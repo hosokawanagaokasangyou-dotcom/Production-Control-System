@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "workbook": "G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm",
+  "sheet": "設定_配台不要工程",
+  "column_e": 5,
+  "cells": {
+    "8": "{\"version\": 1, \"mode\": \"conditions\", \"require_all\": true, \"conditions\": [{\"column\": \"工程名\", \"op\": \"eq\", \"value\": \"分割\"}]}",
+    "12": "{\"version\":1,\"mode\":\"conditions\",\"require_all\":true,\"conditions\":[{\"column\":\"工程名\",\"op\":\"eq\",\"value\":\"分割\"}]}"
+  }
+}

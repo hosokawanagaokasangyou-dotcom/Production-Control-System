@@ -1,0 +1,13 @@
+VBA.txt は **生産管理_AI配台テスト.xlsm** に貼り付ける VBA のテキストバックアップ（Python 起動・LOG・結果_* / 個人_* 取り込み・フォント・ボタン等）。
+
+出勤簿.txt は **master.xlsm** に貼り付ける VBA のテキストバックアップ（〇月カレンダー→メンバー出勤簿・条件付き書式の実体化・かっこいいボタン等）。
+
+**データの役割**: `planning_core.MASTER_FILE` は `master.xlsm`（skills / need / メンバー別勤怠）。段階2で VBA が `TASK_INPUT_WORKBOOK` に **配台ブック（ThisWorkbook）** を渡し、その中の「加工計画DATA」等を読む。Python のカレントは `main.py` 所在フォルダ（通常は `master.xlsm` と同じディレクトリ想定）。
+
+**VBA.txt・結果シート取り込み（次回以降の修正の前提）**
+- `Set ws = ThisWorkbook.Sheets(Sheets.Count)` だけだと、末尾が VeryHidden の **`_FontPick`（SCRATCH_SHEET_FONT）** 等の固定シートのとき **コピー直後の「結果_*」ではなく誤参照**する。`結果シート_列幅_AutoFit安定` の `targetWs.Name` が `_FontPick` になる現象の原因になり得る。
+- 対策: **`取込ブック内のコピー先シートを取得(wb, expectedSheetName)`** — ① `wb.Sheets(取り込み元と同名)` を優先 ② だめなら `Sheets(Count)`（末尾が `_FontPick` でなければ採用）③ 末尾が `_FontPick` なら同名シートを総当たり。7a production_plan 取り込み・7b 個人シート新規コピーで `Sheets(Count)` の代わりに使用。
+- **列オートフィット** `結果シート_列幅_AutoFit安定`: 引数は **`targetWs`**（呼び出し元 `ws` とデバッガで混同しない）。**`targetWs` が `_FontPick` なら Exit Sub**。処理は一時 **`Application.ScreenUpdating = True`** のうえ **`targetWs.Activate` → `DoEvents` → `Cells.Select` → `DoEvents` → `Cells.EntireColumn.AutoFit`**、最後に元の ScreenUpdating を復帰（取り込み中 False のままだと Select が確定前に AutoFit が走る問題の対策）。
+- 計画結果の **列幅は Python（openpyxl）では設定せず**、取り込み時の上記 VBA に任せる方針。
+
+あなたはエクセルVBAの専門家です
