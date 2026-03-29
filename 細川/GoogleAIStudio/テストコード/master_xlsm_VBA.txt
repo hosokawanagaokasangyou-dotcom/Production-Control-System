@@ -7,8 +7,14 @@
 ' 〇月カレンダー: 日付・勤怠入力の有効列は A（メンバー名）～ AG（日付列は B～AG）
 Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 
+' 全シートフォント統一マクロ（PC にフォントが入っている必要があります）
+Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
+' フォント選択ダイアログ用の一時シート（VeryHidden）
+Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
+
 ' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
+' 全シートフォント統一は本ファイル末尾（配台ブックと同 API。master にはメインシート用 AutoFit は無い）。
 ' 「〇月カレンダー」シート群からメンバー別出勤簿を再生成
 ' - 1行目: 対象年月（A1）
 ' - 4行目: 日付（B列～AG列まで有効。AH以降は無視）
@@ -350,6 +356,22 @@ Sub アニメ付き_カレンダーから出勤簿生成()
     Call カレンダーからメンバー出勤簿を生成
 End Sub
 
+' 図形ボタン用：OnAction を本体に直指定すると AnimateButtonPush が効かないためラッパーを割り当てる
+Sub アニメ付き_全シートフォントをリストから選択して統一()
+    Call AnimateButtonPush
+    Call 全シートフォントをリストから選択して統一
+End Sub
+
+Sub アニメ付き_全シートフォントを手入力で統一()
+    Call AnimateButtonPush
+    Call 全シートフォントを手入力で統一
+End Sub
+
+Sub アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
+    Call AnimateButtonPush
+    Call 全シートフォント_BIZ_UDPゴシックに統一
+End Sub
+
 ' =========================================================
 ' 共通：ボタンを押し込むアニメーション（生産管理_AI配台テスト_xlsm_VBA.txt と同様・全シートで Caller を解決）
 ' =========================================================
@@ -522,5 +544,215 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
         .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
         On Error GoTo 0
     End With
+End Sub
+
+' =========================================================
+' 全シートのセルフォントを統一（手動実行・ボタン割当可）
+' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
+' ※保護シートはスキップし、ダイアログに列挙。
+' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
+' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用）。
+' ※配台ブックの「メインシート_AからK列_AutoFit」は master には無いため呼ばない。
+' =========================================================
+Private Function GetOrCreateFontScratchSheet() As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SCRATCH_SHEET_FONT)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        On Error Resume Next
+        ws.Name = SCRATCH_SHEET_FONT
+        On Error GoTo 0
+        ws.Range("A1").Value = "（フォント選択用・削除しないでください）"
+        ws.Visible = xlSheetVeryHidden
+    End If
+    Set GetOrCreateFontScratchSheet = ws
+End Function
+
+Private Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
+    ByVal oldSize As Variant, ByVal oldBold As Variant, ByVal oldItalic As Variant, _
+    ByVal oldUnderline As Variant, ByVal oldColor As Variant, ByVal oldStrike As Variant)
+    On Error Resume Next
+    With r.Font
+        .Name = oldName
+        If Not IsEmpty(oldSize) Then .Size = oldSize
+        If Not IsEmpty(oldBold) Then .Bold = oldBold
+        If Not IsEmpty(oldItalic) Then .Italic = oldItalic
+        If Not IsEmpty(oldUnderline) Then .Underline = oldUnderline
+        If Not IsEmpty(oldColor) Then .Color = oldColor
+        If Not IsEmpty(oldStrike) Then .Strikethrough = oldStrike
+    End With
+    On Error GoTo 0
+End Sub
+
+Private Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
+    Dim i As Long
+    For i = 1 To Application.FontNames.Count
+        If StrComp(Application.FontNames(i), fontName, vbTextCompare) = 0 Then
+            FontNameExistsInExcel = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim rangeErr As Boolean
+    
+    skippedOut = ""
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        If ws.ProtectContents Then
+            skippedOut = skippedOut & "・" & ws.Name & "（保護中のためスキップ）" & vbCrLf
+        Else
+            rangeErr = False
+            Set ur = Nothing
+            Set ur = ws.UsedRange
+            If Err.Number <> 0 Then
+                skippedOut = skippedOut & "・" & ws.Name & "（UsedRange: " & Err.Description & "）" & vbCrLf
+                Err.Clear
+                rangeErr = True
+            End If
+            If Not rangeErr Then
+                ur.Font.Name = fontName
+                If Err.Number <> 0 Then
+                    skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
+                    Err.Clear
+                End If
+            End If
+        End If
+        On Error GoTo 0
+    Next ws
+End Sub
+
+Public Sub 全シートフォントをリストから選択して統一()
+    Dim wsScratch As Worksheet
+    Dim r As Range
+    Dim prevWs As Worksheet
+    Dim prevVis As XlSheetVisibility
+    Dim oldName As String
+    Dim oldSize As Variant
+    Dim oldBold As Variant
+    Dim oldItalic As Variant
+    Dim oldUnderline As Variant
+    Dim oldColor As Variant
+    Dim oldStrike As Variant
+    Dim picked As String
+    Dim skipped As String
+    
+    Set prevWs = ActiveSheet
+    Set wsScratch = GetOrCreateFontScratchSheet()
+    prevVis = wsScratch.Visible
+    
+    Set r = wsScratch.Range("A1")
+    With r.Font
+        oldName = .Name
+        oldSize = .Size
+        oldBold = .Bold
+        oldItalic = .Italic
+        oldUnderline = .Underline
+        oldColor = .Color
+        oldStrike = .Strikethrough
+    End With
+    
+    wsScratch.Visible = xlSheetVisible
+    wsScratch.Activate
+    r.Select
+    
+    If Not Application.Dialogs(xlDialogFormatFont).Show Then
+        RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+        wsScratch.Visible = prevVis
+        On Error Resume Next
+        prevWs.Activate
+        On Error GoTo 0
+        Exit Sub
+    End If
+    
+    picked = r.Font.Name
+    RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+    wsScratch.Visible = prevVis
+    On Error Resume Next
+    prevWs.Activate
+    On Error GoTo 0
+    
+    On Error GoTo FailList
+    ApplyFontToAllSheetCells picked, skipped
+    On Error GoTo 0
+    
+    If Len(skipped) = 0 Then
+        MsgBox "全シートのセルフォントを「" & picked & "」に設定しました。", vbInformation
+    Else
+        MsgBox "フォント「" & picked & "」を設定しました。スキップしたシート:" & vbCrLf & vbCrLf & skipped, vbExclamation
+    End If
+    Exit Sub
+    
+FailList:
+    MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
+End Sub
+
+Public Sub 全シートフォントを選択して統一()
+    Call アニメ付き_全シートフォントをリストから選択して統一
+End Sub
+
+Public Sub 全シートフォントを手入力で統一()
+    Dim v As Variant
+    Dim fontName As String
+    Dim skipped As String
+    
+    v = Application.InputBox( _
+        "適用するフォント名を入力してください。" & vbCrLf & _
+        "（ホームのフォントボックスと同じ表記）", _
+        "全シートのフォント統一（手入力）", _
+        BIZ_UDP_GOTHIC_FONT_NAME, _
+        Type:=2)
+    If VarType(v) = vbBoolean Then Exit Sub
+    
+    fontName = Trim$(CStr(v))
+    If Len(fontName) = 0 Then
+        MsgBox "フォント名が空のため中止しました。", vbExclamation
+        Exit Sub
+    End If
+    
+    If Not FontNameExistsInExcel(fontName) Then
+        If MsgBox( _
+            "フォント「" & fontName & "」が一覧に見つかりませんでした。" & vbCrLf & _
+            "このまま適用を試みますか？", _
+            vbQuestion Or vbYesNo, "確認") = vbNo Then
+            Exit Sub
+        End If
+    End If
+    
+    On Error GoTo FailHand
+    ApplyFontToAllSheetCells fontName, skipped
+    On Error GoTo 0
+    
+    If Len(skipped) = 0 Then
+        MsgBox "全シートのセルフォントを「" & fontName & "」に設定しました。", vbInformation
+    Else
+        MsgBox "フォント「" & fontName & "」を設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
+    End If
+    Exit Sub
+    
+FailHand:
+    MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
+End Sub
+
+Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
+    Dim skipped As String
+    On Error GoTo FailB
+    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    On Error GoTo 0
+    
+    If Len(skipped) = 0 Then
+        MsgBox "全シートのセルフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。", vbInformation
+    Else
+        MsgBox "フォントを設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
+    End If
+    Exit Sub
+    
+FailB:
+    MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 

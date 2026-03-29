@@ -21,7 +21,8 @@ Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
-' ★ Python は python\ フォルダ、master.xlsm はテストコード直下。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
+' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
+' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
@@ -44,6 +45,7 @@ Private m_stage2MemberImported As Boolean
 ' =========================================================
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
+' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一（MsgBox なし）
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
@@ -69,7 +71,7 @@ Sub アニメ付き_環境構築を実行()
     ' 誤操作防止用（セキュリティ目的ではないため、パスワードを明示）
     userInput = InputBox( _
         "環境構築は初回のみ実行してください。" & vbCrLf & vbCrLf & _
-        "Python 3 が無ければインストールし、python\setup_environment.py で依存を導入します。" & vbCrLf & _
+        "Python 3 が無ければインストールし、setup_environment.py で requirements.txt を導入します。" & vbCrLf & _
         "　pandas / openpyxl / google-genai / cryptography / xlwings 等" & vbCrLf & _
         "　xlwings の Excel アドイン（xlwings.xlam）も配置します。" & vbCrLf & vbCrLf & _
         "誤操作防止のため、下記パスワードを入力してから OK を押してください。" & vbCrLf & _
@@ -105,7 +107,7 @@ End Sub
 ' =========================================================
 ' Gemini API キーを暗号化 JSON にし「設定」B1 にパスを書く（押下アニメ付きはアニメ付き_* を図形に割当）
 ' 暗号化パスフレーズは InputBox で入力し --passphrase-file 経由で Python に渡す。B2 にはパスフレーズを書かない。
-' Python: python\encrypt_gemini_credentials.py（要 cryptography）
+' Python: python\encrypt_gemini_credentials.py（要 cryptography）。起動は py -3 を推奨。
 ' =========================================================
 Sub アニメ付き_Gemini認証を暗号化してB1に保存()
     Call AnimateButtonPush
@@ -371,6 +373,51 @@ Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Rang
     On Error GoTo 0
 End Sub
 
+' メイン B7～（メンバー列＋日付12列 C～N）に表全体の細枠罫線を付与。ClearContents 後も B 列だけ線が無い状態を防ぐ。
+Private Sub メインシート_メンバー勤怠ブロックに罫線を設定(ByVal wsMain As Worksheet, ByVal lastMemberRow As Long)
+    Dim rng As Range
+    Const lastCol As Long = 14   ' N列（B=メンバー、C～N=12日分）
+    If wsMain Is Nothing Then Exit Sub
+    If lastMemberRow < 7 Then Exit Sub
+    On Error Resume Next
+    Set rng = wsMain.Range(wsMain.Cells(7, 2), wsMain.Cells(lastMemberRow, lastCol))
+    With rng
+        .Borders(xlDiagonalDown).LineStyle = xlNone
+        .Borders(xlDiagonalUp).LineStyle = xlNone
+        With .Borders(xlEdgeLeft)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeRight)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlInsideVertical)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlInsideHorizontal)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+    End With
+    On Error GoTo 0
+End Sub
+
 Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean = False)
     Dim wb As Workbook
     Dim wsMain As Worksheet
@@ -395,7 +442,9 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
     Dim bHdrBold As Boolean, bHdrIt As Boolean, bHdrUl As Long
     Dim bMemFn As String, bMemFs As Double, bMemFc As Variant
     Dim bMemBold As Boolean, bMemIt As Boolean, bMemUl As Long
+    Dim lastMemberRow As Long
     
+    lastMemberRow = 0
     On Error GoTo EH
     
     Set wb = ThisWorkbook
@@ -472,6 +521,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
     If cnt = 0 Then
         wsMain.Cells(8, 2).Value = "（個人_* のシートがありません）"
         メインシート_フォント属性を適用 wsMain.Cells(8, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+        lastMemberRow = 8
         GoTo CleanExit
     End If
     
@@ -512,11 +562,12 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
         Next col
         r = r + 1
     Next i
+    lastMemberRow = r - 1
 
 CleanExit:
     On Error Resume Next
+    メインシート_メンバー勤怠ブロックに罫線を設定 wsMain, lastMemberRow
     メインシート_結果シートリンクを更新 wsMain
-    On Error GoTo EH
     メインシート_AからK列_AutoFitOnSheet wsMain
     Application.ScreenUpdating = True
     Exit Sub
@@ -1190,10 +1241,10 @@ End Sub
 ' ・Python 3 の検出は py -3（ランチャーで 3 系を明示）
 ' ・未導入時: winget（Python.Python.3.12）→ 失敗時は公式 amd64 インストーラ
 ' ・pip は PowerShell 内で Machine/User の PATH を再合成（Excel 起動後でも py を拾いやすく）
-' ・pip 依存は python\setup_environment.py が python\requirements.txt を読み込んで一括インストール（cryptography 含む）
+' ・pip 依存は setup_environment.py が同フォルダの requirements.txt を読み込んで一括インストール（cryptography 含む）
 ' ・xlwings: 本ブックの段階1/2 は WScript.Shell で py を起動するため planning_core 側では未使用。
 '           将来 Excel から xlwings（RunPython / UDF 等）で Python を呼ぶ拡張に備え、pip とアドインを導入する。
-' ・python\setup_environment.py の最後で「xlwings addin install」（Excel アドインを XLSTART へ）
+' ・setup_environment.py の最後で「xlwings addin install」（Excel アドインを XLSTART へ）
 ' ※公式 URL はモジュール先頭の PY_OFFICIAL_INSTALLER_URL で変更可能
 ' =========================================================
 Private Function Py3VersionOutput(wsh As Object) As String
@@ -1252,13 +1303,13 @@ Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As 
     Dim ps As String
     Dim shellCmd As String
     Dim wdEsc As String
-    ' PATH を再合成したうえで、ブックフォルダで python\setup_environment.py を実行
+    ' PATH を再合成したうえで、ブックフォルダで setup_environment.py を実行（pip + requirements + xlwings addin）
     wdEsc = Replace(workDir, "'", "''")
     ps = "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
          "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
          "Set-Location -LiteralPath '" & wdEsc & "'; " & _
-         "& py -3 -u python\setup_environment.py; " & _
+         "& py -3 -u .\setup_environment.py; " & _
          "exit $LASTEXITCODE"
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
@@ -1276,11 +1327,11 @@ Sub InstallComponents()
     workDir = Trim$(ThisWorkbook.Path)
     If Len(workDir) = 0 Then
         MsgBox "先にこのブックを保存してから環境構築を実行してください。" & vbCrLf & _
-               "（python\setup_environment.py と python\requirements.txt をブックと同じフォルダ配下に置きます）", vbExclamation
+               "（setup_environment.py と requirements.txt はブックと同じフォルダに置きます）", vbExclamation
         Exit Sub
     End If
-    If Len(Dir(workDir & "\python\setup_environment.py")) = 0 Then
-        MsgBox "次のファイルが見つかりません:" & vbCrLf & workDir & "\python\setup_environment.py" & vbCrLf & vbCrLf & _
+    If Len(Dir(workDir & "\setup_environment.py")) = 0 Then
+        MsgBox "次のファイルが見つかりません:" & vbCrLf & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
                "テストコード一式を同じフォルダにコピーしてから再実行してください。", vbCritical
         Exit Sub
     End If
@@ -1322,7 +1373,7 @@ Sub InstallComponents()
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
                "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
                "cd /d """ & workDir & """" & vbCrLf & _
-               "py -3 python\setup_environment.py", vbCritical
+               "py -3 setup_environment.py", vbCritical
         Exit Sub
     End If
     
@@ -1331,8 +1382,7 @@ Sub InstallComponents()
 End Sub
 
 ' =========================================================
-' 【補助】Python planning_core 用 Gemini 認証
-' シート「設定」B1 に認証 JSON のフルパス。平文または暗号化 JSON（python\encrypt_gemini_credentials.py）。
+' Gemini 認証: Python は「設定」B1 の JSON ファイルパスからキーを読む（平文または暗号化）。
 ' 暗号化 JSON の復号は planning_core のソース内定数のみ。パスフレーズはシートに保存しない（B2 は未使用またはクリア）。
 ' =========================================================
 Private Function GeminiCredentialsJsonPathIsConfigured() As Boolean
@@ -1924,6 +1974,12 @@ Private Sub 段階1_コア実行()
     On Error Resume Next
     配台計画_タスク入力を前へ並べ替え
     配台計画_タスク入力_A1を選択
+    On Error GoTo 0
+
+    Application.ScreenUpdating = True
+    DoEvents
+    On Error Resume Next
+    配台_全シートフォントBIZ_UDP_自動適用
     On Error GoTo 0
 
     Application.ScreenUpdating = prevScreenUpdating
@@ -2714,6 +2770,10 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     m_stage2PlanImported = planImported
     m_stage2MemberImported = memberImported
 
+    On Error Resume Next
+    配台_全シートフォントBIZ_UDP_自動適用
+    On Error GoTo 0
+
 Finish:
     On Error Resume Next
     If Not adoStream Is Nothing Then
@@ -2886,28 +2946,42 @@ End Function
 
 Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
     Dim ws As Worksheet
-    Dim errNum As Long
-    Dim errDesc As String
+    Dim ur As Range
+    Dim rangeErr As Boolean
     
     skippedOut = ""
-    On Error GoTo EH
-    
     For Each ws In ThisWorkbook.Worksheets
-        Err.Clear
         On Error Resume Next
-        ws.Cells.Font.Name = fontName
-        If Err.Number <> 0 Then
-            skippedOut = skippedOut & "・" & ws.Name & "（" & Err.Description & "）" & vbCrLf
+        If ws.ProtectContents Then
+            skippedOut = skippedOut & "・" & ws.Name & "（保護中のためスキップ）" & vbCrLf
+        Else
+            rangeErr = False
+            Set ur = Nothing
+            Set ur = ws.UsedRange
+            If Err.Number <> 0 Then
+                skippedOut = skippedOut & "・" & ws.Name & "（UsedRange: " & Err.Description & "）" & vbCrLf
+                Err.Clear
+                rangeErr = True
+            End If
+            If Not rangeErr Then
+                ur.Font.Name = fontName
+                If Err.Number <> 0 Then
+                    skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
+                    Err.Clear
+                End If
+            End If
         End If
-        On Error GoTo EH
+        On Error GoTo 0
     Next ws
-    
-    Exit Sub
-    
-EH:
-    errNum = Err.Number
-    errDesc = Err.Description
-    Err.Raise errNum, , errDesc
+End Sub
+
+' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
+Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
+    Dim skipped As String
+    On Error Resume Next
+    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    メインシート_AからK列_AutoFit
+    On Error GoTo 0
 End Sub
 
 ' Excel 標準の［フォント］ダイアログで選んで全シートに適用
