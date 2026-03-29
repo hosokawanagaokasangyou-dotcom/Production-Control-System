@@ -3,7 +3,7 @@
 段階1: 加工計画DATA から未完了タスクを抽出し output/plan_input_tasks.xlsx を生成する。
 マクロで当ファイルをブックへ取り込み、「配台計画_タスク入力」で特別指定を編集した後、段階2を実行する。
 
-環境: planning_core と同様、openpyxl（閉じたブックの高速 I/O）と xlwings（Excel 起動中の保存・同期）を使用する。
+環境: planning_core と同様、openpyxl（閉じたブックの I/O）と、保存ロック時の xlwings 同期を使用する。
 初回はリポジトリの requirements.txt を pip し、Excel デスクトップ版を用意すること。
 """
 import os
