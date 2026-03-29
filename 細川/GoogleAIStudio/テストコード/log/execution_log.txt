@@ -57,3 +57,4 @@
 2026-03-28 23:31:30,196 - INFO - 完了: 個人別スケジュールを 'D:\マイドライブ\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\output\2026\03\28\member_schedule_20260328_233117.xlsx' に出力しました。
 2026-03-28 23:31:31,456 - WARNING - 段階2: メイン AI サマリの openpyxl 保存に失敗: [Errno 13] Permission denied: 'D:\\マイドライブ\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
 2026-03-28 23:31:31,472 - INFO - 段階2: メイン P 列は openpyxl で保存できませんでした（ブックが Excel で開いている可能性）。 D:\マイドライブ\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で反映してください。
+2026-03-29 09:59:14,397 - WARNING - 環境変数 GEMINI_API_KEY が未設定です。備考のAI解析はスキップされます。

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-「設定_配台不要工程」シートの E 列（5 列目）が Excel COM で書けるか検証する。
+「設定_配台不要工程」シートの E 列（5 列目）が xlwings で書けるか検証する。
 
-planning_core と同じ COM 接続（_com_attach_open_macro_workbook）を使う。
+planning_core と同じ xlwings 接続（_xlwings_attach_open_macro_workbook）を使う。
 
 前提:
-  - pywin32
+  - xlwings / Excel
   - 対象 .xlsm を Excel で開いておくか、接続できないときは非表示 Excel が起動する（本番と同様）
-  - 同じファイルを 2 つの Excel で開くと、COM 側が「読み取り専用」になり Save で失敗することがある → --no-save で書込検証のみ、または Excel は 1 つにする
+  - 同じファイルを 2 つの Excel で開くと Save で失敗することがある → --no-save で書込検証のみ、または Excel は 1 つにする
 
 例（cmd）:
   py com_exclude_rules_column_e_test.py
@@ -42,32 +42,13 @@ def _planning_repo_root() -> str:
     return here
 
 
-def _try_workbook_save(wb, label: str, *, no_save: bool) -> bool:
-    """
-    Save を試す。読み取り専用や二重起動で失敗しがちなのでメッセージを出す。
-    label … ログ用の短い名前（例: 単体 / 一括 / 単体・復元）
-    no_save True なら何もせず True を返す。
-    """
+def _try_book_save(book, label: str, *, no_save: bool) -> bool:
     p = f"[{label}]"
     if no_save:
         print(f"{p} --no-save のため Save しません（メモリ上のブックには書込済み）。")
         return True
     try:
-        if bool(wb.ReadOnly):
-            print(f"{p} ブックが読み取り専用のため Save しません。", file=sys.stderr)
-            print(
-                f"{p} 別の Excel が同じファイルを開いていると、COM が 2 つ目を R/O で開くことがあります。",
-                file=sys.stderr,
-            )
-            print(
-                f"{p} 対処: 余分な Excel を閉じる／ブックを 1 つだけ開く／検証のみなら --no-save。",
-                file=sys.stderr,
-            )
-            return False
-    except Exception:
-        pass
-    try:
-        wb.Save()
+        book.save()
         print(f"{p} Save しました。")
         return True
     except Exception as ex:
@@ -75,7 +56,7 @@ def _try_workbook_save(wb, label: str, *, no_save: bool) -> bool:
         print(f"{p} Save に失敗しました: {text}", file=sys.stderr)
         if "読み取り専用" in text or "read-only" in text.lower():
             print(
-                f"{p} （上記と同様、二重起動・ロック・属性が原因のことがあります）",
+                f"{p} 別の Excel が同じファイルを開いていると R/O で開くことがあります。",
                 file=sys.stderr,
             )
         print(
@@ -86,7 +67,6 @@ def _try_workbook_save(wb, label: str, *, no_save: bool) -> bool:
 
 
 def _warn_if_value_looks_like_broken_json(s: str) -> None:
-    """PowerShell 等で --value の JSON から引用符が落ちたとき、分かりやすく案内する。"""
     t = str(s).strip()
     if not (t.startswith("{") and t.endswith("}")):
         return
@@ -114,17 +94,15 @@ def main() -> int:
         if d not in sys.path:
             sys.path.insert(0, d)
 
-    # planning_core は import 中に GEMINI 未設定で logging.warning を出す。インポート前だけ抑止する
     logging.disable(logging.WARNING)
     import planning_core as pc
 
     logging.disable(logging.NOTSET)
-    # import 後も root は INFO のままなので、以降のテスト出力を優先してレベルを上げる
     logging.getLogger().setLevel(logging.CRITICAL)
 
     default_book = os.path.join(repo, "生産管理_AI配台テスト.xlsm")
     p = argparse.ArgumentParser(
-        description="設定_配台不要工程 の E 列 COM 書き込みテスト",
+        description="設定_配台不要工程 の E 列 xlwings 書き込みテスト",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "PowerShell: JSON は --value-json を推奨。--value 使うときは 1 行で渡すか "
@@ -165,7 +143,7 @@ def main() -> int:
     p.add_argument(
         "--bulk-block",
         action="store_true",
-        help="本番同様 Range(A1:E3).Value に 2 次元タプルを代入（先頭 3 行を上書き。注意）",
+        help="本番同様 A1:E3 に 2 次元配列を代入（先頭 3 行を上書き。注意）",
     )
     args = p.parse_args()
 
@@ -194,56 +172,56 @@ def main() -> int:
         cell_value = args.value
         _warn_if_value_looks_like_broken_json(cell_value)
     else:
-        cell_value = '{"__com_e_column_test__":true}'
+        cell_value = '{"__xlwings_e_column_test__":true}'
 
-    book = os.path.abspath(args.book)
-    if not os.path.isfile(book):
-        print(f"ブックがありません: {book}", file=sys.stderr)
+    book_path = os.path.abspath(args.book)
+    if not os.path.isfile(book_path):
+        print(f"ブックがありません: {book_path}", file=sys.stderr)
         return 2
 
     if args.bulk_block and args.restore:
         print("--bulk-block と --restore は同時に使わないでください。", file=sys.stderr)
         return 2
 
-    attached = pc._com_attach_open_macro_workbook(book, "COM_E_COL_TEST")
+    attached = pc._xlwings_attach_open_macro_workbook(book_path, "XLWINGS_E_COL_TEST")
     if attached is None:
         print(
-            "COM でブックに接続できません。Excel で対象を開くか、planning_core と同じ環境か確認してください。",
+            "xlwings でブックに接続できません。Excel で対象を開くか、planning_core と同じ環境か確認してください。",
             file=sys.stderr,
         )
         return 3
 
-    xl, wb, info = attached
+    xw_book, info = attached
     ok = False
     try:
         try:
-            xl.DisplayAlerts = False
+            xw_book.app.display_alerts = False
         except Exception:
             pass
 
-        ws = wb.Worksheets(pc.EXCLUDE_RULES_SHEET_NAME)
+        sheet = xw_book.sheets[pc.EXCLUDE_RULES_SHEET_NAME]
 
         if args.bulk_block:
-            hdr = (
+            hdr = [
                 pc.EXCLUDE_RULE_COL_PROCESS,
                 pc.EXCLUDE_RULE_COL_MACHINE,
                 pc.EXCLUDE_RULE_COL_FLAG,
                 pc.EXCLUDE_RULE_COL_LOGIC_JA,
                 pc.EXCLUDE_RULE_COL_LOGIC_JSON,
-            )
-            r1 = (
-                "__COM_E_TEST_R1__",
-                "__M_COM__",
+            ]
+            r1 = [
+                "__XW_E_TEST_R1__",
+                "__M_XW__",
                 False,
-                "COM一括テスト1行目",
+                "xlwings一括テスト1行目",
                 '{"__bulk_e_row2__":1}',
-            )
-            r2 = ("__COM_E_TEST_R2__", "__M2__", False, "", "")
-            matrix = (hdr, r1, r2)
-            ws.Range("A1:E3").Value = matrix
-            e2 = ws.Range("E2").Value
-            e3 = ws.Range("E3").Value
-            print("[一括] Range(A1:E3).Value 代入後:")
+            ]
+            r2 = ["__XW_E_TEST_R2__", "__M2__", False, "", ""]
+            matrix = [hdr, r1, r2]
+            sheet.range((1, 1), (3, 5)).value = matrix
+            e2 = sheet.range((2, 5)).value
+            e3 = sheet.range((3, 5)).value
+            print("[一括] A1:E3 代入後:")
             print("  E2 =", repr(e2))
             print("  E3 =", repr(e3))
             if str(e2).find("__bulk_e_row2__") >= 0 or e2 == '{"__bulk_e_row2__":1}':
@@ -251,7 +229,7 @@ def main() -> int:
             else:
                 print("  → E2 が期待と異なる可能性があります（要確認）")
             print("  （E3 はテストデータで E 列を空にしているため None になります）")
-            saved = _try_workbook_save(wb, "一括", no_save=args.no_save)
+            saved = _try_book_save(xw_book, "一括", no_save=args.no_save)
             if saved or args.no_save:
                 print("[一括] A1:E3 はテスト用データに置き換わっています（Save できた場合はディスクにも反映）。")
             ok = True
@@ -259,11 +237,11 @@ def main() -> int:
 
         row = max(2, int(args.row))
         col_e = 5
-        old = ws.Cells(row, col_e).Value
+        old = sheet.range((row, col_e)).value
         print(f"[単体] 変更前 E{row} = {old!r}")
 
-        ws.Cells(row, col_e).Value = cell_value
-        back = ws.Cells(row, col_e).Value
+        sheet.range((row, col_e)).value = cell_value
+        back = sheet.range((row, col_e)).value
         print(f"[単体] 書込値     = {cell_value!r}")
         print(f"[単体] 直後の読取 = {back!r}")
 
@@ -274,15 +252,13 @@ def main() -> int:
             pass
         print(f"[単体] 文字列一致: {same}")
 
-        saved_write = _try_workbook_save(wb, "単体", no_save=args.no_save)
+        saved_write = _try_book_save(xw_book, "単体", no_save=args.no_save)
 
         if args.restore:
-            ws.Cells(row, col_e).Value = old
+            sheet.range((row, col_e)).value = old
             saved_restore = True
             if not args.no_save:
-                saved_restore = _try_workbook_save(
-                    wb, "単体・復元", no_save=False
-                )
+                saved_restore = _try_book_save(xw_book, "単体・復元", no_save=False)
             print(f"[単体] 元の値に戻しました（メモリ上）→ {old!r}")
             if args.no_save:
                 pass
@@ -308,7 +284,7 @@ def main() -> int:
         traceback.print_exc()
         return 4
     finally:
-        pc._com_release_workbook_after_mutation(xl, wb, info, ok)
+        pc._xlwings_release_book_after_mutation(xw_book, info, ok)
 
 
 if __name__ == "__main__":
