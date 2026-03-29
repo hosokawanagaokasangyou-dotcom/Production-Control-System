@@ -612,6 +612,10 @@ RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
+# 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
+RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
+    {"回答納期", "指定納期", "計画基準納期", "加工開始日"}
+)
 
 SOURCE_BASE_COLUMNS = [
     TASK_COL_TASK_ID, TASK_COL_MACHINE, TASK_COL_MACHINE_NAME, TASK_COL_QTY, TASK_COL_ORDER_QTY, TASK_COL_SPEED, TASK_COL_PRODUCT,
@@ -2445,6 +2449,27 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
                 TextBlock(blue_if, bracketed),
                 TextBlock(plain_if, rest),
             )
+            cell.alignment = top
+
+
+def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
+    """
+    結果_タスク一覧: 回答納期・指定納期・計画基準納期・加工開始日のセルを青色にする。
+    （履歴列の【日付】は _apply_result_task_history_rich_text 側。色は 0070C0 で統一）
+    """
+    blue = _result_font(color="0070C0")
+    top = Alignment(wrap_text=False, vertical="top")
+    for col_idx, col_name in enumerate(column_names, 1):
+        if str(col_name) not in RESULT_TASK_DATE_STYLE_HEADERS:
+            continue
+        for r in range(2, worksheet.max_row + 1):
+            cell = worksheet.cell(row=r, column=col_idx)
+            v = cell.value
+            if v is None:
+                continue
+            if isinstance(v, str) and not str(v).strip():
+                continue
+            cell.font = blue
             cell.alignment = top
 
 
@@ -8012,6 +8037,7 @@ def generate_plan():
         )
 
         _apply_result_task_history_rich_text(worksheet_tasks, list(df_tasks.columns))
+        _apply_result_task_date_columns_blue_font(worksheet_tasks, list(df_tasks.columns))
 
         # 未スケジュール行（配台不可・配台残）を目立たせる
         status_col_idx = None

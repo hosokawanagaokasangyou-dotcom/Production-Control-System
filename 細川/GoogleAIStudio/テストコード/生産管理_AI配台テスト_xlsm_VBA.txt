@@ -41,6 +41,8 @@ Private m_lastStage2ErrMsg As String
 Private m_lastStage2ExitCode As Long
 Private m_stage2PlanImported As Boolean
 Private m_stage2MemberImported As Boolean
+' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
+Private m_lastRefreshQueriesErrMsg As String
 
 ' =========================================================
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
@@ -1416,16 +1418,50 @@ Private Function GeminiCredentialsJsonPathIsConfigured() As Boolean
 End Function
 
 ' =========================================================
+' 外部データ／PQ の接続を「バックグラウンド更新しない」にそろえる。
+' 背景更新のまま RefreshAll が先に返り、その直後の Save 等で Excel が
+' 「この操作を実行すると、まだ実行されていないデータの更新が取り消されます」と出すのを防ぐ。
+' =========================================================
+Private Sub DisableBackgroundDataRefreshAll()
+    Dim wb As Workbook
+    Dim cn As WorkbookConnection
+    Dim ws As Worksheet
+    Dim lo As ListObject
+    Dim pt As PivotTable
+    Set wb = ThisWorkbook
+    On Error Resume Next
+    For Each cn In wb.Connections
+        cn.OLEDBConnection.BackgroundQuery = False
+        cn.ODBCConnection.BackgroundQuery = False
+    Next cn
+    For Each ws In wb.Worksheets
+        For Each lo In ws.ListObjects
+            lo.QueryTable.BackgroundQuery = False
+        Next lo
+        For Each pt In ws.PivotTables
+            pt.PivotCache.BackgroundQuery = False
+        Next pt
+    Next ws
+    On Error GoTo 0
+End Sub
+
+' =========================================================
 ' Power Query / データ接続の更新（マクロ処理の先頭で呼ぶ）
-' ※ Application.CalculateUntilAsyncQueriesDone は非同期クエリが完了しないと戻らず
-'    Excel がフリーズしたように見えることがあるため呼びません。
-'    RefreshAll により同期クエリは完了します。
+' ※ 先に DisableBackgroundDataRefreshAll で同期更新に寄せ、RefreshAll 後に
+'    CalculateUntilAsyncQueriesDone で取りこぼし待ち（背景オフ後はほぼ即時）。
+'    これにより「未実行のデータ更新が取り消されます」系ダイアログを抑止しやすくする。
+' ※ DisplayAlerts=False で接続／PQ 失敗時の Excel 標準ダイアログを抑止。VBA 側も MsgBox は出さず
+'    m_lastRefreshQueriesErrMsg に詳細を残す（段階1・2のエラーメッセージに連結）。
 ' =========================================================
 Private Function TryRefreshWorkbookQueries() As Boolean
     Dim prevSU As Boolean
+    Dim prevDA As Boolean
     On Error GoTo EH
+    m_lastRefreshQueriesErrMsg = vbNullString
     prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
     Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
     If SKIP_WORKBOOK_REFRESH_ALL Then
         Application.StatusBar = "（SKIP_WORKBOOK_REFRESH_ALL）接続の一括更新を省略しました"
         DoEvents
@@ -1433,16 +1469,22 @@ Private Function TryRefreshWorkbookQueries() As Boolean
     Else
         Application.StatusBar = "データ接続を更新しています（完了までお待ちください）..."
         DoEvents
+        Call DisableBackgroundDataRefreshAll
         ThisWorkbook.RefreshAll
+        Application.CalculateUntilAsyncQueriesDone
         Application.StatusBar = False
     End If
+    Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
     TryRefreshWorkbookQueries = True
     Exit Function
 EH:
     Application.StatusBar = False
+    On Error Resume Next
+    Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
-    MsgBox "データの更新（Power Query / 接続）でエラーが発生しました。" & vbCrLf & Err.Description, vbExclamation, "クエリ更新"
+    On Error GoTo 0
+    m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & Err.Description
     TryRefreshWorkbookQueries = False
 End Function
 
@@ -1882,7 +1924,7 @@ End Sub
 
 ' =========================================================
 ' 段階1コア: task_extract_stage1.py → plan_input_tasks.xlsx →「配台計画_タスク入力」取込
-' MsgBox は出さない。m_lastStage1ExitCode / m_lastStage1ErrMsg を参照（クエリ更新失敗時は TryRefresh 側で既に表示）
+' MsgBox は出さない。m_lastStage1ExitCode / m_lastStage1ErrMsg を参照（クエリ更新失敗時は m_lastRefreshQueriesErrMsg が連結される）
 ' =========================================================
 Private Sub 段階1_コア実行()
     Dim wsh As Object
@@ -1916,6 +1958,9 @@ Private Sub 段階1_コア実行()
 
     If Not TryRefreshWorkbookQueries() Then
         m_lastStage1ErrMsg = "データ接続の更新に失敗したため段階1を中断しました。（「設定_配台不要工程」シートは作成済みの可能性があります）"
+        If Len(m_lastRefreshQueriesErrMsg) > 0 Then
+            m_lastStage1ErrMsg = m_lastStage1ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
+        End If
         Exit Sub
     End If
 
@@ -2411,6 +2456,9 @@ End Function
 
 ' 段階2の取り込み結果を MsgBox（m_stage2PlanImported / m_stage2MemberImported を参照）
 Private Sub 段階2_取り込み結果をMsgBox()
+    Dim p As String
+    p = ThisWorkbook.Path
+    
     If m_stage2PlanImported And m_stage2MemberImported Then
         MsgBox "Pythonの実行が完了しました。" & vbCrLf & "計画（結果_*）と個人別スケジュール（個人_*）を取り込みました。", vbInformation, "計画生成"
     ElseIf m_stage2PlanImported Then
@@ -2419,7 +2467,9 @@ Private Sub 段階2_取り込み結果をMsgBox()
         MsgBox "Pythonの実行が完了しました。" & vbCrLf & "個人別スケジュール（個人_*）のみ取り込みました。（production_plan が見つかりませんでした）", vbInformation, "計画生成"
     Else
         MsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
-               "LOG シートまたは log\execution_log.txt で「段階2を中断」「マスタファイル」「メンバーが0人」等を確認してください。" & vbCrLf & _
+               "Python 終了コード: " & CStr(m_lastStage2ExitCode) & vbCrLf & _
+               IIf(Len(p) > 0, "探索したフォルダ: " & p & "\output", "ブックが未保存のため output パスを表示できません。先に保存してください。") & vbCrLf & vbCrLf & _
+               "LOG シートまたは " & IIf(Len(p) > 0, p & "\log\execution_log.txt", "log\execution_log.txt（ブックと同じフォルダ）") & " で「段階2を中断」「マスタファイル」「メンバーが0人」等を確認してください。" & vbCrLf & _
                "（テストコード直下に master.xlsm が無いとメンバー0で中断し、xlsx は出力されません。）", vbExclamation, "計画生成"
     End If
 End Sub
@@ -2490,7 +2540,13 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
 
     設定_配台不要工程_シートを確保
 
-    If Not TryRefreshWorkbookQueries() Then Exit Sub
+    If Not TryRefreshWorkbookQueries() Then
+        m_lastStage2ErrMsg = "データ接続の更新に失敗したため段階2を中断しました。"
+        If Len(m_lastRefreshQueriesErrMsg) > 0 Then
+            m_lastStage2ErrMsg = m_lastStage2ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
+        End If
+        Exit Sub
+    End If
     
     Set preserved = New Collection
     If preserveStage1LogOnLogSheet Then
