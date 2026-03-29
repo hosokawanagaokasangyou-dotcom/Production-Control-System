@@ -7,7 +7,7 @@
 - pip を更新し、同フォルダの requirements.txt から依存をインストール（無い場合は既定リスト）
 - Windows: xlwings の Excel アドインを配置
 
-VBA の「環境構築」マクロからも同じスクリプトを呼び出します。
+VBA の「環境構築」マクロはブック直下から python\\setup_environment.py を実行します。
 """
 from __future__ import annotations
 

@@ -1241,7 +1241,7 @@ End Sub
 ' ・Python 3 の検出は py -3（ランチャーで 3 系を明示）
 ' ・未導入時: winget（Python.Python.3.12）→ 失敗時は公式 amd64 インストーラ
 ' ・pip は PowerShell 内で Machine/User の PATH を再合成（Excel 起動後でも py を拾いやすく）
-' ・pip 依存は setup_environment.py が同フォルダの requirements.txt を読み込んで一括インストール（cryptography 含む）
+' ・pip 依存は setup_environment.py が requirements.txt を読み込んで一括（cryptography 含む）。スクリプトは python\setup_environment.py を優先（旧: ブック直下）
 ' ・xlwings: 本ブックの段階1/2 は WScript.Shell で py を起動するため planning_core 側では未使用。
 '           将来 Excel から xlwings（RunPython / UDF 等）で Python を呼ぶ拡張に備え、pip とアドインを導入する。
 ' ・setup_environment.py の最後で「xlwings addin install」（Excel アドインを XLSTART へ）
@@ -1299,17 +1299,30 @@ Fail:
     TryInstallPythonViaOfficialInstaller = False
 End Function
 
-Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String) As Long
+' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
+Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
+    If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
+        SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
+    ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
+        SetupEnvironmentScriptRelativePath = "setup_environment.py"
+    Else
+        SetupEnvironmentScriptRelativePath = ""
+    End If
+End Function
+
+Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
     Dim ps As String
     Dim shellCmd As String
     Dim wdEsc As String
+    Dim setupEsc As String
     ' PATH を再合成したうえで、ブックフォルダで setup_environment.py を実行（pip + requirements + xlwings addin）
     wdEsc = Replace(workDir, "'", "''")
+    setupEsc = Replace(setupRel, "'", "''")
     ps = "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
          "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
          "Set-Location -LiteralPath '" & wdEsc & "'; " & _
-         "& py -3 -u .\setup_environment.py; " & _
+         "& py -3 -u .\" & setupEsc & "; " & _
          "exit $LASTEXITCODE"
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
@@ -1321,18 +1334,22 @@ Sub InstallComponents()
     Dim pipExit As Long
     Dim msg As String
     Dim workDir As String
+    Dim setupRel As String
     
     Set wsh = CreateObject("WScript.Shell")
     
     workDir = Trim$(ThisWorkbook.Path)
     If Len(workDir) = 0 Then
         MsgBox "先にこのブックを保存してから環境構築を実行してください。" & vbCrLf & _
-               "（setup_environment.py と requirements.txt はブックと同じフォルダに置きます）", vbExclamation
+               "（setup_environment.py は python\ またはブック直下、requirements.txt は python\ に配置）", vbExclamation
         Exit Sub
     End If
-    If Len(Dir(workDir & "\setup_environment.py")) = 0 Then
-        MsgBox "次のファイルが見つかりません:" & vbCrLf & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
-               "テストコード一式を同じフォルダにコピーしてから再実行してください。", vbCritical
+    setupRel = SetupEnvironmentScriptRelativePath(workDir)
+    If Len(setupRel) = 0 Then
+        MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
+               workDir & "\python\setup_environment.py" & vbCrLf & _
+               "または " & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
+               "テストコード一式（python フォルダ含む）をブックと同じフォルダにコピーしてから再実行してください。", vbCritical
         Exit Sub
     End If
     
@@ -1368,12 +1385,12 @@ Sub InstallComponents()
                "続いて pip でライブラリをインストールします。", vbInformation
     End If
     
-    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir)
+    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel)
     If pipExit <> 0 Then
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
                "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
                "cd /d """ & workDir & """" & vbCrLf & _
-               "py -3 setup_environment.py", vbCritical
+               "py -3 " & setupRel, vbCritical
         Exit Sub
     End If
     
