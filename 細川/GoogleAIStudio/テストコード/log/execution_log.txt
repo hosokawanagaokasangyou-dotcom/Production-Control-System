@@ -1,64 +1,9 @@
-﻿2026-03-29 16:28:18,915 - WARNING - Gemini: 「設定」B1 で指定された認証 JSON が見つかりません。
-2026-03-29 16:28:18,915 - WARNING - Gemini API キーが未設定です。マクロブックに「設定」シートを用意し B1 に認証 JSON のフルパスを書いてください。 備考の AI 解析等はスキップされます。 ひな型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。
-2026-03-29 16:28:18,999 - INFO - 結果ブック: 「設定」B4 が空のため、セルに書体名を埋め込みません（全シートフォント統一後の取り込みで上書きされにくくなります）。 Python 出力に明示フォントを付けたい場合は B4 にフォント名、必要なら B5 にポイントを入力してください。
-2026-03-29 16:28:19,021 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=15列, メンバー=6人）。
-2026-03-29 16:28:19,047 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ごとの上限を読み込みました。
-2026-03-29 16:28:19,059 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
-2026-03-29 16:28:19,059 - INFO - 『master.xlsm』からスキルと設備要件(need)を読み込みました。
-2026-03-29 16:28:19,100 - INFO - 計画基準日時: 2026/03/29 16:28:19（現在時刻フォールバック）
-2026-03-29 16:28:19,141 - INFO - 『master.xlsm』の各メンバーの勤怠シートを読み込みました。
-2026-03-29 16:28:19,141 - INFO - 勤怠列: AI 入力は「備考」のみ。備考が空の日は「休暇区分」（前休・後休・他拠点勤務など）を reason に反映します。
-2026-03-29 16:28:20,208 - INFO - メイン・グローバルコメント: 工場休業扱いの日付 → 2026-04-01
-2026-03-29 16:28:20,251 - INFO - [設定_配台不要工程] START | 配台シート読込 | 設定シート保守開始 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
-2026-03-29 16:28:21,321 - INFO - [設定_配台不要工程] OPEN_OK | 配台シート読込 | ブックを開きました。 | keep_vba=True sheets=29
-2026-03-29 16:28:21,322 - INFO - 配台シート読込: 「設定_配台不要工程」から空行を 7 件削除し、13 行に詰めました（並び順は維持）。
-2026-03-29 16:28:21,323 - INFO - [設定_配台不要工程] DATA_COMPACT | 配台シート読込 | 空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。 | rows=13 removed_empty=7
-2026-03-29 16:28:21,325 - INFO - [設定_配台不要工程] E_VBA_TSV_WRITTEN | 配台シート読込 | E 列を VBA 反映用 TSV に書き出しました（COM 保存失敗時のフォールバック用）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
-2026-03-29 16:28:21,325 - INFO - [設定_配台不要工程] E_APPLY_FILES_WRITTEN | 配台シート読込 | E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。 | cells=2
-2026-03-29 16:28:21,325 - INFO - 配台シート読込: 設定_配台不要工程は openpyxl で保存します（不可のときは VBA 用行列 TSV）。
-2026-03-29 16:28:21,329 - WARNING - [設定_配台不要工程] OPENPYXL_SAVE_FAIL | 配台シート読込 | openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:21,329 - INFO - [設定_配台不要工程] OPENPYXL_RETRY_WAIT | 配台シート読込 | openpyxl 再保存まで 2 秒待ちます (2/4)。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:23,332 - WARNING - [設定_配台不要工程] OPENPYXL_SAVE_FAIL | 配台シート読込 | openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:23,333 - INFO - [設定_配台不要工程] OPENPYXL_RETRY_WAIT | 配台シート読込 | openpyxl 再保存まで 2 秒待ちます (3/4)。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:25,335 - WARNING - [設定_配台不要工程] OPENPYXL_SAVE_FAIL | 配台シート読込 | openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:25,335 - INFO - [設定_配台不要工程] OPENPYXL_RETRY_WAIT | 配台シート読込 | openpyxl 再保存まで 2 秒待ちます (4/4)。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:27,337 - WARNING - [設定_配台不要工程] OPENPYXL_SAVE_FAIL | 配台シート読込 | openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:27,338 - INFO - [設定_配台不要工程] MATRIX_TSV_WRITTEN | 配台シート読込 | 設定シート A〜E を VBA 反映用 TSV に書き出しました（openpyxl 保存不可時）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_matrix_vba.tsv rows=14
-2026-03-29 16:28:27,339 - WARNING - 配台シート読込: 設定シートを log\exclude_rules_matrix_vba.tsv に出力しました。 Excel でマクロ「設定_配台不要工程_AからE_TSVから反映」を実行してください。
-2026-03-29 16:28:27,339 - WARNING - [設定_配台不要工程] OPENPYXL_VBA_FALLBACK | 配台シート読込 | openpyxl 保存に失敗したため VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映が必要な場合があります）。 | path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
-2026-03-29 16:28:27,339 - WARNING - 配台シート読込: 設定シートの openpyxl 保存に失敗しました。 log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」、または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。
-2026-03-29 16:28:27,340 - INFO - [設定_配台不要工程] CLOSED | 配台シート読込 | ブックをクローズしました。
-2026-03-29 16:28:27,348 - INFO - 配台シート読込: 設定「設定_配台不要工程」により配台不要=yes を 5 行に設定しました。
-2026-03-29 16:28:27,348 - INFO - 計画タスク入力: 'G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm' の '配台計画_タスク入力' を読み込みました。
-2026-03-29 16:28:27,348 - INFO - メイン再優先特記: キャッシュヒット（Gemini は呼びません）。
-2026-03-29 16:28:27,351 - INFO - タスク特別指定: キャッシュヒット（2 件・基準年=2026）。Gemini は呼びません。
-2026-03-29 16:28:27,357 - INFO - task_queue 構築完了: total=38（配台不要によりスキップ 5 行）
-2026-03-29 16:28:28,449 - WARNING - 配台シートへの矛盾ハイライトをファイル保存できませんでした（Excel でブックを開いたまま等）。 'G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\planning_conflict_highlight.tsv' に指示を書き出しました。マクロがシート上に直接適用します。 ([Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm')
-2026-03-29 16:28:28,449 - INFO - DEBUG[task=Y3-26] queue基準: start_date_req=2026-04-03 due_basis=2026-04-05 answer_due=2026-04-07 specified_due=2026-04-07 specified_due_ov=None due_source=ai_target_due priority=1 in_progress=False remark=True
-2026-03-29 16:28:28,449 - INFO - DEBUG[day=2026-03-29] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,451 - INFO - DEBUG[day=2026-04-01] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,455 - INFO - DEBUG[day=2026-04-03] avail_members=6 tasks_today=17 (task=Y3-26 含む=True)
-2026-03-29 16:28:28,455 - INFO - DEBUG[task=Y3-26] day=2026-04-03 開始判定: start_date_req=2026-04-03 remaining_units=32.0 machine=SEC
-2026-03-29 16:28:28,455 - INFO - DEBUG[完了日指定] 依頼NO=Y3-26 日付=2026-04-03 start_date_req=2026-04-03 due_basis=2026-04-05 指定納期(上書き)=None 進捗=0.0/6400
-2026-03-29 16:28:28,455 - INFO - DEBUG[完了日指定] 依頼NO=Y3-26 設備=SEC req_num=3 capable_members=6 machine_free=2026-04-03 08:45:00
-2026-03-29 16:28:28,459 - INFO - DEBUG[day=2026-04-04] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,459 - INFO - DEBUG[day=2026-04-05] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,468 - INFO - DEBUG[day=2026-04-11] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,469 - INFO - DEBUG[day=2026-04-12] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,477 - INFO - DEBUG[day=2026-04-18] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-19] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-21] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,478 - INFO - DEBUG[day=2026-04-25] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,479 - INFO - DEBUG[day=2026-04-26] 稼働メンバー0のため割付スキップ
-2026-03-29 16:28:28,479 - INFO - DEBUG[day=2026-04-27] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,479 - INFO - DEBUG[day=2026-04-28] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,479 - INFO - DEBUG[day=2026-04-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,480 - INFO - DEBUG[day=2026-04-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
-2026-03-29 16:28:28,629 - INFO - 結果_タスク一覧の列順ソース: マクロブック「列設定_結果_タスク一覧」（23 列）
-2026-03-29 16:28:30,431 - INFO - 完了: 'G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\output\2026\03\29\production_plan_multi_day_20260329_162819.xlsx' を生成しました。
-2026-03-29 16:28:30,911 - INFO - 完了: 個人別スケジュールを 'G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\output\2026\03\29\member_schedule_20260329_162819.xlsx' に出力しました。
-2026-03-29 16:28:32,007 - WARNING - 段階2: メイン AI サマリの openpyxl 保存に失敗: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
-2026-03-29 16:28:32,009 - INFO - 段階2: メイン P 列は openpyxl で保存できませんでした（ブックが Excel で開いている可能性）。 G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で反映してください。
+﻿2026-03-29 17:51:10,136 - INFO - Gemini API キー: 暗号化認証 JSON から読み込みました。
+2026-03-29 17:51:10,232 - INFO - 結果ブック: 「設定」B4 が空のため、セルに書体名を埋め込みません（全シートフォント統一後の取り込みで上書きされにくくなります）。 Python 出力に明示フォントを付けたい場合は B4 にフォント名、必要なら B5 にポイントを入力してください。
+2026-03-29 17:51:10,258 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=15列, メンバー=6人）。
+2026-03-29 17:51:10,288 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ごとの上限を読み込みました。
+2026-03-29 17:51:10,302 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
+2026-03-29 17:51:10,303 - INFO - 『master.xlsm』からスキルと設備要件(need)を読み込みました。
+2026-03-29 17:51:10,350 - INFO - 計画基準日時: 2026/03/29 17:51:10（現在時刻フォールバック）
+2026-03-29 17:51:10,398 - INFO - 『master.xlsm』の各メンバーの勤怠シートを読み込みました。
+2026-03-29 17:51:10,399 - INFO - 勤怠列: AI 入力は「備考」のみ。備考が空の日は「休暇区分」（前休・後休・他拠点勤務など）を reason に反映します。
