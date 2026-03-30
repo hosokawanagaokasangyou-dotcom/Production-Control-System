@@ -566,10 +566,23 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
-# True（既定）: チームは「人数多い→開始早い→本日単位多い→優先度合計小さい」。False: 従来どおり開始時刻最優先
+# True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
-    "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "1"
+    "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
 ).strip().lower() not in ("0", "false", "no", "off", "いいえ")
+
+
+def _team_assign_start_slack_wait_minutes() -> int:
+    """全日候補の最早開始からこの分以内の遅れなら、開始より人数を優先（分）。0 で無効。"""
+    raw = os.environ.get("TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", "60").strip()
+    try:
+        v = int(raw)
+    except ValueError:
+        v = 60
+    return max(0, v)
+
+
+TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
 # マクロブック「設定_配台不要工程」: A〜E は openpyxl で保存。ロック時は xlwings で同期→Save。それも失敗時は TSV→VBA 反映。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
@@ -7252,20 +7265,42 @@ def _surplus_team_time_factor(
     return 1.0 - SURPLUS_TEAM_MAX_SPEEDUP_RATIO * frac
 
 
+def _team_assign_trace_tuple_label() -> str:
+    if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
+        return "(-人数, 開始, -単位数, 優先度合計)"
+    if TEAM_ASSIGN_START_SLACK_WAIT_MINUTES <= 0:
+        return "(開始, -単位数, 優先度合計)"
+    return (
+        f"最早開始から{TEAM_ASSIGN_START_SLACK_WAIT_MINUTES}分以内は"
+        "(0,-人数,開始,-単位数,優先度)、超過は(1,開始,-人数,-単位数,優先度)"
+    )
+
+
 def _team_assignment_sort_tuple(
     team: tuple,
     team_start: datetime,
     units_today: int,
     team_prio_sum: int,
+    t_min: datetime | None = None,
 ) -> tuple:
     """
     チーム候補の優劣用タプル（辞書式で小さい方が採用）。
-    TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF のとき -len(team) を先頭に置き余剰活用を優先。
+    - TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF: (-人数, 開始, -単位数, 優先度合計)
+    - それ以外かつ TEAM_ASSIGN_START_SLACK_WAIT_MINUTES>0 かつ t_min あり:
+        最早開始からスラック以内 → (0, -人数, 開始, -単位数, 優先度) … 遅れても人数を厚く
+        スラック超 → (1, 開始, -人数, -単位数, 優先度) … 開始を優先
+    - 上記以外: (開始, -単位数, 優先度合計)
     """
     n = len(team)
     if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
         return (-n, team_start, -units_today, team_prio_sum)
-    return (team_start, -units_today, team_prio_sum)
+    sm = TEAM_ASSIGN_START_SLACK_WAIT_MINUTES
+    if sm <= 0 or t_min is None:
+        return (team_start, -units_today, team_prio_sum)
+    sl = timedelta(minutes=sm)
+    if team_start - t_min <= sl:
+        return (0, -n, team_start, -units_today, team_prio_sum)
+    return (1, team_start, -n, -units_today, team_prio_sum)
 
 
 # skills セル: OP / AS + 任意の優先度整数（例 OP1, AS 3）。数値が小さいほど割当で先に選ばれる。
@@ -7315,12 +7350,24 @@ def build_member_assignment_priority_reference(
     mem_list = [str(m).strip() for m in mem_list if m and str(m).strip()]
 
     surplus_on = bool(TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF)
-    team_rule = (
-        "有効: チーム候補は「人数が多い」→「同なら開始が早い」→「同なら当日処理単位数が多い」"
-        "→「スキル優先度の合計が小さい」順で採用（環境変数 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF）。"
-        if surplus_on
-        else "無効: 「開始が早い」→「当日処理単位数が多い」→「スキル優先度合計が小さい」順（従来）。"
-    )
+    slack_m = TEAM_ASSIGN_START_SLACK_WAIT_MINUTES
+    if surplus_on:
+        team_rule = (
+            "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF=有効: "
+            "(-人数, 開始, -単位数, 優先度合計) の辞書式（人数最優先・従来）。"
+        )
+    elif slack_m > 0:
+        team_rule = (
+            f"既定: その日の成立候補全体の「最早開始」を基準に、"
+            f"開始がその{slack_m}分以内の遅れなら人数を厚く優先（0,-人数,開始,-単位数,優先度）、"
+            f"それより遅い候補は開始を優先（1,開始,-人数,-単位数,優先度）。"
+            f"環境変数 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0 で無効化。"
+        )
+    else:
+        team_rule = (
+            "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0: "
+            "(開始, -単位数, 優先度合計) のみ（開始最優先）。"
+        )
 
     legend_rows = [
         {
@@ -7343,7 +7390,11 @@ def build_member_assignment_priority_reference(
         },
         {
             "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
-            "内容": "1/有効（既定）" if surplus_on else "0/無効",
+            "内容": "1/有効（人数最優先・従来）" if surplus_on else "0/無効（既定）",
+        },
+        {
+            "区分": "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
+            "内容": str(slack_m),
         },
     ]
     df_legend = pd.DataFrame(legend_rows)
@@ -9135,16 +9186,9 @@ def generate_plan():
                             pref_mem,
                         )
     
-                    best_team = None
-                    best_info = {
-                        "start_dt": datetime.max,
-                        "units_today": 0,
-                        "prio_sum": 10**9,
-                    }
+                    team_candidates: list[dict] = []
     
                     for tsize in range(req_num, max_team_size + 1):
-                        sz_best_cand = None
-                        sz_best_meta = None
                         if (
                             pref_mem is not None
                             and pref_mem in capable_members
@@ -9233,49 +9277,67 @@ def generate_plan():
                             actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
     
                             team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
-                            cand = _team_assignment_sort_tuple(
-                                team, team_start, units_today, team_prio_sum
-                            )
-                            if trace_assign and (
-                                sz_best_cand is None or cand < sz_best_cand
-                            ):
-                                sz_best_cand = cand
-                                sz_best_meta = {
+                            team_candidates.append(
+                                {
                                     "team": team,
                                     "team_start": team_start,
+                                    "actual_end_dt": actual_end_dt,
                                     "units_today": units_today,
+                                    "team_breaks": team_breaks,
+                                    "avg_eff": avg_eff,
                                     "prio_sum": team_prio_sum,
+                                    "op_list": op_list,
                                     "eff_time_per_unit": eff_time_per_unit,
                                 }
-                            prev_best = (
-                                None
-                                if best_team is None
-                                else _team_assignment_sort_tuple(
-                                    best_team,
-                                    best_info["start_dt"],
-                                    best_info["units_today"],
-                                    best_info["prio_sum"],
-                                )
                             )
-                            if best_team is None or cand < prev_best:
-                                if pref_mem and pref_mem in op_list:
-                                    lead_op = pref_mem
-                                else:
-                                    lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
-                                best_team = team
-                                best_info = {
-                                    "start_dt": team_start,
-                                    "end_dt": actual_end_dt,
-                                    "op": lead_op,
-                                    "units_today": units_today,
-                                    "breaks": team_breaks,
-                                    "eff": avg_eff,
-                                    "prio_sum": team_prio_sum,
-                                }
     
-                        if trace_assign:
-                            tid = task["task_id"]
-                            if sz_best_meta is None:
+                    best_team = None
+                    best_info = {
+                        "start_dt": datetime.max,
+                        "units_today": 0,
+                        "prio_sum": 10**9,
+                    }
+                    t_min = (
+                        min(c["team_start"] for c in team_candidates)
+                        if team_candidates
+                        else None
+                    )
+    
+                    def _team_cand_key(c):
+                        return _team_assignment_sort_tuple(
+                            c["team"],
+                            c["team_start"],
+                            c["units_today"],
+                            c["prio_sum"],
+                            t_min,
+                        )
+    
+                    if team_candidates:
+                        best_c = min(team_candidates, key=_team_cand_key)
+                        if pref_mem and pref_mem in best_c["op_list"]:
+                            lead_op = pref_mem
+                        else:
+                            lead_op = min(
+                                best_c["op_list"],
+                                key=lambda mm: (skill_role_priority(mm)[1], mm),
+                            )
+                        best_team = best_c["team"]
+                        best_info = {
+                            "start_dt": best_c["team_start"],
+                            "end_dt": best_c["actual_end_dt"],
+                            "op": lead_op,
+                            "units_today": best_c["units_today"],
+                            "breaks": best_c["team_breaks"],
+                            "eff": best_c["avg_eff"],
+                            "prio_sum": best_c["prio_sum"],
+                        }
+    
+                    if trace_assign:
+                        _tk = _team_assign_trace_tuple_label()
+                        tid = task["task_id"]
+                        for tsize in range(req_num, max_team_size + 1):
+                            sub = [c for c in team_candidates if len(c["team"]) == tsize]
+                            if not sub:
                                 logging.info(
                                     "TRACE配台[%s] %s tsize=%s → この人数で成立するチームなし",
                                     tid,
@@ -9283,16 +9345,11 @@ def generate_plan():
                                     tsize,
                                 )
                             else:
-                                sm = sz_best_meta
-                                _tk = (
-                                    "(-人数, start, -units, prio_sum)"
-                                    if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF
-                                    else "(start, -units, prio_sum)"
-                                )
+                                sm = min(sub, key=_team_cand_key)
                                 logging.info(
                                     "TRACE配台[%s] %s tsize=%s 人数内最良: members=%s "
                                     "start=%s units_today=%s prio_sum=%s eff_t/unit=%.6f "
-                                    "比較タプル=%s ※辞書式で小さい方が採用",
+                                    "比較ルール=%s ※全日最早開始=%s を基準に辞書式で小さい方が採用",
                                     tid,
                                     current_date,
                                     tsize,
@@ -9302,6 +9359,7 @@ def generate_plan():
                                     sm["prio_sum"],
                                     sm["eff_time_per_unit"],
                                     _tk,
+                                    t_min.isoformat(sep=" ") if t_min else "—",
                                 )
     
                     if trace_assign and best_team is not None:
@@ -9318,18 +9376,19 @@ def generate_plan():
                         if len(best_team) == 1 and max_team_size > req_num:
                             if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
                                 logging.info(
-                                    "TRACE配台[%s] %s 1人採用（余剰優先モード）: より大きい人数で有効なチームなし"
-                                    "（OPが1人しかいない・組合せで時間内0単位・開始>=終了等）。",
+                                    "TRACE配台[%s] %s 1人採用（TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF）: "
+                                    "より大きい人数で有効なチームなし（OP不足・0単位・開始>=終了等）。",
                                     task["task_id"],
                                     current_date,
                                 )
                             else:
                                 logging.info(
-                                    "TRACE配台[%s] %s 1人採用の典型要因: team_start=max(メンバー空き) で人数が増えると開始が遅れやすい；"
-                                    "増員の速度効果が小さい(SURPLUS_TEAM_MAX_SPEEDUP_RATIO)と units_today がほぼ同じで開始の早い1人が勝つ。"
-                                    "必要人数が1(シート上書き・メイン再優先・need)のときは max_team=1 もあり得ます。",
+                                    "TRACE配台[%s] %s 1人採用: 人数を増やすと開始が遅れ、"
+                                    "スラック外では開始優先で1人が選ばれた可能性。"
+                                    "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=%s、または従来の人数最優先は環境変数参照。",
                                     task["task_id"],
                                     current_date,
+                                    TEAM_ASSIGN_START_SLACK_WAIT_MINUTES,
                                 )
     
                     if best_team:
