@@ -5045,6 +5045,43 @@ def _task_id_priority_key(task_id):
     return (s, 10**9, s)
 
 
+def _excel_scalar_to_plan_string_cell(v):
+    """
+    既存シート（read_excel）由来のスカラーを、配台計画 DataFrame の文字列列（StringDtype）へ
+    代入できる str に正規化する。Excel が数値として保持した優先度 1 → \"1\" など。
+    """
+    if v is None:
+        return ""
+    if isinstance(v, float) and pd.isna(v):
+        return ""
+    if isinstance(v, bool):
+        return str(v).lower()
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if isinstance(v, float) and math.isfinite(v) and float(int(v)) == v:
+            return str(int(v))
+        if isinstance(v, float) and math.isfinite(v):
+            s = str(v)
+            if "." in s:
+                s = s.rstrip("0").rstrip(".")
+            return s
+        return str(int(v))
+    if isinstance(v, pd.Timestamp):
+        if pd.isna(v):
+            return ""
+        if v.hour == 0 and v.minute == 0 and v.second == 0 and v.microsecond == 0:
+            return v.strftime("%Y/%m/%d")
+        return v.strftime("%Y/%m/%d %H:%M")
+    if isinstance(v, datetime):
+        if v.hour == 0 and v.minute == 0 and v.second == 0 and v.microsecond == 0:
+            return v.date().strftime("%Y/%m/%d")
+        return v.strftime("%Y/%m/%d %H:%M")
+    if isinstance(v, date):
+        return v.strftime("%Y/%m/%d")
+    if isinstance(v, str):
+        return v.strip()
+    return str(v).strip()
+
+
 def _merge_plan_sheet_user_overrides(out_df):
     """
     ブック内の「配台計画_タスク入力」にユーザーが入力した上書き列を、
@@ -5103,6 +5140,8 @@ def _merge_plan_sheet_user_overrides(out_df):
         for c, v in bucket.items():
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 v = _coerce_plan_exclude_column_value_for_storage(v)
+            elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
+                v = _excel_scalar_to_plan_string_cell(v)
             out_df.at[i, c] = v
 
     if merged_rows:
