@@ -1352,6 +1352,57 @@ Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As 
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
 End Function
 
+' xlwings.xlam をアドイン一覧に載せて Installed=True にする（環境構築の最後に呼ぶ）
+Private Sub EnableXlwingsAddInIfPresent()
+    Dim xlamPath As String
+    Dim ai As AddIn
+    Dim found As Boolean
+    xlamPath = Environ("APPDATA") & "\Microsoft\Excel\XLSTART\xlwings.xlam"
+    If Len(Dir(xlamPath)) = 0 Then Exit Sub
+    On Error Resume Next
+    found = False
+    For Each ai In Application.AddIns
+        If StrComp(CStr(ai.FullName), xlamPath, vbTextCompare) = 0 Then
+            ai.Installed = True
+            found = True
+            Exit For
+        End If
+    Next ai
+    If Not found Then
+        Application.AddIns.Add Filename:=xlamPath, CopyFile:=False
+        For Each ai In Application.AddIns
+            If StrComp(CStr(ai.FullName), xlamPath, vbTextCompare) = 0 Then
+                ai.Installed = True
+                Exit For
+            End If
+        Next ai
+    End If
+    On Error GoTo 0
+End Sub
+
+' ThisWorkbook に xlwings.xlam の VBA 参照を追加（RunPython 等）。要: 信頼センターで
+' 「VBA プロジェクト オブジェクト モデルへの信頼アクセス」。未設定時は On Error で無視。
+Private Sub TryAddXlwingsReferenceIfTrusted()
+    Dim xlamPath As String
+    Dim vbProj As Object
+    Dim i As Long
+    Dim ref As Object
+    xlamPath = Environ("APPDATA") & "\Microsoft\Excel\XLSTART\xlwings.xlam"
+    If Len(Dir(xlamPath)) = 0 Then Exit Sub
+    On Error GoTo CleanFail
+    Set vbProj = ThisWorkbook.VBProject
+    For i = 1 To vbProj.References.Count
+        Set ref = vbProj.References(i)
+        If InStr(1, CStr(ref.FullPath), "xlwings", vbTextCompare) > 0 Then
+            Exit Sub
+        End If
+    Next i
+    vbProj.References.AddFromFile xlamPath
+    Exit Sub
+CleanFail:
+    On Error GoTo 0
+End Sub
+
 Sub InstallComponents()
     Dim wsh As Object
     Dim wingetExit As Long
@@ -1417,9 +1468,18 @@ Sub InstallComponents()
                "py -3 " & setupRel, vbCritical
         Exit Sub
     End If
-    
+
+    ' setup_environment.py 内で %USERPROFILE%\.xlwings\xlwings.conf に SHOW CONSOLE=True をマージ済み。
+    Call EnableXlwingsAddInIfPresent
+    Call TryAddXlwingsReferenceIfTrusted
+
     MsgBox "すべてのコンポーネントの準備が完了しました！" & vbCrLf & vbCrLf & _
-           "xlwings のリボンが見えない場合は、Excel をいったん終了してから再度開いてください。", vbInformation
+           "xlwings: ユーザー設定に Show Console（SHOW CONSOLE=True）を書き込みました。" & vbCrLf & _
+           "アドインの有効化と、このブックへの VBA 参照追加も試みました。" & vbCrLf & vbCrLf & _
+           "・リボンや参照が反映されない場合は Excel を一度終了してから開き直してください。" & vbCrLf & _
+           "・参照が付かない場合は「ファイル」→「オプション」→「信頼センター」→「マクロの設定」で" & vbCrLf & _
+           "  「VBA プロジェクト オブジェクト モデルへの信頼アクセス」にチェック後、再度環境構築するか、" & vbCrLf & _
+           "  「開発」タブ→「参照設定」で xlwings に手動でチェックしてください。", vbInformation
 End Sub
 
 ' =========================================================
