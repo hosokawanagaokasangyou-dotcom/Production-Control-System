@@ -8195,6 +8195,11 @@ ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
+# 配台残（一部割当済み・納期内に完遂できず）の依頼について、納期系を1日ずつ後ろ倒しして全パス再実行する。
+# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各ラウンド前に勤怠拡張分はマスタ日付へ戻す。
+STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
+STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 366
+
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
     """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
@@ -8507,6 +8512,71 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     )
 
 
+def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
+    """勤怠辞書からマスタに無い日付キーを削除する（自動拡張分の巻き戻し）。"""
+    for dk in list(attendance_data.keys()):
+        if dk not in keep_dates:
+            del attendance_data[dk]
+
+
+def _collect_partial_remaining_task_ids(task_queue: list) -> set:
+    """配台残相当: 残量>0 かつ割当履歴ありの依頼NO集合。"""
+    out: set = set()
+    eps = 1e-9
+    for t in task_queue:
+        rem = float(t.get("remaining_units") or 0)
+        if rem <= eps:
+            continue
+        hist = t.get("assigned_history") or []
+        if not hist:
+            continue
+        tid = str(t.get("task_id", "") or "").strip()
+        if tid:
+            out.add(tid)
+    return out
+
+
+def _partial_task_id_due_shift_outcome(
+    task_queue: list, task_id: str, calendar_last: date
+) -> tuple[bool, bool]:
+    """
+    配台残の依頼NOについて納期+1日リトライの分類。
+    戻り値: (shift_ok, calendar_shortfall)
+    - shift_ok: 計画基準納期を持つ行があり、それらすべてで +1 日がマスタ最終計画日以下
+    - calendar_shortfall: 計画基準納期を持つ行があり、いずれかで +1 日がマスタ最終計画日を超える
+    基準納期が一行も無い依頼は (False, False)（通常の配台残のまま）。
+    """
+    tid = (task_id or "").strip()
+    if not tid:
+        return False, False
+    rows = [t for t in task_queue if str(t.get("task_id", "") or "").strip() == tid]
+    if not rows:
+        return False, False
+    basis_rows = [t for t in rows if t.get("due_basis_date") is not None]
+    if not basis_rows:
+        return False, False
+    for t in basis_rows:
+        db = t["due_basis_date"]
+        if db + timedelta(days=1) > calendar_last:
+            return False, True
+    return True, False
+
+
+def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
+    """1行分の納期系を1日ずらし、due_urgent を基準日で再計算する。"""
+    if task.get("due_basis_date") is not None:
+        task["due_basis_date"] = task["due_basis_date"] + timedelta(days=1)
+    if task.get("answer_due_date") is not None:
+        task["answer_due_date"] = task["answer_due_date"] + timedelta(days=1)
+    if task.get("specified_due_date") is not None:
+        task["specified_due_date"] = task["specified_due_date"] + timedelta(days=1)
+    if task.get("specified_due_override") is not None:
+        task["specified_due_override"] = task["specified_due_override"] + timedelta(days=1)
+    db = task.get("due_basis_date")
+    if db is not None:
+        task["due_urgent"] = db <= run_date
+
+
 # =========================================================
 # 3. メイン計画生成 (日毎ループ・持ち越し対応)
 #    段階2の本体。plan_simulation_stage2 からのみ呼ばれる想定。
@@ -8718,488 +8788,569 @@ def generate_plan():
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
     # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
+    # 配台残は納期+1日で全パス再試行（STAGE2_RETRY_*）。各ラウンド先頭で勤怠の自動拡張分はマスタ日付へ巻き戻す。
     # ---------------------------------------------------------
-    _plan_day_iter = (
-        _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
-        if STAGE2_EXTEND_ATTENDANCE_CALENDAR
-        else sorted_dates
-    )
-    for current_date in _plan_day_iter:
-        daily_status = attendance_data[current_date]
-        # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
-        machine_avail_dt = {}
-        
-        avail_dt = {}
-        for m in members:
-            if m not in daily_status:
+    _master_attendance_date_set = frozenset(attendance_data.keys())
+    _master_plan_dates_template = list(sorted_dates)
+    _calendar_last_plan_day = _master_plan_dates_template[-1]
+    _stage2_due_retry_round = 0
+    while True:
+        _stage2_due_retry_round += 1
+        if _stage2_due_retry_round > 1:
+            _purge_attendance_days_not_in_set(
+                attendance_data, _master_attendance_date_set
+            )
+            sorted_dates[:] = list(_master_plan_dates_template)
+
+        for t in task_queue:
+            t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
+            t["assigned_history"].clear()
+        timeline_events.clear()
+
+        _plan_day_iter = (
+            _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
+            if STAGE2_EXTEND_ATTENDANCE_CALENDAR
+            else sorted_dates
+        )
+        for current_date in _plan_day_iter:
+            daily_status = attendance_data[current_date]
+            # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
+            machine_avail_dt = {}
+            
+            avail_dt = {}
+            for m in members:
+                if m not in daily_status:
+                    continue
+                st = daily_status[m]
+                if st.get("eligible_for_assignment", st.get("is_working", False)):
+                    avail_dt[m] = st["start_dt"]
+            
+            if not avail_dt:
+                logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
                 continue
-            st = daily_status[m]
-            if st.get("eligible_for_assignment", st.get("is_working", False)):
-                avail_dt[m] = st["start_dt"]
-        
-        if not avail_dt:
-            logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
-            continue
-
-        tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
-        pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
-        if not tasks_today:
-            earliest_wait = min(
-                [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
-                default=None,
-            )
-            logging.info(
-                "DEBUG[day=%s] 割付対象タスク0件 pending_total=%s earliest_start_date_req=%s",
-                current_date,
-                pending_total,
-                earliest_wait,
-            )
-        elif DEBUG_TASK_ID:
-            has_dbg_today = any(str(t.get("task_id", "")).strip() == DEBUG_TASK_ID for t in tasks_today)
-            if current_date.isoformat() == "2026-04-03" or has_dbg_today:
+    
+            tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
+            if not tasks_today:
+                earliest_wait = min(
+                    [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
+                    default=None,
+                )
                 logging.info(
-                    "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s 含む=%s)",
+                    "DEBUG[day=%s] 割付対象タスク0件 pending_total=%s earliest_start_date_req=%s",
                     current_date,
-                    len(avail_dt),
-                    len(tasks_today),
-                    DEBUG_TASK_ID,
-                    has_dbg_today,
+                    pending_total,
+                    earliest_wait,
                 )
-        
-        _sched_max_passes = max(96, max(1, len(tasks_today)) * 15)
-        _sched_pi = 0
-        while _sched_pi < _sched_max_passes:
-            _sched_pi += 1
-            _sched_made_progress = False
-            for task in sorted(
-                [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
-                key=lambda t: _day_schedule_task_sort_key(t, task_queue),
-            ):
-                if _task_blocked_by_same_request_dependency(task, task_queue):
-                    continue
-                if task.get("roll_pipeline_inspection") and (
-                    _roll_pipeline_inspection_assign_room(
-                        task_queue, str(task.get("task_id", "")).strip()
-                    )
-                    <= 1e-12
-                ):
-                    continue
-                if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
+            elif DEBUG_TASK_ID:
+                has_dbg_today = any(str(t.get("task_id", "")).strip() == DEBUG_TASK_ID for t in tasks_today)
+                if current_date.isoformat() == "2026-04-03" or has_dbg_today:
                     logging.info(
-                        "DEBUG[task=%s] day=%s 開始判定: start_date_req=%s remaining_units=%s machine=%s",
+                        "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s 含む=%s)",
+                        current_date,
+                        len(avail_dt),
+                        len(tasks_today),
                         DEBUG_TASK_ID,
-                        current_date,
-                        task.get("start_date_req"),
-                        task.get("remaining_units"),
-                        task.get("machine"),
+                        has_dbg_today,
                     )
-                if task.get("has_done_deadline_override"):
-                    logging.info(
-                        "DEBUG[完了日指定] 依頼NO=%s 日付=%s start_date_req=%s due_basis=%s 指定納期(上書き)=%s 進捗=%s/%s",
-                        task.get("task_id"),
-                        current_date,
-                        task.get("start_date_req"),
-                        task.get("due_basis_date"),
-                        task.get("specified_due_override"),
-                        task.get("done_qty_reported"),
-                        task.get("total_qty_m"),
-                    )
-
-                machine = task['machine']
-                ro = task.get("required_op")
-                if ro is not None and int(ro) >= 1:
-                    req_num = int(ro)
-                else:
-                    req_num = resolve_need_required_op(
-                        machine, task.get("machine_name", ""), task["task_id"], req_map, need_rules
-                    )
-                if global_priority_override.get("ignore_need_minimum"):
-                    req_num = 1
-
-                # メンバー×設備スキル（parse_op_as_skill_cell: 小さい優先度ほど先にチーム候補へ採用）
-                # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
-                # 複合キー「工程名+機械名」のみを見る（別工程の同名機械の OP が流れ込まないようにする）。
-                skill_meta_cache = {}
-                machine_name = str(task.get("machine_name", "") or "").strip()
-                machine_proc = str(machine or "").strip()
-                _gpo = global_priority_override
-
-                def skill_role_priority(mem):
-                    if _gpo.get("ignore_skill_requirements"):
-                        return ("OP", 100)
-                    if mem not in skill_meta_cache:
-                        srow = skills_dict.get(mem, {})
-                        v = ""
-                        if machine_proc and machine_name:
-                            v = srow.get(f"{machine_proc}+{machine_name}", "")
-                        elif machine_name:
-                            v = srow.get(machine_name, "")
-                        elif machine_proc:
-                            v = srow.get(machine_proc, "")
-                        skill_meta_cache[mem] = parse_op_as_skill_cell(v)
-                    return skill_meta_cache[mem]
-
-                capable_members = [m for m in avail_dt.keys() if skill_role_priority(m)[0] in ("OP", "AS")]
-                capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
-                if task.get("has_done_deadline_override"):
-                    machine_free_dbg = machine_avail_dt.get(machine, datetime.combine(current_date, DEFAULT_START_TIME))
-                    logging.info(
-                        "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
-                        task.get("task_id"),
-                        machine,
-                        req_num,
-                        len(capable_members),
-                        machine_free_dbg,
-                    )
-
-                pref_raw = str(task.get("preferred_operator_raw") or "").strip()
-                op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-                pref_mem = (
-                    _resolve_preferred_op_to_member(pref_raw, op_today, members)
-                    if pref_raw
-                    else None
-                )
-                if pref_raw and pref_mem is None and op_today:
-                    logging.info(
-                        "担当OP指名: 当日のOP候補に一致せず制約なし task=%s raw=%r",
-                        task.get("task_id"),
-                        pref_raw,
-                    )
-
-                extra_max = resolve_need_surplus_extra_max(
-                    machine,
-                    machine_name,
-                    task["task_id"],
-                    surplus_map,
-                    need_rules,
-                )
-                max_team_size = min(req_num + extra_max, len(capable_members))
-                if max_team_size < req_num:
-                    max_team_size = req_num
-                rq_base = max(1, int(req_num))
-
-                trace_assign = bool(TRACE_TEAM_ASSIGN_TASK_ID) and (
-                    str(task.get("task_id", "")).strip() == TRACE_TEAM_ASSIGN_TASK_ID
-                )
-                if trace_assign:
-                    logging.info(
-                        "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
-                        "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%r→%s",
-                        task["task_id"],
-                        current_date,
-                        machine,
-                        machine_name,
-                        req_num,
-                        extra_max,
-                        max_team_size,
-                        len(capable_members),
-                        capable_members,
-                        global_priority_override.get("ignore_need_minimum"),
-                        global_priority_override.get("ignore_skill_requirements"),
-                        global_priority_override.get("abolish_all_scheduling_limits"),
-                        pref_raw,
-                        pref_mem,
-                    )
-
-                best_team = None
-                best_info = {
-                    "start_dt": datetime.max,
-                    "units_today": 0,
-                    "prio_sum": 10**9,
-                }
-
-                for tsize in range(req_num, max_team_size + 1):
-                    sz_best_cand = None
-                    sz_best_meta = None
-                    if (
-                        pref_mem is not None
-                        and pref_mem in capable_members
-                        and skill_role_priority(pref_mem)[0] == "OP"
-                    ):
-                        others = [m for m in capable_members if m != pref_mem]
-                        if tsize == 1:
-                            teams_iter = [(pref_mem,)]
-                        elif len(others) >= tsize - 1:
-                            teams_iter = [
-                                tuple([pref_mem] + list(rest))
-                                for rest in itertools.combinations(others, tsize - 1)
-                            ]
-                        else:
-                            logging.info(
-                                "担当OP指名: チーム人数を満たせないため指名を無視 task=%s size=%s raw=%r",
-                                task.get("task_id"),
-                                tsize,
-                                pref_raw,
-                            )
-                            teams_iter = itertools.combinations(capable_members, tsize)
-                    else:
-                        teams_iter = itertools.combinations(capable_members, tsize)
-
-                    for team in teams_iter:
-                        op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
-                        if not op_list:
-                            continue
-
-                        team_start = max(avail_dt[m] for m in team)
-                        if not _gpo.get("abolish_all_scheduling_limits"):
-                            # 同一設備は1時点で1タスクのみ（設備空き時刻を反映）
-                            machine_free_dt = machine_avail_dt.get(
-                                machine, datetime.combine(current_date, DEFAULT_START_TIME)
-                            )
-                            if team_start < machine_free_dt:
-                                team_start = machine_free_dt
-                            # 原反投入日と同日の開始は 10:30 以降
-                            if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
-                                min_start_dt = datetime.combine(
-                                    current_date, task["same_day_raw_start_limit"]
-                                )
-                                if team_start < min_start_dt:
-                                    team_start = min_start_dt
-                            if current_date == task["start_date_req"] and task.get("earliest_start_time"):
-                                min_user_t = datetime.combine(
-                                    current_date, task["earliest_start_time"]
-                                )
-                                if team_start < min_user_t:
-                                    team_start = min_user_t
-                            # 当日は「マクロ実行した時刻」より前に開始できない
-                            if current_date == macro_run_date and team_start < macro_now_dt:
-                                team_start = macro_now_dt
-                        team_end_limit = min(daily_status[m]['end_dt'] for m in team)
-
-                        if team_start >= team_end_limit:
-                            continue
-
-                        team_breaks = []
-                        for m in team:
-                            team_breaks.extend(daily_status[m]['breaks_dt'])
-                        team_breaks = merge_time_intervals(team_breaks)
-
-                        avg_eff = sum(daily_status[m]['efficiency'] for m in team) / len(team)
-                        if avg_eff <= 0:
-                            avg_eff = 0.01
-                        t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-                        if t_eff <= 0:
-                            t_eff = 1.0
-                        # 追加増員による短縮は最大でも SURPLUS_TEAM_MAX_SPEEDUP_RATIO 程度（線形）
-                        eff_time_per_unit = (
-                            task["base_time_per_unit"]
-                            / avg_eff
-                            / t_eff
-                            * _surplus_team_time_factor(rq_base, len(team), extra_max)
-                        )
-
-                        _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
-
-                        units_can_do = int(avail_mins / eff_time_per_unit)
-                        if units_can_do == 0:
-                            continue
-
-                        units_today = min(units_can_do, math.ceil(task['remaining_units']))
-                        work_mins_needed = int(units_today * eff_time_per_unit)
-                        actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
-
-                        team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
-                        cand = _team_assignment_sort_tuple(
-                            team, team_start, units_today, team_prio_sum
-                        )
-                        if trace_assign and (
-                            sz_best_cand is None or cand < sz_best_cand
-                        ):
-                            sz_best_cand = cand
-                            sz_best_meta = {
-                                "team": team,
-                                "team_start": team_start,
-                                "units_today": units_today,
-                                "prio_sum": team_prio_sum,
-                                "eff_time_per_unit": eff_time_per_unit,
-                            }
-                        prev_best = (
-                            None
-                            if best_team is None
-                            else _team_assignment_sort_tuple(
-                                best_team,
-                                best_info["start_dt"],
-                                best_info["units_today"],
-                                best_info["prio_sum"],
-                            )
-                        )
-                        if best_team is None or cand < prev_best:
-                            if pref_mem and pref_mem in op_list:
-                                lead_op = pref_mem
-                            else:
-                                lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
-                            best_team = team
-                            best_info = {
-                                "start_dt": team_start,
-                                "end_dt": actual_end_dt,
-                                "op": lead_op,
-                                "units_today": units_today,
-                                "breaks": team_breaks,
-                                "eff": avg_eff,
-                                "prio_sum": team_prio_sum,
-                            }
-
-                    if trace_assign:
-                        tid = task["task_id"]
-                        if sz_best_meta is None:
-                            logging.info(
-                                "TRACE配台[%s] %s tsize=%s → この人数で成立するチームなし",
-                                tid,
-                                current_date,
-                                tsize,
-                            )
-                        else:
-                            sm = sz_best_meta
-                            _tk = (
-                                "(-人数, start, -units, prio_sum)"
-                                if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF
-                                else "(start, -units, prio_sum)"
-                            )
-                            logging.info(
-                                "TRACE配台[%s] %s tsize=%s 人数内最良: members=%s "
-                                "start=%s units_today=%s prio_sum=%s eff_t/unit=%.6f "
-                                "比較タプル=%s ※辞書式で小さい方が採用",
-                                tid,
-                                current_date,
-                                tsize,
-                                sm["team"],
-                                sm["team_start"],
-                                sm["units_today"],
-                                sm["prio_sum"],
-                                sm["eff_time_per_unit"],
-                                _tk,
-                            )
-
-                if trace_assign and best_team is not None:
-                    logging.info(
-                        "TRACE配台[%s] %s ★採用 n=%s members=%s start=%s units_today=%s prio_sum=%s",
-                        task["task_id"],
-                        current_date,
-                        len(best_team),
-                        best_team,
-                        best_info["start_dt"],
-                        best_info["units_today"],
-                        best_info["prio_sum"],
-                    )
-                    if len(best_team) == 1 and max_team_size > req_num:
-                        if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
-                            logging.info(
-                                "TRACE配台[%s] %s 1人採用（余剰優先モード）: より大きい人数で有効なチームなし"
-                                "（OPが1人しかいない・組合せで時間内0単位・開始>=終了等）。",
-                                task["task_id"],
-                                current_date,
-                            )
-                        else:
-                            logging.info(
-                                "TRACE配台[%s] %s 1人採用の典型要因: team_start=max(メンバー空き) で人数が増えると開始が遅れやすい；"
-                                "増員の速度効果が小さい(SURPLUS_TEAM_MAX_SPEEDUP_RATIO)と units_today がほぼ同じで開始の早い1人が勝つ。"
-                                "必要人数が1(シート上書き・メイン再優先・need)のときは max_team=1 もあり得ます。",
-                                task["task_id"],
-                                current_date,
-                            )
-
-                if best_team:
-                    sub_members = [m for m in best_team if m != best_info["op"]]
-                    done_units = best_info["units_today"]
-                    if task.get("roll_pipeline_inspection"):
-                        _rp_room = _roll_pipeline_inspection_assign_room(
+            
+            _sched_max_passes = max(96, max(1, len(tasks_today)) * 15)
+            _sched_pi = 0
+            while _sched_pi < _sched_max_passes:
+                _sched_pi += 1
+                _sched_made_progress = False
+                for task in sorted(
+                    [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
+                    key=lambda t: _day_schedule_task_sort_key(t, task_queue),
+                ):
+                    if _task_blocked_by_same_request_dependency(task, task_queue):
+                        continue
+                    if task.get("roll_pipeline_inspection") and (
+                        _roll_pipeline_inspection_assign_room(
                             task_queue, str(task.get("task_id", "")).strip()
                         )
-                        done_units = min(
-                            int(done_units),
-                            int(min(_rp_room, math.ceil(task["remaining_units"]))),
-                        )
-                    else:
-                        done_units = int(done_units)
-                    if done_units <= 0:
+                        <= 1e-12
+                    ):
                         continue
-                    if done_units < best_info["units_today"]:
-                        team_end_limit = min(
-                            daily_status[m]["end_dt"] for m in best_team
+                    if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
+                        logging.info(
+                            "DEBUG[task=%s] day=%s 開始判定: start_date_req=%s remaining_units=%s machine=%s",
+                            DEBUG_TASK_ID,
+                            current_date,
+                            task.get("start_date_req"),
+                            task.get("remaining_units"),
+                            task.get("machine"),
                         )
-                        _teff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-                        if _teff <= 0:
-                            _teff = 1.0
-                        _eff_t = (
-                            task["base_time_per_unit"]
-                            / best_info["eff"]
-                            / _teff
-                            * _surplus_team_time_factor(rq_base, len(best_team), extra_max)
-                        )
-                        _wm = int(done_units * _eff_t)
-                        _end_dt, _, _ = calculate_end_time(
-                            best_info["start_dt"],
-                            _wm,
-                            best_info["breaks"],
-                            team_end_limit,
-                        )
-                        best_info = dict(best_info)
-                        best_info["end_dt"] = _end_dt
-                        best_info["units_today"] = done_units
-
-                    total_u = math.ceil(task['total_qty_m'] / task['unit_m']) if task['unit_m'] else 0
-                    rem_u_before = math.ceil(task['remaining_units'])
-                    already_done = total_u - rem_u_before
-                    
-                    # 「マクロ実行時点」の完了率（予定の進捗ではなく、実加工数ベース）
-                    try:
-                        tot_qty = parse_float_safe(task.get('total_qty_m'), 0.0)
-                        done_qty = parse_float_safe(task.get('done_qty_reported'), 0.0)
-                        if tot_qty > 0:
-                            pct_macro = max(0, min(100, int(round((done_qty / tot_qty) * 100))))
-                        else:
-                            pct_macro = 0
-                    except Exception:
-                        pct_macro = 0
-                    
-                    _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
-                    if _te_disp <= 0:
-                        _te_disp = 1.0
-                    timeline_events.append({
-                        "date": current_date, "task_id": task['task_id'], "machine": machine,
-                        "op": best_info["op"], "sub": ", ".join(sub_members),
-                        "start_dt": best_info["start_dt"], "end_dt": best_info["end_dt"],
-                        "breaks": best_info["breaks"], "units_done": done_units,
-                        "already_done_units": already_done,
-                        "total_units": total_u,
-                        "pct_macro": pct_macro,
-                        "eff_time_per_unit": task["base_time_per_unit"]
-                        / best_info["eff"]
-                        / _te_disp
-                        * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
-                        "unit_m": task['unit_m']
-                    })
-                    
-                    task['remaining_units'] -= done_units
-                    op_main = (best_info.get("op") or "").strip()
-                    subs_part = ",".join(
-                        s.strip() for s in sub_members if s and str(s).strip()
-                    )
-                    team_s = f"{op_main}, {subs_part}" if subs_part else op_main
-                    task["assigned_history"].append(
-                        {
-                            "date": current_date.strftime("%m/%d"),
-                            "team": team_s,
-                            "done_m": int(done_units * task["unit_m"]),
-                        }
-                    )
-                    
-                    for m in best_team:
-                        avail_dt[m] = best_info["end_dt"]
-                    if not _gpo.get("abolish_all_scheduling_limits"):
-                        machine_avail_dt[machine] = best_info["end_dt"]
-                    _sched_made_progress = True
-                else:
                     if task.get("has_done_deadline_override"):
                         logging.info(
-                            "DEBUG[完了日指定] 依頼NO=%s 日付=%s は割当不可（要員/設備空き条件でチーム不成立）。remaining_units=%s",
+                            "DEBUG[完了日指定] 依頼NO=%s 日付=%s start_date_req=%s due_basis=%s 指定納期(上書き)=%s 進捗=%s/%s",
                             task.get("task_id"),
                             current_date,
-                            task.get("remaining_units"),
+                            task.get("start_date_req"),
+                            task.get("due_basis_date"),
+                            task.get("specified_due_override"),
+                            task.get("done_qty_reported"),
+                            task.get("total_qty_m"),
                         )
+    
+                    machine = task['machine']
+                    ro = task.get("required_op")
+                    if ro is not None and int(ro) >= 1:
+                        req_num = int(ro)
+                    else:
+                        req_num = resolve_need_required_op(
+                            machine, task.get("machine_name", ""), task["task_id"], req_map, need_rules
+                        )
+                    if global_priority_override.get("ignore_need_minimum"):
+                        req_num = 1
+    
+                    # メンバー×設備スキル（parse_op_as_skill_cell: 小さい優先度ほど先にチーム候補へ採用）
+                    # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
+                    # 複合キー「工程名+機械名」のみを見る（別工程の同名機械の OP が流れ込まないようにする）。
+                    skill_meta_cache = {}
+                    machine_name = str(task.get("machine_name", "") or "").strip()
+                    machine_proc = str(machine or "").strip()
+                    _gpo = global_priority_override
+    
+                    def skill_role_priority(mem):
+                        if _gpo.get("ignore_skill_requirements"):
+                            return ("OP", 100)
+                        if mem not in skill_meta_cache:
+                            srow = skills_dict.get(mem, {})
+                            v = ""
+                            if machine_proc and machine_name:
+                                v = srow.get(f"{machine_proc}+{machine_name}", "")
+                            elif machine_name:
+                                v = srow.get(machine_name, "")
+                            elif machine_proc:
+                                v = srow.get(machine_proc, "")
+                            skill_meta_cache[mem] = parse_op_as_skill_cell(v)
+                        return skill_meta_cache[mem]
+    
+                    capable_members = [m for m in avail_dt.keys() if skill_role_priority(m)[0] in ("OP", "AS")]
+                    capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+                    if task.get("has_done_deadline_override"):
+                        machine_free_dbg = machine_avail_dt.get(machine, datetime.combine(current_date, DEFAULT_START_TIME))
+                        logging.info(
+                            "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
+                            task.get("task_id"),
+                            machine,
+                            req_num,
+                            len(capable_members),
+                            machine_free_dbg,
+                        )
+    
+                    pref_raw = str(task.get("preferred_operator_raw") or "").strip()
+                    op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
+                    pref_mem = (
+                        _resolve_preferred_op_to_member(pref_raw, op_today, members)
+                        if pref_raw
+                        else None
+                    )
+                    if pref_raw and pref_mem is None and op_today:
+                        logging.info(
+                            "担当OP指名: 当日のOP候補に一致せず制約なし task=%s raw=%r",
+                            task.get("task_id"),
+                            pref_raw,
+                        )
+    
+                    extra_max = resolve_need_surplus_extra_max(
+                        machine,
+                        machine_name,
+                        task["task_id"],
+                        surplus_map,
+                        need_rules,
+                    )
+                    max_team_size = min(req_num + extra_max, len(capable_members))
+                    if max_team_size < req_num:
+                        max_team_size = req_num
+                    rq_base = max(1, int(req_num))
+    
+                    trace_assign = bool(TRACE_TEAM_ASSIGN_TASK_ID) and (
+                        str(task.get("task_id", "")).strip() == TRACE_TEAM_ASSIGN_TASK_ID
+                    )
+                    if trace_assign:
+                        logging.info(
+                            "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
+                            "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%r→%s",
+                            task["task_id"],
+                            current_date,
+                            machine,
+                            machine_name,
+                            req_num,
+                            extra_max,
+                            max_team_size,
+                            len(capable_members),
+                            capable_members,
+                            global_priority_override.get("ignore_need_minimum"),
+                            global_priority_override.get("ignore_skill_requirements"),
+                            global_priority_override.get("abolish_all_scheduling_limits"),
+                            pref_raw,
+                            pref_mem,
+                        )
+    
+                    best_team = None
+                    best_info = {
+                        "start_dt": datetime.max,
+                        "units_today": 0,
+                        "prio_sum": 10**9,
+                    }
+    
+                    for tsize in range(req_num, max_team_size + 1):
+                        sz_best_cand = None
+                        sz_best_meta = None
+                        if (
+                            pref_mem is not None
+                            and pref_mem in capable_members
+                            and skill_role_priority(pref_mem)[0] == "OP"
+                        ):
+                            others = [m for m in capable_members if m != pref_mem]
+                            if tsize == 1:
+                                teams_iter = [(pref_mem,)]
+                            elif len(others) >= tsize - 1:
+                                teams_iter = [
+                                    tuple([pref_mem] + list(rest))
+                                    for rest in itertools.combinations(others, tsize - 1)
+                                ]
+                            else:
+                                logging.info(
+                                    "担当OP指名: チーム人数を満たせないため指名を無視 task=%s size=%s raw=%r",
+                                    task.get("task_id"),
+                                    tsize,
+                                    pref_raw,
+                                )
+                                teams_iter = itertools.combinations(capable_members, tsize)
+                        else:
+                            teams_iter = itertools.combinations(capable_members, tsize)
+    
+                        for team in teams_iter:
+                            op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
+                            if not op_list:
+                                continue
+    
+                            team_start = max(avail_dt[m] for m in team)
+                            if not _gpo.get("abolish_all_scheduling_limits"):
+                                # 同一設備は1時点で1タスクのみ（設備空き時刻を反映）
+                                machine_free_dt = machine_avail_dt.get(
+                                    machine, datetime.combine(current_date, DEFAULT_START_TIME)
+                                )
+                                if team_start < machine_free_dt:
+                                    team_start = machine_free_dt
+                                # 原反投入日と同日の開始は 10:30 以降
+                                if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
+                                    min_start_dt = datetime.combine(
+                                        current_date, task["same_day_raw_start_limit"]
+                                    )
+                                    if team_start < min_start_dt:
+                                        team_start = min_start_dt
+                                if current_date == task["start_date_req"] and task.get("earliest_start_time"):
+                                    min_user_t = datetime.combine(
+                                        current_date, task["earliest_start_time"]
+                                    )
+                                    if team_start < min_user_t:
+                                        team_start = min_user_t
+                                # 当日は「マクロ実行した時刻」より前に開始できない
+                                if current_date == macro_run_date and team_start < macro_now_dt:
+                                    team_start = macro_now_dt
+                            team_end_limit = min(daily_status[m]['end_dt'] for m in team)
+    
+                            if team_start >= team_end_limit:
+                                continue
+    
+                            team_breaks = []
+                            for m in team:
+                                team_breaks.extend(daily_status[m]['breaks_dt'])
+                            team_breaks = merge_time_intervals(team_breaks)
+    
+                            avg_eff = sum(daily_status[m]['efficiency'] for m in team) / len(team)
+                            if avg_eff <= 0:
+                                avg_eff = 0.01
+                            t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+                            if t_eff <= 0:
+                                t_eff = 1.0
+                            # 追加増員による短縮は最大でも SURPLUS_TEAM_MAX_SPEEDUP_RATIO 程度（線形）
+                            eff_time_per_unit = (
+                                task["base_time_per_unit"]
+                                / avg_eff
+                                / t_eff
+                                * _surplus_team_time_factor(rq_base, len(team), extra_max)
+                            )
+    
+                            _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
+    
+                            units_can_do = int(avail_mins / eff_time_per_unit)
+                            if units_can_do == 0:
+                                continue
+    
+                            units_today = min(units_can_do, math.ceil(task['remaining_units']))
+                            work_mins_needed = int(units_today * eff_time_per_unit)
+                            actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
+    
+                            team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
+                            cand = _team_assignment_sort_tuple(
+                                team, team_start, units_today, team_prio_sum
+                            )
+                            if trace_assign and (
+                                sz_best_cand is None or cand < sz_best_cand
+                            ):
+                                sz_best_cand = cand
+                                sz_best_meta = {
+                                    "team": team,
+                                    "team_start": team_start,
+                                    "units_today": units_today,
+                                    "prio_sum": team_prio_sum,
+                                    "eff_time_per_unit": eff_time_per_unit,
+                                }
+                            prev_best = (
+                                None
+                                if best_team is None
+                                else _team_assignment_sort_tuple(
+                                    best_team,
+                                    best_info["start_dt"],
+                                    best_info["units_today"],
+                                    best_info["prio_sum"],
+                                )
+                            )
+                            if best_team is None or cand < prev_best:
+                                if pref_mem and pref_mem in op_list:
+                                    lead_op = pref_mem
+                                else:
+                                    lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
+                                best_team = team
+                                best_info = {
+                                    "start_dt": team_start,
+                                    "end_dt": actual_end_dt,
+                                    "op": lead_op,
+                                    "units_today": units_today,
+                                    "breaks": team_breaks,
+                                    "eff": avg_eff,
+                                    "prio_sum": team_prio_sum,
+                                }
+    
+                        if trace_assign:
+                            tid = task["task_id"]
+                            if sz_best_meta is None:
+                                logging.info(
+                                    "TRACE配台[%s] %s tsize=%s → この人数で成立するチームなし",
+                                    tid,
+                                    current_date,
+                                    tsize,
+                                )
+                            else:
+                                sm = sz_best_meta
+                                _tk = (
+                                    "(-人数, start, -units, prio_sum)"
+                                    if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF
+                                    else "(start, -units, prio_sum)"
+                                )
+                                logging.info(
+                                    "TRACE配台[%s] %s tsize=%s 人数内最良: members=%s "
+                                    "start=%s units_today=%s prio_sum=%s eff_t/unit=%.6f "
+                                    "比較タプル=%s ※辞書式で小さい方が採用",
+                                    tid,
+                                    current_date,
+                                    tsize,
+                                    sm["team"],
+                                    sm["team_start"],
+                                    sm["units_today"],
+                                    sm["prio_sum"],
+                                    sm["eff_time_per_unit"],
+                                    _tk,
+                                )
+    
+                    if trace_assign and best_team is not None:
+                        logging.info(
+                            "TRACE配台[%s] %s ★採用 n=%s members=%s start=%s units_today=%s prio_sum=%s",
+                            task["task_id"],
+                            current_date,
+                            len(best_team),
+                            best_team,
+                            best_info["start_dt"],
+                            best_info["units_today"],
+                            best_info["prio_sum"],
+                        )
+                        if len(best_team) == 1 and max_team_size > req_num:
+                            if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
+                                logging.info(
+                                    "TRACE配台[%s] %s 1人採用（余剰優先モード）: より大きい人数で有効なチームなし"
+                                    "（OPが1人しかいない・組合せで時間内0単位・開始>=終了等）。",
+                                    task["task_id"],
+                                    current_date,
+                                )
+                            else:
+                                logging.info(
+                                    "TRACE配台[%s] %s 1人採用の典型要因: team_start=max(メンバー空き) で人数が増えると開始が遅れやすい；"
+                                    "増員の速度効果が小さい(SURPLUS_TEAM_MAX_SPEEDUP_RATIO)と units_today がほぼ同じで開始の早い1人が勝つ。"
+                                    "必要人数が1(シート上書き・メイン再優先・need)のときは max_team=1 もあり得ます。",
+                                    task["task_id"],
+                                    current_date,
+                                )
+    
+                    if best_team:
+                        sub_members = [m for m in best_team if m != best_info["op"]]
+                        done_units = best_info["units_today"]
+                        if task.get("roll_pipeline_inspection"):
+                            _rp_room = _roll_pipeline_inspection_assign_room(
+                                task_queue, str(task.get("task_id", "")).strip()
+                            )
+                            done_units = min(
+                                int(done_units),
+                                int(min(_rp_room, math.ceil(task["remaining_units"]))),
+                            )
+                        else:
+                            done_units = int(done_units)
+                        if done_units <= 0:
+                            continue
+                        if done_units < best_info["units_today"]:
+                            team_end_limit = min(
+                                daily_status[m]["end_dt"] for m in best_team
+                            )
+                            _teff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+                            if _teff <= 0:
+                                _teff = 1.0
+                            _eff_t = (
+                                task["base_time_per_unit"]
+                                / best_info["eff"]
+                                / _teff
+                                * _surplus_team_time_factor(rq_base, len(best_team), extra_max)
+                            )
+                            _wm = int(done_units * _eff_t)
+                            _end_dt, _, _ = calculate_end_time(
+                                best_info["start_dt"],
+                                _wm,
+                                best_info["breaks"],
+                                team_end_limit,
+                            )
+                            best_info = dict(best_info)
+                            best_info["end_dt"] = _end_dt
+                            best_info["units_today"] = done_units
+    
+                        total_u = math.ceil(task['total_qty_m'] / task['unit_m']) if task['unit_m'] else 0
+                        rem_u_before = math.ceil(task['remaining_units'])
+                        already_done = total_u - rem_u_before
+                        
+                        # 「マクロ実行時点」の完了率（予定の進捗ではなく、実加工数ベース）
+                        try:
+                            tot_qty = parse_float_safe(task.get('total_qty_m'), 0.0)
+                            done_qty = parse_float_safe(task.get('done_qty_reported'), 0.0)
+                            if tot_qty > 0:
+                                pct_macro = max(0, min(100, int(round((done_qty / tot_qty) * 100))))
+                            else:
+                                pct_macro = 0
+                        except Exception:
+                            pct_macro = 0
+                        
+                        _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
+                        if _te_disp <= 0:
+                            _te_disp = 1.0
+                        timeline_events.append({
+                            "date": current_date, "task_id": task['task_id'], "machine": machine,
+                            "op": best_info["op"], "sub": ", ".join(sub_members),
+                            "start_dt": best_info["start_dt"], "end_dt": best_info["end_dt"],
+                            "breaks": best_info["breaks"], "units_done": done_units,
+                            "already_done_units": already_done,
+                            "total_units": total_u,
+                            "pct_macro": pct_macro,
+                            "eff_time_per_unit": task["base_time_per_unit"]
+                            / best_info["eff"]
+                            / _te_disp
+                            * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
+                            "unit_m": task['unit_m']
+                        })
+                        
+                        task['remaining_units'] -= done_units
+                        op_main = (best_info.get("op") or "").strip()
+                        subs_part = ",".join(
+                            s.strip() for s in sub_members if s and str(s).strip()
+                        )
+                        team_s = f"{op_main}, {subs_part}" if subs_part else op_main
+                        task["assigned_history"].append(
+                            {
+                                "date": current_date.strftime("%m/%d"),
+                                "team": team_s,
+                                "done_m": int(done_units * task["unit_m"]),
+                            }
+                        )
+                        
+                        for m in best_team:
+                            avail_dt[m] = best_info["end_dt"]
+                        if not _gpo.get("abolish_all_scheduling_limits"):
+                            machine_avail_dt[machine] = best_info["end_dt"]
+                        _sched_made_progress = True
+                    else:
+                        if task.get("has_done_deadline_override"):
+                            logging.info(
+                                "DEBUG[完了日指定] 依頼NO=%s 日付=%s は割当不可（要員/設備空き条件でチーム不成立）。remaining_units=%s",
+                                task.get("task_id"),
+                                current_date,
+                                task.get("remaining_units"),
+                            )
+    
+                if not _sched_made_progress:
+                    break
+        for t in task_queue:
+            t.pop("_partial_retry_calendar_blocked", None)
 
-            if not _sched_made_progress:
-                break
+        partial_tids = _collect_partial_remaining_task_ids(task_queue)
+        if not partial_tids:
+            break
+        if not STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING:
+            break
+
+        blocked_tids = set()
+        shift_tid_list = []
+        for _ptid in partial_tids:
+            _do_shift, _cal_short = _partial_task_id_due_shift_outcome(
+                task_queue, _ptid, _calendar_last_plan_day
+            )
+            if _cal_short:
+                blocked_tids.add(_ptid)
+            if _do_shift:
+                shift_tid_list.append(_ptid)
+
+        for t in task_queue:
+            _tid = str(t.get("task_id", "") or "").strip()
+            if _tid in blocked_tids:
+                t["_partial_retry_calendar_blocked"] = True
+
+        if _stage2_due_retry_round >= STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS:
+            logging.warning(
+                "配台残の納期後ろ倒し再配台が上限（%s 回）に達しました。残る配台残はそのまま出力します。",
+                STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
+            )
+            break
+        if not shift_tid_list:
+            break
+
+        for t in task_queue:
+            if str(t.get("task_id", "") or "").strip() in shift_tid_list:
+                _shift_task_due_calendar_fields_one_day(t, run_date)
+
+        task_queue.sort(
+            key=lambda x: (
+                x.get("due_source_rank", 9),
+                0 if x.get("has_done_deadline_override") else 1,
+                0 if x.get("in_progress") else 1,
+                0 if x.get("roll_pipeline_inspection") else 1,
+                x["priority"],
+                0 if x["due_urgent"] else 1,
+                x["due_basis_date"] or date.max,
+                x["start_date_req"],
+                _task_id_priority_key(x.get("task_id")),
+                -resolve_need_required_op(
+                    x["machine"],
+                    x.get("machine_name", ""),
+                    x["task_id"],
+                    req_map,
+                    need_rules,
+                ),
+            )
+        )
+        logging.info(
+            "配台残リトライ: 納期+1日で再配台します（第 %s 回、対象依頼NO=%s）",
+            _stage2_due_retry_round,
+            ",".join(sorted(shift_tid_list)),
+        )
 
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     events_by_date = defaultdict(list)
@@ -9299,9 +9450,16 @@ def generate_plan():
     # ステータス（配台の可否・残）：完了相当=配台可／未割当=配台不可／一部のみ=配台残
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     for t in sorted_tasks_for_result:
-        status = "配台可" if t['remaining_units'] <= 0 else "配台残"
-        if not t['assigned_history'] and t['remaining_units'] > 0:
+        rem_u = float(t.get("remaining_units") or 0)
+        hist = bool(t.get("assigned_history"))
+        if rem_u <= 1e-9:
+            status = "配台可"
+        elif hist and t.get("_partial_retry_calendar_blocked"):
+            status = "配台残(勤務カレンダー不足)"
+        elif not hist and rem_u > 1e-9:
             status = "配台不可"
+        else:
+            status = "配台残"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
