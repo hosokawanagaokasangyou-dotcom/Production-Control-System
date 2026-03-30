@@ -208,9 +208,11 @@ MASTER_FILE = "master.xlsm" # skillsとattendance(およびtasks)を統合した
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
 # 勤怠AIの入力は備考のみ。ただし reason（表示・中抜け補正・個人シートの休憩/休暇文言）は、備考が空のとき休暇区分を引き継ぐ。
 # master カレンダー／出勤簿.txt 準拠: 前休=午前年休・12:45～17:00（午後休憩14:45～15:00）／後休=8:45～12:00・午後年休／国=他拠点勤務。
-# 備考列に文言が入っている行は出勤状態の変更の可能性が高いため、内容に関わらず勤怠AI判定の対象とする（空欄のみスキップ）。
+# 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
+# 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
+ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
 # need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数」等（余剰時に増やせる人数・工程×機械列）
 # ＋ 行「特別指定1」～「特別指定99」（必要人数の上書き・1～99）
 NEED_COL_CONDITION = "依頼NO条件"
@@ -1964,6 +1966,7 @@ def apply_factory_closure_dates_to_attendance(
                 continue
             ent = day[m]
             ent["is_working"] = False
+            ent["eligible_for_assignment"] = False
             prev = str(ent.get("reason") or "").strip()
             ent["reason"] = f"{tag} {prev}".strip() if prev else tag
 
@@ -7578,21 +7581,24 @@ def _attendance_leave_type_text(row) -> str:
     return s
 
 
-def _attendance_remark_forbids_assignment(remark: str) -> bool:
-    """
-    勤怠「備考」に、当日のライン配台に参加しない旨が明示されているか。
-    AI の is_holiday 判定より優先し、配台候補（is_working）から外す。
-    例: 「月次点検の為、配台不可」→ 出勤シート上は記録があっても加工配台には乗せない。
-    """
-    if not remark or not str(remark).strip():
+def _ai_json_bool(v, default: bool = False) -> bool:
+    """勤怠備考 AI の真偽値（bool / 数値 / 文字列の揺れを吸収）。"""
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, int):
+        return v != 0
+    if isinstance(v, float):
+        if pd.isna(v):
+            return default
+        return v != 0.0
+    s = str(v).strip().lower()
+    if s in ("true", "1", "yes", "y", "はい", "真", "on"):
+        return True
+    if s in ("false", "0", "no", "n", "いいえ", "偽", "off", ""):
         return False
-    t = unicodedata.normalize("NFKC", str(remark).strip())
-    compact = re.sub(r"[\s　]+", "", t)
-    if "配台不可" in compact:
-        return True
-    if "配台ＮＧ" in compact or "配台ng" in compact.lower():
-        return True
-    return False
+    return default
 
 
 def load_attendance_and_analyze(members):
@@ -7649,18 +7655,25 @@ def load_attendance_and_analyze(members):
             for m in members: records.append({'日付': d, 'メンバー': m, '備考': '通常'})
         df = pd.DataFrame(records)
 
-    # 2. AIによる特記事項の解析（備考に1文字でもあれば対象。「通常」明示も含む）
+    # 2. AI による勤怠文脈の解析（備考が空でも休暇区分のみの行は AI に渡し、表記揺れはモデルに解釈させる）
     remarks_to_analyze = []
     for _, row in df.iterrows():
         m = str(row.get('メンバー', '')).strip()
+        if m not in members:
+            continue
         rem = _attendance_remark_text(row)
+        lt = _attendance_leave_type_text(row)
         d_str = row['日付'].strftime("%Y-%m-%d") if pd.notna(row['日付']) else ""
-        if m in members and rem:
+        if rem:
             remarks_to_analyze.append(f"{d_str}_{m} の備考: {rem}")
+        elif lt and lt not in ("通常", ""):
+            remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
-        cache_key = hashlib.sha256(remarks_blob.encode("utf-8")).hexdigest()
+        cache_key = hashlib.sha256(
+            (remarks_blob + "\n" + ATTENDANCE_REMARK_AI_SCHEMA_ID).encode("utf-8")
+        ).hexdigest()
         ai_cache = load_ai_cache()
 
         # 同一備考セットはキャッシュを優先利用し、APIコールを節約
@@ -7690,16 +7703,20 @@ def load_attendance_and_analyze(members):
                 "中抜け開始": "HH:MM",
                 "中抜け終了": "HH:MM",
                 "作業効率": 1.0,     
-                "is_holiday": true   
+                "is_holiday": false,
+                "配台不参加": false
               }}
             }}
-            ・出勤時刻/退勤時刻: 各日の「備考」欄のみを根拠に推測（休暇区分は入力に含まれません）。不明や変更なしなら null
-            ・中抜け開始/終了: 備考に「11:00～14:00まで抜ける」など一時的な離脱（中抜け）がある場合、その開始・終了時刻。ない場合は null
+            ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
+            ・出勤時刻/退勤時刻: 当該行の「備考」または「休暇区分（備考は空）」の文脈から推測。不明や変更なしなら null
+            ・中抜け開始/終了: 一時的な離脱（中抜け・事務所・会議など）がある場合、その開始・終了。ない場合は null
             ・曖昧語の解釈例:
               - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
               - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
-            ・is_holiday: 「休み」「休む」「欠勤」などの場合は true、それ以外は false
-            ・備考に「配台不可」「配台NG」等があり、その日はラインへの加工配台に参加しない場合も true（月次点検・事務・他拠点など理由は問わない）
+            ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
+            ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
+              例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
+              通常勤務で特に制限が読み取れない場合は false
             ・作業効率: 0.0〜1.0の数値
             
             【特記事項リスト】
@@ -7767,9 +7784,8 @@ def load_attendance_and_analyze(members):
         ai_info = ai_parsed.get(key, {})
 
         is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
-        is_holiday = ai_info.get("is_holiday", False) or is_empty_shift
-        if _attendance_remark_forbids_assignment(original_reason):
-            is_holiday = True
+        is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
+        exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
 
         ai_eff = ai_info.get("作業効率")
         excel_eff = row.get('作業効率')
@@ -7830,13 +7846,15 @@ def load_attendance_and_analyze(members):
         # ★追加: 中抜け時間がある場合は、特別な「休憩」としてスケジュール計算に追加
         if mid_break_s and mid_break_e: breaks_dt.append((combine_dt(mid_break_s), combine_dt(mid_break_e)))
         
+        is_working = not is_holiday
         attendance_data[curr_date][m] = {
-            "is_working": not is_holiday,
+            "is_working": is_working,
+            "eligible_for_assignment": is_working and (not exclude_from_line),
             "start_dt": start_dt,
             "end_dt": end_dt,
             "breaks_dt": merge_time_intervals(breaks_dt),
             "efficiency": efficiency,
-            "reason": reason
+            "reason": reason,
         }
 
     return attendance_data, ai_log
@@ -8199,8 +8217,11 @@ def generate_plan():
         
         avail_dt = {}
         for m in members:
-            if m in daily_status and daily_status[m]['is_working']:
-                avail_dt[m] = daily_status[m]['start_dt']
+            if m not in daily_status:
+                continue
+            st = daily_status[m]
+            if st.get("eligible_for_assignment", st.get("is_working", False)):
+                avail_dt[m] = st["start_dt"]
         
         if not avail_dt:
             logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
