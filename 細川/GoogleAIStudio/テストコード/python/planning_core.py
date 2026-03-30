@@ -2560,6 +2560,7 @@ def parse_result_task_column_config_dataframe(
     「列設定_結果_タスク一覧」相当の DataFrame から (列ラベル, 表示) を上から読む。
     見出し「列名」と「表示」（無い場合は表示はすべて True）。
     「履歴」「履歴*」の1行は履歴1～履歴n に展開し、同一行の表示フラグを共有する。
+    同一列名（NFKC・別名正規化後）が複数行ある場合は先頭行のみ採用し、以降はログに出して捨てる。
     """
     if df_cfg is None or df_cfg.empty:
         return None
@@ -2581,21 +2582,56 @@ def parse_result_task_column_config_dataframe(
             vis_col = c
             break
 
-    out = []
+    seen_norm: set[str] = set()
+    out: list[tuple[str, bool]] = []
+
+    def _try_add(label: str, vis: bool) -> None:
+        lab = str(label).strip()
+        if not lab:
+            return
+        nk = _nfkc_column_aliases(unicodedata.normalize("NFKC", lab))
+        if nk in seen_norm:
+            logging.warning(
+                "列設定「%s」: 重複列名「%s」をスキップしました（上の行を優先）。",
+                COLUMN_CONFIG_SHEET_NAME,
+                lab,
+            )
+            return
+        seen_norm.add(nk)
+        out.append((lab, vis))
+
     for i in range(len(df_cfg)):
         raw = df_cfg[name_col].iloc[i]
         vis = _parse_column_visible_cell(df_cfg[vis_col].iloc[i] if vis_col is not None else None)
         if _is_result_task_history_expand_token(raw):
             for j in range(max_history_len):
-                out.append((f"履歴{j+1}", vis))
+                _try_add(f"履歴{j+1}", vis)
             continue
         if raw is None or (isinstance(raw, float) and pd.isna(raw)):
             continue
         s = unicodedata.normalize("NFKC", str(raw).strip())
         if not s or s.lower() in ("nan", "none"):
             continue
-        out.append((s, vis))
+        _try_add(s, vis)
     return out or None
+
+
+def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]) -> None:
+    """列設定シートの A:B を 列名・表示 のみで上書き（1行目見出し＋データ）。"""
+    mat = [[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]]
+    for lab, vis in rows:
+        mat.append([lab, bool(vis)])
+    n_r = len(mat)
+    try:
+        ur = xw_sheet.used_range
+        lim_r = max(ur.row + ur.rows.count - 1, n_r, 2)
+        xw_sheet.range((1, 1), (lim_r, 2)).clear_contents()
+    except Exception:
+        try:
+            xw_sheet.range((1, 1)).resize(max(n_r, 50), 2).clear_contents()
+        except Exception:
+            pass
+    xw_sheet.range((1, 1)).resize(n_r, 2).value = mat
 
 
 def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> list | None:
@@ -2778,8 +2814,19 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
         return False
 
     max_h = _max_history_len_from_result_task_df_columns(df_res.columns)
+    rows_cfg = parse_result_task_column_config_dataframe(df_cfg, max_h)
+    if not rows_cfg:
+        logging.error(
+            "結果_タスク一覧 列適用: 「%s」に有効な列名行がありません。",
+            COLUMN_CONFIG_SHEET_NAME,
+        )
+        return False
+    _xlwings_write_column_config_sheet_ab(ws_cfg, rows_cfg)
+    df_cfg_clean = pd.DataFrame(
+        rows_cfg, columns=[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]
+    )
     df_out, ordered, source, vis_map = apply_result_task_sheet_column_order(
-        df_res, max_h, config_dataframe=df_cfg
+        df_res, max_h, config_dataframe=df_cfg_clean
     )
 
     df_write = df_out.astype(object).where(pd.notna(df_out), None)
@@ -2836,6 +2883,63 @@ def apply_result_task_column_layout_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return apply_result_task_column_layout_via_xlwings(p)
+
+
+def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
+    """
+    「列設定_結果_タスク一覧」の A:B だけを、重複列名を除いた一覧で書き直す（先の行を優先）。
+    「結果_タスク一覧」があれば履歴列数の解釈に使う。結果シートは変更しない。
+    """
+    path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("列設定 重複整理: ブックパスが空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("列設定 重複整理: xlwings が import できません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
+    except Exception as e:
+        logging.error("列設定 重複整理: 接続またはシート取得に失敗: %s", e)
+        return False
+
+    max_h = 1
+    try:
+        ws_res = wb.sheets[RESULT_TASK_SHEET_NAME]
+        df_r = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_res))
+        if df_r is not None and not df_r.empty:
+            max_h = _max_history_len_from_result_task_df_columns(df_r.columns)
+    except Exception:
+        pass
+
+    df_cfg = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_cfg))
+    if df_cfg is None:
+        logging.error("列設定 重複整理: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+        return False
+    rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
+    if not rows:
+        logging.warning("列設定 重複整理: 有効なデータ行がありません。")
+        return False
+    _xlwings_write_column_config_sheet_ab(ws_cfg, rows)
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("列設定 重複整理: 保存警告: %s", e)
+    logging.info(
+        "列設定「%s」を重複除去済みで %s 行に整理しました（履歴展開後の行数）。",
+        COLUMN_CONFIG_SHEET_NAME,
+        len(rows),
+    )
+    return True
+
+
+def dedupe_result_task_column_config_sheet_only() -> bool:
+    """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートだけ重複整理（VBA 用）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    return dedupe_result_task_column_config_sheet_via_xlwings(p)
 
 
 def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vis_map: dict):
@@ -9297,10 +9401,19 @@ def generate_plan():
         df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
             df_tasks, max_history_len
         )
+        seen_tc: set[str] = set()
+        task_column_order_dedup: list = []
+        vis_list_dedup: list = []
+        for c in task_column_order:
+            if c in seen_tc:
+                continue
+            seen_tc.add(c)
+            task_column_order_dedup.append(c)
+            vis_list_dedup.append(bool(vis_map.get(c, True)))
         pd.DataFrame(
             {
-                "列名": task_column_order,
-                "表示": [bool(vis_map.get(c, True)) for c in task_column_order],
+                "列名": task_column_order_dedup,
+                "表示": vis_list_dedup,
             }
         ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
         df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
@@ -9322,7 +9435,7 @@ def generate_plan():
             _apply_output_font_to_result_sheet(ws_out)
 
         ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
-        _add_column_config_sheet_helpers(ws_cfg, len(task_column_order))
+        _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))
 
         worksheet_tasks = writer.sheets[RESULT_TASK_SHEET_NAME]
         max_col = worksheet_tasks.max_column

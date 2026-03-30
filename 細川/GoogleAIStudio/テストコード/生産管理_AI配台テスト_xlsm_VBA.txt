@@ -123,6 +123,12 @@ Sub アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用
     Call 列設定_結果_タスク一覧_列順表示をPython適用
 End Sub
 
+' 列設定シート A:B のみ重複列名を削除（結果シートは触らない）。図形には「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
+Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
+    Call AnimateButtonPush
+    Call 列設定_結果_タスク一覧_重複列名を整理
+End Sub
+
 Private Function GeminiJsonStringEscape(ByVal s As String) As String
     Dim t As String
     t = Replace(s, "\", "\\")
@@ -3264,7 +3270,8 @@ End Sub
 '==============================================================================
 ' 列設定_結果_タスク一覧 → 結果_タスク一覧 へ列順・列非表示を適用（Python / xlwings）
 ' 図形のマクロ: 「アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用」（押下アニメ付き）。
-'   本体「列設定_結果_タスク一覧_列順表示をPython適用」を直指定すると AnimateButtonPush が動かない。
+'   重複列名の整理のみ: 「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
+'   本体を直指定すると AnimateButtonPush が動かない。
 ' ・事前に「列設定」シートで列名・表示を編集してから実行。
 ' ・Excel で本ブックを開いたまま（xlwings が接続）。保存してから実行推奨。
 '==============================================================================
@@ -3323,6 +3330,55 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
     Else
         MsgBox "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK _
             & "」に合わせて更新しました。", vbInformation, "列設定の適用"
+    End If
+End Sub
+
+'==============================================================================
+' 列設定_結果_タスク一覧: 列名の重複行を除き A:B を書き直す（Python）。結果_タスク一覧は変更しない。
+' チェックボックスを B 列に付けている場合は、実行後に「列設定_結果_タスク一覧_チェックボックスを配置」を推奨。
+'==============================================================================
+Public Sub 列設定_結果_タスク一覧_重複列名を整理()
+    Dim wsh As Object
+    Dim cmd As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsCfg As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.Path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "列設定の整理"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsCfg = ThisWorkbook.Worksheets(SHEET_COL_CONFIG_RESULT_TASK)
+    On Error GoTo 0
+    If wsCfg Is Nothing Then
+        MsgBox "シート「" & SHEET_COL_CONFIG_RESULT_TASK & "」がありません。", vbExclamation, "列設定の整理"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && py -3 -u python\dedupe_result_task_column_config_sheet.py" _
+        & " & echo. & echo [列設定重複整理] ERRORLEVEL=%ERRORLEVEL%"
+    exitCode = wsh.Run(cmd, 1, True)
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の整理"
+    Else
+        MsgBox "「" & SHEET_COL_CONFIG_RESULT_TASK & "」から重複列名を除き、A:B を書き直しました。" & vbCrLf & _
+            "チェックボックスを使っている場合は「列設定_結果_タスク一覧_チェックボックスを配置」を再実行してください。", vbInformation, "列設定の整理"
     End If
 End Sub
 
