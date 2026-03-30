@@ -621,7 +621,14 @@ COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
-    {"回答納期", "指定納期", "計画基準納期", "加工開始日"}
+    {
+        "回答納期",
+        "指定納期",
+        "計画基準納期",
+        "加工開始日",
+        "配完_加工開始",
+        "配完_加工終了",
+    }
 )
 
 SOURCE_BASE_COLUMNS = [
@@ -2470,6 +2477,8 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "計画基準納期",
         "納期緊急",
         "加工開始日",
+        "配完_加工開始",
+        "配完_加工終了",
         "総加工量",
         "残加工量",
         "完了率(実行時点)",
@@ -9265,6 +9274,25 @@ def generate_plan():
         
     df_eq_schedule = pd.DataFrame(all_eq_rows)
 
+    # 結果_タスク一覧用: シミュレーション上の当該タスクの最早開始・最遅終了（timeline_events 集約）
+    plan_window_by_task_id: dict = {}
+    for _ev in timeline_events:
+        tid = _ev.get("task_id")
+        if tid is None:
+            continue
+        sd = _ev.get("start_dt")
+        ed = _ev.get("end_dt")
+        if sd is None or ed is None:
+            continue
+        if tid not in plan_window_by_task_id:
+            plan_window_by_task_id[tid] = [sd, ed]
+        else:
+            w = plan_window_by_task_id[tid]
+            if sd < w[0]:
+                w[0] = sd
+            if ed > w[1]:
+                w[1] = ed
+
     task_results = []
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
@@ -9310,6 +9338,19 @@ def generate_plan():
         except Exception:
             pct_macro = 0
 
+        _pw = plan_window_by_task_id.get(t["task_id"])
+        if _pw:
+            _ps, _pe = _pw[0], _pw[1]
+            plan_assign_start_s = (
+                _ps.strftime("%Y/%m/%d %H:%M") if hasattr(_ps, "strftime") else ""
+            )
+            plan_assign_end_s = (
+                _pe.strftime("%Y/%m/%d %H:%M") if hasattr(_pe, "strftime") else ""
+            )
+        else:
+            plan_assign_start_s = ""
+            plan_assign_end_s = ""
+
         row_tail = {
             "必要OP(上書)": rov if rov is not None else "",
             "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
@@ -9321,6 +9362,8 @@ def generate_plan():
             "計画基準納期": basis_s,
             "納期緊急": "はい" if t.get("due_urgent") else "いいえ",
             "加工開始日": start_req_s,
+            "配完_加工開始": plan_assign_start_s,
+            "配完_加工終了": plan_assign_end_s,
             "総加工量": f"{total_r}R ({t['total_qty_m']}m)",
             "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
             "完了率(実行時点)": f"{pct_macro}%",
