@@ -616,6 +616,8 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
+# マスタ skills の工程+機械列ごとの OP/AS 割当参考順（優先度値・氏名順）とチーム採用ルールの説明
+RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
@@ -7300,6 +7302,111 @@ def parse_op_as_skill_cell(cell_val):
     return role, pr
 
 
+def build_member_assignment_priority_reference(
+    skills_dict: dict,
+    members: list | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    結果ブック用: マスタ skills の「工程名+機械名」列ごとに、割当アルゴリズムと同じ
+    (優先度値昇順, メンバー名昇順) で並べた参考表と、ルール説明の表を返す。
+    当日の出勤・設備空き・同一依頼の工程順・チーム人数は反映しない（あくまでマスタ上の順序）。
+    """
+    mem_list = list(members) if members else list((skills_dict or {}).keys())
+    mem_list = [str(m).strip() for m in mem_list if m and str(m).strip()]
+
+    surplus_on = bool(TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF)
+    team_rule = (
+        "有効: チーム候補は「人数が多い」→「同なら開始が早い」→「同なら当日処理単位数が多い」"
+        "→「スキル優先度の合計が小さい」順で採用（環境変数 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF）。"
+        if surplus_on
+        else "無効: 「開始が早い」→「当日処理単位数が多い」→「スキル優先度合計が小さい」順（従来）。"
+    )
+
+    legend_rows = [
+        {
+            "区分": "スキル列の並び",
+            "内容": "各「工程名+機械名」列について、セルが OP/AS（+優先度整数）のメンバーのみ対象。"
+            " 数値が小さいほど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。",
+        },
+        {
+            "区分": "当日との差",
+            "内容": "実際の配台は、この順のうちその日出勤かつ AS/OP 要件を満たす者だけが候補。"
+            " 設備の空き・同一依頼NOの工程順・必要人数・増員枠・指名OPで変わります。",
+        },
+        {
+            "区分": "チーム候補の比較",
+            "内容": team_rule,
+        },
+        {
+            "区分": "指名・グローバル上書き",
+            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指名は本表より優先されます。",
+        },
+        {
+            "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
+            "内容": "1/有効（既定）" if surplus_on else "0/無効",
+        },
+    ]
+    df_legend = pd.DataFrame(legend_rows)
+
+    combo_keys: set[str] = set()
+    for m in mem_list:
+        row = (skills_dict or {}).get(m) or {}
+        for k in row:
+            ks = str(k).strip()
+            if "+" in ks:
+                combo_keys.add(ks)
+    sorted_combos = sorted(combo_keys)
+
+    out: list[dict] = []
+    for combo in sorted_combos:
+        parts = combo.split("+", 1)
+        proc = parts[0].strip()
+        mach = parts[1].strip() if len(parts) > 1 else ""
+        ranked: list[tuple[int, str, str, str]] = []
+        for m in sorted(mem_list):
+            cell = ((skills_dict or {}).get(m) or {}).get(combo)
+            if cell is None or (isinstance(cell, float) and pd.isna(cell)):
+                cell_s = ""
+            else:
+                cell_s = str(cell).strip()
+            role, pr = parse_op_as_skill_cell(cell_s if cell_s else None)
+            if role in ("OP", "AS"):
+                ranked.append((pr, m, role, cell_s))
+        ranked.sort(key=lambda x: (x[0], x[1]))
+        if not ranked:
+            out.append(
+                {
+                    "工程名": proc,
+                    "機械名": mach,
+                    "スキル列キー": combo,
+                    "優先順位": "",
+                    "メンバー": "（なし）",
+                    "ロール": "",
+                    "優先度値_小さいほど先": "",
+                    "skillsセル値": "",
+                    "備考": "この列に OP/AS の資格セルがあるメンバーがいません",
+                }
+            )
+            continue
+        for i, (pr, m, role, cell_s) in enumerate(ranked, start=1):
+            out.append(
+                {
+                    "工程名": proc,
+                    "機械名": mach,
+                    "スキル列キー": combo,
+                    "優先順位": i,
+                    "メンバー": m,
+                    "ロール": role,
+                    "優先度値_小さいほど先": pr,
+                    "skillsセル値": cell_s,
+                    "備考": "",
+                }
+            )
+
+    df_tbl = pd.DataFrame(out)
+    return df_legend, df_tbl
+
+
 def _normalize_person_name_for_match(s):
     """担当者指名のあいまい一致用（NFKC・富田/冨田の表記寄せ・空白除去・末尾敬称のみ除去）。"""
     if s is None:
@@ -9629,6 +9736,26 @@ def generate_plan():
         
     df_utilization = pd.DataFrame(utilization_data)
 
+    df_mprio_legend, df_mprio_tbl = build_member_assignment_priority_reference(
+        skills_dict, members
+    )
+    if df_mprio_tbl.empty:
+        df_mprio_tbl = pd.DataFrame(
+            [
+                {
+                    "工程名": "",
+                    "機械名": "",
+                    "スキル列キー": "",
+                    "優先順位": "",
+                    "メンバー": "",
+                    "ロール": "",
+                    "優先度値_小さいほど先": "",
+                    "skillsセル値": "",
+                    "備考": "マスタ skills に「工程名+機械名」形式の列が見つからないか、データがありません。",
+                }
+            ]
+        )
+
     _usage_txt = build_gemini_usage_summary_text()
     if _usage_txt:
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
@@ -9658,6 +9785,13 @@ def generate_plan():
         ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
         df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
         pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
+
+        _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
+        df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
+        _mprio_gap = len(df_mprio_legend) + 2
+        df_mprio_tbl.to_excel(
+            writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
+        )
 
         _write_results_equipment_gantt_sheet(
             writer,
