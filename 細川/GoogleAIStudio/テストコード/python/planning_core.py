@@ -2746,6 +2746,32 @@ def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
             cell.alignment = top
 
 
+def _apply_result_task_task_id_content_mismatch_highlight(
+    worksheet, column_names: list, sorted_tasks: list
+):
+    """
+    加工内容に工程名が含まれない行の「タスクID」セルを赤背景・白文字にする（元データ不整合の視認用）。
+    """
+    task_id_col_idx = None
+    for col_idx, col_name in enumerate(column_names, 1):
+        if str(col_name) == "タスクID":
+            task_id_col_idx = col_idx
+            break
+    if task_id_col_idx is None or worksheet.max_row < 2:
+        return
+    fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    font_white = _result_font(color="FFFFFF")
+    top = Alignment(wrap_text=False, vertical="top")
+    n_data = worksheet.max_row - 1
+    for i in range(min(len(sorted_tasks), n_data)):
+        if not sorted_tasks[i].get("process_content_mismatch"):
+            continue
+        cell = worksheet.cell(row=i + 2, column=task_id_col_idx)
+        cell.fill = fill_red
+        cell.font = font_white
+        cell.alignment = top
+
+
 def _add_column_config_sheet_helpers(ws_cfg, num_data_rows: int):
     """表示列に TRUE/FALSE リスト（チェックの代わりにプルダウン）を付与。"""
     last_r = max(num_data_rows + 1, 2)
@@ -4502,6 +4528,7 @@ def build_task_queue_from_planning_df(
     task_queue = []
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
+    same_tid_line_seq = defaultdict(int)
 
     for _, row in tasks_df.iterrows():
         if row_has_completion_keyword(row):
@@ -4538,6 +4565,9 @@ def build_task_queue_from_planning_df(
 
         if qty <= 0 or not machine or not task_id:
             continue
+
+        _line_seq = same_tid_line_seq[task_id]
+        same_tid_line_seq[task_id] += 1
 
         remark_raw = str(row.get(PLAN_COL_SPECIAL_REMARK, "") or "").strip()
         has_special_remark = bool(remark_raw) and remark_raw.lower() not in ("nan", "none")
@@ -4660,6 +4690,9 @@ def build_task_queue_from_planning_df(
         _order_list = seq_by_tid.get(task_id) or []
         _p_rank = _process_sequence_rank_for_machine(machine, _order_list)
         _init_rem = float(qty / unit if unit else 0.0)
+        _process_content_mismatch = bool(_order_list) and not _process_name_matches_kakou_content_tokens(
+            machine, _order_list
+        )
 
         task_queue.append(
             {
@@ -4693,11 +4726,13 @@ def build_task_queue_from_planning_df(
                 "has_done_deadline_override": has_done_deadline_override,
                 "done_qty_reported": done_qty,
                 "process_sequence_rank": _p_rank,
+                "same_request_line_seq": _line_seq,
                 "initial_remaining_units": _init_rem,
                 "roll_pipeline_ec": _row_matches_roll_pipeline_ec(machine, machine_name),
                 "roll_pipeline_inspection": _row_matches_roll_pipeline_inspection(
                     machine, machine_name
                 ),
+                "process_content_mismatch": _process_content_mismatch,
             }
         )
 
@@ -7871,7 +7906,9 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 # 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
-# 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（結果の「配台残」を避ける）
+# 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
+# False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
+STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
 
@@ -7998,6 +8035,24 @@ def _collect_process_content_order_by_task_id(tasks_df) -> dict[str, list[str]]:
     return out
 
 
+def _process_name_matches_kakou_content_tokens(
+    process_name: str, content_tokens: list[str]
+) -> bool:
+    """
+    工程名（配台計画の「工程名」列）が、元データの「加工内容」カンマ区切りトークンのいずれかと
+    正規化一致するか。トークンが無い（加工内容未記入の依頼）は照合対象外として True。
+    """
+    if not content_tokens:
+        return True
+    proc = _normalize_process_name_for_rule_match(process_name)
+    if not proc:
+        return False
+    for tok in content_tokens:
+        if _normalize_process_name_for_rule_match(tok) == proc:
+            return True
+    return False
+
+
 def _process_sequence_rank_for_machine(proc, order_list: list[str]):
     if not order_list:
         return None
@@ -8008,23 +8063,64 @@ def _process_sequence_rank_for_machine(proc, order_list: list[str]):
     return None
 
 
-def _task_blocked_by_process_sequence(task, task_queue) -> bool:
-    tid = str(task.get("task_id", "") or "").strip()
+def _task_rank_int_or_none(task) -> int | None:
     r = task.get("process_sequence_rank")
     if r is None:
+        return None
+    try:
+        return int(r)
+    except (TypeError, ValueError):
+        return None
+
+
+def _plan_sheet_priority_sort_value(t: dict) -> int:
+    """配台計画シートの「優先度」。小さいほど先。未入力・不正は 999。"""
+    p = t.get("priority", 999)
+    try:
+        return int(p)
+    except (TypeError, ValueError):
+        return 999
+
+
+def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
+    """
+    同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2・§B-1）。
+    - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
+    - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
+    - §B-1（熱融着検査 × 先行 EC）だけ、EC に残ロールがあっても検査行へのブロックを掛けない。
+    """
+    tid = str(task.get("task_id", "") or "").strip()
+    if not tid:
         return False
+    try:
+        my_seq = int(task.get("same_request_line_seq", 0))
+    except (TypeError, ValueError):
+        my_seq = 0
+    my_r = _task_rank_int_or_none(task)
+
     for t2 in task_queue:
         if str(t2.get("task_id", "") or "").strip() != tid:
             continue
-        r2 = t2.get("process_sequence_rank")
-        if r2 is None or r2 >= r:
-            continue
         if float(t2.get("remaining_units") or 0) <= 1e-9:
             continue
-        # §B-1: 先行 EC に残ロールがあっても、熱融着検査はロール枠で並行可。A-1 の完全ブロックは掛けない。
+        # §B-1: 先行 EC に残ロールがあっても、熱融着検査はロール枠で並行可
         if task.get("roll_pipeline_inspection") and t2.get("roll_pipeline_ec"):
             continue
-        return True
+        r2 = _task_rank_int_or_none(t2)
+        try:
+            s2 = int(t2.get("same_request_line_seq", 0))
+        except (TypeError, ValueError):
+            s2 = 0
+
+        if my_r is not None and r2 is not None:
+            precedes = r2 < my_r
+        elif my_r is None and r2 is None:
+            precedes = s2 < my_seq
+        else:
+            precedes = s2 < my_seq
+
+        if precedes:
+            return True
     return False
 
 
@@ -8099,7 +8195,8 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 
 def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
-    同一日内の割付試行順。加工内容の工程順 r を基準にし、§B-1 検査は同 r 帯で先に試す。
+    同一日内の割付試行順。加工内容の工程順 r、同一 r 帯ではシート行順（same_request_line_seq）、
+    §B-1 検査の前倒し、計画シート優先度、結果用ソートキー。
     パイプラインに空き枠がある B-1 検査は r を 1 段繰り上げ、他依頼の先行工程と同じ波で並行試行する。
     """
     raw_r = task.get("process_sequence_rank")
@@ -8115,8 +8212,15 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
             and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
         ):
             r = max(0, r - 1)
+    try:
+        line_seq = int(task.get("same_request_line_seq", 0))
+    except (TypeError, ValueError):
+        line_seq = 0
     b1_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
-    return (r, b1_insp_first) + _result_task_sheet_sort_key(task)
+    return (
+        (r, line_seq, b1_insp_first, _plan_sheet_priority_sort_value(task))
+        + _result_task_sheet_sort_key(task)
+    )
 
 
 # =========================================================
@@ -8328,9 +8432,15 @@ def generate_plan():
     timeline_events = []
 
     # ---------------------------------------------------------
-    # 日毎のスケジューリングループ（残タスクがある間は最終勤怠日の型で日付を自動拡張）
+    # 日毎のスケジューリングループ
+    # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
     # ---------------------------------------------------------
-    for current_date in _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue):
+    _plan_day_iter = (
+        _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
+        if STAGE2_EXTEND_ATTENDANCE_CALENDAR
+        else sorted_dates
+    )
+    for current_date in _plan_day_iter:
         daily_status = attendance_data[current_date]
         # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
         machine_avail_dt = {}
@@ -8381,7 +8491,7 @@ def generate_plan():
                 [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
                 key=lambda t: _day_schedule_task_sort_key(t, task_queue),
             ):
-                if _task_blocked_by_process_sequence(task, task_queue):
+                if _task_blocked_by_same_request_dependency(task, task_queue):
                     continue
                 if task.get("roll_pipeline_inspection") and (
                     _roll_pipeline_inspection_assign_room(
@@ -8884,7 +8994,8 @@ def generate_plan():
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
     # ステータス（配台の可否・残）：完了相当=配台可／未割当=配台不可／一部のみ=配台残
-    for t in sorted(task_queue, key=_result_task_sheet_sort_key):
+    sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
+    for t in sorted_tasks_for_result:
         status = "配台可" if t['remaining_units'] <= 0 else "配台残"
         if not t['assigned_history'] and t['remaining_units'] > 0:
             status = "配台不可"
@@ -9069,6 +9180,10 @@ def generate_plan():
                 if st in ("配台不可", "配台残"):
                     for c in range(1, max_col + 1):
                         worksheet_tasks.cell(row=r, column=c).fill = unscheduled_fill
+
+        _apply_result_task_task_id_content_mismatch_highlight(
+            worksheet_tasks, list(df_tasks.columns), sorted_tasks_for_result
+        )
 
     try:
         _apply_excel_date_columns_date_only_display(

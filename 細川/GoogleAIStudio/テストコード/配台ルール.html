@@ -101,13 +101,14 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細・従来ルールは <span class="file">配台ルール.md</span> を参照してください。実装は <span class="file">python/planning_core.py</span> です。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細・従来ルールは <span class="file">配台ルール.md</span> を参照してください。実装は <span class="file">python/planning_core.py</span> です。段階2は現行、勤怠マスタの日付範囲のみで割付し（<code>STAGE2_EXTEND_ATTENDANCE_CALENDAR = False</code>）、勤怠の自動日付拡張は行いません。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
     <ol>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
+      <li><a href="#result-task-id">結果_タスク一覧・タスクIDの赤表示</a></li>
     </ol>
   </nav>
 
@@ -118,9 +119,16 @@
       <li><strong>列</strong>: マクロブック <strong>加工計画DATA</strong> および <strong>配台計画_タスク入力</strong> の <strong>加工内容</strong>（段階1でコピーされます）。</li>
       <li><strong>書式</strong>: カンマ <code>,</code> 区切り。各要素は <strong>工程名</strong>に対応（例: <code>EC,検査</code>）。</li>
       <li><strong>制約</strong>: 同一 <strong>依頼NO</strong> で、いずれの行も <strong>配台不要でない</strong> とき、リストの <strong>前の工程がすべて完了（残ロール0）するまで、後の工程には割り当てません</strong>。</li>
-      <li><strong>例外</strong>: 工程名が加工内容に含まれない行は、この順序制約の対象外です。配台不要行はキューに入らず、前工程としてもブロックしません。</li>
+      <li><strong>例外</strong>: 工程名が加工内容に含まれない行は、この順序制約の対象外です。配台不要行はキューに入らず、前工程としてもブロックしません。ただし加工内容にトークンがある依頼では、結果シートで<strong>タスクIDセルを赤背景・白文字</strong>にして不整合を示します（下記セクション）。</li>
       <li><strong>照合</strong>: 工程名は NFKC・空白除去で加工内容の各トークンと突き合わせます。</li>
-      <li><strong>日内の動き</strong>: 同一日に、加工内容順を優先したうえでタスクを複数周回し、各タスクあたり最大1チャンクずつ割り当てるため、前後工程を同日で交互に進められます。</li>
+      <li><strong>日内の動き</strong>: 同一日に、加工内容順（rank）・シート行順・B-1 検査の前倒し・優先度・結果用ソートを組み合わせてタスクを複数周回し、各タスクあたり最大1チャンクずつ割り当てるため、前後工程を同日で交互に進められます。</li>
+    </ul>
+    <h3>同一依頼NOの直列（加工内容に rank が無い行）</h3>
+    <ul>
+      <li><strong>原則</strong>: 同一 <strong>依頼NO</strong> の <strong>別工程（別行）</strong>は、設備が違っても <strong>同時加工しない</strong>。配台計画シートを上から読んだ <strong>行順</strong>（<code>same_request_line_seq</code>）で、上の行の残ロールがなくなるまで下の行に割り当てません。</li>
+      <li><strong>§A-1 との関係</strong>: 両行に加工内容由来の rank があるときは <strong>rank だけ</strong>で前後を決め、片方でも rank が無いときは <strong>行順</strong>で直列化します。</li>
+      <li><strong>§B-1 の例外</strong>: <code>EC機　湖南</code> の EC と <code>熱融着機　湖南</code> の検査の組み合わせだけ、EC に残があっても検査を <strong>ロール枠</strong>の範囲で並行試行できます（<code>_task_blocked_by_same_request_dependency</code>）。</li>
+      <li><strong>実装</strong>: <span class="file">planning_core.py</span> の <code>build_task_queue_from_planning_df</code> と <code>_task_blocked_by_same_request_dependency</code>。</li>
     </ul>
   </section>
 
@@ -141,13 +149,25 @@
       <li><strong>バッファ</strong>: EC 側で <strong>2 ロール完了するまで</strong>、検査には <strong>1 ロールも割り当てません</strong>（段取り時間の確保）。定数: <code>ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2</code>。</li>
       <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
         上限（イメージ）: EC 完了ロール数を <code>ec_done</code>、検査完了を <code>insp_done</code> とすると、<code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。</li>
-      <li><strong>全体ルールとの関係</strong>: セクション A の工程順により、検査は常に EC より後の工程として扱われます。</li>
+      <li><strong>§A・§A-2 との関係</strong>: 通常は同一依頼で前工程に残があると後工程をブロックしますが、本 B-1 ペアだけ EC 残があっても検査を試します（コード: <code>_task_blocked_by_same_request_dependency</code>）。並行量は上記ロール枠で制限します。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
   </section>
 
+  <section id="result-task-id" class="card" aria-labelledby="h-result-task">
+    <h2 id="h-result-task">結果_タスク一覧・タスクIDの赤表示（加工内容との整合）</h2>
+    <p>段階2が出力する <span class="file">production_plan_multi_day_*.xlsx</span> の <strong>結果_タスク一覧</strong> で、元データの <strong>加工内容</strong>（カンマ区切り）と行の <strong>工程名</strong> が一致しない可能性がある行の <strong>タスクID</strong> セルだけを、<strong>赤塗り・白文字</strong>にします。</p>
+    <ul>
+      <li><strong>加工内容の取り方</strong>: セクション A と同じく、同一依頼NOについて表の上の方で最初に現れた非空の加工内容をトークン化します。</li>
+      <li><strong>ハイライトしない</strong>: その依頼についてトークンが1つも無い（加工内容が未記入のみ等）場合は、比較基準が無いため色を付けません。</li>
+      <li><strong>ハイライトする</strong>: トークンがあるのに、工程名が（NFKC 等の正規化後）いずれのトークンとも一致しないとき。</li>
+      <li><strong>配台不可／配台残</strong>の行全体の薄い黄より<strong>後</strong>にタスクIDだけ上書きするため、該当セルは赤が優先されます。</li>
+    </ul>
+    <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>。</p>
+  </section>
+
   <footer>
-    同一ソースの Markdown: 配台ルール.md（セクション A・B と §1 以降の一般ルール）
+    同一ソースの Markdown: 配台ルール.md（セクション A・B・9 と番号付き一般ルール）
   </footer>
 </body>
 </html>
