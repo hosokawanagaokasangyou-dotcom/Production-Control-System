@@ -22236,3 +22236,2703 @@ phase=配台シート読込
 summary=設定シート保守開始
 details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
 
+--- 2026-03-30 20:59:32 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 20:59:34 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 20:59:34 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 20:59:34 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 20:59:34 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 20:59:34 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 20:59:34 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 20:59:36 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 20:59:36 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 20:59:38 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 20:59:38 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 20:59:40 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 20:59:41 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 20:59:41 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:00:10 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:00:12 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:00:12 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:00:12 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:00:12 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:00:12 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:00:12 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:00:14 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:00:14 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:00:16 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:00:16 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:00:18 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:00:18 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:00:18 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:02:32 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:02:34 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:02:34 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:02:34 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:02:34 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:02:34 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:02:34 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:02:36 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:02:36 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:02:38 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:02:38 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:02:40 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:02:41 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:02:41 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:03:30 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:03:31 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:03:31 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:03:31 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:03:31 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:03:31 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:03:31 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:03:33 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:03:33 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:03:35 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:03:35 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:03:37 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:03:38 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:03:38 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:06:03 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:06:04 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:06:04 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:06:04 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:06:04 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:06:04 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:06:04 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:06:06 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:06:06 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:06:08 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:06:08 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:06:10 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:06:11 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:06:11 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:10:53 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:10:54 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:10:54 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:10:54 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:10:54 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:10:54 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:10:54 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:10:56 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:10:56 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:10:58 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:10:58 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:11:00 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:11:01 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:11:01 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:12:38 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:12:39 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:12:39 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:12:39 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:12:39 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:12:39 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:12:39 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:12:41 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:12:41 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:12:43 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:12:43 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:12:45 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:12:46 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:12:46 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:14:34 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:14:35 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:14:35 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:14:35 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:14:35 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:14:35 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:14:35 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:14:37 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:14:37 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:14:39 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:14:39 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:14:41 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6066, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:14:42 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:14:42 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:18:23 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:18:24 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:18:24 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:18:24 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:18:24 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:18:24 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:18:24 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:18:26 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:18:26 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:18:28 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:18:28 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:18:30 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:18:31 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:18:31 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:19:21 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:19:23 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:19:23 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:19:23 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:19:23 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:19:23 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:19:23 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:19:25 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:19:25 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:19:27 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:19:27 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:19:29 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:19:30 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:19:30 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:24:55 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:24:56 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:24:56 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:24:56 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:24:56 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:24:56 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:24:56 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:24:58 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:24:58 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:25:00 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:00 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:25:02 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:03 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:25:03 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:25:34 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:25:35 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:25:35 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:25:35 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:25:35 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:25:35 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:35 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:25:37 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:37 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:25:39 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:39 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:25:41 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:25:42 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:25:42 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:36:38 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:36:39 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:36:39 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:36:39 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:36:39 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:36:39 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:36:39 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:36:41 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:36:41 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:36:43 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:36:43 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:36:45 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'G:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:36:46 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=G:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:36:46 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:46:50 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:46:51 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:46:51 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:46:51 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:46:51 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:46:51 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:46:51 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:46:53 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:46:53 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:46:55 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:46:55 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:46:57 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:46:58 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:46:58 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:47:30 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:47:31 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:47:31 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:47:31 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:47:31 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:47:31 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:47:31 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:47:33 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:47:33 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:47:35 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:47:35 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:47:37 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:47:38 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:47:38 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 21:59:20 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 21:59:21 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 21:59:21 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 21:59:21 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 21:59:21 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 21:59:21 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:59:21 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:59:23 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:59:23 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:59:25 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:59:25 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 21:59:27 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6105, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 21:59:28 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 21:59:28 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 22:13:03 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 22:13:05 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 22:13:05 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 22:13:05 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 22:13:05 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 22:13:05 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:13:05 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:13:07 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:13:07 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:13:09 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:13:09 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:13:11 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:13:12 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 22:13:12 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 22:16:31 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 22:16:32 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 22:16:32 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 22:16:32 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 22:16:32 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 22:16:32 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:16:32 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:16:34 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:16:34 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:16:36 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:16:36 ---
+event=OPENPYXL_RETRY_WAIT
+phase=段階1
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:16:38 ---
+event=OPENPYXL_SAVE_FAIL
+phase=段階1
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:16:39 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 22:16:39 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-03-30 22:17:27 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 22:17:28 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 22:17:28 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 22:17:28 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 22:17:28 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 22:17:28 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:17:28 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:17:30 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:17:30 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:17:32 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:17:32 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:17:34 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:17:35 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 22:17:35 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-03-30 22:19:44 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-03-30 22:19:46 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=29
+
+--- 2026-03-30 22:19:46 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-03-30 22:19:46 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-03-30 22:19:46 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-03-30 22:19:46 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (1/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:19:46 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (2/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:19:48 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (2/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:19:48 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (3/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:19:50 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (3/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:19:50 ---
+event=OPENPYXL_RETRY_WAIT
+phase=配台シート読込
+summary=openpyxl 再保存まで 2 秒待ちます (4/4)。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-03-30 22:19:52 ---
+event=OPENPYXL_SAVE_FAIL
+phase=配台シート読込
+summary=openpyxl での .xlsm 保存に失敗しました (4/4)（Excel で開きっぱなし・ロックの可能性）。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+exception=PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+Traceback (most recent call last):
+  File "g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\python\planning_core.py", line 6120, in _openpyxl_persist_ok
+    _wb.save(wb_path)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\workbook\workbook.py", line 386, in save
+    save_workbook(self, filename)
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\site-packages\openpyxl\writer\excel.py", line 291, in save_workbook
+    archive = ZipFile(filename, 'w', ZIP_DEFLATED, allowZip64=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\surei\AppData\Local\Programs\Python\Python311\Lib\zipfile.py", line 1294, in __init__
+    self.fp = io.open(file, filemode)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'g:\\工程管理AIプロジェクト\\細川\\GoogleAIStudio\\テストコード\\生産管理_AI配台テスト.xlsm'
+
+--- 2026-03-30 22:19:52 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=g:\工程管理AIプロジェクト\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-03-30 22:19:52 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
