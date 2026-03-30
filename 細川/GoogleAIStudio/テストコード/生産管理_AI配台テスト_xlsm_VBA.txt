@@ -11,8 +11,9 @@
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
-' planning_core の COLUMN_CONFIG_SHEET_NAME と一致させる
+' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
+Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
 Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
@@ -3252,6 +3253,70 @@ NextLoop:
 
 FailChk:
     MsgBox "チェックボックス配置でエラー: " & Err.Description, vbCritical
+End Sub
+
+'==============================================================================
+' 列設定_結果_タスク一覧 → 結果_タスク一覧 へ列順・列非表示を適用（Python / xlwings）
+' 図形にマクロ「列設定_結果_タスク一覧_列順表示をPython適用」を割り当ててボタンから実行。
+' ・事前に「列設定」シートで列名・表示を編集してから実行。
+' ・Excel で本ブックを開いたまま（xlwings が接続）。保存してから実行推奨。
+'==============================================================================
+Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
+    Dim wsh As Object
+    Dim cmd As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsRes As Worksheet
+    Dim wsCfg As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.Path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "列設定の適用"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsRes = ThisWorkbook.Worksheets(SHEET_RESULT_TASK_LIST)
+    Set wsCfg = ThisWorkbook.Worksheets(SHEET_COL_CONFIG_RESULT_TASK)
+    On Error GoTo 0
+    If wsRes Is Nothing Then
+        MsgBox "シート「" & SHEET_RESULT_TASK_LIST & "」がありません。", vbExclamation, "列設定の適用"
+        Exit Sub
+    End If
+    If wsCfg Is Nothing Then
+        MsgBox "シート「" & SHEET_COL_CONFIG_RESULT_TASK & "」がありません。", vbExclamation, "列設定の適用"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && py -3 -u python\apply_result_task_column_layout.py" _
+        & " & echo. & echo [列設定適用] ERRORLEVEL=%ERRORLEVEL%"
+    exitCode = wsh.Run(cmd, 1, True)
+    Application.ScreenUpdating = prevScreen
+
+    On Error Resume Next
+    Set wsRes = ThisWorkbook.Worksheets(SHEET_RESULT_TASK_LIST)
+    If Not wsRes Is Nothing Then
+        結果シート_列幅_AutoFit非表示を維持 wsRes
+    End If
+    On Error GoTo 0
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の適用"
+    Else
+        MsgBox "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK _
+            & "」に合わせて更新しました。", vbInformation, "列設定の適用"
+    End If
 End Sub
 
 '==============================================================================
