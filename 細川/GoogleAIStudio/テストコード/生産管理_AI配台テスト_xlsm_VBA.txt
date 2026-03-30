@@ -27,6 +27,15 @@ Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
+'
+' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
+'   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
+'   ・Excel リボンで Show Console にチェック。VBA で xlwings 参照を有効にしたうえで別標準モジュールに例えば:
+'       Sub 試験_xlwings段階1()
+'           RunPython "import xlwings_console_runner as _xw; _xw.run_stage1_for_xlwings()"
+'       End Sub
+'   ・実体は python\xlwings_console_runner.py。logging は既に stdout へ出るためコンソールに流れる。
+'   ・既定の 段階1_コア実行（LOG 取り込み・plan 取り込み等）とは別経路のため、試験か後処理の共通化で使い分け。
 
 ' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
@@ -2005,8 +2014,9 @@ Private Sub 段階1_コア実行()
     On Error GoTo ErrStage1
 
     wsh.CurrentDirectory = Environ("TEMP")
-    cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます && py -3 -u python\task_extract_stage1.py" _
-        & " & echo. & echo [段階1] 終了 ERRORLEVEL=%ERRORLEVEL%"
+    ' /v:on … set STAGE1_PY_EXIT=!ERRORLEVEL! で Python 終了直後のコードを保持し、pause 後も exit /b で VBA に返す
+    cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます && py -3 -u python\task_extract_stage1.py" _
+        & " & set STAGE1_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT! & pause & exit /b !STAGE1_PY_EXIT!"
     exitCode = wsh.Run(cmd, 1, True)
     m_lastStage1ExitCode = exitCode
 
