@@ -101,16 +101,25 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細・従来ルールは <span class="file">配台ルール.md</span> を参照してください。実装は <span class="file">python/planning_core.py</span> です。段階2は現行、勤怠マスタの日付範囲のみで割付し（<code>STAGE2_EXTEND_ATTENDANCE_CALENDAR = False</code>）、勤怠の自動日付拡張は行いません。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。段階2は現行、計画基準日以降の<strong>勤怠マスタの日付範囲のみ</strong>で各パスを回し（<code>STAGE2_EXTEND_ATTENDANCE_CALENDAR = False</code>）、勤怠の自動日付拡張は行いません。配台残が出たときは既定で納期を1日ずつ後ろへずらして<strong>全パス再実行</strong>します（<code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code>）。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
     <ol>
+      <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
+      <li><a href="#partial-retry">配台残・納期シフト再試行</a></li>
       <li><a href="#result-task-id">結果_タスク一覧・タスクIDの赤表示</a></li>
     </ol>
   </nav>
+
+  <section id="queue-order" class="card" aria-labelledby="h-queue">
+    <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → 納期基準日 → 開始日 → 依頼NO → 必要OP人数（多いほど先）。</p>
+    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果タスク一覧用（開始日・回答納期・指定納期・依頼NO・工程名）。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
+    <p>同一日内はこの順で複数周し、各タスクあたり最大1チャンクずつ割り当てます。</p>
+  </section>
 
   <section id="global" class="card" aria-labelledby="h-global">
     <h2 id="h-global">A. 全加工依頼に適用する追加ルール</h2>
@@ -147,10 +156,22 @@
     </table>
     <ul>
       <li><strong>バッファ</strong>: EC 側で <strong>2 ロール完了するまで</strong>、検査には <strong>1 ロールも割り当てません</strong>（段取り時間の確保）。定数: <code>ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2</code>。</li>
+      <li><strong>EC 行が同一依頼に無い検査</strong>: ロール枠を事実上かけず（<code>ROLL_PIPELINE_INSP_UNCAPPED_ROOM</code>）、通常どおり <code>need</code>・スキルで配台します。</li>
       <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
         上限（イメージ）: EC 完了ロール数を <code>ec_done</code>、検査完了を <code>insp_done</code> とすると、<code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。</li>
       <li><strong>§A・§A-2 との関係</strong>: 通常は同一依頼で前工程に残があると後工程をブロックしますが、本 B-1 ペアだけ EC 残があっても検査を試します（コード: <code>_task_blocked_by_same_request_dependency</code>）。並行量は上記ロール枠で制限します。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
+    </ul>
+  </section>
+
+  <section id="partial-retry" class="card" aria-labelledby="h-partial">
+    <h2 id="h-partial">配台残と納期の後ろ倒し再試行</h2>
+    <p>残ロールがあり、かついずれかの行に割当履歴がある依頼NO（配台残）が残る場合、既定では <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> により、対象依頼の納期系日付を <strong>1 日ずつ後ろへシフト</strong>し、残量・履歴を初期化したうえで<strong>全日程を最初から</strong>再度走査します。各ラウンド前に勤怠の自動拡張で増えた日はマスタ日付へ戻します。</p>
+    <ul>
+      <li><strong>オフにする</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False</code> で 1 パスのみ。</li>
+      <li><strong>上限</strong>: <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（既定 366）。</li>
+      <li><strong>シフトしない</strong>: 依頼全体で <code>due_basis_date</code> を持つ行が無い場合は、後ろ倒し対象にしません。</li>
+      <li><strong>勤怠最終日</strong>: +1 日がマスタ最終計画日を超える行がある依頼は、そのラウンドではシフト対象外になり得ます。</li>
     </ul>
   </section>
 
@@ -167,7 +188,7 @@
   </section>
 
   <footer>
-    同一ソースの Markdown: 配台ルール.md（セクション A・B・9 と番号付き一般ルール）
+    同一ソース: 配台ルール.md（2026-03-31 精査。セクション 2・7・8 および A・B・9 ほか）
   </footer>
 </body>
 </html>
