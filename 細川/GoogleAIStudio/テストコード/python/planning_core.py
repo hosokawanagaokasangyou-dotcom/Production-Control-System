@@ -7578,6 +7578,23 @@ def _attendance_leave_type_text(row) -> str:
     return s
 
 
+def _attendance_remark_forbids_assignment(remark: str) -> bool:
+    """
+    勤怠「備考」に、当日のライン配台に参加しない旨が明示されているか。
+    AI の is_holiday 判定より優先し、配台候補（is_working）から外す。
+    例: 「月次点検の為、配台不可」→ 出勤シート上は記録があっても加工配台には乗せない。
+    """
+    if not remark or not str(remark).strip():
+        return False
+    t = unicodedata.normalize("NFKC", str(remark).strip())
+    compact = re.sub(r"[\s　]+", "", t)
+    if "配台不可" in compact:
+        return True
+    if "配台ＮＧ" in compact or "配台ng" in compact.lower():
+        return True
+    return False
+
+
 def load_attendance_and_analyze(members):
     attendance_data = {}
     # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
@@ -7682,6 +7699,7 @@ def load_attendance_and_analyze(members):
               - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
               - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
             ・is_holiday: 「休み」「休む」「欠勤」などの場合は true、それ以外は false
+            ・備考に「配台不可」「配台NG」等があり、その日はラインへの加工配台に参加しない場合も true（月次点検・事務・他拠点など理由は問わない）
             ・作業効率: 0.0〜1.0の数値
             
             【特記事項リスト】
@@ -7742,12 +7760,17 @@ def load_attendance_and_analyze(members):
         if curr_date not in attendance_data:
             attendance_data[curr_date] = {}
 
+        original_reason = _attendance_remark_text(row)
+        leave_type = _attendance_leave_type_text(row)
+
         key = f"{curr_date.strftime('%Y-%m-%d')}_{m}"
         ai_info = ai_parsed.get(key, {})
-        
+
         is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
         is_holiday = ai_info.get("is_holiday", False) or is_empty_shift
-        
+        if _attendance_remark_forbids_assignment(original_reason):
+            is_holiday = True
+
         ai_eff = ai_info.get("作業効率")
         excel_eff = row.get('作業効率')
         
@@ -7763,8 +7786,6 @@ def load_attendance_and_analyze(members):
         except (ValueError, TypeError):
             efficiency = 1.0
 
-        original_reason = _attendance_remark_text(row)
-        leave_type = _attendance_leave_type_text(row)
         if original_reason:
             if (
                 leave_type
@@ -7829,6 +7850,8 @@ ROLL_PIPELINE_EC_MACHINE = "EC機　湖南"
 ROLL_PIPELINE_INSP_PROCESS = "検査"
 ROLL_PIPELINE_INSP_MACHINE = "熱融着機　湖南"
 ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
+# 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
+ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
 def _parse_process_content_tokens(val) -> list[str]:
@@ -7929,7 +7952,23 @@ def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
     return s
 
 
+def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
+    """同一依頼NOに EC（ロールパイプライン先行）タスクがキューに含まれるか。"""
+    tid = str(task_id or "").strip()
+    if not tid:
+        return False
+    for t in task_queue:
+        if str(t.get("task_id", "") or "").strip() != tid:
+            continue
+        if t.get("roll_pipeline_ec"):
+            return True
+    return False
+
+
 def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
+    tid = str(task_id or "").strip()
+    if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
+        return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
     insp_done = _pipeline_inspection_roll_done_units(task_queue, task_id)
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
