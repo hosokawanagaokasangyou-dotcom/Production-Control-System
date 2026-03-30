@@ -48,32 +48,43 @@ def _xlwings_addin_install() -> int:
     return _run([str(xw), "addin", "install"])
 
 
-def _merge_xlwings_user_conf_show_console() -> None:
+def _strip_show_console_from_xlwings_user_conf() -> None:
     """
-    %USERPROFILE%\\.xlwings\\xlwings.conf に SHOW CONSOLE を True でマージする。
-    xlwings アドインの GetConfig / Python の read_user_config と同じ「"KEY","VALUE"」1行形式。
+    以前の環境構築で書いた SHOW CONSOLE を %USERPROFILE%\\.xlwings\\xlwings.conf から外す。
+    段階1/2 は cmd.exe 経由を既定とする（xlwings のコンソールを自動では有効にしない）。
     """
     if sys.platform != "win32":
         return
     conf_path = Path.home() / ".xlwings" / "xlwings.conf"
-    key_keep = "SHOW CONSOLE"
-    key_upper = key_keep.upper()
+    if not conf_path.is_file():
+        return
+    key_upper = "SHOW CONSOLE".upper()
     rows: list[tuple[str, str]] = []
-    if conf_path.is_file():
-        text = conf_path.read_text(encoding="utf-8", errors="replace")
-        for line in text.splitlines():
-            parts = re.findall(r'"[^"]*"', line)
-            if len(parts) >= 2:
-                k = parts[0].strip('"')
-                v = parts[1].strip('"')
-                if k.upper() == key_upper:
-                    continue
-                rows.append((k, v))
-    rows.append((key_keep, "True"))
-    conf_path.parent.mkdir(parents=True, exist_ok=True)
-    data = "".join(f'"{k}","{v}"\n' for k, v in rows)
-    conf_path.write_text(data, encoding="utf-8", newline="\n")
-    print(f"xlwings: ユーザー設定に SHOW CONSOLE=True を書き込みました: {conf_path}", flush=True)
+    text = conf_path.read_text(encoding="utf-8", errors="replace")
+    for line in text.splitlines():
+        parts = re.findall(r'"[^"]*"', line)
+        if len(parts) >= 2:
+            k = parts[0].strip('"')
+            v = parts[1].strip('"')
+            if k.upper() == key_upper:
+                continue
+            rows.append((k, v))
+    try:
+        if not rows:
+            conf_path.unlink()
+            print(
+                f"xlwings: SHOW CONSOLE を外し、他キーが無いため {conf_path} を削除しました。",
+                flush=True,
+            )
+        else:
+            data = "".join(f'"{k}","{v}"\n' for k, v in rows)
+            conf_path.write_text(data, encoding="utf-8", newline="\n")
+            print(
+                f"xlwings: ユーザー設定から SHOW CONSOLE を削除しました: {conf_path}",
+                flush=True,
+            )
+    except OSError as ex:
+        print(f"xlwings.conf の整理をスキップしました: {ex}", flush=True)
 
 
 def main() -> int:
@@ -108,10 +119,7 @@ def main() -> int:
         print("xlwings addin install に失敗しました。", file=sys.stderr, flush=True)
         return code
 
-    try:
-        _merge_xlwings_user_conf_show_console()
-    except OSError as ex:
-        print(f"xlwings.conf の更新をスキップしました: {ex}", flush=True)
+    _strip_show_console_from_xlwings_user_conf()
 
     print("環境セットアップが完了しました。", flush=True)
     return 0
