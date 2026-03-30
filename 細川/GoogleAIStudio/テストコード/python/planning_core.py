@@ -7871,6 +7871,106 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 # 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
+# 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（結果の「配台残」を避ける）
+SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
+
+
+def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
+    """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
+    delta_days = (new_date - old_date).days
+    if delta_days == 0:
+        return {m: dict(st) for m, st in source_day.items()}
+    delta = timedelta(days=delta_days)
+    out: dict = {}
+    for m, st in source_day.items():
+        new_st = dict(st)
+        sd = st.get("start_dt")
+        ed = st.get("end_dt")
+        new_st["start_dt"] = sd + delta if sd else None
+        new_st["end_dt"] = ed + delta if ed else None
+        nb = []
+        for pair in st.get("breaks_dt") or []:
+            if len(pair) >= 2:
+                a, b = pair[0], pair[1]
+                if a is not None and b is not None:
+                    nb.append((a + delta, b + delta))
+        new_st["breaks_dt"] = merge_time_intervals(nb)
+        out[m] = new_st
+    return out
+
+
+def _pick_extension_template_date(attendance_data: dict, plan_dates: list):
+    """配台可能なメンバーが1人でもいる直近の日をテンプレに採用（最終日が全休でも有効な型を使う）。"""
+    for i in range(len(plan_dates) - 1, -1, -1):
+        d = plan_dates[i]
+        day = attendance_data.get(d)
+        if not day:
+            continue
+        if any(
+            v.get("eligible_for_assignment", v.get("is_working", False))
+            for v in day.values()
+        ):
+            return d
+    return plan_dates[-1] if plan_dates else None
+
+
+def _extend_attendance_one_calendar_day(
+    attendance_data: dict,
+    plan_dates: list,
+) -> bool:
+    """カレンダー上1日先を plan_dates に追加し、テンプレ日のシフト複製で attendance を埋める。失敗時 False。"""
+    if not plan_dates:
+        return False
+    last_d = plan_dates[-1]
+    next_d = last_d + timedelta(days=1)
+    tmpl_d = _pick_extension_template_date(attendance_data, plan_dates)
+    if tmpl_d is None:
+        return False
+    template = attendance_data.get(tmpl_d)
+    if not template:
+        return False
+    attendance_data[next_d] = _clone_attendance_day_shifted(template, tmpl_d, next_d)
+    plan_dates.append(next_d)
+    logging.info(
+        "配台完了まで勤怠を自動拡張: %s を追加（テンプレ=%s、メンバー数=%s）",
+        next_d,
+        tmpl_d,
+        len(attendance_data[next_d]),
+    )
+    return True
+
+
+def _iter_plan_dates_extending(
+    plan_dates: list,
+    attendance_data: dict,
+    task_queue: list,
+):
+    """
+    plan_dates を先頭から順に yield。末尾まで来ても残タスクがあれば勤怠を1日ずつ拡張して継続。
+    plan_dates / attendance_data はインプレース更新される。
+    """
+    si = 0
+    ext_used = 0
+    while True:
+        while si < len(plan_dates):
+            yield plan_dates[si]
+            si += 1
+        pending = any(float(t.get("remaining_units") or 0) > 1e-12 for t in task_queue)
+        if not pending:
+            return
+        if ext_used >= SCHEDULE_EXTEND_MAX_EXTRA_DAYS:
+            logging.warning(
+                "残タスクがありますが勤怠の自動拡張が上限（%s 日）に達しました。配台残・配台不可が残る可能性があります。",
+                SCHEDULE_EXTEND_MAX_EXTRA_DAYS,
+            )
+            return
+        if not _extend_attendance_one_calendar_day(attendance_data, plan_dates):
+            logging.warning(
+                "勤怠を1日拡張できませんでした（テンプレ日のデータ欠落）。残タスクは未割当のままです。"
+            )
+            return
+        ext_used += 1
+
 
 def _parse_process_content_tokens(val) -> list[str]:
     if val is None or (isinstance(val, float) and pd.isna(val)):
@@ -7919,8 +8019,12 @@ def _task_blocked_by_process_sequence(task, task_queue) -> bool:
         r2 = t2.get("process_sequence_rank")
         if r2 is None or r2 >= r:
             continue
-        if float(t2.get("remaining_units") or 0) > 1e-9:
-            return True
+        if float(t2.get("remaining_units") or 0) <= 1e-9:
+            continue
+        # §B-1: 先行 EC に残ロールがあっても、熱融着検査はロール枠で並行可。A-1 の完全ブロックは掛けない。
+        if task.get("roll_pipeline_inspection") and t2.get("roll_pipeline_ec"):
+            continue
+        return True
     return False
 
 
@@ -7993,11 +8097,26 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     return max(0.0, max_insp - insp_done)
 
 
-def _day_schedule_task_sort_key(task: dict):
-    r = task.get("process_sequence_rank")
-    if r is None:
+def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
+    """
+    同一日内の割付試行順。加工内容の工程順 r を基準にし、§B-1 検査は同 r 帯で先に試す。
+    パイプラインに空き枠がある B-1 検査は r を 1 段繰り上げ、他依頼の先行工程と同じ波で並行試行する。
+    """
+    raw_r = task.get("process_sequence_rank")
+    if raw_r is None:
         r = 10**9
-    return (r,) + _result_task_sheet_sort_key(task)
+    else:
+        r = int(raw_r)
+        tid = str(task.get("task_id", "") or "").strip()
+        if (
+            task_queue is not None
+            and tid
+            and task.get("roll_pipeline_inspection")
+            and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
+        ):
+            r = max(0, r - 1)
+    b1_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
+    return (r, b1_insp_first) + _result_task_sheet_sort_key(task)
 
 
 # =========================================================
@@ -8170,12 +8289,13 @@ def generate_plan():
             "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
         )
 
-    # 加工途中（実績あり）は優先。さらに同条件なら依頼NO（ハイフン後半の数値が小さい順）で先行。
+    # 加工途中（実績あり）は優先。§B-1（熱融着検査）を同帯で前に（個別ルールが本文一般ルールより優先）。
     task_queue.sort(
         key=lambda x: (
             x.get("due_source_rank", 9),
             0 if x.get("has_done_deadline_override") else 1,
             0 if x.get("in_progress") else 1,
+            0 if x.get("roll_pipeline_inspection") else 1,
             x["priority"],
             0 if x["due_urgent"] else 1,
             x["due_basis_date"] or date.max,
@@ -8208,9 +8328,9 @@ def generate_plan():
     timeline_events = []
 
     # ---------------------------------------------------------
-    # 日毎のスケジューリングループ
+    # 日毎のスケジューリングループ（残タスクがある間は最終勤怠日の型で日付を自動拡張）
     # ---------------------------------------------------------
-    for current_date in sorted_dates:
+    for current_date in _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue):
         daily_status = attendance_data[current_date]
         # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
         machine_avail_dt = {}
@@ -8259,7 +8379,7 @@ def generate_plan():
             _sched_made_progress = False
             for task in sorted(
                 [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
-                key=_day_schedule_task_sort_key,
+                key=lambda t: _day_schedule_task_sort_key(t, task_queue),
             ):
                 if _task_blocked_by_process_sequence(task, task_queue):
                     continue
