@@ -57,7 +57,7 @@ Private m_lastRefreshQueriesErrMsg As String
 ' =========================================================
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
-' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一（MsgBox なし）
+' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（MsgBox なし）
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
@@ -979,6 +979,55 @@ Private Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws 
         .HorizontalAlignment = xlLeft
         .VerticalAlignment = xlCenter
     End With
+End Sub
+
+' 段階1/2 終盤・全シートフォント適用後: 結果の主要4シートの列オートフィット
+' ・結果_タスク一覧 は非表示列を開かない（結果シート_列幅_AutoFit非表示を維持）
+' ・結果_設備ガント は AutoFit 後にタイトル A1 左寄せを再固定
+Public Sub 結果_主要4結果シート_列オートフィット()
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    
+    Set wb = ThisWorkbook
+    On Error Resume Next
+    
+    Err.Clear
+    Set ws = wb.Worksheets("結果_設備ガント")
+    If Err.Number = 0 Then
+        結果シート_列幅_AutoFit安定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets("結果_カレンダー(出勤簿)")
+    If Err.Number = 0 Then
+        結果シート_列幅_AutoFit安定 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets("結果_メンバー別作業割合")
+    If Err.Number = 0 Then
+        結果シート_列幅_AutoFit安定 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets(SHEET_RESULT_TASK_LIST)
+    If Err.Number = 0 Then
+        結果シート_列幅_AutoFit非表示を維持 ws
+    Else
+        Err.Clear
+    End If
+    
+    On Error GoTo 0
 End Sub
 
 ' =========================================================
@@ -3078,6 +3127,7 @@ Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     On Error Resume Next
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     メインシート_AからK列_AutoFit
+    結果_主要4結果シート_列オートフィット
     On Error GoTo 0
 End Sub
 
@@ -3143,6 +3193,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
+    結果_主要4結果シート_列オートフィット
     On Error GoTo 0
     Exit Sub
     
@@ -3193,6 +3244,7 @@ Public Sub 全シートフォントを手入力で統一()
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
+    結果_主要4結果シート_列オートフィット
     On Error GoTo 0
     Exit Sub
     
@@ -3213,6 +3265,7 @@ Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
+    結果_主要4結果シート_列オートフィット
     On Error GoTo 0
     Exit Sub
     
