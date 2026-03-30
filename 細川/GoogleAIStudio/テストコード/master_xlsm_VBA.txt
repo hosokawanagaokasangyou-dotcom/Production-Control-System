@@ -11,9 +11,9 @@ Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
-
 ' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
+' 公開マクロ名は先頭に master_ を付与し、配台ブックと同名のマクロが別ブックで実行されるのを防ぐ（ThisWorkbook 以外で Alt+F8 等）。
 ' 全シートフォント統一は本ファイル末尾（配台ブックと同 API。master にはメインシート用 AutoFit は無い）。
 ' 「〇月カレンダー」シート群からメンバー別出勤簿を再生成
 ' - 1行目: 対象年月（A1）
@@ -23,7 +23,7 @@ Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
 ' - セル色が白 or 黄色のみ「工場稼働日」とみなす（ただし記号が入っているセルは記号を優先）
 ' - 条件付き書式は Interior を読んでも拾えないため、読取前に表示色を実体化してからルール削除
 ' =========================================================
-Sub カレンダーからメンバー出勤簿を生成()
+Sub master_カレンダーからメンバー出勤簿を生成()
     Dim wb As Workbook
     Dim ws As Worksheet
     Dim recMap As Object            ' key: member, value: Collection(配列)
@@ -54,6 +54,10 @@ Sub カレンダーからメンバー出勤簿を生成()
         WriteMemberAttendanceSheet CStr(key), recMap(key)
         memberCount = memberCount + 1
     Next key
+    
+    Call AutoFitAllWorksheetColumns
+    
+    Call TryAutoSaveMasterWorkbook
     
     MsgBox "メンバー別出勤簿を生成しました。" & vbCrLf & _
            "カレンダーシート: " & CStr(calendarCount) & " / メンバー: " & CStr(memberCount) & " / レコード: " & CStr(totalRec), vbInformation
@@ -188,7 +192,7 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
                 End Select
             End If
             
-            ' rec(8) = 休暇区分、rec(9) = 備考（カレンダー由来では空欄のまま）
+            ' rec(8) = 休暇区分、rec(9) = 備考（カレンダーからは入れない。再生成時は既存シート J 列を日付キーで復元）
             rec = Array(d, st, en, b1s, b1e, b2s, b2e, 1#, note, "")
             recs.Add rec
             totalRec = totalRec + 1
@@ -200,6 +204,84 @@ NextMemberRow:
     Next r
 End Sub
 
+' 再生成前に、メンバー出勤簿シートの「備考」(J列) だけを日付キーで退避する（空欄は退避しない）
+Private Sub PreserveMemberSheetRemarks(ByVal ws As Worksheet, ByVal outMap As Object)
+    Dim lr As Long
+    Dim rr As Long
+    Dim d As Variant
+    Dim note As String
+    Dim hdr As String
+    
+    On Error Resume Next
+    hdr = Trim$(CStr(ws.Cells(1, 1).Value))
+    On Error GoTo 0
+    If StrComp(hdr, "日付", vbTextCompare) <> 0 Then Exit Sub
+    
+    lr = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lr < 2 Then Exit Sub
+    
+    For rr = 2 To lr
+        d = ws.Cells(rr, 1).Value
+        If Not IsDate(d) Then GoTo NextPreserveRow
+        note = Trim$(CStr(ws.Cells(rr, 10).Value))
+        If Len(note) = 0 Then GoTo NextPreserveRow
+        outMap(Format$(CDate(d), "yyyy-mm-dd")) = ws.Cells(rr, 10).Value
+NextPreserveRow:
+    Next rr
+End Sub
+
+' メンバー出勤簿: 罫線・見出し色・先頭行のウィンドウ枠の固定（スクロール時も1行目を表示）
+Private Sub FormatMemberAttendanceSheetLayout(ByVal ws As Worksheet, ByVal lastRow As Long)
+    Dim dataRng As Range
+    Dim prevWs As Worksheet
+    Dim prevScr As Boolean
+    If lastRow < 1 Then Exit Sub
+    Set dataRng = ws.Range("A1:J" & CStr(lastRow))
+    On Error Resume Next
+    With dataRng.Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = RGB(160, 160, 160)
+    End With
+    With ws.Range("A1:J1")
+        .Interior.Color = RGB(180, 220, 210)
+        .Font.Bold = True
+        .Font.Color = RGB(0, 0, 0)
+    End With
+    On Error GoTo 0
+    
+    Set prevWs = Nothing
+    On Error Resume Next
+    Set prevWs = ActiveSheet
+    On Error GoTo 0
+    prevScr = Application.ScreenUpdating
+    Application.ScreenUpdating = True
+    On Error Resume Next
+    If Not ActiveWorkbook Is ThisWorkbook Then ThisWorkbook.Activate
+    ws.Activate
+    With ActiveWindow
+        .FreezePanes = False
+        .Split = False
+    End With
+    DoEvents
+    ' ①解除のあと ②A1 で表示位置をリセット（この状態で固定しないと1行目が見えないまま固定されることがある）
+    ws.Range("A1").Select
+    ActiveWindow.ScrollRow = 1
+    ActiveWindow.ScrollColumn = 1
+    Application.GoTo ws.Range("A1"), True
+    DoEvents
+    ' ③見出し1行目の下（A2）をアクティブにしてから固定
+    ws.Range("A2").Select
+    ActiveWindow.FreezePanes = True
+    On Error GoTo 0
+    If Not prevWs Is Nothing Then
+        On Error Resume Next
+        prevWs.Activate
+        On Error GoTo 0
+    End If
+    Application.ScreenUpdating = prevScr
+End Sub
+
 Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As Collection)
     Dim ws As Worksheet
     Dim wb As Workbook
@@ -207,13 +289,20 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     Dim r As Long
     Dim rec As Variant
     Dim sortRange As Range
+    Dim preservedNotes As Object
+    Dim dk As String
+    Dim noteOut As Variant
     
     Set wb = ThisWorkbook
+    Set preservedNotes = CreateObject("Scripting.Dictionary")
     Set ws = Nothing
     On Error Resume Next
     Set ws = wb.Worksheets(memberName)
     On Error GoTo 0
-    If ws Is Nothing Then
+    
+    If Not ws Is Nothing Then
+        Call PreserveMemberSheetRemarks(ws, preservedNotes)
+    Else
         Set ws = wb.Worksheets.Add(After:=wb.Sheets(wb.Sheets.Count))
         ws.Name = memberName
     End If
@@ -230,7 +319,6 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     ws.Cells(1, 8).Value = "作業効率"
     ws.Cells(1, 9).Value = "休暇区分"
     ws.Cells(1, 10).Value = "備考"
-    ws.Range("A1:J1").Font.Bold = True
     
     r = 2
     For i = 1 To recs.Count
@@ -244,7 +332,13 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
         If Not IsEmpty(rec(6)) Then ws.Cells(r, 7).Value = rec(6)
         ws.Cells(r, 8).Value = rec(7)
         ws.Cells(r, 9).Value = rec(8)  ' 休暇区分（年休/前休/後休/他拠点勤務 など）
-        ws.Cells(r, 10).Value = rec(9) ' 備考（手入力・特記事項用）
+        dk = Format$(CDate(rec(0)), "yyyy-mm-dd")
+        If preservedNotes.Exists(dk) Then
+            noteOut = preservedNotes(dk)
+        Else
+            noteOut = rec(9)
+        End If
+        ws.Cells(r, 10).Value = noteOut ' 備考（手入力・特記。再生成前に入っていた内容は同一日付なら維持）
         r = r + 1
     Next i
     
@@ -256,6 +350,8 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     ws.Columns("A").NumberFormatLocal = "yyyy/mm/dd"
     ws.Columns("B:G").NumberFormatLocal = "hh:mm"
     ws.Columns("A:J").AutoFit
+    
+    Call FormatMemberAttendanceSheetLayout(ws, r - 1)
 End Sub
 
 Private Function ResolveCalendarYearMonth(ByVal wsCal As Worksheet, ByRef outY As Long, ByRef outM As Long) As Boolean
@@ -351,25 +447,25 @@ End Function
 ' =========================================================
 ' 図形ボタン: 押下アニメーション → 出勤簿生成（master.xlsm 用）
 ' =========================================================
-Sub アニメ付き_カレンダーから出勤簿生成()
+Sub master_アニメ付き_カレンダーから出勤簿生成()
     Call AnimateButtonPush
-    Call カレンダーからメンバー出勤簿を生成
+    Call master_カレンダーからメンバー出勤簿を生成
 End Sub
 
 ' 図形ボタン用：OnAction を本体に直指定すると AnimateButtonPush が効かないためラッパーを割り当てる
-Sub アニメ付き_全シートフォントをリストから選択して統一()
+Sub master_アニメ付き_全シートフォントをリストから選択して統一()
     Call AnimateButtonPush
-    Call 全シートフォントをリストから選択して統一
+    Call master_全シートフォントをリストから選択して統一
 End Sub
 
-Sub アニメ付き_全シートフォントを手入力で統一()
+Sub master_アニメ付き_全シートフォントを手入力で統一()
     Call AnimateButtonPush
-    Call 全シートフォントを手入力で統一
+    Call master_全シートフォントを手入力で統一
 End Sub
 
-Sub アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
+Sub master_アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
     Call AnimateButtonPush
-    Call 全シートフォント_BIZ_UDPゴシックに統一
+    Call master_全シートフォント_BIZ_UDPゴシックに統一
 End Sub
 
 ' =========================================================
@@ -467,17 +563,17 @@ Private Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, p
 End Sub
 
 ' 現在のシートに「出勤簿を生成」ボタンを1つ配置（ティール系プリセット 2）
-Sub かっこいいボタンを作成()
+Sub master_かっこいいボタンを作成()
     Dim y As Single
     Const gap As Single = 70
     y = 50
-    CreateCoolButtonWithPreset "出勤簿を生成", "アニメ付き_カレンダーから出勤簿生成", 50, y, 2
+    CreateCoolButtonWithPreset "出勤簿を生成", "master_アニメ付き_カレンダーから出勤簿生成", 50, y, 2
     MsgBox "ボタンを作成しました。「出勤簿を生成」はカレンダーからメンバー出勤簿を再生成します。" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
 
 ' 配色 P1～P10 の見本（クリックは無効化）
-Sub かっこいいボタン_配色サンプル作成()
+Sub master_かっこいいボタン_配色サンプル作成()
     Dim i As Long
     Dim x As Single
     Dim y As Single
@@ -489,7 +585,7 @@ Sub かっこいいボタン_配色サンプル作成()
     For i = 1 To 10
         x = left0 + CSng((i - 1) Mod 5) * colW
         y = top0 + CSng((i - 1) \ 5) * rowH
-        CreateCoolButton "P" & CStr(i), "かっこいいボタンを作成", x, y, CoolButtonGradientTop(i), CoolButtonGradientBottom(i)
+        CreateCoolButton "P" & CStr(i), "master_かっこいいボタンを作成", x, y, CoolButtonGradientTop(i), CoolButtonGradientBottom(i)
         On Error Resume Next
         ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
         On Error GoTo 0
@@ -549,9 +645,11 @@ End Sub
 ' =========================================================
 ' 全シートのセルフォントを統一（手動実行・ボタン割当可）
 ' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
-' ※保護シートはスキップし、ダイアログに列挙。
+' ※シート保護: 空パスワードなら一時解除→フォント・列幅→再保護。パスワード付きはスキップして列挙。
 ' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
-' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用）。
+' ※365/一部環境で Dialogs.Show が False やエラーになることがあるため、失敗時は InputBox で代替。
+' ※日本語Excelでは Font.Name だけでは見た目が変わらないことがあるため NameFarEast・テーマ解除も行う。
+' ※図形のマクロには「master_アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用）。
 ' ※配台ブックの「メインシート_AからK列_AutoFit」は master には無いため呼ばない。
 ' =========================================================
 Private Function GetOrCreateFontScratchSheet() As Worksheet
@@ -596,16 +694,103 @@ Private Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Next i
 End Function
 
+' 空パスワードのシート保護だけ一時解除（メンバー出勤簿など）。パスワード付きは False のまま。
+Private Function TryTempUnprotectBlank(ByVal ws As Worksheet) As Boolean
+    TryTempUnprotectBlank = False
+    If Not ws.ProtectContents Then Exit Function
+    On Error Resume Next
+    ws.Unprotect Password:=""
+    If Err.Number <> 0 Then
+        Err.Clear
+        Exit Function
+    End If
+    If Not ws.ProtectContents Then TryTempUnprotectBlank = True
+    On Error GoTo 0
+End Function
+
+' 一時解除したシートを再保護（元が空パスワード想定。オプションは Excel 既定に近い最小限）
+Private Sub ReprotectSheetBlankPwdUI(ByVal ws As Worksheet)
+    On Error Resume Next
+    ws.Protect Password:="", DrawingObjects:=True, Contents:=True
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+' ブック内の各ワークシートで UsedRange の列幅をオートフィット
+Private Sub AutoFitAllWorksheetColumns()
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim unlk As Boolean
+    For Each ws In ThisWorkbook.Worksheets
+        unlk = TryTempUnprotectBlank(ws)
+        On Error Resume Next
+        If Not ws.ProtectContents Then
+            Set ur = ws.UsedRange
+            If Not ur Is Nothing Then ur.Columns.AutoFit
+        End If
+        Err.Clear
+        On Error GoTo 0
+        If unlk Then ReprotectSheetBlankPwdUI ws
+    Next ws
+End Sub
+
+' フォント変更・出勤簿生成後など、ThisWorkbook（master.xlsm）を保存する
+Private Sub TryAutoSaveMasterWorkbook()
+    On Error Resume Next
+    If ThisWorkbook.ReadOnly Then
+        On Error GoTo 0
+        Exit Sub
+    End If
+    ThisWorkbook.Save
+    If Err.Number <> 0 Then
+        MsgBox "master.xlsm の自動保存に失敗しました: " & Err.Description, vbExclamation
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Sub
+
+' UsedRange 一括にフォント名を適用（テーマフォント・東アジア語フォントを同じ名前にそろえる）
+Private Function AssignFontNameToRange(ByVal tgt As Range, ByVal fontName As String) As Boolean
+    On Error Resume Next
+    tgt.Font.ThemeFont = xlThemeFontNone
+    Err.Clear
+    tgt.Font.Name = fontName
+    If Err.Number <> 0 Then
+        AssignFontNameToRange = False
+        Err.Clear
+        On Error GoTo 0
+        Exit Function
+    End If
+    tgt.Font.NameFarEast = fontName
+    Err.Clear
+    tgt.Font.NameAscii = fontName
+    Err.Clear
+    AssignFontNameToRange = True
+    On Error GoTo 0
+End Function
+
 Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean
+    Dim prevCalc As XlCalculation
+    Dim prevScr As Boolean
+    Dim prevEv As Boolean
+    Dim unlk As Boolean
     
     skippedOut = ""
+    prevCalc = Application.Calculation
+    prevScr = Application.ScreenUpdating
+    prevEv = Application.EnableEvents
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+    
     For Each ws In ThisWorkbook.Worksheets
+        unlk = TryTempUnprotectBlank(ws)
         On Error Resume Next
         If ws.ProtectContents Then
-            skippedOut = skippedOut & "・" & ws.Name & "（保護中のためスキップ）" & vbCrLf
+            skippedOut = skippedOut & "・" & ws.Name & "（保護中・解除不可のためスキップ）" & vbCrLf
         Else
             rangeErr = False
             Set ur = Nothing
@@ -616,18 +801,27 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
                 rangeErr = True
             End If
             If Not rangeErr Then
-                ur.Font.Name = fontName
-                If Err.Number <> 0 Then
-                    skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
-                    Err.Clear
+                If Not ur Is Nothing Then
+                    If Not AssignFontNameToRange(ur, fontName) Then
+                        skippedOut = skippedOut & "・" & ws.Name & "（フォント適用失敗）" & vbCrLf
+                    Else
+                        ur.Columns.AutoFit
+                    End If
                 End If
             End If
         End If
         On Error GoTo 0
+        If unlk Then ReprotectSheetBlankPwdUI ws
     Next ws
+    
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScr
+    Application.EnableEvents = prevEv
+    
+    Call TryAutoSaveMasterWorkbook
 End Sub
 
-Public Sub 全シートフォントをリストから選択して統一()
+Public Sub master_全シートフォントをリストから選択して統一()
     Dim wsScratch As Worksheet
     Dim r As Range
     Dim prevWs As Worksheet
@@ -641,6 +835,8 @@ Public Sub 全シートフォントをリストから選択して統一()
     Dim oldStrike As Variant
     Dim picked As String
     Dim skipped As String
+    Dim dlgOk As Boolean
+    Dim v As Variant
     
     Set prevWs = ActiveSheet
     Set wsScratch = GetOrCreateFontScratchSheet()
@@ -661,21 +857,66 @@ Public Sub 全シートフォントをリストから選択して統一()
     wsScratch.Activate
     r.Select
     
-    If Not Application.Dialogs(xlDialogFormatFont).Show Then
-        RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
-        wsScratch.Visible = prevVis
+    dlgOk = False
+    Dim dlgRet As Variant
+    On Error Resume Next
+    dlgRet = Application.Dialogs(xlDialogFormatFont).Show
+    If Err.Number <> 0 Then
+        Err.Clear
+        dlgOk = False
+    Else
+        Select Case VarType(dlgRet)
+            Case vbBoolean
+                dlgOk = dlgRet
+            Case vbInteger, vbLong, vbByte
+                dlgOk = (CLng(dlgRet) <> 0)
+            Case Else
+                dlgOk = False
+        End Select
+    End If
+    On Error GoTo 0
+    
+    DoEvents
+    
+    picked = ""
+    If dlgOk Then
         On Error Resume Next
-        prevWs.Activate
+        picked = Trim$(CStr(r.Font.Name))
+        If Len(picked) = 0 Then
+            picked = Trim$(CStr(r.Font.NameFarEast))
+        End If
         On Error GoTo 0
-        Exit Sub
     End If
     
-    picked = r.Font.Name
     RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
     wsScratch.Visible = prevVis
     On Error Resume Next
     prevWs.Activate
     On Error GoTo 0
+    
+    If Len(picked) = 0 Then
+        v = Application.InputBox( _
+            "フォントの一覧ダイアログが使えない、またはキャンセルされました。" & vbCrLf & _
+            "適用するフォント名を入力してください（ホームのフォントボックスと同じ表記）。" & vbCrLf & _
+            "（手入力のみの場合は「master_全シートフォントを手入力で統一」でも同じ操作ができます）", _
+            "全シートのフォント統一", _
+            oldName, _
+            Type:=2)
+        If VarType(v) = vbBoolean Then Exit Sub
+        picked = Trim$(CStr(v))
+        If Len(picked) = 0 Then
+            MsgBox "フォント名が空のため中止しました。", vbExclamation
+            Exit Sub
+        End If
+        If Not FontNameExistsInExcel(picked) Then
+            If MsgBox( _
+                "フォント「" & picked & "」が一覧に見つかりませんでした。" & vbCrLf & _
+                "このまま適用を試みますか？", _
+                vbQuestion Or vbYesNo, "確認") = vbNo Then
+                Exit Sub
+            End If
+        End If
+    End If
     
     On Error GoTo FailList
     ApplyFontToAllSheetCells picked, skipped
@@ -692,11 +933,11 @@ FailList:
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
-Public Sub 全シートフォントを選択して統一()
-    Call アニメ付き_全シートフォントをリストから選択して統一
+Public Sub master_全シートフォントを選択して統一()
+    Call master_アニメ付き_全シートフォントをリストから選択して統一
 End Sub
 
-Public Sub 全シートフォントを手入力で統一()
+Public Sub master_全シートフォントを手入力で統一()
     Dim v As Variant
     Dim fontName As String
     Dim skipped As String
@@ -739,7 +980,7 @@ FailHand:
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
-Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
+Public Sub master_全シートフォント_BIZ_UDPゴシックに統一()
     Dim skipped As String
     On Error GoTo FailB
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>配台ルール（全依頼共通・個別）</title>
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --card: #fffef9;
+      --accent: #1a5f4a;
+      --accent2: #c45c26;
+      --text: #1e1e1e;
+      --muted: #5c5c5c;
+      --border: #d8d0c4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      margin: 0;
+      padding: 2rem 1.25rem 3rem;
+      max-width: 52rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.25rem;
+      color: var(--accent2);
+      margin-top: 2.25rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid var(--border);
+    }
+    h3 {
+      font-size: 1.05rem;
+      color: var(--accent);
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+    ul { padding-left: 1.35rem; margin: 0.5rem 0; }
+    li { margin: 0.35rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+    }
+    th { background: #eef5f2; }
+    code, .file {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.88em;
+      background: #ebe6dc;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+    }
+    nav.toc {
+      background: #e8f0ec;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 2rem;
+    }
+    nav.toc strong { color: var(--accent); }
+    nav.toc ol { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    nav.toc a { color: var(--accent2); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 2.5rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <h1>配台ルール</h1>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細・従来ルールは <span class="file">配台ルール.md</span> を参照してください。実装は <span class="file">python/planning_core.py</span> です。</p>
+
+  <nav class="toc" aria-label="目次">
+    <strong>目次</strong>
+    <ol>
+      <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
+      <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
+    </ol>
+  </nav>
+
+  <section id="global" class="card" aria-labelledby="h-global">
+    <h2 id="h-global">A. 全加工依頼に適用する追加ルール</h2>
+    <h3>加工内容列による工程順序（同一依頼NO）</h3>
+    <ul>
+      <li><strong>列</strong>: マクロブック <strong>加工計画DATA</strong> および <strong>配台計画_タスク入力</strong> の <strong>加工内容</strong>（段階1でコピーされます）。</li>
+      <li><strong>書式</strong>: カンマ <code>,</code> 区切り。各要素は <strong>工程名</strong>に対応（例: <code>EC,検査</code>）。</li>
+      <li><strong>制約</strong>: 同一 <strong>依頼NO</strong> で、いずれの行も <strong>配台不要でない</strong> とき、リストの <strong>前の工程がすべて完了（残ロール0）するまで、後の工程には割り当てません</strong>。</li>
+      <li><strong>例外</strong>: 工程名が加工内容に含まれない行は、この順序制約の対象外です。配台不要行はキューに入らず、前工程としてもブロックしません。</li>
+      <li><strong>照合</strong>: 工程名は NFKC・空白除去で加工内容の各トークンと突き合わせます。</li>
+      <li><strong>日内の動き</strong>: 同一日に、加工内容順を優先したうえでタスクを複数周回し、各タスクあたり最大1チャンクずつ割り当てるため、前後工程を同日で交互に進められます。</li>
+    </ul>
+  </section>
+
+  <section id="individual" class="card" aria-labelledby="h-individual">
+    <h2 id="h-individual">B. 個別に指定する追加ルール</h2>
+    <h3>EC → 検査（ロール単位パイプライン）</h3>
+    <p>次の <strong>工程名・機械名の組み合わせ</strong>に限り、同一依頼NO内でロール単位の並行を認めます（コード内定数）。</p>
+    <table>
+      <thead>
+        <tr><th>役割</th><th>工程名</th><th>機械名</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>先行（EC）</td><td>EC</td><td>EC機　湖南</td></tr>
+        <tr><td>後続（検査）</td><td>検査</td><td>熱融着機　湖南</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><strong>バッファ</strong>: EC 側で <strong>2 ロール完了するまで</strong>、検査には <strong>1 ロールも割り当てません</strong>（段取り時間の確保）。定数: <code>ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2</code>。</li>
+      <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
+        上限（イメージ）: EC 完了ロール数を <code>ec_done</code>、検査完了を <code>insp_done</code> とすると、<code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。</li>
+      <li><strong>全体ルールとの関係</strong>: セクション A の工程順により、検査は常に EC より後の工程として扱われます。</li>
+      <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
+    </ul>
+  </section>
+
+  <footer>
+    同一ソースの Markdown: 配台ルール.md（セクション A・B と §1 以降の一般ルール）
+  </footer>
+</body>
+</html>

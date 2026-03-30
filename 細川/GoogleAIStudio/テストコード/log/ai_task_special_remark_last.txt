@@ -90,7 +90,6 @@
 - 依頼NO Y3-26 | 工程名「SEC」 | 機械名「SEC機　湖南」 | 備考本文: 4/5に少なくとも2000m出荷したいので間に合うように計画を変更する
 
 === Gemini 返却テキスト（モデル出力そのまま） ===
-```json
 {
   "W3-14": {
     "process_name": "検査",
@@ -100,12 +99,11 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "priority": 1
+    "target_completion_date": "2026-04-05"
   }
 }
-```
 
 === AI が返したテキストからクライアントが切り出した JSON 文字列 ===
 （※ユーザー特別指定の解析に正規表現は使っていません。モデル応答のパース用です）
@@ -118,9 +116,9 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "priority": 1
+    "target_completion_date": "2026-04-05"
   }
 }
 
@@ -134,8 +132,8 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "priority": 1
+    "target_completion_date": "2026-04-05"
   }
 }
