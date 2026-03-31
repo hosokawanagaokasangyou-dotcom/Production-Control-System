@@ -8893,7 +8893,8 @@ SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 # 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
 # マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
-STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 366
+# 計画基準納期の +1 日による巻き戻し再シミュは最大この回数（11 回目以降は行わず、未完了はステータスに納期見直し必要を付与）。
+STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 10
 
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
@@ -9658,6 +9659,7 @@ def generate_plan():
     timeline_events.clear()
 
     _deadline_retry_count = 0
+    _due_shift_retry_budget_exhausted = False
     while True:
         if _deadline_retry_count > 0:
             _purge_attendance_days_not_in_set(
@@ -10297,8 +10299,10 @@ def generate_plan():
                             t["_partial_retry_calendar_blocked"] = True
                     if shift_tid_list:
                         if _deadline_retry_count >= STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS:
+                            _due_shift_retry_budget_exhausted = True
                             logging.warning(
-                                "納期後ろ倒し再配台が上限（%s 回）に達しました。残る不完全割当はそのまま出力します。",
+                                "納期後ろ倒し再配台が上限（%s 回）に達しました。計画基準+1はこれ以上行いません。"
+                                "未完了タスクのステータスに「納期見直し必要」を付けて出力します。",
                                 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
                             )
                             _full_calendar_without_deadline_restart = True
@@ -10513,6 +10517,7 @@ def generate_plan():
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
     # ステータス（配台の可否・残）：完了相当=配台可／未割当=配台不可／一部のみ=配台残
+    # 計画基準+1 の再試行が上限に達したあとに残る未完了には（納期見直し必要）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
@@ -10525,6 +10530,8 @@ def generate_plan():
             status = "配台不可"
         else:
             status = "配台残"
+        if _due_shift_retry_budget_exhausted and rem_u > 1e-9 and "納期見直し必要" not in status:
+            status = f"{status}（納期見直し必要）"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
