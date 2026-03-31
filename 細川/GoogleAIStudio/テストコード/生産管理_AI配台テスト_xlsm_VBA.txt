@@ -2064,9 +2064,9 @@ Private Sub 段階1_コア実行()
     On Error GoTo ErrStage1
 
     wsh.CurrentDirectory = Environ("TEMP")
-    ' /v:on … set STAGE1_PY_EXIT=!ERRORLEVEL! で Python 終了直後のコードを保持。pause でコンソールのトレースバックを確認してから exit /b で VBA に返す
+    ' /v:on … py 直後の ERRORLEVEL を !ERRORLEVEL! で保存し exit /b で cmd.exe の終了コードとして VBA に返す（pause なし）
     cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます && py -3 -u python\task_extract_stage1.py" _
-        & " & set STAGE1_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT! & pause & exit /b !STAGE1_PY_EXIT!"
+        & " & set STAGE1_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT! & exit /b !STAGE1_PY_EXIT!"
     exitCode = wsh.Run(cmd, 1, True)
     m_lastStage1ExitCode = exitCode
 
@@ -2158,8 +2158,12 @@ Public Sub RunPythonStage1ThenStage2()
         Exit Sub
     End If
     段階2_コア実行 True
-    If Len(m_lastStage2ErrMsg) > 0 Then
-        MsgBox m_lastStage2ErrMsg, vbCritical, "段階1+2"
+    If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
+        If Len(m_lastStage2ErrMsg) > 0 Then
+            MsgBox m_lastStage2ErrMsg, vbCritical, "段階1+2"
+        Else
+            MsgBox "段階2の Python 終了コードが " & CStr(m_lastStage2ExitCode) & " です。LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "段階1+2"
+        End If
         Exit Sub
     End If
     段階2_取り込み結果をMsgBox
@@ -2679,8 +2683,9 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' ② 「pushd」コマンドを使用し、UNCパスに一時的なドライブ文字を割り当てて確実に移動してからPythonを実行する
     ' リダイレクトは付けない（付けるとコンソールが真っ黒になる）。ログは Python が execution_log.txt にも出力する。
     cmdLogPath = targetDir & "\log\cmd_stage2.log"
-    cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階2] 計画生成を実行中... 進捗はこの画面に表示されます。保存済みログ: log\execution_log.txt && py -3 -u python\plan_simulation_stage2.py" _
-        & " & echo. & echo [段階2] 終了 ERRORLEVEL=%ERRORLEVEL%"
+    ' /v:on … py の終了コードを exit /b で返す（末尾の echo だけだと ERRORLEVEL=0 になり VBA が正常終了と誤認しがち）
+    cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階2] 計画生成を実行中... 進捗はこの画面に表示されます。保存済みログ: log\execution_log.txt && py -3 -u python\plan_simulation_stage2.py" _
+        & " & set STAGE2_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階2] 終了 ERRORLEVEL=!STAGE2_PY_EXIT! & exit /b !STAGE2_PY_EXIT!"
     
     ' 4. コマンドプロンプトを表示＆完了まで待機（モーダル化）
     ' 第2引数(1) = 通常のウィンドウを表示、第3引数(True) = 処理が終わるまでVBAを停止して待つ
@@ -2692,6 +2697,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         stage2Block = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
         If Len(stage2Block) > 0 Then
             m_lastStage2ErrMsg = stage2Block
+        Else
+            m_lastStage2ErrMsg = "Python の終了コードが " & CStr(exitCode) & " です。LOG シートおよび log\execution_log.txt を確認してください。（優先度重複などの検証中止時は log\stage2_blocking_message.txt も参照）"
         End If
     End If
 
@@ -2973,8 +2980,12 @@ End Sub
 ' 互換・他モジュール用: 段階2のみ（エラー・取り込み完了の MsgBox あり）
 Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
     段階2_コア実行 preserveStage1LogOnLogSheet
-    If Len(m_lastStage2ErrMsg) > 0 Then
-        MsgBox m_lastStage2ErrMsg, vbCritical, "計画生成"
+    If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
+        If Len(m_lastStage2ErrMsg) > 0 Then
+            MsgBox m_lastStage2ErrMsg, vbCritical, "計画生成"
+        Else
+            MsgBox "Python の終了コードが " & CStr(m_lastStage2ExitCode) & " です。LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "計画生成"
+        End If
         Exit Sub
     End If
     段階2_取り込み結果をMsgBox
