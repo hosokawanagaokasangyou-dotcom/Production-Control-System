@@ -247,7 +247,8 @@ ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
 # 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
-# need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数」等（余剰時に増やせる人数・工程×機械列）
+# need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数／余力時追加人数」等
+# （Excel 上は概ね 5 行目付近。余剰時に増やせる人数上限・工程×機械列）
 # ＋ 行「特別指定1」～「特別指定99」（必要人数の上書き・1～99）
 NEED_COL_CONDITION = "依頼NO条件"
 NEED_COL_NOTE = "備考"
@@ -742,10 +743,19 @@ def _team_assign_start_slack_wait_minutes() -> int:
 
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
-# True のとき need シート「配台時追加人数」行を無視し、チーム人数は基本必要人数（req_num）のみ試行する。
-# （既定 False: 追加人数上限まで増員し、開始・単位数などのスコアで最良人数を選ぶ。）
+# True のとき need シート「配台時追加人数」行を無視し、チーム人数は基本必要人数（req_num）のみ試行し、メイン後追記もしない。
 TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW = (
     os.environ.get("TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0")
+    .strip()
+    .lower()
+    in ("1", "true", "yes", "on", "はい")
+)
+
+# True: 従来どおりメイン割付の組み合わせ探索で req_num〜req_num+追加人数上限まで試す。
+# False（既定）: メインは req_num のみ。追加人数上限は全シミュレーション完了後、当該ブロック時間に
+#     他タスクへ未割当（時間重なりなし）かつ skills 適合の者をサブとして追記（append_surplus_staff_after_main_dispatch）。
+TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
+    os.environ.get("TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "")
     .strip()
     .lower()
     in ("1", "true", "yes", "on", "はい")
@@ -9911,7 +9921,7 @@ def _assign_one_roll_trial_order_flow(
         else None
     )
 
-    extra_max, extra_src_line = resolve_need_surplus_extra_max_explain(
+    extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
         machine,
         machine_name,
         task["task_id"],
@@ -9919,10 +9929,21 @@ def _assign_one_roll_trial_order_flow(
         need_rules,
     )
     if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
-        extra_max = 0
+        extra_max_sheet = 0
         extra_src_line = (
             (extra_src_line + " → ") if extra_src_line else ""
         ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
+    extra_max = (
+        extra_max_sheet if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS else 0
+    )
+    if (
+        extra_max_sheet > 0
+        and not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+        and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
+    ):
+        extra_src_line = (
+            (extra_src_line + " → ") if extra_src_line else ""
+        ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
     max_team_size = min(req_num + extra_max, len(capable_members))
     if max_team_size < req_num:
         max_team_size = req_num
@@ -10235,6 +10256,209 @@ def _trial_order_first_schedule_pass(
     return False
 
 
+def _timeline_event_team_names_set(ev: dict) -> set:
+    names: set = set()
+    op = str(ev.get("op") or "").strip()
+    if op:
+        names.add(op)
+    sub = str(ev.get("sub") or "").strip()
+    if sub:
+        for s in sub.split(","):
+            t = s.strip()
+            if t:
+                names.add(t)
+    return names
+
+
+def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
+    tid = str(ev.get("task_id") or "").strip()
+    if not tid:
+        return None
+    eq = str(ev.get("machine") or "").strip()
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        if t_eq == eq:
+            return t
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() == tid:
+            return t
+    return None
+
+
+def _member_overlaps_busy(
+    busy_map: dict, member: str, st: datetime, ed: datetime
+) -> bool:
+    for bs, be in busy_map.get(member, ()):
+        if st < be and bs < ed:
+            return True
+    return False
+
+
+def append_surplus_staff_after_main_dispatch(
+    timeline_events: list,
+    attendance_data: dict,
+    skills_dict: dict,
+    members: list,
+    task_queue: list,
+    req_map: dict,
+    need_rules: list,
+    surplus_map: dict,
+    global_priority_override: dict | None,
+) -> int:
+    """
+    need「配台時追加人数／余力時追加人数」行の上限まで、メイン割付で採用しきれなかった枠を追記する。
+    各タイムラインブロックについて、その時間帯に他ブロックへ未参加（区間重なりなし）で
+    eligible かつ OP/AS スキルの者をサブに追加する。
+    """
+    gpo = global_priority_override or {}
+    if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
+        return 0
+
+    busy: dict[str, list[tuple[datetime, datetime]]] = defaultdict(list)
+    for e in timeline_events:
+        st = e.get("start_dt")
+        ed = e.get("end_dt")
+        if not isinstance(st, datetime) or not isinstance(ed, datetime):
+            continue
+        for name in _timeline_event_team_names_set(e):
+            busy[name].append((st, ed))
+
+    appended_total = 0
+    sorted_evs = sorted(
+        (
+            e
+            for e in timeline_events
+            if isinstance(e.get("start_dt"), datetime)
+            and isinstance(e.get("end_dt"), datetime)
+        ),
+        key=lambda x: (x.get("date"), x.get("start_dt") or datetime.min),
+    )
+
+    for ev in sorted_evs:
+        d = ev.get("date")
+        if d is None or d not in attendance_data:
+            continue
+        daily_status = attendance_data[d]
+        task = _task_dict_for_timeline_event(ev, task_queue)
+        if task is None:
+            continue
+        machine = task.get("machine")
+        machine_name = str(task.get("machine_name") or "").strip()
+        tid = str(task.get("task_id") or "").strip()
+
+        ro = task.get("required_op")
+        if ro is not None:
+            try:
+                riv = int(ro)
+                if riv >= 1:
+                    req_num = riv
+                else:
+                    req_num = resolve_need_required_op(
+                        str(machine or "").strip(),
+                        machine_name,
+                        tid,
+                        req_map,
+                        need_rules,
+                    )
+            except (TypeError, ValueError):
+                req_num = resolve_need_required_op(
+                    str(machine or "").strip(),
+                    machine_name,
+                    tid,
+                    req_map,
+                    need_rules,
+                )
+        else:
+            req_num = resolve_need_required_op(
+                str(machine or "").strip(),
+                machine_name,
+                tid,
+                req_map,
+                need_rules,
+            )
+        if gpo.get("ignore_need_minimum"):
+            req_num = 1
+
+        extra_max_sheet = resolve_need_surplus_extra_max(
+            str(machine or "").strip(),
+            machine_name,
+            tid,
+            surplus_map,
+            need_rules,
+        )
+        if extra_max_sheet <= 0:
+            continue
+
+        names = _timeline_event_team_names_set(ev)
+        team_size = len(names)
+        cap_add = req_num + extra_max_sheet - team_size
+        if cap_add <= 0:
+            continue
+
+        skill_meta_cache: dict = {}
+
+        def skill_role_priority(mem):
+            if gpo.get("ignore_skill_requirements"):
+                return ("OP", 100)
+            if mem not in skill_meta_cache:
+                srow = skills_dict.get(mem, {})
+                machine_proc = str(machine or "").strip()
+                v = ""
+                if machine_proc and machine_name:
+                    v = srow.get(f"{machine_proc}+{machine_name}", "")
+                elif machine_name:
+                    v = srow.get(machine_name, "")
+                elif machine_proc:
+                    v = srow.get(machine_proc, "")
+                skill_meta_cache[mem] = parse_op_as_skill_cell(v)
+            return skill_meta_cache[mem]
+
+        capable = []
+        for mem in members:
+            if mem not in daily_status:
+                continue
+            st_ent = daily_status[mem]
+            if not st_ent.get(
+                "eligible_for_assignment", st_ent.get("is_working", False)
+            ):
+                continue
+            if skill_role_priority(mem)[0] not in ("OP", "AS"):
+                continue
+            capable.append(mem)
+        capable.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+
+        st = ev["start_dt"]
+        ed = ev["end_dt"]
+        candidates = [
+            m
+            for m in capable
+            if m not in names and not _member_overlaps_busy(busy, m, st, ed)
+        ]
+        candidates.sort(
+            key=lambda mm: (
+                0 if skill_role_priority(mm)[0] == "AS" else 1,
+                skill_role_priority(mm)[1],
+                mm,
+            )
+        )
+
+        chosen = candidates[:cap_add]
+        if not chosen:
+            continue
+
+        old_sub = str(ev.get("sub") or "").strip()
+        parts = [s.strip() for s in old_sub.split(",") if s.strip()]
+        parts.extend(chosen)
+        ev["sub"] = ", ".join(parts)
+        for m in chosen:
+            busy[m].append((st, ed))
+        appended_total += len(chosen)
+
+    return appended_total
+
+
 # =========================================================
 # 3. メイン計画生成 (日毎ループ・持ち越し対応)
 #    段階2の本体。plan_simulation_stage2 からのみ呼ばれる想定。
@@ -10263,6 +10487,15 @@ def generate_plan():
         return
     reset_gemini_usage_tracker()
     _clear_stage2_blocking_message_file()
+    if (
+        not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+        and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
+    ):
+        logging.info(
+            "need配台時追加人数: メイン割付は基本必要人数のみ。"
+            "余力は全シミュレーション後、時間重なりのない未割当かつスキル適合者をサブに追記します。"
+            "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
+        )
 
     global TRACE_SCHEDULE_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
@@ -10859,7 +11092,7 @@ def generate_plan():
                                 pref_raw,
                             )
     
-                        extra_max, extra_src_line = resolve_need_surplus_extra_max_explain(
+                        extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
                             machine,
                             machine_name,
                             task["task_id"],
@@ -10867,12 +11100,27 @@ def generate_plan():
                             need_rules,
                         )
                         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
-                            extra_max = 0
+                            extra_max_sheet = 0
                             extra_src_line = (
                                 (extra_src_line + " → ")
                                 if extra_src_line
                                 else ""
                             ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
+                        extra_max = (
+                            extra_max_sheet
+                            if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+                            else 0
+                        )
+                        if (
+                            extra_max_sheet > 0
+                            and not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+                            and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
+                        ):
+                            extra_src_line = (
+                                (extra_src_line + " → ")
+                                if extra_src_line
+                                else ""
+                            ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
                         max_team_size = min(req_num + extra_max, len(capable_members))
                         if max_team_size < req_num:
                             max_team_size = req_num
@@ -11465,6 +11713,30 @@ def generate_plan():
                     _ev.get("total_units"),
                     _ev.get("end_dt"),
                 )
+
+    # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
+    if (
+        not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+        and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
+        and surplus_map
+        and timeline_events
+    ):
+        _n_sur = append_surplus_staff_after_main_dispatch(
+            timeline_events,
+            attendance_data,
+            skills_dict,
+            members,
+            task_queue,
+            req_map,
+            need_rules,
+            surplus_map,
+            global_priority_override,
+        )
+        if _n_sur:
+            logging.info(
+                "need余力: メイン割付完了後にサブ %s 名を追記（未割当×スキル・時間重なりなし）",
+                _n_sur,
+            )
 
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     events_by_date = defaultdict(list)
