@@ -2787,16 +2787,21 @@ def _task_date_key_for_result_sheet_sort(val):
 
 def _result_task_sheet_sort_key(t: dict):
     """
-    結果_タスク一覧の表示順（配台キュー順とは独立）。
-    ①加工開始日が早い ②回答納期が早い ③指定納期が早い。
-    同一キー内は依頼NO（タスクID）文字列でまとめ、さらに工程名で安定化。
+    結果_タスク一覧の表示順。①配台試行順番（generate_plan 冒頭でキュー順に付与した 1..n）昇順。
+    欠損・非数は最後。同一試行順内は依頼NO・機械名、続けて加工開始日・納期で安定化。
     """
+    _dto = t.get("dispatch_trial_order")
+    try:
+        trial_k = int(_dto) if _dto is not None else 10**9
+    except (TypeError, ValueError):
+        trial_k = 10**9
     return (
+        trial_k,
+        str(t.get("task_id", "")).strip(),
+        str(t.get("machine", "")).strip(),
         _task_date_key_for_result_sheet_sort(t.get("start_date_req")),
         _task_date_key_for_result_sheet_sort(t.get("answer_due_date")),
         _task_date_key_for_result_sheet_sort(t.get("specified_due_date")),
-        str(t.get("task_id", "")).strip(),
-        str(t.get("machine", "")).strip(),
     )
 
 
@@ -8911,6 +8916,10 @@ STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
 # 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（11 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 10
 
+# True のとき、配台計画シートのグローバル並び（初回 task_queue.sort 後の行順＝試行順ベース）で先頭の依頼NOが
+# 全行完走するまで、他依頼NOは割付対象に入れない（同一日内も依頼をまたがない）。
+STAGE2_SERIAL_DISPATCH_BY_TASK_ID = True
+
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
     """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
@@ -9687,6 +9696,17 @@ def generate_plan():
         for t in task_queue:
             t.pop("_partial_retry_calendar_blocked", None)
 
+        if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
+            _serial_order_tids: list[str] = []
+            _seen_serial_tid: set[str] = set()
+            for _tq in task_queue:
+                _stid = str(_tq.get("task_id", "") or "").strip()
+                if _stid and _stid not in _seen_serial_tid:
+                    _seen_serial_tid.add(_stid)
+                    _serial_order_tids.append(_stid)
+        else:
+            _serial_order_tids = []
+
         _plan_day_iter = (
             _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
             if STAGE2_EXTEND_ATTENDANCE_CALENDAR
@@ -9721,6 +9741,22 @@ def generate_plan():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
+                _active_serial_tid = None
+                for _tid in _serial_order_tids:
+                    if any(
+                        float(x.get("remaining_units") or 0) > 1e-12
+                        for x in task_queue
+                        if str(x.get("task_id", "") or "").strip() == _tid
+                    ):
+                        _active_serial_tid = _tid
+                        break
+                if _active_serial_tid is not None:
+                    tasks_today = [
+                        t
+                        for t in tasks_today
+                        if str(t.get("task_id", "") or "").strip() == _active_serial_tid
+                    ]
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
             if not tasks_today:
                 earliest_wait = min(

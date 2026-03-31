@@ -128,7 +128,8 @@
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
     <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO（従来キー） → 必要OP人数（多いほど先）。</p>
-    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果タスク一覧用。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
+    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果用（<strong>配台試行順番</strong> → 依頼NO → 機械 → 開始日 → 回答・指定納期）。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
+    <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（段階2冒頭のキュー順 1..n）が第一キーです。</p>
     <p>同一日内はこの順で複数周し、各タスクあたり最大1チャンクずつ割り当てます。</p>
   </section>
 
