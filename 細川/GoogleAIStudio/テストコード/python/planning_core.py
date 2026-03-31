@@ -741,6 +741,15 @@ def _team_assign_start_slack_wait_minutes() -> int:
 
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
+# True のとき need シート「配台時追加人数」行を無視し、チーム人数は基本必要人数（req_num）のみ試行する。
+# （既定 False: 追加人数上限まで増員し、開始・単位数などのスコアで最良人数を選ぶ。）
+TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW = (
+    os.environ.get("TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0")
+    .strip()
+    .lower()
+    in ("1", "true", "yes", "on", "はい")
+)
+
 # §B-1 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
 # 0 / false / no / off で無効にすると設備時間割上で依頼が混在し得るが、占有による長期ブロック（例: W3-14 型）を避けられる。
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
@@ -8377,6 +8386,11 @@ def load_skills_and_needs():
                 "need シート: 基本必要人数の直下に配台時追加人数行を検出できませんでした（省略可）。"
             )
 
+        if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
+            logging.info(
+                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW が有効: 配台時追加人数は読み込んでも常に 0 扱い（チームは基本必要人数のみ試行）。"
+            )
+
         # 特別指定
         for r in range(needs_raw.shape[0]):
             v0 = needs_raw.iat[r, col0]
@@ -9120,12 +9134,32 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
         return 999
 
 
+def _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue) -> bool:
+    """
+    §B-1: 熱融着検査（ロールパイプライン）は、同一依頼の EC 行の残ロールがすべてゼロになるまで配台しない。
+    EC 行がキューに無い依頼の検査は False（従来どおり need に従う）。
+    """
+    if not task.get("roll_pipeline_inspection"):
+        return False
+    tid = str(task.get("task_id", "") or "").strip()
+    if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
+        return False
+    for t2 in task_queue:
+        if str(t2.get("task_id", "") or "").strip() != tid:
+            continue
+        if not t2.get("roll_pipeline_ec"):
+            continue
+        if float(t2.get("remaining_units") or 0) > 1e-9:
+            return True
+    return False
+
+
 def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     """
-    同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2・§B-1）。
+    同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
     - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
     - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
-    - §B-1（熱融着検査 × 先行 EC）だけ、EC に残ロールがあっても検査行へのブロックを掛けない。
+    §B-1（熱融着検査×EC）の前後関係は ``_roll_pipeline_inspection_blocked_until_ec_done`` で制御する。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -9140,9 +9174,6 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
         if str(t2.get("task_id", "") or "").strip() != tid:
             continue
         if float(t2.get("remaining_units") or 0) <= 1e-9:
-            continue
-        # §B-1: 先行 EC に残ロールがあっても、熱融着検査はロール枠で並行可
-        if task.get("roll_pipeline_inspection") and t2.get("roll_pipeline_ec"):
             continue
         r2 = _task_rank_int_or_none(t2)
         try:
@@ -9294,8 +9325,8 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
     計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、加工内容の工程順 r、行順、
-    §B-1 検査の前倒し、計画シート優先度、結果用ソートキー。
-    パイプラインに空き枠がある B-1 検査は r を 1 段繰り上げ、他依頼の先行工程と同じ波で並行試行する。
+    §B-1 検査のタイブレーク、計画シート優先度、結果用ソートキー。
+    （EC 完走前は検査を試行しないため、検査の r 前倒しは行わない。task_queue は後方互換のため引数に残す。）
     """
     dbk = task.get("due_basis_date")
     if not isinstance(dbk, date):
@@ -9307,14 +9338,6 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
         r = 10**9
     else:
         r = int(raw_r)
-        tid = str(task.get("task_id", "") or "").strip()
-        if (
-            task_queue is not None
-            and tid
-            and task.get("roll_pipeline_inspection")
-            and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
-        ):
-            r = max(0, r - 1)
     try:
         line_seq = int(task.get("same_request_line_seq", 0))
     except (TypeError, ValueError):
@@ -9842,6 +9865,25 @@ def generate_plan():
                                 float(task.get("remaining_units") or 0),
                             )
                         continue
+                    if _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue):
+                        if _trace_schedule_task_enabled(task.get("task_id")):
+                            _tid_ec = str(task.get("task_id", "") or "").strip()
+                            _ec_rem = sum(
+                                float(x.get("remaining_units") or 0)
+                                for x in task_queue
+                                if str(x.get("task_id", "") or "").strip() == _tid_ec
+                                and x.get("roll_pipeline_ec")
+                            )
+                            logging.info(
+                                "[配台トレース task=%s] スキップ: §B-1 EC完走待ち（検査開始前にEC残をゼロに） "
+                                "day=%s machine=%s ec残合計R=%.4f rem_insp=%.4f",
+                                task.get("task_id"),
+                                current_date,
+                                task.get("machine"),
+                                _ec_rem,
+                                float(task.get("remaining_units") or 0),
+                            )
+                        continue
                     if task.get("roll_pipeline_inspection") and (
                         _roll_pipeline_inspection_assign_room(
                             task_queue, str(task.get("task_id", "")).strip()
@@ -9969,6 +10011,8 @@ def generate_plan():
                         surplus_map,
                         need_rules,
                     )
+                    if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
+                        extra_max = 0
                     max_team_size = min(req_num + extra_max, len(capable_members))
                     if max_team_size < req_num:
                         max_team_size = req_num
