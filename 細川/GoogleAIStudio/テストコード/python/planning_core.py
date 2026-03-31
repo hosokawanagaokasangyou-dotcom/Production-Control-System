@@ -5469,6 +5469,8 @@ def build_task_queue_from_planning_df(
                 "specified_due_date": specified_due,
                 "specified_due_override": specified_due_ov,
                 "due_basis_date": due_basis,
+                # 納期後ろ倒し再試行で due_basis_date を内部 +1 しても、結果_タスク一覧の計画基準納期はこの値のまま
+                "due_basis_date_result_sheet": due_basis,
                 "due_source": due_source,
                 "due_source_rank": due_source_rank,
                 "due_urgent": due_urgent,
@@ -9359,9 +9361,10 @@ def _partial_task_id_due_shift_outcome(
 
 def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     """
-    配台残リトライ用: **計画基準納期（due_basis_date）だけ**を +1 日する。
-    回答納期・指定納期・指定納期_上書きは配台計画シート由来のまま（結果_タスク一覧の列を上書きしない）。
-    due_urgent はずらした基準日で再計算する。
+    配台残リトライ用: **内部の計画基準納期（due_basis_date）だけ**を +1 日する。
+    結果_タスク一覧用の ``due_basis_date_result_sheet`` は変更しない（+1 前の日付を保持）。
+    回答納期・指定納期・指定納期_上書きも配台計画シート由来のまま。
+    due_urgent はずらした due_basis_date で再計算する。
     """
     if task.get("due_basis_date") is not None:
         task["due_basis_date"] = task["due_basis_date"] + timedelta(days=1)
@@ -10670,7 +10673,14 @@ def generate_plan():
         else:
             ans_s = t["answer_due_date"].strftime("%Y/%m/%d") if t.get("answer_due_date") else ""
             spec_s = t["specified_due_date"].strftime("%Y/%m/%d") if t.get("specified_due_date") else ""
-        basis_s = t["due_basis_date"].strftime("%Y/%m/%d") if t.get("due_basis_date") else ""
+        _basis_for_sheet = t.get("due_basis_date_result_sheet")
+        if _basis_for_sheet is None:
+            _basis_for_sheet = t.get("due_basis_date")
+        basis_s = (
+            _basis_for_sheet.strftime("%Y/%m/%d")
+            if _basis_for_sheet is not None and hasattr(_basis_for_sheet, "strftime")
+            else ""
+        )
         if _line_key in _result_sheet_raw_input_by_line:
             _rid_d = _result_sheet_raw_input_by_line[_line_key]
             kenhan_s = _rid_d.strftime("%Y/%m/%d") if _rid_d else ""

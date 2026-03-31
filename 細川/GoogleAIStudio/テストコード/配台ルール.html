@@ -179,7 +179,7 @@
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
     <h2 id="h-partial">配台残と納期の後ろ倒し再試行</h2>
-    <p>残ロールがあり、かついずれかの行に割当履歴がある依頼NO（配台残）が残る場合、既定では <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> により、対象依頼の <strong><code>due_basis_date</code>（計画基準納期）のみ</strong>を <strong>1 日ずつ後ろへシフト</strong>します（回答納期・指定納期・指定納期_上書きはシート取り込みのまま）。残量・履歴を初期化したうえで<strong>全日程を最初から</strong>再度走査します。各ラウンド前に勤怠の自動拡張で増えた日はマスタ日付へ戻します。</p>
+    <p>残ロールがあり、かついずれかの行に割当履歴がある依頼NO（配台残）が残る場合、既定では <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> により、対象依頼の <strong>内部の <code>due_basis_date</code>（計画基準納期）のみ</strong>を <strong>1 日ずつ後ろへシフト</strong>します（ソート・納期超過判定はシフト後の値）。<strong>結果_タスク一覧の「計画基準納期」</strong>は <code>due_basis_date_result_sheet</code> で <strong>+1 前の元日付</strong>を表示します。回答納期・指定納期・指定納期_上書きはシート取り込みのまま。残量・履歴を初期化したうえで<strong>全日程を最初から</strong>再度走査します。各ラウンド前に勤怠の自動拡張で増えた日はマスタ日付へ戻します。</p>
     <ul>
       <li><strong>オフにする</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False</code> で 1 パスのみ。</li>
       <li><strong>上限</strong>: <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（既定 40、<strong>依頼NOごと</strong>。全体の合計回数ではない）。</li>
