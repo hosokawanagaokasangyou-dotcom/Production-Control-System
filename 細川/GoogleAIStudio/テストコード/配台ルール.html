@@ -101,16 +101,17 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-03 改定</strong>: 計画基準納期は「グローバルコメント AI の依頼NO別日付 → 特別指定備考 AI → 指定納期_上書き → 原反投入日 → 回答納期 → 指定納期」の順。原反<strong>当日</strong>開始は <strong>12:50</strong> 以降。優先度の<strong>同数重複</strong>は段階2が中止（<code>log/stage2_blocking_message.txt</code>）。順次1件配台・16:00締めはドキュメント上の次段階です。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 原反投入日 → 回答納期 → 指定納期」。開始日は <code>max(基準日, 原反投入日)</code>＋上書き。原反<strong>当日</strong>は <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-1 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。業務案の順次1件・16:00締め込みは次段。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
     <ol>
       <li><a href="#rev-2026-03">改定（2026-03）要約</a></li>
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
+      <li><a href="#day-flow">日内割付・環境変数</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
-      <li><a href="#partial-retry">配台残・納期シフト再試行</a></li>
+      <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
       <li><a href="#result-task-id">結果_タスク一覧・タスクIDの赤表示</a></li>
     </ol>
   </nav>
@@ -121,16 +122,28 @@
       <li><strong>グローバル AI</strong>: JSON に <code>task_planning_basis_dates</code>（依頼NO→日付）を追加。特別指定備考 AI より<strong>先</strong>に計画基準納期へ反映。</li>
       <li><strong>優先度重複</strong>: 配台対象行で同じ優先度整数が2行以上→段階2中止、終了コード3、メッセージファイル経由で Excel に表示（999は除外）。</li>
       <li><strong>同日同機械</strong>: 計画基準納期と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
-      <li><strong>未実装（次段）</strong>: 抽出日に近いタスクから1件ずつ配台・超過で納期+1再試行のループ、計画基準納日の作業完了を16:00で強制する割付ロジック。</li>
+      <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一設備列は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
+      <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある最上位依頼に限定。</li>
+      <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、計画基準納日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
     </ul>
   </section>
 
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO（従来キー） → 必要OP人数（多いほど先）。</p>
-    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果用（<strong>配台試行順番</strong> → 依頼NO → 機械 → 開始日 → 回答・指定納期）。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
-    <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（段階2冒頭のキュー順 1..n）が第一キーです。</p>
-    <p>同一日内はこの順で複数周し、各タスクあたり最大1チャンクずつ割り当てます。</p>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO（従来キー） → 必要OP人数（多いほど先）。この後、各行に <strong>配台試行順番</strong> 1..n を付与。</p>
+    <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が<strong>配台試行順の昇順</strong>で候補を回し、試行順が先でも当日詰まらなければ<strong>同一パスで次の試行順へ進む</strong>。同一設備列ではより小さい試行順がまだ残す間、後続を当該設備では試さない（<code>_equipment_line_lower_dispatch_trial_still_pending</code>）。</p>
+    <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順のループ（納期基準日 → 機械名 → タイブレーク → rank → 行順 → <code>dispatch_trial_order</code> → B-1 前倒し → 優先度 → 結果用ソート）。</p>
+    <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（グローバルソート直後の 1..n）が第一キーです。</p>
+  </section>
+
+  <section id="day-flow" class="card" aria-labelledby="h-dayflow">
+    <h2 id="h-dayflow">日内割付・主な環境変数</h2>
+    <ul>
+      <li><code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> … 既定 <code>1</code>。配台試行順優先の <code>_trial_order_first_schedule_pass</code>。<code>0</code> で従来の日内ソートキーループ。</li>
+      <li><code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID</code> … 既定相当 <code>0</code>。<code>1</code> で依頼NO直列（アクティブ依頼のみ当日候補）。</li>
+      <li><code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> … 既定オン。§B-1 検査が占有する設備列では他タスクを試さない。</li>
+      <li><code>TEAM_ASSIGN_*</code> … チーム選定は <span class="file">配台ルール.md</span> セクション5。</li>
+    </ul>
   </section>
 
   <section id="global" class="card" aria-labelledby="h-global">
@@ -148,7 +161,7 @@
     <ul>
       <li><strong>原則</strong>: 同一 <strong>依頼NO</strong> の <strong>別工程（別行）</strong>は、設備が違っても <strong>同時加工しない</strong>。配台計画シートを上から読んだ <strong>行順</strong>（<code>same_request_line_seq</code>）で、上の行の残ロールがなくなるまで下の行に割り当てません。</li>
       <li><strong>§A-1 との関係</strong>: 両行に加工内容由来の rank があるときは <strong>rank だけ</strong>で前後を決め、片方でも rank が無いときは <strong>行順</strong>で直列化します。</li>
-      <li><strong>§B-1 の例外</strong>: <code>EC機　湖南</code> の EC と <code>熱融着機　湖南</code> の検査の組み合わせだけ、EC に残があっても検査を <strong>ロール枠</strong>の範囲で並行試行できます（<code>_task_blocked_by_same_request_dependency</code>）。</li>
+      <li><strong>§B-1</strong>: EC×検査パイプラインはロール枠・設備占有など<strong>別フィルタ</strong>で制御。同一依頼の前後関係は <span class="file">配台ルール.md</span> B-1.6・<code>_trial_order_flow_eligible_tasks</code> を参照。</li>
       <li><strong>実装</strong>: <span class="file">planning_core.py</span> の <code>build_task_queue_from_planning_df</code> と <code>_task_blocked_by_same_request_dependency</code>。</li>
     </ul>
   </section>
@@ -172,14 +185,15 @@
       <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
         <strong>進行中</strong>: <code>ec_done</code>（EC 完了ロール数）・<code>insp_done</code>（検査完了）とすると、原則 <code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。<br />
         <strong>EC 全ロール完了後</strong>: 同一依頼NOの EC パイプライン行がすべて残量ゼロのときは、上記だけでは検査が 1 本足りなくなるため、上限を <code>ec_done</code> まで引き上げ、検査も EC と同じ本数まで完了できます（<code>_pipeline_ec_fully_done_for_tid</code> / <code>_roll_pipeline_inspection_assign_room</code>）。</li>
-      <li><strong>§A・§A-2 との関係</strong>: 通常は同一依頼で前工程に残があると後工程をブロックしますが、本 B-1 ペアだけ EC 残があっても検査を試します（コード: <code>_task_blocked_by_same_request_dependency</code>）。並行量は上記ロール枠で制限します。</li>
+      <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・<code>_roll_pipeline_inspection_blocked_until_ec_done</code>・ロール枠・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付・ロール枠が効く。詳細は <span class="file">配台ルール.md</span> B-1.6。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
   </section>
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
-    <h2 id="h-partial">配台残と納期の後ろ倒し再試行</h2>
-    <p>残ロールがあり、かついずれかの行に割当履歴がある依頼NO（配台残）が残る場合、既定では <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> により、対象依頼の <strong>内部の <code>due_basis_date</code>（計画基準納期）のみ</strong>を <strong>1 日ずつ後ろへシフト</strong>します（ソート・納期超過判定はシフト後の値）。<strong>結果_タスク一覧の「計画基準納期」</strong>は <code>due_basis_date_result_sheet</code> で <strong>+1 前の元日付</strong>を表示します。回答納期・指定納期・指定納期_上書きはシート取り込みのまま。残量・履歴を初期化したうえで<strong>全日程を最初から</strong>再度走査します。各ラウンド前に勤怠の自動拡張で増えた日はマスタ日付へ戻します。</p>
+    <h2 id="h-partial">納期超過検出と後ろ倒し再試行</h2>
+    <p><strong>検出</strong>（<code>_collect_task_ids_missed_deadline_after_day</code>）: ある日のシミュレーション終了時に、<strong>残量あり</strong>・<strong><code>due_basis_date</code> あり</strong>・<code>start_date_req</code> ≤ 当日・<strong>当日 ≥ <code>due_basis_date</code></strong> の依頼NOを集める（納期<strong>当日</strong>を含む）。</p>
+    <p><strong>再試行</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> のとき、上記依頼について <strong>内部 <code>due_basis_date</code> のみ +1 日</strong>、当該依頼のタイムラインと割当を巻き戻し、<strong>全日程を最初から</strong>再走査。表示用 <code>due_basis_date_result_sheet</code> は元日付のまま。上限 <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（依頼NOごと）。各ラウンド前に勤怠拡張日はマスタへ戻す。</p>
     <ul>
       <li><strong>オフにする</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False</code> で 1 パスのみ。</li>
       <li><strong>上限</strong>: <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（既定 40、<strong>依頼NOごと</strong>。全体の合計回数ではない）。</li>
@@ -201,7 +215,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-03-31 改定ルール反映・順次配台は未）
+    同一ソース: 配台ルール.md（2026-04-01・<code>planning_core.py</code> に合わせて 13:00・試行順フロー・納期検出・環境変数を更新）
   </footer>
 </body>
 </html>
