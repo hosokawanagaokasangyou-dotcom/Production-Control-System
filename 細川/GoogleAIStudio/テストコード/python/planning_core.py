@@ -741,6 +741,15 @@ def _team_assign_start_slack_wait_minutes() -> int:
 
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
+# §B-1 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
+# 0 / false / no / off で無効にすると設備時間割上で依頼が混在し得るが、占有による長期ブロック（例: W3-14 型）を避けられる。
+PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
+    os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ", "無効")
+)
+
 # マクロブック「設定_配台不要工程」: A〜E は openpyxl で保存。ロック時は xlwings で同期→Save。それも失敗時は TSV→VBA 反映。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
 EXCLUDE_RULE_COL_PROCESS = "工程名"
@@ -9158,6 +9167,23 @@ def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
     return False
 
 
+def _pipeline_ec_fully_done_for_tid(task_queue, task_id: str) -> bool:
+    """同一依頼NOの EC ロールパイプライン行がすべて残量ゼロ（完走）か。"""
+    tid = str(task_id or "").strip()
+    if not tid:
+        return False
+    found = False
+    for t in task_queue:
+        if str(t.get("task_id", "") or "").strip() != tid:
+            continue
+        if not t.get("roll_pipeline_ec"):
+            continue
+        found = True
+        if float(t.get("remaining_units") or 0) > 1e-9:
+            return False
+    return found
+
+
 def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     tid = str(task_id or "").strip()
     if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
@@ -9165,6 +9191,10 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
     insp_done = _pipeline_inspection_roll_done_units(task_queue, task_id)
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
+    # 先行バッファ式は ec_done と max_insp が 1 ずれるため、EC 完走直後に検査が 1 ロール足りなくなる。
+    # EC が全ロール終了した後は検査も同数まで進められるよう上限を ec_done に合わせる。
+    if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
+        max_insp = max(max_insp, ec_done)
     return max(0.0, max_insp - insp_done)
 
 
@@ -9738,20 +9768,21 @@ def generate_plan():
                                 float(task.get("remaining_units") or 0),
                             )
                         continue
-                    _b1_holder = _exclusive_b1_inspection_holder_for_machine(
-                        task_queue, task.get("machine")
-                    )
-                    if _b1_holder is not None and _b1_holder is not task:
-                        if _trace_schedule_task_enabled(task.get("task_id")):
-                            logging.info(
-                                "[配台トレース task=%s] スキップ: 同一設備の検査占有中 day=%s "
-                                "占有者依頼NO=%s 占有者試行順=%s",
-                                task.get("task_id"),
-                                current_date,
-                                _b1_holder.get("task_id"),
-                                _b1_holder.get("dispatch_trial_order"),
-                            )
-                        continue
+                    if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
+                        _b1_holder = _exclusive_b1_inspection_holder_for_machine(
+                            task_queue, task.get("machine")
+                        )
+                        if _b1_holder is not None and _b1_holder is not task:
+                            if _trace_schedule_task_enabled(task.get("task_id")):
+                                logging.info(
+                                    "[配台トレース task=%s] スキップ: 同一設備の検査占有中 day=%s "
+                                    "占有者依頼NO=%s 占有者試行順=%s",
+                                    task.get("task_id"),
+                                    current_date,
+                                    _b1_holder.get("task_id"),
+                                    _b1_holder.get("dispatch_trial_order"),
+                                )
+                            continue
                     if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
                         logging.info(
                             "DEBUG[task=%s] day=%s 開始判定: start_date_req=%s remaining_units=%s machine=%s",

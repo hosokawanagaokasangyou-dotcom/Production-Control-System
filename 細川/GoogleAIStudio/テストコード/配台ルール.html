@@ -169,7 +169,8 @@
       <li><strong>バッファ</strong>: EC 側で <strong>2 ロール完了するまで</strong>、検査には <strong>1 ロールも割り当てません</strong>（段取り時間の確保）。定数: <code>ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2</code>。</li>
       <li><strong>EC 行が同一依頼に無い検査</strong>: ロール枠を事実上かけず（<code>ROLL_PIPELINE_INSP_UNCAPPED_ROOM</code>）、通常どおり <code>need</code>・スキルで配台します。</li>
       <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
-        上限（イメージ）: EC 完了ロール数を <code>ec_done</code>、検査完了を <code>insp_done</code> とすると、<code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。</li>
+        <strong>進行中</strong>: <code>ec_done</code>（EC 完了ロール数）・<code>insp_done</code>（検査完了）とすると、原則 <code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。<br />
+        <strong>EC 全ロール完了後</strong>: 同一依頼NOの EC パイプライン行がすべて残量ゼロのときは、上記だけでは検査が 1 本足りなくなるため、上限を <code>ec_done</code> まで引き上げ、検査も EC と同じ本数まで完了できます（<code>_pipeline_ec_fully_done_for_tid</code> / <code>_roll_pipeline_inspection_assign_room</code>）。</li>
       <li><strong>§A・§A-2 との関係</strong>: 通常は同一依頼で前工程に残があると後工程をブロックしますが、本 B-1 ペアだけ EC 残があっても検査を試します（コード: <code>_task_blocked_by_same_request_dependency</code>）。並行量は上記ロール枠で制限します。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
