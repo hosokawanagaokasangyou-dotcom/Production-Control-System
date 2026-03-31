@@ -2064,9 +2064,9 @@ Private Sub 段階1_コア実行()
     On Error GoTo ErrStage1
 
     wsh.CurrentDirectory = Environ("TEMP")
-    ' /v:on … set STAGE1_PY_EXIT=!ERRORLEVEL! で Python 終了直後のコードを保持し、exit /b で VBA に返す
+    ' /v:on … set STAGE1_PY_EXIT=!ERRORLEVEL! で Python 終了直後のコードを保持。pause でコンソールのトレースバックを確認してから exit /b で VBA に返す
     cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます && py -3 -u python\task_extract_stage1.py" _
-        & " & set STAGE1_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT! & exit /b !STAGE1_PY_EXIT!"
+        & " & set STAGE1_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT! & pause & exit /b !STAGE1_PY_EXIT!"
     exitCode = wsh.Run(cmd, 1, True)
     m_lastStage1ExitCode = exitCode
 
