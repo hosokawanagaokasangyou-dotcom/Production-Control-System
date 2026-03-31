@@ -48,6 +48,7 @@ from collections import Counter, defaultdict
 import itertools
 import csv
 import json
+import copy
 import re
 import traceback
 import base64
@@ -905,13 +906,12 @@ def _format_paren_ref_scalar(val):
 
 def _reference_text_for_override_row(row, override_col: str, req_map: dict, need_rules: list) -> str:
     """1行分の上書き列に対応する参照文言（括弧付き）。"""
-    tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
     mach = str(row.get(TASK_COL_MACHINE, "") or "").strip()
     mname = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
 
     if override_col == PLAN_COL_REQUIRED_OP:
         try:
-            n = resolve_need_required_op(mach, mname, tid, req_map, need_rules)
+            n = resolve_need_required_op(mach, mname, planning_task_id_str_from_plan_row(row), req_map, need_rules)
             return f"（{n}）"
         except Exception:
             return "（―）"
@@ -1944,7 +1944,70 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
         k = _normalize_equipment_match_key(eq)
         if k and k not in lookup:
             lookup[k] = eq
+    # 工程名のみの照合（加工実績DATA等）: 同一工程の先頭列（工程+機械）へ寄せる
+    for eq in equipment_list:
+        s = str(eq).strip()
+        if "+" not in s:
+            continue
+        p, _rest = s.split("+", 1)
+        pk = _normalize_equipment_match_key(p)
+        if pk and pk not in lookup:
+            lookup[pk] = eq
     return lookup
+
+
+def _equipment_schedule_header_labels(equipment_list: list) -> list:
+    """
+    結果_設備毎の時間割・結果_設備ガントの行／列見出し用。
+    内部キーが「工程+機械」のときは機械名を表示し、機械名の重複時のみ工程を括弧で補う。
+    """
+    raw = []
+    for eq in equipment_list:
+        s = str(eq).strip()
+        if "+" in s:
+            mpart = s.split("+", 1)[1].strip()
+            raw.append(mpart if mpart else s)
+        else:
+            raw.append(s)
+    counts = {}
+    for r in raw:
+        counts[r] = counts.get(r, 0) + 1
+    out = []
+    for eq, r in zip(equipment_list, raw):
+        if counts.get(r, 0) > 1:
+            s = str(eq).strip()
+            if "+" in s:
+                p = s.split("+", 1)[0].strip()
+                out.append(f"{r}（{p}）" if p else r)
+            else:
+                out.append(r)
+        else:
+            out.append(r)
+    return out
+
+
+def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
+    """
+    設備時間割・設備専有空きの列キー（skills / need と同じ「工程+機械」を基本とする）。
+    機械名が空でマスタに当該工程の列が1つだけならその複合キーへ寄せる。
+    """
+    p = str(task.get("machine") or "").strip()
+    mn = str(task.get("machine_name") or "").strip()
+    cand = f"{p}+{mn}" if (p and mn) else (p or mn)
+    elist = [str(x).strip() for x in (equipment_list or []) if str(x).strip()]
+    if cand in elist:
+        return cand
+    if mn:
+        return cand
+    if not p:
+        return cand
+    exact_p = [x for x in elist if x == p]
+    if len(exact_p) == 1:
+        return exact_p[0]
+    prefixed = [x for x in elist if x.startswith(p + "+")]
+    if len(prefixed) == 1:
+        return prefixed[0]
+    return p
 
 
 def load_planning_tasks_df():
@@ -3590,7 +3653,26 @@ def _normalize_special_task_id_for_ai(val):
     s = str(val).strip()
     if not s or s.lower() in ("nan", "none", "null"):
         return None
-    return unicodedata.normalize("NFKC", s).strip() or None
+    s = unicodedata.normalize("NFKC", s).strip()
+    if not s or s.lower() in ("nan", "none", "null"):
+        return None
+    # 文字列としての "20010.0" 等（Excel・CSV）を整数表記の依頼NOに寄せる
+    if re.fullmatch(r"-?\d+\.0+", s):
+        try:
+            return str(int(float(s)))
+        except ValueError:
+            pass
+    return s or None
+
+
+def planning_task_id_str_from_scalar(val) -> str:
+    """配台・段階1マージ・キュー構築で用いる依頼NOの安定文字列（空なら \"\"）。"""
+    return _normalize_special_task_id_for_ai(val) or ""
+
+
+def planning_task_id_str_from_plan_row(row) -> str:
+    """重複見出し列でも先頭スカラーを拾い、依頼NOを planning_task_id_str_from_scalar に渡す。"""
+    return planning_task_id_str_from_scalar(_planning_df_cell_scalar(row, TASK_COL_TASK_ID))
 
 
 def _cell_text_task_special_remark(val):
@@ -3631,7 +3713,7 @@ def _task_special_prompt_lines(tasks_df):
     for _, row in tasks_df.iterrows():
         if _plan_row_exclude_from_assignment(row):
             continue
-        tid = _normalize_special_task_id_for_ai(row.get(TASK_COL_TASK_ID))
+        tid = planning_task_id_str_from_plan_row(row)
         rem = _cell_text_task_special_remark(row.get(PLAN_COL_SPECIAL_REMARK))
         if not tid or not rem:
             continue
@@ -3640,9 +3722,64 @@ def _task_special_prompt_lines(tasks_df):
         proc_disp = proc if proc else "（空）"
         macn_disp = macn if macn else "（空）"
         lines.append(
-            f"- 依頼NO {tid} | 工程名「{proc_disp}」 | 機械名「{macn_disp}」 | 備考本文: {rem}"
+            f"- 依頼NO【{tid}】| 工程名「{proc_disp}」 | 機械名「{macn_disp}」 | 備考本文: {rem}"
         )
     return lines
+
+
+def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict:
+    """
+    備考が品番・原反コード（例: 20010 で始まる数字列）で始まると、モデルがその列を JSON トップキーに
+    誤用することがある。依頼NO【…】と一致しない数字のみのキーを、当該備考を持つ行の依頼NOへ付け替える。
+    """
+    if not isinstance(parsed, dict) or not parsed or tasks_df is None or getattr(tasks_df, "empty", True):
+        return parsed
+    valid_tids: set[str] = set()
+    remark_by_tid: dict[str, list[str]] = {}
+    for _, row in tasks_df.iterrows():
+        if _plan_row_exclude_from_assignment(row):
+            continue
+        tid = planning_task_id_str_from_plan_row(row)
+        rem = _cell_text_task_special_remark(row.get(PLAN_COL_SPECIAL_REMARK))
+        if not tid or not rem:
+            continue
+        valid_tids.add(tid)
+        remark_by_tid.setdefault(tid, []).append(rem)
+
+    for bad_key in list(parsed.keys()):
+        sk = str(bad_key).strip()
+        if sk in valid_tids:
+            continue
+        if not re.fullmatch(r"\d{4,}", sk):
+            continue
+        hits = [
+            tid
+            for tid, rems in remark_by_tid.items()
+            if any(
+                r.startswith(sk)
+                or r.startswith(sk + " ")
+                or r.startswith(sk + "\u3000")
+                or r.startswith(sk + "-")
+                or r.startswith(sk + "ー")
+                for r in rems
+            )
+        ]
+        if len(hits) != 1:
+            continue
+        target = hits[0]
+        val = parsed.pop(bad_key, None)
+        if val is None:
+            continue
+        if target not in parsed:
+            parsed[target] = val
+            logging.info(
+                "タスク特別指定: JSON トップキー誤りを修復（%r は依頼NOではない → %r）",
+                bad_key,
+                target,
+            )
+        else:
+            parsed[bad_key] = val
+    return parsed
 
 
 def _normalize_task_special_scope_str(s) -> str:
@@ -3748,8 +3885,8 @@ def _ai_task_special_entry_for_row(ai_by_tid, row):
     """
     if not isinstance(ai_by_tid, dict) or not ai_by_tid:
         return None
-    tid_norm = _normalize_special_task_id_for_ai(row.get(TASK_COL_TASK_ID))
-    tid_raw = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+    tid_norm = planning_task_id_str_from_plan_row(row)
+    tid_raw = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
 
     def try_val(v):
         return _select_ai_task_special_entry_for_tid_value(v, row)
@@ -4619,7 +4756,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         n_rem_only = 0
         n_tid_raw = 0
         for _, row in tasks_df.iterrows():
-            tid = _normalize_special_task_id_for_ai(row.get(TASK_COL_TASK_ID))
+            tid = planning_task_id_str_from_plan_row(row)
             rem = _cell_text_task_special_remark(row.get(PLAN_COL_SPECIAL_REMARK))
             if tid:
                 n_tid_raw += 1
@@ -4658,7 +4795,10 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
-        return cached_parsed
+        out = copy.deepcopy(cached_parsed)
+        if isinstance(out, dict):
+            _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
+        return out
 
     logging.info(
         "タスク特別指定: キャッシュなし。Gemini で %s 件の備考を解析します（基準年=%s）。",
@@ -4678,10 +4818,11 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 【最重要】
 1) 【特別指定原文】の各行は、ユーザーがセルに入力した文字列を **改変・要約・断ち切りはしておらず**（先頭末尾の空白のみ除去）、そのまま渡しています。**原文の事実や意図を別の文言に置き換えないでください。**
 2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭が {{ 、末尾が }} ）。説明文・マークダウン・コードフェンスは禁止。
+3) JSON のトップレベルキーは、各行の **依頼NO【と】の間の文字列のみ** と **完全一致** させること。**備考本文**に書かれた品番・原反名・製品コード（例: 20010 で始まる番号列）をキーにしてはならない。備考がそのような番号で始まっていても、キーは必ず【】内の依頼NOだけとする。
 
 【返却JSONの契約（この節どおりに出力すること）】
 ■ トップレベル
-- キー: 【特別指定原文】に現れる **依頼NO文字列と完全一致**（表記・ハイフン・英大文字小文字を原文どおり）。
+- キー: 上記【特別指定原文】の **依頼NO【…】の括弧内** の文字列と **完全一致**（表記・ハイフン・英大文字小文字を原文どおり）。備考本文中の数字列をキーにしない。
 - 値: 次のいずれか。
   (A) **JSONオブジェクト1つ** … 当該依頼NOの備考がプロンプト上 **1行だけ** のとき。
   (B) **JSON配列**（要素はオブジェクト）… 同一依頼NOで工程名・機械名が異なる備考行が **複数** あるとき。要素の順はプロンプトの行順と対応させる。
@@ -4776,6 +4917,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
+            _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
             put_cached_ai_result(
                 ai_cache, cache_key, parsed, content_key=cache_fingerprint
             )
@@ -4801,6 +4943,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
                 if parsed is not None:
+                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
                     put_cached_ai_result(
                         ai_cache, cache_key, parsed, content_key=cache_fingerprint
                     )
@@ -4821,6 +4964,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
                 if parsed is not None:
+                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
                     put_cached_ai_result(
                         ai_cache, cache_key, parsed, content_key=cache_fingerprint
                     )
@@ -5242,7 +5386,7 @@ def validate_no_duplicate_explicit_plan_priorities(tasks_df) -> None:
             continue
         if _plan_row_exclude_from_assignment(row):
             continue
-        tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+        tid = planning_task_id_str_from_plan_row(row)
         if not tid:
             continue
         pv = _planning_row_plan_priority_cell(row)
@@ -5269,7 +5413,12 @@ def validate_no_duplicate_explicit_plan_priorities(tasks_df) -> None:
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変換（優先度・納期・AI 上書きを集約）
 # ---------------------------------------------------------------------------
 def build_task_queue_from_planning_df(
-    tasks_df, run_date, req_map, ai_by_tid=None, global_priority_override=None
+    tasks_df,
+    run_date,
+    req_map,
+    ai_by_tid=None,
+    global_priority_override=None,
+    equipment_list=None,
 ):
     """
     ``generate_plan`` 内で呼ばれる。完了済み・配台不要行を除き、残りを task_queue に積む。
@@ -5291,9 +5440,9 @@ def build_task_queue_from_planning_df(
             n_exclude_plan += 1
             continue
 
-        task_id = str(row.get(TASK_COL_TASK_ID, "")).strip()
+        task_id = planning_task_id_str_from_plan_row(row)
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
-        machine_name = str(row.get(TASK_COL_MACHINE_NAME, "")).strip()
+        machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         done_qty = calc_done_qty_equivalent_from_row(row)
         speed_raw = row.get(TASK_COL_SPEED, 1)
@@ -5473,6 +5622,10 @@ def build_task_queue_from_planning_df(
                 "task_id": task_id,
                 "machine": machine,
                 "machine_name": machine_name,
+                "equipment_line_key": _resolve_equipment_line_key_for_task(
+                    {"machine": machine, "machine_name": machine_name},
+                    equipment_list,
+                ),
                 "start_date_req": effective_start_date,
                 "answer_due_date": answer_due,
                 "specified_due_date": specified_due,
@@ -5624,7 +5777,7 @@ def _merge_plan_sheet_user_overrides(out_df):
 
     lookup = {}
     for _, r in df_old.iterrows():
-        tid = str(r.get(TASK_COL_TASK_ID, "") or "").strip()
+        tid = planning_task_id_str_from_plan_row(r)
         mach = str(r.get(TASK_COL_MACHINE, "") or "").strip()
         if not tid or not mach:
             continue
@@ -5647,7 +5800,7 @@ def _merge_plan_sheet_user_overrides(out_df):
 
     merged_rows = 0
     for i, row in out_df.iterrows():
-        tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+        tid = planning_task_id_str_from_plan_row(row)
         mach = str(row.get(TASK_COL_MACHINE, "") or "").strip()
         bucket = lookup.get((tid, mach))
         if not bucket:
@@ -5923,7 +6076,7 @@ def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> li
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
             continue
-        task_id = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+        task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "") or "").strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
@@ -7474,7 +7627,7 @@ def run_stage1_extract():
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
             continue
-        task_id = str(row.get(TASK_COL_TASK_ID, "")).strip()
+        task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "")).strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
@@ -7483,6 +7636,7 @@ def run_stage1_extract():
         if qty <= 0 or not machine or not task_id:
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
+        rec[TASK_COL_TASK_ID] = task_id
         # 工程名 + 機械名 を“因子”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
@@ -7730,6 +7884,45 @@ def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_
     return int(base)
 
 
+def resolve_need_required_op_explain(
+    process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list
+) -> tuple[int, str]:
+    """
+    resolve_need_required_op と同値を返しつつ、ログ用に参照元の説明文字列を付ける。
+    """
+    p = str(process).strip()
+    m = str(machine_name).strip()
+    combo_key = f"{p}+{m}" if p and m else None
+    base = None
+    base_src = ""
+    if combo_key and combo_key in req_map:
+        base = req_map.get(combo_key)
+        base_src = f"req_map[{combo_key!r}]={base}"
+    elif m and m in req_map:
+        base = req_map[m]
+        base_src = f"req_map[機械名のみ {m!r}]={base}（複合キー不在）"
+    elif p and p in req_map:
+        base = req_map[p]
+        base_src = f"req_map[工程名のみ {p!r}]={base}（複合・機械キー不在）"
+    else:
+        base = 1
+        base_src = "req_map該当なし→既定1"
+    for rule in need_rules:
+        if not match_need_sheet_condition(rule["condition"], task_id):
+            continue
+        order = rule.get("order", "?")
+        if combo_key and combo_key in rule["overrides"]:
+            v = int(rule["overrides"][combo_key])
+            return v, f"need特別指定{order} [{combo_key!r}]={v}"
+        if m and m in rule["overrides"]:
+            v = int(rule["overrides"][m])
+            return v, f"need特別指定{order} [機械名{m!r}]={v}"
+        if p and p in rule["overrides"]:
+            v = int(rule["overrides"][p])
+            return v, f"need特別指定{order} [工程名{p!r}]={v}"
+    return int(base), base_src
+
+
 def _need_row_label_hints_surplus_add(label_a0: str) -> bool:
     """need シート A列: 基本必要人数の直下にある「配台結果で余剰が出たときの追加増員上限」行か。"""
     s = unicodedata.normalize("NFKC", str(label_a0 or "").strip())
@@ -7800,6 +7993,35 @@ def resolve_need_surplus_extra_max(
     except (TypeError, ValueError):
         return 0
     return max(0, min(n, 50))
+
+
+def resolve_need_surplus_extra_max_explain(
+    process: str,
+    machine_name: str,
+    task_id: str,
+    surplus_map: dict,
+    need_rules: list,
+) -> tuple[int, str]:
+    """resolve_need_surplus_extra_max と同値＋参照元説明（ログ用）。"""
+    val = resolve_need_surplus_extra_max(
+        process, machine_name, task_id, surplus_map, need_rules
+    )
+    _ = need_rules
+    if not surplus_map:
+        return val, "surplus_map空（配台時追加人数行なし）"
+    p = str(process).strip()
+    m = str(machine_name).strip()
+    combo_key = f"{p}+{m}" if p and m else None
+    if combo_key and combo_key in surplus_map:
+        raw = surplus_map[combo_key]
+        return val, f"surplus_map[{combo_key!r}]={raw}"
+    if m and m in surplus_map:
+        raw = surplus_map[m]
+        return val, f"surplus_map[機械名のみ {m!r}]={raw}（複合キー不在）"
+    if p and p in surplus_map:
+        raw = surplus_map[p]
+        return val, f"surplus_map[工程名のみ {p!r}]={raw}（複合キー不在）"
+    return val, "surplus当キーなし→0"
 
 
 def _surplus_team_time_factor(
@@ -8194,7 +8416,7 @@ def load_skills_and_needs():
 
         if use_two_header:
             pm_cols = []
-            seen_eq = set()
+            seen_combo = set()
             for c in range(1, skills_raw.shape[1]):
                 p = skills_raw.iat[0, c]
                 m = skills_raw.iat[1, c]
@@ -8206,9 +8428,9 @@ def load_skills_and_needs():
                     continue
                 combo = f"{p_s}+{m_s}"
                 pm_cols.append((c, p_s, m_s, combo))
-                if p_s not in seen_eq:
-                    seen_eq.add(p_s)
-                    equipment_list.append(p_s)
+                if combo not in seen_combo:
+                    seen_combo.add(combo)
+                    equipment_list.append(combo)
 
             for r in range(2, skills_raw.shape[0]):
                 m_name_raw = skills_raw.iat[r, 0]
@@ -8260,10 +8482,12 @@ def load_skills_and_needs():
             for c in skill_cols:
                 if c == member_col:
                     continue
-                proc = c.split("+", 1)[0].strip() if "+" in c else c.strip()
-                if proc and proc not in seen_eq:
-                    seen_eq.add(proc)
-                    equipment_list.append(proc)
+                cid = str(c).strip()
+                if not cid or cid.lower() in ("nan", "none", "null"):
+                    continue
+                if cid not in seen_eq:
+                    seen_eq.add(cid)
+                    equipment_list.append(cid)
 
             for _, row in skills_df.iterrows():
                 m_name = str(row.get(member_col, "")).strip() if member_col else ""
@@ -8389,6 +8613,21 @@ def load_skills_and_needs():
         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
             logging.info(
                 "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW が有効: 配台時追加人数は読み込んでも常に 0 扱い（チームは基本必要人数のみ試行）。"
+            )
+
+        logging.info(
+            "need人数マスタ: %s を都度 read_excel（need シート専用のディスクキャッシュは無し・AI json キャッシュとは無関係）。",
+            os.path.abspath(MASTER_FILE),
+        )
+        for _ci, _ps, _ms in pm_cols:
+            _ck = f"{_ps}+{_ms}"
+            _bn = req_map.get(_ck)
+            _sx = surplus_map.get(_ck, 0) if surplus_map else 0
+            logging.info(
+                "need列サマリ combo=%r 基本必要人数=%s 配台時追加人数上限=%s",
+                _ck,
+                _bn,
+                _sx,
             )
 
         # 特別指定
@@ -9076,7 +9315,7 @@ def _collect_process_content_order_by_task_id(tasks_df) -> dict[str, list[str]]:
     if tasks_df is None or tasks_df.empty:
         return out
     for _, row in tasks_df.iterrows():
-        tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+        tid = planning_task_id_str_from_plan_row(row)
         if not tid:
             continue
         parts = _parse_process_content_tokens(row.get(TASK_COL_PROCESS_CONTENT))
@@ -9283,21 +9522,22 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     return max(0.0, max_insp - insp_done)
 
 
-def _exclusive_b1_inspection_holder_for_machine(task_queue, machine: str):
+def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     """
-    同一「工程名」（設備時間割の列キー）上で、§B-1 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
+    同一設備列（equipment_line_key／工程+機械）上で、§B-1 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
     そのタスク dict を1件返す（なければ None）。
 
     パイプライン枠で検査を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼の検査** が同じ設備に入り、
-    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該工程列では他タスクを試行しない
-    （EC など別工程列は従来どおり）。
+    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該設備列では他タスクを試行しない
+    （別設備列は従来どおり）。
     """
-    m = str(machine or "").strip()
+    m = str(line_key or "").strip()
     if not m:
         return None
     holders: list = []
     for t in task_queue:
-        if str(t.get("machine") or "").strip() != m:
+        lk = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        if lk != m:
             continue
         if not t.get("roll_pipeline_inspection"):
             continue
@@ -9631,7 +9871,12 @@ def generate_plan():
         tasks_df, reference_year=run_date.year, ai_sheet_sink=ai_log_data
     )
     task_queue = build_task_queue_from_planning_df(
-        tasks_df, run_date, req_map, ai_task_by_tid, global_priority_override
+        tasks_df,
+        run_date,
+        req_map,
+        ai_task_by_tid,
+        global_priority_override,
+        equipment_list,
     )
     # 開始日が非稼働日の場合は、直前の稼働日へ補正（例: 4/4, 4/5 が非稼働なら 4/3 へ）
     working_days = [
@@ -9740,6 +9985,7 @@ def generate_plan():
     _due_shift_cap_warned_tids: set[str] = set()
     _outer_retry_round = 0
     while True:
+        _need_headcount_logged_orders: set = set()
         if _outer_retry_round > 0:
             _purge_attendance_days_not_in_set(
                 attendance_data, _master_attendance_date_set
@@ -9909,7 +10155,12 @@ def generate_plan():
                         continue
                     if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
                         _b1_holder = _exclusive_b1_inspection_holder_for_machine(
-                            task_queue, task.get("machine")
+                            task_queue,
+                            str(
+                                task.get("equipment_line_key")
+                                or task.get("machine")
+                                or ""
+                            ).strip(),
                         )
                         if _b1_holder is not None and _b1_holder is not task:
                             if _trace_schedule_task_enabled(task.get("task_id")):
@@ -9944,15 +10195,29 @@ def generate_plan():
                         )
     
                     machine = task['machine']
+                    eq_line = str(
+                        task.get("equipment_line_key") or machine or ""
+                    ).strip() or machine
                     ro = task.get("required_op")
+                    need_src_line = ""
                     if ro is not None and int(ro) >= 1:
                         req_num = int(ro)
+                        need_src_line = f"計画シート「必要OP(上書)」={req_num}"
                     else:
-                        req_num = resolve_need_required_op(
-                            machine, task.get("machine_name", ""), task["task_id"], req_map, need_rules
+                        req_num, need_src_line = resolve_need_required_op_explain(
+                            machine,
+                            task.get("machine_name", ""),
+                            task["task_id"],
+                            req_map,
+                            need_rules,
                         )
                     if global_priority_override.get("ignore_need_minimum"):
                         req_num = 1
+                        need_src_line = (
+                            (need_src_line + " → ")
+                            if need_src_line
+                            else ""
+                        ) + "メイン上書ignore_need_minimumでreq=1"
     
                     # メンバー×設備スキル（parse_op_as_skill_cell: 小さい優先度ほど先にチーム候補へ採用）
                     # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
@@ -10004,7 +10269,7 @@ def generate_plan():
                             pref_raw,
                         )
     
-                    extra_max = resolve_need_surplus_extra_max(
+                    extra_max, extra_src_line = resolve_need_surplus_extra_max_explain(
                         machine,
                         machine_name,
                         task["task_id"],
@@ -10013,10 +10278,36 @@ def generate_plan():
                     )
                     if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
                         extra_max = 0
+                        extra_src_line = (
+                            (extra_src_line + " → ")
+                            if extra_src_line
+                            else ""
+                        ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
                     max_team_size = min(req_num + extra_max, len(capable_members))
                     if max_team_size < req_num:
                         max_team_size = req_num
                     rq_base = max(1, int(req_num))
+    
+                    _dto_head = task.get("dispatch_trial_order")
+                    if (
+                        _dto_head is not None
+                        and _dto_head not in _need_headcount_logged_orders
+                    ):
+                        _need_headcount_logged_orders.add(_dto_head)
+                        logging.info(
+                            "need人数(配台試行順初回) order=%s task=%s 工程/機械=%s/%s "
+                            "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
+                            _dto_head,
+                            task["task_id"],
+                            machine,
+                            machine_name,
+                            req_num,
+                            need_src_line,
+                            extra_max,
+                            extra_src_line,
+                            max_team_size,
+                            len(capable_members),
+                        )
     
                     trace_assign = bool(TRACE_TEAM_ASSIGN_TASK_ID) and (
                         str(task.get("task_id", "")).strip() == TRACE_TEAM_ASSIGN_TASK_ID
@@ -10077,7 +10368,7 @@ def generate_plan():
                             if not _gpo.get("abolish_all_scheduling_limits"):
                                 # 同一設備は1時点で1タスクのみ（設備空き時刻を反映）
                                 machine_free_dt = machine_avail_dt.get(
-                                    machine, datetime.combine(current_date, DEFAULT_START_TIME)
+                                    eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
                                 )
                                 if team_start < machine_free_dt:
                                     team_start = machine_free_dt
@@ -10247,6 +10538,22 @@ def generate_plan():
                                 )
     
                     if best_team:
+                        if len(best_team) > req_num:
+                            logging.info(
+                                "配台採用人数>req_num task=%s day=%s order=%s 工程/機械=%s/%s "
+                                "採用=%s人 req_num=%s extra_max=%s max_team=%s [%s] [%s]",
+                                task["task_id"],
+                                current_date,
+                                task.get("dispatch_trial_order"),
+                                machine,
+                                machine_name,
+                                len(best_team),
+                                req_num,
+                                extra_max,
+                                max_team_size,
+                                need_src_line,
+                                extra_src_line,
+                            )
                         sub_members = [m for m in best_team if m != best_info["op"]]
                         done_units = best_info["units_today"]
                         if task.get("roll_pipeline_inspection"):
@@ -10321,7 +10628,7 @@ def generate_plan():
                         if _te_disp <= 0:
                             _te_disp = 1.0
                         timeline_events.append({
-                            "date": current_date, "task_id": task['task_id'], "machine": machine,
+                            "date": current_date, "task_id": task['task_id'], "machine": eq_line,
                             "op": best_info["op"], "sub": ", ".join(sub_members),
                             "start_dt": best_info["start_dt"], "end_dt": best_info["end_dt"],
                             "breaks": best_info["breaks"], "units_done": done_units,
@@ -10347,7 +10654,7 @@ def generate_plan():
                                 "start=%s end=%s eff_t/unit=%.4f rp_room(当時)=%s",
                                 task.get("task_id"),
                                 current_date,
-                                machine,
+                                eq_line,
                                 done_units,
                                 already_done,
                                 total_u,
@@ -10383,7 +10690,7 @@ def generate_plan():
                         for m in best_team:
                             avail_dt[m] = best_info["end_dt"]
                         if not _gpo.get("abolish_all_scheduling_limits"):
-                            machine_avail_dt[machine] = best_info["end_dt"]
+                            machine_avail_dt[eq_line] = best_info["end_dt"]
                         _sched_made_progress = True
                     else:
                         if task.get("has_done_deadline_override"):
