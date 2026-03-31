@@ -9566,8 +9566,10 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
     計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、加工内容の工程順 r、行順、
-    §B-1 検査のタイブレーク、計画シート優先度、結果用ソートキー。
+    配台試行順（キュー全体の dispatch_trial_order）、§B-1 検査のタイブレーク、計画シート優先度、結果用ソートキー。
     （EC 完走前は検査を試行しないため、検査の r 前倒しは行わない。task_queue は後方互換のため引数に残す。）
+    同一設備列の隙間割り込みは machine_avail_dt だけでは防げないため、eq_line 確定後に
+    _equipment_line_lower_dispatch_trial_still_pending（当日 start 可能な先試行順のみ）で試行順を強制する。
     """
     dbk = task.get("due_basis_date")
     if not isinstance(dbk, date):
@@ -9584,10 +9586,61 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     except (TypeError, ValueError):
         line_seq = 0
     b1_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
+    try:
+        dto = int(task.get("dispatch_trial_order") or 10**9)
+    except (TypeError, ValueError):
+        dto = 10**9
     return (
-        (dbk, mk, tb, r, line_seq, b1_insp_first, _plan_sheet_priority_sort_value(task))
+        (
+            dbk,
+            mk,
+            tb,
+            r,
+            line_seq,
+            dto,
+            b1_insp_first,
+            _plan_sheet_priority_sort_value(task),
+        )
         + _result_task_sheet_sort_key(task)
     )
+
+
+def _equipment_line_lower_dispatch_trial_still_pending(
+    task_queue: list, eq_line: str, my_dispatch_order: int, current_date: date
+) -> bool:
+    """
+    同一 equipment_line_key（工程+機械の設備列）で、より小さい配台試行順の行がまだ残量を持つか。
+    machine_avail_dt はチャンク間の隙間に後続試行順が入り込めるため、ここで順序を強制する。
+
+    キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
+    start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
+    （まだ開始日に達していない行が全日ブロッカーになり、後続がほぼ配台不可になるのを防ぐ。）
+    """
+    line = (eq_line or "").strip()
+    if not line:
+        return False
+    try:
+        my_o = int(my_dispatch_order)
+    except (TypeError, ValueError):
+        my_o = 10**9
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            continue
+        _sdr = t.get("start_date_req")
+        if not isinstance(_sdr, date) or _sdr > current_date:
+            continue
+        t_line = str(
+            t.get("equipment_line_key") or t.get("machine") or ""
+        ).strip()
+        if t_line != line:
+            continue
+        try:
+            o = int(t.get("dispatch_trial_order") or 10**9)
+        except (TypeError, ValueError):
+            o = 10**9
+        if o < my_o:
+            return True
+    return False
 
 
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
@@ -10199,6 +10252,25 @@ def generate_plan():
                     eq_line = str(
                         task.get("equipment_line_key") or machine or ""
                     ).strip() or machine
+                    try:
+                        _my_dispatch_ord = int(
+                            task.get("dispatch_trial_order") or 10**9
+                        )
+                    except (TypeError, ValueError):
+                        _my_dispatch_ord = 10**9
+                    if _equipment_line_lower_dispatch_trial_still_pending(
+                        task_queue, eq_line, _my_dispatch_ord, current_date
+                    ):
+                        if _trace_schedule_task_enabled(task.get("task_id")):
+                            logging.info(
+                                "[配台トレース task=%s] スキップ: 同一設備で配台試行順が先の行が未完了 "
+                                "day=%s eq_line=%s my_order=%s",
+                                task.get("task_id"),
+                                current_date,
+                                eq_line,
+                                _my_dispatch_ord,
+                            )
+                        continue
                     ro = task.get("required_op")
                     need_src_line = ""
                     if ro is not None and int(ro) >= 1:
