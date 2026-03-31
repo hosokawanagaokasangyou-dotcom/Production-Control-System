@@ -32,3 +32,11 @@ Generate commit messages in Japanese only. Never use English-only commit message
 - **ローカルコミットは、ソースコード等の変更前に実行する**（編集ツール使用前に `git status` → 対象があればコミット。作業ツリーがクリーンなら省略）。
 - **コミットメッセージは、そのターンのユーザーのチャットメッセージの先頭から最大 300 文字**とする。
 - **`git push` は自動では実行しない**。
+
+---
+
+## 配台ロジック変更時のドキュメント
+
+正本: リポジトリ直下 **`.cursor/rules/dispatch-docs-sync.mdc`**（`alwaysApply: true`）。
+
+**`python/planning_core.py` 等で配台に関するロジックを変えたときは、必ず `配台ルール.md` と `配台ルール.html` を同じ変更内容に合わせて更新する。**

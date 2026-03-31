@@ -101,7 +101,7 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 原反投入日 → 回答納期 → 指定納期」。開始日は <code>max(基準日, 原反投入日)</code>＋上書き。原反<strong>当日</strong>は <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-1 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。業務案の順次1件・16:00締め込みは次段。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 原反投入日 → 回答納期 → 指定納期」。開始日は <code>max(基準日, 原反投入日)</code>＋上書き。原反<strong>当日</strong>は <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-1 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
@@ -109,6 +109,8 @@
       <li><a href="#rev-2026-03">改定（2026-03）要約</a></li>
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#day-flow">日内割付・環境変数</a></li>
+      <li><a href="#need-surplus">need 追加人数（余力・メイン後追記）</a></li>
+      <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
       <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
@@ -142,8 +144,26 @@
       <li><code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> … 既定 <code>1</code>。配台試行順優先の <code>_trial_order_first_schedule_pass</code>。<code>0</code> で従来の日内ソートキーループ。</li>
       <li><code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID</code> … 既定相当 <code>0</code>。<code>1</code> で依頼NO直列（アクティブ依頼のみ当日候補）。</li>
       <li><code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> … 既定オン。§B-1 検査が占有する設備列では他タスクを試さない。</li>
-      <li><code>TEAM_ASSIGN_*</code> … チーム選定は <span class="file">配台ルール.md</span> セクション5。</li>
+      <li><code>TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS</code> … 未設定＝メインは基本人数のみ、全シミュレーション後に余力サブ追記。<code>1</code>＝従来どおりメインで <code>req+追加上限</code> まで探索。</li>
+      <li><code>TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</code> … <code>1</code> で need 追加人数行を全面無視（後追いもなし）。</li>
+      <li><code>TEAM_ASSIGN_*</code>（人数優先・スラック）… <span class="file">配台ルール.md</span> セクション5。</li>
     </ul>
+  </section>
+
+  <section id="need-surplus" class="card" aria-labelledby="h-need-surplus">
+    <h2 id="h-need-surplus">need 追加人数（余力・メイン後追記）</h2>
+    <p><span class="file">master.xlsm</span> の need で、基本必要人数の<strong>直下</strong>（目安 Excel 5 行目付近）の「配台時追加人数／余力時追加人数」列は、工程×機械ごとに <strong>req を満たしたあと追加で入れられる人数の上限</strong>です。</p>
+    <ul>
+      <li><strong>既定</strong>: メインの割付シミュレーションではこの上限を<strong>人数探索に使わず</strong> <code>req_num</code> ちょうどで組む。シミュレーション<strong>完了後</strong>、各タイムラインブロックで枠が空き、かつその時間帯に<strong>他ブロックと重ならない</strong>・<strong>スキル OP/AS 適合</strong>・<strong>eligible</strong> の人を <strong>サブ（<code>sub</code>）に追記</strong>（<code>append_surplus_staff_after_main_dispatch</code>）。</li>
+      <li><strong>時刻は変えない</strong>（表示・同席記録向け。メインで決めた <code>end_dt</code> のまま）。</li>
+      <li>詳細・表は <span class="file">配台ルール.md</span> セクション 3.5。</li>
+    </ul>
+  </section>
+
+  <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">
+    <h2 id="h-doc-sync">ソース変更時のドキュメント同期（開発）</h2>
+    <p><span class="file">python/planning_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
+    <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。テストコードの <span class="file">.cursorrules</span> にも同趣旨を記載しています。</p>
   </section>
 
   <section id="global" class="card" aria-labelledby="h-global">
@@ -215,7 +235,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-01・<code>planning_core.py</code> に合わせて 13:00・試行順フロー・納期検出・環境変数を更新）
+    同一ソース: 配台ルール.md（2026-04-01・need 余力のメイン後追記・<code>dispatch-docs-sync.mdc</code> による md/html 同期ルールを追記）
   </footer>
 </body>
 </html>
