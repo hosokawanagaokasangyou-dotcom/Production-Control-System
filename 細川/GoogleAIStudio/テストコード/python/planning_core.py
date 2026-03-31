@@ -784,15 +784,17 @@ def _reference_text_for_override_row(row, override_col: str, req_map: dict, need
     ):
         return "（―）"
     if override_col == PLAN_COL_SPECIFIED_DUE_OVERRIDE:
-        sd = parse_optional_date(row.get(TASK_COL_SPECIFIED_DUE))
+        sd = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
         if sd is not None:
             return _format_paren_ref_scalar(sd)
-        ad = parse_optional_date(row.get(TASK_COL_ANSWER_DUE))
+        ad = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
         if ad is not None:
             return _format_paren_ref_scalar(ad)
         return "（―）"
     if override_col == PLAN_COL_START_DATE_OVERRIDE:
-        return _format_paren_ref_scalar(parse_optional_date(row.get(TASK_COL_RAW_INPUT_DATE)))
+        return _format_paren_ref_scalar(
+            parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
+        )
     return "（―）"
 
 
@@ -1554,6 +1556,21 @@ def parse_optional_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _planning_df_cell_scalar(row, col_name):
+    """
+    iterrows() 1行分から列値を取る。同一見出しの重複列があると row.get は Series になり、
+    str→to_datetime で誤った日付になることがあるため、先頭の非欠損スカラーを返す。
+    """
+    v = row.get(col_name) if hasattr(row, "get") else None
+    if isinstance(v, pd.Series):
+        for x in v:
+            if x is None or (isinstance(x, float) and pd.isna(x)):
+                continue
+            return x
+        return None
+    return v
 
 
 def load_ai_cache():
@@ -4983,9 +5000,11 @@ def build_task_queue_from_planning_df(
         done_qty = calc_done_qty_equivalent_from_row(row)
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
-        answer_due = parse_optional_date(row.get(TASK_COL_ANSWER_DUE))
-        specified_due = parse_optional_date(row.get(TASK_COL_SPECIFIED_DUE))
-        specified_due_ov = parse_optional_date(row.get(PLAN_COL_SPECIFIED_DUE_OVERRIDE))
+        answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
+        specified_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
+        specified_due_ov = parse_optional_date(
+            _planning_df_cell_scalar(row, PLAN_COL_SPECIFIED_DUE_OVERRIDE)
+        )
         # 計画基準納期（due_basis）の採用順（配台ルール改定）:
         # 0) メイン・グローバルコメント AI の task_planning_basis_dates（依頼NO別）
         # 1) 特別指定_備考 AI の完了・出荷目標日
@@ -4997,7 +5016,7 @@ def build_task_queue_from_planning_df(
         due_basis = None
         due_source = "none"
         due_source_rank = 9
-        raw_input_date = parse_optional_date(row.get(TASK_COL_RAW_INPUT_DATE))
+        raw_input_date = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
 
         qty = max(0.0, qty_total - done_qty)
         speed = parse_float_safe(speed_raw, 1.0)
@@ -9817,6 +9836,20 @@ def generate_plan():
             if ed > w[1]:
                 w[1] = ed
 
+    # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ（計画基準納期と混同しない）
+    _result_sheet_answer_spec_by_line = {}
+    if tasks_df is not None and not getattr(tasks_df, "empty", True):
+        for _, _r in tasks_df.iterrows():
+            if _plan_row_exclude_from_assignment(_r):
+                continue
+            _tid = str(_planning_df_cell_scalar(_r, TASK_COL_TASK_ID) or "").strip()
+            _mach = str(_planning_df_cell_scalar(_r, TASK_COL_MACHINE) or "").strip()
+            if not _tid or not _mach:
+                continue
+            _ad = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_ANSWER_DUE))
+            _sd = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_SPECIFIED_DUE))
+            _result_sheet_answer_spec_by_line[(_tid, _mach)] = (_ad, _sd)
+
     task_results = []
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
@@ -9837,8 +9870,15 @@ def generate_plan():
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
         
-        ans_s = t["answer_due_date"].strftime("%Y/%m/%d") if t.get("answer_due_date") else ""
-        spec_s = t["specified_due_date"].strftime("%Y/%m/%d") if t.get("specified_due_date") else ""
+        _line_key = (str(t.get("task_id", "") or "").strip(), str(t.get("machine", "") or "").strip())
+        _sheet_pair = _result_sheet_answer_spec_by_line.get(_line_key)
+        if _sheet_pair is not None:
+            _ans_d, _spec_d = _sheet_pair
+            ans_s = _ans_d.strftime("%Y/%m/%d") if _ans_d else ""
+            spec_s = _spec_d.strftime("%Y/%m/%d") if _spec_d else ""
+        else:
+            ans_s = t["answer_due_date"].strftime("%Y/%m/%d") if t.get("answer_due_date") else ""
+            spec_s = t["specified_due_date"].strftime("%Y/%m/%d") if t.get("specified_due_date") else ""
         basis_s = t["due_basis_date"].strftime("%Y/%m/%d") if t.get("due_basis_date") else ""
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
