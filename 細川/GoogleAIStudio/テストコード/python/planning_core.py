@@ -117,6 +117,10 @@ output_dir = os.path.join(os.getcwd(), 'output')
 os.makedirs(output_dir, exist_ok=True)
 log_dir = os.path.join(os.getcwd(), 'log')
 os.makedirs(log_dir, exist_ok=True)
+# 段階2がユーザー検証で中断したときの1行メッセージ（VBA が log から読み MsgBox 用）
+STAGE2_BLOCKING_MESSAGE_FILE = "stage2_blocking_message.txt"
+# 計画基準納期当日の完了目安時刻（業務ルール）。順次配台・超過再試行ロジックへの組み込みは段階的に拡張可能。
+PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 # Gemini 利用・推定料金の累計 JSON（log ではなく専用フォルダ）
 api_payment_dir = os.path.join(os.getcwd(), 'API_Payment')
 os.makedirs(api_payment_dir, exist_ok=True)
@@ -207,10 +211,6 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# 段階2がユーザー検証で中断したときの1行メッセージ（VBA が log から読み MsgBox 用）
-STAGE2_BLOCKING_MESSAGE_FILE = "stage2_blocking_message.txt"
-# 計画基準納期当日の完了目安時刻（業務ルール）。順次配台・超過再試行ロジックへの組み込みは段階的に拡張可能。
-PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
