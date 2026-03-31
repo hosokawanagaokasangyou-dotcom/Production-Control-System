@@ -8564,8 +8564,9 @@ ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
-# 配台残（一部割当済み・納期内に完遂できず）の依頼について、納期系を1日ずつ後ろ倒しして全パス再実行する。
-# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各ラウンド前に勤怠拡張分はマスタ日付へ戻す。
+# 計画基準納期日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
+# 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
+# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 366
 
@@ -8894,23 +8895,6 @@ def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozens
             del attendance_data[dk]
 
 
-def _collect_partial_remaining_task_ids(task_queue: list) -> set:
-    """配台残相当: 残量>0 かつ割当履歴ありの依頼NO集合。"""
-    out: set = set()
-    eps = 1e-9
-    for t in task_queue:
-        rem = float(t.get("remaining_units") or 0)
-        if rem <= eps:
-            continue
-        hist = t.get("assigned_history") or []
-        if not hist:
-            continue
-        tid = str(t.get("task_id", "") or "").strip()
-        if tid:
-            out.add(tid)
-    return out
-
-
 def _partial_task_id_due_shift_outcome(
     task_queue: list, task_id: str, calendar_last: date
 ) -> tuple[bool, bool]:
@@ -8948,6 +8932,66 @@ def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     db = task.get("due_basis_date")
     if db is not None:
         task["due_urgent"] = db <= run_date
+
+
+def _seed_avail_from_timeline_for_date(
+    timeline_events: list,
+    current_date: date,
+    machine_avail_dt: dict,
+    avail_dt: dict,
+    machine_day_start: datetime,
+) -> None:
+    """同一日内の既存 timeline から設備空き・メンバー空きの下限を反映する（部分再配台用）。"""
+    for e in timeline_events:
+        if e.get("date") != current_date:
+            continue
+        end_dt = e.get("end_dt")
+        if end_dt is None or not hasattr(end_dt, "replace"):
+            continue
+        mach = e.get("machine")
+        if mach:
+            prev = machine_avail_dt.get(mach, machine_day_start)
+            if end_dt > prev:
+                machine_avail_dt[mach] = end_dt
+        op = str(e.get("op") or "").strip()
+        if op and op in avail_dt:
+            prev_m = avail_dt[op]
+            if end_dt > prev_m:
+                avail_dt[op] = end_dt
+        sub_raw = e.get("sub") or ""
+        for sn in str(sub_raw).split(","):
+            sm = sn.strip()
+            if sm and sm in avail_dt:
+                prev_s = avail_dt[sm]
+                if end_dt > prev_s:
+                    avail_dt[sm] = end_dt
+
+
+def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
+    """
+    当該日の終了時点で、計画基準納期日（当日含む）以前なのに残量が残る依頼NO。
+    「納期日内に完遂できなかった」= 後ろ倒し再試行の候補。
+    """
+    out = set()
+    eps = 1e-9
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= eps:
+            continue
+        db = t.get("due_basis_date")
+        if db is None:
+            continue
+        sdr = t.get("start_date_req")
+        if isinstance(sdr, date) and sdr > current_date:
+            continue
+        if current_date >= db:
+            tid = str(t.get("task_id", "") or "").strip()
+            if tid:
+                out.add(tid)
+    return out
+
+
+def _normalize_timeline_task_id(ev: dict) -> str:
+    return str(ev.get("task_id", "") or "").strip()
 
 
 # =========================================================
@@ -9170,30 +9214,35 @@ def generate_plan():
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
     # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
-    # 配台残は納期+1日で全パス再試行（STAGE2_RETRY_*）。各ラウンド先頭で勤怠の自動拡張分はマスタ日付へ巻き戻す。
+    # 計画基準納期を過ぎても残がある依頼のみ due_basis +1 し当該依頼の割当を戻して先頭から再実行（STAGE2_RETRY_*）。
+    # 各再試行前に勤怠の自動拡張分はマスタ日付へ巻き戻す。
     # ---------------------------------------------------------
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
     _calendar_last_plan_day = _master_plan_dates_template[-1]
-    _stage2_due_retry_round = 0
+
+    for t in task_queue:
+        t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
+        t["assigned_history"].clear()
+    timeline_events.clear()
+
+    _deadline_retry_count = 0
     while True:
-        _stage2_due_retry_round += 1
-        if _stage2_due_retry_round > 1:
+        if _deadline_retry_count > 0:
             _purge_attendance_days_not_in_set(
                 attendance_data, _master_attendance_date_set
             )
             sorted_dates[:] = list(_master_plan_dates_template)
 
         for t in task_queue:
-            t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
-            t["assigned_history"].clear()
-        timeline_events.clear()
+            t.pop("_partial_retry_calendar_blocked", None)
 
         _plan_day_iter = (
             _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
             if STAGE2_EXTEND_ATTENDANCE_CALENDAR
             else sorted_dates
         )
+        _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
             daily_status = attendance_data[current_date]
             # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
@@ -9206,7 +9255,17 @@ def generate_plan():
                 st = daily_status[m]
                 if st.get("eligible_for_assignment", st.get("is_working", False)):
                     avail_dt[m] = st["start_dt"]
-            
+
+            _machine_day_start = datetime.combine(current_date, DEFAULT_START_TIME)
+            if avail_dt:
+                _seed_avail_from_timeline_for_date(
+                    timeline_events,
+                    current_date,
+                    machine_avail_dt,
+                    avail_dt,
+                    _machine_day_start,
+                )
+
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
                 continue
@@ -9678,71 +9737,87 @@ def generate_plan():
     
                 if not _sched_made_progress:
                     break
-        for t in task_queue:
-            t.pop("_partial_retry_calendar_blocked", None)
 
-        partial_tids = _collect_partial_remaining_task_ids(task_queue)
-        if not partial_tids:
+            if STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING:
+                missed_tids = _collect_task_ids_missed_deadline_after_day(
+                    task_queue, current_date
+                )
+                if missed_tids:
+                    blocked_tids = set()
+                    shift_tid_list = []
+                    for _ptid in sorted(missed_tids):
+                        _do_shift, _cal_short = _partial_task_id_due_shift_outcome(
+                            task_queue, _ptid, _calendar_last_plan_day
+                        )
+                        if _cal_short:
+                            blocked_tids.add(_ptid)
+                        if _do_shift:
+                            shift_tid_list.append(_ptid)
+                    for t in task_queue:
+                        _tid = str(t.get("task_id", "") or "").strip()
+                        if _tid in blocked_tids:
+                            t["_partial_retry_calendar_blocked"] = True
+                    if shift_tid_list:
+                        if _deadline_retry_count >= STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS:
+                            logging.warning(
+                                "納期後ろ倒し再配台が上限（%s 回）に達しました。残る不完全割当はそのまま出力します。",
+                                STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
+                            )
+                            _full_calendar_without_deadline_restart = True
+                        else:
+                            _deadline_retry_count += 1
+                            shift_set = set(shift_tid_list)
+                            for t in task_queue:
+                                if str(t.get("task_id", "") or "").strip() in shift_set:
+                                    _shift_task_due_calendar_fields_one_day(t, run_date)
+                            timeline_events[:] = [
+                                e
+                                for e in timeline_events
+                                if _normalize_timeline_task_id(e) not in shift_set
+                            ]
+                            for t in task_queue:
+                                if str(t.get("task_id", "") or "").strip() in shift_set:
+                                    t["remaining_units"] = float(
+                                        t.get("initial_remaining_units") or 0
+                                    )
+                                    t["assigned_history"].clear()
+                            task_queue.sort(
+                                key=lambda x: (
+                                    x.get("due_source_rank", 9),
+                                    0 if x.get("has_done_deadline_override") else 1,
+                                    0 if x.get("in_progress") else 1,
+                                    0 if x.get("roll_pipeline_inspection") else 1,
+                                    x["priority"],
+                                    0 if x["due_urgent"] else 1,
+                                    x["due_basis_date"] or date.max,
+                                    _normalize_equipment_match_key(
+                                        x.get("machine_name") or ""
+                                    ),
+                                    _task_id_same_machine_due_tiebreak_key(
+                                        x.get("task_id")
+                                    ),
+                                    x["start_date_req"],
+                                    _task_id_priority_key(x.get("task_id")),
+                                    -resolve_need_required_op(
+                                        x["machine"],
+                                        x.get("machine_name", ""),
+                                        x["task_id"],
+                                        req_map,
+                                        need_rules,
+                                    ),
+                                )
+                            )
+                            logging.info(
+                                "納期超過リトライ: 計画基準+1日して当該依頼のみ再配台（試行 %s 回目・検出日=%s 依頼NO=%s）",
+                                _deadline_retry_count,
+                                current_date.isoformat(),
+                                ",".join(sorted(shift_tid_list)),
+                            )
+                            _full_calendar_without_deadline_restart = False
+                        break
+
+        if _full_calendar_without_deadline_restart:
             break
-        if not STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING:
-            break
-
-        blocked_tids = set()
-        shift_tid_list = []
-        for _ptid in partial_tids:
-            _do_shift, _cal_short = _partial_task_id_due_shift_outcome(
-                task_queue, _ptid, _calendar_last_plan_day
-            )
-            if _cal_short:
-                blocked_tids.add(_ptid)
-            if _do_shift:
-                shift_tid_list.append(_ptid)
-
-        for t in task_queue:
-            _tid = str(t.get("task_id", "") or "").strip()
-            if _tid in blocked_tids:
-                t["_partial_retry_calendar_blocked"] = True
-
-        if _stage2_due_retry_round >= STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS:
-            logging.warning(
-                "配台残の納期後ろ倒し再配台が上限（%s 回）に達しました。残る配台残はそのまま出力します。",
-                STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
-            )
-            break
-        if not shift_tid_list:
-            break
-
-        for t in task_queue:
-            if str(t.get("task_id", "") or "").strip() in shift_tid_list:
-                _shift_task_due_calendar_fields_one_day(t, run_date)
-
-        task_queue.sort(
-            key=lambda x: (
-                x.get("due_source_rank", 9),
-                0 if x.get("has_done_deadline_override") else 1,
-                0 if x.get("in_progress") else 1,
-                0 if x.get("roll_pipeline_inspection") else 1,
-                x["priority"],
-                0 if x["due_urgent"] else 1,
-                x["due_basis_date"] or date.max,
-                _normalize_equipment_match_key(x.get("machine_name") or ""),
-                _task_id_same_machine_due_tiebreak_key(x.get("task_id")),
-                x["start_date_req"],
-                _task_id_priority_key(x.get("task_id")),
-                -resolve_need_required_op(
-                    x["machine"],
-                    x.get("machine_name", ""),
-                    x["task_id"],
-                    req_map,
-                    need_rules,
-                ),
-            )
-        )
-        logging.info(
-            "配台残リトライ: 納期+1日で再配台します（第 %s 回、対象依頼NO=%s）",
-            _stage2_due_retry_round,
-            ",".join(sorted(shift_tid_list)),
-        )
 
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     events_by_date = defaultdict(list)
