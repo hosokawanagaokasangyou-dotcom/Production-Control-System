@@ -100,6 +100,7 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
     "target_completion_date": "2026-04-05"
   }
@@ -116,6 +117,7 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
     "target_completion_date": "2026-04-05"
   }
@@ -131,6 +133,7 @@
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
+    "priority": 1,
     "ship_by_date": "2026-04-05",
     "target_completion_date": "2026-04-05"
   }
