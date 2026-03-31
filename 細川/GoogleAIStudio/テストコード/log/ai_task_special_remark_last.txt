@@ -86,44 +86,54 @@
 }
 
 【特別指定原文】（Excel からそのまま。1行＝依頼NOと備考のペア）
+- 依頼NO W3-14 | 工程名「検査」 | 機械名「熱融着機　湖南」 | 備考本文: 担当者を富田さんへ固定
 - 依頼NO Y3-26 | 工程名「SEC」 | 機械名「SEC機　湖南」 | 備考本文: 4/5に少なくとも2000m出荷したいので間に合うように計画を変更する
 
 === Gemini 返却テキスト（モデル出力そのまま） ===
 {
+  "W3-14": {
+    "process_name": "検査",
+    "machine_name": "熱融着機　湖南",
+    "preferred_operator": "富田"
+  },
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
     "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "restrict_to_process_name": "",
-    "restrict_to_machine_name": ""
+    "target_completion_date": "2026-04-05"
   }
 }
 
 === AI が返したテキストからクライアントが切り出した JSON 文字列 ===
 （※ユーザー特別指定の解析に正規表現は使っていません。モデル応答のパース用です）
 {
+  "W3-14": {
+    "process_name": "検査",
+    "machine_name": "熱融着機　湖南",
+    "preferred_operator": "富田"
+  },
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
     "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "restrict_to_process_name": "",
-    "restrict_to_machine_name": ""
+    "target_completion_date": "2026-04-05"
   }
 }
 
 === json.loads 後（依頼NOキー） ===
 {
+  "W3-14": {
+    "process_name": "検査",
+    "machine_name": "熱融着機　湖南",
+    "preferred_operator": "富田"
+  },
   "Y3-26": {
     "process_name": "SEC",
     "machine_name": "SEC機　湖南",
     "priority": 1,
     "ship_by_date": "2026-04-05",
-    "target_completion_date": "2026-04-05",
-    "restrict_to_process_name": "",
-    "restrict_to_machine_name": ""
+    "target_completion_date": "2026-04-05"
   }
 }
