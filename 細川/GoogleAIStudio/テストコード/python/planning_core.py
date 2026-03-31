@@ -1573,6 +1573,37 @@ def _planning_df_cell_scalar(row, col_name):
     return v
 
 
+def _planning_row_plan_priority_cell(row):
+    """
+    配台計画シート「優先度」の実セル値を1つに決める。
+    pandas.read_excel が重複見出しを 優先度.1 のように付けた列や、同一ラベル重複で Series になる場合を吸収。
+    （左の 優先度 が空で .1 にだけ数値がある行でも検出・配台で同じ値を使う）
+    """
+    v = _planning_df_cell_scalar(row, PLAN_COL_PRIORITY)
+    if v is not None and not (isinstance(v, float) and pd.isna(v)):
+        if isinstance(v, str) and not str(v).strip():
+            v = None
+        else:
+            return v
+    idx = getattr(row, "index", None)
+    if idx is None:
+        return None
+    for suf in (".1", ".2", ".3"):
+        alt = f"{PLAN_COL_PRIORITY}{suf}"
+        if alt not in idx:
+            continue
+        try:
+            vx = row[alt]
+        except (KeyError, TypeError):
+            vx = row.get(alt) if hasattr(row, "get") else None
+        if vx is None or (isinstance(vx, float) and pd.isna(vx)):
+            continue
+        if isinstance(vx, str) and not str(vx).strip():
+            continue
+        return vx
+    return None
+
+
 def load_ai_cache():
     try:
         if os.path.exists(ai_cache_path):
@@ -4657,7 +4688,10 @@ def _merge_task_row_with_ai(row, ai_for_tid):
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
 
     def first_int(cell, ai_key):
-        v = parse_optional_int(row.get(cell))
+        if cell == PLAN_COL_PRIORITY:
+            v = parse_optional_int(_planning_row_plan_priority_cell(row))
+        else:
+            v = parse_optional_int(row.get(cell))
         if v is not None:
             return v
         return parse_optional_int(ai.get(ai_key))
@@ -4758,8 +4792,9 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
             if av is not None and abs(cv - av) > 1e-5:
                 out.add(PLAN_COL_TASK_EFFICIENCY)
 
-    if _plan_row_cell_nonempty(row, PLAN_COL_PRIORITY):
-        cv = parse_optional_int(row.get(PLAN_COL_PRIORITY))
+    _pri_cell = parse_optional_int(_planning_row_plan_priority_cell(row))
+    if _pri_cell is not None:
+        cv = _pri_cell
         av = _ai_int_for_conflict(ai, "priority")
         if cv is not None and av is not None and cv != av:
             out.add(PLAN_COL_PRIORITY)
@@ -4946,12 +4981,9 @@ def validate_no_duplicate_explicit_plan_priorities(tasks_df) -> None:
         tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
         if not tid:
             continue
-        pv = row.get(PLAN_COL_PRIORITY)
-        if pv is None or (isinstance(pv, float) and pd.isna(pv)):
-            continue
-        try:
-            p = int(float(pv))
-        except (TypeError, ValueError):
+        pv = _planning_row_plan_priority_cell(row)
+        p = parse_optional_int(pv)
+        if p is None:
             continue
         if p == 999:
             continue
