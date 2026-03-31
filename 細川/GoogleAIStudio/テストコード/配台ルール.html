@@ -101,11 +101,12 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。段階2は現行、計画基準日以降の<strong>勤怠マスタの日付範囲のみ</strong>で各パスを回し（<code>STAGE2_EXTEND_ATTENDANCE_CALENDAR = False</code>）、勤怠の自動日付拡張は行いません。配台残が出たときは既定で納期を1日ずつ後ろへずらして<strong>全パス再実行</strong>します（<code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code>）。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-03 改定</strong>: 計画基準納期は「グローバルコメント AI の依頼NO別日付 → 特別指定備考 AI → 指定納期_上書き → 原反投入日 → 回答納期 → 指定納期」の順。原反<strong>当日</strong>開始は <strong>12:50</strong> 以降。優先度の<strong>同数重複</strong>は段階2が中止（<code>log/stage2_blocking_message.txt</code>）。順次1件配台・16:00締めはドキュメント上の次段階です。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
     <ol>
+      <li><a href="#rev-2026-03">改定（2026-03）要約</a></li>
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
@@ -114,10 +115,20 @@
     </ol>
   </nav>
 
+  <section id="rev-2026-03" class="card" aria-labelledby="h-rev">
+    <h2 id="h-rev">改定（2026-03）要約</h2>
+    <ul>
+      <li><strong>グローバル AI</strong>: JSON に <code>task_planning_basis_dates</code>（依頼NO→日付）を追加。特別指定備考 AI より<strong>先</strong>に計画基準納期へ反映。</li>
+      <li><strong>優先度重複</strong>: 配台対象行で同じ優先度整数が2行以上→段階2中止、終了コード3、メッセージファイル経由で Excel に表示（999は除外）。</li>
+      <li><strong>同日同機械</strong>: 計画基準納期と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
+      <li><strong>未実装（次段）</strong>: 抽出日に近いタスクから1件ずつ配台・超過で納期+1再試行のループ、計画基準納日の作業完了を16:00で強制する割付ロジック。</li>
+    </ul>
+  </section>
+
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → 納期基準日 → 開始日 → 依頼NO → 必要OP人数（多いほど先）。</p>
-    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果タスク一覧用（開始日・回答納期・指定納期・依頼NO・工程名）。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO（従来キー） → 必要OP人数（多いほど先）。</p>
+    <p><strong>各日内</strong>（<code>_day_schedule_task_sort_key</code>）: <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 加工内容の工程順（rank）→ 同一 rank はシート行順 → B-1 検査の前倒し → 優先度 → 結果タスク一覧用。B-1 で枠がある検査は rank を1段繰り上げて他依頼の先行工程と同じ波で試行します。</p>
     <p>同一日内はこの順で複数周し、各タスクあたり最大1チャンクずつ割り当てます。</p>
   </section>
 
@@ -188,7 +199,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-03-31 精査。セクション 2・7・8 および A・B・9 ほか）
+    同一ソース: 配台ルール.md（2026-03-31 改定ルール反映・順次配台は未）
   </footer>
 </body>
 </html>

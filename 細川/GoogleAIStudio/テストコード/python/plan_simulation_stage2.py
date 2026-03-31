@@ -17,7 +17,14 @@ import planning_core as pc
 
 
 def main():
-    pc.generate_plan()
+    try:
+        pc.generate_plan()
+    except pc.PlanningValidationError as e:
+        msg = str(e).strip() or "配台計画の検証で中断しました。"
+        if not os.path.isfile(pc.stage2_blocking_message_path):
+            pc._write_stage2_blocking_message(msg)
+        print(msg, file=sys.stderr)
+        sys.exit(3)
 
 
 if __name__ == "__main__":

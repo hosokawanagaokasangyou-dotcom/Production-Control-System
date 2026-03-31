@@ -156,6 +156,33 @@ log_file_path = os.path.join(log_dir, 'execution_log.txt')
 file_handler = logging.FileHandler(log_file_path, encoding='utf-8-sig')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+stage2_blocking_message_path = os.path.join(log_dir, STAGE2_BLOCKING_MESSAGE_FILE)
+
+
+class PlanningValidationError(Exception):
+    """配台計画シートの検証エラー（段階2を続行しない）。メッセージは log にも書く。"""
+
+
+def _clear_stage2_blocking_message_file() -> None:
+    try:
+        if os.path.isfile(stage2_blocking_message_path):
+            os.remove(stage2_blocking_message_path)
+    except OSError:
+        pass
+
+
+def _write_stage2_blocking_message(message: str) -> None:
+    s = (message or "").strip()
+    if not s:
+        return
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        with open(stage2_blocking_message_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(s)
+    except OSError as ex:
+        logging.warning("stage2_blocking_message の書き込みに失敗: %s", ex)
+
 # AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
@@ -180,6 +207,10 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
+# 段階2がユーザー検証で中断したときの1行メッセージ（VBA が log から読み MsgBox 用）
+STAGE2_BLOCKING_MESSAGE_FILE = "stage2_blocking_message.txt"
+# 計画基準納期当日の完了目安時刻（業務ルール）。順次配台・超過再試行ロジックへの組み込みは段階的に拡張可能。
+PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
@@ -2214,6 +2245,21 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
     return combined
 
 
+def _coerce_task_planning_basis_dates(raw) -> dict[str, str]:
+    """グローバルコメント AI の 依頼NO→計画基準納期（YYYY-MM-DD 文字列）。"""
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for k, v in raw.items():
+        ks = unicodedata.normalize("NFKC", str(k).strip())
+        if not ks or ks.lower() in ("nan", "none", "null"):
+            continue
+        d = parse_optional_date(v)
+        if d is not None:
+            out[ks] = d.isoformat()
+    return out
+
+
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
     """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
@@ -2237,6 +2283,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         "factory_closure_dates": [],
         "scheduler_notes_ja": "",
         "global_speed_rules": [],
+        "task_planning_basis_dates": {},
     }
     if not isinstance(raw, dict):
         return base
@@ -2258,6 +2305,9 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
     if sn is not None and not (isinstance(sn, float) and pd.isna(sn)):
         base["scheduler_notes_ja"] = str(sn).strip()[:600]
     base["global_speed_rules"] = _coerce_global_speed_rules(raw.get("global_speed_rules"))
+    base["task_planning_basis_dates"] = _coerce_task_planning_basis_dates(
+        raw.get("task_planning_basis_dates")
+    )
     return base
 
 
@@ -2306,6 +2356,7 @@ def analyze_global_priority_override_comment(
     - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
     - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
     - global_speed_rules: **工程名・機械名**への部分一致（各キーワードは **どちらの列にあっても可**）で、既存の加工速度（シート／上書き後）に **乗算**するルールの配列。該当なしは []。
+    - task_planning_basis_dates: 依頼NO→計画基準納期（YYYY-MM-DD）。配台の納期基準として **特別指定_備考AIより優先**して適用する。該当なしは {{}}。
     - scheduler_notes_ja: 上記に落としきれない補足や運用メモ（速度は可能なら global_speed_rules も併記）。
 
     API キー無し・JSON 解釈失敗時: 上記ブール・指名は既定値、工場休業日のみ従来のルールベース解析で補完。
@@ -2386,6 +2437,11 @@ D) **scheduler_notes_ja** （文字列・必須）
 E) **interpretation_ja** （文字列・必須）
    - 原文の要約を1文（200文字以内）。
 
+F) **task_planning_basis_dates** （オブジェクト・必須）
+   - グローバルコメントから読み取れる **依頼NO（Excel「依頼NO」列と同一表記）** ごとの **計画基準納期** を **YYYY-MM-DD** の文字列で格納。
+   - 例: {{"Y3-12": "2026-04-10", "W1-5": "2026-04-15"}}
+   - 依頼NOごとの納期指示が無ければ **空オブジェクト {{}}**（キー省略不可）。
+
 【返答形式】
 先頭が {{ で終わりが }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
 
@@ -2396,6 +2452,7 @@ E) **interpretation_ja** （文字列・必須）
 - "abolish_all_scheduling_limits": true または false
 - "task_preferred_operators": オブジェクト（該当なしは {{}}）
 - "global_speed_rules": オブジェクトの配列（該当なしは []）
+- "task_planning_basis_dates": オブジェクト（依頼NO→YYYY-MM-DD、該当なしは {{}}）
 - "scheduler_notes_ja": 文字列
 - "interpretation_ja": 文字列
 
@@ -4811,6 +4868,89 @@ def _ai_planning_target_due_date(ai_dict):
     return min(dates)
 
 
+def _global_planning_basis_date_from_override(gpo: dict | None, task_id: str):
+    """メイン・グローバルコメント AI の task_planning_basis_dates から計画基準納期を取得。"""
+    gpo = gpo or {}
+    m = gpo.get("task_planning_basis_dates")
+    if not isinstance(m, dict):
+        return None
+    tid = str(task_id or "").strip()
+    if not tid:
+        return None
+    raw_v = m.get(tid)
+    if raw_v is None:
+        for k, val in m.items():
+            if str(k).strip() == tid:
+                raw_v = val
+                break
+    return parse_optional_date(raw_v)
+
+
+def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
+    """
+    計画基準納期・機械名が同じ帯での試行順。
+    Y3-24 は末尾の数値。Y4-1-1 のようにハイフンが2つ以上あるときは「最初の - の直後」の数値部を採用。
+    """
+    s = str(task_id or "").strip()
+    if not s:
+        return (2, 10**9, "")
+    parts = s.split("-", 1)
+    if len(parts) < 2:
+        return (2, 10**9, s)
+    rest = parts[1]
+    if "-" in rest:
+        first_seg = rest.split("-", 1)[0]
+        try:
+            return (0, int(first_seg), s)
+        except ValueError:
+            return (1, 10**9, s)
+    tail = rest.strip()
+    try:
+        return (0, int(tail), s)
+    except ValueError:
+        return (1, 10**9, s)
+
+
+def validate_no_duplicate_explicit_plan_priorities(tasks_df) -> None:
+    """
+    配台ルール: 「優先度」列に同一の整数（明示入力）が2行以上あると段階2を中止。
+    999 は未入力扱いのため重複チェックから除外。
+    """
+    from collections import Counter
+
+    if tasks_df is None or getattr(tasks_df, "empty", True):
+        return
+    c = Counter()
+    for _, row in tasks_df.iterrows():
+        if row_has_completion_keyword(row):
+            continue
+        if _plan_row_exclude_from_assignment(row):
+            continue
+        tid = str(row.get(TASK_COL_TASK_ID, "") or "").strip()
+        if not tid:
+            continue
+        pv = row.get(PLAN_COL_PRIORITY)
+        if pv is None or (isinstance(pv, float) and pd.isna(pv)):
+            continue
+        try:
+            p = int(float(pv))
+        except (TypeError, ValueError):
+            continue
+        if p == 999:
+            continue
+        c[p] += 1
+    dupes = sorted([k for k, v in c.items() if v > 1])
+    if dupes:
+        msg = (
+            "【配台中止】配台計画_タスク入力の「優先度」が重複しています（同じ数値が複数行）。"
+            "重複している値: "
+            + ", ".join(str(x) for x in dupes)
+            + "。優先度を一意に直してから段階2を再実行してください。"
+        )
+        _write_stage2_blocking_message(msg)
+        raise PlanningValidationError(msg)
+
+
 # ---------------------------------------------------------------------------
 # 配台用タスクキュー
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変換（優先度・納期・AI 上書きを集約）
@@ -4846,12 +4986,14 @@ def build_task_queue_from_planning_df(
         answer_due = parse_optional_date(row.get(TASK_COL_ANSWER_DUE))
         specified_due = parse_optional_date(row.get(TASK_COL_SPECIFIED_DUE))
         specified_due_ov = parse_optional_date(row.get(PLAN_COL_SPECIFIED_DUE_OVERRIDE))
-        # 納期/開始日の採用元（優先順位）:
-        # 1) 指定納期_上書き（セル）
-        # 2) 特別指定_備考のAI: target_completion_date / ship_by_date 等
-        # 3) 特別指定_備考のAI: start_date（従来互換・目標日が無い場合のみ締めに使う）
-        # 4) 回答納期
-        # 5) 指定納期
+        # 計画基準納期（due_basis）の採用順（配台ルール改定）:
+        # 0) メイン・グローバルコメント AI の task_planning_basis_dates（依頼NO別）
+        # 1) 特別指定_備考 AI の完了・出荷目標日
+        # 2) 特別指定_備考 AI の start_date（目標日が無い場合の締め）
+        # 3) 指定納期_上書き（空白は無視済み）
+        # 4) 原反投入日（原反がある行は計画基準納期＝原反投入日）
+        # 5) 回答納期
+        # 6) 指定納期
         due_basis = None
         due_source = "none"
         due_source_rank = 9
@@ -4895,28 +5037,39 @@ def build_task_queue_from_planning_df(
         if isinstance(ai_used, dict) and ai_used.get("start_date") is not None:
             ai_start_date = parse_optional_date(ai_used.get("start_date"))
 
-        if specified_due_ov is not None:
-            due_basis = specified_due_ov
-            due_source = "specified_due_override"
+        g_basis = _global_planning_basis_date_from_override(gpo, task_id)
+        if g_basis is not None:
+            due_basis = g_basis
+            due_source = "global_comment_ai_due"
             due_source_rank = 0
+            has_done_deadline_override = True
         elif ai_target_due is not None:
             due_basis = ai_target_due
             due_source = "ai_target_due"
             due_source_rank = 1
             has_done_deadline_override = True
         elif ai_start_date is not None:
-            has_done_deadline_override = True
             due_basis = ai_start_date
             due_source = "ai_start_date"
             due_source_rank = 2
+            has_done_deadline_override = True
+        elif specified_due_ov is not None:
+            due_basis = specified_due_ov
+            due_source = "specified_due_override"
+            due_source_rank = 3
+            has_done_deadline_override = True
+        elif raw_input_date is not None:
+            due_basis = raw_input_date
+            due_source = "raw_input_same_as_plan_basis"
+            due_source_rank = 4
         elif answer_due is not None:
             due_basis = answer_due
             due_source = "answer_due"
-            due_source_rank = 3
+            due_source_rank = 5
         elif specified_due is not None:
             due_basis = specified_due
             due_source = "specified_due"
-            due_source_rank = 4
+            due_source_rank = 6
 
         if speed_ov is not None:
             speed = speed_ov
@@ -4973,7 +5126,7 @@ def build_task_queue_from_planning_df(
                 )
 
         same_day_raw_start_limit = (
-            time(10, 30)
+            time(12, 50)
             if (raw_input_date and start_date_ov is None and effective_start_date == raw_input_date)
             else None
         )
@@ -8681,10 +8834,16 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 
 def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
-    同一日内の割付試行順。加工内容の工程順 r、同一 r 帯ではシート行順（same_request_line_seq）、
+    同一日内の割付試行順。
+    計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、加工内容の工程順 r、行順、
     §B-1 検査の前倒し、計画シート優先度、結果用ソートキー。
     パイプラインに空き枠がある B-1 検査は r を 1 段繰り上げ、他依頼の先行工程と同じ波で並行試行する。
     """
+    dbk = task.get("due_basis_date")
+    if not isinstance(dbk, date):
+        dbk = date.max
+    mk = _normalize_equipment_match_key(task.get("machine_name") or "")
+    tb = _task_id_same_machine_due_tiebreak_key(task.get("task_id"))
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
         r = 10**9
@@ -8704,7 +8863,7 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
         line_seq = 0
     b1_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
     return (
-        (r, line_seq, b1_insp_first, _plan_sheet_priority_sort_value(task))
+        (dbk, mk, tb, r, line_seq, b1_insp_first, _plan_sheet_priority_sort_value(task))
         + _result_task_sheet_sort_key(task)
     )
 
@@ -8801,6 +8960,7 @@ def generate_plan():
         )
         return
     reset_gemini_usage_tracker()
+    _clear_stage2_blocking_message_file()
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく「データ抽出日」を使用
     data_extract_dt = _extract_data_extraction_datetime()
@@ -8857,6 +9017,12 @@ def generate_plan():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
+
+    try:
+        validate_no_duplicate_explicit_plan_priorities(tasks_df)
+    except PlanningValidationError as e:
+        logging.error("%s", e)
+        raise
 
     if global_priority_raw.strip():
         snip = global_priority_raw[:2500]
@@ -8954,6 +9120,8 @@ def generate_plan():
             x["priority"],
             0 if x["due_urgent"] else 1,
             x["due_basis_date"] or date.max,
+            _normalize_equipment_match_key(x.get("machine_name") or ""),
+            _task_id_same_machine_due_tiebreak_key(x.get("task_id")),
             x["start_date_req"],
             _task_id_priority_key(x.get("task_id")),
             -resolve_need_required_op(
@@ -9226,7 +9394,7 @@ def generate_plan():
                                 )
                                 if team_start < machine_free_dt:
                                     team_start = machine_free_dt
-                                # 原反投入日と同日の開始は 10:30 以降
+                                # 原反投入日と同日の開始は 12:50 以降
                                 if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                                     min_start_dt = datetime.combine(
                                         current_date, task["same_day_raw_start_limit"]
@@ -9540,6 +9708,8 @@ def generate_plan():
                 x["priority"],
                 0 if x["due_urgent"] else 1,
                 x["due_basis_date"] or date.max,
+                _normalize_equipment_match_key(x.get("machine_name") or ""),
+                _task_id_same_machine_due_tiebreak_key(x.get("task_id")),
                 x["start_date_req"],
                 _task_id_priority_key(x.get("task_id")),
                 -resolve_need_required_op(

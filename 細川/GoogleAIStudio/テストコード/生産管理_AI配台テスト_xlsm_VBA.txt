@@ -2686,6 +2686,14 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' 第2引数(1) = 通常のウィンドウを表示、第3引数(True) = 処理が終わるまでVBAを停止して待つ
     exitCode = wsh.Run(cmd, 1, True)
     m_lastStage2ExitCode = exitCode
+    ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
+    If exitCode <> 0 Then
+        Dim stage2Block As String
+        stage2Block = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
+        If Len(stage2Block) > 0 Then
+            m_lastStage2ErrMsg = stage2Block
+        End If
+    End If
 
     ' Gemini サマリ・設定シートは Python が openpyxl で保存を試みる。開きっぱなし時は log をマクロで反映。
     On Error Resume Next
@@ -2746,6 +2754,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         For i = LBound(cmdLines) To UBound(cmdLines)
             wsLog.Cells(baseRow + 1 + i, 1).Value = cmdLines(i)
         Next i
+    End If
+
+    ' 計画検証エラー等で m_lastStage2ErrMsg が設定されたときは結果ブック取り込みをスキップ（誤って前回出力を取り込まない）
+    If exitCode <> 0 And Len(m_lastStage2ErrMsg) > 0 Then
+        GoTo Finish
     End If
 
     ' ブックが開いたままだと Python 側の openpyxl 保存が失敗することがある → TSV 経由でハイライトを反映
