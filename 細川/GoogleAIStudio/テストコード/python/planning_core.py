@@ -821,6 +821,8 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
+# 配完_加工終了が計画基準納期当日の PLAN_DUE_DAY_COMPLETION_TIME 以前かを表示
+RESULT_TASK_COL_PLAN_END_BY_BASIS_16 = "配完_基準16時まで"
 # マスタ skills の工程+機械列ごとの OP/AS 割当参考順（優先度値・氏名順）とチーム採用ルールの説明
 RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
@@ -2844,6 +2846,7 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "加工開始日",
         "配完_加工開始",
         "配完_加工終了",
+        RESULT_TASK_COL_PLAN_END_BY_BASIS_16,
         "総加工量",
         "残加工量",
         "完了率(実行時点)",
@@ -2866,6 +2869,34 @@ def _task_date_key_for_result_sheet_sort(val):
         return ts.date()
     except Exception:
         return date.max
+
+
+def _result_task_plan_end_within_basis_16_label(
+    plan_window: list | None, basis_date
+) -> str:
+    """
+    結果_タスク一覧用: 「配完_加工終了」相当の最終終了時刻が、
+    計画基準納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを短文で返す。
+    """
+    if not plan_window or len(plan_window) < 2:
+        return "未割当"
+    _pe = plan_window[1]
+    if _pe is None:
+        return "未割当"
+    bd = basis_date
+    if bd is None:
+        return "基準日なし"
+    if isinstance(bd, datetime):
+        bd = bd.date()
+    if not hasattr(bd, "year"):
+        return "基準日なし"
+    try:
+        deadline_dt = datetime.combine(bd, PLAN_DUE_DAY_COMPLETION_TIME)
+        if _pe <= deadline_dt:
+            return "はい"
+        return "いいえ"
+    except Exception:
+        return "判定不能"
 
 
 def _result_task_sheet_sort_key(t: dict):
@@ -11968,6 +11999,10 @@ def generate_plan():
             plan_assign_start_s = ""
             plan_assign_end_s = ""
 
+        _plan_end_basis16 = _result_task_plan_end_within_basis_16_label(
+            _pw, _basis_for_sheet
+        )
+
         row_tail = {
             "必要OP(上書)": rov if rov is not None else "",
             "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
@@ -11982,6 +12017,7 @@ def generate_plan():
             "加工開始日": start_req_s,
             "配完_加工開始": plan_assign_start_s,
             "配完_加工終了": plan_assign_end_s,
+            RESULT_TASK_COL_PLAN_END_BY_BASIS_16: _plan_end_basis16,
             "総加工量": f"{total_r}R ({t['total_qty_m']}m)",
             "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
             "完了率(実行時点)": f"{pct_macro}%",

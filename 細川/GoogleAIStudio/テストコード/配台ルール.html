@@ -239,10 +239,11 @@
       <li><strong>配台不可／配台残</strong>の行全体の薄い黄より<strong>後</strong>にタスクIDだけ上書きするため、該当セルは赤が優先されます。</li>
     </ul>
     <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>。</p>
+    <p><strong>列 配完_基準16時まで</strong>: <strong>配完_加工終了</strong>（タイムライン上の最終終了）が、当該行の <strong>計画基準納期</strong>の日付＋既定 <strong>16:00</strong>（<code>PLAN_DUE_DAY_COMPLETION_TIME</code>）以前かを <code>はい</code>／<code>いいえ</code>／<code>未割当</code>／<code>基準日なし</code>で表示（<code>_result_task_plan_end_within_basis_16_label</code>）。</p>
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-01・§B-1 試行順／§B-2 パイプラインの番号・優先順位・need 余力・md/html 同期）
+    同一ソース: 配台ルール.md（2026-04-01・結果_タスク一覧「配完_基準16時まで」列・§B-1/§B-2・need 余力・md/html 同期）
   </footer>
 </body>
 </html>
