@@ -68,6 +68,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.views import Selection
 
 # =========================================================
 # 【重要】カレントを「テストコード直下」に設定（master.xlsm・output・log・json・API_Payment と同じ階層）
@@ -1051,6 +1052,13 @@ def _result_font(**kwargs):
 
 def _output_book_font(bold=False):
     return _result_font(bold=bold)
+
+
+def _apply_result_equipment_schedule_sheet_view(ws) -> None:
+    """結果_設備毎の時間割: 1行目・A列を窓枠固定し、ブックを開いたときの選択を B2 にする。"""
+    ws.freeze_panes = "B2"
+    if ws.views.sheetView:
+        ws.views.sheetView[0].selection = [Selection(activeCell="B2", sqref="B2")]
 
 
 def _apply_output_font_to_result_sheet(ws):
@@ -11794,6 +11802,9 @@ def generate_plan():
 
     with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
         df_eq_schedule.to_excel(writer, sheet_name='結果_設備毎の時間割', index=False)
+        _apply_result_equipment_schedule_sheet_view(
+            writer.sheets["結果_設備毎の時間割"]
+        )
         pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
         df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割合', index=False)
         df_tasks = pd.DataFrame(task_results)
