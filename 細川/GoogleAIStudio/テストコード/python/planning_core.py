@@ -5210,8 +5210,8 @@ def build_task_queue_from_planning_df(
         )
         # 計画基準納期（due_basis）の採用順（配台ルール改定）:
         # 0) メイン・グローバルコメント AI の task_planning_basis_dates（依頼NO別）
-        # 1) 特別指定_備考 AI の完了・出荷目標日
-        # 2) 特別指定_備考 AI の start_date（目標日が無い場合の締め）
+        # 1) 特別指定_備考 AI の完了・出荷目標日 … 備考に納期・期限・最優先等の文言がある行のみ
+        # 2) 特別指定_備考 AI の start_date（目標日が無い場合の締め）… 同上
         # 3) 指定納期_上書き（空白は無視済み）
         # 4) 原反投入日（原反がある行は計画基準納期＝原反投入日）
         # 5) 回答納期
@@ -9102,6 +9102,44 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     return max(0.0, max_insp - insp_done)
 
 
+def _exclusive_b1_inspection_holder_for_machine(task_queue, machine: str):
+    """
+    同一「工程名」（設備時間割の列キー）上で、§B-1 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
+    そのタスク dict を1件返す（なければ None）。
+
+    パイプライン枠で検査を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼の検査** が同じ設備に入り、
+    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該工程列では他タスクを試行しない
+    （EC など別工程列は従来どおり）。
+    """
+    m = str(machine or "").strip()
+    if not m:
+        return None
+    holders: list = []
+    for t in task_queue:
+        if str(t.get("machine") or "").strip() != m:
+            continue
+        if not t.get("roll_pipeline_inspection"):
+            continue
+        rem = float(t.get("remaining_units") or 0)
+        if rem <= 1e-9:
+            continue
+        init = float(t.get("initial_remaining_units") or 0)
+        started = (init - rem) > 1e-9 or bool(t.get("assigned_history"))
+        if not started:
+            continue
+        holders.append(t)
+    if not holders:
+        return None
+    return min(
+        holders,
+        key=lambda t: (
+            int(t.get("dispatch_trial_order") or 10**9),
+            str(t.get("task_id") or ""),
+            int(t.get("same_request_line_seq") or 0),
+        ),
+    )
+
+
 def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
@@ -9565,6 +9603,11 @@ def generate_plan():
                         )
                         <= 1e-12
                     ):
+                        continue
+                    _b1_holder = _exclusive_b1_inspection_holder_for_machine(
+                        task_queue, task.get("machine")
+                    )
+                    if _b1_holder is not None and _b1_holder is not task:
                         continue
                     if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
                         logging.info(
@@ -10099,7 +10142,9 @@ def generate_plan():
         machine_to_events = defaultdict(list)
         for ev in events_today:
             machine_to_events[ev["machine"]].append(ev)
-        
+        for _eq_k, _evs in machine_to_events.items():
+            _evs.sort(key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")))
+
         is_anyone_working = any(daily_status['is_working'] for daily_status in attendance_data[d].values())
         if not events_today and not is_anyone_working: continue
         
@@ -10556,4 +10601,5 @@ def generate_plan():
                 for cell in row:
                     cell.border = thin_border
                     
-    logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に
+    logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
+    _try_write_main_sheet_gemini_usage_summary("段階2")
