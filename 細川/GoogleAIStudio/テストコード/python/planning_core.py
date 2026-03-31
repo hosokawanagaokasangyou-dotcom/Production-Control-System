@@ -9199,10 +9199,16 @@ STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
 # 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（41 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 40
 
-# True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼を
-# 複数日にまたがって完走させ、次依頼へ進む。①で占有した人・設備はタイムラインでブロックされる。
-# （試行順＝初回 task_queue.sort 後の並びでは決めない。）
-STAGE2_SERIAL_DISPATCH_BY_TASK_ID = True
+# True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼だけを
+# 当日候補に残し、完走してから次依頼へ進む。**他依頼は一切その日配台されない**ため、
+# アクティブ依頼の1行でも詰まると全体が配台不可に見える（ログ「依頼NO直列配台 直列後=1」）。
+# 既定 False。厳密な依頼NO直列が必要なときだけ STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 を設定する。
+STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
+    os.environ.get("STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0")
+    .strip()
+    .lower()
+    in ("1", "true", "yes", "on", "はい")
+)
 
 # True: ①残タスクのうち配台試行順が最小の1タスクだけを選び、1ロールずつ割付。
 # ②原反投入日と同一日に開始する場合は 13:00 以降（same_day_raw_start_limit も 13:00）。
@@ -10096,7 +10102,9 @@ def _trial_order_first_schedule_pass(
     _need_headcount_logged_orders: set,
 ) -> bool:
     """
-    ①当日候補のうち配台試行順最小のタスクに対し、可能な限り 1 ロールずつ割付する（1 パス分）。
+    ①当日候補を配台試行順の昇順に並べ、先頭から順に「1 ロールずつ」を詰める（1 パス分）。
+    試行順最小の行だけが当日入らない場合でも、**同じパス内で次の試行順へ進み**他設備を埋める。
+    （旧実装: 最小1件だけを見て失敗すると日内マルチパスが即終了し、ほぼ全件配台不可になっていた。）
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     eligible = _trial_order_flow_eligible_tasks(
@@ -10104,119 +10112,127 @@ def _trial_order_first_schedule_pass(
     )
     if not eligible:
         return False
-    task = min(
+    eligible_sorted = sorted(
         eligible,
         key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
     )
-    preferred_team: tuple | None = None
-    made = False
     _gpo = global_priority_override or {}
-    while float(task.get("remaining_units") or 0) > 1e-12:
-        res = _assign_one_roll_trial_order_flow(
-            task,
-            current_date,
-            daily_status,
-            avail_dt,
-            machine_avail_dt,
-            task_queue,
-            skills_dict,
-            members,
-            req_map,
-            need_rules,
-            surplus_map,
-            global_priority_override,
-            macro_run_date,
-            macro_now_dt,
-            preferred_team,
-            _need_headcount_logged_orders,
-        )
-        if res is None:
-            break
-        done_units = 1
-        if task.get("roll_pipeline_inspection"):
-            _rp_room = _roll_pipeline_inspection_assign_room(
-                task_queue, str(task.get("task_id", "") or "").strip()
+
+    def _drain_rolls_for_task(task: dict) -> bool:
+        preferred_team: tuple | None = None
+        made_local = False
+        while float(task.get("remaining_units") or 0) > 1e-12:
+            res = _assign_one_roll_trial_order_flow(
+                task,
+                current_date,
+                daily_status,
+                avail_dt,
+                machine_avail_dt,
+                task_queue,
+                skills_dict,
+                members,
+                req_map,
+                need_rules,
+                surplus_map,
+                global_priority_override,
+                macro_run_date,
+                macro_now_dt,
+                preferred_team,
+                _need_headcount_logged_orders,
             )
-            if _rp_room <= 1e-12:
+            if res is None:
                 break
-            done_units = min(1, int(min(_rp_room, math.ceil(task["remaining_units"]))))
-        if done_units <= 0:
-            break
-        best_team = tuple(res["team"])
-        lead_op = res["lead_op"]
-        sub_members = [m for m in best_team if m != lead_op]
-        best_start = res["team_start"]
-        best_end = res["actual_end_dt"]
-        best_breaks = res["team_breaks"]
-        best_eff = res["avg_eff"]
-        rq_base = res["rq_base"]
-        extra_max = res["extra_max"]
-        eq_line = res["eq_line"]
-        machine = res["machine"]
-        machine_name = res["machine_name"]
-        _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
-        if _te_disp <= 0:
-            _te_disp = 1.0
-        if done_units < 1:
-            break
-        best_end = res["actual_end_dt"]
+            done_units = 1
+            if task.get("roll_pipeline_inspection"):
+                _rp_room = _roll_pipeline_inspection_assign_room(
+                    task_queue, str(task.get("task_id", "") or "").strip()
+                )
+                if _rp_room <= 1e-12:
+                    break
+                done_units = min(
+                    1, int(min(_rp_room, math.ceil(task["remaining_units"])))
+                )
+            if done_units <= 0:
+                break
+            best_team = tuple(res["team"])
+            lead_op = res["lead_op"]
+            sub_members = [m for m in best_team if m != lead_op]
+            best_start = res["team_start"]
+            best_end = res["actual_end_dt"]
+            best_breaks = res["team_breaks"]
+            best_eff = res["avg_eff"]
+            rq_base = res["rq_base"]
+            extra_max = res["extra_max"]
+            eq_line = res["eq_line"]
+            _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
+            if _te_disp <= 0:
+                _te_disp = 1.0
 
-        total_u = (
-            math.ceil(task["total_qty_m"] / task["unit_m"]) if task["unit_m"] else 0
-        )
-        rem_u_before = math.ceil(task["remaining_units"])
-        already_done = total_u - rem_u_before
-        try:
-            tot_qty = parse_float_safe(task.get("total_qty_m"), 0.0)
-            done_qty = parse_float_safe(task.get("done_qty_reported"), 0.0)
-            if tot_qty > 0:
-                pct_macro = max(0, min(100, int(round((done_qty / tot_qty) * 100))))
-            else:
+            total_u = (
+                math.ceil(task["total_qty_m"] / task["unit_m"]) if task["unit_m"] else 0
+            )
+            rem_u_before = math.ceil(task["remaining_units"])
+            already_done = total_u - rem_u_before
+            try:
+                tot_qty = parse_float_safe(task.get("total_qty_m"), 0.0)
+                done_qty = parse_float_safe(task.get("done_qty_reported"), 0.0)
+                if tot_qty > 0:
+                    pct_macro = max(
+                        0, min(100, int(round((done_qty / tot_qty) * 100)))
+                    )
+                else:
+                    pct_macro = 0
+            except Exception:
                 pct_macro = 0
-        except Exception:
-            pct_macro = 0
 
-        timeline_events.append(
-            {
-                "date": current_date,
-                "task_id": task["task_id"],
-                "machine": eq_line,
-                "op": lead_op,
-                "sub": ", ".join(sub_members),
-                "start_dt": best_start,
-                "end_dt": best_end,
-                "breaks": best_breaks,
-                "units_done": done_units,
-                "already_done_units": already_done,
-                "total_units": total_u,
-                "pct_macro": pct_macro,
-                "eff_time_per_unit": task["base_time_per_unit"]
-                / best_eff
-                / _te_disp
-                * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
-                "unit_m": task["unit_m"],
-            }
-        )
-        task["remaining_units"] -= float(done_units)
-        op_main = (lead_op or "").strip()
-        subs_part = ",".join(
-            s.strip() for s in sub_members if s and str(s).strip()
-        )
-        team_s = f"{op_main}, {subs_part}" if subs_part else op_main
-        task["assigned_history"].append(
-            {
-                "date": current_date.strftime("%m/%d"),
-                "team": team_s,
-                "done_m": int(done_units * task["unit_m"]),
-            }
-        )
-        for m in best_team:
-            avail_dt[m] = best_end
-        if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_avail_dt[eq_line] = best_end
-        preferred_team = best_team
-        made = True
-    return made
+            timeline_events.append(
+                {
+                    "date": current_date,
+                    "task_id": task["task_id"],
+                    "machine": eq_line,
+                    "op": lead_op,
+                    "sub": ", ".join(sub_members),
+                    "start_dt": best_start,
+                    "end_dt": best_end,
+                    "breaks": best_breaks,
+                    "units_done": done_units,
+                    "already_done_units": already_done,
+                    "total_units": total_u,
+                    "pct_macro": pct_macro,
+                    "eff_time_per_unit": task["base_time_per_unit"]
+                    / best_eff
+                    / _te_disp
+                    * _surplus_team_time_factor(
+                        rq_base, len(best_team), extra_max
+                    ),
+                    "unit_m": task["unit_m"],
+                }
+            )
+            task["remaining_units"] -= float(done_units)
+            op_main = (lead_op or "").strip()
+            subs_part = ",".join(
+                s.strip() for s in sub_members if s and str(s).strip()
+            )
+            team_s = f"{op_main}, {subs_part}" if subs_part else op_main
+            task["assigned_history"].append(
+                {
+                    "date": current_date.strftime("%m/%d"),
+                    "team": team_s,
+                    "done_m": int(done_units * task["unit_m"]),
+                }
+            )
+            for m in best_team:
+                avail_dt[m] = best_end
+            if not _gpo.get("abolish_all_scheduling_limits"):
+                machine_avail_dt[eq_line] = best_end
+            preferred_team = best_team
+            made_local = True
+        return made_local
+
+    for task in eligible_sorted:
+        if _drain_rolls_for_task(task):
+            return True
+    return False
 
 
 # =========================================================
@@ -10502,6 +10518,16 @@ def generate_plan():
         t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
         t["assigned_history"].clear()
     timeline_events.clear()
+
+    if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
+        logging.info(
+            "依頼NO直列配台: 有効（STAGE2_SERIAL_DISPATCH_BY_TASK_ID）。"
+            " 各日はアクティブな依頼NOの行だけが候補のため、当該依頼が詰まると他依頼は一切進みません。"
+        )
+    else:
+        logging.info(
+            "依頼NO直列配台: 無効。start_date を満たす全行が当日候補になり、配台試行順・設備ルールで順序付けします。"
+        )
 
     _due_shift_retry_count_by_request: dict[str, int] = {}
     _due_shift_exhausted_requests: set[str] = set()
