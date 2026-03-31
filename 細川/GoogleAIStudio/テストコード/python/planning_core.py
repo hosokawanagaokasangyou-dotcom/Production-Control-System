@@ -5272,6 +5272,8 @@ def build_task_queue_from_planning_df(
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
     same_tid_line_seq = defaultdict(int)
+    # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
+    planning_sheet_row_seq = 0
 
     for _, row in tasks_df.iterrows():
         if row_has_completion_keyword(row):
@@ -5496,8 +5498,10 @@ def build_task_queue_from_planning_df(
                     machine, machine_name
                 ),
                 "process_content_mismatch": _process_content_mismatch,
+                "planning_sheet_row_seq": planning_sheet_row_seq,
             }
         )
+        planning_sheet_row_seq += 1
 
     logging.info(
         "task_queue 構築完了: total=%s（配台不要によりスキップ %s 行）",
@@ -5522,6 +5526,28 @@ def _task_id_priority_key(task_id):
         if re.match(r"^\d+$", tail):
             return (head, int(tail), s)
     return (s, 10**9, s)
+
+
+def _serial_dispatch_order_task_ids(task_queue) -> list:
+    """
+    依頼NO直列配台の処理順。配台計画 DataFrame の読み込み行順（各依頼NOについて最も早い行の
+    planning_sheet_row_seq が小さいほど先）で完走させる。初回 task_queue.sort（納期・優先度）
+    の並びとは独立。
+    """
+    first_seq_by_tid: dict = {}
+    for t in task_queue:
+        tid = str(t.get("task_id", "") or "").strip()
+        if not tid:
+            continue
+        seq = t.get("planning_sheet_row_seq")
+        seq = int(seq) if seq is not None else 10**9
+        prev = first_seq_by_tid.get(tid)
+        if prev is None or seq < prev:
+            first_seq_by_tid[tid] = seq
+    return sorted(
+        first_seq_by_tid.keys(),
+        key=lambda tid: (first_seq_by_tid[tid], _task_id_priority_key(tid)),
+    )
 
 
 def _excel_scalar_to_plan_string_cell(v):
@@ -8913,11 +8939,12 @@ SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 # 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
 # マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
-# 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（11 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
-STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 10
+# 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（41 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
+STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 40
 
-# True のとき、配台計画シートのグローバル並び（初回 task_queue.sort 後の行順＝試行順ベース）で先頭の依頼NOが
-# 全行完走するまで、他依頼NOは割付対象に入れない（同一日内も依頼をまたがない）。
+# True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼を
+# 複数日にまたがって完走させ、次依頼へ進む。①で占有した人・設備はタイムラインでブロックされる。
+# （試行順＝初回 task_queue.sort 後の並びでは決めない。）
 STAGE2_SERIAL_DISPATCH_BY_TASK_ID = True
 
 
@@ -9697,13 +9724,7 @@ def generate_plan():
             t.pop("_partial_retry_calendar_blocked", None)
 
         if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
-            _serial_order_tids: list[str] = []
-            _seen_serial_tid: set[str] = set()
-            for _tq in task_queue:
-                _stid = str(_tq.get("task_id", "") or "").strip()
-                if _stid and _stid not in _seen_serial_tid:
-                    _seen_serial_tid.add(_stid)
-                    _serial_order_tids.append(_stid)
+            _serial_order_tids = _serial_dispatch_order_task_ids(task_queue)
         else:
             _serial_order_tids = []
 
@@ -9742,6 +9763,7 @@ def generate_plan():
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
+                _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
                 for _tid in _serial_order_tids:
                     if any(
@@ -9757,6 +9779,23 @@ def generate_plan():
                         for t in tasks_today
                         if str(t.get("task_id", "") or "").strip() == _active_serial_tid
                     ]
+                _serial_pos = (
+                    _serial_order_tids.index(_active_serial_tid) + 1
+                    if _active_serial_tid in _serial_order_tids
+                    else 0
+                )
+                _pending_rows = sum(1 for t in task_queue if t["remaining_units"] > 0)
+                logging.info(
+                    "依頼NO直列配台 day=%s アクティブ依頼NO=%s 直列リスト位置=%s/%s "
+                    "当日候補行数(直列前)=%s 直列後=%s キュー残行(全日)=%s",
+                    current_date,
+                    _active_serial_tid if _active_serial_tid is not None else "—",
+                    _serial_pos if _serial_pos else "—",
+                    len(_serial_order_tids),
+                    _tasks_today_before_serial,
+                    len(tasks_today),
+                    _pending_rows,
+                )
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
             if not tasks_today:
                 earliest_wait = min(
