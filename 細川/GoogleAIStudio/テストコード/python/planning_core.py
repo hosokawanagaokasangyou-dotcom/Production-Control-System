@@ -9588,14 +9588,53 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     )
 
 
+def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: list) -> tuple:
+    """
+    generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
+    §B を §A・一般キーより先に効かせるため、B-1（roll_pipeline_inspection）→ B-2（同・加工途中＋試行順土台）
+    → その他の加工途中 → 以降は納期・優先度等。
+    """
+    rp = bool(task.get("roll_pipeline_inspection"))
+    ip = bool(task.get("in_progress"))
+    b1 = 0 if rp else 1
+    b2 = (0 if ip else 1) if rp else 1
+    gen_ip = 0 if (not rp and ip) else 1
+    try:
+        pss = int(task.get("planning_sheet_row_seq") or 0)
+    except (TypeError, ValueError):
+        pss = 10**9
+    b2_trial = (0, pss) if (rp and ip) else (1, 0)
+    return (
+        task.get("due_source_rank", 9),
+        0 if task.get("has_done_deadline_override") else 1,
+        b1,
+        b2,
+        gen_ip,
+        b2_trial,
+        task["priority"],
+        0 if task["due_urgent"] else 1,
+        task["due_basis_date"] or date.max,
+        _normalize_equipment_match_key(task.get("machine_name") or ""),
+        _task_id_same_machine_due_tiebreak_key(task.get("task_id")),
+        task["start_date_req"],
+        _task_id_priority_key(task.get("task_id")),
+        -resolve_need_required_op(
+            task["machine"],
+            task.get("machine_name", ""),
+            task["task_id"],
+            req_map,
+            need_rules,
+        ),
+    )
+
+
 def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
-    計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、加工内容の工程順 r、行順、
-    配台試行順（キュー全体の dispatch_trial_order）、§B-1 検査のタイブレーク、計画シート優先度、結果用ソートキー。
-    （EC 完走前は検査を試行しないため、検査の r 前倒しは行わない。task_queue は後方互換のため引数に残す。）
-    同一設備列の隙間割り込みは machine_avail_dt だけでは防げないため、eq_line 確定後に
-    _equipment_line_lower_dispatch_trial_still_pending（当日 start 可能な先試行順のみ）で試行順を強制する。
+    計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、
+    §B-2（検査+熱融着機湖南かつ加工途中）は配台試行順 dispatch_trial_order を加工内容 rank より先に効かせる。
+    続けて r、行順、dto、§B-1 検査タイブレーク、優先度、結果用ソートキー。
+    同一設備列の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
     dbk = task.get("due_basis_date")
     if not isinstance(dbk, date):
@@ -9616,11 +9655,15 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
         dto = int(task.get("dispatch_trial_order") or 10**9)
     except (TypeError, ValueError):
         dto = 10**9
+    rp = bool(task.get("roll_pipeline_inspection"))
+    ip = bool(task.get("in_progress"))
+    b2_trial_early = (0, dto) if (rp and ip) else (1, 0)
     return (
         (
             dbk,
             mk,
             tb,
+            b2_trial_early,
             r,
             line_seq,
             dto,
@@ -10694,24 +10737,9 @@ def generate_plan():
             "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
         )
 
-    # 加工途中（実績あり）は優先。§B-1（熱融着検査）を同帯で前に（個別ルールが本文一般ルールより優先）。
+    # §B-1 → §B-2 → その他加工途中 → 一般キー（§B を §A より先にソートキーへ反映）
     task_queue.sort(
-        key=lambda x: (
-            x.get("due_source_rank", 9),
-            0 if x.get("has_done_deadline_override") else 1,
-            0 if x.get("in_progress") else 1,
-            0 if x.get("roll_pipeline_inspection") else 1,
-            x["priority"],
-            0 if x["due_urgent"] else 1,
-            x["due_basis_date"] or date.max,
-            _normalize_equipment_match_key(x.get("machine_name") or ""),
-            _task_id_same_machine_due_tiebreak_key(x.get("task_id")),
-            x["start_date_req"],
-            _task_id_priority_key(x.get("task_id")),
-            -resolve_need_required_op(
-                x["machine"], x.get("machine_name", ""), x["task_id"], req_map, need_rules
-            ),
-        )
+        key=lambda x: _generate_plan_task_queue_sort_key(x, req_map, need_rules)
     )
     # 配台試行順: 日次ループ前・ソート済みキューの並び（初回割当の成否とは無関係）
     for _trial_ord, _tq in enumerate(task_queue, start=1):
@@ -11613,29 +11641,8 @@ def generate_plan():
                                     )
                                     t["assigned_history"].clear()
                             task_queue.sort(
-                                key=lambda x: (
-                                    x.get("due_source_rank", 9),
-                                    0 if x.get("has_done_deadline_override") else 1,
-                                    0 if x.get("in_progress") else 1,
-                                    0 if x.get("roll_pipeline_inspection") else 1,
-                                    x["priority"],
-                                    0 if x["due_urgent"] else 1,
-                                    x["due_basis_date"] or date.max,
-                                    _normalize_equipment_match_key(
-                                        x.get("machine_name") or ""
-                                    ),
-                                    _task_id_same_machine_due_tiebreak_key(
-                                        x.get("task_id")
-                                    ),
-                                    x["start_date_req"],
-                                    _task_id_priority_key(x.get("task_id")),
-                                    -resolve_need_required_op(
-                                        x["machine"],
-                                        x.get("machine_name", ""),
-                                        x["task_id"],
-                                        req_map,
-                                        need_rules,
-                                    ),
+                                key=lambda x: _generate_plan_task_queue_sort_key(
+                                    x, req_map, need_rules
                                 )
                             )
                             _trials_detail = ",".join(

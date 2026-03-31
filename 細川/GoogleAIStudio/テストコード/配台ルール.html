@@ -132,9 +132,9 @@
 
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>）: 納期ソース順 → 完了日上書き行 → 加工途中 → <strong>B-1 検査行を同帯で前へ</strong> → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO（従来キー） → 必要OP人数（多いほど先）。この後、各行に <strong>配台試行順番</strong> 1..n を付与。</p>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>・<code>_generate_plan_task_queue_sort_key</code>）: 納期ソース順 → 完了日上書き行 → <strong>§B-1</strong>（<code>roll_pipeline_inspection</code>）→ <strong>§B-2</strong>（そのうち加工途中を先・タイブレークに <code>planning_sheet_row_seq</code>）→ その他の加工途中 → 配台計画の優先度 → 納期緊急度 → <strong>納期基準日 → 機械名 → 依頼NOタイブレーク</strong> → 開始日 → 依頼NO → 必要OP人数（多いほど先）。<strong>§B は §A より先</strong>にキーへ反映。§B 群内は <strong>B-1 ＞ B-2</strong>（番号順）。この後、各行に <strong>配台試行順番</strong> 1..n を付与。</p>
     <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が<strong>配台試行順の昇順</strong>で候補を回し、試行順が先でも当日詰まらなければ<strong>同一パスで次の試行順へ進む</strong>。同一設備列ではより小さい試行順がまだ残す間、後続を当該設備では試さない（<code>_equipment_line_lower_dispatch_trial_still_pending</code>）。</p>
-    <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順のループ（納期基準日 → 機械名 → タイブレーク → rank → 行順 → <code>dispatch_trial_order</code> → B-1 前倒し → 優先度 → 結果用ソート）。</p>
+    <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順のループ（納期基準日 → 機械名 → タイブレーク → <strong>§B-2</strong>: 検査×熱融着機湖南かつ加工途中は <code>dispatch_trial_order</code> を <strong>rank より前</strong> → rank → 行順 → <code>dispatch_trial_order</code> → B-1 前倒し → 優先度 → 結果用ソート）。</p>
     <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（グローバルソート直後の 1..n）が第一キーです。</p>
   </section>
 
@@ -208,6 +208,13 @@
       <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・<code>_roll_pipeline_inspection_blocked_until_ec_done</code>・ロール枠・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付・ロール枠が効く。詳細は <span class="file">配台ルール.md</span> B-1.6。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
+    <h3>B-2 — 検査×熱融着機湖南で加工途中なら試行順優先</h3>
+    <p><strong>対象</strong>: 上表の後続（検査・熱融着機　湖南）と同一で、<strong>加工途中</strong>（<code>in_progress</code>）の行。</p>
+    <ul>
+      <li><strong>グローバル</strong>: B-1 帯のうち加工途中同士は <code>planning_sheet_row_seq</code> でタイブレーク（試行番号付与前の「シート順の土台」）。</li>
+      <li><strong>日内</strong>: 同じ納期・機械・タイブレークの帯で、<code>dispatch_trial_order</code> を §A-1 の rank より<strong>前</strong>に置く（<code>_day_schedule_task_sort_key</code>）。</li>
+      <li><strong>§B 群内</strong>: <strong>B-1 ＞ B-2</strong>。詳細は <span class="file">配台ルール.md</span> の「適用の優先順位」および §B-2。</li>
+    </ul>
   </section>
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
@@ -235,7 +242,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-01・need 余力のメイン後追記・<code>dispatch-docs-sync.mdc</code> による md/html 同期ルールを追記）
+    同一ソース: 配台ルール.md（2026-04-01・§B-2 試行順・B/A・B-1/B-2 優先の明示・need 余力・md/html 同期）
   </footer>
 </body>
 </html>
