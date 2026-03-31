@@ -8919,15 +8919,13 @@ def _partial_task_id_due_shift_outcome(
 
 
 def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
-    """1行分の納期系を1日ずらし、due_urgent を基準日で再計算する。"""
+    """
+    配台残リトライ用: **計画基準納期（due_basis_date）だけ**を +1 日する。
+    回答納期・指定納期・指定納期_上書きは配台計画シート由来のまま（結果_タスク一覧の列を上書きしない）。
+    due_urgent はずらした基準日で再計算する。
+    """
     if task.get("due_basis_date") is not None:
         task["due_basis_date"] = task["due_basis_date"] + timedelta(days=1)
-    if task.get("answer_due_date") is not None:
-        task["answer_due_date"] = task["answer_due_date"] + timedelta(days=1)
-    if task.get("specified_due_date") is not None:
-        task["specified_due_date"] = task["specified_due_date"] + timedelta(days=1)
-    if task.get("specified_due_override") is not None:
-        task["specified_due_override"] = task["specified_due_override"] + timedelta(days=1)
     db = task.get("due_basis_date")
     if db is not None:
         task["due_urgent"] = db <= run_date
