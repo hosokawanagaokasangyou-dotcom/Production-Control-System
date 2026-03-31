@@ -1345,6 +1345,7 @@ def _write_results_equipment_gantt_sheet(
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = 15
+    eq_display = _equipment_schedule_header_labels(equipment_list)
     hdr_font = _result_font(bold=True, color="000000", size=10)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
     hdr_time_font = _result_font(bold=True, color="000000", size=9)
@@ -1472,7 +1473,7 @@ def _write_results_equipment_gantt_sheet(
             first_freeze_set = True
 
         zebra = False
-        for eq in equipment_list:
+        for eq, disp in zip(equipment_list, eq_display):
             zebra = not zebra
             evlist = by_dm[d].get(eq, [])
             if evlist:
@@ -1493,7 +1494,7 @@ def _write_results_equipment_gantt_sheet(
             if zebra:
                 lab_fill = PatternFill(fill_type="solid", start_color="F0F4FA", end_color="F0F4FA")
 
-            c1 = ws.cell(row=row, column=1, value=eq)
+            c1 = ws.cell(row=row, column=1, value=disp)
             c2 = ws.cell(row=row, column=2, value=task_sum)
             c3 = ws.cell(row=row, column=3, value=op_disp)
             for c in (c1, c2, c3):
@@ -1546,7 +1547,7 @@ def _write_results_equipment_gantt_sheet(
                         fill_type="solid", start_color="E0EEE0", end_color="E0EEE0"
                     )
 
-                ca1 = ws.cell(row=row, column=1, value=f"{eq}（実績）")
+                ca1 = ws.cell(row=row, column=1, value=f"{disp}（実績）")
                 ca2 = ws.cell(row=row, column=2, value=task_sum_a)
                 ca3 = ws.cell(row=row, column=3, value=op_disp_a)
                 for c in (ca1, ca2, ca3):
@@ -10245,11 +10246,13 @@ def generate_plan():
                     capable_members = [m for m in avail_dt.keys() if skill_role_priority(m)[0] in ("OP", "AS")]
                     capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
                     if task.get("has_done_deadline_override"):
-                        machine_free_dbg = machine_avail_dt.get(machine, datetime.combine(current_date, DEFAULT_START_TIME))
+                        machine_free_dbg = machine_avail_dt.get(
+                            eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+                        )
                         logging.info(
                             "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
                             task.get("task_id"),
-                            machine,
+                            eq_line,
                             req_num,
                             len(capable_members),
                             machine_free_dbg,
@@ -10950,6 +10953,16 @@ def generate_plan():
         all_eq_rows.append({"日時帯": "", **eq_empty_cols})
         
     df_eq_schedule = pd.DataFrame(all_eq_rows)
+    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
+    _eq_rename = {}
+    for _eq, _lab in zip(equipment_list, _eq_hdr):
+        if _eq in df_eq_schedule.columns:
+            _eq_rename[_eq] = _lab
+        _pqc = f"{_eq}進度"
+        if _pqc in df_eq_schedule.columns:
+            _eq_rename[_pqc] = f"{_lab}進度"
+    if _eq_rename:
+        df_eq_schedule = df_eq_schedule.rename(columns=_eq_rename)
 
     # 結果_タスク一覧用: シミュレーション上の当該タスクの最早開始・最遅終了（timeline_events 集約）
     plan_window_by_task_id: dict = {}
