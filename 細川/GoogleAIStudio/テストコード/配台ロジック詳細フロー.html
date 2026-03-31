@@ -188,7 +188,7 @@
     <tr><td><span class="mono">base_time_per_unit</span></td><td>換算数量・速度・単位から単位あたり時間</td></tr>
     <tr><td><span class="mono">due_urgent</span></td><td><span class="mono">due_basis_date <= run_date</span></td></tr>
     <tr><td><span class="mono">in_progress</span></td><td><span class="mono">done_qty > 0</span></td></tr>
-    <tr><td><span class="mono">roll_pipeline_ec</span> / <span class="mono">roll_pipeline_inspection</span></td><td>工程名・機械名が §B-1 パイプライン定義に一致するか</td></tr>
+    <tr><td><span class="mono">roll_pipeline_ec</span> / <span class="mono">roll_pipeline_inspection</span></td><td>工程名・機械名が §B-2 パイプライン定義に一致するか</td></tr>
     <tr><td><span class="mono">planning_sheet_row_seq</span></td><td>DataFrame 読込順（依頼NO直列モードの順序に使用）</td></tr>
     <tr><td><span class="mono">dispatch_trial_order</span></td><td>初回 <span class="mono">task_queue.sort</span> 後に <span class="mono">enumerate(..., start=1)</span> で付与。<strong>納期シフト再実行でキューを再ソートした後は、ソース上はこの番号を付け直していない</strong>点に注意</td></tr>
   </tbody>
@@ -289,12 +289,13 @@ flowchart TB
     <tr><td>1</td><td><span class="mono">due_basis_date</span></td><td>計画基準納期（無ければ <span class="mono">date.max</span>）</td></tr>
     <tr><td>2</td><td>機械名正規化キー</td><td><span class="mono">machine_name</span></td></tr>
     <tr><td>3</td><td>依頼NOタイブレーク</td><td><span class="mono">_task_id_same_machine_due_tiebreak_key</span></td></tr>
-    <tr><td>4</td><td><span class="mono">process_sequence_rank</span></td><td><span class="mono">加工内容</span>から算出した工程順</td></tr>
-    <tr><td>5</td><td><span class="mono">same_request_line_seq</span></td><td>同一依頼NO内の行順（読込順）</td></tr>
-    <tr><td>6</td><td><span class="mono">dispatch_trial_order</span></td><td>キュー全体の試行順（初回ソート後 enumerate）</td></tr>
-    <tr><td>7</td><td>§B-1 検査フラグ</td><td>検査行を EC 完走前に前へ出さないためのタイブレーク</td></tr>
-    <tr><td>8</td><td>計画シート優先度</td><td><span class="mono">_plan_sheet_priority_sort_value</span></td></tr>
-    <tr><td>9+</td><td><span class="mono">_result_task_sheet_sort_key</span></td><td>結果一覧用の安定ソートキー</td></tr>
+    <tr><td>4</td><td>§B-1 試行順繰り上げ</td><td><span class="mono">roll_pipeline_inspection</span> かつ <span class="mono">in_progress</span> のとき <span class="mono">(0, dispatch_trial_order)</span> を rank より前へ</td></tr>
+    <tr><td>5</td><td><span class="mono">process_sequence_rank</span></td><td><span class="mono">加工内容</span>から算出した工程順</td></tr>
+    <tr><td>6</td><td><span class="mono">same_request_line_seq</span></td><td>同一依頼NO内の行順（読込順）</td></tr>
+    <tr><td>7</td><td><span class="mono">dispatch_trial_order</span></td><td>キュー全体の試行順（初回ソート後 enumerate）</td></tr>
+    <tr><td>8</td><td>§B-2 パイプライン検査</td><td><span class="mono">roll_pipeline_inspection</span> の同帯前倒し（<span class="mono">b2_roll_pipeline_insp_first</span>）</td></tr>
+    <tr><td>9</td><td>計画シート優先度</td><td><span class="mono">_plan_sheet_priority_sort_value</span></td></tr>
+    <tr><td>10+</td><td><span class="mono">_result_task_sheet_sort_key</span></td><td>結果一覧用の安定ソートキー</td></tr>
   </tbody>
 </table>
 <p class="note">
@@ -313,16 +314,17 @@ flowchart TB
   <tbody>
     <tr><td>1</td><td><span class="mono">due_source_rank</span>（グローバルAI基準=0 … 指定納期=6 等）</td></tr>
     <tr><td>2</td><td>完了日指定系オーバーライド（<span class="mono">has_done_deadline_override</span>）</td></tr>
-    <tr><td>3</td><td>加工途中 <span class="mono">in_progress</span></td></tr>
-    <tr><td>4</td><td>§B-1 検査行を前へ</td></tr>
-    <tr><td>5</td><td><span class="mono">priority</span>（シート・AIマージ後）</td></tr>
-    <tr><td>6</td><td><span class="mono">due_urgent</span></td></tr>
-    <tr><td>7</td><td><span class="mono">due_basis_date</span></td></tr>
-    <tr><td>8</td><td>機械名正規化</td></tr>
-    <tr><td>9</td><td>依頼NOタイブレーク</td></tr>
-    <tr><td>10</td><td><span class="mono">start_date_req</span></td></tr>
-    <tr><td>11</td><td><span class="mono">_task_id_priority_key</span></td></tr>
-    <tr><td>12</td><td>必要OPの負符号（大きいほど先）</td></tr>
+    <tr><td>3</td><td><span class="mono">b_tier</span>（0=§B-1 加工途中の熱融着検査、1=§B-2 同パイプライン・未着手、2=その他）</td></tr>
+    <tr><td>4</td><td>§B-1 試行順タイブレーク（<span class="mono">planning_sheet_row_seq</span>）</td></tr>
+    <tr><td>5</td><td>§B 対象外の加工途中 <span class="mono">in_progress</span></td></tr>
+    <tr><td>6</td><td><span class="mono">priority</span>（シート・AIマージ後）</td></tr>
+    <tr><td>7</td><td><span class="mono">due_urgent</span></td></tr>
+    <tr><td>8</td><td><span class="mono">due_basis_date</span></td></tr>
+    <tr><td>9</td><td>機械名正規化</td></tr>
+    <tr><td>10</td><td>依頼NOタイブレーク</td></tr>
+    <tr><td>11</td><td><span class="mono">start_date_req</span></td></tr>
+    <tr><td>12</td><td><span class="mono">_task_id_priority_key</span></td></tr>
+    <tr><td>13</td><td>必要OPの負符号（大きいほど先）</td></tr>
   </tbody>
 </table>
 

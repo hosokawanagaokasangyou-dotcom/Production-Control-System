@@ -761,7 +761,7 @@ TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
     in ("1", "true", "yes", "on", "はい")
 )
 
-# §B-1 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
+# §B-2 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
 # 0 / false / no / off で無効にすると設備時間割上で依頼が混在し得るが、占有による長期ブロック（例: W3-14 型）を避けられる。
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
@@ -9402,7 +9402,7 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
 
 def _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue) -> bool:
     """
-    §B-1: 熱融着検査（ロールパイプライン）は、同一依頼の EC 行の残ロールがすべてゼロになるまで配台しない。
+    §B-2: 熱融着検査（ロールパイプライン）は、同一依頼の EC 行の残ロールがすべてゼロになるまで配台しない。
     EC 行がキューに無い依頼の検査は False（従来どおり need に従う）。
     """
     if not task.get("roll_pipeline_inspection"):
@@ -9425,7 +9425,7 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
     - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
     - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
-    §B-1（熱融着検査×EC）の前後関係は ``_roll_pipeline_inspection_blocked_until_ec_done`` で制御する。
+    §B-2（熱融着検査×EC）の前後関係は ``_roll_pipeline_inspection_blocked_until_ec_done`` で制御する。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -9551,7 +9551,7 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     """
-    同一設備列（equipment_line_key／工程+機械）上で、§B-1 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
+    同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
     そのタスク dict を1件返す（なければ None）。
 
     パイプライン枠で検査を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼の検査** が同じ設備に入り、
@@ -9591,26 +9591,29 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
 def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: list) -> tuple:
     """
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
-    §B を §A・一般キーより先に効かせるため、B-1（roll_pipeline_inspection）→ B-2（同・加工途中＋試行順土台）
-    → その他の加工途中 → 以降は納期・優先度等。
+    §B を §A・一般キーより先に効かせるため、B-1（roll_pipeline_inspection かつ in_progress＋試行順土台）
+    → B-2（同じく roll_pipeline_inspection だが未着手）→ その他の加工途中 → 以降は納期・優先度等。
     """
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
-    b1 = 0 if rp else 1
-    b2 = (0 if ip else 1) if rp else 1
-    gen_ip = 0 if (not rp and ip) else 1
+    if rp and ip:
+        b_tier = 0  # §B-1
+    elif rp:
+        b_tier = 1  # §B-2 ロールパイプライン検査（未着手）
+    else:
+        b_tier = 2
     try:
         pss = int(task.get("planning_sheet_row_seq") or 0)
     except (TypeError, ValueError):
         pss = 10**9
-    b2_trial = (0, pss) if (rp and ip) else (1, 0)
+    b1_trial = (0, pss) if (rp and ip) else (1, 0)
+    gen_ip = 0 if (not rp and ip) else 1
     return (
         task.get("due_source_rank", 9),
         0 if task.get("has_done_deadline_override") else 1,
-        b1,
-        b2,
+        b_tier,
+        b1_trial,
         gen_ip,
-        b2_trial,
         task["priority"],
         0 if task["due_urgent"] else 1,
         task["due_basis_date"] or date.max,
@@ -9632,8 +9635,8 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
     計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、
-    §B-2（検査+熱融着機湖南かつ加工途中）は配台試行順 dispatch_trial_order を加工内容 rank より先に効かせる。
-    続けて r、行順、dto、§B-1 検査タイブレーク、優先度、結果用ソートキー。
+    §B-1（検査+熱融着機湖南かつ加工途中）は配台試行順 dispatch_trial_order を加工内容 rank より先に効かせる。
+    続けて r、行順、dto、§B-2 ロールパイプライン検査の同帯前倒し（b2_roll_pipeline_insp_first）、優先度、結果用ソートキー。
     同一設備列の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
     dbk = task.get("due_basis_date")
@@ -9650,24 +9653,24 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
         line_seq = int(task.get("same_request_line_seq", 0))
     except (TypeError, ValueError):
         line_seq = 0
-    b1_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
+    b2_roll_pipeline_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
     try:
         dto = int(task.get("dispatch_trial_order") or 10**9)
     except (TypeError, ValueError):
         dto = 10**9
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
-    b2_trial_early = (0, dto) if (rp and ip) else (1, 0)
+    b1_trial_early = (0, dto) if (rp and ip) else (1, 0)
     return (
         (
             dbk,
             mk,
             tb,
-            b2_trial_early,
+            b1_trial_early,
             r,
             line_seq,
             dto,
-            b1_insp_first,
+            b2_roll_pipeline_insp_first,
             _plan_sheet_priority_sort_value(task),
         )
         + _result_task_sheet_sort_key(task)
@@ -10737,7 +10740,7 @@ def generate_plan():
             "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
         )
 
-    # §B-1 → §B-2 → その他加工途中 → 一般キー（§B を §A より先にソートキーへ反映）
+    # §B-1（加工途中の熱融着検査＋試行順）→ §B-2（同パイプライン・未着手）→ その他加工途中 → 一般キー
     task_queue.sort(
         key=lambda x: _generate_plan_task_queue_sort_key(x, req_map, need_rules)
     )
@@ -10951,7 +10954,7 @@ def generate_plan():
                                     and x.get("roll_pipeline_ec")
                                 )
                                 logging.info(
-                                    "[配台トレース task=%s] スキップ: §B-1 EC完走待ち（検査開始前にEC残をゼロに） "
+                                    "[配台トレース task=%s] スキップ: §B-2 EC完走待ち（検査開始前にEC残をゼロに） "
                                     "day=%s machine=%s ec残合計R=%.4f rem_insp=%.4f",
                                     task.get("task_id"),
                                     current_date,
@@ -10973,7 +10976,7 @@ def generate_plan():
                                     task_queue, _tid_tr
                                 )
                                 logging.info(
-                                    "[配台トレース task=%s] スキップ: §B-1 検査ロール枠ゼロ day=%s machine=%s "
+                                    "[配台トレース task=%s] スキップ: §B-2 検査ロール枠ゼロ day=%s machine=%s "
                                     "ec累計完了R=%.4f insp累計完了R=%.4f rem_insp=%.4f",
                                     _tid_tr,
                                     current_date,
