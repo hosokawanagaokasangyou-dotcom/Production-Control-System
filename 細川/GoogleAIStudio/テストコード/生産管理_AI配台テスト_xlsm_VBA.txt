@@ -14,6 +14,7 @@ Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
 Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
+Private Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
 Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
@@ -58,6 +59,7 @@ Private m_lastRefreshQueriesErrMsg As String
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
 ' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（MsgBox なし）
+' 段階2 取り込み成功時は Finish で「結果_設備毎の時間割」を B2 アクティブ・窓枠固定（1行目・A列）にする
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
@@ -950,6 +952,20 @@ Private Sub 結果シート_メインへ戻るリンクを付与(ByVal ws As Wor
         .HorizontalAlignment = xlRight
     End With
 End Sub
+
+' 段階2 完了時: 結果_設備毎の時間割 を表示し B2 を選択、1行目と A 列を窓枠固定。シートが無ければ False。
+Private Function 結果_設備毎の時間割_B2選択して窓枠固定() As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_RESULT_EQUIP_SCHEDULE)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    ws.Activate
+    ActiveWindow.FreezePanes = False
+    ws.Range("B2").Select
+    ActiveWindow.FreezePanes = True
+    結果_設備毎の時間割_B2選択して窓枠固定 = True
+End Function
 
 ' 結果_設備ガント：取り込み直後に列幅を設定（Python 本体では列幅を書かない）
 Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
@@ -2960,7 +2976,13 @@ Finish:
     Application.ScreenUpdating = prevScreenUpdating
     
     On Error Resume Next
-    メインシートA1を選択
+    If planImported Then
+        If Not 結果_設備毎の時間割_B2選択して窓枠固定() Then
+            メインシートA1を選択
+        End If
+    Else
+        メインシートA1を選択
+    End If
     On Error GoTo 0
     
     On Error Resume Next
