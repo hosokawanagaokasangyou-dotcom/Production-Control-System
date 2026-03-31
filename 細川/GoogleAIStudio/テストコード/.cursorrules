@@ -27,4 +27,8 @@ Generate commit messages in Japanese only. Never use English-only commit message
 
 ## Git: ソース変更前のローカルコミット
 
-リポジトリ直下の **`.cursorrules`** と **`.cursor/rules/pre-edit-git-commit-push.mdc`** と同じ。**ソース変更前**にローカル `git commit`（クリーンなら省略）。メッセージは **チャット入力の先頭 300 文字**。`git push` は自動しない。
+正本: リポジトリ直下 **`.cursor/rules/pre-edit-git-commit-push.mdc`**（`alwaysApply: true`）。
+
+- **ローカルコミットは、ソースコード等の変更前に実行する**（編集ツール使用前に `git status` → 対象があればコミット。作業ツリーがクリーンなら省略）。
+- **コミットメッセージは、そのターンのユーザーのチャットメッセージの先頭から最大 300 文字**とする。
+- **`git push` は自動では実行しない**。
