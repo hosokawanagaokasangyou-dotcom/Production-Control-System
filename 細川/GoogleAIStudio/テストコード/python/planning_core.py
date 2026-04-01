@@ -266,6 +266,8 @@ GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
 # ---------------------------------------------------------------------------
 
 MASTER_FILE = "master.xlsm" # skillsとattendance(およびtasks)を統合したファイル
+# VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
+MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
 # 勤怠AIの入力は備考のみ。ただし reason（表示・中抜け補正・個人シートの休憩/休暇文言）は、備考が空のとき休暇区分を引き継ぐ。
 # master カレンダー／出勤簿.txt 準拠: 前休=午前年休・12:45～17:00（午後休憩14:45～15:00）／後休=8:45～12:00・午後年休／国=他拠点勤務。
@@ -786,6 +788,23 @@ TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
     .strip()
     .lower()
     in ("1", "true", "yes", "on", "はい")
+)
+
+# True（既定）: メイン配台の必要人数は need（基本必要人数＋特別指定）のみ。
+# 計画シート「必要人数」は headcount に使わない（参照列の表示用に残る）。
+TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY = (
+    os.environ.get("TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ")
+)
+# True（既定）: master「組み合わせ表」に該当行がある工程+機械は、組合せ優先度の昇順で
+# 最初に成立したメンバー編成を採用。すべて不可なら従来の itertools 組合せ探索。
+TEAM_ASSIGN_USE_MASTER_COMBO_SHEET = (
+    os.environ.get("TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ")
 )
 
 # §B-2 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
@@ -8813,6 +8832,75 @@ def load_skills_and_needs():
         logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
         return {}, [], [], {}, [], {}
 
+
+def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tuple[str, ...]]]]:
+    """
+    master.xlsm「組み合わせ表」を読み、工程+機械キーごとに
+    [(組合せ優先度, メンバータプル), ...] を返す。同一キー内は優先度昇順、同順位はシート上の行順。
+    """
+    if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
+        return {}
+    path = MASTER_FILE
+    if not os.path.isfile(path):
+        return {}
+    try:
+        df = pd.read_excel(path, sheet_name=MASTER_SHEET_TEAM_COMBINATIONS, header=0)
+    except Exception as e:
+        logging.info("組み合わせ表シートの読込をスキップします: %s", e)
+        return {}
+    if df is None or df.empty:
+        return {}
+
+    def norm_cell(x) -> str:
+        if x is None or (isinstance(x, float) and pd.isna(x)):
+            return ""
+        return str(x).strip()
+
+    colmap = {norm_cell(c): c for c in df.columns if norm_cell(c)}
+    proc_c = colmap.get("工程名")
+    mach_c = colmap.get("機械名")
+    combo_c = colmap.get("工程+機械")
+    prio_c = colmap.get("組合せ優先度")
+
+    def mem_col_order(c) -> int:
+        m = re.search(r"メンバー\s*(\d+)", norm_cell(c))
+        return int(m.group(1)) if m else 9999
+
+    mem_keys = sorted(
+        [c for c in df.columns if norm_cell(str(c)).startswith("メンバー")],
+        key=mem_col_order,
+    )
+    buckets: dict[str, list[tuple[int, int, tuple[str, ...]]]] = defaultdict(list)
+    for row_i, (_, row) in enumerate(df.iterrows()):
+        proc = norm_cell(row.get(proc_c)) if proc_c else ""
+        mach = norm_cell(row.get(mach_c)) if mach_c else ""
+        combo_cell = norm_cell(row.get(combo_c)) if combo_c else ""
+        if proc and mach:
+            key = f"{proc}+{mach}"
+        elif combo_cell:
+            key = combo_cell
+        else:
+            continue
+        pr = parse_optional_int(row.get(prio_c)) if prio_c else None
+        if pr is None:
+            pr = 10**9
+        team: list[str] = []
+        for mc in mem_keys:
+            s = norm_cell(row.get(mc))
+            if not s or s.lower() in ("nan", "none", "null"):
+                continue
+            team.append(s)
+        if not team:
+            continue
+        buckets[key].append((pr, row_i, tuple(team)))
+
+    out: dict[str, list[tuple[int, tuple[str, ...]]]] = {}
+    for key, lst in buckets.items():
+        lst.sort(key=lambda x: (x[0], x[1]))
+        out[key] = [(t[0], t[2]) for t in lst]
+    return out
+
+
 def generate_default_calendar_dates(year, month):
     cal = calendar.Calendar()
     return [d for d in cal.itermonthdates(year, month) if d.year == year and d.month == month and d.weekday() < 5]
@@ -10041,6 +10129,105 @@ def _trial_order_flow_eligible_tasks(
     return out
 
 
+def _plan_sheet_required_op_optional(task: dict) -> int | None:
+    """加工計画の必要人数列が正の整数ならその値。無効なら None。"""
+    ro = task.get("required_op")
+    if ro is None or (isinstance(ro, float) and pd.isna(ro)):
+        return None
+    try:
+        n = int(ro)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 else None
+
+
+def _append_legacy_dispatch_candidate_for_team(
+    task: dict,
+    team: tuple,
+    avail_dt: dict,
+    machine_avail_dt: dict,
+    daily_status: dict,
+    current_date: date,
+    macro_run_date: date,
+    macro_now_dt: datetime,
+    skill_role_priority,
+    eq_line: str,
+    rq_base: int,
+    extra_max: int,
+    global_priority_override: dict,
+    team_candidates: list,
+) -> bool:
+    """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
+    _gpo = global_priority_override or {}
+    op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
+    if not op_list:
+        return False
+    team_start = max(avail_dt[m] for m in team)
+    if not _gpo.get("abolish_all_scheduling_limits"):
+        machine_free_dt = machine_avail_dt.get(
+            eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+        )
+        if team_start < machine_free_dt:
+            team_start = machine_free_dt
+        if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
+            min_start_dt = datetime.combine(
+                current_date, task["same_day_raw_start_limit"]
+            )
+            if team_start < min_start_dt:
+                team_start = min_start_dt
+        if current_date == task["start_date_req"] and task.get("earliest_start_time"):
+            min_user_t = datetime.combine(
+                current_date, task["earliest_start_time"]
+            )
+            if team_start < min_user_t:
+                team_start = min_user_t
+        if current_date == macro_run_date and team_start < macro_now_dt:
+            team_start = macro_now_dt
+    team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+    if team_start >= team_end_limit:
+        return False
+    team_breaks = []
+    for m in team:
+        team_breaks.extend(daily_status[m]["breaks_dt"])
+    team_breaks = merge_time_intervals(team_breaks)
+    avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
+    if avg_eff <= 0:
+        avg_eff = 0.01
+    t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+    if t_eff <= 0:
+        t_eff = 1.0
+    eff_time_per_unit = (
+        task["base_time_per_unit"]
+        / avg_eff
+        / t_eff
+        * _surplus_team_time_factor(rq_base, len(team), extra_max)
+    )
+    _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
+    units_can_do = int(avail_mins / eff_time_per_unit)
+    if units_can_do == 0:
+        return False
+    units_today = min(units_can_do, math.ceil(task["remaining_units"]))
+    work_mins_needed = int(units_today * eff_time_per_unit)
+    actual_end_dt, _, _ = calculate_end_time(
+        team_start, work_mins_needed, team_breaks, team_end_limit
+    )
+    team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
+    team_candidates.append(
+        {
+            "team": team,
+            "team_start": team_start,
+            "actual_end_dt": actual_end_dt,
+            "units_today": units_today,
+            "team_breaks": team_breaks,
+            "avg_eff": avg_eff,
+            "prio_sum": team_prio_sum,
+            "op_list": op_list,
+            "eff_time_per_unit": eff_time_per_unit,
+        }
+    )
+    return True
+
+
 def _assign_one_roll_trial_order_flow(
     task: dict,
     current_date: date,
@@ -10058,6 +10245,7 @@ def _assign_one_roll_trial_order_flow(
     macro_now_dt: datetime,
     preferred_team: tuple | None,
     _need_headcount_logged_orders: set,
+    team_combo_presets: dict | None = None,
 ) -> dict | None:
     """
     1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
@@ -10070,12 +10258,9 @@ def _assign_one_roll_trial_order_flow(
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
     _gpo = global_priority_override or {}
 
-    ro = task.get("required_op")
+    plan_ro = _plan_sheet_required_op_optional(task)
     need_src_line = ""
-    if ro is not None and int(ro) >= 1:
-        req_num = int(ro)
-        need_src_line = f"計画シート「必要OP(上書)」={req_num}"
-    else:
+    if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
         req_num, need_src_line = resolve_need_required_op_explain(
             machine,
             machine_name,
@@ -10083,6 +10268,21 @@ def _assign_one_roll_trial_order_flow(
             req_map,
             need_rules,
         )
+        if plan_ro is not None and plan_ro != req_num:
+            need_src_line = (need_src_line + "；") if need_src_line else ""
+            need_src_line += f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
+    else:
+        if plan_ro is not None:
+            req_num = plan_ro
+            need_src_line = f"計画シート「必要OP(上書)」={req_num}"
+        else:
+            req_num, need_src_line = resolve_need_required_op_explain(
+                machine,
+                machine_name,
+                task["task_id"],
+                req_map,
+                need_rules,
+            )
     if _gpo.get("ignore_need_minimum"):
         req_num = 1
         need_src_line = (
@@ -10247,6 +10447,41 @@ def _assign_one_roll_trial_order_flow(
                     "max_team_size": max_team_size,
                 }
 
+    combo_key = (
+        f"{machine_proc}+{machine_name}"
+        if machine_proc and machine_name
+        else ""
+    )
+    preset_rows = (
+        (team_combo_presets or {}).get(combo_key)
+        if (team_combo_presets and combo_key)
+        else None
+    )
+    if preset_rows:
+        for _prio, preset_team in preset_rows:
+            if len(preset_team) < req_num or len(preset_team) > max_team_size:
+                continue
+            if pref_mem is not None and pref_mem not in preset_team:
+                continue
+            if not all(m in capable_members for m in preset_team):
+                continue
+            if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
+                continue
+            got = _one_roll_from_team(tuple(preset_team))
+            if got is not None:
+                return {
+                    **got,
+                    "extra_max": extra_max,
+                    "rq_base": rq_base,
+                    "need_src_line": need_src_line,
+                    "extra_src_line": extra_src_line,
+                    "machine": machine,
+                    "machine_name": machine_name,
+                    "eq_line": eq_line,
+                    "req_num": req_num,
+                    "max_team_size": max_team_size,
+                }
+
     team_candidates: list[dict] = []
     for tsize in range(req_num, max_team_size + 1):
         if (
@@ -10317,6 +10552,7 @@ def _trial_order_first_schedule_pass(
     macro_run_date: date,
     macro_now_dt: datetime,
     _need_headcount_logged_orders: set,
+    team_combo_presets: dict | None = None,
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並べ、先頭から順に「1 ロールずつ」を詰める（1 パス分）。
@@ -10356,6 +10592,7 @@ def _trial_order_first_schedule_pass(
                 macro_now_dt,
                 preferred_team,
                 _need_headcount_logged_orders,
+                team_combo_presets,
             )
             if res is None:
                 break
@@ -10544,29 +10781,7 @@ def append_surplus_staff_after_main_dispatch(
         machine_name = str(task.get("machine_name") or "").strip()
         tid = str(task.get("task_id") or "").strip()
 
-        ro = task.get("required_op")
-        if ro is not None:
-            try:
-                riv = int(ro)
-                if riv >= 1:
-                    req_num = riv
-                else:
-                    req_num = resolve_need_required_op(
-                        str(machine or "").strip(),
-                        machine_name,
-                        tid,
-                        req_map,
-                        need_rules,
-                    )
-            except (TypeError, ValueError):
-                req_num = resolve_need_required_op(
-                    str(machine or "").strip(),
-                    machine_name,
-                    tid,
-                    req_map,
-                    need_rules,
-                )
-        else:
+        if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
             req_num = resolve_need_required_op(
                 str(machine or "").strip(),
                 machine_name,
@@ -10574,6 +10789,37 @@ def append_surplus_staff_after_main_dispatch(
                 req_map,
                 need_rules,
             )
+        else:
+            ro = task.get("required_op")
+            if ro is not None:
+                try:
+                    riv = int(ro)
+                    if riv >= 1:
+                        req_num = riv
+                    else:
+                        req_num = resolve_need_required_op(
+                            str(machine or "").strip(),
+                            machine_name,
+                            tid,
+                            req_map,
+                            need_rules,
+                        )
+                except (TypeError, ValueError):
+                    req_num = resolve_need_required_op(
+                        str(machine or "").strip(),
+                        machine_name,
+                        tid,
+                        req_map,
+                        need_rules,
+                    )
+            else:
+                req_num = resolve_need_required_op(
+                    str(machine or "").strip(),
+                    machine_name,
+                    tid,
+                    req_map,
+                    need_rules,
+                )
         if gpo.get("ignore_need_minimum"):
             req_num = 1
 
@@ -10670,6 +10916,18 @@ def generate_plan():
     skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
         load_skills_and_needs()
     )
+    team_combo_presets = load_team_combination_presets_from_master()
+    if team_combo_presets:
+        _nrules = sum(len(v) for v in team_combo_presets.values())
+        logging.info(
+            "組み合わせ表: 工程+機械キー %s 種類・編成行 %s を配台プリセットとして読み込みました。",
+            len(team_combo_presets),
+            _nrules,
+        )
+    elif TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
+        logging.info(
+            "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のチーム探索のみ。"
+        )
     if not members:
         master_abs = os.path.abspath(MASTER_FILE)
         logging.error(
@@ -11078,6 +11336,7 @@ def generate_plan():
                         macro_run_date,
                         macro_now_dt,
                         _need_headcount_logged_orders,
+                        team_combo_presets,
                     )
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     for task in sorted(
@@ -11200,19 +11459,37 @@ def generate_plan():
                                     _my_dispatch_ord,
                                 )
                             continue
-                        ro = task.get("required_op")
+                        machine_name = str(task.get("machine_name", "") or "").strip()
+                        machine_proc = str(machine or "").strip()
+                        plan_ro = _plan_sheet_required_op_optional(task)
                         need_src_line = ""
-                        if ro is not None and int(ro) >= 1:
-                            req_num = int(ro)
-                            need_src_line = f"計画シート「必要OP(上書)」={req_num}"
-                        else:
+                        if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
                             req_num, need_src_line = resolve_need_required_op_explain(
                                 machine,
-                                task.get("machine_name", ""),
+                                machine_name,
                                 task["task_id"],
                                 req_map,
                                 need_rules,
                             )
+                            if plan_ro is not None and plan_ro != req_num:
+                                need_src_line = (
+                                    (need_src_line + "；") if need_src_line else ""
+                                )
+                                need_src_line += (
+                                    f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
+                                )
+                        else:
+                            if plan_ro is not None:
+                                req_num = plan_ro
+                                need_src_line = f"計画シート「必要OP(上書)」={req_num}"
+                            else:
+                                req_num, need_src_line = resolve_need_required_op_explain(
+                                    machine,
+                                    machine_name,
+                                    task["task_id"],
+                                    req_map,
+                                    need_rules,
+                                )
                         if global_priority_override.get("ignore_need_minimum"):
                             req_num = 1
                             need_src_line = (
@@ -11225,8 +11502,6 @@ def generate_plan():
                         # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
                         # 複合キー「工程名+機械名」のみを見る（別工程の同名機械の OP が流れ込まないようにする）。
                         skill_meta_cache = {}
-                        machine_name = str(task.get("machine_name", "") or "").strip()
-                        machine_proc = str(machine or "").strip()
                         _gpo = global_priority_override
     
                         def skill_role_priority(mem):
@@ -11352,8 +11627,48 @@ def generate_plan():
                             )
     
                         team_candidates: list[dict] = []
+                        combo_key = (
+                            f"{machine_proc}+{machine_name}"
+                            if machine_proc and machine_name
+                            else ""
+                        )
+                        preset_rows = (
+                            (team_combo_presets or {}).get(combo_key)
+                            if (team_combo_presets and combo_key)
+                            else None
+                        )
+                        preset_matched = False
+                        if preset_rows:
+                            for _prio, preset_team in preset_rows:
+                                pteam = tuple(preset_team)
+                                if len(pteam) < req_num or len(pteam) > max_team_size:
+                                    continue
+                                if pref_mem is not None and pref_mem not in pteam:
+                                    continue
+                                if not all(m in capable_members for m in pteam):
+                                    continue
+                                if _append_legacy_dispatch_candidate_for_team(
+                                    task,
+                                    pteam,
+                                    avail_dt,
+                                    machine_avail_dt,
+                                    daily_status,
+                                    current_date,
+                                    macro_run_date,
+                                    macro_now_dt,
+                                    skill_role_priority,
+                                    eq_line,
+                                    rq_base,
+                                    extra_max,
+                                    global_priority_override,
+                                    team_candidates,
+                                ):
+                                    preset_matched = True
+                                    break
     
                         for tsize in range(req_num, max_team_size + 1):
+                            if preset_matched:
+                                break
                             if (
                                 pref_mem is not None
                                 and pref_mem in capable_members
