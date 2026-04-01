@@ -9980,6 +9980,67 @@ def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: li
     )
 
 
+def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
+    """
+    §B-2: 同一 task_id の `roll_pipeline_ec` 行の直後に、対応する未着手 `roll_pipeline_inspection` を隣接させる。
+
+    `_generate_plan_task_queue_sort_key` では b_tier=1 帯で EC を未着手検査より先にまとめるが、
+    帯内の他キー（納期・優先度等）により「全 EC が先・全検査が後」に見えることがある。
+    結果シートの「配台試行順番」は依頼ごとに EC→検査の連番に揃える。
+    """
+    if len(task_queue) < 2:
+        return
+    moved_tids: list[str] = []
+    n_rounds = 0
+    max_rounds = max(len(task_queue) * 4, 8)
+    while n_rounds < max_rounds:
+        n_rounds += 1
+        by_tid: dict = {}
+        for t in task_queue:
+            tid = str(t.get("task_id") or "").strip()
+            if not tid:
+                continue
+            if t.get("roll_pipeline_ec"):
+                by_tid.setdefault(tid, {})["ec"] = t
+            if t.get("roll_pipeline_inspection") and not t.get("in_progress"):
+                by_tid.setdefault(tid, {})["insp"] = t
+        pairs = []
+        for tid, d in by_tid.items():
+            ec_t, insp_t = d.get("ec"), d.get("insp")
+            if ec_t is not None and insp_t is not None:
+                pairs.append((tid, ec_t, insp_t))
+        if not pairs:
+            break
+        pairs.sort(key=lambda x: task_queue.index(x[1]))
+        moved = False
+        for tid, ec_task, insp_task in pairs:
+            try:
+                ie = task_queue.index(ec_task)
+                ii = task_queue.index(insp_task)
+            except ValueError:
+                continue
+            if ii == ie + 1:
+                continue
+            if ii > ie:
+                task_queue.pop(ii)
+                ie = task_queue.index(ec_task)
+                task_queue.insert(ie + 1, insp_task)
+            else:
+                task_queue.pop(ie)
+                ii = task_queue.index(insp_task)
+                task_queue.insert(ii, ec_task)
+            moved_tids.append(tid)
+            moved = True
+            break
+        if not moved:
+            break
+    if moved_tids:
+        logging.info(
+            "§B-2 配台試行順: EC と未着手検査を隣接した依頼NO（配台試行順番を依頼内連番に揃える）: %s",
+            ",".join(moved_tids),
+        )
+
+
 def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     """
     同一日内の割付試行順。
@@ -11370,6 +11431,7 @@ def generate_plan():
     task_queue.sort(
         key=lambda x: _generate_plan_task_queue_sort_key(x, req_map, need_rules)
     )
+    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     # 配台試行順: 日次ループ前・ソート済みキューの並び（初回割当の成否とは無関係）
     for _trial_ord, _tq in enumerate(task_queue, start=1):
         _tq["dispatch_trial_order"] = _trial_ord
@@ -12384,6 +12446,7 @@ def generate_plan():
                                     x, req_map, need_rules
                                 )
                             )
+                            _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
                             _trials_detail = ",".join(
                                 f"{tid}:{_due_shift_retry_count_by_request[tid]}"
                                 for tid in sorted(allowed_shift_tids)
