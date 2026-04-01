@@ -1100,6 +1100,41 @@ Private Function SkillComboRowGroupKey(ByVal ws As Worksheet, ByVal dataRow As L
     End If
 End Function
 
+Private Sub SkillComboApplyGridBorders(ByVal rng As Range)
+    Dim brColor As Long
+    brColor = RGB(180, 180, 180)
+    With rng.Borders(xlEdgeLeft)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+    With rng.Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+    With rng.Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+    With rng.Borders(xlEdgeRight)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+    With rng.Borders(xlInsideVertical)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+    With rng.Borders(xlInsideHorizontal)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = brColor
+    End With
+End Sub
+
 Private Sub ApplySkillCombinationSheetFormat(ByVal ws As Worksheet, ByVal maxReq As Long)
     Dim lastCol As Long
     Dim lastRow As Long
@@ -1161,6 +1196,7 @@ Private Sub ApplySkillCombinationSheetFormat(ByVal ws As Worksheet, ByVal maxReq
     
     Set bodyRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
     bodyRange.Columns.AutoFit
+    Call SkillComboApplyGridBorders(bodyRange)
 End Sub
 
 Private Function EnsureSkillCombinationSheetAfterSkills(ByVal wb As Workbook, ByVal wsSkills As Worksheet, ByRef wsOut As Worksheet) As Boolean
