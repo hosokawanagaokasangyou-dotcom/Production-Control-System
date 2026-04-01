@@ -59,7 +59,7 @@ Private m_lastRefreshQueriesErrMsg As String
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
 ' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（MsgBox なし）
-' 段階2 取り込み成功時は Finish で「結果_設備毎の時間割」を B2 アクティブ・窓枠固定（1行目・A列）にする
+' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 70% にし、「結果_設備毎の時間割」で B2・窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
@@ -966,6 +966,23 @@ Private Function 結果_設備毎の時間割_B2選択して窓枠固定() As Bo
     ActiveWindow.FreezePanes = True
     結果_設備毎の時間割_B2選択して窓枠固定 = True
 End Function
+
+' 段階2 完了間際: 名前が「結果_」で始まるシートの表示倍率を指定％にする（各シートを一度アクティブにして ActiveWindow.Zoom を設定）
+Private Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
+    Dim ws As Worksheet
+    Dim prevScr As Boolean
+    prevScr = Application.ScreenUpdating
+    On Error Resume Next
+    Application.ScreenUpdating = False
+    For Each ws In wb.Worksheets
+        If Left$(ws.Name, 3) = "結果_" Then
+            ws.Activate
+            ActiveWindow.Zoom = zoomPercent
+        End If
+    Next ws
+    On Error GoTo 0
+    Application.ScreenUpdating = prevScr
+End Sub
 
 ' 結果_設備ガント：取り込み直後に列幅を設定（Python 本体では列幅を書かない）
 Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
@@ -2597,6 +2614,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim newSheetName As String
     Dim planImported As Boolean
     Dim memberImported As Boolean
+    Dim zSt2EquipFreeze As Boolean
     Dim warnRow2 As Long
     Dim preserved As Collection
     Dim logStartRow As Long
@@ -2977,12 +2995,10 @@ Finish:
     
     On Error Resume Next
     If planImported Then
-        If Not 結果_設備毎の時間割_B2選択して窓枠固定() Then
-            メインシートA1を選択
-        End If
-    Else
-        メインシートA1を選択
+        結果プレフィックスシートの表示倍率を設定 ThisWorkbook, 70
+        zSt2EquipFreeze = 結果_設備毎の時間割_B2選択して窓枠固定()
     End If
+    メインシートA1を選択
     On Error GoTo 0
     
     On Error Resume Next
