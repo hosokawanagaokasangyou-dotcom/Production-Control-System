@@ -7811,6 +7811,19 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
+# 終業直前・休憩直前に「まだロールが残る」タスクを詰めない（休憩終了後へ繰り下げ、当日終業間際は翌日へ）
+# 0 にすると本ルール無効
+ASSIGN_DEFER_MIN_REMAINING_ROLLS = max(
+    0, int(os.environ.get("ASSIGN_DEFER_MIN_REMAINING_ROLLS", "3").strip() or 0)
+)
+ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES = max(
+    0,
+    int(os.environ.get("ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES", "15").strip() or 0),
+)
+ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
+    0,
+    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "25").strip() or 0),
+)
 
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
@@ -7829,6 +7842,56 @@ def merge_time_intervals(intervals):
         else:
             merged.append((current_start, current_end))
     return merged
+
+
+def _defer_team_start_past_prebreak_and_end_of_day(
+    task: dict,
+    team: tuple,
+    team_start: datetime,
+    team_end_limit: datetime,
+    team_breaks: list,
+    refloor_fn,
+) -> datetime | None:
+    """
+    残ロールが ASSIGN_DEFER_MIN_REMAINING_ROLLS 以上のとき:
+    - 次の休憩開始までが ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES 分以内なら開始を休憩終了後へ繰り下げ（refloor_fn を再適用）
+    - 勤務終了までが ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内なら当日は不可（None → 翌日等で再試行）
+    """
+    if ASSIGN_DEFER_MIN_REMAINING_ROLLS <= 0:
+        return team_start
+    rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
+    if rem_ceil < ASSIGN_DEFER_MIN_REMAINING_ROLLS:
+        return team_start
+
+    gap_pre = float(ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES)
+    gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
+
+    ts = refloor_fn(team_start)
+    for _ in range(32):
+        if ts >= team_end_limit:
+            return None
+        if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
+            return None
+        progressed = False
+        for bs, be in team_breaks:
+            if be <= ts:
+                continue
+            if bs <= ts < be:
+                ts = refloor_fn(be)
+                progressed = True
+                break
+            if bs > ts:
+                if gap_pre > 0 and (bs - ts).total_seconds() / 60.0 <= gap_pre:
+                    ts = refloor_fn(be)
+                    progressed = True
+                break
+        if not progressed:
+            break
+    if ts >= team_end_limit:
+        return None
+    if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
+        return None
+    return ts
 
 
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
@@ -10227,6 +10290,45 @@ def _append_legacy_dispatch_candidate_for_team(
     for m in team:
         team_breaks.extend(daily_status[m]["breaks_dt"])
     team_breaks = merge_time_intervals(team_breaks)
+
+    def _refloor_legacy_roll(ts: datetime) -> datetime:
+        ts = max(ts, max(avail_dt[m] for m in team))
+        if not _gpo.get("abolish_all_scheduling_limits"):
+            machine_free_dt = machine_avail_dt.get(
+                eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+            )
+            if ts < machine_free_dt:
+                ts = machine_free_dt
+            if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
+                min_start_dt = datetime.combine(
+                    current_date, task["same_day_raw_start_limit"]
+                )
+                if ts < min_start_dt:
+                    ts = min_start_dt
+            if current_date == task["start_date_req"] and task.get("earliest_start_time"):
+                min_user_t = datetime.combine(
+                    current_date, task["earliest_start_time"]
+                )
+                if ts < min_user_t:
+                    ts = min_user_t
+            if current_date == macro_run_date and ts < macro_now_dt:
+                ts = macro_now_dt
+        return ts
+
+    team_start_adj = _defer_team_start_past_prebreak_and_end_of_day(
+        task,
+        team,
+        team_start,
+        team_end_limit,
+        team_breaks,
+        _refloor_legacy_roll,
+    )
+    if team_start_adj is None:
+        return False
+    team_start = team_start_adj
+    if team_start >= team_end_limit:
+        return False
+
     avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
     if avg_eff <= 0:
         avg_eff = 0.01
@@ -10433,6 +10535,31 @@ def _assign_one_roll_trial_order_flow(
         for m in team:
             team_breaks.extend(daily_status[m]["breaks_dt"])
         team_breaks = merge_time_intervals(team_breaks)
+
+        def _refloor_trial_roll(ts: datetime) -> datetime:
+            ts = max(ts, max(avail_dt[m] for m in team))
+            if not _gpo.get("abolish_all_scheduling_limits"):
+                mf = machine_avail_dt.get(eq_line, machine_day_floor)
+                if ts < mf:
+                    ts = mf
+                if ts < day_floor:
+                    ts = day_floor
+            return ts
+
+        team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
+            task,
+            team,
+            team_start,
+            team_end_limit,
+            team_breaks,
+            _refloor_trial_roll,
+        )
+        if team_start_d is None:
+            return None
+        team_start = team_start_d
+        if team_start >= team_end_limit:
+            return None
+
         avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
         if avg_eff <= 0:
             avg_eff = 0.01
@@ -11783,6 +11910,56 @@ def generate_plan():
                                 for m in team:
                                     team_breaks.extend(daily_status[m]['breaks_dt'])
                                 team_breaks = merge_time_intervals(team_breaks)
+    
+                                def _refloor_legacy_inline(ts):
+                                    ts = max(ts, max(avail_dt[m] for m in team))
+                                    if not _gpo.get("abolish_all_scheduling_limits"):
+                                        _mfd = machine_avail_dt.get(
+                                            eq_line,
+                                            datetime.combine(
+                                                current_date, DEFAULT_START_TIME
+                                            ),
+                                        )
+                                        if ts < _mfd:
+                                            ts = _mfd
+                                        if task.get(
+                                            "same_day_raw_start_limit"
+                                        ) and current_date == task["start_date_req"]:
+                                            _msd = datetime.combine(
+                                                current_date,
+                                                task["same_day_raw_start_limit"],
+                                            )
+                                            if ts < _msd:
+                                                ts = _msd
+                                        if current_date == task[
+                                            "start_date_req"
+                                        ] and task.get("earliest_start_time"):
+                                            _mut = datetime.combine(
+                                                current_date,
+                                                task["earliest_start_time"],
+                                            )
+                                            if ts < _mut:
+                                                ts = _mut
+                                        if (
+                                            current_date == macro_run_date
+                                            and ts < macro_now_dt
+                                        ):
+                                            ts = macro_now_dt
+                                    return ts
+    
+                                _ts_adj = _defer_team_start_past_prebreak_and_end_of_day(
+                                    task,
+                                    tuple(team),
+                                    team_start,
+                                    team_end_limit,
+                                    team_breaks,
+                                    _refloor_legacy_inline,
+                                )
+                                if _ts_adj is None:
+                                    continue
+                                team_start = _ts_adj
+                                if team_start >= team_end_limit:
+                                    continue
     
                                 avg_eff = sum(daily_status[m]['efficiency'] for m in team) / len(team)
                                 if avg_eff <= 0:
