@@ -821,8 +821,8 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
-# 配完_加工終了が計画基準納期当日の PLAN_DUE_DAY_COMPLETION_TIME 以前かを表示
-RESULT_TASK_COL_PLAN_END_BY_BASIS_16 = "配完_基準16時まで"
+# 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
+RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配完_回答指定16時まで"
 # マスタ skills の工程+機械列ごとの OP/AS 割当参考順（優先度値・氏名順）とチーム採用ルールの説明
 RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
@@ -2846,7 +2846,7 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "加工開始日",
         "配完_加工開始",
         "配完_加工終了",
-        RESULT_TASK_COL_PLAN_END_BY_BASIS_16,
+        RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
         "総加工量",
         "残加工量",
         "完了率(実行時点)",
@@ -2871,27 +2871,38 @@ def _task_date_key_for_result_sheet_sort(val):
         return date.max
 
 
-def _result_task_plan_end_within_basis_16_label(
-    plan_window: list | None, basis_date
+def _coerce_planning_date_for_deadline(d) -> date | None:
+    """回答納期・指定納期などを date に正規化（欠損は None）。"""
+    if d is None:
+        return None
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, date):
+        return d
+    return None
+
+
+def _result_task_plan_end_within_answer_or_spec_16_label(
+    plan_window: list | None, answer_due, specified_due
 ) -> str:
     """
-    結果_タスク一覧用: 「配完_加工終了」相当の最終終了時刻が、
-    計画基準納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを短文で返す。
+    結果_タスク一覧用: 「配完_加工終了」相当の最終終了が、
+    回答納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを判定。
+    回答納期が無い行は指定納期の日付 + 16:00 で判定。
+    両方無い場合は「納期なし」。
     """
     if not plan_window or len(plan_window) < 2:
         return "未割当"
     _pe = plan_window[1]
     if _pe is None:
         return "未割当"
-    bd = basis_date
-    if bd is None:
-        return "基準日なし"
-    if isinstance(bd, datetime):
-        bd = bd.date()
-    if not hasattr(bd, "year"):
-        return "基準日なし"
+    dd = _coerce_planning_date_for_deadline(answer_due)
+    if dd is None:
+        dd = _coerce_planning_date_for_deadline(specified_due)
+    if dd is None:
+        return "納期なし"
     try:
-        deadline_dt = datetime.combine(bd, PLAN_DUE_DAY_COMPLETION_TIME)
+        deadline_dt = datetime.combine(dd, PLAN_DUE_DAY_COMPLETION_TIME)
         if _pe <= deadline_dt:
             return "はい"
         return "いいえ"
@@ -2941,7 +2952,16 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
     s = unicodedata.normalize("NFKC", str(label).strip())
     if not s or s.lower() in ("nan", "none"):
         return None
-    return col_by_norm.get(_nfkc_column_aliases(s))
+    nk = _nfkc_column_aliases(s)
+    resolved = col_by_norm.get(nk)
+    if resolved is not None:
+        return resolved
+    # 旧列名（計画基準納期ベース）→ 配完_回答指定16時まで
+    if nk == _nfkc_column_aliases("配完_基準16時まで"):
+        return col_by_norm.get(
+            _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
+        )
+    return None
 
 
 def _parse_column_visible_cell(val) -> bool:
@@ -11935,8 +11955,10 @@ def generate_plan():
             ans_s = _ans_d.strftime("%Y/%m/%d") if _ans_d else ""
             spec_s = _spec_d.strftime("%Y/%m/%d") if _spec_d else ""
         else:
-            ans_s = t["answer_due_date"].strftime("%Y/%m/%d") if t.get("answer_due_date") else ""
-            spec_s = t["specified_due_date"].strftime("%Y/%m/%d") if t.get("specified_due_date") else ""
+            _ans_d = t.get("answer_due_date")
+            _spec_d = t.get("specified_due_date")
+            ans_s = _ans_d.strftime("%Y/%m/%d") if _ans_d else ""
+            spec_s = _spec_d.strftime("%Y/%m/%d") if _spec_d else ""
         _basis_for_sheet = t.get("due_basis_date_result_sheet")
         if _basis_for_sheet is None:
             _basis_for_sheet = t.get("due_basis_date")
@@ -11999,8 +12021,8 @@ def generate_plan():
             plan_assign_start_s = ""
             plan_assign_end_s = ""
 
-        _plan_end_basis16 = _result_task_plan_end_within_basis_16_label(
-            _pw, _basis_for_sheet
+        _plan_end_ans_spec16 = _result_task_plan_end_within_answer_or_spec_16_label(
+            _pw, _ans_d, _spec_d
         )
 
         row_tail = {
@@ -12017,7 +12039,7 @@ def generate_plan():
             "加工開始日": start_req_s,
             "配完_加工開始": plan_assign_start_s,
             "配完_加工終了": plan_assign_end_s,
-            RESULT_TASK_COL_PLAN_END_BY_BASIS_16: _plan_end_basis16,
+            RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16: _plan_end_ans_spec16,
             "総加工量": f"{total_r}R ({t['total_qty_m']}m)",
             "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
             "完了率(実行時点)": f"{pct_macro}%",
