@@ -24,7 +24,14 @@ def main():
     if not pc.TASKS_INPUT_WORKBOOK:
         print("TASK_INPUT_WORKBOOK が未設定です。VBA からマクロ実行してください。", file=sys.stderr)
         sys.exit(2)
-    ok = pc.run_stage1_extract()
+    try:
+        ok = pc.run_stage1_extract()
+    except pc.PlanningValidationError as e:
+        msg = str(e).strip() or "マスタ skills の検証で中断しました。"
+        if not os.path.isfile(pc.stage2_blocking_message_path):
+            pc._write_stage2_blocking_message(msg)
+        print(msg, file=sys.stderr)
+        sys.exit(3)
     sys.exit(0 if ok else 1)
 
 

@@ -7758,6 +7758,9 @@ def run_stage1_extract():
         ].astype(object)
     try:
         _, _, _, req_map, need_rules, _ = load_skills_and_needs()
+    except PlanningValidationError:
+        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
+        raise
     except Exception as e:
         logging.info("段階1: マスタ need を読めず元列は need なしで埋めます (%s)", e)
         req_map, need_rules = {}, []
@@ -8203,6 +8206,50 @@ def parse_op_as_skill_cell(cell_val):
     return role, pr
 
 
+def _validate_skills_op_as_priority_numbers_unique(
+    skills_dict: dict, column_keys: list
+) -> None:
+    """
+    master「skills」の各列（工程+機械キー等）について、OP/AS の割当優先度の**数値**が
+    メンバー間で重複していないか検証する。重複時は PlanningValidationError。
+    （OP1 と AS1 のようにロールが異なっても同一数値なら重複とみなす）
+    """
+    errors: list[str] = []
+    for combo in column_keys:
+        ck = str(combo or "").strip()
+        if not ck:
+            continue
+        pr_to_entries: dict[int, list[str]] = defaultdict(list)
+        for mem, row in (skills_dict or {}).items():
+            mnm = str(mem or "").strip()
+            if not mnm or not isinstance(row, dict):
+                continue
+            raw = row.get(ck)
+            if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+                continue
+            sval = str(raw).strip()
+            if not sval or sval.lower() in ("nan", "none", "null"):
+                continue
+            role, pr = parse_op_as_skill_cell(sval)
+            if role not in ("OP", "AS"):
+                continue
+            pr_to_entries[int(pr)].append(f"{mnm}({role})")
+        for pr, entries in sorted(pr_to_entries.items()):
+            if len(entries) > 1:
+                errors.append(f'列「{ck}」: 優先度 {pr} が重複 → ' + "、".join(entries))
+    if errors:
+        cap = 50
+        tail = errors[:cap]
+        msg = (
+            "マスタ「skills」で、同一列の OP/AS 優先度の数値が重複しています。"
+            " 列ごとに数値は1人につき1種類にしてください。\n"
+            + "\n".join(tail)
+        )
+        if len(errors) > cap:
+            msg += f"\n…他 {len(errors) - cap} 件"
+        raise PlanningValidationError(msg)
+
+
 def build_member_assignment_priority_reference(
     skills_dict: dict,
     members: list | None,
@@ -8239,7 +8286,8 @@ def build_member_assignment_priority_reference(
         {
             "区分": "スキル列の並び",
             "内容": "各「工程名+機械名」列について、セルが OP/AS（+優先度整数）のメンバーのみ対象。"
-            " 数値が小さいほど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。",
+            " 数値が小さいほど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。"
+            " 同一列では優先度の数値はメンバー間で重複不可（マスタ読込時に検証）。",
         },
         {
             "区分": "当日との差",
@@ -8476,6 +8524,7 @@ def load_skills_and_needs():
 
     skills 交差セルは OP/AS の後に優先度整数（例 OP1, AS3）。数値が小さいほど当該工程への割当で優先。
     数字省略の OP/AS は優先度 1。
+    同一列（同一工程×機械）では優先度の数値はメンバー間で重複不可（重複時は PlanningValidationError）。
     """
     try:
         # skills は新仕様:
@@ -8608,6 +8657,8 @@ def load_skills_and_needs():
 
         if not members:
             logging.error("skillsシートからメンバーを読み込めませんでした。")
+        else:
+            _validate_skills_op_as_priority_numbers_unique(skills_dict, equipment_list)
 
         # need は header=None で読み、先頭の複数行を“見出し行”として解釈
         needs_raw = pd.read_excel(MASTER_FILE, sheet_name="need", header=None)
@@ -8756,6 +8807,8 @@ def load_skills_and_needs():
         logging.info(f"『{MASTER_FILE}』からスキルと設備要件(need)を読み込みました。")
         return skills_dict, members, equipment_list, req_map, need_rules, surplus_map
 
+    except PlanningValidationError:
+        raise
     except Exception as e:
         logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
         return {}, [], [], {}, [], {}

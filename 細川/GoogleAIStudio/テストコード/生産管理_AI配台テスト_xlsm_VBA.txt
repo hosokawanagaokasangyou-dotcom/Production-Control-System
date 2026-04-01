@@ -2028,6 +2028,185 @@ MatrixFail:
 End Sub
 
 ' =========================================================
+' マスタ master.xlsm「skills」: 同一列で OP/AS の優先度の数値が重複していないか検証
+' （planning_core._validate_skills_op_as_priority_numbers_unique と同趣旨・2段/1段ヘッダ両対応）
+' =========================================================
+Private Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut As String, ByRef prOut As Long) As Boolean
+    Dim t As String
+    Dim tail As String
+    ParseOpAsSkillCellForValidate = False
+    roleOut = ""
+    prOut = 0
+    t = Replace(Replace(UCase$(Trim$(s)), " ", ""), vbTab, "")
+    If Len(t) = 0 Then Exit Function
+    If Left$(t, 2) = "OP" Then
+        roleOut = "OP"
+        tail = Mid$(t, 3)
+    ElseIf Left$(t, 2) = "AS" Then
+        roleOut = "AS"
+        tail = Mid$(t, 3)
+    Else
+        Exit Function
+    End If
+    If Len(tail) = 0 Then
+        prOut = 1
+    Else
+        If Not IsNumeric(tail) Then Exit Function
+        prOut = CLng(CDbl(tail))
+        If prOut < 0 Then prOut = 0
+    End If
+    ParseOpAsSkillCellForValidate = True
+End Function
+
+Private Function ValidateMasterSkillsOpAsPriorityUnique(ByVal targetDir As String, ByRef errOut As String) As Boolean
+    Dim wbPath As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim openedHere As Boolean
+    Dim lastCol As Long
+    Dim lastRow As Long
+    Dim c As Long
+    Dim r As Long
+    Dim pHdr As String
+    Dim mHdr As String
+    Dim combo As String
+    Dim mem As String
+    Dim cellV As String
+    Dim roleCh As String
+    Dim prVal As Long
+    Dim okCell As Boolean
+    Dim pmCount As Long
+    Dim dict As Object
+    Dim headerRow As Long
+    Dim memCol As Long
+    
+    errOut = ""
+    ValidateMasterSkillsOpAsPriorityUnique = False
+    wbPath = targetDir & "\master.xlsm"
+    If Len(Dir(wbPath)) = 0 Then
+        errOut = "master.xlsm が見つかりません: " & wbPath
+        Exit Function
+    End If
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks("master.xlsm")
+    On Error GoTo 0
+    If wb Is Nothing Then
+        On Error GoTo OpenFailSkills
+        Set wb = Workbooks.Open(Filename:=wbPath, ReadOnly:=True, UpdateLinks:=0)
+        openedHere = True
+        On Error GoTo 0
+    End If
+    
+    On Error Resume Next
+    Set ws = wb.Worksheets("skills")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        errOut = "master.xlsm に「skills」シートがありません。"
+        If openedHere Then
+            On Error Resume Next
+            wb.Close SaveChanges:=False
+            On Error GoTo 0
+        End If
+        Exit Function
+    End If
+    
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastCol < 2 Or lastRow < 2 Then GoTo CloseOkSkills
+    
+    pmCount = 0
+    For c = 2 To lastCol
+        pHdr = Trim$(CStr(ws.Cells(1, c).Value))
+        mHdr = Trim$(CStr(ws.Cells(2, c).Value))
+        If Len(pHdr) > 0 And Len(mHdr) > 0 Then
+            If StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0 And StrComp(LCase$(mHdr), "nan", vbTextCompare) <> 0 Then
+                pmCount = pmCount + 1
+            End If
+        End If
+    Next c
+    
+    If pmCount > 0 Then
+        For c = 2 To lastCol
+            pHdr = Trim$(CStr(ws.Cells(1, c).Value))
+            mHdr = Trim$(CStr(ws.Cells(2, c).Value))
+            If Len(pHdr) = 0 Or Len(mHdr) = 0 Then GoTo NextColTwo
+            If StrComp(LCase$(pHdr), "nan", vbTextCompare) = 0 Or StrComp(LCase$(mHdr), "nan", vbTextCompare) = 0 Then GoTo NextColTwo
+            combo = pHdr & "+" & mHdr
+            Set dict = CreateObject("Scripting.Dictionary")
+            For r = 3 To lastRow
+                mem = Trim$(CStr(ws.Cells(r, 1).Value))
+                If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextRowTwo
+                cellV = Trim$(CStr(ws.Cells(r, c).Value))
+                okCell = ParseOpAsSkillCellForValidate(cellV, roleCh, prVal)
+                If Not okCell Then GoTo NextRowTwo
+                If Not dict.Exists(CStr(prVal)) Then
+                    dict.Add CStr(prVal), mem & "(" & roleCh & ")"
+                Else
+                    errOut = "マスタ skills の優先度の数値が重複しています。" & vbCrLf & _
+                        "列「" & combo & "」: 優先度 " & CStr(prVal) & " が重複（" & dict(CStr(prVal)) & " と " & mem & "(" & roleCh & ")）" & vbCrLf & _
+                        "master.xlsm を修正してから再実行してください。"
+                    Set dict = Nothing
+                    GoTo CloseFailSkills
+                End If
+NextRowTwo:
+            Next r
+            Set dict = Nothing
+NextColTwo:
+        Next c
+    Else
+        headerRow = 1
+        memCol = 1
+        For c = 2 To lastCol
+            combo = Trim$(CStr(ws.Cells(headerRow, c).Value))
+            If Len(combo) = 0 Or StrComp(LCase$(combo), "nan", vbTextCompare) = 0 Then GoTo NextColOne
+            Set dict = CreateObject("Scripting.Dictionary")
+            For r = headerRow + 1 To lastRow
+                mem = Trim$(CStr(ws.Cells(r, memCol).Value))
+                If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextRowOne
+                cellV = Trim$(CStr(ws.Cells(r, c).Value))
+                okCell = ParseOpAsSkillCellForValidate(cellV, roleCh, prVal)
+                If Not okCell Then GoTo NextRowOne
+                If Not dict.Exists(CStr(prVal)) Then
+                    dict.Add CStr(prVal), mem & "(" & roleCh & ")"
+                Else
+                    errOut = "マスタ skills の優先度の数値が重複しています。" & vbCrLf & _
+                        "列「" & combo & "」: 優先度 " & CStr(prVal) & " が重複（" & dict(CStr(prVal)) & " と " & mem & "(" & roleCh & ")）" & vbCrLf & _
+                        "master.xlsm を修正してから再実行してください。"
+                    Set dict = Nothing
+                    GoTo CloseFailSkills
+                End If
+NextRowOne:
+            Next r
+            Set dict = Nothing
+NextColOne:
+        Next c
+    End If
+
+CloseOkSkills:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    ValidateMasterSkillsOpAsPriorityUnique = True
+    Exit Function
+
+CloseFailSkills:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Exit Function
+
+OpenFailSkills:
+    errOut = "master.xlsm を開けませんでした: " & wbPath
+End Function
+
+' =========================================================
 ' 段階1コア: task_extract_stage1.py → plan_input_tasks.xlsx →「配台計画_タスク入力」取込
 ' MsgBox は出さない。m_lastStage1ExitCode / m_lastStage1ErrMsg を参照（クエリ更新失敗時は m_lastRefreshQueriesErrMsg が連結される）
 ' =========================================================
@@ -2066,6 +2245,13 @@ Private Sub 段階1_コア実行()
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
             m_lastStage1ErrMsg = m_lastStage1ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
         End If
+        Exit Sub
+    End If
+
+    Dim skErrSt1 As String
+    If Not ValidateMasterSkillsOpAsPriorityUnique(targetDir, skErrSt1) Then
+        m_lastStage1ErrMsg = skErrSt1
+        m_lastStage1ExitCode = -1
         Exit Sub
     End If
 
@@ -2173,7 +2359,13 @@ Public Sub RunPythonStage1()
         Exit Sub
     End If
     If m_lastStage1ExitCode <> 0 Then
-        MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " です。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "段階1"
+        Dim st1Block As String
+        st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.Path & "\log\stage2_blocking_message.txt"))
+        If m_lastStage1ExitCode = 3 And Len(st1Block) > 0 Then
+            MsgBox st1Block, vbCritical, "段階1"
+        Else
+            MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " です。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。（検証中止時は log\stage2_blocking_message.txt も参照）", vbExclamation, "段階1"
+        End If
         Exit Sub
     End If
     MsgBox "段階1が完了しました。「配台計画_タスク入力」を編集後、計画生成（段階2）を実行してください。", vbInformation, "段階1"
@@ -2187,7 +2379,13 @@ Public Sub RunPythonStage1ThenStage2()
         Exit Sub
     End If
     If m_lastStage1ExitCode <> 0 Then
-        MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " のため、段階2は実行しません。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "段階1+2"
+        Dim st1b2 As String
+        st1b2 = Trim$(GeminiReadUtf8File(ThisWorkbook.Path & "\log\stage2_blocking_message.txt"))
+        If m_lastStage1ExitCode = 3 And Len(st1b2) > 0 Then
+            MsgBox st1b2, vbCritical, "段階1+2"
+        Else
+            MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " のため、段階2は実行しません。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。（検証中止時は log\stage2_blocking_message.txt も参照）", vbExclamation, "段階1+2"
+        End If
         Exit Sub
     End If
     段階2_コア実行 True
@@ -2646,6 +2844,12 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     On Error GoTo 0
     If wsLog Is Nothing Then
         m_lastStage2ErrMsg = "「LOG」シートが見つかりません。"
+        Exit Sub
+    End If
+
+    Dim skErrSt2 As String
+    If Not ValidateMasterSkillsOpAsPriorityUnique(targetDir, skErrSt2) Then
+        m_lastStage2ErrMsg = skErrSt2
         Exit Sub
     End If
 
