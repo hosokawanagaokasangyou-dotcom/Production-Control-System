@@ -33539,3 +33539,708 @@ event=CLOSED
 phase=配台シート読込
 summary=ブックをクローズしました。
 
+--- 2026-04-01 08:12:14 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:12:16 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:12:16 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:12:16 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:12:16 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:12:16 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:12:18 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:12:18 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:12:39 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:12:40 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:12:41 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:12:41 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:12:41 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:12:41 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:12:43 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:12:43 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:17:12 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:17:15 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:17:15 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:17:15 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:17:15 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:17:15 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:17:18 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:17:18 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:17:42 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:17:43 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:17:43 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:17:43 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:17:43 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:17:43 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:17:46 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:17:46 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:40:30 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:40:33 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:40:33 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:40:33 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:40:33 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:40:33 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:40:36 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:40:36 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:41:02 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:41:05 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:41:05 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:41:06 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:41:06 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:41:06 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:41:09 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:41:09 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 08:55:10 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 08:55:11 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 08:55:11 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 08:55:12 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 08:55:12 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 08:55:12 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 08:55:14 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 08:55:14 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:08:42 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:08:44 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:08:44 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:08:45 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:08:45 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:08:45 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:08:48 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:08:48 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:21:27 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:21:29 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:21:29 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:21:29 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:21:29 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:21:29 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:21:34 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:21:34 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:22:47 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:22:48 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:22:48 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:22:49 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:22:49 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:22:49 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:22:51 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:22:51 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:26:05 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:26:08 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:26:08 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:26:08 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:26:08 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:26:08 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:26:11 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:26:12 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:31:46 ---
+event=START
+phase=段階1
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:31:49 ---
+event=OPEN_OK
+phase=段階1
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:31:49 ---
+event=DATA_COMPACT
+phase=段階1
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:31:50 ---
+event=E_VBA_TSV_WRITTEN
+phase=段階1
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:31:50 ---
+event=E_APPLY_FILES_WRITTEN
+phase=段階1
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:31:50 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=段階1
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:31:53 ---
+event=XLWINGS_SYNC_OK
+phase=段階1
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:31:53 ---
+event=CLOSED
+phase=段階1
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:32:17 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:32:21 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:32:21 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:32:21 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:32:21 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:32:21 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:32:24 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:32:24 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:37:08 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:37:15 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:37:15 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:37:15 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:37:15 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:37:15 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:37:18 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:37:19 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-04-01 09:40:36 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm pairs=13
+
+--- 2026-04-01 09:40:43 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開きました。
+details=keep_vba=True sheets=30
+
+--- 2026-04-01 09:40:43 ---
+event=DATA_COMPACT
+phase=配台シート読込
+summary=空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。
+details=rows=13 removed_empty=7
+
+--- 2026-04-01 09:40:43 ---
+event=E_VBA_TSV_WRITTEN
+phase=配台シート読込
+summary=E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\log\exclude_rules_e_column_vba.tsv cells=2
+
+--- 2026-04-01 09:40:43 ---
+event=E_APPLY_FILES_WRITTEN
+phase=配台シート読込
+summary=E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。
+details=cells=2
+
+--- 2026-04-01 09:40:43 ---
+event=OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY
+phase=配台シート読込
+summary=設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm
+
+--- 2026-04-01 09:40:46 ---
+event=XLWINGS_SYNC_OK
+phase=配台シート読込
+summary=xlwings 経由で設定シート A〜E を同期しブックを保存しました。
+details=path=m:\国分工場\国分共有\工程管理AIプロジェクト\----AI------\細川\GoogleAIStudio\テストコード\生産管理_AI配台テスト.xlsm rows=14
+
+--- 2026-04-01 09:40:46 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
