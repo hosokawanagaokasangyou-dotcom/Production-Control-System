@@ -16,14 +16,32 @@
 ' RunPython 文字列は1行（改行不可）のため、下記は1行にまとめて登録してください。
 ' =========================================================
 
+' xlwings 参照経由で RunPython を呼ぶ（Application.Run 経由を使わない）
+Private Sub XwRunPythonSafe(ByVal pyCode As String)
+    On Error GoTo EH
+    xlwings.RunPython pyCode
+    Exit Sub
+EH:
+    Err.Raise vbObjectError + 514, "XwRunPythonSafe", _
+        "xlwings.RunPython 呼び出しに失敗しました。VBE の [ツール]-[参照設定] で xlwings を有効化してください。"
+End Sub
+
 ' 段階2実行後に JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり）
 Sub 配台デバッグ_ロールトレースをシートに表示()
-    RunPython "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
+    On Error GoTo EH
+    XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
+    Exit Sub
+EH:
+    MsgBox "xlwings 実行に失敗: " & Err.Description, vbCritical
 End Sub
 
 ' JSONL を有効にした段階2 → 続けて同じブックにロールトレースシートを表示（ワンショット調査向け）
 Sub 配台デバッグ_段階2とロールトレースシート()
-    RunPython "import xlwings_console_runner as _xw; _xw.run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings()"
+    On Error GoTo EH
+    XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings()"
+    Exit Sub
+EH:
+    MsgBox "xlwings 実行に失敗: " & Err.Description, vbCritical
 End Sub
 
 ' アクティブシートが「配台_ロールトレース」のとき、選択行を1つ下へ（現認用の「進む」）
