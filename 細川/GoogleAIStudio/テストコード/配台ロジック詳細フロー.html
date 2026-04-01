@@ -255,6 +255,8 @@ flowchart TB
   MP6 -->|はい| MP
   nextd --> D0
 </div>
+<p class="src"><strong>試行順優先（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>・既定）</strong>: 上図の「ソート済タスクを順に試行」は、実装では <code>_trial_order_flow_eligible_tasks</code> で絞ったあと <strong><code>dispatch_trial_order</code> 昇順</strong>の意味に読み替えてください。<strong>1 パス</strong>では先頭タスクから見ますが、<strong>1 ロールでも進んだタスクについては連続ロール割付（<code>_drain_rolls_for_task</code>）し、進展があればそのパスは終了</strong>します（同一パス内で試行順の後続タスクへは進みません）。外側のマルチパスで再び昇順の先頭から繰り返します。<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のときは §8 の <code>_day_schedule_task_sort_key</code> でソートした 1 本ループが主経路です。</p>
+<p class="src"><strong>納期シフト再試行</strong>: ラウンドごとに <code>task_queue.sort</code> は再実行されますが、<strong><code>dispatch_trial_order</code> は初回付与のまま再付与されません</strong>（<span class="file">配台ルール.md</span> §2.0.3）。</p>
 
 <h3>6.1 チーム開始時刻の下限（Excel・変数との対応）</h3>
 <ul class="compact">
@@ -269,7 +271,8 @@ flowchart TB
 <table>
   <thead><tr><th>名前</th><th>意味（概要）</th></tr></thead>
   <tbody>
-    <tr><td><span class="mono">STAGE2_SERIAL_DISPATCH_BY_TASK_ID</span></td><td>True 時、当日は直列リスト上の1依頼NOだけを候補に（既定ソースでは True）</td></tr>
+    <tr><td><span class="mono">STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</span></td><td><code>1</code>（既定）で <code>_trial_order_first_schedule_pass</code>（配台試行順昇順・1 パスは先頭タスクを連続詰め）。<code>0</code> で日内は <code>_day_schedule_task_sort_key</code> 順</td></tr>
+    <tr><td><span class="mono">STAGE2_SERIAL_DISPATCH_BY_TASK_ID</span></td><td><code>1</code> のとき当日は直列リスト上の1依頼NOだけを候補に（ソース既定は <code>0</code>）</td></tr>
     <tr><td><span class="mono">STAGE2_EXTEND_ATTENDANCE_CALENDAR</span></td><td>残タスクがあれば勤怠日付を複製拡張するか</td></tr>
     <tr><td><span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span></td><td>納期超過検出時に計画基準+1日して当該依頼だけ巻き戻し再実行</td></tr>
     <tr><td><span class="mono">STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</span></td><td>依頼ごとの +1 日リトライ上限</td></tr>
@@ -282,7 +285,8 @@ flowchart TB
 </table>
 
 <h2>8. 同一日内のタスク試行順（<span class="mono">_day_schedule_task_sort_key</span>）</h2>
-<p class="src">辞書式比較で<strong>先に来るほど早く試行</strong>されます（タプル左から比較）。</p>
+<p class="src"><strong>適用範囲</strong>: このキーでソートした順に試行するのは <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のときです。<code>=1</code>（既定）では §6 の補足どおり <code>_trial_order_first_schedule_pass</code> が主経路で、本表はフォールバック経路の並びです。</p>
+<p class="src">辞書式比較で<strong>先に来るほど早く試行</strong>されます（タプル左から比較）。<code>dispatch_trial_order</code> は複合キーの一部であり、単独の最優先キーではありません。</p>
 <table>
   <thead><tr><th>順</th><th>キー要素</th><th>主な由来</th></tr></thead>
   <tbody>
