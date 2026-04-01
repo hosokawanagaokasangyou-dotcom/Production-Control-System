@@ -1052,6 +1052,7 @@ Public Sub master_組み合わせ表を更新()
     
     Call WriteSkillCombinationSheetHeader(wsOut, maxReq)
     totalRows = SkillComboFillBody(wsSkills, wsNeed, wsOut, rProc, rMach, rBase, useTwoHeader, maxReq)
+    Call ApplySkillCombinationSheetFormat(wsOut, maxReq)
     Call FreezeTopRowSafe(wsOut)
     Application.ScreenUpdating = True
     
@@ -1082,6 +1083,84 @@ Private Sub FreezeTopRowSafe(ByVal ws As Worksheet)
     ws.Range("A2").Select
     ActiveWindow.FreezePanes = True
     On Error GoTo 0
+End Sub
+
+' 工程名+機械名（列1・2）が空の行は列3「工程+機械」でグループキーにする
+Private Function SkillComboRowGroupKey(ByVal ws As Worksheet, ByVal dataRow As Long) As String
+    Dim s1 As String
+    Dim s2 As String
+    Dim s3 As String
+    s1 = Trim$(CStr(ws.Cells(dataRow, 1).Value))
+    s2 = Trim$(CStr(ws.Cells(dataRow, 2).Value))
+    s3 = Trim$(CStr(ws.Cells(dataRow, 3).Value))
+    If Len(s1) > 0 Or Len(s2) > 0 Then
+        SkillComboRowGroupKey = s1 & vbTab & s2
+    Else
+        SkillComboRowGroupKey = s3
+    End If
+End Function
+
+Private Sub ApplySkillCombinationSheetFormat(ByVal ws As Worksheet, ByVal maxReq As Long)
+    Dim lastCol As Long
+    Dim lastRow As Long
+    Dim r As Long
+    Dim hdrRange As Range
+    Dim prevKey As String
+    Dim curKey As String
+    Dim altBand As Boolean
+    Dim rowRng As Range
+    Dim hdrFill As Long
+    Dim hdrFont As Long
+    Dim fillA As Long
+    Dim fillB As Long
+    Dim bodyRange As Range
+    
+    lastCol = 6 + maxReq
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastRow < 1 Then Exit Sub
+    
+    hdrFill = RGB(47, 84, 150)
+    hdrFont = RGB(255, 255, 255)
+    fillA = RGB(232, 240, 254)
+    fillB = RGB(255, 255, 255)
+    
+    Set hdrRange = ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol))
+    With hdrRange
+        .Font.Bold = True
+        .Font.Color = hdrFont
+        .Interior.Pattern = xlSolid
+        .Interior.Color = hdrFill
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    
+    If lastRow >= 2 Then
+        prevKey = vbNullString
+        altBand = False
+        For r = 2 To lastRow
+            curKey = SkillComboRowGroupKey(ws, r)
+            If curKey <> prevKey Then
+                altBand = Not altBand
+                prevKey = curKey
+            End If
+            Set rowRng = ws.Range(ws.Cells(r, 1), ws.Cells(r, lastCol))
+            With rowRng.Interior
+                .Pattern = xlSolid
+                If altBand Then
+                    .Color = fillA
+                Else
+                    .Color = fillB
+                End If
+            End With
+            With rowRng.Font
+                .Bold = False
+                .Color = RGB(0, 0, 0)
+            End With
+        Next r
+    End If
+    
+    Set bodyRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
+    bodyRange.Columns.AutoFit
 End Sub
 
 Private Function EnsureSkillCombinationSheetAfterSkills(ByVal wb As Workbook, ByVal wsSkills As Worksheet, ByRef wsOut As Worksheet) As Boolean
