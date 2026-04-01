@@ -12,6 +12,15 @@ Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
 ' =========================================================
+' 組み合わせ表（skills の OP/AS 列 × need の必要人数から、OP1名以上を含む組合せを列挙）
+' ・配台 Python には未接続（参照用・優先度は手編集前提。仮で列内連番を振る）
+' ・シート名「組み合わせ表」… skills シートの直後
+' ※定数は必ずモジュール先頭に置く（Sub の後に Private Const を置くとコンパイルエラー）
+' =========================================================
+Private Const SHEET_SKILL_COMBINATIONS As String = "組み合わせ表"
+Private Const SHEET_SKILLS_DATA As String = "skills"
+Private Const SHEET_NEED_DATA As String = "need"
+' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
 ' 公開マクロ名は先頭に master_ を付与し、配台ブックと同名のマクロが別ブックで実行されるのを防ぐ（ThisWorkbook 以外で Alt+F8 等）。
 ' 全シートフォント統一は本ファイル末尾（配台ブックと同 API。master にはメインシート用 AutoFit は無い）。
@@ -996,15 +1005,6 @@ Public Sub master_全シートフォント_BIZ_UDPゴシックに統一()
 FailB:
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
-
-' =========================================================
-' 組み合わせ表（skills の OP/AS 列 × need の必要人数から、OP1名以上を含む組合せを列挙）
-' ・配台 Python には未接続（参照用・優先度は手編集前提。仮で列内連番を振る）
-' ・シート名「組み合わせ表」… skills シートの直後
-' =========================================================
-Private Const SHEET_SKILL_COMBINATIONS As String = "組み合わせ表"
-Private Const SHEET_SKILLS_DATA As String = "skills"
-Private Const SHEET_NEED_DATA As String = "need"
 
 Public Sub master_組み合わせ表を更新()
     Dim wb As Workbook
