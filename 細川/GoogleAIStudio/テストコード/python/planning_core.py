@@ -7811,8 +7811,11 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-# 終業直前・休憩直前に「まだロールが残る」タスクを詰めない（休憩終了後へ繰り下げ、当日終業間際は翌日へ）
-# 0 にすると本ルール無効
+# 休憩直前・（任意で）終業直前に「まだロールが残る」タスクを詰めない。
+# ASSIGN_DEFER_MIN_REMAINING_ROLLS … 既定3。環境変数 ASSIGN_DEFER_MIN_REMAINING_ROLLS で上書き。0 で本ブロック全体スキップ。
+# ASSIGN_END_OF_DAY_DEFER_MINUTES … team_end_limit までの残りがこの分数以下なら当日開始しない（None）。既定0=無効。
+#   事業所標準終業は DEFAULT_END_TIME(17:00) だが、残業・早出・昼休憩ずらしは未実装のため終業直前デファーは既定OFF。
+#   将来はメンバー別の実勤務終了（最大21:00想定など）と ASSIGN_END_OF_DAY_DEFER_MINUTES を組み合わせて有効化する想定。
 ASSIGN_DEFER_MIN_REMAINING_ROLLS = max(
     0, int(os.environ.get("ASSIGN_DEFER_MIN_REMAINING_ROLLS", "3").strip() or 0)
 )
@@ -7822,7 +7825,7 @@ ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES = max(
 )
 ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     0,
-    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "50").strip() or 0),
+    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
 )
 
 # =========================================================
@@ -7855,7 +7858,8 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     """
     残ロールが ASSIGN_DEFER_MIN_REMAINING_ROLLS 以上のとき:
     - 次の休憩開始までが ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES 分以内なら開始を休憩終了後へ繰り下げ（refloor_fn を再適用）
-    - 勤務終了までが ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内なら当日は不可（None → 翌日等で再試行）
+    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 のとき、(team_end_limit - 試行開始) がその分数以下なら当日は不可（None）
+      team_end_limit は呼び出し元の勤務上限（現状は主に標準終業に整合。残業連動は未実装で既定では終業直前デファーもOFF）
     """
     if ASSIGN_DEFER_MIN_REMAINING_ROLLS <= 0:
         return team_start
