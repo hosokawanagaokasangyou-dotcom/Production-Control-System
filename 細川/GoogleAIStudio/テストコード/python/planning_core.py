@@ -8833,10 +8833,14 @@ def load_skills_and_needs():
         return {}, [], [], {}, [], {}
 
 
-def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tuple[str, ...]]]]:
+def load_team_combination_presets_from_master() -> dict[
+    str, list[tuple[int, int | None, tuple[str, ...]]]
+]:
     """
     master.xlsm「組み合わせ表」を読み、工程+機械キーごとに
-    [(組合せ優先度, メンバータプル), ...] を返す。同一キー内は優先度昇順、同順位はシート上の行順。
+    [(組合せ優先度, 必要人数またはNone, メンバータプル), ...] を返す。
+    同一キー内は優先度昇順、同順位はシート上の行順。
+    「必要人数」列は配台時に need 基本人数より優先する（メンバー列人数と一致すること）。
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         return {}
@@ -8861,6 +8865,7 @@ def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tup
     mach_c = colmap.get("機械名")
     combo_c = colmap.get("工程+機械")
     prio_c = colmap.get("組合せ優先度")
+    req_c = colmap.get("必要人数")
 
     def mem_col_order(c) -> int:
         m = re.search(r"メンバー\s*(\d+)", norm_cell(c))
@@ -8870,7 +8875,9 @@ def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tup
         [c for c in df.columns if norm_cell(str(c)).startswith("メンバー")],
         key=mem_col_order,
     )
-    buckets: dict[str, list[tuple[int, int, tuple[str, ...]]]] = defaultdict(list)
+    buckets: dict[str, list[tuple[int, int, int | None, tuple[str, ...]]]] = defaultdict(
+        list
+    )
     for row_i, (_, row) in enumerate(df.iterrows()):
         proc = norm_cell(row.get(proc_c)) if proc_c else ""
         mach = norm_cell(row.get(mach_c)) if mach_c else ""
@@ -8884,6 +8891,11 @@ def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tup
         pr = parse_optional_int(row.get(prio_c)) if prio_c else None
         if pr is None:
             pr = 10**9
+        sheet_req: int | None = None
+        if req_c:
+            sheet_req = parse_optional_int(row.get(req_c))
+            if sheet_req is not None and sheet_req < 1:
+                sheet_req = None
         team: list[str] = []
         for mc in mem_keys:
             s = norm_cell(row.get(mc))
@@ -8892,12 +8904,12 @@ def load_team_combination_presets_from_master() -> dict[str, list[tuple[int, tup
             team.append(s)
         if not team:
             continue
-        buckets[key].append((pr, row_i, tuple(team)))
+        buckets[key].append((pr, row_i, sheet_req, tuple(team)))
 
-    out: dict[str, list[tuple[int, tuple[str, ...]]]] = {}
+    out: dict[str, list[tuple[int, int | None, tuple[str, ...]]]] = {}
     for key, lst in buckets.items():
         lst.sort(key=lambda x: (x[0], x[1]))
-        out[key] = [(t[0], t[2]) for t in lst]
+        out[key] = [(t[0], t[2], t[3]) for t in lst]
     return out
 
 
@@ -10129,6 +10141,31 @@ def _trial_order_flow_eligible_tasks(
     return out
 
 
+def _combo_preset_team_size_bounds(
+    preset_team: tuple,
+    sheet_req_n: int | None,
+    max_team_size_need: int,
+) -> tuple[int, int] | None:
+    """
+    組み合わせ表プリセット1行の人数範囲 (lo, hi)。need の基本人数よりシート側を優先する。
+    - 必要人数列が正のときはメンバー列の人数と一致すること。
+    - hi は need の上限と実人数の大きい方（プリセットが need より少人数でも採用可能）。
+    """
+    nmem = len(preset_team)
+    if nmem < 1:
+        return None
+    if sheet_req_n is not None and sheet_req_n >= 1:
+        if nmem != sheet_req_n:
+            return None
+        lo = sheet_req_n
+    else:
+        lo = nmem
+    hi = max(max_team_size_need, nmem)
+    if not (lo <= nmem <= hi):
+        return None
+    return lo, hi
+
+
 def _plan_sheet_required_op_optional(task: dict) -> int | None:
     """加工計画の必要人数列が正の整数ならその値。無効なら None。"""
     ro = task.get("required_op")
@@ -10368,8 +10405,14 @@ def _assign_one_roll_trial_order_flow(
     )
     machine_day_floor = datetime.combine(current_date, DEFAULT_START_TIME)
 
-    def _one_roll_from_team(team: tuple) -> dict | None:
-        if len(team) < req_num or len(team) > max_team_size:
+    def _one_roll_from_team(
+        team: tuple,
+        min_n: int | None = None,
+        max_n: int | None = None,
+    ) -> dict | None:
+        lo = req_num if min_n is None else min_n
+        hi = max_team_size if max_n is None else max_n
+        if len(team) < lo or len(team) > hi:
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
@@ -10458,16 +10501,22 @@ def _assign_one_roll_trial_order_flow(
         else None
     )
     if preset_rows:
-        for _prio, preset_team in preset_rows:
-            if len(preset_team) < req_num or len(preset_team) > max_team_size:
+        for _prio, sheet_rs, preset_team in preset_rows:
+            bounds = _combo_preset_team_size_bounds(
+                tuple(preset_team), sheet_rs, max_team_size
+            )
+            if bounds is None:
                 continue
+            lo_pt, hi_pt = bounds
             if pref_mem is not None and pref_mem not in preset_team:
                 continue
             if not all(m in capable_members for m in preset_team):
                 continue
             if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
                 continue
-            got = _one_roll_from_team(tuple(preset_team))
+            got = _one_roll_from_team(
+                tuple(preset_team), min_n=lo_pt, max_n=hi_pt
+            )
             if got is not None:
                 return {
                     **got,
@@ -11639,9 +11688,12 @@ def generate_plan():
                         )
                         preset_matched = False
                         if preset_rows:
-                            for _prio, preset_team in preset_rows:
+                            for _prio, sheet_rs, preset_team in preset_rows:
                                 pteam = tuple(preset_team)
-                                if len(pteam) < req_num or len(pteam) > max_team_size:
+                                bounds = _combo_preset_team_size_bounds(
+                                    pteam, sheet_rs, max_team_size
+                                )
+                                if bounds is None:
                                     continue
                                 if pref_mem is not None and pref_mem not in pteam:
                                     continue
