@@ -16,14 +16,29 @@
 ' RunPython 文字列は1行（改行不可）のため、下記は1行にまとめて登録してください。
 ' =========================================================
 
-' xlwings 参照経由で RunPython を呼ぶ（Application.Run 経由を使わない）
+' xlwings の正規呼び出し1本に絞り、Python側の本当のエラーを捕捉する
 Private Sub XwRunPythonSafe(ByVal pyCode As String)
-    On Error GoTo EH
+    On Error Resume Next
+    Err.Clear
+
+    ' 経路を1本化（xlwingsの参照設定が有効な場合の正規メソッド）
     xlwings.RunPython pyCode
-    Exit Sub
-EH:
-    Err.Raise vbObjectError + 514, "XwRunPythonSafe", _
-        "xlwings.RunPython 呼び出しに失敗しました。VBE の [ツール]-[参照設定] で xlwings を有効化してください。"
+
+    ' エラーが発生した場合（Python側でのエラー等）
+    If Err.Number <> 0 Then
+        Dim errNum As Long, errDesc As String
+        errNum = Err.Number
+        errDesc = Err.Description
+        On Error GoTo 0
+        
+        ' 呼び出し元へ、Python/xlwings の「本当のエラー」を投げる
+        Err.Raise vbObjectError + 513, "XwRunPythonSafe", _
+            "Pythonの実行に失敗しました。" & vbCrLf & _
+            "エラー番号: " & errNum & vbCrLf & _
+            "詳細: " & errDesc
+    End If
+
+    On Error GoTo 0
 End Sub
 
 ' 段階2実行後に JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり）
@@ -32,7 +47,7 @@ Sub 配台デバッグ_ロールトレースをシートに表示()
     XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
     Exit Sub
 EH:
-    MsgBox "xlwings 実行に失敗: " & Err.Description, vbCritical
+    MsgBox Err.Description, vbCritical, "実行エラー"
 End Sub
 
 ' JSONL を有効にした段階2 → 続けて同じブックにロールトレースシートを表示（ワンショット調査向け）
@@ -41,23 +56,35 @@ Sub 配台デバッグ_段階2とロールトレースシート()
     XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings()"
     Exit Sub
 EH:
-    MsgBox "xlwings 実行に失敗: " & Err.Description, vbCritical
+    MsgBox Err.Description, vbCritical, "実行エラー"
 End Sub
 
 ' アクティブシートが「配台_ロールトレース」のとき、選択行を1つ下へ（現認用の「進む」）
 ' ※ シートを表示したあと、最初のデータ行（行2）を選んでから繰り返し実行すると見やすい
 Sub 配台デバッグ_進む_次の行を選択()
     Dim ws As Worksheet
+    Dim lastRow As Long
+    
     Set ws = ActiveSheet
     If ws Is Nothing Then Exit Sub
     If ws.Name <> "配台_ロールトレース" Then
         MsgBox "シート「配台_ロールトレース」を表示してから実行してください。", vbExclamation
         Exit Sub
     End If
-    If ws.UsedRange.Rows.Count < 2 Then
+    
+    ' データが存在する最終行を取得
+    lastRow = ws.UsedRange.Rows.Count + ws.UsedRange.Row - 1
+    If lastRow < 2 Then
         MsgBox "データ行がありません。", vbInformation
         Exit Sub
     End If
+    
+    ' 現在の行が最終行以上の場合は進めない
+    If ActiveCell.Row >= lastRow Then
+        MsgBox "データの最終行です。", vbInformation
+        Exit Sub
+    End If
+
     On Error Resume Next
     ws.Cells(ActiveCell.Row + 1, ActiveCell.Column).Select
     If Err.Number <> 0 Then
@@ -65,5 +92,6 @@ Sub 配台デバッグ_進む_次の行を選択()
         ws.Cells(2, 1).Select
     End If
     On Error GoTo 0
+    
     ActiveWindow.ScrollRow = ActiveCell.Row
 End Sub
