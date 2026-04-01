@@ -1,85 +1,138 @@
 ' =========================================================
-' 配台デバッグ: 1 ロールごとのトレースを Excel で確認する（標準モジュールに貼り付け）
+' 配台デバッグ: cmd.exe 経由で 1 ロールトレースを確認する（標準モジュールに貼り付け）
 ' =========================================================
-' 前提: xlwings 参照 ON・Show Console・xlwings.conf.json で PYTHONPATH=python
-'
-' 【仕組み】
-'   planning_core が各ロール割付成功時に log/dispatch_roll_trace.jsonl へ1行ずつ追記する。
-'   Python が「配台_ロールトレース」シートに一覧を流し込む。
-'   人が行を順に見て「どの順で・どのタスクが・どの設備に入ったか」を現認する。
-'
-' 環境変数（任意・Windows のシステム環境 or xlwings.conf では直接書けない場合は
-'   バッチ起動や planning_dispatch_debug からの実行で設定）:
-'   DISPATCH_ROLL_TRACE_JSONL=log/dispatch_roll_trace.jsonl  … JSONL のパス
-'   DISPATCH_DEBUG_STOP_AFTER_ROLLS=5  … 5ロールで段階2の割付シミュレーションを打ち切り（部分結果で原因調査）
-'
-' RunPython 文字列は1行（改行不可）のため、下記は1行にまとめて登録してください。
+' xlwings は使わない。python を cmd.exe から実行する。
 ' =========================================================
 
-' xlwings の正規呼び出し1本に絞り、Python側の本当のエラーを捕捉する
-Private Sub XwRunPythonSafe(ByVal pyCode As String)
-    On Error Resume Next
-    Err.Clear
+Private Function DbgWorkbookDir() As String
+    DbgWorkbookDir = ThisWorkbook.Path
+End Function
 
-    ' 経路を1本化（xlwingsの参照設定が有効な場合の正規メソッド）
-    xlwings.RunPython pyCode
+Private Function DbgPythonExe() As String
+    DbgPythonExe = "C:\Users\0585\AppData\Local\Programs\Python\Python314\python.exe"
+End Function
 
-    ' エラーが発生した場合（Python側でのエラー等）
-    If Err.Number <> 0 Then
-        Dim errNum As Long, errDesc As String
-        errNum = Err.Number
-        errDesc = Err.Description
-        On Error GoTo 0
-        
-        ' 呼び出し元へ、Python/xlwings の「本当のエラー」を投げる
-        Err.Raise vbObjectError + 513, "XwRunPythonSafe", _
-            "Pythonの実行に失敗しました。" & vbCrLf & _
-            "エラー番号: " & errNum & vbCrLf & _
-            "詳細: " & errDesc
+Private Function DbgRollTraceJsonlPath() As String
+    DbgRollTraceJsonlPath = DbgWorkbookDir() & "\log\dispatch_roll_trace.jsonl"
+End Function
+
+Private Sub DbgRunCmdWait(ByVal cmdLine As String)
+    Dim sh As Object
+    Dim p As Object
+    Set sh = CreateObject("WScript.Shell")
+    Set p = sh.Exec("cmd.exe /c """ & cmdLine & """")
+    Do While p.Status = 0
+        DoEvents
+    Loop
+    If p.ExitCode <> 0 Then
+        Err.Raise vbObjectError + 521, "DbgRunCmdWait", _
+            "cmd 実行失敗 ExitCode=" & CStr(p.ExitCode) & vbCrLf & p.StdErr.ReadAll
+    End If
+End Sub
+
+Private Sub DbgLoadRollTraceXlsxToSheet(ByVal traceXlsxPath As String)
+    Dim srcWb As Workbook
+    Dim srcWs As Worksheet
+    Dim dstWs As Worksheet
+    Dim ur As Range
+
+    If Len(Dir$(traceXlsxPath)) = 0 Then
+        Err.Raise vbObjectError + 522, "DbgLoadRollTraceXlsxToSheet", "トレースxlsxが見つかりません: " & traceXlsxPath
     End If
 
+    On Error Resume Next
+    Set dstWs = ThisWorkbook.Worksheets("配台_ロールトレース")
     On Error GoTo 0
+    If dstWs Is Nothing Then
+        Set dstWs = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(1))
+        dstWs.Name = "配台_ロールトレース"
+    End If
+
+    Set srcWb = Workbooks.Open(Filename:=traceXlsxPath, ReadOnly:=True)
+    Set srcWs = srcWb.Worksheets(1)
+    Set ur = srcWs.UsedRange
+
+    dstWs.Cells.Clear
+    ur.Copy Destination:=dstWs.Range("A1")
+    dstWs.Columns.AutoFit
+
+    srcWb.Close SaveChanges:=False
 End Sub
 
-' 段階2実行後に JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり）
+Private Sub DbgExportTraceXlsxByCmd()
+    Dim root As String
+    Dim py As String
+    Dim scriptPath As String
+    Dim jsonlPath As String
+    Dim outXlsx As String
+    Dim cmdLine As String
+
+    root = DbgWorkbookDir()
+    py = DbgPythonExe()
+    scriptPath = root & "\python\planning_dispatch_debug.py"
+    jsonlPath = DbgRollTraceJsonlPath()
+    outXlsx = root & "\log\dispatch_roll_trace_export.xlsx"
+
+    cmdLine = """" & py & """ """ & scriptPath & """ --jsonl """ & jsonlPath & """ --export-xlsx """ & outXlsx & """"
+    DbgRunCmdWait cmdLine
+    DbgLoadRollTraceXlsxToSheet outXlsx
+End Sub
+
+' ログJSONL -> 一覧シート反映（cmd 経由）
 Sub 配台デバッグ_ロールトレースをシートに表示()
     On Error GoTo EH
-    XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
+    If Len(Dir$(DbgRollTraceJsonlPath())) = 0 Then
+        MsgBox "ロールトレースJSONLがありません。まず「配台デバッグ_段階2とロールトレースシート」を実行してください。", vbInformation
+        Exit Sub
+    End If
+    DbgExportTraceXlsxByCmd
     Exit Sub
 EH:
-    MsgBox Err.Description, vbCritical, "実行エラー"
+    MsgBox "実行エラー: " & Err.Description, vbCritical
 End Sub
 
-' JSONL を有効にした段階2 → 続けて同じブックにロールトレースシートを表示（ワンショット調査向け）
+' 段階2（cmd）実行 -> ロールトレースを一覧シートに反映
 Sub 配台デバッグ_段階2とロールトレースシート()
     On Error GoTo EH
-    XwRunPythonSafe "import xlwings_console_runner as _xw; _xw.run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings()"
+
+    Dim root As String
+    Dim py As String
+    Dim stage2Path As String
+    Dim cmdLine As String
+
+    root = DbgWorkbookDir()
+    py = DbgPythonExe()
+    stage2Path = root & "\python\plan_simulation_stage2.py"
+
+    cmdLine = "set TASK_INPUT_WORKBOOK=""" & ThisWorkbook.FullName & """ && " & _
+              "set DISPATCH_ROLL_TRACE_JSONL=""" & DbgRollTraceJsonlPath() & """ && " & _
+              """" & py & """ """ & stage2Path & """"
+    DbgRunCmdWait cmdLine
+
+    DbgExportTraceXlsxByCmd
     Exit Sub
 EH:
-    MsgBox Err.Description, vbCritical, "実行エラー"
+    MsgBox "実行エラー: " & Err.Description, vbCritical
 End Sub
 
 ' アクティブシートが「配台_ロールトレース」のとき、選択行を1つ下へ（現認用の「進む」）
-' ※ シートを表示したあと、最初のデータ行（行2）を選んでから繰り返し実行すると見やすい
 Sub 配台デバッグ_進む_次の行を選択()
     Dim ws As Worksheet
     Dim lastRow As Long
-    
+
     Set ws = ActiveSheet
     If ws Is Nothing Then Exit Sub
     If ws.Name <> "配台_ロールトレース" Then
         MsgBox "シート「配台_ロールトレース」を表示してから実行してください。", vbExclamation
         Exit Sub
     End If
-    
-    ' データが存在する最終行を取得
+
     lastRow = ws.UsedRange.Rows.Count + ws.UsedRange.Row - 1
     If lastRow < 2 Then
         MsgBox "データ行がありません。", vbInformation
         Exit Sub
     End If
-    
-    ' 現在の行が最終行以上の場合は進めない
+
     If ActiveCell.Row >= lastRow Then
         MsgBox "データの最終行です。", vbInformation
         Exit Sub
@@ -92,6 +145,6 @@ Sub 配台デバッグ_進む_次の行を選択()
         ws.Cells(2, 1).Select
     End If
     On Error GoTo 0
-    
+
     ActiveWindow.ScrollRow = ActiveCell.Row
 End Sub
