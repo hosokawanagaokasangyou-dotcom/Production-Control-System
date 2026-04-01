@@ -9643,16 +9643,28 @@ def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: li
     """
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
     §B を §A・一般キーより先に効かせるため、B-1（roll_pipeline_inspection かつ in_progress＋試行順土台）
-    → B-2（同じく roll_pipeline_inspection だが未着手）→ その他の加工途中 → 以降は納期・優先度等。
+    → B-2 帯（同一帯内は **EC（roll_pipeline_ec）を未着手検査より先**・§B-2）
+    → その他の加工途中 → 以降は納期・優先度等。
     """
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
+    ec = bool(task.get("roll_pipeline_ec"))
     if rp and ip:
         b_tier = 0  # §B-1
-    elif rp:
-        b_tier = 1  # §B-2 ロールパイプライン検査（未着手）
+    elif ec or (rp and not ip):
+        # §B-2: EC と未着手検査を同じ b_tier にまとめ、b2_queue_sub で EC 先行
+        b_tier = 1
     else:
         b_tier = 2
+    if b_tier == 1:
+        if ec:
+            b2_queue_sub = 0
+        elif rp and not ip:
+            b2_queue_sub = 1
+        else:
+            b2_queue_sub = 2
+    else:
+        b2_queue_sub = 0
     try:
         pss = int(task.get("planning_sheet_row_seq") or 0)
     except (TypeError, ValueError):
@@ -9663,6 +9675,7 @@ def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: li
         task.get("due_source_rank", 9),
         0 if task.get("has_done_deadline_override") else 1,
         b_tier,
+        b2_queue_sub,
         b1_trial,
         gen_ip,
         task["priority"],
@@ -9687,7 +9700,7 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     同一日内の割付試行順。
     計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、
     §B-1（検査+熱融着機湖南かつ加工途中）は配台試行順 dispatch_trial_order を加工内容 rank より先に効かせる。
-    続けて r、行順、dto、§B-2 ロールパイプライン検査の同帯前倒し（b2_roll_pipeline_insp_first）、優先度、結果用ソートキー。
+    続けて r、行順、dto、§B-2 帯では **EC（roll_pipeline_ec）を未着手検査より先**（b2_roll_pipeline_stage）、優先度、結果用ソートキー。
     同一設備列の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
     dbk = task.get("due_basis_date")
@@ -9704,13 +9717,19 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
         line_seq = int(task.get("same_request_line_seq", 0))
     except (TypeError, ValueError):
         line_seq = 0
-    b2_roll_pipeline_insp_first = 0 if task.get("roll_pipeline_inspection") else 1
     try:
         dto = int(task.get("dispatch_trial_order") or 10**9)
     except (TypeError, ValueError):
         dto = 10**9
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
+    ec = bool(task.get("roll_pipeline_ec"))
+    if ec:
+        b2_roll_pipeline_stage = 0
+    elif rp and not ip:
+        b2_roll_pipeline_stage = 1
+    else:
+        b2_roll_pipeline_stage = 2
     b1_trial_early = (0, dto) if (rp and ip) else (1, 0)
     return (
         (
@@ -9721,7 +9740,7 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
             r,
             line_seq,
             dto,
-            b2_roll_pipeline_insp_first,
+            b2_roll_pipeline_stage,
             _plan_sheet_priority_sort_value(task),
         )
         + _result_task_sheet_sort_key(task)

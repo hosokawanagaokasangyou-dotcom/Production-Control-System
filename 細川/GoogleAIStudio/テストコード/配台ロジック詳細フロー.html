@@ -297,7 +297,7 @@ flowchart TB
     <tr><td>5</td><td><span class="mono">process_sequence_rank</span></td><td><span class="mono">加工内容</span>から算出した工程順</td></tr>
     <tr><td>6</td><td><span class="mono">same_request_line_seq</span></td><td>同一依頼NO内の行順（読込順）</td></tr>
     <tr><td>7</td><td><span class="mono">dispatch_trial_order</span></td><td>キュー全体の試行順（初回ソート後 enumerate）</td></tr>
-    <tr><td>8</td><td>§B-2 パイプライン検査</td><td><span class="mono">roll_pipeline_inspection</span> の同帯前倒し（<span class="mono">b2_roll_pipeline_insp_first</span>）</td></tr>
+    <tr><td>8</td><td>§B-2 帯内順</td><td><span class="mono">b2_roll_pipeline_stage</span>：0=<span class="mono">roll_pipeline_ec</span>（EC 先行）、1=未着手<span class="mono">roll_pipeline_inspection</span>、2=その他</td></tr>
     <tr><td>9</td><td>計画シート優先度</td><td><span class="mono">_plan_sheet_priority_sort_value</span></td></tr>
     <tr><td>10+</td><td><span class="mono">_result_task_sheet_sort_key</span></td><td>結果一覧用の安定ソートキー</td></tr>
   </tbody>
