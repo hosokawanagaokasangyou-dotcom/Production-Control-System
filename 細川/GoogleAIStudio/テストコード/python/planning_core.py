@@ -7828,6 +7828,97 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
 )
 
+# 配台デバッグ: 1 ロールごとに JSONL へ追記（DISPATCH_ROLL_TRACE_JSONL）、
+# または DISPATCH_DEBUG_STOP_AFTER_ROLLS 到達でシミュレーションを打ち切り（部分タイムラインのまま結果出力へ）。
+_DISPATCH_ROLL_TRACE_SEQ = 0
+_DISPATCH_ROLL_TRACE_PATH: str | None = None
+_DISPATCH_DEBUG_STOP_AFTER_ROLLS: int | None = None
+_DISPATCH_DEBUG_STOP_FLAG = False
+
+
+def _dispatch_debug_should_stop_early() -> bool:
+    return _DISPATCH_DEBUG_STOP_FLAG
+
+
+def _dispatch_debug_reset_roll_trace(workbook_path: str | None) -> None:
+    """generate_plan のスケジューリング開始直前に呼ぶ。JSONL を空にし、ロール计数・停止フラグをリセット。"""
+    global _DISPATCH_ROLL_TRACE_SEQ, _DISPATCH_ROLL_TRACE_PATH, _DISPATCH_DEBUG_STOP_AFTER_ROLLS
+    global _DISPATCH_DEBUG_STOP_FLAG
+    _DISPATCH_DEBUG_STOP_FLAG = False
+    _DISPATCH_ROLL_TRACE_SEQ = 0
+    raw = (os.environ.get("DISPATCH_ROLL_TRACE_JSONL") or "").strip()
+    stop_raw = (os.environ.get("DISPATCH_DEBUG_STOP_AFTER_ROLLS") or "").strip()
+    if stop_raw.isdigit():
+        _DISPATCH_DEBUG_STOP_AFTER_ROLLS = max(1, int(stop_raw))
+        if not raw:
+            raw = "log/dispatch_roll_trace.jsonl"
+    else:
+        _DISPATCH_DEBUG_STOP_AFTER_ROLLS = None
+    if not raw:
+        _DISPATCH_ROLL_TRACE_PATH = None
+        return
+    if workbook_path:
+        _DISPATCH_ROLL_TRACE_PATH = _resolve_path_relative_to_workbook(workbook_path, raw)
+    else:
+        _DISPATCH_ROLL_TRACE_PATH = os.path.abspath(raw)
+    _d = os.path.dirname(_DISPATCH_ROLL_TRACE_PATH)
+    if _d:
+        os.makedirs(_d, exist_ok=True)
+    with open(_DISPATCH_ROLL_TRACE_PATH, "w", encoding="utf-8") as f:
+        f.write("")
+    if _DISPATCH_ROLL_TRACE_PATH or _DISPATCH_DEBUG_STOP_AFTER_ROLLS is not None:
+        logging.info(
+            "配台デバッグ: ロールトレース path=%s STOP_AFTER=%s",
+            _DISPATCH_ROLL_TRACE_PATH or "（カウントのみ・ファイルなし）",
+            _DISPATCH_DEBUG_STOP_AFTER_ROLLS,
+        )
+
+
+def _dispatch_roll_trace_after_roll(
+    current_date: date,
+    task: dict,
+    eq_line: str,
+    start_dt,
+    end_dt,
+    units_done: float,
+    rem_rolls_after: int,
+    lead_op: str,
+    sub_members: list,
+) -> None:
+    """タイムラインに 1 ロール追記した直後に呼ぶ。JSONL・早期停止判定。"""
+    global _DISPATCH_ROLL_TRACE_SEQ, _DISPATCH_DEBUG_STOP_FLAG
+    if _DISPATCH_ROLL_TRACE_PATH is None and _DISPATCH_DEBUG_STOP_AFTER_ROLLS is None:
+        return
+    p = _DISPATCH_ROLL_TRACE_PATH
+    _DISPATCH_ROLL_TRACE_SEQ += 1
+    seq = _DISPATCH_ROLL_TRACE_SEQ
+    st_s = start_dt.isoformat(sep=" ") if hasattr(start_dt, "isoformat") else str(start_dt)
+    ed_s = end_dt.isoformat(sep=" ") if hasattr(end_dt, "isoformat") else str(end_dt)
+    rec = {
+        "seq": seq,
+        "date": str(current_date),
+        "task_id": str(task.get("task_id") or ""),
+        "machine_line": str(eq_line),
+        "dispatch_trial_order": task.get("dispatch_trial_order"),
+        "start_dt": st_s,
+        "end_dt": ed_s,
+        "units_done": float(units_done),
+        "remaining_rolls_after": int(rem_rolls_after),
+        "lead_op": str(lead_op or "").strip(),
+        "subs": ",".join(str(x).strip() for x in (sub_members or []) if x and str(x).strip()),
+    }
+    if p:
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    lim = _DISPATCH_DEBUG_STOP_AFTER_ROLLS
+    if lim is not None and seq >= lim:
+        _DISPATCH_DEBUG_STOP_FLAG = True
+        logging.info(
+            "配台デバッグ: DISPATCH_DEBUG_STOP_AFTER_ROLLS=%s に達したためこの時点で割付シミュレーションを打ち切ります（以降は未割当のまま結果シートへ）。",
+            lim,
+        )
+
+
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
 #    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
@@ -10958,6 +11049,21 @@ def _trial_order_first_schedule_pass(
                 avail_dt[m] = best_end
             if not _gpo.get("abolish_all_scheduling_limits"):
                 machine_avail_dt[eq_line] = best_end
+            rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
+            _dispatch_roll_trace_after_roll(
+                current_date,
+                task,
+                eq_line,
+                best_start,
+                best_end,
+                float(done_units),
+                rem_after,
+                lead_op,
+                list(sub_members),
+            )
+            if _dispatch_debug_should_stop_early():
+                made_local = True
+                return made_local
             preferred_team = best_team
             made_local = True
         return made_local
@@ -11470,6 +11576,9 @@ def generate_plan():
         t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
         t["assigned_history"].clear()
     timeline_events.clear()
+    _dispatch_debug_reset_roll_trace(
+        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
+    )
 
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
@@ -11618,6 +11727,9 @@ def generate_plan():
                         _need_headcount_logged_orders,
                         team_combo_presets,
                     )
+                    if _dispatch_debug_should_stop_early():
+                        _sched_made_progress = True
+                        break
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
@@ -12358,7 +12470,21 @@ def generate_plan():
                                 avail_dt[m] = best_info["end_dt"]
                             if not _gpo.get("abolish_all_scheduling_limits"):
                                 machine_avail_dt[eq_line] = best_info["end_dt"]
+                            rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
+                            _dispatch_roll_trace_after_roll(
+                                current_date,
+                                task,
+                                eq_line,
+                                best_info["start_dt"],
+                                best_info["end_dt"],
+                                float(done_units),
+                                rem_after,
+                                str(best_info.get("op") or ""),
+                                list(sub_members),
+                            )
                             _sched_made_progress = True
+                            if _dispatch_debug_should_stop_early():
+                                break
                         else:
                             if task.get("has_done_deadline_override"):
                                 logging.info(
@@ -12368,6 +12494,8 @@ def generate_plan():
                                     task.get("remaining_units"),
                                 )
     
+                if _dispatch_debug_should_stop_early():
+                    break
                 if not _sched_made_progress:
                     break
 
@@ -12479,6 +12607,8 @@ def generate_plan():
                                     ",".join(_cap_tids),
                                 )
 
+        if _dispatch_debug_should_stop_early():
+            break
         if _full_calendar_without_deadline_restart:
             break
 

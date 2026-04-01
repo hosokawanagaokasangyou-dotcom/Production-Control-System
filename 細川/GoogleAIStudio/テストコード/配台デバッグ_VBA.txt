@@ -1,0 +1,51 @@
+' =========================================================
+' 配台デバッグ: 1 ロールごとのトレースを Excel で確認する（標準モジュールに貼り付け）
+' =========================================================
+' 前提: xlwings 参照 ON・Show Console・xlwings.conf.json で PYTHONPATH=python
+'
+' 【仕組み】
+'   planning_core が各ロール割付成功時に log/dispatch_roll_trace.jsonl へ1行ずつ追記する。
+'   Python が「配台_ロールトレース」シートに一覧を流し込む。
+'   人が行を順に見て「どの順で・どのタスクが・どの設備に入ったか」を現認する。
+'
+' 環境変数（任意・Windows のシステム環境 or xlwings.conf では直接書けない場合は
+'   バッチ起動や planning_dispatch_debug からの実行で設定）:
+'   DISPATCH_ROLL_TRACE_JSONL=log/dispatch_roll_trace.jsonl  … JSONL のパス
+'   DISPATCH_DEBUG_STOP_AFTER_ROLLS=5  … 5ロールで段階2の割付シミュレーションを打ち切り（部分結果で原因調査）
+'
+' RunPython 文字列は1行（改行不可）のため、下記は1行にまとめて登録してください。
+' =========================================================
+
+' 段階2実行後に JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり）
+Sub 配台デバッグ_ロールトレースをシートに表示()
+    RunPython "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
+End Sub
+
+' JSONL を有効にした段階2 → 続けて同じブックにロールトレースシートを表示（ワンショット調査向け）
+Sub 配台デバッグ_段階2とロールトレースシート()
+    RunPython "import xlwings_console_runner as _xw; _xw.run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings()"
+End Sub
+
+' アクティブシートが「配台_ロールトレース」のとき、選択行を1つ下へ（現認用の「進む」）
+' ※ シートを表示したあと、最初のデータ行（行2）を選んでから繰り返し実行すると見やすい
+Sub 配台デバッグ_進む_次の行を選択()
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    If ws Is Nothing Then Exit Sub
+    If ws.Name <> "配台_ロールトレース" Then
+        MsgBox "シート「配台_ロールトレース」を表示してから実行してください。", vbExclamation
+        Exit Sub
+    End If
+    If ws.UsedRange.Rows.Count < 2 Then
+        MsgBox "データ行がありません。", vbInformation
+        Exit Sub
+    End If
+    On Error Resume Next
+    ws.Cells(ActiveCell.Row + 1, ActiveCell.Column).Select
+    If Err.Number <> 0 Then
+        Err.Clear
+        ws.Cells(2, 1).Select
+    End If
+    On Error GoTo 0
+    ActiveWindow.ScrollRow = ActiveCell.Row
+End Sub
