@@ -7822,7 +7822,7 @@ ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES = max(
 )
 ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     0,
-    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "25").strip() or 0),
+    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "50").strip() or 0),
 )
 
 # =========================================================
@@ -7892,6 +7892,44 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
         return None
     return ts
+
+
+def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
+    """
+    設備毎の時間割・メンバー日程・稼働率用インデックス向け。
+    1 本のイベントが日をまたぐ場合、e["date"] だけ当日に載せると翌朝セグメントが欠けるため、
+    start_dt〜end_dt を各就業日 DEFAULT_START_TIME〜DEFAULT_END_TIME にクリップした複製へ展開する。
+    """
+    expanded: list = []
+    for e in timeline_events:
+        sd = e.get("start_dt")
+        ed = e.get("end_dt")
+        if not isinstance(sd, datetime) or not isinstance(ed, datetime):
+            expanded.append(e)
+            continue
+        if ed <= sd:
+            expanded.append(e)
+            continue
+        segments: list = []
+        cal = sd.date()
+        last_d = ed.date()
+        while cal <= last_d:
+            w0 = datetime.combine(cal, DEFAULT_START_TIME)
+            w1 = datetime.combine(cal, DEFAULT_END_TIME)
+            a = max(sd, w0)
+            b = min(ed, w1)
+            if a < b:
+                ne = dict(e)
+                ne["date"] = cal
+                ne["start_dt"] = a
+                ne["end_dt"] = b
+                segments.append(ne)
+            cal += timedelta(days=1)
+        if segments:
+            expanded.extend(segments)
+        else:
+            expanded.append(e)
+    return expanded
 
 
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
@@ -12443,9 +12481,11 @@ def generate_plan():
             )
 
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
-    events_by_date = defaultdict(list)
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
+    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
+    events_by_date = defaultdict(list)
+    for e in timeline_for_eq_grid:
         events_by_date[e["date"]].append(e)
 
     # =========================================================
