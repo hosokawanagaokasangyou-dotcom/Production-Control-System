@@ -10791,15 +10791,6 @@ def _trial_order_flow_eligible_tasks(
             <= 1e-12
         ):
             continue
-        # §B-2: 同一依頼の EC が 1 ロールでも残っている間は前進配台で検査を載せない。
-        # 全日の EC 完走後に `_run_b2_inspection_rewind_pass` で日付先頭から検査を詰める。
-        _tid_elig = str(task.get("task_id", "") or "").strip()
-        if (
-            task.get("roll_pipeline_inspection")
-            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid_elig)
-            and not _pipeline_ec_fully_done_for_tid(task_queue, _tid_elig)
-        ):
-            continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                 task_queue,
@@ -12505,27 +12496,6 @@ def generate_plan():
                                     task.get("machine"),
                                     _ec_d,
                                     _in_d,
-                                    float(task.get("remaining_units") or 0),
-                                )
-                            continue
-                        _tid_legacy = str(task.get("task_id", "") or "").strip()
-                        if (
-                            task.get("roll_pipeline_inspection")
-                            and _task_queue_has_roll_pipeline_ec_for_tid(
-                                task_queue, _tid_legacy
-                            )
-                            and not _pipeline_ec_fully_done_for_tid(
-                                task_queue, _tid_legacy
-                            )
-                        ):
-                            if _trace_schedule_task_enabled(task.get("task_id")):
-                                _log_dispatch_trace_schedule(
-                                    _tid_legacy,
-                                    "[配台トレース task=%s] スキップ: §B-2 EC 未完走のため前進では検査しない "
-                                    "day=%s machine=%s rem_insp=%.4f",
-                                    _tid_legacy,
-                                    current_date,
-                                    task.get("machine"),
                                     float(task.get("remaining_units") or 0),
                                 )
                             continue
