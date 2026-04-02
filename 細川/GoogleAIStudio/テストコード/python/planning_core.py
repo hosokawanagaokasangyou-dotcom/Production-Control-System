@@ -5834,9 +5834,8 @@ def build_task_queue_from_planning_df(
         # 1) 特別指定_備考 AI の完了・出荷目標日 … 備考に納期・期限・最優先等の文言がある行のみ
         # 2) 特別指定_備考 AI の start_date（目標日が無い場合の締め）… 同上
         # 3) 指定納期_上書き（空白は無視済み）
-        # 4) 原反投入日（原反がある行は計画基準納期＝原反投入日）
-        # 5) 回答納期
-        # 6) 指定納期
+        # 4) 回答納期
+        # 5) 指定納期
         due_basis = None
         due_source = "none"
         due_source_rank = 9
@@ -5906,18 +5905,14 @@ def build_task_queue_from_planning_df(
             due_source = "specified_due_override"
             due_source_rank = 3
             has_done_deadline_override = True
-        elif raw_input_date is not None:
-            due_basis = raw_input_date
-            due_source = "raw_input_same_as_plan_basis"
-            due_source_rank = 4
         elif answer_due is not None:
             due_basis = answer_due
             due_source = "answer_due"
-            due_source_rank = 5
+            due_source_rank = 4
         elif specified_due is not None:
             due_basis = specified_due
             due_source = "specified_due"
-            due_source_rank = 6
+            due_source_rank = 5
 
         if speed_ov is not None:
             speed = speed_ov
