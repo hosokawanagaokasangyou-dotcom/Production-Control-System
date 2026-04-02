@@ -195,33 +195,68 @@
 </table>
 
 <h2>5. <span class="mono">generate_plan</span> 全体フロー</h2>
+<p class="note">外側 <span class="mono">while True</span> は、<strong>納期超過リトライ</strong>で日中の <span class="mono">for current_date</span> を途中 break したときに<strong>次のラウンド</strong>へ進みます。<strong>カレンダーを最後まで通した</strong>ラウンドの末尾で <span class="mono">_run_b2_inspection_rewind_pass</span> が一度だけ走り、その後 <span class="mono">while</span> を抜けます（実装: <span class="mono">planning_core.generate_plan</span>）。</p>
 <div class="mermaid">
 flowchart TB
-  subgraph load["読込・準備"]
-    A[generate_plan] --> B[load_skills_and_needs]
-    B --> C[skills_dict / members / equipment_list / req_map / need_rules / surplus_map]
-    A --> D[load_attendance_and_analyze]
-    D --> E[attendance_data]
-    A --> F[メインシート グローバルコメント]
-    F --> G[global_priority_override + 工場休業を勤怠に反映]
-    A --> H[load_planning_tasks_df]
-    H --> I[tasks_df]
-    I --> J[validate_no_duplicate_explicit_plan_priorities]
-    J --> K[analyze_task_special_remarks 特別指定_備考→AI]
-    K --> L[build_task_queue_from_planning_df]
-    L --> M[task_queue 各 dict]
-    M --> N[start_date_req 非稼働日補正]
-    N --> O[task_queue.sort 初回優先度キー]
-    O --> P[dispatch_trial_order 付与]
-    P --> Q[残量・履歴・timeline 初期化]
+  subgraph prep["読込・準備"]
+    A[generate_plan] --> B[skills/need・勤怠・tasks_df・メイン全局・特別指定AI]
+    B --> C[task_queue 構築・初回ソート]
+    C --> D[dispatch_trial_order 付与]
+    D --> E[残量・履歴・timeline_events 初期化]
   end
   subgraph outer["外側 while True"]
-    Q --> R{納期シフトでカレンダー再実行?}
-    R --> S[for current_date]
-    S --> T{全日終了}
-    T --> U{STAGE2_RETRY で break した?}
-    U -->|はい| R
-    U -->|いいえ| V[Excel 出力・終了]
+    E --> F{_outer_retry_round > 0 ?}
+    F -->|Yes| F1[勤怠の拡張日を除去し sorted_dates をテンプレに戻す]
+    F -->|No| G
+    F1 --> G[plan_day_iter で全日を順に走査]
+    G --> H[各 current_date: 日内マルチパス §6]
+    H --> I{当日終了: 納期超過で当該依頼を巻き戻し?}
+    I -->|Yes for を break 全日程未完了扱い| F
+    I -->|No| J{次の計画日がある?}
+    J -->|Yes| G
+    J -->|No| K{デバッグ早期終了?}
+    K -->|Yes| END[while 脱出]
+    K -->|No| L{full_calendar_without_deadline_restart ?}
+    L -->|Yes| M[B-2 _run_b2_inspection_rewind_pass]
+    M --> N[while True を break]
+    L -->|No 再度外側へ| F
+    N --> END
+  end
+  subgraph post["while 脱出後"]
+    END --> P[配台トレース集計・余力サブ追記・Excel 出力]
+  end
+</div>
+
+<h3>5.1 試行順優先（既定）の 1 パス二相と B-2 リワインド</h3>
+<p class="src"><span class="mono">STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</span> のときの <span class="mono">_trial_order_first_schedule_pass</span> と、全日終了後の再走査を図示しています。B-2 検査は <span class="mono">_trial_order_flow_eligible_tasks</span> で <strong>同一依頼の EC が全日完走するまで前進候補に入りません</strong>（<span class="file">配台ルール.md</span> B-2 節参照）。</p>
+<div class="mermaid">
+flowchart TB
+  subgraph onepass["_trial_order_first_schedule_pass の 1 パス"]
+    T0[eligible = _trial_order_flow_eligible_tasks] --> T1{候補あり?}
+    T0 -.-> E0
+    T1 -->|No| TF[進捗なしでパス終了]
+    T1 -->|Yes| T2[dispatch_trial_order 昇順に並べ替え]
+    T2 --> T3[フェーズ1: B-2 検査行以外を順に _drain_rolls_for_task]
+    T3 --> T4[フェーズ2: B-2 検査行のみ同順に _drain]
+    T4 --> T5{いずれかでロール確定?}
+    T5 -->|Yes| TO[進捗あり]
+    T5 -->|No| TF
+  end
+  subgraph drain["_drain_rolls_for_task（概要）"]
+    D0{remaining_units > 0 ?} -->|No| Dend[終了]
+    D0 -->|Yes| D1[_assign_one_roll_trial_order_flow]
+    D1 -->|None| Dend
+    D1 -->|OK| D2[timeline_events 追記・avail と machine 空き更新]
+    D2 --> D0
+  end
+  subgraph eligible_note["B-2 検査の候補条件（抜粋）"]
+    E0["assign_room で枠ゼロなら除外 / 同一依頼で EC 未完走なら除外 / 先行工程・設備占有・試行順 等"]
+  end
+  subgraph rewind["_run_b2_inspection_rewind_pass（全日通し後）"]
+    R0{EC 完走かつ検査に残ありの B-2 依頼がある?} -->|No| Rskip[何もしない]
+    R0 -->|Yes| R1[sorted_dates 先頭から日付ループ]
+    R1 --> R2[timeline から seeds し _trial_order_first_schedule_pass を繰り返し]
+    R2 --> R3[検査ロールを詰める]
   end
 </div>
 
@@ -333,7 +368,7 @@ flowchart TB
 </table>
 
 <hr />
-<p class="src">生成: planning_core の列定数・generate_plan 付近の実装に基づく。ファイル: 配台ロジック詳細フロー.html</p>
+<p class="src">生成: planning_core の列定数・generate_plan 付近の実装に基づく。§5 / §5.1 の Mermaid は 2026-04-02 時点の制御フロー。ファイル: 配台ロジック詳細フロー.html</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
