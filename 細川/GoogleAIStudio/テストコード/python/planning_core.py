@@ -1011,9 +1011,9 @@ RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
-# 段階2の結果 xlsx 生成後、入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製する（既定 OFF）
+# 段階2の結果 xlsx 生成後、入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製する（既定 ON。無効化は STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
-    "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", ""
+    "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
@@ -3818,7 +3818,7 @@ def _stage2_try_copy_column_config_shapes_from_input(
 ) -> None:
     """
     pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
-    STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=1 のとき、入力ブックの
+    既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
     「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーする。
     openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
