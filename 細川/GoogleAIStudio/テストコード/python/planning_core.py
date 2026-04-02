@@ -10720,20 +10720,25 @@ def _trial_order_flow_day_start_floor(
 ) -> datetime:
     """原反投入日を起点に、その日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
+    # §B-2 検査（roll_pipeline_inspection）は EC 完了を待って開始できるため、
+    # 原反投入日（=同日13:00以降）の制約をそのまま適用すると検査が不必要に後ろへ倒れる。
+    # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を取る。
+    is_b2_inspection = bool(task.get("roll_pipeline_inspection"))
     rid = task.get("raw_input_date")
-    if isinstance(rid, date) and rid == current_date:
+    if not is_b2_inspection and isinstance(rid, date) and rid == current_date:
         floor = max(floor, datetime.combine(current_date, time(13, 0)))
     sdl = task.get("same_day_raw_start_limit")
     s_req = task.get("start_date_req")
     if (
-        sdl
+        (not is_b2_inspection)
+        and sdl
         and isinstance(s_req, date)
         and current_date == s_req
         and isinstance(sdl, time)
     ):
         floor = max(floor, datetime.combine(current_date, sdl))
     est = task.get("earliest_start_time")
-    if isinstance(s_req, date) and current_date == s_req and est:
+    if (not is_b2_inspection) and isinstance(s_req, date) and current_date == s_req and est:
         if isinstance(est, time):
             floor = max(floor, datetime.combine(current_date, est))
     if current_date == macro_run_date and floor < macro_now_dt:
