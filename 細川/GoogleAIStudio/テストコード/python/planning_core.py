@@ -5952,26 +5952,32 @@ def build_task_queue_from_planning_df(
             due_urgent = due_basis <= run_date
 
         # 開始日ルール:
-        # 1) 原反投入日があるときは「原反当日から」可（同日開始は 13:00 以降。same_day_raw_start_limit）
-        #    原反が無いときは run_date
-        # 2) 特別指定（セル/AI）の開始日がある場合はそれを優先
+        # 1) 原反投入日があるときは「原反投入日 13:00 以降」を開始可能日時の下限とする。
+        #    （日付下限: max(run_date, raw_input_date)、同日時間下限: 13:00）
+        # 2) 特別指定（セル/AI）の開始日がある場合も、原反投入日より前倒しにはしない（date 下限を維持）
+        # 3) 原反が無いときは run_date
         if raw_input_date:
             effective_start_date = max(run_date, raw_input_date)
         else:
             effective_start_date = run_date
         if start_date_ov is not None:
-            effective_start_date = start_date_ov
-            if raw_input_date and start_date_ov <= raw_input_date:
+            effective_start_date = (
+                max(start_date_ov, raw_input_date)
+                if raw_input_date
+                else start_date_ov
+            )
+            if raw_input_date and start_date_ov < raw_input_date:
                 logging.info(
-                    "開始日上書きを優先: 依頼NO=%s 指定開始日=%s 原反投入日=%s（当日開始を許容）",
+                    "開始日上書きは原反投入日より前倒し不可: 依頼NO=%s 指定開始日=%s 原反投入日=%s 採用開始日=%s",
                     task_id,
                     start_date_ov,
                     raw_input_date,
+                    effective_start_date,
                 )
 
         same_day_raw_start_limit = (
             time(13, 0)
-            if (raw_input_date and start_date_ov is None and effective_start_date == raw_input_date)
+            if (raw_input_date and effective_start_date == raw_input_date)
             else None
         )
 
