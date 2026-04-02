@@ -9380,6 +9380,8 @@ def load_team_combination_presets_from_master() -> dict[
     [(組合せ優先度, 必要人数またはNone, メンバータプル, 組合せ行IDまたはNone), ...] を返す。
     同一キー内は優先度昇順、同順位はシート上の行順。
     「必要人数」列は配台時に need 基本人数より優先する（メンバー列人数と一致すること）。
+    配台では成立したプリセットをすべて候補に載せ、組合せ探索とまとめて team_start 等で最良を選ぶ
+    （シート優先度は試行順のみ。先頭プリセットの即決はしない）。
     A 列「組合せ行ID」が無い／空の旧シートでは ID は None。
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
@@ -11397,6 +11399,9 @@ def _assign_one_roll_trial_order_flow(
         if (team_combo_presets and combo_key)
         else None
     )
+    team_candidates: list[dict] = []
+    # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
+    # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
     if preset_rows:
         for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
             bounds = _combo_preset_team_size_bounds(
@@ -11415,22 +11420,13 @@ def _assign_one_roll_trial_order_flow(
                 tuple(preset_team), min_n=lo_pt, max_n=hi_pt
             )
             if got is not None:
-                return {
-                    **got,
-                    "extra_max": extra_max,
-                    "rq_base": rq_base,
-                    "need_src_line": need_src_line,
-                    "extra_src_line": extra_src_line,
-                    "machine": machine,
-                    "machine_name": machine_name,
-                    "eq_line": eq_line,
-                    "req_num": req_num,
-                    "max_team_size": max_team_size,
-                    "combo_sheet_row_id": combo_row_id,
-                    "combo_preset_team": tuple(preset_team),
-                }
-
-    team_candidates: list[dict] = []
+                team_candidates.append(
+                    {
+                        **got,
+                        "combo_sheet_row_id": combo_row_id,
+                        "combo_preset_team": tuple(preset_team),
+                    }
+                )
     for tsize in range(req_num, max_team_size + 1):
         if (
             pref_mem is not None
@@ -12887,7 +12883,7 @@ def generate_plan():
                             if (team_combo_presets and combo_key)
                             else None
                         )
-                        preset_matched = False
+                        # プリセットは成立分をすべて候補に載せ、下の組合せ探索とまとめて最良を選ぶ。
                         if preset_rows:
                             for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
                                 pteam = tuple(preset_team)
@@ -12900,7 +12896,7 @@ def generate_plan():
                                     continue
                                 if not all(m in capable_members for m in pteam):
                                     continue
-                                if _append_legacy_dispatch_candidate_for_team(
+                                _append_legacy_dispatch_candidate_for_team(
                                     task,
                                     pteam,
                                     avail_dt,
@@ -12917,13 +12913,9 @@ def generate_plan():
                                     team_candidates,
                                     combo_sheet_row_id=combo_row_id,
                                     combo_preset_team=pteam,
-                                ):
-                                    preset_matched = True
-                                    break
+                                )
     
                         for tsize in range(req_num, max_team_size + 1):
-                            if preset_matched:
-                                break
                             if (
                                 pref_mem is not None
                                 and pref_mem in capable_members
