@@ -3614,6 +3614,39 @@ def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
             cell.alignment = top
 
 
+def _apply_result_task_history_need_surplus_highlight(
+    worksheet, column_names: list, sorted_tasks: list
+):
+    """
+    need「配台時追加人数」相当で基本必要人数を超えて採用したブロック、または
+    メイン完了後の余力追記でサブが増えたブロックに対応する「履歴n」セルを薄黄に塗る。
+    """
+    hist_cols: list[tuple[int, int]] = []
+    for col_idx, col_name in enumerate(column_names, 1):
+        m = re.match(r"^履歴(\d+)$", str(col_name).strip())
+        if m:
+            hist_cols.append((int(m.group(1)), col_idx))
+    hist_cols.sort(key=lambda x: x[0])
+    if not hist_cols or worksheet.max_row < 2:
+        return
+    fill_surplus = PatternFill(
+        start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"
+    )
+    n_tasks = len(sorted_tasks)
+    for r in range(2, worksheet.max_row + 1):
+        ti = r - 2
+        if ti < 0 or ti >= n_tasks:
+            continue
+        ah = sorted_tasks[ti].get("assigned_history") or []
+        for ord1, cidx in hist_cols:
+            i = ord1 - 1
+            if i < 0 or i >= len(ah):
+                continue
+            if not ah[i].get("need_surplus_assigned"):
+                continue
+            worksheet.cell(row=r, column=cidx).fill = fill_surplus
+
+
 def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
@@ -11200,6 +11233,9 @@ def _trial_order_first_schedule_pass(
                     "date": current_date.strftime("%m/%d"),
                     "team": team_s,
                     "done_m": int(done_units * task["unit_m"]),
+                    "start_dt": best_start,
+                    "end_dt": best_end,
+                    "need_surplus_assigned": len(best_team) > rq_base,
                 }
             )
             for m in best_team:
@@ -11439,6 +11475,15 @@ def append_surplus_staff_after_main_dispatch(
         for m in chosen:
             busy[m].append((st, ed))
         appended_total += len(chosen)
+        _hist = task.get("assigned_history")
+        if _hist:
+            for h in _hist:
+                if (
+                    h.get("start_dt") == st
+                    and h.get("end_dt") == ed
+                ):
+                    h["need_surplus_assigned"] = True
+                    break
 
     return appended_total
 
@@ -12673,6 +12718,9 @@ def generate_plan():
                                     "date": current_date.strftime("%m/%d"),
                                     "team": team_s,
                                     "done_m": int(done_units * task["unit_m"]),
+                                    "start_dt": best_info["start_dt"],
+                                    "end_dt": best_info["end_dt"],
+                                    "need_surplus_assigned": len(best_team) > rq_base,
                                 }
                             )
 
@@ -13314,6 +13362,10 @@ def generate_plan():
                 if st in ("配台不可", "配台残"):
                     for c in range(1, max_col + 1):
                         worksheet_tasks.cell(row=r, column=c).fill = unscheduled_fill
+
+        _apply_result_task_history_need_surplus_highlight(
+            worksheet_tasks, list(df_tasks.columns), sorted_tasks_for_result
+        )
 
         _apply_result_task_task_id_content_mismatch_highlight(
             worksheet_tasks, list(df_tasks.columns), sorted_tasks_for_result
