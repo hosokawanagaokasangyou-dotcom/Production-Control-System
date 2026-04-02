@@ -805,7 +805,8 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
     """
     配台トレース対象ごとに log/dispatch_trace_<依頼NO>.txt を新規作成（当該段階2実行の冒頭で1回）。
     実行前に log 内の dispatch_trace_*.txt をすべて削除し、過去実行の残骸を残さない。
-    execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行のみ _log_dispatch_trace_schedule で追記。
+    execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行を _log_dispatch_trace_schedule で追記
+    （日次残・ロール確定の余剰有無・余力追記・終了時サマリ等）。
     """
     if not TRACE_SCHEDULE_TASK_IDS:
         return
@@ -8074,6 +8075,8 @@ def _dispatch_roll_trace_after_roll(
     rem_rolls_after: int,
     lead_op: str,
     sub_members: list,
+    *,
+    roll_surplus_meta: dict | None = None,
 ) -> None:
     """タイムラインに 1 ロール追記した直後に呼ぶ。JSONL・早期停止判定。"""
     global _DISPATCH_ROLL_TRACE_SEQ, _DISPATCH_DEBUG_STOP_FLAG
@@ -8097,6 +8100,8 @@ def _dispatch_roll_trace_after_roll(
         "lead_op": str(lead_op or "").strip(),
         "subs": ",".join(str(x).strip() for x in (sub_members or []) if x and str(x).strip()),
     }
+    if roll_surplus_meta:
+        rec.update(roll_surplus_meta)
     if p:
         with open(p, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -11260,7 +11265,33 @@ def _trial_order_first_schedule_pass(
                 rem_after,
                 lead_op,
                 list(sub_members),
+                roll_surplus_meta={
+                    "surplus_phase": "main",
+                    "req_num": req_num_run,
+                    "team_size": len(best_team),
+                    "extra_max_main_pass": extra_max_run,
+                    "need_surplus_assigned": need_surplus_assigned,
+                    "team_summary": team_s,
+                },
             )
+            if _trace_schedule_task_enabled(task.get("task_id")):
+                _log_dispatch_trace_schedule(
+                    task.get("task_id"),
+                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
+                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
+                    "余剰人数適用(メイン)=%s team=%s",
+                    task.get("task_id"),
+                    current_date,
+                    eq_line,
+                    str(task.get("machine_name") or "").strip(),
+                    best_start,
+                    best_end,
+                    len(best_team),
+                    req_num_run,
+                    extra_max_run,
+                    need_surplus_assigned,
+                    team_s,
+                )
             if _dispatch_debug_should_stop_early():
                 made_local = True
                 return made_local
@@ -11506,6 +11537,27 @@ def append_surplus_staff_after_main_dispatch(
                         h["need_surplus_assigned"] = True
                     h["team"] = team_sync
                     break
+
+        if _trace_schedule_task_enabled(tid):
+            _log_dispatch_trace_schedule(
+                tid,
+                "[配台トレース task=%s] 余力追記(メイン完了後) day=%s machine=%s machine_name=%s "
+                "start=%s end=%s 追記人数=%s 追記前人数=%s 追記後人数=%s req_num=%s "
+                "need追加枠(シート)=%s 履歴黄(余剰人数超過)=%s 追記メンバー=%s",
+                tid,
+                d,
+                str(machine or "").strip(),
+                machine_name,
+                st,
+                ed,
+                len(chosen),
+                team_size_before,
+                final_team_size,
+                req_num,
+                extra_max_sheet,
+                highlight_surplus,
+                ",".join(chosen),
+            )
 
     return appended_total
 
@@ -12766,7 +12818,33 @@ def generate_plan():
                                 rem_after,
                                 str(best_info.get("op") or ""),
                                 list(sub_members),
+                                roll_surplus_meta={
+                                    "surplus_phase": "main",
+                                    "req_num": int(req_num),
+                                    "team_size": len(best_team),
+                                    "extra_max_main_pass": int(extra_max),
+                                    "need_surplus_assigned": need_surplus_assigned,
+                                    "team_summary": team_s,
+                                },
                             )
+                            if _trace_schedule_task_enabled(task.get("task_id")):
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
+                                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
+                                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
+                                    "余剰人数適用(メイン)=%s team=%s",
+                                    task.get("task_id"),
+                                    current_date,
+                                    eq_line,
+                                    str(machine_name or "").strip(),
+                                    best_info["start_dt"],
+                                    best_info["end_dt"],
+                                    len(best_team),
+                                    int(req_num),
+                                    int(extra_max),
+                                    need_surplus_assigned,
+                                    team_s,
+                                )
                             _sched_made_progress = True
                             if _dispatch_debug_should_stop_early():
                                 break
