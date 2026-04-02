@@ -240,8 +240,9 @@
       <li><strong>ハイライトしない</strong>: その依頼についてトークンが1つも無い（加工内容が未記入のみ等）場合は、比較基準が無いため色を付けません。</li>
       <li><strong>ハイライトする</strong>: トークンがあるのに、工程名が（NFKC 等の正規化後）いずれのトークンとも一致しないとき。</li>
       <li><strong>配台不可／配台残</strong>の行全体の薄い黄より<strong>後</strong>にタスクIDだけ上書きするため、該当セルは赤が優先されます。</li>
+      <li><strong>結果_設備毎の時間割へのリンク</strong>: <strong>タスクID</strong>セルに内部ハイパーリンクを付け、時間割で当該タスクが<strong>最初に現れるセル</strong>へジャンプ（未割当のみで時間割に無い行はリンクなし）。<code>_apply_result_task_id_hyperlinks_to_equipment_schedule</code>。</li>
     </ul>
-    <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>。</p>
+    <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>、<code>_apply_result_task_id_hyperlinks_to_equipment_schedule</code>。</p>
     <p><strong>列 配完_回答指定16時まで</strong>: <strong>配完_加工終了</strong>が、<strong>回答納期</strong>の日付＋既定 <strong>16:00</strong>（<code>PLAN_DUE_DAY_COMPLETION_TIME</code>）以前かを判定。回答納期が空なら <strong>指定納期</strong>＋16:00 で判定。値は <code>はい</code>／<code>いいえ</code>／<code>未割当</code>／<code>納期なし</code>（回答・指定とも日付なし）。<code>_result_task_plan_end_within_answer_or_spec_16_label</code>。</p>
   </section>
 
@@ -285,7 +286,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-02・セクション12 デバッグ限定配台・セクション10 JSONL・セクション11 配台トレース・結果_タスク一覧「配完_回答指定16時まで」・B-1/B-2・need 余力・md/html 同期）
+    同一ソース: 配台ルール.md（2026-04-02・セクション9 タスクID→時間割リンク・セクション12 デバッグ限定配台・セクション10 JSONL・セクション11 配台トレース・配完_回答指定16時まで・B-1/B-2・md/html 同期）
   </footer>
 </body>
 </html>

@@ -965,6 +965,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
+RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
@@ -3627,6 +3628,53 @@ def _apply_result_task_task_id_content_mismatch_highlight(
         cell = worksheet.cell(row=i + 2, column=task_id_col_idx)
         cell.fill = fill_red
         cell.font = font_white
+        cell.alignment = top
+
+
+def _apply_result_task_id_hyperlinks_to_equipment_schedule(
+    worksheet_tasks,
+    column_names: list,
+    sorted_tasks_for_row_order: list,
+    task_id_to_schedule_cell: dict[str, str],
+    schedule_sheet_name: str,
+) -> None:
+    """
+    結果_タスク一覧の「タスクID」セルに、結果_設備毎の時間割で当該タスクが最初に現れるセルへの内部ハイパーリンクを付与する。
+    時間割に現れないタスク（未割当のみ等）はリンクなし。
+    """
+    if not task_id_to_schedule_cell or worksheet_tasks.max_row < 2:
+        return
+    task_id_col_idx = None
+    for col_idx, col_name in enumerate(column_names, 1):
+        if str(col_name) == "タスクID":
+            task_id_col_idx = col_idx
+            break
+    if task_id_col_idx is None:
+        return
+    esc = schedule_sheet_name.replace("'", "''")
+    loc_prefix = f"#'{esc}'!"
+    font_link = Font(color="0563C1", underline="single")
+    font_link_on_red = Font(color="FFFFFF", underline="single")
+    top = Alignment(wrap_text=False, vertical="top")
+    n_tasks = len(sorted_tasks_for_row_order)
+    for r in range(2, worksheet_tasks.max_row + 1):
+        cell = worksheet_tasks.cell(row=r, column=task_id_col_idx)
+        raw = cell.value
+        if raw is None:
+            continue
+        tid = str(raw).strip()
+        if not tid:
+            continue
+        addr = task_id_to_schedule_cell.get(tid)
+        if not addr:
+            continue
+        cell.hyperlink = loc_prefix + addr
+        row_i = r - 2
+        mismatch = (
+            row_i < n_tasks
+            and bool(sorted_tasks_for_row_order[row_i].get("process_content_mismatch"))
+        )
+        cell.font = font_link_on_red if mismatch else font_link
         cell.alignment = top
 
 
@@ -12857,7 +12905,9 @@ def generate_plan():
         output_dir, f'production_plan_multi_day_{base_now_dt.strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
     all_eq_rows = []
-    
+    # タスクID → 結果_設備毎の時間割で当該タスクが最初に現れるセル（例 B12）。結果_タスク一覧のリンク用。
+    first_eq_schedule_cell_by_task_id: dict[str, str] = {}
+
     eq_empty_cols = {}
     for eq in equipment_list:
         eq_empty_cols[eq] = ""
@@ -12908,7 +12958,14 @@ def generate_plan():
                         sub_text = f" 補:{active_ev['sub']}" if active_ev['sub'] else ""
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
-                        
+                        _tid_sched = str(active_ev.get("task_id") or "").strip()
+                        if _tid_sched and _tid_sched not in first_eq_schedule_cell_by_task_id:
+                            _row_ex = len(all_eq_rows) + 2
+                            _ci = 2 + 2 * equipment_list.index(eq)
+                            first_eq_schedule_cell_by_task_id[_tid_sched] = (
+                                f"{get_column_letter(_ci)}{_row_ex}"
+                            )
+
                 row_data[eq] = eq_text
                 row_data[f"{eq}進度"] = progress_text
             
@@ -13177,7 +13234,9 @@ def generate_plan():
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
 
     with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
-        df_eq_schedule.to_excel(writer, sheet_name='結果_設備毎の時間割', index=False)
+        df_eq_schedule.to_excel(
+            writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
+        )
         pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
         df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割合', index=False)
         df_tasks = pd.DataFrame(task_results)
@@ -13257,6 +13316,13 @@ def generate_plan():
 
         _apply_result_task_task_id_content_mismatch_highlight(
             worksheet_tasks, list(df_tasks.columns), sorted_tasks_for_result
+        )
+        _apply_result_task_id_hyperlinks_to_equipment_schedule(
+            worksheet_tasks,
+            list(df_tasks.columns),
+            sorted_tasks_for_result,
+            first_eq_schedule_cell_by_task_id,
+            RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
         )
 
     try:
