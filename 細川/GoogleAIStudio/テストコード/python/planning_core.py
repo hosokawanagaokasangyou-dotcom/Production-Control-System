@@ -10453,11 +10453,26 @@ def _filter_capable_members_b2_disjoint_teams(
         )
     if not excl:
         return capable_members
-    return [
+    filtered = [
         m
         for m in capable_members
         if unicodedata.normalize("NFKC", str(m).strip()) not in excl
     ]
+    removed = [m for m in capable_members if m not in filtered]
+    if removed and _trace_schedule_task_enabled(tid):
+        _side = "EC" if is_ec else "検査"
+        _log_dispatch_trace_schedule(
+            tid,
+            "[配台トレース task=%s] ブロック判定: B-2担当者分離 side=%s machine=%s "
+            "候補除外=%s 残候補=%s(%s)",
+            tid,
+            _side,
+            task.get("machine"),
+            ",".join(str(x) for x in removed),
+            len(filtered),
+            ",".join(str(x) for x in filtered) if filtered else "なし",
+        )
+    return filtered
 
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
