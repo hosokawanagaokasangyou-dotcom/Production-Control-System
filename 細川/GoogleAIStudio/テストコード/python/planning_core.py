@@ -11213,6 +11213,16 @@ def _assign_one_roll_trial_order_flow(
     machine_day_floor = datetime.combine(current_date, DEFAULT_START_TIME)
     b2_insp_ec_floor: datetime | None = None
     _tid_assign = str(task.get("task_id") or "").strip()
+    _trace_assign_enabled = _trace_schedule_task_enabled(_tid_assign)
+    def _trace_assign(msg: str, *args) -> None:
+        if not _trace_assign_enabled:
+            return
+        _log_dispatch_trace_schedule(
+            _tid_assign,
+            "[配台トレース task=%s] " + msg,
+            _tid_assign,
+            *args,
+        )
     if task.get("roll_pipeline_inspection") and _task_queue_has_roll_pipeline_ec_for_tid(
         task_queue, _tid_assign
     ):
@@ -11228,11 +11238,26 @@ def _assign_one_roll_trial_order_flow(
         lo = req_num if min_n is None else min_n
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
+            _trace_assign(
+                "候補却下: チーム人数外 team=%s size=%s req=%s max=%s",
+                ",".join(str(x) for x in team),
+                len(team),
+                lo,
+                hi,
+            )
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
+            _trace_assign(
+                "候補却下: OP不在 team=%s",
+                ",".join(str(x) for x in team),
+            )
             return None
         if not all(m in daily_status for m in team):
+            _trace_assign(
+                "候補却下: 当日勤怠キーなし team=%s",
+                ",".join(str(x) for x in team),
+            )
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
@@ -11245,6 +11270,12 @@ def _assign_one_roll_trial_order_flow(
             team_start = b2_insp_ec_floor
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
+            _trace_assign(
+                "候補却下: 開始>=終業 team=%s start=%s end_limit=%s",
+                ",".join(str(x) for x in team),
+                team_start,
+                team_end_limit,
+            )
             return None
         team_breaks = []
         for m in team:
@@ -11272,9 +11303,19 @@ def _assign_one_roll_trial_order_flow(
             _refloor_trial_roll,
         )
         if team_start_d is None:
+            _trace_assign(
+                "候補却下: 休憩/終業デファーで当日不可 team=%s",
+                ",".join(str(x) for x in team),
+            )
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
+            _trace_assign(
+                "候補却下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
+                ",".join(str(x) for x in team),
+                team_start,
+                team_end_limit,
+            )
             return None
 
         avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
@@ -11293,6 +11334,13 @@ def _assign_one_roll_trial_order_flow(
             team_start, 9999, team_breaks, team_end_limit
         )
         if int(avail_mins / eff_time_per_unit) < 1:
+            _trace_assign(
+                "候補却下: 実働不足 team=%s start=%s avail_mins=%s need_mins=%.2f",
+                ",".join(str(x) for x in team),
+                team_start,
+                avail_mins,
+                eff_time_per_unit,
+            )
             return None
         work_mins_needed = int(eff_time_per_unit)
         actual_end_dt, _, _ = calculate_end_time(
@@ -11389,6 +11437,11 @@ def _assign_one_roll_trial_order_flow(
             and pref_mem in capable_members
             and skill_role_priority(pref_mem)[0] == "OP"
         ):
+            if tsize == 1:
+                _trace_assign(
+                    "候補固定: 担当OP指名=%s のため 1人チームは当人のみ試行",
+                    pref_mem,
+                )
             others = [m for m in capable_members if m != pref_mem]
             if tsize == 1:
                 teams_iter = [(pref_mem,)]
