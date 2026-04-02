@@ -3543,6 +3543,33 @@ def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vi
             worksheet.column_dimensions[get_column_letter(idx)].hidden = True
 
 
+def _norm_history_member_label(name: str) -> str:
+    """履歴の担当名比較用（全角空白を半角1個化・前後trim・連続空白の圧縮）。"""
+    t = str(name or "").replace("\u3000", " ").strip()
+    return " ".join(t.split())
+
+
+def _history_team_text_main_assignment_only(h: dict) -> str:
+    """
+    結果シート「担当」欄用: メイン割付確定時点の名前（余力追記サブは含めない）。
+    append_surplus 後の h['team'] から post_dispatch_surplus_names を除外する。
+    """
+    raw = (h.get("team") or "").strip()
+    if not raw:
+        return ""
+    ps = h.get("post_dispatch_surplus_names") or []
+    if not ps:
+        return raw
+    ps_set = {
+        _norm_history_member_label(x)
+        for x in ps
+        if x and str(x).strip()
+    }
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    kept = [p for p in parts if _norm_history_member_label(p) not in ps_set]
+    return ", ".join(kept) if kept else raw
+
+
 def _format_result_task_history_cell(task: dict, h: dict) -> str:
     """結果_タスク一覧の履歴セル文字列（組合せ表の採用行ID・メイン追加人数・余力追記の明示を含む）。"""
     um = task.get("unit_m") or 0
@@ -3558,7 +3585,7 @@ def _format_result_task_history_cell(task: dict, h: dict) -> str:
             parts_out.append(f"組合せ表#{int(cid)}")
         except (TypeError, ValueError):
             parts_out.append(f"組合せ表#{cid}")
-    parts_out.append(f"担当[{h.get('team') or ''}]")
+    parts_out.append(f"担当[{_history_team_text_main_assignment_only(h)}]")
     sm = h.get("surplus_member_names") or []
     if sm:
         parts_out.append(f"追加[{','.join(str(x) for x in sm)}]")
