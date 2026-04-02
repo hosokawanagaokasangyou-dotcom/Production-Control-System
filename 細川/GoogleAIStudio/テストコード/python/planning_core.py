@@ -11298,6 +11298,11 @@ def generate_plan():
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組のみ）、および log/execution_log.txt。
     """
+    # ロールトレース JSONL は日次ループより前に早期 return しうるため、ここで初期化する
+    # （DISPATCH_ROLL_TRACE_JSONL 未設定・空ならファイルは作らない）。
+    _dispatch_debug_reset_roll_trace(
+        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
+    )
     skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
         load_skills_and_needs()
     )
@@ -11576,9 +11581,6 @@ def generate_plan():
         t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
         t["assigned_history"].clear()
     timeline_events.clear()
-    _dispatch_debug_reset_roll_trace(
-        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
-    )
 
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(

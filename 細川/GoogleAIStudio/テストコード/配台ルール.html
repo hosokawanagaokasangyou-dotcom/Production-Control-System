@@ -115,6 +115,7 @@
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
       <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
       <li><a href="#result-task-id">結果_タスク一覧・タスクIDの赤表示</a></li>
+      <li><a href="#roll-trace-jsonl">配台デバッグ（ロールトレース JSONL）</a></li>
     </ol>
   </nav>
 
@@ -243,8 +244,20 @@
     <p><strong>列 配完_回答指定16時まで</strong>: <strong>配完_加工終了</strong>が、<strong>回答納期</strong>の日付＋既定 <strong>16:00</strong>（<code>PLAN_DUE_DAY_COMPLETION_TIME</code>）以前かを判定。回答納期が空なら <strong>指定納期</strong>＋16:00 で判定。値は <code>はい</code>／<code>いいえ</code>／<code>未割当</code>／<code>納期なし</code>（回答・指定とも日付なし）。<code>_result_task_plan_end_within_answer_or_spec_16_label</code>。</p>
   </section>
 
+  <section id="roll-trace-jsonl" class="card" aria-labelledby="h-roll-trace">
+    <h2 id="h-roll-trace">配台デバッグ（ロールトレース JSONL）</h2>
+    <p>割付で <strong>1 ロール確定ごと</strong>に、依頼・設備・時刻などを <strong>JSONL</strong>（1 行 1 JSON）へ追記します。</p>
+    <ul>
+      <li><code>DISPATCH_ROLL_TRACE_JSONL</code> … 出力パス。<strong>相対</strong>はマクロブック（<code>TASK_INPUT_WORKBOOK</code>）と同じフォルダ基準。<strong>未設定または空</strong>ではファイルを作りません（<span class="file">xlwings_console_runner</span> の段階2デバッグ入口は既定で <code>log/dispatch_roll_trace.jsonl</code> を設定）。</li>
+      <li><code>DISPATCH_DEBUG_STOP_AFTER_ROLLS</code> … 正の整数で、指定ロール数でシミュレーション打ち切り。</li>
+      <li><strong>初期化</strong>: <code>generate_plan</code> の<strong>先頭</strong>でファイルを空にし、早期終了時もトレース有効なら <strong>空の JSONL</strong> が残ります（以前は日次ループ直前のみ初期化）。</li>
+      <li><strong>追記</strong>: ループ内の <code>_dispatch_roll_trace_after_roll</code>。ロールが無ければ <strong>0 行</strong>のまま。</li>
+    </ul>
+    <p>詳細は <span class="file">配台ルール.md</span> セクション 10。</p>
+  </section>
+
   <footer>
-    同一ソース: 配台ルール.md（2026-04-01・結果_タスク一覧「配完_回答指定16時まで」列・§B-1/§B-2・need 余力・md/html 同期）
+    同一ソース: 配台ルール.md（2026-04-02・セクション10 ロールトレース JSONL・結果_タスク一覧「配完_回答指定16時まで」・B-1/B-2・need 余力・md/html 同期）
   </footer>
 </body>
 </html>
