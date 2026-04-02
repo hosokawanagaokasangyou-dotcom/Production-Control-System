@@ -3543,6 +3543,31 @@ def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vi
             worksheet.column_dimensions[get_column_letter(idx)].hidden = True
 
 
+def _format_result_task_history_cell(task: dict, h: dict) -> str:
+    """結果_タスク一覧の履歴セル文字列（組合せ表の採用行ID・メイン追加人数・余力追記の明示を含む）。"""
+    um = task.get("unit_m") or 0
+    try:
+        done_r = int(h["done_m"] / um) if um else 0
+    except (TypeError, ValueError, ZeroDivisionError):
+        done_r = 0
+    dm = h.get("done_m", 0)
+    parts_out: list[str] = [f"・【{h.get('date', '')}】：{done_r}R ({dm}m)"]
+    cid = h.get("combo_sheet_row_id")
+    if cid is not None:
+        try:
+            parts_out.append(f"組合せ表#{int(cid)}")
+        except (TypeError, ValueError):
+            parts_out.append(f"組合せ表#{cid}")
+    parts_out.append(f"担当[{h.get('team') or ''}]")
+    sm = h.get("surplus_member_names") or []
+    if sm:
+        parts_out.append(f"追加[{','.join(str(x) for x in sm)}]")
+    ps = h.get("post_dispatch_surplus_names") or []
+    if ps:
+        parts_out.append(f"余力追記[{','.join(str(x) for x in ps)}]")
+    return " ".join(parts_out)
+
+
 _RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^・(【[^】]*】)(.*)$", re.DOTALL)
 
 
@@ -9225,13 +9250,14 @@ def load_skills_and_needs():
 
 
 def load_team_combination_presets_from_master() -> dict[
-    str, list[tuple[int, int | None, tuple[str, ...]]]
+    str, list[tuple[int, int | None, tuple[str, ...], int | None]]
 ]:
     """
     master.xlsm「組み合わせ表」を読み、工程+機械キーごとに
-    [(組合せ優先度, 必要人数またはNone, メンバータプル), ...] を返す。
+    [(組合せ優先度, 必要人数またはNone, メンバータプル, 組合せ行IDまたはNone), ...] を返す。
     同一キー内は優先度昇順、同順位はシート上の行順。
     「必要人数」列は配台時に need 基本人数より優先する（メンバー列人数と一致すること）。
+    A 列「組合せ行ID」が無い／空の旧シートでは ID は None。
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         return {}
@@ -9252,6 +9278,7 @@ def load_team_combination_presets_from_master() -> dict[
         return str(x).strip()
 
     colmap = {norm_cell(c): c for c in df.columns if norm_cell(c)}
+    id_c = colmap.get("組合せ行ID") or colmap.get("インデックス")
     proc_c = colmap.get("工程名")
     mach_c = colmap.get("機械名")
     combo_c = colmap.get("工程+機械")
@@ -9266,9 +9293,10 @@ def load_team_combination_presets_from_master() -> dict[
         [c for c in df.columns if norm_cell(str(c)).startswith("メンバー")],
         key=mem_col_order,
     )
-    buckets: dict[str, list[tuple[int, int, int | None, tuple[str, ...]]]] = defaultdict(
-        list
-    )
+    buckets: dict[
+        str,
+        list[tuple[int, int, int | None, tuple[str, ...], int | None]],
+    ] = defaultdict(list)
     for row_i, (_, row) in enumerate(df.iterrows()):
         proc = norm_cell(row.get(proc_c)) if proc_c else ""
         mach = norm_cell(row.get(mach_c)) if mach_c else ""
@@ -9287,6 +9315,11 @@ def load_team_combination_presets_from_master() -> dict[
             sheet_req = parse_optional_int(row.get(req_c))
             if sheet_req is not None and sheet_req < 1:
                 sheet_req = None
+        sheet_combo_id: int | None = None
+        if id_c:
+            sheet_combo_id = parse_optional_int(row.get(id_c))
+            if sheet_combo_id is not None and sheet_combo_id < 1:
+                sheet_combo_id = None
         team: list[str] = []
         for mc in mem_keys:
             s = norm_cell(row.get(mc))
@@ -9295,12 +9328,16 @@ def load_team_combination_presets_from_master() -> dict[
             team.append(s)
         if not team:
             continue
-        buckets[key].append((pr, row_i, sheet_req, tuple(team)))
+        buckets[key].append(
+            (pr, row_i, sheet_req, tuple(team), sheet_combo_id)
+        )
 
-    out: dict[str, list[tuple[int, int | None, tuple[str, ...]]]] = {}
+    out: dict[
+        str, list[tuple[int, int | None, tuple[str, ...], int | None]]
+    ] = {}
     for key, lst in buckets.items():
         lst.sort(key=lambda x: (x[0], x[1]))
-        out[key] = [(t[0], t[2], t[3]) for t in lst]
+        out[key] = [(t[0], t[2], t[3], t[4]) for t in lst]
     return out
 
 
@@ -10645,6 +10682,9 @@ def _append_legacy_dispatch_candidate_for_team(
     extra_max: int,
     global_priority_override: dict,
     team_candidates: list,
+    *,
+    combo_sheet_row_id: int | None = None,
+    combo_preset_team: tuple[str, ...] | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
     _gpo = global_priority_override or {}
@@ -10751,6 +10791,8 @@ def _append_legacy_dispatch_candidate_for_team(
             "prio_sum": team_prio_sum,
             "op_list": op_list,
             "eff_time_per_unit": eff_time_per_unit,
+            "combo_sheet_row_id": combo_sheet_row_id,
+            "combo_preset_team": combo_preset_team,
         }
     )
     return True
@@ -11004,6 +11046,8 @@ def _assign_one_roll_trial_order_flow(
                     "eq_line": eq_line,
                     "req_num": req_num,
                     "max_team_size": max_team_size,
+                    "combo_sheet_row_id": None,
+                    "combo_preset_team": None,
                 }
 
     combo_key = (
@@ -11017,7 +11061,7 @@ def _assign_one_roll_trial_order_flow(
         else None
     )
     if preset_rows:
-        for _prio, sheet_rs, preset_team in preset_rows:
+        for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
             bounds = _combo_preset_team_size_bounds(
                 tuple(preset_team), sheet_rs, max_team_size
             )
@@ -11045,6 +11089,8 @@ def _assign_one_roll_trial_order_flow(
                     "eq_line": eq_line,
                     "req_num": req_num,
                     "max_team_size": max_team_size,
+                    "combo_sheet_row_id": combo_row_id,
+                    "combo_preset_team": tuple(preset_team),
                 }
 
     team_candidates: list[dict] = []
@@ -11070,7 +11116,13 @@ def _assign_one_roll_trial_order_flow(
         for team in teams_iter:
             got = _one_roll_from_team(team)
             if got is not None:
-                team_candidates.append(got)
+                team_candidates.append(
+                    {
+                        **got,
+                        "combo_sheet_row_id": None,
+                        "combo_preset_team": None,
+                    }
+                )
 
     if not team_candidates:
         return None
@@ -11097,6 +11149,8 @@ def _assign_one_roll_trial_order_flow(
         "eq_line": eq_line,
         "req_num": req_num,
         "max_team_size": max_team_size,
+        "combo_sheet_row_id": best_c.get("combo_sheet_row_id"),
+        "combo_preset_team": best_c.get("combo_preset_team"),
     }
 
 
@@ -11240,6 +11294,18 @@ def _trial_order_first_schedule_pass(
                 and extra_max_run > 0
                 and len(best_team) > req_num_run
             )
+            names_ordered: list[str] = []
+            if op_main:
+                names_ordered.append(op_main)
+            for _m in sub_members:
+                if _m and str(_m).strip():
+                    names_ordered.append(str(_m).strip())
+            surplus_member_names = (
+                names_ordered[req_num_run:]
+                if need_surplus_assigned
+                and len(names_ordered) > req_num_run
+                else []
+            )
             task["assigned_history"].append(
                 {
                     "date": current_date.strftime("%m/%d"),
@@ -11248,6 +11314,8 @@ def _trial_order_first_schedule_pass(
                     "start_dt": best_start,
                     "end_dt": best_end,
                     "need_surplus_assigned": need_surplus_assigned,
+                    "combo_sheet_row_id": res.get("combo_sheet_row_id"),
+                    "surplus_member_names": surplus_member_names,
                 }
             )
             for m in best_team:
@@ -11536,6 +11604,10 @@ def append_surplus_staff_after_main_dispatch(
                     if highlight_surplus:
                         h["need_surplus_assigned"] = True
                     h["team"] = team_sync
+                    prev_pd = h.get("post_dispatch_surplus_names") or []
+                    h["post_dispatch_surplus_names"] = prev_pd + [
+                        str(x) for x in chosen
+                    ]
                     break
 
         if _trace_schedule_task_enabled(tid):
@@ -12358,7 +12430,7 @@ def generate_plan():
                         )
                         preset_matched = False
                         if preset_rows:
-                            for _prio, sheet_rs, preset_team in preset_rows:
+                            for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
                                 pteam = tuple(preset_team)
                                 bounds = _combo_preset_team_size_bounds(
                                     pteam, sheet_rs, max_team_size
@@ -12384,6 +12456,8 @@ def generate_plan():
                                     extra_max,
                                     global_priority_override,
                                     team_candidates,
+                                    combo_sheet_row_id=combo_row_id,
+                                    combo_preset_team=pteam,
                                 ):
                                     preset_matched = True
                                     break
@@ -12540,6 +12614,8 @@ def generate_plan():
                                         "prio_sum": team_prio_sum,
                                         "op_list": op_list,
                                         "eff_time_per_unit": eff_time_per_unit,
+                                        "combo_sheet_row_id": None,
+                                        "combo_preset_team": None,
                                     }
                                 )
     
@@ -12792,6 +12868,19 @@ def generate_plan():
                                 and extra_max > 0
                                 and len(best_team) > req_num
                             )
+                            _lo = (best_info.get("op") or "").strip()
+                            _subs_legacy = [
+                                str(s).strip()
+                                for s in sub_members
+                                if s and str(s).strip()
+                            ]
+                            _names_ord = ([] if not _lo else [_lo]) + _subs_legacy
+                            _surplus_names = (
+                                _names_ord[int(req_num) :]
+                                if need_surplus_assigned
+                                and len(_names_ord) > int(req_num)
+                                else []
+                            )
                             task["assigned_history"].append(
                                 {
                                     "date": current_date.strftime("%m/%d"),
@@ -12800,6 +12889,10 @@ def generate_plan():
                                     "start_dt": best_info["start_dt"],
                                     "end_dt": best_info["end_dt"],
                                     "need_surplus_assigned": need_surplus_assigned,
+                                    "combo_sheet_row_id": best_c.get(
+                                        "combo_sheet_row_id"
+                                    ),
+                                    "surplus_member_names": _surplus_names,
                                 }
                             )
 
@@ -13249,10 +13342,7 @@ def generate_plan():
         for i in range(max_history_len):
             if i < len(t['assigned_history']):
                 h = t['assigned_history'][i]
-                done_r = int(h['done_m'] / t['unit_m']) if t['unit_m'] else 0
-                row_history[f"履歴{i+1}"] = (
-                    f"・【{h['date']}】：{done_r}R ({h['done_m']}m) 担当[{h['team']}]"
-                )
+                row_history[f"履歴{i+1}"] = _format_result_task_history_cell(t, h)
             else:
                 row_history[f"履歴{i+1}"] = ""
 
