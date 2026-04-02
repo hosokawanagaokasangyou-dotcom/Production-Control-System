@@ -10281,6 +10281,87 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     return ends[need_n - 1]
 
 
+def _pipeline_b2_team_history_names(team_cell) -> set[str]:
+    """assigned_history の team 文字列（主・補を「,」「、」区切り）から担当者名を抽出（NFKC）。"""
+    if team_cell is None:
+        return set()
+    s = str(team_cell).strip()
+    if not s:
+        return set()
+    out: set[str] = set()
+    for part in re.split(r"[,、]", s):
+        t = part.strip()
+        if t:
+            out.add(unicodedata.normalize("NFKC", t))
+    return out
+
+
+def _pipeline_b2_assigned_member_names_nfkc_for_side(
+    task_queue: list, task_id: str, *, ec_side: bool
+) -> set[str]:
+    """同一依頼の EC 行または検査行の assigned_history に出た担当者名（NFKC 集合）。"""
+    tid = str(task_id or "").strip()
+    if not tid:
+        return set()
+    names: set[str] = set()
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        if ec_side:
+            if not t.get("roll_pipeline_ec"):
+                continue
+        else:
+            if not t.get("roll_pipeline_inspection"):
+                continue
+        for h in t.get("assigned_history") or []:
+            names |= _pipeline_b2_team_history_names(h.get("team"))
+    return names
+
+
+def _b2_ec_insp_pair_in_queue(task_queue: list, task_id: str) -> bool:
+    """同一依頼NOに §B-2 の EC 行と検査行の両方がキューにあるか。"""
+    tid = str(task_id or "").strip()
+    if not tid:
+        return False
+    return bool(
+        _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid)
+        and _roll_pipeline_inspection_task_row_for_tid(task_queue, tid) is not None
+    )
+
+
+def _filter_capable_members_b2_disjoint_teams(
+    task: dict, task_queue: list, capable_members: list
+) -> list:
+    """
+    §B-2 同一依頼では、EC 行に一度でも入った者は検査の候補から外し、検査に入った者は EC の候補から外す。
+    （社内ルール: 担当者集合を必ず分ける）
+    """
+    if not capable_members:
+        return capable_members
+    tid = str(task.get("task_id") or "").strip()
+    if not tid or not _b2_ec_insp_pair_in_queue(task_queue, tid):
+        return capable_members
+    is_ec = bool(task.get("roll_pipeline_ec"))
+    is_insp = bool(task.get("roll_pipeline_inspection"))
+    if not is_ec and not is_insp:
+        return capable_members
+    if is_ec:
+        excl = _pipeline_b2_assigned_member_names_nfkc_for_side(
+            task_queue, tid, ec_side=False
+        )
+    else:
+        excl = _pipeline_b2_assigned_member_names_nfkc_for_side(
+            task_queue, tid, ec_side=True
+        )
+    if not excl:
+        return capable_members
+    return [
+        m
+        for m in capable_members
+        if unicodedata.normalize("NFKC", str(m).strip()) not in excl
+    ]
+
+
 def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     """
     同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
@@ -10949,6 +11030,9 @@ def _assign_one_roll_trial_order_flow(
 
     capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
     capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+    capable_members = _filter_capable_members_b2_disjoint_teams(
+        task, task_queue, capable_members
+    )
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
@@ -12394,6 +12478,9 @@ def generate_plan():
     
                         capable_members = [m for m in avail_dt.keys() if skill_role_priority(m)[0] in ("OP", "AS")]
                         capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+                        capable_members = _filter_capable_members_b2_disjoint_teams(
+                            task, task_queue, capable_members
+                        )
                         if task.get("has_done_deadline_override"):
                             machine_free_dbg = machine_avail_dt.get(
                                 eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
