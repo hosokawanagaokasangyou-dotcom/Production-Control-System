@@ -9466,6 +9466,50 @@ def load_team_combination_presets_from_master() -> dict[
     return out
 
 
+def _lookup_combo_sheet_row_id_for_preset_team(
+    preset_rows: list | None,
+    team: tuple,
+) -> int | None:
+    """
+    採用チームのメンバー集合（NFKC・trim）が組み合わせ表プリセットのいずれかと一致するとき、
+    その行の組合せ行ID（A列）を返す。組合せ探索のみで決まり combo_sheet_row_id が付いていない
+    履歴行の補完に使う。複数一致時は組合せ優先度（数値が小さい方）を採用。
+    """
+    if not preset_rows or not team:
+        return None
+
+    def _mem_key(members) -> frozenset:
+        out: set[str] = set()
+        for m in members:
+            s = str(m).strip()
+            if not s:
+                continue
+            out.add(unicodedata.normalize("NFKC", s))
+        return frozenset(out)
+
+    target = _mem_key(team)
+    if not target:
+        return None
+    best_id: int | None = None
+    best_prio: int | None = None
+    for pr, _sheet_rs, preset_team, combo_row_id in preset_rows:
+        if combo_row_id is None:
+            continue
+        if _mem_key(preset_team) != target:
+            continue
+        try:
+            prio_val = int(pr)
+        except (TypeError, ValueError):
+            prio_val = 10**9
+        if best_prio is None or prio_val < best_prio:
+            best_prio = prio_val
+            try:
+                best_id = int(combo_row_id)
+            except (TypeError, ValueError):
+                best_id = None
+    return best_id
+
+
 def generate_default_calendar_dates(year, month):
     cal = calendar.Calendar()
     return [d for d in cal.itermonthdates(year, month) if d.year == year and d.month == month and d.weekday() < 5]
@@ -11190,6 +11234,16 @@ def _assign_one_roll_trial_order_flow(
     if max_team_size < req_num:
         max_team_size = req_num
     rq_base = max(1, int(req_num))
+    combo_key_assign = (
+        f"{machine_proc}+{machine_name}"
+        if machine_proc and machine_name
+        else ""
+    )
+    preset_rows_assign = (
+        (team_combo_presets or {}).get(combo_key_assign)
+        if (team_combo_presets and combo_key_assign)
+        else None
+    )
 
     _dto_head = task.get("dispatch_trial_order")
     if _dto_head is not None and _dto_head not in _need_headcount_logged_orders:
@@ -11374,6 +11428,9 @@ def _assign_one_roll_trial_order_flow(
         if all(m in capable_members and m in avail_dt for m in pt):
             got = _one_roll_from_team(pt)
             if got is not None:
+                _cid_pt = _lookup_combo_sheet_row_id_for_preset_team(
+                    preset_rows_assign, pt
+                )
                 return {
                     **got,
                     "extra_max": extra_max,
@@ -11385,25 +11442,15 @@ def _assign_one_roll_trial_order_flow(
                     "eq_line": eq_line,
                     "req_num": req_num,
                     "max_team_size": max_team_size,
-                    "combo_sheet_row_id": None,
-                    "combo_preset_team": None,
+                    "combo_sheet_row_id": _cid_pt,
+                    "combo_preset_team": pt if _cid_pt is not None else None,
                 }
 
-    combo_key = (
-        f"{machine_proc}+{machine_name}"
-        if machine_proc and machine_name
-        else ""
-    )
-    preset_rows = (
-        (team_combo_presets or {}).get(combo_key)
-        if (team_combo_presets and combo_key)
-        else None
-    )
     team_candidates: list[dict] = []
     # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
     # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
-    if preset_rows:
-        for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
+    if preset_rows_assign:
+        for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
             bounds = _combo_preset_team_size_bounds(
                 tuple(preset_team), sheet_rs, max_team_size
             )
