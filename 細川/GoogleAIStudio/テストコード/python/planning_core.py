@@ -8236,29 +8236,98 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
 
     ts = refloor_fn(team_start)
+    _tid = str(task.get("task_id", "") or "").strip()
+    _team_txt = ", ".join(str(x) for x in team) if team else "—"
+
+    def _trace_block(msg: str, *a) -> None:
+        if not _trace_schedule_task_enabled(_tid):
+            return
+        _log_dispatch_trace_schedule(
+            _tid,
+            "[配台トレース task=%s] ブロック判定: " + msg,
+            _tid,
+            *a,
+        )
     for _ in range(32):
         if ts >= team_end_limit:
+            _trace_block(
+                "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
+                task.get("machine"),
+                _team_txt,
+                float(task.get("remaining_units") or 0),
+                ts,
+                team_end_limit,
+            )
             return None
         if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
+            _trace_block(
+                "開始不可(終業直前デファー) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s gap_end_min=%s",
+                task.get("machine"),
+                _team_txt,
+                float(task.get("remaining_units") or 0),
+                ts,
+                team_end_limit,
+                gap_end,
+            )
             return None
         progressed = False
         for bs, be in team_breaks:
             if be <= ts:
                 continue
             if bs <= ts < be:
+                _prev = ts
                 ts = refloor_fn(be)
+                _trace_block(
+                    "休憩中を回避 machine=%s team=%s rem=%.4f break=%s-%s shift=%s->%s",
+                    task.get("machine"),
+                    _team_txt,
+                    float(task.get("remaining_units") or 0),
+                    bs,
+                    be,
+                    _prev,
+                    ts,
+                )
                 progressed = True
                 break
             if bs > ts:
                 if gap_pre > 0 and (bs - ts).total_seconds() / 60.0 <= gap_pre:
+                    _prev = ts
                     ts = refloor_fn(be)
+                    _trace_block(
+                        "休憩直前デファー machine=%s team=%s rem=%.4f break=%s-%s gap_pre_min=%s shift=%s->%s",
+                        task.get("machine"),
+                        _team_txt,
+                        float(task.get("remaining_units") or 0),
+                        bs,
+                        be,
+                        gap_pre,
+                        _prev,
+                        ts,
+                    )
                     progressed = True
                 break
         if not progressed:
             break
     if ts >= team_end_limit:
+        _trace_block(
+            "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
+            task.get("machine"),
+            _team_txt,
+            float(task.get("remaining_units") or 0),
+            ts,
+            team_end_limit,
+        )
         return None
     if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
+        _trace_block(
+            "開始不可(終業直前デファー) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s gap_end_min=%s",
+            task.get("machine"),
+            _team_txt,
+            float(task.get("remaining_units") or 0),
+            ts,
+            team_end_limit,
+            gap_end,
+        )
         return None
     return ts
 
