@@ -11228,6 +11228,13 @@ def _trial_order_first_schedule_pass(
                 s.strip() for s in sub_members if s and str(s).strip()
             )
             team_s = f"{op_main}, {subs_part}" if subs_part else op_main
+            req_num_run = int(res.get("req_num") or 0)
+            extra_max_run = int(res.get("extra_max") or 0)
+            need_surplus_assigned = (
+                TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+                and extra_max_run > 0
+                and len(best_team) > req_num_run
+            )
             task["assigned_history"].append(
                 {
                     "date": current_date.strftime("%m/%d"),
@@ -11235,7 +11242,7 @@ def _trial_order_first_schedule_pass(
                     "done_m": int(done_units * task["unit_m"]),
                     "start_dt": best_start,
                     "end_dt": best_end,
-                    "need_surplus_assigned": len(best_team) > rq_base,
+                    "need_surplus_assigned": need_surplus_assigned,
                 }
             )
             for m in best_team:
@@ -11468,6 +11475,10 @@ def append_surplus_staff_after_main_dispatch(
         if not chosen:
             continue
 
+        team_size_before = team_size
+        final_team_size = team_size_before + len(chosen)
+        highlight_surplus = final_team_size > req_num
+
         old_sub = str(ev.get("sub") or "").strip()
         parts = [s.strip() for s in old_sub.split(",") if s.strip()]
         parts.extend(chosen)
@@ -11475,6 +11486,15 @@ def append_surplus_staff_after_main_dispatch(
         for m in chosen:
             busy[m].append((st, ed))
         appended_total += len(chosen)
+
+        op_sync = str(ev.get("op") or "").strip()
+        subs_sync = ",".join(
+            s.strip()
+            for s in str(ev.get("sub") or "").split(",")
+            if s.strip()
+        )
+        team_sync = f"{op_sync}, {subs_sync}" if subs_sync else op_sync
+
         _hist = task.get("assigned_history")
         if _hist:
             for h in _hist:
@@ -11482,7 +11502,9 @@ def append_surplus_staff_after_main_dispatch(
                     h.get("start_dt") == st
                     and h.get("end_dt") == ed
                 ):
-                    h["need_surplus_assigned"] = True
+                    if highlight_surplus:
+                        h["need_surplus_assigned"] = True
+                    h["team"] = team_sync
                     break
 
     return appended_total
@@ -12713,6 +12735,11 @@ def generate_plan():
                                 s.strip() for s in sub_members if s and str(s).strip()
                             )
                             team_s = f"{op_main}, {subs_part}" if subs_part else op_main
+                            need_surplus_assigned = (
+                                TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+                                and extra_max > 0
+                                and len(best_team) > req_num
+                            )
                             task["assigned_history"].append(
                                 {
                                     "date": current_date.strftime("%m/%d"),
@@ -12720,7 +12747,7 @@ def generate_plan():
                                     "done_m": int(done_units * task["unit_m"]),
                                     "start_dt": best_info["start_dt"],
                                     "end_dt": best_info["end_dt"],
-                                    "need_surplus_assigned": len(best_team) > rq_base,
+                                    "need_surplus_assigned": need_surplus_assigned,
                                 }
                             )
 
