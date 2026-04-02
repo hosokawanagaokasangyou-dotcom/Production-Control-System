@@ -1011,6 +1011,10 @@ RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
+# 段階2の結果 xlsx 生成後、入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製する（既定 OFF）
+STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
+    "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", ""
+).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
@@ -3806,6 +3810,95 @@ def _add_column_config_sheet_helpers(ws_cfg, num_data_rows: int):
     dv = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
     ws_cfg.add_data_validation(dv)
     dv.add(f"B2:B{cap}")
+
+
+def _stage2_try_copy_column_config_shapes_from_input(
+    result_path: str,
+    input_path: str | None,
+) -> None:
+    """
+    pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
+    STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=1 のとき、入力ブックの
+    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーする。
+    openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
+    """
+    if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
+        return
+    rp = (result_path or "").strip()
+    ip = (input_path or "").strip()
+    if not rp or not os.path.isfile(rp):
+        logging.warning(
+            "列設定シート図形コピー: 結果パスが無効のためスキップしました。"
+        )
+        return
+    if not ip or not os.path.isfile(ip):
+        logging.warning(
+            "列設定シート図形コピー: TASK_INPUT_WORKBOOK が無効のためスキップしました。"
+        )
+        return
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.warning(
+            "列設定シート図形コピー: xlwings が import できません。"
+        )
+        return
+    app = None
+    wb_out = None
+    wb_in = None
+    try:
+        app = xw.App(visible=False)
+        app.display_alerts = False
+        wb_out = app.books.open(os.path.abspath(rp), update_links=False)
+        wb_in = app.books.open(os.path.abspath(ip), read_only=True, update_links=False)
+        try:
+            ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
+        except Exception:
+            logging.warning(
+                "列設定シート図形コピー: 結果ブックにシート「%s」がありません。",
+                COLUMN_CONFIG_SHEET_NAME,
+            )
+            return
+        try:
+            ws_in = wb_in.sheets[COLUMN_CONFIG_SHEET_NAME]
+        except Exception:
+            logging.warning(
+                "列設定シート図形コピー: 入力ブックにシート「%s」がありません。",
+                COLUMN_CONFIG_SHEET_NAME,
+            )
+            return
+        n_shapes = int(ws_in.api.Shapes.Count)
+        if n_shapes <= 0:
+            logging.info(
+                "列設定シート図形コピー: 入力側に図形がありません（スキップ）。"
+            )
+            return
+        ws_out.activate()
+        for i in range(1, n_shapes + 1):
+            ws_in.api.Shapes(i).Copy()
+            ws_out.api.Paste()
+        wb_out.save()
+        logging.info(
+            "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
+            n_shapes,
+        )
+    except Exception as e:
+        logging.warning(
+            "列設定シート図形コピー: 失敗しました（%s）。Excel 占有・COM エラー等の可能性があります。",
+            e,
+        )
+    finally:
+        for _wb in (wb_in, wb_out):
+            if _wb is not None:
+                try:
+                    _wb.close()
+                except Exception:
+                    pass
+        if app is not None:
+            try:
+                app.quit()
+            except Exception:
+                pass
 
 
 def _coerce_actual_sheet_datetime(val):
@@ -11523,6 +11616,16 @@ def _assign_one_roll_trial_order_flow(
         )
 
     best_c = min(team_candidates, key=_team_cand_key)
+    if best_c.get("combo_sheet_row_id") is None and preset_rows_assign:
+        _lcid = _lookup_combo_sheet_row_id_for_preset_team(
+            preset_rows_assign, tuple(best_c["team"])
+        )
+        if _lcid is not None:
+            best_c = {
+                **best_c,
+                "combo_sheet_row_id": _lcid,
+                "combo_preset_team": tuple(best_c["team"]),
+            }
     return {
         **best_c,
         "extra_max": extra_max,
@@ -13140,6 +13243,16 @@ def generate_plan():
     
                         if team_candidates:
                             best_c = min(team_candidates, key=_team_cand_key)
+                            if best_c.get("combo_sheet_row_id") is None and preset_rows:
+                                _lcid_l = _lookup_combo_sheet_row_id_for_preset_team(
+                                    preset_rows, tuple(best_c["team"])
+                                )
+                                if _lcid_l is not None:
+                                    best_c = {
+                                        **best_c,
+                                        "combo_sheet_row_id": _lcid_l,
+                                        "combo_preset_team": tuple(best_c["team"]),
+                                    }
                             if pref_mem and pref_mem in best_c["op_list"]:
                                 lead_op = pref_mem
                             else:
@@ -14097,6 +14210,11 @@ def generate_plan():
         )
     except Exception as e:
         logging.warning(f"結果_カレンダー(出勤簿)の日付列表示整形: {e}")
+
+    _stage2_try_copy_column_config_shapes_from_input(
+        output_filename,
+        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
+    )
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 

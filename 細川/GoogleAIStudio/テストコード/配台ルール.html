@@ -243,9 +243,10 @@
       <li><strong>配台不可／配台残</strong>の行全体の薄い黄より<strong>後</strong>にタスクIDだけ上書きするため、該当セルは赤が優先されます。</li>
       <li><strong>結果_設備毎の時間割へのリンク</strong>: <strong>タスクID</strong>セルに内部ハイパーリンクを付け、時間割で当該タスクが<strong>最初に現れるセル</strong>へジャンプ（未割当のみで時間割に無い行はリンクなし）。<code>_apply_result_task_id_hyperlinks_to_equipment_schedule</code>。</li>
       <li><strong>履歴列（追加人数・色）</strong>: <strong>req_num を超えた人数</strong>のブロックのみ薄黄（<code>FFEB9C</code>）。メインは <code>TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS</code> ＋追加枠あり ＋採用人数&gt;req_num。余力追記は追記後の人数が req_num を超えるときのみ（定員までの追記のみでは塗らない）。履歴の担当表記は追記後に同期。<code>_apply_result_task_history_need_surplus_highlight</code>。</li>
-      <li><strong>履歴テキスト</strong>: マスタ<strong>組み合わせ表</strong>の<strong>組合せ行ID</strong>（A列）を、<strong>最終採用がプリセット行と一致したときだけ</strong><strong>組合せ表#n</strong>として記載（プリセットは成立分をすべて候補に載せ、組合せ探索とまとめて <code>team_start</code> 等で最良を選ぶ）。<strong>担当</strong>はメイン確定分のみ（余力追記で足した名前は<strong>余力追記[…]</strong>のみ）。<strong>追加[…]</strong>はメインで人数超過。<code>_format_result_task_history_cell</code>／<code>_history_team_text_main_assignment_only</code>。</li>
+      <li><strong>履歴テキスト</strong>: <strong>組合せ表#n</strong>はプリセット行採用時に付くほか、探索のみで ID が欠けていても<strong>採用メンバー集合がいずれかのプリセットと一致</strong>すれば <code>_lookup_combo_sheet_row_id_for_preset_team</code> で補完（履歴1〜n 共通）。一致プリセットが無ければ付かない。プリセットは成立分をすべて候補に載せ、探索とまとめて最良を選ぶ。<strong>担当</strong>はメイン確定分のみ（余力追記は<strong>余力追記[…]</strong>）。<strong>追加[…]</strong>はメインで人数超過。<code>_format_result_task_history_cell</code>／<code>_history_team_text_main_assignment_only</code>。</li>
+      <li><strong>列設定_結果_タスク一覧</strong>（結果ブック）: 段階2は A:B を毎回再生成するため<strong>既定では図形（ボタン等）なし</strong>。必要時のみ <code>STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=1</code> で入力ブックから xlwings 複製（<code>_stage2_try_copy_column_config_shapes_from_input</code>）。</li>
     </ul>
-    <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>、<code>_apply_result_task_id_hyperlinks_to_equipment_schedule</code>、<code>_apply_result_task_history_need_surplus_highlight</code>、<code>_format_result_task_history_cell</code>。</p>
+    <p>実装: <span class="file">planning_core.py</span> の <code>process_content_mismatch</code>、<code>_process_name_matches_kakou_content_tokens</code>、<code>_apply_result_task_task_id_content_mismatch_highlight</code>、<code>_apply_result_task_id_hyperlinks_to_equipment_schedule</code>、<code>_apply_result_task_history_need_surplus_highlight</code>、<code>_format_result_task_history_cell</code>、<code>_lookup_combo_sheet_row_id_for_preset_team</code>、<code>_stage2_try_copy_column_config_shapes_from_input</code>。</p>
     <p><strong>列 配完_回答指定16時まで</strong>: <strong>配完_加工終了</strong>が、<strong>回答納期</strong>の日付＋既定 <strong>16:00</strong>（<code>PLAN_DUE_DAY_COMPLETION_TIME</code>）以前かを判定。回答納期が空なら <strong>指定納期</strong>＋16:00 で判定。値は <code>はい</code>／<code>いいえ</code>／<code>未割当</code>／<code>納期なし</code>（回答・指定とも日付なし）。<code>_result_task_plan_end_within_answer_or_spec_16_label</code>。</p>
   </section>
 
@@ -288,7 +289,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-02・セクション11 配台トレースは A 列のみ・セクション9 リンク・セクション12・JSONL・配完_回答指定16時まで・B-1/B-2）
+    同一ソース: 配台ルール.md（2026-04-02・セクション9 履歴の組合せ表ID補完・列設定図形コピー環境変数・セクション11 配台トレースは A 列のみ・セクション12・JSONL・配完_回答指定16時まで・B-1/B-2）
   </footer>
 </body>
 </html>
