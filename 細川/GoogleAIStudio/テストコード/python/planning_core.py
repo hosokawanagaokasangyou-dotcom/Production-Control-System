@@ -10092,7 +10092,9 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
     - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
     §B-2: ``roll_pipeline_inspection`` 行が ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
-    ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない（ロール並行）。
+    ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない。
+    前進配台では ``_trial_order_flow_eligible_tasks`` が EC 完走まで検査を外すため、
+    EC 残がある間は本分岐に到達しない。リワインド等で検査が載る局面との整合用。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -10762,6 +10764,15 @@ def _trial_order_flow_eligible_tasks(
             <= 1e-12
         ):
             continue
+        # §B-2: 同一依頼の EC が 1 ロールでも残っている間は前進配台で検査を載せない。
+        # 全日の EC 完走後に `_run_b2_inspection_rewind_pass` で日付先頭から検査を詰める。
+        _tid_elig = str(task.get("task_id", "") or "").strip()
+        if (
+            task.get("roll_pipeline_inspection")
+            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid_elig)
+            and not _pipeline_ec_fully_done_for_tid(task_queue, _tid_elig)
+        ):
+            continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                 task_queue,
@@ -11348,11 +11359,13 @@ def _trial_order_first_schedule_pass(
     """
     ①当日候補を配台試行順の昇順に並べる（1 パス分）。
     **完全二相（§B-2）**: **フェーズ1**で熱融着**検査行を除く**候補（EC・他依頼・他工程）を試行順どおり
-    **`_drain_rolls_for_task`** し、**フェーズ2**で §B-2 検査行だけを同順で `_drain_rolls_for_task` する。
+    **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
+    EC 残がある日は `_trial_order_flow_eligible_tasks` で検査を外し、翌稼働日以降も EC のみ前進する。
+    カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から検査だけ再走査する）。
     EC と検査を **交互に 1 ロールずつ試すと**同一担当者が途中で検査へ回り **EC がブロック**されるため、
-    同一パス内では検査を試さず先に EC 等を詰める。
-    検査の各ロールは `_roll_pipeline_inspection_assign_room` に加え
-    `_roll_pipeline_b2_inspection_ec_completion_floor_dt` で **EC ロール終了時刻**の下限を満たす。
+    同一パス内では EC 等を先に詰める。
+    リワインド側の検査は各ロールについて `_roll_pipeline_inspection_assign_room` および
+    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
@@ -12464,6 +12477,27 @@ def generate_plan():
                                     task.get("machine"),
                                     _ec_d,
                                     _in_d,
+                                    float(task.get("remaining_units") or 0),
+                                )
+                            continue
+                        _tid_legacy = str(task.get("task_id", "") or "").strip()
+                        if (
+                            task.get("roll_pipeline_inspection")
+                            and _task_queue_has_roll_pipeline_ec_for_tid(
+                                task_queue, _tid_legacy
+                            )
+                            and not _pipeline_ec_fully_done_for_tid(
+                                task_queue, _tid_legacy
+                            )
+                        ):
+                            if _trace_schedule_task_enabled(task.get("task_id")):
+                                _log_dispatch_trace_schedule(
+                                    _tid_legacy,
+                                    "[配台トレース task=%s] スキップ: §B-2 EC 未完走のため前進では検査しない "
+                                    "day=%s machine=%s rem_insp=%.4f",
+                                    _tid_legacy,
+                                    current_date,
+                                    task.get("machine"),
                                     float(task.get("remaining_units") or 0),
                                 )
                             continue
