@@ -515,7 +515,7 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
         1,
         "配台トレース",
         "A",
-        openpyxl_skip_hint="トレースは環境変数 TRACE_SCHEDULE_TASK_ID のみ有効です。",
+        openpyxl_skip_hint="配台トレースは「設定」シート A 列を openpyxl で読めないため無効です。",
     )
 
 
@@ -779,13 +779,8 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
-# 例: set TRACE_SCHEDULE_TASK_ID=W4-1 または W4-1,Y3-26 … 結果_設備毎の時間割の進捗が止まる原因調査用（log/execution_log.txt）
-# 併用: マクロブック「設定」シート A3 以降に依頼NOを縦に並べる（generate_plan 冒頭で和集合にマージ）
-_TRACE_SCHEDULE_TASK_ID_RAW = os.environ.get("TRACE_SCHEDULE_TASK_ID", "").strip()
-TRACE_SCHEDULE_TASK_IDS_FROM_ENV: frozenset[str] = frozenset(
-    x.strip() for x in _TRACE_SCHEDULE_TASK_ID_RAW.split(",") if x.strip()
-)
-TRACE_SCHEDULE_TASK_IDS: frozenset[str] = TRACE_SCHEDULE_TASK_IDS_FROM_ENV
+# 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
+TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
 # デバッグ限定配台: 「設定」B3 以降が優先。空なら環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）。
 _DISPATCH_DEBUG_ONLY_TASK_IDS_RAW = os.environ.get("DISPATCH_DEBUG_ONLY_TASK_IDS", "").strip()
 DISPATCH_DEBUG_ONLY_TASK_IDS: frozenset[str] = frozenset()
@@ -11465,22 +11460,14 @@ def generate_plan():
     _dispatch_debug_reset_roll_trace(
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     )
-    # 配台トレース（設定シート A3 以降・TRACE_SCHEDULE_TASK_ID）は、メンバー0人等で早期 return しても
+    # 配台トレース（設定シート A3 以降のみ）は、メンバー0人等で早期 return しても
     # execution_log に残るよう skills 読込より前で確定・ログする。
     global TRACE_SCHEDULE_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
-        set(TRACE_SCHEDULE_TASK_IDS_FROM_ENV) | set(_ids_from_sheet)
+        str(x).strip() for x in _ids_from_sheet if str(x).strip()
     )
-    if TRACE_SCHEDULE_TASK_IDS_FROM_ENV:
-        logging.info(
-            "環境変数 TRACE_SCHEDULE_TASK_ID=%r → トレース候補（%s）",
-            _TRACE_SCHEDULE_TASK_ID_RAW,
-            ", ".join(sorted(TRACE_SCHEDULE_TASK_IDS_FROM_ENV)),
-        )
-    else:
-        logging.info("環境変数 TRACE_SCHEDULE_TASK_ID は未設定")
     if _ids_from_sheet:
         _preview = _ids_from_sheet[:25]
         _suffix = " …" if len(_ids_from_sheet) > 25 else ""
@@ -11498,7 +11485,7 @@ def generate_plan():
         )
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
-            "配台トレース: 有効 task_id = %s（環境変数と設定シートの和集合）",
+            "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
             ", ".join(sorted(TRACE_SCHEDULE_TASK_IDS)),
         )
     else:

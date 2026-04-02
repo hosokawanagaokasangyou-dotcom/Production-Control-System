@@ -122,7 +122,7 @@
     <tr>
       <td>「設定」シート A3 以降（依頼NO）</td>
       <td><span class="mono">_read_trace_schedule_task_ids_from_config_sheet()</span></td>
-      <td>環境変数と和集合で <span class="mono">TRACE_SCHEDULE_TASK_IDS</span>（ログ用）</td>
+      <td>A 列の依頼NO集合が <span class="mono">TRACE_SCHEDULE_TASK_IDS</span>（ログ用。環境変数は使わない）</td>
     </tr>
   </tbody>
 </table>
@@ -280,7 +280,7 @@ flowchart TB
     <tr><td><span class="mono">TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF</span></td><td>チーム採用スコア（人数優先 vs 開始早さ）</td></tr>
     <tr><td><span class="mono">TEAM_ASSIGN_START_SLACK_WAIT_MINUTES</span></td><td>開始の遅れ許容（分）</td></tr>
     <tr><td><span class="mono">TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</span></td><td>need の追加人数行を無視し req のみで試行</td></tr>
-    <tr><td><span class="mono">TRACE_SCHEDULE_TASK_ID</span> / <span class="mono">TRACE_TEAM_ASSIGN_TASK_ID</span></td><td>ログ詳細化</td></tr>
+    <tr><td><span class="mono">TRACE_TEAM_ASSIGN_TASK_ID</span></td><td>チーム割当ログ詳細化（配台トレースは設定シート A 列のみ）</td></tr>
   </tbody>
 </table>
 
