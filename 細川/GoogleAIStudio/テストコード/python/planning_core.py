@@ -10086,32 +10086,13 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
         return 999
 
 
-def _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue) -> bool:
-    """
-    §B-2: 熱融着検査（ロールパイプライン）は、同一依頼の EC 行の残ロールがすべてゼロになるまで配台しない。
-    EC 行がキューに無い依頼の検査は False（従来どおり need に従う）。
-    """
-    if not task.get("roll_pipeline_inspection"):
-        return False
-    tid = str(task.get("task_id", "") or "").strip()
-    if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
-        return False
-    for t2 in task_queue:
-        if str(t2.get("task_id", "") or "").strip() != tid:
-            continue
-        if not t2.get("roll_pipeline_ec"):
-            continue
-        if float(t2.get("remaining_units") or 0) > 1e-9:
-            return True
-    return False
-
-
 def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     """
     同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
     - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
     - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
-    §B-2（熱融着検査×EC）の前後関係は ``_roll_pipeline_inspection_blocked_until_ec_done`` で制御する。
+    §B-2: ``roll_pipeline_inspection`` 行が ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
+    ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない（ロール並行）。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -10141,6 +10122,12 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
             precedes = s2 < my_seq
 
         if precedes:
+            if (
+                task.get("roll_pipeline_inspection")
+                and t2.get("roll_pipeline_ec")
+                and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
+            ):
+                continue
             return True
     return False
 
@@ -10622,8 +10609,6 @@ def _trial_order_flow_eligible_tasks(
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
-            continue
-        if _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue):
             continue
         if task.get("roll_pipeline_inspection") and (
             _roll_pipeline_inspection_assign_room(
@@ -12164,26 +12149,6 @@ def generate_plan():
                                     task.get("task_id"),
                                     current_date,
                                     task.get("machine"),
-                                    float(task.get("remaining_units") or 0),
-                                )
-                            continue
-                        if _roll_pipeline_inspection_blocked_until_ec_done(task, task_queue):
-                            if _trace_schedule_task_enabled(task.get("task_id")):
-                                _tid_ec = str(task.get("task_id", "") or "").strip()
-                                _ec_rem = sum(
-                                    float(x.get("remaining_units") or 0)
-                                    for x in task_queue
-                                    if str(x.get("task_id", "") or "").strip() == _tid_ec
-                                    and x.get("roll_pipeline_ec")
-                                )
-                                _log_dispatch_trace_schedule(
-                                    task.get("task_id"),
-                                    "[配台トレース task=%s] スキップ: §B-2 EC完走待ち（検査開始前にEC残をゼロに） "
-                                    "day=%s machine=%s ec残合計R=%.4f rem_insp=%.4f",
-                                    task.get("task_id"),
-                                    current_date,
-                                    task.get("machine"),
-                                    _ec_rem,
                                     float(task.get("remaining_units") or 0),
                                 )
                             continue

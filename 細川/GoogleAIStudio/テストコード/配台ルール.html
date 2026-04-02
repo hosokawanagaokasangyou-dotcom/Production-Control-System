@@ -215,7 +215,7 @@
       <li><strong>パイプライン</strong>: バッファ後は、検査の累計完了ロール数が常に次の上限を超えないようにします。<br />
         <strong>進行中</strong>: <code>ec_done</code>（EC 完了ロール数）・<code>insp_done</code>（検査完了）とすると、原則 <code>insp_done ≤ max(0, ec_done - 2 + 1)</code>。EC が 2 ロール終わると検査 1 ロール目が可能になり、その後は EC が 1 ロール進むごとに検査も最大 1 ロール進められます。<br />
         <strong>EC 全ロール完了後</strong>: 同一依頼NOの EC パイプライン行がすべて残量ゼロのときは、上記だけでは検査が 1 本足りなくなるため、上限を <code>ec_done</code> まで引き上げ、検査も EC と同じ本数まで完了できます（<code>_pipeline_ec_fully_done_for_tid</code> / <code>_roll_pipeline_inspection_assign_room</code>）。</li>
-      <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・<code>_roll_pipeline_inspection_blocked_until_ec_done</code>・ロール枠・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付・ロール枠が効く。詳細は <span class="file">配台ルール.md</span> B-2.6。</li>
+      <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・B-2 検査は <code>_roll_pipeline_inspection_assign_room</code>（ロール枠）・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付。詳細は <span class="file">配台ルール.md</span> B-2.6。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
   </section>
