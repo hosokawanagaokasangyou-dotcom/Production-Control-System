@@ -11258,12 +11258,12 @@ def _trial_order_first_schedule_pass(
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並べる（1 パス分）。
-    **完全二相**: **フェーズ1**で §B-2 の熱融着**検査行を除く**候補（EC・他依頼・他工程）を試行順どおり
-    **`_drain_rolls_for_task`** し、**フェーズ2**で §B-2 検査行だけを同順で `_drain_rolls_for_task` する。
-    同一パス内では検査を一切試さず EC 等を先に詰め、続けて検査を後追いする（人・機械の空きはフェーズ2で反映）。
-    検査の各ロールは `_roll_pipeline_inspection_assign_room` に加え
-    `_roll_pipeline_b2_inspection_ec_completion_floor_dt` で **EC ロール終了時刻**の下限を満たす。
-    試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
+    **§B-2**（同一依頼の EC + 熱融着検査）: **EC 1 ロール → 検査 1 ロール**を同一内側ループで交互に試す。
+    これにより「当日の EC を最後まで詰めてから検査」とならず、累計 **EC 完了ロール − 検査完了ロール >= 2**
+    （`_roll_pipeline_inspection_assign_room`）かつ **(累計検査完了+バッファ) 番目の EC 終了時刻以降**
+    （`_roll_pipeline_b2_inspection_ec_completion_floor_dt`）を満たすタイミングで検査に人・機械を回せる。
+    §B-2 以外は試行順どおり **`_drain_rolls_for_task`** で連続ロール。進展があれば従来どおり **そのパスで終了**。
+    試行順最小の行だけが当日入らない場合でも、**同じパス内で次の試行順へ進み**他設備を埋める。
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     eligible = _trial_order_flow_eligible_tasks(
@@ -11277,10 +11277,20 @@ def _trial_order_first_schedule_pass(
     )
     _gpo = global_priority_override or {}
 
-    def _drain_rolls_for_task(task: dict) -> bool:
-        preferred_team: tuple | None = None
+    def _drain_rolls_for_task(
+        task: dict,
+        *,
+        preferred_holder: list | None = None,
+        max_rolls: int | None = None,
+    ) -> bool:
+        preferred_team: tuple | None = (
+            preferred_holder[0] if preferred_holder is not None else None
+        )
         made_local = False
+        rolls_this_stretch = 0
         while float(task.get("remaining_units") or 0) > 1e-12:
+            if max_rolls is not None and rolls_this_stretch >= max_rolls:
+                break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -11449,29 +11459,77 @@ def _trial_order_first_schedule_pass(
                 )
             if _dispatch_debug_should_stop_early():
                 made_local = True
+                if preferred_holder is not None:
+                    preferred_holder[0] = best_team
                 return made_local
             preferred_team = best_team
             made_local = True
+            rolls_this_stretch += 1
+            if preferred_holder is not None:
+                preferred_holder[0] = preferred_team
         return made_local
 
-    def _is_b2_inspection_eligible_row(t: dict) -> bool:
-        _tid = str(t.get("task_id") or "").strip()
-        return bool(
-            t.get("roll_pipeline_inspection")
-            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid)
+    seen_b2_insp_tid: set[str] = set()
+
+    for task in eligible_sorted:
+        tid_loop = str(task.get("task_id") or "").strip()
+        is_b2_insp = bool(
+            task.get("roll_pipeline_inspection")
+            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid_loop)
         )
-
-    phase1_tasks = [t for t in eligible_sorted if not _is_b2_inspection_eligible_row(t)]
-    phase2_tasks = [t for t in eligible_sorted if _is_b2_inspection_eligible_row(t)]
-
-    pass_made = False
-    for task in phase1_tasks:
+        is_b2_ec = bool(
+            task.get("roll_pipeline_ec")
+            and _roll_pipeline_inspection_task_row_for_tid(task_queue, tid_loop)
+            is not None
+        )
+        if is_b2_insp:
+            if tid_loop in seen_b2_insp_tid:
+                continue
+        if is_b2_ec:
+            _insp_row = _roll_pipeline_inspection_task_row_for_tid(
+                task_queue, tid_loop
+            )
+            _insp_eligible = _insp_row is not None and any(
+                _insp_row is x for x in eligible
+            )
+            if _insp_row is not None and _insp_eligible:
+                pref_ec: list[tuple | None] = [None]
+                pref_insp: list[tuple | None] = [None]
+                b2_any = False
+                while True:
+                    progressed = False
+                    if float(task.get("remaining_units") or 0) > 1e-12:
+                        if _drain_rolls_for_task(
+                            task, preferred_holder=pref_ec, max_rolls=1
+                        ):
+                            progressed = True
+                            b2_any = True
+                    if float(_insp_row.get("remaining_units") or 0) > 1e-12:
+                        if _roll_pipeline_inspection_assign_room(
+                            task_queue, tid_loop
+                        ) > 1e-12:
+                            if _drain_rolls_for_task(
+                                _insp_row,
+                                preferred_holder=pref_insp,
+                                max_rolls=1,
+                            ):
+                                progressed = True
+                                b2_any = True
+                    if not progressed:
+                        break
+                seen_b2_insp_tid.add(tid_loop)
+                if b2_any:
+                    return True
+            else:
+                if _drain_rolls_for_task(task):
+                    return True
+            continue
+        if is_b2_insp and tid_loop in seen_b2_insp_tid:
+            continue
         if _drain_rolls_for_task(task):
-            pass_made = True
-    for task in phase2_tasks:
-        if _drain_rolls_for_task(task):
-            pass_made = True
-    return pass_made
+            return True
+
+    return False
 
 
 def _timeline_event_team_names_set(ev: dict) -> set:
