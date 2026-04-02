@@ -442,21 +442,29 @@ def _read_output_book_font_prefs_from_workbook(wb_path: str) -> tuple[str | None
     return b4, sz
 
 
-def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
+def _read_task_ids_from_config_sheet_column(
+    wb_path: str,
+    column_index: int,
+    log_label: str,
+    column_letter_desc: str,
+    *,
+    openpyxl_skip_hint: str | None = None,
+) -> list[str]:
     """
-    マクロブック「設定」シート A 列の 3 行目以降を、配台トレース対象の依頼NOとして読む。
-    空セルはスキップ。連続 30 セル空なら打ち切り。最大 500 行まで走査。
+    マクロブック「設定」シートの指定列（1=A, 2=B）3 行目以降から依頼NOを読む。
+    空セルはスキップ。連続 30 セル空で打ち切り。最大 500 行。カンマ区切りで複数可。
     """
     out: list[str] = []
     if not wb_path or not os.path.isfile(wb_path):
         return out
     if _workbook_should_skip_openpyxl_io(wb_path):
-        logging.info(
-            "配台トレース: ブックに「%s」があるため「%s」!A3 以降は openpyxl で読めません。"
-            " トレースは環境変数 TRACE_SCHEDULE_TASK_ID のみ有効です。",
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-            APP_CONFIG_SHEET_NAME,
+        msg = (
+            f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため"
+            f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}3 以降は openpyxl で読めません。"
         )
+        if openpyxl_skip_hint:
+            msg += " " + openpyxl_skip_hint.strip()
+        logging.info(msg)
         return out
     try:
         keep_vba = str(wb_path).lower().endswith(".xlsm")
@@ -469,7 +477,7 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
             ws = wb[APP_CONFIG_SHEET_NAME]
             consecutive_empty = 0
             for r in range(3, 3 + 500):
-                t = _config_cell_text(ws.cell(row=r, column=1).value)
+                t = _config_cell_text(ws.cell(row=r, column=column_index).value)
                 if not t:
                     consecutive_empty += 1
                     if consecutive_empty >= 30:
@@ -487,12 +495,42 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
             wb.close()
     except Exception as ex:
         logging.warning(
-            "配台トレース: 「%s」!A3 以降の依頼NOを読めません（無視）: %s",
+            "%s: 「%s」!%s3 以降の依頼NOを読めません（無視）: %s",
+            log_label,
             APP_CONFIG_SHEET_NAME,
+            column_letter_desc,
             ex,
         )
         return []
     return out
+
+
+def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
+    """
+    マクロブック「設定」シート A 列の 3 行目以降を、配台トレース対象の依頼NOとして読む。
+    空セルはスキップ。連続 30 セル空なら打ち切り。最大 500 行まで走査。
+    """
+    return _read_task_ids_from_config_sheet_column(
+        wb_path,
+        1,
+        "配台トレース",
+        "A",
+        openpyxl_skip_hint="トレースは環境変数 TRACE_SCHEDULE_TASK_ID のみ有効です。",
+    )
+
+
+def _read_dispatch_debug_only_task_ids_from_config_sheet_b(wb_path: str) -> list[str]:
+    """
+    マクロブック「設定」シート B 列 3 行目以降に依頼NOがある場合、段階2はその依頼NOの行だけ配台する。
+    （空なら全件。トレース用 A 列とは独立。）
+    """
+    return _read_task_ids_from_config_sheet_column(
+        wb_path,
+        2,
+        "デバッグ配台",
+        "B",
+        openpyxl_skip_hint="限定配台は環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）でも指定できます。",
+    )
 
 
 def _extract_gemini_api_key_from_plain_dict(data: dict, json_path: str) -> str | None:
@@ -754,6 +792,65 @@ def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
         return False
     return str(task_id or "").strip() in TRACE_SCHEDULE_TASK_IDS
+
+
+def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
+    """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
+    s = "".join(
+        c if (c.isalnum() or c in "-_.") else "_"
+        for c in str(task_id or "").strip()
+    )
+    return s[:120] if s else "task"
+
+
+def _reset_dispatch_trace_per_task_logfiles() -> None:
+    """
+    配台トレース対象ごとに log/dispatch_trace_<依頼NO>.txt を新規作成（当該段階2実行の冒頭で1回）。
+    execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行のみ _log_dispatch_trace_schedule で追記。
+    """
+    if not TRACE_SCHEDULE_TASK_IDS:
+        return
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError:
+        return
+    for tid in TRACE_SCHEDULE_TASK_IDS:
+        t = str(tid or "").strip()
+        if not t:
+            continue
+        safe = _sanitize_dispatch_trace_filename_part(t)
+        path = os.path.join(log_dir, f"dispatch_trace_{safe}.txt")
+        try:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(
+                    "# 配台トレース（依頼NOごと）。同一行は log/execution_log.txt にも出力されます。\n"
+                    f"# task_id={t}\n\n"
+                )
+        except OSError as ex:
+            logging.warning("dispatch_trace ログの初期化に失敗: %s (%s)", path, ex)
+
+
+def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
+    """[配台トレース task=…] を execution_log に出しつつ、対象依頼NO専用ファイルにも追記する。"""
+    logging.info(msg, *args)
+    t = str(task_id or "").strip()
+    if not t or t not in TRACE_SCHEDULE_TASK_IDS:
+        return
+    safe = _sanitize_dispatch_trace_filename_part(t)
+    path = os.path.join(log_dir, f"dispatch_trace_{safe}.txt")
+    try:
+        body = msg % args if args else msg
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        line = f"{ts} - INFO - {body}\n"
+        with open(path, "a", encoding="utf-8", newline="\n") as f:
+            f.write(line)
+    except OSError as ex:
+        try:
+            logging.warning("dispatch_trace 側ファイルへの追記に失敗: %s (%s)", path, ex)
+        except Exception:
+            pass
+
+
 # True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -11303,44 +11400,8 @@ def generate_plan():
     _dispatch_debug_reset_roll_trace(
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     )
-    skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
-        load_skills_and_needs()
-    )
-    team_combo_presets = load_team_combination_presets_from_master()
-    if team_combo_presets:
-        _nrules = sum(len(v) for v in team_combo_presets.values())
-        logging.info(
-            "組み合わせ表: 工程+機械キー %s 種類・編成行 %s を配台プリセットとして読み込みました。",
-            len(team_combo_presets),
-            _nrules,
-        )
-    elif TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
-        logging.info(
-            "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のチーム探索のみ。"
-        )
-    if not members:
-        master_abs = os.path.abspath(MASTER_FILE)
-        logging.error(
-            "段階2を中断しました: メンバーが0人です（マスタの skills が空、または読み込み失敗）。"
-            " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置き、"
-            "planning_core のカレントがそのフォルダになるよう python\\ 配置を確認してください。"
-            " この状態では production_plan / member_schedule は出力されません。",
-            master_abs,
-            os.getcwd(),
-        )
-        return
-    reset_gemini_usage_tracker()
-    _clear_stage2_blocking_message_file()
-    if (
-        not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
-        and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
-    ):
-        logging.info(
-            "need配台時追加人数: メイン割付は基本必要人数のみ。"
-            "余力は全シミュレーション後、時間重なりのない未割当かつスキル適合者をサブに追記します。"
-            "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
-        )
-
+    # 配台トレース（設定シート A3 以降・TRACE_SCHEDULE_TASK_ID）は、メンバー0人等で早期 return しても
+    # execution_log に残るよう skills 読込より前で確定・ログする。
     global TRACE_SCHEDULE_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
@@ -11383,6 +11444,46 @@ def generate_plan():
         logging.info(
             "環境変数 TRACE_TEAM_ASSIGN_TASK_ID=%r → チーム割当トレース有効",
             TRACE_TEAM_ASSIGN_TASK_ID,
+        )
+
+    _reset_dispatch_trace_per_task_logfiles()
+
+    skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
+        load_skills_and_needs()
+    )
+    team_combo_presets = load_team_combination_presets_from_master()
+    if team_combo_presets:
+        _nrules = sum(len(v) for v in team_combo_presets.values())
+        logging.info(
+            "組み合わせ表: 工程+機械キー %s 種類・編成行 %s を配台プリセットとして読み込みました。",
+            len(team_combo_presets),
+            _nrules,
+        )
+    elif TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
+        logging.info(
+            "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のチーム探索のみ。"
+        )
+    if not members:
+        master_abs = os.path.abspath(MASTER_FILE)
+        logging.error(
+            "段階2を中断しました: メンバーが0人です（マスタの skills が空、または読み込み失敗）。"
+            " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置き、"
+            "planning_core のカレントがそのフォルダになるよう python\\ 配置を確認してください。"
+            " この状態では production_plan / member_schedule は出力されません。",
+            master_abs,
+            os.getcwd(),
+        )
+        return
+    reset_gemini_usage_tracker()
+    _clear_stage2_blocking_message_file()
+    if (
+        not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
+        and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
+    ):
+        logging.info(
+            "need配台時追加人数: メイン割付は基本必要人数のみ。"
+            "余力は全シミュレーション後、時間重なりのない未割当かつスキル適合者をサブに追記します。"
+            "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく「データ抽出日」を使用
@@ -11739,7 +11840,8 @@ def generate_plan():
                     ):
                         if _task_blocked_by_same_request_dependency(task, task_queue):
                             if _trace_schedule_task_enabled(task.get("task_id")):
-                                logging.info(
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
                                     "[配台トレース task=%s] スキップ: 同一依頼NOの先行工程待ち day=%s machine=%s rem=%.4f",
                                     task.get("task_id"),
                                     current_date,
@@ -11756,7 +11858,8 @@ def generate_plan():
                                     if str(x.get("task_id", "") or "").strip() == _tid_ec
                                     and x.get("roll_pipeline_ec")
                                 )
-                                logging.info(
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
                                     "[配台トレース task=%s] スキップ: §B-2 EC完走待ち（検査開始前にEC残をゼロに） "
                                     "day=%s machine=%s ec残合計R=%.4f rem_insp=%.4f",
                                     task.get("task_id"),
@@ -11778,7 +11881,8 @@ def generate_plan():
                                 _in_d = _pipeline_inspection_roll_done_units(
                                     task_queue, _tid_tr
                                 )
-                                logging.info(
+                                _log_dispatch_trace_schedule(
+                                    _tid_tr,
                                     "[配台トレース task=%s] スキップ: §B-2 検査ロール枠ゼロ day=%s machine=%s "
                                     "ec累計完了R=%.4f insp累計完了R=%.4f rem_insp=%.4f",
                                     _tid_tr,
@@ -11800,7 +11904,8 @@ def generate_plan():
                             )
                             if _b1_holder is not None and _b1_holder is not task:
                                 if _trace_schedule_task_enabled(task.get("task_id")):
-                                    logging.info(
+                                    _log_dispatch_trace_schedule(
+                                        task.get("task_id"),
                                         "[配台トレース task=%s] スキップ: 同一設備の検査占有中 day=%s "
                                         "占有者依頼NO=%s 占有者試行順=%s",
                                         task.get("task_id"),
@@ -11844,7 +11949,8 @@ def generate_plan():
                             task_queue, eq_line, _my_dispatch_ord, current_date
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
-                                logging.info(
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
                                     "[配台トレース task=%s] スキップ: 同一設備で配台試行順が先の行が未完了 "
                                     "day=%s eq_line=%s my_order=%s",
                                     task.get("task_id"),
@@ -12355,7 +12461,8 @@ def generate_plan():
                                             task_queue,
                                             str(task.get("task_id", "") or "").strip(),
                                         )
-                                    logging.info(
+                                    _log_dispatch_trace_schedule(
+                                        task.get("task_id"),
                                         "[配台トレース task=%s] スキップ: チーム採用後の実効ユニット0 "
                                         "day=%s machine=%s best_units_today=%s rp_room=%s rem=%.4f",
                                         task.get("task_id"),
@@ -12429,7 +12536,8 @@ def generate_plan():
                                         task_queue,
                                         str(task.get("task_id", "") or "").strip(),
                                     )
-                                logging.info(
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
                                     "[配台トレース task=%s] タイムライン追記 chunk day=%s machine=%s "
                                     "done_units=%s already_done=%s total_u=%s rem_after=%.4f "
                                     "start=%s end=%s eff_t/unit=%.4f rp_room(当時)=%s",
@@ -12509,7 +12617,8 @@ def generate_plan():
                         _rem_tr = float(_t.get("remaining_units") or 0)
                         if _rem_tr <= 1e-9:
                             continue
-                        logging.info(
+                        _log_dispatch_trace_schedule(
+                            _tt,
                             "[配台トレース task=%s] 日次終了時点の残 day=%s machine=%s "
                             "machine_name=%s rem=%.4f roll_insp=%s 試行順=%s",
                             _tt,
@@ -12619,7 +12728,8 @@ def generate_plan():
             for _t in task_queue:
                 if str(_t.get("task_id", "")).strip() != _tt:
                     continue
-                logging.info(
+                _log_dispatch_trace_schedule(
+                    _tt,
                     "[配台トレース task=%s] シミュレーション終了時 machine=%s machine_name=%s "
                     "rem=%.4f initial=%.4f roll_insp=%s",
                     _tt,
@@ -12643,7 +12753,8 @@ def generate_plan():
             for _mk, _ev in sorted(_last_ev_by_machine.items()):
                 _ad = int(_ev.get("already_done_units") or 0)
                 _ud = int(_ev.get("units_done") or 0)
-                logging.info(
+                _log_dispatch_trace_schedule(
+                    _tt,
                     "[配台トレース task=%s] タイムライン最終塊(工程列ごと) machine=%s "
                     "already_done+units_done=%s+%s=%s total_units=%s end_dt=%s",
                     _tt,
