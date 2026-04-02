@@ -11074,7 +11074,8 @@ def _assign_one_roll_trial_order_flow(
 ) -> dict | None:
     """
     1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
-    preferred_team が与えられ同一日内で成立すれば、組合せ探索より優先して採用する。
+    preferred_team が与えられ、かつ「同一日内の直前ロール」として成立すれば、
+    組合せ探索より優先して採用する（翌日には持ち越さない）。
     戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
     machine = task["machine"]
@@ -11299,8 +11300,11 @@ def _assign_one_roll_trial_order_flow(
             "lead_op": lead_op,
         }
 
-    # 特別指定: 同一日・連続ロールは前回チームを優先
-    if preferred_team:
+    # 特別指定: 同一日・連続ロールは前回チームを優先（翌日へは持ち越さない）。
+    _hist = task.get("assigned_history") or []
+    _last_hist_date = _hist[-1].get("date") if _hist else None
+    _same_day_last_roll = _last_hist_date == current_date.strftime("%m/%d")
+    if preferred_team and _same_day_last_roll:
         pt = tuple(preferred_team)
         if all(m in capable_members and m in avail_dt for m in pt):
             got = _one_roll_from_team(pt)
