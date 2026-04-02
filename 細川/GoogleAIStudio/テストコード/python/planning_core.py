@@ -11564,6 +11564,118 @@ def _trial_order_first_schedule_pass(
     return pass_made
 
 
+def _run_b2_inspection_rewind_pass(
+    sorted_dates: list,
+    attendance_data: dict,
+    task_queue: list,
+    timeline_events: list,
+    skills_dict: dict,
+    members: list,
+    req_map: dict,
+    need_rules: list,
+    surplus_map: dict,
+    global_priority_override: dict,
+    macro_run_date: date,
+    macro_now_dt: datetime,
+    _need_headcount_logged_orders: set,
+    team_combo_presets: dict | None = None,
+) -> bool:
+    """
+    §B-2: EC 側を先に全日で進めた後、検査側のみを日付先頭から再走査して配台する。
+    timeline_events を人・設備のブロックテーブルとして使い、日跨ぎの占有を保持する。
+    """
+    target_tids: set[str] = set()
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            continue
+        if not t.get("roll_pipeline_inspection"):
+            continue
+        tid = str(t.get("task_id", "") or "").strip()
+        if not tid:
+            continue
+        if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
+            continue
+        if not _pipeline_ec_fully_done_for_tid(task_queue, tid):
+            continue
+        target_tids.add(tid)
+    if not target_tids:
+        return False
+
+    _gpo = global_priority_override or {}
+    _any_progress = False
+    _machine_day_start_cache: dict[date, datetime] = {}
+    for current_date in sorted_dates:
+        daily_status = attendance_data.get(current_date)
+        if not daily_status:
+            continue
+        machine_avail_dt: dict = {}
+        avail_dt: dict = {}
+        for m in members:
+            if m not in daily_status:
+                continue
+            st = daily_status[m]
+            if st.get("eligible_for_assignment", st.get("is_working", False)):
+                avail_dt[m] = st["start_dt"]
+        if not avail_dt:
+            continue
+
+        _machine_day_start = _machine_day_start_cache.get(current_date)
+        if _machine_day_start is None:
+            _machine_day_start = datetime.combine(current_date, DEFAULT_START_TIME)
+            _machine_day_start_cache[current_date] = _machine_day_start
+        _seed_avail_from_timeline_for_date(
+            timeline_events,
+            current_date,
+            machine_avail_dt,
+            avail_dt,
+            _machine_day_start,
+        )
+        if _gpo.get("abolish_all_scheduling_limits"):
+            machine_avail_dt.clear()
+
+        tasks_today = [
+            t
+            for t in task_queue
+            if float(t.get("remaining_units") or 0) > 1e-12
+            and t.get("roll_pipeline_inspection")
+            and str(t.get("task_id", "") or "").strip() in target_tids
+            and t.get("start_date_req") <= current_date
+        ]
+        if not tasks_today:
+            continue
+
+        _sched_max_passes = max(96, max(1, len(tasks_today)) * 15)
+        _sched_pi = 0
+        while _sched_pi < _sched_max_passes:
+            _sched_pi += 1
+            _made = _trial_order_first_schedule_pass(
+                current_date,
+                tasks_today,
+                task_queue,
+                daily_status,
+                machine_avail_dt,
+                avail_dt,
+                timeline_events,
+                skills_dict,
+                members,
+                req_map,
+                need_rules,
+                surplus_map,
+                global_priority_override,
+                macro_run_date,
+                macro_now_dt,
+                _need_headcount_logged_orders,
+                team_combo_presets,
+            )
+            if _dispatch_debug_should_stop_early():
+                _any_progress = _any_progress or _made
+                return _any_progress
+            if not _made:
+                break
+            _any_progress = True
+    return _any_progress
+
+
 def _timeline_event_team_names_set(ev: dict) -> set:
     names: set = set()
     op = str(ev.get("op") or "").strip()
@@ -13241,6 +13353,26 @@ def generate_plan():
         if _dispatch_debug_should_stop_early():
             break
         if _full_calendar_without_deadline_restart:
+            _rewind_made = _run_b2_inspection_rewind_pass(
+                sorted_dates,
+                attendance_data,
+                task_queue,
+                timeline_events,
+                skills_dict,
+                members,
+                req_map,
+                need_rules,
+                surplus_map,
+                global_priority_override,
+                macro_run_date,
+                macro_now_dt,
+                _need_headcount_logged_orders,
+                team_combo_presets,
+            )
+            if _rewind_made:
+                logging.info(
+                    "§B-2 検査リワインド: EC 完走後に検査のみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
+                )
             break
 
     if TRACE_SCHEDULE_TASK_IDS:
