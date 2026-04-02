@@ -10222,6 +10222,65 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     return max(0.0, max_insp - insp_done)
 
 
+def _roll_pipeline_inspection_task_row_for_tid(
+    task_queue: list, task_id: str
+) -> dict | None:
+    """同一依頼NOの §B-2 検査行（roll_pipeline_inspection）を1件返す。無ければ None。"""
+    tid = str(task_id or "").strip()
+    if not tid:
+        return None
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        if t.get("roll_pipeline_inspection"):
+            return t
+    return None
+
+
+def _pipeline_b2_ec_roll_end_datetimes_sorted(
+    task_queue: list, task_id: str
+) -> list[datetime]:
+    """同一依頼の EC ロール確定ごとの終了時刻を時系列で返す（assigned_history の end_dt）。"""
+    tid = str(task_id or "").strip()
+    ends: list[datetime] = []
+    if not tid:
+        return ends
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        if not t.get("roll_pipeline_ec"):
+            continue
+        for h in t.get("assigned_history") or []:
+            ed = h.get("end_dt")
+            if isinstance(ed, datetime):
+                ends.append(ed)
+    ends.sort()
+    return ends
+
+
+def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
+    task_queue: list, task_id: str
+) -> datetime | None:
+    """
+    次の検査ロールを開始してよい最早時刻。
+    累計検査完了ロール数を K、バッファを B（=ROLL_PIPELINE_INITIAL_BUFFER_ROLLS）とすると、
+    EC 完了ロールが時系列で (K+B) 本目に到達した時刻（そのロールの end_dt）未満には開始しない。
+    （業務ルール: 任意の時点で EC_RollEndCount - KENSA_RollEndCount >= B を満たすまで検査を進めない、
+    の「ロール終了時刻基準」の実装。）
+    """
+    tid = str(task_id or "").strip()
+    if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
+        return None
+    insp_done = int(
+        math.floor(float(_pipeline_inspection_roll_done_units(task_queue, tid)))
+    )
+    need_n = insp_done + int(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS)
+    ends = _pipeline_b2_ec_roll_end_datetimes_sorted(task_queue, tid)
+    if need_n < 1 or len(ends) < need_n:
+        return None
+    return ends[need_n - 1]
+
+
 def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     """
     同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
@@ -10949,6 +11008,14 @@ def _assign_one_roll_trial_order_flow(
         task, current_date, macro_run_date, macro_now_dt
     )
     machine_day_floor = datetime.combine(current_date, DEFAULT_START_TIME)
+    b2_insp_ec_floor: datetime | None = None
+    _tid_assign = str(task.get("task_id") or "").strip()
+    if task.get("roll_pipeline_inspection") and _task_queue_has_roll_pipeline_ec_for_tid(
+        task_queue, _tid_assign
+    ):
+        b2_insp_ec_floor = _roll_pipeline_b2_inspection_ec_completion_floor_dt(
+            task_queue, _tid_assign
+        )
 
     def _one_roll_from_team(
         team: tuple,
@@ -10971,6 +11038,8 @@ def _assign_one_roll_trial_order_flow(
                 team_start = machine_free_dt
             if team_start < day_floor:
                 team_start = day_floor
+        if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
+            team_start = b2_insp_ec_floor
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
             return None
@@ -10987,6 +11056,8 @@ def _assign_one_roll_trial_order_flow(
                     ts = mf
                 if ts < day_floor:
                     ts = day_floor
+            if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
+                ts = b2_insp_ec_floor
             return ts
 
         team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
@@ -11186,12 +11257,13 @@ def _trial_order_first_schedule_pass(
     team_combo_presets: dict | None = None,
 ) -> bool:
     """
-    ①当日候補を配台試行順の昇順に並べ、先頭から順に「可能な限り連続でロール」を詰める（1 パス分）。
-    §B-2（EC→検査）ではキュー上 **試行順が EC より若い検査は存在しない**ため、同一パス内では
-    **EC をその日入る限り詰め切ってから**（`_roll_pipeline_inspection_assign_room` が正になるまで
-    検査は候補外）、検査は **EC の確定済み完了ロール数**に基づく枠の範囲で後追い配台される。
+    ①当日候補を配台試行順の昇順に並べる（1 パス分）。
+    §B-2（同一依頼の EC + 熱融着検査）については、**EC 1 ロール → 検査 1 ロール**を交互に試し、
+    バッファ・枠が満たされ人・機械が空くたびに検査を挟める（EC を一日分先に詰め切って検査が夕方まで
+    遅れるのを防ぐ）。検査の開始は `_roll_pipeline_b2_inspection_ec_completion_floor_dt` により
+    **(累計検査完了 + バッファ) 番目の EC ロール終了時刻**以降に限定する。
+    上記以外のタスクは従来どおり **可能な限り連続ロール**（`_drain_rolls_for_task`）。
     試行順最小の行だけが当日入らない場合でも、**同じパス内で次の試行順へ進み**他設備を埋める。
-    （旧実装: 最小1件だけを見て失敗すると日内マルチパスが即終了し、ほぼ全件配台不可になっていた。）
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     eligible = _trial_order_flow_eligible_tasks(
@@ -11205,10 +11277,20 @@ def _trial_order_first_schedule_pass(
     )
     _gpo = global_priority_override or {}
 
-    def _drain_rolls_for_task(task: dict) -> bool:
-        preferred_team: tuple | None = None
+    def _drain_rolls_for_task(
+        task: dict,
+        *,
+        preferred_holder: list | None = None,
+        max_rolls: int | None = None,
+    ) -> bool:
+        preferred_team: tuple | None = (
+            preferred_holder[0] if preferred_holder is not None else None
+        )
         made_local = False
+        rolls_this_stretch = 0
         while float(task.get("remaining_units") or 0) > 1e-12:
+            if max_rolls is not None and rolls_this_stretch >= max_rolls:
+                break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -11377,14 +11459,76 @@ def _trial_order_first_schedule_pass(
                 )
             if _dispatch_debug_should_stop_early():
                 made_local = True
+                if preferred_holder is not None:
+                    preferred_holder[0] = best_team
                 return made_local
             preferred_team = best_team
             made_local = True
+            rolls_this_stretch += 1
+            if preferred_holder is not None:
+                preferred_holder[0] = preferred_team
         return made_local
 
+    seen_b2_insp_tid: set[str] = set()
+
     for task in eligible_sorted:
+        tid_loop = str(task.get("task_id") or "").strip()
+        is_b2_insp = bool(
+            task.get("roll_pipeline_inspection")
+            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid_loop)
+        )
+        is_b2_ec = bool(
+            task.get("roll_pipeline_ec")
+            and _roll_pipeline_inspection_task_row_for_tid(task_queue, tid_loop)
+            is not None
+        )
+        if is_b2_insp:
+            if tid_loop in seen_b2_insp_tid:
+                continue
+        if is_b2_ec:
+            _insp_row = _roll_pipeline_inspection_task_row_for_tid(
+                task_queue, tid_loop
+            )
+            _insp_eligible = _insp_row is not None and any(
+                _insp_row is x for x in eligible
+            )
+            if _insp_row is not None and _insp_eligible:
+                pref_ec: list[tuple | None] = [None]
+                pref_insp: list[tuple | None] = [None]
+                b2_prog = False
+                while True:
+                    progressed = False
+                    if float(task.get("remaining_units") or 0) > 1e-12:
+                        if _drain_rolls_for_task(
+                            task, preferred_holder=pref_ec, max_rolls=1
+                        ):
+                            progressed = True
+                            b2_prog = True
+                    if float(_insp_row.get("remaining_units") or 0) > 1e-12:
+                        if _roll_pipeline_inspection_assign_room(
+                            task_queue, tid_loop
+                        ) > 1e-12:
+                            if _drain_rolls_for_task(
+                                _insp_row,
+                                preferred_holder=pref_insp,
+                                max_rolls=1,
+                            ):
+                                progressed = True
+                                b2_prog = True
+                    if not progressed:
+                        break
+                seen_b2_insp_tid.add(tid_loop)
+                if b2_prog:
+                    return True
+            else:
+                if _drain_rolls_for_task(task):
+                    return True
+            continue
+        if is_b2_insp and tid_loop in seen_b2_insp_tid:
+            continue
         if _drain_rolls_for_task(task):
             return True
+
     return False
 
 
