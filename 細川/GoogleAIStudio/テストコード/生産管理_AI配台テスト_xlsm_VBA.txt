@@ -2782,6 +2782,31 @@ Private Sub 段階2_取り込み結果をMsgBox()
     End If
 End Sub
 
+' 設定シート B3 以降にデバッグ用依頼NOが1件以上あるか（最大500行・連続30空で打切り。planning_core と同趣旨）
+Private Function 設定シート_B列デバッグ依頼NO指定あり() As Boolean
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim nBlank As Long
+    Dim v As Variant
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("設定")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    nBlank = 0
+    For r = 3 To 502
+        v = ws.Cells(r, 2).Value
+        If IsError(v) Then
+            nBlank = nBlank + 1
+        ElseIf Len(Trim$(CStr(v))) > 0 Then
+            設定シート_B列デバッグ依頼NO指定あり = True
+            Exit Function
+        Else
+            nBlank = nBlank + 1
+        End If
+        If nBlank >= 30 Then Exit For
+    Next r
+End Function
+
 ' =========================================================
 ' 段階2コア: plan_simulation_stage2.py → 結果取り込み・メイン更新
 ' MsgBox は出さない。m_lastStage2ErrMsg / m_lastStage2ExitCode / m_stage2* を参照
@@ -2911,6 +2936,13 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' ① コマンドプロンプトが起動する瞬間の警告を防ぐため、裏で一時フォルダを指定
     wsh.CurrentDirectory = Environ("TEMP")
     
+    ' デバッグ限定配台: 設定 B3 以降に依頼NOがあるときは MsgBox のうえで段階2（Python は保存済みブックから B 列を読む）
+    If 設定シート_B列デバッグ依頼NO指定あり() Then
+        MsgBox "【デバッグ限定配台】" & vbCrLf & vbCrLf & _
+            "シート「設定」の B3 以降に依頼NOが入力されています。" & vbCrLf & _
+            "この段階2では、指定した依頼NOに該当する行だけを配台します（全件ではありません）。" & vbCrLf & vbCrLf & _
+            "通常運用に戻すときは B 列を空にしてください。", vbInformation, "段階2"
+    End If
     ' 段階2: Python は TASK_INPUT_WORKBOOK のディスク上のファイルを読むため、
     ' 未保存の「配台計画_タスク入力」等が反映されないのを防ぐ
     Application.StatusBar = "ブックを保存しています..."

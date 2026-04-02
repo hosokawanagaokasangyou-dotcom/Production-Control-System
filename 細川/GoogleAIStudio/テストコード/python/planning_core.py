@@ -786,6 +786,9 @@ TRACE_SCHEDULE_TASK_IDS_FROM_ENV: frozenset[str] = frozenset(
     x.strip() for x in _TRACE_SCHEDULE_TASK_ID_RAW.split(",") if x.strip()
 )
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = TRACE_SCHEDULE_TASK_IDS_FROM_ENV
+# デバッグ限定配台: 「設定」B3 以降が優先。空なら環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）。
+_DISPATCH_DEBUG_ONLY_TASK_IDS_RAW = os.environ.get("DISPATCH_DEBUG_ONLY_TASK_IDS", "").strip()
+DISPATCH_DEBUG_ONLY_TASK_IDS: frozenset[str] = frozenset()
 
 
 def _trace_schedule_task_enabled(task_id) -> bool:
@@ -11446,6 +11449,35 @@ def generate_plan():
             TRACE_TEAM_ASSIGN_TASK_ID,
         )
 
+    global DISPATCH_DEBUG_ONLY_TASK_IDS
+    _ids_debug_b = _read_dispatch_debug_only_task_ids_from_config_sheet_b(_wb_trace)
+    DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset()
+    if _ids_debug_b:
+        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(
+            planning_task_id_str_from_scalar(x) for x in _ids_debug_b
+        )
+        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(x for x in DISPATCH_DEBUG_ONLY_TASK_IDS if x)
+    if not DISPATCH_DEBUG_ONLY_TASK_IDS:
+        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(
+            planning_task_id_str_from_scalar(x.strip())
+            for x in _DISPATCH_DEBUG_ONLY_TASK_IDS_RAW.split(",")
+            if x.strip()
+        )
+        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(x for x in DISPATCH_DEBUG_ONLY_TASK_IDS if x)
+        if _ids_debug_b and not DISPATCH_DEBUG_ONLY_TASK_IDS:
+            logging.warning(
+                "デバッグ限定配台: 設定シート「%s」B 列に値はありますが、依頼NOとして正規化できるものがありません。"
+                " 環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS も解釈できませんでした。この実行は全依頼を対象にします。",
+                APP_CONFIG_SHEET_NAME,
+            )
+    if DISPATCH_DEBUG_ONLY_TASK_IDS:
+        logging.warning(
+            "デバッグ限定配台: 次の依頼NOのみ「配台計画_タスク入力」から配台します → %s",
+            ", ".join(sorted(DISPATCH_DEBUG_ONLY_TASK_IDS)),
+        )
+    elif not _ids_debug_b:
+        logging.info("デバッグ限定配台: 未指定（全依頼を対象）")
+
     _reset_dispatch_trace_per_task_logfiles()
 
     skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
@@ -11541,6 +11573,25 @@ def generate_plan():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
+
+    if DISPATCH_DEBUG_ONLY_TASK_IDS:
+        _n_tasks_before = len(tasks_df)
+        _tid_ok = tasks_df[TASK_COL_TASK_ID].map(
+            lambda v: planning_task_id_str_from_scalar(v) in DISPATCH_DEBUG_ONLY_TASK_IDS
+        )
+        tasks_df = tasks_df.loc[_tid_ok].copy()
+        logging.info(
+            "デバッグ限定配台: タスク入力 %s 行 → フィルタ後 %s 行",
+            _n_tasks_before,
+            len(tasks_df),
+        )
+        if tasks_df.empty:
+            logging.error(
+                "デバッグ限定配台: 指定依頼NOに該当するタスク行がありません（%s）。段階2を中断します。",
+                ", ".join(sorted(DISPATCH_DEBUG_ONLY_TASK_IDS)),
+            )
+            _try_write_main_sheet_gemini_usage_summary("段階2")
+            return
 
     try:
         validate_no_duplicate_explicit_plan_priorities(tasks_df)

@@ -37,6 +37,31 @@ Private Function DbgRollTraceJsonlPath() As String
     DbgRollTraceJsonlPath = ThisWorkbook.Path & "\log\dispatch_roll_trace.jsonl"
 End Function
 
+' 設定シート B3 以降にデバッグ用依頼NOが1件以上あるか（最大500行・連続30空で打切り。planning_core と同趣旨）
+Private Function 設定シート_B列デバッグ依頼NO指定あり() As Boolean
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim nBlank As Long
+    Dim v As Variant
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("設定")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    nBlank = 0
+    For r = 3 To 502
+        v = ws.Cells(r, 2).Value
+        If IsError(v) Then
+            nBlank = nBlank + 1
+        ElseIf Len(Trim$(CStr(v))) > 0 Then
+            設定シート_B列デバッグ依頼NO指定あり = True
+            Exit Function
+        Else
+            nBlank = nBlank + 1
+        End If
+        If nBlank >= 30 Then Exit For
+    Next r
+End Function
+
 ' JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり別マクロの場合は先に実行）
 Sub 配台デバッグ_ロールトレースをシートに表示()
     On Error GoTo EH
@@ -53,6 +78,17 @@ End Sub
 ' JSONL を有効にした段階2 → 続けて同じブックにロールトレースシートを表示（ワンショット調査向け）
 Sub 配台デバッグ_段階2とロールトレースシート()
     On Error GoTo EH
+    If 設定シート_B列デバッグ依頼NO指定あり() Then
+        MsgBox "【デバッグ限定配台】" & vbCrLf & vbCrLf & _
+            "シート「設定」の B3 以降に依頼NOが入力されています。" & vbCrLf & _
+            "この段階2では、指定した依頼NOに該当する行だけを配台します（全件ではありません）。" & vbCrLf & vbCrLf & _
+            "通常運用に戻すときは B 列を空にしてください。", vbInformation, "段階2"
+    End If
+    ' openpyxl はディスク上のブックを読むため、設定シート B 列を反映させる
+    Application.StatusBar = "ブックを保存しています（設定シート B 列を Python が読み込みます）..."
+    DoEvents
+    ThisWorkbook.Save
+    Application.StatusBar = False
     DbgRunConsoleRunner "run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings"
     Exit Sub
 EH:
