@@ -1,0 +1,26 @@
+﻿# Cursor インデックス・コンテキストから除外（.gitignore と同様のパターン）
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+**/env/
+
+# Excel 一時ロック
+~$*
+
+# テストコード配下の .gitignore と同趣旨（生成物・ログ）
+**/output/
+**/log/
+**/python/log/
+
+# 依存・ビルド（あれば）
+**/node_modules/
+**/dist/
+**/build/
+**/.eggs/
+**/*.egg-info/
