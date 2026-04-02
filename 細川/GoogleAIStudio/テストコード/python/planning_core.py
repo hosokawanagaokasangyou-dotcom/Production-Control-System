@@ -3819,7 +3819,8 @@ def _stage2_try_copy_column_config_shapes_from_input(
     """
     pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
     既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
-    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーする。
+    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
+    各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
     openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
@@ -3874,9 +3875,35 @@ def _stage2_try_copy_column_config_shapes_from_input(
             )
             return
         ws_out.activate()
+        api_in = ws_in.api
+        api_out = ws_out.api
         for i in range(1, n_shapes + 1):
-            ws_in.api.Shapes(i).Copy()
-            ws_out.api.Paste()
+            src = api_in.Shapes(i)
+            left = float(src.Left)
+            top = float(src.Top)
+            width = float(src.Width)
+            height = float(src.Height)
+            placement = None
+            try:
+                placement = int(src.Placement)
+            except Exception:
+                pass
+            src.Copy()
+            api_out.Paste()
+            dst = api_out.Shapes(int(api_out.Shapes.Count))
+            try:
+                dst.LockAspectRatio = False
+            except Exception:
+                pass
+            if placement is not None:
+                try:
+                    dst.Placement = placement
+                except Exception:
+                    pass
+            dst.Left = left
+            dst.Top = top
+            dst.Width = width
+            dst.Height = height
         wb_out.save()
         logging.info(
             "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
