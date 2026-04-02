@@ -781,6 +781,8 @@ DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
 # 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
+# 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
+DISPATCH_TRACE_OUTER_ROUND: int = 0
 # デバッグ限定配台: 「設定」B3 以降が優先。空なら環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）。
 _DISPATCH_DEBUG_ONLY_TASK_IDS_RAW = os.environ.get("DISPATCH_DEBUG_ONLY_TASK_IDS", "").strip()
 DISPATCH_DEBUG_ONLY_TASK_IDS: frozenset[str] = frozenset()
@@ -803,8 +805,8 @@ def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
 
 def _reset_dispatch_trace_per_task_logfiles() -> None:
     """
-    配台トレース対象ごとに log/dispatch_trace_<依頼NO>.txt を新規作成（当該段階2実行の冒頭で1回）。
-    実行前に log 内の dispatch_trace_*.txt をすべて削除し、過去実行の残骸を残さない。
+    段階2実行の冒頭で1回、log 内の dispatch_trace_*.txt をすべて削除する（過去実行の残骸を残さない）。
+    各外側ラウンド用ファイルは generate_plan の while 先頭で _dispatch_trace_begin_outer_round がヘッダ付き新規作成する。
     execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行を _log_dispatch_trace_schedule で追記
     （日次残・ロール確定の余剰有無・余力追記・終了時サマリ等）。
     """
@@ -827,17 +829,35 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
                 pass
     except OSError:
         pass
+
+
+def _dispatch_trace_begin_outer_round(round_n: int) -> None:
+    """納期超過リトライの外側ラウンド番号を確定し、当ラウンド用 dispatch_trace_*_rNN.txt のヘッダを1回だけ書く。"""
+    global DISPATCH_TRACE_OUTER_ROUND
+    DISPATCH_TRACE_OUTER_ROUND = max(0, int(round_n))
+    if not TRACE_SCHEDULE_TASK_IDS:
+        return
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError:
+        return
     for tid in TRACE_SCHEDULE_TASK_IDS:
         t = str(tid or "").strip()
         if not t:
             continue
         safe = _sanitize_dispatch_trace_filename_part(t)
-        path = os.path.join(log_dir, f"dispatch_trace_{safe}.txt")
+        path = os.path.join(
+            log_dir,
+            f"dispatch_trace_{safe}_r{DISPATCH_TRACE_OUTER_ROUND:02d}.txt",
+        )
+        if os.path.exists(path):
+            continue
         try:
             with open(path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(
-                    "# 配台トレース（依頼NOごと）。同一行は log/execution_log.txt にも出力されます。\n"
-                    f"# task_id={t}\n\n"
+                    "# 配台トレース（依頼NOごと・外側ラウンド別）。同一行は log/execution_log.txt にも出力されます。\n"
+                    f"# task_id={t}  outer_round={DISPATCH_TRACE_OUTER_ROUND}  "
+                    "# （0=初回カレンダー通し、以降は納期超過リトライごとに +1）\n\n"
                 )
         except OSError as ex:
             logging.warning("dispatch_trace ログの初期化に失敗: %s (%s)", path, ex)
@@ -845,14 +865,20 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
 
 def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
     """[配台トレース task=…] を execution_log に出しつつ、対象依頼NO専用ファイルにも追記する。"""
-    logging.info(msg, *args)
     t = str(task_id or "").strip()
+    body_raw = msg % args if args else msg
+    body = body_raw
+    if t and t in TRACE_SCHEDULE_TASK_IDS:
+        body = f"[outer_round={DISPATCH_TRACE_OUTER_ROUND:02d}] {body_raw}"
+    logging.info(body)
     if not t or t not in TRACE_SCHEDULE_TASK_IDS:
         return
     safe = _sanitize_dispatch_trace_filename_part(t)
-    path = os.path.join(log_dir, f"dispatch_trace_{safe}.txt")
+    path = os.path.join(
+        log_dir,
+        f"dispatch_trace_{safe}_r{DISPATCH_TRACE_OUTER_ROUND:02d}.txt",
+    )
     try:
-        body = msg % args if args else msg
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
         line = f"{ts} - INFO - {body}\n"
         with open(path, "a", encoding="utf-8", newline="\n") as f:
@@ -12305,6 +12331,7 @@ def generate_plan():
     _due_shift_cap_warned_tids: set[str] = set()
     _outer_retry_round = 0
     while True:
+        _dispatch_trace_begin_outer_round(_outer_retry_round)
         _need_headcount_logged_orders: set = set()
         if _outer_retry_round > 0:
             _purge_attendance_days_not_in_set(
