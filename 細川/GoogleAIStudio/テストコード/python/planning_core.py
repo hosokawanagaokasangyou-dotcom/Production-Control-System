@@ -809,6 +809,7 @@ def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
 def _reset_dispatch_trace_per_task_logfiles() -> None:
     """
     配台トレース対象ごとに log/dispatch_trace_<依頼NO>.txt を新規作成（当該段階2実行の冒頭で1回）。
+    実行前に log 内の dispatch_trace_*.txt をすべて削除し、過去実行の残骸を残さない。
     execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行のみ _log_dispatch_trace_schedule で追記。
     """
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -817,6 +818,19 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
         os.makedirs(log_dir, exist_ok=True)
     except OSError:
         return
+    try:
+        for _name in os.listdir(log_dir):
+            if not (
+                str(_name).startswith("dispatch_trace_") and str(_name).endswith(".txt")
+            ):
+                continue
+            _p = os.path.join(log_dir, _name)
+            try:
+                os.unlink(_p)
+            except OSError:
+                pass
+    except OSError:
+        pass
     for tid in TRACE_SCHEDULE_TASK_IDS:
         t = str(tid or "").strip()
         if not t:

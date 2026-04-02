@@ -265,7 +265,7 @@
       <li><code>TRACE_SCHEDULE_TASK_ID</code> … カンマ区切り（例 <code>W4-1,Y3-26</code>）。</li>
       <li>マクロブック <strong>「設定」</strong>シート <strong>A 列 3 行目以降</strong>に依頼NOを縦に（<code>_read_trace_schedule_task_ids_from_config_sheet</code>）。</li>
       <li><strong>和集合</strong>が有効集合。<code>generate_plan</code> <strong>冒頭</strong>（JSONL 初期化の直後・<strong>skills 読込より前</strong>）に読み、<strong>必ず INFO ログ</strong>。メンバー0で即終了したときも設定シートの読み取り結果がログに残ります。</li>
-      <li><code>[配台トレース task=…]</code> 行は <span class="file">log/execution_log.txt</span> に加え、<strong><span class="file">log/dispatch_trace_&lt;依頼NO&gt;.txt</span></strong>（名はサニタイズ）へ同一文面を追記。段階2開始時に対象ごとにファイルを上書き初期化。</li>
+      <li><code>[配台トレース task=…]</code> 行は <span class="file">log/execution_log.txt</span> に加え、<strong><span class="file">log/dispatch_trace_&lt;依頼NO&gt;.txt</span></strong>（名はサニタイズ）へ同一文面を追記。トレース有効時は段階2冒頭で <span class="file">log/dispatch_trace_*.txt</span> を全削除のうえ、今回分だけ新規作成。</li>
       <li>シート <strong>配台_配台不要工程</strong>（openpyxl 非互換マーカー）があるブックは「設定」を openpyxl で読めず A3 以降は無視（環境変数のみ）。</li>
     </ul>
     <p>詳細は <span class="file">配台ルール.md</span> セクション 11。</p>
