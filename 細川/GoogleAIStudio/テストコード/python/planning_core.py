@@ -121,11 +121,18 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
 
 class _FlushingFileHandler(logging.FileHandler):
-    """1レコード書き込みごとに flush し、VBA が execution_log.txt をポーリングしても追記が見えるようにする。"""
+    """1レコードごとに flush + fsync。VBA が execution_log.txt をポーリングするとき遅延を抑える。"""
 
     def emit(self, record: logging.LogRecord) -> None:
         super().emit(record)
         self.flush()
+        try:
+            stream = self.stream
+            if stream is not None:
+                fd = stream.fileno()
+                os.fsync(fd)
+        except OSError:
+            pass
 
 
 # 1. 画面(コンソール)用ハンドラ

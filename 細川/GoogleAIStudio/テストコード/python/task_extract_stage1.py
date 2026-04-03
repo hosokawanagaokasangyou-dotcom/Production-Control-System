@@ -50,6 +50,10 @@ def _append_execution_log_line(level: str, msg: str) -> None:
             with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
                 f.write(line)
                 f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
             return
         except OSError as ex:
             last_err = ex
@@ -85,6 +89,10 @@ except Exception:
                 f.write(_err_head)
                 f.write(_tb)
                 f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
         except OSError:
             pass
     traceback.print_exc()
