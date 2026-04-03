@@ -12,6 +12,7 @@
 '    ・WordWrap = True、フォントはメイリオ 11pt 程度、幅はフォームいっぱい・高さ 40〜50pt 程度
 ' 5. TextBox を1つ置く。名前(Name)を txtExecutionLog に変更（必ずこの名前。標準モジュールが Controls("txtExecutionLog") で参照）
 '    ・MultiLine = True、ScrollBars = 2 - fmScrollBarsVertical（縦スクロール）
+'    ・HideSelection = False（フォーカスが他にあっても選択位置が見える／末尾スクロールしやすい）
 '    ・EnterKeyBehavior = False、フォントは Consolas 9pt または MS ゴシック 9pt（ログ見やすさ用）
 '    ・位置: lblMessage の下からフォーム下端まで（高さ 200pt 前後の余白を確保）
 ' 6. フォーム全体のサイズ例: Width 540 pt、Height 320 pt 前後（ログ表示の有無に合わせ調整）
@@ -35,7 +36,10 @@ Option Explicit
 Private Sub UserForm_Initialize()
     On Error Resume Next
     Me.StartUpPosition = 2  ' 画面中央（実行時に標準モジュールでも設定）
-    Me.Controls("txtExecutionLog").Text = ""
+    With Me.Controls("txtExecutionLog")
+        .Text = ""
+        .HideSelection = False
+    End With
 End Sub
 
 ' ×ボタンで閉じられないようにする（標準モジュールの Unload 以外では閉じない）
