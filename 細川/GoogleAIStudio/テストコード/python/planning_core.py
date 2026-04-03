@@ -10904,6 +10904,16 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
         )
 
 
+def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
+    """
+    `task_queue` のリスト順に合わせて `dispatch_trial_order` を 1..n へ付け直す。
+    `_reorder_task_queue_b2_ec_inspection_consecutive` の直後（およびキュー再ソートの直後）に呼び、
+    EC と後続（検査／巻返し）の連続番号を保証する。
+    """
+    for i, t in enumerate(task_queue, start=1):
+        t["dispatch_trial_order"] = i
+
+
 def _day_schedule_task_sort_key(
     task: dict,
     _task_queue: list | None = None,
@@ -12752,8 +12762,7 @@ def generate_plan():
     )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     # 配台試行順: 日次ループ前・ソート済みキューの並び（初回割当の成否とは無関係）
-    for _trial_ord, _tq in enumerate(task_queue, start=1):
-        _tq["dispatch_trial_order"] = _trial_ord
+    _assign_sequential_dispatch_trial_order(task_queue)
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
         if dbg_items:
@@ -13852,6 +13861,7 @@ def generate_plan():
                                 )
                             )
                             _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+                            _assign_sequential_dispatch_trial_order(task_queue)
                             _trials_detail = ",".join(
                                 f"{tid}:{_due_shift_retry_count_by_request[tid]}"
                                 for tid in sorted(allowed_shift_tids)
