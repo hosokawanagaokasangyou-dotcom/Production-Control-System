@@ -34,7 +34,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。
-' ★ 段階1/2 等の cmd 表示は Run-CmdWithConsoleLayout.ps1 でウィンドウを左上・幅フル・高さ 1/4 に配置（ps1 が無い場合は従来どおり）。
+' ★ 段階1/2 等は %TEMP% の一時 .cmd を cmd.exe /c で実行する（ウィンドウ位置の PowerShell ラッパーは使わない）。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -68,11 +68,6 @@ Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Private m_animMacroSucceeded As Boolean
 
-' cmd.exe をプライマリ画面 左上・幅全体・高さ約 1/4 に表示（Run-CmdWithConsoleLayout.ps1）
-Private Function ConsoleLayoutPs1Path() As String
-    ConsoleLayoutPs1Path = ThisWorkbook.Path & "\Run-CmdWithConsoleLayout.ps1"
-End Function
-
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
     Dim fh As Integer
@@ -94,15 +89,6 @@ Private Function WriteTempCmdFile(ByVal body As String) As String
 End Function
 
 Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String) As Long
-    Dim ps1 As String
-    Dim line As String
-    On Error GoTo Fallback
-    ps1 = ConsoleLayoutPs1Path()
-    If Len(Dir(ps1)) = 0 Then GoTo Fallback
-    line = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & ps1 & """ -CmdFile """ & cmdFilePath & """"
-    RunCmdFileWithConsoleLayout = wsh.Run(line, 0, True)
-    Exit Function
-Fallback:
     RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
 End Function
 
@@ -2611,7 +2597,7 @@ Private Sub 段階1_コア実行()
 
     MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。コンソール完了までそのままお待ちください…"
     wsh.CurrentDirectory = Environ("TEMP")
-    ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（.cmd 経由・コンソール配置は Run-CmdWithConsoleLayout.ps1）
+    ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
     runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます" & vbCrLf & _
@@ -3316,7 +3302,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
              "echo [段階2] 終了 ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
-    ' 4. コマンドプロンプトを表示＆完了まで待機（配置は Run-CmdWithConsoleLayout.ps1）
+    ' 4. コマンドプロンプトを表示＆完了まで待機
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     m_lastStage2ExitCode = exitCode
     ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
