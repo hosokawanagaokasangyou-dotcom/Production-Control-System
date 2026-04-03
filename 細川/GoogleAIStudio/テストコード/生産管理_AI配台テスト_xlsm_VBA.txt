@@ -1531,14 +1531,13 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     If Not tb Is Nothing Then tb.Text = ""
 End Sub
 
-' ログは末尾が最新。キャレットを最後に置きフォーカスを TextBox へ（先頭行だけ見えるのを防ぐ）
+' ログは末尾が最新。キャレットを最後に置き txtExecutionLog にフォーカス（UserForm には SetFocus がない）
 Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     On Error Resume Next
     tb.HideSelection = False
     tb.SelStart = Len(tb.Text)
     tb.SelLength = 0
     If Application.Interactive Then
-        frmMacroSplash.SetFocus
         tb.SetFocus
     End If
     frmMacroSplash.Repaint
