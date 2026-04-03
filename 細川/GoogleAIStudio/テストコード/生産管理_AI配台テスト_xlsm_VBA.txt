@@ -96,6 +96,8 @@ Private m_splashExecutionLogPath As String
 ' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
 Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
+' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
+Private m_splashReadErrShown As Boolean
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -1519,6 +1521,7 @@ End Sub
 Private Sub MacroSplash_ClearExecutionLogPane()
     Dim tb As Object
     On Error Resume Next
+    m_splashReadErrShown = False
     If Not m_macroSplashShown Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If Not tb Is Nothing Then tb.Text = ""
@@ -1530,6 +1533,8 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     Dim s As String
     Dim n As Long
     Dim prevSU As Boolean
+    Dim errBanner As String
+    Dim flen As Long
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
@@ -1540,18 +1545,38 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
         s = GeminiReadUtf8FileViaTempCopy(m_splashExecutionLogPath)
     End If
     n = Len(s)
-    If n = 0 Then Exit Sub
-    If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
-        s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+    If n > 0 Then
+        m_splashReadErrShown = False
+        If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
+            s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+        End If
+        prevSU = Application.ScreenUpdating
+        Application.ScreenUpdating = True
+        tb.Text = s
+        tb.SelStart = Len(tb.Text)
+        tb.SelLength = 0
+        frmMacroSplash.Repaint
+        DoEvents
+        Application.ScreenUpdating = prevSU
+        Exit Sub
     End If
+    If Len(Dir(m_splashExecutionLogPath)) = 0 Then Exit Sub
+    flen = 0
+    flen = FileLen(m_splashExecutionLogPath)
+    If Err.Number <> 0 Then Err.Clear
+    If flen = 0 And Len(tb.Text) = 0 Then Exit Sub
+    If m_splashReadErrShown Then Exit Sub
+    errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
     prevSU = Application.ScreenUpdating
     Application.ScreenUpdating = True
-    tb.Text = s
-    tb.SelStart = Len(tb.Text)
+    tb.Text = errBanner & tb.Text
+    tb.SelStart = 1
     tb.SelLength = 0
+    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 — 下記の【ログ表示エラー】を参照）"
     frmMacroSplash.Repaint
     DoEvents
     Application.ScreenUpdating = prevSU
+    m_splashReadErrShown = True
 End Sub
 
 ' RunPython 終了直後など、同期 Python でポーリングできなかったあとに execution_log を一括表示（Interactive 一時 True で描画）
@@ -1560,13 +1585,32 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     Dim s As String
     Dim n As Long
     Dim prevInt As Boolean
+    Dim errBanner As String
+    Dim flen As Long
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If Len(Dir(fullPath)) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     s = GeminiReadUtf8File(fullPath)
+    If Len(s) = 0 Then s = GeminiReadUtf8FileViaTempCopy(fullPath)
     n = Len(s)
+    If n = 0 Then
+        flen = FileLen(fullPath)
+        If Err.Number <> 0 Then Err.Clear
+        If flen > 0 Or Len(tb.Text) > 0 Then
+            errBanner = "【ログ表示エラー】execution_log.txt を読み込めませんでした。パス: " & fullPath & vbCrLf & vbCrLf
+            prevInt = Application.Interactive
+            Application.Interactive = True
+            tb.Text = errBanner & tb.Text
+            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 — 下記を参照）"
+            frmMacroSplash.Repaint
+            DoEvents
+            If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
+        End If
+        Exit Sub
+    End If
+    m_splashReadErrShown = False
     If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
         s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
     End If
