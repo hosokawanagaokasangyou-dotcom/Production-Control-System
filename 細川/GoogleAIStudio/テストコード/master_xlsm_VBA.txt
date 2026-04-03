@@ -23,12 +23,16 @@ Private Const SHEET_NEED_DATA As String = "need"
 ' =========================================================
 ' 機械カレンダー（シート 1 枚「機械カレンダー」）
 ' ・1 行目＝工程名、2 行目＝機械名（skills の設備列と同じ並び・値を転記）。見出しに色付け
-' ・A 列＝日付＋時刻（1 時間単位・メンバー出勤「通常」と同じ昼/午後休憩を除外した開始時刻）
+' ・A 列＝日付＋時刻（1 時間単位・当日 6:00～22:00 の毎正時）
+' ・データ行は日ごとに薄い青系のストライプ（交互）
 ' ・各設備列: 空白でないセル＝そのスロットで稼働不可（コメント）。再作成時は日時×工程×機械キーで復元
 ' =========================================================
 Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 Private Const MACHINE_CAL_HORIZON_DAYS As Long = 365
-Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 8
+Private Const MACHINE_CAL_SLOT_HOUR_FIRST As Long = 6
+Private Const MACHINE_CAL_SLOT_HOUR_LAST As Long = 22
+' 6～22 時の毎正時（17 行/日）
+Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 17
 ' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
 ' 公開マクロ名は先頭に master_ を付与し、配台ブックと同名のマクロが別ブックで実行されるのを防ぐ（ThisWorkbook 以外で Alt+F8 等）。
@@ -392,8 +396,7 @@ Public Sub master_機械カレンダーを作成()
     Dim colKey As String
     Dim mapKey As String
     Dim lastRow As Long
-    Dim slotIdx As Long
-    Dim mMin As Long
+    Dim slotHour As Long
     Dim slotTime As Date
     
     On Error GoTo EH
@@ -449,9 +452,8 @@ NextHdr:
     
     r = 3
     For dayOffset = 0 To MACHINE_CAL_HORIZON_DAYS - 1
-        For slotIdx = 1 To MACHINE_CAL_SLOTS_PER_DAY
-            mMin = MachineCalHourlySlotStartMinute(slotIdx)
-            slotTime = (startDay + dayOffset) + TimeSerial(mMin \ 60, mMin Mod 60, 0)
+        For slotHour = MACHINE_CAL_SLOT_HOUR_FIRST To MACHINE_CAL_SLOT_HOUR_LAST
+            slotTime = (startDay + dayOffset) + TimeSerial(slotHour, 0, 0)
             wsOut.Cells(r, 1).Value = slotTime
             For c = 2 To lastC
                 If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextCell
@@ -467,7 +469,7 @@ NextHdr:
 NextCell:
             Next c
             r = r + 1
-        Next slotIdx
+        Next slotHour
     Next dayOffset
     
     Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastC)
@@ -478,7 +480,7 @@ NextCell:
     
     MsgBox "「" & SHEET_MACHINE_CALENDAR & "」を更新しました。" & vbCrLf & _
            "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
-           "A 列は 1 時間単位（1 日 " & CStr(MACHINE_CAL_SLOTS_PER_DAY) & " スロット・休憩帯は行なし）。" & vbCrLf & _
+           "A 列は 1 時間単位（6:00～22:00・1 日 " & CStr(MACHINE_CAL_SLOTS_PER_DAY) & " 行）・日ごとに行の色がストライプです。" & vbCrLf & _
            "設備列へ入力した文言は、同一日時・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
     Exit Sub
     
@@ -537,21 +539,6 @@ Private Function MachineCalSkillsColumnUsable(ByVal wsSkill As Worksheet, ByVal 
     Else
         MachineCalSkillsColumnUsable = (Len(pHdr) > 0 And StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0)
     End If
-End Function
-
-' 1 日 8 スロット: 8:45～11:45（1h 刻み）、12:50・13:50、15:00・16:00（メンバー出勤の昼・午後休憩と同趣旨で挟む）
-Private Function MachineCalHourlySlotStartMinute(ByVal slotIndex1 As Long) As Long
-    Select Case slotIndex1
-        Case 1: MachineCalHourlySlotStartMinute = 525   ' 8:45
-        Case 2: MachineCalHourlySlotStartMinute = 585   ' 9:45
-        Case 3: MachineCalHourlySlotStartMinute = 645   ' 10:45
-        Case 4: MachineCalHourlySlotStartMinute = 705   ' 11:45
-        Case 5: MachineCalHourlySlotStartMinute = 770   ' 12:50
-        Case 6: MachineCalHourlySlotStartMinute = 830   ' 13:50
-        Case 7: MachineCalHourlySlotStartMinute = 900   ' 15:00
-        Case 8: MachineCalHourlySlotStartMinute = 960   ' 16:00
-        Case Else: MachineCalHourlySlotStartMinute = -1
-    End Select
 End Function
 
 Private Sub PreserveMachineCalendarGrid(ByVal ws As Worksheet, ByVal outMap As Object)
@@ -642,6 +629,8 @@ Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow
     ws.Range(ws.Cells(3, 1), ws.Cells(lastRow, 1)).NumberFormatLocal = "yyyy/mm/dd hh:mm"
     On Error GoTo 0
     
+    Call ApplyMachineCalendarDayStripes(ws, lastRow, lastCol)
+    
     ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).Columns.AutoFit
     
     Set prevWs = Nothing
@@ -672,6 +661,33 @@ Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow
         On Error GoTo 0
     End If
     Application.ScreenUpdating = prevScr
+End Sub
+
+' 3 行目以降を「カレンダー日」単位で薄い青のストライプ（同一日は同色）
+Private Sub ApplyMachineCalendarDayStripes(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal lastCol As Long)
+    Dim rr As Long
+    Dim dayIx As Long
+    Dim fillColor As Long
+    Dim bandA As Long
+    Dim bandB As Long
+    
+    If lastRow < 3 Or lastCol < 1 Then Exit Sub
+    
+    bandA = RGB(237, 246, 255)
+    bandB = RGB(220, 236, 252)
+    
+    For rr = 3 To lastRow
+        dayIx = (rr - 3) \ MACHINE_CAL_SLOTS_PER_DAY
+        If (dayIx Mod 2) = 0 Then
+            fillColor = bandA
+        Else
+            fillColor = bandB
+        End If
+        With ws.Range(ws.Cells(rr, 1), ws.Cells(rr, lastCol)).Interior
+            .Pattern = xlSolid
+            .Color = fillColor
+        End With
+    Next rr
 End Sub
 
 Private Function ResolveCalendarYearMonth(ByVal wsCal As Worksheet, ByRef outY As Long, ByRef outM As Long) As Boolean
@@ -892,7 +908,7 @@ Sub master_かっこいいボタンを作成()
     CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
     MsgBox "ボタンを作成しました。" & vbCrLf & _
            "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成" & vbCrLf & _
-           "・機械カレンダー作成 … skills 見出し＋A列日時（1時間スロット）の「機械カレンダー」1枚を更新（当日から 365 日分）" & vbCrLf & _
+           "・機械カレンダー作成 … skills 見出し＋A列 6～22時（1時間）・日ストライプ色の「機械カレンダー」1枚（365日）" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
 
