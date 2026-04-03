@@ -11,7 +11,7 @@
 '    ・Caption は任意（実行時に上書き）
 '    ・WordWrap = True、フォントはメイリオ 11pt 程度、幅はフォームいっぱい・高さ 40〜50pt 程度
 ' 5. TextBox を1つ置く。名前(Name)を txtExecutionLog に変更（必ずこの名前。標準モジュールが Controls("txtExecutionLog") で参照）
-'    ・シート「設定」D3=false のとき VBA は txtExecutionLog を更新しない（log\execution_log.txt のみ比較用）。true または空で従来どおり。
+'    ・シート「設定」D3=false のとき txtExecutionLog を更新せず、段階1/2 の cmd 待機もポーリングループを使わない（同期 Run）。true または空で従来どおり。
 '    ・MultiLine = True、ScrollBars = 2 - fmScrollBarsVertical（縦スクロール）
 '    ・HideSelection = False（フォーカスが他にあっても選択位置が見える／末尾スクロールしやすい）
 '    ・EnterKeyBehavior = False、フォントは Consolas 9pt または MS ゴシック 9pt（ログ見やすさ用）
