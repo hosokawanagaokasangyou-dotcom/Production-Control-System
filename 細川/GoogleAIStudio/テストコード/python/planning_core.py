@@ -4151,7 +4151,7 @@ TASK_SPECIAL_AI_LAST_RESPONSE_FILE = "ai_task_special_remark_last.txt"
 # 勤怠備考キャッシュとキー空間を分離（同一SHA衝突を避ける）。指紋に基準年を含め日付解釈のズレを防ぐ。
 TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v3|"
 # メインシート「グローバルコメント」下の自由記述 → Gemini 解釈（配台の最優先オーバーライド）
-GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v7|"
+GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v8|"
 
 
 def _normalize_special_task_id_for_ai(val):
