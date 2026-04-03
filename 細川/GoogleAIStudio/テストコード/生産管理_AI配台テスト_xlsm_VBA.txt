@@ -2628,11 +2628,11 @@ Private Sub 段階1_コア実行()
     ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
     runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
-             "echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます" & vbCrLf & _
+             "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
              "py -3 -u python\task_extract_stage1.py" & vbCrLf & _
              "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
+             "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     m_lastStage1ExitCode = exitCode
@@ -3335,11 +3335,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。コンソール完了までそのままお待ちください…"
     runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
-             "echo [段階2] 計画生成を実行中... 進捗はこの画面に表示されます。保存済みログ: log\execution_log.txt" & vbCrLf & _
+             "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
              "py -3 -u python\plan_simulation_stage2.py" & vbCrLf & _
              "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [段階2] 終了 ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
+             "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
     ' 4. コマンドプロンプトを表示＆完了まで待機
@@ -4086,7 +4086,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\apply_result_task_column_layout.py" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [列設定適用] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "echo [column-layout] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
@@ -4146,7 +4146,7 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\dedupe_result_task_column_config_sheet.py" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [列設定重複整理] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "echo [dedupe-column-config] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
