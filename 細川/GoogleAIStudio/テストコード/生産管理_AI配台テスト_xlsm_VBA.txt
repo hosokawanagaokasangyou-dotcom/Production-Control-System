@@ -2619,6 +2619,7 @@ Private Sub 段階1_コア実行()
              "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [段階1] 終了 ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
+             "pause" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     m_lastStage1ExitCode = exitCode
