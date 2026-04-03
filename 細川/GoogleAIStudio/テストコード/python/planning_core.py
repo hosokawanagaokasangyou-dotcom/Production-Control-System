@@ -71,15 +71,25 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 # =========================================================
-# 【重要】カレントを「テストコード直下」に設定（master.xlsm・output・log・json・API_Payment と同じ階層）
-# planning_core.py が python\ 配下にあるときは親フォルダへ上がる。単体配置のときは自フォルダ。
-# （VBA は …\output\plan_input_tasks.xlsx を参照するため output は直下必須）
+# 【重要】カレントをマクロブック（TASK_INPUT_WORKBOOK）と同じフォルダに設定する。
+# log/execution_log.txt・output/ を VBA の ThisWorkbook.Path 基準と一致させる。
+# 環境変数が無い・chdir 不可のときは従来どおり planning_core.py 所在の「python の親」または自フォルダへ。
+# （VBA は …\output\plan_input_tasks.xlsx を参照するため output はブックと同じ階層が前提）
 # =========================================================
-_planning_core_dir = os.path.dirname(os.path.abspath(__file__))
-if os.path.basename(_planning_core_dir).lower() == "python":
-    os.chdir(os.path.dirname(_planning_core_dir))
-else:
-    os.chdir(_planning_core_dir)
+_env_wb_for_cwd = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+_cwd_from_workbook = False
+if _env_wb_for_cwd:
+    try:
+        os.chdir(os.path.dirname(os.path.abspath(_env_wb_for_cwd)))
+        _cwd_from_workbook = True
+    except OSError:
+        _cwd_from_workbook = False
+if not _cwd_from_workbook:
+    _planning_core_dir = os.path.dirname(os.path.abspath(__file__))
+    if os.path.basename(_planning_core_dir).lower() == "python":
+        os.chdir(os.path.dirname(_planning_core_dir))
+    else:
+        os.chdir(_planning_core_dir)
 
 # cmd で chcp 65001 時にログの日本語をコンソールへ出しやすくする（段階2でリダイレクト無し実行時向け）
 if os.name == "nt" and hasattr(sys.stdout, "reconfigure"):

@@ -172,6 +172,7 @@
     <h2 id="h-doc-sync">ソース変更時のドキュメント同期（開発）</h2>
     <p><span class="file">python/planning_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
     <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。同趣旨の要約はリポジトリ直下 <span class="file">.cursorrules</span> にもあります。</p>
+    <p><strong>作業ディレクトリ</strong>: 環境変数 <code>TASK_INPUT_WORKBOOK</code> があるときはそのブックのフォルダへ <code>chdir</code> し、<code>log/</code>・<code>output/</code> を VBA のブック配置と揃える。未設定時は <code>python</code> の親フォルダ基準（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
   </section>
 
   <section id="roll-unit-length" class="card" aria-labelledby="h-roll-unit">

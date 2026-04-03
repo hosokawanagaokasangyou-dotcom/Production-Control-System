@@ -19,16 +19,40 @@ def _repo_root_for_stage1() -> str:
     return os.path.dirname(d) if os.path.basename(d).lower() == "python" else d
 
 
-def _append_execution_log_line(level: str, msg: str) -> str:
-    root = _repo_root_for_stage1()
-    log_dir = os.path.join(root, "log")
-    path = os.path.join(log_dir, "execution_log.txt")
-    os.makedirs(log_dir, exist_ok=True)
+def _execution_log_paths_stage1() -> list[str]:
+    """VBA が読む log と同じ候補（マクロブックのフォルダを最優先）。"""
+    paths: list[str] = []
+    wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(os.path.dirname(os.path.abspath(wb)), "log", "execution_log.txt")
+        )
+    paths.append(
+        os.path.join(_repo_root_for_stage1(), "log", "execution_log.txt")
+    )
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _append_execution_log_line(level: str, msg: str) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{ts} - {level} - {msg}\n"
-    with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
-        f.write(line)
-    return path
+    last_err: OSError | None = None
+    for path in _execution_log_paths_stage1():
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+                f.write(line)
+            return
+        except OSError as ex:
+            last_err = ex
+    print(f"log/execution_log.txt へ書けません: {last_err}", file=sys.stderr)
 
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -48,17 +72,19 @@ except OSError as ex:
 try:
     import planning_core as pc
 except Exception:
-    try:
-        path = os.path.join(_repo_root_for_stage1(), "log", "execution_log.txt")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
-            f.write(
-                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ERROR - "
-                "planning_core の import に失敗しました\n"
-            )
-            f.write(traceback.format_exc())
-    except OSError:
-        pass
+    _err_head = (
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ERROR - "
+        "planning_core の import に失敗しました\n"
+    )
+    _tb = traceback.format_exc()
+    for path in _execution_log_paths_stage1():
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+                f.write(_err_head)
+                f.write(_tb)
+        except OSError:
+            pass
     traceback.print_exc()
     sys.exit(1)
 
