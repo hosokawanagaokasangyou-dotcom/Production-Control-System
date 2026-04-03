@@ -45,7 +45,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。
-' ★ 段階1/2 は %TEMP% の一時 .cmd を「start "タイトル" /wait cmd /c」経由で実行し、キャプション一致で FindWindow→SetWindowPos（左上・幅=プライマリ全幅・高さ=1/4）。その他の .cmd 実行は従来どおり cmd.exe /c。
+' ★ 段階1/2 は一時 .cmd の先頭に title を挿入し cmd.exe /c を1回だけ起動（外側 cmd+start の二重コンソールを作らない）。FindWindow→SetWindowPos で左上・全幅・高さ1/4。その他の .cmd は従来どおり cmd.exe /c。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -104,9 +104,20 @@ Private Function WriteTempCmdFile(ByVal body As String) As String
     WriteTempCmdFile = p
 End Function
 
-Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False) As Long
+' 段階1/2 用: 同一 .cmd 内で最初に title してから本処理（FindWindow はこのキャプション1つだけになる）
+Private Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titleText As String) As String
+    Const echoOffCrLf As String = "@echo off" & vbCrLf
+    If Len(body) >= Len(echoOffCrLf) And LCase$(Left$(body, 9)) = "@echo off" Then
+        If Mid$(body, 10, 2) = vbCrLf Then
+            AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & Mid$(body, 12)
+            Exit Function
+        End If
+    End If
+    AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & body
+End Function
+
+Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal consoleTitleForLayout As String = "") As Long
     Dim execObj As Object
-    Dim uniq As String
     Dim cmdLine As String
 #If VBA7 Then
     Dim hwnd As LongPtr
@@ -121,9 +132,7 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
         RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
         Exit Function
     End If
-    Randomize
-    uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
-    cmdLine = "cmd.exe /c start """ & uniq & """ /wait cmd.exe /c """ & cmdFilePath & """"
+    cmdLine = "cmd.exe /c """ & cmdFilePath & """"
     On Error Resume Next
     Set execObj = wsh.Exec(cmdLine)
     If Err.Number <> 0 Or execObj Is Nothing Then
@@ -137,8 +146,8 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
-        If Not positioned Then
-            hwnd = FindWindow(0&, uniq)
+        If Len(consoleTitleForLayout) > 0 And Not positioned Then
+            hwnd = FindWindow(0&, consoleTitleForLayout)
             If hwnd <> 0 Then
                 SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
                 positioned = True
@@ -158,8 +167,16 @@ End Function
 
 Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False) As Long
     Dim p As String
-    p = WriteTempCmdFile(body)
-    RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p, applyTopQuarterFullWidthConsole)
+    Dim uniq As String
+    If applyTopQuarterFullWidthConsole Then
+        Randomize
+        uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
+        p = WriteTempCmdFile(AugmentCmdBodyWithConsoleTitle(body, uniq))
+        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p, True, uniq)
+    Else
+        p = WriteTempCmdFile(body)
+        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p, False)
+    End If
     On Error Resume Next
     Kill p
 End Function
