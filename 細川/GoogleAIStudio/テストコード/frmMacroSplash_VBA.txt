@@ -12,6 +12,7 @@
 '    ・WordWrap = True、フォントはメイリオ 11pt 程度、幅はフォームいっぱい・高さ 40〜50pt 程度
 ' 5. TextBox を1つ置く。名前(Name)を txtExecutionLog に変更（必ずこの名前。標準モジュールが Controls("txtExecutionLog") で参照）
 '    ・シート「設定」D3=false のとき txtExecutionLog を更新せず、段階1/2 はポーリング無しの同期 Run＋通常の cmd ウィンドウ表示（headless・nul 捨てなし）。true または空で従来どおり。
+'    ・execution_log ポーリングは FileLen が変わるときだけ UTF-8 全文読み（間隔は標準モジュール SPLASH_LOG_POLL_INTERVAL_MS）
 '    ・MultiLine = True、ScrollBars = 2 - fmScrollBarsVertical（縦スクロール）
 '    ・HideSelection = False（フォーカスが他にあっても選択位置が見える／末尾スクロールしやすい）
 '    ・EnterKeyBehavior = False、フォントは Consolas 9pt または MS ゴシック 9pt（ログ見やすさ用）

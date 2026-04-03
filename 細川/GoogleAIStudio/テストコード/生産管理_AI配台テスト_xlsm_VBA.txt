@@ -97,6 +97,11 @@ Private m_splashExecutionLogPath As String
 ' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
 Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
+' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
+Private Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 400
+' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
+Private m_splashPollLastFileLen As Long
+Private m_splashPollHaveCachedFileLen As Boolean
 ' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
 Private m_splashReadErrShown As Boolean
 ' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
@@ -276,7 +281,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
-        ' ポーリング間隔: 短すぎると ScreenUpdating 切替と Text 全置換で画面がちらつく（中身が変わったときだけ更新＋150ms）
+        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
             If Len(consoleTitle) > 0 And Not positioned Then
@@ -292,7 +297,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                 End If
             End If
         End If
-        Sleep 150&
+        Sleep SPLASH_LOG_POLL_INTERVAL_MS
         DoEvents
     Loop
     MacroSplash_RefreshExecutionLogPane
@@ -1578,6 +1583,8 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     On Error Resume Next
     m_splashReadErrShown = False
     m_splashLastLogSnapshot = ""
+    m_splashPollHaveCachedFileLen = False
+    m_splashPollLastFileLen = 0
     If Not m_macroSplashShown Then Exit Sub
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
@@ -1605,12 +1612,21 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     Dim prevSU As Boolean
     Dim errBanner As String
     Dim flen As Long
+    Dim flenAtStart As Long
     On Error Resume Next
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
+    flenAtStart = -1
+    If Len(Dir(m_splashExecutionLogPath)) > 0 Then
+        flenAtStart = FileLen(m_splashExecutionLogPath)
+        If Err.Number <> 0 Then Err.Clear: flenAtStart = -1
+    End If
+    If m_splashPollHaveCachedFileLen And flenAtStart >= 0 And flenAtStart = m_splashPollLastFileLen And Not m_splashReadErrShown Then
+        Exit Sub
+    End If
     s = GeminiReadUtf8File(m_splashExecutionLogPath)
     If Len(s) = 0 And Len(Dir(m_splashExecutionLogPath)) > 0 Then
         s = GeminiReadUtf8FileViaTempCopy(m_splashExecutionLogPath)
@@ -1621,8 +1637,14 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
         If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
             s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
         End If
-        If StrComp(s, m_splashLastLogSnapshot, vbBinaryCompare) = 0 Then Exit Sub
+        If StrComp(s, m_splashLastLogSnapshot, vbBinaryCompare) = 0 Then
+            m_splashPollLastFileLen = flenAtStart
+            m_splashPollHaveCachedFileLen = True
+            Exit Sub
+        End If
         m_splashLastLogSnapshot = s
+        m_splashPollLastFileLen = flenAtStart
+        m_splashPollHaveCachedFileLen = True
         prevSU = Application.ScreenUpdating
         If Not prevSU Then Application.ScreenUpdating = True
         tb.Text = s
@@ -1636,6 +1658,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     If Err.Number <> 0 Then Err.Clear
     If flen = 0 And Len(tb.Text) = 0 Then Exit Sub
     If m_splashReadErrShown Then Exit Sub
+    m_splashPollHaveCachedFileLen = False
     errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
     prevSU = Application.ScreenUpdating
     If Not prevSU Then Application.ScreenUpdating = True
