@@ -27,6 +27,8 @@ print と同様に xlwings のコンソールへ流れる。
 - cmd 経路は ``task_extract_stage1.py`` が planning_core より前に ``execution_log.txt`` を作る。
   **本モジュールも** ``run_stage1_for_xlwings`` / ``run_stage2_for_xlwings`` で import 前に同ファイルへ1行追記し、
   例外時はトレースバックを追記する（VBA が LOG シート用にファイル存在を前提にできる）。
+- ``runpy.run_path`` 実行時は **sys.path 先頭に本ファイルの親（python フォルダ）が入らない** ことがあり、
+  ``import planning_core`` が ``ModuleNotFoundError`` になる。読み込み直後に ``_ensure_this_python_dir_on_syspath`` で補う。
 """
 from __future__ import annotations
 
@@ -37,6 +39,22 @@ import traceback
 from datetime import datetime
 
 STAGE_VBA_EXIT_CODE_FILE = "stage_vba_exitcode.txt"
+
+
+def _ensure_this_python_dir_on_syspath() -> None:
+    """planning_core 等と同じディレクトリを sys.path に必ず含める（run_path 経路対策）。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    here_n = os.path.normcase(here)
+    for _p in sys.path:
+        try:
+            if os.path.normcase(os.path.abspath(_p)) == here_n:
+                return
+        except (OSError, ValueError):
+            continue
+    sys.path.insert(0, here)
+
+
+_ensure_this_python_dir_on_syspath()
 
 
 def _write_stage_vba_exit_code(code: int) -> None:
