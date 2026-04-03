@@ -215,7 +215,7 @@
     <ul>
       <li><strong>グローバル</strong>: <code>b_tier = 0</code>。対象行同士の順は §2.0（加工途中→計画基準納期→need 列→依頼NO）。試行番号はその後の付与。</li>
       <li><strong>日内</strong>（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code>）: §2.0 と同趣旨の先頭キーのあと、<code>dispatch_trial_order</code> を §A-1 の rank より<strong>前</strong>に置く（<code>_day_schedule_task_sort_key</code>）。</li>
-      <li><strong>§B 群内</strong>: <strong>B-1 ＞ B-2 ＞ B-3</strong>。詳細は <span class="file">配台ルール.md</span> §B-1。</li>
+      <li><strong>§B 群内</strong>: <strong>B-1</strong> を最優先。<strong>B-2</strong> と <strong>B-3</strong> は同一の <code>b_tier = 1</code> 帯。詳細は <span class="file">配台ルール.md</span> §B-1。</li>
     </ul>
     <h3>B-2 — EC → 検査（ロール単位パイプライン）</h3>
     <p>次の <strong>工程名・機械名の組み合わせ</strong>に限り、同一依頼NO内でロール単位の並行を認めます（コード内定数）。</p>
