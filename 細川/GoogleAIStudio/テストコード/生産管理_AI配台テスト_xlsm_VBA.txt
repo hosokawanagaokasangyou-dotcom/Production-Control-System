@@ -19,8 +19,9 @@ Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
-' planning_core.MASTER_FILE と一致（本ブックと同じフォルダのマスタ）
+' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
+Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
@@ -2207,6 +2208,173 @@ OpenFailSkills:
 End Function
 
 ' =========================================================
+' 段階1: master.xlsm から「機械カレンダー」とメンバー別勤怠シートを本ブックへ置換コピーし、
+'         パスワード無しでシート保護する（編集は master 側で実施し、段階1でスナップショットを同期）
+' =========================================================
+Private Function 段階1_マスタシートを本ブックへ置換コピー( _
+    ByVal srcWb As Workbook, _
+    ByVal sheetName As String) As Boolean
+    Dim srcWs As Worksheet
+    Dim wsOld As Worksheet
+    Dim destWs As Worksheet
+    Dim da As Boolean
+    
+    段階1_マスタシートを本ブックへ置換コピー = False
+    On Error Resume Next
+    Set srcWs = srcWb.Worksheets(sheetName)
+    On Error GoTo 0
+    If srcWs Is Nothing Then Exit Function
+    
+    da = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    Set wsOld = ThisWorkbook.Worksheets(sheetName)
+    If Not wsOld Is Nothing Then
+        If ThisWorkbook.Sheets.Count <= 1 Then
+            Application.DisplayAlerts = da
+            Exit Function
+        End If
+        wsOld.Unprotect
+        If Not ThisWorkbook.ActiveSheet Is Nothing Then
+            If StrComp(ThisWorkbook.ActiveSheet.Name, sheetName, vbBinaryCompare) = 0 Then
+                ThisWorkbook.Worksheets(1).Activate
+            End If
+        End If
+        wsOld.Delete
+        Set wsOld = Nothing
+    End If
+    On Error GoTo CopySheetFailSt1
+    
+    srcWs.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    Set destWs = ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    On Error Resume Next
+    destWs.Name = sheetName
+    On Error GoTo 0
+    
+    ' パスワード無しでシート保護。UserInterfaceOnly=True でマクロ（段階1 終盤のフォント適用等）からの編集は可、UI からの直接編集は不可。
+    destWs.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+    
+    Application.DisplayAlerts = da
+    段階1_マスタシートを本ブックへ置換コピー = True
+    Exit Function
+CopySheetFailSt1:
+    Application.DisplayAlerts = da
+End Function
+
+' master を開き（未オープンなら ReadOnly）、skills の A 列メンバー名に対応するシートを同期。戻り値=LOG に載せる短文。
+Private Function 段階1_マスタ勤怠と機械カレンダーを同期し保護(ByVal targetDir As String) As String
+    Dim wbPath As String
+    Dim wb As Workbook
+    Dim openedHere As Boolean
+    Dim wsSkill As Worksheet
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim pmCount As Long
+    Dim c As Long
+    Dim pHdr As String
+    Dim mHdr As String
+    Dim r As Long
+    Dim mem As String
+    Dim startRow As Long
+    Dim seen As Object
+    Dim nOk As Long
+    Dim nSkip As Long
+    Dim wsMc As Worksheet
+    Dim wm As Worksheet
+    Dim parts As String
+    
+    段階1_マスタ勤怠と機械カレンダーを同期し保護 = ""
+    wbPath = targetDir & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(wbPath)) = 0 Then Exit Function
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo 0
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=wbPath, ReadOnly:=True, UpdateLinks:=0)
+        openedHere = Not (wb Is Nothing)
+        On Error GoTo 0
+    End If
+    If wb Is Nothing Then
+        段階1_マスタ勤怠と機械カレンダーを同期し保護 = "マスタ同期: ブックを開けませんでした"
+        Exit Function
+    End If
+    
+    On Error Resume Next
+    Set wsMc = wb.Worksheets(SHEET_MACHINE_CALENDAR)
+    On Error GoTo 0
+    If Not wsMc Is Nothing Then
+        If 段階1_マスタシートを本ブックへ置換コピー(wb, SHEET_MACHINE_CALENDAR) Then
+            nOk = nOk + 1
+        Else
+            nSkip = nSkip + 1
+        End If
+    End If
+    
+    On Error Resume Next
+    Set wsSkill = wb.Worksheets("skills")
+    On Error GoTo 0
+    If wsSkill Is Nothing Then GoTo CloseMasterWbSt1
+    
+    lastCol = wsSkill.Cells(1, wsSkill.Columns.Count).End(xlToLeft).Column
+    lastRow = wsSkill.Cells(wsSkill.Rows.Count, 1).End(xlUp).Row
+    If lastCol < 2 Or lastRow < 2 Then GoTo CloseMasterWbSt1
+    
+    pmCount = 0
+    For c = 2 To lastCol
+        pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
+        mHdr = Trim$(CStr(wsSkill.Cells(2, c).Value))
+        If Len(pHdr) > 0 And Len(mHdr) > 0 Then
+            If StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0 And StrComp(LCase$(mHdr), "nan", vbTextCompare) <> 0 Then
+                pmCount = pmCount + 1
+            End If
+        End If
+    Next c
+    
+    If pmCount > 0 Then
+        startRow = 3
+    Else
+        startRow = 2
+    End If
+    
+    Set seen = CreateObject("Scripting.Dictionary")
+    For r = startRow To lastRow
+        mem = Trim$(CStr(wsSkill.Cells(r, 1).Value))
+        If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMemberSt1
+        If seen.Exists(mem) Then GoTo NextMemberSt1
+        seen.Add mem, True
+        Set wm = Nothing
+        On Error Resume Next
+        Set wm = wb.Worksheets(mem)
+        On Error GoTo 0
+        If Not wm Is Nothing Then
+            If 段階1_マスタシートを本ブックへ置換コピー(wb, mem) Then
+                nOk = nOk + 1
+            Else
+                nSkip = nSkip + 1
+            End If
+        End If
+NextMemberSt1:
+    Next r
+    
+CloseMasterWbSt1:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    parts = "マスタ同期: 「" & SHEET_MACHINE_CALENDAR & "」+ メンバー勤怠をコピーし保護（成功シート数 " & CStr(nOk)
+    If nSkip > 0 Then
+        parts = parts & "・失敗 " & CStr(nSkip)
+    End If
+    parts = parts & "）"
+    段階1_マスタ勤怠と機械カレンダーを同期し保護 = parts
+End Function
+
+' =========================================================
 ' 段階1コア: task_extract_stage1.py → plan_input_tasks.xlsx →「配台計画_タスク入力」取込
 ' MsgBox は出さない。m_lastStage1ExitCode / m_lastStage1ErrMsg を参照（クエリ更新失敗時は m_lastRefreshQueriesErrMsg が連結される）
 ' =========================================================
@@ -2274,6 +2442,11 @@ Private Sub 段階1_コア実行()
     wsLog.Cells(1, 1).Value = "実行ブック: " & ThisWorkbook.FullName
     If Not GeminiCredentialsJsonPathIsConfigured() Then
         wsLog.Cells(1, 2).Value = "【要設定】シート「設定」B1 に Gemini 認証 JSON のフルパス（例: Z:\社内\gemini_credentials.json）。gemini_credentials.example.json 参照。"
+    End If
+    Dim st1MasterSync As String
+    st1MasterSync = 段階1_マスタ勤怠と機械カレンダーを同期し保護(targetDir)
+    If Len(st1MasterSync) > 0 Then
+        wsLog.Cells(1, 3).Value = st1MasterSync
     End If
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
