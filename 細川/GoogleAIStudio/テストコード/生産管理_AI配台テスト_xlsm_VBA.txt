@@ -49,6 +49,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
+' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する＝従来どおり）。ログ比較・負荷試験用。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
@@ -257,7 +258,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
-        MacroSplash_RefreshExecutionLogPane
+        If SettingsSheet_IsSplashExecutionLogWriteEnabled() Then MacroSplash_RefreshExecutionLogPane
         ' ポーリング間隔: 短すぎると ScreenUpdating 切替と Text 全置換で画面がちらつく（中身が変わったときだけ更新＋150ms）
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
@@ -277,7 +278,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         Sleep 150&
         DoEvents
     Loop
-    MacroSplash_RefreshExecutionLogPane
+    If SettingsSheet_IsSplashExecutionLogWriteEnabled() Then MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
     exitPath = StageVbaExitCodeFilePath()
     If Len(Dir(exitPath)) > 0 Then
@@ -1507,6 +1508,7 @@ End Sub
 
 ' =========================================================
 ' マクロ実行中スプラッシュ（擬似モーダル）
+' ・シート「設定」D3: true/TRUE でログ枠へ書き込み・ポーリング、false/FALSE で無し（log\execution_log.txt への Python 出力は変わらず）
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
 ' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
@@ -1514,6 +1516,32 @@ End Sub
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
 ' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋システム音（MacroCompleteChime）
 ' =========================================================
+Private Function SettingsSheet_IsSplashExecutionLogWriteEnabled() As Boolean
+    On Error GoTo DefaultTrue
+    Dim ws As Worksheet
+    Dim v As Variant
+    Dim t As String
+    Set ws = ThisWorkbook.Worksheets(SHEET_SETTINGS)
+    v = ws.Range("D3").Value
+    If IsError(v) Then GoTo DefaultTrue
+    If VarType(v) = vbBoolean Then
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = CBool(v)
+        Exit Function
+    End If
+    t = Trim$(CStr(v))
+    If Len(t) = 0 Then GoTo DefaultTrue
+    If StrComp(t, "false", vbTextCompare) = 0 Then
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = False
+        Exit Function
+    End If
+    If StrComp(t, "true", vbTextCompare) = 0 Then
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = True
+        Exit Function
+    End If
+DefaultTrue:
+    SettingsSheet_IsSplashExecutionLogWriteEnabled = True
+End Function
+
 Private Sub MacroSplash_SetStep(ByVal stepMessage As String)
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
@@ -1527,6 +1555,7 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     m_splashReadErrShown = False
     m_splashLastLogSnapshot = ""
     If Not m_macroSplashShown Then Exit Sub
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If Not tb Is Nothing Then tb.Text = ""
 End Sub
@@ -1553,6 +1582,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     Dim errBanner As String
     Dim flen As Long
     On Error Resume Next
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
@@ -1605,6 +1635,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     Dim errBanner As String
     Dim flen As Long
     On Error Resume Next
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(Dir(fullPath)) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
@@ -1692,6 +1723,7 @@ End Sub
 Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     On Error Resume Next
     If Len(chunk) = 0 Then Exit Sub
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     Dim tb As Object
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
