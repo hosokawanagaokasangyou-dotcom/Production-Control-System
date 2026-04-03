@@ -3,12 +3,14 @@
 ' =========================================================
 ' 前提: xlwings アドイン有効・Show Console（推奨）
 '
-' 【呼び出し】マクロブックと同じフォルダに xlwings.conf.json（PYTHONPATH=python）を置く。
-'   VBA では「ツール → 参照」で xlwings を有効にし、次のように **RunPython だけ** を呼ぶ
-'   （xlwings.RunPython のような修飾は使わない。存在しない／解決できず止まる原因になる）。
-'   例:
-'     RunPython "import xlwings_console_runner as _xw; _xw.run_stage1_for_xlwings()"
-'     RunPython "import xlwings_console_runner as _xw; _xw.run_refresh_dispatch_roll_trace_sheet_for_xlwings()"
+' 【呼び出し】PYTHONPATH 不要で runner を読み込む（run_path）。VBA からは参照ライブラリの
+'   モジュール名付きで呼ぶ: xlwings.RunPython "..."  （RunPython 単体では解決できないことが多い）
+'   Python 側の例:
+'   import os, runpy, xlwings as xw
+'   wb = xw.Book.caller()
+'   p = os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py')
+'   ns = runpy.run_path(p)
+'   ns['関数名']()
 '
 ' 【仕組み】
 '   planning_core が各ロール割付成功時に log/dispatch_roll_trace.jsonl へ1行ずつ追記する。
@@ -22,10 +24,10 @@
 ' RunPython 文字列は1行（改行不可）のため、下記は1行にまとめて登録してください。
 ' =========================================================
 
-' xlwings 参照設定後のグローバル RunPython（python フォルダは xlwings.conf.json の PYTHONPATH）
+' xlwings 参照の RunPython（ブック直下の python\xlwings_console_runner.py を run_path で実行）
 Private Sub DbgRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
-    RunPython "import xlwings_console_runner as _xw; _xw." & entryPoint & "()"
+    xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
     Exit Sub
 EH:
     Err.Raise Err.Number, "DbgRunConsoleRunner", "RunPython: " & Err.Description
@@ -59,20 +61,6 @@ Private Function 設定シート_B列デバッグ依頼NO指定あり() As Boole
         If nBlank >= 30 Then Exit For
     Next r
 End Function
-
-' 段階1のみ（cmd なし・xlwings Show Console 推奨）。本番の「段階1_コア実行」とは別経路で、
-' LOG シート取り込み等の VBA 後処理は行わない。止まるときは RunPython の呼び方と xlwings.conf.json を確認。
-Sub 配台デバッグ_段階1_xlwings()
-    On Error GoTo EH
-    Application.StatusBar = "ブックを保存しています（Python がディスク上のブックを読みます）..."
-    DoEvents
-    ThisWorkbook.Save
-    Application.StatusBar = False
-    RunPython "import xlwings_console_runner as _xw; _xw.run_stage1_for_xlwings()"
-    Exit Sub
-EH:
-    MsgBox "xlwings 段階1で失敗 (" & CStr(Err.Number) & "): " & Err.Description, vbCritical
-End Sub
 
 ' JSONL をシート「配台_ロールトレース」へ読み込むだけ（段階2は従来どおり別マクロの場合は先に実行）
 Sub 配台デバッグ_ロールトレースをシートに表示()
