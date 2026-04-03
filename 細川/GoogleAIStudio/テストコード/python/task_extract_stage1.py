@@ -54,6 +54,13 @@ def _append_execution_log_line(level: str, msg: str) -> None:
                     os.fsync(f.fileno())
                 except OSError:
                     pass
+            try:
+                import xlwings_splash_log as _xsl
+
+                if _xsl.enabled():
+                    _xsl.append_formatted_line(line)
+            except Exception:
+                pass
             return
         except OSError as ex:
             last_err = ex
@@ -95,6 +102,13 @@ except Exception:
                     pass
         except OSError:
             pass
+    try:
+        import xlwings_splash_log as _xsl
+
+        if _xsl.enabled():
+            _xsl.append_formatted_line(_err_head + _tb)
+    except Exception:
+        pass
     traceback.print_exc()
     sys.exit(1)
 

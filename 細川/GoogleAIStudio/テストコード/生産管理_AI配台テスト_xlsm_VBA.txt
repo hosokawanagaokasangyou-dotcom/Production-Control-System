@@ -24,8 +24,10 @@ Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
 Private Const SWP_NOZORDER As Long = &H4
 Private Const SWP_SHOWWINDOW As Long = &H40
-' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog＝log\execution_log.txt）のみ。py の余剰 stdout/stderr は nul へ捨てパイプ詰まりを防ぐ（PowerShell は使わない）。False=画面上部にコンソール（1/4 高さ・全幅）
+' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）。True かつ下記 xlwings 有効時は Python が xlwings で直接追記、無効時は execution_log.txt をポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
+' True=段階1/2 の .cmd で PM_AI_SPLASH_XLWINGS=1 を渡し、Python が xlwings で SplashLog_AppendChunk を呼ぶ（ファイルポーリングはオフ）
+Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
@@ -49,7 +51,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
-' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。txtExecutionLog に log\execution_log.txt をポーリング表示可。
+' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。STAGE12_USE_XLWINGS_SPLASH_LOG=True なら Python(xlwings)が SplashLog_AppendChunk で txtExecutionLog に直接追記。False なら execution_log.txt をポーリング。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
@@ -88,8 +90,10 @@ Private m_macroSplashShown As Boolean
 Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Private m_animMacroSucceeded As Boolean
-' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog 更新用）
+' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）
 Private m_splashExecutionLogPath As String
+' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
+Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
@@ -150,10 +154,13 @@ End Function
 Private Function StageVbaExitCodeFilePath() As String
     Dim k As Long
     StageVbaExitCodeFilePath = ""
-    If Len(m_splashExecutionLogPath) = 0 Then Exit Function
-    k = InStrRev(m_splashExecutionLogPath, "\")
-    If k <= 0 Then Exit Function
-    StageVbaExitCodeFilePath = Left$(m_splashExecutionLogPath, k) & "stage_vba_exitcode.txt"
+    If Len(m_splashExecutionLogPath) > 0 Then
+        k = InStrRev(m_splashExecutionLogPath, "\")
+        If k <= 0 Then Exit Function
+        StageVbaExitCodeFilePath = Left$(m_splashExecutionLogPath, k) & "stage_vba_exitcode.txt"
+    ElseIf Len(m_stageVbaExitCodeLogDir) > 0 Then
+        StageVbaExitCodeFilePath = m_stageVbaExitCodeLogDir & "\stage_vba_exitcode.txt"
+    End If
 End Function
 
 Private Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
@@ -1553,6 +1560,27 @@ Private Sub MacroSplash_Hide()
     End If
 End Sub
 
+' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
+Public Sub SplashLog_AppendChunk(ByVal chunk As String)
+    On Error Resume Next
+    If Len(chunk) = 0 Then Exit Sub
+    If Not m_macroSplashShown Then Exit Sub
+    Dim tb As Object
+    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    If tb Is Nothing Then Exit Sub
+    Dim n As Long
+    n = Len(tb.Text) + Len(chunk)
+    If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
+        tb.Text = Right$(tb.Text & chunk, SPLASH_LOG_MAX_DISPLAY_CHARS)
+    Else
+        tb.Text = tb.Text & chunk
+    End If
+    tb.SelStart = Len(tb.Text)
+    tb.SelLength = 0
+    frmMacroSplash.Repaint
+    DoEvents
+End Sub
+
 ' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
 ' 最後の lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
 Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True)
@@ -2783,6 +2811,7 @@ Private Sub 段階1_コア実行()
     Dim logLines() As String
     Dim i As Long
     Dim warnRow As Long
+    Dim stageEnvXw As String
 
     On Error GoTo ErrStage1
     m_lastStage1ExitCode = -1
@@ -2854,7 +2883,9 @@ Private Sub 段階1_コア実行()
     MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
     wsh.CurrentDirectory = Environ("TEMP")
     ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
-    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+    stageEnvXw = ""
+    If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
+    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
              "if not exist log mkdir log" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
@@ -2864,10 +2895,17 @@ Private Sub 段階1_コア実行()
              "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
              "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
-    m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+    If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+        m_splashExecutionLogPath = ""
+        m_stageVbaExitCodeLogDir = targetDir & "\log"
+    Else
+        m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+        m_stageVbaExitCodeLogDir = ""
+    End If
     MacroSplash_ClearExecutionLogPane
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
     m_splashExecutionLogPath = ""
+    m_stageVbaExitCodeLogDir = ""
     m_lastStage1ExitCode = exitCode
 
     MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
@@ -3452,6 +3490,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim lastLogR As Long
     Dim r As Long
     Dim pr As Long
+    Dim stageEnvXw As String
     
     On Error GoTo ErrHandler
     
@@ -3567,7 +3606,9 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     cmdLogPath = targetDir & "\log\cmd_stage2.log"
     ' /v:on … py の終了コードを exit /b で返す（末尾の echo だけだと ERRORLEVEL=0 になり VBA が正常終了と誤認しがち）
     MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
-    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+    stageEnvXw = ""
+    If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
+    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
              "if not exist log mkdir log" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
@@ -3578,11 +3619,18 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
              "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
-    ' 4. cmd 完了まで待機（待機中は execution_log をスプラッシュ txtExecutionLog へポーリング）
-    m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+    ' 4. cmd 完了まで待機（xlwings 無効時は execution_log を txtExecutionLog へポーリング）
+    If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+        m_splashExecutionLogPath = ""
+        m_stageVbaExitCodeLogDir = targetDir & "\log"
+    Else
+        m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+        m_stageVbaExitCodeLogDir = ""
+    End If
     MacroSplash_ClearExecutionLogPane
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
     m_splashExecutionLogPath = ""
+    m_stageVbaExitCodeLogDir = ""
     m_lastStage2ExitCode = exitCode
     ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
     If exitCode <> 0 Then

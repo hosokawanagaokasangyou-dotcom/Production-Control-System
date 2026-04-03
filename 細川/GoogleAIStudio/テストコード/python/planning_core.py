@@ -215,6 +215,51 @@ file_handler = _FlushingFileHandler(log_file_path, encoding='utf-8-sig')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+
+def _maybe_register_xlwings_splash_logging() -> None:
+    """PM_AI_SPLASH_XLWINGS=1 のとき xlwings で UserForm txtExecutionLog にログ行を送る。"""
+    try:
+        import atexit
+
+        import xlwings_splash_log as xsl
+
+        if not xsl.enabled():
+            return
+
+        class _XlwingsSplashLogHandler(logging.Handler):
+            terminator = "\n"
+
+            def emit(self, record: logging.LogRecord) -> None:
+                try:
+                    import xlwings_splash_log as xsl2
+
+                    msg = self.format(record)
+                    if self.terminator and not msg.endswith(self.terminator):
+                        msg += self.terminator
+                    xsl2.append_formatted_line(msg)
+                except Exception:
+                    self.handleError(record)
+
+        _xh = _XlwingsSplashLogHandler()
+        _xh.setFormatter(formatter)
+        _xh.setLevel(logging.INFO)
+        logger.addHandler(_xh)
+
+        def _atexit_flush_splash() -> None:
+            try:
+                import xlwings_splash_log as xsl3
+
+                xsl3.shutdown()
+            except Exception:
+                pass
+
+        atexit.register(_atexit_flush_splash)
+    except Exception:
+        pass
+
+
+_maybe_register_xlwings_splash_logging()
+
 stage2_blocking_message_path = os.path.join(log_dir, STAGE2_BLOCKING_MESSAGE_FILE)
 
 
