@@ -2656,7 +2656,6 @@ Private Sub 段階1_コア実行()
     End If
     On Error Resume Next
     配台計画_タスク入力を前へ並べ替え
-    配台計画_タスク入力_A1を選択
     On Error GoTo 0
 
     MacroSplash_SetStep "段階1: フォント統一と表示調整を行っています…"
@@ -2664,6 +2663,10 @@ Private Sub 段階1_コア実行()
     DoEvents
     On Error Resume Next
     配台_全シートフォントBIZ_UDP_自動適用
+    On Error GoTo 0
+
+    On Error Resume Next
+    配台計画_タスク入力_A1を選択
     On Error GoTo 0
 
     Application.ScreenUpdating = prevScreenUpdating
@@ -2684,6 +2687,9 @@ End Sub
 ' 互換・他モジュール用: 段階1のみ（エラー時 MsgBox。成功時はスプラッシュ文＋チャイム）
 Public Sub RunPythonStage1()
     段階1_コア実行
+    On Error Resume Next
+    配台計画_タスク入力_A1を選択
+    On Error GoTo 0
     If m_lastStage1ExitCode < 0 Then
         If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "段階1"
         Exit Sub
@@ -2705,6 +2711,9 @@ End Sub
 ' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
 Public Sub RunPythonStage1ThenStage2()
     段階1_コア実行
+    On Error Resume Next
+    配台計画_タスク入力_A1を選択
+    On Error GoTo 0
     If m_lastStage1ExitCode < 0 Then
         If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "段階1+2"
         Exit Sub
@@ -2886,15 +2895,19 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     ImportPlanInputTasksFromOutput = True
 End Function
 
-' 配台計画_タスク入力シートを表示し A1 をアクティブにする（段階1取り込み・並べ替え後）
+' 配台計画_タスク入力シートを表示し A1 をアクティブにする（段階1終了時・取り込み後など）
 Private Sub 配台計画_タスク入力_A1を選択()
     Const PLAN_SHEET As String = "配台計画_タスク入力"
     Dim ws As Worksheet
     On Error Resume Next
+    ThisWorkbook.Activate
     Set ws = ThisWorkbook.Sheets(PLAN_SHEET)
     If ws Is Nothing Then Exit Sub
+    If ws.Visible <> xlSheetVisible Then ws.Visible = xlSheetVisible
     ws.Activate
     ws.Range("A1").Select
+    ActiveWindow.ScrollRow = 1
+    ActiveWindow.ScrollColumn = 1
     On Error GoTo 0
 End Sub
 
