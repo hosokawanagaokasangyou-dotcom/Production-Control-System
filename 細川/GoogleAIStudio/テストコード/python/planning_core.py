@@ -266,6 +266,12 @@ GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
 # ---------------------------------------------------------------------------
 
 MASTER_FILE = "master.xlsm" # skillsとattendance(およびtasks)を統合したファイル
+# VBA「master_機械カレンダーを作成」シート（1 時間スロット占有を段階2の machine_avail_dt に反映）
+SHEET_MACHINE_CALENDAR = "機械カレンダー"
+# ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
+_MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
+    date, dict[str, list[tuple[datetime, datetime]]]
+] = {}
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
@@ -11264,6 +11270,235 @@ def _seed_avail_from_timeline_for_date(
                     avail_dt[sm] = end_dt
 
 
+def _merge_machine_calendar_intervals(
+    intervals: list[tuple[datetime, datetime]],
+) -> list[tuple[datetime, datetime]]:
+    if not intervals:
+        return []
+    iv = sorted(intervals, key=lambda x: (x[0], x[1]))
+    out = [iv[0]]
+    for s, e in iv[1:]:
+        ps, pe = out[-1]
+        if s <= pe:
+            out[-1] = (ps, max(pe, e))
+        else:
+            out.append((s, e))
+    return out
+
+
+def _bump_dt_past_machine_calendar_blocks(
+    t: datetime,
+    blocks: list[tuple[datetime, datetime]],
+) -> datetime:
+    """半開区間ブロック [start,end) に t が入る間、終端へ繰り上げる。"""
+    if not blocks:
+        return t
+    changed = True
+    while changed:
+        changed = False
+        for s, e in blocks:
+            if s <= t < e:
+                t = e
+                changed = True
+                break
+    return t
+
+
+def _machine_cal_parse_slot_datetime(cell) -> datetime | None:
+    if cell is None or (isinstance(cell, float) and pd.isna(cell)):
+        return None
+    try:
+        dt = pd.to_datetime(cell, errors="coerce")
+    except Exception:
+        return None
+    if dt is None or (isinstance(dt, float) and pd.isna(dt)):
+        return None
+    if isinstance(dt, pd.Timestamp):
+        dt = dt.to_pydatetime()
+    if getattr(dt, "tzinfo", None) is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
+
+def _machine_cal_cell_is_occupied(cell) -> bool:
+    if cell is None or (isinstance(cell, float) and pd.isna(cell)):
+        return False
+    if isinstance(cell, str):
+        return bool(cell.strip())
+    if isinstance(cell, bool):
+        return cell
+    return True
+
+
+def _machine_cal_resolve_column_to_equipment_key(
+    p_raw,
+    m_raw,
+    eq_lookup: dict,
+    elist_set: set,
+) -> str | None:
+    p_s = (
+        str(p_raw).strip()
+        if p_raw is not None and not (isinstance(p_raw, float) and pd.isna(p_raw))
+        else ""
+    )
+    m_s = (
+        str(m_raw).strip()
+        if m_raw is not None and not (isinstance(m_raw, float) and pd.isna(m_raw))
+        else ""
+    )
+    if p_s and m_s:
+        combo = f"{p_s}+{m_s}"
+    elif p_s:
+        combo = p_s
+    else:
+        return None
+    if combo in elist_set:
+        return combo
+    nk = _normalize_equipment_match_key(combo)
+    return eq_lookup.get(nk)
+
+
+def load_machine_calendar_occupancy_blocks(
+    master_path: str,
+    equipment_list: list,
+) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
+    """
+    master.xlsm「機械カレンダー」を読み、設備列の非空セル＝当該 1 時間スロット占有とみなす。
+    戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
+    """
+    if not master_path or not os.path.isfile(master_path):
+        return {}
+    try:
+        xls = pd.ExcelFile(master_path)
+        if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
+            return {}
+        raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
+    except Exception as e:
+        logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
+        return {}
+    if raw.shape[0] < 3 or raw.shape[1] < 3:
+        return {}
+
+    ncols = raw.shape[1]
+    non_empty_pm = 0
+    for c in range(2, ncols):
+        p = raw.iat[0, c]
+        m = raw.iat[1, c]
+        if pd.isna(p) or pd.isna(m):
+            continue
+        p_s = str(p).strip()
+        m_s = str(m).strip()
+        if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
+            non_empty_pm += 1
+    use_two_header = non_empty_pm > 0
+
+    eq_lookup = _equipment_lookup_normalized_to_canonical(equipment_list)
+    elist_set = set(str(x).strip() for x in equipment_list if str(x).strip())
+    col_to_eq: dict[int, str] = {}
+    for c in range(2, ncols):
+        p = raw.iat[0, c]
+        m = raw.iat[1, c] if use_two_header else None
+        if use_two_header:
+            if pd.isna(p) or pd.isna(m):
+                continue
+            p_s = str(p).strip()
+            m_s = str(m).strip()
+            if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
+                continue
+        else:
+            if pd.isna(p):
+                continue
+            p_s = str(p).strip()
+            if not p_s or p_s.lower() == "nan":
+                continue
+            m_s = ""
+        canon = _machine_cal_resolve_column_to_equipment_key(
+            p_s, m_s, eq_lookup, elist_set
+        )
+        if canon:
+            col_to_eq[c] = canon
+
+    if not col_to_eq:
+        return {}
+
+    acc: dict[date, dict[str, list[tuple[datetime, datetime]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for r in range(2, raw.shape[0]):
+        slot0 = _machine_cal_parse_slot_datetime(raw.iat[r, 0])
+        if slot0 is None:
+            continue
+        try:
+            day_d = slot0.date()
+        except Exception:
+            continue
+        for c, eq_key in col_to_eq.items():
+            if c >= raw.shape[1]:
+                continue
+            cell = raw.iat[r, c]
+            if not _machine_cal_cell_is_occupied(cell):
+                continue
+            slot_start = slot0
+            slot_end = slot_start + timedelta(hours=1)
+            acc[day_d][eq_key].append((slot_start, slot_end))
+
+    out: dict[date, dict[str, list[tuple[datetime, datetime]]]] = {}
+    for d, eqmap in acc.items():
+        out[d] = {
+            eq: _merge_machine_calendar_intervals(iv)
+            for eq, iv in eqmap.items()
+            if iv
+        }
+    return out
+
+
+def _apply_machine_calendar_floor_for_date(
+    current_date: date,
+    machine_avail_dt: dict,
+    equipment_list: list,
+    machine_day_start: datetime,
+) -> None:
+    """当日のタイムラインシード後、機械カレンダー占有で設備空き下限を繰り上げる。"""
+    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    if not day_blocks:
+        return
+    keys = set(equipment_list) | set(machine_avail_dt.keys())
+    for eq in keys:
+        eq_s = str(eq).strip() if eq is not None else ""
+        if not eq_s:
+            continue
+        blocks = day_blocks.get(eq_s)
+        if not blocks:
+            continue
+        t0 = machine_avail_dt.get(eq_s, machine_day_start)
+        t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks)
+        if t1 > t0:
+            machine_avail_dt[eq_s] = t1
+
+
+def _bump_machine_avail_after_roll_for_calendar(
+    current_date: date,
+    eq_line: str,
+    machine_avail_dt: dict,
+) -> None:
+    """ロール確定直後: 終了時刻がカレンダー占有スロット内なら終端まで繰り上げ。"""
+    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    if not day_blocks:
+        return
+    eq_s = str(eq_line).strip() if eq_line is not None else ""
+    if not eq_s:
+        return
+    blocks = day_blocks.get(eq_s)
+    if not blocks:
+        return
+    t0 = machine_avail_dt.get(eq_s)
+    if t0 is None:
+        return
+    t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks)
+    if t1 > t0:
+        machine_avail_dt[eq_s] = t1
+
+
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
     当該日の終了時点で、計画基準納期日（当日含む）以前なのに残量が残る依頼NO。
@@ -12207,6 +12442,9 @@ def _trial_order_first_schedule_pass(
                 avail_dt[m] = best_end
             if not _gpo.get("abolish_all_scheduling_limits"):
                 machine_avail_dt[eq_line] = best_end
+                _bump_machine_avail_after_roll_for_calendar(
+                    current_date, eq_line, machine_avail_dt
+                )
             rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
             _dispatch_roll_trace_after_roll(
                 current_date,
@@ -12343,6 +12581,12 @@ def _run_b2_inspection_rewind_pass(
         )
         if _gpo.get("abolish_all_scheduling_limits"):
             machine_avail_dt.clear()
+        _apply_machine_calendar_floor_for_date(
+            current_date,
+            machine_avail_dt,
+            equipment_list,
+            _machine_day_start,
+        )
 
         tasks_today = [
             t
@@ -12769,6 +13013,28 @@ def generate_plan():
             os.getcwd(),
         )
         return
+    global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+    try:
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
+            equipment_list,
+        )
+    except Exception as e:
+        logging.warning(
+            "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
+        )
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+    if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
+        _n_iv = sum(
+            len(ivs)
+            for _dm in _MACHINE_CALENDAR_BLOCKS_BY_DATE.values()
+            for ivs in _dm.values()
+        )
+        logging.info(
+            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映します。",
+            len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
+            _n_iv,
+        )
     reset_gemini_usage_tracker()
     _clear_stage2_blocking_message_file()
     if (
@@ -13055,6 +13321,12 @@ def generate_plan():
                     current_date,
                     machine_avail_dt,
                     avail_dt,
+                    _machine_day_start,
+                )
+                _apply_machine_calendar_floor_for_date(
+                    current_date,
+                    machine_avail_dt,
+                    equipment_list,
                     _machine_day_start,
                 )
 
@@ -13979,6 +14251,9 @@ def generate_plan():
                                 avail_dt[m] = best_info["end_dt"]
                             if not _gpo.get("abolish_all_scheduling_limits"):
                                 machine_avail_dt[eq_line] = best_info["end_dt"]
+                                _bump_machine_avail_after_roll_for_calendar(
+                                    current_date, eq_line, machine_avail_dt
+                                )
                             rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
                             _dispatch_roll_trace_after_roll(
                                 current_date,
