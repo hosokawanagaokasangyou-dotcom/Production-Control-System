@@ -28,6 +28,8 @@ Private Const SWP_SHOWWINDOW As Long = &H40
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=段階1/2 の .cmd で PM_AI_SPLASH_XLWINGS=1 を渡し、Python が xlwings で SplashLog_AppendChunk を呼ぶ（ファイルポーリングはオフ）
 Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
+' True=段階1/2 の Python を 配台デバッグ_VBA と同じ xlwings.RunPython + runpy.run_path で実行（Tools→参照に xlwings）。False=従来 cmd+py
+Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
@@ -54,14 +56,11 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。STAGE12_USE_XLWINGS_SPLASH_LOG=True なら Python(xlwings)が SplashLog_AppendChunk で txtExecutionLog に直接追記。False なら execution_log.txt をポーリング。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
-' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
-'   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
-'   ・Excel リボンで Show Console にチェック。VBA で xlwings 参照を有効にしたうえで別標準モジュールに例えば:
-'       Sub 試験_xlwings段階1()
-'           RunPython "import xlwings_console_runner as _xw; _xw.run_stage1_for_xlwings()"
-'       End Sub
-'   ・実体は python\xlwings_console_runner.py。logging は既に stdout へ出るためコンソールに流れる。
-'   ・既定の 段階1_コア実行（LOG 取り込み・plan 取り込み等）とは別経路のため、試験か後処理の共通化で使い分け。
+' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
+'   ・import 解決のため RunPython 文字列は 配台デバッグ_VBA.txt の DbgRunConsoleRunner と同型（runpy.run_path）を使う。
+'       xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
+'   ・本番は STAGE12_USE_XLWINGS_RUNPYTHON=True で 段階1_コア実行/段階2_コア実行 が上記形式（XwRunConsoleRunner）を呼ぶ。
+'   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
 ' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
@@ -176,6 +175,15 @@ Private Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
 Fail:
     ReadStageVbaExitCodeFromFile = &H7FFFFFFF
 End Function
+
+' 配台デバッグ_VBA.txt の DbgRunConsoleRunner と同じ（runpy.run_path で python\xlwings_console_runner.py を実行）
+Private Sub XwRunConsoleRunner(ByVal entryPoint As String)
+    On Error GoTo EH
+    xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
+    Exit Sub
+EH:
+    Err.Raise Err.Number, "XwRunConsoleRunner", "RunPython: " & Err.Description
+End Sub
 
 ' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
 Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
@@ -2812,6 +2820,8 @@ Private Sub 段階1_コア実行()
     Dim i As Long
     Dim warnRow As Long
     Dim stageEnvXw As String
+    Dim st1XwErr As Long
+    Dim st1XwDesc As String
 
     On Error GoTo ErrStage1
     m_lastStage1ExitCode = -1
@@ -2881,32 +2891,71 @@ Private Sub 段階1_コア実行()
     On Error GoTo ErrStage1
 
     MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
-    wsh.CurrentDirectory = Environ("TEMP")
-    ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
-    stageEnvXw = ""
-    If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
-    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
-             "if not exist log mkdir log" & vbCrLf & _
-             "chcp 65001>nul" & vbCrLf & _
-             "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
-             "py -3 -u python\task_extract_stage1.py" & vbCrLf & _
-             "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
-             "echo." & vbCrLf & _
-             "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
-             "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
-             "exit /b !STAGE1_PY_EXIT!"
-    If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+    If STAGE12_USE_XLWINGS_RUNPYTHON Then
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            wsh.Environment("Process")("PM_AI_SPLASH_XLWINGS") = "1"
+        Else
+            wsh.Environment("Process")("PM_AI_SPLASH_XLWINGS") = ""
+        End If
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = targetDir & "\log"
+        Else
+            m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+            m_stageVbaExitCodeLogDir = ""
+        End If
+        MacroSplash_ClearExecutionLogPane
+        On Error Resume Next
+        Err.Clear
+        XwRunConsoleRunner "run_stage1_for_xlwings"
+        If Err.Number <> 0 Then
+            st1XwErr = Err.Number
+            st1XwDesc = Err.Description
+            Err.Clear
+            On Error GoTo ErrStage1
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = ""
+            m_lastStage1ExitCode = -1
+            m_lastStage1ErrMsg = "段階1: xlwings RunPython が失敗しました (" & CStr(st1XwErr) & "): " & st1XwDesc
+            Application.StatusBar = False
+            Application.ScreenUpdating = prevScreenUpdating
+            Application.DisplayAlerts = prevDisplayAlerts
+            Exit Sub
+        End If
+        On Error GoTo ErrStage1
+        exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
+        If exitCode = &H7FFFFFFF Then exitCode = 1
         m_splashExecutionLogPath = ""
-        m_stageVbaExitCodeLogDir = targetDir & "\log"
-    Else
-        m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
+        m_lastStage1ExitCode = exitCode
+    Else
+        wsh.CurrentDirectory = Environ("TEMP")
+        ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
+        stageEnvXw = ""
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
+        runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
+                 "if not exist log mkdir log" & vbCrLf & _
+                 "chcp 65001>nul" & vbCrLf & _
+                 "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
+                 "py -3 -u python\task_extract_stage1.py" & vbCrLf & _
+                 "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
+                 "echo." & vbCrLf & _
+                 "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
+                 "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
+                 "exit /b !STAGE1_PY_EXIT!"
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = targetDir & "\log"
+        Else
+            m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+            m_stageVbaExitCodeLogDir = ""
+        End If
+        MacroSplash_ClearExecutionLogPane
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+        m_splashExecutionLogPath = ""
+        m_stageVbaExitCodeLogDir = ""
+        m_lastStage1ExitCode = exitCode
     End If
-    MacroSplash_ClearExecutionLogPane
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
-    m_splashExecutionLogPath = ""
-    m_stageVbaExitCodeLogDir = ""
-    m_lastStage1ExitCode = exitCode
 
     MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
     ' Gemini サマリ・設定シートは planning_core が openpyxl で保存（ブックが閉じているとき）。
@@ -3491,6 +3540,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim r As Long
     Dim pr As Long
     Dim stageEnvXw As String
+    Dim st2XwErr As Long
+    Dim st2XwDesc As String
     
     On Error GoTo ErrHandler
     
@@ -3606,32 +3657,67 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     cmdLogPath = targetDir & "\log\cmd_stage2.log"
     ' /v:on … py の終了コードを exit /b で返す（末尾の echo だけだと ERRORLEVEL=0 になり VBA が正常終了と誤認しがち）
     MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
-    stageEnvXw = ""
-    If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
-    runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
-             "if not exist log mkdir log" & vbCrLf & _
-             "chcp 65001>nul" & vbCrLf & _
-             "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
-             "py -3 -u python\plan_simulation_stage2.py" & vbCrLf & _
-             "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
-             "echo." & vbCrLf & _
-             "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
-             "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
-             "exit /b !STAGE2_PY_EXIT!"
-    
-    ' 4. cmd 完了まで待機（xlwings 無効時は execution_log を txtExecutionLog へポーリング）
-    If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+    If STAGE12_USE_XLWINGS_RUNPYTHON Then
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            wsh.Environment("Process")("PM_AI_SPLASH_XLWINGS") = "1"
+        Else
+            wsh.Environment("Process")("PM_AI_SPLASH_XLWINGS") = ""
+        End If
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = targetDir & "\log"
+        Else
+            m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+            m_stageVbaExitCodeLogDir = ""
+        End If
+        MacroSplash_ClearExecutionLogPane
+        On Error Resume Next
+        Err.Clear
+        XwRunConsoleRunner "run_stage2_for_xlwings"
+        If Err.Number <> 0 Then
+            st2XwErr = Err.Number
+            st2XwDesc = Err.Description
+            Err.Clear
+            On Error GoTo ErrHandler
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = ""
+            m_lastStage2ExitCode = -1
+            m_lastStage2ErrMsg = "段階2: xlwings RunPython が失敗しました (" & CStr(st2XwErr) & "): " & st2XwDesc
+            GoTo Finish
+        End If
+        On Error GoTo ErrHandler
+        exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
+        If exitCode = &H7FFFFFFF Then exitCode = 1
         m_splashExecutionLogPath = ""
-        m_stageVbaExitCodeLogDir = targetDir & "\log"
-    Else
-        m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
+        m_lastStage2ExitCode = exitCode
+    Else
+        stageEnvXw = ""
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
+        runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & stageEnvXw & "pushd """ & targetDir & """" & vbCrLf & _
+                 "if not exist log mkdir log" & vbCrLf & _
+                 "chcp 65001>nul" & vbCrLf & _
+                 "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
+                 "py -3 -u python\plan_simulation_stage2.py" & vbCrLf & _
+                 "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
+                 "echo." & vbCrLf & _
+                 "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
+                 "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
+                 "exit /b !STAGE2_PY_EXIT!"
+        ' 4. cmd 完了まで待機（xlwings 無効時は execution_log を txtExecutionLog へポーリング）
+        If STAGE12_USE_XLWINGS_SPLASH_LOG Then
+            m_splashExecutionLogPath = ""
+            m_stageVbaExitCodeLogDir = targetDir & "\log"
+        Else
+            m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+            m_stageVbaExitCodeLogDir = ""
+        End If
+        MacroSplash_ClearExecutionLogPane
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+        m_splashExecutionLogPath = ""
+        m_stageVbaExitCodeLogDir = ""
+        m_lastStage2ExitCode = exitCode
     End If
-    MacroSplash_ClearExecutionLogPane
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
-    m_splashExecutionLogPath = ""
-    m_stageVbaExitCodeLogDir = ""
-    m_lastStage2ExitCode = exitCode
     ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
     If exitCode <> 0 Then
         Dim stage2Block As String

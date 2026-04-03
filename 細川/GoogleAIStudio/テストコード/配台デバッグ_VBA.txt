@@ -25,6 +25,7 @@
 ' =========================================================
 
 ' xlwings 参照の RunPython（ブック直下の python\xlwings_console_runner.py を run_path で実行）
+' ※本番ブックの 生産管理_AI配台テスト_xlsm_VBA.txt は同等の XwRunConsoleRunner を STAGE12_USE_XLWINGS_RUNPYTHON で段階1/2から呼ぶ。
 Private Sub DbgRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
