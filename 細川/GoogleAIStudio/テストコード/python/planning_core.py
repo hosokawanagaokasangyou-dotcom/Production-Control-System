@@ -6181,6 +6181,9 @@ def build_task_queue_from_planning_df(
                 "roll_pipeline_inspection": _row_matches_roll_pipeline_inspection(
                     machine, machine_name
                 ),
+                "roll_pipeline_rewind": _row_matches_roll_pipeline_rewind(
+                    machine, machine_name
+                ),
                 "process_content_mismatch": _process_content_mismatch,
                 "planning_sheet_row_seq": planning_sheet_row_seq,
             }
@@ -10188,6 +10191,9 @@ ROLL_PIPELINE_EC_PROCESS = "EC"
 ROLL_PIPELINE_EC_MACHINE = "EC機　湖南"
 ROLL_PIPELINE_INSP_PROCESS = "検査"
 ROLL_PIPELINE_INSP_MACHINE = "熱融着機　湖南"
+# §B-3: 後続は B-2 の「検査」に相当する工程として巻返し（同一依頼で EC 先行・ロール枠・リワインド等は B-2 と同趣旨）
+ROLL_PIPELINE_REWIND_PROCESS = "巻返し"
+ROLL_PIPELINE_REWIND_MACHINE = "EC機　湖南"
 ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 # 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
@@ -10400,7 +10406,8 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
     - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
     - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
-    §B-2: ``roll_pipeline_inspection`` 行が ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
+    §B-2 / §B-3: ``roll_pipeline_inspection`` または ``roll_pipeline_rewind`` 行が
+    ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
     ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない。
     前進配台では ``_trial_order_flow_eligible_tasks`` が EC 完走まで検査を外すため、
     EC 残がある間は本分岐に到達しない。リワインド等で検査が載る局面との整合用。
@@ -10434,7 +10441,10 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
 
         if precedes:
             if (
-                task.get("roll_pipeline_inspection")
+                (
+                    task.get("roll_pipeline_inspection")
+                    or task.get("roll_pipeline_rewind")
+                )
                 and t2.get("roll_pipeline_ec")
                 and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
             ):
@@ -10461,6 +10471,15 @@ def _row_matches_roll_pipeline_inspection(proc, mach) -> bool:
     )
 
 
+def _row_matches_roll_pipeline_rewind(proc, mach) -> bool:
+    return (
+        _normalize_process_name_for_rule_match(proc)
+        == _normalize_process_name_for_rule_match(ROLL_PIPELINE_REWIND_PROCESS)
+        and _normalize_equipment_match_key(mach)
+        == _normalize_equipment_match_key(ROLL_PIPELINE_REWIND_MACHINE)
+    )
+
+
 def _pipeline_ec_roll_done_units(task_queue, tid: str) -> float:
     tid = str(tid or "").strip()
     s = 0.0
@@ -10476,12 +10495,28 @@ def _pipeline_ec_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
+    """熱融着検査行のみの累計完了ロール（トレース用）。"""
     tid = str(tid or "").strip()
     s = 0.0
     for t in task_queue:
         if str(t.get("task_id", "") or "").strip() != tid:
             continue
         if not t.get("roll_pipeline_inspection"):
+            continue
+        init = float(t.get("initial_remaining_units") or 0)
+        rem = float(t.get("remaining_units") or 0)
+        s += max(0.0, init - rem)
+    return s
+
+
+def _pipeline_b2_follower_roll_done_units(task_queue, tid: str) -> float:
+    """§B-2 検査行＋§B-3 巻返し行の、同一依頼内の後続パイプライン累計完了ロール。"""
+    tid = str(tid or "").strip()
+    s = 0.0
+    for t in task_queue:
+        if str(t.get("task_id", "") or "").strip() != tid:
+            continue
+        if not (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")):
             continue
         init = float(t.get("initial_remaining_units") or 0)
         rem = float(t.get("remaining_units") or 0)
@@ -10524,7 +10559,7 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
-    insp_done = _pipeline_inspection_roll_done_units(task_queue, task_id)
+    insp_done = _pipeline_b2_follower_roll_done_units(task_queue, task_id)
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
     # 先行バッファ式は ec_done と max_insp が 1 ずれるため、EC 完走直後に検査が 1 ロール足りなくなる。
     # EC が全ロール終了した後は検査も同数まで進められるよう上限を ec_done に合わせる。
@@ -10536,14 +10571,14 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 def _roll_pipeline_inspection_task_row_for_tid(
     task_queue: list, task_id: str
 ) -> dict | None:
-    """同一依頼NOの §B-2 検査行（roll_pipeline_inspection）を1件返す。無ければ None。"""
+    """同一依頼NOの §B-2 検査行または §B-3 巻返し行を1件返す。無ければ None。"""
     tid = str(task_id or "").strip()
     if not tid:
         return None
     for t in task_queue:
         if str(t.get("task_id") or "").strip() != tid:
             continue
-        if t.get("roll_pipeline_inspection"):
+        if t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind"):
             return t
     return None
 
@@ -10583,7 +10618,7 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
         return None
     insp_done = int(
-        math.floor(float(_pipeline_inspection_roll_done_units(task_queue, tid)))
+        math.floor(float(_pipeline_b2_follower_roll_done_units(task_queue, tid)))
     )
     need_n = insp_done + int(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS)
     ends = _pipeline_b2_ec_roll_end_datetimes_sorted(task_queue, tid)
@@ -10622,7 +10657,9 @@ def _pipeline_b2_assigned_member_names_nfkc_for_side(
             if not t.get("roll_pipeline_ec"):
                 continue
         else:
-            if not t.get("roll_pipeline_inspection"):
+            if not (
+                t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
+            ):
                 continue
         for h in t.get("assigned_history") or []:
             names |= _pipeline_b2_team_history_names(h.get("team"))
@@ -10630,7 +10667,7 @@ def _pipeline_b2_assigned_member_names_nfkc_for_side(
 
 
 def _b2_ec_insp_pair_in_queue(task_queue: list, task_id: str) -> bool:
-    """同一依頼NOに §B-2 の EC 行と検査行の両方がキューにあるか。"""
+    """同一依頼NOに §B-2/§B-3 の EC 行と後続行（検査または巻返し）の両方がキューにあるか。"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -10644,7 +10681,8 @@ def _filter_capable_members_b2_disjoint_teams(
     task: dict, task_queue: list, capable_members: list
 ) -> list:
     """
-    §B-2 同一依頼では、EC 行に一度でも入った者は検査の候補から外し、検査に入った者は EC の候補から外す。
+    §B-2 / §B-3 同一依頼では、EC 行に一度でも入った者は後続（検査／巻返し）の候補から外し、
+    後続に入った者は EC の候補から外す。
     （社内ルール: 担当者集合を必ず分ける）
     """
     if not capable_members:
@@ -10653,8 +10691,10 @@ def _filter_capable_members_b2_disjoint_teams(
     if not tid or not _b2_ec_insp_pair_in_queue(task_queue, tid):
         return capable_members
     is_ec = bool(task.get("roll_pipeline_ec"))
-    is_insp = bool(task.get("roll_pipeline_inspection"))
-    if not is_ec and not is_insp:
+    is_follower = bool(
+        task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
+    )
+    if not is_ec and not is_follower:
         return capable_members
     if is_ec:
         excl = _pipeline_b2_assigned_member_names_nfkc_for_side(
@@ -10673,7 +10713,12 @@ def _filter_capable_members_b2_disjoint_teams(
     ]
     removed = [m for m in capable_members if m not in filtered]
     if removed and _trace_schedule_task_enabled(tid):
-        _side = "EC" if is_ec else "検査"
+        if is_ec:
+            _side = "EC"
+        elif task.get("roll_pipeline_rewind"):
+            _side = "巻返し"
+        else:
+            _side = "検査"
         _log_dispatch_trace_schedule(
             tid,
             "[配台トレース task=%s] ブロック判定: B-2担当者分離 side=%s machine=%s "
@@ -10690,10 +10735,10 @@ def _filter_capable_members_b2_disjoint_teams(
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     """
-    同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査が **既に割付を開始** し残ロールが残る行があれば
+    同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査または §B-3 巻返しが **既に割付を開始** し残ロールが残る行があれば
     そのタスク dict を1件返す（なければ None）。
 
-    パイプライン枠で検査を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼の検査** が同じ設備に入り、
+    パイプライン枠で後続を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼** が同じ設備に入り、
     結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該設備列では他タスクを試行しない
     （別設備列は従来どおり）。
     """
@@ -10705,7 +10750,7 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
         lk = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
         if lk != m:
             continue
-        if not t.get("roll_pipeline_inspection"):
+        if not (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")):
             continue
         rem = float(t.get("remaining_units") or 0)
         if rem <= 1e-9:
@@ -10753,7 +10798,7 @@ def _generate_plan_task_queue_sort_key(
     """
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
 
-    1. §B-1 → §B-2 帯 → その他（§B-2 帯内は EC を未着手検査より先）
+    1. §B-1 → §B-2/§B-3 帯 → その他（帯内は EC を未着手の検査／巻返しより先）
     2. 加工途中（in_progress）を先
     3. 計画基準納期（早いほど先）
     4. need シート左列ほど先（工程名+機械名列の位置）
@@ -10761,20 +10806,20 @@ def _generate_plan_task_queue_sort_key(
 
     _req_map / _need_rules は呼び出し互換のため残す。
     """
-    rp = bool(task.get("roll_pipeline_inspection"))
+    insp = bool(task.get("roll_pipeline_inspection"))
+    rw = bool(task.get("roll_pipeline_rewind"))
     ip = bool(task.get("in_progress"))
     ec = bool(task.get("roll_pipeline_ec"))
-    if rp and ip:
+    if insp and ip:
         b_tier = 0  # §B-1
-    elif ec or (rp and not ip):
-        # §B-2: EC と未着手検査を同じ b_tier にまとめ、b2_queue_sub で EC 先行
-        b_tier = 1
+    elif ec or (insp and not ip) or (rw and not ip):
+        b_tier = 1  # §B-2 / §B-3 帯
     else:
         b_tier = 2
     if b_tier == 1:
         if ec:
             b2_queue_sub = 0
-        elif rp and not ip:
+        elif (insp and not ip) or (rw and not ip):
             b2_queue_sub = 1
         else:
             b2_queue_sub = 2
@@ -10795,11 +10840,8 @@ def _generate_plan_task_queue_sort_key(
 
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
     """
-    §B-2: 同一 task_id の `roll_pipeline_ec` 行の直後に、対応する未着手 `roll_pipeline_inspection` を隣接させる。
-
-    `_generate_plan_task_queue_sort_key` では b_tier=1 帯で EC を未着手検査より先にまとめるが、
-    帯内の他キー（納期・優先度等）により「全 EC が先・全検査が後」に見えることがある。
-    結果シートの「配台試行順番」は依頼ごとに EC→検査の連番に揃える。
+    §B-2 / §B-3: 同一 task_id の `roll_pipeline_ec` 行の直後に、未着手の後続行
+    （`roll_pipeline_inspection` または `roll_pipeline_rewind`）を行順で隣接させる。
     """
     if len(task_queue) < 2:
         return
@@ -10815,33 +10857,41 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
                 continue
             if t.get("roll_pipeline_ec"):
                 by_tid.setdefault(tid, {})["ec"] = t
-            if t.get("roll_pipeline_inspection") and not t.get("in_progress"):
-                by_tid.setdefault(tid, {})["insp"] = t
-        pairs = []
+            if (t.get("roll_pipeline_inspection") and not t.get("in_progress")) or (
+                t.get("roll_pipeline_rewind") and not t.get("in_progress")
+            ):
+                by_tid.setdefault(tid, {}).setdefault("followers", []).append(t)
+        blocks = []
         for tid, d in by_tid.items():
-            ec_t, insp_t = d.get("ec"), d.get("insp")
-            if ec_t is not None and insp_t is not None:
-                pairs.append((tid, ec_t, insp_t))
-        if not pairs:
+            ec_task = d.get("ec")
+            followers = d.get("followers") or []
+            if ec_task is None or not followers:
+                continue
+            followers = sorted(
+                followers,
+                key=lambda x: (
+                    int(x.get("same_request_line_seq") or 0),
+                    task_queue.index(x),
+                ),
+            )
+            blocks.append((tid, ec_task, followers))
+        if not blocks:
             break
-        pairs.sort(key=lambda x: task_queue.index(x[1]))
+        blocks.sort(key=lambda b: task_queue.index(b[1]))
         moved = False
-        for tid, ec_task, insp_task in pairs:
+        for tid, ec_task, followers in blocks:
+            chain = [ec_task] + followers
             try:
-                ie = task_queue.index(ec_task)
-                ii = task_queue.index(insp_task)
+                indices = [task_queue.index(x) for x in chain]
             except ValueError:
                 continue
-            if ii == ie + 1:
+            if all(indices[i] == indices[0] + i for i in range(len(indices))):
                 continue
-            if ii > ie:
-                task_queue.pop(ii)
-                ie = task_queue.index(ec_task)
-                task_queue.insert(ie + 1, insp_task)
-            else:
-                task_queue.pop(ie)
-                ii = task_queue.index(insp_task)
-                task_queue.insert(ii, ec_task)
+            insert_at = min(indices)
+            for idx in sorted(indices, reverse=True):
+                task_queue.pop(idx)
+            for j, item in enumerate(chain):
+                task_queue.insert(insert_at + j, item)
             moved_tids.append(tid)
             moved = True
             break
@@ -10849,7 +10899,7 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
             break
     if moved_tids:
         logging.info(
-            "§B-2 配台試行順: EC と未着手検査を隣接した依頼NO（配台試行順番を依頼内連番に揃える）: %s",
+            "§B-2/§B-3 配台試行順: EC と未着手後続（検査／巻返し）を隣接した依頼NO: %s",
             ",".join(moved_tids),
         )
 
@@ -10878,19 +10928,20 @@ def _day_schedule_task_sort_key(
         dto = int(task.get("dispatch_trial_order") or 10**9)
     except (TypeError, ValueError):
         dto = 10**9
-    rp = bool(task.get("roll_pipeline_inspection"))
+    insp = bool(task.get("roll_pipeline_inspection"))
+    rw = bool(task.get("roll_pipeline_rewind"))
     ip = bool(task.get("in_progress"))
     ec = bool(task.get("roll_pipeline_ec"))
-    if rp and ip:
+    if insp and ip:
         b_tier = 0
-    elif ec or (rp and not ip):
+    elif ec or (insp and not ip) or (rw and not ip):
         b_tier = 1
     else:
         b_tier = 2
     if b_tier == 1:
         if ec:
             b2_queue_sub = 0
-        elif rp and not ip:
+        elif (insp and not ip) or (rw and not ip):
             b2_queue_sub = 1
         else:
             b2_queue_sub = 2
@@ -10898,7 +10949,7 @@ def _day_schedule_task_sort_key(
         b2_queue_sub = 0
     if ec:
         b2_roll_pipeline_stage = 0
-    elif rp and not ip:
+    elif (insp and not ip) or (rw and not ip):
         b2_roll_pipeline_stage = 1
     else:
         b2_roll_pipeline_stage = 2
@@ -10909,7 +10960,7 @@ def _day_schedule_task_sort_key(
         task.get("machine"), task.get("machine_name"), need_combo_col_index
     )
     tb = _task_id_same_machine_due_tiebreak_key(task.get("task_id"))
-    b1_trial_early = (0, dto) if (rp and ip) else (1, 0)
+    b1_trial_early = (0, dto) if (insp and ip) else (1, 0)
     return (
         (
             b_tier,
@@ -11075,21 +11126,31 @@ def _normalize_timeline_task_id(ev: dict) -> str:
 
 
 def _trial_order_flow_day_start_floor(
-    task: dict, current_date: date, macro_run_date: date, macro_now_dt: datetime
+    task: dict,
+    current_date: date,
+    macro_run_date: date,
+    macro_now_dt: datetime,
+    task_queue: list | None = None,
 ) -> datetime:
     """原反投入日を起点に、その日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
-    # §B-2 検査（roll_pipeline_inspection）は EC 完了を待って開始できるため、
-    # 原反投入日（=同日13:00以降）の制約をそのまま適用すると検査が不必要に後ろへ倒れる。
+    # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始できるため、
+    # 原反投入日（=同日13:00以降）の制約をそのまま適用すると後続が不必要に後ろへ倒れる。
     # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を取る。
-    is_b2_inspection = bool(task.get("roll_pipeline_inspection"))
+    _tid_floor = str(task.get("task_id", "") or "").strip()
+    is_b2_follower_delayed = bool(
+        (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
+        and _tid_floor
+        and task_queue is not None
+        and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid_floor)
+    )
     rid = task.get("raw_input_date")
-    if not is_b2_inspection and isinstance(rid, date) and rid == current_date:
+    if not is_b2_follower_delayed and isinstance(rid, date) and rid == current_date:
         floor = max(floor, datetime.combine(current_date, time(13, 0)))
     sdl = task.get("same_day_raw_start_limit")
     s_req = task.get("start_date_req")
     if (
-        (not is_b2_inspection)
+        (not is_b2_follower_delayed)
         and sdl
         and isinstance(s_req, date)
         and current_date == s_req
@@ -11097,7 +11158,12 @@ def _trial_order_flow_day_start_floor(
     ):
         floor = max(floor, datetime.combine(current_date, sdl))
     est = task.get("earliest_start_time")
-    if (not is_b2_inspection) and isinstance(s_req, date) and current_date == s_req and est:
+    if (
+        (not is_b2_follower_delayed)
+        and isinstance(s_req, date)
+        and current_date == s_req
+        and est
+    ):
         if isinstance(est, time):
             floor = max(floor, datetime.combine(current_date, est))
     if current_date == macro_run_date and floor < macro_now_dt:
@@ -11114,7 +11180,9 @@ def _trial_order_flow_eligible_tasks(
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
-        if task.get("roll_pipeline_inspection") and (
+        if (
+            task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
+        ) and (
             _roll_pipeline_inspection_assign_room(
                 task_queue, str(task.get("task_id", "") or "").strip()
             )
@@ -11464,7 +11532,7 @@ def _assign_one_roll_trial_order_flow(
         )
 
     day_floor = _trial_order_flow_day_start_floor(
-        task, current_date, macro_run_date, macro_now_dt
+        task, current_date, macro_run_date, macro_now_dt, task_queue
     )
     machine_day_floor = datetime.combine(current_date, DEFAULT_START_TIME)
     b2_insp_ec_floor: datetime | None = None
@@ -11479,8 +11547,12 @@ def _assign_one_roll_trial_order_flow(
             _tid_assign,
             *args,
         )
-    if task.get("roll_pipeline_inspection") and _task_queue_has_roll_pipeline_ec_for_tid(
-        task_queue, _tid_assign
+    if (
+        (
+            task.get("roll_pipeline_inspection")
+            or task.get("roll_pipeline_rewind")
+        )
+        and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid_assign)
     ):
         b2_insp_ec_floor = _roll_pipeline_b2_inspection_ec_completion_floor_dt(
             task_queue, _tid_assign
@@ -11770,13 +11842,13 @@ def _trial_order_first_schedule_pass(
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並べる（1 パス分）。
-    **完全二相（§B-2）**: **フェーズ1**で熱融着**検査行を除く**候補（EC・他依頼・他工程）を試行順どおり
-    **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
-    EC 残がある日は `_trial_order_flow_eligible_tasks` で検査を外し、翌稼働日以降も EC のみ前進する。
-    カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から検査だけ再走査する）。
-    EC と検査を **交互に 1 ロールずつ試すと**同一担当者が途中で検査へ回り **EC がブロック**されるため、
+    **完全二相（§B-2 / §B-3）**: **フェーズ1**で **後続パイプライン行**（熱融着検査・巻返し）**を除く**候補（EC・他依頼・他工程）を試行順どおり
+    **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査／§B-3 巻返し行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
+    EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
+    カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
+    EC と後続を **交互に 1 ロールずつ試すと**同一担当者が途中で後続へ回り **EC がブロック**されるため、
     同一パス内では EC 等を先に詰める。
-    リワインド側の検査は各ロールについて `_roll_pipeline_inspection_assign_room` および
+    リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
     機械・人の空きはロールごとに更新する（⑦⑧）。
@@ -11818,7 +11890,9 @@ def _trial_order_first_schedule_pass(
             if res is None:
                 break
             done_units = 1
-            if task.get("roll_pipeline_inspection"):
+            if task.get("roll_pipeline_inspection") or task.get(
+                "roll_pipeline_rewind"
+            ):
                 _rp_room = _roll_pipeline_inspection_assign_room(
                     task_queue, str(task.get("task_id", "") or "").strip()
                 )
@@ -11969,15 +12043,18 @@ def _trial_order_first_schedule_pass(
             made_local = True
         return made_local
 
-    def _is_b2_inspection_eligible_row(t: dict) -> bool:
+    def _is_b2_follower_phase2_row(t: dict) -> bool:
         _tid = str(t.get("task_id") or "").strip()
         return bool(
-            t.get("roll_pipeline_inspection")
+            (
+                t.get("roll_pipeline_inspection")
+                or t.get("roll_pipeline_rewind")
+            )
             and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid)
         )
 
-    phase1_tasks = [t for t in eligible_sorted if not _is_b2_inspection_eligible_row(t)]
-    phase2_tasks = [t for t in eligible_sorted if _is_b2_inspection_eligible_row(t)]
+    phase1_tasks = [t for t in eligible_sorted if not _is_b2_follower_phase2_row(t)]
+    phase2_tasks = [t for t in eligible_sorted if _is_b2_follower_phase2_row(t)]
 
     pass_made = False
     for task in phase1_tasks:
@@ -12006,14 +12083,14 @@ def _run_b2_inspection_rewind_pass(
     team_combo_presets: dict | None = None,
 ) -> bool:
     """
-    §B-2: EC 側を先に全日で進めた後、検査側のみを日付先頭から再走査して配台する。
+    §B-2 / §B-3: EC 側を先に全日で進めた後、検査／巻返し側のみを日付先頭から再走査して配台する。
     timeline_events を人・設備のブロックテーブルとして使い、日跨ぎの占有を保持する。
     """
     target_tids: set[str] = set()
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
             continue
-        if not t.get("roll_pipeline_inspection"):
+        if not (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")):
             continue
         tid = str(t.get("task_id", "") or "").strip()
         if not tid:
@@ -12062,7 +12139,10 @@ def _run_b2_inspection_rewind_pass(
             t
             for t in task_queue
             if float(t.get("remaining_units") or 0) > 1e-12
-            and t.get("roll_pipeline_inspection")
+            and (
+                t.get("roll_pipeline_inspection")
+                or t.get("roll_pipeline_rewind")
+            )
             and str(t.get("task_id", "") or "").strip() in target_tids
             and t.get("start_date_req") <= current_date
         ]
@@ -12879,7 +12959,10 @@ def generate_plan():
                                     float(task.get("remaining_units") or 0),
                                 )
                             continue
-                        if task.get("roll_pipeline_inspection") and (
+                        if (
+                            task.get("roll_pipeline_inspection")
+                            or task.get("roll_pipeline_rewind")
+                        ) and (
                             _roll_pipeline_inspection_assign_room(
                                 task_queue, str(task.get("task_id", "")).strip()
                             )
@@ -12888,13 +12971,13 @@ def generate_plan():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _tid_tr = str(task.get("task_id", "") or "").strip()
                                 _ec_d = _pipeline_ec_roll_done_units(task_queue, _tid_tr)
-                                _in_d = _pipeline_inspection_roll_done_units(
+                                _in_d = _pipeline_b2_follower_roll_done_units(
                                     task_queue, _tid_tr
                                 )
                                 _log_dispatch_trace_schedule(
                                     _tid_tr,
-                                    "[配台トレース task=%s] スキップ: §B-2 検査ロール枠ゼロ day=%s machine=%s "
-                                    "ec累計完了R=%.4f insp累計完了R=%.4f rem_insp=%.4f",
+                                    "[配台トレース task=%s] スキップ: §B-2/§B-3 後続ロール枠ゼロ day=%s machine=%s "
+                                    "ec累計完了R=%.4f 後続累計完了R=%.4f rem_follower=%.4f",
                                     _tid_tr,
                                     current_date,
                                     task.get("machine"),
@@ -13466,7 +13549,9 @@ def generate_plan():
                                 )
                             sub_members = [m for m in best_team if m != best_info["op"]]
                             done_units = best_info["units_today"]
-                            if task.get("roll_pipeline_inspection"):
+                            if task.get("roll_pipeline_inspection") or task.get(
+                                "roll_pipeline_rewind"
+                            ):
                                 _rp_room = _roll_pipeline_inspection_assign_room(
                                     task_queue, str(task.get("task_id", "")).strip()
                                 )
@@ -13479,7 +13564,9 @@ def generate_plan():
                             if done_units <= 0:
                                 if _trace_schedule_task_enabled(task.get("task_id")):
                                     _rp_log = None
-                                    if task.get("roll_pipeline_inspection"):
+                                    if task.get(
+                                        "roll_pipeline_inspection"
+                                    ) or task.get("roll_pipeline_rewind"):
                                         _rp_log = _roll_pipeline_inspection_assign_room(
                                             task_queue,
                                             str(task.get("task_id", "") or "").strip(),
@@ -13554,7 +13641,9 @@ def generate_plan():
                             })
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _rp_tr = None
-                                if task.get("roll_pipeline_inspection"):
+                                if task.get("roll_pipeline_inspection") or task.get(
+                                    "roll_pipeline_rewind"
+                                ):
                                     _rp_tr = _roll_pipeline_inspection_assign_room(
                                         task_queue,
                                         str(task.get("task_id", "") or "").strip(),
@@ -13694,13 +13783,16 @@ def generate_plan():
                         _log_dispatch_trace_schedule(
                             _tt,
                             "[配台トレース task=%s] 日次終了時点の残 day=%s machine=%s "
-                            "machine_name=%s rem=%.4f roll_insp=%s 試行順=%s",
+                            "machine_name=%s rem=%.4f roll_b2_follower=%s 試行順=%s",
                             _tt,
                             current_date,
                             _t.get("machine"),
                             _t.get("machine_name"),
                             _rem_tr,
-                            bool(_t.get("roll_pipeline_inspection")),
+                            bool(
+                                _t.get("roll_pipeline_inspection")
+                                or _t.get("roll_pipeline_rewind")
+                            ),
                             _t.get("dispatch_trial_order"),
                         )
 
@@ -13813,7 +13905,7 @@ def generate_plan():
             )
             if _rewind_made:
                 logging.info(
-                    "§B-2 検査リワインド: EC 完走後に検査のみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
+                    "§B-2/§B-3 リワインド: EC 完走後に検査／巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
             break
 
@@ -13825,13 +13917,16 @@ def generate_plan():
                 _log_dispatch_trace_schedule(
                     _tt,
                     "[配台トレース task=%s] シミュレーション終了時 machine=%s machine_name=%s "
-                    "rem=%.4f initial=%.4f roll_insp=%s",
+                    "rem=%.4f initial=%.4f roll_b2_follower=%s",
                     _tt,
                     _t.get("machine"),
                     _t.get("machine_name"),
                     float(_t.get("remaining_units") or 0),
                     float(_t.get("initial_remaining_units") or 0),
-                    bool(_t.get("roll_pipeline_inspection")),
+                    bool(
+                        _t.get("roll_pipeline_inspection")
+                        or _t.get("roll_pipeline_rewind")
+                    ),
                 )
             _evs_tr = sorted(
                 (

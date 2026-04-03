@@ -136,8 +136,8 @@
 
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>・<code>_generate_plan_task_queue_sort_key</code>・2026-04）: <strong><code>b_tier</code></strong>（0=§B-1、1=§B-2 帯、2=その他）→ <strong><code>b2_queue_sub</code></strong>（§B-2 帯内で <strong>EC が未着手検査より先</strong>）→ <strong>加工途中</strong>（<code>in_progress</code> を先）→ <strong>計画基準納期</strong>（早いほど先）→ <strong>need シート左列ほど先</strong>（工程名+機械名の列位置 <code>need_combo_col_index</code>）→ <strong>依頼NOタイブレーク</strong>（<code>_task_id_same_machine_due_tiebreak_key</code>）。その後 <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で依頼内 EC→検査を隣接し、<strong>配台試行順番</strong> 1..n を付与（シート物理行順ではない）。納期由来・配台優先度・機械名 NFKC 単独・開始日・必要OP人数はグローバルキーに含めません。</p>
-    <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が候補を <strong><code>dispatch_trial_order</code> 昇順</strong>にし、§B-2 は <strong>完全二相</strong>（<strong>フェーズ1</strong>: 熱融着検査<strong>以外</strong>を連続ロール → <strong>フェーズ2</strong>: 検査行を配台）。検査候補は <code>_roll_pipeline_inspection_assign_room</code>（バッファ付きロール枠）で制御されます。通常の日次ループ完了後、B-2 検査を <code>_run_b2_inspection_rewind_pass</code> で日付先頭から再走査し、<code>timeline_events</code> を人・設備のブロックテーブルとして再利用して日跨ぎ占有を保持したまま検査を詰めます。再走査中は <code>_roll_pipeline_inspection_assign_room</code> と <code>_roll_pipeline_b2_inspection_ec_completion_floor_dt</code>。同一設備列の試行順は <code>_equipment_line_lower_dispatch_trial_still_pending</code>。<code>_day_schedule_task_sort_key</code> は主ループのソートには使わない。<strong>継続チーム優先は同日内のみ</strong>で、翌日は当日候補から再選定します。</p>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>・<code>_generate_plan_task_queue_sort_key</code>・2026-04）: <strong><code>b_tier</code></strong>（0=§B-1、1=§B-2/§B-3 帯、2=その他）→ <strong><code>b2_queue_sub</code></strong>（帯内で <strong>EC が未着手の検査／巻返しより先</strong>）→ <strong>加工途中</strong>（<code>in_progress</code> を先）→ <strong>計画基準納期</strong>（早いほど先）→ <strong>need シート左列ほど先</strong>（工程名+機械名の列位置 <code>need_combo_col_index</code>）→ <strong>依頼NOタイブレーク</strong>（<code>_task_id_same_machine_due_tiebreak_key</code>）。その後 <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で依頼内 EC→後続（検査／巻返し）を隣接し、<strong>配台試行順番</strong> 1..n を付与（シート物理行順ではない）。納期由来・配台優先度・機械名 NFKC 単独・開始日・必要OP人数はグローバルキーに含めません。</p>
+    <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が候補を <strong><code>dispatch_trial_order</code> 昇順</strong>にし、§B-2/§B-3 は <strong>完全二相</strong>（<strong>フェーズ1</strong>: 熱融着検査・巻返し（後続）<strong>以外</strong>を連続ロール → <strong>フェーズ2</strong>: 後続行を配台）。後続候補は <code>_roll_pipeline_inspection_assign_room</code>（バッファ付きロール枠）で制御されます。通常の日次ループ完了後、B-2 検査／B-3 巻返しを <code>_run_b2_inspection_rewind_pass</code> で日付先頭から再走査し、<code>timeline_events</code> を人・設備のブロックテーブルとして再利用して日跨ぎ占有を保持したまま詰めます。再走査中は <code>_roll_pipeline_inspection_assign_room</code> と <code>_roll_pipeline_b2_inspection_ec_completion_floor_dt</code>。同一設備列の試行順は <code>_equipment_line_lower_dispatch_trial_still_pending</code>。<code>_day_schedule_task_sort_key</code> は主ループのソートには使わない。<strong>継続チーム優先は同日内のみ</strong>で、翌日は当日候補から再選定します。</p>
     <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順の 1 本ループ。<code>dispatch_trial_order</code> は<strong>複合キーの一部</strong>（最優先単独ではない）。</p>
     <p><strong>納期シフト再試行</strong>: ラウンドごとに <code>task_queue</code> は再ソートされるが、<strong><code>dispatch_trial_order</code> は付け直さない</strong>（初回 1..n のまま）。</p>
     <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（グローバルソート直後の 1..n）が第一キーです。</p>
@@ -148,7 +148,7 @@
     <ul>
       <li><code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> … 既定 <code>1</code>。配台試行順優先の <code>_trial_order_first_schedule_pass</code>。<code>0</code> で従来の日内ソートキーループ。</li>
       <li><code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID</code> … 既定相当 <code>0</code>。<code>1</code> で依頼NO直列（アクティブ依頼のみ当日候補）。</li>
-      <li><code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> … 既定オン。§B-2 検査が占有する設備列では他タスクを試さない（変数名は歴史的）。</li>
+      <li><code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> … 既定オン。§B-2 検査／§B-3 巻返しが占有する設備列では他タスクを試さない（変数名は歴史的）。</li>
       <li><code>TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS</code> … 未設定＝メインは基本人数のみ、全シミュレーション後に余力サブ追記。<code>1</code>＝従来どおりメインで <code>req+追加上限</code> まで探索。</li>
       <li><code>TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</code> … <code>1</code> で need 追加人数行を全面無視（後追いもなし）。</li>
       <li><code>TEAM_ASSIGN_*</code>（人数優先・スラック）… <span class="file">配台ルール.md</span> セクション5。</li>
@@ -203,7 +203,7 @@
     <ul>
       <li><strong>原則</strong>: 同一 <strong>依頼NO</strong> の <strong>別工程（別行）</strong>は、設備が違っても <strong>同時加工しない</strong>。配台計画シートを上から読んだ <strong>行順</strong>（<code>same_request_line_seq</code>）で、上の行の残ロールがなくなるまで下の行に割り当てません。</li>
       <li><strong>§A-1 との関係</strong>: 両行に加工内容由来の rank があるときは <strong>rank だけ</strong>で前後を決め、片方でも rank が無いときは <strong>行順</strong>で直列化します。</li>
-      <li><strong>§B-2</strong>: EC×検査パイプラインはロール枠・設備占有など<strong>別フィルタ</strong>で制御。同一依頼の前後関係は <span class="file">配台ルール.md</span> B-2.6・<code>_trial_order_flow_eligible_tasks</code> を参照。</li>
+      <li><strong>§B-2 / §B-3</strong>: EC×後続（検査または巻返し）パイプラインはロール枠・設備占有など<strong>別フィルタ</strong>で制御。同一依頼の前後関係は <span class="file">配台ルール.md</span> B-2.6・B-3・<code>_trial_order_flow_eligible_tasks</code> を参照。</li>
       <li><strong>実装</strong>: <span class="file">planning_core.py</span> の <code>build_task_queue_from_planning_df</code> と <code>_task_blocked_by_same_request_dependency</code>。</li>
     </ul>
   </section>
@@ -215,7 +215,7 @@
     <ul>
       <li><strong>グローバル</strong>: <code>b_tier = 0</code>。対象行同士の順は §2.0（加工途中→計画基準納期→need 列→依頼NO）。試行番号はその後の付与。</li>
       <li><strong>日内</strong>（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code>）: §2.0 と同趣旨の先頭キーのあと、<code>dispatch_trial_order</code> を §A-1 の rank より<strong>前</strong>に置く（<code>_day_schedule_task_sort_key</code>）。</li>
-      <li><strong>§B 群内</strong>: <strong>B-1 ＞ B-2</strong>。詳細は <span class="file">配台ルール.md</span> §B-1。</li>
+      <li><strong>§B 群内</strong>: <strong>B-1 ＞ B-2 ＞ B-3</strong>。詳細は <span class="file">配台ルール.md</span> §B-1。</li>
     </ul>
     <h3>B-2 — EC → 検査（ロール単位パイプライン）</h3>
     <p>次の <strong>工程名・機械名の組み合わせ</strong>に限り、同一依頼NO内でロール単位の並行を認めます（コード内定数）。</p>
@@ -237,6 +237,21 @@
       <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・<code>_roll_pipeline_inspection_assign_room</code>（ロール枠）・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付。前進・再走査の両方で同ロール枠と時刻下限が効きます。詳細は <span class="file">配台ルール.md</span> B-2.6。</li>
       <li><strong>担当者の排他（同一依頼NO）</strong>: EC 行と検査行で <strong>履歴に出たメンバーは他側の候補から除外</strong>（<code>_filter_capable_members_b2_disjoint_teams</code>・NFKC 突合）。配台トレース対象依頼NOでは、この除外が発生した時点で <code>ブロック判定: B-2担当者分離 ...</code> を出力。さらに候補試行時に <code>候補固定: 担当OP指名=...</code>・<code>候補却下: ...</code>（OP不在/実働不足など）も出力。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
+    </ul>
+    <h3>B-3 — EC → 巻返し（ロール単位パイプライン・B-2 同趣旨）</h3>
+    <p>同一依頼NOで <strong>B-2 と同じロールパイプライン挙動</strong>（完全二相・ロール枠・リワインド・担当者排他・設備占有）を適用します。B-2 の「検査」に相当する工程を <strong>巻返し</strong>、機械名は先行 EC と同じ <strong>EC機　湖南</strong> です。</p>
+    <table>
+      <thead>
+        <tr><th>役割</th><th>工程名</th><th>機械名</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>先行（EC）</td><td>EC</td><td>EC機　湖南</td></tr>
+        <tr><td>後続（巻返し）</td><td>巻返し</td><td>EC機　湖南</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><strong>実装</strong>: タスク辞書の <code>roll_pipeline_rewind</code>。定数 <code>ROLL_PIPELINE_REWIND_PROCESS</code> / <code>ROLL_PIPELINE_REWIND_MACHINE</code>。完了ロール集計は <code>_pipeline_b2_follower_roll_done_units</code>（検査＋巻返しを合算）。</li>
+      <li><strong>詳細</strong>: <span class="file">配台ルール.md</span> §B-3 および §B-2.2〜B-2.7（語の読み替え）。</li>
     </ul>
   </section>
 
