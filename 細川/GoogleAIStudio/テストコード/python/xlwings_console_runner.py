@@ -24,15 +24,17 @@ print と同様に xlwings のコンソールへ流れる。
 ----
 - ``planning_core`` は import 時に TASK_INPUT_WORKBOOK 依存の初期化があるため、
   本モジュールでは **都度 ``planning_core`` を sys.modules から外して再 import** する。
-- 既存の ``段階1_コア実行``（LOG シート埋め・plan 取り込み等）とは別経路。
-  試験なら上記 RunPython のみ、本番運用は従来の cmd 経路か、VBA 側で runner 呼び出し後に
-  後処理を続けるよう組み合わせてください。
+- cmd 経路は ``task_extract_stage1.py`` が planning_core より前に ``execution_log.txt`` を作る。
+  **本モジュールも** ``run_stage1_for_xlwings`` / ``run_stage2_for_xlwings`` で import 前に同ファイルへ1行追記し、
+  例外時はトレースバックを追記する（VBA が LOG シート用にファイル存在を前提にできる）。
 """
 from __future__ import annotations
 
 import logging
 import os
 import sys
+import traceback
+from datetime import datetime
 
 STAGE_VBA_EXIT_CODE_FILE = "stage_vba_exitcode.txt"
 
@@ -68,6 +70,57 @@ def _prepare_from_caller_book() -> str:
     return path
 
 
+def _execution_log_path() -> str:
+    return os.path.join(os.getcwd(), "log", "execution_log.txt")
+
+
+def _append_execution_log_line(level: str, msg: str) -> None:
+    """
+    cmd 経路の task_extract_stage1 と同様、planning_core より前に log を確保する（VBA が LOG シートへ読む）。
+    """
+    path = _execution_log_path()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{ts} - {level} - {msg}\n"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+            f.write(line)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+    except OSError:
+        return
+    try:
+        import xlwings_splash_log as xsl
+
+        if xsl.enabled():
+            xsl.append_formatted_line(line)
+    except Exception:
+        pass
+
+
+def _append_execution_log_traceback(title: str) -> None:
+    """except ブロック内で呼ぶ（format_exc が有効なとき）。"""
+    _append_execution_log_line("ERROR", title)
+    tb = traceback.format_exc()
+    try:
+        path = _execution_log_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+            f.write(tb)
+            if not tb.endswith("\n"):
+                f.write("\n")
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def run_stage1_for_xlwings() -> int:
     """
     段階1（run_stage1_extract）。戻り値: 0=成功, 1=失敗, 2=caller 不備。
@@ -84,6 +137,10 @@ def run_stage1_for_xlwings() -> int:
             )
             rc = 2
             return rc
+        _append_execution_log_line(
+            "INFO",
+            "段階1: xlwings run_stage1_for_xlwings 開始（planning_core 読み込み前）",
+        )
         _purge_planning_core_modules()
         try:
             import planning_core as pc
@@ -100,6 +157,7 @@ def run_stage1_for_xlwings() -> int:
                 rc = 1
         except Exception:
             logging.exception("xlwings: 段階1で未捕捉例外")
+            _append_execution_log_traceback("xlwings: 段階1で未捕捉例外")
             rc = 1
         return rc
     finally:
@@ -119,6 +177,10 @@ def run_stage2_for_xlwings() -> int:
             logging.exception("xlwings: Book.caller() を取得できません。")
             rc = 2
             return rc
+        _append_execution_log_line(
+            "INFO",
+            "段階2: xlwings run_stage2_for_xlwings 開始（planning_core 読み込み前）",
+        )
         _purge_planning_core_modules()
         try:
             import planning_core as pc
@@ -135,6 +197,7 @@ def run_stage2_for_xlwings() -> int:
                 rc = 1
         except Exception:
             logging.exception("xlwings: 段階2で未捕捉例外")
+            _append_execution_log_traceback("xlwings: 段階2で未捕捉例外")
             rc = 1
         return rc
     finally:

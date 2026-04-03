@@ -2822,6 +2822,7 @@ Private Sub 段階1_コア実行()
     Dim stageEnvXw As String
     Dim st1XwErr As Long
     Dim st1XwDesc As String
+    Dim missSt1 As String
 
     On Error GoTo ErrStage1
     m_lastStage1ExitCode = -1
@@ -2969,6 +2970,11 @@ Private Sub 段階1_コア実行()
     logFilePath = targetDir & "\log\execution_log.txt"
     If Len(Dir(logFilePath)) = 0 Then
         wsLog.Range("A2").Value = "execution_log.txt が見つかりませんでした。exitCode=" & CStr(exitCode)
+        wsLog.Range("A3").Value = "xlwings 経路（STAGE12_USE_XLWINGS_RUNPYTHON=True）では Show Console の Python 出力も参照してください。runner は planning_core 読込前に log を作成するよう修正済みです。"
+        missSt1 = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
+        If Len(missSt1) > 0 Then
+            wsLog.Range("A4").Value = "log\stage2_blocking_message.txt: " & missSt1
+        End If
     Else
         Set adoStream = CreateObject("ADODB.Stream")
         adoStream.Charset = "UTF-8"
@@ -3542,6 +3548,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim stageEnvXw As String
     Dim st2XwErr As Long
     Dim st2XwDesc As String
+    Dim missSt2 As String
     
     On Error GoTo ErrHandler
     
@@ -3744,6 +3751,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     
     If Len(Dir(logFilePath)) = 0 Then
         wsLog.Cells(logStartRow, 1).Value = "execution_log.txt が見つかりませんでした。exitCode=" & CStr(exitCode)
+        wsLog.Cells(logStartRow + 1, 1).Value = "xlwings 経路（STAGE12_USE_XLWINGS_RUNPYTHON=True）では Show Console の Python 出力も参照してください。runner は planning_core 読込前に log を作成するよう修正済みです。"
+        missSt2 = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
+        If Len(missSt2) > 0 Then
+            wsLog.Cells(logStartRow + 2, 1).Value = "log\stage2_blocking_message.txt: " & missSt2
+        End If
         GoTo Finish
     End If
     
