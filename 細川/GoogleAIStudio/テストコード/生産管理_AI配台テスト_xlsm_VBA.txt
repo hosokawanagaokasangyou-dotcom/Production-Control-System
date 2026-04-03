@@ -449,6 +449,24 @@ CleanFail:
     Set stm = Nothing
 End Function
 
+' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
+Private Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
+    Dim tmp As String
+    GeminiReadUtf8FileViaTempCopy = ""
+    If Len(Dir(filePath)) = 0 Then Exit Function
+    Randomize
+    tmp = Environ("TEMP") & "\pm_ai_sp_" & Replace(Replace(Replace(CStr(Now), "/", ""), ":", ""), " ", "_") & "_" & CStr(Int(100000 * Rnd)) & ".txt"
+    On Error Resume Next
+    FileCopy filePath, tmp
+    If Err.Number <> 0 Then
+        Err.Clear
+        Exit Function
+    End If
+    GeminiReadUtf8FileViaTempCopy = GeminiReadUtf8File(tmp)
+    On Error Resume Next
+    Kill tmp
+End Function
+
 Public Sub 設定_Gemini認証を暗号化してB1に保存()
     Dim apiKey As String
     Dim pass1 As String
@@ -1511,21 +1529,29 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     Dim tb As Object
     Dim s As String
     Dim n As Long
+    Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     s = GeminiReadUtf8File(m_splashExecutionLogPath)
+    If Len(s) = 0 And Len(Dir(m_splashExecutionLogPath)) > 0 Then
+        s = GeminiReadUtf8FileViaTempCopy(m_splashExecutionLogPath)
+    End If
     n = Len(s)
+    If n = 0 Then Exit Sub
     If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
         s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
     End If
+    prevSU = Application.ScreenUpdating
+    Application.ScreenUpdating = True
     tb.Text = s
     tb.SelStart = Len(tb.Text)
     tb.SelLength = 0
     frmMacroSplash.Repaint
     DoEvents
+    Application.ScreenUpdating = prevSU
 End Sub
 
 ' RunPython 終了直後など、同期 Python でポーリングできなかったあとに execution_log を一括表示（Interactive 一時 True で描画）
