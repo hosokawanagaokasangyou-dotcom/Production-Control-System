@@ -30,7 +30,7 @@ Option Explicit
 Private Sub UserForm_Initialize()
     On Error Resume Next
     Me.StartUpPosition = 2  ' 画面中央（実行時に標準モジュールでも設定）
-    Me.txtExecutionLog.Text = ""
+    Me.Controls("txtExecutionLog").Text = ""
 End Sub
 
 ' ×ボタンで閉じられないようにする（標準モジュールの Unload 以外では閉じない）
