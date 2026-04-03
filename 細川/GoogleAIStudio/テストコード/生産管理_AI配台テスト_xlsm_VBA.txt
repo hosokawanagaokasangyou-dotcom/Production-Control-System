@@ -53,7 +53,10 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
-' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。STAGE12_USE_XLWINGS_SPLASH_LOG=True なら Python(xlwings)が SplashLog_AppendChunk で txtExecutionLog に直接追記。False なら execution_log.txt をポーリング。
+' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
+'   ・cmd+Exec 待機中は MacroSplash_RefreshExecutionLogPane で execution_log をポーリング（Interactive 一時 True）。
+'   ・同期 xlwings.RunPython 中は Excel がブロックされポーリングも SplashLog_AppendChunk も実質動かない → RunPython 直後に MacroSplash_LoadExecutionLogFromPath でファイルを1回反映。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True かつ cmd 経路では Python が SplashLog_AppendChunk を呼ぶ想定（非同期で効く環境もある）。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
@@ -1526,6 +1529,36 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     DoEvents
 End Sub
 
+' RunPython 終了直後など、同期 Python でポーリングできなかったあとに execution_log を一括表示（Interactive 一時 True で描画）
+Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
+    Dim tb As Object
+    Dim s As String
+    Dim n As Long
+    Dim prevInt As Boolean
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    If Len(Dir(fullPath)) = 0 Then Exit Sub
+    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    If tb Is Nothing Then Exit Sub
+    s = GeminiReadUtf8File(fullPath)
+    n = Len(s)
+    If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
+        s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+    End If
+    prevInt = Application.Interactive
+    Application.Interactive = True
+    tb.Text = s
+    tb.SelStart = Len(tb.Text)
+    tb.SelLength = 0
+    frmMacroSplash.Repaint
+    DoEvents
+    If m_macroSplashLockedExcel Then
+        Application.Interactive = False
+    Else
+        Application.Interactive = prevInt
+    End If
+End Sub
+
 Private Sub MacroCompleteChime()
     On Error Resume Next
     PlaySound "SystemDefault", 0&, SND_ALIAS Or SND_ASYNC
@@ -2929,6 +2962,7 @@ Private Sub 段階1_コア実行()
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage1ExitCode = exitCode
+        MacroSplash_LoadExecutionLogFromPath targetDir & "\log\execution_log.txt"
     Else
         wsh.CurrentDirectory = Environ("TEMP")
         ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
@@ -3698,6 +3732,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage2ExitCode = exitCode
+        MacroSplash_LoadExecutionLogFromPath targetDir & "\log\execution_log.txt"
     Else
         stageEnvXw = ""
         If STAGE12_USE_XLWINGS_SPLASH_LOG Then stageEnvXw = "set PM_AI_SPLASH_XLWINGS=1" & vbCrLf
