@@ -101,7 +101,7 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期」。開始日は原反投入日がある行で <code>max(基準日, 原反投入日, 開始日上書き)</code>（原反前倒し不可）。原反<strong>当日</strong>は開始日上書き有無にかかわらず <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-2 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期」。<strong>原反投入日</strong>はシート列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があるとき<strong>そちらを配台に採用</strong>、空のとき列 <code>原反投入日</code>。開始日は採用した原反日がある行で <code>max(基準日, 原反投入日, 開始日上書き)</code>（原反前倒し不可）。原反<strong>当日</strong>は開始日上書き有無にかかわらず <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-2 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
@@ -113,6 +113,7 @@
       <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#roll-unit-length">ロール単位長さ（配台計画_タスク入力）</a></li>
       <li><a href="#stock-location">在庫場所（配台計画_タスク入力）</a></li>
+      <li><a href="#raw-input-override">原反投入日_上書き</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
       <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
@@ -187,6 +188,15 @@
     <ul>
       <li><strong>列</strong>: <code>在庫場所</code>（<code>TASK_COL_STOCK_LOCATION</code>）。<strong>加工計画DATA</strong> に同名の列があるとき、段階1で <strong>原反投入日の右隣</strong>に出力されます（<code>SOURCE_BASE_COLUMNS</code> / <code>plan_input_sheet_column_order</code>）。</li>
       <li><strong>配台計算</strong>: 参照表示のみ。キュー（<code>build_task_queue_from_planning_df</code>）の内部キーには載せません。</li>
+    </ul>
+  </section>
+
+  <section id="raw-input-override" class="card" aria-labelledby="h-raw-ov">
+    <h2 id="h-raw-ov">原反投入日_上書き（配台計画_タスク入力）</h2>
+    <ul>
+      <li><strong>列</strong>: <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）。参照列 <code>（元）原反投入日_上書き</code> は括弧内に列 <code>原反投入日</code> を表示。</li>
+      <li><strong>段階2</strong>: 日付があるときその値を <code>raw_input_date</code> として採用（開始下限・同日 13:00 下限・加工開始日_指定との max 等）。空のときは列 <code>原反投入日</code> のみ。</li>
+      <li><strong>結果_タスク一覧</strong>の <code>原反投入日</code> 表示も、上記と同じ優先で日付を出します。詳細は <span class="file">配台ルール.md</span> 2.1・7.3。</li>
     </ul>
   </section>
 

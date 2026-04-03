@@ -774,6 +774,8 @@ PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
 PLAN_COL_TASK_EFFICIENCY = "タスク加工効率"
 PLAN_COL_PRIORITY = "優先度"
 PLAN_COL_SPECIFIED_DUE_OVERRIDE = "指定納期_上書き"
+# 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
+PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
 PLAN_COL_START_DATE_OVERRIDE = "加工開始日_指定"
 PLAN_COL_START_TIME_OVERRIDE = "加工開始時刻_指定"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
@@ -1002,6 +1004,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         PLAN_COL_TASK_EFFICIENCY,
         PLAN_COL_PRIORITY,
         PLAN_COL_SPECIFIED_DUE_OVERRIDE,
+        PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
         PLAN_COL_START_DATE_OVERRIDE,
         PLAN_COL_START_TIME_OVERRIDE,
         PLAN_COL_PREFERRED_OP,
@@ -1049,7 +1052,7 @@ SOURCE_BASE_COLUMNS = [
 PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_EXCLUDE_FROM_ASSIGNMENT,
     PLAN_COL_REQUIRED_OP, PLAN_COL_SPEED_OVERRIDE, PLAN_COL_TASK_EFFICIENCY,
-    PLAN_COL_PRIORITY, PLAN_COL_SPECIFIED_DUE_OVERRIDE, PLAN_COL_START_DATE_OVERRIDE, PLAN_COL_START_TIME_OVERRIDE,
+    PLAN_COL_PRIORITY, PLAN_COL_SPECIFIED_DUE_OVERRIDE, PLAN_COL_RAW_INPUT_DATE_OVERRIDE, PLAN_COL_START_DATE_OVERRIDE, PLAN_COL_START_TIME_OVERRIDE,
     PLAN_COL_PREFERRED_OP,
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
@@ -1084,6 +1087,7 @@ def plan_input_sheet_column_order():
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール単位長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因子
     4. 上書き列… 各列の直前に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
+       （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
 
     global_speed_rules 等で変わる実効速度はシート列では持たず、配台内部のみで反映する。
     """
@@ -1158,6 +1162,10 @@ def _reference_text_for_override_row(row, override_col: str, req_map: dict, need
         if ad is not None:
             return _format_paren_ref_scalar(ad)
         return "（―）"
+    if override_col == PLAN_COL_RAW_INPUT_DATE_OVERRIDE:
+        return _format_paren_ref_scalar(
+            parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
+        )
     if override_col == PLAN_COL_START_DATE_OVERRIDE:
         return _format_paren_ref_scalar(
             parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
@@ -1255,6 +1263,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
         TASK_COL_SPECIFIED_DUE,
         TASK_COL_RAW_INPUT_DATE,
         PLAN_COL_SPECIFIED_DUE_OVERRIDE,
+        PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
         PLAN_COL_START_DATE_OVERRIDE,
     }
 )
@@ -6007,7 +6016,26 @@ def build_task_queue_from_planning_df(
         due_basis = None
         due_source = "none"
         due_source_rank = 9
-        raw_input_date = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
+        raw_input_sheet = parse_optional_date(
+            _planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE)
+        )
+        raw_input_date_ov = parse_optional_date(
+            _planning_df_cell_scalar(row, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+        )
+        raw_input_date = (
+            raw_input_date_ov if raw_input_date_ov is not None else raw_input_sheet
+        )
+        if (
+            raw_input_date_ov is not None
+            and raw_input_sheet is not None
+            and raw_input_date_ov != raw_input_sheet
+        ):
+            logging.info(
+                "原反投入日_上書きを採用: 依頼NO=%s シート原反投入日=%s 上書き=%s",
+                task_id,
+                raw_input_sheet,
+                raw_input_date_ov,
+            )
 
         qty = max(0.0, qty_total - done_qty)
         speed = parse_float_safe(speed_raw, 1.0)
@@ -8215,6 +8243,7 @@ def run_stage1_extract():
         rec[PLAN_COL_TASK_EFFICIENCY] = ""
         rec[PLAN_COL_PRIORITY] = ""
         rec[PLAN_COL_SPECIFIED_DUE_OVERRIDE] = ""
+        rec[PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
         rec[PLAN_COL_START_DATE_OVERRIDE] = ""
         rec[PLAN_COL_START_TIME_OVERRIDE] = ""
         rec[PLAN_COL_PREFERRED_OP] = ""
@@ -14632,7 +14661,8 @@ def generate_plan():
             if ed > w[1]:
                 w[1] = ed
 
-    # 結果_タスク一覧の「回答納期」「指定納期」「原反投入日」は配台計画_タスク入力の当該行セルのみ（計画基準納期と混同しない）
+    # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
+    # 「原反投入日」は上書き列に日付があるときその値、無いとき列「原反投入日」（計画基準納期と混同しない）
     _result_sheet_answer_spec_by_line = {}
     _result_sheet_raw_input_by_line: dict = {}
     if tasks_df is not None and not getattr(tasks_df, "empty", True):
@@ -14646,6 +14676,11 @@ def generate_plan():
             _ad = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_ANSWER_DUE))
             _sd = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_SPECIFIED_DUE))
             _rid = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_RAW_INPUT_DATE))
+            _rid_ov = parse_optional_date(
+                _planning_df_cell_scalar(_r, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+            )
+            if _rid_ov is not None:
+                _rid = _rid_ov
             _result_sheet_answer_spec_by_line[(_tid, _mach)] = (_ad, _sd)
             _result_sheet_raw_input_by_line[(_tid, _mach)] = _rid
 
