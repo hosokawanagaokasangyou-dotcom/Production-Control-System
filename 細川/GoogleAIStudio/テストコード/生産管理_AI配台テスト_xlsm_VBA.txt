@@ -2657,6 +2657,13 @@ Private Sub 段階1_コア実行()
         End If
     End If
 
+    ' Python 失敗時はこの先（取り込み・フォント）をスキップ。フォント手前まで進んでから MsgBox すると原因が誤解されやすい。
+    If exitCode <> 0 Then
+        Application.ScreenUpdating = prevScreenUpdating
+        Application.DisplayAlerts = prevDisplayAlerts
+        Exit Sub
+    End If
+
     MacroSplash_SetStep "段階1: 出力を「配台計画_タスク入力」シートへ取り込んでいます…"
     If Not ImportPlanInputTasksFromOutput(targetDir) Then
         m_lastStage1ExitCode = -1
