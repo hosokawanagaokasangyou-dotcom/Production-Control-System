@@ -3294,6 +3294,13 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
                 On Error GoTo ErrHandler
             End If
             
+            ' (5) 結果_* ：パスワード無しでシート保護（UI からの編集不可。マクロ・段階2 後処理からの更新は可）
+            If Left$(sheetName, 3) = "結果_" Then
+                On Error Resume Next
+                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                On Error GoTo ErrHandler
+            End If
+            
         Next sourceWs
         
         ' ソースブックを閉じる（保存しない）
