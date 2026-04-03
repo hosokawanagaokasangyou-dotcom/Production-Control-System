@@ -14,6 +14,7 @@
 ' 6. 下記「frmMacroSplash コード」一式を、フォームのコードウィンドウへコピー
 '
 ' ※ このテキストは .frm のバイナリ(frx)を含まない。手作業での追加を想定している。
+' ※ 成功終了時は標準モジュールの MacroCompleteChime（winmm PlaySound・別名 SystemDefault）が鳴る。
 '
 ' ------------------------------------------------------------
 ' frmMacroSplash コード（UserForm のコードモジュールへ貼り付け）

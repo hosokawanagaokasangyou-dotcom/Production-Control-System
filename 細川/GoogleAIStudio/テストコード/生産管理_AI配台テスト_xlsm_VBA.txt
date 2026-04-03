@@ -3,9 +3,13 @@
 ' =========================================================
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+    Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+    Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
 #End If
+Private Const SND_ASYNC As Long = &H1
+Private Const SND_ALIAS As Long = &H10000
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
@@ -60,11 +64,13 @@ Private m_lastRefreshQueriesErrMsg As String
 Private m_macroSplashShown As Boolean
 ' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
 Private m_macroSplashLockedExcel As Boolean
+' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
+Private m_animMacroSucceeded As Boolean
 
 ' =========================================================
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
-' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（MsgBox なし）
+' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（完了の vbInformation MsgBox は使わずスプラッシュ＋システム音）
 ' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 70% にし、「結果_設備毎の時間割」で B2・窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
@@ -276,6 +282,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     Kill errPath
     On Error GoTo EH
     
+    MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
     Set wsh = CreateObject("WScript.Shell")
     cmd = "cmd.exe /c pushd """ & wbPath & """ && chcp 65001>nul && py -3 -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """"
     exitCode = wsh.Run(cmd, 1, True)
@@ -303,8 +310,8 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     ThisWorkbook.Save
     On Error GoTo 0
     
-    MsgBox "暗号化 JSON を保存しました。" & vbCrLf & outPath & vbCrLf & vbCrLf & _
-           "「設定」B1 にファイルパスを書きました。（パスフレーズはシートに保存していません）", vbInformation
+    MacroSplash_SetStep "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
+    m_animMacroSucceeded = True
     Exit Sub
 EH:
     MsgBox "エラー: " & Err.Description, vbCritical
@@ -335,12 +342,17 @@ Public Sub メインシート_masterブックを開く()
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
             wb.Activate
+            MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
+            m_animMacroSucceeded = True
             Exit Sub
         End If
     Next wb
     
     On Error GoTo OpenFail
+    MacroSplash_SetStep "master.xlsm を開いています…"
     Application.Workbooks.Open Filename:=path
+    MacroSplash_SetStep "master.xlsm を開きました。"
+    m_animMacroSucceeded = True
     Exit Sub
 OpenFail:
     MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
@@ -1223,10 +1235,24 @@ End Sub
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
 ' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
+' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋システム音（MacroCompleteChime）
 ' =========================================================
+Private Sub MacroSplash_SetStep(ByVal stepMessage As String)
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    frmMacroSplash.lblMessage.Caption = stepMessage
+    DoEvents
+End Sub
+
+Private Sub MacroCompleteChime()
+    On Error Resume Next
+    PlaySound "SystemDefault", 0&, SND_ALIAS Or SND_ASYNC
+End Sub
+
 Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
     On Error GoTo CleanupFail
     If m_macroSplashShown Then MacroSplash_Hide
+    m_animMacroSucceeded = False
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
     End If
@@ -1263,7 +1289,7 @@ End Sub
 ' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
 ' 最後の lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
 Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True)
-    On Error GoTo CleanUp
+    On Error GoTo EH
     MacroSplash_Show splashMessage, lockExcelUI
     If IsMissing(arg1) And IsMissing(arg2) Then
         Application.Run procName
@@ -1272,7 +1298,14 @@ Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessag
     Else
         Application.Run procName, arg1, arg2
     End If
-CleanUp:
+    GoTo Finish
+EH:
+    On Error Resume Next
+Finish:
+    If m_animMacroSucceeded Then
+        On Error Resume Next
+        MacroCompleteChime
+    End If
     MacroSplash_Hide
 End Sub
 
@@ -1555,10 +1588,10 @@ Sub InstallComponents()
         End If
         
         msg = Trim$(Py3VersionOutput(wsh))
-        MsgBox "Python を検出しました: " & Left$(msg, 120) & vbCrLf & _
-               "続いて pip でライブラリをインストールします。", vbInformation
+        MacroSplash_SetStep "Python を検出しました（" & Left$(msg, 80) & "…）。pip でライブラリをインストールします…"
     End If
     
+    MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
     pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel)
     If pipExit <> 0 Then
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
@@ -1568,9 +1601,8 @@ Sub InstallComponents()
         Exit Sub
     End If
 
-    MsgBox "すべてのコンポーネントの準備が完了しました！" & vbCrLf & vbCrLf & _
-           "xlwings のリボンが見えない場合は、Excel をいったん終了してから再度開いてください。" & vbCrLf & _
-           "（段階1/2 のログは従来どおり cmd.exe 経由で表示します。）", vbInformation
+    MacroSplash_SetStep "環境構築が完了しました。xlwings リボンが無い場合は Excel を再起動してください。"
+    m_animMacroSucceeded = True
 End Sub
 
 ' =========================================================
@@ -2474,6 +2506,7 @@ Private Sub 段階1_コア実行()
 
     ' 接続更新より先に設定シートを確保（Refresh で止まる・失敗して Exit したとき無言でシート未作成になるのを防ぐ）
     設定_配台不要工程_シートを確保
+    MacroSplash_SetStep "段階1: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then
         m_lastStage1ErrMsg = "データ接続の更新に失敗したため段階1を中断しました。（「設定_配台不要工程」シートは作成済みの可能性があります）"
@@ -2483,6 +2516,7 @@ Private Sub 段階1_コア実行()
         Exit Sub
     End If
 
+    MacroSplash_SetStep "段階1: マスタ skills の運用優先度を検証しています…"
     Dim skErrSt1 As String
     If Not ValidateMasterSkillsOpAsPriorityUnique(targetDir, skErrSt1) Then
         m_lastStage1ErrMsg = skErrSt1
@@ -2490,6 +2524,7 @@ Private Sub 段階1_コア実行()
         Exit Sub
     End If
 
+    MacroSplash_SetStep "段階1: ブックを保存し LOG シートを初期化します…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
     On Error Resume Next
@@ -2510,6 +2545,7 @@ Private Sub 段階1_コア実行()
     If Not GeminiCredentialsJsonPathIsConfigured() Then
         wsLog.Cells(1, 2).Value = "【要設定】シート「設定」B1 に Gemini 認証 JSON のフルパス（例: Z:\社内\gemini_credentials.json）。gemini_credentials.example.json 参照。"
     End If
+    MacroSplash_SetStep "段階1: master.xlsm から勤怠・機械カレンダーを同期しています…"
     Dim st1MasterSync As String
     st1MasterSync = 段階1_マスタ勤怠と機械カレンダーを同期し保護(targetDir)
     If Len(st1MasterSync) > 0 Then
@@ -2522,6 +2558,7 @@ Private Sub 段階1_コア実行()
     Kill targetDir & "\log\execution_log.txt"
     On Error GoTo ErrStage1
 
+    MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。コンソール完了までそのままお待ちください…"
     wsh.CurrentDirectory = Environ("TEMP")
     ' /v:on … py 直後の ERRORLEVEL を !ERRORLEVEL! で保存し exit /b で cmd.exe の終了コードとして VBA に返す（pause なし）
     cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階1] Python を実行しています...  LOGシート・log\execution_log.txt でも確認できます && py -3 -u python\task_extract_stage1.py" _
@@ -2529,6 +2566,7 @@ Private Sub 段階1_コア実行()
     exitCode = wsh.Run(cmd, 1, True)
     m_lastStage1ExitCode = exitCode
 
+    MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
     ' Gemini サマリ・設定シートは planning_core が openpyxl で保存（ブックが閉じているとき）。
     ' Excel で開いたままのときは log の TSV/テキストをマクロで反映する。
     On Error Resume Next
@@ -2561,6 +2599,7 @@ Private Sub 段階1_コア実行()
         End If
     End If
 
+    MacroSplash_SetStep "段階1: 出力を「配台計画_タスク入力」シートへ取り込んでいます…"
     If Not ImportPlanInputTasksFromOutput(targetDir) Then
         m_lastStage1ExitCode = -1
         Exit Sub
@@ -2570,6 +2609,7 @@ Private Sub 段階1_コア実行()
     配台計画_タスク入力_A1を選択
     On Error GoTo 0
 
+    MacroSplash_SetStep "段階1: フォント統一と表示調整を行っています…"
     Application.ScreenUpdating = True
     DoEvents
     On Error Resume Next
@@ -2591,7 +2631,7 @@ ErrStage1:
     Application.DisplayAlerts = prevDisplayAlerts
 End Sub
 
-' 互換・他モジュール用: 段階1のみ（完了・エラー MsgBox あり）
+' 互換・他モジュール用: 段階1のみ（エラー時 MsgBox。成功時はスプラッシュ文＋チャイム）
 Public Sub RunPythonStage1()
     段階1_コア実行
     If m_lastStage1ExitCode < 0 Then
@@ -2608,10 +2648,11 @@ Public Sub RunPythonStage1()
         End If
         Exit Sub
     End If
-    MsgBox "段階1が完了しました。「配台計画_タスク入力」を編集後、計画生成（段階2）を実行してください。", vbInformation, "段階1"
+    MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
+    m_animMacroSucceeded = True
 End Sub
 
-' 互換: 段階1→段階2（完了ダイアログは段階2の取り込み結果のみ）
+' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
 Public Sub RunPythonStage1ThenStage2()
     段階1_コア実行
     If m_lastStage1ExitCode < 0 Then
@@ -2637,7 +2678,8 @@ Public Sub RunPythonStage1ThenStage2()
         End If
         Exit Sub
     End If
-    段階2_取り込み結果をMsgBox
+    段階2_取り込み結果を報告
+    If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
 ' 段階1取り込み前: 既存「配台計画_タスク入力」のフォント（名・サイズ）を退避（Clear で消えるため）
@@ -3003,17 +3045,17 @@ Private Function 取込ブック内のコピー先シートを取得(ByVal wb As
     Set 取込ブック内のコピー先シートを取得 = sh
 End Function
 
-' 段階2の取り込み結果を MsgBox（m_stage2PlanImported / m_stage2MemberImported を参照）
-Private Sub 段階2_取り込み結果をMsgBox()
+' 段階2の取り込み結果をスプラッシュへ反映（成功・一部取込は MsgBox なし。未取得のみ警告ダイアログ）
+Private Sub 段階2_取り込み結果を報告()
     Dim p As String
     p = ThisWorkbook.Path
     
     If m_stage2PlanImported And m_stage2MemberImported Then
-        MsgBox "Pythonの実行が完了しました。" & vbCrLf & "計画（結果_*）と個人別スケジュール（個人_*）を取り込みました。", vbInformation, "計画生成"
+        MacroSplash_SetStep "計画生成が完了しました（結果シートと個人シートを取り込みました）。"
     ElseIf m_stage2PlanImported Then
-        MsgBox "Pythonの実行が完了しました。" & vbCrLf & "計画シートを取り込みました。（member_schedule_*.xlsx が見つかりませんでした）", vbInformation, "計画生成"
+        MacroSplash_SetStep "計画生成が完了しました（結果シートのみ。個人別 member_schedule は見つかりませんでした）。"
     ElseIf m_stage2MemberImported Then
-        MsgBox "Pythonの実行が完了しました。" & vbCrLf & "個人別スケジュール（個人_*）のみ取り込みました。（production_plan が見つかりませんでした）", vbInformation, "計画生成"
+        MacroSplash_SetStep "計画生成が完了しました（個人シートのみ。production_plan は見つかりませんでした）。"
     Else
         MsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
                "Python 終了コード: " & CStr(m_lastStage2ExitCode) & vbCrLf & _
@@ -3120,6 +3162,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     End If
 
     設定_配台不要工程_シートを確保
+    MacroSplash_SetStep "段階2: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then
         m_lastStage2ErrMsg = "データ接続の更新に失敗したため段階2を中断しました。"
@@ -3129,6 +3172,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         Exit Sub
     End If
     
+    MacroSplash_SetStep "段階2: LOG シートを準備しています（段階1ログの連結含む）…"
     Set preserved = New Collection
     If preserveStage1LogOnLogSheet Then
         lastLogR = wsLog.Cells(wsLog.Rows.Count, 1).End(xlUp).Row
@@ -3179,6 +3223,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     
     ' デバッグ限定配台: 設定 B3 以降に依頼NOがあるときは MsgBox のうえで段階2（Python は保存済みブックから B 列を読む）
     If 設定シート_B列デバッグ依頼NO指定あり() Then
+        MacroSplash_SetStep "段階2: 【デバッグ】設定 B 列の依頼NO指定で部分配台します（確認ダイアログのあと続行）…"
         MsgBox "【デバッグ限定配台】" & vbCrLf & vbCrLf & _
             "シート「設定」の B3 以降に依頼NOが入力されています。" & vbCrLf & _
             "この段階2では、指定した依頼NOに該当する行だけを配台します（全件ではありません）。" & vbCrLf & vbCrLf & _
@@ -3186,6 +3231,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     End If
     ' 段階2: Python は TASK_INPUT_WORKBOOK のディスク上のファイルを読むため、
     ' 未保存の「配台計画_タスク入力」等が反映されないのを防ぐ
+    MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
     ThisWorkbook.Save
@@ -3195,6 +3241,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' リダイレクトは付けない（付けるとコンソールが真っ黒になる）。ログは Python が execution_log.txt にも出力する。
     cmdLogPath = targetDir & "\log\cmd_stage2.log"
     ' /v:on … py の終了コードを exit /b で返す（末尾の echo だけだと ERRORLEVEL=0 になり VBA が正常終了と誤認しがち）
+    MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。コンソール完了までそのままお待ちください…"
     cmd = "cmd.exe /v:on /c pushd """ & targetDir & """ && chcp 65001>nul && echo [段階2] 計画生成を実行中... 進捗はこの画面に表示されます。保存済みログ: log\execution_log.txt && py -3 -u python\plan_simulation_stage2.py" _
         & " & set STAGE2_PY_EXIT=!ERRORLEVEL! & echo. & echo [段階2] 終了 ERRORLEVEL=!STAGE2_PY_EXIT! & exit /b !STAGE2_PY_EXIT!"
     
@@ -3213,6 +3260,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         End If
     End If
 
+    MacroSplash_SetStep "段階2: ログ・設定（配台不要工程・Gemini）をブックへ反映しています…"
     ' Gemini サマリ・設定シートは Python が openpyxl で保存を試みる。開きっぱなし時は log をマクロで反映。
     On Error Resume Next
     Call 設定_配台不要工程_AからE_TSVから反映
@@ -3285,6 +3333,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' ---------------------------------------------------------
     ' 7. 生成されたExcelファイルのシートをこのブックに取り込む
     ' ---------------------------------------------------------
+    MacroSplash_SetStep "段階2: 出力 xlsx から結果シート・個人シートを取り込みます…"
     planImported = False
     memberImported = False
     Set targetWb = ThisWorkbook
@@ -3385,6 +3434,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         targetWb.Sheets(1).Activate
     End If
     
+    MacroSplash_SetStep "段階2: 個人別スケジュール（member_schedule）を取り込んでいます…"
     ' 7b. member_schedule_*.xlsx（メンバー名シート → 個人_プレフィックスで取り込み）
     memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
     If Len(memberPath) > 0 Then
@@ -3434,6 +3484,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         Application.ScreenUpdating = prevScreenUpdating
     End If
     
+    MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
     メインシート_メンバー一覧と出勤表示 True
@@ -3499,7 +3550,7 @@ ErrHandler:
     Resume Finish
 End Sub
 
-' 互換・他モジュール用: 段階2のみ（エラー・取り込み完了の MsgBox あり）
+' 互換・他モジュール用: 段階2のみ（エラー時 MsgBox。成功時はスプラッシュ＋チャイム）
 Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
     段階2_コア実行 preserveStage1LogOnLogSheet
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
@@ -3510,7 +3561,8 @@ Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = Fal
         End If
         Exit Sub
     End If
-    段階2_取り込み結果をMsgBox
+    段階2_取り込み結果を報告
+    If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
 ' =========================================================
@@ -3728,14 +3780,18 @@ Public Sub 全シートフォントをリストから選択して統一()
     prevWs.Activate
     On Error GoTo 0
     
+    MacroSplash_SetStep "フォント「" & picked & "」を全シートへ適用しています…"
     On Error GoTo Fail
     ApplyFontToAllSheetCells picked, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MsgBox "全シートのセルフォントを「" & picked & "」に設定しました。", vbInformation
+        MacroSplash_SetStep "全シートのフォントを「" & picked & "」に設定しました。"
+        m_animMacroSucceeded = True
     Else
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & picked & "」を設定しました。スキップしたシート:" & vbCrLf & vbCrLf & skipped, vbExclamation
+        m_animMacroSucceeded = True
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
@@ -3779,14 +3835,18 @@ Public Sub 全シートフォントを手入力で統一()
         End If
     End If
     
+    MacroSplash_SetStep "フォント「" & fontName & "」を全シートへ適用しています…"
     On Error GoTo FailHand
     ApplyFontToAllSheetCells fontName, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MsgBox "全シートのセルフォントを「" & fontName & "」に設定しました。", vbInformation
+        MacroSplash_SetStep "全シートのフォントを「" & fontName & "」に設定しました。"
+        m_animMacroSucceeded = True
     Else
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & fontName & "」を設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
+        m_animMacroSucceeded = True
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
@@ -3800,14 +3860,18 @@ End Sub
 
 Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     Dim skipped As String
+    MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
     On Error GoTo FailB
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MsgBox "全シートのセルフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。", vbInformation
+        MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。"
+        m_animMacroSucceeded = True
     Else
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォントを設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
+        m_animMacroSucceeded = True
     End If
     On Error Resume Next
     メインシート_AからK列_AutoFit
@@ -3922,6 +3986,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
+    MacroSplash_SetStep "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
     cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && py -3 -u python\apply_result_task_column_layout.py" _
         & " & echo. & echo [列設定適用] ERRORLEVEL=%ERRORLEVEL%"
     exitCode = wsh.Run(cmd, 1, True)
@@ -3938,8 +4003,8 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の適用"
     Else
-        MsgBox "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK _
-            & "」に合わせて更新しました。", vbInformation, "列設定の適用"
+        MacroSplash_SetStep "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK & "」に合わせました。"
+        m_animMacroSucceeded = True
     End If
 End Sub
 
@@ -3978,6 +4043,7 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
+    MacroSplash_SetStep "列設定: Python で重複列名を整理しています…"
     cmd = "cmd.exe /c pushd """ & targetDir & """ && chcp 65001>nul && py -3 -u python\dedupe_result_task_column_config_sheet.py" _
         & " & echo. & echo [列設定重複整理] ERRORLEVEL=%ERRORLEVEL%"
     exitCode = wsh.Run(cmd, 1, True)
@@ -3987,8 +4053,8 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の整理"
     Else
-        MsgBox "「" & SHEET_COL_CONFIG_RESULT_TASK & "」から重複列名を除き、A:B を書き直しました。" & vbCrLf & _
-            "チェックボックスを使っている場合は「列設定_結果_タスク一覧_チェックボックスを配置」を再実行してください。", vbInformation, "列設定の整理"
+        MacroSplash_SetStep "「" & SHEET_COL_CONFIG_RESULT_TASK & "」の重複列名を除き A:B を更新しました。（チェックボックス利用時は配置マクロの再実行を推奨）"
+        m_animMacroSucceeded = True
     End If
 End Sub
 
