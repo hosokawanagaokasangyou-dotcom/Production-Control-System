@@ -21,17 +21,13 @@ Private Const SHEET_SKILL_COMBINATIONS As String = "組み合わせ表"
 Private Const SHEET_SKILLS_DATA As String = "skills"
 Private Const SHEET_NEED_DATA As String = "need"
 ' =========================================================
-' 機械カレンダー（need「機械名」行の種類数だけシートを作成・更新）
-' ・シート名は「機械_」＋機械名（Excel 禁止文字を置換、メンバー出勤簿シート名と衝突しにくくする）
-' ・A 列: 勤怠と同様「日付」見出し。セルは日時（30 分刻み・通常勤務の休憩帯を除外）
-' ・B 列: 空白でないセル＝その時間帯は当該機械が稼働不可。作り直し時は日時キーで B 列のみ復元
+' 機械カレンダー（シート 1 枚「機械カレンダー」）
+' ・1 行目＝工程名、2 行目＝機械名（skills の設備列と同じ並び・値を転記）。見出しに色付け
+' ・A 列＝メンバー出勤簿と同様「日付」＋日付のみの連続行（yyyy/mm/dd）
+' ・各設備列: 空白でないセル＝その日は稼働不可（コメント）。再作成時は日付×工程×機械キーで復元
 ' =========================================================
-Private Const MACHINE_CAL_SHEET_PREFIX As String = "機械_"
+Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 Private Const MACHINE_CAL_HORIZON_DAYS As Long = 365
-Private Const MACHINE_SLOT_STEP_MIN As Long = 30
-' 1 日目の最初スロット開始（8:45）・最終スロット開始（16:30）を「分（0:00 から）」で表す
-Private Const MACHINE_SLOT_FIRST_MIN As Long = 525   ' 8*60+45
-Private Const MACHINE_SLOT_LAST_START_MIN As Long = 990 ' 16*60+30
 ' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
 ' 公開マクロ名は先頭に master_ を付与し、配台ブックと同名のマクロが別ブックで実行されるのを防ぐ（ThisWorkbook 以外で Alt+F8 等）。
@@ -97,6 +93,7 @@ Private Function IsMonthlyCalendarSheet(ByVal ws As Worksheet) As Boolean
     If InStr(nm, "カレンダー") = 0 Then Exit Function
     If Left$(nm, 3) = "結果_" Then Exit Function
     If LCase$(nm) = "skills" Or LCase$(nm) = "need" Or LCase$(nm) = "tasks" Then Exit Function
+    If StrComp(nm, SHEET_MACHINE_CALENDAR, vbTextCompare) = 0 Then Exit Function
     IsMonthlyCalendarSheet = True
 End Function
 
@@ -376,56 +373,109 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
 End Sub
 
 ' =========================================================
-' 機械カレンダー: need 由来の機械名ごとにシートを作成し、スロット行を再生成（B 列は日時キーで維持）
+' 機械カレンダー: 1 シート、skills と同型の 1～2 行見出し、A 列は出勤簿と同様に日付のみの連続行
 ' =========================================================
 Public Sub master_機械カレンダーを作成()
     Dim wb As Workbook
-    Dim wsNeed As Worksheet
-    Dim rMach As Long
-    Dim rProc As Long
-    Dim rBase As Long
-    Dim names As Collection
+    Dim wsSkill As Worksheet
+    Dim wsOut As Worksheet
+    Dim preserved As Object
     Dim startDay As Date
-    Dim i As Long
-    Dim n As Long
+    Dim lastC As Long
+    Dim useTwoHeader As Boolean
+    Dim c As Long
+    Dim r As Long
+    Dim dayOffset As Long
+    Dim procH As String
+    Dim machH As String
+    Dim colKey As String
+    Dim mapKey As String
+    Dim lastRow As Long
     
     On Error GoTo EH
     Set wb = ThisWorkbook
     On Error Resume Next
-    Set wsNeed = wb.Worksheets(SHEET_NEED_DATA)
+    Set wsSkill = wb.Worksheets(SHEET_SKILLS_DATA)
     On Error GoTo EH
-    If wsNeed Is Nothing Then
-        MsgBox "need シートがありません。機械名を取得できません。", vbExclamation, "機械カレンダー"
+    If wsSkill Is Nothing Then
+        MsgBox "skills シートがありません。工程名・機械名の見出しをコピーできません。", vbExclamation, "機械カレンダー"
         Exit Sub
     End If
     
-    If Not NeedFindBaseHeaders(wsNeed, rProc, rMach, rBase) Or rMach <= 0 Then
-        MsgBox "need シートに「機械名」行が見つかりません。", vbExclamation, "機械カレンダー"
+    Call MachineCalGetSkillsMode(wsSkill, lastC, useTwoHeader)
+    If lastC < 2 Then
+        MsgBox "skills シートに有効な列がありません。", vbExclamation, "機械カレンダー"
         Exit Sub
     End If
     
-    Set names = CollectUniqueMachineNamesFromNeedRow(wsNeed, rMach)
-    If names Is Nothing Or names.Count = 0 Then
-        MsgBox "need の機械名行に有効な機械名がありません。", vbExclamation, "機械カレンダー"
+    Set wsOut = EnsureMachineCalendarSheet(wb, wsSkill)
+    If wsOut Is Nothing Then
+        MsgBox "「" & SHEET_MACHINE_CALENDAR & "」シートを用意できません。", vbExclamation, "機械カレンダー"
         Exit Sub
     End If
     
-    startDay = DateSerial(Year(Date), Month(Date), Day(Date))
+    Set preserved = CreateObject("Scripting.Dictionary")
+    Call PreserveMachineCalendarGrid(wsOut, preserved)
     
     Application.ScreenUpdating = False
-    n = names.Count
-    For i = 1 To n
-        Call WriteOrRefreshMachineCalendarSheet(wb, CStr(names(i)), startDay, wsNeed)
-    Next i
+    
+    wsOut.Cells.UnMerge
+    wsOut.Cells.Clear
+    
+    With wsOut.Range("A1:A2")
+        .Merge
+        .Value = "日付"
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    
+    For c = 2 To lastC
+        If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextHdr
+        wsOut.Cells(1, c).Value = wsSkill.Cells(1, c).Value
+        If useTwoHeader Then
+            wsOut.Cells(2, c).Value = wsSkill.Cells(2, c).Value
+        Else
+            wsOut.Cells(2, c).ClearContents
+        End If
+NextHdr:
+    Next c
+    
+    startDay = DateSerial(Year(Date), Month(Date), Day(Date))
+    lastRow = 2 + MACHINE_CAL_HORIZON_DAYS
+    
+    r = 3
+    For dayOffset = 0 To MACHINE_CAL_HORIZON_DAYS - 1
+        wsOut.Cells(r, 1).Value = startDay + dayOffset
+        r = r + 1
+    Next dayOffset
+    
+    r = 3
+    For dayOffset = 0 To MACHINE_CAL_HORIZON_DAYS - 1
+        For c = 2 To lastC
+            If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextCell
+            procH = Trim$(CStr(wsOut.Cells(1, c).Value))
+            machH = Trim$(CStr(wsOut.Cells(2, c).Value))
+            colKey = procH & vbTab & machH
+            mapKey = Format$(startDay + dayOffset, "yyyy-mm-dd") & "|" & colKey
+            If preserved.Exists(mapKey) Then
+                wsOut.Cells(r, c).Value = preserved(mapKey)
+            Else
+                wsOut.Cells(r, c).ClearContents
+            End If
+NextCell:
+        Next c
+        r = r + 1
+    Next dayOffset
+    
+    Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastC)
     
     Application.ScreenUpdating = True
     Call AutoFitAllWorksheetColumns
     Call TryAutoSaveMasterWorkbook
     
-    MsgBox "機械カレンダーを更新しました。" & vbCrLf & _
-           "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日）" & vbCrLf & _
-           "機械シート数: " & CStr(n) & " / 先読み日数: " & CStr(MACHINE_CAL_HORIZON_DAYS) & vbCrLf & _
-           "B 列に入力した文言は、同一日時の行があれば再作成後も復元されます。", vbInformation, "機械カレンダー"
+    MsgBox "「" & SHEET_MACHINE_CALENDAR & "」を更新しました。" & vbCrLf & _
+           "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
+           "設備列へ入力した文言は、同一日付・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
     Exit Sub
     
 EH:
@@ -438,244 +488,142 @@ Sub master_アニメ付き_機械カレンダーを作成()
     Call master_機械カレンダーを作成
 End Sub
 
-Private Function CollectUniqueMachineNamesFromNeedRow(ByVal wsNeed As Worksheet, ByVal rName As Long) As Collection
-    Dim lastC As Long
-    Dim c As Long
-    Dim s As String
-    Dim seen As Object
-    Dim outC As Collection
-    
-    Set seen = CreateObject("Scripting.Dictionary")
-    Set outC = New Collection
-    lastC = wsNeed.Cells(rName, wsNeed.Columns.Count).End(xlToLeft).Column
-    If lastC < 4 Then
-        Set CollectUniqueMachineNamesFromNeedRow = outC
-        Exit Function
-    End If
-    
-    For c = 4 To lastC
-        s = Trim$(CStr(wsNeed.Cells(rName, c).Value))
-        If Len(s) = 0 Then GoTo NextNeedCol
-        If StrComp(LCase$(s), "nan", vbTextCompare) = 0 Then GoTo NextNeedCol
-        If Not seen.Exists(s) Then
-            seen.Add s, True
-            outC.Add s
-        End If
-NextNeedCol:
-    Next c
-    
-    Set CollectUniqueMachineNamesFromNeedRow = outC
-End Function
-
-Private Function SanitizeExcelSheetBaseName(ByVal raw As String) As String
-    Dim s As String
-    Dim i As Long
-    Dim ch As String
-    Dim bad As String
-    Dim outS As String
-    
-    s = Trim$(raw)
-    bad = "\/:*?[]"
-    outS = ""
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-        If InStr(bad, ch) > 0 Or AscW(ch) < 32 Then
-            ch = "_"
-        End If
-        outS = outS & ch
-    Next i
-    s = outS
-    Do While Len(s) > 0 And (Right$(s, 1) = "." Or Right$(s, 1) = " ")
-        s = Left$(s, Len(s) - 1)
-    Loop
-    If Len(s) = 0 Then s = "未命名"
-    SanitizeExcelSheetBaseName = s
-End Function
-
-' 新規作成時のみ。既存シートは Z1 の内部キーで検索する。
-Private Function AllocateNewMachineCalSheetName(ByVal wb As Workbook, ByVal machineName As String) As String
-    Dim base As String
-    Dim cand As String
-    Dim k As Long
-    Dim maxBaseLen As Long
-    Dim suf As String
-    Dim room As Long
-    
-    base = SanitizeExcelSheetBaseName(machineName)
-    maxBaseLen = 31 - Len(MACHINE_CAL_SHEET_PREFIX)
-    If maxBaseLen < 1 Then maxBaseLen = 1
-    If Len(base) > maxBaseLen Then base = Left$(base, maxBaseLen)
-    
-    k = 0
-    Do
-        If k = 0 Then
-            cand = MACHINE_CAL_SHEET_PREFIX & base
-        Else
-            suf = "_" & CStr(k)
-            room = 31 - Len(MACHINE_CAL_SHEET_PREFIX) - Len(suf)
-            If room < 1 Then room = 1
-            If Len(base) > room Then base = Left$(base, room)
-            If Len(base) < 1 Then base = "x"
-            cand = MACHINE_CAL_SHEET_PREFIX & base & suf
-        End If
-        If Len(cand) > 31 Then cand = Left$(cand, 31)
-        If Not SheetNameExistsInWorkbook(wb, cand) Then
-            AllocateNewMachineCalSheetName = cand
-            Exit Function
-        End If
-        k = k + 1
-        If k > 9999 Then
-            AllocateNewMachineCalSheetName = Left$(MACHINE_CAL_SHEET_PREFIX & "New", 31)
-            Exit Function
-        End If
-    Loop
-End Function
-
-Private Function FindMachineCalendarSheetByMachineName(ByVal wb As Workbook, ByVal machineName As String) As Worksheet
+Private Function EnsureMachineCalendarSheet(ByVal wb As Workbook, ByVal wsAfter As Worksheet) As Worksheet
     Dim ws As Worksheet
-    Dim pref As String
-    Dim z As String
-    
-    pref = LCase$(MACHINE_CAL_SHEET_PREFIX)
-    For Each ws In wb.Worksheets
-        If Len(ws.Name) < Len(MACHINE_CAL_SHEET_PREFIX) Then GoTo NextMachWs
-        If LCase$(Left$(ws.Name, Len(MACHINE_CAL_SHEET_PREFIX))) <> pref Then GoTo NextMachWs
-        z = Trim$(CStr(ws.Range("Z1").Value))
-        If StrComp(z, machineName, vbBinaryCompare) = 0 Then
-            Set FindMachineCalendarSheetByMachineName = ws
-            Exit Function
-        End If
-NextMachWs:
-    Next ws
-    Set FindMachineCalendarSheetByMachineName = Nothing
-End Function
-
-Private Function SheetNameExistsInWorkbook(ByVal wb As Workbook, ByVal sheetName As String) As Boolean
     On Error Resume Next
-    Dim ws As Worksheet
-    Set ws = wb.Worksheets(sheetName)
-    SheetNameExistsInWorkbook = Not (ws Is Nothing)
+    Set ws = wb.Worksheets(SHEET_MACHINE_CALENDAR)
     On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add(After:=wsAfter)
+        On Error Resume Next
+        ws.Name = SHEET_MACHINE_CALENDAR
+        On Error GoTo 0
+    End If
+    Set EnsureMachineCalendarSheet = ws
 End Function
 
-Private Sub PreserveMachineCalComments(ByVal ws As Worksheet, ByVal outMap As Object)
-    Dim lr As Long
+Private Sub MachineCalGetSkillsMode(ByVal wsSkill As Worksheet, ByRef lastC As Long, ByRef useTwoHeader As Boolean)
+    Dim c As Long
+    Dim pHdr As String
+    Dim mHdr As String
+    Dim pm As Long
+    
+    lastC = wsSkill.Cells(1, wsSkill.Columns.Count).End(xlToLeft).Column
+    pm = 0
+    For c = 2 To lastC
+        pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
+        mHdr = Trim$(CStr(wsSkill.Cells(2, c).Value))
+        If Len(pHdr) > 0 And Len(mHdr) > 0 Then
+            If StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0 And StrComp(LCase$(mHdr), "nan", vbTextCompare) <> 0 Then
+                pm = pm + 1
+            End If
+        End If
+    Next c
+    useTwoHeader = (pm > 0)
+End Sub
+
+Private Function MachineCalSkillsColumnUsable(ByVal wsSkill As Worksheet, ByVal c As Long, ByVal useTwoHeader As Boolean) As Boolean
+    Dim pHdr As String
+    Dim mHdr As String
+    
+    pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
+    If useTwoHeader Then
+        mHdr = Trim$(CStr(wsSkill.Cells(2, c).Value))
+        MachineCalSkillsColumnUsable = (Len(pHdr) > 0 And Len(mHdr) > 0 And StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0 And StrComp(LCase$(mHdr), "nan", vbTextCompare) <> 0)
+    Else
+        MachineCalSkillsColumnUsable = (Len(pHdr) > 0 And StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0)
+    End If
+End Function
+
+Private Sub PreserveMachineCalendarGrid(ByVal ws As Worksheet, ByVal outMap As Object)
+    Dim lastC As Long
+    Dim lastR As Long
     Dim rr As Long
-    Dim dt As Date
-    Dim note As String
+    Dim cc As Long
     Dim hdr As String
+    Dim procH As String
+    Dim machH As String
+    Dim colKey As String
+    Dim note As String
     
     On Error Resume Next
     hdr = Trim$(CStr(ws.Cells(1, 1).Value))
     On Error GoTo 0
     If StrComp(hdr, "日付", vbTextCompare) <> 0 Then Exit Sub
     
-    lr = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    If lr < 2 Then Exit Sub
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastC < 2 Or lastR < 3 Then Exit Sub
     
-    For rr = 2 To lr
-        If Not IsDate(ws.Cells(rr, 1).Value) Then GoTo NextMachPreserve
-        dt = CDate(ws.Cells(rr, 1).Value)
-        note = Trim$(CStr(ws.Cells(rr, 2).Value))
-        If Len(note) = 0 Then GoTo NextMachPreserve
-        outMap(Format$(dt, "yyyy-mm-dd hh:nn")) = ws.Cells(rr, 2).Value
-NextMachPreserve:
-    Next rr
+    For cc = 2 To lastC
+        procH = Trim$(CStr(ws.Cells(1, cc).Value))
+        machH = Trim$(CStr(ws.Cells(2, cc).Value))
+        colKey = procH & vbTab & machH
+        For rr = 3 To lastR
+            If Not IsDate(ws.Cells(rr, 1).Value) Then GoTo NextPreserveCell
+            note = Trim$(CStr(ws.Cells(rr, cc).Value))
+            If Len(note) = 0 Then GoTo NextPreserveCell
+            outMap(Format$(CDate(ws.Cells(rr, 1).Value), "yyyy-mm-dd") & "|" & colKey) = ws.Cells(rr, cc).Value
+NextPreserveCell:
+        Next rr
+    Next cc
 End Sub
 
-Private Function MachineCalMinuteIsBreakSpan(ByVal m As Long) As Boolean
-    ' メンバー出勤簿の「通常」と同じ昼休憩・午後休憩
-    If m >= (12 * 60) And m < (12 * 60 + 50) Then
-        MachineCalMinuteIsBreakSpan = True
-        Exit Function
-    End If
-    If m >= (14 * 60 + 45) And m < (15 * 60) Then
-        MachineCalMinuteIsBreakSpan = True
-        Exit Function
-    End If
-    MachineCalMinuteIsBreakSpan = False
-End Function
-
-Private Sub WriteOrRefreshMachineCalendarSheet(ByVal wb As Workbook, ByVal machineName As String, ByVal startDay As Date, ByVal wsNeed As Worksheet)
-    Dim ws As Worksheet
-    Dim preserved As Object
-    Dim r As Long
-    Dim dayOffset As Long
-    Dim curDate As Date
-    Dim m As Long
-    Dim slotTime As Date
-    Dim mapKey As String
-    
-    Set preserved = CreateObject("Scripting.Dictionary")
-    Set ws = FindMachineCalendarSheetByMachineName(wb, machineName)
-    
-    If Not ws Is Nothing Then
-        Call PreserveMachineCalComments(ws, preserved)
-        ws.Cells.Clear
-    Else
-        On Error Resume Next
-        Set ws = wb.Worksheets.Add(After:=wsNeed)
-        On Error GoTo 0
-        If ws Is Nothing Then
-            Set ws = wb.Worksheets.Add(After:=wb.Sheets(wb.Sheets.Count))
-        End If
-        On Error Resume Next
-        ws.Name = AllocateNewMachineCalSheetName(wb, machineName)
-        On Error GoTo 0
-    End If
-    
-    ws.Cells(1, 1).Value = "日付"
-    ws.Cells(1, 2).Value = "稼働不可コメント"
-    ws.Range("Z1").Value = machineName
-    On Error Resume Next
-    ws.Columns("Z").Hidden = True
-    On Error GoTo 0
-    
-    r = 2
-    For dayOffset = 0 To MACHINE_CAL_HORIZON_DAYS - 1
-        curDate = startDay + dayOffset
-        For m = MACHINE_SLOT_FIRST_MIN To MACHINE_SLOT_LAST_START_MIN Step MACHINE_SLOT_STEP_MIN
-            If MachineCalMinuteIsBreakSpan(m) Then GoTo NextMinSlot
-            slotTime = curDate + TimeSerial(m \ 60, m Mod 60, 0)
-            ws.Cells(r, 1).Value = slotTime
-            mapKey = Format$(slotTime, "yyyy-mm-dd hh:nn")
-            If preserved.Exists(mapKey) Then
-                ws.Cells(r, 2).Value = preserved(mapKey)
-            Else
-                ws.Cells(r, 2).ClearContents
-            End If
-            r = r + 1
-NextMinSlot:
-        Next m
-    Next dayOffset
-    
-    Call FormatMachineCalendarSheetLayout(ws, r - 1)
-End Sub
-
-Private Sub FormatMachineCalendarSheetLayout(ByVal ws As Worksheet, ByVal lastRow As Long)
+Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal lastCol As Long)
     Dim dataRng As Range
     Dim prevWs As Worksheet
     Dim prevScr As Boolean
+    Dim hdrTop As Long
+    Dim hdrMid As Long
+    Dim hdrFont As Long
+    Dim memHdr As Long
     
-    If lastRow < 1 Then Exit Sub
+    If lastRow < 3 Or lastCol < 1 Then Exit Sub
     
-    Set dataRng = ws.Range("A1:B" & CStr(lastRow))
+    hdrTop = RGB(47, 84, 150)
+    hdrMid = RGB(70, 115, 175)
+    hdrFont = RGB(255, 255, 255)
+    memHdr = RGB(180, 220, 210)
+    
+    On Error Resume Next
+    With ws.Range("A1:A2")
+        .Interior.Color = memHdr
+        .Font.Bold = True
+        .Font.Color = RGB(0, 0, 0)
+    End With
+    On Error GoTo 0
+    
+    If lastCol >= 2 Then
+        With ws.Range(ws.Cells(1, 2), ws.Cells(1, lastCol))
+            .Interior.Color = hdrTop
+            .Font.Bold = True
+            .Font.Color = hdrFont
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        With ws.Range(ws.Cells(2, 2), ws.Cells(2, lastCol))
+            .Interior.Color = hdrMid
+            .Font.Bold = True
+            .Font.Color = hdrFont
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+    End If
+    
+    Set dataRng = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
     On Error Resume Next
     With dataRng.Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
         .Color = RGB(160, 160, 160)
     End With
-    With ws.Range("A1:B1")
-        .Interior.Color = RGB(180, 220, 210)
-        .Font.Bold = True
-        .Font.Color = RGB(0, 0, 0)
-    End With
     On Error GoTo 0
     
-    ws.Columns("A").NumberFormatLocal = "yyyy/mm/dd hh:mm"
-    ws.Columns("B").NumberFormatLocal = "General"
-    ws.Columns("A:B").AutoFit
+    On Error Resume Next
+    ws.Range(ws.Cells(3, 1), ws.Cells(lastRow, 1)).NumberFormatLocal = "yyyy/mm/dd"
+    On Error GoTo 0
+    
+    ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).Columns.AutoFit
     
     Set prevWs = Nothing
     On Error Resume Next
@@ -696,7 +644,7 @@ Private Sub FormatMachineCalendarSheetLayout(ByVal ws As Worksheet, ByVal lastRo
     ActiveWindow.ScrollColumn = 1
     Application.GoTo ws.Range("A1"), True
     DoEvents
-    ws.Range("A2").Select
+    ws.Range("B3").Select
     ActiveWindow.FreezePanes = True
     On Error GoTo 0
     If Not prevWs Is Nothing Then
@@ -705,10 +653,6 @@ Private Sub FormatMachineCalendarSheetLayout(ByVal ws As Worksheet, ByVal lastRo
         On Error GoTo 0
     End If
     Application.ScreenUpdating = prevScr
-    
-    On Error Resume Next
-    ws.Columns("Z").Hidden = True
-    On Error GoTo 0
 End Sub
 
 Private Function ResolveCalendarYearMonth(ByVal wsCal As Worksheet, ByRef outY As Long, ByRef outM As Long) As Boolean
@@ -929,7 +873,7 @@ Sub master_かっこいいボタンを作成()
     CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
     MsgBox "ボタンを作成しました。" & vbCrLf & _
            "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成" & vbCrLf & _
-           "・機械カレンダー作成 … need の機械名の数だけカレンダーシートを作成／更新（当日から 365 日分）" & vbCrLf & _
+           "・機械カレンダー作成 … skills 見出し列＋日付行の「機械カレンダー」1枚を更新（当日から 365 日分）" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
 
