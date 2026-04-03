@@ -13,10 +13,6 @@
 # Excel 一時ロック
 ~$*
 
-# テストコード配下の .gitignore と同趣旨（生成物・ログ）
-**/output/
-**/log/
-**/python/log/
 
 # 依存・ビルド（あれば）
 **/node_modules/

@@ -1,31 +1,31 @@
 {
   "version": 1,
-  "updated_at": "2026-04-02T20:34:45",
-  "calls_total": 45,
-  "prompt_total": 101697,
-  "candidates_total": 167060,
-  "thoughts_total": 172875,
-  "total_tokens_reported": 441632,
-  "estimated_cost_usd_total": 0.10960777499999999,
+  "updated_at": "2026-04-03T12:36:48",
+  "calls_total": 52,
+  "prompt_total": 154850,
+  "candidates_total": 290656,
+  "thoughts_total": 284934,
+  "total_tokens_reported": 730440,
+  "estimated_cost_usd_total": 0.18429074999999998,
   "by_model": {
     "gemini-2.5-flash": {
-      "calls": 45,
-      "prompt": 101697,
-      "candidates": 167060,
-      "thoughts": 172875,
-      "total": 441632,
-      "estimated_cost_usd": 0.10960777499999999
+      "calls": 52,
+      "prompt": 154850,
+      "candidates": 290656,
+      "thoughts": 284934,
+      "total": 730440,
+      "estimated_cost_usd": 0.18429074999999998
     }
   },
   "buckets": {
     "by_year": {
       "2026": {
-        "calls": 45,
-        "prompt": 101697,
-        "candidates": 167060,
-        "thoughts": 172875,
-        "total_tokens": 441632,
-        "estimated_cost_usd": 0.10960777499999999
+        "calls": 52,
+        "prompt": 154850,
+        "candidates": 290656,
+        "thoughts": 284934,
+        "total_tokens": 730440,
+        "estimated_cost_usd": 0.18429074999999998
       }
     },
     "by_month": {
@@ -38,12 +38,12 @@
         "estimated_cost_usd": 0.04108799999999999
       },
       "2026-04": {
-        "calls": 12,
-        "prompt": 54981,
-        "candidates": 128804,
-        "thoughts": 85850,
-        "total_tokens": 269635,
-        "estimated_cost_usd": 0.068519775
+        "calls": 19,
+        "prompt": 108134,
+        "candidates": 252400,
+        "thoughts": 197909,
+        "total_tokens": 558443,
+        "estimated_cost_usd": 0.14320275000000002
       }
     },
     "by_week": {
@@ -56,12 +56,12 @@
         "estimated_cost_usd": 0.012531599999999999
       },
       "2026-W14": {
-        "calls": 23,
-        "prompt": 77233,
-        "candidates": 164840,
-        "thoughts": 139439,
-        "total_tokens": 381512,
-        "estimated_cost_usd": 0.097076175
+        "calls": 30,
+        "prompt": 130386,
+        "candidates": 288436,
+        "thoughts": 251498,
+        "total_tokens": 670320,
+        "estimated_cost_usd": 0.17175914999999997
       }
     },
     "by_day": {
@@ -112,6 +112,14 @@
         "thoughts": 34155,
         "total_tokens": 135458,
         "estimated_cost_usd": 0.033718874999999995
+      },
+      "2026-04-03": {
+        "calls": 7,
+        "prompt": 53153,
+        "candidates": 123596,
+        "thoughts": 112059,
+        "total_tokens": 288808,
+        "estimated_cost_usd": 0.074682975
       }
     },
     "by_hour": {
@@ -282,6 +290,38 @@
         "thoughts": 6316,
         "total_tokens": 37751,
         "estimated_cost_usd": 0.009500999999999999
+      },
+      "2026-04-03T07": {
+        "calls": 2,
+        "prompt": 9421,
+        "candidates": 18747,
+        "thoughts": 19679,
+        "total_tokens": 47847,
+        "estimated_cost_usd": 0.012234375000000002
+      },
+      "2026-04-03T09": {
+        "calls": 3,
+        "prompt": 21570,
+        "candidates": 47192,
+        "thoughts": 75611,
+        "total_tokens": 144373,
+        "estimated_cost_usd": 0.03845865
+      },
+      "2026-04-03T10": {
+        "calls": 1,
+        "prompt": 11051,
+        "candidates": 25387,
+        "thoughts": 13214,
+        "total_tokens": 49652,
+        "estimated_cost_usd": 0.012409125
+      },
+      "2026-04-03T12": {
+        "calls": 1,
+        "prompt": 11111,
+        "candidates": 32270,
+        "thoughts": 3555,
+        "total_tokens": 46936,
+        "estimated_cost_usd": 0.011580825
       }
     },
     "timezone_note": "period_key は PC ローカル時刻（datetime.now）で付与。他 PC との集計は混ぜないでください。"
