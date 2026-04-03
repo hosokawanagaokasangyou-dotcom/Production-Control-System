@@ -7,13 +7,16 @@
     Private Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
     Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+    Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
     Private Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
     Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+    Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
 #End If
+Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
 Private Const SND_ALIAS As Long = &H10000
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
@@ -46,8 +49,8 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
-' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。
-' ★ 段階1/2: STAGE12_CMD_HIDE_WINDOW=True なら cmd を Run ウィンドウスタイル0（非表示）。py 行は log\pm_ai_cmd_stdout.txt へ 1>>2>&1 しパイプ詰まりを防ぐ。False なら一時 .cmd に title 付与し単一 cmd を Exec、FindWindow→SetWindowPos（左上・全幅・高さ1/4）。
+' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。txtExecutionLog に log\execution_log.txt をポーリング表示可。
+' ★ 段階1/2: Exec＋待機ループで log を刷新。STAGE12_CMD_HIDE_WINDOW=True ならコンソールを FindWindow 後 ShowWindow(SW_HIDE)。False なら SetWindowPos（左上・全幅・高さ1/4）。非表示時は py を pm_ai_cmd_stdout.txt へリダイレクト。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -85,6 +88,9 @@ Private m_macroSplashShown As Boolean
 Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Private m_animMacroSucceeded As Boolean
+' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog 更新用）
+Private m_splashExecutionLogPath As String
+Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -142,7 +148,8 @@ Private Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     EnsureStageBatchStdoutRedirect = body
 End Function
 
-Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal consoleTitleForLayout As String = "") As Long
+' 段階1/2: 単一 cmd を Exec し、待機中にログファイルをスプラッシュへ反映。hideConsoleWindow なら一度 ShowWindow(SW_HIDE)
+Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean) As Long
     Dim execObj As Object
     Dim cmdLine As String
 #If VBA7 Then
@@ -154,16 +161,14 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
     Dim cx As Long
     Dim cyQuarter As Long
     Dim probe As Long
-    If Not applyTopQuarterFullWidthConsole Then
-        RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
-        Exit Function
-    End If
+    Dim waitStyle As Long
     cmdLine = "cmd.exe /c """ & cmdFilePath & """"
+    If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     On Error Resume Next
     Set execObj = wsh.Exec(cmdLine)
     If Err.Number <> 0 Or execObj Is Nothing Then
         Err.Clear
-        RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
+        RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
         Exit Function
     End If
     On Error GoTo 0
@@ -172,10 +177,15 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
-        If Len(consoleTitleForLayout) > 0 And Not positioned Then
-            hwnd = FindWindow(0&, consoleTitleForLayout)
+        MacroSplash_RefreshExecutionLogPane
+        If Len(consoleTitle) > 0 And Not positioned Then
+            hwnd = FindWindow(0&, consoleTitle)
             If hwnd <> 0 Then
-                SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+                If hideConsoleWindow Then
+                    ShowWindow hwnd, SW_HIDE
+                ElseIf applyQuarterLayout Then
+                    SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+                End If
                 positioned = True
             Else
                 probe = probe + 1
@@ -185,36 +195,32 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
         Sleep 50&
         DoEvents
     Loop
+    MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
-    RunCmdFileWithConsoleLayout = CLng(execObj.ExitCode)
-    If Err.Number <> 0 Then RunCmdFileWithConsoleLayout = -1
+    RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+    If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
     On Error GoTo 0
+End Function
+
+Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String) As Long
+    RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
 End Function
 
 Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal hideCmdWindow As Boolean = False) As Long
     Dim p As String
     Dim uniq As String
     Dim batText As String
-    Dim rc As Double
-    If hideCmdWindow Then
-        batText = EnsureStageBatchStdoutRedirect(body)
-        p = WriteTempCmdFile(batText)
-        On Error Resume Next
-        rc = wsh.Run("cmd.exe /c """ & p & """", 0, True)
-        If Err.Number <> 0 Then
-            Err.Clear
-            RunTempCmdWithConsoleLayout = -1
-        Else
-            RunTempCmdWithConsoleLayout = CLng(rc)
-        End If
-    ElseIf applyTopQuarterFullWidthConsole Then
+    If hideCmdWindow Or applyTopQuarterFullWidthConsole Then
+        batText = body
+        If hideCmdWindow Then batText = EnsureStageBatchStdoutRedirect(batText)
         Randomize
         uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
-        p = WriteTempCmdFile(AugmentCmdBodyWithConsoleTitle(body, uniq))
-        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p, True, uniq)
+        batText = AugmentCmdBodyWithConsoleTitle(batText, uniq)
+        p = WriteTempCmdFile(batText)
+        RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow)
     Else
         p = WriteTempCmdFile(body)
-        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p, False)
+        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p)
     End If
     On Error Resume Next
     Kill p
@@ -1397,6 +1403,35 @@ Private Sub MacroSplash_SetStep(ByVal stepMessage As String)
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     frmMacroSplash.lblMessage.Caption = stepMessage
+    DoEvents
+End Sub
+
+Private Sub MacroSplash_ClearExecutionLogPane()
+    Dim tb As Object
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    If Not tb Is Nothing Then tb.Text = ""
+End Sub
+
+' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog へ（長いときは末尾のみ）
+Private Sub MacroSplash_RefreshExecutionLogPane()
+    Dim tb As Object
+    Dim s As String
+    Dim n As Long
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
+    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    If tb Is Nothing Then Exit Sub
+    s = GeminiReadUtf8File(m_splashExecutionLogPath)
+    n = Len(s)
+    If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
+        s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+    End If
+    tb.Text = s
+    tb.SelStart = Len(tb.Text)
+    tb.SelLength = 0
     DoEvents
 End Sub
 
@@ -2751,7 +2786,10 @@ Private Sub 段階1_コア実行()
              "echo." & vbCrLf & _
              "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
+    m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+    MacroSplash_ClearExecutionLogPane
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+    m_splashExecutionLogPath = ""
     m_lastStage1ExitCode = exitCode
 
     MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
@@ -3460,8 +3498,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
              "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
-    ' 4. cmd 完了まで待機（STAGE12_CMD_HIDE_WINDOW=True なら非表示＋標準出力は log\pm_ai_cmd_stdout.txt）
+    ' 4. cmd 完了まで待機（待機中は execution_log をスプラッシュ txtExecutionLog へポーリング）
+    m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
+    MacroSplash_ClearExecutionLogPane
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+    m_splashExecutionLogPath = ""
     m_lastStage2ExitCode = exitCode
     ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
     If exitCode <> 0 Then
