@@ -23,9 +23,9 @@ Private Const SHEET_NEED_DATA As String = "need"
 ' =========================================================
 ' 機械カレンダー（シート 1 枚「機械カレンダー」）
 ' ・1 行目＝工程名、2 行目＝機械名（skills の設備列と同じ並び・値を転記）。見出しに色付け
-' ・A 列＝日付＋時刻（1 時間単位・当日 6:00～22:00 の毎正時）
-' ・データ行は日ごとに薄い青系のストライプ（交互）
-' ・各設備列: 空白でないセル＝そのスロットで稼働不可（コメント）。再作成時は日時×工程×機械キーで復元
+' ・A 列＝日付＋時刻（1 時間単位・当日 6:00～22:00 の毎正時）／B 列＝曜日（略称）
+' ・C 列以降＝skills と同型の工程名・機械名。データ行は日ごとに薄い青系のストライプ（交互）
+' ・設備列: 空白でないセル＝そのスロットで稼働不可（コメント）。再作成時は日時×工程×機械キーで復元
 ' =========================================================
 Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 Private Const MACHINE_CAL_HORIZON_DAYS As Long = 365
@@ -398,6 +398,8 @@ Public Sub master_機械カレンダーを作成()
     Dim lastRow As Long
     Dim slotHour As Long
     Dim slotTime As Date
+    Dim outCol As Long
+    Dim lastOutCol As Long
     
     On Error GoTo EH
     Set wb = ThisWorkbook
@@ -435,14 +437,22 @@ Public Sub master_機械カレンダーを作成()
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
     End With
+    With wsOut.Range("B1:B2")
+        .Merge
+        .Value = "曜日"
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
     
+    lastOutCol = lastC + 1
     For c = 2 To lastC
         If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextHdr
-        wsOut.Cells(1, c).Value = wsSkill.Cells(1, c).Value
+        outCol = c + 1
+        wsOut.Cells(1, outCol).Value = wsSkill.Cells(1, c).Value
         If useTwoHeader Then
-            wsOut.Cells(2, c).Value = wsSkill.Cells(2, c).Value
+            wsOut.Cells(2, outCol).Value = wsSkill.Cells(2, c).Value
         Else
-            wsOut.Cells(2, c).ClearContents
+            wsOut.Cells(2, outCol).ClearContents
         End If
 NextHdr:
     Next c
@@ -455,16 +465,18 @@ NextHdr:
         For slotHour = MACHINE_CAL_SLOT_HOUR_FIRST To MACHINE_CAL_SLOT_HOUR_LAST
             slotTime = (startDay + dayOffset) + TimeSerial(slotHour, 0, 0)
             wsOut.Cells(r, 1).Value = slotTime
+            wsOut.Cells(r, 2).Value = MachineCalWeekdayShort(slotTime)
             For c = 2 To lastC
                 If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextCell
-                procH = Trim$(CStr(wsOut.Cells(1, c).Value))
-                machH = Trim$(CStr(wsOut.Cells(2, c).Value))
+                outCol = c + 1
+                procH = Trim$(CStr(wsOut.Cells(1, outCol).Value))
+                machH = Trim$(CStr(wsOut.Cells(2, outCol).Value))
                 colKey = procH & vbTab & machH
                 mapKey = Format$(slotTime, "yyyy-mm-dd hh:nn") & "|" & colKey
                 If preserved.Exists(mapKey) Then
-                    wsOut.Cells(r, c).Value = preserved(mapKey)
+                    wsOut.Cells(r, outCol).Value = preserved(mapKey)
                 Else
-                    wsOut.Cells(r, c).ClearContents
+                    wsOut.Cells(r, outCol).ClearContents
                 End If
 NextCell:
             Next c
@@ -472,7 +484,7 @@ NextCell:
         Next slotHour
     Next dayOffset
     
-    Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastC)
+    Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastOutCol)
     
     Application.ScreenUpdating = True
     Call AutoFitAllWorksheetColumns
@@ -480,7 +492,7 @@ NextCell:
     
     MsgBox "「" & SHEET_MACHINE_CALENDAR & "」を更新しました。" & vbCrLf & _
            "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
-           "A 列は 1 時間単位（6:00～22:00・1 日 " & CStr(MACHINE_CAL_SLOTS_PER_DAY) & " 行）・日ごとに行の色がストライプです。" & vbCrLf & _
+           "A 列＝日時・B 列＝曜日、1 時間単位（6:00～22:00・1 日 " & CStr(MACHINE_CAL_SLOTS_PER_DAY) & " 行）・日ストライプ。" & vbCrLf & _
            "設備列へ入力した文言は、同一日時・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
     Exit Sub
     
@@ -541,6 +553,14 @@ Private Function MachineCalSkillsColumnUsable(ByVal wsSkill As Worksheet, ByVal 
     End If
 End Function
 
+' 曜日略称（環境の表示言語に追随。日本語 Excel では 月火水木…）
+Private Function MachineCalWeekdayShort(ByVal dt As Date) As String
+    On Error Resume Next
+    MachineCalWeekdayShort = Format$(dt, "aaa")
+    If Len(Trim$(MachineCalWeekdayShort)) = 0 Then MachineCalWeekdayShort = Format$(dt, "ddd")
+    On Error GoTo 0
+End Function
+
 Private Sub PreserveMachineCalendarGrid(ByVal ws As Worksheet, ByVal outMap As Object)
     Dim lastC As Long
     Dim lastR As Long
@@ -551,6 +571,7 @@ Private Sub PreserveMachineCalendarGrid(ByVal ws As Worksheet, ByVal outMap As O
     Dim machH As String
     Dim colKey As String
     Dim note As String
+    Dim startEquipCol As Long
     
     On Error Resume Next
     hdr = Trim$(CStr(ws.Cells(1, 1).Value))
@@ -559,9 +580,16 @@ Private Sub PreserveMachineCalendarGrid(ByVal ws As Worksheet, ByVal outMap As O
     
     lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    If lastC < 2 Or lastR < 3 Then Exit Sub
+    If lastR < 3 Then Exit Sub
     
-    For cc = 2 To lastC
+    If StrComp(Trim$(CStr(ws.Cells(1, 2).Value)), "曜日", vbTextCompare) = 0 Then
+        startEquipCol = 3
+    Else
+        startEquipCol = 2
+    End If
+    If lastC < startEquipCol Then Exit Sub
+    
+    For cc = startEquipCol To lastC
         procH = Trim$(CStr(ws.Cells(1, cc).Value))
         machH = Trim$(CStr(ws.Cells(2, cc).Value))
         colKey = procH & vbTab & machH
@@ -597,17 +625,22 @@ Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow
         .Font.Bold = True
         .Font.Color = RGB(0, 0, 0)
     End With
+    With ws.Range("B1:B2")
+        .Interior.Color = memHdr
+        .Font.Bold = True
+        .Font.Color = RGB(0, 0, 0)
+    End With
     On Error GoTo 0
     
-    If lastCol >= 2 Then
-        With ws.Range(ws.Cells(1, 2), ws.Cells(1, lastCol))
+    If lastCol >= 3 Then
+        With ws.Range(ws.Cells(1, 3), ws.Cells(1, lastCol))
             .Interior.Color = hdrTop
             .Font.Bold = True
             .Font.Color = hdrFont
             .HorizontalAlignment = xlCenter
             .VerticalAlignment = xlCenter
         End With
-        With ws.Range(ws.Cells(2, 2), ws.Cells(2, lastCol))
+        With ws.Range(ws.Cells(2, 3), ws.Cells(2, lastCol))
             .Interior.Color = hdrMid
             .Font.Bold = True
             .Font.Color = hdrFont
@@ -652,7 +685,7 @@ Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow
     ActiveWindow.ScrollColumn = 1
     Application.GoTo ws.Range("A1"), True
     DoEvents
-    ws.Range("B3").Select
+    ws.Range("C3").Select
     ActiveWindow.FreezePanes = True
     On Error GoTo 0
     If Not prevWs Is Nothing Then
@@ -908,7 +941,7 @@ Sub master_かっこいいボタンを作成()
     CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
     MsgBox "ボタンを作成しました。" & vbCrLf & _
            "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成" & vbCrLf & _
-           "・機械カレンダー作成 … skills 見出し＋A列 6～22時（1時間）・日ストライプ色の「機械カレンダー」1枚（365日）" & vbCrLf & _
+           "・機械カレンダー作成 … A日時・B曜日・C～skills設備列・6～22時・日ストライプの「機械カレンダー」1枚（365日）" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
 
