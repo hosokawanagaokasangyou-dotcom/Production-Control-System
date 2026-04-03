@@ -98,6 +98,8 @@ Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 ' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
 Private m_splashReadErrShown As Boolean
+' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
+Private m_splashLastLogSnapshot As String
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -256,6 +258,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
+        ' ポーリング間隔: 短すぎると ScreenUpdating 切替と Text 全置換で画面がちらつく（中身が変わったときだけ更新＋150ms）
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
             If Len(consoleTitle) > 0 And Not positioned Then
@@ -271,7 +274,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                 End If
             End If
         End If
-        Sleep 50&
+        Sleep 150&
         DoEvents
     Loop
     MacroSplash_RefreshExecutionLogPane
@@ -1522,6 +1525,7 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     Dim tb As Object
     On Error Resume Next
     m_splashReadErrShown = False
+    m_splashLastLogSnapshot = ""
     If Not m_macroSplashShown Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If Not tb Is Nothing Then tb.Text = ""
@@ -1550,14 +1554,16 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
         If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
             s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
         End If
+        If StrComp(s, m_splashLastLogSnapshot, vbBinaryCompare) = 0 Then Exit Sub
+        m_splashLastLogSnapshot = s
         prevSU = Application.ScreenUpdating
-        Application.ScreenUpdating = True
+        If Not prevSU Then Application.ScreenUpdating = True
         tb.Text = s
         tb.SelStart = Len(tb.Text)
         tb.SelLength = 0
         frmMacroSplash.Repaint
         DoEvents
-        Application.ScreenUpdating = prevSU
+        If Not prevSU Then Application.ScreenUpdating = False
         Exit Sub
     End If
     If Len(Dir(m_splashExecutionLogPath)) = 0 Then Exit Sub
@@ -1568,14 +1574,15 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     If m_splashReadErrShown Then Exit Sub
     errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
     prevSU = Application.ScreenUpdating
-    Application.ScreenUpdating = True
+    If Not prevSU Then Application.ScreenUpdating = True
     tb.Text = errBanner & tb.Text
+    m_splashLastLogSnapshot = tb.Text
     tb.SelStart = 1
     tb.SelLength = 0
     frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 — 下記の【ログ表示エラー】を参照）"
     frmMacroSplash.Repaint
     DoEvents
-    Application.ScreenUpdating = prevSU
+    If Not prevSU Then Application.ScreenUpdating = False
     m_splashReadErrShown = True
 End Sub
 
@@ -1603,6 +1610,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             prevInt = Application.Interactive
             Application.Interactive = True
             tb.Text = errBanner & tb.Text
+            m_splashLastLogSnapshot = tb.Text
             frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 — 下記を参照）"
             frmMacroSplash.Repaint
             DoEvents
@@ -1617,6 +1625,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     prevInt = Application.Interactive
     Application.Interactive = True
     tb.Text = s
+    m_splashLastLogSnapshot = s
     tb.SelStart = Len(tb.Text)
     tb.SelLength = 0
     frmMacroSplash.Repaint
