@@ -19,6 +19,7 @@
 '
 ' ※ このテキストは .frm のバイナリ(frx)を含まない。手作業での追加を想定している。
 ' ※ txtExecutionLog が無い／名前が違う場合でもマクロは継続（ログ表示のみスキップ）。
+' ※ 段階1/2 の進捗は PowerShell ではなく log\execution_log.txt を本フォームがポーリング表示（標準モジュール m_splashExecutionLogPath 等）。
 ' ※ 成功終了時は標準モジュールの MacroCompleteChime（winmm PlaySound・別名 SystemDefault）が鳴る。
 '
 ' ------------------------------------------------------------

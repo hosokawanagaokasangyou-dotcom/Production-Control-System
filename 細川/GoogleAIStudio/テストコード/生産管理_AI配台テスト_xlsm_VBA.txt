@@ -24,7 +24,7 @@ Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
 Private Const SWP_NOZORDER As Long = &H4
 Private Const SWP_SHOWWINDOW As Long = &H40
-' 段階1/2 の cmd: True=ウィンドウ非表示（スプラッシュを隠さない）。py の標準出力・エラーを log\pm_ai_cmd_stdout.txt へリダイレクトし、非表示時のパイプ詰まりで停止しないようにする。False=画面上部にコンソール（1/4 高さ・全幅）
+' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog＝log\execution_log.txt）のみ。py の余剰 stdout/stderr は nul へ捨てパイプ詰まりを防ぐ（PowerShell は使わない）。False=画面上部にコンソール（1/4 高さ・全幅）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
@@ -50,7 +50,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。txtExecutionLog に log\execution_log.txt をポーリング表示可。
-' ★ 段階1/2: Exec＋待機ループで log を刷新。STAGE12_CMD_HIDE_WINDOW=True なら conhost --headless で Windows Terminal を経由しない（黒画面がスプラッシュを覆うのを防ぐ）。終了コードは log\stage_vba_exitcode.txt を優先。False なら cmd＋SetWindowPos（左上・全幅・高さ1/4）。非表示時は py を pm_ai_cmd_stdout.txt へリダイレクト。
+' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -124,21 +124,20 @@ Private Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titl
     AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & body
 End Function
 
-' 非表示 cmd 用: py 行へ stdout/stderr をファイルへ逃がす（コンソール無しで print/logging が詰まるのを防ぐ）
+' 非表示時: py 行へ 1>nul 2>&1（標準出力・標準エラーを捨てる。詰まり防止）。本番ログは planning_core の execution_log（UserForm で表示）
 Private Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
     Dim lines() As String
     Dim i As Long
     Dim s As String
-    Const relLog As String = "log\pm_ai_cmd_stdout.txt"
     t = Replace(Replace(body, vbCrLf, vbLf), vbCr, vbLf)
     lines = Split(t, vbLf)
     For i = LBound(lines) To UBound(lines)
         s = lines(i)
         If Len(s) > 0 Then
             If InStr(1, LTrim$(s), "py ", vbTextCompare) = 1 Then
-                If InStr(1, s, "1>>") = 0 Then
-                    lines(i) = RTrim$(s) & " 1>> """ & relLog & """ 2>&1"
+                If InStr(1, s, "1>>", vbTextCompare) = 0 And InStr(1, s, ">nul", vbTextCompare) = 0 Then
+                    lines(i) = RTrim$(s) & " 1>nul 2>&1"
                 End If
                 EnsureStageBatchStdoutRedirect = Join(lines, vbCrLf)
                 Exit Function
