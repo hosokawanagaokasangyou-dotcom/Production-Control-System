@@ -50,6 +50,11 @@ Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
 Private Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
+' Power Query 更新前の到達確認（接続先と同一想定の IP）。応答なしなら RefreshAll を行わず処理は継続する。
+' 接続先の IP アドレスを指定（Power Query のデータソースと揃える）
+Private Const PQ_REFRESH_PING_HOST As String = "192.168.0.101"
+' ping -w に渡すタイムアウト（ミリ秒）。合計待ちはあともう数百 ms 程度のことがある。
+Private Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
 
 ' 段階1コアの最終 Python exitCode（0=成功）。VBAエラー・事前失敗は -1。
 Private m_lastStage1ExitCode As Long
@@ -1687,6 +1692,23 @@ Private Sub DisableBackgroundDataRefreshAll()
     On Error GoTo 0
 End Sub
 
+' PQ 更新前: 接続先 IP へ ping 1 回（-w でタイムアウト）。成功時のみ True。
+' 失敗時はデータ更新をスキップし、呼び出し元は従来どおり True で継続する。
+Private Function PingHostOnceBeforeQueryRefresh(ByVal ipAddress As String, ByVal timeoutMs As Long) As Boolean
+    Dim wsh As Object
+    Dim cmd As String
+    Dim rc As Long
+    On Error GoTo EH
+    If Len(ipAddress) = 0 Then PingHostOnceBeforeQueryRefresh = False: Exit Function
+    Set wsh = CreateObject("WScript.Shell")
+    cmd = "cmd /c ping -n 1 -w " & CStr(timeoutMs) & " " & ipAddress
+    rc = wsh.Run(cmd, 0, True)
+    PingHostOnceBeforeQueryRefresh = (rc = 0)
+    Exit Function
+EH:
+    PingHostOnceBeforeQueryRefresh = False
+End Function
+
 ' =========================================================
 ' Power Query / データ接続の更新（マクロ処理の先頭で呼ぶ）
 ' ※ 先に DisableBackgroundDataRefreshAll で同期更新に寄せ、RefreshAll 後に
@@ -1694,6 +1716,8 @@ End Sub
 '    これにより「未実行のデータ更新が取り消されます」系ダイアログを抑止しやすくする。
 ' ※ DisplayAlerts=False で接続／PQ 失敗時の Excel 標準ダイアログを抑止。VBA 側も MsgBox は出さず
 '    m_lastRefreshQueriesErrMsg に詳細を残す（段階1・2のエラーメッセージに連結）。
+' ※ PQ_REFRESH_PING_HOST へ ping（PQ_REFRESH_PING_TIMEOUT_MS）で応答がなければ RefreshAll は行わず、
+'    成功として返す（既存データのまま段階1・2を継続）。
 ' =========================================================
 Private Function TryRefreshWorkbookQueries() As Boolean
     Dim prevSU As Boolean
@@ -1706,6 +1730,10 @@ Private Function TryRefreshWorkbookQueries() As Boolean
     Application.DisplayAlerts = False
     If SKIP_WORKBOOK_REFRESH_ALL Then
         Application.StatusBar = "（SKIP_WORKBOOK_REFRESH_ALL）接続の一括更新を省略しました"
+        DoEvents
+        Application.StatusBar = False
+    ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
+        Application.StatusBar = "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答なし（" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "ms）— Power Query 等の一括更新をスキップして処理を続行します"
         DoEvents
         Application.StatusBar = False
     Else
