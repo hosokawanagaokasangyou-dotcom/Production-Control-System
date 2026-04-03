@@ -8196,7 +8196,7 @@ def run_stage1_extract():
             PLAN_COL_EXCLUDE_FROM_ASSIGNMENT
         ].astype(object)
     try:
-        _, _, _, req_map, need_rules, _ = load_skills_and_needs()
+        _, _, _, req_map, need_rules, _, _ = load_skills_and_needs()
     except PlanningValidationError:
         logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
@@ -9224,6 +9224,9 @@ def load_skills_and_needs():
     """
     統合ファイル(MASTER_FILE)からスキルと need を動的に読み込みます。
 
+    戻り値は7要素。最後は need シート上の「工程名+機械名」列位置（左ほど小さい整数）の辞書
+    ``need_combo_col_index``（配台キューソート用）。
+
     今回の need は（Excel上で）
       工程名行・機械名行のあと「基本必要人数」行（A列に「必要人数」を含む）
       その直下: 配台で余剰人員があるときに追加で入れられる人数（工程×機械ごと。未設定は 0）
@@ -9419,6 +9422,8 @@ def load_skills_and_needs():
             pm_cols.append((col_idx, p_s, m_s))
 
         req_map = {}
+        # 工程名+機械名コンボ → need シート上の列インデックス（左ほど小さい＝配台キューで先）
+        need_combo_col_index: dict[str, int] = {}
         # need_rules: [{'order': int, 'condition': str, 'overrides': {combo_key/machine/process: int}}]
         need_rules = []
 
@@ -9428,6 +9433,7 @@ def load_skills_and_needs():
             if n is None or n < 1:
                 n = 1
             combo_key = f"{p_s}+{m_s}"
+            need_combo_col_index[combo_key] = col_idx
             req_map[combo_key] = n
             # フォールバック用（機械名 or 工程名だけで引けるようにする）
             if p_s not in req_map:
@@ -9513,13 +9519,21 @@ def load_skills_and_needs():
         logging.info(f"need 特別指定ルール: {len(need_rules)} 件（工程名+機械名キー）。")
 
         logging.info(f"『{MASTER_FILE}』からスキルと設備要件(need)を読み込みました。")
-        return skills_dict, members, equipment_list, req_map, need_rules, surplus_map
+        return (
+            skills_dict,
+            members,
+            equipment_list,
+            req_map,
+            need_rules,
+            surplus_map,
+            need_combo_col_index,
+        )
 
     except PlanningValidationError:
         raise
     except Exception as e:
         logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
-        return {}, [], [], {}, [], {}
+        return {}, [], [], {}, [], [], {}
 
 
 def load_team_combination_presets_from_master() -> dict[
@@ -10710,12 +10724,39 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
     )
 
 
-def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: list) -> tuple:
+def _need_sheet_pm_column_rank(
+    process,
+    machine_name,
+    need_combo_col_index: dict | None,
+) -> int:
+    """need シートで左にある「工程名+機械名」列ほど小さい値（キューで先）。"""
+    if not need_combo_col_index:
+        return 10**9
+    p = str(process or "").strip()
+    m = str(machine_name or "").strip()
+    if not p or not m:
+        return 10**9
+    ck = f"{p}+{m}"
+    v = need_combo_col_index.get(ck)
+    return int(v) if v is not None else 10**9
+
+
+def _generate_plan_task_queue_sort_key(
+    task: dict,
+    _req_map: dict,
+    _need_rules: list,
+    need_combo_col_index: dict | None = None,
+) -> tuple:
     """
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
-    §B を §A・一般キーより先に効かせるため、B-1（roll_pipeline_inspection かつ in_progress＋試行順土台）
-    → B-2 帯（同一帯内は **EC（roll_pipeline_ec）を未着手検査より先**・§B-2）
-    → その他の加工途中 → 以降は納期・優先度等。
+
+    1. §B-1 → §B-2 帯 → その他（§B-2 帯内は EC を未着手検査より先）
+    2. 加工途中（in_progress）を先
+    3. 計画基準納期（早いほど先）
+    4. need シート左列ほど先（工程名+機械名列の位置）
+    5. 依頼NOタイブレーク（_task_id_same_machine_due_tiebreak_key）
+
+    _req_map / _need_rules は呼び出し互換のため残す。
     """
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
@@ -10736,33 +10777,16 @@ def _generate_plan_task_queue_sort_key(task: dict, req_map: dict, need_rules: li
             b2_queue_sub = 2
     else:
         b2_queue_sub = 0
-    try:
-        pss = int(task.get("planning_sheet_row_seq") or 0)
-    except (TypeError, ValueError):
-        pss = 10**9
-    b1_trial = (0, pss) if (rp and ip) else (1, 0)
-    gen_ip = 0 if (not rp and ip) else 1
+    need_rank = _need_sheet_pm_column_rank(
+        task.get("machine"), task.get("machine_name"), need_combo_col_index
+    )
     return (
-        task.get("due_source_rank", 9),
-        0 if task.get("has_done_deadline_override") else 1,
         b_tier,
         b2_queue_sub,
-        b1_trial,
-        gen_ip,
-        task["priority"],
-        0 if task["due_urgent"] else 1,
+        0 if ip else 1,
         task["due_basis_date"] or date.max,
-        _normalize_equipment_match_key(task.get("machine_name") or ""),
+        need_rank,
         _task_id_same_machine_due_tiebreak_key(task.get("task_id")),
-        task["start_date_req"],
-        _task_id_priority_key(task.get("task_id")),
-        -resolve_need_required_op(
-            task["machine"],
-            task.get("machine_name", ""),
-            task["task_id"],
-            req_map,
-            need_rules,
-        ),
     )
 
 
@@ -10827,19 +10851,17 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
         )
 
 
-def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
+def _day_schedule_task_sort_key(
+    task: dict,
+    _task_queue: list | None = None,
+    need_combo_col_index: dict | None = None,
+):
     """
-    同一日内の割付試行順。
-    計画基準納期→機械名→依頼NOタイブレーク（同日同機械）のあと、
-    §B-1（検査+熱融着機湖南かつ加工途中）は配台試行順 dispatch_trial_order を加工内容 rank より先に効かせる。
-    続けて r、行順、dto、§B-2 帯では **EC（roll_pipeline_ec）を未着手検査より先**（b2_roll_pipeline_stage）、優先度、結果用ソートキー。
+    同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
+    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（§B 段・加工途中・計画基準納期・need 列順・依頼NO）。
+    続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
     同一設備列の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
-    dbk = task.get("due_basis_date")
-    if not isinstance(dbk, date):
-        dbk = date.max
-    mk = _normalize_equipment_match_key(task.get("machine_name") or "")
-    tb = _task_id_same_machine_due_tiebreak_key(task.get("task_id"))
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
         r = 10**9
@@ -10856,17 +10878,42 @@ def _day_schedule_task_sort_key(task: dict, task_queue: list | None = None):
     rp = bool(task.get("roll_pipeline_inspection"))
     ip = bool(task.get("in_progress"))
     ec = bool(task.get("roll_pipeline_ec"))
+    if rp and ip:
+        b_tier = 0
+    elif ec or (rp and not ip):
+        b_tier = 1
+    else:
+        b_tier = 2
+    if b_tier == 1:
+        if ec:
+            b2_queue_sub = 0
+        elif rp and not ip:
+            b2_queue_sub = 1
+        else:
+            b2_queue_sub = 2
+    else:
+        b2_queue_sub = 0
     if ec:
         b2_roll_pipeline_stage = 0
     elif rp and not ip:
         b2_roll_pipeline_stage = 1
     else:
         b2_roll_pipeline_stage = 2
+    dbk = task.get("due_basis_date")
+    if not isinstance(dbk, date):
+        dbk = date.max
+    need_rank = _need_sheet_pm_column_rank(
+        task.get("machine"), task.get("machine_name"), need_combo_col_index
+    )
+    tb = _task_id_same_machine_due_tiebreak_key(task.get("task_id"))
     b1_trial_early = (0, dto) if (rp and ip) else (1, 0)
     return (
         (
+            b_tier,
+            b2_queue_sub,
+            0 if ip else 1,
             dbk,
-            mk,
+            need_rank,
             tb,
             b1_trial_early,
             r,
@@ -12398,9 +12445,15 @@ def generate_plan():
 
     _reset_dispatch_trace_per_task_logfiles()
 
-    skills_dict, members, equipment_list, req_map, need_rules, surplus_map = (
-        load_skills_and_needs()
-    )
+    (
+        skills_dict,
+        members,
+        equipment_list,
+        req_map,
+        need_rules,
+        surplus_map,
+        need_combo_col_index,
+    ) = load_skills_and_needs()
     team_combo_presets = load_team_combination_presets_from_master()
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
@@ -12610,7 +12663,9 @@ def generate_plan():
 
     # §B-1（加工途中の熱融着検査＋試行順）→ §B-2（同パイプライン・未着手）→ その他加工途中 → 一般キー
     task_queue.sort(
-        key=lambda x: _generate_plan_task_queue_sort_key(x, req_map, need_rules)
+        key=lambda x: _generate_plan_task_queue_sort_key(
+            x, req_map, need_rules, need_combo_col_index
+        )
     )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     # 配台試行順: 日次ループ前・ソート済みキューの並び（初回割当の成否とは無関係）
@@ -12806,7 +12861,9 @@ def generate_plan():
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
-                        key=lambda t: _day_schedule_task_sort_key(t, task_queue),
+                        key=lambda t: _day_schedule_task_sort_key(
+                            t, task_queue, need_combo_col_index
+                        ),
                     ):
                         if _task_blocked_by_same_request_dependency(task, task_queue):
                             if _trace_schedule_task_enabled(task.get("task_id")):
@@ -13696,7 +13753,7 @@ def generate_plan():
                                     t["assigned_history"].clear()
                             task_queue.sort(
                                 key=lambda x: _generate_plan_task_queue_sort_key(
-                                    x, req_map, need_rules
+                                    x, req_map, need_rules, need_combo_col_index
                                 )
                             )
                             _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)

@@ -160,7 +160,7 @@ if __name__ == "__main__":
         import planning_core as pc
 
         os.chdir(_planning_repo_root())
-        sd, mem, eq, req, rules, _surp = pc.load_skills_and_needs()
+        sd, mem, eq, req, rules, _surp, _need_col_idx = pc.load_skills_and_needs()
         if not mem:
             print("\n[ERROR] planning_core.load_skills_and_needs がメンバー0でした。")
             rc = 1
