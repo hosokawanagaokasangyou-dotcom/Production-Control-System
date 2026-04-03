@@ -9520,141 +9520,150 @@ def load_skills_and_needs():
     同一列（同一工程×機械）では優先度の数値はメンバー間で重複不可（重複時は PlanningValidationError）。
     """
     try:
-        # skills は新仕様:
-        #   1行目: 工程名
-        #   2行目: 機械名
-        #   A3以降: メンバー名
-        #   交差セル: OP または AS の後に割当優先度の整数（例 OP1, AS3）。数値が小さいほど当該工程へ優先割当。
-        #             数字省略の OP/AS は優先度 1（従来どおり最優先扱い）。
-        # を基本としつつ、旧仕様（1行ヘッダ）にもフォールバック対応する。
-        skills_raw = pd.read_excel(MASTER_FILE, sheet_name="skills", header=None)
-        skills_dict = {}
-        equipment_list = []
-        members = []
-
-        use_two_header = False
-        if skills_raw.shape[0] >= 3 and skills_raw.shape[1] >= 2:
-            non_empty_pm = 0
-            for c in range(1, skills_raw.shape[1]):
-                p = skills_raw.iat[0, c]
-                m = skills_raw.iat[1, c]
-                if pd.isna(p) or pd.isna(m):
-                    continue
-                p_s = str(p).strip()
-                m_s = str(m).strip()
-                if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
-                    non_empty_pm += 1
-            use_two_header = non_empty_pm > 0
-
-        if use_two_header:
-            pm_cols = []
-            seen_combo = set()
-            for c in range(1, skills_raw.shape[1]):
-                p = skills_raw.iat[0, c]
-                m = skills_raw.iat[1, c]
-                if pd.isna(p) or pd.isna(m):
-                    continue
-                p_s = str(p).strip()
-                m_s = str(m).strip()
-                if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
-                    continue
-                combo = f"{p_s}+{m_s}"
-                pm_cols.append((c, p_s, m_s, combo))
-                if combo not in seen_combo:
-                    seen_combo.add(combo)
-                    equipment_list.append(combo)
-
-            for r in range(2, skills_raw.shape[0]):
-                m_name_raw = skills_raw.iat[r, 0]
-                if pd.isna(m_name_raw):
-                    continue
-                m_name = str(m_name_raw).strip()
-                if not m_name or m_name.lower() in ("nan", "none", "null"):
-                    continue
-                row_skills = {}
-                for c, p_s, m_s, combo in pm_cols:
-                    v = skills_raw.iat[r, c] if c < skills_raw.shape[1] else None
-                    sval = "" if pd.isna(v) else str(v).strip()
-                    if not sval or sval.lower() in ("nan", "none", "null"):
-                        continue
-                    row_skills[combo] = sval
-                    if m_s not in row_skills:
-                        row_skills[m_s] = sval
-                    if p_s not in row_skills:
-                        row_skills[p_s] = sval
-                skills_dict[m_name] = row_skills
-            members = list(skills_dict.keys())
-            logging.info(
-                "skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=%s列, メンバー=%s人）。",
-                len(pm_cols),
-                len(members),
+        # 同一ブックを pd.read_excel で都度開くと I/O が重いため、ExcelFile を1回だけ開いてシートを parse する。
+        with pd.ExcelFile(MASTER_FILE) as _master_xls:
+            # skills は新仕様:
+            #   1行目: 工程名
+            #   2行目: 機械名
+            #   A3以降: メンバー名
+            #   交差セル: OP または AS の後に割当優先度の整数（例 OP1, AS3）。数値が小さいほど当該工程へ優先割当。
+            #             数字省略の OP/AS は優先度 1（従来どおり最優先扱い）。
+            # を基本としつつ、旧仕様（1行ヘッダ）にもフォールバック対応する。
+            skills_raw = pd.read_excel(
+                _master_xls, sheet_name="skills", header=None
             )
-        else:
-            skills_df = pd.read_excel(MASTER_FILE, sheet_name="skills")
-            skills_df.columns = skills_df.columns.str.strip()
-            skill_cols = [
-                str(c).strip()
-                for c in skills_df.columns
-                if not str(c).startswith("Unnamed")
-            ]
+            skills_dict = {}
+            equipment_list = []
+            members = []
 
-            member_col = None
-            for c in skill_cols:
-                if c in ("メンバー", "担当者", "氏名", "作業者"):
-                    member_col = c
-                    break
-            if member_col is None and skill_cols:
-                member_col = skill_cols[0]
-                logging.warning(
-                    "skillsシート: メンバー列名が標準と一致しないため、先頭列 '%s' をメンバー列として扱います。",
-                    member_col,
+            use_two_header = False
+            if skills_raw.shape[0] >= 3 and skills_raw.shape[1] >= 2:
+                non_empty_pm = 0
+                for c in range(1, skills_raw.shape[1]):
+                    p = skills_raw.iat[0, c]
+                    m = skills_raw.iat[1, c]
+                    if pd.isna(p) or pd.isna(m):
+                        continue
+                    p_s = str(p).strip()
+                    m_s = str(m).strip()
+                    if p_s and m_s and p_s.lower() != "nan" and m_s.lower() != "nan":
+                        non_empty_pm += 1
+                use_two_header = non_empty_pm > 0
+
+            if use_two_header:
+                pm_cols = []
+                seen_combo = set()
+                for c in range(1, skills_raw.shape[1]):
+                    p = skills_raw.iat[0, c]
+                    m = skills_raw.iat[1, c]
+                    if pd.isna(p) or pd.isna(m):
+                        continue
+                    p_s = str(p).strip()
+                    m_s = str(m).strip()
+                    if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
+                        continue
+                    combo = f"{p_s}+{m_s}"
+                    pm_cols.append((c, p_s, m_s, combo))
+                    if combo not in seen_combo:
+                        seen_combo.add(combo)
+                        equipment_list.append(combo)
+
+                for r in range(2, skills_raw.shape[0]):
+                    m_name_raw = skills_raw.iat[r, 0]
+                    if pd.isna(m_name_raw):
+                        continue
+                    m_name = str(m_name_raw).strip()
+                    if not m_name or m_name.lower() in ("nan", "none", "null"):
+                        continue
+                    row_skills = {}
+                    for c, p_s, m_s, combo in pm_cols:
+                        v = skills_raw.iat[r, c] if c < skills_raw.shape[1] else None
+                        sval = "" if pd.isna(v) else str(v).strip()
+                        if not sval or sval.lower() in ("nan", "none", "null"):
+                            continue
+                        row_skills[combo] = sval
+                        if m_s not in row_skills:
+                            row_skills[m_s] = sval
+                        if p_s not in row_skills:
+                            row_skills[p_s] = sval
+                    skills_dict[m_name] = row_skills
+                members = list(skills_dict.keys())
+                logging.info(
+                    "skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=%s列, メンバー=%s人）。",
+                    len(pm_cols),
+                    len(members),
                 )
+            else:
+                skills_df = pd.read_excel(_master_xls, sheet_name="skills")
+                skills_df.columns = skills_df.columns.str.strip()
+                skill_cols = [
+                    str(c).strip()
+                    for c in skills_df.columns
+                    if not str(c).startswith("Unnamed")
+                ]
 
-            seen_eq = set()
-            for c in skill_cols:
-                if c == member_col:
-                    continue
-                cid = str(c).strip()
-                if not cid or cid.lower() in ("nan", "none", "null"):
-                    continue
-                if cid not in seen_eq:
-                    seen_eq.add(cid)
-                    equipment_list.append(cid)
+                member_col = None
+                for c in skill_cols:
+                    if c in ("メンバー", "担当者", "氏名", "作業者"):
+                        member_col = c
+                        break
+                if member_col is None and skill_cols:
+                    member_col = skill_cols[0]
+                    logging.warning(
+                        "skillsシート: メンバー列名が標準と一致しないため、先頭列 '%s' をメンバー列として扱います。",
+                        member_col,
+                    )
 
-            for _, row in skills_df.iterrows():
-                m_name = str(row.get(member_col, "")).strip() if member_col else ""
-                if not m_name or m_name.lower() == "nan":
-                    continue
-                row_skills = {}
+                seen_eq = set()
                 for c in skill_cols:
                     if c == member_col:
                         continue
-                    sval = str(row.get(c, "")).strip()
-                    if not sval or sval.lower() in ("nan", "none", "null"):
+                    cid = str(c).strip()
+                    if not cid or cid.lower() in ("nan", "none", "null"):
                         continue
-                    row_skills[c] = sval
-                    if "+" in c:
-                        p, m = c.split("+", 1)
-                        p = p.strip()
-                        m = m.strip()
-                        if m and m not in row_skills:
-                            row_skills[m] = sval
-                        if p and p not in row_skills:
-                            row_skills[p] = sval
-                skills_dict[m_name] = row_skills
-            members = list(skills_dict.keys())
-            logging.info(
-                "skillsシート: 1行ヘッダ形式（旧互換）で読み込みました（メンバー=%s人）。",
-                len(members),
+                    if cid not in seen_eq:
+                        seen_eq.add(cid)
+                        equipment_list.append(cid)
+
+                for _, row in skills_df.iterrows():
+                    m_name = str(row.get(member_col, "")).strip() if member_col else ""
+                    if not m_name or m_name.lower() == "nan":
+                        continue
+                    row_skills = {}
+                    for c in skill_cols:
+                        if c == member_col:
+                            continue
+                        sval = str(row.get(c, "")).strip()
+                        if not sval or sval.lower() in ("nan", "none", "null"):
+                            continue
+                        row_skills[c] = sval
+                        if "+" in c:
+                            p, m = c.split("+", 1)
+                            p = p.strip()
+                            m = m.strip()
+                            if m and m not in row_skills:
+                                row_skills[m] = sval
+                            if p and p not in row_skills:
+                                row_skills[p] = sval
+                    skills_dict[m_name] = row_skills
+                members = list(skills_dict.keys())
+                logging.info(
+                    "skillsシート: 1行ヘッダ形式（旧互換）で読み込みました（メンバー=%s人）。",
+                    len(members),
+                )
+
+            if not members:
+                logging.error("skillsシートからメンバーを読み込めませんでした。")
+            else:
+                _validate_skills_op_as_priority_numbers_unique(
+                    skills_dict, equipment_list
+                )
+
+            # need は header=None で読み、先頭の複数行を“見出し行”として解釈
+            needs_raw = pd.read_excel(
+                _master_xls, sheet_name="need", header=None
             )
 
-        if not members:
-            logging.error("skillsシートからメンバーを読み込めませんでした。")
-        else:
-            _validate_skills_op_as_priority_numbers_unique(skills_dict, equipment_list)
-
-        # need は header=None で読み、先頭の複数行を“見出し行”として解釈
-        needs_raw = pd.read_excel(MASTER_FILE, sheet_name="need", header=None)
         col0 = 0
         process_header_row = None
         machine_header_row = None
@@ -9753,7 +9762,7 @@ def load_skills_and_needs():
             )
 
         logging.info(
-            "need人数マスタ: %s を都度 read_excel（need シート専用のディスクキャッシュは無し・AI json キャッシュとは無関係）。",
+            "need人数マスタ: %s の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。",
             os.path.abspath(MASTER_FILE),
         )
         for _ci, _ps, _ms in pm_cols:
