@@ -49,7 +49,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
-' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のとき段階1/2 は Exec 待機ループも行わず同期 Run のみ（ポーリング無し）。ログ比較・負荷試験用。
+' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のとき段階1/2 は Exec 待機ループも行わず同期 Run のみ（ポーリング無し）。あわせて通常の cmd ウィンドウを表示（conhost --headless・nul リダイレクトなし・四隅レイアウトなし）。ログ比較・負荷試験用。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
@@ -231,12 +231,14 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     unlockInteractiveForPoll = False
     On Error Resume Next
-    ' D3=false: Exec ループ（150ms×DoEvents）を使わず同期 Run のみ。スプラッシュ lbl も Run 中は更新されない
+    ' D3=false: Exec ループを使わず同期 Run のみ。cmd は通常表示（headless・非表示 Run スタイルは使わない）
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
             Application.Interactive = True
             unlockInteractiveForPoll = True
         End If
+        cmdLine = BuildStageExecCommandLine(cmdFilePath, False)
+        waitStyle = 1
         RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
         If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
         exitPath = StageVbaExitCodeFilePath()
@@ -322,6 +324,12 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
     Dim p As String
     Dim uniq As String
     Dim batText As String
+    ' D3=false: 素の .cmd（stdout 捨て・ウィンドウタイトル付与なし）を表示 cmd で同期実行（レイアウト API も使わない）
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
+        p = WriteTempCmdFile(body)
+        RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, "", False, False)
+        GoTo RunTempCmdWithConsoleLayoutCleanup
+    End If
     If hideCmdWindow Or applyTopQuarterFullWidthConsole Then
         batText = body
         If hideCmdWindow Then batText = EnsureStageBatchStdoutRedirect(batText)
@@ -334,6 +342,7 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
         p = WriteTempCmdFile(body)
         RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p)
     End If
+RunTempCmdWithConsoleLayoutCleanup:
     On Error Resume Next
     Kill p
     On Error GoTo 0
@@ -1523,7 +1532,7 @@ End Sub
 
 ' =========================================================
 ' マクロ実行中スプラッシュ（擬似モーダル）
-' ・シート「設定」D3: true/TRUE でログ枠へ書き込み＋Exec 待機中のファイルポーリング。false/FALSE で無しかつ待機は同期 Run のみ（log\execution_log.txt への Python 出力は変わらず）
+' ・シート「設定」D3: true/TRUE でログ枠へ書き込み＋Exec 待機中のファイルポーリング。false/FALSE で無し・同期 Run・通常 cmd 表示（log\execution_log.txt への Python 出力は変わらず）
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
 ' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
