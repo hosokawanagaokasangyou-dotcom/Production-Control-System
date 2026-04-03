@@ -2779,6 +2779,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         "scheduler_notes_ja": "",
         "global_speed_rules": [],
         "task_planning_basis_dates": {},
+        "global_day_process_operator_rules": [],
     }
     if not isinstance(raw, dict):
         return base
@@ -2802,6 +2803,9 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
     base["global_speed_rules"] = _coerce_global_speed_rules(raw.get("global_speed_rules"))
     base["task_planning_basis_dates"] = _coerce_task_planning_basis_dates(
         raw.get("task_planning_basis_dates")
+    )
+    base["global_day_process_operator_rules"] = _coerce_global_day_process_operator_rules(
+        raw.get("global_day_process_operator_rules")
     )
     return base
 
@@ -2852,6 +2856,7 @@ def analyze_global_priority_override_comment(
     - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
     - global_speed_rules: **工程名・機械名**への部分一致（各キーワードは **どちらの列にあっても可**）で、既存の加工速度（シート／上書き後）に **乗算**するルールの配列。該当なしは []。
     - task_planning_basis_dates: 依頼NO→計画基準納期（YYYY-MM-DD）。配台の納期基準として **特別指定_備考AIより優先**して適用する。該当なしは {{}}。
+    - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を、当日その工程のタスクの**チーム全員に必ず含める**ルールの配列。該当なしは []。
     - scheduler_notes_ja: 上記に落としきれない補足や運用メモ（速度は可能なら global_speed_rules も併記）。
 
     API キー無し・JSON 解釈失敗時: 上記ブール・指名は既定値、工場休業日のみ従来のルールベース解析で補完。
@@ -2937,6 +2942,16 @@ F) **task_planning_basis_dates** （オブジェクト・必須）
    - 例: {{"Y3-12": "2026-04-10", "W1-5": "2026-04-15"}}
    - 依頼NOごとの納期指示が無ければ **空オブジェクト {{}}**（キー省略不可）。
 
+G) **global_day_process_operator_rules** （配列・必須）
+   - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当てはまるタスクについて、
+     列挙した **全メンバーを同一チームに必ず含める** ルール（**OP/AS どちらのスキルでも可**。氏名解決は **担当OP指名と同じ**）。
+   - **依頼NOが分かる主担当の1名指名**は **task_preferred_operators** を使うこと。原文が **「◯月◯日の△工程にＡとＢを配台」** のように **日付・工程・複数名**のときは **本配列**へ落とす。
+   - 各オブジェクトのキー:
+     - "date": **YYYY-MM-DD**（その日に割り当てるロールに適用）
+     - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
+     - "operator_names": 氏名の配列（例: ["森下", "宮島　花子"]）
+   - 該当指示がなければ **空配列 []**。
+
 【返答形式】
 先頭が {{ で終わりが }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
 
@@ -2948,6 +2963,7 @@ F) **task_planning_basis_dates** （オブジェクト・必須）
 - "task_preferred_operators": オブジェクト（該当なしは {{}}）
 - "global_speed_rules": オブジェクトの配列（該当なしは []）
 - "task_planning_basis_dates": オブジェクト（依頼NO→YYYY-MM-DD、該当なしは {{}}）
+- "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
 - "scheduler_notes_ja": 文字列
 - "interpretation_ja": 文字列
 
@@ -3001,10 +3017,12 @@ F) **task_planning_basis_dates** （オブジェクト・必須）
         _tpo = coerced.get("task_preferred_operators") or {}
         _fcd = coerced.get("factory_closure_dates") or []
         _gsr = coerced.get("global_speed_rules") or []
+        _gdp = coerced.get("global_day_process_operator_rules") or []
         logging.info(
-            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 skill=%s need1=%s abolish=%s task_pref=%s件 — %s",
+            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 日×工程チーム=%s件 skill=%s need1=%s abolish=%s task_pref=%s件 — %s",
             len(_fcd),
             len(_gsr),
+            len(_gdp),
             coerced["ignore_skill_requirements"],
             coerced["ignore_need_minimum"],
             coerced.get("abolish_all_scheduling_limits"),
@@ -5097,6 +5115,15 @@ def write_plan_sheet_global_comment_parse_block(
                 "グローバルOP指名",
                 json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
                 if gpo.get("task_preferred_operators")
+                else "（なし）",
+            ),
+            (
+                "日付×工程チーム指名",
+                json.dumps(
+                    gpo.get("global_day_process_operator_rules") or [],
+                    ensure_ascii=False,
+                )
+                if gpo.get("global_day_process_operator_rules")
                 else "（なし）",
             ),
             (
@@ -9166,31 +9193,35 @@ def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
     return r_mei_n in m_mei_n or m_mei_n in r_mei_n
 
 
-def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None):
+def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_member_names=None):
     """
-    自由記述の指名を、当日スキル上OPのメンバー名（skills シートの行キー）に解決する。
-    op_candidates: その設備でOPのメンバー名リスト。
-    roster_member_names: skills の全メンバー名（省略時は op_candidates）。同一姓の重複判定に使用。
+    自由記述の指名を、当日スキル上 OP/AS のメンバー名（skills シートの行キー）に解決する。
+    capable_candidates: その設備で OP または AS として割当可能なメンバー名リスト。
+    roster_member_names: skills の全メンバー名（省略時は capable_candidates）。同一姓の重複判定に使用。
 
     名前の表記ゆれ:
     - 姓は正規化後に完全一致のみ（ゆれ許容しない。富田/冨田のみ従来どおり寄せ）。
     - roster に同一姓が2人以上いないときだけ、名は部分一致（どちらかが他方を含む）または完全一致を許容。
     - 同一姓がロスターにいる間は名も完全一致必須。
-    - 姓のみの入力で名ゆれモードのとき、姓が一致するOPが複数いれば解決不可（None）。
+    - 姓のみの入力で名ゆれモードのとき、姓が一致する候補が複数いれば解決不可（None）。
     """
-    if not raw or not op_candidates:
+    if not raw or not capable_candidates:
         return None
     r0 = unicodedata.normalize("NFKC", str(raw).strip())
     r = _normalize_person_name_for_match(r0)
     if not r:
         return None
-    for m in op_candidates:
+    for m in capable_candidates:
         if _normalize_person_name_for_match(m) == r:
             return m
         if unicodedata.normalize("NFKC", str(m).strip()) == r0.strip():
             return m
 
-    roster = list(roster_member_names) if roster_member_names is not None else list(op_candidates)
+    roster = (
+        list(roster_member_names)
+        if roster_member_names is not None
+        else list(capable_candidates)
+    )
     allow_mei_fuzzy = not _has_duplicate_surname_among_members(roster)
 
     r_sei, r_mei = _split_person_sei_mei(raw)
@@ -9200,7 +9231,7 @@ def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None
         return None
 
     matches = []
-    for m in op_candidates:
+    for m in capable_candidates:
         m_sei, m_mei = _split_person_sei_mei(m)
         m_sei_n = _normalize_sei_for_match(m_sei)
         m_mei_n = _normalize_mei_for_match(m_mei)
@@ -9219,6 +9250,131 @@ def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None
     if len(matches) == 1:
         return matches[0]
     return None
+
+
+def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None):
+    """当日スキル上 OP のみへ解決（従来 API）。実体は `_resolve_preferred_name_to_capable_member`。"""
+    return _resolve_preferred_name_to_capable_member(
+        raw, op_candidates, roster_member_names
+    )
+
+
+def _task_process_matches_global_contains(machine_val: str, contains: str) -> bool:
+    """工程名（タスクの machine）に部分一致（NFKC・大小無視）。"""
+    m = unicodedata.normalize("NFKC", str(machine_val or "").strip()).casefold()
+    c = unicodedata.normalize("NFKC", str(contains or "").strip()).casefold()
+    if not c:
+        return False
+    return c in m
+
+
+def _coerce_global_day_process_operator_rules(raw_val) -> list:
+    """Gemini の global_day_process_operator_rules を正規化（空・不正は除外）。"""
+    out: list[dict] = []
+    if not isinstance(raw_val, list):
+        return out
+    seen_sig = set()
+    for item in raw_val:
+        if not isinstance(item, dict):
+            continue
+        d = parse_optional_date(item.get("date"))
+        if d is None:
+            continue
+        pc = item.get("process_contains")
+        if pc is None or (isinstance(pc, float) and pd.isna(pc)):
+            continue
+        pc_s = unicodedata.normalize("NFKC", str(pc).strip())
+        if not pc_s:
+            continue
+        names = item.get("operator_names")
+        if not isinstance(names, list):
+            continue
+        op_names: list[str] = []
+        for n in names:
+            if n is None or (isinstance(n, float) and pd.isna(n)):
+                continue
+            s = str(n).strip()
+            if s and s.lower() not in ("nan", "none", "null"):
+                op_names.append(s)
+        if not op_names:
+            continue
+        sig = (d.isoformat(), pc_s.casefold(), tuple(op_names))
+        if sig in seen_sig:
+            continue
+        seen_sig.add(sig)
+        out.append(
+            {
+                "date": d.isoformat(),
+                "process_contains": pc_s,
+                "operator_names": op_names,
+            }
+        )
+    return out
+
+
+def _active_global_day_process_must_include(
+    gpo: dict,
+    task: dict,
+    current_date: date,
+    capable_members: list,
+    roster_members: list,
+) -> tuple[list[str], list[str]]:
+    """
+    グローバルコメント由来の「日付×工程×複数指名」で、その日・その工程タスクに
+    **チームへ必ず含める**メンバー（skills 行キー）と警告メッセージを返す。
+    """
+    rules = gpo.get("global_day_process_operator_rules") or []
+    if not isinstance(rules, list):
+        return [], []
+    machine = task.get("machine")
+    warns: list[str] = []
+    acc: list[str] = []
+    seen_m: set[str] = set()
+    tid = str(task.get("task_id") or "").strip()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        rd = parse_optional_date(rule.get("date"))
+        if rd is None or rd != current_date:
+            continue
+        pc = rule.get("process_contains") or ""
+        pcn = unicodedata.normalize("NFKC", str(pc).strip())
+        if not pcn or not _task_process_matches_global_contains(machine, pcn):
+            continue
+        for raw_name in rule.get("operator_names") or []:
+            mem = _resolve_preferred_name_to_capable_member(
+                raw_name, capable_members, roster_members
+            )
+            if mem:
+                if mem not in seen_m:
+                    seen_m.add(mem)
+                    acc.append(mem)
+            else:
+                warns.append(
+                    "メイングローバル(日付×工程)指名: "
+                    f"依頼NO={tid} 日付={current_date} 工程={machine!r} の "
+                    f"指名「{raw_name}」を当日スキル該当メンバーに解決できません"
+                )
+    return acc, warns
+
+
+def _merge_global_day_process_and_pref_anchor(
+    must_include: list, pref_mem, capable_members: list
+) -> list[str]:
+    """必須メンバーと担当OP指名を1本化（capable にいるものだけ）。"""
+    fixed: list[str] = []
+    seen: set[str] = set()
+    for m in must_include or []:
+        if m in capable_members and m not in seen:
+            seen.add(m)
+            fixed.append(m)
+    if (
+        pref_mem
+        and pref_mem in capable_members
+        and pref_mem not in seen
+    ):
+        fixed.append(pref_mem)
+    return fixed
 
 
 # =========================================================
@@ -11485,6 +11641,29 @@ def _assign_one_roll_trial_order_flow(
         else None
     )
 
+    _gdp_must, _gdp_warns = _active_global_day_process_must_include(
+        _gpo, task, current_date, capable_members, members
+    )
+    for _gw in _gdp_warns:
+        logging.warning(_gw)
+    fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
+        _gdp_must, pref_mem, capable_members
+    )
+    if _gdp_must:
+        logging.info(
+            "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
+            task.get("task_id"),
+            current_date,
+            machine,
+            ",".join(_gdp_must),
+        )
+    if fixed_team_anchor:
+        _nfix = len(fixed_team_anchor)
+        if _nfix > req_num:
+            need_src_line = (need_src_line + " → ") if need_src_line else ""
+            need_src_line += f"グローバル(日付×工程)指名で最低{_nfix}人"
+        req_num = max(req_num, _nfix)
+
     extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
         machine,
         machine_name,
@@ -11707,7 +11886,10 @@ def _assign_one_roll_trial_order_flow(
     _same_day_last_roll = _last_hist_date == current_date.strftime("%m/%d")
     if preferred_team and _same_day_last_roll:
         pt = tuple(preferred_team)
-        if all(m in capable_members and m in avail_dt for m in pt):
+        _pref_pt_ok = (not fixed_team_anchor) or all(
+            m in pt for m in fixed_team_anchor
+        )
+        if _pref_pt_ok and all(m in capable_members and m in avail_dt for m in pt):
             got = _one_roll_from_team(pt)
             if got is not None:
                 _cid_pt = _lookup_combo_sheet_row_id_for_preset_team(
@@ -11739,6 +11921,8 @@ def _assign_one_roll_trial_order_flow(
             if bounds is None:
                 continue
             lo_pt, hi_pt = bounds
+            if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
+                continue
             if pref_mem is not None and pref_mem not in preset_team:
                 continue
             if not all(m in capable_members for m in preset_team):
@@ -11757,7 +11941,22 @@ def _assign_one_roll_trial_order_flow(
                     }
                 )
     for tsize in range(req_num, max_team_size + 1):
-        if (
+        if fixed_team_anchor:
+            _ft = list(fixed_team_anchor)
+            others = [m for m in capable_members if m not in _ft]
+            need_extra = tsize - len(_ft)
+            if need_extra < 0:
+                teams_iter = []
+            elif need_extra == 0:
+                teams_iter = [tuple(_ft)]
+            elif len(others) >= need_extra:
+                teams_iter = [
+                    tuple(_ft + list(rest))
+                    for rest in itertools.combinations(others, need_extra)
+                ]
+            else:
+                teams_iter = []
+        elif (
             pref_mem is not None
             and pref_mem in capable_members
             and skill_role_priority(pref_mem)[0] == "OP"
@@ -13152,6 +13351,39 @@ def generate_plan():
                                 task.get("task_id"),
                                 pref_raw,
                             )
+
+                        _gdp_must, _gdp_warns = _active_global_day_process_must_include(
+                            _gpo,
+                            task,
+                            current_date,
+                            capable_members,
+                            members,
+                        )
+                        for _gw in _gdp_warns:
+                            logging.warning(_gw)
+                        fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
+                            _gdp_must, pref_mem, capable_members
+                        )
+                        if _gdp_must:
+                            logging.info(
+                                "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
+                                task.get("task_id"),
+                                current_date,
+                                machine,
+                                ",".join(_gdp_must),
+                            )
+                        if fixed_team_anchor:
+                            _nfix = len(fixed_team_anchor)
+                            if _nfix > req_num:
+                                need_src_line = (
+                                    (need_src_line + " → ")
+                                    if need_src_line
+                                    else ""
+                                )
+                                need_src_line += (
+                                    f"グローバル(日付×工程)指名で最低{_nfix}人"
+                                )
+                            req_num = max(req_num, _nfix)
     
                         extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
                             machine,
@@ -13251,6 +13483,10 @@ def generate_plan():
                                 )
                                 if bounds is None:
                                     continue
+                                if fixed_team_anchor and not all(
+                                    m in pteam for m in fixed_team_anchor
+                                ):
+                                    continue
                                 if pref_mem is not None and pref_mem not in pteam:
                                     continue
                                 if not all(m in capable_members for m in pteam):
@@ -13275,7 +13511,24 @@ def generate_plan():
                                 )
     
                         for tsize in range(req_num, max_team_size + 1):
-                            if (
+                            if fixed_team_anchor:
+                                _ft = list(fixed_team_anchor)
+                                others = [m for m in capable_members if m not in _ft]
+                                need_extra = tsize - len(_ft)
+                                if need_extra < 0:
+                                    teams_iter = []
+                                elif need_extra == 0:
+                                    teams_iter = [tuple(_ft)]
+                                elif len(others) >= need_extra:
+                                    teams_iter = [
+                                        tuple(_ft + list(rest))
+                                        for rest in itertools.combinations(
+                                            others, need_extra
+                                        )
+                                    ]
+                                else:
+                                    teams_iter = []
+                            elif (
                                 pref_mem is not None
                                 and pref_mem in capable_members
                                 and skill_role_priority(pref_mem)[0] == "OP"
