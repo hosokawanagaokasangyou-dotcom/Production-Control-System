@@ -204,21 +204,33 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Dim waitStyle As Long
     Dim exitFromFile As Long
     Dim exitPath As String
+    Dim unlockInteractiveForPoll As Boolean
     cmdLine = BuildStageExecCommandLine(cmdFilePath, hideConsoleWindow)
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
+    unlockInteractiveForPoll = False
     On Error Resume Next
     Set execObj = wsh.Exec(cmdLine)
     If Err.Number <> 0 Or execObj Is Nothing Then
         Err.Clear
+        ' 同期 Run は VBA を占有しスプラッシュは更新されない。念のため Interactive を戻しても Run 中は DoEvents 不能。
+        If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
+            Application.Interactive = True
+            unlockInteractiveForPoll = True
+        End If
         RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
         exitPath = StageVbaExitCodeFilePath()
         If Len(Dir(exitPath)) > 0 Then
             exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
             If exitFromFile <> &H7FFFFFFF Then RunCmdFileStageExecAndPoll = exitFromFile
         End If
-        Exit Function
+        GoTo RestoreInteractiveAfterStagePoll
     End If
     On Error GoTo 0
+    ' Application.Interactive=False だと UserForm がほぼ再描画されない。ポーリング中だけ True に戻す（終了後は再ロック）
+    If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
+        Application.Interactive = True
+        unlockInteractiveForPoll = True
+    End If
     positioned = False
     probe = 0
     cx = GetSystemMetrics(SM_CXSCREEN)
@@ -258,6 +270,10 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     End If
     If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
     On Error GoTo 0
+RestoreInteractiveAfterStagePoll:
+    If unlockInteractiveForPoll Then
+        If m_macroSplashLockedExcel And m_macroSplashShown Then Application.Interactive = False
+    End If
 End Function
 
 Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String) As Long
@@ -1453,6 +1469,7 @@ End Sub
 ' マクロ実行中スプラッシュ（擬似モーダル）
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
+' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
 ' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
 ' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋システム音（MacroCompleteChime）
@@ -1490,6 +1507,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     tb.Text = s
     tb.SelStart = Len(tb.Text)
     tb.SelLength = 0
+    frmMacroSplash.Repaint
     DoEvents
 End Sub
 
