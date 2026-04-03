@@ -21,6 +21,8 @@ Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
 Private Const SWP_NOZORDER As Long = &H4
 Private Const SWP_SHOWWINDOW As Long = &H40
+' 段階1/2 の cmd: True=ウィンドウ非表示（スプラッシュを隠さない）。py の標準出力・エラーを log\pm_ai_cmd_stdout.txt へリダイレクトし、非表示時のパイプ詰まりで停止しないようにする。False=画面上部にコンソール（1/4 高さ・全幅）
+Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
@@ -45,7 +47,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。
-' ★ 段階1/2 は一時 .cmd の先頭に title を挿入し cmd.exe /c を1回だけ起動（外側 cmd+start の二重コンソールを作らない）。FindWindow→SetWindowPos で左上・全幅・高さ1/4。その他の .cmd は従来どおり cmd.exe /c。
+' ★ 段階1/2: STAGE12_CMD_HIDE_WINDOW=True なら cmd を Run ウィンドウスタイル0（非表示）。py 行は log\pm_ai_cmd_stdout.txt へ 1>>2>&1 しパイプ詰まりを防ぐ。False なら一時 .cmd に title 付与し単一 cmd を Exec、FindWindow→SetWindowPos（左上・全幅・高さ1/4）。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -116,6 +118,30 @@ Private Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titl
     AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & body
 End Function
 
+' 非表示 cmd 用: py 行へ stdout/stderr をファイルへ逃がす（コンソール無しで print/logging が詰まるのを防ぐ）
+Private Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
+    Dim t As String
+    Dim lines() As String
+    Dim i As Long
+    Dim s As String
+    Const relLog As String = "log\pm_ai_cmd_stdout.txt"
+    t = Replace(Replace(body, vbCrLf, vbLf), vbCr, vbLf)
+    lines = Split(t, vbLf)
+    For i = LBound(lines) To UBound(lines)
+        s = lines(i)
+        If Len(s) > 0 Then
+            If InStr(1, LTrim$(s), "py ", vbTextCompare) = 1 Then
+                If InStr(1, s, "1>>") = 0 Then
+                    lines(i) = RTrim$(s) & " 1>> """ & relLog & """ 2>&1"
+                End If
+                EnsureStageBatchStdoutRedirect = Join(lines, vbCrLf)
+                Exit Function
+            End If
+        End If
+    Next i
+    EnsureStageBatchStdoutRedirect = body
+End Function
+
 Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal consoleTitleForLayout As String = "") As Long
     Dim execObj As Object
     Dim cmdLine As String
@@ -165,10 +191,23 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
     On Error GoTo 0
 End Function
 
-Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False) As Long
+Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal hideCmdWindow As Boolean = False) As Long
     Dim p As String
     Dim uniq As String
-    If applyTopQuarterFullWidthConsole Then
+    Dim batText As String
+    Dim rc As Double
+    If hideCmdWindow Then
+        batText = EnsureStageBatchStdoutRedirect(body)
+        p = WriteTempCmdFile(batText)
+        On Error Resume Next
+        rc = wsh.Run("cmd.exe /c """ & p & """", 0, True)
+        If Err.Number <> 0 Then
+            Err.Clear
+            RunTempCmdWithConsoleLayout = -1
+        Else
+            RunTempCmdWithConsoleLayout = CLng(rc)
+        End If
+    ElseIf applyTopQuarterFullWidthConsole Then
         Randomize
         uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
         p = WriteTempCmdFile(AugmentCmdBodyWithConsoleTitle(body, uniq))
@@ -179,6 +218,7 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
     End If
     On Error Resume Next
     Kill p
+    On Error GoTo 0
 End Function
 
 ' =========================================================
@@ -2699,10 +2739,11 @@ Private Sub 段階1_コア実行()
     Kill targetDir & "\log\execution_log.txt"
     On Error GoTo ErrStage1
 
-    MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。コンソール完了までそのままお待ちください…"
+    MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
     wsh.CurrentDirectory = Environ("TEMP")
     ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
     runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+             "if not exist log mkdir log" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
              "py -3 -u python\task_extract_stage1.py" & vbCrLf & _
@@ -2710,7 +2751,7 @@ Private Sub 段階1_コア実行()
              "echo." & vbCrLf & _
              "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, True)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
     m_lastStage1ExitCode = exitCode
 
     MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
@@ -3408,8 +3449,9 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' リダイレクトは付けない（付けるとコンソールが真っ黒になる）。ログは Python が execution_log.txt にも出力する。
     cmdLogPath = targetDir & "\log\cmd_stage2.log"
     ' /v:on … py の終了コードを exit /b で返す（末尾の echo だけだと ERRORLEVEL=0 になり VBA が正常終了と誤認しがち）
-    MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。コンソール完了までそのままお待ちください…"
+    MacroSplash_SetStep "段階2: Python（plan_simulation）で計画シミュレーションを実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
     runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+             "if not exist log mkdir log" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
              "py -3 -u python\plan_simulation_stage2.py" & vbCrLf & _
@@ -3418,8 +3460,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
              "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
-    ' 4. コマンドプロンプトを表示＆完了まで待機（ウィンドウは左上・全幅・高さ1/4）
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, True)
+    ' 4. cmd 完了まで待機（STAGE12_CMD_HIDE_WINDOW=True なら非表示＋標準出力は log\pm_ai_cmd_stdout.txt）
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
     m_lastStage2ExitCode = exitCode
     ' Python が検証エラー（例: exit 3）のとき log\stage2_blocking_message.txt に1行メッセージを残す。計画生成の MsgBox 用。
     If exitCode <> 0 Then
