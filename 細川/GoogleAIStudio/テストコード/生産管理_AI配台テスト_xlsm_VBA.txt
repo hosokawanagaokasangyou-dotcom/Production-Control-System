@@ -50,7 +50,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。txtExecutionLog に log\execution_log.txt をポーリング表示可。
-' ★ 段階1/2: Exec＋待機ループで log を刷新。STAGE12_CMD_HIDE_WINDOW=True ならコンソールを FindWindow 後 ShowWindow(SW_HIDE)。False なら SetWindowPos（左上・全幅・高さ1/4）。非表示時は py を pm_ai_cmd_stdout.txt へリダイレクト。
+' ★ 段階1/2: Exec＋待機ループで log を刷新。STAGE12_CMD_HIDE_WINDOW=True なら conhost --headless で Windows Terminal を経由しない（黒画面がスプラッシュを覆うのを防ぐ）。終了コードは log\stage_vba_exitcode.txt を優先。False なら cmd＋SetWindowPos（左上・全幅・高さ1/4）。非表示時は py を pm_ai_cmd_stdout.txt へリダイレクト。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -148,7 +148,48 @@ Private Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     EnsureStageBatchStdoutRedirect = body
 End Function
 
-' 段階1/2: 単一 cmd を Exec し、待機中にログファイルをスプラッシュへ反映。hideConsoleWindow なら一度 ShowWindow(SW_HIDE)
+Private Function StageVbaExitCodeFilePath() As String
+    Dim k As Long
+    StageVbaExitCodeFilePath = ""
+    If Len(m_splashExecutionLogPath) = 0 Then Exit Function
+    k = InStrRev(m_splashExecutionLogPath, "\")
+    If k <= 0 Then Exit Function
+    StageVbaExitCodeFilePath = Left$(m_splashExecutionLogPath, k) & "stage_vba_exitcode.txt"
+End Function
+
+Private Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
+    Dim s As String
+    On Error GoTo Fail
+    ReadStageVbaExitCodeFromFile = &H7FFFFFFF
+    If Len(Dir(fullPath)) = 0 Then Exit Function
+    s = GeminiReadUtf8File(fullPath)
+    s = Trim$(Replace(Replace(Replace(s, vbCrLf, ""), vbLf, ""), vbCr, ""))
+    If Len(s) = 0 Then Exit Function
+    ReadStageVbaExitCodeFromFile = CLng(Val(s))
+    Exit Function
+Fail:
+    ReadStageVbaExitCodeFromFile = &H7FFFFFFF
+End Function
+
+' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
+Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
+    Dim conhostExe As String
+    Dim comSpec As String
+    If Not hideConsoleWindow Then
+        BuildStageExecCommandLine = "cmd.exe /c """ & cmdFilePath & """"
+        Exit Function
+    End If
+    conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
+    comSpec = Environ("ComSpec")
+    If Len(comSpec) = 0 Then comSpec = Environ("SystemRoot") & "\System32\cmd.exe"
+    If Len(Dir(conhostExe)) > 0 Then
+        BuildStageExecCommandLine = """" & conhostExe & """ --headless """ & comSpec & """ /c """ & cmdFilePath & """"
+    Else
+        BuildStageExecCommandLine = """" & comSpec & """ /c """ & cmdFilePath & """"
+    End If
+End Function
+
+' 段階1/2: 単一プロセスを Exec し、待機中にログファイルをスプラッシュへ反映。hide 時は conhost --headless（WT による黒画面を避ける）
 Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean) As Long
     Dim execObj As Object
     Dim cmdLine As String
@@ -162,13 +203,20 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Dim cyQuarter As Long
     Dim probe As Long
     Dim waitStyle As Long
-    cmdLine = "cmd.exe /c """ & cmdFilePath & """"
+    Dim exitFromFile As Long
+    Dim exitPath As String
+    cmdLine = BuildStageExecCommandLine(cmdFilePath, hideConsoleWindow)
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     On Error Resume Next
     Set execObj = wsh.Exec(cmdLine)
     If Err.Number <> 0 Or execObj Is Nothing Then
         Err.Clear
         RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
+        exitPath = StageVbaExitCodeFilePath()
+        If Len(Dir(exitPath)) > 0 Then
+            exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
+            If exitFromFile <> &H7FFFFFFF Then RunCmdFileStageExecAndPoll = exitFromFile
+        End If
         Exit Function
     End If
     On Error GoTo 0
@@ -178,18 +226,19 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
-        If Len(consoleTitle) > 0 And Not positioned Then
-            hwnd = FindWindow(0&, consoleTitle)
-            If hwnd <> 0 Then
-                If hideConsoleWindow Then
-                    ShowWindow hwnd, SW_HIDE
-                ElseIf applyQuarterLayout Then
-                    SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+        ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
+        If Not hideConsoleWindow Then
+            If Len(consoleTitle) > 0 And Not positioned Then
+                hwnd = FindWindow(0&, consoleTitle)
+                If hwnd <> 0 Then
+                    If applyQuarterLayout Then
+                        SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+                    End If
+                    positioned = True
+                Else
+                    probe = probe + 1
+                    If probe > 120 Then positioned = True
                 End If
-                positioned = True
-            Else
-                probe = probe + 1
-                If probe > 120 Then positioned = True
             End If
         End If
         Sleep 50&
@@ -197,7 +246,17 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Loop
     MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
-    RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+    exitPath = StageVbaExitCodeFilePath()
+    If Len(Dir(exitPath)) > 0 Then
+        exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
+        If exitFromFile <> &H7FFFFFFF Then
+            RunCmdFileStageExecAndPoll = exitFromFile
+        Else
+            RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+        End If
+    Else
+        RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+    End If
     If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
     On Error GoTo 0
 End Function
@@ -2772,6 +2831,7 @@ Private Sub 段階1_コア実行()
 
     On Error Resume Next
     Kill targetDir & "\log\execution_log.txt"
+    Kill targetDir & "\log\stage_vba_exitcode.txt"
     On Error GoTo ErrStage1
 
     MacroSplash_SetStep "段階1: Python（task_extract）でタスク抽出を実行しています。完了までお待ちください…（詳細は LOG シート・log\execution_log.txt）"
@@ -2785,6 +2845,7 @@ Private Sub 段階1_コア実行()
              "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
+             "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
              "exit /b !STAGE1_PY_EXIT!"
     m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
     MacroSplash_ClearExecutionLogPane
@@ -3458,6 +3519,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' ★修正：削除対象のログファイルのパスを output フォルダ配下に変更
     On Error Resume Next
     Kill targetDir & "\log\execution_log.txt"
+    Kill targetDir & "\log\stage_vba_exitcode.txt"
     Kill targetDir & "\log\cmd_stage2.log"
     On Error GoTo 0
     
@@ -3496,6 +3558,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
              "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
+             "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
              "exit /b !STAGE2_PY_EXIT!"
     
     ' 4. cmd 完了まで待機（待機中は execution_log をスプラッシュ txtExecutionLog へポーリング）
