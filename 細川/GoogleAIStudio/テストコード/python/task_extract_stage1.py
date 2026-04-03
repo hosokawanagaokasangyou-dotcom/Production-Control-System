@@ -49,6 +49,7 @@ def _append_execution_log_line(level: str, msg: str) -> None:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
                 f.write(line)
+                f.flush()
             return
         except OSError as ex:
             last_err = ex
@@ -83,6 +84,7 @@ except Exception:
             with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
                 f.write(_err_head)
                 f.write(_tb)
+                f.flush()
         except OSError:
             pass
     traceback.print_exc()

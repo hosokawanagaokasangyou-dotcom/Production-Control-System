@@ -119,6 +119,15 @@ if logger.hasHandlers():
 
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
+
+class _FlushingFileHandler(logging.FileHandler):
+    """1レコード書き込みごとに flush し、VBA が execution_log.txt をポーリングしても追記が見えるようにする。"""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        self.flush()
+
+
 # 1. 画面(コンソール)用ハンドラ
 stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setFormatter(formatter)
@@ -195,7 +204,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
 # 3. ファイル用ハンドラ（VBAで後から読み取るため UTF-8 で保存）
 log_file_path = os.path.join(log_dir, 'execution_log.txt')
 # BOM 付き UTF-8（Excel / VBA の ADODB.Stream が文字化けしにくい）
-file_handler = logging.FileHandler(log_file_path, encoding='utf-8-sig')
+file_handler = _FlushingFileHandler(log_file_path, encoding='utf-8-sig')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
