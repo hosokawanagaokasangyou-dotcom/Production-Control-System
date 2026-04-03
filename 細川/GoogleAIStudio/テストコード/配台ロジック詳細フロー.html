@@ -146,6 +146,7 @@
     <tr><td><span class="mono">加工速度</span> <span class="mono">TASK_COL_SPEED</span></td><td>速度（上書きと合算後 <span class="mono">speed</span>）</td><td><span class="mono">加工速度_上書き</span>があれば優先。メイン全局の <span class="mono">global_speed_rules</span> で倍率可</td></tr>
     <tr><td><span class="mono">製品名</span> <span class="mono">TASK_COL_PRODUCT</span></td><td><span class="mono">unit_m</span></td><td><span class="mono">infer_unit_m_from_product_name()</span> で1単位のメートル換算</td></tr>
     <tr><td><span class="mono">回答納期</span> / <span class="mono">指定納期</span> / <span class="mono">原反投入日</span></td><td><span class="mono">answer_due_date</span> / <span class="mono">specified_due_date</span> / <span class="mono">raw_input_date</span></td><td>結果シート表示・基準納期ルールの材料</td></tr>
+    <tr><td><span class="mono">在庫場所</span> <span class="mono">TASK_COL_STOCK_LOCATION</span></td><td>—</td><td>加工計画DATA から段階1でコピー（原反投入日の右隣）。配台キューdictには含めない表示用</td></tr>
     <tr><td><span class="mono">指定納期_上書き</span> <span class="mono">PLAN_COL_SPECIFIED_DUE_OVERRIDE</span></td><td><span class="mono">specified_due_override</span>、<span class="mono">due_basis_date</span>候補</td><td>優先順位は下記「計画基準納期」フロー参照</td></tr>
     <tr><td><span class="mono">加工内容</span> <span class="mono">TASK_COL_PROCESS_CONTENT</span></td><td><span class="mono">process_sequence_rank</span></td><td>同一依頼NO内の工程順リストから工程名の位置</td></tr>
     <tr><td><span class="mono">加工完了区分</span></td><td>—</td><td><span class="mono">row_has_completion_keyword()</span> で True なら<strong>キューに載せない</strong></td></tr>

@@ -112,6 +112,7 @@
       <li><a href="#need-surplus">need 追加人数（余力・メイン後追記）</a></li>
       <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#roll-unit-length">ロール単位長さ（配台計画_タスク入力）</a></li>
+      <li><a href="#stock-location">在庫場所（配台計画_タスク入力）</a></li>
       <li><a href="#global">A. 全加工依頼に適用する追加ルール</a></li>
       <li><a href="#individual">B. 個別に指定する追加ルール</a></li>
       <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
@@ -176,6 +177,14 @@
       <li><strong>列</strong>: <code>ロール単位長さ</code>（<code>PLAN_COL_ROLL_UNIT_LENGTH</code>）。シートでは <strong>製品名の右隣</strong>。</li>
       <li><strong>段階1</strong>: <code>infer_unit_m_from_product_name</code> と換算数量フォールバックで <strong>1ロールあたりの m</strong> を計算して出力。再抽出時は旧シートのセルに値があれば <strong>依頼NO＋工程名</strong>キーで引き継ぎ。</li>
       <li><strong>段階2</strong>: <code>build_task_queue_from_planning_df</code> は<strong>まずこの列の数値</strong>を <code>unit_m</code> に使う。<strong>空・0・不正</strong>のときだけ従来の製品名推定へフォールバック。</li>
+    </ul>
+  </section>
+
+  <section id="stock-location" class="card" aria-labelledby="h-stock-loc">
+    <h2 id="h-stock-loc">在庫場所（配台計画_タスク入力）</h2>
+    <ul>
+      <li><strong>列</strong>: <code>在庫場所</code>（<code>TASK_COL_STOCK_LOCATION</code>）。<strong>加工計画DATA</strong> に同名の列があるとき、段階1で <strong>原反投入日の右隣</strong>に出力されます（<code>SOURCE_BASE_COLUMNS</code> / <code>plan_input_sheet_column_order</code>）。</li>
+      <li><strong>配台計算</strong>: 参照表示のみ。キュー（<code>build_task_queue_from_planning_df</code>）の内部キーには載せません。</li>
     </ul>
   </section>
 
