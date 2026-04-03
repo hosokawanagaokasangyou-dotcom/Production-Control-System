@@ -29,6 +29,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
+' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt（未作成ならスキップされエラーにはならない）。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン）
 '   ・本ブックと同じフォルダの xlwings.conf.json（PYTHONPATH=python）を用意。
@@ -55,6 +56,10 @@ Private m_stage2PlanImported As Boolean
 Private m_stage2MemberImported As Boolean
 ' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
 Private m_lastRefreshQueriesErrMsg As String
+' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
+Private m_macroSplashShown As Boolean
+' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
+Private m_macroSplashLockedExcel As Boolean
 
 ' =========================================================
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
@@ -64,19 +69,19 @@ Private m_lastRefreshQueriesErrMsg As String
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
-    RunPython False
+    アニメ付き_スプラッシュ付きで実行 "シミュレーション（計画生成）を実行しています…", "RunPython", False
 End Sub
 
 ' 段階1: 加工計画DATA からタスク抽出 → output に xlsx 出力し「配台計画_タスク入力」へ取り込み
 Sub アニメ付き_タスク抽出を実行()
     Call AnimateButtonPush
-    RunPythonStage1
+    アニメ付き_スプラッシュ付きで実行 "タスク抽出（段階1）を実行しています…", "RunPythonStage1"
 End Sub
 
 ' 段階1→保存反映→段階2を続けて実行（配台計画シートの手編集を挟まない一括実行）
 Sub アニメ付き_段階1と段階2を連続実行()
     Call AnimateButtonPush
-    RunPythonStage1ThenStage2
+    アニメ付き_スプラッシュ付きで実行 "段階1と段階2を連続実行しています…", "RunPythonStage1ThenStage2"
 End Sub
 
 Sub アニメ付き_環境構築を実行()
@@ -100,23 +105,25 @@ Sub アニメ付き_環境構築を実行()
     End If
     
     Call AnimateButtonPush
-    Call InstallComponents
+    アニメ付き_スプラッシュ付きで実行 "環境構築を実行しています…", "InstallComponents"
 End Sub
 
 ' 図形ボタン用：Caller が取れるのは「この Sub が OnAction のとき」だけ。本体を直接割り当てるとアニメは動かない。
 Sub アニメ付き_全シートフォントをリストから選択して統一()
     Call AnimateButtonPush
-    Call 全シートフォントをリストから選択して統一
+    ' xlDialogFormatFont 表示のためグリッド操作ブロックは使わない
+    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを一覧から選んで統一しています…", "全シートフォントをリストから選択して統一", , , False
 End Sub
 
 Sub アニメ付き_全シートフォントを手入力で統一()
     Call AnimateButtonPush
-    Call 全シートフォントを手入力で統一
+    ' Application.InputBox 用にグリッド操作ブロックは使わない
+    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを手入力の名前で統一しています…", "全シートフォントを手入力で統一", , , False
 End Sub
 
 Sub アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
     Call AnimateButtonPush
-    Call 全シートフォント_BIZ_UDPゴシックに統一
+    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを BIZ UDP ゴシックに統一しています…", "全シートフォント_BIZ_UDPゴシックに統一"
 End Sub
 
 ' =========================================================
@@ -126,19 +133,20 @@ End Sub
 ' =========================================================
 Sub アニメ付き_Gemini認証を暗号化してB1に保存()
     Call AnimateButtonPush
-    Call 設定_Gemini認証を暗号化してB1に保存
+    ' InputBox 等があるためグリッド操作ブロックは使わない（スプラッシュのみ）
+    アニメ付き_スプラッシュ付きで実行 "Gemini 認証を暗号化して保存しています…", "設定_Gemini認証を暗号化してB1に保存", , , False
 End Sub
 
 ' 列設定シートの内容を「結果_タスク一覧」へ反映（Python）。図形の OnAction には本マクロを指定（本体を直指定するとアニメは動かない）。
 Sub アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用()
     Call AnimateButtonPush
-    Call 列設定_結果_タスク一覧_列順表示をPython適用
+    アニメ付き_スプラッシュ付きで実行 "列設定を結果タスク一覧に反映しています…", "列設定_結果_タスク一覧_列順表示をPython適用"
 End Sub
 
 ' 列設定シート A:B のみ重複列名を削除（結果シートは触らない）。図形には「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
 Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
     Call AnimateButtonPush
-    Call 列設定_結果_タスク一覧_重複列名を整理
+    アニメ付き_スプラッシュ付きで実行 "列設定シートの重複列名を整理しています…", "列設定_結果_タスク一覧_重複列名を整理"
 End Sub
 
 Private Function GeminiJsonStringEscape(ByVal s As String) As String
@@ -340,7 +348,7 @@ End Sub
 
 Sub アニメ付き_メインシート_masterブックを開く()
     Call AnimateButtonPush
-    Call メインシート_masterブックを開く
+    アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
 End Sub
 
 ' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
@@ -1207,6 +1215,65 @@ Private Sub AnimateButtonPush()
     shp.Left = originalLeft
     If hasShadow Then shp.Shadow.Visible = msoTrue
     DoEvents
+End Sub
+
+' =========================================================
+' マクロ実行中スプラッシュ（擬似モーダル）
+' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
+' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
+' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
+' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
+' =========================================================
+Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
+    On Error GoTo CleanupFail
+    If m_macroSplashShown Then MacroSplash_Hide
+    If Len(Trim$(message)) = 0 Then
+        message = "処理中です。しばらくお待ちください。"
+    End If
+    frmMacroSplash.lblMessage.Caption = message
+    frmMacroSplash.StartUpPosition = 2  ' 画面中央
+    m_macroSplashLockedExcel = False
+    If lockExcelUI Then
+        Application.Interactive = False
+        m_macroSplashLockedExcel = True
+    End If
+    frmMacroSplash.Show vbModeless
+    m_macroSplashShown = True
+    DoEvents
+    Exit Sub
+CleanupFail:
+    On Error Resume Next
+    If m_macroSplashLockedExcel Then Application.Interactive = True
+    m_macroSplashLockedExcel = False
+    m_macroSplashShown = False
+End Sub
+
+Private Sub MacroSplash_Hide()
+    On Error Resume Next
+    If m_macroSplashShown Then
+        Unload frmMacroSplash
+    End If
+    m_macroSplashShown = False
+    If m_macroSplashLockedExcel Then
+        Application.Interactive = True
+        m_macroSplashLockedExcel = False
+    End If
+End Sub
+
+' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
+' 最後の lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
+Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True)
+    On Error GoTo CleanUp
+    MacroSplash_Show splashMessage, lockExcelUI
+    If IsMissing(arg1) And IsMissing(arg2) Then
+        Application.Run procName
+    ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
+        Application.Run procName, arg1
+    Else
+        Application.Run procName, arg1, arg2
+    End If
+CleanUp:
+    MacroSplash_Hide
 End Sub
 
 ' =========================================================
