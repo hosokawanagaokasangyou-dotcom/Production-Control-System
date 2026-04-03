@@ -120,19 +120,33 @@ if logger.hasHandlers():
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
 
-class _FlushingFileHandler(logging.FileHandler):
-    """1レコードごとに flush + fsync。VBA が execution_log.txt をポーリングするとき遅延を抑える。"""
+class _FlushingFileHandler(logging.Handler):
+    """1レコードごとに追記後 fsync し、都度ファイルを閉じる。
+
+    logging.FileHandler はファイルを開きっぱなしにするため、Windows では VBA 側の
+    ADODB.LoadFromFile / FileCopy が共有違反で失敗し、スプラッシュのポーリングが
+    先頭1行のまま止まることがある。開閉 per emit で他プロセスが読めるようにする。
+    """
+
+    terminator = "\n"
+
+    def __init__(self, filename: str, encoding: str = "utf-8-sig") -> None:
+        super().__init__()
+        self.baseFilename = os.path.abspath(filename)
+        self.encoding = encoding
 
     def emit(self, record: logging.LogRecord) -> None:
-        super().emit(record)
-        self.flush()
         try:
-            stream = self.stream
-            if stream is not None:
-                fd = stream.fileno()
-                os.fsync(fd)
-        except OSError:
-            pass
+            msg = self.format(record) + self.terminator
+            with open(self.baseFilename, "a", encoding=self.encoding, newline="\n") as f:
+                f.write(msg)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+        except Exception:
+            self.handleError(record)
 
 
 # 1. 画面(コンソール)用ハンドラ
@@ -211,7 +225,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
 # 3. ファイル用ハンドラ（VBAで後から読み取るため UTF-8 で保存）
 log_file_path = os.path.join(log_dir, 'execution_log.txt')
 # BOM 付き UTF-8（Excel / VBA の ADODB.Stream が文字化けしにくい）
-file_handler = _FlushingFileHandler(log_file_path, encoding='utf-8-sig')
+file_handler = _FlushingFileHandler(log_file_path, encoding="utf-8-sig")
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
