@@ -20,6 +20,7 @@
 ' ※ このテキストは .frm のバイナリ(frx)を含まない。手作業での追加を想定している。
 ' ※ txtExecutionLog が無い／名前が違う場合でもマクロは継続（ログ表示のみスキップ）。
 ' ※ 段階1/2: STAGE12_USE_XLWINGS_SPLASH_LOG=True のときは必ず cmd+Exec。VBA が execution_log.txt をポーリングして txtExecutionLog を実行中に更新する（固まったように見えにくい）。
+' ※ Python が execution_log を開きっぱなしのときは ADODB の直接読みが失敗しうるため、標準モジュールは一時コピー経由にフォールバックし、ScreenUpdating も一時 True にする。
 ' ※ SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True のときは同期 RunPython → 実行中はログ枠はほぼ動かず、終了後に MacroSplash_LoadExecutionLogFromPath で一括表示。
 ' ※ SplashLog_AppendChunk は任意（バッチで PM_AI_SPLASH_XLWINGS=1 を付けた自前運用向け）。既定はポーリングのみ。
 ' ※ 成功終了時は標準モジュールの MacroCompleteChime（winmm PlaySound・別名 SystemDefault）が鳴る。
