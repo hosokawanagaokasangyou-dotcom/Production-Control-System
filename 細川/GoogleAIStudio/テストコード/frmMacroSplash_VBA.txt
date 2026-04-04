@@ -27,7 +27,7 @@
 ' ※ それでも読めないときは txtExecutionLog 先頭に【ログ表示エラー】を1回だけ付け、lblMessage にも短い案内を出す。
 ' ※ SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True のときは同期 RunPython → 実行中はログ枠はほぼ動かず、終了後に MacroSplash_LoadExecutionLogFromPath で一括表示。
 ' ※ SplashLog_AppendChunk は任意（バッチで PM_AI_SPLASH_XLWINGS=1 を付けた自前運用向け）。既定はポーリングのみ。
-' ※ 成功終了時は標準モジュールの MacroCompleteChime（sounds\macro_complete_chime.wav を PlaySoundW。無ければ GitHub raw から取得を試みる）が鳴る。
+' ※ 成功終了時は標準モジュールの MacroCompleteChime（設定 D4 のトラック 1〜4＝sounds\*.mp3 を MCI 再生。不可なら WAV／GitHub raw／SystemAsterisk）が鳴る。
 '
 ' ------------------------------------------------------------
 ' frmMacroSplash コード（UserForm のコードモジュールへ貼り付け）
