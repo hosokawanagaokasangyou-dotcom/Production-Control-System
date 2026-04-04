@@ -65,7 +65,7 @@ Private Const MACRO_COMPLETE_MP3_2 As String = "穏やかな応答2.mp3"
 Private Const MACRO_COMPLETE_MP3_3 As String = "穏やかな応答3.mp3"
 Private Const MACRO_COMPLETE_MP3_4 As String = "穏やかな応答4.mp3"
 ' スプラッシュ中 BGM（sounds 配下）。MCI 固定 alias でループ再生し、終了時はフェードアウト後 close。
-Private Const MACRO_START_BGM_FILENAME As String = "Glass_Architecture.mp3"
+Private Const MACRO_START_BGM_FILENAME As String = "Glass_Architecture1.mp3"
 Private Const MACRO_START_BGM_ALIAS As String = "pm_ai_glassbg"
 ' frmMacroSplash を Excel メイン枠の下端・水平中央に合わせるときの下端からの余白（px）
 Private Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
