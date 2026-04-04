@@ -983,12 +983,56 @@ OpenFail:
     MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
 End Sub
 
+' ログ上は ActiveWorkbook=master でも、UserForm 終了直後に OS 前面が別ウィンドウに残ることがある（SDI 等）ため再アクティブ＋hwnd 前面化
+Private Sub アニメ後_masterをOs前面へ()
+    Dim path As String
+    Dim folder As String
+    Dim wb As Workbook
+    Dim w As Window
+#If VBA7 Then
+    Dim xlHwnd As LongPtr
+#Else
+    Dim xlHwnd As Long
+#End If
+    On Error Resume Next
+    folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then Exit Sub
+    path = folder & "\" & MASTER_WORKBOOK_FILE
+    For Each wb In Application.Workbooks
+        If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
+            wb.Activate
+            For Each w In wb.Windows
+                w.Activate
+                Exit For
+            Next w
+            Exit For
+        End If
+    Next wb
+    DoEvents
+#If VBA7 Then
+    xlHwnd = Application.hwnd
+#Else
+    xlHwnd = Application.hWnd
+#End If
+    If xlHwnd <> 0 Then
+        BringWindowToTop xlHwnd
+        SetForegroundWindow xlHwnd
+    End If
+    On Error GoTo 0
+End Sub
+
 Sub アニメ付き_メインシート_masterブックを開く()
     ' #region agent log
     DebugAgent_Log "H4", "anim_master_open", "entry", "pre-fix"
     ' #endregion agent log
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
+    If m_animMacroSucceeded Then
+        アニメ後_masterをOs前面へ
+        ' #region agent log
+        DebugAgent_Log "H6", "anim_master_open", "after_os_foreground_helper", "post-fix"
+        ' #endregion agent log
+    End If
 End Sub
 
 ' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
