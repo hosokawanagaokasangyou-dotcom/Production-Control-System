@@ -50,13 +50,14 @@ Private Const SWP_SHOWWINDOW As Long = &H40
 Private Const SWP_NOMOVE As Long = &H2
 Private Const SWP_NOSIZE As Long = &H1
 Private Const SWP_FRAMECHANGED As Long = &H20
+Private Const SWP_NOACTIVATE As Long = &H10
 Private Const LOGPIXELSX As Long = 88
 Private Const LOGPIXELSY As Long = 90
 Private Const GWL_STYLE As Long = -16
 ' コンソール枠除去用（Caption/ThickFrame/MinMax/SysMenu）。環境によっては conhost が無視する場合あり
 Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
-' D3=false かつスプラッシュ表示時: txtExecutionLog の画面矩形に cmd を重ねるループの待ち（ms）。ポーリング無しのため短めでよい
-Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 80
+' D3=false オーバーレイ待機（ms）。短すぎると Python→xlwings の COM 同期と Excel 主スレッドが奪い合い「応答していません」になりやすいため SPLASH_LOG と同程度にする
+Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1200
 ' ログ枠（TextBox）の画面矩形よりコンソール外周を四辺いくら縮めるか（px）。conhost の内側の黒余白で「枠が大きい」と感じる場合に調整
 Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
@@ -426,12 +427,10 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                             MacroSplash_BeginConsoleOverlay
                             ConsoleApplyBorderlessIfNeeded hwnd
                             If haveRect Then
-                                SetWindowPos hwnd, 0&, ox, oy, ow, oh, SWP_SHOWWINDOW
+                                SetWindowPos hwnd, 0&, ox, oy, ow, oh, SWP_SHOWWINDOW Or SWP_NOACTIVATE
                             Else
-                                SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+                                SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW Or SWP_NOACTIVATE
                             End If
-                            BringWindowToTop hwnd
-                            SetForegroundWindow hwnd
                             positioned = True
                         Else
                             probe = probe + 1
