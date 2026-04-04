@@ -7456,6 +7456,26 @@ def _xlwings_app_save_perf_state_pop(app, snap):
             pass
 
 
+def _xlwings_write_rect_value2_chunked(sht, data, ncols: int, row_chunk: int = 5) -> None:
+    """
+    広い Range に一括で .value を渡すと、Excel 主スレッドが長時間ブロックし
+    D3=true（スプラッシュ＋ポーリング）と同じプロセスだと数十秒〜数分かかることがある。
+    Value2 と行チャンクで COM を分割し、その間にメッセージ処理が入りやすくする。
+    """
+    n = len(data)
+    if n == 0:
+        return
+    step = max(1, int(row_chunk))
+    for i in range(0, n, step):
+        rows = data[i : i + step]
+        r1 = i + 1
+        rng = sht.range((r1, 1)).resize(len(rows), ncols)
+        try:
+            rng.api.Value2 = rows
+        except Exception:
+            rng.value = rows
+
+
 def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
@@ -7549,7 +7569,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
         try:
             _t_r0 = time_module.perf_counter()
-            sht.range((1, 1)).resize(len(data), ncols).value = data
+            _xlwings_write_rect_value2_chunked(sht, data, ncols, row_chunk=5)
             _t_r1 = time_module.perf_counter()
             # #region agent log
             _agent_debug_ndjson_log(
