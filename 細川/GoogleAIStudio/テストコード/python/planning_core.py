@@ -195,46 +195,6 @@ for _legacy_name in (
         pass
 
 
-# #region agent log
-def _agent_stage2_perf_log_path() -> str:
-    d = os.path.abspath(os.getcwd())
-    for _ in range(16):
-        if os.path.exists(os.path.join(d, ".git")):
-            return os.path.join(d, "debug-2067ed.log")
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.join(os.path.abspath(os.getcwd()), "debug-2067ed.log")
-
-
-def _agent_stage2_perf_log(
-    *,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-    run_id: str = "pre-fix",
-) -> None:
-    payload = {
-        "sessionId": "2067ed",
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time_module.time() * 1000),
-    }
-    try:
-        with open(_agent_stage2_perf_log_path(), "a", encoding="utf-8", newline="\n") as _f:
-            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
-
-
-# #endregion
-
-
 def _try_remove_path_with_retries(
     path: str, *, attempts: int = 5, delay_s: float = 0.35
 ) -> tuple[bool, OSError | None]:
@@ -14209,26 +14169,6 @@ def generate_plan():
 
 
 def _generate_plan_impl():
-    # #region agent log
-    _s2_t0 = time_module.perf_counter()
-    _s2_t_prev = _s2_t0
-
-    def _s2_perf_mark(hid: str, msg: str, **kwargs) -> None:
-        nonlocal _s2_t_prev
-        now = time_module.perf_counter()
-        _agent_stage2_perf_log(
-            hypothesis_id=hid,
-            location="planning_core.py:_generate_plan_impl",
-            message=msg,
-            data={
-                "elapsed_s": round(now - _s2_t0, 4),
-                "delta_s": round(now - _s2_t_prev, 4),
-                **{k: v for k, v in kwargs.items() if v is not None},
-            },
-        )
-        _s2_t_prev = now
-
-    # #endregion
     # ロールトレース JSONL は日次ループより前に早期 return しうるため、ここで初期化する
     # （DISPATCH_ROLL_TRACE_JSONL 未設定・空ならファイルは作らない）。
     _dispatch_debug_reset_roll_trace(
@@ -14357,14 +14297,6 @@ def _generate_plan_impl():
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
         )
-    # #region agent log
-    _s2_perf_mark(
-        "H1",
-        "phase_after_skills_machine_calendar",
-        n_members=len(members),
-        n_equipment=len(equipment_list),
-    )
-    # #endregion
     reset_gemini_usage_tracker()
     _clear_stage2_blocking_message_file()
     if (
@@ -14391,16 +14323,10 @@ def _generate_plan_impl():
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
-    # #region agent log
-    _s2_perf_mark("H1a", "phase_sub_after_load_attendance_and_analyze")
-    # #endregion
     global_priority_raw = load_main_sheet_global_priority_override_text()
     global_priority_override = analyze_global_priority_override_comment(
-        global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
+        global_priority_raw, members, run_date.year,         ai_sheet_sink=ai_log_data
     )
-    # #region agent log
-    _s2_perf_mark("H1b", "phase_sub_after_global_priority_override_ai")
-    # #endregion
     _factory_closure_dates: set[date] = set()
     for _iso in global_priority_override.get("factory_closure_dates") or []:
         _d = parse_optional_date(_iso)
@@ -14438,13 +14364,6 @@ def _generate_plan_impl():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
-    # #region agent log
-    _s2_perf_mark(
-        "H1c",
-        "phase_sub_after_load_planning_tasks_df",
-        n_task_rows=len(tasks_df),
-    )
-    # #endregion
 
     if DISPATCH_DEBUG_ONLY_TASK_IDS:
         _n_tasks_before = len(tasks_df)
@@ -14503,15 +14422,8 @@ def _generate_plan_impl():
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
-        tasks_df, reference_year=run_date.year, ai_sheet_sink=ai_log_data
+        tasks_df, reference_year=run_date.year,         ai_sheet_sink=ai_log_data
     )
-    # #region agent log
-    _s2_perf_mark(
-        "H1e",
-        "phase_sub_after_analyze_task_special_remarks",
-        n_ai_task_keys=len(ai_task_by_tid) if isinstance(ai_task_by_tid, dict) else 0,
-    )
-    # #endregion
     task_queue = build_task_queue_from_planning_df(
         tasks_df,
         run_date,
@@ -14548,27 +14460,12 @@ def _generate_plan_impl():
                     )
                 t["start_date_req"] = prev_work
     conflict_rows = collect_planning_conflicts_by_excel_row(tasks_df, ai_task_by_tid)
-    # #region agent log
-    _s2_perf_mark(
-        "H1e2",
-        "phase_sub_after_queue_and_conflict_map",
-        n_task_queue=len(task_queue),
-        n_conflict_rows=len(conflict_rows),
-    )
-    # #endregion
     _try_write_plan_input_global_parse_and_conflicts_one_save(
         global_priority_override,
         data_extract_dt_str,
         len(tasks_df),
         conflict_rows,
     )
-    # #region agent log
-    _s2_perf_mark(
-        "H1d",
-        "phase_sub_after_plan_sheet_one_save_global_parse_and_conflicts",
-        n_task_queue=len(task_queue),
-    )
-    # #endregion
 
     if not task_queue:
         logging.warning(
@@ -14638,14 +14535,6 @@ def _generate_plan_impl():
     _due_shift_exhausted_requests: set[str] = set()
     _due_shift_cap_warned_tids: set[str] = set()
     _outer_retry_round = 0
-    # #region agent log
-    _s2_perf_mark(
-        "H1",
-        "phase_before_dispatch_day_loops",
-        n_plan_dates=len(sorted_dates),
-        n_task_queue=len(task_queue),
-    )
-    # #endregion
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
         _need_headcount_logged_orders: set = set()
@@ -15836,15 +15725,6 @@ def _generate_plan_impl():
                 )
             break
 
-    # #region agent log
-    _s2_perf_mark(
-        "H2",
-        "phase_after_dispatch_outer_loops",
-        outer_retry_round=_outer_retry_round,
-        n_timeline_events=len(timeline_events),
-        n_plan_dates=len(sorted_dates),
-    )
-    # #endregion
     if TRACE_SCHEDULE_TASK_IDS:
         for _tt in TRACE_SCHEDULE_TASK_IDS:
             for _t in task_queue:
@@ -16194,15 +16074,6 @@ def _generate_plan_impl():
         utilization_data.append(row_data)
         
     df_utilization = pd.DataFrame(utilization_data)
-    # #region agent log
-    _s2_perf_mark(
-        "H3",
-        "phase_after_task_results_cal_utilization",
-        n_task_results=len(task_results),
-        n_members=len(members),
-        n_plan_dates=len(sorted_dates),
-    )
-    # #endregion
 
     df_mprio_legend, df_mprio_tbl = build_member_assignment_priority_reference(
         skills_dict, members
@@ -16243,13 +16114,6 @@ def _generate_plan_impl():
         "段階2: 結果ブックを作成します → %s",
         os.path.basename(output_filename),
     )
-    # #region agent log
-    _s2_perf_mark(
-        "H4",
-        "phase_before_production_plan_excel_writer",
-        output_basename=os.path.basename(output_filename),
-    )
-    # #endregion
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -16306,14 +16170,6 @@ def _generate_plan_impl():
                 base_now_dt,
                 regular_shift_times=(_reg_shift_start, _reg_shift_end),
             )
-            # #region agent log
-            _s2_perf_mark(
-                "H4",
-                "phase_after_equipment_gantt_sheet",
-                n_timeline_events=len(timeline_events),
-                n_equipment=len(equipment_list),
-            )
-            # #endregion
 
             for sheet_name, ws_out in writer.sheets.items():
                 if sheet_name == RESULT_SHEET_GANTT_NAME:
@@ -16380,12 +16236,6 @@ def _generate_plan_impl():
                 first_eq_schedule_cell_by_task_id,
                 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
             )
-            # #region agent log
-            _s2_perf_mark(
-                "H4",
-                "phase_after_production_plan_excel_writer_inner_done",
-            )
-            # #endregion
 
     except OSError as e:
         logging.error(
@@ -16436,13 +16286,6 @@ def _generate_plan_impl():
     )
     try:
         with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
-            # #region agent log
-            _s2_perf_mark(
-                "H5a",
-                "phase_member_schedule_excel_writer_opened",
-                n_time_slots=len(time_labels),
-            )
-            # #endregion
             for m in members:
                 # 各行の辞書を初期化
                 m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
@@ -16514,14 +16357,6 @@ def _generate_plan_impl():
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, max_col=worksheet.max_column):
                     for cell in row:
                         cell.border = thin_border
-            # #region agent log
-            _s2_perf_mark(
-                "H5",
-                "phase_after_member_schedule_excel_writer",
-                n_members=len(members),
-                n_plan_dates=len(sorted_dates),
-            )
-            # #endregion
 
     except OSError as e:
         logging.error(
@@ -16533,7 +16368,4 @@ def _generate_plan_impl():
         raise
 
     logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
-    # #region agent log
-    _s2_perf_mark("H0", "phase_stage2_impl_complete")
-    # #endregion
     _try_write_main_sheet_gemini_usage_summary("段階2")
