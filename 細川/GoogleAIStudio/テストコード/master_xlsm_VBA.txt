@@ -37,6 +37,11 @@ Private Const MACHINE_CAL_SLOT_HOUR_FIRST As Long = 6
 Private Const MACHINE_CAL_SLOT_HOUR_LAST As Long = 22
 ' 6～22 時の毎正時（17 行/日）… A12/B12 未設定時の既定。設定時は (終了時−開始時)+1 行/日
 Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 17
+' メインシート D 列: skills A 列（3 行目～）のメンバー名から、同名シートの勤怠簿 A1 への HYPERLINK 一覧
+' （master_メインの勤怠リンクリストを更新、または master_カレンダーからメンバー出勤簿を生成 成功時に更新）
+Private Const MAIN_ATTENDANCE_LINK_COL As Long = 4
+Private Const MAIN_ATTENDANCE_LINK_FIRST_DATA_ROW As Long = 2
+Private Const MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS As Long = 400
 
 ' メインシート（「メイン」「Main」、または名前に「メイン」を含む）を取得
 ' ※「〇月メインカレンダー」等を誤採用しないよう、名前に「カレンダー」を含むシートはフォールバック対象外。
@@ -75,6 +80,125 @@ NextMainCand:
     Next ws
     Set MasterGetMainWorksheet = best
 End Function
+
+' skills シート A 列 3 行目以降からメンバー名を収集し、重複除去・昇順ソートした配列（1..n）と件数 n を返す。skills が無い／0 件は n=0。
+Private Sub MasterCollectSortedSkillsMembers(ByVal wb As Workbook, ByRef outNames() As String, ByRef n As Long)
+    Dim ws As Worksheet
+    Dim dict As Object
+    Dim r As Long, lr As Long
+    Dim v As String
+    Dim k As Variant
+    Dim i As Long, j As Long
+    Dim tmp As String
+    
+    n = 0
+    Erase outNames
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_SKILLS_DATA)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+    
+    Set dict = CreateObject("Scripting.Dictionary")
+    lr = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lr < 3 Then Exit Sub
+    
+    For r = 3 To lr
+        v = Trim$(CStr(ws.Cells(r, 1).Value))
+        If Len(v) = 0 Then GoTo NextSkillsRow
+        If Not dict.Exists(v) Then dict.Add v, True
+NextSkillsRow:
+    Next r
+    
+    If dict.Count = 0 Then Exit Sub
+    
+    ReDim outNames(1 To dict.Count)
+    i = 1
+    For Each k In dict.Keys
+        outNames(i) = CStr(k)
+        i = i + 1
+    Next k
+    
+    For i = 1 To UBound(outNames) - 1
+        For j = i + 1 To UBound(outNames)
+            If StrComp(outNames(i), outNames(j), vbTextCompare) > 0 Then
+                tmp = outNames(i)
+                outNames(i) = outNames(j)
+                outNames(j) = tmp
+            End If
+        Next j
+    Next i
+    
+    n = UBound(outNames)
+End Sub
+
+' 勤怠簿シート（メンバー名）へのローカル HYPERLINK 数式。シート名の単引用符は二重化、表示文字の " はエスケープ。
+Private Function MasterAttendanceLinkFormula(ByVal sheetName As String) As String
+    Dim esc As String
+    Dim dispEsc As String
+    esc = Replace(sheetName, "'", "''")
+    dispEsc = Replace(sheetName, """", """""")
+    MasterAttendanceLinkFormula = "=HYPERLINK(""#'" & esc & "'!A1"",""" & dispEsc & """)"
+End Function
+
+' メイン MAIN_ATTENDANCE_LINK_COL に勤怠簿リンクリストを書き直す。失敗しても呼び出し元の処理は継続。
+Private Sub MasterRefreshMainAttendanceLinkList(ByVal wb As Workbook)
+    Dim wsMain As Worksheet
+    Dim names() As String
+    Dim n As Long
+    Dim i As Long
+    Dim r As Long
+    Dim shTest As Worksheet
+    Dim clearRng As Range
+    
+    On Error GoTo Fail
+    
+    Set wsMain = MasterGetMainWorksheet(wb)
+    If wsMain Is Nothing Then GoTo Fail
+    
+    Set clearRng = wsMain.Range(wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL), wsMain.Cells(MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS, MAIN_ATTENDANCE_LINK_COL))
+    clearRng.Clear
+    
+    wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL).Value = "勤怠簿リンク"
+    wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL).Font.Bold = True
+    
+    Call MasterCollectSortedSkillsMembers(wb, names, n)
+    If n = 0 Then
+        wsMain.Cells(MAIN_ATTENDANCE_LINK_FIRST_DATA_ROW, MAIN_ATTENDANCE_LINK_COL).Value = "（skills の A 列（3 行目～）にメンバーがありません）"
+        GoTo FitCol
+    End If
+    
+    r = MAIN_ATTENDANCE_LINK_FIRST_DATA_ROW
+    For i = 1 To n
+        Set shTest = Nothing
+        On Error Resume Next
+        Set shTest = wb.Worksheets(names(i))
+        On Error GoTo Fail
+        If Not shTest Is Nothing Then
+            wsMain.Cells(r, MAIN_ATTENDANCE_LINK_COL).Formula = MasterAttendanceLinkFormula(names(i))
+        Else
+            wsMain.Cells(r, MAIN_ATTENDANCE_LINK_COL).Value = names(i) & "（勤怠シート未作成）"
+        End If
+        r = r + 1
+    Next i
+
+FitCol:
+    On Error Resume Next
+    wsMain.Columns(MAIN_ATTENDANCE_LINK_COL).AutoFit
+    On Error GoTo 0
+    Exit Sub
+Fail:
+    On Error GoTo 0
+End Sub
+
+' メインシートの勤怠簿（メンバー別シート）への HYPERLINK 一覧を skills に基づき更新
+Sub master_メインの勤怠リンクリストを更新()
+    On Error GoTo EH
+    MasterRefreshMainAttendanceLinkList ThisWorkbook
+    MsgBox "メインシート（D 列）の勤怠簿リンクを更新しました。", vbInformation
+    Exit Sub
+EH:
+    MsgBox "勤怠リンク更新エラー: " & Err.Description, vbCritical
+End Sub
 
 ' メイン A15/B15・A12/B12 等: 結合セルでも左上セルの実値を取得（結合右隣が空扱いになるのを防ぐ）
 Private Function MasterMainMergedTopLeftValue(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
@@ -241,6 +365,8 @@ Sub master_カレンダーからメンバー出勤簿を生成()
         WriteMemberAttendanceSheet CStr(key), recMap(key)
         memberCount = memberCount + 1
     Next key
+    
+    Call MasterRefreshMainAttendanceLinkList(wb)
     
     Call AutoFitAllWorksheetColumns
     
