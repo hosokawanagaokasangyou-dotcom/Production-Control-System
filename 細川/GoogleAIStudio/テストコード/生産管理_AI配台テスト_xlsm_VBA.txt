@@ -59,6 +59,8 @@ Private Const GWL_STYLE As Long = -16
 Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
 ' D3=false かつスプラッシュ表示時: txtExecutionLog の画面矩形に cmd を重ねるループの待ち（ms）。ポーリング無しのため短めでよい
 Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 80
+' ログ枠（TextBox）の画面矩形よりコンソール外周を四辺いくら縮めるか（px）。conhost の内側の黒余白で「枠が大きい」と感じる場合に調整
+Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 8
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
 Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
@@ -482,6 +484,17 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                 probe = 0
                 splashPollIter = 0
                 haveRect = MacroSplash_GetTxtExecutionLogScreenRectPixels(ox, oy, ow, oh)
+                If haveRect Then
+                    If ow > STAGE12_CMD_OVERLAY_RECT_INSET_PX * 2 + 80 And oh > STAGE12_CMD_OVERLAY_RECT_INSET_PX * 2 + 80 Then
+                        ox = ox + STAGE12_CMD_OVERLAY_RECT_INSET_PX
+                        oy = oy + STAGE12_CMD_OVERLAY_RECT_INSET_PX
+                        ow = ow - 2 * STAGE12_CMD_OVERLAY_RECT_INSET_PX
+                        oh = oh - 2 * STAGE12_CMD_OVERLAY_RECT_INSET_PX
+                    End If
+                    ' #region agent log
+                    AgentDbgLog "H7", "RunCmdFileStageExecAndPoll.OverlayRectInset", "insetPx=" & CStr(STAGE12_CMD_OVERLAY_RECT_INSET_PX) & ";ox=" & CStr(ox) & ";oy=" & CStr(oy) & ";ow=" & CStr(ow) & ";oh=" & CStr(oh)
+                    ' #endregion agent log
+                End If
                 cx = GetSystemMetrics(SM_CXSCREEN)
                 cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
                 Do While execObj.Status = 0
