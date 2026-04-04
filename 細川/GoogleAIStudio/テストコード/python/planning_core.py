@@ -12150,36 +12150,6 @@ def _build_equipment_schedule_by_machine_name_dataframe(
             machine_cols.append(disp)
         eq_to_mcol[eq] = occ_key_to_header[occ_key]
 
-    # #region agent log
-    try:
-        import json as _json_dbg
-        import time as _time_dbg
-        _repo_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
-        )
-        _log_path = os.path.join(_repo_root, "debug-8ae73f.log")
-        _paren_eq = any(
-            ("（" in str(c)) and ("+" in str(c)) for c in machine_cols
-        )
-        _dbg = {
-            "sessionId": "8ae73f",
-            "hypothesisId": "H1",
-            "location": "planning_core:_build_equipment_schedule_by_machine_name_dataframe",
-            "message": "機械名毎シート列見出し",
-            "data": {
-                "n_cols": len(machine_cols),
-                "machine_cols": machine_cols,
-                "paren_plus_in_header": _paren_eq,
-                "eq_to_mcol_count": len(eq_to_mcol),
-            },
-            "timestamp": int(_time_dbg.time() * 1000),
-        }
-        with open(_log_path, "a", encoding="utf-8") as _f:
-            _f.write(_json_dbg.dumps(_dbg, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
     empty_tail = {mcol: "" for mcol in machine_cols}
     all_rows = []
 
