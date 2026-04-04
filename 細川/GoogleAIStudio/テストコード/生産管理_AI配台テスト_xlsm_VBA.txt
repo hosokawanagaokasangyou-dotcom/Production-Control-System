@@ -2098,7 +2098,7 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ws.Columns("D").ColumnWidth = 8
     wD = ws.Columns("D").Width
     If wD > 0 Then
-        ws.Columns("D").ColumnWidth = ws.Columns("D").ColumnWidth * (35# / wD)
+        ws.Columns("D").ColumnWidth = 35
     End If
     ws.Columns("D").WrapText = True
     ws.Columns("C").WrapText = True
