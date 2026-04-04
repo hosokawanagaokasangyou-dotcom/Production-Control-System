@@ -38,7 +38,8 @@ if not defined EXCEL_EXE (
 )
 
 rem First quoted argument to CMD start is window title; /D fixes Excel process cwd to the workbook folder.
-start "" /D "%~dp0." "%EXCEL_EXE%" "%BOOK_ABS%"
+rem /x forces a new Excel.exe process (required when another workbook is already open in a different instance).
+start "" /D "%~dp0." "%EXCEL_EXE%" /x "%BOOK_ABS%"
 
 endlocal
 exit /b 0
