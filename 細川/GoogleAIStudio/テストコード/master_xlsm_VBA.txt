@@ -1495,6 +1495,7 @@ NextInc0:
                     "合計データ行数: " & CStr(totalRows)
     End If
     
+    Call SkillComboSortDataRowsByMachine(wsOut, maxReq)
     Call ApplySkillCombinationSheetFormat(wsOut, maxReq)
     Call FreezeTopRowSafe(wsOut)
     Application.ScreenUpdating = True
@@ -1502,6 +1503,7 @@ NextInc0:
     Call TryAutoSaveMasterWorkbook
     
     MsgBox "「" & SHEET_SKILL_COMBINATIONS & "」を更新しました。" & vbCrLf & msgDetail & vbCrLf & _
+           "データ行は機械名→工程名→工程+機械→組合せ優先度→組合せ行IDの順で並べ替えています。" & vbCrLf & _
            "A列・組合せ行IDはデータ行ごとの一意番号（追記時は既存の最大値の続き）。組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
     Exit Sub
     
@@ -1842,6 +1844,34 @@ Private Function SkillComboDataLastRow(ByVal ws As Worksheet) As Long
     If r4 > SkillComboDataLastRow Then SkillComboDataLastRow = r4
     If SkillComboDataLastRow < 1 Then SkillComboDataLastRow = 1
 End Function
+
+' データ行（2行目以降）を機械名でまとまるよう並べ替え（同一機械内は工程名・工程+機械・優先度・行IDで安定化）
+Private Sub SkillComboSortDataRowsByMachine(ByVal ws As Worksheet, ByVal maxReq As Long)
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim sortRng As Range
+    
+    lastRow = SkillComboDataLastRow(ws)
+    If lastRow < 2 Then Exit Sub
+    lastCol = 7 + maxReq
+    If lastCol < 7 Then lastCol = 7
+    
+    Set sortRng = ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, lastCol))
+    
+    With ws.Sort
+        .SortFields.Clear
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 3), ws.Cells(lastRow, 3)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 2), ws.Cells(lastRow, 2)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 4), ws.Cells(lastRow, 4)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 6), ws.Cells(lastRow, 6)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, 1)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SetRange sortRng
+        .Header = xlNo
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .Apply
+    End With
+End Sub
 
 Private Function SkillComboMaxNumericId(ByVal ws As Worksheet, ByVal upToRow As Long) As Long
     Dim r As Long
