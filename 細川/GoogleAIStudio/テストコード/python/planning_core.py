@@ -1707,7 +1707,7 @@ def _paint_gantt_timeline_row_merged(
             c.fill = PatternFill(fill_type="solid", start_color=gh, end_color=gh)
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
-            i = j
+        i = j
     # #region agent log
     t_merge1 = time_module.perf_counter()
     _debug_ef588c_log(
