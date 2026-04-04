@@ -14245,10 +14245,16 @@ def _generate_plan_impl():
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
+    # #region agent log
+    _s2_perf_mark("H1a", "phase_sub_after_load_attendance_and_analyze")
+    # #endregion
     global_priority_raw = load_main_sheet_global_priority_override_text()
     global_priority_override = analyze_global_priority_override_comment(
         global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
     )
+    # #region agent log
+    _s2_perf_mark("H1b", "phase_sub_after_global_priority_override_ai")
+    # #endregion
     _factory_closure_dates: set[date] = set()
     for _iso in global_priority_override.get("factory_closure_dates") or []:
         _d = parse_optional_date(_iso)
@@ -14286,6 +14292,13 @@ def _generate_plan_impl():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
+    # #region agent log
+    _s2_perf_mark(
+        "H1c",
+        "phase_sub_after_load_planning_tasks_df",
+        n_task_rows=len(tasks_df),
+    )
+    # #endregion
 
     if DISPATCH_DEBUG_ONLY_TASK_IDS:
         _n_tasks_before = len(tasks_df)
@@ -14344,6 +14357,9 @@ def _generate_plan_impl():
         global_priority_override,
         data_extract_dt_str,
     )
+    # #region agent log
+    _s2_perf_mark("H1d", "phase_sub_after_plan_sheet_global_comment_parse_block")
+    # #endregion
 
     # 「当日」判定と最早開始時刻には基準日時（データ抽出日）を使う
     macro_now_dt = base_now_dt
@@ -14351,6 +14367,13 @@ def _generate_plan_impl():
     ai_task_by_tid = analyze_task_special_remarks(
         tasks_df, reference_year=run_date.year, ai_sheet_sink=ai_log_data
     )
+    # #region agent log
+    _s2_perf_mark(
+        "H1e",
+        "phase_sub_after_analyze_task_special_remarks",
+        n_ai_task_keys=len(ai_task_by_tid) if isinstance(ai_task_by_tid, dict) else 0,
+    )
+    # #endregion
     task_queue = build_task_queue_from_planning_df(
         tasks_df,
         run_date,
@@ -14396,6 +14419,14 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(f"配台シート矛盾ハイライト適用をスキップ: {e}")
+
+    # #region agent log
+    _s2_perf_mark(
+        "H1f",
+        "phase_sub_after_build_queue_and_conflict_highlight",
+        n_task_queue=len(task_queue),
+    )
+    # #endregion
 
     if not task_queue:
         logging.warning(
@@ -16263,6 +16294,13 @@ def _generate_plan_impl():
     )
     try:
         with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
+            # #region agent log
+            _s2_perf_mark(
+                "H5a",
+                "phase_member_schedule_excel_writer_opened",
+                n_time_slots=len(time_labels),
+            )
+            # #endregion
             for m in members:
                 # 各行の辞書を初期化
                 m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
