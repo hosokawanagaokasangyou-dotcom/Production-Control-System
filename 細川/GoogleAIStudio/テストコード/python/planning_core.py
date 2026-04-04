@@ -6763,6 +6763,10 @@ def _merge_plan_sheet_user_overrides(out_df):
         for c, v in bucket.items():
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 v = _coerce_plan_exclude_column_value_for_storage(v)
+            elif c == RESULT_TASK_COL_DISPATCH_TRIAL_ORDER:
+                _dto_m = parse_optional_int(v)
+                if _dto_m is not None:
+                    v = _dto_m
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
             out_df.at[i, c] = v
@@ -11818,9 +11822,10 @@ def fill_plan_dispatch_trial_order_column_stage1(
         if dto is None:
             continue
         try:
-            plan_df.iat[iloc, col_idx] = str(int(dto))
+            # Excel 上は数値セルにし、フィルター・並べ替えをしやすくする（文字列だと数値と別グループになる）
+            plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
-            plan_df.iat[iloc, col_idx] = str(dto)
+            plan_df.iat[iloc, col_idx] = ""
 
 
 def _build_equipment_schedule_dataframe(
