@@ -59,6 +59,8 @@ import csv
 import json
 import copy
 import re
+
+from dispatch_interval_mirror import DispatchIntervalMirror
 import traceback
 import base64
 import hashlib
@@ -11009,6 +11011,13 @@ STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST = os.environ.get(
     "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1"
 ).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
+# True（既定）: 割付候補を「設備・人の壁時計占有区間」で二重検査し、タイムライン追記と同期登録する
+# （ブロックテーブルと同趣旨。Excel セル逐次 I/O は行わない）。
+# False: 従来どおり avail_dt / machine_avail_dt のみ。
+DISPATCH_INTERVAL_MIRROR_ENFORCE = os.environ.get(
+    "DISPATCH_INTERVAL_MIRROR_ENFORCE", "1"
+).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
+
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
     """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
@@ -12742,6 +12751,7 @@ def _append_legacy_dispatch_candidate_for_team(
     *,
     combo_sheet_row_id: int | None = None,
     combo_preset_team: tuple[str, ...] | None = None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
     _gpo = global_priority_override or {}
@@ -12836,6 +12846,10 @@ def _append_legacy_dispatch_candidate_for_team(
     actual_end_dt, _, _ = calculate_end_time(
         team_start, work_mins_needed, team_breaks, team_end_limit
     )
+    if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
+        eq_line, team, team_start, actual_end_dt
+    ):
+        return False
     team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
     team_candidates.append(
         {
@@ -12873,6 +12887,7 @@ def _assign_one_roll_trial_order_flow(
     preferred_team: tuple | None,
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> dict | None:
     """
     1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
@@ -13170,6 +13185,17 @@ def _assign_one_roll_trial_order_flow(
         actual_end_dt, _, _ = calculate_end_time(
             team_start, work_mins_needed, team_breaks, team_end_limit
         )
+        if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
+            eq_line, team, team_start, actual_end_dt
+        ):
+            _trace_assign(
+                "区間ミラー却下: team=%s start=%s end=%s eq=%s",
+                ",".join(str(x) for x in team),
+                team_start,
+                actual_end_dt,
+                eq_line,
+            )
+            return None
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
         else:
@@ -13355,6 +13381,7 @@ def _trial_order_first_schedule_pass(
     macro_now_dt: datetime,
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並べる（1 パス分）。
@@ -13402,6 +13429,7 @@ def _trial_order_first_schedule_pass(
                 preferred_team,
                 _need_headcount_logged_orders,
                 team_combo_presets,
+                dispatch_interval_mirror=dispatch_interval_mirror,
             )
             if res is None:
                 break
@@ -13473,6 +13501,8 @@ def _trial_order_first_schedule_pass(
                     "unit_m": task["unit_m"],
                 }
             )
+            if dispatch_interval_mirror is not None:
+                dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
             op_main = (lead_op or "").strip()
             subs_part = ",".join(
@@ -13600,6 +13630,7 @@ def _run_b2_inspection_rewind_pass(
     macro_now_dt: datetime,
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
     §B-2 / §B-3: EC 側を先に全日で進めた後、検査／巻返し側のみを日付先頭から再走査して配台する。
@@ -13696,6 +13727,7 @@ def _run_b2_inspection_rewind_pass(
                 macro_now_dt,
                 _need_headcount_logged_orders,
                 team_combo_presets,
+                dispatch_interval_mirror=dispatch_interval_mirror,
             )
             if _dispatch_debug_should_stop_early():
                 _any_progress = _any_progress or _made
@@ -14337,6 +14369,14 @@ def _generate_plan_impl():
         t["assigned_history"].clear()
     timeline_events.clear()
 
+    _dispatch_interval_mirror: DispatchIntervalMirror | None = None
+    if DISPATCH_INTERVAL_MIRROR_ENFORCE:
+        _dispatch_interval_mirror = DispatchIntervalMirror()
+        logging.info(
+            "DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡します"
+            "（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。"
+        )
+
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
             "依頼NO直列配台: 有効（STAGE2_SERIAL_DISPATCH_BY_TASK_ID）。"
@@ -14490,6 +14530,7 @@ def _generate_plan_impl():
                         macro_now_dt,
                         _need_headcount_logged_orders,
                         team_combo_presets,
+                        dispatch_interval_mirror=_dispatch_interval_mirror,
                     )
                     if _dispatch_debug_should_stop_early():
                         _sched_made_progress = True
@@ -14853,6 +14894,7 @@ def _generate_plan_impl():
                                     team_candidates,
                                     combo_sheet_row_id=combo_row_id,
                                     combo_preset_team=pteam,
+                                    dispatch_interval_mirror=_dispatch_interval_mirror,
                                 )
     
                         for tsize in range(req_num, max_team_size + 1):
@@ -15011,6 +15053,16 @@ def _generate_plan_impl():
                                 actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
     
                                 team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
+                                if (
+                                    _dispatch_interval_mirror is not None
+                                    and _dispatch_interval_mirror.would_block_roll(
+                                        eq_line,
+                                        team,
+                                        team_start,
+                                        actual_end_dt,
+                                    )
+                                ):
+                                    continue
                                 team_candidates.append(
                                     {
                                         "team": team,
@@ -15246,6 +15298,10 @@ def _generate_plan_impl():
                                 * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
                                 "unit_m": task['unit_m']
                             })
+                            if _dispatch_interval_mirror is not None:
+                                _dispatch_interval_mirror.register_from_event(
+                                    timeline_events[-1]
+                                )
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _rp_tr = None
                                 if task.get("roll_pipeline_inspection") or task.get(
@@ -15450,6 +15506,10 @@ def _generate_plan_impl():
                                 for e in timeline_events
                                 if _normalize_timeline_task_id(e) not in shift_set
                             ]
+                            if _dispatch_interval_mirror is not None:
+                                _dispatch_interval_mirror.rebuild_from_timeline(
+                                    timeline_events
+                                )
                             for t in task_queue:
                                 if str(t.get("task_id", "") or "").strip() in shift_set:
                                     t["remaining_units"] = float(
@@ -15512,6 +15572,7 @@ def _generate_plan_impl():
                 macro_now_dt,
                 _need_headcount_logged_orders,
                 team_combo_presets,
+                dispatch_interval_mirror=_dispatch_interval_mirror,
             )
             if _rewind_made:
                 logging.info(
@@ -15591,6 +15652,9 @@ def _generate_plan_impl():
                 "need余力: メイン割付完了後にサブ %s 名を追記（未割当×スキル・時間重なりなし）",
                 _n_sur,
             )
+
+    if _dispatch_interval_mirror is not None:
+        _dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
 
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     for e in timeline_events:
