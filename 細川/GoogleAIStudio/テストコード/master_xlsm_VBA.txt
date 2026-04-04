@@ -1377,8 +1377,25 @@ Public Sub master_組み合わせ表を更新()
     Dim wsOut As Worksheet
     Dim rProc As Long, rMach As Long, rBase As Long
     Dim useTwoHeader As Boolean
+    Dim maxReqNew As Long
+    Dim maxReqOld As Long
     Dim maxReq As Long
     Dim totalRows As Long
+    Dim fullRebuild As Boolean
+    Dim remCol As Long
+    Dim lastDataR As Long
+    Dim maxId As Long
+    Dim outRow As Long
+    Dim sheetRowIndex As Long
+    Dim existingKeys As Object
+    Dim lastC As Long
+    Dim c As Long
+    Dim pKey As String
+    Dim addedPairs As Long
+    Dim appendedRows As Long
+    Dim r As Long
+    Dim rk As String
+    Dim msgDetail As String
     
     On Error GoTo EH
     
@@ -1402,29 +1419,90 @@ Public Sub master_組み合わせ表を更新()
         Exit Sub
     End If
     
-    maxReq = SkillComboScanMaxReq(wsSkills, wsNeed, rProc, rMach, rBase, useTwoHeader)
-    If maxReq < 1 Then maxReq = 1
-    If maxReq > 12 Then maxReq = 12
+    maxReqNew = SkillComboScanMaxReq(wsSkills, wsNeed, rProc, rMach, rBase, useTwoHeader)
+    If maxReqNew < 1 Then maxReqNew = 1
+    If maxReqNew > 12 Then maxReqNew = 12
     
     If Not EnsureSkillCombinationSheetAfterSkills(wb, wsSkills, wsOut) Then
         MsgBox "組み合わせ表シートを作成できませんでした。", vbExclamation, "組み合わせ表"
         Exit Sub
     End If
     
-    Application.ScreenUpdating = False
-    wsOut.Cells.Clear
+    fullRebuild = False
+    If Trim$(CStr(wsOut.Cells(1, 1).Value)) <> "組合せ行ID" Then fullRebuild = True
+    remCol = SkillComboFindRemarksCol(wsOut)
+    If remCol = 0 Then fullRebuild = True
+    If Not fullRebuild Then
+        maxReqOld = remCol - 7
+        If maxReqOld < 1 Then fullRebuild = True
+    End If
     
-    Call WriteSkillCombinationSheetHeader(wsOut, maxReq)
-    totalRows = SkillComboFillBody(wsSkills, wsNeed, wsOut, rProc, rMach, rBase, useTwoHeader, maxReq)
+    maxReq = maxReqNew
+    If Not fullRebuild Then
+        If maxReqOld > maxReq Then maxReq = maxReqOld
+    End If
+    If maxReq < 1 Then maxReq = 1
+    If maxReq > 12 Then maxReq = 12
+    
+    Application.ScreenUpdating = False
+    
+    If fullRebuild Then
+        wsOut.Cells.Clear
+        Call WriteSkillCombinationSheetHeader(wsOut, maxReq)
+        totalRows = SkillComboFillBody(wsSkills, wsNeed, wsOut, rProc, rMach, rBase, useTwoHeader, maxReq)
+        msgDetail = "出力行数: " & CStr(totalRows) & "（全行を need / skills に基づき再生成）"
+    Else
+        Call SkillComboEnsureMemberColumnsGrow(wsOut, maxReqOld, maxReq)
+        Set existingKeys = CreateObject("Scripting.Dictionary")
+        lastDataR = SkillComboDataLastRow(wsOut)
+        If lastDataR < 2 Then lastDataR = 1
+        For r = 2 To lastDataR
+            rk = SkillComboRowGroupKey(wsOut, r)
+            If Len(rk) > 0 Then existingKeys(rk) = True
+        Next r
+        maxId = SkillComboMaxNumericId(wsOut, lastDataR)
+        outRow = lastDataR + 1
+        sheetRowIndex = maxId
+        addedPairs = 0
+        lastC = wsSkills.Cells(1, wsSkills.Columns.Count).End(xlToLeft).Column
+        If useTwoHeader Then
+            For c = 2 To lastC
+                pKey = SkillComboPairKeyFromSkillsColumn(wsSkills, c, True)
+                If Len(pKey) = 0 Then GoTo NextInc1
+                If existingKeys.Exists(pKey) Then GoTo NextInc1
+                Call SkillComboWriteBodyForSkillsColumn(wsSkills, wsNeed, wsOut, c, rProc, rMach, rBase, True, maxReq, outRow, sheetRowIndex)
+                existingKeys.Add pKey, True
+                addedPairs = addedPairs + 1
+NextInc1:
+            Next c
+        Else
+            For c = 2 To lastC
+                pKey = SkillComboPairKeyFromSkillsColumn(wsSkills, c, False)
+                If Len(pKey) = 0 Then GoTo NextInc0
+                If existingKeys.Exists(pKey) Then GoTo NextInc0
+                Call SkillComboWriteBodyForSkillsColumn(wsSkills, wsNeed, wsOut, c, rProc, rMach, rBase, False, maxReq, outRow, sheetRowIndex)
+                existingKeys.Add pKey, True
+                addedPairs = addedPairs + 1
+NextInc0:
+            Next c
+        End If
+        appendedRows = outRow - lastDataR - 1
+        If appendedRows < 0 Then appendedRows = 0
+        totalRows = SkillComboDataLastRow(wsOut) - 1
+        If totalRows < 0 Then totalRows = 0
+        msgDetail = "既存の組合せ行は変更していません。" & vbCrLf & _
+                    "新規の工程名+機械名グループ: " & CStr(addedPairs) & " 件を末尾に追記（データ行 +" & CStr(appendedRows) & "）。" & vbCrLf & _
+                    "合計データ行数: " & CStr(totalRows)
+    End If
+    
     Call ApplySkillCombinationSheetFormat(wsOut, maxReq)
     Call FreezeTopRowSafe(wsOut)
     Application.ScreenUpdating = True
     
     Call TryAutoSaveMasterWorkbook
     
-    MsgBox "「" & SHEET_SKILL_COMBINATIONS & "」を更新しました。" & vbCrLf & _
-           "出力行数: " & CStr(totalRows) & "（必要人数・スキル列は need / skills に準拠）" & vbCrLf & _
-           "A列・組合せ行IDはデータ行ごとの一意番号。組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
+    MsgBox "「" & SHEET_SKILL_COMBINATIONS & "」を更新しました。" & vbCrLf & msgDetail & vbCrLf & _
+           "A列・組合せ行IDはデータ行ごとの一意番号（追記時は既存の最大値の続き）。組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
     Exit Sub
     
 EH:
@@ -1736,16 +1814,106 @@ Private Sub WriteSkillCombinationSheetHeader(ByVal ws As Worksheet, ByVal maxReq
     ws.Cells(1, col).Value = "備考"
 End Sub
 
-Private Function SkillComboFillBody(ByVal wsSkill As Worksheet, ByVal wsNeed As Worksheet, ByVal wsOut As Worksheet, _
-    ByVal rProc As Long, ByVal rMach As Long, ByVal rBase As Long, ByVal useTwoHeader As Boolean, ByVal maxReq As Long) As Long
-    Dim lastC As Long
+Private Function SkillComboFindRemarksCol(ByVal ws As Worksheet) As Long
     Dim c As Long
+    Dim lastC As Long
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    For c = 1 To lastC
+        If Trim$(CStr(ws.Cells(1, c).Value)) = "備考" Then
+            SkillComboFindRemarksCol = c
+            Exit Function
+        End If
+    Next c
+    SkillComboFindRemarksCol = 0
+End Function
+
+Private Function SkillComboDataLastRow(ByVal ws As Worksheet) As Long
+    Dim r1 As Long
+    Dim r2 As Long
+    Dim r3 As Long
+    Dim r4 As Long
+    r1 = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    r2 = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+    r3 = ws.Cells(ws.Rows.Count, 3).End(xlUp).Row
+    r4 = ws.Cells(ws.Rows.Count, 4).End(xlUp).Row
+    SkillComboDataLastRow = r1
+    If r2 > SkillComboDataLastRow Then SkillComboDataLastRow = r2
+    If r3 > SkillComboDataLastRow Then SkillComboDataLastRow = r3
+    If r4 > SkillComboDataLastRow Then SkillComboDataLastRow = r4
+    If SkillComboDataLastRow < 1 Then SkillComboDataLastRow = 1
+End Function
+
+Private Function SkillComboMaxNumericId(ByVal ws As Worksheet, ByVal upToRow As Long) As Long
+    Dim r As Long
+    Dim mx As Long
+    Dim v As Variant
+    mx = 0
+    If upToRow < 2 Then
+        SkillComboMaxNumericId = 0
+        Exit Function
+    End If
+    For r = 2 To upToRow
+        v = ws.Cells(r, 1).Value
+        If IsNumeric(v) Then
+            If CLng(CDbl(v)) > mx Then mx = CLng(CDbl(v))
+        End If
+    Next r
+    SkillComboMaxNumericId = mx
+End Function
+
+Private Sub SkillComboEnsureMemberColumnsGrow(ByVal ws As Worksheet, ByVal maxReqOld As Long, ByVal maxReqNew As Long)
+    Dim i As Long
+    Dim ins As Long
+    Dim remCol As Long
+    Dim hdr As String
+    If maxReqNew <= maxReqOld Then Exit Sub
+    ins = maxReqNew - maxReqOld
+    remCol = SkillComboFindRemarksCol(ws)
+    If remCol = 0 Then Exit Sub
+    For i = 1 To ins
+        ws.Columns(remCol).Insert Shift:=xlToRight
+        hdr = "メンバー" & CStr(maxReqOld + i)
+        ws.Cells(1, remCol).Value = hdr
+        remCol = remCol + 1
+    Next i
+End Sub
+
+' SkillComboRowGroupKey と同じキー規則（2行ヘッダは 工程名+vbTab+機械名、1行ヘッダは列見出し文字列）
+Private Function SkillComboPairKeyFromSkillsColumn(ByVal wsSkill As Worksheet, ByVal colIdx As Long, ByVal useTwoHeader As Boolean) As String
+    Dim pHdr As String
+    Dim mHdr As String
+    If useTwoHeader Then
+        pHdr = Trim$(CStr(wsSkill.Cells(1, colIdx).Value))
+        mHdr = Trim$(CStr(wsSkill.Cells(2, colIdx).Value))
+        If Len(pHdr) = 0 Or Len(mHdr) = 0 Then GoTo EmptyKey
+        If StrComp(LCase$(pHdr), "nan", vbTextCompare) = 0 Then GoTo EmptyKey
+        If StrComp(LCase$(mHdr), "nan", vbTextCompare) = 0 Then GoTo EmptyKey
+        SkillComboPairKeyFromSkillsColumn = pHdr & vbTab & mHdr
+        Exit Function
+    Else
+        pHdr = Trim$(CStr(wsSkill.Cells(1, colIdx).Value))
+        If Len(pHdr) = 0 Then GoTo EmptyKey
+        If StrComp(LCase$(pHdr), "nan", vbTextCompare) = 0 Then GoTo EmptyKey
+        SkillComboPairKeyFromSkillsColumn = pHdr
+        Exit Function
+    End If
+EmptyKey:
+    SkillComboPairKeyFromSkillsColumn = ""
+End Function
+
+' skills の 1 設備列ぶんを組み合わせ表の outRow 以降に出力（組合せ行ID は sheetRowIndex を増分）
+Private Sub SkillComboWriteBodyForSkillsColumn( _
+    ByVal wsSkill As Worksheet, ByVal wsNeed As Worksheet, ByVal wsOut As Worksheet, _
+    ByVal colIdx As Long, _
+    ByVal rProc As Long, ByVal rMach As Long, ByVal rBase As Long, _
+    ByVal useTwoHeader As Boolean, ByVal maxReq As Long, _
+    ByRef outRow As Long, ByRef sheetRowIndex As Long)
+    
     Dim pHdr As String
     Dim mHdr As String
     Dim combo As String
     Dim needCol As Long
     Dim req As Long
-    Dim outRow As Long
     Dim lastRowS As Long
     Dim r As Long
     Dim mem As String
@@ -1764,165 +1932,173 @@ Private Function SkillComboFillBody(ByVal wsSkill As Worksheet, ByVal wsNeed As 
     Dim prio As Long
     Dim note As String
     Dim memCol As Long
+    
+    If useTwoHeader Then
+        pHdr = Trim$(CStr(wsSkill.Cells(1, colIdx).Value))
+        mHdr = Trim$(CStr(wsSkill.Cells(2, colIdx).Value))
+        If Len(pHdr) = 0 Or Len(mHdr) = 0 Then Exit Sub
+        combo = pHdr & "+" & mHdr
+        needCol = NeedFindColumnForProcessMachine(wsNeed, rProc, rMach, pHdr, mHdr)
+        If needCol <= 0 Then
+            Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, 0, maxReq, "need に列が見つかりません（工程名・機械名の一致を確認）")
+            outRow = outRow + 1
+            Exit Sub
+        End If
+        req = NeedGetBaseReqAtColumn(wsNeed, rBase, needCol)
+        If req > maxReq Then req = maxReq
+        
+        nMem = 0
+        lastRowS = wsSkill.Cells(wsSkill.Rows.Count, 1).End(xlUp).Row
+        For r = 3 To lastRowS
+            mem = Trim$(CStr(wsSkill.Cells(r, 1).Value))
+            If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMem1
+            cellV = Trim$(CStr(wsSkill.Cells(r, colIdx).Value))
+            okCell = MasterParseOpAsCell(cellV, roleCh, prV)
+            If Not okCell Then GoTo NextMem1
+            nMem = nMem + 1
+            If nMem = 1 Then
+                ReDim names(1 To 1)
+                ReDim isOp(1 To 1)
+            Else
+                ReDim Preserve names(1 To nMem)
+                ReDim Preserve isOp(1 To nMem)
+            End If
+            names(nMem) = mem
+            isOp(nMem) = (StrComp(roleCh, "OP", vbTextCompare) = 0)
+NextMem1:
+        Next r
+        
+        If nMem < req Then
+            note = "スキル(OP/AS)ありが必要人数 " & CStr(req) & " 未満（" & CStr(nMem) & "名）のため組合せなし"
+            Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, req, maxReq, note)
+            outRow = outRow + 1
+            Exit Sub
+        End If
+        
+        Set linesColl = New Collection
+        Set dup = CreateObject("Scripting.Dictionary")
+        Call BuildSkillCombinations(nMem, req, names, isOp, linesColl, dup)
+        
+        prio = 0
+        For Each k In SortCollectionStrings(linesColl)
+            prio = prio + 1
+            sheetRowIndex = sheetRowIndex + 1
+            wsOut.Cells(outRow, 1).Value = sheetRowIndex
+            wsOut.Cells(outRow, 2).Value = pHdr
+            wsOut.Cells(outRow, 3).Value = mHdr
+            wsOut.Cells(outRow, 4).Value = combo
+            wsOut.Cells(outRow, 5).Value = req
+            wsOut.Cells(outRow, 6).Value = prio
+            parts = Split(CStr(k), "|")
+            For jj = LBound(parts) To UBound(parts)
+                wsOut.Cells(outRow, 7 + jj).Value = parts(jj)
+            Next jj
+            For jj = UBound(parts) + 1 To maxReq - 1
+                wsOut.Cells(outRow, 7 + jj).Value = ""
+            Next jj
+            wsOut.Cells(outRow, 7 + maxReq).Value = ""
+            outRow = outRow + 1
+        Next k
+        
+        If prio = 0 Then
+            note = "OP1名以上を含む組合せがありません（要リーダー条件）"
+            Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, req, maxReq, note)
+            outRow = outRow + 1
+        End If
+    Else
+        memCol = 1
+        pHdr = Trim$(CStr(wsSkill.Cells(1, colIdx).Value))
+        If Len(pHdr) = 0 Then Exit Sub
+        needCol = NeedFindColumnByHeaderToken(wsNeed, rProc, rMach, pHdr)
+        mHdr = ""
+        combo = pHdr
+        If needCol <= 0 Then
+            Call WriteComboWarningRow(wsOut, outRow, "", "", combo, 0, maxReq, "need に列が見つかりません（列見出しと need の突合）")
+            outRow = outRow + 1
+            Exit Sub
+        End If
+        req = NeedGetBaseReqAtColumn(wsNeed, rBase, needCol)
+        If req > maxReq Then req = maxReq
+        
+        nMem = 0
+        lastRowS = wsSkill.Cells(wsSkill.Rows.Count, memCol).End(xlUp).Row
+        For r = 2 To lastRowS
+            mem = Trim$(CStr(wsSkill.Cells(r, memCol).Value))
+            If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMem0
+            cellV = Trim$(CStr(wsSkill.Cells(r, colIdx).Value))
+            okCell = MasterParseOpAsCell(cellV, roleCh, prV)
+            If Not okCell Then GoTo NextMem0
+            nMem = nMem + 1
+            If nMem = 1 Then
+                ReDim names(1 To 1)
+                ReDim isOp(1 To 1)
+            Else
+                ReDim Preserve names(1 To nMem)
+                ReDim Preserve isOp(1 To nMem)
+            End If
+            names(nMem) = mem
+            isOp(nMem) = (StrComp(roleCh, "OP", vbTextCompare) = 0)
+NextMem0:
+        Next r
+        
+        If nMem < req Then
+            note = "スキル(OP/AS)ありが必要人数未満のため組合せなし"
+            Call WriteComboWarningRow(wsOut, outRow, "", "", combo, req, maxReq, note)
+            outRow = outRow + 1
+            Exit Sub
+        End If
+        
+        Set linesColl = New Collection
+        Set dup = CreateObject("Scripting.Dictionary")
+        Call BuildSkillCombinations(nMem, req, names, isOp, linesColl, dup)
+        
+        prio = 0
+        For Each k In SortCollectionStrings(linesColl)
+            prio = prio + 1
+            sheetRowIndex = sheetRowIndex + 1
+            wsOut.Cells(outRow, 1).Value = sheetRowIndex
+            wsOut.Cells(outRow, 2).Value = ""
+            wsOut.Cells(outRow, 3).Value = ""
+            wsOut.Cells(outRow, 4).Value = combo
+            wsOut.Cells(outRow, 5).Value = req
+            wsOut.Cells(outRow, 6).Value = prio
+            parts = Split(CStr(k), "|")
+            For jj = LBound(parts) To UBound(parts)
+                wsOut.Cells(outRow, 7 + jj).Value = parts(jj)
+            Next jj
+            For jj = UBound(parts) + 1 To maxReq - 1
+                wsOut.Cells(outRow, 7 + jj).Value = ""
+            Next jj
+            wsOut.Cells(outRow, 7 + maxReq).Value = ""
+            outRow = outRow + 1
+        Next k
+        
+        If prio = 0 Then
+            Call WriteComboWarningRow(wsOut, outRow, "", "", combo, req, maxReq, "OP1名以上を含む組合せがありません")
+            outRow = outRow + 1
+        End If
+    End If
+End Sub
+
+Private Function SkillComboFillBody(ByVal wsSkill As Worksheet, ByVal wsNeed As Worksheet, ByVal wsOut As Worksheet, _
+    ByVal rProc As Long, ByVal rMach As Long, ByVal rBase As Long, ByVal useTwoHeader As Boolean, ByVal maxReq As Long) As Long
+    Dim lastC As Long
+    Dim c As Long
+    Dim outRow As Long
     Dim sheetRowIndex As Long
     
     outRow = 2
     sheetRowIndex = 0
     lastC = wsSkill.Cells(1, wsSkill.Columns.Count).End(xlToLeft).Column
-    
     If useTwoHeader Then
         For c = 2 To lastC
-            pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
-            mHdr = Trim$(CStr(wsSkill.Cells(2, c).Value))
-            If Len(pHdr) = 0 Or Len(mHdr) = 0 Then GoTo NextBody1
-            combo = pHdr & "+" & mHdr
-            needCol = NeedFindColumnForProcessMachine(wsNeed, rProc, rMach, pHdr, mHdr)
-            If needCol <= 0 Then
-                Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, 0, maxReq, "need に列が見つかりません（工程名・機械名の一致を確認）")
-                outRow = outRow + 1
-                GoTo NextBody1
-            End If
-            req = NeedGetBaseReqAtColumn(wsNeed, rBase, needCol)
-            If req > maxReq Then req = maxReq
-            
-            nMem = 0
-            lastRowS = wsSkill.Cells(wsSkill.Rows.Count, 1).End(xlUp).Row
-            For r = 3 To lastRowS
-                mem = Trim$(CStr(wsSkill.Cells(r, 1).Value))
-                If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMem1
-                cellV = Trim$(CStr(wsSkill.Cells(r, c).Value))
-                okCell = MasterParseOpAsCell(cellV, roleCh, prV)
-                If Not okCell Then GoTo NextMem1
-                nMem = nMem + 1
-                If nMem = 1 Then
-                    ReDim names(1 To 1)
-                    ReDim isOp(1 To 1)
-                Else
-                    ReDim Preserve names(1 To nMem)
-                    ReDim Preserve isOp(1 To nMem)
-                End If
-                names(nMem) = mem
-                isOp(nMem) = (StrComp(roleCh, "OP", vbTextCompare) = 0)
-NextMem1:
-            Next r
-            
-            note = ""
-            If nMem < req Then
-                note = "スキル(OP/AS)ありが必要人数 " & CStr(req) & " 未満（" & CStr(nMem) & "名）のため組合せなし"
-                Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, req, maxReq, note)
-                outRow = outRow + 1
-                GoTo NextBody1
-            End If
-            
-            Set linesColl = New Collection
-            Set dup = CreateObject("Scripting.Dictionary")
-            Call BuildSkillCombinations(nMem, req, names, isOp, linesColl, dup)
-            
-            prio = 0
-            For Each k In SortCollectionStrings(linesColl)
-                prio = prio + 1
-                sheetRowIndex = sheetRowIndex + 1
-                wsOut.Cells(outRow, 1).Value = sheetRowIndex
-                wsOut.Cells(outRow, 2).Value = pHdr
-                wsOut.Cells(outRow, 3).Value = mHdr
-                wsOut.Cells(outRow, 4).Value = combo
-                wsOut.Cells(outRow, 5).Value = req
-                wsOut.Cells(outRow, 6).Value = prio
-                parts = Split(CStr(k), "|")
-                For jj = LBound(parts) To UBound(parts)
-                    wsOut.Cells(outRow, 7 + jj).Value = parts(jj)
-                Next jj
-                For jj = UBound(parts) + 1 To maxReq - 1
-                    wsOut.Cells(outRow, 7 + jj).Value = ""
-                Next jj
-                wsOut.Cells(outRow, 7 + maxReq).Value = ""
-                outRow = outRow + 1
-            Next k
-            
-            If prio = 0 Then
-                note = "OP1名以上を含む組合せがありません（要リーダー条件）"
-                Call WriteComboWarningRow(wsOut, outRow, pHdr, mHdr, combo, req, maxReq, note)
-                outRow = outRow + 1
-            End If
-NextBody1:
+            Call SkillComboWriteBodyForSkillsColumn(wsSkill, wsNeed, wsOut, c, rProc, rMach, rBase, True, maxReq, outRow, sheetRowIndex)
         Next c
     Else
-        memCol = 1
         For c = 2 To lastC
-            pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
-            If Len(pHdr) = 0 Then GoTo NextBody0
-            needCol = NeedFindColumnByHeaderToken(wsNeed, rProc, rMach, pHdr)
-            mHdr = ""
-            combo = pHdr
-            If needCol <= 0 Then
-                Call WriteComboWarningRow(wsOut, outRow, "", "", combo, 0, maxReq, "need に列が見つかりません（列見出しと need の突合）")
-                outRow = outRow + 1
-                GoTo NextBody0
-            End If
-            req = NeedGetBaseReqAtColumn(wsNeed, rBase, needCol)
-            If req > maxReq Then req = maxReq
-            
-            nMem = 0
-            lastRowS = wsSkill.Cells(wsSkill.Rows.Count, memCol).End(xlUp).Row
-            For r = 2 To lastRowS
-                mem = Trim$(CStr(wsSkill.Cells(r, memCol).Value))
-                If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMem0
-                cellV = Trim$(CStr(wsSkill.Cells(r, c).Value))
-                okCell = MasterParseOpAsCell(cellV, roleCh, prV)
-                If Not okCell Then GoTo NextMem0
-                nMem = nMem + 1
-                If nMem = 1 Then
-                    ReDim names(1 To 1)
-                    ReDim isOp(1 To 1)
-                Else
-                    ReDim Preserve names(1 To nMem)
-                    ReDim Preserve isOp(1 To nMem)
-                End If
-                names(nMem) = mem
-                isOp(nMem) = (StrComp(roleCh, "OP", vbTextCompare) = 0)
-NextMem0:
-            Next r
-            
-            If nMem < req Then
-                note = "スキル(OP/AS)ありが必要人数未満のため組合せなし"
-                Call WriteComboWarningRow(wsOut, outRow, "", "", combo, req, maxReq, note)
-                outRow = outRow + 1
-                GoTo NextBody0
-            End If
-            
-            Set linesColl = New Collection
-            Set dup = CreateObject("Scripting.Dictionary")
-            Call BuildSkillCombinations(nMem, req, names, isOp, linesColl, dup)
-            
-            prio = 0
-            For Each k In SortCollectionStrings(linesColl)
-                prio = prio + 1
-                sheetRowIndex = sheetRowIndex + 1
-                wsOut.Cells(outRow, 1).Value = sheetRowIndex
-                wsOut.Cells(outRow, 2).Value = ""
-                wsOut.Cells(outRow, 3).Value = ""
-                wsOut.Cells(outRow, 4).Value = combo
-                wsOut.Cells(outRow, 5).Value = req
-                wsOut.Cells(outRow, 6).Value = prio
-                parts = Split(CStr(k), "|")
-                For jj = LBound(parts) To UBound(parts)
-                    wsOut.Cells(outRow, 7 + jj).Value = parts(jj)
-                Next jj
-                For jj = UBound(parts) + 1 To maxReq - 1
-                    wsOut.Cells(outRow, 7 + jj).Value = ""
-                Next jj
-                wsOut.Cells(outRow, 7 + maxReq).Value = ""
-                outRow = outRow + 1
-            Next k
-            
-            If prio = 0 Then
-                Call WriteComboWarningRow(wsOut, outRow, "", "", combo, req, maxReq, "OP1名以上を含む組合せがありません")
-                outRow = outRow + 1
-            End If
-NextBody0:
+            Call SkillComboWriteBodyForSkillsColumn(wsSkill, wsNeed, wsOut, c, rProc, rMach, rBase, False, maxReq, outRow, sheetRowIndex)
         Next c
     End If
-    
     SkillComboFillBody = outRow - 2
     If SkillComboFillBody < 0 Then SkillComboFillBody = 0
 End Function
