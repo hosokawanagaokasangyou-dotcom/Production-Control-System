@@ -1149,7 +1149,7 @@ RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
-# 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに A〜D 列を区別する淡色（順に割当・循環）
+# 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに B〜E 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
     "FCE8F0",
@@ -1760,7 +1760,7 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
 
 def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
     """
-    結果_設備ガントの固定列（A〜D）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出現順で
+    結果_設備ガントの固定列（B〜E、A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出現順で
     淡色を割り当て、同一機械名は常に同じ PatternFill を共有する。
     """
     order: list[str] = []
@@ -1870,7 +1870,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 4  # 機械名 / 工程名 / 担当者 / タスク概要（日付は日ブロック見出しのみ）
+    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
     last_col = n_fixed + n_slots
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
@@ -1927,55 +1927,50 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 26
     row += 1
 
-    first_freeze_set = False
+    dates_to_show: list = []
+    for d0 in sorted_dates:
+        evs0 = events_by_date.get(d0, [])
+        a_evs0 = actual_events_by_date.get(d0, []) if show_actual_rows else []
+        is_anyone_working0 = any(
+            attendance_data[d0][mm]["is_working"] for mm in attendance_data[d0] if mm in attendance_data[d0]
+        )
+        if not evs0 and not a_evs0 and not is_anyone_working0:
+            continue
+        dates_to_show.append(d0)
 
-    for d in sorted_dates:
+    hdr_row = row
+    fixed_hdr = ["日付", "機械名", "工程名", "担当者", "タスク概要"]
+    for ci, h in enumerate(fixed_hdr, 1):
+        c = ws.cell(row=hdr_row, column=ci, value=h)
+        c.font = hdr_font
+        c.fill = hdr_fill
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    slots_hdr = [datetime.combine(dummy_d, tm) for tm in slot_times]
+    for si, st in enumerate(slots_hdr):
+        c = ws.cell(row=hdr_row, column=n_fixed + 1 + si, value=st.strftime("%H:%M"))
+        c.font = hdr_time_font
+        slot_end_t = (st + timedelta(minutes=slot_mins)).time()
+        hdr_use = hdr_fill
+        if rs is not None and re_ is not None:
+            if not _time_intervals_overlap_half_open(st.time(), slot_end_t, rs, re_):
+                hdr_use = hdr_fill_outside_regular
+        c.fill = hdr_use
+        c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
+    ws.row_dimensions[hdr_row].height = 44
+    # 先頭データ行の左上＝時刻列先頭（F4）で窓枠固定（行1〜3・列A〜Eを固定）
+    ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
+    row = hdr_row + 1
+
+    sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
+    no_border = Border()
+
+    for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
-        is_anyone_working = any(
-            attendance_data[d][mm]["is_working"] for mm in attendance_data[d] if mm in attendance_data[d]
-        )
-        if not evs and not a_evs_day and not is_anyone_working:
-            continue
 
         slots = [datetime.combine(d, tm) for tm in slot_times]
 
-        # 日付見出し（左の固定列に合わせて A〜固定列まで結合）
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_fixed)
-        ban = ws.cell(row=row, column=1, value=f"▶ {d.strftime('%Y/%m/%d')}　{_weekday_jp(d)}")
-        ban.font = day_banner_font
-        ban.fill = day_banner_fill
-        ban.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-        ban.border = Border(left=accent_left, bottom=thin)
-        ws.row_dimensions[row].height = 26
-        row += 1
-
-        fixed_hdr = ["機械名", "工程名", "担当者", "タスク概要"]
-        for ci, h in enumerate(fixed_hdr, 1):
-            c = ws.cell(row=row, column=ci, value=h)
-            c.font = hdr_font
-            c.fill = hdr_fill
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
-        for si, st in enumerate(slots):
-            c = ws.cell(row=row, column=n_fixed + 1 + si, value=st.strftime("%H:%M"))
-            c.font = hdr_time_font
-            slot_end_t = (st + timedelta(minutes=slot_mins)).time()
-            hdr_use = hdr_fill
-            if rs is not None and re_ is not None:
-                if not _time_intervals_overlap_half_open(
-                    st.time(), slot_end_t, rs, re_
-                ):
-                    hdr_use = hdr_fill_outside_regular
-            c.fill = hdr_use
-            c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
-        ws.row_dimensions[row].height = 44
-        row += 1
-
-        data_row0 = row
-        if not first_freeze_set:
-            ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{data_row0}"
-            first_freeze_set = True
-
+        day_start = row
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             mk_key = (mach_nm or "").strip() or "—"
@@ -1995,10 +1990,10 @@ def _write_results_equipment_gantt_sheet(
                 task_sum = "—"
                 member_disp = "—"
 
-            c1 = ws.cell(row=row, column=1, value=mach_nm if mach_nm else "—")
-            c2 = ws.cell(row=row, column=2, value=proc_nm if proc_nm else "—")
-            c3 = ws.cell(row=row, column=3, value=member_disp)
-            c4 = ws.cell(row=row, column=4, value=task_sum)
+            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
+            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+            c3 = ws.cell(row=row, column=4, value=member_disp)
+            c4 = ws.cell(row=row, column=5, value=task_sum)
             for c in (c1, c2, c3, c4):
                 c.font = _result_font(size=12, color="000000")
                 c.fill = lab_fill
@@ -2049,10 +2044,10 @@ def _write_results_equipment_gantt_sheet(
                     act_mach = "（実績）"
                 else:
                     act_mach = "—"
-                ca1 = ws.cell(row=row, column=1, value=act_mach)
-                ca2 = ws.cell(row=row, column=2, value=proc_nm if proc_nm else "—")
-                ca3 = ws.cell(row=row, column=3, value=member_disp_a)
-                ca4 = ws.cell(row=row, column=4, value=task_sum_a)
+                ca1 = ws.cell(row=row, column=2, value=act_mach)
+                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                ca3 = ws.cell(row=row, column=4, value=member_disp_a)
+                ca4 = ws.cell(row=row, column=5, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
                     c.font = _result_font(size=12, color="000000")
                     c.fill = lab_fill_a
@@ -2080,8 +2075,31 @@ def _write_results_equipment_gantt_sheet(
 
                 ws.row_dimensions[row].height = 52
                 row += 1
-        # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
-    # 列幅・D列折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
+
+        day_end = row - 1
+        if day_end >= day_start:
+            ws.merge_cells(start_row=day_start, start_column=1, end_row=day_end, end_column=1)
+            ban = ws.cell(
+                row=day_start,
+                column=1,
+                value=f"▶ {d.strftime('%Y/%m/%d')}　{_weekday_jp(d)}",
+            )
+            ban.font = day_banner_font
+            ban.fill = day_banner_fill
+            ban.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
+
+        if di < len(dates_to_show) - 1 and day_end >= day_start:
+            for cc in range(1, last_col + 1):
+                sc = ws.cell(row=row, column=cc)
+                sc.value = None
+                sc.fill = sep_fill
+                sc.border = no_border
+            ws.row_dimensions[row].height = 5
+            row += 1
+
+    # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
+    # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
 
     try:
         ws.page_setup.orientation = "landscape"

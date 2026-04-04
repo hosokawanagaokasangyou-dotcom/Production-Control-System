@@ -1289,13 +1289,13 @@ Private Sub 結果_設備ガント_マスタ時刻反映( _
     lastR = ur.Row + ur.Rows.Count - 1
     
     For r = 1 To lastR
-        If Trim$(CStr(ws.Cells(r, 1).Value)) = "機械名" _
-            And Trim$(CStr(ws.Cells(r, 2).Value)) = "工程名" _
-            And Trim$(CStr(ws.Cells(r, 3).Value)) = "担当者" _
-            And Trim$(CStr(ws.Cells(r, 4).Value)) = "タスク概要" Then
+        If Trim$(CStr(ws.Cells(r, 2).Value)) = "機械名" _
+            And Trim$(CStr(ws.Cells(r, 3).Value)) = "工程名" _
+            And Trim$(CStr(ws.Cells(r, 4).Value)) = "担当者" _
+            And Trim$(CStr(ws.Cells(r, 5).Value)) = "タスク概要" Then
             
             lastC = ws.Cells(r, ws.Columns.Count).End(xlToLeft).Column
-            For c = 5 To lastC
+            For c = 6 To lastC
                 v = ws.Cells(r, c).Value
                 If Not IsEmpty(v) And VarType(v) <> vbError Then
                     If マスタメイン_セルを時刻Dateへ(v, slotStart) Then
@@ -2148,29 +2148,32 @@ End Sub
 Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastCol As Long
     Dim c As Long
-    Dim wD As Double
+    Dim wE As Double
     
     On Error Resume Next
-    ws.Columns("A").ColumnWidth = 16   ' 機械名（Python 側フォント拡大に合わせる）
-    ws.Columns("B").ColumnWidth = 16   ' 工程名
-    ws.Columns("C").ColumnWidth = 26   ' 担当者（主担当＋サブ列挙）
-    ' D: タスク概要（依頼NO）… 列幅を約 38 ポイントにし折り返し
-    ws.Columns("D").ColumnWidth = 8
-    wD = ws.Columns("D").Width
-    If wD > 0 Then
-        ws.Columns("D").ColumnWidth = 38
+    ws.Columns("A").ColumnWidth = 12   ' 日付（縦結合）
+    ws.Columns("B").ColumnWidth = 16   ' 機械名（Python 側フォント拡大に合わせる）
+    ws.Columns("C").ColumnWidth = 16   ' 工程名
+    ws.Columns("D").ColumnWidth = 26   ' 担当者（主担当＋サブ列挙）
+    ' E: タスク概要（依頼NO）… 列幅を約 38 ポイントにし折り返し
+    ws.Columns("E").ColumnWidth = 8
+    wE = ws.Columns("E").Width
+    If wE > 0 Then
+        ws.Columns("E").ColumnWidth = 38
     End If
+    ws.Columns("E").WrapText = True
     ws.Columns("D").WrapText = True
-    ws.Columns("C").WrapText = True
     lastCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     On Error GoTo 0
-    If lastCol < 5 Then Exit Sub
-    For c = 5 To lastCol
+    If lastCol < 6 Then Exit Sub
+    For c = 6 To lastCol
         ws.Columns(c).ColumnWidth = 7.5   ' 時刻見出し 90° 回転・帯ラベル用に拡大
     Next c
     On Error Resume Next
     ws.Activate
-    ws.Range("A1").Select
+    ActiveWindow.FreezePanes = False
+    ws.Range("F4").Select
+    ActiveWindow.FreezePanes = True
     On Error GoTo 0
 End Sub
 
@@ -2242,45 +2245,28 @@ Private Function 結果_設備ガント_行は表頭行か(ByVal ws As Worksheet
     Dim a As String
     Dim b As String
     On Error Resume Next
-    a = Trim$(CStr(ws.Cells(r, 1).Value))
-    b = Trim$(CStr(ws.Cells(r, 2).Value))
+    a = Trim$(CStr(ws.Cells(r, 2).Value))
+    b = Trim$(CStr(ws.Cells(r, 3).Value))
     On Error GoTo 0
     結果_設備ガント_行は表頭行か = (StrComp(a, "機械名", vbBinaryCompare) = 0 And StrComp(b, "工程名", vbBinaryCompare) = 0)
 End Function
 
-Private Function 結果_設備ガント_行は日ブロック見出しか(ByVal ws As Worksheet, ByVal r As Long) As Boolean
-    Dim s As String
+' Python が挿入する日付ブロック間の黒帯（行高さ約 5pt）
+Private Function 結果_設備ガント_行は区切り行か(ByVal ws As Worksheet, ByVal r As Long) As Boolean
+    Dim rh As Double
     On Error Resume Next
-    s = CStr(ws.Cells(r, 1).Value)
+    rh = ws.Rows(r).RowHeight
     On Error GoTo 0
-    If Len(s) = 0 Then Exit Function
-    If InStr(1, s, "▶", vbBinaryCompare) > 0 Then 結果_設備ガント_行は日ブロック見出しか = True
+    If rh > 0# And rh <= 5.6 Then 結果_設備ガント_行は区切り行か = True
 End Function
 
-' Python が書く「機械名／工程名」行より下で、日付帯見出し・表頭以外＝計画行・実績行
+' タイトル・メタ（1〜2 行）・表頭・区切り行以外＝計画行・実績行（日付は A 列縦結合のため列 A にも ▶ が現れる）
 Private Function 結果_設備ガント_行はデータ行か(ByVal ws As Worksheet, ByVal r As Long) As Boolean
-    Dim i As Long
-    Dim hdr As Long
-    
     結果_設備ガント_行はデータ行か = False
-    If r < 3 Then Exit Function
+    If r <= 2 Then Exit Function
     If 結果_設備ガント_行は表頭行か(ws, r) Then Exit Function
-    If 結果_設備ガント_行は日ブロック見出しか(ws, r) Then Exit Function
-    
-    hdr = 0
-    For i = r - 1 To 3 Step -1
-        If 結果_設備ガント_行は表頭行か(ws, i) Then
-            hdr = i
-            Exit For
-        End If
-    Next i
-    If hdr = 0 Then Exit Function
-    If r <= hdr Then Exit Function
-    
-    For i = hdr + 1 To r - 1
-        If 結果_設備ガント_行は日ブロック見出しか(ws, i) Then Exit Function
-    Next i
-    
+    If 結果_設備ガント_行は区切り行か(ws, r) Then Exit Function
+    If r < 4 Then Exit Function
     結果_設備ガント_行はデータ行か = True
 End Function
 
