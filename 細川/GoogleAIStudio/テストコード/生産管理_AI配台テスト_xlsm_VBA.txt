@@ -111,6 +111,8 @@ Private Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間
 Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
+' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
+Private Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
@@ -123,6 +125,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
+' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
@@ -3373,6 +3376,203 @@ ErrHandler:
 End Sub
 
 ' =========================================================
+' 設定_環境変数: シートの新規作成・見出し行・テンプレにあってシートに無い変数名行のみ追記
+' （python/workbook_env_bootstrap.py・設定_環境変数_雛形.tsv と整合）
+' =========================================================
+Private Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(CStr(ws.Cells(1, 1).Value)))
+    If Len(t) = 0 Then
+        設定_環境変数_1行目は見出し = False
+        Exit Function
+    End If
+    設定_環境変数_1行目は見出し = (t = "変数名" Or t = "環境変数" Or t = "name" Or t = "key" Or t = "env")
+End Function
+
+Public Sub 設定_環境変数_シートを確保()
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+    Dim dict As Object
+    Dim keys As Variant
+    Dim vals As Variant
+    Dim descs As Variant
+    Dim i As Long
+    Dim r As Long
+    Dim lastRow As Long
+    Dim dataStart As Long
+    Dim k As String
+    Dim nk As String
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_WORKBOOK_ENV
+    End If
+
+    If StrComp(ws.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 525, , "シート名を「" & SHEET_WORKBOOK_ENV & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+    ElseIf Not 設定_環境変数_1行目は見出し(ws) Then
+        ' 1 行目がデータの場合は見出しを挿入しない（ユーザー構成を壊さない）
+    Else
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+    End If
+
+    If 設定_環境変数_1行目は見出し(ws) Then
+        dataStart = 2
+    Else
+        dataStart = 1
+    End If
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    dict.CompareMode = 1 ' vbTextCompare（Windows 環境変数は実質大文字小文字無視）
+
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastRow < dataStart Then
+        lastRow = dataStart - 1
+    End If
+
+    For r = dataStart To lastRow
+        k = Trim$(CStr(ws.Cells(r, 1).Value))
+        If Len(k) > 0 Then
+            nk = LCase$(k)
+            If Not dict.Exists(nk) Then dict.Add nk, True
+        End If
+    Next r
+
+    keys = Array( _
+        "TASK_PLAN_SHEET", _
+        "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", _
+        "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", _
+        "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", _
+        "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", _
+        "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", _
+        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", _
+        "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", _
+        "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", _
+        "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", _
+        "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", _
+        "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", _
+        "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", _
+        "ASSIGN_DEFER_MIN_REMAINING_ROLLS", _
+        "ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES", _
+        "ASSIGN_END_OF_DAY_DEFER_MINUTES", _
+        "DISPATCH_ROLL_TRACE_JSONL", _
+        "DISPATCH_DEBUG_STOP_AFTER_ROLLS", _
+        "DISPATCH_DEBUG_ONLY_TASK_IDS", _
+        "DEBUG_TASK_ID", _
+        "TRACE_TEAM_ASSIGN_TASK_ID", _
+        "GEMINI_PRICE_USD_IN_PER_M", _
+        "GEMINI_PRICE_USD_OUT_PER_M", _
+        "GEMINI_JPY_PER_USD", _
+        "EXCLUDE_RULES_TEST_E1234", _
+        "EXCLUDE_RULES_TEST_E1234_ROW", _
+        "#TASK_INPUT_WORKBOOK" _
+    )
+    vals = Array( _
+        "", _
+        "1", _
+        "0", _
+        "1", _
+        "1", _
+        "0", _
+        "60", _
+        "0", _
+        "", _
+        "1", _
+        "1", _
+        "1", _
+        "", _
+        "3", _
+        "15", _
+        "0", _
+        "", _
+        "", _
+        "", _
+        "", _
+        "", _
+        "0.075", _
+        "0.30", _
+        "150", _
+        "", _
+        "9", _
+        "" _
+    )
+    descs = Array( _
+        "配台計画シート名（空なら既定 配台計画_タスク入力）", _
+        "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート", _
+        "1=依頼NO直列", _
+        "§B-2/§B-3 設備占有（0 で無効）", _
+        "B-2/3 ECと後続の担当者分離（0 で無効）", _
+        "1=人数最優先（従来）", _
+        "スラック分（0 で開始のみ）", _
+        "1=need追加人数行を無視", _
+        "1=メインで req+追加上限まで探索", _
+        "0=計画シート必要人数も参照", _
+        "0=組合せ表プリセットを使わない", _
+        "段階2後の列設定図形コピー（0 で無効）", _
+        "1=配台不要シートを openpyxl で保存試行", _
+        "同日 defer しきい値（ロール残）", _
+        "", _
+        "", _
+        "例: log/dispatch_roll_trace.jsonl（相対はブックフォルダ基準）", _
+        "整数NでNロールで打ち切り", _
+        "カンマ区切り依頼NO（限定配台）", _
+        "デバッグ用依頼NO", _
+        "チーム割付トレース対象", _
+        "", _
+        "", _
+        "", _
+        "テスト用（通常空）", _
+        "", _
+        "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い" _
+    )
+
+    For i = LBound(keys) To UBound(keys)
+        k = CStr(keys(i))
+        nk = LCase$(Trim$(k))
+        If Len(nk) > 0 And Not dict.Exists(nk) Then
+            lastRow = lastRow + 1
+            ws.Cells(lastRow, 1).Value = k
+            ws.Cells(lastRow, 2).Value = vals(i)
+            ws.Cells(lastRow, 3).Value = descs(i)
+            dict.Add nk, True
+        End If
+    Next i
+
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
+
+    Application.DisplayAlerts = prevDA
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
 ' Python が出力した log\exclude_rules_e_column_vba.tsv から E 列（ロジック式）を書き込む。
 ' COM は A〜D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
 ' =========================================================
@@ -3993,6 +4193,7 @@ Private Sub 段階1_コア実行()
 
     ' 接続更新より先に設定シートを確保（Refresh で止まる・失敗して Exit したとき無言でシート未作成になるのを防ぐ）
     設定_配台不要工程_シートを確保
+    設定_環境変数_シートを確保
     MacroSplash_SetStep "段階1: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then
@@ -4723,6 +4924,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     End If
 
     設定_配台不要工程_シートを確保
+    設定_環境変数_シートを確保
     MacroSplash_SetStep "段階2: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then

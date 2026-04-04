@@ -152,7 +152,7 @@
       <li><code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID</code> … 既定相当 <code>0</code>。<code>1</code> で依頼NO直列（アクティブ依頼のみ当日候補）。</li>
       <li><code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code> … 既定オン。§B-2 検査／§B-3 巻返しが占有する設備列では他タスクを試さない（変数名は歴史的）。</li>
       <li><code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code> … 既定オン。同一依頼の EC と後続（検査／巻返し）で、履歴に出たメンバーを他側のチーム候補から除外（B-2.7）。<code>0</code> / <code>off</code> 等で無効化すると除外しない。詳細は <span class="file">配台ルール.md</span> B-2.7。</li>
-      <li><strong>集約シート</strong>: マクロブックに <code>設定_環境変数</code>（A=変数名・B=値）を置くと、段階1/2 等の Python 起動時に <span class="file">workbook_env_bootstrap.py</span> が <code>import planning_core</code> より前に <code>os.environ</code> へ反映します（OS 環境に触れず運用可。VBA の <code>TASK_INPUT_WORKBOOK</code> は従来どおり）。詳細は <span class="file">配台ルール.md</span> セクション8.0。</li>
+      <li><strong>集約シート</strong>: マクロブックに <code>設定_環境変数</code>（A=変数名・B=値）を置くと、段階1/2 等の Python 起動時に <span class="file">workbook_env_bootstrap.py</span> が <code>import planning_core</code> より前に <code>os.environ</code> へ反映します（OS 環境に触れず運用可。VBA の <code>TASK_INPUT_WORKBOOK</code> は従来どおり）。<strong>VBA</strong> の <code>設定_環境変数_シートを確保</code> が段階1/2 先頭で不足行のみ追記します。詳細は <span class="file">配台ルール.md</span> セクション8.0。</li>
       <li><code>TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS</code> … 未設定＝メインは基本人数のみ、全シミュレーション後に余力サブ追記。<code>1</code>＝従来どおりメインで <code>req+追加上限</code> まで探索。</li>
       <li><code>TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</code> … <code>1</code> で need 追加人数行を全面無視（後追いもなし）。</li>
       <li><code>TEAM_ASSIGN_*</code>（人数優先・スラック）… <span class="file">配台ルール.md</span> セクション5。</li>
