@@ -37,7 +37,8 @@ Option Explicit
 
 Private Sub UserForm_Initialize()
     On Error Resume Next
-    Me.StartUpPosition = 2  ' 画面中央（実行時に標準モジュールでも設定）
+    ' 初期は中央。可視 cmd の段階1/2 では標準モジュールがコンソール検出後に HWND で直下へ移動
+    Me.StartUpPosition = 2  ' 画面中央（MacroSplash_Show でも設定）
     With Me.Controls("txtExecutionLog")
         .Text = ""
         .HideSelection = False
