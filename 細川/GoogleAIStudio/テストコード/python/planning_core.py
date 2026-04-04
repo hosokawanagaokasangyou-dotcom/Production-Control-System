@@ -11241,11 +11241,9 @@ def load_attendance_and_analyze(members):
         if not pd.isna(excel_s) and not pd.isna(excel_e):
             start_t = parse_time_str(excel_s, DEFAULT_START_TIME)
             end_t = parse_time_str(excel_e, DEFAULT_END_TIME)
-            shift_src = "excel_both"
         else:
             start_t = parse_time_str(ai_info.get("出勤時刻") or excel_s, DEFAULT_START_TIME)
             end_t = parse_time_str(ai_info.get("退勤時刻") or excel_e, DEFAULT_END_TIME)
-            shift_src = "ai_or_partial_excel"
         base_end_t = end_t
 
         b1_s = parse_time_str(row.get('休憩時間1_開始'), DEFAULT_BREAKS[0][0])
@@ -11300,54 +11298,6 @@ def load_attendance_and_analyze(members):
             "efficiency": efficiency,
             "reason": reason,
         }
-
-        # #region agent log
-        if ("冨田" in m) or ("富田" in m):
-            try:
-                _lt = leave_type
-                if _lt is not None and isinstance(_lt, float) and pd.isna(_lt):
-                    _lt_s = ""
-                else:
-                    _lt_s = str(_lt) if _lt is not None else ""
-                _payload = {
-                    "sessionId": "9c482f",
-                    "runId": "post-fix",
-                    "hypothesisId": "H1-H3",
-                    "location": "planning_core.py:load_attendance",
-                    "message": "tomita_attendance_row",
-                    "data": {
-                        "date": curr_date.isoformat(),
-                        "member": m,
-                        "is_working": is_working,
-                        "shift_source": shift_src,
-                        "start_t": str(start_t),
-                        "end_t": str(end_t),
-                        "base_end_before_ot": str(base_end_t),
-                        "ot_cell_repr": repr(row.get(ATT_COL_OT_END)),
-                        "ot_applied": ot_applied_flag,
-                        "excel_退勤_repr": repr(row.get("退勤時間")),
-                        "excel_出勤_repr": repr(row.get("出勤時間")),
-                        "ai_退勤時刻": ai_info.get("退勤時刻"),
-                        "ai_出勤時刻": ai_info.get("出勤時刻"),
-                        "leave_type": _lt_s,
-                    },
-                    "timestamp": int(time_module.time() * 1000),
-                }
-                _logp = os.path.normpath(
-                    os.path.join(
-                        os.path.dirname(os.path.abspath(__file__)),
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "debug-9c482f.log",
-                    )
-                )
-                with open(_logp, "a", encoding="utf-8") as _df:
-                    _df.write(json.dumps(_payload, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
-        # #endregion
 
     return attendance_data, ai_log
 
@@ -16293,43 +16243,6 @@ def _generate_plan_impl():
                     cal_end = _calendar_display_clock_out_for_calendar_sheet(data, d)
                     end_disp = cal_end if cal_end is not None else data['end_dt']
                     clock_out_s = end_disp.strftime("%H:%M")
-                    # #region agent log
-                    if ("冨田" in m) or ("富田" in m):
-                        try:
-                            _payload2 = {
-                                "sessionId": "9c482f",
-                                "runId": "post-fix",
-                                "hypothesisId": "H4-H5",
-                                "location": "planning_core.py:cal_rows",
-                                "message": "tomita_calendar_out",
-                                "data": {
-                                    "date": str(d),
-                                    "raw_end_dt": data["end_dt"].strftime("%H:%M")
-                                    if data.get("end_dt")
-                                    else None,
-                                    "cal_end_disp": cal_end.strftime("%H:%M")
-                                    if cal_end
-                                    else None,
-                                    "clock_out_s": clock_out_s,
-                                    "reason": (data.get("reason") or "")[:120],
-                                },
-                                "timestamp": int(time_module.time() * 1000),
-                            }
-                            _logp2 = os.path.normpath(
-                                os.path.join(
-                                    os.path.dirname(os.path.abspath(__file__)),
-                                    "..",
-                                    "..",
-                                    "..",
-                                    "..",
-                                    "debug-9c482f.log",
-                                )
-                            )
-                            with open(_logp2, "a", encoding="utf-8") as _df2:
-                                _df2.write(json.dumps(_payload2, ensure_ascii=False) + "\n")
-                        except Exception:
-                            pass
-                    # #endregion
                 else:
                     clock_out_s = "休"
                 cal_rows.append({
