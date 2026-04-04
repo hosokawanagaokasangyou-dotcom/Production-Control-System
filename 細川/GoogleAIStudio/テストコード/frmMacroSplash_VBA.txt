@@ -6,7 +6,7 @@
 ' 【Excel での作成手順】
 ' 1. Alt+F11 で VBE を開く
 ' 2. メニュー 挿入 → UserForm
-' 3. プロパティで (Name) を frmMacroSplash、Caption は空または「処理中」
+' 3. プロパティで (Name) を frmMacroSplash、Caption は「PM_AI_MACRO_SPLASH」（標準モジュール SPLASH_FORM_WINDOW_TITLE と一致。前面取得用）
 ' 4. ツールボックスから Label を1つ置く。名前(プロパティ Name)を lblMessage に変更
 '    ・Caption は任意（実行時に上書き）
 '    ・WordWrap = True、フォントはメイリオ 11pt 程度、幅はフォームいっぱい・高さ 40〜50pt 程度

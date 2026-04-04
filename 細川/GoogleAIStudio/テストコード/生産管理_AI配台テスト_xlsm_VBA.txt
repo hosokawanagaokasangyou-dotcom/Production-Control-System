@@ -8,6 +8,8 @@
     Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
     Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
+    Private Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
+    Private Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
@@ -15,6 +17,8 @@
     Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
     Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
+    Private Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
+    Private Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
 #End If
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
@@ -97,6 +101,8 @@ Private m_splashExecutionLogPath As String
 ' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
 Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
+' UserForm 前面化用（Caption を一意にし FindWindow で HWND を得る。フォームの Caption プロパティも同じ文字列にするとよい）
+Private Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
 ' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
 ' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（400→1200）
 Private Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1200
@@ -278,10 +284,15 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     End If
     positioned = False
     probe = 0
+    Dim splashPollIter As Long
+    splashPollIter = 0
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
+        splashPollIter = splashPollIter + 1
+        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20≈24秒）
+        If splashPollIter Mod 20 = 0 Then MacroSplash_BringFormToFront
         ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
@@ -1728,6 +1739,22 @@ Private Sub MacroCompleteChime()
     PlaySound "SystemDefault", 0&, SND_ALIAS Or SND_ASYNC
 End Sub
 
+' モードレス UserForm が背後に残ると再描画・ログ更新が止まったように見えることがある。Show 直後に前面へ（ユーザーがクリックしたときと同趣旨）。
+Private Sub MacroSplash_BringFormToFront()
+#If VBA7 Then
+    Dim hwnd As LongPtr
+#Else
+    Dim hwnd As Long
+#End If
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    hwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
+    If hwnd = 0 Then Exit Sub
+    BringWindowToTop hwnd
+    SetForegroundWindow hwnd
+    On Error GoTo 0
+End Sub
+
 Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
     On Error GoTo CleanupFail
     If m_macroSplashShown Then MacroSplash_Hide
@@ -1735,6 +1762,7 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
     End If
+    frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
     frmMacroSplash.lblMessage.Caption = message
     frmMacroSplash.StartUpPosition = 2  ' 画面中央
     m_macroSplashLockedExcel = False
@@ -1746,6 +1774,7 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     m_macroSplashShown = True
     On Error Resume Next
     frmMacroSplash.Controls("txtExecutionLog").HideSelection = False
+    MacroSplash_BringFormToFront
     DoEvents
     Exit Sub
 CleanupFail:
