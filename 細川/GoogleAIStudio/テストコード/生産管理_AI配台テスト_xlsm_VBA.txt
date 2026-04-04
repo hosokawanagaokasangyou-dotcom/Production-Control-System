@@ -117,8 +117,8 @@ Private Const SHEET_SETTINGS As String = "設定"
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Private Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
-' Ctrl+Shift+テンキー -（Subtract）→ メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{SUBTRACT}=テンキーのマイナス。ブックを閉じる前に解除しないと Excel 全体に割当が残る（ThisWorkbook の BeforeClose 推奨）
-Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{SUBTRACT}"
+' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
+Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
