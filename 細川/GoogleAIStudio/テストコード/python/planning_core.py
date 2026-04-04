@@ -1082,6 +1082,15 @@ PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
+# §B-2 / §B-3 同一依頼で EC と後続（検査／巻返し）の担当者集合を排他するか。
+# 0 / false / no / off / いいえ / 無効 で無効化すると、履歴ベースの相互除外を行わず同一人物が両側の候補に残り得る。
+PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
+    os.environ.get("PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1")
+    .strip()
+    .lower()
+    not in ("0", "false", "no", "off", "いいえ", "無効")
+)
+
 # マクロブック「設定_配台不要工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl が実質失敗するため）。失敗時は TSV→VBA 反映。
 # コマンド等で openpyxl を試す場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
@@ -11408,6 +11417,40 @@ def _filter_capable_members_b2_disjoint_teams(
     )
     if not is_ec and not is_follower:
         return capable_members
+    if not PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS:
+        # #region agent log
+        try:
+            import json
+            import time as _time_ag
+
+            _repo_root_ag = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+            )
+            _log_path_ag = os.path.join(_repo_root_ag, "debug-109161.log")
+            with open(_log_path_ag, "a", encoding="utf-8") as _lf_ag:
+                _lf_ag.write(
+                    json.dumps(
+                        {
+                            "sessionId": "109161",
+                            "hypothesisId": "H-A",
+                            "location": "planning_core.py:_filter_capable_members_b2_disjoint_teams",
+                            "message": "b2_disjoint bypass env off",
+                            "data": {
+                                "tid": tid,
+                                "is_ec": is_ec,
+                                "is_rewind": bool(task.get("roll_pipeline_rewind")),
+                                "n_capable": len(capable_members),
+                            },
+                            "timestamp": int(_time_ag.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+        return capable_members
     if is_ec:
         excl = _pipeline_b2_assigned_member_names_nfkc_for_side(
             task_queue, tid, ec_side=False
@@ -11424,6 +11467,39 @@ def _filter_capable_members_b2_disjoint_teams(
         if unicodedata.normalize("NFKC", str(m).strip()) not in excl
     ]
     removed = [m for m in capable_members if m not in filtered]
+    if removed:
+        # #region agent log
+        try:
+            import json
+            import time as _time_ag2
+
+            _repo_root_ag2 = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+            )
+            _log_path_ag2 = os.path.join(_repo_root_ag2, "debug-109161.log")
+            with open(_log_path_ag2, "a", encoding="utf-8") as _lf_ag2:
+                _lf_ag2.write(
+                    json.dumps(
+                        {
+                            "sessionId": "109161",
+                            "hypothesisId": "H-B",
+                            "location": "planning_core.py:_filter_capable_members_b2_disjoint_teams",
+                            "message": "b2_disjoint applied removed>0",
+                            "data": {
+                                "tid": tid,
+                                "is_ec": is_ec,
+                                "n_removed": len(removed),
+                                "n_after": len(filtered),
+                            },
+                            "timestamp": int(_time_ag2.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
     if removed and _trace_schedule_task_enabled(tid):
         if is_ec:
             _side = "EC"
