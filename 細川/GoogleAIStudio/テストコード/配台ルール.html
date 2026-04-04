@@ -177,7 +177,7 @@
     <p><span class="file">python/planning_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
     <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。同趣旨の要約はリポジトリ直下 <span class="file">.cursorrules</span> にもあります。</p>
     <p><strong>作業ディレクトリ</strong>: 環境変数 <code>TASK_INPUT_WORKBOOK</code> があるときはそのブックのフォルダへ <code>chdir</code> し、<code>log/</code>・<code>output/</code> を VBA のブック配置と揃える。未設定時は <code>python</code> の親フォルダ基準（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
-    <p><strong>段階2の output</strong>: 実行前に <code>production_plan_multi_day_*.xlsx</code> と <code>member_schedule_*.xlsx</code> を削除しようとします。<strong>Excel で開いたまま</strong>だと削除・保存に失敗しうるので閉じてから実行。削除は短いリトライし、残ったファイルは ERROR ログに列挙。ファイル名の時刻はマイクロ秒まで含め衝突を避ける。設備ガント生成は重く、ログが止まって見えることがある（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
+    <p><strong>段階2の output</strong>: 実行前に <code>production_plan_multi_day_*.xlsx</code> と <code>member_schedule_*.xlsx</code> を削除しようとします。<strong>Excel で開いたまま</strong>だと削除・保存に失敗しうるので閉じてから実行。削除は短いリトライし、残ったファイルは ERROR ログに列挙。ファイル名の時刻はマイクロ秒まで含め衝突を避ける。設備ガント生成は重く、ログが止まって見えることがある（詳細は <span class="file">配台ルール.md</span> セクション8）。<strong>マクロブック取り込み</strong>では、出力 xlsx の各シート名と<strong>同名のシートをコピー前に削除</strong>し、<code>TEMP_設備毎の時間割</code> や <code>ブロックテーブル</code> が <code>(2)</code> 付きで増えないようにする（VBA は <span class="file">生産管理_AI配台テスト_xlsm_VBA.txt</span> を参照）。</p>
     <p><strong>計画ブックに追加されるシート</strong>（<code>production_plan_multi_day_*.xlsx</code>）:</p>
     <table>
       <thead><tr><th>シート</th><th>概要</th></tr></thead>
