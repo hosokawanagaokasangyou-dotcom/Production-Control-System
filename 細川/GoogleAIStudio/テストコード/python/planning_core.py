@@ -2901,6 +2901,120 @@ def _coerce_task_planning_basis_dates(raw) -> dict[str, str]:
     return out
 
 
+def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
+    """
+    Gemini が task_preferred_operators に誤って長文を入れた場合など、
+    自然言語断片から global_day_process_operator_rules 相当を推定する（保守的）。
+    例: 「2026/4/4 工程名:EC 森下と宮島を配台」
+    """
+    t = unicodedata.normalize("NFKC", str(text or "")).strip()
+    if len(t) < 6:
+        return []
+    dates = _extract_calendar_dates_from_text(t, int(ref_y))
+    if not dates:
+        return []
+    d0 = dates[0]
+    proc_m = re.search(
+        r"工程名?\s*[:：]?\s*([A-Za-z0-9一-龯ー・〆々]+)",
+        t,
+    )
+    pc = proc_m.group(1).strip() if proc_m else ""
+    if not pc:
+        m2 = re.search(r"([\dA-Za-z一-龯ー・〆々]{1,12})\s*工程", t)
+        pc = m2.group(1).strip() if m2 else ""
+    if not pc:
+        return []
+    names: list[str] = []
+    for m in re.finditer(
+        r"([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*と\s*([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*を?\s*(?:配台|配属|組ませ|同一チーム)",
+        t,
+    ):
+        a, b = m.group(1).strip(), m.group(2).strip()
+        if a:
+            names.append(a)
+        if b:
+            names.append(b)
+    if len(names) < 2:
+        return []
+    return [
+        {
+            "date": d0.isoformat(),
+            "process_contains": pc,
+            "operator_names": names[:12],
+        }
+    ]
+
+
+def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dict:
+    """
+    Gemini が task_preferred_operators に **配列**や誤スキーマ（workstation_id 等）を返したとき、
+    捨てずに global_day_process_operator_rules / scheduler_notes_ja へ救済する。
+    """
+    out = dict(raw)
+    tpo = out.get("task_preferred_operators")
+    if not isinstance(tpo, list) or not tpo:
+        return out
+    narratives: list[str] = []
+    extra_rule_objs: list[dict] = []
+    for item in tpo:
+        if not isinstance(item, dict):
+            continue
+        onames = item.get("operator_names")
+        if isinstance(onames, list) and (
+            item.get("date") is not None or item.get("process_contains")
+        ):
+            extra_rule_objs.append(item)
+            continue
+        for key in ("workstation_id", "schedule_notes_ai", "schedule_notes", "note", "text"):
+            s = str(item.get(key) or "").strip()
+            if len(s) >= 12:
+                narratives.append(s[:800])
+        for _k, v in item.items():
+            if _k in (
+                "factory_closure_dates",
+                "operator_names",
+                "date",
+                "process_contains",
+            ):
+                continue
+            if isinstance(v, str) and len(v) > 35 and ("配" in v or "工程" in v):
+                narratives.append(v[:800])
+    out["task_preferred_operators"] = {}
+    gdp_existing = out.get("global_day_process_operator_rules")
+    gdp_list: list = list(gdp_existing) if isinstance(gdp_existing, list) else []
+    gdp_list.extend(extra_rule_objs)
+    seen_n: set[str] = set()
+    inferred_n = 0
+    for nb in narratives:
+        if nb in seen_n:
+            continue
+        seen_n.add(nb)
+        inferred = _infer_global_day_process_rules_from_free_text(nb, ref_y)
+        if inferred:
+            inferred_n += len(inferred)
+        gdp_list.extend(inferred)
+    out["global_day_process_operator_rules"] = gdp_list
+    if narratives:
+        sn0 = str(out.get("scheduler_notes_ja") or "").strip()
+        add = " | ".join(n[:280] for n in narratives[:4])
+        out["scheduler_notes_ja"] = (sn0 + " " + add).strip()[:600]
+    # #region agent log
+    _agent_debug_ndjson(
+        "H1",
+        "planning_core:_salvage_malformed_global_priority_gemini_dict",
+        "salvaged list-shaped task_preferred_operators",
+        {
+            "list_len": len(tpo),
+            "narratives_n": len(narratives),
+            "extra_rule_objs_n": len(extra_rule_objs),
+            "inferred_rules_n": inferred_n,
+            "gdp_list_len": len(gdp_list),
+        },
+    )
+    # #endregion
+    return out
+
+
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
     """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
@@ -2929,6 +3043,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
     }
     if not isinstance(raw, dict):
         return base
+    raw = _salvage_malformed_global_priority_gemini_dict(raw, y0)
     base["ignore_skill_requirements"] = as_bool(raw.get("ignore_skill_requirements"))
     base["ignore_need_minimum"] = as_bool(raw.get("ignore_need_minimum"))
     base["abolish_all_scheduling_limits"] = as_bool(
@@ -3125,7 +3240,7 @@ G) **global_day_process_operator_rules** （配列・必須）
 - "ignore_skill_requirements": true または false
 - "ignore_need_minimum": true または false
 - "abolish_all_scheduling_limits": true または false
-- "task_preferred_operators": オブジェクト（該当なしは {{}}）
+- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当氏名）。**配列にしてはならない**。該当なしは {{}}
 - "global_speed_rules": オブジェクトの配列（該当なしは []）
 - "task_planning_basis_dates": オブジェクト（依頼NO→YYYY-MM-DD、該当なしは {{}}）
 - "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）

@@ -126,7 +126,7 @@
   <section id="rev-2026-03" class="card" aria-labelledby="h-rev">
     <h2 id="h-rev">改定（2026-03）要約</h2>
     <ul>
-      <li><strong>グローバル AI</strong>: JSON に <code>task_planning_basis_dates</code>（依頼NO→日付）を追加。特別指定備考 AI より<strong>先</strong>に計画基準納期へ反映。<strong>2026-04 追補</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名の部分一致＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
+      <li><strong>グローバル AI</strong>: JSON に <code>task_planning_basis_dates</code>（依頼NO→日付）を追加。特別指定備考 AI より<strong>先</strong>に計画基準納期へ反映。<strong>2026-04 追補</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名の部分一致＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映。<code>task_preferred_operators</code> は<strong>オブジェクトのみ</strong>（配列不可）。誤スキーマ時は実装が可能な範囲でルール・メモへ救済（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
       <li><strong>優先度重複</strong>: 配台対象行で同じ優先度整数が2行以上→段階2中止、終了コード3、メッセージファイル経由で Excel に表示（999は除外）。</li>
       <li><strong>同日同機械</strong>: 計画基準納期と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
       <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一設備列は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
