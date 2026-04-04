@@ -399,7 +399,7 @@ End Sub
 ' - 1行目: 対象年月（A1）
 ' - 4行目: 日付（B列～AG列まで有効。AH以降は無視）
 ' - A列(5行目以降): メンバー名
-' - 交点セル: 空白=通常 / *=年休 / 国=他拠点勤務 / 前休=午後休憩(14:45～15:00)終了後～定常終了（それ以前は年休） / 後休=定常開始～昼休憩開始(12:00)・午後年休（定常はメイン A15/B15、空なら 8:45～17:00）
+' - 交点セル: 空白=通常 / *=年休 / 国=他拠点勤務 / 前休=午前年休・休憩時間1_終了～定常終了(午後休憩14:45～15:00。休憩1は通常行と同値12:00～12:50) / 後休=定常開始～休憩時間1_開始・午後年休（定常はメイン A15/B15、空なら 8:45～17:00）
 ' - セル色が白 or 黄色のみ「工場稼働日」とみなす（ただし記号が入っているセルは記号を優先）
 ' - 条件付き書式は Interior を読んでも拾えないため、読取前に表示色を実体化してからルール削除
 ' =========================================================
@@ -520,6 +520,10 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
     Dim st As Variant, en As Variant
     Dim b1s As Variant, b1e As Variant, b2s As Variant, b2e As Variant
     Dim note As String
+    ' 通常行と同じ休憩時間1（メンバー出勤簿の休憩時間1_開始/終了と一致。変更時は Case "" / 国 / Else と前休・後休を揃える）
+    Dim defB1s As Date, defB1e As Date
+    defB1s = TimeSerial(12, 0, 0)
+    defB1e = TimeSerial(12, 50, 0)
     
     If Not ResolveCalendarYearMonth(wsCal, y, m) Then Exit Sub
     
@@ -557,27 +561,28 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
                 Select Case marker
                     Case "", "通常"
                         st = regSt: en = regEn
-                        b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
+                        b1s = defB1s: b1e = defB1e
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "通常"
                     Case "*", "＊"
                         note = "年休"
                     Case "国"
                         st = regSt: en = regEn
-                        b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
+                        b1s = defB1s: b1e = defB1e
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "他拠点勤務"
                     Case "前休"
-                        ' 午前・昼食帯・午後休憩までは年休。勤務は午後休憩終了(15:00)～定常終了（休憩列に午後休憩は出さない）
-                        st = TimeSerial(15, 0, 0): en = regEn
+                        ' 午前は年休扱い。休憩時間1_終了～定常終了。午後休憩は通常どおり 14:45～15:00（昼食帯は出ず）
+                        st = defB1e: en = regEn
+                        b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "前休"
                     Case "後休"
-                        ' 定常開始～昼休憩開始(12:00)。午後は年休扱い（12:00 は通常行の昼休憩帯開始と同じ）
-                        st = regSt: en = TimeSerial(12, 0, 0)
+                        ' 定常開始～休憩時間1_開始 勤務。午後は年休扱い
+                        st = regSt: en = defB1s
                         note = "後休"
                     Case Else
                         st = regSt: en = regEn
-                        b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
+                        b1s = defB1s: b1e = defB1e
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = marker
                 End Select

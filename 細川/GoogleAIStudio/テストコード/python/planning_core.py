@@ -404,7 +404,7 @@ _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
 # 勤怠AIの入力は備考のみ。ただし reason（表示・中抜け補正・個人シートの休憩/休暇文言）は、備考が空のとき休暇区分を引き継ぐ。
-# master カレンダー／VBA 出勤簿生成と一致: 前休=午後休憩(14:45～15:00)後の 15:00～定常終了／後休=定常開始～昼休憩開始(12:00)・午後年休／国=他拠点勤務。
+# master カレンダー／出勤簿.txt 準拠: 前休=午前年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）／後休=定常開始～休憩時間1_開始・午後年休／国=他拠点勤務。
 # 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
@@ -10779,11 +10779,12 @@ def _override_default_factory_hours_from_master(master_path: str):
         DEFAULT_START_TIME, DEFAULT_END_TIME = orig_s, orig_e
 
 
-def infer_mid_break_from_reason(reason_text, start_t, end_t):
+def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, break1_end=None):
     """
     備考から中抜け時間を推定するローカル補正。
     AIが中抜けを返さない場合のフェイルセーフとして使う。
-    master.xlsm カレンダー由来の休暇区分: 前休=午後休憩後(15:00)から定常終了まで勤務、後休=定常開始から昼休憩開始(12:00)まで勤務（VBA カレンダー→出勤簿と同義）。
+    master.xlsm カレンダー由来の休暇区分: 前休=午前年休・午後のみ勤務、後休=午後年休・午前のみ勤務（出勤簿.txt と同義）。
+    前休・後休の境界はメンバー勤怠の休憩時間1_開始/終了（未指定時は DEFAULT_BREAKS[0]）に合わせる。
     """
     if reason_text is None:
         return None, None
@@ -10791,18 +10792,20 @@ def infer_mid_break_from_reason(reason_text, start_t, end_t):
     if not txt or txt.lower() in ("nan", "none", "null", "通常"):
         return None, None
 
+    b1_s = break1_start if break1_start is not None else DEFAULT_BREAKS[0][0]
+    b1_e = break1_end if break1_end is not None else DEFAULT_BREAKS[0][1]
+
     noon_end = time(12, 0)
     afternoon_start = time(13, 0)
-    mae_kyuu_afternoon_work_start = time(15, 0)  # 前休の所定出勤（午後休憩 14:45～15:00 終了後）
     # カレンダー記号と一致させる（シフト時刻が誤っている場合の補完用。正しい行では区間が空になり追加されない）
     if txt == "前休":
-        # 正しい行は出勤 15:00 以降で補完不要。全日シフトの誤入力時は 15:00 までを中抜け（午前～午後休憩まで年休相当）
-        if start_t and start_t < mae_kyuu_afternoon_work_start:
-            return start_t, mae_kyuu_afternoon_work_start
+        # 正しい行は出勤が休憩1終了以降で補完不要。全日シフトの誤入力時はそこまでを中抜け（午前年休相当）
+        if start_t and start_t < b1_e:
+            return start_t, b1_e
         return None, None
     if txt == "後休":
-        if end_t and afternoon_start < end_t:
-            return afternoon_start, end_t
+        if end_t and b1_s < end_t:
+            return b1_s, end_t
         return None, None
 
     # 1) 明示的な時刻範囲（例: 11:00-14:00 / 11:00～14:00）
@@ -10833,8 +10836,8 @@ def infer_mid_break_from_reason(reason_text, start_t, end_t):
     return None, None
 
 
-# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に昼休憩開始(12:00)終了とみなす。
-_AFTERNOON_OFF_DISPLAY_END = time(12, 0)
+# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に実質 休憩時間1_開始で終了とみなす。
+_AFTERNOON_OFF_DISPLAY_END = DEFAULT_BREAKS[0][0]
 
 
 def _reason_is_afternoon_off(reason: str) -> bool:
@@ -10844,14 +10847,14 @@ def _reason_is_afternoon_off(reason: str) -> bool:
 
 
 def _reason_is_morning_off(reason: str) -> bool:
-    """前休（午後休憩まで年休・15:00 から定常終了まで勤務）。カレンダー由来の略号のみ明示扱い（事務所勤務などと混同しない）。"""
+    """前休（午前年休・午後のみ勤務）。カレンダー由来の略号のみ明示扱い（事務所勤務などと混同しない）。"""
     return "前休" in str(reason or "")
 
 
 def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
     """
     配台は breaks_dt の午後中抜けで正しくなる一方、end_dt が 17:00 のままだと結果カレンダーの退勤列だけ誤る。
-    後休（午後年休）または備考が午後休み系で、定時まで続く午後の中抜けがあるときだけ退勤表示を 12:00 に揃える（end_dt 本体は変更しない）。
+    後休（午後年休）または備考が午後休み系で、定時まで続く午後の中抜けがあるときだけ退勤表示を休憩時間1_開始に揃える（end_dt 本体は変更しない）。
     """
     if not entry.get("is_working"):
         return None
@@ -10869,7 +10872,7 @@ def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
         bs = b_s.time() if isinstance(b_s, datetime) else b_s
         if isinstance(bs, datetime):
             bs = bs.time()
-        if bs < time(12, 0):
+        if bs < DEFAULT_BREAKS[0][0]:
             continue
         if isinstance(b_e, datetime):
             be_cmp = b_e
@@ -10886,7 +10889,7 @@ def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reas
     """
     個人_* スケジュールの10分枠が休憩帯に入るときの文言。
     昼食など通常休憩は「休憩」。後休（午後年休）で定時まで工場にいない午後帯は「休暇」。
-    前休（午後休憩まで年休）で勤務開始前の欠勤区間が休憩帯として入っている場合は「休暇」。
+    前休（午前年休）で午前の欠勤区間が休憩帯として入っている場合は「休暇」。
     """
     reason = str(reason or "")
     afternoon_off = _reason_is_afternoon_off(reason)
@@ -10900,9 +10903,9 @@ def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reas
             bs = b_s.time() if isinstance(b_s, datetime) else b_s
             if isinstance(bs, datetime):
                 bs = bs.time()
-            if afternoon_off and bs >= time(12, 0) and b_e >= shift_end_dt - timedelta(seconds=2):
+            if afternoon_off and bs >= DEFAULT_BREAKS[0][0] and b_e >= shift_end_dt - timedelta(seconds=2):
                 return "休暇"
-            if morning_off and bs < time(12, 0):
+            if morning_off and bs < DEFAULT_BREAKS[0][0]:
                 be_t = b_e.time() if isinstance(b_e, datetime) else b_e
                 if be_t <= time(13, 0):
                     return "休暇"
@@ -10919,7 +10922,7 @@ def _member_schedule_off_shift_label(
 ) -> str:
     """
     個人_* シートで所定出退勤の外側の10分枠。
-    前休の午後勤務開始前（所定開始～15:00 未満）は年休、後休の午後は年休。それ以外のシフト外は勤務外。
+    前休の午前（工場日の所定開始～午後出勤まで）は年休、後休の午後は年休。それ以外のシフト外は勤務外。
     """
     r = str(reason or "")
     day_start = datetime.combine(day_date, DEFAULT_START_TIME)
@@ -11246,7 +11249,7 @@ def load_attendance_and_analyze(members):
         mid_break_e = parse_time_str(ai_info.get("中抜け終了"), None)
         # AIが中抜けを返さなかった場合は、備考文言からローカル推定で補完
         if not (mid_break_s and mid_break_e):
-            fb_s, fb_e = infer_mid_break_from_reason(reason, start_t, end_t)
+            fb_s, fb_e = infer_mid_break_from_reason(reason, start_t, end_t, b1_s, b1_e)
             if fb_s and fb_e:
                 mid_break_s, mid_break_e = fb_s, fb_e
 
