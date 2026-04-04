@@ -7502,24 +7502,12 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             xw_book.app.display_alerts = False
         except Exception:
             pass
-        _t_names0 = time_module.perf_counter()
+        # 全シート名を列挙するとシート数分の COM 往復になり、D3=true 時は VBA ポーリングと競合して
+        # 1 シート数秒〜十数秒かかることがある（計測で 40 シート≈213s）。名前で直接解決する。
+        _t_sheet0 = time_module.perf_counter()
         try:
-            sheet_names = [s.name for s in xw_book.sheets]
+            sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         except Exception:
-            sheet_names = []
-        _t_names1 = time_module.perf_counter()
-        # #region agent log
-        _agent_debug_ndjson_log(
-            "H6",
-            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-            "after_sheet_names_enum",
-            {
-                "elapsed_ms": round((_t_names1 - _t_names0) * 1000),
-                "sheet_count": len(sheet_names),
-            },
-        )
-        # #endregion
-        if EXCLUDE_RULES_SHEET_NAME not in sheet_names:
             _log_exclude_rules_sheet_debug(
                 "XLWINGS_SYNC_SKIP",
                 log_prefix,
@@ -7527,8 +7515,17 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 details=f"path={wb_path}",
             )
             return False
-
-        sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
+        _t_sheet1 = time_module.perf_counter()
+        # #region agent log
+        _agent_debug_ndjson_log(
+            "H6",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "after_direct_sheet_lookup",
+            {
+                "elapsed_ms": round((_t_sheet1 - _t_sheet0) * 1000),
+            },
+        )
+        # #endregion
         max_r = max(1, int(ws_oxl.max_row or 1))
         ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
         _t_mat0 = time_module.perf_counter()
@@ -7580,8 +7577,8 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         finally:
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
         _attach_ms = round((_t_after_attach - _t_sync0) * 1000)
-        _enum_ms = round((_t_names1 - _t_names0) * 1000)
-        _prep_ms = round((_t_mat0 - _t_names1) * 1000)
+        _sheet_lookup_ms = round((_t_sheet1 - _t_sheet0) * 1000)
+        _prep_ms = round((_t_mat0 - _t_sheet1) * 1000)
         _matrix_ms = round((_t_mat1 - _t_mat0) * 1000)
         _range_ms = round((_t_r1 - _t_r0) * 1000)
         _save_ms = round((_t_s1 - _t_s0) * 1000)
@@ -7589,11 +7586,11 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _exclude_rules_effective_read_path = wb_path
         _clear_exclude_rules_e_apply_files()
         logging.info(
-            "%s: [XLWINGS_PERF] attach_ms=%d sheets_enum_ms=%d prep_ms=%d matrix_ms=%d "
+            "%s: [XLWINGS_PERF] attach_ms=%d sheet_lookup_ms=%d prep_ms=%d matrix_ms=%d "
             "range_ms=%d save_ms=%d rows=%d",
             log_prefix,
             _attach_ms,
-            _enum_ms,
+            _sheet_lookup_ms,
             _prep_ms,
             _matrix_ms,
             _range_ms,
