@@ -2090,11 +2090,11 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ws.Columns("A").ColumnWidth = 14   ' 機械名
     ws.Columns("B").ColumnWidth = 14   ' 工程名
     ws.Columns("C").ColumnWidth = 22   ' 担当者（主担当＋サブ列挙）
-    ' D: タスク概要 … 列幅を約 40 ポイントにし折り返し
+    ' D: タスク概要（依頼NO）… 列幅を約 35 ポイントにし折り返し
     ws.Columns("D").ColumnWidth = 8
     wD = ws.Columns("D").Width
     If wD > 0 Then
-        ws.Columns("D").ColumnWidth = ws.Columns("D").ColumnWidth * (40# / wD)
+        ws.Columns("D").ColumnWidth = ws.Columns("D").ColumnWidth * (35# / wD)
     End If
     ws.Columns("D").WrapText = True
     ws.Columns("C").WrapText = True

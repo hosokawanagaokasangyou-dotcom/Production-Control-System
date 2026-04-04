@@ -1956,12 +1956,14 @@ def _write_results_equipment_gantt_sheet(
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             evlist = by_dm[d].get(eq, [])
             if evlist:
-                parts = []
+                tids: list[str] = []
+                seen_tid: set[str] = set()
                 for e in evlist:
-                    cum = e["already_done_units"] + e["units_done"]
-                    tot = e["total_units"]
-                    parts.append(f"[{e['task_id']}] {cum}/{tot}R")
-                task_sum = " ｜ ".join(parts)
+                    tid = str(e.get("task_id") or "").strip()
+                    if tid and tid not in seen_tid:
+                        seen_tid.add(tid)
+                        tids.append(tid)
+                task_sum = " ".join(tids) if tids else "—"
                 member_disp = _gantt_row_member_names(evlist)
             else:
                 task_sum = "—"
@@ -2004,8 +2006,14 @@ def _write_results_equipment_gantt_sheet(
             if show_actual_rows:
                 evlist_a = by_dm_actual[d].get(eq, [])
                 if evlist_a:
-                    parts_a = [f"[{e_a['task_id']}]" for e_a in evlist_a]
-                    task_sum_a = " ".join(dict.fromkeys(parts_a))
+                    tids_a: list[str] = []
+                    seen_aid: set[str] = set()
+                    for e_a in evlist_a:
+                        tid = str(e_a.get("task_id") or "").strip()
+                        if tid and tid not in seen_aid:
+                            seen_aid.add(tid)
+                            tids_a.append(tid)
+                    task_sum_a = " ".join(tids_a) if tids_a else "—"
                     member_disp_a = _gantt_row_member_names(evlist_a)
                 else:
                     task_sum_a = "—"
@@ -2504,24 +2512,43 @@ def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
     return ("", s)
 
 
+def _gantt_member_label_surname_only(raw: str) -> str:
+    """
+    設備ガントの担当者セル用。半角／全角空白があれば手前を姓とみなし、無いときは全体を表示
+    （氏名が1トークンのみのときは姓の切り出し不可のためそのまま）。NFKC・富田/冨田寄せは姓用と同じ。
+    """
+    sei, mei = _split_person_sei_mei(raw)
+    if not sei:
+        return ""
+    n = _normalize_sei_for_match(sei)
+    return n if n else sei
+
+
 def _gantt_row_member_names(evlist) -> str:
-    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去して列挙する。"""
-    names: list[str] = []
-    seen: set[str] = set()
+    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去し、姓のみを半角スペース区切り。"""
+    raw_names: list[str] = []
+    seen_raw: set[str] = set()
     for e in evlist or []:
         op = str(e.get("op") or "").strip()
-        if op and op not in seen:
-            seen.add(op)
-            names.append(op)
+        if op and op not in seen_raw:
+            seen_raw.add(op)
+            raw_names.append(op)
         sub_raw = str(e.get("sub") or "").strip()
         if not sub_raw:
             continue
         for seg in re.split(r"[,、]", sub_raw):
             t = seg.strip()
-            if t and t not in seen:
-                seen.add(t)
-                names.append(t)
-    return "、".join(names) if names else "—"
+            if t and t not in seen_raw:
+                seen_raw.add(t)
+                raw_names.append(t)
+    labels: list[str] = []
+    seen_label: set[str] = set()
+    for raw in raw_names:
+        lab = _gantt_member_label_surname_only(raw)
+        if lab and lab not in seen_label:
+            seen_label.add(lab)
+            labels.append(lab)
+    return " ".join(labels) if labels else "—"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
