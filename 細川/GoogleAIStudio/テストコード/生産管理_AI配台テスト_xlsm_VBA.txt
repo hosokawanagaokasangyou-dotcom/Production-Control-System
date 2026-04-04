@@ -1275,12 +1275,13 @@ Private Sub 結果_設備ガント_マスタ時刻反映( _
     lastR = ur.Row + ur.Rows.Count - 1
     
     For r = 1 To lastR
-        If Trim$(CStr(ws.Cells(r, 1).Value)) = "設備" _
-            And Trim$(CStr(ws.Cells(r, 2).Value)) = "タスク概要" _
-            And Trim$(CStr(ws.Cells(r, 3).Value)) = "主担当" Then
+        If Trim$(CStr(ws.Cells(r, 1).Value)) = "機械名" _
+            And Trim$(CStr(ws.Cells(r, 2).Value)) = "工程名" _
+            And Trim$(CStr(ws.Cells(r, 3).Value)) = "担当者" _
+            And Trim$(CStr(ws.Cells(r, 4).Value)) = "タスク概要" Then
             
             lastC = ws.Cells(r, ws.Columns.Count).End(xlToLeft).Column
-            For c = 4 To lastC
+            For c = 5 To lastC
                 v = ws.Cells(r, c).Value
                 If Not IsEmpty(v) And VarType(v) <> vbError Then
                     If マスタメイン_セルを時刻Dateへ(v, slotStart) Then
@@ -2083,15 +2084,24 @@ End Sub
 Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastCol As Long
     Dim c As Long
+    Dim wD As Double
     
     On Error Resume Next
-    ws.Columns("A").ColumnWidth = 14
-    ws.Columns("B").ColumnWidth = 46
-    ws.Columns("C").ColumnWidth = 12
+    ws.Columns("A").ColumnWidth = 14   ' 機械名
+    ws.Columns("B").ColumnWidth = 14   ' 工程名
+    ws.Columns("C").ColumnWidth = 22   ' 担当者（主担当＋サブ列挙）
+    ' D: タスク概要 … 列幅を約 40 ポイントにし折り返し
+    ws.Columns("D").ColumnWidth = 8
+    wD = ws.Columns("D").Width
+    If wD > 0 Then
+        ws.Columns("D").ColumnWidth = ws.Columns("D").ColumnWidth * (40# / wD)
+    End If
+    ws.Columns("D").WrapText = True
+    ws.Columns("C").WrapText = True
     lastCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     On Error GoTo 0
-    If lastCol < 4 Then Exit Sub
-    For c = 4 To lastCol
+    If lastCol < 5 Then Exit Sub
+    For c = 5 To lastCol
         ws.Columns(c).ColumnWidth = 6
     Next c
     On Error Resume Next
@@ -2111,7 +2121,7 @@ End Sub
 
 ' 段階1/2 終盤・全シートフォント適用後: 結果の主要4シートの列オートフィット
 ' ・結果_タスク一覧 は非表示列を開かない（結果シート_列幅_AutoFit非表示を維持）
-' ・結果_設備ガント は AutoFit 後にタイトル A1 左寄せを再固定
+' ・結果_設備ガント は専用列幅（時刻列を潰さない）＋タイトル A1 左寄せ再固定
 Public Sub 結果_主要4結果シート_列オートフィット()
     Dim wb As Workbook
     Dim ws As Worksheet
@@ -2122,7 +2132,7 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     Err.Clear
     Set ws = wb.Worksheets("結果_設備ガント")
     If Err.Number = 0 Then
-        結果シート_列幅_AutoFit安定 ws
+        結果_設備ガント_列幅を設定 ws
         結果_設備ガント_タイトルA1を左寄せに固定 ws
     Else
         Err.Clear

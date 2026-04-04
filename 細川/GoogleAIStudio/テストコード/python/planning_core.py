@@ -1811,7 +1811,6 @@ def _write_results_equipment_gantt_sheet(
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = 15
-    eq_display = _equipment_schedule_header_labels(equipment_list)
     hdr_font = _result_font(bold=True, color="000000", size=10)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
     hdr_time_font = _result_font(bold=True, color="000000", size=9)
@@ -1848,7 +1847,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 3  # 設備 / タスク概要 / 主担当（日付は日ブロック見出しのみ）
+    n_fixed = 4  # 機械名 / 工程名 / 担当者 / タスク概要（日付は日ブロック見出しのみ）
     last_col = n_fixed + n_slots
 
     # タイトル＆日時（ページ上部）
@@ -1915,7 +1914,7 @@ def _write_results_equipment_gantt_sheet(
 
         slots = [datetime.combine(d, tm) for tm in slot_times]
 
-        # 日付見出し（左の固定列幅に合わせて A〜C に表示）
+        # 日付見出し（左の固定列に合わせて A〜固定列まで結合）
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_fixed)
         ban = ws.cell(row=row, column=1, value=f"▶ {d.strftime('%Y/%m/%d')}　{_weekday_jp(d)}")
         ban.font = day_banner_font
@@ -1925,7 +1924,7 @@ def _write_results_equipment_gantt_sheet(
         ws.row_dimensions[row].height = 22
         row += 1
 
-        fixed_hdr = ["設備", "タスク概要", "主担当"]
+        fixed_hdr = ["機械名", "工程名", "担当者", "タスク概要"]
         for ci, h in enumerate(fixed_hdr, 1):
             c = ws.cell(row=row, column=ci, value=h)
             c.font = hdr_font
@@ -1952,36 +1951,39 @@ def _write_results_equipment_gantt_sheet(
             first_freeze_set = True
 
         zebra = False
-        for eq, disp in zip(equipment_list, eq_display):
+        for eq in equipment_list:
             zebra = not zebra
+            proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             evlist = by_dm[d].get(eq, [])
             if evlist:
                 parts = []
-                ops = []
                 for e in evlist:
                     cum = e["already_done_units"] + e["units_done"]
                     tot = e["total_units"]
                     parts.append(f"[{e['task_id']}] {cum}/{tot}R")
-                    ops.append(str(e["op"]))
-                task_sum = " ｜ ".join(parts)[:120]
-                op_disp = ops[0] if len(set(ops)) == 1 else ",".join(dict.fromkeys(ops))
+                task_sum = " ｜ ".join(parts)
+                member_disp = _gantt_row_member_names(evlist)
             else:
                 task_sum = "—"
-                op_disp = "—"
+                member_disp = "—"
 
             lab_fill = PatternFill(fill_type="solid", start_color="FAFAFA", end_color="FAFAFA")
             if zebra:
                 lab_fill = PatternFill(fill_type="solid", start_color="F0F4FA", end_color="F0F4FA")
 
-            c1 = ws.cell(row=row, column=1, value=disp)
-            c2 = ws.cell(row=row, column=2, value=task_sum)
-            c3 = ws.cell(row=row, column=3, value=op_disp)
-            for c in (c1, c2, c3):
+            c1 = ws.cell(row=row, column=1, value=mach_nm if mach_nm else "—")
+            c2 = ws.cell(row=row, column=2, value=proc_nm if proc_nm else "—")
+            c3 = ws.cell(row=row, column=3, value=member_disp)
+            c4 = ws.cell(row=row, column=4, value=task_sum)
+            for c in (c1, c2, c3, c4):
                 c.font = _result_font(size=10, color="000000")
                 c.fill = lab_fill
                 c.border = grid_border
-                c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c1.font = _result_font(size=10, bold=True, color="000000")
+            c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+            c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+            c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+            c4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
             _paint_gantt_timeline_row_merged(
                 ws,
@@ -1996,27 +1998,18 @@ def _write_results_equipment_gantt_sheet(
                 grid_border,
             )
 
-            ws.row_dimensions[row].height = 22
+            ws.row_dimensions[row].height = 45
             row += 1
 
             if show_actual_rows:
                 evlist_a = by_dm_actual[d].get(eq, [])
                 if evlist_a:
                     parts_a = [f"[{e_a['task_id']}]" for e_a in evlist_a]
-                    task_sum_a = " ".join(dict.fromkeys(parts_a))[:120]
-                    ops_a = [
-                        str(e_a.get("op") or "").strip()
-                        for e_a in evlist_a
-                        if str(e_a.get("op") or "").strip()
-                    ]
-                    op_disp_a = (
-                        ops_a[0]
-                        if len(set(ops_a)) == 1
-                        else ",".join(dict.fromkeys(ops_a))
-                    )
+                    task_sum_a = " ".join(dict.fromkeys(parts_a))
+                    member_disp_a = _gantt_row_member_names(evlist_a)
                 else:
                     task_sum_a = "—"
-                    op_disp_a = "—"
+                    member_disp_a = "—"
 
                 lab_fill_a = PatternFill(
                     fill_type="solid", start_color="EEF6EE", end_color="EEF6EE"
@@ -2026,17 +2019,25 @@ def _write_results_equipment_gantt_sheet(
                         fill_type="solid", start_color="E0EEE0", end_color="E0EEE0"
                     )
 
-                ca1 = ws.cell(row=row, column=1, value=f"{disp}（実績）")
-                ca2 = ws.cell(row=row, column=2, value=task_sum_a)
-                ca3 = ws.cell(row=row, column=3, value=op_disp_a)
-                for c in (ca1, ca2, ca3):
+                if mach_nm:
+                    act_mach = f"{mach_nm}（実績）"
+                elif proc_nm:
+                    act_mach = "（実績）"
+                else:
+                    act_mach = "—"
+                ca1 = ws.cell(row=row, column=1, value=act_mach)
+                ca2 = ws.cell(row=row, column=2, value=proc_nm if proc_nm else "—")
+                ca3 = ws.cell(row=row, column=3, value=member_disp_a)
+                ca4 = ws.cell(row=row, column=4, value=task_sum_a)
+                for c in (ca1, ca2, ca3, ca4):
                     c.font = _result_font(size=10, color="000000")
                     c.fill = lab_fill_a
                     c.border = grid_border
-                    c.alignment = Alignment(
-                        horizontal="left", vertical="center", wrap_text=False
-                    )
                 ca1.font = _result_font(size=10, bold=True, color="000000", italic=True)
+                ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                ca4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
                 _paint_gantt_timeline_row_merged(
                     ws,
@@ -2053,10 +2054,10 @@ def _write_results_equipment_gantt_sheet(
                     label_font=gantt_label_font_actual,
                 )
 
-                ws.row_dimensions[row].height = 22
+                ws.row_dimensions[row].height = 45
                 row += 1
         # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
-    # 列幅は VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
+    # 列幅・D列折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
 
     try:
         ws.page_setup.orientation = "landscape"
@@ -2487,6 +2488,40 @@ def _equipment_schedule_header_labels(equipment_list: list) -> list:
         else:
             out.append(r)
     return out
+
+
+def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
+    """
+    設備マスタの列キー「工程+機械」を (工程名, 機械名) に分割する。
+    '+' が無いときは機械名のみとみなし、工程名は空文字。
+    """
+    s = str(eq_line).strip()
+    if not s:
+        return ("", "")
+    if "+" in s:
+        p, m = s.split("+", 1)
+        return (p.strip(), m.strip())
+    return ("", s)
+
+
+def _gantt_row_member_names(evlist) -> str:
+    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去して列挙する。"""
+    names: list[str] = []
+    seen: set[str] = set()
+    for e in evlist or []:
+        op = str(e.get("op") or "").strip()
+        if op and op not in seen:
+            seen.add(op)
+            names.append(op)
+        sub_raw = str(e.get("sub") or "").strip()
+        if not sub_raw:
+            continue
+        for seg in re.split(r"[,、]", sub_raw):
+            t = seg.strip()
+            if t and t not in seen:
+                seen.add(t)
+                names.append(t)
+    return "、".join(names) if names else "—"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
