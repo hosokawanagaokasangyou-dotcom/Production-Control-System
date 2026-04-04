@@ -18,7 +18,6 @@ End Type
     Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
     Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
     Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
-    Private Declare PtrSafe Function SplashGetClassName Lib "user32" Alias "GetClassNameA" (ByVal hwnd As LongPtr, ByVal lpClassName As String, ByVal nMaxCount As Long) As Long
     #If Win64 Then
     Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
     Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
@@ -39,7 +38,6 @@ End Type
     Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
     Private Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
-    Private Declare Function SplashGetClassName Lib "user32" Alias "GetClassNameA" (ByVal hwnd As Long, ByVal lpClassName As String, ByVal nMaxCount As Long) As Long
 #End If
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
@@ -60,7 +58,7 @@ Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
 ' D3=false かつスプラッシュ表示時: txtExecutionLog の画面矩形に cmd を重ねるループの待ち（ms）。ポーリング無しのため短めでよい
 Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 80
 ' ログ枠（TextBox）の画面矩形よりコンソール外周を四辺いくら縮めるか（px）。conhost の内側の黒余白で「枠が大きい」と感じる場合に調整
-Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 8
+Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
 Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
@@ -150,63 +148,6 @@ Private m_splashReadErrShown As Boolean
 Private m_splashLastLogSnapshot As String
 ' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
 Private m_splashConsoleOverlayActive As Boolean
-
-' #region agent log
-Private Function AgentDbgResolveLogPath() As String
-    On Error Resume Next
-    Dim fso As Object
-    If Len(ThisWorkbook.Path) = 0 Then Exit Function
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    If fso Is Nothing Then
-        AgentDbgResolveLogPath = ThisWorkbook.Path & "\debug-4e99af.log"
-    Else
-        AgentDbgResolveLogPath = fso.GetAbsolutePathName(ThisWorkbook.Path & "\..\..\..\debug-4e99af.log")
-    End If
-End Function
-
-Private Function AgentDbgEsc(ByVal s As String) As String
-    Dim t As String
-    t = Replace(s, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCrLf, "\n")
-    t = Replace(t, vbCr, "\n")
-    t = Replace(t, vbLf, "\n")
-    AgentDbgEsc = t
-End Function
-
-Private Sub AgentDbgLog(ByVal hypothesisId As String, ByVal loc As String, ByVal msg As String)
-    Dim p As String
-    Dim ts As String
-    Dim fso As Object
-    Dim f As Object
-    On Error Resume Next
-    p = AgentDbgResolveLogPath()
-    If Len(p) = 0 Then Exit Sub
-    ts = Format$(Now, "yyyy-mm-ddThh:nn:ss")
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    Set f = fso.OpenTextFile(p, 8, True, 0)
-    f.WriteLine "{""sessionId"":""4e99af"",""hypothesisId"":""" & AgentDbgEsc(hypothesisId) & """,""location"":""" & AgentDbgEsc(loc) & """,""message"":""" & AgentDbgEsc(msg) & """,""timestamp"":""" & ts & """}"
-    f.Close
-End Sub
-
-#If VBA7 Then
-Private Function AgentDbgWindowClass(ByVal hwnd As LongPtr) As String
-    Dim b As String * 260
-    Dim n As Long
-    On Error Resume Next
-    n = SplashGetClassName(hwnd, b, 260)
-    If n > 0 Then AgentDbgWindowClass = Left$(b, n)
-End Function
-#Else
-Private Function AgentDbgWindowClass(ByVal hwnd As Long) As String
-    Dim b As String * 260
-    Dim n As Long
-    On Error Resume Next
-    n = SplashGetClassName(hwnd, b, 260)
-    If n > 0 Then AgentDbgWindowClass = Left$(b, n)
-End Function
-#End If
-' #endregion agent log
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -397,16 +338,8 @@ End Sub
 #If VBA7 Then
 Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error Resume Next
-    If Not STAGE12_CMD_OVERLAY_BORDERLESS Then
-        ' #region agent log
-        AgentDbgLog "H5", "ConsoleApplyBorderlessIfNeeded", "STAGE12_CMD_OVERLAY_BORDERLESS=False_skip"
-        ' #endregion agent log
-        Exit Sub
-    End If
+    If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
     #If Win64 Then
-        ' #region agent log
-        AgentDbgLog "H5b", "ConsoleApplyBorderlessIfNeeded", "applying_borderless_Win64"
-        ' #endregion agent log
         Dim ns64 As LongPtr
         Dim nsLo As Long
         ns64 = SplashGetWindowLongPtr(hwnd, GWL_STYLE)
@@ -414,9 +347,6 @@ Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
         nsLo = nsLo And Not WS_CONSOLE_OVERLAY_STRIP
         Call SplashSetWindowLongPtr(hwnd, GWL_STYLE, nsLo)
     #Else
-        ' #region agent log
-        AgentDbgLog "H5b", "ConsoleApplyBorderlessIfNeeded", "applying_borderless_Win32"
-        ' #endregion agent log
         Dim ns As Long
         ns = SplashGetWindowLongPtr(hwnd, GWL_STYLE)
         Call SplashSetWindowLongPtr(hwnd, GWL_STYLE, ns And Not WS_CONSOLE_OVERLAY_STRIP)
@@ -467,14 +397,8 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 Then
             Dim overlayCmdLine As String
             overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
-            ' #region agent log
-            AgentDbgLog "H4", "RunCmdFileStageExecAndPoll.beforeExec", "cmdLine320=" & Left$(Replace(overlayCmdLine, """", "'"), 320) & ";title=" & consoleTitle & ";runId=post-fix"
-            ' #endregion agent log
             Set execObj = wsh.Exec(overlayCmdLine)
             If Err.Number = 0 And Not execObj Is Nothing Then
-                ' #region agent log
-                On Error Resume Next
-                AgentDbgLog "H4b", "RunCmdFileStageExecAndPoll.ExecOk", "processId=" & CStr(execObj.ProcessID)
                 On Error GoTo 0
                 If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
                     Application.Interactive = True
@@ -491,9 +415,6 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                         ow = ow - 2 * STAGE12_CMD_OVERLAY_RECT_INSET_PX
                         oh = oh - 2 * STAGE12_CMD_OVERLAY_RECT_INSET_PX
                     End If
-                    ' #region agent log
-                    AgentDbgLog "H7", "RunCmdFileStageExecAndPoll.OverlayRectInset", "insetPx=" & CStr(STAGE12_CMD_OVERLAY_RECT_INSET_PX) & ";ox=" & CStr(ox) & ";oy=" & CStr(oy) & ";ow=" & CStr(ow) & ";oh=" & CStr(oh)
-                    ' #endregion agent log
                 End If
                 cx = GetSystemMetrics(SM_CXSCREEN)
                 cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
@@ -502,9 +423,6 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                     If Len(consoleTitle) > 0 And Not positioned Then
                         hwnd = FindWindow(0&, consoleTitle)
                         If hwnd <> 0 Then
-                            ' #region agent log
-                            AgentDbgLog "H2", "RunCmdFileStageExecAndPoll.FoundHwnd", "hwnd=" & CStr(hwnd) & ";class=" & AgentDbgWindowClass(hwnd) & ";haveRect=" & CStr(haveRect) & ";ox=" & CStr(ox) & ";oy=" & CStr(oy) & ";ow=" & CStr(ow) & ";oh=" & CStr(oh)
-                            ' #endregion agent log
                             MacroSplash_BeginConsoleOverlay
                             ConsoleApplyBorderlessIfNeeded hwnd
                             If haveRect Then
@@ -639,9 +557,6 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
             uniq = "PM_AI_CMD_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
             batText = AugmentCmdBodyWithConsoleTitle(body, uniq)
             p = WriteTempCmdFile(batText)
-            ' #region agent log
-            AgentDbgLog "H1", "RunTempCmdWithConsoleLayout.D3splash", "inStr1nul=" & CStr(InStr(1, batText, "1>nul", vbTextCompare)) & ";inStr2nul=" & CStr(InStr(1, batText, "2>nul", vbTextCompare)) & ";inStrPyDashU=" & CStr(InStr(1, batText, "-u", vbTextCompare)) & ";batLen=" & CStr(Len(batText))
-            ' #endregion agent log
             RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, False, False, True)
         Else
             p = WriteTempCmdFile(body)
