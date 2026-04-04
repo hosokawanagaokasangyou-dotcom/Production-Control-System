@@ -14,6 +14,7 @@ End Type
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
+    Private Declare PtrSafe Function Beep Lib "kernel32" (ByVal dwFreq As Long, ByVal dwDuration As Long) As Long
     Private Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
     Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
@@ -35,6 +36,7 @@ End Type
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
+    Private Declare Function Beep Lib "kernel32" (ByVal dwFreq As Long, ByVal dwDuration As Long) As Long
     Private Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
     Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
@@ -1786,7 +1788,7 @@ End Sub
 ' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
 ' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
-' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋システム音（MacroCompleteChime）
+' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋完了チャイム（MacroCompleteChime・Beep 短メロディ／失敗時 SystemAsterisk）
 ' =========================================================
 Private Function SettingsSheet_IsSplashExecutionLogWriteEnabled() As Boolean
     On Error GoTo DefaultTrue
@@ -1967,7 +1969,13 @@ End Sub
 
 Private Sub MacroCompleteChime()
     On Error Resume Next
-    PlaySound "SystemDefault", 0&, SND_ALIAS Or SND_ASYNC
+    ' 完了感のある短い上昇メロディ（長三和音 C5→E5→G5）。Beep が使えない環境では通知音にフォールバック。
+    If Beep(523&, 110&) = 0 Then
+        PlaySound "SystemAsterisk", 0&, SND_ALIAS Or SND_ASYNC
+        Exit Sub
+    End If
+    Beep 659&, 110&
+    Beep 784&, 260&
 End Sub
 
 ' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
