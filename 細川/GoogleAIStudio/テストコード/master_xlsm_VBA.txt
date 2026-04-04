@@ -1496,6 +1496,7 @@ NextInc0:
     End If
     
     Call SkillComboSortDataRowsByMachine(wsOut, maxReq)
+    Call SkillComboRenumberComboRowIds(wsOut)
     Call ApplySkillCombinationSheetFormat(wsOut, maxReq)
     Call FreezeTopRowSafe(wsOut)
     Application.ScreenUpdating = True
@@ -1503,8 +1504,8 @@ NextInc0:
     Call TryAutoSaveMasterWorkbook
     
     MsgBox "「" & SHEET_SKILL_COMBINATIONS & "」を更新しました。" & vbCrLf & msgDetail & vbCrLf & _
-           "データ行は機械名→工程名→必要人数→組合せ優先度→工程+機械→組合せ行IDの順で並べ替えています（各セルの値は保持）。" & vbCrLf & _
-           "A列・組合せ行IDはデータ行ごとの一意番号（追記時は既存の最大値の続き）。組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
+           "データ行は機械名→工程名→必要人数→組合せ優先度→工程+機械→組合せ行IDの順で並べ替え（上記の並びのあと、A列・組合せ行IDを上から1から振り直し）。" & vbCrLf & _
+           "組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
     Exit Sub
     
 EH:
@@ -1873,6 +1874,20 @@ Private Sub SkillComboSortDataRowsByMachine(ByVal ws As Worksheet, ByVal maxReq 
         .Orientation = xlTopToBottom
         .Apply
     End With
+End Sub
+
+' 並べ替え後の見た目順に合わせ、A列・組合せ行IDを 1 から連番で付け直す
+Private Sub SkillComboRenumberComboRowIds(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim r As Long
+    Dim n As Long
+    lastRow = SkillComboDataLastRow(ws)
+    If lastRow < 2 Then Exit Sub
+    n = 0
+    For r = 2 To lastRow
+        n = n + 1
+        ws.Cells(r, 1).Value = n
+    Next r
 End Sub
 
 Private Function SkillComboMaxNumericId(ByVal ws As Worksheet, ByVal upToRow As Long) As Long
