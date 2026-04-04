@@ -149,6 +149,7 @@ Private Function MasterAttendanceLinkFormula(ByVal sheetName As String) As Strin
 End Function
 
 ' メイン MAIN_ATTENDANCE_LINK_COL に勤怠簿リンクリストを書き直す。失敗しても呼び出し元の処理は継続。
+' D 列 Clear でフォントが既定に戻るため、Clear 前に代表セルから名・サイズを退避し、書き込み後に復元する。
 Private Sub MasterRefreshMainAttendanceLinkList(ByVal wb As Workbook)
     Dim wsMain As Worksheet
     Dim names() As String
@@ -157,11 +158,45 @@ Private Sub MasterRefreshMainAttendanceLinkList(ByVal wb As Workbook)
     Dim r As Long
     Dim shTest As Worksheet
     Dim clearRng As Range
+    Dim preserveFontName As String
+    Dim preserveFontSize As Variant
+    Dim samp As Range
+    Dim lrD As Long
+    Dim lrA As Long
+    Dim lastD As Long
+    Dim fontCol As Range
     
     On Error GoTo Fail
     
     Set wsMain = MasterGetMainWorksheet(wb)
     If wsMain Is Nothing Then GoTo Fail
+    
+    preserveFontName = ""
+    preserveFontSize = Empty
+    On Error Resume Next
+    lrD = wsMain.Cells(wsMain.Rows.Count, MAIN_ATTENDANCE_LINK_COL).End(xlUp).Row
+    If lrD >= 2 Then
+        Set samp = wsMain.Cells(2, MAIN_ATTENDANCE_LINK_COL)
+    ElseIf lrD >= 1 And Len(Trim$(CStr(wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL).Value))) > 0 Then
+        Set samp = wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL)
+    Else
+        Set samp = Nothing
+    End If
+    If samp Is Nothing Then
+        lrA = wsMain.Cells(wsMain.Rows.Count, 1).End(xlUp).Row
+        If lrA >= 2 Then
+            Set samp = wsMain.Cells(2, 1)
+        Else
+            Set samp = wsMain.Cells(1, 1)
+        End If
+    End If
+    If Not samp Is Nothing Then
+        preserveFontName = Trim$(CStr(samp.Font.Name))
+        If Len(preserveFontName) = 0 Then preserveFontName = Trim$(CStr(samp.Font.NameFarEast))
+        preserveFontSize = samp.Font.Size
+    End If
+    Err.Clear
+    On Error GoTo Fail
     
     Set clearRng = wsMain.Range(wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL), wsMain.Cells(MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS, MAIN_ATTENDANCE_LINK_COL))
     clearRng.Clear
@@ -191,6 +226,19 @@ Private Sub MasterRefreshMainAttendanceLinkList(ByVal wb As Workbook)
 
 FitCol:
     On Error Resume Next
+    lastD = wsMain.Cells(wsMain.Rows.Count, MAIN_ATTENDANCE_LINK_COL).End(xlUp).Row
+    If lastD < 1 Then lastD = 1
+    If Len(preserveFontName) > 0 Then
+        Set fontCol = wsMain.Range(wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL), wsMain.Cells(lastD, MAIN_ATTENDANCE_LINK_COL))
+        If AssignFontNameToRange(fontCol, preserveFontName) Then
+            If Not IsEmpty(preserveFontSize) Then
+                If IsNumeric(preserveFontSize) Then
+                    If CDbl(preserveFontSize) > 0# Then fontCol.Font.Size = CDbl(preserveFontSize)
+                End If
+            End If
+        End If
+        wsMain.Cells(1, MAIN_ATTENDANCE_LINK_COL).Font.Bold = True
+    End If
     wsMain.Columns(MAIN_ATTENDANCE_LINK_COL).AutoFit
     On Error GoTo 0
     Exit Sub
