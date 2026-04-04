@@ -91,6 +91,32 @@ if not _cwd_from_workbook:
     else:
         os.chdir(_planning_core_dir)
 
+# #region agent log
+_AGENT_DEBUG_LOG_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "debug-4e99af.log")
+)
+
+
+def _agent_debug_log(hypothesis_id, location, message, data=None):
+    if data is None:
+        data = {}
+    try:
+        payload = {
+            "sessionId": "4e99af",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
 # cmd で chcp 65001 時にログの日本語をコンソールへ出しやすくする（段階2でリダイレクト無し実行時向け）
 if os.name == "nt" and hasattr(sys.stdout, "reconfigure"):
     try:
@@ -7279,9 +7305,27 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
     戻り値: (Book, release_info) / 失敗時 None。
     release_info: mode が keep または quit_excel、opened_wb_here が bool。
     """
+    # #region agent log
+    _attach_t0 = time_module.perf_counter()
+
+    def _attach_dbg(branch, **extra):
+        _agent_debug_log(
+            "H3",
+            "planning_core:_xlwings_attach_open_macro_workbook",
+            branch,
+            {
+                "elapsed_ms": round((time_module.perf_counter() - _attach_t0) * 1000, 2),
+                **extra,
+            },
+        )
+
+    # #endregion
     try:
         import xlwings as xw  # noqa: F401
     except ImportError:
+        # #region agent log
+        _attach_dbg("import_fail_xlwings")
+        # #endregion
         _log_exclude_rules_sheet_debug(
             "XLWINGS_UNAVAILABLE",
             log_prefix,
@@ -7293,10 +7337,16 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     book = _xlwings_find_book_on_running_instances(abs_path)
     if book is not None:
+        # #region agent log
+        _attach_dbg("found_on_running_instances")
+        # #endregion
         return book, {"mode": "keep", "opened_wb_here": False}
 
     book = _xlwings_try_open_in_running_apps(abs_path)
     if book is not None:
+        # #region agent log
+        _attach_dbg("opened_via_try_open_in_running_apps")
+        # #endregion
         return book, {"mode": "keep", "opened_wb_here": True}
 
     try:
@@ -7308,8 +7358,14 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         except Exception:
             pass
         book = app.books.open(abs_path, update_links=False)
+        # #region agent log
+        _attach_dbg("opened_new_hidden_xw_app")
+        # #endregion
         return book, {"mode": "quit_excel", "opened_wb_here": True}
     except Exception as ex:
+        # #region agent log
+        _attach_dbg("attach_exception", err_type=type(ex).__name__)
+        # #endregion
         _log_exclude_rules_sheet_debug(
             "XLWINGS_ATTACH_FAIL",
             log_prefix,
@@ -7358,7 +7414,30 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     """
     global _exclude_rules_effective_read_path
 
+    # #region agent log
+    _sync_t0 = time_module.perf_counter()
+    _agent_debug_log(
+        "H0",
+        "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+        "sync_start",
+        {"wb_base": os.path.basename(wb_path or "")},
+    )
+    # #endregion
+
     attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
+    # #region agent log
+    _agent_debug_log(
+        "H3",
+        "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+        "after_attach_call",
+        {
+            "elapsed_ms": round((time_module.perf_counter() - _sync_t0) * 1000, 2),
+            "attached_ok": attached is not None,
+            "release_mode": (attached[1].get("mode") if attached else None),
+            "opened_here": (attached[1].get("opened_wb_here") if attached else None),
+        },
+    )
+    # #endregion
     if attached is None:
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_SKIP",
@@ -7391,12 +7470,51 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         max_r = max(1, int(ws_oxl.max_row or 1))
         ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
+        # #region agent log
+        _t_data0 = time_module.perf_counter()
+        # #endregion
         data = [
             [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
             for r in range(1, max_r + 1)
         ]
+        # #region agent log
+        _agent_debug_log(
+            "H2",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "after_build_data",
+            {
+                "elapsed_ms": round((time_module.perf_counter() - _t_data0) * 1000, 2),
+                "rows": len(data),
+                "ncols": ncols,
+            },
+        )
+        _t_rng0 = time_module.perf_counter()
+        # #endregion
         sht.range((1, 1)).resize(len(data), ncols).value = data
+        # #region agent log
+        _agent_debug_log(
+            "H4",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "after_range_value",
+            {"elapsed_ms": round((time_module.perf_counter() - _t_rng0) * 1000, 2)},
+        )
+        _t_sv0 = time_module.perf_counter()
+        # #endregion
         xw_book.save()
+        # #region agent log
+        _agent_debug_log(
+            "H1",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "after_save",
+            {"elapsed_ms": round((time_module.perf_counter() - _t_sv0) * 1000, 2)},
+        )
+        _agent_debug_log(
+            "H0",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "sync_success_total",
+            {"elapsed_ms": round((time_module.perf_counter() - _sync_t0) * 1000, 2)},
+        )
+        # #endregion
         ok = True
         _exclude_rules_effective_read_path = wb_path
         _clear_exclude_rules_e_apply_files()
