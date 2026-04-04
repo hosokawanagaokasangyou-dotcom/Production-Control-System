@@ -27,7 +27,6 @@ End Type
     Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
     Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
     Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
-    Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
     #If Win64 Then
     Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
     Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
@@ -51,7 +50,6 @@ End Type
     Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
     Private Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
-    Private Declare Function GetTickCount Lib "kernel32" () As Long
 #End If
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
@@ -117,33 +115,6 @@ Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
-
-' #region agent log (ef588c: 段階2「メイン・並べ替え・フォント」後処理の区内訳)
-Private Function DbgMsSinceTick(ByVal tickStart As Long) As Long
-    Dim dt As Double
-    dt = CDbl(GetTickCount()) - CDbl(tickStart)
-    If dt < 0# Then dt = dt + 4294967296#
-    If dt > 2147483647# Then dt = 2147483647#
-    DbgMsSinceTick = CLng(dt)
-End Function
-
-Private Sub DbgEf588cLogStage2(ByVal hypothesisId As String, ByVal msgKey As String, ByVal durationMs As Long)
-    Dim fso As Object
-    Dim p As String
-    Dim stm As Object
-    Dim js As String
-    On Error Resume Next
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    p = fso.GetAbsolutePathName(ThisWorkbook.Path & "\..\..\..\debug-ef588c.log")
-    js = "{""sessionId"":""ef588c"",""hypothesisId"":""" & hypothesisId & _
-        """,""location"":""VBA.stage2_post"",""message"":""" & msgKey & _
-        """,""data"":{""durationMs"":" & CStr(durationMs) & "},""timestamp"":" & CStr(GetTickCount()) & "}"
-    Set stm = fso.OpenTextFile(p, 8, True)
-    stm.WriteLine js
-    stm.Close
-    On Error GoTo 0
-End Sub
-' #endregion
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
@@ -4659,7 +4630,6 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim st2XwErr As Long
     Dim st2XwDesc As String
     Dim missSt2 As String
-    Dim dbgT0 As Long
     
     On Error GoTo ErrHandler
     
@@ -5070,36 +5040,26 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
-    dbgT0 = GetTickCount()
     メインシート_メンバー一覧と出勤表示 True
-    DbgEf588cLogStage2 "H3", "main_member_attendance", DbgMsSinceTick(dbgT0)
     ' 個人_* シートをブック末尾へ（失敗しても継続）
-    dbgT0 = GetTickCount()
     個人シートを末尾へ並べ替え
-    DbgEf588cLogStage2 "H4", "personal_sheets_reorder", DbgMsSinceTick(dbgT0)
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
-    dbgT0 = GetTickCount()
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
-    DbgEf588cLogStage2 "H5", "column_config_sheet_move", DbgMsSinceTick(dbgT0)
     On Error GoTo ErrHandler
     
     ' 完了ダイアログ直前はメインシートを表示（A1）
     On Error Resume Next
     Application.ScreenUpdating = True
-    dbgT0 = GetTickCount()
     メインシートA1を選択
     DoEvents
-    DbgEf588cLogStage2 "H6", "main_select_doevents", DbgMsSinceTick(dbgT0)
     On Error GoTo ErrHandler
     
     m_stage2PlanImported = planImported
     m_stage2MemberImported = memberImported
 
     On Error Resume Next
-    dbgT0 = GetTickCount()
     配台_全シートフォントBIZ_UDP_自動適用
-    DbgEf588cLogStage2 "H1", "font_autofit_block_total", DbgMsSinceTick(dbgT0)
     On Error GoTo 0
 
 Finish:
@@ -5315,17 +5275,10 @@ End Sub
 ' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
 Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
-    Dim t0 As Long
     On Error Resume Next
-    t0 = GetTickCount()
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
-    DbgEf588cLogStage2 "H1a", "ApplyFontToAllSheetCells", DbgMsSinceTick(t0)
-    t0 = GetTickCount()
     メインシート_AからK列_AutoFit
-    DbgEf588cLogStage2 "H2a", "main_A_to_N_autofit", DbgMsSinceTick(t0)
-    t0 = GetTickCount()
     結果_主要4結果シート_列オートフィット
-    DbgEf588cLogStage2 "H2b", "result4_sheets_autofit", DbgMsSinceTick(t0)
     On Error GoTo 0
 End Sub
 
