@@ -70,6 +70,29 @@ from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
+# #region agent log
+def _agent_debug_ndjson(hypothesis_id: str, location: str, message: str, data: dict):
+    """DEBUG: NDJSON をワークスペース直下 debug-d7a212.log へ追記（機密・全文は書かない）。"""
+    try:
+        _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+        _path = os.path.join(_root, "debug-d7a212.log")
+        _payload = {
+            "sessionId": "d7a212",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+            "runId": "pre-fix",
+        }
+        with open(_path, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(json.dumps(_payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
 # =========================================================
 # 【重要】カレントをマクロブック（TASK_INPUT_WORKBOOK）と同じフォルダに設定する。
 # log/execution_log.txt・output/ を VBA の ThisWorkbook.Path 基準と一致させる。
@@ -2713,6 +2736,29 @@ def _apply_global_priority_solo_heuristic(blob: str, coerced: dict) -> dict:
 
 def _coerce_task_preferred_operators_dict(raw_val) -> dict:
     """AI の task_preferred_operators を {依頼NO: 氏名} に正規化。"""
+    # #region agent log
+    if raw_val is not None:
+        _sample_keys = None
+        if isinstance(raw_val, dict) and raw_val:
+            _sample_keys = list(raw_val.keys())[:5]
+        elif isinstance(raw_val, list) and raw_val:
+            _e0 = raw_val[0]
+            _sample_keys = (
+                list(_e0.keys())[:12] if isinstance(_e0, dict) else type(_e0).__name__
+            )
+        _agent_debug_ndjson(
+            "H1",
+            "planning_core:_coerce_task_preferred_operators_dict",
+            "raw task_preferred_operators shape",
+            {
+                "type": type(raw_val).__name__,
+                "is_dict": isinstance(raw_val, dict),
+                "is_list": isinstance(raw_val, list),
+                "len": len(raw_val) if isinstance(raw_val, (list, dict)) else None,
+                "sample_keys_or_elem0": _sample_keys,
+            },
+        )
+    # #endregion
     out = {}
     if not isinstance(raw_val, dict):
         return out
@@ -2968,6 +3014,14 @@ def analyze_global_priority_override_comment(
             ai_sheet_sink["メイン再優先特記_AI_API"] = "スキップ（メイン原文なし）"
         return empty
     blob = str(text).strip()
+    # #region agent log
+    _agent_debug_ndjson(
+        "H3",
+        "planning_core:analyze_global_priority_override_comment:entry",
+        "non-empty global comment blob",
+        {"blob_len": len(blob), "blob_preview": blob[:240], "ref_y": ref_y},
+    )
+    # #endregion
     mem_sig = ",".join(sorted(str(m).strip() for m in (members or []) if m))
     cache_fingerprint = f"{GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX}{ref_y}\n{blob}\n{mem_sig}"
     cache_key = hashlib.sha256(cache_fingerprint.encode("utf-8")).hexdigest()
@@ -2977,9 +3031,20 @@ def analyze_global_priority_override_comment(
         logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼びません）。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
-        return _finalize_global_priority_override(
-            blob, _coerce_global_priority_override_dict(cached, ref_y)
+        _coerced_cache = _coerce_global_priority_override_dict(cached, ref_y)
+        # #region agent log
+        _agent_debug_ndjson(
+            "H4",
+            "planning_core:analyze_global_priority_override_comment:cache_hit",
+            "coerced from cache",
+            {
+                "cached_keys": sorted(cached.keys()) if isinstance(cached, dict) else None,
+                "tpo_len": len(_coerced_cache.get("task_preferred_operators") or {}),
+                "gdp_len": len(_coerced_cache.get("global_day_process_operator_rules") or []),
+            },
         )
+        # #endregion
+        return _finalize_global_priority_override(blob, _coerced_cache)
 
     if not API_KEY:
         logging.info("GEMINI_API_KEY 未設定のためメイン再優先特記の AI 解析をスキップしました。")
@@ -3104,7 +3169,35 @@ G) **global_day_process_operator_rules** （配列・必須）
                 _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
             )
             return _finalize_global_priority_override(blob, coerced)
+        # #region agent log
+        _tp_raw = parsed.get("task_preferred_operators")
+        _gdp_raw = parsed.get("global_day_process_operator_rules")
+        _agent_debug_ndjson(
+            "H2",
+            "planning_core:analyze_global_priority_override_comment:parsed",
+            "gemini JSON before coerce",
+            {
+                "parsed_keys": sorted(parsed.keys()),
+                "task_pref_type": type(_tp_raw).__name__,
+                "task_pref_is_list": isinstance(_tp_raw, list),
+                "gdp_type": type(_gdp_raw).__name__,
+                "gdp_len": len(_gdp_raw) if isinstance(_gdp_raw, list) else None,
+            },
+        )
+        # #endregion
         coerced = _coerce_global_priority_override_dict(parsed, ref_y)
+        # #region agent log
+        _agent_debug_ndjson(
+            "H1",
+            "planning_core:analyze_global_priority_override_comment:after_coerce",
+            "normalized global_priority_override",
+            {
+                "tpo_len": len(coerced.get("task_preferred_operators") or {}),
+                "gdp_len": len(coerced.get("global_day_process_operator_rules") or []),
+                "factory_n": len(coerced.get("factory_closure_dates") or []),
+            },
+        )
+        # #endregion
         coerced = _finalize_global_priority_override(blob, coerced)
         try:
             rpath = os.path.join(log_dir, "ai_global_priority_override_last_response.txt")
@@ -13245,6 +13338,18 @@ def generate_plan():
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
     global_priority_raw = load_main_sheet_global_priority_override_text()
+    # #region agent log
+    _agent_debug_ndjson(
+        "H3",
+        "planning_core:generate_plan:global_priority_raw",
+        "text read from main sheet global comment cell",
+        {
+            "raw_len": len(global_priority_raw or ""),
+            "raw_preview": (global_priority_raw or "")[:200],
+            "run_year": run_date.year,
+        },
+    )
+    # #endregion
     global_priority_override = analyze_global_priority_override_comment(
         global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
     )
