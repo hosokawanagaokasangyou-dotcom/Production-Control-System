@@ -901,6 +901,44 @@ Sub メインシート_メンバー一覧と出勤表示_手動()
     メインシート_メンバー一覧と出勤表示 False
 End Sub
 
+' #region agent log
+' debug: master/splash active workbook (session dc1a8a → workspace debug-dc1a8a.log)
+Private Function DebugAgent_EscapeJson(ByVal s As String) As String
+    s = Replace$(s, "\", "\\")
+    s = Replace$(s, """", "\""")
+    DebugAgent_EscapeJson = s
+End Function
+
+Private Sub DebugAgent_Log(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal runId As String)
+    Dim p As String
+    Dim ln As String
+    Dim f As Integer
+    Dim activeNm As String
+    Dim thisNm As String
+    Dim inter As Boolean
+    On Error Resume Next
+    activeNm = ActiveWorkbook.Name
+    If Err.Number <> 0 Then activeNm = "(no_active_wb)": Err.Clear
+    thisNm = ThisWorkbook.Name
+    inter = Application.Interactive
+    ln = "{""sessionId"":""dc1a8a"",""runId"":""" & runId & """,""hypothesisId"":""" & hypothesisId & """,""location"":""" & DebugAgent_EscapeJson(location) & """,""message"":""" & DebugAgent_EscapeJson(message) & """,""data"":{""activeWB"":""" & DebugAgent_EscapeJson(activeNm) & """,""thisWB"":""" & DebugAgent_EscapeJson(thisNm) & """,""interactive"":" & IIf(inter, "true", "false") & "},""timestamp"":" & CLng(1000 * Timer) & "}"
+    p = ThisWorkbook.Path & "\..\..\..\debug-dc1a8a.log"
+    f = FreeFile
+    Open p For Append As #f
+    If Err.Number <> 0 Then
+        Err.Clear
+        p = ThisWorkbook.Path & "\debug-dc1a8a.log"
+        f = FreeFile
+        Open p For Append As #f
+    End If
+    If Err.Number = 0 Then
+        Print #f, ln
+        Close #f
+    End If
+    On Error GoTo 0
+End Sub
+' #endregion agent log
+
 ' 同じフォルダの master.xlsm を開く（既に開いていればアクティブ化）
 Public Sub メインシート_masterブックを開く()
     Dim path As String
@@ -922,6 +960,9 @@ Public Sub メインシート_masterブックを開く()
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
             wb.Activate
+            ' #region agent log
+            DebugAgent_Log "H3", "master_open", "after_activate_already_open", "pre-fix"
+            ' #endregion agent log
             MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
             m_animMacroSucceeded = True
             Exit Sub
@@ -932,6 +973,9 @@ Public Sub メインシート_masterブックを開く()
     MacroSplash_SetStep "master.xlsm を開いています…"
     Set wbMaster = Application.Workbooks.Open(Filename:=path)
     wbMaster.Activate
+    ' #region agent log
+    DebugAgent_Log "H3", "master_open", "after_open_and_activate", "pre-fix"
+    ' #endregion agent log
     MacroSplash_SetStep "master.xlsm を開きました。"
     m_animMacroSucceeded = True
     Exit Sub
@@ -940,6 +984,9 @@ OpenFail:
 End Sub
 
 Sub アニメ付き_メインシート_masterブックを開く()
+    ' #region agent log
+    DebugAgent_Log "H4", "anim_master_open", "entry", "pre-fix"
+    ' #endregion agent log
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
 End Sub
@@ -1789,7 +1836,7 @@ End Sub
 
 ' Ctrl+Shift+テンキー - 用（手続き名は従来互換で CtrlShift0 のまま。Application.OnKey の Procedure は ASCII 名が無難）
 Public Sub ShortcutMainSheet_CtrlShift0()
-    On Error Resume Nextお
+    On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     メインシートA1を選択
     On Error GoTo 0
@@ -2844,6 +2891,9 @@ Private Sub MacroSplash_Hide()
         Application.Interactive = True
         m_macroSplashLockedExcel = False
     End If
+    ' #region agent log
+    DebugAgent_Log "H2", "macro_splash_hide", "end_after_interactive_restore", "pre-fix"
+    ' #endregion agent log
 End Sub
 
 ' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
@@ -2872,6 +2922,9 @@ Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessag
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
     MacroSplash_Show splashMessage, lockExcelUI
+    ' #region agent log
+    DebugAgent_Log "H2", "splash_exec", "after_show_before_run", "pre-fix"
+    ' #endregion agent log
     If IsMissing(arg1) And IsMissing(arg2) Then
         Application.Run procName
     ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
@@ -2879,6 +2932,9 @@ Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessag
     Else
         Application.Run procName, arg1, arg2
     End If
+    ' #region agent log
+    DebugAgent_Log "H1", "splash_exec", "after_inner_proc", "pre-fix"
+    ' #endregion agent log
     GoTo Finish
 EH:
     On Error Resume Next
@@ -2889,6 +2945,9 @@ Finish:
         MacroCompleteChime
     End If
     MacroSplash_Hide
+    ' #region agent log
+    DebugAgent_Log "H1", "splash_exec", "after_splash_hide", "pre-fix"
+    ' #endregion agent log
     m_splashAllowMacroSound = False
 End Sub
 
