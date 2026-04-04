@@ -7439,15 +7439,30 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         ]
         _t_mat1 = time_module.perf_counter()
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
+        rng = sht.range((1, 1)).resize(len(data), ncols)
+        hid_sheet_for_write = False
         try:
             _t_r0 = time_module.perf_counter()
-            # チャンク分割＋Value2 は計測で総時間増（COM 回数増）のため一括 .value に戻す
-            sht.range((1, 1)).resize(len(data), ncols).value = data
+            try:
+                if int(sht.api.Visible) == -1:  # xlSheetVisible
+                    sht.api.Visible = 0  # xlSheetHidden（同期中だけ。再描画・ウィンドウ更新負荷を抑える）
+                    hid_sheet_for_write = True
+            except Exception:
+                pass
+            try:
+                rng.api.Value2 = data
+            except Exception:
+                rng.value = data
             _t_r1 = time_module.perf_counter()
             _t_s0 = time_module.perf_counter()
             xw_book.save()
             _t_s1 = time_module.perf_counter()
         finally:
+            if hid_sheet_for_write:
+                try:
+                    sht.api.Visible = -1
+                except Exception:
+                    pass
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
         _attach_ms = round((_t_after_attach - _t_sync0) * 1000)
         _sheet_lookup_ms = round((_t_sheet1 - _t_sheet0) * 1000)
