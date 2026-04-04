@@ -986,6 +986,287 @@ Fail:
     マスタメイン_セルを時刻Dateへ = False
 End Function
 
+' planning_core.RESULT_OUTSIDE_REGULAR_TIME_FILL（FCE4D6）相当＝定常外
+' 工場稼働枠外（メイン A12/B12 の半開区間と重ならない帯）は薄い青で区別
+
+Private Function 時刻を分に(ByVal t As Date) As Long
+    時刻を分に = CLng(Hour(t)) * 60& + CLng(Minute(t))
+End Function
+
+' 半開区間 [a0,a1) と [b0,b1) が重なるか（分単位・同一日内想定）
+Private Function 半開区間が重なる分(ByVal a0 As Long, ByVal a1 As Long, ByVal b0 As Long, ByVal b1 As Long) As Boolean
+    半開区間が重なる分 = (a0 < b1) And (a1 > b0)
+End Function
+
+' 結果_設備毎の時間割「日時帯」セル（HH:MM-HH:MM 等）を解釈。■ を含む行は False
+Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, ByRef t1 As Date) As Boolean
+    Dim s As String
+    Dim sep As String
+    Dim parts() As String
+    Dim leftS As String
+    Dim rightS As String
+    
+    If IsEmpty(v) Or VarType(v) = vbError Then Exit Function
+    s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+    If Len(s) = 0 Then Exit Function
+    If InStr(s, "■") > 0 Then Exit Function
+    
+    sep = vbNullString
+    If InStr(s, "-") > 0 Then sep = "-"
+    If InStr(s, "－") > 0 Then sep = "－"
+    If Len(sep) = 0 And InStr(s, "~") > 0 Then sep = "~"
+    If Len(sep) = 0 And InStr(s, "〜") > 0 Then sep = "〜"
+    If Len(sep) = 0 Then Exit Function
+    
+    parts = Split(s, sep, 2)
+    If UBound(parts) < 1 Then Exit Function
+    leftS = Trim$(Replace(parts(0), "：", ":"))
+    rightS = Trim$(Replace(parts(1), "：", ":"))
+    
+    If Not マスタメイン_セルを時刻Dateへ(leftS, t0) Then Exit Function
+    If Not マスタメイン_セルを時刻Dateへ(rightS, t1) Then Exit Function
+    If 時刻を分に(t0) >= 時刻を分に(t1) Then Exit Function
+    日時帯文字列を時刻範囲に = True
+End Function
+
+' master.xlsm メイン A12/B12（工場稼働）・A15/B15（定常）を読む。欠損・不正・開始>=終了は *Ok=False
+Private Sub マスタメイン_工場稼働と定常を取得( _
+    ByRef facOk As Boolean, ByRef facS As Date, ByRef facE As Date, _
+    ByRef regOk As Boolean, ByRef regS As Date, ByRef regE As Date)
+    
+    Dim folder As String
+    Dim p As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim openedHere As Boolean
+    Dim v As Variant
+    Dim tS As Date
+    Dim tE As Date
+    
+    facOk = False
+    regOk = False
+    folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then Exit Sub
+    p = folder & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(p)) = 0 Then Exit Sub
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo 0
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=p, ReadOnly:=True, UpdateLinks:=0)
+        openedHere = Not (wb Is Nothing)
+        On Error GoTo 0
+    End If
+    If wb Is Nothing Then Exit Sub
+    
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = wb.Worksheets("メイン")
+    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        For Each sh In wb.Worksheets
+            If InStr(sh.Name, "メイン") > 0 Then
+                Set ws = sh
+                Exit For
+            End If
+        Next sh
+    End If
+    If ws Is Nothing Then GoTo CloseMasterWb
+    
+    v = ws.Range("A12").Value
+    If マスタメイン_セルを時刻Dateへ(v, tS) Then
+        v = ws.Range("B12").Value
+        If マスタメイン_セルを時刻Dateへ(v, tE) Then
+            If TimeValue(tS) < TimeValue(tE) Then
+                facOk = True
+                facS = tS
+                facE = tE
+            End If
+        End If
+    End If
+    
+    v = ws.Range("A15").Value
+    If マスタメイン_セルを時刻Dateへ(v, tS) Then
+        v = ws.Range("B15").Value
+        If マスタメイン_セルを時刻Dateへ(v, tE) Then
+            If TimeValue(tS) < TimeValue(tE) Then
+                regOk = True
+                regS = tS
+                regE = tE
+            End If
+        End If
+    End If
+
+CloseMasterWb:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+End Sub
+
+Private Sub 結果_設備毎の時間割_マスタ時刻反映( _
+    ByVal ws As Worksheet, _
+    ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
+    ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
+    
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim r As Long
+    Dim t0 As Date
+    Dim t1 As Date
+    Dim b0 As Long
+    Dim b1 As Long
+    Dim r0 As Long
+    Dim r1 As Long
+    Dim f0 As Long
+    Dim f1 As Long
+    
+    On Error GoTo CleanExit
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    If regOk Then
+        r0 = 時刻を分に(regS)
+        r1 = 時刻を分に(regE)
+    End If
+    If facOk Then
+        f0 = 時刻を分に(facS)
+        f1 = 時刻を分に(facE)
+    End If
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit
+    
+    For r = 2 To lastR
+        If 日時帯文字列を時刻範囲に(ws.Cells(r, colTB).Value, t0, t1) Then
+            b0 = 時刻を分に(t0)
+            b1 = 時刻を分に(t1)
+            With ws.Cells(r, colTB)
+                If facOk And Not 半開区間が重なる分(b0, b1, f0, f1) Then
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(221, 235, 247)
+                ElseIf regOk And Not 半開区間が重なる分(b0, b1, r0, r1) Then
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(252, 228, 214)
+                Else
+                    .Interior.Pattern = xlNone
+                End If
+            End With
+        End If
+    Next r
+CleanExit:
+    On Error GoTo 0
+End Sub
+
+Private Sub 結果_設備ガント_マスタ時刻反映( _
+    ByVal ws As Worksheet, _
+    ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
+    ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
+    
+    Dim lastR As Long
+    Dim r As Long
+    Dim c As Long
+    Dim lastC As Long
+    Dim slotStart As Date
+    Dim slotEnd As Date
+    Dim s0 As Long
+    Dim s1 As Long
+    Dim r0 As Long
+    Dim r1 As Long
+    Dim f0 As Long
+    Dim f1 As Long
+    Dim v As Variant
+    Dim ur As Range
+    
+    On Error GoTo CleanExit
+    If ws Is Nothing Then Exit Sub
+    
+    If regOk Then
+        r0 = 時刻を分に(regS)
+        r1 = 時刻を分に(regE)
+    End If
+    If facOk Then
+        f0 = 時刻を分に(facS)
+        f1 = 時刻を分に(facE)
+    End If
+    
+    Set ur = ws.UsedRange
+    If ur Is Nothing Then GoTo CleanExit
+    lastR = ur.Row + ur.Rows.Count - 1
+    
+    For r = 1 To lastR
+        If Trim$(CStr(ws.Cells(r, 1).Value)) = "設備" _
+            And Trim$(CStr(ws.Cells(r, 2).Value)) = "タスク概要" _
+            And Trim$(CStr(ws.Cells(r, 3).Value)) = "主担当" Then
+            
+            lastC = ws.Cells(r, ws.Columns.Count).End(xlToLeft).Column
+            For c = 4 To lastC
+                v = ws.Cells(r, c).Value
+                If Not IsEmpty(v) And VarType(v) <> vbError Then
+                    If マスタメイン_セルを時刻Dateへ(v, slotStart) Then
+                        slotEnd = slotStart + TimeSerial(0, 15, 0)
+                        s0 = 時刻を分に(slotStart)
+                        s1 = 時刻を分に(slotEnd)
+                        With ws.Cells(r, c)
+                            If facOk And Not 半開区間が重なる分(s0, s1, f0, f1) Then
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(221, 235, 247)
+                            ElseIf regOk And Not 半開区間が重なる分(s0, s1, r0, r1) Then
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(252, 228, 214)
+                            Else
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(217, 217, 217)
+                            End If
+                        End With
+                    End If
+                End If
+            Next c
+        End If
+    Next r
+CleanExit:
+    On Error GoTo 0
+End Sub
+
+' 段階2: production_plan 取り込み直後（シート保護の前）に呼ぶ
+Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Workbook)
+    Dim facOk As Boolean
+    Dim regOk As Boolean
+    Dim facS As Date
+    Dim facE As Date
+    Dim regS As Date
+    Dim regE As Date
+    Dim ws As Worksheet
+    
+    If wb Is Nothing Then Exit Sub
+    マスタメイン_工場稼働と定常を取得 facOk, facS, facE, regOk, regS, regE
+    
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_SCHEDULE)
+    If Not ws Is Nothing Then
+        結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets("結果_設備ガント")
+    If Not ws Is Nothing Then
+        結果_設備ガント_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+    End If
+    On Error GoTo 0
+End Sub
+
+' 手動: master を変更したあと結果シートだけ着色を合わせ直す（再取り込み不要）
+Public Sub 結果シート_マスタ工場稼働と定常を再適用()
+    取込後_結果シートへマスタ時刻を反映 ThisWorkbook
+End Sub
+
 ' master.xlsm メイン A15/B15（定常）を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
 Private Function マスタメイン_工場標準勤怠表示文字列() As String
     Const FB As String = "08:45 / 17:00"
@@ -4685,6 +4966,12 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             End If
             
         Next sourceWs
+        
+        ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備ガントに反映（保護前）
+        On Error Resume Next
+        取込後_結果シートへマスタ時刻を反映 targetWb
+        Err.Clear
+        On Error GoTo ErrHandler
         
         ' ソースブックを閉じる（保存しない）
         sourceWb.Close SaveChanges:=False
