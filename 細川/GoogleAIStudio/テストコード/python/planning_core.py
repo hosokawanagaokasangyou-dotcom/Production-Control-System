@@ -1162,6 +1162,8 @@ BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
 RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
+# 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
+RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
@@ -1724,6 +1726,37 @@ def _apply_equipment_schedule_outside_regular_fill(
         if t0 is None or t1 is None:
             continue
         if not _time_intervals_overlap_half_open(t0, t1, reg_start, reg_end):
+            cell.fill = fill
+
+
+def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
+    """
+    結果_設備毎の時間割_機械名毎の機械名列で、依頼NOが入っているセルに薄緑を付与する。
+    「（休憩）」のみのセルは対象外。見出し行・日時帯列は変更しない。
+    """
+    fill = PatternFill(
+        fill_type="solid",
+        start_color=RESULT_DISPATCHED_REQUEST_FILL,
+        end_color=RESULT_DISPATCHED_REQUEST_FILL,
+    )
+    col_tb = None
+    for i, c in enumerate(ws[1], start=1):
+        if c.value is not None and str(c.value).strip() == "日時帯":
+            col_tb = i
+            break
+    if col_tb is None:
+        return
+    mr = ws.max_row or 1
+    mc = ws.max_column or col_tb
+    for r in range(2, mr + 1):
+        for c in range(col_tb + 1, mc + 1):
+            cell = ws.cell(row=r, column=c)
+            val = cell.value
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                continue
+            s = str(val).strip().replace("\r", "").replace("\n", "")
+            if not s or s == "（休憩）":
+                continue
             cell.fill = fill
 
 
@@ -16235,6 +16268,7 @@ def _generate_plan_impl():
                 for _eq_sched_sheet in (
                     RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
                     TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
+                    RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME,
                 ):
                     if _eq_sched_sheet in writer.sheets:
                         _apply_equipment_schedule_outside_regular_fill(
@@ -16242,6 +16276,11 @@ def _generate_plan_impl():
                             _reg_shift_start,
                             _reg_shift_end,
                         )
+
+            if RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME in writer.sheets:
+                _apply_equipment_by_machine_dispatched_request_fill(
+                    writer.sheets[RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME]
+                )
 
             ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
             _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))

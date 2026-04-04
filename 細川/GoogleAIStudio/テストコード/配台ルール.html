@@ -134,7 +134,7 @@
       <li><strong>2026-04 追補</strong>: <strong>配台計画_タスク入力</strong>の先頭列 <strong>配台試行順番</strong>（段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与）。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。成果物に <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
       <li><strong>区間ミラー</strong>: <code>DISPATCH_INTERVAL_MIRROR_ENFORCE</code> 既定オン。<code>dispatch_interval_mirror.py</code> で<strong>機械名占有キー</strong>・人の占有区間をタイムラインと同期し、割付候補を二重検査（Excel 逐次操作なし）。<code>0</code> で無効。</li>
       <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、計画基準納日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
-      <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong>（<strong>メイン A12/B12</strong>＝稼働スロットの時台、<strong>A15/B15</strong>＝定常開始終了・出勤簿・定常外の A/B 列着色）。段階2は A12/B12 で <code>DEFAULT_*</code>、A15/B15 で <code>結果_設備毎の時間割</code>／<code>結果_設備ガント</code>の定常外見出し着色。詳細は <span class="file">配台ルール.md</span> 3.2.1・3.2.2・4.4。</li>
+      <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong>（<strong>メイン A12/B12</strong>＝稼働スロットの時台、<strong>A15/B15</strong>＝定常開始終了・出勤簿・定常外の A/B 列着色）。段階2は A12/B12 で <code>DEFAULT_*</code>、A15/B15 で <code>結果_設備毎の時間割</code>・<code>結果_設備毎の時間割_機械名毎</code>／<code>結果_設備ガント</code>の定常外（および機械名毎の依頼NOセル薄緑）。詳細は <span class="file">配台ルール.md</span> 3.2.1・3.2.2・4.4。</li>
     </ul>
   </section>
 
@@ -185,7 +185,7 @@
         <tr><td><code>結果_設備毎の時間割</code></td><td>従来どおり。10分枠、need 余力追記<strong>後</strong>。</td></tr>
         <tr><td><code>TEMP_設備毎の時間割</code></td><td>同形式、余力追記<strong>前</strong>（メイン割付のみ）。</td></tr>
         <tr><td><code>ブロックテーブル</code></td><td>10分枠で設備（<code>設備:…</code>）と人（<code>人:…</code>）の占有依頼NO。計算は従来の <code>timeline_events</code> ベース、本シートは可視化。</td></tr>
-        <tr><td><code>結果_設備毎の時間割_機械名毎</code></td><td>列見出しは機械名のみ。同一物理機械は1列にまとめ、各枠は依頼NOのみ（複数は「／」）。</td></tr>
+        <tr><td><code>結果_設備毎の時間割_機械名毎</code></td><td>列見出しは機械名のみ。同一物理機械は1列にまとめ、各枠は依頼NOのみ（複数は「／」）。<strong>日時帯</strong>列は定常外を薄橙（xlsx／VBA 取込後）。<strong>依頼NO</strong>入りセルは薄緑（「（休憩）」のみは除外）。メイン A 列は <code>結果_</code> 全シートへのリンク（A1:A120）。</td></tr>
       </tbody>
     </table>
   </section>

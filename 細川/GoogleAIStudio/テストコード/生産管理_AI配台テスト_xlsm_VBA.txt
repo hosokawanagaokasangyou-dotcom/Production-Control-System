@@ -108,6 +108,7 @@ Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
 Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
 Private Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
+Private Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"
 Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
@@ -1199,6 +1200,44 @@ CleanExit:
     On Error GoTo 0
 End Sub
 
+' planning_core.RESULT_DISPATCHED_REQUEST_FILL（C6EFCE）相当＝機械名列の依頼NO
+Private Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim lastC As Long
+    Dim r As Long
+    Dim c As Long
+    Dim v As Variant
+    Dim s As String
+    
+    On Error GoTo CleanExit2
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit2
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If lastC <= colTB Then GoTo CleanExit2
+    
+    For r = 2 To lastR
+        For c = colTB + 1 To lastC
+            v = ws.Cells(r, c).Value
+            If IsEmpty(v) Or VarType(v) = vbError Then GoTo NextC2
+            s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+            If Len(s) = 0 Then GoTo NextC2
+            If StrComp(s, "（休憩）", vbBinaryCompare) = 0 Then GoTo NextC2
+            With ws.Cells(r, c)
+                .Interior.Pattern = xlSolid
+                .Interior.Color = RGB(198, 239, 206)
+            End With
+NextC2:
+        Next c
+    Next r
+CleanExit2:
+    On Error GoTo 0
+End Sub
+
 Private Sub 結果_設備ガント_マスタ時刻反映( _
     ByVal ws As Worksheet, _
     ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
@@ -1286,6 +1325,12 @@ Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Wor
     Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_SCHEDULE)
     If Not ws Is Nothing Then
         結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_BY_MACHINE)
+    If Not ws Is Nothing Then
+        結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+        結果_機械名毎時間割_依頼NOセルを薄緑 ws
     End If
     Set ws = Nothing
     Set ws = wb.Worksheets("結果_設備ガント")
@@ -1819,8 +1864,9 @@ Private Sub メインシート_結果シートリンクを更新(ByVal wsMain As
     Next ws
     
     ' Clear だと A 列のフォントが既定に戻る → リンク削除＋内容のみクリア
-    メインシート_指定範囲のハイパーリンクを削除 wsMain, wsMain.Range("A1:A45")
-    wsMain.Range("A1:A45").ClearContents
+    ' 結果_* が増えても取りこぼさないよう A 列の確保行を広げる（「計画結果」見出し＋リンク列）
+    メインシート_指定範囲のハイパーリンクを削除 wsMain, wsMain.Range("A1:A120")
+    wsMain.Range("A1:A120").ClearContents
     
     If coll.Count = 0 Then
         wsMain.Range("A1").Value = "（結果_* シートなし）"
@@ -5244,7 +5290,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             
         Next sourceWs
         
-        ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備ガントに反映（保護前）
+        ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（保護後も UI のみ。依頼NO薄緑は機械名毎のみ追加）
         On Error Resume Next
         取込後_結果シートへマスタ時刻を反映 targetWb
         Err.Clear
