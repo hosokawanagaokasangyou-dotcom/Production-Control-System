@@ -3389,15 +3389,24 @@ Private Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) 
     設定_環境変数_1行目は見出し = (t = "変数名" Or t = "環境変数" Or t = "name" Or t = "key" Or t = "env")
 End Function
 
+' 行継続（ _ ）は1文あたり25個までのため、Array 連結は使わず1行ずつ追記する
+Private Sub 設定_環境変数_欠損行を試し追記(ByVal dict As Object, ByVal ws As Worksheet, ByRef lastRow As Long, ByVal envKey As String, ByVal envVal As String, ByVal envDesc As String)
+    Dim nk As String
+    nk = LCase$(Trim$(envKey))
+    If Len(nk) = 0 Then Exit Sub
+    If dict.Exists(nk) Then Exit Sub
+    lastRow = lastRow + 1
+    ws.Cells(lastRow, 1).Value = envKey
+    ws.Cells(lastRow, 2).Value = envVal
+    ws.Cells(lastRow, 3).Value = envDesc
+    dict.Add nk, True
+End Sub
+
 Public Sub 設定_環境変数_シートを確保()
     Dim ws As Worksheet
     Dim sh As Worksheet
     Dim prevDA As Boolean
     Dim dict As Object
-    Dim keys As Variant
-    Dim vals As Variant
-    Dim descs As Variant
-    Dim i As Long
     Dim r As Long
     Dim lastRow As Long
     Dim dataStart As Long
@@ -3461,105 +3470,33 @@ Public Sub 設定_環境変数_シートを確保()
         End If
     Next r
 
-    keys = Array( _
-        "TASK_PLAN_SHEET", _
-        "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", _
-        "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", _
-        "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", _
-        "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", _
-        "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", _
-        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", _
-        "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", _
-        "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", _
-        "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", _
-        "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", _
-        "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", _
-        "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", _
-        "ASSIGN_DEFER_MIN_REMAINING_ROLLS", _
-        "ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES", _
-        "ASSIGN_END_OF_DAY_DEFER_MINUTES", _
-        "DISPATCH_ROLL_TRACE_JSONL", _
-        "DISPATCH_DEBUG_STOP_AFTER_ROLLS", _
-        "DISPATCH_DEBUG_ONLY_TASK_IDS", _
-        "DEBUG_TASK_ID", _
-        "TRACE_TEAM_ASSIGN_TASK_ID", _
-        "GEMINI_PRICE_USD_IN_PER_M", _
-        "GEMINI_PRICE_USD_OUT_PER_M", _
-        "GEMINI_JPY_PER_USD", _
-        "EXCLUDE_RULES_TEST_E1234", _
-        "EXCLUDE_RULES_TEST_E1234_ROW", _
-        "#TASK_INPUT_WORKBOOK" _
-    )
-    vals = Array( _
-        "", _
-        "1", _
-        "0", _
-        "1", _
-        "1", _
-        "0", _
-        "60", _
-        "0", _
-        "", _
-        "1", _
-        "1", _
-        "1", _
-        "", _
-        "3", _
-        "15", _
-        "0", _
-        "", _
-        "", _
-        "", _
-        "", _
-        "", _
-        "0.075", _
-        "0.30", _
-        "150", _
-        "", _
-        "9", _
-        "" _
-    )
-    descs = Array( _
-        "配台計画シート名（空なら既定 配台計画_タスク入力）", _
-        "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート", _
-        "1=依頼NO直列", _
-        "§B-2/§B-3 設備占有（0 で無効）", _
-        "B-2/3 ECと後続の担当者分離（0 で無効）", _
-        "1=人数最優先（従来）", _
-        "スラック分（0 で開始のみ）", _
-        "1=need追加人数行を無視", _
-        "1=メインで req+追加上限まで探索", _
-        "0=計画シート必要人数も参照", _
-        "0=組合せ表プリセットを使わない", _
-        "段階2後の列設定図形コピー（0 で無効）", _
-        "1=配台不要シートを openpyxl で保存試行", _
-        "同日 defer しきい値（ロール残）", _
-        "", _
-        "", _
-        "例: log/dispatch_roll_trace.jsonl（相対はブックフォルダ基準）", _
-        "整数NでNロールで打ち切り", _
-        "カンマ区切り依頼NO（限定配台）", _
-        "デバッグ用依頼NO", _
-        "チーム割付トレース対象", _
-        "", _
-        "", _
-        "", _
-        "テスト用（通常空）", _
-        "", _
-        "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い" _
-    )
-
-    For i = LBound(keys) To UBound(keys)
-        k = CStr(keys(i))
-        nk = LCase$(Trim$(k))
-        If Len(nk) > 0 And Not dict.Exists(nk) Then
-            lastRow = lastRow + 1
-            ws.Cells(lastRow, 1).Value = k
-            ws.Cells(lastRow, 2).Value = vals(i)
-            ws.Cells(lastRow, 3).Value = descs(i)
-            dict.Add nk, True
-        End If
-    Next i
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TASK_PLAN_SHEET", "", "配台計画シート名（空なら既定 配台計画_タスク入力）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1", "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0", "1=依頼NO直列")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1", "§B-2/§B-3 設備占有（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1", "B-2/3 ECと後続の担当者分離（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0", "1=人数最優先（従来）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", "60", "スラック分（0 で開始のみ）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0", "1=need追加人数行を無視")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "", "1=メインで req+追加上限まで探索")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1", "0=計画シート必要人数も参照")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", "1", "0=組合せ表プリセットを使わない")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1", "段階2後の列設定図形コピー（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", "", "1=配台不要シートを openpyxl で保存試行")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "ASSIGN_DEFER_MIN_REMAINING_ROLLS", "3", "同日 defer しきい値（ロール残）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES", "15", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "ASSIGN_END_OF_DAY_DEFER_MINUTES", "0", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "DISPATCH_ROLL_TRACE_JSONL", "", "例: log/dispatch_roll_trace.jsonl（相対はブックフォルダ基準）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "DISPATCH_DEBUG_STOP_AFTER_ROLLS", "", "整数NでNロールで打ち切り")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "DISPATCH_DEBUG_ONLY_TASK_IDS", "", "カンマ区切り依頼NO（限定配台）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "DEBUG_TASK_ID", "", "デバッグ用依頼NO")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TRACE_TEAM_ASSIGN_TASK_ID", "", "チーム割付トレース対象")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_PRICE_USD_IN_PER_M", "0.075", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_PRICE_USD_OUT_PER_M", "0.30", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_JPY_PER_USD", "150", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234", "", "テスト用（通常空）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234_ROW", "9", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "#TASK_INPUT_WORKBOOK", "", "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い")
 
     ws.Columns(1).ColumnWidth = 28
     ws.Columns(2).ColumnWidth = 14
