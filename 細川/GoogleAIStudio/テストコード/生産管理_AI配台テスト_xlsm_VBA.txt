@@ -952,20 +952,104 @@ End Sub
 ' （結果_カレンダー(出勤簿) から取得。シート名は「メイン」「Main」または名前に「メイン」を含むもの）
 ' ★段階2(planning_core): 任意で見出しセルに「グローバルコメント」と書き、その直下のセルに「再優先特別記載」を入力可能。
 '   同文言は Gemini で解釈され、指示に応じてスキル無視・必要人数1名化などが通常ルールより最優先で適用される。
-' ・勤怠セル: 標準シフト「08:45 / 17:00」以外は背景色（休み・短縮・データなしを区別）
+' ・勤怠セル: master.xlsm メイン A12/B12 の工場稼働開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
 ' =========================================================
 
-' 結果_カレンダー(出勤簿) の「出勤 / 退勤」表示が、工場の通常勤務（8:45～17:00）と一致するか
+' master.xlsm メイン A12/B12 を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
+Private Function マスタメイン_工場標準勤怠表示文字列() As String
+    Const FB As String = "08:45 / 17:00"
+    Dim folder As String
+    Dim p As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim openedHere As Boolean
+    Dim vS As Variant, vE As Variant
+    
+    マスタメイン_工場標準勤怠表示文字列 = FB
+    On Error GoTo CleanExit
+    
+    folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then Exit Function
+    p = folder & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(p)) = 0 Then Exit Function
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo CleanExit
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=p, ReadOnly:=True, UpdateLinks:=0)
+        On Error GoTo CleanExit
+        openedHere = Not (wb Is Nothing)
+    End If
+    If wb Is Nothing Then Exit Function
+    
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = wb.Worksheets("メイン")
+    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
+    On Error GoTo CleanExit
+    If ws Is Nothing Then
+        For Each sh In wb.Worksheets
+            If InStr(sh.Name, "メイン") > 0 Then
+                Set ws = sh
+                Exit For
+            End If
+        Next sh
+    End If
+    If ws Is Nothing Then GoTo CloseWb
+    
+    vS = ws.Range("A12").Value
+    vE = ws.Range("B12").Value
+    If Not IsDate(vS) Or Not IsDate(vE) Then GoTo CloseWb
+    If TimeValue(CDate(vS)) >= TimeValue(CDate(vE)) Then GoTo CloseWb
+    
+    マスタメイン_工場標準勤怠表示文字列 = Format$(CDate(vS), "hh:nn") & " / " & Format$(CDate(vE), "hh:nn")
+
+CloseWb:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Exit Function
+CleanExit:
+    On Error Resume Next
+    If openedHere And Not wb Is Nothing Then wb.Close SaveChanges:=False
+    On Error GoTo 0
+End Function
+
+Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled As String) As String
+    Dim parts() As String
+    Dim a As String, b As String
+    parts = Split(labeled, " / ")
+    If UBound(parts) <> 1 Then
+        メインシート_勤怠表示先頭ゼロ無し = labeled
+        Exit Function
+    End If
+    a = Trim$(parts(0))
+    b = Trim$(parts(1))
+    If Len(a) >= 4 And Left$(a, 1) = "0" Then a = Mid$(a, 2)
+    If Len(b) >= 4 And Left$(b, 1) = "0" Then b = Mid$(b, 2)
+    メインシート_勤怠表示先頭ゼロ無し = a & " / " & b
+End Function
+
+' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A12/B12 の工場稼働枠と一致するか
 Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String) As Boolean
     Dim t As String
+    Dim exp As String
     t = Trim$(Replace(Replace(txt, vbCr, ""), vbLf, ""))
     t = Replace(t, "：", ":")
     Do While InStr(t, "  ") > 0
         t = Replace(t, "  ", " ")
     Loop
-    If StrComp(t, "08:45 / 17:00", vbTextCompare) = 0 Then
+    exp = マスタメイン_工場標準勤怠表示文字列()
+    If StrComp(t, exp, vbTextCompare) = 0 Then
         メインシート_勤怠表示が通常勤務か = True
-    ElseIf StrComp(t, "8:45 / 17:00", vbTextCompare) = 0 Then
+    ElseIf StrComp(t, メインシート_勤怠表示先頭ゼロ無し(exp), vbTextCompare) = 0 Then
         メインシート_勤怠表示が通常勤務か = True
     Else
         メインシート_勤怠表示が通常勤務か = False

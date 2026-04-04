@@ -132,7 +132,7 @@
       <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一設備列は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
       <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある最上位依頼に限定。</li>
       <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、計画基準納日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
-      <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong> シート（1 時間刻み・設備列に文字があるセル＝その時間帯は <code>machine_avail_dt</code> を占有）。詳細は <span class="file">配台ルール.md</span> 3.2.1。</li>
+      <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong> シート（1 時間刻み・設備列に文字があるセル＝その時間帯は <code>machine_avail_dt</code> を占有）。<strong>メイン A12/B12</strong> でスロットの開始・終了「時」を指定（空なら 6〜22 時）。段階2は同セルを読み <code>DEFAULT_START_TIME</code>/<code>DEFAULT_END_TIME</code> を上書きし結果グリッドに反映。詳細は <span class="file">配台ルール.md</span> 3.2.1・4.4。</li>
     </ul>
   </section>
 

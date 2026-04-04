@@ -64,6 +64,7 @@ import fnmatch
 import shutil
 import sys
 import ctypes
+from contextlib import contextmanager
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
@@ -10139,6 +10140,85 @@ def parse_time_str(time_str, default_time):
     except:
         return default_time
 
+
+def _excel_scalar_to_time_optional(v) -> time | None:
+    """master メインの時刻セル（datetime / time / 文字列）を time に。解釈不能は None。"""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, time):
+        return v
+    if isinstance(v, datetime):
+        return v.time()
+    return parse_time_str(v, None)
+
+
+def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | None, time | None]:
+    """
+    master.xlsm のメインシート A12（稼働開始）・B12（稼働終了）を読む。
+    いずれか欠損・不正・開始>=終了のときは (None, None)。
+    """
+    p = (master_path or "").strip()
+    if not p or not os.path.isfile(p):
+        return None, None
+    if _workbook_should_skip_openpyxl_io(p):
+        return None, None
+    try:
+        wb = load_workbook(p, data_only=True, read_only=False)
+    except Exception as e:
+        logging.warning("工場稼働時刻: master を openpyxl で開けませんでした（既定の日内枠を使います）: %s", e)
+        return None, None
+    try:
+        ws = None
+        for name in ("メイン", "Main"):
+            if name in wb.sheetnames:
+                ws = wb[name]
+                break
+        if ws is None:
+            for sn in wb.sheetnames:
+                if "メイン" in sn:
+                    ws = wb[sn]
+                    break
+        if ws is None:
+            return None, None
+        st = _excel_scalar_to_time_optional(ws.cell(row=12, column=1).value)
+        et = _excel_scalar_to_time_optional(ws.cell(row=12, column=2).value)
+        if st is None or et is None:
+            return None, None
+        if st >= et:
+            logging.warning(
+                "工場稼働時刻: master メイン A12/B12 が開始>=終了 (%s >= %s) のため既定値を使います。",
+                st,
+                et,
+            )
+            return None, None
+        return st, et
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+
+@contextmanager
+def _override_default_factory_hours_from_master(master_path: str):
+    """段階2の間だけ DEFAULT_START_TIME / DEFAULT_END_TIME を master メイン A12/B12 で上書き。"""
+    global DEFAULT_START_TIME, DEFAULT_END_TIME
+    orig_s, orig_e = DEFAULT_START_TIME, DEFAULT_END_TIME
+    ns, ne = _read_master_main_factory_operating_times(master_path)
+    try:
+        if ns is not None and ne is not None:
+            DEFAULT_START_TIME = ns
+            DEFAULT_END_TIME = ne
+            logging.info(
+                "工場稼働枠: master.xlsm メイン A12/B12 を採用 → %s ～ %s（結果_* の日内グリッド・配台枠）",
+                DEFAULT_START_TIME.strftime("%H:%M"),
+                DEFAULT_END_TIME.strftime("%H:%M"),
+            )
+        yield
+    finally:
+        DEFAULT_START_TIME, DEFAULT_END_TIME = orig_s, orig_e
+
+
 def infer_mid_break_from_reason(reason_text, start_t, end_t):
     """
     備考から中抜け時間を推定するローカル補正。
@@ -13187,6 +13267,12 @@ def generate_plan():
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組のみ）、および log/execution_log.txt。
     """
+    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    with _override_default_factory_hours_from_master(master_abs):
+        _generate_plan_impl()
+
+
+def _generate_plan_impl():
     # ロールトレース JSONL は日次ループより前に早期 return しうるため、ここで初期化する
     # （DISPATCH_ROLL_TRACE_JSONL 未設定・空ならファイルは作らない）。
     _dispatch_debug_reset_roll_trace(
