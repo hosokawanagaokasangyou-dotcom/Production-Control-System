@@ -104,6 +104,8 @@ Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
+' 全シートフォント統一で保護シートを一時解除するときのパスワード。空＝パスワード無しのシートのみ解除可。パスワード付きで統一したい場合はここに同じパスワードを設定（再保護にも使用）。
+Private Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
 Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
@@ -5543,7 +5545,9 @@ End Sub
 ' =========================================================
 ' 全シートのセルフォントを統一（手動実行・ボタン割当可）
 ' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
-' ※保護シートはスキップし、ダイアログに列挙。
+' ※保護シートは一時解除→フォント適用→取り込み結果シートと同様の再保護（DrawingObjects+Contents+UserInterfaceOnly。パスワードは SHEET_FONT_UNPROTECT_PASSWORD）。
+' ※解除できないシートはスキップし、ダイアログに列挙。
+' ※フォント後の列幅調整はメイン A:K と 結果_主要4結果シート_列オートフィット のみ。結果_設備ガントは専用列幅（オートフィットしない）。
 ' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
 ' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用。本体を直指定すると AnimateButtonPush が動かない）。
 ' =========================================================
@@ -5593,13 +5597,28 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean
+    Dim wasProt As Boolean
+    Dim unprotectOk As Boolean
     
     skippedOut = ""
     For Each ws In ThisWorkbook.Worksheets
+        wasProt = False
+        unprotectOk = True
         On Error Resume Next
         If ws.ProtectContents Then
-            skippedOut = skippedOut & "・" & ws.Name & "（保護中のためスキップ）" & vbCrLf
-        Else
+            wasProt = True
+            ws.Unprotect
+            If ws.ProtectContents And Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+            End If
+            If ws.ProtectContents Then
+                skippedOut = skippedOut & "・" & ws.Name & "（保護解除できずスキップ）" & vbCrLf
+                Err.Clear
+                unprotectOk = False
+            End If
+        End If
+        
+        If unprotectOk Then
             rangeErr = False
             Set ur = Nothing
             Set ur = ws.UsedRange
@@ -5614,6 +5633,19 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
                     skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
                     Err.Clear
                 End If
+            End If
+        End If
+        
+        If wasProt And unprotectOk Then
+            Err.Clear
+            If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+            Else
+                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+            End If
+            If Err.Number <> 0 Then
+                skippedOut = skippedOut & "・" & ws.Name & "（再保護失敗: " & Err.Description & "）" & vbCrLf
+                Err.Clear
             End If
         End If
         On Error GoTo 0

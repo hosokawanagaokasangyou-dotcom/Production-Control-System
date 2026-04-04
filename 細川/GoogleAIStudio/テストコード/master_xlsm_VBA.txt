@@ -11,6 +11,10 @@ Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
+' 全シートフォント統一で保護シートを一時解除するときのパスワード（空＝パスワード無しのみ。パスワード付きシートはここに設定）
+Private Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
+' 配台ブックと同名シートがある場合、列オートフィットで時刻グリッドが潰れないよう除外
+Private Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
 ' =========================================================
 ' 組み合わせ表（skills の OP/AS 列 × need の必要人数から、OP1名以上を含む組合せを列挙）
 ' ・A列「組合せ行ID」… データ行ごとに 1 からの一意番号（配台で採用時は結果_タスク一覧の履歴に組合せ表#として転記）
@@ -1353,7 +1357,8 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
     Dim prevCalc As XlCalculation
     Dim prevScr As Boolean
     Dim prevEv As Boolean
-    Dim unlk As Boolean
+    Dim wasProt As Boolean
+    Dim unprotectOk As Boolean
     
     skippedOut = ""
     prevCalc = Application.Calculation
@@ -1364,11 +1369,23 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
     Application.Calculation = xlCalculationManual
     
     For Each ws In ThisWorkbook.Worksheets
-        unlk = TryTempUnprotectBlank(ws)
+        wasProt = False
+        unprotectOk = True
         On Error Resume Next
         If ws.ProtectContents Then
-            skippedOut = skippedOut & "・" & ws.Name & "（保護中・解除不可のためスキップ）" & vbCrLf
-        Else
+            wasProt = True
+            ws.Unprotect
+            If ws.ProtectContents And Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+            End If
+            If ws.ProtectContents Then
+                unprotectOk = False
+                skippedOut = skippedOut & "・" & ws.Name & "（保護解除できずスキップ）" & vbCrLf
+                Err.Clear
+            End If
+        End If
+        
+        If unprotectOk Then
             rangeErr = False
             Set ur = Nothing
             Set ur = ws.UsedRange
@@ -1382,13 +1399,27 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
                     If Not AssignFontNameToRange(ur, fontName) Then
                         skippedOut = skippedOut & "・" & ws.Name & "（フォント適用失敗）" & vbCrLf
                     Else
-                        ur.Columns.AutoFit
+                        If StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then
+                            ur.Columns.AutoFit
+                        End If
                     End If
                 End If
             End If
         End If
+        
+        If wasProt And unprotectOk Then
+            Err.Clear
+            If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+            Else
+                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+            End If
+            If Err.Number <> 0 Then
+                skippedOut = skippedOut & "・" & ws.Name & "（再保護失敗: " & Err.Description & "）" & vbCrLf
+                Err.Clear
+            End If
+        End If
         On Error GoTo 0
-        If unlk Then ReprotectSheetBlankPwdUI ws
     Next ws
     
     Application.Calculation = prevCalc
