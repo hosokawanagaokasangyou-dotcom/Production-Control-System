@@ -906,6 +906,7 @@ Public Sub メインシート_masterブックを開く()
     Dim path As String
     Dim folder As String
     Dim wb As Workbook
+    Dim wbMaster As Workbook
     
     folder = ThisWorkbook.Path
     If Len(folder) = 0 Then
@@ -929,7 +930,8 @@ Public Sub メインシート_masterブックを開く()
     
     On Error GoTo OpenFail
     MacroSplash_SetStep "master.xlsm を開いています…"
-    Application.Workbooks.Open Filename:=path
+    Set wbMaster = Application.Workbooks.Open(Filename:=path)
+    wbMaster.Activate
     MacroSplash_SetStep "master.xlsm を開きました。"
     m_animMacroSucceeded = True
     Exit Sub
@@ -937,27 +939,9 @@ OpenFail:
     MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
 End Sub
 
-' スプラッシュ UserForm を閉じた直後など、フォーカスが ThisWorkbook に戻ることがあるため master を前面へ
-Private Sub メインシート_masterブックを前面にする()
-    Dim path As String
-    Dim folder As String
-    Dim wb As Workbook
-    On Error Resume Next
-    folder = ThisWorkbook.Path
-    If Len(folder) = 0 Then Exit Sub
-    path = folder & "\" & MASTER_WORKBOOK_FILE
-    For Each wb In Application.Workbooks
-        If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
-            wb.Activate
-            Exit Sub
-        End If
-    Next wb
-End Sub
-
 Sub アニメ付き_メインシート_masterブックを開く()
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
-    If m_animMacroSucceeded Then メインシート_masterブックを前面にする
 End Sub
 
 ' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
