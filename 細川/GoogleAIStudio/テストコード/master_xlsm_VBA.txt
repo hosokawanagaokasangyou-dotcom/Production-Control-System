@@ -744,6 +744,41 @@ Private Sub FormatMemberAttendanceSheetLayout(ByVal ws As Worksheet, ByVal lastR
     End If
 End Sub
 
+' #region agent log
+Private Sub AgentDbg2841(ByVal hypothesisId As String, ByVal loc As String, ByVal fmtLocal As String, ByVal errNum As Long)
+    Dim fn As Integer
+    Const LOGP As String = "G:\工程管理AIプロジェクト\debug-2841a4.log"
+    On Error Resume Next
+    fn = FreeFile
+    Open LOGP For Append As #fn
+    Print #fn, "{""sessionId"":""2841a4"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & loc & """,""fmt"":""" & Replace(Replace(fmtLocal, "\", "/"), """", "'") & """,""err"":" & CStr(errNum) & ",""ts"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
+    Close #fn
+End Sub
+
+Private Sub AgentDbg2841State(ByVal protContents As Boolean, ByVal protMode As Boolean, ByVal sheetName As String)
+    Dim fn As Integer
+    Dim sn As String
+    Const LOGP As String = "G:\工程管理AIプロジェクト\debug-2841a4.log"
+    On Error Resume Next
+    sn = Replace(Replace(sheetName, "\", "/"), """", "'")
+    fn = FreeFile
+    Open LOGP For Append As #fn
+    Print #fn, "{""sessionId"":""2841a4"",""hypothesisId"":""A"",""location"":""WriteMemberAttendanceSheet:preFmt"",""protContents"":" & LCase$(CStr(protContents)) & ",""protMode"":" & LCase$(CStr(protMode)) & ",""sheet"":""" & sn & """,""ts"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
+    Close #fn
+End Sub
+
+Private Sub SafeNumberFormatLocal2841(ByVal tgt As Range, ByVal fmtLocal As String, ByVal hypothesisId As String, ByVal loc As String)
+    Dim e As Long
+    Err.Clear
+    On Error Resume Next
+    tgt.NumberFormatLocal = fmtLocal
+    e = Err.Number
+    Call AgentDbg2841(hypothesisId, loc, fmtLocal, e)
+    On Error GoTo 0
+    If e <> 0 Then Err.Raise e
+End Sub
+' #endregion
+
 Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As Collection)
     Dim ws As Worksheet
     Dim wb As Workbook
@@ -842,26 +877,27 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
         sortRange.Sort Key1:=ws.Range("A2"), Order1:=xlAscending, Header:=xlYes
     End If
     
-    ws.Columns("A").NumberFormatLocal = "yyyy/mm/dd"
-    ws.Columns("B:G").NumberFormatLocal = "hh:mm"
+    Call AgentDbg2841State(ws.ProtectContents, ws.ProtectionMode, ws.Name)
+    Call SafeNumberFormatLocal2841(ws.Columns("A"), "yyyy/mm/dd", "D", "WriteMember:ColA")
+    Call SafeNumberFormatLocal2841(ws.Columns("B:G"), "hh:mm", "D", "WriteMember:ColBG")
     ' K 列は「残業終業（時刻）」と「残業時間（数値）」の両方があり得るため、入力型に応じて表示形式を付ける
-    ws.Columns("K").NumberFormatLocal = "General"
+    Call SafeNumberFormatLocal2841(ws.Columns("K"), "General", "B", "WriteMember:ColKbulk")
     If r > 2 Then
         For fmtR = 2 To r - 1
             If Not IsEmpty(ws.Cells(fmtR, 11).Value) Then
                 kv = ws.Cells(fmtR, 11).Value
                 If VarType(kv) = vbString Then
-                    ws.Cells(fmtR, 11).NumberFormatLocal = "General"
+                    Call SafeNumberFormatLocal2841(ws.Cells(fmtR, 11), "General", "E", "WriteMember:KrowStr" & CStr(fmtR))
                 ElseIf VarType(kv) = vbDate Then
-                    ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                    Call SafeNumberFormatLocal2841(ws.Cells(fmtR, 11), "hh:mm", "E", "WriteMember:KrowDate" & CStr(fmtR))
                 ElseIf IsNumeric(kv) Then
                     If CDbl(kv) >= 0# And CDbl(kv) < 1# Then
-                        ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                        Call SafeNumberFormatLocal2841(ws.Cells(fmtR, 11), "hh:mm", "E", "WriteMember:KrowNumT" & CStr(fmtR))
                     Else
-                        ws.Cells(fmtR, 11).NumberFormatLocal = "General"
+                        Call SafeNumberFormatLocal2841(ws.Cells(fmtR, 11), "General", "E", "WriteMember:KrowNumG" & CStr(fmtR))
                     End If
                 ElseIf IsDate(kv) Then
-                    ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                    Call SafeNumberFormatLocal2841(ws.Cells(fmtR, 11), "hh:mm", "E", "WriteMember:KrowIsDate" & CStr(fmtR))
                 End If
             End If
         Next fmtR
