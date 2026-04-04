@@ -1,0 +1,18 @@
+' ============================================================
+' 貼り付け先: 「生産管理_AI配台テスト.xlsm」の ThisWorkbook（プロジェクト内の ThisWorkbook をダブルクリック）
+' 標準モジュール側: 生産管理_AI配台テスト_xlsm_VBA.txt の Auto_Open / ShortcutMainSheet_* と対
+' 目的: ブックを閉じたあとも Ctrl+Shift+0 の割当が Excel に残らないよう BeforeClose で解除する
+' ============================================================
+Option Explicit
+
+Private Sub Workbook_Open()
+    On Error Resume Next
+    ShortcutMainSheet_OnKeyRegister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error Resume Next
+    ShortcutMainSheet_OnKeyUnregister
+    On Error GoTo 0
+End Sub
