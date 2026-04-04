@@ -35,8 +35,13 @@ Private Const MACHINE_CAL_SLOT_HOUR_LAST As Long = 22
 Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 17
 
 ' メインシート（「メイン」「Main」、または名前に「メイン」を含む）を取得
+' ※「〇月メインカレンダー」等を誤採用しないよう、名前に「カレンダー」を含むシートはフォールバック対象外。
+' ※複数候補があるときはシート名が最短のものを優先（先頭一致のブックで誤った長い名前を避ける）。
 Private Function MasterGetMainWorksheet(ByVal wb As Workbook) As Worksheet
     Dim ws As Worksheet
+    Dim best As Worksheet
+    Dim bestLen As Long
+    Dim L As Long
     On Error Resume Next
     Set ws = wb.Worksheets("メイン")
     On Error GoTo 0
@@ -51,13 +56,31 @@ Private Function MasterGetMainWorksheet(ByVal wb As Workbook) As Worksheet
         Set MasterGetMainWorksheet = ws
         Exit Function
     End If
+    Set best = Nothing
+    bestLen = 10000
     For Each ws In wb.Worksheets
         If InStr(ws.Name, "メイン") > 0 Then
-            Set MasterGetMainWorksheet = ws
-            Exit Function
+            If InStr(ws.Name, "カレンダー") > 0 Then GoTo NextMainCand
+            L = Len(ws.Name)
+            If L < bestLen Then
+                bestLen = L
+                Set best = ws
+            End If
         End If
+NextMainCand:
     Next ws
-    Set MasterGetMainWorksheet = Nothing
+    Set MasterGetMainWorksheet = best
+End Function
+
+' メイン A15/B15・A12/B12 等: 結合セルでも左上セルの実値を取得（結合右隣が空扱いになるのを防ぐ）
+Private Function MasterMainMergedTopLeftValue(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
+    Dim rng As Range
+    On Error GoTo Fail
+    Set rng = ws.Range(cellAddr)
+    MasterMainMergedTopLeftValue = rng.MergeArea.Cells(1, 1).Value
+    Exit Function
+Fail:
+    MasterMainMergedTopLeftValue = Empty
 End Function
 
 ' Excel セルの時刻（Double の日付シリアル・Date 型・文字列）から「時」0～23 を取得。解釈不能は -1。
@@ -130,8 +153,8 @@ Private Function MasterMainReadRegularShiftTimes(ByVal wb As Workbook, ByRef tRe
     MasterMainReadRegularShiftTimes = False
     Set ws = MasterGetMainWorksheet(wb)
     If ws Is Nothing Then Exit Function
-    vS = ws.Range("A15").Value
-    vE = ws.Range("B15").Value
+    vS = MasterMainMergedTopLeftValue(ws, "A15")
+    vE = MasterMainMergedTopLeftValue(ws, "B15")
     If Not MasterMainCellToTimeDate(vS, tRegStart) Then Exit Function
     If Not MasterMainCellToTimeDate(vE, tRegEnd) Then Exit Function
     If TimeValue(tRegStart) >= TimeValue(tRegEnd) Then Exit Function
@@ -151,8 +174,8 @@ Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As 
     Set ws = MasterGetMainWorksheet(wb)
     If ws Is Nothing Then Exit Sub
     
-    vS = ws.Range("A12").Value
-    vE = ws.Range("B12").Value
+    vS = MasterMainMergedTopLeftValue(ws, "A12")
+    vE = MasterMainMergedTopLeftValue(ws, "B12")
     
     hhF = MasterMainTimeCellToHour(vS)
     hhL = MasterMainTimeCellToHour(vE)

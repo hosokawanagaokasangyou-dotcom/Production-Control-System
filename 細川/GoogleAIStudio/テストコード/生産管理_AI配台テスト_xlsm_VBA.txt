@@ -1029,6 +1029,49 @@ Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef 
     日時帯文字列を時刻範囲に = True
 End Function
 
+' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の MasterGetMainWorksheet と同趣旨）
+Private Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim best As Worksheet
+    Dim bestLen As Long
+    Dim L As Long
+    If wb Is Nothing Then Exit Function
+    On Error Resume Next
+    Set ws = wb.Worksheets("メイン")
+    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        Set マスタブック_メイン設定シートを取得 = ws
+        Exit Function
+    End If
+    Set best = Nothing
+    bestLen = 10000
+    For Each sh In wb.Worksheets
+        If InStr(sh.Name, "メイン") > 0 Then
+            If InStr(sh.Name, "カレンダー") > 0 Then GoTo NextMastMainPick
+            L = Len(sh.Name)
+            If L < bestLen Then
+                bestLen = L
+                Set best = sh
+            End If
+        End If
+NextMastMainPick:
+    Next sh
+    Set マスタブック_メイン設定シートを取得 = best
+End Function
+
+' master メイン A12/B15 等: 結合セルでも左上の実値を取得
+Private Function マスタメイン_結合左上の値(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
+    Dim rng As Range
+    On Error GoTo FailMMTL
+    Set rng = ws.Range(cellAddr)
+    マスタメイン_結合左上の値 = rng.MergeArea.Cells(1, 1).Value
+    Exit Function
+FailMMTL:
+    マスタメイン_結合左上の値 = Empty
+End Function
+
 ' master.xlsm メイン A12/B12（工場稼働）・A15/B15（定常）を読む。欠損・不正・開始>=終了は *Ok=False
 Private Sub マスタメイン_工場稼働と定常を取得( _
     ByRef facOk As Boolean, ByRef facS As Date, ByRef facE As Date, _
@@ -1038,7 +1081,6 @@ Private Sub マスタメイン_工場稼働と定常を取得( _
     Dim p As String
     Dim wb As Workbook
     Dim ws As Worksheet
-    Dim sh As Worksheet
     Dim openedHere As Boolean
     Dim v As Variant
     Dim tS As Date
@@ -1064,24 +1106,12 @@ Private Sub マスタメイン_工場稼働と定常を取得( _
     End If
     If wb Is Nothing Then Exit Sub
     
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = wb.Worksheets("メイン")
-    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
-    On Error GoTo 0
-    If ws Is Nothing Then
-        For Each sh In wb.Worksheets
-            If InStr(sh.Name, "メイン") > 0 Then
-                Set ws = sh
-                Exit For
-            End If
-        Next sh
-    End If
+    Set ws = マスタブック_メイン設定シートを取得(wb)
     If ws Is Nothing Then GoTo CloseMasterWb
     
-    v = ws.Range("A12").Value
+    v = マスタメイン_結合左上の値(ws, "A12")
     If マスタメイン_セルを時刻Dateへ(v, tS) Then
-        v = ws.Range("B12").Value
+        v = マスタメイン_結合左上の値(ws, "B12")
         If マスタメイン_セルを時刻Dateへ(v, tE) Then
             If TimeValue(tS) < TimeValue(tE) Then
                 facOk = True
@@ -1091,9 +1121,9 @@ Private Sub マスタメイン_工場稼働と定常を取得( _
         End If
     End If
     
-    v = ws.Range("A15").Value
+    v = マスタメイン_結合左上の値(ws, "A15")
     If マスタメイン_セルを時刻Dateへ(v, tS) Then
-        v = ws.Range("B15").Value
+        v = マスタメイン_結合左上の値(ws, "B15")
         If マスタメイン_セルを時刻Dateへ(v, tE) Then
             If TimeValue(tS) < TimeValue(tE) Then
                 regOk = True
@@ -1274,7 +1304,6 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     Dim p As String
     Dim wb As Workbook
     Dim ws As Worksheet
-    Dim sh As Worksheet
     Dim openedHere As Boolean
     Dim vS As Variant, vE As Variant
     Dim tS As Date, tE As Date
@@ -1300,23 +1329,11 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     End If
     If wb Is Nothing Then Exit Function
     
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = wb.Worksheets("メイン")
-    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
-    On Error GoTo CleanExit
-    If ws Is Nothing Then
-        For Each sh In wb.Worksheets
-            If InStr(sh.Name, "メイン") > 0 Then
-                Set ws = sh
-                Exit For
-            End If
-        Next sh
-    End If
+    Set ws = マスタブック_メイン設定シートを取得(wb)
     If ws Is Nothing Then GoTo CloseWb
     
-    vS = ws.Range("A15").Value
-    vE = ws.Range("B15").Value
+    vS = マスタメイン_結合左上の値(ws, "A15")
+    vE = マスタメイン_結合左上の値(ws, "B15")
     If Not マスタメイン_セルを時刻Dateへ(vS, tS) Then GoTo CloseWb
     If Not マスタメイン_セルを時刻Dateへ(vE, tE) Then GoTo CloseWb
     If TimeValue(tS) >= TimeValue(tE) Then GoTo CloseWb

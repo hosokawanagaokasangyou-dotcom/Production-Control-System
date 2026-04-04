@@ -10257,6 +10257,21 @@ def _excel_scalar_to_time_optional(v) -> time | None:
     return parse_time_str(v, None)
 
 
+def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
+    """
+    master.xlsm の「メイン」設定シート名を解決する（VBA MasterGetMainWorksheet と同趣旨）。
+    「〇月メインカレンダー」等を誤採用しないよう「カレンダー」を含む名前は除外し、
+    複数候補はシート名が最短のものを優先する。
+    """
+    for prefer in ("メイン", "Main"):
+        if prefer in sheetnames:
+            return prefer
+    cand = [sn for sn in sheetnames if "メイン" in sn and "カレンダー" not in sn]
+    if not cand:
+        return None
+    return min(cand, key=len)
+
+
 def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | None, time | None]:
     """
     master.xlsm のメインシート A12（稼働開始）・B12（稼働終了）を読む。
@@ -10273,18 +10288,10 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
         logging.warning("工場稼働時刻: master を openpyxl で開けませんでした（既定の日内枠を使います）: %s", e)
         return None, None
     try:
-        ws = None
-        for name in ("メイン", "Main"):
-            if name in wb.sheetnames:
-                ws = wb[name]
-                break
-        if ws is None:
-            for sn in wb.sheetnames:
-                if "メイン" in sn:
-                    ws = wb[sn]
-                    break
-        if ws is None:
+        sn = _pick_master_main_sheet_name(list(wb.sheetnames))
+        if sn is None:
             return None, None
+        ws = wb[sn]
         st = _excel_scalar_to_time_optional(ws.cell(row=12, column=1).value)
         et = _excel_scalar_to_time_optional(ws.cell(row=12, column=2).value)
         if st is None or et is None:
@@ -10323,18 +10330,10 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
         )
         return None, None
     try:
-        ws = None
-        for name in ("メイン", "Main"):
-            if name in wb.sheetnames:
-                ws = wb[name]
-                break
-        if ws is None:
-            for sn in wb.sheetnames:
-                if "メイン" in sn:
-                    ws = wb[sn]
-                    break
-        if ws is None:
+        sn = _pick_master_main_sheet_name(list(wb.sheetnames))
+        if sn is None:
             return None, None
+        ws = wb[sn]
         st = _excel_scalar_to_time_optional(ws.cell(row=15, column=1).value)
         et = _excel_scalar_to_time_optional(ws.cell(row=15, column=2).value)
         if st is None or et is None:
