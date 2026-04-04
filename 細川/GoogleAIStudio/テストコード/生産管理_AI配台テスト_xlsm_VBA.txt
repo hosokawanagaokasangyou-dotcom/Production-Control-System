@@ -14,7 +14,7 @@ End Type
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
-    Private Declare PtrSafe Function Beep Lib "kernel32" (ByVal dwFreq As Long, ByVal dwDuration As Long) As Long
+    Private Declare PtrSafe Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As LongPtr, ByVal hmod As LongPtr, ByVal fdw As Long) As Long
     Private Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
     Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
@@ -36,7 +36,7 @@ End Type
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
-    Private Declare Function Beep Lib "kernel32" (ByVal dwFreq As Long, ByVal dwDuration As Long) As Long
+    Private Declare Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As Long, ByVal hmod As Long, ByVal fdw As Long) As Long
     Private Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
     Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
     Private Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
@@ -52,6 +52,11 @@ End Type
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
 Private Const SND_ALIAS As Long = &H10000
+Private Const SND_FILENAME As Long = &H20000
+' 完了チャイム WAV（ブックと同じフォルダ配下）。無ければ下記 URL から取得（リポジトリが public かつブランチ一致が前提）
+Private Const MACRO_COMPLETE_CHIME_REL_DIR As String = "sounds"
+Private Const MACRO_COMPLETE_CHIME_FILE_NAME As String = "macro_complete_chime.wav"
+Private Const MACRO_COMPLETE_CHIME_DOWNLOAD_URL As String = "https://raw.githubusercontent.com/kamoshika9999/----AI------/xlwings%E7%A9%8D%E6%A5%B5%E9%81%A9%E7%94%A8/%E7%B4%B0%E5%B7%9D/GoogleAIStudio/%E3%83%86%E3%82%B9%E3%83%88%E3%82%B3%E3%83%BC%E3%83%89/sounds/macro_complete_chime.wav"
 ' frmMacroSplash を Excel メイン枠の下端・水平中央に合わせるときの下端からの余白（px）
 Private Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
@@ -1788,7 +1793,7 @@ End Sub
 ' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
 ' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
-' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋完了チャイム（MacroCompleteChime・Beep 短メロディ／失敗時 SystemAsterisk）
+' ・完了の vbInformation MsgBox は原則やめ、スプラッシュ最終文＋完了チャイム（MacroCompleteChime・sounds\macro_complete_chime.wav／無ければ GitHub raw 取得・失敗時 SystemAsterisk）
 ' =========================================================
 Private Function SettingsSheet_IsSplashExecutionLogWriteEnabled() As Boolean
     On Error GoTo DefaultTrue
@@ -1967,15 +1972,64 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
 End Sub
 
+Private Function MacroCompleteChime_LocalWavPath() As String
+    Dim folder As String
+    folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then Exit Function
+    MacroCompleteChime_LocalWavPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_COMPLETE_CHIME_FILE_NAME
+End Function
+
+Private Function MacroCompleteChime_HttpDownloadBinary(ByVal url As String, ByVal destPath As String) As Boolean
+    Dim xhr As Object
+    Dim stm As Object
+    On Error GoTo Fail
+    Set xhr = CreateObject("MSXML2.XMLHTTP.6.0")
+    xhr.Open "GET", url, False
+    xhr.setRequestHeader "User-Agent", "Excel-VBA-MacroCompleteChime/1"
+    xhr.Send
+    If xhr.Status < 200 Or xhr.Status >= 300 Then GoTo Fail
+    If LenB(xhr.responseBody) = 0 Then GoTo Fail
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1
+    stm.Open
+    stm.Write xhr.responseBody
+    stm.SaveToFile destPath, 2
+    stm.Close
+    MacroCompleteChime_HttpDownloadBinary = True
+    Exit Function
+Fail:
+    On Error Resume Next
+    If Not stm Is Nothing Then stm.Close
+    MacroCompleteChime_HttpDownloadBinary = False
+End Function
+
+Private Function MacroCompleteChime_EnsureWavPath() As String
+    Dim p As String
+    Dim dirSounds As String
+    p = MacroCompleteChime_LocalWavPath()
+    If Len(p) = 0 Then Exit Function
+    If Len(Dir(p)) > 0 Then
+        MacroCompleteChime_EnsureWavPath = p
+        Exit Function
+    End If
+    dirSounds = ThisWorkbook.Path & "\" & MACRO_COMPLETE_CHIME_REL_DIR
+    On Error Resume Next
+    MkDir dirSounds
+    On Error GoTo 0
+    If MacroCompleteChime_HttpDownloadBinary(MACRO_COMPLETE_CHIME_DOWNLOAD_URL, p) Then
+        If Len(Dir(p)) > 0 Then MacroCompleteChime_EnsureWavPath = p
+    End If
+End Function
+
 Private Sub MacroCompleteChime()
     On Error Resume Next
-    ' 完了感のある短い上昇メロディ（長三和音 C5→E5→G5）。Beep が使えない環境では通知音にフォールバック。
-    If Beep(523&, 110&) = 0 Then
+    Dim wav As String
+    wav = MacroCompleteChime_EnsureWavPath()
+    If Len(wav) > 0 Then
+        PlaySoundW StrPtr(wav), 0&, SND_FILENAME Or SND_ASYNC
+    Else
         PlaySound "SystemAsterisk", 0&, SND_ALIAS Or SND_ASYNC
-        Exit Sub
     End If
-    Beep 659&, 110&
-    Beep 784&, 260&
 End Sub
 
 ' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
