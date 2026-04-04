@@ -990,73 +990,15 @@ OpenFail:
     MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
 End Sub
 
-' SDI ではブックごとに HWND が分かれる。Application.hwnd だけでは前面がズレることがあるため、まず wb.Windows(1).Hwnd を試す
-Private Function アニメ後_masterをOs前面へ() As Boolean
-    Dim path As String
-    Dim folder As String
-    Dim wb As Workbook
-    Dim w As Window
-    Dim found As Boolean
-    Dim usedBookWin As Boolean
-#If VBA7 Then
-    Dim targetHwnd As LongPtr
-#Else
-    Dim targetHwnd As Long
-#End If
-    アニメ後_masterをOs前面へ = False
-    usedBookWin = False
-    targetHwnd = 0
-    On Error Resume Next
-    folder = ThisWorkbook.Path
-    If Len(folder) = 0 Then Exit Function
-    path = folder & "\" & MASTER_WORKBOOK_FILE
-    found = False
-    For Each wb In Application.Workbooks
-        If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
-            found = True
-            Exit For
-        End If
-    Next wb
-    If Not found Then Exit Function
-    wb.Activate
-    For Each w In wb.Windows
-        w.Activate
-        Exit For
-    Next w
-    DoEvents
-    Err.Clear
-    targetHwnd = wb.Windows(1).Hwnd
-    If Err.Number = 0 And targetHwnd <> 0 Then
-        usedBookWin = True
-    Else
-        Err.Clear
-#If VBA7 Then
-        targetHwnd = Application.hwnd
-#Else
-        targetHwnd = Application.hWnd
-#End If
-    End If
-    If targetHwnd <> 0 Then
-        BringWindowToTop targetHwnd
-        SetForegroundWindow targetHwnd
-    End If
-    On Error GoTo 0
-    アニメ後_masterをOs前面へ = usedBookWin
-End Function
-
 Sub アニメ付き_メインシート_masterブックを開く()
-    Dim usedBkWin As Boolean
     ' #region agent log
-    DebugAgent_Log "H4", "anim_master_open", "entry", "pre-fix"
+    DebugAgent_Log "H4", "anim_master_open", "entry_no_splash", "no-splash"
     ' #endregion agent log
     Call AnimateButtonPush
-    アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
-    If m_animMacroSucceeded Then
-        usedBkWin = アニメ後_masterをOs前面へ()
-        ' #region agent log
-        DebugAgent_Log "H7", "anim_master_open", "after_book_win_hwnd_foreground", "post-fix2", usedBkWin
-        ' #endregion agent log
-    End If
+    メインシート_masterブックを開く
+    ' #region agent log
+    If m_animMacroSucceeded Then DebugAgent_Log "H8", "anim_master_open", "after_direct_master_open", "no-splash"
+    ' #endregion agent log
 End Sub
 
 ' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
