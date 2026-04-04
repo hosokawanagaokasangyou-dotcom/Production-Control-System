@@ -62,7 +62,9 @@ Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1200
 Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
 Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
-' D3=false かつスプラッシュ表示中: True=Exec＋FindWindow＋ログ枠への SetWindowPos／枠除去／conhost 強制などを行う。False=同期 Run のみで cmd の位置・見た目は OS 既定に任せる（処理が進まない・xlwings 同期疑い時は False）
+' D3=false かつスプラッシュ表示中の cmd 見た目をログ枠に重ねる（Exec＋FindWindow＋SetWindowPos／conhost／枠除去など）。
+' ★ True にすると段階1/2 の Python が同一 Excel に xlwings で COM 同期するとき、VBA 主スレッドが待機ループ＋HWND 操作で奪い合いになりやすく、処理が固まったように見えることが多い。実用では False 推奨。
+' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
 Private Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
@@ -89,7 +91,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
-' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のときはポーリング無し。D3=false 時の cmd は既定で同期 Run（OS 任せ）。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True のときのみスプラッシュ中に Exec＋ログ枠への SetWindowPos／conhost 強制／枠除去などを試す。
+' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
