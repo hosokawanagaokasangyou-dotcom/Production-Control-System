@@ -1164,6 +1164,19 @@ RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
+# 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに A〜D 列を区別する淡色（順に割当・循環）
+RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
+    "E8F4FC",
+    "FCE8F0",
+    "E8F8E8",
+    "FFF0D8",
+    "EDE8FC",
+    "E0F8F4",
+    "F8E8E0",
+    "E8ECF8",
+    "F5F5E0",
+    "F0E8E8",
+)
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
@@ -1760,6 +1773,31 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
             cell.fill = fill
 
 
+def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
+    """
+    結果_設備ガントの固定列（A〜D）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出現順で
+    淡色を割り当て、同一機械名は常に同じ PatternFill を共有する。
+    """
+    order: list[str] = []
+    seen: set[str] = set()
+    for eq in equipment_list or []:
+        _, mn = _split_equipment_line_process_machine(eq)
+        key = (mn or "").strip() or "—"
+        if key not in seen:
+            seen.add(key)
+            order.append(key)
+    palette = RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS
+    if not palette:
+        fb = "F5F5F5"
+        return {k: PatternFill(fill_type="solid", start_color=fb, end_color=fb) for k in order}
+    out: dict[str, PatternFill] = {}
+    n = len(palette)
+    for i, key in enumerate(order):
+        hx = palette[i % n]
+        out[key] = PatternFill(fill_type="solid", start_color=hx, end_color=hx)
+    return out
+
+
 def _write_results_equipment_gantt_sheet(
     writer,
     timeline_events,
@@ -1849,6 +1887,9 @@ def _write_results_equipment_gantt_sheet(
     n_slots = len(slot_times)
     n_fixed = 4  # 機械名 / 工程名 / 担当者 / タスク概要（日付は日ブロック見出しのみ）
     last_col = n_fixed + n_slots
+    fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
+    fb_gantt = "F5F5F5"
+    fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
 
     # タイトル＆日時（ページ上部）
     create_ts = base_dt.strftime("%Y/%m/%d %H:%M:%S")
@@ -1950,10 +1991,10 @@ def _write_results_equipment_gantt_sheet(
             ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{data_row0}"
             first_freeze_set = True
 
-        zebra = False
         for eq in equipment_list:
-            zebra = not zebra
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
+            mk_key = (mach_nm or "").strip() or "—"
+            lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
             evlist = by_dm[d].get(eq, [])
             if evlist:
                 tids: list[str] = []
@@ -1968,10 +2009,6 @@ def _write_results_equipment_gantt_sheet(
             else:
                 task_sum = "—"
                 member_disp = "—"
-
-            lab_fill = PatternFill(fill_type="solid", start_color="FAFAFA", end_color="FAFAFA")
-            if zebra:
-                lab_fill = PatternFill(fill_type="solid", start_color="F0F4FA", end_color="F0F4FA")
 
             c1 = ws.cell(row=row, column=1, value=mach_nm if mach_nm else "—")
             c2 = ws.cell(row=row, column=2, value=proc_nm if proc_nm else "—")
@@ -2019,13 +2056,7 @@ def _write_results_equipment_gantt_sheet(
                     task_sum_a = "—"
                     member_disp_a = "—"
 
-                lab_fill_a = PatternFill(
-                    fill_type="solid", start_color="EEF6EE", end_color="EEF6EE"
-                )
-                if zebra:
-                    lab_fill_a = PatternFill(
-                        fill_type="solid", start_color="E0EEE0", end_color="E0EEE0"
-                    )
+                lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
                 if mach_nm:
                     act_mach = f"{mach_nm}（実績）"
