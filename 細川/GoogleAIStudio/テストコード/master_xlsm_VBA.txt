@@ -50,8 +50,8 @@ Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 17
 Private Const MAIN_ATTENDANCE_LINK_COL As Long = 4
 Private Const MAIN_ATTENDANCE_LINK_FIRST_DATA_ROW As Long = 2
 Private Const MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS As Long = 400
-' Ctrl+Shift+-（主キーボードのハイフン）→ メインへ（Application.OnKey）。{-}=ハイフン。配台ブック側の ShortcutMainSheet_* と名前を分け、複数ブック同時オープン時の OnKey 解決を明確化
-Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{-}"
+' Ctrl+Shift+テンキー -（Subtract）→ メインへ（Application.OnKey）。{SUBTRACT}=テンキーのマイナス。配台ブック側の ShortcutMainSheet_* と名前を分け、複数ブック同時オープン時の OnKey 解決を明確化
+Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{SUBTRACT}"
 
 ' メインシート（「メイン」「Main」、または名前に「メイン」を含む）を取得
 ' ※「〇月メインカレンダー」等を誤採用しないよう、名前に「カレンダー」を含むシートはフォールバック対象外。
@@ -2892,7 +2892,7 @@ Private Function SortCollectionStrings(ByVal coll As Collection) As Collection
     Set SortCollectionStrings = outC
 End Function
 
-' ブックを開いたときに Ctrl+Shift+- を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）
+' ブックを開いたときに Ctrl+Shift+テンキー - を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）
 Sub Auto_Open()
     MasterShortcutMainSheet_OnKeyRegister
 End Sub
