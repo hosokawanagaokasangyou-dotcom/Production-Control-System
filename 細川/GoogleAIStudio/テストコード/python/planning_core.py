@@ -7394,10 +7394,12 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
 ) -> bool:
     """
     openpyxl で保存できないとき、xlwings で「設定_配台不要工程」A:E をメモリ上の値で上書きし Save。
+
+    表示中シートに対する一括 .value だけだと、スプラッシュ＋ポーリング（D3=true）下で
+    Range 代入が数分かかる計測があり得る。同期中のみシートを一時非表示にし api.Value2 で書く。
     """
     global _exclude_rules_effective_read_path
 
-    _t_sync0 = time_module.perf_counter()
     attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
     if attached is None:
         _log_exclude_rules_sheet_debug(
@@ -7409,7 +7411,6 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         return False
 
     xw_book, info = attached
-    _t_after_attach = time_module.perf_counter()
     ok = False
     try:
         try:
@@ -7418,7 +7419,6 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             pass
         # 全シート名を列挙するとシート数分の COM 往復になり、D3=true 時は VBA ポーリングと競合して
         # 1 シート数秒〜十数秒かかることがある（計測で 40 シート≈213s）。名前で直接解決する。
-        _t_sheet0 = time_module.perf_counter()
         try:
             sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         except Exception:
@@ -7429,20 +7429,16 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 details=f"path={wb_path}",
             )
             return False
-        _t_sheet1 = time_module.perf_counter()
         max_r = max(1, int(ws_oxl.max_row or 1))
         ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
-        _t_mat0 = time_module.perf_counter()
         data = [
             [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
             for r in range(1, max_r + 1)
         ]
-        _t_mat1 = time_module.perf_counter()
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
         rng = sht.range((1, 1)).resize(len(data), ncols)
         hid_sheet_for_write = False
         try:
-            _t_r0 = time_module.perf_counter()
             try:
                 if int(sht.api.Visible) == -1:  # xlSheetVisible
                     sht.api.Visible = 0  # xlSheetHidden（同期中だけ。再描画・ウィンドウ更新負荷を抑える）
@@ -7453,10 +7449,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 rng.api.Value2 = data
             except Exception:
                 rng.value = data
-            _t_r1 = time_module.perf_counter()
-            _t_s0 = time_module.perf_counter()
             xw_book.save()
-            _t_s1 = time_module.perf_counter()
         finally:
             if hid_sheet_for_write:
                 try:
@@ -7464,27 +7457,9 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 except Exception:
                     pass
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
-        _attach_ms = round((_t_after_attach - _t_sync0) * 1000)
-        _sheet_lookup_ms = round((_t_sheet1 - _t_sheet0) * 1000)
-        _prep_ms = round((_t_mat0 - _t_sheet1) * 1000)
-        _matrix_ms = round((_t_mat1 - _t_mat0) * 1000)
-        _range_ms = round((_t_r1 - _t_r0) * 1000)
-        _save_ms = round((_t_s1 - _t_s0) * 1000)
         ok = True
         _exclude_rules_effective_read_path = wb_path
         _clear_exclude_rules_e_apply_files()
-        logging.info(
-            "%s: [XLWINGS_PERF] attach_ms=%d sheet_lookup_ms=%d prep_ms=%d matrix_ms=%d "
-            "range_ms=%d save_ms=%d rows=%d",
-            log_prefix,
-            _attach_ms,
-            _sheet_lookup_ms,
-            _prep_ms,
-            _matrix_ms,
-            _range_ms,
-            _save_ms,
-            max_r,
-        )
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_OK",
             log_prefix,
