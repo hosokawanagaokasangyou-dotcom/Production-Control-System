@@ -130,7 +130,8 @@
       <li><strong>優先度重複</strong>: 配台対象行で同じ優先度整数が2行以上→段階2中止、終了コード3、メッセージファイル経由で Excel に表示（999は除外）。</li>
       <li><strong>同日同機械</strong>: 計画基準納期と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
       <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一設備列は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
-      <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある最上位依頼に限定。</li>
+      <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある<strong>処理順リスト先頭</strong>の依頼に限定。処理順は各依頼NOの<strong>配台試行順番の最小値</strong>が小さいほど先（<code>_serial_dispatch_order_task_ids</code>）。</li>
+      <li><strong>2026-04 追補</strong>: <strong>配台計画_タスク入力</strong>の先頭列 <strong>配台試行順番</strong>（段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与）。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。成果物に <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
       <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、計画基準納日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
       <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong>（<strong>メイン A12/B12</strong>＝稼働スロットの時台、<strong>A15/B15</strong>＝定常開始終了・出勤簿・定常外の A/B 列着色）。段階2は A12/B12 で <code>DEFAULT_*</code>、A15/B15 で <code>結果_設備毎の時間割</code>／<code>結果_設備ガント</code>の定常外見出し着色。詳細は <span class="file">配台ルール.md</span> 3.2.1・3.2.2・4.4。</li>
     </ul>
@@ -138,10 +139,10 @@
 
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内の <code>task_queue.sort</code>・<code>_generate_plan_task_queue_sort_key</code>・2026-04）: <strong><code>b_tier</code></strong>（0=§B-1、1=§B-2/§B-3 帯、2=その他）→ <strong><code>b2_queue_sub</code></strong>（帯内で <strong>EC が未着手の検査／巻返しより先</strong>）→ <strong>加工途中</strong>（<code>in_progress</code> を先）→ <strong>計画基準納期</strong>（早いほど先）→ <strong>need シート左列ほど先</strong>（工程名+機械名の列位置 <code>need_combo_col_index</code>）→ <strong>依頼NOタイブレーク</strong>（<code>_task_id_same_machine_due_tiebreak_key</code>）。その後 <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で依頼内 EC→後続（検査／巻返し）を<strong>キュー上で隣接</strong>（配台試行順では EC の直次が後続行）、<code>_assign_sequential_dispatch_trial_order</code> で <strong>配台試行順番</strong> 1..n を付与（シート物理行順ではない）。<strong>納期シフト再試行</strong>で再ソートした後も同様に隣接＋付け直し。納期由来・配台優先度・機械名 NFKC 単独・開始日・必要OP人数はグローバルキーに含めません。</p>
+    <p><strong>グローバル</strong>（<code>generate_plan</code> 内・2026-04）: キュー全行に<strong>シートの配台試行順番（正の整数）が揃っている</strong>ときは、その昇順（同値は <code>planning_sheet_row_seq</code>）で並べ <code>dispatch_trial_order</code> に反映（<strong>EC 隣接繰り上げはスキップ</strong>）。<strong>欠損がある行が1行でもある</strong>ときは <code>task_queue.sort</code>（<code>_generate_plan_task_queue_sort_key</code>）: <strong><code>b_tier</code></strong>（0=§B-1、1=§B-2/§B-3 帯、2=その他）→ <strong><code>b2_queue_sub</code></strong> → <strong>加工途中</strong> → <strong>計画基準納期</strong> → <strong>need 列位置</strong> → <strong>依頼NOタイブレーク</strong>。続けて <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で EC→後続を隣接、<code>_assign_sequential_dispatch_trial_order</code> で 1..n。<strong>納期シフト再試行</strong>後も同じ <code>_apply_dispatch_trial_order_for_generate_plan</code> で確定。</p>
     <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が候補を <strong><code>dispatch_trial_order</code> 昇順</strong>にし、§B-2/§B-3 は <strong>完全二相</strong>（<strong>フェーズ1</strong>: 熱融着検査・巻返し（後続）<strong>以外</strong>を連続ロール → <strong>フェーズ2</strong>: 後続行を配台）。後続候補は <code>_roll_pipeline_inspection_assign_room</code>（バッファ付きロール枠）で制御されます。通常の日次ループ完了後、B-2 検査／B-3 巻返しを <code>_run_b2_inspection_rewind_pass</code> で日付先頭から再走査し、<code>timeline_events</code> を人・設備のブロックテーブルとして再利用して日跨ぎ占有を保持したまま詰めます。再走査中は <code>_roll_pipeline_inspection_assign_room</code> と <code>_roll_pipeline_b2_inspection_ec_completion_floor_dt</code>。同一設備列の試行順は <code>_equipment_line_lower_dispatch_trial_still_pending</code>。<code>_day_schedule_task_sort_key</code> は主ループのソートには使わない。<strong>継続チーム優先は同日内のみ</strong>で、翌日は当日候補から再選定します。</p>
     <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順の 1 本ループ。<code>dispatch_trial_order</code> は<strong>複合キーの一部</strong>（最優先単独ではない）。</p>
-    <p><strong>納期シフト再試行</strong>: 対象依頼の再配台前に <code>task_queue</code> を再ソートし、§B-2/§B-3 の EC→後続を再隣接したうえで <code>_assign_sequential_dispatch_trial_order</code> により <code>dispatch_trial_order</code> を <strong>キュー順で 1..n に付け直す</strong>。</p>
+    <p><strong>納期シフト再試行</strong>: 対象依頼の再配台前に <code>_apply_dispatch_trial_order_for_generate_plan</code> で試行順を再確定（シート優先条件または自動ソート＋隣接＋連番）。</p>
     <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（グローバルソート直後の 1..n）が第一キーです。</p>
   </section>
 
@@ -176,6 +177,16 @@
     <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。同趣旨の要約はリポジトリ直下 <span class="file">.cursorrules</span> にもあります。</p>
     <p><strong>作業ディレクトリ</strong>: 環境変数 <code>TASK_INPUT_WORKBOOK</code> があるときはそのブックのフォルダへ <code>chdir</code> し、<code>log/</code>・<code>output/</code> を VBA のブック配置と揃える。未設定時は <code>python</code> の親フォルダ基準（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
     <p><strong>段階2の output</strong>: 実行前に <code>production_plan_multi_day_*.xlsx</code> と <code>member_schedule_*.xlsx</code> を削除しようとします。<strong>Excel で開いたまま</strong>だと削除・保存に失敗しうるので閉じてから実行。削除は短いリトライし、残ったファイルは ERROR ログに列挙。ファイル名の時刻はマイクロ秒まで含め衝突を避ける。設備ガント生成は重く、ログが止まって見えることがある（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
+    <p><strong>計画ブックに追加されるシート</strong>（<code>production_plan_multi_day_*.xlsx</code>）:</p>
+    <table>
+      <thead><tr><th>シート</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td><code>結果_設備毎の時間割</code></td><td>従来どおり。10分枠、need 余力追記<strong>後</strong>。</td></tr>
+        <tr><td><code>TEMP_設備毎の時間割</code></td><td>同形式、余力追記<strong>前</strong>（メイン割付のみ）。</td></tr>
+        <tr><td><code>ブロックテーブル</code></td><td>10分枠で設備（<code>設備:…</code>）と人（<code>人:…</code>）の占有依頼NO。計算は従来の <code>timeline_events</code> ベース、本シートは可視化。</td></tr>
+        <tr><td><code>結果_設備毎の時間割_機械名毎</code></td><td>機械名単位の列で依頼NOのみを表示（複数は「／」）。</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <section id="roll-unit-length" class="card" aria-labelledby="h-roll-unit">

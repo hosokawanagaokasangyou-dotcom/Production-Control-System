@@ -1152,6 +1152,12 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
+# 余力追記前のタイムラインを可視化（結果_設備毎の時間割と同じ 10 分枠・列構造）
+TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_設備毎の時間割"
+# 設備・人の占有（ブロック）を 10 分枠で一覧（調査・検証用）
+BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
+# 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
+RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
@@ -1199,7 +1205,7 @@ PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
 # 段階1再抽出時、既存「配台計画_タスク入力」から継承する列（AIの解析結果列は毎回空に戻す）
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
 # 上書き以外で、再抽出時に旧シートから引き継ぐ列（セルが空でないときのみ）
-PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
+PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
 # openpyxl 保存がブックロックで失敗したとき、VBA が開いているブックへ書式適用するための指示ファイル
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
 # 配台計画_タスク入力へ「グローバルコメント解析」を書く列（表の右端より外側。1行目から縦にラベル／値）
@@ -1220,6 +1226,7 @@ def plan_input_sheet_column_order():
     """
     配台計画_タスク入力の列順（段階1出力・段階2読込で共通）。
 
+    0. 配台試行順番（段階1で段階2と同趣旨に付与。段階2は全行に値があるときこの順を優先）
     1. 配台不要（参照列なし）
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール単位長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因子
@@ -1228,7 +1235,7 @@ def plan_input_sheet_column_order():
 
     global_speed_rules 等で変わる実効速度はシート列では持たず、配台内部のみで反映する。
     """
-    cols = [PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
+    cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
     for c in SOURCE_BASE_COLUMNS:
         cols.append(c)
         if c == TASK_COL_PRODUCT:
@@ -6328,7 +6335,7 @@ def build_task_queue_from_planning_df(
     # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
     planning_sheet_row_seq = 0
 
-    for _, row in tasks_df.iterrows():
+    for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
             continue
         if _plan_row_exclude_from_assignment(row):
@@ -6539,6 +6546,12 @@ def build_task_queue_from_planning_df(
             machine, _order_list
         )
 
+        _dto_from_sheet = None
+        if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER in tasks_df.columns:
+            _dto_from_sheet = parse_optional_int(
+                _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
+            )
+
         task_queue.append(
             {
                 "task_id": task_id,
@@ -6588,6 +6601,8 @@ def build_task_queue_from_planning_df(
                 ),
                 "process_content_mismatch": _process_content_mismatch,
                 "planning_sheet_row_seq": planning_sheet_row_seq,
+                "planning_df_iloc": planning_df_iloc,
+                "dispatch_trial_order_from_sheet": _dto_from_sheet,
             }
         )
         planning_sheet_row_seq += 1
@@ -6619,23 +6634,35 @@ def _task_id_priority_key(task_id):
 
 def _serial_dispatch_order_task_ids(task_queue) -> list:
     """
-    依頼NO直列配台の処理順。配台計画 DataFrame の読み込み行順（各依頼NOについて最も早い行の
-    planning_sheet_row_seq が小さいほど先）で完走させる。初回 task_queue.sort（納期・優先度）
-    の並びとは独立。
+    依頼NO直列配台の処理順。各依頼NOについて **配台試行順番の最小値** が小さい依頼を先に完走させる
+    （同一依頼内の複数行は最小幅の試行順で代表）。タイブレークは計画シート上の先行行
+    （planning_sheet_row_seq）と依頼NOキー。
     """
+    min_dto_by_tid: dict = {}
     first_seq_by_tid: dict = {}
     for t in task_queue:
         tid = str(t.get("task_id", "") or "").strip()
         if not tid:
             continue
+        try:
+            dto = int(t.get("dispatch_trial_order") or 10**9)
+        except (TypeError, ValueError):
+            dto = 10**9
+        prev_d = min_dto_by_tid.get(tid)
+        if prev_d is None or dto < prev_d:
+            min_dto_by_tid[tid] = dto
         seq = t.get("planning_sheet_row_seq")
         seq = int(seq) if seq is not None else 10**9
         prev = first_seq_by_tid.get(tid)
         if prev is None or seq < prev:
             first_seq_by_tid[tid] = seq
     return sorted(
-        first_seq_by_tid.keys(),
-        key=lambda tid: (first_seq_by_tid[tid], _task_id_priority_key(tid)),
+        min_dto_by_tid.keys(),
+        key=lambda tid: (
+            min_dto_by_tid[tid],
+            first_seq_by_tid.get(tid, 10**9),
+            _task_id_priority_key(tid),
+        ),
     )
 
 
@@ -8665,13 +8692,23 @@ def run_stage1_extract():
             PLAN_COL_EXCLUDE_FROM_ASSIGNMENT
         ].astype(object)
     try:
-        _, _, _, req_map, need_rules, _, _ = load_skills_and_needs()
+        (
+            _skills_d_stage1,
+            _members_stage1,
+            equipment_list_stage1,
+            req_map,
+            need_rules,
+            _surplus_map_stage1,
+            need_combo_col_index_stage1,
+        ) = load_skills_and_needs()
     except PlanningValidationError:
         logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
     except Exception as e:
         logging.info("段階1: マスタ need を読めず元列は need なしで埋めます (%s)", e)
         req_map, need_rules = {}, []
+        equipment_list_stage1 = []
+        need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
@@ -8682,6 +8719,19 @@ def run_stage1_extract():
         out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台不要適用で例外（続行）: %s", ex)
+    try:
+        _ext_dt_s1 = _extract_data_extraction_datetime()
+        _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
+        fill_plan_dispatch_trial_order_column_stage1(
+            out_df,
+            _run_d_s1,
+            req_map,
+            need_rules,
+            need_combo_col_index_stage1,
+            equipment_list_stage1,
+        )
+    except Exception as ex:
+        logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
@@ -11645,6 +11695,459 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
         t["dispatch_trial_order"] = i
 
 
+def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
+    """配台計画シートの「配台試行順番」がキュー全行に正の整数で入っているか。"""
+    if not task_queue:
+        return False
+    for t in task_queue:
+        v = t.get("dispatch_trial_order_from_sheet")
+        if v is None:
+            return False
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            return False
+        if iv < 1:
+            return False
+    return True
+
+
+def _apply_dispatch_trial_order_for_generate_plan(
+    task_queue: list,
+    req_map: dict,
+    need_rules: list,
+    need_combo_col_index: dict | None,
+) -> None:
+    """
+    配台試行順の確定。シートに全行分の試行順があればそれを採用（§B-2/3 の隣接繰り上げは行わない）。
+    欠損があれば従来どおりマスタ・納期・need 列順などでソートし、EC 隣接後に 1..n を付与。
+    """
+    if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
+        task_queue.sort(
+            key=lambda t: (
+                int(t.get("dispatch_trial_order_from_sheet") or 10**9),
+                int(t.get("planning_sheet_row_seq") or 10**9),
+            )
+        )
+        for t in task_queue:
+            t["dispatch_trial_order"] = int(t.get("dispatch_trial_order_from_sheet") or 10**9)
+        logging.info(
+            "配台試行順番: 「%s」列の値をそのまま使用しました（全 %s 行）。",
+            RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
+            len(task_queue),
+        )
+        return
+    task_queue.sort(
+        key=lambda x: _generate_plan_task_queue_sort_key(
+            x, req_map, need_rules, need_combo_col_index
+        )
+    )
+    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+    _assign_sequential_dispatch_trial_order(task_queue)
+    logging.info(
+        "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
+        len(task_queue),
+    )
+
+
+def fill_plan_dispatch_trial_order_column_stage1(
+    plan_df: "pd.DataFrame",
+    run_date: date,
+    req_map: dict,
+    need_rules: list,
+    need_combo_col_index: dict | None,
+    equipment_list: list,
+) -> None:
+    """
+    段階1出力 DataFrame の「配台試行順番」を、段階2 冒頭と同じ手順（ソート・§B-2/3 隣接・連番）で埋める。
+    配台対象外の行は空のまま。
+    """
+    if plan_df is None or getattr(plan_df, "empty", True):
+        return
+    if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER not in plan_df.columns:
+        return
+    col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(MASTER_FILE) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
+    gpo = analyze_global_priority_override_comment(
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+    )
+    tq = build_task_queue_from_planning_df(
+        plan_df,
+        run_date,
+        req_map,
+        None,
+        gpo,
+        equipment_list,
+    )
+    _apply_dispatch_trial_order_for_generate_plan(
+        tq, req_map, need_rules, need_combo_col_index
+    )
+    try:
+        col_idx = plan_df.columns.get_loc(col)
+    except Exception:
+        return
+    for t in tq:
+        iloc = t.get("planning_df_iloc")
+        if iloc is None:
+            continue
+        if not isinstance(iloc, int) or iloc < 0 or iloc >= len(plan_df):
+            continue
+        dto = t.get("dispatch_trial_order")
+        if dto is None:
+            continue
+        try:
+            plan_df.iat[iloc, col_idx] = str(int(dto))
+        except (TypeError, ValueError):
+            plan_df.iat[iloc, col_idx] = str(dto)
+
+
+def _build_equipment_schedule_dataframe(
+    sorted_dates: list,
+    equipment_list: list,
+    attendance_data: dict,
+    timeline_events: list,
+    *,
+    first_eq_schedule_cell_by_task_id: dict | None = None,
+) -> "pd.DataFrame":
+    """
+    結果_設備毎の時間割と同形式の DataFrame（10 分枠・設備列＋進度列）。
+    first_eq_schedule_cell_by_task_id を渡したときのみ、初出セル座標を記録（結果ハイパーリンク用）。
+    """
+    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
+    events_by_date = defaultdict(list)
+    for e in timeline_for_eq_grid:
+        events_by_date[e["date"]].append(e)
+
+    all_eq_rows = []
+    eq_empty_cols = {}
+    for eq in equipment_list:
+        eq_empty_cols[eq] = ""
+        eq_empty_cols[f"{eq}進度"] = ""
+
+    for d in sorted_dates:
+        d_start = datetime.combine(d, DEFAULT_START_TIME)
+        d_end = datetime.combine(d, DEFAULT_END_TIME)
+        events_today = events_by_date[d]
+        machine_to_events = defaultdict(list)
+        for ev in events_today:
+            machine_to_events[ev["machine"]].append(ev)
+        for _eq_k, _evs in machine_to_events.items():
+            _evs.sort(
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+            )
+
+        is_anyone_working = any(
+            daily_status["is_working"] for daily_status in attendance_data[d].values()
+        )
+        if not events_today and not is_anyone_working:
+            continue
+
+        all_eq_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **eq_empty_cols})
+
+        curr_grid = d_start
+        while curr_grid < d_end:
+            next_grid = curr_grid + timedelta(minutes=10)
+            if next_grid > d_end:
+                next_grid = d_end
+
+            mid_t = curr_grid + (next_grid - curr_grid) / 2
+            row_data = {
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+            }
+
+            for eq in equipment_list:
+                eq_text = ""
+                progress_text = ""
+                active_ev = None
+                for ev in machine_to_events.get(eq, ()):
+                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
+                        active_ev = ev
+                        break
+
+                if active_ev:
+                    if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                        eq_text = "休憩"
+                    else:
+                        elapsed = get_actual_work_minutes(
+                            active_ev["start_dt"],
+                            min(next_grid, active_ev["end_dt"]),
+                            active_ev["breaks"],
+                        )
+                        block_done_now = min(
+                            int(elapsed / active_ev["eff_time_per_unit"]),
+                            active_ev["units_done"],
+                        )
+
+                        cumulative_done = active_ev["already_done_units"] + block_done_now
+                        total_u = active_ev["total_units"]
+
+                        sub_text = f" 補:{active_ev['sub']}" if active_ev["sub"] else ""
+                        eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
+                        progress_text = f"{cumulative_done}/{total_u}R"
+                        _tid_sched = str(active_ev.get("task_id") or "").strip()
+                        if (
+                            first_eq_schedule_cell_by_task_id is not None
+                            and _tid_sched
+                            and _tid_sched not in first_eq_schedule_cell_by_task_id
+                        ):
+                            _row_ex = len(all_eq_rows) + 2
+                            _ci = 2 + 2 * equipment_list.index(eq)
+                            first_eq_schedule_cell_by_task_id[_tid_sched] = (
+                                f"{get_column_letter(_ci)}{_row_ex}"
+                            )
+
+                row_data[eq] = eq_text
+                row_data[f"{eq}進度"] = progress_text
+
+            all_eq_rows.append(row_data)
+            curr_grid = next_grid
+        all_eq_rows.append({"日時帯": "", **eq_empty_cols})
+
+    df_eq = pd.DataFrame(all_eq_rows)
+    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
+    _eq_rename = {}
+    for _eq, _lab in zip(equipment_list, _eq_hdr):
+        if _eq in df_eq.columns:
+            _eq_rename[_eq] = _lab
+        _pqc = f"{_eq}進度"
+        if _pqc in df_eq.columns:
+            _eq_rename[_pqc] = f"{_lab}進度"
+    if _eq_rename:
+        df_eq = df_eq.rename(columns=_eq_rename)
+    return df_eq
+
+
+def _machine_display_key_for_equipment(eq: str) -> str:
+    """skills 列キー「工程+機械」から機械名表示キーを得る（重複時は複合キーごとに別列）。"""
+    s = str(eq).strip()
+    if "+" in s:
+        mpart = s.split("+", 1)[1].strip()
+        return mpart if mpart else s
+    return s
+
+
+def _build_equipment_schedule_by_machine_name_dataframe(
+    sorted_dates: list,
+    equipment_list: list,
+    attendance_data: dict,
+    timeline_events: list,
+) -> "pd.DataFrame":
+    """
+    機械名単位に列をまとめ、各 10 分枠で占有中の依頼NO（複数時は「／」）を表示する。
+    """
+    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
+    events_by_date = defaultdict(list)
+    for e in timeline_for_eq_grid:
+        events_by_date[e["date"]].append(e)
+
+    machine_cols: list[str] = []
+    seen_m: set[str] = set()
+    eq_to_mcol: dict[str, str] = {}
+    for eq in equipment_list:
+        base_m = _machine_display_key_for_equipment(eq)
+        if base_m in seen_m:
+            mcol = f"{base_m}（{eq}）"
+        else:
+            mcol = base_m
+            seen_m.add(base_m)
+        eq_to_mcol[eq] = mcol
+        if mcol not in machine_cols:
+            machine_cols.append(mcol)
+
+    empty_tail = {mcol: "" for mcol in machine_cols}
+    all_rows = []
+
+    for d in sorted_dates:
+        d_start = datetime.combine(d, DEFAULT_START_TIME)
+        d_end = datetime.combine(d, DEFAULT_END_TIME)
+        events_today = events_by_date[d]
+        machine_to_events = defaultdict(list)
+        for ev in events_today:
+            machine_to_events[ev["machine"]].append(ev)
+        for _eq_k, _evs in machine_to_events.items():
+            _evs.sort(
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+            )
+
+        is_anyone_working = any(
+            daily_status["is_working"] for daily_status in attendance_data[d].values()
+        )
+        if not events_today and not is_anyone_working:
+            continue
+
+        all_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **empty_tail})
+
+        curr_grid = d_start
+        while curr_grid < d_end:
+            next_grid = curr_grid + timedelta(minutes=10)
+            if next_grid > d_end:
+                next_grid = d_end
+            mid_t = curr_grid + (next_grid - curr_grid) / 2
+            row_data = {
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+            }
+            for mcol in machine_cols:
+                row_data[mcol] = ""
+            tids_by_mcol: dict[str, set[str]] = defaultdict(set)
+            for eq, evs in machine_to_events.items():
+                mcol = eq_to_mcol.get(eq)
+                if not mcol:
+                    continue
+                active_ev = None
+                for ev in evs:
+                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
+                        active_ev = ev
+                        break
+                if not active_ev:
+                    continue
+                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                    tids_by_mcol[mcol].add("（休憩）")
+                else:
+                    tid = str(active_ev.get("task_id") or "").strip()
+                    if tid:
+                        tids_by_mcol[mcol].add(tid)
+            for mcol in machine_cols:
+                parts = sorted(tids_by_mcol.get(mcol, ()))
+                row_data[mcol] = "／".join(parts) if parts else ""
+            all_rows.append(row_data)
+            curr_grid = next_grid
+        all_rows.append({"日時帯": "", **empty_tail})
+
+    return pd.DataFrame(all_rows)
+
+
+def _build_block_table_dataframe(
+    sorted_dates: list,
+    equipment_list: list,
+    members: list,
+    attendance_data: dict,
+    timeline_events: list,
+) -> "pd.DataFrame":
+    """
+    設備列（占有中の依頼NO）＋メンバー列（同）を 10 分枠で並べたブロック可視化用シート。
+    """
+    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
+    events_by_date = defaultdict(list)
+    for e in timeline_for_eq_grid:
+        events_by_date[e["date"]].append(e)
+
+    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
+    eq_disp_to_key: dict[str, str] = {}
+    for eq, lab in zip(equipment_list, _eq_hdr):
+        eq_disp_to_key[f"設備:{lab}"] = eq
+
+    mem_cols = [f"人:{m}" for m in members]
+    eq_cols = [f"設備:{lab}" for lab in _eq_hdr]
+    all_cols = ["日時帯"] + eq_cols + mem_cols
+    rows_out = []
+
+    for d in sorted_dates:
+        d_start = datetime.combine(d, DEFAULT_START_TIME)
+        d_end = datetime.combine(d, DEFAULT_END_TIME)
+        events_today = events_by_date[d]
+        machine_to_events = defaultdict(list)
+        for ev in events_today:
+            machine_to_events[ev["machine"]].append(ev)
+        for _evs in machine_to_events.values():
+            _evs.sort(
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+            )
+
+        is_anyone_working = any(
+            daily_status["is_working"] for daily_status in attendance_data[d].values()
+        )
+        if not events_today and not is_anyone_working:
+            continue
+
+        banner = {"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■"}
+        banner.update({c: "" for c in all_cols if c != "日時帯"})
+        rows_out.append(banner)
+
+        curr_grid = d_start
+        while curr_grid < d_end:
+            next_grid = curr_grid + timedelta(minutes=10)
+            if next_grid > d_end:
+                next_grid = d_end
+            mid_t = curr_grid + (next_grid - curr_grid) / 2
+            row_data: dict = {
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+            }
+            for c in eq_cols + mem_cols:
+                row_data[c] = ""
+
+            for col_eq, lab in zip(eq_cols, _eq_hdr):
+                eq_key = eq_disp_to_key.get(col_eq)
+                if not eq_key:
+                    continue
+                active_ev = None
+                for ev in machine_to_events.get(eq_key, ()):
+                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
+                        active_ev = ev
+                        break
+                if not active_ev:
+                    continue
+                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                    row_data[col_eq] = "休憩"
+                else:
+                    tid = str(active_ev.get("task_id") or "").strip()
+                    row_data[col_eq] = tid if tid else "占有"
+
+            busy_member_task: dict[str, set[str]] = defaultdict(set)
+            for ev in events_today:
+                st = ev.get("start_dt")
+                ed = ev.get("end_dt")
+                if not isinstance(st, datetime) or not isinstance(ed, datetime):
+                    continue
+                if not (st <= mid_t < ed):
+                    continue
+                tid = str(ev.get("task_id") or "").strip()
+                op = str(ev.get("op") or "").strip()
+                if op:
+                    if any(
+                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
+                    ):
+                        busy_member_task[op].add("休憩" if tid else "休憩")
+                    elif tid:
+                        busy_member_task[op].add(tid)
+                for s in str(ev.get("sub") or "").split(","):
+                    s = s.strip()
+                    if not s:
+                        continue
+                    if any(
+                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
+                    ):
+                        busy_member_task[s].add("休憩")
+                    elif tid:
+                        busy_member_task[s].add(tid)
+
+            for m in members:
+                col_m = f"人:{m}"
+                parts = sorted(busy_member_task.get(m, ()))
+                row_data[col_m] = "／".join(parts) if parts else ""
+
+            rows_out.append(row_data)
+            curr_grid = next_grid
+
+        tail = {"日時帯": ""}
+        tail.update({c: "" for c in all_cols if c != "日時帯"})
+        rows_out.append(tail)
+
+    return pd.DataFrame(rows_out, columns=all_cols)
+
+
 def _day_schedule_task_sort_key(
     task: dict,
     _task_queue: list | None = None,
@@ -13794,15 +14297,10 @@ def _generate_plan_impl():
             "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
         )
 
-    # §B-1（加工途中の熱融着検査＋試行順）→ §B-2（同パイプライン・未着手）→ その他加工途中 → 一般キー
-    task_queue.sort(
-        key=lambda x: _generate_plan_task_queue_sort_key(
-            x, req_map, need_rules, need_combo_col_index
-        )
+    # 配台試行順: シート列が揃っていればそれを採用。欠損時は §B 帯・納期・need 列順でソートし EC 隣接後に 1..n
+    _apply_dispatch_trial_order_for_generate_plan(
+        task_queue, req_map, need_rules, need_combo_col_index
     )
-    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
-    # 配台試行順: 日次ループ前・ソート済みキューの並び（初回割当の成否とは無関係）
-    _assign_sequential_dispatch_trial_order(task_queue)
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
         if dbg_items:
@@ -14958,13 +15456,12 @@ def _generate_plan_impl():
                                         t.get("initial_remaining_units") or 0
                                     )
                                     t["assigned_history"].clear()
-                            task_queue.sort(
-                                key=lambda x: _generate_plan_task_queue_sort_key(
-                                    x, req_map, need_rules, need_combo_col_index
-                                )
+                            _apply_dispatch_trial_order_for_generate_plan(
+                                task_queue,
+                                req_map,
+                                need_rules,
+                                need_combo_col_index,
                             )
-                            _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
-                            _assign_sequential_dispatch_trial_order(task_queue)
                             _trials_detail = ",".join(
                                 f"{tid}:{_due_shift_retry_count_by_request[tid]}"
                                 for tid in sorted(allowed_shift_tids)
@@ -15068,6 +15565,9 @@ def _generate_plan_impl():
                     _ev.get("end_dt"),
                 )
 
+    # メイン割付までのタイムライン（need 余力追記前）。TEMP_設備毎の時間割用。
+    timeline_before_need_surplus = copy.deepcopy(timeline_events)
+
     # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
     if (
         not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
@@ -15095,10 +15595,6 @@ def _generate_plan_impl():
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
-    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
-    events_by_date = defaultdict(list)
-    for e in timeline_for_eq_grid:
-        events_by_date[e["date"]].append(e)
 
     # =========================================================
     # 4. Excel出力 (メイン計画)
@@ -15109,86 +15605,35 @@ def _generate_plan_impl():
     output_filename = os.path.join(
         output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
-    all_eq_rows = []
     # タスクID → 結果_設備毎の時間割で当該タスクが最初に現れるセル（例 B12）。結果_タスク一覧のリンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
-
-    eq_empty_cols = {}
-    for eq in equipment_list:
-        eq_empty_cols[eq] = ""
-        eq_empty_cols[f"{eq}進度"] = ""
-    
-    for d in sorted_dates:
-        d_start = datetime.combine(d, DEFAULT_START_TIME)
-        d_end = datetime.combine(d, DEFAULT_END_TIME)
-        events_today = events_by_date[d]
-        machine_to_events = defaultdict(list)
-        for ev in events_today:
-            machine_to_events[ev["machine"]].append(ev)
-        for _eq_k, _evs in machine_to_events.items():
-            _evs.sort(key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")))
-
-        is_anyone_working = any(daily_status['is_working'] for daily_status in attendance_data[d].values())
-        if not events_today and not is_anyone_working: continue
-        
-        all_eq_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **eq_empty_cols})
-        
-        curr_grid = d_start
-        while curr_grid < d_end:
-            next_grid = curr_grid + timedelta(minutes=10)
-            if next_grid > d_end: next_grid = d_end
-            
-            mid_t = curr_grid + (next_grid - curr_grid) / 2
-            row_data = {"日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"}
-            
-            for eq in equipment_list:
-                eq_text = ""
-                progress_text = ""
-                active_ev = None
-                for ev in machine_to_events.get(eq, ()):
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
-                
-                if active_ev:
-                    if any(b_s <= mid_t < b_e for b_s, b_e in active_ev['breaks']):
-                        eq_text = "休憩"
-                    else:
-                        elapsed = get_actual_work_minutes(active_ev['start_dt'], min(next_grid, active_ev['end_dt']), active_ev['breaks'])
-                        block_done_now = min(int(elapsed / active_ev['eff_time_per_unit']), active_ev['units_done'])
-                        
-                        cumulative_done = active_ev['already_done_units'] + block_done_now
-                        total_u = active_ev['total_units']
-                        
-                        sub_text = f" 補:{active_ev['sub']}" if active_ev['sub'] else ""
-                        eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
-                        progress_text = f"{cumulative_done}/{total_u}R"
-                        _tid_sched = str(active_ev.get("task_id") or "").strip()
-                        if _tid_sched and _tid_sched not in first_eq_schedule_cell_by_task_id:
-                            _row_ex = len(all_eq_rows) + 2
-                            _ci = 2 + 2 * equipment_list.index(eq)
-                            first_eq_schedule_cell_by_task_id[_tid_sched] = (
-                                f"{get_column_letter(_ci)}{_row_ex}"
-                            )
-
-                row_data[eq] = eq_text
-                row_data[f"{eq}進度"] = progress_text
-            
-            all_eq_rows.append(row_data)
-            curr_grid = next_grid
-        all_eq_rows.append({"日時帯": "", **eq_empty_cols})
-        
-    df_eq_schedule = pd.DataFrame(all_eq_rows)
-    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
-    _eq_rename = {}
-    for _eq, _lab in zip(equipment_list, _eq_hdr):
-        if _eq in df_eq_schedule.columns:
-            _eq_rename[_eq] = _lab
-        _pqc = f"{_eq}進度"
-        if _pqc in df_eq_schedule.columns:
-            _eq_rename[_pqc] = f"{_lab}進度"
-    if _eq_rename:
-        df_eq_schedule = df_eq_schedule.rename(columns=_eq_rename)
+    df_eq_schedule = _build_equipment_schedule_dataframe(
+        sorted_dates,
+        equipment_list,
+        attendance_data,
+        timeline_events,
+        first_eq_schedule_cell_by_task_id=first_eq_schedule_cell_by_task_id,
+    )
+    df_temp_equipment_schedule = _build_equipment_schedule_dataframe(
+        sorted_dates,
+        equipment_list,
+        attendance_data,
+        timeline_before_need_surplus,
+        first_eq_schedule_cell_by_task_id=None,
+    )
+    df_block_table = _build_block_table_dataframe(
+        sorted_dates,
+        equipment_list,
+        members,
+        attendance_data,
+        timeline_events,
+    )
+    df_equipment_by_machine_name = _build_equipment_schedule_by_machine_name_dataframe(
+        sorted_dates,
+        equipment_list,
+        attendance_data,
+        timeline_events,
+    )
 
     # 結果_タスク一覧用: シミュレーション上の当該タスクの最早開始・最遅終了（timeline_events 集約）
     plan_window_by_task_id: dict = {}
@@ -15461,6 +15906,13 @@ def _generate_plan_impl():
             df_eq_schedule.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
             )
+            df_temp_equipment_schedule.to_excel(
+                writer, sheet_name=TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
+            )
+            df_block_table.to_excel(writer, sheet_name=BLOCK_TABLE_SHEET_NAME, index=False)
+            df_equipment_by_machine_name.to_excel(
+                writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
+            )
             pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
             df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割合', index=False)
             df_tasks = pd.DataFrame(task_results)
@@ -15511,16 +15963,17 @@ def _generate_plan_impl():
                     continue
                 _apply_output_font_to_result_sheet(ws_out)
 
-            if (
-                _reg_shift_start is not None
-                and _reg_shift_end is not None
-                and RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets
-            ):
-                _apply_equipment_schedule_outside_regular_fill(
-                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME],
-                    _reg_shift_start,
-                    _reg_shift_end,
-                )
+            if _reg_shift_start is not None and _reg_shift_end is not None:
+                for _eq_sched_sheet in (
+                    RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
+                    TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
+                ):
+                    if _eq_sched_sheet in writer.sheets:
+                        _apply_equipment_schedule_outside_regular_fill(
+                            writer.sheets[_eq_sched_sheet],
+                            _reg_shift_start,
+                            _reg_shift_end,
+                        )
 
             ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
             _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))
