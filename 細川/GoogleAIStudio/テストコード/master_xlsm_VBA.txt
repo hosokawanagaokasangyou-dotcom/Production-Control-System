@@ -8,6 +8,7 @@
 Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 
 ' メンバー別出勤簿（WriteMemberAttendanceSheet）: 1 行目見出し・データは A 列「日付」～ K 列
+' （再生成時は Clear 前に A2（無ければ A1）のフォント名・サイズを退避し、罫線・見出し整形の後に復元）
 Private Const MEMBER_ATT_HEADER_A1 As String = "日付"
 Private Const MEMBER_ATT_FIRST_DATA_ROW As Long = 2
 Private Const MEMBER_ATT_LAST_INPUT_COL As Long = 11   ' K（備考・残業終業まで）
@@ -693,6 +694,15 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     Dim preservedOtEnd As Object
     Dim dk As String
     Dim noteOut As Variant
+    ' ws.Cells.Clear で書式も消えるため、再生成前のフォント（名・サイズ）を退避する
+    Dim preserveFontName As String
+    Dim preserveFontSize As Variant
+    Dim samp As Range
+    Dim lr0 As Long
+    Dim fontApply As Range
+    
+    preserveFontName = ""
+    preserveFontSize = Empty
     
     Set wb = ThisWorkbook
     Set preservedNotes = CreateObject("Scripting.Dictionary")
@@ -704,7 +714,25 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     
     If Not ws Is Nothing Then
         Call PreserveMemberAttendanceHandColumns(ws, preservedNotes, preservedOtEnd)
-    Else
+        On Error Resume Next
+        lr0 = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lr0 >= 2 Then
+            Set samp = ws.Cells(2, 1)
+        ElseIf lr0 >= 1 Then
+            Set samp = ws.Cells(1, 1)
+        Else
+            Set samp = Nothing
+        End If
+        If Not samp Is Nothing Then
+            preserveFontName = Trim$(CStr(samp.Font.Name))
+            If Len(preserveFontName) = 0 Then preserveFontName = Trim$(CStr(samp.Font.NameFarEast))
+            preserveFontSize = samp.Font.Size
+        End If
+        Err.Clear
+        On Error GoTo 0
+    End If
+    
+    If ws Is Nothing Then
         Set ws = wb.Worksheets.Add(After:=wb.Sheets(wb.Sheets.Count))
         ws.Name = memberName
     End If
@@ -757,6 +785,25 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     ws.Columns("A:K").AutoFit
     
     Call FormatMemberAttendanceSheetLayout(ws, r - 1)
+    
+    ' Clear 後は既定フォントに戻るため、再生成前に退避したフォントを A1:K の表範囲へ戻す
+    If Len(preserveFontName) > 0 And (r - 1) >= 1 Then
+        On Error Resume Next
+        Set fontApply = ws.Range("A1:K" & CStr(r - 1))
+        If AssignFontNameToRange(fontApply, preserveFontName) Then
+            If Not IsEmpty(preserveFontSize) Then
+                If IsNumeric(preserveFontSize) Then
+                    If CDbl(preserveFontSize) > 0# Then fontApply.Font.Size = CDbl(preserveFontSize)
+                End If
+            End If
+        End If
+        With ws.Range("A1:K1")
+            .Font.Bold = True
+            .Font.Color = RGB(0, 0, 0)
+        End With
+        Err.Clear
+        On Error GoTo 0
+    End If
 End Sub
 
 ' =========================================================
