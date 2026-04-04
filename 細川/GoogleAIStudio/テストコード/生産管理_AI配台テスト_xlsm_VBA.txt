@@ -104,6 +104,8 @@ Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
+' デバッグ用 NDJSON（ThisWorkbook.Path 直下）。識別子は AGENT_DBG_LOG（アンダースコア必須）
+Private Const AGENT_DBG_LOG As String = "debug-0061e8.log"
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
 Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
@@ -187,6 +189,24 @@ Private m_splashReadErrShown As Boolean
 Private m_splashLastLogSnapshot As String
 ' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
 Private m_splashConsoleOverlayActive As Boolean
+
+' #region agent log
+Private Sub AgentDbgWrite(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal data1 As String, ByVal data2 As String)
+    On Error Resume Next
+    Dim f As Integer
+    Dim p As String
+    Dim esc1 As String
+    Dim esc2 As String
+    p = ThisWorkbook.Path & "\" & AGENT_DBG_LOG
+    esc1 = Replace(Replace(data1, "\", "\\"), """", "\""")
+    esc2 = Replace(Replace(data2, "\", "\\"), """", "\""")
+    f = FreeFile
+    Open p For Append As #f
+    Print #f, "{""sessionId"":""0061e8"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""d1"":""" & esc1 & """,""d2"":""" & esc2 & """},""timestamp"":" & CLng(Timer * 1000) Mod 2000000000 & "}"
+    Close #f
+    On Error GoTo 0
+End Sub
+' #endregion
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -1898,26 +1918,6 @@ Private Sub メインシート_結果シートリンクを更新(ByVal wsMain As
         r = r + 1
     Next i
 End Sub
-
-' #region agent log
-Private Const AGENT_DBG_LOG As String = "debug-0061e8.log"
-
-Private Sub AgentDbgWrite(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal data1 As String, ByVal data2 As String)
-    On Error Resume Next
-    Dim f As Integer
-    Dim p As String
-    Dim esc1 As String
-    Dim esc2 As String
-    p = ThisWorkbook.Path & "\" & AGENT_DBG_LOG
-    esc1 = Replace(Replace(data1, "\", "\\"), """", "\""")
-    esc2 = Replace(Replace(data2, "\", "\\"), """", "\""")
-    f = FreeFile
-    Open p For Append As #f
-    Print #f, "{""sessionId"":""0061e8"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""d1"":""" & esc1 & """,""d2"":""" & esc2 & """},""timestamp"":" & CLng(Timer * 1000) Mod 2000000000 & "}"
-    Close #f
-    On Error GoTo 0
-End Sub
-' #endregion
 
 ' 結果_*（設備ガント以外）・個人_*: 実験コードと同じ手順で列オートフィット
 ' ・呼び出し元が ScreenUpdating=False のとき、Select 前に True に戻さないと AutoFit が効かないことがある
