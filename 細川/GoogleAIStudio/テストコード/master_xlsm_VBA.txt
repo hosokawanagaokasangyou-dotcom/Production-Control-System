@@ -771,7 +771,12 @@ Private Sub SafeNumberFormatLocal2841(ByVal tgt As Range, ByVal fmtLocal As Stri
     Dim e As Long
     Err.Clear
     On Error Resume Next
-    tgt.NumberFormatLocal = fmtLocal
+    ' 日本語環境では NumberFormatLocal = "General" が 1004 になることがあるため、標準表示は NumberFormat を使う
+    If StrComp(Trim$(fmtLocal), "General", vbTextCompare) = 0 Then
+        tgt.NumberFormat = "General"
+    Else
+        tgt.NumberFormatLocal = fmtLocal
+    End If
     e = Err.Number
     Call AgentDbg2841(hypothesisId, loc, fmtLocal, e)
     On Error GoTo 0
