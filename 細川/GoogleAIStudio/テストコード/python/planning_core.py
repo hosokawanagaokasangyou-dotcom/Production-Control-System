@@ -1103,6 +1103,8 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
+# master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
+RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
@@ -1607,7 +1609,64 @@ def _paint_gantt_timeline_row_merged(
             c.fill = PatternFill(fill_type="solid", start_color=gh, end_color=gh)
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
-        i = j
+            i = j
+
+
+def _time_intervals_overlap_half_open(
+    a_start: time, a_end: time, b_start: time, b_end: time
+) -> bool:
+    """半開区間 [a_start, a_end) と [b_start, b_end) が重なるか（同一日内）。"""
+
+    def _sec(t: time) -> int:
+        return t.hour * 3600 + t.minute * 60 + t.second
+
+    return _sec(a_start) < _sec(b_end) and _sec(a_end) > _sec(b_start)
+
+
+def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | None]:
+    """結果_設備毎の時間割「日時帯」セル（例 08:45-09:00）を解釈。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None, None
+    s = str(val).strip()
+    if not s or "■" in s:
+        return None, None
+    for sep in ("-", "－", "~", "〜"):
+        if sep in s:
+            left, right = s.split(sep, 1)
+            left = left.strip().replace("：", ":")
+            right = right.strip().replace("：", ":")
+            t0 = parse_time_str(left, None)
+            t1 = parse_time_str(right, None)
+            if t0 is not None and t1 is not None and t0 < t1:
+                return t0, t1
+            return None, None
+    return None, None
+
+
+def _apply_equipment_schedule_outside_regular_fill(
+    ws, reg_start: time, reg_end: time
+) -> None:
+    """「日時帯」列で定常 [reg_start, reg_end) と重ならない行のセルに着色。"""
+    fill = PatternFill(
+        fill_type="solid",
+        start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
+        end_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
+    )
+    col_idx = None
+    for i, c in enumerate(ws[1], start=1):
+        if c.value is not None and str(c.value).strip() == "日時帯":
+            col_idx = i
+            break
+    if col_idx is None:
+        return
+    mr = ws.max_row or 1
+    for r in range(2, mr + 1):
+        cell = ws.cell(row=r, column=col_idx)
+        t0, t1 = _parse_equipment_schedule_time_band_cell(cell.value)
+        if t0 is None or t1 is None:
+            continue
+        if not _time_intervals_overlap_half_open(t0, t1, reg_start, reg_end):
+            cell.fill = fill
 
 
 def _write_results_equipment_gantt_sheet(
@@ -1619,6 +1678,7 @@ def _write_results_equipment_gantt_sheet(
     data_extract_dt_str,
     base_now_dt=None,
     actual_timeline_events=None,
+    regular_shift_times: tuple[time | None, time | None] | None = None,
 ):
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
@@ -1678,6 +1738,12 @@ def _write_results_equipment_gantt_sheet(
     break_fill = PatternFill(fill_type="solid", start_color="B8B8B8", end_color="B8B8B8")
     gantt_label_font = _result_font(size=8, bold=True, color="000000")
     gantt_label_font_actual = _result_font(size=8, bold=True, color="000000", italic=True)
+    hdr_fill_outside_regular = PatternFill(
+        fill_type="solid",
+        start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
+        end_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
+    )
+    rs, re_ = (regular_shift_times or (None, None))
 
     # 横軸(10分刻み)は日付で共通のため、slot_times を先に確定
     base_dt = base_now_dt if isinstance(base_now_dt, datetime) else datetime.now()
@@ -1777,7 +1843,14 @@ def _write_results_equipment_gantt_sheet(
         for si, st in enumerate(slots):
             c = ws.cell(row=row, column=n_fixed + 1 + si, value=st.strftime("%H:%M"))
             c.font = hdr_time_font
-            c.fill = hdr_fill
+            slot_end_t = (st + timedelta(minutes=slot_mins)).time()
+            hdr_use = hdr_fill
+            if rs is not None and re_ is not None:
+                if not _time_intervals_overlap_half_open(
+                    st.time(), slot_end_t, rs, re_
+                ):
+                    hdr_use = hdr_fill_outside_regular
+            c.fill = hdr_use
             c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
         ws.row_dimensions[row].height = 38
         row += 1
@@ -10199,6 +10272,56 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
             pass
 
 
+def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None, time | None]:
+    """
+    master.xlsm のメインシート A15（定常開始）・B15（定常終了）を読む。
+    いずれか欠損・不正・開始>=終了のときは (None, None)。
+    """
+    p = (master_path or "").strip()
+    if not p or not os.path.isfile(p):
+        return None, None
+    if _workbook_should_skip_openpyxl_io(p):
+        return None, None
+    try:
+        wb = load_workbook(p, data_only=True, read_only=False)
+    except Exception as e:
+        logging.warning(
+            "定常時刻: master を openpyxl で開けませんでした（結果シートの定常外着色をスキップ）: %s",
+            e,
+        )
+        return None, None
+    try:
+        ws = None
+        for name in ("メイン", "Main"):
+            if name in wb.sheetnames:
+                ws = wb[name]
+                break
+        if ws is None:
+            for sn in wb.sheetnames:
+                if "メイン" in sn:
+                    ws = wb[sn]
+                    break
+        if ws is None:
+            return None, None
+        st = _excel_scalar_to_time_optional(ws.cell(row=15, column=1).value)
+        et = _excel_scalar_to_time_optional(ws.cell(row=15, column=2).value)
+        if st is None or et is None:
+            return None, None
+        if st >= et:
+            logging.warning(
+                "定常時刻: master メイン A15/B15 が開始>=終了 (%s >= %s) のため着色・比較に使いません。",
+                st,
+                et,
+            )
+            return None, None
+        return st, et
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+
 @contextmanager
 def _override_default_factory_hours_from_master(master_path: str):
     """段階2の間だけ DEFAULT_START_TIME / DEFAULT_END_TIME を master メイン A12/B12 で上書き。"""
@@ -15230,6 +15353,17 @@ def _generate_plan_impl():
     if _usage_txt:
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
 
+    _master_abs_for_result_fmt = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
+        _master_abs_for_result_fmt
+    )
+    if _reg_shift_start is not None and _reg_shift_end is not None:
+        logging.info(
+            "定常枠: master メイン A15/B15 → %s ～ %s（結果の定常外「日時帯」着色）",
+            _reg_shift_start.strftime("%H:%M"),
+            _reg_shift_end.strftime("%H:%M"),
+        )
+
     with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
         df_eq_schedule.to_excel(
             writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
@@ -15273,12 +15407,24 @@ def _generate_plan_impl():
             attendance_data,
             data_extract_dt_str,
             base_now_dt,
+            regular_shift_times=(_reg_shift_start, _reg_shift_end),
         )
 
         for sheet_name, ws_out in writer.sheets.items():
             if sheet_name == RESULT_SHEET_GANTT_NAME:
                 continue
             _apply_output_font_to_result_sheet(ws_out)
+
+        if (
+            _reg_shift_start is not None
+            and _reg_shift_end is not None
+            and RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets
+        ):
+            _apply_equipment_schedule_outside_regular_fill(
+                writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME],
+                _reg_shift_start,
+                _reg_shift_end,
+            )
 
         ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
         _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))

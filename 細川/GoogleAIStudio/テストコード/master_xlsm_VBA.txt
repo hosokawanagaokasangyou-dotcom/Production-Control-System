@@ -92,6 +92,52 @@ Fail:
     MasterMainTimeCellToHour = -1
 End Function
 
+' メインの時刻セルを Date（時分）として解釈。解釈不能は False（時刻のみ Double 対応）。
+Private Function MasterMainCellToTimeDate(ByVal v As Variant, ByRef outT As Date) As Boolean
+    On Error GoTo Fail
+    If IsEmpty(v) Or VarType(v) = vbError Then GoTo Fail
+    
+    Select Case VarType(v)
+    Case vbDate
+        outT = CDate(v)
+        MasterMainCellToTimeDate = True
+        Exit Function
+    Case vbDouble, vbSingle, vbCurrency, vbLong, vbInteger
+        outT = CDate(CDbl(v))
+        MasterMainCellToTimeDate = True
+        Exit Function
+    Case vbString
+        If Len(Trim$(v)) = 0 Then GoTo Fail
+        outT = CDate(Trim$(v))
+        MasterMainCellToTimeDate = True
+        Exit Function
+    Case Else
+        If IsDate(v) Then
+            outT = CDate(v)
+            MasterMainCellToTimeDate = True
+            Exit Function
+        End If
+    End Select
+Fail:
+    MasterMainCellToTimeDate = False
+End Function
+
+' メイン A15・B15 = 定常開始・終了（カレンダー→出勤簿の「通常」出勤/退勤・定常外は機械カレンダーで A/B 列を着色）。空・不正時は False。
+Private Function MasterMainReadRegularShiftTimes(ByVal wb As Workbook, ByRef tRegStart As Date, ByRef tRegEnd As Date) As Boolean
+    Dim ws As Worksheet
+    Dim vS As Variant, vE As Variant
+    
+    MasterMainReadRegularShiftTimes = False
+    Set ws = MasterGetMainWorksheet(wb)
+    If ws Is Nothing Then Exit Function
+    vS = ws.Range("A15").Value
+    vE = ws.Range("B15").Value
+    If Not MasterMainCellToTimeDate(vS, tRegStart) Then Exit Function
+    If Not MasterMainCellToTimeDate(vE, tRegEnd) Then Exit Function
+    If TimeValue(tRegStart) >= TimeValue(tRegEnd) Then Exit Function
+    MasterMainReadRegularShiftTimes = True
+End Function
+
 ' メイン A12・B12 からスロットの開始・終了「時」（毎正時）を取得。空・不正時は 6～22。
 Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As Long, ByRef hLast As Long, ByRef slotsPer As Long)
     Dim ws As Worksheet
@@ -126,7 +172,7 @@ End Sub
 ' - 1行目: 対象年月（A1）
 ' - 4行目: 日付（B列～AG列まで有効。AH以降は無視）
 ' - A列(5行目以降): メンバー名
-' - 交点セル: 空白=通常 / *=年休 / 国=他拠点勤務 / 前休=午前年休・12:45～17:00(午後休憩14:45～15:00) / 後休=8:45～12:00・午後年休
+' - 交点セル: 空白=通常 / *=年休 / 国=他拠点勤務 / 前休=午前年休・12:45～定常終了(午後休憩14:45～15:00) / 後休=定常開始～12:00・午後年休（定常はメイン A15/B15、空なら 8:45～17:00）
 ' - セル色が白 or 黄色のみ「工場稼働日」とみなす（ただし記号が入っているセルは記号を優先）
 ' - 条件付き書式は Interior を読んでも拾えないため、読取前に表示色を実体化してからルール削除
 ' =========================================================
@@ -236,6 +282,12 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
     Dim st As Variant, en As Variant
     Dim b1s As Variant, b1e As Variant, b2s As Variant, b2e As Variant
     Dim note As String
+    Dim regSt As Date, regEn As Date
+    
+    If Not MasterMainReadRegularShiftTimes(ThisWorkbook, regSt, regEn) Then
+        regSt = TimeSerial(8, 45, 0)
+        regEn = TimeSerial(17, 0, 0)
+    End If
     
     If Not ResolveCalendarYearMonth(wsCal, y, m) Then Exit Sub
     
@@ -272,28 +324,28 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
             Else
                 Select Case marker
                     Case "", "通常"
-                        st = TimeSerial(8, 45, 0): en = TimeSerial(17, 0, 0)
+                        st = regSt: en = regEn
                         b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "通常"
                     Case "*", "＊"
                         note = "年休"
                     Case "国"
-                        st = TimeSerial(8, 45, 0): en = TimeSerial(17, 0, 0)
+                        st = regSt: en = regEn
                         b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "他拠点勤務"
                     Case "前休"
-                        ' 午前は年休扱い。12:45～17:00 勤務。午後休憩は通常どおり 14:45～15:00（昼食帯は出ず）
-                        st = TimeSerial(12, 45, 0): en = TimeSerial(17, 0, 0)
+                        ' 午前は年休扱い。12:45～定常終了。午後休憩は通常どおり 14:45～15:00（昼食帯は出ず）
+                        st = TimeSerial(12, 45, 0): en = regEn
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = "前休"
                     Case "後休"
-                        ' 8:45～12:00 勤務。午後は年休扱い
-                        st = TimeSerial(8, 45, 0): en = TimeSerial(12, 0, 0)
+                        ' 定常開始～12:00 勤務。午後は年休扱い
+                        st = regSt: en = TimeSerial(12, 0, 0)
                         note = "後休"
                     Case Else
-                        st = TimeSerial(8, 45, 0): en = TimeSerial(17, 0, 0)
+                        st = regSt: en = regEn
                         b1s = TimeSerial(12, 0, 0): b1e = TimeSerial(12, 50, 0)
                         b2s = TimeSerial(14, 45, 0): b2e = TimeSerial(15, 0, 0)
                         note = marker
@@ -572,7 +624,7 @@ NextCell:
         Next slotHour
     Next dayOffset
     
-    Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastOutCol, slotsPer)
+    Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastOutCol, slotsPer, wb)
     
     Application.ScreenUpdating = True
     Call AutoFitAllWorksheetColumns
@@ -581,7 +633,8 @@ NextCell:
     MsgBox "「" & SHEET_MACHINE_CALENDAR & "」を更新しました。" & vbCrLf & _
            "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
            "A 列＝日時・B 列＝曜日、1 時間単位（" & CStr(hFirst) & ":00～" & CStr(hLast) & ":00・1 日 " & CStr(slotsPer) & " 行）・日ストライプ。" & vbCrLf & _
-           "（時刻はメインシート A12/B12。空のときは 6～22 時）" & vbCrLf & _
+           "（稼働スロット: メイン A12/B12。空なら 6～22 時）" & vbCrLf & _
+           "（定常外の色: メイン A15/B15。空なら着色なし）" & vbCrLf & _
            "設備列へ入力した文言は、同一日時・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
     Exit Sub
     
@@ -692,7 +745,7 @@ NextPreserveCell:
     Next cc
 End Sub
 
-Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal lastCol As Long, ByVal slotsPerDay As Long)
+Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal lastCol As Long, ByVal slotsPerDay As Long, ByVal wb As Workbook)
     Dim dataRng As Range
     Dim prevWs As Worksheet
     Dim prevScr As Boolean
@@ -752,6 +805,7 @@ Private Sub FormatMachineCalendarGridLayout(ByVal ws As Worksheet, ByVal lastRow
     On Error GoTo 0
     
     Call ApplyMachineCalendarDayStripes(ws, lastRow, lastCol, slotsPerDay)
+    Call ApplyMachineCalendarOutsideRegularHoursTint(ws, wb, lastRow, lastCol)
     
     ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).Columns.AutoFit
     
@@ -812,6 +866,37 @@ Private Sub ApplyMachineCalendarDayStripes(ByVal ws As Worksheet, ByVal lastRow 
             .Pattern = xlSolid
             .Color = fillColor
         End With
+    Next rr
+End Sub
+
+' 定常開始～終了（メイン A15/B15）と重ならない 1 時間スロットの A 列・B 列（日時・曜日）を薄いオレンジで強調
+Private Sub ApplyMachineCalendarOutsideRegularHoursTint(ByVal ws As Worksheet, ByVal wb As Workbook, ByVal lastRow As Long, ByVal lastCol As Long)
+    Dim regSt As Date, regEn As Date
+    Dim rr As Long
+    Dim slotFull As Date
+    Dim slotStartFrac As Double, slotEndFrac As Double
+    Dim regStartFrac As Double, regEndFrac As Double
+    Dim useColor As Long
+    
+    useColor = RGB(244, 224, 198)
+    If lastRow < 3 Or lastCol < 2 Then Exit Sub
+    If Not MasterMainReadRegularShiftTimes(wb, regSt, regEn) Then Exit Sub
+    
+    regStartFrac = TimeValue(regSt)
+    regEndFrac = TimeValue(regEn)
+    
+    For rr = 3 To lastRow
+        On Error Resume Next
+        slotFull = CDate(ws.Cells(rr, 1).Value)
+        On Error GoTo 0
+        If Not IsDate(ws.Cells(rr, 1).Value) Then GoTo NextMcTint
+        slotStartFrac = TimeValue(slotFull)
+        slotEndFrac = slotStartFrac + (1# / 24#)
+        ' 半開区間 [slotStart, slotEnd) と [regStart, regEnd) が重ならない → 定常外
+        If (slotEndFrac <= regStartFrac) Or (slotStartFrac >= regEndFrac) Then
+            ws.Range(ws.Cells(rr, 1), ws.Cells(rr, 2)).Interior.Color = useColor
+        End If
+NextMcTint:
     Next rr
 End Sub
 

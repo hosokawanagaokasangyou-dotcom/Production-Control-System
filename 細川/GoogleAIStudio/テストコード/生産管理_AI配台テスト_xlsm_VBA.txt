@@ -952,7 +952,7 @@ End Sub
 ' （結果_カレンダー(出勤簿) から取得。シート名は「メイン」「Main」または名前に「メイン」を含むもの）
 ' ★段階2(planning_core): 任意で見出しセルに「グローバルコメント」と書き、その直下のセルに「再優先特別記載」を入力可能。
 '   同文言は Gemini で解釈され、指示に応じてスキル無視・必要人数1名化などが通常ルールより最優先で適用される。
-' ・勤怠セル: master.xlsm メイン A12/B12 の工場稼働開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
+' ・勤怠セル: master.xlsm メイン A15/B15 の定常開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
 ' =========================================================
 
 ' master メイン A12/B12 のセル値を時刻として解釈（時分）。解釈不能は False。
@@ -986,7 +986,7 @@ Fail:
     マスタメイン_セルを時刻Dateへ = False
 End Function
 
-' master.xlsm メイン A12/B12 を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
+' master.xlsm メイン A15/B15（定常）を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
 Private Function マスタメイン_工場標準勤怠表示文字列() As String
     Const FB As String = "08:45 / 17:00"
     Dim folder As String
@@ -1034,8 +1034,8 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     End If
     If ws Is Nothing Then GoTo CloseWb
     
-    vS = ws.Range("A12").Value
-    vE = ws.Range("B12").Value
+    vS = ws.Range("A15").Value
+    vE = ws.Range("B15").Value
     If Not マスタメイン_セルを時刻Dateへ(vS, tS) Then GoTo CloseWb
     If Not マスタメイン_セルを時刻Dateへ(vE, tE) Then GoTo CloseWb
     If TimeValue(tS) >= TimeValue(tE) Then GoTo CloseWb
@@ -1070,7 +1070,7 @@ Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled
     メインシート_勤怠表示先頭ゼロ無し = a & " / " & b
 End Function
 
-' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A12/B12 の工場稼働枠と一致するか
+' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A15/B15 の定常枠と一致するか
 Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String) As Boolean
     Dim t As String
     Dim exp As String
