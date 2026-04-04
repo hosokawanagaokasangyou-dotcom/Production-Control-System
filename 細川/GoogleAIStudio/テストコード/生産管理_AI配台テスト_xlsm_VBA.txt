@@ -59,8 +59,8 @@ Private Const GWL_STYLE As Long = -16
 Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
 ' D3=false かつスプラッシュ表示時: txtExecutionLog の画面矩形に cmd を重ねるループの待ち（ms）。ポーリング無しのため短めでよい
 Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 80
-' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False のまま）
-Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = False
+' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
+Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
@@ -86,7 +86,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
-' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のときはポーリング無し。スプラッシュ非表示時は同期 Run のみ通常 cmd。スプラッシュ表示中は Exec＋一意 title で cmd を txtExecutionLog の画面矩形へ SetWindowPos し疑似的にログ枠へ重ねる（STAGE12_CMD_OVERLAY_*）。
+' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のときはポーリング無し。スプラッシュ非表示時は同期 Run のみ通常 cmd。スプラッシュ表示中は Exec＋一意 title＋conhost 経由で古典コンソールを強制し、txtExecutionLog の画面矩形へ SetWindowPos（既定端末が WT のとき CASCADIA_HOSTING 誤検出で真っ黒になるのを避ける）。枠除去は STAGE12_CMD_OVERLAY_BORDERLESS。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
@@ -314,6 +314,19 @@ Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hi
     End If
 End Function
 
+' D3=false オーバーレイ専用: 既定端末が Windows Terminal のとき cmd 直起動だと FindWindow が CASCADIA_HOSTING を返し中身が空振りしうるため、conhost で古典コンソールを強制
+Private Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) As String
+    Dim conhostExe As String
+    Dim cmdExe As String
+    conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
+    cmdExe = Environ("SystemRoot") & "\System32\cmd.exe"
+    If Len(Dir(conhostExe)) = 0 Or Len(Dir(cmdExe)) = 0 Then
+        BuildStageVisibleClassicConhostCmd = "cmd.exe /c """ & cmdFilePath & """"
+    Else
+        BuildStageVisibleClassicConhostCmd = """" & conhostExe & """ """ & cmdExe & """ /c """ & cmdFilePath & """"
+    End If
+End Function
+
 ' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
 Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
 #If VBA7 Then
@@ -378,31 +391,36 @@ Private Sub MacroSplash_EndConsoleOverlay()
     On Error GoTo 0
 End Sub
 
-' コンソール枠の簡易除去（32bit Excel のみ。64bit では未適用）
+' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
 #If VBA7 Then
 Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
-    #If Win64 Then
+    On Error Resume Next
+    If Not STAGE12_CMD_OVERLAY_BORDERLESS Then
         ' #region agent log
-        AgentDbgLog "H6", "ConsoleApplyBorderlessIfNeeded", "compile_Win64_exit_borderless_disabled"
+        AgentDbgLog "H5", "ConsoleApplyBorderlessIfNeeded", "STAGE12_CMD_OVERLAY_BORDERLESS=False_skip"
         ' #endregion agent log
         Exit Sub
+    End If
+    #If Win64 Then
+        ' #region agent log
+        AgentDbgLog "H5b", "ConsoleApplyBorderlessIfNeeded", "applying_borderless_Win64"
+        ' #endregion agent log
+        Dim ns64 As LongPtr
+        Dim nsLo As Long
+        ns64 = SplashGetWindowLongPtr(hwnd, GWL_STYLE)
+        nsLo = CLng(ns64)
+        nsLo = nsLo And Not WS_CONSOLE_OVERLAY_STRIP
+        Call SplashSetWindowLongPtr(hwnd, GWL_STYLE, nsLo)
     #Else
-        On Error Resume Next
-        If Not STAGE12_CMD_OVERLAY_BORDERLESS Then
-            ' #region agent log
-            AgentDbgLog "H5", "ConsoleApplyBorderlessIfNeeded", "STAGE12_CMD_OVERLAY_BORDERLESS=False_skip"
-            ' #endregion agent log
-            Exit Sub
-        End If
         ' #region agent log
         AgentDbgLog "H5b", "ConsoleApplyBorderlessIfNeeded", "applying_borderless_Win32"
         ' #endregion agent log
         Dim ns As Long
         ns = SplashGetWindowLongPtr(hwnd, GWL_STYLE)
         Call SplashSetWindowLongPtr(hwnd, GWL_STYLE, ns And Not WS_CONSOLE_OVERLAY_STRIP)
-        Call SetWindowPos(hwnd, 0&, 0&, 0&, 0&, 0&, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOZORDER Or SWP_FRAMECHANGED)
-        On Error GoTo 0
     #End If
+    Call SetWindowPos(hwnd, 0&, 0&, 0&, 0&, 0&, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOZORDER Or SWP_FRAMECHANGED)
+    On Error GoTo 0
 End Sub
 #Else
 Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
@@ -445,10 +463,12 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         cmdLine = BuildStageExecCommandLine(cmdFilePath, False)
         waitStyle = 1
         If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 Then
+            Dim overlayCmdLine As String
+            overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
             ' #region agent log
-            AgentDbgLog "H4", "RunCmdFileStageExecAndPoll.beforeExec", "cmdLine320=" & Left$(Replace(cmdLine, """", "'"), 320) & ";title=" & consoleTitle
+            AgentDbgLog "H4", "RunCmdFileStageExecAndPoll.beforeExec", "cmdLine320=" & Left$(Replace(overlayCmdLine, """", "'"), 320) & ";title=" & consoleTitle & ";runId=post-fix"
             ' #endregion agent log
-            Set execObj = wsh.Exec(cmdLine)
+            Set execObj = wsh.Exec(overlayCmdLine)
             If Err.Number = 0 And Not execObj Is Nothing Then
                 ' #region agent log
                 On Error Resume Next
