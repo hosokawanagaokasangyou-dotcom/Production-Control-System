@@ -98,7 +98,8 @@ Private m_splashExecutionLogPath As String
 Private m_stageVbaExitCodeLogDir As String
 Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 ' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
-Private Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 400
+' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（400→1200）
+Private Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1200
 ' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
 Private m_splashPollLastFileLen As Long
 Private m_splashPollHaveCachedFileLen As Boolean
@@ -281,7 +282,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
-        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい。FileLen 不変時は全文読みスキップ
+        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
             If Len(consoleTitle) > 0 And Not positioned Then

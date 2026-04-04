@@ -7397,13 +7397,9 @@ def _xlwings_attach_workbook_for_tests(
 def _agent_debug_ndjson_log(
     hypothesis_id: str, location: str, message: str, data: dict | None = None
 ) -> None:
-    """Debug NDJSON → リポジトリ直下 debug-4e99af.log（セッション 4e99af）。"""
+    """Debug NDJSON → log/debug-4e99af.log（execution_log と同じ log_dir。cwd=マクロブックフォルダ）。"""
     try:
-        pc_path = os.path.abspath(__file__)
-        root = pc_path
-        for _ in range(5):
-            root = os.path.dirname(root)
-        log_path = os.path.join(root, "debug-4e99af.log")
+        log_path = os.path.join(log_dir, "debug-4e99af.log")
         payload = {
             "sessionId": "4e99af",
             "hypothesisId": hypothesis_id,
@@ -7499,16 +7495,30 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         return False
 
     xw_book, info = attached
+    _t_after_attach = time_module.perf_counter()
     ok = False
     try:
         try:
             xw_book.app.display_alerts = False
         except Exception:
             pass
+        _t_names0 = time_module.perf_counter()
         try:
             sheet_names = [s.name for s in xw_book.sheets]
         except Exception:
             sheet_names = []
+        _t_names1 = time_module.perf_counter()
+        # #region agent log
+        _agent_debug_ndjson_log(
+            "H6",
+            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
+            "after_sheet_names_enum",
+            {
+                "elapsed_ms": round((_t_names1 - _t_names0) * 1000),
+                "sheet_count": len(sheet_names),
+            },
+        )
+        # #endregion
         if EXCLUDE_RULES_SHEET_NAME not in sheet_names:
             _log_exclude_rules_sheet_debug(
                 "XLWINGS_SYNC_SKIP",
@@ -7526,13 +7536,14 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
             for r in range(1, max_r + 1)
         ]
+        _t_mat1 = time_module.perf_counter()
         # #region agent log
         _agent_debug_ndjson_log(
             "H5",
             "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
             "after_openpyxl_matrix",
             {
-                "elapsed_ms": round((time_module.perf_counter() - _t_mat0) * 1000),
+                "elapsed_ms": round((_t_mat1 - _t_mat0) * 1000),
                 "rows": len(data),
                 "ncols": ncols,
             },
@@ -7542,33 +7553,53 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         try:
             _t_r0 = time_module.perf_counter()
             sht.range((1, 1)).resize(len(data), ncols).value = data
+            _t_r1 = time_module.perf_counter()
             # #region agent log
             _agent_debug_ndjson_log(
                 "H1",
                 "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
                 "after_range_value",
                 {
-                    "elapsed_ms": round((time_module.perf_counter() - _t_r0) * 1000),
+                    "elapsed_ms": round((_t_r1 - _t_r0) * 1000),
                 },
             )
             # #endregion
             _t_s0 = time_module.perf_counter()
             xw_book.save()
+            _t_s1 = time_module.perf_counter()
             # #region agent log
             _agent_debug_ndjson_log(
                 "H3",
                 "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
                 "after_xw_save",
                 {
-                    "elapsed_ms": round((time_module.perf_counter() - _t_s0) * 1000),
+                    "elapsed_ms": round((_t_s1 - _t_s0) * 1000),
                 },
             )
             # #endregion
         finally:
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
+        _attach_ms = round((_t_after_attach - _t_sync0) * 1000)
+        _enum_ms = round((_t_names1 - _t_names0) * 1000)
+        _prep_ms = round((_t_mat0 - _t_names1) * 1000)
+        _matrix_ms = round((_t_mat1 - _t_mat0) * 1000)
+        _range_ms = round((_t_r1 - _t_r0) * 1000)
+        _save_ms = round((_t_s1 - _t_s0) * 1000)
         ok = True
         _exclude_rules_effective_read_path = wb_path
         _clear_exclude_rules_e_apply_files()
+        logging.info(
+            "%s: [XLWINGS_PERF] attach_ms=%d sheets_enum_ms=%d prep_ms=%d matrix_ms=%d "
+            "range_ms=%d save_ms=%d rows=%d",
+            log_prefix,
+            _attach_ms,
+            _enum_ms,
+            _prep_ms,
+            _matrix_ms,
+            _range_ms,
+            _save_ms,
+            max_r,
+        )
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_OK",
             log_prefix,
