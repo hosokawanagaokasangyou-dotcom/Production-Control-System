@@ -655,20 +655,6 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     )
 
 
-def _read_dispatch_debug_only_task_ids_from_config_sheet_b(wb_path: str) -> list[str]:
-    """
-    マクロブック「設定」シート B 列 3 行目以降に依頼NOがある場合、段階2はその依頼NOの行だけ配台する。
-    （空なら全件。トレース用 A 列とは独立。）
-    """
-    return _read_task_ids_from_config_sheet_column(
-        wb_path,
-        2,
-        "デバッグ配台",
-        "B",
-        openpyxl_skip_hint="限定配台は環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）でも指定できます。",
-    )
-
-
 def _extract_gemini_api_key_from_plain_dict(data: dict, json_path: str) -> str | None:
     key = data.get("gemini_api_key")
     if key is None or (isinstance(key, str) and not key.strip()):
@@ -925,9 +911,6 @@ TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").stri
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
 # 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
-# デバッグ限定配台: 「設定」B3 以降が優先。空なら環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS（カンマ区切り）。
-_DISPATCH_DEBUG_ONLY_TASK_IDS_RAW = os.environ.get("DISPATCH_DEBUG_ONLY_TASK_IDS", "").strip()
-DISPATCH_DEBUG_ONLY_TASK_IDS: frozenset[str] = frozenset()
 
 
 def _trace_schedule_task_enabled(task_id) -> bool:
@@ -9070,101 +9053,6 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
 )
 
-# 配台デバッグ: 1 ロールごとに JSONL へ追記（DISPATCH_ROLL_TRACE_JSONL）、
-# または DISPATCH_DEBUG_STOP_AFTER_ROLLS 到達でシミュレーションを打ち切り（部分タイムラインのまま結果出力へ）。
-_DISPATCH_ROLL_TRACE_SEQ = 0
-_DISPATCH_ROLL_TRACE_PATH: str | None = None
-_DISPATCH_DEBUG_STOP_AFTER_ROLLS: int | None = None
-_DISPATCH_DEBUG_STOP_FLAG = False
-
-
-def _dispatch_debug_should_stop_early() -> bool:
-    return _DISPATCH_DEBUG_STOP_FLAG
-
-
-def _dispatch_debug_reset_roll_trace(workbook_path: str | None) -> None:
-    """generate_plan のスケジューリング開始直前に呼ぶ。JSONL を空にし、ロール计数・停止フラグをリセット。"""
-    global _DISPATCH_ROLL_TRACE_SEQ, _DISPATCH_ROLL_TRACE_PATH, _DISPATCH_DEBUG_STOP_AFTER_ROLLS
-    global _DISPATCH_DEBUG_STOP_FLAG
-    _DISPATCH_DEBUG_STOP_FLAG = False
-    _DISPATCH_ROLL_TRACE_SEQ = 0
-    raw = (os.environ.get("DISPATCH_ROLL_TRACE_JSONL") or "").strip()
-    stop_raw = (os.environ.get("DISPATCH_DEBUG_STOP_AFTER_ROLLS") or "").strip()
-    if stop_raw.isdigit():
-        _DISPATCH_DEBUG_STOP_AFTER_ROLLS = max(1, int(stop_raw))
-        if not raw:
-            raw = "log/dispatch_roll_trace.jsonl"
-    else:
-        _DISPATCH_DEBUG_STOP_AFTER_ROLLS = None
-    if not raw:
-        _DISPATCH_ROLL_TRACE_PATH = None
-        return
-    if workbook_path:
-        _DISPATCH_ROLL_TRACE_PATH = _resolve_path_relative_to_workbook(workbook_path, raw)
-    else:
-        _DISPATCH_ROLL_TRACE_PATH = os.path.abspath(raw)
-    _d = os.path.dirname(_DISPATCH_ROLL_TRACE_PATH)
-    if _d:
-        os.makedirs(_d, exist_ok=True)
-    with open(_DISPATCH_ROLL_TRACE_PATH, "w", encoding="utf-8") as f:
-        f.write("")
-    if _DISPATCH_ROLL_TRACE_PATH or _DISPATCH_DEBUG_STOP_AFTER_ROLLS is not None:
-        logging.info(
-            "配台デバッグ: ロールトレース path=%s STOP_AFTER=%s",
-            _DISPATCH_ROLL_TRACE_PATH or "（カウントのみ・ファイルなし）",
-            _DISPATCH_DEBUG_STOP_AFTER_ROLLS,
-        )
-
-
-def _dispatch_roll_trace_after_roll(
-    current_date: date,
-    task: dict,
-    eq_line: str,
-    start_dt,
-    end_dt,
-    units_done: float,
-    rem_rolls_after: int,
-    lead_op: str,
-    sub_members: list,
-    *,
-    roll_surplus_meta: dict | None = None,
-) -> None:
-    """タイムラインに 1 ロール追記した直後に呼ぶ。JSONL・早期停止判定。"""
-    global _DISPATCH_ROLL_TRACE_SEQ, _DISPATCH_DEBUG_STOP_FLAG
-    if _DISPATCH_ROLL_TRACE_PATH is None and _DISPATCH_DEBUG_STOP_AFTER_ROLLS is None:
-        return
-    p = _DISPATCH_ROLL_TRACE_PATH
-    _DISPATCH_ROLL_TRACE_SEQ += 1
-    seq = _DISPATCH_ROLL_TRACE_SEQ
-    st_s = start_dt.isoformat(sep=" ") if hasattr(start_dt, "isoformat") else str(start_dt)
-    ed_s = end_dt.isoformat(sep=" ") if hasattr(end_dt, "isoformat") else str(end_dt)
-    rec = {
-        "seq": seq,
-        "date": str(current_date),
-        "task_id": str(task.get("task_id") or ""),
-        "machine_line": str(eq_line),
-        "dispatch_trial_order": task.get("dispatch_trial_order"),
-        "start_dt": st_s,
-        "end_dt": ed_s,
-        "units_done": float(units_done),
-        "remaining_rolls_after": int(rem_rolls_after),
-        "lead_op": str(lead_op or "").strip(),
-        "subs": ",".join(str(x).strip() for x in (sub_members or []) if x and str(x).strip()),
-    }
-    if roll_surplus_meta:
-        rec.update(roll_surplus_meta)
-    if p:
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    lim = _DISPATCH_DEBUG_STOP_AFTER_ROLLS
-    if lim is not None and seq >= lim:
-        _DISPATCH_DEBUG_STOP_FLAG = True
-        logging.info(
-            "配台デバッグ: DISPATCH_DEBUG_STOP_AFTER_ROLLS=%s に達したためこの時点で割付シミュレーションを打ち切ります（以降は未割当のまま結果シートへ）。",
-            lim,
-        )
-
-
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
 #    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
@@ -13919,26 +13807,6 @@ def _trial_order_first_schedule_pass(
                 _bump_machine_avail_after_roll_for_calendar(
                     current_date, machine_occ_key, machine_avail_dt
                 )
-            rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
-            _dispatch_roll_trace_after_roll(
-                current_date,
-                task,
-                eq_line,
-                best_start,
-                best_end,
-                float(done_units),
-                rem_after,
-                lead_op,
-                list(sub_members),
-                roll_surplus_meta={
-                    "surplus_phase": "main",
-                    "req_num": req_num_run,
-                    "team_size": len(best_team),
-                    "extra_max_main_pass": extra_max_run,
-                    "need_surplus_assigned": need_surplus_assigned,
-                    "team_summary": team_s,
-                },
-            )
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -13957,9 +13825,6 @@ def _trial_order_first_schedule_pass(
                     need_surplus_assigned,
                     team_s,
                 )
-            if _dispatch_debug_should_stop_early():
-                made_local = True
-                return made_local
             preferred_team = best_team
             made_local = True
         return made_local
@@ -14102,9 +13967,6 @@ def _run_b2_inspection_rewind_pass(
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
             )
-            if _dispatch_debug_should_stop_early():
-                _any_progress = _any_progress or _made
-                return _any_progress
             if not _made:
                 break
             _any_progress = True
@@ -14390,11 +14252,6 @@ def generate_plan():
 
 
 def _generate_plan_impl():
-    # ロールトレース JSONL は日次ループより前に早期 return しうるため、ここで初期化する
-    # （DISPATCH_ROLL_TRACE_JSONL 未設定・空ならファイルは作らない）。
-    _dispatch_debug_reset_roll_trace(
-        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
-    )
     # 配台トレース（設定シート A3 以降のみ）は、メンバー0人等で早期 return しても
     # execution_log に残るよう skills 読込より前で確定・ログする。
     global TRACE_SCHEDULE_TASK_IDS
@@ -14432,35 +14289,6 @@ def _generate_plan_impl():
             "環境変数 TRACE_TEAM_ASSIGN_TASK_ID=%r → チーム割当トレース有効",
             TRACE_TEAM_ASSIGN_TASK_ID,
         )
-
-    global DISPATCH_DEBUG_ONLY_TASK_IDS
-    _ids_debug_b = _read_dispatch_debug_only_task_ids_from_config_sheet_b(_wb_trace)
-    DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset()
-    if _ids_debug_b:
-        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(
-            planning_task_id_str_from_scalar(x) for x in _ids_debug_b
-        )
-        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(x for x in DISPATCH_DEBUG_ONLY_TASK_IDS if x)
-    if not DISPATCH_DEBUG_ONLY_TASK_IDS:
-        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(
-            planning_task_id_str_from_scalar(x.strip())
-            for x in _DISPATCH_DEBUG_ONLY_TASK_IDS_RAW.split(",")
-            if x.strip()
-        )
-        DISPATCH_DEBUG_ONLY_TASK_IDS = frozenset(x for x in DISPATCH_DEBUG_ONLY_TASK_IDS if x)
-        if _ids_debug_b and not DISPATCH_DEBUG_ONLY_TASK_IDS:
-            logging.warning(
-                "デバッグ限定配台: 設定シート「%s」B 列に値はありますが、依頼NOとして正規化できるものがありません。"
-                " 環境変数 DISPATCH_DEBUG_ONLY_TASK_IDS も解釈できませんでした。この実行は全依頼を対象にします。",
-                APP_CONFIG_SHEET_NAME,
-            )
-    if DISPATCH_DEBUG_ONLY_TASK_IDS:
-        logging.warning(
-            "デバッグ限定配台: 次の依頼NOのみ「配台計画_タスク入力」から配台します → %s",
-            ", ".join(sorted(DISPATCH_DEBUG_ONLY_TASK_IDS)),
-        )
-    elif not _ids_debug_b:
-        logging.info("デバッグ限定配台: 未指定（全依頼を対象）")
 
     _reset_dispatch_trace_per_task_logfiles()
 
@@ -14585,25 +14413,6 @@ def _generate_plan_impl():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
-
-    if DISPATCH_DEBUG_ONLY_TASK_IDS:
-        _n_tasks_before = len(tasks_df)
-        _tid_ok = tasks_df[TASK_COL_TASK_ID].map(
-            lambda v: planning_task_id_str_from_scalar(v) in DISPATCH_DEBUG_ONLY_TASK_IDS
-        )
-        tasks_df = tasks_df.loc[_tid_ok].copy()
-        logging.info(
-            "デバッグ限定配台: タスク入力 %s 行 → フィルタ後 %s 行",
-            _n_tasks_before,
-            len(tasks_df),
-        )
-        if tasks_df.empty:
-            logging.error(
-                "デバッグ限定配台: 指定依頼NOに該当するタスク行がありません（%s）。段階2を中断します。",
-                ", ".join(sorted(DISPATCH_DEBUG_ONLY_TASK_IDS)),
-            )
-            _try_write_main_sheet_gemini_usage_summary("段階2")
-            return
 
     try:
         validate_no_duplicate_explicit_plan_priorities(tasks_df)
@@ -14897,9 +14706,6 @@ def _generate_plan_impl():
                         team_combo_presets,
                         dispatch_interval_mirror=_dispatch_interval_mirror,
                     )
-                    if _dispatch_debug_should_stop_early():
-                        _sched_made_progress = True
-                        break
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
@@ -15746,26 +15552,6 @@ def _generate_plan_impl():
                                 _bump_machine_avail_after_roll_for_calendar(
                                     current_date, machine_occ_key, machine_avail_dt
                                 )
-                            rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
-                            _dispatch_roll_trace_after_roll(
-                                current_date,
-                                task,
-                                eq_line,
-                                best_info["start_dt"],
-                                best_info["end_dt"],
-                                float(done_units),
-                                rem_after,
-                                str(best_info.get("op") or ""),
-                                list(sub_members),
-                                roll_surplus_meta={
-                                    "surplus_phase": "main",
-                                    "req_num": int(req_num),
-                                    "team_size": len(best_team),
-                                    "extra_max_main_pass": int(extra_max),
-                                    "need_surplus_assigned": need_surplus_assigned,
-                                    "team_summary": team_s,
-                                },
-                            )
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
@@ -15785,8 +15571,6 @@ def _generate_plan_impl():
                                     team_s,
                                 )
                             _sched_made_progress = True
-                            if _dispatch_debug_should_stop_early():
-                                break
                         else:
                             if task.get("has_done_deadline_override"):
                                 logging.info(
@@ -15796,8 +15580,6 @@ def _generate_plan_impl():
                                     task.get("remaining_units"),
                                 )
     
-                if _dispatch_debug_should_stop_early():
-                    break
                 if not _sched_made_progress:
                     break
 
@@ -15917,8 +15699,6 @@ def _generate_plan_impl():
                                     ",".join(_cap_tids),
                                 )
 
-        if _dispatch_debug_should_stop_early():
-            break
         if _full_calendar_without_deadline_restart:
             _rewind_made = _run_b2_inspection_rewind_pass(
                 sorted_dates,
