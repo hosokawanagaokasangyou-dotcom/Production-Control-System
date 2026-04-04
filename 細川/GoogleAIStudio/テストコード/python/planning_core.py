@@ -7350,6 +7350,45 @@ def _xlwings_attach_workbook_for_tests(
         return None
 
 
+def _xlwings_app_save_perf_state_push(app):
+    """VBA 側のスプラッシュポーリングと競合しにくくするため、同期・保存の短時間だけ Excel を静かにする。"""
+    snap = {}
+    for attr in ("screen_updating", "calculation", "enable_events"):
+        try:
+            snap[attr] = getattr(app, attr)
+        except Exception:
+            snap[attr] = None
+    try:
+        app.screen_updating = False
+    except Exception:
+        pass
+    try:
+        app.calculation = "manual"
+    except Exception:
+        try:
+            app.api.Calculation = -4135  # xlCalculationManual
+        except Exception:
+            pass
+    try:
+        app.enable_events = False
+    except Exception:
+        pass
+    return snap
+
+
+def _xlwings_app_save_perf_state_pop(app, snap):
+    if not snap:
+        return
+    for attr in ("enable_events", "calculation", "screen_updating"):
+        prev = snap.get(attr)
+        if prev is None:
+            continue
+        try:
+            setattr(app, attr, prev)
+        except Exception:
+            pass
+
+
 def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
@@ -7395,8 +7434,12 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
             for r in range(1, max_r + 1)
         ]
-        sht.range((1, 1)).resize(len(data), ncols).value = data
-        xw_book.save()
+        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
+        try:
+            sht.range((1, 1)).resize(len(data), ncols).value = data
+            xw_book.save()
+        finally:
+            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
         ok = True
         _exclude_rules_effective_read_path = wb_path
         _clear_exclude_rules_e_apply_files()
