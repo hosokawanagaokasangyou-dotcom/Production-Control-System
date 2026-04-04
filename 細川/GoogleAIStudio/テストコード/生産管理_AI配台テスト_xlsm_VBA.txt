@@ -1,6 +1,10 @@
 ' =========================================================
 ' Windows APIの宣言（ボタンの待機・アニメーション処理用）
 ' =========================================================
+Private Type POINTAPI
+    x As Long
+    y As Long
+End Type
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
@@ -10,6 +14,17 @@
     Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
     Private Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
     Private Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
+    Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
+    Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
+    Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
+    Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
+    #If Win64 Then
+    Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
+    Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+    #Else
+    Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As Long
+    Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As Long) As Long
+    #End If
 #Else
     Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
@@ -19,6 +34,10 @@
     Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
     Private Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
+    Private Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
+    Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
+    Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
+    Private Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
 #End If
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
@@ -28,6 +47,18 @@ Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
 Private Const SWP_NOZORDER As Long = &H4
 Private Const SWP_SHOWWINDOW As Long = &H40
+Private Const SWP_NOMOVE As Long = &H2
+Private Const SWP_NOSIZE As Long = &H1
+Private Const SWP_FRAMECHANGED As Long = &H20
+Private Const LOGPIXELSX As Long = 88
+Private Const LOGPIXELSY As Long = 90
+Private Const GWL_STYLE As Long = -16
+' コンソール枠除去用（Caption/ThickFrame/MinMax/SysMenu）。環境によっては conhost が無視する場合あり
+Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
+' D3=false かつスプラッシュ表示時: txtExecutionLog の画面矩形に cmd を重ねるループの待ち（ms）。ポーリング無しのため短めでよい
+Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 80
+' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False のまま）
+Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
@@ -53,7 +84,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
-' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のとき段階1/2 は Exec 待機ループも行わず同期 Run のみ（ポーリング無し）。あわせて通常の cmd ウィンドウを表示（conhost --headless・nul リダイレクトなし・四隅レイアウトなし）。ログ比較・負荷試験用。
+' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/TRUE=する・false/FALSE=しない。空・その他=する）。false のときはポーリング無し。スプラッシュ非表示時は同期 Run のみ通常 cmd。スプラッシュ表示中は Exec＋一意 title で cmd を txtExecutionLog の画面矩形へ SetWindowPos し疑似的にログ枠へ重ねる（STAGE12_CMD_OVERLAY_*）。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
@@ -113,6 +144,8 @@ Private m_splashPollHaveCachedFileLen As Boolean
 Private m_splashReadErrShown As Boolean
 ' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
 Private m_splashLastLogSnapshot As String
+' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
+Private m_splashConsoleOverlayActive As Boolean
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -222,8 +255,92 @@ Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hi
     End If
 End Function
 
-' 段階1/2: 設定 D3=true … Exec＋待機ループで execution_log をポーリング。D3=false … ポーリングせず同期 Run のみ（負荷比較用）。hide 時は conhost --headless
-Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean) As Long
+' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
+Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
+#If VBA7 Then
+    Dim hwndSplash As LongPtr
+    Dim hdc As LongPtr
+#Else
+    Dim hwndSplash As Long
+    Dim hdc As Long
+#End If
+    Dim pt As POINTAPI
+    Dim dpiX As Long
+    Dim dpiY As Long
+    Dim tb As Object
+    On Error GoTo Fail
+    MacroSplash_GetTxtExecutionLogScreenRectPixels = False
+    If Not m_macroSplashShown Then Exit Function
+    hwndSplash = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
+    If hwndSplash = 0 Then Exit Function
+    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    If tb Is Nothing Then Exit Function
+    dpiX = 96
+    dpiY = 96
+    hdc = GetDC(hwndSplash)
+    If hdc <> 0 Then
+        dpiX = GetDeviceCaps(hdc, LOGPIXELSX)
+        dpiY = GetDeviceCaps(hdc, LOGPIXELSY)
+        Call ReleaseDC(hwndSplash, hdc)
+    End If
+    pt.x = 0
+    pt.y = 0
+    Call ClientToScreen(hwndSplash, pt)
+    outL = pt.x + CLng((CDbl(tb.Left) * dpiX) / 72#)
+    outT = pt.y + CLng((CDbl(tb.Top) * dpiY) / 72#)
+    outW = CLng((CDbl(tb.Width) * dpiX) / 72#)
+    outH = CLng((CDbl(tb.Height) * dpiY) / 72#)
+    If outW < 20 Or outH < 20 Then Exit Function
+    MacroSplash_GetTxtExecutionLogScreenRectPixels = True
+    Exit Function
+Fail:
+    MacroSplash_GetTxtExecutionLogScreenRectPixels = False
+End Function
+
+' cmd をログ枠に重ねるとき、二重表示を避けるため TextBox を一時非表示
+Private Sub MacroSplash_BeginConsoleOverlay()
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    If m_splashConsoleOverlayActive Then Exit Sub
+    frmMacroSplash.Controls("txtExecutionLog").Visible = False
+    m_splashConsoleOverlayActive = True
+    frmMacroSplash.Repaint
+    On Error GoTo 0
+End Sub
+
+Private Sub MacroSplash_EndConsoleOverlay()
+    On Error Resume Next
+    If Not m_splashConsoleOverlayActive Then Exit Sub
+    m_splashConsoleOverlayActive = False
+    If m_macroSplashShown Then
+        frmMacroSplash.Controls("txtExecutionLog").Visible = True
+        frmMacroSplash.Repaint
+    End If
+    On Error GoTo 0
+End Sub
+
+' コンソール枠の簡易除去（32bit Excel のみ。64bit では未適用）
+#If VBA7 Then
+Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
+    #If Win64 Then
+        Exit Sub
+    #Else
+        On Error Resume Next
+        If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
+        Dim ns As Long
+        ns = SplashGetWindowLongPtr(hwnd, GWL_STYLE)
+        Call SplashSetWindowLongPtr(hwnd, GWL_STYLE, ns And Not WS_CONSOLE_OVERLAY_STRIP)
+        Call SetWindowPos(hwnd, 0&, 0&, 0&, 0&, 0&, SWP_NOMOVE Or SWP_NOSIZE Or SWP_NOZORDER Or SWP_FRAMECHANGED)
+        On Error GoTo 0
+    #End If
+End Sub
+#Else
+Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
+End Sub
+#End If
+
+' 段階1/2: 設定 D3=true … Exec＋待機ループで execution_log をポーリング。D3=false … スプラッシュ時は Exec＋ログ枠へ cmd 重ね（useSplashLogRectConsole）。hide 時は conhost --headless
+Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean, Optional ByVal useSplashLogRectConsole As Boolean = False) As Long
     Dim execObj As Object
     Dim cmdLine As String
 #If VBA7 Then
@@ -239,11 +356,17 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Dim exitFromFile As Long
     Dim exitPath As String
     Dim unlockInteractiveForPoll As Boolean
+    Dim splashPollIter As Long
+    Dim haveRect As Boolean
+    Dim ox As Long
+    Dim oy As Long
+    Dim ow As Long
+    Dim oh As Long
     cmdLine = BuildStageExecCommandLine(cmdFilePath, hideConsoleWindow)
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     unlockInteractiveForPoll = False
     On Error Resume Next
-    ' D3=false: Exec ループを使わず同期 Run のみ。cmd は通常表示（headless・非表示 Run スタイルは使わない）
+    ' D3=false: スプラッシュ表示中かつ useSplashLogRectConsole … Exec＋title 検出でログ枠へ SetWindowPos。それ以外は同期 Run
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
             Application.Interactive = True
@@ -251,6 +374,63 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         End If
         cmdLine = BuildStageExecCommandLine(cmdFilePath, False)
         waitStyle = 1
+        If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 Then
+            Set execObj = wsh.Exec(cmdLine)
+            If Err.Number = 0 And Not execObj Is Nothing Then
+                On Error GoTo 0
+                If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
+                    Application.Interactive = True
+                    unlockInteractiveForPoll = True
+                End If
+                positioned = False
+                probe = 0
+                splashPollIter = 0
+                haveRect = MacroSplash_GetTxtExecutionLogScreenRectPixels(ox, oy, ow, oh)
+                cx = GetSystemMetrics(SM_CXSCREEN)
+                cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
+                Do While execObj.Status = 0
+                    splashPollIter = splashPollIter + 1
+                    If Len(consoleTitle) > 0 And Not positioned Then
+                        hwnd = FindWindow(0&, consoleTitle)
+                        If hwnd <> 0 Then
+                            MacroSplash_BeginConsoleOverlay
+                            ConsoleApplyBorderlessIfNeeded hwnd
+                            If haveRect Then
+                                SetWindowPos hwnd, 0&, ox, oy, ow, oh, SWP_SHOWWINDOW
+                            Else
+                                SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
+                            End If
+                            BringWindowToTop hwnd
+                            SetForegroundWindow hwnd
+                            positioned = True
+                        Else
+                            probe = probe + 1
+                            If probe > 200 Then positioned = True
+                        End If
+                    End If
+                    Sleep STAGE12_CMD_OVERLAY_POLL_MS
+                    DoEvents
+                Loop
+                MacroSplash_EndConsoleOverlay
+                On Error Resume Next
+                exitPath = StageVbaExitCodeFilePath()
+                If Len(Dir(exitPath)) > 0 Then
+                    exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
+                    If exitFromFile <> &H7FFFFFFF Then
+                        RunCmdFileStageExecAndPoll = exitFromFile
+                    Else
+                        RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+                    End If
+                Else
+                    RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+                End If
+                If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
+                On Error GoTo 0
+                GoTo RestoreInteractiveAfterStagePoll
+            End If
+            Err.Clear
+            On Error GoTo 0
+        End If
         RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
         If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
         exitPath = StageVbaExitCodeFilePath()
@@ -284,7 +464,6 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     End If
     positioned = False
     probe = 0
-    Dim splashPollIter As Long
     splashPollIter = 0
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
@@ -341,10 +520,18 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
     Dim p As String
     Dim uniq As String
     Dim batText As String
-    ' D3=false: 素の .cmd（stdout 捨て・ウィンドウタイトル付与なし）を表示 cmd で同期実行（レイアウト API も使わない）
+    ' D3=false: スプラッシュ表示中は title 付き .cmd＋Exec でログ枠へ cmd を重ねる。非表示時は従来どおり同期 Run
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
-        p = WriteTempCmdFile(body)
-        RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, "", False, False)
+        If m_macroSplashShown Then
+            Randomize
+            uniq = "PM_AI_CMD_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
+            batText = AugmentCmdBodyWithConsoleTitle(body, uniq)
+            p = WriteTempCmdFile(batText)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, False, False, True)
+        Else
+            p = WriteTempCmdFile(body)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, "", False, False, False)
+        End If
         GoTo RunTempCmdWithConsoleLayoutCleanup
     End If
     If hideCmdWindow Or applyTopQuarterFullWidthConsole Then
@@ -1786,6 +1973,7 @@ End Sub
 
 Private Sub MacroSplash_Hide()
     On Error Resume Next
+    m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
         Unload frmMacroSplash
     End If
