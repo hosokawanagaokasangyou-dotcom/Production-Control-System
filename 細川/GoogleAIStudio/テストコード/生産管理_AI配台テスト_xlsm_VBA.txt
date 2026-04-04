@@ -104,8 +104,6 @@ Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
 Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
-' デバッグ用 NDJSON（ThisWorkbook.Path 直下）。識別子は AGENT_DBG_LOG（アンダースコア必須）
-Private Const AGENT_DBG_LOG As String = "debug-0061e8.log"
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
 Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
@@ -189,24 +187,6 @@ Private m_splashReadErrShown As Boolean
 Private m_splashLastLogSnapshot As String
 ' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
 Private m_splashConsoleOverlayActive As Boolean
-
-' #region agent log
-Private Sub AgentDbgWrite(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal data1 As String, ByVal data2 As String)
-    On Error Resume Next
-    Dim f As Integer
-    Dim p As String
-    Dim esc1 As String
-    Dim esc2 As String
-    p = ThisWorkbook.Path & "\" & AGENT_DBG_LOG
-    esc1 = Replace(Replace(data1, "\", "\\"), """", "\""")
-    esc2 = Replace(Replace(data2, "\", "\\"), """", "\""")
-    f = FreeFile
-    Open p For Append As #f
-    Print #f, "{""sessionId"":""0061e8"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""d1"":""" & esc1 & """,""d2"":""" & esc2 & """},""timestamp"":" & CLng(Timer * 1000) Mod 2000000000 & "}"
-    Close #f
-    On Error GoTo 0
-End Sub
-' #endregion
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
@@ -1925,7 +1905,6 @@ End Sub
 ' ・引数名は targetWs（RunPython 等の呼び出し側にも「ws」があり、ウォッチで親フレームの ws と混同しやすいため）
 Private Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
-    AgentDbgWrite "H1", "結果シート_列幅_AutoFit安定", "enter", targetWs.Name, ""
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
     ' 結果_設備ガントは専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
     If StrComp(Trim$(targetWs.Name), "結果_設備ガント", vbBinaryCompare) = 0 Then Exit Sub
@@ -2108,12 +2087,6 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastCol As Long
     Dim c As Long
     Dim wD As Double
-    Dim wPts As String
-    
-    On Error Resume Next
-    wPts = CStr(ws.Columns("D").Width)
-    On Error GoTo 0
-    AgentDbgWrite "H3", "結果_設備ガント_列幅を設定", "before_set", wPts, ws.Name
     
     On Error Resume Next
     ws.Columns("A").ColumnWidth = 14   ' 機械名
@@ -2137,9 +2110,6 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ws.Activate
     ws.Range("A1").Select
     On Error GoTo 0
-    On Error Resume Next
-    AgentDbgWrite "H3", "結果_設備ガント_列幅を設定", "after_set", CStr(ws.Columns("D").Width), ws.Name
-    On Error GoTo 0
 End Sub
 
 ' 結果_設備ガント：タイトルは結合セル先頭 A1。取り込み後の 1 行目一括書式のあと左寄せが崩れることがあるため固定する。
@@ -2158,7 +2128,6 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     Dim wb As Workbook
     Dim ws As Worksheet
     
-    AgentDbgWrite "H5", "結果_主要4結果シート_列オートフィット", "enter", "", ""
     Set wb = ThisWorkbook
     On Error Resume Next
     
@@ -4976,7 +4945,6 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim sourceWs As Worksheet
     Dim ws As Worksheet
     Dim sheetName As String
-    Dim colBr As String
     Dim memberWb As Workbook
     Dim memberPath As String
     Dim newSheetName As String
@@ -5273,14 +5241,6 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         
         For Each sourceWs In sourceWb.Sheets
             sheetName = Trim$(sourceWs.Name)
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
-                colBr = "gantt_eq"
-            ElseIf StrComp(sheetName, "結果_タスク一覧", vbBinaryCompare) = 0 Then
-                colBr = "tasklist"
-            Else
-                colBr = "autofit_else"
-            End If
-            AgentDbgWrite "H2", "計画取込_列幅分岐", colBr, sheetName, "len=" & CStr(Len(sheetName))
             
             ' Python 出力と同名のシートがマクロブックに残っていると、Copy 時に Excel が (2) を付けて複製する。
             ' 従来は「結果_*」と列設定のみ事前削除していたため、TEMP_設備毎の時間割・ブロックテーブル等が重複した。
@@ -5663,7 +5623,6 @@ End Sub
 ' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
 Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
-    AgentDbgWrite "H4", "配台_全シートフォントBIZ_UDP_自動適用", "start", "", ""
     On Error Resume Next
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     メインシート_AからK列_AutoFit
