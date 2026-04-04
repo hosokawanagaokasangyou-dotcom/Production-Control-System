@@ -1811,14 +1811,14 @@ def _write_results_equipment_gantt_sheet(
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = 15
-    hdr_font = _result_font(bold=True, color="000000", size=10)
+    hdr_font = _result_font(bold=True, color="000000", size=12)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
-    hdr_time_font = _result_font(bold=True, color="000000", size=9)
-    title_font = _result_font(bold=True, size=20, color="1A1A1A")
+    hdr_time_font = _result_font(bold=True, color="000000", size=11)
+    title_font = _result_font(bold=True, size=24, color="1A1A1A")
     title_fill = PatternFill(fill_type="solid", start_color="DDDDDD", end_color="DDDDDD")
-    meta_font = _result_font(size=9, color="333333")
+    meta_font = _result_font(size=11, color="333333")
     meta_fill = PatternFill(fill_type="solid", start_color="F3F3F3", end_color="F3F3F3")
-    day_banner_font = _result_font(bold=True, size=11, color="1A1A1A")
+    day_banner_font = _result_font(bold=True, size=13, color="1A1A1A")
     day_banner_fill = PatternFill(fill_type="solid", start_color="D0D0D0", end_color="D0D0D0")
     accent_left = Side(style="thick", color="2B2B2B")
     banner_sep = Side(style="thin", color="7A7A7A")
@@ -1826,8 +1826,8 @@ def _write_results_equipment_gantt_sheet(
     grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     idle_fill = PatternFill(fill_type="solid", start_color="FFFFFF", end_color="FFFFFF")
     break_fill = PatternFill(fill_type="solid", start_color="B8B8B8", end_color="B8B8B8")
-    gantt_label_font = _result_font(size=8, bold=True, color="000000")
-    gantt_label_font_actual = _result_font(size=8, bold=True, color="000000", italic=True)
+    gantt_label_font = _result_font(size=10, bold=True, color="000000")
+    gantt_label_font_actual = _result_font(size=10, bold=True, color="000000", italic=True)
     hdr_fill_outside_regular = PatternFill(
         fill_type="solid",
         start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
@@ -1878,7 +1878,7 @@ def _write_results_equipment_gantt_sheet(
         indent=1,
     )
     tcell.border = Border(left=accent_left, bottom=banner_sep)
-    ws.row_dimensions[row].height = 34
+    ws.row_dimensions[row].height = 40
     row += 1
 
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
@@ -1898,7 +1898,7 @@ def _write_results_equipment_gantt_sheet(
         shrink_to_fit=False,
     )
     mtop.border = Border(left=accent_left, bottom=banner_sep)
-    ws.row_dimensions[row].height = 22
+    ws.row_dimensions[row].height = 26
     row += 1
 
     first_freeze_set = False
@@ -1921,7 +1921,7 @@ def _write_results_equipment_gantt_sheet(
         ban.fill = day_banner_fill
         ban.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         ban.border = Border(left=accent_left, bottom=thin)
-        ws.row_dimensions[row].height = 22
+        ws.row_dimensions[row].height = 26
         row += 1
 
         fixed_hdr = ["機械名", "工程名", "担当者", "タスク概要"]
@@ -1942,7 +1942,7 @@ def _write_results_equipment_gantt_sheet(
                     hdr_use = hdr_fill_outside_regular
             c.fill = hdr_use
             c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
-        ws.row_dimensions[row].height = 38
+        ws.row_dimensions[row].height = 44
         row += 1
 
         data_row0 = row
@@ -1978,10 +1978,10 @@ def _write_results_equipment_gantt_sheet(
             c3 = ws.cell(row=row, column=3, value=member_disp)
             c4 = ws.cell(row=row, column=4, value=task_sum)
             for c in (c1, c2, c3, c4):
-                c.font = _result_font(size=10, color="000000")
+                c.font = _result_font(size=12, color="000000")
                 c.fill = lab_fill
                 c.border = grid_border
-            c1.font = _result_font(size=10, bold=True, color="000000")
+            c1.font = _result_font(size=12, bold=True, color="000000")
             c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -2000,7 +2000,7 @@ def _write_results_equipment_gantt_sheet(
                 grid_border,
             )
 
-            ws.row_dimensions[row].height = 45
+            ws.row_dimensions[row].height = 52
             row += 1
 
             if show_actual_rows:
@@ -2038,10 +2038,10 @@ def _write_results_equipment_gantt_sheet(
                 ca3 = ws.cell(row=row, column=3, value=member_disp_a)
                 ca4 = ws.cell(row=row, column=4, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
-                    c.font = _result_font(size=10, color="000000")
+                    c.font = _result_font(size=12, color="000000")
                     c.fill = lab_fill_a
                     c.border = grid_border
-                ca1.font = _result_font(size=10, bold=True, color="000000", italic=True)
+                ca1.font = _result_font(size=12, bold=True, color="000000", italic=True)
                 ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -2062,7 +2062,7 @@ def _write_results_equipment_gantt_sheet(
                     label_font=gantt_label_font_actual,
                 )
 
-                ws.row_dimensions[row].height = 45
+                ws.row_dimensions[row].height = 52
                 row += 1
         # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 列幅・D列折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
