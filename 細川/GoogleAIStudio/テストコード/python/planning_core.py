@@ -1545,35 +1545,6 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# #region agent log
-def _debug_ef588c_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    """debug session ef588c: NDJSON to workspace debug-ef588c.log (no secrets)."""
-    try:
-        log_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "..",
-            "..",
-            "..",
-            "debug-ef588c.log",
-        )
-        rec = {
-            "sessionId": "ef588c",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('task', tid, fill_hex, pct)"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
@@ -1635,50 +1606,13 @@ def _paint_gantt_timeline_row_merged(
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
-    t_states0 = time_module.perf_counter()
     states = []
     for slot_start in slots:
         mid = slot_start + timedelta(minutes=slot_mins / 2)
         states.append(_gantt_slot_state_tuple(evlist, mid, task_fill_fn))
-    t_states1 = time_module.perf_counter()
-    # #region agent log
-    _debug_ef588c_log(
-        "C",
-        "planning_core:_paint_gantt_timeline_row_merged",
-        "states_built",
-        {
-            "row": row,
-            "n_slots": n_slots,
-            "len_evlist": len(evlist) if evlist is not None else 0,
-            "states_build_sec": round(t_states1 - t_states0, 6),
-            "slot_ev_product": n_slots * (len(evlist) if evlist else 0),
-        },
-    )
-    # #endregion
     tcol0 = n_fixed + 1
     i = 0
-    t_merge0 = time_module.perf_counter()
-    loop_iter = 0
     while i < n_slots:
-        loop_iter += 1
-        # #region agent log
-        if loop_iter > n_slots + 20:
-            _debug_ef588c_log(
-                "A",
-                "planning_core:_paint_gantt_timeline_row_merged",
-                "loop_guard_exceeded",
-                {
-                    "row": row,
-                    "n_slots": n_slots,
-                    "loop_iter": loop_iter,
-                    "i": i,
-                    "st0_head": states[i][0] if i < len(states) else None,
-                },
-            )
-            raise RuntimeError(
-                "[debug-ef588c] ガント行描画ループ異常（仮説H1: idle/break で i が進まない無限ループの疑い）"
-            )
-        # #endregion
         mk = _gantt_merge_key(states[i])
         j = i + 1
         while j < n_slots and _gantt_merge_key(states[j]) == mk:
@@ -1708,20 +1642,6 @@ def _paint_gantt_timeline_row_merged(
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
         i = j
-    # #region agent log
-    t_merge1 = time_module.perf_counter()
-    _debug_ef588c_log(
-        "B",
-        "planning_core:_paint_gantt_timeline_row_merged",
-        "merge_loop_done",
-        {
-            "row": row,
-            "n_slots": n_slots,
-            "loop_iter": loop_iter,
-            "merge_loop_sec": round(t_merge1 - t_merge0, 6),
-        },
-    )
-    # #endregion
 
 
 def _time_intervals_overlap_half_open(
@@ -1808,24 +1728,6 @@ def _write_results_equipment_gantt_sheet(
         ws.sheet_properties.tabColor = "7F7F7F"
     except Exception:
         pass
-
-    # #region agent log
-    _t_gantt_all0 = time_module.perf_counter()
-    _debug_ef588c_log(
-        "E",
-        "planning_core:_write_results_equipment_gantt_sheet",
-        "gantt_start",
-        {
-            "n_timeline_events": len(timeline_events) if timeline_events is not None else 0,
-            "n_equipment": len(equipment_list) if equipment_list is not None else 0,
-            "n_sorted_dates": len(sorted_dates) if sorted_dates is not None else 0,
-            "show_actual_rows": bool(actual_timeline_events),
-            "n_actual_events": len(actual_timeline_events)
-            if actual_timeline_events is not None
-            else 0,
-        },
-    )
-    # #endregion
 
     events_by_date = defaultdict(list)
     for e in timeline_events:
@@ -2114,23 +2016,6 @@ def _write_results_equipment_gantt_sheet(
         ws.print_options.gridLines = False
     except Exception:
         pass
-
-    # #region agent log
-    _t_gantt_all1 = time_module.perf_counter()
-    _debug_ef588c_log(
-        "E",
-        "planning_core:_write_results_equipment_gantt_sheet",
-        "gantt_end",
-        {
-            "total_sec": round(_t_gantt_all1 - _t_gantt_all0, 6),
-            "n_slots_per_day": n_slots,
-            "approx_cell_ops_scale": (len(sorted_dates) if sorted_dates else 0)
-            * (len(equipment_list) if equipment_list else 0)
-            * (2 if show_actual_rows else 1)
-            * max(1, n_slots),
-        },
-    )
-    # #endregion
 
 
 def row_has_completion_keyword(row):
