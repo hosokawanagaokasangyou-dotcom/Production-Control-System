@@ -5,6 +5,12 @@ Private Type POINTAPI
     x As Long
     y As Long
 End Type
+Private Type RECT
+    Left As Long
+    Top As Long
+    Right As Long
+    Bottom As Long
+End Type
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
@@ -14,6 +20,7 @@ End Type
     Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
     Private Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
     Private Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
+    Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
     Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
     Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
     Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
@@ -34,6 +41,7 @@ End Type
     Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
     Private Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
+    Private Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, lpRect As RECT) As Long
     Private Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
     Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
@@ -42,6 +50,8 @@ End Type
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
 Private Const SND_ALIAS As Long = &H10000
+' frmMacroSplash を Excel メイン枠の下端・水平中央に合わせるときの下端からの余白（px）
+Private Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
 Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
@@ -97,6 +107,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
+'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
@@ -1959,6 +1970,45 @@ Private Sub MacroCompleteChime()
     PlaySound "SystemDefault", 0&, SND_ALIAS Or SND_ASYNC
 End Sub
 
+' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
+Private Sub MacroSplash_PositionDockExcelBottomCenter()
+#If VBA7 Then
+    Dim xlHwnd As LongPtr
+    Dim splashHwnd As LongPtr
+#Else
+    Dim xlHwnd As Long
+    Dim splashHwnd As Long
+#End If
+    Dim rcX As RECT
+    Dim rcS As RECT
+    Dim xlW As Long
+    Dim sw As Long
+    Dim sh As Long
+    Dim newL As Long
+    Dim newT As Long
+    On Error GoTo SplashDockDone
+    If Not m_macroSplashShown Then GoTo SplashDockDone
+#If VBA7 Then
+    xlHwnd = Application.hwnd
+#Else
+    xlHwnd = Application.hWnd
+#End If
+    If xlHwnd = 0 Then GoTo SplashDockDone
+    splashHwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
+    If splashHwnd = 0 Then GoTo SplashDockDone
+    If GetWindowRect(xlHwnd, rcX) = 0 Then GoTo SplashDockDone
+    If GetWindowRect(splashHwnd, rcS) = 0 Then GoTo SplashDockDone
+    xlW = rcX.Right - rcX.Left
+    sw = rcS.Right - rcS.Left
+    sh = rcS.Bottom - rcS.Top
+    If xlW < 80 Or sw < 40 Or sh < 40 Then GoTo SplashDockDone
+    newL = rcX.Left + (xlW - sw) \ 2
+    newT = rcX.Bottom - sh - SPLASH_EXCEL_BOTTOM_GAP_PX
+    Call SetWindowPos(splashHwnd, 0&, newL, newT, sw, sh, SWP_NOZORDER Or SWP_SHOWWINDOW)
+SplashDockDone:
+    On Error GoTo 0
+End Sub
+
 ' モードレス UserForm が背後に残ると再描画・ログ更新が止まったように見えることがある。Show 直後に前面へ（ユーザーがクリックしたときと同趣旨）。
 Private Sub MacroSplash_BringFormToFront()
 #If VBA7 Then
@@ -1968,6 +2018,7 @@ Private Sub MacroSplash_BringFormToFront()
 #End If
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
+    MacroSplash_PositionDockExcelBottomCenter
     hwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
     If hwnd = 0 Then Exit Sub
     BringWindowToTop hwnd
@@ -1984,7 +2035,7 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     End If
     frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
     frmMacroSplash.lblMessage.Caption = message
-    frmMacroSplash.StartUpPosition = 2  ' 画面中央
+    frmMacroSplash.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
         Application.Interactive = False
