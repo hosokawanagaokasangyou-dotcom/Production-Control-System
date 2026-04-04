@@ -7,6 +7,13 @@
 ' 〇月カレンダー: 日付・勤怠入力の有効列は A（メンバー名）～ AG（日付列は B～AG）
 Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 
+' メンバー別出勤簿（WriteMemberAttendanceSheet）: 1 行目見出し・データは A 列「日付」～ K 列
+Private Const MEMBER_ATT_HEADER_A1 As String = "日付"
+Private Const MEMBER_ATT_FIRST_DATA_ROW As Long = 2
+Private Const MEMBER_ATT_LAST_INPUT_COL As Long = 11   ' K（備考・残業終業まで）
+Private mAttRowHL_SheetName As String
+Private mAttRowHL_DataRow As Long
+
 ' 全シートフォント統一マクロ（PC にフォントが入っている必要があります）
 Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
@@ -198,6 +205,75 @@ Sub master_メインの勤怠リンクリストを更新()
     Exit Sub
 EH:
     MsgBox "勤怠リンク更新エラー: " & Err.Description, vbCritical
+End Sub
+
+' -----------------------------------------------------------------------
+' メンバー勤怠（出勤簿）シート: アクティブセル行の入力可能列 A～K を薄色でハイライト
+' ※ ThisWorkbook モジュールに次を1つ追加してください（貼り付け後、イベントが有効になります）。
+'
+' Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)
+'     On Error Resume Next
+'     MasterAttendanceRowHighlight_OnSelection Sh, Target
+'     On Error GoTo 0
+' End Sub
+' -----------------------------------------------------------------------
+
+Private Function MasterIsMemberAttendanceSheet(ByVal ws As Worksheet) As Boolean
+    Dim h As String
+    MasterIsMemberAttendanceSheet = False
+    If ws Is Nothing Then Exit Function
+    On Error Resume Next
+    h = Trim$(CStr(ws.Cells(1, 1).Value))
+    On Error GoTo 0
+    If StrComp(h, MEMBER_ATT_HEADER_A1, vbTextCompare) <> 0 Then Exit Function
+    MasterIsMemberAttendanceSheet = True
+End Function
+
+Private Sub MasterAttendanceRowHighlight_Clear(ByVal wb As Workbook)
+    Dim ws As Worksheet
+    Dim rng As Range
+    If Len(mAttRowHL_SheetName) = 0 Then Exit Sub
+    If mAttRowHL_DataRow < MEMBER_ATT_FIRST_DATA_ROW Then Exit Sub
+    On Error Resume Next
+    Set ws = wb.Worksheets(mAttRowHL_SheetName)
+    On Error GoTo 0
+    If ws Is Nothing Then GoTo ResetState
+    If Not MasterIsMemberAttendanceSheet(ws) Then GoTo ResetState
+    On Error Resume Next
+    Set rng = ws.Range(ws.Cells(mAttRowHL_DataRow, 1), ws.Cells(mAttRowHL_DataRow, MEMBER_ATT_LAST_INPUT_COL))
+    rng.Interior.ColorIndex = xlNone
+    On Error GoTo 0
+ResetState:
+    mAttRowHL_SheetName = vbNullString
+    mAttRowHL_DataRow = 0
+End Sub
+
+' ThisWorkbook.SheetSelectionChange から呼び出し（標準モジュールは Public 必須）
+Public Sub MasterAttendanceRowHighlight_OnSelection(ByVal Sh As Object, ByVal Target As Range)
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim rng As Range
+    Dim wb As Workbook
+    
+    On Error GoTo QuietExit
+    If Sh Is Nothing Then Exit Sub
+    If Not TypeOf Sh Is Worksheet Then Exit Sub
+    Set ws = Sh
+    Set wb = ws.Parent
+    
+    MasterAttendanceRowHighlight_Clear wb
+    
+    If Not MasterIsMemberAttendanceSheet(ws) Then Exit Sub
+    r = Target.Row
+    If r < MEMBER_ATT_FIRST_DATA_ROW Then Exit Sub
+    
+    Set rng = ws.Range(ws.Cells(r, 1), ws.Cells(r, MEMBER_ATT_LAST_INPUT_COL))
+    On Error Resume Next
+    rng.Interior.Color = RGB(255, 247, 112)
+    On Error GoTo 0
+    mAttRowHL_SheetName = ws.Name
+    mAttRowHL_DataRow = r
+QuietExit:
 End Sub
 
 ' メイン A15/B15・A12/B12 等: 結合セルでも左上セルの実値を取得（結合右隣が空扱いになるのを防ぐ）
