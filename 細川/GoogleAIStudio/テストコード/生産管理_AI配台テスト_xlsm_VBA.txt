@@ -2479,6 +2479,7 @@ Private Sub 配台計画_タスク入力を前へ並べ替え()
     Dim wsMain As Worksheet
     Dim wsAfter As Worksheet
     
+    MacroSplash_SetStep "段階1: 「配台計画_タスク入力」シートをメイン付近へ移動しています…"
     On Error Resume Next
     Set wsPlan = ThisWorkbook.Sheets(PLAN_SHEET)
     On Error GoTo 0
@@ -2621,10 +2622,15 @@ Def1:
 End Function
 
 Private Sub MacroSplash_SetStep(ByVal stepMessage As String)
+    Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
+    prevSU = Application.ScreenUpdating
+    If Not prevSU Then Application.ScreenUpdating = True
     frmMacroSplash.lblMessage.Caption = stepMessage
+    frmMacroSplash.Repaint
     DoEvents
+    If Not prevSU Then Application.ScreenUpdating = False
 End Sub
 
 Private Sub MacroSplash_ClearExecutionLogPane()
@@ -4432,8 +4438,12 @@ Private Sub 段階1_コア実行()
         Exit Sub
     End If
 
+    Application.ScreenUpdating = False
+
     ' 接続更新より先に設定シートを確保（Refresh で止まる・失敗して Exit したとき無言でシート未作成になるのを防ぐ）
+    MacroSplash_SetStep "段階1: 「設定_配台不要工程」シートを確認・作成・見出しを整えています…"
     設定_配台不要工程_シートを確保
+    MacroSplash_SetStep "段階1: 「設定_環境変数」シートを確認・作成し不足キーのみ追記しています…"
     設定_環境変数_シートを確保
     MacroSplash_SetStep "段階1: データ接続（Power Query 等）を更新しています…"
 
@@ -4442,6 +4452,8 @@ Private Sub 段階1_コア実行()
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
             m_lastStage1ErrMsg = m_lastStage1ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
         End If
+        Application.ScreenUpdating = prevScreenUpdating
+        Application.DisplayAlerts = prevDisplayAlerts
         Exit Sub
     End If
 
@@ -4450,6 +4462,8 @@ Private Sub 段階1_コア実行()
     If Not ValidateMasterSkillsOpAsPriorityUnique(targetDir, skErrSt1) Then
         m_lastStage1ErrMsg = skErrSt1
         m_lastStage1ExitCode = -1
+        Application.ScreenUpdating = prevScreenUpdating
+        Application.DisplayAlerts = prevDisplayAlerts
         Exit Sub
     End If
 
@@ -4466,9 +4480,12 @@ Private Sub 段階1_コア実行()
     On Error GoTo ErrStage1
     If wsLog Is Nothing Then
         m_lastStage1ErrMsg = "「LOG」シートが見つかりません。"
+        Application.ScreenUpdating = prevScreenUpdating
+        Application.DisplayAlerts = prevDisplayAlerts
         Exit Sub
     End If
 
+    MacroSplash_SetStep "段階1: LOG シートをクリアしヘッダを書き込んでいます…"
     wsLog.Cells.Clear
     wsLog.Cells(1, 1).Value = "実行ブック: " & ThisWorkbook.FullName
     If Not GeminiCredentialsJsonPathIsConfigured() Then
@@ -4541,12 +4558,14 @@ Private Sub 段階1_コア実行()
         m_lastStage1ExitCode = exitCode
     End If
 
-    MacroSplash_SetStep "段階1: 実行ログと配台不要工程・Gemini サマリをブックへ反映しています…"
+    MacroSplash_SetStep "段階1: 配台不要工程シートへ TSV（A〜D）を反映しています…"
     ' Gemini サマリ・設定シートは planning_core が openpyxl で保存（ブックが閉じているとき）。
     ' Excel で開いたままのときは log の TSV/テキストをマクロで反映する。
     On Error Resume Next
     Call 設定_配台不要工程_AからE_TSVから反映
+    MacroSplash_SetStep "段階1: 配台不要工程シートの E 列（ロジック式）を TSV から反映しています…"
     Call 設定_配台不要工程_E列_TSVから反映
+    MacroSplash_SetStep "段階1: メインシートの Gemini 利用サマリ（P 列）を反映しています…"
     Call メインシート_Gemini利用サマリをP列に反映(targetDir)
     On Error GoTo ErrStage1
 
@@ -4568,6 +4587,7 @@ Private Sub 段階1_コア実行()
         Set adoStream = Nothing
         outputText = Replace(outputText, vbCrLf, vbLf)
         logLines = Split(outputText, vbLf)
+        MacroSplash_SetStep "段階1: execution_log.txt の全文を LOG シートへ書き込んでいます…（行数 " & CStr(UBound(logLines) - LBound(logLines) + 1) & "）"
         Application.ScreenUpdating = False
         For i = LBound(logLines) To UBound(logLines)
             wsLog.Cells(i + 2, 1).Value = logLines(i)
@@ -4586,9 +4606,11 @@ Private Sub 段階1_コア実行()
         Exit Sub
     End If
 
-    MacroSplash_SetStep "段階1: 出力を「配台計画_タスク入力」シートへ取り込んでいます…"
+    MacroSplash_SetStep "段階1: output\plan_input_tasks.xlsx を開き「配台計画_タスク入力」へ取り込んでいます…"
     If Not ImportPlanInputTasksFromOutput(targetDir) Then
         m_lastStage1ExitCode = -1
+        Application.ScreenUpdating = prevScreenUpdating
+        Application.DisplayAlerts = prevDisplayAlerts
         Exit Sub
     End If
     On Error Resume Next
@@ -4743,6 +4765,7 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     Dim srcWs As Worksheet
     Dim ws As Worksheet
     Dim da As Boolean
+    Dim prevSUImp As Boolean
     Dim preserveFontName As String
     Dim preserveFontSize As Double
     Dim havePreserveFont As Boolean
@@ -4755,9 +4778,11 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     End If
 
     da = Application.DisplayAlerts
+    prevSUImp = Application.ScreenUpdating
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
+    MacroSplash_SetStep "段階1: plan_input_tasks.xlsx を開いています…"
     Set srcWb = Workbooks.Open(path)
     Set srcWs = srcWb.Sheets(1)
 
@@ -4766,18 +4791,21 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     On Error GoTo 0
 
     If ws Is Nothing Then
+        MacroSplash_SetStep "段階1: 「配台計画_タスク入力」シートが無いため、出力ブックから新規シートとしてコピーしています…"
         srcWs.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
         Set ws = ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
         On Error Resume Next
         ws.Name = PLAN_SHEET
         On Error GoTo 0
     Else
+        MacroSplash_SetStep "段階1: 既存の「配台計画_タスク入力」をクリアし、出力データを貼り付けています…"
         preserveFontName = "": preserveFontSize = 0: havePreserveFont = False
         配台計画_タスク入力_既存シートの基準フォントを取得 ws, preserveFontName, preserveFontSize, havePreserveFont
         ws.Cells.Clear
         srcWs.UsedRange.Copy Destination:=ws.Range("A1")
     End If
 
+    MacroSplash_SetStep "段階1: 取り込み元ブックを閉じ、列幅・罫線・指定納期ソートを適用しています…"
     srcWb.Close SaveChanges:=False
     Set srcWb = Nothing
 
@@ -4828,7 +4856,7 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     配台計画_タスク入力_上書き列に入力色を付与 ws
 
     Application.DisplayAlerts = da
-    Application.ScreenUpdating = True
+    Application.ScreenUpdating = prevSUImp
     ImportPlanInputTasksFromOutput = True
 End Function
 
