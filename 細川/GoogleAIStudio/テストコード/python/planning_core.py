@@ -2426,35 +2426,6 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
     return lookup
 
 
-def _agent_debug_session_log(
-    *,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-) -> None:
-    # #region agent log
-    try:
-        _p = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "..", "debug-8ae73f.log"
-            )
-        )
-        payload = {
-            "sessionId": "8ae73f",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_p, "a", encoding="utf-8") as _af:
-            _af.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
-
 def _equipment_schedule_header_labels(equipment_list: list) -> list:
     """
     結果_設備毎の時間割・結果_設備ガントの行／列見出し用。
@@ -2495,36 +2466,18 @@ def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None
     cand = f"{p}+{mn}" if (p and mn) else (p or mn)
     elist = [str(x).strip() for x in (equipment_list or []) if str(x).strip()]
     if cand in elist:
-        result = cand
-    elif mn:
-        result = cand
-    elif not p:
-        result = cand
-    else:
-        exact_p = [x for x in elist if x == p]
-        if len(exact_p) == 1:
-            result = exact_p[0]
-        else:
-            prefixed = [x for x in elist if x.startswith(p + "+")]
-            if len(prefixed) == 1:
-                result = prefixed[0]
-            else:
-                result = p
-    # #region agent log
-    if "+" in str(result):
-        _agent_debug_session_log(
-            hypothesis_id="H2",
-            location="planning_core.py:_resolve_equipment_line_key_for_task",
-            message="equipment_line_key_composite",
-            data={
-                "process": p,
-                "machine_name": mn,
-                "equipment_line_key": result,
-                "cand": cand,
-            },
-        )
-    # #endregion
-    return result
+        return cand
+    if mn:
+        return cand
+    if not p:
+        return cand
+    exact_p = [x for x in elist if x == p]
+    if len(exact_p) == 1:
+        return exact_p[0]
+    prefixed = [x for x in elist if x.startswith(p + "+")]
+    if len(prefixed) == 1:
+        return prefixed[0]
+    return p
 
 
 def load_planning_tasks_df():
@@ -13755,25 +13708,6 @@ def _trial_order_first_schedule_pass(
                     "unit_m": task["unit_m"],
                 }
             )
-            # #region agent log
-            _mn_occ = str(task.get("machine_name") or "").strip()
-            _proc_occ = str(task.get("machine") or "").strip()
-            _agent_debug_session_log(
-                hypothesis_id="H1",
-                location="planning_core.py:timeline_events.append(main_roll)",
-                message="roll_committed_timeline",
-                data={
-                    "equipment_line_key": eq_line,
-                    "machine_occupancy_key": machine_occ_key,
-                    "task_machine_column": _proc_occ,
-                    "machine_name": _mn_occ,
-                    "task_id": str(task.get("task_id") or ""),
-                    "date": current_date.isoformat(),
-                    "start_dt": best_start.isoformat(sep=" ", timespec="seconds"),
-                    "end_dt": best_end.isoformat(sep=" ", timespec="seconds"),
-                },
-            )
-            # #endregion
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
@@ -15562,25 +15496,6 @@ def _generate_plan_impl():
                                 * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
                                 "unit_m": task['unit_m']
                             })
-                            # #region agent log
-                            _mn_occ2 = str(task.get("machine_name") or "").strip()
-                            _proc_occ2 = str(task.get("machine") or "").strip()
-                            _agent_debug_session_log(
-                                hypothesis_id="H1",
-                                location="planning_core.py:timeline_events.append(chunk_roll)",
-                                message="roll_committed_timeline",
-                                data={
-                                    "equipment_line_key": eq_line,
-                                    "machine_occupancy_key": machine_occ_key,
-                                    "task_machine_column": _proc_occ2,
-                                    "machine_name": _mn_occ2,
-                                    "task_id": str(task.get("task_id") or ""),
-                                    "date": current_date.isoformat(),
-                                    "start_dt": best_info["start_dt"].isoformat(sep=" ", timespec="seconds"),
-                                    "end_dt": best_info["end_dt"].isoformat(sep=" ", timespec="seconds"),
-                                },
-                            )
-                            # #endregion
                             if _dispatch_interval_mirror is not None:
                                 _dispatch_interval_mirror.register_from_event(
                                     timeline_events[-1]
