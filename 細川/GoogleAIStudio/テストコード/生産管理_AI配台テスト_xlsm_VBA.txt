@@ -4741,6 +4741,38 @@ Private Function 取込ブック内のコピー先シートを取得(ByVal wb As
     Set 取込ブック内のコピー先シートを取得 = sh
 End Function
 
+' production_plan 取り込み: マクロブック側の「同名」および Excel が付けた「名前 (2)」「名前 (3)」…をすべて削除してから Copy する。
+' （過去バージョンで残った (2) だけが残り、正確名の削除だけでは掃除しきれない場合がある。）
+Private Sub マクロブックから計画取込シート同源名シートを削除(ByVal wb As Workbook, ByVal sheetName As String)
+    Dim i As Long
+    Dim j As Long
+    Dim nm As String
+    Dim names() As String
+    Dim n As Long
+    
+    n = 0
+    ReDim names(1 To wb.Sheets.Count)
+    For i = 1 To wb.Sheets.Count
+        nm = wb.Sheets(i).Name
+        If StrComp(nm, sheetName, vbBinaryCompare) = 0 Then
+            n = n + 1
+            names(n) = nm
+        ElseIf Len(nm) >= Len(sheetName) + 3 Then
+            If StrComp(Left$(nm, Len(sheetName) + 2), sheetName & " (", vbBinaryCompare) = 0 Then
+                n = n + 1
+                names(n) = nm
+            End If
+        End If
+    Next i
+    
+    For j = n To 1 Step -1
+        On Error Resume Next
+        wb.Sheets(names(j)).Delete
+        Err.Clear
+        On Error GoTo 0
+    Next j
+End Sub
+
 ' 段階2の取り込み結果をスプラッシュへ反映（成功・一部取込は MsgBox なし。未取得のみ警告ダイアログ）
 Private Sub 段階2_取り込み結果を報告()
     Dim p As String
@@ -5110,12 +5142,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             
             ' Python 出力と同名のシートがマクロブックに残っていると、Copy 時に Excel が (2) を付けて複製する。
             ' 従来は「結果_*」と列設定のみ事前削除していたため、TEMP_設備毎の時間割・ブロックテーブル等が重複した。
-            On Error Resume Next
-            Set ws = targetWb.Sheets(sheetName)
-            On Error GoTo ErrHandler
-            If Not ws Is Nothing Then
-                ws.Delete
-            End If
+            ' 既に残っている「名前 (2)」だけの場合もあるため、同源名（正確一致 + 「名前 (」で始まる複製）をまとめて削除する。
+            マクロブックから計画取込シート同源名シートを削除 targetWb, sheetName
             Set ws = Nothing
             
             ' シートをコピー（ターゲットブックの末尾に）
