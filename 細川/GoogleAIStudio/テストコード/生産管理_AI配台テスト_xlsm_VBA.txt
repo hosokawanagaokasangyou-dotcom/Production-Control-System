@@ -909,19 +909,26 @@ Private Function DebugAgent_EscapeJson(ByVal s As String) As String
     DebugAgent_EscapeJson = s
 End Function
 
-Private Sub DebugAgent_Log(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal runId As String)
+Private Sub DebugAgent_Log(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal runId As String, Optional ByVal optUsedBookWin As Variant)
     Dim p As String
     Dim ln As String
     Dim f As Integer
     Dim activeNm As String
     Dim thisNm As String
     Dim inter As Boolean
+    Dim optPart As String
     On Error Resume Next
     activeNm = ActiveWorkbook.Name
     If Err.Number <> 0 Then activeNm = "(no_active_wb)": Err.Clear
     thisNm = ThisWorkbook.Name
     inter = Application.Interactive
-    ln = "{""sessionId"":""dc1a8a"",""runId"":""" & runId & """,""hypothesisId"":""" & hypothesisId & """,""location"":""" & DebugAgent_EscapeJson(location) & """,""message"":""" & DebugAgent_EscapeJson(message) & """,""data"":{""activeWB"":""" & DebugAgent_EscapeJson(activeNm) & """,""thisWB"":""" & DebugAgent_EscapeJson(thisNm) & """,""interactive"":" & IIf(inter, "true", "false") & "},""timestamp"":" & CLng(1000 * Timer) & "}"
+    optPart = ""
+    If Not IsMissing(optUsedBookWin) Then
+        If VarType(optUsedBookWin) = vbBoolean Then
+            optPart = "," & """usedBookWinHwnd"":" & IIf(CBool(optUsedBookWin), "true", "false")
+        End If
+    End If
+    ln = "{""sessionId"":""dc1a8a"",""runId"":""" & runId & """,""hypothesisId"":""" & hypothesisId & """,""location"":""" & DebugAgent_EscapeJson(location) & """,""message"":""" & DebugAgent_EscapeJson(message) & """,""data"":{""activeWB"":""" & DebugAgent_EscapeJson(activeNm) & """,""thisWB"":""" & DebugAgent_EscapeJson(thisNm) & """,""interactive"":" & IIf(inter, "true", "false") & optPart & "},""timestamp"":" & CLng(1000 * Timer) & "}"
     p = ThisWorkbook.Path & "\..\..\..\debug-dc1a8a.log"
     f = FreeFile
     Open p For Append As #f
@@ -983,54 +990,71 @@ OpenFail:
     MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
 End Sub
 
-' ログ上は ActiveWorkbook=master でも、UserForm 終了直後に OS 前面が別ウィンドウに残ることがある（SDI 等）ため再アクティブ＋hwnd 前面化
-Private Sub アニメ後_masterをOs前面へ()
+' SDI ではブックごとに HWND が分かれる。Application.hwnd だけでは前面がズレることがあるため、まず wb.Windows(1).Hwnd を試す
+Private Function アニメ後_masterをOs前面へ() As Boolean
     Dim path As String
     Dim folder As String
     Dim wb As Workbook
     Dim w As Window
+    Dim found As Boolean
+    Dim usedBookWin As Boolean
 #If VBA7 Then
-    Dim xlHwnd As LongPtr
+    Dim targetHwnd As LongPtr
 #Else
-    Dim xlHwnd As Long
+    Dim targetHwnd As Long
 #End If
+    アニメ後_masterをOs前面へ = False
+    usedBookWin = False
+    targetHwnd = 0
     On Error Resume Next
     folder = ThisWorkbook.Path
-    If Len(folder) = 0 Then Exit Sub
+    If Len(folder) = 0 Then Exit Function
     path = folder & "\" & MASTER_WORKBOOK_FILE
+    found = False
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
-            wb.Activate
-            For Each w In wb.Windows
-                w.Activate
-                Exit For
-            Next w
+            found = True
             Exit For
         End If
     Next wb
+    If Not found Then Exit Function
+    wb.Activate
+    For Each w In wb.Windows
+        w.Activate
+        Exit For
+    Next w
     DoEvents
+    Err.Clear
+    targetHwnd = wb.Windows(1).Hwnd
+    If Err.Number = 0 And targetHwnd <> 0 Then
+        usedBookWin = True
+    Else
+        Err.Clear
 #If VBA7 Then
-    xlHwnd = Application.hwnd
+        targetHwnd = Application.hwnd
 #Else
-    xlHwnd = Application.hWnd
+        targetHwnd = Application.hWnd
 #End If
-    If xlHwnd <> 0 Then
-        BringWindowToTop xlHwnd
-        SetForegroundWindow xlHwnd
+    End If
+    If targetHwnd <> 0 Then
+        BringWindowToTop targetHwnd
+        SetForegroundWindow targetHwnd
     End If
     On Error GoTo 0
-End Sub
+    アニメ後_masterをOs前面へ = usedBookWin
+End Function
 
 Sub アニメ付き_メインシート_masterブックを開く()
+    Dim usedBkWin As Boolean
     ' #region agent log
     DebugAgent_Log "H4", "anim_master_open", "entry", "pre-fix"
     ' #endregion agent log
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "master.xlsm を開いています…", "メインシート_masterブックを開く"
     If m_animMacroSucceeded Then
-        アニメ後_masterをOs前面へ
+        usedBkWin = アニメ後_masterをOs前面へ()
         ' #region agent log
-        DebugAgent_Log "H6", "anim_master_open", "after_os_foreground_helper", "post-fix"
+        DebugAgent_Log "H7", "anim_master_open", "after_book_win_hwnd_foreground", "post-fix2", usedBkWin
         ' #endregion agent log
     End If
 End Sub
