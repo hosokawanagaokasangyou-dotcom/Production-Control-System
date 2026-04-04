@@ -184,52 +184,6 @@ Private m_splashLastLogSnapshot As String
 ' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
 Private m_splashConsoleOverlayActive As Boolean
 
-' #region agent log
-' Cursor debug session 9f22f3: 段階2「メイン・シート順・フォント後処理」区間の所要時間(ms)を NDJSON でリポジトリ直下 debug-9f22f3.log へ追記（ブックは 細川/GoogleAIStudio/テストコード 配下想定）
-Private Function AgentDebugLogPath() As String
-    On Error Resume Next
-    Dim fso As Object
-    Dim p As String
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    If Len(ThisWorkbook.Path) = 0 Then
-        AgentDebugLogPath = ""
-        Exit Function
-    End If
-    p = fso.GetAbsolutePathName(ThisWorkbook.Path & "\..\..\..\debug-9f22f3.log")
-    If Len(Dir(fso.GetParentFolderName(p), vbDirectory)) > 0 Then
-        AgentDebugLogPath = p
-    Else
-        AgentDebugLogPath = fso.BuildPath(ThisWorkbook.Path, "debug-9f22f3.log")
-    End If
-    On Error GoTo 0
-End Function
-
-Private Function AgentDebugJsonEsc(ByVal s As String) As String
-    Dim t As String
-    t = Replace(s, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCrLf, " ")
-    t = Replace(t, vbCr, " ")
-    t = Replace(t, vbLf, " ")
-    AgentDebugJsonEsc = t
-End Function
-
-Private Sub AgentDebugLogNDJSON(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal elapsedMs As Long)
-    On Error Resume Next
-    Dim p As String
-    Dim fh As Integer
-    Dim line As String
-    p = AgentDebugLogPath()
-    If Len(p) = 0 Then Exit Sub
-    line = "{""sessionId"":""9f22f3"",""hypothesisId"":""" & AgentDebugJsonEsc(hypothesisId) & """,""location"":""" & AgentDebugJsonEsc(location) & """,""message"":""" & AgentDebugJsonEsc(message) & """,""data"":{""elapsedMs"":" & CStr(elapsedMs) & "},""timestamp"":" & CStr(CLng(Timer * 1000)) & "}"
-    fh = FreeFile
-    Open p For Append As #fh
-    Print #fh, line
-    Close #fh
-    On Error GoTo 0
-End Sub
-' #endregion agent log
-
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
     Dim fh As Integer
@@ -4701,7 +4655,6 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim st2XwErr As Long
     Dim st2XwDesc As String
     Dim missSt2 As String
-    Dim agLogT As Single
     
     On Error GoTo ErrHandler
     
@@ -5110,31 +5063,14 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     End If
     
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
-    ' #region agent log
-    AgentDebugLogNDJSON "E", "stage2_post_enter", "splash main sheet order font postproc", 0
-    ' #endregion agent log
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
-    ' #region agent log
-    agLogT = Timer
-    ' #endregion agent log
     メインシート_メンバー一覧と出勤表示 True
-    ' #region agent log
-    AgentDebugLogNDJSON "A", "stage2_after_main_member_refresh", "MainSheet member list and attendance", CLng((Timer - agLogT) * 1000)
-    agLogT = Timer
-    ' #endregion agent log
     ' 個人_* シートをブック末尾へ（失敗しても継続）
     個人シートを末尾へ並べ替え
-    ' #region agent log
-    AgentDebugLogNDJSON "B", "stage2_after_personal_reorder", "personal sheets to end + LOG + settings", CLng((Timer - agLogT) * 1000)
-    agLogT = Timer
-    ' #endregion agent log
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
-    ' #region agent log
-    AgentDebugLogNDJSON "B", "stage2_after_colconfig_move", "column config before settings sheet", CLng((Timer - agLogT) * 1000)
-    ' #endregion agent log
     On Error GoTo ErrHandler
     
     ' 完了ダイアログ直前はメインシートを表示（A1）
@@ -5148,13 +5084,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     m_stage2MemberImported = memberImported
 
     On Error Resume Next
-    ' #region agent log
-    agLogT = Timer
-    ' #endregion agent log
     配台_全シートフォントBIZ_UDP_自動適用
-    ' #region agent log
-    AgentDebugLogNDJSON "C", "stage2_after_font_postproc_block", "ApplyFont all sheets + main autofit + result autofit", CLng((Timer - agLogT) * 1000)
-    ' #endregion agent log
     On Error GoTo 0
 
 Finish:
@@ -5178,30 +5108,14 @@ Finish:
     
     On Error Resume Next
     If planImported Then
-        ' #region agent log
-        agLogT = Timer
-        ' #endregion agent log
         結果プレフィックスシートの表示倍率を設定 ThisWorkbook, 70
-        ' #region agent log
-        AgentDebugLogNDJSON "D", "stage2_after_result_zoom", "activate each result_ sheet set zoom 70", CLng((Timer - agLogT) * 1000)
-        agLogT = Timer
-        ' #endregion agent log
         zSt2EquipFreeze = 結果_設備毎の時間割_B2選択して窓枠固定()
-        ' #region agent log
-        AgentDebugLogNDJSON "D", "stage2_after_equip_freeze", "equip schedule B2 freeze panes", CLng((Timer - agLogT) * 1000)
-        ' #endregion agent log
     End If
     メインシートA1を選択
     On Error GoTo 0
     
     On Error Resume Next
-    ' #region agent log
-    agLogT = Timer
-    ' #endregion agent log
     ThisWorkbook.Save
-    ' #region agent log
-    AgentDebugLogNDJSON "I", "stage2_after_workbook_save", "ThisWorkbook.Save", CLng((Timer - agLogT) * 1000)
-    ' #endregion agent log
     On Error GoTo 0
     
     Exit Sub
@@ -5386,25 +5300,10 @@ End Sub
 ' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
 Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
-    Dim t0 As Single
     On Error Resume Next
-    ' #region agent log
-    t0 = Timer
-    ' #endregion agent log
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
-    ' #region agent log
-    AgentDebugLogNDJSON "C", "font_after_apply_all_cells", "ApplyFontToAllSheetCells BIZ UDP", CLng((Timer - t0) * 1000)
-    t0 = Timer
-    ' #endregion agent log
     メインシート_AからK列_AutoFit
-    ' #region agent log
-    AgentDebugLogNDJSON "G", "font_after_main_AK_autofit", "Main A-K columns AutoFit", CLng((Timer - t0) * 1000)
-    t0 = Timer
-    ' #endregion agent log
     結果_主要4結果シート_列オートフィット
-    ' #region agent log
-    AgentDebugLogNDJSON "G", "font_after_major4_autofit", "result major 4 sheets column autofit", CLng((Timer - t0) * 1000)
-    ' #endregion agent log
     On Error GoTo 0
 End Sub
 
