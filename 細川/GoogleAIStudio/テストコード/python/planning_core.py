@@ -7291,68 +7291,25 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     abs_path = os.path.abspath(macro_wb_path)
 
-    _t_find0 = time_module.perf_counter()
     book = _xlwings_find_book_on_running_instances(abs_path)
-    # #region agent log
-    _agent_debug_ndjson_log(
-        "H4",
-        "planning_core:_xlwings_attach_open_macro_workbook",
-        "after_find_running_instances",
-        {
-            "elapsed_ms": round((time_module.perf_counter() - _t_find0) * 1000),
-            "found": book is not None,
-        },
-    )
-    # #endregion
     if book is not None:
         return book, {"mode": "keep", "opened_wb_here": False}
 
-    _t_try0 = time_module.perf_counter()
     book = _xlwings_try_open_in_running_apps(abs_path)
-    # #region agent log
-    _agent_debug_ndjson_log(
-        "H4",
-        "planning_core:_xlwings_attach_open_macro_workbook",
-        "after_try_open_in_running_apps",
-        {
-            "elapsed_ms": round((time_module.perf_counter() - _t_try0) * 1000),
-            "found": book is not None,
-        },
-    )
-    # #endregion
     if book is not None:
         return book, {"mode": "keep", "opened_wb_here": True}
 
     try:
         import xlwings as xw
 
-        _t_new0 = time_module.perf_counter()
         app = xw.App(visible=False, add_book=False)
         try:
             app.display_alerts = False
         except Exception:
             pass
         book = app.books.open(abs_path, update_links=False)
-        # #region agent log
-        _agent_debug_ndjson_log(
-            "H4",
-            "planning_core:_xlwings_attach_open_macro_workbook",
-            "after_new_app_open",
-            {
-                "elapsed_ms": round((time_module.perf_counter() - _t_new0) * 1000),
-            },
-        )
-        # #endregion
         return book, {"mode": "quit_excel", "opened_wb_here": True}
     except Exception as ex:
-        # #region agent log
-        _agent_debug_ndjson_log(
-            "H4",
-            "planning_core:_xlwings_attach_open_macro_workbook",
-            "new_app_open_failed",
-            {"exc_type": type(ex).__name__},
-        )
-        # #endregion
         _log_exclude_rules_sheet_debug(
             "XLWINGS_ATTACH_FAIL",
             log_prefix,
@@ -7391,30 +7348,6 @@ def _xlwings_attach_workbook_for_tests(
         return book, {"mode": "keep", "opened_wb_here": True}, f"{label}:dispatch-open"
     except Exception:
         return None
-
-
-# #region agent log
-def _agent_debug_ndjson_log(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    """Debug NDJSON → log/debug-4e99af.log（execution_log と同じ log_dir。cwd=マクロブックフォルダ）。"""
-    try:
-        log_path = os.path.join(log_dir, "debug-4e99af.log")
-        payload = {
-            "sessionId": "4e99af",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(log_path, "a", encoding="utf-8") as _df:
-            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
 
 
 def _xlwings_app_save_perf_state_push(app):
@@ -7456,26 +7389,6 @@ def _xlwings_app_save_perf_state_pop(app, snap):
             pass
 
 
-def _xlwings_write_rect_value2_chunked(sht, data, ncols: int, row_chunk: int = 5) -> None:
-    """
-    広い Range に一括で .value を渡すと、Excel 主スレッドが長時間ブロックし
-    D3=true（スプラッシュ＋ポーリング）と同じプロセスだと数十秒〜数分かかることがある。
-    Value2 と行チャンクで COM を分割し、その間にメッセージ処理が入りやすくする。
-    """
-    n = len(data)
-    if n == 0:
-        return
-    step = max(1, int(row_chunk))
-    for i in range(0, n, step):
-        rows = data[i : i + step]
-        r1 = i + 1
-        rng = sht.range((r1, 1)).resize(len(rows), ncols)
-        try:
-            rng.api.Value2 = rows
-        except Exception:
-            rng.value = rows
-
-
 def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
@@ -7485,26 +7398,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     global _exclude_rules_effective_read_path
 
     _t_sync0 = time_module.perf_counter()
-    # #region agent log
-    _agent_debug_ndjson_log(
-        "H2",
-        "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-        "enter",
-        {"wb_base": os.path.basename(wb_path)},
-    )
-    # #endregion
     attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
-    # #region agent log
-    _agent_debug_ndjson_log(
-        "H4",
-        "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-        "after_attach",
-        {
-            "elapsed_ms": round((time_module.perf_counter() - _t_sync0) * 1000),
-            "attached": attached is not None,
-        },
-    )
-    # #endregion
     if attached is None:
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_SKIP",
@@ -7536,16 +7430,6 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             )
             return False
         _t_sheet1 = time_module.perf_counter()
-        # #region agent log
-        _agent_debug_ndjson_log(
-            "H6",
-            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-            "after_direct_sheet_lookup",
-            {
-                "elapsed_ms": round((_t_sheet1 - _t_sheet0) * 1000),
-            },
-        )
-        # #endregion
         max_r = max(1, int(ws_oxl.max_row or 1))
         ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
         _t_mat0 = time_module.perf_counter()
@@ -7554,46 +7438,15 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             for r in range(1, max_r + 1)
         ]
         _t_mat1 = time_module.perf_counter()
-        # #region agent log
-        _agent_debug_ndjson_log(
-            "H5",
-            "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-            "after_openpyxl_matrix",
-            {
-                "elapsed_ms": round((_t_mat1 - _t_mat0) * 1000),
-                "rows": len(data),
-                "ncols": ncols,
-            },
-        )
-        # #endregion
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
         try:
             _t_r0 = time_module.perf_counter()
-            _xlwings_write_rect_value2_chunked(sht, data, ncols, row_chunk=5)
+            # チャンク分割＋Value2 は計測で総時間増（COM 回数増）のため一括 .value に戻す
+            sht.range((1, 1)).resize(len(data), ncols).value = data
             _t_r1 = time_module.perf_counter()
-            # #region agent log
-            _agent_debug_ndjson_log(
-                "H1",
-                "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                "after_range_value",
-                {
-                    "elapsed_ms": round((_t_r1 - _t_r0) * 1000),
-                },
-            )
-            # #endregion
             _t_s0 = time_module.perf_counter()
             xw_book.save()
             _t_s1 = time_module.perf_counter()
-            # #region agent log
-            _agent_debug_ndjson_log(
-                "H3",
-                "planning_core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                "after_xw_save",
-                {
-                    "elapsed_ms": round((_t_s1 - _t_s0) * 1000),
-                },
-            )
-            # #endregion
         finally:
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
         _attach_ms = round((_t_after_attach - _t_sync0) * 1000)
