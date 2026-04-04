@@ -2210,26 +2210,30 @@ Private Sub 結果_設備ガント_行枠を通常に戻す(ByVal rng As Range)
 End Sub
 
 Private Sub 結果_設備ガント_行枠を強調(ByVal rng As Range)
+    ' xlThick 単線より視認性を上げるため二重線＋濃いオレンジ（Excel の Weight は xlThick が上限のため）
+    Const hlR As Long = 204
+    Const hlG As Long = 0
+    Const hlB As Long = 0
     On Error Resume Next
     With rng.Borders(xlEdgeTop)
-        .LineStyle = xlContinuous
+        .LineStyle = xlDouble
         .Weight = xlThick
-        .Color = RGB(255, 140, 0)
+        .Color = RGB(hlR, hlG, hlB)
     End With
     With rng.Borders(xlEdgeBottom)
-        .LineStyle = xlContinuous
+        .LineStyle = xlDouble
         .Weight = xlThick
-        .Color = RGB(255, 140, 0)
+        .Color = RGB(hlR, hlG, hlB)
     End With
     With rng.Borders(xlEdgeLeft)
-        .LineStyle = xlContinuous
+        .LineStyle = xlDouble
         .Weight = xlThick
-        .Color = RGB(255, 140, 0)
+        .Color = RGB(hlR, hlG, hlB)
     End With
     With rng.Borders(xlEdgeRight)
-        .LineStyle = xlContinuous
+        .LineStyle = xlDouble
         .Weight = xlThick
-        .Color = RGB(255, 140, 0)
+        .Color = RGB(hlR, hlG, hlB)
     End With
     On Error GoTo 0
 End Sub
@@ -2337,6 +2341,27 @@ Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal Sh As Obj
     mGanttHL_Row = r
     mGanttHL_LastCol = lastCol
 QuietExit:
+End Sub
+
+' 既存ブックで設備ガントが「セルの書式設定」無効の保護のとき、ハイライト罫線が効かない。パスワードは SHEET_FONT_UNPROTECT_PASSWORD のみ対応（手動パスワードはユーザーが一度解除してから実行）
+Public Sub 結果_設備ガント_保護を書式設定許可で更新()
+    Dim ws As Worksheet
+    On Error GoTo Quiet
+    Set ws = ThisWorkbook.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+    If ws Is Nothing Then Exit Sub
+    If ws.ProtectContents Then
+        If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+            ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+        End If
+        If ws.ProtectContents Then ws.Unprotect
+    End If
+    If ws.ProtectContents Then Exit Sub
+    If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+        ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+    Else
+        ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+    End If
+Quiet:
 End Sub
 
 ' 段階1/2 終盤・全シートフォント適用後: 結果の主要4シートの列オートフィット
@@ -5521,9 +5546,14 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             End If
             
             ' (5) 結果_* ：パスワード無しでシート保護（UI からの編集不可。マクロ・段階2 後処理からの更新は可）
+            '     結果_設備ガントのみ AllowFormattingCells=True（［シートの保護］で「セルの書式設定」相当。選択行ハイライトの罫線変更が保護下でも可能）
             If Left$(sheetName, 3) = "結果_" Then
                 On Error Resume Next
-                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                If StrComp(sheetName, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+                Else
+                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                End If
                 On Error GoTo ErrHandler
             End If
             
@@ -5767,7 +5797,7 @@ End Sub
 ' =========================================================
 ' 全シートのセルフォントを統一（手動実行・ボタン割当可）
 ' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
-' ※保護シートは一時解除→フォント適用→取り込み結果シートと同様の再保護（DrawingObjects+Contents+UserInterfaceOnly。パスワードは SHEET_FONT_UNPROTECT_PASSWORD）。
+' ※保護シートは一時解除→フォント適用→取り込み結果シートと同様の再保護（DrawingObjects+Contents+UserInterfaceOnly。パスワードは SHEET_FONT_UNPROTECT_PASSWORD）。結果_設備ガントのみ AllowFormattingCells（行ハイライト罫線用）。
 ' ※解除できないシートはスキップし、ダイアログに列挙。
 ' ※フォント後の列幅調整はメイン A:K と 結果_主要4結果シート_列オートフィット のみ。結果_設備ガントは専用列幅（オートフィットしない）。
 ' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
@@ -5861,9 +5891,17 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
         If wasProt And unprotectOk Then
             Err.Clear
             If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-                ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+                    ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+                Else
+                    ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                End If
             Else
-                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+                Else
+                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+                End If
             End If
             If Err.Number <> 0 Then
                 skippedOut = skippedOut & "・" & ws.Name & "（再保護失敗: " & Err.Description & "）" & vbCrLf
