@@ -1,0 +1,24 @@
+' ============================================================
+' 貼り付け先: master.xlsm の ThisWorkbook
+' 標準モジュール: master_xlsm_VBA.txt の Auto_Open / MasterShortcutMainSheet_* と対
+' 既存の Workbook_SheetSelectionChange を残した統合例（そのまま ThisWorkbook に置換可）
+' ============================================================
+Option Explicit
+
+Private Sub Workbook_Open()
+    On Error Resume Next
+    MasterShortcutMainSheet_OnKeyRegister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error Resume Next
+    MasterShortcutMainSheet_OnKeyUnregister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)
+    On Error Resume Next
+    MasterAttendanceRowHighlight_OnSelection Sh, Target
+    On Error GoTo 0
+End Sub
