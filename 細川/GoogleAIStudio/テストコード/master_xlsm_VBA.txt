@@ -122,7 +122,7 @@ Fail:
     MasterMainCellToTimeDate = False
 End Function
 
-' メイン A15・B15 = 定常開始・終了（カレンダー→出勤簿の「通常」出勤/退勤・定常外は機械カレンダーで A/B 列を着色）。空・不正時は False。
+' メイン A15・B15 = 定常開始・終了（カレンダー→出勤簿の「通常」出勤/退勤・機械カレンダーでは定常外スロットの A 列のみ着色）。空・不正時は False。
 Private Function MasterMainReadRegularShiftTimes(ByVal wb As Workbook, ByRef tRegStart As Date, ByRef tRegEnd As Date) As Boolean
     Dim ws As Worksheet
     Dim vS As Variant, vE As Variant
@@ -184,17 +184,24 @@ Sub master_カレンダーからメンバー出勤簿を生成()
     Dim memberCount As Long
     Dim totalRec As Long
     Dim key As Variant
+    Dim regSt As Date, regEn As Date
+    Dim regFromMain As Boolean
     
     On Error GoTo EH
     Set wb = ThisWorkbook
     Set recMap = CreateObject("Scripting.Dictionary")
-    
     Application.ScreenUpdating = False
+    
+    regFromMain = MasterMainReadRegularShiftTimes(wb, regSt, regEn)
+    If Not regFromMain Then
+        MsgBox "定常時刻（メインシート A15/B15）が未設定です。メンバー別出勤簿を生成できません。", vbCritical
+        GoTo CleanExit
+    End If
     
     For Each ws In wb.Worksheets
         If IsMonthlyCalendarSheet(ws) Then
             calendarCount = calendarCount + 1
-            CollectAttendanceFromCalendar ws, recMap, totalRec
+            CollectAttendanceFromCalendar ws, recMap, totalRec, regSt, regEn
         End If
     Next ws
     
@@ -213,7 +220,9 @@ Sub master_カレンダーからメンバー出勤簿を生成()
     Call TryAutoSaveMasterWorkbook
     
     MsgBox "メンバー別出勤簿を生成しました。" & vbCrLf & _
-           "カレンダーシート: " & CStr(calendarCount) & " / メンバー: " & CStr(memberCount) & " / レコード: " & CStr(totalRec), vbInformation
+           "カレンダーシート: " & CStr(calendarCount) & " / メンバー: " & CStr(memberCount) & " / レコード: " & CStr(totalRec) & vbCrLf & _
+           "定常（通常・国・後休の出退・前休の終了）: " & Format$(TimeValue(regSt), "hh:nn") & " ～ " & Format$(TimeValue(regEn), "hh:nn") & _
+           IIf(regFromMain, "（メイン A15/B15）", "（メイン未設定のため 8:45～17:00）"), vbInformation
     
 CleanExit:
     Application.ScreenUpdating = True
@@ -268,7 +277,7 @@ Private Sub FlattenConditionalFormattingToInterior(ByVal ws As Worksheet, ByVal 
     On Error GoTo 0
 End Sub
 
-Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap As Object, ByRef totalRec As Long)
+Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap As Object, ByRef totalRec As Long, ByVal regSt As Date, ByVal regEn As Date)
     Dim y As Long, m As Long
     Dim lastCol As Long, lastRow As Long
     Dim r As Long, c As Long
@@ -282,12 +291,6 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
     Dim st As Variant, en As Variant
     Dim b1s As Variant, b1e As Variant, b2s As Variant, b2e As Variant
     Dim note As String
-    Dim regSt As Date, regEn As Date
-    
-    If Not MasterMainReadRegularShiftTimes(ThisWorkbook, regSt, regEn) Then
-        regSt = TimeSerial(8, 45, 0)
-        regEn = TimeSerial(17, 0, 0)
-    End If
     
     If Not ResolveCalendarYearMonth(wsCal, y, m) Then Exit Sub
     
@@ -394,7 +397,6 @@ End Sub
 Private Sub FormatMemberAttendanceSheetLayout(ByVal ws As Worksheet, ByVal lastRow As Long)
     Dim dataRng As Range
     Dim prevWs As Worksheet
-    Dim prevScr As Boolean
     If lastRow < 1 Then Exit Sub
     Set dataRng = ws.Range("A1:J" & CStr(lastRow))
     On Error Resume Next
@@ -414,8 +416,7 @@ Private Sub FormatMemberAttendanceSheetLayout(ByVal ws As Worksheet, ByVal lastR
     On Error Resume Next
     Set prevWs = ActiveSheet
     On Error GoTo 0
-    prevScr = Application.ScreenUpdating
-    Application.ScreenUpdating = True
+    ' 呼び出し元（勤怠一括生成など）が ScreenUpdating=False のときも True に戻さない
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then ThisWorkbook.Activate
     ws.Activate
@@ -439,7 +440,6 @@ Private Sub FormatMemberAttendanceSheetLayout(ByVal ws As Worksheet, ByVal lastR
         prevWs.Activate
         On Error GoTo 0
     End If
-    Application.ScreenUpdating = prevScr
 End Sub
 
 Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As Collection)
@@ -634,7 +634,7 @@ NextCell:
            "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
            "A 列＝日時・B 列＝曜日、1 時間単位（" & CStr(hFirst) & ":00～" & CStr(hLast) & ":00・1 日 " & CStr(slotsPer) & " 行）・日ストライプ。" & vbCrLf & _
            "（稼働スロット: メイン A12/B12。空なら 6～22 時）" & vbCrLf & _
-           "（定常外の色: メイン A15/B15。空なら着色なし）" & vbCrLf & _
+           "（定常外の色: メイン A15/B15・A 列のみ。空なら着色なし）" & vbCrLf & _
            "設備列へ入力した文言は、同一日時・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
     Exit Sub
     
@@ -869,7 +869,7 @@ Private Sub ApplyMachineCalendarDayStripes(ByVal ws As Worksheet, ByVal lastRow 
     Next rr
 End Sub
 
-' 定常開始～終了（メイン A15/B15）と重ならない 1 時間スロットの A 列・B 列（日時・曜日）を薄いオレンジで強調
+' 定常開始～終了（メイン A15/B15）と重ならない 1 時間スロットの A 列（日時）のみ薄いオレンジで強調（B 列は日ストライプのまま）
 Private Sub ApplyMachineCalendarOutsideRegularHoursTint(ByVal ws As Worksheet, ByVal wb As Workbook, ByVal lastRow As Long, ByVal lastCol As Long)
     Dim regSt As Date, regEn As Date
     Dim rr As Long
@@ -879,7 +879,7 @@ Private Sub ApplyMachineCalendarOutsideRegularHoursTint(ByVal ws As Worksheet, B
     Dim useColor As Long
     
     useColor = RGB(244, 224, 198)
-    If lastRow < 3 Or lastCol < 2 Then Exit Sub
+    If lastRow < 3 Then Exit Sub
     If Not MasterMainReadRegularShiftTimes(wb, regSt, regEn) Then Exit Sub
     
     regStartFrac = TimeValue(regSt)
@@ -894,7 +894,10 @@ Private Sub ApplyMachineCalendarOutsideRegularHoursTint(ByVal ws As Worksheet, B
         slotEndFrac = slotStartFrac + (1# / 24#)
         ' 半開区間 [slotStart, slotEnd) と [regStart, regEnd) が重ならない → 定常外
         If (slotEndFrac <= regStartFrac) Or (slotStartFrac >= regEndFrac) Then
-            ws.Range(ws.Cells(rr, 1), ws.Cells(rr, 2)).Interior.Color = useColor
+            With ws.Cells(rr, 1).Interior
+                .Pattern = xlSolid
+                .Color = useColor
+            End With
         End If
 NextMcTint:
     Next rr
@@ -992,6 +995,7 @@ End Function
 
 ' =========================================================
 ' 図形ボタン: 押下アニメーション → 出勤簿生成（master.xlsm 用）
+' 出退時刻は本体でメイン A15/B15（定常）を読み、全カレンダー共通で適用（空なら 8:45～17:00）。
 ' =========================================================
 Sub master_アニメ付き_カレンダーから出勤簿生成()
     Call AnimateButtonPush
@@ -1117,7 +1121,7 @@ Sub master_かっこいいボタンを作成()
     y = y + gap
     CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
     MsgBox "ボタンを作成しました。" & vbCrLf & _
-           "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成" & vbCrLf & _
+           "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成（定常はメイン A15/B15・空なら 8:45～17:00）" & vbCrLf & _
            "・機械カレンダー作成 … A日時・B曜日・C～skills設備列・メインA12/B12の時台～（空なら6～22時）・日ストライプの「機械カレンダー」1枚（365日）" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
