@@ -4092,6 +4092,42 @@ def _apply_result_task_task_id_content_mismatch_highlight(
         cell.alignment = top
 
 
+def _apply_result_task_plan_end_answer_spec_16_no_highlight(
+    worksheet, column_names: list
+):
+    """
+    列「配完_回答指定16時まで」が「いいえ」のセルを赤背景・白文字・太字にする。
+    列設定で旧名「配完_基準16時まで」のままの見出しにも対応。
+    """
+    target_names = frozenset(
+        {
+            RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
+            "配完_基準16時まで",
+        }
+    )
+    col_idx = None
+    for ci, col_name in enumerate(column_names, 1):
+        if str(col_name) in target_names:
+            col_idx = ci
+            break
+    if col_idx is None or worksheet.max_row < 2:
+        return
+    fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    font_white_bold = _result_font(color="FFFFFF", bold=True)
+    top = Alignment(wrap_text=False, vertical="top")
+    for r in range(2, worksheet.max_row + 1):
+        cell = worksheet.cell(row=r, column=col_idx)
+        v = cell.value
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s != "いいえ":
+            continue
+        cell.fill = fill_red
+        cell.font = font_white_bold
+        cell.alignment = top
+
+
 def _apply_result_task_id_hyperlinks_to_equipment_schedule(
     worksheet_tasks,
     column_names: list,
@@ -15504,6 +15540,9 @@ def _generate_plan_impl():
 
             _apply_result_task_task_id_content_mismatch_highlight(
                 worksheet_tasks, list(df_tasks.columns), sorted_tasks_for_result
+            )
+            _apply_result_task_plan_end_answer_spec_16_no_highlight(
+                worksheet_tasks, list(df_tasks.columns)
             )
             _apply_result_task_id_hyperlinks_to_equipment_schedule(
                 worksheet_tasks,
