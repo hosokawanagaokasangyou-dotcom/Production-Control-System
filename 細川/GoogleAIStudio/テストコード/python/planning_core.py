@@ -5437,6 +5437,86 @@ def _try_write_main_sheet_gemini_usage_summary(phase: str) -> None:
         )
 
 
+def _plan_sheet_write_global_parse_block_to_ws(
+    ws,
+    global_priority_override: dict,
+    when_str: str,
+) -> None:
+    """既に開いている「配台計画_タスク入力」相当シートへ AX:AY のグローバル解析ブロックを書く。"""
+    gpo = global_priority_override or {}
+    lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
+    vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
+    max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
+    for i in range(max_r):
+        ws.cell(row=1 + i, column=lc, value=None)
+        ws.cell(row=1 + i, column=vc, value=None)
+    align_top = Alignment(wrap_text=True, vertical="top")
+    pairs: list[tuple[str, str]] = [
+        ("【グローバルコメント解析】", "参照用・段階2で自動記録"),
+        (
+            "※二重適用について",
+            "配台への反映はメインシート「グローバルコメント」からのみ行われます。"
+            "このAX〜AY列は読み取られません。編集しても次回実行まで配台に効きません。"
+            "原文はメイン欄を参照してください。",
+        ),
+        ("計画基準日時", (when_str or "").strip() or "―"),
+        (
+            "工場休業日",
+            ", ".join(str(x) for x in (gpo.get("factory_closure_dates") or []))
+            if gpo.get("factory_closure_dates")
+            else "（なし）",
+        ),
+        (
+            "スキル要件を無視",
+            "はい" if gpo.get("ignore_skill_requirements") else "いいえ",
+        ),
+        (
+            "need人数1固定",
+            "はい" if gpo.get("ignore_need_minimum") else "いいえ",
+        ),
+        (
+            "配台制限の撤廃",
+            "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
+        ),
+        (
+            "グローバルOP指名",
+            json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
+            if gpo.get("task_preferred_operators")
+            else "（なし）",
+        ),
+        (
+            "日付×工程チーム指名",
+            json.dumps(
+                gpo.get("global_day_process_operator_rules") or [],
+                ensure_ascii=False,
+            )
+            if gpo.get("global_day_process_operator_rules")
+            else "（なし）",
+        ),
+        (
+            "グローバル速度ルール",
+            json.dumps(gpo.get("global_speed_rules") or [], ensure_ascii=False)
+            if gpo.get("global_speed_rules")
+            else "（なし）",
+        ),
+        (
+            "未適用メモ(AI)",
+            str(gpo.get("scheduler_notes_ja") or "").strip() or "（なし）",
+        ),
+        (
+            "AI要約",
+            str(gpo.get("interpretation_ja") or "").strip() or "（なし）",
+        ),
+    ]
+    for i, (lab, val) in enumerate(pairs):
+        if i >= max_r:
+            break
+        c1 = ws.cell(row=1 + i, column=lc, value=lab)
+        c2 = ws.cell(row=1 + i, column=vc, value=val)
+        c1.alignment = align_top
+        c2.alignment = align_top
+
+
 def write_plan_sheet_global_comment_parse_block(
     wb_path: str,
     sheet_name: str,
@@ -5482,77 +5562,9 @@ def write_plan_sheet_global_comment_parse_block(
             )
             return False
         ws = wb[sheet_name]
+        _plan_sheet_write_global_parse_block_to_ws(ws, gpo, when_str)
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-        max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
-        for i in range(max_r):
-            ws.cell(row=1 + i, column=lc, value=None)
-            ws.cell(row=1 + i, column=vc, value=None)
-        align_top = Alignment(wrap_text=True, vertical="top")
-        pairs: list[tuple[str, str]] = [
-            ("【グローバルコメント解析】", "参照用・段階2で自動記録"),
-            (
-                "※二重適用について",
-                "配台への反映はメインシート「グローバルコメント」からのみ行われます。"
-                "このAX〜AY列は読み取られません。編集しても次回実行まで配台に効きません。"
-                "原文はメイン欄を参照してください。",
-            ),
-            ("計画基準日時", (when_str or "").strip() or "―"),
-            (
-                "工場休業日",
-                ", ".join(str(x) for x in (gpo.get("factory_closure_dates") or []))
-                if gpo.get("factory_closure_dates")
-                else "（なし）",
-            ),
-            (
-                "スキル要件を無視",
-                "はい" if gpo.get("ignore_skill_requirements") else "いいえ",
-            ),
-            (
-                "need人数1固定",
-                "はい" if gpo.get("ignore_need_minimum") else "いいえ",
-            ),
-            (
-                "配台制限の撤廃",
-                "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
-            ),
-            (
-                "グローバルOP指名",
-                json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
-                if gpo.get("task_preferred_operators")
-                else "（なし）",
-            ),
-            (
-                "日付×工程チーム指名",
-                json.dumps(
-                    gpo.get("global_day_process_operator_rules") or [],
-                    ensure_ascii=False,
-                )
-                if gpo.get("global_day_process_operator_rules")
-                else "（なし）",
-            ),
-            (
-                "グローバル速度ルール",
-                json.dumps(gpo.get("global_speed_rules") or [], ensure_ascii=False)
-                if gpo.get("global_speed_rules")
-                else "（なし）",
-            ),
-            (
-                "未適用メモ(AI)",
-                str(gpo.get("scheduler_notes_ja") or "").strip() or "（なし）",
-            ),
-            (
-                "AI要約",
-                str(gpo.get("interpretation_ja") or "").strip() or "（なし）",
-            ),
-        ]
-        for i, (lab, val) in enumerate(pairs):
-            if i >= max_r:
-                break
-            c1 = ws.cell(row=1 + i, column=lc, value=lab)
-            c2 = ws.cell(row=1 + i, column=vc, value=val)
-            c1.alignment = align_top
-            c2.alignment = align_top
         wb.save(wb_path)
         logging.info(
             "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました。",
@@ -5597,6 +5609,29 @@ def _try_write_plan_sheet_global_comment_parse_block(
     except Exception as ex:
         logging.warning(
             "段階2: 配台シートへのグローバルコメント解析書き込みで例外（続行）: %s",
+            ex,
+        )
+
+
+def _try_write_plan_input_global_parse_and_conflicts_one_save(
+    global_priority_override: dict,
+    when_str: str,
+    num_data_rows: int,
+    conflicts_by_row,
+) -> None:
+    try:
+        write_plan_sheet_global_parse_and_conflict_styles_one_io(
+            TASKS_INPUT_WORKBOOK,
+            PLAN_INPUT_SHEET_NAME,
+            global_priority_override,
+            when_str=when_str,
+            num_data_rows=num_data_rows,
+            conflicts_by_row=conflicts_by_row,
+            log_prefix="段階2",
+        )
+    except Exception as ex:
+        logging.warning(
+            "段階2: 配台シートへのグローバル解析＋矛盾着色（1回保存）で例外（続行）: %s",
             ex,
         )
 
@@ -6133,6 +6168,150 @@ def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
     return res
 
 
+def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by_row) -> None:
+    """既に開いている配台計画シートへ、矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼び出し側。"""
+    header_map = {}
+    for col_idx in range(1, ws.max_column + 1):
+        v = ws.cell(1, col_idx).value
+        if v is not None:
+            header_map[str(v).strip()] = col_idx
+
+    last_row = max(2, 1 + int(num_data_rows))
+    clear_fill = PatternFill(fill_type=None)
+    yellow_input_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    conflict_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    conflict_font = Font(color="FFFFFF", bold=True)
+
+    for r in range(2, last_row + 1):
+        for name in PLAN_CONFLICT_STYLABLE_COLS:
+            ci = header_map.get(name)
+            if not ci:
+                continue
+            cell = ws.cell(row=r, column=ci)
+            if name == PLAN_COL_AI_PARSE:
+                cell.fill = clear_fill
+            else:
+                cell.fill = yellow_input_fill
+            # フォントは上書きしない（ブック既定・ユーザー設定を維持）
+
+    for r, colnames in conflicts_by_row.items():
+        if r < 2:
+            continue
+        for name in colnames:
+            ci = header_map.get(name)
+            if not ci:
+                continue
+            cell = ws.cell(row=r, column=ci)
+            cell.fill = conflict_fill
+            cell.font = conflict_font
+
+
+def write_plan_sheet_global_parse_and_conflict_styles_one_io(
+    wb_path: str,
+    sheet_name: str,
+    global_priority_override: dict,
+    *,
+    when_str: str,
+    num_data_rows: int,
+    conflicts_by_row,
+    log_prefix: str = "段階2",
+) -> bool:
+    """
+    段階2向け: グローバルコメント解析ブロック（AX:AY）と矛盾ハイライトを **1回の load/save** で反映する。
+    従来は別関数でブックを2回開いていたため、.xlsm が大きい環境で十数秒単位の短縮になる。
+    """
+    if not wb_path or not os.path.isfile(wb_path):
+        return False
+    if _workbook_should_skip_openpyxl_io(wb_path):
+        logging.info(
+            "%s: ブックに「%s」があるため openpyxl でグローバル解析・矛盾着色をスキップしました。",
+            log_prefix,
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
+        )
+        return False
+    keep_vba = str(wb_path).lower().endswith(".xlsm")
+    wb = None
+    try:
+        wb = load_workbook(
+            wb_path, keep_vba=keep_vba, read_only=False, data_only=False
+        )
+    except Exception as ex:
+        logging.info(
+            "%s: 配台シート一括書込のためブックを開けません: %s",
+            log_prefix,
+            ex,
+        )
+        return False
+    try:
+        if sheet_name not in wb.sheetnames:
+            logging.info(
+                "%s: シート '%s' が無いためグローバル解析・矛盾着色をスキップ。",
+                log_prefix,
+                sheet_name,
+            )
+            return False
+        ws = wb[sheet_name]
+        _plan_sheet_write_global_parse_block_to_ws(ws, global_priority_override or {}, when_str)
+        _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row or {})
+        lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
+        vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
+        try:
+            wb.save(wb_path)
+        except OSError as e:
+            write_planning_conflict_highlight_sidecar(
+                sheet_name, num_data_rows, conflicts_by_row or {}
+            )
+            logging.warning(
+                "%s: 配台シートへの一括保存に失敗（Excel で開いたまま等）。"
+                " 矛盾ハイライトは '%s' に書き出しました。グローバル解析は未保存の可能性があります。 (%s)",
+                log_prefix,
+                _planning_conflict_sidecar_path(),
+                e,
+            )
+            return False
+        _remove_planning_conflict_sidecar_safe()
+        _n_conf = len(conflicts_by_row) if conflicts_by_row else 0
+        if _n_conf:
+            logging.info(
+                "%s: 「%s」%s:%s 列にグローバル解析を保存し、"
+                "特別指定_備考と列の矛盾 %s 行を同じ保存でハイライトしました。",
+                log_prefix,
+                sheet_name,
+                get_column_letter(lc),
+                get_column_letter(vc),
+                _n_conf,
+            )
+        else:
+            logging.info(
+                "%s: 「%s」%s:%s 列にグローバル解析を保存しました（矛盾行なし）。",
+                log_prefix,
+                sheet_name,
+                get_column_letter(lc),
+                get_column_letter(vc),
+            )
+        return True
+    except OSError as ex:
+        logging.warning(
+            "%s: 配台シート一括保存で OSError: %s",
+            log_prefix,
+            ex,
+        )
+        return False
+    except Exception as ex:
+        logging.warning(
+            "%s: 配台シートへのグローバル解析＋矛盾着色（一括）で例外: %s",
+            log_prefix,
+            ex,
+        )
+        return False
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
 def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, conflicts_by_row):
     """
     配台計画_タスク入力シートのデータ行を、矛盾列のみ赤地・白太字にする。
@@ -6155,40 +6334,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
             logging.warning(f"矛盾書式: シート '{sheet_name}' が見つかりません。")
             return
         ws = wb[sheet_name]
-        header_map = {}
-        for col_idx in range(1, ws.max_column + 1):
-            v = ws.cell(1, col_idx).value
-            if v is not None:
-                header_map[str(v).strip()] = col_idx
-
-        last_row = max(2, 1 + int(num_data_rows))
-        clear_fill = PatternFill(fill_type=None)
-        yellow_input_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-        conflict_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
-        conflict_font = Font(color="FFFFFF", bold=True)
-
-        for r in range(2, last_row + 1):
-            for name in PLAN_CONFLICT_STYLABLE_COLS:
-                ci = header_map.get(name)
-                if not ci:
-                    continue
-                cell = ws.cell(row=r, column=ci)
-                if name == PLAN_COL_AI_PARSE:
-                    cell.fill = clear_fill
-                else:
-                    cell.fill = yellow_input_fill
-                # フォントは上書きしない（ブック既定・ユーザー設定を維持）
-
-        for r, colnames in conflicts_by_row.items():
-            if r < 2:
-                continue
-            for name in colnames:
-                ci = header_map.get(name)
-                if not ci:
-                    continue
-                cell = ws.cell(row=r, column=ci)
-                cell.fill = conflict_fill
-                cell.font = conflict_font
+        _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row)
 
         try:
             wb.save(wb_path)
@@ -14353,14 +14499,6 @@ def _generate_plan_impl():
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    _try_write_plan_sheet_global_comment_parse_block(
-        global_priority_override,
-        data_extract_dt_str,
-    )
-    # #region agent log
-    _s2_perf_mark("H1d", "phase_sub_after_plan_sheet_global_comment_parse_block")
-    # #endregion
-
     # 「当日」判定と最早開始時刻には基準日時（データ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
@@ -14410,20 +14548,24 @@ def _generate_plan_impl():
                     )
                 t["start_date_req"] = prev_work
     conflict_rows = collect_planning_conflicts_by_excel_row(tasks_df, ai_task_by_tid)
-    try:
-        apply_planning_sheet_conflict_styles(
-            TASKS_INPUT_WORKBOOK,
-            PLAN_INPUT_SHEET_NAME,
-            len(tasks_df),
-            conflict_rows,
-        )
-    except Exception as e:
-        logging.warning(f"配台シート矛盾ハイライト適用をスキップ: {e}")
-
     # #region agent log
     _s2_perf_mark(
-        "H1f",
-        "phase_sub_after_build_queue_and_conflict_highlight",
+        "H1e2",
+        "phase_sub_after_queue_and_conflict_map",
+        n_task_queue=len(task_queue),
+        n_conflict_rows=len(conflict_rows),
+    )
+    # #endregion
+    _try_write_plan_input_global_parse_and_conflicts_one_save(
+        global_priority_override,
+        data_extract_dt_str,
+        len(tasks_df),
+        conflict_rows,
+    )
+    # #region agent log
+    _s2_perf_mark(
+        "H1d",
+        "phase_sub_after_plan_sheet_one_save_global_parse_and_conflicts",
         n_task_queue=len(task_queue),
     )
     # #endregion
