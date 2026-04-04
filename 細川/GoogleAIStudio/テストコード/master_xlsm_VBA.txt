@@ -1503,7 +1503,7 @@ NextInc0:
     Call TryAutoSaveMasterWorkbook
     
     MsgBox "「" & SHEET_SKILL_COMBINATIONS & "」を更新しました。" & vbCrLf & msgDetail & vbCrLf & _
-           "データ行は機械名→工程名→工程+機械→組合せ優先度→組合せ行IDの順で並べ替えています。" & vbCrLf & _
+           "データ行は機械名→工程名→必要人数→組合せ優先度→工程+機械→組合せ行IDの順で並べ替えています（各セルの値は保持）。" & vbCrLf & _
            "A列・組合せ行IDはデータ行ごとの一意番号（追記時は既存の最大値の続き）。組合せ優先度列は列内連番（手編集可）。", vbInformation, "組み合わせ表"
     Exit Sub
     
@@ -1845,7 +1845,8 @@ Private Function SkillComboDataLastRow(ByVal ws As Worksheet) As Long
     If SkillComboDataLastRow < 1 Then SkillComboDataLastRow = 1
 End Function
 
-' データ行（2行目以降）を機械名でまとまるよう並べ替え（同一機械内は工程名・工程+機械・優先度・行IDで安定化）
+' データ行（2行目以降）を機械名でまとまるよう並べ替え（行全体が動くため必要人数・組合せ優先度のセル値は保持される）
+' キー順: 機械名→工程名→必要人数→組合せ優先度→工程+機械→組合せ行ID
 Private Sub SkillComboSortDataRowsByMachine(ByVal ws As Worksheet, ByVal maxReq As Long)
     Dim lastRow As Long
     Dim lastCol As Long
@@ -1862,8 +1863,9 @@ Private Sub SkillComboSortDataRowsByMachine(ByVal ws As Worksheet, ByVal maxReq 
         .SortFields.Clear
         .SortFields.Add Key:=ws.Range(ws.Cells(2, 3), ws.Cells(lastRow, 3)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
         .SortFields.Add Key:=ws.Range(ws.Cells(2, 2), ws.Cells(lastRow, 2)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-        .SortFields.Add Key:=ws.Range(ws.Cells(2, 4), ws.Cells(lastRow, 4)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 5), ws.Cells(lastRow, 5)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
         .SortFields.Add Key:=ws.Range(ws.Cells(2, 6), ws.Cells(lastRow, 6)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .SortFields.Add Key:=ws.Range(ws.Cells(2, 4), ws.Cells(lastRow, 4)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
         .SortFields.Add Key:=ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, 1)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
         .SetRange sortRng
         .Header = xlNo
