@@ -408,6 +408,9 @@ MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
+# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて残業を指定
+ATT_COL_OT_MINUTES = "残業分"
+ATT_COL_OT_END = "残業終業"
 # 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
 # need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数／余力時追加人数」等
@@ -11005,6 +11008,43 @@ def _ai_json_bool(v, default: bool = False) -> bool:
     return default
 
 
+def _parse_attendance_overtime_minutes_optional(v) -> int | None:
+    """
+    勤怠「残業分」列。正の整数分のみ採用（定時退勤＋この分だけ end_dt を延長）。
+    空・0・負・不正は None。Excel の 0〜1 の小数（時刻の日付シリアル）は誤解釈防止のため無視。
+    """
+    if v is None:
+        return None
+    if isinstance(v, float) and pd.isna(v):
+        return None
+    if isinstance(v, str):
+        s = v.strip().replace(",", "")
+        if not s:
+            return None
+        try:
+            n = int(float(s))
+        except (ValueError, TypeError):
+            return None
+    else:
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            return None
+        if isinstance(fv, float) and pd.isna(fv):
+            return None
+        if 0.0 < fv < 1.0:
+            return None
+        n = int(fv)
+    if n <= 0:
+        return None
+    return n
+
+
+def _parse_attendance_overtime_end_optional(v) -> time | None:
+    """勤怠「残業終業」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
+    return _excel_scalar_to_time_optional(v)
+
+
 def load_attendance_and_analyze(members):
     attendance_data = {}
     # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
@@ -11047,6 +11087,14 @@ def load_attendance_and_analyze(members):
                 logging.warning(
                     "勤怠データに「%s」列がありません。備考ベースの AI 解析は空扱いになります。",
                     ATT_COL_REMARK,
+                )
+            if ATT_COL_OT_MINUTES in _cols or ATT_COL_OT_END in _cols:
+                logging.info(
+                    "勤怠列: 残業は「%s」（定時退勤へ加算する分数）または「%s」（退勤上限の時刻を直接指定）。"
+                    "両方入っている場合は「%s」を優先します（全日休み行では無視）。",
+                    ATT_COL_OT_MINUTES,
+                    ATT_COL_OT_END,
+                    ATT_COL_OT_END,
                 )
         else:
             raise FileNotFoundError("有効なメンバー別勤怠シートが見つかりません。")
@@ -11222,7 +11270,8 @@ def load_attendance_and_analyze(members):
 
         start_t = parse_time_str(ai_info.get("出勤時刻") or row.get('出勤時間'), DEFAULT_START_TIME)
         end_t = parse_time_str(ai_info.get("退勤時刻") or row.get('退勤時間'), DEFAULT_END_TIME)
-        
+        base_end_t = end_t
+
         b1_s = parse_time_str(row.get('休憩時間1_開始'), DEFAULT_BREAKS[0][0])
         b1_e = parse_time_str(row.get('休憩時間1_終了'), DEFAULT_BREAKS[0][1])
         b2_s = parse_time_str(row.get('休憩時間2_開始'), DEFAULT_BREAKS[1][0])
@@ -11237,10 +11286,35 @@ def load_attendance_and_analyze(members):
             if fb_s and fb_e:
                 mid_break_s, mid_break_e = fb_s, fb_e
 
+        if not is_holiday:
+            ot_end = _parse_attendance_overtime_end_optional(row.get(ATT_COL_OT_END))
+            if ot_end is not None:
+                end_t = ot_end
+            else:
+                ot_add = _parse_attendance_overtime_minutes_optional(row.get(ATT_COL_OT_MINUTES))
+                if ot_add is not None:
+                    adj_dt = datetime.combine(curr_date, end_t) + timedelta(minutes=ot_add)
+                    if adj_dt.date() != curr_date:
+                        logging.warning(
+                            "勤怠 %s %s: 残業分適用で日をまたぐため、残業分を無視します。",
+                            curr_date,
+                            m,
+                        )
+                    else:
+                        end_t = adj_dt.time()
+
         def combine_dt(t): return datetime.combine(curr_date, t) if t else None
         
         start_dt = combine_dt(start_t)
         end_dt = combine_dt(end_t)
+        if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
+            logging.warning(
+                "勤怠 %s %s: 残業列適用後に退勤が出勤以前となったため、残業を無視して定時退勤に戻します。",
+                curr_date,
+                m,
+            )
+            end_t = base_end_t
+            end_dt = combine_dt(end_t)
         breaks_dt = []
         
         # 通常の休憩を追加
