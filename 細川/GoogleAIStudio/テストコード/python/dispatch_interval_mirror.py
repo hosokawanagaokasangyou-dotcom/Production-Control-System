@@ -7,15 +7,43 @@
 壁時計ベースの占有モデルで、avail_dt / machine_avail_dt との整合を強める。
 
 Excel セルを逐次読み書きする方式は行わない（I/O と COM 負荷のため）。
+
+設備側のキーは **機械名ベースの占有キー**（イベントの machine_occupancy_key、
+無い場合は machine 列から推定）とする。
 """
 from __future__ import annotations
 
+import json
+import os
+import re
+import time
+import unicodedata
 from collections import defaultdict
 from datetime import datetime
 
 
+def _mirror_normalize_occupancy_key(val) -> str:
+    if val is None or val == "":
+        return ""
+    t = unicodedata.normalize("NFKC", str(val))
+    t = t.replace("\u00a0", " ").replace("\u3000", " ")
+    t = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _mirror_occupancy_key_from_event(ev: dict) -> str:
+    k = str(ev.get("machine_occupancy_key") or "").strip()
+    if k:
+        return _mirror_normalize_occupancy_key(k)
+    mach = str(ev.get("machine") or "").strip()
+    if "+" in mach:
+        return _mirror_normalize_occupancy_key(mach.split("+", 1)[1])
+    return _mirror_normalize_occupancy_key(mach)
+
+
 class DispatchIntervalMirror:
-    """設備キー・メンバー名ごとの占有区間リスト（重なり検査用）。"""
+    """設備占有キー・メンバー名ごとの占有区間リスト（重なり検査用）。"""
 
     __slots__ = ("_eq", "_mem")
 
@@ -34,9 +62,9 @@ class DispatchIntervalMirror:
         return st1 < ed2 and st2 < ed1
 
     def would_block_equipment(
-        self, eq_line: str, st: datetime, ed: datetime
+        self, machine_occupancy_key: str, st: datetime, ed: datetime
     ) -> bool:
-        eq = (eq_line or "").strip()
+        eq = _mirror_normalize_occupancy_key(machine_occupancy_key)
         if not eq or not isinstance(st, datetime) or not isinstance(ed, datetime):
             return False
         if ed <= st:
@@ -59,12 +87,12 @@ class DispatchIntervalMirror:
 
     def would_block_roll(
         self,
-        eq_line: str,
+        machine_occupancy_key: str,
         team: tuple,
         st: datetime,
         ed: datetime,
     ) -> bool:
-        if self.would_block_equipment(eq_line, st, ed):
+        if self.would_block_equipment(machine_occupancy_key, st, ed):
             return True
         for m in team:
             if self.would_block_member(str(m), st, ed):
@@ -78,9 +106,45 @@ class DispatchIntervalMirror:
             return
         if ed <= st:
             return
-        eq = str(ev.get("machine") or "").strip()
-        if eq:
-            self._eq[eq].append((st, ed))
+        eq_line = str(ev.get("machine") or "").strip()
+        occ = _mirror_occupancy_key_from_event(ev)
+        if occ:
+            self._eq[occ].append((st, ed))
+            # #region agent log
+            try:
+                _p = os.path.normpath(
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "debug-8ae73f.log",
+                    )
+                )
+                with open(_p, "a", encoding="utf-8") as _af:
+                    _af.write(
+                        json.dumps(
+                            {
+                                "sessionId": "8ae73f",
+                                "hypothesisId": "H4",
+                                "location": "dispatch_interval_mirror.py:register_from_event",
+                                "message": "mirror_equipment_interval",
+                                "data": {
+                                    "equipment_line_key": eq_line,
+                                    "machine_occupancy_key": occ,
+                                    "start_dt": st.isoformat(sep=" ", timespec="seconds"),
+                                    "end_dt": ed.isoformat(sep=" ", timespec="seconds"),
+                                },
+                                "timestamp": int(time.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
         op = str(ev.get("op") or "").strip()
         if op:
             self._mem[op].append((st, ed))

@@ -2384,6 +2384,29 @@ def _normalize_equipment_match_key(val):
     return t
 
 
+def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
+    """設備列キー（工程+機械 等）から、物理機械の占有に用いるキー（機械名側・正規化）を得る。"""
+    s = str(eq_line or "").strip()
+    if not s:
+        return ""
+    if "+" in s:
+        return _normalize_equipment_match_key(s.split("+", 1)[1])
+    return _normalize_equipment_match_key(s)
+
+
+def _physical_machine_occupancy_key_for_task(task: dict) -> str:
+    """
+    設備の壁時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
+    機械名があればそれを正規化した値とし、無いときは equipment_line_key から機械名側を推定する。
+    """
+    mn = str(task.get("machine_name") or "").strip()
+    if mn:
+        return _normalize_equipment_match_key(mn)
+    return _equipment_line_key_to_physical_occupancy_key(
+        str(task.get("equipment_line_key") or task.get("machine") or "")
+    )
+
+
 def _equipment_lookup_normalized_to_canonical(equipment_list):
     """正規化キー → master スキルシート上の列名（canonical 表記）。"""
     lookup = {}
@@ -2401,6 +2424,35 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
         if pk and pk not in lookup:
             lookup[pk] = eq
     return lookup
+
+
+def _agent_debug_session_log(
+    *,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+) -> None:
+    # #region agent log
+    try:
+        _p = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "..", "debug-8ae73f.log"
+            )
+        )
+        payload = {
+            "sessionId": "8ae73f",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
 
 
 def _equipment_schedule_header_labels(equipment_list: list) -> list:
@@ -2443,18 +2495,36 @@ def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None
     cand = f"{p}+{mn}" if (p and mn) else (p or mn)
     elist = [str(x).strip() for x in (equipment_list or []) if str(x).strip()]
     if cand in elist:
-        return cand
-    if mn:
-        return cand
-    if not p:
-        return cand
-    exact_p = [x for x in elist if x == p]
-    if len(exact_p) == 1:
-        return exact_p[0]
-    prefixed = [x for x in elist if x.startswith(p + "+")]
-    if len(prefixed) == 1:
-        return prefixed[0]
-    return p
+        result = cand
+    elif mn:
+        result = cand
+    elif not p:
+        result = cand
+    else:
+        exact_p = [x for x in elist if x == p]
+        if len(exact_p) == 1:
+            result = exact_p[0]
+        else:
+            prefixed = [x for x in elist if x.startswith(p + "+")]
+            if len(prefixed) == 1:
+                result = prefixed[0]
+            else:
+                result = p
+    # #region agent log
+    if "+" in str(result):
+        _agent_debug_session_log(
+            hypothesis_id="H2",
+            location="planning_core.py:_resolve_equipment_line_key_for_task",
+            message="equipment_line_key_composite",
+            data={
+                "process": p,
+                "machine_name": mn,
+                "equipment_line_key": result,
+                "cand": cand,
+            },
+        )
+    # #endregion
+    return result
 
 
 def load_planning_tasks_df():
@@ -11673,21 +11743,20 @@ def _filter_capable_members_b2_disjoint_teams(
     return filtered
 
 
-def _exclusive_b1_inspection_holder_for_machine(task_queue, line_key: str):
+def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
     """
-    同一設備列（equipment_line_key／工程+機械）上で、§B-2 熱融着検査または §B-3 巻返しが **既に割付を開始** し残ロールが残る行があれば
+    同一物理機械（機械名ベースの占有キー）上で、§B-2 熱融着検査または §B-3 巻返しが **既に割付を開始** し残ロールが残る行があれば
     そのタスク dict を1件返す（なければ None）。
 
     パイプライン枠で後続を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼** が同じ設備に入り、
-    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該設備列では他タスクを試行しない
-    （別設備列は従来どおり）。
+    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該物理機械では他タスクを試行しない。
     """
-    m = str(line_key or "").strip()
+    m = str(occupant_key or "").strip()
     if not m:
         return None
     holders: list = []
     for t in task_queue:
-        lk = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        lk = _physical_machine_occupancy_key_for_task(t)
         if lk != m:
             continue
         if not (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")):
@@ -12317,7 +12386,7 @@ def _day_schedule_task_sort_key(
     同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
     先頭キーは _generate_plan_task_queue_sort_key と同趣旨（§B 段・加工途中・計画基準納期・need 列順・依頼NO）。
     続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
-    同一設備列の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
+    同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
@@ -12385,17 +12454,17 @@ def _day_schedule_task_sort_key(
 
 
 def _equipment_line_lower_dispatch_trial_still_pending(
-    task_queue: list, eq_line: str, my_dispatch_order: int, current_date: date
+    task_queue: list, machine_occ_key: str, my_dispatch_order: int, current_date: date
 ) -> bool:
     """
-    同一 equipment_line_key（工程+機械の設備列）で、より小さい配台試行順の行がまだ残量を持つか。
+    同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
     machine_avail_dt はチャンク間の隙間に後続試行順が入り込めるため、ここで順序を強制する。
 
     キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
     start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
     （まだ開始日に達していない行が全日ブロッカーになり、後続がほぼ配台不可になるのを防ぐ。）
     """
-    line = (eq_line or "").strip()
+    line = (machine_occ_key or "").strip()
     if not line:
         return False
     try:
@@ -12408,10 +12477,8 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         _sdr = t.get("start_date_req")
         if not isinstance(_sdr, date) or _sdr > current_date:
             continue
-        t_line = str(
-            t.get("equipment_line_key") or t.get("machine") or ""
-        ).strip()
-        if t_line != line:
+        t_occ = _physical_machine_occupancy_key_for_task(t)
+        if t_occ != line:
             continue
         try:
             o = int(t.get("dispatch_trial_order") or 10**9)
@@ -12483,11 +12550,18 @@ def _seed_avail_from_timeline_for_date(
         end_dt = e.get("end_dt")
         if end_dt is None or not hasattr(end_dt, "replace"):
             continue
-        mach = e.get("machine")
-        if mach:
-            prev = machine_avail_dt.get(mach, machine_day_start)
+        occ = str(e.get("machine_occupancy_key") or "").strip()
+        if not occ:
+            mraw = str(e.get("machine") or "").strip()
+            occ = (
+                _normalize_equipment_match_key(mraw.split("+", 1)[1])
+                if "+" in mraw
+                else _normalize_equipment_match_key(mraw)
+            )
+        if occ:
+            prev = machine_avail_dt.get(occ, machine_day_start)
             if end_dt > prev:
-                machine_avail_dt[mach] = end_dt
+                machine_avail_dt[occ] = end_dt
         op = str(e.get("op") or "").strip()
         if op and op in avail_dt:
             prev_m = avail_dt[op]
@@ -12676,11 +12750,25 @@ def load_machine_calendar_occupancy_blocks(
 
     out: dict[date, dict[str, list[tuple[datetime, datetime]]]] = {}
     for d, eqmap in acc.items():
-        out[d] = {
+        merged_eq = {
             eq: _merge_machine_calendar_intervals(iv)
             for eq, iv in eqmap.items()
             if iv
         }
+        phys_accum: dict[str, list] = defaultdict(list)
+        for eq, iv in merged_eq.items():
+            es = str(eq).strip()
+            pk = (
+                _normalize_equipment_match_key(es.split("+", 1)[1])
+                if "+" in es
+                else _normalize_equipment_match_key(es)
+            )
+            if pk:
+                phys_accum[pk].extend(iv)
+        merged_all = dict(merged_eq)
+        for pk, iv in phys_accum.items():
+            merged_all[pk] = _merge_machine_calendar_intervals(iv)
+        out[d] = merged_all
     return out
 
 
@@ -12694,11 +12782,23 @@ def _apply_machine_calendar_floor_for_date(
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
         return
-    keys = set(equipment_list) | set(machine_avail_dt.keys())
-    for eq in keys:
-        eq_s = str(eq).strip() if eq is not None else ""
-        if not eq_s:
+    candidates: set[str] = set()
+    for k in machine_avail_dt.keys():
+        sk = str(k).strip() if k is not None else ""
+        if sk:
+            candidates.add(sk)
+    for el in equipment_list:
+        ek = str(el).strip() if el is not None else ""
+        if not ek:
             continue
+        pk = (
+            _normalize_equipment_match_key(ek.split("+", 1)[1])
+            if "+" in ek
+            else _normalize_equipment_match_key(ek)
+        )
+        if pk:
+            candidates.add(pk)
+    for eq_s in candidates:
         blocks = day_blocks.get(eq_s)
         if not blocks:
             continue
@@ -12825,9 +12925,7 @@ def _trial_order_flow_eligible_tasks(
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                 task_queue,
-                str(
-                    task.get("equipment_line_key") or task.get("machine") or ""
-                ).strip(),
+                _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
                 continue
@@ -12835,12 +12933,13 @@ def _trial_order_flow_eligible_tasks(
         eq_line = str(
             task.get("equipment_line_key") or machine or ""
         ).strip() or machine
+        _mocc_trial = _physical_machine_occupancy_key_for_task(task) or eq_line
         try:
             _my_dispatch_ord = int(task.get("dispatch_trial_order") or 10**9)
         except (TypeError, ValueError):
             _my_dispatch_ord = 10**9
         if _equipment_line_lower_dispatch_trial_still_pending(
-            task_queue, eq_line, _my_dispatch_ord, current_date
+            task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
             continue
         out.append(task)
@@ -12905,6 +13004,7 @@ def _append_legacy_dispatch_candidate_for_team(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
+    _machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
     _gpo = global_priority_override or {}
     op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
     if not op_list:
@@ -12912,7 +13012,7 @@ def _append_legacy_dispatch_candidate_for_team(
     team_start = max(avail_dt[m] for m in team)
     if not _gpo.get("abolish_all_scheduling_limits"):
         machine_free_dt = machine_avail_dt.get(
-            eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+            _machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
         )
         if team_start < machine_free_dt:
             team_start = machine_free_dt
@@ -12942,7 +13042,7 @@ def _append_legacy_dispatch_candidate_for_team(
         ts = max(ts, max(avail_dt[m] for m in team))
         if not _gpo.get("abolish_all_scheduling_limits"):
             machine_free_dt = machine_avail_dt.get(
-                eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+                _machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
             )
             if ts < machine_free_dt:
                 ts = machine_free_dt
@@ -12998,7 +13098,7 @@ def _append_legacy_dispatch_candidate_for_team(
         team_start, work_mins_needed, team_breaks, team_end_limit
     )
     if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
-        eq_line, team, team_start, actual_end_dt
+        _machine_occ_key, team, team_start, actual_end_dt
     ):
         return False
     team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
@@ -13050,6 +13150,7 @@ def _assign_one_roll_trial_order_flow(
     machine_name = str(task.get("machine_name", "") or "").strip()
     machine_proc = str(machine or "").strip()
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
+    machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
     _gpo = global_priority_override or {}
 
     plan_ro = _plan_sheet_required_op_optional(task)
@@ -13251,7 +13352,7 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_free_dt = machine_avail_dt.get(eq_line, machine_day_floor)
+            machine_free_dt = machine_avail_dt.get(machine_occ_key, machine_day_floor)
             if team_start < machine_free_dt:
                 team_start = machine_free_dt
             if team_start < day_floor:
@@ -13275,7 +13376,7 @@ def _assign_one_roll_trial_order_flow(
         def _refloor_trial_roll(ts: datetime) -> datetime:
             ts = max(ts, max(avail_dt[m] for m in team))
             if not _gpo.get("abolish_all_scheduling_limits"):
-                mf = machine_avail_dt.get(eq_line, machine_day_floor)
+                mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
                 if ts < mf:
                     ts = mf
                 if ts < day_floor:
@@ -13337,7 +13438,7 @@ def _assign_one_roll_trial_order_flow(
             team_start, work_mins_needed, team_breaks, team_end_limit
         )
         if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
-            eq_line, team, team_start, actual_end_dt
+            machine_occ_key, team, team_start, actual_end_dt
         ):
             _trace_assign(
                 "区間ミラー却下: team=%s start=%s end=%s eq=%s",
@@ -13608,6 +13709,7 @@ def _trial_order_first_schedule_pass(
             rq_base = res["rq_base"]
             extra_max = res["extra_max"]
             eq_line = res["eq_line"]
+            machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
             _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
             if _te_disp <= 0:
                 _te_disp = 1.0
@@ -13634,6 +13736,7 @@ def _trial_order_first_schedule_pass(
                     "date": current_date,
                     "task_id": task["task_id"],
                     "machine": eq_line,
+                    "machine_occupancy_key": machine_occ_key,
                     "op": lead_op,
                     "sub": ", ".join(sub_members),
                     "start_dt": best_start,
@@ -13652,6 +13755,25 @@ def _trial_order_first_schedule_pass(
                     "unit_m": task["unit_m"],
                 }
             )
+            # #region agent log
+            _mn_occ = str(task.get("machine_name") or "").strip()
+            _proc_occ = str(task.get("machine") or "").strip()
+            _agent_debug_session_log(
+                hypothesis_id="H1",
+                location="planning_core.py:timeline_events.append(main_roll)",
+                message="roll_committed_timeline",
+                data={
+                    "equipment_line_key": eq_line,
+                    "machine_occupancy_key": machine_occ_key,
+                    "task_machine_column": _proc_occ,
+                    "machine_name": _mn_occ,
+                    "task_id": str(task.get("task_id") or ""),
+                    "date": current_date.isoformat(),
+                    "start_dt": best_start.isoformat(sep=" ", timespec="seconds"),
+                    "end_dt": best_end.isoformat(sep=" ", timespec="seconds"),
+                },
+            )
+            # #endregion
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
@@ -13694,9 +13816,9 @@ def _trial_order_first_schedule_pass(
             for m in best_team:
                 avail_dt[m] = best_end
             if not _gpo.get("abolish_all_scheduling_limits"):
-                machine_avail_dt[eq_line] = best_end
+                machine_avail_dt[machine_occ_key] = best_end
                 _bump_machine_avail_after_roll_for_calendar(
-                    current_date, eq_line, machine_avail_dt
+                    current_date, machine_occ_key, machine_avail_dt
                 )
             rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
             _dispatch_roll_trace_after_roll(
@@ -14727,11 +14849,7 @@ def _generate_plan_impl():
                         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
                             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                                 task_queue,
-                                str(
-                                    task.get("equipment_line_key")
-                                    or task.get("machine")
-                                    or ""
-                                ).strip(),
+                                _physical_machine_occupancy_key_for_task(task),
                             )
                             if _b1_holder is not None and _b1_holder is not task:
                                 if _trace_schedule_task_enabled(task.get("task_id")):
@@ -14770,6 +14888,7 @@ def _generate_plan_impl():
                         eq_line = str(
                             task.get("equipment_line_key") or machine or ""
                         ).strip() or machine
+                        machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
                         try:
                             _my_dispatch_ord = int(
                                 task.get("dispatch_trial_order") or 10**9
@@ -14777,7 +14896,7 @@ def _generate_plan_impl():
                         except (TypeError, ValueError):
                             _my_dispatch_ord = 10**9
                         if _equipment_line_lower_dispatch_trial_still_pending(
-                            task_queue, eq_line, _my_dispatch_ord, current_date
+                            task_queue, machine_occ_key, _my_dispatch_ord, current_date
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
@@ -14857,7 +14976,7 @@ def _generate_plan_impl():
                         )
                         if task.get("has_done_deadline_override"):
                             machine_free_dbg = machine_avail_dt.get(
-                                eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+                                machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
                             )
                             logging.info(
                                 "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
@@ -15092,7 +15211,7 @@ def _generate_plan_impl():
                                 if not _gpo.get("abolish_all_scheduling_limits"):
                                     # 同一設備は1時点で1タスクのみ（設備空き時刻を反映）
                                     machine_free_dt = machine_avail_dt.get(
-                                        eq_line, datetime.combine(current_date, DEFAULT_START_TIME)
+                                        machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
                                     )
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
@@ -15126,7 +15245,7 @@ def _generate_plan_impl():
                                     ts = max(ts, max(avail_dt[m] for m in team))
                                     if not _gpo.get("abolish_all_scheduling_limits"):
                                         _mfd = machine_avail_dt.get(
-                                            eq_line,
+                                            machine_occ_key,
                                             datetime.combine(
                                                 current_date, DEFAULT_START_TIME
                                             ),
@@ -15200,7 +15319,7 @@ def _generate_plan_impl():
                                 if (
                                     _dispatch_interval_mirror is not None
                                     and _dispatch_interval_mirror.would_block_roll(
-                                        eq_line,
+                                        machine_occ_key,
                                         team,
                                         team_start,
                                         actual_end_dt,
@@ -15430,6 +15549,7 @@ def _generate_plan_impl():
                                 _te_disp = 1.0
                             timeline_events.append({
                                 "date": current_date, "task_id": task['task_id'], "machine": eq_line,
+                                "machine_occupancy_key": machine_occ_key,
                                 "op": best_info["op"], "sub": ", ".join(sub_members),
                                 "start_dt": best_info["start_dt"], "end_dt": best_info["end_dt"],
                                 "breaks": best_info["breaks"], "units_done": done_units,
@@ -15442,6 +15562,25 @@ def _generate_plan_impl():
                                 * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
                                 "unit_m": task['unit_m']
                             })
+                            # #region agent log
+                            _mn_occ2 = str(task.get("machine_name") or "").strip()
+                            _proc_occ2 = str(task.get("machine") or "").strip()
+                            _agent_debug_session_log(
+                                hypothesis_id="H1",
+                                location="planning_core.py:timeline_events.append(chunk_roll)",
+                                message="roll_committed_timeline",
+                                data={
+                                    "equipment_line_key": eq_line,
+                                    "machine_occupancy_key": machine_occ_key,
+                                    "task_machine_column": _proc_occ2,
+                                    "machine_name": _mn_occ2,
+                                    "task_id": str(task.get("task_id") or ""),
+                                    "date": current_date.isoformat(),
+                                    "start_dt": best_info["start_dt"].isoformat(sep=" ", timespec="seconds"),
+                                    "end_dt": best_info["end_dt"].isoformat(sep=" ", timespec="seconds"),
+                                },
+                            )
+                            # #endregion
                             if _dispatch_interval_mirror is not None:
                                 _dispatch_interval_mirror.register_from_event(
                                     timeline_events[-1]
@@ -15523,9 +15662,9 @@ def _generate_plan_impl():
                             for m in best_team:
                                 avail_dt[m] = best_info["end_dt"]
                             if not _gpo.get("abolish_all_scheduling_limits"):
-                                machine_avail_dt[eq_line] = best_info["end_dt"]
+                                machine_avail_dt[machine_occ_key] = best_info["end_dt"]
                                 _bump_machine_avail_after_roll_for_calendar(
-                                    current_date, eq_line, machine_avail_dt
+                                    current_date, machine_occ_key, machine_avail_dt
                                 )
                             rem_after = int(math.ceil(float(task.get("remaining_units") or 0)))
                             _dispatch_roll_trace_after_roll(
