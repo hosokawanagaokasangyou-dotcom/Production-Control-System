@@ -5,12 +5,6 @@ Private Type POINTAPI
     x As Long
     y As Long
 End Type
-Private Type RECT
-    Left As Long
-    Top As Long
-    Right As Long
-    Bottom As Long
-End Type
 #If VBA7 Then
     Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
@@ -20,7 +14,6 @@ End Type
     Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
     Private Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
     Private Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
-    Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
     Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
     Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
     Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
@@ -41,7 +34,6 @@ End Type
     Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
     Private Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
-    Private Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, lpRect As RECT) As Long
     Private Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
     Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
@@ -50,8 +42,6 @@ End Type
 Private Const SW_HIDE As Long = 0
 Private Const SND_ASYNC As Long = &H1
 Private Const SND_ALIAS As Long = &H10000
-' 可視 cmd の下端と frmMacroSplash の上端の隙間（px）。Exec 待機でコンソール HWND を検出した直後にスプラッシュをその下へ移動
-Private Const STAGE12_SPLASH_BELOW_CMD_GAP_PX As Long = 6
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
 Private Const SM_CXSCREEN As Long = 0
 Private Const SM_CYSCREEN As Long = 1
@@ -107,7 +97,6 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
-'   ・可視 cmd（STAGE12_CMD_HIDE_WINDOW=False）時は Exec 待機で title 付きコンソールを検出した直後、frmMacroSplash をそのウィンドウ下端の下（STAGE12_SPLASH_BELOW_CMD_GAP_PX）へ移動。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
@@ -350,48 +339,6 @@ Private Sub MacroSplash_EndConsoleOverlay()
     On Error GoTo 0
 End Sub
 
-' 可視 cmd（title 一致の HWND）の直下に UserForm スプラッシュを置く。ヘッドレス時や未表示時は呼ばない
-#If VBA7 Then
-Private Sub MacroSplash_PositionSplashBelowConsoleHwnd(ByVal consoleHwnd As LongPtr)
-#Else
-Private Sub MacroSplash_PositionSplashBelowConsoleHwnd(ByVal consoleHwnd As Long)
-#End If
-    Dim rcC As RECT
-    Dim rcS As RECT
-#If VBA7 Then
-    Dim splashHwnd As LongPtr
-#Else
-    Dim splashHwnd As Long
-#End If
-    Dim sw As Long
-    Dim sh As Long
-    Dim newL As Long
-    Dim newT As Long
-    Dim scrW As Long
-    Dim scrH As Long
-    On Error GoTo Done
-    If consoleHwnd = 0 Then GoTo Done
-    If Not m_macroSplashShown Then GoTo Done
-    If GetWindowRect(consoleHwnd, rcC) = 0 Then GoTo Done
-    splashHwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
-    If splashHwnd = 0 Then GoTo Done
-    If GetWindowRect(splashHwnd, rcS) = 0 Then GoTo Done
-    sw = rcS.Right - rcS.Left
-    sh = rcS.Bottom - rcS.Top
-    If sw < 80 Or sh < 80 Then GoTo Done
-    newL = rcC.Left
-    newT = rcC.Bottom + STAGE12_SPLASH_BELOW_CMD_GAP_PX
-    scrW = GetSystemMetrics(SM_CXSCREEN)
-    scrH = GetSystemMetrics(SM_CYSCREEN)
-    If newL + sw > scrW Then newL = scrW - sw
-    If newL < 0 Then newL = 0
-    If newT + sh > scrH Then newT = scrH - sh
-    If newT < 0 Then newT = 0
-    Call SetWindowPos(splashHwnd, 0&, newL, newT, sw, sh, SWP_NOZORDER Or SWP_SHOWWINDOW)
-Done:
-    On Error GoTo 0
-End Sub
-
 ' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
 #If VBA7 Then
 Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
@@ -488,7 +435,6 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                             Else
                                 SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW Or SWP_NOACTIVATE
                             End If
-                            ' ログ枠オーバーレイ時はコンソールが TextBox 上に乗るためスプラッシュ位置は変えない
                             positioned = True
                         Else
                             probe = probe + 1
@@ -568,7 +514,6 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                     If applyQuarterLayout Then
                         SetWindowPos hwnd, 0&, 0&, 0&, cx, cyQuarter, SWP_NOZORDER Or SWP_SHOWWINDOW
                     End If
-                    If m_macroSplashShown Then MacroSplash_PositionSplashBelowConsoleHwnd hwnd
                     positioned = True
                 Else
                     probe = probe + 1
