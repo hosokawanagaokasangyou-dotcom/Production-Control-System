@@ -637,7 +637,7 @@ Private Sub CollectAttendanceFromCalendar(ByVal wsCal As Worksheet, ByRef recMap
                 End Select
             End If
             
-            ' rec(8) = 休暇区分、rec(9) = 備考（カレンダーからは入れない。再生成時は既存シート J〜K を日付キーで復元）
+            ' rec(8) = 休暇区分、rec(9) = 備考（カレンダーからは入れない。再生成時は既存シート J〜K を日付キーで復元・K は時刻/数値/文字いずれも可）
             rec = Array(d, st, en, b1s, b1e, b2s, b2e, 1#, note, "")
             recs.Add rec
             totalRec = totalRec + 1
@@ -648,6 +648,21 @@ NextDayCell:
 NextMemberRow:
     Next r
 End Sub
+
+' メンバー出勤簿の退避用: セルにユーザー入力相当の値があるか（空・エラー値は False。数値の残業時間・文字列入力も True）
+Private Function MemberAttendanceCellHasUserValue(ByVal v As Variant) As Boolean
+    On Error GoTo Quiet
+    MemberAttendanceCellHasUserValue = False
+    If IsEmpty(v) Then Exit Function
+    If VarType(v) = vbError Then Exit Function
+    If VarType(v) = vbString Then
+        MemberAttendanceCellHasUserValue = (Len(Trim$(v)) > 0)
+        Exit Function
+    End If
+    MemberAttendanceCellHasUserValue = True
+    Exit Function
+Quiet:
+End Function
 
 ' 再生成前に、メンバー出勤簿の手入力列 J〜K（備考・残業終業）を日付キーで退避する（空欄は退避しない）
 Private Sub PreserveMemberAttendanceHandColumns(ByVal ws As Worksheet, ByVal notesMap As Object, ByVal otEndMap As Object)
@@ -674,10 +689,8 @@ Private Sub PreserveMemberAttendanceHandColumns(ByVal ws As Worksheet, ByVal not
         note = Trim$(CStr(ws.Cells(rr, 10).Value))
         If Len(note) > 0 Then notesMap(dk) = ws.Cells(rr, 10).Value
         ke = ws.Cells(rr, 11).Value
-        If IsEmpty(ke) Or Not IsDate(ke) Then ke = ws.Cells(rr, 12).Value
-        If Not IsEmpty(ke) Then
-            If IsDate(ke) Then otEndMap(dk) = ke
-        End If
+        If Not MemberAttendanceCellHasUserValue(ke) Then ke = ws.Cells(rr, 12).Value
+        If MemberAttendanceCellHasUserValue(ke) Then otEndMap(dk) = ke
 NextPreserveRow:
     Next rr
 End Sub
@@ -742,6 +755,8 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     Dim preservedOtEnd As Object
     Dim dk As String
     Dim noteOut As Variant
+    Dim fmtR As Long
+    Dim kv As Variant
     ' ws.Cells.Clear で書式も消えるため、再生成前のフォント（名・サイズ）を退避する
     Dim preserveFontName As String
     Dim preserveFontSize As Variant
@@ -829,7 +844,28 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     
     ws.Columns("A").NumberFormatLocal = "yyyy/mm/dd"
     ws.Columns("B:G").NumberFormatLocal = "hh:mm"
-    ws.Columns("K").NumberFormatLocal = "hh:mm"
+    ' K 列は「残業終業（時刻）」と「残業時間（数値）」の両方があり得るため、入力型に応じて表示形式を付ける
+    ws.Columns("K").NumberFormatLocal = "General"
+    If r > 2 Then
+        For fmtR = 2 To r - 1
+            If Not IsEmpty(ws.Cells(fmtR, 11).Value) Then
+                kv = ws.Cells(fmtR, 11).Value
+                If VarType(kv) = vbString Then
+                    ws.Cells(fmtR, 11).NumberFormatLocal = "General"
+                ElseIf VarType(kv) = vbDate Then
+                    ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                ElseIf IsNumeric(kv) Then
+                    If CDbl(kv) >= 0# And CDbl(kv) < 1# Then
+                        ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                    Else
+                        ws.Cells(fmtR, 11).NumberFormatLocal = "General"
+                    End If
+                ElseIf IsDate(kv) Then
+                    ws.Cells(fmtR, 11).NumberFormatLocal = "hh:mm"
+                End If
+            End If
+        Next fmtR
+    End If
     ws.Columns("A:K").AutoFit
     
     Call FormatMemberAttendanceSheetLayout(ws, r - 1)
