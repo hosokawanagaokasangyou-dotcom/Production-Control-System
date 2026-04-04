@@ -60,6 +60,38 @@ Private Function MasterGetMainWorksheet(ByVal wb As Workbook) As Worksheet
     Set MasterGetMainWorksheet = Nothing
 End Function
 
+' Excel セルの時刻（Double の日付シリアル・Date 型・文字列）から「時」0～23 を取得。解釈不能は -1。
+' ※「時刻のみ」のセルは Value が数値になり IsDate(値) が False になり得るため、IsNumeric 経路が必須。
+Private Function MasterMainTimeCellToHour(ByVal v As Variant) As Long
+    Dim d As Date
+    On Error GoTo Fail
+    MasterMainTimeCellToHour = -1
+    If IsEmpty(v) Then Exit Function
+    If VarType(v) = vbError Then Exit Function
+    
+    Select Case VarType(v)
+    Case vbDate
+        MasterMainTimeCellToHour = Hour(CDate(v))
+        Exit Function
+    Case vbDouble, vbSingle, vbCurrency, vbLong, vbInteger
+        d = CDate(CDbl(v))
+        MasterMainTimeCellToHour = Hour(d)
+        Exit Function
+    Case vbString
+        If Len(Trim$(v)) = 0 Then Exit Function
+        d = CDate(Trim$(v))
+        MasterMainTimeCellToHour = Hour(d)
+        Exit Function
+    Case Else
+        If IsDate(v) Then
+            MasterMainTimeCellToHour = Hour(CDate(v))
+            Exit Function
+        End If
+    End Select
+Fail:
+    MasterMainTimeCellToHour = -1
+End Function
+
 ' メイン A12・B12 からスロットの開始・終了「時」（毎正時）を取得。空・不正時は 6～22。
 Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As Long, ByRef hLast As Long, ByRef slotsPer As Long)
     Dim ws As Worksheet
@@ -76,12 +108,8 @@ Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As 
     vS = ws.Range("A12").Value
     vE = ws.Range("B12").Value
     
-    hhF = -1
-    hhL = -1
-    On Error Resume Next
-    If IsDate(vS) Then hhF = Hour(CDate(vS))
-    If IsDate(vE) Then hhL = Hour(CDate(vE))
-    On Error GoTo 0
+    hhF = MasterMainTimeCellToHour(vS)
+    hhL = MasterMainTimeCellToHour(vE)
     
     If hhF < 0 Or hhF > 23 Or hhL < 0 Or hhL > 23 Then Exit Sub
     If hhF > hhL Then Exit Sub

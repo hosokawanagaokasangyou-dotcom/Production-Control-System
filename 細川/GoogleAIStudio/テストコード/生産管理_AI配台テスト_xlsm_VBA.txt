@@ -955,6 +955,37 @@ End Sub
 ' ・勤怠セル: master.xlsm メイン A12/B12 の工場稼働開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
 ' =========================================================
 
+' master メイン A12/B12 のセル値を時刻として解釈（時分）。解釈不能は False。
+' ※時刻のみのセルは Double になり IsDate が False になり得るため、数値型を明示処理する。
+Private Function マスタメイン_セルを時刻Dateへ(ByVal v As Variant, ByRef outT As Date) As Boolean
+    On Error GoTo Fail
+    If IsEmpty(v) Or VarType(v) = vbError Then GoTo Fail
+    
+    Select Case VarType(v)
+    Case vbDate
+        outT = CDate(v)
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case vbDouble, vbSingle, vbCurrency, vbLong, vbInteger
+        outT = CDate(CDbl(v))
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case vbString
+        If Len(Trim$(v)) = 0 Then GoTo Fail
+        outT = CDate(Trim$(v))
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case Else
+        If IsDate(v) Then
+            outT = CDate(v)
+            マスタメイン_セルを時刻Dateへ = True
+            Exit Function
+        End If
+    End Select
+Fail:
+    マスタメイン_セルを時刻Dateへ = False
+End Function
+
 ' master.xlsm メイン A12/B12 を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
 Private Function マスタメイン_工場標準勤怠表示文字列() As String
     Const FB As String = "08:45 / 17:00"
@@ -965,6 +996,7 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     Dim sh As Worksheet
     Dim openedHere As Boolean
     Dim vS As Variant, vE As Variant
+    Dim tS As Date, tE As Date
     
     マスタメイン_工場標準勤怠表示文字列 = FB
     On Error GoTo CleanExit
@@ -1004,10 +1036,11 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     
     vS = ws.Range("A12").Value
     vE = ws.Range("B12").Value
-    If Not IsDate(vS) Or Not IsDate(vE) Then GoTo CloseWb
-    If TimeValue(CDate(vS)) >= TimeValue(CDate(vE)) Then GoTo CloseWb
+    If Not マスタメイン_セルを時刻Dateへ(vS, tS) Then GoTo CloseWb
+    If Not マスタメイン_セルを時刻Dateへ(vE, tE) Then GoTo CloseWb
+    If TimeValue(tS) >= TimeValue(tE) Then GoTo CloseWb
     
-    マスタメイン_工場標準勤怠表示文字列 = Format$(CDate(vS), "hh:nn") & " / " & Format$(CDate(vE), "hh:nn")
+    マスタメイン_工場標準勤怠表示文字列 = Format$(tS, "hh:nn") & " / " & Format$(tE, "hh:nn")
 
 CloseWb:
     If openedHere Then
