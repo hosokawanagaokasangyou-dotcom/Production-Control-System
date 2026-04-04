@@ -60,10 +60,13 @@ Private Const MACRO_COMPLETE_CHIME_REL_DIR As String = "sounds"
 Private Const MACRO_COMPLETE_CHIME_FILE_NAME As String = "macro_complete_chime.wav"
 Private Const MACRO_COMPLETE_CHIME_DOWNLOAD_URL As String = "https://raw.githubusercontent.com/kamoshika9999/----AI------/xlwings%E7%A9%8D%E6%A5%B5%E9%81%A9%E7%94%A8/%E7%B4%B0%E5%B7%9D/GoogleAIStudio/%E3%83%86%E3%82%B9%E3%83%88%E3%82%B3%E3%83%BC%E3%83%89/sounds/macro_complete_chime.wav"
 ' 完了 MP3（sounds 配下）。トラックは「設定」D4 に 1〜4（空・不正は 1）。実ファイル名を変えたら定数だけ合わせる。
-Private Const MACRO_COMPLETE_MP3_1 As String = "穏やかな応答.mp3"
-Private Const MACRO_COMPLETE_MP3_2 As String = "完了チャイム_トラック2.mp3"
-Private Const MACRO_COMPLETE_MP3_3 As String = "完了チャイム_トラック3.mp3"
-Private Const MACRO_COMPLETE_MP3_4 As String = "完了チャイム_トラック4.mp3"
+Private Const MACRO_COMPLETE_MP3_1 As String = "穏やかな応答1.mp3"
+Private Const MACRO_COMPLETE_MP3_2 As String = "穏やかな応答2.mp3"
+Private Const MACRO_COMPLETE_MP3_3 As String = "穏やかな応答3.mp3"
+Private Const MACRO_COMPLETE_MP3_4 As String = "穏やかな応答4.mp3"
+' スプラッシュ中 BGM（sounds 配下）。MCI 固定 alias でループ再生し、終了時はフェードアウト後 close。
+Private Const MACRO_START_BGM_FILENAME As String = "Glass_Architecture.mp3"
+Private Const MACRO_START_BGM_ALIAS As String = "pm_ai_glassbg"
 ' frmMacroSplash を Excel メイン枠の下端・水平中央に合わせるときの下端からの余白（px）
 Private Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
@@ -159,6 +162,8 @@ Private m_macroSplashShown As Boolean
 Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Private m_animMacroSucceeded As Boolean
+' スプラッシュ用 BGM（Glass_Architecture.mp3）を MCI で開いているとき True
+Private m_macroStartBgmOpen As Boolean
 ' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）
 Private m_splashExecutionLogPath As String
 ' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
@@ -1796,6 +1801,7 @@ End Sub
 ' マクロ実行中スプラッシュ（擬似モーダル）
 ' ・シート「設定」D3: true/TRUE でログ枠へ書き込み＋Exec 待機中のファイルポーリング。false/FALSE で無し・同期 Run・通常 cmd 表示（log\execution_log.txt への Python 出力は変わらず）
 ' ・シート「設定」D4: マクロ成功時の完了チャイム用 MP3 トラック番号 1〜4（空・不正は 1）。ファイル名は標準モジュール MACRO_COMPLETE_MP3_1〜4。sounds フォルダに配置。MP3 が無い／再生失敗時は macro_complete_chime.wav
+' ・スプラッシュ表示中: sounds\Glass_Architecture.mp3 を BGM として MCI ループ再生。終了時はフェードアウト後に close（完了チャイムより先）。MacroSplash_Hide でも同様（二重呼び出しは無操作）
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
 ' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
@@ -2115,6 +2121,53 @@ Public Sub PlayFinishSound()
     MacroCompleteChime
 End Sub
 
+Private Function MacroStartBgm_FullPath() As String
+    Dim folder As String
+    folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then Exit Function
+    MacroStartBgm_FullPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_START_BGM_FILENAME
+End Function
+
+Private Sub MacroStartBgm_CloseHard()
+    On Error Resume Next
+    If m_macroStartBgmOpen Then
+        mciSendStringW StrPtr("close " & MACRO_START_BGM_ALIAS), 0&, 0, 0&
+    End If
+    m_macroStartBgmOpen = False
+End Sub
+
+Private Sub MacroStartBgm_FadeOutAndClose()
+    Dim i As Long
+    Dim vol As Long
+    On Error Resume Next
+    If Not m_macroStartBgmOpen Then Exit Sub
+    For i = 10 To 0 Step -1
+        vol = 100& * i
+        mciSendStringW StrPtr("setaudio " & MACRO_START_BGM_ALIAS & " volume to " & CStr(vol)), 0&, 0, 0&
+        Sleep 45
+        DoEvents
+    Next i
+    mciSendStringW StrPtr("close " & MACRO_START_BGM_ALIAS), 0&, 0, 0&
+    m_macroStartBgmOpen = False
+End Sub
+
+Private Sub MacroStartBgm_StartIfAvailable()
+    Dim p As String
+    Dim r As Long
+    Dim cmdOpen As String
+    On Error Resume Next
+    p = MacroStartBgm_FullPath()
+    If Len(p) = 0 Or Len(Dir(p)) = 0 Then Exit Sub
+    MacroStartBgm_CloseHard
+    cmdOpen = "open " & Chr$(34) & p & Chr$(34) & " type mpegvideo alias " & MACRO_START_BGM_ALIAS
+    r = mciSendStringW(StrPtr(cmdOpen), 0&, 0, 0&)
+    If r <> 0 Then Exit Sub
+    mciSendStringW StrPtr("setaudio " & MACRO_START_BGM_ALIAS & " volume to 1000"), 0&, 0, 0&
+    r = mciSendStringW(StrPtr("play " & MACRO_START_BGM_ALIAS & " repeat"), 0&, 0, 0&)
+    If r <> 0 Then r = mciSendStringW(StrPtr("play " & MACRO_START_BGM_ALIAS), 0&, 0, 0&)
+    If r = 0 Then m_macroStartBgmOpen = True
+End Sub
+
 ' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
 Private Sub MacroSplash_PositionDockExcelBottomCenter()
 #If VBA7 Then
@@ -2192,6 +2245,7 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     frmMacroSplash.Controls("txtExecutionLog").HideSelection = False
     MacroSplash_BringFormToFront
     DoEvents
+    MacroStartBgm_StartIfAvailable
     Exit Sub
 CleanupFail:
     On Error Resume Next
@@ -2202,6 +2256,7 @@ End Sub
 
 Private Sub MacroSplash_Hide()
     On Error Resume Next
+    MacroStartBgm_FadeOutAndClose
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
         Unload frmMacroSplash
@@ -2248,6 +2303,7 @@ Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessag
 EH:
     On Error Resume Next
 Finish:
+    MacroStartBgm_FadeOutAndClose
     If m_animMacroSucceeded Then
         On Error Resume Next
         MacroCompleteChime
