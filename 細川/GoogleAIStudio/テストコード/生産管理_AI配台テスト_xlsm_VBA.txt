@@ -1927,6 +1927,8 @@ Private Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
     AgentDbgWrite "H1", "結果シート_列幅_AutoFit安定", "enter", targetWs.Name, ""
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
+    ' 結果_設備ガントは専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
+    If StrComp(Trim$(targetWs.Name), "結果_設備ガント", vbBinaryCompare) = 0 Then Exit Sub
     su = Application.ScreenUpdating
     On Error Resume Next
     Application.ScreenUpdating = True
@@ -2160,17 +2162,8 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     Set wb = ThisWorkbook
     On Error Resume Next
     
+    ' 先に他シートの AutoFit を済ませ、最後に設備ガントの専用列幅を適用（他処理での幅変動を上書き）
     Err.Clear
-    Set ws = wb.Worksheets("結果_設備ガント")
-    If Err.Number = 0 Then
-        結果_設備ガント_列幅を設定 ws
-        結果_設備ガント_タイトルA1を左寄せに固定 ws
-    Else
-        Err.Clear
-    End If
-    
-    Err.Clear
-    Set ws = Nothing
     Set ws = wb.Worksheets("結果_カレンダー(出勤簿)")
     If Err.Number = 0 Then
         結果シート_列幅_AutoFit安定 ws
@@ -2192,6 +2185,16 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     Set ws = wb.Worksheets(SHEET_RESULT_TASK_LIST)
     If Err.Number = 0 Then
         結果シート_列幅_AutoFit非表示を維持 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets("結果_設備ガント")
+    If Err.Number = 0 Then
+        結果_設備ガント_列幅を設定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
     Else
         Err.Clear
     End If
@@ -5269,8 +5272,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         Set sourceWb = Workbooks.Open(outputFilePath)
         
         For Each sourceWs In sourceWb.Sheets
-            sheetName = sourceWs.Name
-            If sheetName = "結果_設備ガント" Then
+            sheetName = Trim$(sourceWs.Name)
+            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
                 colBr = "gantt_eq"
             ElseIf StrComp(sheetName, "結果_タスク一覧", vbBinaryCompare) = 0 Then
                 colBr = "tasklist"
@@ -5296,7 +5299,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             
             ' (1b) 列幅: Python 出力では列幅を書かない。設備ガントは専用、それ以外は AutoFit。
             '     結果_タスク一覧 は非表示列があるため、全列 Select+AutoFit すると非表示が解除される。
-            If sheetName = "結果_設備ガント" Then
+            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
                 結果_設備ガント_列幅を設定 ws
             ElseIf StrComp(sheetName, "結果_タスク一覧", vbBinaryCompare) = 0 Then
                 結果シート_列幅_AutoFit非表示を維持 ws
@@ -5308,6 +5311,10 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             ' (2) 使用している範囲全体に罫線(実線・細線)を引く
             ws.UsedRange.Borders.LineStyle = 1 ' xlContinuous
             ws.UsedRange.Borders.Weight = 2    ' xlThin
+            ' 罫線付与で列幅が変わる環境があるため、設備ガントは専用幅を再適用
+            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+                結果_設備ガント_列幅を設定 ws
+            End If
             
             ' (3) 見出し（1行目）：太字・薄い黄緑（表形式シート向け）
             '     結果_設備ガント は 1 行目がレポートタイトル（Python でサイズ・背景を指定）のため上書きしない
@@ -5319,7 +5326,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
             End If
             
             ' (3b) 結果_設備ガントのみ：タイトル A1（結合先頭）を強制的に左寄せ
-            If sheetName = "結果_設備ガント" Then
+            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
                 結果_設備ガント_タイトルA1を左寄せに固定 ws
             End If
             
@@ -5343,6 +5350,14 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（保護後も UI のみ。依頼NO薄緑は機械名毎のみ追加）
         On Error Resume Next
         取込後_結果シートへマスタ時刻を反映 targetWb
+        Err.Clear
+        ' マスタ反映・保護後も、設備ガントの列幅は専用設定に戻す（AutoFit 混入防止）
+        Set ws = Nothing
+        Set ws = targetWb.Worksheets("結果_設備ガント")
+        If Err.Number = 0 Then
+            結果_設備ガント_列幅を設定 ws
+            結果_設備ガント_タイトルA1を左寄せに固定 ws
+        End If
         Err.Clear
         On Error GoTo ErrHandler
         
