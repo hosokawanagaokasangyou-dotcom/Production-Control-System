@@ -1787,35 +1787,16 @@ End Sub
 
 ' Ctrl+Shift+テンキー - 用（手続き名は従来互換で CtrlShift0 のまま。Application.OnKey の Procedure は ASCII 名が無難）
 Public Sub ShortcutMainSheet_CtrlShift0()
-    ' #region agent log
-    AgentDbgLogND "H2", "ShortcutMainSheet_CtrlShift0", "handler_entry", "{}"
-    ' #endregion
     On Error Resume Next
-    If Not ActiveWorkbook Is ThisWorkbook Then
-        ' #region agent log
-        AgentDbgLogND "H3", "ShortcutMainSheet_CtrlShift0", "exit_wrong_workbook", "{""active"":""" & AgentDbgEsc(ActiveWorkbook.Name) & """,""this"":""" & AgentDbgEsc(ThisWorkbook.Name) & """}"
-        ' #endregion
-        Exit Sub
-    End If
+    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     メインシートA1を選択
     On Error GoTo 0
 End Sub
 
 Public Sub ShortcutMainSheet_OnKeyRegister()
-    Dim errNum As Long
-    Dim errDesc As String
-    ' #region agent log
-    AgentDbgLogND "H1", "ShortcutMainSheet_OnKeyRegister", "before_onkey", "{""keySpec"":""" & AgentDbgEsc(SHORTCUT_MAIN_SHEET_ONKEY) & """,""proc"":""ShortcutMainSheet_CtrlShift0""}"
-    ' #endregion
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ShortcutMainSheet_CtrlShift0"
-    errNum = Err.Number
-    errDesc = Err.Description
-    Err.Clear
     On Error GoTo 0
-    ' #region agent log
-    AgentDbgLogND "H1", "ShortcutMainSheet_OnKeyRegister", "after_onkey", "{""errNum"":" & errNum & ",""errDesc"":""" & AgentDbgEsc(errDesc) & """}"
-    ' #endregion
 End Sub
 
 Public Sub ShortcutMainSheet_OnKeyUnregister()
@@ -1823,43 +1804,6 @@ Public Sub ShortcutMainSheet_OnKeyUnregister()
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY
     On Error GoTo 0
 End Sub
-
-' #region agent log
-Private Function AgentDbgEsc(ByVal s As String) As String
-    s = Replace$(s, "\", "\\")
-    s = Replace$(s, """", "'")
-    s = Replace$(s, vbCrLf, " ")
-    s = Replace$(s, vbCr, " ")
-    s = Replace$(s, vbLf, " ")
-    AgentDbgEsc = s
-End Function
-
-Private Sub AgentDbgLogND(ByVal hypothesisId As String, ByVal loc As String, ByVal msg As String, ByVal dataJson As String)
-    Dim basePath As String
-    Dim p As String
-    Dim f As Integer
-    Dim ln As String
-    Dim ts As String
-    basePath = ThisWorkbook.Path
-    If Len(basePath) = 0 Then Exit Sub
-    ts = Format$(Now, "yyyy-mm-dd""T""hh:nn:ss")
-    ln = "{""sessionId"":""e15308"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & AgentDbgEsc(loc) & """,""message"":""" & AgentDbgEsc(msg) & """,""data"":" & dataJson & ",""timestamp"":""" & ts & """}"
-    p = basePath & "\..\..\..\debug-e15308.log"
-    On Error Resume Next
-    f = FreeFile
-    Open p For Append As #f
-    If Err.Number <> 0 Then
-        Err.Clear
-        p = basePath & "\debug-e15308.log"
-        Open p For Append As #f
-    End If
-    If Err.Number = 0 Then
-        Print #f, ln
-        Close #f
-    End If
-    On Error GoTo 0
-End Sub
-' #endregion
 
 Private Function FindColHeader(ws As Worksheet, ByVal headerText As String) As Long
     Dim c As Long
@@ -6295,9 +6239,6 @@ End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
 Sub Auto_Open()
-    ' #region agent log
-    AgentDbgLogND "H1", "Auto_Open", "ran", "{""wb"":""" & AgentDbgEsc(ThisWorkbook.Name) & """}"
-    ' #endregion
     ShortcutMainSheet_OnKeyRegister
 End Sub
 
