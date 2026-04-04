@@ -4978,8 +4978,16 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
                  "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
-                 "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
-                 "exit /b !STAGE2_PY_EXIT!"
+                 "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf
+        ' コンソール表示時のみ: Python 失敗後にウィンドウがすぐ閉じないよう pause（非表示・headless では付けない）
+        If Not STAGE12_CMD_HIDE_WINDOW Then
+            runBat = runBat & "if not !STAGE2_PY_EXIT! equ 0 (" & vbCrLf & _
+                     "echo." & vbCrLf & _
+                     "echo [stage2] Python error. Press any key to close this window..." & vbCrLf & _
+                     "pause" & vbCrLf & _
+                     ")" & vbCrLf
+        End If
+        runBat = runBat & "exit /b !STAGE2_PY_EXIT!"
         ' 4. cmd 完了まで待機（execution_log を txtExecutionLog へポーリング）
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""

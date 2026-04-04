@@ -15662,6 +15662,10 @@ def _generate_plan_impl():
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
 
+    events_by_date = defaultdict(list)
+    for e in timeline_events:
+        events_by_date[e["date"]].append(e)
+
     # =========================================================
     # 4. Excel出力 (メイン計画)
     # =========================================================
