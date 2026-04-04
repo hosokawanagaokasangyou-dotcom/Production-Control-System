@@ -2,12 +2,19 @@
 ' 貼り付け先: 「生産管理_AI配台テスト.xlsm」の ThisWorkbook（プロジェクト内の ThisWorkbook をダブルクリック）
 ' 標準モジュール側: 生産管理_AI配台テスト_xlsm_VBA.txt の Auto_Open / ShortcutMainSheet_* と対
 ' 目的: ブックを閉じたあとも Ctrl+Shift+テンキー - の割当が Excel に残らないよう BeforeClose で解除する
+' SheetSelectionChange: 結果_設備ガントでデータ行選択時に行枠を太線で強調（標準モジュールの 結果_設備ガント_行ハイライト_OnSelection）
 ' ============================================================
 Option Explicit
 
 Private Sub Workbook_Open()
     On Error Resume Next
     ShortcutMainSheet_OnKeyRegister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)
+    On Error Resume Next
+    結果_設備ガント_行ハイライト_OnSelection Sh, Target
     On Error GoTo 0
 End Sub
 
