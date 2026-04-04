@@ -1415,7 +1415,7 @@ Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled
 End Function
 
 ' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A15/B15 の定常枠と一致するか
-Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String) As Boolean
+Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String, Optional ByVal stdDispCached As String) As Boolean
     Dim t As String
     Dim exp As String
     t = Trim$(Replace(Replace(txt, vbCr, ""), vbLf, ""))
@@ -1423,7 +1423,11 @@ Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As 
     Do While InStr(t, "  ") > 0
         t = Replace(t, "  ", " ")
     Loop
-    exp = マスタメイン_工場標準勤怠表示文字列()
+    If Len(stdDispCached) > 0 Then
+        exp = stdDispCached
+    Else
+        exp = マスタメイン_工場標準勤怠表示文字列()
+    End If
     If StrComp(t, exp, vbTextCompare) = 0 Then
         メインシート_勤怠表示が通常勤務か = True
     ElseIf StrComp(t, メインシート_勤怠表示先頭ゼロ無し(exp), vbTextCompare) = 0 Then
@@ -1433,14 +1437,14 @@ Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As 
     End If
 End Function
 
-Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayVal As String)
+Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayVal As String, ByVal stdDispCached As String)
     Dim s As String
     s = Trim$(CStr(displayVal))
     On Error Resume Next
     If s = "" Or s = "-" Then
         c.Interior.Pattern = xlSolid
         c.Interior.Color = RGB(242, 242, 242)
-    ElseIf メインシート_勤怠表示が通常勤務か(s) Then
+    ElseIf メインシート_勤怠表示が通常勤務か(s, stdDispCached) Then
         c.Interior.Pattern = xlNone
     Else
         c.Interior.Pattern = xlSolid
@@ -1519,6 +1523,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
     Dim bMemFn As String, bMemFs As Double, bMemFc As Variant
     Dim bMemBold As Boolean, bMemIt As Boolean, bMemUl As Long
     Dim lastMemberRow As Long
+    Dim stdDispCached As String
     
     lastMemberRow = 0
     On Error GoTo EH
@@ -1615,6 +1620,9 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
         Next j
     Next i
     
+    ' master.xlsm の定常表示はセルごとに読むと都度 Open/Close になり得るため、ここで1回だけ取得して勤怠セル着色に渡す
+    stdDispCached = マスタメイン_工場標準勤怠表示文字列()
+    
     r = 8
     For i = 0 To UBound(keysArr)
         mn = keysArr(i)
@@ -1629,10 +1637,10 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
             k = mn & "|" & Format$(d, "yyyy-mm-dd")
             If dict.Exists(k) Then
                 wsMain.Cells(r, 3 + col).Value = dict(k)
-                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), CStr(dict(k))
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), CStr(dict(k)), stdDispCached
             Else
                 wsMain.Cells(r, 3 + col).Value = "-"
-                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), "-"
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), "-", stdDispCached
             End If
             wsMain.Cells(r, 3 + col).HorizontalAlignment = xlCenter
         Next col
