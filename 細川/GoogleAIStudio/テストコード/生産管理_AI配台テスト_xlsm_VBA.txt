@@ -2034,7 +2034,8 @@ Private Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Bool
     a = ""
     On Error GoTo Fail
     Randomize
-    a = "pm_ai_" & CStr(Int((Timer + Rnd) * 1000000) And 2147483647)
+    ' Timer*1e6 は Long 上限を超えうるため、Rnd のみで 0〜2147483646（CLng 安全域）
+    a = "pm_ai_" & CStr(CLng(2147483646# * Rnd))
     r = mciSendStringW(StrPtr("close " & a), 0&, 0, 0&)
     Err.Clear
     cmdOpen = "open " & Chr$(34) & fullPath & Chr$(34) & " type mpegvideo alias " & a
