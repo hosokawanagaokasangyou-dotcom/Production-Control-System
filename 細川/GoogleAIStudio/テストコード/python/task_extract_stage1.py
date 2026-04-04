@@ -69,6 +69,13 @@ def _append_execution_log_line(level: str, msg: str) -> None:
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+try:
+    import workbook_env_bootstrap as _wbe
+
+    _wbe.apply_from_task_input_workbook()
+except Exception:
+    pass
+
 if os.name == "nt":
     hwnd = ctypes.windll.kernel32.GetConsoleWindow()
     if hwnd:

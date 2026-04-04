@@ -22,6 +22,8 @@ print と同様に xlwings のコンソールへ流れる。
 
 注意
 ----
+- マクロブックに ``設定_環境変数`` シートがあるとき、``_apply_workbook_env_overrides`` が
+  ``import planning_core`` より前に ``os.environ`` へ反映する（``workbook_env_bootstrap``）。
 - ``planning_core`` は import 時に TASK_INPUT_WORKBOOK 依存の初期化があるため、
   本モジュールでは **都度 ``planning_core`` を sys.modules から外して再 import** する。
 - cmd 経路は ``task_extract_stage1.py`` が planning_core より前に ``execution_log.txt`` を作る。
@@ -55,6 +57,16 @@ def _ensure_this_python_dir_on_syspath() -> None:
 
 
 _ensure_this_python_dir_on_syspath()
+
+
+def _apply_workbook_env_overrides() -> None:
+    """マクロブック「設定_環境変数」を TASK_INPUT_WORKBOOK から読み、planning_core より前に反映。"""
+    try:
+        import workbook_env_bootstrap as _wbe
+
+        _wbe.apply_from_task_input_workbook()
+    except Exception:
+        pass
 
 
 def _write_stage_vba_exit_code(code: int) -> None:
@@ -155,6 +167,7 @@ def run_stage1_for_xlwings() -> int:
             )
             rc = 2
             return rc
+        _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
             "段階1: xlwings run_stage1_for_xlwings 開始（planning_core 読み込み前）",
@@ -195,6 +208,7 @@ def run_stage2_for_xlwings() -> int:
             logging.exception("xlwings: Book.caller() を取得できません。")
             rc = 2
             return rc
+        _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
             "段階2: xlwings run_stage2_for_xlwings 開始（planning_core 読み込み前）",
@@ -235,6 +249,7 @@ def run_refresh_dispatch_roll_trace_sheet_for_xlwings() -> int:
     except Exception:
         logging.exception("xlwings: Book.caller() を取得できません。")
         return 2
+    _apply_workbook_env_overrides()
     try:
         import planning_dispatch_debug as dd
 
@@ -259,6 +274,7 @@ def run_stage2_with_roll_trace_jsonl_then_refresh_sheet_for_xlwings() -> int:
     except Exception:
         logging.exception("xlwings: Book.caller() を取得できません。")
         return 2
+    _apply_workbook_env_overrides()
     # setdefault は「キー未存在」のみ。空文字の DISPATCH_ROLL_TRACE_JSONL では既定が入らないため明示する。
     _dj = (os.environ.get("DISPATCH_ROLL_TRACE_JSONL") or "").strip()
     if not _dj:

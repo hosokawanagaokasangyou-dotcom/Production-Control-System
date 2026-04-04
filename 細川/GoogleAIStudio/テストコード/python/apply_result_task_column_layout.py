@@ -12,6 +12,13 @@ import sys
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+try:
+    import workbook_env_bootstrap as _wbe
+
+    _wbe.apply_from_task_input_workbook()
+except Exception:
+    pass
+
 import planning_core as pc  # noqa: E402
 
 
