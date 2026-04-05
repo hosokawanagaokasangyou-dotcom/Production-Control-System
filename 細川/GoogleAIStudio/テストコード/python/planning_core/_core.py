@@ -15078,6 +15078,7 @@ def _trial_order_first_schedule_pass(
                 "end": str(e.get("end_dt")),
                 "machine": str(e.get("machine") or ""),
                 "op": str(e.get("op") or ""),
+                "sub": str(e.get("sub") or ""),
             }
             for e in timeline_events
             if e.get("date") == current_date
