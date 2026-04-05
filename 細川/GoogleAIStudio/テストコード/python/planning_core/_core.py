@@ -746,6 +746,7 @@ _AGENT497_MAX = 24
 _AGENT497_COUNT = 0
 _AGENT497_Y416_ENTRY = 0
 _AGENT497_Y416_CAND_LOGS = 0
+_AGENT497_APR8_DAYSTART_KEYS: set = set()
 
 
 def _agent497_is_apr8(cur: date) -> bool:
@@ -15902,6 +15903,43 @@ def _generate_plan_impl():
                     equipment_list,
                     _machine_day_start,
                 )
+                # region agent log
+                if _agent497_is_apr8(current_date) and _AGENT497_COUNT < _AGENT497_MAX:
+                    _dsk = (DISPATCH_TRACE_OUTER_ROUND, current_date.isoformat())
+                    if _dsk not in _AGENT497_APR8_DAYSTART_KEYS:
+                        _AGENT497_APR8_DAYSTART_KEYS.add(_dsk)
+                        _watch = ("宮島　　剛", "竹内　正美")
+                        _agent497_ndjson(
+                            {
+                                "hypothesisId": "H0_day_start_avail",
+                                "location": "generate_plan:day_loop:after_seed",
+                                "message": "4/8 各外側ラウンド×日付: seed 直後の avail_dt と勤怠 start_dt（前日終了の持ち越し検証）",
+                                "data": {
+                                    "dispatch_outer_round": DISPATCH_TRACE_OUTER_ROUND,
+                                    "avail_dt_after_seed": {
+                                        nm: str(avail_dt[nm])
+                                        for nm in _watch
+                                        if nm in avail_dt
+                                    },
+                                    "daily_status_start_dt": {
+                                        nm: str(daily_status[nm]["start_dt"])
+                                        for nm in _watch
+                                        if nm in daily_status
+                                    },
+                                    "same_as_start": {
+                                        nm: (
+                                            nm in avail_dt
+                                            and nm in daily_status
+                                            and avail_dt[nm]
+                                            == daily_status[nm]["start_dt"]
+                                        )
+                                        for nm in _watch
+                                    },
+                                },
+                                "runId": "apr8-daystart",
+                            }
+                        )
+                # endregion agent log
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
