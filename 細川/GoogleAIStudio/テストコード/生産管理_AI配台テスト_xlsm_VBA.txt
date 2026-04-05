@@ -136,7 +136,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
-' ★「設定_シート表示」は A=並び順（小さいほど左のタブ）・B=シート名・C=表示状態。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。当シートは常に表示のまま。
+' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウン: F2:F4）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 完了時に一覧を自動更新（名前一致で順と表示を維持）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
@@ -3880,8 +3880,9 @@ End Sub
 
 ' =========================================================
 ' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
-' ・一覧をブックから再取得 … 現ブックの全シートを行に並べ、新規シート行を追加（既存の順序・表示列は名前一致で維持）
+' ・一覧をブックから再取得 … 全シートを列挙。シート名が一致する行は並び順・表示の意図を維持し、A 列は 1 からの連番に振り直す。C 列はドロップダウン（F2:F4）
 ' ・ブックへ適用 … A〜C の内容で Visible と Move を実行（当シートは必ず表示）
+' ・段階1/段階2 成功完了時に一覧を自動更新（設定の維持は名前一致で行う）
 ' =========================================================
 Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
     Dim t As String
@@ -3918,6 +3919,38 @@ Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis
     End Select
 End Function
 
+' C 列ドロップダウン用（入力規則の参照元。A〜D のデータ行とは別）
+Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
+    ws.Range("F1").Value = "（C列リスト用）"
+    ws.Range("F2").Value = "表示"
+    ws.Range("F3").Value = "非表示"
+    ws.Range("F4").Value = "完全非表示"
+    ws.Columns(6).ColumnWidth = 14
+End Sub
+
+' C2 以降に「表示/非表示/完全非表示」リストを付与（F2:F4 を参照）
+Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
+    Dim rng As Range
+    Dim qn As String
+    Set rng = ws.Range("C2:C1000")
+    On Error Resume Next
+    rng.Validation.Delete
+    On Error GoTo 0
+    qn = Replace(ws.Name, "'", "''")
+    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
+        Formula1:="='" & qn & "'!$F$2:$F$4"
+    rng.Validation.IgnoreBlank = True
+    rng.Validation.InCellDropdown = True
+End Sub
+
+Private Function 設定_シート表示_C列を正規化表示文字列(ByVal raw As String, ByVal fallbackVis As XlSheetVisibility) As String
+    If Len(Trim$(raw)) = 0 Then
+        設定_シート表示_C列を正規化表示文字列 = 設定_シート表示_表示状態の説明文字列(fallbackVis)
+    Else
+        設定_シート表示_C列を正規化表示文字列 = 設定_シート表示_表示状態の説明文字列(設定_シート表示_C列を表示状態に変換(raw))
+    End If
+End Function
+
 Public Sub 設定_シート表示_シートを確保()
     Dim ws As Worksheet
     Dim sh As Worksheet
@@ -3949,12 +3982,15 @@ Public Sub 設定_シート表示_シートを確保()
     ws.Cells(1, 1).Value = "並び順"
     ws.Cells(1, 2).Value = "シート名"
     ws.Cells(1, 3).Value = "表示"
-    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順・表示を編集 → ブックへ適用"
+    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順(1始まり)・表示を編集 → ブックへ適用"
 
     ws.Columns(1).ColumnWidth = 10
     ws.Columns(2).ColumnWidth = 36
     ws.Columns(3).ColumnWidth = 14
     ws.Columns(4).ColumnWidth = 62
+
+    Call 設定_シート表示_ドロップダウン候補セルを書く(ws)
+    Call 設定_シート表示_C列入力規則を付与(ws)
 
     Application.DisplayAlerts = prevDA
     Exit Sub
@@ -3963,22 +3999,31 @@ ErrHandler:
     Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
 
-' ブック内の全シートを B 列に並べ、既存行と名前が一致するものは A・C をそのまま使う。新規シートは末尾に追加。
+' ブック内の全シートを行に列挙。名前一致行は「以前の並び順・表示」の意味を維持し、A 列は 1 から連番に振り直す。新規シートは末尾相当の順キーで追加。
 Public Sub 設定_シート表示_一覧をブックから再取得()
     Dim wb As Workbook
     Dim wsCfg As Worksheet
     Dim orderDict As Object
     Dim visDict As Object
-    Dim i As Long
     Dim lastRow As Long
     Dim r As Long
     Dim nm As String
     Dim ordVal As Double
     Dim maxOrder As Double
     Dim ws As Worksheet
-    Dim outRow As Long
     Dim prevSU As Boolean
     Dim prevDA As Boolean
+    Dim n As Long
+    Dim i As Long
+    Dim j As Long
+    Dim sortKey() As Double
+    Dim sheetName() As String
+    Dim visText() As String
+    Dim origIdx() As Long
+    Dim tmpK As Double
+    Dim tmpN As String
+    Dim tmpV As String
+    Dim tmpO As Long
 
     Call 設定_シート表示_シートを確保
     Set wb = ThisWorkbook
@@ -3997,10 +4042,12 @@ Public Sub 設定_シート表示_一覧をブックから再取得()
         If Len(nm) > 0 Then
             If Not orderDict.Exists(nm) Then
                 ordVal = 0
+                Err.Clear
                 On Error Resume Next
                 ordVal = CDbl(wsCfg.Cells(r, 1).Value)
+                If Err.Number <> 0 Then ordVal = 0
                 On Error GoTo 0
-                If ordVal <= 0 Then ordVal = CDbl((r - 1) * 10)
+                If ordVal <= 0 Then ordVal = CDbl(1000000# + r)
                 orderDict.Add nm, ordVal
                 If ordVal > maxOrder Then maxOrder = ordVal
                 visDict.Add nm, Trim$(CStr(wsCfg.Cells(r, 3).Value))
@@ -4013,27 +4060,53 @@ Public Sub 設定_シート表示_一覧をブックから再取得()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
-    wsCfg.Rows("2:" & wsCfg.Rows.Count).ClearContents
+    wsCfg.Range("A2:D" & wsCfg.Rows.Count).ClearContents
 
-    outRow = 2
-    For i = 1 To wb.Worksheets.Count
+    n = wb.Worksheets.Count
+    If n > 0 Then
+        ReDim sortKey(1 To n)
+        ReDim sheetName(1 To n)
+        ReDim visText(1 To n)
+        ReDim origIdx(1 To n)
+    End If
+
+    For i = 1 To n
         Set ws = wb.Worksheets(i)
         nm = ws.Name
+        origIdx(i) = i
+        sheetName(i) = nm
         If orderDict.Exists(nm) Then
-            wsCfg.Cells(outRow, 1).Value = orderDict(nm)
-            If Len(Trim$(CStr(visDict(nm)))) > 0 Then
-                wsCfg.Cells(outRow, 3).Value = visDict(nm)
-            Else
-                wsCfg.Cells(outRow, 3).Value = 設定_シート表示_表示状態の説明文字列(ws.Visible)
-            End If
+            sortKey(i) = orderDict(nm)
         Else
-            maxOrder = maxOrder + 10
-            wsCfg.Cells(outRow, 1).Value = maxOrder
-            wsCfg.Cells(outRow, 3).Value = 設定_シート表示_表示状態の説明文字列(ws.Visible)
+            maxOrder = maxOrder + 1
+            sortKey(i) = maxOrder
         End If
-        wsCfg.Cells(outRow, 2).Value = nm
-        outRow = outRow + 1
+        If visDict.Exists(nm) And Len(Trim$(CStr(visDict(nm)))) > 0 Then
+            visText(i) = 設定_シート表示_C列を正規化表示文字列(CStr(visDict(nm)), ws.Visible)
+        Else
+            visText(i) = 設定_シート表示_表示状態の説明文字列(ws.Visible)
+        End If
     Next i
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            If sortKey(i) > sortKey(j) Or (sortKey(i) = sortKey(j) And origIdx(i) > origIdx(j)) Then
+                tmpK = sortKey(i): sortKey(i) = sortKey(j): sortKey(j) = tmpK
+                tmpN = sheetName(i): sheetName(i) = sheetName(j): sheetName(j) = tmpN
+                tmpV = visText(i): visText(i) = visText(j): visText(j) = tmpV
+                tmpO = origIdx(i): origIdx(i) = origIdx(j): origIdx(j) = tmpO
+            End If
+        Next j
+    Next i
+
+    For i = 1 To n
+        wsCfg.Cells(i + 1, 1).Value = i
+        wsCfg.Cells(i + 1, 2).Value = sheetName(i)
+        wsCfg.Cells(i + 1, 3).Value = visText(i)
+    Next i
+
+    Call 設定_シート表示_ドロップダウン候補セルを書く(wsCfg)
+    Call 設定_シート表示_C列入力規則を付与(wsCfg)
 
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
@@ -4097,7 +4170,7 @@ Public Sub 設定_シート表示_ブックへ適用()
                     On Error Resume Next
                     ordVal = CDbl(wsCfg.Cells(r, 1).Value)
                     If Err.Number <> 0 Then ordVal = 0
-                    If ordVal <= 0 Then ordVal = CDbl(r * 10000)
+                    If ordVal <= 0 Then ordVal = CDbl(r + 10000)
                     orderList(nListed) = ordVal
                     nameList(nListed) = nm
                     rowList(nListed) = r
@@ -5009,6 +5082,11 @@ Private Sub 段階1_コア実行()
 
     On Error Resume Next
     配台計画_タスク入力_A1を選択
+    On Error GoTo 0
+
+    MacroSplash_SetStep "段階1: 「設定_シート表示」の一覧を更新しています…"
+    On Error Resume Next
+    設定_シート表示_一覧をブックから再取得
     On Error GoTo 0
 
     Application.ScreenUpdating = prevScreenUpdating
@@ -6024,6 +6102,12 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
+    On Error GoTo ErrHandler
+
+    MacroSplash_SetStep "段階2: 「設定_シート表示」の一覧を更新しています…"
+    On Error Resume Next
+    設定_シート表示_一覧をブックから再取得
+    Err.Clear
     On Error GoTo ErrHandler
     
     ' 完了ダイアログ直前はメインシートを表示（A1）
