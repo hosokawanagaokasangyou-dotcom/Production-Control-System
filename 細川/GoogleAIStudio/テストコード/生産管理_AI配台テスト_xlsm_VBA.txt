@@ -119,6 +119,8 @@ Private Const SHEET_SETTINGS As String = "設定"
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Private Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
+' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
+Private Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
@@ -134,6 +136,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
+' ★「設定_シート表示」は A=並び順（小さいほど左のタブ）・B=シート名・C=表示状態。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。当シートは常に表示のまま。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
@@ -3876,6 +3879,326 @@ ErrHandler:
 End Sub
 
 ' =========================================================
+' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
+' ・一覧をブックから再取得 … 現ブックの全シートを行に並べ、新規シート行を追加（既存の順序・表示列は名前一致で維持）
+' ・ブックへ適用 … A〜C の内容で Visible と Move を実行（当シートは必ず表示）
+' =========================================================
+Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
+    Dim t As String
+    t = LCase$(Trim$(s))
+    If Len(t) = 0 Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+        Exit Function
+    End If
+    If t = "表示" Or t = "true" Or t = "1" Or t = "yes" Or t = "on" Or t = "y" Or t = "はい" Or t = "visible" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+        Exit Function
+    End If
+    If t = "非表示" Or t = "hidden" Or t = "0" Or t = "false" Or t = "no" Or t = "off" Or t = "n" Or t = "いいえ" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetHidden
+        Exit Function
+    End If
+    If t = "完全非表示" Or t = "非常隠し" Or t = "veryhidden" Or t = "xlveryhidden" Or t = "2" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVeryHidden
+        Exit Function
+    End If
+    設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+End Function
+
+Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis As XlSheetVisibility) As String
+    Select Case vis
+        Case xlSheetVisible
+            設定_シート表示_表示状態の説明文字列 = "表示"
+        Case xlSheetHidden
+            設定_シート表示_表示状態の説明文字列 = "非表示"
+        Case xlSheetVeryHidden
+            設定_シート表示_表示状態の説明文字列 = "完全非表示"
+        Case Else
+            設定_シート表示_表示状態の説明文字列 = "表示"
+    End Select
+End Function
+
+Public Sub 設定_シート表示_シートを確保()
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_SHEET_VISIBILITY
+    End If
+
+    If StrComp(ws.Name, SHEET_SHEET_VISIBILITY, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 531, , "シート名を「" & SHEET_SHEET_VISIBILITY & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    ws.Cells(1, 1).Value = "並び順"
+    ws.Cells(1, 2).Value = "シート名"
+    ws.Cells(1, 3).Value = "表示"
+    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順・表示を編集 → ブックへ適用"
+
+    ws.Columns(1).ColumnWidth = 10
+    ws.Columns(2).ColumnWidth = 36
+    ws.Columns(3).ColumnWidth = 14
+    ws.Columns(4).ColumnWidth = 62
+
+    Application.DisplayAlerts = prevDA
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' ブック内の全シートを B 列に並べ、既存行と名前が一致するものは A・C をそのまま使う。新規シートは末尾に追加。
+Public Sub 設定_シート表示_一覧をブックから再取得()
+    Dim wb As Workbook
+    Dim wsCfg As Worksheet
+    Dim orderDict As Object
+    Dim visDict As Object
+    Dim i As Long
+    Dim lastRow As Long
+    Dim r As Long
+    Dim nm As String
+    Dim ordVal As Double
+    Dim maxOrder As Double
+    Dim ws As Worksheet
+    Dim outRow As Long
+    Dim prevSU As Boolean
+    Dim prevDA As Boolean
+
+    Call 設定_シート表示_シートを確保
+    Set wb = ThisWorkbook
+    Set wsCfg = wb.Worksheets(SHEET_SHEET_VISIBILITY)
+
+    Set orderDict = CreateObject("Scripting.Dictionary")
+    orderDict.CompareMode = 1
+    Set visDict = CreateObject("Scripting.Dictionary")
+    visDict.CompareMode = 1
+
+    lastRow = wsCfg.Cells(wsCfg.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then lastRow = 1
+    maxOrder = 0
+    For r = 2 To lastRow
+        nm = Trim$(CStr(wsCfg.Cells(r, 2).Value))
+        If Len(nm) > 0 Then
+            If Not orderDict.Exists(nm) Then
+                ordVal = 0
+                On Error Resume Next
+                ordVal = CDbl(wsCfg.Cells(r, 1).Value)
+                On Error GoTo 0
+                If ordVal <= 0 Then ordVal = CDbl((r - 1) * 10)
+                orderDict.Add nm, ordVal
+                If ordVal > maxOrder Then maxOrder = ordVal
+                visDict.Add nm, Trim$(CStr(wsCfg.Cells(r, 3).Value))
+            End If
+        End If
+    Next r
+
+    prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    wsCfg.Rows("2:" & wsCfg.Rows.Count).ClearContents
+
+    outRow = 2
+    For i = 1 To wb.Worksheets.Count
+        Set ws = wb.Worksheets(i)
+        nm = ws.Name
+        If orderDict.Exists(nm) Then
+            wsCfg.Cells(outRow, 1).Value = orderDict(nm)
+            If Len(Trim$(CStr(visDict(nm)))) > 0 Then
+                wsCfg.Cells(outRow, 3).Value = visDict(nm)
+            Else
+                wsCfg.Cells(outRow, 3).Value = 設定_シート表示_表示状態の説明文字列(ws.Visible)
+            End If
+        Else
+            maxOrder = maxOrder + 10
+            wsCfg.Cells(outRow, 1).Value = maxOrder
+            wsCfg.Cells(outRow, 3).Value = 設定_シート表示_表示状態の説明文字列(ws.Visible)
+        End If
+        wsCfg.Cells(outRow, 2).Value = nm
+        outRow = outRow + 1
+    Next i
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+End Sub
+
+' A 列昇順でタブを並べ替え、C 列で Visible を設定。テーブルに無いシートは現在の順のまま末尾へ回す。
+Public Sub 設定_シート表示_ブックへ適用()
+    Dim wb As Workbook
+    Dim wsCfg As Worksheet
+    Dim lastRow As Long
+    Dim r As Long
+    Dim nm As String
+    Dim ordVal As Double
+    Dim listed As Object
+    Dim orderList() As Double
+    Dim nameList() As String
+    Dim rowList() As Long
+    Dim nListed As Long
+    Dim i As Long
+    Dim j As Long
+    Dim tmpD As Double
+    Dim tmpS As String
+    Dim tmpR As Long
+    Dim vis As XlSheetVisibility
+    Dim cntVis As Long
+    Dim nFull As Long
+    Dim wi As Long
+    Dim prevSU As Boolean
+    Dim prevDA As Boolean
+    Dim testWs As Worksheet
+
+    On Error GoTo ErrHandler
+    Call 設定_シート表示_シートを確保
+    Set wb = ThisWorkbook
+    Set wsCfg = wb.Worksheets(SHEET_SHEET_VISIBILITY)
+
+    Set listed = CreateObject("Scripting.Dictionary")
+    listed.CompareMode = 1
+
+    lastRow = wsCfg.Cells(wsCfg.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then
+        MsgBox "「" & SHEET_SHEET_VISIBILITY & "」にデータ行（2行目以降）がありません。先に「設定_シート表示_一覧をブックから再取得」を実行してください。", vbExclamation, "設定_シート表示"
+        Exit Sub
+    End If
+
+    nListed = 0
+    For r = 2 To lastRow
+        nm = Trim$(CStr(wsCfg.Cells(r, 2).Value))
+        If Len(nm) > 0 Then
+            Set testWs = Nothing
+            Err.Clear
+            On Error Resume Next
+            Set testWs = wb.Worksheets(nm)
+            If Err.Number = 0 And Not testWs Is Nothing Then
+                If Not listed.Exists(nm) Then
+                    nListed = nListed + 1
+                    ReDim Preserve orderList(1 To nListed)
+                    ReDim Preserve nameList(1 To nListed)
+                    ReDim Preserve rowList(1 To nListed)
+                    ordVal = 0
+                    On Error Resume Next
+                    ordVal = CDbl(wsCfg.Cells(r, 1).Value)
+                    If Err.Number <> 0 Then ordVal = 0
+                    If ordVal <= 0 Then ordVal = CDbl(r * 10000)
+                    orderList(nListed) = ordVal
+                    nameList(nListed) = nm
+                    rowList(nListed) = r
+                    listed.Add nm, True
+                End If
+            End If
+            Err.Clear
+            On Error GoTo ErrHandler
+        End If
+    Next r
+
+    If nListed = 0 Then
+        MsgBox "有効なシート名の行がありません。", vbExclamation, "設定_シート表示"
+        Exit Sub
+    End If
+
+    ' 同順位は元の行番号で安定ソート
+    For i = 1 To nListed - 1
+        For j = i + 1 To nListed
+            If orderList(i) > orderList(j) Or (orderList(i) = orderList(j) And rowList(i) > rowList(j)) Then
+                tmpD = orderList(i): orderList(i) = orderList(j): orderList(j) = tmpD
+                tmpS = nameList(i): nameList(i) = nameList(j): nameList(j) = tmpS
+                tmpR = rowList(i): rowList(i) = rowList(j): rowList(j) = tmpR
+            End If
+        Next j
+    Next i
+
+    cntVis = 0
+    For i = 1 To nListed
+        nm = nameList(i)
+        r = rowList(i)
+        vis = 設定_シート表示_C列を表示状態に変換(CStr(wsCfg.Cells(r, 3).Value))
+        If StrComp(nm, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            vis = xlSheetVisible
+        End If
+        If vis = xlSheetVisible Then cntVis = cntVis + 1
+    Next i
+
+    For wi = 1 To wb.Worksheets.Count
+        nm = wb.Worksheets(wi).Name
+        If Not listed.Exists(nm) Then
+            If wb.Worksheets(nm).Visible = xlSheetVisible Then cntVis = cntVis + 1
+        End If
+    Next wi
+
+    If cntVis < 1 Then
+        MsgBox "この内容では表示されるシートが 0 になります。Excel の制約のため中止しました。", vbCritical, "設定_シート表示"
+        Exit Sub
+    End If
+
+    prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    For i = 1 To nListed
+        nm = nameList(i)
+        r = rowList(i)
+        vis = 設定_シート表示_C列を表示状態に変換(CStr(wsCfg.Cells(r, 3).Value))
+        If StrComp(nm, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            vis = xlSheetVisible
+        End If
+        On Error Resume Next
+        wb.Worksheets(nm).Visible = vis
+        Err.Clear
+        On Error GoTo ErrHandler
+    Next i
+
+    nFull = nListed
+    For wi = 1 To wb.Worksheets.Count
+        nm = wb.Worksheets(wi).Name
+        If Not listed.Exists(nm) Then
+            nFull = nFull + 1
+            ReDim Preserve nameList(1 To nFull)
+            nameList(nFull) = nm
+        End If
+    Next wi
+
+    If nFull <> wb.Worksheets.Count Then
+        Application.DisplayAlerts = prevDA
+        Application.ScreenUpdating = prevSU
+        Err.Raise vbObjectError + 532, , "内部エラー: シート数と並びリストが一致しません。"
+    End If
+
+    For i = 1 To nFull
+        On Error Resume Next
+        wb.Worksheets(nameList(i)).Move After:=wb.Sheets(wb.Sheets.Count)
+        Err.Clear
+        On Error GoTo ErrHandler
+    Next i
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
 ' Python が出力した log\exclude_rules_e_column_vba.tsv から E 列（ロジック式）を書き込む。
 ' COM は A〜D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
 ' =========================================================
@@ -4501,6 +4824,8 @@ Private Sub 段階1_コア実行()
     設定_配台不要工程_シートを確保
     MacroSplash_SetStep "段階1: 「設定_環境変数」シートを確認・作成し不足キーのみ追記しています…"
     設定_環境変数_シートを確保
+    MacroSplash_SetStep "段階1: 「設定_シート表示」シートを確認・作成しています…"
+    設定_シート表示_シートを確保
     MacroSplash_SetStep "段階1: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then
@@ -5301,6 +5626,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
 
     設定_配台不要工程_シートを確保
     設定_環境変数_シートを確保
+    設定_シート表示_シートを確保
     MacroSplash_SetStep "段階2: データ接続（Power Query 等）を更新しています…"
 
     If Not TryRefreshWorkbookQueries() Then
