@@ -375,6 +375,8 @@ GEMINI_USAGE_CHART_HEADER_ROW = 16
 GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
 GEMINI_USAGE_CHART_MAX_DAYS = 14
 GEMINI_USAGE_CHART_CLEAR_ROWS = 36
+# xlwings で貼る折れ線の名前（再実行時に削除してから作り直す）
+GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
@@ -5352,6 +5354,181 @@ def _apply_main_sheet_gemini_usage_chart(ws_main, cum: dict) -> None:
     ws_main.add_chart(chart, GEMINI_USAGE_CHART_ANCHOR_CELL)
 
 
+def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
+    """xlwings Book からメイン相当シートを返す。無ければ None。"""
+    for name in ("メイン", "メイン_", "Main"):
+        try:
+            return book.sheets[name]
+        except Exception:
+            continue
+    try:
+        for sht in book.sheets:
+            try:
+                if "メイン" in str(sht.name):
+                    return sht
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _strip_gemini_usage_charts_xlwings(ws) -> None:
+    """当機能が管理する折れ線（名前またはグラフタイトル）を削除する。"""
+    try:
+        charts_iter = list(ws.charts)
+    except Exception:
+        return
+    for ch in charts_iter:
+        try:
+            if str(getattr(ch, "name", "") or "") == GEMINI_USAGE_XLW_CHART_NAME:
+                ch.delete()
+                continue
+        except Exception:
+            pass
+        try:
+            ca = ch.api
+            if bool(ca.HasTitle):
+                cap = getattr(ca.ChartTitle, "Caption", None)
+                txt = getattr(ca.ChartTitle, "Text", None)
+                title_s = str(cap or txt or "")
+                if "Gemini API 日次推移" in title_s:
+                    ch.delete()
+        except Exception:
+            pass
+
+
+def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
+    """開いたブック上で Q〜R を埋め、折れ線グラフを 1 本だけ置く（xlwings）。"""
+    hr = GEMINI_USAGE_CHART_HEADER_ROW
+    cdt = GEMINI_USAGE_CHART_COL_DATE
+    cvl = GEMINI_USAGE_CHART_COL_VALUE
+    nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
+    try:
+        qr = ws.range((hr, cdt), (hr + nclear - 1, cvl))
+        qr.clear_contents()
+    except Exception:
+        for i in range(nclear):
+            r = hr + i
+            try:
+                ws.range((r, cdt)).clear_contents()
+                ws.range((r, cvl)).clear_contents()
+            except Exception:
+                pass
+
+    _strip_gemini_usage_charts_xlwings(ws)
+    ser = _gemini_daily_trend_series(cum)
+    if ser is None:
+        return
+    day_keys, values, val_label = ser
+    n = len(day_keys)
+    if n <= 0:
+        return
+
+    ws.range((hr, cdt)).value = "日付"
+    ws.range((hr, cvl)).value = val_label
+    for i, (dk, val) in enumerate(zip(day_keys, values)):
+        r = hr + 1 + i
+        ws.range((r, cdt)).value = dk
+        ws.range((r, cvl)).value = val
+    try:
+        vrng = ws.range((hr + 1, cvl), (hr + n, cvl))
+        vrng.number_format = "0.000000" if val_label == "推定USD" else "0"
+    except Exception:
+        pass
+
+    try:
+        anchor = ws.range(GEMINI_USAGE_CHART_ANCHOR_CELL)
+        left = float(anchor.left)
+        top = float(anchor.top)
+    except Exception:
+        left, top = 0.0, 0.0
+    chart = ws.charts.add(left=left, top=top, width=410, height=220)
+    try:
+        chart.name = GEMINI_USAGE_XLW_CHART_NAME
+    except Exception:
+        pass
+    data_rng = ws.range((hr, cdt), (hr + n, cvl))
+    chart.set_source_data(data_rng)
+    try:
+        chart.chart_type = "line"
+    except Exception:
+        try:
+            chart.api.ChartType = 4
+        except Exception:
+            pass
+    try:
+        ca = chart.api
+        ca.HasTitle = True
+        ca.ChartTitle.Text = "Gemini API 日次推移"
+        ca.HasLegend = False
+    except Exception:
+        pass
+
+
+def _write_main_sheet_gemini_usage_via_xlwings(
+    macro_wb_path: str, text: str, log_prefix: str
+) -> bool:
+    """Excel でブックが開いているとき、メイン P 列・Q〜R・グラフを xlwings で更新して Save。"""
+    attached = _xlwings_attach_open_macro_workbook(macro_wb_path, log_prefix)
+    if attached is None:
+        logging.info(
+            "%s: xlwings でマクロブックに接続できず、メイン AI サマリをスキップしました。",
+            log_prefix,
+        )
+        return False
+    xw_book, info = attached
+    ok = False
+    try:
+        try:
+            xw_book.app.display_alerts = False
+        except Exception:
+            pass
+        ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
+        if ws_main is None:
+            logging.info(
+                "%s: メインシートが無いため xlwings での AI サマリをスキップしました。",
+                log_prefix,
+            )
+            return False
+        start_r, col_p, clear_n = 16, 16, 120
+        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
+        try:
+            p_rng = ws_main.range((start_r, col_p)).resize(clear_n, 1)
+            p_rng.clear_contents()
+            lines_list = text.split("\n") if (text or "").strip() else []
+            p_vals = [
+                [lines_list[i] if i < len(lines_list) else None]
+                for i in range(clear_n)
+            ]
+            p_rng.value = p_vals
+            try:
+                p_rng.api.WrapText = True
+                p_rng.api.VerticalAlignment = -4160
+            except Exception:
+                pass
+            _apply_main_sheet_gemini_usage_chart_xlwings(
+                ws_main, _load_gemini_cumulative_payload()
+            )
+            xw_book.save()
+            ok = True
+            logging.info(
+                "%s: メインシート P%d 以降・Gemini 推移グラフを xlwings で保存しました。",
+                log_prefix,
+                start_r,
+            )
+        finally:
+            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
+    except Exception as ex:
+        logging.warning(
+            "%s: メイン AI サマリの xlwings 保存に失敗: %s", log_prefix, ex
+        )
+        ok = False
+    finally:
+        _xlwings_release_book_after_mutation(xw_book, info, ok)
+    return ok
+
+
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
     """累計・当実行向けの 2 列テキスト表（履歴行は含めない）。"""
     out = [title]
@@ -5649,10 +5826,11 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
 
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 利用サマリを log に書き、可能なら openpyxl でメイン P 列へ保存。開いたまま保存できないときは VBA 用テキストのみ。"""
+    """Gemini 利用サマリを log に書き、openpyxl または xlwings でメイン P 列・推移グラフへ保存。"""
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
     disk_ok = False
+    xw_ok = False
     if wb_path and os.path.isfile(wb_path):
         try:
             disk_ok = _write_main_sheet_gemini_usage_via_openpyxl(
@@ -5660,6 +5838,15 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             )
         except Exception as ex:
             logging.warning("%s: AI サマリの openpyxl 書き込みで例外: %s", log_prefix, ex)
+        if not disk_ok:
+            try:
+                xw_ok = _write_main_sheet_gemini_usage_via_xlwings(
+                    wb_path, text, log_prefix
+                )
+            except Exception as ex:
+                logging.warning(
+                    "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
+                )
     try:
         os.makedirs(log_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as f:
@@ -5672,12 +5859,12 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
         logging.debug("Gemini バケット CSV 出力で例外（続行）: %s", ex)
-    if disk_ok:
+    if disk_ok or xw_ok:
         return
     if text.strip():
         logging.info(
-            "%s: メイン P 列は openpyxl で保存できませんでした（ブックが Excel で開いている可能性）。"
-            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で反映してください。",
+            "%s: メイン P 列・グラフは openpyxl / xlwings どちらでも保存できませんでした。"
+            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
             log_prefix,
             path,
         )
