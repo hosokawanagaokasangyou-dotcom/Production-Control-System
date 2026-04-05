@@ -9030,17 +9030,14 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-# 休憩直前・（任意で）終業直前に「まだロールが残る」タスクを詰めない。
-# ASSIGN_DEFER_MIN_REMAINING_ROLLS … 既定3。環境変数 ASSIGN_DEFER_MIN_REMAINING_ROLLS で上書き。0 で本ブロック全体スキップ。
-# ASSIGN_END_OF_DAY_DEFER_MINUTES … team_end_limit までの残りがこの分数以下なら当日開始しない（None）。既定0=無効。
-#   事業所標準終業は DEFAULT_END_TIME(17:00) だが、残業・早出・昼休憩ずらしは未実装のため終業直前デファーは既定OFF。
-#   将来はメンバー別の実勤務終了（最大21:00想定など）と ASSIGN_END_OF_DAY_DEFER_MINUTES を組み合わせて有効化する想定。
-ASSIGN_DEFER_MIN_REMAINING_ROLLS = max(
-    0, int(os.environ.get("ASSIGN_DEFER_MIN_REMAINING_ROLLS", "3").strip() or 0)
-)
-ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES = max(
+# 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
+# かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
+# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
+# 休憩: 開始が休憩帯内は不可。休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
+# （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES は廃止・無視）
+ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
     0,
-    int(os.environ.get("ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES", "15").strip() or 0),
+    int(os.environ.get("ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS", "5").strip() or 0),
 )
 ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     0,
@@ -9066,6 +9063,29 @@ def merge_time_intervals(intervals):
     return merged
 
 
+def _contiguous_work_minutes_until_next_break_or_limit(
+    start_dt: datetime,
+    breaks_dt: list,
+    end_limit_dt: datetime,
+) -> int:
+    """
+    start_dt から次の休憩開始（または終業上限）までの、連続して実働に使える分数。
+    開始が休憩帯内なら 0（呼び出し元で却下）。breaks_dt は merge 済み想定。
+    """
+    if start_dt >= end_limit_dt:
+        return 0
+    for bs, be in breaks_dt:
+        if bs <= start_dt < be:
+            return 0
+    next_stop = end_limit_dt
+    for bs, be in breaks_dt:
+        if be <= start_dt:
+            continue
+        if start_dt < bs:
+            next_stop = min(next_stop, bs)
+    return max(0, int((next_stop - start_dt).total_seconds() / 60))
+
+
 def _defer_team_start_past_prebreak_and_end_of_day(
     task: dict,
     team: tuple,
@@ -9075,20 +9095,10 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     refloor_fn,
 ) -> datetime | None:
     """
-    残ロールが ASSIGN_DEFER_MIN_REMAINING_ROLLS 以上のとき:
-    - 次の休憩開始までが ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES 分以内なら開始を休憩終了後へ繰り下げ（refloor_fn を再適用）
-    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 のとき、(team_end_limit - 試行開始) がその分数以下なら当日は不可（None）
-      team_end_limit は呼び出し元の勤務上限（現状は主に標準終業に整合。残業連動は未実装で既定では終業直前デファーもOFF）
+    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
+      remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
+    - 試行開始が休憩帯内のときは当日不可（None）。休憩直前の繰り下げ・3ロール縛りは行わない。
     """
-    if ASSIGN_DEFER_MIN_REMAINING_ROLLS <= 0:
-        return team_start
-    rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
-    if rem_ceil < ASSIGN_DEFER_MIN_REMAINING_ROLLS:
-        return team_start
-
-    gap_pre = float(ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES)
-    gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
-
     ts = refloor_fn(team_start)
     _tid = str(task.get("task_id", "") or "").strip()
     _team_txt = ", ".join(str(x) for x in team) if team else "—"
@@ -9102,66 +9112,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             _tid,
             *a,
         )
-    for _ in range(32):
-        if ts >= team_end_limit:
-            _trace_block(
-                "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
-                task.get("machine"),
-                _team_txt,
-                float(task.get("remaining_units") or 0),
-                ts,
-                team_end_limit,
-            )
-            return None
-        if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
-            _trace_block(
-                "開始不可(終業直前デファー) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s gap_end_min=%s",
-                task.get("machine"),
-                _team_txt,
-                float(task.get("remaining_units") or 0),
-                ts,
-                team_end_limit,
-                gap_end,
-            )
-            return None
-        progressed = False
-        for bs, be in team_breaks:
-            if be <= ts:
-                continue
-            if bs <= ts < be:
-                _prev = ts
-                ts = refloor_fn(be)
-                _trace_block(
-                    "休憩中を回避 machine=%s team=%s rem=%.4f break=%s-%s shift=%s->%s",
-                    task.get("machine"),
-                    _team_txt,
-                    float(task.get("remaining_units") or 0),
-                    bs,
-                    be,
-                    _prev,
-                    ts,
-                )
-                progressed = True
-                break
-            if bs > ts:
-                if gap_pre > 0 and (bs - ts).total_seconds() / 60.0 <= gap_pre:
-                    _prev = ts
-                    ts = refloor_fn(be)
-                    _trace_block(
-                        "休憩直前デファー machine=%s team=%s rem=%.4f break=%s-%s gap_pre_min=%s shift=%s->%s",
-                        task.get("machine"),
-                        _team_txt,
-                        float(task.get("remaining_units") or 0),
-                        bs,
-                        be,
-                        gap_pre,
-                        _prev,
-                        ts,
-                    )
-                    progressed = True
-                break
-        if not progressed:
-            break
+
     if ts >= team_end_limit:
         _trace_block(
             "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
@@ -9172,17 +9123,39 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             team_end_limit,
         )
         return None
-    if gap_end > 0 and (team_end_limit - ts) <= timedelta(minutes=gap_end):
+
+    gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
+    rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
+    if (
+        gap_end > 0
+        and (team_end_limit - ts) <= timedelta(minutes=gap_end)
+        and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
+    ):
         _trace_block(
-            "開始不可(終業直前デファー) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s gap_end_min=%s",
+            "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
             task.get("machine"),
             _team_txt,
-            float(task.get("remaining_units") or 0),
+            rem_ceil,
+            ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
             ts,
             team_end_limit,
             gap_end,
         )
         return None
+
+    for bs, be in team_breaks:
+        if bs <= ts < be:
+            _trace_block(
+                "開始不可(休憩帯内) machine=%s team=%s rem=%.4f break=%s-%s trial_start=%s",
+                task.get("machine"),
+                _team_txt,
+                float(task.get("remaining_units") or 0),
+                bs,
+                be,
+                ts,
+            )
+            return None
+
     return ts
 
 
@@ -13877,6 +13850,13 @@ def _append_legacy_dispatch_candidate_for_team(
         return False
     units_today = min(units_can_do, math.ceil(task["remaining_units"]))
     work_mins_needed = int(units_today * eff_time_per_unit)
+    if (
+        _contiguous_work_minutes_until_next_break_or_limit(
+            team_start, team_breaks, team_end_limit
+        )
+        < work_mins_needed
+    ):
+        return False
     actual_end_dt, _, _ = calculate_end_time(
         team_start, work_mins_needed, team_breaks, team_end_limit
     )
@@ -14207,7 +14187,7 @@ def _assign_one_roll_trial_order_flow(
         )
         if team_start_d is None:
             _trace_assign(
-                "候補却下: 休憩/終業デファーで当日不可 team=%s",
+                "候補却下: 休憩帯内・終業直前(小残)で当日不可 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
@@ -14246,6 +14226,18 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
         work_mins_needed = int(eff_time_per_unit)
+        _contig = _contiguous_work_minutes_until_next_break_or_limit(
+            team_start, team_breaks, team_end_limit
+        )
+        if _contig < work_mins_needed:
+            _trace_assign(
+                "候補却下: 休憩またぎのため連続実働不足 team=%s contiguous_min=%s need_mins=%s start=%s",
+                ",".join(str(x) for x in team),
+                _contig,
+                work_mins_needed,
+                team_start,
+            )
+            return None
         actual_end_dt, _, _ = calculate_end_time(
             team_start, work_mins_needed, team_breaks, team_end_limit
         )
@@ -16135,6 +16127,13 @@ def _generate_plan_impl():
     
                                 units_today = min(units_can_do, math.ceil(task['remaining_units']))
                                 work_mins_needed = int(units_today * eff_time_per_unit)
+                                if (
+                                    _contiguous_work_minutes_until_next_break_or_limit(
+                                        team_start, team_breaks, team_end_limit
+                                    )
+                                    < work_mins_needed
+                                ):
+                                    continue
                                 actual_end_dt, _, _ = calculate_end_time(team_start, work_mins_needed, team_breaks, team_end_limit)
     
                                 team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
