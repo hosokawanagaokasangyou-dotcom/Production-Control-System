@@ -113,6 +113,12 @@ SHEET_MACHINE_CALENDAR = "機械カレンダー"
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
+# master.xlsm: 依頼NO が変わる前後の工程×機械ごとの準備・後始末（分）／機械ごとの日次始業準備（分）
+SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
+SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
+# ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
+_STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
+_STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
@@ -12820,6 +12826,226 @@ def _bump_machine_avail_after_roll_for_calendar(
         machine_avail_dt[eq_s] = t1
 
 
+def _parse_nonneg_minutes_cell(v) -> int:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return 0
+    try:
+        n = int(round(float(v)))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, n)
+
+
+def _df_pick_column(df, *candidates: str) -> str | None:
+    cols = [str(c).strip() for c in df.columns]
+    low_map = {str(c).strip().lower(): str(c).strip() for c in df.columns}
+    for cand in candidates:
+        c0 = str(cand).strip()
+        if c0 in df.columns:
+            return c0
+        cl = c0.lower()
+        if cl in low_map:
+            return low_map[cl]
+    return None
+
+
+def load_machine_changeover_settings(
+    master_path: str,
+) -> tuple[dict[str, tuple[int, int]], dict[str, int]]:
+    """
+    master.xlsm の任意シート:
+      - 「設定_依頼切替前後時間」… 工程名・機械名・準備分・後始末分（1 行目見出し、2 行目以降データ）
+      - 「設定_機械_日次始業準備」… 機械名・日次始業準備分
+
+    依頼NO（タスク）が同一物理機械上で切り替わるとき、直前ブロックの後始末→当該ブロックの準備を
+    設備空き下限に加算する。同一依頼NOの連続ロールの間には加算しない。
+    日次始業準備は、同一カレンダ日で当該機械の先頭ロールにのみ加算する。
+
+    戻り: (設備行キー「工程+機械」および正規化キー -> (準備分, 後始末分),
+          機械名および正規化キー -> 始業準備分)
+    """
+    changeover: dict[str, tuple[int, int]] = {}
+    startup: dict[str, int] = {}
+    if not master_path or not os.path.isfile(master_path):
+        return changeover, startup
+    try:
+        xls = pd.ExcelFile(master_path)
+    except Exception as e:
+        logging.warning("機械準備/切替設定: ブックを開けません (%s)", e)
+        return changeover, startup
+
+    if SHEET_MACHINE_CHANGEOVER in xls.sheet_names:
+        try:
+            df = pd.read_excel(
+                master_path, sheet_name=SHEET_MACHINE_CHANGEOVER, header=0
+            )
+            df.columns = [str(c).strip() for c in df.columns]
+            c_proc = _df_pick_column(df, "工程名", "工程")
+            c_mac = _df_pick_column(df, "機械名", "機械")
+            c_prep = _df_pick_column(
+                df,
+                "準備時間_分",
+                "準備分",
+                "加工前準備_分",
+                "加工開始前準備_分",
+            )
+            c_clean = _df_pick_column(
+                df,
+                "後始末時間_分",
+                "後始末分",
+                "加工後後始末_分",
+                "加工終了後後始末_分",
+            )
+            if c_proc and c_mac and c_prep and c_clean:
+                n_ent = 0
+                for _, row in df.iterrows():
+                    p = row.get(c_proc)
+                    m = row.get(c_mac)
+                    if p is None or m is None:
+                        continue
+                    if isinstance(p, float) and pd.isna(p):
+                        continue
+                    if isinstance(m, float) and pd.isna(m):
+                        continue
+                    p_s = str(p).strip()
+                    m_s = str(m).strip()
+                    if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
+                        continue
+                    combo = f"{p_s}+{m_s}"
+                    prep = _parse_nonneg_minutes_cell(row.get(c_prep))
+                    clean = _parse_nonneg_minutes_cell(row.get(c_clean))
+                    if prep == 0 and clean == 0:
+                        continue
+                    changeover[combo] = (prep, clean)
+                    nk = _normalize_equipment_match_key(combo)
+                    if nk:
+                        changeover[nk] = (prep, clean)
+                    n_ent += 1
+                if n_ent:
+                    logging.info(
+                        "マスタ「%s」: 工程+機械 %s 行の準備/後始末（分）を読み込みました。",
+                        SHEET_MACHINE_CHANGEOVER,
+                        n_ent,
+                    )
+        except Exception as e:
+            logging.warning(
+                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_CHANGEOVER, e
+            )
+
+    if SHEET_MACHINE_DAILY_STARTUP in xls.sheet_names:
+        try:
+            df2 = pd.read_excel(
+                master_path, sheet_name=SHEET_MACHINE_DAILY_STARTUP, header=0
+            )
+            df2.columns = [str(c).strip() for c in df2.columns]
+            c_mn = _df_pick_column(df2, "機械名", "機械")
+            c_su = _df_pick_column(
+                df2, "日次始業準備_分", "始業準備_分", "日始業準備_分"
+            )
+            if c_mn and c_su:
+                for _, row in df2.iterrows():
+                    mn = row.get(c_mn)
+                    if mn is None or (isinstance(mn, float) and pd.isna(mn)):
+                        continue
+                    mn_s = str(mn).strip()
+                    if not mn_s or mn_s.lower() == "nan":
+                        continue
+                    su = _parse_nonneg_minutes_cell(row.get(c_su))
+                    if su <= 0:
+                        continue
+                    startup[mn_s] = su
+                    nk = _normalize_equipment_match_key(mn_s)
+                    if nk:
+                        startup[nk] = su
+                if startup:
+                    logging.info(
+                        "マスタ「%s」: 機械 %s 件の日次始業準備（分）を読み込みました。",
+                        SHEET_MACHINE_DAILY_STARTUP,
+                        len({k for k in startup if "+" not in str(k)}),
+                    )
+        except Exception as e:
+            logging.warning(
+                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_DAILY_STARTUP, e
+            )
+
+    return changeover, startup
+
+
+def _lookup_changeover_minutes_for_eq(
+    eq_line: str,
+    by_eq: dict[str, tuple[int, int]] | None,
+) -> tuple[int, int]:
+    mp = by_eq if by_eq is not None else _STAGE2_MACHINE_CHANGEOVER_BY_EQ
+    k0 = str(eq_line or "").strip()
+    if not k0:
+        return (0, 0)
+    if k0 in mp:
+        return mp[k0]
+    nk = _normalize_equipment_match_key(k0)
+    if nk in mp:
+        return mp[nk]
+    for k, v in mp.items():
+        if _normalize_equipment_match_key(str(k)) == nk:
+            return v
+    return (0, 0)
+
+
+def _lookup_daily_startup_minutes(
+    machine_name: str,
+    by_m: dict[str, int] | None,
+) -> int:
+    st = by_m if by_m is not None else _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+    mn = str(machine_name or "").strip()
+    if not mn:
+        return 0
+    if mn in st:
+        return st[mn]
+    nk = _normalize_equipment_match_key(mn)
+    if nk in st:
+        return st[nk]
+    for k, v in st.items():
+        if _normalize_equipment_match_key(str(k)) == nk:
+            return v
+    return 0
+
+
+def _machine_effective_floor_for_assign(
+    machine_occ_key: str,
+    task_id: str,
+    eq_line: str,
+    machine_name: str,
+    machine_avail_dt: dict,
+    machine_handoff: dict,
+    machine_day_floor: datetime,
+    abolish_limits: bool,
+    *,
+    changeover_by_eq: dict[str, tuple[int, int]] | None = None,
+    daily_startup_by_machine: dict[str, int] | None = None,
+) -> datetime:
+    """
+    設備の壁時計における「当該ロールの加工開始」以前の下限。
+    日次始業準備・依頼NO 切替時の後始末/準備を machine_avail_dt の直後に加算する。
+    """
+    if abolish_limits:
+        return machine_day_floor
+    mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+    if machine_occ_key not in machine_handoff.get("started_today", set()):
+        su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
+        if su:
+            mf = mf + timedelta(minutes=su)
+    prev_tid = (machine_handoff.get("last_tid") or {}).get(machine_occ_key)
+    cur_tid = str(task_id or "").strip()
+    prev_eq = (machine_handoff.get("last_eq") or {}).get(machine_occ_key, "")
+    if prev_tid and cur_tid and prev_tid != cur_tid:
+        _, cu = _lookup_changeover_minutes_for_eq(prev_eq, changeover_by_eq)
+        if cu:
+            mf = mf + timedelta(minutes=cu)
+    prep, _ = _lookup_changeover_minutes_for_eq(eq_line, changeover_by_eq)
+    if prep:
+        mf = mf + timedelta(minutes=prep)
+    return mf
+
+
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
     当該日の終了時点で、計画基準納期日（当日含む）以前なのに残量が残る依頼NO。
@@ -12845,6 +13071,49 @@ def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: 
 
 def _normalize_timeline_task_id(ev: dict) -> str:
     return str(ev.get("task_id", "") or "").strip()
+
+
+def _machine_handoff_state_from_timeline(
+    timeline_events: list,
+    current_date: date,
+) -> dict:
+    """
+    タイムラインから、各 machine_occupancy_key について
+    計画日 current_date 以前の最終終了イベントの (task_id, 設備行, その日付) を復元する。
+    """
+    best: dict[str, tuple[datetime, str, str, date]] = {}
+    for e in timeline_events:
+        ed = e.get("date")
+        if not isinstance(ed, date):
+            continue
+        if ed > current_date:
+            continue
+        occ = str(e.get("machine_occupancy_key") or "").strip()
+        if not occ:
+            mraw = str(e.get("machine") or "").strip()
+            occ = (
+                _normalize_equipment_match_key(mraw.split("+", 1)[1])
+                if "+" in mraw
+                else _normalize_equipment_match_key(mraw)
+            )
+        if not occ:
+            continue
+        end_dt = e.get("end_dt")
+        if end_dt is None or not hasattr(end_dt, "replace"):
+            continue
+        eq_line = str(e.get("machine") or "").strip()
+        tid = _normalize_timeline_task_id(e)
+        prev = best.get(occ)
+        if prev is None or end_dt > prev[0]:
+            best[occ] = (end_dt, tid, eq_line, ed)
+    last_tid = {k: v[1] for k, v in best.items()}
+    last_eq = {k: v[2] for k, v in best.items()}
+    started_today = {k for k, v in best.items() if v[3] == current_date}
+    return {
+        "last_tid": last_tid,
+        "last_eq": last_eq,
+        "started_today": started_today,
+    }
 
 
 def _trial_order_flow_day_start_floor(
@@ -12991,17 +13260,33 @@ def _append_legacy_dispatch_candidate_for_team(
     combo_sheet_row_id: int | None = None,
     combo_preset_team: tuple[str, ...] | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    machine_handoff: dict | None = None,
+    machine_day_floor: datetime | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
     _machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
     _gpo = global_priority_override or {}
+    _floor_default = datetime.combine(current_date, DEFAULT_START_TIME)
+    _mdf = machine_day_floor if machine_day_floor is not None else _floor_default
+    _mh_legacy = machine_handoff or {
+        "last_tid": {},
+        "last_eq": {},
+        "started_today": set(),
+    }
     op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
     if not op_list:
         return False
     team_start = max(avail_dt[m] for m in team)
     if not _gpo.get("abolish_all_scheduling_limits"):
-        machine_free_dt = machine_avail_dt.get(
-            _machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
+        machine_free_dt = _machine_effective_floor_for_assign(
+            _machine_occ_key,
+            str(task.get("task_id") or "").strip(),
+            eq_line,
+            str(task.get("machine_name") or "").strip(),
+            machine_avail_dt,
+            _mh_legacy,
+            _mdf,
+            False,
         )
         if team_start < machine_free_dt:
             team_start = machine_free_dt
@@ -13030,11 +13315,18 @@ def _append_legacy_dispatch_candidate_for_team(
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
         if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_free_dt = machine_avail_dt.get(
-                _machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
+            mf = _machine_effective_floor_for_assign(
+                _machine_occ_key,
+                str(task.get("task_id") or "").strip(),
+                eq_line,
+                str(task.get("machine_name") or "").strip(),
+                machine_avail_dt,
+                _mh_legacy,
+                _mdf,
+                False,
             )
-            if ts < machine_free_dt:
-                ts = machine_free_dt
+            if ts < mf:
+                ts = mf
             if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                 min_start_dt = datetime.combine(
                     current_date, task["same_day_raw_start_limit"]
@@ -13128,6 +13420,7 @@ def _assign_one_roll_trial_order_flow(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    machine_handoff: dict | None = None,
 ) -> dict | None:
     """
     1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
@@ -13141,6 +13434,11 @@ def _assign_one_roll_trial_order_flow(
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
     machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
     _gpo = global_priority_override or {}
+    _mh = machine_handoff or {
+        "last_tid": {},
+        "last_eq": {},
+        "started_today": set(),
+    }
 
     plan_ro = _plan_sheet_required_op_optional(task)
     need_src_line = ""
@@ -13341,7 +13639,16 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_free_dt = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+            machine_free_dt = _machine_effective_floor_for_assign(
+                machine_occ_key,
+                str(task.get("task_id") or "").strip(),
+                eq_line,
+                machine_name,
+                machine_avail_dt,
+                _mh,
+                machine_day_floor,
+                False,
+            )
             if team_start < machine_free_dt:
                 team_start = machine_free_dt
             if team_start < day_floor:
@@ -13365,7 +13672,16 @@ def _assign_one_roll_trial_order_flow(
         def _refloor_trial_roll(ts: datetime) -> datetime:
             ts = max(ts, max(avail_dt[m] for m in team))
             if not _gpo.get("abolish_all_scheduling_limits"):
-                mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+                mf = _machine_effective_floor_for_assign(
+                    machine_occ_key,
+                    str(task.get("task_id") or "").strip(),
+                    eq_line,
+                    machine_name,
+                    machine_avail_dt,
+                    _mh,
+                    machine_day_floor,
+                    False,
+                )
                 if ts < mf:
                     ts = mf
                 if ts < day_floor:
@@ -13647,6 +13963,12 @@ def _trial_order_first_schedule_pass(
         key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
     )
     _gpo = global_priority_override or {}
+    _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
+    machine_handoff = {
+        "last_tid": dict(_mh_init["last_tid"]),
+        "last_eq": dict(_mh_init["last_eq"]),
+        "started_today": set(_mh_init["started_today"]),
+    }
 
     def _drain_rolls_for_task(task: dict) -> bool:
         preferred_team: tuple | None = None
@@ -13671,6 +13993,7 @@ def _trial_order_first_schedule_pass(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                machine_handoff=machine_handoff,
             )
             if res is None:
                 break
@@ -13790,6 +14113,11 @@ def _trial_order_first_schedule_pass(
                 _bump_machine_avail_after_roll_for_calendar(
                     current_date, machine_occ_key, machine_avail_dt
                 )
+            machine_handoff["last_tid"][machine_occ_key] = str(
+                task.get("task_id") or ""
+            ).strip()
+            machine_handoff["last_eq"][machine_occ_key] = eq_line
+            machine_handoff["started_today"].add(machine_occ_key)
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -14308,6 +14636,7 @@ def _generate_plan_impl():
         )
         return
     global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+    global _STAGE2_MACHINE_CHANGEOVER_BY_EQ, _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
     try:
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
@@ -14318,6 +14647,19 @@ def _generate_plan_impl():
             "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+    try:
+        (
+            _STAGE2_MACHINE_CHANGEOVER_BY_EQ,
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
+        ) = load_machine_changeover_settings(
+            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+        )
+    except Exception as e:
+        logging.warning(
+            "機械準備/依頼切替・日次始業設定: 読込例外のため無視します (%s)", e
+        )
+        _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
+        _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
             len(ivs)
@@ -14690,6 +15032,14 @@ def _generate_plan_impl():
                         dispatch_interval_mirror=_dispatch_interval_mirror,
                     )
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
+                    _mh_legacy_day = _machine_handoff_state_from_timeline(
+                        timeline_events, current_date
+                    )
+                    machine_handoff_legacy = {
+                        "last_tid": dict(_mh_legacy_day["last_tid"]),
+                        "last_eq": dict(_mh_legacy_day["last_eq"]),
+                        "started_today": set(_mh_legacy_day["started_today"]),
+                    }
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
                         key=lambda t: _day_schedule_task_sort_key(
@@ -14863,8 +15213,15 @@ def _generate_plan_impl():
                             task, task_queue, capable_members
                         )
                         if task.get("has_done_deadline_override"):
-                            machine_free_dbg = machine_avail_dt.get(
-                                machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
+                            machine_free_dbg = _machine_effective_floor_for_assign(
+                                machine_occ_key,
+                                str(task.get("task_id") or "").strip(),
+                                eq_line,
+                                str(task.get("machine_name") or "").strip(),
+                                machine_avail_dt,
+                                machine_handoff_legacy,
+                                _machine_day_start,
+                                bool(_gpo.get("abolish_all_scheduling_limits")),
                             )
                             logging.info(
                                 "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
@@ -15046,6 +15403,8 @@ def _generate_plan_impl():
                                     combo_sheet_row_id=combo_row_id,
                                     combo_preset_team=pteam,
                                     dispatch_interval_mirror=_dispatch_interval_mirror,
+                                    machine_handoff=machine_handoff_legacy,
+                                    machine_day_floor=_machine_day_start,
                                 )
     
                         for tsize in range(req_num, max_team_size + 1):
@@ -15097,9 +15456,16 @@ def _generate_plan_impl():
     
                                 team_start = max(avail_dt[m] for m in team)
                                 if not _gpo.get("abolish_all_scheduling_limits"):
-                                    # 同一設備は1時点で1タスクのみ（設備空き時刻を反映）
-                                    machine_free_dt = machine_avail_dt.get(
-                                        machine_occ_key, datetime.combine(current_date, DEFAULT_START_TIME)
+                                    # 同一設備は1時点で1タスクのみ（設備空き＋日次始業/依頼切替の準備・後始末）
+                                    machine_free_dt = _machine_effective_floor_for_assign(
+                                        machine_occ_key,
+                                        str(task.get("task_id") or "").strip(),
+                                        eq_line,
+                                        str(task.get("machine_name") or "").strip(),
+                                        machine_avail_dt,
+                                        machine_handoff_legacy,
+                                        _machine_day_start,
+                                        False,
                                     )
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
@@ -15132,11 +15498,15 @@ def _generate_plan_impl():
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
                                     if not _gpo.get("abolish_all_scheduling_limits"):
-                                        _mfd = machine_avail_dt.get(
+                                        _mfd = _machine_effective_floor_for_assign(
                                             machine_occ_key,
-                                            datetime.combine(
-                                                current_date, DEFAULT_START_TIME
-                                            ),
+                                            str(task.get("task_id") or "").strip(),
+                                            eq_line,
+                                            str(task.get("machine_name") or "").strip(),
+                                            machine_avail_dt,
+                                            machine_handoff_legacy,
+                                            _machine_day_start,
+                                            False,
                                         )
                                         if ts < _mfd:
                                             ts = _mfd
@@ -15535,6 +15905,13 @@ def _generate_plan_impl():
                                 _bump_machine_avail_after_roll_for_calendar(
                                     current_date, machine_occ_key, machine_avail_dt
                                 )
+                            machine_handoff_legacy["last_tid"][machine_occ_key] = str(
+                                task.get("task_id") or ""
+                            ).strip()
+                            machine_handoff_legacy["last_eq"][machine_occ_key] = eq_line
+                            machine_handoff_legacy["started_today"].add(
+                                machine_occ_key
+                            )
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),

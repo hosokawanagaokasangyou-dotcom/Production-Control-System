@@ -40,6 +40,9 @@ Private Const SHEET_NEED_DATA As String = "need"
 ' ・設備列: 空白でないセル＝そのスロットで稼働不可（コメント）。再作成時は日時×工程×機械キーで復元
 ' =========================================================
 Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
+' 段階2 Python（planning_core._core）が読む任意シート。シート名はコード定数と一致させること。
+Private Const SHEET_MACHINE_CHANGEOVER As String = "設定_依頼切替前後時間"
+Private Const SHEET_MACHINE_DAILY_STARTUP As String = "設定_機械_日次始業準備"
 Private Const MACHINE_CAL_HORIZON_DAYS As Long = 365
 Private Const MACHINE_CAL_SLOT_HOUR_FIRST As Long = 6
 Private Const MACHINE_CAL_SLOT_HOUR_LAST As Long = 22
@@ -2898,6 +2901,53 @@ Private Function SortCollectionStrings(ByVal coll As Collection) As Collection
     Next i
     Set SortCollectionStrings = outC
 End Function
+
+' 依頼NO切替の準備/後始末・機械ごとの日次始業準備（入力テンプレ）。無いシートだけ作成し、A1 が空のときのみ見出し行を書く。
+Public Sub MasterEnsureMachineChangeoverTemplateSheets()
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set wb = ThisWorkbook
+    On Error GoTo 0
+    If wb Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_MACHINE_CHANGEOVER)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add(After:=wb.Sheets(wb.Sheets.Count))
+        On Error Resume Next
+        ws.Name = SHEET_MACHINE_CHANGEOVER
+        On Error GoTo 0
+    End If
+    If Not ws Is Nothing Then
+        If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+            ws.Cells(1, 1).Value = "工程名"
+            ws.Cells(1, 2).Value = "機械名"
+            ws.Cells(1, 3).Value = "準備時間_分"
+            ws.Cells(1, 4).Value = "後始末時間_分"
+            ws.Rows(1).Font.Bold = True
+        End If
+    End If
+
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_MACHINE_DAILY_STARTUP)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add(After:=wb.Sheets(wb.Sheets.Count))
+        On Error Resume Next
+        ws.Name = SHEET_MACHINE_DAILY_STARTUP
+        On Error GoTo 0
+    End If
+    If Not ws Is Nothing Then
+        If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+            ws.Cells(1, 1).Value = "機械名"
+            ws.Cells(1, 2).Value = "日次始業準備_分"
+            ws.Rows(1).Font.Bold = True
+        End If
+    End If
+End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）
 Sub Auto_Open()
