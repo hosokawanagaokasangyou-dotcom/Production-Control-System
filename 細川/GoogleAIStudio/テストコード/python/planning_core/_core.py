@@ -741,6 +741,58 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             pass
 
 
+# region agent log
+_AGENT_DEBUG_DISPATCH_SESSION = "497ff0"
+_AGENT_DEBUG_DISPATCH_LOG_MAX = 56
+_AGENT_DEBUG_DISPATCH_LOG_COUNT = 0
+_AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT = 0
+_AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_MAX = 12
+
+
+def _agent_debug_ndjson_dispatch(payload: dict) -> None:
+    """Cursor デバッグ用: リポジトリ直下 debug-497ff0.log へ NDJSON 追記。"""
+    global _AGENT_DEBUG_DISPATCH_LOG_COUNT
+    try:
+        if _AGENT_DEBUG_DISPATCH_LOG_COUNT >= _AGENT_DEBUG_DISPATCH_LOG_MAX:
+            return
+        root = os.path.dirname(os.path.abspath(__file__))
+        log_path = None
+        for _ in range(14):
+            if os.path.isdir(os.path.join(root, ".git")):
+                log_path = os.path.join(root, "debug-497ff0.log")
+                break
+            parent = os.path.dirname(root)
+            if parent == root:
+                break
+            root = parent
+        if not log_path:
+            log_path = os.path.join(os.getcwd(), "debug-497ff0.log")
+        payload = dict(payload)
+        payload.setdefault("sessionId", _AGENT_DEBUG_DISPATCH_SESSION)
+        payload.setdefault("timestamp", int(time_module.time() * 1000))
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        _AGENT_DEBUG_DISPATCH_LOG_COUNT += 1
+    except Exception:
+        pass
+
+
+def _agent_debug_should_log_y416_sec_apr8(
+    task_id: object, machine: object, current_date: date
+) -> bool:
+    tid = str(task_id or "").strip()
+    mac = str(machine or "").strip().upper()
+    return (
+        tid == "Y4-16"
+        and "SEC" in mac
+        and current_date.month == 4
+        and current_date.day == 8
+    )
+
+
+# endregion agent log
+
+
 # True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -13885,6 +13937,32 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
+            # region agent log
+            global _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT
+            if (
+                _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT
+                < _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_MAX
+                and _agent_debug_should_log_y416_sec_apr8(
+                    task.get("task_id"), task.get("machine"), current_date
+                )
+            ):
+                _agent_debug_ndjson_dispatch(
+                    {
+                        "hypothesisId": "H2_blocked_lower_trial_order",
+                        "location": "_trial_order_flow_eligible_tasks:skip",
+                        "message": "Y4-16 SEC 4/8 excluded: lower dispatch_trial_order still pending on same machine",
+                        "data": {
+                            "task_id": str(task.get("task_id") or "").strip(),
+                            "current_date": str(current_date),
+                            "dispatch_trial_order": _my_dispatch_ord,
+                            "machine_occ": _mocc_trial,
+                            "machine": str(task.get("machine") or ""),
+                        },
+                        "runId": "pre-fix",
+                    }
+                )
+                _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT += 1
+            # endregion agent log
             continue
         out.append(task)
     return out
@@ -14344,6 +14422,54 @@ def _assign_one_roll_trial_order_flow(
     )
     if _co_abort:
         return None
+
+    # region agent log
+    if _agent_debug_should_log_y416_sec_apr8(
+        task.get("task_id"), machine, current_date
+    ):
+        _av_sample = [
+            str(avail_dt.get(m))
+            for m in capable_members[:8]
+            if m in avail_dt
+        ]
+        _agent_debug_ndjson_dispatch(
+            {
+                "hypothesisId": "H1_H3_H4_machine_and_day_floor",
+                "location": "_assign_one_roll_trial_order_flow:floors",
+                "message": "Y4-16 SEC 4/8 roll attempt context",
+                "data": {
+                    "outer_round": DISPATCH_TRACE_OUTER_ROUND,
+                    "remaining_units": task.get("remaining_units"),
+                    "dispatch_trial_order": task.get("dispatch_trial_order"),
+                    "day_floor": str(day_floor),
+                    "machine_day_floor": str(machine_day_floor),
+                    "mach_floor_eff": str(_mach_floor_eff),
+                    "machine_avail_before_co": str(
+                        machine_avail_dt.get(machine_occ_key, machine_day_floor)
+                    ),
+                    "b2_insp_ec_floor": str(b2_insp_ec_floor)
+                    if b2_insp_ec_floor
+                    else None,
+                    "raw_input_date": str(task.get("raw_input_date")),
+                    "start_date_req": str(task.get("start_date_req")),
+                    "earliest_start_time": str(task.get("earliest_start_time"))
+                    if task.get("earliest_start_time")
+                    else None,
+                    "same_day_raw_start_limit": str(task.get("same_day_raw_start_limit"))
+                    if task.get("same_day_raw_start_limit")
+                    else None,
+                    "regular_shift_start": str(_STAGE2_REGULAR_SHIFT_START)
+                    if _STAGE2_REGULAR_SHIFT_START
+                    else None,
+                    "daily_startup_min": _lookup_daily_startup_minutes(
+                        machine_name, None
+                    ),
+                    "avail_dt_sample_capable": _av_sample,
+                },
+                "runId": "pre-fix",
+            }
+        )
+    # endregion agent log
 
     def _one_roll_from_team(
         team: tuple,
