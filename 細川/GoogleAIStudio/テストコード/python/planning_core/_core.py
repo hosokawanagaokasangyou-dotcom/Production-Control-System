@@ -14183,6 +14183,7 @@ def _assign_one_roll_trial_order_flow(
     組合せ探索より優先して採用する（翌日には持ち越さない）。
     戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
+    global _AGENT497_Y416_ENTRY, _AGENT497_Y416_CAND_LOGS
     machine = task["machine"]
     machine_name = str(task.get("machine_name", "") or "").strip()
     machine_proc = str(machine or "").strip()
@@ -14195,7 +14196,6 @@ def _assign_one_roll_trial_order_flow(
         and _AGENT497_Y416_ENTRY < 6
         and _AGENT497_COUNT < _AGENT497_MAX
     ):
-        global _AGENT497_Y416_ENTRY
         _AGENT497_Y416_ENTRY += 1
         _agent497_ndjson(
             {
@@ -14708,7 +14708,6 @@ def _assign_one_roll_trial_order_flow(
         return None
     t_min = min(c["team_start"] for c in team_candidates)
     # region agent log
-    global _AGENT497_Y416_CAND_LOGS
     if (
         _agent497_is_apr8(current_date)
         and str(task.get("task_id") or "").strip() == "Y4-16"
