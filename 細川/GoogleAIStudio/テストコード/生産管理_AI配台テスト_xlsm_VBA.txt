@@ -200,21 +200,6 @@ Private mGanttHL_SheetName As String
 Private mGanttHL_Row As Long
 Private mGanttHL_LastCol As Long
 
-' #region agent log
-Public Sub AgentDbg650_OnKey(ByVal loc As String, ByVal hyp As String, ByVal activeName As String, ByVal thisName As String)
-    On Error Resume Next
-    Dim f As Integer, p As String, an As String, tn As String
-    p = "g:\工程管理AIプロジェクト\debug-650ec5.log"
-    an = Replace(Replace(activeName, "\", "/"), """", "'")
-    tn = Replace(Replace(thisName, "\", "/"), """", "'")
-    f = FreeFile
-    Open p For Append As #f
-    Print #f, "{""sessionId"":""650ec5"",""hypothesisId"":""" & hyp & """,""location"":""" & loc & """,""message"":""active=" & an & "|this=" & tn & """,""timestamp"":" & CLng(Timer * 1000) & "}"
-    Close #f
-    On Error GoTo 0
-End Sub
-' #endregion
-
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
     Dim fh As Integer
@@ -1798,9 +1783,6 @@ End Sub
 ' Ctrl+Shift+テンキー - 用（手続き名は従来互換で CtrlShift0 のまま。Application.OnKey の Procedure は ASCII 名が無難）
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
-    ' #region agent log
-    AgentDbg650_OnKey "dispatch:ShortcutMainSheet_CtrlShift0", "H2", ActiveWorkbook.Name, ThisWorkbook.Name
-    ' #endregion
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     メインシートA1を選択
     On Error GoTo 0
@@ -1809,9 +1791,6 @@ End Sub
 Public Sub ShortcutMainSheet_OnKeyRegister()
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ShortcutMainSheet_CtrlShift0"
-    ' #region agent log
-    AgentDbg650_OnKey "dispatch:ShortcutMainSheet_OnKeyRegister", "H1", ActiveWorkbook.Name, ThisWorkbook.Name
-    ' #endregion
     On Error GoTo 0
 End Sub
 
