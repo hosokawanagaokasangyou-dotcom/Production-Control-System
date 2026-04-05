@@ -1468,7 +1468,7 @@ def _apply_equipment_schedule_outside_regular_fill(
 
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
-    設備列（進度列を除く）で、表示に「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
+    設備列（進度列を除く）で、表示に「日次始業準備」「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
     結果_設備毎の時間割 / TEMP_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
     """
     fill = PatternFill(
@@ -1476,7 +1476,7 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(加工前準備)", "(依頼切替後始末)")
+    markers = ("(日次始業準備)", "(加工前準備)", "(依頼切替後始末)")
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):

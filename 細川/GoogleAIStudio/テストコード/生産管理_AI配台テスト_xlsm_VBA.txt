@@ -1355,7 +1355,7 @@ CleanExit2:
     On Error GoTo 0
 End Sub
 
-' 結果_設備毎の時間割（および TEMP）: 設備セルに「(加工前準備)」「(依頼切替後始末)」が含まれるとき薄緑（進度列は除外）
+' 結果_設備毎の時間割（および TEMP）: 設備セルに「(日次始業準備)」「(加工前準備)」「(依頼切替後始末)」が含まれるとき薄緑（進度列は除外）
 Private Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
     Dim colTB As Long
     Dim lastR As Long
@@ -1386,7 +1386,8 @@ Private Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Wo
             If IsEmpty(v) Or VarType(v) = vbError Then GoTo NextC3
             s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
             If Len(s) = 0 Then GoTo NextC3
-            If InStr(1, s, "(加工前準備)", vbTextCompare) > 0 _
+            If InStr(1, s, "(日次始業準備)", vbTextCompare) > 0 _
+                Or InStr(1, s, "(加工前準備)", vbTextCompare) > 0 _
                 Or InStr(1, s, "(依頼切替後始末)", vbTextCompare) > 0 Then
                 With ws.Cells(r, c)
                     .Interior.Pattern = xlSolid
