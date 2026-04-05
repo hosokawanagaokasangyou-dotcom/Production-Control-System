@@ -1444,6 +1444,18 @@ Sub master_アニメ付き_全シートフォント_BIZ_UDPゴシックに統一
     Call master_全シートフォント_BIZ_UDPゴシックに統一
 End Sub
 
+Sub master_アニメ付き_依頼切替日次始業シートを更新()
+    On Error GoTo EH
+    Call AnimateButtonPush
+    Call MasterEnsureMachineChangeoverTemplateSheets
+    MsgBox "設定シートを更新しました。" & vbCrLf & _
+           "・設定_依頼切替前後時間 … skills の工程+機械で未登録行を追補（準備/後始末の分は既存行はそのまま）" & vbCrLf & _
+           "・設定_機械_日次始業準備 … skills の機械名で未登録行を追補（分は既存行はそのまま）", vbInformation, "依頼切替・日次始業"
+    Exit Sub
+EH:
+    MsgBox "エラー: " & Err.Description, vbCritical, "依頼切替・日次始業"
+End Sub
+
 ' =========================================================
 ' 共通：ボタンを押し込むアニメーション（生産管理_AI配台テスト_xlsm_VBA.txt と同様・全シートで Caller を解決）
 ' =========================================================
@@ -1534,8 +1546,8 @@ Private Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     End Select
 End Function
 
-Private Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long)
-    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId)
+Private Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional ByVal fixedShapeName As String = vbNullString)
+    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), fixedShapeName
 End Sub
 
 ' 現在のシートに「出勤簿を生成」ボタンを1つ配置（ティール系プリセット 2）
@@ -1546,9 +1558,15 @@ Sub master_かっこいいボタンを作成()
     CreateCoolButtonWithPreset "出勤簿を生成", "master_アニメ付き_カレンダーから出勤簿生成", 50, y, 2
     y = y + gap
     CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
+    y = y + gap
+    On Error Resume Next
+    ActiveSheet.Shapes("Btn_ChangeoverTemplateStack").Delete
+    On Error GoTo 0
+    CreateCoolButtonWithPreset "依頼切替・日次始業シート", "master_アニメ付き_依頼切替日次始業シートを更新", 50, y, 4, "Btn_ChangeoverTemplateStack"
     MsgBox "ボタンを作成しました。" & vbCrLf & _
            "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成（定常はメイン A15/B15・空なら 8:45～17:00）" & vbCrLf & _
            "・機械カレンダー作成 … A日時・B曜日・C～skills設備列・メインA12/B12の時台～（空なら6～22時）・日ストライプの「機械カレンダー」1枚（365日）" & vbCrLf & _
+           "・依頼切替・日次始業シート … skills から「設定_依頼切替前後時間」「設定_機械_日次始業準備」へ工程名・機械名を追補（押下時は押し込みアニメ）" & vbCrLf & _
            "好きな位置へドラッグして配置してください。", vbInformation
 End Sub
 
@@ -1573,7 +1591,7 @@ Sub master_かっこいいボタン_配色サンプル作成()
     MsgBox "配色プリセット P1～P10 の見本を配置しました。不要なら削除してください。", vbInformation
 End Sub
 
-Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long)
+Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional ByVal fixedShapeName As String = vbNullString)
     Dim shp As Shape
     
     Set shp = ActiveSheet.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, 220, 50)
@@ -1616,8 +1634,12 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
         .OnAction = macroName
         
         On Error Resume Next
-        Randomize
-        .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        If Len(Trim$(fixedShapeName)) > 0 Then
+            .Name = Trim$(fixedShapeName)
+        Else
+            Randomize
+            .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        End If
         On Error GoTo 0
     End With
 End Sub
@@ -3077,6 +3099,34 @@ Public Sub MasterEnsureMachineChangeoverTemplateSheets()
 
     Call MasterSyncChangeoverRowsFromSkills(wb)
     Call MasterSyncDailyStartupRowsFromSkills(wb)
+End Sub
+
+' メイン相当シートの H4 左上に、MasterEnsureMachineChangeoverTemplateSheets 用の「かっこいいボタン」を1つ配置する。
+' 図形名 Btn_ChangeoverTemplateMain（再実行で削除して作り直し）。OnAction = master_アニメ付き_依頼切替日次始業シートを更新（押し込みアニメ付き）。
+Public Sub master_依頼切替日次始業_アニメ付きボタンを作成()
+    Dim ws As Worksheet
+    Const shpName As String = "Btn_ChangeoverTemplateMain"
+    On Error Resume Next
+    Set ws = MasterGetMainWorksheet(ThisWorkbook)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "メインシートが見つかりません。アクティブシートに作成します。", vbExclamation, "依頼切替・日次始業"
+        Set ws = ActiveSheet
+    End If
+    If ws Is Nothing Then Exit Sub
+    On Error Resume Next
+    ws.Shapes(shpName).Delete
+    On Error GoTo 0
+    ws.Activate
+    Dim posX As Single
+    Dim posY As Single
+    posX = ws.Range("H4").Left
+    posY = ws.Range("H4").Top
+    CreateCoolButtonWithPreset "依頼切替・日次始業を更新", "master_アニメ付き_依頼切替日次始業シートを更新", posX, posY, 4, shpName
+    MsgBox "ボタンを配置しました。" & vbCrLf & _
+           "・マクロ: MasterEnsureMachineChangeoverTemplateSheets（見出し・skills からの追補）" & vbCrLf & _
+           "・図形名: " & shpName & "（再実行で置き直し）" & vbCrLf & _
+           "・押下時は他のかっこいいボタンと同様に押し込みアニメが付きます。", vbInformation, "依頼切替・日次始業"
 End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）
