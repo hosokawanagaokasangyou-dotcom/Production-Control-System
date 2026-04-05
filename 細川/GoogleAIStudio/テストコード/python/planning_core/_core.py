@@ -1284,6 +1284,34 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
+# #region agent log
+_AGENT_DBG_GANTT_LOG = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-0150cb.log")
+)
+
+
+def _agent_dbg_gantt_ndjson(
+    *, hypothesis_id: str, location: str, message: str, data: dict, run_id: str = "pre-fix"
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0150cb",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": dict(data),
+            "timestamp": int(time_module.time() * 1000),
+            "runId": run_id,
+        }
+        with open(_AGENT_DBG_GANTT_LOG, "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('task', tid, fill_hex, pct)"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
@@ -1338,6 +1366,7 @@ def _paint_gantt_timeline_row_merged(
     grid_border,
     task_fill_fn=None,
     label_font=None,
+    _dbg_acc=None,
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
@@ -1345,13 +1374,24 @@ def _paint_gantt_timeline_row_merged(
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
+    # #region agent log
+    _ts_states = time_module.perf_counter()
+    # #endregion
     states = []
     for slot_start in slots:
         mid = slot_start + timedelta(minutes=slot_mins / 2)
         states.append(_gantt_slot_state_tuple(evlist, mid, task_fill_fn))
+    # #region agent log
+    _t_states_built = time_module.perf_counter() - _ts_states
+    _ts_merge = time_module.perf_counter()
+    _seg_count = 0
+    # #endregion
     tcol0 = n_fixed + 1
     i = 0
     while i < n_slots:
+        # #region agent log
+        _seg_count += 1
+        # #endregion
         mk = _gantt_merge_key(states[i])
         j = i + 1
         while j < n_slots and _gantt_merge_key(states[j]) == mk:
@@ -1381,6 +1421,15 @@ def _paint_gantt_timeline_row_merged(
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
         i = j
+    # #region agent log
+    if _dbg_acc is not None:
+        _dbg_acc["state_build_s"] = _dbg_acc.get("state_build_s", 0.0) + _t_states_built
+        _dbg_acc["merge_paint_s"] = _dbg_acc.get("merge_paint_s", 0.0) + (
+            time_module.perf_counter() - _ts_merge
+        )
+        _dbg_acc["segments"] = _dbg_acc.get("segments", 0) + _seg_count
+        _dbg_acc["n_paints"] = _dbg_acc.get("n_paints", 0) + 1
+    # #endregion
 
 
 def _time_intervals_overlap_half_open(
@@ -1651,6 +1700,22 @@ def _write_results_equipment_gantt_sheet(
             continue
         dates_to_show.append(d0)
 
+    # #region agent log
+    _agent_dbg_gantt_ndjson(
+        hypothesis_id="H5",
+        location="_write_results_equipment_gantt_sheet:post_dates",
+        message="gantt_dims",
+        data={
+            "n_slots": n_slots,
+            "last_col": last_col,
+            "len_equipment_list": len(equipment_list or []),
+            "len_dates_to_show": len(dates_to_show),
+            "len_timeline_events": len(timeline_events or []),
+            "show_actual_rows": show_actual_rows,
+        },
+    )
+    # #endregion
+
     hdr_row = row
     fixed_hdr = ["日付", "機械名", "工程名", "担当者", "タスク概要"]
     for ci, h in enumerate(fixed_hdr, 1):
@@ -1676,6 +1741,12 @@ def _write_results_equipment_gantt_sheet(
 
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
+
+    # #region agent log
+    _gantt_dbg_acc: dict = {}
+    _gantt_sep_cell_writes = 0
+    _t_gantt_main = time_module.perf_counter()
+    # #endregion
 
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
@@ -1728,6 +1799,7 @@ def _write_results_equipment_gantt_sheet(
                 break_fill,
                 gantt_label_font,
                 grid_border,
+                _dbg_acc=_gantt_dbg_acc,
             )
 
             ws.row_dimensions[row].height = 52
@@ -1784,6 +1856,7 @@ def _write_results_equipment_gantt_sheet(
                     grid_border,
                     task_fill_fn=_gantt_bar_fill_actual_for_task_id,
                     label_font=gantt_label_font_actual,
+                    _dbg_acc=_gantt_dbg_acc,
                 )
 
                 ws.row_dimensions[row].height = 52
@@ -1813,8 +1886,28 @@ def _write_results_equipment_gantt_sheet(
                 sc.value = None
                 sc.fill = sep_fill
                 sc.border = no_border
+            # #region agent log
+            _gantt_sep_cell_writes += last_col
+            # #endregion
             ws.row_dimensions[row].height = 5
             row += 1
+
+    # #region agent log
+    _elapsed_gantt_main = time_module.perf_counter() - _t_gantt_main
+    _agent_dbg_gantt_ndjson(
+        hypothesis_id="H1_H2_H3_H4",
+        location="_write_results_equipment_gantt_sheet:timing",
+        message="gantt_loop_timing",
+        data={
+            "elapsed_date_equipment_loop_s": round(_elapsed_gantt_main, 4),
+            "state_build_s": round(_gantt_dbg_acc.get("state_build_s", 0.0), 4),
+            "merge_paint_s": round(_gantt_dbg_acc.get("merge_paint_s", 0.0), 4),
+            "merge_segments_total": int(_gantt_dbg_acc.get("segments", 0)),
+            "n_paint_calls": int(_gantt_dbg_acc.get("n_paints", 0)),
+            "sep_row_cell_writes": int(_gantt_sep_cell_writes),
+        },
+    )
+    # #endregion
 
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
