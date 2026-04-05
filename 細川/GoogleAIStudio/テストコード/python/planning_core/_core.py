@@ -31,8 +31,10 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from .bootstrap import (
+    _clear_stage2_blocking_message_file,
     _remove_prior_stage2_workbooks_and_prune_empty_dirs,
     _try_remove_path_with_retries,
+    _write_stage2_blocking_message,
     api_payment_dir,
     json_data_dir,
     log_dir,
@@ -40,6 +42,34 @@ from .bootstrap import (
 )
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
+
+# region agent log
+try:
+    _dbg_ws = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+    )
+    _dbg_p = os.path.join(_dbg_ws, "debug-131a52.log")
+    with open(_dbg_p, "a", encoding="utf-8") as _df:
+        _df.write(
+            json.dumps(
+                {
+                    "sessionId": "131a52",
+                    "hypothesisId": "H1",
+                    "location": "planning_core/_core.py:after_bootstrap_import",
+                    "message": "blocking helpers visible in _core",
+                    "data": {
+                        "has_clear": callable(_clear_stage2_blocking_message_file),
+                        "has_write": callable(_write_stage2_blocking_message),
+                    },
+                    "timestamp": int(time_module.time() * 1000),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+except OSError:
+    pass
+# endregion agent log
 
 # AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
