@@ -367,15 +367,19 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# メインシート・Gemini 日次推移（xlwings: Q〜R に系列データ、T16 付近に折れ線グラフ）
+# メインシート・Gemini 日次推移（xlwings: Q〜R＝料金または呼出し、S〜T＝合計トークン）
 GEMINI_USAGE_CHART_COL_DATE = 17  # Q
 GEMINI_USAGE_CHART_COL_VALUE = 18  # R
+GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S（グラフ用に日付を複製）
+GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # T（total_tokens 相当）
 GEMINI_USAGE_CHART_HEADER_ROW = 16
 GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
+GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL = "AA16"
 GEMINI_USAGE_CHART_MAX_DAYS = 14
 GEMINI_USAGE_CHART_CLEAR_ROWS = 36
 # xlwings で貼る折れ線の名前（再実行時に削除してから作り直す）
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
+GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
@@ -5251,6 +5255,31 @@ def _gemini_daily_trend_series(
     return (keys, series, label)
 
 
+def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[int]:
+    """by_day の各キーについて、total_tokens（無ければ prompt+candidates+thoughts）を返す。"""
+    b = cum.get("buckets")
+    if not isinstance(b, dict):
+        return [0] * len(day_keys)
+    subd = b.get("by_day")
+    if not isinstance(subd, dict):
+        return [0] * len(day_keys)
+    out: list[int] = []
+    for pk in day_keys:
+        ent = subd.get(pk)
+        if not isinstance(ent, dict):
+            out.append(0)
+            continue
+        tt = int(ent.get("total_tokens") or 0)
+        if tt <= 0:
+            tt = (
+                int(ent.get("prompt") or 0)
+                + int(ent.get("candidates") or 0)
+                + int(ent.get("thoughts") or 0)
+            )
+        out.append(tt)
+    return out
+
+
 def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
     """テキスト側はグラフ参照と CSV 案内のみ（ASCII スパークラインは出さない）。"""
     ser = _gemini_daily_trend_series(cum)
@@ -5259,8 +5288,9 @@ def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
     keys, _, label = ser
     b = cum.get("buckets")
     lines = [
-        "【推移グラフ】メインシートの折れ線グラフ（データ: Q〜R 列・自動更新）を参照",
-        f"  系列: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
+        "【推移グラフ】料金・呼出し: Q〜R 列／トークン量: S〜T 列（各グラフ・自動更新）を参照",
+        f"  系列1: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
+        "  系列2: 日次 合計トークン（API 報告 total または内訳合計）",
         f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ可）",
     ]
     if isinstance(b, dict):
@@ -5291,13 +5321,21 @@ def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
 
 def _strip_gemini_usage_charts_xlwings(ws) -> None:
     """当機能が管理する折れ線（名前またはグラフタイトル）を削除する。"""
+    managed_names = (
+        GEMINI_USAGE_XLW_CHART_NAME,
+        GEMINI_USAGE_XLW_CHART_TOKENS_NAME,
+    )
+    title_markers = (
+        "Gemini API 日次推移",
+        "Gemini API 日次トークン",
+    )
     try:
         charts_iter = list(ws.charts)
     except Exception:
         return
     for ch in charts_iter:
         try:
-            if str(getattr(ch, "name", "") or "") == GEMINI_USAGE_XLW_CHART_NAME:
+            if str(getattr(ch, "name", "") or "") in managed_names:
                 ch.delete()
                 continue
         except Exception:
@@ -5308,29 +5346,33 @@ def _strip_gemini_usage_charts_xlwings(ws) -> None:
                 cap = getattr(ca.ChartTitle, "Caption", None)
                 txt = getattr(ca.ChartTitle, "Text", None)
                 title_s = str(cap or txt or "")
-                if "Gemini API 日次推移" in title_s:
-                    ch.delete()
+                for mk in title_markers:
+                    if mk in title_s:
+                        ch.delete()
+                        break
         except Exception:
             pass
 
 
 def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
-    """開いたブック上で Q〜R を埋め、折れ線グラフを 1 本だけ置く（xlwings）。"""
+    """開いたブック上で Q〜R・S〜T を埋め、折れ線グラフを 2 本まで置く（xlwings）。"""
     hr = GEMINI_USAGE_CHART_HEADER_ROW
     cdt = GEMINI_USAGE_CHART_COL_DATE
     cvl = GEMINI_USAGE_CHART_COL_VALUE
+    cts = GEMINI_USAGE_CHART_COL_TOK_DATE
+    ctv = GEMINI_USAGE_CHART_COL_TOK_VALUE
     nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
     try:
-        qr = ws.range((hr, cdt), (hr + nclear - 1, cvl))
-        qr.clear_contents()
+        block = ws.range((hr, cdt), (hr + nclear - 1, ctv))
+        block.clear_contents()
     except Exception:
         for i in range(nclear):
             r = hr + i
-            try:
-                ws.range((r, cdt)).clear_contents()
-                ws.range((r, cvl)).clear_contents()
-            except Exception:
-                pass
+            for c in (cdt, cvl, cts, ctv):
+                try:
+                    ws.range((r, c)).clear_contents()
+                except Exception:
+                    pass
 
     _strip_gemini_usage_charts_xlwings(ws)
     ser = _gemini_daily_trend_series(cum)
@@ -5381,11 +5423,55 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     except Exception:
         pass
 
+    tok_vals = _gemini_daily_total_tokens_for_days(cum, day_keys)
+    if not tok_vals or max(tok_vals) <= 0:
+        return
+
+    tok_label = "合計トークン"
+    ws.range((hr, cts)).value = "日付"
+    ws.range((hr, ctv)).value = tok_label
+    for i, dk in enumerate(day_keys):
+        r = hr + 1 + i
+        ws.range((r, cts)).value = dk
+        ws.range((r, ctv)).value = int(tok_vals[i])
+    try:
+        ws.range((hr + 1, ctv), (hr + n, ctv)).number_format = "#,##0"
+    except Exception:
+        pass
+
+    try:
+        anchor2 = ws.range(GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL)
+        left2 = float(anchor2.left)
+        top2 = float(anchor2.top)
+    except Exception:
+        left2, top2 = left + 420.0, top
+    chart2 = ws.charts.add(left=left2, top=top2, width=410, height=220)
+    try:
+        chart2.name = GEMINI_USAGE_XLW_CHART_TOKENS_NAME
+    except Exception:
+        pass
+    data_rng2 = ws.range((hr, cts), (hr + n, ctv))
+    chart2.set_source_data(data_rng2)
+    try:
+        chart2.chart_type = "line"
+    except Exception:
+        try:
+            chart2.api.ChartType = 4
+        except Exception:
+            pass
+    try:
+        ca2 = chart2.api
+        ca2.HasTitle = True
+        ca2.ChartTitle.Text = "Gemini API 日次トークン"
+        ca2.HasLegend = False
+    except Exception:
+        pass
+
 
 def _write_main_sheet_gemini_usage_via_xlwings(
     macro_wb_path: str, text: str, log_prefix: str
 ) -> bool:
-    """Excel でブックが開いているとき、メイン P 列・Q〜R・グラフを xlwings で更新して Save。"""
+    """Excel でブックが開いているとき、メイン P 列・Q〜T・推移グラフ（最大2本）を xlwings で更新して Save。"""
     attached = _xlwings_attach_open_macro_workbook(macro_wb_path, log_prefix)
     if attached is None:
         logging.info(
@@ -5429,7 +5515,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             xw_book.save()
             ok = True
             logging.info(
-                "%s: メインシート P%d 以降・Gemini 推移グラフを xlwings で保存しました。",
+                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で保存しました。",
                 log_prefix,
                 start_r,
             )
