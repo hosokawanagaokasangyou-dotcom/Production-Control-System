@@ -12,7 +12,6 @@ from dispatch_interval_mirror import DispatchIntervalMirror
 import traceback
 import base64
 import hashlib
-from functools import lru_cache
 import unicodedata
 import time as time_module
 from google import genai
@@ -1271,93 +1270,51 @@ _GANTT_BAR_FILLS_ACTUAL = (
     "DCD2DC",
 )
 
-# ガント描画: 同一色の PatternFill を共有（openpyxl のオブジェクト生成コスト削減）
-_GANTT_SOLID_FILL_CACHE: dict[str, PatternFill] = {}
 
-# タイムラインセル共通（各行・各結合ブロックで新規生成しない）
-_GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
-    horizontal="left",
-    vertical="center",
-    wrap_text=False,
-    shrink_to_fit=False,
-    indent=1,
-)
-
-
-def _gantt_cached_solid_fill(hex_rgb: str) -> PatternFill:
-    fill = _GANTT_SOLID_FILL_CACHE.get(hex_rgb)
-    if fill is None:
-        fill = PatternFill(fill_type="solid", start_color=hex_rgb, end_color=hex_rgb)
-        _GANTT_SOLID_FILL_CACHE[hex_rgb] = fill
-    return fill
-
-
-@lru_cache(maxsize=8192)
-def _gantt_bar_fill_hex_for_task_id_str(task_id_str: str) -> str:
-    h = hashlib.md5(task_id_str.encode("utf-8")).hexdigest()
+def _gantt_bar_fill_for_task_id(task_id):
+    """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使わない。"""
+    h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_PRINT_SAFE)
     return _GANTT_BAR_FILLS_PRINT_SAFE[i]
 
 
-@lru_cache(maxsize=8192)
-def _gantt_bar_fill_hex_actual_for_task_id_str(task_id_str: str) -> str:
-    h = hashlib.md5(task_id_str.encode("utf-8")).hexdigest()
+def _gantt_bar_fill_actual_for_task_id(task_id):
+    h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_ACTUAL)
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-def _gantt_bar_fill_for_task_id(task_id):
-    """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使わない。"""
-    return _gantt_bar_fill_hex_for_task_id_str(str(task_id))
-
-
-def _gantt_bar_fill_actual_for_task_id(task_id):
-    return _gantt_bar_fill_hex_actual_for_task_id_str(str(task_id))
-
-
-def _gantt_task_pct_from_event(active: dict) -> int | None:
-    """スロット内タスク表示用の完了率（None ならラベルに % 省略）。"""
+def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
+    """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('task', tid, fill_hex, pct)"""
+    fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
+    active = None
+    for e in evlist:
+        if e["start_dt"] <= slot_mid < e["end_dt"]:
+            active = e
+            break
+    if active is None:
+        return ("idle",)
+    if any(b_s <= slot_mid < b_e for b_s, b_e in active.get("breaks") or ()):
+        return ("break",)
+    tid = str(active["task_id"])
+    gh = fill_fn(active["task_id"])
+    pct = None
     try:
+        # 「マクロ実行時点」の完了率を優先（pct_macro を timeline_event に持たせる）
         if active.get("pct_macro") is not None:
             pct = int(round(parse_float_safe(active.get("pct_macro"), 0.0)))
-            return max(0, min(100, pct))
-        tot = parse_float_safe(active.get("total_units"), 0.0)
-        done = parse_float_safe(active.get("already_done_units"), 0.0) + parse_float_safe(
-            active.get("units_done"), 0.0
-        )
-        if tot > 0:
-            return max(0, min(100, int(round((done / tot) * 100))))
+            pct = max(0, min(100, pct))
+        else:
+            # フェイルセーフ（従来の擬似進捗計算）
+            tot = parse_float_safe(active.get("total_units"), 0.0)
+            done = parse_float_safe(active.get("already_done_units"), 0.0) + parse_float_safe(
+                active.get("units_done"), 0.0
+            )
+            if tot > 0:
+                pct = max(0, min(100, int(round((done / tot) * 100))))
     except Exception:
-        return None
-    return None
-
-
-def _gantt_row_slot_states(evlist, slots, slot_mins, task_fill_fn=None):
-    """
-    1行分のスロット状態をまとめて算出。evlist は start_dt 昇順を想定（二点ポインタ）。
-    各要素: ('idle',) | ('break',) | ('task', tid, fill_hex, pct)
-    """
-    fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
-    half = timedelta(minutes=slot_mins / 2)
-    states: list = []
-    ei = 0
-    n_ev = len(evlist)
-    for slot_start in slots:
-        mid = slot_start + half
-        while ei < n_ev and evlist[ei]["end_dt"] <= mid:
-            ei += 1
-        if ei >= n_ev or evlist[ei]["start_dt"] > mid:
-            states.append(("idle",))
-            continue
-        active = evlist[ei]
-        if any(b_s <= mid < b_e for b_s, b_e in active.get("breaks") or ()):
-            states.append(("break",))
-            continue
-        tid = str(active["task_id"])
-        gh = fill_fn(active["task_id"])
-        pct = _gantt_task_pct_from_event(active)
-        states.append(("task", tid, gh, pct))
-    return states
+        pct = None
+    return ("task", tid, gh, pct)
 
 
 def _gantt_merge_key(st):
@@ -1388,7 +1345,10 @@ def _paint_gantt_timeline_row_merged(
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
-    states = _gantt_row_slot_states(evlist, slots, slot_mins, task_fill_fn)
+    states = []
+    for slot_start in slots:
+        mid = slot_start + timedelta(minutes=slot_mins / 2)
+        states.append(_gantt_slot_state_tuple(evlist, mid, task_fill_fn))
     tcol0 = n_fixed + 1
     i = 0
     while i < n_slots:
@@ -1403,14 +1363,21 @@ def _paint_gantt_timeline_row_merged(
             ws.merge_cells(start_row=row, start_column=col_s, end_row=row, end_column=col_e)
         c = ws.cell(row=row, column=col_s)
         c.border = grid_border
-        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+        # 左寄せ・折り返しなし・縮小なし（長いラベルはセル外へはみ出し表示しやすくする）
+        c.alignment = Alignment(
+            horizontal="left",
+            vertical="center",
+            wrap_text=False,
+            shrink_to_fit=False,
+            indent=1,
+        )
         if st0[0] == "idle":
             c.fill = idle_fill
         elif st0[0] == "break":
             c.fill = break_fill
         else:
             _, tid, gh, pct = st0
-            c.fill = _gantt_cached_solid_fill(gh)
+            c.fill = PatternFill(fill_type="solid", start_color=gh, end_color=gh)
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
         i = j
@@ -1709,9 +1676,6 @@ def _write_results_equipment_gantt_sheet(
 
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
-    font_gantt_body_12 = _result_font(size=12, color="000000")
-    font_gantt_mach_12b = _result_font(size=12, bold=True, color="000000")
-    font_gantt_mach_12b_i = _result_font(size=12, bold=True, color="000000", italic=True)
 
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
@@ -1744,10 +1708,10 @@ def _write_results_equipment_gantt_sheet(
             c3 = ws.cell(row=row, column=4, value=member_disp)
             c4 = ws.cell(row=row, column=5, value=task_sum)
             for c in (c1, c2, c3, c4):
-                c.font = font_gantt_body_12
+                c.font = _result_font(size=12, color="000000")
                 c.fill = lab_fill
                 c.border = grid_border
-            c1.font = font_gantt_mach_12b
+            c1.font = _result_font(size=12, bold=True, color="000000")
             c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -1798,10 +1762,10 @@ def _write_results_equipment_gantt_sheet(
                 ca3 = ws.cell(row=row, column=4, value=member_disp_a)
                 ca4 = ws.cell(row=row, column=5, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
-                    c.font = font_gantt_body_12
+                    c.font = _result_font(size=12, color="000000")
                     c.fill = lab_fill_a
                     c.border = grid_border
-                ca1.font = font_gantt_mach_12b_i
+                ca1.font = _result_font(size=12, bold=True, color="000000", italic=True)
                 ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -1844,11 +1808,11 @@ def _write_results_equipment_gantt_sheet(
             ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-            sc = ws.cell(row=row, column=1)
-            sc.value = None
-            sc.fill = sep_fill
-            sc.border = no_border
+            for cc in range(1, last_col + 1):
+                sc = ws.cell(row=row, column=cc)
+                sc.value = None
+                sc.fill = sep_fill
+                sc.border = no_border
             ws.row_dimensions[row].height = 5
             row += 1
 
