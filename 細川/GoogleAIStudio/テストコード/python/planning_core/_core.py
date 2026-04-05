@@ -9083,41 +9083,6 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
 )
 
-# region agent log
-_AGENT_DEBUG_LOG_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-5e5f85.log")
-)
-
-
-def _agent_dbg_apr6(d: date) -> bool:
-    return d.month == 4 and d.day == 6
-
-
-def _agent_debug_dispatch_log(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-    run_id: str = "run1",
-) -> None:
-    try:
-        payload = {
-            "sessionId": "5e5f85",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
-
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
 #    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
@@ -9225,27 +9190,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         )
 
     ts = refloor_fn(team_start)
-    # region agent log
-    _apr6 = _agent_dbg_apr6(team_start.date())
-    if _apr6:
-        _agent_debug_dispatch_log(
-            "H1",
-            "_core.py:_defer_team_start_past_prebreak_and_end_of_day:entry",
-            "defer_entry",
-            {
-                "task_id": _tid,
-                "machine": str(task.get("machine") or ""),
-                "team_start_in": team_start.isoformat(),
-                "ts_after_refloor0": ts.isoformat(),
-                "team_end_limit": team_end_limit.isoformat(),
-                "breaks_preview": [(a.isoformat(), b.isoformat()) for a, b in team_breaks[:8]],
-                "gap_min": ASSIGN_END_OF_DAY_DEFER_MINUTES,
-                "rem_ceil": math.ceil(float(task.get("remaining_units") or 0)),
-                "max_rem": ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
-            },
-        )
-    # endregion
-    for _loop_i in range(64):
+    for _ in range(64):
         if ts >= team_end_limit:
             _trace_block(
                 "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
@@ -9255,20 +9200,6 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 ts,
                 team_end_limit,
             )
-            # region agent log
-            if _apr6:
-                _agent_debug_dispatch_log(
-                    "H1",
-                    "_core.py:_defer_team_start_past_prebreak_and_end_of_day:none",
-                    "defer_none_end_limit",
-                    {
-                        "task_id": _tid,
-                        "loop": _loop_i,
-                        "ts": ts.isoformat(),
-                        "team_end_limit": team_end_limit.isoformat(),
-                    },
-                )
-            # endregion
             return None
 
         break_end = None
@@ -9285,20 +9216,6 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 break_end,
                 ts,
             )
-            # region agent log
-            if _apr6:
-                _agent_debug_dispatch_log(
-                    "H5",
-                    "_core.py:_defer_team_start_past_prebreak_and_end_of_day:break_slide",
-                    "defer_slide_past_break",
-                    {
-                        "task_id": _tid,
-                        "loop": _loop_i,
-                        "trial_was": ts.isoformat(),
-                        "break_end": break_end.isoformat(),
-                    },
-                )
-            # endregion
             ts = refloor_fn(break_end)
             continue
 
@@ -9316,21 +9233,6 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                     ts,
                     slip_end,
                 )
-                # region agent log
-                if _apr6:
-                    _agent_debug_dispatch_log(
-                        "H6",
-                        "_core.py:_defer_team_start_past_prebreak_and_end_of_day:prebreak_slide",
-                        "defer_slide_prebreak_insufficient_contiguous",
-                        {
-                            "task_id": _tid,
-                            "loop": _loop_i,
-                            "trial_was": ts.isoformat(),
-                            "slip_end": slip_end.isoformat(),
-                            "need_min": min_contiguous_work_mins,
-                        },
-                    )
-                # endregion
                 ts = refloor_fn(slip_end)
                 continue
 
@@ -9351,34 +9253,8 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 team_end_limit,
                 gap_end,
             )
-            # region agent log
-            if _apr6:
-                _agent_debug_dispatch_log(
-                    "H2",
-                    "_core.py:_defer_team_start_past_prebreak_and_end_of_day:none",
-                    "defer_none_eod_defer",
-                    {
-                        "task_id": _tid,
-                        "loop": _loop_i,
-                        "ts": ts.isoformat(),
-                        "team_end_limit": team_end_limit.isoformat(),
-                        "gap_min": gap_end,
-                        "rem_ceil": rem_ceil,
-                        "mins_to_limit": int((team_end_limit - ts).total_seconds() // 60),
-                    },
-                )
-            # endregion
             return None
 
-        # region agent log
-        if _apr6 and ts.time() >= time(14, 20):
-            _agent_debug_dispatch_log(
-                "H5",
-                "_core.py:_defer_team_start_past_prebreak_and_end_of_day:ok",
-                "defer_ok_afternoon",
-                {"task_id": _tid, "loop": _loop_i, "ts": ts.isoformat()},
-            )
-        # endregion
         return ts
 
     _trace_block(
@@ -9388,15 +9264,6 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         float(task.get("remaining_units") or 0),
         ts,
     )
-    # region agent log
-    if _apr6:
-        _agent_debug_dispatch_log(
-            "H5",
-            "_core.py:_defer_team_start_past_prebreak_and_end_of_day:none",
-            "defer_none_loop_cap",
-            {"task_id": _tid, "ts": ts.isoformat(), "loops": 64},
-        )
-    # endregion
     return None
 
 
@@ -14510,22 +14377,6 @@ def _assign_one_roll_trial_order_flow(
                 avail_mins,
                 eff_time_per_unit,
             )
-            # region agent log
-            if _agent_dbg_apr6(current_date):
-                _agent_debug_dispatch_log(
-                    "H4",
-                    "_core.py:_assign_one_roll_trial_order_flow:reject",
-                    "trial_reject_avail_units",
-                    {
-                        "task_id": str(task.get("task_id") or ""),
-                        "machine": str(task.get("machine") or ""),
-                        "team_start": team_start.isoformat(),
-                        "team_end_limit": team_end_limit.isoformat(),
-                        "avail_mins": float(avail_mins),
-                        "eff_time_per_unit": float(eff_time_per_unit),
-                    },
-                )
-            # endregion
             return None
         work_mins_needed = int(eff_time_per_unit)
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
@@ -14539,22 +14390,6 @@ def _assign_one_roll_trial_order_flow(
                 work_mins_needed,
                 team_start,
             )
-            # region agent log
-            if _agent_dbg_apr6(current_date):
-                _agent_debug_dispatch_log(
-                    "H3",
-                    "_core.py:_assign_one_roll_trial_order_flow:reject",
-                    "trial_reject_contiguous",
-                    {
-                        "task_id": str(task.get("task_id") or ""),
-                        "machine": str(task.get("machine") or ""),
-                        "team_start": team_start.isoformat(),
-                        "team_end_limit": team_end_limit.isoformat(),
-                        "contiguous_min": int(_contig),
-                        "work_mins_needed": int(work_mins_needed),
-                    },
-                )
-            # endregion
             return None
         actual_end_dt, _, _ = calculate_end_time(
             team_start, work_mins_needed, team_breaks, team_end_limit
