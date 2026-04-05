@@ -13118,24 +13118,24 @@ def _machine_effective_floor_timedelta_only(
         if cu:
             mf = mf + timedelta(minutes=cu)
     prep, _ = _lookup_changeover_minutes_for_eq(eq_line, changeover_by_eq)
+    _pt_td = str(prev_tid or "").strip()
+    _ct_td = str(cur_tid or "").strip()
+    need_prep_td = prep > 0 and (not _pt_td or _pt_td != _ct_td)
     # #region agent log
-    if prep:
+    if prep > 0:
         try:
-            _pt = str(prev_tid or "").strip()
-            _ct = str(cur_tid or "").strip()
             _agent_td = {
                 "sessionId": "dfede8",
-                "runId": "pre-fix",
+                "runId": "post-fix",
                 "hypothesisId": "D",
                 "location": "_machine_effective_floor_timedelta_only:prep",
-                "message": "timedelta prep minutes",
+                "message": "timedelta prep gate",
                 "data": {
                     "machine_occ_key": str(machine_occ_key or "")[:80],
-                    "prev_tid": _pt[:50],
-                    "cur_tid": _ct[:50],
+                    "prev_tid": _pt_td[:50],
+                    "cur_tid": _ct_td[:50],
                     "prep_min": prep,
-                    "same_request": bool(_ct) and _pt == _ct,
-                    "adds_prep_minutes": True,
+                    "need_prep_td": need_prep_td,
                 },
                 "timestamp": int(time_module.time() * 1000),
             }
@@ -13155,7 +13155,7 @@ def _machine_effective_floor_timedelta_only(
         except Exception:
             pass
     # #endregion
-    if prep:
+    if need_prep_td:
         mf = mf + timedelta(minutes=prep)
     return mf
 
@@ -13178,6 +13178,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     """
     前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
     skills 適合 OP の勤務・休憩に沿って forward し、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
+    同一占有キーで直前加工と同一依頼NOのときは加工前準備を付けない（連続ロール）。
     セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
     """
     if abolish_limits:
@@ -13257,25 +13258,24 @@ def _changeover_plan_segments_and_machining_lower_bound(
         )
         t = max(t, ce)
 
+    _lt_s = str(last_tid or "").strip()
+    need_prep = prep > 0 and (not _lt_s or _lt_s != cur_tid)
     # #region agent log
     if prep > 0:
         try:
-            _lt_s = str(last_tid or "").strip()
-            _ct_s = str(cur_tid or "").strip()
-            _same_req = bool(_ct_s) and _lt_s == _ct_s
             _agent_p = {
                 "sessionId": "dfede8",
-                "runId": "pre-fix",
+                "runId": "post-fix",
                 "hypothesisId": "A",
                 "location": "_changeover_plan_segments:prep_gate",
-                "message": "before prep segment",
+                "message": "prep segment gate",
                 "data": {
                     "mach_occ": mach_occ[:80],
                     "last_tid": _lt_s[:50],
-                    "cur_tid": _ct_s[:50],
+                    "cur_tid": cur_tid[:50],
                     "prep_min": prep,
-                    "same_request_continuing": _same_req,
-                    "current_code_appends_prep": True,
+                    "same_request_continuing": bool(cur_tid) and _lt_s == cur_tid,
+                    "need_prep": need_prep,
                 },
                 "timestamp": int(time_module.time() * 1000),
             }
@@ -13295,7 +13295,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
         except Exception:
             pass
     # #endregion
-    if prep > 0:
+    if need_prep:
         pe, act, rem = calculate_end_time(t, prep, br_r, end_r)
         if rem > 0 or act < prep:
             return None, []
