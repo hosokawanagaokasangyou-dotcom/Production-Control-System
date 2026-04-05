@@ -9083,6 +9083,38 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
 )
 
+# region agent log
+_AGENT_FF0A19_EQ_PROG_KEYS: set = set()
+
+
+def _agent_ff0a19_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    try:
+        _p = os.path.abspath(os.path.dirname(__file__))
+        _logf = os.path.join(os.getcwd(), "debug-ff0a19.log")
+        for _ in range(16):
+            if os.path.isdir(os.path.join(_p, ".git")):
+                _logf = os.path.join(_p, "debug-ff0a19.log")
+                break
+            _np = os.path.dirname(_p)
+            if _np == _p:
+                break
+            _p = _np
+        _rec = {
+            "sessionId": "ff0a19",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_logf, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
 #    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
@@ -9179,6 +9211,25 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     _tid = str(task.get("task_id", "") or "").strip()
     _team_txt = ", ".join(str(x) for x in team) if team else "—"
 
+    # region agent log
+    if "Y4-16" in _tid and not getattr(
+        _defer_team_start_past_prebreak_and_end_of_day, "_ff0a19_y416_once", False
+    ):
+        setattr(
+            _defer_team_start_past_prebreak_and_end_of_day, "_ff0a19_y416_once", True
+        )
+        _agent_ff0a19_log(
+            "H2",
+            "_core.py:_defer_team_start_past_prebreak_and_end_of_day",
+            "eod_env_constants_first_Y4-16",
+            {
+                "ASSIGN_END_OF_DAY_DEFER_MINUTES": ASSIGN_END_OF_DAY_DEFER_MINUTES,
+                "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS": ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                "task_id": _tid,
+            },
+        )
+    # endregion agent log
+
     def _trace_block(msg: str, *a) -> None:
         if not _trace_schedule_task_enabled(_tid):
             return
@@ -9243,6 +9294,26 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
         ):
+            # region agent log
+            if "Y4-16" in str(task.get("task_id", "") or ""):
+                _agent_ff0a19_log(
+                    "H2_H5",
+                    "_core.py:_defer_team_start_past_prebreak_and_end_of_day",
+                    "eod_blocked_small_remaining",
+                    {
+                        "task_id": str(task.get("task_id", "") or "").strip(),
+                        "rem_ceil": rem_ceil,
+                        "rem_float": float(task.get("remaining_units") or 0),
+                        "gap_end_min": gap_end,
+                        "eod_max_rem_rolls": ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                        "trial_start": ts.isoformat(),
+                        "team_end_limit": team_end_limit.isoformat(),
+                        "mins_to_team_end": round(
+                            (team_end_limit - ts).total_seconds() / 60.0, 4
+                        ),
+                    },
+                )
+            # endregion agent log
             _trace_block(
                 "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
                 task.get("machine"),
@@ -9255,6 +9326,31 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             )
             return None
 
+        # region agent log
+        _tid_defer = str(task.get("task_id", "") or "").strip()
+        if "Y4-16" in _tid_defer:
+            _mte = (team_end_limit - ts).total_seconds() / 60.0
+            if _mte <= 180.0:
+                _agent_ff0a19_log(
+                    "H1_H2_H5",
+                    "_core.py:_defer_team_start_past_prebreak_and_end_of_day",
+                    "eod_check_passed_return_ts",
+                    {
+                        "task_id": _tid_defer,
+                        "rem_ceil": rem_ceil,
+                        "rem_float": float(task.get("remaining_units") or 0),
+                        "gap_end_min": gap_end,
+                        "eod_max_rem_rolls": ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                        "eod_rule_active": gap_end > 0,
+                        "mins_to_team_end": round(_mte, 4),
+                        "would_block_if_all_met": gap_end > 0
+                        and (team_end_limit - ts) <= timedelta(minutes=gap_end)
+                        and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                        "trial_start": ts.isoformat(),
+                        "team_end_limit": team_end_limit.isoformat(),
+                    },
+                )
+        # endregion agent log
         return ts
 
     _trace_block(
@@ -12270,6 +12366,27 @@ def _build_equipment_schedule_dataframe(
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
                         _tid_sched = str(active_ev.get("task_id") or "").strip()
+                        # region agent log
+                        if "Y4-16" in _tid_sched and curr_grid.time() >= time(16, 30):
+                            _ek = (_tid_sched, str(d), curr_grid.strftime("%H:%M"))
+                            if _ek not in _AGENT_FF0A19_EQ_PROG_KEYS:
+                                _AGENT_FF0A19_EQ_PROG_KEYS.add(_ek)
+                                _agent_ff0a19_log(
+                                    "H1",
+                                    "_core.py:_build_equipment_schedule_dataframe",
+                                    "late_slot_progress_display",
+                                    {
+                                        "task_id": _tid_sched,
+                                        "date": str(d),
+                                        "slot_start": curr_grid.strftime("%H:%M"),
+                                        "cumulative_done": cumulative_done,
+                                        "total_units": total_u,
+                                        "progress_text": progress_text,
+                                        "inferred_remain_rolls": int(total_u)
+                                        - int(cumulative_done),
+                                    },
+                                )
+                        # endregion agent log
                         if (
                             first_eq_schedule_cell_by_task_id is not None
                             and _tid_sched
