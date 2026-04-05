@@ -9111,7 +9111,47 @@ def _eod_reject_capacity_units_below_threshold(
         return False
     if not _eod_minutes_window_covers_start(team_start, team_end_limit):
         return False
-    return int(units_fit_until_close) < int(th)
+    _rej = int(units_fit_until_close) < int(th)
+    if _rej:
+        # region agent log
+        try:
+            _rp = os.path.abspath(os.path.dirname(__file__))
+            for _ in range(16):
+                if os.path.isdir(os.path.join(_rp, ".git")):
+                    break
+                _np = os.path.dirname(_rp)
+                if _np == _rp:
+                    _rp = os.getcwd()
+                    break
+                _rp = _np
+            else:
+                _rp = os.getcwd()
+            _lp = os.path.join(_rp, "debug-eod-capacity.log")
+            with open(_lp, "a", encoding="utf-8") as _lf:
+                _lf.write(
+                    json.dumps(
+                        {
+                            "event": "eod_capacity_reject",
+                            "units_fit_until_close": int(units_fit_until_close),
+                            "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS": int(th),
+                            "ASSIGN_END_OF_DAY_DEFER_MINUTES": int(
+                                ASSIGN_END_OF_DAY_DEFER_MINUTES
+                            ),
+                            "team_start": team_start.isoformat(),
+                            "team_end_limit": team_end_limit.isoformat(),
+                            "mins_to_end": round(
+                                (team_end_limit - team_start).total_seconds() / 60.0,
+                                4,
+                            ),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # endregion agent log
+    return _rej
 
 
 # =========================================================
