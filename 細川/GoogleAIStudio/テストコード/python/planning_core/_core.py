@@ -9160,6 +9160,40 @@ def _contiguous_work_minutes_until_next_break_or_limit(
     return max(0, int((next_stop - start_dt).total_seconds() / 60))
 
 
+def _break_end_to_skip_if_contiguous_under(
+    start_dt: datetime,
+    breaks_dt: list,
+    end_limit_dt: datetime,
+    min_contiguous_mins: int,
+) -> datetime | None:
+    """
+    休憩帯外でも、次の休憩開始までの連続実働が min_contiguous_mins 未満なら、
+    その休憩区間の終了時刻を返す（午後休憩直前に 1 ロール分が収まらない開始だけ進める）。
+    終業までしか実働が続かない場合は None。
+    """
+    if min_contiguous_mins <= 0:
+        return None
+    if start_dt >= end_limit_dt:
+        return None
+    c = _contiguous_work_minutes_until_next_break_or_limit(
+        start_dt, breaks_dt, end_limit_dt
+    )
+    if c >= min_contiguous_mins:
+        return None
+    next_stop = end_limit_dt
+    for bs, be in breaks_dt:
+        if be <= start_dt:
+            continue
+        if start_dt < bs:
+            next_stop = min(next_stop, bs)
+    if next_stop >= end_limit_dt:
+        return None
+    for bs, be in breaks_dt:
+        if bs == next_stop:
+            return be
+    return None
+
+
 def _defer_team_start_past_prebreak_and_end_of_day(
     task: dict,
     team: tuple,
@@ -9167,12 +9201,15 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     team_end_limit: datetime,
     team_breaks: list,
     refloor_fn,
+    min_contiguous_work_mins: int | None = None,
 ) -> datetime | None:
     """
     - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
       remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
     - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
       繰り下げのあと終業超過・EOD デファーに該当すれば None。
+    - min_contiguous_work_mins が正のとき、帯外でも **次の休憩までの連続実働**がそれ未満なら
+      当該休憩の終了へ繰り下げ（上と同様に refloor しループ）。
     """
     _tid = str(task.get("task_id", "") or "").strip()
     _team_txt = ", ".join(str(x) for x in team) if team else "—"
@@ -9264,6 +9301,38 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             # endregion
             ts = refloor_fn(break_end)
             continue
+
+        if min_contiguous_work_mins is not None and min_contiguous_work_mins > 0:
+            slip_end = _break_end_to_skip_if_contiguous_under(
+                ts, team_breaks, team_end_limit, min_contiguous_work_mins
+            )
+            if slip_end is not None:
+                _trace_block(
+                    "休憩直前で連続実働不足のため休憩終了へ繰り下げ machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
+                    task.get("machine"),
+                    _team_txt,
+                    float(task.get("remaining_units") or 0),
+                    min_contiguous_work_mins,
+                    ts,
+                    slip_end,
+                )
+                # region agent log
+                if _apr6:
+                    _agent_debug_dispatch_log(
+                        "H6",
+                        "_core.py:_defer_team_start_past_prebreak_and_end_of_day:prebreak_slide",
+                        "defer_slide_prebreak_insufficient_contiguous",
+                        {
+                            "task_id": _tid,
+                            "loop": _loop_i,
+                            "trial_was": ts.isoformat(),
+                            "slip_end": slip_end.isoformat(),
+                            "need_min": min_contiguous_work_mins,
+                        },
+                    )
+                # endregion
+                ts = refloor_fn(slip_end)
+                continue
 
         gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
@@ -13995,6 +14064,20 @@ def _append_legacy_dispatch_candidate_for_team(
         team_breaks.extend(daily_status[m]["breaks_dt"])
     team_breaks = merge_time_intervals(team_breaks)
 
+    avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
+    if avg_eff <= 0:
+        avg_eff = 0.01
+    t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+    if t_eff <= 0:
+        t_eff = 1.0
+    eff_time_per_unit = (
+        task["base_time_per_unit"]
+        / avg_eff
+        / t_eff
+        * _surplus_team_time_factor(rq_base, len(team), extra_max)
+    )
+    _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
         if not _gpo.get("abolish_all_scheduling_limits"):
@@ -14036,6 +14119,7 @@ def _append_legacy_dispatch_candidate_for_team(
         team_end_limit,
         team_breaks,
         _refloor_legacy_roll,
+        min_contiguous_work_mins=_defer_min_contig,
     )
     if team_start_adj is None:
         return False
@@ -14043,18 +14127,6 @@ def _append_legacy_dispatch_candidate_for_team(
     if team_start >= team_end_limit:
         return False
 
-    avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
-    if avg_eff <= 0:
-        avg_eff = 0.01
-    t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-    if t_eff <= 0:
-        t_eff = 1.0
-    eff_time_per_unit = (
-        task["base_time_per_unit"]
-        / avg_eff
-        / t_eff
-        * _surplus_team_time_factor(rq_base, len(team), extra_max)
-    )
     _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
     units_can_do = int(avail_mins / eff_time_per_unit)
     if units_can_do == 0:
@@ -14376,6 +14448,20 @@ def _assign_one_roll_trial_order_flow(
             team_breaks.extend(daily_status[m]["breaks_dt"])
         team_breaks = merge_time_intervals(team_breaks)
 
+        avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
+        if avg_eff <= 0:
+            avg_eff = 0.01
+        t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+        if t_eff <= 0:
+            t_eff = 1.0
+        eff_time_per_unit = (
+            task["base_time_per_unit"]
+            / avg_eff
+            / t_eff
+            * _surplus_team_time_factor(rq_base, len(team), extra_max)
+        )
+        _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+
         def _refloor_trial_roll(ts: datetime) -> datetime:
             ts = max(ts, max(avail_dt[m] for m in team))
             if not _gpo.get("abolish_all_scheduling_limits"):
@@ -14395,6 +14481,7 @@ def _assign_one_roll_trial_order_flow(
             team_end_limit,
             team_breaks,
             _refloor_trial_roll,
+            min_contiguous_work_mins=_defer_min_contig,
         )
         if team_start_d is None:
             _trace_assign(
@@ -14412,18 +14499,6 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
 
-        avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
-        if avg_eff <= 0:
-            avg_eff = 0.01
-        t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-        if t_eff <= 0:
-            t_eff = 1.0
-        eff_time_per_unit = (
-            task["base_time_per_unit"]
-            / avg_eff
-            / t_eff
-            * _surplus_team_time_factor(rq_base, len(team), extra_max)
-        )
         _, avail_mins, _ = calculate_end_time(
             team_start, 9999, team_breaks, team_end_limit
         )
@@ -16302,6 +16377,20 @@ def _generate_plan_impl():
                                 for m in team:
                                     team_breaks.extend(daily_status[m]['breaks_dt'])
                                 team_breaks = merge_time_intervals(team_breaks)
+
+                                avg_eff = sum(daily_status[m]['efficiency'] for m in team) / len(team)
+                                if avg_eff <= 0:
+                                    avg_eff = 0.01
+                                t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+                                if t_eff <= 0:
+                                    t_eff = 1.0
+                                eff_time_per_unit = (
+                                    task["base_time_per_unit"]
+                                    / avg_eff
+                                    / t_eff
+                                    * _surplus_team_time_factor(rq_base, len(team), extra_max)
+                                )
+                                _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
     
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
@@ -16341,26 +16430,13 @@ def _generate_plan_impl():
                                     team_end_limit,
                                     team_breaks,
                                     _refloor_legacy_inline,
+                                    min_contiguous_work_mins=_defer_min_contig,
                                 )
                                 if _ts_adj is None:
                                     continue
                                 team_start = _ts_adj
                                 if team_start >= team_end_limit:
                                     continue
-    
-                                avg_eff = sum(daily_status[m]['efficiency'] for m in team) / len(team)
-                                if avg_eff <= 0:
-                                    avg_eff = 0.01
-                                t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-                                if t_eff <= 0:
-                                    t_eff = 1.0
-                                # 追加増員による短縮は最大でも SURPLUS_TEAM_MAX_SPEEDUP_RATIO 程度（線形）
-                                eff_time_per_unit = (
-                                    task["base_time_per_unit"]
-                                    / avg_eff
-                                    / t_eff
-                                    * _surplus_team_time_factor(rq_base, len(team), extra_max)
-                                )
     
                                 _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
     
