@@ -5213,58 +5213,73 @@ def _gemini_estimate_cost_usd(
     return (prompt_tok / 1_000_000.0) * rin + (out_equiv / 1_000_000.0) * rout
 
 
-def _gemini_bucket_entry_line(period_key: str, ent: dict) -> str:
-    calls = int(ent.get("calls") or 0)
-    pt = int(ent.get("prompt") or 0)
-    cc = int(ent.get("candidates") or 0)
-    th = int(ent.get("thoughts") or 0)
-    usd = float(ent.get("estimated_cost_usd") or 0.0)
-    parts = [
-        f"  {period_key}",
-        f"呼出し {calls:,} 回",
-        f"入力 {pt:,}",
-        f"出力 {cc:,}",
-    ]
-    if th:
-        parts.append(f"思考 {th:,}")
-    if usd > 0:
-        parts.append(f"推定USD ${usd:.6f}")
-        parts.append(f"推定JPY ¥{usd * GEMINI_JPY_PER_USD:.2f}")
-    return "  ".join(parts)
+_GEMINI_SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
 
-def _gemini_time_bucket_summary_lines(cum: dict) -> list[str]:
+def _gemini_values_to_sparkline(vals: list[float]) -> str:
+    """数値列を Unicode ブロックのミニグラフ（高さ 8 段）にする。左=古・右=新想定。"""
+    if not vals:
+        return "（データなし）"
+    lo, hi = min(vals), max(vals)
+    if hi <= lo:
+        return _GEMINI_SPARK_CHARS[3] * len(vals)
+    nch = len(_GEMINI_SPARK_CHARS)
+    span = hi - lo
+    out: list[str] = []
+    for v in vals:
+        i = int((v - lo) / span * (nch - 1) + 0.5)
+        i = max(0, min(nch - 1, i))
+        out.append(_GEMINI_SPARK_CHARS[i])
+    return "".join(out)
+
+
+def _gemini_usage_trend_mini_lines(cum: dict, *, max_days: int = 14) -> list[str]:
+    """表には載せない履歴トレンドを、日次ミニグラフ＋ CSV 案内のみで示す。"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return []
-    lines: list[str] = []
+    subd = b.get("by_day")
+    if not isinstance(subd, dict) or not subd:
+        return []
+    keys = sorted(subd.keys())
+    keys = keys[-max(1, max_days) :]
+    usds: list[float] = []
+    calls: list[int] = []
+    for pk in keys:
+        ent = subd.get(pk)
+        if isinstance(ent, dict):
+            usds.append(float(ent.get("estimated_cost_usd") or 0.0))
+            calls.append(int(ent.get("calls") or 0))
+        else:
+            usds.append(0.0)
+            calls.append(0)
+    use_calls = sum(usds) <= 0.0 and sum(calls) > 0
+    series = [float(c) for c in calls] if use_calls else usds
+    label = "日次 呼出し回数" if use_calls else "日次 推定USD"
+    spark = _gemini_values_to_sparkline(series)
+    lines = [
+        "【推移ミニグラフ】" + label + "（左=古 右=新 ▁低 … █高）",
+        f"  期間: {keys[0]} ～ {keys[-1]}",
+        f"  {spark}",
+        f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ可）",
+    ]
     note = b.get("timezone_note")
-    lines.append("【期間別集計】（トレンドは log の CSV を Excel でグラフ化）")
     if note:
         lines.append(f"  （{note}）")
-
-    def emit_block(title: str, sub: str, limit: int | None) -> None:
-        subd = b.get(sub)
-        if not isinstance(subd, dict) or not subd:
-            return
-        keys = sorted(subd.keys(), reverse=True)
-        if limit is not None:
-            keys = keys[:limit]
-        lines.append(f"  [{title}]")
-        for pk in keys:
-            ent = subd.get(pk)
-            if isinstance(ent, dict):
-                lines.append(_gemini_bucket_entry_line(pk, ent))
-
-    emit_block("年", "by_year", None)
-    emit_block("月（新しい順・最大12）", "by_month", 12)
-    emit_block("週 ISO（新しい順・最大8）", "by_week", 8)
-    emit_block("日（新しい順・最大14）", "by_day", 14)
-    emit_block("時間（新しい順・最大48）", "by_hour", 48)
-    lines.append(
-        f"  グラフ用: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}"
-    )
     return lines
+
+
+def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
+    """累計・当実行向けの 2 列テキスト表（履歴行は含めない）。"""
+    out = [title]
+    if not rows:
+        return out
+    lw = min(22, max(len(a) for a, _ in rows))
+    sep = "  " + ("─" * (lw + 2 + 28))
+    out.append(sep)
+    for a, b in rows:
+        out.append(f"  {a:<{lw}}  {b}")
+    return out
 
 
 def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
@@ -5341,44 +5356,64 @@ def build_gemini_usage_summary_text() -> str:
     lines: list[str] = []
     ts = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     if _gemini_usage_session:
-        lines.append(f"集計時刻: {ts}（この実行での Gemini API 合計）")
+        lines.append(f"集計時刻: {ts}（この実行での Gemini API）")
         tot_calls = sum(b["calls"] for b in _gemini_usage_session.values())
         tot_p = sum(b["prompt"] for b in _gemini_usage_session.values())
         tot_c = sum(b["candidates"] for b in _gemini_usage_session.values())
         tot_th = sum(b["thoughts"] for b in _gemini_usage_session.values())
         tot_t = sum(b["total"] for b in _gemini_usage_session.values())
-        lines.append(
-            f"【合計】呼出し {tot_calls} 回 / 入力 {tot_p:,} / 出力 {tot_c:,}"
-            + (f" / 思考 {tot_th:,}" if tot_th else "")
-            + f" / total 報告 {tot_t:,}"
-        )
+        sess_rows: list[tuple[str, str]] = [
+            ("呼出し", f"{tot_calls:,} 回"),
+            ("入力トークン", f"{tot_p:,}"),
+            ("出力トークン", f"{tot_c:,}"),
+        ]
+        if tot_th:
+            sess_rows.append(("思考トークン", f"{tot_th:,}"))
+        sess_rows.append(("total 報告", f"{tot_t:,}"))
+        lines.extend(_gemini_kv_table_lines("【この実行】", sess_rows))
         grand_usd = 0.0
         any_price = False
         for mid in sorted(_gemini_usage_session.keys()):
             b = _gemini_usage_session[mid]
-            lines.append(f"--- モデル: {mid} ---")
-            lines.append(f"  呼出し: {b['calls']} 回")
-            lines.append(f"  入力トークン: {b['prompt']:,}")
-            lines.append(f"  出力トークン(candidates): {b['candidates']:,}")
+            mrows: list[tuple[str, str]] = [
+                ("モデル", mid),
+                ("呼出し", f"{b['calls']:,} 回"),
+                ("入力トークン", f"{b['prompt']:,}"),
+                ("出力トークン", f"{b['candidates']:,}"),
+            ]
             if b.get("thoughts", 0):
-                lines.append(f"  思考トークン(thoughts): {b['thoughts']:,}")
-            lines.append(f"  total_token_count 合計: {b['total']:,}")
+                mrows.append(("思考トークン", f"{b['thoughts']:,}"))
+            mrows.append(("total_token_count", f"{b['total']:,}"))
             est = _gemini_estimate_cost_usd(
                 mid, b["prompt"], b["candidates"], b.get("thoughts", 0)
             )
             if est is not None:
                 any_price = True
                 grand_usd += est
-                lines.append(f"  推定料金(USD): ${est:.6f}")
-                lines.append(
-                    f"  推定料金(JPY・{GEMINI_JPY_PER_USD:.0f}円/USD): ¥{est * GEMINI_JPY_PER_USD:.2f}"
+                mrows.append(("推定USD", f"${est:.6f}"))
+                mrows.append(
+                    (
+                        "推定JPY",
+                        f"¥{est * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                    )
                 )
             else:
-                lines.append("  推定料金: （単価未登録モデル）")
+                mrows.append(("推定料金", "（単価未登録モデル）"))
+            lines.append("")
+            lines.extend(_gemini_kv_table_lines(f"【この実行・モデル別】", mrows))
         if any_price:
-            lines.append(f"【推定料金 合計(USD)】${grand_usd:.6f}")
-            lines.append(
-                f"【推定料金 合計(JPY)】¥{grand_usd * GEMINI_JPY_PER_USD:.2f}"
+            lines.append("")
+            lines.extend(
+                _gemini_kv_table_lines(
+                    "【この実行・推定料金合計】",
+                    [
+                        ("USD", f"${grand_usd:.6f}"),
+                        (
+                            "JPY",
+                            f"¥{grand_usd * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                        ),
+                    ],
+                )
             )
     else:
         lines.append(f"集計時刻: {ts}")
@@ -5393,43 +5428,61 @@ def build_gemini_usage_summary_text() -> str:
 
     if ct_tot > 0:
         lines.append("")
-        lines.append(
-            f"【累計】{GEMINI_USAGE_CUMULATIVE_JSON_FILE}（全実行・推定値・ファイル: API_Payment フォルダ）"
+        cum_hdr = (
+            f"【累計】{GEMINI_USAGE_CUMULATIVE_JSON_FILE} "
+            "（API_Payment フォルダ・全実行の推定値）"
         )
-        lines.append(f"  最終更新: {cum.get('updated_at') or '—'}")
         pt0 = int(cum.get("prompt_total") or 0)
         cc0 = int(cum.get("candidates_total") or 0)
         th0 = int(cum.get("thoughts_total") or 0)
         tt0 = int(cum.get("total_tokens_reported") or 0)
-        lines.append(
-            f"  呼出し {ct_tot:,} 回 / 入力 {pt0:,} / 出力 {cc0:,}"
-            + (f" / 思考 {th0:,}" if th0 else "")
-            + f" / total 報告 {tt0:,}"
-        )
+        cum_rows: list[tuple[str, str]] = [
+            ("最終更新", str(cum.get("updated_at") or "—")),
+            ("呼出し", f"{ct_tot:,} 回"),
+            ("入力トークン", f"{pt0:,}"),
+            ("出力トークン", f"{cc0:,}"),
+        ]
+        if th0:
+            cum_rows.append(("思考トークン", f"{th0:,}"))
+        cum_rows.append(("total 報告", f"{tt0:,}"))
         usd_all = float(cum.get("estimated_cost_usd_total") or 0.0)
         if usd_all > 0:
-            lines.append(f"  推定料金累計(USD): ${usd_all:.6f}")
-            lines.append(
-                f"  推定料金累計(JPY・{GEMINI_JPY_PER_USD:.0f}円/USD): ¥{usd_all * GEMINI_JPY_PER_USD:.2f}"
+            cum_rows.append(("推定USD 累計", f"${usd_all:.6f}"))
+            cum_rows.append(
+                (
+                    "推定JPY 累計",
+                    f"¥{usd_all * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                )
             )
+        lines.extend(_gemini_kv_table_lines(cum_hdr, cum_rows))
         bm = cum.get("by_model") or {}
         if isinstance(bm, dict) and bm:
             for mid in sorted(bm.keys()):
                 m = bm[mid]
                 if not isinstance(m, dict):
                     continue
-                lines.append(f"  --- 累計 モデル: {mid} ---")
-                lines.append(f"    呼出し: {int(m.get('calls') or 0):,} 回")
-                lines.append(f"    入力: {int(m.get('prompt') or 0):,} / 出力: {int(m.get('candidates') or 0):,}")
+                mrows2: list[tuple[str, str]] = [
+                    ("モデル", mid),
+                    ("呼出し", f"{int(m.get('calls') or 0):,} 回"),
+                    (
+                        "入力 / 出力",
+                        f"{int(m.get('prompt') or 0):,} / {int(m.get('candidates') or 0):,}",
+                    ),
+                ]
                 if int(m.get("thoughts") or 0):
-                    lines.append(f"    思考: {int(m.get('thoughts') or 0):,}")
+                    mrows2.append(("思考トークン", f"{int(m.get('thoughts') or 0):,}"))
                 mud = float(m.get("estimated_cost_usd") or 0.0)
                 if mud > 0:
-                    lines.append(f"    推定料金累計(USD): ${mud:.6f}")
-                    lines.append(
-                        f"    推定料金累計(JPY): ¥{mud * GEMINI_JPY_PER_USD:.2f}"
+                    mrows2.append(("推定USD 累計", f"${mud:.6f}"))
+                    mrows2.append(
+                        ("推定JPY 累計", f"¥{mud * GEMINI_JPY_PER_USD:.2f}")
                     )
-        lines.extend(_gemini_time_bucket_summary_lines(cum))
+                lines.append("")
+                lines.extend(_gemini_kv_table_lines("【累計・モデル別】", mrows2))
+        trend = _gemini_usage_trend_mini_lines(cum)
+        if trend:
+            lines.append("")
+            lines.extend(trend)
     return "\n".join(lines)
 
 
