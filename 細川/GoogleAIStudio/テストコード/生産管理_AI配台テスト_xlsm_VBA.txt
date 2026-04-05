@@ -3919,26 +3919,81 @@ Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis
     End Select
 End Function
 
+' DBG:agent session 17c9e8 — 長1行のログ呼び出しは貼り付けで欠けるため、短い行＋Call のみ使う
+Private Function AgentDbgEsc17(ByVal s As String) As String
+    AgentDbgEsc17 = Replace(Replace(s, "\", "\\"), """", "'")
+End Function
+
+Private Sub AgentDbgLog17(ByVal hypothesisId As String, ByVal loc As String, ByVal msg As String, Optional ByVal jsonTail As String = "{}")
+    On Error Resume Next
+    Dim fs As Object
+    Dim ts As Object
+    Dim p As String
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    p = ThisWorkbook.Path & "\..\..\..\debug-17c9e8.log"
+    Set ts = fs.OpenTextFile(p, 8, True)
+    If Err.Number <> 0 Then
+        Err.Clear
+        Set ts = Nothing
+        p = ThisWorkbook.Path & "\debug-17c9e8.log"
+        Set ts = fs.OpenTextFile(p, 8, True)
+    End If
+    If Err.Number <> 0 Then Exit Sub
+    ts.WriteLine "{""sessionId"":""17c9e8"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & AgentDbgEsc17(loc) & """,""message"":""" & AgentDbgEsc17(msg) & """,""data"":" & jsonTail & "}"
+    ts.Close
+End Sub
+
 ' C 列ドロップダウン用（入力規則の参照元。A〜D のデータ行とは別）
 Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
+    Dim dbg As String
+    dbg = "{""f1Merge"":""" & LCase(CStr(ws.Range("F1").MergeCells)) & """"
+    dbg = dbg & ",""c2Merge"":""" & LCase(CStr(ws.Range("C2").MergeCells)) & """}"
+    Call AgentDbgLog17("H3", "dropdown:entry", "start", dbg)
+    On Error GoTo DropFail
     ws.Range("F1").Value = "（C列リスト用）"
     ws.Range("F2").Value = "表示"
     ws.Range("F3").Value = "非表示"
     ws.Range("F4").Value = "完全非表示"
     ws.Columns(6).ColumnWidth = 14
+    Call AgentDbgLog17("H4", "dropdown:ok", "written_f1_f4", "{}")
+    Exit Sub
+DropFail:
+    dbg = "{""errNumber"":" & Err.Number & "}"
+    Call AgentDbgLog17("H4", "dropdown:fail", Err.Description, dbg)
+    Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
 
-' C2 以降に「表示/非表示/完全非表示」リストを付与（F2:F4 を参照）
+' C2 以降に「表示/非表示/完全非表示」リストを付与（同一シート上の F2:F4 を参照 =$F$2:$F$4）
 Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
     Dim rng As Range
-    Dim qn As String
+    Dim f1 As String
+    Dim eNum As Long
+    Dim eDesc As String
+    Dim dbg As String
     Set rng = ws.Range("C2:C1000")
+    dbg = "{""c2Merge"":""" & LCase(CStr(ws.Range("C2").MergeCells)) & """"
+    dbg = dbg & ",""protectContents"":""" & LCase(CStr(ws.ProtectContents)) & """}"
+    Call AgentDbgLog17("H3", "validation:pre_delete", rng.Address, dbg)
     On Error Resume Next
     rng.Validation.Delete
+    eNum = Err.Number
+    eDesc = Err.Description
+    Err.Clear
+    dbg = "{""errNumber"":" & eNum & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
+    Call AgentDbgLog17("H5", "validation:after_delete", "delete_result", dbg)
     On Error GoTo 0
-    qn = Replace(ws.Name, "'", "''")
-    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
-        Formula1:="='" & qn & "'!$F$2:$F$4"
+    f1 = "=$F$2:$F$4"
+    dbg = "{""formula1"":""" & AgentDbgEsc17(f1) & """}"
+    Call AgentDbgLog17("H2", "validation:before_add", "formula", dbg)
+    On Error Resume Next
+    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:=f1
+    eNum = Err.Number
+    eDesc = Err.Description
+    Err.Clear
+    dbg = "{""errNumber"":" & eNum & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
+    Call AgentDbgLog17("H2", "validation:after_add", "add_result", dbg)
+    On Error GoTo 0
+    If eNum <> 0 Then Err.Raise eNum, , eDesc
     rng.Validation.IgnoreBlank = True
     rng.Validation.InCellDropdown = True
 End Sub
@@ -3955,6 +4010,8 @@ Public Sub 設定_シート表示_シートを確保()
     Dim ws As Worksheet
     Dim sh As Worksheet
     Dim prevDA As Boolean
+    Dim dbgH1 As String
+    Dim dbgErr As String
 
     On Error GoTo ErrHandler
     prevDA = Application.DisplayAlerts
@@ -3979,6 +4036,10 @@ Public Sub 設定_シート表示_シートを確保()
 
     ws.Visible = xlSheetVisible
 
+    dbgH1 = "{""name"":""" & AgentDbgEsc17(ws.Name) & """"
+    dbgH1 = dbgH1 & ",""protectContents"":""" & LCase(CStr(ws.ProtectContents)) & """}"
+    Call AgentDbgLog17("H1", "sheet_ensure:pre_headers", "sheet_state", dbgH1)
+
     ws.Cells(1, 1).Value = "並び順"
     ws.Cells(1, 2).Value = "シート名"
     ws.Cells(1, 3).Value = "表示"
@@ -3995,6 +4056,8 @@ Public Sub 設定_シート表示_シートを確保()
     Application.DisplayAlerts = prevDA
     Exit Sub
 ErrHandler:
+    dbgErr = "{""errNumber"":" & Err.Number & "}"
+    Call AgentDbgLog17("ERR", "sheet_ensure:ErrHandler", Err.Description, dbgErr)
     Application.DisplayAlerts = prevDA
     Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
