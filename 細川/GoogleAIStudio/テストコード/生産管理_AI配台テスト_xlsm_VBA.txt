@@ -521,10 +521,9 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
             Application.Interactive = True
             unlockInteractiveForPoll = True
         End If
-        cmdLine = BuildStageExecCommandLine(cmdFilePath, False)
-        waitStyle = 1
-        Call AgentDebugNdjson0c572c("H3", "RunCmdFileStageExecAndPoll", "d3false_cmdline_reset", "{""hideArgBeforeReset"":" & LCase$(CStr(hideConsoleWindow)) & ",""headlessInLineAfterReset"":" & LCase$(CStr(InStr(1, cmdLine, "headless", vbTextCompare) > 0)) & "}")
-        If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 Then
+        ' hideConsoleWindow を維持（従来はここで False に上書きし STAGE12_CMD_HIDE_WINDOW が無効化されていた）
+        Call AgentDebugNdjson0c572c("H3", "RunCmdFileStageExecAndPoll", "d3false_keep_cmdline", "{""hideArg"":" & LCase$(CStr(hideConsoleWindow)) & ",""headlessInLine"":" & LCase$(CStr(InStr(1, cmdLine, "headless", vbTextCompare) > 0)) & "}")
+        If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 And Not hideConsoleWindow Then
             Dim overlayCmdLine As String
             overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
             Set execObj = wsh.Exec(overlayCmdLine)
@@ -681,12 +680,21 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
     ' D3=false: STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT かつスプラッシュ時のみオーバーレイ用 Exec。それ以外は同期 Run（ウィンドウレイアウトは OS 任せ）
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         Call AgentDebugNdjson0c572c("H4", "RunTempCmdWithConsoleLayout", "d3false_entry", "{""hideCmdWindow"":" & LCase$(CStr(hideCmdWindow)) & ",""applyTopQuarter"":" & LCase$(CStr(applyTopQuarterFullWidthConsole)) & "}")
-        If m_macroSplashShown And STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT Then
+        ' ログ枠オーバーレイは「見えるコンソール」前提。非表示指定時は D3=true 経路と同様に headless へ。
+        If m_macroSplashShown And STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT And Not hideCmdWindow Then
             Randomize
             uniq = "PM_AI_CMD_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
             batText = AugmentCmdBodyWithConsoleTitle(body, uniq)
             p = WriteTempCmdFile(batText)
             RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, False, False, True)
+        ElseIf hideCmdWindow Or applyTopQuarterFullWidthConsole Then
+            batText = body
+            If hideCmdWindow Then batText = EnsureStageBatchStdoutRedirect(batText)
+            Randomize
+            uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
+            batText = AugmentCmdBodyWithConsoleTitle(batText, uniq)
+            p = WriteTempCmdFile(batText)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow, False)
         Else
             p = WriteTempCmdFile(body)
             RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, "", False, False, False)
