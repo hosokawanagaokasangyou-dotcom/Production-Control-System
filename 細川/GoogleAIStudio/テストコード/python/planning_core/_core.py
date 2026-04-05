@@ -12054,6 +12054,49 @@ def _build_equipment_schedule_dataframe(
     結果_設備毎の時間割と同形式の DataFrame（10 分枠・設備列＋進度列）。
     first_eq_schedule_cell_by_task_id を渡したときのみ、初出セル座標を記録（結果ハイパーリンク用）。
     """
+    # #region agent log
+    try:
+        _agent_dbg_path0 = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-dfede8.log",
+            )
+        )
+        _kind_counts: dict[str, int] = {}
+        _missing_eff = 0
+        for _ev0 in timeline_events:
+            _k0 = str(_ev0.get("event_kind") or "").strip() or "machining_default"
+            _kind_counts[_k0] = _kind_counts.get(_k0, 0) + 1
+            if "eff_time_per_unit" not in _ev0:
+                _missing_eff += 1
+        with open(_agent_dbg_path0, "a", encoding="utf-8") as _f0:
+            _f0.write(
+                json.dumps(
+                    {
+                        "sessionId": "dfede8",
+                        "runId": "pre-fix",
+                        "hypothesisId": "D",
+                        "location": "_build_equipment_schedule_dataframe:entry",
+                        "message": "timeline summary",
+                        "data": {
+                            "event_kind_counts": _kind_counts,
+                            "events_missing_eff_time_per_unit": _missing_eff,
+                            "total_events": len(timeline_events),
+                        },
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
     for e in timeline_for_eq_grid:
@@ -12106,6 +12149,46 @@ def _build_equipment_schedule_dataframe(
                         break
 
                 if active_ev:
+                    # #region agent log
+                    try:
+                        _agent_dbg_path = os.path.normpath(
+                            os.path.join(
+                                os.path.dirname(__file__),
+                                "..",
+                                "..",
+                                "..",
+                                "..",
+                                "..",
+                                "debug-dfede8.log",
+                            )
+                        )
+                        _ek = str(active_ev.get("event_kind") or "").strip()
+                        _payload = {
+                            "sessionId": "dfede8",
+                            "runId": "pre-fix",
+                            "hypothesisId": "A",
+                            "location": "_build_equipment_schedule_dataframe:active_ev",
+                            "message": "slot active event",
+                            "data": {
+                                "eq": str(eq)[:80],
+                                "event_kind": _ek or "(default machining)",
+                                "has_eff_time_per_unit": "eff_time_per_unit"
+                                in active_ev,
+                                "has_units_done": "units_done" in active_ev,
+                                "machine": str(active_ev.get("machine") or "")[:80],
+                                "task_id": str(active_ev.get("task_id") or "")[:40],
+                            },
+                            "timestamp": int(time_module.time() * 1000),
+                        }
+                        with open(
+                            _agent_dbg_path, "a", encoding="utf-8"
+                        ) as _agent_f:
+                            _agent_f.write(
+                                json.dumps(_payload, ensure_ascii=False) + "\n"
+                            )
+                    except Exception:
+                        pass
+                    # #endregion
                     if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
                         eq_text = "休憩"
                     else:
