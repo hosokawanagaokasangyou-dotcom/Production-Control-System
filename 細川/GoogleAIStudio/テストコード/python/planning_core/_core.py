@@ -741,50 +741,6 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             pass
 
 
-# region agent log
-_AGENT_DBG497_MAX = 12
-_AGENT_DBG497_COUNT = 0
-
-
-def _agent_dbg497_ndjson(payload: dict) -> None:
-    global _AGENT_DBG497_COUNT
-    if _AGENT_DBG497_COUNT >= _AGENT_DBG497_MAX:
-        return
-    try:
-        _root = os.path.dirname(os.path.abspath(__file__))
-        log_path = None
-        for _ in range(16):
-            if os.path.isdir(os.path.join(_root, ".git")):
-                log_path = os.path.join(_root, "debug-497ff0.log")
-                break
-            _par = os.path.dirname(_root)
-            if _par == _root:
-                break
-            _root = _par
-        if not log_path:
-            log_path = os.path.join(os.getcwd(), "debug-497ff0.log")
-        payload = dict(payload)
-        payload["sessionId"] = "497ff0"
-        payload.setdefault("timestamp", int(time_module.time() * 1000))
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-        _AGENT_DBG497_COUNT += 1
-    except Exception:
-        pass
-
-
-def _agent_dbg497_y416_sec_apr8(task_id: object, machine: object, cur: date) -> bool:
-    return (
-        str(task_id or "").strip() == "Y4-16"
-        and "SEC" in str(machine or "").strip().upper()
-        and cur.month == 4
-        and cur.day == 8
-    )
-
-
-# endregion agent log
-
-
 # True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -14696,54 +14652,6 @@ def _assign_one_roll_trial_order_flow(
                 "combo_sheet_row_id": _lcid,
                 "combo_preset_team": tuple(best_c["team"]),
             }
-    # region agent log
-    if _agent_dbg497_y416_sec_apr8(task.get("task_id"), machine, current_date):
-        _wt = tuple(best_c["team"])
-        _ws = best_c["team_start"]
-        _ranked = sorted(team_candidates, key=_team_cand_key)
-        _rows = []
-        for i, c in enumerate(_ranked):
-            _k = _team_cand_key(c)
-            _rows.append(
-                {
-                    "rank_lex": i,
-                    "combo_sheet_row_id": c.get("combo_sheet_row_id"),
-                    "team": list(c["team"]),
-                    "team_start": str(c["team_start"]),
-                    "prio_sum": c["prio_sum"],
-                    "len_team": len(c["team"]),
-                    "sort_tuple": list(_k),
-                    "same_as_winner": tuple(c["team"]) == _wt
-                    and c["team_start"] == _ws,
-                }
-            )
-        _agent_dbg497_ndjson(
-            {
-                "hypothesisId": "H1_tuple_rank",
-                "location": "_assign_one_roll_trial_order_flow:after_best",
-                "message": "Y4-16 SEC 4/8: team_candidates sorted by _team_assignment_sort_tuple (lex smallest wins)",
-                "data": {
-                    "t_min": str(t_min),
-                    "n_candidates": len(team_candidates),
-                    "preset_combo_ids_in_candidates": sorted(
-                        {
-                            x
-                            for c in team_candidates
-                            if (x := c.get("combo_sheet_row_id")) is not None
-                        },
-                        key=str,
-                    ),
-                    "combo_key_assign": combo_key_assign,
-                    "winner_combo_sheet_row_id": best_c.get("combo_sheet_row_id"),
-                    "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF": TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF,
-                    "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES": _team_assign_start_slack_wait_minutes(),
-                    "team_assign_tuple_label": _team_assign_trace_tuple_label(),
-                    "candidates_ranked": _rows,
-                },
-                "runId": "investigate-y416-28",
-            }
-        )
-    # endregion agent log
     return {
         **best_c,
         "extra_max": extra_max,
