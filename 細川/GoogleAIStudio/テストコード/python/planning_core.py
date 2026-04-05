@@ -77,7 +77,6 @@ import sys
 import ctypes
 from contextlib import contextmanager
 from openpyxl import load_workbook
-from openpyxl.chart import LineChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
@@ -368,7 +367,7 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# メインシート・Gemini 日次推移（openpyxl: Q〜R に系列データ、T16 付近に折れ線グラフ）
+# メインシート・Gemini 日次推移（xlwings: Q〜R に系列データ、T16 付近に折れ線グラフ）
 GEMINI_USAGE_CHART_COL_DATE = 17  # Q
 GEMINI_USAGE_CHART_COL_VALUE = 18  # R
 GEMINI_USAGE_CHART_HEADER_ROW = 16
@@ -5271,89 +5270,6 @@ def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
     return lines
 
 
-def _gemini_chart_is_managed_line_chart(ch: object) -> bool:
-    """当機能が Q〜R 列データで貼った折れ線グラフか（再実行時の削除用・ヒューリスティック）。"""
-    if not isinstance(ch, LineChart):
-        return False
-    try:
-        for ser in ch.series:
-            v = getattr(ser, "val", None)
-            if v is None:
-                continue
-            if int(getattr(v, "min_col", 0) or 0) == GEMINI_USAGE_CHART_COL_VALUE:
-                return True
-    except (TypeError, ValueError, AttributeError):
-        pass
-    return False
-
-
-def _strip_managed_gemini_usage_charts(ws) -> None:
-    charts = getattr(ws, "_charts", None)
-    if not charts:
-        return
-    for ch in list(charts):
-        if _gemini_chart_is_managed_line_chart(ch):
-            charts.remove(ch)
-
-
-def _apply_main_sheet_gemini_usage_chart(ws_main, cum: dict) -> None:
-    """Q〜R に日次系列を書き、T16 付近へ折れ線グラフを 1 本だけ置く。"""
-    hr = GEMINI_USAGE_CHART_HEADER_ROW
-    cdt = GEMINI_USAGE_CHART_COL_DATE
-    cvl = GEMINI_USAGE_CHART_COL_VALUE
-    nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
-    for i in range(nclear):
-        r = hr + i
-        ws_main.cell(row=r, column=cdt, value=None)
-        ws_main.cell(row=r, column=cvl, value=None)
-
-    ser = _gemini_daily_trend_series(cum)
-    _strip_managed_gemini_usage_charts(ws_main)
-    if ser is None:
-        return
-
-    day_keys, values, val_label = ser
-    n = len(day_keys)
-    if n <= 0:
-        return
-
-    ws_main.cell(row=hr, column=cdt, value="日付")
-    ws_main.cell(row=hr, column=cvl, value=val_label)
-    for i, (dk, val) in enumerate(zip(day_keys, values)):
-        r = hr + 1 + i
-        ws_main.cell(row=r, column=cdt, value=dk)
-        c = ws_main.cell(row=r, column=cvl, value=val)
-        if val_label == "推定USD":
-            c.number_format = "0.000000"
-        else:
-            c.number_format = "0"
-
-    data_ref = Reference(
-        ws_main,
-        min_col=cvl,
-        min_row=hr,
-        max_col=cvl,
-        max_row=hr + n,
-    )
-    cats = Reference(
-        ws_main,
-        min_col=cdt,
-        min_row=hr + 1,
-        max_row=hr + n,
-    )
-    chart = LineChart()
-    chart.title = "Gemini API 日次推移"
-    chart.style = 2
-    chart.y_axis.title = val_label
-    chart.x_axis.title = "日付"
-    chart.legend = None
-    chart.width = 14.5
-    chart.height = 7.2
-    chart.add_data(data_ref, titles_from_data=True)
-    chart.set_categories(cats)
-    ws_main.add_chart(chart, GEMINI_USAGE_CHART_ANCHOR_CELL)
-
-
 def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
     """xlwings Book からメイン相当シートを返す。無ければ None。"""
     for name in ("メイン", "メイン_", "Main"):
@@ -5746,107 +5662,20 @@ def build_gemini_usage_summary_text() -> str:
     return "\n".join(lines)
 
 
-def _write_main_sheet_gemini_usage_via_openpyxl(
-    macro_wb_path: str, text: str, log_prefix: str
-) -> bool:
-    """メインシート P 列 16 行目以降に Gemini サマリを openpyxl で書き save する（ブックが閉じているとき）。"""
-    if _workbook_should_skip_openpyxl_io(macro_wb_path):
-        logging.info(
-            "%s: ブックに「%s」があるため openpyxl でメイン P 列へ書き込みません。",
-            log_prefix,
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-        )
-        return False
-    keep_vba = str(macro_wb_path).lower().endswith(".xlsm")
-    start_r, col_p, clear_n = 16, 16, 120
-    wb = None
-    try:
-        wb = load_workbook(
-            macro_wb_path, keep_vba=keep_vba, read_only=False, data_only=False
-        )
-    except Exception as ex:
-        logging.info(
-            "%s: メイン P 列への openpyxl 書込のためブックを開けません（Excel で開きっぱなし等）: %s",
-            log_prefix,
-            ex,
-        )
-        return False
-    try:
-        ws_main = None
-        for name in ("メイン", "メイン_", "Main"):
-            if name in wb.sheetnames:
-                ws_main = wb[name]
-                break
-        if ws_main is None:
-            for sn in wb.sheetnames:
-                if "メイン" in str(sn):
-                    ws_main = wb[sn]
-                    break
-        if ws_main is None:
-            logging.info(
-                "%s: メインシートが無いため openpyxl での AI サマリをスキップしました。",
-                log_prefix,
-            )
-            return False
-        last_clear = start_r + clear_n - 1
-        for i in range(clear_n):
-            ws_main.cell(row=start_r + i, column=col_p, value=None)
-        lines = text.split("\n") if (text or "").strip() else []
-        for i, line in enumerate(lines):
-            if i >= clear_n:
-                break
-            cell = ws_main.cell(row=start_r + i, column=col_p, value=line)
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-        try:
-            _apply_main_sheet_gemini_usage_chart(
-                ws_main, _load_gemini_cumulative_payload()
-            )
-        except Exception as ex:
-            logging.debug(
-                "%s: メイン Gemini 推移グラフの更新で例外（続行）: %s", log_prefix, ex
-            )
-        wb.save(macro_wb_path)
-        logging.info(
-            "%s: メインシート P%d 以降に AI 利用サマリを openpyxl で保存しました。",
-            log_prefix,
-            start_r,
-        )
-        return True
-    except Exception as ex:
-        logging.warning(
-            "%s: メイン AI サマリの openpyxl 保存に失敗: %s", log_prefix, ex
-        )
-        return False
-    finally:
-        if wb is not None:
-            try:
-                wb.close()
-            except Exception:
-                pass
-
-
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 利用サマリを log に書き、openpyxl または xlwings でメイン P 列・推移グラフへ保存。"""
+    """Gemini 利用サマリを log に書き、xlwings でメイン P 列・推移グラフへ保存（開いているブック向け）。"""
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
-    disk_ok = False
     xw_ok = False
     if wb_path and os.path.isfile(wb_path):
         try:
-            disk_ok = _write_main_sheet_gemini_usage_via_openpyxl(
+            xw_ok = _write_main_sheet_gemini_usage_via_xlwings(
                 wb_path, text, log_prefix
             )
         except Exception as ex:
-            logging.warning("%s: AI サマリの openpyxl 書き込みで例外: %s", log_prefix, ex)
-        if not disk_ok:
-            try:
-                xw_ok = _write_main_sheet_gemini_usage_via_xlwings(
-                    wb_path, text, log_prefix
-                )
-            except Exception as ex:
-                logging.warning(
-                    "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
-                )
+            logging.warning(
+                "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
+            )
     try:
         os.makedirs(log_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as f:
@@ -5859,11 +5688,11 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
         logging.debug("Gemini バケット CSV 出力で例外（続行）: %s", ex)
-    if disk_ok or xw_ok:
+    if xw_ok:
         return
     if text.strip():
         logging.info(
-            "%s: メイン P 列・グラフは openpyxl / xlwings どちらでも保存できませんでした。"
+            "%s: メイン P 列・グラフを xlwings で保存できませんでした。"
             " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
             log_prefix,
             path,
