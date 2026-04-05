@@ -94,6 +94,7 @@ Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
 Private Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
+' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
 Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
@@ -137,7 +138,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
-' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
+' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW（シートまたは OS 環境・既定1）=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
 '   ・import 解決のため RunPython 文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
@@ -197,6 +198,59 @@ Private m_splashLastLogSnapshot As String
 Private m_splashConsoleOverlayActive As Boolean
 ' 結果_設備ガント：選択中データ行の太枠（Interior は触らない）
 Private mGanttHL_SheetName As String
+
+' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
+Private Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(s))
+    If Len(t) = 0 Then ParseStage12CmdHideWindowBool = defaultVal: Exit Function
+    If t = "1" Or t = "true" Or t = "yes" Or t = "on" Or t = "y" Then
+        ParseStage12CmdHideWindowBool = True
+        Exit Function
+    End If
+    If t = "0" Or t = "false" Or t = "no" Or t = "off" Or t = "n" Then
+        ParseStage12CmdHideWindowBool = False
+        Exit Function
+    End If
+    If Trim$(s) = "はい" Then ParseStage12CmdHideWindowBool = True: Exit Function
+    If Trim$(s) = "いいえ" Then ParseStage12CmdHideWindowBool = False: Exit Function
+    ParseStage12CmdHideWindowBool = defaultVal
+End Function
+
+Private Function Stage12CmdHideWindowEffective() As Boolean
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim lastRow As Long
+    Dim cellKey As String
+    Dim v As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastRow >= 2 Then
+            For r = 2 To lastRow
+                cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
+                If Len(cellKey) > 0 And Left$(cellKey, 1) <> "#" Then
+                    If StrComp(cellKey, "STAGE12_CMD_HIDE_WINDOW", vbTextCompare) = 0 Then
+                        v = Trim$(CStr(ws.Cells(r, 2).Value))
+                        If Len(v) > 0 Then
+                            Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
+                            Exit Function
+                        End If
+                        Exit For
+                    End If
+                End If
+            Next r
+        End If
+    End If
+    v = Trim$(Environ("STAGE12_CMD_HIDE_WINDOW"))
+    If Len(v) > 0 Then
+        Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
+        Exit Function
+    End If
+    Stage12CmdHideWindowEffective = STAGE12_CMD_HIDE_WINDOW
+End Function
 Private mGanttHL_Row As Long
 Private mGanttHL_LastCol As Long
 
@@ -3779,6 +3833,7 @@ Public Sub 設定_環境変数_シートを確保()
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TASK_PLAN_SHEET", "", "配台計画シート名（空なら既定 配台計画_タスク入力）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1", "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0", "1=依頼NO直列")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE12_CMD_HIDE_WINDOW", "1", "段階1/2: cmd 1=非表示(既定) 0=画面上部にコンソール")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1", "§B-2/§B-3 設備占有（0 で無効）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1", "B-2/3 ECと後続の担当者分離（0 で無効）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0", "1=人数最優先（従来）")
@@ -4529,6 +4584,8 @@ Private Sub 段階1_コア実行()
         m_lastStage1ExitCode = exitCode
         MacroSplash_LoadExecutionLogFromPath targetDir & "\log\execution_log.txt"
     Else
+        Dim hideStage12CmdSt1 As Boolean
+        hideStage12CmdSt1 = Stage12CmdHideWindowEffective()
         wsh.CurrentDirectory = Environ("TEMP")
         ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
         ' 進捗表示は execution_log.txt のポーリングのみ（PM_AI_SPLASH_XLWINGS は使わない＝二重表示防止）
@@ -4545,7 +4602,7 @@ Private Sub 段階1_コア実行()
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane
-        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideStage12CmdSt1, hideStage12CmdSt1)
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage1ExitCode = exitCode
@@ -5336,6 +5393,8 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         m_lastStage2ExitCode = exitCode
         MacroSplash_LoadExecutionLogFromPath targetDir & "\log\execution_log.txt"
     Else
+        Dim hideStage12CmdSt2 As Boolean
+        hideStage12CmdSt2 = Stage12CmdHideWindowEffective()
         runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
@@ -5346,7 +5405,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
                  "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
                  "(echo !STAGE2_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf
         ' コンソール表示時のみ: Python 失敗後にウィンドウがすぐ閉じないよう pause（非表示・headless では付けない）
-        If Not STAGE12_CMD_HIDE_WINDOW Then
+        If Not hideStage12CmdSt2 Then
             runBat = runBat & "if not !STAGE2_PY_EXIT! equ 0 (" & vbCrLf & _
                      "echo." & vbCrLf & _
                      "echo [stage2] Python error. Press any key to close this window..." & vbCrLf & _
@@ -5358,7 +5417,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane
-        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not STAGE12_CMD_HIDE_WINDOW, STAGE12_CMD_HIDE_WINDOW)
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideStage12CmdSt2, hideStage12CmdSt2)
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage2ExitCode = exitCode
