@@ -13398,22 +13398,31 @@ def _append_changeover_segments_to_timeline(
     task_id: str,
     machine_occ_key: str,
     segments: list[dict],
+    machining_lead_op: str | None = None,
 ) -> None:
     """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映（各セグメントは主担当1名のみ）。"""
+    _lead_m = str(machining_lead_op or "").strip()
     for seg in segments or []:
-        op = str(seg.get("op") or "").strip()
+        op_seg = str(seg.get("op") or "").strip()
         st = seg.get("start_dt")
         ed = seg.get("end_dt")
         if not isinstance(st, datetime) or not isinstance(ed, datetime):
             continue
         m_line = str(seg.get("machine") or "").strip()
         m_occ = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
+        ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_CHANGEOVER_PREP
+        if _lead_m and ek in (
+            TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+            TIMELINE_EVENT_CHANGEOVER_PREP,
+        ):
+            op = _lead_m if _lead_m in daily_status else op_seg
+        else:
+            op = op_seg
         br_seg: list = []
         if op:
             br_seg = merge_time_intervals(
                 list(daily_status.get(op, {}).get("breaks_dt") or [])
             )
-        ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_CHANGEOVER_PREP
         ev = {
             "date": current_date,
             "task_id": task_id,
@@ -14493,6 +14502,7 @@ def _trial_order_first_schedule_pass(
                 task_id=str(task.get("task_id") or ""),
                 machine_occ_key=machine_occ_key,
                 segments=list(res.get("changeover_segments") or []),
+                machining_lead_op=str(lead_op or "").strip() or None,
             )
             timeline_events.append(
                 {
@@ -16293,6 +16303,10 @@ def _generate_plan_impl():
                                 task_id=str(task.get("task_id") or ""),
                                 machine_occ_key=machine_occ_key,
                                 segments=list(_co_segs_legacy or []),
+                                machining_lead_op=str(
+                                    best_info.get("op") or ""
+                                ).strip()
+                                or None,
                             )
                             timeline_events.append({
                                 "date": current_date, "task_id": task['task_id'], "machine": eq_line,
