@@ -53,7 +53,7 @@ Private Const MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS As Long = 400
 ' Ctrl+Shift+テンキー - → メインへ（Application.OnKey）。{109}=vbKeySubtract（テンキー -）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 
-' メインシート（「メイン」「Main」、または名前に「メイン」を含む）を取得
+' メインシート（「メイン」「メイン_」「Main」、または名前に「メイン」を含む）を取得
 ' ※「〇月メインカレンダー」等を誤採用しないよう、名前に「カレンダー」を含むシートはフォールバック対象外。
 ' ※複数候補があるときはシート名が最短のものを優先（先頭一致のブックで誤った長い名前を避ける）。
 Private Function MasterGetMainWorksheet(ByVal wb As Workbook) As Worksheet
@@ -63,6 +63,13 @@ Private Function MasterGetMainWorksheet(ByVal wb As Workbook) As Worksheet
     Dim L As Long
     On Error Resume Next
     Set ws = wb.Worksheets("メイン")
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        Set MasterGetMainWorksheet = ws
+        Exit Function
+    End If
+    On Error Resume Next
+    Set ws = wb.Worksheets("メイン_")
     On Error GoTo 0
     If Not ws Is Nothing Then
         Set MasterGetMainWorksheet = ws

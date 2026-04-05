@@ -1057,6 +1057,7 @@ Private Function マスタブック_メイン設定シートを取得(ByVal wb A
     If wb Is Nothing Then Exit Function
     On Error Resume Next
     Set ws = wb.Worksheets("メイン")
+    If ws Is Nothing Then Set ws = wb.Worksheets("メイン_")
     If ws Is Nothing Then Set ws = wb.Worksheets("Main")
     On Error GoTo 0
     If Not ws Is Nothing Then
@@ -1705,6 +1706,9 @@ Private Function GetMainWorksheet() As Worksheet
     Set wb = ThisWorkbook
     On Error Resume Next
     Set GetMainWorksheet = wb.Worksheets("メイン")
+    If Err.Number = 0 And Not GetMainWorksheet Is Nothing Then Exit Function
+    Err.Clear
+    Set GetMainWorksheet = wb.Worksheets("メイン_")
     If Err.Number = 0 And Not GetMainWorksheet Is Nothing Then Exit Function
     Err.Clear
     Set GetMainWorksheet = wb.Worksheets("Main")

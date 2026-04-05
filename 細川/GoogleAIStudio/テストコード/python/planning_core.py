@@ -2689,7 +2689,7 @@ def _main_sheet_cell_is_global_comment_label(val) -> bool:
 def load_main_sheet_global_priority_override_text() -> str:
     """
     TASK_INPUT_WORKBOOK のメインシートで「グローバルコメント」と書かれたセルの **直下** を読む。
-    シート名: 「メイン」「Main」、または名前に「メイン」を含む（VBA GetMainWorksheet と同趣旨）。
+    シート名: 「メイン」「メイン_」「Main」のいずれか、または名前に「メイン」を含む（VBA GetMainWorksheet と同趣旨）。
 
     内容は **Gemini で一括解釈**（`analyze_global_priority_override_comment`）。工場休業日・再優先フラグ・未実装指示のメモを JSON 化する。
     API キーが無い場合のみ、工場休業日はルールベースの `parse_factory_closure_dates_from_global_comment` で補完する。
@@ -2710,7 +2710,7 @@ def load_main_sheet_global_priority_override_text() -> str:
         return ""
     try:
         ws = None
-        for name in ("メイン", "Main"):
+        for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
                 ws = wb[name]
                 break
@@ -5460,7 +5460,7 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
         return False
     try:
         ws_main = None
-        for name in ("メイン", "Main"):
+        for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
                 ws_main = wb[name]
                 break
@@ -10580,7 +10580,7 @@ def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
     「〇月メインカレンダー」等を誤採用しないよう「カレンダー」を含む名前は除外し、
     複数候補はシート名が最短のものを優先する。
     """
-    for prefer in ("メイン", "Main"):
+    for prefer in ("メイン", "メイン_", "Main"):
         if prefer in sheetnames:
             return prefer
     cand = [sn for sn in sheetnames if "メイン" in sn and "カレンダー" not in sn]
