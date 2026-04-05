@@ -12079,7 +12079,7 @@ def _build_equipment_schedule_dataframe(
                 json.dumps(
                     {
                         "sessionId": "dfede8",
-                        "runId": "pre-fix",
+                        "runId": "post-fix",
                         "hypothesisId": "D",
                         "location": "_build_equipment_schedule_dataframe:entry",
                         "message": "timeline summary",
@@ -12149,6 +12149,19 @@ def _build_equipment_schedule_dataframe(
                         break
 
                 if active_ev:
+                    _use_prog = (
+                        _is_machining_timeline_event(active_ev)
+                        and all(
+                            k in active_ev
+                            for k in (
+                                "eff_time_per_unit",
+                                "units_done",
+                                "total_units",
+                                "already_done_units",
+                            )
+                        )
+                        and float(active_ev.get("eff_time_per_unit") or 0) > 0
+                    )
                     # #region agent log
                     try:
                         _agent_dbg_path = os.path.normpath(
@@ -12165,7 +12178,7 @@ def _build_equipment_schedule_dataframe(
                         _ek = str(active_ev.get("event_kind") or "").strip()
                         _payload = {
                             "sessionId": "dfede8",
-                            "runId": "pre-fix",
+                            "runId": "post-fix",
                             "hypothesisId": "A",
                             "location": "_build_equipment_schedule_dataframe:active_ev",
                             "message": "slot active event",
@@ -12175,6 +12188,7 @@ def _build_equipment_schedule_dataframe(
                                 "has_eff_time_per_unit": "eff_time_per_unit"
                                 in active_ev,
                                 "has_units_done": "units_done" in active_ev,
+                                "use_progress_path": _use_prog,
                                 "machine": str(active_ev.get("machine") or "")[:80],
                                 "task_id": str(active_ev.get("task_id") or "")[:40],
                             },
@@ -12191,6 +12205,23 @@ def _build_equipment_schedule_dataframe(
                     # #endregion
                     if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
                         eq_text = "休憩"
+                    elif not _use_prog:
+                        _ek_disp = _timeline_event_kind(active_ev)
+                        _tag = {
+                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
+                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "依頼切替後始末",
+                            TIMELINE_EVENT_CHANGEOVER_PREP: "加工前準備",
+                        }.get(
+                            _ek_disp,
+                            "セットアップ",
+                        )
+                        _sub_n = str(active_ev.get("sub") or "").strip()
+                        _sub_text = f" 補:{_sub_n}" if _sub_n else ""
+                        _tid_d = str(active_ev.get("task_id") or "").strip()
+                        eq_text = (
+                            f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
+                        )
+                        progress_text = ""
                     else:
                         elapsed = get_actual_work_minutes(
                             active_ev["start_dt"],
