@@ -9071,7 +9071,8 @@ DEFAULT_BREAKS = [
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
-# 休憩: 開始が休憩帯内は不可。休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
+# 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
+# 休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
 # （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES は廃止・無視）
 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
     0,
@@ -9135,9 +9136,9 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     """
     - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
       remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
-    - 試行開始が休憩帯内のときは当日不可（None）。休憩直前の繰り下げ・3ロール縛りは行わない。
+    - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
+      繰り下げのあと終業超過・EOD デファーに該当すれば None。
     """
-    ts = refloor_fn(team_start)
     _tid = str(task.get("task_id", "") or "").strip()
     _team_txt = ", ".join(str(x) for x in team) if team else "—"
 
@@ -9151,50 +9152,65 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             *a,
         )
 
-    if ts >= team_end_limit:
-        _trace_block(
-            "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
-            task.get("machine"),
-            _team_txt,
-            float(task.get("remaining_units") or 0),
-            ts,
-            team_end_limit,
-        )
-        return None
-
-    gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
-    rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
-    if (
-        gap_end > 0
-        and (team_end_limit - ts) <= timedelta(minutes=gap_end)
-        and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
-    ):
-        _trace_block(
-            "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
-            task.get("machine"),
-            _team_txt,
-            rem_ceil,
-            ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
-            ts,
-            team_end_limit,
-            gap_end,
-        )
-        return None
-
-    for bs, be in team_breaks:
-        if bs <= ts < be:
+    ts = refloor_fn(team_start)
+    for _ in range(64):
+        if ts >= team_end_limit:
             _trace_block(
-                "開始不可(休憩帯内) machine=%s team=%s rem=%.4f break=%s-%s trial_start=%s",
+                "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
-                bs,
-                be,
                 ts,
+                team_end_limit,
             )
             return None
 
-    return ts
+        break_end = None
+        for bs, be in team_breaks:
+            if bs <= ts < be:
+                break_end = be
+                break
+        if break_end is not None:
+            _trace_block(
+                "休憩帯内のため終了へ繰り下げ machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
+                task.get("machine"),
+                _team_txt,
+                float(task.get("remaining_units") or 0),
+                break_end,
+                ts,
+            )
+            ts = refloor_fn(break_end)
+            continue
+
+        gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
+        rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
+        if (
+            gap_end > 0
+            and (team_end_limit - ts) <= timedelta(minutes=gap_end)
+            and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
+        ):
+            _trace_block(
+                "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
+                task.get("machine"),
+                _team_txt,
+                rem_ceil,
+                ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                ts,
+                team_end_limit,
+                gap_end,
+            )
+            return None
+
+        return ts
+
+    _trace_block(
+        "開始不可(休憩繰り下げ打切り) machine=%s team=%s rem=%.4f trial_start=%s",
+        task.get("machine"),
+        _team_txt,
+        float(task.get("remaining_units") or 0),
+        ts,
+    )
+    return None
 
 
 def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
