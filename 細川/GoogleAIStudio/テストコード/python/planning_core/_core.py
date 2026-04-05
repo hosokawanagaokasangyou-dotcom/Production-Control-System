@@ -13118,44 +13118,9 @@ def _machine_effective_floor_timedelta_only(
         if cu:
             mf = mf + timedelta(minutes=cu)
     prep, _ = _lookup_changeover_minutes_for_eq(eq_line, changeover_by_eq)
-    _pt_td = str(prev_tid or "").strip()
-    _ct_td = str(cur_tid or "").strip()
-    need_prep_td = prep > 0 and (not _pt_td or _pt_td != _ct_td)
-    # #region agent log
-    if prep > 0:
-        try:
-            _agent_td = {
-                "sessionId": "dfede8",
-                "runId": "post-fix",
-                "hypothesisId": "D",
-                "location": "_machine_effective_floor_timedelta_only:prep",
-                "message": "timedelta prep gate",
-                "data": {
-                    "machine_occ_key": str(machine_occ_key or "")[:80],
-                    "prev_tid": _pt_td[:50],
-                    "cur_tid": _ct_td[:50],
-                    "prep_min": prep,
-                    "need_prep_td": need_prep_td,
-                },
-                "timestamp": int(time_module.time() * 1000),
-            }
-            _apath_td = os.path.normpath(
-                os.path.join(
-                    os.path.dirname(__file__),
-                    "..",
-                    "..",
-                    "..",
-                    "..",
-                    "..",
-                    "debug-dfede8.log",
-                )
-            )
-            with open(_apath_td, "a", encoding="utf-8") as _tf:
-                _tf.write(json.dumps(_agent_td, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-    # #endregion
-    if need_prep_td:
+    _pt = str(prev_tid or "").strip()
+    _ct = str(cur_tid or "").strip()
+    if prep > 0 and (not _pt or _pt != _ct):
         mf = mf + timedelta(minutes=prep)
     return mf
 
@@ -13260,41 +13225,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
 
     _lt_s = str(last_tid or "").strip()
     need_prep = prep > 0 and (not _lt_s or _lt_s != cur_tid)
-    # #region agent log
-    if prep > 0:
-        try:
-            _agent_p = {
-                "sessionId": "dfede8",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "_changeover_plan_segments:prep_gate",
-                "message": "prep segment gate",
-                "data": {
-                    "mach_occ": mach_occ[:80],
-                    "last_tid": _lt_s[:50],
-                    "cur_tid": cur_tid[:50],
-                    "prep_min": prep,
-                    "same_request_continuing": bool(cur_tid) and _lt_s == cur_tid,
-                    "need_prep": need_prep,
-                },
-                "timestamp": int(time_module.time() * 1000),
-            }
-            _apath = os.path.normpath(
-                os.path.join(
-                    os.path.dirname(__file__),
-                    "..",
-                    "..",
-                    "..",
-                    "..",
-                    "..",
-                    "debug-dfede8.log",
-                )
-            )
-            with open(_apath, "a", encoding="utf-8") as _af:
-                _af.write(json.dumps(_agent_p, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-    # #endregion
     if need_prep:
         pe, act, rem = calculate_end_time(t, prep, br_r, end_r)
         if rem > 0 or act < prep:
