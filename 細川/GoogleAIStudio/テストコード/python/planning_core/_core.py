@@ -629,6 +629,48 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
+# #region agent log
+_AGENT_DBG_SESSION = "57b151"
+_AGENT_DBG_FOCUS_DAY_ISO = "2026-04-08"
+_AGENT_DBG_FOCUS_TID = "Y4-16"
+
+
+def _agent_dbg_dispatch_session(
+    *,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+    current_date: date | None = None,
+    task_id: str | None = None,
+    run_id: str = "pre-fix",
+) -> None:
+    """debug session: Y4-16 × 2026-04-08 の実行証跡を workspace/debug-57b151.log へ NDJSON で追記。"""
+    if current_date is None or current_date.isoformat() != _AGENT_DBG_FOCUS_DAY_ISO:
+        return
+    if task_id is not None and str(task_id).strip() != _AGENT_DBG_FOCUS_TID:
+        return
+    _root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+    )
+    _path = os.path.join(_root, "debug-57b151.log")
+    _rec = {
+        "sessionId": _AGENT_DBG_SESSION,
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time_module.time() * 1000),
+    }
+    try:
+        with open(_path, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+# #endregion
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
 # 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
@@ -13811,6 +13853,16 @@ def _trial_order_flow_eligible_tasks(
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
+            # #region agent log
+            _agent_dbg_dispatch_session(
+                hypothesis_id="H3",
+                location="_core.py:_trial_order_flow_eligible_tasks",
+                message="skip same_request_dependency",
+                data={"machine": task.get("machine"), "trial": task.get("dispatch_trial_order")},
+                current_date=current_date,
+                task_id=str(task.get("task_id", "") or ""),
+            )
+            # #endregion
             continue
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
@@ -13820,6 +13872,20 @@ def _trial_order_flow_eligible_tasks(
             )
             <= 1e-12
         ):
+            # #region agent log
+            _agent_dbg_dispatch_session(
+                hypothesis_id="H4",
+                location="_core.py:_trial_order_flow_eligible_tasks",
+                message="skip roll_pipeline no assign room",
+                data={
+                    "room": _roll_pipeline_inspection_assign_room(
+                        task_queue, str(task.get("task_id", "") or "").strip()
+                    ),
+                },
+                current_date=current_date,
+                task_id=str(task.get("task_id", "") or ""),
+            )
+            # #endregion
             continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
@@ -13827,6 +13893,16 @@ def _trial_order_flow_eligible_tasks(
                 _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
+                # #region agent log
+                _agent_dbg_dispatch_session(
+                    hypothesis_id="H5",
+                    location="_core.py:_trial_order_flow_eligible_tasks",
+                    message="skip b1 exclusive other holder",
+                    data={"holder": _b1_holder.get("task_id")},
+                    current_date=current_date,
+                    task_id=str(task.get("task_id", "") or ""),
+                )
+                # #endregion
                 continue
         machine = task["machine"]
         eq_line = str(
@@ -13840,6 +13916,16 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
+            # #region agent log
+            _agent_dbg_dispatch_session(
+                hypothesis_id="H6",
+                location="_core.py:_trial_order_flow_eligible_tasks",
+                message="skip lower dispatch_trial still pending same equipment",
+                data={"mocc": _mocc_trial, "my_order": _my_dispatch_ord},
+                current_date=current_date,
+                task_id=str(task.get("task_id", "") or ""),
+            )
+            # #endregion
             continue
         out.append(task)
     return out
@@ -14703,6 +14789,16 @@ def _trial_order_first_schedule_pass(
                 machine_handoff=machine_handoff,
             )
             if res is None:
+                # #region agent log
+                _agent_dbg_dispatch_session(
+                    hypothesis_id="H7",
+                    location="_core.py:_drain_rolls_for_task",
+                    message="assign_one_roll returned None",
+                    data={"eq": str(task.get("equipment_line_key") or task.get("machine") or "")},
+                    current_date=current_date,
+                    task_id=str(task.get("task_id", "") or ""),
+                )
+                # #endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -15680,6 +15776,7 @@ def _generate_plan_impl():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            _dbg_serial_tid = None
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
                 _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
@@ -15714,7 +15811,37 @@ def _generate_plan_impl():
                     len(tasks_today),
                     _pending_rows,
                 )
+                _dbg_serial_tid = _active_serial_tid
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
+            # #region agent log
+            _y416_pending = [
+                {
+                    "start_date_req": str(t.get("start_date_req")),
+                    "rem": float(t.get("remaining_units") or 0),
+                    "machine": t.get("machine"),
+                    "trial": t.get("dispatch_trial_order"),
+                    "in_tasks_today": t in tasks_today,
+                }
+                for t in task_queue
+                if str(t.get("task_id", "") or "").strip() == _AGENT_DBG_FOCUS_TID
+                and float(t.get("remaining_units") or 0) > 1e-12
+            ]
+            if _y416_pending:
+                _agent_dbg_dispatch_session(
+                    hypothesis_id="H1-H2",
+                    location="_core.py:day_loop_tasks_today",
+                    message="Y4-16 queue vs tasks_today",
+                    data={
+                        "serial_active_tid": _dbg_serial_tid,
+                        "serial_mode": bool(
+                            STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids
+                        ),
+                        "tasks_today_n": len(tasks_today),
+                        "rows": _y416_pending,
+                    },
+                    current_date=current_date,
+                )
+            # #endregion
             if not tasks_today:
                 earliest_wait = min(
                     [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
