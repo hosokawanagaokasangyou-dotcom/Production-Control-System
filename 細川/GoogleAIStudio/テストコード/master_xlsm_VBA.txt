@@ -2902,7 +2902,134 @@ Private Function SortCollectionStrings(ByVal coll As Collection) As Collection
     Set SortCollectionStrings = outC
 End Function
 
-' 依頼NO切替の準備/後始末・機械ごとの日次始業準備（入力テンプレ）。無いシートだけ作成し、A1 が空のときのみ見出し行を書く。
+' -------------------------------------------------------------------------
+' 設定_依頼切替前後時間 / 設定_機械_日次始業準備 … skills の工程×機械を転記して入力しやすくする
+' -------------------------------------------------------------------------
+
+Private Function MasterChangeoverFindRow(ByVal wsCh As Worksheet, ByVal procNm As String, ByVal machNm As String) As Long
+    Dim r As Long
+    Dim lr As Long
+    Dim a As String
+    Dim b As String
+    MasterChangeoverFindRow = 0
+    lr = wsCh.Cells(wsCh.Rows.Count, 1).End(xlUp).Row
+    If lr < 2 Then Exit Function
+    For r = 2 To lr
+        a = Trim$(CStr(wsCh.Cells(r, 1).Value))
+        b = Trim$(CStr(wsCh.Cells(r, 2).Value))
+        If StrComp(a, procNm, vbTextCompare) = 0 And StrComp(b, machNm, vbTextCompare) = 0 Then
+            MasterChangeoverFindRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function MasterDailyStartupFindRow(ByVal wsSu As Worksheet, ByVal machNm As String) As Long
+    Dim r As Long
+    Dim lr As Long
+    MasterDailyStartupFindRow = 0
+    lr = wsSu.Cells(wsSu.Rows.Count, 1).End(xlUp).Row
+    If lr < 2 Then Exit Function
+    For r = 2 To lr
+        If StrComp(Trim$(CStr(wsSu.Cells(r, 1).Value)), machNm, vbTextCompare) = 0 Then
+            MasterDailyStartupFindRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+' skills 1 行目＝工程名・2 行目＝機械名の列だけ対象（機械カレンダーと同趣旨）
+Private Sub MasterSyncChangeoverRowsFromSkills(ByVal wb As Workbook)
+    Dim wsSk As Worksheet
+    Dim wsCh As Worksheet
+    Dim lastC As Long
+    Dim c As Long
+    Dim pHdr As String
+    Dim mHdr As String
+    Dim rNew As Long
+    On Error Resume Next
+    Set wsSk = wb.Worksheets(SHEET_SKILLS_DATA)
+    On Error GoTo 0
+    If wsSk Is Nothing Then Exit Sub
+    On Error Resume Next
+    Set wsCh = wb.Worksheets(SHEET_MACHINE_CHANGEOVER)
+    On Error GoTo 0
+    If wsCh Is Nothing Then Exit Sub
+
+    lastC = wsSk.Cells(1, wsSk.Columns.Count).End(xlToLeft).Column
+    If lastC < 2 Then Exit Sub
+
+    For c = 2 To lastC
+        pHdr = Trim$(CStr(wsSk.Cells(1, c).Value))
+        mHdr = Trim$(CStr(wsSk.Cells(2, c).Value))
+        If Len(pHdr) = 0 Or Len(mHdr) = 0 Then GoTo NextSkillCol
+        If StrComp(LCase$(pHdr), "nan", vbTextCompare) = 0 Then GoTo NextSkillCol
+        If StrComp(LCase$(mHdr), "nan", vbTextCompare) = 0 Then GoTo NextSkillCol
+        If MasterChangeoverFindRow(wsCh, pHdr, mHdr) > 0 Then GoTo NextSkillCol
+        rNew = wsCh.Cells(wsCh.Rows.Count, 1).End(xlUp).Row + 1
+        If rNew < 2 Then rNew = 2
+        wsCh.Cells(rNew, 1).Value = pHdr
+        wsCh.Cells(rNew, 2).Value = mHdr
+        ' C,D は空のまま（ユーザーが分を入力）
+NextSkillCol:
+    Next c
+End Sub
+
+Private Sub MasterSyncDailyStartupRowsFromSkills(ByVal wb As Workbook)
+    Dim wsSk As Worksheet
+    Dim wsSu As Worksheet
+    Dim lastC As Long
+    Dim c As Long
+    Dim mHdr As String
+    Dim dict As Object
+    Dim k As Variant
+    Dim arr() As String
+    Dim n As Long
+    Dim i As Long
+    Dim rNew As Long
+    On Error Resume Next
+    Set wsSk = wb.Worksheets(SHEET_SKILLS_DATA)
+    On Error GoTo 0
+    If wsSk Is Nothing Then Exit Sub
+    On Error Resume Next
+    Set wsSu = wb.Worksheets(SHEET_MACHINE_DAILY_STARTUP)
+    On Error GoTo 0
+    If wsSu Is Nothing Then Exit Sub
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    lastC = wsSk.Cells(2, wsSk.Columns.Count).End(xlToLeft).Column
+    If lastC < 2 Then Exit Sub
+    For c = 2 To lastC
+        mHdr = Trim$(CStr(wsSk.Cells(2, c).Value))
+        If Len(mHdr) = 0 Then GoTo NextMachCol
+        If StrComp(LCase$(mHdr), "nan", vbTextCompare) = 0 Then GoTo NextMachCol
+        If Not dict.Exists(mHdr) Then dict.Add mHdr, True
+NextMachCol:
+    Next c
+    If dict.Count = 0 Then Exit Sub
+
+    ReDim arr(1 To dict.Count)
+    n = 0
+    For Each k In dict.Keys
+        n = n + 1
+        arr(n) = CStr(k)
+    Next k
+    Call SortStringArrayAsc1(arr)
+
+    For i = 1 To UBound(arr)
+        mHdr = arr(i)
+        If MasterDailyStartupFindRow(wsSu, mHdr) > 0 Then GoTo NextMachNm
+        rNew = wsSu.Cells(wsSu.Rows.Count, 1).End(xlUp).Row + 1
+        If rNew < 2 Then rNew = 2
+        wsSu.Cells(rNew, 1).Value = mHdr
+        ' B 列は空（ユーザーが分を入力）
+NextMachNm:
+    Next i
+End Sub
+
+' 依頼NO切替の準備/後始末・機械ごとの日次始業準備。
+' ・シートが無ければ作成し、1 行目に見出しを書く（A1 が空のときのみ見出しを書く）。
+' ・skills の 1～2 行目（工程名・機械名）から、未登録の行だけ追補する（既存行の C 列以降は変更しない）。
 Public Sub MasterEnsureMachineChangeoverTemplateSheets()
     Dim wb As Workbook
     Dim ws As Worksheet
@@ -2947,6 +3074,9 @@ Public Sub MasterEnsureMachineChangeoverTemplateSheets()
             ws.Rows(1).Font.Bold = True
         End If
     End If
+
+    Call MasterSyncChangeoverRowsFromSkills(wb)
+    Call MasterSyncDailyStartupRowsFromSkills(wb)
 End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）
