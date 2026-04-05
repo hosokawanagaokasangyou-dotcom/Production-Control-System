@@ -3967,7 +3967,8 @@ End Sub
 Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
     Dim rng As Range
     Dim f1 As String
-    Dim eNum As Long
+    ' eNum は VBA 予約語 Enum と同一視されるため使わない
+    Dim lngErr As Long
     Dim eDesc As String
     Dim dbg As String
     Set rng = ws.Range("C2:C1000")
@@ -3976,10 +3977,10 @@ Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Workshe
     Call AgentDbgLog17("H3", "validation:pre_delete", rng.Address, dbg)
     On Error Resume Next
     rng.Validation.Delete
-    eNum = Err.Number
+    lngErr = Err.Number
     eDesc = Err.Description
     Err.Clear
-    dbg = "{""errNumber"":" & eNum & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
+    dbg = "{""errNumber"":" & lngErr & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
     Call AgentDbgLog17("H5", "validation:after_delete", "delete_result", dbg)
     On Error GoTo 0
     f1 = "=$F$2:$F$4"
@@ -3987,13 +3988,13 @@ Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Workshe
     Call AgentDbgLog17("H2", "validation:before_add", "formula", dbg)
     On Error Resume Next
     rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:=f1
-    eNum = Err.Number
+    lngErr = Err.Number
     eDesc = Err.Description
     Err.Clear
-    dbg = "{""errNumber"":" & eNum & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
+    dbg = "{""errNumber"":" & lngErr & ",""errDesc"":""" & AgentDbgEsc17(eDesc) & """}"
     Call AgentDbgLog17("H2", "validation:after_add", "add_result", dbg)
     On Error GoTo 0
-    If eNum <> 0 Then Err.Raise eNum, , eDesc
+    If lngErr <> 0 Then Err.Raise lngErr, , eDesc
     rng.Validation.IgnoreBlank = True
     rng.Validation.InCellDropdown = True
 End Sub
