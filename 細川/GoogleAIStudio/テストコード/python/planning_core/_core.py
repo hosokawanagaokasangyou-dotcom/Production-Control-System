@@ -12707,6 +12707,12 @@ def _machine_cal_cell_is_occupied(cell) -> bool:
         return bool(cell.strip())
     if isinstance(cell, bool):
         return cell
+    # Excel で 0 を「空」としている列や、数式の結果 0 は占有しない（従来 True だと全日占有扱いになり得る）
+    if isinstance(cell, (int, float)):
+        try:
+            return float(cell) != 0.0
+        except (TypeError, ValueError):
+            return True
     return True
 
 
