@@ -101,7 +101,7 @@
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core/_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期」。<strong>原反投入日</strong>はシート列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があるとき<strong>そちらを配台に採用</strong>、空のとき列 <code>原反投入日</code>。開始日は採用した原反日がある行で <code>max(基準日, 原反投入日, 開始日上書き)</code>（原反前倒し不可）。原反<strong>当日</strong>は開始日上書き有無にかかわらず <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-2 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）で設備占有。優先度<strong>同数重複</strong>は段階2中止。納期リトライは <code>_collect_task_ids_missed_deadline_after_day</code> 条件（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
+  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core/_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期」。<strong>原反投入日</strong>はシート列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があるとき<strong>そちらを配台に採用</strong>、空のとき列 <code>原反投入日</code>。開始日は採用した原反日がある行で <code>max(基準日, 原反投入日, 開始日上書き)</code>（原反前倒し不可）。原反<strong>当日</strong>は開始日上書き有無にかかわらず <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-2 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）で設備占有。優先度<strong>同数重複</strong>は段階2中止。計画基準超過の<strong>巻き戻し再試行</strong>は既定 <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>（オフ）。<code>True</code> のときのみ <code>_collect_task_ids_missed_deadline_after_day</code> 条件で再試行（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
@@ -289,12 +289,13 @@
   </section>
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
-    <h2 id="h-partial">納期超過検出と後ろ倒し再試行</h2>
-    <p><strong>検出</strong>（<code>_collect_task_ids_missed_deadline_after_day</code>）: ある日のシミュレーション終了時に、<strong>残量あり</strong>・<strong><code>due_basis_date</code> あり</strong>・<code>start_date_req</code> ≤ 当日・<strong>当日 ≥ <code>due_basis_date</code></strong> の依頼NOを集める（納期<strong>当日</strong>を含む）。</p>
-    <p><strong>再試行</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> のとき、上記依頼について <strong>内部 <code>due_basis_date</code> のみ +1 日</strong>、当該依頼のタイムラインと割当を巻き戻し、<strong>全日程を最初から</strong>再走査。表示用 <code>due_basis_date_result_sheet</code> は元日付のまま。上限 <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（依頼NOごと）。各ラウンド前に勤怠拡張日はマスタへ戻す。</p>
+    <h2 id="h-partial">納期超過検出と後ろ倒し再試行（任意・既定オフ）</h2>
+    <p><strong>既定</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False</code>。計画基準を過ぎても <strong>巻き戻し再試行は行わず</strong>、カレンダーは 1 通しで完走（配台試行順を正とする方針）。</p>
+    <p><strong>検出</strong>（<code>_collect_task_ids_missed_deadline_after_day</code>）: ある日のシミュレーション終了時に、<strong>残量あり</strong>・<strong><code>due_basis_date</code> あり</strong>・<code>start_date_req</code> ≤ 当日・<strong>当日 ≥ <code>due_basis_date</code></strong> の依頼NOを集める（納期<strong>当日</strong>を含む）。フラグがオフのときは <strong>検出のみ</strong>で再試行に入らない。</p>
+    <p><strong>再試行</strong>（<code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code> のとき）: 上記依頼について <strong>内部 <code>due_basis_date</code> のみ +1 日</strong>、当該依頼のタイムラインと割当を巻き戻し、<strong>全日程を最初から</strong>再走査。表示用 <code>due_basis_date_result_sheet</code> は元日付のまま。上限 <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（依頼NOごと）。各ラウンド前に勤怠拡張日はマスタへ戻す。</p>
     <ul>
-      <li><strong>オフにする</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False</code> で 1 パスのみ。</li>
-      <li><strong>上限</strong>: <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（既定 5、<strong>依頼NOごと</strong>。全体の合計回数ではない）。</li>
+      <li><strong>従来挙動を有効にする</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True</code>。</li>
+      <li><strong>上限</strong>: <code>STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</code>（既定 5、<strong>依頼NOごと</strong>。全体の合計回数ではない）。再試行オン時のみ意味を持つ。</li>
       <li><strong>シフトしない</strong>: 依頼全体で <code>due_basis_date</code> を持つ行が無い場合は、後ろ倒し対象にしません。</li>
       <li><strong>勤怠最終日</strong>: +1 日がマスタ最終計画日を超える行がある依頼は、そのラウンドではシフト対象外になり得ます。</li>
     </ul>
@@ -323,7 +324,7 @@
     <ul>
       <li>マクロブック <strong>「設定」</strong>シート <strong>A 列 3 行目以降</strong>に依頼NOを縦に（<code>_read_trace_schedule_task_ids_from_config_sheet</code>）。環境変数では指定しない。</li>
       <li><code>generate_plan</code> <strong>冒頭</strong>（<strong>skills 読込より前</strong>）に読み、<strong>必ず INFO ログ</strong>。メンバー0で即終了したときも設定シートの読み取り結果がログに残ります。</li>
-      <li><code>[配台トレース task=…]</code> 行は <span class="file">log/execution_log.txt</span> に加え、<strong><span class="file">log/dispatch_trace_&lt;依頼NO&gt;_r&lt;外側ラウンド2桁&gt;.txt</span></strong>（例 <code>dispatch_trace_W4-2_r00.txt</code>、名はサニタイズ）へ追記。納期超過リトライのたびラウンドが増え、文頭に <code>[outer_round=00]</code> が付く。段階2冒頭で <span class="file">log/dispatch_trace_*.txt</span> を全削除。各ラウンドのヘッダ付きファイルは <code>generate_plan</code> の外側 <code>while True</code> 先頭で新規作成。</li>
+      <li><code>[配台トレース task=…]</code> 行は <span class="file">log/execution_log.txt</span> に加え、<strong><span class="file">log/dispatch_trace_&lt;依頼NO&gt;_r&lt;外側ラウンド2桁&gt;.txt</span></strong>（例 <code>dispatch_trace_W4-2_r00.txt</code>、名はサニタイズ）へ追記。外側ラウンドは <strong>納期巻き戻し再試行オン時のみ</strong>リトライのたび増え（既定オフでは通常 <code>r00</code> のみ）。文頭に <code>[outer_round=00]</code> が付く。段階2冒頭で <span class="file">log/dispatch_trace_*.txt</span> を全削除。各ラウンドのヘッダ付きファイルは <code>generate_plan</code> の外側 <code>while True</code> 先頭で新規作成。</li>
       <li>シート <strong>配台_配台不要工程</strong>（openpyxl 非互換マーカー）があるブックは「設定」を openpyxl で読めず A3 以降は無視（配台トレースは無効）。</li>
     </ul>
     <p>詳細は <span class="file">配台ルール.md</span> セクション 10。</p>

@@ -11331,7 +11331,8 @@ SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 # 計画基準納期日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
 # 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
 # マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
-STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = True
+# 既定 **False**（配台試行順を正とし、計画基準超過でもこの巻き戻し再試行は行わない）。従来挙動が必要なときだけ True。
+STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
 # 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 5
 
@@ -15650,8 +15651,9 @@ def _generate_plan_impl():
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
     # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
-    # 計画基準納期を過ぎても残がある依頼のみ due_basis +1 し当該依頼の割当を戻して先頭から再実行（STAGE2_RETRY_*）。
-    # 各再試行前に勤怠の自動拡張分はマスタ日付へ巻き戻す。
+    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING が True のときのみ: 計画基準納期を過ぎても残がある依頼について
+    # due_basis +1・当該依頼の割当戻し・先頭から再実行。各再試行前に勤怠拡張分はマスタ日付へ巻き戻す。
+    # 既定 False のため通常は 1 パス（カレンダー通し 1 回）のみ。
     # ---------------------------------------------------------
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
