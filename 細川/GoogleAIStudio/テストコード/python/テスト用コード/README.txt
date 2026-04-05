@@ -6,7 +6,7 @@
 
 前提
 ----
-- `master.xlsm`・`生産管理_AI配台テスト.xlsm`・`planning_core.py` は **親フォルダ（テストコード）** にあります。
+- `master.xlsm`・`生産管理_AI配台テスト.xlsm` は **テストコード直下**、`planning_core` は **python/planning_core/** パッケージです。
 - 各スクリプトは `_planning_repo_root()` で親を検出するため、このフォルダに置いたまま実行できます。
 
 実行例（カレントを「テストコード」にしたうえで）

@@ -29,7 +29,10 @@ param(
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $parent = Split-Path -Parent $here
-if (Test-Path -LiteralPath (Join-Path $parent "planning_core.py")) {
+if (
+    (Test-Path -LiteralPath (Join-Path $parent "planning_core.py")) -or
+    (Test-Path -LiteralPath (Join-Path $parent "planning_core\__init__.py"))
+) {
     $repoRoot = $parent
 } else {
     $repoRoot = $here

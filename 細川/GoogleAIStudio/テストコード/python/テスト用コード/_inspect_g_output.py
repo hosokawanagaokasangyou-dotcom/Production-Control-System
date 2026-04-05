@@ -8,7 +8,7 @@ import pandas as pd
 def _planning_repo_root() -> Path:
     here = Path(__file__).resolve().parent
     parent = here.parent
-    if (parent / "planning_core.py").is_file():
+    if (parent / "planning_core.py").is_file() or (parent / "planning_core" / "__init__.py").is_file():
         return parent
     return here
 

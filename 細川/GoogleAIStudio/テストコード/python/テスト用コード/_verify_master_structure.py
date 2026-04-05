@@ -9,7 +9,9 @@ import pandas as pd
 def _planning_repo_root() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
     parent = os.path.dirname(here)
-    if os.path.isfile(os.path.join(parent, "planning_core.py")):
+    if os.path.isfile(os.path.join(parent, "planning_core.py")) or os.path.isfile(
+        os.path.join(parent, "planning_core", "__init__.py")
+    ):
         return parent
     return here
 

@@ -36,7 +36,9 @@ def _script_dir() -> str:
 def _planning_repo_root() -> str:
     here = _script_dir()
     parent = os.path.dirname(here)
-    if os.path.isfile(os.path.join(parent, "planning_core.py")):
+    if os.path.isfile(os.path.join(parent, "planning_core.py")) or os.path.isfile(
+        os.path.join(parent, "planning_core", "__init__.py")
+    ):
         return parent
     return here
 

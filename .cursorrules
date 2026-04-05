@@ -47,4 +47,4 @@ Generate commit messages in Japanese only. Never use English-only commit message
 
 正本: リポジトリ直下 **`.cursor/rules/dispatch-docs-sync.mdc`**（`alwaysApply: true`）。
 
-**`細川/GoogleAIStudio/テストコード/python/planning_core.py` をはじめ配台ロジックを変えたときは、必ず `細川/GoogleAIStudio/テストコード/配台ルール.md` と `細川/GoogleAIStudio/テストコード/配台ルール.html` を同じ変更内容に合わせて更新する。**
+**`細川/GoogleAIStudio/テストコード/python/planning_core/`（実装本体は `_core.py`）をはじめ配台ロジックを変えたときは、必ず `細川/GoogleAIStudio/テストコード/配台ルール.md` と `細川/GoogleAIStudio/テストコード/配台ルール.html` を同じ変更内容に合わせて更新する。**
