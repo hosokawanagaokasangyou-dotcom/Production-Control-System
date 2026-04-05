@@ -9070,6 +9070,7 @@ DEFAULT_BREAKS = [
 ]
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
+# ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
 # 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
 # 休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
@@ -9080,7 +9081,7 @@ ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
 )
 ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     0,
-    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "0").strip() or 0),
+    int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "45").strip() or 0),
 )
 
 # region agent log
