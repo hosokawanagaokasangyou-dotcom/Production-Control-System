@@ -2174,6 +2174,8 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ActiveWindow.FreezePanes = False
     ws.Range("F4").Select
     ActiveWindow.FreezePanes = True
+    ws.Range("F2").Select
+    ws.Range("A1").Select
     On Error GoTo 0
 End Sub
 

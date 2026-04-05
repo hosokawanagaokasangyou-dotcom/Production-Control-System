@@ -2082,11 +2082,16 @@ def _write_results_equipment_gantt_sheet(
             ban = ws.cell(
                 row=day_start,
                 column=1,
-                value=f"▶ {d.strftime('%Y/%m/%d')}　{_weekday_jp(d)}",
+                value=f"【{d.strftime('%Y/%m/%d')}】",
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
-            ban.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ban.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=False,
+                textRotation=90,
+            )
             ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
