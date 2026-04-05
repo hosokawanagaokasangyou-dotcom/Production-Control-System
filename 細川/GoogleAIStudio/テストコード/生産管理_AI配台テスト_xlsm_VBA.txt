@@ -1701,26 +1701,10 @@ Public Sub メインシート_AからK列_AutoFit()
 End Sub
 
 Private Function GetMainWorksheet() As Worksheet
-    Dim wb As Workbook
-    Dim ws As Worksheet
-    Set wb = ThisWorkbook
+    ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next
-    Set GetMainWorksheet = wb.Worksheets("メイン")
-    If Err.Number = 0 And Not GetMainWorksheet Is Nothing Then Exit Function
-    Err.Clear
-    Set GetMainWorksheet = wb.Worksheets("メイン_")
-    If Err.Number = 0 And Not GetMainWorksheet Is Nothing Then Exit Function
-    Err.Clear
-    Set GetMainWorksheet = wb.Worksheets("Main")
-    If Err.Number = 0 And Not GetMainWorksheet Is Nothing Then Exit Function
-    Err.Clear
-    For Each ws In wb.Worksheets
-        If InStr(ws.Name, "メイン") > 0 Then
-            Set GetMainWorksheet = ws
-            Exit Function
-        End If
-    Next ws
-    Set GetMainWorksheet = Nothing
+    Set GetMainWorksheet = ThisWorkbook.Worksheets("メイン_")
+    On Error GoTo 0
 End Function
 
 ' planning_core が log\gemini_usage_summary_for_main.txt（UTF-8）に出力した Gemini 利用サマリを、
@@ -1785,7 +1769,7 @@ GeminiUsageP_Fail:
     On Error GoTo 0
 End Sub
 
-' メインシートを表示し A1 をアクティブにする（GetMainWorksheet と同じ名前解決）
+' メインシートを表示し A1 をアクティブにする（シート名「メイン_」＝GetMainWorksheet と同じ）
 Private Sub メインシートA1を選択()
     Dim ws As Worksheet
     On Error Resume Next
