@@ -7,6 +7,9 @@ Option Explicit
 
 Private Sub Workbook_Open()
     On Error Resume Next
+    ' #region agent log
+    AgentDbg650_OnKey "master:Workbook_Open", "H3_H4", ActiveWorkbook.Name, ThisWorkbook.Name
+    ' #endregion
     MasterShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub

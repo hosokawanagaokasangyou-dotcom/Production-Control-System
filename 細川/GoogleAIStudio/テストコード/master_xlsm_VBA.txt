@@ -53,6 +53,21 @@ Private Const MAIN_ATTENDANCE_LINK_CLEAR_MAX_ROWS As Long = 400
 ' Ctrl+Shift+テンキー - → メインへ（Application.OnKey）。{109}=vbKeySubtract（テンキー -）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 
+' #region agent log
+Public Sub AgentDbg650_OnKey(ByVal loc As String, ByVal hyp As String, ByVal activeName As String, ByVal thisName As String)
+    On Error Resume Next
+    Dim f As Integer, p As String, an As String, tn As String
+    p = "g:\工程管理AIプロジェクト\debug-650ec5.log"
+    an = Replace(Replace(activeName, "\", "/"), """", "'")
+    tn = Replace(Replace(thisName, "\", "/"), """", "'")
+    f = FreeFile
+    Open p For Append As #f
+    Print #f, "{""sessionId"":""650ec5"",""location"":""" & loc & """,""hypothesisId"":""" & hyp & """,""message"":""active=" & an & "|this=" & tn & """,""timestamp"":" & CLng(Timer * 1000) & "}"
+    Close #f
+    On Error GoTo 0
+End Sub
+' #endregion
+
 ' メインシート（「メイン」「メイン_」「Main」、または名前に「メイン」を含む）を取得
 ' ※「〇月メインカレンダー」等を誤採用しないよう、名前に「カレンダー」を含むシートはフォールバック対象外。
 ' ※複数候補があるときはシート名が最短のものを優先（先頭一致のブックで誤った長い名前を避ける）。
@@ -110,6 +125,9 @@ End Sub
 
 Public Sub MasterShortcutMainSheet_CtrlShift0()
     On Error Resume Next
+    ' #region agent log
+    AgentDbg650_OnKey "master:MasterShortcutMainSheet_CtrlShift0", "H2", ActiveWorkbook.Name, ThisWorkbook.Name
+    ' #endregion
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     MasterSelectMainSheetA1
     On Error GoTo 0
@@ -118,6 +136,9 @@ End Sub
 Public Sub MasterShortcutMainSheet_OnKeyRegister()
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="MasterShortcutMainSheet_CtrlShift0"
+    ' #region agent log
+    AgentDbg650_OnKey "master:MasterShortcutMainSheet_OnKeyRegister", "H1", ActiveWorkbook.Name, ThisWorkbook.Name
+    ' #endregion
     On Error GoTo 0
 End Sub
 
