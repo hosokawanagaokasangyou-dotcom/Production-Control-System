@@ -3919,7 +3919,7 @@ Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis
     End Select
 End Function
 
-' C 列ドロップダウン用（F 列は候補の目安。入力規則はセル参照ではなくインライン一覧で付与し 1004 を避ける）
+' C 列ドロップダウン用（F2:F4 は候補表示。入力規則は主にインライン一覧）
 Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
     ws.Range("F1").Value = "（C列の候補・参照用）"
     ws.Range("F2").Value = "表示"
@@ -3928,9 +3928,7 @@ Private Sub 設定_シート表示_ドロップダウン候補セルを書く(By
     ws.Columns(6).ColumnWidth = 14
 End Sub
 
-' C2 以降に「表示/非表示/完全非表示」リストを付与
-' 経緯: =$F$2:$F$4 直指定は環境で 1004。International 区切りのインラインも API と食い違うことがある。
-'       ① カンマ固定インライン（Validation 定番）→ ② 失敗時はブック名 PM_AI_SheetVisList = F2:F4 を経由。
+' C2 以降に「表示/非表示/完全非表示」リストを付与（失敗時は定義名 PM_AI_SheetVisList → F2:F4）
 Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
     Const NM_SHEET_VIS As String = "PM_AI_SheetVisList"
     Dim rng As Range
