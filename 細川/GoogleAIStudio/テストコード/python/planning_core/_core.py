@@ -9070,6 +9070,8 @@ DEFAULT_BREAKS = [
 ]
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
+# 同じ「終業まであと N 分以内」ウィンドウでは、試行開始から終業までに収容できるロール数が
+# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 未満の候補も却下（_eod_reject_capacity_units_below_threshold）。
 # ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
 # 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
@@ -9083,6 +9085,34 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
     0,
     int(os.environ.get("ASSIGN_END_OF_DAY_DEFER_MINUTES", "45").strip() or 0),
 )
+
+
+def _eod_minutes_window_covers_start(
+    team_start: datetime, team_end_limit: datetime
+) -> bool:
+    """ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、開始が終業上限のその分数以内か。"""
+    gap = ASSIGN_END_OF_DAY_DEFER_MINUTES
+    if gap <= 0:
+        return False
+    if team_start >= team_end_limit:
+        return False
+    return (team_end_limit - team_start) <= timedelta(minutes=gap)
+
+
+def _eod_reject_capacity_units_below_threshold(
+    units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
+) -> bool:
+    """
+    終業直前ウィンドウ内で、終業までに収容できるロール数が
+    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 未満なら True（候補却下）。
+    """
+    th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
+    if th <= 0:
+        return False
+    if not _eod_minutes_window_covers_start(team_start, team_end_limit):
+        return False
+    return int(units_fit_until_close) < int(th)
+
 
 # =========================================================
 # 1. コア計算ロジック (日時ベース)
@@ -14000,6 +14030,10 @@ def _append_legacy_dispatch_candidate_for_team(
     if units_can_do == 0:
         return False
     units_today = min(units_can_do, math.ceil(task["remaining_units"]))
+    if _eod_reject_capacity_units_below_threshold(
+        units_today, team_start, team_end_limit
+    ):
+        return False
     work_mins_needed = int(units_today * eff_time_per_unit)
     if (
         _contiguous_work_minutes_until_next_break_or_limit(
@@ -14370,13 +14404,25 @@ def _assign_one_roll_trial_order_flow(
         _, avail_mins, _ = calculate_end_time(
             team_start, 9999, team_breaks, team_end_limit
         )
-        if int(avail_mins / eff_time_per_unit) < 1:
+        _trial_units_cap = int(avail_mins / eff_time_per_unit)
+        if _trial_units_cap < 1:
             _trace_assign(
                 "候補却下: 実働不足 team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
                 team_start,
                 avail_mins,
                 eff_time_per_unit,
+            )
+            return None
+        if _eod_reject_capacity_units_below_threshold(
+            _trial_units_cap, team_start, team_end_limit
+        ):
+            _trace_assign(
+                "候補却下: 終業直前で当日収容ロール数が閾値未満 team=%s cap=%s th=%s start=%s",
+                ",".join(str(x) for x in team),
+                _trial_units_cap,
+                ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                team_start,
             )
             return None
         work_mins_needed = int(eff_time_per_unit)
@@ -16281,6 +16327,10 @@ def _generate_plan_impl():
                                     continue
     
                                 units_today = min(units_can_do, math.ceil(task['remaining_units']))
+                                if _eod_reject_capacity_units_below_threshold(
+                                    units_today, team_start, team_end_limit
+                                ):
+                                    continue
                                 work_mins_needed = int(units_today * eff_time_per_unit)
                                 if (
                                     _contiguous_work_minutes_until_next_break_or_limit(
