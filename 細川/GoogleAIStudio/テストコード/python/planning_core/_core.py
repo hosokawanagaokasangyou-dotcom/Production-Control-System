@@ -9235,96 +9235,6 @@ def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
     return expanded
 
 
-def _agent_debug_ndjson_log(payload: dict) -> None:
-    # #region agent log
-    try:
-        _rp = os.path.abspath(__file__)
-        for _ in range(6):
-            _rp = os.path.dirname(_rp)
-        _lp = os.path.join(_rp, "debug-5e5f85.log")
-        p = {"sessionId": "5e5f85", **payload, "timestamp": int(time_module.time() * 1000)}
-        with open(_lp, "a", encoding="utf-8") as lf:
-            lf.write(json.dumps(p, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
-
-def _agent_debug_log_equipment_task_dispersion(timeline_events: list) -> None:
-    # #region agent log
-    """同一日・同一設備列で同一 task_id の加工が複数セグメントに分かれるケースを NDJSON に記録する。"""
-    by_dm: dict = defaultdict(list)
-    for e in timeline_events or []:
-        if not _is_machining_timeline_event(e):
-            continue
-        d = e.get("date")
-        m = str(e.get("machine") or "").strip()
-        tid = str(e.get("task_id") or "").strip()
-        if d is None or not m or not tid:
-            continue
-        st = e.get("start_dt")
-        ed = e.get("end_dt")
-        if not isinstance(st, datetime) or not isinstance(ed, datetime):
-            continue
-        by_dm[(d, m)].append(
-            {"tid": tid, "st": st, "ed": ed, "sub": str(e.get("sub") or "")}
-        )
-    n_out = 0
-    for (d, m), evs in by_dm.items():
-        evs.sort(key=lambda x: x["st"])
-        by_tid: dict = defaultdict(list)
-        for ev in evs:
-            by_tid[ev["tid"]].append(ev)
-        for tid, segs in by_tid.items():
-            if len(segs) < 2:
-                continue
-            if n_out >= 200:
-                return
-            subs_list = [s["sub"] for s in segs]
-            subs_distinct = len(set(subs_list)) > 1
-            _unified_names: set[str] = set()
-            for ss in subs_list:
-                for part in str(ss or "").split(","):
-                    z = part.strip()
-                    if z:
-                        _unified_names.add(z)
-            interleaved = False
-            for i in range(len(segs) - 1):
-                gap_start = segs[i]["ed"]
-                gap_end = segs[i + 1]["st"]
-                if gap_start >= gap_end:
-                    continue
-                for x in evs:
-                    if x["tid"] == tid:
-                        continue
-                    if x["st"] < gap_end and x["ed"] > gap_start:
-                        interleaved = True
-                        break
-                if interleaved:
-                    break
-            _agent_debug_ndjson_log(
-                {
-                    "hypothesisId": "H1-H5",
-                    "location": "_core.py:_agent_debug_log_equipment_task_dispersion",
-                    "message": "multi-segment machining same equipment",
-                    "data": {
-                        "date": str(d),
-                        "machine": m,
-                        "task_id": tid,
-                        "segment_count": len(segs),
-                        "subs_per_segment": subs_list,
-                        "subs_distinct_across_segments": subs_distinct,
-                        "unified_sub_display": (
-                            ", ".join(sorted(_unified_names)) if _unified_names else ""
-                        ),
-                        "other_task_in_gap_between_segments": interleaved,
-                    },
-                }
-            )
-            n_out += 1
-    # #endregion
-
-
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
     """
     start_dt から end_dt までの「休憩を除いた実働分数」。
@@ -15187,22 +15097,6 @@ def append_surplus_staff_after_main_dispatch(
         parts = [s.strip() for s in old_sub.split(",") if s.strip()]
         parts.extend(chosen)
         ev["sub"] = ", ".join(parts)
-        # #region agent log
-        if old_sub != ev["sub"]:
-            _agent_debug_ndjson_log(
-                {
-                    "hypothesisId": "H2",
-                    "location": "_core.py:append_surplus_staff_after_main_dispatch",
-                    "message": "surplus staff appended to sub",
-                    "data": {
-                        "task_id": tid,
-                        "machine": str(machine or ""),
-                        "old_sub": old_sub,
-                        "new_sub": ev["sub"],
-                    },
-                }
-            )
-        # #endregion
         for m in chosen:
             busy[m].append((st, ed))
         appended_total += len(chosen)
@@ -16957,9 +16851,6 @@ def _generate_plan_impl():
     )
     # タスクID → 結果_設備毎の時間割で当該タスクが最初に現れるセル（例 B12）。結果_タスク一覧のリンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
-    # #region agent log
-    _agent_debug_log_equipment_task_dispersion(timeline_events)
-    # #endregion
     df_eq_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
         equipment_list,
