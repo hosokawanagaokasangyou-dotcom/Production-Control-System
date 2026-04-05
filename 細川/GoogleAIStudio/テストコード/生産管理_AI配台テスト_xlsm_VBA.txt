@@ -2152,6 +2152,9 @@ Private Sub 結果_設備ガント_表示倍率を設定(ByVal wb As Workbook, B
     If ws Is Nothing Then GoTo CleanZoom
     ws.Activate
     ActiveWindow.Zoom = zoomPercent
+    ws.Range("A1").Activate
+    ActiveWindow.ScrollColumn = 1
+    ActiveWindow.ScrollRow = 1
 CleanZoom:
     On Error GoTo 0
 End Sub
@@ -2189,6 +2192,8 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ws.Range("F2").Activate
     ws.Range("A1").Activate
     ActiveWindow.Zoom = 85
+    ActiveWindow.ScrollColumn = 1
+    ActiveWindow.ScrollRow = 1
     On Error GoTo 0
 End Sub
 
