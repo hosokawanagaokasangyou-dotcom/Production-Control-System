@@ -12042,6 +12042,10 @@ def fill_plan_dispatch_trial_order_column_stage1(
             plan_df.iat[iloc, col_idx] = ""
 
 
+# agent debug: cap NDJSON lines per process (段階2は1プロセス1回想定)
+_EQ_SCHED_ACTIVE_DBG_REM = 120
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -12163,43 +12167,46 @@ def _build_equipment_schedule_dataframe(
                         and float(active_ev.get("eff_time_per_unit") or 0) > 0
                     )
                     # #region agent log
+                    global _EQ_SCHED_ACTIVE_DBG_REM
                     try:
-                        _agent_dbg_path = os.path.normpath(
-                            os.path.join(
-                                os.path.dirname(__file__),
-                                "..",
-                                "..",
-                                "..",
-                                "..",
-                                "..",
-                                "debug-dfede8.log",
+                        if _EQ_SCHED_ACTIVE_DBG_REM > 0:
+                            _EQ_SCHED_ACTIVE_DBG_REM -= 1
+                            _agent_dbg_path = os.path.normpath(
+                                os.path.join(
+                                    os.path.dirname(__file__),
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "debug-dfede8.log",
+                                )
                             )
-                        )
-                        _ek = str(active_ev.get("event_kind") or "").strip()
-                        _payload = {
-                            "sessionId": "dfede8",
-                            "runId": "post-fix",
-                            "hypothesisId": "A",
-                            "location": "_build_equipment_schedule_dataframe:active_ev",
-                            "message": "slot active event",
-                            "data": {
-                                "eq": str(eq)[:80],
-                                "event_kind": _ek or "(default machining)",
-                                "has_eff_time_per_unit": "eff_time_per_unit"
-                                in active_ev,
-                                "has_units_done": "units_done" in active_ev,
-                                "use_progress_path": _use_prog,
-                                "machine": str(active_ev.get("machine") or "")[:80],
-                                "task_id": str(active_ev.get("task_id") or "")[:40],
-                            },
-                            "timestamp": int(time_module.time() * 1000),
-                        }
-                        with open(
-                            _agent_dbg_path, "a", encoding="utf-8"
-                        ) as _agent_f:
-                            _agent_f.write(
-                                json.dumps(_payload, ensure_ascii=False) + "\n"
-                            )
+                            _ek = str(active_ev.get("event_kind") or "").strip()
+                            _payload = {
+                                "sessionId": "dfede8",
+                                "runId": "post-fix",
+                                "hypothesisId": "A",
+                                "location": "_build_equipment_schedule_dataframe:active_ev",
+                                "message": "slot active event",
+                                "data": {
+                                    "eq": str(eq)[:80],
+                                    "event_kind": _ek or "(default machining)",
+                                    "has_eff_time_per_unit": "eff_time_per_unit"
+                                    in active_ev,
+                                    "has_units_done": "units_done" in active_ev,
+                                    "use_progress_path": _use_prog,
+                                    "machine": str(active_ev.get("machine") or "")[:80],
+                                    "task_id": str(active_ev.get("task_id") or "")[:40],
+                                },
+                                "timestamp": int(time_module.time() * 1000),
+                            }
+                            with open(
+                                _agent_dbg_path, "a", encoding="utf-8"
+                            ) as _agent_f:
+                                _agent_f.write(
+                                    json.dumps(_payload, ensure_ascii=False) + "\n"
+                                )
                     except Exception:
                         pass
                     # #endregion
