@@ -872,6 +872,7 @@ RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
+# 結果_設備毎の時間割（および TEMP）: 加工前準備・依頼切替後始末の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに B〜E 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
@@ -1463,6 +1464,43 @@ def _apply_equipment_schedule_outside_regular_fill(
             continue
         if not _time_intervals_overlap_half_open(t0, t1, reg_start, reg_end):
             cell.fill = fill
+
+
+def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
+    """
+    設備列（進度列を除く）で、表示に「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
+    結果_設備毎の時間割 / TEMP_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
+    """
+    fill = PatternFill(
+        fill_type="solid",
+        start_color=RESULT_DISPATCHED_REQUEST_FILL,
+        end_color=RESULT_DISPATCHED_REQUEST_FILL,
+    )
+    markers = ("(加工前準備)", "(依頼切替後始末)")
+    col_tb = None
+    equip_cols: list[int] = []
+    for i, c in enumerate(ws[1], start=1):
+        if c.value is None:
+            continue
+        h = str(c.value).strip()
+        if h == "日時帯":
+            col_tb = i
+            continue
+        if h.endswith("進度"):
+            continue
+        equip_cols.append(i)
+    if col_tb is None or not equip_cols:
+        return
+    mr = ws.max_row or 1
+    for r in range(2, mr + 1):
+        for ci in equip_cols:
+            cell = ws.cell(row=r, column=ci)
+            val = cell.value
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                continue
+            s = str(val).strip().replace("\r", "").replace("\n", "")
+            if any(m in s for m in markers):
+                cell.fill = fill
 
 
 def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
@@ -17153,6 +17191,15 @@ def _generate_plan_impl():
                 _apply_equipment_by_machine_dispatched_request_fill(
                     writer.sheets[RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME]
                 )
+
+            for _prep_sheet in (
+                RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
+                TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
+            ):
+                if _prep_sheet in writer.sheets:
+                    _apply_equipment_schedule_prep_cleanup_fill(
+                        writer.sheets[_prep_sheet]
+                    )
 
             ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
             _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))

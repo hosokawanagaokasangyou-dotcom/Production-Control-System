@@ -1355,6 +1355,51 @@ CleanExit2:
     On Error GoTo 0
 End Sub
 
+' 結果_設備毎の時間割（および TEMP）: 設備セルに「(加工前準備)」「(依頼切替後始末)」が含まれるとき薄緑（進度列は除外）
+Private Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim lastC As Long
+    Dim r As Long
+    Dim c As Long
+    Dim v As Variant
+    Dim s As String
+    Dim hdr As String
+    
+    On Error GoTo CleanExit3
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit3
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If lastC <= colTB Then GoTo CleanExit3
+    
+    For r = 2 To lastR
+        For c = colTB + 1 To lastC
+            hdr = Trim$(CStr(ws.Cells(1, c).Value))
+            If Len(hdr) >= 2 Then
+                If Right$(hdr, 2) = "進度" Then GoTo NextC3
+            End If
+            v = ws.Cells(r, c).Value
+            If IsEmpty(v) Or VarType(v) = vbError Then GoTo NextC3
+            s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+            If Len(s) = 0 Then GoTo NextC3
+            If InStr(1, s, "(加工前準備)", vbTextCompare) > 0 _
+                Or InStr(1, s, "(依頼切替後始末)", vbTextCompare) > 0 Then
+                With ws.Cells(r, c)
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(198, 239, 206)
+                End With
+            End If
+NextC3:
+        Next c
+    Next r
+CleanExit3:
+    On Error GoTo 0
+End Sub
+
 Private Sub 結果_設備ガント_マスタ時刻反映( _
     ByVal ws As Worksheet, _
     ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
@@ -1443,6 +1488,12 @@ Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Wor
     Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_SCHEDULE)
     If Not ws Is Nothing Then
         結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+        結果_設備時間割_準備後始末セルを薄緑 ws
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets("TEMP_設備毎の時間割")
+    If Not ws Is Nothing Then
+        結果_設備時間割_準備後始末セルを薄緑 ws
     End If
     Set ws = Nothing
     Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_BY_MACHINE)
