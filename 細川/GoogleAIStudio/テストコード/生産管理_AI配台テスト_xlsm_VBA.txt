@@ -201,6 +201,26 @@ Private mGanttHL_SheetName As String
 Private mGanttHL_Row As Long
 Private mGanttHL_LastCol As Long
 
+#Region "agent log"
+Private Function AgentDbgEsc(ByVal s As String) As String
+    AgentDbgEsc = Replace(Replace(Replace(s, "\", "\\"), vbCrLf, " "), """", "'")
+End Function
+
+Private Sub AgentDebugNdjson0c572c(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal jsonDataInner As String)
+    Dim fp As String
+    Dim fh As Integer
+    Dim line As String
+    On Error Resume Next
+    fp = ThisWorkbook.Path & "\debug-0c572c.log"
+    fh = FreeFile
+    Open fp For Append As #fh
+    line = "{""sessionId"":""0c572c"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & AgentDbgEsc(message) & """,""data"":" & jsonDataInner & ",""ts"":""" & Format(Now, "yyyymmddhhnnss") & """}"
+    Print #fh, line;
+    Close #fh
+    On Error GoTo 0
+End Sub
+#End Region
+
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
 Private Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
     Dim t As String
@@ -238,6 +258,7 @@ Private Function Stage12CmdHideWindowEffective() As Boolean
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
                             Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
+                            Call AgentDebugNdjson0c572c("H1", "Stage12CmdHideWindowEffective", "exit_sheet", "{""src"":""sheet"",""eff"":" & LCase$(CStr(Stage12CmdHideWindowEffective)) & ",""rawLen"":" & CStr(Len(v)) & "}")
                             Exit Function
                         End If
                         Exit For
@@ -249,9 +270,11 @@ Private Function Stage12CmdHideWindowEffective() As Boolean
     v = Trim$(Environ("STAGE12_CMD_HIDE_WINDOW"))
     If Len(v) > 0 Then
         Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
+        Call AgentDebugNdjson0c572c("H1", "Stage12CmdHideWindowEffective", "exit_environ", "{""src"":""environ"",""eff"":" & LCase$(CStr(Stage12CmdHideWindowEffective)) & ",""rawLen"":" & CStr(Len(v)) & "}")
         Exit Function
     End If
     Stage12CmdHideWindowEffective = STAGE12_CMD_HIDE_WINDOW
+    Call AgentDebugNdjson0c572c("H1", "Stage12CmdHideWindowEffective", "exit_const", "{""src"":""const"",""eff"":" & LCase$(CStr(Stage12CmdHideWindowEffective)) & "}")
 End Function
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
@@ -489,6 +512,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Dim oh As Long
     cmdLine = BuildStageExecCommandLine(cmdFilePath, hideConsoleWindow)
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
+    Call AgentDebugNdjson0c572c("H3", "RunCmdFileStageExecAndPoll", "after_first_build", "{""splashD3"":" & LCase$(CStr(SettingsSheet_IsSplashExecutionLogWriteEnabled())) & ",""hideArg"":" & LCase$(CStr(hideConsoleWindow)) & ",""headlessInLine"":" & LCase$(CStr(InStr(1, cmdLine, "headless", vbTextCompare) > 0)) & "}")
     unlockInteractiveForPoll = False
     On Error Resume Next
     ' D3=false: スプラッシュ表示中かつ useSplashLogRectConsole … Exec＋title 検出でログ枠へ SetWindowPos。それ以外は同期 Run
@@ -499,6 +523,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         End If
         cmdLine = BuildStageExecCommandLine(cmdFilePath, False)
         waitStyle = 1
+        Call AgentDebugNdjson0c572c("H3", "RunCmdFileStageExecAndPoll", "d3false_cmdline_reset", "{""hideArgBeforeReset"":" & LCase$(CStr(hideConsoleWindow)) & ",""headlessInLineAfterReset"":" & LCase$(CStr(InStr(1, cmdLine, "headless", vbTextCompare) > 0)) & "}")
         If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 Then
             Dim overlayCmdLine As String
             overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
@@ -655,6 +680,7 @@ Private Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As 
     Dim batText As String
     ' D3=false: STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT かつスプラッシュ時のみオーバーレイ用 Exec。それ以外は同期 Run（ウィンドウレイアウトは OS 任せ）
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
+        Call AgentDebugNdjson0c572c("H4", "RunTempCmdWithConsoleLayout", "d3false_entry", "{""hideCmdWindow"":" & LCase$(CStr(hideCmdWindow)) & ",""applyTopQuarter"":" & LCase$(CStr(applyTopQuarterFullWidthConsole)) & "}")
         If m_macroSplashShown And STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT Then
             Randomize
             uniq = "PM_AI_CMD_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
@@ -4561,6 +4587,7 @@ Private Sub 段階1_コア実行()
         MacroSplash_ClearExecutionLogPane
         On Error Resume Next
         Err.Clear
+        Call AgentDebugNdjson0c572c("H2", "stage1_core", "xlwings_branch", "{""using_cmd"":false}")
         XwRunConsoleRunner "run_stage1_for_xlwings"
         If Err.Number <> 0 Then
             st1XwErr = Err.Number
@@ -4586,6 +4613,7 @@ Private Sub 段階1_コア実行()
     Else
         Dim hideStage12CmdSt1 As Boolean
         hideStage12CmdSt1 = Stage12CmdHideWindowEffective()
+        Call AgentDebugNdjson0c572c("H2", "stage1_core", "cmd_branch", "{""hideEff"":" & LCase$(CStr(hideStage12CmdSt1)) & "}")
         wsh.CurrentDirectory = Environ("TEMP")
         ' 遅延環境変数で py 終了コードを exit /b し VBA に返す（一時 .cmd を cmd.exe /c で実行）
         ' 進捗表示は execution_log.txt のポーリングのみ（PM_AI_SPLASH_XLWINGS は使わない＝二重表示防止）
@@ -5373,6 +5401,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
         MacroSplash_ClearExecutionLogPane
         On Error Resume Next
         Err.Clear
+        Call AgentDebugNdjson0c572c("H2", "stage2_core", "xlwings_branch", "{""using_cmd"":false}")
         XwRunConsoleRunner "run_stage2_for_xlwings"
         If Err.Number <> 0 Then
             st2XwErr = Err.Number
@@ -5395,6 +5424,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Else
         Dim hideStage12CmdSt2 As Boolean
         hideStage12CmdSt2 = Stage12CmdHideWindowEffective()
+        Call AgentDebugNdjson0c572c("H2", "stage2_core", "cmd_branch", "{""hideEff"":" & LCase$(CStr(hideStage12CmdSt2)) & "}")
         runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
