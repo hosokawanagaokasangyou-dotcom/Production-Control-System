@@ -741,75 +741,6 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             pass
 
 
-# region agent log
-_AGENT_DEBUG_DISPATCH_SESSION = "497ff0"
-_AGENT_DEBUG_DISPATCH_LOG_MAX = 72
-_AGENT_DEBUG_DISPATCH_LOG_COUNT = 0
-_AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT = 0
-_AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_MAX = 12
-
-
-def _agent_debug_ndjson_dispatch(payload: dict) -> None:
-    """Cursor デバッグ用: リポジトリ直下 debug-497ff0.log へ NDJSON 追記。"""
-    global _AGENT_DEBUG_DISPATCH_LOG_COUNT
-    try:
-        if _AGENT_DEBUG_DISPATCH_LOG_COUNT >= _AGENT_DEBUG_DISPATCH_LOG_MAX:
-            return
-        root = os.path.dirname(os.path.abspath(__file__))
-        log_path = None
-        for _ in range(14):
-            if os.path.isdir(os.path.join(root, ".git")):
-                log_path = os.path.join(root, "debug-497ff0.log")
-                break
-            parent = os.path.dirname(root)
-            if parent == root:
-                break
-            root = parent
-        if not log_path:
-            log_path = os.path.join(os.getcwd(), "debug-497ff0.log")
-        payload = dict(payload)
-        payload.setdefault("sessionId", _AGENT_DEBUG_DISPATCH_SESSION)
-        payload.setdefault("timestamp", int(time_module.time() * 1000))
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-        _AGENT_DEBUG_DISPATCH_LOG_COUNT += 1
-    except Exception:
-        pass
-
-
-def _agent_debug_should_log_y416_sec_apr8(
-    task_id: object, machine: object, current_date: date
-) -> bool:
-    tid = str(task_id or "").strip()
-    mac = str(machine or "").strip().upper()
-    return (
-        tid == "Y4-16"
-        and "SEC" in mac
-        and current_date.month == 4
-        and current_date.day == 8
-    )
-
-
-_AGENT_DEBUG_TRACKED_COMBO_ROW_IDS: frozenset[int] = frozenset({40, 41})
-
-
-def _agent_debug_combo_sheet_row_tracked_id(crid: object) -> int | None:
-    """組合せ行IDがデバッグ追跡対象（40 / 41）ならその int、それ以外は None。"""
-    try:
-        v = int(crid)
-        return v if v in _AGENT_DEBUG_TRACKED_COMBO_ROW_IDS else None
-    except (TypeError, ValueError):
-        pass
-    s = str(crid or "").strip()
-    for w in _AGENT_DEBUG_TRACKED_COMBO_ROW_IDS:
-        if s == str(w):
-            return w
-    return None
-
-
-# endregion agent log
-
-
 # True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -13954,32 +13885,6 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
-            # region agent log
-            global _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT
-            if (
-                _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT
-                < _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_MAX
-                and _agent_debug_should_log_y416_sec_apr8(
-                    task.get("task_id"), task.get("machine"), current_date
-                )
-            ):
-                _agent_debug_ndjson_dispatch(
-                    {
-                        "hypothesisId": "H2_blocked_lower_trial_order",
-                        "location": "_trial_order_flow_eligible_tasks:skip",
-                        "message": "Y4-16 SEC 4/8 excluded: lower dispatch_trial_order still pending on same machine",
-                        "data": {
-                            "task_id": str(task.get("task_id") or "").strip(),
-                            "current_date": str(current_date),
-                            "dispatch_trial_order": _my_dispatch_ord,
-                            "machine_occ": _mocc_trial,
-                            "machine": str(task.get("machine") or ""),
-                        },
-                        "runId": "pre-fix",
-                    }
-                )
-                _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT += 1
-            # endregion agent log
             continue
         out.append(task)
     return out
@@ -14440,54 +14345,6 @@ def _assign_one_roll_trial_order_flow(
     if _co_abort:
         return None
 
-    # region agent log
-    if _agent_debug_should_log_y416_sec_apr8(
-        task.get("task_id"), machine, current_date
-    ):
-        _av_sample = [
-            str(avail_dt.get(m))
-            for m in capable_members[:8]
-            if m in avail_dt
-        ]
-        _agent_debug_ndjson_dispatch(
-            {
-                "hypothesisId": "H1_H3_H4_machine_and_day_floor",
-                "location": "_assign_one_roll_trial_order_flow:floors",
-                "message": "Y4-16 SEC 4/8 roll attempt context",
-                "data": {
-                    "outer_round": DISPATCH_TRACE_OUTER_ROUND,
-                    "remaining_units": task.get("remaining_units"),
-                    "dispatch_trial_order": task.get("dispatch_trial_order"),
-                    "day_floor": str(day_floor),
-                    "machine_day_floor": str(machine_day_floor),
-                    "mach_floor_eff": str(_mach_floor_eff),
-                    "machine_avail_before_co": str(
-                        machine_avail_dt.get(machine_occ_key, machine_day_floor)
-                    ),
-                    "b2_insp_ec_floor": str(b2_insp_ec_floor)
-                    if b2_insp_ec_floor
-                    else None,
-                    "raw_input_date": str(task.get("raw_input_date")),
-                    "start_date_req": str(task.get("start_date_req")),
-                    "earliest_start_time": str(task.get("earliest_start_time"))
-                    if task.get("earliest_start_time")
-                    else None,
-                    "same_day_raw_start_limit": str(task.get("same_day_raw_start_limit"))
-                    if task.get("same_day_raw_start_limit")
-                    else None,
-                    "regular_shift_start": str(_STAGE2_REGULAR_SHIFT_START)
-                    if _STAGE2_REGULAR_SHIFT_START
-                    else None,
-                    "daily_startup_min": _lookup_daily_startup_minutes(
-                        machine_name, None
-                    ),
-                    "avail_dt_sample_capable": _av_sample,
-                },
-                "runId": "pre-fix",
-            }
-        )
-    # endregion agent log
-
     def _one_roll_from_team(
         team: tuple,
         min_n: int | None = None,
@@ -14694,83 +14551,26 @@ def _assign_one_roll_trial_order_flow(
     team_candidates: list[dict] = []
     # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
     # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
-    _preset_tracked_traces: dict[int, dict] = {}
     if preset_rows_assign:
         for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
-            # region agent log
-            _tracked_rid = None
-            if _agent_debug_should_log_y416_sec_apr8(
-                task.get("task_id"), machine, current_date
-            ):
-                _tracked_rid = _agent_debug_combo_sheet_row_tracked_id(combo_row_id)
-            # endregion agent log
             bounds = _combo_preset_team_size_bounds(
                 tuple(preset_team), sheet_rs, max_team_size
             )
             if bounds is None:
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "bounds_none",
-                        "sheet_rs": str(sheet_rs),
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
                 continue
             lo_pt, hi_pt = bounds
             if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "fixed_anchor_not_subset",
-                        "anchor": list(fixed_team_anchor),
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
                 continue
             if pref_mem is not None and pref_mem not in preset_team:
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "preferred_op_not_in_preset",
-                        "pref_mem": str(pref_mem),
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
                 continue
             if not all(m in capable_members for m in preset_team):
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "not_all_capable",
-                        "missing": [
-                            m for m in preset_team if m not in capable_members
-                        ],
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
                 continue
             if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "no_op_in_preset",
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
                 continue
             got = _one_roll_from_team(
                 tuple(preset_team), min_n=lo_pt, max_n=hi_pt
             )
             if got is not None:
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "added_to_candidates",
-                        "team_start": str(got.get("team_start")),
-                        "lo_hi": [lo_pt, hi_pt],
-                    }
-                # endregion agent log
                 team_candidates.append(
                     {
                         **got,
@@ -14778,16 +14578,6 @@ def _assign_one_roll_trial_order_flow(
                         "combo_preset_team": tuple(preset_team),
                     }
                 )
-            else:
-                # region agent log
-                if _tracked_rid is not None:
-                    _preset_tracked_traces[_tracked_rid] = {
-                        "outcome": "one_roll_from_team_none",
-                        "lo_hi": [lo_pt, hi_pt],
-                        "preset_team": list(preset_team),
-                    }
-                # endregion agent log
-                pass
     for tsize in range(req_num, max_team_size + 1):
         if fixed_team_anchor:
             _ft = list(fixed_team_anchor)
@@ -14850,80 +14640,6 @@ def _assign_one_roll_trial_order_flow(
             c["prio_sum"],
             t_min,
         )
-
-    # region agent log
-    if _agent_debug_should_log_y416_sec_apr8(
-        task.get("task_id"), machine, current_date
-    ):
-        _preset_rows_in_table: dict[str, dict | None] = {}
-        for _want in sorted(_AGENT_DEBUG_TRACKED_COMBO_ROW_IDS):
-            _preset_rows_in_table[str(_want)] = None
-        if preset_rows_assign:
-            for _pr, _sr, _pt, _cid in preset_rows_assign:
-                _tid_tbl = _agent_debug_combo_sheet_row_tracked_id(_cid)
-                if _tid_tbl is not None:
-                    _preset_rows_in_table[str(_tid_tbl)] = {
-                        "prio": _pr,
-                        "sheet_rs": str(_sr),
-                        "preset_team": list(_pt),
-                        "combo_sheet_row_id": _cid,
-                    }
-        _cand_by_id: dict[str, dict | None] = {}
-        for _want in sorted(_AGENT_DEBUG_TRACKED_COMBO_ROW_IDS):
-            _cx = next(
-                (
-                    c
-                    for c in team_candidates
-                    if _agent_debug_combo_sheet_row_tracked_id(
-                        c.get("combo_sheet_row_id")
-                    )
-                    == _want
-                ),
-                None,
-            )
-            if _cx is None:
-                _cand_by_id[str(_want)] = None
-            else:
-                _cand_by_id[str(_want)] = {
-                    "team_start": str(_cx["team_start"]),
-                    "sort_tuple": list(_team_cand_key(_cx)),
-                    "team": list(_cx["team"]),
-                }
-        _pre_best = min(team_candidates, key=_team_cand_key)
-        _loop_tr_json = {str(k): v for k, v in _preset_tracked_traces.items()}
-        _agent_debug_ndjson_dispatch(
-            {
-                "hypothesisId": "H_combo4041_pick",
-                "location": "_assign_one_roll_trial_order_flow:before_min",
-                "message": "Y4-16 SEC 4/8: combo#40/#41 trace vs t_min/best",
-                "data": {
-                    "combo_key_assign": combo_key_assign,
-                    "tracked_combo_row_ids": sorted(_AGENT_DEBUG_TRACKED_COMBO_ROW_IDS),
-                    "preset_rows_40_41_in_table": _preset_rows_in_table,
-                    "preset_loop_traces_by_id": _loop_tr_json,
-                    "n_candidates": len(team_candidates),
-                    "t_min": str(t_min),
-                    "candidates_40_41": _cand_by_id,
-                    "best_combo_id": _pre_best.get("combo_sheet_row_id"),
-                    "best_team_start": str(_pre_best["team_start"]),
-                    "best_sort_tuple": list(_team_cand_key(_pre_best)),
-                    "best_team": list(_pre_best["team"]),
-                    "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES": TEAM_ASSIGN_START_SLACK_WAIT_MINUTES,
-                    "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF": TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF,
-                    "n_start_before_1000": sum(
-                        1
-                        for c in team_candidates
-                        if c["team_start"].hour < 10
-                        or (
-                            c["team_start"].hour == 10
-                            and c["team_start"].minute == 0
-                        )
-                    ),
-                },
-                "runId": "combo4041-debug",
-            }
-        )
-    # endregion agent log
 
     best_c = min(team_candidates, key=_team_cand_key)
     if best_c.get("combo_sheet_row_id") is None and preset_rows_assign:
