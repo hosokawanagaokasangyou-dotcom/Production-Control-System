@@ -136,7 +136,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
 ' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
-' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウン: F2:F4）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 完了時に一覧を自動更新（名前一致で順と表示を維持）。当シートは常に表示。
+' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウン: F2:F4）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 成功完了時は一覧更新のあと「ブックへ適用」まで自動実行（適用末尾で再び一覧同期）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
 '   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
@@ -5091,9 +5091,12 @@ Private Sub 段階1_コア実行()
     配台計画_タスク入力_A1を選択
     On Error GoTo 0
 
-    MacroSplash_SetStep "段階1: 「設定_シート表示」の一覧を更新しています…"
+    MacroSplash_SetStep "段階1: 「設定_シート表示」を一覧更新しブックへ適用しています…"
     On Error Resume Next
     設定_シート表示_一覧をブックから再取得
+    Err.Clear
+    設定_シート表示_ブックへ適用
+    Err.Clear
     On Error GoTo 0
 
     Application.ScreenUpdating = prevScreenUpdating
@@ -6111,9 +6114,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
     On Error GoTo ErrHandler
 
-    MacroSplash_SetStep "段階2: 「設定_シート表示」の一覧を更新しています…"
+    MacroSplash_SetStep "段階2: 「設定_シート表示」を一覧更新しブックへ適用しています…"
     On Error Resume Next
     設定_シート表示_一覧をブックから再取得
+    Err.Clear
+    設定_シート表示_ブックへ適用
     Err.Clear
     On Error GoTo ErrHandler
     
