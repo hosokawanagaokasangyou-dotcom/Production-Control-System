@@ -13475,9 +13475,14 @@ def _append_changeover_segments_to_timeline(
             if nm and nm in daily_status:
                 br_acc.extend(daily_status[nm].get("breaks_dt") or [])
         br_seg = merge_time_intervals(br_acc)
+        tid_ev = (
+            ""
+            if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP
+            else str(task_id or "").strip()
+        )
         ev = {
             "date": current_date,
-            "task_id": task_id,
+            "task_id": tid_ev,
             "machine": m_line,
             "machine_occupancy_key": m_occ,
             "op": op,
