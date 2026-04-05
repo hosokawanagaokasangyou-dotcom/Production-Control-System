@@ -13144,6 +13144,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
     skills 適合 OP の勤務・休憩に沿って forward し、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
     同一占有キーで直前加工と同一依頼NOのときは加工前準備を付けない（連続ロール）。
+    日次始業セグメントの op は空（タイムラインでは人を載せず設備のみ）。準備・後始末の op は forward 用の代表／直前主。
     セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
     """
     if abolish_limits:
@@ -13186,7 +13187,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
             {
                 "start_dt": t0,
                 "end_dt": ce,
-                "op": rep,
+                "op": "",
                 "event_kind": TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
                 "machine": eq_line,
                 "machine_occupancy_key": mach_occ,
@@ -13366,12 +13367,28 @@ def _resolve_machine_changeover_floor_segments(
             return mf, [], False
         return machine_day_floor, [], True
     if dispatch_interval_mirror is not None and co_segs:
+        _last_sub_m = machine_handoff.get("last_machining_sub") or {}
         for seg in co_segs:
             sop = str(seg.get("op") or "").strip()
             sok = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
             st_seg = seg.get("start_dt")
             ed_seg = seg.get("end_dt")
+            ek_chk = str(seg.get("event_kind") or "").strip()
             if not isinstance(st_seg, datetime) or not isinstance(ed_seg, datetime):
+                continue
+            if ek_chk == TIMELINE_EVENT_CHANGEOVER_CLEANUP and sok:
+                _sc = str(_last_sub_m.get(sok, "") or "").strip()
+                _team_chk: list[str] = []
+                if sop:
+                    _team_chk.append(sop)
+                for _p in _sc.split(","):
+                    _t = _p.strip()
+                    if _t and _t not in _team_chk:
+                        _team_chk.append(_t)
+                if dispatch_interval_mirror.would_block_roll(
+                    sok, tuple(_team_chk), st_seg, ed_seg
+                ):
+                    return machine_day_floor, [], True
                 continue
             if (
                 sop
@@ -13388,6 +13405,35 @@ def _resolve_machine_changeover_floor_segments(
     return co_lb, co_segs, False
 
 
+def _changeover_timeline_op_sub_for_event(
+    *,
+    event_kind: str,
+    op_from_segment: str,
+    machine_occ_key: str,
+    machining_lead_op: str,
+    machining_sub_str: str,
+    machine_handoff: dict,
+    daily_status: dict,
+) -> tuple[str, str]:
+    """タイムライン用の主／補。日次始業は人なし。準備は直後ロール、後始末は handoff の直前ロール。"""
+    ek = str(event_kind or "").strip()
+    op_s = str(op_from_segment or "").strip()
+    _lead = str(machining_lead_op or "").strip()
+    _sub_new = str(machining_sub_str or "").strip()
+    if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+        return "", ""
+    if ek == TIMELINE_EVENT_CHANGEOVER_PREP:
+        op_u = _lead if _lead in daily_status else op_s
+        return op_u, _sub_new
+    if ek == TIMELINE_EVENT_CHANGEOVER_CLEANUP:
+        mocc = str(machine_occ_key or "").strip()
+        sub_prev = str(
+            (machine_handoff.get("last_machining_sub") or {}).get(mocc, "") or ""
+        ).strip()
+        return op_s, sub_prev
+    return op_s, ""
+
+
 def _append_changeover_segments_to_timeline(
     timeline_events: list,
     dispatch_interval_mirror: DispatchIntervalMirror | None,
@@ -13399,9 +13445,13 @@ def _append_changeover_segments_to_timeline(
     machine_occ_key: str,
     segments: list[dict],
     machining_lead_op: str | None = None,
+    machining_sub_str: str | None = None,
+    machine_handoff: dict | None = None,
 ) -> None:
-    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映（各セグメントは主担当1名のみ）。"""
+    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
+    _mh = machine_handoff or {}
     _lead_m = str(machining_lead_op or "").strip()
+    _sub_roll = str(machining_sub_str or "").strip()
     for seg in segments or []:
         op_seg = str(seg.get("op") or "").strip()
         st = seg.get("start_dt")
@@ -13411,25 +13461,27 @@ def _append_changeover_segments_to_timeline(
         m_line = str(seg.get("machine") or "").strip()
         m_occ = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
         ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_CHANGEOVER_PREP
-        if _lead_m and ek in (
-            TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
-            TIMELINE_EVENT_CHANGEOVER_PREP,
-        ):
-            op = _lead_m if _lead_m in daily_status else op_seg
-        else:
-            op = op_seg
-        br_seg: list = []
-        if op:
-            br_seg = merge_time_intervals(
-                list(daily_status.get(op, {}).get("breaks_dt") or [])
-            )
+        op, sub = _changeover_timeline_op_sub_for_event(
+            event_kind=ek,
+            op_from_segment=op_seg,
+            machine_occ_key=m_occ,
+            machining_lead_op=_lead_m,
+            machining_sub_str=_sub_roll,
+            machine_handoff=_mh,
+            daily_status=daily_status,
+        )
+        br_acc: list = []
+        for nm in (op, *[_p.strip() for _p in sub.split(",") if _p.strip()]):
+            if nm and nm in daily_status:
+                br_acc.extend(daily_status[nm].get("breaks_dt") or [])
+        br_seg = merge_time_intervals(br_acc)
         ev = {
             "date": current_date,
             "task_id": task_id,
             "machine": m_line,
             "machine_occupancy_key": m_occ,
             "op": op,
-            "sub": "",
+            "sub": sub,
             "start_dt": st,
             "end_dt": ed,
             "breaks": br_seg,
@@ -13439,12 +13491,14 @@ def _append_changeover_segments_to_timeline(
         timeline_events.append(ev)
         if dispatch_interval_mirror is not None:
             dispatch_interval_mirror.register_from_event(ev)
-        if op:
-            prev_a = avail_dt.get(op, st)
+        for nm in (op, *[_p.strip() for _p in sub.split(",") if _p.strip()]):
+            if not nm:
+                continue
+            prev_a = avail_dt.get(nm, st)
             if isinstance(prev_a, datetime):
-                avail_dt[op] = max(prev_a, ed)
+                avail_dt[nm] = max(prev_a, ed)
             else:
-                avail_dt[op] = ed
+                avail_dt[nm] = ed
 
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
@@ -13483,7 +13537,7 @@ def _machine_handoff_state_from_timeline(
     計画日 current_date 以前の **加工 (machining)** イベントの最終終了を復元する。
     セットアップ系 event_kind は last_tid / 後始末判定に含めない。
     """
-    best: dict[str, tuple[datetime, str, str, date, str]] = {}
+    best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
     for e in timeline_events:
         if not _is_machining_timeline_event(e):
             continue
@@ -13508,14 +13562,16 @@ def _machine_handoff_state_from_timeline(
         eq_line = str(e.get("machine") or "").strip()
         tid = _normalize_timeline_task_id(e)
         lead_op = str(e.get("op") or "").strip()
+        sub_csv = str(e.get("sub") or "").strip()
         prev = best.get(occ)
         if prev is None or end_dt > prev[0]:
-            best[occ] = (end_dt, tid, eq_line, ed, lead_op)
+            best[occ] = (end_dt, tid, eq_line, ed, lead_op, sub_csv)
     last_tid = {k: v[1] for k, v in best.items()}
     last_eq = {k: v[2] for k, v in best.items()}
     last_machining_dt = {k: v[0] for k, v in best.items()}
     last_machining_date = {k: v[3] for k, v in best.items()}
     last_lead_op = {k: v[4] for k, v in best.items()}
+    last_machining_sub = {k: v[5] for k, v in best.items()}
     machining_today_occ: set[str] = set()
     for e in timeline_events:
         if not _is_machining_timeline_event(e):
@@ -13539,6 +13595,7 @@ def _machine_handoff_state_from_timeline(
         "last_machining_dt": last_machining_dt,
         "last_machining_date": last_machining_date,
         "last_lead_op": last_lead_op,
+        "last_machining_sub": last_machining_sub,
         "machining_today_occ": machining_today_occ,
         "started_today": started_today,
     }
@@ -13705,6 +13762,7 @@ def _append_legacy_dispatch_candidate_for_team(
         "last_machining_dt": {},
         "last_machining_date": {},
         "last_lead_op": {},
+        "last_machining_sub": {},
     }
     op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
     if not op_list:
@@ -13881,6 +13939,7 @@ def _assign_one_roll_trial_order_flow(
         "last_machining_dt": {},
         "last_machining_date": {},
         "last_lead_op": {},
+        "last_machining_sub": {},
     }
 
     plan_ro = _plan_sheet_required_op_optional(task)
@@ -14418,6 +14477,7 @@ def _trial_order_first_schedule_pass(
         "last_machining_dt": dict(_mh_init.get("last_machining_dt") or {}),
         "last_machining_date": dict(_mh_init.get("last_machining_date") or {}),
         "last_lead_op": dict(_mh_init.get("last_lead_op") or {}),
+        "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
     }
 
     def _drain_rolls_for_task(task: dict) -> bool:
@@ -14493,6 +14553,9 @@ def _trial_order_first_schedule_pass(
             except Exception:
                 pct_macro = 0
 
+            _mach_sub_line = ", ".join(
+                str(s).strip() for s in sub_members if s and str(s).strip()
+            )
             _append_changeover_segments_to_timeline(
                 timeline_events,
                 dispatch_interval_mirror,
@@ -14503,6 +14566,8 @@ def _trial_order_first_schedule_pass(
                 machine_occ_key=machine_occ_key,
                 segments=list(res.get("changeover_segments") or []),
                 machining_lead_op=str(lead_op or "").strip() or None,
+                machining_sub_str=_mach_sub_line or None,
+                machine_handoff=machine_handoff,
             )
             timeline_events.append(
                 {
@@ -14584,6 +14649,8 @@ def _trial_order_first_schedule_pass(
             machine_handoff["last_machining_dt"][machine_occ_key] = best_end
             machine_handoff["last_machining_date"][machine_occ_key] = current_date
             machine_handoff["last_lead_op"][machine_occ_key] = lead_op
+            machine_handoff.setdefault("last_machining_sub", {})
+            machine_handoff["last_machining_sub"][machine_occ_key] = _mach_sub_line
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -14805,7 +14872,7 @@ def append_surplus_staff_after_main_dispatch(
     need「配台時追加人数／余力時追加人数」行の上限まで、メイン割付で採用しきれなかった枠を追記する。
     各タイムラインブロックについて、その時間帯に他ブロックへ未参加（区間重なりなし）で
     eligible かつ OP/AS スキルの者をサブに追加する。
-    日次始業・依頼切替後始末・加工前準備（event_kind が加工以外）は主担当1名のみとし、本処理の対象外。
+    日次始業・依頼切替後始末・加工前準備（event_kind が加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
     """
     gpo = global_priority_override or {}
     if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
@@ -15518,6 +15585,9 @@ def _generate_plan_impl():
                             _mh_legacy_day.get("last_machining_date") or {}
                         ),
                         "last_lead_op": dict(_mh_legacy_day.get("last_lead_op") or {}),
+                        "last_machining_sub": dict(
+                            _mh_legacy_day.get("last_machining_sub") or {}
+                        ),
                     }
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
@@ -16294,6 +16364,11 @@ def _generate_plan_impl():
                             _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
                             if _te_disp <= 0:
                                 _te_disp = 1.0
+                            _legacy_mach_sub = ", ".join(
+                                str(s).strip()
+                                for s in sub_members
+                                if s and str(s).strip()
+                            )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
                                 _dispatch_interval_mirror,
@@ -16307,6 +16382,8 @@ def _generate_plan_impl():
                                     best_info.get("op") or ""
                                 ).strip()
                                 or None,
+                                machining_sub_str=_legacy_mach_sub or None,
+                                machine_handoff=machine_handoff_legacy,
                             )
                             timeline_events.append({
                                 "date": current_date, "task_id": task['task_id'], "machine": eq_line,
@@ -16428,6 +16505,10 @@ def _generate_plan_impl():
                             machine_handoff_legacy["last_lead_op"][
                                 machine_occ_key
                             ] = best_info["op"]
+                            machine_handoff_legacy.setdefault("last_machining_sub", {})
+                            machine_handoff_legacy["last_machining_sub"][
+                                machine_occ_key
+                            ] = _legacy_mach_sub
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
