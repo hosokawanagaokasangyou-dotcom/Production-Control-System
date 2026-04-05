@@ -741,48 +741,6 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             pass
 
 
-# region agent log
-_AGENT497_MAX = 24
-_AGENT497_COUNT = 0
-_AGENT497_Y416_ENTRY = 0
-_AGENT497_Y416_CAND_LOGS = 0
-_AGENT497_APR8_DAYSTART_KEYS: set = set()
-
-
-def _agent497_is_apr8(cur: date) -> bool:
-    return cur.month == 4 and cur.day == 8
-
-
-def _agent497_ndjson(payload: dict) -> None:
-    global _AGENT497_COUNT
-    if _AGENT497_COUNT >= _AGENT497_MAX:
-        return
-    try:
-        _root = os.path.dirname(os.path.abspath(__file__))
-        log_path = None
-        for _ in range(16):
-            if os.path.isdir(os.path.join(_root, ".git")):
-                log_path = os.path.join(_root, "debug-497ff0.log")
-                break
-            _par = os.path.dirname(_root)
-            if _par == _root:
-                break
-            _root = _par
-        if not log_path:
-            log_path = os.path.join(os.getcwd(), "debug-497ff0.log")
-        payload = dict(payload)
-        payload["sessionId"] = "497ff0"
-        payload.setdefault("timestamp", int(time_module.time() * 1000))
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-        _AGENT497_COUNT += 1
-    except Exception:
-        pass
-
-
-# endregion agent log
-
-
 # True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -14184,46 +14142,11 @@ def _assign_one_roll_trial_order_flow(
     組合せ探索より優先して採用する（翌日には持ち越さない）。
     戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
-    global _AGENT497_Y416_ENTRY, _AGENT497_Y416_CAND_LOGS
     machine = task["machine"]
     machine_name = str(task.get("machine_name", "") or "").strip()
     machine_proc = str(machine or "").strip()
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
     machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
-    # region agent log
-    if (
-        _agent497_is_apr8(current_date)
-        and str(task.get("task_id") or "").strip() == "Y4-16"
-        and _AGENT497_Y416_ENTRY < 6
-        and _AGENT497_COUNT < _AGENT497_MAX
-    ):
-        _AGENT497_Y416_ENTRY += 1
-        _agent497_ndjson(
-            {
-                "hypothesisId": "H3_avail_at_y416_call",
-                "location": "_assign_one_roll_trial_order_flow:entry",
-                "message": "Y4-16 4/8: ロール試行前の avail / 機械空きスナップショット",
-                "data": {
-                    "call_index": _AGENT497_Y416_ENTRY,
-                    "remaining_units": float(task.get("remaining_units") or 0),
-                    "dispatch_trial_order": task.get("dispatch_trial_order"),
-                    "machine_occ_key": machine_occ_key,
-                    "eq_line": eq_line,
-                    "avail_dt": {
-                        k: str(v)
-                        for k, v in sorted(avail_dt.items())[:120]
-                    },
-                    "avail_dt_n": len(avail_dt),
-                    "machine_avail_dt": {
-                        k: str(v)
-                        for k, v in sorted(machine_avail_dt.items())[:80]
-                    },
-                    "machine_avail_n": len(machine_avail_dt),
-                },
-                "runId": "apr8-y416",
-            }
-        )
-    # endregion agent log
     _gpo = global_priority_override or {}
     _mh = machine_handoff or {
         "last_tid": {},
@@ -14708,38 +14631,6 @@ def _assign_one_roll_trial_order_flow(
     if not team_candidates:
         return None
     t_min = min(c["team_start"] for c in team_candidates)
-    # region agent log
-    if (
-        _agent497_is_apr8(current_date)
-        and str(task.get("task_id") or "").strip() == "Y4-16"
-        and _AGENT497_COUNT < _AGENT497_MAX
-        and _AGENT497_Y416_CAND_LOGS < 4
-    ):
-        _AGENT497_Y416_CAND_LOGS += 1
-        _agent497_ndjson(
-            {
-                "hypothesisId": "H4_feasible_team_starts",
-                "location": "_assign_one_roll_trial_order_flow:candidates_built",
-                "message": "Y4-16 4/8: 成立した team_candidates の開始時刻（いずれも同じ t_min が多い）",
-                "data": {
-                    "n_candidates": len(team_candidates),
-                    "t_min": str(t_min),
-                    "unique_starts": sorted(
-                        {str(c["team_start"]) for c in team_candidates}
-                    ),
-                    "sample": [
-                        {
-                            "combo_sheet_row_id": c.get("combo_sheet_row_id"),
-                            "team": list(c["team"]),
-                            "start": str(c["team_start"]),
-                        }
-                        for c in team_candidates[:16]
-                    ],
-                },
-                "runId": "apr8-y416",
-            }
-        )
-    # endregion agent log
 
     def _team_cand_key(c):
         return _team_assignment_sort_tuple(
@@ -14820,29 +14711,6 @@ def _trial_order_first_schedule_pass(
         eligible,
         key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
     )
-    # region agent log
-    if _agent497_is_apr8(current_date) and _AGENT497_COUNT < _AGENT497_MAX:
-        _agent497_ndjson(
-            {
-                "hypothesisId": "H1_trial_order",
-                "location": "_trial_order_first_schedule_pass:eligible",
-                "message": "4/8 メインパス: eligible タスクの試行順（先に処理されるほど早い）",
-                "data": {
-                    "dispatch_outer_round": DISPATCH_TRACE_OUTER_ROUND,
-                    "eligible": [
-                        {
-                            "task_id": str(t.get("task_id") or ""),
-                            "order": int(t.get("dispatch_trial_order") or 10**9),
-                            "machine": str(t.get("machine") or ""),
-                            "rem": float(t.get("remaining_units") or 0),
-                        }
-                        for t in eligible_sorted
-                    ],
-                },
-                "runId": "apr8-y416",
-            }
-        )
-    # endregion agent log
     _gpo = global_priority_override or {}
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
     machine_handoff = {
@@ -15069,43 +14937,6 @@ def _trial_order_first_schedule_pass(
     for task in phase2_tasks:
         if _drain_rolls_for_task(task):
             pass_made = True
-    # region agent log
-    if _agent497_is_apr8(current_date) and _AGENT497_COUNT < _AGENT497_MAX:
-        _mach_today = [
-            {
-                "task_id": str(e.get("task_id") or ""),
-                "start": str(e.get("start_dt")),
-                "end": str(e.get("end_dt")),
-                "machine": str(e.get("machine") or ""),
-                "op": str(e.get("op") or ""),
-                "sub": str(e.get("sub") or ""),
-            }
-            for e in timeline_events
-            if e.get("date") == current_date
-            and e.get("event_kind") == TIMELINE_EVENT_MACHINING
-        ]
-        _mach_today.sort(key=lambda x: x["start"])
-        _agent497_ndjson(
-            {
-                "hypothesisId": "H2_timeline_end_pass",
-                "location": "_trial_order_first_schedule_pass:after_pass",
-                "message": "4/8 メインパス終了時: 当日 machining イベント（累積）と avail_dt",
-                "data": {
-                    "dispatch_outer_round": DISPATCH_TRACE_OUTER_ROUND,
-                    "pass_made": pass_made,
-                    "machining_on_date_count": len(_mach_today),
-                    "machining_on_date": _mach_today[:100],
-                    "machining_truncated": len(_mach_today) > 100,
-                    "avail_dt_end": {
-                        k: str(v)
-                        for k, v in sorted(avail_dt.items())[:120]
-                    },
-                    "avail_dt_end_n": len(avail_dt),
-                },
-                "runId": "apr8-y416",
-            }
-        )
-    # endregion agent log
     return pass_made
 
 
@@ -15904,43 +15735,6 @@ def _generate_plan_impl():
                     equipment_list,
                     _machine_day_start,
                 )
-                # region agent log
-                if _agent497_is_apr8(current_date) and _AGENT497_COUNT < _AGENT497_MAX:
-                    _dsk = (DISPATCH_TRACE_OUTER_ROUND, current_date.isoformat())
-                    if _dsk not in _AGENT497_APR8_DAYSTART_KEYS:
-                        _AGENT497_APR8_DAYSTART_KEYS.add(_dsk)
-                        _watch = ("宮島　　剛", "竹内　正美")
-                        _agent497_ndjson(
-                            {
-                                "hypothesisId": "H0_day_start_avail",
-                                "location": "generate_plan:day_loop:after_seed",
-                                "message": "4/8 各外側ラウンド×日付: seed 直後の avail_dt と勤怠 start_dt（前日終了の持ち越し検証）",
-                                "data": {
-                                    "dispatch_outer_round": DISPATCH_TRACE_OUTER_ROUND,
-                                    "avail_dt_after_seed": {
-                                        nm: str(avail_dt[nm])
-                                        for nm in _watch
-                                        if nm in avail_dt
-                                    },
-                                    "daily_status_start_dt": {
-                                        nm: str(daily_status[nm]["start_dt"])
-                                        for nm in _watch
-                                        if nm in daily_status
-                                    },
-                                    "same_as_start": {
-                                        nm: (
-                                            nm in avail_dt
-                                            and nm in daily_status
-                                            and avail_dt[nm]
-                                            == daily_status[nm]["start_dt"]
-                                        )
-                                        for nm in _watch
-                                    },
-                                },
-                                "runId": "apr8-daystart",
-                            }
-                        )
-                # endregion agent log
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
