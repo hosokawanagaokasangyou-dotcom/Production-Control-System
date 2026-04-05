@@ -635,7 +635,7 @@ End Function
 ' ★ 図形に登録するためのアニメーション付き起動マクロ ★
 ' 処理本体は 段階1_コア実行 / 段階2_コア実行、ダイアログ付きの公開入口は RunPythonStage1 / RunPython / RunPythonStage1ThenStage2
 ' 段階1・段階2のコアが成功で終わった直後、配台_全シートフォントBIZ_UDP_自動適用 で全シートを BIZ UDPゴシックに統一し、結果_主要4結果シート_列オートフィット で主要4結果シートの列幅を調整（完了の vbInformation MsgBox は使わずスプラッシュ＋システム音）
-' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 100% にし、結果_設備毎の時間割(B2)・結果_タスク一覧(F2)・結果_カレンダー(出勤簿)(A2) で窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
+' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 100% にし、その後 結果_設備ガント のみ 85% に戻す。結果_設備毎の時間割(B2)・結果_タスク一覧(F2)・結果_カレンダー(出勤簿)(A2) で窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
     Call AnimateButtonPush
@@ -2144,6 +2144,18 @@ Private Sub 結果プレフィックスシートの表示倍率を設定(ByVal w
     Application.ScreenUpdating = prevScr
 End Sub
 
+' 結果_設備ガントのみ表示倍率を設定（シートをアクティブにして ActiveWindow.Zoom）
+Private Sub 結果_設備ガント_表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+    If ws Is Nothing Then GoTo CleanZoom
+    ws.Activate
+    ActiveWindow.Zoom = zoomPercent
+CleanZoom:
+    On Error GoTo 0
+End Sub
+
 ' 結果_設備ガント：取り込み直後に列幅を設定（Python 本体では列幅を書かない）
 Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastCol As Long
@@ -2172,10 +2184,11 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error Resume Next
     ws.Activate
     ActiveWindow.FreezePanes = False
-    ws.Range("F4").Select
+    ws.Range("F4").Activate
     ActiveWindow.FreezePanes = True
-    ws.Range("F2").Select
-    ws.Range("A1").Select
+    ws.Range("F2").Activate
+    ws.Range("A1").Activate
+    ActiveWindow.Zoom = 85
     On Error GoTo 0
 End Sub
 
@@ -5664,6 +5677,7 @@ Finish:
     On Error Resume Next
     If planImported Then
         結果プレフィックスシートの表示倍率を設定 ThisWorkbook, 100
+        結果_設備ガント_表示倍率を設定 ThisWorkbook, 85
         結果_設備毎の時間割_B2選択して窓枠固定
         結果_タスク一覧_F2選択して窓枠固定
         結果_カレンダー出勤簿_A2選択して窓枠固定
