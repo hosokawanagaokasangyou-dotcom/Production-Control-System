@@ -1365,12 +1365,13 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     return ("task", tid, gh, pct)
 
 
-def _gantt_merge_key(st):
-    if st[0] == "idle":
-        return ("idle",)
-    if st[0] == "break":
-        return ("break",)
-    return ("task", st[1])
+def _gantt_timeline_same_segment(st_a, st_b) -> bool:
+    """結合セグメント境界判定（毎スロット tuple を割り当てない）。"""
+    if st_a[0] != st_b[0]:
+        return False
+    if st_a[0] == "idle" or st_a[0] == "break":
+        return True
+    return st_a[1] == st_b[1]
 
 
 def _paint_gantt_timeline_row_merged(
@@ -1412,13 +1413,12 @@ def _paint_gantt_timeline_row_merged(
         # #region agent log
         _seg_count += 1
         # #endregion
-        mk = _gantt_merge_key(states[i])
+        st0 = states[i]
         j = i + 1
-        while j < n_slots and _gantt_merge_key(states[j]) == mk:
+        while j < n_slots and _gantt_timeline_same_segment(st0, states[j]):
             j += 1
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
-        st0 = states[i]
         if col_s < col_e:
             ws.merge_cells(start_row=row, start_column=col_s, end_row=row, end_column=col_e)
         c = ws.cell(row=row, column=col_s)
@@ -1727,7 +1727,7 @@ def _write_results_equipment_gantt_sheet(
             "len_timeline_events": len(timeline_events or []),
             "show_actual_rows": show_actual_rows,
         },
-        run_id="post-fix",
+        run_id="post-fix2",
     )
     # #endregion
 
@@ -1896,15 +1896,13 @@ def _write_results_equipment_gantt_sheet(
             ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
-            # 区切り行: 列ごとのセル書き込みは openpyxl で重いため、1 行を横一括結合して 1 セルだけ塗る
-            if last_col > 1:
-                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-            sc = ws.cell(row=row, column=1)
-            sc.value = None
-            sc.fill = sep_fill
-            sc.border = no_border
+            for cc in range(1, last_col + 1):
+                sc = ws.cell(row=row, column=cc)
+                sc.value = None
+                sc.fill = sep_fill
+                sc.border = no_border
             # #region agent log
-            _gantt_sep_cell_writes += 1
+            _gantt_sep_cell_writes += last_col
             # #endregion
             ws.row_dimensions[row].height = 5
             row += 1
@@ -1923,7 +1921,7 @@ def _write_results_equipment_gantt_sheet(
             "n_paint_calls": int(_gantt_dbg_acc.get("n_paints", 0)),
             "sep_row_cell_writes": int(_gantt_sep_cell_writes),
         },
-        run_id="post-fix",
+        run_id="post-fix2",
     )
     # #endregion
 
