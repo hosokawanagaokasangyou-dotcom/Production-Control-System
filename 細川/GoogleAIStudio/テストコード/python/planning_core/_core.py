@@ -9239,7 +9239,7 @@ def _agent_debug_ndjson_log(payload: dict) -> None:
     # #region agent log
     try:
         _rp = os.path.abspath(__file__)
-        for _ in range(5):
+        for _ in range(6):
             _rp = os.path.dirname(_rp)
         _lp = os.path.join(_rp, "debug-5e5f85.log")
         p = {"sessionId": "5e5f85", **payload, "timestamp": int(time_module.time() * 1000)}
@@ -9282,6 +9282,12 @@ def _agent_debug_log_equipment_task_dispersion(timeline_events: list) -> None:
                 return
             subs_list = [s["sub"] for s in segs]
             subs_distinct = len(set(subs_list)) > 1
+            _unified_names: set[str] = set()
+            for ss in subs_list:
+                for part in str(ss or "").split(","):
+                    z = part.strip()
+                    if z:
+                        _unified_names.add(z)
             interleaved = False
             for i in range(len(segs) - 1):
                 gap_start = segs[i]["ed"]
@@ -9308,6 +9314,9 @@ def _agent_debug_log_equipment_task_dispersion(timeline_events: list) -> None:
                         "segment_count": len(segs),
                         "subs_per_segment": subs_list,
                         "subs_distinct_across_segments": subs_distinct,
+                        "unified_sub_display": (
+                            ", ".join(sorted(_unified_names)) if _unified_names else ""
+                        ),
                         "other_task_in_gap_between_segments": interleaved,
                     },
                 }
@@ -12134,6 +12143,28 @@ def fill_plan_dispatch_trial_order_column_stage1(
             plan_df.iat[iloc, col_idx] = ""
 
 
+def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
+    """
+    同一日・同一設備列キー・同一依頼NO の加工について、設備時間割セル用の「補」表示文字列。
+    タイムライン上の各ブロックの `sub` に現れた補助者名を和集合し、昇順で ", " 連結する。
+    メンバー日程・占有計算に使うタイムラインの `sub` は変更しない（表示専用）。
+    """
+    acc: dict = defaultdict(set)
+    for e in timeline_for_eq_grid or []:
+        if not _is_machining_timeline_event(e):
+            continue
+        tid = str(e.get("task_id") or "").strip()
+        m = str(e.get("machine") or "").strip()
+        d0 = e.get("date")
+        if not tid or not m or d0 is None:
+            continue
+        for s in str(e.get("sub") or "").split(","):
+            t = s.strip()
+            if t:
+                acc[(d0, m, tid)].add(t)
+    return {k: ", ".join(sorted(v)) for k, v in acc.items() if v}
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -12147,6 +12178,7 @@ def _build_equipment_schedule_dataframe(
     first_eq_schedule_cell_by_task_id を渡したときのみ、初出セル座標を記録（結果ハイパーリンク用）。
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
+    _eq_sched_unify_sub = _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid)
     events_by_date = defaultdict(list)
     for e in timeline_for_eq_grid:
         events_by_date[e["date"]].append(e)
@@ -12176,6 +12208,15 @@ def _build_equipment_schedule_dataframe(
             continue
 
         all_eq_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **eq_empty_cols})
+
+        def _eq_cell_display_sub(ev, day_d) -> str:
+            tid0 = str(ev.get("task_id") or "").strip()
+            m0 = str(ev.get("machine") or "").strip()
+            if tid0 and m0:
+                u0 = _eq_sched_unify_sub.get((day_d, m0, tid0))
+                if u0 is not None:
+                    return u0
+            return str(ev.get("sub") or "").strip()
 
         curr_grid = d_start
         while curr_grid < d_end:
@@ -12223,7 +12264,7 @@ def _build_equipment_schedule_dataframe(
                             _ek_disp,
                             "セットアップ",
                         )
-                        _sub_n = str(active_ev.get("sub") or "").strip()
+                        _sub_n = _eq_cell_display_sub(active_ev, d)
                         _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
                         eq_text = (
@@ -12244,7 +12285,8 @@ def _build_equipment_schedule_dataframe(
                         cumulative_done = active_ev["already_done_units"] + block_done_now
                         total_u = active_ev["total_units"]
 
-                        sub_text = f" 補:{active_ev['sub']}" if active_ev["sub"] else ""
+                        _sub_s = _eq_cell_display_sub(active_ev, d)
+                        sub_text = f" 補:{_sub_s}" if _sub_s else ""
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
                         _tid_sched = str(active_ev.get("task_id") or "").strip()
