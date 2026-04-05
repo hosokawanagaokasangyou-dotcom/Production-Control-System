@@ -3881,7 +3881,7 @@ End Sub
 ' =========================================================
 ' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
 ' ・一覧をブックから再取得 … 全シートを列挙。シート名が一致する行は並び順・表示の意図を維持し、A 列は 1 からの連番に振り直す。C 列はドロップダウン（F2:F4）
-' ・ブックへ適用 … A〜C の内容で Visible と Move を実行（当シートは必ず表示）
+' ・ブックへ適用 … A〜C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
 ' ・段階1/段階2 成功完了時に一覧を自動更新（設定の維持は名前一致で行う）
 ' =========================================================
 Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
@@ -3982,7 +3982,7 @@ Public Sub 設定_シート表示_シートを確保()
     ws.Cells(1, 1).Value = "並び順"
     ws.Cells(1, 2).Value = "シート名"
     ws.Cells(1, 3).Value = "表示"
-    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順(1始まり)・表示を編集 → ブックへ適用"
+    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順(1始まり)・表示を編集 → ブックへ適用（適用後は一覧が自動更新）"
 
     ws.Columns(1).ColumnWidth = 10
     ws.Columns(2).ColumnWidth = 36
@@ -4264,6 +4264,13 @@ Public Sub 設定_シート表示_ブックへ適用()
 
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
+
+    ' タブ順・表示を反映したあと、表の並びと A 列連番をブック現状に合わせる（失敗しても適用は維持）
+    On Error Resume Next
+    設定_シート表示_一覧をブックから再取得
+    Err.Clear
+    On Error GoTo 0
+
     Exit Sub
 ErrHandler:
     Application.DisplayAlerts = prevDA
