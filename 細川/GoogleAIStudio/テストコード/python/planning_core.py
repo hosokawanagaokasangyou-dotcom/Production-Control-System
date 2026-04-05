@@ -77,6 +77,7 @@ import sys
 import ctypes
 from contextlib import contextmanager
 from openpyxl import load_workbook
+from openpyxl.chart import LineChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
@@ -367,6 +368,13 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
+# メインシート・Gemini 日次推移（openpyxl: Q〜R に系列データ、T16 付近に折れ線グラフ）
+GEMINI_USAGE_CHART_COL_DATE = 17  # Q
+GEMINI_USAGE_CHART_COL_VALUE = 18  # R
+GEMINI_USAGE_CHART_HEADER_ROW = 16
+GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
+GEMINI_USAGE_CHART_MAX_DAYS = 14
+GEMINI_USAGE_CHART_CLEAR_ROWS = 36
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
@@ -5213,36 +5221,19 @@ def _gemini_estimate_cost_usd(
     return (prompt_tok / 1_000_000.0) * rin + (out_equiv / 1_000_000.0) * rout
 
 
-_GEMINI_SPARK_CHARS = "▁▂▃▄▅▆▇█"
-
-
-def _gemini_values_to_sparkline(vals: list[float]) -> str:
-    """数値列を Unicode ブロックのミニグラフ（高さ 8 段）にする。左=古・右=新想定。"""
-    if not vals:
-        return "（データなし）"
-    lo, hi = min(vals), max(vals)
-    if hi <= lo:
-        return _GEMINI_SPARK_CHARS[3] * len(vals)
-    nch = len(_GEMINI_SPARK_CHARS)
-    span = hi - lo
-    out: list[str] = []
-    for v in vals:
-        i = int((v - lo) / span * (nch - 1) + 0.5)
-        i = max(0, min(nch - 1, i))
-        out.append(_GEMINI_SPARK_CHARS[i])
-    return "".join(out)
-
-
-def _gemini_usage_trend_mini_lines(cum: dict, *, max_days: int = 14) -> list[str]:
-    """表には載せない履歴トレンドを、日次ミニグラフ＋ CSV 案内のみで示す。"""
+def _gemini_daily_trend_series(
+    cum: dict, *, max_days: int | None = None
+) -> tuple[list[str], list[float], str] | None:
+    """累計 JSON の by_day から、日付キー（古→新）・値・系列名。無ければ None。"""
+    lim = GEMINI_USAGE_CHART_MAX_DAYS if max_days is None else max_days
     b = cum.get("buckets")
     if not isinstance(b, dict):
-        return []
+        return None
     subd = b.get("by_day")
     if not isinstance(subd, dict) or not subd:
-        return []
+        return None
     keys = sorted(subd.keys())
-    keys = keys[-max(1, max_days) :]
+    keys = keys[-max(1, lim) :]
     usds: list[float] = []
     calls: list[int] = []
     for pk in keys:
@@ -5255,18 +5246,110 @@ def _gemini_usage_trend_mini_lines(cum: dict, *, max_days: int = 14) -> list[str
             calls.append(0)
     use_calls = sum(usds) <= 0.0 and sum(calls) > 0
     series = [float(c) for c in calls] if use_calls else usds
-    label = "日次 呼出し回数" if use_calls else "日次 推定USD"
-    spark = _gemini_values_to_sparkline(series)
+    label = "呼出し回数" if use_calls else "推定USD"
+    return (keys, series, label)
+
+
+def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
+    """テキスト側はグラフ参照と CSV 案内のみ（ASCII スパークラインは出さない）。"""
+    ser = _gemini_daily_trend_series(cum)
+    if ser is None:
+        return []
+    keys, _, label = ser
+    b = cum.get("buckets")
     lines = [
-        "【推移ミニグラフ】" + label + "（左=古 右=新 ▁低 … █高）",
-        f"  期間: {keys[0]} ～ {keys[-1]}",
-        f"  {spark}",
+        "【推移グラフ】メインシートの折れ線グラフ（データ: Q〜R 列・自動更新）を参照",
+        f"  系列: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
         f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ可）",
     ]
-    note = b.get("timezone_note")
-    if note:
-        lines.append(f"  （{note}）")
+    if isinstance(b, dict):
+        note = b.get("timezone_note")
+        if note:
+            lines.append(f"  （{note}）")
     return lines
+
+
+def _gemini_chart_is_managed_line_chart(ch: object) -> bool:
+    """当機能が Q〜R 列データで貼った折れ線グラフか（再実行時の削除用・ヒューリスティック）。"""
+    if not isinstance(ch, LineChart):
+        return False
+    try:
+        for ser in ch.series:
+            v = getattr(ser, "val", None)
+            if v is None:
+                continue
+            if int(getattr(v, "min_col", 0) or 0) == GEMINI_USAGE_CHART_COL_VALUE:
+                return True
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return False
+
+
+def _strip_managed_gemini_usage_charts(ws) -> None:
+    charts = getattr(ws, "_charts", None)
+    if not charts:
+        return
+    for ch in list(charts):
+        if _gemini_chart_is_managed_line_chart(ch):
+            charts.remove(ch)
+
+
+def _apply_main_sheet_gemini_usage_chart(ws_main, cum: dict) -> None:
+    """Q〜R に日次系列を書き、T16 付近へ折れ線グラフを 1 本だけ置く。"""
+    hr = GEMINI_USAGE_CHART_HEADER_ROW
+    cdt = GEMINI_USAGE_CHART_COL_DATE
+    cvl = GEMINI_USAGE_CHART_COL_VALUE
+    nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
+    for i in range(nclear):
+        r = hr + i
+        ws_main.cell(row=r, column=cdt, value=None)
+        ws_main.cell(row=r, column=cvl, value=None)
+
+    ser = _gemini_daily_trend_series(cum)
+    _strip_managed_gemini_usage_charts(ws_main)
+    if ser is None:
+        return
+
+    day_keys, values, val_label = ser
+    n = len(day_keys)
+    if n <= 0:
+        return
+
+    ws_main.cell(row=hr, column=cdt, value="日付")
+    ws_main.cell(row=hr, column=cvl, value=val_label)
+    for i, (dk, val) in enumerate(zip(day_keys, values)):
+        r = hr + 1 + i
+        ws_main.cell(row=r, column=cdt, value=dk)
+        c = ws_main.cell(row=r, column=cvl, value=val)
+        if val_label == "推定USD":
+            c.number_format = "0.000000"
+        else:
+            c.number_format = "0"
+
+    data_ref = Reference(
+        ws_main,
+        min_col=cvl,
+        min_row=hr,
+        max_col=cvl,
+        max_row=hr + n,
+    )
+    cats = Reference(
+        ws_main,
+        min_col=cdt,
+        min_row=hr + 1,
+        max_row=hr + n,
+    )
+    chart = LineChart()
+    chart.title = "Gemini API 日次推移"
+    chart.style = 2
+    chart.y_axis.title = val_label
+    chart.x_axis.title = "日付"
+    chart.legend = None
+    chart.width = 14.5
+    chart.height = 7.2
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats)
+    ws_main.add_chart(chart, GEMINI_USAGE_CHART_ANCHOR_CELL)
 
 
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
@@ -5479,7 +5562,7 @@ def build_gemini_usage_summary_text() -> str:
                     )
                 lines.append("")
                 lines.extend(_gemini_kv_table_lines("【累計・モデル別】", mrows2))
-        trend = _gemini_usage_trend_mini_lines(cum)
+        trend = _gemini_usage_trend_caption_lines(cum)
         if trend:
             lines.append("")
             lines.extend(trend)
@@ -5537,6 +5620,14 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
                 break
             cell = ws_main.cell(row=start_r + i, column=col_p, value=line)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
+        try:
+            _apply_main_sheet_gemini_usage_chart(
+                ws_main, _load_gemini_cumulative_payload()
+            )
+        except Exception as ex:
+            logging.debug(
+                "%s: メイン Gemini 推移グラフの更新で例外（続行）: %s", log_prefix, ex
+            )
         wb.save(macro_wb_path)
         logging.info(
             "%s: メインシート P%d 以降に AI 利用サマリを openpyxl で保存しました。",
