@@ -198,6 +198,8 @@ Private m_splashLastLogSnapshot As String
 Private m_splashConsoleOverlayActive As Boolean
 ' 結果_設備ガント：選択中データ行の太枠（Interior は触らない）
 Private mGanttHL_SheetName As String
+Private mGanttHL_Row As Long
+Private mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
 Private Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
@@ -251,8 +253,6 @@ Private Function Stage12CmdHideWindowEffective() As Boolean
     End If
     Stage12CmdHideWindowEffective = STAGE12_CMD_HIDE_WINDOW
 End Function
-Private mGanttHL_Row As Long
-Private mGanttHL_LastCol As Long
 
 Private Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
