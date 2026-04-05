@@ -14396,6 +14396,16 @@ def _assign_one_roll_trial_order_flow(
         dispatch_interval_mirror=dispatch_interval_mirror,
     )
     if _co_abort:
+        # #region agent log
+        _agent_dbg_dispatch_session(
+            hypothesis_id="H7a",
+            location="_core.py:_assign_one_roll_trial_order_flow",
+            message="return None: changeover_resolve_abort",
+            data={"machine_occ_key": machine_occ_key},
+            current_date=current_date,
+            task_id=_tid_assign,
+        )
+        # #endregion
         return None
 
     def _one_roll_from_team(
@@ -14682,6 +14692,31 @@ def _assign_one_roll_trial_order_flow(
                 )
 
     if not team_candidates:
+        # #region agent log
+        _agent_dbg_dispatch_session(
+            hypothesis_id="H7b",
+            location="_core.py:_assign_one_roll_trial_order_flow",
+            message="return None: no team_candidates (all combos rejected)",
+            data={
+                "capable_n": len(capable_members),
+                "req_num": int(rq_base),
+                "max_team_size": int(max_team_size),
+                "op_capable_n": len(op_today),
+                "mach_floor": str(_mach_floor_eff),
+                "day_floor": str(day_floor),
+                "b2_ec_floor": str(b2_insp_ec_floor)
+                if b2_insp_ec_floor is not None
+                else None,
+                "fixed_anchor_n": len(fixed_team_anchor)
+                if fixed_team_anchor
+                else 0,
+                "pref_mem": pref_mem,
+                "has_preset_rows": bool(preset_rows_assign),
+            },
+            current_date=current_date,
+            task_id=_tid_assign,
+        )
+        # #endregion
         return None
     t_min = min(c["team_start"] for c in team_candidates)
 
