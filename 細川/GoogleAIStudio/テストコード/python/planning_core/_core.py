@@ -13394,7 +13394,7 @@ def _append_changeover_segments_to_timeline(
     machine_occ_key: str,
     segments: list[dict],
 ) -> None:
-    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
+    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映（各セグメントは主担当1名のみ）。"""
     for seg in segments or []:
         op = str(seg.get("op") or "").strip()
         st = seg.get("start_dt")
@@ -14790,6 +14790,7 @@ def append_surplus_staff_after_main_dispatch(
     need「配台時追加人数／余力時追加人数」行の上限まで、メイン割付で採用しきれなかった枠を追記する。
     各タイムラインブロックについて、その時間帯に他ブロックへ未参加（区間重なりなし）で
     eligible かつ OP/AS スキルの者をサブに追加する。
+    日次始業・依頼切替後始末・加工前準備（event_kind が加工以外）は主担当1名のみとし、本処理の対象外。
     """
     gpo = global_priority_override or {}
     if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
@@ -14818,6 +14819,8 @@ def append_surplus_staff_after_main_dispatch(
     for ev in sorted_evs:
         d = ev.get("date")
         if d is None or d not in attendance_data:
+            continue
+        if not _is_machining_timeline_event(ev):
             continue
         daily_status = attendance_data[d]
         task = _task_dict_for_timeline_event(ev, task_queue)

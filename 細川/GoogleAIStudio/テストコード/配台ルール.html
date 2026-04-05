@@ -162,7 +162,7 @@
       <li><code>TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</code> … <code>1</code> で need 追加人数行を全面無視（後追いもなし）。</li>
       <li><code>TEAM_ASSIGN_*</code>（人数優先・スラック）… <span class="file">配台ルール.md</span> セクション5。</li>
       <li><strong>機械カレンダー</strong>: マスタ <code>機械カレンダー</code> の占有は列キーに加え<strong>機械名集約キー</strong>でも <code>machine_avail_dt</code> に載り、<code>_apply_machine_calendar_floor_for_date</code> および <code>_bump_machine_avail_after_roll_for_calendar</code> で反映（<span class="file">配台ルール.md</span> 3.2.1）。</li>
-      <li><strong>2026-04 追補（依頼切替・日次始業）</strong>: マスタ任意シート <code>設定_依頼切替前後時間</code> と <code>設定_機械_日次始業準備</code>。依頼NO切替・「その日初回の加工」判定はタイムラインの<strong>加工イベントのみ</strong>（<code>event_kind</code>）。日次始業・準備・後始末は<strong>スキル適合OPの勤務・休憩</strong>に沿って forward し、<code>timeline_events</code> に別行で追記（ミラー検査あり）。スキルOPが誰もいないときは壁時計加算にフォールバック。詳細は <span class="file">配台ルール.md</span> 3.2.1.1。</li>
+      <li><strong>2026-04 追補（依頼切替・日次始業）</strong>: マスタ任意シート <code>設定_依頼切替前後時間</code> と <code>設定_機械_日次始業準備</code>。依頼NO切替・「その日初回の加工」判定はタイムラインの<strong>加工イベントのみ</strong>（<code>event_kind</code>）。日次始業・準備・後始末は<strong>スキル適合OPの勤務・休憩</strong>に沿って forward し、<code>timeline_events</code> に<strong>主1名のみ</strong>で別行追記（余剰サブ追記対象外。ミラー検査あり）。スキルOPが誰もいないときは壁時計加算にフォールバック。詳細は <span class="file">配台ルール.md</span> 3.2.1.1。</li>
     </ul>
   </section>
 
@@ -170,7 +170,7 @@
     <h2 id="h-need-surplus">need 追加人数（余力・メイン後追記）</h2>
     <p><span class="file">master.xlsm</span> の need で、基本必要人数の<strong>直下</strong>（目安 Excel 5 行目付近）の「配台時追加人数／余力時追加人数」列は、工程×機械ごとに <strong>req を満たしたあと追加で入れられる人数の上限</strong>です。</p>
     <ul>
-      <li><strong>既定</strong>: メインの割付シミュレーションではこの上限を<strong>人数探索に使わず</strong> <code>req_num</code> ちょうどで組む。シミュレーション<strong>完了後</strong>、各タイムラインブロックで枠が空き、かつその時間帯に<strong>他ブロックと重ならない</strong>・<strong>スキル OP/AS 適合</strong>・<strong>eligible</strong> の人を <strong>サブ（<code>sub</code>）に追記</strong>（<code>append_surplus_staff_after_main_dispatch</code>）。</li>
+      <li><strong>既定</strong>: メインの割付シミュレーションではこの上限を<strong>人数探索に使わず</strong> <code>req_num</code> ちょうどで組む。シミュレーション<strong>完了後</strong>、<strong>加工イベント</strong>のタイムラインブロックだけを対象に、枠が空き、かつその時間帯に<strong>他ブロックと重ならない</strong>・<strong>スキル OP/AS 適合</strong>・<strong>eligible</strong> の人を <strong>サブ（<code>sub</code>）に追記</strong>（<code>append_surplus_staff_after_main_dispatch</code>）。<strong>日次始業・後始末・準備</strong>の3種は<strong>主1名のみ</strong>（サブ追記なし）。</li>
       <li><strong>時刻は変えない</strong>（表示・同席記録向け。メインで決めた <code>end_dt</code> のまま）。</li>
       <li>詳細・表は <span class="file">配台ルール.md</span> セクション 3.5。</li>
     </ul>
