@@ -119,6 +119,11 @@ SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
 # ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
 _STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
+# timeline_events の event_kind（省略時は加工とみなす）
+TIMELINE_EVENT_MACHINING = "machining"
+TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
+TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
+TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
@@ -13009,7 +13014,49 @@ def _lookup_daily_startup_minutes(
     return 0
 
 
-def _machine_effective_floor_for_assign(
+def _timeline_event_kind(ev: dict) -> str:
+    k = str(ev.get("event_kind") or "").strip()
+    return k if k else TIMELINE_EVENT_MACHINING
+
+
+def _is_machining_timeline_event(ev: dict) -> bool:
+    return _timeline_event_kind(ev) == TIMELINE_EVENT_MACHINING
+
+
+def _pick_skilled_op_for_changeover_interval(
+    machine_proc: str,
+    machine_name: str,
+    skills_dict: dict,
+    daily_status: dict,
+) -> str | None:
+    """
+    当日 eligible のうち、当該工程+機械で OP スキルを持つ者のうち優先度が最小の1名。
+    準備・日次始業の休憩スキップに用いる（avail_dt は見ない）。
+    """
+    cands: list[tuple[int, str]] = []
+    proc = (machine_proc or "").strip()
+    mnm = (machine_name or "").strip()
+    for mem, st in daily_status.items():
+        if not st.get("eligible_for_assignment", st.get("is_working", False)):
+            continue
+        srow = skills_dict.get(mem, {})
+        if proc and mnm:
+            v = srow.get(f"{proc}+{mnm}", "")
+        elif mnm:
+            v = srow.get(mnm, "")
+        elif proc:
+            v = srow.get(proc, "")
+        else:
+            v = ""
+        role, prio = parse_op_as_skill_cell(v)
+        if role == "OP":
+            cands.append((prio, mem))
+    if not cands:
+        return None
+    return min(cands)[1]
+
+
+def _machine_effective_floor_timedelta_only(
     machine_occ_key: str,
     task_id: str,
     eq_line: str,
@@ -13022,14 +13069,14 @@ def _machine_effective_floor_for_assign(
     changeover_by_eq: dict[str, tuple[int, int]] | None = None,
     daily_startup_by_machine: dict[str, int] | None = None,
 ) -> datetime:
-    """
-    設備の壁時計における「当該ロールの加工開始」以前の下限。
-    日次始業準備・依頼NO 切替時の後始末/準備を machine_avail_dt の直後に加算する。
-    """
+    """スキル OP が拾えないときのフォールバック（壁時計に分を足すのみ）。"""
     if abolish_limits:
         return machine_day_floor
     mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
-    if machine_occ_key not in machine_handoff.get("started_today", set()):
+    mto = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    if machine_occ_key not in mto:
         su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
         if su:
             mf = mf + timedelta(minutes=su)
@@ -13044,6 +13091,183 @@ def _machine_effective_floor_for_assign(
     if prep:
         mf = mf + timedelta(minutes=prep)
     return mf
+
+
+def _changeover_plan_segments_and_machining_lower_bound(
+    *,
+    prev_machining_end_dt: datetime,
+    machine_day_floor: datetime,
+    current_date: date,
+    machine_occ_key: str,
+    task_id: str,
+    eq_line: str,
+    machine_name: str,
+    machine_proc: str,
+    machine_handoff: dict,
+    daily_status: dict,
+    skills_dict: dict,
+    abolish_limits: bool,
+) -> tuple[datetime | None, list[dict]]:
+    """
+    前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
+    skills 適合 OP の勤務・休憩に沿って forward し、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
+    セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
+    """
+    if abolish_limits:
+        return prev_machining_end_dt, []
+    mach_occ = str(machine_occ_key or "").strip()
+    rep = _pick_skilled_op_for_changeover_interval(
+        machine_proc, machine_name, skills_dict, daily_status
+    )
+    if rep is None:
+        return None, []
+    st_r = daily_status.get(rep)
+    if not st_r:
+        return None, []
+    br_r = merge_time_intervals(list(st_r.get("breaks_dt") or []))
+    end_r = st_r["end_dt"]
+    start_r = st_r["start_dt"]
+    machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    last_tid = (machine_handoff.get("last_tid") or {}).get(mach_occ, "")
+    last_eq = (machine_handoff.get("last_eq") or {}).get(mach_occ, "")
+    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
+    last_lead = (machine_handoff.get("last_lead_op") or {}).get(mach_occ, "")
+    cur_tid = str(task_id or "").strip()
+    su = _lookup_daily_startup_minutes(machine_name, None)
+    prep, _cu_line = _lookup_changeover_minutes_for_eq(eq_line, None)
+    _prep_unused, cu_prev = (
+        _lookup_changeover_minutes_for_eq(last_eq, None) if last_eq else (0, 0)
+    )
+
+    segments: list[dict] = []
+    t = prev_machining_end_dt
+
+    if mach_occ not in machining_today_occ and su > 0:
+        t0 = max(t, machine_day_floor, start_r)
+        ce, act, rem = calculate_end_time(t0, su, br_r, end_r)
+        if rem > 0 or act < su:
+            return None, []
+        segments.append(
+            {
+                "start_dt": t0,
+                "end_dt": ce,
+                "op": rep,
+                "event_kind": TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                "machine": eq_line,
+                "machine_occupancy_key": mach_occ,
+            }
+        )
+        t = ce
+
+    need_cleanup = (
+        bool(last_tid)
+        and bool(cur_tid)
+        and last_tid != cur_tid
+        and last_d == current_date
+        and cu_prev > 0
+        and mach_occ in machining_today_occ
+    )
+    if need_cleanup:
+        cop = (str(last_lead).strip() or rep)
+        st_c = daily_status.get(cop) or st_r
+        br_c = merge_time_intervals(list(st_c.get("breaks_dt") or []))
+        end_c = st_c["end_dt"]
+        cs = prev_machining_end_dt
+        ce, act, rem = calculate_end_time(cs, cu_prev, br_c, end_c)
+        if rem > 0 or act < cu_prev:
+            return None, []
+        segments.append(
+            {
+                "start_dt": cs,
+                "end_dt": ce,
+                "op": cop,
+                "event_kind": TIMELINE_EVENT_CHANGEOVER_CLEANUP,
+                "machine": last_eq or eq_line,
+                "machine_occupancy_key": mach_occ,
+            }
+        )
+        t = max(t, ce)
+
+    if prep > 0:
+        pe, act, rem = calculate_end_time(t, prep, br_r, end_r)
+        if rem > 0 or act < prep:
+            return None, []
+        segments.append(
+            {
+                "start_dt": t,
+                "end_dt": pe,
+                "op": rep,
+                "event_kind": TIMELINE_EVENT_CHANGEOVER_PREP,
+                "machine": eq_line,
+                "machine_occupancy_key": mach_occ,
+            }
+        )
+        t = pe
+
+    return t, segments
+
+
+def _machine_effective_floor_for_assign(
+    machine_occ_key: str,
+    task_id: str,
+    eq_line: str,
+    machine_name: str,
+    machine_avail_dt: dict,
+    machine_handoff: dict,
+    machine_day_floor: datetime,
+    abolish_limits: bool,
+    *,
+    changeover_by_eq: dict[str, tuple[int, int]] | None = None,
+    daily_startup_by_machine: dict[str, int] | None = None,
+    current_date: date | None = None,
+    daily_status: dict | None = None,
+    skills_dict: dict | None = None,
+    machine_proc: str | None = None,
+) -> datetime:
+    """
+    設備の壁時計における「当該ロールの加工開始」以前の下限。
+    daily_status・skills_dict・current_date が揃うときは、skills 適合 OP の勤務・休憩に沿って
+    日次始業・後始末・準備を forward した最早加工開始。揃わないときは分の壁時計加算にフォールバック。
+    """
+    if abolish_limits:
+        return machine_day_floor
+    prev_mach = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+    if (
+        current_date is not None
+        and daily_status is not None
+        and skills_dict is not None
+        and machine_proc is not None
+    ):
+        lb, _segs = _changeover_plan_segments_and_machining_lower_bound(
+            prev_machining_end_dt=prev_mach,
+            machine_day_floor=machine_day_floor,
+            current_date=current_date,
+            machine_occ_key=machine_occ_key,
+            task_id=task_id,
+            eq_line=eq_line,
+            machine_name=machine_name,
+            machine_proc=str(machine_proc or "").strip(),
+            machine_handoff=machine_handoff,
+            daily_status=daily_status,
+            skills_dict=skills_dict,
+            abolish_limits=False,
+        )
+        if lb is not None:
+            return lb
+    return _machine_effective_floor_timedelta_only(
+        machine_occ_key,
+        task_id,
+        eq_line,
+        machine_name,
+        machine_avail_dt,
+        machine_handoff,
+        machine_day_floor,
+        False,
+        changeover_by_eq=changeover_by_eq,
+        daily_startup_by_machine=daily_startup_by_machine,
+    )
 
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
@@ -13079,10 +13303,13 @@ def _machine_handoff_state_from_timeline(
 ) -> dict:
     """
     タイムラインから、各 machine_occupancy_key について
-    計画日 current_date 以前の最終終了イベントの (task_id, 設備行, その日付) を復元する。
+    計画日 current_date 以前の **加工 (machining)** イベントの最終終了を復元する。
+    セットアップ系 event_kind は last_tid / 後始末判定に含めない。
     """
-    best: dict[str, tuple[datetime, str, str, date]] = {}
+    best: dict[str, tuple[datetime, str, str, date, str]] = {}
     for e in timeline_events:
+        if not _is_machining_timeline_event(e):
+            continue
         ed = e.get("date")
         if not isinstance(ed, date):
             continue
@@ -13103,15 +13330,39 @@ def _machine_handoff_state_from_timeline(
             continue
         eq_line = str(e.get("machine") or "").strip()
         tid = _normalize_timeline_task_id(e)
+        lead_op = str(e.get("op") or "").strip()
         prev = best.get(occ)
         if prev is None or end_dt > prev[0]:
-            best[occ] = (end_dt, tid, eq_line, ed)
+            best[occ] = (end_dt, tid, eq_line, ed, lead_op)
     last_tid = {k: v[1] for k, v in best.items()}
     last_eq = {k: v[2] for k, v in best.items()}
-    started_today = {k for k, v in best.items() if v[3] == current_date}
+    last_machining_dt = {k: v[0] for k, v in best.items()}
+    last_machining_date = {k: v[3] for k, v in best.items()}
+    last_lead_op = {k: v[4] for k, v in best.items()}
+    machining_today_occ: set[str] = set()
+    for e in timeline_events:
+        if not _is_machining_timeline_event(e):
+            continue
+        if e.get("date") != current_date:
+            continue
+        occ = str(e.get("machine_occupancy_key") or "").strip()
+        if not occ:
+            mraw = str(e.get("machine") or "").strip()
+            occ = (
+                _normalize_equipment_match_key(mraw.split("+", 1)[1])
+                if "+" in mraw
+                else _normalize_equipment_match_key(mraw)
+            )
+        if occ:
+            machining_today_occ.add(occ)
+    started_today = set(machining_today_occ)
     return {
         "last_tid": last_tid,
         "last_eq": last_eq,
+        "last_machining_dt": last_machining_dt,
+        "last_machining_date": last_machining_date,
+        "last_lead_op": last_lead_op,
+        "machining_today_occ": machining_today_occ,
         "started_today": started_today,
     }
 
