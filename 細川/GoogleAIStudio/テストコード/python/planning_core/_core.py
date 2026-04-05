@@ -1284,6 +1284,26 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
+# ガント時刻セル（結合帯の先頭セル）: 毎セグメント new しない
+_GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
+    horizontal="left",
+    vertical="center",
+    wrap_text=False,
+    shrink_to_fit=False,
+    indent=1,
+)
+# タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
+_GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
+
+
+def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
+    fi = _GANTT_TASK_PATTERN_FILL_BY_HEX.get(hex_rrggbb)
+    if fi is None:
+        fi = PatternFill(fill_type="solid", start_color=hex_rrggbb, end_color=hex_rrggbb)
+        _GANTT_TASK_PATTERN_FILL_BY_HEX[hex_rrggbb] = fi
+    return fi
+
+
 # #region agent log
 _AGENT_DBG_GANTT_LOG = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-0150cb.log")
@@ -1404,20 +1424,14 @@ def _paint_gantt_timeline_row_merged(
         c = ws.cell(row=row, column=col_s)
         c.border = grid_border
         # 左寄せ・折り返しなし・縮小なし（長いラベルはセル外へはみ出し表示しやすくする）
-        c.alignment = Alignment(
-            horizontal="left",
-            vertical="center",
-            wrap_text=False,
-            shrink_to_fit=False,
-            indent=1,
-        )
+        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
         if st0[0] == "idle":
             c.fill = idle_fill
         elif st0[0] == "break":
             c.fill = break_fill
         else:
             _, tid, gh, pct = st0
-            c.fill = PatternFill(fill_type="solid", start_color=gh, end_color=gh)
+            c.fill = _gantt_cached_pattern_fill(gh)
             c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
             c.font = bar_label_font
         i = j
@@ -1713,6 +1727,7 @@ def _write_results_equipment_gantt_sheet(
             "len_timeline_events": len(timeline_events or []),
             "show_actual_rows": show_actual_rows,
         },
+        run_id="post-fix",
     )
     # #endregion
 
@@ -1881,13 +1896,15 @@ def _write_results_equipment_gantt_sheet(
             ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
-            for cc in range(1, last_col + 1):
-                sc = ws.cell(row=row, column=cc)
-                sc.value = None
-                sc.fill = sep_fill
-                sc.border = no_border
+            # 区切り行: 列ごとのセル書き込みは openpyxl で重いため、1 行を横一括結合して 1 セルだけ塗る
+            if last_col > 1:
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+            sc = ws.cell(row=row, column=1)
+            sc.value = None
+            sc.fill = sep_fill
+            sc.border = no_border
             # #region agent log
-            _gantt_sep_cell_writes += last_col
+            _gantt_sep_cell_writes += 1
             # #endregion
             ws.row_dimensions[row].height = 5
             row += 1
@@ -1906,6 +1923,7 @@ def _write_results_equipment_gantt_sheet(
             "n_paint_calls": int(_gantt_dbg_acc.get("n_paints", 0)),
             "sep_row_cell_writes": int(_gantt_sep_cell_writes),
         },
+        run_id="post-fix",
     )
     # #endregion
 
