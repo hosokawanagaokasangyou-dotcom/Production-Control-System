@@ -743,7 +743,7 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
 
 # region agent log
 _AGENT_DEBUG_DISPATCH_SESSION = "497ff0"
-_AGENT_DEBUG_DISPATCH_LOG_MAX = 56
+_AGENT_DEBUG_DISPATCH_LOG_MAX = 72
 _AGENT_DEBUG_DISPATCH_LOG_COUNT = 0
 _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_COUNT = 0
 _AGENT_DEBUG_ELIG_LOW_TRIAL_LOG_MAX = 12
@@ -788,6 +788,13 @@ def _agent_debug_should_log_y416_sec_apr8(
         and current_date.month == 4
         and current_date.day == 8
     )
+
+
+def _agent_debug_combo_sheet_row_is(crid: object, want: int = 19) -> bool:
+    try:
+        return int(crid) == want
+    except (TypeError, ValueError):
+        return str(crid or "").strip() == str(want)
 
 
 # endregion agent log
@@ -14677,26 +14684,84 @@ def _assign_one_roll_trial_order_flow(
     team_candidates: list[dict] = []
     # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
     # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
+    _preset19_trace: dict | None = None
     if preset_rows_assign:
         for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
+            # region agent log
+            _is_combo19 = (
+                _agent_debug_should_log_y416_sec_apr8(
+                    task.get("task_id"), machine, current_date
+                )
+                and _agent_debug_combo_sheet_row_is(combo_row_id, 19)
+            )
+            # endregion agent log
             bounds = _combo_preset_team_size_bounds(
                 tuple(preset_team), sheet_rs, max_team_size
             )
             if bounds is None:
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "bounds_none",
+                        "sheet_rs": str(sheet_rs),
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
                 continue
             lo_pt, hi_pt = bounds
             if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "fixed_anchor_not_subset",
+                        "anchor": list(fixed_team_anchor),
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
                 continue
             if pref_mem is not None and pref_mem not in preset_team:
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "preferred_op_not_in_preset",
+                        "pref_mem": str(pref_mem),
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
                 continue
             if not all(m in capable_members for m in preset_team):
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "not_all_capable",
+                        "missing": [
+                            m for m in preset_team if m not in capable_members
+                        ],
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
                 continue
             if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "no_op_in_preset",
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
                 continue
             got = _one_roll_from_team(
                 tuple(preset_team), min_n=lo_pt, max_n=hi_pt
             )
             if got is not None:
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "added_to_candidates",
+                        "team_start": str(got.get("team_start")),
+                        "lo_hi": [lo_pt, hi_pt],
+                    }
+                # endregion agent log
                 team_candidates.append(
                     {
                         **got,
@@ -14704,6 +14769,16 @@ def _assign_one_roll_trial_order_flow(
                         "combo_preset_team": tuple(preset_team),
                     }
                 )
+            else:
+                # region agent log
+                if _is_combo19:
+                    _preset19_trace = {
+                        "outcome": "one_roll_from_team_none",
+                        "lo_hi": [lo_pt, hi_pt],
+                        "preset_team": list(preset_team),
+                    }
+                # endregion agent log
+                pass
     for tsize in range(req_num, max_team_size + 1):
         if fixed_team_anchor:
             _ft = list(fixed_team_anchor)
@@ -14766,6 +14841,69 @@ def _assign_one_roll_trial_order_flow(
             c["prio_sum"],
             t_min,
         )
+
+    # region agent log
+    if _agent_debug_should_log_y416_sec_apr8(
+        task.get("task_id"), machine, current_date
+    ):
+        _preset19_row = None
+        if preset_rows_assign:
+            for _pr, _sr, _pt, _cid in preset_rows_assign:
+                if _agent_debug_combo_sheet_row_is(_cid, 19):
+                    _preset19_row = {
+                        "prio": _pr,
+                        "sheet_rs": str(_sr),
+                        "preset_team": list(_pt),
+                        "combo_sheet_row_id": _cid,
+                    }
+                    break
+        _c19 = next(
+            (
+                c
+                for c in team_candidates
+                if _agent_debug_combo_sheet_row_is(c.get("combo_sheet_row_id"), 19)
+            ),
+            None,
+        )
+        _pre_best = min(team_candidates, key=_team_cand_key)
+        _agent_debug_ndjson_dispatch(
+            {
+                "hypothesisId": "H_combo19_pick",
+                "location": "_assign_one_roll_trial_order_flow:before_min",
+                "message": "Y4-16 SEC 4/8: combo#19 trace vs t_min/best",
+                "data": {
+                    "combo_key_assign": combo_key_assign,
+                    "preset_row_19_in_table": _preset19_row,
+                    "preset_19_loop_trace": _preset19_trace,
+                    "n_candidates": len(team_candidates),
+                    "t_min": str(t_min),
+                    "candidate_19_team_start": str(_c19["team_start"])
+                    if _c19
+                    else None,
+                    "candidate_19_sort_tuple": list(_team_cand_key(_c19))
+                    if _c19
+                    else None,
+                    "candidate_19_team": list(_c19["team"]) if _c19 else None,
+                    "best_combo_id": _pre_best.get("combo_sheet_row_id"),
+                    "best_team_start": str(_pre_best["team_start"]),
+                    "best_sort_tuple": list(_team_cand_key(_pre_best)),
+                    "best_team": list(_pre_best["team"]),
+                    "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES": TEAM_ASSIGN_START_SLACK_WAIT_MINUTES,
+                    "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF": TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF,
+                    "n_start_before_1000": sum(
+                        1
+                        for c in team_candidates
+                        if c["team_start"].hour < 10
+                        or (
+                            c["team_start"].hour == 10
+                            and c["team_start"].minute == 0
+                        )
+                    ),
+                },
+                "runId": "combo19-debug",
+            }
+        )
+    # endregion agent log
 
     best_c = min(team_candidates, key=_team_cand_key)
     if best_c.get("combo_sheet_row_id") is None and preset_rows_assign:
