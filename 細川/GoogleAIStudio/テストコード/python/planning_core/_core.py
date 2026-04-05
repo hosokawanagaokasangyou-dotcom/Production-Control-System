@@ -119,6 +119,8 @@ SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
 # ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
 _STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
+# master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) の壁時計に載せる。
+_STAGE2_REGULAR_SHIFT_START: time | None = None
 # timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
@@ -1282,6 +1284,9 @@ _GANTT_BAR_FILLS_ACTUAL = (
     "DCD2DC",
 )
 
+# 設備ガント: 日次始業準備（machine_daily_startup）の帯色（黄色系）
+_GANTT_DAILY_STARTUP_FILL = "FFEB9C"
+
 
 def _gantt_bar_fill_for_task_id(task_id):
     """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使わない。"""
@@ -1317,7 +1322,7 @@ def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
 
 
 def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
-    """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('task', tid, fill_hex, pct)"""
+    """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
     active = None
     for e in evlist:
@@ -1326,6 +1331,8 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
             break
     if active is None:
         return ("idle",)
+    if _timeline_event_kind(active) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+        return ("daily_startup", _GANTT_DAILY_STARTUP_FILL)
     if any(b_s <= slot_mid < b_e for b_s, b_e in active.get("breaks") or ()):
         return ("break",)
     tid = str(active["task_id"])
@@ -1355,6 +1362,7 @@ def _gantt_timeline_same_segment(st_a, st_b) -> bool:
         return False
     if st_a[0] == "idle" or st_a[0] == "break":
         return True
+    # daily_startup: [1]=fill / task: [1]=task_id
     return st_a[1] == st_b[1]
 
 
@@ -1401,6 +1409,11 @@ def _paint_gantt_timeline_row_merged(
             c.fill = idle_fill
         elif st0[0] == "break":
             c.fill = break_fill
+        elif st0[0] == "daily_startup":
+            _, gh_ds = st0
+            c.fill = _gantt_cached_pattern_fill(gh_ds)
+            c.value = "(日次始業準備)"
+            c.font = bar_label_font
         else:
             _, tid, gh, pct = st0
             c.fill = _gantt_cached_pattern_fill(gh)
@@ -13249,8 +13262,9 @@ def _machine_effective_floor_timedelta_only(
     *,
     changeover_by_eq: dict[str, tuple[int, int]] | None = None,
     daily_startup_by_machine: dict[str, int] | None = None,
+    current_date: date | None = None,
 ) -> datetime:
-    """スキル OP が拾えないときのフォールバック（壁時計に分を足すのみ）。"""
+    """スキル OP が拾えないときのフォールバック（壁時計に分を足す／定常開始基準の日次始業は終了時刻で max）。"""
     if abolish_limits:
         return machine_day_floor
     mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
@@ -13260,7 +13274,13 @@ def _machine_effective_floor_timedelta_only(
     if machine_occ_key not in mto:
         su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
         if su:
-            mf = mf + timedelta(minutes=su)
+            reg_ts = _STAGE2_REGULAR_SHIFT_START
+            if reg_ts is not None:
+                cd = current_date if current_date is not None else machine_day_floor.date()
+                reg_end = datetime.combine(cd, reg_ts) + timedelta(minutes=su)
+                mf = max(mf, reg_end)
+            else:
+                mf = mf + timedelta(minutes=su)
     prev_tid = (machine_handoff.get("last_tid") or {}).get(machine_occ_key)
     cur_tid = str(task_id or "").strip()
     prev_eq = (machine_handoff.get("last_eq") or {}).get(machine_occ_key, "")
@@ -13293,7 +13313,9 @@ def _changeover_plan_segments_and_machining_lower_bound(
 ) -> tuple[datetime | None, list[dict]]:
     """
     前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
-    skills 適合 OP の勤務・休憩に沿って forward し、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
+    組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
+    日次始業は master メイン A15（定常開始）が読めれば [開始, 開始+N分) の壁時計（勤怠 forward しない）。
+    A15 が読めないときのみ、従来どおり代表スキル OP の勤務・休憩に沿って forward する。
     同一占有キーで直前加工と同一依頼NOのときは加工前準備を付けない（連続ロール）。
     日次始業セグメントの op は空（タイムラインでは人を載せず設備のみ）。準備・後始末の op は forward 用の代表／直前主。
     セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
@@ -13301,17 +13323,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     if abolish_limits:
         return prev_machining_end_dt, []
     mach_occ = str(machine_occ_key or "").strip()
-    rep = _pick_skilled_op_for_changeover_interval(
-        machine_proc, machine_name, skills_dict, daily_status
-    )
-    if rep is None:
-        return None, []
-    st_r = daily_status.get(rep)
-    if not st_r:
-        return None, []
-    br_r = merge_time_intervals(list(st_r.get("breaks_dt") or []))
-    end_r = st_r["end_dt"]
-    start_r = st_r["start_dt"]
+    reg_ts = _STAGE2_REGULAR_SHIFT_START
     machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
         "started_today", set()
     )
@@ -13326,25 +13338,50 @@ def _changeover_plan_segments_and_machining_lower_bound(
         _lookup_changeover_minutes_for_eq(last_eq, None) if last_eq else (0, 0)
     )
 
+    rep = _pick_skilled_op_for_changeover_interval(
+        machine_proc, machine_name, skills_dict, daily_status
+    )
+    st_r = daily_status.get(rep) if rep else None
+    br_r = merge_time_intervals(list(st_r.get("breaks_dt") or [])) if st_r else []
+    end_r = st_r["end_dt"] if st_r else None
+    start_r = st_r["start_dt"] if st_r else None
+
     segments: list[dict] = []
     t = prev_machining_end_dt
 
     if mach_occ not in machining_today_occ and su > 0:
-        t0 = max(t, machine_day_floor, start_r)
-        ce, act, rem = calculate_end_time(t0, su, br_r, end_r)
-        if rem > 0 or act < su:
-            return None, []
-        segments.append(
-            {
-                "start_dt": t0,
-                "end_dt": ce,
-                "op": "",
-                "event_kind": TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
-                "machine": eq_line,
-                "machine_occupancy_key": mach_occ,
-            }
-        )
-        t = ce
+        if reg_ts is not None:
+            reg_start_dt = datetime.combine(current_date, reg_ts)
+            reg_end_dt = reg_start_dt + timedelta(minutes=su)
+            segments.append(
+                {
+                    "start_dt": reg_start_dt,
+                    "end_dt": reg_end_dt,
+                    "op": "",
+                    "event_kind": TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                    "machine": eq_line,
+                    "machine_occupancy_key": mach_occ,
+                }
+            )
+            t = max(t, reg_end_dt)
+        else:
+            if rep is None or not st_r or end_r is None or start_r is None:
+                return None, []
+            t0 = max(t, machine_day_floor, start_r)
+            ce, act, rem = calculate_end_time(t0, su, br_r, end_r)
+            if rem > 0 or act < su:
+                return None, []
+            segments.append(
+                {
+                    "start_dt": t0,
+                    "end_dt": ce,
+                    "op": "",
+                    "event_kind": TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                    "machine": eq_line,
+                    "machine_occupancy_key": mach_occ,
+                }
+            )
+            t = ce
 
     need_cleanup = (
         bool(last_tid)
@@ -13356,7 +13393,11 @@ def _changeover_plan_segments_and_machining_lower_bound(
     )
     if need_cleanup:
         cop = (str(last_lead).strip() or rep)
+        if not cop:
+            return None, []
         st_c = daily_status.get(cop) or st_r
+        if not st_c:
+            return None, []
         br_c = merge_time_intervals(list(st_c.get("breaks_dt") or []))
         end_c = st_c["end_dt"]
         cs = prev_machining_end_dt
@@ -13378,6 +13419,8 @@ def _changeover_plan_segments_and_machining_lower_bound(
     _lt_s = str(last_tid or "").strip()
     need_prep = prep > 0 and (not _lt_s or _lt_s != cur_tid)
     if need_prep:
+        if rep is None or not st_r or end_r is None:
+            return None, []
         pe, act, rem = calculate_end_time(t, prep, br_r, end_r)
         if rem > 0 or act < prep:
             return None, []
@@ -13454,6 +13497,7 @@ def _machine_effective_floor_for_assign(
         False,
         changeover_by_eq=changeover_by_eq,
         daily_startup_by_machine=daily_startup_by_machine,
+        current_date=current_date,
     )
 
 
@@ -13514,6 +13558,7 @@ def _resolve_machine_changeover_floor_segments(
                 machine_handoff,
                 machine_day_floor,
                 False,
+                current_date=current_date,
             )
             return mf, [], False
         return machine_day_floor, [], True
@@ -13937,6 +13982,7 @@ def _append_legacy_dispatch_candidate_for_team(
                 _mh_legacy,
                 _mdf,
                 False,
+                current_date=current_date,
             )
         if team_start < machine_free_dt:
             team_start = machine_free_dt
@@ -13991,6 +14037,7 @@ def _append_legacy_dispatch_candidate_for_team(
                     _mh_legacy,
                     _mdf,
                     False,
+                    current_date=current_date,
                 )
             if ts < mf:
                 ts = mf
@@ -15370,6 +15417,7 @@ def _generate_plan_impl():
         return
     global _MACHINE_CALENDAR_BLOCKS_BY_DATE
     global _STAGE2_MACHINE_CHANGEOVER_BY_EQ, _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+    global _STAGE2_REGULAR_SHIFT_START
     try:
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
@@ -15393,6 +15441,19 @@ def _generate_plan_impl():
         )
         _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
+    try:
+        _rs_a15, _ = _read_master_main_regular_shift_times(
+            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+        )
+        _STAGE2_REGULAR_SHIFT_START = _rs_a15
+        if _rs_a15 is not None:
+            logging.info(
+                "日次始業準備: 定常開始 master メイン A15=%s を採用（[開始, 開始+分) を壁時計で占有。A15 無効時は従来の勤怠 forward）",
+                _rs_a15.strftime("%H:%M"),
+            )
+    except Exception as e:
+        logging.warning("定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e)
+        _STAGE2_REGULAR_SHIFT_START = None
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
             len(ivs)
