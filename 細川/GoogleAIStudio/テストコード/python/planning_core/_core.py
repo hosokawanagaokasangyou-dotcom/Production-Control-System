@@ -631,8 +631,12 @@ PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # #region agent log
 _AGENT_DBG_SESSION = "57b151"
-_AGENT_DBG_FOCUS_DAY_ISO = "2026-04-08"
-_AGENT_DBG_FOCUS_TID = "Y4-16"
+_AGENT_DBG_FOCUS_DAY_ISO = (
+    os.environ.get("AGENT_DEBUG_FOCUS_DAY", "2026-04-08").strip() or "2026-04-08"
+)
+_AGENT_DBG_FOCUS_TID = (
+    os.environ.get("AGENT_DEBUG_FOCUS_TID", "Y4-16").strip() or "Y4-16"
+)
 
 
 def _agent_dbg_dispatch_session(
@@ -13927,6 +13931,16 @@ def _trial_order_flow_eligible_tasks(
             )
             # #endregion
             continue
+        # #region agent log
+        _agent_dbg_dispatch_session(
+            hypothesis_id="H0",
+            location="_core.py:_trial_order_flow_eligible_tasks",
+            message="included in trial_order eligible list",
+            data={"eq": eq_line, "trial": _my_dispatch_ord},
+            current_date=current_date,
+            task_id=str(task.get("task_id", "") or ""),
+        )
+        # #endregion
         out.append(task)
     return out
 
