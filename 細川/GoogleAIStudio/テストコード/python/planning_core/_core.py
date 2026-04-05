@@ -13270,6 +13270,139 @@ def _machine_effective_floor_for_assign(
     )
 
 
+def _resolve_machine_changeover_floor_segments(
+    *,
+    abolish_all_scheduling_limits: bool,
+    machine_occ_key: str,
+    task_id: str,
+    eq_line: str,
+    machine_name: str,
+    machine_proc: str,
+    machine_avail_dt: dict,
+    machine_day_floor: datetime,
+    current_date: date,
+    machine_handoff: dict,
+    daily_status: dict,
+    skills_dict: dict,
+    dispatch_interval_mirror: DispatchIntervalMirror | None,
+) -> tuple[datetime, list[dict], bool]:
+    """
+    設備の加工開始下限と、タイムライン追記用セットアップ区間。
+    戻り値 (floor_dt, segments, abort)。abort が True のときは当該ロール割当を全体として棄却する。
+    """
+    if abolish_all_scheduling_limits:
+        prev = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+        return prev, [], False
+    prev_mach = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+    co_lb, co_segs = _changeover_plan_segments_and_machining_lower_bound(
+        prev_machining_end_dt=prev_mach,
+        machine_day_floor=machine_day_floor,
+        current_date=current_date,
+        machine_occ_key=machine_occ_key,
+        task_id=task_id,
+        eq_line=eq_line,
+        machine_name=machine_name,
+        machine_proc=str(machine_proc or "").strip(),
+        machine_handoff=machine_handoff,
+        daily_status=daily_status,
+        skills_dict=skills_dict,
+        abolish_limits=False,
+    )
+    if co_lb is None:
+        if (
+            _pick_skilled_op_for_changeover_interval(
+                str(machine_proc or "").strip(),
+                str(machine_name or "").strip(),
+                skills_dict,
+                daily_status,
+            )
+            is None
+        ):
+            mf = _machine_effective_floor_timedelta_only(
+                machine_occ_key,
+                task_id,
+                eq_line,
+                machine_name,
+                machine_avail_dt,
+                machine_handoff,
+                machine_day_floor,
+                False,
+            )
+            return mf, [], False
+        return machine_day_floor, [], True
+    if dispatch_interval_mirror is not None and co_segs:
+        for seg in co_segs:
+            sop = str(seg.get("op") or "").strip()
+            sok = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
+            st_seg = seg.get("start_dt")
+            ed_seg = seg.get("end_dt")
+            if not isinstance(st_seg, datetime) or not isinstance(ed_seg, datetime):
+                continue
+            if (
+                sop
+                and dispatch_interval_mirror.would_block_member(sop, st_seg, ed_seg)
+            ):
+                return machine_day_floor, [], True
+            if (
+                sok
+                and dispatch_interval_mirror.would_block_equipment(
+                    sok, st_seg, ed_seg
+                )
+            ):
+                return machine_day_floor, [], True
+    return co_lb, co_segs, False
+
+
+def _append_changeover_segments_to_timeline(
+    timeline_events: list,
+    dispatch_interval_mirror: DispatchIntervalMirror | None,
+    avail_dt: dict,
+    daily_status: dict,
+    *,
+    current_date: date,
+    task_id: str,
+    machine_occ_key: str,
+    segments: list[dict],
+) -> None:
+    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
+    for seg in segments or []:
+        op = str(seg.get("op") or "").strip()
+        st = seg.get("start_dt")
+        ed = seg.get("end_dt")
+        if not isinstance(st, datetime) or not isinstance(ed, datetime):
+            continue
+        m_line = str(seg.get("machine") or "").strip()
+        m_occ = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
+        br_seg: list = []
+        if op:
+            br_seg = merge_time_intervals(
+                list(daily_status.get(op, {}).get("breaks_dt") or [])
+            )
+        ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_CHANGEOVER_PREP
+        ev = {
+            "date": current_date,
+            "task_id": task_id,
+            "machine": m_line,
+            "machine_occupancy_key": m_occ,
+            "op": op,
+            "sub": "",
+            "start_dt": st,
+            "end_dt": ed,
+            "breaks": br_seg,
+            "units_done": 0,
+            "event_kind": ek,
+        }
+        timeline_events.append(ev)
+        if dispatch_interval_mirror is not None:
+            dispatch_interval_mirror.register_from_event(ev)
+        if op:
+            prev_a = avail_dt.get(op, st)
+            if isinstance(prev_a, datetime):
+                avail_dt[op] = max(prev_a, ed)
+            else:
+                avail_dt[op] = ed
+
+
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
     当該日の終了時点で、計画基準納期日（当日含む）以前なのに残量が残る依頼NO。
@@ -13513,6 +13646,7 @@ def _append_legacy_dispatch_candidate_for_team(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     machine_handoff: dict | None = None,
     machine_day_floor: datetime | None = None,
+    machine_floor_cached: datetime | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
     _machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
@@ -13523,22 +13657,29 @@ def _append_legacy_dispatch_candidate_for_team(
         "last_tid": {},
         "last_eq": {},
         "started_today": set(),
+        "machining_today_occ": set(),
+        "last_machining_dt": {},
+        "last_machining_date": {},
+        "last_lead_op": {},
     }
     op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
     if not op_list:
         return False
     team_start = max(avail_dt[m] for m in team)
     if not _gpo.get("abolish_all_scheduling_limits"):
-        machine_free_dt = _machine_effective_floor_for_assign(
-            _machine_occ_key,
-            str(task.get("task_id") or "").strip(),
-            eq_line,
-            str(task.get("machine_name") or "").strip(),
-            machine_avail_dt,
-            _mh_legacy,
-            _mdf,
-            False,
-        )
+        if machine_floor_cached is not None:
+            machine_free_dt = machine_floor_cached
+        else:
+            machine_free_dt = _machine_effective_floor_for_assign(
+                _machine_occ_key,
+                str(task.get("task_id") or "").strip(),
+                eq_line,
+                str(task.get("machine_name") or "").strip(),
+                machine_avail_dt,
+                _mh_legacy,
+                _mdf,
+                False,
+            )
         if team_start < machine_free_dt:
             team_start = machine_free_dt
         if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
@@ -13566,16 +13707,19 @@ def _append_legacy_dispatch_candidate_for_team(
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
         if not _gpo.get("abolish_all_scheduling_limits"):
-            mf = _machine_effective_floor_for_assign(
-                _machine_occ_key,
-                str(task.get("task_id") or "").strip(),
-                eq_line,
-                str(task.get("machine_name") or "").strip(),
-                machine_avail_dt,
-                _mh_legacy,
-                _mdf,
-                False,
-            )
+            if machine_floor_cached is not None:
+                mf = machine_floor_cached
+            else:
+                mf = _machine_effective_floor_for_assign(
+                    _machine_occ_key,
+                    str(task.get("task_id") or "").strip(),
+                    eq_line,
+                    str(task.get("machine_name") or "").strip(),
+                    machine_avail_dt,
+                    _mh_legacy,
+                    _mdf,
+                    False,
+                )
             if ts < mf:
                 ts = mf
             if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
@@ -13689,6 +13833,10 @@ def _assign_one_roll_trial_order_flow(
         "last_tid": {},
         "last_eq": {},
         "started_today": set(),
+        "machining_today_occ": set(),
+        "last_machining_dt": {},
+        "last_machining_date": {},
+        "last_lead_op": {},
     }
 
     plan_ro = _plan_sheet_required_op_optional(task)
@@ -13859,6 +14007,24 @@ def _assign_one_roll_trial_order_flow(
             task_queue, _tid_assign
         )
 
+    _mach_floor_eff, _co_segs, _co_abort = _resolve_machine_changeover_floor_segments(
+        abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
+        machine_occ_key=machine_occ_key,
+        task_id=str(task.get("task_id") or "").strip(),
+        eq_line=eq_line,
+        machine_name=machine_name,
+        machine_proc=machine_proc,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_floor=machine_day_floor,
+        current_date=current_date,
+        machine_handoff=_mh,
+        daily_status=daily_status,
+        skills_dict=skills_dict,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    if _co_abort:
+        return None
+
     def _one_roll_from_team(
         team: tuple,
         min_n: int | None = None,
@@ -13890,16 +14056,7 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_free_dt = _machine_effective_floor_for_assign(
-                machine_occ_key,
-                str(task.get("task_id") or "").strip(),
-                eq_line,
-                machine_name,
-                machine_avail_dt,
-                _mh,
-                machine_day_floor,
-                False,
-            )
+            machine_free_dt = _mach_floor_eff
             if team_start < machine_free_dt:
                 team_start = machine_free_dt
             if team_start < day_floor:
@@ -13923,16 +14080,7 @@ def _assign_one_roll_trial_order_flow(
         def _refloor_trial_roll(ts: datetime) -> datetime:
             ts = max(ts, max(avail_dt[m] for m in team))
             if not _gpo.get("abolish_all_scheduling_limits"):
-                mf = _machine_effective_floor_for_assign(
-                    machine_occ_key,
-                    str(task.get("task_id") or "").strip(),
-                    eq_line,
-                    machine_name,
-                    machine_avail_dt,
-                    _mh,
-                    machine_day_floor,
-                    False,
-                )
+                mf = _mach_floor_eff
                 if ts < mf:
                     ts = mf
                 if ts < day_floor:
@@ -14019,6 +14167,7 @@ def _assign_one_roll_trial_order_flow(
             "op_list": op_list,
             "eff_time_per_unit": eff_time_per_unit,
             "lead_op": lead_op,
+            "changeover_segments": _co_segs,
         }
 
     # 特別指定: 同一日・連続ロールは前回チームを優先（翌日へは持ち越さない）。
@@ -14049,6 +14198,7 @@ def _assign_one_roll_trial_order_flow(
                     "max_team_size": max_team_size,
                     "combo_sheet_row_id": _cid_pt,
                     "combo_preset_team": pt if _cid_pt is not None else None,
+                    "changeover_segments": _co_segs,
                 }
 
     team_candidates: list[dict] = []
@@ -14168,6 +14318,7 @@ def _assign_one_roll_trial_order_flow(
         "max_team_size": max_team_size,
         "combo_sheet_row_id": best_c.get("combo_sheet_row_id"),
         "combo_preset_team": best_c.get("combo_preset_team"),
+        "changeover_segments": _co_segs,
     }
 
 
@@ -14219,6 +14370,10 @@ def _trial_order_first_schedule_pass(
         "last_tid": dict(_mh_init["last_tid"]),
         "last_eq": dict(_mh_init["last_eq"]),
         "started_today": set(_mh_init["started_today"]),
+        "machining_today_occ": set(_mh_init.get("machining_today_occ") or set()),
+        "last_machining_dt": dict(_mh_init.get("last_machining_dt") or {}),
+        "last_machining_date": dict(_mh_init.get("last_machining_date") or {}),
+        "last_lead_op": dict(_mh_init.get("last_lead_op") or {}),
     }
 
     def _drain_rolls_for_task(task: dict) -> bool:
@@ -14294,6 +14449,16 @@ def _trial_order_first_schedule_pass(
             except Exception:
                 pct_macro = 0
 
+            _append_changeover_segments_to_timeline(
+                timeline_events,
+                dispatch_interval_mirror,
+                avail_dt,
+                daily_status,
+                current_date=current_date,
+                task_id=str(task.get("task_id") or ""),
+                machine_occ_key=machine_occ_key,
+                segments=list(res.get("changeover_segments") or []),
+            )
             timeline_events.append(
                 {
                     "date": current_date,
@@ -14316,6 +14481,7 @@ def _trial_order_first_schedule_pass(
                         rq_base, len(best_team), extra_max
                     ),
                     "unit_m": task["unit_m"],
+                    "event_kind": TIMELINE_EVENT_MACHINING,
                 }
             )
             if dispatch_interval_mirror is not None:
@@ -14369,6 +14535,10 @@ def _trial_order_first_schedule_pass(
             ).strip()
             machine_handoff["last_eq"][machine_occ_key] = eq_line
             machine_handoff["started_today"].add(machine_occ_key)
+            machine_handoff["machining_today_occ"].add(machine_occ_key)
+            machine_handoff["last_machining_dt"][machine_occ_key] = best_end
+            machine_handoff["last_machining_date"][machine_occ_key] = current_date
+            machine_handoff["last_lead_op"][machine_occ_key] = lead_op
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -15290,6 +15460,16 @@ def _generate_plan_impl():
                         "last_tid": dict(_mh_legacy_day["last_tid"]),
                         "last_eq": dict(_mh_legacy_day["last_eq"]),
                         "started_today": set(_mh_legacy_day["started_today"]),
+                        "machining_today_occ": set(
+                            _mh_legacy_day.get("machining_today_occ") or set()
+                        ),
+                        "last_machining_dt": dict(
+                            _mh_legacy_day.get("last_machining_dt") or {}
+                        ),
+                        "last_machining_date": dict(
+                            _mh_legacy_day.get("last_machining_date") or {}
+                        ),
+                        "last_lead_op": dict(_mh_legacy_day.get("last_lead_op") or {}),
                     }
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
@@ -15473,6 +15653,10 @@ def _generate_plan_impl():
                                 machine_handoff_legacy,
                                 _machine_day_start,
                                 bool(_gpo.get("abolish_all_scheduling_limits")),
+                                current_date=current_date,
+                                daily_status=daily_status,
+                                skills_dict=skills_dict,
+                                machine_proc=machine_proc,
                             )
                             logging.info(
                                 "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
@@ -15619,6 +15803,29 @@ def _generate_plan_impl():
                             if (team_combo_presets and combo_key)
                             else None
                         )
+                        (
+                            _mach_floor_legacy,
+                            _co_segs_legacy,
+                            _abort_legacy,
+                        ) = _resolve_machine_changeover_floor_segments(
+                            abolish_all_scheduling_limits=bool(
+                                _gpo.get("abolish_all_scheduling_limits")
+                            ),
+                            machine_occ_key=machine_occ_key,
+                            task_id=str(task.get("task_id") or "").strip(),
+                            eq_line=eq_line,
+                            machine_name=str(task.get("machine_name") or "").strip(),
+                            machine_proc=machine_proc,
+                            machine_avail_dt=machine_avail_dt,
+                            machine_day_floor=_machine_day_start,
+                            current_date=current_date,
+                            machine_handoff=machine_handoff_legacy,
+                            daily_status=daily_status,
+                            skills_dict=skills_dict,
+                            dispatch_interval_mirror=_dispatch_interval_mirror,
+                        )
+                        if _abort_legacy:
+                            continue
                         # プリセットは成立分をすべて候補に載せ、下の組合せ探索とまとめて最良を選ぶ。
                         if preset_rows:
                             for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
@@ -15656,6 +15863,7 @@ def _generate_plan_impl():
                                     dispatch_interval_mirror=_dispatch_interval_mirror,
                                     machine_handoff=machine_handoff_legacy,
                                     machine_day_floor=_machine_day_start,
+                                    machine_floor_cached=_mach_floor_legacy,
                                 )
     
                         for tsize in range(req_num, max_team_size + 1):
@@ -15708,16 +15916,7 @@ def _generate_plan_impl():
                                 team_start = max(avail_dt[m] for m in team)
                                 if not _gpo.get("abolish_all_scheduling_limits"):
                                     # 同一設備は1時点で1タスクのみ（設備空き＋日次始業/依頼切替の準備・後始末）
-                                    machine_free_dt = _machine_effective_floor_for_assign(
-                                        machine_occ_key,
-                                        str(task.get("task_id") or "").strip(),
-                                        eq_line,
-                                        str(task.get("machine_name") or "").strip(),
-                                        machine_avail_dt,
-                                        machine_handoff_legacy,
-                                        _machine_day_start,
-                                        False,
-                                    )
+                                    machine_free_dt = _mach_floor_legacy
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
                                     # 原反投入日と同日の開始は 13:00 以降（試行順優先フローと一致）
@@ -15749,16 +15948,7 @@ def _generate_plan_impl():
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
                                     if not _gpo.get("abolish_all_scheduling_limits"):
-                                        _mfd = _machine_effective_floor_for_assign(
-                                            machine_occ_key,
-                                            str(task.get("task_id") or "").strip(),
-                                            eq_line,
-                                            str(task.get("machine_name") or "").strip(),
-                                            machine_avail_dt,
-                                            machine_handoff_legacy,
-                                            _machine_day_start,
-                                            False,
-                                        )
+                                        _mfd = _mach_floor_legacy
                                         if ts < _mfd:
                                             ts = _mfd
                                         if task.get(
@@ -16056,6 +16246,16 @@ def _generate_plan_impl():
                             _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
                             if _te_disp <= 0:
                                 _te_disp = 1.0
+                            _append_changeover_segments_to_timeline(
+                                timeline_events,
+                                _dispatch_interval_mirror,
+                                avail_dt,
+                                daily_status,
+                                current_date=current_date,
+                                task_id=str(task.get("task_id") or ""),
+                                machine_occ_key=machine_occ_key,
+                                segments=list(_co_segs_legacy or []),
+                            )
                             timeline_events.append({
                                 "date": current_date, "task_id": task['task_id'], "machine": eq_line,
                                 "machine_occupancy_key": machine_occ_key,
@@ -16069,7 +16269,8 @@ def _generate_plan_impl():
                                 / best_info["eff"]
                                 / _te_disp
                                 * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
-                                "unit_m": task['unit_m']
+                                "unit_m": task['unit_m'],
+                                "event_kind": TIMELINE_EVENT_MACHINING,
                             })
                             if _dispatch_interval_mirror is not None:
                                 _dispatch_interval_mirror.register_from_event(
@@ -16163,6 +16364,18 @@ def _generate_plan_impl():
                             machine_handoff_legacy["started_today"].add(
                                 machine_occ_key
                             )
+                            machine_handoff_legacy["machining_today_occ"].add(
+                                machine_occ_key
+                            )
+                            machine_handoff_legacy["last_machining_dt"][
+                                machine_occ_key
+                            ] = best_info["end_dt"]
+                            machine_handoff_legacy["last_machining_date"][
+                                machine_occ_key
+                            ] = current_date
+                            machine_handoff_legacy["last_lead_op"][
+                                machine_occ_key
+                            ] = best_info["op"]
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
