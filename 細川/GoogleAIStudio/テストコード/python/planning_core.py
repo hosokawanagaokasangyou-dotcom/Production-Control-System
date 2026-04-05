@@ -2564,7 +2564,7 @@ def _gantt_member_label_surname_only(raw: str) -> str:
 
 
 def _gantt_row_member_names(evlist) -> str:
-    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去し、姓のみを半角スペース区切り。"""
+    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去し、姓のみをカンマ+半角スペース区切り。"""
     raw_names: list[str] = []
     seen_raw: set[str] = set()
     for e in evlist or []:
@@ -2587,7 +2587,7 @@ def _gantt_row_member_names(evlist) -> str:
         if lab and lab not in seen_label:
             seen_label.add(lab)
             labels.append(lab)
-    return " ".join(labels) if labels else "—"
+    return ", ".join(labels) if labels else "—"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
