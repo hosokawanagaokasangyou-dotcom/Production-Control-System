@@ -9070,8 +9070,8 @@ DEFAULT_BREAKS = [
 ]
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
-# 同じ「終業まであと N 分以内」ウィンドウでは、試行開始から終業までに収容できるロール数が
-# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 未満の候補も却下（_eod_reject_capacity_units_below_threshold）。
+# 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
+# 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
 # ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
 # 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
@@ -9103,8 +9103,8 @@ def _eod_reject_capacity_units_below_threshold(
     units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
 ) -> bool:
     """
-    終業直前ウィンドウ内で、終業までに収容できるロール数が
-    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 未満なら True（候補却下）。
+    終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
+    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
     """
     th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
     if th <= 0:
