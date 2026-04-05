@@ -1,6 +1,7 @@
 ' ============================================================
 ' 貼り付け先: master.xlsm の ThisWorkbook
 ' 標準モジュール: master_xlsm_VBA.txt の Auto_Open / MasterShortcutMainSheet_* と対
+' Workbook_Activate: OnKey は Excel 全体で1キー1割当のため、他ブックが上書きしたあと master をアクティブにしたとき付け直す
 ' 既存の Workbook_SheetSelectionChange を残した統合例（そのまま ThisWorkbook に置換可）
 ' ============================================================
 Option Explicit
@@ -10,6 +11,12 @@ Private Sub Workbook_Open()
     ' #region agent log
     AgentDbg650_OnKey "master:Workbook_Open", "H3", ActiveWorkbook.Name, ThisWorkbook.Name
     ' #endregion
+    MasterShortcutMainSheet_OnKeyRegister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_Activate()
+    On Error Resume Next
     MasterShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub

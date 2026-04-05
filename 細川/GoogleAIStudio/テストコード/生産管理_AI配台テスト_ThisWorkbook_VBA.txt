@@ -2,6 +2,7 @@
 ' 貼り付け先: 「生産管理_AI配台テスト.xlsm」の ThisWorkbook（プロジェクト内の ThisWorkbook をダブルクリック）
 ' 標準モジュール側: 生産管理_AI配台テスト_xlsm_VBA.txt の Auto_Open / ShortcutMainSheet_* と対
 ' 目的: ブックを閉じたあとも Ctrl+Shift+テンキー - の割当が Excel に残らないよう BeforeClose で解除する
+' Workbook_Activate: Application.OnKey は Excel 全体で1キー1割当のため、他ブック（master.xlsm）が Open で上書きしたあと、当ブックをアクティブにしたとき付け直す
 ' SheetSelectionChange: 結果_設備ガントでデータ行選択時に行枠を太線で強調（標準モジュールの 結果_設備ガント_行ハイライト_OnSelection）
 ' ============================================================
 Option Explicit
@@ -11,6 +12,12 @@ Private Sub Workbook_Open()
     ' #region agent log
     AgentDbg650_OnKey "dispatch:Workbook_Open", "H3", ActiveWorkbook.Name, ThisWorkbook.Name
     ' #endregion
+    ShortcutMainSheet_OnKeyRegister
+    On Error GoTo 0
+End Sub
+
+Private Sub Workbook_Activate()
+    On Error Resume Next
     ShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub
