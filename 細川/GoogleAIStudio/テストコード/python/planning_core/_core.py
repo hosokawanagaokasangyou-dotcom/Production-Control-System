@@ -629,6 +629,173 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
+# #region agent log
+_FOCUS_MEMBER_DBG_DAY_ISO = (
+    os.environ.get("AGENT_DEBUG_FOCUS_DAY", "2026-04-08").strip() or "2026-04-08"
+)
+_FOCUS_MEMBER_DBG_NAMES_RAW = os.environ.get(
+    "AGENT_DEBUG_MEMBER_NAMES",
+    "冨田裕子,宮島剛,竹内正美",
+).replace("，", ",")
+
+
+def _dbg_norm_person_name(s: str) -> str:
+    t = unicodedata.normalize("NFKC", str(s or ""))
+    return "".join(t.split())
+
+
+def _dbg_focus_member_keys(members: list) -> list[str]:
+    keys = [
+        _dbg_norm_person_name(x.strip())
+        for x in _FOCUS_MEMBER_DBG_NAMES_RAW.split(",")
+        if x.strip()
+    ]
+    out: list[str] = []
+    for m in members:
+        nm = _dbg_norm_person_name(str(m))
+        for fk in keys:
+            if fk and (fk in nm or nm == fk):
+                out.append(str(m))
+                break
+    return out
+
+
+def _agent_dbg_member_ndjson(payload: dict) -> None:
+    _root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+    )
+    _path = os.path.join(_root, "debug-57b151.log")
+    rec = {
+        "sessionId": "57b151",
+        "timestamp": int(time_module.time() * 1000),
+        **payload,
+    }
+    try:
+        with open(_path, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+    except OSError:
+        pass
+
+
+def _dbg_skill_tuple_for_member_task(
+    skills_dict: dict, mem: str, machine_proc: str, machine_name: str
+):
+    srow = skills_dict.get(mem, {})
+    proc = str(machine_proc or "").strip()
+    mnm = str(machine_name or "").strip()
+    v = ""
+    if proc and mnm:
+        v = srow.get(f"{proc}+{mnm}", "")
+    elif mnm:
+        v = srow.get(mnm, "")
+    elif proc:
+        v = srow.get(proc, "")
+    return parse_op_as_skill_cell(v)
+
+
+def _dbg_log_focus_day_skill_sample(
+    *,
+    current_date: date,
+    focus_members: list[str],
+    tasks_today: list,
+    skills_dict: dict,
+    avail_dt: dict,
+    hypothesis_id: str,
+) -> None:
+    if not focus_members or not tasks_today:
+        return
+    lim = min(40, len(tasks_today))
+    for mem in focus_members:
+        if mem not in avail_dt:
+            _agent_dbg_member_ndjson(
+                {
+                    "hypothesisId": hypothesis_id,
+                    "runId": "pre-fix",
+                    "location": "_core.py:focus_skill_sample",
+                    "message": "not in avail_dt (skip skill probe)",
+                    "data": {"day": current_date.isoformat(), "member": mem},
+                }
+            )
+            continue
+        ctr: Counter = Counter()
+        samples: list[dict] = []
+        for task in tasks_today[:lim]:
+            mp = str(task.get("machine") or "").strip()
+            mn = str(task.get("machine_name") or "").strip()
+            role, prio = _dbg_skill_tuple_for_member_task(
+                skills_dict, mem, mp, mn
+            )
+            ctr[f"{role}:{prio}"] += 1
+            if len(samples) < 8:
+                samples.append(
+                    {
+                        "tid": task.get("task_id"),
+                        "proc": mp,
+                        "mach": mn,
+                        "role": role,
+                        "prio": prio,
+                    }
+                )
+        _agent_dbg_member_ndjson(
+            {
+                "hypothesisId": hypothesis_id,
+                "runId": "pre-fix",
+                "location": "_core.py:focus_skill_sample",
+                "message": "skill fit over sample of tasks_today",
+                "data": {
+                    "day": current_date.isoformat(),
+                    "member": mem,
+                    "sample_n": lim,
+                    "role_prio_hist": dict(ctr),
+                    "samples": samples,
+                },
+            }
+        )
+
+
+def _dbg_log_focus_day_timeline(
+    timeline_events: list, current_date: date, focus_members: list[str]
+) -> None:
+    lead = {m: 0 for m in focus_members}
+    subn = {m: 0 for m in focus_members}
+    norm_map = {m: _dbg_norm_person_name(m) for m in focus_members}
+    for ev in timeline_events:
+        if ev.get("date") != current_date:
+            continue
+        if not _is_machining_timeline_event(ev):
+            continue
+        op_raw = str(ev.get("op") or "").strip()
+        op_n = _dbg_norm_person_name(op_raw)
+        sub_raw = str(ev.get("sub") or "")
+        sub_parts = [x.strip() for x in sub_raw.replace("、", ",").split(",") if x.strip()]
+        sub_norms = {_dbg_norm_person_name(x) for x in sub_parts}
+        for mem in focus_members:
+            if op_n and op_n == norm_map[mem]:
+                lead[mem] += 1
+            elif norm_map[mem] in sub_norms:
+                subn[mem] += 1
+    _agent_dbg_member_ndjson(
+        {
+            "hypothesisId": "H5",
+            "runId": "pre-fix",
+            "location": "_core.py:focus_timeline_eod",
+            "message": "machining event counts for focus members",
+            "data": {
+                "day": current_date.isoformat(),
+                "lead_rolls": lead,
+                "sub_rolls": subn,
+                "total_machining_events_today": sum(
+                    1
+                    for ev in timeline_events
+                    if ev.get("date") == current_date
+                    and _is_machining_timeline_event(ev)
+                ),
+            },
+        }
+    )
+
+
+# #endregion
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
 # 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
@@ -15648,6 +15815,10 @@ def _generate_plan_impl():
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
             daily_status = attendance_data[current_date]
+            _member_focus_day = current_date.isoformat() == _FOCUS_MEMBER_DBG_DAY_ISO
+            _focus_mems_today = (
+                _dbg_focus_member_keys(members) if _member_focus_day else []
+            )
             # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
             machine_avail_dt = {}
             
@@ -15675,8 +15846,58 @@ def _generate_plan_impl():
                     _machine_day_start,
                 )
 
+            # #region agent log
+            if _member_focus_day and _focus_mems_today:
+                for _fm in _focus_mems_today:
+                    if _fm not in daily_status:
+                        _agent_dbg_member_ndjson(
+                            {
+                                "hypothesisId": "H1",
+                                "runId": "pre-fix",
+                                "location": "_core.py:focus_day_attendance",
+                                "message": "member not in daily_status",
+                                "data": {
+                                    "day": current_date.isoformat(),
+                                    "member": _fm,
+                                },
+                            }
+                        )
+                    else:
+                        _st = daily_status[_fm]
+                        _agent_dbg_member_ndjson(
+                            {
+                                "hypothesisId": "H1",
+                                "runId": "pre-fix",
+                                "location": "_core.py:focus_day_attendance",
+                                "message": "attendance vs avail_dt pool",
+                                "data": {
+                                    "day": current_date.isoformat(),
+                                    "member": _fm,
+                                    "is_working": _st.get("is_working"),
+                                    "eligible_for_assignment": _st.get(
+                                        "eligible_for_assignment"
+                                    ),
+                                    "reason": _st.get("reason"),
+                                    "in_avail_dt": _fm in avail_dt,
+                                },
+                            }
+                        )
+            # #endregion
+
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
+                # #region agent log
+                if _member_focus_day and _focus_mems_today:
+                    _agent_dbg_member_ndjson(
+                        {
+                            "hypothesisId": "H1",
+                            "runId": "pre-fix",
+                            "location": "_core.py:focus_day_attendance",
+                            "message": "day skipped: no avail_dt (all ineligible or missing)",
+                            "data": {"day": current_date.isoformat()},
+                        }
+                    )
+                # #endregion
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -15715,6 +15936,21 @@ def _generate_plan_impl():
                     _pending_rows,
                 )
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
+            # #region agent log
+            if (
+                _member_focus_day
+                and _focus_mems_today
+                and tasks_today
+            ):
+                _dbg_log_focus_day_skill_sample(
+                    current_date=current_date,
+                    focus_members=_focus_mems_today,
+                    tasks_today=tasks_today,
+                    skills_dict=skills_dict,
+                    avail_dt=avail_dt,
+                    hypothesis_id="H2-H4",
+                )
+            # #endregion
             if not tasks_today:
                 earliest_wait = min(
                     [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
@@ -16772,6 +17008,13 @@ def _generate_plan_impl():
                             ),
                             _t.get("dispatch_trial_order"),
                         )
+
+            # #region agent log
+            if _member_focus_day and _focus_mems_today:
+                _dbg_log_focus_day_timeline(
+                    timeline_events, current_date, _focus_mems_today
+                )
+            # #endregion
 
             if STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING:
                 missed_tids = _collect_task_ids_missed_deadline_after_day(
