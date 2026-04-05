@@ -3929,21 +3929,31 @@ Private Sub 設定_シート表示_ドロップダウン候補セルを書く(By
 End Sub
 
 ' C2 以降に「表示/非表示/完全非表示」リストを付与
-' ログ証拠: =$F$2:$F$4 参照の Validation.Add が err 1004。インライン一覧＋International(xlListSeparator) で付与する。
+' 経緯: =$F$2:$F$4 直指定は環境で 1004。International 区切りのインラインも API と食い違うことがある。
+'       ① カンマ固定インライン（Validation 定番）→ ② 失敗時はブック名 PM_AI_SheetVisList = F2:F4 を経由。
 Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
+    Const NM_SHEET_VIS As String = "PM_AI_SheetVisList"
     Dim rng As Range
-    Dim listFormula As String
-    Dim sep As String
     Set rng = ws.Range("C2:C1000")
     On Error Resume Next
     rng.Validation.Delete
-    On Error GoTo 0
-    sep = Application.International(xlListSeparator)
-    If Len(sep) = 0 Then sep = ","
-    listFormula = "表示" & sep & "非表示" & sep & "完全非表示"
-    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:=listFormula
+    Err.Clear
+    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="表示,非表示,完全非表示"
+    If Err.Number = 0 Then GoTo ApplyVisFlags
+    Err.Clear
+    ThisWorkbook.Names(NM_SHEET_VIS).Delete
+    Err.Clear
+    ThisWorkbook.Names.Add Name:=NM_SHEET_VIS, RefersTo:=ws.Range("F2:F4")
+    If Err.Number = 0 Then
+        Err.Clear
+        rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & NM_SHEET_VIS
+    End If
+ApplyVisFlags:
+    On Error Resume Next
     rng.Validation.IgnoreBlank = True
     rng.Validation.InCellDropdown = True
+    Err.Clear
+    On Error GoTo 0
 End Sub
 
 Private Function 設定_シート表示_C列を正規化表示文字列(ByVal raw As String, ByVal fallbackVis As XlSheetVisibility) As String
