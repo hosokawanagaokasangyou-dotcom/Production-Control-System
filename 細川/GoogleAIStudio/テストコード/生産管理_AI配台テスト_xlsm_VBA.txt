@@ -1472,7 +1472,7 @@ CleanExit:
     On Error GoTo 0
 End Sub
 
-' 段階2: production_plan 取り込み直後（シート保護の前）に呼ぶ
+' 段階2: production_plan 取り込み直後に呼ぶ（当該マクロ内は終了時まで保護しない）
 Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Workbook)
     Dim facOk As Boolean
     Dim regOk As Boolean
@@ -4797,8 +4797,8 @@ OpenFailSkills:
 End Function
 
 ' =========================================================
-' 段階1: master.xlsm から「機械カレンダー」とメンバー別勤怠シートを本ブックへ置換コピーし、
-'         パスワード無しでシート保護する（編集は master 側で実施し、段階1でスナップショットを同期）。
+' 段階1: master.xlsm から「機械カレンダー」とメンバー別勤怠シートを本ブックへ置換コピーする（保護は段階1/2 終了時にまとめて適用）。
+'         ※編集は master 側で実施し、段階1でスナップショットを同期。
 '         ※配台用 Python は master.xlsm を直接参照するため本コピーは任意。既定は STAGE1_SYNC_MASTER_SHEETS_TO_MACRO_BOOK=0 でスキップ。
 ' =========================================================
 Private Function 段階1_マスタシートを本ブックへ置換コピー( _
@@ -4841,8 +4841,7 @@ Private Function 段階1_マスタシートを本ブックへ置換コピー( _
     destWs.Name = sheetName
     On Error GoTo 0
     
-    ' パスワード無しでシート保護。UserInterfaceOnly=True でマクロ（段階1 終盤のフォント適用等）からの編集は可、UI からの直接編集は不可。
-    destWs.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+    ' 保護は段階1/2 マクロ終了時に 配台マクロ_対象シートを条件どおりに保護 でまとめて適用（処理中は全シート解除済み）
     
     Application.DisplayAlerts = da
     段階1_マスタシートを本ブックへ置換コピー = True
@@ -4960,9 +4959,150 @@ CloseMasterWbSt1:
     If nSkip > 0 Then
         parts = parts & "・失敗 " & CStr(nSkip)
     End If
-    parts = parts & "）"
+    parts = parts & "）※シート保護はマクロ終了時にまとめて適用"
     段階1_マスタ勤怠と機械カレンダーを同期し保護 = parts
 End Function
+
+' =========================================================
+' 段階1/2・全シートフォント: 開始時に全シートを試行解除し、終了直前に「対象」だけ既定条件で再保護する
+' （結果_* … 段階2 取込と同じオプション／機械カレンダー・マスタ skills のメンバー勤怠シート … 無パス UI のみブロック）
+' =========================================================
+Private Sub 配台マクロ_全シート保護を試行解除()
+    Dim ws As Worksheet
+    On Error Resume Next
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.ProtectContents Then
+            ws.Unprotect
+            If ws.ProtectContents And Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+            End If
+        End If
+    Next ws
+    On Error GoTo 0
+End Sub
+
+' master.xlsm の skills から、勤怠シート名が実在するメンバーのみ dict に追加（キーのみ使用）
+Private Sub 配台_マスタSkillsから勤怠シート名を辞書に追加(ByVal targetDir As String, ByVal dict As Object)
+    Dim wbPath As String
+    Dim wb As Workbook
+    Dim openedHere As Boolean
+    Dim wsSkill As Worksheet
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim pmCount As Long
+    Dim c As Long
+    Dim pHdr As String
+    Dim mHdr As String
+    Dim r As Long
+    Dim mem As String
+    Dim startRow As Long
+    Dim seen As Object
+    Dim wm As Worksheet
+    
+    wbPath = targetDir & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(wbPath)) = 0 Then Exit Sub
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo 0
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=wbPath, ReadOnly:=True, UpdateLinks:=0)
+        openedHere = Not (wb Is Nothing)
+        On Error GoTo 0
+    End If
+    If wb Is Nothing Then Exit Sub
+    
+    On Error Resume Next
+    Set wsSkill = wb.Worksheets("skills")
+    On Error GoTo 0
+    If wsSkill Is Nothing Then GoTo CloseMasterWbProt
+    
+    lastCol = wsSkill.Cells(1, wsSkill.Columns.Count).End(xlToLeft).Column
+    lastRow = wsSkill.Cells(wsSkill.Rows.Count, 1).End(xlUp).Row
+    If lastCol < 2 Or lastRow < 2 Then GoTo CloseMasterWbProt
+    
+    pmCount = 0
+    For c = 2 To lastCol
+        pHdr = Trim$(CStr(wsSkill.Cells(1, c).Value))
+        mHdr = Trim$(CStr(wsSkill.Cells(2, c).Value))
+        If Len(pHdr) > 0 And Len(mHdr) > 0 Then
+            If StrComp(LCase$(pHdr), "nan", vbTextCompare) <> 0 And StrComp(LCase$(mHdr), "nan", vbTextCompare) <> 0 Then
+                pmCount = pmCount + 1
+            End If
+        End If
+    Next c
+    
+    If pmCount > 0 Then
+        startRow = 3
+    Else
+        startRow = 2
+    End If
+    
+    Set seen = CreateObject("Scripting.Dictionary")
+    For r = startRow To lastRow
+        mem = Trim$(CStr(wsSkill.Cells(r, 1).Value))
+        If Len(mem) = 0 Or StrComp(LCase$(mem), "nan", vbTextCompare) = 0 Then GoTo NextMemberProt
+        If seen.Exists(mem) Then GoTo NextMemberProt
+        seen.Add mem, True
+        Set wm = Nothing
+        On Error Resume Next
+        Set wm = wb.Worksheets(mem)
+        On Error GoTo 0
+        If Not wm Is Nothing Then
+            If Not dict.Exists(mem) Then dict.Add mem, True
+        End If
+NextMemberProt:
+    Next r
+
+CloseMasterWbProt:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+End Sub
+
+' targetDir 空なら ThisWorkbook.Path を使用（全シートフォント単体実行向け）
+Private Sub 配台マクロ_対象シートを条件どおりに保護(Optional ByVal targetDir As String = "")
+    Dim td As String
+    Dim ws As Worksheet
+    Dim nm As Variant
+    Dim dict As Object
+    
+    On Error Resume Next
+    td = targetDir
+    If Len(td) = 0 Then td = ThisWorkbook.Path
+    
+    For Each ws In ThisWorkbook.Worksheets
+        If Left$(ws.Name, 3) = "結果_" Then
+            If ws.ProtectContents Then ws.Unprotect
+            If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+            Else
+                ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+            End If
+        End If
+    Next ws
+    
+    Set dict = CreateObject("Scripting.Dictionary")
+    If Not dict.Exists(SHEET_MACHINE_CALENDAR) Then dict.Add SHEET_MACHINE_CALENDAR, True
+    If Len(td) > 0 Then
+        配台_マスタSkillsから勤怠シート名を辞書に追加 td, dict
+    End If
+    For Each nm In dict.Keys
+        Set ws = Nothing
+        Set ws = ThisWorkbook.Worksheets(CStr(nm))
+        If Not ws Is Nothing Then
+            If ws.ProtectContents Then ws.Unprotect
+            ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
+        End If
+    Next nm
+    
+    On Error GoTo 0
+End Sub
 
 ' =========================================================
 ' 段階1コア: task_extract_stage1.py → plan_input_tasks.xlsx →「配台計画_タスク入力」取込
@@ -4985,6 +5125,7 @@ Private Sub 段階1_コア実行()
     Dim st1XwErr As Long
     Dim st1XwDesc As String
     Dim missSt1 As String
+    Dim st1DidUnlock As Boolean
 
     On Error GoTo ErrStage1
     m_lastStage1ExitCode = -1
@@ -5047,6 +5188,10 @@ Private Sub 段階1_コア実行()
         Exit Sub
     End If
 
+    st1DidUnlock = False
+    配台マクロ_全シート保護を試行解除
+    st1DidUnlock = True
+
     MacroSplash_SetStep "段階1: LOG シートをクリアしヘッダを書き込んでいます…"
     wsLog.Cells.Clear
     wsLog.Cells(1, 1).Value = "実行ブック: " & ThisWorkbook.FullName
@@ -5093,6 +5238,7 @@ Private Sub 段階1_コア実行()
             Application.StatusBar = False
             Application.ScreenUpdating = prevScreenUpdating
             Application.DisplayAlerts = prevDisplayAlerts
+            If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
             Exit Sub
         End If
         On Error GoTo ErrStage1
@@ -5172,6 +5318,7 @@ Private Sub 段階1_コア実行()
     If exitCode <> 0 Then
         Application.ScreenUpdating = prevScreenUpdating
         Application.DisplayAlerts = prevDisplayAlerts
+        If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
         Exit Sub
     End If
 
@@ -5180,6 +5327,7 @@ Private Sub 段階1_コア実行()
         m_lastStage1ExitCode = -1
         Application.ScreenUpdating = prevScreenUpdating
         Application.DisplayAlerts = prevDisplayAlerts
+        If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
         Exit Sub
     End If
     On Error Resume Next
@@ -5210,6 +5358,7 @@ Private Sub 段階1_コア実行()
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo 0
+    If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
     Exit Sub
 
 ErrStage1:
@@ -5218,6 +5367,7 @@ ErrStage1:
     Application.StatusBar = False
     Application.ScreenUpdating = prevScreenUpdating
     Application.DisplayAlerts = prevDisplayAlerts
+    If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
 End Sub
 
 ' 互換・他モジュール用: 段階1のみ（エラー時 MsgBox。成功時はスプラッシュ文＋チャイム）
@@ -5785,6 +5935,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     Dim st2XwErr As Long
     Dim st2XwDesc As String
     Dim missSt2 As String
+    Dim st2DidUnlock As Boolean
     
     On Error GoTo ErrHandler
     
@@ -5888,6 +6039,10 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     DoEvents
     ThisWorkbook.Save
     Application.StatusBar = False
+    
+    st2DidUnlock = False
+    配台マクロ_全シート保護を試行解除
+    st2DidUnlock = True
     
     ' ② 「pushd」コマンドを使用し、UNCパスに一時的なドライブ文字を割り当てて確実に移動してからPythonを実行する
     ' リダイレクトは付けない（付けるとコンソールが真っ黒になる）。ログは Python が execution_log.txt にも出力する。
@@ -6117,21 +6272,11 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
                 On Error GoTo ErrHandler
             End If
             
-            ' (5) 結果_* ：パスワード無しでシート保護（UI からの編集不可。マクロ・段階2 後処理からの更新は可）
-            '     結果_設備ガントのみ AllowFormattingCells=True（［シートの保護］で「セルの書式設定」相当。選択行ハイライトの罫線変更が保護下でも可能）
-            If Left$(sheetName, 3) = "結果_" Then
-                On Error Resume Next
-                If StrComp(sheetName, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
-                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-                Else
-                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
-                End If
-                On Error GoTo ErrHandler
-            End If
+            ' (5) 結果_* の保護は段階2 終了時（Finish）の 配台マクロ_対象シートを条件どおりに保護 でまとめて適用（処理中は全シート解除済み）
             
         Next sourceWs
         
-        ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（保護後も UI のみ。依頼NO薄緑は機械名毎のみ追加）
+        ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（UserInterfaceOnly 保護後もマクロから可。依頼NO薄緑は機械名毎のみ追加）
         On Error Resume Next
         取込後_結果シートへマスタ時刻を反映 targetWb
         Err.Clear
@@ -6261,6 +6406,12 @@ Finish:
     Application.DisplayAlerts = prevDisplayAlerts
     Application.ScreenUpdating = prevScreenUpdating
     
+    If st2DidUnlock Then
+        On Error Resume Next
+        配台マクロ_対象シートを条件どおりに保護 targetDir
+        On Error GoTo 0
+    End If
+    
     On Error Resume Next
     If planImported Then
         結果プレフィックスシートの表示倍率を設定 ThisWorkbook, 100
@@ -6378,7 +6529,7 @@ End Sub
 ' =========================================================
 ' 全シートのセルフォントを統一（手動実行・ボタン割当可）
 ' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
-' ※保護シートは一時解除→フォント適用→取り込み結果シートと同様の再保護（DrawingObjects+Contents+UserInterfaceOnly。パスワードは SHEET_FONT_UNPROTECT_PASSWORD）。結果_設備ガントのみ AllowFormattingCells（行ハイライト罫線用）。
+' ※保護の解除・再保護は呼び出し元（段階1/2 コアまたは全シートフォント各マクロ）が 配台マクロ_* で実施。本サブは UsedRange のフォント名のみ変更。
 ' ※解除できないシートはスキップし、ダイアログに列挙。
 ' ※フォント後の列幅調整はメイン A:K と 結果_主要4結果シート_列オートフィット のみ。結果_設備ガントは専用列幅（オートフィットしない）。
 ' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
@@ -6430,62 +6581,22 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean
-    Dim wasProt As Boolean
-    Dim unprotectOk As Boolean
     
     skippedOut = ""
     For Each ws In ThisWorkbook.Worksheets
-        wasProt = False
-        unprotectOk = True
         On Error Resume Next
-        If ws.ProtectContents Then
-            wasProt = True
-            ws.Unprotect
-            If ws.ProtectContents And Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
-            End If
-            If ws.ProtectContents Then
-                skippedOut = skippedOut & "・" & ws.Name & "（保護解除できずスキップ）" & vbCrLf
-                Err.Clear
-                unprotectOk = False
-            End If
-        End If
-        
-        If unprotectOk Then
-            rangeErr = False
-            Set ur = Nothing
-            Set ur = ws.UsedRange
-            If Err.Number <> 0 Then
-                skippedOut = skippedOut & "・" & ws.Name & "（UsedRange: " & Err.Description & "）" & vbCrLf
-                Err.Clear
-                rangeErr = True
-            End If
-            If Not rangeErr Then
-                ur.Font.Name = fontName
-                If Err.Number <> 0 Then
-                    skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
-                    Err.Clear
-                End If
-            End If
-        End If
-        
-        If wasProt And unprotectOk Then
+        rangeErr = False
+        Set ur = Nothing
+        Set ur = ws.UsedRange
+        If Err.Number <> 0 Then
+            skippedOut = skippedOut & "・" & ws.Name & "（UsedRange: " & Err.Description & "）" & vbCrLf
             Err.Clear
-            If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-                If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
-                    ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-                Else
-                    ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
-                End If
-            Else
-                If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
-                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-                Else
-                    ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
-                End If
-            End If
+            rangeErr = True
+        End If
+        If Not rangeErr Then
+            ur.Font.Name = fontName
             If Err.Number <> 0 Then
-                skippedOut = skippedOut & "・" & ws.Name & "（再保護失敗: " & Err.Description & "）" & vbCrLf
+                skippedOut = skippedOut & "・" & ws.Name & "（Font.Name: " & Err.Description & "）" & vbCrLf
                 Err.Clear
             End If
         End If
@@ -6554,6 +6665,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     prevWs.Activate
     On Error GoTo 0
     
+    配台マクロ_全シート保護を試行解除
     MacroSplash_SetStep "フォント「" & picked & "」を全シートへ適用しています…"
     On Error GoTo Fail
     ApplyFontToAllSheetCells picked, skipped
@@ -6570,10 +6682,14 @@ Public Sub 全シートフォントをリストから選択して統一()
     On Error Resume Next
     メインシート_AからK列_AutoFit
     結果_主要4結果シート_列オートフィット
+    配台マクロ_対象シートを条件どおりに保護
     On Error GoTo 0
     Exit Sub
     
 Fail:
+    On Error Resume Next
+    配台マクロ_対象シートを条件どおりに保護
+    On Error GoTo 0
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
@@ -6609,6 +6725,7 @@ Public Sub 全シートフォントを手入力で統一()
         End If
     End If
     
+    配台マクロ_全シート保護を試行解除
     MacroSplash_SetStep "フォント「" & fontName & "」を全シートへ適用しています…"
     On Error GoTo FailHand
     ApplyFontToAllSheetCells fontName, skipped
@@ -6625,16 +6742,21 @@ Public Sub 全シートフォントを手入力で統一()
     On Error Resume Next
     メインシート_AからK列_AutoFit
     結果_主要4結果シート_列オートフィット
+    配台マクロ_対象シートを条件どおりに保護
     On Error GoTo 0
     Exit Sub
     
 FailHand:
+    On Error Resume Next
+    配台マクロ_対象シートを条件どおりに保護
+    On Error GoTo 0
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
 Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     Dim skipped As String
     MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
+    配台マクロ_全シート保護を試行解除
     On Error GoTo FailB
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     On Error GoTo 0
@@ -6650,10 +6772,14 @@ Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     On Error Resume Next
     メインシート_AからK列_AutoFit
     結果_主要4結果シート_列オートフィット
+    配台マクロ_対象シートを条件どおりに保護
     On Error GoTo 0
     Exit Sub
     
 FailB:
+    On Error Resume Next
+    配台マクロ_対象シートを条件どおりに保護
+    On Error GoTo 0
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
