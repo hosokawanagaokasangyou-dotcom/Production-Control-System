@@ -920,7 +920,8 @@ PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
 # 段階1再抽出時、既存「配台計画_タスク入力」から継承する列（AIの解析結果列は毎回空に戻す）
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
 # 上書き以外で、再抽出時に旧シートから引き継ぐ列（セルが空でないときのみ）
-PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
+# 配台試行順番は毎回空クリアのうえ fill_plan_dispatch_trial_order_column_stage1 で付け直すため対象外。
+PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
 # openpyxl 保存がブックロックで失敗したとき、VBA が開いているブックへ書式適用するための指示ファイル
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
 # 配台計画_タスク入力へ「グローバルコメント解析」を書く列（表の右端より外側。1行目から縦にラベル／値）
@@ -939,7 +940,7 @@ def plan_input_sheet_column_order():
     """
     配台計画_タスク入力の列順（段階1出力・段階2読込で共通）。
 
-    0. 配台試行順番（段階1で段階2と同趣旨に付与。段階2は全行に値があるときこの順を優先）
+    0. 配台試行順番（段階1抽出直後に空クリア→段階2と同趣旨に付与。段階2は全行に値があるときこの順を優先）
     1. 配台不要（参照列なし）
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール単位長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因子
@@ -6844,10 +6845,6 @@ def _merge_plan_sheet_user_overrides(out_df):
         for c, v in bucket.items():
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 v = _coerce_plan_exclude_column_value_for_storage(v)
-            elif c == RESULT_TASK_COL_DISPATCH_TRIAL_ORDER:
-                _dto_m = parse_optional_int(v)
-                if _dto_m is not None:
-                    v = _dto_m
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
             out_df.at[i, c] = v
@@ -8771,6 +8768,11 @@ def run_stage1_extract():
     if PLAN_COL_EXCLUDE_FROM_ASSIGNMENT in out_df.columns:
         out_df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = out_df[
             PLAN_COL_EXCLUDE_FROM_ASSIGNMENT
+        ].astype(object)
+    if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER in out_df.columns:
+        out_df[RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = ""
+        out_df[RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = out_df[
+            RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
         ].astype(object)
     try:
         (
