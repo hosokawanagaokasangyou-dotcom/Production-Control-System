@@ -14582,22 +14582,64 @@ def _assign_one_roll_trial_order_flow(
                     _floor_h7 = b2_insp_ec_floor.isoformat(sep=" ")
             except Exception:
                 _floor_h7 = str(b2_insp_ec_floor)
+            _h7_data: dict = {
+                "tid": _tid_h7,
+                "day": _day_h7,
+                "trial_order": task.get("dispatch_trial_order"),
+                "req_num": req_num,
+                "capable_ct": len(capable_members),
+                "max_team_size": max_team_size,
+                "b2_ec_floor": _floor_h7,
+                "rem": float(task.get("remaining_units") or 0),
+                "h8_rejects": dict(_h8_tally),
+            }
+            # start_ge_end_initial 時の壁時計・勤怠スナップショット（PII なし）
+            if _h8_tally.get("start_ge_end_initial", 0) > 0 and capable_members:
+                try:
+                    _op_cand = [
+                        m
+                        for m in capable_members
+                        if skill_role_priority(m)[0] == "OP"
+                    ] or list(capable_members)
+                    _ends_ok = [
+                        daily_status[m]["end_dt"]
+                        for m in _op_cand
+                        if m in daily_status
+                    ]
+                    _avs_ok = [
+                        avail_dt[m] for m in _op_cand if m in avail_dt
+                    ]
+                    if _ends_ok:
+                        _h7_data["min_op_end_iso"] = min(_ends_ok).isoformat(sep=" ")
+                    if _avs_ok:
+                        _h7_data["max_op_avail_iso"] = max(_avs_ok).isoformat(sep=" ")
+                except Exception:
+                    pass
+                try:
+                    if _mach_floor_eff is not None:
+                        _h7_data["mach_floor_eff_iso"] = _mach_floor_eff.isoformat(
+                            sep=" "
+                        )
+                except Exception:
+                    _h7_data["mach_floor_eff_iso"] = str(_mach_floor_eff)
+                try:
+                    _h7_data["day_floor_iso"] = day_floor.isoformat(sep=" ")
+                except Exception:
+                    _h7_data["day_floor_iso"] = str(day_floor)
+                _mkey_h7 = machine_occ_key or ""
+                _h7_data["machine_occ_key"] = _mkey_h7
+                _mad_h7 = machine_avail_dt.get(_mkey_h7)
+                try:
+                    if _mad_h7 is not None and hasattr(_mad_h7, "isoformat"):
+                        _h7_data["machine_avail_dt_iso"] = _mad_h7.isoformat(sep=" ")
+                except Exception:
+                    _h7_data["machine_avail_dt_iso"] = str(_mad_h7)
             _agent_ndjson_log(
                 {
                     "hypothesisId": "H7",
                     "location": "_assign_one_roll_trial_order_flow",
                     "message": "b2_follower_empty_team_candidates",
-                    "data": {
-                        "tid": _tid_h7,
-                        "day": _day_h7,
-                        "trial_order": task.get("dispatch_trial_order"),
-                        "req_num": req_num,
-                        "capable_ct": len(capable_members),
-                        "max_team_size": max_team_size,
-                        "b2_ec_floor": _floor_h7,
-                        "rem": float(task.get("remaining_units") or 0),
-                        "h8_rejects": dict(_h8_tally),
-                    },
+                    "data": _h7_data,
                 }
             )
         # #endregion
