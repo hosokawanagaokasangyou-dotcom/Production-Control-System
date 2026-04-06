@@ -8696,6 +8696,34 @@ def apply_exclude_rules_config_to_plan_df(
     return df
 
 
+def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") -> "pd.DataFrame":
+    """
+    段階1出力直前: 配台試行順番の昇順に行を並べ替えた DataFrame を返す。
+    正の整数でないセルは最後（同帯内は元の行順）。
+    """
+    col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if plan_df is None or getattr(plan_df, "empty", True) or col not in plan_df.columns:
+        return plan_df
+    try:
+        loc = plan_df.columns.get_loc(col)
+    except Exception:
+        return plan_df
+    n = len(plan_df)
+    if n <= 1:
+        return plan_df
+    keys = []
+    for i in range(n):
+        dto = parse_optional_int(plan_df.iat[i, loc])
+        if dto is not None and dto >= 1:
+            keys.append((0, int(dto), i))
+        else:
+            keys.append((1, 10**9, i))
+    order = sorted(range(n), key=lambda j: keys[j])
+    if order == list(range(n)):
+        return plan_df
+    return plan_df.iloc[order].reset_index(drop=True)
+
+
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
 #   加工計画DATA 読取 → 配台不要自動処理 → 設定シート保守 → plan_input_tasks.xlsx 出力
@@ -8815,6 +8843,7 @@ def run_stage1_extract():
         )
     except Exception as ex:
         logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
+    out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
