@@ -14648,7 +14648,8 @@ def _trial_order_first_schedule_pass(
     EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
     カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
     EC と後続を **交互に 1 ロールずつ試すと**同一担当者が途中で後続へ回り **EC がブロック**されるため、
-    同一パス内では EC 等を先に詰める。
+    担当者集合の分離がある§B-2/§B-3 のみ、**同一パス内**でフェーズ1・フェーズ2を **最大1ロールずつ**
+    交互に繰り返す（他依存はフェーズ1のみ従来どおり全日詰め）。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14676,10 +14677,15 @@ def _trial_order_first_schedule_pass(
         "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
     }
 
-    def _drain_rolls_for_task(task: dict) -> bool:
+    def _drain_rolls_for_task(
+        task: dict, *, max_rolls: int | None = None
+    ) -> bool:
         preferred_team: tuple | None = None
         made_local = False
+        rolls_done = 0
         while float(task.get("remaining_units") or 0) > 1e-12:
+            if max_rolls is not None and rolls_done >= max_rolls:
+                break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -14867,6 +14873,7 @@ def _trial_order_first_schedule_pass(
                 )
             preferred_team = best_team
             made_local = True
+            rolls_done += 1
         return made_local
 
     def _is_b2_follower_phase2_row(t: dict) -> bool:
@@ -14883,12 +14890,26 @@ def _trial_order_first_schedule_pass(
     phase2_tasks = [t for t in eligible_sorted if _is_b2_follower_phase2_row(t)]
 
     pass_made = False
-    for task in phase1_tasks:
-        if _drain_rolls_for_task(task):
+    # §B-2/§B-3 後続行があるときは、フェーズ1を全日で詰めてからフェーズ2に回すと
+    # 検査担当が同一日内に他タスク（フェーズ1）へ取られ、検査が team_candidates 空で
+    # 全日ストップする。1ロール単位でフェーズ1→フェーズ2を交互に回し配台試行順を
+    # 同一日内でも実効化する。
+    if phase2_tasks:
+        while True:
+            round_made = False
+            for task in phase1_tasks:
+                if _drain_rolls_for_task(task, max_rolls=1):
+                    round_made = True
+            for task in phase2_tasks:
+                if _drain_rolls_for_task(task, max_rolls=1):
+                    round_made = True
+            if not round_made:
+                break
             pass_made = True
-    for task in phase2_tasks:
-        if _drain_rolls_for_task(task):
-            pass_made = True
+    else:
+        for task in phase1_tasks:
+            if _drain_rolls_for_task(task):
+                pass_made = True
     return pass_made
 
 
