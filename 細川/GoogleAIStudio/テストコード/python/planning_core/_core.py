@@ -8701,57 +8701,6 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
     段階1出力直前: 配台試行順番の昇順に行を並べ替えた DataFrame を返す。
     正の整数でないセルは最後（同帯内は元の行順）。
     """
-    # #region agent log
-    def _agent_debug_stage1_pre_xlsx(plan_inner: "pd.DataFrame", tag: str) -> None:
-        import json
-        import time
-        from pathlib import Path
-
-        root = Path(__file__).resolve()
-        for _ in range(28):
-            if (root / ".git").is_dir():
-                break
-            nxt = root.parent
-            if nxt == root:
-                break
-            root = nxt
-        dcol = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-        dto_idx = [
-            j for j, c in enumerate(plan_inner.columns) if c == dcol
-        ] if plan_inner is not None and not getattr(plan_inner, "empty", True) else []
-        tid_idx = [
-            j for j, c in enumerate(plan_inner.columns) if c == TASK_COL_TASK_ID
-        ]
-        head = []
-        if dto_idx and tid_idx and plan_inner is not None:
-            di, ti = dto_idx[0], tid_idx[0]
-            for i in range(min(28, len(plan_inner))):
-                head.append(
-                    {
-                        "i": i,
-                        "dto": str(plan_inner.iat[i, di]),
-                        "tid": str(plan_inner.iat[i, ti]).strip()[:20],
-                    }
-                )
-        payload = {
-            "sessionId": "2c5e96",
-            "hypothesisId": "H1",
-            "location": "_sort_stage1_plan_df_by_dispatch_trial_order_asc",
-            "message": tag,
-            "data": {
-                "n_rows": len(plan_inner) if plan_inner is not None else 0,
-                "dto_col_positions": dto_idx,
-                "head_after_sort": head,
-            },
-            "timestamp": int(time.time() * 1000),
-        }
-        try:
-            with (root / "debug-2c5e96.log").open("a", encoding="utf-8") as _df:
-                _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-
-    # #endregion
     col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if plan_df is None or getattr(plan_df, "empty", True) or col not in plan_df.columns:
         return plan_df
@@ -8761,7 +8710,6 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
     loc = dto_positions[0]
     n = len(plan_df)
     if n <= 1:
-        _agent_debug_stage1_pre_xlsx(plan_df, "sort_skip_n_le_1")
         return plan_df
     keys = []
     for i in range(n):
@@ -8772,11 +8720,8 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
             keys.append((1, 10**9, i))
     order = sorted(range(n), key=lambda j: keys[j])
     if order == list(range(n)):
-        out = plan_df
-    else:
-        out = plan_df.iloc[order].reset_index(drop=True)
-    _agent_debug_stage1_pre_xlsx(out, "pre_to_excel_after_sort")
-    return out
+        return plan_df
+    return plan_df.iloc[order].reset_index(drop=True)
 
 
 # =============================================================================
