@@ -97,11 +97,61 @@
       font-size: 0.85rem;
       color: var(--muted);
     }
+    /* 読みやすさ: 要約・手順・表 */
+    .lead-short {
+      font-size: 1.02rem;
+      line-height: 1.7;
+      margin-bottom: 0.75rem;
+    }
+    details.more {
+      margin: 0.75rem 0 1.25rem;
+      padding: 0.65rem 1rem;
+      background: #f0ebe3;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    details.more summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    details.more .inner { margin-top: 0.65rem; font-size: 0.95rem; color: var(--text); }
+    h4.queue-sub {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 1.35rem 0 0.5rem;
+      padding-left: 0.55rem;
+      border-left: 4px solid var(--accent2);
+    }
+    .queue-note {
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin: 0.35rem 0 0.75rem;
+    }
+    table.dense th, table.dense td { vertical-align: top; }
+    table.dense td:first-child { white-space: nowrap; font-weight: 600; }
+    ol.steps { margin: 0.5rem 0; padding-left: 1.35rem; }
+    ol.steps li { margin: 0.5rem 0; }
   </style>
 </head>
 <body>
   <h1>配台ルール</h1>
-  <p class="sub">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。詳細は <span class="file">配台ルール.md</span>、実装の正は <span class="file">python/planning_core/_core.py</span> です。<strong>2026-04 反映</strong>: 計画基準納期は「グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期」。<strong>原反投入日</strong>はシート列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があるとき<strong>そちらを配台に採用</strong>、空のとき列 <code>原反投入日</code>。開始日は採用した原反日がある行で <code>max(基準日, 原反投入日, 開始日上書き)</code>（原反前倒し不可）。原反<strong>当日</strong>は開始日上書き有無にかかわらず <strong>13:00</strong> 以降開始。日内は既定で <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（<strong>配台試行順</strong>優先マルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。§B-2 は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）で設備占有。優先度<strong>同数重複</strong>は段階2中止。計画基準超過の<strong>巻き戻し再試行</strong>は既定 <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>（オフ）。<code>True</code> のときのみ <code>_collect_task_ids_missed_deadline_after_day</code> 条件で再試行（本文 2.3）。<strong>need 配台時追加人数</strong>は既定でメインは基本人数のみ→<strong>全シミュレーション後</strong>に未割当×スキルでサブ追記（<a href="#need-surplus">下記</a>）。<strong>配台ロジックを変えたら <span class="file">配台ルール.md</span> / 本 HTML を必ず更新</strong>（<a href="#doc-sync">開発ルール</a>）。業務案の順次1件・16:00締め込みは次段。</p>
+  <p class="lead-short">全加工依頼に適用するルールと、個別指定ルールを分けて記載しています。<strong>詳細の正</strong>は <span class="file">配台ルール.md</span>、<strong>実装の正</strong>は <span class="file">python/planning_core/_core.py</span> です。配台ロジックを変えたら <span class="file">配台ルール.md</span> と本 HTML を同期してください（<a href="#doc-sync">開発ルール</a>）。</p>
+  <details class="more">
+    <summary>2026-04 ブリーフィング（納期・原反・日内・環境変数など）を開く</summary>
+    <div class="inner">
+      <ul>
+        <li><strong>計画基準納期</strong>の優先: グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期。</li>
+        <li><strong>原反投入日</strong>: 列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があれば<strong>配台はそちらを採用</strong>。空なら <code>原反投入日</code>。開始日は原反採用行で <code>max(基準日, 原反投入日, 開始日上書き)</code>。原反<strong>当日</strong>は <strong>13:00</strong> 以降開始。</li>
+        <li><strong>日内</strong>は既定 <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（配台試行順を先に見るマルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。</li>
+        <li>§B-2 検査占有は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）。優先度<strong>同数重複</strong>は段階2中止。</li>
+        <li>計画基準超過の<strong>巻き戻し再試行</strong>は既定オフ <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>。<code>True</code> 時のみ <code>_collect_task_ids_missed_deadline_after_day</code> 条件で再試行。</li>
+        <li><strong>need 配台時追加人数</strong>: 既定はメインは基本人数のみ→<strong>全シミュレーション後</strong>にサブ追記（<a href="#need-surplus">need 追加人数</a>）。</li>
+        <li>業務案の「順次1件・16:00締め込み」は次段。</li>
+      </ul>
+    </div>
+  </details>
 
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
@@ -143,11 +193,59 @@
 
   <section id="queue-order" class="card" aria-labelledby="h-queue">
     <h2 id="h-queue">タスクの並び（割付の試行順・要約）</h2>
-    <p><strong>グローバル</strong>（<code>generate_plan</code> 内・2026-04）: キュー全行に<strong>シートの配台試行順番（正の整数）が揃っている</strong>ときは、その昇順（同値は <code>planning_sheet_row_seq</code>）で並べ <code>dispatch_trial_order</code> に反映（<strong>EC 隣接繰り上げはスキップ</strong>）。<strong>欠損がある行が1行でもある</strong>ときは <code>task_queue.sort</code>（<code>_generate_plan_task_queue_sort_key</code>）: <strong><code>b_tier</code></strong>（0=§B-1、1=§B-2/§B-3 帯、2=その他）→ <strong>加工途中</strong> → <strong>計画基準納期</strong> → <strong><code>b2_queue_sub</code></strong>（§B-2/§B-3 帯内の EC 先行）→ <strong>need 列位置</strong> → <strong>依頼NOタイブレーク</strong>（2026-04-06 改定）。続けて <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で EC→後続を隣接、<code>_assign_sequential_dispatch_trial_order</code> で 1..n。<strong>納期シフト再試行</strong>後も同じ <code>_apply_dispatch_trial_order_for_generate_plan</code> で確定。</p>
-    <p><strong>各日内（既定）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code> では <code>_trial_order_first_schedule_pass</code> が候補を <strong><code>dispatch_trial_order</code> 昇順</strong>にし、§B-2/§B-3 は <strong>完全二相</strong>（<strong>フェーズ1</strong>: 熱融着検査・巻返し（後続）<strong>以外</strong>を連続ロール → <strong>フェーズ2</strong>: 後続行を配台）。後続候補は <code>_roll_pipeline_inspection_assign_room</code>（バッファ付きロール枠）で制御されます。通常の日次ループ完了後、B-2 検査／B-3 巻返しを <code>_run_b2_inspection_rewind_pass</code> で日付先頭から再走査し、<code>timeline_events</code> を人・設備のブロックテーブルとして再利用して日跨ぎ占有を保持したまま詰めます。再走査中は <code>_roll_pipeline_inspection_assign_room</code> と <code>_roll_pipeline_b2_inspection_ec_completion_floor_dt</code>。<strong>壁時計の設備占有</strong>は <code>machine_avail_dt</code> を<strong>機械名占有キー</strong>で管理し、同一<strong>物理機械</strong>上の試行順は <code>_equipment_line_lower_dispatch_trial_still_pending</code>。<code>_day_schedule_task_sort_key</code> は主ループのソートには使わない。<strong>継続チーム優先は同日内のみ</strong>で、翌日は当日候補から再選定します。</p>
-    <p><strong>各日内（フォールバック）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のとき <code>_day_schedule_task_sort_key</code> 順の 1 本ループ。<code>dispatch_trial_order</code> は<strong>複合キーの一部</strong>（最優先単独ではない）。</p>
-    <p><strong>納期シフト再試行</strong>: 対象依頼の再配台前に <code>_apply_dispatch_trial_order_for_generate_plan</code> で試行順を再確定（シート優先条件または自動ソート＋隣接＋連番）。</p>
-    <p><strong>結果_タスク一覧</strong>の行順は <strong>配台試行順番</strong>（グローバルソート直後の 1..n）が第一キーです。</p>
+    <p class="queue-note">ここは <code>generate_plan</code> でのグローバル試行順の決め方と、段階2の日内ループの関係を<strong>見出し＋表</strong>で整理しています（2026-04 時点）。</p>
+
+    <h4 class="queue-sub">1. グローバル（<code>generate_plan</code> 内）</h4>
+    <table class="dense">
+      <thead><tr><th>条件</th><th>試行順 <code>dispatch_trial_order</code> の決め方</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>キュー<strong>全行</strong>にシート列 <strong>配台試行順番</strong>（正の整数）が埋まっている</td>
+          <td>その<strong>昇順</strong>。同値は <code>planning_sheet_row_seq</code>。<strong>EC 隣接繰り上げは行わない</strong>（手計算シート順を尊重）。</td>
+        </tr>
+        <tr>
+          <td>欠損行が<strong>1 行でも</strong>ある</td>
+          <td><code>task_queue.sort</code> のキー <code>_generate_plan_task_queue_sort_key</code> で並べ替え（下表）→ <code>_reorder_task_queue_b2_ec_inspection_consecutive</code> で EC→後続を隣接 → <code>_assign_sequential_dispatch_trial_order</code> で <strong>1…n</strong>。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>自動ソート時のキー順</strong>（2026-04-06 改定・欠損時のみ）:</p>
+    <table class="dense">
+      <thead><tr><th>順位</th><th>キー</th><th>意味（要約）</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><code>b_tier</code></td><td><strong>0</strong>=§B-1、<strong>1</strong>=§B-2／§B-3 帯、<strong>2</strong>=その他</td></tr>
+        <tr><td>2</td><td>（加工途中）</td><td>途中タスクを先に</td></tr>
+        <tr><td>3</td><td>計画基準納期</td><td><code>due_basis_date</code> 系</td></tr>
+        <tr><td>4</td><td><code>b2_queue_sub</code></td><td>§B-2／§B-3 帯内で <strong>EC 先行</strong></td></tr>
+        <tr><td>5</td><td>need 列位置</td><td>シート上の need 由来の順位</td></tr>
+        <tr><td>6</td><td>依頼NO</td><td>タイブレーク</td></tr>
+      </tbody>
+    </table>
+    <p><strong>納期シフト再試行</strong>を挟んでも、グローバル側は再度 <code>_apply_dispatch_trial_order_for_generate_plan</code> で<strong>同じ規則</strong>（シート優先が効くならそれ、欠損なら上記＋隣接＋連番）により確定します。</p>
+
+    <h4 class="queue-sub">2. 各日内・既定（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>）</h4>
+    <ol class="steps">
+      <li><strong>候補の並び</strong>: <code>_trial_order_first_schedule_pass</code> が、まず <code>dispatch_trial_order</code> <strong>昇順</strong>で見る（主ループは <code>_day_schedule_task_sort_key</code> 単独では並べ替えない）。</li>
+      <li><strong>§B-2／§B-3 は完全二相</strong>:
+        <ul>
+          <li><strong>フェーズ1</strong> — 熱融着検査・巻返し（<strong>後続</strong>）<strong>以外</strong>を、連続ロールとして進める。</li>
+          <li><strong>フェーズ2</strong> — 後続行を配台。後続の入り幅は <code>_roll_pipeline_inspection_assign_room</code>（バッファ付きロール枠）。</li>
+        </ul>
+      </li>
+      <li><strong>本節ループ後の再走査</strong>: B-2 検査／B-3 巻返しは <code>_run_b2_inspection_rewind_pass</code> で<strong>日付の先頭から</strong>再スキャン。<code>timeline_events</code> と人・設備ブロックテーブルを再利用し、<strong>日をまたいだ占有</strong>を保ったまま詰める。</li>
+      <li><strong>再走査中の関数</strong>: <code>_roll_pipeline_inspection_assign_room</code>、<code>_roll_pipeline_b2_inspection_ec_completion_floor_dt</code>。</li>
+      <li><strong>設備の壁時計</strong>: <code>machine_avail_dt</code> を<strong>機械名占有キー</strong>で管理。同一物理機械では、試行順の整合に <code>_equipment_line_lower_dispatch_trial_still_pending</code>。</li>
+      <li><strong>継続チーム優先</strong>は<strong>その日のうち</strong>に限り、翌日はまた当日候補から選び直す。</li>
+    </ol>
+
+    <h4 class="queue-sub">3. 各日内・フォールバック（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code>）</h4>
+    <p><code>_day_schedule_task_sort_key</code> 順の<strong>一本ループ</strong>。<code>dispatch_trial_order</code> は<strong>複合キーの一部</strong>に過ぎず、単独の最優先キーではない。</p>
+
+    <h4 class="queue-sub">4. 納期シフト再試行の直前</h4>
+    <p>対象依頼を再配台する前に、<code>_apply_dispatch_trial_order_for_generate_plan</code> で試行順を<strong>再確定</strong>（シート「全行そろい」優先、または自動ソート＋EC 隣接＋連番）。</p>
+
+    <h4 class="queue-sub">5. 結果シートの見え方</h4>
+    <p><strong>結果_タスク一覧</strong>の行順の<strong>第一キー</strong>は、グローバルでソートした直後の<strong>配台試行順番</strong>（1…n）です。</p>
   </section>
 
   <section id="day-flow" class="card" aria-labelledby="h-dayflow">
