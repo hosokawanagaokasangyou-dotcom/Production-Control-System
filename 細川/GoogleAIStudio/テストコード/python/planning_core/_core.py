@@ -14648,8 +14648,8 @@ def _trial_order_first_schedule_pass(
     EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
     カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
     EC と後続を **交互に 1 ロールずつ試すと**同一担当者が途中で後続へ回り **EC がブロック**されるため、
-    担当者集合の分離がある§B-2/§B-3 のみ、**同一パス内**でフェーズ1・フェーズ2を **最大1ロールずつ**
-    交互に繰り返す（他依存はフェーズ1のみ従来どおり全日詰め）。
+    担当者集合の分離がある§B-2/§B-3 のみ、**同一パス内**で **フェーズ2→フェーズ1** の順に
+    **最大1ロールずつ**繰り返す（他依存はフェーズ1のみ従来どおり全日詰め）。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14897,10 +14897,12 @@ def _trial_order_first_schedule_pass(
     if phase2_tasks:
         while True:
             round_made = False
-            for task in phase1_tasks:
+            # フェーズ2を先に1ロールずつ試す。フェーズ1を先に回すと、同一日内に他タスクが
+            # 検査の候補OPの空きを先に取り、フェーズ2が全日 team_candidates 空のままになる。
+            for task in phase2_tasks:
                 if _drain_rolls_for_task(task, max_rolls=1):
                     round_made = True
-            for task in phase2_tasks:
+            for task in phase1_tasks:
                 if _drain_rolls_for_task(task, max_rolls=1):
                     round_made = True
             if not round_made:
