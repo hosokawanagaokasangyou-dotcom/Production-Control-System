@@ -11932,9 +11932,9 @@ def _generate_plan_task_queue_sort_key(
     """
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
 
-    1. §B-1 → §B-2/§B-3 帯 → その他
-    2. 加工途中（in_progress）を先
-    3. 計画基準納期（早いほど先）
+    1. 加工途中（in_progress）を先
+    2. 計画基準納期（早いほど先）
+    3. §B-1 → §B-2/§B-3 帯 → その他（b_tier）
     4. §B-2/§B-3 帯内のみ EC を未着手の検査／巻返しより先（b2_queue_sub）
     5. need シート左列ほど先（工程名+機械名列の位置）
     6. 依頼NOタイブレーク（_task_id_same_machine_due_tiebreak_key）
@@ -11964,9 +11964,9 @@ def _generate_plan_task_queue_sort_key(
         task.get("machine"), task.get("machine_name"), need_combo_col_index
     )
     return (
-        b_tier,
         0 if ip else 1,
         task["due_basis_date"] or date.max,
+        b_tier,
         b2_queue_sub,
         need_rank,
         _task_id_same_machine_due_tiebreak_key(task.get("task_id")),
@@ -12574,7 +12574,7 @@ def _day_schedule_task_sort_key(
 ):
     """
     同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
-    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（§B 段・加工途中・計画基準納期・b2_queue_sub・need 列順・依頼NO）。
+    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・計画基準納期・§B 段・b2_queue_sub・need 列順・依頼NO）。
     続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
     同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
@@ -12626,9 +12626,9 @@ def _day_schedule_task_sort_key(
     b1_trial_early = (0, dto) if (insp and ip) else (1, 0)
     return (
         (
-            b_tier,
             0 if ip else 1,
             dbk,
+            b_tier,
             b2_queue_sub,
             need_rank,
             tb,

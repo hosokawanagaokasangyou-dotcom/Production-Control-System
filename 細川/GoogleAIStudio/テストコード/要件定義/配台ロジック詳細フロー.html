@@ -332,9 +332,9 @@ flowchart TB
   <thead><tr><th>順</th><th>キー要素</th><th>主な由来</th></tr></thead>
   <tbody>
     <tr><td colspan="3"><em>先頭タプル（<span class="mono">_generate_plan_task_queue_sort_key</span> と同趣旨）</em></td></tr>
-    <tr><td>1</td><td><span class="mono">b_tier</span></td><td>0=§B-1（熱融着検査かつ加工途中）、1=§B-2/§B-3 帯、2=その他</td></tr>
-    <tr><td>2</td><td><span class="mono">in_progress</span></td><td>0=加工途中を先、1=未着手を後</td></tr>
-    <tr><td>3</td><td><span class="mono">due_basis_date</span></td><td>早いほど先（無ければ <span class="mono">date.max</span>）</td></tr>
+    <tr><td>1</td><td><span class="mono">in_progress</span></td><td>0=加工途中を先、1=未着手を後</td></tr>
+    <tr><td>2</td><td><span class="mono">due_basis_date</span></td><td>早いほど先（無ければ <span class="mono">date.max</span>）</td></tr>
+    <tr><td>3</td><td><span class="mono">b_tier</span></td><td>0=§B-1（熱融着検査かつ加工途中）、1=§B-2/§B-3 帯、2=その他</td></tr>
     <tr><td>4</td><td><span class="mono">b2_queue_sub</span></td><td>§B-2/3 帯内のみ：0=EC、1=未着手検査／巻返し、2=その他</td></tr>
     <tr><td>5</td><td><span class="mono">need_rank</span></td><td>need シート左列ほど先（<span class="mono">_need_sheet_pm_column_rank</span>）</td></tr>
     <tr><td>6</td><td>依頼NOタイブレーク</td><td><span class="mono">_task_id_same_machine_due_tiebreak_key</span></td></tr>
@@ -363,9 +363,9 @@ flowchart TB
 <table>
   <thead><tr><th>順（タプル左→右）</th><th>内容</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td><span class="mono">b_tier</span> … 0=§B-1、1=§B-2/§B-3 帯、2=その他</td></tr>
-    <tr><td>2</td><td><span class="mono">0 if in_progress else 1</span> … 加工途中を先</td></tr>
-    <tr><td>3</td><td><span class="mono">due_basis_date</span> または <span class="mono">date.max</span></td></tr>
+    <tr><td>1</td><td><span class="mono">0 if in_progress else 1</span> … 加工途中を先</td></tr>
+    <tr><td>2</td><td><span class="mono">due_basis_date</span> または <span class="mono">date.max</span></td></tr>
+    <tr><td>3</td><td><span class="mono">b_tier</span> … 0=B-1、1=B-2/B-3 帯、2=その他（定義は <span class="file">配台ルール.md</span> 2.0）</td></tr>
     <tr><td>4</td><td><span class="mono">b2_queue_sub</span> … 帯内で EC を未着手後続より先</td></tr>
     <tr><td>5</td><td><span class="mono">need_rank</span> … need 左列優先</td></tr>
     <tr><td>6</td><td><span class="mono">_task_id_same_machine_due_tiebreak_key(task_id)</span></td></tr>
@@ -374,7 +374,7 @@ flowchart TB
 <p class="note"><span class="mono">due_source_rank</span>・<span class="mono">priority</span>・<span class="mono">start_date_req</span> はタスク dict に保持されるが、<strong>現行のこのソートタプルには含まれない</strong>（旧実装との差に注意）。</p>
 
 <hr />
-<p class="src">生成: <span class="mono">planning_core/_core.py</span> の列定数・<span class="mono">generate_plan</span> 付近の実装に基づく。§5 / §5.1 の Mermaid は制御フロー概要。本文整合: 2026-04-06。ファイル: 配台ロジック詳細フロー.html</p>
+<p class="src">生成: <span class="mono">planning_core/_core.py</span> の列定数・<span class="mono">generate_plan</span> 付近の実装に基づく。§5 / §5.1 の Mermaid は制御フロー概要。本文整合: 2026-04-06（グローバル試行順キー順は同日改定②）。ファイル: 配台ロジック詳細フロー.html</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
