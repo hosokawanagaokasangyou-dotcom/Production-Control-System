@@ -11104,6 +11104,29 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 # 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
+
+# #region agent log
+def _agent_ndjson_log(data: dict) -> None:
+    """DEBUG MODE: append one NDJSON line to workspace debug-d2b067.log."""
+    try:
+        _log_path = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__), *(os.pardir,) * 5, "debug-d2b067.log"
+            )
+        )
+        _line = dict(
+            data,
+            timestamp=int(time_module.time() * 1000),
+            sessionId="d2b067",
+        )
+        with open(_log_path, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(_line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
 # 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
@@ -11479,7 +11502,29 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     # EC が全ロール終了した後は検査も同数まで進められるよう上限を ec_done に合わせる。
     if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
         max_insp = max(max_insp, ec_done)
-    return max(0.0, max_insp - insp_done)
+    _room = max(0.0, max_insp - insp_done)
+    # #region agent log
+    if (
+        insp_done >= 15
+        and _room <= 1e-12
+        and not _pipeline_ec_fully_done_for_tid(task_queue, tid)
+    ):
+        _agent_ndjson_log(
+            {
+                "hypothesisId": "H1",
+                "location": "_roll_pipeline_inspection_assign_room",
+                "message": "pipeline_room_zero",
+                "data": {
+                    "tid": tid,
+                    "ec_done": ec_done,
+                    "insp_done": insp_done,
+                    "max_insp": max_insp,
+                    "buffer_B": ROLL_PIPELINE_INITIAL_BUFFER_ROLLS,
+                },
+            }
+        )
+    # #endregion
+    return _room
 
 
 def _roll_pipeline_inspection_task_row_for_tid(
@@ -11537,6 +11582,22 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     need_n = insp_done + int(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS)
     ends = _pipeline_b2_ec_roll_end_datetimes_sorted(task_queue, tid)
     if need_n < 1 or len(ends) < need_n:
+        # #region agent log
+        if insp_done >= 15:
+            _agent_ndjson_log(
+                {
+                    "hypothesisId": "H2",
+                    "location": "_roll_pipeline_b2_inspection_ec_completion_floor_dt",
+                    "message": "ec_ends_before_buffer_need",
+                    "data": {
+                        "tid": tid,
+                        "need_n": need_n,
+                        "len_ec_ends": len(ends),
+                        "insp_done": insp_done,
+                    },
+                }
+            )
+        # #endregion
         return None
     return ends[need_n - 1]
 
@@ -13648,6 +13709,25 @@ def _trial_order_flow_eligible_tasks(
             )
             <= 1e-12
         ):
+            # #region agent log
+            _tid_el = str(task.get("task_id", "") or "").strip()
+            _agent_ndjson_log(
+                {
+                    "hypothesisId": "H1",
+                    "location": "_trial_order_flow_eligible_tasks",
+                    "message": "skip_inspection_pipeline_room",
+                    "data": {
+                        "tid": _tid_el,
+                        "day": str(current_date),
+                        "dispatch_trial_order": task.get("dispatch_trial_order"),
+                        "ec_done": _pipeline_ec_roll_done_units(task_queue, _tid_el),
+                        "insp_done": _pipeline_b2_follower_roll_done_units(
+                            task_queue, _tid_el
+                        ),
+                    },
+                }
+            )
+            # #endregion
             continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
@@ -13655,6 +13735,22 @@ def _trial_order_flow_eligible_tasks(
                 _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
+                # #region agent log
+                _agent_ndjson_log(
+                    {
+                        "hypothesisId": "H4",
+                        "location": "_trial_order_flow_eligible_tasks",
+                        "message": "skip_inspection_b1_exclusive_holder",
+                        "data": {
+                            "tid": str(task.get("task_id", "") or "").strip(),
+                            "day": str(current_date),
+                            "holder_tid": _b1_holder.get("task_id"),
+                            "holder_order": _b1_holder.get("dispatch_trial_order"),
+                            "my_order": task.get("dispatch_trial_order"),
+                        },
+                    }
+                )
+                # #endregion
                 continue
         machine = task["machine"]
         eq_line = str(
@@ -13668,6 +13764,24 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
+            # #region agent log
+            if task.get("roll_pipeline_inspection") or task.get(
+                "roll_pipeline_rewind"
+            ):
+                _agent_ndjson_log(
+                    {
+                        "hypothesisId": "H5",
+                        "location": "_trial_order_flow_eligible_tasks",
+                        "message": "skip_follower_lower_trial_pending_same_machine",
+                        "data": {
+                            "tid": str(task.get("task_id", "") or "").strip(),
+                            "day": str(current_date),
+                            "my_order": _my_dispatch_ord,
+                            "machine_occ": _mocc_trial,
+                        },
+                    }
+                )
+            # #endregion
             continue
         out.append(task)
     return out
@@ -13992,9 +14106,29 @@ def _assign_one_roll_trial_order_flow(
 
     capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
     capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+    _cap_before_disjoint = len(capable_members)
     capable_members = _filter_capable_members_b2_disjoint_teams(
         task, task_queue, capable_members
     )
+    # #region agent log
+    if not capable_members and (
+        task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
+    ):
+        _agent_ndjson_log(
+            {
+                "hypothesisId": "H6",
+                "location": "_assign_one_roll_trial_order_flow",
+                "message": "b2_follower_no_capable_after_disjoint",
+                "data": {
+                    "tid": str(task.get("task_id", "") or "").strip(),
+                    "day": str(current_date),
+                    "machine": str(task.get("machine", "") or ""),
+                    "trial_order": task.get("dispatch_trial_order"),
+                    "capable_before_disjoint": _cap_before_disjoint,
+                },
+            }
+        )
+    # #endregion
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
@@ -15516,6 +15650,16 @@ def _generate_plan_impl():
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
+                # #region agent log
+                _agent_ndjson_log(
+                    {
+                        "hypothesisId": "H3",
+                        "location": "stage2_main_day_loop",
+                        "message": "no_eligible_members_skip_day",
+                        "data": {"date": str(current_date)},
+                    }
+                )
+                # #endregion
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
