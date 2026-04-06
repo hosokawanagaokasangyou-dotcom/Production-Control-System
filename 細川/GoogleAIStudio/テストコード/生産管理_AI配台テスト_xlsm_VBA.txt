@@ -5532,7 +5532,7 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
         srcWs.UsedRange.Copy Destination:=ws.Range("A1")
     End If
 
-    MacroSplash_SetStep "段階1: 取り込み元ブックを閉じ、列幅・罫線・指定納期ソートを適用しています…"
+    MacroSplash_SetStep "段階1: 取り込み元ブックを閉じ、列幅・罫線・配台試行順番ソートを適用しています…"
     srcWb.Close SaveChanges:=False
     Set srcWb = Nothing
 
@@ -5548,24 +5548,37 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     ws.UsedRange.Borders.LineStyle = 1
     ws.UsedRange.Borders.Weight = 2
 
-    ' 指定納期順（昇順）にソートし、オートフィルタを有効化
-    ' ※ ヘッダー行は1行目。列名は「指定納期」を想定。
+    ' 配台試行順番（昇順）でソートし、オートフィルタを有効化。列が無いときのみ従来どおり「指定納期」。
+    ' ※ Python は to_excel 直前に試行順で並べ替え済みだが、貼り付け後にここで一度ソートすることで
+    '   UsedRange の列検出・表示を安定させ、かつ試行順を正とする（指定納期だけだと順序が崩れる）。
+    Dim colTrialOrder As Long
     Dim colSpecifiedDue As Long
+    Dim sortCol As Long
     Dim lastRow As Long
     Dim lastCol As Long
     Dim keyRange As Range
+    Dim sortDataOpt As XlSortDataOption
+    colTrialOrder = FindColHeader(ws, "配台試行順番")
     colSpecifiedDue = FindColHeader(ws, "指定納期")
-    If colSpecifiedDue > 0 Then
-        lastRow = ws.Cells(ws.Rows.Count, colSpecifiedDue).End(xlUp).Row
+    sortCol = 0
+    sortDataOpt = xlSortNormal
+    If colTrialOrder > 0 Then
+        sortCol = colTrialOrder
+        sortDataOpt = xlSortTextAsNumbers
+    ElseIf colSpecifiedDue > 0 Then
+        sortCol = colSpecifiedDue
+    End If
+    If sortCol > 0 Then
+        lastRow = ws.Cells(ws.Rows.Count, sortCol).End(xlUp).Row
         lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
         If lastRow >= 2 And lastCol >= 1 Then
             On Error Resume Next
             If ws.AutoFilterMode Then ws.AutoFilterMode = False
             On Error GoTo 0
 
-            Set keyRange = ws.Range(ws.Cells(2, colSpecifiedDue), ws.Cells(lastRow, colSpecifiedDue))
+            Set keyRange = ws.Range(ws.Cells(2, sortCol), ws.Cells(lastRow, sortCol))
             ws.Sort.SortFields.Clear
-            ws.Sort.SortFields.Add Key:=keyRange, SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+            ws.Sort.SortFields.Add Key:=keyRange, SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=sortDataOpt
             With ws.Sort
                 .SetRange ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
                 .Header = xlYes
