@@ -12694,6 +12694,49 @@ def _clip_machine_calendar_slot_to_factory_window(
     return None
 
 
+def _machine_calendar_planning_window_end_dt(
+    current_date: date,
+    daily_status: dict,
+    members: list,
+) -> datetime:
+    """
+    機械カレンダー占有の右端を切る上限。工場マスタ終業（DEFAULT_END_TIME）と、
+    当日配台対象メンバーの勤務終了時刻の最小の小さい方（人がいない時間帯の「占有」で
+    設備床だけが終業を超えないようにする）。
+    """
+    w_factory = datetime.combine(current_date, DEFAULT_END_TIME)
+    ends: list[datetime] = []
+    for m in members:
+        if m not in daily_status:
+            continue
+        st = daily_status[m]
+        if not st.get("eligible_for_assignment", st.get("is_working", False)):
+            continue
+        et = st.get("end_dt")
+        if et is not None and hasattr(et, "replace"):
+            ends.append(et)
+    if not ends:
+        return w_factory
+    return min(w_factory, min(ends))
+
+
+def _clip_machine_busy_blocks_to_planning_window(
+    blocks: list[tuple[datetime, datetime]],
+    w0: datetime,
+    w1: datetime,
+) -> list[tuple[datetime, datetime]]:
+    """占有半開区間を [w0, w1) にクリップしてからマージする。"""
+    out: list[tuple[datetime, datetime]] = []
+    for s, e in blocks or []:
+        s2 = max(s, w0)
+        e2 = min(e, w1)
+        if s2 < e2:
+            out.append((s2, e2))
+    if not out:
+        return []
+    return _merge_machine_calendar_intervals(out)
+
+
 def _machine_cal_resolve_column_to_equipment_key(
     p_raw,
     m_raw,
@@ -12841,6 +12884,8 @@ def _apply_machine_calendar_floor_for_date(
     machine_avail_dt: dict,
     equipment_list: list,
     machine_day_start: datetime,
+    *,
+    machine_calendar_plan_end: datetime | None = None,
 ) -> None:
     """当日のタイムラインシード後、機械カレンダー占有で設備空き下限を繰り上げる。"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
@@ -12862,12 +12907,19 @@ def _apply_machine_calendar_floor_for_date(
         )
         if pk:
             candidates.add(pk)
+    w0 = machine_day_start
+    w1 = machine_calendar_plan_end
+    if w1 is None:
+        w1 = datetime.combine(current_date, DEFAULT_END_TIME)
     for eq_s in candidates:
         blocks = day_blocks.get(eq_s)
         if not blocks:
             continue
+        blocks_c = _clip_machine_busy_blocks_to_planning_window(blocks, w0, w1)
+        if not blocks_c:
+            continue
         t0 = machine_avail_dt.get(eq_s, machine_day_start)
-        t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks)
+        t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks_c)
         if t1 > t0:
             machine_avail_dt[eq_s] = t1
 
@@ -12876,6 +12928,9 @@ def _bump_machine_avail_after_roll_for_calendar(
     current_date: date,
     eq_line: str,
     machine_avail_dt: dict,
+    *,
+    machine_calendar_plan_end: datetime | None = None,
+    machine_day_floor: datetime | None = None,
 ) -> None:
     """ロール確定直後: 終了時刻がカレンダー占有スロット内なら終端まで繰り上げ。"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
@@ -12890,7 +12945,20 @@ def _bump_machine_avail_after_roll_for_calendar(
     t0 = machine_avail_dt.get(eq_s)
     if t0 is None:
         return
-    t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks)
+    w0 = (
+        machine_day_floor
+        if machine_day_floor is not None
+        else datetime.combine(current_date, DEFAULT_START_TIME)
+    )
+    w1 = (
+        machine_calendar_plan_end
+        if machine_calendar_plan_end is not None
+        else datetime.combine(current_date, DEFAULT_END_TIME)
+    )
+    blocks_c = _clip_machine_busy_blocks_to_planning_window(blocks, w0, w1)
+    if not blocks_c:
+        return
+    t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks_c)
     if t1 > t0:
         machine_avail_dt[eq_s] = t1
 
@@ -14754,6 +14822,10 @@ def _trial_order_first_schedule_pass(
         key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
     )
     _gpo = global_priority_override or {}
+    _mc_plan_end = _machine_calendar_planning_window_end_dt(
+        current_date, daily_status, members
+    )
+    _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
     machine_handoff = {
         "last_tid": dict(_mh_init["last_tid"]),
@@ -14929,7 +15001,11 @@ def _trial_order_first_schedule_pass(
             if not _gpo.get("abolish_all_scheduling_limits"):
                 machine_avail_dt[machine_occ_key] = best_end
                 _bump_machine_avail_after_roll_for_calendar(
-                    current_date, machine_occ_key, machine_avail_dt
+                    current_date,
+                    machine_occ_key,
+                    machine_avail_dt,
+                    machine_calendar_plan_end=_mc_plan_end,
+                    machine_day_floor=_mc_w0,
                 )
             machine_handoff["last_tid"][machine_occ_key] = str(
                 task.get("task_id") or ""
@@ -15120,11 +15196,15 @@ def _run_b2_inspection_rewind_pass(
         )
         if _gpo.get("abolish_all_scheduling_limits"):
             machine_avail_dt.clear()
+        _mc_plan_end_b2 = _machine_calendar_planning_window_end_dt(
+            current_date, daily_status, members
+        )
         _apply_machine_calendar_floor_for_date(
             current_date,
             machine_avail_dt,
             equipment_list,
             _machine_day_start,
+            machine_calendar_plan_end=_mc_plan_end_b2,
         )
 
         tasks_today = [
@@ -15829,6 +15909,9 @@ def _generate_plan_impl():
                     avail_dt[m] = st["start_dt"]
 
             _machine_day_start = datetime.combine(current_date, DEFAULT_START_TIME)
+            _machine_calendar_plan_end = _machine_calendar_planning_window_end_dt(
+                current_date, daily_status, members
+            )
             if avail_dt:
                 _seed_avail_from_timeline_for_date(
                     timeline_events,
@@ -15842,6 +15925,7 @@ def _generate_plan_impl():
                     machine_avail_dt,
                     equipment_list,
                     _machine_day_start,
+                    machine_calendar_plan_end=_machine_calendar_plan_end,
                 )
 
             if not avail_dt:
@@ -16872,7 +16956,11 @@ def _generate_plan_impl():
                             if not _gpo.get("abolish_all_scheduling_limits"):
                                 machine_avail_dt[machine_occ_key] = best_info["end_dt"]
                                 _bump_machine_avail_after_roll_for_calendar(
-                                    current_date, machine_occ_key, machine_avail_dt
+                                    current_date,
+                                    machine_occ_key,
+                                    machine_avail_dt,
+                                    machine_calendar_plan_end=_machine_calendar_plan_end,
+                                    machine_day_floor=_machine_day_start,
                                 )
                             machine_handoff_legacy["last_tid"][machine_occ_key] = str(
                                 task.get("task_id") or ""
