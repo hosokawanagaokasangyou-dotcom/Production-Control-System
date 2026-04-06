@@ -2211,6 +2211,62 @@ def _nfkc_column_aliases(canonical_name):
     return unicodedata.normalize("NFKC", str(canonical_name).strip())
 
 
+def _repo_root_for_agent_debug_log(start_path: str, max_up: int = 28) -> str:
+    """エージェント用 NDJSON ログをリポジトリ直下へ置くための .git 探索。"""
+    d = os.path.dirname(os.path.abspath(start_path))
+    for _ in range(max_up):
+        if os.path.isfile(os.path.join(d, ".git")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.getcwd()
+
+
+def _agent_debug_log_plan_input_columns(where: str, hypothesis_id: str, df) -> None:
+    # region agent log
+    try:
+        if df is None:
+            payload = {
+                "sessionId": "f4646c",
+                "location": where,
+                "message": "plan_input headers",
+                "hypothesisId": hypothesis_id,
+                "data": {"cols": None, "dup_labels": {}, "pandas_dup_any": False},
+                "timestamp": int(time_module.time() * 1000),
+            }
+        else:
+            cols = [str(x) for x in df.columns]
+            cnt = Counter(cols)
+            dup_labels = {k: v for k, v in cnt.items() if v > 1}
+            try:
+                pd_dup_any = bool(df.columns.duplicated().any())
+            except Exception:
+                pd_dup_any = False
+            payload = {
+                "sessionId": "f4646c",
+                "location": where,
+                "message": "plan_input headers",
+                "hypothesisId": hypothesis_id,
+                "data": {
+                    "n_cols": len(cols),
+                    "cols": cols,
+                    "dup_labels": dup_labels,
+                    "pandas_dup_any": pd_dup_any,
+                },
+                "timestamp": int(time_module.time() * 1000),
+            }
+        log_path = os.path.join(
+            _repo_root_for_agent_debug_log(__file__), "debug-f4646c.log"
+        )
+        with open(log_path, "a", encoding="utf-8") as _lf:
+            _lf.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # endregion
+
+
 def _rename_legacy_plan_input_ref_columns(df):
     """旧参照列見出し「（元）必要OP人数」を現行「（元）必要人数」へ寄せる。"""
     if df is None or df.empty:
@@ -2420,10 +2476,22 @@ def load_planning_tasks_df():
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
+    _agent_debug_log_plan_input_columns(
+        "load_planning_tasks_df:after_read_excel", "H1", df
+    )
     df.columns = df.columns.str.strip()
+    _agent_debug_log_plan_input_columns(
+        "load_planning_tasks_df:after_strip", "H2", df
+    )
     df = _rename_legacy_plan_input_ref_columns(df)
+    _agent_debug_log_plan_input_columns(
+        "load_planning_tasks_df:after_legacy_rename", "H4", df
+    )
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
+    )
+    _agent_debug_log_plan_input_columns(
+        "load_planning_tasks_df:after_align", "H3", df
     )
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
@@ -6978,10 +7046,16 @@ def _merge_plan_sheet_user_overrides(out_df):
         logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
         return out_df
     df_old.columns = df_old.columns.str.strip()
+    _agent_debug_log_plan_input_columns(
+        "_merge_plan_sheet_user_overrides:old_after_strip", "H4", df_old
+    )
     df_old = _rename_legacy_plan_input_ref_columns(df_old)
     df_old = _align_dataframe_headers_to_canonical(
         df_old,
         plan_input_sheet_column_order(),
+    )
+    _agent_debug_log_plan_input_columns(
+        "_merge_plan_sheet_user_overrides:old_after_align", "H3", df_old
     )
     if TASK_COL_TASK_ID not in df_old.columns or TASK_COL_MACHINE not in df_old.columns:
         return out_df
