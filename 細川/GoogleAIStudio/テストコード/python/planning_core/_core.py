@@ -14265,6 +14265,15 @@ def _assign_one_roll_trial_order_flow(
     if _co_abort:
         return None
 
+    _h8_tally: dict[str, int] = {}
+
+    def _bump_h8(code: str) -> None:
+        if not (
+            task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
+        ):
+            return
+        _h8_tally[code] = _h8_tally.get(code, 0) + 1
+
     def _one_roll_from_team(
         team: tuple,
         min_n: int | None = None,
@@ -14280,6 +14289,7 @@ def _assign_one_roll_trial_order_flow(
                 lo,
                 hi,
             )
+            _bump_h8("team_size_bad")
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
@@ -14287,12 +14297,14 @@ def _assign_one_roll_trial_order_flow(
                 "候補却下: OP不在 team=%s",
                 ",".join(str(x) for x in team),
             )
+            _bump_h8("no_op_in_team")
             return None
         if not all(m in daily_status for m in team):
             _trace_assign(
                 "候補却下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
             )
+            _bump_h8("no_attendance_key")
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
@@ -14311,6 +14323,7 @@ def _assign_one_roll_trial_order_flow(
                 team_start,
                 team_end_limit,
             )
+            _bump_h8("start_ge_end_initial")
             return None
         team_breaks = []
         for m in team:
@@ -14357,6 +14370,7 @@ def _assign_one_roll_trial_order_flow(
                 "候補却下: 休憩帯内・終業直前(小残)で当日不可 team=%s",
                 ",".join(str(x) for x in team),
             )
+            _bump_h8("defer_blocked")
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
@@ -14366,6 +14380,7 @@ def _assign_one_roll_trial_order_flow(
                 team_start,
                 team_end_limit,
             )
+            _bump_h8("start_ge_end_after_defer")
             return None
 
         _, avail_mins, _ = calculate_end_time(
@@ -14380,6 +14395,7 @@ def _assign_one_roll_trial_order_flow(
                 avail_mins,
                 eff_time_per_unit,
             )
+            _bump_h8("avail_units_lt1")
             return None
         if _eod_reject_capacity_units_below_threshold(
             _trial_units_cap, team_start, team_end_limit
@@ -14391,6 +14407,7 @@ def _assign_one_roll_trial_order_flow(
                 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
                 team_start,
             )
+            _bump_h8("eod_threshold_reject")
             return None
         work_mins_needed = int(eff_time_per_unit)
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
@@ -14404,6 +14421,7 @@ def _assign_one_roll_trial_order_flow(
                 work_mins_needed,
                 team_start,
             )
+            _bump_h8("contiguous_short")
             return None
         actual_end_dt, _, _ = calculate_end_time(
             team_start, work_mins_needed, team_breaks, team_end_limit
@@ -14418,6 +14436,7 @@ def _assign_one_roll_trial_order_flow(
                 actual_end_dt,
                 eq_line,
             )
+            _bump_h8("interval_mirror_block")
             return None
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
@@ -14577,6 +14596,7 @@ def _assign_one_roll_trial_order_flow(
                         "max_team_size": max_team_size,
                         "b2_ec_floor": _floor_h7,
                         "rem": float(task.get("remaining_units") or 0),
+                        "h8_rejects": dict(_h8_tally),
                     },
                 }
             )
@@ -14648,8 +14668,7 @@ def _trial_order_first_schedule_pass(
     EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
     カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
     EC と後続を **交互に 1 ロールずつ試すと**同一担当者が途中で後続へ回り **EC がブロック**されるため、
-    担当者集合の分離がある§B-2/§B-3 のみ、**同一パス内**で **フェーズ2→フェーズ1** の順に
-    **最大1ロールずつ**繰り返す（他依存はフェーズ1のみ従来どおり全日詰め）。
+    同一パス内では EC 等を先に詰める。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14677,15 +14696,10 @@ def _trial_order_first_schedule_pass(
         "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
     }
 
-    def _drain_rolls_for_task(
-        task: dict, *, max_rolls: int | None = None
-    ) -> bool:
+    def _drain_rolls_for_task(task: dict) -> bool:
         preferred_team: tuple | None = None
         made_local = False
-        rolls_done = 0
         while float(task.get("remaining_units") or 0) > 1e-12:
-            if max_rolls is not None and rolls_done >= max_rolls:
-                break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -14873,7 +14887,6 @@ def _trial_order_first_schedule_pass(
                 )
             preferred_team = best_team
             made_local = True
-            rolls_done += 1
         return made_local
 
     def _is_b2_follower_phase2_row(t: dict) -> bool:
@@ -14890,28 +14903,12 @@ def _trial_order_first_schedule_pass(
     phase2_tasks = [t for t in eligible_sorted if _is_b2_follower_phase2_row(t)]
 
     pass_made = False
-    # §B-2/§B-3 後続行があるときは、フェーズ1を全日で詰めてからフェーズ2に回すと
-    # 検査担当が同一日内に他タスク（フェーズ1）へ取られ、検査が team_candidates 空で
-    # 全日ストップする。1ロール単位でフェーズ1→フェーズ2を交互に回し配台試行順を
-    # 同一日内でも実効化する。
-    if phase2_tasks:
-        while True:
-            round_made = False
-            # フェーズ2を先に1ロールずつ試す。フェーズ1を先に回すと、同一日内に他タスクが
-            # 検査の候補OPの空きを先に取り、フェーズ2が全日 team_candidates 空のままになる。
-            for task in phase2_tasks:
-                if _drain_rolls_for_task(task, max_rolls=1):
-                    round_made = True
-            for task in phase1_tasks:
-                if _drain_rolls_for_task(task, max_rolls=1):
-                    round_made = True
-            if not round_made:
-                break
+    for task in phase1_tasks:
+        if _drain_rolls_for_task(task):
             pass_made = True
-    else:
-        for task in phase1_tasks:
-            if _drain_rolls_for_task(task):
-                pass_made = True
+    for task in phase2_tasks:
+        if _drain_rolls_for_task(task):
+            pass_made = True
     return pass_made
 
 
