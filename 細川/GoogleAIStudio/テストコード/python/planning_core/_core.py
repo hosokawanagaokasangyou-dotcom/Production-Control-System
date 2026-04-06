@@ -14667,8 +14667,11 @@ def _trial_order_first_schedule_pass(
     **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査／§B-3 巻返し行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
     EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
     カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
-    EC と後続を **交互に 1 ロールずつ試すと**同一担当者が途中で後続へ回り **EC がブロック**されるため、
-    同一パス内では EC 等を先に詰める。
+    EC と後続を **同一担当者で** 交互に詰めると EC がブロックされるため、従来はフェーズ1を先に詰めた。
+    ただし後続が候補化した時点で **検査と同じ物理機械**のフェーズ1や **同一依頼の EC** が全日先に進むと、
+    検査は `start_ge_end_initial`（設備空きが終業より後）で全日失敗する。§B-2/§B-3 後続があるときは
+    「同一依頼EC・検査機と機械共有するフェーズ1・後続」を **配台試行順**でマージし、
+    **最大1ロールずつ**周回してから残りを詰め、その後 **その他のフェーズ1** を従来どおり詰める。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14696,10 +14699,15 @@ def _trial_order_first_schedule_pass(
         "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
     }
 
-    def _drain_rolls_for_task(task: dict) -> bool:
+    def _drain_rolls_for_task(
+        task: dict, *, max_rolls: int | None = None
+    ) -> bool:
         preferred_team: tuple | None = None
         made_local = False
+        rolls_done = 0
         while float(task.get("remaining_units") or 0) > 1e-12:
+            if max_rolls is not None and rolls_done >= max_rolls:
+                break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -14887,6 +14895,7 @@ def _trial_order_first_schedule_pass(
                 )
             preferred_team = best_team
             made_local = True
+            rolls_done += 1
         return made_local
 
     def _is_b2_follower_phase2_row(t: dict) -> bool:
@@ -14902,13 +14911,61 @@ def _trial_order_first_schedule_pass(
     phase1_tasks = [t for t in eligible_sorted if not _is_b2_follower_phase2_row(t)]
     phase2_tasks = [t for t in eligible_sorted if _is_b2_follower_phase2_row(t)]
 
+    phase2_tids: set[str] = {
+        str(t.get("task_id") or "").strip()
+        for t in phase2_tasks
+        if str(t.get("task_id") or "").strip()
+    }
+    phase2_mocc: set[str] = set()
+    for t in phase2_tasks:
+        _pk = (_physical_machine_occupancy_key_for_task(t) or "").strip()
+        if _pk:
+            phase2_mocc.add(_pk)
+
+    phase1_interleave: list = []
+    phase1_rest: list = []
+    for t in phase1_tasks:
+        _tid1 = str(t.get("task_id") or "").strip()
+        _mk = (_physical_machine_occupancy_key_for_task(t) or "").strip()
+        _same_tid_ec = bool(t.get("roll_pipeline_ec") and _tid1 and _tid1 in phase2_tids)
+        _share_m = bool(_mk and _mk in phase2_mocc)
+        if _same_tid_ec or _share_m:
+            phase1_interleave.append(t)
+        else:
+            phase1_rest.append(t)
+
+    def _b2_merged_sort_key(t: dict) -> tuple:
+        return (
+            int(t.get("dispatch_trial_order") or 10**9),
+            0 if t.get("roll_pipeline_ec") else 1,
+            str(t.get("task_id") or ""),
+            int(t.get("same_request_line_seq") or 0),
+        )
+
     pass_made = False
-    for task in phase1_tasks:
-        if _drain_rolls_for_task(task):
+    if phase2_tasks:
+        merged_b2 = sorted(
+            phase1_interleave + phase2_tasks,
+            key=_b2_merged_sort_key,
+        )
+        while True:
+            round_made = False
+            for task in merged_b2:
+                if _drain_rolls_for_task(task, max_rolls=1):
+                    round_made = True
+            if not round_made:
+                break
             pass_made = True
-    for task in phase2_tasks:
-        if _drain_rolls_for_task(task):
-            pass_made = True
+        for task in merged_b2:
+            if _drain_rolls_for_task(task):
+                pass_made = True
+        for task in phase1_rest:
+            if _drain_rolls_for_task(task):
+                pass_made = True
+    else:
+        for task in phase1_tasks:
+            if _drain_rolls_for_task(task):
+                pass_made = True
     return pass_made
 
 
