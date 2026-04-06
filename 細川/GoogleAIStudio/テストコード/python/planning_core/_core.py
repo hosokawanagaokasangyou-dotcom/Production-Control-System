@@ -609,17 +609,9 @@ ACTUAL_HEADER_CANONICAL = (
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
-PLAN_COL_REQUIRED_OP = "必要人数"
-# 上書き列「必要OP人数」の左隣の参照列見出し（「（元）必要OP人数」から改称）
-PLAN_REF_REQUIRED_OP = "（元）必要人数"
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
-PLAN_COL_TASK_EFFICIENCY = "タスク加工効率"
-PLAN_COL_PRIORITY = "優先度"
-PLAN_COL_SPECIFIED_DUE_OVERRIDE = "指定納期_上書き"
 # 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
-PLAN_COL_START_DATE_OVERRIDE = "加工開始日_指定"
-PLAN_COL_START_TIME_OVERRIDE = "加工開始時刻_指定"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 # 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
@@ -778,7 +770,7 @@ TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
 )
 
 # True（既定）: メイン配台の必要人数は need（基本必要人数＋特別指定）のみ。
-# 計画シート「必要人数」は headcount に使わない（参照列の表示用に残る）。
+# False のときは特別指定備考 AI の required_op のみ計画側から参照し得る（シート列「必要人数」は廃止済み）。
 TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY = (
     os.environ.get("TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1")
     .strip()
@@ -847,14 +839,8 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_DATA_EXTRACTION_DT,
-        PLAN_COL_REQUIRED_OP,
         PLAN_COL_SPEED_OVERRIDE,
-        PLAN_COL_TASK_EFFICIENCY,
-        PLAN_COL_PRIORITY,
-        PLAN_COL_SPECIFIED_DUE_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
-        PLAN_COL_START_DATE_OVERRIDE,
-        PLAN_COL_START_TIME_OVERRIDE,
         PLAN_COL_PREFERRED_OP,
         PLAN_COL_SPECIAL_REMARK,
         PLAN_COL_PROCESS_FACTOR,
@@ -923,8 +909,8 @@ SOURCE_BASE_COLUMNS = [
 ]
 PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_EXCLUDE_FROM_ASSIGNMENT,
-    PLAN_COL_REQUIRED_OP, PLAN_COL_SPEED_OVERRIDE, PLAN_COL_TASK_EFFICIENCY,
-    PLAN_COL_PRIORITY, PLAN_COL_SPECIFIED_DUE_OVERRIDE, PLAN_COL_RAW_INPUT_DATE_OVERRIDE, PLAN_COL_START_DATE_OVERRIDE, PLAN_COL_START_TIME_OVERRIDE,
+    PLAN_COL_SPEED_OVERRIDE,
+    PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
     PLAN_COL_PREFERRED_OP,
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
@@ -946,8 +932,6 @@ PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
 
 def plan_reference_column_name(override_col: str) -> str:
     """上書き列の左隣に置く参照列の見出し（セル値は括弧付きで元データを表示）。"""
-    if override_col == PLAN_COL_REQUIRED_OP:
-        return PLAN_REF_REQUIRED_OP
     return f"（元）{override_col}"
 
 
@@ -999,15 +983,7 @@ def _format_paren_ref_scalar(val):
 
 def _reference_text_for_override_row(row, override_col: str, req_map: dict, need_rules: list) -> str:
     """1行分の上書き列に対応する参照文言（括弧付き）。"""
-    mach = str(row.get(TASK_COL_MACHINE, "") or "").strip()
-    mname = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-
-    if override_col == PLAN_COL_REQUIRED_OP:
-        try:
-            n = resolve_need_required_op(mach, mname, planning_task_id_str_from_plan_row(row), req_map, need_rules)
-            return f"（{n}）"
-        except Exception:
-            return "（―）"
+    _ = (req_map, need_rules)  # 旧「（元）必要人数」参照で使用。列廃止により未使用だが呼び出し互換のため残す。
     if override_col == PLAN_COL_SPEED_OVERRIDE:
         v = row.get(TASK_COL_SPEED)
         if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -1019,27 +995,9 @@ def _reference_text_for_override_row(row, override_col: str, req_map: dict, need
             return f"（{x}）"
         except (TypeError, ValueError):
             return _format_paren_ref_scalar(v)
-    if override_col in (
-        PLAN_COL_TASK_EFFICIENCY,
-        PLAN_COL_PRIORITY,
-        PLAN_COL_START_TIME_OVERRIDE,
-        PLAN_COL_PREFERRED_OP,
-        PLAN_COL_SPECIAL_REMARK,
-    ):
-        return "（―）"
-    if override_col == PLAN_COL_SPECIFIED_DUE_OVERRIDE:
-        sd = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
-        if sd is not None:
-            return _format_paren_ref_scalar(sd)
-        ad = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
-        if ad is not None:
-            return _format_paren_ref_scalar(ad)
+    if override_col in (PLAN_COL_PREFERRED_OP, PLAN_COL_SPECIAL_REMARK):
         return "（―）"
     if override_col == PLAN_COL_RAW_INPUT_DATE_OVERRIDE:
-        return _format_paren_ref_scalar(
-            parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
-        )
-    if override_col == PLAN_COL_START_DATE_OVERRIDE:
         return _format_paren_ref_scalar(
             parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
         )
@@ -1135,9 +1093,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
         TASK_COL_ANSWER_DUE,
         TASK_COL_SPECIFIED_DUE,
         TASK_COL_RAW_INPUT_DATE,
-        PLAN_COL_SPECIFIED_DUE_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
-        PLAN_COL_START_DATE_OVERRIDE,
     }
 )
 
@@ -2053,37 +2009,6 @@ def _planning_df_cell_scalar(row, col_name):
     return v
 
 
-def _planning_row_plan_priority_cell(row):
-    """
-    配台計画シート「優先度」の実セル値を1つに決める。
-    pandas.read_excel が重複見出しを 優先度.1 のように付けた列や、同一ラベル重複で Series になる場合を吸収。
-    （左の 優先度 が空で .1 にだけ数値がある行でも検出・配台で同じ値を使う）
-    """
-    v = _planning_df_cell_scalar(row, PLAN_COL_PRIORITY)
-    if v is not None and not (isinstance(v, float) and pd.isna(v)):
-        if isinstance(v, str) and not str(v).strip():
-            v = None
-        else:
-            return v
-    idx = getattr(row, "index", None)
-    if idx is None:
-        return None
-    for suf in (".1", ".2", ".3"):
-        alt = f"{PLAN_COL_PRIORITY}{suf}"
-        if alt not in idx:
-            continue
-        try:
-            vx = row[alt]
-        except (KeyError, TypeError):
-            vx = row.get(alt) if hasattr(row, "get") else None
-        if vx is None or (isinstance(vx, float) and pd.isna(vx)):
-            continue
-        if isinstance(vx, str) and not str(vx).strip():
-            continue
-        return vx
-    return None
-
-
 def load_ai_cache():
     try:
         if os.path.exists(ai_cache_path):
@@ -2209,20 +2134,6 @@ def load_tasks_df():
 def _nfkc_column_aliases(canonical_name):
     """見出しの表記ゆれ（全角記号・互換文字）を吸収するための比較キー。"""
     return unicodedata.normalize("NFKC", str(canonical_name).strip())
-
-
-def _rename_legacy_plan_input_ref_columns(df):
-    """旧参照列見出し「（元）必要OP人数」を現行「（元）必要人数」へ寄せる。"""
-    if df is None or df.empty:
-        return df
-    legacy = unicodedata.normalize("NFKC", "（元）必要OP人数")
-    renames = {}
-    for c in df.columns:
-        if _nfkc_column_aliases(c) == legacy:
-            renames[c] = PLAN_REF_REQUIRED_OP
-    if renames:
-        df = df.rename(columns=renames)
-    return df
 
 
 def _align_dataframe_headers_to_canonical(df, canonical_names):
@@ -2421,7 +2332,6 @@ def load_planning_tasks_df():
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
     df.columns = df.columns.str.strip()
-    df = _rename_legacy_plan_input_ref_columns(df)
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
     )
@@ -6072,7 +5982,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             logging.warning(f"タスク特別指定 AI エラー: {e}")
         logging.warning(
             "タスク特別指定: AI解析結果を取得できなかったため、特別指定_備考の開始日/優先指示は反映されません。"
-            " 必要なら『加工開始日_指定』または『指定納期_上書き』を入力してください。"
+            "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してください。）"
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
@@ -6120,22 +6030,13 @@ def _merge_task_row_with_ai(
     row, ai_for_tid, *, allow_ai_dispatch_priority_from_remark: bool = True
 ):
     """
-    セル優先で上書き値を決定。ai_for_tid は analyze_task_special_remarks の1エントリ。
-    allow_ai_dispatch_priority_from_remark が False のとき、AI の priority / start_date / start_time は
-    セルが空でも採用しない（備考に納期系文言が無い行向け）。
+    上書き列は加工速度_上書き・原反投入日_上書き等のみ（計画シート）。その他は特別指定備考 AI から。
+    allow_ai_dispatch_priority_from_remark が False のとき、AI の required_op / task_efficiency / priority /
+    start_date / start_time は採用しない（備考に納期系文言が無い行向け）。
     """
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
 
-    def first_int(cell, ai_key):
-        if cell == PLAN_COL_PRIORITY:
-            v = parse_optional_int(_planning_row_plan_priority_cell(row))
-        else:
-            v = parse_optional_int(row.get(cell))
-        if v is not None:
-            return v
-        return parse_optional_int(ai.get(ai_key))
-
-    def first_float_pos(cell, ai_key):
+    def first_float_pos_cell_or_ai(cell, ai_key):
         v = parse_float_safe(row.get(cell), None)
         if v is not None and (not isinstance(v, float) or not pd.isna(v)) and float(v) > 0:
             return float(v)
@@ -6147,34 +6048,42 @@ def _merge_task_row_with_ai(
             pass
         return None
 
-    req_op = first_int(PLAN_COL_REQUIRED_OP, "required_op")
+    if allow_ai_dispatch_priority_from_remark:
+        req_op = parse_optional_int(ai.get("required_op"))
+    else:
+        req_op = None
     if req_op is not None and req_op < 1:
         req_op = None
 
-    te = first_float_pos(PLAN_COL_TASK_EFFICIENCY, "task_efficiency")
-    if te is None or te <= 0:
+    if allow_ai_dispatch_priority_from_remark:
+        te = None
+        a = ai.get("task_efficiency")
+        try:
+            if a is not None and float(a) > 0:
+                te = float(a)
+        except (TypeError, ValueError):
+            te = None
+        if te is None or te <= 0:
+            te = 1.0
+    else:
         te = 1.0
 
     if allow_ai_dispatch_priority_from_remark:
-        pri = first_int(PLAN_COL_PRIORITY, "priority")
+        pri = parse_optional_int(ai.get("priority"))
     else:
-        pv = parse_optional_int(_planning_row_plan_priority_cell(row))
-        if pv is not None:
-            pri = pv
-        else:
-            pri = parse_optional_int(row.get(PLAN_COL_PRIORITY))
+        pri = None
     if pri is None:
         pri = 999
 
-    st_date = parse_optional_date(row.get(PLAN_COL_START_DATE_OVERRIDE))
-    if st_date is None and allow_ai_dispatch_priority_from_remark and ai.get("start_date"):
+    st_date = None
+    if allow_ai_dispatch_priority_from_remark and ai.get("start_date"):
         st_date = parse_optional_date(ai.get("start_date"))
 
-    st_time = parse_time_str(row.get(PLAN_COL_START_TIME_OVERRIDE), None)
-    if st_time is None and allow_ai_dispatch_priority_from_remark and ai.get("start_time"):
+    st_time = None
+    if allow_ai_dispatch_priority_from_remark and ai.get("start_time"):
         st_time = parse_time_str(str(ai.get("start_time")), None)
 
-    speed_ov = first_float_pos(PLAN_COL_SPEED_OVERRIDE, "speed_override")
+    speed_ov = first_float_pos_cell_or_ai(PLAN_COL_SPEED_OVERRIDE, "speed_override")
 
     return req_op, speed_ov, te, pri, st_date, st_time, ai
 
@@ -6187,12 +6096,6 @@ def _plan_row_cell_nonempty(row, col_name):
     if not s or s.lower() in ("nan", "none"):
         return False
     return True
-
-
-def _ai_int_for_conflict(ai, key):
-    if not ai or ai.get(key) is None:
-        return None
-    return parse_optional_int(ai.get(key))
 
 
 def _ai_float_for_conflict(ai, key):
@@ -6218,44 +6121,12 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
         return set()
     out = set()
 
-    if _plan_row_cell_nonempty(row, PLAN_COL_REQUIRED_OP):
-        cv = parse_optional_int(row.get(PLAN_COL_REQUIRED_OP))
-        av = _ai_int_for_conflict(ai, "required_op")
-        if cv is not None and av is not None and cv != av:
-            out.add(PLAN_COL_REQUIRED_OP)
-
     if _plan_row_cell_nonempty(row, PLAN_COL_SPEED_OVERRIDE):
         cv = parse_float_safe(row.get(PLAN_COL_SPEED_OVERRIDE), None)
         if cv is not None and cv > 0:
             av = _ai_float_for_conflict(ai, "speed_override")
             if av is not None and abs(cv - av) > 1e-5:
                 out.add(PLAN_COL_SPEED_OVERRIDE)
-
-    if _plan_row_cell_nonempty(row, PLAN_COL_TASK_EFFICIENCY):
-        cv = parse_float_safe(row.get(PLAN_COL_TASK_EFFICIENCY), None)
-        if cv is not None and cv > 0:
-            av = _ai_float_for_conflict(ai, "task_efficiency")
-            if av is not None and abs(cv - av) > 1e-5:
-                out.add(PLAN_COL_TASK_EFFICIENCY)
-
-    _pri_cell = parse_optional_int(_planning_row_plan_priority_cell(row))
-    if _pri_cell is not None:
-        cv = _pri_cell
-        av = _ai_int_for_conflict(ai, "priority")
-        if cv is not None and av is not None and cv != av:
-            out.add(PLAN_COL_PRIORITY)
-
-    if _plan_row_cell_nonempty(row, PLAN_COL_START_DATE_OVERRIDE):
-        cv = parse_optional_date(row.get(PLAN_COL_START_DATE_OVERRIDE))
-        av = parse_optional_date(ai.get("start_date")) if ai.get("start_date") else None
-        if cv is not None and av is not None and cv != av:
-            out.add(PLAN_COL_START_DATE_OVERRIDE)
-
-    if _plan_row_cell_nonempty(row, PLAN_COL_START_TIME_OVERRIDE):
-        cv = parse_time_str(row.get(PLAN_COL_START_TIME_OVERRIDE), None)
-        av = parse_time_str(str(ai.get("start_time")), None) if ai.get("start_time") else None
-        if cv is not None and av is not None and cv != av:
-            out.add(PLAN_COL_START_TIME_OVERRIDE)
 
     if _plan_row_cell_nonempty(row, PLAN_COL_PREFERRED_OP):
         cv = _normalize_person_name_for_match(row.get(PLAN_COL_PREFERRED_OP))
@@ -6556,43 +6427,6 @@ def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
         return (1, 10**9, s)
 
 
-def validate_no_duplicate_explicit_plan_priorities(tasks_df) -> None:
-    """
-    配台ルール: 「優先度」列に同一の整数（明示入力）が2行以上あると段階2を中止。
-    999 は未入力扱いのため重複チェックから除外。
-    """
-    from collections import Counter
-
-    if tasks_df is None or getattr(tasks_df, "empty", True):
-        return
-    c = Counter()
-    for _, row in tasks_df.iterrows():
-        if row_has_completion_keyword(row):
-            continue
-        if _plan_row_exclude_from_assignment(row):
-            continue
-        tid = planning_task_id_str_from_plan_row(row)
-        if not tid:
-            continue
-        pv = _planning_row_plan_priority_cell(row)
-        p = parse_optional_int(pv)
-        if p is None:
-            continue
-        if p == 999:
-            continue
-        c[p] += 1
-    dupes = sorted([k for k, v in c.items() if v > 1])
-    if dupes:
-        msg = (
-            "【配台中止】配台計画_タスク入力の「優先度」が重複しています（同じ数値が複数行）。"
-            "重複している値: "
-            + ", ".join(str(x) for x in dupes)
-            + "。優先度を一意に直してから段階2を再実行してください。"
-        )
-        _write_stage2_blocking_message(msg)
-        raise PlanningValidationError(msg)
-
-
 # ---------------------------------------------------------------------------
 # 配台用タスクキュー
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変換（優先度・納期・AI 上書きを集約）
@@ -6634,14 +6468,9 @@ def build_task_queue_from_planning_df(
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
         specified_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
-        specified_due_ov = parse_optional_date(
-            _planning_df_cell_scalar(row, PLAN_COL_SPECIFIED_DUE_OVERRIDE)
-        )
-        # 納期基準（due_basis_date・ソート・緊急度・任意リトライ）: ①回答納期（空でなければ）②指定納期。
-        # 指定納期は列「指定納期_上書き」があればそれ、なければ列「指定納期」。
-        specified_basis = (
-            specified_due_ov if specified_due_ov is not None else specified_due
-        )
+        specified_due_ov = None
+        # 納期基準: ①回答納期（空でなければ）②列「指定納期」（列「指定納期_上書き」は廃止済み）
+        specified_basis = specified_due
         due_basis = None
         due_source = "none"
         due_source_rank = 9
@@ -6709,13 +6538,9 @@ def build_task_queue_from_planning_df(
             due_source_rank = 0
         elif specified_basis is not None:
             due_basis = specified_basis
-            due_source = (
-                "specified_due_override"
-                if specified_due_ov is not None
-                else "specified_due"
-            )
+            due_source = "specified_due"
             due_source_rank = 1
-        has_done_deadline_override = bool(specified_due_ov is not None)
+        has_done_deadline_override = False
 
         if speed_ov is not None:
             speed = speed_ov
@@ -6978,7 +6803,6 @@ def _merge_plan_sheet_user_overrides(out_df):
         logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
         return out_df
     df_old.columns = df_old.columns.str.strip()
-    df_old = _rename_legacy_plan_input_ref_columns(df_old)
     df_old = _align_dataframe_headers_to_canonical(
         df_old,
         plan_input_sheet_column_order(),
@@ -8929,14 +8753,8 @@ def run_stage1_extract():
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
         else:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+"
-        rec[PLAN_COL_REQUIRED_OP] = ""
         rec[PLAN_COL_SPEED_OVERRIDE] = ""
-        rec[PLAN_COL_TASK_EFFICIENCY] = ""
-        rec[PLAN_COL_PRIORITY] = ""
-        rec[PLAN_COL_SPECIFIED_DUE_OVERRIDE] = ""
         rec[PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
-        rec[PLAN_COL_START_DATE_OVERRIDE] = ""
-        rec[PLAN_COL_START_TIME_OVERRIDE] = ""
         rec[PLAN_COL_PREFERRED_OP] = ""
         rec[PLAN_COL_SPECIAL_REMARK] = ""
         rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
@@ -12648,7 +12466,7 @@ def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     """
     配台残リトライ用: **内部の納期基準（due_basis_date）だけ**を +1 日する。
     結果_タスク一覧用の ``due_basis_date_result_sheet`` は変更しない（+1 前の日付を保持）。
-    回答納期・指定納期・指定納期_上書きも配台計画シート由来のまま。
+    回答納期・指定納期も配台計画シート由来のまま。
     due_urgent はずらした due_basis_date で再計算する。
     """
     if task.get("due_basis_date") is not None:
@@ -15466,12 +15284,6 @@ def _generate_plan_impl():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
-
-    try:
-        validate_no_duplicate_explicit_plan_priorities(tasks_df)
-    except PlanningValidationError as e:
-        logging.error("%s", e)
-        raise
 
     if global_priority_raw.strip():
         snip = global_priority_raw[:2500]
