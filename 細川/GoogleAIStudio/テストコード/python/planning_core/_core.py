@@ -11816,49 +11816,6 @@ def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
     return True
 
 
-def _agent_debug_ndjson_dispatch(payload: dict) -> None:
-    # #region agent log
-    import json
-    import time
-    from pathlib import Path
-
-    root = Path(__file__).resolve()
-    for _ in range(28):
-        if (root / ".git").is_dir():
-            break
-        next_root = root.parent
-        if next_root == root:
-            break
-        root = next_root
-    log_path = root / "debug-2c5e96.log"
-    line = {
-        **payload,
-        "sessionId": "2c5e96",
-        "timestamp": int(time.time() * 1000),
-    }
-    try:
-        with log_path.open("a", encoding="utf-8") as _df:
-            _df.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-    # #endregion
-
-
-def _sort_key_for_debug_json(task: dict, sk: tuple) -> list:
-    out = []
-    for x in sk:
-        if hasattr(x, "strftime"):
-            out.append(x.strftime("%Y-%m-%d"))
-        elif isinstance(x, tuple):
-            out.append([float(y) if isinstance(y, (int, float)) else str(y) for y in x])
-        elif isinstance(x, (int, float)):
-            out.append(x)
-        else:
-            out.append(str(x))
-    return out
-
-
 def _apply_dispatch_trial_order_for_generate_plan(
     task_queue: list,
     req_map: dict,
@@ -11869,47 +11826,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     配台試行順の確定。シートに全行分の試行順があればそれを採用（§B-2/3 の隣接繰り上げは行わない）。
     欠損があれば従来どおりマスタ・納期・need 列順などでソートし、EC 隣接後に 1..n を付与。
     """
-    # #region agent log
-    _dbg_tid = "Y4-16"
-    _use_sheet = _task_queue_all_have_sheet_dispatch_trial_order(task_queue)
-    _agent_debug_ndjson_dispatch(
-        {
-            "hypothesisId": "H1",
-            "location": "_apply_dispatch_trial_order_for_generate_plan:entry",
-            "message": "trial order branch",
-            "data": {
-                "use_sheet_dispatch_trial_order_column": _use_sheet,
-                "queue_len": len(task_queue),
-            },
-        }
-    )
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != _dbg_tid:
-            continue
-        _sk0 = _generate_plan_task_queue_sort_key(
-            _t, req_map, need_rules, need_combo_col_index
-        )
-        _agent_debug_ndjson_dispatch(
-            {
-                "hypothesisId": "H2",
-                "location": "_apply_dispatch_trial_order_for_generate_plan:watch_row",
-                "message": "Y4-16 before apply",
-                "data": {
-                    "task_id": _t.get("task_id"),
-                    "machine": _t.get("machine"),
-                    "machine_name": _t.get("machine_name"),
-                    "done_qty_reported": _t.get("done_qty_reported"),
-                    "in_progress": _t.get("in_progress"),
-                    "dispatch_trial_order_from_sheet": _t.get(
-                        "dispatch_trial_order_from_sheet"
-                    ),
-                    "planning_sheet_row_seq": _t.get("planning_sheet_row_seq"),
-                    "sort_key_auto_path": _sort_key_for_debug_json(_t, _sk0),
-                },
-            }
-        )
-    # #endregion
-    if _use_sheet:
+    if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
         task_queue.sort(
             key=lambda t: (
                 int(t.get("dispatch_trial_order_from_sheet") or 10**9),
@@ -11923,96 +11840,18 @@ def _apply_dispatch_trial_order_for_generate_plan(
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
             len(task_queue),
         )
-        # #region agent log
-        for _i, _t in enumerate(task_queue):
-            if str(_t.get("task_id") or "").strip() != _dbg_tid:
-                continue
-            _agent_debug_ndjson_dispatch(
-                {
-                    "hypothesisId": "H1",
-                    "location": "_apply_dispatch_trial_order_for_generate_plan:sheet_path",
-                    "message": "Y4-16 final (sheet column)",
-                    "data": {
-                        "queue_index_0based": _i,
-                        "dispatch_trial_order": _t.get("dispatch_trial_order"),
-                        "dispatch_trial_order_from_sheet": _t.get(
-                            "dispatch_trial_order_from_sheet"
-                        ),
-                    },
-                }
-            )
-        # #endregion
         return
     task_queue.sort(
         key=lambda x: _generate_plan_task_queue_sort_key(
             x, req_map, need_rules, need_combo_col_index
         )
     )
-    # #region agent log
-    _head_auto = []
-    for _i, _t in enumerate(task_queue[:22]):
-        _head_auto.append(
-            {
-                "pos": _i + 1,
-                "task_id": _t.get("task_id"),
-                "machine": _t.get("machine"),
-                "dto_sheet": _t.get("dispatch_trial_order_from_sheet"),
-                "in_progress": _t.get("in_progress"),
-                "done_qty": _t.get("done_qty_reported"),
-            }
-        )
-    _agent_debug_ndjson_dispatch(
-        {
-            "hypothesisId": "H4",
-            "location": "_apply_dispatch_trial_order_for_generate_plan:after_sort_pre_b2",
-            "message": "queue head after sort_key before B2 adjacent",
-            "data": {"head_rows": _head_auto},
-        }
-    )
-    # #endregion
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
         "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
         len(task_queue),
     )
-    # #region agent log
-    _head_final = []
-    for _i, _t in enumerate(task_queue[:22]):
-        _head_final.append(
-            {
-                "pos": _i + 1,
-                "task_id": _t.get("task_id"),
-                "machine": _t.get("machine"),
-                "dispatch_trial_order": _t.get("dispatch_trial_order"),
-                "in_progress": _t.get("in_progress"),
-                "done_qty": _t.get("done_qty_reported"),
-            }
-        )
-    _agent_debug_ndjson_dispatch(
-        {
-            "hypothesisId": "H3",
-            "location": "_apply_dispatch_trial_order_for_generate_plan:auto_path_final",
-            "message": "queue head after sequential dto",
-            "data": {"head_rows": _head_final},
-        }
-    )
-    for _i, _t in enumerate(task_queue):
-        if str(_t.get("task_id") or "").strip() != _dbg_tid:
-            continue
-        _agent_debug_ndjson_dispatch(
-            {
-                "hypothesisId": "H3",
-                "location": "_apply_dispatch_trial_order_for_generate_plan:watch_final_auto",
-                "message": "Y4-16 final (auto path)",
-                "data": {
-                    "queue_index_0based": _i,
-                    "dispatch_trial_order": _t.get("dispatch_trial_order"),
-                    "machine": _t.get("machine"),
-                },
-            }
-        )
-    # #endregion
 
 
 def fill_plan_dispatch_trial_order_column_stage1(
