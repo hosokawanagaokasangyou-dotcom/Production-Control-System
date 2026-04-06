@@ -14,7 +14,7 @@
       line-height: 1.65;
       margin: 0;
       padding: 2rem 1.25rem 3rem;
-      max-width: 40rem;
+      max-width: min(720px, 96vw);
       margin-left: auto;
       margin-right: auto;
     }
@@ -34,7 +34,7 @@
 </head>
 <body>
   <h1>工程順番メモ</h1>
-  <p class="sub">業務メモ。実装の正は <span class="file">配台ルール.md</span>・<span class="file">python/planning_core.py</span>。編集時は <span class="file">工程順番メモ.md</span> と併せて更新すること。</p>
+  <p class="sub">業務メモ。自動配台の実装の正は <span class="file">配台ルール.md</span>・<span class="file">python/planning_core/_core.py</span>（パッケージ <code>planning_core</code>）。編集時は <span class="file">工程順番メモ.md</span> と併せて更新すること。</p>
   <section>工程順番
 ・ＳＥＣ/スリット加工
 製品上りが500幅以下のものはＳＥＣ→スリット
