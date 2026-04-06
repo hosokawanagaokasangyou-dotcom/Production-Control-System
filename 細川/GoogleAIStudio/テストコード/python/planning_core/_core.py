@@ -11125,6 +11125,9 @@ def _agent_ndjson_log(data: dict) -> None:
         pass
 
 
+_AGENT_DEBUG_H7_KEYS: set[tuple[str, str]] = set()
+
+
 # #endregion
 
 # 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
@@ -14546,6 +14549,38 @@ def _assign_one_roll_trial_order_flow(
                 )
 
     if not team_candidates:
+        # #region agent log
+        _tid_h7 = str(task.get("task_id", "") or "").strip()
+        _day_h7 = str(current_date)
+        if (
+            (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
+            and (_tid_h7, _day_h7) not in _AGENT_DEBUG_H7_KEYS
+        ):
+            _AGENT_DEBUG_H7_KEYS.add((_tid_h7, _day_h7))
+            _floor_h7 = None
+            try:
+                if b2_insp_ec_floor is not None:
+                    _floor_h7 = b2_insp_ec_floor.isoformat(sep=" ")
+            except Exception:
+                _floor_h7 = str(b2_insp_ec_floor)
+            _agent_ndjson_log(
+                {
+                    "hypothesisId": "H7",
+                    "location": "_assign_one_roll_trial_order_flow",
+                    "message": "b2_follower_empty_team_candidates",
+                    "data": {
+                        "tid": _tid_h7,
+                        "day": _day_h7,
+                        "trial_order": task.get("dispatch_trial_order"),
+                        "req_num": req_num,
+                        "capable_ct": len(capable_members),
+                        "max_team_size": max_team_size,
+                        "b2_ec_floor": _floor_h7,
+                        "rem": float(task.get("remaining_units") or 0),
+                    },
+                }
+            )
+        # #endregion
         return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -15283,6 +15318,9 @@ def _generate_plan_impl():
             "設定シート「%s」A3 以降: トレース用依頼NOは無し（空またはシート無し）",
             APP_CONFIG_SHEET_NAME,
         )
+    # #region agent log
+    _AGENT_DEBUG_H7_KEYS.clear()
+    # #endregion
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
             "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
