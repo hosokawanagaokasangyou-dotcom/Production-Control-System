@@ -2918,21 +2918,6 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
     return combined
 
 
-def _coerce_task_planning_basis_dates(raw) -> dict[str, str]:
-    """グローバルコメント AI の 依頼NO→計画基準納期（YYYY-MM-DD 文字列）。"""
-    out: dict[str, str] = {}
-    if not isinstance(raw, dict):
-        return out
-    for k, v in raw.items():
-        ks = unicodedata.normalize("NFKC", str(k).strip())
-        if not ks or ks.lower() in ("nan", "none", "null"):
-            continue
-        d = parse_optional_date(v)
-        if d is not None:
-            out[ks] = d.isoformat()
-    return out
-
-
 def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
     """
     Gemini が task_preferred_operators に誤って長文を入れた場合など、
@@ -3052,7 +3037,6 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         "factory_closure_dates": [],
         "scheduler_notes_ja": "",
         "global_speed_rules": [],
-        "task_planning_basis_dates": {},
         "global_day_process_operator_rules": [],
     }
     if not isinstance(raw, dict):
@@ -3076,9 +3060,6 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
     if sn is not None and not (isinstance(sn, float) and pd.isna(sn)):
         base["scheduler_notes_ja"] = str(sn).strip()[:600]
     base["global_speed_rules"] = _coerce_global_speed_rules(raw.get("global_speed_rules"))
-    base["task_planning_basis_dates"] = _coerce_task_planning_basis_dates(
-        raw.get("task_planning_basis_dates")
-    )
     base["global_day_process_operator_rules"] = _coerce_global_day_process_operator_rules(
         raw.get("global_day_process_operator_rules")
     )
@@ -3130,7 +3111,6 @@ def analyze_global_priority_override_comment(
     - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
     - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
     - global_speed_rules: **工程名・機械名**への部分一致（各キーワードは **どちらの列にあっても可**）で、既存の加工速度（シート／上書き後）に **乗算**するルールの配列。該当なしは []。
-    - task_planning_basis_dates: 依頼NO→計画基準納期（YYYY-MM-DD）。配台の納期基準として **特別指定_備考AIより優先**して適用する。該当なしは {{}}。
     - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を、当日その工程のタスクの**チーム全員に必ず含める**ルールの配列。該当なしは []。
     - scheduler_notes_ja: 上記に落としきれない補足や運用メモ（速度は可能なら global_speed_rules も併記）。
 
@@ -3212,12 +3192,7 @@ D) **scheduler_notes_ja** （文字列・必須）
 E) **interpretation_ja** （文字列・必須）
    - 原文の要約を1文（200文字以内）。
 
-F) **task_planning_basis_dates** （オブジェクト・必須）
-   - グローバルコメントから読み取れる **依頼NO（Excel「依頼NO」列と同一表記）** ごとの **計画基準納期** を **YYYY-MM-DD** の文字列で格納。
-   - 例: {{"Y3-12": "2026-04-10", "W1-5": "2026-04-15"}}
-   - 依頼NOごとの納期指示が無ければ **空オブジェクト {{}}**（キー省略不可）。
-
-G) **global_day_process_operator_rules** （配列・必須）
+F) **global_day_process_operator_rules** （配列・必須）
    - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当てはまるタスクについて、
      列挙した **全メンバーを同一チームに必ず含める** ルール（**OP/AS どちらのスキルでも可**。氏名解決は **担当OP指名と同じ**）。
    - **依頼NOが分かる主担当の1名指名**は **task_preferred_operators** を使うこと。原文が **「◯月◯日の△工程にＡとＢを配台」** のように **日付・工程・複数名**のときは **本配列**へ落とす。
@@ -3237,7 +3212,6 @@ G) **global_day_process_operator_rules** （配列・必須）
 - "abolish_all_scheduling_limits": true または false
 - "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当氏名）。**配列にしてはならない**。該当なしは {{}}
 - "global_speed_rules": オブジェクトの配列（該当なしは []）
-- "task_planning_basis_dates": オブジェクト（依頼NO→YYYY-MM-DD、該当なしは {{}}）
 - "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
 - "scheduler_notes_ja": 文字列
 - "interpretation_ja": 文字列
@@ -6557,27 +6531,9 @@ def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bo
     return any(w.casefold() in n_lower for w in needles)
 
 
-def _global_planning_basis_date_from_override(gpo: dict | None, task_id: str):
-    """メイン・グローバルコメント AI の task_planning_basis_dates から計画基準納期を取得。"""
-    gpo = gpo or {}
-    m = gpo.get("task_planning_basis_dates")
-    if not isinstance(m, dict):
-        return None
-    tid = str(task_id or "").strip()
-    if not tid:
-        return None
-    raw_v = m.get(tid)
-    if raw_v is None:
-        for k, val in m.items():
-            if str(k).strip() == tid:
-                raw_v = val
-                break
-    return parse_optional_date(raw_v)
-
-
 def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
     """
-    計画基準納期・機械名が同じ帯での試行順。
+    納期基準（回答→指定）・機械名が同じ帯での試行順。
     Y3-24 は末尾の数値。Y4-1-1 のようにハイフンが2つ以上あるときは「最初の - の直後」の数値部を採用。
     """
     s = str(task_id or "").strip()
@@ -6681,13 +6637,11 @@ def build_task_queue_from_planning_df(
         specified_due_ov = parse_optional_date(
             _planning_df_cell_scalar(row, PLAN_COL_SPECIFIED_DUE_OVERRIDE)
         )
-        # 計画基準納期（due_basis）の採用順（配台ルール改定）:
-        # 0) メイン・グローバルコメント AI の task_planning_basis_dates（依頼NO別）
-        # 1) 特別指定_備考 AI の完了・出荷目標日 … 備考に納期・期限・最優先等の文言がある行のみ
-        # 2) 特別指定_備考 AI の start_date（目標日が無い場合の締め）… 同上
-        # 3) 指定納期_上書き（空白は無視済み）
-        # 4) 回答納期
-        # 5) 指定納期
+        # 納期基準（due_basis_date・ソート・緊急度・任意リトライ）: ①回答納期（空でなければ）②指定納期。
+        # 指定納期は列「指定納期_上書き」があればそれ、なければ列「指定納期」。
+        specified_basis = (
+            specified_due_ov if specified_due_ov is not None else specified_due
+        )
         due_basis = None
         due_source = "none"
         due_source_rank = 9
@@ -6729,7 +6683,6 @@ def build_task_queue_from_planning_df(
             _special_remark_implies_due_related_dispatch_priority(remark_raw)
         )
         in_progress = done_qty > 0.0
-        has_done_deadline_override = False
 
         ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
         req_op, speed_ov, task_eff_factor, priority, start_date_ov, start_time_ov, ai_used = _merge_task_row_with_ai(
@@ -6750,40 +6703,19 @@ def build_task_queue_from_planning_df(
                 gop_name,
             )
 
-        ai_target_due = _ai_planning_target_due_date(ai_used)
-        ai_start_date = None
-        if isinstance(ai_used, dict) and ai_used.get("start_date") is not None:
-            ai_start_date = parse_optional_date(ai_used.get("start_date"))
-
-        g_basis = _global_planning_basis_date_from_override(gpo, task_id)
-        if g_basis is not None:
-            due_basis = g_basis
-            due_source = "global_comment_ai_due"
-            due_source_rank = 0
-            has_done_deadline_override = True
-        elif remark_implies_due_dispatch_priority and ai_target_due is not None:
-            due_basis = ai_target_due
-            due_source = "ai_target_due"
-            due_source_rank = 1
-            has_done_deadline_override = True
-        elif remark_implies_due_dispatch_priority and ai_start_date is not None:
-            due_basis = ai_start_date
-            due_source = "ai_start_date"
-            due_source_rank = 2
-            has_done_deadline_override = True
-        elif specified_due_ov is not None:
-            due_basis = specified_due_ov
-            due_source = "specified_due_override"
-            due_source_rank = 3
-            has_done_deadline_override = True
-        elif answer_due is not None:
+        if answer_due is not None:
             due_basis = answer_due
             due_source = "answer_due"
-            due_source_rank = 4
-        elif specified_due is not None:
-            due_basis = specified_due
-            due_source = "specified_due"
-            due_source_rank = 5
+            due_source_rank = 0
+        elif specified_basis is not None:
+            due_basis = specified_basis
+            due_source = (
+                "specified_due_override"
+                if specified_due_ov is not None
+                else "specified_due"
+            )
+            due_source_rank = 1
+        has_done_deadline_override = bool(specified_due_ov is not None)
 
         if speed_ov is not None:
             speed = speed_ov
@@ -6893,7 +6825,7 @@ def build_task_queue_from_planning_df(
                 "specified_due_date": specified_due,
                 "specified_due_override": specified_due_ov,
                 "due_basis_date": due_basis,
-                # 納期後ろ倒し再試行で due_basis_date を内部 +1 しても、結果_タスク一覧の計画基準納期はこの値のまま
+                # 納期後ろ倒し再試行で due_basis_date を内部 +1 しても、結果_タスク一覧の当列（列名は互換で「計画基準納期」）はこの値のまま
                 "due_basis_date_result_sheet": due_basis,
                 "due_source": due_source,
                 "due_source_rank": due_source_rank,
@@ -11328,12 +11260,12 @@ ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
-# 計画基準納期日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
+# 納期基準日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
 # 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
 # マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
 # 既定 **False**（配台試行順を正とし、計画基準超過でもこの巻き戻し再試行は行わない）。従来挙動が必要なときだけ True。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
-# 計画基準納期の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
+# 納期基準の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 5
 
 # True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼だけを
@@ -11933,7 +11865,7 @@ def _generate_plan_task_queue_sort_key(
     generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
 
     1. 加工途中（in_progress）を先
-    2. 計画基準納期（早いほど先）
+    2. 納期基準 due_basis_date（回答納期→指定納期。早いほど先）
     3. §B-1 → §B-2/§B-3 帯 → その他（b_tier）
     4. §B-2/§B-3 帯内のみ EC を未着手の検査／巻返しより先（b2_queue_sub）
     5. need シート左列ほど先（工程名+機械名列の位置）
@@ -12574,7 +12506,7 @@ def _day_schedule_task_sort_key(
 ):
     """
     同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
-    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・計画基準納期・§B 段・b2_queue_sub・need 列順・依頼NO）。
+    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・納期基準 due_basis_date・§B 段・b2_queue_sub・need 列順・依頼NO）。
     続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
     同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
     """
@@ -12692,8 +12624,8 @@ def _partial_task_id_due_shift_outcome(
     """
     配台残の依頼NOについて納期+1日リトライの分類。
     戻り値: (shift_ok, calendar_shortfall)
-    - shift_ok: 計画基準納期を持つ行があり、それらすべてで +1 日がマスタ最終計画日以下
-    - calendar_shortfall: 計画基準納期を持つ行があり、いずれかで +1 日がマスタ最終計画日を超える
+    - shift_ok: 納期基準（due_basis_date）を持つ行があり、それらすべてで +1 日がマスタ最終計画日以下
+    - calendar_shortfall: 納期基準を持つ行があり、いずれかで +1 日がマスタ最終計画日を超える
     基準納期が一行も無い依頼は (False, False)（通常の配台残のまま）。
     """
     tid = (task_id or "").strip()
@@ -12714,7 +12646,7 @@ def _partial_task_id_due_shift_outcome(
 
 def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     """
-    配台残リトライ用: **内部の計画基準納期（due_basis_date）だけ**を +1 日する。
+    配台残リトライ用: **内部の納期基準（due_basis_date）だけ**を +1 日する。
     結果_タスク一覧用の ``due_basis_date_result_sheet`` は変更しない（+1 前の日付を保持）。
     回答納期・指定納期・指定納期_上書きも配台計画シート由来のまま。
     due_urgent はずらした due_basis_date で再計算する。
@@ -13706,7 +13638,7 @@ def _append_changeover_segments_to_timeline(
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
-    当該日の終了時点で、計画基準納期日（当日含む）以前なのに残量が残る依頼NO。
+    当該日の終了時点で、納期基準日（当日含む）以前なのに残量が残る依頼NO。
     「納期日内に完遂できなかった」= 後ろ倒し再試行の候補。
     """
     out = set()
@@ -15652,7 +15584,7 @@ def _generate_plan_impl():
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
     # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
-    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING が True のときのみ: 計画基準納期を過ぎても残がある依頼について
+    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING が True のときのみ: 納期基準を過ぎても残がある依頼について
     # due_basis +1・当該依頼の割当戻し・先頭から再実行。各再試行前に勤怠拡張分はマスタ日付へ巻き戻す。
     # 既定 False のため通常は 1 パス（カレンダー通し 1 回）のみ。
     # ---------------------------------------------------------

@@ -147,7 +147,7 @@
     <tr><td><span class="mono">製品名</span> <span class="mono">TASK_COL_PRODUCT</span></td><td><span class="mono">unit_m</span></td><td><span class="mono">infer_unit_m_from_product_name()</span> で1単位のメートル換算</td></tr>
     <tr><td><span class="mono">回答納期</span> / <span class="mono">指定納期</span> / <span class="mono">原反投入日</span></td><td><span class="mono">answer_due_date</span> / <span class="mono">specified_due_date</span> / <span class="mono">raw_input_date</span></td><td>結果シート表示・基準納期ルールの材料</td></tr>
     <tr><td><span class="mono">在庫場所</span> <span class="mono">TASK_COL_STOCK_LOCATION</span></td><td>—</td><td>加工計画DATA から段階1でコピー（原反投入日の右隣）。配台キューdictには含めない表示用</td></tr>
-    <tr><td><span class="mono">指定納期_上書き</span> <span class="mono">PLAN_COL_SPECIFIED_DUE_OVERRIDE</span></td><td><span class="mono">specified_due_override</span>、<span class="mono">due_basis_date</span>候補</td><td>優先順位は下記「計画基準納期」フロー参照</td></tr>
+    <tr><td><span class="mono">指定納期_上書き</span> <span class="mono">PLAN_COL_SPECIFIED_DUE_OVERRIDE</span></td><td><span class="mono">specified_due_override</span>、<span class="mono">due_basis_date</span> の「指定」側</td><td>下記「納期基準」: 回答が空のとき<strong>上書きがあればそれ</strong>、なければ<strong>指定納期</strong>列</td></tr>
     <tr><td><span class="mono">加工内容</span> <span class="mono">TASK_COL_PROCESS_CONTENT</span></td><td><span class="mono">process_sequence_rank</span></td><td>同一依頼NO内の工程順リストから工程名の位置</td></tr>
     <tr><td><span class="mono">加工完了区分</span></td><td>—</td><td><span class="mono">row_has_completion_keyword()</span> で True なら<strong>キューに載せない</strong></td></tr>
     <tr><td><span class="mono">配台不要</span> <span class="mono">PLAN_COL_EXCLUDE_FROM_ASSIGNMENT</span></td><td>—</td><td><span class="mono">_plan_row_exclude_from_assignment()</span> True ならスキップ</td></tr>
@@ -157,21 +157,17 @@
     <tr><td><span class="mono">優先度</span></td><td><span class="mono">priority</span></td><td>空なら 999。備考に納期系文言が無い行は AI の priority を使わない制御あり</td></tr>
     <tr><td><span class="mono">加工開始日_指定</span> / <span class="mono">加工開始時刻_指定</span></td><td><span class="mono">start_date_req</span>の上書き源、<span class="mono">earliest_start_time</span></td><td>デフォルト開始日は原反の翌日または <span class="mono">run_date</span></td></tr>
     <tr><td><span class="mono">担当OP_指定</span></td><td><span class="mono">preferred_operator_raw</span></td><td>メイン全局・AIより後に全局指名で上書き可</td></tr>
-    <tr><td><span class="mono">特別指定_備考</span></td><td>AI解析 <span class="mono">ai_by_tid</span>、フラグ類</td><td><span class="mono">analyze_task_special_remarks()</span> → <span class="mono">_merge_task_row_with_ai</span> 等。納期関連文言がある行のみ AI の目標日・開始日を基準納期に使い得る</td></tr>
+    <tr><td><span class="mono">特別指定_備考</span></td><td>AI解析 <span class="mono">ai_by_tid</span>、フラグ類</td><td><span class="mono">analyze_task_special_remarks()</span> → <span class="mono">_merge_task_row_with_ai</span> 等。<strong>2026-04-06</strong> より <span class="mono">due_basis_date</span> には<strong>反映しない</strong>（優先度・速度・指名等は従来どおり）</td></tr>
   </tbody>
 </table>
 
-<h3>4.1 計画基準納期 <span class="mono">due_basis_date</span> の優先順（<span class="mono">build_task_queue_from_planning_df</span> 実装準拠）</h3>
-<p class="note"><strong>原反投入日</strong>は <span class="mono">due_basis_date</span> には<strong>入らない</strong>。<span class="mono">原反投入日_上書き</span>優先で採用した日付は <span class="mono">raw_input_date</span>・開始日 <span class="mono">start_date_req</span> の下限に使う（§4.2）。</p>
+<h3>4.1 納期基準 <span class="mono">due_basis_date</span>（<span class="mono">build_task_queue_from_planning_df</span> 実装準拠・2026-04-06）</h3>
+<p class="note"><strong>原反投入日</strong>は <span class="mono">due_basis_date</span> には<strong>入らない</strong>。<span class="mono">原反投入日_上書き</span>優先で採用した日付は <span class="mono">raw_input_date</span>・開始日 <span class="mono">start_date_req</span> の下限に使う（§4.2）。結果_タスク一覧の列名「計画基準納期」は互換のため従来どおりで、値はこの <span class="mono">due_basis_date</span>。</p>
 <ol class="compact">
-  <li>メイン・グローバルコメント AI の <span class="mono">task_planning_basis_dates</span>（<span class="mono">due_source_rank=0</span>）</li>
-  <li>特別指定_備考に納期系キーワードがあり、かつ AI の目標完了系日付（<span class="mono">due_source_rank=1</span>）</li>
-  <li>同上条件で AI の <span class="mono">start_date</span>（<span class="mono">due_source_rank=2</span>）</li>
-  <li><span class="mono">指定納期_上書き</span>（<span class="mono">due_source_rank=3</span>）</li>
-  <li><span class="mono">回答納期</span>（<span class="mono">due_source_rank=4</span>）</li>
-  <li><span class="mono">指定納期</span>（<span class="mono">due_source_rank=5</span>）</li>
+  <li><span class="mono">回答納期</span>に日付がある（空でない）→ <span class="mono">due_source=answer_due</span>、<span class="mono">due_source_rank=0</span></li>
+  <li>上記で無いとき → <strong>指定</strong>として <span class="mono">指定納期_上書き</span> があればそれ、なければ <span class="mono">指定納期</span>（<span class="mono">due_source</span> は <span class="mono">specified_due_override</span> または <span class="mono">specified_due</span>、<span class="mono">due_source_rank=1</span>）</li>
 </ol>
-<p class="src"><span class="mono">due_source_rank=9</span> はいずれも採用できなかった場合。ソートキーには使わず、タスク dict のメタデータとして保持。</p>
+<p class="src">グローバルコメント AI の <span class="mono">task_planning_basis_dates</span> と、特別指定備考 AI の目標日／開始日による <span class="mono">due_basis</span> 上書きは<strong>廃止</strong>。<span class="mono">due_source_rank=9</span>（<span class="mono">due_source=none</span>）は①②いずれの日付も無い行。</p>
 
 <h3>4.2 開始日 <span class="mono">start_date_req</span>（実効）</h3>
 <ul class="compact">

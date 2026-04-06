@@ -142,11 +142,11 @@
     <summary>2026-04 ブリーフィング（納期・原反・日内・環境変数など）を開く</summary>
     <div class="inner">
       <ul>
-        <li><strong>計画基準納期</strong>の優先: グローバル AI <code>task_planning_basis_dates</code> →（特別指定_備考は<strong>納期系キーワードがある行のみ</strong>）備考 AI の目標日／開始日 → 指定納期_上書き → 回答納期 → 指定納期。</li>
+        <li><strong>納期基準</strong>（<code>due_basis_date</code>・ソート・緊急度・任意リトライ）: ①<strong>回答納期</strong>（空でなければ）②<strong>指定納期</strong>（<code>指定納期_上書き</code> があればそれ、なければ <code>指定納期</code>）。グローバルコメント AI・特別指定備考 AI による上書きは<strong>しない</strong>。</li>
         <li><strong>原反投入日</strong>: 列 <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）に日付があれば<strong>配台はそちらを採用</strong>。空なら <code>原反投入日</code>。開始日は原反採用行で <code>max(基準日, 原反投入日, 開始日上書き)</code>。原反<strong>当日</strong>は <strong>13:00</strong> 以降開始。</li>
         <li><strong>日内</strong>は既定 <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>（配台試行順を先に見るマルチパス）。<code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> で依頼NO直列。</li>
         <li>§B-2 検査占有は <code>PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</code>（既定オン・変数名は歴史的）。優先度<strong>同数重複</strong>は段階2中止。</li>
-        <li>計画基準超過の<strong>巻き戻し再試行</strong>は既定オフ <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>。<code>True</code> 時のみ <code>_collect_task_ids_missed_deadline_after_day</code> 条件で再試行。</li>
+        <li>納期基準超過の<strong>巻き戻し再試行</strong>は既定オフ <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>。<code>True</code> 時のみ <code>_collect_task_ids_missed_deadline_after_day</code> 条件で再試行。</li>
         <li><strong>need 配台時追加人数</strong>: 既定はメインは基本人数のみ→<strong>全シミュレーション後</strong>にサブ追記（<a href="#need-surplus">need 追加人数</a>）。</li>
         <li>業務案の「順次1件・16:00締め込み」は次段。</li>
       </ul>
@@ -175,14 +175,14 @@
   <section id="rev-2026-03" class="card" aria-labelledby="h-rev">
     <h2 id="h-rev">改定（2026-03）要約</h2>
     <ul>
-      <li><strong>グローバル AI</strong>: JSON に <code>task_planning_basis_dates</code>（依頼NO→日付）を追加。特別指定備考 AI より<strong>先</strong>に計画基準納期へ反映。<strong>2026-04 追補</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名の部分一致＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映。<code>task_preferred_operators</code> は<strong>オブジェクトのみ</strong>（配列不可）。誤スキーマ時は実装が可能な範囲でルール・メモへ救済（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
+      <li><strong>グローバル AI</strong>: <code>task_planning_basis_dates</code> は <strong>2026-04-06 廃止</strong>（納期基準はシートの回答／指定のみ）。<strong>2026-04 追補</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名の部分一致＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映。<code>task_preferred_operators</code> は<strong>オブジェクトのみ</strong>（配列不可）。誤スキーマ時は実装が可能な範囲でルール・メモへ救済（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
       <li><strong>優先度重複</strong>: 配台対象行で同じ優先度整数が2行以上→段階2中止、終了コード3、メッセージファイル経由で Excel に表示（999は除外）。</li>
-      <li><strong>同日同機械</strong>: 計画基準納期と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
+      <li><strong>同日同機械</strong>: 納期基準（<code>due_basis_date</code>）と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
       <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一<strong>物理機械</strong>（機械名占有キー）は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
       <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある<strong>処理順リスト先頭</strong>の依頼に限定。処理順は各依頼NOの<strong>配台試行順番の最小値</strong>が小さいほど先（<code>_serial_dispatch_order_task_ids</code>）。</li>
       <li><strong>2026-04 追補</strong>: <strong>配台計画_タスク入力</strong>の先頭列 <strong>配台試行順番</strong>（段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与）。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。成果物に <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
       <li><strong>区間ミラー</strong>: <code>DISPATCH_INTERVAL_MIRROR_ENFORCE</code> 既定オン。<code>dispatch_interval_mirror.py</code> で<strong>機械名占有キー</strong>・人の占有区間をタイムラインと同期し、割付候補を二重検査（Excel 逐次操作なし）。<code>0</code> で無効。</li>
-      <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、計画基準納日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
+      <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、納期基準日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
       <li><strong>2026-04 追補（マスタ出退勤と AI）</strong>: <strong>出勤時間</strong>・<strong>退勤時間</strong>が<strong>両方</strong>入っている行は、勤怠 AI の出勤/退勤時刻で上書きしない（<span class="file">配台ルール.md</span> 3.1）。</li>
       <li><strong>2026-04 追補（メンバー残業）</strong>: <span class="file">master.xlsm</span> 各メンバー勤怠の任意列 <strong>残業終業</strong>（K 列）で退勤上限を指定。Python <code>load_attendance_and_analyze</code> が <code>end_dt</code> に反映（詳細は <span class="file">配台ルール.md</span> 3.1）。VBA は再生成時に日付キーで復元（旧 L 列のみの退避フォールバックあり）。</li>
       <li><strong>2026-04 追補（前休・後休）</strong>: カレンダー→出勤簿で <strong>前休</strong>＝<strong>休憩時間1_終了～定常終了</strong>、<strong>後休</strong>＝<strong>定常開始～休憩時間1_開始</strong>（VBA は通常行と同一の休憩1時刻を境界に使用。Python <code>infer_mid_break_from_reason</code> は勤怠シートの休憩1列と整合）。詳細は <span class="file">配台ルール.md</span> 3.2.2。</li>
@@ -214,7 +214,7 @@
       <thead><tr><th>順位</th><th>キー</th><th>意味（要約）</th></tr></thead>
       <tbody>
         <tr><td>1</td><td>（加工途中）</td><td>途中タスクを先に</td></tr>
-        <tr><td>2</td><td>計画基準納期</td><td><code>due_basis_date</code> 系</td></tr>
+        <tr><td>2</td><td>納期基準</td><td><code>due_basis_date</code>（回答納期→指定納期）</td></tr>
         <tr><td>3</td><td><code>b_tier</code></td><td><strong>0</strong>=§B-1、<strong>1</strong>=§B-2／§B-3 帯、<strong>2</strong>=その他</td></tr>
         <tr><td>4</td><td><code>b2_queue_sub</code></td><td>§B-2／§B-3 帯内で <strong>EC 先行</strong></td></tr>
         <tr><td>5</td><td>need 列位置</td><td>シート上の need 由来の順位</td></tr>
