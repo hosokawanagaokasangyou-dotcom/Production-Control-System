@@ -12677,6 +12677,23 @@ def _machine_cal_cell_is_occupied(cell) -> bool:
     return True
 
 
+def _clip_machine_calendar_slot_to_factory_window(
+    day_d: date, slot_start: datetime, slot_end: datetime
+) -> tuple[datetime, datetime] | None:
+    """
+    機械カレンダー1スロット [slot_start, slot_end) を工場稼働枠にクリップする。
+    枠外のみのスロットは None（配台では無視）。段階2では master メイン A12/B12 で
+    DEFAULT_START_TIME / DEFAULT_END_TIME が上書き済み（generate_plan のコンテキスト内で読込）。
+    """
+    w0 = datetime.combine(day_d, DEFAULT_START_TIME)
+    w1 = datetime.combine(day_d, DEFAULT_END_TIME)
+    s2 = max(slot_start, w0)
+    e2 = min(slot_end, w1)
+    if s2 < e2:
+        return (s2, e2)
+    return None
+
+
 def _machine_cal_resolve_column_to_equipment_key(
     p_raw,
     m_raw,
@@ -12787,6 +12804,12 @@ def load_machine_calendar_occupancy_blocks(
                 continue
             slot_start = slot0
             slot_end = slot_start + timedelta(hours=1)
+            _clipped_mc = _clip_machine_calendar_slot_to_factory_window(
+                day_d, slot_start, slot_end
+            )
+            if _clipped_mc is None:
+                continue
+            slot_start, slot_end = _clipped_mc
             acc[day_d][eq_key].append((slot_start, slot_end))
 
     out: dict[date, dict[str, list[tuple[datetime, datetime]]]] = {}
