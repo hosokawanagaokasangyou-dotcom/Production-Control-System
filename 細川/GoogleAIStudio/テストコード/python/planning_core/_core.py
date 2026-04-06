@@ -14671,7 +14671,8 @@ def _trial_order_first_schedule_pass(
     ただし後続が候補化した時点で **検査と同じ物理機械**のフェーズ1や **同一依頼の EC** が全日先に進むと、
     検査は `start_ge_end_initial`（設備空きが終業より後）で全日失敗する。§B-2/§B-3 後続があるときは
     「同一依頼EC・検査機と機械共有するフェーズ1・後続」を **配台試行順**でマージし、
-    **最大1ロールずつ**周回してから残りを詰め、その後 **その他のフェーズ1** を従来どおり詰める。
+    同順では **後続を EC より先に** **最大1ロールずつ**周回する（マージ集合の一括ドレインはしない）。
+    その後 **その他のフェーズ1** を従来どおり詰める。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14935,9 +14936,14 @@ def _trial_order_first_schedule_pass(
             phase1_rest.append(t)
 
     def _b2_merged_sort_key(t: dict) -> tuple:
+        # 同じ配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着の壁時計を
+        # 同日早い段階で取りに行く（§B-2 担当者分離で EC と検査は別メンバー想定）。
+        _fol = bool(
+            t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
+        )
         return (
             int(t.get("dispatch_trial_order") or 10**9),
-            0 if t.get("roll_pipeline_ec") else 1,
+            0 if _fol else 1,
             str(t.get("task_id") or ""),
             int(t.get("same_request_line_seq") or 0),
         )
@@ -14956,9 +14962,9 @@ def _trial_order_first_schedule_pass(
             if not round_made:
                 break
             pass_made = True
-        for task in merged_b2:
-            if _drain_rolls_for_task(task):
-                pass_made = True
+        # merged をここで一括ドレインしない。EC を同日に先に詰め直すと検査が
+        # start_ge_end_initial で全日失敗しうる。残量は同一日の外側スケジュール
+        # ループの次パスで再び上記 while が回る。
         for task in phase1_rest:
             if _drain_rolls_for_task(task):
                 pass_made = True
