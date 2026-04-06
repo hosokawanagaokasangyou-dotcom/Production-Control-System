@@ -14671,8 +14671,9 @@ def _trial_order_first_schedule_pass(
     ただし後続が候補化した時点で **検査と同じ物理機械**のフェーズ1や **同一依頼の EC** が全日先に進むと、
     検査は `start_ge_end_initial`（設備空きが終業より後）で全日失敗する。§B-2/§B-3 後続があるときは
     「同一依頼EC・検査機と機械共有するフェーズ1・後続」を **配台試行順**でマージし、
-    同順では **後続を EC より先に** **最大1ロールずつ**周回する（マージ集合の一括ドレインはしない）。
-    その後 **その他のフェーズ1** を従来どおり詰める。
+    同順では **後続を EC より先に**、**その他のフェーズ1** とあわせて **配台試行順**で整列し
+    **最大1ロールずつ**だけ周回する（マージ・rest とも一括ドレインしない。検査OPが他工程に
+    同日取り切られ start_ge_end_initial になるのを防ぐ）。
     リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
     `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
@@ -14954,20 +14955,29 @@ def _trial_order_first_schedule_pass(
             phase1_interleave + phase2_tasks,
             key=_b2_merged_sort_key,
         )
+        _merged_row_ids = {id(x) for x in merged_b2}
+
+        def _b2_rr_key(t: dict) -> tuple:
+            if id(t) in _merged_row_ids:
+                return _b2_merged_sort_key(t)
+            return (
+                int(t.get("dispatch_trial_order") or 10**9),
+                2,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+
+        all_rr = sorted(merged_b2 + phase1_rest, key=_b2_rr_key)
         while True:
             round_made = False
-            for task in merged_b2:
+            for task in all_rr:
+                if float(task.get("remaining_units") or 0) <= 1e-12:
+                    continue
                 if _drain_rolls_for_task(task, max_rolls=1):
                     round_made = True
             if not round_made:
                 break
             pass_made = True
-        # merged をここで一括ドレインしない。EC を同日に先に詰め直すと検査が
-        # start_ge_end_initial で全日失敗しうる。残量は同一日の外側スケジュール
-        # ループの次パスで再び上記 while が回る。
-        for task in phase1_rest:
-            if _drain_rolls_for_task(task):
-                pass_made = True
     else:
         for task in phase1_tasks:
             if _drain_rolls_for_task(task):
