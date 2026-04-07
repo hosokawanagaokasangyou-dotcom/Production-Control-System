@@ -29,7 +29,7 @@ Private Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Bool
     a = ""
     On Error GoTo Fail
     Randomize
-    ' Timer*1e6 は Long 上限を超えうるため、Rnd のみで 0?2147483646（CLng 安全域）
+    ' Timer*1e6 ?? Long ????????????ARnd ???? 0?2147483646?iCLng ???S??j
     a = "pm_ai_" & CStr(CLng(2147483646# * Rnd))
     r = mciSendStringW(StrPtr("close " & a), 0&, 0, 0&)
     Err.Clear
@@ -106,7 +106,7 @@ Private Sub MacroCompleteChime()
     End If
 End Sub
 
-' MP3 は sndPlaySound（別名 PlaySoundA 系）ではなく MCI（mciSendStringW）で再生。WAV のみの場合は PlaySoundW でも可。
+' MP3 ?? sndPlaySound?i??? PlaySoundA ?n?j????? MCI?imciSendStringW?j?????BWAV ??????? PlaySoundW ?????B
 Public Sub PlayFinishSound()
     MacroCompleteChime
 End Sub
@@ -159,4 +159,4 @@ Private Sub MacroStartBgm_StartIfAvailable()
     If r = 0 Then m_macroStartBgmOpen = True
 End Sub
 
-' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
+' Excel ???C???E?B???h?E?iApplication.hwnd?j????[?E?????????? UserForm ?? SetWindowPos?i???[?h???X????? API ????W?w??j
