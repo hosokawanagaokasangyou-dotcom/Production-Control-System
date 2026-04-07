@@ -2302,11 +2302,19 @@ def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
 def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     """
     設備の壁時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
-    機械名があればそれを正規化した値とし、無いときは equipment_line_key から機械名側を推定する。
+    機械カレンダー列は equipment_line_key の「工程+機械」と一致するため、
+    正規化後に「+」を含むときは **machine_name より先に** そこから物理機械名を採用する。
+    （machine_name に工程名のみなどが入り、床キー「熱融着機 湖南」とずれて候補外し漏れするのを防ぐ）
+    単一名のときは従来どおり machine_name を優先し、無ければ equipment_line_key / machine から推定する。
     machine_name に「工程+機械」と入っている場合でも、占有は物理機械名（+ の右側）に寄せる。
-    （機械カレンダー床・merged_all の物理キーと一致させるため）
     全角「＋」のみの列は NFKC 後に半角「+」になるため、分割判定は正規化後に行う。
     """
+    ek = str(task.get("equipment_line_key") or "").strip()
+    nek = _normalize_equipment_match_key(ek)
+    if nek and "+" in nek:
+        pk = _equipment_line_key_to_physical_occupancy_key(ek)
+        if pk:
+            return pk
     mn = str(task.get("machine_name") or "").strip()
     if mn:
         nk = _normalize_equipment_match_key(mn)
@@ -15438,26 +15446,50 @@ def _trial_order_first_schedule_pass(
                 pass_made = True
     # #region agent log
     if current_date in _AGENT_MC_DEBUG_DATES and not pass_made:
+        _h7_payload = {
+            "day": str(current_date),
+            "n_eligible": len(eligible_sorted),
+            "n_phase1": len(phase1_tasks),
+            "n_phase2": len(phase2_tasks),
+            "serial_by_tid": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
+            "global_order_strict": bool(STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT),
+            "min_dto": _min_pending_dispatch_trial_order_for_date(
+                task_queue,
+                current_date,
+                daily_status=daily_status,
+                members=members,
+                machine_avail_dt=machine_avail_dt,
+                machine_day_start=_mc_w0,
+            ),
+        }
+        if eligible_sorted:
+            _t0 = eligible_sorted[0]
+            _m = _t0.get("machine")
+            _eqx = (
+                str(_t0.get("equipment_line_key") or _m or "").strip() or str(_m or "")
+            )
+            _ocx = _machine_occupancy_key_resolve(_t0, _eqx)
+            _adx = machine_avail_dt.get(_ocx) if machine_avail_dt else None
+            _h7_payload["eligible0"] = {
+                "task_id": str(_t0.get("task_id") or ""),
+                "machine_name": str(_t0.get("machine_name") or "")[:80],
+                "equipment_line_key": str(_t0.get("equipment_line_key") or "")[:120],
+                "occ": _ocx,
+                "avail_get": str(_adx) if _adx is not None else None,
+                "no_win_floor": _task_no_machining_window_left_from_avail_floor(
+                    _t0,
+                    current_date,
+                    daily_status,
+                    members,
+                    machine_avail_dt,
+                    _mc_w0,
+                ),
+            }
         _agent_debug_log_mc(
             "H7",
             "planning_core/_core.py:_trial_order_first_schedule_pass",
             "pass made no progress",
-            {
-                "day": str(current_date),
-                "n_eligible": len(eligible_sorted),
-                "n_phase1": len(phase1_tasks),
-                "n_phase2": len(phase2_tasks),
-                "serial_by_tid": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
-                "global_order_strict": bool(STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT),
-                "min_dto": _min_pending_dispatch_trial_order_for_date(
-                    task_queue,
-                    current_date,
-                    daily_status=daily_status,
-                    members=members,
-                    machine_avail_dt=machine_avail_dt,
-                    machine_day_start=_mc_w0,
-                ),
-            },
+            _h7_payload,
         )
     # #endregion
     return pass_made
