@@ -12620,6 +12620,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    assign_probe_ctx: dict | None = None,
 ) -> bool:
     """
     同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
@@ -12678,6 +12679,10 @@ def _equipment_line_lower_dispatch_trial_still_pending(
                 dispatch_interval_mirror=dispatch_interval_mirror,
             ):
                 continue
+            if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
+                t, current_date, daily_status, assign_probe_ctx
+            ):
+                continue
             return True
     return False
 
@@ -12694,6 +12699,7 @@ def _min_pending_dispatch_trial_order_for_date(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    assign_probe_ctx: dict | None = None,
 ) -> int | None:
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
@@ -12707,6 +12713,7 @@ def _min_pending_dispatch_trial_order_for_date(
     - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
     - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
     - （machine_avail_dt 等が渡るとき）設備壁時計が計画終端以上で当日スロットなしの行
+    - （assign_probe_ctx が渡るとき）試行順フローと同じ 1 ロール割当が成立しない行
     """
     orders: list[int] = []
     for t in task_queue:
@@ -12734,6 +12741,10 @@ def _min_pending_dispatch_trial_order_for_date(
             dispatch_interval_mirror=dispatch_interval_mirror,
         ):
             continue
+        if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
+            t, current_date, daily_status, assign_probe_ctx
+        ):
+            continue
         try:
             orders.append(int(t.get("dispatch_trial_order") or 10**9))
         except (TypeError, ValueError):
@@ -12754,6 +12765,7 @@ def _task_blocked_by_global_dispatch_trial_order(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    assign_probe_ctx: dict | None = None,
 ) -> bool:
     """
     より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
@@ -12771,6 +12783,7 @@ def _task_blocked_by_global_dispatch_trial_order(
         skills_dict=skills_dict,
         abolish_all_scheduling_limits=abolish_all_scheduling_limits,
         dispatch_interval_mirror=dispatch_interval_mirror,
+        assign_probe_ctx=assign_probe_ctx,
     )
     if m is None:
         return False
@@ -14255,6 +14268,7 @@ def _trial_order_flow_eligible_tasks(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    assign_probe_ctx: dict | None = None,
 ) -> list:
     out = []
     for task in tasks_today:
@@ -14274,6 +14288,7 @@ def _trial_order_flow_eligible_tasks(
             skills_dict=skills_dict,
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
+            assign_probe_ctx=assign_probe_ctx,
         ):
             continue
         # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
@@ -14294,6 +14309,10 @@ def _trial_order_flow_eligible_tasks(
                 skills_dict=skills_dict,
                 abolish_all_scheduling_limits=abolish_all_scheduling_limits,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+            ):
+                continue
+            if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
+                task, current_date, daily_status, assign_probe_ctx
             ):
                 continue
         if (
@@ -14334,6 +14353,7 @@ def _trial_order_flow_eligible_tasks(
             skills_dict=skills_dict,
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
+            assign_probe_ctx=assign_probe_ctx,
         ):
             continue
         out.append(task)
@@ -15155,6 +15175,45 @@ def _assign_one_roll_trial_order_flow(
     }
 
 
+def _trial_order_assign_probe_fails(
+    task: dict,
+    current_date: date,
+    daily_status: dict,
+    ctx: dict,
+) -> bool:
+    """
+    現在の avail_dt / machine_avail_dt / machine_handoff のスナップショットで
+    `_assign_one_roll_trial_order_flow` が None になるなら True。
+    機械枠は十分でも人・休憩・ミラー等で詰まり、グローバル試行順だけが先頭行に張り付くのを防ぐ。
+    副作用なし（need 人数ログ用 set は毎回空）。
+    """
+    try:
+        r = _assign_one_roll_trial_order_flow(
+            task,
+            current_date,
+            daily_status,
+            ctx["avail_dt"],
+            ctx["machine_avail_dt"],
+            ctx["task_queue"],
+            ctx["skills_dict"],
+            ctx["members"],
+            ctx["req_map"],
+            ctx["need_rules"],
+            ctx["surplus_map"],
+            ctx["global_priority_override"],
+            ctx["macro_run_date"],
+            ctx["macro_now_dt"],
+            None,
+            set(),
+            team_combo_presets=ctx.get("team_combo_presets"),
+            dispatch_interval_mirror=ctx.get("dispatch_interval_mirror"),
+            machine_handoff=ctx["machine_handoff"],
+        )
+    except Exception:
+        return True
+    return r is None
+
+
 def _trial_order_first_schedule_pass(
     current_date: date,
     tasks_today: list,
@@ -15196,6 +15255,24 @@ def _trial_order_first_schedule_pass(
     _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
     _gpo = global_priority_override or {}
+    _assign_probe_ctx: dict | None = None
+    if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
+        _assign_probe_ctx = {
+            "avail_dt": avail_dt,
+            "machine_avail_dt": machine_avail_dt,
+            "task_queue": task_queue,
+            "skills_dict": skills_dict,
+            "members": members,
+            "req_map": req_map,
+            "need_rules": need_rules,
+            "surplus_map": surplus_map,
+            "global_priority_override": global_priority_override,
+            "macro_run_date": macro_run_date,
+            "macro_now_dt": macro_now_dt,
+            "machine_handoff": _mh_init,
+            "team_combo_presets": team_combo_presets,
+            "dispatch_interval_mirror": dispatch_interval_mirror,
+        }
     eligible = _trial_order_flow_eligible_tasks(
         tasks_today,
         task_queue,
@@ -15208,6 +15285,7 @@ def _trial_order_first_schedule_pass(
         skills_dict=skills_dict,
         abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
         dispatch_interval_mirror=dispatch_interval_mirror,
+        assign_probe_ctx=_assign_probe_ctx,
     )
     if not eligible:
         # #region agent log
@@ -15232,6 +15310,7 @@ def _trial_order_first_schedule_pass(
                             _gpo.get("abolish_all_scheduling_limits")
                         ),
                         dispatch_interval_mirror=dispatch_interval_mirror,
+                        assign_probe_ctx=_assign_probe_ctx,
                     ),
                 },
             )
@@ -15566,6 +15645,7 @@ def _trial_order_first_schedule_pass(
                     _gpo.get("abolish_all_scheduling_limits")
                 ),
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                assign_probe_ctx=_assign_probe_ctx,
             ),
         }
         if eligible_sorted:
@@ -15621,6 +15701,13 @@ def _trial_order_first_schedule_pass(
                         _gpo.get("abolish_all_scheduling_limits")
                     ),
                     dispatch_interval_mirror=dispatch_interval_mirror,
+                ),
+                "assign_probe_fails": (
+                    _trial_order_assign_probe_fails(
+                        _t0, current_date, daily_status, _assign_probe_ctx
+                    )
+                    if _assign_probe_ctx is not None
+                    else None
                 ),
             }
         _agent_debug_log_mc(
