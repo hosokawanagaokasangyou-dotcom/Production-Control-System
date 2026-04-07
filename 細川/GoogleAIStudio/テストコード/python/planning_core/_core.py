@@ -11105,31 +11105,6 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
-# #region agent log
-def _agent_ndjson_log(data: dict) -> None:
-    """DEBUG MODE: append one NDJSON line to workspace debug-d2b067.log."""
-    try:
-        _log_path = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__), *(os.pardir,) * 5, "debug-d2b067.log"
-            )
-        )
-        _line = dict(
-            data,
-            timestamp=int(time_module.time() * 1000),
-            sessionId="d2b067",
-        )
-        with open(_log_path, "a", encoding="utf-8") as _af:
-            _af.write(json.dumps(_line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-_AGENT_DEBUG_H7_KEYS: set[tuple[str, str]] = set()
-
-
-# #endregion
-
 # 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
@@ -11161,6 +11136,12 @@ STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
 # 無効化: 環境変数 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST = os.environ.get(
     "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1"
+).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
+
+# True（既定）: start_date_req<=当日 かつ残ありのタスクのうち、配台試行順の最小「枠」だけが割付対象。
+# より大きい試行順は、より小さい試行順に未完了が残る限りブロック（納期が近くても割り込まない）。
+STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT = os.environ.get(
+    "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT", "1"
 ).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
 # True（既定）: 割付候補を「設備・人の壁時計占有区間」で二重検査し、タイムライン追記と同期登録する
@@ -11506,27 +11487,6 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
         max_insp = max(max_insp, ec_done)
     _room = max(0.0, max_insp - insp_done)
-    # #region agent log
-    if (
-        insp_done >= 15
-        and _room <= 1e-12
-        and not _pipeline_ec_fully_done_for_tid(task_queue, tid)
-    ):
-        _agent_ndjson_log(
-            {
-                "hypothesisId": "H1",
-                "location": "_roll_pipeline_inspection_assign_room",
-                "message": "pipeline_room_zero",
-                "data": {
-                    "tid": tid,
-                    "ec_done": ec_done,
-                    "insp_done": insp_done,
-                    "max_insp": max_insp,
-                    "buffer_B": ROLL_PIPELINE_INITIAL_BUFFER_ROLLS,
-                },
-            }
-        )
-    # #endregion
     return _room
 
 
@@ -11585,22 +11545,6 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     need_n = insp_done + int(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS)
     ends = _pipeline_b2_ec_roll_end_datetimes_sorted(task_queue, tid)
     if need_n < 1 or len(ends) < need_n:
-        # #region agent log
-        if insp_done >= 15:
-            _agent_ndjson_log(
-                {
-                    "hypothesisId": "H2",
-                    "location": "_roll_pipeline_b2_inspection_ec_completion_floor_dt",
-                    "message": "ec_ends_before_buffer_need",
-                    "data": {
-                        "tid": tid,
-                        "need_n": need_n,
-                        "len_ec_ends": len(ends),
-                        "insp_done": insp_done,
-                    },
-                }
-            )
-        # #endregion
         return None
     return ends[need_n - 1]
 
@@ -12422,6 +12366,8 @@ def _day_schedule_task_sort_key(
     先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・納期基準 due_basis_date・§B 段・b2_queue_sub・need 列順・依頼NO）。
     続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
     同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
+    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 のときは _task_blocked_by_global_dispatch_trial_order が
+    より小さい試行順の未完了を跨いだ割り込みを別途ブロックする。
     """
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
@@ -12494,6 +12440,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     """
     同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
     machine_avail_dt はチャンク間の隙間に後続試行順が入り込めるため、ここで順序を強制する。
+    設備を跨いだ試行順の前後は _task_blocked_by_global_dispatch_trial_order で別途制御する。
 
     キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
     start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
@@ -12522,6 +12469,46 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         if o < my_o:
             return True
     return False
+
+
+def _min_pending_dispatch_trial_order_for_date(
+    task_queue: list, current_date: date
+) -> int | None:
+    """
+    start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
+    _equipment_line_lower_dispatch_trial_still_pending と同様、まだ開始日に達していない行は
+    「先行試行順の競合」に含めない。
+    """
+    orders: list[int] = []
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            continue
+        sdr = t.get("start_date_req")
+        if not isinstance(sdr, date) or sdr > current_date:
+            continue
+        try:
+            orders.append(int(t.get("dispatch_trial_order") or 10**9))
+        except (TypeError, ValueError):
+            orders.append(10**9)
+    return min(orders) if orders else None
+
+
+def _task_blocked_by_global_dispatch_trial_order(
+    task: dict, task_queue: list, current_date: date
+) -> bool:
+    """
+    より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
+    """
+    if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
+        return False
+    m = _min_pending_dispatch_trial_order_for_date(task_queue, current_date)
+    if m is None:
+        return False
+    try:
+        my_o = int(task.get("dispatch_trial_order") or 10**9)
+    except (TypeError, ValueError):
+        my_o = 10**9
+    return my_o > m
 
 
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
@@ -13795,6 +13782,8 @@ def _trial_order_flow_eligible_tasks(
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
+        if _task_blocked_by_global_dispatch_trial_order(task, task_queue, current_date):
+            continue
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
         ) and (
@@ -13803,25 +13792,6 @@ def _trial_order_flow_eligible_tasks(
             )
             <= 1e-12
         ):
-            # #region agent log
-            _tid_el = str(task.get("task_id", "") or "").strip()
-            _agent_ndjson_log(
-                {
-                    "hypothesisId": "H1",
-                    "location": "_trial_order_flow_eligible_tasks",
-                    "message": "skip_inspection_pipeline_room",
-                    "data": {
-                        "tid": _tid_el,
-                        "day": str(current_date),
-                        "dispatch_trial_order": task.get("dispatch_trial_order"),
-                        "ec_done": _pipeline_ec_roll_done_units(task_queue, _tid_el),
-                        "insp_done": _pipeline_b2_follower_roll_done_units(
-                            task_queue, _tid_el
-                        ),
-                    },
-                }
-            )
-            # #endregion
             continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
@@ -13829,22 +13799,6 @@ def _trial_order_flow_eligible_tasks(
                 _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
-                # #region agent log
-                _agent_ndjson_log(
-                    {
-                        "hypothesisId": "H4",
-                        "location": "_trial_order_flow_eligible_tasks",
-                        "message": "skip_inspection_b1_exclusive_holder",
-                        "data": {
-                            "tid": str(task.get("task_id", "") or "").strip(),
-                            "day": str(current_date),
-                            "holder_tid": _b1_holder.get("task_id"),
-                            "holder_order": _b1_holder.get("dispatch_trial_order"),
-                            "my_order": task.get("dispatch_trial_order"),
-                        },
-                    }
-                )
-                # #endregion
                 continue
         machine = task["machine"]
         eq_line = str(
@@ -13858,24 +13812,6 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
-            # #region agent log
-            if task.get("roll_pipeline_inspection") or task.get(
-                "roll_pipeline_rewind"
-            ):
-                _agent_ndjson_log(
-                    {
-                        "hypothesisId": "H5",
-                        "location": "_trial_order_flow_eligible_tasks",
-                        "message": "skip_follower_lower_trial_pending_same_machine",
-                        "data": {
-                            "tid": str(task.get("task_id", "") or "").strip(),
-                            "day": str(current_date),
-                            "my_order": _my_dispatch_ord,
-                            "machine_occ": _mocc_trial,
-                        },
-                    }
-                )
-            # #endregion
             continue
         out.append(task)
     return out
@@ -14200,29 +14136,9 @@ def _assign_one_roll_trial_order_flow(
 
     capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
     capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
-    _cap_before_disjoint = len(capable_members)
     capable_members = _filter_capable_members_b2_disjoint_teams(
         task, task_queue, capable_members
     )
-    # #region agent log
-    if not capable_members and (
-        task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
-    ):
-        _agent_ndjson_log(
-            {
-                "hypothesisId": "H6",
-                "location": "_assign_one_roll_trial_order_flow",
-                "message": "b2_follower_no_capable_after_disjoint",
-                "data": {
-                    "tid": str(task.get("task_id", "") or "").strip(),
-                    "day": str(current_date),
-                    "machine": str(task.get("machine", "") or ""),
-                    "trial_order": task.get("dispatch_trial_order"),
-                    "capable_before_disjoint": _cap_before_disjoint,
-                },
-            }
-        )
-    # #endregion
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
@@ -14356,15 +14272,6 @@ def _assign_one_roll_trial_order_flow(
     if _co_abort:
         return None
 
-    _h8_tally: dict[str, int] = {}
-
-    def _bump_h8(code: str) -> None:
-        if not (
-            task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
-        ):
-            return
-        _h8_tally[code] = _h8_tally.get(code, 0) + 1
-
     def _one_roll_from_team(
         team: tuple,
         min_n: int | None = None,
@@ -14380,7 +14287,6 @@ def _assign_one_roll_trial_order_flow(
                 lo,
                 hi,
             )
-            _bump_h8("team_size_bad")
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
@@ -14388,14 +14294,12 @@ def _assign_one_roll_trial_order_flow(
                 "候補却下: OP不在 team=%s",
                 ",".join(str(x) for x in team),
             )
-            _bump_h8("no_op_in_team")
             return None
         if not all(m in daily_status for m in team):
             _trace_assign(
                 "候補却下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
             )
-            _bump_h8("no_attendance_key")
             return None
         team_start = max(avail_dt[m] for m in team)
         if not _gpo.get("abolish_all_scheduling_limits"):
@@ -14414,7 +14318,6 @@ def _assign_one_roll_trial_order_flow(
                 team_start,
                 team_end_limit,
             )
-            _bump_h8("start_ge_end_initial")
             return None
         team_breaks = []
         for m in team:
@@ -14461,7 +14364,6 @@ def _assign_one_roll_trial_order_flow(
                 "候補却下: 休憩帯内・終業直前(小残)で当日不可 team=%s",
                 ",".join(str(x) for x in team),
             )
-            _bump_h8("defer_blocked")
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
@@ -14471,7 +14373,6 @@ def _assign_one_roll_trial_order_flow(
                 team_start,
                 team_end_limit,
             )
-            _bump_h8("start_ge_end_after_defer")
             return None
 
         _, avail_mins, _ = calculate_end_time(
@@ -14486,7 +14387,6 @@ def _assign_one_roll_trial_order_flow(
                 avail_mins,
                 eff_time_per_unit,
             )
-            _bump_h8("avail_units_lt1")
             return None
         if _eod_reject_capacity_units_below_threshold(
             _trial_units_cap, team_start, team_end_limit
@@ -14498,7 +14398,6 @@ def _assign_one_roll_trial_order_flow(
                 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
                 team_start,
             )
-            _bump_h8("eod_threshold_reject")
             return None
         work_mins_needed = int(eff_time_per_unit)
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
@@ -14512,7 +14411,6 @@ def _assign_one_roll_trial_order_flow(
                 work_mins_needed,
                 team_start,
             )
-            _bump_h8("contiguous_short")
             return None
         actual_end_dt, _, _ = calculate_end_time(
             team_start, work_mins_needed, team_breaks, team_end_limit
@@ -14527,7 +14425,6 @@ def _assign_one_roll_trial_order_flow(
                 actual_end_dt,
                 eq_line,
             )
-            _bump_h8("interval_mirror_block")
             return None
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
@@ -14659,81 +14556,6 @@ def _assign_one_roll_trial_order_flow(
                 )
 
     if not team_candidates:
-        # #region agent log
-        _tid_h7 = str(task.get("task_id", "") or "").strip()
-        _day_h7 = str(current_date)
-        if (
-            (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
-            and (_tid_h7, _day_h7) not in _AGENT_DEBUG_H7_KEYS
-        ):
-            _AGENT_DEBUG_H7_KEYS.add((_tid_h7, _day_h7))
-            _floor_h7 = None
-            try:
-                if b2_insp_ec_floor is not None:
-                    _floor_h7 = b2_insp_ec_floor.isoformat(sep=" ")
-            except Exception:
-                _floor_h7 = str(b2_insp_ec_floor)
-            _h7_data: dict = {
-                "tid": _tid_h7,
-                "day": _day_h7,
-                "trial_order": task.get("dispatch_trial_order"),
-                "req_num": req_num,
-                "capable_ct": len(capable_members),
-                "max_team_size": max_team_size,
-                "b2_ec_floor": _floor_h7,
-                "rem": float(task.get("remaining_units") or 0),
-                "h8_rejects": dict(_h8_tally),
-            }
-            # start_ge_end_initial 時の壁時計・勤怠スナップショット（PII なし）
-            if _h8_tally.get("start_ge_end_initial", 0) > 0 and capable_members:
-                try:
-                    _op_cand = [
-                        m
-                        for m in capable_members
-                        if skill_role_priority(m)[0] == "OP"
-                    ] or list(capable_members)
-                    _ends_ok = [
-                        daily_status[m]["end_dt"]
-                        for m in _op_cand
-                        if m in daily_status
-                    ]
-                    _avs_ok = [
-                        avail_dt[m] for m in _op_cand if m in avail_dt
-                    ]
-                    if _ends_ok:
-                        _h7_data["min_op_end_iso"] = min(_ends_ok).isoformat(sep=" ")
-                    if _avs_ok:
-                        _h7_data["max_op_avail_iso"] = max(_avs_ok).isoformat(sep=" ")
-                except Exception:
-                    pass
-                try:
-                    if _mach_floor_eff is not None:
-                        _h7_data["mach_floor_eff_iso"] = _mach_floor_eff.isoformat(
-                            sep=" "
-                        )
-                except Exception:
-                    _h7_data["mach_floor_eff_iso"] = str(_mach_floor_eff)
-                try:
-                    _h7_data["day_floor_iso"] = day_floor.isoformat(sep=" ")
-                except Exception:
-                    _h7_data["day_floor_iso"] = str(day_floor)
-                _mkey_h7 = machine_occ_key or ""
-                _h7_data["machine_occ_key"] = _mkey_h7
-                _mad_h7 = machine_avail_dt.get(_mkey_h7)
-                try:
-                    if _mad_h7 is not None and hasattr(_mad_h7, "isoformat"):
-                        _h7_data["machine_avail_dt_iso"] = _mad_h7.isoformat(sep=" ")
-                except Exception:
-                    _h7_data["machine_avail_dt_iso"] = str(_mad_h7)
-            _agent_ndjson_log(
-                {
-                    "hypothesisId": "H7",
-                    "location": "_assign_one_roll_trial_order_flow",
-                    "message": "b2_follower_empty_team_candidates",
-                    "data": _h7_data,
-                }
-            )
-        # #endregion
         return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -15556,9 +15378,6 @@ def _generate_plan_impl():
             "設定シート「%s」A3 以降: トレース用依頼NOは無し（空またはシート無し）",
             APP_CONFIG_SHEET_NAME,
         )
-    # #region agent log
-    _AGENT_DEBUG_H7_KEYS.clear()
-    # #endregion
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
             "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
@@ -15930,16 +15749,6 @@ def _generate_plan_impl():
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
-                # #region agent log
-                _agent_ndjson_log(
-                    {
-                        "hypothesisId": "H3",
-                        "location": "stage2_main_day_loop",
-                        "message": "no_eligible_members_skip_day",
-                        "data": {"date": str(current_date)},
-                    }
-                )
-                # #endregion
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -16142,6 +15951,19 @@ def _generate_plan_impl():
                             )
                         except (TypeError, ValueError):
                             _my_dispatch_ord = 10**9
+                        if _task_blocked_by_global_dispatch_trial_order(
+                            task, task_queue, current_date
+                        ):
+                            if _trace_schedule_task_enabled(task.get("task_id")):
+                                _log_dispatch_trace_schedule(
+                                    task.get("task_id"),
+                                    "[配台トレース task=%s] スキップ: より小さい配台試行順に未完了あり "
+                                    "day=%s my_order=%s",
+                                    task.get("task_id"),
+                                    current_date,
+                                    _my_dispatch_ord,
+                                )
+                            continue
                         if _equipment_line_lower_dispatch_trial_still_pending(
                             task_queue, machine_occ_key, _my_dispatch_ord, current_date
                         ):
