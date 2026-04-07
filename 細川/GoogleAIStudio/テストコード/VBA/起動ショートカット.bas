@@ -1,4 +1,4 @@
-Private Sub メインシートA1を選択()
+Private Sub MoveToMainSheetA1()
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = GetMainWorksheet()
@@ -11,7 +11,7 @@ End Sub
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    メインシートA1を選択
+    MoveToMainSheetA1
     On Error GoTo 0
 End Sub
 
