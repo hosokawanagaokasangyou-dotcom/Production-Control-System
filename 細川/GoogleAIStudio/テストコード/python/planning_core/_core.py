@@ -845,6 +845,8 @@ RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
 # 結果_設備毎の時間割（および TEMP）: 加工前準備・依頼切替後始末の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
+# 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
+RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
 # 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに B〜E 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
@@ -1450,6 +1452,110 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
             s = str(val).strip().replace("\r", "").replace("\n", "")
             if any(m in s for m in markers):
                 cell.fill = fill
+
+
+def _parse_equipment_schedule_day_header_date(val) -> date | None:
+    """日付見出し行「■ YYYY/MM/DD … ■」から日付を取る。"""
+    if val is None:
+        return None
+    s = str(val).strip()
+    m = re.search(r"(\d{4})/(\d{1,2})/(\d{1,2})", s)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+def _machine_calendar_intervals_for_equipment_line(
+    day_blocks: dict[str, list[tuple[datetime, datetime]]],
+    eq_line: str,
+    day_d: date,
+) -> list[tuple[datetime, datetime]]:
+    """当日・当該設備列キーに対応する機械カレンダー占有区間（工場稼働枠でクリップ済み）。"""
+    if not day_blocks:
+        return []
+    ek = str(eq_line or "").strip()
+    blocks: list[tuple[datetime, datetime]] | None = None
+    if ek in day_blocks:
+        blocks = day_blocks[ek]
+    else:
+        pk = (
+            _normalize_equipment_match_key(ek.split("+", 1)[1])
+            if "+" in ek
+            else _normalize_equipment_match_key(ek)
+        )
+        if pk and pk in day_blocks:
+            blocks = day_blocks[pk]
+        else:
+            nk = _normalize_equipment_match_key(ek)
+            for k, iv in day_blocks.items():
+                if _normalize_equipment_match_key(str(k)) == nk:
+                    blocks = iv
+                    break
+    if not blocks:
+        return []
+    w0 = datetime.combine(day_d, DEFAULT_START_TIME)
+    w1 = datetime.combine(day_d, DEFAULT_END_TIME)
+    return _clip_machine_busy_blocks_to_planning_window(blocks, w0, w1)
+
+
+def _apply_equipment_schedule_machine_calendar_fill(
+    ws,
+    equipment_list: list,
+    calendar_blocks_by_date: dict[date, dict[str, list[tuple[datetime, datetime]]]],
+) -> None:
+    """
+    結果_設備毎の時間割: 機械カレンダー占有と重なる設備セル（進度列以外）を紫色で塗る。
+    10 分枠の半開区間 [slot_start, slot_end) と占有 [bs, be) が重なれば対象。
+    """
+    if not calendar_blocks_by_date or not equipment_list:
+        return
+    fill = PatternFill(
+        fill_type="solid",
+        start_color=RESULT_MACHINE_CALENDAR_BLOCK_FILL,
+        end_color=RESULT_MACHINE_CALENDAR_BLOCK_FILL,
+    )
+    col_tb = None
+    for i, c in enumerate(ws[1], start=1):
+        if c.value is not None and str(c.value).strip() == "日時帯":
+            col_tb = i
+            break
+    if col_tb is None:
+        return
+    eq_col_indices: list[int] = [
+        col_tb + 1 + 2 * idx for idx in range(len(equipment_list))
+    ]
+    mr = ws.max_row or 1
+    current_d: date | None = None
+    for r in range(2, mr + 1):
+        tb_cell = ws.cell(row=r, column=col_tb)
+        tv = tb_cell.value
+        d_hdr = _parse_equipment_schedule_day_header_date(tv)
+        if d_hdr is not None:
+            current_d = d_hdr
+            continue
+        t0, t1 = _parse_equipment_schedule_time_band_cell(tv)
+        if t0 is None or t1 is None or current_d is None:
+            continue
+        slot_a = datetime.combine(current_d, t0)
+        slot_b = datetime.combine(current_d, t1)
+        if slot_b <= slot_a:
+            continue
+        day_blocks = calendar_blocks_by_date.get(current_d)
+        if not day_blocks:
+            continue
+        for col_idx, eq_line in zip(eq_col_indices, equipment_list):
+            blocks_c = _machine_calendar_intervals_for_equipment_line(
+                day_blocks, eq_line, current_d
+            )
+            if not blocks_c:
+                continue
+            for bs, be in blocks_c:
+                if slot_a < be and bs < slot_b:
+                    ws.cell(row=r, column=col_idx).fill = fill
+                    break
 
 
 def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
@@ -17502,6 +17608,13 @@ def _generate_plan_impl():
                     _apply_equipment_schedule_prep_cleanup_fill(
                         writer.sheets[_prep_sheet]
                     )
+
+            if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
+                _apply_equipment_schedule_machine_calendar_fill(
+                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME],
+                    equipment_list,
+                    _MACHINE_CALENDAR_BLOCKS_BY_DATE,
+                )
 
             ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
             _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))
