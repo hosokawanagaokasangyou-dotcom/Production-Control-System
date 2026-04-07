@@ -114,42 +114,6 @@ _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
 
-# #region agent log
-_AGENT_MC_DEBUG_DATES = frozenset(
-    {date(2026, 4, 8), date(2026, 4, 9), date(2026, 4, 10)}
-)
-
-
-def _agent_debug_log_mc(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        _rp = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "..",
-                "..",
-                "..",
-                "..",
-                "debug-4704e8.log",
-            )
-        )
-        _payload = {
-            "sessionId": "4704e8",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_rp, "a", encoding="utf-8") as _af:
-            _af.write(json.dumps(_payload, ensure_ascii=False, default=str) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
 # master.xlsm: 依頼NO が変わる前後の工程×機械ごとの準備・後始末（分）／機械ごとの日次始業準備（分）
 SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
 SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
@@ -13128,31 +13092,6 @@ def load_machine_calendar_occupancy_blocks(
         for pk, iv in phys_accum.items():
             merged_all[pk] = _merge_machine_calendar_intervals(iv)
         out[d] = merged_all
-        # #region agent log
-        if d in _AGENT_MC_DEBUG_DATES:
-            _ks = {}
-            for _ek, _ivs in merged_all.items():
-                if not _ivs:
-                    continue
-                _mn = min(x[0] for x in _ivs)
-                _mx = max(x[1] for x in _ivs)
-                _ks[str(_ek)] = {"n_iv": len(_ivs), "span_start": str(_mn), "span_end": str(_mx)}
-            _agent_debug_log_mc(
-                "H1",
-                "planning_core/_core.py:load_machine_calendar_occupancy_blocks",
-                "merged_all summary",
-                {"day": str(d), "n_keys": len(merged_all), "keys": _ks},
-            )
-        # #endregion
-    if out.keys() & _AGENT_MC_DEBUG_DATES:
-        # #region agent log
-        _agent_debug_log_mc(
-            "H2",
-            "planning_core/_core.py:load_machine_calendar_occupancy_blocks",
-            "col_to_eq",
-            {"col_to_eq": {str(int(c)): v for c, v in sorted(col_to_eq.items())}},
-        )
-        # #endregion
     return out
 
 
@@ -13184,9 +13123,6 @@ def _apply_machine_calendar_floor_for_date(
     w1 = machine_calendar_plan_end
     if w1 is None:
         w1 = datetime.combine(current_date, DEFAULT_END_TIME)
-    # #region agent log
-    _mc_floor_bumps: list[dict] = []
-    # #endregion
     for eq_s in candidates:
         blocks = day_blocks.get(eq_s) or _machine_calendar_blocks_for_occ_key(
             day_blocks, eq_s
@@ -13200,32 +13136,6 @@ def _apply_machine_calendar_floor_for_date(
         t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks_c)
         if t1 > t0:
             machine_avail_dt[eq_s] = t1
-            # #region agent log
-            _mc_floor_bumps.append(
-                {
-                    "eq_s": eq_s,
-                    "t0": str(t0),
-                    "t1": str(t1),
-                    "n_blocks_c": len(blocks_c),
-                }
-            )
-            # #endregion
-    # #region agent log
-    if current_date in _AGENT_MC_DEBUG_DATES:
-        _agent_debug_log_mc(
-            "H3",
-            "planning_core/_core.py:_apply_machine_calendar_floor_for_date",
-            "floor bumps",
-            {
-                "day": str(current_date),
-                "n_candidates": len(candidates),
-                "w0": str(w0),
-                "w1": str(w1),
-                "n_bumps": len(_mc_floor_bumps),
-                "bumps": _mc_floor_bumps[:60],
-            },
-        )
-    # #endregion
 
 
 def _machine_calendar_blocks_for_occ_key(
@@ -15379,33 +15289,6 @@ def _trial_order_first_schedule_pass(
         assign_probe_ctx=_assign_probe_ctx,
     )
     if not eligible:
-        # #region agent log
-        if current_date in _AGENT_MC_DEBUG_DATES:
-            _agent_debug_log_mc(
-                "H6",
-                "planning_core/_core.py:_trial_order_first_schedule_pass",
-                "eligible empty",
-                {
-                    "day": str(current_date),
-                    "n_tasks_today": len(tasks_today),
-                    "min_pending_dto": _min_pending_dispatch_trial_order_for_date(
-                        task_queue,
-                        current_date,
-                        daily_status=daily_status,
-                        members=members,
-                        machine_avail_dt=machine_avail_dt,
-                        machine_day_start=_mc_w0,
-                        machine_handoff=_mh_init,
-                        skills_dict=skills_dict,
-                        abolish_all_scheduling_limits=bool(
-                            _gpo.get("abolish_all_scheduling_limits")
-                        ),
-                        dispatch_interval_mirror=dispatch_interval_mirror,
-                    ),
-                    "min_dto_effective": _min_dispatch_eff,
-                },
-            )
-        # #endregion
         return False
     eligible_sorted = sorted(
         eligible,
@@ -15714,100 +15597,6 @@ def _trial_order_first_schedule_pass(
         for task in phase1_tasks:
             if _drain_rolls_for_task(task):
                 pass_made = True
-    # #region agent log
-    if current_date in _AGENT_MC_DEBUG_DATES and not pass_made:
-        _h7_payload = {
-            "day": str(current_date),
-            "n_eligible": len(eligible_sorted),
-            "n_phase1": len(phase1_tasks),
-            "n_phase2": len(phase2_tasks),
-            "serial_by_tid": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
-            "global_order_strict": bool(STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT),
-            "min_dto_raw": _min_pending_dispatch_trial_order_for_date(
-                task_queue,
-                current_date,
-                daily_status=daily_status,
-                members=members,
-                machine_avail_dt=machine_avail_dt,
-                machine_day_start=_mc_w0,
-                machine_handoff=_mh_init,
-                skills_dict=skills_dict,
-                abolish_all_scheduling_limits=bool(
-                    _gpo.get("abolish_all_scheduling_limits")
-                ),
-                dispatch_interval_mirror=dispatch_interval_mirror,
-            ),
-            "min_dto_effective": _min_dispatch_eff,
-        }
-        if eligible_sorted:
-            _t0 = eligible_sorted[0]
-            _m = _t0.get("machine")
-            _eqx = (
-                str(_t0.get("equipment_line_key") or _m or "").strip() or str(_m or "")
-            )
-            _ocx = _machine_occupancy_key_resolve(_t0, _eqx)
-            _adx = machine_avail_dt.get(_ocx) if machine_avail_dt else None
-            _mn_dbg = str(_t0.get("machine_name", "") or "").strip()
-            _mp_dbg = str(_m or "").strip()
-            _mfe_dbg, _, _ab_dbg = _resolve_machine_changeover_floor_segments(
-                abolish_all_scheduling_limits=bool(
-                    _gpo.get("abolish_all_scheduling_limits")
-                ),
-                machine_occ_key=_ocx,
-                task_id=str(_t0.get("task_id") or "").strip(),
-                eq_line=_eqx,
-                machine_name=_mn_dbg,
-                machine_proc=_mp_dbg,
-                machine_avail_dt=machine_avail_dt,
-                machine_day_floor=_mc_w0,
-                current_date=current_date,
-                machine_handoff=_mh_init,
-                daily_status=daily_status,
-                skills_dict=skills_dict,
-                dispatch_interval_mirror=dispatch_interval_mirror,
-            )
-            _h7_payload["eligible0"] = {
-                "task_id": str(_t0.get("task_id") or ""),
-                "machine_name": str(_t0.get("machine_name") or "")[:80],
-                "equipment_line_key": str(_t0.get("equipment_line_key") or "")[:120],
-                "occ": _ocx,
-                "avail_get": str(_adx) if _adx is not None else None,
-                "mach_floor_eff": str(_mfe_dbg),
-                "co_abort": _ab_dbg,
-                "w1_plan_end": str(
-                    _machine_calendar_planning_window_end_dt(
-                        current_date, daily_status, members
-                    )
-                ),
-                "no_win_floor": _task_no_machining_window_left_from_avail_floor(
-                    _t0,
-                    current_date,
-                    daily_status,
-                    members,
-                    machine_avail_dt,
-                    _mc_w0,
-                    machine_handoff=_mh_init,
-                    skills_dict=skills_dict,
-                    abolish_all_scheduling_limits=bool(
-                        _gpo.get("abolish_all_scheduling_limits")
-                    ),
-                    dispatch_interval_mirror=dispatch_interval_mirror,
-                ),
-                "assign_probe_fails": (
-                    _trial_order_assign_probe_fails(
-                        _t0, current_date, daily_status, _assign_probe_ctx
-                    )
-                    if _assign_probe_ctx is not None
-                    else None
-                ),
-            }
-        _agent_debug_log_mc(
-            "H7",
-            "planning_core/_core.py:_trial_order_first_schedule_pass",
-            "pass made no progress",
-            _h7_payload,
-        )
-    # #endregion
     return pass_made
 
 
@@ -16646,22 +16435,6 @@ def _generate_plan_impl():
                     _machine_day_start,
                     machine_calendar_plan_end=_machine_calendar_plan_end,
                 )
-                # #region agent log
-                if current_date in _AGENT_MC_DEBUG_DATES:
-                    _mk = sorted(str(k) for k in machine_avail_dt.keys())
-                    _agent_debug_log_mc(
-                        "H4",
-                        "planning_core/_core.py:generate_plan day loop",
-                        "after seed+calendar floor",
-                        {
-                            "day": str(current_date),
-                            "n_machine_avail_keys": len(_mk),
-                            "machine_avail_keys_head": _mk[:80],
-                            "mc_plan_end": str(_machine_calendar_plan_end),
-                            "n_workers": len(avail_dt),
-                        },
-                    )
-                # #endregion
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
@@ -17845,31 +17618,6 @@ def _generate_plan_impl():
                                 )
     
                 if not _sched_made_progress:
-                    # #region agent log
-                    if (
-                        current_date in _AGENT_MC_DEBUG_DATES
-                        and STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST
-                    ):
-                        _p_tot = sum(
-                            1
-                            for t in task_queue
-                            if float(t.get("remaining_units") or 0) > 1e-12
-                        )
-                        _agent_debug_log_mc(
-                            "H8",
-                            "planning_core/_core.py:generate_plan day schedule",
-                            "inner loop break no progress",
-                            {
-                                "day": str(current_date),
-                                "sched_pass_index": _sched_pi,
-                                "n_tasks_today": len(tasks_today),
-                                "pending_queue": _p_tot,
-                                "serial_by_tid": bool(
-                                    STAGE2_SERIAL_DISPATCH_BY_TASK_ID
-                                ),
-                            },
-                        )
-                    # #endregion
                     break
 
             if TRACE_SCHEDULE_TASK_IDS:
