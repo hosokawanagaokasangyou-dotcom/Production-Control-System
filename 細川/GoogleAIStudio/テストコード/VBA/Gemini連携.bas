@@ -1,0 +1,1735 @@
+﻿Private Function GeminiJsonStringEscape(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, "\", "\\")
+    t = Replace(t, """", "\""")
+    t = Replace(t, vbCr, "\r")
+    t = Replace(t, vbLf, "\n")
+    t = Replace(t, vbTab, "\t")
+    GeminiJsonStringEscape = t
+End Function
+
+Private Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
+    Dim stm As Object
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.charset = "UTF-8"
+    stm.Open
+    stm.WriteText textContent
+    stm.SaveToFile filePath, 2
+    stm.Close
+    Set stm = Nothing
+End Sub
+
+' ログ表示用（暗号化失敗時の stderr など）
+Private Function GeminiReadUtf8File(ByVal filePath As String) As String
+    Dim stm As Object
+    GeminiReadUtf8File = ""
+    If Len(Dir(filePath)) = 0 Then Exit Function
+    On Error GoTo CleanFail
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.charset = "UTF-8"
+    stm.Open
+    stm.LoadFromFile filePath
+    GeminiReadUtf8File = stm.ReadText
+    stm.Close
+    Set stm = Nothing
+    Exit Function
+CleanFail:
+    On Error Resume Next
+    If Not stm Is Nothing Then stm.Close
+    Set stm = Nothing
+End Function
+
+' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
+Private Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
+    Dim tmp As String
+    GeminiReadUtf8FileViaTempCopy = ""
+    If Len(Dir(filePath)) = 0 Then Exit Function
+    Randomize
+    tmp = Environ("TEMP") & "\pm_ai_sp_" & Replace(Replace(Replace(CStr(Now), "/", ""), ":", ""), " ", "_") & "_" & CStr(Int(100000 * Rnd)) & ".txt"
+    On Error Resume Next
+    FileCopy filePath, tmp
+    If Err.Number <> 0 Then
+        Err.Clear
+        Exit Function
+    End If
+    GeminiReadUtf8FileViaTempCopy = GeminiReadUtf8File(tmp)
+    On Error Resume Next
+    Kill tmp
+End Function
+
+Public Sub 設定_Gemini認証を暗号化してB1に保存()
+    Dim apiKey As String
+    Dim pass1 As String
+    Dim pass2 As String
+    Dim wbPath As String
+    Dim outPath As String
+    Dim plainPath As String
+    Dim passPath As String
+    Dim errPath As String
+    Dim jsonBody As String
+    Dim wsh As Object
+    Dim gemBat As String
+    Dim exitCode As Long
+    Dim wsSet As Worksheet
+    Dim errLog As String
+    Dim pyScript As String
+    
+    On Error GoTo EH
+    
+    Set wsSet = Nothing
+    On Error Resume Next
+    Set wsSet = ThisWorkbook.Worksheets(SHEET_SETTINGS)
+    On Error GoTo EH
+    If wsSet Is Nothing Then
+        MsgBox "シート「" & SHEET_SETTINGS & "」がありません。先に作成してください。", vbExclamation
+        Exit Sub
+    End If
+    
+    wbPath = ThisWorkbook.path
+    If Len(wbPath) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください（保存フォルダに暗号化 JSON を出力します）。", vbExclamation
+        Exit Sub
+    End If
+    
+    pyScript = wbPath & "\python\encrypt_gemini_credentials.py"
+    If Len(Dir(pyScript)) = 0 Then
+        MsgBox "次のファイルが見つかりません。" & vbCrLf & pyScript & vbCrLf & vbCrLf & _
+               "テストコード直下に python\ フォルダがあり、上記スクリプトがあるか確認してください。", vbCritical
+        Exit Sub
+    End If
+    
+    apiKey = InputBox( _
+        "Gemini API キー（AIza...）を貼り付けてください。" & vbCrLf & _
+        "キャンセルで中断します。", _
+        "Gemini 認証の暗号化 (1/3)")
+    If Len(Trim$(apiKey)) = 0 Then Exit Sub
+    
+    pass1 = InputBox( _
+        "暗号化に使うパスフレーズを入力してください。" & vbCrLf & _
+        "社内で案内されている値を使用し、次の画面でもう一度同じものを入力します。", _
+        "Gemini 認証の暗号化 (2/3)")
+    If Len(pass1) = 0 Then
+        MsgBox "パスフレーズが空のため中断しました。", vbInformation
+        Exit Sub
+    End If
+    
+    pass2 = InputBox( _
+        "パスフレーズをもう一度入力してください（確認用）。", _
+        "Gemini 認証の暗号化 (3/3)")
+    If StrComp(pass1, pass2, vbBinaryCompare) <> 0 Then
+        MsgBox "2回のパスフレーズが一致しません。やり直してください。", vbExclamation
+        Exit Sub
+    End If
+    
+    Randomize
+    plainPath = Environ("TEMP") & "\gemini_plain_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd)) & ".json"
+    passPath = Environ("TEMP") & "\gemini_pass_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd)) & ".txt"
+    errPath = Environ("TEMP") & "\gemini_encrypt_stderr.txt"
+    outPath = wbPath & "\gemini_credentials.encrypted.json"
+    
+    If Len(Dir(outPath)) > 0 Then
+        If MsgBox("既に次のファイルがあります。上書きしますか？" & vbCrLf & outPath, vbYesNo Or vbExclamation, "確認") <> vbYes Then
+            Exit Sub
+        End If
+    End If
+    
+    jsonBody = "{" & """gemini_api_key"": """ & GeminiJsonStringEscape(Trim$(apiKey)) & """}"
+    Call GeminiWriteUtf8File(plainPath, jsonBody)
+    Call GeminiWriteUtf8File(passPath, pass1)
+    
+    On Error Resume Next
+    Kill errPath
+    On Error GoTo EH
+    
+    MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
+    Set wsh = CreateObject("WScript.Shell")
+    gemBat = "@echo off" & vbCrLf & "pushd """ & wbPath & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -3 -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, gemBat)
+    
+    On Error Resume Next
+    Kill plainPath
+    Kill passPath
+    On Error GoTo EH
+    
+    If Len(Dir(outPath)) = 0 Then
+        errLog = Trim$(GeminiReadUtf8File(errPath))
+        If Len(errLog) > 2500 Then errLog = Left$(errLog, 2500) & vbCrLf & "…（省略）"
+        If Len(errLog) = 0 Then errLog = "（標準エラーに出力なし。py -3 が PATH に無い、または別のエラーの可能性があります）"
+        MsgBox "暗号化ファイルができませんでした。（終了コード " & CStr(exitCode) & "）" & vbCrLf & vbCrLf & _
+               "【Python のメッセージ】" & vbCrLf & errLog & vbCrLf & vbCrLf & _
+               "よくある対処: py -3 -m pip install cryptography" & vbCrLf & _
+               "または: py -3 -m pip install -r python\requirements.txt", vbCritical
+        Exit Sub
+    End If
+    
+    wsSet.Range("B1").Value = outPath
+    wsSet.Range("B2").ClearContents
+    
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+    
+    MacroSplash_SetStep "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
+    m_animMacroSucceeded = True
+    Exit Sub
+EH:
+    MsgBox "エラー: " & Err.Description, vbCritical
+End Sub
+
+' メインシートのリンク・出退勤のみ再反映したいとき（手動実行可）
+Sub メインシート_メンバー一覧と出勤表示_手動()
+    メインシート_メンバー一覧と出勤表示 False
+End Sub
+
+' 同じフォルダの master.xlsm を開く（既に開いていればアクティブ化）
+Public Sub メインシート_masterブックを開く()
+    Dim path As String
+    Dim folder As String
+    Dim wb As Workbook
+    Dim wbMaster As Workbook
+    
+    folder = ThisWorkbook.path
+    If Len(folder) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください。", vbExclamation
+        Exit Sub
+    End If
+    path = folder & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(path)) = 0 Then
+        MsgBox "次のファイルが見つかりません。" & vbCrLf & path, vbExclamation
+        Exit Sub
+    End If
+    
+    For Each wb In Application.Workbooks
+        If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
+            wb.Activate
+            MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
+            m_animMacroSucceeded = True
+            Exit Sub
+        End If
+    Next wb
+    
+    On Error GoTo OpenFail
+    MacroSplash_SetStep "master.xlsm を開いています…"
+    Set wbMaster = Application.Workbooks.Open(Filename:=path)
+    wbMaster.Activate
+    MacroSplash_SetStep "master.xlsm を開きました。"
+    m_animMacroSucceeded = True
+    Exit Sub
+OpenFail:
+    MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
+End Sub
+
+Sub アニメ付き_メインシート_masterブックを開く()
+    Call AnimateButtonPush
+    メインシート_masterブックを開く
+End Sub
+
+' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
+Public Sub メインシート_master開くボタンを配置()
+    Dim ws As Worksheet
+    
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then
+        MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
+        Exit Sub
+    End If
+    ws.Activate
+    CreateCoolButtonWithPreset "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
+    MsgBox "メインシートにボタンを配置しました。位置はドラッグで調整できます。", vbInformation
+End Sub
+
+
+' =========================================================
+' メインシート A列上段：結果_* シートへのリンク
+' B7～：個人シートへのリンク ＋ 前日から12日間の出退勤
+' （結果_カレンダー(出勤簿) から取得。シート名は「メイン」「Main」または名前に「メイン」を含むもの）
+' ★段階2(planning_core): 任意で見出しセルに「グローバルコメント」と書き、その直下のセルに「再優先特別記載」を入力可能。
+'   同文言は Gemini で解釈され、指示に応じてスキル無視・必要人数1名化などが通常ルールより最優先で適用される。
+' ・勤怠セル: master.xlsm メイン A15/B15 の定常開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
+' =========================================================
+
+' master メイン A12/B12 のセル値を時刻として解釈（時分）。解釈不能は False。
+' ※時刻のみのセルは Double になり IsDate が False になり得るため、数値型を明示処理する。
+Private Function マスタメイン_セルを時刻Dateへ(ByVal v As Variant, ByRef outT As Date) As Boolean
+    On Error GoTo Fail
+    If IsEmpty(v) Or VarType(v) = vbError Then GoTo Fail
+    
+    Select Case VarType(v)
+    Case vbDate
+        outT = CDate(v)
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case vbDouble, vbSingle, vbCurrency, vbLong, vbInteger
+        outT = CDate(CDbl(v))
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case vbString
+        If Len(Trim$(v)) = 0 Then GoTo Fail
+        outT = CDate(Trim$(v))
+        マスタメイン_セルを時刻Dateへ = True
+        Exit Function
+    Case Else
+        If IsDate(v) Then
+            outT = CDate(v)
+            マスタメイン_セルを時刻Dateへ = True
+            Exit Function
+        End If
+    End Select
+Fail:
+    マスタメイン_セルを時刻Dateへ = False
+End Function
+
+' planning_core.RESULT_OUTSIDE_REGULAR_TIME_FILL（FCE4D6）相当＝定常外
+' 工場稼働枠外（メイン A12/B12 の半開区間と重ならない帯）は薄い青で区別
+
+Private Function 時刻を分に(ByVal t As Date) As Long
+    時刻を分に = CLng(Hour(t)) * 60& + CLng(Minute(t))
+End Function
+
+' 半開区間 [a0,a1) と [b0,b1) が重なるか（分単位・同一日内想定）
+Private Function 半開区間が重なる分(ByVal a0 As Long, ByVal a1 As Long, ByVal b0 As Long, ByVal b1 As Long) As Boolean
+    半開区間が重なる分 = (a0 < b1) And (a1 > b0)
+End Function
+
+' 結果_設備毎の時間割「日時帯」セル（HH:MM-HH:MM 等）を解釈。■ を含む行は False
+Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, ByRef t1 As Date) As Boolean
+    Dim s As String
+    Dim sep As String
+    Dim parts() As String
+    Dim leftS As String
+    Dim rightS As String
+    
+    If IsEmpty(v) Or VarType(v) = vbError Then Exit Function
+    s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+    If Len(s) = 0 Then Exit Function
+    If InStr(s, "■") > 0 Then Exit Function
+    
+    sep = vbNullString
+    If InStr(s, "-") > 0 Then sep = "-"
+    If InStr(s, "－") > 0 Then sep = "－"
+    If Len(sep) = 0 And InStr(s, "~") > 0 Then sep = "~"
+    If Len(sep) = 0 And InStr(s, "?") > 0 Then sep = "?"
+    If Len(sep) = 0 Then Exit Function
+    
+    parts = Split(s, sep, 2)
+    If UBound(parts) < 1 Then Exit Function
+    leftS = Trim$(Replace(parts(0), "：", ":"))
+    rightS = Trim$(Replace(parts(1), "：", ":"))
+    
+    If Not マスタメイン_セルを時刻Dateへ(leftS, t0) Then Exit Function
+    If Not マスタメイン_セルを時刻Dateへ(rightS, t1) Then Exit Function
+    If 時刻を分に(t0) >= 時刻を分に(t1) Then Exit Function
+    日時帯文字列を時刻範囲に = True
+End Function
+
+' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の MasterGetMainWorksheet と同趣旨）
+Private Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim best As Worksheet
+    Dim bestLen As Long
+    Dim L As Long
+    If wb Is Nothing Then Exit Function
+    On Error Resume Next
+    Set ws = wb.Worksheets("メイン")
+    If ws Is Nothing Then Set ws = wb.Worksheets("メイン_")
+    If ws Is Nothing Then Set ws = wb.Worksheets("Main")
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        Set マスタブック_メイン設定シートを取得 = ws
+        Exit Function
+    End If
+    Set best = Nothing
+    bestLen = 10000
+    For Each sh In wb.Worksheets
+        If InStr(sh.Name, "メイン") > 0 Then
+            If InStr(sh.Name, "カレンダー") > 0 Then GoTo NextMastMainPick
+            L = Len(sh.Name)
+            If L < bestLen Then
+                bestLen = L
+                Set best = sh
+            End If
+        End If
+NextMastMainPick:
+    Next sh
+    Set マスタブック_メイン設定シートを取得 = best
+End Function
+
+' master メイン A12/B15 等: 結合セルでも左上の実値を取得
+Private Function マスタメイン_結合左上の値(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
+    Dim rng As Range
+    On Error GoTo FailMMTL
+    Set rng = ws.Range(cellAddr)
+    マスタメイン_結合左上の値 = rng.MergeArea.Cells(1, 1).Value
+    Exit Function
+FailMMTL:
+    マスタメイン_結合左上の値 = Empty
+End Function
+
+' master.xlsm メイン A12/B12（工場稼働）・A15/B15（定常）を読む。欠損・不正・開始>=終了は *Ok=False
+Private Sub マスタメイン_工場稼働と定常を取得( _
+    ByRef facOk As Boolean, ByRef facS As Date, ByRef facE As Date, _
+    ByRef regOk As Boolean, ByRef regS As Date, ByRef regE As Date)
+    
+    Dim folder As String
+    Dim p As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim openedHere As Boolean
+    Dim v As Variant
+    Dim tS As Date
+    Dim tE As Date
+    
+    facOk = False
+    regOk = False
+    folder = ThisWorkbook.path
+    If Len(folder) = 0 Then Exit Sub
+    p = folder & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(p)) = 0 Then Exit Sub
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo 0
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=p, ReadOnly:=True, UpdateLinks:=0)
+        openedHere = Not (wb Is Nothing)
+        On Error GoTo 0
+    End If
+    If wb Is Nothing Then Exit Sub
+    
+    Set ws = マスタブック_メイン設定シートを取得(wb)
+    If ws Is Nothing Then GoTo CloseMasterWb
+    
+    v = マスタメイン_結合左上の値(ws, "A12")
+    If マスタメイン_セルを時刻Dateへ(v, tS) Then
+        v = マスタメイン_結合左上の値(ws, "B12")
+        If マスタメイン_セルを時刻Dateへ(v, tE) Then
+            If TimeValue(tS) < TimeValue(tE) Then
+                facOk = True
+                facS = tS
+                facE = tE
+            End If
+        End If
+    End If
+    
+    v = マスタメイン_結合左上の値(ws, "A15")
+    If マスタメイン_セルを時刻Dateへ(v, tS) Then
+        v = マスタメイン_結合左上の値(ws, "B15")
+        If マスタメイン_セルを時刻Dateへ(v, tE) Then
+            If TimeValue(tS) < TimeValue(tE) Then
+                regOk = True
+                regS = tS
+                regE = tE
+            End If
+        End If
+    End If
+
+CloseMasterWb:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+End Sub
+
+Private Sub 結果_設備毎の時間割_マスタ時刻反映( _
+    ByVal ws As Worksheet, _
+    ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
+    ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
+    
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim r As Long
+    Dim t0 As Date
+    Dim t1 As Date
+    Dim b0 As Long
+    Dim b1 As Long
+    Dim r0 As Long
+    Dim r1 As Long
+    Dim f0 As Long
+    Dim f1 As Long
+    
+    On Error GoTo CleanExit
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    If regOk Then
+        r0 = 時刻を分に(regS)
+        r1 = 時刻を分に(regE)
+    End If
+    If facOk Then
+        f0 = 時刻を分に(facS)
+        f1 = 時刻を分に(facE)
+    End If
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit
+    
+    For r = 2 To lastR
+        If 日時帯文字列を時刻範囲に(ws.Cells(r, colTB).Value, t0, t1) Then
+            b0 = 時刻を分に(t0)
+            b1 = 時刻を分に(t1)
+            With ws.Cells(r, colTB)
+                If facOk And Not 半開区間が重なる分(b0, b1, f0, f1) Then
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(221, 235, 247)
+                ElseIf regOk And Not 半開区間が重なる分(b0, b1, r0, r1) Then
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(252, 228, 214)
+                Else
+                    .Interior.Pattern = xlNone
+                End If
+            End With
+        End If
+    Next r
+CleanExit:
+    On Error GoTo 0
+End Sub
+
+' planning_core.RESULT_DISPATCHED_REQUEST_FILL（C6EFCE）相当＝機械名列の依頼NO
+Private Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim lastC As Long
+    Dim r As Long
+    Dim c As Long
+    Dim v As Variant
+    Dim s As String
+    
+    On Error GoTo CleanExit2
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit2
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If lastC <= colTB Then GoTo CleanExit2
+    
+    For r = 2 To lastR
+        For c = colTB + 1 To lastC
+            v = ws.Cells(r, c).Value
+            If IsEmpty(v) Or VarType(v) = vbError Then GoTo NextC2
+            s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+            If Len(s) = 0 Then GoTo NextC2
+            If StrComp(s, "（休憩）", vbBinaryCompare) = 0 Then GoTo NextC2
+            With ws.Cells(r, c)
+                .Interior.Pattern = xlSolid
+                .Interior.Color = RGB(198, 239, 206)
+            End With
+NextC2:
+        Next c
+    Next r
+CleanExit2:
+    On Error GoTo 0
+End Sub
+
+' 結果_設備毎の時間割（および TEMP）: 設備セルに「(日次始業準備)」「(加工前準備)」「(依頼切替後始末)」が含まれるとき薄緑（進度列は除外）
+Private Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
+    Dim colTB As Long
+    Dim lastR As Long
+    Dim lastC As Long
+    Dim r As Long
+    Dim c As Long
+    Dim v As Variant
+    Dim s As String
+    Dim hdr As String
+    
+    On Error GoTo CleanExit3
+    If ws Is Nothing Then Exit Sub
+    colTB = FindColHeader(ws, "日時帯")
+    If colTB = 0 Then Exit Sub
+    
+    lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
+    If lastR < 2 Then GoTo CleanExit3
+    lastC = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If lastC <= colTB Then GoTo CleanExit3
+    
+    For r = 2 To lastR
+        For c = colTB + 1 To lastC
+            hdr = Trim$(CStr(ws.Cells(1, c).Value))
+            If Len(hdr) >= 2 Then
+                If Right$(hdr, 2) = "進度" Then GoTo NextC3
+            End If
+            v = ws.Cells(r, c).Value
+            If IsEmpty(v) Or VarType(v) = vbError Then GoTo NextC3
+            s = Trim$(Replace(Replace(CStr(v), vbCr, ""), vbLf, ""))
+            If Len(s) = 0 Then GoTo NextC3
+            If InStr(1, s, "(日次始業準備)", vbTextCompare) > 0 _
+                Or InStr(1, s, "(加工前準備)", vbTextCompare) > 0 _
+                Or InStr(1, s, "(依頼切替後始末)", vbTextCompare) > 0 Then
+                With ws.Cells(r, c)
+                    .Interior.Pattern = xlSolid
+                    .Interior.Color = RGB(198, 239, 206)
+                End With
+            End If
+NextC3:
+        Next c
+    Next r
+CleanExit3:
+    On Error GoTo 0
+End Sub
+
+Private Sub 結果_設備ガント_マスタ時刻反映( _
+    ByVal ws As Worksheet, _
+    ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
+    ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
+    
+    Dim lastR As Long
+    Dim r As Long
+    Dim c As Long
+    Dim lastC As Long
+    Dim slotStart As Date
+    Dim slotEnd As Date
+    Dim s0 As Long
+    Dim s1 As Long
+    Dim r0 As Long
+    Dim r1 As Long
+    Dim f0 As Long
+    Dim f1 As Long
+    Dim v As Variant
+    Dim ur As Range
+    
+    On Error GoTo CleanExit
+    If ws Is Nothing Then Exit Sub
+    
+    If regOk Then
+        r0 = 時刻を分に(regS)
+        r1 = 時刻を分に(regE)
+    End If
+    If facOk Then
+        f0 = 時刻を分に(facS)
+        f1 = 時刻を分に(facE)
+    End If
+    
+    Set ur = ws.UsedRange
+    If ur Is Nothing Then GoTo CleanExit
+    lastR = ur.Row + ur.Rows.Count - 1
+    
+    For r = 1 To lastR
+        If Trim$(CStr(ws.Cells(r, 2).Value)) = "機械名" _
+            And Trim$(CStr(ws.Cells(r, 3).Value)) = "工程名" _
+            And Trim$(CStr(ws.Cells(r, 4).Value)) = "担当者" _
+            And Trim$(CStr(ws.Cells(r, 5).Value)) = "タスク概要" Then
+            
+            lastC = ws.Cells(r, ws.Columns.Count).End(xlToLeft).Column
+            For c = 6 To lastC
+                v = ws.Cells(r, c).Value
+                If Not IsEmpty(v) And VarType(v) <> vbError Then
+                    If マスタメイン_セルを時刻Dateへ(v, slotStart) Then
+                        slotEnd = slotStart + TimeSerial(0, 15, 0)
+                        s0 = 時刻を分に(slotStart)
+                        s1 = 時刻を分に(slotEnd)
+                        With ws.Cells(r, c)
+                            If facOk And Not 半開区間が重なる分(s0, s1, f0, f1) Then
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(221, 235, 247)
+                            ElseIf regOk And Not 半開区間が重なる分(s0, s1, r0, r1) Then
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(252, 228, 214)
+                            Else
+                                .Interior.Pattern = xlSolid
+                                .Interior.Color = RGB(217, 217, 217)
+                            End If
+                        End With
+                    End If
+                End If
+            Next c
+        End If
+    Next r
+CleanExit:
+    On Error GoTo 0
+End Sub
+
+' 段階2: production_plan 取り込み直後に呼ぶ（当該マクロ内は終了時まで保護しない）
+Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Workbook)
+    Dim facOk As Boolean
+    Dim regOk As Boolean
+    Dim facS As Date
+    Dim facE As Date
+    Dim regS As Date
+    Dim regE As Date
+    Dim ws As Worksheet
+    
+    If wb Is Nothing Then Exit Sub
+    マスタメイン_工場稼働と定常を取得 facOk, facS, facE, regOk, regS, regE
+    
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_SCHEDULE)
+    If Not ws Is Nothing Then
+        結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+        結果_設備時間割_準備後始末セルを薄緑 ws
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets("TEMP_設備毎の時間割")
+    If Not ws Is Nothing Then
+        結果_設備時間割_準備後始末セルを薄緑 ws
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_BY_MACHINE)
+    If Not ws Is Nothing Then
+        結果_設備毎の時間割_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+        結果_機械名毎時間割_依頼NOセルを薄緑 ws
+    End If
+    Set ws = Nothing
+    Set ws = wb.Worksheets("結果_設備ガント")
+    If Not ws Is Nothing Then
+        結果_設備ガント_マスタ時刻反映 ws, regOk, regS, regE, facOk, facS, facE
+    End If
+    On Error GoTo 0
+End Sub
+
+' 手動: master を変更したあと結果シートだけ着色を合わせ直す（再取り込み不要）
+Public Sub 結果シート_マスタ工場稼働と定常を再適用()
+    取込後_結果シートへマスタ時刻を反映 ThisWorkbook
+End Sub
+
+' master.xlsm メイン A15/B15（定常）を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
+Private Function マスタメイン_工場標準勤怠表示文字列() As String
+    Const FB As String = "08:45 / 17:00"
+    Dim folder As String
+    Dim p As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim openedHere As Boolean
+    Dim vS As Variant, vE As Variant
+    Dim tS As Date, tE As Date
+    
+    マスタメイン_工場標準勤怠表示文字列 = FB
+    On Error GoTo CleanExit
+    
+    folder = ThisWorkbook.path
+    If Len(folder) = 0 Then Exit Function
+    p = folder & "\" & MASTER_WORKBOOK_FILE
+    If Len(Dir(p)) = 0 Then Exit Function
+    
+    openedHere = False
+    Set wb = Nothing
+    On Error Resume Next
+    Set wb = Workbooks(MASTER_WORKBOOK_FILE)
+    On Error GoTo CleanExit
+    If wb Is Nothing Then
+        On Error Resume Next
+        Set wb = Workbooks.Open(Filename:=p, ReadOnly:=True, UpdateLinks:=0)
+        On Error GoTo CleanExit
+        openedHere = Not (wb Is Nothing)
+    End If
+    If wb Is Nothing Then Exit Function
+    
+    Set ws = マスタブック_メイン設定シートを取得(wb)
+    If ws Is Nothing Then GoTo CloseWb
+    
+    vS = マスタメイン_結合左上の値(ws, "A15")
+    vE = マスタメイン_結合左上の値(ws, "B15")
+    If Not マスタメイン_セルを時刻Dateへ(vS, tS) Then GoTo CloseWb
+    If Not マスタメイン_セルを時刻Dateへ(vE, tE) Then GoTo CloseWb
+    If TimeValue(tS) >= TimeValue(tE) Then GoTo CloseWb
+    
+    マスタメイン_工場標準勤怠表示文字列 = Format$(tS, "hh:nn") & " / " & Format$(tE, "hh:nn")
+
+CloseWb:
+    If openedHere Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Exit Function
+CleanExit:
+    On Error Resume Next
+    If openedHere And Not wb Is Nothing Then wb.Close SaveChanges:=False
+    On Error GoTo 0
+End Function
+
+Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled As String) As String
+    Dim parts() As String
+    Dim a As String, b As String
+    parts = Split(labeled, " / ")
+    If UBound(parts) <> 1 Then
+        メインシート_勤怠表示先頭ゼロ無し = labeled
+        Exit Function
+    End If
+    a = Trim$(parts(0))
+    b = Trim$(parts(1))
+    If Len(a) >= 4 And Left$(a, 1) = "0" Then a = Mid$(a, 2)
+    If Len(b) >= 4 And Left$(b, 1) = "0" Then b = Mid$(b, 2)
+    メインシート_勤怠表示先頭ゼロ無し = a & " / " & b
+End Function
+
+' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A15/B15 の定常枠と一致するか
+Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String, Optional ByVal stdDispCached As String) As Boolean
+    Dim t As String
+    Dim exp As String
+    t = Trim$(Replace(Replace(txt, vbCr, ""), vbLf, ""))
+    t = Replace(t, "：", ":")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    If Len(stdDispCached) > 0 Then
+        exp = stdDispCached
+    Else
+        exp = マスタメイン_工場標準勤怠表示文字列()
+    End If
+    If StrComp(t, exp, vbTextCompare) = 0 Then
+        メインシート_勤怠表示が通常勤務か = True
+    ElseIf StrComp(t, メインシート_勤怠表示先頭ゼロ無し(exp), vbTextCompare) = 0 Then
+        メインシート_勤怠表示が通常勤務か = True
+    Else
+        メインシート_勤怠表示が通常勤務か = False
+    End If
+End Function
+
+Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayVal As String, ByVal stdDispCached As String)
+    Dim s As String
+    s = Trim$(CStr(displayVal))
+    On Error Resume Next
+    If s = "" Or s = "-" Then
+        c.Interior.Pattern = xlSolid
+        c.Interior.Color = RGB(242, 242, 242)
+    ElseIf メインシート_勤怠表示が通常勤務か(s, stdDispCached) Then
+        c.Interior.Pattern = xlNone
+    Else
+        c.Interior.Pattern = xlSolid
+        c.Interior.Color = RGB(255, 242, 204)
+    End If
+    On Error GoTo 0
+End Sub
+
+' メイン B7～（メンバー列＋日付12列 C～N）に表全体の細枠罫線を付与。ClearContents 後も B 列だけ線が無い状態を防ぐ。
+Private Sub メインシート_メンバー勤怠ブロックに罫線を設定(ByVal wsMain As Worksheet, ByVal lastMemberRow As Long)
+    Dim rng As Range
+    Const lastCol As Long = 14   ' N列（B=メンバー、C～N=12日分）
+    If wsMain Is Nothing Then Exit Sub
+    If lastMemberRow < 7 Then Exit Sub
+    On Error Resume Next
+    Set rng = wsMain.Range(wsMain.Cells(7, 2), wsMain.Cells(lastMemberRow, lastCol))
+    With rng
+        .Borders(xlDiagonalDown).LineStyle = xlNone
+        .Borders(xlDiagonalUp).LineStyle = xlNone
+        With .Borders(xlEdgeLeft)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlEdgeRight)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlInsideVertical)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+        With .Borders(xlInsideHorizontal)
+            .LineStyle = xlContinuous
+            .ColorIndex = xlAutomatic
+            .Weight = xlThin
+        End With
+    End With
+    On Error GoTo 0
+End Sub
+
+Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean = False)
+    Dim wb As Workbook
+    Dim wsMain As Worksheet
+    Dim wsCal As Worksheet
+    Dim ws As Worksheet
+    Dim dict As Object
+    Dim members As Object
+    Dim keys As Variant
+    Dim keysArr() As String
+    Dim i As Long, j As Long, r As Long, col As Long
+    Dim lastR As Long
+    Dim mn As String
+    Dim sheetName As String
+    Dim d As Date
+    Dim k As String
+    Dim colDate As Long, colMem As Long, colIn As Long, colOut As Long
+    Dim wkStr As String
+    Dim temp As String
+    Dim cnt As Long
+    Dim srcHdr As Range, srcMem As Range
+    Dim bHdrFn As String, bHdrFs As Double, bHdrFc As Variant
+    Dim bHdrBold As Boolean, bHdrIt As Boolean, bHdrUl As Long
+    Dim bMemFn As String, bMemFs As Double, bMemFc As Variant
+    Dim bMemBold As Boolean, bMemIt As Boolean, bMemUl As Long
+    Dim lastMemberRow As Long
+    Dim stdDispCached As String
+    
+    lastMemberRow = 0
+    On Error GoTo EH
+    
+    Set wb = ThisWorkbook
+    Set wsMain = GetMainWorksheet()
+    If wsMain Is Nothing Then
+        If Not Silent Then MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
+        Exit Sub
+    End If
+    
+    Application.ScreenUpdating = False
+    
+    ' クリア前に B 列・見出しの見本フォントを記憶（無ければ日付列 C から）
+    Set srcHdr = wsMain.Cells(7, 2)
+    If Len(Trim$(CStr(srcHdr.Value))) = 0 Then Set srcHdr = wsMain.Cells(7, 3)
+    メインシート_フォント属性を取得 srcHdr, bHdrFn, bHdrFs, bHdrFc, bHdrBold, bHdrIt, bHdrUl
+    Set srcMem = wsMain.Cells(8, 2)
+    If Len(Trim$(CStr(srcMem.Value))) = 0 Then Set srcMem = wsMain.Cells(8, 3)
+    If Len(Trim$(CStr(srcMem.Value))) = 0 Then Set srcMem = wsMain.Cells(7, 3)
+    メインシート_フォント属性を取得 srcMem, bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+    
+    ' Clear だとフォント等の書式まで消える → ClearContents のみ。B列の個人リンクは削除してから再付与
+    メインシート_指定範囲のハイパーリンクを削除 wsMain, wsMain.Range("B7:B500")
+    wsMain.Range("B7:N500").ClearContents
+    On Error Resume Next
+    wsMain.Range("C7:N500").Interior.Pattern = xlNone
+    On Error GoTo EH
+    
+    ' 見出し行（前日から12日間）
+    wsMain.Cells(7, 2).Value = "メンバー"
+    メインシート_フォント属性を適用 wsMain.Cells(7, 2), bHdrFn, bHdrFs, bHdrFc, bHdrBold, bHdrIt, bHdrUl
+    For i = 0 To 11
+        d = DateAdd("d", i - 1, Date)
+        wkStr = Split("月,火,水,木,金,土,日", ",")(Weekday(d, vbMonday) - 1)
+        wsMain.Cells(7, 3 + i).Value = Format$(d, "m/d") & "(" & wkStr & ")"
+        wsMain.Cells(7, 3 + i).HorizontalAlignment = xlCenter
+    Next i
+    
+    ' 個人_* シートからメンバー名一覧（重複なし）
+    Set members = CreateObject("Scripting.Dictionary")
+    For Each ws In wb.Worksheets
+        If Left$(ws.Name, 3) = "個人_" Then
+            mn = Mid$(ws.Name, 4)
+            If Len(mn) > 0 And Not members.Exists(mn) Then members.Add mn, mn
+        End If
+    Next ws
+    
+    ' 結果_カレンダー(出勤簿) から (メンバー,日付) → 出勤/退勤
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error Resume Next
+    Set wsCal = wb.Worksheets("結果_カレンダー(出勤簿)")
+    On Error GoTo EH
+    
+    If Not wsCal Is Nothing Then
+        colDate = FindColHeader(wsCal, "日付")
+        colMem = FindColHeader(wsCal, "メンバー")
+        colIn = FindColHeader(wsCal, "出勤")
+        colOut = FindColHeader(wsCal, "退勤")
+        If colDate > 0 And colMem > 0 And colIn > 0 And colOut > 0 Then
+            lastR = wsCal.Cells(wsCal.Rows.Count, colDate).End(xlUp).Row
+            For r = 2 To lastR
+                If IsDate(wsCal.Cells(r, colDate).Value) Then
+                    d = CDate(wsCal.Cells(r, colDate).Value)
+                    mn = Trim$(CStr(wsCal.Cells(r, colMem).Value))
+                    If Len(mn) > 0 Then
+                        k = mn & "|" & Format$(d, "yyyy-mm-dd")
+                        dict(k) = Trim$(CStr(wsCal.Cells(r, colIn).Value)) & " / " & Trim$(CStr(wsCal.Cells(r, colOut).Value))
+                    End If
+                End If
+            Next r
+        End If
+    End If
+    
+    cnt = members.Count
+    If cnt = 0 Then
+        wsMain.Cells(8, 2).Value = "（個人_* のシートがありません）"
+        メインシート_フォント属性を適用 wsMain.Cells(8, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+        lastMemberRow = 8
+        GoTo CleanExit
+    End If
+    
+    keys = members.keys
+    ReDim keysArr(0 To UBound(keys))
+    For i = 0 To UBound(keys)
+        keysArr(i) = CStr(keys(i))
+    Next i
+    ' 単純ソート（表示順）
+    For i = 0 To UBound(keysArr) - 1
+        For j = i + 1 To UBound(keysArr)
+            If keysArr(i) > keysArr(j) Then
+                temp = keysArr(i): keysArr(i) = keysArr(j): keysArr(j) = temp
+            End If
+        Next j
+    Next i
+    
+    ' master.xlsm の定常表示はセルごとに読むと都度 Open/Close になり得るため、ここで1回だけ取得して勤怠セル着色に渡す
+    stdDispCached = マスタメイン_工場標準勤怠表示文字列()
+    
+    r = 8
+    For i = 0 To UBound(keysArr)
+        mn = keysArr(i)
+        sheetName = SafePersonalSheetName(mn)
+        On Error Resume Next
+        wsMain.Hyperlinks.Add anchor:=wsMain.Cells(r, 2), Address:="", SubAddress:="'" & Replace(sheetName, "'", "''") & "'!A1", TextToDisplay:=mn
+        On Error GoTo EH
+        メインシート_フォント属性を適用 wsMain.Cells(r, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+        
+        For col = 0 To 11
+            d = DateAdd("d", col - 1, Date)
+            k = mn & "|" & Format$(d, "yyyy-mm-dd")
+            If dict.Exists(k) Then
+                wsMain.Cells(r, 3 + col).Value = dict(k)
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), CStr(dict(k)), stdDispCached
+            Else
+                wsMain.Cells(r, 3 + col).Value = "-"
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), "-", stdDispCached
+            End If
+            wsMain.Cells(r, 3 + col).HorizontalAlignment = xlCenter
+        Next col
+        r = r + 1
+    Next i
+    lastMemberRow = r - 1
+
+CleanExit:
+    On Error Resume Next
+    メインシート_メンバー勤怠ブロックに罫線を設定 wsMain, lastMemberRow
+    メインシート_結果シートリンクを更新 wsMain
+    メインシート_AからK列_AutoFitOnSheet wsMain
+    Application.ScreenUpdating = True
+    Exit Sub
+EH:
+    If Not Silent Then MsgBox "メインシート更新エラー: " & Err.Description, vbCritical
+    Resume CleanExit
+End Sub
+
+' メインシートの A～N 列オートフィット（メインの勤怠12日分＋A列リンク。フォント変更後・段階2後のレイアウト用）
+' ※ScreenUpdating=False 中は効かないことがあるため、必要なら True にしてから実行
+Private Sub メインシート_AからK列_AutoFitOnSheet(ByVal wsMain As Worksheet)
+    On Error Resume Next
+    If wsMain Is Nothing Then Exit Sub
+    wsMain.Columns("A:N").AutoFit
+    On Error GoTo 0
+End Sub
+
+Public Sub メインシート_AからK列_AutoFit()
+    Dim ws As Worksheet
+    Dim su As Boolean
+    On Error Resume Next
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then Exit Sub
+    su = Application.ScreenUpdating
+    Application.ScreenUpdating = True
+    メインシート_AからK列_AutoFitOnSheet ws
+    Application.ScreenUpdating = su
+    On Error GoTo 0
+End Sub
+
+Private Function GeminiCredentialsJsonPathIsConfigured() As Boolean
+    Dim rng As Range
+    GeminiCredentialsJsonPathIsConfigured = False
+    On Error Resume Next
+    Set rng = ThisWorkbook.Worksheets(SHEET_SETTINGS).Range("B1")
+    If Err.Number = 0 And Not rng Is Nothing Then
+        If Len(Trim$(CStr(rng.Value))) > 0 Then
+            GeminiCredentialsJsonPathIsConfigured = True
+        End If
+    End If
+    On Error GoTo 0
+End Function
+
+' =========================================================
+' 外部データ／PQ の接続を「バックグラウンド更新しない」にそろえる。
+' 背景更新のまま RefreshAll が先に返り、その直後の Save 等で Excel が
+' 「この操作を実行すると、まだ実行されていないデータの更新が取り消されます」と出すのを防ぐ。
+' =========================================================
+Private Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
+    Const SH_LOG_AI As String = "LOG_AI"
+    Const MAX_CELL As Long = 32700
+    Dim ws As Worksheet
+    Dim wasProtected As Boolean
+    Dim promptPath As String
+    Dim remarkPath As String
+    Dim fileBody As String
+    Dim lines() As String
+    Dim r As Long
+    Dim i As Long
+    
+    promptPath = targetDir & "\log\ai_task_special_last_prompt.txt"
+    remarkPath = targetDir & "\log\ai_task_special_remark_last.txt"
+    
+    ' ※呼び出し元で On Error Resume Next の直後だと Err が残っていることがある。
+    ' Set ws = Worksheets(...) 成功時も Err は自動クリアされないため、
+    ' Err.Number 判定で「無い」と誤認し別シートへ書くと LOG_AI が空のままになる。
+    Set ws = Nothing
+    Err.Clear
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SH_LOG_AI)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        On Error Resume Next
+        ws.Name = SH_LOG_AI
+        On Error GoTo 0
+    End If
+    If ws Is Nothing Then Exit Sub
+
+    ' 保護シートだと Cells(...).Value で 1004 になるため、書き込み前に解除（再保護はしない）
+    wasProtected = ws.ProtectContents
+    If wasProtected Then
+        On Error Resume Next
+        ws.Unprotect
+        On Error GoTo 0
+        If ws.ProtectContents Then
+            MsgBox "LOG_AI シートが保護されているため、AIログを書き込めません。保護を解除してください。", vbExclamation
+            Exit Sub
+        End If
+    End If
+    
+    ws.Cells.Clear
+    r = 1
+    
+    ws.Cells(r, 1).Value = "[log\ai_task_special_last_prompt.txt]"
+    ws.Cells(r, 1).Font.Bold = True
+    r = r + 1
+    If Len(Dir(promptPath)) > 0 Then
+        fileBody = ReadTextFileWithCharset(promptPath, "utf-8")
+        fileBody = Replace(fileBody, vbCrLf, vbLf)
+        lines = Split(fileBody, vbLf)
+        For i = LBound(lines) To UBound(lines)
+            If Len(lines(i)) > MAX_CELL Then
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+            Else
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
+            End If
+            r = r + 1
+        Next i
+    Else
+        ws.Cells(r, 1).Value = "(ファイルなし: " & promptPath & ")"
+        r = r + 1
+    End If
+    
+    r = r + 1
+    ws.Cells(r, 1).Value = "[log\ai_task_special_remark_last.txt]"
+    ws.Cells(r, 1).Font.Bold = True
+    r = r + 1
+    If Len(Dir(remarkPath)) > 0 Then
+        fileBody = ReadTextFileWithCharset(remarkPath, "utf-8")
+        fileBody = Replace(fileBody, vbCrLf, vbLf)
+        lines = Split(fileBody, vbLf)
+        For i = LBound(lines) To UBound(lines)
+            If Len(lines(i)) > MAX_CELL Then
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+            Else
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
+            End If
+            r = r + 1
+        Next i
+    Else
+        ws.Cells(r, 1).Value = "(ファイルなし: " & remarkPath & ")"
+        r = r + 1
+    End If
+    
+    ws.Columns(1).ColumnWidth = 100
+End Sub
+
+' =========================================================
+' 設定_配台不要工程: シートの新規作成と見出し行のみ VBA（Python は工程+機械行の同期・AI・保存）
+' 手動で空シートだけ用意したい場合も本マクロを実行可。
+' =========================================================
+Public Sub 設定_配台不要工程_シートを確保()
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_EXCLUDE_ASSIGNMENT, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_EXCLUDE_ASSIGNMENT
+    End If
+
+    If StrComp(ws.Name, SHEET_EXCLUDE_ASSIGNMENT, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 524, , "シート名を「" & SHEET_EXCLUDE_ASSIGNMENT & "」にできません（現在の名前: " & ws.Name & "）。同名シートや禁則文字を確認してください。"
+    End If
+
+    ' 非常に非表示のシートはタブに出ないため、確保時に必ず表示へ戻す
+    ws.Visible = xlSheetVisible
+
+    ' 1 行目は常に planning_core と同一見出し（空・不一致でも確実に揃える）
+    ws.Cells(1, 1).Value = "工程名"
+    ws.Cells(1, 2).Value = "機械名"
+    ws.Cells(1, 3).Value = "配台不要"
+    ws.Cells(1, 4).Value = "配台不能ロジック"
+    ws.Cells(1, 5).Value = "ロジック式"
+
+    Application.DisplayAlerts = prevDA
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
+' 設定_環境変数: シートの新規作成・見出し行・テンプレにあってシートに無い変数名行のみ追記
+' （python/workbook_env_bootstrap.py・設定_環境変数_雛形.tsv と整合）
+' =========================================================
+Private Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(CStr(ws.Cells(1, 1).Value)))
+    If Len(t) = 0 Then
+        設定_環境変数_1行目は見出し = False
+        Exit Function
+    End If
+    設定_環境変数_1行目は見出し = (t = "変数名" Or t = "環境変数" Or t = "name" Or t = "key" Or t = "env")
+End Function
+
+' 行継続（ _ ）は1文あたり25個までのため、Array 連結は使わず1行ずつ追記する
+Private Sub 設定_環境変数_欠損行を試し追記(ByVal dict As Object, ByVal ws As Worksheet, ByRef lastRow As Long, ByVal envKey As String, ByVal envVal As String, ByVal envDesc As String)
+    Dim nk As String
+    nk = LCase$(Trim$(envKey))
+    If Len(nk) = 0 Then Exit Sub
+    If dict.Exists(nk) Then Exit Sub
+    lastRow = lastRow + 1
+    ws.Cells(lastRow, 1).Value = envKey
+    ws.Cells(lastRow, 2).Value = envVal
+    ws.Cells(lastRow, 3).Value = envDesc
+    dict.Add nk, True
+End Sub
+
+Public Sub 設定_環境変数_シートを確保()
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+    Dim dict As Object
+    Dim r As Long
+    Dim lastRow As Long
+    Dim dataStart As Long
+    Dim k As String
+    Dim nk As String
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_WORKBOOK_ENV
+    End If
+
+    If StrComp(ws.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 525, , "シート名を「" & SHEET_WORKBOOK_ENV & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+    ElseIf Not 設定_環境変数_1行目は見出し(ws) Then
+        ' 1 行目がデータの場合は見出しを挿入しない（ユーザー構成を壊さない）
+    Else
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+    End If
+
+    If 設定_環境変数_1行目は見出し(ws) Then
+        dataStart = 2
+    Else
+        dataStart = 1
+    End If
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    dict.CompareMode = 1 ' vbTextCompare（Windows 環境変数は実質大文字小文字無視）
+
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastRow < dataStart Then
+        lastRow = dataStart - 1
+    End If
+
+    For r = dataStart To lastRow
+        k = Trim$(CStr(ws.Cells(r, 1).Value))
+        If Len(k) > 0 Then
+            nk = LCase$(k)
+            If Not dict.Exists(nk) Then dict.Add nk, True
+        End If
+    Next r
+
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TASK_PLAN_SHEET", "", "配台計画シート名（空なら既定 配台計画_タスク入力）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1", "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0", "1=依頼NO直列")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE12_CMD_HIDE_WINDOW", "1", "段階1/2: cmd 1=非表示(既定) 0=画面上部にコンソール")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE1_SYNC_MASTER_SHEETS_TO_MACRO_BOOK", "0", "段階1: master から機械カレンダー・勤怠をマクロブックへコピー 1=する 0=しない（配台は master 直読み）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1", "§B-2/§B-3 設備占有（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1", "B-2/3 ECと後続の担当者分離（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0", "1=人数最優先（従来）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", "60", "スラック分（0 で開始のみ）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0", "1=need追加人数行を無視")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "", "1=メインで req+追加上限まで探索")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1", "0=計画シート必要人数も参照")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", "1", "0=組合せ表プリセットを使わない")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1", "段階2後の列設定図形コピー（0 で無効）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", "", "1=配台不要シートを openpyxl で保存試行")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS", "5", "終業直前デファー対象の最大残ロール")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "ASSIGN_END_OF_DAY_DEFER_MINUTES", "45", "終業直前デファー分数（0で明示無効・既定45）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "DEBUG_TASK_ID", "", "デバッグ用依頼NO")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TRACE_TEAM_ASSIGN_TASK_ID", "", "チーム割付トレース対象")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_PRICE_USD_IN_PER_M", "0.075", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_PRICE_USD_OUT_PER_M", "0.30", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "GEMINI_JPY_PER_USD", "150", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234", "", "テスト用（通常空）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234_ROW", "9", "")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "#TASK_INPUT_WORKBOOK", "", "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い")
+
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
+
+    Application.DisplayAlerts = prevDA
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
+' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
+' ・一覧をブックから再取得 … 全シートを列挙。シート名が一致する行は並び順・表示の意図を維持し、A 列は 1 からの連番に振り直す。C 列はドロップダウン（インライン一覧。F 列は候補表示）
+' ・ブックへ適用 … A?C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
+' ・段階1/段階2 成功完了時に一覧を自動更新（設定の維持は名前一致で行う）
+' =========================================================
+Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
+    Dim t As String
+    t = LCase$(Trim$(s))
+    If Len(t) = 0 Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+        Exit Function
+    End If
+    If t = "表示" Or t = "true" Or t = "1" Or t = "yes" Or t = "on" Or t = "y" Or t = "はい" Or t = "visible" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+        Exit Function
+    End If
+    If t = "非表示" Or t = "hidden" Or t = "0" Or t = "false" Or t = "no" Or t = "off" Or t = "n" Or t = "いいえ" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetHidden
+        Exit Function
+    End If
+    If t = "完全非表示" Or t = "非常隠し" Or t = "veryhidden" Or t = "xlveryhidden" Or t = "2" Then
+        設定_シート表示_C列を表示状態に変換 = xlSheetVeryHidden
+        Exit Function
+    End If
+    設定_シート表示_C列を表示状態に変換 = xlSheetVisible
+End Function
+
+Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis As XlSheetVisibility) As String
+    Select Case vis
+        Case xlSheetVisible
+            設定_シート表示_表示状態の説明文字列 = "表示"
+        Case xlSheetHidden
+            設定_シート表示_表示状態の説明文字列 = "非表示"
+        Case xlSheetVeryHidden
+            設定_シート表示_表示状態の説明文字列 = "完全非表示"
+        Case Else
+            設定_シート表示_表示状態の説明文字列 = "表示"
+    End Select
+End Function
+
+' C 列ドロップダウン用（F2:F4 は候補表示。入力規則は主にインライン一覧）
+Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
+    ws.Range("F1").Value = "（C列の候補・参照用）"
+    ws.Range("F2").Value = "表示"
+    ws.Range("F3").Value = "非表示"
+    ws.Range("F4").Value = "完全非表示"
+    ws.Columns(6).ColumnWidth = 14
+End Sub
+
+' C2 以降に「表示/非表示/完全非表示」リストを付与（失敗時は定義名 PM_AI_SheetVisList → F2:F4）
+Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
+    Const NM_SHEET_VIS As String = "PM_AI_SheetVisList"
+    Dim rng As Range
+    Set rng = ws.Range("C2:C1000")
+    On Error Resume Next
+    rng.Validation.Delete
+    Err.Clear
+    rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="表示,非表示,完全非表示"
+    If Err.Number = 0 Then GoTo ApplyVisFlags
+    Err.Clear
+    ThisWorkbook.names(NM_SHEET_VIS).Delete
+    Err.Clear
+    ThisWorkbook.names.Add Name:=NM_SHEET_VIS, RefersTo:=ws.Range("F2:F4")
+    If Err.Number = 0 Then
+        Err.Clear
+        rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & NM_SHEET_VIS
+    End If
+ApplyVisFlags:
+    On Error Resume Next
+    rng.Validation.IgnoreBlank = True
+    rng.Validation.InCellDropdown = True
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+Private Function 設定_シート表示_C列を正規化表示文字列(ByVal raw As String, ByVal fallbackVis As XlSheetVisibility) As String
+    If Len(Trim$(raw)) = 0 Then
+        設定_シート表示_C列を正規化表示文字列 = 設定_シート表示_表示状態の説明文字列(fallbackVis)
+    Else
+        設定_シート表示_C列を正規化表示文字列 = 設定_シート表示_表示状態の説明文字列(設定_シート表示_C列を表示状態に変換(raw))
+    End If
+End Function
+
+Public Sub 設定_シート表示_シートを確保()
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_SHEET_VISIBILITY
+    End If
+
+    If StrComp(ws.Name, SHEET_SHEET_VISIBILITY, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 531, , "シート名を「" & SHEET_SHEET_VISIBILITY & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    ws.Cells(1, 1).Value = "並び順"
+    ws.Cells(1, 2).Value = "シート名"
+    ws.Cells(1, 3).Value = "表示"
+    ws.Cells(1, 4).Value = "（手順）一覧をブックから再取得 → 並び順(1始まり)・表示を編集 → ブックへ適用（適用後は一覧が自動更新）"
+
+    ws.Columns(1).ColumnWidth = 10
+    ws.Columns(2).ColumnWidth = 36
+    ws.Columns(3).ColumnWidth = 14
+    ws.Columns(4).ColumnWidth = 62
+
+    Call 設定_シート表示_ドロップダウン候補セルを書く(ws)
+    Call 設定_シート表示_C列入力規則を付与(ws)
+
+    Application.DisplayAlerts = prevDA
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' ブック内の全シートを行に列挙。名前一致行は「以前の並び順・表示」の意味を維持し、A 列は 1 から連番に振り直す。新規シートは末尾相当の順キーで追加。
+Public Sub 設定_シート表示_一覧をブックから再取得()
+    Dim wb As Workbook
+    Dim wsCfg As Worksheet
+    Dim orderDict As Object
+    Dim visDict As Object
+    Dim lastRow As Long
+    Dim r As Long
+    Dim nm As String
+    Dim ordVal As Double
+    Dim maxOrder As Double
+    Dim ws As Worksheet
+    Dim prevSU As Boolean
+    Dim prevDA As Boolean
+    Dim n As Long
+    Dim i As Long
+    Dim j As Long
+    Dim sortKey() As Double
+    Dim sheetName() As String
+    Dim visText() As String
+    Dim origIdx() As Long
+    Dim tmpK As Double
+    Dim tmpN As String
+    Dim tmpV As String
+    Dim tmpO As Long
+
+    Call 設定_シート表示_シートを確保
+    Set wb = ThisWorkbook
+    Set wsCfg = wb.Worksheets(SHEET_SHEET_VISIBILITY)
+
+    Set orderDict = CreateObject("Scripting.Dictionary")
+    orderDict.CompareMode = 1
+    Set visDict = CreateObject("Scripting.Dictionary")
+    visDict.CompareMode = 1
+
+    lastRow = wsCfg.Cells(wsCfg.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then lastRow = 1
+    maxOrder = 0
+    For r = 2 To lastRow
+        nm = Trim$(CStr(wsCfg.Cells(r, 2).Value))
+        If Len(nm) > 0 Then
+            If Not orderDict.Exists(nm) Then
+                ordVal = 0
+                Err.Clear
+                On Error Resume Next
+                ordVal = CDbl(wsCfg.Cells(r, 1).Value)
+                If Err.Number <> 0 Then ordVal = 0
+                On Error GoTo 0
+                If ordVal <= 0 Then ordVal = CDbl(1000000# + r)
+                orderDict.Add nm, ordVal
+                If ordVal > maxOrder Then maxOrder = ordVal
+                visDict.Add nm, Trim$(CStr(wsCfg.Cells(r, 3).Value))
+            End If
+        End If
+    Next r
+
+    prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    wsCfg.Range("A2:D" & wsCfg.Rows.Count).ClearContents
+
+    n = wb.Worksheets.Count
+    If n > 0 Then
+        ReDim sortKey(1 To n)
+        ReDim sheetName(1 To n)
+        ReDim visText(1 To n)
+        ReDim origIdx(1 To n)
+    End If
+
+    For i = 1 To n
+        Set ws = wb.Worksheets(i)
+        nm = ws.Name
+        origIdx(i) = i
+        sheetName(i) = nm
+        If orderDict.Exists(nm) Then
+            sortKey(i) = orderDict(nm)
+        Else
+            maxOrder = maxOrder + 1
+            sortKey(i) = maxOrder
+        End If
+        If visDict.Exists(nm) And Len(Trim$(CStr(visDict(nm)))) > 0 Then
+            visText(i) = 設定_シート表示_C列を正規化表示文字列(CStr(visDict(nm)), ws.Visible)
+        Else
+            visText(i) = 設定_シート表示_表示状態の説明文字列(ws.Visible)
+        End If
+    Next i
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            If sortKey(i) > sortKey(j) Or (sortKey(i) = sortKey(j) And origIdx(i) > origIdx(j)) Then
+                tmpK = sortKey(i): sortKey(i) = sortKey(j): sortKey(j) = tmpK
+                tmpN = sheetName(i): sheetName(i) = sheetName(j): sheetName(j) = tmpN
+                tmpV = visText(i): visText(i) = visText(j): visText(j) = tmpV
+                tmpO = origIdx(i): origIdx(i) = origIdx(j): origIdx(j) = tmpO
+            End If
+        Next j
+    Next i
+
+    For i = 1 To n
+        wsCfg.Cells(i + 1, 1).Value = i
+        wsCfg.Cells(i + 1, 2).Value = sheetName(i)
+        wsCfg.Cells(i + 1, 3).Value = visText(i)
+    Next i
+
+    Call 設定_シート表示_ドロップダウン候補セルを書く(wsCfg)
+    Call 設定_シート表示_C列入力規則を付与(wsCfg)
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+End Sub
+
+' A 列昇順でタブを並べ替え、C 列で Visible を設定。テーブルに無いシートは現在の順のまま末尾へ回す。
+Public Sub 設定_シート表示_ブックへ適用()
+    Dim wb As Workbook
+    Dim wsCfg As Worksheet
+    Dim lastRow As Long
+    Dim r As Long
+    Dim nm As String
+    Dim ordVal As Double
+    Dim listed As Object
+    Dim orderList() As Double
+    Dim nameList() As String
+    Dim rowList() As Long
+    Dim nListed As Long
+    Dim i As Long
+    Dim j As Long
+    Dim tmpD As Double
+    Dim tmpS As String
+    Dim tmpR As Long
+    Dim vis As XlSheetVisibility
+    Dim cntVis As Long
+    Dim nFull As Long
+    Dim wi As Long
+    Dim prevSU As Boolean
+    Dim prevDA As Boolean
+    Dim testWs As Worksheet
+
+    On Error GoTo ErrHandler
+    Call 設定_シート表示_シートを確保
+    Set wb = ThisWorkbook
+    Set wsCfg = wb.Worksheets(SHEET_SHEET_VISIBILITY)
+
+    Set listed = CreateObject("Scripting.Dictionary")
+    listed.CompareMode = 1
+
+    lastRow = wsCfg.Cells(wsCfg.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then
+        MsgBox "「" & SHEET_SHEET_VISIBILITY & "」にデータ行（2行目以降）がありません。先に「設定_シート表示_一覧をブックから再取得」を実行してください。", vbExclamation, "設定_シート表示"
+        Exit Sub
+    End If
+
+    nListed = 0
+    For r = 2 To lastRow
+        nm = Trim$(CStr(wsCfg.Cells(r, 2).Value))
+        If Len(nm) > 0 Then
+            Set testWs = Nothing
+            Err.Clear
+            On Error Resume Next
+            Set testWs = wb.Worksheets(nm)
+            If Err.Number = 0 And Not testWs Is Nothing Then
+                If Not listed.Exists(nm) Then
+                    nListed = nListed + 1
+                    ReDim Preserve orderList(1 To nListed)
+                    ReDim Preserve nameList(1 To nListed)
+                    ReDim Preserve rowList(1 To nListed)
+                    ordVal = 0
+                    On Error Resume Next
+                    ordVal = CDbl(wsCfg.Cells(r, 1).Value)
+                    If Err.Number <> 0 Then ordVal = 0
+                    If ordVal <= 0 Then ordVal = CDbl(r + 10000)
+                    orderList(nListed) = ordVal
+                    nameList(nListed) = nm
+                    rowList(nListed) = r
+                    listed.Add nm, True
+                End If
+            End If
+            Err.Clear
+            On Error GoTo ErrHandler
+        End If
+    Next r
+
+    If nListed = 0 Then
+        MsgBox "有効なシート名の行がありません。", vbExclamation, "設定_シート表示"
+        Exit Sub
+    End If
+
+    ' 同順位は元の行番号で安定ソート
+    For i = 1 To nListed - 1
+        For j = i + 1 To nListed
+            If orderList(i) > orderList(j) Or (orderList(i) = orderList(j) And rowList(i) > rowList(j)) Then
+                tmpD = orderList(i): orderList(i) = orderList(j): orderList(j) = tmpD
+                tmpS = nameList(i): nameList(i) = nameList(j): nameList(j) = tmpS
+                tmpR = rowList(i): rowList(i) = rowList(j): rowList(j) = tmpR
+            End If
+        Next j
+    Next i
+
+    cntVis = 0
+    For i = 1 To nListed
+        nm = nameList(i)
+        r = rowList(i)
+        vis = 設定_シート表示_C列を表示状態に変換(CStr(wsCfg.Cells(r, 3).Value))
+        If StrComp(nm, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            vis = xlSheetVisible
+        End If
+        If vis = xlSheetVisible Then cntVis = cntVis + 1
+    Next i
+
+    For wi = 1 To wb.Worksheets.Count
+        nm = wb.Worksheets(wi).Name
+        If Not listed.Exists(nm) Then
+            If wb.Worksheets(nm).Visible = xlSheetVisible Then cntVis = cntVis + 1
+        End If
+    Next wi
+
+    If cntVis < 1 Then
+        MsgBox "この内容では表示されるシートが 0 になります。Excel の制約のため中止しました。", vbCritical, "設定_シート表示"
+        Exit Sub
+    End If
+
+    prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    For i = 1 To nListed
+        nm = nameList(i)
+        r = rowList(i)
+        vis = 設定_シート表示_C列を表示状態に変換(CStr(wsCfg.Cells(r, 3).Value))
+        If StrComp(nm, SHEET_SHEET_VISIBILITY, vbBinaryCompare) = 0 Then
+            vis = xlSheetVisible
+        End If
+        On Error Resume Next
+        wb.Worksheets(nm).Visible = vis
+        Err.Clear
+        On Error GoTo ErrHandler
+    Next i
+
+    nFull = nListed
+    For wi = 1 To wb.Worksheets.Count
+        nm = wb.Worksheets(wi).Name
+        If Not listed.Exists(nm) Then
+            nFull = nFull + 1
+            ReDim Preserve nameList(1 To nFull)
+            nameList(nFull) = nm
+        End If
+    Next wi
+
+    If nFull <> wb.Worksheets.Count Then
+        Application.DisplayAlerts = prevDA
+        Application.ScreenUpdating = prevSU
+        Err.Raise vbObjectError + 532, , "内部エラー: シート数と並びリストが一致しません。"
+    End If
+
+    For i = 1 To nFull
+        On Error Resume Next
+        wb.Worksheets(nameList(i)).Move After:=wb.Sheets(wb.Sheets.Count)
+        Err.Clear
+        On Error GoTo ErrHandler
+    Next i
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+
+    ' タブ順・表示を反映したあと、表の並びと A 列連番をブック現状に合わせる（失敗しても適用は維持）
+    On Error Resume Next
+    設定_シート表示_一覧をブックから再取得
+    Err.Clear
+    On Error GoTo 0
+
+    Exit Sub
+ErrHandler:
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
+' Python が出力した log\exclude_rules_e_column_vba.tsv から E 列（ロジック式）を書き込む。
+' COM は A?D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
+' =========================================================
