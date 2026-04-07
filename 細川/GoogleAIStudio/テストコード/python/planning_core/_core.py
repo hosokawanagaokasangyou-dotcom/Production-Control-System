@@ -12606,6 +12606,8 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     *,
     daily_status: dict | None = None,
     members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
 ) -> bool:
     """
     同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
@@ -12651,6 +12653,15 @@ def _equipment_line_lower_dispatch_trial_still_pending(
                 t, current_date, daily_status, members
             ):
                 continue
+            if _task_no_machining_window_left_from_avail_floor(
+                t,
+                current_date,
+                daily_status,
+                members,
+                machine_avail_dt,
+                machine_day_start,
+            ):
+                continue
             return True
     return False
 
@@ -12661,6 +12672,8 @@ def _min_pending_dispatch_trial_order_for_date(
     *,
     daily_status: dict | None = None,
     members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
 ) -> int | None:
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
@@ -12673,6 +12686,7 @@ def _min_pending_dispatch_trial_order_for_date(
     循環して永久に動けない。
     - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
     - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
+    - （machine_avail_dt 等が渡るとき）設備壁時計が計画終端以上で当日スロットなしの行
     """
     orders: list[int] = []
     for t in task_queue:
@@ -12685,6 +12699,15 @@ def _min_pending_dispatch_trial_order_for_date(
             continue
         if _task_fully_machine_calendar_blocked_on_date(
             t, current_date, daily_status, members
+        ):
+            continue
+        if _task_no_machining_window_left_from_avail_floor(
+            t,
+            current_date,
+            daily_status,
+            members,
+            machine_avail_dt,
+            machine_day_start,
         ):
             continue
         try:
@@ -12701,6 +12724,8 @@ def _task_blocked_by_global_dispatch_trial_order(
     *,
     daily_status: dict | None = None,
     members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
 ) -> bool:
     """
     より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
@@ -12712,6 +12737,8 @@ def _task_blocked_by_global_dispatch_trial_order(
         current_date,
         daily_status=daily_status,
         members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
     )
     if m is None:
         return False
@@ -13231,6 +13258,44 @@ def _task_fully_machine_calendar_blocked_on_date(
     return _machine_calendar_occ_blocks_full_plan_window(
         occ, current_date, daily_status, members
     )
+
+
+def _task_no_machining_window_left_from_avail_floor(
+    t: dict,
+    current_date: date,
+    daily_status: dict | None,
+    members: list | None,
+    machine_avail_dt: dict | None,
+    machine_day_start: datetime | None,
+) -> bool:
+    """
+    machine_avail_dt（シード・機械カレンダー床・当日確定ロール反映後）で、
+    占有設備の空き下限が計画窓終端以上なら当日は当設備にスロットなし。
+    カレンダー区間照合のキー取りこぼしを防ぐ。
+    """
+    if (
+        daily_status is None
+        or members is None
+        or machine_avail_dt is None
+        or machine_day_start is None
+    ):
+        return False
+    w1 = _machine_calendar_planning_window_end_dt(current_date, daily_status, members)
+    _tm = t.get("machine")
+    _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+    occ = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
+    if not occ:
+        return False
+    t_floor = machine_avail_dt.get(occ)
+    if t_floor is None:
+        nk = _normalize_equipment_match_key(occ)
+        for k, v in machine_avail_dt.items():
+            if _normalize_equipment_match_key(str(k)) == nk:
+                t_floor = v
+                break
+    if t_floor is None:
+        t_floor = machine_day_start
+    return t_floor >= w1
 
 
 def _bump_machine_avail_after_roll_for_calendar(
