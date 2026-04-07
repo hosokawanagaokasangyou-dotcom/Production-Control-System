@@ -1,7 +1,8 @@
 Private Sub MoveToMainSheetA1()
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = GetMainWorksheet()
+    Set ws = ThisWorkbook.Worksheets("ÉÅÉCÉì_")
+    If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets(1)
     If ws Is Nothing Then Exit Sub
     ws.Activate
     ws.Range("A1").Select

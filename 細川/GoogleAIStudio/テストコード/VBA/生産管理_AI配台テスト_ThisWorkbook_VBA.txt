@@ -21,7 +21,7 @@ End Sub
 
 Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)
     On Error Resume Next
-    結果_設備ガント_行ハイライト_OnSelection Sh, Target
+    Application.Run "結果_設備ガント_行ハイライト_OnSelection", Sh, Target
     On Error GoTo 0
 End Sub
 
