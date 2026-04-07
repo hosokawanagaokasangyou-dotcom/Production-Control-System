@@ -132,6 +132,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
 ' ★ 配台結果 xlsx のフォントは planning_core がセルごとに指定。「設定」B4/B5 は参照しない（未使用）。
+' ★「設定」B3以降に依頼NOがあると段階2はデバッグ配台（その依頼の行のみ配台・Python が起動直後にメッセージ表示）。B列がすべて空なら通常。A3以降はログトレース専用。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。

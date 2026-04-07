@@ -332,6 +332,46 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     )
 
 
+def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
+    """
+    マクロブック「設定」シート B 列の 3 行目以降を、段階2デバッグ配台の対象依頼NOとして読む。
+    1 件も無い場合は段階2は通常モード（全件配台）。空セル・打ち切り等は A 列トレースと同じ。
+    """
+    return _read_task_ids_from_config_sheet_column(
+        wb_path,
+        2,
+        "デバッグ配台",
+        "B",
+        openpyxl_skip_hint="デバッグ配台は「設定」シート B 列を openpyxl で読めないため無効（全件配台）です。",
+    )
+
+
+def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
+    """設定シート B3以降が空でないときだけ呼ぶ。Windows では MessageBox、それ以外は WARNING ログ。"""
+    if not task_ids_sorted:
+        return
+    preview_lines = task_ids_sorted[:30]
+    preview = "\n".join(preview_lines)
+    if len(task_ids_sorted) > 30:
+        preview += "\n…"
+    body = (
+        "デバッグモードで実行します。\n\n"
+        "「設定」シート B3以降に入力した依頼NOのみを配台対象とします。\n\n"
+        "対象依頼NO:\n"
+        + preview
+    )
+    title = "段階2（配台）— デバッグモード"
+    if sys.platform != "win32":
+        logging.warning("%s\n%s", title, body)
+        return
+    try:
+        ctypes.windll.user32.MessageBoxW(0, body, title, 0x00000040)
+    except Exception as ex:
+        logging.warning(
+            "デバッグ配台: メッセージボックスを表示できません (%s)。%s", ex, body
+        )
+
+
 def _extract_gemini_api_key_from_plain_dict(data: dict, json_path: str) -> str | None:
     key = data.get("gemini_api_key")
     if key is None or (isinstance(key, str) and not key.strip()):
@@ -568,6 +608,8 @@ DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
 # 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
+# 段階2デバッグ配台: 「設定」B 列 3 行目以降に依頼NOがあるときのみ、その依頼の行だけ配台（generate_plan 冒頭で確定）。空なら全件。
+DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
@@ -15288,7 +15330,7 @@ def generate_plan():
 def _generate_plan_impl():
     # 配台トレース（設定シート A3 以降のみ）は、メンバー0人等で早期 return しても
     # execution_log に残るよう skills 読込より前で確定・ログする。
-    global TRACE_SCHEDULE_TASK_IDS
+    global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
@@ -15318,6 +15360,21 @@ def _generate_plan_impl():
         logging.info(
             "配台トレース: 対象なし（[配台トレース …] ログは出ません）"
         )
+    _ids_debug_dispatch_raw = _read_debug_dispatch_task_ids_from_config_sheet(_wb_trace)
+    _dbg_norm: list[str] = []
+    for _dx in _ids_debug_dispatch_raw:
+        _dt = planning_task_id_str_from_scalar(_dx)
+        if _dt:
+            _dbg_norm.append(_dt)
+    DEBUG_DISPATCH_ONLY_TASK_IDS = frozenset(_dbg_norm)
+    if DEBUG_DISPATCH_ONLY_TASK_IDS:
+        logging.warning(
+            "デバッグ配台: 「%s」B3以降により配台対象を %s 件の依頼NOに限定します: %s",
+            APP_CONFIG_SHEET_NAME,
+            len(DEBUG_DISPATCH_ONLY_TASK_IDS),
+            ", ".join(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS)),
+        )
+        _show_stage2_debug_dispatch_mode_dialog(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS))
     if TRACE_TEAM_ASSIGN_TASK_ID:
         logging.info(
             "環境変数 TRACE_TEAM_ASSIGN_TASK_ID=%r → チーム割当トレース有効",
@@ -15475,6 +15532,28 @@ def _generate_plan_impl():
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
+
+    if DEBUG_DISPATCH_ONLY_TASK_IDS:
+        _n_tasks_before = len(tasks_df)
+        _dbg_mask = tasks_df.apply(
+            lambda row: planning_task_id_str_from_plan_row(row)
+            in DEBUG_DISPATCH_ONLY_TASK_IDS,
+            axis=1,
+        )
+        tasks_df = tasks_df.loc[_dbg_mask].copy()
+        _n_tasks_after = len(tasks_df)
+        logging.warning(
+            "デバッグ配台: 「%s」の行を %s → %s に絞り込みました。",
+            PLAN_INPUT_SHEET_NAME,
+            _n_tasks_before,
+            _n_tasks_after,
+        )
+        if _n_tasks_after == 0:
+            logging.error(
+                "デバッグ配台: B3以降の依頼NOに一致する行がありません。段階2を中断します。"
+            )
+            _try_write_main_sheet_gemini_usage_summary("段階2")
+            return
 
     if global_priority_raw.strip():
         snip = global_priority_raw[:2500]
