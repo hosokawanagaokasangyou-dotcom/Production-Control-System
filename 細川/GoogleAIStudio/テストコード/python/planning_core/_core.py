@@ -14167,6 +14167,8 @@ def _trial_order_flow_eligible_tasks(
     *,
     daily_status: dict | None = None,
     members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
 ) -> list:
     out = []
     for task in tasks_today:
@@ -14180,6 +14182,8 @@ def _trial_order_flow_eligible_tasks(
             current_date,
             daily_status=daily_status,
             members=members,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_start=machine_day_start,
         ):
             continue
         # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
@@ -14187,6 +14191,15 @@ def _trial_order_flow_eligible_tasks(
         if daily_status is not None and members is not None:
             if _task_fully_machine_calendar_blocked_on_date(
                 task, current_date, daily_status, members
+            ):
+                continue
+            if _task_no_machining_window_left_from_avail_floor(
+                task,
+                current_date,
+                daily_status,
+                members,
+                machine_avail_dt,
+                machine_day_start,
             ):
                 continue
         if (
@@ -14221,6 +14234,8 @@ def _trial_order_flow_eligible_tasks(
             current_date,
             daily_status=daily_status,
             members=members,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_start=machine_day_start,
         ):
             continue
         out.append(task)
@@ -15080,12 +15095,15 @@ def _trial_order_first_schedule_pass(
     試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
+    _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     eligible = _trial_order_flow_eligible_tasks(
         tasks_today,
         task_queue,
         current_date,
         daily_status=daily_status,
         members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=_mc_w0,
     )
     if not eligible:
         # #region agent log
@@ -15102,6 +15120,8 @@ def _trial_order_first_schedule_pass(
                         current_date,
                         daily_status=daily_status,
                         members=members,
+                        machine_avail_dt=machine_avail_dt,
+                        machine_day_start=_mc_w0,
                     ),
                 },
             )
@@ -15115,7 +15135,6 @@ def _trial_order_first_schedule_pass(
     _mc_plan_end = _machine_calendar_planning_window_end_dt(
         current_date, daily_status, members
     )
-    _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
     machine_handoff = {
         "last_tid": dict(_mh_init["last_tid"]),
@@ -15435,6 +15454,8 @@ def _trial_order_first_schedule_pass(
                     current_date,
                     daily_status=daily_status,
                     members=members,
+                    machine_avail_dt=machine_avail_dt,
+                    machine_day_start=_mc_w0,
                 ),
             },
         )
@@ -16503,6 +16524,8 @@ def _generate_plan_impl():
                             current_date,
                             daily_status=daily_status,
                             members=members,
+                            machine_avail_dt=machine_avail_dt,
+                            machine_day_start=_machine_day_start,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
@@ -16518,6 +16541,15 @@ def _generate_plan_impl():
                             task, current_date, daily_status, members
                         ):
                             continue
+                        if _task_no_machining_window_left_from_avail_floor(
+                            task,
+                            current_date,
+                            daily_status,
+                            members,
+                            machine_avail_dt,
+                            _machine_day_start,
+                        ):
+                            continue
                         if _equipment_line_lower_dispatch_trial_still_pending(
                             task_queue,
                             machine_occ_key,
@@ -16525,6 +16557,8 @@ def _generate_plan_impl():
                             current_date,
                             daily_status=daily_status,
                             members=members,
+                            machine_avail_dt=machine_avail_dt,
+                            machine_day_start=_machine_day_start,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
