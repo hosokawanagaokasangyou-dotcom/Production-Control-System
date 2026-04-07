@@ -11481,6 +11481,27 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     return False
 
 
+def _task_not_yet_schedulable_due_to_dependency_or_b2_room(
+    task: dict, task_queue: list
+) -> bool:
+    """
+    キュー状態上、この行はまだ日次配台で進められない（§A 同一依頼の前工程残、または §B-2/§B-3 の枠ゼロ）。
+    `_min_pending_dispatch_trial_order_for_date` と `_equipment_line_lower_dispatch_trial_still_pending`
+    で同じ基準を共有する。片方だけ直すと、同一設備キー上で「小さい試行順が物理的に動けないのに占有待ち」と
+    グローバル最小が噛み合わず fc33 のように全件未割当が残る。
+    """
+    if _task_blocked_by_same_request_dependency(task, task_queue):
+        return True
+    if (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")) and (
+        _roll_pipeline_inspection_assign_room(
+            task_queue, str(task.get("task_id", "") or "").strip()
+        )
+        <= 1e-12
+    ):
+        return True
+    return False
+
+
 def _row_matches_roll_pipeline_ec(proc, mach) -> bool:
     return (
         _normalize_process_name_for_rule_match(proc)
@@ -12555,6 +12576,9 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
     start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
     （まだ開始日に達していない行が全日ブロッカーになり、後続がほぼ配台不可になるのを防ぐ。）
+
+    より小さい試行順の行が **同一依頼の前工程待ち等でまだ割付不能**なときは「競合の残」とみなさない。
+    （当該行は eligible にも入らないため、ここで待たせると後続試行順が同一設備で永久停止し得る。）
     """
     line = (machine_occ_key or "").strip()
     if not line:
@@ -12577,6 +12601,8 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         except (TypeError, ValueError):
             o = 10**9
         if o < my_o:
+            if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
+                continue
             return True
     return False
 
@@ -12594,8 +12620,7 @@ def _min_pending_dispatch_trial_order_for_date(
     §A-1/§A-2 前工程（試行順は後ろだが行順は先）が必要な行が、より小さい試行順の行と
     循環して永久に動けない（fc33 ログ: 全日 min_dto=33 かつ当該行は same_request_dependency
     でブロック、より大きい試行順の前工程はグローバルブロックで止まる）。
-    - `_task_blocked_by_same_request_dependency` が True の行
-    - §B-2/§B-3 かつ `_roll_pipeline_inspection_assign_room` が 0 の行
+    - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
     """
     orders: list[int] = []
     for t in task_queue:
@@ -12604,14 +12629,7 @@ def _min_pending_dispatch_trial_order_for_date(
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
             continue
-        if _task_blocked_by_same_request_dependency(t, task_queue):
-            continue
-        if (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")) and (
-            _roll_pipeline_inspection_assign_room(
-                task_queue, str(t.get("task_id", "") or "").strip()
-            )
-            <= 1e-12
-        ):
+        if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
             continue
         try:
             orders.append(int(t.get("dispatch_trial_order") or 10**9))
