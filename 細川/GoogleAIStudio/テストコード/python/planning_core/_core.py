@@ -255,55 +255,6 @@ def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None
     return _resolve_path_relative_to_workbook(wb_path, b1) or None
 
 
-def _read_output_book_font_prefs_from_workbook(wb_path: str) -> tuple[str | None, int | None]:
-    """
-    「設定」B4=配台結果 xlsx に埋め込むフォント名。空なら書体名・既定サイズをセルに埋め込まない
-    （マクロ「全シートフォント」や取り込み先ブックの既定書体を維持しやすい）。
-    B5=ポイント（B4 に名前があるときのみ有効、空なら 11）。
-    マクロブックが無い・読めないときは従来互換で BIZ UDPゴシック 11。
-    """
-    fallback_name = "BIZ UDPゴシック"
-    fallback_size = 11
-    if not wb_path or not os.path.isfile(wb_path):
-        return fallback_name, fallback_size
-    if _workbook_should_skip_openpyxl_io(wb_path):
-        logging.debug(
-            "結果ブック用フォント: ブックに「%s」があるため openpyxl で設定シートを読みません（既定フォント）。",
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-        )
-        return fallback_name, fallback_size
-    try:
-        keep_vba = str(wb_path).lower().endswith(".xlsm")
-        wb = load_workbook(wb_path, read_only=True, data_only=True, keep_vba=keep_vba)
-        try:
-            if APP_CONFIG_SHEET_NAME not in wb.sheetnames:
-                return fallback_name, fallback_size
-            ws = wb[APP_CONFIG_SHEET_NAME]
-            b4 = _config_cell_text(ws.cell(row=4, column=2).value)
-            b5_raw = ws.cell(row=5, column=2).value
-        finally:
-            wb.close()
-    except Exception as ex:
-        logging.debug(
-            "結果ブック用フォント: マクロブック「%s」の「%s」!B4/B5 を読めません: %s",
-            wb_path,
-            APP_CONFIG_SHEET_NAME,
-            ex,
-        )
-        return fallback_name, fallback_size
-
-    if not b4:
-        return None, None
-
-    sz = fallback_size
-    if b5_raw is not None and str(b5_raw).strip() != "":
-        try:
-            sz = int(float(b5_raw))
-        except (TypeError, ValueError):
-            pass
-    return b4, sz
-
-
 def _read_task_ids_from_config_sheet_column(
     wb_path: str,
     column_index: int,
@@ -544,16 +495,6 @@ if not API_KEY:
         APP_CONFIG_SHEET_NAME,
     )
 
-# 計画結果 xlsx のセルフォント（「設定」B4/B5。B4 空=書体名を openpyxl で付けず取り込み先に任せる）
-OUTPUT_BOOK_FONT_NAME, OUTPUT_BOOK_FONT_SIZE = _read_output_book_font_prefs_from_workbook(
-    TASKS_INPUT_WORKBOOK
-)
-if OUTPUT_BOOK_FONT_NAME is None:
-    logging.info(
-        "結果ブック: 「%s」B4 が空のため、セルに書体名を埋め込みません（全シートフォント統一後の取り込みで上書きされにくくなります）。"
-        " Python 出力に明示フォントを付けたい場合は B4 にフォント名、必要なら B5 にポイントを入力してください。",
-        APP_CONFIG_SHEET_NAME,
-    )
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
@@ -1100,11 +1041,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """結果ブック用 Font。OUTPUT_BOOK_FONT_* があれば付与（kwargs の name/size が優先）。"""
-    if OUTPUT_BOOK_FONT_NAME and "name" not in kwargs:
-        kwargs["name"] = OUTPUT_BOOK_FONT_NAME
-    if OUTPUT_BOOK_FONT_SIZE is not None and "size" not in kwargs:
-        kwargs["size"] = OUTPUT_BOOK_FONT_SIZE
+    """結果ブック用 Font（呼び出し側が name/size 等を指定）。"""
     return Font(**kwargs)
 
 
@@ -3841,12 +3778,6 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
 
     _plain_kw: dict = {}
     _blue_kw: dict = {"color": Color(rgb="FF0070C0")}
-    if OUTPUT_BOOK_FONT_NAME:
-        _plain_kw["rFont"] = OUTPUT_BOOK_FONT_NAME
-        _blue_kw["rFont"] = OUTPUT_BOOK_FONT_NAME
-    if OUTPUT_BOOK_FONT_SIZE is not None:
-        _plain_kw["sz"] = OUTPUT_BOOK_FONT_SIZE
-        _blue_kw["sz"] = OUTPUT_BOOK_FONT_SIZE
     plain_if = InlineFont(**_plain_kw)
     blue_if = InlineFont(**_blue_kw)
     top = Alignment(wrap_text=False, vertical="top")
