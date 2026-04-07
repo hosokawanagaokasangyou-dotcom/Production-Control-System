@@ -11184,6 +11184,34 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
+# #region agent log
+def _debug_fc33_ndjson(message: str, data: dict) -> None:
+    """fc33: 配台不可連発のランタイム調査（debug-fc33.log へ NDJSON 追記）。"""
+    try:
+        _root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+        )
+        _path = os.path.join(_root, "debug-fc33.log")
+        with open(_path, "a", encoding="utf-8") as _f:
+            _f.write(
+                json.dumps(
+                    {
+                        "sessionId": "fc33",
+                        "message": message,
+                        "data": data,
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 # 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
@@ -17179,6 +17207,78 @@ def _generate_plan_impl():
                     _ev.get("total_units"),
                     _ev.get("end_dt"),
                 )
+
+    # #region agent log
+    try:
+        _pfc = [
+            t
+            for t in task_queue
+            if float(t.get("remaining_units") or 0) > 1e-9
+        ]
+        _no_hist = [t for t in _pfc if not t.get("assigned_history")]
+        _rows = []
+        for t in sorted(
+            _no_hist,
+            key=lambda x: int(x.get("dispatch_trial_order") or 10**9),
+        )[:55]:
+            _sdr = t.get("start_date_req")
+            _sdr_s = (
+                _sdr.isoformat()
+                if hasattr(_sdr, "isoformat")
+                else str(_sdr)
+            )
+            _rows.append(
+                {
+                    "tid": str(t.get("task_id", "") or "").strip(),
+                    "dto": t.get("dispatch_trial_order"),
+                    "mach": str(t.get("machine", "") or "")[:48],
+                    "mn": str(t.get("machine_name", "") or "")[:32],
+                    "sdr": _sdr_s,
+                    "rem": float(t.get("remaining_units") or 0),
+                }
+            )
+        _orders = [
+            int(t.get("dispatch_trial_order") or 10**9) for t in _pfc
+        ]
+        _mind = min(_orders) if _orders else None
+        _at_min = [
+            str(t.get("task_id", "") or "").strip()
+            for t in _pfc
+            if int(t.get("dispatch_trial_order") or 10**9) == _mind
+        ][
+            :12
+        ]
+        _cal0 = (
+            _master_plan_dates_template[0].isoformat()
+            if _master_plan_dates_template
+            else ""
+        )
+        _cal1 = (
+            _master_plan_dates_template[-1].isoformat()
+            if _master_plan_dates_template
+            else ""
+        )
+        _debug_fc33_ndjson(
+            "post_sim_pending",
+            {
+                "hypothesisTags": ["H1_calendar", "H2_min_dto", "H3_start_req", "H4_serial"],
+                "calendar_first": _cal0,
+                "calendar_last": _cal1,
+                "stage2_serial_dispatch": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
+                "stage2_global_dto_strict": bool(
+                    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT
+                ),
+                "stage2_extend_calendar": bool(STAGE2_EXTEND_ATTENDANCE_CALENDAR),
+                "pending_total": len(_pfc),
+                "pending_no_hist": len(_no_hist),
+                "min_dto_pending": _mind,
+                "task_ids_at_min_dto": _at_min,
+                "sample_no_hist_by_dto": _rows,
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
 
     # メイン割付までのタイムライン（need 余力追記前）。TEMP_設備毎の時間割用。
     timeline_before_need_surplus = copy.deepcopy(timeline_events)
