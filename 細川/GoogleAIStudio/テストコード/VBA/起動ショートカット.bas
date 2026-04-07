@@ -1,7 +1,7 @@
-ï»¿Public Sub ShortcutMainSheet_CtrlShift0()
+Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆA1ã‚’é¸æŠ
+    ƒƒCƒ“ƒV[ƒgA1‚ğ‘I‘ğ
     On Error GoTo 0
 End Sub
 
