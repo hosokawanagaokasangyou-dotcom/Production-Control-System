@@ -372,7 +372,7 @@ flowchart TB
   nextd --> D0
 </div>
 <p class="src"><strong>試行順優先（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>・既定）</strong>: 上図の「ソート済タスクを順に試行」は、実装では <code>_trial_order_flow_eligible_tasks</code> で絞ったあと <strong><code>dispatch_trial_order</code> 昇順</strong>の意味に読み替えてください。<strong>1 パス</strong>では先頭タスクから見ますが、<strong>1 ロールでも進んだタスクについては連続ロール割付（<code>_drain_rolls_for_task</code>）し、進展があればそのパスは終了</strong>します（同一パス内で試行順の後続タスクへは進みません）。外側のマルチパスで再び昇順の先頭から繰り返します。<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のときは §8 の <code>_day_schedule_task_sort_key</code> でソートした 1 本ループが主経路です。</p>
-<p class="src"><strong>納期シフト再試行</strong>: 対象依頼のクリア直後に <code>_apply_dispatch_trial_order_for_generate_plan</code> を再実行し、<strong><code>dispatch_trial_order</code> を再確定</strong>します（<span class="file">配台ルール.md</span> §2.0.3・§2.3）。<code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=False</code>（既定）では外側ラウンドは増えません。</p>
+<p class="src"><strong>互換用の納期シフト再試行経路</strong>: <code>STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=True</code> のときのみ、対象依頼のクリア直後に <code>_apply_dispatch_trial_order_for_generate_plan</code> を再実行し、<strong><code>dispatch_trial_order</code> を再確定</strong>します（<span class="file">配台ルール.md</span> §2.0.3・§2.3）。既定値 <code>False</code> では外側ラウンドは増えません。</p>
 
 <h3>6.1 チーム開始時刻の下限（Excel・変数との対応）</h3>
 <ul class="compact">
