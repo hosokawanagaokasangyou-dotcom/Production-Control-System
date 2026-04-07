@@ -13279,6 +13279,9 @@ def _task_no_machining_window_left_from_avail_floor(
     """
     machine_avail_dt（シード・機械カレンダー床・当日確定ロール反映後）で、
     占有設備の空き下限が計画窓終端以上なら当日は当設備にスロットなし。
+    また空き下限が終端より前でも、計画窓での **残り連続が 1 ロール分に足りない**
+    と判断できる場合は True（`_assign_one_roll_trial_order_flow` が実働不足で常に失敗し、
+    グローバル試行順だけが先行して全体が止まるのを防ぐ）。
     カレンダー区間照合のキー取りこぼしを防ぐ。
     """
     if (
@@ -13303,7 +13306,21 @@ def _task_no_machining_window_left_from_avail_floor(
                 break
     if t_floor is None:
         t_floor = machine_day_start
-    return t_floor >= w1
+    if t_floor >= w1:
+        return True
+    rem = w1 - t_floor
+    if rem <= timedelta(0):
+        return True
+    btp = parse_float_safe(t.get("base_time_per_unit"), 0.0)
+    if btp <= 0:
+        return False
+    t_eff = parse_float_safe(t.get("task_eff_factor"), 1.0)
+    if t_eff <= 0:
+        t_eff = 1.0
+    # eff_time_per_unit ≈ base / avg_eff / t_eff × 余力係数。avg_eff はチーム次第で下がる。
+    _avg_eff_floor = 0.5
+    approx_need_mins = max(1.0, float(btp) / t_eff / _avg_eff_floor)
+    return rem < timedelta(minutes=approx_need_mins)
 
 
 def _bump_machine_avail_after_roll_for_calendar(
@@ -15476,6 +15493,11 @@ def _trial_order_first_schedule_pass(
                 "equipment_line_key": str(_t0.get("equipment_line_key") or "")[:120],
                 "occ": _ocx,
                 "avail_get": str(_adx) if _adx is not None else None,
+                "w1_plan_end": str(
+                    _machine_calendar_planning_window_end_dt(
+                        current_date, daily_status, members
+                    )
+                ),
                 "no_win_floor": _task_no_machining_window_left_from_avail_floor(
                     _t0,
                     current_date,
