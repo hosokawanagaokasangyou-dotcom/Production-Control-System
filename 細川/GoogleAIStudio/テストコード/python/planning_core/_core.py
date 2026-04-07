@@ -29,6 +29,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.pagebreak import Break
 
 from .bootstrap import (
     _clear_stage2_blocking_message_file,
@@ -1804,7 +1805,10 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
+    # 2日ごとに改ページを入れるため、各日ブロック先頭行を記録しておく
+    day_block_first_rows: list[int] = []
     for di, d in enumerate(dates_to_show):
+        day_block_first_rows.append(row)
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
 
@@ -1945,7 +1949,28 @@ def _write_results_equipment_gantt_sheet(
 
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
-    # 印刷（用紙・余白・拡縮・改ページ等）は Excel 側の手動設定に任せ、openpyxl では書かない。
+    # 印刷レイアウトは A3 横・余白最小・横1ページ・2日分ごとに改ページ・1〜3行目をタイトル行とする。
+    try:
+        # 各ページの先頭に 1〜3 行目（タイトル・メタ・表頭）を繰り返し印刷
+        ws.print_title_rows = f"1:{hdr_row}"
+        # 2日1ページ: 3日目・5日目・7日目... のブロック先頭に改ページを入れる
+        for bi in range(2, len(day_block_first_rows), 2):
+            ws.row_breaks.append(Break(id=day_block_first_rows[bi], man=True))
+        # A3 横 / 余白最小 / 横 1 ページ
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToHeight = False
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.paperSize = 8  # A3
+        ws.page_margins.left = 0
+        ws.page_margins.right = 0
+        ws.page_margins.top = 0
+        ws.page_margins.bottom = 0
+        ws.print_options.horizontalCentered = False
+        ws.print_options.verticalCentered = False
+        ws.print_options.gridLines = False
+    except Exception:
+        # 印刷設定は致命的ではないので例外は握りつぶす
+        pass
 
 
 def row_has_completion_keyword(row):
