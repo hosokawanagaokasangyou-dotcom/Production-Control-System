@@ -1,3 +1,13 @@
+Private Sub メインシートA1を選択()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then Exit Sub
+    ws.Activate
+    ws.Range("A1").Select
+    On Error GoTo 0
+End Sub
+
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
