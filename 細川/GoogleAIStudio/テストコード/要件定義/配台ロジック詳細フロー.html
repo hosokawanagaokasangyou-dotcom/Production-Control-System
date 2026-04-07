@@ -5,19 +5,90 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>配台ロジック詳細フロー（Excel由来・変数対応）</title>
   <style>
-    :root { --bd: #ccc; --bg2: #f6f8fa; --accent: #0d47a1; }
-    body { font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; line-height: 1.55; margin: 0 auto; max-width: min(1400px, 96vw); padding: 1.25rem clamp(1rem, 3vw, 2rem) 3rem; color: #222; }
-    h1 { font-size: 1.45rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.35rem; }
-    h2 { font-size: 1.15rem; margin-top: 2rem; color: var(--accent); }
-    h3 { font-size: 1.02rem; margin-top: 1.25rem; }
-    p.note { font-size: 0.92rem; color: #444; background: var(--bg2); padding: 0.65rem 0.85rem; border-left: 4px solid var(--accent); }
-    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.88rem; }
-    th, td { border: 1px solid var(--bd); padding: 0.4rem 0.55rem; vertical-align: top; }
-    th { background: var(--bg2); text-align: left; }
+    :root {
+      --bd: #d0d7de;
+      --bg2: #f6f8fa;
+      --bg3: #fbfcfe;
+      --accent: #0d47a1;
+      --text: #1f2328;
+      --muted: #57606a;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+      line-height: 1.7;
+      letter-spacing: 0.01em;
+      margin: 0 auto;
+      max-width: min(1360px, 96vw);
+      padding: 1.25rem clamp(1rem, 3vw, 2rem) 3rem;
+      color: var(--text);
+      background: #fff;
+    }
+    h1 {
+      font-size: 1.5rem;
+      line-height: 1.35;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 0.4rem;
+      margin-bottom: 0.8rem;
+    }
+    h2 {
+      font-size: 1.18rem;
+      margin-top: 2.2rem;
+      margin-bottom: 0.55rem;
+      color: var(--accent);
+      border-left: 4px solid var(--accent);
+      padding-left: 0.55rem;
+    }
+    h3 {
+      font-size: 1.04rem;
+      margin-top: 1.35rem;
+      margin-bottom: 0.45rem;
+    }
+    p { margin: 0.55rem 0; }
+    p.note {
+      font-size: 0.93rem;
+      color: #374151;
+      background: linear-gradient(to right, #eef4ff, #f8fbff);
+      padding: 0.72rem 0.9rem;
+      border-left: 4px solid var(--accent);
+      border-radius: 4px;
+    }
+    nav.toc {
+      border: 1px solid var(--bd);
+      background: var(--bg3);
+      border-radius: 6px;
+      padding: 0.85rem 1rem;
+      margin: 1rem 0 1.3rem;
+    }
+    nav.toc h2 {
+      margin: 0 0 0.45rem;
+      font-size: 1rem;
+      border: 0;
+      padding: 0;
+    }
+    nav.toc ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
+    nav.toc li { margin: 0.22rem 0; }
+    nav.toc a { color: #1f4fa5; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.85rem 0 1.35rem;
+      font-size: 0.9rem;
+    }
+    th, td { border: 1px solid var(--bd); padding: 0.48rem 0.62rem; vertical-align: top; }
+    th {
+      background: var(--bg2);
+      text-align: left;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tbody tr:nth-child(even) td { background: #fcfdff; }
     code, .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.86em; }
-    .mermaid { margin: 1rem 0; overflow-x: auto; background: #fafafa; padding: 1rem; border: 1px solid var(--bd); }
+    .mermaid { margin: 1rem 0; overflow-x: auto; background: #fafafa; padding: 1rem; border: 1px solid var(--bd); border-radius: 6px; }
     ul.compact li { margin: 0.25rem 0; }
-    .src { color: #555; font-size: 0.85rem; }
+    .src { color: var(--muted); font-size: 0.86rem; }
     caption { caption-side: bottom; font-size: 0.82rem; color: #666; text-align: left; margin-top: 0.35rem; }
   </style>
 </head>
@@ -30,7 +101,23 @@
   実装の更新により差異が出た場合はソースを優先してください。
 </p>
 
-<h2>1. 参照する Excel ブックとファイル</h2>
+<nav class="toc" aria-label="目次">
+  <h2>目次</h2>
+  <ul>
+    <li><a href="#sec1">1. 参照する Excel ブックとファイル</a></li>
+    <li><a href="#sec2">2. master.xlsm シート → Python 側の変数</a></li>
+    <li><a href="#sec3">3. マクロブックの読み取り箇所</a></li>
+    <li><a href="#sec4">4. タスク入力列 → task_queue キー</a></li>
+    <li><a href="#sec5">5. generate_plan 全体フロー</a></li>
+    <li><a href="#sec6">6. 1 日の処理（詳細）</a></li>
+    <li><a href="#sec7">7. 主要な定数・環境変数</a></li>
+    <li><a href="#sec8">8. 同一日内のタスク試行順</a></li>
+    <li><a href="#sec9">9. 出力（タイムライン → Excel）</a></li>
+    <li><a href="#sec10">10. 試行順の自動ソートキー</a></li>
+  </ul>
+</nav>
+
+<h2 id="sec1">1. 参照する Excel ブックとファイル</h2>
 <table>
   <thead>
     <tr><th>種別</th><th>パス・名前</th><th>環境変数 / 定数</th><th>主な用途</th></tr>
@@ -57,7 +144,7 @@
   </tbody>
 </table>
 
-<h2>2. <span class="mono">master.xlsm</span> シート → Python 側の変数</h2>
+<h2 id="sec2">2. <span class="mono">master.xlsm</span> シート → Python 側の変数</h2>
 <table>
   <thead>
     <tr><th>シート / 構造</th><th>読込関数</th><th>戻り値・内部構造</th><th>配台での使われ方</th></tr>
@@ -98,7 +185,7 @@
   </tbody>
 </table>
 
-<h2>3. マクロブック（<span class="mono">TASK_INPUT_WORKBOOK</span>）の読み取り箇所</h2>
+<h2 id="sec3">3. マクロブック（<span class="mono">TASK_INPUT_WORKBOOK</span>）の読み取り箇所</h2>
 <table>
   <thead>
     <tr><th>シート・位置</th><th>関数</th><th>代入先</th></tr>
@@ -130,7 +217,7 @@
   メインのグローバルコメント解析結果を計画シート列に書き出す表示用列（AX/AY 付近）はありますが、<strong>配台計算の入力経路はメイン「グローバルコメント」1系統</strong>です（二重適用にならない設計）。
 </p>
 
-<h2>4. 「配台計画_タスク入力」列 → <span class="mono">task_queue</span> の dict キー</h2>
+<h2 id="sec4">4. 「配台計画_タスク入力」列 → <span class="mono">task_queue</span> の dict キー</h2>
 <p class="src">変換本体: <span class="mono">build_task_queue_from_planning_df()</span>（<span class="mono">planning_core/_core.py</span>）</p>
 <table>
   <thead>
@@ -188,7 +275,7 @@
   </tbody>
 </table>
 
-<h2>5. <span class="mono">generate_plan</span> 全体フロー</h2>
+<h2 id="sec5">5. <span class="mono">generate_plan</span> 全体フロー</h2>
 <p class="note">外側 <span class="mono">while True</span> は、<strong>納期超過リトライ</strong>（<span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span>）で日中の <span class="mono">for current_date</span> を途中 break したときに<strong>次のラウンド</strong>へ進みます。再入前に <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> で試行順を再確定。<strong>カレンダーを最後まで通した</strong>ラウンドの末尾で <span class="mono">_run_b2_inspection_rewind_pass</span> が一度だけ走り、その後 <span class="mono">while</span> を抜けます（実装: <span class="mono">planning_core.generate_plan</span> → <span class="mono">_core.py</span>）。</p>
 <div class="mermaid">
 flowchart TB
@@ -254,7 +341,7 @@ flowchart TB
   end
 </div>
 
-<h2>6. 1 日の処理（詳細）</h2>
+<h2 id="sec6">6. 1 日の処理（詳細）</h2>
 <div class="mermaid">
 flowchart TB
   D0[current_date] --> D1{稼働メンバー avail_dt あり?}
@@ -296,7 +383,7 @@ flowchart TB
   <li>当日かつデータ抽出日: <span class="mono">macro_now_dt</span> より前に開始しない</li>
 </ul>
 
-<h2>7. 主要なソース内定数・環境変数（抜粋）</h2>
+<h2 id="sec7">7. 主要なソース内定数・環境変数（抜粋）</h2>
 <table>
   <thead><tr><th>名前</th><th>意味（概要）</th></tr></thead>
   <tbody>
@@ -317,7 +404,7 @@ flowchart TB
   </tbody>
 </table>
 
-<h2>8. 同一日内のタスク試行順（<span class="mono">_day_schedule_task_sort_key</span>）</h2>
+<h2 id="sec8">8. 同一日内のタスク試行順（<span class="mono">_day_schedule_task_sort_key</span>）</h2>
 <p class="src"><strong>適用範囲</strong>: このキーでソートした順に試行するのは <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0</code> のときです。<code>=1</code>（既定）では §6 の補足どおり <code>_trial_order_first_schedule_pass</code> が主経路で、本表はフォールバック経路の並びです。</p>
 <p class="src">辞書式比較で<strong>先に来るほど早く試行</strong>されます（タプル左から比較）。<code>dispatch_trial_order</code> は複合キーの一部であり、単独の最優先キーではありません。</p>
 <table>
@@ -344,13 +431,13 @@ flowchart TB
   グローバルキューの並び替え（試行順確定の<strong>欠損時</strong>）は <span class="mono">_generate_plan_task_queue_sort_key</span>（§10）。その後 <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> が <span class="mono">dispatch_trial_order</span> を付与するので、本表の 10 番目以降は<strong>付与後の値</strong>が入る。
 </p>
 
-<h2>9. 出力（タイムライン → Excel）</h2>
+<h2 id="sec9">9. 出力（タイムライン → Excel）</h2>
 <p>
   割付成功ごとに <span class="mono">timeline_events</span> にイベントが追加され、計画期間の各日・各設備列（<span class="mono">equipment_list</span> 由来の見出し）に対し 10 分刻みグリッドで
   <span class="mono">production_plan_multi_day_*.xlsx</span> 等へ書き出します。結果タスク一覧では <span class="mono">plan_window_by_task_id</span> から最早開始・最遅終了を集約します。
 </p>
 
-<h2>10. <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> 内の自動ソートキー（シート試行順が<strong>欠損</strong>あるとき）</h2>
+<h2 id="sec10">10. <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> 内の自動ソートキー（シート試行順が<strong>欠損</strong>あるとき）</h2>
 <p class="src">関数 <span class="mono">_generate_plan_task_queue_sort_key</span> の戻りタプル（左から辞書式比較・小さい方が先）。<strong>全行シート指定</strong>のときはこのソートは使われず、列順のみ。</p>
 <table>
   <thead><tr><th>順（タプル左→右）</th><th>内容</th></tr></thead>
