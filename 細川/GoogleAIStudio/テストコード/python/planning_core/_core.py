@@ -12616,6 +12616,10 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     members: list | None = None,
     machine_avail_dt: dict | None = None,
     machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
     同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
@@ -12668,6 +12672,10 @@ def _equipment_line_lower_dispatch_trial_still_pending(
                 members,
                 machine_avail_dt,
                 machine_day_start,
+                machine_handoff=machine_handoff,
+                skills_dict=skills_dict,
+                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+                dispatch_interval_mirror=dispatch_interval_mirror,
             ):
                 continue
             return True
@@ -12682,6 +12690,10 @@ def _min_pending_dispatch_trial_order_for_date(
     members: list | None = None,
     machine_avail_dt: dict | None = None,
     machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> int | None:
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
@@ -12716,6 +12728,10 @@ def _min_pending_dispatch_trial_order_for_date(
             members,
             machine_avail_dt,
             machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
         ):
             continue
         try:
@@ -12734,6 +12750,10 @@ def _task_blocked_by_global_dispatch_trial_order(
     members: list | None = None,
     machine_avail_dt: dict | None = None,
     machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
     より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
@@ -12747,6 +12767,10 @@ def _task_blocked_by_global_dispatch_trial_order(
         members=members,
         machine_avail_dt=machine_avail_dt,
         machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+        dispatch_interval_mirror=dispatch_interval_mirror,
     )
     if m is None:
         return False
@@ -13275,13 +13299,20 @@ def _task_no_machining_window_left_from_avail_floor(
     members: list | None,
     machine_avail_dt: dict | None,
     machine_day_start: datetime | None,
+    *,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
     machine_avail_dt（シード・機械カレンダー床・当日確定ロール反映後）で、
     占有設備の空き下限が計画窓終端以上なら当日は当設備にスロットなし。
+    `machine_handoff` 等が渡るときは `_resolve_machine_changeover_floor_segments` により
+    `_assign_one_roll_trial_order_flow` と同じ **実効加工開始下限** で判定する
+    （生の machine_avail だけではチャンジオーバー後の下限が欠け、候補や min_dto が狂うのを防ぐ）。
     また空き下限が終端より前でも、計画窓での **残り連続が 1 ロール分に足りない**
-    と判断できる場合は True（`_assign_one_roll_trial_order_flow` が実働不足で常に失敗し、
-    グローバル試行順だけが先行して全体が止まるのを防ぐ）。
+    と判断できる場合は True（実働不足デッドロック防止）。
     カレンダー区間照合のキー取りこぼしを防ぐ。
     """
     if (
@@ -13297,15 +13328,41 @@ def _task_no_machining_window_left_from_avail_floor(
     occ = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
     if not occ:
         return False
-    t_floor = machine_avail_dt.get(occ)
-    if t_floor is None:
-        nk = _normalize_equipment_match_key(occ)
-        for k, v in machine_avail_dt.items():
-            if _normalize_equipment_match_key(str(k)) == nk:
-                t_floor = v
-                break
-    if t_floor is None:
-        t_floor = machine_day_start
+    use_co = machine_handoff is not None and skills_dict is not None
+    if use_co:
+        machine_name = str(t.get("machine_name", "") or "").strip()
+        machine_proc = str(_tm or "").strip()
+        eq_line = str(
+            t.get("equipment_line_key") or _tm or ""
+        ).strip() or str(_tm or "")
+        machine_occ_key = _machine_occupancy_key_resolve(t, eq_line)
+        t_floor, _segs, abort = _resolve_machine_changeover_floor_segments(
+            abolish_all_scheduling_limits=bool(abolish_all_scheduling_limits),
+            machine_occ_key=machine_occ_key,
+            task_id=str(t.get("task_id") or "").strip(),
+            eq_line=eq_line,
+            machine_name=machine_name,
+            machine_proc=machine_proc,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_floor=machine_day_start,
+            current_date=current_date,
+            machine_handoff=machine_handoff,
+            daily_status=daily_status,
+            skills_dict=skills_dict,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+        )
+        if abort:
+            return True
+    else:
+        t_floor = machine_avail_dt.get(occ)
+        if t_floor is None:
+            nk = _normalize_equipment_match_key(occ)
+            for k, v in machine_avail_dt.items():
+                if _normalize_equipment_match_key(str(k)) == nk:
+                    t_floor = v
+                    break
+        if t_floor is None:
+            t_floor = machine_day_start
     if t_floor >= w1:
         return True
     rem = w1 - t_floor
@@ -14194,6 +14251,10 @@ def _trial_order_flow_eligible_tasks(
     members: list | None = None,
     machine_avail_dt: dict | None = None,
     machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> list:
     out = []
     for task in tasks_today:
@@ -14209,6 +14270,10 @@ def _trial_order_flow_eligible_tasks(
             members=members,
             machine_avail_dt=machine_avail_dt,
             machine_day_start=machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
         ):
             continue
         # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
@@ -14225,6 +14290,10 @@ def _trial_order_flow_eligible_tasks(
                 members,
                 machine_avail_dt,
                 machine_day_start,
+                machine_handoff=machine_handoff,
+                skills_dict=skills_dict,
+                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+                dispatch_interval_mirror=dispatch_interval_mirror,
             ):
                 continue
         if (
@@ -14261,6 +14330,10 @@ def _trial_order_flow_eligible_tasks(
             members=members,
             machine_avail_dt=machine_avail_dt,
             machine_day_start=machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
         ):
             continue
         out.append(task)
@@ -15121,6 +15194,8 @@ def _trial_order_first_schedule_pass(
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
+    _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
+    _gpo = global_priority_override or {}
     eligible = _trial_order_flow_eligible_tasks(
         tasks_today,
         task_queue,
@@ -15129,6 +15204,10 @@ def _trial_order_first_schedule_pass(
         members=members,
         machine_avail_dt=machine_avail_dt,
         machine_day_start=_mc_w0,
+        machine_handoff=_mh_init,
+        skills_dict=skills_dict,
+        abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
+        dispatch_interval_mirror=dispatch_interval_mirror,
     )
     if not eligible:
         # #region agent log
@@ -15147,6 +15226,12 @@ def _trial_order_first_schedule_pass(
                         members=members,
                         machine_avail_dt=machine_avail_dt,
                         machine_day_start=_mc_w0,
+                        machine_handoff=_mh_init,
+                        skills_dict=skills_dict,
+                        abolish_all_scheduling_limits=bool(
+                            _gpo.get("abolish_all_scheduling_limits")
+                        ),
+                        dispatch_interval_mirror=dispatch_interval_mirror,
                     ),
                 },
             )
@@ -15156,11 +15241,9 @@ def _trial_order_first_schedule_pass(
         eligible,
         key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
     )
-    _gpo = global_priority_override or {}
     _mc_plan_end = _machine_calendar_planning_window_end_dt(
         current_date, daily_status, members
     )
-    _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
     machine_handoff = {
         "last_tid": dict(_mh_init["last_tid"]),
         "last_eq": dict(_mh_init["last_eq"]),
@@ -15477,6 +15560,12 @@ def _trial_order_first_schedule_pass(
                 members=members,
                 machine_avail_dt=machine_avail_dt,
                 machine_day_start=_mc_w0,
+                machine_handoff=_mh_init,
+                skills_dict=skills_dict,
+                abolish_all_scheduling_limits=bool(
+                    _gpo.get("abolish_all_scheduling_limits")
+                ),
+                dispatch_interval_mirror=dispatch_interval_mirror,
             ),
         }
         if eligible_sorted:
@@ -15487,12 +15576,33 @@ def _trial_order_first_schedule_pass(
             )
             _ocx = _machine_occupancy_key_resolve(_t0, _eqx)
             _adx = machine_avail_dt.get(_ocx) if machine_avail_dt else None
+            _mn_dbg = str(_t0.get("machine_name", "") or "").strip()
+            _mp_dbg = str(_m or "").strip()
+            _mfe_dbg, _, _ab_dbg = _resolve_machine_changeover_floor_segments(
+                abolish_all_scheduling_limits=bool(
+                    _gpo.get("abolish_all_scheduling_limits")
+                ),
+                machine_occ_key=_ocx,
+                task_id=str(_t0.get("task_id") or "").strip(),
+                eq_line=_eqx,
+                machine_name=_mn_dbg,
+                machine_proc=_mp_dbg,
+                machine_avail_dt=machine_avail_dt,
+                machine_day_floor=_mc_w0,
+                current_date=current_date,
+                machine_handoff=_mh_init,
+                daily_status=daily_status,
+                skills_dict=skills_dict,
+                dispatch_interval_mirror=dispatch_interval_mirror,
+            )
             _h7_payload["eligible0"] = {
                 "task_id": str(_t0.get("task_id") or ""),
                 "machine_name": str(_t0.get("machine_name") or "")[:80],
                 "equipment_line_key": str(_t0.get("equipment_line_key") or "")[:120],
                 "occ": _ocx,
                 "avail_get": str(_adx) if _adx is not None else None,
+                "mach_floor_eff": str(_mfe_dbg),
+                "co_abort": _ab_dbg,
                 "w1_plan_end": str(
                     _machine_calendar_planning_window_end_dt(
                         current_date, daily_status, members
@@ -15505,6 +15615,12 @@ def _trial_order_first_schedule_pass(
                     members,
                     machine_avail_dt,
                     _mc_w0,
+                    machine_handoff=_mh_init,
+                    skills_dict=skills_dict,
+                    abolish_all_scheduling_limits=bool(
+                        _gpo.get("abolish_all_scheduling_limits")
+                    ),
+                    dispatch_interval_mirror=dispatch_interval_mirror,
                 ),
             }
         _agent_debug_log_mc(
@@ -16580,6 +16696,14 @@ def _generate_plan_impl():
                             members=members,
                             machine_avail_dt=machine_avail_dt,
                             machine_day_start=_machine_day_start,
+                            machine_handoff=machine_handoff_legacy,
+                            skills_dict=skills_dict,
+                            abolish_all_scheduling_limits=bool(
+                                global_priority_override.get(
+                                    "abolish_all_scheduling_limits"
+                                )
+                            ),
+                            dispatch_interval_mirror=_dispatch_interval_mirror,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
@@ -16602,6 +16726,14 @@ def _generate_plan_impl():
                             members,
                             machine_avail_dt,
                             _machine_day_start,
+                            machine_handoff=machine_handoff_legacy,
+                            skills_dict=skills_dict,
+                            abolish_all_scheduling_limits=bool(
+                                global_priority_override.get(
+                                    "abolish_all_scheduling_limits"
+                                )
+                            ),
+                            dispatch_interval_mirror=_dispatch_interval_mirror,
                         ):
                             continue
                         if _equipment_line_lower_dispatch_trial_still_pending(
@@ -16613,6 +16745,14 @@ def _generate_plan_impl():
                             members=members,
                             machine_avail_dt=machine_avail_dt,
                             machine_day_start=_machine_day_start,
+                            machine_handoff=machine_handoff_legacy,
+                            skills_dict=skills_dict,
+                            abolish_all_scheduling_limits=bool(
+                                global_priority_override.get(
+                                    "abolish_all_scheduling_limits"
+                                )
+                            ),
+                            dispatch_interval_mirror=_dispatch_interval_mirror,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
