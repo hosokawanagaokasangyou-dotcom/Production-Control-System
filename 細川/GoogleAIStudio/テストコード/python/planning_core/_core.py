@@ -12599,7 +12599,13 @@ def _day_schedule_task_sort_key(
 
 
 def _equipment_line_lower_dispatch_trial_still_pending(
-    task_queue: list, machine_occ_key: str, my_dispatch_order: int, current_date: date
+    task_queue: list,
+    machine_occ_key: str,
+    my_dispatch_order: int,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
 ) -> bool:
     """
     同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
@@ -12638,12 +12644,20 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         if o < my_o:
             if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
                 continue
+            if _task_fully_machine_calendar_blocked_on_date(
+                t, current_date, daily_status, members
+            ):
+                continue
             return True
     return False
 
 
 def _min_pending_dispatch_trial_order_for_date(
-    task_queue: list, current_date: date
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
 ) -> int | None:
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
@@ -12655,6 +12669,7 @@ def _min_pending_dispatch_trial_order_for_date(
     §A-1/§A-2 前工程（試行順は後ろだが行順は先）が必要な行が、より小さい試行順の行と
     循環して永久に動けない。
     - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
+    - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
     """
     orders: list[int] = []
     for t in task_queue:
@@ -12665,6 +12680,10 @@ def _min_pending_dispatch_trial_order_for_date(
             continue
         if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
             continue
+        if _task_fully_machine_calendar_blocked_on_date(
+            t, current_date, daily_status, members
+        ):
+            continue
         try:
             orders.append(int(t.get("dispatch_trial_order") or 10**9))
         except (TypeError, ValueError):
@@ -12673,14 +12692,24 @@ def _min_pending_dispatch_trial_order_for_date(
 
 
 def _task_blocked_by_global_dispatch_trial_order(
-    task: dict, task_queue: list, current_date: date
+    task: dict,
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
 ) -> bool:
     """
     より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
     """
     if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
         return False
-    m = _min_pending_dispatch_trial_order_for_date(task_queue, current_date)
+    m = _min_pending_dispatch_trial_order_for_date(
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+    )
     if m is None:
         return False
     try:
@@ -13142,6 +13171,70 @@ def _apply_machine_calendar_floor_for_date(
             },
         )
     # #endregion
+
+
+def _machine_calendar_blocks_for_occ_key(
+    day_blocks: dict[str, list[tuple[datetime, datetime]]],
+    occ: str,
+) -> list[tuple[datetime, datetime]] | None:
+    """day_blocks から占有キー（表記ゆらぎ許容）に一致する区間リストを得る。"""
+    o = str(occ or "").strip()
+    if not o or not day_blocks:
+        return None
+    if o in day_blocks:
+        return day_blocks[o]
+    nk = _normalize_equipment_match_key(o)
+    for k, iv in day_blocks.items():
+        if _normalize_equipment_match_key(str(k)) == nk:
+            return iv
+    return None
+
+
+def _machine_calendar_occ_blocks_full_plan_window(
+    occ_key: str,
+    current_date: date,
+    daily_status: dict,
+    members: list,
+) -> bool:
+    """
+    当日の機械カレンダー占有が計画窓 [始業, min(終業,稼働メンバー終了) ) 全体を塞ぎ、
+    その設備では当日 1 本も加工を入れられないとき True。
+    """
+    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    if not day_blocks:
+        return False
+    blocks = _machine_calendar_blocks_for_occ_key(day_blocks, occ_key)
+    if not blocks:
+        return False
+    w0 = datetime.combine(current_date, DEFAULT_START_TIME)
+    w1 = _machine_calendar_planning_window_end_dt(current_date, daily_status, members)
+    blocks_c = _clip_machine_busy_blocks_to_planning_window(blocks, w0, w1)
+    if not blocks_c:
+        return False
+    t1 = _bump_dt_past_machine_calendar_blocks(w0, blocks_c)
+    return t1 >= w1
+
+
+def _task_fully_machine_calendar_blocked_on_date(
+    t: dict,
+    current_date: date,
+    daily_status: dict | None,
+    members: list | None,
+) -> bool:
+    """
+    当該タスクの占有設備が、当日の機械カレンダーだけで計画窓を全日塞がれている。
+    グローバル試行順ブロック用の「最小試行順」から外す（他設備の配台デッドロック防止）。
+    """
+    if daily_status is None or members is None:
+        return False
+    _tm = t.get("machine")
+    _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+    occ = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
+    if not occ:
+        return False
+    return _machine_calendar_occ_blocks_full_plan_window(
+        occ, current_date, daily_status, members
+    )
 
 
 def _bump_machine_avail_after_roll_for_calendar(
@@ -14007,7 +14100,12 @@ def _trial_order_flow_day_start_floor(
 
 
 def _trial_order_flow_eligible_tasks(
-    tasks_today: list, task_queue: list, current_date: date
+    tasks_today: list,
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
 ) -> list:
     out = []
     for task in tasks_today:
@@ -14015,7 +14113,13 @@ def _trial_order_flow_eligible_tasks(
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
-        if _task_blocked_by_global_dispatch_trial_order(task, task_queue, current_date):
+        if _task_blocked_by_global_dispatch_trial_order(
+            task,
+            task_queue,
+            current_date,
+            daily_status=daily_status,
+            members=members,
+        ):
             continue
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
@@ -14043,7 +14147,12 @@ def _trial_order_flow_eligible_tasks(
         except (TypeError, ValueError):
             _my_dispatch_ord = 10**9
         if _equipment_line_lower_dispatch_trial_still_pending(
-            task_queue, _mocc_trial, _my_dispatch_ord, current_date
+            task_queue,
+            _mocc_trial,
+            _my_dispatch_ord,
+            current_date,
+            daily_status=daily_status,
+            members=members,
         ):
             continue
         out.append(task)
@@ -14904,9 +15013,31 @@ def _trial_order_first_schedule_pass(
     機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     eligible = _trial_order_flow_eligible_tasks(
-        tasks_today, task_queue, current_date
+        tasks_today,
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
     )
     if not eligible:
+        # #region agent log
+        if current_date in _AGENT_MC_DEBUG_DATES:
+            _agent_debug_log_mc(
+                "H6",
+                "planning_core/_core.py:_trial_order_first_schedule_pass",
+                "eligible empty",
+                {
+                    "day": str(current_date),
+                    "n_tasks_today": len(tasks_today),
+                    "min_pending_dto": _min_pending_dispatch_trial_order_for_date(
+                        task_queue,
+                        current_date,
+                        daily_status=daily_status,
+                        members=members,
+                    ),
+                },
+            )
+        # #endregion
         return False
     eligible_sorted = sorted(
         eligible,
@@ -16277,7 +16408,11 @@ def _generate_plan_impl():
                         except (TypeError, ValueError):
                             _my_dispatch_ord = 10**9
                         if _task_blocked_by_global_dispatch_trial_order(
-                            task, task_queue, current_date
+                            task,
+                            task_queue,
+                            current_date,
+                            daily_status=daily_status,
+                            members=members,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
@@ -16290,7 +16425,12 @@ def _generate_plan_impl():
                                 )
                             continue
                         if _equipment_line_lower_dispatch_trial_still_pending(
-                            task_queue, machine_occ_key, _my_dispatch_ord, current_date
+                            task_queue,
+                            machine_occ_key,
+                            _my_dispatch_ord,
+                            current_date,
+                            daily_status=daily_status,
+                            members=members,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
