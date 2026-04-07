@@ -613,6 +613,45 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
+# Cursor デバッグセッション: NDJSON 追記（配台 4/8 等の切り分け用）
+_AGENT_DEBUG_LOG_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), *(os.pardir,) * 5, "debug-0cc4fc.log")
+)
+_AGENT_DEBUG_SESSION_ID = "0cc4fc"
+
+
+def _agent_debug_ndjson(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        rec = {
+            "sessionId": _AGENT_DEBUG_SESSION_ID,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def _agent_debug_focus_dispatch_tids(current_date: date) -> frozenset[str]:
+    """設定シートデバッグ配台が有効なときのみ、4月8日の計測対象依頼NO集合。"""
+    if not DEBUG_DISPATCH_ONLY_TASK_IDS:
+        return frozenset()
+    if current_date.month != 4 or current_date.day != 8:
+        return frozenset()
+    return DEBUG_DISPATCH_ONLY_TASK_IDS
+
 
 def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -13750,14 +13789,18 @@ def _trial_order_flow_eligible_tasks(
     tasks_today: list, task_queue: list, current_date: date
 ) -> list:
     out = []
+    _focus_tids = _agent_debug_focus_dispatch_tids(current_date)
     for task in tasks_today:
+        tid = str(task.get("task_id", "") or "").strip()
+        skip_reason: str | None = None
+        extra_dbg: dict = {}
         if float(task.get("remaining_units") or 0) <= 1e-12:
-            continue
-        if _task_blocked_by_same_request_dependency(task, task_queue):
-            continue
-        if _task_blocked_by_global_dispatch_trial_order(task, task_queue, current_date):
-            continue
-        if (
+            skip_reason = "no_remaining"
+        elif _task_blocked_by_same_request_dependency(task, task_queue):
+            skip_reason = "same_request_dependency"
+        elif _task_blocked_by_global_dispatch_trial_order(task, task_queue, current_date):
+            skip_reason = "global_dispatch_trial_order"
+        elif (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
         ) and (
             _roll_pipeline_inspection_assign_room(
@@ -13765,26 +13808,57 @@ def _trial_order_flow_eligible_tasks(
             )
             <= 1e-12
         ):
-            continue
-        if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
+            skip_reason = "roll_pipeline_inspection_room_zero"
+            _tid_r = str(task.get("task_id", "") or "").strip()
+            extra_dbg = {
+                "has_ec_row": _task_queue_has_roll_pipeline_ec_for_tid(
+                    task_queue, _tid_r
+                ),
+                "ec_done": _pipeline_ec_roll_done_units(task_queue, _tid_r),
+                "follower_done": _pipeline_b2_follower_roll_done_units(
+                    task_queue, _tid_r
+                ),
+                "ec_fully_done": _pipeline_ec_fully_done_for_tid(task_queue, _tid_r),
+                "assign_room": _roll_pipeline_inspection_assign_room(
+                    task_queue, _tid_r
+                ),
+            }
+        elif PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                 task_queue,
                 _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
-                continue
-        machine = task["machine"]
-        eq_line = str(
-            task.get("equipment_line_key") or machine or ""
-        ).strip() or machine
-        _mocc_trial = _physical_machine_occupancy_key_for_task(task) or eq_line
-        try:
-            _my_dispatch_ord = int(task.get("dispatch_trial_order") or 10**9)
-        except (TypeError, ValueError):
-            _my_dispatch_ord = 10**9
-        if _equipment_line_lower_dispatch_trial_still_pending(
-            task_queue, _mocc_trial, _my_dispatch_ord, current_date
-        ):
+                skip_reason = "b1_inspection_exclusive_blocked"
+        if skip_reason is None:
+            machine = task["machine"]
+            eq_line = str(
+                task.get("equipment_line_key") or machine or ""
+            ).strip() or machine
+            _mocc_trial = _physical_machine_occupancy_key_for_task(task) or eq_line
+            try:
+                _my_dispatch_ord = int(task.get("dispatch_trial_order") or 10**9)
+            except (TypeError, ValueError):
+                _my_dispatch_ord = 10**9
+            if _equipment_line_lower_dispatch_trial_still_pending(
+                task_queue, _mocc_trial, _my_dispatch_ord, current_date
+            ):
+                skip_reason = "equipment_line_lower_trial_pending"
+        # #region agent log
+        if _focus_tids and tid in _focus_tids:
+            _agent_debug_ndjson(
+                "H2",
+                "_trial_order_flow_eligible_tasks",
+                "eligibility",
+                {
+                    "date": current_date.isoformat(),
+                    "tid": tid,
+                    "skip_reason": skip_reason or "eligible",
+                    **extra_dbg,
+                },
+            )
+        # #endregion
+        if skip_reason is not None:
             continue
         out.append(task)
     return out
@@ -14109,6 +14183,7 @@ def _assign_one_roll_trial_order_flow(
 
     capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
     capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+    _capable_before_b2 = len(capable_members)
     capable_members = _filter_capable_members_b2_disjoint_teams(
         task, task_queue, capable_members
     )
@@ -14243,6 +14318,22 @@ def _assign_one_roll_trial_order_flow(
         dispatch_interval_mirror=dispatch_interval_mirror,
     )
     if _co_abort:
+        # #region agent log
+        _focus_co = _agent_debug_focus_dispatch_tids(current_date)
+        _tid_co = str(task.get("task_id", "") or "").strip()
+        if _focus_co and _tid_co in _focus_co:
+            _agent_debug_ndjson(
+                "H3",
+                "_assign_one_roll_trial_order_flow",
+                "changeover_abort",
+                {
+                    "date": current_date.isoformat(),
+                    "tid": _tid_co,
+                    "eq_line": eq_line,
+                    "machine_occ_key": machine_occ_key,
+                },
+            )
+        # #endregion
         return None
 
     def _one_roll_from_team(
@@ -14529,6 +14620,38 @@ def _assign_one_roll_trial_order_flow(
                 )
 
     if not team_candidates:
+        # #region agent log
+        _focus_nc = _agent_debug_focus_dispatch_tids(current_date)
+        _tid_nc = str(task.get("task_id", "") or "").strip()
+        if _focus_nc and _tid_nc in _focus_nc:
+            _agent_debug_ndjson(
+                "H3",
+                "_assign_one_roll_trial_order_flow",
+                "no_team_candidates",
+                {
+                    "date": current_date.isoformat(),
+                    "tid": _tid_nc,
+                    "req_num": int(req_num),
+                    "max_team_size": int(max_team_size),
+                    "extra_max": int(extra_max),
+                    "capable_before_b2_disjoint": _capable_before_b2,
+                    "capable_after_b2_disjoint": len(capable_members),
+                    "avail_dt_count": len(avail_dt),
+                    "b2_insp_ec_floor": (
+                        b2_insp_ec_floor.isoformat() if b2_insp_ec_floor else None
+                    ),
+                    "day_floor": day_floor.isoformat(),
+                    "machine_floor_eff": (
+                        _mach_floor_eff.isoformat()
+                        if isinstance(_mach_floor_eff, datetime)
+                        else str(_mach_floor_eff)
+                    ),
+                    "fixed_team_anchor": (
+                        list(fixed_team_anchor) if fixed_team_anchor else []
+                    ),
+                },
+            )
+        # #endregion
         return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -15762,6 +15885,34 @@ def _generate_plan_impl():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            # #region agent log
+            _focus_main = _agent_debug_focus_dispatch_tids(current_date)
+            if _focus_main:
+                for _t in task_queue:
+                    _tidm = str(_t.get("task_id", "") or "").strip()
+                    if _tidm not in _focus_main:
+                        continue
+                    _agent_debug_ndjson(
+                        "H1",
+                        "main_loop:day_state",
+                        "debug_dispatch task queue vs tasks_today",
+                        {
+                            "date": current_date.isoformat(),
+                            "tid": _tidm,
+                            "start_date_req": str(_t.get("start_date_req")),
+                            "remaining_units": float(_t.get("remaining_units") or 0),
+                            "in_tasks_today": _t in tasks_today,
+                            "roll_pipeline_ec": bool(_t.get("roll_pipeline_ec")),
+                            "roll_pipeline_inspection": bool(
+                                _t.get("roll_pipeline_inspection")
+                            ),
+                            "roll_pipeline_rewind": bool(_t.get("roll_pipeline_rewind")),
+                            "dispatch_trial_order": _t.get("dispatch_trial_order"),
+                            "machine": str(_t.get("machine") or ""),
+                            "machine_name": str(_t.get("machine_name") or ""),
+                        },
+                    )
+            # #endregion
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
                 _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
