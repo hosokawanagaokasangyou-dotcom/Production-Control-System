@@ -1194,23 +1194,7 @@ Private Sub メインシートA1を選択()
     ws.Range("A1").Select
     On Error GoTo 0
 End Sub
- Ctrl+Shift+テンキー - 用（手続き名は従来互換で CtrlShift0 のまま。Application.OnKey の Procedure は ASCII 名が無難）
-Public Sub ShortcutMainSheet_CtrlShift0()
-    On Error Resume Next
-    If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    メインシートA1を選択
-    On Error GoTo 0
-End Sub
-Public Sub ShortcutMainSheet_OnKeyRegister()
-    On Error Resume Next
-    Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ShortcutMainSheet_CtrlShift0"
-    On Error GoTo 0
-End Sub
-Public Sub ShortcutMainSheet_OnKeyUnregister()
-    On Error Resume Next
-    Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY
-    On Error GoTo 0
-End Sub
+' ShortcutMainSheet_CtrlShift0 / OnKeyRegister / OnKeyUnregister は 起動ショートカット.bas に集約
 Private Function FindColHeader(ws As Worksheet, ByVal headerText As String) As Long
     Dim c As Long
     Dim lastCol As Long
@@ -2246,10 +2230,7 @@ Private Sub MacroCompleteChime()
         PlaySound "SystemAsterisk", 0&, SND_ALIAS Or SND_ASYNC
     End If
 End Sub
- MP3 は sndPlaySound（別名 PlaySoundA 系）ではなく MCI（mciSendStringW）で再生。WAV のみの場合は PlaySoundW でも可。
-Public Sub PlayFinishSound()
-    MacroCompleteChime
-End Sub
+' PlayFinishSound は サウンド制御.bas に集約（内部で MacroCompleteChime 相当を実行）
 Private Function MacroStartBgm_FullPath() As String
     Dim folder As String
     folder = ThisWorkbook.path
@@ -2390,27 +2371,10 @@ Private Sub MacroSplash_Hide()
         m_macroSplashLockedExcel = False
     End If
 End Sub
- Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
-Public Sub SplashLog_AppendChunk(ByVal chunk As String)
-    On Error Resume Next
-    If Len(chunk) = 0 Then Exit Sub
-    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
-    If Not m_macroSplashShown Then Exit Sub
-    Dim tb As Object
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
-    If tb Is Nothing Then Exit Sub
-    Dim n As Long
-    n = Len(tb.text) + Len(chunk)
-    If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
-        tb.text = Right$(tb.text & chunk, SPLASH_LOG_MAX_DISPLAY_CHARS)
-    Else
-        tb.text = tb.text & chunk
-    End If
-    MacroSplash_TextBoxScrollToTail tb
-End Sub
- アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
- lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
- allowMacroSound：True = 段階1／段階2と同様に BGM・成功時チャイムを許可（既定 False）
+' SplashLog_AppendChunk は スプラッシュ表示.bas に集約（xlwings からの呼び出しは PM_AI_XLWINGS_SPLASH_MACRO でモジュール名を指定可）
+' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
+' lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
+' allowMacroSound：True = 段階1／段階2と同様に BGM・成功時チャイムを許可（既定 False）
 Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
@@ -2562,166 +2526,11 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
         On Error GoTo 0
     End With
 End Sub
- =========================================================
- ① Python本体と必要なコンポーネントをインストールするマクロ（修正版）
- ・Python 3 の検出は py -3（ランチャーで 3 系を明示）
- ・未導入時: winget（Python.Python.3.12）→ 失敗時は公式 amd64 インストーラ
- ・pip は PowerShell 内で Machine/User の PATH を再合成（Excel 起動後でも py を拾いやすく）
- ・pip 依存は setup_environment.py が requirements.txt を読み込んで一括（cryptography 含む）。スクリプトは python\setup_environment.py を優先（旧: ブック直下）
- ・xlwings: 本ブックの段階1/2 は WScript.Shell で py を起動するため planning_core 側では未使用。
-           将来 Excel から xlwings（RunPython / UDF 等）で Python を呼ぶ拡張に備え、pip とアドインを導入する。
- ・setup_environment.py の最後で「xlwings addin install」（Excel アドインを XLSTART へ）
- ※公式 URL はモジュール先頭の PY_OFFICIAL_INSTALLER_URL で変更可能
- =========================================================
-Private Function Py3VersionOutput(wsh As Object) As String
-    Dim execObj As Object
-    Dim s As String
-    Py3VersionOutput = ""
-    On Error GoTo CleanExit
-    Set execObj = wsh.Exec("cmd.exe /c py -3 --version")
-    Do While execObj.Status = 0
-        Sleep 50
-    Loop
-    s = execObj.StdOut.ReadAll()
-    If Len(Trim$(s)) = 0 Then s = execObj.StdErr.ReadAll()
-    Py3VersionOutput = s
-CleanExit:
-End Function
-Private Function IsPython3Available(wsh As Object) As Boolean
-    Dim s As String
-    s = Py3VersionOutput(wsh)
-    IsPython3Available = (InStr(1, s, "Python 3", vbTextCompare) > 0)
-End Function
-Private Function TryInstallPythonViaWinget(wsh As Object) As Boolean
-    On Error GoTo Fail
-    Dim wingetBat As String
-    wingetBat = "@echo off" & vbCrLf & "winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
-    RunTempCmdWithConsoleLayout wsh, wingetBat
-    TryInstallPythonViaWinget = True
-    Exit Function
-Fail:
-    TryInstallPythonViaWinget = False
-End Function
-Private Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
-    Dim psCmd As String
-    Dim shellCmd As String
-    Dim exitCode As Long
-    On Error GoTo Fail
-    psCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command """ & _
-            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " & _
-            "$url = '" & PY_OFFICIAL_INSTALLER_URL & "'; " & _
-            "$out = Join-Path $env:TEMP 'python_official_installer.exe'; " & _
-            "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing; " & _
-            "if ((Get-Item $out).Length -lt 1MB) { throw 'ダウンロードに失敗した可能性があります' }; " & _
-            "$p = Start-Process -FilePath $out -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_pip=1 Include_launcher=1' -Wait -PassThru; " & _
-            "Remove-Item $out -ErrorAction SilentlyContinue; " & _
-            "exit $p.ExitCode"""
-    shellCmd = "cmd.exe /c " & psCmd
-    exitCode = wsh.Run(shellCmd, 1, True)
-    TryInstallPythonViaOfficialInstaller = (exitCode = 0)
-    Exit Function
-Fail:
-    TryInstallPythonViaOfficialInstaller = False
-End Function
- ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
-Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
-    If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
-        SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
-    ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
-        SetupEnvironmentScriptRelativePath = "setup_environment.py"
-    Else
-        SetupEnvironmentScriptRelativePath = ""
-    End If
-End Function
-Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
-    Dim ps As String
-    Dim shellCmd As String
-    Dim wdEsc As String
-    Dim setupEsc As String
-    ' PATH を再合成したうえで、ブックフォルダで setup_environment.py を実行（pip + requirements + xlwings addin）
-    wdEsc = Replace(workDir, "'", "''")
-    setupEsc = Replace(setupRel, "'", "''")
-    ps = "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
-         "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
-         "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
-         "Set-Location -LiteralPath '" & wdEsc & "'; " & _
-         "& py -3 -u .\" & setupEsc & "; " & _
-         "exit $LASTEXITCODE"
-    shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
-    RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
-End Function
-Sub InstallComponents()
-    Dim wsh As Object
-    Dim wingetExit As Long
-    Dim pipExit As Long
-    Dim msg As String
-    Dim workDir As String
-    Dim setupRel As String
-    
-    Set wsh = CreateObject("WScript.Shell")
-    
-    workDir = Trim$(ThisWorkbook.path)
-    If Len(workDir) = 0 Then
-        MsgBox "先にこのブックを保存してから環境構築を実行してください。" & vbCrLf & _
-               "（setup_environment.py は python\ またはブック直下、requirements.txt は python\ に配置）", vbExclamation
-        Exit Sub
-    End If
-    setupRel = SetupEnvironmentScriptRelativePath(workDir)
-    If Len(setupRel) = 0 Then
-        MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
-               workDir & "\python\setup_environment.py" & vbCrLf & _
-               "または " & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
-               "テストコード一式（python フォルダ含む）をブックと同じフォルダにコピーしてから再実行してください。", vbCritical
-        Exit Sub
-    End If
-    
-    If Not IsPython3Available(wsh) Then
-        MsgBox "Python 3（py -3）が見つかりません。" & vbCrLf & _
-               "自動インストールを開始します（winget → 失敗時は python.org のインストーラ）。" & vbCrLf & _
-               "管理者権限や UAC の承認が求められる場合があります。数分かかることがあります。", vbInformation
-        
-        On Error Resume Next
-        wingetExit = wsh.Run("cmd.exe /c winget --version", 0, True)
-        On Error GoTo 0
-        
-        If wingetExit = 0 Then
-            Call TryInstallPythonViaWinget(wsh)
-        End If
-        
-        If Not IsPython3Available(wsh) Then
-            If Not TryInstallPythonViaOfficialInstaller(wsh) Then
-                MsgBox "公式インストーラによるセットアップに失敗しました。" & vbCrLf & _
-                       "https://www.python.org/downloads/windows/ から Python 3.12 をインストール（Add python.exe to PATH）後、本マクロを再実行してください。", vbCritical
-                Exit Sub
-            End If
-        End If
-        
-        If Not IsPython3Available(wsh) Then
-            MsgBox "インストール後も py -3 を認識できませんでした。" & vbCrLf & _
-                   "Excel をいったん終了し、再起動してから再度「環境構築」を実行してください。", vbExclamation
-            Exit Sub
-        End If
-        
-        msg = Trim$(Py3VersionOutput(wsh))
-        MacroSplash_SetStep "Python を検出しました（" & Left$(msg, 80) & "…）。pip でライブラリをインストールします…"
-    End If
-    
-    MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
-    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel)
-    If pipExit <> 0 Then
-        MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
-               "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
-               "cd /d """ & workDir & """" & vbCrLf & _
-               "py -3 " & setupRel, vbCritical
-        Exit Sub
-    End If
-    MacroSplash_SetStep "環境構築が完了しました。xlwings リボンが無い場合は Excel を再起動してください。"
-    m_animMacroSucceeded = True
-End Sub
- =========================================================
- Gemini 認証: Python は「設定」B1 の JSON ファイルパスからキーを読む（平文または暗号化）。
- 暗号化 JSON の復号は planning_core のソース内定数のみ。パスフレーズはシートに保存しない（B2 は未使用またはクリア）。
- =========================================================
+' InstallComponents および Python 環境セットアップ用の Private 補助は 環境セットアップ.bas に集約
+' =========================================================
+' Gemini 認証: Python は「設定」B1 の JSON ファイルパスからキーを読む（平文または暗号化）。
+' 暗号化 JSON の復号は planning_core のソース内定数のみ。パスフレーズはシートに保存しない（B2 は未使用またはクリア）。
+' =========================================================
 Private Function GeminiCredentialsJsonPathIsConfigured() As Boolean
     Dim rng As Range
     GeminiCredentialsJsonPathIsConfigured = False
