@@ -169,6 +169,7 @@
       <li><a href="#partial-retry">納期超過検出とシフト再試行</a></li>
       <li><a href="#result-task-id">結果_タスク一覧・タスクIDの赤表示</a></li>
       <li><a href="#trace-schedule">配台トレース（設定シート A3 のみ）</a></li>
+      <li><a href="#debug-dispatch">デバッグ配台（設定シート B3 以降）</a></li>
     </ol>
   </nav>
 
@@ -429,8 +430,25 @@
     <p>詳細は <span class="file">配台ルール.md</span> セクション 10。</p>
   </section>
 
+  <section id="debug-dispatch" class="card" aria-labelledby="h-debug-dispatch">
+    <h2 id="h-debug-dispatch">デバッグ配台（設定シート B3 以降）</h2>
+    <p>段階2の配台対象を <strong>一部の依頼NOに限定</strong>し、全体シミュレーションを避けたいときに使います（<code>generate_plan</code> 冒頭の <code>_read_debug_dispatch_task_ids_from_config_sheet</code>）。</p>
+    <ul>
+      <li><strong>入力</strong>: マクロブック <strong>「設定」</strong>シートの <strong>B 列 3 行目以降</strong>に、配台対象にしたい <strong>依頼NO</strong> を縦に並べます（空セルはスキップ。連続空で打ち切り・カンマ区切り複数可など読み取り仕様は A 列の配台トレースと同趣旨）。</li>
+      <li><strong>動作</strong>:
+        <ul>
+          <li><strong>有効な依頼NOが 1 件も無い</strong>（空白のみ等）… <strong>通常モード</strong>（<span class="file">配台計画_タスク入力</span> の全行が対象）。ダイアログは出しません。</li>
+          <li><strong>1 件以上ある</strong> … <strong>デバッグモード</strong>。Windows のメッセージボックスを出し（非 Windows では WARNING ログ）、続けて <span class="file">配台計画_タスク入力</span> を当該依頼NOの行だけに絞って配台します。絞り込み後に <strong>0 行</strong>なら段階2は <strong>エラー終了</strong>です。</li>
+        </ul>
+      </li>
+      <li><strong>配台トレースとの関係</strong>: <strong>A 列</strong>はトレース（ログ用）だけ、<strong>B 列</strong>は配台対象の限定です。両方に同じ依頼NOを書いても構いません。</li>
+      <li><strong>制約</strong>: シート <strong>配台_配台不要工程</strong>（openpyxl 非互換マーカー）があるブックは「設定」を openpyxl で読めず B3 以降は無視（デバッグ配台は無効で、全件配台・ダイアログなし）。</li>
+    </ul>
+    <p>詳細は <span class="file">配台ルール.md</span> セクション 11。</p>
+  </section>
+
   <footer>
-    同一ソース: 配台ルール.md（2026-04-05・ロールトレース JSONL／デバッグ限定配台の記述を削除）
+    同一ソース: 配台ルール.md（2026-04-07・§11 デバッグ配台（設定シート B3 以降）を追記）
   </footer>
 </body>
 </html>
