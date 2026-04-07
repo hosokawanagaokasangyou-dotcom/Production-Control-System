@@ -29,6 +29,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.pagebreak import Break
 
 from .bootstrap import (
     _clear_stage2_blocking_message_file,
@@ -1240,7 +1241,7 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# ガント時刻セル（結合帯の先頭セル）: 毎セグメント new しない
+# ガント時刻セル（結合なし・帯の先頭セルにラベル）: 毎セグメント new しない
 _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     horizontal="left",
     vertical="center",
@@ -1305,7 +1306,7 @@ def _gantt_timeline_same_segment(st_a, st_b) -> bool:
     return st_a[1] == st_b[1]
 
 
-def _paint_gantt_timeline_row_merged(
+def _paint_gantt_timeline_row(
     ws,
     row,
     n_fixed,
@@ -1320,8 +1321,8 @@ def _paint_gantt_timeline_row_merged(
     label_font=None,
 ):
     """
-    時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
-    （細マス単体の塗りではなく15分刻み＋同一状態のセル結合で、帯状のバーとして表現する）
+    時間軸を15分マス単位で塗り分ける。同一状態の連続区間は横結合せず、
+    先頭マスにのみラベル（地色・罫線は区間内すべて）とし、Excel 上でオーバーフロー表示しやすくする。
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1338,26 +1339,34 @@ def _paint_gantt_timeline_row_merged(
             j += 1
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
-        if col_s < col_e:
-            ws.merge_cells(start_row=row, start_column=col_s, end_row=row, end_column=col_e)
-        c = ws.cell(row=row, column=col_s)
-        c.border = grid_border
-        # 左寄せ・折り返しなし・縮小なし（長いラベルはセル外へはみ出し表示しやすくする）
-        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
-        if st0[0] == "idle":
-            c.fill = idle_fill
-        elif st0[0] == "break":
-            c.fill = break_fill
-        elif st0[0] == "daily_startup":
-            _, gh_ds = st0
-            c.fill = _gantt_cached_pattern_fill(gh_ds)
-            c.value = "(日次始業準備)"
-            c.font = bar_label_font
-        else:
-            _, tid, gh, pct = st0
-            c.fill = _gantt_cached_pattern_fill(gh)
-            c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
-            c.font = bar_label_font
+        g_left, g_right = grid_border.left, grid_border.right
+        g_top, g_bot = grid_border.top, grid_border.bottom
+        for col_idx in range(col_s, col_e + 1):
+            c = ws.cell(row=row, column=col_idx)
+            # 帯の内側に縦罫線を置かない（同一帯内で文字のオーバーフローが切れにくくする）
+            c.border = Border(
+                left=g_left if col_idx == col_s else None,
+                right=g_right if col_idx == col_e else None,
+                top=g_top,
+                bottom=g_bot,
+            )
+            c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+            if st0[0] == "idle":
+                c.fill = idle_fill
+            elif st0[0] == "break":
+                c.fill = break_fill
+            elif st0[0] == "daily_startup":
+                _, gh_ds = st0
+                c.fill = _gantt_cached_pattern_fill(gh_ds)
+                if col_idx == col_s:
+                    c.value = "(日次始業準備)"
+                    c.font = bar_label_font
+            else:
+                _, tid, gh, pct = st0
+                c.fill = _gantt_cached_pattern_fill(gh)
+                if col_idx == col_s:
+                    c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
+                    c.font = bar_label_font
         i = j
 
 
@@ -1629,7 +1638,7 @@ def _write_results_equipment_gantt_sheet(
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
-    横軸は15分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
+    横軸は15分刻み。同一タスク／休憩／空きの連続区間は結合せず地色の帯とし、ラベルは先頭マスのみ（オーバーフロー表示）。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     """
     wb = writer.book
@@ -1666,14 +1675,14 @@ def _write_results_equipment_gantt_sheet(
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = 15
-    hdr_font = _result_font(bold=True, color="000000", size=12)
+    hdr_font = _result_font(bold=True, color="000000", size=14)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
-    hdr_time_font = _result_font(bold=True, color="000000", size=11)
+    hdr_time_font = _result_font(bold=True, color="000000", size=14)
     title_font = _result_font(bold=True, size=24, color="1A1A1A")
     title_fill = PatternFill(fill_type="solid", start_color="DDDDDD", end_color="DDDDDD")
     meta_font = _result_font(size=11, color="333333")
     meta_fill = PatternFill(fill_type="solid", start_color="F3F3F3", end_color="F3F3F3")
-    day_banner_font = _result_font(bold=True, size=13, color="1A1A1A")
+    day_banner_font = _result_font(bold=True, size=14, color="1A1A1A")
     day_banner_fill = PatternFill(fill_type="solid", start_color="D0D0D0", end_color="D0D0D0")
     accent_left = Side(style="thick", color="2B2B2B")
     banner_sep = Side(style="thin", color="7A7A7A")
@@ -1681,8 +1690,8 @@ def _write_results_equipment_gantt_sheet(
     grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     idle_fill = PatternFill(fill_type="solid", start_color="FFFFFF", end_color="FFFFFF")
     break_fill = PatternFill(fill_type="solid", start_color="B8B8B8", end_color="B8B8B8")
-    gantt_label_font = _result_font(size=10, bold=True, color="000000")
-    gantt_label_font_actual = _result_font(size=10, bold=True, color="000000", italic=True)
+    gantt_label_font = _result_font(size=14, bold=True, color="000000")
+    gantt_label_font_actual = _result_font(size=14, bold=True, color="000000", italic=True)
     hdr_fill_outside_regular = PatternFill(
         fill_type="solid",
         start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
@@ -1702,7 +1711,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
+    n_fixed = 5  # A=日付（日ブロック内で行ごとに同一表示）/ B〜E=機械名・工程名・担当者・タスク概要
     last_col = n_fixed + n_slots
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
@@ -1723,7 +1732,6 @@ def _write_results_equipment_gantt_sheet(
     master_mtime = _fmt_mtime(master_path)
 
     row = 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
     tcell.font = title_font
     tcell.fill = title_fill
@@ -1739,7 +1747,6 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 40
     row += 1
 
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     meta_line = (
         f"作成　{create_ts}"
         f"　・　データ吸出し　{data_extract_dt_str or '—'}"
@@ -1796,7 +1803,9 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
+    day_block_first_rows: list[int] = []
     for di, d in enumerate(dates_to_show):
+        day_block_first_rows.append(row)
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
 
@@ -1827,16 +1836,16 @@ def _write_results_equipment_gantt_sheet(
             c3 = ws.cell(row=row, column=4, value=member_disp)
             c4 = ws.cell(row=row, column=5, value=task_sum)
             for c in (c1, c2, c3, c4):
-                c.font = _result_font(size=12, color="000000")
+                c.font = _result_font(size=14, color="000000")
                 c.fill = lab_fill
                 c.border = grid_border
-            c1.font = _result_font(size=12, bold=True, color="000000")
+            c1.font = _result_font(size=14, bold=True, color="000000")
             c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
             c4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-            _paint_gantt_timeline_row_merged(
+            _paint_gantt_timeline_row(
                 ws,
                 row,
                 n_fixed,
@@ -1881,16 +1890,16 @@ def _write_results_equipment_gantt_sheet(
                 ca3 = ws.cell(row=row, column=4, value=member_disp_a)
                 ca4 = ws.cell(row=row, column=5, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
-                    c.font = _result_font(size=12, color="000000")
+                    c.font = _result_font(size=14, color="000000")
                     c.fill = lab_fill_a
                     c.border = grid_border
-                ca1.font = _result_font(size=12, bold=True, color="000000", italic=True)
+                ca1.font = _result_font(size=14, bold=True, color="000000", italic=True)
                 ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 ca4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-                _paint_gantt_timeline_row_merged(
+                _paint_gantt_timeline_row(
                     ws,
                     row,
                     n_fixed,
@@ -1910,21 +1919,18 @@ def _write_results_equipment_gantt_sheet(
 
         day_end = row - 1
         if day_end >= day_start:
-            ws.merge_cells(start_row=day_start, start_column=1, end_row=day_end, end_column=1)
-            ban = ws.cell(
-                row=day_start,
-                column=1,
-                value=f"【{d.strftime('%Y/%m/%d')}】",
-            )
-            ban.font = day_banner_font
-            ban.fill = day_banner_fill
-            ban.alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=False,
-                textRotation=90,
-            )
-            ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
+            day_label = f"【{d.strftime('%Y/%m/%d')}】"
+            for r in range(day_start, day_end + 1):
+                ban = ws.cell(row=r, column=1, value=day_label)
+                ban.font = day_banner_font
+                ban.fill = day_banner_fill
+                ban.alignment = Alignment(
+                    horizontal="center",
+                    vertical="center",
+                    wrap_text=False,
+                    textRotation=90,
+                )
+                ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
             for cc in range(1, last_col + 1):
@@ -1939,17 +1945,19 @@ def _write_results_equipment_gantt_sheet(
     # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
 
     try:
+        ws.print_title_rows = f"1:{hdr_row}"
+        for bi in range(2, len(day_block_first_rows), 2):
+            ws.row_breaks.append(Break(id=day_block_first_rows[bi], man=True))
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToHeight = False
         ws.page_setup.fitToWidth = 1
-        # A3（openpyxl 上で paperSize=8 が A3 相当）
+        # A3（openpyxl: paperSize 8 = A3）
         ws.page_setup.paperSize = 8
-        # 余白を狭めて横1ページに収まりやすくする（単位: インチ）
-        ws.page_margins.left = 0.2
-        ws.page_margins.right = 0.2
-        ws.page_margins.top = 0.2
-        ws.page_margins.bottom = 0.2
-        # タイトル・表をページ左基準に（レポート風）
+        # 余白はできるだけ狭く（単位: インチ）
+        ws.page_margins.left = 0.17
+        ws.page_margins.right = 0.17
+        ws.page_margins.top = 0.17
+        ws.page_margins.bottom = 0.17
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
