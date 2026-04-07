@@ -12699,7 +12699,6 @@ def _min_pending_dispatch_trial_order_for_date(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
-    assign_probe_ctx: dict | None = None,
 ) -> int | None:
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
@@ -12713,38 +12712,23 @@ def _min_pending_dispatch_trial_order_for_date(
     - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
     - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
     - （machine_avail_dt 等が渡るとき）設備壁時計が計画終端以上で当日スロットなしの行
-    - （assign_probe_ctx が渡るとき）試行順フローと同じ 1 ロール割当が成立しない行
+
+    1 ロール割当プローブによる除外は行わない（`_effective_min_dispatch_trial_order_from_pool` 側で層ごとに判定）。
     """
+    pool = _tasks_in_min_pending_dispatch_pool(
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
     orders: list[int] = []
-    for t in task_queue:
-        if float(t.get("remaining_units") or 0) <= 1e-12:
-            continue
-        sdr = t.get("start_date_req")
-        if not isinstance(sdr, date) or sdr > current_date:
-            continue
-        if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
-            continue
-        if _task_fully_machine_calendar_blocked_on_date(
-            t, current_date, daily_status, members
-        ):
-            continue
-        if _task_no_machining_window_left_from_avail_floor(
-            t,
-            current_date,
-            daily_status,
-            members,
-            machine_avail_dt,
-            machine_day_start,
-            machine_handoff=machine_handoff,
-            skills_dict=skills_dict,
-            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
-            dispatch_interval_mirror=dispatch_interval_mirror,
-        ):
-            continue
-        if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
-            t, current_date, daily_status, assign_probe_ctx
-        ):
-            continue
+    for t in pool:
         try:
             orders.append(int(t.get("dispatch_trial_order") or 10**9))
         except (TypeError, ValueError):
@@ -12765,26 +12749,29 @@ def _task_blocked_by_global_dispatch_trial_order(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
-    assign_probe_ctx: dict | None = None,
+    min_dispatch_effective: int | None = None,
 ) -> bool:
     """
     より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
+    min_dispatch_effective: プール＋プローブで求めた実効最小試行順（未指定時は安価フィルタのみの最小）。
     """
     if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
         return False
-    m = _min_pending_dispatch_trial_order_for_date(
-        task_queue,
-        current_date,
-        daily_status=daily_status,
-        members=members,
-        machine_avail_dt=machine_avail_dt,
-        machine_day_start=machine_day_start,
-        machine_handoff=machine_handoff,
-        skills_dict=skills_dict,
-        abolish_all_scheduling_limits=abolish_all_scheduling_limits,
-        dispatch_interval_mirror=dispatch_interval_mirror,
-        assign_probe_ctx=assign_probe_ctx,
-    )
+    if min_dispatch_effective is not None:
+        m = min_dispatch_effective
+    else:
+        m = _min_pending_dispatch_trial_order_for_date(
+            task_queue,
+            current_date,
+            daily_status=daily_status,
+            members=members,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_start=machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+        )
     if m is None:
         return False
     try:
@@ -14268,6 +14255,7 @@ def _trial_order_flow_eligible_tasks(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    min_dispatch_effective: int | None = None,
     assign_probe_ctx: dict | None = None,
 ) -> list:
     out = []
@@ -14288,7 +14276,7 @@ def _trial_order_flow_eligible_tasks(
             skills_dict=skills_dict,
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
-            assign_probe_ctx=assign_probe_ctx,
+            min_dispatch_effective=min_dispatch_effective,
         ):
             continue
         # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
@@ -14309,10 +14297,6 @@ def _trial_order_flow_eligible_tasks(
                 skills_dict=skills_dict,
                 abolish_all_scheduling_limits=abolish_all_scheduling_limits,
                 dispatch_interval_mirror=dispatch_interval_mirror,
-            ):
-                continue
-            if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
-                task, current_date, daily_status, assign_probe_ctx
             ):
                 continue
         if (
@@ -15209,9 +15193,96 @@ def _trial_order_assign_probe_fails(
             dispatch_interval_mirror=ctx.get("dispatch_interval_mirror"),
             machine_handoff=ctx["machine_handoff"],
         )
-    except Exception:
-        return True
+    except Exception as ex:
+        logging.warning(
+            "trial_order_assign_probe 例外のため当該行は除外しない: task=%s err=%s",
+            task.get("task_id"),
+            ex,
+        )
+        return False
     return r is None
+
+
+def _tasks_in_min_pending_dispatch_pool(
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+) -> list:
+    """`_min_pending_dispatch_trial_order_for_date` と同一の安価フィルタを通過したタスクのリスト。"""
+    out: list = []
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            continue
+        sdr = t.get("start_date_req")
+        if not isinstance(sdr, date) or sdr > current_date:
+            continue
+        if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
+            continue
+        if _task_fully_machine_calendar_blocked_on_date(
+            t, current_date, daily_status, members
+        ):
+            continue
+        if _task_no_machining_window_left_from_avail_floor(
+            t,
+            current_date,
+            daily_status,
+            members,
+            machine_avail_dt,
+            machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+        ):
+            continue
+        out.append(t)
+    return out
+
+
+def _effective_min_dispatch_trial_order_from_pool(
+    pool: list,
+    current_date: date,
+    daily_status: dict,
+    assign_probe_ctx: dict,
+) -> int | None:
+    """
+    pool を昇順 dto で見て、**その dto に属する行のうち 1 件でも** 1 ロール割当プローブが通れば
+    その dto を「実効の最小試行順」とする。
+    先頭 dto 層が全滅（機械は空いているが人で積めない等）のとき、次の dto に進みグローバル停止を防ぐ。
+    プローブ無しのときは pool の最小 dto を返す。
+    """
+    if not pool:
+        return None
+    dtos = sorted(
+        {
+            int(t.get("dispatch_trial_order") or 10**9)
+            for t in pool
+        }
+    )
+    if not assign_probe_ctx:
+        return min(dtos)
+    for d in dtos:
+        at_d = [
+            t
+            for t in pool
+            if int(t.get("dispatch_trial_order") or 10**9) == d
+        ]
+        if any(
+            not _trial_order_assign_probe_fails(
+                t, current_date, daily_status, assign_probe_ctx
+            )
+            for t in at_d
+        ):
+            return d
+    return None
 
 
 def _trial_order_first_schedule_pass(
@@ -15273,6 +15344,25 @@ def _trial_order_first_schedule_pass(
             "team_combo_presets": team_combo_presets,
             "dispatch_interval_mirror": dispatch_interval_mirror,
         }
+    _min_dispatch_eff: int | None = None
+    if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT and _assign_probe_ctx:
+        _pool_min = _tasks_in_min_pending_dispatch_pool(
+            task_queue,
+            current_date,
+            daily_status=daily_status,
+            members=members,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_start=_mc_w0,
+            machine_handoff=_mh_init,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=bool(
+                _gpo.get("abolish_all_scheduling_limits")
+            ),
+            dispatch_interval_mirror=dispatch_interval_mirror,
+        )
+        _min_dispatch_eff = _effective_min_dispatch_trial_order_from_pool(
+            _pool_min, current_date, daily_status, _assign_probe_ctx
+        )
     eligible = _trial_order_flow_eligible_tasks(
         tasks_today,
         task_queue,
@@ -15285,6 +15375,7 @@ def _trial_order_first_schedule_pass(
         skills_dict=skills_dict,
         abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
         dispatch_interval_mirror=dispatch_interval_mirror,
+        min_dispatch_effective=_min_dispatch_eff,
         assign_probe_ctx=_assign_probe_ctx,
     )
     if not eligible:
@@ -15310,8 +15401,8 @@ def _trial_order_first_schedule_pass(
                             _gpo.get("abolish_all_scheduling_limits")
                         ),
                         dispatch_interval_mirror=dispatch_interval_mirror,
-                        assign_probe_ctx=_assign_probe_ctx,
                     ),
+                    "min_dto_effective": _min_dispatch_eff,
                 },
             )
         # #endregion
@@ -15632,7 +15723,7 @@ def _trial_order_first_schedule_pass(
             "n_phase2": len(phase2_tasks),
             "serial_by_tid": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
             "global_order_strict": bool(STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT),
-            "min_dto": _min_pending_dispatch_trial_order_for_date(
+            "min_dto_raw": _min_pending_dispatch_trial_order_for_date(
                 task_queue,
                 current_date,
                 daily_status=daily_status,
@@ -15645,8 +15736,8 @@ def _trial_order_first_schedule_pass(
                     _gpo.get("abolish_all_scheduling_limits")
                 ),
                 dispatch_interval_mirror=dispatch_interval_mirror,
-                assign_probe_ctx=_assign_probe_ctx,
             ),
+            "min_dto_effective": _min_dispatch_eff,
         }
         if eligible_sorted:
             _t0 = eligible_sorted[0]
@@ -16683,6 +16774,49 @@ def _generate_plan_impl():
                             _mh_legacy_day.get("last_machining_sub") or {}
                         ),
                     }
+                    _assign_probe_ctx_legacy: dict | None = None
+                    _min_dispatch_eff_legacy: int | None = None
+                    if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
+                        _assign_probe_ctx_legacy = {
+                            "avail_dt": avail_dt,
+                            "machine_avail_dt": machine_avail_dt,
+                            "task_queue": task_queue,
+                            "skills_dict": skills_dict,
+                            "members": members,
+                            "req_map": req_map,
+                            "need_rules": need_rules,
+                            "surplus_map": surplus_map,
+                            "global_priority_override": global_priority_override,
+                            "macro_run_date": macro_run_date,
+                            "macro_now_dt": macro_now_dt,
+                            "machine_handoff": machine_handoff_legacy,
+                            "team_combo_presets": team_combo_presets,
+                            "dispatch_interval_mirror": _dispatch_interval_mirror,
+                        }
+                        _pool_legacy = _tasks_in_min_pending_dispatch_pool(
+                            task_queue,
+                            current_date,
+                            daily_status=daily_status,
+                            members=members,
+                            machine_avail_dt=machine_avail_dt,
+                            machine_day_start=_machine_day_start,
+                            machine_handoff=machine_handoff_legacy,
+                            skills_dict=skills_dict,
+                            abolish_all_scheduling_limits=bool(
+                                global_priority_override.get(
+                                    "abolish_all_scheduling_limits"
+                                )
+                            ),
+                            dispatch_interval_mirror=_dispatch_interval_mirror,
+                        )
+                        _min_dispatch_eff_legacy = (
+                            _effective_min_dispatch_trial_order_from_pool(
+                                _pool_legacy,
+                                current_date,
+                                daily_status,
+                                _assign_probe_ctx_legacy,
+                            )
+                        )
                     for task in sorted(
                         [t for t in tasks_today if float(t.get("remaining_units") or 0) > 1e-12],
                         key=lambda t: _day_schedule_task_sort_key(
@@ -16791,6 +16925,7 @@ def _generate_plan_impl():
                                 )
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
+                            min_dispatch_effective=_min_dispatch_eff_legacy,
                         ):
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
