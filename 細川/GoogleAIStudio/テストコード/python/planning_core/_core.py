@@ -1240,7 +1240,7 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# ガント時刻セル（結合なし・帯の先頭セルにラベル）: 毎セグメント new しない
+# ガント時刻列（F 以降）のみ非結合・帯の先頭セルにラベル: 毎セグメント new しない
 _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     horizontal="left",
     vertical="center",
@@ -1796,7 +1796,7 @@ def _write_results_equipment_gantt_sheet(
                 hdr_use = hdr_fill_outside_regular
         c.fill = hdr_use
         c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
-    ws.row_dimensions[hdr_row].height = 44
+    ws.row_dimensions[hdr_row].height = 65
     # 先頭データ行の左上＝時刻列先頭（F4）で窓枠固定（行1〜3・列A〜Eを固定）
     ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
     row = hdr_row + 1
