@@ -271,12 +271,12 @@
     <tr><td><span class="mono">in_progress</span></td><td><span class="mono">done_qty > 0</span></td></tr>
     <tr><td><span class="mono">roll_pipeline_ec</span> / <span class="mono">roll_pipeline_inspection</span></td><td>工程名・機械名が §B-2 パイプライン定義に一致するか</td></tr>
     <tr><td><span class="mono">planning_sheet_row_seq</span></td><td>DataFrame 読込順（依頼NO直列モードの順序に使用）</td></tr>
-    <tr><td><span class="mono">dispatch_trial_order</span></td><td><span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> で確定。全行シート指定時は列値コピー、欠損時はソート→§B-2/3 隣接→<span class="mono">_assign_sequential_dispatch_trial_order</span> で 1..n。<strong><span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=True</span> の納期シフト再試行直後も同関数で再確定</strong></td></tr>
+    <tr><td><span class="mono">dispatch_trial_order</span></td><td><span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> で確定。全行シート指定時は列値コピー、欠損時はソート→§B-2/3 隣接→<span class="mono">_assign_sequential_dispatch_trial_order</span> で 1..n。<strong>互換コードとして残る再試行経路を有効化した場合（<span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING=True</span>）も同関数で再確定</strong></td></tr>
   </tbody>
 </table>
 
 <h2 id="sec5">5. <span class="mono">generate_plan</span> 全体フロー</h2>
-<p class="note">外側 <span class="mono">while True</span> は、<strong>納期超過リトライ</strong>（<span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span>）で日中の <span class="mono">for current_date</span> を途中 break したときに<strong>次のラウンド</strong>へ進みます。再入前に <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> で試行順を再確定。<strong>カレンダーを最後まで通した</strong>ラウンドの末尾で <span class="mono">_run_b2_inspection_rewind_pass</span> が一度だけ走り、その後 <span class="mono">while</span> を抜けます（実装: <span class="mono">planning_core.generate_plan</span> → <span class="mono">_core.py</span>）。</p>
+<p class="note">外側 <span class="mono">while True</span> は、<strong>互換コードとして残る納期超過再試行経路</strong>（<span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span>）を有効化した場合に、日中の <span class="mono">for current_date</span> を途中 break したとき<strong>次のラウンド</strong>へ進みます。既定値は <span class="mono">False</span> のため通常運用ではこの分岐は通りません。再入前に <span class="mono">_apply_dispatch_trial_order_for_generate_plan</span> で試行順を再確定。<strong>カレンダーを最後まで通した</strong>ラウンドの末尾で <span class="mono">_run_b2_inspection_rewind_pass</span> が一度だけ走り、その後 <span class="mono">while</span> を抜けます（実装: <span class="mono">planning_core.generate_plan</span> → <span class="mono">_core.py</span>）。</p>
 <div class="mermaid">
 flowchart TB
   subgraph prep["読込・準備"]
@@ -390,7 +390,7 @@ flowchart TB
     <tr><td><span class="mono">STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</span></td><td><code>1</code>（既定）で <code>_trial_order_first_schedule_pass</code>（配台試行順昇順・1 パスは先頭タスクを連続詰め）。<code>0</code> で日内は <code>_day_schedule_task_sort_key</code> 順</td></tr>
     <tr><td><span class="mono">STAGE2_SERIAL_DISPATCH_BY_TASK_ID</span></td><td><code>1</code> のとき当日は直列リスト上の1依頼NOだけを候補に（ソース既定は <code>0</code>）</td></tr>
     <tr><td><span class="mono">STAGE2_EXTEND_ATTENDANCE_CALENDAR</span></td><td>残タスクがあれば勤怠日付を複製拡張するか</td></tr>
-    <tr><td><span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span></td><td>納期超過検出時に計画基準+1日して当該依頼だけ巻き戻し再実行</td></tr>
+    <tr><td><span class="mono">STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING</span></td><td>互換用フラグ（既定 <span class="mono">False</span>）。<span class="mono">True</span> のときのみ、納期超過検出時に計画基準+1日して当該依頼だけ巻き戻し再実行</td></tr>
     <tr><td><span class="mono">STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS</span></td><td>依頼ごとの +1 日リトライ上限</td></tr>
     <tr><td><span class="mono">PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE</span></td><td>熱融着検査の同一設備占有（環境変数で無効化可）</td></tr>
     <tr><td><span class="mono">TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF</span></td><td>チーム採用スコア（人数優先 vs 開始早さ）</td></tr>
