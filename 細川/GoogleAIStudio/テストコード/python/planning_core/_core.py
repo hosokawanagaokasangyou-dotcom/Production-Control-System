@@ -14117,6 +14117,13 @@ def _trial_order_flow_eligible_tasks(
             members=members,
         ):
             continue
+        # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
+        # 試行順=min の占有行が残り、他試行順が永久停止し得る。当日スロットゼロの行は候補外にする。
+        if daily_status is not None and members is not None:
+            if _task_fully_machine_calendar_blocked_on_date(
+                task, current_date, daily_status, members
+            ):
+                continue
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
         ) and (
@@ -16441,6 +16448,10 @@ def _generate_plan_impl():
                                     current_date,
                                     _my_dispatch_ord,
                                 )
+                            continue
+                        if _task_fully_machine_calendar_blocked_on_date(
+                            task, current_date, daily_status, members
+                        ):
                             continue
                         if _equipment_line_lower_dispatch_trial_still_pending(
                             task_queue,
