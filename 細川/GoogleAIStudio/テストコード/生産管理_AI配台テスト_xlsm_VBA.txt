@@ -2309,7 +2309,7 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim wE As Double
     
     On Error Resume Next
-    ws.Columns("A").ColumnWidth = 12   ' 日付（行ごと・Python 出力は結合なし）
+    ws.Columns("A").ColumnWidth = 12   ' 日付（縦結合）
     ws.Columns("B").ColumnWidth = 16   ' 機械名（Python 側フォント拡大に合わせる）
     ws.Columns("C").ColumnWidth = 16   ' 工程名
     ws.Columns("D").ColumnWidth = 26   ' 担当者（主担当＋サブ列挙）
@@ -2339,7 +2339,7 @@ Private Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' 結果_設備ガント：タイトルは A1（結合なし）。取り込み後の 1 行目一括書式のあと左寄せが崩れることがあるため固定する。
+' 結果_設備ガント：タイトルは結合セル先頭 A1。取り込み後の 1 行目一括書式のあと左寄せが崩れることがあるため固定する。
 Private Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     On Error Resume Next
     With ws.Range("A1")
@@ -2422,7 +2422,7 @@ Private Function 結果_設備ガント_行は区切り行か(ByVal ws As Worksh
     If rh > 0# And rh <= 5.6 Then 結果_設備ガント_行は区切り行か = True
 End Function
 
-' タイトル・メタ（1〜2 行）・表頭・区切り行以外＝計画行・実績行（日付は A 列行ごとのため列 A にも ▶ が現れる）
+' タイトル・メタ（1〜2 行）・表頭・区切り行以外＝計画行・実績行（日付は A 列縦結合のため列 A にも ▶ が現れる）
 Private Function 結果_設備ガント_行はデータ行か(ByVal ws As Worksheet, ByVal r As Long) As Boolean
     結果_設備ガント_行はデータ行か = False
     If r <= 2 Then Exit Function
@@ -6266,7 +6266,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
                 End With
             End If
             
-            ' (3b) 結果_設備ガントのみ：タイトル A1 を強制的に左寄せ
+            ' (3b) 結果_設備ガントのみ：タイトル A1（結合先頭）を強制的に左寄せ
             If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
                 結果_設備ガント_タイトルA1を左寄せに固定 ws
             End If

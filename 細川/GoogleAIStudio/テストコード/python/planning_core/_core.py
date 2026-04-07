@@ -29,7 +29,6 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.worksheet.pagebreak import Break
 
 from .bootstrap import (
     _clear_stage2_blocking_message_file,
@@ -1638,7 +1637,7 @@ def _write_results_equipment_gantt_sheet(
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
-    横軸は15分刻み。同一タスク／休憩／空きの連続区間は結合せず地色の帯とし、ラベルは先頭マスのみ（オーバーフロー表示）。
+    横軸は15分刻み。**時刻が入る列（F 列以降）だけ**横結合しない（帯＋先頭マスにラベル／オーバーフロー）。タイトル・A 列日付など左ブロックは従来どおり結合してよい。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     """
     wb = writer.book
@@ -1711,7 +1710,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=日付（日ブロック内で行ごとに同一表示）/ B〜E=機械名・工程名・担当者・タスク概要
+    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
     last_col = n_fixed + n_slots
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
@@ -1732,6 +1731,7 @@ def _write_results_equipment_gantt_sheet(
     master_mtime = _fmt_mtime(master_path)
 
     row = 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
     tcell.font = title_font
     tcell.fill = title_fill
@@ -1747,6 +1747,7 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 40
     row += 1
 
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     meta_line = (
         f"作成　{create_ts}"
         f"　・　データ吸出し　{data_extract_dt_str or '—'}"
@@ -1803,9 +1804,7 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
-    day_block_first_rows: list[int] = []
     for di, d in enumerate(dates_to_show):
-        day_block_first_rows.append(row)
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
 
@@ -1919,18 +1918,21 @@ def _write_results_equipment_gantt_sheet(
 
         day_end = row - 1
         if day_end >= day_start:
-            day_label = f"【{d.strftime('%Y/%m/%d')}】"
-            for r in range(day_start, day_end + 1):
-                ban = ws.cell(row=r, column=1, value=day_label)
-                ban.font = day_banner_font
-                ban.fill = day_banner_fill
-                ban.alignment = Alignment(
-                    horizontal="center",
-                    vertical="center",
-                    wrap_text=False,
-                    textRotation=90,
-                )
-                ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
+            ws.merge_cells(start_row=day_start, start_column=1, end_row=day_end, end_column=1)
+            ban = ws.cell(
+                row=day_start,
+                column=1,
+                value=f"【{d.strftime('%Y/%m/%d')}】",
+            )
+            ban.font = day_banner_font
+            ban.fill = day_banner_fill
+            ban.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=False,
+                textRotation=90,
+            )
+            ban.border = Border(left=accent_left, top=thin, bottom=thin, right=thin)
 
         if di < len(dates_to_show) - 1 and day_end >= day_start:
             for cc in range(1, last_col + 1):
@@ -1943,26 +1945,7 @@ def _write_results_equipment_gantt_sheet(
 
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
-
-    try:
-        ws.print_title_rows = f"1:{hdr_row}"
-        for bi in range(2, len(day_block_first_rows), 2):
-            ws.row_breaks.append(Break(id=day_block_first_rows[bi], man=True))
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToHeight = False
-        ws.page_setup.fitToWidth = 1
-        # A3（openpyxl: paperSize 8 = A3）
-        ws.page_setup.paperSize = 8
-        # 余白はできるだけ狭く（単位: インチ）
-        ws.page_margins.left = 0.17
-        ws.page_margins.right = 0.17
-        ws.page_margins.top = 0.17
-        ws.page_margins.bottom = 0.17
-        ws.print_options.horizontalCentered = False
-        ws.print_options.verticalCentered = False
-        ws.print_options.gridLines = False
-    except Exception:
-        pass
+    # 印刷（用紙・余白・拡縮・改ページ等）は Excel 側の手動設定に任せ、openpyxl では書かない。
 
 
 def row_has_completion_keyword(row):
