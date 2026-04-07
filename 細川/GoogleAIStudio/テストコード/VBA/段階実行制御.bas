@@ -33,9 +33,9 @@ Private Function Stage12CmdHideWindowEffective() As Boolean
     Stage12CmdHideWindowEffective = STAGE12_CMD_HIDE_WINDOW
 End Function
 
-' 段階1: master.xlsm から機械カレンダー・メンバー勤怠をマクロブックへコピーするか。
-' Python（段階1/2）は常に master.xlsm を直接読むため、配台ロジック上このコピーは不要。既定 False（スキップ）。
-' 1 / true / yes … 従来どおりコピー（マクロブック内でマスタのスナップショットを見たい場合）。
+' ?i?K1: master.xlsm ????@?B?J?????_?[?E?????o?[?Α???}?N???u?b?N??R?s?[?????B
+' Python?i?i?K1/2?j???? master.xlsm ????????A?z???W?b?N?ケ??R?s?[??s?v?B???? False?i?X?L?b?v?j?B
+' 1 / true / yes ?c ?]???????R?s?[?i?}?N???u?b?N????}?X?^??X?i?b?v?V???b?g???????????j?B
 Private Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long
@@ -90,7 +90,7 @@ Private Function WriteTempCmdFile(ByVal body As String) As String
     WriteTempCmdFile = p
 End Function
 
-' 段階1/2 用: 同一 .cmd 内で最初に title してから本処理（FindWindow はこのキャプション1つだけになる）
+' ?i?K1/2 ?p: ???? .cmd ???????? title ???????{?????iFindWindow ?????L???v?V????1?????????j
 Private Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titleText As String) As String
     Const echoOffCrLf As String = "@echo off" & vbCrLf
     If Len(body) >= Len(echoOffCrLf) And LCase$(Left$(body, 9)) = "@echo off" Then
@@ -102,7 +102,7 @@ Private Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titl
     AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & body
 End Function
 
-' 非表示時: py 行へ 1>nul 2>&1（標準出力・標準エラーを捨てる。詰まり防止）。本番ログは planning_core の execution_log（UserForm で表示）
+' ??\????: py ?s?? 1>nul 2>&1?i?W???o??E?W???G???[??????B?l???h?~?j?B?{????O?? planning_core ?? execution_log?iUserForm ??\???j
 Private Function StageVbaExitCodeFilePath() As String
     Dim k As Long
     StageVbaExitCodeFilePath = ""
@@ -129,7 +129,7 @@ Fail:
     ReadStageVbaExitCodeFromFile = &H7FFFFFFF
 End Function
 
-' xlwings RunPython: runpy.run_path で python\xlwings_console_runner.py を実行
+' xlwings RunPython: runpy.run_path ?? python\xlwings_console_runner.py ?????s
 Private Sub XwRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
@@ -138,7 +138,7 @@ EH:
     Err.Raise Err.Number, "XwRunConsoleRunner", "RunPython: " & Err.Description
 End Sub
 
-' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
+' hideConsoleWindow ?p: Windows Terminal ????????w?b?h???X?N???iconhost ??????Β?? cmd?j
 Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
     Dim conhostExe As String
     Dim comSpec As String
@@ -156,7 +156,7 @@ Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hi
     End If
 End Function
 
-' D3=false オーバーレイ専用: 既定端末が Windows Terminal のとき cmd 直起動だと FindWindow が CASCADIA_HOSTING を返し中身が空振りしうるため、conhost で古典コンソールを強制
+' D3=false ?I?[?o?[???C??p: ????[???? Windows Terminal ???? cmd ???N?????? FindWindow ?? CASCADIA_HOSTING ???????g????U????????Aconhost ???T?R???\?[????????
 Private Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) As String
     Dim conhostExe As String
     Dim cmdExe As String
@@ -169,7 +169,8 @@ Private Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String)
     End If
 End Function
 
-' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
+' D3=false: txtExecutionLog ????s?N?Z????`?i?t?H?[????N???C?A???g???_?{?|?C???g??DPI ???Z?j
+#If VBA7 Then
 Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error Resume Next
     If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
@@ -193,7 +194,7 @@ Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
 End Sub
 #End If
 
-' 段階1/2: 設定 D3=true … Exec＋待機ループで execution_log をポーリング。D3=false … スプラッシュ時は Exec＋ログ枠へ cmd 重ね（useSplashLogRectConsole）。hide 時は conhost --headless
+' ?i?K1/2: ??? D3=true ?c Exec?{??@???[?v?? execution_log ???|?[?????O?BD3=false ?c ?X?v???b?V?????? Exec?{???O?g?? cmd ?d??iuseSplashLogRectConsole?j?Bhide ???? conhost --headless
 Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean, Optional ByVal useSplashLogRectConsole As Boolean = False) As Long
     Dim execObj As Object
     Dim cmdLine As String
@@ -220,13 +221,13 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     unlockInteractiveForPoll = False
     On Error Resume Next
-    ' D3=false: スプラッシュ表示中かつ useSplashLogRectConsole … Exec＋title 検出でログ枠へ SetWindowPos。それ以外は同期 Run
+    ' D3=false: ?X?v???b?V???\???????? useSplashLogRectConsole ?c Exec?{title ???o????O?g?? SetWindowPos?B?????O????? Run
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
             Application.Interactive = True
             unlockInteractiveForPoll = True
         End If
-        ' hideConsoleWindow を維持（従来はここで False に上書きし STAGE12_CMD_HIDE_WINDOW が無効化されていた）
+        ' hideConsoleWindow ??????i?]????????? False ??????? STAGE12_CMD_HIDE_WINDOW ?????????????????j
         If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 And Not hideConsoleWindow Then
             Dim overlayCmdLine As String
             overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
@@ -304,7 +305,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Set execObj = wsh.Exec(cmdLine)
     If Err.Number <> 0 Or execObj Is Nothing Then
         Err.Clear
-        ' 同期 Run は VBA を占有しスプラッシュは更新されない。念のため Interactive を戻しても Run 中は DoEvents 不能。
+        ' ???? Run ?? VBA ???L???X?v???b?V????X?V???????B?O????? Interactive ??????? Run ???? DoEvents ?s?\?B
         If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
             Application.Interactive = True
             unlockInteractiveForPoll = True
@@ -318,7 +319,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         GoTo RestoreInteractiveAfterStagePoll
     End If
     On Error GoTo 0
-    ' Application.Interactive=False だと UserForm がほぼ再描画されない。ポーリング中だけ True に戻す（終了後は再ロック）
+    ' Application.Interactive=False ???? UserForm ??????`?悳?????B?|?[?????O?????? True ?????i?I????????b?N?j
     If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
         Application.Interactive = True
         unlockInteractiveForPoll = True
@@ -331,10 +332,10 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
         splashPollIter = splashPollIter + 1
-        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20?24秒）
+        ' ?????? COM?ixlwings ???j??w???????????????????邱???????B??20??|?[?????O?????O????i1200ms?~20?24?b?j
         If splashPollIter Mod 20 = 0 Then MacroSplash_BringFormToFront
-        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
-        ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
+        ' ?|?[?????O??u SPLASH_LOG_POLL_INTERVAL_MS: ?Z??????? xlwings COM ????????????i???? 1200ms?j?BFileLen ?s?????S?????X?L?b?v
+        ' ?w?b?h???X????R???\?[?? HWND ???????B?]???\????????u????
         If Not hideConsoleWindow Then
             If Len(consoleTitle) > 0 And Not positioned Then
                 hwnd = FindWindow(0&, consoleTitle)
@@ -378,63 +379,63 @@ Private Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFileP
 End Function
 
 Public Sub RunPythonStage1()
-    段階1_コア実行
+    ?i?K1_?R?A???s
     On Error Resume Next
-    配台計画_タスク入力_A1を選択
+    ?z??v??_?^?X?N????_A1??I??
     On Error GoTo 0
     If m_lastStage1ExitCode < 0 Then
-        If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "段階1"
+        If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "?i?K1"
         Exit Sub
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1Block As String
         st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1Block) > 0 Then
-            MsgBox st1Block, vbCritical, "段階1"
+            MsgBox st1Block, vbCritical, "?i?K1"
         Else
-            MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " です。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。（検証中止時は log\stage2_blocking_message.txt も参照）", vbExclamation, "段階1"
+            MsgBox "?i?K1?? Python ?I???R?[?h?? " & CStr(m_lastStage1ExitCode) & " ????B" & vbCrLf & "LOG ?V?[?g?Elog\execution_log.txt ???m?F????????????B?i??????~???? log\stage2_blocking_message.txt ???Q??j", vbExclamation, "?i?K1"
         End If
         Exit Sub
     End If
-    MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
+    MacroSplash_SetStep "?i?K1??????????????B?z??v??V?[?g???m?F??????A?K?v???i?K2?i?v?搶???j?????s????????????B"
     m_animMacroSucceeded = True
 End Sub
 
-' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
+' ???: ?i?K1???i?K2?i??????m??X?v???b?V???{?`???C???B?G???[????? MsgBox?j
 Public Sub RunPythonStage1ThenStage2()
-    段階1_コア実行
+    ?i?K1_?R?A???s
     On Error Resume Next
-    配台計画_タスク入力_A1を選択
+    ?z??v??_?^?X?N????_A1??I??
     On Error GoTo 0
     If m_lastStage1ExitCode < 0 Then
-        If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "段階1+2"
+        If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "?i?K1+2"
         Exit Sub
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1b2 As String
         st1b2 = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1b2) > 0 Then
-            MsgBox st1b2, vbCritical, "段階1+2"
+            MsgBox st1b2, vbCritical, "?i?K1+2"
         Else
-            MsgBox "段階1の Python 終了コードが " & CStr(m_lastStage1ExitCode) & " のため、段階2は実行しません。" & vbCrLf & "LOG シート・log\execution_log.txt を確認してください。（検証中止時は log\stage2_blocking_message.txt も参照）", vbExclamation, "段階1+2"
+            MsgBox "?i?K1?? Python ?I???R?[?h?? " & CStr(m_lastStage1ExitCode) & " ?????A?i?K2????s???????B" & vbCrLf & "LOG ?V?[?g?Elog\execution_log.txt ???m?F????????????B?i??????~???? log\stage2_blocking_message.txt ???Q??j", vbExclamation, "?i?K1+2"
         End If
         Exit Sub
     End If
-    段階2_コア実行 True
+    ?i?K2_?R?A???s True
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
-            MsgBox m_lastStage2ErrMsg, vbCritical, "段階1+2"
+            MsgBox m_lastStage2ErrMsg, vbCritical, "?i?K1+2"
         Else
-            MsgBox "段階2の Python 終了コードが " & CStr(m_lastStage2ExitCode) & " です。LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "段階1+2"
+            MsgBox "?i?K2?? Python ?I???R?[?h?? " & CStr(m_lastStage2ExitCode) & " ????BLOG ?V?[?g?Elog\execution_log.txt ???m?F????????????B", vbExclamation, "?i?K1+2"
         End If
         Exit Sub
     End If
-    段階2_取り込み結果を報告
+    ?i?K2_??????????
     If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
-' 段階1取り込み前: 既存「配台計画_タスク入力」のフォント（名・サイズ）を退避（Clear で消えるため）
-Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
+' ?i?K1?????O: ?????u?z??v??_?^?X?N????v??t?H???g?i???E?T?C?Y?j?????iClear ?????????j
+Private Sub ?z??v??_?^?X?N????_?????V?[?g????t?H???g???擾( _
     ByVal ws As Worksheet, _
     ByRef fontName As String, _
     ByRef fontSize As Double, _
@@ -455,7 +456,7 @@ Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
     rMax = r0 + ur.Rows.Count - 1
     cMax = c0 + ur.Columns.Count - 1
     
-    ' 先頭行を見出しとみなし、その次行以降で最初の非空セルのフォントを採用
+    ' ???s?????o????????A??????s??~????????Z????t?H???g????p
     For r = r0 + 1 To rMax
         For c = c0 To cMax
             If Len(Trim$(CStr(ws.Cells(r, c).Value))) > 0 Then
@@ -476,8 +477,8 @@ Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
     If Len(fontName) > 0 And fontSize > 0 Then haveFont = True
 End Sub
 
-' 取り込み直後: xlsx 側の既定フォントを上書きし、退避した体裁に戻す
-Private Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
+' ????????: xlsx ???????t?H???g?????????A?????????????
+Private Sub ?z??v??_?^?X?N????_UsedRange??t?H???g????T?C?Y??K?p( _
     ByVal ws As Worksheet, _
     ByVal fontName As String, _
     ByVal fontSize As Double)
@@ -492,19 +493,19 @@ Private Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
 End Sub
 
 Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
-    段階2_コア実行 preserveStage1LogOnLogSheet
+    ?i?K2_?R?A???s preserveStage1LogOnLogSheet
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
-            MsgBox m_lastStage2ErrMsg, vbCritical, "計画生成"
+            MsgBox m_lastStage2ErrMsg, vbCritical, "?v?搶??"
         Else
-            MsgBox "Python の終了コードが " & CStr(m_lastStage2ExitCode) & " です。LOG シート・log\execution_log.txt を確認してください。", vbExclamation, "計画生成"
+            MsgBox "Python ??I???R?[?h?? " & CStr(m_lastStage2ExitCode) & " ????BLOG ?V?[?g?Elog\execution_log.txt ???m?F????????????B", vbExclamation, "?v?搶??"
         End If
         Exit Sub
     End If
-    段階2_取り込み結果を報告
+    ?i?K2_??????????
     If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
 ' =========================================================
-' 【補助】個人別スケジュール用シート名（個人_プレフィックス・禁則文字除去・31文字以内）
+' ?y???z??l??X?P?W???[???p?V?[?g???i??l_?v???t?B?b?N?X?E????????????E31????????j
 ' =========================================================
