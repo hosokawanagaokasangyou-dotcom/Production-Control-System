@@ -11184,38 +11184,6 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
-# #region agent log
-def _agent_debug_ndjson_4704e8(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    """DEBUG 4704e8: NDJSON 1行をワークスペース直下 debug-4704e8.log へ追記。"""
-    try:
-        _root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-        )
-        _path = os.path.join(_root, "debug-4704e8.log")
-        with open(_path, "a", encoding="utf-8") as _f:
-            _f.write(
-                json.dumps(
-                    {
-                        "sessionId": "4704e8",
-                        "hypothesisId": hypothesis_id,
-                        "location": location,
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 # 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
@@ -11597,49 +11565,10 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     # max_insp - insp_done が 0 のまま残り、検査行が eligible から外れ配台試行順が永久に詰まる
     # （再現ログ: ec_fully_done かつ insp_done==max_insp==ec_done で room=0 → 後続試行順が配台不可）。
     if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
-        # #region agent log
-        if tid == "W4-3":
-            _n = getattr(_roll_pipeline_inspection_assign_room, "_dbg4704_cnt", 0)
-            if _n < 60:
-                _roll_pipeline_inspection_assign_room._dbg4704_cnt = _n + 1
-                _agent_debug_ndjson_4704e8(
-                    "H1",
-                    "_roll_pipeline_inspection_assign_room",
-                    "W4-3 assign_room branch ec_fully_done_uncapped",
-                    {
-                        "ec_done": ec_done,
-                        "insp_done": insp_done,
-                        "room": float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM),
-                        "ec_fully_done": True,
-                        "buffer": float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS),
-                    },
-                )
-        # #endregion
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     # EC 稼働中: 先行バッファ B により検査ロール上限を ec_done から遅延させる（B=2 の式はコメント参照）。
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
     _room = max(0.0, max_insp - insp_done)
-    # #region agent log
-    if tid == "W4-3":
-        _n = getattr(_roll_pipeline_inspection_assign_room, "_dbg4704_cnt", 0)
-        if _n < 60:
-            _roll_pipeline_inspection_assign_room._dbg4704_cnt = _n + 1
-            _agent_debug_ndjson_4704e8(
-                "H1",
-                "_roll_pipeline_inspection_assign_room",
-                "W4-3 assign_room",
-                {
-                    "ec_done": ec_done,
-                    "insp_done": insp_done,
-                    "max_insp": max_insp,
-                    "room": _room,
-                    "ec_fully_done": _pipeline_ec_fully_done_for_tid(
-                        task_queue, task_id
-                    ),
-                    "buffer": float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS),
-                },
-            )
-    # #endregion
     return _room
 
 
@@ -12661,43 +12590,7 @@ def _task_blocked_by_global_dispatch_trial_order(
         my_o = int(task.get("dispatch_trial_order") or 10**9)
     except (TypeError, ValueError):
         my_o = 10**9
-    _blocked = my_o > m
-    # #region agent log
-    if _blocked and my_o >= 7:
-        _cnt = getattr(_task_blocked_by_global_dispatch_trial_order, "_dbg4704_cnt", 0)
-        if _cnt < 35:
-            _holders: list[str] = []
-            for _t in task_queue:
-                if float(_t.get("remaining_units") or 0) <= 1e-12:
-                    continue
-                _sdr = _t.get("start_date_req")
-                if not isinstance(_sdr, date) or _sdr > current_date:
-                    continue
-                try:
-                    _o = int(_t.get("dispatch_trial_order") or 10**9)
-                except (TypeError, ValueError):
-                    _o = 10**9
-                if _o == m:
-                    _holders.append(
-                        f"{str(_t.get('task_id','')).strip()}/dto={_o}/"
-                        f"{'insp' if _t.get('roll_pipeline_inspection') else ''}"
-                        f"{'ec' if _t.get('roll_pipeline_ec') else ''}"
-                    )
-            _task_blocked_by_global_dispatch_trial_order._dbg4704_cnt = _cnt + 1
-            _agent_debug_ndjson_4704e8(
-                "H5",
-                "_task_blocked_by_global_dispatch_trial_order",
-                "blocked higher dto",
-                {
-                    "current_date": current_date.isoformat(),
-                    "my_tid": str(task.get("task_id", "") or "").strip(),
-                    "my_o": my_o,
-                    "min_o": m,
-                    "min_order_task_hints": _holders[:12],
-                },
-            )
-    # #endregion
-    return _blocked
+    return my_o > m
 
 
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
@@ -13967,68 +13860,20 @@ def _trial_order_flow_eligible_tasks(
 ) -> list:
     out = []
     for task in tasks_today:
-        _tid_el = str(task.get("task_id", "") or "").strip()
-        _w4_follow_dbg = _tid_el == "W4-3" and bool(
-            task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
-        )
-
-        def _w4_elig_log(hid: str, reason: str, extra: dict) -> None:
-            _c = getattr(_trial_order_flow_eligible_tasks, "_dbg4704_cnt", 0)
-            if _c >= 50:
-                return
-            _trial_order_flow_eligible_tasks._dbg4704_cnt = _c + 1
-            _agent_debug_ndjson_4704e8(
-                hid,
-                "_trial_order_flow_eligible_tasks",
-                "W4-3 follower skip",
-                {"current_date": current_date.isoformat(), "reason": reason, **extra},
-            )
-
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
-            # #region agent log
-            if _w4_follow_dbg:
-                _w4_elig_log(
-                    "H3",
-                    "same_request_dependency",
-                    {"dto": task.get("dispatch_trial_order")},
-                )
-            # #endregion
             continue
         if _task_blocked_by_global_dispatch_trial_order(task, task_queue, current_date):
-            # #region agent log
-            if _w4_follow_dbg:
-                _m = _min_pending_dispatch_trial_order_for_date(
-                    task_queue, current_date
-                )
-                _w4_elig_log(
-                    "H5",
-                    "global_dispatch_trial_order",
-                    {
-                        "dto": task.get("dispatch_trial_order"),
-                        "min_pending_dto": _m,
-                    },
-                )
-            # #endregion
             continue
-        _rp_room_el = _roll_pipeline_inspection_assign_room(
-            task_queue, str(task.get("task_id", "") or "").strip()
-        )
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
-        ) and (_rp_room_el <= 1e-12):
-            # #region agent log
-            if _w4_follow_dbg:
-                _w4_elig_log(
-                    "H1",
-                    "roll_pipeline_assign_room_zero",
-                    {
-                        "assign_room": _rp_room_el,
-                        "dto": task.get("dispatch_trial_order"),
-                    },
-                )
-            # #endregion
+        ) and (
+            _roll_pipeline_inspection_assign_room(
+                task_queue, str(task.get("task_id", "") or "").strip()
+            )
+            <= 1e-12
+        ):
             continue
         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
@@ -14036,19 +13881,6 @@ def _trial_order_flow_eligible_tasks(
                 _physical_machine_occupancy_key_for_task(task),
             )
             if _b1_holder is not None and _b1_holder is not task:
-                # #region agent log
-                if _w4_follow_dbg:
-                    _w4_elig_log(
-                        "H4",
-                        "b1_exclusive_holder",
-                        {
-                            "holder_tid": str(
-                                _b1_holder.get("task_id", "") or ""
-                            ).strip(),
-                            "dto": task.get("dispatch_trial_order"),
-                        },
-                    )
-                # #endregion
                 continue
         machine = task["machine"]
         eq_line = str(
@@ -14062,17 +13894,6 @@ def _trial_order_flow_eligible_tasks(
         if _equipment_line_lower_dispatch_trial_still_pending(
             task_queue, _mocc_trial, _my_dispatch_ord, current_date
         ):
-            # #region agent log
-            if _w4_follow_dbg:
-                _w4_elig_log(
-                    "H5",
-                    "equipment_line_lower_dto_pending",
-                    {
-                        "dto": _my_dispatch_ord,
-                        "mocc": _mocc_trial,
-                    },
-                )
-            # #endregion
             continue
         out.append(task)
     return out
@@ -14459,32 +14280,6 @@ def _assign_one_roll_trial_order_flow(
     if max_team_size < req_num:
         max_team_size = req_num
     rq_base = max(1, int(req_num))
-    # #region agent log
-    _tid_rq = str(task.get("task_id", "") or "").strip()
-    if _tid_rq == "W4-3" and (
-        task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
-    ):
-        _h2n = getattr(_assign_one_roll_trial_order_flow, "_dbg4704_cnt", 0)
-        if _h2n < 40:
-            _assign_one_roll_trial_order_flow._dbg4704_cnt = _h2n + 1
-            _agent_debug_ndjson_4704e8(
-                "H2",
-                "_assign_one_roll_trial_order_flow",
-                "W4-3 follower headcount vs capable",
-                {
-                    "current_date": current_date.isoformat(),
-                    "rq_base": rq_base,
-                    "max_team_size": max_team_size,
-                    "len_capable": len(capable_members),
-                    "len_op_today": len(
-                        [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-                    ),
-                    "pref_raw_head": (pref_raw or "")[:80],
-                    "machine": str(task.get("machine", "") or ""),
-                    "machine_name": machine_name,
-                },
-            )
-    # #endregion
     combo_key_assign = (
         f"{machine_proc}+{machine_name}"
         if machine_proc and machine_name
