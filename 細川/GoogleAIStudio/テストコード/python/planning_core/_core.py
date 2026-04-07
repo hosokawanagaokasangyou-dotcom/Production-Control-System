@@ -1956,10 +1956,13 @@ def _write_results_equipment_gantt_sheet(
         # 2日1ページ: 3日目・5日目・7日目... のブロック先頭に改ページを入れる
         for bi in range(2, len(day_block_first_rows), 2):
             ws.row_breaks.append(Break(id=day_block_first_rows[bi], man=True))
-        # A3 横 / 余白最小 / 横 1 ページ
+        # A3 横 / 余白最小 / 横だけ 1 ページに合わせる（縦は Excel の「自動」＝ページ数制限なし）
+        # fitToPage を立てないと ribbon の「ページに合わせる」相当にならず scale のままになりうる
+        ws.page_setup.fitToPage = True
+        ws.page_setup.scale = None
         ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToHeight = False
         ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
         ws.page_setup.paperSize = 8  # A3
         ws.page_margins.left = 0
         ws.page_margins.right = 0
