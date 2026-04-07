@@ -14302,6 +14302,9 @@ def _assign_one_roll_trial_order_flow(
             task_queue, _tid_assign
         )
 
+    _prev_mach_before_co = machine_avail_dt.get(
+        machine_occ_key, machine_day_floor
+    )
     _mach_floor_eff, _co_segs, _co_abort = _resolve_machine_changeover_floor_segments(
         abolish_all_scheduling_limits=bool(_gpo.get("abolish_all_scheduling_limits")),
         machine_occ_key=machine_occ_key,
@@ -14637,6 +14640,7 @@ def _assign_one_roll_trial_order_flow(
                     "capable_before_b2_disjoint": _capable_before_b2,
                     "capable_after_b2_disjoint": len(capable_members),
                     "avail_dt_count": len(avail_dt),
+                    "prev_mach_before_changeover": _prev_mach_before_co.isoformat(),
                     "b2_insp_ec_floor": (
                         b2_insp_ec_floor.isoformat() if b2_insp_ec_floor else None
                     ),
@@ -14652,6 +14656,39 @@ def _assign_one_roll_trial_order_flow(
                 },
             )
         # #endregion
+        _mem_max_end: datetime | None = None
+        for _m in capable_members:
+            if _m not in daily_status:
+                continue
+            _ed = daily_status[_m].get("end_dt")
+            if isinstance(_ed, datetime):
+                _mem_max_end = (
+                    _ed if _mem_max_end is None else max(_mem_max_end, _ed)
+                )
+        if (
+            len(capable_members) >= req_num
+            and _mem_max_end is not None
+            and isinstance(_mach_floor_eff, datetime)
+            and _mach_floor_eff >= _mem_max_end
+        ):
+            logging.warning(
+                "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でチーム候補が0件。"
+                "スキル適合(OP/AS)は %s 人いますが、設備の加工開始下限=%s が"
+                "当日の担当候補の退勤(%s)以降のためこの日は割当できません。"
+                "master「機械カレンダー」で当該日・当該機械列に不要な記入がないか、"
+                "または前工程の占有で設備下限が終業まで繰り上がっていないか確認してください"
+                "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
+                "デバッグ用: changeover前の設備空き下限=%s 占有キー=%s",
+                task.get("task_id"),
+                current_date,
+                machine,
+                machine_name,
+                len(capable_members),
+                _mach_floor_eff.strftime("%Y-%m-%d %H:%M"),
+                _mem_max_end.strftime("%H:%M"),
+                _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
+                machine_occ_key,
+            )
         return None
     t_min = min(c["team_start"] for c in team_candidates)
 
