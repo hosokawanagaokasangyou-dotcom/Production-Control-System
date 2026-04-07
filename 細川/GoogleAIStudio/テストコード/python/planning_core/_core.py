@@ -12588,6 +12588,14 @@ def _min_pending_dispatch_trial_order_for_date(
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
     _equipment_line_lower_dispatch_trial_still_pending と同様、まだ開始日に達していない行は
     「先行試行順の競合」に含めない。
+
+    **グローバル試行順ブロック**（STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT）用に、
+    「この日まだ割付候補になり得ない」行は最小値から除外する。さもないと同一依頼の
+    §A-1/§A-2 前工程（試行順は後ろだが行順は先）が必要な行が、より小さい試行順の行と
+    循環して永久に動けない（fc33 ログ: 全日 min_dto=33 かつ当該行は same_request_dependency
+    でブロック、より大きい試行順の前工程はグローバルブロックで止まる）。
+    - `_task_blocked_by_same_request_dependency` が True の行
+    - §B-2/§B-3 かつ `_roll_pipeline_inspection_assign_room` が 0 の行
     """
     orders: list[int] = []
     for t in task_queue:
@@ -12595,6 +12603,15 @@ def _min_pending_dispatch_trial_order_for_date(
             continue
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
+            continue
+        if _task_blocked_by_same_request_dependency(t, task_queue):
+            continue
+        if (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")) and (
+            _roll_pipeline_inspection_assign_room(
+                task_queue, str(t.get("task_id", "") or "").strip()
+            )
+            <= 1e-12
+        ):
             continue
         try:
             orders.append(int(t.get("dispatch_trial_order") or 10**9))
@@ -17258,12 +17275,19 @@ def _generate_plan_impl():
             if _master_plan_dates_template
             else ""
         )
+        _mlast = _master_plan_dates_template[-1] if _master_plan_dates_template else None
+        _min_global_basis = (
+            _min_pending_dispatch_trial_order_for_date(task_queue, _mlast)
+            if _mlast is not None
+            else None
+        )
         _debug_fc33_ndjson(
             "post_sim_pending",
             {
                 "hypothesisTags": ["H1_calendar", "H2_min_dto", "H3_start_req", "H4_serial"],
                 "calendar_first": _cal0,
                 "calendar_last": _cal1,
+                "min_dto_global_block_basis": _min_global_basis,
                 "stage2_serial_dispatch": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
                 "stage2_global_dto_strict": bool(
                     STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT
