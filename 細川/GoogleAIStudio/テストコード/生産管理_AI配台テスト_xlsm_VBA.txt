@@ -3956,7 +3956,9 @@ Public Sub 設定_環境変数_シートを確保()
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234_ROW", "9", "")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "#TASK_INPUT_WORKBOOK", "", "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い")
 
-    ws.Columns("A:C").AutoFit
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
 
     Application.DisplayAlerts = prevDA
     Exit Sub
