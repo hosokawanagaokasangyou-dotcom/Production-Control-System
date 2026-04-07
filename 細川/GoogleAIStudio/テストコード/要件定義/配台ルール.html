@@ -175,21 +175,53 @@
 
   <section id="rev-2026-03" class="card" aria-labelledby="h-rev">
     <h2 id="h-rev">改定（2026-03）要約</h2>
+    <p class="queue-note">「何が変わったか」を分野別に短くまとめます。詳細は <span class="file">配台ルール.md</span> の該当セクション（納期・日内フロー・勤怠/カレンダー・結果出力など）を参照してください。</p>
+
+    <h3>納期・AI（入力解釈）</h3>
     <ul>
-      <li><strong>グローバル AI</strong>: <code>task_planning_basis_dates</code> は <strong>2026-04-06 廃止</strong>（納期基準はシートの回答／指定のみ）。<strong>2026-04 追補</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名の部分一致＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映。<code>task_preferred_operators</code> は<strong>オブジェクトのみ</strong>（配列不可）。誤スキーマ時は実装が可能な範囲でルール・メモへ救済（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
-      <li><strong>2026-04-06</strong>: 配台計画_タスク入力から <strong>優先度・必要人数・タスク加工効率・指定納期_上書き・加工開始日_指定・加工開始時刻_指定</strong>（および対応 <code>（元）…</code>）を廃止。並びは <strong>配台試行順番</strong> 等を利用。</li>
-      <li><strong>同日同機械</strong>: 納期基準（<code>due_basis_date</code>）と機械名が同じ帯では、依頼NOのタイブレーク（<code>Y4-1-1</code> は先頭<code>-</code>後の数値）。</li>
+      <li><strong>納期基準の簡素化</strong>: <code>task_planning_basis_dates</code> は <strong>2026-04-06 廃止</strong>（納期基準はシートの回答／指定のみ）。</li>
+      <li><strong>グローバル AI（追補）</strong>: <code>global_day_process_operator_rules</code> で「日付＋工程名（部分一致）＋複数名」を<strong>その日その工程のチーム必須同席</strong>に反映。<code>task_preferred_operators</code> は<strong>オブジェクトのみ</strong>（配列不可）。誤スキーマ時は可能な範囲で救済（詳細は <span class="file">配台ルール.md</span> 3.4・5.2）。</li>
+      <li><strong>入力列の廃止（2026-04-06）</strong>: 配台計画_タスク入力から <strong>優先度・必要人数・タスク加工効率・指定納期_上書き・加工開始日_指定・加工開始時刻_指定</strong>（および対応 <code>（元）…</code>）を廃止。並びは <strong>配台試行順番</strong> 等を利用。</li>
+    </ul>
+
+    <h3>試行順・日内フロー</h3>
+    <ul>
       <li><strong>日内配台（実装）</strong>: <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> 既定オンで<strong>配台試行順</strong>の昇順にマルチパス。同一<strong>物理機械</strong>（機械名占有キー）は <code>_equipment_line_lower_dispatch_trial_still_pending</code> で試行順を強制。</li>
       <li><strong>依頼NO直列</strong>: <code>STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1</code> のときのみ、残のある<strong>処理順リスト先頭</strong>の依頼に限定。処理順は各依頼NOの<strong>配台試行順番の最小値</strong>が小さいほど先（<code>_serial_dispatch_order_task_ids</code>）。</li>
-      <li><strong>2026-04 追補</strong>: <strong>配台計画_タスク入力</strong>の先頭列 <strong>配台試行順番</strong>（段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与）。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。成果物に <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
-      <li><strong>2026-04-06（追補）</strong>: 段階1 は抽出直後に <strong>配台試行順番</strong> を空にクリアし、既存シートからは継承しない（<code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code> は <strong>ロール単位長さ</strong> のみ）。出力直前に同列<strong>昇順</strong>で行ソート（<code>_sort_stage1_plan_df_by_dispatch_trial_order_asc</code>）。VBA <code>ImportPlanInputTasksFromOutput</code> でも貼り付け後に<strong>配台試行順番</strong>昇順ソート（無いときのみ指定納期）。詳細は <span class="file">配台ルール.md</span> §2・§7.1・§8.0.1。</li>
-      <li><strong>区間ミラー</strong>: <code>DISPATCH_INTERVAL_MIRROR_ENFORCE</code> 既定オン。<code>dispatch_interval_mirror.py</code> で<strong>機械名占有キー</strong>・人の占有区間をタイムラインと同期し、割付候補を二重検査（Excel 逐次操作なし）。<code>0</code> で無効。</li>
-      <li><strong>未実装（次段）</strong>: 業務案どおり「近い納期から1件ずつ」型メインループ、納期基準日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
-      <li><strong>2026-04 追補（マスタ出退勤と AI）</strong>: <strong>出勤時間</strong>・<strong>退勤時間</strong>が<strong>両方</strong>入っている行は、勤怠 AI の出勤/退勤時刻で上書きしない（<span class="file">配台ルール.md</span> 3.1）。</li>
-      <li><strong>2026-04 追補（メンバー残業）</strong>: <span class="file">master.xlsm</span> 各メンバー勤怠の任意列 <strong>残業終業</strong>（K 列）で退勤上限を指定。Python <code>load_attendance_and_analyze</code> が <code>end_dt</code> に反映（詳細は <span class="file">配台ルール.md</span> 3.1）。VBA は再生成時に日付キーで復元（旧 L 列のみの退避フォールバックあり）。</li>
-      <li><strong>2026-04 追補（前休・後休）</strong>: カレンダー→出勤簿で <strong>前休</strong>＝<strong>休憩時間1_終了～定常終了</strong>、<strong>後休</strong>＝<strong>定常開始～休憩時間1_開始</strong>（VBA は通常行と同一の休憩1時刻を境界に使用。Python <code>infer_mid_break_from_reason</code> は勤怠シートの休憩1列と整合）。詳細は <span class="file">配台ルール.md</span> 3.2.2。</li>
-      <li><strong>2026-04 追補（メインシート名）</strong>: <strong>メイン相当</strong>シートは <code>メイン</code>・<code>メイン_</code>・<code>Main</code> を優先し、無ければ名前に「メイン」を含み「カレンダー」を含まない<strong>最短名</strong>（<span class="file">配台ルール.md</span> 3.2.1 本文）。</li>
-      <li><strong>2026-04 追補</strong>: <span class="file">master.xlsm</span> の <strong>機械カレンダー</strong>（<strong>メイン A12/B12</strong>＝稼働スロットの時台、<strong>A15/B15</strong>＝定常開始終了・出勤簿・定常外の A/B 列着色）。段階2は A12/B12 で <code>DEFAULT_*</code>、A15/B15 で <code>結果_設備毎の時間割</code>・<code>結果_設備毎の時間割_機械名毎</code>／<code>結果_設備ガント</code>の定常外（および機械名毎の依頼NOセル薄緑）。詳細は <span class="file">配台ルール.md</span> 3.2.1・3.2.2・4.4。<strong>2026-04 追補（設備ガント）</strong>: <code>結果_設備ガント</code> は <strong>A 列に日付を縦結合</strong>、<strong>B〜E</strong> が <strong>機械名／工程名／担当者（姓のみ・カンマ+スペース区切り）／タスク概要（依頼NO のみ）</strong>。<strong>時刻見出しは 3 行目のみ</strong>（<strong>F 列から</strong> 15 分刻み）。<strong>日付ブロック間</strong>は <strong>行高 5pt・黒背景</strong>の区切り行。窓枠固定は <strong>F4</strong>（VBA <code>結果_設備ガント_列幅を設定</code> で解除→<code>F4.Activate</code>→再固定→<code>A1.Activate</code>・<strong>ズーム 85%</strong>・<code>ScrollColumn/ScrollRow = 1</code> で左上表示）。段階2 終了時は全 <code>結果_*</code> を 100% の後 <code>結果_設備ガント_表示倍率を設定</code> で 85%＋左上スクロール。日付は A 列縦結合で <strong>【YYYY/MM/DD】</strong>・左 90° 回転。データ行 52pt・帯 10pt 前後（Python <code>_write_results_equipment_gantt_sheet</code>）。E 列折り返し・列幅は <span class="file">配台ルール.md</span> 4.4。<strong>列幅</strong>: 設備ガントは <code>結果シート_列幅_AutoFit安定</code> の対象外。取込み後・<code>結果_主要4結果シート_列オートフィット</code> の最後で専用列幅を再適用（詳細は <span class="file">配台ルール.md</span> 4.4）。</li>
+      <li><strong>同日同機械のタイブレーク</strong>: 納期基準（<code>due_basis_date</code>）と機械名が同じ帯では依頼NOで比較（例 <code>Y4-1-1</code> は先頭<code>-</code>直後の数値）。</li>
+    </ul>
+
+    <h3>入出力（配台計画シート／成果物）</h3>
+    <ul>
+      <li><strong>配台試行順番（追補）</strong>: 段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。</li>
+      <li><strong>段階1の継承方針（2026-04-06 追補）</strong>: 抽出直後に <strong>配台試行順番</strong> を空にクリアし既存シートからは継承しない（<code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code> は <strong>ロール単位長さ</strong> のみ）。出力直前に同列昇順で行ソート。VBA <code>ImportPlanInputTasksFromOutput</code> も貼り付け後に同列昇順ソート（無いときのみ指定納期）。</li>
+      <li><strong>成果物の追加（追補）</strong>: <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
+    </ul>
+
+    <h3>勤怠・カレンダー（マスタ／表示）</h3>
+    <ul>
+      <li><strong>出退勤の優先（追補）</strong>: マスタで <strong>出勤時間</strong>・<strong>退勤時間</strong>が<strong>両方</strong>入っている行は、勤怠 AI の出勤/退勤時刻で上書きしない（<span class="file">配台ルール.md</span> 3.1）。</li>
+      <li><strong>残業終業（追補）</strong>: メンバー勤怠の任意列 <strong>残業終業</strong>（K列）で退勤上限を指定。Python が <code>end_dt</code> に反映。VBA は再生成時に日付キーで復元（旧L列のみの退避フォールバックあり）。</li>
+      <li><strong>前休・後休（追補）</strong>: 出勤簿生成で <strong>前休</strong>＝休憩1終了～定常終了、<strong>後休</strong>＝定常開始～休憩1開始（詳細は <span class="file">配台ルール.md</span> 3.2.2）。</li>
+      <li><strong>メイン相当シート名（追補）</strong>: <code>メイン</code>・<code>メイン_</code>・<code>Main</code> を優先、無ければ条件に合う最短名。</li>
+      <li><strong>機械カレンダー（追補）</strong>: <strong>メイン A12/B12</strong>＝稼働スロット、<strong>A15/B15</strong>＝定常・出勤簿・定常外着色（段階2出力の定常外や機械名毎の薄緑も含む）。</li>
+    </ul>
+
+    <details class="more">
+      <summary>（詳細）設備ガントのレイアウト変更（2026-04 追補）を開く</summary>
+      <div class="inner">
+        <ul>
+          <li><code>結果_設備ガント</code> は <strong>A列に日付を縦結合</strong>、<strong>B〜E</strong> が <strong>機械名／工程名／担当者（姓のみ）／タスク概要（依頼NOのみ）</strong>。時刻グリッドは <strong>F列から</strong>（15分刻み）。</li>
+          <li>日付ブロック間に <strong>行高 5pt・黒背景</strong>の区切り行。窓枠固定は <strong>F4</strong>（VBA が貼付後に再固定・ズーム 85%・左上スクロールへ復帰）。</li>
+          <li>設備ガントは自動列幅の対象外のため、取込み後に専用列幅を再適用（詳細は <span class="file">配台ルール.md</span> 4.4）。</li>
+        </ul>
+      </div>
+    </details>
+
+    <h3>その他（検査・未実装）</h3>
+    <ul>
+      <li><strong>区間ミラー</strong>: <code>DISPATCH_INTERVAL_MIRROR_ENFORCE</code> 既定オン。機械名占有キー・人の占有区間を同期して二重検査（<code>0</code> で無効）。</li>
+      <li><strong>未実装（次段）</strong>: 「近い納期から1件ずつ」型メインループ、納期基準日16:00での割付強制（定数 <code>PLAN_DUE_DAY_COMPLETION_TIME</code> の組み込み）。</li>
     </ul>
   </section>
 
