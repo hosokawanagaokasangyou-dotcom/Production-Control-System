@@ -2302,9 +2302,13 @@ def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     """
     設備の壁時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
     機械名があればそれを正規化した値とし、無いときは equipment_line_key から機械名側を推定する。
+    machine_name に「工程+機械」と入っている場合でも、占有は物理機械名（+ の右側）に寄せる。
+    （機械カレンダー床・merged_all の物理キーと一致させるため）
     """
     mn = str(task.get("machine_name") or "").strip()
     if mn:
+        if "+" in mn:
+            return _normalize_equipment_match_key(mn.split("+", 1)[1])
         return _normalize_equipment_match_key(mn)
     return _equipment_line_key_to_physical_occupancy_key(
         str(task.get("equipment_line_key") or task.get("machine") or "")
