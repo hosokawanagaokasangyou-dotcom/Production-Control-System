@@ -2318,6 +2318,22 @@ def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     )
 
 
+def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
+    """
+    machine_avail_dt・機械カレンダー床と整合する占有キー（原則: 物理機械名）。
+    task から取れないときは eq_line（工程+機械）から機械名側を推定し、最後の手段で eq_line。
+    「… or eq_line」による工程+機械フォールバックは機械カレンダー物理キーと不一致になり得るため禁止。
+    """
+    occ = (_physical_machine_occupancy_key_for_task(task) or "").strip()
+    if occ:
+        return occ
+    ek = str(eq_line or "").strip()
+    if not ek:
+        return ""
+    pk = (_equipment_line_key_to_physical_occupancy_key(ek) or "").strip()
+    return pk or ek
+
+
 def _equipment_lookup_normalized_to_canonical(equipment_list):
     """正規化キー → master スキルシート上の列名（canonical 表記）。"""
     lookup = {}
@@ -11816,7 +11832,9 @@ def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
         return None
     holders: list = []
     for t in task_queue:
-        lk = _physical_machine_occupancy_key_for_task(t)
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        lk = _machine_occupancy_key_resolve(t, _eqt)
         if lk != m:
             continue
         if not (t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")):
@@ -12608,7 +12626,9 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         _sdr = t.get("start_date_req")
         if not isinstance(_sdr, date) or _sdr > current_date:
             continue
-        t_occ = _physical_machine_occupancy_key_for_task(t)
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        t_occ = _machine_occupancy_key_resolve(t, _eqt)
         if t_occ != line:
             continue
         try:
@@ -14006,18 +14026,18 @@ def _trial_order_flow_eligible_tasks(
             <= 1e-12
         ):
             continue
-        if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
-            _b1_holder = _exclusive_b1_inspection_holder_for_machine(
-                task_queue,
-                _physical_machine_occupancy_key_for_task(task),
-            )
-            if _b1_holder is not None and _b1_holder is not task:
-                continue
         machine = task["machine"]
         eq_line = str(
             task.get("equipment_line_key") or machine or ""
         ).strip() or machine
-        _mocc_trial = _physical_machine_occupancy_key_for_task(task) or eq_line
+        _mocc_trial = _machine_occupancy_key_resolve(task, eq_line)
+        if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
+            _b1_holder = _exclusive_b1_inspection_holder_for_machine(
+                task_queue,
+                _mocc_trial,
+            )
+            if _b1_holder is not None and _b1_holder is not task:
+                continue
         try:
             _my_dispatch_ord = int(task.get("dispatch_trial_order") or 10**9)
         except (TypeError, ValueError):
@@ -14091,7 +14111,7 @@ def _append_legacy_dispatch_candidate_for_team(
     machine_floor_cached: datetime | None = None,
 ) -> bool:
     """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
-    _machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
+    _machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
     _floor_default = datetime.combine(current_date, DEFAULT_START_TIME)
     _mdf = machine_day_floor if machine_day_floor is not None else _floor_default
@@ -14286,7 +14306,7 @@ def _assign_one_roll_trial_order_flow(
     machine_name = str(task.get("machine_name", "") or "").strip()
     machine_proc = str(machine or "").strip()
     eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
-    machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
+    machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
     _mh = machine_handoff or {
         "last_tid": {},
@@ -14965,7 +14985,7 @@ def _trial_order_first_schedule_pass(
             rq_base = res["rq_base"]
             extra_max = res["extra_max"]
             eq_line = res["eq_line"]
-            machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
+            machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
             _te_disp = parse_float_safe(task.get("task_eff_factor"), 1.0)
             if _te_disp <= 0:
                 _te_disp = 1.0
@@ -15132,7 +15152,9 @@ def _trial_order_first_schedule_pass(
     }
     phase2_mocc: set[str] = set()
     for t in phase2_tasks:
-        _pk = (_physical_machine_occupancy_key_for_task(t) or "").strip()
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        _pk = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
         if _pk:
             phase2_mocc.add(_pk)
 
@@ -15140,7 +15162,9 @@ def _trial_order_first_schedule_pass(
     phase1_rest: list = []
     for t in phase1_tasks:
         _tid1 = str(t.get("task_id") or "").strip()
-        _mk = (_physical_machine_occupancy_key_for_task(t) or "").strip()
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        _mk = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
         _same_tid_ec = bool(t.get("roll_pipeline_ec") and _tid1 and _tid1 in phase2_tids)
         _share_m = bool(_mk and _mk in phase2_mocc)
         if _same_tid_ec or _share_m:
@@ -16204,10 +16228,15 @@ def _generate_plan_impl():
                                     float(task.get("remaining_units") or 0),
                                 )
                             continue
+                        machine = task["machine"]
+                        eq_line = str(
+                            task.get("equipment_line_key") or machine or ""
+                        ).strip() or machine
+                        machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
                         if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
                             _b1_holder = _exclusive_b1_inspection_holder_for_machine(
                                 task_queue,
-                                _physical_machine_occupancy_key_for_task(task),
+                                machine_occ_key,
                             )
                             if _b1_holder is not None and _b1_holder is not task:
                                 if _trace_schedule_task_enabled(task.get("task_id")):
@@ -16241,12 +16270,6 @@ def _generate_plan_impl():
                                 task.get("done_qty_reported"),
                                 task.get("total_qty_m"),
                             )
-    
-                        machine = task['machine']
-                        eq_line = str(
-                            task.get("equipment_line_key") or machine or ""
-                        ).strip() or machine
-                        machine_occ_key = _physical_machine_occupancy_key_for_task(task) or eq_line
                         try:
                             _my_dispatch_ord = int(
                                 task.get("dispatch_trial_order") or 10**9
