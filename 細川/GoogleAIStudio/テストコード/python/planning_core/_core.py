@@ -1953,9 +1953,12 @@ def _write_results_equipment_gantt_sheet(
     try:
         # 各ページの先頭に 1〜3 行目（タイトル・メタ・表頭）を繰り返し印刷
         ws.print_title_rows = f"1:{hdr_row}"
-        # 2日1ページ: 3日目・5日目・7日目... のブロック先頭に改ページを入れる
+        # 2日1ページ: 3日目・5日目・7日目... のブロック先頭（1基準行番号）の直上に改ページ
+        # OOXML の brk@id は 0 基準（id=n は 1 基準の行 n+1 の上で区切る）。openpyxl に渡す id は (先頭行 - 1)。
         for bi in range(2, len(day_block_first_rows), 2):
-            ws.row_breaks.append(Break(id=day_block_first_rows[bi], man=True))
+            first_1based = day_block_first_rows[bi]
+            brk_id = max(0, int(first_1based) - 1)
+            ws.row_breaks.append(Break(id=brk_id, man=True))
         # A3 横 / 余白最小 / 横だけ 1 ページに合わせる（縦は Excel の「自動」＝ページ数制限なし）
         # fitToPage を立てないと ribbon の「ページに合わせる」相当にならず scale のままになりうる
         ws.page_setup.fitToPage = True
