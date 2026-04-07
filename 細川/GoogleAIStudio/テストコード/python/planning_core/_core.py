@@ -15345,6 +15345,28 @@ def _trial_order_first_schedule_pass(
         for task in phase1_tasks:
             if _drain_rolls_for_task(task):
                 pass_made = True
+    # #region agent log
+    if current_date in _AGENT_MC_DEBUG_DATES and not pass_made:
+        _agent_debug_log_mc(
+            "H7",
+            "planning_core/_core.py:_trial_order_first_schedule_pass",
+            "pass made no progress",
+            {
+                "day": str(current_date),
+                "n_eligible": len(eligible_sorted),
+                "n_phase1": len(phase1_tasks),
+                "n_phase2": len(phase2_tasks),
+                "serial_by_tid": bool(STAGE2_SERIAL_DISPATCH_BY_TASK_ID),
+                "global_order_strict": bool(STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT),
+                "min_dto": _min_pending_dispatch_trial_order_for_date(
+                    task_queue,
+                    current_date,
+                    daily_status=daily_status,
+                    members=members,
+                ),
+            },
+        )
+    # #endregion
     return pass_made
 
 
@@ -17297,6 +17319,31 @@ def _generate_plan_impl():
                                 )
     
                 if not _sched_made_progress:
+                    # #region agent log
+                    if (
+                        current_date in _AGENT_MC_DEBUG_DATES
+                        and STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST
+                    ):
+                        _p_tot = sum(
+                            1
+                            for t in task_queue
+                            if float(t.get("remaining_units") or 0) > 1e-12
+                        )
+                        _agent_debug_log_mc(
+                            "H8",
+                            "planning_core/_core.py:generate_plan day schedule",
+                            "inner loop break no progress",
+                            {
+                                "day": str(current_date),
+                                "sched_pass_index": _sched_pi,
+                                "n_tasks_today": len(tasks_today),
+                                "pending_queue": _p_tot,
+                                "serial_by_tid": bool(
+                                    STAGE2_SERIAL_DISPATCH_BY_TASK_ID
+                                ),
+                            },
+                        )
+                    # #endregion
                     break
 
             if TRACE_SCHEDULE_TASK_IDS:
