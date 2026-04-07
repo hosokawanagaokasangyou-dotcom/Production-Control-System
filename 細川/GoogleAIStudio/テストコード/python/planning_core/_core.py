@@ -113,6 +113,43 @@ SHEET_MACHINE_CALENDAR = "機械カレンダー"
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
+
+# #region agent log
+_AGENT_MC_DEBUG_DATES = frozenset(
+    {date(2026, 4, 8), date(2026, 4, 9), date(2026, 4, 10)}
+)
+
+
+def _agent_debug_log_mc(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        _rp = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-4704e8.log",
+            )
+        )
+        _payload = {
+            "sessionId": "4704e8",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_rp, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(_payload, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
 # master.xlsm: 依頼NO が変わる前後の工程×機械ごとの準備・後始末（分）／機械ごとの日次始業準備（分）
 SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
 SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
@@ -12978,6 +13015,31 @@ def load_machine_calendar_occupancy_blocks(
         for pk, iv in phys_accum.items():
             merged_all[pk] = _merge_machine_calendar_intervals(iv)
         out[d] = merged_all
+        # #region agent log
+        if d in _AGENT_MC_DEBUG_DATES:
+            _ks = {}
+            for _ek, _ivs in merged_all.items():
+                if not _ivs:
+                    continue
+                _mn = min(x[0] for x in _ivs)
+                _mx = max(x[1] for x in _ivs)
+                _ks[str(_ek)] = {"n_iv": len(_ivs), "span_start": str(_mn), "span_end": str(_mx)}
+            _agent_debug_log_mc(
+                "H1",
+                "planning_core/_core.py:load_machine_calendar_occupancy_blocks",
+                "merged_all summary",
+                {"day": str(d), "n_keys": len(merged_all), "keys": _ks},
+            )
+        # #endregion
+    if out.keys() & _AGENT_MC_DEBUG_DATES:
+        # #region agent log
+        _agent_debug_log_mc(
+            "H2",
+            "planning_core/_core.py:load_machine_calendar_occupancy_blocks",
+            "col_to_eq",
+            {"col_to_eq": {str(int(c)): v for c, v in sorted(col_to_eq.items())}},
+        )
+        # #endregion
     return out
 
 
@@ -13013,6 +13075,9 @@ def _apply_machine_calendar_floor_for_date(
     w1 = machine_calendar_plan_end
     if w1 is None:
         w1 = datetime.combine(current_date, DEFAULT_END_TIME)
+    # #region agent log
+    _mc_floor_bumps: list[dict] = []
+    # #endregion
     for eq_s in candidates:
         blocks = day_blocks.get(eq_s)
         if not blocks:
@@ -13024,6 +13089,32 @@ def _apply_machine_calendar_floor_for_date(
         t1 = _bump_dt_past_machine_calendar_blocks(t0, blocks_c)
         if t1 > t0:
             machine_avail_dt[eq_s] = t1
+            # #region agent log
+            _mc_floor_bumps.append(
+                {
+                    "eq_s": eq_s,
+                    "t0": str(t0),
+                    "t1": str(t1),
+                    "n_blocks_c": len(blocks_c),
+                }
+            )
+            # #endregion
+    # #region agent log
+    if current_date in _AGENT_MC_DEBUG_DATES:
+        _agent_debug_log_mc(
+            "H3",
+            "planning_core/_core.py:_apply_machine_calendar_floor_for_date",
+            "floor bumps",
+            {
+                "day": str(current_date),
+                "n_candidates": len(candidates),
+                "w0": str(w0),
+                "w1": str(w1),
+                "n_bumps": len(_mc_floor_bumps),
+                "bumps": _mc_floor_bumps[:60],
+            },
+        )
+    # #endregion
 
 
 def _bump_machine_avail_after_roll_for_calendar(
@@ -15934,6 +16025,22 @@ def _generate_plan_impl():
                     _machine_day_start,
                     machine_calendar_plan_end=_machine_calendar_plan_end,
                 )
+                # #region agent log
+                if current_date in _AGENT_MC_DEBUG_DATES:
+                    _mk = sorted(str(k) for k in machine_avail_dt.keys())
+                    _agent_debug_log_mc(
+                        "H4",
+                        "planning_core/_core.py:generate_plan day loop",
+                        "after seed+calendar floor",
+                        {
+                            "day": str(current_date),
+                            "n_machine_avail_keys": len(_mk),
+                            "machine_avail_keys_head": _mk[:80],
+                            "mc_plan_end": str(_machine_calendar_plan_end),
+                            "n_workers": len(avail_dt),
+                        },
+                    )
+                # #endregion
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
