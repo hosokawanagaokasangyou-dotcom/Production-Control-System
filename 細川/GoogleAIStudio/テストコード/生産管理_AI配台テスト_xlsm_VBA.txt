@@ -59,7 +59,7 @@ Private Const SND_FILENAME As Long = &H20000
 Private Const MACRO_COMPLETE_CHIME_REL_DIR As String = "sounds"
 Private Const MACRO_COMPLETE_CHIME_FILE_NAME As String = "macro_complete_chime.wav"
 Private Const MACRO_COMPLETE_CHIME_DOWNLOAD_URL As String = "https://raw.githubusercontent.com/kamoshika9999/----AI------/xlwings%E7%A9%8D%E6%A5%B5%E9%81%A9%E7%94%A8/%E7%B4%B0%E5%B7%9D/GoogleAIStudio/%E3%83%86%E3%82%B9%E3%83%88%E3%82%B3%E3%83%BC%E3%83%89/sounds/macro_complete_chime.wav"
-' 完了 MP3（sounds 配下）。トラックは「設定」D4 に 1〜4（空・不正は 1）。実ファイル名を変えたら定数だけ合わせる。
+' 完了 MP3（sounds 配下）。トラックは「設定」D4 に 1?4（空・不正は 1）。実ファイル名を変えたら定数だけ合わせる。
 Private Const MACRO_COMPLETE_MP3_1 As String = "穏やかな応答1.mp3"
 Private Const MACRO_COMPLETE_MP3_2 As String = "穏やかな応答2.mp3"
 Private Const MACRO_COMPLETE_MP3_3 As String = "穏やかな応答3.mp3"
@@ -131,8 +131,7 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
-' ★ 配台結果 xlsx のフォントは planning_core がセルごとに指定。「設定」B4/B5 は参照しない（未使用）。
-' ★「設定」B3以降に依頼NOがあると段階2はデバッグ配台（その依頼の行のみ配台・Python が起動直後にメッセージ表示）。B列がすべて空なら通常。A3以降はログトレース専用。
+' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
@@ -592,10 +591,10 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
                     If exitFromFile <> &H7FFFFFFF Then
                         RunCmdFileStageExecAndPoll = exitFromFile
                     Else
-                        RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+                        RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
                     End If
                 Else
-                    RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+                    RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
                 End If
                 If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
                 On Error GoTo 0
@@ -643,7 +642,7 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
         splashPollIter = splashPollIter + 1
-        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20≈24秒）
+        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20?24秒）
         If splashPollIter Mod 20 = 0 Then MacroSplash_BringFormToFront
         ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
@@ -672,10 +671,10 @@ Private Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePa
         If exitFromFile <> &H7FFFFFFF Then
             RunCmdFileStageExecAndPoll = exitFromFile
         Else
-            RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+            RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
         End If
     Else
-        RunCmdFileStageExecAndPoll = CLng(execObj.ExitCode)
+        RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
     End If
     If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
     On Error GoTo 0
@@ -836,7 +835,7 @@ Private Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As S
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
-    stm.Charset = "UTF-8"
+    stm.charset = "UTF-8"
     stm.Open
     stm.WriteText textContent
     stm.SaveToFile filePath, 2
@@ -852,7 +851,7 @@ Private Function GeminiReadUtf8File(ByVal filePath As String) As String
     On Error GoTo CleanFail
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
-    stm.Charset = "UTF-8"
+    stm.charset = "UTF-8"
     stm.Open
     stm.LoadFromFile filePath
     GeminiReadUtf8File = stm.ReadText
@@ -911,7 +910,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
         Exit Sub
     End If
     
-    wbPath = ThisWorkbook.Path
+    wbPath = ThisWorkbook.path
     If Len(wbPath) = 0 Then
         MsgBox "ブックを一度保存してから実行してください（保存フォルダに暗号化 JSON を出力します）。", vbExclamation
         Exit Sub
@@ -1016,7 +1015,7 @@ Public Sub メインシート_masterブックを開く()
     Dim wb As Workbook
     Dim wbMaster As Workbook
     
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then
         MsgBox "ブックを一度保存してから実行してください。", vbExclamation
         Exit Sub
@@ -1136,7 +1135,7 @@ Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef 
     If InStr(s, "-") > 0 Then sep = "-"
     If InStr(s, "－") > 0 Then sep = "－"
     If Len(sep) = 0 And InStr(s, "~") > 0 Then sep = "~"
-    If Len(sep) = 0 And InStr(s, "〜") > 0 Then sep = "〜"
+    If Len(sep) = 0 And InStr(s, "?") > 0 Then sep = "?"
     If Len(sep) = 0 Then Exit Function
     
     parts = Split(s, sep, 2)
@@ -1210,7 +1209,7 @@ Private Sub マスタメイン_工場稼働と定常を取得( _
     
     facOk = False
     regOk = False
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Sub
     p = folder & "\" & MASTER_WORKBOOK_FILE
     If Len(Dir(p)) = 0 Then Exit Sub
@@ -1530,7 +1529,7 @@ Private Function マスタメイン_工場標準勤怠表示文字列() As Strin
     マスタメイン_工場標準勤怠表示文字列 = FB
     On Error GoTo CleanExit
     
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     p = folder & "\" & MASTER_WORKBOOK_FILE
     If Len(Dir(p)) = 0 Then Exit Function
@@ -1779,7 +1778,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
         GoTo CleanExit
     End If
     
-    keys = members.Keys
+    keys = members.keys
     ReDim keysArr(0 To UBound(keys))
     For i = 0 To UBound(keys)
         keysArr(i) = CStr(keys(i))
@@ -1801,7 +1800,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal S
         mn = keysArr(i)
         sheetName = SafePersonalSheetName(mn)
         On Error Resume Next
-        wsMain.Hyperlinks.Add Anchor:=wsMain.Cells(r, 2), Address:="", SubAddress:="'" & Replace(sheetName, "'", "''") & "'!A1", TextToDisplay:=mn
+        wsMain.Hyperlinks.Add anchor:=wsMain.Cells(r, 2), Address:="", SubAddress:="'" & Replace(sheetName, "'", "''") & "'!A1", TextToDisplay:=mn
         On Error GoTo EH
         メインシート_フォント属性を適用 wsMain.Cells(r, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
         
@@ -1889,7 +1888,7 @@ Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal target
     
     On Error GoTo GeminiUsageP_Fail
     Set adoStream = CreateObject("ADODB.Stream")
-    adoStream.Charset = "UTF-8"
+    adoStream.charset = "UTF-8"
     adoStream.Open
     adoStream.LoadFromFile fp
     outputText = adoStream.ReadText
@@ -2005,11 +2004,11 @@ Private Sub メインシート_フォント属性を適用( _
 End Sub
 
 ' 範囲内の各セルに付いたハイパーリンクだけ削除（書式は維持）
-Private Sub メインシート_指定範囲のハイパーリンクを削除(ByVal wsMain As Worksheet, ByVal target As Range)
+Private Sub メインシート_指定範囲のハイパーリンクを削除(ByVal wsMain As Worksheet, ByVal Target As Range)
     Dim c As Range
-    If wsMain Is Nothing Or target Is Nothing Then Exit Sub
+    If wsMain Is Nothing Or Target Is Nothing Then Exit Sub
     On Error Resume Next
-    For Each c In target.Cells
+    For Each c In Target.Cells
         If c.Hyperlinks.Count > 0 Then c.Hyperlinks.Delete
     Next c
     On Error GoTo 0
@@ -2070,7 +2069,7 @@ Private Sub メインシート_結果シートリンクを更新(ByVal wsMain As
     r = 2
     For i = 1 To n
         sn = arr(i)
-        wsMain.Hyperlinks.Add Anchor:=wsMain.Cells(r, 1), Address:="", SubAddress:="'" & Replace(sn, "'", "''") & "'!A1", TextToDisplay:=sn
+        wsMain.Hyperlinks.Add anchor:=wsMain.Cells(r, 1), Address:="", SubAddress:="'" & Replace(sn, "'", "''") & "'!A1", TextToDisplay:=sn
         メインシート_フォント属性を適用 wsMain.Cells(r, 1), afn, afs, afc, False, aIt, aUl
         r = r + 1
     Next i
@@ -2169,10 +2168,10 @@ Private Sub 列設定結果タスク一覧_番号付き重複シートを削除(
     Dim i As Long
     Dim ws As Worksheet
     Dim pfx As String
-    Dim prevDa As Boolean
+    Dim prevDA As Boolean
     
     pfx = SHEET_COL_CONFIG_RESULT_TASK & " ("
-    prevDa = Application.DisplayAlerts
+    prevDA = Application.DisplayAlerts
     Application.DisplayAlerts = False
     For i = wb.Worksheets.Count To 1 Step -1
         Set ws = wb.Worksheets(i)
@@ -2180,7 +2179,7 @@ Private Sub 列設定結果タスク一覧_番号付き重複シートを削除(
             ws.Delete
         End If
     Next i
-    Application.DisplayAlerts = prevDa
+    Application.DisplayAlerts = prevDA
 End Sub
 
 ' 段階2 取り込み後: 「設定」タブの直前に列設定シートを置く（個人_*・LOG・設定の並べ替えの後に呼ぶ）
@@ -2220,7 +2219,7 @@ Private Sub 結果シート_メインへ戻るリンクを付与(ByVal ws As Wor
     On Error Resume Next
     anchor.Hyperlinks.Delete
     On Error GoTo 0
-    ws.Hyperlinks.Add Anchor:=anchor, Address:="", SubAddress:="'" & Replace(mainName, "'", "''") & "'!A1", TextToDisplay:="≪ メインへ"
+    ws.Hyperlinks.Add anchor:=anchor, Address:="", SubAddress:="'" & Replace(mainName, "'", "''") & "'!A1", TextToDisplay:="≪ メインへ"
     With anchor
         .Font.Bold = False
         .Interior.Pattern = xlNone
@@ -2422,7 +2421,7 @@ Private Function 結果_設備ガント_行は区切り行か(ByVal ws As Worksh
     If rh > 0# And rh <= 5.6 Then 結果_設備ガント_行は区切り行か = True
 End Function
 
-' タイトル・メタ（1〜2 行）・表頭・区切り行以外＝計画行・実績行（日付は A 列縦結合のため列 A にも ▶ が現れる）
+' タイトル・メタ（1?2 行）・表頭・区切り行以外＝計画行・実績行（日付は A 列縦結合のため列 A にも ? が現れる）
 Private Function 結果_設備ガント_行はデータ行か(ByVal ws As Worksheet, ByVal r As Long) As Boolean
     結果_設備ガント_行はデータ行か = False
     If r <= 2 Then Exit Function
@@ -2456,7 +2455,7 @@ ResetState:
 End Sub
 
 ' ThisWorkbook.SheetSelectionChange から呼ぶ（標準モジュールは Public 必須）
-Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal Sh As Object, ByVal Target As Range)
+Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal sh As Object, ByVal Target As Range)
     Dim ws As Worksheet
     Dim wb As Workbook
     Dim r As Long
@@ -2464,9 +2463,9 @@ Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal Sh As Obj
     Dim rng As Range
     
     On Error GoTo QuietExit
-    If Sh Is Nothing Then Exit Sub
-    If Not TypeOf Sh Is Worksheet Then Exit Sub
-    Set ws = Sh
+    If sh Is Nothing Then Exit Sub
+    If Not TypeOf sh Is Worksheet Then Exit Sub
+    Set ws = sh
     Set wb = ws.Parent
     
     結果_設備ガント_行ハイライト_Clear wb
@@ -2711,7 +2710,7 @@ End Sub
 ' =========================================================
 ' マクロ実行中スプラッシュ（擬似モーダル）
 ' ・シート「設定」D3: true/TRUE でログ枠へ書き込み＋Exec 待機中のファイルポーリング。false/FALSE で無し・同期 Run・通常 cmd 表示（log\execution_log.txt への Python 出力は変わらず）
-' ・シート「設定」D4: マクロ成功時の完了チャイム用 MP3 トラック番号 1〜4（空・不正は 1）。ファイル名は標準モジュール MACRO_COMPLETE_MP3_1〜4。sounds フォルダに配置。MP3 が無い／再生失敗時は macro_complete_chime.wav
+' ・シート「設定」D4: マクロ成功時の完了チャイム用 MP3 トラック番号 1?4（空・不正は 1）。ファイル名は標準モジュール MACRO_COMPLETE_MP3_1?4。sounds フォルダに配置。MP3 が無い／再生失敗時は macro_complete_chime.wav
 ' ・段階1／段階2のスプラッシュのみ: BGM（sounds 配下の Glass_Architecture1.mp3 等）を MCI ループ再生。終了時はフェードアウト後に close（完了チャイムより先）。他マクロのスプラッシュでは BGM・チャイムは再生しない
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
 ' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
@@ -2791,14 +2790,14 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     If Not m_macroSplashShown Then Exit Sub
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
-    If Not tb Is Nothing Then tb.Text = ""
+    If Not tb Is Nothing Then tb.text = ""
 End Sub
 
 ' ログは末尾が最新。キャレットを最後に置き txtExecutionLog にフォーカス（UserForm には SetFocus がない）
 Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     On Error Resume Next
     tb.HideSelection = False
-    tb.SelStart = Len(tb.Text)
+    tb.SelStart = Len(tb.text)
     tb.SelLength = 0
     If Application.Interactive Then
         tb.SetFocus
@@ -2850,7 +2849,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
         m_splashPollHaveCachedFileLen = True
         prevSU = Application.ScreenUpdating
         If Not prevSU Then Application.ScreenUpdating = True
-        tb.Text = s
+        tb.text = s
         MacroSplash_TextBoxScrollToTail tb
         If Not prevSU Then Application.ScreenUpdating = False
         Exit Sub
@@ -2859,17 +2858,17 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     flen = 0
     flen = FileLen(m_splashExecutionLogPath)
     If Err.Number <> 0 Then Err.Clear
-    If flen = 0 And Len(tb.Text) = 0 Then Exit Sub
+    If flen = 0 And Len(tb.text) = 0 Then Exit Sub
     If m_splashReadErrShown Then Exit Sub
     m_splashPollHaveCachedFileLen = False
     errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
     prevSU = Application.ScreenUpdating
     If Not prevSU Then Application.ScreenUpdating = True
-    tb.Text = errBanner & tb.Text
-    m_splashLastLogSnapshot = tb.Text
+    tb.text = errBanner & tb.text
+    m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
     tb.SelLength = 0
-    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 — 下記の【ログ表示エラー】を参照）"
+    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
     frmMacroSplash.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
@@ -2896,13 +2895,13 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     If n = 0 Then
         flen = FileLen(fullPath)
         If Err.Number <> 0 Then Err.Clear
-        If flen > 0 Or Len(tb.Text) > 0 Then
+        If flen > 0 Or Len(tb.text) > 0 Then
             errBanner = "【ログ表示エラー】execution_log.txt を読み込めませんでした。パス: " & fullPath & vbCrLf & vbCrLf
             prevInt = Application.Interactive
             Application.Interactive = True
-            tb.Text = errBanner & tb.Text
-            m_splashLastLogSnapshot = tb.Text
-            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 — 下記を参照）"
+            tb.text = errBanner & tb.text
+            m_splashLastLogSnapshot = tb.text
+            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
             frmMacroSplash.Repaint
             DoEvents
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
@@ -2915,7 +2914,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
     prevInt = Application.Interactive
     Application.Interactive = True
-    tb.Text = s
+    tb.text = s
     m_splashLastLogSnapshot = s
     MacroSplash_TextBoxScrollToTail tb
     If m_macroSplashLockedExcel Then
@@ -2927,7 +2926,7 @@ End Sub
 
 Private Function MacroCompleteChime_LocalWavPath() As String
     Dim folder As String
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     MacroCompleteChime_LocalWavPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_COMPLETE_CHIME_FILE_NAME
 End Function
@@ -2935,7 +2934,7 @@ End Function
 Private Function MacroCompleteChime_LocalMp3Path(ByVal track1to4 As Long) As String
     Dim folder As String
     Dim fn As String
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     Select Case track1to4
         Case 1: fn = MACRO_COMPLETE_MP3_1
@@ -2956,7 +2955,7 @@ Private Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Bool
     a = ""
     On Error GoTo Fail
     Randomize
-    ' Timer*1e6 は Long 上限を超えうるため、Rnd のみで 0〜2147483646（CLng 安全域）
+    ' Timer*1e6 は Long 上限を超えうるため、Rnd のみで 0?2147483646（CLng 安全域）
     a = "pm_ai_" & CStr(CLng(2147483646# * Rnd))
     r = mciSendStringW(StrPtr("close " & a), 0&, 0, 0&)
     Err.Clear
@@ -3005,7 +3004,7 @@ Private Function MacroCompleteChime_EnsureWavPath() As String
         MacroCompleteChime_EnsureWavPath = p
         Exit Function
     End If
-    dirSounds = ThisWorkbook.Path & "\" & MACRO_COMPLETE_CHIME_REL_DIR
+    dirSounds = ThisWorkbook.path & "\" & MACRO_COMPLETE_CHIME_REL_DIR
     On Error Resume Next
     MkDir dirSounds
     On Error GoTo 0
@@ -3040,7 +3039,7 @@ End Sub
 
 Private Function MacroStartBgm_FullPath() As String
     Dim folder As String
-    folder = ThisWorkbook.Path
+    folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     MacroStartBgm_FullPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_START_BGM_FILENAME
 End Function
@@ -3107,7 +3106,7 @@ Private Sub MacroSplash_PositionDockExcelBottomCenter()
 #If VBA7 Then
     xlHwnd = Application.hwnd
 #Else
-    xlHwnd = Application.hWnd
+    xlHwnd = Application.hwnd
 #End If
     If xlHwnd = 0 Then GoTo SplashDockDone
     splashHwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
@@ -3196,11 +3195,11 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     Dim n As Long
-    n = Len(tb.Text) + Len(chunk)
+    n = Len(tb.text) + Len(chunk)
     If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
-        tb.Text = Right$(tb.Text & chunk, SPLASH_LOG_MAX_DISPLAY_CHARS)
+        tb.text = Right$(tb.text & chunk, SPLASH_LOG_MAX_DISPLAY_CHARS)
     Else
-        tb.Text = tb.Text & chunk
+        tb.text = tb.text & chunk
     End If
     MacroSplash_TextBoxScrollToTail tb
 End Sub
@@ -3324,7 +3323,7 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
     
     With shp
         With .TextFrame2.TextRange
-            .Text = btnText
+            .text = btnText
             .Font.Name = "メイリオ"
             .Font.Size = 14
             .Font.Bold = msoTrue
@@ -3340,7 +3339,7 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
             .BackColor.RGB = colorBottom
         End With
         
-        .Line.Visible = msoFalse
+        .line.Visible = msoFalse
         
         With .ThreeD
             .BevelTopType = msoBevelSoftRound
@@ -3470,7 +3469,7 @@ Sub InstallComponents()
     
     Set wsh = CreateObject("WScript.Shell")
     
-    workDir = Trim$(ThisWorkbook.Path)
+    workDir = Trim$(ThisWorkbook.path)
     If Len(workDir) = 0 Then
         MsgBox "先にこのブックを保存してから環境構築を実行してください。" & vbCrLf & _
                "（setup_environment.py は python\ またはブック直下、requirements.txt は python\ に配置）", vbExclamation
@@ -3616,7 +3615,7 @@ Private Function TryRefreshWorkbookQueries() As Boolean
         DoEvents
         Application.StatusBar = False
     ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
-        Application.StatusBar = "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答なし（" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "ms）— Power Query 等の一括更新をスキップして処理を続行します"
+        Application.StatusBar = "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答なし（" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "ms）? Power Query 等の一括更新をスキップして処理を続行します"
         DoEvents
         Application.StatusBar = False
     Else
@@ -3665,7 +3664,7 @@ Private Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
-    stm.Charset = charset
+    stm.charset = charset
     stm.Open
     stm.LoadFromFile filePath
     ReadTextFileWithCharset = stm.ReadText
@@ -3957,7 +3956,9 @@ Public Sub 設定_環境変数_シートを確保()
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234_ROW", "9", "")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "#TASK_INPUT_WORKBOOK", "", "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い")
 
-    ws.Columns("A:C").AutoFit
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
 
     Application.DisplayAlerts = prevDA
     Exit Sub
@@ -3969,7 +3970,7 @@ End Sub
 ' =========================================================
 ' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
 ' ・一覧をブックから再取得 … 全シートを列挙。シート名が一致する行は並び順・表示の意図を維持し、A 列は 1 からの連番に振り直す。C 列はドロップダウン（インライン一覧。F 列は候補表示）
-' ・ブックへ適用 … A〜C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
+' ・ブックへ適用 … A?C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
 ' ・段階1/段階2 成功完了時に一覧を自動更新（設定の維持は名前一致で行う）
 ' =========================================================
 Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
@@ -4027,9 +4028,9 @@ Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Workshe
     rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="表示,非表示,完全非表示"
     If Err.Number = 0 Then GoTo ApplyVisFlags
     Err.Clear
-    ThisWorkbook.Names(NM_SHEET_VIS).Delete
+    ThisWorkbook.names(NM_SHEET_VIS).Delete
     Err.Clear
-    ThisWorkbook.Names.Add Name:=NM_SHEET_VIS, RefersTo:=ws.Range("F2:F4")
+    ThisWorkbook.names.Add Name:=NM_SHEET_VIS, RefersTo:=ws.Range("F2:F4")
     If Err.Number = 0 Then
         Err.Clear
         rng.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & NM_SHEET_VIS
@@ -4379,7 +4380,7 @@ End Sub
 
 ' =========================================================
 ' Python が出力した log\exclude_rules_e_column_vba.tsv から E 列（ロジック式）を書き込む。
-' COM は A〜D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
+' COM は A?D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
 ' =========================================================
 Private Function NormalizeWorkbookPathForCompare(ByVal p As String) As String
     NormalizeWorkbookPathForCompare = LCase$(Replace(Replace(Trim$(p), "/", "\"), vbTab, ""))
@@ -4397,7 +4398,7 @@ Private Function Utf8BytesToString(ByVal data As Variant) As String
     stm.Write bytes
     stm.Position = 0
     stm.Type = 2
-    stm.Charset = "UTF-8"
+    stm.charset = "UTF-8"
     Utf8BytesToString = stm.ReadText
     stm.Close
     Exit Function
@@ -4411,7 +4412,7 @@ Private Function DecodeBase64Utf8(ByVal b64 As String) As String
     Set xml = CreateObject("MSXML2.DOMDocument.6.0")
     Set node = xml.createElement("b64")
     node.DataType = "bin.base64"
-    node.Text = b64
+    node.text = b64
     DecodeBase64Utf8 = Utf8BytesToString(node.NodeTypedValue)
     Exit Function
 Fail:
@@ -4419,7 +4420,7 @@ Fail:
     Set xml = CreateObject("MSXML2.DOMDocument.3.0")
     Set node = xml.createElement("b64")
     node.DataType = "bin.base64"
-    node.Text = b64
+    node.text = b64
     DecodeBase64Utf8 = Utf8BytesToString(node.NodeTypedValue)
     Exit Function
 Fail2:
@@ -4445,14 +4446,14 @@ Public Sub 設定_配台不要工程_E列_TSVから反映()
 
     On Error GoTo CleanFail
 
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then Exit Sub
 
     tsvPath = targetDir & "\log\exclude_rules_e_column_vba.tsv"
     If Len(Dir(tsvPath)) = 0 Then Exit Sub
 
     Set stm = CreateObject("ADODB.Stream")
-    stm.Charset = "UTF-8"
+    stm.charset = "UTF-8"
     stm.Open
     stm.LoadFromFile tsvPath
     text = stm.ReadText
@@ -4517,7 +4518,7 @@ End Sub
 
 ' =========================================================
 ' Python が出力した log\exclude_rules_matrix_vba.tsv から
-' 「設定_配台不要工程」の A〜E を書き込む（ブックが Excel で開いたまま openpyxl が保存できないとき）。
+' 「設定_配台不要工程」の A?E を書き込む（ブックが Excel で開いたまま openpyxl が保存できないとき）。
 ' =========================================================
 Public Sub 設定_配台不要工程_AからE_TSVから反映()
     Dim targetDir As String
@@ -4539,14 +4540,14 @@ Public Sub 設定_配台不要工程_AからE_TSVから反映()
 
     On Error GoTo MatrixFail
 
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then Exit Sub
 
     matrixPath = targetDir & "\log\exclude_rules_matrix_vba.tsv"
     If Len(Dir(matrixPath)) = 0 Then Exit Sub
 
     Set stm = CreateObject("ADODB.Stream")
-    stm.Charset = "UTF-8"
+    stm.charset = "UTF-8"
     stm.Open
     stm.LoadFromFile matrixPath
     text = stm.ReadText
@@ -5073,7 +5074,7 @@ Private Sub 配台マクロ_対象シートを条件どおりに保護(Optional 
     
     On Error Resume Next
     td = targetDir
-    If Len(td) = 0 Then td = ThisWorkbook.Path
+    If Len(td) = 0 Then td = ThisWorkbook.path
     
     For Each ws In ThisWorkbook.Worksheets
         If Left$(ws.Name, 3) = "結果_" Then
@@ -5091,7 +5092,7 @@ Private Sub 配台マクロ_対象シートを条件どおりに保護(Optional 
     If Len(td) > 0 Then
         配台_マスタSkillsから勤怠シート名を辞書に追加 td, dict
     End If
-    For Each nm In dict.Keys
+    For Each nm In dict.keys
         Set ws = Nothing
         Set ws = ThisWorkbook.Worksheets(CStr(nm))
         If Not ws Is Nothing Then
@@ -5132,7 +5133,7 @@ Private Sub 段階1_コア実行()
 
     prevScreenUpdating = Application.ScreenUpdating
     prevDisplayAlerts = Application.DisplayAlerts
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If targetDir = "" Then
         m_lastStage1ErrMsg = "先にこのExcelファイルを保存してください。"
         Exit Sub
@@ -5272,7 +5273,7 @@ Private Sub 段階1_コア実行()
         m_lastStage1ExitCode = exitCode
     End If
 
-    MacroSplash_SetStep "段階1: 配台不要工程シートへ TSV（A〜D）を反映しています…"
+    MacroSplash_SetStep "段階1: 配台不要工程シートへ TSV（A?D）を反映しています…"
     ' Gemini サマリ・設定シートは planning_core が openpyxl で保存（ブックが閉じているとき）。
     ' Excel で開いたままのときは log の TSV/テキストをマクロで反映する。
     On Error Resume Next
@@ -5293,7 +5294,7 @@ Private Sub 段階1_コア実行()
         End If
     Else
         Set adoStream = CreateObject("ADODB.Stream")
-        adoStream.Charset = "UTF-8"
+        adoStream.charset = "UTF-8"
         adoStream.Open
         adoStream.LoadFromFile logFilePath
         outputText = adoStream.ReadText
@@ -5381,7 +5382,7 @@ Public Sub RunPythonStage1()
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1Block As String
-        st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.Path & "\log\stage2_blocking_message.txt"))
+        st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1Block) > 0 Then
             MsgBox st1Block, vbCritical, "段階1"
         Else
@@ -5405,7 +5406,7 @@ Public Sub RunPythonStage1ThenStage2()
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1b2 As String
-        st1b2 = Trim$(GeminiReadUtf8File(ThisWorkbook.Path & "\log\stage2_blocking_message.txt"))
+        st1b2 = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1b2) > 0 Then
             MsgBox st1b2, vbCritical, "段階1+2"
         Else
@@ -5591,7 +5592,7 @@ Private Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Bo
     End If
     On Error GoTo 0
 
-    ' 上書き入力列に薄い黄色（Python planning_core と同系色）— 取り込み後も確実に付与
+    ' 上書き入力列に薄い黄色（Python planning_core と同系色）? 取り込み後も確実に付与
     配台計画_タスク入力_上書き列に入力色を付与 ws
 
     Application.DisplayAlerts = da
@@ -5667,13 +5668,13 @@ Private Sub ApplyPlanningConflictHighlightSidecar()
     Dim lastCol As Long
     Dim prevSU As Boolean
 
-    p = ThisWorkbook.Path & "\log\" & SIDECAR
+    p = ThisWorkbook.path & "\log\" & SIDECAR
     If Len(Dir(p)) = 0 Then Exit Sub
 
     On Error GoTo CleanFail
 
     Set adoStream = CreateObject("ADODB.Stream")
-    adoStream.Charset = "UTF-8"
+    adoStream.charset = "UTF-8"
     adoStream.Open
     adoStream.LoadFromFile p
     txt = adoStream.ReadText
@@ -5883,7 +5884,7 @@ End Sub
 ' 段階2の取り込み結果をスプラッシュへ反映（成功・一部取込は MsgBox なし。未取得のみ警告ダイアログ）
 Private Sub 段階2_取り込み結果を報告()
     Dim p As String
-    p = ThisWorkbook.Path
+    p = ThisWorkbook.path
     
     If m_stage2PlanImported And m_stage2MemberImported Then
         MacroSplash_SetStep "計画生成が完了しました（結果シートと個人シートを取り込みました）。"
@@ -5953,7 +5954,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     prevDisplayAlerts = Application.DisplayAlerts
     
     ' 1. 現在のExcelファイルの場所を取得 (UNCパス対応のため)
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If targetDir = "" Then
         m_lastStage2ErrMsg = "先にこのExcelファイルを保存してください。"
         Exit Sub
@@ -6145,7 +6146,7 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As B
     End If
     
     Set adoStream = CreateObject("ADODB.Stream")
-    adoStream.Charset = "UTF-8"
+    adoStream.charset = "UTF-8"
     adoStream.Open
     
     adoStream.LoadFromFile logFilePath
@@ -6517,7 +6518,7 @@ Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal f
             If Err.Number = 0 Then
                 If currDate > latestDate Then
                     latestDate = currDate
-                    latestPath = CStr(fil.Path)
+                    latestPath = CStr(fil.path)
                 End If
             Else
                 Err.Clear
@@ -6527,7 +6528,7 @@ Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal f
     Next fil
 
     For Each subFldr In fldr.SubFolders
-        CollectLatestOutputFileRecursive CStr(subFldr.Path), filePattern, latestPath, latestDate
+        CollectLatestOutputFileRecursive CStr(subFldr.path), filePattern, latestPath, latestDate
     Next subFldr
 End Sub
 
@@ -6789,7 +6790,7 @@ FailB:
 End Sub
 
 '==============================================================================
-' 列設定_結果_タスク一覧 — 表示列(B)と連動するフォームのチェックボックスを配置
+' 列設定_結果_タスク一覧 ? 表示列(B)と連動するフォームのチェックボックスを配置
 ' 開発タブ → 挿入 → フォーム コントロールの「チェックボックス」と同等。
 ' 再実行すると既存のチェックボックスを削除して付け直します（セルの TRUE/FALSE は保持）。
 '==============================================================================
@@ -6863,7 +6864,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
     Dim wsCfg As Worksheet
     Dim prevScreen As Boolean
 
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
         MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "列設定の適用"
         Exit Sub
@@ -6928,7 +6929,7 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
     Dim wsCfg As Worksheet
     Dim prevScreen As Boolean
 
-    targetDir = ThisWorkbook.Path
+    targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
         MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "列設定の整理"
         Exit Sub
@@ -7113,11 +7114,11 @@ Public Sub COM操作テスト_全シートをログに出す()
             Err.Clear
             On Error GoTo 0
         Else
-            wsLog.Cells(r, 4).Value = "—"
-            wsLog.Cells(r, 5).Value = "—"
-            wsLog.Cells(r, 6).Value = "—"
-            wsLog.Cells(r, 7).Value = "—"
-            wsLog.Cells(r, 8).Value = "—"
+            wsLog.Cells(r, 4).Value = "?"
+            wsLog.Cells(r, 5).Value = "?"
+            wsLog.Cells(r, 6).Value = "?"
+            wsLog.Cells(r, 7).Value = "?"
+            wsLog.Cells(r, 8).Value = "?"
             On Error Resume Next
             s.Activate
             If Err.Number <> 0 Then
@@ -7154,4 +7155,6 @@ End Sub
 Sub Auto_Open()
     ShortcutMainSheet_OnKeyRegister
 End Sub
+
+
 
