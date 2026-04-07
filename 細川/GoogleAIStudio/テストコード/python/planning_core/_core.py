@@ -12618,6 +12618,9 @@ def _equipment_line_lower_dispatch_trial_still_pending(
 
     より小さい試行順の行が **同一依頼の前工程待ち等でまだ割付不能**なときは「競合の残」とみなさない。
     （当該行は eligible にも入らないため、ここで待たせると後続試行順が同一設備で永久停止し得る。）
+
+    より小さい試行順の行が **当日の機械カレンダーだけで計画窓を全日占有**（その設備は当日スロットゼロ）なら
+    「競合の残」とみなさない（グローバル試行順とあわせて他設備が全日止まるのを防ぐ）。
     """
     line = (machine_occ_key or "").strip()
     if not line:
@@ -13059,12 +13062,7 @@ def load_machine_calendar_occupancy_blocks(
         }
         phys_accum: dict[str, list] = defaultdict(list)
         for eq, iv in merged_eq.items():
-            es = str(eq).strip()
-            pk = (
-                _normalize_equipment_match_key(es.split("+", 1)[1])
-                if "+" in es
-                else _normalize_equipment_match_key(es)
-            )
+            pk = _equipment_line_key_to_physical_occupancy_key(str(eq).strip())
             if pk:
                 phys_accum[pk].extend(iv)
         merged_all = dict(merged_eq)
@@ -13120,11 +13118,7 @@ def _apply_machine_calendar_floor_for_date(
         ek = str(el).strip() if el is not None else ""
         if not ek:
             continue
-        pk = (
-            _normalize_equipment_match_key(ek.split("+", 1)[1])
-            if "+" in ek
-            else _normalize_equipment_match_key(ek)
-        )
+        pk = _equipment_line_key_to_physical_occupancy_key(ek)
         if pk:
             candidates.add(pk)
     w0 = machine_day_start
@@ -13135,7 +13129,9 @@ def _apply_machine_calendar_floor_for_date(
     _mc_floor_bumps: list[dict] = []
     # #endregion
     for eq_s in candidates:
-        blocks = day_blocks.get(eq_s)
+        blocks = day_blocks.get(eq_s) or _machine_calendar_blocks_for_occ_key(
+            day_blocks, eq_s
+        )
         if not blocks:
             continue
         blocks_c = _clip_machine_busy_blocks_to_planning_window(blocks, w0, w1)
