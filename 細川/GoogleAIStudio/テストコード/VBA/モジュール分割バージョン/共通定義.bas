@@ -174,7 +174,8 @@ Private m_stage2MemberImported As Boolean
 ' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
 Private m_lastRefreshQueriesErrMsg As String
 ' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
-Private m_macroSplashShown As Boolean
+' 業務ロジック・スプラッシュ表示 等の標準モジュールから参照するため Public
+Public m_macroSplashShown As Boolean
 ' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
 Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
