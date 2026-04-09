@@ -9,13 +9,13 @@ Option Explicit
 
 Private Sub Workbook_Open()
     On Error Resume Next
-    ショートカット_メイン_OnKey登録
+    ShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub
 
 Private Sub Workbook_Activate()
     On Error Resume Next
-    ショートカット_メイン_OnKey登録
+    ShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub
 
@@ -27,6 +27,6 @@ End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error Resume Next
-    ショートカット_メイン_OnKey解除
+    ShortcutMainSheet_OnKeyUnregister
     On Error GoTo 0
 End Sub
