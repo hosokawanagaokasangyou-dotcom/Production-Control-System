@@ -94,7 +94,7 @@ Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' D3=false かつスプラッシュ表示中の cmd 見た目をログ枠に重ねる（Exec＋FindWindow＋SetWindowPos／conhost／枠除去など）。
 ' ★ True にすると段階1/2 の Python が同一 Excel に xlwings で COM 同期するとき、VBA 主スレッドが待機ループ＋HWND 操作で奪い合いになりやすく、処理が固まったように見えることが多い。実用では False 推奨。
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
-Private Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
+Public Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
 ' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
