@@ -64,7 +64,6 @@ Public Sub MacroSplash_EndConsoleOverlay()
 End Sub
 
 ' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
-#If VBA7 Then
 Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     Dim prevSU As Boolean
     On Error Resume Next
