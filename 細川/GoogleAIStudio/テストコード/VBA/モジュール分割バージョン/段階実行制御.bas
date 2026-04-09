@@ -172,6 +172,7 @@ Public Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) 
 End Function
 
 ' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
+#If VBA7 Then
 Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error Resume Next
     If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
