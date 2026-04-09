@@ -1,11 +1,21 @@
+<<<<<<< HEAD
 Private Function 完了チャイム_ローカルWAVパス() As String
+=======
+Option Explicit
+
+Public Function MacroCompleteChime_LocalWavPath() As String
+>>>>>>> main4
     Dim folder As String
     folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     完了チャイム_ローカルWAVパス = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_COMPLETE_CHIME_FILE_NAME
 End Function
 
+<<<<<<< HEAD
 Private Function 完了チャイム_MP3パスを取得(ByVal track1to4 As Long) As String
+=======
+Public Function MacroCompleteChime_LocalMp3Path(ByVal track1to4 As Long) As String
+>>>>>>> main4
     Dim folder As String
     Dim fn As String
     folder = ThisWorkbook.path
@@ -21,7 +31,11 @@ Private Function 完了チャイム_MP3パスを取得(ByVal track1to4 As Long) As String
     完了チャイム_MP3パスを取得 = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & fn
 End Function
 
+<<<<<<< HEAD
 Private Function 完了チャイム_MP3をMCI再生(ByVal fullPath As String) As Boolean
+=======
+Public Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Boolean
+>>>>>>> main4
     Dim a As String
     Dim cmdOpen As String
     Dim r As Long
@@ -45,7 +59,11 @@ Fail:
     If Len(a) > 0 Then r = mciSendStringW(StrPtr("close " & a), 0&, 0, 0&)
 End Function
 
+<<<<<<< HEAD
 Private Function 完了チャイム_HTTPでバイナリ取得(ByVal url As String, ByVal destPath As String) As Boolean
+=======
+Public Function MacroCompleteChime_HttpDownloadBinary(ByVal url As String, ByVal destPath As String) As Boolean
+>>>>>>> main4
     Dim xhr As Object
     Dim stm As Object
     On Error GoTo Fail
@@ -69,7 +87,11 @@ Fail:
     完了チャイム_HTTPでバイナリ取得 = False
 End Function
 
+<<<<<<< HEAD
 Private Function 完了チャイム_WAVパスを確保() As String
+=======
+Public Function MacroCompleteChime_EnsureWavPath() As String
+>>>>>>> main4
     Dim p As String
     Dim dirSounds As String
     p = 完了チャイム_ローカルWAVパス()
@@ -87,7 +109,11 @@ Private Function 完了チャイム_WAVパスを確保() As String
     End If
 End Function
 
+<<<<<<< HEAD
 Private Sub 完了チャイムを再生処理()
+=======
+Public Sub MacroCompleteChime()
+>>>>>>> main4
     On Error Resume Next
     If Not m_splashAllowMacroSound Then Exit Sub
     Dim track As Long
@@ -111,14 +137,22 @@ Public Sub 完了音を再生()
     完了チャイムを再生処理
 End Sub
 
+<<<<<<< HEAD
 Private Function 起動BGM_フルパス() As String
+=======
+Public Function MacroStartBgm_FullPath() As String
+>>>>>>> main4
     Dim folder As String
     folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     起動BGM_フルパス = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_START_BGM_FILENAME
 End Function
 
+<<<<<<< HEAD
 Private Sub 起動BGMを強制クローズ()
+=======
+Public Sub MacroStartBgm_CloseHard()
+>>>>>>> main4
     On Error Resume Next
     If m_macroStartBgmOpen Then
         mciSendStringW StrPtr("close " & MACRO_START_BGM_ALIAS), 0&, 0, 0&
@@ -126,7 +160,11 @@ Private Sub 起動BGMを強制クローズ()
     m_macroStartBgmOpen = False
 End Sub
 
+<<<<<<< HEAD
 Private Sub 起動BGM_フェードアウトして閉じる()
+=======
+Public Sub MacroStartBgm_FadeOutAndClose()
+>>>>>>> main4
     Dim i As Long
     Dim vol As Long
     On Error Resume Next
@@ -141,7 +179,11 @@ Private Sub 起動BGM_フェードアウトして閉じる()
     m_macroStartBgmOpen = False
 End Sub
 
+<<<<<<< HEAD
 Private Sub 起動BGM_利用可能なら開始()
+=======
+Public Sub MacroStartBgm_StartIfAvailable()
+>>>>>>> main4
     Dim p As String
     Dim r As Long
     Dim cmdOpen As String

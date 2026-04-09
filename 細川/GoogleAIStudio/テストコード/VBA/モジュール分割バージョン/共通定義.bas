@@ -1,132 +1,142 @@
+Option Explicit
+
 ' =========================================================
 ' Windows APIの宣言（ボタンの待機・アニメーション処理用）
 ' =========================================================
-Private Type POINTAPI
+Public Type POINTAPI
     x As Long
     y As Long
 End Type
-Private Type RECT
+Public Type RECT
     Left As Long
     Top As Long
     Right As Long
     Bottom As Long
 End Type
 #If VBA7 Then
-    Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
-    Private Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
-    Private Declare PtrSafe Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As LongPtr, ByVal hmod As LongPtr, ByVal fdw As Long) As Long
-    Private Declare PtrSafe Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As LongPtr, ByVal lpstrReturnString As LongPtr, ByVal uReturnLength As Long, ByVal hwndCallback As LongPtr) As Long
-    Private Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
-    Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
-    Private Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
-    Private Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
-    Private Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
-    Private Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
-    Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
-    Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
-    Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
-    Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
-    Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
+    Public Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+    Public Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
+    Public Declare PtrSafe Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As LongPtr, ByVal hmod As LongPtr, ByVal fdw As Long) As Long
+    Public Declare PtrSafe Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As LongPtr, ByVal lpstrReturnString As LongPtr, ByVal uReturnLength As Long, ByVal hwndCallback As LongPtr) As Long
+    Public Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
+    Public Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
+    Public Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+    Public Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
+    Public Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
+    Public Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
+    Public Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
+    Public Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
+    Public Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
+    Public Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
+    Public Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
     #If Win64 Then
-    Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
-    Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+    Public Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
+    Public Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
     #Else
-    Private Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As Long
-    Private Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As Long) As Long
+    Public Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As Long
+    Public Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As Long) As Long
     #End If
 #Else
-    Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
-    Private Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
-    Private Declare Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As Long, ByVal hmod As Long, ByVal fdw As Long) As Long
-    Private Declare Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As Long, ByVal lpstrReturnString As Long, ByVal uReturnLength As Long, ByVal hwndCallback As Long) As Long
-    Private Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
-    Private Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
-    Private Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
-    Private Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
-    Private Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
-    Private Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
-    Private Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, lpRect As RECT) As Long
-    Private Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
-    Private Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
-    Private Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
-    Private Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
+    Public Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+    Public Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
+    Public Declare Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As Long, ByVal hmod As Long, ByVal fdw As Long) As Long
+    Public Declare Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As Long, ByVal lpstrReturnString As Long, ByVal uReturnLength As Long, ByVal hwndCallback As Long) As Long
+    Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
+    Public Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
+    Public Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+    Public Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
+    Public Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
+    Public Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
+    Public Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, lpRect As RECT) As Long
+    Public Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
+    Public Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
+    Public Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
+    Public Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
 #End If
-Private Const SW_HIDE As Long = 0
-Private Const SND_ASYNC As Long = &H1
-Private Const SND_ALIAS As Long = &H10000
-Private Const SND_FILENAME As Long = &H20000
+Public Const SW_HIDE As Long = 0
+Public Const SND_ASYNC As Long = &H1
+Public Const SND_ALIAS As Long = &H10000
+Public Const SND_FILENAME As Long = &H20000
 ' 完了チャイム WAV（ブックと同じフォルダ配下）。無ければ下記 URL から取得（リポジトリが public かつブランチ一致が前提）
-Private Const MACRO_COMPLETE_CHIME_REL_DIR As String = "sounds"
-Private Const MACRO_COMPLETE_CHIME_FILE_NAME As String = "macro_complete_chime.wav"
-Private Const MACRO_COMPLETE_CHIME_DOWNLOAD_URL As String = "https://raw.githubusercontent.com/kamoshika9999/----AI------/xlwings%E7%A9%8D%E6%A5%B5%E9%81%A9%E7%94%A8/%E7%B4%B0%E5%B7%9D/GoogleAIStudio/%E3%83%86%E3%82%B9%E3%83%88%E3%82%B3%E3%83%BC%E3%83%89/sounds/macro_complete_chime.wav"
+Public Const MACRO_COMPLETE_CHIME_REL_DIR As String = "sounds"
+Public Const MACRO_COMPLETE_CHIME_FILE_NAME As String = "macro_complete_chime.wav"
+Public Const MACRO_COMPLETE_CHIME_DOWNLOAD_URL As String = "https://raw.githubusercontent.com/kamoshika9999/----AI------/xlwings%E7%A9%8D%E6%A5%B5%E9%81%A9%E7%94%A8/%E7%B4%B0%E5%B7%9D/GoogleAIStudio/%E3%83%86%E3%82%B9%E3%83%88%E3%82%B3%E3%83%BC%E3%83%89/sounds/macro_complete_chime.wav"
 ' 完了 MP3（sounds 配下）。トラックは「設定」D4 に 1?4（空・不正は 1）。実ファイル名を変えたら定数だけ合わせる。
-Private Const MACRO_COMPLETE_MP3_1 As String = "穏やかな応答1.mp3"
-Private Const MACRO_COMPLETE_MP3_2 As String = "穏やかな応答2.mp3"
-Private Const MACRO_COMPLETE_MP3_3 As String = "穏やかな応答3.mp3"
-Private Const MACRO_COMPLETE_MP3_4 As String = "穏やかな応答4.mp3"
+Public Const MACRO_COMPLETE_MP3_1 As String = "穏やかな応答1.mp3"
+Public Const MACRO_COMPLETE_MP3_2 As String = "穏やかな応答2.mp3"
+Public Const MACRO_COMPLETE_MP3_3 As String = "穏やかな応答3.mp3"
+Public Const MACRO_COMPLETE_MP3_4 As String = "穏やかな応答4.mp3"
 ' スプラッシュ中 BGM（sounds 配下）。MCI 固定 alias でループ再生し、終了時はフェードアウト後 close。
-Private Const MACRO_START_BGM_FILENAME As String = "Glass_Architecture1.mp3"
-Private Const MACRO_START_BGM_ALIAS As String = "pm_ai_glassbg"
+Public Const MACRO_START_BGM_FILENAME As String = "Glass_Architecture1.mp3"
+Public Const MACRO_START_BGM_ALIAS As String = "pm_ai_glassbg"
 ' frmMacroSplash を Excel メイン枠の下端・水平中央に合わせるときの下端からの余白（px）
-Private Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
+Public Const SPLASH_EXCEL_BOTTOM_GAP_PX As Long = 0
 ' 段階1/2 の cmd コンソールをプライマリ画面 左上・全幅・高さ 1/4 に置くときに使用
-Private Const SM_CXSCREEN As Long = 0
-Private Const SM_CYSCREEN As Long = 1
-Private Const SWP_NOZORDER As Long = &H4
-Private Const SWP_SHOWWINDOW As Long = &H40
-Private Const SWP_NOMOVE As Long = &H2
-Private Const SWP_NOSIZE As Long = &H1
-Private Const SWP_FRAMECHANGED As Long = &H20
-Private Const SWP_NOACTIVATE As Long = &H10
-Private Const LOGPIXELSX As Long = 88
-Private Const LOGPIXELSY As Long = 90
-Private Const GWL_STYLE As Long = -16
+Public Const SM_CXSCREEN As Long = 0
+Public Const SM_CYSCREEN As Long = 1
+Public Const SWP_NOZORDER As Long = &H4
+Public Const SWP_SHOWWINDOW As Long = &H40
+Public Const SWP_NOMOVE As Long = &H2
+Public Const SWP_NOSIZE As Long = &H1
+Public Const SWP_FRAMECHANGED As Long = &H20
+Public Const SWP_NOACTIVATE As Long = &H10
+Public Const LOGPIXELSX As Long = 88
+Public Const LOGPIXELSY As Long = 90
+Public Const GWL_STYLE As Long = -16
 ' コンソール枠除去用（Caption/ThickFrame/MinMax/SysMenu）。環境によっては conhost が無視する場合あり
-Private Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
+Public Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
 ' D3=false オーバーレイ待機（ms）。短すぎると Python→xlwings の COM 同期と Excel 主スレッドが奪い合い「応答していません」になりやすいため SPLASH_LOG と同程度にする
-Private Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1200
+Public Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1200
 ' ログ枠（TextBox）の画面矩形よりコンソール外周を四辺いくら縮めるか（px）。conhost の内側の黒余白で「枠が大きい」と感じる場合に調整
-Private Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
+Public Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
-Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
+Public Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' D3=false かつスプラッシュ表示中の cmd 見た目をログ枠に重ねる（Exec＋FindWindow＋SetWindowPos／conhost／枠除去など）。
 ' ★ True にすると段階1/2 の Python が同一 Excel に xlwings で COM 同期するとき、VBA 主スレッドが待機ループ＋HWND 操作で奪い合いになりやすく、処理が固まったように見えることが多い。実用では False 推奨。
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
-Private Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
+Public Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
+<<<<<<< HEAD
 ' 実効値は 段階12_CMDウィンドウ非表示_実効値（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 xlwings.RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 VBA「ダイアログ付き_段階2を実行」の可否に従う
 Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
+=======
+' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
+Public Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
+' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
+Public Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
+>>>>>>> main4
 ' True かつ STAGE12_USE_XLWINGS_SPLASH_LOG=False のときのみ xlwings.RunPython+runpy.run_path（Tools→参照に xlwings）。実行中はログ枠はほぼ更新されず終了後に一括表示。進捗表示優先なら SPLASH_LOG=True のまま（cmd になる）
-Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
+Public Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 
 ' 全シートフォント統一マクロで使用（PC にフォントが入っている必要があります）
-Private Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
+Public Const BIZ_UDP_GOTHIC_FONT_NAME As String = "BIZ UDPゴシック"
 ' フォント選択ダイアログ用の一時シート（VeryHidden）
-Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
+Public Const SCRATCH_SHEET_FONT As String = "_FontPick"
 ' 全シートフォント統一で保護シートを一時解除するときのパスワード。空＝パスワード無しのシートのみ解除可。パスワード付きで統一したい場合はここに同じパスワードを設定（再保護にも使用）。
-Private Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
+Public Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
-Private Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
-Private Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
-Private Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
-Private Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"
-Private Const SHEET_RESULT_CALENDAR_ATTEND As String = "結果_カレンダー(出勤簿)"
-Private Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
-Private Const SHEET_SETTINGS As String = "設定"
+Public Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
+Public Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
+Public Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
+Public Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"
+Public Const SHEET_RESULT_CALENDAR_ATTEND As String = "結果_カレンダー(出勤簿)"
+Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
+Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
-Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
+Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
-Private Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
+Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
-Private Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
+Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
-Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
+' 起動ショートカット.bas 等から OnKey 登録で参照するため Public
+Public Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
-Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
-Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
+Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
+Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
@@ -149,21 +159,27 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 '   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ Xlwings_コンソールランナー実行。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
+<<<<<<< HEAD
 ' 環境コンポーネントをインストール: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+=======
+' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
+Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+>>>>>>> main4
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
-Private Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
+Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
 ' Power Query 更新前の到達確認（接続先と同一想定の IP）。応答なしなら RefreshAll を行わず処理は継続する。
 ' 接続先の IP アドレスを指定（Power Query のデータソースと揃える）
-Private Const PQ_REFRESH_PING_HOST As String = "192.168.0.101"
+Public Const PQ_REFRESH_PING_HOST As String = "192.168.0.101"
 ' ping -w に渡すタイムアウト（ミリ秒）。合計待ちはあともう数百 ms 程度のことがある。
-Private Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
+Public Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
 
 ' 段階1コアの最終 Python exitCode（0=成功）。VBAエラー・事前失敗は -1。
-Private m_lastStage1ExitCode As Long
-Private m_lastStage1ErrMsg As String
+Public m_lastStage1ExitCode As Long
+Public m_lastStage1ErrMsg As String
 ' 段階2コア用（ダイアログは呼び出し元で出す）
+<<<<<<< HEAD
 Private m_lastStage2ErrMsg As String
 Private m_lastStage2ExitCode As Long
 Private m_stage2PlanImported As Boolean
@@ -174,34 +190,47 @@ Private m_lastRefreshQueriesErrMsg As String
 Private m_macroSplashShown As Boolean
 ' スプラッシュ_表示 で Application.Interactive=False を立てたときだけ スプラッシュ_非表示 で True に戻す
 Private m_macroSplashLockedExcel As Boolean
+=======
+Public m_lastStage2ErrMsg As String
+Public m_lastStage2ExitCode As Long
+Public m_stage2PlanImported As Boolean
+Public m_stage2MemberImported As Boolean
+' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
+Public m_lastRefreshQueriesErrMsg As String
+' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
+' 業務ロジック・スプラッシュ表示 等の標準モジュールから参照するため Public
+Public m_macroSplashShown As Boolean
+' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
+Public m_macroSplashLockedExcel As Boolean
+>>>>>>> main4
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
-Private m_animMacroSucceeded As Boolean
+Public m_animMacroSucceeded As Boolean
 ' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）
-Private m_splashAllowMacroSound As Boolean
+Public m_splashAllowMacroSound As Boolean
 ' スプラッシュ用 BGM（Glass_Architecture.mp3）を MCI で開いているとき True
-Private m_macroStartBgmOpen As Boolean
+Public m_macroStartBgmOpen As Boolean
 ' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）
-Private m_splashExecutionLogPath As String
+Public m_splashExecutionLogPath As String
 ' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
-Private m_stageVbaExitCodeLogDir As String
-Private Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
+Public m_stageVbaExitCodeLogDir As String
+Public Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 ' UserForm 前面化用（Caption を一意にし FindWindow で HWND を得る。フォームの Caption プロパティも同じ文字列にするとよい）
-Private Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
+Public Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
 ' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
 ' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（400→1200）
-Private Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1200
+Public Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1200
 ' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
-Private m_splashPollLastFileLen As Long
-Private m_splashPollHaveCachedFileLen As Boolean
+Public m_splashPollLastFileLen As Long
+Public m_splashPollHaveCachedFileLen As Boolean
 ' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
-Private m_splashReadErrShown As Boolean
+Public m_splashReadErrShown As Boolean
 ' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
-Private m_splashLastLogSnapshot As String
+Public m_splashLastLogSnapshot As String
 ' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
-Private m_splashConsoleOverlayActive As Boolean
+Public m_splashConsoleOverlayActive As Boolean
 ' 結果_設備ガント：選択中データ行の太枠（Interior は触らない）
-Private mGanttHL_SheetName As String
-Private mGanttHL_Row As Long
-Private mGanttHL_LastCol As Long
+Public mGanttHL_SheetName As String
+Public mGanttHL_Row As Long
+Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
