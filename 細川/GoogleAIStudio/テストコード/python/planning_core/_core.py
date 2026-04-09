@@ -1338,26 +1338,32 @@ def _paint_gantt_timeline_row_merged(
             j += 1
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
-        if col_s < col_e:
-            ws.merge_cells(start_row=row, start_column=col_s, end_row=row, end_column=col_e)
-        c = ws.cell(row=row, column=col_s)
-        c.border = grid_border
-        # 左寄せ・折り返しなし・縮小なし（長いラベルはセル外へはみ出し表示しやすくする）
-        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
-        if st0[0] == "idle":
-            c.fill = idle_fill
-        elif st0[0] == "break":
-            c.fill = break_fill
-        elif st0[0] == "daily_startup":
-            _, gh_ds = st0
-            c.fill = _gantt_cached_pattern_fill(gh_ds)
-            c.value = "(日次始業準備)"
-            c.font = bar_label_font
-        else:
-            _, tid, gh, pct = st0
-            c.fill = _gantt_cached_pattern_fill(gh)
-            c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
-            c.font = bar_label_font
+        for col in range(col_s, col_e + 1):
+            c = ws.cell(row=row, column=col)
+            c.border = grid_border
+            c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+            if st0[0] == "idle":
+                c.fill = idle_fill
+                c.value = None
+            elif st0[0] == "break":
+                c.fill = break_fill
+                c.value = None
+            elif st0[0] == "daily_startup":
+                _, gh_ds = st0
+                c.fill = _gantt_cached_pattern_fill(gh_ds)
+                if col == col_s:
+                    c.value = "(日次始業準備)"
+                    c.font = bar_label_font
+                else:
+                    c.value = None
+            else:
+                _, tid, gh, pct = st0
+                c.fill = _gantt_cached_pattern_fill(gh)
+                if col == col_s:
+                    c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
+                    c.font = bar_label_font
+                else:
+                    c.value = None
         i = j
 
 
