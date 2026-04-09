@@ -1868,7 +1868,7 @@ End Sub
    誤ってそちらを動かし、意図しないシートが前面に出ることがあります。
    全シートから名前を解決し、ActiveSheet 上のものを優先します。
  '=========================================================
-Private Sub ボタン押下アニメーション()
+Public Sub ボタン押下アニメーション()
     Dim shpName As String
     Dim shp As Shape
     Dim ws As Worksheet
