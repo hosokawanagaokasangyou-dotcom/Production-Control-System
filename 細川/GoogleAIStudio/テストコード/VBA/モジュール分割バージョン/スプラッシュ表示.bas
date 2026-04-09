@@ -1,5 +1,16 @@
 Option Explicit
 
+' UserForm「frmMacroSplash」の既定グローバルインスタンス（VB_PredeclaredId）に依存しない。
+' 手作業で追加した UserForm は事前宣言 ID が無効になり「frmMacroSplash が未定義」になることがあるため、New で確保する。
+Private m_frmMacroSplash As frmMacroSplash
+
+Private Function MacroSplash_Form() As frmMacroSplash
+    If m_frmMacroSplash Is Nothing Then
+        Set m_frmMacroSplash = New frmMacroSplash
+    End If
+    Set MacroSplash_Form = m_frmMacroSplash
+End Function
+
 Public Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
 #If VBA7 Then
     Dim hwndSplash As LongPtr
@@ -17,7 +28,7 @@ Public Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Lon
     If Not m_macroSplashShown Then Exit Function
     hwndSplash = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
     If hwndSplash = 0 Then Exit Function
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Function
     dpiX = 96
     dpiY = 96
@@ -46,9 +57,9 @@ Public Sub MacroSplash_BeginConsoleOverlay()
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If m_splashConsoleOverlayActive Then Exit Sub
-    frmMacroSplash.Controls("txtExecutionLog").Visible = False
+    MacroSplash_Form.Controls("txtExecutionLog").Visible = False
     m_splashConsoleOverlayActive = True
-    frmMacroSplash.Repaint
+    MacroSplash_Form.Repaint
     On Error GoTo 0
 End Sub
 
@@ -57,8 +68,8 @@ Public Sub MacroSplash_EndConsoleOverlay()
     If Not m_splashConsoleOverlayActive Then Exit Sub
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
-        frmMacroSplash.Controls("txtExecutionLog").Visible = True
-        frmMacroSplash.Repaint
+        MacroSplash_Form.Controls("txtExecutionLog").Visible = True
+        MacroSplash_Form.Repaint
     End If
     On Error GoTo 0
 End Sub
@@ -70,8 +81,8 @@ Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     If Not m_macroSplashShown Then Exit Sub
     prevSU = Application.ScreenUpdating
     If Not prevSU Then Application.ScreenUpdating = True
-    frmMacroSplash.lblMessage.Caption = stepMessage
-    frmMacroSplash.Repaint
+    MacroSplash_Form.lblMessage.Caption = stepMessage
+    MacroSplash_Form.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
 End Sub
@@ -85,7 +96,7 @@ Public Sub MacroSplash_ClearExecutionLogPane()
     m_splashPollLastFileLen = 0
     If Not m_macroSplashShown Then Exit Sub
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If Not tb Is Nothing Then tb.text = ""
 End Sub
 
@@ -98,7 +109,7 @@ Public Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     If Application.Interactive Then
         tb.SetFocus
     End If
-    frmMacroSplash.Repaint
+    MacroSplash_Form.Repaint
     DoEvents
 End Sub
 
@@ -115,7 +126,7 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     flenAtStart = -1
     If Len(Dir(m_splashExecutionLogPath)) > 0 Then
@@ -164,8 +175,8 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
     tb.SelLength = 0
-    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
-    frmMacroSplash.Repaint
+    MacroSplash_Form.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
+    MacroSplash_Form.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
     m_splashReadErrShown = True
@@ -183,7 +194,7 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(Dir(fullPath)) = 0 Then Exit Sub
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     s = GeminiReadUtf8File(fullPath)
     If Len(s) = 0 Then s = GeminiReadUtf8FileViaTempCopy(fullPath)
@@ -197,8 +208,8 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             Application.Interactive = True
             tb.text = errBanner & tb.text
             m_splashLastLogSnapshot = tb.text
-            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
-            frmMacroSplash.Repaint
+            MacroSplash_Form.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
+            MacroSplash_Form.Repaint
             DoEvents
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
         End If
@@ -282,18 +293,19 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
     End If
-    frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
-    frmMacroSplash.lblMessage.Caption = message
-    frmMacroSplash.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
+    MacroSplash_Form.Caption = SPLASH_FORM_WINDOW_TITLE
+    MacroSplash_Form.lblMessage.Caption = message
+    MacroSplash_Form.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
         Application.Interactive = False
         m_macroSplashLockedExcel = True
     End If
-    frmMacroSplash.Show vbModeless
+    ' Show の Modal=False（または省略）でモードレス。vbModeless は参照設定によって未定義になることがある
+    MacroSplash_Form.Show False
     m_macroSplashShown = True
     On Error Resume Next
-    frmMacroSplash.Controls("txtExecutionLog").HideSelection = False
+    MacroSplash_Form.Controls("txtExecutionLog").HideSelection = False
     MacroSplash_BringFormToFront
     DoEvents
     MacroStartBgm_StartIfAvailable
@@ -303,6 +315,10 @@ CleanupFail:
     If m_macroSplashLockedExcel Then Application.Interactive = True
     m_macroSplashLockedExcel = False
     m_macroSplashShown = False
+    If Not m_frmMacroSplash Is Nothing Then
+        Unload m_frmMacroSplash
+    End If
+    Set m_frmMacroSplash = Nothing
 End Sub
 
 Public Sub MacroSplash_Hide()
@@ -310,7 +326,10 @@ Public Sub MacroSplash_Hide()
     MacroStartBgm_FadeOutAndClose
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
-        Unload frmMacroSplash
+        If Not m_frmMacroSplash Is Nothing Then
+            Unload m_frmMacroSplash
+        End If
+        Set m_frmMacroSplash = Nothing
     End If
     m_macroSplashShown = False
     If m_macroSplashLockedExcel Then
@@ -326,7 +345,7 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     Dim tb As Object
-    Set tb = frmMacroSplash.Controls("txtExecutionLog")
+    Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
     Dim n As Long
     n = Len(tb.text) + Len(chunk)
