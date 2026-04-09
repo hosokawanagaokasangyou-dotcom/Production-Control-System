@@ -1938,6 +1938,12 @@ End Sub
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
+    メインシート_ショートカット実行_CtrlShift0
+    On Error GoTo 0
+End Sub
+
+Public Sub メインシート_ショートカット実行_CtrlShift0()
+    On Error Resume Next
     メインシートA1を選択
     On Error GoTo 0
 End Sub
@@ -1948,10 +1954,18 @@ Public Sub ShortcutMainSheet_OnKeyRegister()
     On Error GoTo 0
 End Sub
 
+Public Sub メインシート_ショートカット登録()
+    ShortcutMainSheet_OnKeyRegister
+End Sub
+
 Public Sub ShortcutMainSheet_OnKeyUnregister()
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY
     On Error GoTo 0
+End Sub
+
+Public Sub メインシート_ショートカット解除()
+    ShortcutMainSheet_OnKeyUnregister
 End Sub
 
 Private Function FindColHeader(ws As Worksheet, ByVal headerText As String) As Long
@@ -3037,6 +3051,10 @@ Public Sub PlayFinishSound()
     MacroCompleteChime
 End Sub
 
+Public Sub 完了音を再生()
+    PlayFinishSound
+End Sub
+
 Private Function MacroStartBgm_FullPath() As String
     Dim folder As String
     folder = ThisWorkbook.path
@@ -3202,6 +3220,10 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
         tb.text = tb.text & chunk
     End If
     MacroSplash_TextBoxScrollToTail tb
+End Sub
+
+Public Sub スプラッシュログ_追記(ByVal chunk As String)
+    SplashLog_AppendChunk chunk
 End Sub
 
 ' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
@@ -3458,6 +3480,10 @@ Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As 
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
 End Function
+
+Public Sub 環境構築_コンポーネントをインストール()
+    InstallComponents
+End Sub
 
 Sub InstallComponents()
     Dim wsh As Object
@@ -5372,6 +5398,10 @@ End Sub
 
 ' 互換・他モジュール用: 段階1のみ（エラー時 MsgBox。成功時はスプラッシュ文＋チャイム）
 Public Sub RunPythonStage1()
+    段階1_互換入口
+End Sub
+
+Public Sub 段階1_互換入口()
     段階1_コア実行
     On Error Resume Next
     配台計画_タスク入力_A1を選択
@@ -5396,6 +5426,10 @@ End Sub
 
 ' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
 Public Sub RunPythonStage1ThenStage2()
+    段階1から段階2_互換入口
+End Sub
+
+Public Sub 段階1から段階2_互換入口()
     段階1_コア実行
     On Error Resume Next
     配台計画_タスク入力_A1を選択
@@ -6445,6 +6479,10 @@ End Sub
 
 ' 互換・他モジュール用: 段階2のみ（エラー時 MsgBox。成功時はスプラッシュ＋チャイム）
 Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
+    段階2_互換入口 preserveStage1LogOnLogSheet
+End Sub
+
+Public Sub 段階2_互換入口(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
     段階2_コア実行 preserveStage1LogOnLogSheet
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
@@ -6493,6 +6531,10 @@ Function GetLatestOutputFile(folderPath As String, filePattern As String) As Str
     latestPath = ""
     CollectLatestOutputFileRecursive folderPath, filePattern, latestPath, latestDate
     GetLatestOutputFile = latestPath
+End Function
+
+Function 最新の出力ファイルを取得(folderPath As String, filePattern As String) As String
+    最新の出力ファイルを取得 = GetLatestOutputFile(folderPath, filePattern)
 End Function
 
 Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
@@ -7153,7 +7195,7 @@ End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
 Sub Auto_Open()
-    ShortcutMainSheet_OnKeyRegister
+    メインシート_ショートカット登録
 End Sub
 
 
