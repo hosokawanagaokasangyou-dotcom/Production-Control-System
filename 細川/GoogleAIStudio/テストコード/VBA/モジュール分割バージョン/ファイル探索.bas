@@ -1,19 +1,19 @@
-Function GetLatestOutputFile(folderPath As String, filePattern As String) As String
+Function 最新の出力ファイルパスを取得(folderPath As String, filePattern As String) As String
     Dim latestPath As String
     Dim latestDate As Date
 
     If Len(Dir(folderPath, vbDirectory)) = 0 Then
-        GetLatestOutputFile = ""
+        最新の出力ファイルパスを取得 = ""
         Exit Function
     End If
 
     latestDate = 0
     latestPath = ""
-    CollectLatestOutputFileRecursive folderPath, filePattern, latestPath, latestDate
-    GetLatestOutputFile = latestPath
+    最新出力ファイルを再帰検索 folderPath, filePattern, latestPath, latestDate
+    最新の出力ファイルパスを取得 = latestPath
 End Function
 
-Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
+Private Sub 最新出力ファイルを再帰検索(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
     Dim fso As Object
     Dim fldr As Object
     Dim subFldr As Object
@@ -46,7 +46,7 @@ Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal f
     Next fil
 
     For Each subFldr In fldr.SubFolders
-        CollectLatestOutputFileRecursive CStr(subFldr.path), filePattern, latestPath, latestDate
+        最新出力ファイルを再帰検索 CStr(subFldr.path), filePattern, latestPath, latestDate
     Next subFldr
 End Sub
 
@@ -57,5 +57,5 @@ End Sub
 ' ※解除できないシートはスキップし、ダイアログに列挙。
 ' ※フォント後の列幅調整はメイン A:K と 結果_主要4結果シート_列オートフィット のみ。結果_設備ガントは専用列幅（オートフィットしない）。
 ' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
-' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用。本体を直指定すると AnimateButtonPush が動かない）。
+' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用。本体を直指定すると ボタン押下アニメーション が動かない）。
 ' =========================================================

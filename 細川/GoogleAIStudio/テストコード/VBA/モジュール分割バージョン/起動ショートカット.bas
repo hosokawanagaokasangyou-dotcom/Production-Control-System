@@ -1,4 +1,4 @@
-Private Sub MoveToMainSheetA1()
+Private Sub メインシートA1へ移動()
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets("メイン_")
@@ -9,25 +9,25 @@ Private Sub MoveToMainSheetA1()
     On Error GoTo 0
 End Sub
 
-Public Sub ShortcutMainSheet_CtrlShift0()
+Public Sub ショートカット_メイン_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    MoveToMainSheetA1
+    メインシートA1へ移動
     On Error GoTo 0
 End Sub
 
-Public Sub ShortcutMainSheet_OnKeyRegister()
+Public Sub ショートカット_メイン_OnKey登録()
     On Error Resume Next
-    Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ShortcutMainSheet_CtrlShift0"
+    Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ショートカット_メイン_CtrlShift0"
     On Error GoTo 0
 End Sub
 
-Public Sub ShortcutMainSheet_OnKeyUnregister()
+Public Sub ショートカット_メイン_OnKey解除()
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY
     On Error GoTo 0
 End Sub
 
 Sub Auto_Open()
-    ShortcutMainSheet_OnKeyRegister
+    ショートカット_メイン_OnKey登録
 End Sub

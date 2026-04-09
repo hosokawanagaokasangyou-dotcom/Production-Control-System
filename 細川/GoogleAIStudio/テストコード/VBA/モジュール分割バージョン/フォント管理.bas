@@ -1,4 +1,4 @@
-Private Function GetOrCreateFontScratchSheet() As Worksheet
+Private Function フォント作業用シートを取得または作成() As Worksheet
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SCRATCH_SHEET_FONT)
@@ -11,10 +11,10 @@ Private Function GetOrCreateFontScratchSheet() As Worksheet
         ws.Range("A1").Value = "（フォント選択用・削除しないでください）"
         ws.Visible = xlSheetVeryHidden
     End If
-    Set GetOrCreateFontScratchSheet = ws
+    Set フォント作業用シートを取得または作成 = ws
 End Function
 
-Private Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
+Private Sub セルのフォント属性を復元(ByVal r As Range, ByVal oldName As String, _
     ByVal oldSize As Variant, ByVal oldBold As Variant, ByVal oldItalic As Variant, _
     ByVal oldUnderline As Variant, ByVal oldColor As Variant, ByVal oldStrike As Variant)
     On Error Resume Next
@@ -30,17 +30,17 @@ Private Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
     On Error GoTo 0
 End Sub
 
-Private Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
+Private Function フォント名がExcel一覧に存在するか(ByVal fontName As String) As Boolean
     Dim i As Long
     For i = 1 To Application.FontNames.Count
         If StrComp(Application.FontNames(i), fontName, vbTextCompare) = 0 Then
-            FontNameExistsInExcel = True
+            フォント名がExcel一覧に存在するか = True
             Exit Function
         End If
     Next i
 End Function
 
-Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
+Private Sub 全シートのセルにフォント適用(ByVal fontName As String, ByRef skippedOut As String)
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean
@@ -71,7 +71,7 @@ End Sub
 Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
     On Error Resume Next
-    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    全シートのセルにフォント適用 BIZ_UDP_GOTHIC_FONT_NAME, skipped
     メインシート_AからK列_AutoFit
     結果_主要4結果シート_列オートフィット
     On Error GoTo 0
@@ -94,7 +94,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     Dim skipped As String
     
     Set prevWs = ActiveSheet
-    Set wsScratch = GetOrCreateFontScratchSheet()
+    Set wsScratch = フォント作業用シートを取得または作成()
     prevVis = wsScratch.Visible
     
     Set r = wsScratch.Range("A1")
@@ -113,7 +113,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     r.Select
     
     If Not Application.Dialogs(xlDialogFormatFont).Show Then
-        RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+        セルのフォント属性を復元 r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
         wsScratch.Visible = prevVis
         On Error Resume Next
         prevWs.Activate
@@ -122,23 +122,23 @@ Public Sub 全シートフォントをリストから選択して統一()
     End If
     
     picked = r.Font.Name
-    RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+    セルのフォント属性を復元 r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
     wsScratch.Visible = prevVis
     On Error Resume Next
     prevWs.Activate
     On Error GoTo 0
     
     配台マクロ_全シート保護を試行解除
-    MacroSplash_SetStep "フォント「" & picked & "」を全シートへ適用しています…"
+    スプラッシュ_手順文を設定 "フォント「" & picked & "」を全シートへ適用しています…"
     On Error GoTo Fail
-    ApplyFontToAllSheetCells picked, skipped
+    全シートのセルにフォント適用 picked, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MacroSplash_SetStep "全シートのフォントを「" & picked & "」に設定しました。"
+        スプラッシュ_手順文を設定 "全シートのフォントを「" & picked & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & picked & "」を設定しました。スキップしたシート:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -179,7 +179,7 @@ Public Sub 全シートフォントを手入力で統一()
         Exit Sub
     End If
     
-    If Not FontNameExistsInExcel(fontName) Then
+    If Not フォント名がExcel一覧に存在するか(fontName) Then
         If MsgBox( _
             "フォント「" & fontName & "」が一覧に見つかりませんでした。" & vbCrLf & _
             "このまま適用を試みますか？", _
@@ -189,16 +189,16 @@ Public Sub 全シートフォントを手入力で統一()
     End If
     
     配台マクロ_全シート保護を試行解除
-    MacroSplash_SetStep "フォント「" & fontName & "」を全シートへ適用しています…"
+    スプラッシュ_手順文を設定 "フォント「" & fontName & "」を全シートへ適用しています…"
     On Error GoTo FailHand
-    ApplyFontToAllSheetCells fontName, skipped
+    全シートのセルにフォント適用 fontName, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MacroSplash_SetStep "全シートのフォントを「" & fontName & "」に設定しました。"
+        スプラッシュ_手順文を設定 "全シートのフォントを「" & fontName & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & fontName & "」を設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -218,17 +218,17 @@ End Sub
 
 Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     Dim skipped As String
-    MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
+    スプラッシュ_手順文を設定 "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
     配台マクロ_全シート保護を試行解除
     On Error GoTo FailB
-    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    全シートのセルにフォント適用 BIZ_UDP_GOTHIC_FONT_NAME, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。"
+        スプラッシュ_手順文を設定 "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォントを設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -308,7 +308,7 @@ End Sub
 ' 列設定_結果_タスク一覧 → 結果_タスク一覧 へ列順・列非表示を適用（Python / xlwings）
 ' 図形のマクロ: 「アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用」（押下アニメ付き）。
 '   重複列名の整理のみ: 「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
-'   本体を直指定すると AnimateButtonPush が動かない。
+'   本体を直指定すると ボタン押下アニメーション が動かない。
 ' ・事前に「列設定」シートで列名・表示を編集してから実行。
 ' ・Excel で本ブックを開いたまま（xlwings が接続）。保存してから実行推奨。
 '==============================================================================
@@ -349,13 +349,13 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
-    MacroSplash_SetStep "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
+    スプラッシュ_手順文を設定 "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\apply_result_task_column_layout.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [column-layout] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
     On Error Resume Next
@@ -369,7 +369,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の適用"
     Else
-        MacroSplash_SetStep "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK & "」に合わせました。"
+        スプラッシュ_手順文を設定 "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK & "」に合わせました。"
         m_animMacroSucceeded = True
     End If
 End Sub
@@ -409,20 +409,20 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
-    MacroSplash_SetStep "列設定: Python で重複列名を整理しています…"
+    スプラッシュ_手順文を設定 "列設定: Python で重複列名を整理しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\dedupe_result_task_column_config_sheet.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dedupe-column-config] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の整理"
     Else
-        MacroSplash_SetStep "「" & SHEET_COL_CONFIG_RESULT_TASK & "」の重複列名を除き A:B を更新しました。（チェックボックス利用時は配置マクロの再実行を推奨）"
+        スプラッシュ_手順文を設定 "「" & SHEET_COL_CONFIG_RESULT_TASK & "」の重複列名を除き A:B を更新しました。（チェックボックス利用時は配置マクロの再実行を推奨）"
         m_animMacroSucceeded = True
     End If
 End Sub

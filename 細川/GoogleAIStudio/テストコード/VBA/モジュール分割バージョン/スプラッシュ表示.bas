@@ -1,4 +1,4 @@
-Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
+Private Function スプラッシュ_実行ログ領域の画面ピクセル矩形を取得(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
 #If VBA7 Then
     Dim hwndSplash As LongPtr
     Dim hdc As LongPtr
@@ -11,7 +11,7 @@ Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Lo
     Dim dpiY As Long
     Dim tb As Object
     On Error GoTo Fail
-    MacroSplash_GetTxtExecutionLogScreenRectPixels = False
+    スプラッシュ_実行ログ領域の画面ピクセル矩形を取得 = False
     If Not m_macroSplashShown Then Exit Function
     hwndSplash = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
     If hwndSplash = 0 Then Exit Function
@@ -33,14 +33,14 @@ Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Lo
     outW = CLng((CDbl(tb.Width) * dpiX) / 72#)
     outH = CLng((CDbl(tb.Height) * dpiY) / 72#)
     If outW < 20 Or outH < 20 Then Exit Function
-    MacroSplash_GetTxtExecutionLogScreenRectPixels = True
+    スプラッシュ_実行ログ領域の画面ピクセル矩形を取得 = True
     Exit Function
 Fail:
-    MacroSplash_GetTxtExecutionLogScreenRectPixels = False
+    スプラッシュ_実行ログ領域の画面ピクセル矩形を取得 = False
 End Function
 
 ' cmd をログ枠に重ねるとき、二重描画を避けるため TextBox を一時非表示
-Private Sub MacroSplash_BeginConsoleOverlay()
+Private Sub スプラッシュ_コンソールオーバーレイ開始()
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If m_splashConsoleOverlayActive Then Exit Sub
@@ -50,7 +50,7 @@ Private Sub MacroSplash_BeginConsoleOverlay()
     On Error GoTo 0
 End Sub
 
-Private Sub MacroSplash_EndConsoleOverlay()
+Private Sub スプラッシュ_コンソールオーバーレイ終了()
     On Error Resume Next
     If Not m_splashConsoleOverlayActive Then Exit Sub
     m_splashConsoleOverlayActive = False
@@ -63,7 +63,7 @@ End Sub
 
 ' コンソール制御（Win32/Win64。WT ホスト HWND に効かない場合があるためオーバーレイ時は conhost 直起動を併用）
 #If VBA7 Then
-Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
+Public Sub スプラッシュ_手順文を設定(ByVal stepMessage As String)
     Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
@@ -75,7 +75,7 @@ Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     If Not prevSU Then Application.ScreenUpdating = False
 End Sub
 
-Private Sub MacroSplash_ClearExecutionLogPane()
+Private Sub スプラッシュ_実行ログ枠をクリア()
     Dim tb As Object
     On Error Resume Next
     m_splashReadErrShown = False
@@ -83,13 +83,13 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     m_splashPollHaveCachedFileLen = False
     m_splashPollLastFileLen = 0
     If Not m_macroSplashShown Then Exit Sub
-    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
+    If Not 設定シート_スプラッシュログ書込み有効か() Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If Not tb Is Nothing Then tb.text = ""
 End Sub
 
 ' ログは常に最新。キャレットを末尾に移動し txtExecutionLog へフォーカス（UserForm 自体に SetFocus は不可）
-Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
+Private Sub スプラッシュ_テキストボックス末尾へスクロール(ByVal tb As Object)
     On Error Resume Next
     tb.HideSelection = False
     tb.SelStart = Len(tb.text)
@@ -102,7 +102,7 @@ Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
 End Sub
 
 ' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog に反映（変更がない場合は再描画しない）
-Private Sub MacroSplash_RefreshExecutionLogPane()
+Private Sub スプラッシュ_実行ログ枠を更新()
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -111,7 +111,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     Dim flen As Long
     Dim flenAtStart As Long
     On Error Resume Next
-    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
+    If Not 設定シート_スプラッシュログ書込み有効か() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashExecutionLogPath) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
@@ -124,9 +124,9 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     If m_splashPollHaveCachedFileLen And flenAtStart >= 0 And flenAtStart = m_splashPollLastFileLen And Not m_splashReadErrShown Then
         Exit Sub
     End If
-    s = GeminiReadUtf8File(m_splashExecutionLogPath)
+    s = Gemini_UTF8ファイルを読込(m_splashExecutionLogPath)
     If Len(s) = 0 And Len(Dir(m_splashExecutionLogPath)) > 0 Then
-        s = GeminiReadUtf8FileViaTempCopy(m_splashExecutionLogPath)
+        s = Gemini_UTF8ファイルを一時コピーで読込(m_splashExecutionLogPath)
     End If
     n = Len(s)
     If n > 0 Then
@@ -145,7 +145,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
         prevSU = Application.ScreenUpdating
         If Not prevSU Then Application.ScreenUpdating = True
         tb.text = s
-        MacroSplash_TextBoxScrollToTail tb
+        スプラッシュ_テキストボックス末尾へスクロール tb
         If Not prevSU Then Application.ScreenUpdating = False
         Exit Sub
     End If
@@ -171,8 +171,8 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     m_splashReadErrShown = True
 End Sub
 
-' RunPython 終了後など、途中ポーリングできなかった場合に execution_log を一括表示（Interactive 一時 True で描画）
-Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
+' ダイアログ付き_段階2を実行 終了後など、途中ポーリングできなかった場合に execution_log を一括表示（Interactive 一時 True で描画）
+Private Sub スプラッシュ_実行ログをパスから読込(ByVal fullPath As String)
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -180,13 +180,13 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     Dim errBanner As String
     Dim flen As Long
     On Error Resume Next
-    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
+    If Not 設定シート_スプラッシュログ書込み有効か() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     If Len(Dir(fullPath)) = 0 Then Exit Sub
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
-    s = GeminiReadUtf8File(fullPath)
-    If Len(s) = 0 Then s = GeminiReadUtf8FileViaTempCopy(fullPath)
+    s = Gemini_UTF8ファイルを読込(fullPath)
+    If Len(s) = 0 Then s = Gemini_UTF8ファイルを一時コピーで読込(fullPath)
     n = Len(s)
     If n = 0 Then
         flen = FileLen(fullPath)
@@ -212,7 +212,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     Application.Interactive = True
     tb.text = s
     m_splashLastLogSnapshot = s
-    MacroSplash_TextBoxScrollToTail tb
+    スプラッシュ_テキストボックス末尾へスクロール tb
     If m_macroSplashLockedExcel Then
         Application.Interactive = False
     Else
@@ -220,7 +220,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
 End Sub
 
-Private Sub MacroSplash_PositionDockExcelBottomCenter()
+Private Sub スプラッシュ_Excel下端中央にドッキング()
 #If VBA7 Then
     Dim xlHwnd As LongPtr
     Dim splashHwnd As LongPtr
@@ -259,7 +259,7 @@ SplashDockDone:
 End Sub
 
 ' モードレス UserForm を前面に維持し、再描画・ログ更新が止まったように見えることを防ぐ。Show 直後も前面化する。
-Private Sub MacroSplash_BringFormToFront()
+Private Sub スプラッシュ_フォームを最前面へ()
 #If VBA7 Then
     Dim hwnd As LongPtr
 #Else
@@ -267,7 +267,7 @@ Private Sub MacroSplash_BringFormToFront()
 #End If
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
-    MacroSplash_PositionDockExcelBottomCenter
+    スプラッシュ_Excel下端中央にドッキング
     hwnd = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
     If hwnd = 0 Then Exit Sub
     BringWindowToTop hwnd
@@ -275,16 +275,16 @@ Private Sub MacroSplash_BringFormToFront()
     On Error GoTo 0
 End Sub
 
-Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
+Private Sub スプラッシュ_表示(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
     On Error GoTo CleanupFail
-    If m_macroSplashShown Then MacroSplash_Hide
+    If m_macroSplashShown Then スプラッシュ_非表示
     m_animMacroSucceeded = False
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
     End If
     frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
     frmMacroSplash.lblMessage.Caption = message
-    frmMacroSplash.StartUpPosition = 2  ' 初期表示のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端へ移動
+    frmMacroSplash.StartUpPosition = 2  ' 初期表示のみ。直後に スプラッシュ_Excel下端中央にドッキング で Excel 下端へ移動
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
         Application.Interactive = False
@@ -294,9 +294,9 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     m_macroSplashShown = True
     On Error Resume Next
     frmMacroSplash.Controls("txtExecutionLog").HideSelection = False
-    MacroSplash_BringFormToFront
+    スプラッシュ_フォームを最前面へ
     DoEvents
-    MacroStartBgm_StartIfAvailable
+    起動BGM_利用可能なら開始
     Exit Sub
 CleanupFail:
     On Error Resume Next
@@ -305,9 +305,9 @@ CleanupFail:
     m_macroSplashShown = False
 End Sub
 
-Private Sub MacroSplash_Hide()
+Private Sub スプラッシュ_非表示()
     On Error Resume Next
-    MacroStartBgm_FadeOutAndClose
+    起動BGM_フェードアウトして閉じる
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
         Unload frmMacroSplash
@@ -320,11 +320,11 @@ Private Sub MacroSplash_Hide()
 End Sub
 
 ' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 のときのみ実行される想定。
-' マクロ名を環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk で指定可能。
-Public Sub SplashLog_AppendChunk(ByVal chunk As String)
+' マクロ名を環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.スプラッシュログ_チャンクを追記 で指定可能。
+Public Sub スプラッシュログ_チャンクを追記(ByVal chunk As String)
     On Error Resume Next
     If Len(chunk) = 0 Then Exit Sub
-    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
+    If Not 設定シート_スプラッシュログ書込み有効か() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     Dim tb As Object
     Set tb = frmMacroSplash.Controls("txtExecutionLog")
@@ -336,16 +336,16 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     Else
         tb.text = tb.text & chunk
     End If
-    MacroSplash_TextBoxScrollToTail tb
+    スプラッシュ_テキストボックス末尾へスクロール tb
 End Sub
 
 ' アニメ付き_* から呼ぶ：スプラッシュ表示中にマクロ実行（引数は最大2つまで Application.Run へ委譲）
 ' lockExcelUI=False は InputBox / フォントダイアログ等で Excel 操作が必要なマクロ向け
 ' allowMacroSound=True で 段階1/段階2 と同様に BGM・完了チャイムを許可（通常は False）
-Private Sub ?A?j???t??_?X?v???b?V???t??????s(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
+Private Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
-    MacroSplash_Show splashMessage, lockExcelUI
+    スプラッシュ_表示 splashMessage, lockExcelUI
     If IsMissing(arg1) And IsMissing(arg2) Then
         Application.Run procName
     ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
@@ -357,19 +357,19 @@ Private Sub ?A?j???t??_?X?v???b?V???t??????s(ByVal splashMessage As String, ByVa
 EH:
     On Error Resume Next
 Finish:
-    MacroStartBgm_FadeOutAndClose
+    起動BGM_フェードアウトして閉じる
     If m_animMacroSucceeded Then
         On Error Resume Next
-        MacroCompleteChime
+        完了チャイムを再生処理
     End If
-    MacroSplash_Hide
+    スプラッシュ_非表示
     m_splashAllowMacroSound = False
 End Sub
 
 ' =========================================================
 ' かっこいいボタンを自動生成するマクロ
 ' =========================================================
-' グラデーション配色プリセット（CreateCoolButtonWithPreset の presetId）
+' グラデーション配色プリセット（クールボタンをプリセットで作成 の presetId）
 ' 1=ロイヤルブルー 2=ティール 3=オレンジ 4=フォレストグリーン 5=パープル
 ' 6=インディゴ 7=スレート 8=コーラル 9=アンバー 10=マゼンタ
 

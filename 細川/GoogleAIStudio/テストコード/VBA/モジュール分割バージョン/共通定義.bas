@@ -94,9 +94,9 @@ Private Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
 Private Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
-' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
+' 実効値は 段階12_CMDウィンドウ非表示_実効値（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
-' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
+' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 xlwings.RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 VBA「ダイアログ付き_段階2を実行」の可否に従う
 Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
 ' True かつ STAGE12_USE_XLWINGS_SPLASH_LOG=False のときのみ xlwings.RunPython+runpy.run_path（Tools→参照に xlwings）。実行中はログ枠はほぼ更新されず終了後に一括表示。進捗表示優先なら SPLASH_LOG=True のまま（cmd になる）
 Private Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
@@ -138,18 +138,18 @@ Private Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
 ' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウンはインライン一覧。F2:F4 は候補の目安）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 成功完了時は一覧更新のあと「ブックへ適用」まで自動実行（適用末尾で再び一覧同期）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
-'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
+'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。スプラッシュ_フォームを最前面へ のたびに再配置（長時間処理中の Excel 移動に追従）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 スプラッシュ_実行ログ枠を更新 で execution_log.txt をポーリング（固まったように見えない）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 xlwings.RunPython（終了後 スプラッシュ_実行ログをパスから読込 で一括）。実行中はログ枠はほぼ動かない。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW（シートまたは OS 環境・既定1）=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
-'   ・import 解決のため RunPython 文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
+'   ・import 解決のため xlwings.RunPython に渡す文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
 '       xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
-'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ XwRunConsoleRunner。SPLASH_LOG=True のときは cmd（進捗優先）。
+'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ Xlwings_コンソールランナー実行。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
-' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
+' 環境コンポーネントをインストール: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
@@ -168,11 +168,11 @@ Private m_lastStage2ErrMsg As String
 Private m_lastStage2ExitCode As Long
 Private m_stage2PlanImported As Boolean
 Private m_stage2MemberImported As Boolean
-' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
+' ブックのクエリ更新を試行 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
 Private m_lastRefreshQueriesErrMsg As String
 ' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
 Private m_macroSplashShown As Boolean
-' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
+' スプラッシュ_表示 で Application.Interactive=False を立てたときだけ スプラッシュ_非表示 で True に戻す
 Private m_macroSplashLockedExcel As Boolean
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Private m_animMacroSucceeded As Boolean
