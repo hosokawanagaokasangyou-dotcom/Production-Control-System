@@ -1,18 +1,9 @@
-Private Sub MoveToMainSheetA1()
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets("メイン_")
-    If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets(1)
-    If ws Is Nothing Then Exit Sub
-    ws.Activate
-    ws.Range("A1").Select
-    On Error GoTo 0
-End Sub
+Option Explicit
 
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
-    MoveToMainSheetA1
+    メインシートA1を選択
     On Error GoTo 0
 End Sub
 
@@ -31,3 +22,6 @@ End Sub
 Sub Auto_Open()
     ShortcutMainSheet_OnKeyRegister
 End Sub
+
+
+

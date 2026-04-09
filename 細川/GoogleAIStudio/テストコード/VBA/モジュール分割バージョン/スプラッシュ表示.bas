@@ -1,4 +1,6 @@
-Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
+Option Explicit
+
+Public Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
 #If VBA7 Then
     Dim hwndSplash As LongPtr
     Dim hdc As LongPtr
@@ -39,8 +41,8 @@ Fail:
     MacroSplash_GetTxtExecutionLogScreenRectPixels = False
 End Function
 
-' cmd をログ枠に重ねるとき、二重描画を避けるため TextBox を一時非表示
-Private Sub MacroSplash_BeginConsoleOverlay()
+' cmd をログ枠に重ねるとき、二重表示を避けるため TextBox を一時非表示
+Public Sub MacroSplash_BeginConsoleOverlay()
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If m_splashConsoleOverlayActive Then Exit Sub
@@ -50,7 +52,7 @@ Private Sub MacroSplash_BeginConsoleOverlay()
     On Error GoTo 0
 End Sub
 
-Private Sub MacroSplash_EndConsoleOverlay()
+Public Sub MacroSplash_EndConsoleOverlay()
     On Error Resume Next
     If Not m_splashConsoleOverlayActive Then Exit Sub
     m_splashConsoleOverlayActive = False
@@ -61,7 +63,7 @@ Private Sub MacroSplash_EndConsoleOverlay()
     On Error GoTo 0
 End Sub
 
-' コンソール制御（Win32/Win64。WT ホスト HWND に効かない場合があるためオーバーレイ時は conhost 直起動を併用）
+' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
 #If VBA7 Then
 Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     Dim prevSU As Boolean
@@ -75,7 +77,7 @@ Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     If Not prevSU Then Application.ScreenUpdating = False
 End Sub
 
-Private Sub MacroSplash_ClearExecutionLogPane()
+Public Sub MacroSplash_ClearExecutionLogPane()
     Dim tb As Object
     On Error Resume Next
     m_splashReadErrShown = False
@@ -88,8 +90,8 @@ Private Sub MacroSplash_ClearExecutionLogPane()
     If Not tb Is Nothing Then tb.text = ""
 End Sub
 
-' ログは常に最新。キャレットを末尾に移動し txtExecutionLog へフォーカス（UserForm 自体に SetFocus は不可）
-Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
+' ログは末尾が最新。キャレットを最後に置き txtExecutionLog にフォーカス（UserForm には SetFocus がない）
+Public Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     On Error Resume Next
     tb.HideSelection = False
     tb.SelStart = Len(tb.text)
@@ -101,8 +103,8 @@ Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     DoEvents
 End Sub
 
-' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog に反映（変更がない場合は再描画しない）
-Private Sub MacroSplash_RefreshExecutionLogPane()
+' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog へ（長いときは末尾のみ）
+Public Sub MacroSplash_RefreshExecutionLogPane()
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -132,7 +134,7 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     If n > 0 Then
         m_splashReadErrShown = False
         If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
-            s = "（長文ログのため末尾のみ表示）" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+            s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
         End If
         If StrComp(s, m_splashLastLogSnapshot, vbBinaryCompare) = 0 Then
             m_splashPollLastFileLen = flenAtStart
@@ -156,23 +158,22 @@ Private Sub MacroSplash_RefreshExecutionLogPane()
     If flen = 0 And Len(tb.text) = 0 Then Exit Sub
     If m_splashReadErrShown Then Exit Sub
     m_splashPollHaveCachedFileLen = False
-    errBanner = "【ログ表示エラー】execution_log.txt を VBA で読めませんでした（Python がファイルを開いている可能性）。" & vbCrLf & _
-        "LOG シートまたはエディタで次のパスを直接開いて確認してください: " & m_splashExecutionLogPath & vbCrLf & vbCrLf
+    errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
     prevSU = Application.ScreenUpdating
     If Not prevSU Then Application.ScreenUpdating = True
     tb.text = errBanner & tb.text
     m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
     tb.SelLength = 0
-    frmMacroSplash.lblMessage.Caption = "（実行ログの表示に失敗 - 上記【ログ表示エラー】を参照）"
+    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
     frmMacroSplash.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
     m_splashReadErrShown = True
 End Sub
 
-' RunPython 終了後など、途中ポーリングできなかった場合に execution_log を一括表示（Interactive 一時 True で描画）
-Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
+' RunPython 終了直後など、同期 Python でポーリングできなかったあとに execution_log を一括表示（Interactive 一時 True で描画）
+Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -197,7 +198,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             Application.Interactive = True
             tb.text = errBanner & tb.text
             m_splashLastLogSnapshot = tb.text
-            frmMacroSplash.lblMessage.Caption = "（実行ログの一括表示に失敗 - 上記参照）"
+            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
             frmMacroSplash.Repaint
             DoEvents
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
@@ -206,7 +207,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
     m_splashReadErrShown = False
     If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
-        s = "（長文ログのため末尾のみ表示）" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
+        s = "…（冒頭を省略。直近のみ表示）…" & vbCrLf & Right$(s, SPLASH_LOG_MAX_DISPLAY_CHARS)
     End If
     prevInt = Application.Interactive
     Application.Interactive = True
@@ -220,7 +221,7 @@ Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
 End Sub
 
-Private Sub MacroSplash_PositionDockExcelBottomCenter()
+Public Sub MacroSplash_PositionDockExcelBottomCenter()
 #If VBA7 Then
     Dim xlHwnd As LongPtr
     Dim splashHwnd As LongPtr
@@ -258,8 +259,8 @@ SplashDockDone:
     On Error GoTo 0
 End Sub
 
-' モードレス UserForm を前面に維持し、再描画・ログ更新が止まったように見えることを防ぐ。Show 直後も前面化する。
-Private Sub MacroSplash_BringFormToFront()
+' モードレス UserForm が背後に残ると再描画・ログ更新が止まったように見えることがある。Show 直後に前面へ（ユーザーがクリックしたときと同趣旨）。
+Public Sub MacroSplash_BringFormToFront()
 #If VBA7 Then
     Dim hwnd As LongPtr
 #Else
@@ -275,7 +276,7 @@ Private Sub MacroSplash_BringFormToFront()
     On Error GoTo 0
 End Sub
 
-Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
+Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
     On Error GoTo CleanupFail
     If m_macroSplashShown Then MacroSplash_Hide
     m_animMacroSucceeded = False
@@ -284,7 +285,7 @@ Private Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lo
     End If
     frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
     frmMacroSplash.lblMessage.Caption = message
-    frmMacroSplash.StartUpPosition = 2  ' 初期表示のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端へ移動
+    frmMacroSplash.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
         Application.Interactive = False
@@ -305,7 +306,7 @@ CleanupFail:
     m_macroSplashShown = False
 End Sub
 
-Private Sub MacroSplash_Hide()
+Public Sub MacroSplash_Hide()
     On Error Resume Next
     MacroStartBgm_FadeOutAndClose
     m_splashConsoleOverlayActive = False
@@ -319,8 +320,7 @@ Private Sub MacroSplash_Hide()
     End If
 End Sub
 
-' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 のときのみ実行される想定。
-' マクロ名を環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk で指定可能。
+' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
 Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     On Error Resume Next
     If Len(chunk) = 0 Then Exit Sub
@@ -339,38 +339,6 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     MacroSplash_TextBoxScrollToTail tb
 End Sub
 
-' アニメ付き_* から呼ぶ：スプラッシュ表示中にマクロ実行（引数は最大2つまで Application.Run へ委譲）
-' lockExcelUI=False は InputBox / フォントダイアログ等で Excel 操作が必要なマクロ向け
-' allowMacroSound=True で 段階1/段階2 と同様に BGM・完了チャイムを許可（通常は False）
-Private Sub ?A?j???t??_?X?v???b?V???t??????s(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
-    m_splashAllowMacroSound = allowMacroSound
-    On Error GoTo EH
-    MacroSplash_Show splashMessage, lockExcelUI
-    If IsMissing(arg1) And IsMissing(arg2) Then
-        Application.Run procName
-    ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
-        Application.Run procName, arg1
-    Else
-        Application.Run procName, arg1, arg2
-    End If
-    GoTo Finish
-EH:
-    On Error Resume Next
-Finish:
-    MacroStartBgm_FadeOutAndClose
-    If m_animMacroSucceeded Then
-        On Error Resume Next
-        MacroCompleteChime
-    End If
-    MacroSplash_Hide
-    m_splashAllowMacroSound = False
-End Sub
-
-' =========================================================
-' かっこいいボタンを自動生成するマクロ
-' =========================================================
-' グラデーション配色プリセット（CreateCoolButtonWithPreset の presetId）
-' 1=ロイヤルブルー 2=ティール 3=オレンジ 4=フォレストグリーン 5=パープル
-' 6=インディゴ 7=スレート 8=コーラル 9=アンバー 10=マゼンタ
-
-#End If
+' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
+' lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
+' allowMacroSound：True = 段階1／段階2と同様に BGM・成功時チャイムを許可（既定 False）

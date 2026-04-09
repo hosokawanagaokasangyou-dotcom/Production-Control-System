@@ -1,11 +1,13 @@
-Private Function MacroCompleteChime_LocalWavPath() As String
+Option Explicit
+
+Public Function MacroCompleteChime_LocalWavPath() As String
     Dim folder As String
     folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     MacroCompleteChime_LocalWavPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_COMPLETE_CHIME_FILE_NAME
 End Function
 
-Private Function MacroCompleteChime_LocalMp3Path(ByVal track1to4 As Long) As String
+Public Function MacroCompleteChime_LocalMp3Path(ByVal track1to4 As Long) As String
     Dim folder As String
     Dim fn As String
     folder = ThisWorkbook.path
@@ -21,7 +23,7 @@ Private Function MacroCompleteChime_LocalMp3Path(ByVal track1to4 As Long) As Str
     MacroCompleteChime_LocalMp3Path = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & fn
 End Function
 
-Private Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Boolean
+Public Function MacroCompleteChime_MciPlayMp3(ByVal fullPath As String) As Boolean
     Dim a As String
     Dim cmdOpen As String
     Dim r As Long
@@ -45,7 +47,7 @@ Fail:
     If Len(a) > 0 Then r = mciSendStringW(StrPtr("close " & a), 0&, 0, 0&)
 End Function
 
-Private Function MacroCompleteChime_HttpDownloadBinary(ByVal url As String, ByVal destPath As String) As Boolean
+Public Function MacroCompleteChime_HttpDownloadBinary(ByVal url As String, ByVal destPath As String) As Boolean
     Dim xhr As Object
     Dim stm As Object
     On Error GoTo Fail
@@ -69,7 +71,7 @@ Fail:
     MacroCompleteChime_HttpDownloadBinary = False
 End Function
 
-Private Function MacroCompleteChime_EnsureWavPath() As String
+Public Function MacroCompleteChime_EnsureWavPath() As String
     Dim p As String
     Dim dirSounds As String
     p = MacroCompleteChime_LocalWavPath()
@@ -87,7 +89,7 @@ Private Function MacroCompleteChime_EnsureWavPath() As String
     End If
 End Function
 
-Private Sub MacroCompleteChime()
+Public Sub MacroCompleteChime()
     On Error Resume Next
     If Not m_splashAllowMacroSound Then Exit Sub
     Dim track As Long
@@ -111,14 +113,14 @@ Public Sub PlayFinishSound()
     MacroCompleteChime
 End Sub
 
-Private Function MacroStartBgm_FullPath() As String
+Public Function MacroStartBgm_FullPath() As String
     Dim folder As String
     folder = ThisWorkbook.path
     If Len(folder) = 0 Then Exit Function
     MacroStartBgm_FullPath = folder & "\" & MACRO_COMPLETE_CHIME_REL_DIR & "\" & MACRO_START_BGM_FILENAME
 End Function
 
-Private Sub MacroStartBgm_CloseHard()
+Public Sub MacroStartBgm_CloseHard()
     On Error Resume Next
     If m_macroStartBgmOpen Then
         mciSendStringW StrPtr("close " & MACRO_START_BGM_ALIAS), 0&, 0, 0&
@@ -126,7 +128,7 @@ Private Sub MacroStartBgm_CloseHard()
     m_macroStartBgmOpen = False
 End Sub
 
-Private Sub MacroStartBgm_FadeOutAndClose()
+Public Sub MacroStartBgm_FadeOutAndClose()
     Dim i As Long
     Dim vol As Long
     On Error Resume Next
@@ -141,7 +143,7 @@ Private Sub MacroStartBgm_FadeOutAndClose()
     m_macroStartBgmOpen = False
 End Sub
 
-Private Sub MacroStartBgm_StartIfAvailable()
+Public Sub MacroStartBgm_StartIfAvailable()
     Dim p As String
     Dim r As Long
     Dim cmdOpen As String

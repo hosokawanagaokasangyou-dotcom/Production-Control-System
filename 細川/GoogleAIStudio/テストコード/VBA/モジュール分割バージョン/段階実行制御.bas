@@ -1,4 +1,6 @@
-Private Function Stage12CmdHideWindowEffective() As Boolean
+Option Explicit
+
+Public Function Stage12CmdHideWindowEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long
     Dim lastRow As Long
@@ -36,7 +38,7 @@ End Function
 ' 段階1: master.xlsm から機械カレンダー・メンバー勤怠をマクロブックへコピーするか。
 ' Python（段階1/2）は常に master.xlsm を直接読むため、配台ロジック上このコピーは不要。既定 False（スキップ）。
 ' 1 / true / yes … 従来どおりコピー（マクロブック内でマスタのスナップショットを見たい場合）。
-Private Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
+Public Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long
     Dim lastRow As Long
@@ -103,7 +105,7 @@ Public Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal title
 End Function
 
 ' 非表示時: py 行へ 1>nul 2>&1（標準出力・標準エラーを捨てる。詰まり防止）。本番ログは planning_core の execution_log（UserForm で表示）
-Private Function StageVbaExitCodeFilePath() As String
+Public Function StageVbaExitCodeFilePath() As String
     Dim k As Long
     StageVbaExitCodeFilePath = ""
     If Len(m_splashExecutionLogPath) > 0 Then
@@ -115,7 +117,7 @@ Private Function StageVbaExitCodeFilePath() As String
     End If
 End Function
 
-Private Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
+Public Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
     Dim s As String
     On Error GoTo Fail
     ReadStageVbaExitCodeFromFile = &H7FFFFFFF
@@ -130,7 +132,7 @@ Fail:
 End Function
 
 ' xlwings RunPython: runpy.run_path で python\xlwings_console_runner.py を実行
-Private Sub XwRunConsoleRunner(ByVal entryPoint As String)
+Public Sub XwRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
     Exit Sub
@@ -139,7 +141,7 @@ EH:
 End Sub
 
 ' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
-Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
+Public Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
     Dim conhostExe As String
     Dim comSpec As String
     If Not hideConsoleWindow Then
@@ -157,7 +159,7 @@ Private Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hi
 End Function
 
 ' D3=false オーバーレイ専用: 既定端末が Windows Terminal のとき cmd 直起動だと FindWindow が CASCADIA_HOSTING を返し中身が空振りしうるため、conhost で古典コンソールを強制
-Private Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) As String
+Public Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) As String
     Dim conhostExe As String
     Dim cmdExe As String
     conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
@@ -170,8 +172,7 @@ Private Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String)
 End Function
 
 ' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
-#If VBA7 Then
-Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
+Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error Resume Next
     If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
     #If Win64 Then
@@ -190,7 +191,7 @@ Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error GoTo 0
 End Sub
 #Else
-Private Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
+Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
 End Sub
 #End If
 
@@ -435,7 +436,7 @@ Public Sub RunPythonStage1ThenStage2()
 End Sub
 
 ' 段階1取り込み前: 既存「配台計画_タスク入力」のフォント（名・サイズ）を退避（Clear で消えるため）
-Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
+Public Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
     ByVal ws As Worksheet, _
     ByRef fontName As String, _
     ByRef fontSize As Double, _
@@ -478,7 +479,7 @@ Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
 End Sub
 
 ' 取り込み直後: xlsx 側の既定フォントを上書きし、退避した体裁に戻す
-Private Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
+Public Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
     ByVal ws As Worksheet, _
     ByVal fontName As String, _
     ByVal fontSize As Double)

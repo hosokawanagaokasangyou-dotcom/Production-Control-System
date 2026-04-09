@@ -1,4 +1,6 @@
-Private Function Py3VersionOutput(wsh As Object) As String
+Option Explicit
+
+Public Function Py3VersionOutput(wsh As Object) As String
     Dim execObj As Object
     Dim s As String
     Py3VersionOutput = ""
@@ -13,13 +15,13 @@ Private Function Py3VersionOutput(wsh As Object) As String
 CleanExit:
 End Function
 
-Private Function IsPython3Available(wsh As Object) As Boolean
+Public Function IsPython3Available(wsh As Object) As Boolean
     Dim s As String
     s = Py3VersionOutput(wsh)
     IsPython3Available = (InStr(1, s, "Python 3", vbTextCompare) > 0)
 End Function
 
-Private Function TryInstallPythonViaWinget(wsh As Object) As Boolean
+Public Function TryInstallPythonViaWinget(wsh As Object) As Boolean
     On Error GoTo Fail
     Dim wingetBat As String
     wingetBat = "@echo off" & vbCrLf & "winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
@@ -30,7 +32,7 @@ Fail:
     TryInstallPythonViaWinget = False
 End Function
 
-Private Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
+Public Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
     Dim psCmd As String
     Dim shellCmd As String
     Dim exitCode As Long
@@ -53,7 +55,7 @@ Fail:
 End Function
 
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
-Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
+Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
     If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
         SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
     ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
@@ -63,7 +65,7 @@ Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As 
     End If
 End Function
 
-Private Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
+Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
     Dim ps As String
     Dim shellCmd As String
     Dim wdEsc As String

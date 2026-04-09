@@ -1,4 +1,6 @@
-Private Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
+Option Explicit
+
+Public Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
     Dim t As String
     t = LCase$(Trim$(s))
     If Len(t) = 0 Then ParseStage12CmdHideWindowBool = defaultVal: Exit Function
@@ -15,7 +17,7 @@ Private Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultV
     ParseStage12CmdHideWindowBool = defaultVal
 End Function
 
-Private Function FileHasUtf8Bom(ByVal filePath As String) As Boolean
+Public Function FileHasUtf8Bom(ByVal filePath As String) As Boolean
     Dim ff As Integer
     Dim b1 As Byte, b2 As Byte, b3 As Byte
     On Error GoTo CleanFail
@@ -34,7 +36,7 @@ CleanFail:
     FileHasUtf8Bom = False
 End Function
 
-Private Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset As String) As String
+Public Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset As String) As String
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
@@ -47,7 +49,7 @@ Private Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset
 End Function
 
 ' cmd.exe が生成した capture ログ用（UTF-8 BOM が無ければ日本語環境では Shift_JIS として読む）
-Private Function ReadCmdCaptureLogText(ByVal filePath As String) As String
+Public Function ReadCmdCaptureLogText(ByVal filePath As String) As String
     On Error GoTo EH
     If Len(Dir(filePath)) = 0 Then Exit Function
     If FileHasUtf8Bom(filePath) Then
@@ -61,7 +63,7 @@ EH:
 End Function
 
 ' Excel で式として解釈される先頭 "=" を文字列として保持する
-Private Function EscapeExcelFormulaText(ByVal s As String) As String
+Public Function EscapeExcelFormulaText(ByVal s As String) As String
     If Len(s) > 0 Then
         If Left$(s, 1) = "=" Then
             EscapeExcelFormulaText = "'" & s
@@ -72,12 +74,12 @@ Private Function EscapeExcelFormulaText(ByVal s As String) As String
 End Function
 
 ' 段階2 完了後: 特別指定_備考用 Gemini のプロンプト・応答ログを LOG_AI シートに転記（pause の代わりにブック内で確認）
-Private Function NormalizeWorkbookPathForCompare(ByVal p As String) As String
+Public Function NormalizeWorkbookPathForCompare(ByVal p As String) As String
     NormalizeWorkbookPathForCompare = LCase$(Replace(Replace(Trim$(p), "/", "\"), vbTab, ""))
 End Function
 
 ' NodeTypedValue は Variant（Byte 配列）のため、引数は Variant にしてから Byte() へ代入する。
-Private Function Utf8BytesToString(ByVal data As Variant) As String
+Public Function Utf8BytesToString(ByVal data As Variant) As String
     Dim stm As Object
     Dim bytes() As Byte
     On Error GoTo CleanFail
@@ -96,7 +98,7 @@ CleanFail:
     Utf8BytesToString = ""
 End Function
 
-Private Function DecodeBase64Utf8(ByVal b64 As String) As String
+Public Function DecodeBase64Utf8(ByVal b64 As String) As String
     On Error GoTo Fail
     Dim xml As Object, node As Object
     Set xml = CreateObject("MSXML2.DOMDocument.6.0")
@@ -311,7 +313,7 @@ End Sub
 ' マスタ master.xlsm「skills」: 同一列で OP/AS の優先度の数値が重複していないか検証
 ' （planning_core._validate_skills_op_as_priority_numbers_unique と同趣旨・2段/1段ヘッダ両対応）
 ' =========================================================
-Private Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut As String, ByRef prOut As Long) As Boolean
+Public Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut As String, ByRef prOut As Long) As Boolean
     Dim t As String
     Dim tail As String
     ParseOpAsSkillCellForValidate = False
@@ -337,3 +339,4 @@ Private Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut 
     End If
     ParseOpAsSkillCellForValidate = True
 End Function
+

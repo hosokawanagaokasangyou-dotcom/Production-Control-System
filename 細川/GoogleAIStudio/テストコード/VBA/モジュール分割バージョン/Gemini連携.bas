@@ -1,4 +1,6 @@
-Private Function GeminiJsonStringEscape(ByVal s As String) As String
+Option Explicit
+
+Public Function GeminiJsonStringEscape(ByVal s As String) As String
     Dim t As String
     t = Replace(s, "\", "\\")
     t = Replace(t, """", "\""")
@@ -8,7 +10,7 @@ Private Function GeminiJsonStringEscape(ByVal s As String) As String
     GeminiJsonStringEscape = t
 End Function
 
-Private Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
+Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
@@ -21,7 +23,7 @@ Private Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As S
 End Sub
 
 ' ログ表示用（暗号化失敗時の stderr など）
-Private Function GeminiReadUtf8File(ByVal filePath As String) As String
+Public Function GeminiReadUtf8File(ByVal filePath As String) As String
     Dim stm As Object
     GeminiReadUtf8File = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
@@ -42,7 +44,7 @@ CleanFail:
 End Function
 
 ' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
-Private Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
+Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
     Dim tmp As String
     GeminiReadUtf8FileViaTempCopy = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
@@ -254,7 +256,7 @@ End Sub
 
 ' master メイン A12/B12 のセル値を時刻として解釈（時分）。解釈不能は False。
 ' ※時刻のみのセルは Double になり IsDate が False になり得るため、数値型を明示処理する。
-Private Function マスタメイン_セルを時刻Dateへ(ByVal v As Variant, ByRef outT As Date) As Boolean
+Public Function マスタメイン_セルを時刻Dateへ(ByVal v As Variant, ByRef outT As Date) As Boolean
     On Error GoTo Fail
     If IsEmpty(v) Or VarType(v) = vbError Then GoTo Fail
     
@@ -286,17 +288,17 @@ End Function
 ' planning_core.RESULT_OUTSIDE_REGULAR_TIME_FILL（FCE4D6）相当＝定常外
 ' 工場稼働枠外（メイン A12/B12 の半開区間と重ならない帯）は薄い青で区別
 
-Private Function 時刻を分に(ByVal t As Date) As Long
+Public Function 時刻を分に(ByVal t As Date) As Long
     時刻を分に = CLng(Hour(t)) * 60& + CLng(Minute(t))
 End Function
 
 ' 半開区間 [a0,a1) と [b0,b1) が重なるか（分単位・同一日内想定）
-Private Function 半開区間が重なる分(ByVal a0 As Long, ByVal a1 As Long, ByVal b0 As Long, ByVal b1 As Long) As Boolean
+Public Function 半開区間が重なる分(ByVal a0 As Long, ByVal a1 As Long, ByVal b0 As Long, ByVal b1 As Long) As Boolean
     半開区間が重なる分 = (a0 < b1) And (a1 > b0)
 End Function
 
 ' 結果_設備毎の時間割「日時帯」セル（HH:MM-HH:MM 等）を解釈。■ を含む行は False
-Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, ByRef t1 As Date) As Boolean
+Public Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, ByRef t1 As Date) As Boolean
     Dim s As String
     Dim sep As String
     Dim parts() As String
@@ -327,7 +329,7 @@ Private Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, 
 End Function
 
 ' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の MasterGetMainWorksheet と同趣旨）
-Private Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
+Public Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
     Dim ws As Worksheet
     Dim sh As Worksheet
     Dim best As Worksheet
@@ -360,7 +362,7 @@ NextMastMainPick:
 End Function
 
 ' master メイン A12/B15 等: 結合セルでも左上の実値を取得
-Private Function マスタメイン_結合左上の値(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
+Public Function マスタメイン_結合左上の値(ByVal ws As Worksheet, ByVal cellAddr As String) As Variant
     Dim rng As Range
     On Error GoTo FailMMTL
     Set rng = ws.Range(cellAddr)
@@ -371,7 +373,7 @@ FailMMTL:
 End Function
 
 ' master.xlsm メイン A12/B12（工場稼働）・A15/B15（定常）を読む。欠損・不正・開始>=終了は *Ok=False
-Private Sub マスタメイン_工場稼働と定常を取得( _
+Public Sub マスタメイン_工場稼働と定常を取得( _
     ByRef facOk As Boolean, ByRef facS As Date, ByRef facE As Date, _
     ByRef regOk As Boolean, ByRef regS As Date, ByRef regE As Date)
     
@@ -439,7 +441,7 @@ CloseMasterWb:
     End If
 End Sub
 
-Private Sub 結果_設備毎の時間割_マスタ時刻反映( _
+Public Sub 結果_設備毎の時間割_マスタ時刻反映( _
     ByVal ws As Worksheet, _
     ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
     ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
@@ -495,7 +497,7 @@ CleanExit:
 End Sub
 
 ' planning_core.RESULT_DISPATCHED_REQUEST_FILL（C6EFCE）相当＝機械名列の依頼NO
-Private Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
+Public Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
     Dim colTB As Long
     Dim lastR As Long
     Dim lastC As Long
@@ -533,7 +535,7 @@ CleanExit2:
 End Sub
 
 ' 結果_設備毎の時間割（および TEMP）: 設備セルに「(日次始業準備)」「(加工前準備)」「(依頼切替後始末)」が含まれるとき薄緑（進度列は除外）
-Private Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
+Public Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
     Dim colTB As Long
     Dim lastR As Long
     Dim lastC As Long
@@ -578,7 +580,7 @@ CleanExit3:
     On Error GoTo 0
 End Sub
 
-Private Sub 結果_設備ガント_マスタ時刻反映( _
+Public Sub 結果_設備ガント_マスタ時刻反映( _
     ByVal ws As Worksheet, _
     ByVal regOk As Boolean, ByVal regS As Date, ByVal regE As Date, _
     ByVal facOk As Boolean, ByVal facS As Date, ByVal facE As Date)
@@ -650,7 +652,7 @@ CleanExit:
 End Sub
 
 ' 段階2: production_plan 取り込み直後に呼ぶ（当該マクロ内は終了時まで保護しない）
-Private Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Workbook)
+Public Sub 取込後_結果シートへマスタ時刻を反映(ByVal wb As Workbook)
     Dim facOk As Boolean
     Dim regOk As Boolean
     Dim facS As Date
@@ -693,7 +695,7 @@ Public Sub 結果シート_マスタ工場稼働と定常を再適用()
 End Sub
 
 ' master.xlsm メイン A15/B15（定常）を「hh:nn / hh:nn」で返す（読めなければ 08:45 / 17:00）
-Private Function マスタメイン_工場標準勤怠表示文字列() As String
+Public Function マスタメイン_工場標準勤怠表示文字列() As String
     Const FB As String = "08:45 / 17:00"
     Dim folder As String
     Dim p As String
@@ -748,7 +750,7 @@ CleanExit:
     On Error GoTo 0
 End Function
 
-Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled As String) As String
+Public Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled As String) As String
     Dim parts() As String
     Dim a As String, b As String
     parts = Split(labeled, " / ")
@@ -764,7 +766,7 @@ Private Function メインシート_勤怠表示先頭ゼロ無し(ByVal labeled As String) As S
 End Function
 
 ' 結果_カレンダー(出勤簿) の「出勤 / 退勤」が master メイン A15/B15 の定常枠と一致するか
-Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String, Optional ByVal stdDispCached As String) As Boolean
+Public Function メインシート_勤怠表示が通常勤務か(ByVal txt As String, Optional ByVal stdDispCached As String) As Boolean
     Dim t As String
     Dim exp As String
     t = Trim$(Replace(Replace(txt, vbCr, ""), vbLf, ""))
@@ -786,7 +788,7 @@ Private Function メインシート_勤怠表示が通常勤務か(ByVal txt As String, Optional
     End If
 End Function
 
-Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayVal As String, ByVal stdDispCached As String)
+Public Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayVal As String, ByVal stdDispCached As String)
     Dim s As String
     s = Trim$(CStr(displayVal))
     On Error Resume Next
@@ -803,7 +805,7 @@ Private Sub メインシート_勤怠セルに背景色を設定(ByVal c As Range, ByVal displayV
 End Sub
 
 ' メイン B7～（メンバー列＋日付12列 C～N）に表全体の細枠罫線を付与。ClearContents 後も B 列だけ線が無い状態を防ぐ。
-Private Sub メインシート_メンバー勤怠ブロックに罫線を設定(ByVal wsMain As Worksheet, ByVal lastMemberRow As Long)
+Public Sub メインシート_メンバー勤怠ブロックに罫線を設定(ByVal wsMain As Worksheet, ByVal lastMemberRow As Long)
     Dim rng As Range
     Const lastCol As Long = 14   ' N列（B=メンバー、C～N=12日分）
     If wsMain Is Nothing Then Exit Sub
@@ -1011,7 +1013,7 @@ End Sub
 
 ' メインシートの A～N 列オートフィット（メインの勤怠12日分＋A列リンク。フォント変更後・段階2後のレイアウト用）
 ' ※ScreenUpdating=False 中は効かないことがあるため、必要なら True にしてから実行
-Private Sub メインシート_AからK列_AutoFitOnSheet(ByVal wsMain As Worksheet)
+Public Sub メインシート_AからK列_AutoFitOnSheet(ByVal wsMain As Worksheet)
     On Error Resume Next
     If wsMain Is Nothing Then Exit Sub
     wsMain.Columns("A:N").AutoFit
@@ -1031,7 +1033,7 @@ Public Sub メインシート_AからK列_AutoFit()
     On Error GoTo 0
 End Sub
 
-Private Function GeminiCredentialsJsonPathIsConfigured() As Boolean
+Public Function GeminiCredentialsJsonPathIsConfigured() As Boolean
     Dim rng As Range
     GeminiCredentialsJsonPathIsConfigured = False
     On Error Resume Next
@@ -1049,7 +1051,7 @@ End Function
 ' 背景更新のまま RefreshAll が先に返り、その直後の Save 等で Excel が
 ' 「この操作を実行すると、まだ実行されていないデータの更新が取り消されます」と出すのを防ぐ。
 ' =========================================================
-Private Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
+Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
     Const SH_LOG_AI As String = "LOG_AI"
     Const MAX_CELL As Long = 32700
     Dim ws As Worksheet
@@ -1190,7 +1192,7 @@ End Sub
 ' 設定_環境変数: シートの新規作成・見出し行・テンプレにあってシートに無い変数名行のみ追記
 ' （python/workbook_env_bootstrap.py・設定_環境変数_雛形.tsv と整合）
 ' =========================================================
-Private Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) As Boolean
+Public Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) As Boolean
     Dim t As String
     t = LCase$(Trim$(CStr(ws.Cells(1, 1).Value)))
     If Len(t) = 0 Then
@@ -1201,7 +1203,7 @@ Private Function 設定_環境変数_1行目は見出し(ByVal ws As Worksheet) As Boolean
 End Function
 
 ' 行継続（ _ ）は1文あたり25個までのため、Array 連結は使わず1行ずつ追記する
-Private Sub 設定_環境変数_欠損行を試し追記(ByVal dict As Object, ByVal ws As Worksheet, ByRef lastRow As Long, ByVal envKey As String, ByVal envVal As String, ByVal envDesc As String)
+Public Sub 設定_環境変数_欠損行を試し追記(ByVal dict As Object, ByVal ws As Worksheet, ByRef lastRow As Long, ByVal envKey As String, ByVal envVal As String, ByVal envDesc As String)
     Dim nk As String
     nk = LCase$(Trim$(envKey))
     If Len(nk) = 0 Then Exit Sub
@@ -1324,7 +1326,7 @@ End Sub
 ' ・ブックへ適用 … A?C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
 ' ・段階1/段階2 成功完了時に一覧を自動更新（設定の維持は名前一致で行う）
 ' =========================================================
-Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
+Public Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlSheetVisibility
     Dim t As String
     t = LCase$(Trim$(s))
     If Len(t) = 0 Then
@@ -1346,7 +1348,7 @@ Private Function 設定_シート表示_C列を表示状態に変換(ByVal s As String) As XlShe
     設定_シート表示_C列を表示状態に変換 = xlSheetVisible
 End Function
 
-Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis As XlSheetVisibility) As String
+Public Function 設定_シート表示_表示状態の説明文字列(ByVal vis As XlSheetVisibility) As String
     Select Case vis
         Case xlSheetVisible
             設定_シート表示_表示状態の説明文字列 = "表示"
@@ -1360,7 +1362,7 @@ Private Function 設定_シート表示_表示状態の説明文字列(ByVal vis As XlSheetVisibi
 End Function
 
 ' C 列ドロップダウン用（F2:F4 は候補表示。入力規則は主にインライン一覧）
-Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
+Public Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
     ws.Range("F1").Value = "（C列の候補・参照用）"
     ws.Range("F2").Value = "表示"
     ws.Range("F3").Value = "非表示"
@@ -1369,7 +1371,7 @@ Private Sub 設定_シート表示_ドロップダウン候補セルを書く(ByVal ws As Worksheet)
 End Sub
 
 ' C2 以降に「表示/非表示/完全非表示」リストを付与（失敗時は定義名 PM_AI_SheetVisList → F2:F4）
-Private Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
+Public Sub 設定_シート表示_C列入力規則を付与(ByVal ws As Worksheet)
     Const NM_SHEET_VIS As String = "PM_AI_SheetVisList"
     Dim rng As Range
     Set rng = ws.Range("C2:C1000")
@@ -1394,7 +1396,7 @@ ApplyVisFlags:
     On Error GoTo 0
 End Sub
 
-Private Function 設定_シート表示_C列を正規化表示文字列(ByVal raw As String, ByVal fallbackVis As XlSheetVisibility) As String
+Public Function 設定_シート表示_C列を正規化表示文字列(ByVal raw As String, ByVal fallbackVis As XlSheetVisibility) As String
     If Len(Trim$(raw)) = 0 Then
         設定_シート表示_C列を正規化表示文字列 = 設定_シート表示_表示状態の説明文字列(fallbackVis)
     Else

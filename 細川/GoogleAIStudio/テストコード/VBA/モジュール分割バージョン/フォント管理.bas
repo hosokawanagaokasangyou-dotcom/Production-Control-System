@@ -1,4 +1,6 @@
-Private Function GetOrCreateFontScratchSheet() As Worksheet
+Option Explicit
+
+Public Function GetOrCreateFontScratchSheet() As Worksheet
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SCRATCH_SHEET_FONT)
@@ -14,7 +16,7 @@ Private Function GetOrCreateFontScratchSheet() As Worksheet
     Set GetOrCreateFontScratchSheet = ws
 End Function
 
-Private Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
+Public Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
     ByVal oldSize As Variant, ByVal oldBold As Variant, ByVal oldItalic As Variant, _
     ByVal oldUnderline As Variant, ByVal oldColor As Variant, ByVal oldStrike As Variant)
     On Error Resume Next
@@ -30,7 +32,7 @@ Private Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
     On Error GoTo 0
 End Sub
 
-Private Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
+Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Dim i As Long
     For i = 1 To Application.FontNames.Count
         If StrComp(Application.FontNames(i), fontName, vbTextCompare) = 0 Then
@@ -40,7 +42,7 @@ Private Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Next i
 End Function
 
-Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
+Public Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean
@@ -68,7 +70,7 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
 End Sub
 
 ' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
-Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
+Public Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
     On Error Resume Next
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped

@@ -1,3 +1,5 @@
+Option Explicit
+
 Function GetLatestOutputFile(folderPath As String, filePattern As String) As String
     Dim latestPath As String
     Dim latestDate As Date
@@ -13,7 +15,7 @@ Function GetLatestOutputFile(folderPath As String, filePattern As String) As Str
     GetLatestOutputFile = latestPath
 End Function
 
-Private Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
+Public Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
     Dim fso As Object
     Dim fldr As Object
     Dim subFldr As Object
