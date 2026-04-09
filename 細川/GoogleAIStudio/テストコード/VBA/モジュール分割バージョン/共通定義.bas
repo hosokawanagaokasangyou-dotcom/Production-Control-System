@@ -124,7 +124,8 @@ Private Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
 Private Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
-Private Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
+' 起動ショートカット.bas 等から OnKey 登録で参照するため Public
+Public Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Private Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
