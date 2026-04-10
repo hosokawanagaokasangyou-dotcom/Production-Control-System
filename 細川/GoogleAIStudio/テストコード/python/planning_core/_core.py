@@ -1409,6 +1409,7 @@ def _paint_gantt_timeline_row_merged(
                                 "col_e": col_e,
                                 "text": _ds_txt,
                                 "italic": bool(label_italic),
+                                "fill_hex": str(gh_ds),
                             }
                         )
                         c.value = None
@@ -1435,6 +1436,7 @@ def _paint_gantt_timeline_row_merged(
                                     "col_e": col_e,
                                     "text": _lbl,
                                     "italic": bool(label_italic),
+                                    "fill_hex": str(gh),
                                 }
                             )
                         c.value = None
@@ -4893,6 +4895,46 @@ def _com_excel_bgr_rgb(r: int, g: int, b: int) -> int:
     return int(r) & 255 | ((int(g) & 255) << 8) | ((int(b) & 255) << 16)
 
 
+def _hex_rrggbb_to_rgb_triple(hx: str) -> tuple[int, int, int]:
+    """6 桁 RRGGBB（# 可）を (R,G,B) に。不正時は中間グレー。"""
+    s = (hx or "").strip().lstrip("#").upper()
+    if len(s) != 6 or any(c not in "0123456789ABCDEF" for c in s):
+        return (180, 180, 180)
+    return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+
+
+def _gantt_label_luminance_01(r: int, g: int, b: int) -> float:
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+
+
+def _gantt_com_colors_from_fill_hex(fill_hex: str) -> tuple[int, int, int]:
+    """
+    ガント帯色（RRGGBB）から COM 用 (塗り BGR, 枠 BGR, 文字 BGR)。
+    淡色帯は黒寄り文字、やや濃い帯は白文字（モックのコントラストに近づける）。
+    """
+    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
+    fill_bgr = _com_excel_bgr_rgb(r, g, b)
+    lr = max(0, min(255, int(r * 0.52)))
+    lg = max(0, min(255, int(g * 0.52)))
+    lb = max(0, min(255, int(b * 0.52)))
+    line_bgr = _com_excel_bgr_rgb(lr, lg, lb)
+    lum = _gantt_label_luminance_01(r, g, b)
+    if lum > 0.74:
+        text_bgr = _com_excel_bgr_rgb(26, 26, 26)
+    else:
+        text_bgr = _com_excel_bgr_rgb(255, 255, 255)
+    return fill_bgr, line_bgr, text_bgr
+
+
+def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
+    """openpyxl Font.color 用 6 桁（RGB 文字列）。"""
+    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
+    lum = _gantt_label_luminance_01(r, g, b)
+    if lum > 0.74:
+        return "1A1A1A"
+    return "FFFFFF"
+
+
 def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
     """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
     from openpyxl import load_workbook
@@ -4915,10 +4957,11 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
                 continue
             c = ws.cell(row=row, column=col_s)
             c.value = text
+            _fh = str(sp.get("fill_hex") or "E8E8E8")
             c.font = _result_font(
                 size=10,
                 bold=True,
-                color="000000",
+                color=_gantt_openpyxl_font_color_for_fill_hex(_fh),
                 italic=bool(sp.get("italic")),
             )
             c.alignment = _gantt_timeline_label_alignment(single_slot=(col_s == col_e))
@@ -4968,6 +5011,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             h = float(rng.height)
             if w <= 0 or h <= 0:
                 continue
+            _fh = str(sp.get("fill_hex") or "E8E8E8")
+            fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
             min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
             label_w = max(w, min_w)
             label_h = min(max(11.0, h * 0.78), max(9.0, h - 1.5))
@@ -4988,9 +5033,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             try:
                 shp.Fill.Visible = True
                 shp.Fill.Solid()
-                shp.Fill.ForeColor.RGB = _com_excel_bgr_rgb(255, 252, 235)
+                shp.Fill.ForeColor.RGB = fill_bgr
                 shp.Line.Visible = True
-                shp.Line.ForeColor.RGB = _com_excel_bgr_rgb(130, 130, 145)
+                shp.Line.ForeColor.RGB = line_bgr
                 shp.Line.Weight = 0.75
             except Exception:
                 pass
@@ -5005,6 +5050,15 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 tf.TextRange.Font.Bold = True
                 if sp.get("italic"):
                     tf.TextRange.Font.Italic = True
+                try:
+                    tf.TextRange.Font.Color = text_bgr
+                except Exception:
+                    try:
+                        tf.TextRange.Font.Fill.Visible = True
+                        tf.TextRange.Font.Fill.Solid()
+                        tf.TextRange.Font.Fill.ForeColor.RGB = text_bgr
+                    except Exception:
+                        pass
                 tf.VerticalAnchor = 3  # msoAnchorMiddle
                 tf.MarginLeft = 1.5
                 tf.MarginRight = 1.5
