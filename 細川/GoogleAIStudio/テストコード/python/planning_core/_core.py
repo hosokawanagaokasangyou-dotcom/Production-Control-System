@@ -4066,7 +4066,9 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     - 依頼NO・工程名が両方空の行は対象外。先頭の空行と、最後のデータ行より後の空行は
       元の順のまま残す。
     - 最初の対象行から最後の対象行までは **途切れなく対象行** でなければならない。
-    - 対象行はキーが **有限の float** で、**互いに重複してはならない**。
+    - **有限の float** として解釈できるキー同士は **重複してはならない**。
+    - キーが空・解釈不能の対象行は、**すべての有効キー行の後ろ**に元の行順を保って並べ、
+      連番 1..n はその並びで振り直す。
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
@@ -4126,17 +4128,16 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             )
             return False
 
-    key_by_row: dict[int, float] = {}
     row_by_key: dict[float, int] = {}
+    sort_tuple_by_row: dict[int, tuple] = {}
+    n_invalid_key = 0
     for i in active:
         fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
         if fk is None:
-            logging.error(
-                "配台試行順番（小数キー並べ）: %s 行目の「%s」が空か、数値として解釈できません。",
-                i + 2,
-                dto_col,
-            )
-            return False
+            n_invalid_key += 1
+            # 有効 float より後ろ。同帯は元の行番号で安定化。
+            sort_tuple_by_row[i] = (1, i)
+            continue
         if fk in row_by_key:
             logging.error(
                 "配台試行順番（小数キー並べ）: 並べ替えキー %s が %s 行目と %s 行目で重複しています。",
@@ -4146,9 +4147,17 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             )
             return False
         row_by_key[fk] = i
-        key_by_row[i] = fk
+        sort_tuple_by_row[i] = (0, fk, i)
 
-    sorted_active = sorted(active, key=lambda ri: (key_by_row[ri], ri))
+    if n_invalid_key:
+        logging.info(
+            "配台試行順番（小数キー並べ）: 「%s」が空・非数値のデータ行が %s 行あります。"
+            " 有効キー行の後ろに並べ、連番化します。",
+            dto_col,
+            n_invalid_key,
+        )
+
+    sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
     df_mut = df.copy()
     for rank, i in enumerate(sorted_active, start=1):
         df_mut.iat[i, dto_idx] = rank
