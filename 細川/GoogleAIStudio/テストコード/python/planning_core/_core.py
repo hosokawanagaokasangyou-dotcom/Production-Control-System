@@ -5012,6 +5012,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         _xl_move_and_size = 1
         _progress_every = 200
         n_added = 0
+        # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
+        _row_shape_seq: dict[int, int] = {}
         for idx, sp in enumerate(specs, start=1):
             if idx == 1 or idx % _progress_every == 0 or idx == n_specs:
                 logging.info(
@@ -5037,11 +5039,16 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
             min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
             label_w = max(w, min_w)
-            label_h = min(max(11.0, h * 0.78), max(9.0, h - 1.5))
-            label_top = top + (h - label_h) / 2.0
+            # 縦幅 = 配置行の 1/3。縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）
+            _band = float(h) / 3.0
+            label_h = max(9.0, _band)
+            _n_on_row = int(_row_shape_seq.get(row, 0))
+            _slot = _n_on_row % 3
+            _row_shape_seq[row] = _n_on_row + 1
+            label_top = top + _slot * _band
             shp = api_ws.Shapes.AddShape(_mso_round_rect, left, label_top, label_w, label_h)
             try:
-                shp.Name = f"GanttLbl_R{row}_C{col_s}"
+                shp.Name = f"GanttLbl_R{row}_C{col_s}_{_n_on_row}"
             except Exception:
                 pass
             try:
