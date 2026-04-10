@@ -20,6 +20,7 @@ import logging
 import calendar
 import math
 import os
+import random
 import fnmatch
 import shutil
 import sys
@@ -101,6 +102,17 @@ _GEMINI_FLASH_OUT_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_OUT_PER_M", "0.30") or 0.30
 )
 GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
+# 503 / UNAVAILABLE / 429 等: 呼び出し直前の一様乱数ジッター（秒・上限）。0 で無効。
+_GEMINI_PRE_REQUEST_JITTER_MAX = float(
+    os.environ.get("GEMINI_PRE_REQUEST_JITTER_MAX_SEC", "0.75") or 0.75
+)
+# 再試行の指数バックオフ基底（秒）。試行 k 目の待ちの目安: base * 2^k + 小ジッター
+_GEMINI_RETRY_BACKOFF_BASE = float(
+    os.environ.get("GEMINI_RETRY_BACKOFF_BASE_SEC", "2.0") or 2.0
+)
+_GEMINI_RETRY_MAX_ATTEMPTS = max(
+    1, int(os.environ.get("GEMINI_RETRY_MAX_ATTEMPTS", "5") or 5)
+)
 
 # ---------------------------------------------------------------------------
 # 以降の定数ブロックは「Excel 列見出し」と 1:1 で対応させる。
@@ -2284,6 +2296,99 @@ def extract_retry_seconds(err_text):
     return None
 
 
+def _gemini_err_text_for_exc(exc: BaseException) -> str:
+    parts = [str(exc), repr(exc)]
+    for attr in ("status_code", "code", "message"):
+        v = getattr(exc, attr, None)
+        if v is not None:
+            parts.append(str(v))
+    return " ".join(parts)
+
+
+def _gemini_is_transient_api_error(err_text: str) -> bool:
+    """503 / 過負荷 / 期限切れなど、待てば再試行に値する API 失敗。"""
+    t = err_text.upper()
+    if "429" in err_text:
+        return True
+    if "503" in err_text:
+        return True
+    if "504" in err_text:
+        return True
+    for needle in (
+        "UNAVAILABLE",
+        "RESOURCE_EXHAUSTED",
+        "DEADLINE_EXCEEDED",
+        "DEADLINE EXCEEDED",
+        "SERVICE UNAVAILABLE",
+        "INTERNAL ERROR",
+        "UNRECOVERABLE",
+    ):
+        if needle in t:
+            return True
+    return False
+
+
+def _gemini_is_quota_style_error(err_text: str) -> bool:
+    t = err_text.upper()
+    return ("429" in err_text) or ("RESOURCE_EXHAUSTED" in t)
+
+
+def _gemini_pre_request_jitter_sleep() -> None:
+    mx = max(0.0, _GEMINI_PRE_REQUEST_JITTER_MAX)
+    if mx <= 0.0:
+        return
+    time_module.sleep(random.uniform(0.0, mx))
+
+
+def _gemini_generate_content_with_retry(
+    client: genai.Client,
+    *,
+    contents,
+    model: str | None = None,
+    max_attempts: int | None = None,
+    log_label: str = "",
+):
+    """generate_content を一時エラー時に再試行する（Flash 系 API 共通）。
+
+    - 各試行の直前: 0〜_GEMINI_PRE_REQUEST_JITTER_MAX の乱数待機（同時リクエストのばらつき）
+    - 待機時間は二系統:
+      (1) 429 / RESOURCE_EXHAUSTED で本文に retry 秒数があるときはその値（クリップ）＋小ジッター
+      (2) それ以外の一時エラーは指数バックオフ＋ジッター（503 / UNAVAILABLE 等）
+    """
+    mid = model if model is not None else GEMINI_MODEL_FLASH
+    n = max_attempts if max_attempts is not None else _GEMINI_RETRY_MAX_ATTEMPTS
+    if n < 1:
+        n = 1
+    base = max(0.1, float(_GEMINI_RETRY_BACKOFF_BASE))
+    for attempt in range(n):
+        _gemini_pre_request_jitter_sleep()
+        try:
+            return client.models.generate_content(model=mid, contents=contents)
+        except Exception as e:
+            err_text = _gemini_err_text_for_exc(e)
+            if attempt >= n - 1 or not _gemini_is_transient_api_error(err_text):
+                raise
+            wait_sec = None
+            if _gemini_is_quota_style_error(err_text):
+                rs = extract_retry_seconds(err_text)
+                if rs is not None:
+                    wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
+            if wait_sec is None:
+                pow_part = base * (2**attempt)
+                jitter = random.uniform(0.0, min(4.0, base * 2.0))
+                wait_sec = min(pow_part + jitter, 90.0)
+            prefix = f"{log_label}: " if log_label else ""
+            logging.warning(
+                "%sGemini API 一時エラー（試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                prefix,
+                attempt + 1,
+                n,
+                err_text[:800],
+                wait_sec,
+            )
+            time_module.sleep(wait_sec)
+
+
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     製品名文字列から加工単位(m)を推定する暫定ルール。
@@ -3498,7 +3603,9 @@ F) **global_day_process_operator_rules** （配列・必須）
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
+        res = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="メイン再優先特記"
+        )
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
@@ -6942,7 +7049,9 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
+        res = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="タスク特別指定"
+        )
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
@@ -6959,54 +7068,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             ai_sheet_sink["特別指定備考_AI_API"] = "あり（JSON解釈失敗）"
         return {}
     except Exception as e:
-        err_text = str(e)
-        is_quota = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
-        is_unavailable = ("503" in err_text) or ("UNAVAILABLE" in err_text)
-        retry_sec = extract_retry_seconds(err_text) if is_quota else None
-        if is_quota and retry_sec is not None:
-            wait_sec = min(max(retry_sec, 1.0), 90.0)
-            logging.warning(f"タスク特別指定 AI 429。{wait_sec:.1f}秒待機して再試行します。")
-            time_module.sleep(wait_sec)
-            try:
-                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
-                if parsed is not None:
-                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
-                    put_cached_ai_result(
-                        ai_cache, cache_key, parsed, content_key=cache_fingerprint
-                    )
-                    save_ai_cache(ai_cache)
-                    if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（429再試行後）"
-                    return parsed
-            except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 再試行失敗: {e2}")
-        elif is_unavailable:
-            wait_sec = 8.0
-            logging.warning(
-                f"タスク特別指定 AI 503/UNAVAILABLE。{wait_sec:.1f}秒待機して再試行します。"
-            )
-            time_module.sleep(wait_sec)
-            try:
-                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
-                if parsed is not None:
-                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
-                    put_cached_ai_result(
-                        ai_cache, cache_key, parsed, content_key=cache_fingerprint
-                    )
-                    save_ai_cache(ai_cache)
-                    logging.info("タスク特別指定: AI再試行で解析が完了しました。")
-                    if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（503再試行後）"
-                    return parsed
-                logging.warning("タスク特別指定 AI 503再試行: JSON 抽出に失敗しました。")
-            except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 503再試行失敗: {e2}")
-        else:
-            logging.warning(f"タスク特別指定 AI エラー: {e}")
+        logging.warning("タスク特別指定: Gemini 呼び出し失敗（再試行尽き）: %s", e)
         logging.warning(
             "タスク特別指定: AI解析結果を取得できなかったため、特別指定_備考の開始日/優先指示は反映されません。"
             "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してください。）"
@@ -8401,7 +8463,9 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
         logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
+        res = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="配台不要ルールD→E"
+        )
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_last_response.txt")
@@ -8471,7 +8535,9 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
         logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
+        res = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="配台不要ルールD→Eバッチ"
+        )
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_response.txt")
@@ -12025,7 +12091,9 @@ def load_attendance_and_analyze(members):
             """
             try:
                 client = genai.Client(api_key=API_KEY)
-                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
+                res = _gemini_generate_content_with_retry(
+                    client, contents=prompt, log_label="勤怠備考AI"
+                )
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 match = re.search(r'\{.*\}', res.text, re.DOTALL)
                 if match:
@@ -12037,34 +12105,9 @@ def load_attendance_and_analyze(members):
                     ai_parsed = {}
                     ai_log["勤怠備考_AI_詳細"] = "JSONパース失敗"
             except Exception as e:
-                err_text = str(e)
-                is_quota_or_rate = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
-                retry_sec = extract_retry_seconds(err_text) if is_quota_or_rate else None
-
-                if is_quota_or_rate and retry_sec is not None:
-                    wait_sec = min(max(retry_sec, 1.0), 90.0)
-                    logging.warning(f"AI通信 429/RESOURCE_EXHAUSTED。{wait_sec:.1f}秒待機して1回だけ再試行します。")
-                    time_module.sleep(wait_sec)
-                    try:
-                        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
-                        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                        match = re.search(r'\{.*\}', res.text, re.DOTALL)
-                        if match:
-                            ai_parsed = json.loads(match.group(0))
-                            put_cached_ai_result(ai_cache, cache_key, ai_parsed)
-                            save_ai_cache(ai_cache)
-                            ai_log["勤怠備考_AI_詳細"] = "再試行で解析成功"
-                        else:
-                            ai_parsed = {}
-                            ai_log["勤怠備考_AI_詳細"] = "再試行後JSONパース失敗"
-                    except Exception as e2:
-                        ai_parsed = {}
-                        logging.warning(f"AI再試行エラー: {e2}")
-                        ai_log["勤怠備考_AI_詳細"] = f"429後再試行失敗: {e2}"
-                else:
-                    ai_parsed = {}
-                    logging.warning(f"AI通信エラー: {e}")
-                    ai_log["勤怠備考_AI_詳細"] = str(e)
+                ai_parsed = {}
+                logging.warning("AI通信エラー: %s", e)
+                ai_log["勤怠備考_AI_詳細"] = str(e)
     else:
         ai_parsed = {}
 
