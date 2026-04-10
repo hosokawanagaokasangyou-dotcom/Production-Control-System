@@ -886,6 +886,11 @@ COLUMN_CONFIG_VISIBLE_COL = "表示"
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
     "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
+# 結果_設備ガントのタイムライン上ラベル（依頼NO 等）をセル文字ではなく角丸四角シェイプで重ねる。
+# xlwings + Excel が必要。失敗時は openpyxl でセルにフォールバック。無効化: GANTT_TIMELINE_SHAPE_LABELS=0
+GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
+    "GANTT_TIMELINE_SHAPE_LABELS", "1"
+).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
@@ -1356,10 +1361,14 @@ def _paint_gantt_timeline_row_merged(
     grid_border,
     task_fill_fn=None,
     label_font=None,
+    shape_label_specs: list | None = None,
+    label_italic: bool = False,
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
     （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
+    shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（xlwings）で
+    角丸シェイプとして追加するための座標・文言を蓄積する。
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1391,11 +1400,24 @@ def _paint_gantt_timeline_row_merged(
                 _, gh_ds = st0
                 c.fill = _gantt_cached_pattern_fill(gh_ds)
                 if col == col_s:
-                    c.value = "(日次始業準備)"
-                    c.font = bar_label_font
-                    c.alignment = _gantt_timeline_label_alignment(
-                        single_slot=single_slot_segment
-                    )
+                    _ds_txt = "(日次始業準備)"
+                    if shape_label_specs is not None:
+                        shape_label_specs.append(
+                            {
+                                "row": row,
+                                "col_s": col_s,
+                                "col_e": col_e,
+                                "text": _ds_txt,
+                                "italic": bool(label_italic),
+                            }
+                        )
+                        c.value = None
+                    else:
+                        c.value = _ds_txt
+                        c.font = bar_label_font
+                        c.alignment = _gantt_timeline_label_alignment(
+                            single_slot=single_slot_segment
+                        )
                 else:
                     c.value = None
             else:
@@ -1403,11 +1425,25 @@ def _paint_gantt_timeline_row_merged(
                 c.fill = _gantt_cached_pattern_fill(gh)
                 if col == col_s:
                     tid_s = str(tid or "").strip()
-                    c.value = f"{tid_s} {pct}%" if pct is not None else tid_s
-                    c.font = bar_label_font
-                    c.alignment = _gantt_timeline_label_alignment(
-                        single_slot=single_slot_segment
-                    )
+                    _lbl = f"{tid_s} {pct}%" if pct is not None else tid_s
+                    if shape_label_specs is not None:
+                        if tid_s:
+                            shape_label_specs.append(
+                                {
+                                    "row": row,
+                                    "col_s": col_s,
+                                    "col_e": col_e,
+                                    "text": _lbl,
+                                    "italic": bool(label_italic),
+                                }
+                            )
+                        c.value = None
+                    else:
+                        c.value = _lbl
+                        c.font = bar_label_font
+                        c.alignment = _gantt_timeline_label_alignment(
+                            single_slot=single_slot_segment
+                        )
                 else:
                     c.value = None
         i = j
@@ -1681,8 +1717,10 @@ def _write_results_equipment_gantt_sheet(
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
-    横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
+    横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。同一状態の連続は帯状に塗分けする。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
+    GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
+    角丸シェイプ用の仕様 dict の list を返す（保存後に xlwings で描画）。
     """
     wb = writer.book
     try:
@@ -1756,6 +1794,8 @@ def _write_results_equipment_gantt_sheet(
     n_slots = len(slot_times)
     n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
     last_col = n_fixed + n_slots
+    gantt_shape_label_specs: list[dict] = []
+    _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
@@ -1899,6 +1939,8 @@ def _write_results_equipment_gantt_sheet(
                 break_fill,
                 gantt_label_font,
                 grid_border,
+                shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                label_italic=False,
             )
 
             ws.row_dimensions[row].height = 52
@@ -1955,6 +1997,8 @@ def _write_results_equipment_gantt_sheet(
                     grid_border,
                     task_fill_fn=_gantt_bar_fill_actual_for_task_id,
                     label_font=gantt_label_font_actual,
+                    shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                    label_italic=True,
                 )
 
                 ws.row_dimensions[row].height = 52
@@ -2011,6 +2055,8 @@ def _write_results_equipment_gantt_sheet(
         ws.print_options.gridLines = False
     except Exception:
         pass
+
+    return gantt_shape_label_specs if _use_gantt_shape_labels else []
 
 
 def row_has_completion_keyword(row):
@@ -4840,6 +4886,187 @@ def _stage2_try_copy_column_config_shapes_from_input(
                 app.quit()
             except Exception:
                 pass
+
+
+def _com_excel_bgr_rgb(r: int, g: int, b: int) -> int:
+    """Office COM の Color.RGB（BGR リトルエンディアン）。"""
+    return int(r) & 255 | ((int(g) & 255) << 8) | ((int(b) & 255) << 16)
+
+
+def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
+    """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
+    from openpyxl import load_workbook
+
+    if _workbook_should_skip_openpyxl_io(result_path):
+        return
+    wb = load_workbook(result_path)
+    try:
+        ws = wb[RESULT_SHEET_GANTT_NAME]
+    except KeyError:
+        wb.close()
+        return
+    try:
+        for sp in specs:
+            row = int(sp["row"])
+            col_s = int(sp["col_s"])
+            col_e = int(sp["col_e"])
+            text = str(sp.get("text") or "").strip()
+            if not text:
+                continue
+            c = ws.cell(row=row, column=col_s)
+            c.value = text
+            c.font = _result_font(
+                size=10,
+                bold=True,
+                color="000000",
+                italic=bool(sp.get("italic")),
+            )
+            c.alignment = _gantt_timeline_label_alignment(single_slot=(col_s == col_e))
+        wb.save(result_path)
+    finally:
+        wb.close()
+
+
+def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: list) -> bool:
+    """
+    結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
+    成功時 True。xlwings / Excel 不可時は False。
+    """
+    rp = (result_path or "").strip()
+    if not rp or not os.path.isfile(rp) or not specs:
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        return False
+    app = None
+    wb = None
+    try:
+        app = xw.App(visible=False)
+        app.display_alerts = False
+        wb = app.books.open(os.path.abspath(rp), update_links=False)
+        try:
+            sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
+        except Exception:
+            return False
+        api_ws = sht.api
+        # msoShapeRoundedRectangle = 5
+        _mso_round_rect = 5
+        _mso_bring_to_front = 0
+        _xl_move_and_size = 1
+        for sp in specs:
+            text = str(sp.get("text") or "").strip()
+            if not text:
+                continue
+            row = int(sp["row"])
+            col_s = int(sp["col_s"])
+            col_e = int(sp["col_e"])
+            rng = sht.range((row, col_s), (row, col_e))
+            left = float(rng.left)
+            top = float(rng.top)
+            w = float(rng.width)
+            h = float(rng.height)
+            if w <= 0 or h <= 0:
+                continue
+            min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
+            label_w = max(w, min_w)
+            label_h = min(max(11.0, h * 0.78), max(9.0, h - 1.5))
+            label_top = top + (h - label_h) / 2.0
+            shp = api_ws.Shapes.AddShape(_mso_round_rect, left, label_top, label_w, label_h)
+            try:
+                shp.Name = f"GanttLbl_R{row}_C{col_s}"
+            except Exception:
+                pass
+            try:
+                shp.Placement = _xl_move_and_size
+            except Exception:
+                pass
+            try:
+                shp.ZOrder(_mso_bring_to_front)
+            except Exception:
+                pass
+            try:
+                shp.Fill.Visible = True
+                shp.Fill.Solid()
+                shp.Fill.ForeColor.RGB = _com_excel_bgr_rgb(255, 252, 235)
+                shp.Line.Visible = True
+                shp.Line.ForeColor.RGB = _com_excel_bgr_rgb(130, 130, 145)
+                shp.Line.Weight = 0.75
+            except Exception:
+                pass
+            try:
+                shp.Adjustments[1] = 0.2
+            except Exception:
+                pass
+            try:
+                tf = shp.TextFrame2
+                tf.TextRange.Text = text
+                tf.TextRange.Font.Size = 9
+                tf.TextRange.Font.Bold = True
+                if sp.get("italic"):
+                    tf.TextRange.Font.Italic = True
+                tf.VerticalAnchor = 3  # msoAnchorMiddle
+                tf.MarginLeft = 1.5
+                tf.MarginRight = 1.5
+                tf.MarginTop = 0.8
+                tf.MarginBottom = 0.8
+                try:
+                    tf.TextRange.ParagraphFormat.Alignment = 1
+                except Exception:
+                    pass
+            except Exception:
+                try:
+                    shp.TextFrame.Characters().Text = text
+                except Exception:
+                    pass
+        wb.save()
+        return True
+    except Exception as e:
+        logging.warning(
+            "結果_設備ガント: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            e,
+        )
+        return False
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        if app is not None:
+            try:
+                app.quit()
+            except Exception:
+                pass
+
+
+def _stage2_try_add_gantt_timeline_shape_labels(result_path: str, specs: list | None) -> None:
+    """
+    openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
+    失敗時は openpyxl でセルにフォールバック。
+    """
+    if not GANTT_TIMELINE_SHAPE_LABELS or not specs:
+        return
+    rp = (result_path or "").strip()
+    if not rp or not os.path.isfile(rp):
+        return
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs):
+        logging.info(
+            "結果_設備ガント: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            len(specs),
+        )
+        return
+    try:
+        _gantt_fallback_timeline_labels_openpyxl(rp, specs)
+        logging.info(
+            "結果_設備ガント: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            len(specs),
+        )
+    except Exception as e:
+        logging.warning(
+            "結果_設備ガント: セルへのラベルフォールバックも失敗しました（%s）。",
+            e,
+        )
 
 
 def _coerce_actual_sheet_datetime(val):
@@ -18887,6 +19114,7 @@ def _generate_plan_impl():
         "段階2: 結果ブックを作成します → %s",
         os.path.basename(output_filename),
     )
+    gantt_tl_label_specs: list = []
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -18933,7 +19161,7 @@ def _generate_plan_impl():
             logging.info(
                 "段階2: 設備ガントを生成しています（データ量により数分かかることがあります）"
             )
-            _write_results_equipment_gantt_sheet(
+            gantt_tl_label_specs = _write_results_equipment_gantt_sheet(
                 writer,
                 timeline_events,
                 equipment_list,
@@ -19052,6 +19280,8 @@ def _generate_plan_impl():
         output_filename,
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
     )
+
+    _stage2_try_add_gantt_timeline_shape_labels(output_filename, gantt_tl_label_specs)
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
