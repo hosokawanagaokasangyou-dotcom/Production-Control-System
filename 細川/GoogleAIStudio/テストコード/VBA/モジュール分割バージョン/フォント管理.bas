@@ -471,15 +471,9 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
     MacroSplash_SetStep "配台計画: Python で配台試行順番を再計算しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\apply_plan_input_dispatch_trial_order.py" & vbCrLf & _
-             "set DISPATCH_TRIAL_RC=%ERRORLEVEL%" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [plan-dispatch-trial-order] ERRORLEVEL=%DISPATCH_TRIAL_RC%" & vbCrLf & _
-             "if not %DISPATCH_TRIAL_RC%==0 (" & vbCrLf & _
-             "echo." & vbCrLf & _
-             "echo [ERROR] Non-zero exit. Read messages above, then press a key to close this window." & vbCrLf & _
-             "pause" & vbCrLf & _
-             ")" & vbCrLf & _
-             "exit /b %DISPATCH_TRIAL_RC%"
+             "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
