@@ -121,6 +121,8 @@ Public Const SHEET_SETTINGS As String = "設定"
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' planning_core.PLAN_INPUT_SHEET_NAME（TASK_PLAN_SHEET 未設定時の既定）と一致
 Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
+' 配台計画_タスク入力シート上の「配台試行順を再計算」図形名（再配置時に削除して付け直す）
+Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）

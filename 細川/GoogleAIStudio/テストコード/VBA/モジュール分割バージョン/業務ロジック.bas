@@ -161,6 +161,12 @@ Sub アニメ付き_配台計画_タスク入力_配台試行順番を再計算()
     アニメ付き_スプラッシュ付きで実行 "配台試行順番を再計算しています…", "配台計画_タスク入力_配台試行順番をPythonで再計算"
 End Sub
 
+' 上記と同じ図形をシートに自動配置（初回・位置調整用）。本体は フォント管理 の 配台計画_タスク入力_配台試行順再計算ボタンを配置。
+Sub アニメ付き_配台計画_タスク入力_配台試行順再計算ボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_配台試行順再計算ボタンを配置
+End Sub
+
 Public Function GetMainWorksheet() As Worksheet
     ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next
@@ -3235,3 +3241,57 @@ NextSheetIter:
 End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
+
+' =========================================================
+' 図形ボタン押下アニメ（OnAction をラッパーにしたときのみ Application.Caller が図形名になる）
+' =========================================================
+Public Sub AnimateButtonPush()
+    Dim shpName As String
+    Dim shp As Shape
+    Dim ws As Worksheet
+    Dim candidate As Shape
+    Dim firstHit As Shape
+    Dim originalTop As Single
+    Dim originalLeft As Single
+    Dim hasShadow As Boolean
+
+    On Error Resume Next
+    shpName = CStr(Application.Caller)
+    On Error GoTo 0
+    If Len(Trim$(shpName)) = 0 Then Exit Sub
+
+    Set shp = Nothing
+    Set firstHit = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        Err.Clear
+        On Error Resume Next
+        Set candidate = ws.Shapes(shpName)
+        If Err.Number = 0 And Not candidate Is Nothing Then
+            If firstHit Is Nothing Then Set firstHit = candidate
+            If ws Is ActiveSheet Then
+                Set shp = candidate
+                Exit For
+            End If
+        End If
+    Next ws
+    On Error GoTo 0
+
+    If shp Is Nothing Then Set shp = firstHit
+    If shp Is Nothing Then Exit Sub
+
+    originalTop = shp.Top
+    originalLeft = shp.Left
+    hasShadow = shp.Shadow.Visible
+
+    shp.Top = originalTop + 2
+    shp.Left = originalLeft + 2
+    If hasShadow Then shp.Shadow.Visible = msoFalse
+
+    DoEvents
+    Sleep 150
+
+    shp.Top = originalTop
+    shp.Left = originalLeft
+    If hasShadow Then shp.Shadow.Visible = msoTrue
+    DoEvents
+End Sub

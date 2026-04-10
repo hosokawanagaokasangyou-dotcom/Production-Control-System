@@ -360,4 +360,27 @@ End Sub
 ' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
 ' lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
 ' allowMacroSound：True = 段階1／段階2と同様に BGM・成功時チャイムを許可（既定 False）
+Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
+    m_splashAllowMacroSound = allowMacroSound
+    On Error GoTo EH
+    MacroSplash_Show splashMessage, lockExcelUI
+    If IsMissing(arg1) And IsMissing(arg2) Then
+        Application.Run procName
+    ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
+        Application.Run procName, arg1
+    Else
+        Application.Run procName, arg1, arg2
+    End If
+    GoTo Finish
+EH:
+    On Error Resume Next
+Finish:
+    MacroStartBgm_FadeOutAndClose
+    If m_animMacroSucceeded Then
+        On Error Resume Next
+        MacroCompleteChime
+    End If
+    MacroSplash_Hide
+    m_splashAllowMacroSound = False
+End Sub
 

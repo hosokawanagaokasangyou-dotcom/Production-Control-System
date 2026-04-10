@@ -132,6 +132,7 @@ Fail:
 End Function
 
 ' xlwings RunPython: runpy.run_path Ç≈ python\xlwings_console_runner.py Çé¿çs
+' entryPoint ó·: run_stage1_for_xlwings / run_stage2_for_xlwings / run_refresh_plan_input_dispatch_trial_order_for_xlwings
 Public Sub XwRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"

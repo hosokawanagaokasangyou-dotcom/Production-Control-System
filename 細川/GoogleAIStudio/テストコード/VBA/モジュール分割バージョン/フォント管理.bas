@@ -432,6 +432,7 @@ End Sub
 '==============================================================================
 ' 配台計画_タスク入力: 「配台試行順番」を Python（xlwings）で再計算・行並べ替え
 ' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_配台試行順番を再計算」
+' 図形の自動作成: 「アニメ付き_配台計画_タスク入力_配台試行順再計算ボタンを配置」
 ' ・段階2 の load_planning_tasks_df と同じ _apply_planning_sheet_post_load_mutations を
 '   経由するため、「配台不要」手動クリア後も設定シート・分割行ルールと整合する。
 ' ・Excel で本ブックを開いたまま。保存してからの実行を推奨。
@@ -483,6 +484,112 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
         MacroSplash_SetStep "「" & SHEET_PLAN_INPUT_TASK & "」の配台試行順番を更新し、行を並べ替えました。"
         m_animMacroSucceeded = True
     End If
+End Sub
+
+' グラデーション＋影付き図形（メインの「かっこいいボタン」と同趣旨）。同一図形名なら削除して付け直す。
+Private Sub PlanInputSheet_AddGradientActionButton( _
+    ByVal ws As Worksheet, _
+    ByVal btnText As String, _
+    ByVal onActionFull As String, _
+    ByVal leftPt As Single, _
+    ByVal topPt As Single, _
+    ByVal colorTop As Long, _
+    ByVal colorBottom As Long)
+    Dim shp As Shape
+    Const BTN_W As Single = 268
+    Const BTN_H As Single = 48
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftPt, topPt, BTN_W, BTN_H)
+    shp.Name = SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER
+    With shp
+        With .TextFrame2.TextRange
+            .text = btnText
+            .Font.Name = "メイリオ"
+            .Font.Size = 12
+            .Font.Bold = msoTrue
+            .Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        End With
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        With .Fill
+            .Visible = msoTrue
+            .TwoColorGradient Style:=msoGradientVertical, Variant:=1
+            .ForeColor.RGB = colorTop
+            .BackColor.RGB = colorBottom
+        End With
+        .line.Visible = msoFalse
+        With .ThreeD
+            .BevelTopType = msoBevelSoftRound
+            .BevelTopDepth = 6
+            .BevelTopInset = 6
+        End With
+        With .Shadow
+            .Type = msoShadow21
+            .Visible = msoTrue
+            .OffsetX = 3
+            .OffsetY = 3
+            .Transparency = 0.5
+            .Blur = 4
+        End With
+        .OnAction = onActionFull
+    End With
+End Sub
+
+'==============================================================================
+' 配台計画_タスク入力: 上記「配台試行順を再計算」用のグラデーション図形を 1 行目付近に配置
+' 開発タブ → マクロ → 「配台計画_タスク入力_配台試行順再計算ボタンを配置」または
+' 「アニメ付き_配台計画_タスク入力_配台試行順再計算ボタンを配置」
+'==============================================================================
+Public Sub 配台計画_タスク入力_配台試行順再計算ボタンを配置()
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim anchorCol As Long
+    Dim leftPt As Single
+    Dim topPt As Single
+    Dim sh As Shape
+    Dim wbQuoted As String
+    Dim macroAnim As String
+    Dim i As Long
+    On Error GoTo FailBtn
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo FailBtn
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "配台試行順ボタン"
+        Exit Sub
+    End If
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        Set sh = ws.Shapes(i)
+        If StrComp(sh.Name, SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER, vbTextCompare) = 0 Then
+            sh.Delete
+        End If
+    Next i
+    On Error GoTo FailBtn
+    Set ur = Nothing
+    On Error Resume Next
+    Set ur = ws.UsedRange
+    On Error GoTo FailBtn
+    anchorCol = 4
+    If Not ur Is Nothing Then
+        anchorCol = ur.Column + ur.Columns.Count + 1
+        If anchorCol < 4 Then anchorCol = 4
+        If anchorCol > 80 Then anchorCol = 80
+    End If
+    leftPt = ws.Cells(1, anchorCol).Left
+    topPt = ws.Rows(1).Top + 1.5
+    wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_配台試行順番を再計算"
+    PlanInputSheet_AddGradientActionButton ws, "配台試行順を更新", macroAnim, leftPt, topPt, RGB(100, 120, 220), RGB(40, 50, 120)
+    ws.Activate
+    On Error Resume Next
+    ws.Range("A1").Select
+    On Error GoTo 0
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "（配台不要を手動でクリアしたあと、クリックで試行順を再計算します）", vbInformation, "配台試行順ボタン"
+    Exit Sub
+FailBtn:
+    MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "配台試行順ボタン"
 End Sub
 
 '==============================================================================
