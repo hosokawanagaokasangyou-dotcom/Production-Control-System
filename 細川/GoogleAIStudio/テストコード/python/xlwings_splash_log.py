@@ -21,7 +21,7 @@ def enabled() -> bool:
 
 
 def _macro_qualified_name() -> str:
-    return (os.environ.get("PM_AI_XLWINGS_SPLASH_MACRO") or "?X?v???b?V?????O_?`?????N???L").strip()
+    return (os.environ.get("PM_AI_XLWINGS_SPLASH_MACRO") or "スプラッシュ表示.SplashLog_AppendChunk").strip()
 
 
 def _task_workbook_abs() -> str:
