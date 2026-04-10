@@ -7062,9 +7062,6 @@ def build_task_queue_from_planning_df(
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         done_qty = calc_done_qty_equivalent_from_row(row)
-        qty_total = _floor_positive_m_to_planning_minimum(
-            qty_total, PLANNING_MIN_QTY_M
-        )
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
@@ -7180,17 +7177,7 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
-        unit = _coerce_roll_unit_m_when_converted_qty_below_roll(
-            product_name, unit, qty_total
-        )
-        try:
-            unit = float(unit)
-        except Exception:
-            unit = float(qty) if qty else 0.0
-        if unit <= 0:
-            unit = qty
-
-        unit = _floor_positive_m_to_planning_minimum(unit, PLANNING_MIN_ROLL_UNIT_M)
+        # 換算数量・ロール単位長さの補正（推定・100m 下限・換算<ロール時の引き上げ）は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
 
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
