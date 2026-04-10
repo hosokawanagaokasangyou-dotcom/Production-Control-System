@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-Private Function フォント作業用シートを取得または作成() As Worksheet
-=======
 Option Explicit
 
 Public Function GetOrCreateFontScratchSheet() As Worksheet
->>>>>>> main4
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SCRATCH_SHEET_FONT)
@@ -20,11 +16,7 @@ Public Function GetOrCreateFontScratchSheet() As Worksheet
     Set フォント作業用シートを取得または作成 = ws
 End Function
 
-<<<<<<< HEAD
-Private Sub セルのフォント属性を復元(ByVal r As Range, ByVal oldName As String, _
-=======
 Public Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
->>>>>>> main4
     ByVal oldSize As Variant, ByVal oldBold As Variant, ByVal oldItalic As Variant, _
     ByVal oldUnderline As Variant, ByVal oldColor As Variant, ByVal oldStrike As Variant)
     On Error Resume Next
@@ -40,11 +32,7 @@ Public Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
     On Error GoTo 0
 End Sub
 
-<<<<<<< HEAD
-Private Function フォント名がExcel一覧に存在するか(ByVal fontName As String) As Boolean
-=======
 Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
->>>>>>> main4
     Dim i As Long
     For i = 1 To Application.FontNames.Count
         If StrComp(Application.FontNames(i), fontName, vbTextCompare) = 0 Then
@@ -54,11 +42,7 @@ Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Next i
 End Function
 
-<<<<<<< HEAD
-Private Sub 全シートのセルにフォント適用(ByVal fontName As String, ByRef skippedOut As String)
-=======
 Public Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
->>>>>>> main4
     Dim ws As Worksheet
     Dim ur As Range
     Dim rangeErr As Boolean

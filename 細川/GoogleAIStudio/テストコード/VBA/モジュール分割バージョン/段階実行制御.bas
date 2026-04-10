@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-Private Function 段階12_CMDウィンドウ非表示_実効値() As Boolean
-=======
 Option Explicit
 
 Public Function Stage12CmdHideWindowEffective() As Boolean
->>>>>>> main4
     Dim ws As Worksheet
     Dim r As Long
     Dim lastRow As Long
@@ -42,11 +38,7 @@ End Function
 ' 段階1: master.xlsm から機械カレンダー・メンバー勤怠をマクロブックへコピーするか。
 ' Python（段階1/2）は常に master.xlsm を直接読むため、配台ロジック上このコピーは不要。既定 False（スキップ）。
 ' 1 / true / yes … 従来どおりコピー（マクロブック内でマスタのスナップショットを見たい場合）。
-<<<<<<< HEAD
-Private Function 段階1_マスタ同期マクロブック_実効値() As Boolean
-=======
 Public Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
->>>>>>> main4
     Dim ws As Worksheet
     Dim r As Long
     Dim lastRow As Long
@@ -113,33 +105,7 @@ Public Function CMD本文へコンソールタイトルを付与(ByVal body As String, ByVal ti
 End Function
 
 ' 非表示時: py 行へ 1>nul 2>&1（標準出力・標準エラーを捨てる。詰まり防止）。本番ログは planning_core の execution_log（UserForm で表示）
-<<<<<<< HEAD
-Private Function 段階バッチ_Python行に標準出力破棄を付与(ByVal body As String) As String
-    Dim t As String
-    Dim lines() As String
-    Dim i As Long
-    Dim s As String
-    t = Replace(Replace(body, vbCrLf, vbLf), vbCr, vbLf)
-    lines = Split(t, vbLf)
-    For i = LBound(lines) To UBound(lines)
-        s = lines(i)
-        If Len(s) > 0 Then
-            If InStr(1, LTrim$(s), "py ", vbTextCompare) = 1 Then
-                If InStr(1, s, "1>>", vbTextCompare) = 0 And InStr(1, s, ">nul", vbTextCompare) = 0 Then
-                    lines(i) = RTrim$(s) & " 1>nul 2>&1"
-                End If
-                段階バッチ_Python行に標準出力破棄を付与 = Join(lines, vbCrLf)
-                Exit Function
-            End If
-        End If
-    Next i
-    段階バッチ_Python行に標準出力破棄を付与 = body
-End Function
-
-Private Function 段階VBA終了コードファイルのパス() As String
-=======
 Public Function StageVbaExitCodeFilePath() As String
->>>>>>> main4
     Dim k As Long
     段階VBA終了コードファイルのパス = ""
     If Len(m_splashExecutionLogPath) > 0 Then
@@ -151,11 +117,7 @@ Public Function StageVbaExitCodeFilePath() As String
     End If
 End Function
 
-<<<<<<< HEAD
-Private Function 段階VBA終了コードをファイルから読取(ByVal fullPath As String) As Long
-=======
 Public Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
->>>>>>> main4
     Dim s As String
     On Error GoTo Fail
     段階VBA終了コードをファイルから読取 = &H7FFFFFFF
@@ -169,13 +131,8 @@ Fail:
     段階VBA終了コードをファイルから読取 = &H7FFFFFFF
 End Function
 
-<<<<<<< HEAD
-' xlwings ダイアログ付き_段階2を実行: runpy.run_path で python\xlwings_console_runner.py を実行
-Private Sub Xlwings_コンソールランナー実行(ByVal entryPoint As String)
-=======
 ' xlwings RunPython: runpy.run_path で python\xlwings_console_runner.py を実行
 Public Sub XwRunConsoleRunner(ByVal entryPoint As String)
->>>>>>> main4
     On Error GoTo EH
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
     Exit Sub
@@ -184,11 +141,7 @@ EH:
 End Sub
 
 ' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
-<<<<<<< HEAD
-Private Function 段階実行_コマンドラインを構築(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
-=======
 Public Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hideConsoleWindow As Boolean) As String
->>>>>>> main4
     Dim conhostExe As String
     Dim comSpec As String
     If Not hideConsoleWindow Then
@@ -206,11 +159,7 @@ Public Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hid
 End Function
 
 ' D3=false オーバーレイ専用: 既定端末が Windows Terminal のとき cmd 直起動だと FindWindow が CASCADIA_HOSTING を返し中身が空振りしうるため、conhost で古典コンソールを強制
-<<<<<<< HEAD
-Private Function 段階表示用クラシックコンソールCMDを構築(ByVal cmdFilePath As String) As String
-=======
 Public Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) As String
->>>>>>> main4
     Dim conhostExe As String
     Dim cmdExe As String
     conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
@@ -224,11 +173,7 @@ End Function
 
 ' D3=false: txtExecutionLog の画面ピクセル矩形（フォームのクライアント原点＋ポイント→DPI 換算）
 #If VBA7 Then
-<<<<<<< HEAD
-Private Sub コンソール枠なし化を必要なら適用(ByVal hwnd As LongPtr)
-=======
 Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
->>>>>>> main4
     On Error Resume Next
     If Not STAGE12_CMD_OVERLAY_BORDERLESS Then Exit Sub
     #If Win64 Then
@@ -247,11 +192,7 @@ Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As LongPtr)
     On Error GoTo 0
 End Sub
 #Else
-<<<<<<< HEAD
-Private Sub コンソール枠なし化を必要なら適用(ByVal hwnd As Long)
-=======
 Public Sub ConsoleApplyBorderlessIfNeeded(ByVal hwnd As Long)
->>>>>>> main4
 End Sub
 #End If
 

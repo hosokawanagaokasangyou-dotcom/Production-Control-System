@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-Private Function 段階12_CMD非表示フラグを真偽に変換(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
-=======
 Option Explicit
 
 Public Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
->>>>>>> main4
     Dim t As String
     t = LCase$(Trim$(s))
     If Len(t) = 0 Then 段階12_CMD非表示フラグを真偽に変換 = defaultVal: Exit Function
@@ -21,11 +17,7 @@ Public Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVa
     段階12_CMD非表示フラグを真偽に変換 = defaultVal
 End Function
 
-<<<<<<< HEAD
-Private Function ファイルがUTF8BOMか(ByVal filePath As String) As Boolean
-=======
 Public Function FileHasUtf8Bom(ByVal filePath As String) As Boolean
->>>>>>> main4
     Dim ff As Integer
     Dim b1 As Byte, b2 As Byte, b3 As Byte
     On Error GoTo CleanFail
@@ -44,11 +36,7 @@ CleanFail:
     ファイルがUTF8BOMか = False
 End Function
 
-<<<<<<< HEAD
-Private Function 文字コード指定でテキストファイル読込(ByVal filePath As String, ByVal charset As String) As String
-=======
 Public Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset As String) As String
->>>>>>> main4
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
@@ -61,11 +49,7 @@ Public Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset 
 End Function
 
 ' cmd.exe が生成した capture ログ用（UTF-8 BOM が無ければ日本語環境では Shift_JIS として読む）
-<<<<<<< HEAD
-Private Function CMDキャプチャログ文字列を読込(ByVal filePath As String) As String
-=======
 Public Function ReadCmdCaptureLogText(ByVal filePath As String) As String
->>>>>>> main4
     On Error GoTo EH
     If Len(Dir(filePath)) = 0 Then Exit Function
     If ファイルがUTF8BOMか(filePath) Then
@@ -79,11 +63,7 @@ EH:
 End Function
 
 ' Excel で式として解釈される先頭 "=" を文字列として保持する
-<<<<<<< HEAD
-Private Function Excel数式用文字列にエスケープ(ByVal s As String) As String
-=======
 Public Function EscapeExcelFormulaText(ByVal s As String) As String
->>>>>>> main4
     If Len(s) > 0 Then
         If Left$(s, 1) = "=" Then
             Excel数式用文字列にエスケープ = "'" & s
@@ -94,21 +74,12 @@ Public Function EscapeExcelFormulaText(ByVal s As String) As String
 End Function
 
 ' 段階2 完了後: 特別指定_備考用 Gemini のプロンプト・応答ログを LOG_AI シートに転記（pause の代わりにブック内で確認）
-<<<<<<< HEAD
-Private Function ブックパスを比較用に正規化(ByVal p As String) As String
-    ブックパスを比較用に正規化 = LCase$(Replace(Replace(Trim$(p), "/", "\"), vbTab, ""))
-End Function
-
-' NodeTypedValue は Variant（Byte 配列）のため、引数は Variant にしてから Byte() へ代入する。
-Private Function UTF8バイト列を文字列化(ByVal data As Variant) As String
-=======
 Public Function NormalizeWorkbookPathForCompare(ByVal p As String) As String
     NormalizeWorkbookPathForCompare = LCase$(Replace(Replace(Trim$(p), "/", "\"), vbTab, ""))
 End Function
 
 ' NodeTypedValue は Variant（Byte 配列）のため、引数は Variant にしてから Byte() へ代入する。
 Public Function Utf8BytesToString(ByVal data As Variant) As String
->>>>>>> main4
     Dim stm As Object
     Dim bytes() As Byte
     On Error GoTo CleanFail
@@ -127,11 +98,7 @@ CleanFail:
     UTF8バイト列を文字列化 = ""
 End Function
 
-<<<<<<< HEAD
-Private Function Base64をUTF8文字列にデコード(ByVal b64 As String) As String
-=======
 Public Function DecodeBase64Utf8(ByVal b64 As String) As String
->>>>>>> main4
     On Error GoTo Fail
     Dim xml As Object, node As Object
     Set xml = CreateObject("MSXML2.DOMDocument.6.0")
@@ -346,11 +313,7 @@ End Sub
 ' マスタ master.xlsm「skills」: 同一列で OP/AS の優先度の数値が重複していないか検証
 ' （planning_core._validate_skills_op_as_priority_numbers_unique と同趣旨・2段/1段ヘッダ両対応）
 ' =========================================================
-<<<<<<< HEAD
-Private Function OPASスキルセルを検証用に解析(ByVal s As String, ByRef roleOut As String, ByRef prOut As Long) As Boolean
-=======
 Public Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut As String, ByRef prOut As Long) As Boolean
->>>>>>> main4
     Dim t As String
     Dim tail As String
     OPASスキルセルを検証用に解析 = False

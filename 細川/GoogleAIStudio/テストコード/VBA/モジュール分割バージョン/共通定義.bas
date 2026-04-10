@@ -96,17 +96,10 @@ Public Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
 Public Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
-<<<<<<< HEAD
-' 実効値は 段階12_CMDウィンドウ非表示_実効値（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
-Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
-' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 xlwings.RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 VBA「ダイアログ付き_段階2を実行」の可否に従う
-Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
-=======
 ' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Public Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
 Public Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
->>>>>>> main4
 ' True かつ STAGE12_USE_XLWINGS_SPLASH_LOG=False のときのみ xlwings.RunPython+runpy.run_path（Tools→参照に xlwings）。実行中はログ枠はほぼ更新されず終了後に一括表示。進捗表示優先なら SPLASH_LOG=True のまま（cmd になる）
 Public Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 
@@ -159,13 +152,8 @@ Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 '   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ Xlwings_コンソールランナー実行。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
-<<<<<<< HEAD
-' 環境コンポーネントをインストール: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
-Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
-=======
 ' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
->>>>>>> main4
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
 Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
@@ -179,18 +167,6 @@ Public Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
 Public m_lastStage1ExitCode As Long
 Public m_lastStage1ErrMsg As String
 ' 段階2コア用（ダイアログは呼び出し元で出す）
-<<<<<<< HEAD
-Private m_lastStage2ErrMsg As String
-Private m_lastStage2ExitCode As Long
-Private m_stage2PlanImported As Boolean
-Private m_stage2MemberImported As Boolean
-' ブックのクエリ更新を試行 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
-Private m_lastRefreshQueriesErrMsg As String
-' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
-Private m_macroSplashShown As Boolean
-' スプラッシュ_表示 で Application.Interactive=False を立てたときだけ スプラッシュ_非表示 で True に戻す
-Private m_macroSplashLockedExcel As Boolean
-=======
 Public m_lastStage2ErrMsg As String
 Public m_lastStage2ExitCode As Long
 Public m_stage2PlanImported As Boolean
@@ -202,7 +178,6 @@ Public m_lastRefreshQueriesErrMsg As String
 Public m_macroSplashShown As Boolean
 ' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
 Public m_macroSplashLockedExcel As Boolean
->>>>>>> main4
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Public m_animMacroSucceeded As Boolean
 ' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）

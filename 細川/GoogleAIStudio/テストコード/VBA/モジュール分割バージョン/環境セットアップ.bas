@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-Private Function Python3バージョン出力文字列(wsh As Object) As String
-=======
 Option Explicit
 
 Public Function Py3VersionOutput(wsh As Object) As String
->>>>>>> main4
     Dim execObj As Object
     Dim s As String
     Python3バージョン出力文字列 = ""
@@ -19,21 +15,13 @@ Public Function Py3VersionOutput(wsh As Object) As String
 CleanExit:
 End Function
 
-<<<<<<< HEAD
-Private Function Python3が利用可能か(wsh As Object) As Boolean
-=======
 Public Function IsPython3Available(wsh As Object) As Boolean
->>>>>>> main4
     Dim s As String
     s = Python3バージョン出力文字列(wsh)
     Python3が利用可能か = (InStr(1, s, "Python 3", vbTextCompare) > 0)
 End Function
 
-<<<<<<< HEAD
-Private Function WingetでPythonインストールを試行(wsh As Object) As Boolean
-=======
 Public Function TryInstallPythonViaWinget(wsh As Object) As Boolean
->>>>>>> main4
     On Error GoTo Fail
     Dim wingetBat As String
     wingetBat = "@echo off" & vbCrLf & "winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
@@ -44,11 +32,7 @@ Fail:
     WingetでPythonインストールを試行 = False
 End Function
 
-<<<<<<< HEAD
-Private Function Pythonを公式インストーラで試行インストール(wsh As Object) As Boolean
-=======
 Public Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
->>>>>>> main4
     Dim psCmd As String
     Dim shellCmd As String
     Dim exitCode As Long
@@ -71,11 +55,7 @@ Fail:
 End Function
 
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
-<<<<<<< HEAD
-Private Function 環境セットアップスクリプト相対パス(ByVal workDir As String) As String
-=======
 Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
->>>>>>> main4
     If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
         環境セットアップスクリプト相対パス = "python\setup_environment.py"
     ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
@@ -85,11 +65,7 @@ Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As S
     End If
 End Function
 
-<<<<<<< HEAD
-Private Function PATH更新後にpipインストールを実行(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
-=======
 Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
->>>>>>> main4
     Dim ps As String
     Dim shellCmd As String
     Dim wdEsc As String

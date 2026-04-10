@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-Private Function Gemini_JSON文字列をエスケープ(ByVal s As String) As String
-=======
 Option Explicit
 
 Public Function GeminiJsonStringEscape(ByVal s As String) As String
->>>>>>> main4
     Dim t As String
     t = Replace(s, "\", "\\")
     t = Replace(t, """", "\""")
@@ -14,11 +10,7 @@ Public Function GeminiJsonStringEscape(ByVal s As String) As String
     Gemini_JSON文字列をエスケープ = t
 End Function
 
-<<<<<<< HEAD
-Private Sub Gemini_UTF8でファイルに書込(ByVal filePath As String, ByVal textContent As String)
-=======
 Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
->>>>>>> main4
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
@@ -31,11 +23,7 @@ Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As St
 End Sub
 
 ' ログ表示用（暗号化失敗時の stderr など）
-<<<<<<< HEAD
-Private Function Gemini_UTF8ファイルを読込(ByVal filePath As String) As String
-=======
 Public Function GeminiReadUtf8File(ByVal filePath As String) As String
->>>>>>> main4
     Dim stm As Object
     Gemini_UTF8ファイルを読込 = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
@@ -56,11 +44,7 @@ CleanFail:
 End Function
 
 ' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
-<<<<<<< HEAD
-Private Function Gemini_UTF8ファイルを一時コピーで読込(ByVal filePath As String) As String
-=======
 Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
->>>>>>> main4
     Dim tmp As String
     Gemini_UTF8ファイルを一時コピーで読込 = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
@@ -344,13 +328,8 @@ Public Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, B
     日時帯文字列を時刻範囲に = True
 End Function
 
-<<<<<<< HEAD
-' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の Masterメインシートを取得 と同趣旨）
-Private Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
-=======
 ' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の MasterGetMainWorksheet と同趣旨）
 Public Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
->>>>>>> main4
     Dim ws As Worksheet
     Dim sh As Worksheet
     Dim best As Worksheet
@@ -1054,11 +1033,7 @@ Public Sub メインシート_AからK列_AutoFit()
     On Error GoTo 0
 End Sub
 
-<<<<<<< HEAD
-Private Function Gemini認証JSONパスが設定済みか() As Boolean
-=======
 Public Function GeminiCredentialsJsonPathIsConfigured() As Boolean
->>>>>>> main4
     Dim rng As Range
     Gemini認証JSONパスが設定済みか = False
     On Error Resume Next

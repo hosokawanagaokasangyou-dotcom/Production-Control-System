@@ -1,14 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-�i??1/2: logging �o�͂� xlwings �o�R�� Excel �� UserForm???txtExecutionLog???�֒ǋL����??
 
-�L������:
-  - ��??�ϐ� PM_AI_SPLASH_XLWINGS=1???VBA �� .cmd �� set???
-  - TASK_INPUT_WORKBOOK �Ƀ}�N���u�b�N�̃t���p�X???���� Excel �ŊJ����??�邱��???
-  - �W�����W���[���� Public Sub SplashLog_AppendChunk(ByVal chunk As String)???���O�ύX��??? PM_AI_XLWINGS_SPLASH_MACRO=���W���[��??.�}�N����??
-
-execution_log.txt �ւ̃t�@�C�����O�͏]���ǂ���???LOG �V�[�g��荞�ݗp?????
-"""
 from __future__ import annotations
 
 import os
