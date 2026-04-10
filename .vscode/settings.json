@@ -19,6 +19,6 @@
             ]
         }
     ],
-    "files.encoding": "shiftjis",
+    "files.encoding": "utf8",
     "files.autoGuessEncoding": true
 }
