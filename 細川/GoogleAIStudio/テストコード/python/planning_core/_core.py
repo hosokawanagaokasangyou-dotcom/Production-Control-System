@@ -12840,6 +12840,45 @@ def _eq_grid_overlap_sample_t(
     return slot_mid
 
 
+def _eq_grid_events_for_equipment_column(
+    machine_to_events: dict, eq_col: str
+) -> list:
+    """
+    equipment_list の列キーと ev['machine'] の表記ゆれ（全角空白・NBSP 等）を正規化して対応づける。
+    一致しないと 10 分枠に何も出ず、結果_タスク一覧の時間割リンクも付かない。
+    """
+    if not eq_col or not machine_to_events:
+        return []
+    evs = machine_to_events.get(eq_col)
+    if evs:
+        return evs
+    nk = _normalize_equipment_match_key(eq_col)
+    if not nk:
+        return []
+    for mk, evs2 in machine_to_events.items():
+        if _normalize_equipment_match_key(str(mk)) == nk:
+            return evs2
+    return []
+
+
+def _eq_grid_mcol_for_event_machine(
+    eq_to_mcol: dict[str, str], event_machine: str
+) -> str | None:
+    """機械名集約時間割: イベント側 machine キーから表示列 mcol を正規化照合で解決。"""
+    if not event_machine or not eq_to_mcol:
+        return None
+    mcol = eq_to_mcol.get(event_machine)
+    if mcol:
+        return mcol
+    nk = _normalize_equipment_match_key(event_machine)
+    if not nk:
+        return None
+    for ek, mc in eq_to_mcol.items():
+        if _normalize_equipment_match_key(str(ek)) == nk:
+            return mc
+    return None
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -12908,7 +12947,9 @@ def _build_equipment_schedule_dataframe(
                 eq_text = ""
                 progress_text = ""
                 active_ev = _eq_grid_first_overlapping_event(
-                    machine_to_events.get(eq, ()), curr_grid, next_grid
+                    _eq_grid_events_for_equipment_column(machine_to_events, eq),
+                    curr_grid,
+                    next_grid,
                 )
 
                 if active_ev:
@@ -13076,7 +13117,7 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 row_data[mcol] = ""
             tids_by_mcol: dict[str, set[str]] = defaultdict(set)
             for eq, evs in machine_to_events.items():
-                mcol = eq_to_mcol.get(eq)
+                mcol = _eq_grid_mcol_for_event_machine(eq_to_mcol, str(eq))
                 if not mcol:
                     continue
                 active_ev = _eq_grid_first_overlapping_event(evs, curr_grid, next_grid)
@@ -13167,7 +13208,9 @@ def _build_block_table_dataframe(
                 if not eq_key:
                     continue
                 active_ev = _eq_grid_first_overlapping_event(
-                    machine_to_events.get(eq_key, ()), curr_grid, next_grid
+                    _eq_grid_events_for_equipment_column(machine_to_events, eq_key),
+                    curr_grid,
+                    next_grid,
                 )
                 if not active_ev:
                     continue
