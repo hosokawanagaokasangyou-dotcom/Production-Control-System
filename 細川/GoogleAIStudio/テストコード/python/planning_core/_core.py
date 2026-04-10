@@ -5010,7 +5010,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         _mso_round_rect = 5
         _mso_bring_to_front = 0
         _xl_move_and_size = 1
-        _progress_every = 200
+        _progress_every = 30
         n_added = 0
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
         _row_shape_seq: dict[int, int] = {}
@@ -5070,6 +5070,22 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 pass
             try:
                 shp.Adjustments[1] = 0.2
+            except Exception:
+                pass
+            try:
+                sd = shp.Shadow
+                sd.Visible = -1  # msoTrue
+                sd.OffsetX = 3
+                sd.OffsetY = 3
+                sd.Transparency = 0.55
+                try:
+                    sd.Blur = 4
+                except Exception:
+                    pass
+                try:
+                    sd.ForeColor.RGB = _com_excel_bgr_rgb(40, 40, 50)
+                except Exception:
+                    pass
             except Exception:
                 pass
             # TextFrame2 は環境によって初回アクセスで COM が長時間ブロックすることがあるため、
