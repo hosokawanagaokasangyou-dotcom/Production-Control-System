@@ -1,37 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-xlwings ? RunPython ????1???2 ????????????cmd.exe ???????????
+xlwings の RunPython から段階1／段階2 等を呼ぶときのエントリ（cmd.exe 起動版の代替・補助）。
 
-??
+概要
 ----
-- Excel ? **xlwings ????** ? **Show Console** ?????????????? **??????** ?
-  ``python/`` ????????????VBA ?? ``runpy.run_path`` ????????
-  ?: ``.../??????.xlsm`` ????? ``python/xlwings_console_runner.py``
-- ``import xlwings_console_runner`` ???? ``sys.path`` ? ``python`` ?????????????
-  **VBA ?? ``runpy.run_path`` ???????????**??``RunPython`` ??
-  ``xlwings.conf.json`` ? PYTHONPATH ?? ``python`` ????
-- VBA ?? xlwings RunPython ? ON ????::
+- Excel 側 **xlwings アドイン** の **Show Console** 有無とは別に、マクロブックと **同じフォルダ** の
+  ``python/`` 配下に本ファイルを置き、VBA から ``runpy.run_path`` で読み込む想定。
+  例: ``.../マクロブック.xlsm`` と同階層の ``python/xlwings_console_runner.py``
+- ``import xlwings_console_runner`` だけでは ``sys.path`` に ``python`` が入らない場合があるため、
+  **VBA から ``runpy.run_path`` で本ファイルを実行する**か、``RunPython`` 用に
+  ``xlwings.conf.json`` の PYTHONPATH 等で ``python`` を通す。
+- VBA から xlwings RunPython を ON にする例::
 
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
 
-  ??1???2 ???? ``task_extract_stage1.py`` / ``plan_simulation_stage2.py`` ??
-  ``STAGE12_USE_XLWINGS_RUNPYTHON`` ????????????
-  ?????? ``log/stage_vba_exitcode.txt`` ? 1 ????VBA ? cmd ???????
+  段階1／段階2 の本体は ``task_extract_stage1.py`` / ``plan_simulation_stage2.py`` 等と
+  ``STAGE12_USE_XLWINGS_RUNPYTHON`` の組み合わせで切り替え。
+  終了コードは ``log/stage_vba_exitcode.txt`` に 1 行書き、VBA や cmd 側が参照可能。
 
-logging ? planning_core ?? ``StreamHandler(sys.stdout)`` ?????
-print ? logging ? xlwings ??????????????
+logging は planning_core 側の ``StreamHandler(sys.stdout)`` 等に依存。
+print や logging は xlwings コンソールに出る場合がある。
 
-??
+注意
 ----
-- ??????? ``??_????`` ?? ``_apply_workbook_env_overrides`` ???
-  ``import planning_core`` ???? ``os.environ`` ????``workbook_env_bootstrap``??
-- ``planning_core`` ? import ???? TASK_INPUT_WORKBOOK ???????
-  ???????? **?? ``planning_core`` ? ``sys.modules`` ??????? import** ???
-- cmd ??? ``task_extract_stage1.py`` ? planning_core  import ?? ``execution_log.txt`` ???????
-  **?????**? ``run_stage1_for_xlwings`` / ``run_stage2_for_xlwings`` ? import ??????????????
-  ????????????????VBA ??????????? cmd ???????????
-- ``runpy.run_path`` ? **sys.path ???????????? ``python`` ???**?``_ensure_this_python_dir_on_syspath``??
-  ``import planning_core`` ? ``ModuleNotFoundError`` ????????????
+- マクロブックの ``設定_環境変数`` 等は ``_apply_workbook_env_overrides`` 経由で
+  ``import planning_core`` より前に ``os.environ`` に載る（``workbook_env_bootstrap``）。
+- ``planning_core`` を import する前に TASK_INPUT_WORKBOOK をセットする。
+  本モジュールでは **都度 ``planning_core`` を ``sys.modules`` から外してから import** する。
+- cmd 経由の ``task_extract_stage1.py`` は planning_core  import 後に ``execution_log.txt`` へ出力するが、
+  **本ランナー**の ``run_stage1_for_xlwings`` / ``run_stage2_for_xlwings`` は import の都度クリーンに近づけるため
+  モジュールを消してから読み直す。VBA のログ枠との同期挙動は cmd 版と異なる場合がある。
+- ``runpy.run_path`` は **sys.path の先頭に本ファイルのある ``python`` を足す**（``_ensure_this_python_dir_on_syspath``）。
+  ``import planning_core`` で ``ModuleNotFoundError`` になる場合はここを確認。
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ STAGE_VBA_EXIT_CODE_FILE = "stage_vba_exitcode.txt"
 
 
 def _ensure_this_python_dir_on_syspath() -> None:
-    """planning_core ????????????????? ``python`` ? sys.path ????run_path ???"""
+    """planning_core を解決できるよう、本ファイルと同じ ``python`` を sys.path に追加（run_path 用）。"""
     here = os.path.dirname(os.path.abspath(__file__))
     here_n = os.path.normcase(here)
     for _p in sys.path:
@@ -61,7 +61,7 @@ _ensure_this_python_dir_on_syspath()
 
 
 def _apply_workbook_env_overrides() -> None:
-    """????????????????????TASK_INPUT_WORKBOOK ??? planning_core ??????????"""
+    """マクロブックの環境変数シート等を反映し、TASK_INPUT_WORKBOOK を含め planning_core 読込前の状態にする。"""
     try:
         import workbook_env_bootstrap as _wbe
 
@@ -71,7 +71,7 @@ def _apply_workbook_env_overrides() -> None:
 
 
 def _write_stage_vba_exit_code(code: int) -> None:
-    """VBA ? ReadStageVbaExitCodeFromFile ???? 1 ???????????"""
+    """VBA の ReadStageVbaExitCodeFromFile 等が読む 1 行の終了コードを書く。"""
     try:
         logd = os.path.join(os.getcwd(), "log")
         os.makedirs(logd, exist_ok=True)
@@ -107,7 +107,7 @@ def _execution_log_path() -> str:
 
 def _append_execution_log_line(level: str, msg: str) -> None:
     """
-    cmd ?? task_extract_stage1 ????planning_core ? log ????VBA ??????????????
+    cmd 版の task_extract_stage1 と同様、planning_core の log に加え、VBA のログ枠へ送る行を追記する。
     """
     path = _execution_log_path()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -133,7 +133,7 @@ def _append_execution_log_line(level: str, msg: str) -> None:
 
 
 def _append_execution_log_traceback(title: str) -> None:
-    """except ?????? traceback.format_exc ? execution_log ??????"""
+    """except ブロックから traceback.format_exc を execution_log に追記する。"""
     _append_execution_log_line("ERROR", title)
     tb = traceback.format_exc()
     try:
@@ -154,8 +154,8 @@ def _append_execution_log_traceback(title: str) -> None:
 
 def run_stage1_for_xlwings() -> int:
     """
-    ??1: ``run_stage1_extract`` ???????: 0=??, 1=??, 2=caller ?????
-    ?????? ``log/stage_vba_exitcode.txt`` ?????
+    段階1: ``run_stage1_extract`` を実行。戻り値: 0=成功, 1=失敗, 2=caller 取得失敗。
+    終了コードは ``log/stage_vba_exitcode.txt`` にも書く。
     """
     rc = 1
     try:
@@ -163,15 +163,15 @@ def run_stage1_for_xlwings() -> int:
             _prepare_from_caller_book()
         except Exception:
             logging.exception(
-                "xlwings: Book.caller() ???????????"
-                " ????????????????????RunPython ?????????????"
+                "xlwings: Book.caller() の取得に失敗しました。"
+                " ブックが呼び出し元として開かれているか、RunPython の指定を確認してください。"
             )
             rc = 2
             return rc
         _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
-            "??1: xlwings run_stage1_for_xlwings ?? planning_core ???????",
+            "段階1: xlwings run_stage1_for_xlwings から planning_core を実行します。",
         )
         _purge_planning_core_modules()
         try:
@@ -188,8 +188,8 @@ def run_stage1_for_xlwings() -> int:
             else:
                 rc = 1
         except Exception:
-            logging.exception("xlwings: ??1??????????????")
-            _append_execution_log_traceback("xlwings: ??1??????????????")
+            logging.exception("xlwings: 段階1の実行で例外が発生しました。")
+            _append_execution_log_traceback("xlwings: 段階1の実行で例外が発生しました。")
             rc = 1
         return rc
     finally:
@@ -198,7 +198,7 @@ def run_stage1_for_xlwings() -> int:
 
 def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
     """
-    ????_?????????????????refresh_plan_input_dispatch_trial_order??
+    配台計画_タスク入力の配台試行順番を再計算（refresh_plan_input_dispatch_trial_order）。
     VBA: XwRunConsoleRunner "run_refresh_plan_input_dispatch_trial_order_for_xlwings"
     """
     rc = 1
@@ -206,13 +206,13 @@ def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() ???????????")
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
-            "?????: xlwings run_refresh_plan_input_dispatch_trial_order_for_xlwings ??",
+            "配台試行順: xlwings run_refresh_plan_input_dispatch_trial_order_for_xlwings 開始",
         )
         _purge_planning_core_modules()
         try:
@@ -229,8 +229,8 @@ def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
             else:
                 rc = 1
         except Exception:
-            logging.exception("xlwings: ????????????????")
-            _append_execution_log_traceback("xlwings: ????????????????")
+            logging.exception("xlwings: 配台試行順の更新で失敗しました。")
+            _append_execution_log_traceback("xlwings: 配台試行順の更新で失敗しました。")
             rc = 1
         return rc
     finally:
@@ -239,7 +239,7 @@ def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
 
 def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
     """
-    ????_?????: ???????????????? 1..n?xlwings ???
+    配台計画_タスク入力: 配台試行順番を小数キーで並べ替え 1..n（xlwings 用）。
     VBA: XwRunConsoleRunner "run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings"
     """
     rc = 1
@@ -247,13 +247,13 @@ def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() ???????????")
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
-            "?????: xlwings run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings ??",
+            "配台試行順: xlwings run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings 開始",
         )
         _purge_planning_core_modules()
         try:
@@ -270,8 +270,8 @@ def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
             else:
                 rc = 1
         except Exception:
-            logging.exception("xlwings: ?????????????????????")
-            _append_execution_log_traceback("xlwings: ?????????????????????")
+            logging.exception("xlwings: 配台試行順（小数キー並べ）で失敗しました。")
+            _append_execution_log_traceback("xlwings: 配台試行順（小数キー並べ）で失敗しました。")
             rc = 1
         return rc
     finally:
@@ -280,21 +280,21 @@ def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
 
 def run_stage2_for_xlwings() -> int:
     """
-    ??2: ``generate_plan`` ???????: 0=??, 1=??, 2=caller ?????
-    ?????? ``log/stage_vba_exitcode.txt`` ?????
+    段階2: ``generate_plan`` を実行。戻り値: 0=成功, 1=失敗, 2=caller 取得失敗。
+    終了コードは ``log/stage_vba_exitcode.txt`` にも書く。
     """
     rc = 1
     try:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() ???????????")
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
         _append_execution_log_line(
             "INFO",
-            "??2: xlwings run_stage2_for_xlwings ?? planning_core ???????",
+            "段階2: xlwings run_stage2_for_xlwings から planning_core を実行します。",
         )
         _purge_planning_core_modules()
         try:
@@ -311,8 +311,8 @@ def run_stage2_for_xlwings() -> int:
             else:
                 rc = 1
         except Exception:
-            logging.exception("xlwings: ??2??????????????")
-            _append_execution_log_traceback("xlwings: ??2??????????????")
+            logging.exception("xlwings: 段階2の実行で例外が発生しました。")
+            _append_execution_log_traceback("xlwings: 段階2の実行で例外が発生しました。")
             rc = 1
         return rc
     finally:
