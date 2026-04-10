@@ -2267,8 +2267,8 @@ def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
 
 def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -> float:
     """
-    配台計画_タスク入力のロール単位長さ(m)。
-    正の値は step_m の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
+    正の長さ(m)を step の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
+    段階1の **ロール単位長さ** と、段階2の **換算数量（配台用内部）** で共用（刻みは `ROLL_UNIT_LENGTH_CEIL_STEP_M`）。
     """
     v = parse_float_safe(roll_m, 0.0)
     if v <= 0:
@@ -7105,6 +7105,8 @@ def build_task_queue_from_planning_df(
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         done_qty = calc_done_qty_equivalent_from_row(row)
+        # 換算数量はシート値のまま実績換算。配台用 total のみ 100m 刻みに切り上げ（例: 40→100、125→200）。Excel セルは書き換えない。
+        qty_total = _ceil_roll_unit_length_m_to_next_step(qty_total)
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
