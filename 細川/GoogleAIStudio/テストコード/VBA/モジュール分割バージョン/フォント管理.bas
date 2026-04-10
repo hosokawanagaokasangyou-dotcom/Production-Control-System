@@ -13,7 +13,7 @@ Public Function GetOrCreateFontScratchSheet() As Worksheet
         ws.Range("A1").Value = "（フォント選択用・削除しないでください）"
         ws.Visible = xlSheetVeryHidden
     End If
-    Set フォント作業用シートを取得または作成 = ws
+    Set GetOrCreateFontScratchSheet = ws
 End Function
 
 Public Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
@@ -36,7 +36,7 @@ Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Dim i As Long
     For i = 1 To Application.FontNames.Count
         If StrComp(Application.FontNames(i), fontName, vbTextCompare) = 0 Then
-            フォント名がExcel一覧に存在するか = True
+            FontNameExistsInExcel = True
             Exit Function
         End If
     Next i
@@ -73,7 +73,7 @@ End Sub
 Public Sub 配台_全シートフォントBIZ_UDP_自動適用()
     Dim skipped As String
     On Error Resume Next
-    全シートのセルにフォント適用 BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     メインシート_AからK列_AutoFit
     結果_主要4結果シート_列オートフィット
     On Error GoTo 0
@@ -96,7 +96,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     Dim skipped As String
     
     Set prevWs = ActiveSheet
-    Set wsScratch = フォント作業用シートを取得または作成()
+    Set wsScratch = GetOrCreateFontScratchSheet()
     prevVis = wsScratch.Visible
     
     Set r = wsScratch.Range("A1")
@@ -115,7 +115,7 @@ Public Sub 全シートフォントをリストから選択して統一()
     r.Select
     
     If Not Application.Dialogs(xlDialogFormatFont).Show Then
-        セルのフォント属性を復元 r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+        RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
         wsScratch.Visible = prevVis
         On Error Resume Next
         prevWs.Activate
@@ -124,23 +124,23 @@ Public Sub 全シートフォントをリストから選択して統一()
     End If
     
     picked = r.Font.Name
-    セルのフォント属性を復元 r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
+    RestoreCellFontProps r, oldName, oldSize, oldBold, oldItalic, oldUnderline, oldColor, oldStrike
     wsScratch.Visible = prevVis
     On Error Resume Next
     prevWs.Activate
     On Error GoTo 0
     
     配台マクロ_全シート保護を試行解除
-    スプラッシュ_手順文を設定 "フォント「" & picked & "」を全シートへ適用しています…"
+    MacroSplash_SetStep "フォント「" & picked & "」を全シートへ適用しています…"
     On Error GoTo Fail
-    全シートのセルにフォント適用 picked, skipped
+    ApplyFontToAllSheetCells picked, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        スプラッシュ_手順文を設定 "全シートのフォントを「" & picked & "」に設定しました。"
+        MacroSplash_SetStep "全シートのフォントを「" & picked & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & picked & "」を設定しました。スキップしたシート:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -181,7 +181,7 @@ Public Sub 全シートフォントを手入力で統一()
         Exit Sub
     End If
     
-    If Not フォント名がExcel一覧に存在するか(fontName) Then
+    If Not FontNameExistsInExcel(fontName) Then
         If MsgBox( _
             "フォント「" & fontName & "」が一覧に見つかりませんでした。" & vbCrLf & _
             "このまま適用を試みますか？", _
@@ -191,16 +191,16 @@ Public Sub 全シートフォントを手入力で統一()
     End If
     
     配台マクロ_全シート保護を試行解除
-    スプラッシュ_手順文を設定 "フォント「" & fontName & "」を全シートへ適用しています…"
+    MacroSplash_SetStep "フォント「" & fontName & "」を全シートへ適用しています…"
     On Error GoTo FailHand
-    全シートのセルにフォント適用 fontName, skipped
+    ApplyFontToAllSheetCells fontName, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        スプラッシュ_手順文を設定 "全シートのフォントを「" & fontName & "」に設定しました。"
+        MacroSplash_SetStep "全シートのフォントを「" & fontName & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォント「" & fontName & "」を設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -220,17 +220,17 @@ End Sub
 
 Public Sub 全シートフォント_BIZ_UDPゴシックに統一()
     Dim skipped As String
-    スプラッシュ_手順文を設定 "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
+    MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」へ適用しています…"
     配台マクロ_全シート保護を試行解除
     On Error GoTo FailB
-    全シートのセルにフォント適用 BIZ_UDP_GOTHIC_FONT_NAME, skipped
+    ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
     On Error GoTo 0
     
     If Len(skipped) = 0 Then
-        スプラッシュ_手順文を設定 "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。"
+        MacroSplash_SetStep "全シートのフォントを「" & BIZ_UDP_GOTHIC_FONT_NAME & "」に設定しました。"
         m_animMacroSucceeded = True
     Else
-        スプラッシュ_手順文を設定 "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
+        MacroSplash_SetStep "フォントは適用しましたが、一部シートをスキップしました（ダイアログで詳細を確認してください）。"
         MsgBox "フォントを設定しました。スキップ:" & vbCrLf & vbCrLf & skipped, vbExclamation
         m_animMacroSucceeded = True
     End If
@@ -310,7 +310,7 @@ End Sub
 ' 列設定_結果_タスク一覧 → 結果_タスク一覧 へ列順・列非表示を適用（Python / xlwings）
 ' 図形のマクロ: 「アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用」（押下アニメ付き）。
 '   重複列名の整理のみ: 「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
-'   本体を直指定すると ボタン押下アニメーション が動かない。
+'   本体を直指定すると AnimateButtonPush が動かない。
 ' ・事前に「列設定」シートで列名・表示を編集してから実行。
 ' ・Excel で本ブックを開いたまま（xlwings が接続）。保存してから実行推奨。
 '==============================================================================
@@ -351,13 +351,13 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
-    スプラッシュ_手順文を設定 "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
+    MacroSplash_SetStep "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\apply_result_task_column_layout.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [column-layout] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
     On Error Resume Next
@@ -371,7 +371,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の適用"
     Else
-        スプラッシュ_手順文を設定 "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK & "」に合わせました。"
+        MacroSplash_SetStep "「" & SHEET_RESULT_TASK_LIST & "」の列順・表示を「" & SHEET_COL_CONFIG_RESULT_TASK & "」に合わせました。"
         m_animMacroSucceeded = True
     End If
 End Sub
@@ -411,91 +411,21 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
-    スプラッシュ_手順文を設定 "列設定: Python で重複列名を整理しています…"
+    MacroSplash_SetStep "列設定: Python で重複列名を整理しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\dedupe_result_task_column_config_sheet.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dedupe-column-config] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "列設定の整理"
     Else
-        スプラッシュ_手順文を設定 "「" & SHEET_COL_CONFIG_RESULT_TASK & "」の重複列名を除き A:B を更新しました。（チェックボックス利用時は配置マクロの再実行を推奨）"
+        MacroSplash_SetStep "「" & SHEET_COL_CONFIG_RESULT_TASK & "」の重複列名を除き A:B を更新しました。（チェックボックス利用時は配置マクロの再実行を推奨）"
         m_animMacroSucceeded = True
-    End If
-End Sub
-
-'==============================================================================
-' 配台計画_タスク入力 → 「配台試行順番」を段階2と同じ基準で再計算（Python / xlwings）
-' 図形のマクロ: 「アニメ付き_配台試行順番_タスク入力をPythonで更新」（押下アニメ付き）。
-'   本体を直指定するとボタン押下アニメーションが動かない場合があります。
-' ・配台不要を手動でクリアしたあとなど、試行順を付け直したいときに使用。
-' ・Excel で本ブックを開いたまま。保存してから実行推奨。
-' ・業務ロジック.bas に Public Sub アニメ付き_スプラッシュ付きで実行 がある構成向け。
-'==============================================================================
-Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
-    Dim wsh As Object
-    Dim runBat As String
-    Dim targetDir As String
-    Dim exitCode As Long
-    Dim wsPlan As Worksheet
-    Dim prevScreen As Boolean
-
-    targetDir = ThisWorkbook.path
-    If Len(targetDir) = 0 Then
-        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "配台試行順番の更新"
-        Exit Sub
-    End If
-
-    On Error Resume Next
-    Set wsPlan = ThisWorkbook.Worksheets("配台計画_タスク入力")
-    On Error GoTo 0
-    If wsPlan Is Nothing Then
-        MsgBox "シート「配台計画_タスク入力」がありません。", vbExclamation, "配台試行順番の更新"
-        Exit Sub
-    End If
-
-    On Error Resume Next
-    ThisWorkbook.Save
-    On Error GoTo 0
-
-    Set wsh = CreateObject("WScript.Shell")
-    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
-
-    prevScreen = Application.ScreenUpdating
-    Application.ScreenUpdating = False
-    スプラッシュ_手順文を設定 "配台試行順番: Python で配台計画_タスク入力を再計算しています…"
-    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -3 -u python\refresh_plan_input_dispatch_trial_order.py" & vbCrLf & _
-             "echo." & vbCrLf & _
-             "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
-             "exit /b %ERRORLEVEL%"
-    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
-    Application.ScreenUpdating = prevScreen
-
-    If exitCode <> 0 Then
-        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
-            & "log\execution_log.txt を確認してください。", vbExclamation, "配台試行順番の更新"
-    Else
-        スプラッシュ_手順文を設定 "「配台計画_タスク入力」の配台試行順番を更新し、行を試行順の昇順に並べ替えました。"
-        m_animMacroSucceeded = True
-    End If
-End Sub
-
-Public Sub アニメ付き_配台試行順番_タスク入力をPythonで更新()
-    Dim errNum As Long
-    On Error Resume Next
-    Application.Run "アニメ付き_スプラッシュ付きで実行", _
-        "配台計画_タスク入力: 配台試行順番を再計算しています…", _
-        "配台試行順番_配台計画タスク入力をPythonで更新"
-    errNum = Err.Number
-    On Error GoTo 0
-    If errNum <> 0 Then
-        Call 配台試行順番_配台計画タスク入力をPythonで更新
     End If
 End Sub
 

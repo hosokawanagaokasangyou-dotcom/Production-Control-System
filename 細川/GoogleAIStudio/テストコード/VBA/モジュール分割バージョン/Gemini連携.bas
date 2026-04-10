@@ -7,7 +7,7 @@ Public Function GeminiJsonStringEscape(ByVal s As String) As String
     t = Replace(t, vbCr, "\r")
     t = Replace(t, vbLf, "\n")
     t = Replace(t, vbTab, "\t")
-    Gemini_JSON文字列をエスケープ = t
+    GeminiJsonStringEscape = t
 End Function
 
 Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
@@ -25,7 +25,7 @@ End Sub
 ' ログ表示用（暗号化失敗時の stderr など）
 Public Function GeminiReadUtf8File(ByVal filePath As String) As String
     Dim stm As Object
-    Gemini_UTF8ファイルを読込 = ""
+    GeminiReadUtf8File = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
     On Error GoTo CleanFail
     Set stm = CreateObject("ADODB.Stream")
@@ -33,7 +33,7 @@ Public Function GeminiReadUtf8File(ByVal filePath As String) As String
     stm.charset = "UTF-8"
     stm.Open
     stm.LoadFromFile filePath
-    Gemini_UTF8ファイルを読込 = stm.ReadText
+    GeminiReadUtf8File = stm.ReadText
     stm.Close
     Set stm = Nothing
     Exit Function
@@ -46,7 +46,7 @@ End Function
 ' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
 Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
     Dim tmp As String
-    Gemini_UTF8ファイルを一時コピーで読込 = ""
+    GeminiReadUtf8FileViaTempCopy = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
     Randomize
     tmp = Environ("TEMP") & "\pm_ai_sp_" & Replace(Replace(Replace(CStr(Now), "/", ""), ":", ""), " ", "_") & "_" & CStr(Int(100000 * Rnd)) & ".txt"
@@ -56,7 +56,7 @@ Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As Strin
         Err.Clear
         Exit Function
     End If
-    Gemini_UTF8ファイルを一時コピーで読込 = Gemini_UTF8ファイルを読込(tmp)
+    GeminiReadUtf8FileViaTempCopy = GeminiReadUtf8File(tmp)
     On Error Resume Next
     Kill tmp
 End Function
@@ -137,20 +137,20 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
         End If
     End If
     
-    jsonBody = "{" & """gemini_api_key"": """ & Gemini_JSON文字列をエスケープ(Trim$(apiKey)) & """}"
-    Call Gemini_UTF8でファイルに書込(plainPath, jsonBody)
-    Call Gemini_UTF8でファイルに書込(passPath, pass1)
+    jsonBody = "{" & """gemini_api_key"": """ & GeminiJsonStringEscape(Trim$(apiKey)) & """}"
+    Call GeminiWriteUtf8File(plainPath, jsonBody)
+    Call GeminiWriteUtf8File(passPath, pass1)
     
     On Error Resume Next
     Kill errPath
     On Error GoTo EH
     
-    スプラッシュ_手順文を設定 "Gemini: Python で認証 JSON を暗号化しています…"
+    MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
     Set wsh = CreateObject("WScript.Shell")
     gemBat = "@echo off" & vbCrLf & "pushd """ & wbPath & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, gemBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, gemBat)
     
     On Error Resume Next
     Kill plainPath
@@ -158,7 +158,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     On Error GoTo EH
     
     If Len(Dir(outPath)) = 0 Then
-        errLog = Trim$(Gemini_UTF8ファイルを読込(errPath))
+        errLog = Trim$(GeminiReadUtf8File(errPath))
         If Len(errLog) > 2500 Then errLog = Left$(errLog, 2500) & vbCrLf & "…（省略）"
         If Len(errLog) = 0 Then errLog = "（標準エラーに出力なし。py -3 が PATH に無い、または別のエラーの可能性があります）"
         MsgBox "暗号化ファイルができませんでした。（終了コード " & CStr(exitCode) & "）" & vbCrLf & vbCrLf & _
@@ -175,7 +175,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     ThisWorkbook.Save
     On Error GoTo 0
     
-    スプラッシュ_手順文を設定 "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
+    MacroSplash_SetStep "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
     m_animMacroSucceeded = True
     Exit Sub
 EH:
@@ -208,17 +208,17 @@ Public Sub メインシート_masterブックを開く()
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
             wb.Activate
-            スプラッシュ_手順文を設定 "master.xlsm は既に開いています（アクティブにしました）。"
+            MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
             m_animMacroSucceeded = True
             Exit Sub
         End If
     Next wb
     
     On Error GoTo OpenFail
-    スプラッシュ_手順文を設定 "master.xlsm を開いています…"
+    MacroSplash_SetStep "master.xlsm を開いています…"
     Set wbMaster = Application.Workbooks.Open(Filename:=path)
     wbMaster.Activate
-    スプラッシュ_手順文を設定 "master.xlsm を開きました。"
+    MacroSplash_SetStep "master.xlsm を開きました。"
     m_animMacroSucceeded = True
     Exit Sub
 OpenFail:
@@ -226,7 +226,7 @@ OpenFail:
 End Sub
 
 Sub アニメ付き_メインシート_masterブックを開く()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     メインシート_masterブックを開く
 End Sub
 
@@ -234,13 +234,13 @@ End Sub
 Public Sub メインシート_master開くボタンを配置()
     Dim ws As Worksheet
     
-    Set ws = メインシートを取得()
+    Set ws = GetMainWorksheet()
     If ws Is Nothing Then
         MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
         Exit Sub
     End If
     ws.Activate
-    クールボタンをプリセットで作成 "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
+    CreateCoolButtonWithPreset "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
     MsgBox "メインシートにボタンを配置しました。位置はドラッグで調整できます。", vbInformation
 End Sub
 
@@ -460,7 +460,7 @@ Public Sub 結果_設備毎の時間割_マスタ時刻反映( _
     
     On Error GoTo CleanExit
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     If regOk Then
@@ -508,7 +508,7 @@ Public Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
     
     On Error GoTo CleanExit2
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
@@ -547,7 +547,7 @@ Public Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
     
     On Error GoTo CleanExit3
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
@@ -880,7 +880,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     On Error GoTo EH
     
     Set wb = ThisWorkbook
-    Set wsMain = メインシートを取得()
+    Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then
         If Not Silent Then MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
         Exit Sub
@@ -930,10 +930,10 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     On Error GoTo EH
     
     If Not wsCal Is Nothing Then
-        colDate = 見出し文字列の列番号を検索(wsCal, "日付")
-        colMem = 見出し文字列の列番号を検索(wsCal, "メンバー")
-        colIn = 見出し文字列の列番号を検索(wsCal, "出勤")
-        colOut = 見出し文字列の列番号を検索(wsCal, "退勤")
+        colDate = FindColHeader(wsCal, "日付")
+        colMem = FindColHeader(wsCal, "メンバー")
+        colIn = FindColHeader(wsCal, "出勤")
+        colOut = FindColHeader(wsCal, "退勤")
         If colDate > 0 And colMem > 0 And colIn > 0 And colOut > 0 Then
             lastR = wsCal.Cells(wsCal.Rows.Count, colDate).End(xlUp).Row
             For r = 2 To lastR
@@ -1024,7 +1024,7 @@ Public Sub メインシート_AからK列_AutoFit()
     Dim ws As Worksheet
     Dim su As Boolean
     On Error Resume Next
-    Set ws = メインシートを取得()
+    Set ws = GetMainWorksheet()
     If ws Is Nothing Then Exit Sub
     su = Application.ScreenUpdating
     Application.ScreenUpdating = True
@@ -1035,12 +1035,12 @@ End Sub
 
 Public Function GeminiCredentialsJsonPathIsConfigured() As Boolean
     Dim rng As Range
-    Gemini認証JSONパスが設定済みか = False
+    GeminiCredentialsJsonPathIsConfigured = False
     On Error Resume Next
     Set rng = ThisWorkbook.Worksheets(SHEET_SETTINGS).Range("B1")
     If Err.Number = 0 And Not rng Is Nothing Then
         If Len(Trim$(CStr(rng.Value))) > 0 Then
-            Gemini認証JSONパスが設定済みか = True
+            GeminiCredentialsJsonPathIsConfigured = True
         End If
     End If
     On Error GoTo 0
@@ -1101,14 +1101,14 @@ Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
     ws.Cells(r, 1).Font.Bold = True
     r = r + 1
     If Len(Dir(promptPath)) > 0 Then
-        fileBody = 文字コード指定でテキストファイル読込(promptPath, "utf-8")
+        fileBody = ReadTextFileWithCharset(promptPath, "utf-8")
         fileBody = Replace(fileBody, vbCrLf, vbLf)
         lines = Split(fileBody, vbLf)
         For i = LBound(lines) To UBound(lines)
             If Len(lines(i)) > MAX_CELL Then
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
             Else
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(lines(i))
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
             End If
             r = r + 1
         Next i
@@ -1122,14 +1122,14 @@ Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
     ws.Cells(r, 1).Font.Bold = True
     r = r + 1
     If Len(Dir(remarkPath)) > 0 Then
-        fileBody = 文字コード指定でテキストファイル読込(remarkPath, "utf-8")
+        fileBody = ReadTextFileWithCharset(remarkPath, "utf-8")
         fileBody = Replace(fileBody, vbCrLf, vbLf)
         lines = Split(fileBody, vbLf)
         For i = LBound(lines) To UBound(lines)
             If Len(lines(i)) > MAX_CELL Then
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
             Else
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(lines(i))
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
             End If
             r = r + 1
         Next i

@@ -18,7 +18,7 @@ Public Function Stage12CmdHideWindowEffective() As Boolean
                     If StrComp(cellKey, "STAGE12_CMD_HIDE_WINDOW", vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
-                            段階12_CMDウィンドウ非表示_実効値 = 段階12_CMD非表示フラグを真偽に変換(v, STAGE12_CMD_HIDE_WINDOW)
+                            Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
                             Exit Function
                         End If
                         Exit For
@@ -29,10 +29,10 @@ Public Function Stage12CmdHideWindowEffective() As Boolean
     End If
     v = Trim$(Environ("STAGE12_CMD_HIDE_WINDOW"))
     If Len(v) > 0 Then
-        段階12_CMDウィンドウ非表示_実効値 = 段階12_CMD非表示フラグを真偽に変換(v, STAGE12_CMD_HIDE_WINDOW)
+        Stage12CmdHideWindowEffective = ParseStage12CmdHideWindowBool(v, STAGE12_CMD_HIDE_WINDOW)
         Exit Function
     End If
-    段階12_CMDウィンドウ非表示_実効値 = STAGE12_CMD_HIDE_WINDOW
+    Stage12CmdHideWindowEffective = STAGE12_CMD_HIDE_WINDOW
 End Function
 
 ' 段階1: master.xlsm から機械カレンダー・メンバー勤怠をマクロブックへコピーするか。
@@ -44,7 +44,7 @@ Public Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
     Dim lastRow As Long
     Dim cellKey As String
     Dim v As String
-    段階1_マスタ同期マクロブック_実効値 = False
+    Stage1SyncMasterSheetsToMacroBookEffective = False
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
     On Error GoTo 0
@@ -57,7 +57,7 @@ Public Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
                     If StrComp(cellKey, "STAGE1_SYNC_MASTER_SHEETS_TO_MACRO_BOOK", vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
-                            段階1_マスタ同期マクロブック_実効値 = 段階12_CMD非表示フラグを真偽に変換(v, False)
+                            Stage1SyncMasterSheetsToMacroBookEffective = ParseStage12CmdHideWindowBool(v, False)
                             Exit Function
                         End If
                         Exit For
@@ -68,11 +68,11 @@ Public Function Stage1SyncMasterSheetsToMacroBookEffective() As Boolean
     End If
     v = Trim$(Environ("STAGE1_SYNC_MASTER_SHEETS_TO_MACRO_BOOK"))
     If Len(v) > 0 Then
-        段階1_マスタ同期マクロブック_実効値 = 段階12_CMD非表示フラグを真偽に変換(v, False)
+        Stage1SyncMasterSheetsToMacroBookEffective = ParseStage12CmdHideWindowBool(v, False)
     End If
 End Function
 
-Public Function 一時CMDファイルに書き出し(ByVal body As String) As String
+Public Function WriteTempCmdFile(ByVal body As String) As String
     Dim p As String
     Dim fh As Integer
     Dim lines() As String
@@ -89,46 +89,46 @@ Public Function 一時CMDファイルに書き出し(ByVal body As String) As String
         Print #fh, lines(j)
     Next j
     Close #fh
-    一時CMDファイルに書き出し = p
+    WriteTempCmdFile = p
 End Function
 
 ' 段階1/2 用: 同一 .cmd 内で最初に title してから本処理（FindWindow はこのキャプション1つだけになる）
-Public Function CMD本文へコンソールタイトルを付与(ByVal body As String, ByVal titleText As String) As String
+Public Function AugmentCmdBodyWithConsoleTitle(ByVal body As String, ByVal titleText As String) As String
     Const echoOffCrLf As String = "@echo off" & vbCrLf
     If Len(body) >= Len(echoOffCrLf) And LCase$(Left$(body, 9)) = "@echo off" Then
         If Mid$(body, 10, 2) = vbCrLf Then
-            CMD本文へコンソールタイトルを付与 = echoOffCrLf & "title " & titleText & vbCrLf & Mid$(body, 12)
+            AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & Mid$(body, 12)
             Exit Function
         End If
     End If
-    CMD本文へコンソールタイトルを付与 = echoOffCrLf & "title " & titleText & vbCrLf & body
+    AugmentCmdBodyWithConsoleTitle = echoOffCrLf & "title " & titleText & vbCrLf & body
 End Function
 
 ' 非表示時: py 行へ 1>nul 2>&1（標準出力・標準エラーを捨てる。詰まり防止）。本番ログは planning_core の execution_log（UserForm で表示）
 Public Function StageVbaExitCodeFilePath() As String
     Dim k As Long
-    段階VBA終了コードファイルのパス = ""
+    StageVbaExitCodeFilePath = ""
     If Len(m_splashExecutionLogPath) > 0 Then
         k = InStrRev(m_splashExecutionLogPath, "\")
         If k <= 0 Then Exit Function
-        段階VBA終了コードファイルのパス = Left$(m_splashExecutionLogPath, k) & "stage_vba_exitcode.txt"
+        StageVbaExitCodeFilePath = Left$(m_splashExecutionLogPath, k) & "stage_vba_exitcode.txt"
     ElseIf Len(m_stageVbaExitCodeLogDir) > 0 Then
-        段階VBA終了コードファイルのパス = m_stageVbaExitCodeLogDir & "\stage_vba_exitcode.txt"
+        StageVbaExitCodeFilePath = m_stageVbaExitCodeLogDir & "\stage_vba_exitcode.txt"
     End If
 End Function
 
 Public Function ReadStageVbaExitCodeFromFile(ByVal fullPath As String) As Long
     Dim s As String
     On Error GoTo Fail
-    段階VBA終了コードをファイルから読取 = &H7FFFFFFF
+    ReadStageVbaExitCodeFromFile = &H7FFFFFFF
     If Len(Dir(fullPath)) = 0 Then Exit Function
-    s = Gemini_UTF8ファイルを読込(fullPath)
+    s = GeminiReadUtf8File(fullPath)
     s = Trim$(Replace(Replace(Replace(s, vbCrLf, ""), vbLf, ""), vbCr, ""))
     If Len(s) = 0 Then Exit Function
-    段階VBA終了コードをファイルから読取 = CLng(Val(s))
+    ReadStageVbaExitCodeFromFile = CLng(Val(s))
     Exit Function
 Fail:
-    段階VBA終了コードをファイルから読取 = &H7FFFFFFF
+    ReadStageVbaExitCodeFromFile = &H7FFFFFFF
 End Function
 
 ' xlwings RunPython: runpy.run_path で python\xlwings_console_runner.py を実行
@@ -137,7 +137,7 @@ Public Sub XwRunConsoleRunner(ByVal entryPoint As String)
     xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
     Exit Sub
 EH:
-    Err.Raise Err.Number, "Xlwings_コンソールランナー実行", "ダイアログ付き_段階2を実行: " & Err.Description
+    Err.Raise Err.Number, "XwRunConsoleRunner", "RunPython: " & Err.Description
 End Sub
 
 ' hideConsoleWindow 用: Windows Terminal を挟まずヘッドレス起動（conhost 無ければ通常 cmd）
@@ -145,16 +145,16 @@ Public Function BuildStageExecCommandLine(ByVal cmdFilePath As String, ByVal hid
     Dim conhostExe As String
     Dim comSpec As String
     If Not hideConsoleWindow Then
-        段階実行_コマンドラインを構築 = "cmd.exe /c """ & cmdFilePath & """"
+        BuildStageExecCommandLine = "cmd.exe /c """ & cmdFilePath & """"
         Exit Function
     End If
     conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
     comSpec = Environ("ComSpec")
     If Len(comSpec) = 0 Then comSpec = Environ("SystemRoot") & "\System32\cmd.exe"
     If Len(Dir(conhostExe)) > 0 Then
-        段階実行_コマンドラインを構築 = """" & conhostExe & """ --headless """ & comSpec & """ /c """ & cmdFilePath & """"
+        BuildStageExecCommandLine = """" & conhostExe & """ --headless """ & comSpec & """ /c """ & cmdFilePath & """"
     Else
-        段階実行_コマンドラインを構築 = """" & comSpec & """ /c """ & cmdFilePath & """"
+        BuildStageExecCommandLine = """" & comSpec & """ /c """ & cmdFilePath & """"
     End If
 End Function
 
@@ -165,9 +165,9 @@ Public Function BuildStageVisibleClassicConhostCmd(ByVal cmdFilePath As String) 
     conhostExe = Environ("SystemRoot") & "\System32\conhost.exe"
     cmdExe = Environ("SystemRoot") & "\System32\cmd.exe"
     If Len(Dir(conhostExe)) = 0 Or Len(Dir(cmdExe)) = 0 Then
-        段階表示用クラシックコンソールCMDを構築 = "cmd.exe /c """ & cmdFilePath & """"
+        BuildStageVisibleClassicConhostCmd = "cmd.exe /c """ & cmdFilePath & """"
     Else
-        段階表示用クラシックコンソールCMDを構築 = """" & conhostExe & """ """ & cmdExe & """ /c """ & cmdFilePath & """"
+        BuildStageVisibleClassicConhostCmd = """" & conhostExe & """ """ & cmdExe & """ /c """ & cmdFilePath & """"
     End If
 End Function
 
@@ -197,7 +197,7 @@ End Sub
 #End If
 
 ' 段階1/2: 設定 D3=true … Exec＋待機ループで execution_log をポーリング。D3=false … スプラッシュ時は Exec＋ログ枠へ cmd 重ね（useSplashLogRectConsole）。hide 時は conhost --headless
-Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean, Optional ByVal useSplashLogRectConsole As Boolean = False) As Long
+Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePath As String, ByVal consoleTitle As String, ByVal applyQuarterLayout As Boolean, ByVal hideConsoleWindow As Boolean, Optional ByVal useSplashLogRectConsole As Boolean = False) As Long
     Dim execObj As Object
     Dim cmdLine As String
 #If VBA7 Then
@@ -219,12 +219,12 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
     Dim oy As Long
     Dim ow As Long
     Dim oh As Long
-    cmdLine = 段階実行_コマンドラインを構築(cmdFilePath, hideConsoleWindow)
+    cmdLine = BuildStageExecCommandLine(cmdFilePath, hideConsoleWindow)
     If hideConsoleWindow Then waitStyle = 0 Else waitStyle = 1
     unlockInteractiveForPoll = False
     On Error Resume Next
     ' D3=false: スプラッシュ表示中かつ useSplashLogRectConsole … Exec＋title 検出でログ枠へ SetWindowPos。それ以外は同期 Run
-    If Not 設定シート_スプラッシュログ書込み有効か() Then
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         If m_macroSplashShown And m_macroSplashLockedExcel And Not Application.Interactive Then
             Application.Interactive = True
             unlockInteractiveForPoll = True
@@ -232,7 +232,7 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
         ' hideConsoleWindow を維持（従来はここで False に上書きし STAGE12_CMD_HIDE_WINDOW が無効化されていた）
         If useSplashLogRectConsole And m_macroSplashShown And Len(consoleTitle) > 0 And Not hideConsoleWindow Then
             Dim overlayCmdLine As String
-            overlayCmdLine = 段階表示用クラシックコンソールCMDを構築(cmdFilePath)
+            overlayCmdLine = BuildStageVisibleClassicConhostCmd(cmdFilePath)
             Set execObj = wsh.Exec(overlayCmdLine)
             If Err.Number = 0 And Not execObj Is Nothing Then
                 On Error GoTo 0
@@ -243,7 +243,7 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
                 positioned = False
                 probe = 0
                 splashPollIter = 0
-                haveRect = スプラッシュ_実行ログ領域の画面ピクセル矩形を取得(ox, oy, ow, oh)
+                haveRect = MacroSplash_GetTxtExecutionLogScreenRectPixels(ox, oy, ow, oh)
                 If haveRect Then
                     If ow > STAGE12_CMD_OVERLAY_RECT_INSET_PX * 2 + 80 And oh > STAGE12_CMD_OVERLAY_RECT_INSET_PX * 2 + 80 Then
                         ox = ox + STAGE12_CMD_OVERLAY_RECT_INSET_PX
@@ -259,8 +259,8 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
                     If Len(consoleTitle) > 0 And Not positioned Then
                         hwnd = FindWindow(0&, consoleTitle)
                         If hwnd <> 0 Then
-                            スプラッシュ_コンソールオーバーレイ開始
-                            コンソール枠なし化を必要なら適用 hwnd
+                            MacroSplash_BeginConsoleOverlay
+                            ConsoleApplyBorderlessIfNeeded hwnd
                             If haveRect Then
                                 SetWindowPos hwnd, 0&, ox, oy, ow, oh, SWP_SHOWWINDOW Or SWP_NOACTIVATE
                             Else
@@ -275,32 +275,32 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
                     Sleep STAGE12_CMD_OVERLAY_POLL_MS
                     DoEvents
                 Loop
-                スプラッシュ_コンソールオーバーレイ終了
+                MacroSplash_EndConsoleOverlay
                 On Error Resume Next
-                exitPath = 段階VBA終了コードファイルのパス()
+                exitPath = StageVbaExitCodeFilePath()
                 If Len(Dir(exitPath)) > 0 Then
-                    exitFromFile = 段階VBA終了コードをファイルから読取(exitPath)
+                    exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
                     If exitFromFile <> &H7FFFFFFF Then
-                        CMDファイルをExecしポーリングして実行 = exitFromFile
+                        RunCmdFileStageExecAndPoll = exitFromFile
                     Else
-                        CMDファイルをExecしポーリングして実行 = CLng(execObj.exitCode)
+                        RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
                     End If
                 Else
-                    CMDファイルをExecしポーリングして実行 = CLng(execObj.exitCode)
+                    RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
                 End If
-                If Err.Number <> 0 Then CMDファイルをExecしポーリングして実行 = -1
+                If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
                 On Error GoTo 0
                 GoTo RestoreInteractiveAfterStagePoll
             End If
             Err.Clear
             On Error GoTo 0
         End If
-        CMDファイルをExecしポーリングして実行 = wsh.Run(cmdLine, waitStyle, True)
-        If Err.Number <> 0 Then CMDファイルをExecしポーリングして実行 = -1
-        exitPath = 段階VBA終了コードファイルのパス()
+        RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
+        If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
+        exitPath = StageVbaExitCodeFilePath()
         If Len(Dir(exitPath)) > 0 Then
-            exitFromFile = 段階VBA終了コードをファイルから読取(exitPath)
-            If exitFromFile <> &H7FFFFFFF Then CMDファイルをExecしポーリングして実行 = exitFromFile
+            exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
+            If exitFromFile <> &H7FFFFFFF Then RunCmdFileStageExecAndPoll = exitFromFile
         End If
         GoTo RestoreInteractiveAfterStagePoll
     End If
@@ -312,11 +312,11 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
             Application.Interactive = True
             unlockInteractiveForPoll = True
         End If
-        CMDファイルをExecしポーリングして実行 = wsh.Run(cmdLine, waitStyle, True)
-        exitPath = 段階VBA終了コードファイルのパス()
+        RunCmdFileStageExecAndPoll = wsh.Run(cmdLine, waitStyle, True)
+        exitPath = StageVbaExitCodeFilePath()
         If Len(Dir(exitPath)) > 0 Then
-            exitFromFile = 段階VBA終了コードをファイルから読取(exitPath)
-            If exitFromFile <> &H7FFFFFFF Then CMDファイルをExecしポーリングして実行 = exitFromFile
+            exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
+            If exitFromFile <> &H7FFFFFFF Then RunCmdFileStageExecAndPoll = exitFromFile
         End If
         GoTo RestoreInteractiveAfterStagePoll
     End If
@@ -332,10 +332,10 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
     cx = GetSystemMetrics(SM_CXSCREEN)
     cyQuarter = GetSystemMetrics(SM_CYSCREEN) \ 4
     Do While execObj.Status = 0
-        スプラッシュ_実行ログ枠を更新
+        MacroSplash_RefreshExecutionLogPane
         splashPollIter = splashPollIter + 1
         ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20?24秒）
-        If splashPollIter Mod 20 = 0 Then スプラッシュ_フォームを最前面へ
+        If splashPollIter Mod 20 = 0 Then MacroSplash_BringFormToFront
         ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
@@ -355,20 +355,20 @@ Public Function CMDファイルをExecしポーリングして実行(ByVal wsh As Object, ByVal
         Sleep SPLASH_LOG_POLL_INTERVAL_MS
         DoEvents
     Loop
-    スプラッシュ_実行ログ枠を更新
+    MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
-    exitPath = 段階VBA終了コードファイルのパス()
+    exitPath = StageVbaExitCodeFilePath()
     If Len(Dir(exitPath)) > 0 Then
-        exitFromFile = 段階VBA終了コードをファイルから読取(exitPath)
+        exitFromFile = ReadStageVbaExitCodeFromFile(exitPath)
         If exitFromFile <> &H7FFFFFFF Then
-            CMDファイルをExecしポーリングして実行 = exitFromFile
+            RunCmdFileStageExecAndPoll = exitFromFile
         Else
-            CMDファイルをExecしポーリングして実行 = CLng(execObj.exitCode)
+            RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
         End If
     Else
-        CMDファイルをExecしポーリングして実行 = CLng(execObj.exitCode)
+        RunCmdFileStageExecAndPoll = CLng(execObj.exitCode)
     End If
-    If Err.Number <> 0 Then CMDファイルをExecしポーリングして実行 = -1
+    If Err.Number <> 0 Then RunCmdFileStageExecAndPoll = -1
     On Error GoTo 0
 RestoreInteractiveAfterStagePoll:
     If unlockInteractiveForPoll Then
@@ -376,11 +376,11 @@ RestoreInteractiveAfterStagePoll:
     End If
 End Function
 
-Public Function CMDファイルをコンソールレイアウトで実行(ByVal wsh As Object, ByVal cmdFilePath As String) As Long
-    CMDファイルをコンソールレイアウトで実行 = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
+Public Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePath As String) As Long
+    RunCmdFileWithConsoleLayout = wsh.Run("cmd.exe /c """ & cmdFilePath & """", 1, True)
 End Function
 
-Public Sub ダイアログ付き_段階1を実行()
+Public Sub RunPythonStage1()
     段階1_コア実行
     On Error Resume Next
     配台計画_タスク入力_A1を選択
@@ -391,7 +391,7 @@ Public Sub ダイアログ付き_段階1を実行()
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1Block As String
-        st1Block = Trim$(Gemini_UTF8ファイルを読込(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
+        st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1Block) > 0 Then
             MsgBox st1Block, vbCritical, "段階1"
         Else
@@ -399,12 +399,12 @@ Public Sub ダイアログ付き_段階1を実行()
         End If
         Exit Sub
     End If
-    スプラッシュ_手順文を設定 "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
+    MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     m_animMacroSucceeded = True
 End Sub
 
 ' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
-Public Sub ダイアログ付き_段階1と2を連続実行()
+Public Sub RunPythonStage1ThenStage2()
     段階1_コア実行
     On Error Resume Next
     配台計画_タスク入力_A1を選択
@@ -415,7 +415,7 @@ Public Sub ダイアログ付き_段階1と2を連続実行()
     End If
     If m_lastStage1ExitCode <> 0 Then
         Dim st1b2 As String
-        st1b2 = Trim$(Gemini_UTF8ファイルを読込(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
+        st1b2 = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1b2) > 0 Then
             MsgBox st1b2, vbCritical, "段階1+2"
         Else
@@ -494,7 +494,7 @@ Public Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
     On Error GoTo 0
 End Sub
 
-Public Sub ダイアログ付き_段階2を実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
+Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
     段階2_コア実行 preserveStage1LogOnLogSheet
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
@@ -511,3 +511,5 @@ End Sub
 ' =========================================================
 ' 【補助】個人別スケジュール用シート名（個人_プレフィックス・禁則文字除去・31文字以内）
 ' =========================================================
+
+

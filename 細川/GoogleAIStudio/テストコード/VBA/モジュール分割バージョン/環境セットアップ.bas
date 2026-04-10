@@ -3,7 +3,7 @@ Option Explicit
 Public Function Py3VersionOutput(wsh As Object) As String
     Dim execObj As Object
     Dim s As String
-    Python3バージョン出力文字列 = ""
+    Py3VersionOutput = ""
     On Error GoTo CleanExit
     Set execObj = wsh.Exec("cmd.exe /c py -3 --version")
     Do While execObj.Status = 0
@@ -11,25 +11,25 @@ Public Function Py3VersionOutput(wsh As Object) As String
     Loop
     s = execObj.StdOut.ReadAll()
     If Len(Trim$(s)) = 0 Then s = execObj.StdErr.ReadAll()
-    Python3バージョン出力文字列 = s
+    Py3VersionOutput = s
 CleanExit:
 End Function
 
 Public Function IsPython3Available(wsh As Object) As Boolean
     Dim s As String
-    s = Python3バージョン出力文字列(wsh)
-    Python3が利用可能か = (InStr(1, s, "Python 3", vbTextCompare) > 0)
+    s = Py3VersionOutput(wsh)
+    IsPython3Available = (InStr(1, s, "Python 3", vbTextCompare) > 0)
 End Function
 
 Public Function TryInstallPythonViaWinget(wsh As Object) As Boolean
     On Error GoTo Fail
     Dim wingetBat As String
     wingetBat = "@echo off" & vbCrLf & "winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
-    一時CMDをコンソールレイアウト付きで実行 wsh, wingetBat
-    WingetでPythonインストールを試行 = True
+    RunTempCmdWithConsoleLayout wsh, wingetBat
+    TryInstallPythonViaWinget = True
     Exit Function
 Fail:
-    WingetでPythonインストールを試行 = False
+    TryInstallPythonViaWinget = False
 End Function
 
 Public Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
@@ -48,20 +48,20 @@ Public Function TryInstallPythonViaOfficialInstaller(wsh As Object) As Boolean
             "exit $p.ExitCode"""
     shellCmd = "cmd.exe /c " & psCmd
     exitCode = wsh.Run(shellCmd, 1, True)
-    Pythonを公式インストーラで試行インストール = (exitCode = 0)
+    TryInstallPythonViaOfficialInstaller = (exitCode = 0)
     Exit Function
 Fail:
-    Pythonを公式インストーラで試行インストール = False
+    TryInstallPythonViaOfficialInstaller = False
 End Function
 
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
 Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
     If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
-        環境セットアップスクリプト相対パス = "python\setup_environment.py"
+        SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
     ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
-        環境セットアップスクリプト相対パス = "setup_environment.py"
+        SetupEnvironmentScriptRelativePath = "setup_environment.py"
     Else
-        環境セットアップスクリプト相対パス = ""
+        SetupEnvironmentScriptRelativePath = ""
     End If
 End Function
 
@@ -80,10 +80,10 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
          "& py -3 -u .\" & setupEsc & "; " & _
          "exit $LASTEXITCODE"
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
-    PATH更新後にpipインストールを実行 = wsh.Run(shellCmd, 1, True)
+    RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
 End Function
 
-Sub 環境コンポーネントをインストール()
+Sub InstallComponents()
     Dim wsh As Object
     Dim wingetExit As Long
     Dim pipExit As Long
@@ -99,7 +99,7 @@ Sub 環境コンポーネントをインストール()
                "（setup_environment.py は python\ またはブック直下、requirements.txt は python\ に配置）", vbExclamation
         Exit Sub
     End If
-    setupRel = 環境セットアップスクリプト相対パス(workDir)
+    setupRel = SetupEnvironmentScriptRelativePath(workDir)
     If Len(setupRel) = 0 Then
         MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
                workDir & "\python\setup_environment.py" & vbCrLf & _
@@ -108,7 +108,7 @@ Sub 環境コンポーネントをインストール()
         Exit Sub
     End If
     
-    If Not Python3が利用可能か(wsh) Then
+    If Not IsPython3Available(wsh) Then
         MsgBox "Python 3（py -3）が見つかりません。" & vbCrLf & _
                "自動インストールを開始します（winget → 失敗時は python.org のインストーラ）。" & vbCrLf & _
                "管理者権限や UAC の承認が求められる場合があります。数分かかることがあります。", vbInformation
@@ -118,29 +118,29 @@ Sub 環境コンポーネントをインストール()
         On Error GoTo 0
         
         If wingetExit = 0 Then
-            Call WingetでPythonインストールを試行(wsh)
+            Call TryInstallPythonViaWinget(wsh)
         End If
         
-        If Not Python3が利用可能か(wsh) Then
-            If Not Pythonを公式インストーラで試行インストール(wsh) Then
+        If Not IsPython3Available(wsh) Then
+            If Not TryInstallPythonViaOfficialInstaller(wsh) Then
                 MsgBox "公式インストーラによるセットアップに失敗しました。" & vbCrLf & _
                        "https://www.python.org/downloads/windows/ から Python 3.12 をインストール（Add python.exe to PATH）後、本マクロを再実行してください。", vbCritical
                 Exit Sub
             End If
         End If
         
-        If Not Python3が利用可能か(wsh) Then
+        If Not IsPython3Available(wsh) Then
             MsgBox "インストール後も py -3 を認識できませんでした。" & vbCrLf & _
                    "Excel をいったん終了し、再起動してから再度「環境構築」を実行してください。", vbExclamation
             Exit Sub
         End If
         
-        msg = Trim$(Python3バージョン出力文字列(wsh))
-        スプラッシュ_手順文を設定 "Python を検出しました（" & Left$(msg, 80) & "…）。pip でライブラリをインストールします…"
+        msg = Trim$(Py3VersionOutput(wsh))
+        MacroSplash_SetStep "Python を検出しました（" & Left$(msg, 80) & "…）。pip でライブラリをインストールします…"
     End If
     
-    スプラッシュ_手順文を設定 "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
-    pipExit = PATH更新後にpipインストールを実行(wsh, workDir, setupRel)
+    MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
+    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel)
     If pipExit <> 0 Then
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
                "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
@@ -149,7 +149,7 @@ Sub 環境コンポーネントをインストール()
         Exit Sub
     End If
 
-    スプラッシュ_手順文を設定 "環境構築が完了しました。xlwings リボンが無い場合は Excel を再起動してください。"
+    MacroSplash_SetStep "環境構築が完了しました。xlwings リボンが無い場合は Excel を再起動してください。"
     m_animMacroSucceeded = True
 End Sub
 

@@ -27,41 +27,41 @@ Public Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As S
     Dim uniq As String
     Dim batText As String
     ' D3=false: STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT かつスプラッシュ時のみオーバーレイ用 Exec。それ以外は同期 Run（ウィンドウレイアウトは OS 任せ）
-    If Not 設定シート_スプラッシュログ書込み有効か() Then
+    If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then
         ' ログ枠オーバーレイは「見えるコンソール」前提。非表示指定時は D3=true 経路と同様に headless へ。
         If m_macroSplashShown And STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT And Not hideCmdWindow Then
             Randomize
             uniq = "PM_AI_CMD_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
-            batText = CMD本文へコンソールタイトルを付与(body, uniq)
-            p = 一時CMDファイルに書き出し(batText)
-            一時CMDをコンソールレイアウト付きで実行 = CMDファイルをExecしポーリングして実行(wsh, p, uniq, False, False, True)
+            batText = AugmentCmdBodyWithConsoleTitle(body, uniq)
+            p = WriteTempCmdFile(batText)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, False, False, True)
         ElseIf hideCmdWindow Or applyTopQuarterFullWidthConsole Then
             batText = body
-            If hideCmdWindow Then batText = 段階バッチ_Python行に標準出力破棄を付与(batText)
+            If hideCmdWindow Then batText = EnsureStageBatchStdoutRedirect(batText)
             Randomize
             uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
-            batText = CMD本文へコンソールタイトルを付与(batText, uniq)
-            p = 一時CMDファイルに書き出し(batText)
-            一時CMDをコンソールレイアウト付きで実行 = CMDファイルをExecしポーリングして実行(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow, False)
+            batText = AugmentCmdBodyWithConsoleTitle(batText, uniq)
+            p = WriteTempCmdFile(batText)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow, False)
         Else
-            p = 一時CMDファイルに書き出し(body)
-            一時CMDをコンソールレイアウト付きで実行 = CMDファイルをExecしポーリングして実行(wsh, p, "", False, False, False)
+            p = WriteTempCmdFile(body)
+            RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, "", False, False, False)
         End If
-        GoTo 一時CMDをコンソールレイアウト付きで実行Cleanup
+        GoTo RunTempCmdWithConsoleLayoutCleanup
     End If
     If hideCmdWindow Or applyTopQuarterFullWidthConsole Then
         batText = body
-        If hideCmdWindow Then batText = 段階バッチ_Python行に標準出力破棄を付与(batText)
+        If hideCmdWindow Then batText = EnsureStageBatchStdoutRedirect(batText)
         Randomize
         uniq = "PM_AI_" & Format(Now, "yyyymmddhhnnss") & "_" & CStr(Int(1000000 * Rnd))
-        batText = CMD本文へコンソールタイトルを付与(batText, uniq)
-        p = 一時CMDファイルに書き出し(batText)
-        一時CMDをコンソールレイアウト付きで実行 = CMDファイルをExecしポーリングして実行(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow)
+        batText = AugmentCmdBodyWithConsoleTitle(batText, uniq)
+        p = WriteTempCmdFile(batText)
+        RunTempCmdWithConsoleLayout = RunCmdFileStageExecAndPoll(wsh, p, uniq, applyTopQuarterFullWidthConsole And Not hideCmdWindow, hideCmdWindow)
     Else
-        p = 一時CMDファイルに書き出し(body)
-        一時CMDをコンソールレイアウト付きで実行 = CMDファイルをコンソールレイアウトで実行(wsh, p)
+        p = WriteTempCmdFile(body)
+        RunTempCmdWithConsoleLayout = RunCmdFileWithConsoleLayout(wsh, p)
     End If
-一時CMDをコンソールレイアウト付きで実行Cleanup:
+RunTempCmdWithConsoleLayoutCleanup:
     On Error Resume Next
     Kill p
     On Error GoTo 0
@@ -74,20 +74,20 @@ End Function
 ' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 100% にし、その後 結果_設備ガント のみ 85% に戻す。結果_設備毎の時間割(B2)・結果_タスク一覧(F2)・結果_カレンダー(出勤簿)(A2) で窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
-    Call ボタン押下アニメーション
-    アニメ付き_スプラッシュ付きで実行 "シミュレーション（計画生成）を実行しています…", "ダイアログ付き_段階2を実行", False, , True, True
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "シミュレーション（計画生成）を実行しています…", "RunPython", False, , True, True
 End Sub
 
 ' 段階1: 加工計画DATA からタスク抽出 → output に xlsx 出力し「配台計画_タスク入力」へ取り込み
 Sub アニメ付き_タスク抽出を実行()
-    Call ボタン押下アニメーション
-    アニメ付き_スプラッシュ付きで実行 "タスク抽出（段階1）を実行しています…", "ダイアログ付き_段階1を実行", , , True, True
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "タスク抽出（段階1）を実行しています…", "RunPythonStage1", , , True, True
 End Sub
 
 ' 段階1→保存反映→段階2を続けて実行（配台計画シートの手編集を挟まない一括実行）
 Sub アニメ付き_段階1と段階2を連続実行()
-    Call ボタン押下アニメーション
-    アニメ付き_スプラッシュ付きで実行 "段階1と段階2を連続実行しています…", "ダイアログ付き_段階1と2を連続実行", , , True, True
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "段階1と段階2を連続実行しています…", "RunPythonStage1ThenStage2", , , True, True
 End Sub
 
 Sub アニメ付き_環境構築を実行()
@@ -110,25 +110,25 @@ Sub アニメ付き_環境構築を実行()
         Exit Sub
     End If
     
-    Call ボタン押下アニメーション
-    アニメ付き_スプラッシュ付きで実行 "環境構築を実行しています…", "環境コンポーネントをインストール"
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "環境構築を実行しています…", "InstallComponents"
 End Sub
 
 ' 図形ボタン用：Caller が取れるのは「この Sub が OnAction のとき」だけ。本体を直接割り当てるとアニメは動かない。
 Sub アニメ付き_全シートフォントをリストから選択して統一()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     ' xlDialogFormatFont 表示のためグリッド操作ブロックは使わない
     アニメ付き_スプラッシュ付きで実行 "全シートのフォントを一覧から選んで統一しています…", "全シートフォントをリストから選択して統一", , , False
 End Sub
 
 Sub アニメ付き_全シートフォントを手入力で統一()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     ' Application.InputBox 用にグリッド操作ブロックは使わない
     アニメ付き_スプラッシュ付きで実行 "全シートのフォントを手入力の名前で統一しています…", "全シートフォントを手入力で統一", , , False
 End Sub
 
 Sub アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "全シートのフォントを BIZ UDP ゴシックに統一しています…", "全シートフォント_BIZ_UDPゴシックに統一"
 End Sub
 
@@ -138,27 +138,27 @@ End Sub
 ' Python: python\encrypt_gemini_credentials.py（要 cryptography）。起動は py -3 を推奨。
 ' =========================================================
 Sub アニメ付き_Gemini認証を暗号化してB1に保存()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     ' InputBox 等があるためグリッド操作ブロックは使わない（スプラッシュのみ）
     アニメ付き_スプラッシュ付きで実行 "Gemini 認証を暗号化して保存しています…", "設定_Gemini認証を暗号化してB1に保存", , , False
 End Sub
 
 ' 列設定シートの内容を「結果_タスク一覧」へ反映（Python）。図形の OnAction には本マクロを指定（本体を直指定するとアニメは動かない）。
 Sub アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "列設定を結果タスク一覧に反映しています…", "列設定_結果_タスク一覧_列順表示をPython適用"
 End Sub
 
 ' 列設定シート A:B のみ重複列名を削除（結果シートは触らない）。図形には「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
 Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "列設定シートの重複列名を整理しています…", "列設定_結果_タスク一覧_重複列名を整理"
 End Sub
 
 Public Function GetMainWorksheet() As Worksheet
     ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next
-    Set メインシートを取得 = ThisWorkbook.Worksheets("メイン_")
+    Set GetMainWorksheet = ThisWorkbook.Worksheets("メイン_")
     On Error GoTo 0
 End Function
 
@@ -178,7 +178,7 @@ Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal targetDir As String)
     Dim r As Long
     Dim lastClearRow As Long
     
-    Set wsMain = メインシートを取得()
+    Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then Exit Sub
     
     lastClearRow = START_ROW + CLEAR_ROWS - 1
@@ -228,7 +228,7 @@ End Sub
 Public Sub メインシートA1を選択()
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = メインシートを取得()
+    Set ws = GetMainWorksheet()
     If ws Is Nothing Then Exit Sub
     ws.Activate
     ws.Range("A1").Select
@@ -242,11 +242,11 @@ Public Function FindColHeader(ws As Worksheet, ByVal headerText As String) As Lo
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     For c = 1 To lastCol
         If Trim$(CStr(ws.Cells(1, c).Value)) = headerText Then
-            見出し文字列の列番号を検索 = c
+            FindColHeader = c
             Exit Function
         End If
     Next c
-    見出し文字列の列番号を検索 = 0
+    FindColHeader = 0
 End Function
 
 ' ハイパーリンク再付与後に既定の青リンク体へ戻らないよう、クリア前のフォントを記憶・復元する
@@ -421,8 +421,8 @@ Public Sub 結果_タスク一覧_配完回答指定16時_いいえを強調(ByVal ws As Worksheet)
     If ws Is Nothing Then Exit Sub
     If StrComp(ws.Name, SHEET_RESULT_TASK_LIST, vbBinaryCompare) <> 0 Then Exit Sub
     
-    c = 見出し文字列の列番号を検索(ws, "配完_回答指定16時まで")
-    If c <= 0 Then c = 見出し文字列の列番号を検索(ws, "配完_基準16時まで")
+    c = FindColHeader(ws, "配完_回答指定16時まで")
+    If c <= 0 Then c = FindColHeader(ws, "配完_基準16時まで")
     If c <= 0 Then Exit Sub
     
     lastRow = ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
@@ -489,7 +489,7 @@ Public Sub 結果シート_メインへ戻るリンクを付与(ByVal ws As Worksheet)
     Dim lastCol As Long
     Dim anchor As Range
     
-    Set wsMain = メインシートを取得()
+    Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then Exit Sub
     If StrComp(ws.Name, wsMain.Name, vbBinaryCompare) = 0 Then Exit Sub
     
@@ -908,14 +908,14 @@ Public Sub 配台計画_タスク入力を前へ並べ替え()
     Dim wsMain As Worksheet
     Dim wsAfter As Worksheet
     
-    スプラッシュ_手順文を設定 "段階1: 「配台計画_タスク入力」シートをメイン付近へ移動しています…"
+    MacroSplash_SetStep "段階1: 「配台計画_タスク入力」シートをメイン付近へ移動しています…"
     On Error Resume Next
     Set wsPlan = ThisWorkbook.Sheets(PLAN_SHEET)
     On Error GoTo 0
     If wsPlan Is Nothing Then Exit Sub
     
     On Error Resume Next
-    Set wsMain = メインシートを取得()
+    Set wsMain = GetMainWorksheet()
     On Error GoTo 0
     
     If wsMain Is Nothing Then
@@ -1010,21 +1010,21 @@ Public Function SettingsSheet_IsSplashExecutionLogWriteEnabled() As Boolean
     v = ws.Range("D3").Value
     If IsError(v) Then GoTo DefaultTrue
     If VarType(v) = vbBoolean Then
-        設定シート_スプラッシュログ書込み有効か = CBool(v)
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = CBool(v)
         Exit Function
     End If
     t = Trim$(CStr(v))
     If Len(t) = 0 Then GoTo DefaultTrue
     If StrComp(t, "false", vbTextCompare) = 0 Then
-        設定シート_スプラッシュログ書込み有効か = False
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = False
         Exit Function
     End If
     If StrComp(t, "true", vbTextCompare) = 0 Then
-        設定シート_スプラッシュログ書込み有効か = True
+        SettingsSheet_IsSplashExecutionLogWriteEnabled = True
         Exit Function
     End If
 DefaultTrue:
-    設定シート_スプラッシュログ書込み有効か = True
+    SettingsSheet_IsSplashExecutionLogWriteEnabled = True
 End Function
 
 Public Function SettingsSheet_GetCompleteChimeTrack1to4() As Long
@@ -1044,16 +1044,16 @@ Public Function SettingsSheet_GetCompleteChimeTrack1to4() As Long
         n = CLng(Val(CStr(v)))
     End If
     If n < 1 Or n > 4 Then GoTo Def1
-    設定シート_完了チャイムトラック番号 = n
+    SettingsSheet_GetCompleteChimeTrack1to4 = n
     Exit Function
 Def1:
-    設定シート_完了チャイムトラック番号 = 1
+    SettingsSheet_GetCompleteChimeTrack1to4 = 1
 End Function
 
 Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
-    スプラッシュ_表示 splashMessage, lockExcelUI
+    MacroSplash_Show splashMessage, lockExcelUI
     If IsMissing(arg1) And IsMissing(arg2) Then
         Application.Run procName
     ElseIf Not IsMissing(arg1) And IsMissing(arg2) Then
@@ -1065,12 +1065,12 @@ Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVa
 EH:
     On Error Resume Next
 Finish:
-    起動BGM_フェードアウトして閉じる
+    MacroStartBgm_FadeOutAndClose
     If m_animMacroSucceeded Then
         On Error Resume Next
-        完了チャイムを再生処理
+        MacroCompleteChime
     End If
-    スプラッシュ_非表示
+    MacroSplash_Hide
     m_splashAllowMacroSound = False
 End Sub
 
@@ -1082,33 +1082,33 @@ End Sub
 ' 6=インディゴ 7=スレート 8=コーラル 9=アンバー 10=マゼンタ
 Public Function CoolButtonGradientTop(ByVal presetId As Long) As Long
     Select Case presetId
-        Case 1: クールボタン_グラデーション上端色 = RGB(65, 105, 225)
-        Case 2: クールボタン_グラデーション上端色 = RGB(0, 180, 170)
-        Case 3: クールボタン_グラデーション上端色 = RGB(255, 160, 60)
-        Case 4: クールボタン_グラデーション上端色 = RGB(60, 179, 113)
-        Case 5: クールボタン_グラデーション上端色 = RGB(186, 85, 211)
-        Case 6: クールボタン_グラデーション上端色 = RGB(100, 120, 220)
-        Case 7: クールボタン_グラデーション上端色 = RGB(130, 140, 150)
-        Case 8: クールボタン_グラデーション上端色 = RGB(255, 120, 120)
-        Case 9: クールボタン_グラデーション上端色 = RGB(255, 200, 80)
-        Case 10: クールボタン_グラデーション上端色 = RGB(230, 90, 180)
-        Case Else: クールボタン_グラデーション上端色 = RGB(65, 105, 225)
+        Case 1: CoolButtonGradientTop = RGB(65, 105, 225)
+        Case 2: CoolButtonGradientTop = RGB(0, 180, 170)
+        Case 3: CoolButtonGradientTop = RGB(255, 160, 60)
+        Case 4: CoolButtonGradientTop = RGB(60, 179, 113)
+        Case 5: CoolButtonGradientTop = RGB(186, 85, 211)
+        Case 6: CoolButtonGradientTop = RGB(100, 120, 220)
+        Case 7: CoolButtonGradientTop = RGB(130, 140, 150)
+        Case 8: CoolButtonGradientTop = RGB(255, 120, 120)
+        Case 9: CoolButtonGradientTop = RGB(255, 200, 80)
+        Case 10: CoolButtonGradientTop = RGB(230, 90, 180)
+        Case Else: CoolButtonGradientTop = RGB(65, 105, 225)
     End Select
 End Function
 
 Public Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     Select Case presetId
-        Case 1: クールボタン_グラデーション下端色 = RGB(0, 0, 139)
-        Case 2: クールボタン_グラデーション下端色 = RGB(0, 100, 95)
-        Case 3: クールボタン_グラデーション下端色 = RGB(180, 80, 0)
-        Case 4: クールボタン_グラデーション下端色 = RGB(0, 90, 40)
-        Case 5: クールボタン_グラデーション下端色 = RGB(75, 0, 130)
-        Case 6: クールボタン_グラデーション下端色 = RGB(40, 50, 120)
-        Case 7: クールボタン_グラデーション下端色 = RGB(70, 75, 85)
-        Case 8: クールボタン_グラデーション下端色 = RGB(180, 50, 50)
-        Case 9: クールボタン_グラデーション下端色 = RGB(180, 120, 0)
-        Case 10: クールボタン_グラデーション下端色 = RGB(140, 30, 100)
-        Case Else: クールボタン_グラデーション下端色 = RGB(0, 0, 139)
+        Case 1: CoolButtonGradientBottom = RGB(0, 0, 139)
+        Case 2: CoolButtonGradientBottom = RGB(0, 100, 95)
+        Case 3: CoolButtonGradientBottom = RGB(180, 80, 0)
+        Case 4: CoolButtonGradientBottom = RGB(0, 90, 40)
+        Case 5: CoolButtonGradientBottom = RGB(75, 0, 130)
+        Case 6: CoolButtonGradientBottom = RGB(40, 50, 120)
+        Case 7: CoolButtonGradientBottom = RGB(70, 75, 85)
+        Case 8: CoolButtonGradientBottom = RGB(180, 50, 50)
+        Case 9: CoolButtonGradientBottom = RGB(180, 120, 0)
+        Case 10: CoolButtonGradientBottom = RGB(140, 30, 100)
+        Case Else: CoolButtonGradientBottom = RGB(0, 0, 139)
     End Select
 End Function
 
@@ -1121,15 +1121,15 @@ Sub かっこいいボタンを作成()
     Const gap As Single = 70
     
     y = 50
-    クールボタンをプリセットで作成 "? シミュレーション実行", "アニメ付き_計画生成を実行", 50, y, 1
+    CreateCoolButtonWithPreset "? シミュレーション実行", "アニメ付き_計画生成を実行", 50, y, 1
     y = y + gap
-    クールボタンをプリセットで作成 "タスク抽出", "アニメ付き_タスク抽出を実行", 50, y, 3
+    CreateCoolButtonWithPreset "タスク抽出", "アニメ付き_タスク抽出を実行", 50, y, 3
     y = y + gap
-    クールボタンをプリセットで作成 "段階1+2 連続", "アニメ付き_段階1と段階2を連続実行", 50, y, 5
+    CreateCoolButtonWithPreset "段階1+2 連続", "アニメ付き_段階1と段階2を連続実行", 50, y, 5
     y = y + gap
-    クールボタンをプリセットで作成 "環境構築 (初回のみ)", "アニメ付き_環境構築を実行", 50, y, 4
+    CreateCoolButtonWithPreset "環境構築 (初回のみ)", "アニメ付き_環境構築を実行", 50, y, 4
     y = y + gap
-    クールボタンをプリセットで作成 "Gemini鍵を暗号化", "アニメ付き_Gemini認証を暗号化してB1に保存", 50, y, 6
+    CreateCoolButtonWithPreset "Gemini鍵を暗号化", "アニメ付き_Gemini認証を暗号化してB1に保存", 50, y, 6
     
     MsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
            "グラデーションはプリセット 1/3/5/4 を使用しています（全 10 色はコード先頭のコメント参照）。" & vbCrLf & _
@@ -1149,7 +1149,7 @@ Sub かっこいいボタン_配色サンプル作成()
     For i = 1 To 10
         x = left0 + CSng((i - 1) Mod 5) * colW
         y = top0 + CSng((i - 1) \ 5) * rowH
-        クールボタンを作成 "P" & CStr(i), "かっこいいボタンを作成", x, y, クールボタン_グラデーション上端色(i), クールボタン_グラデーション下端色(i)
+        CreateCoolButton "P" & CStr(i), "かっこいいボタンを作成", x, y, CoolButtonGradientTop(i), CoolButtonGradientBottom(i)
         On Error Resume Next
         ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
         On Error GoTo 0
@@ -1249,14 +1249,14 @@ Public Function PingHostOnceBeforeQueryRefresh(ByVal ipAddress As String, ByVal 
     Dim cmd As String
     Dim rc As Long
     On Error GoTo EH
-    If Len(ipAddress) = 0 Then クエリ更新前にホストへ1回Ping = False: Exit Function
+    If Len(ipAddress) = 0 Then PingHostOnceBeforeQueryRefresh = False: Exit Function
     Set wsh = CreateObject("WScript.Shell")
     cmd = "cmd /c ping -n 1 -w " & CStr(timeoutMs) & " " & ipAddress
     rc = wsh.Run(cmd, 0, True)
-    クエリ更新前にホストへ1回Ping = (rc = 0)
+    PingHostOnceBeforeQueryRefresh = (rc = 0)
     Exit Function
 EH:
-    クエリ更新前にホストへ1回Ping = False
+    PingHostOnceBeforeQueryRefresh = False
 End Function
 
 ' =========================================================
@@ -1282,21 +1282,21 @@ Public Function TryRefreshWorkbookQueries() As Boolean
         Application.StatusBar = "（SKIP_WORKBOOK_REFRESH_ALL）接続の一括更新を省略しました"
         DoEvents
         Application.StatusBar = False
-    ElseIf Not クエリ更新前にホストへ1回Ping(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
+    ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
         Application.StatusBar = "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答なし（" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "ms）? Power Query 等の一括更新をスキップして処理を続行します"
         DoEvents
         Application.StatusBar = False
     Else
         Application.StatusBar = "データ接続を更新しています（完了までお待ちください）..."
         DoEvents
-        Call バックグラウンド更新を無効化してRefreshAll
+        Call DisableBackgroundDataRefreshAll
         ThisWorkbook.RefreshAll
         Application.CalculateUntilAsyncQueriesDone
         Application.StatusBar = False
     End If
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
-    ブックのクエリ更新を試行 = True
+    TryRefreshWorkbookQueries = True
     Exit Function
 EH:
     Application.StatusBar = False
@@ -1305,7 +1305,7 @@ EH:
     Application.ScreenUpdating = prevSU
     On Error GoTo 0
     m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & Err.Description
-    ブックのクエリ更新を試行 = False
+    TryRefreshWorkbookQueries = False
 End Function
 
 ' Python の execution_log は UTF-8(BOM 付き)。cmd の 2>&1 リダイレクトは環境で Shift_JIS になりがちなので BOM で切り替える。

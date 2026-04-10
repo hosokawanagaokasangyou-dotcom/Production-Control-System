@@ -141,15 +141,15 @@ Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
 ' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウンはインライン一覧。F2:F4 は候補の目安）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 成功完了時は一覧更新のあと「ブックへ適用」まで自動実行（適用末尾で再び一覧同期）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
-'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。スプラッシュ_フォームを最前面へ のたびに再配置（長時間処理中の Excel 移動に追従）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 スプラッシュ_実行ログ枠を更新 で execution_log.txt をポーリング（固まったように見えない）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 xlwings.RunPython（終了後 スプラッシュ_実行ログをパスから読込 で一括）。実行中はログ枠はほぼ動かない。
+'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW（シートまたは OS 環境・既定1）=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
-'   ・import 解決のため xlwings.RunPython に渡す文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
+'   ・import 解決のため RunPython 文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
 '       xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
-'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ Xlwings_コンソールランナー実行。SPLASH_LOG=True のときは cmd（進捗優先）。
+'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ XwRunConsoleRunner。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
 ' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
@@ -209,3 +209,4 @@ Public mGanttHL_Row As Long
 Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
+
