@@ -476,7 +476,7 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
              "echo [plan-dispatch-trial-order] ERRORLEVEL=%DISPATCH_TRIAL_RC%" & vbCrLf & _
              "if not %DISPATCH_TRIAL_RC%==0 (" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo エラーが発生しました。上記のメッセージを確認してから Enter キーで閉じてください。" & vbCrLf & _
+             "echo [ERROR] Non-zero exit. Read messages above, then press a key to close this window." & vbCrLf & _
              "pause" & vbCrLf & _
              ")" & vbCrLf & _
              "exit /b %DISPATCH_TRIAL_RC%"
