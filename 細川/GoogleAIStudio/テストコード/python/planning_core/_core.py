@@ -2559,6 +2559,24 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
+    # region agent log
+    _watch0 = _agent_debug_watch_tids()
+    for _, row in df.iterrows():
+        tid0 = planning_task_id_str_from_plan_row(row)
+        if tid0 not in _watch0:
+            continue
+        _agent_ndjson_log(
+            "H0",
+            "_core.py:load_planning_tasks_df",
+            "sheet_before_mutations",
+            {
+                "tid": tid0,
+                "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
+                "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
+                "exclude_from_assignment": bool(_plan_row_exclude_from_assignment(row)),
+            },
+        )
+    # endregion
     _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
     # region agent log
     _watch = _agent_debug_watch_tids()
@@ -7773,6 +7791,11 @@ def _task_row_matches_exclude_rule_target(
         return False
     rm = str(rule_mach or "").strip()
     if not rm:
+        # 機械名が空のルールは「当該工程の全機械」を意味するが、工程「分割」は同一依頼で別行の
+        # スリット等と同じ機械名が重なるケースが多く、ワイルドカード一致だと実設備向け分割行まで
+        # 一律配台不要になる。分割を除外する場合は設定シートで機械名を明示する。
+        if _process_name_is_bunkatsu_for_auto_exclude(task_proc):
+            return False
         return True
     return _normalize_equipment_match_key(task_mach) == _normalize_equipment_match_key(rm)
 
@@ -9355,13 +9378,44 @@ def apply_exclude_rules_config_to_plan_df(
         for ru in rules:
             if not _task_row_matches_exclude_rule_target(tp, tm, ru["proc"], ru["mach"]):
                 continue
+            _tid_er = planning_task_id_str_from_plan_row(row)
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
+                # region agent log
+                if _tid_er in _agent_debug_watch_tids():
+                    _agent_ndjson_log(
+                        "H6",
+                        "_core.py:apply_exclude_rules_config_to_plan_df",
+                        "exclude_rule_applied_c_yes",
+                        {
+                            "tid": _tid_er,
+                            "task_process": tp,
+                            "task_machine_name": tm,
+                            "rule_process": str(ru.get("proc") or ""),
+                            "rule_machine": str(ru.get("mach") or ""),
+                        },
+                    )
+                # endregion
                 break
             if ru.get("parsed") and evaluate_exclude_rule_json_for_row(ru["parsed"], row):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
+                # region agent log
+                if _tid_er in _agent_debug_watch_tids():
+                    _agent_ndjson_log(
+                        "H6",
+                        "_core.py:apply_exclude_rules_config_to_plan_df",
+                        "exclude_rule_applied_json",
+                        {
+                            "tid": _tid_er,
+                            "task_process": tp,
+                            "task_machine_name": tm,
+                            "rule_process": str(ru.get("proc") or ""),
+                            "rule_machine": str(ru.get("mach") or ""),
+                        },
+                    )
+                # endregion
                 break
     if n:
         logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
