@@ -17017,7 +17017,7 @@ def generate_plan():
     段階2のメイン処理。戻り値なし（ログ・Excel 出力で完結）。
 
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
-    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組のみ）、および log/execution_log.txt。
+    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
     """
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     with _override_default_factory_hours_from_master(master_abs):
@@ -18867,8 +18867,11 @@ def _generate_plan_impl():
     # 4. Excel出力 (メイン計画)
     # =========================================================
     _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_dir)
-    # 同一秒内の再実行でファイル名が衝突しないようマイクロ秒まで含める
-    _stage2_out_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
+    # ファイル名の主部はデータ抽出基準日時（シートメタと整合）。同一抽出データの再実行でも
+    # パスがぶつからないよう、壁時計のサフィックスを付与（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
+    _stage2_data_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
+    _stage2_run_stamp = datetime.now().strftime("%H%M%S_%f")
+    _stage2_out_stamp = f"{_stage2_data_stamp}_{_stage2_run_stamp}"
     output_filename = os.path.join(
         output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
