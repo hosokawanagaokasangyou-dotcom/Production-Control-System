@@ -2191,11 +2191,26 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     製品名文字列から加工単位(m)を推定する暫定ルール。
     例: 15020-JX5R- 770X300F-A   R -> 300
+    例: 1550X 40F のように「ロール長×幅」で X 直後が小さいときは X 前を採用（1550）。
     ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
     s = str(product_name)
+    # 「NNNX MM」形式: 最後のペアで、一方が他方のおおよそ3倍以上なら長い側をロール長とみなす
+    # （770X300 のように近い二数は従来どおり X 後を優先するため閾値を使う）
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if dim_pairs:
+        try:
+            a_str, b_str = dim_pairs[-1]
+            a, b = int(a_str), int(b_str)
+            if a > 0 and b > 0:
+                if a >= 3 * b:
+                    return a
+                if b >= 3 * a:
+                    return b
+        except ValueError:
+            pass
     # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
     matches = re.findall(r"[xX]\s*(\d{2,6})", s)
     if matches:
