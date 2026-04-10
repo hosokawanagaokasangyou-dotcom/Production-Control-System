@@ -1,4 +1,4 @@
-"""planning_core 実装本体（パッケージ内）。``import planning_core`` で bootstrap が先に実行されること。"""
+"""planning_core å®Ÿè£…æœ¬ä½“ï¼ˆãƒ‘ãƒƒã‚±ãƒ¼ã‚¸å†…ï¼‰ã€‚``import planning_core`` ã�§ bootstrap ã�Œå…ˆã�«å®Ÿè¡Œã�•ã‚Œã‚‹ã�“ã�¨ã€‚"""
 import pandas as pd
 from datetime import datetime, timedelta, time, date
 from collections import Counter, defaultdict
@@ -43,7 +43,7 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
-# AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
+# AI å‚™è€ƒãƒ»é…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯ Dâ†’E ã�® TTL ã‚­ãƒ£ãƒƒã‚·ãƒ¥ï¼ˆæ—§ output/ ã�‹ã‚‰ json/ ã�¸ç§»è¡Œï¼‰
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
 _ai_cache_new = os.path.join(json_data_dir, _ai_remarks_cache_name)
@@ -53,46 +53,46 @@ if os.path.isfile(_ai_cache_legacy) and not os.path.isfile(_ai_cache_new):
     except OSError:
         pass
 ai_cache_path = _ai_cache_new
-# 「設定_配台不要工程」シート作成・保存の成否デバッグ（execution_log と併用）
+# ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã‚·ãƒ¼ãƒˆä½œæˆ�ãƒ»ä¿�å­˜ã�®æˆ�å�¦ãƒ‡ãƒ�ãƒƒã‚°ï¼ˆexecution_log ã�¨ä½µç”¨ï¼‰
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
-# 保存失敗時に E 列（ロジック式）だけを退避し、次回 run_exclude_rules_sheet_maintenance で自動適用する（json フォルダ）
+# ä¿�å­˜å¤±æ•—æ™‚ã�« E åˆ—ï¼ˆãƒ­ã‚¸ãƒƒã‚¯å¼�ï¼‰ã� ã�‘ã‚’é€€é�¿ã�—ã€�æ¬¡å›ž run_exclude_rules_sheet_maintenance ã�§è‡ªå‹•é�©ç”¨ã�™ã‚‹ï¼ˆjson ãƒ•ã‚©ãƒ«ãƒ€ï¼‰
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
-# openpyxl 保存失敗時に VBA が E 列へ書き込むための UTF-8 TSV（Base64）。
+# openpyxl ä¿�å­˜å¤±æ•—æ™‚ã�« VBA ã�Œ E åˆ—ã�¸æ›¸ã��è¾¼ã‚€ã�Ÿã‚�ã�® UTF-8 TSVï¼ˆBase64ï¼‰ã€‚
 EXCLUDE_RULES_E_VBA_TSV_FILENAME = "exclude_rules_e_column_vba.tsv"
-# openpyxl 保存失敗時に VBA が A〜E を一括反映する UTF-8 TSV（行ごとに 5 セル分 Base64）。
+# openpyxl ä¿�å­˜å¤±æ•—æ™‚ã�« VBA ã�Œ Aã€œE ã‚’ä¸€æ‹¬å��æ˜ ã�™ã‚‹ UTF-8 TSVï¼ˆè¡Œã�”ã�¨ã�« 5 ã‚»ãƒ«åˆ† Base64ï¼‰ã€‚
 EXCLUDE_RULES_MATRIX_VBA_FILENAME = "exclude_rules_matrix_vba.tsv"
-# VBA がメイン P 列へ書き込むための UTF-8 テキスト（Excel 開いたまま save できない問題の回避）
+# VBA ã�Œãƒ¡ã‚¤ãƒ³ P åˆ—ã�¸æ›¸ã��è¾¼ã‚€ã�Ÿã‚�ã�® UTF-8 ãƒ†ã‚­ã‚¹ãƒˆï¼ˆExcel é–‹ã�„ã�Ÿã�¾ã�¾ save ã�§ã��ã�ªã�„å•�é¡Œã�®å›žé�¿ï¼‰
 GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
-# 全実行を通した Gemini 利用・推定料金の累計（API 応答ごとに更新。保存先は API_Payment フォルダ）
+# å…¨å®Ÿè¡Œã‚’é€šã�—ã�Ÿ Gemini åˆ©ç”¨ãƒ»æŽ¨å®šæ–™é‡‘ã�®ç´¯è¨ˆï¼ˆAPI å¿œç­”ã�”ã�¨ã�«æ›´æ–°ã€‚ä¿�å­˜å…ˆã�¯ API_Payment ãƒ•ã‚©ãƒ«ãƒ€ï¼‰
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
-# 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
+# æœŸé–“åˆ¥ãƒ�ã‚±ãƒƒãƒˆã‚’ãƒ•ãƒ©ãƒƒãƒˆåŒ–ã�—ã�Ÿ CSVï¼ˆExcel ã�®æŠ˜ã‚Œç·šãƒ»æ£’ã‚°ãƒ©ãƒ•ç”¨ï¼‰
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# メインシート・Gemini 日次推移（xlwings: Q〜R＝料金または呼出し、S〜T＝合計トークン）
+# ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆãƒ»Gemini æ—¥æ¬¡æŽ¨ç§»ï¼ˆxlwings: Qã€œRï¼�æ–™é‡‘ã�¾ã�Ÿã�¯å‘¼å‡ºã�—ã€�Sã€œTï¼�å�ˆè¨ˆãƒˆãƒ¼ã‚¯ãƒ³ï¼‰
 GEMINI_USAGE_CHART_COL_DATE = 17  # Q
 GEMINI_USAGE_CHART_COL_VALUE = 18  # R
-GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S（グラフ用に日付を複製）
-GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # T（total_tokens 相当）
+GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # Sï¼ˆã‚°ãƒ©ãƒ•ç”¨ã�«æ—¥ä»˜ã‚’è¤‡è£½ï¼‰
+GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # Tï¼ˆtotal_tokens ç›¸å½“ï¼‰
 GEMINI_USAGE_CHART_HEADER_ROW = 16
 GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
 GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL = "AA16"
 GEMINI_USAGE_CHART_MAX_DAYS = 14
 GEMINI_USAGE_CHART_CLEAR_ROWS = 36
-# xlwings で貼る折れ線の名前（再実行時に削除してから作り直す）
+# xlwings ã�§è²¼ã‚‹æŠ˜ã‚Œç·šã�®å��å‰�ï¼ˆå†�å®Ÿè¡Œæ™‚ã�«å‰Šé™¤ã�—ã�¦ã�‹ã‚‰ä½œã‚Šç›´ã�™ï¼‰
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
-# テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
-# TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
-# 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
+# ãƒ†ã‚¹ãƒˆ: EXCLUDE_RULES_TEST_E1234=1 ã�§ EXCLUDE_RULES_SHEET_NAMEï¼ˆã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ï¼‰ã�® E åˆ—ã�« "1234" ã‚’æ›¸ã��ï¼ˆä¿�å­˜çµŒè·¯ã�®ç¢ºèª�ç”¨ï¼‰ã€‚
+# TASK_INPUT_WORKBOOK ã�¯ã€ŒåŠ å·¥è¨ˆç”»DATAã€�ã‚·ãƒ¼ãƒˆä»˜ã��ãƒ–ãƒƒã‚¯ï¼ˆä¾‹: ç”Ÿç”£ç®¡ç�†_AIé…�å�°ãƒ†ã‚¹ãƒˆ.xlsmï¼‰ã‚’æŒ‡å®šã�™ã‚‹ã�“ã�¨ã€‚
+# è¡Œã�¯ EXCLUDE_RULES_TEST_E1234_ROWï¼ˆæ—¢å®š 9ã€�2 æœªæº€ã�¯ 9 ã�«ä¸¸ã‚�ã‚‹ï¼‰ã€‚
 
 # =========================================================
-# 【設定】APIキー / 基本ルール / ファイル名
+# ã€�è¨­å®šã€‘APIã‚­ãƒ¼ / åŸºæœ¬ãƒ«ãƒ¼ãƒ« / ãƒ•ã‚¡ã‚¤ãƒ«å��
 # =========================================================
-# Gemini API キーは TASK_INPUT_WORKBOOK 確定後、下記「設定」B1 の JSON から解決（平文または format_version 2 の暗号化）。
-# 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
+# Gemini API ã‚­ãƒ¼ã�¯ TASK_INPUT_WORKBOOK ç¢ºå®šå¾Œã€�ä¸‹è¨˜ã€Œè¨­å®šã€�B1 ã�® JSON ã�‹ã‚‰è§£æ±ºï¼ˆå¹³æ–‡ã�¾ã�Ÿã�¯ format_version 2 ã�®æš—å�·åŒ–ï¼‰ã€‚
+# æœªè¨­å®šæ™‚ã�®ã�¿ç§»è¡Œç”¨ã�«ç’°å¢ƒå¤‰æ•° GEMINI_API_KEY ã‚’å�‚ç…§ã€‚
 
 GEMINI_MODEL_FLASH = "gemini-2.5-flash"
-# 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
-# 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
+# æŽ¨å®šæ–™é‡‘: USD / 1M tokensï¼ˆå…¥åŠ›, å‡ºåŠ›ï¼‰ã€‚å…¬å¼�ã�®æœ€æ–°å�˜ä¾¡ã�«å�ˆã‚�ã�›ã�¦æ›´æ–°ã�™ã‚‹ã�“ã�¨ã€‚
+# ç’°å¢ƒå¤‰æ•° GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M ã�§ä¸Šæ›¸ã��å�¯ï¼ˆFlash å�‘ã�‘ï¼‰ã€‚
 _GEMINI_FLASH_IN_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_IN_PER_M", "0.075") or 0.075
 )
@@ -102,60 +102,60 @@ _GEMINI_FLASH_OUT_PER_M = float(
 GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
 
 # ---------------------------------------------------------------------------
-# 以降の定数ブロックは「Excel 列見出し」と 1:1 で対応させる。
-# 列名を変える場合は VBA・マクロ側シートと同時に直すこと。
+# ä»¥é™�ã�®å®šæ•°ãƒ–ãƒ­ãƒƒã‚¯ã�¯ã€ŒExcel åˆ—è¦‹å‡ºã�—ã€�ã�¨ 1:1 ã�§å¯¾å¿œã�•ã�›ã‚‹ã€‚
+# åˆ—å��ã‚’å¤‰ã�ˆã‚‹å ´å�ˆã�¯ VBAãƒ»ãƒžã‚¯ãƒ­å�´ã‚·ãƒ¼ãƒˆã�¨å�Œæ™‚ã�«ç›´ã�™ã�“ã�¨ã€‚
 # ---------------------------------------------------------------------------
 
-MASTER_FILE = "master.xlsm" # skillsとattendance(およびtasks)を統合したファイル
-# VBA「master_機械カレンダーを作成」シート（1 時間スロット占有を段階2の machine_avail_dt に反映）
-SHEET_MACHINE_CALENDAR = "機械カレンダー"
-# ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
+MASTER_FILE = "master.xlsm" # skillsã�¨attendance(ã�Šã‚ˆã�³tasks)ã‚’çµ±å�ˆã�—ã�Ÿãƒ•ã‚¡ã‚¤ãƒ«
+# VBAã€Œmaster_æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚’ä½œæˆ�ã€�ã‚·ãƒ¼ãƒˆï¼ˆ1 æ™‚é–“ã‚¹ãƒ­ãƒƒãƒˆå� æœ‰ã‚’æ®µéšŽ2ã�® machine_avail_dt ã�«å��æ˜ ï¼‰
+SHEET_MACHINE_CALENDAR = "æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼"
+# ``generate_plan`` é–‹å§‹æ™‚ã�«å†�è¨­å®šã€‚date -> è¨­å‚™ã‚­ãƒ¼ -> [ (start, end), ... ] å�Šé–‹åŒºé–“ [start, end)
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
 
-# master.xlsm: 依頼NO が変わる前後の工程×機械ごとの準備・後始末（分）／機械ごとの日次始業準備（分）
-SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
-SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
-# ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
+# master.xlsm: ä¾�é ¼NO ã�Œå¤‰ã‚�ã‚‹å‰�å¾Œã�®å·¥ç¨‹Ã—æ©Ÿæ¢°ã�”ã�¨ã�®æº–å‚™ãƒ»å¾Œå§‹æœ«ï¼ˆåˆ†ï¼‰ï¼�æ©Ÿæ¢°ã�”ã�¨ã�®æ—¥æ¬¡å§‹æ¥­æº–å‚™ï¼ˆåˆ†ï¼‰
+SHEET_MACHINE_CHANGEOVER = "è¨­å®š_ä¾�é ¼åˆ‡æ›¿å‰�å¾Œæ™‚é–“"
+SHEET_MACHINE_DAILY_STARTUP = "è¨­å®š_æ©Ÿæ¢°_æ—¥æ¬¡å§‹æ¥­æº–å‚™"
+# ``generate_plan`` é–‹å§‹æ™‚ã�«å†�è¨­å®šï¼ˆã‚·ãƒ¼ãƒˆç„¡ã�—ãƒ»ç©ºã�¯ç©ºè¾žæ›¸ï¼�å¾“æ�¥ã�©ã�Šã‚Šï¼‰
 _STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
-# master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) の壁時計に載せる。
+# master ãƒ¡ã‚¤ãƒ³ A15ï¼ˆå®šå¸¸é–‹å§‹ï¼‰ã€‚æ—¥æ¬¡å§‹æ¥­æº–å‚™ã‚’å‹¤æ€  forward ã�§ã�¯ã�ªã�� [é–‹å§‹, é–‹å§‹+Nåˆ†) ã�®å£�æ™‚è¨ˆã�«è¼‰ã�›ã‚‹ã€‚
 _STAGE2_REGULAR_SHIFT_START: time | None = None
-# timeline_events の event_kind（省略時は加工とみなす）
+# timeline_events ã�® event_kindï¼ˆçœ�ç•¥æ™‚ã�¯åŠ å·¥ã�¨ã�¿ã�ªã�™ï¼‰
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
 TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
-# VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
-MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
-# メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
-# 勤怠AIの入力は備考のみ。ただし reason（表示・中抜け補正・個人シートの休憩/休暇文言）は、備考が空のとき休暇区分を引き継ぐ。
-# master カレンダー／出勤簿.txt 準拠: 前休=午前年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）／後休=定常開始～休憩時間1_開始・午後年休／国=他拠点勤務。
-# 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
-ATT_COL_LEAVE_TYPE = "休暇区分"
-ATT_COL_REMARK = "備考"
-# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列）
-ATT_COL_OT_END = "残業終業"
-# 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
+# VBAã€Œmaster_çµ„ã�¿å�ˆã‚�ã�›è¡¨ã‚’æ›´æ–°ã€�ã�§ä½œã‚‹ã‚·ãƒ¼ãƒˆï¼ˆå·¥ç¨‹+æ©Ÿæ¢°ã‚­ãƒ¼ã�¨ãƒ¡ãƒ³ãƒ�ãƒ¼ç·¨æˆ�ï¼‰
+MASTER_SHEET_TEAM_COMBINATIONS = "çµ„ã�¿å�ˆã‚�ã�›è¡¨"
+# ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥å‹¤æ€ ã‚·ãƒ¼ãƒˆ: master.xlsm ã�§ã�¯ã€Œä¼‘æš‡åŒºåˆ†ã€�ã�¨ã€Œå‚™è€ƒã€�ã�Œåˆ¥åˆ—ã€‚
+# å‹¤æ€ AIã�®å…¥åŠ›ã�¯å‚™è€ƒã�®ã�¿ã€‚ã�Ÿã� ã�— reasonï¼ˆè¡¨ç¤ºãƒ»ä¸­æŠœã�‘è£œæ­£ãƒ»å€‹äººã‚·ãƒ¼ãƒˆã�®ä¼‘æ†©/ä¼‘æš‡æ–‡è¨€ï¼‰ã�¯ã€�å‚™è€ƒã�Œç©ºã�®ã�¨ã��ä¼‘æš‡åŒºåˆ†ã‚’å¼•ã��ç¶™ã��ã€‚
+# master ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ï¼�å‡ºå‹¤ç°¿.txt æº–æ‹ : å‰�ä¼‘=å�ˆå‰�å¹´ä¼‘ãƒ»ä¼‘æ†©æ™‚é–“1_çµ‚äº†ï½žå®šå¸¸çµ‚äº†ï¼ˆå�ˆå¾Œä¼‘æ†©14:45ï½ž15:00ï¼‰ï¼�å¾Œä¼‘=å®šå¸¸é–‹å§‹ï½žä¼‘æ†©æ™‚é–“1_é–‹å§‹ãƒ»å�ˆå¾Œå¹´ä¼‘ï¼�å›½=ä»–æ‹ ç‚¹å‹¤å‹™ã€‚
+# å‚™è€ƒåˆ—ãƒ»ä¼‘æš‡åŒºåˆ†ã�¯å‹¤æ€  AI ã�§æ§‹é€ åŒ–ï¼ˆé…�å�°ä¸�å�‚åŠ ãƒ»is_holidayãƒ»ä¸­æŠœã�‘ç­‰ï¼‰ã€‚å‚™è€ƒã�Œç©ºã�§ã‚‚ä¼‘æš‡åŒºåˆ†ã�®ã�¿ã�®è¡Œã�¯ AI ã�«æ¸¡ã�™ã€‚
+ATT_COL_LEAVE_TYPE = "ä¼‘æš‡åŒºåˆ†"
+ATT_COL_REMARK = "å‚™è€ƒ"
+# ãƒ¡ãƒ³ãƒ�ãƒ¼å‹¤æ€ ã‚·ãƒ¼ãƒˆï¼ˆmaster.xlsmï¼‰: å®šæ™‚ã�®ã€Œé€€å‹¤æ™‚é–“ã€�ã�¨åˆ†ã�‘ã�¦é€€å‹¤ä¸Šé™�ã‚’æŒ‡å®šï¼ˆä»»æ„�åˆ—ï¼‰
+ATT_COL_OT_END = "æ®‹æ¥­çµ‚æ¥­"
+# å‹¤æ€ å‚™è€ƒ AI ã�® JSON ã‚¹ã‚­ãƒ¼ãƒžã‚’å¤‰ã�ˆã�Ÿã‚‰æ›´æ–°ã�—ã€�ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚­ãƒ¼ã‚’ç„¡åŠ¹åŒ–ã�™ã‚‹
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
-# need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数／余力時追加人数」等
-# （Excel 上は概ね 5 行目付近。余剰時に増やせる人数上限・工程×機械列）
-# ＋ 行「特別指定1」～「特別指定99」（必要人数の上書き・1～99）
-NEED_COL_CONDITION = "依頼NO条件"
-NEED_COL_NOTE = "備考"
-# need「配台時追加人数」を満枠使っても、単位あたり加工時間が短くなるのは最大でこの割合（例: 0.05 ≒ 5%）
+# need ã‚·ãƒ¼ãƒˆ: ã€ŒåŸºæœ¬å¿…è¦�äººæ•°ã€�è¡Œï¼ˆAåˆ—ã�«ã€Œå¿…è¦�äººæ•°ã€�ã‚’å�«ã‚€ï¼‰ï¼‹ ã��ã�®ç›´ä¸‹ã�®ã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ï¼�ä½™åŠ›æ™‚è¿½åŠ äººæ•°ã€�ç­‰
+# ï¼ˆExcel ä¸Šã�¯æ¦‚ã�­ 5 è¡Œç›®ä»˜è¿‘ã€‚ä½™å‰°æ™‚ã�«å¢—ã‚„ã�›ã‚‹äººæ•°ä¸Šé™�ãƒ»å·¥ç¨‹Ã—æ©Ÿæ¢°åˆ—ï¼‰
+# ï¼‹ è¡Œã€Œç‰¹åˆ¥æŒ‡å®š1ã€�ï½žã€Œç‰¹åˆ¥æŒ‡å®š99ã€�ï¼ˆå¿…è¦�äººæ•°ã�®ä¸Šæ›¸ã��ãƒ»1ï½ž99ï¼‰
+NEED_COL_CONDITION = "ä¾�é ¼NOæ�¡ä»¶"
+NEED_COL_NOTE = "å‚™è€ƒ"
+# needã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ã€�ã‚’æº€æž ä½¿ã�£ã�¦ã‚‚ã€�å�˜ä½�ã�‚ã�Ÿã‚ŠåŠ å·¥æ™‚é–“ã�ŒçŸ­ã��ã�ªã‚‹ã�®ã�¯æœ€å¤§ã�§ã�“ã�®å‰²å�ˆï¼ˆä¾‹: 0.05 â‰’ 5%ï¼‰
 SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
-# タスクは tasks.xlsx を使わず、VBA から渡す TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
+# ã‚¿ã‚¹ã‚¯ã�¯ tasks.xlsx ã‚’ä½¿ã‚�ã�šã€�VBA ã�‹ã‚‰æ¸¡ã�™ TASK_INPUT_WORKBOOK ã�®ã€ŒåŠ å·¥è¨ˆç”»DATAã€�ã�®ã�¿
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
-TASKS_SHEET_NAME = "加工計画DATA"
+TASKS_SHEET_NAME = "åŠ å·¥è¨ˆç”»DATA"
 
-# このシート名を含むブックは openpyxl が読み書きに失敗することがあるため、load_workbook を試行しない
-OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "配台_配台不要工程"
+# ã�“ã�®ã‚·ãƒ¼ãƒˆå��ã‚’å�«ã‚€ãƒ–ãƒƒã‚¯ã�¯ openpyxl ã�Œèª­ã�¿æ›¸ã��ã�«å¤±æ•—ã�™ã‚‹ã�“ã�¨ã�Œã�‚ã‚‹ã�Ÿã‚�ã€�load_workbook ã‚’è©¦è¡Œã�—ã�ªã�„
+OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "é…�å�°_é…�å�°ä¸�è¦�å·¥ç¨‹"
 
 
 def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
-    """ZIP 内 xl/workbook.xml からシート名一覧を取る（openpyxl を使わない）。"""
+    """ZIP å†… xl/workbook.xml ã�‹ã‚‰ã‚·ãƒ¼ãƒˆå��ä¸€è¦§ã‚’å�–ã‚‹ï¼ˆopenpyxl ã‚’ä½¿ã‚�ã�ªã�„ï¼‰ã€‚"""
     import zipfile
     import xml.etree.ElementTree as ET
 
@@ -187,7 +187,7 @@ def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
 
 
 def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
-    """当該パスが OOXML でシート「配台_配台不要工程」を含むとき True（openpyxl 利用を避ける）。"""
+    """å½“è©²ãƒ‘ã‚¹ã�Œ OOXML ã�§ã‚·ãƒ¼ãƒˆã€Œé…�å�°_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã‚’å�«ã‚€ã�¨ã�� Trueï¼ˆopenpyxl åˆ©ç”¨ã‚’é�¿ã�‘ã‚‹ï¼‰ã€‚"""
     p = (wb_path or "").strip()
     if not p:
         return False
@@ -197,9 +197,9 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
     return OPENPYXL_INCOMPATIBLE_SHEET_MARKER in names
 
 
-# マクロブック「設定」B1: 社内共有上の Gemini 認証 JSON のパス
-APP_CONFIG_SHEET_NAME = "設定"
-# 暗号化認証 JSON（format_version 2）の復号は常にこの定数のみ（社内手順のパスフレーズと一致させる。ログ・UI に出さない）。
+# ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®šã€�B1: ç¤¾å†…å…±æœ‰ä¸Šã�® Gemini èª�è¨¼ JSON ã�®ãƒ‘ã‚¹
+APP_CONFIG_SHEET_NAME = "è¨­å®š"
+# æš—å�·åŒ–èª�è¨¼ JSONï¼ˆformat_version 2ï¼‰ã�®å¾©å�·ã�¯å¸¸ã�«ã�“ã�®å®šæ•°ã�®ã�¿ï¼ˆç¤¾å†…æ‰‹é †ã�®ãƒ‘ã‚¹ãƒ•ãƒ¬ãƒ¼ã‚ºã�¨ä¸€è‡´ã�•ã�›ã‚‹ã€‚ãƒ­ã‚°ãƒ»UI ã�«å‡ºã�•ã�ªã�„ï¼‰ã€‚
 _GEMINI_CREDENTIALS_PASSPHRASE_FIXED = "nagaoka1234"
 _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT = 480_000
 
@@ -221,12 +221,12 @@ def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
 
 
 def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None:
-    """「設定」シート B1 から認証 JSON ファイルパスを読む。無ければ None。"""
+    """ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ B1 ã�‹ã‚‰èª�è¨¼ JSON ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ã‚’èª­ã‚€ã€‚ç„¡ã�‘ã‚Œã�° Noneã€‚"""
     if not wb_path or not os.path.isfile(wb_path):
         return None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.debug(
-            "Gemini: ブックに「%s」があるため openpyxl で「%s」!B1 を読みません。",
+            "Gemini: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã€Œ%sã€�!B1 ã‚’èª­ã�¿ã�¾ã�›ã‚“ã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             APP_CONFIG_SHEET_NAME,
         )
@@ -245,7 +245,7 @@ def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None
             wb.close()
     except Exception as ex:
         logging.debug(
-            "Gemini: マクロブック「%s」の「%s」!B1 を読めません: %s",
+            "Gemini: ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œ%sã€�ã�®ã€Œ%sã€�!B1 ã‚’èª­ã‚�ã�¾ã�›ã‚“: %s",
             wb_path,
             APP_CONFIG_SHEET_NAME,
             ex,
@@ -265,16 +265,16 @@ def _read_task_ids_from_config_sheet_column(
     openpyxl_skip_hint: str | None = None,
 ) -> list[str]:
     """
-    マクロブック「設定」シートの指定列（1=A, 2=B）3 行目以降から依頼NOを読む。
-    空セルはスキップ。連続 30 セル空で打ち切り。最大 500 行。カンマ区切りで複数可。
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆã�®æŒ‡å®šåˆ—ï¼ˆ1=A, 2=Bï¼‰3 è¡Œç›®ä»¥é™�ã�‹ã‚‰ä¾�é ¼NOã‚’èª­ã‚€ã€‚
+    ç©ºã‚»ãƒ«ã�¯ã‚¹ã‚­ãƒƒãƒ—ã€‚é€£ç¶š 30 ã‚»ãƒ«ç©ºã�§æ‰“ã�¡åˆ‡ã‚Šã€‚æœ€å¤§ 500 è¡Œã€‚ã‚«ãƒ³ãƒžåŒºåˆ‡ã‚Šã�§è¤‡æ•°å�¯ã€‚
     """
     out: list[str] = []
     if not wb_path or not os.path.isfile(wb_path):
         return out
     if _workbook_should_skip_openpyxl_io(wb_path):
         msg = (
-            f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため"
-            f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}3 以降は openpyxl で読めません。"
+            f"{log_label}: ãƒ–ãƒƒã‚¯ã�«ã€Œ{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}ã€�ã�Œã�‚ã‚‹ã�Ÿã‚�"
+            f"ã€Œ{APP_CONFIG_SHEET_NAME}ã€�!{column_letter_desc}3 ä»¥é™�ã�¯ openpyxl ã�§èª­ã‚�ã�¾ã�›ã‚“ã€‚"
         )
         if openpyxl_skip_hint:
             msg += " " + openpyxl_skip_hint.strip()
@@ -309,7 +309,7 @@ def _read_task_ids_from_config_sheet_column(
             wb.close()
     except Exception as ex:
         logging.warning(
-            "%s: 「%s」!%s3 以降の依頼NOを読めません（無視）: %s",
+            "%s: ã€Œ%sã€�!%s3 ä»¥é™�ã�®ä¾�é ¼NOã‚’èª­ã‚�ã�¾ã�›ã‚“ï¼ˆç„¡è¦–ï¼‰: %s",
             log_label,
             APP_CONFIG_SHEET_NAME,
             column_letter_desc,
@@ -321,47 +321,47 @@ def _read_task_ids_from_config_sheet_column(
 
 def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    マクロブック「設定」シート A 列の 3 行目以降を、配台トレース対象の依頼NOとして読む。
-    空セルはスキップ。連続 30 セル空なら打ち切り。最大 500 行まで走査。
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ A åˆ—ã�® 3 è¡Œç›®ä»¥é™�ã‚’ã€�é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹å¯¾è±¡ã�®ä¾�é ¼NOã�¨ã�—ã�¦èª­ã‚€ã€‚
+    ç©ºã‚»ãƒ«ã�¯ã‚¹ã‚­ãƒƒãƒ—ã€‚é€£ç¶š 30 ã‚»ãƒ«ç©ºã�ªã‚‰æ‰“ã�¡åˆ‡ã‚Šã€‚æœ€å¤§ 500 è¡Œã�¾ã�§èµ°æŸ»ã€‚
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
         1,
-        "配台トレース",
+        "é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹",
         "A",
-        openpyxl_skip_hint="配台トレースは「設定」シート A 列を openpyxl で読めないため無効です。",
+        openpyxl_skip_hint="é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ã�¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ A åˆ—ã‚’ openpyxl ã�§èª­ã‚�ã�ªã�„ã�Ÿã‚�ç„¡åŠ¹ã�§ã�™ã€‚",
     )
 
 
 def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    マクロブック「設定」シート B 列の 3 行目以降を、段階2デバッグ配台の対象依頼NOとして読む。
-    1 件も無い場合は段階2は通常モード（全件配台）。空セル・打ち切り等は A 列トレースと同じ。
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ B åˆ—ã�® 3 è¡Œç›®ä»¥é™�ã‚’ã€�æ®µéšŽ2ãƒ‡ãƒ�ãƒƒã‚°é…�å�°ã�®å¯¾è±¡ä¾�é ¼NOã�¨ã�—ã�¦èª­ã‚€ã€‚
+    1 ä»¶ã‚‚ç„¡ã�„å ´å�ˆã�¯æ®µéšŽ2ã�¯é€šå¸¸ãƒ¢ãƒ¼ãƒ‰ï¼ˆå…¨ä»¶é…�å�°ï¼‰ã€‚ç©ºã‚»ãƒ«ãƒ»æ‰“ã�¡åˆ‡ã‚Šç­‰ã�¯ A åˆ—ãƒˆãƒ¬ãƒ¼ã‚¹ã�¨å�Œã�˜ã€‚
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
         2,
-        "デバッグ配台",
+        "ãƒ‡ãƒ�ãƒƒã‚°é…�å�°",
         "B",
-        openpyxl_skip_hint="デバッグ配台は「設定」シート B 列を openpyxl で読めないため無効（全件配台）です。",
+        openpyxl_skip_hint="ãƒ‡ãƒ�ãƒƒã‚°é…�å�°ã�¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ B åˆ—ã‚’ openpyxl ã�§èª­ã‚�ã�ªã�„ã�Ÿã‚�ç„¡åŠ¹ï¼ˆå…¨ä»¶é…�å�°ï¼‰ã�§ã�™ã€‚",
     )
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
-    """設定シート B3以降が空でないときだけ呼ぶ。Windows では MessageBox、それ以外は WARNING ログ。"""
+    """è¨­å®šã‚·ãƒ¼ãƒˆ B3ä»¥é™�ã�Œç©ºã�§ã�ªã�„ã�¨ã��ã� ã�‘å‘¼ã�¶ã€‚Windows ã�§ã�¯ MessageBoxã€�ã��ã‚Œä»¥å¤–ã�¯ WARNING ãƒ­ã‚°ã€‚"""
     if not task_ids_sorted:
         return
     preview_lines = task_ids_sorted[:30]
     preview = "\n".join(preview_lines)
     if len(task_ids_sorted) > 30:
-        preview += "\n…"
+        preview += "\nâ€¦"
     body = (
-        "デバッグモードで実行します。\n\n"
-        "「設定」シート B3以降に入力した依頼NOのみを配台対象とします。\n\n"
-        "対象依頼NO:\n"
+        "ãƒ‡ãƒ�ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã�§å®Ÿè¡Œã�—ã�¾ã�™ã€‚\n\n"
+        "ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ B3ä»¥é™�ã�«å…¥åŠ›ã�—ã�Ÿä¾�é ¼NOã�®ã�¿ã‚’é…�å�°å¯¾è±¡ã�¨ã�—ã�¾ã�™ã€‚\n\n"
+        "å¯¾è±¡ä¾�é ¼NO:\n"
         + preview
     )
-    title = "段階2（配台）— デバッグモード"
+    title = "æ®µéšŽ2ï¼ˆé…�å�°ï¼‰â€” ãƒ‡ãƒ�ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰"
     if sys.platform != "win32":
         logging.warning("%s\n%s", title, body)
         return
@@ -369,7 +369,7 @@ def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
         ctypes.windll.user32.MessageBoxW(0, body, title, 0x00000040)
     except Exception as ex:
         logging.warning(
-            "デバッグ配台: メッセージボックスを表示できません (%s)。%s", ex, body
+            "ãƒ‡ãƒ�ãƒƒã‚°é…�å�°: ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ãƒœãƒƒã‚¯ã‚¹ã‚’è¡¨ç¤ºã�§ã��ã�¾ã�›ã‚“ (%s)ã€‚%s", ex, body
         )
 
 
@@ -379,7 +379,7 @@ def _extract_gemini_api_key_from_plain_dict(data: dict, json_path: str) -> str |
         key = data.get("GEMINI_API_KEY")
     if key is None:
         logging.warning(
-            "Gemini: 認証データに gemini_api_key（または GEMINI_API_KEY）がありません（%s）。",
+            "Gemini: èª�è¨¼ãƒ‡ãƒ¼ã‚¿ã�« gemini_api_keyï¼ˆã�¾ã�Ÿã�¯ GEMINI_API_KEYï¼‰ã�Œã�‚ã‚Šã�¾ã�›ã‚“ï¼ˆ%sï¼‰ã€‚",
             json_path,
         )
         return None
@@ -419,50 +419,50 @@ def _decrypt_gemini_credentials_v2(
         from cryptography.fernet import Fernet
     except ImportError:
         logging.warning(
-            "Gemini: 暗号化認証 JSON には cryptography が必要です（pip install cryptography）。"
+            "Gemini: æš—å�·åŒ–èª�è¨¼ JSON ã�«ã�¯ cryptography ã�Œå¿…è¦�ã�§ã�™ï¼ˆpip install cryptographyï¼‰ã€‚"
         )
         return None
     token_s = (data.get("fernet_ciphertext") or "").strip()
     if not token_s:
         logging.warning(
-            "Gemini: 暗号化認証 JSON に fernet_ciphertext がありません（%s）。",
+            "Gemini: æš—å�·åŒ–èª�è¨¼ JSON ã�« fernet_ciphertext ã�Œã�‚ã‚Šã�¾ã�›ã‚“ï¼ˆ%sï¼‰ã€‚",
             json_path,
         )
         return None
     salt_b64 = (data.get("salt_b64") or "").strip()
     if not salt_b64:
         logging.warning(
-            "Gemini: 暗号化認証 JSON に salt_b64 がありません（%s）。",
+            "Gemini: æš—å�·åŒ–èª�è¨¼ JSON ã�« salt_b64 ã�Œã�‚ã‚Šã�¾ã�›ã‚“ï¼ˆ%sï¼‰ã€‚",
             json_path,
         )
         return None
     try:
         salt = base64.standard_b64decode(salt_b64)
     except Exception as ex:
-        logging.warning("Gemini: salt_b64 の解釈に失敗しました（%s）: %s", json_path, ex)
+        logging.warning("Gemini: salt_b64 ã�®è§£é‡ˆã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿï¼ˆ%sï¼‰: %s", json_path, ex)
         return None
     iterations = int(data.get("iterations") or _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT)
     kdf_name = (data.get("kdf") or "pbkdf2_sha256").strip()
     if kdf_name != "pbkdf2_sha256":
-        logging.warning("Gemini: 未対応の kdf（%s）: %s", kdf_name, json_path)
+        logging.warning("Gemini: æœªå¯¾å¿œã�® kdfï¼ˆ%sï¼‰: %s", kdf_name, json_path)
         return None
     try:
         fkey = _derive_fernet_key_from_passphrase(passphrase, salt, iterations)
         plain = Fernet(fkey).decrypt(token_s.encode("ascii"))
     except Exception:
-        logging.debug("Gemini: 暗号化認証の復号処理に失敗しました（%s）。", json_path)
+        logging.debug("Gemini: æš—å�·åŒ–èª�è¨¼ã�®å¾©å�·å‡¦ç�†ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿï¼ˆ%sï¼‰ã€‚", json_path)
         return None
     try:
         inner = json.loads(plain.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as ex:
         logging.warning(
-            "Gemini: 復号後の JSON が不正です（%s）: %s",
+            "Gemini: å¾©å�·å¾Œã�® JSON ã�Œä¸�æ­£ã�§ã�™ï¼ˆ%sï¼‰: %s",
             json_path,
             ex,
         )
         return None
     if not isinstance(inner, dict):
-        logging.warning("Gemini: 復号後の JSON はオブジェクトである必要があります（%s）。", json_path)
+        logging.warning("Gemini: å¾©å�·å¾Œã�® JSON ã�¯ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�§ã�‚ã‚‹å¿…è¦�ã�Œã�‚ã‚Šã�¾ã�™ï¼ˆ%sï¼‰ã€‚", json_path)
         return None
     return inner
 
@@ -470,18 +470,18 @@ def _decrypt_gemini_credentials_v2(
 def _load_gemini_api_key_from_credentials_json(
     json_path: str, workbook_path: str | None = None
 ) -> tuple[str | None, bool]:
-    """戻り値: (api_key または None, 暗号化形式だったか)。暗号化時は _GEMINI_CREDENTIALS_PASSPHRASE_FIXED のみで復号。"""
+    """æˆ»ã‚Šå€¤: (api_key ã�¾ã�Ÿã�¯ None, æš—å�·åŒ–å½¢å¼�ã� ã�£ã�Ÿã�‹)ã€‚æš—å�·åŒ–æ™‚ã�¯ _GEMINI_CREDENTIALS_PASSPHRASE_FIXED ã�®ã�¿ã�§å¾©å�·ã€‚"""
     try:
         with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
     except OSError as ex:
-        logging.warning("Gemini: 認証 JSON を開けません: %s (%s)", json_path, ex)
+        logging.warning("Gemini: èª�è¨¼ JSON ã‚’é–‹ã�‘ã�¾ã�›ã‚“: %s (%s)", json_path, ex)
         return None, False
     except json.JSONDecodeError as ex:
-        logging.warning("Gemini: 認証 JSON の形式が不正です: %s (%s)", json_path, ex)
+        logging.warning("Gemini: èª�è¨¼ JSON ã�®å½¢å¼�ã�Œä¸�æ­£ã�§ã�™: %s (%s)", json_path, ex)
         return None, False
     if not isinstance(data, dict):
-        logging.warning("Gemini: 認証 JSON はオブジェクト形式である必要があります: %s", json_path)
+        logging.warning("Gemini: èª�è¨¼ JSON ã�¯ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆå½¢å¼�ã�§ã�‚ã‚‹å¿…è¦�ã�Œã�‚ã‚Šã�¾ã�™: %s", json_path)
         return None, False
     if _credentials_json_is_encrypted_v2(data):
         inner = _decrypt_gemini_credentials_v2(
@@ -502,19 +502,19 @@ if _cred_path and os.path.isfile(_cred_path):
     )
     if API_KEY:
         if _used_encrypted_credentials:
-            logging.info("Gemini API キー: 暗号化認証 JSON から読み込みました。")
+            logging.info("Gemini API ã‚­ãƒ¼: æš—å�·åŒ–èª�è¨¼ JSON ã�‹ã‚‰èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚")
         else:
             logging.info(
-                "Gemini API キー: マクロブック「%s」B1 のパスから読み込みました。",
+                "Gemini API ã‚­ãƒ¼: ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œ%sã€�B1 ã�®ãƒ‘ã‚¹ã�‹ã‚‰èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
                 APP_CONFIG_SHEET_NAME,
             )
 elif _cred_path:
     logging.warning(
-        "Gemini: 「%s」B1 で指定された認証 JSON が見つかりません。",
+        "Gemini: ã€Œ%sã€�B1 ã�§æŒ‡å®šã�•ã‚Œã�Ÿèª�è¨¼ JSON ã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“ã€‚",
         APP_CONFIG_SHEET_NAME,
     )
 
-# B1 が暗号化 JSON なのにキーが取れない（平文 JSON でキー欠落との区別）。原因の特定はログに書かず汎用メッセージのみ。
+# B1 ã�Œæš—å�·åŒ– JSON ã�ªã�®ã�«ã‚­ãƒ¼ã�Œå�–ã‚Œã�ªã�„ï¼ˆå¹³æ–‡ JSON ã�§ã‚­ãƒ¼æ¬ è�½ã�¨ã�®åŒºåˆ¥ï¼‰ã€‚åŽŸå› ã�®ç‰¹å®šã�¯ãƒ­ã‚°ã�«æ›¸ã�‹ã�šæ±Žç”¨ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã�®ã�¿ã€‚
 _encrypted_json_missing_key = (
     bool(_cred_path)
     and os.path.isfile(_cred_path)
@@ -523,58 +523,58 @@ _encrypted_json_missing_key = (
 )
 if _encrypted_json_missing_key:
     logging.error(
-        "Gemini: 「%s」B1 の認証ファイルから API キーを利用できません。"
-        " 社内手順に従い認証を再設定するか、管理者に問い合わせてください。",
+        "Gemini: ã€Œ%sã€�B1 ã�®èª�è¨¼ãƒ•ã‚¡ã‚¤ãƒ«ã�‹ã‚‰ API ã‚­ãƒ¼ã‚’åˆ©ç”¨ã�§ã��ã�¾ã�›ã‚“ã€‚"
+        " ç¤¾å†…æ‰‹é †ã�«å¾“ã�„èª�è¨¼ã‚’å†�è¨­å®šã�™ã‚‹ã�‹ã€�ç®¡ç�†è€…ã�«å•�ã�„å�ˆã‚�ã�›ã�¦ã��ã� ã�•ã�„ã€‚",
         APP_CONFIG_SHEET_NAME,
     )
 
 if not API_KEY:
     logging.warning(
-        "Gemini API キーが未設定です。マクロブックに「%s」シートを用意し B1 に認証 JSON のフルパスを書いてください。"
-        " 備考の AI 解析等はスキップされます。"
-        " ひな型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。",
+        "Gemini API ã‚­ãƒ¼ã�Œæœªè¨­å®šã�§ã�™ã€‚ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã‚·ãƒ¼ãƒˆã‚’ç”¨æ„�ã�— B1 ã�«èª�è¨¼ JSON ã�®ãƒ•ãƒ«ãƒ‘ã‚¹ã‚’æ›¸ã�„ã�¦ã��ã� ã�•ã�„ã€‚"
+        " å‚™è€ƒã�® AI è§£æž�ç­‰ã�¯ã‚¹ã‚­ãƒƒãƒ—ã�•ã‚Œã�¾ã�™ã€‚"
+        " ã�²ã�ªåž‹: gemini_credentials.example.json / encrypt_gemini_credentials.pyï¼ˆæš—å�·åŒ–ï¼‰ã€‚",
         APP_CONFIG_SHEET_NAME,
     )
 
-RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
+RESULT_SHEET_GANTT_NAME = "çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆ"
 
-# タスク列名（マクロ実行ブック「加工計画DATA」）
-TASK_COL_TASK_ID = "依頼NO"
-TASK_COL_MACHINE = "工程名"
-TASK_COL_MACHINE_NAME = "機械名"
-TASK_COL_QTY = "換算数量"
-TASK_COL_ORDER_QTY = "受注数"
-TASK_COL_SPEED = "加工速度"
-TASK_COL_PRODUCT = "製品名"
-TASK_COL_ANSWER_DUE = "回答納期"
-TASK_COL_SPECIFIED_DUE = "指定納期"
-TASK_COL_RAW_INPUT_DATE = "原反投入日"
-# 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
-TASK_COL_STOCK_LOCATION = "在庫場所"
-# 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA／配台計画_タスク入力。
-TASK_COL_PROCESS_CONTENT = "加工内容"
-# 投入可能日の目安は「回答納期」、未入力時は「指定納期」（前日基準・当日/遅れは最優先）。「加工開始日」列は参照しない。
-# 完了判定・進捗（加工計画DATA）
-TASK_COL_COMPLETION_FLAG = "加工完了区分"
-TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互換（直接の加工済数量）
-TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完成品数量（換算に使う）
-TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
-AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
-# json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不能ロジック D→E）
+# ã‚¿ã‚¹ã‚¯åˆ—å��ï¼ˆãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã€ŒåŠ å·¥è¨ˆç”»DATAã€�ï¼‰
+TASK_COL_TASK_ID = "ä¾�é ¼NO"
+TASK_COL_MACHINE = "å·¥ç¨‹å��"
+TASK_COL_MACHINE_NAME = "æ©Ÿæ¢°å��"
+TASK_COL_QTY = "æ�›ç®—æ•°é‡�"
+TASK_COL_ORDER_QTY = "å�—æ³¨æ•°"
+TASK_COL_SPEED = "åŠ å·¥é€Ÿåº¦"
+TASK_COL_PRODUCT = "è£½å“�å��"
+TASK_COL_ANSWER_DUE = "å›žç­”ç´�æœŸ"
+TASK_COL_SPECIFIED_DUE = "æŒ‡å®šç´�æœŸ"
+TASK_COL_RAW_INPUT_DATE = "åŽŸå��æŠ•å…¥æ—¥"
+# åŠ å·¥è¨ˆç”»DATA ç”±æ�¥ã€‚é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�§ã�¯åŽŸå��æŠ•å…¥æ—¥ã�®å�³éš£ï¼ˆSOURCE_BASE_COLUMNS é †ï¼‰ã€‚
+TASK_COL_STOCK_LOCATION = "åœ¨åº«å ´æ‰€"
+# å�Œä¸€ä¾�é ¼NOã�®å·¥ç¨‹é †ï¼ˆã‚«ãƒ³ãƒžåŒºåˆ‡ã‚Šã�®å·¥ç¨‹å��ï¼‰ã€‚åŠ å·¥è¨ˆç”»DATAï¼�é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€‚
+TASK_COL_PROCESS_CONTENT = "åŠ å·¥å†…å®¹"
+# æŠ•å…¥å�¯èƒ½æ—¥ã�®ç›®å®‰ã�¯ã€Œå›žç­”ç´�æœŸã€�ã€�æœªå…¥åŠ›æ™‚ã�¯ã€ŒæŒ‡å®šç´�æœŸã€�ï¼ˆå‰�æ—¥åŸºæº–ãƒ»å½“æ—¥/é�…ã‚Œã�¯æœ€å„ªå…ˆï¼‰ã€‚ã€ŒåŠ å·¥é–‹å§‹æ—¥ã€�åˆ—ã�¯å�‚ç…§ã�—ã�ªã�„ã€‚
+# å®Œäº†åˆ¤å®šãƒ»é€²æ�—ï¼ˆåŠ å·¥è¨ˆç”»DATAï¼‰
+TASK_COL_COMPLETION_FLAG = "åŠ å·¥å®Œäº†åŒºåˆ†"
+TASK_COL_ACTUAL_DONE = "å®ŸåŠ å·¥æ•°"   # æ—§äº’æ�›ï¼ˆç›´æŽ¥ã�®åŠ å·¥æ¸ˆæ•°é‡�ï¼‰
+TASK_COL_ACTUAL_OUTPUT = "å®Ÿå‡ºæ�¥é«˜"  # å®Œæˆ�å“�æ•°é‡�ï¼ˆæ�›ç®—ã�«ä½¿ã�†ï¼‰
+TASK_COL_DATA_EXTRACTION_DT = "ãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥"
+AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6æ™‚é–“
+# json/ai_remarks_cache.json å†…ã�®ã‚­ãƒ¼æŽ¥é ­è¾žï¼ˆè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ãƒ»é…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯ Dâ†’Eï¼‰
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
 
-# マクロブック「加工実績DATA」（Power Query 等で取り込み想定）
-ACTUALS_SHEET_NAME = "加工実績DATA"
-ACT_COL_TASK_ID = "依頼NO"
-ACT_COL_PROCESS = "工程名"
-ACT_COL_OPERATOR = "担当者"
-ACT_COL_START_DT = "開始日時"
-ACT_COL_END_DT = "終了日時"
-ACT_COL_START_ALT = "実績開始"
-ACT_COL_END_ALT = "実績終了"
-ACT_COL_DAY = "日付"
-ACT_COL_TIME_START = "開始時刻"
-ACT_COL_TIME_END = "終了時刻"
+# ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€ŒåŠ å·¥å®Ÿç¸¾DATAã€�ï¼ˆPower Query ç­‰ã�§å�–ã‚Šè¾¼ã�¿æƒ³å®šï¼‰
+ACTUALS_SHEET_NAME = "åŠ å·¥å®Ÿç¸¾DATA"
+ACT_COL_TASK_ID = "ä¾�é ¼NO"
+ACT_COL_PROCESS = "å·¥ç¨‹å��"
+ACT_COL_OPERATOR = "æ‹…å½“è€…"
+ACT_COL_START_DT = "é–‹å§‹æ—¥æ™‚"
+ACT_COL_END_DT = "çµ‚äº†æ—¥æ™‚"
+ACT_COL_START_ALT = "å®Ÿç¸¾é–‹å§‹"
+ACT_COL_END_ALT = "å®Ÿç¸¾çµ‚äº†"
+ACT_COL_DAY = "æ—¥ä»˜"
+ACT_COL_TIME_START = "é–‹å§‹æ™‚åˆ»"
+ACT_COL_TIME_END = "çµ‚äº†æ™‚åˆ»"
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -588,83 +588,31 @@ ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TIME_END,
 )
 
-# --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
+# --- 2æ®µéšŽå‡¦ç�†: æ®µéšŽ1æŠ½å‡º â†’ ãƒ–ãƒƒã‚¯ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ç·¨é›† â†’ æ®µéšŽ2è¨ˆç”» ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
-PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
-PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
-# 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
-PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
-PLAN_COL_PREFERRED_OP = "担当OP_指定"
-PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
-# 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
-# セル値の例（配台から外す）: Excel の TRUE / 数値 1 / 文字列「はい」「yes」「true」「○」「〇」「●」等。
-# 空・FALSE・0・「いいえ」等は配台対象。詳細は _plan_row_exclude_from_assignment。
-PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
-PLAN_COL_AI_PARSE = "AI特別指定_解析"
-PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
-# 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
-PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›"
+PLAN_COL_SPEED_OVERRIDE = "åŠ å·¥é€Ÿåº¦_ä¸Šæ›¸ã��"
+# ç©ºç™½ã�®ã�¨ã��ã�¯åˆ—ã€ŒåŽŸå��æŠ•å…¥æ—¥ã€�ï¼ˆåŠ å·¥è¨ˆç”»DATA ç”±æ�¥ï¼‰ã‚’ã��ã�®ã�¾ã�¾ä½¿ã�†ã€‚æ—¥ä»˜ã�‚ã‚Šã�®ã�¨ã��ã�¯é…�å�°ã�®åŽŸå��åˆ¶ç´„ãƒ»çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§è¡¨ç¤ºã�®ä¸¡æ–¹ã�§ã�“ã�®æ—¥ä»˜ã‚’æŽ¡ç”¨ã€‚
+PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "åŽŸå��æŠ•å…¥æ—¥_ä¸Šæ›¸ã��"
+PLAN_COL_PREFERRED_OP = "æ‹…å½“OP_æŒ‡å®š"
+PLAN_COL_SPECIAL_REMARK = "ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒ"
+# å�‚ç…§åˆ—ã€Œï¼ˆå…ƒï¼‰é…�å�°ä¸�è¦�ã€�ã�¯ç½®ã�‹ã�ªã�„ï¼ˆå…ƒãƒ‡ãƒ¼ã‚¿ã�«ç›¸å½“ã�™ã‚‹ãƒžã‚¹ã‚¿åˆ—ã�Œç„¡ã�„ã�Ÿã‚�ï¼‰ã€‚
+# ã‚»ãƒ«å€¤ã�®ä¾‹ï¼ˆé…�å�°ã�‹ã‚‰å¤–ã�™ï¼‰: Excel ã�® TRUE / æ•°å€¤ 1 / æ–‡å­—åˆ—ã€Œã�¯ã�„ã€�ã€Œyesã€�ã€Œtrueã€�ã€Œâ—‹ã€�ã€Œã€‡ã€�ã€Œâ—�ã€�ç­‰ã€‚
+# ç©ºãƒ»FALSEãƒ»0ãƒ»ã€Œã�„ã�„ã�ˆã€�ç­‰ã�¯é…�å�°å¯¾è±¡ã€‚è©³ç´°ã�¯ _plan_row_exclude_from_assignmentã€‚
+PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "é…�å�°ä¸�è¦�"
+PLAN_COL_AI_PARSE = "AIç‰¹åˆ¥æŒ‡å®š_è§£æž�"
+PLAN_COL_PROCESS_FACTOR = "åŠ å·¥å·¥ç¨‹ã�®æ±ºå®šãƒ—ãƒ­ã‚»ã‚¹ã�®å› å­�"
+# 1ãƒ­ãƒ¼ãƒ«ã�‚ã�Ÿã‚Šã�®é•·ã�•ï¼ˆmï¼‰ã€‚é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�«ã�®ã�¿å­˜åœ¨ï¼ˆåŠ å·¥è¨ˆç”»DATA ã�«ã�¯ç„¡ã�„ï¼‰ã€‚è£½å“�å��åˆ—ã�®å�³éš£ã�«é…�ç½®ã€‚
+PLAN_COL_ROLL_UNIT_LENGTH = "ãƒ­ãƒ¼ãƒ«å�˜ä½�é•·ã�•"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
-# 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
+# ä¾‹: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 â€¦ é…�å�°ãƒ«ãƒ¼ãƒ—ã�§ã€Œäººæ•°åˆ¥ã�®æœ€è‰¯å€™è£œã€�ã�¨æŽ¡ç”¨ç�†ç”±ã‚’ INFO ãƒ­ã‚°ã�«å‡ºã�™
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
-# 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
+# é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹å¯¾è±¡ã�¯ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®šã€�ã‚·ãƒ¼ãƒˆ A åˆ— 3 è¡Œç›®ä»¥é™�ã�®ã�¿ï¼ˆgenerate_plan å†’é ­ã�§ç¢ºå®šï¼‰ã€‚ç’°å¢ƒå¤‰æ•°ã�¯ä½¿ã‚�ã�ªã�„ã€‚
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
-# 段階2デバッグ配台: 「設定」B 列 3 行目以降に依頼NOがあるときのみ、その依頼の行だけ配台（generate_plan 冒頭で確定）。空なら全件。
+# æ®µéšŽ2ãƒ‡ãƒ�ãƒƒã‚°é…�å�°: ã€Œè¨­å®šã€�B åˆ— 3 è¡Œç›®ä»¥é™�ã�«ä¾�é ¼NOã�Œã�‚ã‚‹ã�¨ã��ã�®ã�¿ã€�ã��ã�®ä¾�é ¼ã�®è¡Œã� ã�‘é…�å�°ï¼ˆgenerate_plan å†’é ­ã�§ç¢ºå®šï¼‰ã€‚ç©ºã�ªã‚‰å…¨ä»¶ã€‚
 DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
-# 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
+# ç´�æœŸè¶…é�Žãƒªãƒˆãƒ©ã‚¤ã�®å¤–å�´ãƒ©ã‚¦ãƒ³ãƒ‰ï¼ˆ0=åˆ�å›žã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼é€šã�—ã€�ä»¥é™�ã�¯ while å…ˆé ­ã�§æ›´æ–°ï¼‰ã€‚é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹å‡ºåŠ›ã�®ãƒ•ã‚¡ã‚¤ãƒ«å��ãƒ»æŽ¥é ­è¾žã�«ä½¿ç”¨ã€‚
 DISPATCH_TRACE_OUTER_ROUND: int = 0
-
-# #region agent log
-_AGENT_DEBUG_SESSION = "199241"
-_AGENT_DEBUG_LOG_BASENAME = "debug-199241.log"
-
-
-def _agent_debug_log_path() -> str:
-    return os.path.normpath(
-        os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            _AGENT_DEBUG_LOG_BASENAME,
-        )
-    )
-
-
-def _agent_debug_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        rec = {
-            "sessionId": _AGENT_DEBUG_SESSION,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_agent_debug_log_path(), "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-def _agent_debug_task_id_is_w413(tid_raw) -> bool:
-    if tid_raw is None or (isinstance(tid_raw, float) and pd.isna(tid_raw)):
-        return False
-    if isinstance(tid_raw, float) and tid_raw == int(tid_raw):
-        s = str(int(tid_raw))
-    else:
-        s = unicodedata.normalize("NFKC", str(tid_raw).strip())
-    s = (s or "").strip()
-    if not s or s.lower() == "nan":
-        return False
-    return s.upper() == "W4-13"
-
-
-# #endregion
 
 
 def _trace_schedule_task_enabled(task_id) -> bool:
@@ -674,7 +622,7 @@ def _trace_schedule_task_enabled(task_id) -> bool:
 
 
 def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
-    """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
+    """ä¾�é ¼NOã‚’ log ãƒ•ã‚¡ã‚¤ãƒ«å��ã�«ä½¿ã�†ã�Ÿã‚�ã�®ç°¡æ˜“ã‚µãƒ‹ã‚¿ã‚¤ã‚ºï¼ˆWindows ç¦�æ­¢æ–‡å­—ã‚’é�¿ã�‘ã‚‹ï¼‰ã€‚"""
     s = "".join(
         c if (c.isalnum() or c in "-_.") else "_"
         for c in str(task_id or "").strip()
@@ -684,10 +632,10 @@ def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
 
 def _reset_dispatch_trace_per_task_logfiles() -> None:
     """
-    段階2実行の冒頭で1回、log 内の dispatch_trace_*.txt をすべて削除する（過去実行の残骸を残さない）。
-    各外側ラウンド用ファイルは generate_plan の while 先頭で _dispatch_trace_begin_outer_round がヘッダ付き新規作成する。
-    execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行を _log_dispatch_trace_schedule で追記
-    （日次残・ロール確定の余剰有無・余力追記・終了時サマリ等）。
+    æ®µéšŽ2å®Ÿè¡Œã�®å†’é ­ã�§1å›žã€�log å†…ã�® dispatch_trace_*.txt ã‚’ã�™ã�¹ã�¦å‰Šé™¤ã�™ã‚‹ï¼ˆé�ŽåŽ»å®Ÿè¡Œã�®æ®‹éª¸ã‚’æ®‹ã�•ã�ªã�„ï¼‰ã€‚
+    å�„å¤–å�´ãƒ©ã‚¦ãƒ³ãƒ‰ç”¨ãƒ•ã‚¡ã‚¤ãƒ«ã�¯ generate_plan ã�® while å…ˆé ­ã�§ _dispatch_trace_begin_outer_round ã�Œãƒ˜ãƒƒãƒ€ä»˜ã��æ–°è¦�ä½œæˆ�ã�™ã‚‹ã€‚
+    execution_log.txt ã�¨ã�¯åˆ¥ãƒ•ã‚¡ã‚¤ãƒ«ã€‚å†…å®¹ã�¯ [é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=â€¦] è¡Œã‚’ _log_dispatch_trace_schedule ã�§è¿½è¨˜
+    ï¼ˆæ—¥æ¬¡æ®‹ãƒ»ãƒ­ãƒ¼ãƒ«ç¢ºå®šã�®ä½™å‰°æœ‰ç„¡ãƒ»ä½™åŠ›è¿½è¨˜ãƒ»çµ‚äº†æ™‚ã‚µãƒžãƒªç­‰ï¼‰ã€‚
     """
     if not TRACE_SCHEDULE_TASK_IDS:
         return
@@ -711,7 +659,7 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
 
 
 def _dispatch_trace_begin_outer_round(round_n: int) -> None:
-    """納期超過リトライの外側ラウンド番号を確定し、当ラウンド用 dispatch_trace_*_rNN.txt のヘッダを1回だけ書く。"""
+    """ç´�æœŸè¶…é�Žãƒªãƒˆãƒ©ã‚¤ã�®å¤–å�´ãƒ©ã‚¦ãƒ³ãƒ‰ç•ªå�·ã‚’ç¢ºå®šã�—ã€�å½“ãƒ©ã‚¦ãƒ³ãƒ‰ç”¨ dispatch_trace_*_rNN.txt ã�®ãƒ˜ãƒƒãƒ€ã‚’1å›žã� ã�‘æ›¸ã��ã€‚"""
     global DISPATCH_TRACE_OUTER_ROUND
     DISPATCH_TRACE_OUTER_ROUND = max(0, int(round_n))
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -734,16 +682,16 @@ def _dispatch_trace_begin_outer_round(round_n: int) -> None:
         try:
             with open(path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(
-                    "# 配台トレース（依頼NOごと・外側ラウンド別）。同一行は log/execution_log.txt にも出力されます。\n"
+                    "# é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ï¼ˆä¾�é ¼NOã�”ã�¨ãƒ»å¤–å�´ãƒ©ã‚¦ãƒ³ãƒ‰åˆ¥ï¼‰ã€‚å�Œä¸€è¡Œã�¯ log/execution_log.txt ã�«ã‚‚å‡ºåŠ›ã�•ã‚Œã�¾ã�™ã€‚\n"
                     f"# task_id={t}  outer_round={DISPATCH_TRACE_OUTER_ROUND}  "
-                    "# （0=初回カレンダー通し、以降は納期超過リトライごとに +1）\n\n"
+                    "# ï¼ˆ0=åˆ�å›žã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼é€šã�—ã€�ä»¥é™�ã�¯ç´�æœŸè¶…é�Žãƒªãƒˆãƒ©ã‚¤ã�”ã�¨ã�« +1ï¼‰\n\n"
                 )
         except OSError as ex:
-            logging.warning("dispatch_trace ログの初期化に失敗: %s (%s)", path, ex)
+            logging.warning("dispatch_trace ãƒ­ã‚°ã�®åˆ�æœŸåŒ–ã�«å¤±æ•—: %s (%s)", path, ex)
 
 
 def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
-    """[配台トレース task=…] を execution_log に出しつつ、対象依頼NO専用ファイルにも追記する。"""
+    """[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=â€¦] ã‚’ execution_log ã�«å‡ºã�—ã�¤ã�¤ã€�å¯¾è±¡ä¾�é ¼NOå°‚ç”¨ãƒ•ã‚¡ã‚¤ãƒ«ã�«ã‚‚è¿½è¨˜ã�™ã‚‹ã€‚"""
     t = str(task_id or "").strip()
     body_raw = msg % args if args else msg
     body = body_raw
@@ -764,19 +712,19 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             f.write(line)
     except OSError as ex:
         try:
-            logging.warning("dispatch_trace 側ファイルへの追記に失敗: %s (%s)", path, ex)
+            logging.warning("dispatch_trace å�´ãƒ•ã‚¡ã‚¤ãƒ«ã�¸ã�®è¿½è¨˜ã�«å¤±æ•—: %s (%s)", path, ex)
         except Exception:
             pass
 
 
-# True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
+# True: å¾“æ�¥ã�®ã€Œäººæ•°æœ€å„ªå…ˆã€�ã‚¿ãƒ—ãƒ« (-äººæ•°, é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ)ã€‚False ã�®ã�¨ã��ä¸‹è¨˜ã‚¹ãƒ©ãƒƒã‚¯åˆ†ã�¨çµ„ã�¿å�ˆã‚�ã�›
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
-).strip().lower() not in ("0", "false", "no", "off", "いいえ")
+).strip().lower() not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ")
 
 
 def _team_assign_start_slack_wait_minutes() -> int:
-    """全日候補の最早開始からこの分以内の遅れなら、開始より人数を優先（分）。0 で無効。"""
+    """å…¨æ—¥å€™è£œã�®æœ€æ—©é–‹å§‹ã�‹ã‚‰ã�“ã�®åˆ†ä»¥å†…ã�®é�…ã‚Œã�ªã‚‰ã€�é–‹å§‹ã‚ˆã‚Šäººæ•°ã‚’å„ªå…ˆï¼ˆåˆ†ï¼‰ã€‚0 ã�§ç„¡åŠ¹ã€‚"""
     raw = os.environ.get("TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", "60").strip()
     try:
         v = int(raw)
@@ -787,76 +735,76 @@ def _team_assign_start_slack_wait_minutes() -> int:
 
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
-# True のとき need シート「配台時追加人数」行を無視し、チーム人数は基本必要人数（req_num）のみ試行し、メイン後追記もしない。
+# True ã�®ã�¨ã�� need ã‚·ãƒ¼ãƒˆã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ã€�è¡Œã‚’ç„¡è¦–ã�—ã€�ãƒ�ãƒ¼ãƒ äººæ•°ã�¯åŸºæœ¬å¿…è¦�äººæ•°ï¼ˆreq_numï¼‰ã�®ã�¿è©¦è¡Œã�—ã€�ãƒ¡ã‚¤ãƒ³å¾Œè¿½è¨˜ã‚‚ã�—ã�ªã�„ã€‚
 TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW = (
     os.environ.get("TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "はい")
+    in ("1", "true", "yes", "on", "ã�¯ã�„")
 )
 
-# True: 従来どおりメイン割付の組み合わせ探索で req_num〜req_num+追加人数上限まで試す。
-# False（既定）: メインは req_num のみ。追加人数上限は全シミュレーション完了後、当該ブロック時間に
-#     他タスクへ未割当（時間重なりなし）かつ skills 適合の者をサブとして追記（append_surplus_staff_after_main_dispatch）。
+# True: å¾“æ�¥ã�©ã�Šã‚Šãƒ¡ã‚¤ãƒ³å‰²ä»˜ã�®çµ„ã�¿å�ˆã‚�ã�›æŽ¢ç´¢ã�§ req_numã€œreq_num+è¿½åŠ äººæ•°ä¸Šé™�ã�¾ã�§è©¦ã�™ã€‚
+# Falseï¼ˆæ—¢å®šï¼‰: ãƒ¡ã‚¤ãƒ³ã�¯ req_num ã�®ã�¿ã€‚è¿½åŠ äººæ•°ä¸Šé™�ã�¯å…¨ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³å®Œäº†å¾Œã€�å½“è©²ãƒ–ãƒ­ãƒƒã‚¯æ™‚é–“ã�«
+#     ä»–ã‚¿ã‚¹ã‚¯ã�¸æœªå‰²å½“ï¼ˆæ™‚é–“é‡�ã�ªã‚Šã�ªã�—ï¼‰ã�‹ã�¤ skills é�©å�ˆã�®è€…ã‚’ã‚µãƒ–ã�¨ã�—ã�¦è¿½è¨˜ï¼ˆappend_surplus_staff_after_main_dispatchï¼‰ã€‚
 TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
     os.environ.get("TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "はい")
+    in ("1", "true", "yes", "on", "ã�¯ã�„")
 )
 
-# True（既定）: メイン配台の必要人数は need（基本必要人数＋特別指定）のみ。
-# False のときは特別指定備考 AI の required_op のみ計画側から参照し得る（シート列「必要人数」は廃止済み）。
+# Trueï¼ˆæ—¢å®šï¼‰: ãƒ¡ã‚¤ãƒ³é…�å�°ã�®å¿…è¦�äººæ•°ã�¯ needï¼ˆåŸºæœ¬å¿…è¦�äººæ•°ï¼‹ç‰¹åˆ¥æŒ‡å®šï¼‰ã�®ã�¿ã€‚
+# False ã�®ã�¨ã��ã�¯ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ AI ã�® required_op ã�®ã�¿è¨ˆç”»å�´ã�‹ã‚‰å�‚ç…§ã�—å¾—ã‚‹ï¼ˆã‚·ãƒ¼ãƒˆåˆ—ã€Œå¿…è¦�äººæ•°ã€�ã�¯å»ƒæ­¢æ¸ˆã�¿ï¼‰ã€‚
 TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY = (
     os.environ.get("TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "いいえ")
+    not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ")
 )
-# True（既定）: master「組み合わせ表」に該当行がある工程+機械は、組合せ優先度の昇順で
-# 最初に成立したメンバー編成を採用。すべて不可なら従来の itertools 組合せ探索。
+# Trueï¼ˆæ—¢å®šï¼‰: masterã€Œçµ„ã�¿å�ˆã‚�ã�›è¡¨ã€�ã�«è©²å½“è¡Œã�Œã�‚ã‚‹å·¥ç¨‹+æ©Ÿæ¢°ã�¯ã€�çµ„å�ˆã�›å„ªå…ˆåº¦ã�®æ˜‡é †ã�§
+# æœ€åˆ�ã�«æˆ�ç«‹ã�—ã�Ÿãƒ¡ãƒ³ãƒ�ãƒ¼ç·¨æˆ�ã‚’æŽ¡ç”¨ã€‚ã�™ã�¹ã�¦ä¸�å�¯ã�ªã‚‰å¾“æ�¥ã�® itertools çµ„å�ˆã�›æŽ¢ç´¢ã€‚
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET = (
     os.environ.get("TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "いいえ")
+    not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ")
 )
 
-# §B-2 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
-# 0 / false / no / off で無効にすると設備時間割上で依頼が混在し得るが、占有による長期ブロック（例: W3-14 型）を避けられる。
+# Â§B-2 ç†±èž�ç�€æ¤œæŸ»ã‚’å�Œä¸€è¨­å‚™ï¼ˆå·¥ç¨‹åˆ—ã‚­ãƒ¼ï¼‰ã�§ã€Œé–‹å§‹æ¸ˆã�¿1ä»¶ã�«æ®‹ãƒ­ãƒ¼ãƒ«ã�Œã�‚ã‚‹é–“ã�¯ä»–ä¾�é ¼ã�®æ¤œæŸ»ã‚’è©¦ã�•ã�ªã�„ã€�ã�‹ã€‚
+# 0 / false / no / off ã�§ç„¡åŠ¹ã�«ã�™ã‚‹ã�¨è¨­å‚™æ™‚é–“å‰²ä¸Šã�§ä¾�é ¼ã�Œæ··åœ¨ã�—å¾—ã‚‹ã�Œã€�å� æœ‰ã�«ã‚ˆã‚‹é•·æœŸãƒ–ãƒ­ãƒƒã‚¯ï¼ˆä¾‹: W3-14 åž‹ï¼‰ã‚’é�¿ã�‘ã‚‰ã‚Œã‚‹ã€‚
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "いいえ", "無効")
+    not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ", "ç„¡åŠ¹")
 )
 
-# §B-2 / §B-3 同一依頼で EC と後続（検査／巻返し）の担当者集合を排他するか。
-# 0 / false / no / off / いいえ / 無効 で無効化すると、履歴ベースの相互除外を行わず同一人物が両側の候補に残り得る。
+# Â§B-2 / Â§B-3 å�Œä¸€ä¾�é ¼ã�§ EC ã�¨å¾Œç¶šï¼ˆæ¤œæŸ»ï¼�å·»è¿”ã�—ï¼‰ã�®æ‹…å½“è€…é›†å�ˆã‚’æŽ’ä»–ã�™ã‚‹ã�‹ã€‚
+# 0 / false / no / off / ã�„ã�„ã�ˆ / ç„¡åŠ¹ ã�§ç„¡åŠ¹åŒ–ã�™ã‚‹ã�¨ã€�å±¥æ­´ãƒ™ãƒ¼ã‚¹ã�®ç›¸äº’é™¤å¤–ã‚’è¡Œã‚�ã�šå�Œä¸€äººç‰©ã�Œä¸¡å�´ã�®å€™è£œã�«æ®‹ã‚Šå¾—ã‚‹ã€‚
 PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     os.environ.get("PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "いいえ", "無効")
+    not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ", "ç„¡åŠ¹")
 )
 
-# マクロブック「設定_配台不要工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl が実質失敗するため）。失敗時は TSV→VBA 反映。
-# コマンド等で openpyxl を試す場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
-EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
+# ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�: æ—¢å®šã�§ã�¯ openpyxl save ã‚’è©¦ã�•ã�š xlwings å�ŒæœŸâ†’Saveï¼ˆExcel å� æœ‰æ™‚ã�¯ openpyxl ã�Œå®Ÿè³ªå¤±æ•—ã�™ã‚‹ã�Ÿã‚�ï¼‰ã€‚å¤±æ•—æ™‚ã�¯ TSVâ†’VBA å��æ˜ ã€‚
+# ã‚³ãƒžãƒ³ãƒ‰ç­‰ã�§ openpyxl ã‚’è©¦ã�™å ´å�ˆã�¯ EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1ã€‚
+EXCLUDE_RULES_SHEET_NAME = "è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹"
 EXCLUDE_RULES_SKIP_OPENPYXL_SAVE = os.environ.get(
     "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", ""
 ).strip().lower() not in ("1", "true", "yes", "on")
-EXCLUDE_RULE_COL_PROCESS = "工程名"
-EXCLUDE_RULE_COL_MACHINE = "機械名"
-EXCLUDE_RULE_COL_FLAG = "配台不要"
-EXCLUDE_RULE_COL_LOGIC_JA = "配台不能ロジック"
-EXCLUDE_RULE_COL_LOGIC_JSON = "ロジック式"
-# 元ブックがロックされ別名保存した場合、同一プロセス内のルール読込はこのパスを優先
+EXCLUDE_RULE_COL_PROCESS = "å·¥ç¨‹å��"
+EXCLUDE_RULE_COL_MACHINE = "æ©Ÿæ¢°å��"
+EXCLUDE_RULE_COL_FLAG = "é…�å�°ä¸�è¦�"
+EXCLUDE_RULE_COL_LOGIC_JA = "é…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯"
+EXCLUDE_RULE_COL_LOGIC_JSON = "ãƒ­ã‚¸ãƒƒã‚¯å¼�"
+# å…ƒãƒ–ãƒƒã‚¯ã�Œãƒ­ãƒƒã‚¯ã�•ã‚Œåˆ¥å��ä¿�å­˜ã�—ã�Ÿå ´å�ˆã€�å�Œä¸€ãƒ—ãƒ­ã‚»ã‚¹å†…ã�®ãƒ«ãƒ¼ãƒ«èª­è¾¼ã�¯ã�“ã�®ãƒ‘ã‚¹ã‚’å„ªå…ˆ
 _exclude_rules_effective_read_path: str | None = None
-# 直後の apply_exclude_rules（同一プロセス）用: VBA 反映前でも E 列付きルールを使う
+# ç›´å¾Œã�® apply_exclude_rulesï¼ˆå�Œä¸€ãƒ—ãƒ­ã‚»ã‚¹ï¼‰ç”¨: VBA å��æ˜ å‰�ã�§ã‚‚ E åˆ—ä»˜ã��ãƒ«ãƒ¼ãƒ«ã‚’ä½¿ã�†
 _exclude_rules_rules_snapshot: list | None = None
 _exclude_rules_snapshot_wb: str | None = None
-# ルール JSON の conditions で参照可能な列（AI プロンプトと評価器を一致させる）
+# ãƒ«ãƒ¼ãƒ« JSON ã�® conditions ã�§å�‚ç…§å�¯èƒ½ã�ªåˆ—ï¼ˆAI ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�¨è©•ä¾¡å™¨ã‚’ä¸€è‡´ã�•ã�›ã‚‹ï¼‰
 EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     {
         TASK_COL_TASK_ID,
@@ -884,23 +832,23 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     }
 )
 
-# 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
-RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
-RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
-# 余力追記前のタイムラインを可視化（結果_設備毎の時間割と同じ 10 分枠・列構造）
-TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_設備毎の時間割"
-# 設備・人の占有（ブロック）を 10 分枠で一覧（調査・検証用）
-BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
-# 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
-RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
-# master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
+# è¨ˆç”»çµ�æžœãƒ–ãƒƒã‚¯ã€Œçµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã�®åˆ—é †ãƒ»è¡¨ç¤ºï¼ˆãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã�®å�Œå��ã‚·ãƒ¼ãƒˆã�§ä¸Šæ›¸ã��å�¯ï¼‰
+RESULT_TASK_SHEET_NAME = "çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§"
+RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²"
+# ä½™åŠ›è¿½è¨˜å‰�ã�®ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‚’å�¯è¦–åŒ–ï¼ˆçµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�¨å�Œã�˜ 10 åˆ†æž ãƒ»åˆ—æ§‹é€ ï¼‰
+TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²"
+# è¨­å‚™ãƒ»äººã�®å� æœ‰ï¼ˆãƒ–ãƒ­ãƒƒã‚¯ï¼‰ã‚’ 10 åˆ†æž ã�§ä¸€è¦§ï¼ˆèª¿æŸ»ãƒ»æ¤œè¨¼ç”¨ï¼‰
+BLOCK_TABLE_SHEET_NAME = "ãƒ–ãƒ­ãƒƒã‚¯ãƒ†ãƒ¼ãƒ–ãƒ«"
+# å·¥ç¨‹å��+æ©Ÿæ¢°ã�®è¤‡å�ˆåˆ—ã�§ã�¯ã�ªã��ã€�æ©Ÿæ¢°å��å�˜ä½�ã�§å�„æž ã�®ä¾�é ¼NOã‚’æŠŠæ�¡ã�—ã‚„ã�™ã��ã�™ã‚‹
+RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²_æ©Ÿæ¢°å��æ¯Ž"
+# master ãƒ¡ã‚¤ãƒ³ A15/B15 ã�®å®šå¸¸å¤–ã�®ã€Œæ—¥æ™‚å¸¯ã€�è¦‹å‡ºã�—ç�€è‰²ï¼ˆçµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ãƒ»çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆï¼‰
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
-# 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
-# 結果_設備毎の時間割（および TEMP）: 加工前準備・依頼切替後始末の設備セルも同系色
+# çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²_æ©Ÿæ¢°å��æ¯Ž: é…�å�°æ¸ˆã�¿ä¾�é ¼NOã‚»ãƒ«ï¼ˆæ©Ÿæ¢°åˆ—ï¼‰ã�®è–„ã�„ã‚°ãƒªãƒ¼ãƒ³
+# çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ï¼ˆã�Šã‚ˆã�³ TEMPï¼‰: åŠ å·¥å‰�æº–å‚™ãƒ»ä¾�é ¼åˆ‡æ›¿å¾Œå§‹æœ«ã�®è¨­å‚™ã‚»ãƒ«ã‚‚å�Œç³»è‰²
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
-# 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
+# çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²: masterã€Œæ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã€�å� æœ‰ã�¨é‡�ã�ªã‚‹è¨­å‚™ã‚»ãƒ«ï¼ˆ10åˆ†æž ï¼‰
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
-# 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに B〜E 列を区別する淡色（順に割当・循環）
+# çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆ: æ©Ÿæ¢°å��ã‚°ãƒ«ãƒ¼ãƒ—ï¼ˆæ©Ÿæ¢°å��åˆ—ã�®å�Œä¸€å��ç§°ï¼‰ã�”ã�¨ã�« Bã€œE åˆ—ã‚’åŒºåˆ¥ã�™ã‚‹æ·¡è‰²ï¼ˆé †ã�«å‰²å½“ãƒ»å¾ªç’°ï¼‰
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
     "FCE8F0",
@@ -913,29 +861,29 @@ RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "F5F5E0",
     "F0E8E8",
 )
-# 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
-RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
-# 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
-RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配完_回答指定16時まで"
-# マスタ skills の工程+機械列ごとの OP/AS 割当参考順（優先度値・氏名順）とチーム採用ルールの説明
-RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
-COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
-COLUMN_CONFIG_HEADER_COL = "列名"
-COLUMN_CONFIG_VISIBLE_COL = "表示"
-# 段階2の結果 xlsx 生成後、入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製する（既定 ON。無効化は STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0）
+# é…�å�°ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³é–‹å§‹å‰�ï¼ˆåˆ�å›ž task_queue.sort å¾Œï¼‰ã�®ã‚­ãƒ¥ãƒ¼é †ã€‚1 å§‹ã�¾ã‚Šãƒ»å…¨æ—¥ç¨‹ã�§ä¸�å¤‰
+RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "é…�å�°è©¦è¡Œé †ç•ª"
+# é…�å®Œ_åŠ å·¥çµ‚äº†ã�Œã€Œå›žç­”ç´�æœŸ+16:00ã€�ã�¾ã�Ÿã�¯ã€ŒæŒ‡å®šç´�æœŸ+16:00ã€�ï¼ˆå›žç­”ã�Œç©ºã�®ã�¨ã��ï¼‰ä»¥å‰�ã�‹ã‚’è¡¨ç¤º
+RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "é…�å®Œ_å›žç­”æŒ‡å®š16æ™‚ã�¾ã�§"
+# ãƒžã‚¹ã‚¿ skills ã�®å·¥ç¨‹+æ©Ÿæ¢°åˆ—ã�”ã�¨ã�® OP/AS å‰²å½“å�‚è€ƒé †ï¼ˆå„ªå…ˆåº¦å€¤ãƒ»æ°�å��é †ï¼‰ã�¨ãƒ�ãƒ¼ãƒ æŽ¡ç”¨ãƒ«ãƒ¼ãƒ«ã�®èª¬æ˜Ž
+RESULT_MEMBER_PRIORITY_SHEET_NAME = "çµ�æžœ_äººå“¡é…�å�°å„ªå…ˆé †"
+COLUMN_CONFIG_SHEET_NAME = "åˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§"
+COLUMN_CONFIG_HEADER_COL = "åˆ—å��"
+COLUMN_CONFIG_VISIBLE_COL = "è¡¨ç¤º"
+# æ®µéšŽ2ã�®çµ�æžœ xlsx ç”Ÿæˆ�å¾Œã€�å…¥åŠ›ãƒ–ãƒƒã‚¯ã�®åˆ—è¨­å®šã‚·ãƒ¼ãƒˆä¸Šã�®å›³å½¢ï¼ˆãƒ•ã‚©ãƒ¼ãƒ ãƒœã‚¿ãƒ³ç­‰ï¼‰ã‚’ xlwings ã�§è¤‡è£½ã�™ã‚‹ï¼ˆæ—¢å®š ONã€‚ç„¡åŠ¹åŒ–ã�¯ STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0ï¼‰
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
     "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
-# 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
+# çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®æ—¥ä»˜ç³»ï¼ˆyyyy/mm/dd æ–‡å­—åˆ—ï¼‰ã�«ä»˜ã�‘ã‚‹ãƒ•ã‚©ãƒ³ãƒˆè‰²ã€‚å±¥æ­´åˆ—ã�®ã€�æ—¥ä»˜ã€‘ã�¨æ�ƒã�ˆã‚‹
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
-        "回答納期",
-        "指定納期",
-        "計画基準納期",
+        "å›žç­”ç´�æœŸ",
+        "æŒ‡å®šç´�æœŸ",
+        "è¨ˆç”»åŸºæº–ç´�æœŸ",
         TASK_COL_RAW_INPUT_DATE,
-        "加工開始日",
-        "配完_加工開始",
-        "配完_加工終了",
+        "åŠ å·¥é–‹å§‹æ—¥",
+        "é…�å®Œ_åŠ å·¥é–‹å§‹",
+        "é…�å®Œ_åŠ å·¥çµ‚äº†",
     }
 )
 
@@ -953,39 +901,39 @@ PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
 ]
-# 矛盾検出でリセット対象にする列（見出し行の文言と一致すること）
+# çŸ›ç›¾æ¤œå‡ºã�§ãƒªã‚»ãƒƒãƒˆå¯¾è±¡ã�«ã�™ã‚‹åˆ—ï¼ˆè¦‹å‡ºã�—è¡Œã�®æ–‡è¨€ã�¨ä¸€è‡´ã�™ã‚‹ã�“ã�¨ï¼‰
 PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
-# 段階1再抽出時、既存「配台計画_タスク入力」から継承する列（AIの解析結果列は毎回空に戻す）
+# æ®µéšŽ1å†�æŠ½å‡ºæ™‚ã€�æ—¢å­˜ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã�‹ã‚‰ç¶™æ‰¿ã�™ã‚‹åˆ—ï¼ˆAIã�®è§£æž�çµ�æžœåˆ—ã�¯æ¯Žå›žç©ºã�«æˆ»ã�™ï¼‰
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
-# 上書き以外で、再抽出時に旧シートから引き継ぐ列（セルが空でないときのみ）
-# 配台試行順番は毎回空クリアのうえ fill_plan_dispatch_trial_order_column_stage1 で付け直すため対象外。
+# ä¸Šæ›¸ã��ä»¥å¤–ã�§ã€�å†�æŠ½å‡ºæ™‚ã�«æ—§ã‚·ãƒ¼ãƒˆã�‹ã‚‰å¼•ã��ç¶™ã��åˆ—ï¼ˆã‚»ãƒ«ã�Œç©ºã�§ã�ªã�„ã�¨ã��ã�®ã�¿ï¼‰
+# é…�å�°è©¦è¡Œé †ç•ªã�¯æ¯Žå›žç©ºã‚¯ãƒªã‚¢ã�®ã�†ã�ˆ fill_plan_dispatch_trial_order_column_stage1 ã�§ä»˜ã�‘ç›´ã�™ã�Ÿã‚�å¯¾è±¡å¤–ã€‚
 PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
-# openpyxl 保存がブックロックで失敗したとき、VBA が開いているブックへ書式適用するための指示ファイル
+# openpyxl ä¿�å­˜ã�Œãƒ–ãƒƒã‚¯ãƒ­ãƒƒã‚¯ã�§å¤±æ•—ã�—ã�Ÿã�¨ã��ã€�VBA ã�Œé–‹ã�„ã�¦ã�„ã‚‹ãƒ–ãƒƒã‚¯ã�¸æ›¸å¼�é�©ç”¨ã�™ã‚‹ã�Ÿã‚�ã�®æŒ‡ç¤ºãƒ•ã‚¡ã‚¤ãƒ«
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
-# 配台計画_タスク入力へ「グローバルコメント解析」を書く列（表の右端より外側。1行目から縦にラベル／値）
-# ★ 参照表示のみ: load_planning_tasks_df 等は本列を一切読まない。配台適用は常にメイン「グローバルコメント」1経路のため二重適用にならない。
+# é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�¸ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã€�ã‚’æ›¸ã��åˆ—ï¼ˆè¡¨ã�®å�³ç«¯ã‚ˆã‚Šå¤–å�´ã€‚1è¡Œç›®ã�‹ã‚‰ç¸¦ã�«ãƒ©ãƒ™ãƒ«ï¼�å€¤ï¼‰
+# â˜… å�‚ç…§è¡¨ç¤ºã�®ã�¿: load_planning_tasks_df ç­‰ã�¯æœ¬åˆ—ã‚’ä¸€åˆ‡èª­ã�¾ã�ªã�„ã€‚é…�å�°é�©ç”¨ã�¯å¸¸ã�«ãƒ¡ã‚¤ãƒ³ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�1çµŒè·¯ã�®ã�Ÿã‚�äºŒé‡�é�©ç”¨ã�«ã�ªã‚‰ã�ªã�„ã€‚
 PLAN_SHEET_GLOBAL_PARSE_LABEL_COL = 50  # AX
 PLAN_SHEET_GLOBAL_PARSE_VALUE_COL = 51  # AY
 PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
 
 
 def plan_reference_column_name(override_col: str) -> str:
-    """上書き列の左隣に置く参照列の見出し（セル値は括弧付きで元データを表示）。"""
-    return f"（元）{override_col}"
+    """ä¸Šæ›¸ã��åˆ—ã�®å·¦éš£ã�«ç½®ã��å�‚ç…§åˆ—ã�®è¦‹å‡ºã�—ï¼ˆã‚»ãƒ«å€¤ã�¯æ‹¬å¼§ä»˜ã��ã�§å…ƒãƒ‡ãƒ¼ã‚¿ã‚’è¡¨ç¤ºï¼‰ã€‚"""
+    return f"ï¼ˆå…ƒï¼‰{override_col}"
 
 
 def plan_input_sheet_column_order():
     """
-    配台計画_タスク入力の列順（段階1出力・段階2読込で共通）。
+    é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�®åˆ—é †ï¼ˆæ®µéšŽ1å‡ºåŠ›ãƒ»æ®µéšŽ2èª­è¾¼ã�§å…±é€šï¼‰ã€‚
 
-    0. 配台試行順番（段階1抽出直後に空クリア→段階2と同趣旨に付与。段階2は全行に値があるときこの順を優先）
-    1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール単位長さ、原反投入日の直後に在庫場所）
-    3. 加工工程の決定プロセスの因子
-    4. 上書き列… 各列の直前に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
-       （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
+    0. é…�å�°è©¦è¡Œé †ç•ªï¼ˆæ®µéšŽ1æŠ½å‡ºç›´å¾Œã�«ç©ºã‚¯ãƒªã‚¢â†’æ®µéšŽ2ã�¨å�Œè¶£æ—¨ã�«ä»˜ä¸Žã€‚æ®µéšŽ2ã�¯å…¨è¡Œã�«å€¤ã�Œã�‚ã‚‹ã�¨ã��ã�“ã�®é †ã‚’å„ªå…ˆï¼‰
+    1. é…�å�°ä¸�è¦�ï¼ˆå�‚ç…§åˆ—ã�ªã�—ï¼‰
+    2. åŠ å·¥è¨ˆç”»DATA ç”±æ�¥ï¼ˆSOURCE_BASE_COLUMNSï¼‰â€¦ ä¾�é ¼NOã€œå®Ÿå‡ºæ�¥é«˜ã�¾ã�§ï¼ˆè£½å“�å��ã�®ç›´å¾Œã�«ãƒ­ãƒ¼ãƒ«å�˜ä½�é•·ã�•ã€�åŽŸå��æŠ•å…¥æ—¥ã�®ç›´å¾Œã�«åœ¨åº«å ´æ‰€ï¼‰
+    3. åŠ å·¥å·¥ç¨‹ã�®æ±ºå®šãƒ—ãƒ­ã‚»ã‚¹ã�®å› å­�
+    4. ä¸Šæ›¸ã��åˆ—â€¦ å�„åˆ—ã�®ç›´å‰�ã�«ã€Œï¼ˆå…ƒï¼‰â€¦ã€�å�‚ç…§åˆ—ã€‚AIç‰¹åˆ¥æŒ‡å®š_è§£æž�ã�®ã�¿å�‚ç…§åˆ—ã�ªã�—ã€‚
+       ï¼ˆæ—¥ä»˜ç³»ä¸Šæ›¸ã��ã�« åŽŸå��æŠ•å…¥æ—¥_ä¸Šæ›¸ã�� ã‚’å�«ã‚€ã€‚ç©ºç™½æ™‚ã�¯åˆ—ã€ŒåŽŸå��æŠ•å…¥æ—¥ã€�ã‚’é…�å�°ã�«ä½¿ç”¨ï¼‰
 
-    global_speed_rules 等で変わる実効速度はシート列では持たず、配台内部のみで反映する。
+    global_speed_rules ç­‰ã�§å¤‰ã‚�ã‚‹å®ŸåŠ¹é€Ÿåº¦ã�¯ã‚·ãƒ¼ãƒˆåˆ—ã�§ã�¯æŒ�ã�Ÿã�šã€�é…�å�°å†…éƒ¨ã�®ã�¿ã�§å��æ˜ ã�™ã‚‹ã€‚
     """
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
     for c in SOURCE_BASE_COLUMNS:
@@ -1005,46 +953,46 @@ def plan_input_sheet_column_order():
 
 
 def _format_paren_ref_scalar(val):
-    """参照表示用: 空は（―）、日付・その他は（値）。"""
+    """å�‚ç…§è¡¨ç¤ºç”¨: ç©ºã�¯ï¼ˆâ€•ï¼‰ã€�æ—¥ä»˜ãƒ»ã��ã�®ä»–ã�¯ï¼ˆå€¤ï¼‰ã€‚"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
-        return "（―）"
+        return "ï¼ˆâ€•ï¼‰"
     if isinstance(val, datetime):
         d = val.date() if hasattr(val, "date") else val
         if isinstance(d, date):
-            return f"（{d.year}/{d.month}/{d.day}）"
+            return f"ï¼ˆ{d.year}/{d.month}/{d.day}ï¼‰"
     if isinstance(val, date):
-        return f"（{val.year}/{val.month}/{val.day}）"
+        return f"ï¼ˆ{val.year}/{val.month}/{val.day}ï¼‰"
     s = str(val).strip()
     if not s or s.lower() in ("nan", "none"):
-        return "（―）"
-    return f"（{s}）"
+        return "ï¼ˆâ€•ï¼‰"
+    return f"ï¼ˆ{s}ï¼‰"
 
 
 def _reference_text_for_override_row(row, override_col: str, req_map: dict, need_rules: list) -> str:
-    """1行分の上書き列に対応する参照文言（括弧付き）。"""
-    _ = (req_map, need_rules)  # 旧「（元）必要人数」参照で使用。列廃止により未使用だが呼び出し互換のため残す。
+    """1è¡Œåˆ†ã�®ä¸Šæ›¸ã��åˆ—ã�«å¯¾å¿œã�™ã‚‹å�‚ç…§æ–‡è¨€ï¼ˆæ‹¬å¼§ä»˜ã��ï¼‰ã€‚"""
+    _ = (req_map, need_rules)  # æ—§ã€Œï¼ˆå…ƒï¼‰å¿…è¦�äººæ•°ã€�å�‚ç…§ã�§ä½¿ç”¨ã€‚åˆ—å»ƒæ­¢ã�«ã‚ˆã‚Šæœªä½¿ç”¨ã� ã�Œå‘¼ã�³å‡ºã�—äº’æ�›ã�®ã�Ÿã‚�æ®‹ã�™ã€‚
     if override_col == PLAN_COL_SPEED_OVERRIDE:
         v = row.get(TASK_COL_SPEED)
         if v is None or (isinstance(v, float) and pd.isna(v)):
-            return "（―）"
+            return "ï¼ˆâ€•ï¼‰"
         try:
             x = float(v)
             if abs(x - round(x)) < 1e-9:
-                return f"（{int(round(x))}）"
-            return f"（{x}）"
+                return f"ï¼ˆ{int(round(x))}ï¼‰"
+            return f"ï¼ˆ{x}ï¼‰"
         except (TypeError, ValueError):
             return _format_paren_ref_scalar(v)
     if override_col in (PLAN_COL_PREFERRED_OP, PLAN_COL_SPECIAL_REMARK):
-        return "（―）"
+        return "ï¼ˆâ€•ï¼‰"
     if override_col == PLAN_COL_RAW_INPUT_DATE_OVERRIDE:
         return _format_paren_ref_scalar(
             parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
         )
-    return "（―）"
+    return "ï¼ˆâ€•ï¼‰"
 
 
 def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
-    """加工計画DATA／need に基づき「（元）…」列を再計算（マージ後に必ず呼ぶ）。"""
+    """åŠ å·¥è¨ˆç”»DATAï¼�need ã�«åŸºã�¥ã��ã€Œï¼ˆå…ƒï¼‰â€¦ã€�åˆ—ã‚’å†�è¨ˆç®—ï¼ˆãƒžãƒ¼ã‚¸å¾Œã�«å¿…ã�šå‘¼ã�¶ï¼‰ã€‚"""
     if df is None or df.empty:
         return df
     need_rules = need_rules or []
@@ -1063,16 +1011,16 @@ def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
     return df
 
 
-def _apply_plan_input_visual_format(path: str, sheet_name: str = "タスク一覧"):
-    """上書き入力列に薄い黄色を付与（参照列は未着色。AI解析列は除外）。"""
-    # 見出し文字の表記ゆれで列名検索に失敗しがちなため、段階1の列順（plan_input_sheet_column_order）の
-    # 1-based 列番号で塗る（to_excel の列順と一致させる）。
+def _apply_plan_input_visual_format(path: str, sheet_name: str = "ã‚¿ã‚¹ã‚¯ä¸€è¦§"):
+    """ä¸Šæ›¸ã��å…¥åŠ›åˆ—ã�«è–„ã�„é»„è‰²ã‚’ä»˜ä¸Žï¼ˆå�‚ç…§åˆ—ã�¯æœªç�€è‰²ã€‚AIè§£æž�åˆ—ã�¯é™¤å¤–ï¼‰ã€‚"""
+    # è¦‹å‡ºã�—æ–‡å­—ã�®è¡¨è¨˜ã‚†ã‚Œã�§åˆ—å��æ¤œç´¢ã�«å¤±æ•—ã�—ã�Œã�¡ã�ªã�Ÿã‚�ã€�æ®µéšŽ1ã�®åˆ—é †ï¼ˆplan_input_sheet_column_orderï¼‰ã�®
+    # 1-based åˆ—ç•ªå�·ã�§å¡—ã‚‹ï¼ˆto_excel ã�®åˆ—é †ã�¨ä¸€è‡´ã�•ã�›ã‚‹ï¼‰ã€‚
     fill_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
     order = plan_input_sheet_column_order()
     col_1based = {name: i + 1 for i, name in enumerate(order)}
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "配台計画の視覚整形: ブックに「%s」があるため openpyxl での着色をスキップしました。",
+            "é…�å�°è¨ˆç”»ã�®è¦–è¦šæ•´å½¢: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã�®ç�€è‰²ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1114,8 +1062,8 @@ def _remove_planning_conflict_sidecar_safe():
 
 def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row):
     """
-    Excel がブックを開いたままのとき保存できない場合に、VBA 用の TSV を log に書く。
-    形式: V1 / シート名 / データ行数 / クリア列をタブ結合 / 以降 行番号\\t列名
+    Excel ã�Œãƒ–ãƒƒã‚¯ã‚’é–‹ã�„ã�Ÿã�¾ã�¾ã�®ã�¨ã��ä¿�å­˜ã�§ã��ã�ªã�„å ´å�ˆã�«ã€�VBA ç”¨ã�® TSV ã‚’ log ã�«æ›¸ã��ã€‚
+    å½¢å¼�: V1 / ã‚·ãƒ¼ãƒˆå�� / ãƒ‡ãƒ¼ã‚¿è¡Œæ•° / ã‚¯ãƒªã‚¢åˆ—ã‚’ã‚¿ãƒ–çµ�å�ˆ / ä»¥é™� è¡Œç•ªå�·\\tåˆ—å��
     """
     path = _planning_conflict_sidecar_path()
     clear_cols = "\t".join(PLAN_CONFLICT_STYLABLE_COLS)
@@ -1126,7 +1074,7 @@ def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflic
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
-# 段階1出力・ブック内の日付列を Excel 上「日付のみ」(時刻なし表示) に整える
+# æ®µéšŽ1å‡ºåŠ›ãƒ»ãƒ–ãƒƒã‚¯å†…ã�®æ—¥ä»˜åˆ—ã‚’ Excel ä¸Šã€Œæ—¥ä»˜ã�®ã�¿ã€�(æ™‚åˆ»ã�ªã�—è¡¨ç¤º) ã�«æ•´ã�ˆã‚‹
 STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
     {
         TASK_COL_ANSWER_DUE,
@@ -1138,7 +1086,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """結果ブック用 Font（呼び出し側が name/size 等を指定）。"""
+    """çµ�æžœãƒ–ãƒƒã‚¯ç”¨ Fontï¼ˆå‘¼ã�³å‡ºã�—å�´ã�Œ name/size ç­‰ã‚’æŒ‡å®šï¼‰ã€‚"""
     return Font(**kwargs)
 
 
@@ -1147,7 +1095,7 @@ def _output_book_font(bold=False):
 
 
 def _apply_output_font_to_result_sheet(ws):
-    """結果_* のうちガント以外向け: 既定フォント・1行目太字のみ（列幅は VBA AutoFit）。"""
+    """çµ�æžœ_* ã�®ã�†ã�¡ã‚¬ãƒ³ãƒˆä»¥å¤–å�‘ã�‘: æ—¢å®šãƒ•ã‚©ãƒ³ãƒˆãƒ»1è¡Œç›®å¤ªå­—ã�®ã�¿ï¼ˆåˆ—å¹…ã�¯ VBA AutoFitï¼‰ã€‚"""
     base = _output_book_font(bold=False)
     hdr = _output_book_font(bold=True)
     mr, mc = ws.max_row or 1, ws.max_column or 1
@@ -1159,13 +1107,13 @@ def _apply_output_font_to_result_sheet(ws):
 
 
 def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=None):
-    """openpyxl: 指定ヘッダー列を yyyy/mm/dd の日付表示にする（時刻を表示しない）。"""
+    """openpyxl: æŒ‡å®šãƒ˜ãƒƒãƒ€ãƒ¼åˆ—ã‚’ yyyy/mm/dd ã�®æ—¥ä»˜è¡¨ç¤ºã�«ã�™ã‚‹ï¼ˆæ™‚åˆ»ã‚’è¡¨ç¤ºã�—ã�ªã�„ï¼‰ã€‚"""
     from openpyxl import load_workbook
 
     headers = header_names or STAGE1_SHEET_DATEONLY_HEADERS
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "日付列表示整形: ブックに「%s」があるため openpyxl での処理をスキップしました。",
+            "æ—¥ä»˜åˆ—è¡¨ç¤ºæ•´å½¢: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã�®å‡¦ç�†ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1206,7 +1154,7 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 
 def _extract_data_extraction_datetime():
     """
-    `加工計画DATA` シートの `データ抽出日` から datetime を取得する。
+    `åŠ å·¥è¨ˆç”»DATA` ã‚·ãƒ¼ãƒˆã�® `ãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥` ã�‹ã‚‰ datetime ã‚’å�–å¾—ã�™ã‚‹ã€‚
     """
     try:
         if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
@@ -1236,22 +1184,22 @@ def _extract_data_extraction_datetime():
 
 def _extract_data_extraction_datetime_str():
     """
-    `加工計画DATA` シートの `データ抽出日` から「データ吸出し日時」を取得して文字列化する。
+    `åŠ å·¥è¨ˆç”»DATA` ã‚·ãƒ¼ãƒˆã�® `ãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥` ã�‹ã‚‰ã€Œãƒ‡ãƒ¼ã‚¿å�¸å‡ºã�—æ—¥æ™‚ã€�ã‚’å�–å¾—ã�—ã�¦æ–‡å­—åˆ—åŒ–ã�™ã‚‹ã€‚
     """
     try:
         dt = _extract_data_extraction_datetime()
         if dt is None:
-            return "—"
+            return "â€”"
         return dt.strftime("%Y/%m/%d %H:%M:%S")
     except Exception:
-        return "—"
+        return "â€”"
 
 
 def _weekday_jp(d):
-    return "月火水木金土日"[d.weekday()]
+    return "æœˆç�«æ°´æœ¨é‡‘åœŸæ—¥"[d.weekday()]
 
 
-# ガントの作業バー：いずれも明るい地色＋黒文字が読めるトーン（モノクロ印刷でも濃淡で識別しやすい）
+# ã‚¬ãƒ³ãƒˆã�®ä½œæ¥­ãƒ�ãƒ¼ï¼šã�„ã�šã‚Œã‚‚æ˜Žã‚‹ã�„åœ°è‰²ï¼‹é»’æ–‡å­—ã�Œèª­ã‚�ã‚‹ãƒˆãƒ¼ãƒ³ï¼ˆãƒ¢ãƒŽã‚¯ãƒ­å�°åˆ·ã�§ã‚‚æ¿ƒæ·¡ã�§è­˜åˆ¥ã�—ã‚„ã�™ã�„ï¼‰
 _GANTT_BAR_FILLS_PRINT_SAFE = (
     "E8E8E8",
     "D8E4EF",
@@ -1263,7 +1211,7 @@ _GANTT_BAR_FILLS_PRINT_SAFE = (
     "E5DCE5",
 )
 
-# 実績バー用（計画と並べてもモノクロで区別しやすいトーン）
+# å®Ÿç¸¾ãƒ�ãƒ¼ç”¨ï¼ˆè¨ˆç”»ã�¨ä¸¦ã�¹ã�¦ã‚‚ãƒ¢ãƒŽã‚¯ãƒ­ã�§åŒºåˆ¥ã�—ã‚„ã�™ã�„ãƒˆãƒ¼ãƒ³ï¼‰
 _GANTT_BAR_FILLS_ACTUAL = (
     "D4E4D4",
     "C9DDE8",
@@ -1275,12 +1223,12 @@ _GANTT_BAR_FILLS_ACTUAL = (
     "DCD2DC",
 )
 
-# 設備ガント: 日次始業準備（machine_daily_startup）の帯色（黄色系）
+# è¨­å‚™ã‚¬ãƒ³ãƒˆ: æ—¥æ¬¡å§‹æ¥­æº–å‚™ï¼ˆmachine_daily_startupï¼‰ã�®å¸¯è‰²ï¼ˆé»„è‰²ç³»ï¼‰
 _GANTT_DAILY_STARTUP_FILL = "FFEB9C"
 
 
 def _gantt_bar_fill_for_task_id(task_id):
-    """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使わない。"""
+    """ä¾�é ¼NOã�”ã�¨ã�«ä¸Šè¨˜ãƒ‘ãƒ¬ãƒƒãƒˆã�‹ã‚‰1è‰²ï¼ˆRRGGBBï¼‰ã€‚æ¿ƒè‰²ï¼‹ç™½æ–‡å­—ã�®çµ„ã�¿å�ˆã‚�ã�›ã�¯ä½¿ã‚�ã�ªã�„ã€‚"""
     h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_PRINT_SAFE)
     return _GANTT_BAR_FILLS_PRINT_SAFE[i]
@@ -1292,7 +1240,7 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# ガント時刻セル（結合帯の先頭セル）: 毎セグメント new しない
+# ã‚¬ãƒ³ãƒˆæ™‚åˆ»ã‚»ãƒ«ï¼ˆçµ�å�ˆå¸¯ã�®å…ˆé ­ã‚»ãƒ«ï¼‰: æ¯Žã‚»ã‚°ãƒ¡ãƒ³ãƒˆ new ã�—ã�ªã�„
 _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     horizontal="left",
     vertical="center",
@@ -1300,7 +1248,7 @@ _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     shrink_to_fit=False,
     indent=1,
 )
-# タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
+# ã‚¿ã‚¹ã‚¯å¸¯ã�®è‰²ã�¯ãƒ‘ãƒ¬ãƒƒãƒˆæœ‰é™�ã�ªã�®ã�§ PatternFill ã‚’ hex å�˜ä½�ã�§å…±æœ‰ï¼ˆopenpyxl ã�®ã‚¹ã‚¿ã‚¤ãƒ«å±•é–‹ã‚³ã‚¹ãƒˆå‰Šæ¸›ï¼‰
 _GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
 
 
@@ -1313,7 +1261,7 @@ def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
 
 
 def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
-    """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
+    """ã‚¹ãƒ­ãƒƒãƒˆä¸­å¤®æ™‚åˆ»ã�«ã�Šã�‘ã‚‹1ãƒžã‚¹åˆ†ã�®çŠ¶æ…‹ã€‚('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
     active = None
     for e in evlist:
@@ -1330,12 +1278,12 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     gh = fill_fn(active["task_id"])
     pct = None
     try:
-        # 「マクロ実行時点」の完了率を優先（pct_macro を timeline_event に持たせる）
+        # ã€Œãƒžã‚¯ãƒ­å®Ÿè¡Œæ™‚ç‚¹ã€�ã�®å®Œäº†çŽ‡ã‚’å„ªå…ˆï¼ˆpct_macro ã‚’ timeline_event ã�«æŒ�ã�Ÿã�›ã‚‹ï¼‰
         if active.get("pct_macro") is not None:
             pct = int(round(parse_float_safe(active.get("pct_macro"), 0.0)))
             pct = max(0, min(100, pct))
         else:
-            # フェイルセーフ（従来の擬似進捗計算）
+            # ãƒ•ã‚§ã‚¤ãƒ«ã‚»ãƒ¼ãƒ•ï¼ˆå¾“æ�¥ã�®æ“¬ä¼¼é€²æ�—è¨ˆç®—ï¼‰
             tot = parse_float_safe(active.get("total_units"), 0.0)
             done = parse_float_safe(active.get("already_done_units"), 0.0) + parse_float_safe(
                 active.get("units_done"), 0.0
@@ -1348,7 +1296,7 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
 
 
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
-    """結合セグメント境界判定（毎スロット tuple を割り当てない）。"""
+    """çµ�å�ˆã‚»ã‚°ãƒ¡ãƒ³ãƒˆå¢ƒç•Œåˆ¤å®šï¼ˆæ¯Žã‚¹ãƒ­ãƒƒãƒˆ tuple ã‚’å‰²ã‚Šå½“ã�¦ã�ªã�„ï¼‰ã€‚"""
     if st_a[0] != st_b[0]:
         return False
     if st_a[0] == "idle" or st_a[0] == "break":
@@ -1372,8 +1320,8 @@ def _paint_gantt_timeline_row_merged(
     label_font=None,
 ):
     """
-    時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
-    （細マス単体の塗りではなく15分刻み＋同一状態のセル結合で、帯状のバーとして表現する）
+    æ™‚é–“è»¸ã‚’å¡—ã‚Šåˆ†ã�‘ã�Ÿã�†ã�ˆã�§ã€�å�Œä¸€çŠ¶æ…‹ã�Œé€£ç¶šã�™ã‚‹ã‚»ãƒ«ã‚’æ¨ªçµ�å�ˆã�—å¸¯çŠ¶ã�®ãƒ�ãƒ¼ã�«ã�™ã‚‹ã€‚
+    ï¼ˆç´°ãƒžã‚¹å�˜ä½“ã�®å¡—ã‚Šã�§ã�¯ã�ªã��15åˆ†åˆ»ã�¿ï¼‹å�Œä¸€çŠ¶æ…‹ã�®ã‚»ãƒ«çµ�å�ˆã�§ã€�å¸¯çŠ¶ã�®ãƒ�ãƒ¼ã�¨ã�—ã�¦è¡¨ç�¾ã�™ã‚‹ï¼‰
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1404,7 +1352,7 @@ def _paint_gantt_timeline_row_merged(
                 _, gh_ds = st0
                 c.fill = _gantt_cached_pattern_fill(gh_ds)
                 if col == col_s:
-                    c.value = "(日次始業準備)"
+                    c.value = "(æ—¥æ¬¡å§‹æ¥­æº–å‚™)"
                     c.font = bar_label_font
                 else:
                     c.value = None
@@ -1422,7 +1370,7 @@ def _paint_gantt_timeline_row_merged(
 def _time_intervals_overlap_half_open(
     a_start: time, a_end: time, b_start: time, b_end: time
 ) -> bool:
-    """半開区間 [a_start, a_end) と [b_start, b_end) が重なるか（同一日内）。"""
+    """å�Šé–‹åŒºé–“ [a_start, a_end) ã�¨ [b_start, b_end) ã�Œé‡�ã�ªã‚‹ã�‹ï¼ˆå�Œä¸€æ—¥å†…ï¼‰ã€‚"""
 
     def _sec(t: time) -> int:
         return t.hour * 3600 + t.minute * 60 + t.second
@@ -1431,17 +1379,17 @@ def _time_intervals_overlap_half_open(
 
 
 def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | None]:
-    """結果_設備毎の時間割「日時帯」セル（例 08:45-09:00）を解釈。"""
+    """çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã€Œæ—¥æ™‚å¸¯ã€�ã‚»ãƒ«ï¼ˆä¾‹ 08:45-09:00ï¼‰ã‚’è§£é‡ˆã€‚"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None, None
     s = str(val).strip()
-    if not s or "■" in s:
+    if not s or "â– " in s:
         return None, None
-    for sep in ("-", "－", "~", "〜"):
+    for sep in ("-", "ï¼�", "~", "ã€œ"):
         if sep in s:
             left, right = s.split(sep, 1)
-            left = left.strip().replace("：", ":")
-            right = right.strip().replace("：", ":")
+            left = left.strip().replace("ï¼š", ":")
+            right = right.strip().replace("ï¼š", ":")
             t0 = parse_time_str(left, None)
             t1 = parse_time_str(right, None)
             if t0 is not None and t1 is not None and t0 < t1:
@@ -1453,7 +1401,7 @@ def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | N
 def _apply_equipment_schedule_outside_regular_fill(
     ws, reg_start: time, reg_end: time
 ) -> None:
-    """「日時帯」列で定常 [reg_start, reg_end) と重ならない行のセルに着色。"""
+    """ã€Œæ—¥æ™‚å¸¯ã€�åˆ—ã�§å®šå¸¸ [reg_start, reg_end) ã�¨é‡�ã�ªã‚‰ã�ªã�„è¡Œã�®ã‚»ãƒ«ã�«ç�€è‰²ã€‚"""
     fill = PatternFill(
         fill_type="solid",
         start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
@@ -1461,7 +1409,7 @@ def _apply_equipment_schedule_outside_regular_fill(
     )
     col_idx = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "日時帯":
+        if c.value is not None and str(c.value).strip() == "æ—¥æ™‚å¸¯":
             col_idx = i
             break
     if col_idx is None:
@@ -1478,25 +1426,25 @@ def _apply_equipment_schedule_outside_regular_fill(
 
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
-    設備列（進度列を除く）で、表示に「日次始業準備」「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
-    結果_設備毎の時間割 / TEMP_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
+    è¨­å‚™åˆ—ï¼ˆé€²åº¦åˆ—ã‚’é™¤ã��ï¼‰ã�§ã€�è¡¨ç¤ºã�«ã€Œæ—¥æ¬¡å§‹æ¥­æº–å‚™ã€�ã€ŒåŠ å·¥å‰�æº–å‚™ã€�ã€Œä¾�é ¼åˆ‡æ›¿å¾Œå§‹æœ«ã€�ã�Œå�«ã�¾ã‚Œã‚‹ã‚»ãƒ«ã‚’è–„ç·‘ã�«ã�™ã‚‹ã€‚
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰² / TEMP_è¨­å‚™æ¯Žã�®æ™‚é–“å‰² ã�® equip ã‚»ãƒ«ç”¨ï¼ˆæ—¥æ™‚å¸¯åˆ—ã�¯å¤‰æ›´ã�—ã�ªã�„ï¼‰ã€‚
     """
     fill = PatternFill(
         fill_type="solid",
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(日次始業準備)", "(加工前準備)", "(依頼切替後始末)")
+    markers = ("(æ—¥æ¬¡å§‹æ¥­æº–å‚™)", "(åŠ å·¥å‰�æº–å‚™)", "(ä¾�é ¼åˆ‡æ›¿å¾Œå§‹æœ«)")
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):
         if c.value is None:
             continue
         h = str(c.value).strip()
-        if h == "日時帯":
+        if h == "æ—¥æ™‚å¸¯":
             col_tb = i
             continue
-        if h.endswith("進度"):
+        if h.endswith("é€²åº¦"):
             continue
         equip_cols.append(i)
     if col_tb is None or not equip_cols:
@@ -1514,7 +1462,7 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
 
 
 def _parse_equipment_schedule_day_header_date(val) -> date | None:
-    """日付見出し行「■ YYYY/MM/DD … ■」から日付を取る。"""
+    """æ—¥ä»˜è¦‹å‡ºã�—è¡Œã€Œâ–  YYYY/MM/DD â€¦ â– ã€�ã�‹ã‚‰æ—¥ä»˜ã‚’å�–ã‚‹ã€‚"""
     if val is None:
         return None
     s = str(val).strip()
@@ -1532,7 +1480,7 @@ def _machine_calendar_intervals_for_equipment_line(
     eq_line: str,
     day_d: date,
 ) -> list[tuple[datetime, datetime]]:
-    """当日・当該設備列キーに対応する機械カレンダー占有区間（工場稼働枠でクリップ済み）。"""
+    """å½“æ—¥ãƒ»å½“è©²è¨­å‚™åˆ—ã‚­ãƒ¼ã�«å¯¾å¿œã�™ã‚‹æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰åŒºé–“ï¼ˆå·¥å ´ç¨¼åƒ�æž ã�§ã‚¯ãƒªãƒƒãƒ—æ¸ˆã�¿ï¼‰ã€‚"""
     if not day_blocks:
         return []
     ek = str(eq_line or "").strip()
@@ -1566,8 +1514,8 @@ def _apply_equipment_schedule_machine_calendar_fill(
     calendar_blocks_by_date: dict[date, dict[str, list[tuple[datetime, datetime]]]],
 ) -> None:
     """
-    結果_設備毎の時間割: 機械カレンダー占有と重なる設備セル（進度列以外）を紫色で塗る。
-    10 分枠の半開区間 [slot_start, slot_end) と占有 [bs, be) が重なれば対象。
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²: æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã�¨é‡�ã�ªã‚‹è¨­å‚™ã‚»ãƒ«ï¼ˆé€²åº¦åˆ—ä»¥å¤–ï¼‰ã‚’ç´«è‰²ã�§å¡—ã‚‹ã€‚
+    10 åˆ†æž ã�®å�Šé–‹åŒºé–“ [slot_start, slot_end) ã�¨å� æœ‰ [bs, be) ã�Œé‡�ã�ªã‚Œã�°å¯¾è±¡ã€‚
     """
     if not calendar_blocks_by_date or not equipment_list:
         return
@@ -1578,7 +1526,7 @@ def _apply_equipment_schedule_machine_calendar_fill(
     )
     col_tb = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "日時帯":
+        if c.value is not None and str(c.value).strip() == "æ—¥æ™‚å¸¯":
             col_tb = i
             break
     if col_tb is None:
@@ -1619,8 +1567,8 @@ def _apply_equipment_schedule_machine_calendar_fill(
 
 def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
     """
-    結果_設備毎の時間割_機械名毎の機械名列で、依頼NOが入っているセルに薄緑を付与する。
-    「（休憩）」のみのセルは対象外。見出し行・日時帯列は変更しない。
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²_æ©Ÿæ¢°å��æ¯Žã�®æ©Ÿæ¢°å��åˆ—ã�§ã€�ä¾�é ¼NOã�Œå…¥ã�£ã�¦ã�„ã‚‹ã‚»ãƒ«ã�«è–„ç·‘ã‚’ä»˜ä¸Žã�™ã‚‹ã€‚
+    ã€Œï¼ˆä¼‘æ†©ï¼‰ã€�ã�®ã�¿ã�®ã‚»ãƒ«ã�¯å¯¾è±¡å¤–ã€‚è¦‹å‡ºã�—è¡Œãƒ»æ—¥æ™‚å¸¯åˆ—ã�¯å¤‰æ›´ã�—ã�ªã�„ã€‚
     """
     fill = PatternFill(
         fill_type="solid",
@@ -1629,7 +1577,7 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
     )
     col_tb = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "日時帯":
+        if c.value is not None and str(c.value).strip() == "æ—¥æ™‚å¸¯":
             col_tb = i
             break
     if col_tb is None:
@@ -1643,21 +1591,21 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
             if val is None or (isinstance(val, float) and pd.isna(val)):
                 continue
             s = str(val).strip().replace("\r", "").replace("\n", "")
-            if not s or s == "（休憩）":
+            if not s or s == "ï¼ˆä¼‘æ†©ï¼‰":
                 continue
             cell.fill = fill
 
 
 def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
     """
-    結果_設備ガントの固定列（B〜E、A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出現順で
-    淡色を割り当て、同一機械名は常に同じ PatternFill を共有する。
+    çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆã�®å›ºå®šåˆ—ï¼ˆBã€œEã€�A ã�¯æ—¥ä»˜ç¸¦çµ�å�ˆï¼‰ç”¨ã€‚equipment_list å†…ã�®æ©Ÿæ¢°å��ï¼ˆ+ ç„¡ã�—æ™‚ã�¯è¡Œå…¨ä½“ã‚’æ©Ÿæ¢°å��ï¼‰ã�®å‡ºç�¾é †ã�§
+    æ·¡è‰²ã‚’å‰²ã‚Šå½“ã�¦ã€�å�Œä¸€æ©Ÿæ¢°å��ã�¯å¸¸ã�«å�Œã�˜ PatternFill ã‚’å…±æœ‰ã�™ã‚‹ã€‚
     """
     order: list[str] = []
     seen: set[str] = set()
     for eq in equipment_list or []:
         _, mn = _split_equipment_line_process_machine(eq)
-        key = (mn or "").strip() or "—"
+        key = (mn or "").strip() or "â€”"
         if key not in seen:
             seen.add(key)
             order.append(key)
@@ -1685,17 +1633,17 @@ def _write_results_equipment_gantt_sheet(
     regular_shift_times: tuple[time | None, time | None] | None = None,
 ):
     """
-    結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
-    設備×横軸時間のガンチャート風シートを追加する。
-    横軸は15分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
-    actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�¨å�Œä¸€ãƒ‡ãƒ¼ã‚¿æº�ï¼ˆtimeline_eventsï¼‰ã�«åŸºã�¥ã��ã€�
+    è¨­å‚™Ã—æ¨ªè»¸æ™‚é–“ã�®ã‚¬ãƒ³ãƒ�ãƒ£ãƒ¼ãƒˆé¢¨ã‚·ãƒ¼ãƒˆã‚’è¿½åŠ ã�™ã‚‹ã€‚
+    æ¨ªè»¸ã�¯15åˆ†åˆ»ã�¿ã€‚é€£ç¶šã�™ã‚‹å�Œä¸€ã‚¿ã‚¹ã‚¯ï¼�ä¼‘æ†©ï¼�ç©ºã��ã�¯ã‚»ãƒ«çµ�å�ˆã�—ã�¦å¸¯çŠ¶ã�«è¡¨ç¤ºã�™ã‚‹ã€‚
+    actual_timeline_events ã�Œã�‚ã‚Œã�°è¨­å‚™ã�”ã�¨ã�«ã€Œå®Ÿç¸¾ã€�è¡Œã‚’è¨ˆç”»è¡Œã�®ä¸‹ã�¸è¿½åŠ ã�™ã‚‹ã€‚
     """
     wb = writer.book
     try:
-        insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
+        insert_at = wb.sheetnames.index("çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²") + 1
     except ValueError:
         insert_at = len(wb.sheetnames)
-    ws = wb.create_sheet("結果_設備ガント", insert_at)
+    ws = wb.create_sheet("çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆ", insert_at)
     try:
         ws.sheet_properties.tabColor = "7F7F7F"
     except Exception:
@@ -1748,7 +1696,7 @@ def _write_results_equipment_gantt_sheet(
     )
     rs, re_ = (regular_shift_times or (None, None))
 
-    # 横軸(10分刻み)は日付で共通のため、slot_times を先に確定
+    # æ¨ªè»¸(10åˆ†åˆ»ã�¿)ã�¯æ—¥ä»˜ã�§å…±é€šã�®ã�Ÿã‚�ã€�slot_times ã‚’å…ˆã�«ç¢ºå®š
     base_dt = base_now_dt if isinstance(base_now_dt, datetime) else datetime.now()
     dummy_d = sorted_dates[0] if sorted_dates else base_dt.date()
     d_start0 = datetime.combine(dummy_d, DEFAULT_START_TIME)
@@ -1760,13 +1708,13 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
+    n_fixed = 5  # A=æ—¥ä»˜ï¼ˆæ—¥ãƒ–ãƒ­ãƒƒã‚¯å†…ã�§ç¸¦çµ�å�ˆï¼‰/ Bã€œE=æ©Ÿæ¢°å��ãƒ»å·¥ç¨‹å��ãƒ»æ‹…å½“è€…ãƒ»ã‚¿ã‚¹ã‚¯æ¦‚è¦�
     last_col = n_fixed + n_slots
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
 
-    # タイトル＆日時（ページ上部）
+    # ã‚¿ã‚¤ãƒˆãƒ«ï¼†æ—¥æ™‚ï¼ˆãƒšãƒ¼ã‚¸ä¸Šéƒ¨ï¼‰
     create_ts = base_dt.strftime("%Y/%m/%d %H:%M:%S")
     master_path = os.path.join(os.getcwd(), MASTER_FILE) if MASTER_FILE else ""
 
@@ -1776,16 +1724,16 @@ def _write_results_equipment_gantt_sheet(
                 return datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y/%m/%d %H:%M:%S")
         except Exception:
             pass
-        return "—"
+        return "â€”"
 
     master_mtime = _fmt_mtime(master_path)
 
     row = 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-    tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
+    tcell = ws.cell(row=row, column=1, value="æ¹–å�—å·¥å ´ åŠ å·¥è¨ˆç”»")
     tcell.font = title_font
     tcell.fill = title_fill
-    # 結合セルでも左端から表示（縮小・折り返しなし）
+    # çµ�å�ˆã‚»ãƒ«ã�§ã‚‚å·¦ç«¯ã�‹ã‚‰è¡¨ç¤ºï¼ˆç¸®å°�ãƒ»æŠ˜ã‚Šè¿”ã�—ã�ªã�—ï¼‰
     tcell.alignment = Alignment(
         horizontal="left",
         vertical="center",
@@ -1799,9 +1747,9 @@ def _write_results_equipment_gantt_sheet(
 
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     meta_line = (
-        f"作成　{create_ts}"
-        f"　・　データ吸出し　{data_extract_dt_str or '—'}"
-        f"　・　マスタ（master.xlsm）　{master_mtime}"
+        f"ä½œæˆ�ã€€{create_ts}"
+        f"ã€€ãƒ»ã€€ãƒ‡ãƒ¼ã‚¿å�¸å‡ºã�—ã€€{data_extract_dt_str or 'â€”'}"
+        f"ã€€ãƒ»ã€€ãƒžã‚¹ã‚¿ï¼ˆmaster.xlsmï¼‰ã€€{master_mtime}"
     )
     mtop = ws.cell(row=row, column=1, value=meta_line)
     mtop.font = meta_font
@@ -1829,7 +1777,7 @@ def _write_results_equipment_gantt_sheet(
         dates_to_show.append(d0)
 
     hdr_row = row
-    fixed_hdr = ["日付", "機械名", "工程名", "担当者", "タスク概要"]
+    fixed_hdr = ["æ—¥ä»˜", "æ©Ÿæ¢°å��", "å·¥ç¨‹å��", "æ‹…å½“è€…", "ã‚¿ã‚¹ã‚¯æ¦‚è¦�"]
     for ci, h in enumerate(fixed_hdr, 1):
         c = ws.cell(row=hdr_row, column=ci, value=h)
         c.font = hdr_font
@@ -1847,7 +1795,7 @@ def _write_results_equipment_gantt_sheet(
         c.fill = hdr_use
         c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
     ws.row_dimensions[hdr_row].height = 44
-    # 先頭データ行の左上＝時刻列先頭（F4）で窓枠固定（行1〜3・列A〜Eを固定）
+    # å…ˆé ­ãƒ‡ãƒ¼ã‚¿è¡Œã�®å·¦ä¸Šï¼�æ™‚åˆ»åˆ—å…ˆé ­ï¼ˆF4ï¼‰ã�§çª“æž å›ºå®šï¼ˆè¡Œ1ã€œ3ãƒ»åˆ—Aã€œEã‚’å›ºå®šï¼‰
     ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
     row = hdr_row + 1
 
@@ -1863,7 +1811,7 @@ def _write_results_equipment_gantt_sheet(
         day_start = row
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
-            mk_key = (mach_nm or "").strip() or "—"
+            mk_key = (mach_nm or "").strip() or "â€”"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
             evlist = by_dm[d].get(eq, [])
             if evlist:
@@ -1874,14 +1822,14 @@ def _write_results_equipment_gantt_sheet(
                     if tid and tid not in seen_tid:
                         seen_tid.add(tid)
                         tids.append(tid)
-                task_sum = " ".join(tids) if tids else "—"
+                task_sum = " ".join(tids) if tids else "â€”"
                 member_disp = _gantt_row_member_names(evlist)
             else:
-                task_sum = "—"
-                member_disp = "—"
+                task_sum = "â€”"
+                member_disp = "â€”"
 
-            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
-            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "â€”")
+            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "â€”")
             c3 = ws.cell(row=row, column=4, value=member_disp)
             c4 = ws.cell(row=row, column=5, value=task_sum)
             for c in (c1, c2, c3, c4):
@@ -1920,22 +1868,22 @@ def _write_results_equipment_gantt_sheet(
                         if tid and tid not in seen_aid:
                             seen_aid.add(tid)
                             tids_a.append(tid)
-                    task_sum_a = " ".join(tids_a) if tids_a else "—"
+                    task_sum_a = " ".join(tids_a) if tids_a else "â€”"
                     member_disp_a = _gantt_row_member_names(evlist_a)
                 else:
-                    task_sum_a = "—"
-                    member_disp_a = "—"
+                    task_sum_a = "â€”"
+                    member_disp_a = "â€”"
 
                 lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
                 if mach_nm:
-                    act_mach = f"{mach_nm}（実績）"
+                    act_mach = f"{mach_nm}ï¼ˆå®Ÿç¸¾ï¼‰"
                 elif proc_nm:
-                    act_mach = "（実績）"
+                    act_mach = "ï¼ˆå®Ÿç¸¾ï¼‰"
                 else:
-                    act_mach = "—"
+                    act_mach = "â€”"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
-                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "â€”")
                 ca3 = ws.cell(row=row, column=4, value=member_disp_a)
                 ca4 = ws.cell(row=row, column=5, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
@@ -1972,7 +1920,7 @@ def _write_results_equipment_gantt_sheet(
             ban = ws.cell(
                 row=day_start,
                 column=1,
-                value=f"【{d.strftime('%Y/%m/%d')}】",
+                value=f"ã€�{d.strftime('%Y/%m/%d')}ã€‘",
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
@@ -1993,21 +1941,21 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 5
             row += 1
 
-    # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
-    # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
+    # å‡¡ä¾‹ã�¯é«˜ã�•ç¢ºä¿�ã�®ã�Ÿã‚�çœ�ç•¥ï¼ˆãƒ¢ãƒŽã‚¯ãƒ­å�°åˆ·ã�¯è‰²ã�®æ¿ƒæ·¡/ã‚»ãƒ«ã�®æž ã�§è­˜åˆ¥ï¼‰
+    # åˆ—å¹…ãƒ»æŠ˜ã‚Šè¿”ã�—ã�¯ VBA å�–ã‚Šè¾¼ã�¿æ™‚ï¼ˆçµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆ_åˆ—å¹…ã‚’è¨­å®šï¼‰ã�§è¨­å®š
 
     try:
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToHeight = False
         ws.page_setup.fitToWidth = 1
-        # A3（openpyxl 上で paperSize=8 が A3 相当）
+        # A3ï¼ˆopenpyxl ä¸Šã�§ paperSize=8 ã�Œ A3 ç›¸å½“ï¼‰
         ws.page_setup.paperSize = 8
-        # 余白を狭めて横1ページに収まりやすくする（単位: インチ）
+        # ä½™ç™½ã‚’ç‹­ã‚�ã�¦æ¨ª1ãƒšãƒ¼ã‚¸ã�«å�Žã�¾ã‚Šã‚„ã�™ã��ã�™ã‚‹ï¼ˆå�˜ä½�: ã‚¤ãƒ³ãƒ�ï¼‰
         ws.page_margins.left = 0.2
         ws.page_margins.right = 0.2
         ws.page_margins.top = 0.2
         ws.page_margins.bottom = 0.2
-        # タイトル・表をページ左基準に（レポート風）
+        # ã‚¿ã‚¤ãƒˆãƒ«ãƒ»è¡¨ã‚’ãƒšãƒ¼ã‚¸å·¦åŸºæº–ã�«ï¼ˆãƒ¬ãƒ�ãƒ¼ãƒˆé¢¨ï¼‰
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
@@ -2016,21 +1964,21 @@ def _write_results_equipment_gantt_sheet(
 
 
 def row_has_completion_keyword(row):
-    """加工完了区分に「完了」の文字が含まれる場合はタスク完了とみなす。"""
+    """åŠ å·¥å®Œäº†åŒºåˆ†ã�«ã€Œå®Œäº†ã€�ã�®æ–‡å­—ã�Œå�«ã�¾ã‚Œã‚‹å ´å�ˆã�¯ã‚¿ã‚¹ã‚¯å®Œäº†ã�¨ã�¿ã�ªã�™ã€‚"""
     v = row.get(TASK_COL_COMPLETION_FLAG)
     if v is None or pd.isna(v):
         return False
-    return "完了" in str(v)
+    return "å®Œäº†" in str(v)
 
 
 def _plan_row_exclude_from_assignment(row) -> bool:
     """
-    「配台不要」列がオンなら、その行は配台キューへ入れず、特別指定_備考の AI 解析行からも除く。
+    ã€Œé…�å�°ä¸�è¦�ã€�åˆ—ã�Œã‚ªãƒ³ã�ªã‚‰ã€�ã��ã�®è¡Œã�¯é…�å�°ã‚­ãƒ¥ãƒ¼ã�¸å…¥ã‚Œã�šã€�ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�® AI è§£æž�è¡Œã�‹ã‚‰ã‚‚é™¤ã��ã€‚
 
-    配台から外す（真）: 論理値 True、数値 1、文字列（NFKC 後・小文字）
-      true / 1 / yes / on / y / t / はい / ○ / 〇 / ●
-    配台対象（偽）: 空、None、False、0、no / off / false / いいえ / 否 等
-    上記以外の文字列は偽（配台する）。チェックボックス連動セルは通常 TRUE/FALSE または 1/0。
+    é…�å�°ã�‹ã‚‰å¤–ã�™ï¼ˆçœŸï¼‰: è«–ç�†å€¤ Trueã€�æ•°å€¤ 1ã€�æ–‡å­—åˆ—ï¼ˆNFKC å¾Œãƒ»å°�æ–‡å­—ï¼‰
+      true / 1 / yes / on / y / t / ã�¯ã�„ / â—‹ / ã€‡ / â—�
+    é…�å�°å¯¾è±¡ï¼ˆå�½ï¼‰: ç©ºã€�Noneã€�Falseã€�0ã€�no / off / false / ã�„ã�„ã�ˆ / å�¦ ç­‰
+    ä¸Šè¨˜ä»¥å¤–ã�®æ–‡å­—åˆ—ã�¯å�½ï¼ˆé…�å�°ã�™ã‚‹ï¼‰ã€‚ãƒ�ã‚§ãƒƒã‚¯ãƒœãƒƒã‚¯ã‚¹é€£å‹•ã‚»ãƒ«ã�¯é€šå¸¸ TRUE/FALSE ã�¾ã�Ÿã�¯ 1/0ã€‚
     """
     v = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
     if v is True:
@@ -2049,17 +1997,17 @@ def _plan_row_exclude_from_assignment(row) -> bool:
         except (TypeError, ValueError):
             pass
     s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-    if not s or s in ("nan", "none", "false", "0", "no", "off", "いいえ", "否"):
+    if not s or s in ("nan", "none", "false", "0", "no", "off", "ã�„ã�„ã�ˆ", "å�¦"):
         return False
-    if s in ("true", "1", "yes", "on", "はい", "y", "t", "○", "〇", "●"):
+    if s in ("true", "1", "yes", "on", "ã�¯ã�„", "y", "t", "â—‹", "ã€‡", "â—�"):
         return True
     return False
 
 
 def _coerce_plan_exclude_column_value_for_storage(v):
     """
-    「配台不要」列へ書き込む値を、StringDtype 列でも代入エラーにならない形にそろえる。
-    Excel 取り込みの True / 1 / False / 0 と文字列を保持し、_plan_row_exclude_from_assignment と整合する。
+    ã€Œé…�å�°ä¸�è¦�ã€�åˆ—ã�¸æ›¸ã��è¾¼ã‚€å€¤ã‚’ã€�StringDtype åˆ—ã�§ã‚‚ä»£å…¥ã‚¨ãƒ©ãƒ¼ã�«ã�ªã‚‰ã�ªã�„å½¢ã�«ã��ã‚�ã�ˆã‚‹ã€‚
+    Excel å�–ã‚Šè¾¼ã�¿ã�® True / 1 / False / 0 ã�¨æ–‡å­—åˆ—ã‚’ä¿�æŒ�ã�—ã€�_plan_row_exclude_from_assignment ã�¨æ•´å�ˆã�™ã‚‹ã€‚
     """
     if v is None:
         return ""
@@ -2092,13 +2040,13 @@ def parse_float_safe(val, default=0.0):
 
 def calc_done_qty_equivalent_from_row(row):
     """
-    加工済数量（工程投入量換算）を返す。
+    åŠ å·¥æ¸ˆæ•°é‡�ï¼ˆå·¥ç¨‹æŠ•å…¥é‡�æ�›ç®—ï¼‰ã‚’è¿”ã�™ã€‚
 
-    基本式:
-      実出来高 ÷ (受注数 ÷ 換算数量)
-    = 実出来高 * 換算数量 / 受注数
+    åŸºæœ¬å¼�:
+      å®Ÿå‡ºæ�¥é«˜ Ã· (å�—æ³¨æ•° Ã· æ�›ç®—æ•°é‡�)
+    = å®Ÿå‡ºæ�¥é«˜ * æ�›ç®—æ•°é‡� / å�—æ³¨æ•°
 
-    受注数が無い/不正な場合は、旧列「実加工数」を互換フォールバックとして使う。
+    å�—æ³¨æ•°ã�Œç„¡ã�„/ä¸�æ­£ã�ªå ´å�ˆã�¯ã€�æ—§åˆ—ã€Œå®ŸåŠ å·¥æ•°ã€�ã‚’äº’æ�›ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã�¨ã�—ã�¦ä½¿ã�†ã€‚
     """
     qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     order_qty = parse_float_safe(row.get(TASK_COL_ORDER_QTY), 0.0)
@@ -2141,8 +2089,8 @@ def parse_optional_date(val):
 
 def _planning_df_cell_scalar(row, col_name):
     """
-    iterrows() 1行分から列値を取る。同一見出しの重複列があると row.get は Series になり、
-    str→to_datetime で誤った日付になることがあるため、先頭の非欠損スカラーを返す。
+    iterrows() 1è¡Œåˆ†ã�‹ã‚‰åˆ—å€¤ã‚’å�–ã‚‹ã€‚å�Œä¸€è¦‹å‡ºã�—ã�®é‡�è¤‡åˆ—ã�Œã�‚ã‚‹ã�¨ row.get ã�¯ Series ã�«ã�ªã‚Šã€�
+    strâ†’to_datetime ã�§èª¤ã�£ã�Ÿæ—¥ä»˜ã�«ã�ªã‚‹ã�“ã�¨ã�Œã�‚ã‚‹ã�Ÿã‚�ã€�å…ˆé ­ã�®é�žæ¬ æ��ã‚¹ã‚«ãƒ©ãƒ¼ã‚’è¿”ã�™ã€‚
     """
     v = row.get(col_name) if hasattr(row, "get") else None
     if isinstance(v, pd.Series):
@@ -2160,26 +2108,26 @@ def load_ai_cache():
             with open(ai_cache_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    # 期限切れエントリを除去（6時間）
+                    # æœŸé™�åˆ‡ã‚Œã‚¨ãƒ³ãƒˆãƒªã‚’é™¤åŽ»ï¼ˆ6æ™‚é–“ï¼‰
                     now_ts = time_module.time()
                     cleaned = {}
                     expired_count = 0
                     for k, v in data.items():
-                        # 新形式: {"ts": epoch_seconds, "data": {...}}
+                        # æ–°å½¢å¼�: {"ts": epoch_seconds, "data": {...}}
                         if isinstance(v, dict) and "ts" in v and "data" in v:
                             ts = parse_float_safe(v.get("ts"), 0.0)
                             if ts > 0 and (now_ts - ts) <= AI_CACHE_TTL_SECONDS:
                                 cleaned[k] = v
                             else:
                                 expired_count += 1
-                        # 旧形式: 値が直接AI結果dict（互換で読み取り、即時に新形式へ再保存される）
+                        # æ—§å½¢å¼�: å€¤ã�Œç›´æŽ¥AIçµ�æžœdictï¼ˆäº’æ�›ã�§èª­ã�¿å�–ã‚Šã€�å�³æ™‚ã�«æ–°å½¢å¼�ã�¸å†�ä¿�å­˜ã�•ã‚Œã‚‹ï¼‰
                         else:
                             cleaned[k] = {"ts": now_ts, "data": v}
                     if expired_count > 0:
-                        logging.info(f"AIキャッシュ期限切れを削除: {expired_count}件")
+                        logging.info(f"AIã‚­ãƒ£ãƒƒã‚·ãƒ¥æœŸé™�åˆ‡ã‚Œã‚’å‰Šé™¤: {expired_count}ä»¶")
                     return cleaned
     except Exception as e:
-        logging.warning(f"AIキャッシュ読み込み失敗: {e}")
+        logging.warning(f"AIã‚­ãƒ£ãƒƒã‚·ãƒ¥èª­ã�¿è¾¼ã�¿å¤±æ•—: {e}")
     return {}
 
 def save_ai_cache(cache_obj):
@@ -2187,12 +2135,12 @@ def save_ai_cache(cache_obj):
         with open(ai_cache_path, "w", encoding="utf-8") as f:
             json.dump(cache_obj, f, ensure_ascii=False)
     except Exception as e:
-        logging.warning(f"AIキャッシュ保存失敗: {e}")
+        logging.warning(f"AIã‚­ãƒ£ãƒƒã‚·ãƒ¥ä¿�å­˜å¤±æ•—: {e}")
 
 def get_cached_ai_result(cache_obj, cache_key, content_key=None):
     """
-    content_key: オプション。保存時と同一の文字列でないヒットは無効化する（特別指定・照合用の二次チェック）。
-    旧エントリに content_key が無い場合は SHA256 キー一致のみで従来どおりヒットとみなす。
+    content_key: ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã€‚ä¿�å­˜æ™‚ã�¨å�Œä¸€ã�®æ–‡å­—åˆ—ã�§ã�ªã�„ãƒ’ãƒƒãƒˆã�¯ç„¡åŠ¹åŒ–ã�™ã‚‹ï¼ˆç‰¹åˆ¥æŒ‡å®šãƒ»ç…§å�ˆç”¨ã�®äºŒæ¬¡ãƒ�ã‚§ãƒƒã‚¯ï¼‰ã€‚
+    æ—§ã‚¨ãƒ³ãƒˆãƒªã�« content_key ã�Œç„¡ã�„å ´å�ˆã�¯ SHA256 ã‚­ãƒ¼ä¸€è‡´ã�®ã�¿ã�§å¾“æ�¥ã�©ã�Šã‚Šãƒ’ãƒƒãƒˆã�¨ã�¿ã�ªã�™ã€‚
     """
     entry = cache_obj.get(cache_key)
     if not isinstance(entry, dict):
@@ -2206,7 +2154,7 @@ def get_cached_ai_result(cache_obj, cache_key, content_key=None):
         stored_ck = entry.get("content_key")
         if stored_ck is not None and stored_ck != content_key:
             logging.info(
-                "AIキャッシュ: キーは一致しますが content_key が現行入力と異なるため無効化します。"
+                "AIã‚­ãƒ£ãƒƒã‚·ãƒ¥: ã‚­ãƒ¼ã�¯ä¸€è‡´ã�—ã�¾ã�™ã�Œ content_key ã�Œç�¾è¡Œå…¥åŠ›ã�¨ç•°ã�ªã‚‹ã�Ÿã‚�ç„¡åŠ¹åŒ–ã�—ã�¾ã�™ã€‚"
             )
             return None
     data = entry.get("data")
@@ -2221,14 +2169,14 @@ def put_cached_ai_result(cache_obj, cache_key, parsed_obj, content_key=None):
     cache_obj[cache_key] = payload
 
 def extract_retry_seconds(err_text):
-    # 例: "Please retry in 57.089735313s."
+    # ä¾‹: "Please retry in 57.089735313s."
     m = re.search(r"retry in ([0-9]+(?:\.[0-9]+)?)s", err_text, re.IGNORECASE)
     if m:
         try:
             return float(m.group(1))
         except ValueError:
             pass
-    # 例: "'retryDelay': '57s'"
+    # ä¾‹: "'retryDelay': '57s'"
     m = re.search(r"retryDelay'\s*:\s*'([0-9]+)s'", err_text)
     if m:
         try:
@@ -2240,14 +2188,14 @@ def extract_retry_seconds(err_text):
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
-    製品名文字列から加工単位(m)を推定する暫定ルール。
-    例: 15020-JX5R- 770X300F-A   R -> 300
-    ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
+    è£½å“�å��æ–‡å­—åˆ—ã�‹ã‚‰åŠ å·¥å�˜ä½�(m)ã‚’æŽ¨å®šã�™ã‚‹æš«å®šãƒ«ãƒ¼ãƒ«ã€‚
+    ä¾‹: 15020-JX5R- 770X300F-A   R -> 300
+    â€» ãƒ�ãƒªã‚¨ãƒ¼ã‚·ãƒ§ãƒ³ã�Œå¤šã�„å‰�æ��ã�®ã�Ÿã‚�ã€�ã�“ã�“ã‚’éƒ½åº¦èª¿æ•´ã�§ã��ã‚‹ã‚ˆã�†é–¢æ•°åŒ–ã�—ã�¦ã�„ã‚‹ã€‚
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
     s = str(product_name)
-    # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
+    # "770X300..." ã�®ã‚ˆã�†ã�ªãƒ‘ã‚¿ãƒ¼ãƒ³ã�‹ã‚‰ X ã�®å¾Œã�®æ•°å€¤ã‚’æ‹¾ã�†ï¼ˆæœ€å¾Œã�«è¦‹ã�¤ã�‹ã�£ã�ŸXã‚’å„ªå…ˆï¼‰
     matches = re.findall(r"[xX]\s*(\d{2,6})", s)
     if matches:
         try:
@@ -2260,29 +2208,29 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
 
 def load_tasks_df():
     """
-    タスク入力を取得する（tasks.xlsx は使用しない）。
-    必須: 環境変数 TASK_INPUT_WORKBOOK にマクロ実行ブックのフルパス（VBA が設定）
-         シート「加工計画DATA」を読み込む（投入目安は「回答納期」、未入力時は「指定納期」）。
+    ã‚¿ã‚¹ã‚¯å…¥åŠ›ã‚’å�–å¾—ã�™ã‚‹ï¼ˆtasks.xlsx ã�¯ä½¿ç”¨ã�—ã�ªã�„ï¼‰ã€‚
+    å¿…é ˆ: ç’°å¢ƒå¤‰æ•° TASK_INPUT_WORKBOOK ã�«ãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã�®ãƒ•ãƒ«ãƒ‘ã‚¹ï¼ˆVBA ã�Œè¨­å®šï¼‰
+         ã‚·ãƒ¼ãƒˆã€ŒåŠ å·¥è¨ˆç”»DATAã€�ã‚’èª­ã�¿è¾¼ã‚€ï¼ˆæŠ•å…¥ç›®å®‰ã�¯ã€Œå›žç­”ç´�æœŸã€�ã€�æœªå…¥åŠ›æ™‚ã�¯ã€ŒæŒ‡å®šç´�æœŸã€�ï¼‰ã€‚
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK が未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
+            "TASK_INPUT_WORKBOOK ã�Œæœªè¨­å®šã�§ã�™ã€‚VBA ã�® RunPython ã�§ãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã�®ãƒ‘ã‚¹ã‚’æ¸¡ã�—ã�¦ã��ã� ã�•ã�„ã€‚"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
+        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK ã�Œå­˜åœ¨ã�—ã�¾ã�›ã‚“: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
     df.columns = df.columns.str.strip()
-    logging.info(f"タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{TASKS_SHEET_NAME}' を読み込みました。")
+    logging.info(f"ã‚¿ã‚¹ã‚¯å…¥åŠ›: '{TASKS_INPUT_WORKBOOK}' ã�® '{TASKS_SHEET_NAME}' ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚")
     return df
 
 
 def _nfkc_column_aliases(canonical_name):
-    """見出しの表記ゆれ（全角記号・互換文字）を吸収するための比較キー。"""
+    """è¦‹å‡ºã�—ã�®è¡¨è¨˜ã‚†ã‚Œï¼ˆå…¨è§’è¨˜å�·ãƒ»äº’æ�›æ–‡å­—ï¼‰ã‚’å�¸å�Žã�™ã‚‹ã�Ÿã‚�ã�®æ¯”è¼ƒã‚­ãƒ¼ã€‚"""
     return unicodedata.normalize("NFKC", str(canonical_name).strip())
 
 
 def _align_dataframe_headers_to_canonical(df, canonical_names):
-    """列名を NFKC 一致で canonical に寄せる（Excel 側が全角 '_' 等でも読めるように）。"""
+    """åˆ—å��ã‚’ NFKC ä¸€è‡´ã�§ canonical ã�«å¯„ã�›ã‚‹ï¼ˆExcel å�´ã�Œå…¨è§’ '_' ç­‰ã�§ã‚‚èª­ã‚�ã‚‹ã‚ˆã�†ã�«ï¼‰ã€‚"""
     key_to_canonical = {_nfkc_column_aliases(c): c for c in canonical_names}
     rename_map = {}
     for col in df.columns:
@@ -2298,8 +2246,8 @@ def _align_dataframe_headers_to_canonical(df, canonical_names):
 
 def _normalize_equipment_match_key(val):
     """
-    工程名（設備名）の照合用キー。
-    NFKC・前後空白・連続空白・NBSP/全角スペース・ゼロ幅文字を正規化する。
+    å·¥ç¨‹å��ï¼ˆè¨­å‚™å��ï¼‰ã�®ç…§å�ˆç”¨ã‚­ãƒ¼ã€‚
+    NFKCãƒ»å‰�å¾Œç©ºç™½ãƒ»é€£ç¶šç©ºç™½ãƒ»NBSP/å…¨è§’ã‚¹ãƒšãƒ¼ã‚¹ãƒ»ã‚¼ãƒ­å¹…æ–‡å­—ã‚’æ­£è¦�åŒ–ã�™ã‚‹ã€‚
     """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
@@ -2311,7 +2259,7 @@ def _normalize_equipment_match_key(val):
 
 
 def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
-    """設備列キー（工程+機械 等）から、物理機械の占有に用いるキー（機械名側・正規化）を得る。"""
+    """è¨­å‚™åˆ—ã‚­ãƒ¼ï¼ˆå·¥ç¨‹+æ©Ÿæ¢° ç­‰ï¼‰ã�‹ã‚‰ã€�ç‰©ç�†æ©Ÿæ¢°ã�®å� æœ‰ã�«ç”¨ã�„ã‚‹ã‚­ãƒ¼ï¼ˆæ©Ÿæ¢°å��å�´ãƒ»æ­£è¦�åŒ–ï¼‰ã‚’å¾—ã‚‹ã€‚"""
     s = str(eq_line or "").strip()
     if not s:
         return ""
@@ -2323,13 +2271,13 @@ def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
 
 def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     """
-    設備の壁時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
-    機械カレンダー列は equipment_line_key の「工程+機械」と一致するため、
-    正規化後に「+」を含むときは **machine_name より先に** そこから物理機械名を採用する。
-    （machine_name に工程名のみなどが入り、床キー「熱融着機 湖南」とずれて候補外し漏れするのを防ぐ）
-    単一名のときは従来どおり machine_name を優先し、無ければ equipment_line_key / machine から推定する。
-    machine_name に「工程+機械」と入っている場合でも、占有は物理機械名（+ の右側）に寄せる。
-    全角「＋」のみの列は NFKC 後に半角「+」になるため、分割判定は正規化後に行う。
+    è¨­å‚™ã�®å£�æ™‚è¨ˆå� æœ‰ï¼ˆmachine_avail_dtãƒ»é–“éš”ãƒŸãƒ©ãƒ¼ï¼‰ã�«ç”¨ã�„ã‚‹ã‚­ãƒ¼ã€‚
+    æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼åˆ—ã�¯ equipment_line_key ã�®ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã�¨ä¸€è‡´ã�™ã‚‹ã�Ÿã‚�ã€�
+    æ­£è¦�åŒ–å¾Œã�«ã€Œ+ã€�ã‚’å�«ã‚€ã�¨ã��ã�¯ **machine_name ã‚ˆã‚Šå…ˆã�«** ã��ã�“ã�‹ã‚‰ç‰©ç�†æ©Ÿæ¢°å��ã‚’æŽ¡ç”¨ã�™ã‚‹ã€‚
+    ï¼ˆmachine_name ã�«å·¥ç¨‹å��ã�®ã�¿ã�ªã�©ã�Œå…¥ã‚Šã€�åºŠã‚­ãƒ¼ã€Œç†±èž�ç�€æ©Ÿ æ¹–å�—ã€�ã�¨ã�šã‚Œã�¦å€™è£œå¤–ã�—æ¼�ã‚Œã�™ã‚‹ã�®ã‚’é˜²ã��ï¼‰
+    å�˜ä¸€å��ã�®ã�¨ã��ã�¯å¾“æ�¥ã�©ã�Šã‚Š machine_name ã‚’å„ªå…ˆã�—ã€�ç„¡ã�‘ã‚Œã�° equipment_line_key / machine ã�‹ã‚‰æŽ¨å®šã�™ã‚‹ã€‚
+    machine_name ã�«ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã�¨å…¥ã�£ã�¦ã�„ã‚‹å ´å�ˆã�§ã‚‚ã€�å� æœ‰ã�¯ç‰©ç�†æ©Ÿæ¢°å��ï¼ˆ+ ã�®å�³å�´ï¼‰ã�«å¯„ã�›ã‚‹ã€‚
+    å…¨è§’ã€Œï¼‹ã€�ã�®ã�¿ã�®åˆ—ã�¯ NFKC å¾Œã�«å�Šè§’ã€Œ+ã€�ã�«ã�ªã‚‹ã�Ÿã‚�ã€�åˆ†å‰²åˆ¤å®šã�¯æ­£è¦�åŒ–å¾Œã�«è¡Œã�†ã€‚
     """
     ek = str(task.get("equipment_line_key") or "").strip()
     nek = _normalize_equipment_match_key(ek)
@@ -2350,9 +2298,9 @@ def _physical_machine_occupancy_key_for_task(task: dict) -> str:
 
 def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
     """
-    machine_avail_dt・機械カレンダー床と整合する占有キー（原則: 物理機械名）。
-    task から取れないときは eq_line（工程+機械）から機械名側を推定し、最後の手段で eq_line。
-    「… or eq_line」による工程+機械フォールバックは機械カレンダー物理キーと不一致になり得るため禁止。
+    machine_avail_dtãƒ»æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼åºŠã�¨æ•´å�ˆã�™ã‚‹å� æœ‰ã‚­ãƒ¼ï¼ˆåŽŸå‰‡: ç‰©ç�†æ©Ÿæ¢°å��ï¼‰ã€‚
+    task ã�‹ã‚‰å�–ã‚Œã�ªã�„ã�¨ã��ã�¯ eq_lineï¼ˆå·¥ç¨‹+æ©Ÿæ¢°ï¼‰ã�‹ã‚‰æ©Ÿæ¢°å��å�´ã‚’æŽ¨å®šã�—ã€�æœ€å¾Œã�®æ‰‹æ®µã�§ eq_lineã€‚
+    ã€Œâ€¦ or eq_lineã€�ã�«ã‚ˆã‚‹å·¥ç¨‹+æ©Ÿæ¢°ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã�¯æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ç‰©ç�†ã‚­ãƒ¼ã�¨ä¸�ä¸€è‡´ã�«ã�ªã‚Šå¾—ã‚‹ã�Ÿã‚�ç¦�æ­¢ã€‚
     """
     occ = (_physical_machine_occupancy_key_for_task(task) or "").strip()
     if occ:
@@ -2365,13 +2313,13 @@ def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
 
 
 def _equipment_lookup_normalized_to_canonical(equipment_list):
-    """正規化キー → master スキルシート上の列名（canonical 表記）。"""
+    """æ­£è¦�åŒ–ã‚­ãƒ¼ â†’ master ã‚¹ã‚­ãƒ«ã‚·ãƒ¼ãƒˆä¸Šã�®åˆ—å��ï¼ˆcanonical è¡¨è¨˜ï¼‰ã€‚"""
     lookup = {}
     for eq in equipment_list:
         k = _normalize_equipment_match_key(eq)
         if k and k not in lookup:
             lookup[k] = eq
-    # 工程名のみの照合（加工実績DATA等）: 同一工程の先頭列（工程+機械）へ寄せる
+    # å·¥ç¨‹å��ã�®ã�¿ã�®ç…§å�ˆï¼ˆåŠ å·¥å®Ÿç¸¾DATAç­‰ï¼‰: å�Œä¸€å·¥ç¨‹ã�®å…ˆé ­åˆ—ï¼ˆå·¥ç¨‹+æ©Ÿæ¢°ï¼‰ã�¸å¯„ã�›ã‚‹
     for eq in equipment_list:
         s = str(eq).strip()
         if "+" not in s:
@@ -2385,8 +2333,8 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
 
 def _equipment_schedule_header_labels(equipment_list: list) -> list:
     """
-    結果_設備毎の時間割・結果_設備ガントの行／列見出し用。
-    内部キーが「工程+機械」のときは機械名を表示し、機械名の重複時のみ工程を括弧で補う。
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ãƒ»çµ�æžœ_è¨­å‚™ã‚¬ãƒ³ãƒˆã�®è¡Œï¼�åˆ—è¦‹å‡ºã�—ç”¨ã€‚
+    å†…éƒ¨ã‚­ãƒ¼ã�Œã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã�®ã�¨ã��ã�¯æ©Ÿæ¢°å��ã‚’è¡¨ç¤ºã�—ã€�æ©Ÿæ¢°å��ã�®é‡�è¤‡æ™‚ã�®ã�¿å·¥ç¨‹ã‚’æ‹¬å¼§ã�§è£œã�†ã€‚
     """
     raw = []
     for eq in equipment_list:
@@ -2405,7 +2353,7 @@ def _equipment_schedule_header_labels(equipment_list: list) -> list:
             s = str(eq).strip()
             if "+" in s:
                 p = s.split("+", 1)[0].strip()
-                out.append(f"{r}（{p}）" if p else r)
+                out.append(f"{r}ï¼ˆ{p}ï¼‰" if p else r)
             else:
                 out.append(r)
         else:
@@ -2415,8 +2363,8 @@ def _equipment_schedule_header_labels(equipment_list: list) -> list:
 
 def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
     """
-    設備マスタの列キー「工程+機械」を (工程名, 機械名) に分割する。
-    '+' が無いときは機械名のみとみなし、工程名は空文字。
+    è¨­å‚™ãƒžã‚¹ã‚¿ã�®åˆ—ã‚­ãƒ¼ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã‚’ (å·¥ç¨‹å��, æ©Ÿæ¢°å��) ã�«åˆ†å‰²ã�™ã‚‹ã€‚
+    '+' ã�Œç„¡ã�„ã�¨ã��ã�¯æ©Ÿæ¢°å��ã�®ã�¿ã�¨ã�¿ã�ªã�—ã€�å·¥ç¨‹å��ã�¯ç©ºæ–‡å­—ã€‚
     """
     s = str(eq_line).strip()
     if not s:
@@ -2429,8 +2377,8 @@ def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
 
 def _gantt_member_label_surname_only(raw: str) -> str:
     """
-    設備ガントの担当者セル用。半角／全角空白があれば手前を姓とみなし、無いときは全体を表示
-    （氏名が1トークンのみのときは姓の切り出し不可のためそのまま）。NFKC・富田/冨田寄せは姓用と同じ。
+    è¨­å‚™ã‚¬ãƒ³ãƒˆã�®æ‹…å½“è€…ã‚»ãƒ«ç”¨ã€‚å�Šè§’ï¼�å…¨è§’ç©ºç™½ã�Œã�‚ã‚Œã�°æ‰‹å‰�ã‚’å§“ã�¨ã�¿ã�ªã�—ã€�ç„¡ã�„ã�¨ã��ã�¯å…¨ä½“ã‚’è¡¨ç¤º
+    ï¼ˆæ°�å��ã�Œ1ãƒˆãƒ¼ã‚¯ãƒ³ã�®ã�¿ã�®ã�¨ã��ã�¯å§“ã�®åˆ‡ã‚Šå‡ºã�—ä¸�å�¯ã�®ã�Ÿã‚�ã��ã�®ã�¾ã�¾ï¼‰ã€‚NFKCãƒ»å¯Œç”°/å†¨ç”°å¯„ã�›ã�¯å§“ç”¨ã�¨å�Œã�˜ã€‚
     """
     sei, mei = _split_person_sei_mei(raw)
     if not sei:
@@ -2440,7 +2388,7 @@ def _gantt_member_label_surname_only(raw: str) -> str:
 
 
 def _gantt_row_member_names(evlist) -> str:
-    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去し、姓のみをカンマ+半角スペース区切り。"""
+    """è¨­å‚™ã‚¬ãƒ³ãƒˆè¡Œç”¨: ä¸»æ‹…å½“(op)ã�¨ã‚µãƒ–(sub)ã‚’å‡ºç�¾é †ã�§é‡�è¤‡é™¤åŽ»ã�—ã€�å§“ã�®ã�¿ã‚’ã‚«ãƒ³ãƒž+å�Šè§’ã‚¹ãƒšãƒ¼ã‚¹åŒºåˆ‡ã‚Šã€‚"""
     raw_names: list[str] = []
     seen_raw: set[str] = set()
     for e in evlist or []:
@@ -2451,7 +2399,7 @@ def _gantt_row_member_names(evlist) -> str:
         sub_raw = str(e.get("sub") or "").strip()
         if not sub_raw:
             continue
-        for seg in re.split(r"[,、]", sub_raw):
+        for seg in re.split(r"[,ã€�]", sub_raw):
             t = seg.strip()
             if t and t not in seen_raw:
                 seen_raw.add(t)
@@ -2463,13 +2411,13 @@ def _gantt_row_member_names(evlist) -> str:
         if lab and lab not in seen_label:
             seen_label.add(lab)
             labels.append(lab)
-    return ", ".join(labels) if labels else "—"
+    return ", ".join(labels) if labels else "â€”"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
     """
-    設備時間割・設備専有空きの列キー（skills / need と同じ「工程+機械」を基本とする）。
-    機械名が空でマスタに当該工程の列が1つだけならその複合キーへ寄せる。
+    è¨­å‚™æ™‚é–“å‰²ãƒ»è¨­å‚™å°‚æœ‰ç©ºã��ã�®åˆ—ã‚­ãƒ¼ï¼ˆskills / need ã�¨å�Œã�˜ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã‚’åŸºæœ¬ã�¨ã�™ã‚‹ï¼‰ã€‚
+    æ©Ÿæ¢°å��ã�Œç©ºã�§ãƒžã‚¹ã‚¿ã�«å½“è©²å·¥ç¨‹ã�®åˆ—ã�Œ1ã�¤ã� ã�‘ã�ªã‚‰ã��ã�®è¤‡å�ˆã‚­ãƒ¼ã�¸å¯„ã�›ã‚‹ã€‚
     """
     p = str(task.get("machine") or "").strip()
     mn = str(task.get("machine_name") or "").strip()
@@ -2495,8 +2443,8 @@ def _apply_planning_sheet_post_load_mutations(
     df: "pd.DataFrame", wb_path: str, log_prefix: str
 ) -> None:
     """
-    配台計画_タスク入力を DataFrame 化した直後の共通処理。
-    段階2の ``load_planning_tasks_df`` と同じ（設定シート・分割行・配台不要ルール）。
+    é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã‚’ DataFrame åŒ–ã�—ã�Ÿç›´å¾Œã�®å…±é€šå‡¦ç�†ã€‚
+    æ®µéšŽ2ã�® ``load_planning_tasks_df`` ã�¨å�Œã�˜ï¼ˆè¨­å®šã‚·ãƒ¼ãƒˆãƒ»åˆ†å‰²è¡Œãƒ»é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«ï¼‰ã€‚
     """
     try:
         _pairs_lr = []
@@ -2516,12 +2464,12 @@ def _apply_planning_sheet_post_load_mutations(
             _pairs_lr.append((_p, _m))
         run_exclude_rules_sheet_maintenance(wb_path, _pairs_lr, log_prefix)
     except Exception:
-        logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
+        logging.exception("%s: è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�®ä¿�å®ˆã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰", log_prefix)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(df, log_prefix=log_prefix)
     except Exception as ex:
         logging.warning(
-            "%s: 分割行の配台不要自動設定で例外（続行）: %s",
+            "%s: åˆ†å‰²è¡Œã�®é…�å�°ä¸�è¦�è‡ªå‹•è¨­å®šã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s",
             log_prefix,
             ex,
         )
@@ -2529,27 +2477,27 @@ def _apply_planning_sheet_post_load_mutations(
         apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)
     except Exception as ex:
         logging.warning(
-            "%s: 設定シートによる配台不要適用で例外（続行）: %s",
+            "%s: è¨­å®šã‚·ãƒ¼ãƒˆã�«ã‚ˆã‚‹é…�å�°ä¸�è¦�é�©ç”¨ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s",
             log_prefix,
             ex,
         )
 
 def load_planning_tasks_df():
     """
-    2段階目用: マクロブック上の「配台計画_タスク入力」シートを読み込む。
+    2æ®µéšŽç›®ç”¨: ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ä¸Šã�®ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã‚·ãƒ¼ãƒˆã‚’èª­ã�¿è¾¼ã‚€ã€‚
 
-    「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
-    メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
-    「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外。
-    読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
-    「設定_配台不要工程」で工程+機械の組を同期し、C/D/E に基づき配台不要を反映する（シート作成は VBA）。
+    ã€Œæ‹…å½“OP_æŒ‡å®šã€�åˆ—ã�¾ã�Ÿã�¯ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒã�® AI å‡ºåŠ› preferred_operator ã�§ä¸»æ‹…å½“ OP ã‚’æŒ‡å��ã�§ã��ã‚‹ï¼ˆskills ã�®ãƒ¡ãƒ³ãƒ�ãƒ¼å��ã�¨ã�‚ã�„ã�¾ã�„ä¸€è‡´ï¼‰ã€‚
+    ãƒ¡ã‚¤ãƒ³ã€Œå†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰ã€�ã�® task_preferred_operators ã�¯ generate_plan å�´ã�§æœ€å„ªå…ˆãƒžãƒ¼ã‚¸ã�•ã‚Œã‚‹ã€‚
+    ã€Œé…�å�°ä¸�è¦�ã€�ã�Œã‚ªãƒ³ï¼ˆTRUE/1/ã�¯ã�„ ç­‰ï¼‰ã�®è¡Œã�¯é…�å�°å¯¾è±¡å¤–ã€‚
+    èª­ã�¿è¾¼ã�¿å¾Œã€�å�Œä¸€ä¾�é ¼NOãƒ»é‡�è¤‡æ©Ÿæ¢°å��ã�Œã�‚ã‚‹ã‚°ãƒ«ãƒ¼ãƒ—ã�®å·¥ç¨‹ã€Œåˆ†å‰²ã€�è¡Œã�¸ç©ºã�ªã‚‰ã€Œé…�å�°ä¸�è¦�ã€�=yesï¼ˆæ®µéšŽ1ã�¨å�Œã�˜ï¼‰ã€‚
+    ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã�§å·¥ç¨‹+æ©Ÿæ¢°ã�®çµ„ã‚’å�ŒæœŸã�—ã€�C/D/E ã�«åŸºã�¥ã��é…�å�°ä¸�è¦�ã‚’å��æ˜ ã�™ã‚‹ï¼ˆã‚·ãƒ¼ãƒˆä½œæˆ�ã�¯ VBAï¼‰ã€‚
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK が未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
+            "TASK_INPUT_WORKBOOK ã�Œæœªè¨­å®šã�§ã�™ã€‚VBA ã�® RunPython ã�§ãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã�®ãƒ‘ã‚¹ã‚’æ¸¡ã�—ã�¦ã��ã� ã�•ã�„ã€‚"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
+        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK ã�Œå­˜åœ¨ã�—ã�¾ã�›ã‚“: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
@@ -2558,58 +2506,58 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
-    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
+    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "é…�å�°ã‚·ãƒ¼ãƒˆèª­è¾¼")
     logging.info(
-        f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
+        f"è¨ˆç”»ã‚¿ã‚¹ã‚¯å…¥åŠ›: '{TASKS_INPUT_WORKBOOK}' ã�® '{PLAN_INPUT_SHEET_NAME}' ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚"
     )
     return df
 
 
 def _main_sheet_cell_is_global_comment_label(val) -> bool:
-    """メインシート上「グローバルコメント」見出しセルか（表記ゆれ許容）。"""
+    """ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆä¸Šã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�è¦‹å‡ºã�—ã‚»ãƒ«ã�‹ï¼ˆè¡¨è¨˜ã‚†ã‚Œè¨±å®¹ï¼‰ã€‚"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return False
     s = unicodedata.normalize("NFKC", str(val).strip())
     if not s:
         return False
-    if _nfkc_column_aliases(s) == _nfkc_column_aliases("グローバルコメント"):
+    if _nfkc_column_aliases(s) == _nfkc_column_aliases("ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆ"):
         return True
-    if "グローバル" in s and "コメント" in s:
+    if "ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«" in s and "ã‚³ãƒ¡ãƒ³ãƒˆ" in s:
         return True
     return False
 
 
 def load_main_sheet_global_priority_override_text() -> str:
     """
-    TASK_INPUT_WORKBOOK のメインシートで「グローバルコメント」と書かれたセルの **直下** を読む。
-    シート名: 「メイン」「メイン_」「Main」のいずれか、または名前に「メイン」を含む（VBA GetMainWorksheet と同趣旨）。
+    TASK_INPUT_WORKBOOK ã�®ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã�§ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ã�¨æ›¸ã�‹ã‚Œã�Ÿã‚»ãƒ«ã�® **ç›´ä¸‹** ã‚’èª­ã‚€ã€‚
+    ã‚·ãƒ¼ãƒˆå��: ã€Œãƒ¡ã‚¤ãƒ³ã€�ã€Œãƒ¡ã‚¤ãƒ³_ã€�ã€ŒMainã€�ã�®ã�„ã�šã‚Œã�‹ã€�ã�¾ã�Ÿã�¯å��å‰�ã�«ã€Œãƒ¡ã‚¤ãƒ³ã€�ã‚’å�«ã‚€ï¼ˆVBA GetMainWorksheet ã�¨å�Œè¶£æ—¨ï¼‰ã€‚
 
-    内容は **Gemini で一括解釈**（`analyze_global_priority_override_comment`）。工場休業日・再優先フラグ・未実装指示のメモを JSON 化する。
-    API キーが無い場合のみ、工場休業日はルールベースの `parse_factory_closure_dates_from_global_comment` で補完する。
+    å†…å®¹ã�¯ **Gemini ã�§ä¸€æ‹¬è§£é‡ˆ**ï¼ˆ`analyze_global_priority_override_comment`ï¼‰ã€‚å·¥å ´ä¼‘æ¥­æ—¥ãƒ»å†�å„ªå…ˆãƒ•ãƒ©ã‚°ãƒ»æœªå®Ÿè£…æŒ‡ç¤ºã�®ãƒ¡ãƒ¢ã‚’ JSON åŒ–ã�™ã‚‹ã€‚
+    API ã‚­ãƒ¼ã�Œç„¡ã�„å ´å�ˆã�®ã�¿ã€�å·¥å ´ä¼‘æ¥­æ—¥ã�¯ãƒ«ãƒ¼ãƒ«ãƒ™ãƒ¼ã‚¹ã�® `parse_factory_closure_dates_from_global_comment` ã�§è£œå®Œã�™ã‚‹ã€‚
     """
     wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "メイン再優先特記: ブックに「%s」があるため openpyxl でグローバルコメントを読みません。",
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã‚’èª­ã�¿ã�¾ã�›ã‚“ã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return ""
     try:
         wb = load_workbook(wb_path, data_only=True, read_only=False)
     except Exception as e:
-        logging.warning("メイン再優先特記: ブックを開けませんでした: %s", e)
+        logging.warning("ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“ã�§ã�—ã�Ÿ: %s", e)
         return ""
     try:
         ws = None
-        for name in ("メイン", "メイン_", "Main"):
+        for name in ("ãƒ¡ã‚¤ãƒ³", "ãƒ¡ã‚¤ãƒ³_", "Main"):
             if name in wb.sheetnames:
                 ws = wb[name]
                 break
         if ws is None:
             for sn in wb.sheetnames:
-                if "メイン" in sn:
+                if "ãƒ¡ã‚¤ãƒ³" in sn:
                     ws = wb[sn]
                     break
         if ws is None:
@@ -2634,25 +2582,25 @@ def load_main_sheet_global_priority_override_text() -> str:
 
 def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
     """
-    メイン「グローバルコメント」の断片が、工場単位の休業・非稼働を意味するか（個人休みだけを誤検出しない）。
+    ãƒ¡ã‚¤ãƒ³ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ã�®æ–­ç‰‡ã�Œã€�å·¥å ´å�˜ä½�ã�®ä¼‘æ¥­ãƒ»é�žç¨¼åƒ�ã‚’æ„�å‘³ã�™ã‚‹ã�‹ï¼ˆå€‹äººä¼‘ã�¿ã� ã�‘ã‚’èª¤æ¤œå‡ºã�—ã�ªã�„ï¼‰ã€‚
     """
     c = unicodedata.normalize("NFKC", str(chunk or ""))
     if not c.strip():
         return False
-    if re.search(r"臨時\s*休業", c):
+    if re.search(r"è‡¨æ™‚\s*ä¼‘æ¥­", c):
         return True
-    if "休場" in c:
+    if "ä¼‘å ´" in c:
         return True
-    if re.search(r"工場", c) and re.search(r"休|休業|休み|停止|お休み", c):
+    if re.search(r"å·¥å ´", c) and re.search(r"ä¼‘|ä¼‘æ¥­|ä¼‘ã�¿|å�œæ­¢|ã�Šä¼‘ã�¿", c):
         return True
-    if re.search(r"(?:全社|全館|全工場).{0,15}(?:休|休業|停止)", c):
+    if re.search(r"(?:å…¨ç¤¾|å…¨é¤¨|å…¨å·¥å ´).{0,15}(?:ä¼‘|ä¼‘æ¥­|å�œæ­¢)", c):
         return True
-    if re.search(r"(?:稼働|生産|ライン).{0,12}(?:停止|なし|無し)", c):
+    if re.search(r"(?:ç¨¼åƒ�|ç”Ÿç”£|ãƒ©ã‚¤ãƒ³).{0,12}(?:å�œæ­¢|ã�ªã�—|ç„¡ã�—)", c):
         return True
-    if re.search(r"加工.{0,15}(?:しない|無し|なし|お休み)", c):
+    if re.search(r"åŠ å·¥.{0,15}(?:ã�—ã�ªã�„|ç„¡ã�—|ã�ªã�—|ã�Šä¼‘ã�¿)", c):
         return True
-    if "休業" in c and re.search(
-        r"(?:工場|全社|本社|当日|弊社|当社|全員|社全体)", c
+    if "ä¼‘æ¥­" in c and re.search(
+        r"(?:å·¥å ´|å…¨ç¤¾|æœ¬ç¤¾|å½“æ—¥|å¼Šç¤¾|å½“ç¤¾|å…¨å“¡|ç¤¾å…¨ä½“)", c
     ):
         return True
     return False
@@ -2660,40 +2608,40 @@ def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
 
 def _md_slash_is_likely_fraction_not_date(t: str, start: int, end: int, mo: int, day: int) -> bool:
     """
-    「加工速度は1/3とします」の 1/3 を 1月3日 と誤認しない。
-    「4/1は工場を休み」の 4/1 は日付のまま（直後が「は」なら分数扱いにしない）。
+    ã€ŒåŠ å·¥é€Ÿåº¦ã�¯1/3ã�¨ã�—ã�¾ã�™ã€�ã�® 1/3 ã‚’ 1æœˆ3æ—¥ ã�¨èª¤èª�ã�—ã�ªã�„ã€‚
+    ã€Œ4/1ã�¯å·¥å ´ã‚’ä¼‘ã�¿ã€�ã�® 4/1 ã�¯æ—¥ä»˜ã�®ã�¾ã�¾ï¼ˆç›´å¾Œã�Œã€Œã�¯ã€�ã�ªã‚‰åˆ†æ•°æ‰±ã�„ã�«ã�—ã�ªã�„ï¼‰ã€‚
     """
     if mo <= 0 or day <= 0:
         return True
     before = t[max(0, start - 32) : start]
     after = t[end : min(len(t), end + 14)]
     after_st = after.lstrip()
-    if after_st.startswith("は"):
+    if after_st.startswith("ã�¯"):
         return False
     if re.search(
-        r"(?:加工速度|加工\s*スピード|速度|倍率|スピード|効率|割合)(?:\s*は)?\s*$",
+        r"(?:åŠ å·¥é€Ÿåº¦|åŠ å·¥\s*ã‚¹ãƒ”ãƒ¼ãƒ‰|é€Ÿåº¦|å€�çŽ‡|ã‚¹ãƒ”ãƒ¼ãƒ‰|åŠ¹çŽ‡|å‰²å�ˆ)(?:\s*ã�¯)?\s*$",
         before,
     ):
         return True
-    # 1/2・1/3・2/3 等 + 「とします」「倍」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよう です/である は含めない）
+    # 1/2ãƒ»1/3ãƒ»2/3 ç­‰ + ã€Œã�¨ã�—ã�¾ã�™ã€�ã€Œå€�ã€�â€¦ ã�¯åˆ†æ•°ãƒ»æ¯”çŽ‡å¯„ã‚Šï¼ˆã€Œ3/1ã�§ã�™ã€�ç­‰ã�®æ—¥ä»˜ã‚’èª¤ã‚¹ã‚­ãƒƒãƒ—ã�—ã�ªã�„ã‚ˆã�† ã�§ã�™/ã�§ã�‚ã‚‹ ã�¯å�«ã‚�ã�ªã�„ï¼‰
     frac_pat = re.compile(
-        r"^(?:とします?|とする|倍|割合|にする|に設定|くらい|程度|に固定|に変更)"
+        r"^(?:ã�¨ã�—ã�¾ã�™?|ã�¨ã�™ã‚‹|å€�|å‰²å�ˆ|ã�«ã�™ã‚‹|ã�«è¨­å®š|ã��ã‚‰ã�„|ç¨‹åº¦|ã�«å›ºå®š|ã�«å¤‰æ›´)"
     )
     if mo <= 12 and day <= 12 and frac_pat.match(after_st):
         if mo <= 2 or (mo == 3 and day <= 3):
             return True
-    # 「1/2です」「1/10です」のような分母表現（先頭が 1/ のみ）
+    # ã€Œ1/2ã�§ã�™ã€�ã€Œ1/10ã�§ã�™ã€�ã�®ã‚ˆã�†ã�ªåˆ†æ¯�è¡¨ç�¾ï¼ˆå…ˆé ­ã�Œ 1/ ã�®ã�¿ï¼‰
     if (
         mo == 1
         and 2 <= day <= 12
-        and re.match(r"^です|である\b", after_st)
+        and re.match(r"^ã�§ã�™|ã�§ã�‚ã‚‹\b", after_st)
     ):
         return True
     return False
 
 
 def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
-    """グローバルコメント内の日付表記を date に変換（基準年は計画の基準年）。"""
+    """ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆå†…ã�®æ—¥ä»˜è¡¨è¨˜ã‚’ date ã�«å¤‰æ�›ï¼ˆåŸºæº–å¹´ã�¯è¨ˆç”»ã�®åŸºæº–å¹´ï¼‰ã€‚"""
     t = unicodedata.normalize("NFKC", str(s or ""))
     found: list[date] = []
     seen: set[date] = set()
@@ -2708,19 +2656,19 @@ def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
             found.append(dd)
 
     for m in re.finditer(
-        r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?",
+        r"(\d{4})\s*å¹´\s*(\d{1,2})\s*æœˆ\s*(\d{1,2})\s*æ—¥?",
         t,
     ):
         add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     for m in re.finditer(
-        r"(\d{4})\s*[/\-\.／]\s*(\d{1,2})\s*[/\-\.／]\s*(\d{1,2})",
+        r"(\d{4})\s*[/\-\.ï¼�]\s*(\d{1,2})\s*[/\-\.ï¼�]\s*(\d{1,2})",
         t,
     ):
         add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    for m in re.finditer(r"(\d{1,2})\s*月\s*(\d{1,2})\s*日", t):
+    for m in re.finditer(r"(\d{1,2})\s*æœˆ\s*(\d{1,2})\s*æ—¥", t):
         add(int(default_year), int(m.group(1)), int(m.group(2)))
     for m in re.finditer(
-        r"(?<!\d)(\d{1,2})\s*[/／]\s*(\d{1,2})(?!\d)",
+        r"(?<!\d)(\d{1,2})\s*[/ï¼�]\s*(\d{1,2})(?!\d)",
         t,
     ):
         mo_i, d_i = int(m.group(1)), int(m.group(2))
@@ -2732,8 +2680,8 @@ def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
 
 def _split_global_comment_into_chunks(blob: str) -> list[str]:
     """
-    グローバルコメントを「独立した指示」の塊に分ける。
-    改行（Excel の Alt+Enter・Unicode 改行含む）で必ず分割し、同一行内は 。;； で続けて分割。
+    ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã‚’ã€Œç‹¬ç«‹ã�—ã�ŸæŒ‡ç¤ºã€�ã�®å¡Šã�«åˆ†ã�‘ã‚‹ã€‚
+    æ”¹è¡Œï¼ˆExcel ã�® Alt+Enterãƒ»Unicode æ”¹è¡Œå�«ã‚€ï¼‰ã�§å¿…ã�šåˆ†å‰²ã�—ã€�å�Œä¸€è¡Œå†…ã�¯ ã€‚;ï¼› ã�§ç¶šã�‘ã�¦åˆ†å‰²ã€‚
     """
     t = unicodedata.normalize("NFKC", str(blob or "").strip())
     if not t:
@@ -2743,7 +2691,7 @@ def _split_global_comment_into_chunks(blob: str) -> list[str]:
         return []
     chunks: list[str] = []
     for line in lines:
-        subs = [c.strip() for c in re.split(r"[。;；]+", line) if c.strip()]
+        subs = [c.strip() for c in re.split(r"[ã€‚;ï¼›]+", line) if c.strip()]
         if subs:
             chunks.extend(subs)
         else:
@@ -2755,8 +2703,8 @@ def parse_factory_closure_dates_from_global_comment(
     text: str, default_year: int
 ) -> set[date]:
     """
-    メインシート「グローバルコメント」に、工場臨時休業などと日付が書かれている場合に
-    その日を工場休み（全員非稼働・配台で加工しない）として扱う日付集合を返す。
+    ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ã�«ã€�å·¥å ´è‡¨æ™‚ä¼‘æ¥­ã�ªã�©ã�¨æ—¥ä»˜ã�Œæ›¸ã�‹ã‚Œã�¦ã�„ã‚‹å ´å�ˆã�«
+    ã��ã�®æ—¥ã‚’å·¥å ´ä¼‘ã�¿ï¼ˆå…¨å“¡é�žç¨¼åƒ�ãƒ»é…�å�°ã�§åŠ å·¥ã�—ã�ªã�„ï¼‰ã�¨ã�—ã�¦æ‰±ã�†æ—¥ä»˜é›†å�ˆã‚’è¿”ã�™ã€‚
     """
     blob = unicodedata.normalize("NFKC", str(text or "").strip())
     if not blob:
@@ -2780,15 +2728,15 @@ def parse_factory_closure_dates_from_global_comment(
 def apply_factory_closure_dates_to_attendance(
     attendance_data: dict, members: list, closure_dates: set[date]
 ) -> None:
-    """工場休業日: 勤怠上は全員 is_working=False とし、その日は設備割付を行わない。"""
+    """å·¥å ´ä¼‘æ¥­æ—¥: å‹¤æ€ ä¸Šã�¯å…¨å“¡ is_working=False ã�¨ã�—ã€�ã��ã�®æ—¥ã�¯è¨­å‚™å‰²ä»˜ã‚’è¡Œã‚�ã�ªã�„ã€‚"""
     if not closure_dates or not attendance_data:
         return
-    tag = "工場休業（メイン・グローバルコメント）"
+    tag = "å·¥å ´ä¼‘æ¥­ï¼ˆãƒ¡ã‚¤ãƒ³ãƒ»ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆï¼‰"
     for d in sorted(closure_dates):
         if d not in attendance_data:
             logging.warning(
-                "グローバルコメントの工場休業日 %s はマスタ勤怠に行がありません。"
-                " その日は計画ループに含まれない場合、配台上の効果が限定的です。",
+                "ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã�®å·¥å ´ä¼‘æ¥­æ—¥ %s ã�¯ãƒžã‚¹ã‚¿å‹¤æ€ ã�«è¡Œã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚"
+                " ã��ã�®æ—¥ã�¯è¨ˆç”»ãƒ«ãƒ¼ãƒ—ã�«å�«ã�¾ã‚Œã�ªã�„å ´å�ˆã€�é…�å�°ä¸Šã�®åŠ¹æžœã�Œé™�å®šçš„ã�§ã�™ã€‚",
                 d,
             )
             continue
@@ -2805,20 +2753,20 @@ def apply_factory_closure_dates_to_attendance(
 
 def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
     """
-    「制限撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで含め配台制約を緩める（abolish_all_scheduling_limits）。
+    ã€Œåˆ¶é™�æ’¤å»ƒã€�ã€Œã�‚ã‚‰ã‚†ã‚‹æ�¡ä»¶ã€�ç­‰: è¨­å‚™å°‚æœ‰ãƒ»æ™‚åˆ»ã‚¬ãƒ¼ãƒ‰ã�¾ã�§å�«ã‚�é…�å�°åˆ¶ç´„ã‚’ç·©ã‚�ã‚‹ï¼ˆabolish_all_scheduling_limitsï¼‰ã€‚
     """
     b = unicodedata.normalize("NFKC", str(blob or ""))
     strong = (
-        "制限撤廃",
-        "制限を撤廃",
-        "すべての制限",
-        "全ての制限",
-        "あらゆる制限",
-        "あらゆる条件",
-        "すべての条件",
-        "全ての条件",
-        "撤廃して",
-        "撤廃し",
+        "åˆ¶é™�æ’¤å»ƒ",
+        "åˆ¶é™�ã‚’æ’¤å»ƒ",
+        "ã�™ã�¹ã�¦ã�®åˆ¶é™�",
+        "å…¨ã�¦ã�®åˆ¶é™�",
+        "ã�‚ã‚‰ã‚†ã‚‹åˆ¶é™�",
+        "ã�‚ã‚‰ã‚†ã‚‹æ�¡ä»¶",
+        "ã�™ã�¹ã�¦ã�®æ�¡ä»¶",
+        "å…¨ã�¦ã�®æ�¡ä»¶",
+        "æ’¤å»ƒã�—ã�¦",
+        "æ’¤å»ƒã�—",
     )
     if any(k in b for k in strong):
         out = dict(coerced)
@@ -2826,7 +2774,7 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
         out["ignore_skill_requirements"] = True
         out["ignore_need_minimum"] = True
         logging.warning(
-            "メイン再優先特記: 制限撤廃キーワードを検出。設備専有・時刻ガードを含め配台上の制約を緩めます。"
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: åˆ¶é™�æ’¤å»ƒã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã‚’æ¤œå‡ºã€‚è¨­å‚™å°‚æœ‰ãƒ»æ™‚åˆ»ã‚¬ãƒ¼ãƒ‰ã‚’å�«ã‚�é…�å�°ä¸Šã�®åˆ¶ç´„ã‚’ç·©ã‚�ã�¾ã�™ã€‚"
         )
         return out
     return coerced
@@ -2834,8 +2782,8 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
 
 def _maybe_fill_global_speed_rules_from_scheduler_notes(coerced: dict) -> dict:
     """
-    AI が global_speed_rules を空にしたが scheduler_notes に具体パターンがある場合の補完。
-    広く推測しない（熱融着＋検査＋1/3 系のみ）。
+    AI ã�Œ global_speed_rules ã‚’ç©ºã�«ã�—ã�Ÿã�Œ scheduler_notes ã�«å…·ä½“ãƒ‘ã‚¿ãƒ¼ãƒ³ã�Œã�‚ã‚‹å ´å�ˆã�®è£œå®Œã€‚
+    åºƒã��æŽ¨æ¸¬ã�—ã�ªã�„ï¼ˆç†±èž�ç�€ï¼‹æ¤œæŸ»ï¼‹1/3 ç³»ã�®ã�¿ï¼‰ã€‚
     """
     if not isinstance(coerced, dict):
         return coerced
@@ -2843,26 +2791,26 @@ def _maybe_fill_global_speed_rules_from_scheduler_notes(coerced: dict) -> dict:
         return coerced
     sn = str(coerced.get("scheduler_notes_ja") or "")
     t = unicodedata.normalize("NFKC", sn)
-    if "熱融着" not in t or "検査" not in t:
+    if "ç†±èž�ç�€" not in t or "æ¤œæŸ»" not in t:
         return coerced
-    if not re.search(r"(?:1\s*/\s*3|１\s*/\s*3|三分の一|3\s*分の\s*1)", t):
+    if not re.search(r"(?:1\s*/\s*3|ï¼‘\s*/\s*3|ä¸‰åˆ†ã�®ä¸€|3\s*åˆ†ã�®\s*1)", t):
         return coerced
     out = dict(coerced)
     out["global_speed_rules"] = [
         {
-            "process_contains": "熱融着",
-            "machine_contains": "検査",
+            "process_contains": "ç†±èž�ç�€",
+            "machine_contains": "æ¤œæŸ»",
             "speed_multiplier": 1.0 / 3.0,
         }
     ]
     logging.info(
-        "メイン再優先特記: scheduler_notes_ja から global_speed_rules を補完（熱融着・検査・1/3）"
+        "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: scheduler_notes_ja ã�‹ã‚‰ global_speed_rules ã‚’è£œå®Œï¼ˆç†±èž�ç�€ãƒ»æ¤œæŸ»ãƒ»1/3ï¼‰"
     )
     return out
 
 
 def _finalize_global_priority_override(blob: str, coerced: dict) -> dict:
-    """ソロ補正の後、abolish が true ならスキル・人数も強制オン。"""
+    """ã‚½ãƒ­è£œæ­£ã�®å¾Œã€�abolish ã�Œ true ã�ªã‚‰ã‚¹ã‚­ãƒ«ãƒ»äººæ•°ã‚‚å¼·åˆ¶ã‚ªãƒ³ã€‚"""
     coerced = _maybe_fill_global_speed_rules_from_scheduler_notes(dict(coerced))
     coerced = _apply_global_priority_solo_heuristic(blob, coerced)
     coerced = _apply_global_priority_abolish_heuristic(blob, coerced)
@@ -2876,25 +2824,25 @@ def _finalize_global_priority_override(blob: str, coerced: dict) -> dict:
 
 def _apply_global_priority_solo_heuristic(blob: str, coerced: dict) -> dict:
     """
-    「一人で担当」「単独」等で人数だけ緩めても、指名メンバーがスキル非該当だと配台されない。
-    その場合はスキル無視を同時に立てる。
+    ã€Œä¸€äººã�§æ‹…å½“ã€�ã€Œå�˜ç‹¬ã€�ç­‰ã�§äººæ•°ã� ã�‘ç·©ã‚�ã�¦ã‚‚ã€�æŒ‡å��ãƒ¡ãƒ³ãƒ�ãƒ¼ã�Œã‚¹ã‚­ãƒ«é�žè©²å½“ã� ã�¨é…�å�°ã�•ã‚Œã�ªã�„ã€‚
+    ã��ã�®å ´å�ˆã�¯ã‚¹ã‚­ãƒ«ç„¡è¦–ã‚’å�Œæ™‚ã�«ç«‹ã�¦ã‚‹ã€‚
     """
     if not coerced.get("ignore_need_minimum") or coerced.get("ignore_skill_requirements"):
         return coerced
     b = unicodedata.normalize("NFKC", str(blob or ""))
-    solo_kw = ("一人", "ひとり", "単独", "１人", "1人", "独自", "単身")
+    solo_kw = ("ä¸€äºº", "ã�²ã�¨ã‚Š", "å�˜ç‹¬", "ï¼‘äºº", "1äºº", "ç‹¬è‡ª", "å�˜èº«")
     if any(k in b for k in solo_kw):
         out = dict(coerced)
         out["ignore_skill_requirements"] = True
         logging.info(
-            "メイン再優先特記: 単独系キーワードのため ignore_skill_requirements を補助的に true にしました。"
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: å�˜ç‹¬ç³»ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã�®ã�Ÿã‚� ignore_skill_requirements ã‚’è£œåŠ©çš„ã�« true ã�«ã�—ã�¾ã�—ã�Ÿã€‚"
         )
         return out
     return coerced
 
 
 def _coerce_task_preferred_operators_dict(raw_val) -> dict:
-    """AI の task_preferred_operators を {依頼NO: 氏名} に正規化。"""
+    """AI ã�® task_preferred_operators ã‚’ {ä¾�é ¼NO: æ°�å��} ã�«æ­£è¦�åŒ–ã€‚"""
     out = {}
     if not isinstance(raw_val, dict):
         return out
@@ -2912,8 +2860,8 @@ def _coerce_task_preferred_operators_dict(raw_val) -> dict:
 
 def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[str]:
     """
-    AI またはフォールバックの日付リストを YYYY-MM-DD 文字列の昇順ユニークに正規化。
-    要素は ISO 文字列・Excel 日付・「4/1」程度の短文でも可。
+    AI ã�¾ã�Ÿã�¯ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã�®æ—¥ä»˜ãƒªã‚¹ãƒˆã‚’ YYYY-MM-DD æ–‡å­—åˆ—ã�®æ˜‡é †ãƒ¦ãƒ‹ãƒ¼ã‚¯ã�«æ­£è¦�åŒ–ã€‚
+    è¦�ç´ ã�¯ ISO æ–‡å­—åˆ—ãƒ»Excel æ—¥ä»˜ãƒ»ã€Œ4/1ã€�ç¨‹åº¦ã�®çŸ­æ–‡ã�§ã‚‚å�¯ã€‚
     """
     y0 = int(default_year)
     seen: set[str] = set()
@@ -2943,8 +2891,8 @@ def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[st
 
 def _coerce_global_speed_rules(raw_val) -> list[dict]:
     """
-    Gemini の global_speed_rules を正規化。
-    各要素: process_contains / machine_contains（いずれか必須・部分一致用）, speed_multiplier（既存速度に乗算、0超〜10以下）。
+    Gemini ã�® global_speed_rules ã‚’æ­£è¦�åŒ–ã€‚
+    å�„è¦�ç´ : process_contains / machine_containsï¼ˆã�„ã�šã‚Œã�‹å¿…é ˆãƒ»éƒ¨åˆ†ä¸€è‡´ç”¨ï¼‰, speed_multiplierï¼ˆæ—¢å­˜é€Ÿåº¦ã�«ä¹—ç®—ã€�0è¶…ã€œ10ä»¥ä¸‹ï¼‰ã€‚
     """
     out: list[dict] = []
     if not isinstance(raw_val, list):
@@ -2976,7 +2924,7 @@ def _coerce_global_speed_rules(raw_val) -> list[dict]:
 
 
 def _global_speed_rule_substring_matches_row(pnorm: str, mnorm: str, sub_nfkc: str) -> bool:
-    """sub が空でなければ、工程名または機械名のいずれかに部分一致すれば True。"""
+    """sub ã�Œç©ºã�§ã�ªã�‘ã‚Œã�°ã€�å·¥ç¨‹å��ã�¾ã�Ÿã�¯æ©Ÿæ¢°å��ã�®ã�„ã�šã‚Œã�‹ã�«éƒ¨åˆ†ä¸€è‡´ã�™ã‚Œã�° Trueã€‚"""
     if not sub_nfkc:
         return True
     return sub_nfkc in pnorm or sub_nfkc in mnorm
@@ -2984,11 +2932,11 @@ def _global_speed_rule_substring_matches_row(pnorm: str, mnorm: str, sub_nfkc: s
 
 def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules: list) -> float:
     """
-    工程名・機械名に一致するルールの speed_multiplier を掛け合わせる（一致なしは 1.0）。
+    å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�«ä¸€è‡´ã�™ã‚‹ãƒ«ãƒ¼ãƒ«ã�® speed_multiplier ã‚’æŽ›ã�‘å�ˆã‚�ã�›ã‚‹ï¼ˆä¸€è‡´ã�ªã�—ã�¯ 1.0ï¼‰ã€‚
 
-    process_contains / machine_contains はそれぞれ **工程名または機械名のどちらか** に含まれればよい。
-    両方指定時は AND（例: 「熱融着」と「検査」が、列の組み合わせで両方現れる行にマッチ。
-    マスタ上で工程=検査・機械=熱融着機 のようにキーワードが逆側の列にあっても同じルールで効く。
+    process_contains / machine_contains ã�¯ã��ã‚Œã�žã‚Œ **å·¥ç¨‹å��ã�¾ã�Ÿã�¯æ©Ÿæ¢°å��ã�®ã�©ã�¡ã‚‰ã�‹** ã�«å�«ã�¾ã‚Œã‚Œã�°ã‚ˆã�„ã€‚
+    ä¸¡æ–¹æŒ‡å®šæ™‚ã�¯ ANDï¼ˆä¾‹: ã€Œç†±èž�ç�€ã€�ã�¨ã€Œæ¤œæŸ»ã€�ã�Œã€�åˆ—ã�®çµ„ã�¿å�ˆã‚�ã�›ã�§ä¸¡æ–¹ç�¾ã‚Œã‚‹è¡Œã�«ãƒžãƒƒãƒ�ã€‚
+    ãƒžã‚¹ã‚¿ä¸Šã�§å·¥ç¨‹=æ¤œæŸ»ãƒ»æ©Ÿæ¢°=ç†±èž�ç�€æ©Ÿ ã�®ã‚ˆã�†ã�«ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã�Œé€†å�´ã�®åˆ—ã�«ã�‚ã�£ã�¦ã‚‚å�Œã�˜ãƒ«ãƒ¼ãƒ«ã�§åŠ¹ã��ã€‚
     """
     if not rules:
         return 1.0
@@ -3024,9 +2972,9 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
 
 def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
     """
-    Gemini が task_preferred_operators に誤って長文を入れた場合など、
-    自然言語断片から global_day_process_operator_rules 相当を推定する（保守的）。
-    例: 「2026/4/4 工程名:EC 森下と宮島を配台」
+    Gemini ã�Œ task_preferred_operators ã�«èª¤ã�£ã�¦é•·æ–‡ã‚’å…¥ã‚Œã�Ÿå ´å�ˆã�ªã�©ã€�
+    è‡ªç„¶è¨€èªžæ–­ç‰‡ã�‹ã‚‰ global_day_process_operator_rules ç›¸å½“ã‚’æŽ¨å®šã�™ã‚‹ï¼ˆä¿�å®ˆçš„ï¼‰ã€‚
+    ä¾‹: ã€Œ2026/4/4 å·¥ç¨‹å��:EC æ£®ä¸‹ã�¨å®®å³¶ã‚’é…�å�°ã€�
     """
     t = unicodedata.normalize("NFKC", str(text or "")).strip()
     if len(t) < 6:
@@ -3036,18 +2984,18 @@ def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> lis
         return []
     d0 = dates[0]
     proc_m = re.search(
-        r"工程名?\s*[:：]?\s*([A-Za-z0-9一-龯ー・〆々]+)",
+        r"å·¥ç¨‹å��?\s*[:ï¼š]?\s*([A-Za-z0-9ä¸€-é¾¯ãƒ¼ãƒ»ã€†ã€…]+)",
         t,
     )
     pc = proc_m.group(1).strip() if proc_m else ""
     if not pc:
-        m2 = re.search(r"([\dA-Za-z一-龯ー・〆々]{1,12})\s*工程", t)
+        m2 = re.search(r"([\dA-Za-zä¸€-é¾¯ãƒ¼ãƒ»ã€†ã€…]{1,12})\s*å·¥ç¨‹", t)
         pc = m2.group(1).strip() if m2 else ""
     if not pc:
         return []
     names: list[str] = []
     for m in re.finditer(
-        r"([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*と\s*([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*を?\s*(?:配台|配属|組ませ|同一チーム)",
+        r"([\u3040-\u9FFFã€…ãƒ¼ãƒ»A-Za-zãƒ»ã€†ã€…]{1,16}?)\s*ã�¨\s*([\u3040-\u9FFFã€…ãƒ¼ãƒ»A-Za-zãƒ»ã€†ã€…]{1,16}?)\s*ã‚’?\s*(?:é…�å�°|é…�å±ž|çµ„ã�¾ã�›|å�Œä¸€ãƒ�ãƒ¼ãƒ )",
         t,
     ):
         a, b = m.group(1).strip(), m.group(2).strip()
@@ -3068,8 +3016,8 @@ def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> lis
 
 def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dict:
     """
-    Gemini が task_preferred_operators に **配列**や誤スキーマ（workstation_id 等）を返したとき、
-    捨てずに global_day_process_operator_rules / scheduler_notes_ja へ救済する。
+    Gemini ã�Œ task_preferred_operators ã�« **é…�åˆ—**ã‚„èª¤ã‚¹ã‚­ãƒ¼ãƒžï¼ˆworkstation_id ç­‰ï¼‰ã‚’è¿”ã�—ã�Ÿã�¨ã��ã€�
+    æ�¨ã�¦ã�šã�« global_day_process_operator_rules / scheduler_notes_ja ã�¸æ•‘æ¸ˆã�™ã‚‹ã€‚
     """
     out = dict(raw)
     tpo = out.get("task_preferred_operators")
@@ -3098,7 +3046,7 @@ def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dic
                 "process_contains",
             ):
                 continue
-            if isinstance(v, str) and len(v) > 35 and ("配" in v or "工程" in v):
+            if isinstance(v, str) and len(v) > 35 and ("é…�" in v or "å·¥ç¨‹" in v):
                 narratives.append(v[:800])
     out["task_preferred_operators"] = {}
     gdp_existing = out.get("global_day_process_operator_rules")
@@ -3119,7 +3067,7 @@ def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dic
 
 
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
-    """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
+    """Gemini æˆ»ã‚Šã‚’é…�å�°ç”¨ãƒ•ãƒ©ã‚°ãƒ»å·¥å ´ä¼‘æ¥­æ—¥ãƒªã‚¹ãƒˆã�«æ­£è¦�åŒ–ã€‚"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
 
     def as_bool(v):
@@ -3130,7 +3078,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         if v is None or (isinstance(v, float) and pd.isna(v)):
             return False
         s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-        return s in ("true", "1", "yes", "はい", "on")
+        return s in ("true", "1", "yes", "ã�¯ã�„", "on")
 
     base = {
         "ignore_skill_requirements": False,
@@ -3171,7 +3119,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
 
 
 def _parse_global_priority_override_gemini_response(res):
-    """Gemini 応答から JSON オブジェクト1つを取り出す（```json フェンス付きでも可）。"""
+    """Gemini å¿œç­”ã�‹ã‚‰ JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ1ã�¤ã‚’å�–ã‚Šå‡ºã�™ï¼ˆ```json ãƒ•ã‚§ãƒ³ã‚¹ä»˜ã��ã�§ã‚‚å�¯ï¼‰ã€‚"""
     raw = (_gemini_result_text(res) or "").strip()
     if not raw:
         return None
@@ -3198,7 +3146,7 @@ def _parse_global_priority_override_gemini_response(res):
 
 
 def _apply_regex_factory_closure_fallback(coerced: dict, blob: str, ref_y: int) -> dict:
-    """Gemini 未使用・応答解釈失敗時: ルールベースで工場休業日だけ補完（従来互換）。"""
+    """Gemini æœªä½¿ç”¨ãƒ»å¿œç­”è§£é‡ˆå¤±æ•—æ™‚: ãƒ«ãƒ¼ãƒ«ãƒ™ãƒ¼ã‚¹ã�§å·¥å ´ä¼‘æ¥­æ—¥ã� ã�‘è£œå®Œï¼ˆå¾“æ�¥äº’æ�›ï¼‰ã€‚"""
     out = dict(coerced)
     rx = parse_factory_closure_dates_from_global_comment(blob, ref_y)
     out["factory_closure_dates"] = sorted({d.isoformat() for d in rx})
@@ -3209,22 +3157,22 @@ def analyze_global_priority_override_comment(
     text: str, members: list, reference_year: int, ai_sheet_sink: dict | None = None
 ) -> dict:
     """
-    メインシート「グローバルコメント」（UI 上の自由記述）を **Gemini で一括解釈**し、配台に効く JSON に落とす。
-    自然言語の文脈切り分け・改行の別指示解釈は AI に任せ、戻り値のキーだけシステムが機械適用する。
+    ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ï¼ˆUI ä¸Šã�®è‡ªç”±è¨˜è¿°ï¼‰ã‚’ **Gemini ã�§ä¸€æ‹¬è§£é‡ˆ**ã�—ã€�é…�å�°ã�«åŠ¹ã�� JSON ã�«è�½ã�¨ã�™ã€‚
+    è‡ªç„¶è¨€èªžã�®æ–‡è„ˆåˆ‡ã‚Šåˆ†ã�‘ãƒ»æ”¹è¡Œã�®åˆ¥æŒ‡ç¤ºè§£é‡ˆã�¯ AI ã�«ä»»ã�›ã€�æˆ»ã‚Šå€¤ã�®ã‚­ãƒ¼ã� ã�‘ã‚·ã‚¹ãƒ†ãƒ ã�Œæ©Ÿæ¢°é�©ç”¨ã�™ã‚‹ã€‚
 
-    - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
-    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
-    - global_speed_rules: **工程名・機械名**への部分一致（各キーワードは **どちらの列にあっても可**）で、既存の加工速度（シート／上書き後）に **乗算**するルールの配列。該当なしは []。
-    - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を、当日その工程のタスクの**チーム全員に必ず含める**ルールの配列。該当なしは []。
-    - scheduler_notes_ja: 上記に落としきれない補足や運用メモ（速度は可能なら global_speed_rules も併記）。
+    - factory_closure_dates: **å·¥å ´å…¨ä½“**ã�§ç¨¼åƒ�ã�—ã�ªã�„æ—¥ï¼ˆå…¨å“¡é�žç¨¼åƒ�æ‰±ã�„ï¼‰ã�® YYYY-MM-DD æ–‡å­—åˆ—ã�®é…�åˆ—ã€‚è©²å½“ã�ªã�—ã�¯ []ã€‚
+    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: å¾“æ�¥ã�©ã�Šã‚Šã€‚
+    - global_speed_rules: **å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��**ã�¸ã�®éƒ¨åˆ†ä¸€è‡´ï¼ˆå�„ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã�¯ **ã�©ã�¡ã‚‰ã�®åˆ—ã�«ã�‚ã�£ã�¦ã‚‚å�¯**ï¼‰ã�§ã€�æ—¢å­˜ã�®åŠ å·¥é€Ÿåº¦ï¼ˆã‚·ãƒ¼ãƒˆï¼�ä¸Šæ›¸ã��å¾Œï¼‰ã�« **ä¹—ç®—**ã�™ã‚‹ãƒ«ãƒ¼ãƒ«ã�®é…�åˆ—ã€‚è©²å½“ã�ªã�—ã�¯ []ã€‚
+    - global_day_process_operator_rules: **æ—¥ä»˜ï¼‹å·¥ç¨‹å��ã�®éƒ¨åˆ†ä¸€è‡´ï¼‹è¤‡æ•°ãƒ¡ãƒ³ãƒ�ãƒ¼**ã‚’ã€�å½“æ—¥ã��ã�®å·¥ç¨‹ã�®ã‚¿ã‚¹ã‚¯ã�®**ãƒ�ãƒ¼ãƒ å…¨å“¡ã�«å¿…ã�šå�«ã‚�ã‚‹**ãƒ«ãƒ¼ãƒ«ã�®é…�åˆ—ã€‚è©²å½“ã�ªã�—ã�¯ []ã€‚
+    - scheduler_notes_ja: ä¸Šè¨˜ã�«è�½ã�¨ã�—ã��ã‚Œã�ªã�„è£œè¶³ã‚„é�‹ç”¨ãƒ¡ãƒ¢ï¼ˆé€Ÿåº¦ã�¯å�¯èƒ½ã�ªã‚‰ global_speed_rules ã‚‚ä½µè¨˜ï¼‰ã€‚
 
-    API キー無し・JSON 解釈失敗時: 上記ブール・指名は既定値、工場休業日のみ従来のルールベース解析で補完。
+    API ã‚­ãƒ¼ç„¡ã�—ãƒ»JSON è§£é‡ˆå¤±æ•—æ™‚: ä¸Šè¨˜ãƒ–ãƒ¼ãƒ«ãƒ»æŒ‡å��ã�¯æ—¢å®šå€¤ã€�å·¥å ´ä¼‘æ¥­æ—¥ã�®ã�¿å¾“æ�¥ã�®ãƒ«ãƒ¼ãƒ«ãƒ™ãƒ¼ã‚¹è§£æž�ã�§è£œå®Œã€‚
     """
     ref_y = int(reference_year) if reference_year is not None else date.today().year
     empty = _coerce_global_priority_override_dict({}, ref_y)
     if not text or not str(text).strip():
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン再優先特記_AI_API"] = "スキップ（メイン原文なし）"
+            ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = "ã‚¹ã‚­ãƒƒãƒ—ï¼ˆãƒ¡ã‚¤ãƒ³åŽŸæ–‡ã�ªã�—ï¼‰"
         return empty
     blob = str(text).strip()
     mem_sig = ",".join(sorted(str(m).strip() for m in (members or []) if m))
@@ -3233,17 +3181,17 @@ def analyze_global_priority_override_comment(
     ai_cache = load_ai_cache()
     cached = get_cached_ai_result(ai_cache, cache_key, content_key=cache_fingerprint)
     if cached is not None:
-        logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼びません）。")
+        logging.info("ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ’ãƒƒãƒˆï¼ˆGemini ã�¯å‘¼ã�³ã�¾ã�›ã‚“ï¼‰ã€‚")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = "ã�ªã�—ï¼ˆã‚­ãƒ£ãƒƒã‚·ãƒ¥ä½¿ç”¨ï¼‰"
         return _finalize_global_priority_override(
             blob, _coerce_global_priority_override_dict(cached, ref_y)
         )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のためメイン再優先特記の AI 解析をスキップしました。")
+        logging.info("GEMINI_API_KEY æœªè¨­å®šã�®ã�Ÿã‚�ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜ã�® AI è§£æž�ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
+            ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = "ã�ªã�—ï¼ˆAPIã‚­ãƒ¼æœªè¨­å®šãƒ»å·¥å ´ä¼‘æ¥­ã�®ã�¿ãƒ«ãƒ¼ãƒ«è£œå®Œï¼‰"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3251,90 +3199,90 @@ def analyze_global_priority_override_comment(
 
     member_sample = ", ".join(str(m) for m in (members or [])[:80])
     if len(members or []) > 80:
-        member_sample += " …"
+        member_sample += " â€¦"
 
-    prompt = f"""あなたは工場の配台計画システム用アシスタントです。
-Excel メインシートの **「グローバルコメント」**（自由記述・自然言語）の **全文** を読み、次のキーだけを持つ JSON を1つ返してください。
+    prompt = f"""ã�‚ã�ªã�Ÿã�¯å·¥å ´ã�®é…�å�°è¨ˆç”»ã‚·ã‚¹ãƒ†ãƒ ç”¨ã‚¢ã‚·ã‚¹ã‚¿ãƒ³ãƒˆã�§ã�™ã€‚
+Excel ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã�® **ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�**ï¼ˆè‡ªç”±è¨˜è¿°ãƒ»è‡ªç„¶è¨€èªžï¼‰ã�® **å…¨æ–‡** ã‚’èª­ã�¿ã€�æ¬¡ã�®ã‚­ãƒ¼ã� ã�‘ã‚’æŒ�ã�¤ JSON ã‚’1ã�¤è¿”ã�—ã�¦ã��ã� ã�•ã�„ã€‚
 
-【役割】
-ユーザーは改行や句点で複数の指示を書くことがあります。**文脈を読み分け**、配台システムが **機械的に適用できる値** に落とし込んでください。
-推測でブールを true にしないこと。根拠が明確なときだけ true。
+ã€�å½¹å‰²ã€‘
+ãƒ¦ãƒ¼ã‚¶ãƒ¼ã�¯æ”¹è¡Œã‚„å�¥ç‚¹ã�§è¤‡æ•°ã�®æŒ‡ç¤ºã‚’æ›¸ã��ã�“ã�¨ã�Œã�‚ã‚Šã�¾ã�™ã€‚**æ–‡è„ˆã‚’èª­ã�¿åˆ†ã�‘**ã€�é…�å�°ã‚·ã‚¹ãƒ†ãƒ ã�Œ **æ©Ÿæ¢°çš„ã�«é�©ç”¨ã�§ã��ã‚‹å€¤** ã�«è�½ã�¨ã�—è¾¼ã‚“ã�§ã��ã� ã�•ã�„ã€‚
+æŽ¨æ¸¬ã�§ãƒ–ãƒ¼ãƒ«ã‚’ true ã�«ã�—ã�ªã�„ã�“ã�¨ã€‚æ ¹æ‹ ã�Œæ˜Žç¢ºã�ªã�¨ã��ã� ã�‘ trueã€‚
 
-【最優先】
-この欄の内容はマスタ・スキル・need・タスク行・特別指定_備考の AI 指名より優先される例外指示として扱われます。
+ã€�æœ€å„ªå…ˆã€‘
+ã�“ã�®æ¬„ã�®å†…å®¹ã�¯ãƒžã‚¹ã‚¿ãƒ»ã‚¹ã‚­ãƒ«ãƒ»needãƒ»ã‚¿ã‚¹ã‚¯è¡Œãƒ»ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�® AI æŒ‡å��ã‚ˆã‚Šå„ªå…ˆã�•ã‚Œã‚‹ä¾‹å¤–æŒ‡ç¤ºã�¨ã�—ã�¦æ‰±ã‚�ã‚Œã�¾ã�™ã€‚
 
-【改行・複数行】
-各行・各文は **原則として独立した指示** です。行をまたいで1つにまとめたり、**割合表現（例 1/3）を日付と結び付けたりしない**こと。
+ã€�æ”¹è¡Œãƒ»è¤‡æ•°è¡Œã€‘
+å�„è¡Œãƒ»å�„æ–‡ã�¯ **åŽŸå‰‡ã�¨ã�—ã�¦ç‹¬ç«‹ã�—ã�ŸæŒ‡ç¤º** ã�§ã�™ã€‚è¡Œã‚’ã�¾ã�Ÿã�„ã�§1ã�¤ã�«ã�¾ã�¨ã‚�ã�Ÿã‚Šã€�**å‰²å�ˆè¡¨ç�¾ï¼ˆä¾‹ 1/3ï¼‰ã‚’æ—¥ä»˜ã�¨çµ�ã�³ä»˜ã�‘ã�Ÿã‚Šã�—ã�ªã�„**ã�“ã�¨ã€‚
 
-【キー別ルール】
+ã€�ã‚­ãƒ¼åˆ¥ãƒ«ãƒ¼ãƒ«ã€‘
 
-A) **factory_closure_dates** （配列・必須）
-   - **工場全体**が稼働しない日（臨時休業・全工場休み・その日は加工しない等）の日付を **YYYY-MM-DD** の文字列で列挙。
-   - **個人の休み・特定ラインだけ**の停止はここに **含めない**（[]）。
-   - 該当がなければ **空配列 []**（キー省略不可）。
-   - 年が省略されていれば西暦 {ref_y} 年として解釈。
+A) **factory_closure_dates** ï¼ˆé…�åˆ—ãƒ»å¿…é ˆï¼‰
+   - **å·¥å ´å…¨ä½“**ã�Œç¨¼åƒ�ã�—ã�ªã�„æ—¥ï¼ˆè‡¨æ™‚ä¼‘æ¥­ãƒ»å…¨å·¥å ´ä¼‘ã�¿ãƒ»ã��ã�®æ—¥ã�¯åŠ å·¥ã�—ã�ªã�„ç­‰ï¼‰ã�®æ—¥ä»˜ã‚’ **YYYY-MM-DD** ã�®æ–‡å­—åˆ—ã�§åˆ—æŒ™ã€‚
+   - **å€‹äººã�®ä¼‘ã�¿ãƒ»ç‰¹å®šãƒ©ã‚¤ãƒ³ã� ã�‘**ã�®å�œæ­¢ã�¯ã�“ã�“ã�« **å�«ã‚�ã�ªã�„**ï¼ˆ[]ï¼‰ã€‚
+   - è©²å½“ã�Œã�ªã�‘ã‚Œã�° **ç©ºé…�åˆ— []**ï¼ˆã‚­ãƒ¼çœ�ç•¥ä¸�å�¯ï¼‰ã€‚
+   - å¹´ã�Œçœ�ç•¥ã�•ã‚Œã�¦ã�„ã‚Œã�°è¥¿æš¦ {ref_y} å¹´ã�¨ã�—ã�¦è§£é‡ˆã€‚
 
 B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits** / **task_preferred_operators**
-   - 従来どおり（配台のスキル無視・人数1固定・制限撤廃・依頼NO→主担当OP指名）。該当なければ false または {{}}。
+   - å¾“æ�¥ã�©ã�Šã‚Šï¼ˆé…�å�°ã�®ã‚¹ã‚­ãƒ«ç„¡è¦–ãƒ»äººæ•°1å›ºå®šãƒ»åˆ¶é™�æ’¤å»ƒãƒ»ä¾�é ¼NOâ†’ä¸»æ‹…å½“OPæŒ‡å��ï¼‰ã€‚è©²å½“ã�ªã�‘ã‚Œã�° false ã�¾ã�Ÿã�¯ {{}}ã€‚
 
-C) **global_speed_rules** （配列・必須）
-   - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倍率** を指定するオブジェクトのリスト。
-   - 各オブジェクトのキー:
-     - "process_contains": 文字列（省略可）。**工程名または機械名のいずれか**に **部分一致**（NFKC 想定）。
-     - "machine_contains": 文字列（省略可）。**工程名または機械名のいずれか**に **部分一致**。
-     - "speed_multiplier": 正の数。**1/3 の速度**なら約 **0.333333**（既存速度 × この値）。**2倍速**なら 2.0。
-   - **両方指定時は AND**（2つのキーワードが、**両方とも**「工程名・機械名のどちらか」に現れる行）。例: 工程=検査・機械=熱融着機 でも、工程=熱融着・機械=検査用設備 でもマッチしうる。
-   - どちらか一方だけ指定すれば、そのキーワードが工程名または機械名のどちらかにあればマッチ。
-   - 該当指示がなければ **空配列 []**。
-   - 例: 「熱融着を使う検査の加工速度は1/3」→
-     [{{"process_contains":"熱融着","machine_contains":"検査","speed_multiplier":0.333333}}]
-     （「熱融着」と「検査」が工程名・機械名の組み合わせで揃うタスクの速度が約1/3になる）
+C) **global_speed_rules** ï¼ˆé…�åˆ—ãƒ»å¿…é ˆï¼‰
+   - ç‰¹å®šã�® **å·¥ç¨‹å��**ï¼ˆExcelã€Œå·¥ç¨‹å��ã€�åˆ—ï¼‰ã‚„ **æ©Ÿæ¢°å��**ï¼ˆã€Œæ©Ÿæ¢°å��ã€�åˆ—ï¼‰ã�«å¯¾ã�—ã€�**æ—¢å­˜ã�®åŠ å·¥é€Ÿåº¦ã�«æŽ›ã�‘ã‚‹å€�çŽ‡** ã‚’æŒ‡å®šã�™ã‚‹ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®ãƒªã‚¹ãƒˆã€‚
+   - å�„ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®ã‚­ãƒ¼:
+     - "process_contains": æ–‡å­—åˆ—ï¼ˆçœ�ç•¥å�¯ï¼‰ã€‚**å·¥ç¨‹å��ã�¾ã�Ÿã�¯æ©Ÿæ¢°å��ã�®ã�„ã�šã‚Œã�‹**ã�« **éƒ¨åˆ†ä¸€è‡´**ï¼ˆNFKC æƒ³å®šï¼‰ã€‚
+     - "machine_contains": æ–‡å­—åˆ—ï¼ˆçœ�ç•¥å�¯ï¼‰ã€‚**å·¥ç¨‹å��ã�¾ã�Ÿã�¯æ©Ÿæ¢°å��ã�®ã�„ã�šã‚Œã�‹**ã�« **éƒ¨åˆ†ä¸€è‡´**ã€‚
+     - "speed_multiplier": æ­£ã�®æ•°ã€‚**1/3 ã�®é€Ÿåº¦**ã�ªã‚‰ç´„ **0.333333**ï¼ˆæ—¢å­˜é€Ÿåº¦ Ã— ã�“ã�®å€¤ï¼‰ã€‚**2å€�é€Ÿ**ã�ªã‚‰ 2.0ã€‚
+   - **ä¸¡æ–¹æŒ‡å®šæ™‚ã�¯ AND**ï¼ˆ2ã�¤ã�®ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã�Œã€�**ä¸¡æ–¹ã�¨ã‚‚**ã€Œå·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�®ã�©ã�¡ã‚‰ã�‹ã€�ã�«ç�¾ã‚Œã‚‹è¡Œï¼‰ã€‚ä¾‹: å·¥ç¨‹=æ¤œæŸ»ãƒ»æ©Ÿæ¢°=ç†±èž�ç�€æ©Ÿ ã�§ã‚‚ã€�å·¥ç¨‹=ç†±èž�ç�€ãƒ»æ©Ÿæ¢°=æ¤œæŸ»ç”¨è¨­å‚™ ã�§ã‚‚ãƒžãƒƒãƒ�ã�—ã�†ã‚‹ã€‚
+   - ã�©ã�¡ã‚‰ã�‹ä¸€æ–¹ã� ã�‘æŒ‡å®šã�™ã‚Œã�°ã€�ã��ã�®ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã�Œå·¥ç¨‹å��ã�¾ã�Ÿã�¯æ©Ÿæ¢°å��ã�®ã�©ã�¡ã‚‰ã�‹ã�«ã�‚ã‚Œã�°ãƒžãƒƒãƒ�ã€‚
+   - è©²å½“æŒ‡ç¤ºã�Œã�ªã�‘ã‚Œã�° **ç©ºé…�åˆ— []**ã€‚
+   - ä¾‹: ã€Œç†±èž�ç�€ã‚’ä½¿ã�†æ¤œæŸ»ã�®åŠ å·¥é€Ÿåº¦ã�¯1/3ã€�â†’
+     [{{"process_contains":"ç†±èž�ç�€","machine_contains":"æ¤œæŸ»","speed_multiplier":0.333333}}]
+     ï¼ˆã€Œç†±èž�ç�€ã€�ã�¨ã€Œæ¤œæŸ»ã€�ã�Œå·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�®çµ„ã�¿å�ˆã‚�ã�›ã�§æ�ƒã�†ã‚¿ã‚¹ã‚¯ã�®é€Ÿåº¦ã�Œç´„1/3ã�«ã�ªã‚‹ï¼‰
 
-D) **scheduler_notes_ja** （文字列・必須）
-   - 上記キーに落としきれない補足。速度は **global_speed_rules で構造化できるときは必ずそちらにも出す**（ここは人間向け要約でもよい）。無ければ ""。
+D) **scheduler_notes_ja** ï¼ˆæ–‡å­—åˆ—ãƒ»å¿…é ˆï¼‰
+   - ä¸Šè¨˜ã‚­ãƒ¼ã�«è�½ã�¨ã�—ã��ã‚Œã�ªã�„è£œè¶³ã€‚é€Ÿåº¦ã�¯ **global_speed_rules ã�§æ§‹é€ åŒ–ã�§ã��ã‚‹ã�¨ã��ã�¯å¿…ã�šã��ã�¡ã‚‰ã�«ã‚‚å‡ºã�™**ï¼ˆã�“ã�“ã�¯äººé–“å�‘ã�‘è¦�ç´„ã�§ã‚‚ã‚ˆã�„ï¼‰ã€‚ç„¡ã�‘ã‚Œã�° ""ã€‚
 
-E) **interpretation_ja** （文字列・必須）
-   - 原文の要約を1文（200文字以内）。
+E) **interpretation_ja** ï¼ˆæ–‡å­—åˆ—ãƒ»å¿…é ˆï¼‰
+   - åŽŸæ–‡ã�®è¦�ç´„ã‚’1æ–‡ï¼ˆ200æ–‡å­—ä»¥å†…ï¼‰ã€‚
 
-F) **global_day_process_operator_rules** （配列・必須）
-   - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当てはまるタスクについて、
-     列挙した **全メンバーを同一チームに必ず含める** ルール（**OP/AS どちらのスキルでも可**。氏名解決は **担当OP指名と同じ**）。
-   - **依頼NOが分かる主担当の1名指名**は **task_preferred_operators** を使うこと。原文が **「◯月◯日の△工程にＡとＢを配台」** のように **日付・工程・複数名**のときは **本配列**へ落とす。
-   - 各オブジェクトのキー:
-     - "date": **YYYY-MM-DD**（その日に割り当てるロールに適用）
-     - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
-     - "operator_names": 氏名の配列（例: ["森下", "宮島　花子"]）
-   - 該当指示がなければ **空配列 []**。
+F) **global_day_process_operator_rules** ï¼ˆé…�åˆ—ãƒ»å¿…é ˆï¼‰
+   - **ç‰¹å®šã�®ç¨¼åƒ�æ—¥**ã�‹ã�¤ **å·¥ç¨‹å��ï¼ˆExcelã€Œå·¥ç¨‹å��ã€�åˆ—ï¼‰ã�®éƒ¨åˆ†ä¸€è‡´** ã�«å½“ã�¦ã�¯ã�¾ã‚‹ã‚¿ã‚¹ã‚¯ã�«ã�¤ã�„ã�¦ã€�
+     åˆ—æŒ™ã�—ã�Ÿ **å…¨ãƒ¡ãƒ³ãƒ�ãƒ¼ã‚’å�Œä¸€ãƒ�ãƒ¼ãƒ ã�«å¿…ã�šå�«ã‚�ã‚‹** ãƒ«ãƒ¼ãƒ«ï¼ˆ**OP/AS ã�©ã�¡ã‚‰ã�®ã‚¹ã‚­ãƒ«ã�§ã‚‚å�¯**ã€‚æ°�å��è§£æ±ºã�¯ **æ‹…å½“OPæŒ‡å��ã�¨å�Œã�˜**ï¼‰ã€‚
+   - **ä¾�é ¼NOã�Œåˆ†ã�‹ã‚‹ä¸»æ‹…å½“ã�®1å��æŒ‡å��**ã�¯ **task_preferred_operators** ã‚’ä½¿ã�†ã�“ã�¨ã€‚åŽŸæ–‡ã�Œ **ã€Œâ—¯æœˆâ—¯æ—¥ã�®â–³å·¥ç¨‹ã�«ï¼¡ã�¨ï¼¢ã‚’é…�å�°ã€�** ã�®ã‚ˆã�†ã�« **æ—¥ä»˜ãƒ»å·¥ç¨‹ãƒ»è¤‡æ•°å��**ã�®ã�¨ã��ã�¯ **æœ¬é…�åˆ—**ã�¸è�½ã�¨ã�™ã€‚
+   - å�„ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®ã‚­ãƒ¼:
+     - "date": **YYYY-MM-DD**ï¼ˆã��ã�®æ—¥ã�«å‰²ã‚Šå½“ã�¦ã‚‹ãƒ­ãƒ¼ãƒ«ã�«é�©ç”¨ï¼‰
+     - "process_contains": å·¥ç¨‹å��ã�« **éƒ¨åˆ†ä¸€è‡´**ï¼ˆNFKC æƒ³å®šï¼‰ã€‚ä¾‹: "EC"
+     - "operator_names": æ°�å��ã�®é…�åˆ—ï¼ˆä¾‹: ["æ£®ä¸‹", "å®®å³¶ã€€èŠ±å­�"]ï¼‰
+   - è©²å½“æŒ‡ç¤ºã�Œã�ªã�‘ã‚Œã�° **ç©ºé…�åˆ— []**ã€‚
 
-【返答形式】
-先頭が {{ で終わりが }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
+ã€�è¿”ç­”å½¢å¼�ã€‘
+å…ˆé ­ã�Œ {{ ã�§çµ‚ã‚�ã‚Šã�Œ }} ã�® **JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ1ã�¤ã�®ã�¿**ï¼ˆèª¬æ˜Žæ–‡ãƒ»ãƒžãƒ¼ã‚¯ãƒ€ã‚¦ãƒ³ç¦�æ­¢ï¼‰ã€‚
 
-必須キー一覧:
-- "factory_closure_dates": string の配列（YYYY-MM-DD）
-- "ignore_skill_requirements": true または false
-- "ignore_need_minimum": true または false
-- "abolish_all_scheduling_limits": true または false
-- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当氏名）。**配列にしてはならない**。該当なしは {{}}
-- "global_speed_rules": オブジェクトの配列（該当なしは []）
-- "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
-- "scheduler_notes_ja": 文字列
-- "interpretation_ja": 文字列
+å¿…é ˆã‚­ãƒ¼ä¸€è¦§:
+- "factory_closure_dates": string ã�®é…�åˆ—ï¼ˆYYYY-MM-DDï¼‰
+- "ignore_skill_requirements": true ã�¾ã�Ÿã�¯ false
+- "ignore_need_minimum": true ã�¾ã�Ÿã�¯ false
+- "abolish_all_scheduling_limits": true ã�¾ã�Ÿã�¯ false
+- "task_preferred_operators": **JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®ã�¿**ï¼ˆã‚­ãƒ¼=ä¾�é ¼NOãƒ»å€¤=ä¸»æ‹…å½“æ°�å��ï¼‰ã€‚**é…�åˆ—ã�«ã�—ã�¦ã�¯ã�ªã‚‰ã�ªã�„**ã€‚è©²å½“ã�ªã�—ã�¯ {{}}
+- "global_speed_rules": ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®é…�åˆ—ï¼ˆè©²å½“ã�ªã�—ã�¯ []ï¼‰
+- "global_day_process_operator_rules": ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®é…�åˆ—ï¼ˆè©²å½“ã�ªã�—ã�¯ []ï¼‰
+- "scheduler_notes_ja": æ–‡å­—åˆ—
+- "interpretation_ja": æ–‡å­—åˆ—
 
-【基準年】 日付言及があれば西暦 {ref_y} 年として解釈してよい。
+ã€�åŸºæº–å¹´ã€‘ æ—¥ä»˜è¨€å�Šã�Œã�‚ã‚Œã�°è¥¿æš¦ {ref_y} å¹´ã�¨ã�—ã�¦è§£é‡ˆã�—ã�¦ã‚ˆã�„ã€‚
 
-【登録メンバー名の参考】（照合用。JSON キーには含めない）
+ã€�ç™»éŒ²ãƒ¡ãƒ³ãƒ�ãƒ¼å��ã�®å�‚è€ƒã€‘ï¼ˆç…§å�ˆç”¨ã€‚JSON ã‚­ãƒ¼ã�«ã�¯å�«ã‚�ã�ªã�„ï¼‰
 {member_sample}
 
-【グローバルコメント・原文】
+ã€�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆãƒ»åŽŸæ–‡ã€‘
 {blob}
 """
     try:
         ppath = os.path.join(log_dir, "ai_global_priority_override_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("メイン再優先特記: プロンプト全文 → %s", ppath)
+        logging.info("ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆå…¨æ–‡ â†’ %s", ppath)
     except OSError as ex:
-        logging.warning("メイン再優先特記: プロンプト保存失敗: %s", ex)
+        logging.warning("ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆä¿�å­˜å¤±æ•—: %s", ex)
 
     client = genai.Client(api_key=API_KEY)
     try:
@@ -3343,7 +3291,7 @@ F) **global_day_process_operator_rules** （配列・必須）
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
             logging.warning(
-                "メイン再優先特記: AI 応答から JSON を解釈できませんでした。キャッシュせず、次回再試行されます。"
+                "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: AI å¿œç­”ã�‹ã‚‰ JSON ã‚’è§£é‡ˆã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿã€‚ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�›ã�šã€�æ¬¡å›žå†�è©¦è¡Œã�•ã‚Œã�¾ã�™ã€‚"
             )
             try:
                 rpath = os.path.join(log_dir, "ai_global_priority_override_last_response.txt")
@@ -3352,7 +3300,7 @@ F) **global_day_process_operator_rules** （配列・必須）
             except OSError:
                 pass
             if ai_sheet_sink is not None:
-                ai_sheet_sink["メイン再優先特記_AI_API"] = "あり（JSON解釈失敗・工場休業はルール補完）"
+                ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = "ã�‚ã‚Šï¼ˆJSONè§£é‡ˆå¤±æ•—ãƒ»å·¥å ´ä¼‘æ¥­ã�¯ãƒ«ãƒ¼ãƒ«è£œå®Œï¼‰"
             coerced = _apply_regex_factory_closure_fallback(
                 _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
             )
@@ -3372,7 +3320,7 @@ F) **global_day_process_operator_rules** （配列・必須）
         _gsr = coerced.get("global_speed_rules") or []
         _gdp = coerced.get("global_day_process_operator_rules") or []
         logging.info(
-            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 日×工程チーム=%s件 skill=%s need1=%s abolish=%s task_pref=%s件 — %s",
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: AI è§£é‡ˆ factoryä¼‘æ¥­=%sæ—¥ é€Ÿåº¦ãƒ«ãƒ¼ãƒ«=%sä»¶ æ—¥Ã—å·¥ç¨‹ãƒ�ãƒ¼ãƒ =%sä»¶ skill=%s need1=%s abolish=%s task_pref=%sä»¶ â€” %s",
             len(_fcd),
             len(_gsr),
             len(_gdp),
@@ -3383,12 +3331,12 @@ F) **global_day_process_operator_rules** （配列・必須）
             coerced.get("interpretation_ja", "")[:100],
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン再優先特記_AI_API"] = "あり"
+            ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = "ã�‚ã‚Š"
         return coerced
     except Exception as e:
-        logging.warning("メイン再優先特記: Gemini 呼び出し失敗: %s", e)
+        logging.warning("ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: Gemini å‘¼ã�³å‡ºã�—å¤±æ•—: %s", e)
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン再優先特記_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜_AI_API"] = f"å¤±æ•—: {e}"[:500]
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3396,39 +3344,39 @@ F) **global_day_process_operator_rules** （配列・必須）
 
 
 def default_result_task_sheet_column_order(max_history_len: int) -> list:
-    """結果_タスク一覧の既定列順（履歴列数は実行時に決まる）。"""
-    hist = [f"履歴{i+1}" for i in range(max_history_len)]
+    """çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®æ—¢å®šåˆ—é †ï¼ˆå±¥æ­´åˆ—æ•°ã�¯å®Ÿè¡Œæ™‚ã�«æ±ºã�¾ã‚‹ï¼‰ã€‚"""
+    hist = [f"å±¥æ­´{i+1}" for i in range(max_history_len)]
     return [
-        "ステータス",
-        "タスクID",
-        "工程名",
-        "機械名",
-        "優先度",
+        "ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹",
+        "ã‚¿ã‚¹ã‚¯ID",
+        "å·¥ç¨‹å��",
+        "æ©Ÿæ¢°å��",
+        "å„ªå…ˆåº¦",
         RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
         *hist,
-        "必要OP(上書)",
-        "タスク効率",
-        "加工途中",
-        "特別指定あり",
-        "担当OP指名",
-        "回答納期",
-        "指定納期",
-        "計画基準納期",
+        "å¿…è¦�OP(ä¸Šæ›¸)",
+        "ã‚¿ã‚¹ã‚¯åŠ¹çŽ‡",
+        "åŠ å·¥é€”ä¸­",
+        "ç‰¹åˆ¥æŒ‡å®šã�‚ã‚Š",
+        "æ‹…å½“OPæŒ‡å��",
+        "å›žç­”ç´�æœŸ",
+        "æŒ‡å®šç´�æœŸ",
+        "è¨ˆç”»åŸºæº–ç´�æœŸ",
         TASK_COL_RAW_INPUT_DATE,
-        "納期緊急",
-        "加工開始日",
-        "配完_加工開始",
-        "配完_加工終了",
+        "ç´�æœŸç·Šæ€¥",
+        "åŠ å·¥é–‹å§‹æ—¥",
+        "é…�å®Œ_åŠ å·¥é–‹å§‹",
+        "é…�å®Œ_åŠ å·¥çµ‚äº†",
         RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
-        "総加工量",
-        "残加工量",
-        "完了率(実行時点)",
-        "特別指定_AI",
+        "ç·�åŠ å·¥é‡�",
+        "æ®‹åŠ å·¥é‡�",
+        "å®Œäº†çŽ‡(å®Ÿè¡Œæ™‚ç‚¹)",
+        "ç‰¹åˆ¥æŒ‡å®š_AI",
     ]
 
 
 def _task_date_key_for_result_sheet_sort(val):
-    """結果_タスク一覧の並べ替え用。欠損・解釈不能は最後（date.max）。"""
+    """çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®ä¸¦ã�¹æ›¿ã�ˆç”¨ã€‚æ¬ æ��ãƒ»è§£é‡ˆä¸�èƒ½ã�¯æœ€å¾Œï¼ˆdate.maxï¼‰ã€‚"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return date.max
     if isinstance(val, datetime):
@@ -3445,7 +3393,7 @@ def _task_date_key_for_result_sheet_sort(val):
 
 
 def _coerce_planning_date_for_deadline(d) -> date | None:
-    """回答納期・指定納期などを date に正規化（欠損は None）。"""
+    """å›žç­”ç´�æœŸãƒ»æŒ‡å®šç´�æœŸã�ªã�©ã‚’ date ã�«æ­£è¦�åŒ–ï¼ˆæ¬ æ��ã�¯ Noneï¼‰ã€‚"""
     if d is None:
         return None
     if isinstance(d, datetime):
@@ -3459,34 +3407,34 @@ def _result_task_plan_end_within_answer_or_spec_16_label(
     plan_window: list | None, answer_due, specified_due
 ) -> str:
     """
-    結果_タスク一覧用: 「配完_加工終了」相当の最終終了が、
-    回答納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを判定。
-    回答納期が無い行は指定納期の日付 + 16:00 で判定。
-    両方無い場合は「納期なし」。
+    çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ç”¨: ã€Œé…�å®Œ_åŠ å·¥çµ‚äº†ã€�ç›¸å½“ã�®æœ€çµ‚çµ‚äº†ã�Œã€�
+    å›žç­”ç´�æœŸã�®æ—¥ä»˜ + PLAN_DUE_DAY_COMPLETION_TIMEï¼ˆæ—¢å®š 16:00ï¼‰ä»¥ä¸‹ã�‹ã‚’åˆ¤å®šã€‚
+    å›žç­”ç´�æœŸã�Œç„¡ã�„è¡Œã�¯æŒ‡å®šç´�æœŸã�®æ—¥ä»˜ + 16:00 ã�§åˆ¤å®šã€‚
+    ä¸¡æ–¹ç„¡ã�„å ´å�ˆã�¯ã€Œç´�æœŸã�ªã�—ã€�ã€‚
     """
     if not plan_window or len(plan_window) < 2:
-        return "未割当"
+        return "æœªå‰²å½“"
     _pe = plan_window[1]
     if _pe is None:
-        return "未割当"
+        return "æœªå‰²å½“"
     dd = _coerce_planning_date_for_deadline(answer_due)
     if dd is None:
         dd = _coerce_planning_date_for_deadline(specified_due)
     if dd is None:
-        return "納期なし"
+        return "ç´�æœŸã�ªã�—"
     try:
         deadline_dt = datetime.combine(dd, PLAN_DUE_DAY_COMPLETION_TIME)
         if _pe <= deadline_dt:
-            return "はい"
-        return "いいえ"
+            return "ã�¯ã�„"
+        return "ã�„ã�„ã�ˆ"
     except Exception:
-        return "判定不能"
+        return "åˆ¤å®šä¸�èƒ½"
 
 
 def _result_task_sheet_sort_key(t: dict):
     """
-    結果_タスク一覧の表示順。①配台試行順番（generate_plan 冒頭でキュー順に付与した 1..n）昇順。
-    欠損・非数は最後。同一試行順内は依頼NO・機械名、続けて加工開始日・納期で安定化。
+    çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®è¡¨ç¤ºé †ã€‚â‘ é…�å�°è©¦è¡Œé †ç•ªï¼ˆgenerate_plan å†’é ­ã�§ã‚­ãƒ¥ãƒ¼é †ã�«ä»˜ä¸Žã�—ã�Ÿ 1..nï¼‰æ˜‡é †ã€‚
+    æ¬ æ��ãƒ»é�žæ•°ã�¯æœ€å¾Œã€‚å�Œä¸€è©¦è¡Œé †å†…ã�¯ä¾�é ¼NOãƒ»æ©Ÿæ¢°å��ã€�ç¶šã�‘ã�¦åŠ å·¥é–‹å§‹æ—¥ãƒ»ç´�æœŸã�§å®‰å®šåŒ–ã€‚
     """
     _dto = t.get("dispatch_trial_order")
     try:
@@ -3504,15 +3452,15 @@ def _result_task_sheet_sort_key(t: dict):
 
 
 def _is_result_task_history_expand_token(cell_val) -> bool:
-    """列設定シートで「履歴」1行を置くと履歴1～n をその位置に展開する。"""
+    """åˆ—è¨­å®šã‚·ãƒ¼ãƒˆã�§ã€Œå±¥æ­´ã€�1è¡Œã‚’ç½®ã��ã�¨å±¥æ­´1ï½žn ã‚’ã��ã�®ä½�ç½®ã�«å±•é–‹ã�™ã‚‹ã€‚"""
     if cell_val is None or (isinstance(cell_val, float) and pd.isna(cell_val)):
         return False
     s = unicodedata.normalize("NFKC", str(cell_val).strip())
-    return s in ("履歴", "履歴*")
+    return s in ("å±¥æ­´", "å±¥æ­´*")
 
 
 def _result_task_column_alias_map(df_columns) -> dict:
-    """見出しの NFKC 正規化キー → DataFrame 上の実列名。"""
+    """è¦‹å‡ºã�—ã�® NFKC æ­£è¦�åŒ–ã‚­ãƒ¼ â†’ DataFrame ä¸Šã�®å®Ÿåˆ—å��ã€‚"""
     m = {}
     for c in df_columns:
         m[_nfkc_column_aliases(str(c).strip())] = c
@@ -3529,8 +3477,8 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
     resolved = col_by_norm.get(nk)
     if resolved is not None:
         return resolved
-    # 旧列名（計画基準納期ベース）→ 配完_回答指定16時まで
-    if nk == _nfkc_column_aliases("配完_基準16時まで"):
+    # æ—§åˆ—å��ï¼ˆè¨ˆç”»åŸºæº–ç´�æœŸãƒ™ãƒ¼ã‚¹ï¼‰â†’ é…�å®Œ_å›žç­”æŒ‡å®š16æ™‚ã�¾ã�§
+    if nk == _nfkc_column_aliases("é…�å®Œ_åŸºæº–16æ™‚ã�¾ã�§"):
         return col_by_norm.get(
             _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
         )
@@ -3538,7 +3486,7 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
 
 
 def _parse_column_visible_cell(val) -> bool:
-    """表示列: 空・未記入は True（表示）。FALSE/0/いいえ 等で非表示。"""
+    """è¡¨ç¤ºåˆ—: ç©ºãƒ»æœªè¨˜å…¥ã�¯ Trueï¼ˆè¡¨ç¤ºï¼‰ã€‚FALSE/0/ã�„ã�„ã�ˆ ç­‰ã�§é�žè¡¨ç¤ºã€‚"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return True
     if isinstance(val, bool):
@@ -3549,9 +3497,9 @@ def _parse_column_visible_cell(val) -> bool:
         if val == 1:
             return True
     s = unicodedata.normalize("NFKC", str(val).strip()).lower()
-    if s in ("", "true", "1", "はい", "yes", "on", "表示", "○"):
+    if s in ("", "true", "1", "ã�¯ã�„", "yes", "on", "è¡¨ç¤º", "â—‹"):
         return True
-    if s in ("false", "flase", "0", "いいえ", "no", "off", "非表示", "隠す", "×"):
+    if s in ("false", "flase", "0", "ã�„ã�„ã�ˆ", "no", "off", "é�žè¡¨ç¤º", "éš ã�™", "Ã—"):
         return False
     return True
 
@@ -3560,10 +3508,10 @@ def parse_result_task_column_config_dataframe(
     df_cfg: pd.DataFrame | None, max_history_len: int
 ) -> list | None:
     """
-    「列設定_結果_タスク一覧」相当の DataFrame から (列ラベル, 表示) を上から読む。
-    見出し「列名」と「表示」（無い場合は表示はすべて True）。
-    「履歴」「履歴*」の1行は履歴1～履歴n に展開し、同一行の表示フラグを共有する。
-    同一列名（NFKC・別名正規化後）が複数行ある場合は先頭行のみ採用し、以降はログに出して捨てる。
+    ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ç›¸å½“ã�® DataFrame ã�‹ã‚‰ (åˆ—ãƒ©ãƒ™ãƒ«, è¡¨ç¤º) ã‚’ä¸Šã�‹ã‚‰èª­ã‚€ã€‚
+    è¦‹å‡ºã�—ã€Œåˆ—å��ã€�ã�¨ã€Œè¡¨ç¤ºã€�ï¼ˆç„¡ã�„å ´å�ˆã�¯è¡¨ç¤ºã�¯ã�™ã�¹ã�¦ Trueï¼‰ã€‚
+    ã€Œå±¥æ­´ã€�ã€Œå±¥æ­´*ã€�ã�®1è¡Œã�¯å±¥æ­´1ï½žå±¥æ­´n ã�«å±•é–‹ã�—ã€�å�Œä¸€è¡Œã�®è¡¨ç¤ºãƒ•ãƒ©ã‚°ã‚’å…±æœ‰ã�™ã‚‹ã€‚
+    å�Œä¸€åˆ—å��ï¼ˆNFKCãƒ»åˆ¥å��æ­£è¦�åŒ–å¾Œï¼‰ã�Œè¤‡æ•°è¡Œã�‚ã‚‹å ´å�ˆã�¯å…ˆé ­è¡Œã�®ã�¿æŽ¡ç”¨ã�—ã€�ä»¥é™�ã�¯ãƒ­ã‚°ã�«å‡ºã�—ã�¦æ�¨ã�¦ã‚‹ã€‚
     """
     if df_cfg is None or df_cfg.empty:
         return None
@@ -3595,7 +3543,7 @@ def parse_result_task_column_config_dataframe(
         nk = _nfkc_column_aliases(unicodedata.normalize("NFKC", lab))
         if nk in seen_norm:
             logging.warning(
-                "列設定「%s」: 重複列名「%s」をスキップしました（上の行を優先）。",
+                "åˆ—è¨­å®šã€Œ%sã€�: é‡�è¤‡åˆ—å��ã€Œ%sã€�ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿï¼ˆä¸Šã�®è¡Œã‚’å„ªå…ˆï¼‰ã€‚",
                 COLUMN_CONFIG_SHEET_NAME,
                 lab,
             )
@@ -3608,7 +3556,7 @@ def parse_result_task_column_config_dataframe(
         vis = _parse_column_visible_cell(df_cfg[vis_col].iloc[i] if vis_col is not None else None)
         if _is_result_task_history_expand_token(raw):
             for j in range(max_history_len):
-                _try_add(f"履歴{j+1}", vis)
+                _try_add(f"å±¥æ­´{j+1}", vis)
             continue
         if raw is None or (isinstance(raw, float) and pd.isna(raw)):
             continue
@@ -3620,7 +3568,7 @@ def parse_result_task_column_config_dataframe(
 
 
 def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]) -> None:
-    """列設定シートの A:B を 列名・表示 のみで上書き（1行目見出し＋データ）。"""
+    """åˆ—è¨­å®šã‚·ãƒ¼ãƒˆã�® A:B ã‚’ åˆ—å��ãƒ»è¡¨ç¤º ã�®ã�¿ã�§ä¸Šæ›¸ã��ï¼ˆ1è¡Œç›®è¦‹å‡ºã�—ï¼‹ãƒ‡ãƒ¼ã‚¿ï¼‰ã€‚"""
     mat = [[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]]
     for lab, vis in rows:
         mat.append([lab, bool(vis)])
@@ -3639,14 +3587,14 @@ def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]
 
 def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> list | None:
     """
-    TASK_INPUT_WORKBOOK の「列設定_結果_タスク一覧」シートから (列ラベル, 表示) を上から読む。
+    TASK_INPUT_WORKBOOK ã�®ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã‚·ãƒ¼ãƒˆã�‹ã‚‰ (åˆ—ãƒ©ãƒ™ãƒ«, è¡¨ç¤º) ã‚’ä¸Šã�‹ã‚‰èª­ã‚€ã€‚
     """
     wb = TASKS_INPUT_WORKBOOK
     if not wb or not os.path.exists(wb):
         return None
     if _workbook_should_skip_openpyxl_io(wb):
         logging.info(
-            "列設定: ブックに「%s」があるため pandas(openpyxl) での「%s」読込をスキップ（既定列順を使います）。",
+            "åˆ—è¨­å®š: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� pandas(openpyxl) ã�§ã�®ã€Œ%sã€�èª­è¾¼ã‚’ã‚¹ã‚­ãƒƒãƒ—ï¼ˆæ—¢å®šåˆ—é †ã‚’ä½¿ã�„ã�¾ã�™ï¼‰ã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             COLUMN_CONFIG_SHEET_NAME,
         )
@@ -3657,7 +3605,7 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
         return None
     except Exception as e:
         logging.warning(
-            "シート「%s」: 読み込みに失敗したため既定の列順を使います (%s)",
+            "ã‚·ãƒ¼ãƒˆã€Œ%sã€�: èª­ã�¿è¾¼ã�¿ã�«å¤±æ•—ã�—ã�Ÿã�Ÿã‚�æ—¢å®šã�®åˆ—é †ã‚’ä½¿ã�„ã�¾ã�™ (%s)",
             COLUMN_CONFIG_SHEET_NAME,
             e,
         )
@@ -3672,9 +3620,9 @@ def apply_result_task_sheet_column_order(
     config_dataframe: pd.DataFrame | None = None,
 ):
     """
-    列設定シートがあればその順・表示を優先し、無い列は既定順で後ろに追記（表示は True）。
-    config_dataframe を渡した場合はファイルを読まずその内容を列設定とみなす（xlwings 実行時用）。
-    戻り値: (並べ替え後 DataFrame, 実際の列名リスト, 設定ソース説明文字列, 列名→表示bool)
+    åˆ—è¨­å®šã‚·ãƒ¼ãƒˆã�Œã�‚ã‚Œã�°ã��ã�®é †ãƒ»è¡¨ç¤ºã‚’å„ªå…ˆã�—ã€�ç„¡ã�„åˆ—ã�¯æ—¢å®šé †ã�§å¾Œã‚�ã�«è¿½è¨˜ï¼ˆè¡¨ç¤ºã�¯ Trueï¼‰ã€‚
+    config_dataframe ã‚’æ¸¡ã�—ã�Ÿå ´å�ˆã�¯ãƒ•ã‚¡ã‚¤ãƒ«ã‚’èª­ã�¾ã�šã��ã�®å†…å®¹ã‚’åˆ—è¨­å®šã�¨ã�¿ã�ªã�™ï¼ˆxlwings å®Ÿè¡Œæ™‚ç”¨ï¼‰ã€‚
+    æˆ»ã‚Šå€¤: (ä¸¦ã�¹æ›¿ã�ˆå¾Œ DataFrame, å®Ÿéš›ã�®åˆ—å��ãƒªã‚¹ãƒˆ, è¨­å®šã‚½ãƒ¼ã‚¹èª¬æ˜Žæ–‡å­—åˆ—, åˆ—å��â†’è¡¨ç¤ºbool)
     """
     default_order = default_result_task_sheet_column_order(max_history_len)
     if config_dataframe is not None:
@@ -3684,13 +3632,13 @@ def apply_result_task_sheet_column_order(
     if user_rows:
         primary = user_rows
         source = (
-            f"マクロブック「{COLUMN_CONFIG_SHEET_NAME}」"
+            f"ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œ{COLUMN_CONFIG_SHEET_NAME}ã€�"
             if config_dataframe is None
-            else f"シート「{COLUMN_CONFIG_SHEET_NAME}」（実行中ブック）"
+            else f"ã‚·ãƒ¼ãƒˆã€Œ{COLUMN_CONFIG_SHEET_NAME}ã€�ï¼ˆå®Ÿè¡Œä¸­ãƒ–ãƒƒã‚¯ï¼‰"
         )
     else:
         primary = [(n, True) for n in default_order]
-        source = "既定"
+        source = "æ—¢å®š"
 
     actual = list(df.columns)
     actual_set = set(actual)
@@ -3724,15 +3672,15 @@ def apply_result_task_sheet_column_order(
 
     if unknown:
         logging.warning(
-            "列設定: 結果に無い列名を無視しました（最大20件）: %s",
-            ", ".join(unknown[:20]) + (" …" if len(unknown) > 20 else ""),
+            "åˆ—è¨­å®š: çµ�æžœã�«ç„¡ã�„åˆ—å��ã‚’ç„¡è¦–ã�—ã�¾ã�—ã�Ÿï¼ˆæœ€å¤§20ä»¶ï¼‰: %s",
+            ", ".join(unknown[:20]) + (" â€¦" if len(unknown) > 20 else ""),
         )
-    logging.info("結果_タスク一覧の列順ソース: %s（%s 列）", source, len(ordered))
+    logging.info("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®åˆ—é †ã‚½ãƒ¼ã‚¹: %sï¼ˆ%s åˆ—ï¼‰", source, len(ordered))
     if not user_rows and config_dataframe is None:
         logging.info(
-            "列順・表示のカスタマイズ: マクロ実行ブックにシート「%s」を追加。"
-            " 見出し「%s」「%s」… 表示が FALSE の列は結果シートで非表示。"
-            " 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。",
+            "åˆ—é †ãƒ»è¡¨ç¤ºã�®ã‚«ã‚¹ã‚¿ãƒžã‚¤ã‚º: ãƒžã‚¯ãƒ­å®Ÿè¡Œãƒ–ãƒƒã‚¯ã�«ã‚·ãƒ¼ãƒˆã€Œ%sã€�ã‚’è¿½åŠ ã€‚"
+            " è¦‹å‡ºã�—ã€Œ%sã€�ã€Œ%sã€�â€¦ è¡¨ç¤ºã�Œ FALSE ã�®åˆ—ã�¯çµ�æžœã‚·ãƒ¼ãƒˆã�§é�žè¡¨ç¤ºã€‚"
+            " 1è¡Œã€Œå±¥æ­´ã€�ã�§å±¥æ­´1ï½žn ã‚’æŒ¿å…¥ã€‚VBA ã�®ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§_ãƒ�ã‚§ãƒƒã‚¯ãƒœãƒƒã‚¯ã‚¹ã‚’é…�ç½®ã€�ã�§ãƒ�ã‚§ãƒƒã‚¯ãƒœãƒƒã‚¯ã‚¹ã‚’è¡¨ç¤ºåˆ—ã�«é€£å‹•å�¯èƒ½ã€‚",
             COLUMN_CONFIG_SHEET_NAME,
             COLUMN_CONFIG_HEADER_COL,
             COLUMN_CONFIG_VISIBLE_COL,
@@ -3741,7 +3689,7 @@ def apply_result_task_sheet_column_order(
 
 
 def _xlwings_sheet_to_matrix(sheet) -> list:
-    """xlwings Sheet の UsedRange を矩形の list[list] にする（1行のみでも2次元）。"""
+    """xlwings Sheet ã�® UsedRange ã‚’çŸ©å½¢ã�® list[list] ã�«ã�™ã‚‹ï¼ˆ1è¡Œã�®ã�¿ã�§ã‚‚2æ¬¡å…ƒï¼‰ã€‚"""
     ur = sheet.used_range
     if ur is None:
         return []
@@ -3758,7 +3706,7 @@ def _xlwings_sheet_to_matrix(sheet) -> list:
 
 
 def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
-    """1行目を列名とみなし DataFrame を返す。空なら None。"""
+    """1è¡Œç›®ã‚’åˆ—å��ã�¨ã�¿ã�ªã�— DataFrame ã‚’è¿”ã�™ã€‚ç©ºã�ªã‚‰ Noneã€‚"""
     if not matrix or not matrix[0]:
         return None
     header = []
@@ -3774,10 +3722,10 @@ def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
 
 
 def _max_history_len_from_result_task_df_columns(columns) -> int:
-    """結果_タスク一覧の「履歴n」列から n の最大を返す（無ければ 1）。"""
+    """çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®ã€Œå±¥æ­´nã€�åˆ—ã�‹ã‚‰ n ã�®æœ€å¤§ã‚’è¿”ã�™ï¼ˆç„¡ã�‘ã‚Œã�° 1ï¼‰ã€‚"""
     imax = 0
     for c in columns:
-        m = re.match(r"^履歴(\d+)$", str(c).strip())
+        m = re.match(r"^å±¥æ­´(\d+)$", str(c).strip())
         if m:
             imax = max(imax, int(m.group(1)))
     return max(imax, 1)
@@ -3785,31 +3733,31 @@ def _max_history_len_from_result_task_df_columns(columns) -> int:
 
 def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None) -> bool:
     """
-    Excel で開いているマクロブックについて、
-    「列設定_結果_タスク一覧」の内容に合わせて「結果_タスク一覧」の列順と列非表示を更新する。
-    ブックは事前に保存し、本処理中も Excel 上で開いたままにすること（xlwings が接続する）。
+    Excel ã�§é–‹ã�„ã�¦ã�„ã‚‹ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�«ã�¤ã�„ã�¦ã€�
+    ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã�®å†…å®¹ã�«å�ˆã‚�ã�›ã�¦ã€Œçµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã�®åˆ—é †ã�¨åˆ—é�žè¡¨ç¤ºã‚’æ›´æ–°ã�™ã‚‹ã€‚
+    ãƒ–ãƒƒã‚¯ã�¯äº‹å‰�ã�«ä¿�å­˜ã�—ã€�æœ¬å‡¦ç�†ä¸­ã‚‚ Excel ä¸Šã�§é–‹ã�„ã�Ÿã�¾ã�¾ã�«ã�™ã‚‹ã�“ã�¨ï¼ˆxlwings ã�ŒæŽ¥ç¶šã�™ã‚‹ï¼‰ã€‚
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("結果_タスク一覧 列適用: ブックパスが空です（TASK_INPUT_WORKBOOK を設定してください）。")
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ãƒ–ãƒƒã‚¯ãƒ‘ã‚¹ã�Œç©ºã�§ã�™ï¼ˆTASK_INPUT_WORKBOOK ã‚’è¨­å®šã�—ã�¦ã��ã� ã�•ã�„ï¼‰ã€‚")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("結果_タスク一覧 列適用: xlwings が import できません。pip install xlwings を確認してください。")
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: xlwings ã�Œ import ã�§ã��ã�¾ã�›ã‚“ã€‚pip install xlwings ã‚’ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„ã€‚")
         return False
 
     try:
         wb = xw.Book(path)
     except Exception as e:
-        logging.error("結果_タスク一覧 列適用: ブックに接続できません: %s", e)
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ãƒ–ãƒƒã‚¯ã�«æŽ¥ç¶šã�§ã��ã�¾ã�›ã‚“: %s", e)
         return False
 
     try:
         ws_res = wb.sheets[RESULT_TASK_SHEET_NAME]
         ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
     except Exception as e:
-        logging.error("結果_タスク一覧 列適用: 必要シートが見つかりません: %s", e)
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: å¿…è¦�ã‚·ãƒ¼ãƒˆã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“: %s", e)
         return False
 
     mat_res = _xlwings_sheet_to_matrix(ws_res)
@@ -3817,17 +3765,17 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
     df_res = _matrix_to_dataframe_header_first(mat_res)
     df_cfg = _matrix_to_dataframe_header_first(mat_cfg)
     if df_res is None or df_res.empty:
-        logging.error("結果_タスク一覧 列適用: 「%s」にデータがありません。", RESULT_TASK_SHEET_NAME)
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ã€Œ%sã€�ã�«ãƒ‡ãƒ¼ã‚¿ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚", RESULT_TASK_SHEET_NAME)
         return False
     if df_cfg is None:
-        logging.error("結果_タスク一覧 列適用: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+        logging.error("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ã€Œ%sã€�ã�®è¦‹å‡ºã�—ã‚’èª­ã‚�ã�¾ã�›ã‚“ã€‚", COLUMN_CONFIG_SHEET_NAME)
         return False
 
     max_h = _max_history_len_from_result_task_df_columns(df_res.columns)
     rows_cfg = parse_result_task_column_config_dataframe(df_cfg, max_h)
     if not rows_cfg:
         logging.error(
-            "結果_タスク一覧 列適用: 「%s」に有効な列名行がありません。",
+            "çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ã€Œ%sã€�ã�«æœ‰åŠ¹ã�ªåˆ—å��è¡Œã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚",
             COLUMN_CONFIG_SHEET_NAME,
         )
         return False
@@ -3873,15 +3821,15 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
             try:
                 ws_res.range((1, ci)).api.EntireColumn.Hidden = True
             except Exception as e:
-                logging.warning("列非表示に失敗（列%s %s）: %s", ci, col_name, e)
+                logging.warning("åˆ—é�žè¡¨ç¤ºã�«å¤±æ•—ï¼ˆåˆ—%s %sï¼‰: %s", ci, col_name, e)
 
     try:
         wb.save()
     except Exception as e:
-        logging.warning("結果_タスク一覧 列適用: 保存で警告（データはシート上は更新済みの可能性）: %s", e)
+        logging.warning("çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨: ä¿�å­˜ã�§è­¦å‘Šï¼ˆãƒ‡ãƒ¼ã‚¿ã�¯ã‚·ãƒ¼ãƒˆä¸Šã�¯æ›´æ–°æ¸ˆã�¿ã�®å�¯èƒ½æ€§ï¼‰: %s", e)
 
     logging.info(
-        "結果_タスク一覧 列適用完了: %s（%s 列、非表示=%s）",
+        "çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ åˆ—é�©ç”¨å®Œäº†: %sï¼ˆ%s åˆ—ã€�é�žè¡¨ç¤º=%sï¼‰",
         source,
         len(ordered),
         sum(1 for c in ordered if not vis_map.get(c, True)),
@@ -3890,7 +3838,7 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
 
 
 def apply_result_task_column_layout_only() -> bool:
-    """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
+    """ç’°å¢ƒå¤‰æ•° TASK_INPUT_WORKBOOK ã�®ãƒ–ãƒƒã‚¯ã�«å¯¾ã�—åˆ—è¨­å®šã‚’é�©ç”¨ã�™ã‚‹ï¼ˆVBA ãƒœã‚¿ãƒ³ç”¨ï¼‰ã€‚"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return apply_result_task_column_layout_via_xlwings(p)
 
@@ -3898,7 +3846,7 @@ _PLAN_INPUT_XLWINGS_ORIG_ROW = "__orig_sheet_row__"
 
 
 def _plan_input_dispatch_trial_order_local_only_from_env() -> bool:
-    """環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY が真なら post_load をスキップする。"""
+    """ç’°å¢ƒå¤‰æ•° PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY ã�ŒçœŸã�ªã‚‰ post_load ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�™ã‚‹ã€‚"""
     v = (os.environ.get("PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY") or "").strip().lower()
     return v in ("1", "true", "yes", "on", "y")
 
@@ -3909,38 +3857,38 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    Excel で開いたマクロブック内の「配台計画_タスク入力」について、
-    段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
-    再付与し、段階1 出力直前と同じ手順で行を並べ替える。
-    （未保存の編集分も xlwings で反映させるため read_excel は使わない）
+    Excel ã�§é–‹ã�„ã�Ÿãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯å†…ã�®ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã�«ã�¤ã�„ã�¦ã€�
+    æ®µéšŽ2 ã�¨å�Œã�˜ ``fill_plan_dispatch_trial_order_column_stage1`` ã�§ã€Œé…�å�°è©¦è¡Œé †ç•ªã€�ã‚’
+    å†�ä»˜ä¸Žã�—ã€�æ®µéšŽ1 å‡ºåŠ›ç›´å‰�ã�¨å�Œã�˜æ‰‹é †ã�§è¡Œã‚’ä¸¦ã�¹æ›¿ã�ˆã‚‹ã€‚
+    ï¼ˆæœªä¿�å­˜ã�®ç·¨é›†åˆ†ã‚‚ xlwings ã�§å��æ˜ ã�•ã�›ã‚‹ã�Ÿã‚� read_excel ã�¯ä½¿ã‚�ã�ªã�„ï¼‰
 
-    apply_post_load_mutations=False のときは ``_apply_planning_sheet_post_load_mutations`` を呼ばない。
-    加工計画DATA からの再取り込みは行わないが、True のときは段階2 読込と同様に
-    設定_配台不要工程の保守・分割行の自動配台不要・設定ルールによる配台不要の再適用が走る。
-    手動で「配台不要」を外したり「原反投入日_上書き」等のみ変更した内容をそのまま試行順に反映したい場合は False。
+    apply_post_load_mutations=False ã�®ã�¨ã��ã�¯ ``_apply_planning_sheet_post_load_mutations`` ã‚’å‘¼ã�°ã�ªã�„ã€‚
+    åŠ å·¥è¨ˆç”»DATA ã�‹ã‚‰ã�®å†�å�–ã‚Šè¾¼ã�¿ã�¯è¡Œã‚�ã�ªã�„ã�Œã€�True ã�®ã�¨ã��ã�¯æ®µéšŽ2 èª­è¾¼ã�¨å�Œæ§˜ã�«
+    è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�®ä¿�å®ˆãƒ»åˆ†å‰²è¡Œã�®è‡ªå‹•é…�å�°ä¸�è¦�ãƒ»è¨­å®šãƒ«ãƒ¼ãƒ«ã�«ã‚ˆã‚‹é…�å�°ä¸�è¦�ã�®å†�é�©ç”¨ã�Œèµ°ã‚‹ã€‚
+    æ‰‹å‹•ã�§ã€Œé…�å�°ä¸�è¦�ã€�ã‚’å¤–ã�—ã�Ÿã‚Šã€ŒåŽŸå��æŠ•å…¥æ—¥_ä¸Šæ›¸ã��ã€�ç­‰ã�®ã�¿å¤‰æ›´ã�—ã�Ÿå†…å®¹ã‚’ã��ã�®ã�¾ã�¾è©¦è¡Œé †ã�«å��æ˜ ã�—ã�Ÿã�„å ´å�ˆã�¯ Falseã€‚
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
     ).strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("配台試行順番更新: ブックパスが空です。")
+        logging.error("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ãƒ–ãƒƒã‚¯ãƒ‘ã‚¹ã�Œç©ºã�§ã�™ã€‚")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("配台試行順番更新: xlwings がありません。")
+        logging.error("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: xlwings ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
         return False
     try:
         wb = xw.Book(path)
         ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
-        logging.error("配台試行順番更新: シート接続に失敗: %s", e)
+        logging.error("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ã‚·ãƒ¼ãƒˆæŽ¥ç¶šã�«å¤±æ•—: %s", e)
         return False
 
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
-        logging.warning("配台試行順番更新: データ行がありません。")
+        logging.warning("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ãƒ‡ãƒ¼ã‚¿è¡Œã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
         return False
 
     df = df.copy()
@@ -3953,22 +3901,22 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
     if apply_post_load_mutations:
-        _apply_planning_sheet_post_load_mutations(df, path, "配台試行順番更新")
+        _apply_planning_sheet_post_load_mutations(df, path, "é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°")
     else:
         logging.info(
-            "配台試行順番更新: シート内容のみモード（設定シート再適用・分割行の自動配台不要をスキップ）"
+            "é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ã‚·ãƒ¼ãƒˆå†…å®¹ã�®ã�¿ãƒ¢ãƒ¼ãƒ‰ï¼ˆè¨­å®šã‚·ãƒ¼ãƒˆå†�é�©ç”¨ãƒ»åˆ†å‰²è¡Œã�®è‡ªå‹•é…�å�°ä¸�è¦�ã‚’ã‚¹ã‚­ãƒƒãƒ—ï¼‰"
         )
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
-        logging.error("配台試行順番更新: 列「%s」がありません。", dto_col)
+        logging.error("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: åˆ—ã€Œ%sã€�ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚", dto_col)
         return False
 
     _dto_loc = df.columns.get_loc(dto_col)
     if isinstance(_dto_loc, slice):
-        logging.error("配台試行順番更新: 列「%s」が複数あります。", dto_col)
+        logging.error("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: åˆ—ã€Œ%sã€�ã�Œè¤‡æ•°ã�‚ã‚Šã�¾ã�™ã€‚", dto_col)
         return False
-    # Excel 由来で列が float64 のとき "" を入れると pandas が拒否するため、クリアは NaN
+    # Excel ç”±æ�¥ã�§åˆ—ã�Œ float64 ã�®ã�¨ã�� "" ã‚’å…¥ã‚Œã‚‹ã�¨ pandas ã�Œæ‹’å�¦ã�™ã‚‹ã�Ÿã‚�ã€�ã‚¯ãƒªã‚¢ã�¯ NaN
     df[dto_col] = float("nan")
 
     data_extract_dt = _extract_data_extraction_datetime()
@@ -3986,7 +3934,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
             need_combo_col_index,
         ) = load_skills_and_needs()
     except Exception as e:
-        logging.exception("配台試行順番更新: master 読込に失敗: %s", e)
+        logging.exception("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: master èª­è¾¼ã�«å¤±æ•—: %s", e)
         return False
 
     try:
@@ -3999,7 +3947,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
             equipment_list,
         )
     except Exception as e:
-        logging.exception("配台試行順番更新: 試行順計算に失敗: %s", e)
+        logging.exception("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: è©¦è¡Œé †è¨ˆç®—ã�«å¤±æ•—: %s", e)
         return False
 
     df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
@@ -4043,16 +3991,16 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
         n_r = len(new_mat)
         ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
     except Exception as e:
-        logging.exception("配台試行順番更新: シート書込に失敗: %s", e)
+        logging.exception("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ã‚·ãƒ¼ãƒˆæ›¸è¾¼ã�«å¤±æ•—: %s", e)
         return False
 
     try:
         wb.save()
     except Exception as e:
-        logging.warning("配台試行順番更新: Save 警告: %s", e)
+        logging.warning("é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: Save è­¦å‘Š: %s", e)
 
     logging.info(
-        "配台試行順番更新: 「%s」を %s 行で更新しました。",
+        "é…�å�°è©¦è¡Œé †ç•ªæ›´æ–°: ã€Œ%sã€�ã‚’ %s è¡Œã�§æ›´æ–°ã�—ã�¾ã�—ã�Ÿã€‚",
         PLAN_INPUT_SHEET_NAME,
         len(df_sorted),
     )
@@ -4060,8 +4008,8 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
 
 def refresh_plan_input_dispatch_trial_order_only() -> bool:
-    """TASK_INPUT_WORKBOOK に対する配台試行順番再計算（VBA / cmd 経由のエントリ）。
-    環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1 等でシート上のセル値のみを入力とする。
+    """TASK_INPUT_WORKBOOK ã�«å¯¾ã�™ã‚‹é…�å�°è©¦è¡Œé †ç•ªå†�è¨ˆç®—ï¼ˆVBA / cmd çµŒç”±ã�®ã‚¨ãƒ³ãƒˆãƒªï¼‰ã€‚
+    ç’°å¢ƒå¤‰æ•° PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1 ç­‰ã�§ã‚·ãƒ¼ãƒˆä¸Šã�®ã‚»ãƒ«å€¤ã�®ã�¿ã‚’å…¥åŠ›ã�¨ã�™ã‚‹ã€‚
     """
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     local = _plan_input_dispatch_trial_order_local_only_from_env()
@@ -4072,8 +4020,8 @@ def refresh_plan_input_dispatch_trial_order_only() -> bool:
 
 def apply_plan_input_column_layout_only() -> bool:
     """
-    配台計画_タスク入力の列順・表示のみを適用する予定（VBA 用）。
-    未実装。列の並びは段階1出力または手動整理を使用してください。
+    é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�®åˆ—é †ãƒ»è¡¨ç¤ºã�®ã�¿ã‚’é�©ç”¨ã�™ã‚‹äºˆå®šï¼ˆVBA ç”¨ï¼‰ã€‚
+    æœªå®Ÿè£…ã€‚åˆ—ã�®ä¸¦ã�³ã�¯æ®µéšŽ1å‡ºåŠ›ã�¾ã�Ÿã�¯æ‰‹å‹•æ•´ç�†ã‚’ä½¿ç”¨ã�—ã�¦ã��ã� ã�•ã�„ã€‚
     """
     logging.warning("apply_plan_input_column_layout_only: not implemented")
     return False
@@ -4082,23 +4030,23 @@ def apply_plan_input_column_layout_only() -> bool:
 
 def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
     """
-    「列設定_結果_タスク一覧」の A:B だけを、重複列名を除いた一覧で書き直す（先の行を優先）。
-    「結果_タスク一覧」があれば履歴列数の解釈に使う。結果シートは変更しない。
+    ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã�® A:B ã� ã�‘ã‚’ã€�é‡�è¤‡åˆ—å��ã‚’é™¤ã�„ã�Ÿä¸€è¦§ã�§æ›¸ã��ç›´ã�™ï¼ˆå…ˆã�®è¡Œã‚’å„ªå…ˆï¼‰ã€‚
+    ã€Œçµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ã�Œã�‚ã‚Œã�°å±¥æ­´åˆ—æ•°ã�®è§£é‡ˆã�«ä½¿ã�†ã€‚çµ�æžœã‚·ãƒ¼ãƒˆã�¯å¤‰æ›´ã�—ã�ªã�„ã€‚
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("列設定 重複整理: ブックパスが空です。")
+        logging.error("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: ãƒ–ãƒƒã‚¯ãƒ‘ã‚¹ã�Œç©ºã�§ã�™ã€‚")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("列設定 重複整理: xlwings が import できません。")
+        logging.error("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: xlwings ã�Œ import ã�§ã��ã�¾ã�›ã‚“ã€‚")
         return False
     try:
         wb = xw.Book(path)
         ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
     except Exception as e:
-        logging.error("列設定 重複整理: 接続またはシート取得に失敗: %s", e)
+        logging.error("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: æŽ¥ç¶šã�¾ã�Ÿã�¯ã‚·ãƒ¼ãƒˆå�–å¾—ã�«å¤±æ•—: %s", e)
         return False
 
     max_h = 1
@@ -4112,19 +4060,19 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
     df_cfg = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_cfg))
     if df_cfg is None:
-        logging.error("列設定 重複整理: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+        logging.error("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: ã€Œ%sã€�ã�®è¦‹å‡ºã�—ã‚’èª­ã‚�ã�¾ã�›ã‚“ã€‚", COLUMN_CONFIG_SHEET_NAME)
         return False
     rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
     if not rows:
-        logging.warning("列設定 重複整理: 有効なデータ行がありません。")
+        logging.warning("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: æœ‰åŠ¹ã�ªãƒ‡ãƒ¼ã‚¿è¡Œã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
         return False
     _xlwings_write_column_config_sheet_ab(ws_cfg, rows)
     try:
         wb.save()
     except Exception as e:
-        logging.warning("列設定 重複整理: 保存警告: %s", e)
+        logging.warning("åˆ—è¨­å®š é‡�è¤‡æ•´ç�†: ä¿�å­˜è­¦å‘Š: %s", e)
     logging.info(
-        "列設定「%s」を重複除去済みで %s 行に整理しました（履歴展開後の行数）。",
+        "åˆ—è¨­å®šã€Œ%sã€�ã‚’é‡�è¤‡é™¤åŽ»æ¸ˆã�¿ã�§ %s è¡Œã�«æ•´ç�†ã�—ã�¾ã�—ã�Ÿï¼ˆå±¥æ­´å±•é–‹å¾Œã�®è¡Œæ•°ï¼‰ã€‚",
         COLUMN_CONFIG_SHEET_NAME,
         len(rows),
     )
@@ -4132,28 +4080,28 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
 
 def dedupe_result_task_column_config_sheet_only() -> bool:
-    """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートだけ重複整理（VBA 用）。"""
+    """ç’°å¢ƒå¤‰æ•° TASK_INPUT_WORKBOOK ã�®ãƒ–ãƒƒã‚¯ã�®åˆ—è¨­å®šã‚·ãƒ¼ãƒˆã� ã�‘é‡�è¤‡æ•´ç�†ï¼ˆVBA ç”¨ï¼‰ã€‚"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return dedupe_result_task_column_config_sheet_via_xlwings(p)
 
 
 def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vis_map: dict):
-    """結果_タスク一覧で、vis_map が False の列を非表示にする。"""
+    """çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�§ã€�vis_map ã�Œ False ã�®åˆ—ã‚’é�žè¡¨ç¤ºã�«ã�™ã‚‹ã€‚"""
     for idx, col_name in enumerate(column_names, 1):
         if not vis_map.get(col_name, True):
             worksheet.column_dimensions[get_column_letter(idx)].hidden = True
 
 
 def _norm_history_member_label(name: str) -> str:
-    """履歴の担当名比較用（全角空白を半角1個化・前後trim・連続空白の圧縮）。"""
+    """å±¥æ­´ã�®æ‹…å½“å��æ¯”è¼ƒç”¨ï¼ˆå…¨è§’ç©ºç™½ã‚’å�Šè§’1å€‹åŒ–ãƒ»å‰�å¾Œtrimãƒ»é€£ç¶šç©ºç™½ã�®åœ§ç¸®ï¼‰ã€‚"""
     t = str(name or "").replace("\u3000", " ").strip()
     return " ".join(t.split())
 
 
 def _history_team_text_main_assignment_only(h: dict) -> str:
     """
-    結果シート「担当」欄用: メイン割付確定時点の名前（余力追記サブは含めない）。
-    append_surplus 後の h['team'] から post_dispatch_surplus_names を除外する。
+    çµ�æžœã‚·ãƒ¼ãƒˆã€Œæ‹…å½“ã€�æ¬„ç”¨: ãƒ¡ã‚¤ãƒ³å‰²ä»˜ç¢ºå®šæ™‚ç‚¹ã�®å��å‰�ï¼ˆä½™åŠ›è¿½è¨˜ã‚µãƒ–ã�¯å�«ã‚�ã�ªã�„ï¼‰ã€‚
+    append_surplus å¾Œã�® h['team'] ã�‹ã‚‰ post_dispatch_surplus_names ã‚’é™¤å¤–ã�™ã‚‹ã€‚
     """
     raw = (h.get("team") or "").strip()
     if not raw:
@@ -4172,37 +4120,37 @@ def _history_team_text_main_assignment_only(h: dict) -> str:
 
 
 def _format_result_task_history_cell(task: dict, h: dict) -> str:
-    """結果_タスク一覧の履歴セル文字列（組合せ表の採用行ID・メイン追加人数・余力追記の明示を含む）。"""
+    """çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®å±¥æ­´ã‚»ãƒ«æ–‡å­—åˆ—ï¼ˆçµ„å�ˆã�›è¡¨ã�®æŽ¡ç”¨è¡ŒIDãƒ»ãƒ¡ã‚¤ãƒ³è¿½åŠ äººæ•°ãƒ»ä½™åŠ›è¿½è¨˜ã�®æ˜Žç¤ºã‚’å�«ã‚€ï¼‰ã€‚"""
     um = task.get("unit_m") or 0
     try:
         done_r = int(h["done_m"] / um) if um else 0
     except (TypeError, ValueError, ZeroDivisionError):
         done_r = 0
     dm = h.get("done_m", 0)
-    parts_out: list[str] = [f"・【{h.get('date', '')}】：{done_r}R ({dm}m)"]
+    parts_out: list[str] = [f"ãƒ»ã€�{h.get('date', '')}ã€‘ï¼š{done_r}R ({dm}m)"]
     cid = h.get("combo_sheet_row_id")
     if cid is not None:
         try:
-            parts_out.append(f"組合せ表#{int(cid)}")
+            parts_out.append(f"çµ„å�ˆã�›è¡¨#{int(cid)}")
         except (TypeError, ValueError):
-            parts_out.append(f"組合せ表#{cid}")
-    parts_out.append(f"担当[{_history_team_text_main_assignment_only(h)}]")
+            parts_out.append(f"çµ„å�ˆã�›è¡¨#{cid}")
+    parts_out.append(f"æ‹…å½“[{_history_team_text_main_assignment_only(h)}]")
     sm = h.get("surplus_member_names") or []
     if sm:
-        parts_out.append(f"追加[{','.join(str(x) for x in sm)}]")
+        parts_out.append(f"è¿½åŠ [{','.join(str(x) for x in sm)}]")
     ps = h.get("post_dispatch_surplus_names") or []
     if ps:
-        parts_out.append(f"余力追記[{','.join(str(x) for x in ps)}]")
+        parts_out.append(f"ä½™åŠ›è¿½è¨˜[{','.join(str(x) for x in ps)}]")
     return " ".join(parts_out)
 
 
-_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^・(【[^】]*】)(.*)$", re.DOTALL)
+_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^ãƒ»(ã€�[^ã€‘]*ã€‘)(.*)$", re.DOTALL)
 
 
 def _apply_result_task_history_rich_text(worksheet, column_names: list):
     """
-    履歴列: 「・【日付】：…」の日付括弧部分を青色リッチテキストにする。
-    openpyxl 3.1 未満ではスキップ（文字列の【】のみ）。
+    å±¥æ­´åˆ—: ã€Œãƒ»ã€�æ—¥ä»˜ã€‘ï¼šâ€¦ã€�ã�®æ—¥ä»˜æ‹¬å¼§éƒ¨åˆ†ã‚’é�’è‰²ãƒªãƒƒãƒ�ãƒ†ã‚­ã‚¹ãƒˆã�«ã�™ã‚‹ã€‚
+    openpyxl 3.1 æœªæº€ã�§ã�¯ã‚¹ã‚­ãƒƒãƒ—ï¼ˆæ–‡å­—åˆ—ã�®ã€�ã€‘ã�®ã�¿ï¼‰ã€‚
     """
     try:
         from openpyxl.cell.rich_text import CellRichText, TextBlock
@@ -4212,7 +4160,7 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
         return
 
     hist_cols = [
-        i + 1 for i, c in enumerate(column_names) if str(c).startswith("履歴")
+        i + 1 for i, c in enumerate(column_names) if str(c).startswith("å±¥æ­´")
     ]
     if not hist_cols:
         return
@@ -4227,14 +4175,14 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
         for ci in hist_cols:
             cell = worksheet.cell(row=r, column=ci)
             v = cell.value
-            if not isinstance(v, str) or not v.startswith("・【"):
+            if not isinstance(v, str) or not v.startswith("ãƒ»ã€�"):
                 continue
             m = _RESULT_TASK_HISTORY_RICH_HEAD_RE.match(v)
             if not m:
                 continue
             bracketed, rest = m.group(1), m.group(2)
             cell.value = CellRichText(
-                TextBlock(plain_if, "・"),
+                TextBlock(plain_if, "ãƒ»"),
                 TextBlock(blue_if, bracketed),
                 TextBlock(plain_if, rest),
             )
@@ -4243,8 +4191,8 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
 
 def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
     """
-    結果_タスク一覧: 回答納期・指定納期・計画基準納期・原反投入日・加工開始日のセルを青色にする。
-    （履歴列の【日付】は _apply_result_task_history_rich_text 側。色は 0070C0 で統一）
+    çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§: å›žç­”ç´�æœŸãƒ»æŒ‡å®šç´�æœŸãƒ»è¨ˆç”»åŸºæº–ç´�æœŸãƒ»åŽŸå��æŠ•å…¥æ—¥ãƒ»åŠ å·¥é–‹å§‹æ—¥ã�®ã‚»ãƒ«ã‚’é�’è‰²ã�«ã�™ã‚‹ã€‚
+    ï¼ˆå±¥æ­´åˆ—ã�®ã€�æ—¥ä»˜ã€‘ã�¯ _apply_result_task_history_rich_text å�´ã€‚è‰²ã�¯ 0070C0 ã�§çµ±ä¸€ï¼‰
     """
     blue = _result_font(color="0070C0")
     top = Alignment(wrap_text=False, vertical="top")
@@ -4266,12 +4214,12 @@ def _apply_result_task_history_need_surplus_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    need「配台時追加人数」相当で基本必要人数を超えて採用したブロック、または
-    メイン完了後の余力追記でサブが増えたブロックに対応する「履歴n」セルを薄黄に塗る。
+    needã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ã€�ç›¸å½“ã�§åŸºæœ¬å¿…è¦�äººæ•°ã‚’è¶…ã�ˆã�¦æŽ¡ç”¨ã�—ã�Ÿãƒ–ãƒ­ãƒƒã‚¯ã€�ã�¾ã�Ÿã�¯
+    ãƒ¡ã‚¤ãƒ³å®Œäº†å¾Œã�®ä½™åŠ›è¿½è¨˜ã�§ã‚µãƒ–ã�Œå¢—ã�ˆã�Ÿãƒ–ãƒ­ãƒƒã‚¯ã�«å¯¾å¿œã�™ã‚‹ã€Œå±¥æ­´nã€�ã‚»ãƒ«ã‚’è–„é»„ã�«å¡—ã‚‹ã€‚
     """
     hist_cols: list[tuple[int, int]] = []
     for col_idx, col_name in enumerate(column_names, 1):
-        m = re.match(r"^履歴(\d+)$", str(col_name).strip())
+        m = re.match(r"^å±¥æ­´(\d+)$", str(col_name).strip())
         if m:
             hist_cols.append((int(m.group(1)), col_idx))
     hist_cols.sort(key=lambda x: x[0])
@@ -4299,11 +4247,11 @@ def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    加工内容に工程名が含まれない行の「タスクID」セルを赤背景・白文字にする（元データ不整合の視認用）。
+    åŠ å·¥å†…å®¹ã�«å·¥ç¨‹å��ã�Œå�«ã�¾ã‚Œã�ªã�„è¡Œã�®ã€Œã‚¿ã‚¹ã‚¯IDã€�ã‚»ãƒ«ã‚’èµ¤èƒŒæ™¯ãƒ»ç™½æ–‡å­—ã�«ã�™ã‚‹ï¼ˆå…ƒãƒ‡ãƒ¼ã‚¿ä¸�æ•´å�ˆã�®è¦–èª�ç”¨ï¼‰ã€‚
     """
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
-        if str(col_name) == "タスクID":
+        if str(col_name) == "ã‚¿ã‚¹ã‚¯ID":
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None or worksheet.max_row < 2:
@@ -4325,13 +4273,13 @@ def _apply_result_task_plan_end_answer_spec_16_no_highlight(
     worksheet, column_names: list
 ):
     """
-    列「配完_回答指定16時まで」が「いいえ」のセルを赤背景・白文字・太字にする。
-    列設定で旧名「配完_基準16時まで」のままの見出しにも対応。
+    åˆ—ã€Œé…�å®Œ_å›žç­”æŒ‡å®š16æ™‚ã�¾ã�§ã€�ã�Œã€Œã�„ã�„ã�ˆã€�ã�®ã‚»ãƒ«ã‚’èµ¤èƒŒæ™¯ãƒ»ç™½æ–‡å­—ãƒ»å¤ªå­—ã�«ã�™ã‚‹ã€‚
+    åˆ—è¨­å®šã�§æ—§å��ã€Œé…�å®Œ_åŸºæº–16æ™‚ã�¾ã�§ã€�ã�®ã�¾ã�¾ã�®è¦‹å‡ºã�—ã�«ã‚‚å¯¾å¿œã€‚
     """
     target_names = frozenset(
         {
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
-            "配完_基準16時まで",
+            "é…�å®Œ_åŸºæº–16æ™‚ã�¾ã�§",
         }
     )
     col_idx = None
@@ -4350,7 +4298,7 @@ def _apply_result_task_plan_end_answer_spec_16_no_highlight(
         if v is None:
             continue
         s = str(v).strip()
-        if s != "いいえ":
+        if s != "ã�„ã�„ã�ˆ":
             continue
         cell.fill = fill_red
         cell.font = font_white_bold
@@ -4365,14 +4313,14 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
     schedule_sheet_name: str,
 ) -> None:
     """
-    結果_タスク一覧の「タスクID」セルに、結果_設備毎の時間割で当該タスクが最初に現れるセルへの内部ハイパーリンクを付与する。
-    時間割に現れないタスク（未割当のみ等）はリンクなし。
+    çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®ã€Œã‚¿ã‚¹ã‚¯IDã€�ã‚»ãƒ«ã�«ã€�çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�§å½“è©²ã‚¿ã‚¹ã‚¯ã�Œæœ€åˆ�ã�«ç�¾ã‚Œã‚‹ã‚»ãƒ«ã�¸ã�®å†…éƒ¨ãƒ�ã‚¤ãƒ‘ãƒ¼ãƒªãƒ³ã‚¯ã‚’ä»˜ä¸Žã�™ã‚‹ã€‚
+    æ™‚é–“å‰²ã�«ç�¾ã‚Œã�ªã�„ã‚¿ã‚¹ã‚¯ï¼ˆæœªå‰²å½“ã�®ã�¿ç­‰ï¼‰ã�¯ãƒªãƒ³ã‚¯ã�ªã�—ã€‚
     """
     if not task_id_to_schedule_cell or worksheet_tasks.max_row < 2:
         return
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
-        if str(col_name) == "タスクID":
+        if str(col_name) == "ã‚¿ã‚¹ã‚¯ID":
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None:
@@ -4405,7 +4353,7 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
 
 
 def _add_column_config_sheet_helpers(ws_cfg, num_data_rows: int):
-    """表示列に TRUE/FALSE リスト（チェックの代わりにプルダウン）を付与。"""
+    """è¡¨ç¤ºåˆ—ã�« TRUE/FALSE ãƒªã‚¹ãƒˆï¼ˆãƒ�ã‚§ãƒƒã‚¯ã�®ä»£ã‚�ã‚Šã�«ãƒ—ãƒ«ãƒ€ã‚¦ãƒ³ï¼‰ã‚’ä»˜ä¸Žã€‚"""
     last_r = max(num_data_rows + 1, 2)
     cap = max(last_r + 50, 500)
     dv = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
@@ -4418,11 +4366,11 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
-    既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
-    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
-    各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
-    openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
+    pandas/openpyxl ã�§æ–°è¦�ä½œæˆ�ã�—ã�Ÿçµ�æžœãƒ–ãƒƒã‚¯ã�«ã�¯å›³å½¢ã�Œå�«ã�¾ã‚Œã�ªã�„ã€‚
+    æ—¢å®šã�§æœ‰åŠ¹ï¼ˆç’°å¢ƒå¤‰æ•°ã�§ 0/false/no/off ã�®ã�¨ã��ç„¡åŠ¹ï¼‰ã€‚å…¥åŠ›ãƒ–ãƒƒã‚¯ã�®
+    ã€Œåˆ—è¨­å®š_çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã€�ä¸Šã�® Shapes ã‚’çµ�æžœãƒ–ãƒƒã‚¯ã�®å�Œå��ã‚·ãƒ¼ãƒˆã�¸ã‚³ãƒ”ãƒ¼ã�—ã€�
+    å�„å›³å½¢ã�® Left/Top/Width/Heightï¼ˆã�Šã‚ˆã�³å�–ã‚Œã‚‹ã�¨ã�� Placementï¼‰ã‚’å…¥åŠ›å�´ã�¨å�Œã�˜ã�«æˆ»ã�™ã€‚
+    openpyxl ã�«ã‚ˆã‚‹å½“è©²ãƒ–ãƒƒã‚¯ã�¸ã�®ä¿�å­˜ã�Œã�™ã�¹ã�¦çµ‚ã‚�ã�£ã�Ÿå¾Œã�«å‘¼ã�¶ã�“ã�¨ã€‚
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
@@ -4430,19 +4378,19 @@ def _stage2_try_copy_column_config_shapes_from_input(
     ip = (input_path or "").strip()
     if not rp or not os.path.isfile(rp):
         logging.warning(
-            "列設定シート図形コピー: 結果パスが無効のためスキップしました。"
+            "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: çµ�æžœãƒ‘ã‚¹ã�Œç„¡åŠ¹ã�®ã�Ÿã‚�ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚"
         )
         return
     if not ip or not os.path.isfile(ip):
         logging.warning(
-            "列設定シート図形コピー: TASK_INPUT_WORKBOOK が無効のためスキップしました。"
+            "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: TASK_INPUT_WORKBOOK ã�Œç„¡åŠ¹ã�®ã�Ÿã‚�ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚"
         )
         return
     try:
         import xlwings as xw
     except ImportError:
         logging.warning(
-            "列設定シート図形コピー: xlwings が import できません。"
+            "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: xlwings ã�Œ import ã�§ã��ã�¾ã�›ã‚“ã€‚"
         )
         return
     app = None
@@ -4457,7 +4405,7 @@ def _stage2_try_copy_column_config_shapes_from_input(
             ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
             logging.warning(
-                "列設定シート図形コピー: 結果ブックにシート「%s」がありません。",
+                "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: çµ�æžœãƒ–ãƒƒã‚¯ã�«ã‚·ãƒ¼ãƒˆã€Œ%sã€�ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚",
                 COLUMN_CONFIG_SHEET_NAME,
             )
             return
@@ -4465,14 +4413,14 @@ def _stage2_try_copy_column_config_shapes_from_input(
             ws_in = wb_in.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
             logging.warning(
-                "列設定シート図形コピー: 入力ブックにシート「%s」がありません。",
+                "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: å…¥åŠ›ãƒ–ãƒƒã‚¯ã�«ã‚·ãƒ¼ãƒˆã€Œ%sã€�ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚",
                 COLUMN_CONFIG_SHEET_NAME,
             )
             return
         n_shapes = int(ws_in.api.Shapes.Count)
         if n_shapes <= 0:
             logging.info(
-                "列設定シート図形コピー: 入力側に図形がありません（スキップ）。"
+                "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: å…¥åŠ›å�´ã�«å›³å½¢ã�Œã�‚ã‚Šã�¾ã�›ã‚“ï¼ˆã‚¹ã‚­ãƒƒãƒ—ï¼‰ã€‚"
             )
             return
         ws_out.activate()
@@ -4507,12 +4455,12 @@ def _stage2_try_copy_column_config_shapes_from_input(
             dst.Height = height
         wb_out.save()
         logging.info(
-            "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
+            "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: å…¥åŠ›ã�‹ã‚‰ %s å€‹ã�®å›³å½¢ã‚’çµ�æžœãƒ–ãƒƒã‚¯ã�¸è¤‡è£½ã�—ã�¾ã�—ã�Ÿã€‚",
             n_shapes,
         )
     except Exception as e:
         logging.warning(
-            "列設定シート図形コピー: 失敗しました（%s）。Excel 占有・COM エラー等の可能性があります。",
+            "åˆ—è¨­å®šã‚·ãƒ¼ãƒˆå›³å½¢ã‚³ãƒ”ãƒ¼: å¤±æ•—ã�—ã�¾ã�—ã�Ÿï¼ˆ%sï¼‰ã€‚Excel å� æœ‰ãƒ»COM ã‚¨ãƒ©ãƒ¼ç­‰ã�®å�¯èƒ½æ€§ã�Œã�‚ã‚Šã�¾ã�™ã€‚",
             e,
         )
     finally:
@@ -4548,7 +4496,7 @@ def _coerce_actual_sheet_datetime(val):
 
 
 def _actual_row_time_bounds(row):
-    """加工実績DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
+    """åŠ å·¥å®Ÿç¸¾DATA ã�®1è¡Œã�‹ã‚‰ (é–‹å§‹, çµ‚äº†) ã‚’å¾—ã‚‹ã€‚è§£ã�‘ã�ªã�‘ã‚Œã�° (None, None)ã€‚"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
@@ -4594,8 +4542,8 @@ def _actual_row_time_bounds(row):
 
 def load_machining_actuals_df():
     """
-    マクロブックの「加工実績DATA」を読む（無ければ空 DataFrame）。
-    Power Query 等で用意したシートを想定。
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�®ã€ŒåŠ å·¥å®Ÿç¸¾DATAã€�ã‚’èª­ã‚€ï¼ˆç„¡ã�‘ã‚Œã�°ç©º DataFrameï¼‰ã€‚
+    Power Query ç­‰ã�§ç”¨æ„�ã�—ã�Ÿã‚·ãƒ¼ãƒˆã‚’æƒ³å®šã€‚
     """
     if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
         return pd.DataFrame()
@@ -4603,23 +4551,23 @@ def load_machining_actuals_df():
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUALS_SHEET_NAME)
     except ValueError:
         logging.info(
-            f"シート「{ACTUALS_SHEET_NAME}」が無いため、ガントの実績行は出力しません。"
+            f"ã‚·ãƒ¼ãƒˆã€Œ{ACTUALS_SHEET_NAME}ã€�ã�Œç„¡ã�„ã�Ÿã‚�ã€�ã‚¬ãƒ³ãƒˆã�®å®Ÿç¸¾è¡Œã�¯å‡ºåŠ›ã�—ã�¾ã�›ã‚“ã€‚"
         )
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, ACTUAL_HEADER_CANONICAL)
     logging.info(
-        f"加工実績: '{TASKS_INPUT_WORKBOOK}' の '{ACTUALS_SHEET_NAME}' を {len(df)} 行読み込み。"
+        f"åŠ å·¥å®Ÿç¸¾: '{TASKS_INPUT_WORKBOOK}' ã�® '{ACTUALS_SHEET_NAME}' ã‚’ {len(df)} è¡Œèª­ã�¿è¾¼ã�¿ã€‚"
     )
     return df
 
 
 def build_actual_timeline_events(df, equipment_list, sorted_dates):
     """
-    実績シートの各行をガント用イベントへ変換。
-    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」だけ対象。
-    工程名は NFKC・空白正規化後にマスタ列名へマッピングする。
-    時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
+    å®Ÿç¸¾ã‚·ãƒ¼ãƒˆã�®å�„è¡Œã‚’ã‚¬ãƒ³ãƒˆç”¨ã‚¤ãƒ™ãƒ³ãƒˆã�¸å¤‰æ�›ã€‚
+    è¨ˆç”»è¡¨ç¤ºæ—¥ï¼ˆsorted_datesï¼‰ã�‹ã�¤è¨­å‚™ãƒžã‚¹ã‚¿ã�«ä¸€è‡´ã�™ã‚‹ã€Œå·¥ç¨‹å��ã€�ã� ã�‘å¯¾è±¡ã€‚
+    å·¥ç¨‹å��ã�¯ NFKCãƒ»ç©ºç™½æ­£è¦�åŒ–å¾Œã�«ãƒžã‚¹ã‚¿åˆ—å��ã�¸ãƒžãƒƒãƒ”ãƒ³ã‚°ã�™ã‚‹ã€‚
+    æ™‚åˆ»ã�¯ DEFAULT_START_TIME / DEFAULT_END_TIME ã�®æž å†…ã�«ã‚¯ãƒªãƒƒãƒ—ã€‚
     """
     if df is None or len(df) == 0:
         return []
@@ -4692,41 +4640,41 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
 
     if bad_eq:
         logging.warning(
-            f"加工実績DATA: 工程名がマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
+            f"åŠ å·¥å®Ÿç¸¾DATA: å·¥ç¨‹å��ã�Œãƒžã‚¹ã‚¿è¨­å‚™ã�¨ä¸€è‡´ã�—ã�ªã�„è¡Œã‚’ {bad_eq} ä»¶ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿï¼ˆç©ºç™½ç­‰ã�¯æ­£è¦�åŒ–æ¸ˆã�¿ï¼‰ã€‚"
         )
         if mismatch_norm_samples:
             logging.info(
-                "  不一致となった工程名の正規化後サンプル: "
+                "  ä¸�ä¸€è‡´ã�¨ã�ªã�£ã�Ÿå·¥ç¨‹å��ã�®æ­£è¦�åŒ–å¾Œã‚µãƒ³ãƒ—ãƒ«: "
                 + " | ".join(mismatch_norm_samples[:12])
             )
     if bad_time:
         logging.info(
-            f"加工実績DATA: 開始/終了日時が解釈できない行を {bad_time} 件スキップしました。"
+            f"åŠ å·¥å®Ÿç¸¾DATA: é–‹å§‹/çµ‚äº†æ—¥æ™‚ã�Œè§£é‡ˆã�§ã��ã�ªã�„è¡Œã‚’ {bad_time} ä»¶ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚"
         )
     if no_plan_overlap and sorted_dates:
         logging.info(
-            f"加工実績DATA: 設備・日時は有効だが、計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行が {no_plan_overlap} 件ありました。"
+            f"åŠ å·¥å®Ÿç¸¾DATA: è¨­å‚™ãƒ»æ—¥æ™‚ã�¯æœ‰åŠ¹ã� ã�Œã€�è¨ˆç”»å¯¾è±¡æ—¥ï¼ˆå½“æ—¥ä»¥é™�ã�®å‹¤æ€ æ—¥Ã—{DEFAULT_START_TIME}ï½ž{DEFAULT_END_TIME}ï¼‰ã�¨é‡�ã�ªã‚‰ã�ªã�„è¡Œã�Œ {no_plan_overlap} ä»¶ã�‚ã‚Šã�¾ã�—ã�Ÿã€‚"
         )
     if not events and len(df) > 0:
         logging.info(
-            "加工実績DATA: ガント用セグメントが0件です。過去日の実績のみの場合、計画の表示日（sorted_dates）に含まれないため描画されません。"
+            "åŠ å·¥å®Ÿç¸¾DATA: ã‚¬ãƒ³ãƒˆç”¨ã‚»ã‚°ãƒ¡ãƒ³ãƒˆã�Œ0ä»¶ã�§ã�™ã€‚é�ŽåŽ»æ—¥ã�®å®Ÿç¸¾ã�®ã�¿ã�®å ´å�ˆã€�è¨ˆç”»ã�®è¡¨ç¤ºæ—¥ï¼ˆsorted_datesï¼‰ã�«å�«ã�¾ã‚Œã�ªã�„ã�Ÿã‚�æ��ç”»ã�•ã‚Œã�¾ã�›ã‚“ã€‚"
         )
-    logging.info(f"加工実績DATA からガント用セグメント {len(events)} 件を生成しました。")
+    logging.info(f"åŠ å·¥å®Ÿç¸¾DATA ã�‹ã‚‰ã‚¬ãƒ³ãƒˆç”¨ã‚»ã‚°ãƒ¡ãƒ³ãƒˆ {len(events)} ä»¶ã‚’ç”Ÿæˆ�ã�—ã�¾ã�—ã�Ÿã€‚")
     return events
 
 
 TASK_SPECIAL_AI_LAST_RESPONSE_FILE = "ai_task_special_remark_last.txt"
-# 勤怠備考キャッシュとキー空間を分離（同一SHA衝突を避ける）。指紋に基準年を含め日付解釈のズレを防ぐ。
+# å‹¤æ€ å‚™è€ƒã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�¨ã‚­ãƒ¼ç©ºé–“ã‚’åˆ†é›¢ï¼ˆå�Œä¸€SHAè¡�çª�ã‚’é�¿ã�‘ã‚‹ï¼‰ã€‚æŒ‡ç´‹ã�«åŸºæº–å¹´ã‚’å�«ã‚�æ—¥ä»˜è§£é‡ˆã�®ã‚ºãƒ¬ã‚’é˜²ã��ã€‚
 TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v3|"
-# メインシート「グローバルコメント」下の自由記述 → Gemini 解釈（配台の最優先オーバーライド）
+# ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ä¸‹ã�®è‡ªç”±è¨˜è¿° â†’ Gemini è§£é‡ˆï¼ˆé…�å�°ã�®æœ€å„ªå…ˆã‚ªãƒ¼ãƒ�ãƒ¼ãƒ©ã‚¤ãƒ‰ï¼‰
 GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v8|"
 
 
 def _normalize_special_task_id_for_ai(val):
     """
-    依頼NOをキャッシュキー・プロンプト行で一貫させる。
-    Excel の数値セルは float になりがちなので 12345.0 → \"12345\" に揃える。
-    文字列は NFKC（全角英数字など）で表記ゆれを吸収（同一実体の再API呼び出しを減らす）。
+    ä¾�é ¼NOã‚’ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚­ãƒ¼ãƒ»ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆè¡Œã�§ä¸€è²«ã�•ã�›ã‚‹ã€‚
+    Excel ã�®æ•°å€¤ã‚»ãƒ«ã�¯ float ã�«ã�ªã‚Šã�Œã�¡ã�ªã�®ã�§ 12345.0 â†’ \"12345\" ã�«æ�ƒã�ˆã‚‹ã€‚
+    æ–‡å­—åˆ—ã�¯ NFKCï¼ˆå…¨è§’è‹±æ•°å­—ã�ªã�©ï¼‰ã�§è¡¨è¨˜ã‚†ã‚Œã‚’å�¸å�Žï¼ˆå�Œä¸€å®Ÿä½“ã�®å†�APIå‘¼ã�³å‡ºã�—ã‚’æ¸›ã‚‰ã�™ï¼‰ã€‚
     """
     if val is None:
         return None
@@ -4754,7 +4702,7 @@ def _normalize_special_task_id_for_ai(val):
     s = unicodedata.normalize("NFKC", s).strip()
     if not s or s.lower() in ("nan", "none", "null"):
         return None
-    # 文字列としての "20010.0" 等（Excel・CSV）を整数表記の依頼NOに寄せる
+    # æ–‡å­—åˆ—ã�¨ã�—ã�¦ã�® "20010.0" ç­‰ï¼ˆExcelãƒ»CSVï¼‰ã‚’æ•´æ•°è¡¨è¨˜ã�®ä¾�é ¼NOã�«å¯„ã�›ã‚‹
     if re.fullmatch(r"-?\d+\.0+", s):
         try:
             return str(int(float(s)))
@@ -4764,19 +4712,19 @@ def _normalize_special_task_id_for_ai(val):
 
 
 def planning_task_id_str_from_scalar(val) -> str:
-    """配台・段階1マージ・キュー構築で用いる依頼NOの安定文字列（空なら \"\"）。"""
+    """é…�å�°ãƒ»æ®µéšŽ1ãƒžãƒ¼ã‚¸ãƒ»ã‚­ãƒ¥ãƒ¼æ§‹ç¯‰ã�§ç”¨ã�„ã‚‹ä¾�é ¼NOã�®å®‰å®šæ–‡å­—åˆ—ï¼ˆç©ºã�ªã‚‰ \"\"ï¼‰ã€‚"""
     return _normalize_special_task_id_for_ai(val) or ""
 
 
 def planning_task_id_str_from_plan_row(row) -> str:
-    """重複見出し列でも先頭スカラーを拾い、依頼NOを planning_task_id_str_from_scalar に渡す。"""
+    """é‡�è¤‡è¦‹å‡ºã�—åˆ—ã�§ã‚‚å…ˆé ­ã‚¹ã‚«ãƒ©ãƒ¼ã‚’æ‹¾ã�„ã€�ä¾�é ¼NOã‚’ planning_task_id_str_from_scalar ã�«æ¸¡ã�™ã€‚"""
     return planning_task_id_str_from_scalar(_planning_df_cell_scalar(row, TASK_COL_TASK_ID))
 
 
 def _cell_text_task_special_remark(val):
     """
-    特別指定_備考をプロンプト用に取り出す。仕様どおり **strip のみ**
-    （先頭末尾の空白・Excel の偽空白を除き、文中の改行・スペースは保持。数値セルは表記を固定）。
+    ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã‚’ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆç”¨ã�«å�–ã‚Šå‡ºã�™ã€‚ä»•æ§˜ã�©ã�Šã‚Š **strip ã�®ã�¿**
+    ï¼ˆå…ˆé ­æœ«å°¾ã�®ç©ºç™½ãƒ»Excel ã�®å�½ç©ºç™½ã‚’é™¤ã��ã€�æ–‡ä¸­ã�®æ”¹è¡Œãƒ»ã‚¹ãƒšãƒ¼ã‚¹ã�¯ä¿�æŒ�ã€‚æ•°å€¤ã‚»ãƒ«ã�¯è¡¨è¨˜ã‚’å›ºå®šï¼‰ã€‚
     """
     if val is None:
         return ""
@@ -4790,7 +4738,7 @@ def _cell_text_task_special_remark(val):
     elif isinstance(val, float):
         if math.isnan(val):
             return ""
-        # 備考列に数値だけ入っている場合の表記ゆれを減らす
+        # å‚™è€ƒåˆ—ã�«æ•°å€¤ã� ã�‘å…¥ã�£ã�¦ã�„ã‚‹å ´å�ˆã�®è¡¨è¨˜ã‚†ã‚Œã‚’æ¸›ã‚‰ã�™
         if val.is_integer():
             s = str(int(val))
         else:
@@ -4806,7 +4754,7 @@ def _cell_text_task_special_remark(val):
 
 
 def _task_special_prompt_lines(tasks_df):
-    """プロンプトに載せる行リスト（ソート前）。正規化は上記ヘルパーに統一。"""
+    """ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�«è¼‰ã�›ã‚‹è¡Œãƒªã‚¹ãƒˆï¼ˆã‚½ãƒ¼ãƒˆå‰�ï¼‰ã€‚æ­£è¦�åŒ–ã�¯ä¸Šè¨˜ãƒ˜ãƒ«ãƒ‘ãƒ¼ã�«çµ±ä¸€ã€‚"""
     lines = []
     for _, row in tasks_df.iterrows():
         if _plan_row_exclude_from_assignment(row):
@@ -4817,18 +4765,18 @@ def _task_special_prompt_lines(tasks_df):
             continue
         proc = str(row.get(TASK_COL_MACHINE, "") or "").strip()
         macn = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-        proc_disp = proc if proc else "（空）"
-        macn_disp = macn if macn else "（空）"
+        proc_disp = proc if proc else "ï¼ˆç©ºï¼‰"
+        macn_disp = macn if macn else "ï¼ˆç©ºï¼‰"
         lines.append(
-            f"- 依頼NO【{tid}】| 工程名「{proc_disp}」 | 機械名「{macn_disp}」 | 備考本文: {rem}"
+            f"- ä¾�é ¼NOã€�{tid}ã€‘| å·¥ç¨‹å��ã€Œ{proc_disp}ã€� | æ©Ÿæ¢°å��ã€Œ{macn_disp}ã€� | å‚™è€ƒæœ¬æ–‡: {rem}"
         )
     return lines
 
 
 def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict:
     """
-    備考が品番・原反コード（例: 20010 で始まる数字列）で始まると、モデルがその列を JSON トップキーに
-    誤用することがある。依頼NO【…】と一致しない数字のみのキーを、当該備考を持つ行の依頼NOへ付け替える。
+    å‚™è€ƒã�Œå“�ç•ªãƒ»åŽŸå��ã‚³ãƒ¼ãƒ‰ï¼ˆä¾‹: 20010 ã�§å§‹ã�¾ã‚‹æ•°å­—åˆ—ï¼‰ã�§å§‹ã�¾ã‚‹ã�¨ã€�ãƒ¢ãƒ‡ãƒ«ã�Œã��ã�®åˆ—ã‚’ JSON ãƒˆãƒƒãƒ—ã‚­ãƒ¼ã�«
+    èª¤ç”¨ã�™ã‚‹ã�“ã�¨ã�Œã�‚ã‚‹ã€‚ä¾�é ¼NOã€�â€¦ã€‘ã�¨ä¸€è‡´ã�—ã�ªã�„æ•°å­—ã�®ã�¿ã�®ã‚­ãƒ¼ã‚’ã€�å½“è©²å‚™è€ƒã‚’æŒ�ã�¤è¡Œã�®ä¾�é ¼NOã�¸ä»˜ã�‘æ›¿ã�ˆã‚‹ã€‚
     """
     if not isinstance(parsed, dict) or not parsed or tasks_df is None or getattr(tasks_df, "empty", True):
         return parsed
@@ -4858,7 +4806,7 @@ def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict
                 or r.startswith(sk + " ")
                 or r.startswith(sk + "\u3000")
                 or r.startswith(sk + "-")
-                or r.startswith(sk + "ー")
+                or r.startswith(sk + "ãƒ¼")
                 for r in rems
             )
         ]
@@ -4871,7 +4819,7 @@ def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict
         if target not in parsed:
             parsed[target] = val
             logging.info(
-                "タスク特別指定: JSON トップキー誤りを修復（%r は依頼NOではない → %r）",
+                "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: JSON ãƒˆãƒƒãƒ—ã‚­ãƒ¼èª¤ã‚Šã‚’ä¿®å¾©ï¼ˆ%r ã�¯ä¾�é ¼NOã�§ã�¯ã�ªã�„ â†’ %rï¼‰",
                 bad_key,
                 target,
             )
@@ -4888,8 +4836,8 @@ def _normalize_task_special_scope_str(s) -> str:
 
 def _task_special_scope_matches_row_field(row_val, restrict_val) -> bool:
     """
-    restrict が無い・空なら制限なし（True）。
-    非空なら Excel 側の値とあいまい一致（部分一致可）。
+    restrict ã�Œç„¡ã�„ãƒ»ç©ºã�ªã‚‰åˆ¶é™�ã�ªã�—ï¼ˆTrueï¼‰ã€‚
+    é�žç©ºã�ªã‚‰ Excel å�´ã�®å€¤ã�¨ã�‚ã�„ã�¾ã�„ä¸€è‡´ï¼ˆéƒ¨åˆ†ä¸€è‡´å�¯ï¼‰ã€‚
     """
     if restrict_val is None:
         return True
@@ -4907,7 +4855,7 @@ def _task_special_scope_matches_row_field(row_val, restrict_val) -> bool:
 
 
 def _ai_remark_entry_applies_to_row(entry: dict, row) -> bool:
-    """restrict_to_* が無いときは同一依頼NOの全行に適用。"""
+    """restrict_to_* ã�Œç„¡ã�„ã�¨ã��ã�¯å�Œä¸€ä¾�é ¼NOã�®å…¨è¡Œã�«é�©ç”¨ã€‚"""
     if not isinstance(entry, dict):
         return False
     rp = row.get(TASK_COL_MACHINE, "")
@@ -4921,8 +4869,8 @@ def _ai_remark_entry_applies_to_row(entry: dict, row) -> bool:
 
 def _row_matches_remark_source_row(entry: dict, row) -> bool:
     """
-    JSON の process_name / machine_name が、当該 Excel 行の工程名・機械名と一致するか。
-    （プロンプトで渡した「備考があった行」と対応づける。片方だけ一致でも可）
+    JSON ã�® process_name / machine_name ã�Œã€�å½“è©² Excel è¡Œã�®å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�¨ä¸€è‡´ã�™ã‚‹ã�‹ã€‚
+    ï¼ˆãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�§æ¸¡ã�—ã�Ÿã€Œå‚™è€ƒã�Œã�‚ã�£ã�Ÿè¡Œã€�ã�¨å¯¾å¿œã�¥ã�‘ã‚‹ã€‚ç‰‡æ–¹ã� ã�‘ä¸€è‡´ã�§ã‚‚å�¯ï¼‰
     """
     if not isinstance(entry, dict):
         return False
@@ -4936,7 +4884,7 @@ def _row_matches_remark_source_row(entry: dict, row) -> bool:
 
 
 def _entry_is_global_task_special_scope(entry: dict) -> bool:
-    """restrict_to_* が無い・空＝同一依頼NOの全工程行に効かせる指定。"""
+    """restrict_to_* ã�Œç„¡ã�„ãƒ»ç©ºï¼�å�Œä¸€ä¾�é ¼NOã�®å…¨å·¥ç¨‹è¡Œã�«åŠ¹ã�‹ã�›ã‚‹æŒ‡å®šã€‚"""
     if not isinstance(entry, dict):
         return False
     a = _normalize_task_special_scope_str(entry.get("restrict_to_process_name"))
@@ -4945,7 +4893,7 @@ def _entry_is_global_task_special_scope(entry: dict) -> bool:
 
 
 def _select_ai_task_special_entry_for_tid_value(val, row):
-    """1依頼NOに対する値が dict または dict の配列のどちらでも行に合う要素を返す。"""
+    """1ä¾�é ¼NOã�«å¯¾ã�™ã‚‹å€¤ã�Œ dict ã�¾ã�Ÿã�¯ dict ã�®é…�åˆ—ã�®ã�©ã�¡ã‚‰ã�§ã‚‚è¡Œã�«å�ˆã�†è¦�ç´ ã‚’è¿”ã�™ã€‚"""
     if val is None:
         return None
     if isinstance(val, list):
@@ -4976,10 +4924,10 @@ def _select_ai_task_special_entry_for_tid_value(val, row):
 
 def _ai_task_special_entry_for_row(ai_by_tid, row):
     """
-    analyze_task_special_remarks の戻りから当該行のエントリを取る。
-    プロンプトキーは正規化済み依頼NOなので、Excel が 12345.0 でもヒットする。
-    restrict_to_process_name / restrict_to_machine_name が無い・空のときは
-    同一依頼NOの工程・機械が異なる全行に同じ指示を適用する。
+    analyze_task_special_remarks ã�®æˆ»ã‚Šã�‹ã‚‰å½“è©²è¡Œã�®ã‚¨ãƒ³ãƒˆãƒªã‚’å�–ã‚‹ã€‚
+    ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã‚­ãƒ¼ã�¯æ­£è¦�åŒ–æ¸ˆã�¿ä¾�é ¼NOã�ªã�®ã�§ã€�Excel ã�Œ 12345.0 ã�§ã‚‚ãƒ’ãƒƒãƒˆã�™ã‚‹ã€‚
+    restrict_to_process_name / restrict_to_machine_name ã�Œç„¡ã�„ãƒ»ç©ºã�®ã�¨ã��ã�¯
+    å�Œä¸€ä¾�é ¼NOã�®å·¥ç¨‹ãƒ»æ©Ÿæ¢°ã�Œç•°ã�ªã‚‹å…¨è¡Œã�«å�Œã�˜æŒ‡ç¤ºã‚’é�©ç”¨ã�™ã‚‹ã€‚
     """
     if not isinstance(ai_by_tid, dict) or not ai_by_tid:
         return None
@@ -5021,7 +4969,7 @@ def _gemini_result_text(res):
         return ""
 
 
-# 1 回の Python 実行（段階1 または 段階2）単位でリセットする
+# 1 å›žã�® Python å®Ÿè¡Œï¼ˆæ®µéšŽ1 ã�¾ã�Ÿã�¯ æ®µéšŽ2ï¼‰å�˜ä½�ã�§ãƒªã‚»ãƒƒãƒˆã�™ã‚‹
 _gemini_usage_session: dict[str, dict[str, int]] = {}
 
 
@@ -5042,7 +4990,7 @@ def _gemini_cumulative_json_path() -> str:
 
 
 def _load_gemini_cumulative_payload() -> dict:
-    """API_Payment 内の累計 JSON を読む。無い・壊れていれば初期形を返す。"""
+    """API_Payment å†…ã�®ç´¯è¨ˆ JSON ã‚’èª­ã‚€ã€‚ç„¡ã�„ãƒ»å£Šã‚Œã�¦ã�„ã‚Œã�°åˆ�æœŸå½¢ã‚’è¿”ã�™ã€‚"""
     path = _gemini_cumulative_json_path()
     default: dict = {
         "version": 1,
@@ -5090,11 +5038,11 @@ def _save_gemini_cumulative_payload(data: dict) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
     except OSError as ex:
-        logging.debug("Gemini 累計 JSON の保存に失敗: %s", ex)
+        logging.debug("Gemini ç´¯è¨ˆ JSON ã�®ä¿�å­˜ã�«å¤±æ•—: %s", ex)
 
 
 def _gemini_buckets_ensure_structure(data: dict) -> None:
-    """累計 JSON に期間別バケット用の辞書を用意する（既存 v1 ファイルもマージ）。"""
+    """ç´¯è¨ˆ JSON ã�«æœŸé–“åˆ¥ãƒ�ã‚±ãƒƒãƒˆç”¨ã�®è¾žæ›¸ã‚’ç”¨æ„�ã�™ã‚‹ï¼ˆæ—¢å­˜ v1 ãƒ•ã‚¡ã‚¤ãƒ«ã‚‚ãƒžãƒ¼ã‚¸ï¼‰ã€‚"""
     b = data.setdefault("buckets", {})
     if not isinstance(b, dict):
         b = {}
@@ -5105,12 +5053,12 @@ def _gemini_buckets_ensure_structure(data: dict) -> None:
             b[sub] = {}
     b.setdefault(
         "timezone_note",
-        "period_key は PC ローカル時刻（datetime.now）で付与。他 PC との集計は混ぜないでください。",
+        "period_key ã�¯ PC ãƒ­ãƒ¼ã‚«ãƒ«æ™‚åˆ»ï¼ˆdatetime.nowï¼‰ã�§ä»˜ä¸Žã€‚ä»– PC ã�¨ã�®é›†è¨ˆã�¯æ··ã�œã�ªã�„ã�§ã��ã� ã�•ã�„ã€‚",
     )
 
 
 def _gemini_time_bucket_keys(dt: datetime) -> tuple[str, str, str, str, str]:
-    """年・月・ISO週・日・時 のキー（文字列ソートで時系列比較しやすい形）。"""
+    """å¹´ãƒ»æœˆãƒ»ISOé€±ãƒ»æ—¥ãƒ»æ™‚ ã�®ã‚­ãƒ¼ï¼ˆæ–‡å­—åˆ—ã‚½ãƒ¼ãƒˆã�§æ™‚ç³»åˆ—æ¯”è¼ƒã�—ã‚„ã�™ã�„å½¢ï¼‰ã€‚"""
     iy, iw, _ = dt.isocalendar()
     y = dt.strftime("%Y")
     ym = dt.strftime("%Y-%m")
@@ -5130,7 +5078,7 @@ def _gemini_bucket_add_one_call(
     *,
     when: datetime | None = None,
 ) -> None:
-    """1 回の API 呼出しを年・月・週・日・時の各バケットに加算する。"""
+    """1 å›žã�® API å‘¼å‡ºã�—ã‚’å¹´ãƒ»æœˆãƒ»é€±ãƒ»æ—¥ãƒ»æ™‚ã�®å�„ãƒ�ã‚±ãƒƒãƒˆã�«åŠ ç®—ã�™ã‚‹ã€‚"""
     dt = when or datetime.now()
     y, ym, wk, d, h = _gemini_time_bucket_keys(dt)
     pairs = (
@@ -5167,7 +5115,7 @@ def _gemini_bucket_add_one_call(
 def _append_gemini_cumulative_one_call(
     model_id: str, pt: int, ct: int, th: int, tt: int
 ) -> None:
-    """1 回の API 応答分を累計 JSON に加算する（ログに単発料金は出さない）。"""
+    """1 å›žã�® API å¿œç­”åˆ†ã‚’ç´¯è¨ˆ JSON ã�«åŠ ç®—ã�™ã‚‹ï¼ˆãƒ­ã‚°ã�«å�˜ç™ºæ–™é‡‘ã�¯å‡ºã�•ã�ªã�„ï¼‰ã€‚"""
     mid = str(model_id).strip()
     data = _load_gemini_cumulative_payload()
     data["calls_total"] = int(data["calls_total"]) + 1
@@ -5206,7 +5154,7 @@ def _append_gemini_cumulative_one_call(
 
 
 def record_gemini_response_usage(res, model_id: str) -> None:
-    """generate_content の応答から usage_metadata を集計する（セッション＋累計 JSON）。"""
+    """generate_content ã�®å¿œç­”ã�‹ã‚‰ usage_metadata ã‚’é›†è¨ˆã�™ã‚‹ï¼ˆã‚»ãƒƒã‚·ãƒ§ãƒ³ï¼‹ç´¯è¨ˆ JSONï¼‰ã€‚"""
     global _gemini_usage_session
     if res is None or not str(model_id or "").strip():
         return
@@ -5240,7 +5188,7 @@ def record_gemini_response_usage(res, model_id: str) -> None:
     try:
         _append_gemini_cumulative_one_call(mid, pt, ct, th, tt)
     except Exception as ex:
-        logging.debug("Gemini 累計の更新で例外（続行）: %s", ex)
+        logging.debug("Gemini ç´¯è¨ˆã�®æ›´æ–°ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s", ex)
 
 
 def _gemini_estimate_cost_usd(
@@ -5251,7 +5199,7 @@ def _gemini_estimate_cost_usd(
     if "flash" in m:
         rin, rout = _GEMINI_FLASH_IN_PER_M, _GEMINI_FLASH_OUT_PER_M
     elif "pro" in m:
-        # 目安（未使用モデル向けフォールバック）
+        # ç›®å®‰ï¼ˆæœªä½¿ç”¨ãƒ¢ãƒ‡ãƒ«å�‘ã�‘ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ï¼‰
         rin, rout = 1.25, 5.0
     if rin is None:
         return None
@@ -5262,7 +5210,7 @@ def _gemini_estimate_cost_usd(
 def _gemini_daily_trend_series(
     cum: dict, *, max_days: int | None = None
 ) -> tuple[list[str], list[float], str] | None:
-    """累計 JSON の by_day から、日付キー（古→新）・値・系列名。無ければ None。"""
+    """ç´¯è¨ˆ JSON ã�® by_day ã�‹ã‚‰ã€�æ—¥ä»˜ã‚­ãƒ¼ï¼ˆå�¤â†’æ–°ï¼‰ãƒ»å€¤ãƒ»ç³»åˆ—å��ã€‚ç„¡ã�‘ã‚Œã�° Noneã€‚"""
     lim = GEMINI_USAGE_CHART_MAX_DAYS if max_days is None else max_days
     b = cum.get("buckets")
     if not isinstance(b, dict):
@@ -5284,12 +5232,12 @@ def _gemini_daily_trend_series(
             calls.append(0)
     use_calls = sum(usds) <= 0.0 and sum(calls) > 0
     series = [float(c) for c in calls] if use_calls else usds
-    label = "呼出し回数" if use_calls else "推定USD"
+    label = "å‘¼å‡ºã�—å›žæ•°" if use_calls else "æŽ¨å®šUSD"
     return (keys, series, label)
 
 
 def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[int]:
-    """by_day の各キーについて、total_tokens（無ければ prompt+candidates+thoughts）を返す。"""
+    """by_day ã�®å�„ã‚­ãƒ¼ã�«ã�¤ã�„ã�¦ã€�total_tokensï¼ˆç„¡ã�‘ã‚Œã�° prompt+candidates+thoughtsï¼‰ã‚’è¿”ã�™ã€‚"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return [0] * len(day_keys)
@@ -5314,28 +5262,28 @@ def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[
 
 
 def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
-    """テキスト側はグラフ参照と CSV 案内のみ（ASCII スパークラインは出さない）。"""
+    """ãƒ†ã‚­ã‚¹ãƒˆå�´ã�¯ã‚°ãƒ©ãƒ•å�‚ç…§ã�¨ CSV æ¡ˆå†…ã�®ã�¿ï¼ˆASCII ã‚¹ãƒ‘ãƒ¼ã‚¯ãƒ©ã‚¤ãƒ³ã�¯å‡ºã�•ã�ªã�„ï¼‰ã€‚"""
     ser = _gemini_daily_trend_series(cum)
     if ser is None:
         return []
     keys, _, label = ser
     b = cum.get("buckets")
     lines = [
-        "【推移グラフ】料金・呼出し: Q〜R 列／トークン量: S〜T 列（各グラフ・自動更新）を参照",
-        f"  系列1: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
-        "  系列2: 日次 合計トークン（API 報告 total または内訳合計）",
-        f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ可）",
+        "ã€�æŽ¨ç§»ã‚°ãƒ©ãƒ•ã€‘æ–™é‡‘ãƒ»å‘¼å‡ºã�—: Qã€œR åˆ—ï¼�ãƒˆãƒ¼ã‚¯ãƒ³é‡�: Sã€œT åˆ—ï¼ˆå�„ã‚°ãƒ©ãƒ•ãƒ»è‡ªå‹•æ›´æ–°ï¼‰ã‚’å�‚ç…§",
+        f"  ç³»åˆ—1: æ—¥æ¬¡ {label}ï¼ˆ{keys[0]} ï½ž {keys[-1]}ï¼‰",
+        "  ç³»åˆ—2: æ—¥æ¬¡ å�ˆè¨ˆãƒˆãƒ¼ã‚¯ãƒ³ï¼ˆAPI å ±å‘Š total ã�¾ã�Ÿã�¯å†…è¨³å�ˆè¨ˆï¼‰",
+        f"  å¹´ãƒ»æœˆãƒ»é€±ãƒ»æ™‚ã�ªã�©ã�®å†…è¨³: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}ï¼ˆExcel ã�§ã‚°ãƒ©ãƒ•å�¯ï¼‰",
     ]
     if isinstance(b, dict):
         note = b.get("timezone_note")
         if note:
-            lines.append(f"  （{note}）")
+            lines.append(f"  ï¼ˆ{note}ï¼‰")
     return lines
 
 
 def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
-    """xlwings Book からメイン相当シートを返す。無ければ None。"""
-    for name in ("メイン", "メイン_", "Main"):
+    """xlwings Book ã�‹ã‚‰ãƒ¡ã‚¤ãƒ³ç›¸å½“ã‚·ãƒ¼ãƒˆã‚’è¿”ã�™ã€‚ç„¡ã�‘ã‚Œã�° Noneã€‚"""
+    for name in ("ãƒ¡ã‚¤ãƒ³", "ãƒ¡ã‚¤ãƒ³_", "Main"):
         try:
             return book.sheets[name]
         except Exception:
@@ -5343,7 +5291,7 @@ def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
     try:
         for sht in book.sheets:
             try:
-                if "メイン" in str(sht.name):
+                if "ãƒ¡ã‚¤ãƒ³" in str(sht.name):
                     return sht
             except Exception:
                 continue
@@ -5353,14 +5301,14 @@ def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
 
 
 def _strip_gemini_usage_charts_xlwings(ws) -> None:
-    """当機能が管理する折れ線（名前またはグラフタイトル）を削除する。"""
+    """å½“æ©Ÿèƒ½ã�Œç®¡ç�†ã�™ã‚‹æŠ˜ã‚Œç·šï¼ˆå��å‰�ã�¾ã�Ÿã�¯ã‚°ãƒ©ãƒ•ã‚¿ã‚¤ãƒˆãƒ«ï¼‰ã‚’å‰Šé™¤ã�™ã‚‹ã€‚"""
     managed_names = (
         GEMINI_USAGE_XLW_CHART_NAME,
         GEMINI_USAGE_XLW_CHART_TOKENS_NAME,
     )
     title_markers = (
-        "Gemini API 日次推移",
-        "Gemini API 日次トークン",
+        "Gemini API æ—¥æ¬¡æŽ¨ç§»",
+        "Gemini API æ—¥æ¬¡ãƒˆãƒ¼ã‚¯ãƒ³",
     )
     try:
         charts_iter = list(ws.charts)
@@ -5388,7 +5336,7 @@ def _strip_gemini_usage_charts_xlwings(ws) -> None:
 
 
 def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
-    """開いたブック上で Q〜R・S〜T を埋め、折れ線グラフを 2 本まで置く（xlwings）。"""
+    """é–‹ã�„ã�Ÿãƒ–ãƒƒã‚¯ä¸Šã�§ Qã€œRãƒ»Sã€œT ã‚’åŸ‹ã‚�ã€�æŠ˜ã‚Œç·šã‚°ãƒ©ãƒ•ã‚’ 2 æœ¬ã�¾ã�§ç½®ã��ï¼ˆxlwingsï¼‰ã€‚"""
     hr = GEMINI_USAGE_CHART_HEADER_ROW
     cdt = GEMINI_USAGE_CHART_COL_DATE
     cvl = GEMINI_USAGE_CHART_COL_VALUE
@@ -5416,7 +5364,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     if n <= 0:
         return
 
-    ws.range((hr, cdt)).value = "日付"
+    ws.range((hr, cdt)).value = "æ—¥ä»˜"
     ws.range((hr, cvl)).value = val_label
     for i, (dk, val) in enumerate(zip(day_keys, values)):
         r = hr + 1 + i
@@ -5424,7 +5372,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
         ws.range((r, cvl)).value = val
     try:
         vrng = ws.range((hr + 1, cvl), (hr + n, cvl))
-        vrng.number_format = "0.000000" if val_label == "推定USD" else "0"
+        vrng.number_format = "0.000000" if val_label == "æŽ¨å®šUSD" else "0"
     except Exception:
         pass
 
@@ -5451,7 +5399,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     try:
         ca = chart.api
         ca.HasTitle = True
-        ca.ChartTitle.Text = "Gemini API 日次推移"
+        ca.ChartTitle.Text = "Gemini API æ—¥æ¬¡æŽ¨ç§»"
         ca.HasLegend = False
     except Exception:
         pass
@@ -5460,8 +5408,8 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     if not tok_vals or max(tok_vals) <= 0:
         return
 
-    tok_label = "合計トークン"
-    ws.range((hr, cts)).value = "日付"
+    tok_label = "å�ˆè¨ˆãƒˆãƒ¼ã‚¯ãƒ³"
+    ws.range((hr, cts)).value = "æ—¥ä»˜"
     ws.range((hr, ctv)).value = tok_label
     for i, dk in enumerate(day_keys):
         r = hr + 1 + i
@@ -5495,7 +5443,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     try:
         ca2 = chart2.api
         ca2.HasTitle = True
-        ca2.ChartTitle.Text = "Gemini API 日次トークン"
+        ca2.ChartTitle.Text = "Gemini API æ—¥æ¬¡ãƒˆãƒ¼ã‚¯ãƒ³"
         ca2.HasLegend = False
     except Exception:
         pass
@@ -5504,11 +5452,11 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
 def _write_main_sheet_gemini_usage_via_xlwings(
     macro_wb_path: str, text: str, log_prefix: str
 ) -> bool:
-    """Excel でブックが開いているとき、メイン P 列・Q〜T・推移グラフ（最大2本）を xlwings で更新して Save。"""
+    """Excel ã�§ãƒ–ãƒƒã‚¯ã�Œé–‹ã�„ã�¦ã�„ã‚‹ã�¨ã��ã€�ãƒ¡ã‚¤ãƒ³ P åˆ—ãƒ»Qã€œTãƒ»æŽ¨ç§»ã‚°ãƒ©ãƒ•ï¼ˆæœ€å¤§2æœ¬ï¼‰ã‚’ xlwings ã�§æ›´æ–°ã�—ã�¦ Saveã€‚"""
     attached = _xlwings_attach_open_macro_workbook(macro_wb_path, log_prefix)
     if attached is None:
         logging.info(
-            "%s: xlwings でマクロブックに接続できず、メイン AI サマリをスキップしました。",
+            "%s: xlwings ã�§ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�«æŽ¥ç¶šã�§ã��ã�šã€�ãƒ¡ã‚¤ãƒ³ AI ã‚µãƒžãƒªã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
             log_prefix,
         )
         return False
@@ -5522,7 +5470,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
         ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
         if ws_main is None:
             logging.info(
-                "%s: メインシートが無いため xlwings での AI サマリをスキップしました。",
+                "%s: ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã�Œç„¡ã�„ã�Ÿã‚� xlwings ã�§ã�® AI ã‚µãƒžãƒªã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
             )
             return False
@@ -5548,7 +5496,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             xw_book.save()
             ok = True
             logging.info(
-                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で保存しました。",
+                "%s: ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆ P%d ä»¥é™�ãƒ»Gemini æŽ¨ç§»ã‚°ãƒ©ãƒ•ï¼ˆæ–™é‡‘/å‘¼å‡ºã�—ãƒ»ãƒˆãƒ¼ã‚¯ãƒ³ï¼‰ã‚’ xlwings ã�§ä¿�å­˜ã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
                 start_r,
             )
@@ -5556,7 +5504,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
     except Exception as ex:
         logging.warning(
-            "%s: メイン AI サマリの xlwings 保存に失敗: %s", log_prefix, ex
+            "%s: ãƒ¡ã‚¤ãƒ³ AI ã‚µãƒžãƒªã�® xlwings ä¿�å­˜ã�«å¤±æ•—: %s", log_prefix, ex
         )
         ok = False
     finally:
@@ -5565,12 +5513,12 @@ def _write_main_sheet_gemini_usage_via_xlwings(
 
 
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
-    """累計・当実行向けの 2 列テキスト表（履歴行は含めない）。"""
+    """ç´¯è¨ˆãƒ»å½“å®Ÿè¡Œå�‘ã�‘ã�® 2 åˆ—ãƒ†ã‚­ã‚¹ãƒˆè¡¨ï¼ˆå±¥æ­´è¡Œã�¯å�«ã‚�ã�ªã�„ï¼‰ã€‚"""
     out = [title]
     if not rows:
         return out
     lw = min(22, max(len(a) for a, _ in rows))
-    sep = "  " + ("─" * (lw + 2 + 28))
+    sep = "  " + ("â”€" * (lw + 2 + 28))
     out.append(sep)
     for a, b in rows:
         out.append(f"  {a:<{lw}}  {b}")
@@ -5578,7 +5526,7 @@ def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]
 
 
 def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
-    """Excel 折れ線・棒グラフ向けに長形式 CSV を log に書き出す。"""
+    """Excel æŠ˜ã‚Œç·šãƒ»æ£’ã‚°ãƒ©ãƒ•å�‘ã�‘ã�«é•·å½¢å¼� CSV ã‚’ log ã�«æ›¸ã��å‡ºã�™ã€‚"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return
@@ -5638,11 +5586,11 @@ def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
             w.writeheader()
             w.writerows(rows_out)
     except OSError as ex:
-        logging.debug("Gemini バケット CSV の保存に失敗: %s", ex)
+        logging.debug("Gemini ãƒ�ã‚±ãƒƒãƒˆ CSV ã�®ä¿�å­˜ã�«å¤±æ•—: %s", ex)
 
 
 def build_gemini_usage_summary_text() -> str:
-    """メイン表示・結果ログ用の複数行テキスト（この実行分＋累計 JSON）。"""
+    """ãƒ¡ã‚¤ãƒ³è¡¨ç¤ºãƒ»çµ�æžœãƒ­ã‚°ç”¨ã�®è¤‡æ•°è¡Œãƒ†ã‚­ã‚¹ãƒˆï¼ˆã�“ã�®å®Ÿè¡Œåˆ†ï¼‹ç´¯è¨ˆ JSONï¼‰ã€‚"""
     cum = _load_gemini_cumulative_payload()
     ct_tot = int(cum.get("calls_total") or 0)
     if not _gemini_usage_session and ct_tot <= 0:
@@ -5651,33 +5599,33 @@ def build_gemini_usage_summary_text() -> str:
     lines: list[str] = []
     ts = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     if _gemini_usage_session:
-        lines.append(f"集計時刻: {ts}（この実行での Gemini API）")
+        lines.append(f"é›†è¨ˆæ™‚åˆ»: {ts}ï¼ˆã�“ã�®å®Ÿè¡Œã�§ã�® Gemini APIï¼‰")
         tot_calls = sum(b["calls"] for b in _gemini_usage_session.values())
         tot_p = sum(b["prompt"] for b in _gemini_usage_session.values())
         tot_c = sum(b["candidates"] for b in _gemini_usage_session.values())
         tot_th = sum(b["thoughts"] for b in _gemini_usage_session.values())
         tot_t = sum(b["total"] for b in _gemini_usage_session.values())
         sess_rows: list[tuple[str, str]] = [
-            ("呼出し", f"{tot_calls:,} 回"),
-            ("入力トークン", f"{tot_p:,}"),
-            ("出力トークン", f"{tot_c:,}"),
+            ("å‘¼å‡ºã�—", f"{tot_calls:,} å›ž"),
+            ("å…¥åŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{tot_p:,}"),
+            ("å‡ºåŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{tot_c:,}"),
         ]
         if tot_th:
-            sess_rows.append(("思考トークン", f"{tot_th:,}"))
-        sess_rows.append(("total 報告", f"{tot_t:,}"))
-        lines.extend(_gemini_kv_table_lines("【この実行】", sess_rows))
+            sess_rows.append(("æ€�è€ƒãƒˆãƒ¼ã‚¯ãƒ³", f"{tot_th:,}"))
+        sess_rows.append(("total å ±å‘Š", f"{tot_t:,}"))
+        lines.extend(_gemini_kv_table_lines("ã€�ã�“ã�®å®Ÿè¡Œã€‘", sess_rows))
         grand_usd = 0.0
         any_price = False
         for mid in sorted(_gemini_usage_session.keys()):
             b = _gemini_usage_session[mid]
             mrows: list[tuple[str, str]] = [
-                ("モデル", mid),
-                ("呼出し", f"{b['calls']:,} 回"),
-                ("入力トークン", f"{b['prompt']:,}"),
-                ("出力トークン", f"{b['candidates']:,}"),
+                ("ãƒ¢ãƒ‡ãƒ«", mid),
+                ("å‘¼å‡ºã�—", f"{b['calls']:,} å›ž"),
+                ("å…¥åŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{b['prompt']:,}"),
+                ("å‡ºåŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{b['candidates']:,}"),
             ]
             if b.get("thoughts", 0):
-                mrows.append(("思考トークン", f"{b['thoughts']:,}"))
+                mrows.append(("æ€�è€ƒãƒˆãƒ¼ã‚¯ãƒ³", f"{b['thoughts']:,}"))
             mrows.append(("total_token_count", f"{b['total']:,}"))
             est = _gemini_estimate_cost_usd(
                 mid, b["prompt"], b["candidates"], b.get("thoughts", 0)
@@ -5685,68 +5633,68 @@ def build_gemini_usage_summary_text() -> str:
             if est is not None:
                 any_price = True
                 grand_usd += est
-                mrows.append(("推定USD", f"${est:.6f}"))
+                mrows.append(("æŽ¨å®šUSD", f"${est:.6f}"))
                 mrows.append(
                     (
-                        "推定JPY",
-                        f"¥{est * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                        "æŽ¨å®šJPY",
+                        f"Â¥{est * GEMINI_JPY_PER_USD:.2f}ï¼ˆ{GEMINI_JPY_PER_USD:.0f}å††/USDï¼‰",
                     )
                 )
             else:
-                mrows.append(("推定料金", "（単価未登録モデル）"))
+                mrows.append(("æŽ¨å®šæ–™é‡‘", "ï¼ˆå�˜ä¾¡æœªç™»éŒ²ãƒ¢ãƒ‡ãƒ«ï¼‰"))
             lines.append("")
-            lines.extend(_gemini_kv_table_lines(f"【この実行・モデル別】", mrows))
+            lines.extend(_gemini_kv_table_lines(f"ã€�ã�“ã�®å®Ÿè¡Œãƒ»ãƒ¢ãƒ‡ãƒ«åˆ¥ã€‘", mrows))
         if any_price:
             lines.append("")
             lines.extend(
                 _gemini_kv_table_lines(
-                    "【この実行・推定料金合計】",
+                    "ã€�ã�“ã�®å®Ÿè¡Œãƒ»æŽ¨å®šæ–™é‡‘å�ˆè¨ˆã€‘",
                     [
                         ("USD", f"${grand_usd:.6f}"),
                         (
                             "JPY",
-                            f"¥{grand_usd * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                            f"Â¥{grand_usd * GEMINI_JPY_PER_USD:.2f}ï¼ˆ{GEMINI_JPY_PER_USD:.0f}å††/USDï¼‰",
                         ),
                     ],
                 )
             )
     else:
-        lines.append(f"集計時刻: {ts}")
-        lines.append("（この実行での Gemini API 呼出しはありません）")
-    lines.append("※ トークンは API の usage_metadata に基づきます。")
+        lines.append(f"é›†è¨ˆæ™‚åˆ»: {ts}")
+        lines.append("ï¼ˆã�“ã�®å®Ÿè¡Œã�§ã�® Gemini API å‘¼å‡ºã�—ã�¯ã�‚ã‚Šã�¾ã�›ã‚“ï¼‰")
+    lines.append("â€» ãƒˆãƒ¼ã‚¯ãƒ³ã�¯ API ã�® usage_metadata ã�«åŸºã�¥ã��ã�¾ã�™ã€‚")
     lines.append(
-        "※ USD 単価はコード／環境変数の目安です。実課金は Google の請求を参照してください。"
+        "â€» USD å�˜ä¾¡ã�¯ã‚³ãƒ¼ãƒ‰ï¼�ç’°å¢ƒå¤‰æ•°ã�®ç›®å®‰ã�§ã�™ã€‚å®Ÿèª²é‡‘ã�¯ Google ã�®è«‹æ±‚ã‚’å�‚ç…§ã�—ã�¦ã��ã� ã�•ã�„ã€‚"
     )
     lines.append(
-        "※ 各 API 呼出しごとの推定料金はコンソールに出さず、下記累計 JSON にのみ積み上げます。"
+        "â€» å�„ API å‘¼å‡ºã�—ã�”ã�¨ã�®æŽ¨å®šæ–™é‡‘ã�¯ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã�«å‡ºã�•ã�šã€�ä¸‹è¨˜ç´¯è¨ˆ JSON ã�«ã�®ã�¿ç©�ã�¿ä¸Šã�’ã�¾ã�™ã€‚"
     )
 
     if ct_tot > 0:
         lines.append("")
         cum_hdr = (
-            f"【累計】{GEMINI_USAGE_CUMULATIVE_JSON_FILE} "
-            "（API_Payment フォルダ・全実行の推定値）"
+            f"ã€�ç´¯è¨ˆã€‘{GEMINI_USAGE_CUMULATIVE_JSON_FILE} "
+            "ï¼ˆAPI_Payment ãƒ•ã‚©ãƒ«ãƒ€ãƒ»å…¨å®Ÿè¡Œã�®æŽ¨å®šå€¤ï¼‰"
         )
         pt0 = int(cum.get("prompt_total") or 0)
         cc0 = int(cum.get("candidates_total") or 0)
         th0 = int(cum.get("thoughts_total") or 0)
         tt0 = int(cum.get("total_tokens_reported") or 0)
         cum_rows: list[tuple[str, str]] = [
-            ("最終更新", str(cum.get("updated_at") or "—")),
-            ("呼出し", f"{ct_tot:,} 回"),
-            ("入力トークン", f"{pt0:,}"),
-            ("出力トークン", f"{cc0:,}"),
+            ("æœ€çµ‚æ›´æ–°", str(cum.get("updated_at") or "â€”")),
+            ("å‘¼å‡ºã�—", f"{ct_tot:,} å›ž"),
+            ("å…¥åŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{pt0:,}"),
+            ("å‡ºåŠ›ãƒˆãƒ¼ã‚¯ãƒ³", f"{cc0:,}"),
         ]
         if th0:
-            cum_rows.append(("思考トークン", f"{th0:,}"))
-        cum_rows.append(("total 報告", f"{tt0:,}"))
+            cum_rows.append(("æ€�è€ƒãƒˆãƒ¼ã‚¯ãƒ³", f"{th0:,}"))
+        cum_rows.append(("total å ±å‘Š", f"{tt0:,}"))
         usd_all = float(cum.get("estimated_cost_usd_total") or 0.0)
         if usd_all > 0:
-            cum_rows.append(("推定USD 累計", f"${usd_all:.6f}"))
+            cum_rows.append(("æŽ¨å®šUSD ç´¯è¨ˆ", f"${usd_all:.6f}"))
             cum_rows.append(
                 (
-                    "推定JPY 累計",
-                    f"¥{usd_all * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
+                    "æŽ¨å®šJPY ç´¯è¨ˆ",
+                    f"Â¥{usd_all * GEMINI_JPY_PER_USD:.2f}ï¼ˆ{GEMINI_JPY_PER_USD:.0f}å††/USDï¼‰",
                 )
             )
         lines.extend(_gemini_kv_table_lines(cum_hdr, cum_rows))
@@ -5757,23 +5705,23 @@ def build_gemini_usage_summary_text() -> str:
                 if not isinstance(m, dict):
                     continue
                 mrows2: list[tuple[str, str]] = [
-                    ("モデル", mid),
-                    ("呼出し", f"{int(m.get('calls') or 0):,} 回"),
+                    ("ãƒ¢ãƒ‡ãƒ«", mid),
+                    ("å‘¼å‡ºã�—", f"{int(m.get('calls') or 0):,} å›ž"),
                     (
-                        "入力 / 出力",
+                        "å…¥åŠ› / å‡ºåŠ›",
                         f"{int(m.get('prompt') or 0):,} / {int(m.get('candidates') or 0):,}",
                     ),
                 ]
                 if int(m.get("thoughts") or 0):
-                    mrows2.append(("思考トークン", f"{int(m.get('thoughts') or 0):,}"))
+                    mrows2.append(("æ€�è€ƒãƒˆãƒ¼ã‚¯ãƒ³", f"{int(m.get('thoughts') or 0):,}"))
                 mud = float(m.get("estimated_cost_usd") or 0.0)
                 if mud > 0:
-                    mrows2.append(("推定USD 累計", f"${mud:.6f}"))
+                    mrows2.append(("æŽ¨å®šUSD ç´¯è¨ˆ", f"${mud:.6f}"))
                     mrows2.append(
-                        ("推定JPY 累計", f"¥{mud * GEMINI_JPY_PER_USD:.2f}")
+                        ("æŽ¨å®šJPY ç´¯è¨ˆ", f"Â¥{mud * GEMINI_JPY_PER_USD:.2f}")
                     )
                 lines.append("")
-                lines.extend(_gemini_kv_table_lines("【累計・モデル別】", mrows2))
+                lines.extend(_gemini_kv_table_lines("ã€�ç´¯è¨ˆãƒ»ãƒ¢ãƒ‡ãƒ«åˆ¥ã€‘", mrows2))
         trend = _gemini_usage_trend_caption_lines(cum)
         if trend:
             lines.append("")
@@ -5782,7 +5730,7 @@ def build_gemini_usage_summary_text() -> str:
 
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 利用サマリを log に書き、xlwings でメイン P 列・推移グラフへ保存（開いているブック向け）。"""
+    """Gemini åˆ©ç”¨ã‚µãƒžãƒªã‚’ log ã�«æ›¸ã��ã€�xlwings ã�§ãƒ¡ã‚¤ãƒ³ P åˆ—ãƒ»æŽ¨ç§»ã‚°ãƒ©ãƒ•ã�¸ä¿�å­˜ï¼ˆé–‹ã�„ã�¦ã�„ã‚‹ãƒ–ãƒƒã‚¯å�‘ã�‘ï¼‰ã€‚"""
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
     xw_ok = False
@@ -5793,7 +5741,7 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             )
         except Exception as ex:
             logging.warning(
-                "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
+                "%s: AI ã‚µãƒžãƒªã�® xlwings æ›¸ã��è¾¼ã�¿ã�§ä¾‹å¤–: %s", log_prefix, ex
             )
     try:
         os.makedirs(log_dir, exist_ok=True)
@@ -5806,19 +5754,19 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
         if int(cum2.get("calls_total") or 0) > 0:
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
-        logging.debug("Gemini バケット CSV 出力で例外（続行）: %s", ex)
+        logging.debug("Gemini ãƒ�ã‚±ãƒƒãƒˆ CSV å‡ºåŠ›ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s", ex)
     if xw_ok:
         return
     if text.strip():
         logging.info(
-            "%s: メイン P 列・グラフを xlwings で保存できませんでした。"
-            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
+            "%s: ãƒ¡ã‚¤ãƒ³ P åˆ—ãƒ»ã‚°ãƒ©ãƒ•ã‚’ xlwings ã�§ä¿�å­˜ã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿã€‚"
+            " %s ã�«å‡ºåŠ›æ¸ˆã�¿ â†’ ãƒžã‚¯ãƒ­ã€Œãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆ_Geminiåˆ©ç”¨ã‚µãƒžãƒªã‚’Påˆ—ã�«å��æ˜ ã€�ã�§ P åˆ—ã�®ã�¿å��æ˜ ã�§ã��ã�¾ã�™ã€‚",
             log_prefix,
             path,
         )
     else:
         logging.info(
-            "%s: Gemini 未使用: サマリを空で %s に出力。",
+            "%s: Gemini æœªä½¿ç”¨: ã‚µãƒžãƒªã‚’ç©ºã�§ %s ã�«å‡ºåŠ›ã€‚",
             log_prefix,
             path,
         )
@@ -5829,7 +5777,7 @@ def _try_write_main_sheet_gemini_usage_summary(phase: str) -> None:
         write_main_sheet_gemini_usage_summary(TASKS_INPUT_WORKBOOK, phase)
     except Exception as ex:
         logging.warning(
-            "%s: メインシートへの AI 利用サマリ書き込みで例外（続行）: %s", phase, ex
+            "%s: ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã�¸ã�® AI åˆ©ç”¨ã‚µãƒžãƒªæ›¸ã��è¾¼ã�¿ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s", phase, ex
         )
 
 
@@ -5838,7 +5786,7 @@ def _plan_sheet_write_global_parse_block_to_ws(
     global_priority_override: dict,
     when_str: str,
 ) -> None:
-    """既に開いている「配台計画_タスク入力」相当シートへ AX:AY のグローバル解析ブロックを書く。"""
+    """æ—¢ã�«é–‹ã�„ã�¦ã�„ã‚‹ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ç›¸å½“ã‚·ãƒ¼ãƒˆã�¸ AX:AY ã�®ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ãƒ–ãƒ­ãƒƒã‚¯ã‚’æ›¸ã��ã€‚"""
     gpo = global_priority_override or {}
     lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
     vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
@@ -5848,60 +5796,60 @@ def _plan_sheet_write_global_parse_block_to_ws(
         ws.cell(row=1 + i, column=vc, value=None)
     align_top = Alignment(wrap_text=True, vertical="top")
     pairs: list[tuple[str, str]] = [
-        ("【グローバルコメント解析】", "参照用・段階2で自動記録"),
+        ("ã€�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã€‘", "å�‚ç…§ç”¨ãƒ»æ®µéšŽ2ã�§è‡ªå‹•è¨˜éŒ²"),
         (
-            "※二重適用について",
-            "配台への反映はメインシート「グローバルコメント」からのみ行われます。"
-            "このAX〜AY列は読み取られません。編集しても次回実行まで配台に効きません。"
-            "原文はメイン欄を参照してください。",
+            "â€»äºŒé‡�é�©ç”¨ã�«ã�¤ã�„ã�¦",
+            "é…�å�°ã�¸ã�®å��æ˜ ã�¯ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�ã�‹ã‚‰ã�®ã�¿è¡Œã‚�ã‚Œã�¾ã�™ã€‚"
+            "ã�“ã�®AXã€œAYåˆ—ã�¯èª­ã�¿å�–ã‚‰ã‚Œã�¾ã�›ã‚“ã€‚ç·¨é›†ã�—ã�¦ã‚‚æ¬¡å›žå®Ÿè¡Œã�¾ã�§é…�å�°ã�«åŠ¹ã��ã�¾ã�›ã‚“ã€‚"
+            "åŽŸæ–‡ã�¯ãƒ¡ã‚¤ãƒ³æ¬„ã‚’å�‚ç…§ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
         ),
-        ("計画基準日時", (when_str or "").strip() or "―"),
+        ("è¨ˆç”»åŸºæº–æ—¥æ™‚", (when_str or "").strip() or "â€•"),
         (
-            "工場休業日",
+            "å·¥å ´ä¼‘æ¥­æ—¥",
             ", ".join(str(x) for x in (gpo.get("factory_closure_dates") or []))
             if gpo.get("factory_closure_dates")
-            else "（なし）",
+            else "ï¼ˆã�ªã�—ï¼‰",
         ),
         (
-            "スキル要件を無視",
-            "はい" if gpo.get("ignore_skill_requirements") else "いいえ",
+            "ã‚¹ã‚­ãƒ«è¦�ä»¶ã‚’ç„¡è¦–",
+            "ã�¯ã�„" if gpo.get("ignore_skill_requirements") else "ã�„ã�„ã�ˆ",
         ),
         (
-            "need人数1固定",
-            "はい" if gpo.get("ignore_need_minimum") else "いいえ",
+            "needäººæ•°1å›ºå®š",
+            "ã�¯ã�„" if gpo.get("ignore_need_minimum") else "ã�„ã�„ã�ˆ",
         ),
         (
-            "配台制限の撤廃",
-            "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
+            "é…�å�°åˆ¶é™�ã�®æ’¤å»ƒ",
+            "ã�¯ã�„" if gpo.get("abolish_all_scheduling_limits") else "ã�„ã�„ã�ˆ",
         ),
         (
-            "グローバルOP指名",
+            "ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«OPæŒ‡å��",
             json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
             if gpo.get("task_preferred_operators")
-            else "（なし）",
+            else "ï¼ˆã�ªã�—ï¼‰",
         ),
         (
-            "日付×工程チーム指名",
+            "æ—¥ä»˜Ã—å·¥ç¨‹ãƒ�ãƒ¼ãƒ æŒ‡å��",
             json.dumps(
                 gpo.get("global_day_process_operator_rules") or [],
                 ensure_ascii=False,
             )
             if gpo.get("global_day_process_operator_rules")
-            else "（なし）",
+            else "ï¼ˆã�ªã�—ï¼‰",
         ),
         (
-            "グローバル速度ルール",
+            "ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«é€Ÿåº¦ãƒ«ãƒ¼ãƒ«",
             json.dumps(gpo.get("global_speed_rules") or [], ensure_ascii=False)
             if gpo.get("global_speed_rules")
-            else "（なし）",
+            else "ï¼ˆã�ªã�—ï¼‰",
         ),
         (
-            "未適用メモ(AI)",
-            str(gpo.get("scheduler_notes_ja") or "").strip() or "（なし）",
+            "æœªé�©ç”¨ãƒ¡ãƒ¢(AI)",
+            str(gpo.get("scheduler_notes_ja") or "").strip() or "ï¼ˆã�ªã�—ï¼‰",
         ),
         (
-            "AI要約",
-            str(gpo.get("interpretation_ja") or "").strip() or "（なし）",
+            "AIè¦�ç´„",
+            str(gpo.get("interpretation_ja") or "").strip() or "ï¼ˆã�ªã�—ï¼‰",
         ),
     ]
     for i, (lab, val) in enumerate(pairs):
@@ -5919,12 +5867,12 @@ def write_plan_sheet_global_comment_parse_block(
     global_priority_override: dict,
     *,
     when_str: str,
-    log_prefix: str = "段階2",
+    log_prefix: str = "æ®µéšŽ2",
 ) -> bool:
     """
-    「配台計画_タスク入力」シートの右端付近（AX:AY）に、グローバルコメントの解析結果を書き込む。
-    メイン原文はここに転記しない（メイン欄との重複・誤解を避ける）。本列は再読込されず参照専用。
-    Excel でブックを開いたままだと保存に失敗することがある（他の openpyxl 書込と同様）。
+    ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã‚·ãƒ¼ãƒˆã�®å�³ç«¯ä»˜è¿‘ï¼ˆAX:AYï¼‰ã�«ã€�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã�®è§£æž�çµ�æžœã‚’æ›¸ã��è¾¼ã‚€ã€‚
+    ãƒ¡ã‚¤ãƒ³åŽŸæ–‡ã�¯ã�“ã�“ã�«è»¢è¨˜ã�—ã�ªã�„ï¼ˆãƒ¡ã‚¤ãƒ³æ¬„ã�¨ã�®é‡�è¤‡ãƒ»èª¤è§£ã‚’é�¿ã�‘ã‚‹ï¼‰ã€‚æœ¬åˆ—ã�¯å†�èª­è¾¼ã�•ã‚Œã�šå�‚ç…§å°‚ç”¨ã€‚
+    Excel ã�§ãƒ–ãƒƒã‚¯ã‚’é–‹ã�„ã�Ÿã�¾ã�¾ã� ã�¨ä¿�å­˜ã�«å¤±æ•—ã�™ã‚‹ã�“ã�¨ã�Œã�‚ã‚‹ï¼ˆä»–ã�® openpyxl æ›¸è¾¼ã�¨å�Œæ§˜ï¼‰ã€‚
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -5933,7 +5881,7 @@ def write_plan_sheet_global_comment_parse_block(
     wb = None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: ブックに「%s」があるため openpyxl でグローバルコメント解析を配台シートへ書き込みません。",
+            "%s: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã‚’é…�å�°ã‚·ãƒ¼ãƒˆã�¸æ›¸ã��è¾¼ã�¿ã�¾ã�›ã‚“ã€‚",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -5944,7 +5892,7 @@ def write_plan_sheet_global_comment_parse_block(
         )
     except Exception as ex:
         logging.info(
-            "%s: グローバルコメント解析の配台シート書込のためブックを開けません: %s",
+            "%s: ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã�®é…�å�°ã‚·ãƒ¼ãƒˆæ›¸è¾¼ã�®ã�Ÿã‚�ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“: %s",
             log_prefix,
             ex,
         )
@@ -5952,7 +5900,7 @@ def write_plan_sheet_global_comment_parse_block(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: シート '%s' が無いためグローバルコメント解析の反映をスキップ。",
+                "%s: ã‚·ãƒ¼ãƒˆ '%s' ã�Œç„¡ã�„ã�Ÿã‚�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã�®å��æ˜ ã‚’ã‚¹ã‚­ãƒƒãƒ—ã€‚",
                 log_prefix,
                 sheet_name,
             )
@@ -5963,7 +5911,7 @@ def write_plan_sheet_global_comment_parse_block(
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
         wb.save(wb_path)
         logging.info(
-            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました。",
+            "%s: ã€Œ%sã€�%s:%s åˆ—ã�«ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã‚’ä¿�å­˜ã�—ã�¾ã�—ã�Ÿã€‚",
             log_prefix,
             sheet_name,
             get_column_letter(lc),
@@ -5972,14 +5920,14 @@ def write_plan_sheet_global_comment_parse_block(
         return True
     except OSError as ex:
         logging.warning(
-            "%s: グローバルコメント解析を配台シートへ保存できませんでした（Excel で開いたまま等）: %s",
+            "%s: ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã‚’é…�å�°ã‚·ãƒ¼ãƒˆã�¸ä¿�å­˜ã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆExcel ã�§é–‹ã�„ã�Ÿã�¾ã�¾ç­‰ï¼‰: %s",
             log_prefix,
             ex,
         )
         return False
     except Exception as ex:
         logging.warning(
-            "%s: グローバルコメント解析の配台シート書込で例外: %s", log_prefix, ex
+            "%s: ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ã�®é…�å�°ã‚·ãƒ¼ãƒˆæ›¸è¾¼ã�§ä¾‹å¤–: %s", log_prefix, ex
         )
         return False
     finally:
@@ -6000,11 +5948,11 @@ def _try_write_plan_sheet_global_comment_parse_block(
             PLAN_INPUT_SHEET_NAME,
             global_priority_override,
             when_str=when_str,
-            log_prefix="段階2",
+            log_prefix="æ®µéšŽ2",
         )
     except Exception as ex:
         logging.warning(
-            "段階2: 配台シートへのグローバルコメント解析書き込みで例外（続行）: %s",
+            "æ®µéšŽ2: é…�å�°ã‚·ãƒ¼ãƒˆã�¸ã�®ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�æ›¸ã��è¾¼ã�¿ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s",
             ex,
         )
 
@@ -6023,50 +5971,50 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
             when_str=when_str,
             num_data_rows=num_data_rows,
             conflicts_by_row=conflicts_by_row,
-            log_prefix="段階2",
+            log_prefix="æ®µéšŽ2",
         )
     except Exception as ex:
         logging.warning(
-            "段階2: 配台シートへのグローバル解析＋矛盾着色（1回保存）で例外（続行）: %s",
+            "æ®µéšŽ2: é…�å�°ã‚·ãƒ¼ãƒˆã�¸ã�®ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ï¼‹çŸ›ç›¾ç�€è‰²ï¼ˆ1å›žä¿�å­˜ï¼‰ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s",
             ex,
         )
 
 
 def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_text=None):
-    """特別指定_備考向け Gemini のプロンプト・生テキスト・抽出JSON・パース結果を1ファイルに残す。"""
+    """ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒå�‘ã�‘ Gemini ã�®ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆãƒ»ç”Ÿãƒ†ã‚­ã‚¹ãƒˆãƒ»æŠ½å‡ºJSONãƒ»ãƒ‘ãƒ¼ã‚¹çµ�æžœã‚’1ãƒ•ã‚¡ã‚¤ãƒ«ã�«æ®‹ã�™ã€‚"""
     path = os.path.join(log_dir, TASK_SPECIAL_AI_LAST_RESPONSE_FILE)
     try:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             if prompt_text is not None and str(prompt_text).strip():
-                f.write("=== Gemini へ送信したプロンプト（全文） ===\n")
+                f.write("=== Gemini ã�¸é€�ä¿¡ã�—ã�Ÿãƒ—ãƒ­ãƒ³ãƒ—ãƒˆï¼ˆå…¨æ–‡ï¼‰ ===\n")
                 f.write(str(prompt_text).strip())
                 f.write("\n\n")
-            f.write("=== Gemini 返却テキスト（モデル出力そのまま） ===\n")
+            f.write("=== Gemini è¿”å�´ãƒ†ã‚­ã‚¹ãƒˆï¼ˆãƒ¢ãƒ‡ãƒ«å‡ºåŠ›ã��ã�®ã�¾ã�¾ï¼‰ ===\n")
             f.write(raw_text or "")
             f.write(
-                "\n\n=== AI が返したテキストからクライアントが切り出した JSON 文字列 ===\n"
-                "（※ユーザー特別指定の解析に正規表現は使っていません。モデル応答のパース用です）\n"
+                "\n\n=== AI ã�Œè¿”ã�—ã�Ÿãƒ†ã‚­ã‚¹ãƒˆã�‹ã‚‰ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã�Œåˆ‡ã‚Šå‡ºã�—ã�Ÿ JSON æ–‡å­—åˆ— ===\n"
+                "ï¼ˆâ€»ãƒ¦ãƒ¼ã‚¶ãƒ¼ç‰¹åˆ¥æŒ‡å®šã�®è§£æž�ã�«æ­£è¦�è¡¨ç�¾ã�¯ä½¿ã�£ã�¦ã�„ã�¾ã�›ã‚“ã€‚ãƒ¢ãƒ‡ãƒ«å¿œç­”ã�®ãƒ‘ãƒ¼ã‚¹ç”¨ã�§ã�™ï¼‰\n"
             )
-            f.write(extracted_json_str if extracted_json_str else "(抽出なし)")
-            f.write("\n\n=== json.loads 後（依頼NOキー） ===\n")
+            f.write(extracted_json_str if extracted_json_str else "(æŠ½å‡ºã�ªã�—)")
+            f.write("\n\n=== json.loads å¾Œï¼ˆä¾�é ¼NOã‚­ãƒ¼ï¼‰ ===\n")
             if isinstance(parsed, dict):
                 f.write(json.dumps(parsed, ensure_ascii=False, indent=2))
             else:
-                f.write("(パースできず)")
+                f.write("(ãƒ‘ãƒ¼ã‚¹ã�§ã��ã�š)")
         logging.info(
-            "タスク特別指定: プロンプト＋AI応答の詳細 → %s",
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆï¼‹AIå¿œç­”ã�®è©³ç´° â†’ %s",
             path,
         )
     except OSError as ex:
-        logging.warning("タスク特別指定: AI応答ファイル保存に失敗: %s", ex)
+        logging.warning("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AIå¿œç­”ãƒ•ã‚¡ã‚¤ãƒ«ä¿�å­˜ã�«å¤±æ•—: %s", ex)
     if isinstance(parsed, dict) and parsed:
         logging.info(
-            "タスク特別指定: 解析された依頼NO: %s",
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: è§£æž�ã�•ã‚Œã�Ÿä¾�é ¼NO: %s",
             ", ".join(sorted(parsed.keys(), key=lambda x: str(x))),
         )
         for tid_k in sorted(parsed.keys(), key=lambda x: str(x)):
             logging.info(
-                "  依頼NO [%s] AI解析フィールド: %s",
+                "  ä¾�é ¼NO [%s] AIè§£æž�ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰: %s",
                 tid_k,
                 json.dumps(parsed[tid_k], ensure_ascii=False),
             )
@@ -6074,8 +6022,8 @@ def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_t
 
 def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
     """
-    API レスポンスを JSON 化しログ／ファイルへ記録。失敗時は None。
-    ユーザーの特別指定文言には触れず、モデル出力から JSON ブロックを取り出す処理のみ。
+    API ãƒ¬ã‚¹ãƒ�ãƒ³ã‚¹ã‚’ JSON åŒ–ã�—ãƒ­ã‚°ï¼�ãƒ•ã‚¡ã‚¤ãƒ«ã�¸è¨˜éŒ²ã€‚å¤±æ•—æ™‚ã�¯ Noneã€‚
+    ãƒ¦ãƒ¼ã‚¶ãƒ¼ã�®ç‰¹åˆ¥æŒ‡å®šæ–‡è¨€ã�«ã�¯è§¦ã‚Œã�šã€�ãƒ¢ãƒ‡ãƒ«å‡ºåŠ›ã�‹ã‚‰ JSON ãƒ–ãƒ­ãƒƒã‚¯ã‚’å�–ã‚Šå‡ºã�™å‡¦ç�†ã�®ã�¿ã€‚
     """
     raw = _gemini_result_text(res)
     if raw:
@@ -6092,8 +6040,8 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
     if not match:
         _log_task_special_ai_response(raw, {}, None, prompt_text)
         logging.warning(
-            "タスク特別指定: AI応答から JSON を抽出できませんでした。生テキスト先頭 3000 文字:\n%s",
-            (raw[:3000] if raw else "(空)"),
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AIå¿œç­”ã�‹ã‚‰ JSON ã‚’æŠ½å‡ºã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿã€‚ç”Ÿãƒ†ã‚­ã‚¹ãƒˆå…ˆé ­ 3000 æ–‡å­—:\n%s",
+            (raw[:3000] if raw else "(ç©º)"),
         )
         return None
     extracted = match.group(0)
@@ -6101,11 +6049,11 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
         parsed = json.loads(extracted)
     except json.JSONDecodeError as je:
         _log_task_special_ai_response(raw, None, extracted, prompt_text)
-        logging.warning("タスク特別指定: JSON パース失敗: %s", je)
+        logging.warning("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: JSON ãƒ‘ãƒ¼ã‚¹å¤±æ•—: %s", je)
         return None
     if not isinstance(parsed, dict):
         _log_task_special_ai_response(raw, None, extracted, prompt_text)
-        logging.warning("タスク特別指定: トップレベルが JSON オブジェクトではありません。")
+        logging.warning("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ãƒˆãƒƒãƒ—ãƒ¬ãƒ™ãƒ«ã�Œ JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�§ã�¯ã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
         return None
     _log_task_special_ai_response(raw, parsed, extracted, prompt_text)
     return parsed
@@ -6113,17 +6061,17 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
 
 def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: dict | None = None):
     """
-    「配台計画_タスク入力」の「特別指定_備考」を AI で構造化（セルに値がある項目は後段でセルを優先）。
-    「配台不要」がオンな行はプロンプトに載せない（API 節約・当該行は配台しないため）。
-    担当OP指名はプロンプトの返却契約でモデルに preferred_operator を出力させる（備考を正規表現で切り出す処理は行わない）。
-    json/ai_remarks_cache.json に TTL AI_CACHE_TTL_SECONDS でキャッシュ（同一入力・同一基準年なら API を呼ばない）。
-    依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に含めて日付解釈の変化とキャッシュの食い違いを防ぐ。
+    ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã�®ã€Œç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã€�ã‚’ AI ã�§æ§‹é€ åŒ–ï¼ˆã‚»ãƒ«ã�«å€¤ã�Œã�‚ã‚‹é …ç›®ã�¯å¾Œæ®µã�§ã‚»ãƒ«ã‚’å„ªå…ˆï¼‰ã€‚
+    ã€Œé…�å�°ä¸�è¦�ã€�ã�Œã‚ªãƒ³ã�ªè¡Œã�¯ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�«è¼‰ã�›ã�ªã�„ï¼ˆAPI ç¯€ç´„ãƒ»å½“è©²è¡Œã�¯é…�å�°ã�—ã�ªã�„ã�Ÿã‚�ï¼‰ã€‚
+    æ‹…å½“OPæŒ‡å��ã�¯ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�®è¿”å�´å¥‘ç´„ã�§ãƒ¢ãƒ‡ãƒ«ã�« preferred_operator ã‚’å‡ºåŠ›ã�•ã�›ã‚‹ï¼ˆå‚™è€ƒã‚’æ­£è¦�è¡¨ç�¾ã�§åˆ‡ã‚Šå‡ºã�™å‡¦ç�†ã�¯è¡Œã‚�ã�ªã�„ï¼‰ã€‚
+    json/ai_remarks_cache.json ã�« TTL AI_CACHE_TTL_SECONDS ã�§ã‚­ãƒ£ãƒƒã‚·ãƒ¥ï¼ˆå�Œä¸€å…¥åŠ›ãƒ»å�Œä¸€åŸºæº–å¹´ã�ªã‚‰ API ã‚’å‘¼ã�°ã�ªã�„ï¼‰ã€‚
+    ä¾�é ¼NOã�¯æ•°å€¤è¡¨è¨˜ãƒ»å…¨è§’ã�ªã�©ã‚’æ­£è¦�åŒ–ã�—ã�¦ã‚­ãƒ¼ã‚’å®‰å®šåŒ–ã�—ã€�åŸºæº–å¹´ã�¯æŒ‡ç´‹ã�«å�«ã‚�ã�¦æ—¥ä»˜è§£é‡ˆã�®å¤‰åŒ–ã�¨ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�®é£Ÿã�„é�•ã�„ã‚’é˜²ã��ã€‚
 
-    戻り値の例: 依頼NO -> オブジェクト、または同一依頼NOに備考行が複数ある場合はオブジェクトの配列。
-      process_name, machine_name … 当該備考セルがある行の工程名・機械名（プロンプトの行と一致）
-      restrict_to_process_name, restrict_to_machine_name … 省略または空なら同一依頼NOの全工程・全機械行に適用。
-      その他 required_op, speed_override, task_efficiency, priority, start_date, start_time,
-      target_completion_date, ship_by_date, preferred_operator など。
+    æˆ»ã‚Šå€¤ã�®ä¾‹: ä¾�é ¼NO -> ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã€�ã�¾ã�Ÿã�¯å�Œä¸€ä¾�é ¼NOã�«å‚™è€ƒè¡Œã�Œè¤‡æ•°ã�‚ã‚‹å ´å�ˆã�¯ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®é…�åˆ—ã€‚
+      process_name, machine_name â€¦ å½“è©²å‚™è€ƒã‚»ãƒ«ã�Œã�‚ã‚‹è¡Œã�®å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ï¼ˆãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�®è¡Œã�¨ä¸€è‡´ï¼‰
+      restrict_to_process_name, restrict_to_machine_name â€¦ çœ�ç•¥ã�¾ã�Ÿã�¯ç©ºã�ªã‚‰å�Œä¸€ä¾�é ¼NOã�®å…¨å·¥ç¨‹ãƒ»å…¨æ©Ÿæ¢°è¡Œã�«é�©ç”¨ã€‚
+      ã��ã�®ä»– required_op, speed_override, task_efficiency, priority, start_date, start_time,
+      target_completion_date, ship_by_date, preferred_operator ã�ªã�©ã€‚
     """
     lines = _task_special_prompt_lines(tasks_df)
     if not lines:
@@ -6139,18 +6087,18 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 n_rem_only += 1
         miss_col = PLAN_COL_SPECIAL_REMARK not in tasks_df.columns
         logging.warning(
-            "タスク特別指定: AI 解析対象がありません（「%s」列は%s）。"
-            "总行数=%s、依頼NOのある行=%s、備考が入っている行=%s。"
-            "段階2実行前にブックを保存し、本当に「%s」列へ入力しているか確認してください。",
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AI è§£æž�å¯¾è±¡ã�Œã�‚ã‚Šã�¾ã�›ã‚“ï¼ˆã€Œ%sã€�åˆ—ã�¯%sï¼‰ã€‚"
+            "æ€»è¡Œæ•°=%sã€�ä¾�é ¼NOã�®ã�‚ã‚‹è¡Œ=%sã€�å‚™è€ƒã�Œå…¥ã�£ã�¦ã�„ã‚‹è¡Œ=%sã€‚"
+            "æ®µéšŽ2å®Ÿè¡Œå‰�ã�«ãƒ–ãƒƒã‚¯ã‚’ä¿�å­˜ã�—ã€�æœ¬å½“ã�«ã€Œ%sã€�åˆ—ã�¸å…¥åŠ›ã�—ã�¦ã�„ã‚‹ã�‹ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
             PLAN_COL_SPECIAL_REMARK,
-            "見つかりません" if miss_col else "空の可能性があります",
+            "è¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“" if miss_col else "ç©ºã�®å�¯èƒ½æ€§ã�Œã�‚ã‚Šã�¾ã�™",
             n_rows,
             n_tid_raw,
             n_rem_only,
             PLAN_COL_SPECIAL_REMARK,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行なし）"
+            ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã‚¹ã‚­ãƒƒãƒ—ï¼ˆå¯¾è±¡è¡Œã�ªã�—ï¼‰"
         return {}
 
     blob = "\n".join(sorted(lines))
@@ -6164,110 +6112,110 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     )
     if cached_parsed is not None:
         logging.info(
-            "タスク特別指定: キャッシュヒット（%s 件・基準年=%s）。Gemini は呼びません。",
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ’ãƒƒãƒˆï¼ˆ%s ä»¶ãƒ»åŸºæº–å¹´=%sï¼‰ã€‚Gemini ã�¯å‘¼ã�³ã�¾ã�›ã‚“ã€‚",
             len(lines),
             ref_y,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�ªã�—ï¼ˆã‚­ãƒ£ãƒƒã‚·ãƒ¥ä½¿ç”¨ï¼‰"
         out = copy.deepcopy(cached_parsed)
         if isinstance(out, dict):
             _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
         return out
 
     logging.info(
-        "タスク特別指定: キャッシュなし。Gemini で %s 件の備考を解析します（基準年=%s）。",
+        "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�ªã�—ã€‚Gemini ã�§ %s ä»¶ã�®å‚™è€ƒã‚’è§£æž�ã�—ã�¾ã�™ï¼ˆåŸºæº–å¹´=%sï¼‰ã€‚",
         len(lines),
         ref_y,
     )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のためタスク特別指定のAI解析をスキップしました。")
+        logging.info("GEMINI_API_KEY æœªè¨­å®šã�®ã�Ÿã‚�ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®šã�®AIè§£æž�ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
+            ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�ªã�—ï¼ˆAPIã‚­ãƒ¼æœªè¨­å®šï¼‰"
         return {}
 
     prompt = f"""
-あなたは工場の配台計画向けに、Excel「特別指定_備考」欄への自由記述を読み、配台ロジックが使えるフィールドだけに落とし込むアシスタントです。
+ã�‚ã�ªã�Ÿã�¯å·¥å ´ã�®é…�å�°è¨ˆç”»å�‘ã�‘ã�«ã€�Excelã€Œç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã€�æ¬„ã�¸ã�®è‡ªç”±è¨˜è¿°ã‚’èª­ã�¿ã€�é…�å�°ãƒ­ã‚¸ãƒƒã‚¯ã�Œä½¿ã�ˆã‚‹ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã� ã�‘ã�«è�½ã�¨ã�—è¾¼ã‚€ã‚¢ã‚·ã‚¹ã‚¿ãƒ³ãƒˆã�§ã�™ã€‚
 
-【最重要】
-1) 【特別指定原文】の各行は、ユーザーがセルに入力した文字列を **改変・要約・断ち切りはしておらず**（先頭末尾の空白のみ除去）、そのまま渡しています。**原文の事実や意図を別の文言に置き換えないでください。**
-2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭が {{ 、末尾が }} ）。説明文・マークダウン・コードフェンスは禁止。
-3) JSON のトップレベルキーは、各行の **依頼NO【と】の間の文字列のみ** と **完全一致** させること。**備考本文**に書かれた品番・原反名・製品コード（例: 20010 で始まる番号列）をキーにしてはならない。備考がそのような番号で始まっていても、キーは必ず【】内の依頼NOだけとする。
+ã€�æœ€é‡�è¦�ã€‘
+1) ã€�ç‰¹åˆ¥æŒ‡å®šåŽŸæ–‡ã€‘ã�®å�„è¡Œã�¯ã€�ãƒ¦ãƒ¼ã‚¶ãƒ¼ã�Œã‚»ãƒ«ã�«å…¥åŠ›ã�—ã�Ÿæ–‡å­—åˆ—ã‚’ **æ”¹å¤‰ãƒ»è¦�ç´„ãƒ»æ–­ã�¡åˆ‡ã‚Šã�¯ã�—ã�¦ã�Šã‚‰ã�š**ï¼ˆå…ˆé ­æœ«å°¾ã�®ç©ºç™½ã�®ã�¿é™¤åŽ»ï¼‰ã€�ã��ã�®ã�¾ã�¾æ¸¡ã�—ã�¦ã�„ã�¾ã�™ã€‚**åŽŸæ–‡ã�®äº‹å®Ÿã‚„æ„�å›³ã‚’åˆ¥ã�®æ–‡è¨€ã�«ç½®ã��æ�›ã�ˆã�ªã�„ã�§ã��ã� ã�•ã�„ã€‚**
+2) ã�‚ã�ªã�Ÿã�®å¿œç­”ã�¯ **1å€‹ã�® JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�®ã�¿**ï¼ˆå…ˆé ­ã�Œ {{ ã€�æœ«å°¾ã�Œ }} ï¼‰ã€‚èª¬æ˜Žæ–‡ãƒ»ãƒžãƒ¼ã‚¯ãƒ€ã‚¦ãƒ³ãƒ»ã‚³ãƒ¼ãƒ‰ãƒ•ã‚§ãƒ³ã‚¹ã�¯ç¦�æ­¢ã€‚
+3) JSON ã�®ãƒˆãƒƒãƒ—ãƒ¬ãƒ™ãƒ«ã‚­ãƒ¼ã�¯ã€�å�„è¡Œã�® **ä¾�é ¼NOã€�ã�¨ã€‘ã�®é–“ã�®æ–‡å­—åˆ—ã�®ã�¿** ã�¨ **å®Œå…¨ä¸€è‡´** ã�•ã�›ã‚‹ã�“ã�¨ã€‚**å‚™è€ƒæœ¬æ–‡**ã�«æ›¸ã�‹ã‚Œã�Ÿå“�ç•ªãƒ»åŽŸå��å��ãƒ»è£½å“�ã‚³ãƒ¼ãƒ‰ï¼ˆä¾‹: 20010 ã�§å§‹ã�¾ã‚‹ç•ªå�·åˆ—ï¼‰ã‚’ã‚­ãƒ¼ã�«ã�—ã�¦ã�¯ã�ªã‚‰ã�ªã�„ã€‚å‚™è€ƒã�Œã��ã�®ã‚ˆã�†ã�ªç•ªå�·ã�§å§‹ã�¾ã�£ã�¦ã�„ã�¦ã‚‚ã€�ã‚­ãƒ¼ã�¯å¿…ã�šã€�ã€‘å†…ã�®ä¾�é ¼NOã� ã�‘ã�¨ã�™ã‚‹ã€‚
 
-【返却JSONの契約（この節どおりに出力すること）】
-■ トップレベル
-- キー: 上記【特別指定原文】の **依頼NO【…】の括弧内** の文字列と **完全一致**（表記・ハイフン・英大文字小文字を原文どおり）。備考本文中の数字列をキーにしない。
-- 値: 次のいずれか。
-  (A) **JSONオブジェクト1つ** … 当該依頼NOの備考がプロンプト上 **1行だけ** のとき。
-  (B) **JSON配列**（要素はオブジェクト）… 同一依頼NOで工程名・機械名が異なる備考行が **複数** あるとき。要素の順はプロンプトの行順と対応させる。
+ã€�è¿”å�´JSONã�®å¥‘ç´„ï¼ˆã�“ã�®ç¯€ã�©ã�Šã‚Šã�«å‡ºåŠ›ã�™ã‚‹ã�“ã�¨ï¼‰ã€‘
+â–  ãƒˆãƒƒãƒ—ãƒ¬ãƒ™ãƒ«
+- ã‚­ãƒ¼: ä¸Šè¨˜ã€�ç‰¹åˆ¥æŒ‡å®šåŽŸæ–‡ã€‘ã�® **ä¾�é ¼NOã€�â€¦ã€‘ã�®æ‹¬å¼§å†…** ã�®æ–‡å­—åˆ—ã�¨ **å®Œå…¨ä¸€è‡´**ï¼ˆè¡¨è¨˜ãƒ»ãƒ�ã‚¤ãƒ•ãƒ³ãƒ»è‹±å¤§æ–‡å­—å°�æ–‡å­—ã‚’åŽŸæ–‡ã�©ã�Šã‚Šï¼‰ã€‚å‚™è€ƒæœ¬æ–‡ä¸­ã�®æ•°å­—åˆ—ã‚’ã‚­ãƒ¼ã�«ã�—ã�ªã�„ã€‚
+- å€¤: æ¬¡ã�®ã�„ã�šã‚Œã�‹ã€‚
+  (A) **JSONã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ1ã�¤** â€¦ å½“è©²ä¾�é ¼NOã�®å‚™è€ƒã�Œãƒ—ãƒ­ãƒ³ãƒ—ãƒˆä¸Š **1è¡Œã� ã�‘** ã�®ã�¨ã��ã€‚
+  (B) **JSONé…�åˆ—**ï¼ˆè¦�ç´ ã�¯ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆï¼‰â€¦ å�Œä¸€ä¾�é ¼NOã�§å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�Œç•°ã�ªã‚‹å‚™è€ƒè¡Œã�Œ **è¤‡æ•°** ã�‚ã‚‹ã�¨ã��ã€‚è¦�ç´ ã�®é †ã�¯ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆã�®è¡Œé †ã�¨å¯¾å¿œã�•ã�›ã‚‹ã€‚
 
-■ process_name（文字列）・machine_name（文字列）— **必須**
-- 当該備考に対応するプロンプト行の **工程名「…」**・**機械名「…」** の値と **一致** させる（「（空）」のときは空文字列 ""）。
-- ログ・トレース用。省略不可。
+â–  process_nameï¼ˆæ–‡å­—åˆ—ï¼‰ãƒ»machine_nameï¼ˆæ–‡å­—åˆ—ï¼‰â€” **å¿…é ˆ**
+- å½“è©²å‚™è€ƒã�«å¯¾å¿œã�™ã‚‹ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆè¡Œã�® **å·¥ç¨‹å��ã€Œâ€¦ã€�**ãƒ»**æ©Ÿæ¢°å��ã€Œâ€¦ã€�** ã�®å€¤ã�¨ **ä¸€è‡´** ã�•ã�›ã‚‹ï¼ˆã€Œï¼ˆç©ºï¼‰ã€�ã�®ã�¨ã��ã�¯ç©ºæ–‡å­—åˆ— ""ï¼‰ã€‚
+- ãƒ­ã‚°ãƒ»ãƒˆãƒ¬ãƒ¼ã‚¹ç”¨ã€‚çœ�ç•¥ä¸�å�¯ã€‚
 
-■ restrict_to_process_name（文字列）・restrict_to_machine_name（文字列）— **任意**
-- **原文が「特定の工程だけ」「この機械だけ」など、適用範囲を絞っているときだけ** 出力する。
-- **原文に工程名・機械名の限定が無い**（依頼全体・全行程への指示）ときは **両方とも省略** するか **空文字列 ""** とする。
-- その場合、配台ロジックは **同一依頼NOの別行（例: エンボス行と分割行）にも同じ指示を適用** する。
-- 絞る場合は、原文で示された識別名を入れる（Excel の工程名・機械名と照合しやすい表記）。
+â–  restrict_to_process_nameï¼ˆæ–‡å­—åˆ—ï¼‰ãƒ»restrict_to_machine_nameï¼ˆæ–‡å­—åˆ—ï¼‰â€” **ä»»æ„�**
+- **åŽŸæ–‡ã�Œã€Œç‰¹å®šã�®å·¥ç¨‹ã� ã�‘ã€�ã€Œã�“ã�®æ©Ÿæ¢°ã� ã�‘ã€�ã�ªã�©ã€�é�©ç”¨ç¯„å›²ã‚’çµžã�£ã�¦ã�„ã‚‹ã�¨ã��ã� ã�‘** å‡ºåŠ›ã�™ã‚‹ã€‚
+- **åŽŸæ–‡ã�«å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�®é™�å®šã�Œç„¡ã�„**ï¼ˆä¾�é ¼å…¨ä½“ãƒ»å…¨è¡Œç¨‹ã�¸ã�®æŒ‡ç¤ºï¼‰ã�¨ã��ã�¯ **ä¸¡æ–¹ã�¨ã‚‚çœ�ç•¥** ã�™ã‚‹ã�‹ **ç©ºæ–‡å­—åˆ— ""** ã�¨ã�™ã‚‹ã€‚
+- ã��ã�®å ´å�ˆã€�é…�å�°ãƒ­ã‚¸ãƒƒã‚¯ã�¯ **å�Œä¸€ä¾�é ¼NOã�®åˆ¥è¡Œï¼ˆä¾‹: ã‚¨ãƒ³ãƒœã‚¹è¡Œã�¨åˆ†å‰²è¡Œï¼‰ã�«ã‚‚å�Œã�˜æŒ‡ç¤ºã‚’é�©ç”¨** ã�™ã‚‹ã€‚
+- çµžã‚‹å ´å�ˆã�¯ã€�åŽŸæ–‡ã�§ç¤ºã�•ã‚Œã�Ÿè­˜åˆ¥å��ã‚’å…¥ã‚Œã‚‹ï¼ˆExcel ã�®å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ã�¨ç…§å�ˆã�—ã‚„ã�™ã�„è¡¨è¨˜ï¼‰ã€‚
 
-■ preferred_operator（文字列）— 条件付き**必須**
-- **必要条件**: 当該依頼の原文を読み、「**誰がこの加工・作業の主担当（OP）として割り当てたいか**」が **意味として** 読み取れるとき。
-  例: 特定の人にやってもらう／その人に任せる／担当はあの人／OPは〜／〜さん（氏名）に依頼、など。**表現の型に依存せず**、文の意味で判断する。
-- **満たしたときの出力義務**: 上記の意味が成立すると判断したオブジェクトでは、**必ず** キー `preferred_operator` を含め、値は **空でない文字列** とする。併せて **process_name / machine_name は必須**（例: `{{"process_name":"…","machine_name":"…","preferred_operator":"…"}}`）。
-- **値の形式**: 原文で示された **担当者の識別名を1名分**（姓・名・ニックネーム等、原文に現れた表記を維持）。末尾の敬称（さん・君・氏）のみ除去。例:「森岡さんにやってもらいます」→ `"森岡"`。
-- **出力してはいけないとき**: 原文に担当者の指意が **一切ない** と判断した依頼NOでは `preferred_operator` キー自体を **省略** する（空文字列も付けない）。
+â–  preferred_operatorï¼ˆæ–‡å­—åˆ—ï¼‰â€” æ�¡ä»¶ä»˜ã��**å¿…é ˆ**
+- **å¿…è¦�æ�¡ä»¶**: å½“è©²ä¾�é ¼ã�®åŽŸæ–‡ã‚’èª­ã�¿ã€�ã€Œ**èª°ã�Œã�“ã�®åŠ å·¥ãƒ»ä½œæ¥­ã�®ä¸»æ‹…å½“ï¼ˆOPï¼‰ã�¨ã�—ã�¦å‰²ã‚Šå½“ã�¦ã�Ÿã�„ã�‹**ã€�ã�Œ **æ„�å‘³ã�¨ã�—ã�¦** èª­ã�¿å�–ã‚Œã‚‹ã�¨ã��ã€‚
+  ä¾‹: ç‰¹å®šã�®äººã�«ã‚„ã�£ã�¦ã‚‚ã‚‰ã�†ï¼�ã��ã�®äººã�«ä»»ã�›ã‚‹ï¼�æ‹…å½“ã�¯ã�‚ã�®äººï¼�OPã�¯ã€œï¼�ã€œã�•ã‚“ï¼ˆæ°�å��ï¼‰ã�«ä¾�é ¼ã€�ã�ªã�©ã€‚**è¡¨ç�¾ã�®åž‹ã�«ä¾�å­˜ã�›ã�š**ã€�æ–‡ã�®æ„�å‘³ã�§åˆ¤æ–­ã�™ã‚‹ã€‚
+- **æº€ã�Ÿã�—ã�Ÿã�¨ã��ã�®å‡ºåŠ›ç¾©å‹™**: ä¸Šè¨˜ã�®æ„�å‘³ã�Œæˆ�ç«‹ã�™ã‚‹ã�¨åˆ¤æ–­ã�—ã�Ÿã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�§ã�¯ã€�**å¿…ã�š** ã‚­ãƒ¼ `preferred_operator` ã‚’å�«ã‚�ã€�å€¤ã�¯ **ç©ºã�§ã�ªã�„æ–‡å­—åˆ—** ã�¨ã�™ã‚‹ã€‚ä½µã�›ã�¦ **process_name / machine_name ã�¯å¿…é ˆ**ï¼ˆä¾‹: `{{"process_name":"â€¦","machine_name":"â€¦","preferred_operator":"â€¦"}}`ï¼‰ã€‚
+- **å€¤ã�®å½¢å¼�**: åŽŸæ–‡ã�§ç¤ºã�•ã‚Œã�Ÿ **æ‹…å½“è€…ã�®è­˜åˆ¥å��ã‚’1å��åˆ†**ï¼ˆå§“ãƒ»å��ãƒ»ãƒ‹ãƒƒã‚¯ãƒ�ãƒ¼ãƒ ç­‰ã€�åŽŸæ–‡ã�«ç�¾ã‚Œã�Ÿè¡¨è¨˜ã‚’ç¶­æŒ�ï¼‰ã€‚æœ«å°¾ã�®æ•¬ç§°ï¼ˆã�•ã‚“ãƒ»å�›ãƒ»æ°�ï¼‰ã�®ã�¿é™¤åŽ»ã€‚ä¾‹:ã€Œæ£®å²¡ã�•ã‚“ã�«ã‚„ã�£ã�¦ã‚‚ã‚‰ã�„ã�¾ã�™ã€�â†’ `"æ£®å²¡"`ã€‚
+- **å‡ºåŠ›ã�—ã�¦ã�¯ã�„ã�‘ã�ªã�„ã�¨ã��**: åŽŸæ–‡ã�«æ‹…å½“è€…ã�®æŒ‡æ„�ã�Œ **ä¸€åˆ‡ã�ªã�„** ã�¨åˆ¤æ–­ã�—ã�Ÿä¾�é ¼NOã�§ã�¯ `preferred_operator` ã‚­ãƒ¼è‡ªä½“ã‚’ **çœ�ç•¥** ã�™ã‚‹ï¼ˆç©ºæ–‡å­—åˆ—ã‚‚ä»˜ã�‘ã�ªã�„ï¼‰ã€‚
 
-■ その他フィールド（required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date）
-- 原文から **明確に** 読み取れる場合のみ出力。読み取れない数値・日付は **省略**（推測で埋めない）。
+â–  ã��ã�®ä»–ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ï¼ˆrequired_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_dateï¼‰
+- åŽŸæ–‡ã�‹ã‚‰ **æ˜Žç¢ºã�«** èª­ã�¿å�–ã‚Œã‚‹å ´å�ˆã�®ã�¿å‡ºåŠ›ã€‚èª­ã�¿å�–ã‚Œã�ªã�„æ•°å€¤ãƒ»æ—¥ä»˜ã�¯ **çœ�ç•¥**ï¼ˆæŽ¨æ¸¬ã�§åŸ‹ã‚�ã�ªã�„ï¼‰ã€‚
 
-【同一依頼NO・複数工程の例】
-依頼NO Y4-2 に「エンボス」と「分割」の行があり、備考が「4/5までに終わらせる」のみで工程の限定が無い場合:
-- process_name / machine_name は **備考が書かれた行** の値を入れる。
-- restrict_to_* は **出さないか空** にし、**エンボス行・分割行の両方** に同じ優先度・日付等が効くようにする。
+ã€�å�Œä¸€ä¾�é ¼NOãƒ»è¤‡æ•°å·¥ç¨‹ã�®ä¾‹ã€‘
+ä¾�é ¼NO Y4-2 ã�«ã€Œã‚¨ãƒ³ãƒœã‚¹ã€�ã�¨ã€Œåˆ†å‰²ã€�ã�®è¡Œã�Œã�‚ã‚Šã€�å‚™è€ƒã�Œã€Œ4/5ã�¾ã�§ã�«çµ‚ã‚�ã‚‰ã�›ã‚‹ã€�ã�®ã�¿ã�§å·¥ç¨‹ã�®é™�å®šã�Œç„¡ã�„å ´å�ˆ:
+- process_name / machine_name ã�¯ **å‚™è€ƒã�Œæ›¸ã�‹ã‚Œã�Ÿè¡Œ** ã�®å€¤ã‚’å…¥ã‚Œã‚‹ã€‚
+- restrict_to_* ã�¯ **å‡ºã�•ã�ªã�„ã�‹ç©º** ã�«ã�—ã€�**ã‚¨ãƒ³ãƒœã‚¹è¡Œãƒ»åˆ†å‰²è¡Œã�®ä¸¡æ–¹** ã�«å�Œã�˜å„ªå…ˆåº¦ãƒ»æ—¥ä»˜ç­‰ã�ŒåŠ¹ã��ã‚ˆã�†ã�«ã�™ã‚‹ã€‚
 
-【基準年（年なし日付用）】
-「4/5」「4/5に出荷」のように **年が無い** 日付は原則 **西暦 {ref_y} 年** とし、YYYY-MM-DD で出力。
+ã€�åŸºæº–å¹´ï¼ˆå¹´ã�ªã�—æ—¥ä»˜ç”¨ï¼‰ã€‘
+ã€Œ4/5ã€�ã€Œ4/5ã�«å‡ºè�·ã€�ã�®ã‚ˆã�†ã�« **å¹´ã�Œç„¡ã�„** æ—¥ä»˜ã�¯åŽŸå‰‡ **è¥¿æš¦ {ref_y} å¹´** ã�¨ã�—ã€�YYYY-MM-DD ã�§å‡ºåŠ›ã€‚
 
-【フィールド一覧（型の参考）】
-- process_name, machine_name: 文字列（必須。プロンプト行と一致）
-- restrict_to_process_name, restrict_to_machine_name: 文字列（任意。限定なら）
-- preferred_operator: 文字列（上記契約に従う）
-- required_op: 正の整数
-- speed_override: 正の数（m/分）
-- task_efficiency: 0〜1
-- priority: 整数（小さいほど先に割付）
+ã€�ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ä¸€è¦§ï¼ˆåž‹ã�®å�‚è€ƒï¼‰ã€‘
+- process_name, machine_name: æ–‡å­—åˆ—ï¼ˆå¿…é ˆã€‚ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆè¡Œã�¨ä¸€è‡´ï¼‰
+- restrict_to_process_name, restrict_to_machine_name: æ–‡å­—åˆ—ï¼ˆä»»æ„�ã€‚é™�å®šã�ªã‚‰ï¼‰
+- preferred_operator: æ–‡å­—åˆ—ï¼ˆä¸Šè¨˜å¥‘ç´„ã�«å¾“ã�†ï¼‰
+- required_op: æ­£ã�®æ•´æ•°
+- speed_override: æ­£ã�®æ•°ï¼ˆm/åˆ†ï¼‰
+- task_efficiency: 0ã€œ1
+- priority: æ•´æ•°ï¼ˆå°�ã�•ã�„ã�»ã�©å…ˆã�«å‰²ä»˜ï¼‰
 - start_date: YYYY-MM-DD / start_time: HH:MM
 - target_completion_date, ship_by_date: YYYY-MM-DD
 
-【解釈の指針】
-- 「間に合うように」「繰り上げる」→ priority を上げる（数値を下げる）。日付が文中にあれば target_completion_date または ship_by_date に入れる。
-- 担当者指名は **意味理解** で preferred_operator を決める（特定のキーワード列挙に頼らない）。
-- 数値・日付は推測で補わない。
-- **備考が特定の工程・機械にだけ言及していない限り**、restrict_to_* は空にし、同一依頼NOの他行にも適用される形にする。
+ã€�è§£é‡ˆã�®æŒ‡é‡�ã€‘
+- ã€Œé–“ã�«å�ˆã�†ã‚ˆã�†ã�«ã€�ã€Œç¹°ã‚Šä¸Šã�’ã‚‹ã€�â†’ priority ã‚’ä¸Šã�’ã‚‹ï¼ˆæ•°å€¤ã‚’ä¸‹ã�’ã‚‹ï¼‰ã€‚æ—¥ä»˜ã�Œæ–‡ä¸­ã�«ã�‚ã‚Œã�° target_completion_date ã�¾ã�Ÿã�¯ ship_by_date ã�«å…¥ã‚Œã‚‹ã€‚
+- æ‹…å½“è€…æŒ‡å��ã�¯ **æ„�å‘³ç�†è§£** ã�§ preferred_operator ã‚’æ±ºã‚�ã‚‹ï¼ˆç‰¹å®šã�®ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰åˆ—æŒ™ã�«é ¼ã‚‰ã�ªã�„ï¼‰ã€‚
+- æ•°å€¤ãƒ»æ—¥ä»˜ã�¯æŽ¨æ¸¬ã�§è£œã‚�ã�ªã�„ã€‚
+- **å‚™è€ƒã�Œç‰¹å®šã�®å·¥ç¨‹ãƒ»æ©Ÿæ¢°ã�«ã� ã�‘è¨€å�Šã�—ã�¦ã�„ã�ªã�„é™�ã‚Š**ã€�restrict_to_* ã�¯ç©ºã�«ã�—ã€�å�Œä¸€ä¾�é ¼NOã�®ä»–è¡Œã�«ã‚‚é�©ç”¨ã�•ã‚Œã‚‹å½¢ã�«ã�™ã‚‹ã€‚
 
-【出力直前の自己検証（必ず実行してから JSON を閉じる）】
-- 【特別指定原文】の **各行** について、対応するオブジェクトに **process_name** と **machine_name** があるか。
-- 同一依頼NOが複数行あるときは **配列** で各行に1オブジェクト、または適切にマージした単一オブジェクト＋restrict の運用を一貫させる。
-- 「主担当OPの指意」がある行では **非空の preferred_operator** を付ける。
+ã€�å‡ºåŠ›ç›´å‰�ã�®è‡ªå·±æ¤œè¨¼ï¼ˆå¿…ã�šå®Ÿè¡Œã�—ã�¦ã�‹ã‚‰ JSON ã‚’é–‰ã�˜ã‚‹ï¼‰ã€‘
+- ã€�ç‰¹åˆ¥æŒ‡å®šåŽŸæ–‡ã€‘ã�® **å�„è¡Œ** ã�«ã�¤ã�„ã�¦ã€�å¯¾å¿œã�™ã‚‹ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã�« **process_name** ã�¨ **machine_name** ã�Œã�‚ã‚‹ã�‹ã€‚
+- å�Œä¸€ä¾�é ¼NOã�Œè¤‡æ•°è¡Œã�‚ã‚‹ã�¨ã��ã�¯ **é…�åˆ—** ã�§å�„è¡Œã�«1ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã€�ã�¾ã�Ÿã�¯é�©åˆ‡ã�«ãƒžãƒ¼ã‚¸ã�—ã�Ÿå�˜ä¸€ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆï¼‹restrict ã�®é�‹ç”¨ã‚’ä¸€è²«ã�•ã�›ã‚‹ã€‚
+- ã€Œä¸»æ‹…å½“OPã�®æŒ‡æ„�ã€�ã�Œã�‚ã‚‹è¡Œã�§ã�¯ **é�žç©ºã�® preferred_operator** ã‚’ä»˜ã�‘ã‚‹ã€‚
 
-【出力形式の例】（依頼NO・値は実データに合わせ替えること）
+ã€�å‡ºåŠ›å½¢å¼�ã�®ä¾‹ã€‘ï¼ˆä¾�é ¼NOãƒ»å€¤ã�¯å®Ÿãƒ‡ãƒ¼ã‚¿ã�«å�ˆã‚�ã�›æ›¿ã�ˆã‚‹ã�“ã�¨ï¼‰
 {{
   "W3-14": {{
-    "process_name": "検査",
-    "machine_name": "ラインA",
-    "preferred_operator": "森岡"
+    "process_name": "æ¤œæŸ»",
+    "machine_name": "ãƒ©ã‚¤ãƒ³A",
+    "preferred_operator": "æ£®å²¡"
   }},
   "Y3-26": {{
-    "process_name": "コーティング",
+    "process_name": "ã‚³ãƒ¼ãƒ†ã‚£ãƒ³ã‚°",
     "machine_name": "",
     "priority": 1,
     "ship_by_date": "{ref_y}-04-05",
     "target_completion_date": "{ref_y}-04-05"
   }},
   "Y4-2": {{
-    "process_name": "エンボス",
+    "process_name": "ã‚¨ãƒ³ãƒœã‚¹",
     "machine_name": "E1",
     "priority": 2,
     "restrict_to_process_name": "",
@@ -6275,16 +6223,16 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
   }}
 }}
 
-【特別指定原文】（Excel からそのまま。1行＝依頼NOと備考のペア）
+ã€�ç‰¹åˆ¥æŒ‡å®šåŽŸæ–‡ã€‘ï¼ˆExcel ã�‹ã‚‰ã��ã�®ã�¾ã�¾ã€‚1è¡Œï¼�ä¾�é ¼NOã�¨å‚™è€ƒã�®ãƒšã‚¢ï¼‰
 {blob}
 """
     try:
         ppath = os.path.join(log_dir, "ai_task_special_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("タスク特別指定: 今回 Gemini に渡したプロンプト全文 → %s", ppath)
+        logging.info("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ä»Šå›ž Gemini ã�«æ¸¡ã�—ã�Ÿãƒ—ãƒ­ãƒ³ãƒ—ãƒˆå…¨æ–‡ â†’ %s", ppath)
     except OSError as ex:
-        logging.warning("タスク特別指定: プロンプト保存失敗: %s", ex)
+        logging.warning("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆä¿�å­˜å¤±æ•—: %s", ex)
 
     client = genai.Client(api_key=API_KEY)
     try:
@@ -6297,12 +6245,12 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 ai_cache, cache_key, parsed, content_key=cache_fingerprint
             )
             save_ai_cache(ai_cache)
-            logging.info("タスク特別指定: AI解析が完了しました。")
+            logging.info("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AIè§£æž�ã�Œå®Œäº†ã�—ã�¾ã�—ã�Ÿã€‚")
             if ai_sheet_sink is not None:
-                ai_sheet_sink["特別指定備考_AI_API"] = "あり"
+                ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�‚ã‚Š"
             return parsed
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "あり（JSON解釈失敗）"
+            ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�‚ã‚Šï¼ˆJSONè§£é‡ˆå¤±æ•—ï¼‰"
         return {}
     except Exception as e:
         err_text = str(e)
@@ -6311,7 +6259,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         retry_sec = extract_retry_seconds(err_text) if is_quota else None
         if is_quota and retry_sec is not None:
             wait_sec = min(max(retry_sec, 1.0), 90.0)
-            logging.warning(f"タスク特別指定 AI 429。{wait_sec:.1f}秒待機して再試行します。")
+            logging.warning(f"ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI 429ã€‚{wait_sec:.1f}ç§’å¾…æ©Ÿã�—ã�¦å†�è©¦è¡Œã�—ã�¾ã�™ã€‚")
             time_module.sleep(wait_sec)
             try:
                 res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -6324,14 +6272,14 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                     )
                     save_ai_cache(ai_cache)
                     if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（429再試行後）"
+                        ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�‚ã‚Šï¼ˆ429å†�è©¦è¡Œå¾Œï¼‰"
                     return parsed
             except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 再試行失敗: {e2}")
+                logging.warning(f"ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI å†�è©¦è¡Œå¤±æ•—: {e2}")
         elif is_unavailable:
             wait_sec = 8.0
             logging.warning(
-                f"タスク特別指定 AI 503/UNAVAILABLE。{wait_sec:.1f}秒待機して再試行します。"
+                f"ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI 503/UNAVAILABLEã€‚{wait_sec:.1f}ç§’å¾…æ©Ÿã�—ã�¦å†�è©¦è¡Œã�—ã�¾ã�™ã€‚"
             )
             time_module.sleep(wait_sec)
             try:
@@ -6344,26 +6292,26 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                         ai_cache, cache_key, parsed, content_key=cache_fingerprint
                     )
                     save_ai_cache(ai_cache)
-                    logging.info("タスク特別指定: AI再試行で解析が完了しました。")
+                    logging.info("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AIå†�è©¦è¡Œã�§è§£æž�ã�Œå®Œäº†ã�—ã�¾ã�—ã�Ÿã€‚")
                     if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（503再試行後）"
+                        ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = "ã�‚ã‚Šï¼ˆ503å†�è©¦è¡Œå¾Œï¼‰"
                     return parsed
-                logging.warning("タスク特別指定 AI 503再試行: JSON 抽出に失敗しました。")
+                logging.warning("ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI 503å†�è©¦è¡Œ: JSON æŠ½å‡ºã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿã€‚")
             except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 503再試行失敗: {e2}")
+                logging.warning(f"ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI 503å†�è©¦è¡Œå¤±æ•—: {e2}")
         else:
-            logging.warning(f"タスク特別指定 AI エラー: {e}")
+            logging.warning(f"ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š AI ã‚¨ãƒ©ãƒ¼: {e}")
         logging.warning(
-            "タスク特別指定: AI解析結果を取得できなかったため、特別指定_備考の開始日/優先指示は反映されません。"
-            "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してください。）"
+            "ã‚¿ã‚¹ã‚¯ç‰¹åˆ¥æŒ‡å®š: AIè§£æž�çµ�æžœã‚’å�–å¾—ã�§ã��ã�ªã�‹ã�£ã�Ÿã�Ÿã‚�ã€�ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�®é–‹å§‹æ—¥/å„ªå…ˆæŒ‡ç¤ºã�¯å��æ˜ ã�•ã‚Œã�¾ã�›ã‚“ã€‚"
+            "ï¼ˆåˆ—ã€ŒåŠ å·¥é–‹å§‹æ—¥_æŒ‡å®šã€�ã€ŒæŒ‡å®šç´�æœŸ_ä¸Šæ›¸ã��ã€�ã�¯å»ƒæ­¢æ¸ˆã�¿ã€‚å‚™è€ƒã�®å†�è¨˜è¼‰ã�¾ã�Ÿã�¯å¾Œã�‹ã‚‰ AI å†�å®Ÿè¡Œã‚’æ¤œè¨Žã�—ã�¦ã��ã� ã�•ã�„ã€‚ï¼‰"
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ_AI_API"] = f"å¤±æ•—: {e}"[:500]
         return {}
 
 
 def _merge_preferred_operator_cell_and_ai(row, ai_for_tid):
-    """Excel「担当OP_指定」を優先し、空なら AI の preferred_operator。"""
+    """Excelã€Œæ‹…å½“OP_æŒ‡å®šã€�ã‚’å„ªå…ˆã�—ã€�ç©ºã�ªã‚‰ AI ã�® preferred_operatorã€‚"""
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
     v = row.get(PLAN_COL_PREFERRED_OP)
     if v is not None and not (isinstance(v, float) and pd.isna(v)):
@@ -6380,8 +6328,8 @@ def _merge_preferred_operator_cell_and_ai(row, ai_for_tid):
 
 def _global_override_preferred_operator_for_task(tpref, task_id) -> str | None:
     """
-    メイン「再優先特別記載」の task_preferred_operators。
-    キーは依頼NO（大文字・小文字の差は無視）。
+    ãƒ¡ã‚¤ãƒ³ã€Œå†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰ã€�ã�® task_preferred_operatorsã€‚
+    ã‚­ãƒ¼ã�¯ä¾�é ¼NOï¼ˆå¤§æ–‡å­—ãƒ»å°�æ–‡å­—ã�®å·®ã�¯ç„¡è¦–ï¼‰ã€‚
     """
     if not isinstance(tpref, dict) or not tpref:
         return None
@@ -6403,9 +6351,9 @@ def _merge_task_row_with_ai(
     row, ai_for_tid, *, allow_ai_dispatch_priority_from_remark: bool = True
 ):
     """
-    上書き列は加工速度_上書き・原反投入日_上書き等のみ（計画シート）。その他は特別指定備考 AI から。
-    allow_ai_dispatch_priority_from_remark が False のとき、AI の required_op / task_efficiency / priority /
-    start_date / start_time は採用しない（備考に納期系文言が無い行向け）。
+    ä¸Šæ›¸ã��åˆ—ã�¯åŠ å·¥é€Ÿåº¦_ä¸Šæ›¸ã��ãƒ»åŽŸå��æŠ•å…¥æ—¥_ä¸Šæ›¸ã��ç­‰ã�®ã�¿ï¼ˆè¨ˆç”»ã‚·ãƒ¼ãƒˆï¼‰ã€‚ã��ã�®ä»–ã�¯ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒ AI ã�‹ã‚‰ã€‚
+    allow_ai_dispatch_priority_from_remark ã�Œ False ã�®ã�¨ã��ã€�AI ã�® required_op / task_efficiency / priority /
+    start_date / start_time ã�¯æŽ¡ç”¨ã�—ã�ªã�„ï¼ˆå‚™è€ƒã�«ç´�æœŸç³»æ–‡è¨€ã�Œç„¡ã�„è¡Œå�‘ã�‘ï¼‰ã€‚
     """
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
 
@@ -6483,8 +6431,8 @@ def _ai_float_for_conflict(ai, key):
 
 def detect_planning_remark_ai_conflicts(row, ai_for_tid):
     """
-    特別指定_備考に依る AI 解析結果と、明示セルの両方に値があり食い違う列を返す。
-    備考・AIいずれか欠ける場合は空集合。
+    ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�«ä¾�ã‚‹ AI è§£æž�çµ�æžœã�¨ã€�æ˜Žç¤ºã‚»ãƒ«ã�®ä¸¡æ–¹ã�«å€¤ã�Œã�‚ã‚Šé£Ÿã�„é�•ã�†åˆ—ã‚’è¿”ã�™ã€‚
+    å‚™è€ƒãƒ»AIã�„ã�šã‚Œã�‹æ¬ ã�‘ã‚‹å ´å�ˆã�¯ç©ºé›†å�ˆã€‚
     """
     remark = str(row.get(PLAN_COL_SPECIAL_REMARK, "") or "").strip()
     if not remark or remark.lower() in ("nan", "none"):
@@ -6513,7 +6461,7 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
 
 
 def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
-    """Excel 行番号(1始まり・ヘッダー=1行目) -> 矛盾があった列名の集合"""
+    """Excel è¡Œç•ªå�·(1å§‹ã�¾ã‚Šãƒ»ãƒ˜ãƒƒãƒ€ãƒ¼=1è¡Œç›®) -> çŸ›ç›¾ã�Œã�‚ã�£ã�Ÿåˆ—å��ã�®é›†å�ˆ"""
     res = {}
     for i, (_, row) in enumerate(tasks_df.iterrows()):
         if _plan_row_exclude_from_assignment(row):
@@ -6526,7 +6474,7 @@ def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
 
 
 def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by_row) -> None:
-    """既に開いている配台計画シートへ、矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼び出し側。"""
+    """æ—¢ã�«é–‹ã�„ã�¦ã�„ã‚‹é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆã�¸ã€�çŸ›ç›¾åˆ—ã�®ç�€è‰²ï¼ˆè–„é»„ãƒªã‚»ãƒƒãƒˆâ†’èµ¤ï¼‰ã‚’é�©ç”¨ã�™ã‚‹ã€‚ä¿�å­˜ã�¯å‘¼ã�³å‡ºã�—å�´ã€‚"""
     header_map = {}
     for col_idx in range(1, ws.max_column + 1):
         v = ws.cell(1, col_idx).value
@@ -6549,7 +6497,7 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
                 cell.fill = clear_fill
             else:
                 cell.fill = yellow_input_fill
-            # フォントは上書きしない（ブック既定・ユーザー設定を維持）
+            # ãƒ•ã‚©ãƒ³ãƒˆã�¯ä¸Šæ›¸ã��ã�—ã�ªã�„ï¼ˆãƒ–ãƒƒã‚¯æ—¢å®šãƒ»ãƒ¦ãƒ¼ã‚¶ãƒ¼è¨­å®šã‚’ç¶­æŒ�ï¼‰
 
     for r, colnames in conflicts_by_row.items():
         if r < 2:
@@ -6571,17 +6519,17 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     when_str: str,
     num_data_rows: int,
     conflicts_by_row,
-    log_prefix: str = "段階2",
+    log_prefix: str = "æ®µéšŽ2",
 ) -> bool:
     """
-    段階2向け: グローバルコメント解析ブロック（AX:AY）と矛盾ハイライトを **1回の load/save** で反映する。
-    従来は別関数でブックを2回開いていたため、.xlsm が大きい環境で十数秒単位の短縮になる。
+    æ®µéšŽ2å�‘ã�‘: ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆè§£æž�ãƒ–ãƒ­ãƒƒã‚¯ï¼ˆAX:AYï¼‰ã�¨çŸ›ç›¾ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã‚’ **1å›žã�® load/save** ã�§å��æ˜ ã�™ã‚‹ã€‚
+    å¾“æ�¥ã�¯åˆ¥é–¢æ•°ã�§ãƒ–ãƒƒã‚¯ã‚’2å›žé–‹ã�„ã�¦ã�„ã�Ÿã�Ÿã‚�ã€�.xlsm ã�Œå¤§ã��ã�„ç’°å¢ƒã�§å��æ•°ç§’å�˜ä½�ã�®çŸ­ç¸®ã�«ã�ªã‚‹ã€‚
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: ブックに「%s」があるため openpyxl でグローバル解析・矛盾着色をスキップしました。",
+            "%s: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ãƒ»çŸ›ç›¾ç�€è‰²ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -6594,7 +6542,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         )
     except Exception as ex:
         logging.info(
-            "%s: 配台シート一括書込のためブックを開けません: %s",
+            "%s: é…�å�°ã‚·ãƒ¼ãƒˆä¸€æ‹¬æ›¸è¾¼ã�®ã�Ÿã‚�ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“: %s",
             log_prefix,
             ex,
         )
@@ -6602,7 +6550,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: シート '%s' が無いためグローバル解析・矛盾着色をスキップ。",
+                "%s: ã‚·ãƒ¼ãƒˆ '%s' ã�Œç„¡ã�„ã�Ÿã‚�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ãƒ»çŸ›ç›¾ç�€è‰²ã‚’ã‚¹ã‚­ãƒƒãƒ—ã€‚",
                 log_prefix,
                 sheet_name,
             )
@@ -6619,8 +6567,8 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
                 sheet_name, num_data_rows, conflicts_by_row or {}
             )
             logging.warning(
-                "%s: 配台シートへの一括保存に失敗（Excel で開いたまま等）。"
-                " 矛盾ハイライトは '%s' に書き出しました。グローバル解析は未保存の可能性があります。 (%s)",
+                "%s: é…�å�°ã‚·ãƒ¼ãƒˆã�¸ã�®ä¸€æ‹¬ä¿�å­˜ã�«å¤±æ•—ï¼ˆExcel ã�§é–‹ã�„ã�Ÿã�¾ã�¾ç­‰ï¼‰ã€‚"
+                " çŸ›ç›¾ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã�¯ '%s' ã�«æ›¸ã��å‡ºã�—ã�¾ã�—ã�Ÿã€‚ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ã�¯æœªä¿�å­˜ã�®å�¯èƒ½æ€§ã�Œã�‚ã‚Šã�¾ã�™ã€‚ (%s)",
                 log_prefix,
                 _planning_conflict_sidecar_path(),
                 e,
@@ -6630,8 +6578,8 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         _n_conf = len(conflicts_by_row) if conflicts_by_row else 0
         if _n_conf:
             logging.info(
-                "%s: 「%s」%s:%s 列にグローバル解析を保存し、"
-                "特別指定_備考と列の矛盾 %s 行を同じ保存でハイライトしました。",
+                "%s: ã€Œ%sã€�%s:%s åˆ—ã�«ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ã‚’ä¿�å­˜ã�—ã€�"
+                "ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�¨åˆ—ã�®çŸ›ç›¾ %s è¡Œã‚’å�Œã�˜ä¿�å­˜ã�§ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -6640,7 +6588,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
             )
         else:
             logging.info(
-                "%s: 「%s」%s:%s 列にグローバル解析を保存しました（矛盾行なし）。",
+                "%s: ã€Œ%sã€�%s:%s åˆ—ã�«ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ã‚’ä¿�å­˜ã�—ã�¾ã�—ã�Ÿï¼ˆçŸ›ç›¾è¡Œã�ªã�—ï¼‰ã€‚",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -6649,14 +6597,14 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         return True
     except OSError as ex:
         logging.warning(
-            "%s: 配台シート一括保存で OSError: %s",
+            "%s: é…�å�°ã‚·ãƒ¼ãƒˆä¸€æ‹¬ä¿�å­˜ã�§ OSError: %s",
             log_prefix,
             ex,
         )
         return False
     except Exception as ex:
         logging.warning(
-            "%s: 配台シートへのグローバル解析＋矛盾着色（一括）で例外: %s",
+            "%s: é…�å�°ã‚·ãƒ¼ãƒˆã�¸ã�®ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è§£æž�ï¼‹çŸ›ç›¾ç�€è‰²ï¼ˆä¸€æ‹¬ï¼‰ã�§ä¾‹å¤–: %s",
             log_prefix,
             ex,
         )
@@ -6671,16 +6619,16 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
 
 def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, conflicts_by_row):
     """
-    配台計画_タスク入力シートのデータ行を、矛盾列のみ赤地・白太字にする。
-    事前パスでは上書き入力列を段階1と同じ薄黄色に戻し、フォントは変更しない（体裁維持）。
-    AI解析列は着色しない（段階1の仕様に合わせる）。
-    .xlsm は keep_vba=True で保存する。
+    é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã‚·ãƒ¼ãƒˆã�®ãƒ‡ãƒ¼ã‚¿è¡Œã‚’ã€�çŸ›ç›¾åˆ—ã�®ã�¿èµ¤åœ°ãƒ»ç™½å¤ªå­—ã�«ã�™ã‚‹ã€‚
+    äº‹å‰�ãƒ‘ã‚¹ã�§ã�¯ä¸Šæ›¸ã��å…¥åŠ›åˆ—ã‚’æ®µéšŽ1ã�¨å�Œã�˜è–„é»„è‰²ã�«æˆ»ã�—ã€�ãƒ•ã‚©ãƒ³ãƒˆã�¯å¤‰æ›´ã�—ã�ªã�„ï¼ˆä½“è£�ç¶­æŒ�ï¼‰ã€‚
+    AIè§£æž�åˆ—ã�¯ç�€è‰²ã�—ã�ªã�„ï¼ˆæ®µéšŽ1ã�®ä»•æ§˜ã�«å�ˆã‚�ã�›ã‚‹ï¼‰ã€‚
+    .xlsm ã�¯ keep_vba=True ã�§ä¿�å­˜ã�™ã‚‹ã€‚
     """
     if not wb_path or not os.path.exists(wb_path):
         return
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "矛盾書式: ブックに「%s」があるため openpyxl でのハイライトをスキップしました。",
+            "çŸ›ç›¾æ›¸å¼�: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã�®ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -6688,7 +6636,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
     wb = load_workbook(wb_path, keep_vba=keep_vba)
     try:
         if sheet_name not in wb.sheetnames:
-            logging.warning(f"矛盾書式: シート '{sheet_name}' が見つかりません。")
+            logging.warning(f"çŸ›ç›¾æ›¸å¼�: ã‚·ãƒ¼ãƒˆ '{sheet_name}' ã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“ã€‚")
             return
         ws = wb[sheet_name]
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row)
@@ -6698,8 +6646,8 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
         except OSError as e:
             write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row)
             logging.warning(
-                "配台シートへの矛盾ハイライトをファイル保存できませんでした（Excel でブックを開いたまま等）。"
-                " '%s' に指示を書き出しました。マクロがシート上に直接適用します。 (%s)",
+                "é…�å�°ã‚·ãƒ¼ãƒˆã�¸ã�®çŸ›ç›¾ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã‚’ãƒ•ã‚¡ã‚¤ãƒ«ä¿�å­˜ã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆExcel ã�§ãƒ–ãƒƒã‚¯ã‚’é–‹ã�„ã�Ÿã�¾ã�¾ç­‰ï¼‰ã€‚"
+                " '%s' ã�«æŒ‡ç¤ºã‚’æ›¸ã��å‡ºã�—ã�¾ã�—ã�Ÿã€‚ãƒžã‚¯ãƒ­ã�Œã‚·ãƒ¼ãƒˆä¸Šã�«ç›´æŽ¥é�©ç”¨ã�—ã�¾ã�™ã€‚ (%s)",
                 _planning_conflict_sidecar_path(),
                 e,
             )
@@ -6707,14 +6655,14 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
             _remove_planning_conflict_sidecar_safe()
             if conflicts_by_row:
                 logging.info(
-                    f"特別指定_備考と列の矛盾: {len(conflicts_by_row)} 行を '{sheet_name}' でハイライトしました。"
+                    f"ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�¨åˆ—ã�®çŸ›ç›¾: {len(conflicts_by_row)} è¡Œã‚’ '{sheet_name}' ã�§ãƒ�ã‚¤ãƒ©ã‚¤ãƒˆã�—ã�¾ã�—ã�Ÿã€‚"
                 )
     finally:
         wb.close()
 
 
 def _ai_planning_target_due_date(ai_dict):
-    """AI JSON の完了・出荷目標日から、配台の目標日1つを決める（複数あれば最も早い日＝厳しい方）。"""
+    """AI JSON ã�®å®Œäº†ãƒ»å‡ºè�·ç›®æ¨™æ—¥ã�‹ã‚‰ã€�é…�å�°ã�®ç›®æ¨™æ—¥1ã�¤ã‚’æ±ºã‚�ã‚‹ï¼ˆè¤‡æ•°ã�‚ã‚Œã�°æœ€ã‚‚æ—©ã�„æ—¥ï¼�åŽ³ã�—ã�„æ–¹ï¼‰ã€‚"""
     if not isinstance(ai_dict, dict):
         return None
     dates = []
@@ -6729,8 +6677,8 @@ def _ai_planning_target_due_date(ai_dict):
 
 def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bool:
     """
-    特別指定_備考に、納期・期限・最優先など「配台試行を前に出す」意図の文言があるとき True。
-    備考が記入されているだけでは True にしない（AI 由来の目標日・開始日・優先度は使わない）。
+    ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�«ã€�ç´�æœŸãƒ»æœŸé™�ãƒ»æœ€å„ªå…ˆã�ªã�©ã€Œé…�å�°è©¦è¡Œã‚’å‰�ã�«å‡ºã�™ã€�æ„�å›³ã�®æ–‡è¨€ã�Œã�‚ã‚‹ã�¨ã�� Trueã€‚
+    å‚™è€ƒã�Œè¨˜å…¥ã�•ã‚Œã�¦ã�„ã‚‹ã� ã�‘ã�§ã�¯ True ã�«ã�—ã�ªã�„ï¼ˆAI ç”±æ�¥ã�®ç›®æ¨™æ—¥ãƒ»é–‹å§‹æ—¥ãƒ»å„ªå…ˆåº¦ã�¯ä½¿ã‚�ã�ªã�„ï¼‰ã€‚
     """
     if not remark_raw:
         return False
@@ -6740,45 +6688,45 @@ def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bo
     n = unicodedata.normalize("NFKC", s)
     n_lower = n.casefold()
     needles = (
-        "納期",
-        "指定納期",
-        "回答納期",
-        "計画基準",
-        "期日",
-        "締切",
-        "締め切り",
-        "期限",
-        "最優先",
-        "至急",
-        "急ぎ",
-        "直ちに",
-        "早急",
-        "出荷",
-        "納入",
-        "必着",
+        "ç´�æœŸ",
+        "æŒ‡å®šç´�æœŸ",
+        "å›žç­”ç´�æœŸ",
+        "è¨ˆç”»åŸºæº–",
+        "æœŸæ—¥",
+        "ç· åˆ‡",
+        "ç· ã‚�åˆ‡ã‚Š",
+        "æœŸé™�",
+        "æœ€å„ªå…ˆ",
+        "è‡³æ€¥",
+        "æ€¥ã�Ž",
+        "ç›´ã�¡ã�«",
+        "æ—©æ€¥",
+        "å‡ºè�·",
+        "ç´�å…¥",
+        "å¿…ç�€",
         "deadline",
-        "デッドライン",
-        "前倒し",
-        "早めに",
-        "厳守",
-        "までに",
-        "間に合わ",
-        "間に合い",
-        "遅れない",
-        "遅延不可",
-        "優先配台",
-        "先に配台",
-        "完了予定",
-        "本納期",
-        "回答期限",
+        "ãƒ‡ãƒƒãƒ‰ãƒ©ã‚¤ãƒ³",
+        "å‰�å€’ã�—",
+        "æ—©ã‚�ã�«",
+        "åŽ³å®ˆ",
+        "ã�¾ã�§ã�«",
+        "é–“ã�«å�ˆã‚�",
+        "é–“ã�«å�ˆã�„",
+        "é�…ã‚Œã�ªã�„",
+        "é�…å»¶ä¸�å�¯",
+        "å„ªå…ˆé…�å�°",
+        "å…ˆã�«é…�å�°",
+        "å®Œäº†äºˆå®š",
+        "æœ¬ç´�æœŸ",
+        "å›žç­”æœŸé™�",
     )
     return any(w.casefold() in n_lower for w in needles)
 
 
 def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
     """
-    納期基準（回答→指定）・機械名が同じ帯での試行順。
-    Y3-24 は末尾の数値。Y4-1-1 のようにハイフンが2つ以上あるときは「最初の - の直後」の数値部を採用。
+    ç´�æœŸåŸºæº–ï¼ˆå›žç­”â†’æŒ‡å®šï¼‰ãƒ»æ©Ÿæ¢°å��ã�Œå�Œã�˜å¸¯ã�§ã�®è©¦è¡Œé †ã€‚
+    Y3-24 ã�¯æœ«å°¾ã�®æ•°å€¤ã€‚Y4-1-1 ã�®ã‚ˆã�†ã�«ãƒ�ã‚¤ãƒ•ãƒ³ã�Œ2ã�¤ä»¥ä¸Šã�‚ã‚‹ã�¨ã��ã�¯ã€Œæœ€åˆ�ã�® - ã�®ç›´å¾Œã€�ã�®æ•°å€¤éƒ¨ã‚’æŽ¡ç”¨ã€‚
     """
     s = str(task_id or "").strip()
     if not s:
@@ -6801,8 +6749,8 @@ def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# 配台用タスクキュー
-#   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変換（優先度・納期・AI 上書きを集約）
+# é…�å�°ç”¨ã‚¿ã‚¹ã‚¯ã‚­ãƒ¥ãƒ¼
+#   é…�å�°è¨ˆç”» DataFrame 1è¡Œ â†’ å‰²ä»˜ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ ç”¨ dict ã�¸ã�®å¤‰æ�›ï¼ˆå„ªå…ˆåº¦ãƒ»ç´�æœŸãƒ»AI ä¸Šæ›¸ã��ã‚’é›†ç´„ï¼‰
 # ---------------------------------------------------------------------------
 def build_task_queue_from_planning_df(
     tasks_df,
@@ -6813,8 +6761,8 @@ def build_task_queue_from_planning_df(
     equipment_list=None,
 ):
     """
-    ``generate_plan`` 内で呼ばれる。完了済み・配台不要行を除き、残りを task_queue に積む。
-    ai_by_tid が None のときだけ内部で analyze_task_special_remarks を実行する。
+    ``generate_plan`` å†…ã�§å‘¼ã�°ã‚Œã‚‹ã€‚å®Œäº†æ¸ˆã�¿ãƒ»é…�å�°ä¸�è¦�è¡Œã‚’é™¤ã��ã€�æ®‹ã‚Šã‚’ task_queue ã�«ç©�ã‚€ã€‚
+    ai_by_tid ã�Œ None ã�®ã�¨ã��ã� ã�‘å†…éƒ¨ã�§ analyze_task_special_remarks ã‚’å®Ÿè¡Œã�™ã‚‹ã€‚
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
@@ -6822,57 +6770,17 @@ def build_task_queue_from_planning_df(
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
     same_tid_line_seq = defaultdict(int)
-    # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
+    # ä¾�é ¼NOç›´åˆ—é…�å�°ã�®é †åº�ç”¨: iterrows ã�®èª­ã�¿è¾¼ã�¿é †ï¼ˆ0 å§‹ã�¾ã‚Šï¼‰ã€‚task_queue.sort å¾Œã‚‚ä¸�å¤‰ã€‚
     planning_sheet_row_seq = 0
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
-        task_id = planning_task_id_str_from_plan_row(row)
-        _dbg_w413 = _agent_debug_task_id_is_w413(task_id)
-        if _dbg_w413:
-            # #region agent log
-            _excl_raw = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
-            _agent_debug_ndjson(
-                "H0",
-                "_core.py:build_task_queue_from_planning_df",
-                "w413_row_before_filters",
-                {
-                    "planning_df_iloc": planning_df_iloc,
-                    "task_id": task_id,
-                    "process": str(row.get(TASK_COL_MACHINE, "") or ""),
-                    "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or ""),
-                    "completion_keyword": row_has_completion_keyword(row),
-                    "exclude_from_assignment": _plan_row_exclude_from_assignment(row),
-                    "exclude_cell_repr": repr(_excl_raw),
-                    "qty_total": parse_float_safe(row.get(TASK_COL_QTY), 0.0),
-                    "order_qty": parse_float_safe(row.get(TASK_COL_ORDER_QTY), 0.0),
-                    "actual_output": parse_float_safe(row.get(TASK_COL_ACTUAL_OUTPUT), 0.0),
-                },
-            )
-            # #endregion
         if row_has_completion_keyword(row):
-            if _dbg_w413:
-                # #region agent log
-                _agent_debug_ndjson(
-                    "H4",
-                    "_core.py:build_task_queue_from_planning_df",
-                    "w413_skipped_completion",
-                    {"task_id": task_id},
-                )
-                # #endregion
             continue
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
-            if _dbg_w413:
-                # #region agent log
-                _agent_debug_ndjson(
-                    "H1",
-                    "_core.py:build_task_queue_from_planning_df",
-                    "w413_skipped_exclude_flag",
-                    {"task_id": task_id},
-                )
-                # #endregion
             continue
 
+        task_id = planning_task_id_str_from_plan_row(row)
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
@@ -6882,7 +6790,7 @@ def build_task_queue_from_planning_df(
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
         specified_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
         specified_due_ov = None
-        # 納期基準: ①回答納期（空でなければ）②列「指定納期」（列「指定納期_上書き」は廃止済み）
+        # ç´�æœŸåŸºæº–: â‘ å›žç­”ç´�æœŸï¼ˆç©ºã�§ã�ªã�‘ã‚Œã�°ï¼‰â‘¡åˆ—ã€ŒæŒ‡å®šç´�æœŸã€�ï¼ˆåˆ—ã€ŒæŒ‡å®šç´�æœŸ_ä¸Šæ›¸ã��ã€�ã�¯å»ƒæ­¢æ¸ˆã�¿ï¼‰
         specified_basis = specified_due
         due_basis = None
         due_source = "none"
@@ -6902,7 +6810,7 @@ def build_task_queue_from_planning_df(
             and raw_input_date_ov != raw_input_sheet
         ):
             logging.info(
-                "原反投入日_上書きを採用: 依頼NO=%s シート原反投入日=%s 上書き=%s",
+                "åŽŸå��æŠ•å…¥æ—¥_ä¸Šæ›¸ã��ã‚’æŽ¡ç”¨: ä¾�é ¼NO=%s ã‚·ãƒ¼ãƒˆåŽŸå��æŠ•å…¥æ—¥=%s ä¸Šæ›¸ã��=%s",
                 task_id,
                 raw_input_sheet,
                 raw_input_date_ov,
@@ -6914,21 +6822,6 @@ def build_task_queue_from_planning_df(
             speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
-            if _dbg_w413:
-                # #region agent log
-                _agent_debug_ndjson(
-                    "H3",
-                    "_core.py:build_task_queue_from_planning_df",
-                    "w413_skipped_qty_or_keys",
-                    {
-                        "task_id": task_id,
-                        "machine_nonempty": bool(machine),
-                        "qty": qty,
-                        "qty_total": qty_total,
-                        "done_qty": done_qty,
-                    },
-                )
-                # #endregion
             continue
 
         _line_seq = same_tid_line_seq[task_id]
@@ -6955,7 +6848,7 @@ def build_task_queue_from_planning_df(
         if gop_name is not None:
             preferred_operator_raw = gop_name
             logging.info(
-                "メイン再優先特記: 依頼NO=%s の担当OPをグローバル指名で上書き %r（セル・特別指定備考AIより優先）",
+                "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ä¾�é ¼NO=%s ã�®æ‹…å½“OPã‚’ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«æŒ‡å��ã�§ä¸Šæ›¸ã�� %rï¼ˆã‚»ãƒ«ãƒ»ç‰¹åˆ¥æŒ‡å®šå‚™è€ƒAIã‚ˆã‚Šå„ªå…ˆï¼‰",
                 task_id,
                 gop_name,
             )
@@ -6984,7 +6877,7 @@ def build_task_queue_from_planning_df(
             if speed <= 0:
                 speed = 1.0
             logging.info(
-                "メイングローバル: 依頼NO=%s 工程=%r 機械名=%r に speed_multiplier 累積=%s を適用（速度 %s → %s）",
+                "ãƒ¡ã‚¤ãƒ³ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«: ä¾�é ¼NO=%s å·¥ç¨‹=%r æ©Ÿæ¢°å��=%r ã�« speed_multiplier ç´¯ç©�=%s ã‚’é�©ç”¨ï¼ˆé€Ÿåº¦ %s â†’ %sï¼‰",
                 task_id,
                 machine,
                 machine_name,
@@ -7007,17 +6900,17 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
-        # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
+        # ç´�æœŸã�¯å„ªå…ˆé †ä½�ãƒ»ç·Šæ€¥åº¦ã�«ã�¯ä½¿ã�†ã�Œã€�é–‹å§‹æ—¥ã�®ä¸‹é™�ã�«ã�¯ä½¿ã‚�ã�ªã�„ï¼ˆä½™åŠ›ã�Œã�‚ã‚Œã�°å‰�å€’ã�—é–‹å§‹ã�™ã‚‹ã�Ÿã‚�ï¼‰ã€‚
         if due_basis is None:
             due_urgent = False
         else:
             due_urgent = due_basis <= run_date
 
-        # 開始日ルール:
-        # 1) 原反投入日があるときは「原反投入日 13:00 以降」を開始可能日時の下限とする。
-        #    （日付下限: max(run_date, raw_input_date)、同日時間下限: 13:00）
-        # 2) 特別指定（セル/AI）の開始日がある場合も、原反投入日より前倒しにはしない（date 下限を維持）
-        # 3) 原反が無いときは run_date
+        # é–‹å§‹æ—¥ãƒ«ãƒ¼ãƒ«:
+        # 1) åŽŸå��æŠ•å…¥æ—¥ã�Œã�‚ã‚‹ã�¨ã��ã�¯ã€ŒåŽŸå��æŠ•å…¥æ—¥ 13:00 ä»¥é™�ã€�ã‚’é–‹å§‹å�¯èƒ½æ—¥æ™‚ã�®ä¸‹é™�ã�¨ã�™ã‚‹ã€‚
+        #    ï¼ˆæ—¥ä»˜ä¸‹é™�: max(run_date, raw_input_date)ã€�å�Œæ—¥æ™‚é–“ä¸‹é™�: 13:00ï¼‰
+        # 2) ç‰¹åˆ¥æŒ‡å®šï¼ˆã‚»ãƒ«/AIï¼‰ã�®é–‹å§‹æ—¥ã�Œã�‚ã‚‹å ´å�ˆã‚‚ã€�åŽŸå��æŠ•å…¥æ—¥ã‚ˆã‚Šå‰�å€’ã�—ã�«ã�¯ã�—ã�ªã�„ï¼ˆdate ä¸‹é™�ã‚’ç¶­æŒ�ï¼‰
+        # 3) åŽŸå��ã�Œç„¡ã�„ã�¨ã��ã�¯ run_date
         if raw_input_date:
             effective_start_date = max(run_date, raw_input_date)
         else:
@@ -7030,7 +6923,7 @@ def build_task_queue_from_planning_df(
             )
             if raw_input_date and start_date_ov < raw_input_date:
                 logging.info(
-                    "開始日上書きは原反投入日より前倒し不可: 依頼NO=%s 指定開始日=%s 原反投入日=%s 採用開始日=%s",
+                    "é–‹å§‹æ—¥ä¸Šæ›¸ã��ã�¯åŽŸå��æŠ•å…¥æ—¥ã‚ˆã‚Šå‰�å€’ã�—ä¸�å�¯: ä¾�é ¼NO=%s æŒ‡å®šé–‹å§‹æ—¥=%s åŽŸå��æŠ•å…¥æ—¥=%s æŽ¡ç”¨é–‹å§‹æ—¥=%s",
                     task_id,
                     start_date_ov,
                     raw_input_date,
@@ -7078,7 +6971,7 @@ def build_task_queue_from_planning_df(
                 "specified_due_date": specified_due,
                 "specified_due_override": specified_due_ov,
                 "due_basis_date": due_basis,
-                # 納期後ろ倒し再試行で due_basis_date を内部 +1 しても、結果_タスク一覧の当列（列名は互換で「計画基準納期」）はこの値のまま
+                # ç´�æœŸå¾Œã‚�å€’ã�—å†�è©¦è¡Œã�§ due_basis_date ã‚’å†…éƒ¨ +1 ã�—ã�¦ã‚‚ã€�çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®å½“åˆ—ï¼ˆåˆ—å��ã�¯äº’æ�›ã�§ã€Œè¨ˆç”»åŸºæº–ç´�æœŸã€�ï¼‰ã�¯ã�“ã�®å€¤ã�®ã�¾ã�¾
                 "due_basis_date_result_sheet": due_basis,
                 "due_source": due_source,
                 "due_source_rank": due_source_rank,
@@ -7120,7 +7013,7 @@ def build_task_queue_from_planning_df(
         planning_sheet_row_seq += 1
 
     logging.info(
-        "task_queue 構築完了: total=%s（配台不要によりスキップ %s 行）",
+        "task_queue æ§‹ç¯‰å®Œäº†: total=%sï¼ˆé…�å�°ä¸�è¦�ã�«ã‚ˆã‚Šã‚¹ã‚­ãƒƒãƒ— %s è¡Œï¼‰",
         len(task_queue),
         n_exclude_plan,
     )
@@ -7129,8 +7022,8 @@ def build_task_queue_from_planning_df(
 
 def _task_id_priority_key(task_id):
     """
-    依頼NOの同条件タイブレーク用キー。
-    例: Y3-24, Y3-34 のような場合はハイフン後半の数値が小さい方を優先。
+    ä¾�é ¼NOã�®å�Œæ�¡ä»¶ã‚¿ã‚¤ãƒ–ãƒ¬ãƒ¼ã‚¯ç”¨ã‚­ãƒ¼ã€‚
+    ä¾‹: Y3-24, Y3-34 ã�®ã‚ˆã�†ã�ªå ´å�ˆã�¯ãƒ�ã‚¤ãƒ•ãƒ³å¾Œå�Šã�®æ•°å€¤ã�Œå°�ã�•ã�„æ–¹ã‚’å„ªå…ˆã€‚
     """
     s = str(task_id or "").strip()
     if not s:
@@ -7146,9 +7039,9 @@ def _task_id_priority_key(task_id):
 
 def _serial_dispatch_order_task_ids(task_queue) -> list:
     """
-    依頼NO直列配台の処理順。各依頼NOについて **配台試行順番の最小値** が小さい依頼を先に完走させる
-    （同一依頼内の複数行は最小幅の試行順で代表）。タイブレークは計画シート上の先行行
-    （planning_sheet_row_seq）と依頼NOキー。
+    ä¾�é ¼NOç›´åˆ—é…�å�°ã�®å‡¦ç�†é †ã€‚å�„ä¾�é ¼NOã�«ã�¤ã�„ã�¦ **é…�å�°è©¦è¡Œé †ç•ªã�®æœ€å°�å€¤** ã�Œå°�ã�•ã�„ä¾�é ¼ã‚’å…ˆã�«å®Œèµ°ã�•ã�›ã‚‹
+    ï¼ˆå�Œä¸€ä¾�é ¼å†…ã�®è¤‡æ•°è¡Œã�¯æœ€å°�å¹…ã�®è©¦è¡Œé †ã�§ä»£è¡¨ï¼‰ã€‚ã‚¿ã‚¤ãƒ–ãƒ¬ãƒ¼ã‚¯ã�¯è¨ˆç”»ã‚·ãƒ¼ãƒˆä¸Šã�®å…ˆè¡Œè¡Œ
+    ï¼ˆplanning_sheet_row_seqï¼‰ã�¨ä¾�é ¼NOã‚­ãƒ¼ã€‚
     """
     min_dto_by_tid: dict = {}
     first_seq_by_tid: dict = {}
@@ -7180,8 +7073,8 @@ def _serial_dispatch_order_task_ids(task_queue) -> list:
 
 def _excel_scalar_to_plan_string_cell(v):
     """
-    既存シート（read_excel）由来のスカラーを、配台計画 DataFrame の文字列列（StringDtype）へ
-    代入できる str に正規化する。Excel が数値として保持した優先度 1 → \"1\" など。
+    æ—¢å­˜ã‚·ãƒ¼ãƒˆï¼ˆread_excelï¼‰ç”±æ�¥ã�®ã‚¹ã‚«ãƒ©ãƒ¼ã‚’ã€�é…�å�°è¨ˆç”» DataFrame ã�®æ–‡å­—åˆ—åˆ—ï¼ˆStringDtypeï¼‰ã�¸
+    ä»£å…¥ã�§ã��ã‚‹ str ã�«æ­£è¦�åŒ–ã�™ã‚‹ã€‚Excel ã�Œæ•°å€¤ã�¨ã�—ã�¦ä¿�æŒ�ã�—ã�Ÿå„ªå…ˆåº¦ 1 â†’ \"1\" ã�ªã�©ã€‚
     """
     if v is None:
         return ""
@@ -7217,9 +7110,9 @@ def _excel_scalar_to_plan_string_cell(v):
 
 def _merge_plan_sheet_user_overrides(out_df):
     """
-    ブック内の「配台計画_タスク入力」にユーザーが入力した上書き列を、
-    段階1の抽出結果へ (依頼NO, 工程名) 単位で引き継ぐ。
-    空のセルはマージしない（新規抽出側の空のまま）。
+    ãƒ–ãƒƒã‚¯å†…ã�®ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ã�«ãƒ¦ãƒ¼ã‚¶ãƒ¼ã�Œå…¥åŠ›ã�—ã�Ÿä¸Šæ›¸ã��åˆ—ã‚’ã€�
+    æ®µéšŽ1ã�®æŠ½å‡ºçµ�æžœã�¸ (ä¾�é ¼NO, å·¥ç¨‹å��) å�˜ä½�ã�§å¼•ã��ç¶™ã��ã€‚
+    ç©ºã�®ã‚»ãƒ«ã�¯ãƒžãƒ¼ã‚¸ã�—ã�ªã�„ï¼ˆæ–°è¦�æŠ½å‡ºå�´ã�®ç©ºã�®ã�¾ã�¾ï¼‰ã€‚
     """
     if out_df is None or out_df.empty:
         return out_df
@@ -7228,7 +7121,7 @@ def _merge_plan_sheet_user_overrides(out_df):
     try:
         df_old = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
     except Exception as e:
-        logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
+        logging.info("æ®µéšŽ1: æ—¢å­˜ã�®é…�å�°ã‚·ãƒ¼ãƒˆã‚’èª­ã‚�ã�ªã�„ã�Ÿã‚�ä¸Šæ›¸ã��ç¶™æ‰¿ã‚’ã‚¹ã‚­ãƒƒãƒ— (%s)", e)
         return out_df
     df_old.columns = df_old.columns.str.strip()
     df_old = _align_dataframe_headers_to_canonical(
@@ -7278,22 +7171,22 @@ def _merge_plan_sheet_user_overrides(out_df):
 
     if merged_rows:
         logging.info(
-            "段階1: 既存シートから上書き列を %s 行へ引き継ぎました（キー: 依頼NO+工程名）。",
+            "æ®µéšŽ1: æ—¢å­˜ã‚·ãƒ¼ãƒˆã�‹ã‚‰ä¸Šæ›¸ã��åˆ—ã‚’ %s è¡Œã�¸å¼•ã��ç¶™ã�Žã�¾ã�—ã�Ÿï¼ˆã‚­ãƒ¼: ä¾�é ¼NO+å·¥ç¨‹å��ï¼‰ã€‚",
             merged_rows,
         )
     return out_df
 
 
 # ---------------------------------------------------------------------------
-# 配台不要（2系統）
-#   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）
-#   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
-#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり
-#   いずれも apply_exclude_rules_config_to_plan_df で計画 DataFrame に反映される。
+# é…�å�°ä¸�è¦�ï¼ˆ2ç³»çµ±ï¼‰
+#   (A) DataFrame ä¸Šã�®ãƒ«ãƒ¼ãƒ« â€¦ å�Œä¸€ä¾�é ¼NOÃ—å�Œä¸€æ©Ÿæ¢°ã�§ã€Œåˆ†å‰²ã€�è¡Œã�« yesï¼ˆæ‰‹å…¥åŠ›ã�¯ä¸Šæ›¸ã��ã�—ã�ªã�„ï¼‰
+#   (B) ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�â€¦ å·¥ç¨‹+æ©Ÿæ¢°ã�”ã�¨ã�® C/D/E åˆ—ã€�Gemini ã�§ Dâ†’Eã€�
+#       ä¿�å­˜ãƒ­ãƒƒã‚¯æ™‚ã�¯ xlwings ã�§ A:E å�ŒæœŸâ†’Save ã�®ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã�‚ã‚Š
+#   ã�„ã�šã‚Œã‚‚ apply_exclude_rules_config_to_plan_df ã�§è¨ˆç”» DataFrame ã�«å��æ˜ ã�•ã‚Œã‚‹ã€‚
 # ---------------------------------------------------------------------------
 
 def _auto_exclude_cell_empty_for_autofill(v) -> bool:
-    """配台不要セルが未入力のときだけ自動で yes を書き込む。"""
+    """é…�å�°ä¸�è¦�ã‚»ãƒ«ã�Œæœªå…¥åŠ›ã�®ã�¨ã��ã� ã�‘è‡ªå‹•ã�§ yes ã‚’æ›¸ã��è¾¼ã‚€ã€‚"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return True
     if isinstance(v, str):
@@ -7303,7 +7196,7 @@ def _auto_exclude_cell_empty_for_autofill(v) -> bool:
 
 
 def _normalize_task_id_for_dup_grouping(raw) -> str:
-    """同一依頼NOのグルーピング用（表記ゆれ・英字の大小を寄せる）。"""
+    """å�Œä¸€ä¾�é ¼NOã�®ã‚°ãƒ«ãƒ¼ãƒ”ãƒ³ã‚°ç”¨ï¼ˆè¡¨è¨˜ã‚†ã‚Œãƒ»è‹±å­—ã�®å¤§å°�ã‚’å¯„ã�›ã‚‹ï¼‰ã€‚"""
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return ""
     if isinstance(raw, float) and raw == int(raw):
@@ -7317,19 +7210,19 @@ def _normalize_task_id_for_dup_grouping(raw) -> str:
 
 
 def _process_name_is_bunkatsu_for_auto_exclude(raw) -> bool:
-    """工程名が「分割」（空白除去・NFKC 後）。"""
+    """å·¥ç¨‹å��ã�Œã€Œåˆ†å‰²ã€�ï¼ˆç©ºç™½é™¤åŽ»ãƒ»NFKC å¾Œï¼‰ã€‚"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
-    t = re.sub(r"[\s\u3000]+", "", t)
-    return t == "\u5206\u5272"
+    t = re.sub(r"[\sã€€]+", "", t)
+    return t == "åˆ†å‰²"
 
 
 def _apply_auto_exclude_bunkatsu_duplicate_machine(
-    df: pd.DataFrame, log_prefix: str = "段階1"
+    df: pd.DataFrame, log_prefix: str = "æ®µéšŽ1"
 ) -> pd.DataFrame:
     """
-    同一依頼NOが2行以上あり、かつ空でない同一機械名が2行以上あるグループでは、
-    工程名が「分割」の行の「配台不要」に yes を入れる（セルが空のときのみ）。
-    機械名は _normalize_equipment_match_key で重複判定。
+    å�Œä¸€ä¾�é ¼NOã�Œ2è¡Œä»¥ä¸Šã�‚ã‚Šã€�ã�‹ã�¤ç©ºã�§ã�ªã�„å�Œä¸€æ©Ÿæ¢°å��ã�Œ2è¡Œä»¥ä¸Šã�‚ã‚‹ã‚°ãƒ«ãƒ¼ãƒ—ã�§ã�¯ã€�
+    å·¥ç¨‹å��ã�Œã€Œåˆ†å‰²ã€�ã�®è¡Œã�®ã€Œé…�å�°ä¸�è¦�ã€�ã�« yes ã‚’å…¥ã‚Œã‚‹ï¼ˆã‚»ãƒ«ã�Œç©ºã�®ã�¨ã��ã�®ã�¿ï¼‰ã€‚
+    æ©Ÿæ¢°å��ã�¯ _normalize_equipment_match_key ã�§é‡�è¤‡åˆ¤å®šã€‚
     """
     if df is None or df.empty:
         return df
@@ -7339,7 +7232,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             return df
     if PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
-    # read_excel 等で StringDtype になると数値・真偽の .at 代入で TypeError になるため object に寄せる
+    # read_excel ç­‰ã�§ StringDtype ã�«ã�ªã‚‹ã�¨æ•°å€¤ãƒ»çœŸå�½ã�® .at ä»£å…¥ã�§ TypeError ã�«ã�ªã‚‹ã�Ÿã‚� object ã�«å¯„ã�›ã‚‹
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
 
     by_tid = defaultdict(list)
@@ -7361,34 +7254,6 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             counts[mn_key] += 1
         if not any(c >= 2 for c in counts.values()):
             continue
-        # #region agent log
-        if _tid_key == "W4-13":
-            _rows_dbg = []
-            for i in idx_list:
-                _proc = df.at[i, TASK_COL_MACHINE]
-                _rows_dbg.append(
-                    {
-                        "idx": int(i),
-                        "process": str(_proc),
-                        "machine_name": str(df.at[i, TASK_COL_MACHINE_NAME]),
-                        "is_bunkatsu_name": _process_name_is_bunkatsu_for_auto_exclude(
-                            _proc
-                        ),
-                        "exclude_empty": _auto_exclude_cell_empty_for_autofill(
-                            df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
-                        ),
-                    }
-                )
-            _agent_debug_ndjson(
-                "H1",
-                "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
-                "w413_dup_machine_group_inspection",
-                {
-                    "counts": {str(k): int(v) for k, v in counts.items()},
-                    "rows": _rows_dbg,
-                },
-            )
-        # #endregion
         for i in idx_list:
             if not _process_name_is_bunkatsu_for_auto_exclude(df.at[i, TASK_COL_MACHINE]):
                 continue
@@ -7396,30 +7261,13 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
             ):
                 continue
-            # 列が StringDtype のとき int 代入で TypeError になるため文字列にする（_plan_row_exclude_from_assignment は yes を真とみなす）
+            # åˆ—ã�Œ StringDtype ã�®ã�¨ã�� int ä»£å…¥ã�§ TypeError ã�«ã�ªã‚‹ã�Ÿã‚�æ–‡å­—åˆ—ã�«ã�™ã‚‹ï¼ˆ_plan_row_exclude_from_assignment ã�¯ yes ã‚’çœŸã�¨ã�¿ã�ªã�™ï¼‰
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
             n_set += 1
-            # #region agent log
-            if _tid_key == "W4-13":
-                _agent_debug_ndjson(
-                    "H1",
-                    "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
-                    "split_row_auto_exclude_yes",
-                    {
-                        "task_id": _tid_key,
-                        "row_index": int(i),
-                        "process": str(df.at[i, TASK_COL_MACHINE]),
-                        "machine_name": str(df.at[i, TASK_COL_MACHINE_NAME]),
-                        "machine_key_counts": {
-                            str(k): int(v) for k, v in counts.items()
-                        },
-                    },
-                )
-            # #endregion
 
     if n_set:
         logging.info(
-            "%s: 同一依頼NOかつ同一機械名が複数行あるグループで、工程名「分割」の行 %s 件に「配台不要」=yes を自動設定しました。",
+            "%s: å�Œä¸€ä¾�é ¼NOã�‹ã�¤å�Œä¸€æ©Ÿæ¢°å��ã�Œè¤‡æ•°è¡Œã�‚ã‚‹ã‚°ãƒ«ãƒ¼ãƒ—ã�§ã€�å·¥ç¨‹å��ã€Œåˆ†å‰²ã€�ã�®è¡Œ %s ä»¶ã�«ã€Œé…�å�°ä¸�è¦�ã€�=yes ã‚’è‡ªå‹•è¨­å®šã�—ã�¾ã�—ã�Ÿã€‚",
             log_prefix,
             n_set,
         )
@@ -7427,16 +7275,16 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
 
 
 def _normalize_process_name_for_rule_match(raw) -> str:
-    """工程名のルール照合（NFKC・空白除去）。"""
+    """å·¥ç¨‹å��ã�®ãƒ«ãƒ¼ãƒ«ç…§å�ˆï¼ˆNFKCãƒ»ç©ºç™½é™¤åŽ»ï¼‰ã€‚"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
-    t = re.sub(r"[\s　]+", "", t)
+    t = re.sub(r"[\sã€€]+", "", t)
     return t
 
 
 def _exclude_rules_sheet_header_map(ws) -> dict:
-    """1行目見出し → 列番号(1始まり)。
-    openpyxl は新規シート直後に max_column が 0 のままのことがあり、見出しが読めず保存前に return してしまう。
-    そのため最低 A～E 列は必ず走査する。
+    """1è¡Œç›®è¦‹å‡ºã�— â†’ åˆ—ç•ªå�·(1å§‹ã�¾ã‚Š)ã€‚
+    openpyxl ã�¯æ–°è¦�ã‚·ãƒ¼ãƒˆç›´å¾Œã�« max_column ã�Œ 0 ã�®ã�¾ã�¾ã�®ã�“ã�¨ã�Œã�‚ã‚Šã€�è¦‹å‡ºã�—ã�Œèª­ã‚�ã�šä¿�å­˜å‰�ã�« return ã�—ã�¦ã�—ã�¾ã�†ã€‚
+    ã��ã�®ã�Ÿã‚�æœ€ä½Ž Aï½žE åˆ—ã�¯å¿…ã�šèµ°æŸ»ã�™ã‚‹ã€‚
     """
     h = {}
     last_col = max(5, int(ws.max_column or 0))
@@ -7449,8 +7297,8 @@ def _exclude_rules_sheet_header_map(ws) -> dict:
 
 def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tuple[int, int, int, int, int]:
     """
-    1行目に標準見出し（工程名・機械名・配台不要・配台不能ロジック・ロジック式）があることを保証する。
-    手動で空シートだけ追加した場合は A1:E1 が空のため、ここで書き込んで列番号を返す。
+    1è¡Œç›®ã�«æ¨™æº–è¦‹å‡ºã�—ï¼ˆå·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ãƒ»é…�å�°ä¸�è¦�ãƒ»é…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯ãƒ»ãƒ­ã‚¸ãƒƒã‚¯å¼�ï¼‰ã�Œã�‚ã‚‹ã�“ã�¨ã‚’ä¿�è¨¼ã�™ã‚‹ã€‚
+    æ‰‹å‹•ã�§ç©ºã‚·ãƒ¼ãƒˆã� ã�‘è¿½åŠ ã�—ã�Ÿå ´å�ˆã�¯ A1:E1 ã�Œç©ºã�®ã�Ÿã‚�ã€�ã�“ã�“ã�§æ›¸ã��è¾¼ã‚“ã�§åˆ—ç•ªå�·ã‚’è¿”ã�™ã€‚
     """
     headers = (
         EXCLUDE_RULE_COL_PROCESS,
@@ -7465,7 +7313,7 @@ def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tupl
     for i, name in enumerate(headers, start=1):
         ws.cell(row=1, column=i, value=name)
     logging.info(
-        "%s: 「%s」の見出しが無い／列名が一致しないため、標準の1行目（A1:E1）を設定しました。",
+        "%s: ã€Œ%sã€�ã�®è¦‹å‡ºã�—ã�Œç„¡ã�„ï¼�åˆ—å��ã�Œä¸€è‡´ã�—ã�ªã�„ã�Ÿã‚�ã€�æ¨™æº–ã�®1è¡Œç›®ï¼ˆA1:E1ï¼‰ã‚’è¨­å®šã�—ã�¾ã�—ã�Ÿã€‚",
         log_prefix,
         EXCLUDE_RULES_SHEET_NAME,
     )
@@ -7482,9 +7330,9 @@ def _compact_exclude_rules_data_rows(
     log_prefix: str,
 ) -> tuple[int, int]:
     """
-    2 行目以降から「空行」を除いて上に詰める（元の並びは維持、ソートしない）。
-    空行: 工程名が空、または A～E 相当の5セルがすべて空白相当。
-    Returns (残したデータ行数, 削除した行数).
+    2 è¡Œç›®ä»¥é™�ã�‹ã‚‰ã€Œç©ºè¡Œã€�ã‚’é™¤ã�„ã�¦ä¸Šã�«è©°ã‚�ã‚‹ï¼ˆå…ƒã�®ä¸¦ã�³ã�¯ç¶­æŒ�ã€�ã‚½ãƒ¼ãƒˆã�—ã�ªã�„ï¼‰ã€‚
+    ç©ºè¡Œ: å·¥ç¨‹å��ã�Œç©ºã€�ã�¾ã�Ÿã�¯ Aï½žE ç›¸å½“ã�®5ã‚»ãƒ«ã�Œã�™ã�¹ã�¦ç©ºç™½ç›¸å½“ã€‚
+    Returns (æ®‹ã�—ã�Ÿãƒ‡ãƒ¼ã‚¿è¡Œæ•°, å‰Šé™¤ã�—ã�Ÿè¡Œæ•°).
     """
     max_r = int(ws.max_row or 1)
     if max_r < 2:
@@ -7514,7 +7362,7 @@ def _compact_exclude_rules_data_rows(
         ws.delete_rows(2, old_body)
         if old_body > 0:
             logging.info(
-                "%s: 「%s」は有効なデータ行が無かったため、データ行 %s 行を削除しました。",
+                "%s: ã€Œ%sã€�ã�¯æœ‰åŠ¹ã�ªãƒ‡ãƒ¼ã‚¿è¡Œã�Œç„¡ã�‹ã�£ã�Ÿã�Ÿã‚�ã€�ãƒ‡ãƒ¼ã‚¿è¡Œ %s è¡Œã‚’å‰Šé™¤ã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 old_body,
@@ -7531,7 +7379,7 @@ def _compact_exclude_rules_data_rows(
 
     if n_skip:
         logging.info(
-            "%s: 「%s」から空行を %s 件削除し、%s 行に詰めました（並び順は維持）。",
+            "%s: ã€Œ%sã€�ã�‹ã‚‰ç©ºè¡Œã‚’ %s ä»¶å‰Šé™¤ã�—ã€�%s è¡Œã�«è©°ã‚�ã�¾ã�—ã�Ÿï¼ˆä¸¦ã�³é †ã�¯ç¶­æŒ�ï¼‰ã€‚",
             log_prefix,
             EXCLUDE_RULES_SHEET_NAME,
             n_skip,
@@ -7550,7 +7398,7 @@ def _cell_is_blank_for_rule(v) -> bool:
 
 
 def _exclude_rule_c_column_is_yes(v) -> bool:
-    """C列「配台不要」がオン（この工程+機械パターンは常に配台不要）。"""
+    """Cåˆ—ã€Œé…�å�°ä¸�è¦�ã€�ã�Œã‚ªãƒ³ï¼ˆã�“ã�®å·¥ç¨‹+æ©Ÿæ¢°ãƒ‘ã‚¿ãƒ¼ãƒ³ã�¯å¸¸ã�«é…�å�°ä¸�è¦�ï¼‰ã€‚"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return False
     if isinstance(v, bool):
@@ -7561,7 +7409,7 @@ def _exclude_rule_c_column_is_yes(v) -> bool:
         except (TypeError, ValueError):
             pass
     s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-    return s in ("yes", "true", "1", "y", "はい", "○", "〇", "●")
+    return s in ("yes", "true", "1", "y", "ã�¯ã�„", "â—‹", "ã€‡", "â—�")
 
 
 def _task_row_matches_exclude_rule_target(
@@ -7578,7 +7426,7 @@ def _task_row_matches_exclude_rule_target(
 
 
 def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> list[tuple[str, str]]:
-    """加工計画DATA から、段階1と同じ抽出条件で (工程名, 機械名) の一覧（重複除く・順序維持）。"""
+    """åŠ å·¥è¨ˆç”»DATA ã�‹ã‚‰ã€�æ®µéšŽ1ã�¨å�Œã�˜æŠ½å‡ºæ�¡ä»¶ã�§ (å·¥ç¨‹å��, æ©Ÿæ¢°å��) ã�®ä¸€è¦§ï¼ˆé‡�è¤‡é™¤ã��ãƒ»é †åº�ç¶­æŒ�ï¼‰ã€‚"""
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for _, row in df_src.iterrows():
@@ -7624,7 +7472,7 @@ def _parse_exclude_rule_json_cell(raw) -> dict | None:
 
 
 def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
-    """Gemini／E列から得た dict が配台不要ルールとして有効か。"""
+    """Geminiï¼�Eåˆ—ã�‹ã‚‰å¾—ã�Ÿ dict ã�Œé…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«ã�¨ã�—ã�¦æœ‰åŠ¹ã�‹ã€‚"""
     if not isinstance(o, dict):
         return None
     if int(o.get("version") or 0) != 1:
@@ -7636,7 +7484,7 @@ def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
 
 
 def _exclude_rule_de_cache_key(stripped_blob: str) -> str:
-    """「配台不能ロジック」文言（正規化済み）に対する ai_remarks_cache 用キー。"""
+    """ã€Œé…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯ã€�æ–‡è¨€ï¼ˆæ­£è¦�åŒ–æ¸ˆã�¿ï¼‰ã�«å¯¾ã�™ã‚‹ ai_remarks_cache ç”¨ã‚­ãƒ¼ã€‚"""
     h = hashlib.sha256(stripped_blob.encode("utf-8")).hexdigest()
     return f"{AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE}:{h}"
 
@@ -7669,22 +7517,22 @@ def _cache_put_exclude_rule_de_parsed(
 def _exclude_rule_logic_gemini_schema_instructions() -> str:
     allowed = ", ".join(sorted(EXCLUDE_RULE_ALLOWED_COLUMNS))
     return (
-        "【スキーマ version は必ず 1】\n"
-        "1) 常に配台不要（説明が条件なしで外す意味）のとき:\n"
+        "ã€�ã‚¹ã‚­ãƒ¼ãƒž version ã�¯å¿…ã�š 1ã€‘\n"
+        "1) å¸¸ã�«é…�å�°ä¸�è¦�ï¼ˆèª¬æ˜Žã�Œæ�¡ä»¶ã�ªã�—ã�§å¤–ã�™æ„�å‘³ï¼‰ã�®ã�¨ã��:\n"
         '{"version":1,"mode":"always_exclude"}\n\n'
-        "2) 列の条件で配台不要とするとき:\n"
-        '{"version":1,"mode":"conditions","require_all": true または false,"conditions":[ ... ]}\n\n'
-        "conditions の各要素:\n"
-        "- {\"column\":\"列名\",\"op\":\"empty\"} … セルが空\n"
-        "- {\"column\":\"列名\",\"op\":\"not_empty\"}\n"
-        "- {\"column\":\"列名\",\"op\":\"eq\",\"value\":\"文字列\"} / ne / contains / not_contains / regex（正規表現）\n"
-        "- {\"column\":\"列名\",\"op\":\"gt\"|\"gte\"|\"lt\"|\"lte\",\"value\":数値} … 数値比較（列は数として解釈）\n\n"
-        f"【使用可能な列名のみ】（これ以外は使わない）:\n{allowed}\n"
+        "2) åˆ—ã�®æ�¡ä»¶ã�§é…�å�°ä¸�è¦�ã�¨ã�™ã‚‹ã�¨ã��:\n"
+        '{"version":1,"mode":"conditions","require_all": true ã�¾ã�Ÿã�¯ false,"conditions":[ ... ]}\n\n'
+        "conditions ã�®å�„è¦�ç´ :\n"
+        "- {\"column\":\"åˆ—å��\",\"op\":\"empty\"} â€¦ ã‚»ãƒ«ã�Œç©º\n"
+        "- {\"column\":\"åˆ—å��\",\"op\":\"not_empty\"}\n"
+        "- {\"column\":\"åˆ—å��\",\"op\":\"eq\",\"value\":\"æ–‡å­—åˆ—\"} / ne / contains / not_contains / regexï¼ˆæ­£è¦�è¡¨ç�¾ï¼‰\n"
+        "- {\"column\":\"åˆ—å��\",\"op\":\"gt\"|\"gte\"|\"lt\"|\"lte\",\"value\":æ•°å€¤} â€¦ æ•°å€¤æ¯”è¼ƒï¼ˆåˆ—ã�¯æ•°ã�¨ã�—ã�¦è§£é‡ˆï¼‰\n\n"
+        f"ã€�ä½¿ç”¨å�¯èƒ½ã�ªåˆ—å��ã�®ã�¿ã€‘ï¼ˆã�“ã‚Œä»¥å¤–ã�¯ä½¿ã‚�ã�ªã�„ï¼‰:\n{allowed}\n"
     )
 
 
 def _parse_exclude_rule_json_array_response(text: str) -> list | None:
-    """モデル応答から JSON 配列を取り出す（```json フェンス付き可）。"""
+    """ãƒ¢ãƒ‡ãƒ«å¿œç­”ã�‹ã‚‰ JSON é…�åˆ—ã‚’å�–ã‚Šå‡ºã�™ï¼ˆ```json ãƒ•ã‚§ãƒ³ã‚¹ä»˜ã��å�¯ï¼‰ã€‚"""
     s = (text or "").strip()
     if not s:
         return None
@@ -7714,7 +7562,7 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
         return False
     col = cond.get("column")
     if col not in EXCLUDE_RULE_ALLOWED_COLUMNS:
-        logging.warning("配台不要ルール: 未対応の列名をスキップしました: %s", col)
+        logging.warning("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: æœªå¯¾å¿œã�®åˆ—å��ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿ: %s", col)
         return False
     op = str(cond.get("op") or "").strip().lower()
     val = _row_scalar_for_exclude_rule(row, col)
@@ -7766,7 +7614,7 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
 
 def evaluate_exclude_rule_json_for_row(rule: dict, row) -> bool:
     """
-    E列の JSON（version=1）を評価し、当該タスク行を配台不要とすべきなら True。
+    Eåˆ—ã�® JSONï¼ˆversion=1ï¼‰ã‚’è©•ä¾¡ã�—ã€�å½“è©²ã‚¿ã‚¹ã‚¯è¡Œã‚’é…�å�°ä¸�è¦�ã�¨ã�™ã�¹ã��ã�ªã‚‰ Trueã€‚
     mode: always_exclude | conditions
     """
     if not isinstance(rule, dict) or int(rule.get("version") or 0) != 1:
@@ -7791,8 +7639,8 @@ def evaluate_exclude_rule_json_for_row(rule: dict, row) -> bool:
 
 def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None:
     """
-    D列の自然言語を Gemini で JSON ルールに変換。失敗時 None。
-    json/ai_remarks_cache.json に TTL 付きでキャッシュ（同一文言なら API を呼ばない）。
+    Dåˆ—ã�®è‡ªç„¶è¨€èªžã‚’ Gemini ã�§ JSON ãƒ«ãƒ¼ãƒ«ã�«å¤‰æ�›ã€‚å¤±æ•—æ™‚ Noneã€‚
+    json/ai_remarks_cache.json ã�« TTL ä»˜ã��ã�§ã‚­ãƒ£ãƒƒã‚·ãƒ¥ï¼ˆå�Œä¸€æ–‡è¨€ã�ªã‚‰ API ã‚’å‘¼ã�°ã�ªã�„ï¼‰ã€‚
     """
     blob = str(natural_language or "").strip()
     if not blob:
@@ -7800,24 +7648,24 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
     ai_cache = load_ai_cache()
     hit = _cache_get_exclude_rule_de_parsed(ai_cache, blob)
     if hit is not None:
-        logging.info("配台不要ルール: AIキャッシュヒット（配台不能ロジック→JSON）")
+        logging.info("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: AIã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ’ãƒƒãƒˆï¼ˆé…�å�°ä¸�èƒ½ãƒ­ã‚¸ãƒƒã‚¯â†’JSONï¼‰")
         return hit
     if not API_KEY:
         return None
     schema = _exclude_rule_logic_gemini_schema_instructions()
     prompt = (
-        "あなたは工場の配台システム用です。次の「配台不能の説明」を、タスク1行を判定する機械可読ルールに変換してください。\n\n"
-        "【出力】先頭が { で終わりが } の JSON オブジェクト1つのみ（説明・マークダウン禁止）。\n\n"
+        "ã�‚ã�ªã�Ÿã�¯å·¥å ´ã�®é…�å�°ã‚·ã‚¹ãƒ†ãƒ ç”¨ã�§ã�™ã€‚æ¬¡ã�®ã€Œé…�å�°ä¸�èƒ½ã�®èª¬æ˜Žã€�ã‚’ã€�ã‚¿ã‚¹ã‚¯1è¡Œã‚’åˆ¤å®šã�™ã‚‹æ©Ÿæ¢°å�¯èª­ãƒ«ãƒ¼ãƒ«ã�«å¤‰æ�›ã�—ã�¦ã��ã� ã�•ã�„ã€‚\n\n"
+        "ã€�å‡ºåŠ›ã€‘å…ˆé ­ã�Œ { ã�§çµ‚ã‚�ã‚Šã�Œ } ã�® JSON ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ1ã�¤ã�®ã�¿ï¼ˆèª¬æ˜Žãƒ»ãƒžãƒ¼ã‚¯ãƒ€ã‚¦ãƒ³ç¦�æ­¢ï¼‰ã€‚\n\n"
         f"{schema}\n"
-        f"【説明文】\n{blob}\n"
+        f"ã€�èª¬æ˜Žæ–‡ã€‘\n{blob}\n"
     )
     try:
         ppath = os.path.join(log_dir, "ai_exclude_rule_logic_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("配台不要ルール: プロンプト → %s", ppath)
+        logging.info("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆ â†’ %s", ppath)
     except OSError as ex:
-        logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
+        logging.warning("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆä¿�å­˜å¤±æ•—: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
         res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -7835,14 +7683,14 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
             save_ai_cache(ai_cache)
         return parsed
     except Exception as e:
-        logging.warning("配台不要ルール: Gemini 変換失敗: %s", e)
+        logging.warning("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: Gemini å¤‰æ�›å¤±æ•—: %s", e)
         return None
 
 
 def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]:
     """
-    複数の D 列文言を 1 回の Gemini 呼び出しで JSON 化。失敗・要素数不一致時は 1 件ずつにフォールバック。
-    json/ai_remarks_cache.json にヒットした文言は API を呼ばない。
+    è¤‡æ•°ã�® D åˆ—æ–‡è¨€ã‚’ 1 å›žã�® Gemini å‘¼ã�³å‡ºã�—ã�§ JSON åŒ–ã€‚å¤±æ•—ãƒ»è¦�ç´ æ•°ä¸�ä¸€è‡´æ™‚ã�¯ 1 ä»¶ã�šã�¤ã�«ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã€‚
+    json/ai_remarks_cache.json ã�«ãƒ’ãƒƒãƒˆã�—ã�Ÿæ–‡è¨€ã�¯ API ã‚’å‘¼ã�°ã�ªã�„ã€‚
     """
     n = len(blobs)
     if n == 0:
@@ -7861,7 +7709,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             pend_b.append(s)
     if not pend_b:
         logging.info(
-            "配台不要ルール: AIキャッシュのみで D→E バッチ %s 件を完結（API 呼び出しなし）。",
+            "é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: AIã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�®ã�¿ã�§ Dâ†’E ãƒ�ãƒƒãƒ� %s ä»¶ã‚’å®Œçµ�ï¼ˆAPI å‘¼ã�³å‡ºã�—ã�ªã�—ï¼‰ã€‚",
             n,
         )
         return out
@@ -7875,19 +7723,19 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     schema = _exclude_rule_logic_gemini_schema_instructions()
     numbered = "\n".join(f"[{i + 1}] {str(b).strip()}" for i, b in enumerate(pend_b))
     prompt = (
-        "あなたは工場の配台システム用です。以下の N 個の「配台不能の説明」を、与えた順序でそれぞれ JSON ルールに変換してください。\n\n"
-        f"【出力】JSON 配列のみ。先頭が [ で終わりが ] 。要素数は必ず {m}（Markdown・説明禁止）。\n"
-        f"配列の先頭要素が [1]、2 番目が [2] … に対応します。\n\n"
+        "ã�‚ã�ªã�Ÿã�¯å·¥å ´ã�®é…�å�°ã‚·ã‚¹ãƒ†ãƒ ç”¨ã�§ã�™ã€‚ä»¥ä¸‹ã�® N å€‹ã�®ã€Œé…�å�°ä¸�èƒ½ã�®èª¬æ˜Žã€�ã‚’ã€�ä¸Žã�ˆã�Ÿé †åº�ã�§ã��ã‚Œã�žã‚Œ JSON ãƒ«ãƒ¼ãƒ«ã�«å¤‰æ�›ã�—ã�¦ã��ã� ã�•ã�„ã€‚\n\n"
+        f"ã€�å‡ºåŠ›ã€‘JSON é…�åˆ—ã�®ã�¿ã€‚å…ˆé ­ã�Œ [ ã�§çµ‚ã‚�ã‚Šã�Œ ] ã€‚è¦�ç´ æ•°ã�¯å¿…ã�š {m}ï¼ˆMarkdownãƒ»èª¬æ˜Žç¦�æ­¢ï¼‰ã€‚\n"
+        f"é…�åˆ—ã�®å…ˆé ­è¦�ç´ ã�Œ [1]ã€�2 ç•ªç›®ã�Œ [2] â€¦ ã�«å¯¾å¿œã�—ã�¾ã�™ã€‚\n\n"
         f"{schema}\n"
-        f"【説明文】\n{numbered}\n"
+        f"ã€�èª¬æ˜Žæ–‡ã€‘\n{numbered}\n"
     )
     try:
         ppath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("配台不要ルール(バッチ): プロンプト → %s", ppath)
+        logging.info("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«(ãƒ�ãƒƒãƒ�): ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆ â†’ %s", ppath)
     except OSError as ex:
-        logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
+        logging.warning("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«(ãƒ�ãƒƒãƒ�): ãƒ—ãƒ­ãƒ³ãƒ—ãƒˆä¿�å­˜å¤±æ•—: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
         res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -7902,7 +7750,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
         arr = _parse_exclude_rule_json_array_response(raw)
         if not isinstance(arr, list) or len(arr) != m:
             logging.warning(
-                "配台不要ルール: バッチ応答が不正（要素数 %s、期待 %s）。1 件ずつ再試行します。",
+                "é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: ãƒ�ãƒƒãƒ�å¿œç­”ã�Œä¸�æ­£ï¼ˆè¦�ç´ æ•° %sã€�æœŸå¾… %sï¼‰ã€‚1 ä»¶ã�šã�¤å†�è©¦è¡Œã�—ã�¾ã�™ã€‚",
                 len(arr) if isinstance(arr, list) else None,
                 m,
             )
@@ -7920,7 +7768,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             save_ai_cache(ai_cache)
         return out
     except Exception as e:
-        logging.warning("配台不要ルール: バッチ Gemini 失敗、単発にフォールバック: %s", e)
+        logging.warning("é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: ãƒ�ãƒƒãƒ� Gemini å¤±æ•—ã€�å�˜ç™ºã�«ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯: %s", e)
         for j, idx in enumerate(pend_i):
             out[idx] = _ai_compile_exclude_rule_logic_to_json(pend_b[j])
         return out
@@ -7934,10 +7782,10 @@ def _log_exclude_rules_sheet_debug(
     exc: BaseException | None = None,
 ) -> None:
     """
-    「設定_配台不要工程」の保守処理のイベントログ。
+    ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã�®ä¿�å®ˆå‡¦ç�†ã�®ã‚¤ãƒ™ãƒ³ãƒˆãƒ­ã‚°ã€‚
 
-    設定シート処理の成否を log/exclude_rules_sheet_debug.txt に追記し、execution_log にもタグ付きで出力する。
-    event 例: START, OPEN_OK, OPEN_RETRY, OPEN_FAIL, HEADER_FIX, SYNC_ROWS, OPENPYXL_SAVE_OK, OPENPYXL_SAVE_FAIL,
+    è¨­å®šã‚·ãƒ¼ãƒˆå‡¦ç�†ã�®æˆ�å�¦ã‚’ log/exclude_rules_sheet_debug.txt ã�«è¿½è¨˜ã�—ã€�execution_log ã�«ã‚‚ã‚¿ã‚°ä»˜ã��ã�§å‡ºåŠ›ã�™ã‚‹ã€‚
+    event ä¾‹: START, OPEN_OK, OPEN_RETRY, OPEN_FAIL, HEADER_FIX, SYNC_ROWS, OPENPYXL_SAVE_OK, OPENPYXL_SAVE_FAIL,
     OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY, OPENPYXL_RETRY_WAIT, OPENPYXL_VBA_FALLBACK, MATRIX_TSV_WRITTEN,
     XLWINGS_UNAVAILABLE, XLWINGS_ATTACH_FAIL, XLWINGS_SYNC_SKIP, XLWINGS_SYNC_OK, XLWINGS_SYNC_FAIL,
     E_SIDECAR_WRITTEN, E_SIDECAR_APPLIED, FALLBACK_FAIL,
@@ -7961,9 +7809,9 @@ def _log_exclude_rules_sheet_debug(
         with open(exclude_rules_sheet_debug_log_path, "a", encoding="utf-8", newline="\n") as df:
             df.write(block)
     except OSError as wex:
-        logging.warning("exclude_rules_sheet_debug.txt へ書けません: %s", wex)
+        logging.warning("exclude_rules_sheet_debug.txt ã�¸æ›¸ã�‘ã�¾ã�›ã‚“: %s", wex)
 
-    tag = "[設定_配台不要工程]"
+    tag = "[è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹]"
     msg = f"{tag} {event} | {log_prefix} | {summary}"
     if details:
         msg += f" | {details}"
@@ -8006,7 +7854,7 @@ def _log_exclude_rules_sheet_debug(
 
 
 def _xlwings_paths_equivalent(disk_path: str, book_fullname: str) -> bool:
-    """ディスクパスと xlwings Book.full_name が同一ファイルを指すか（表記ゆれを多少吸収）。"""
+    """ãƒ‡ã‚£ã‚¹ã‚¯ãƒ‘ã‚¹ã�¨ xlwings Book.full_name ã�Œå�Œä¸€ãƒ•ã‚¡ã‚¤ãƒ«ã‚’æŒ‡ã�™ã�‹ï¼ˆè¡¨è¨˜ã‚†ã‚Œã‚’å¤šå°‘å�¸å�Žï¼‰ã€‚"""
     try:
         fn = str(book_fullname).strip()
     except Exception:
@@ -8052,7 +7900,7 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
 
 
 def _xlwings_find_book_on_running_instances(abs_path: str):
-    """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。"""
+    """èµ·å‹•ä¸­ã�® Excel ã�‹ã‚‰ãƒ‘ã‚¹ä¸€è‡´ã�™ã‚‹ xlwings Book ã‚’è¿”ã�™ã€‚ç„¡ã�‘ã‚Œã�° Noneã€‚"""
     try:
         import xlwings as xw
     except ImportError:
@@ -8075,7 +7923,7 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
 
 
 def _xlwings_try_open_in_running_apps(abs_path: str):
-    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。"""
+    """æ—¢å­˜ã�® Excel.App ã�§ Workbooks.Open ã‚’è©¦ã�™ã€‚æˆ�åŠŸæ™‚ Bookã€�å¤±æ•—æ™‚ Noneã€‚"""
     try:
         import xlwings as xw
     except ImportError:
@@ -8090,7 +7938,7 @@ def _xlwings_try_open_in_running_apps(abs_path: str):
 
 
 def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool) -> None:
-    """専用起動した Excel は終了する。実行中 Excel でだけ Open したブックは失敗時のみ閉じる。"""
+    """å°‚ç”¨èµ·å‹•ã�—ã�Ÿ Excel ã�¯çµ‚äº†ã�™ã‚‹ã€‚å®Ÿè¡Œä¸­ Excel ã�§ã� ã�‘ Open ã�—ã�Ÿãƒ–ãƒƒã‚¯ã�¯å¤±æ•—æ™‚ã�®ã�¿é–‰ã�˜ã‚‹ã€‚"""
     if xw_book is None:
         return
     mode = info.get("mode", "keep")
@@ -8114,9 +7962,9 @@ def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool)
 
 def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
     """
-    マクロブックを xlwings で取得する（本番・テスト共通）。
-    戻り値: (Book, release_info) / 失敗時 None。
-    release_info: mode が keep または quit_excel、opened_wb_here が bool。
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã‚’ xlwings ã�§å�–å¾—ã�™ã‚‹ï¼ˆæœ¬ç•ªãƒ»ãƒ†ã‚¹ãƒˆå…±é€šï¼‰ã€‚
+    æˆ»ã‚Šå€¤: (Book, release_info) / å¤±æ•—æ™‚ Noneã€‚
+    release_info: mode ã�Œ keep ã�¾ã�Ÿã�¯ quit_excelã€�opened_wb_here ã�Œ boolã€‚
     """
     try:
         import xlwings as xw  # noqa: F401
@@ -8124,7 +7972,7 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         _log_exclude_rules_sheet_debug(
             "XLWINGS_UNAVAILABLE",
             log_prefix,
-            "xlwings が import できません（pip install xlwings を確認）。",
+            "xlwings ã�Œ import ã�§ã��ã�¾ã�›ã‚“ï¼ˆpip install xlwings ã‚’ç¢ºèª�ï¼‰ã€‚",
         )
         return None
 
@@ -8152,7 +8000,7 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         _log_exclude_rules_sheet_debug(
             "XLWINGS_ATTACH_FAIL",
             log_prefix,
-            "xlwings でブックを開けませんでした。",
+            "xlwings ã�§ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“ã�§ã�—ã�Ÿã€‚",
             details=f"path={abs_path}",
             exc=ex,
         )
@@ -8166,13 +8014,13 @@ def _xlwings_attach_workbook_for_tests(
     allow_dispatch_open: bool = False,
 ):
     """
-    検証スクリプト用: 起動中ブックを優先し、必要なら表示付き Excel で開く。
-    戻り値: (Book, info, 説明文字列) または None。
+    æ¤œè¨¼ã‚¹ã‚¯ãƒªãƒ—ãƒˆç”¨: èµ·å‹•ä¸­ãƒ–ãƒƒã‚¯ã‚’å„ªå…ˆã�—ã€�å¿…è¦�ã�ªã‚‰è¡¨ç¤ºä»˜ã�� Excel ã�§é–‹ã��ã€‚
+    æˆ»ã‚Šå€¤: (Book, info, èª¬æ˜Žæ–‡å­—åˆ—) ã�¾ã�Ÿã�¯ Noneã€‚
     """
     abs_path = os.path.abspath(book_path)
     book = _xlwings_find_book_on_running_instances(abs_path)
     if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:既存インスタンス"
+        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:æ—¢å­˜ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹"
     if not allow_dispatch_open:
         return None
     try:
@@ -8190,7 +8038,7 @@ def _xlwings_attach_workbook_for_tests(
 
 
 def _xlwings_app_save_perf_state_push(app):
-    """VBA 側のスプラッシュポーリングと競合しにくくするため、同期・保存の短時間だけ Excel を静かにする。"""
+    """VBA å�´ã�®ã‚¹ãƒ—ãƒ©ãƒƒã‚·ãƒ¥ãƒ�ãƒ¼ãƒªãƒ³ã‚°ã�¨ç«¶å�ˆã�—ã�«ã��ã��ã�™ã‚‹ã�Ÿã‚�ã€�å�ŒæœŸãƒ»ä¿�å­˜ã�®çŸ­æ™‚é–“ã� ã�‘ Excel ã‚’é�™ã�‹ã�«ã�™ã‚‹ã€‚"""
     snap = {}
     for attr in ("screen_updating", "calculation", "enable_events"):
         try:
@@ -8232,10 +8080,10 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
     """
-    openpyxl で保存できないとき、xlwings で「設定_配台不要工程」A:E をメモリ上の値で上書きし Save。
+    openpyxl ã�§ä¿�å­˜ã�§ã��ã�ªã�„ã�¨ã��ã€�xlwings ã�§ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�A:E ã‚’ãƒ¡ãƒ¢ãƒªä¸Šã�®å€¤ã�§ä¸Šæ›¸ã��ã�— Saveã€‚
 
-    表示中シートに対する一括 .value だけだと、スプラッシュ＋ポーリング（D3=true）下で
-    Range 代入が数分かかる計測があり得る。同期中のみシートを一時非表示にし api.Value2 で書く。
+    è¡¨ç¤ºä¸­ã‚·ãƒ¼ãƒˆã�«å¯¾ã�™ã‚‹ä¸€æ‹¬ .value ã� ã�‘ã� ã�¨ã€�ã‚¹ãƒ—ãƒ©ãƒƒã‚·ãƒ¥ï¼‹ãƒ�ãƒ¼ãƒªãƒ³ã‚°ï¼ˆD3=trueï¼‰ä¸‹ã�§
+    Range ä»£å…¥ã�Œæ•°åˆ†ã�‹ã�‹ã‚‹è¨ˆæ¸¬ã�Œã�‚ã‚Šå¾—ã‚‹ã€‚å�ŒæœŸä¸­ã�®ã�¿ã‚·ãƒ¼ãƒˆã‚’ä¸€æ™‚é�žè¡¨ç¤ºã�«ã�— api.Value2 ã�§æ›¸ã��ã€‚
     """
     global _exclude_rules_effective_read_path
 
@@ -8244,7 +8092,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_SKIP",
             log_prefix,
-            "xlwings でブックに接続できず A:E 同期をスキップ。",
+            "xlwings ã�§ãƒ–ãƒƒã‚¯ã�«æŽ¥ç¶šã�§ã��ã�š A:E å�ŒæœŸã‚’ã‚¹ã‚­ãƒƒãƒ—ã€‚",
             details=f"path={wb_path}",
         )
         return False
@@ -8256,15 +8104,15 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             xw_book.app.display_alerts = False
         except Exception:
             pass
-        # 全シート名を列挙するとシート数分の COM 往復になり、D3=true 時は VBA ポーリングと競合して
-        # 1 シート数秒〜十数秒かかることがある（計測で 40 シート≈213s）。名前で直接解決する。
+        # å…¨ã‚·ãƒ¼ãƒˆå��ã‚’åˆ—æŒ™ã�™ã‚‹ã�¨ã‚·ãƒ¼ãƒˆæ•°åˆ†ã�® COM å¾€å¾©ã�«ã�ªã‚Šã€�D3=true æ™‚ã�¯ VBA ãƒ�ãƒ¼ãƒªãƒ³ã‚°ã�¨ç«¶å�ˆã�—ã�¦
+        # 1 ã‚·ãƒ¼ãƒˆæ•°ç§’ã€œå��æ•°ç§’ã�‹ã�‹ã‚‹ã�“ã�¨ã�Œã�‚ã‚‹ï¼ˆè¨ˆæ¸¬ã�§ 40 ã‚·ãƒ¼ãƒˆâ‰ˆ213sï¼‰ã€‚å��å‰�ã�§ç›´æŽ¥è§£æ±ºã�™ã‚‹ã€‚
         try:
             sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         except Exception:
             _log_exclude_rules_sheet_debug(
                 "XLWINGS_SYNC_SKIP",
                 log_prefix,
-                f"xlwings 側にシート「{EXCLUDE_RULES_SHEET_NAME}」がありません。",
+                f"xlwings å�´ã�«ã‚·ãƒ¼ãƒˆã€Œ{EXCLUDE_RULES_SHEET_NAME}ã€�ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚",
                 details=f"path={wb_path}",
             )
             return False
@@ -8280,7 +8128,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         try:
             try:
                 if int(sht.api.Visible) == -1:  # xlSheetVisible
-                    sht.api.Visible = 0  # xlSheetHidden（同期中だけ。再描画・ウィンドウ更新負荷を抑える）
+                    sht.api.Visible = 0  # xlSheetHiddenï¼ˆå�ŒæœŸä¸­ã� ã�‘ã€‚å†�æ��ç”»ãƒ»ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦æ›´æ–°è² è�·ã‚’æŠ‘ã�ˆã‚‹ï¼‰
                     hid_sheet_for_write = True
             except Exception:
                 pass
@@ -8302,11 +8150,11 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_OK",
             log_prefix,
-            "xlwings 経由で設定シート A〜E を同期しブックを保存しました。",
+            "xlwings çµŒç”±ã�§è¨­å®šã‚·ãƒ¼ãƒˆ Aã€œE ã‚’å�ŒæœŸã�—ãƒ–ãƒƒã‚¯ã‚’ä¿�å­˜ã�—ã�¾ã�—ã�Ÿã€‚",
             details=f"path={wb_path} rows={max_r}",
         )
         logging.info(
-            "%s: 設定シートを xlwings でマクロブックに保存しました（A〜E）。",
+            "%s: è¨­å®šã‚·ãƒ¼ãƒˆã‚’ xlwings ã�§ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�«ä¿�å­˜ã�—ã�¾ã�—ã�Ÿï¼ˆAã€œEï¼‰ã€‚",
             log_prefix,
         )
         return True
@@ -8314,7 +8162,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_FAIL",
             log_prefix,
-            "xlwings での A:E 同期または Save に失敗しました。",
+            "xlwings ã�§ã�® A:E å�ŒæœŸã�¾ã�Ÿã�¯ Save ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿã€‚",
             details=f"path={wb_path}",
             exc=ex,
         )
@@ -8323,17 +8171,17 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _xlwings_release_book_after_mutation(xw_book, info, ok)
 
 
-# 設定シートの列範囲（A〜E）。xlwings 同期・VBA 行列 TSV 出力でも使用。
+# è¨­å®šã‚·ãƒ¼ãƒˆã�®åˆ—ç¯„å›²ï¼ˆAã€œEï¼‰ã€‚xlwings å�ŒæœŸãƒ»VBA è¡Œåˆ— TSV å‡ºåŠ›ã�§ã‚‚ä½¿ç”¨ã€‚
 EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL = 5
 EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 
 
 def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> bool:
     """
-    設定シートのディスク反映。既定は xlwings で A:E 同期→Save（EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 のときのみ openpyxl save を試行）。
-    保存できないときは log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映する。
+    è¨­å®šã‚·ãƒ¼ãƒˆã�®ãƒ‡ã‚£ã‚¹ã‚¯å��æ˜ ã€‚æ—¢å®šã�¯ xlwings ã�§ A:E å�ŒæœŸâ†’Saveï¼ˆEXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 ã�®ã�¨ã��ã�®ã�¿ openpyxl save ã‚’è©¦è¡Œï¼‰ã€‚
+    ä¿�å­˜ã�§ã��ã�ªã�„ã�¨ã��ã�¯ log ã�«è¡Œåˆ— TSV ã‚’å‡ºã�—ã€�VBAã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_Aã�‹ã‚‰E_TSVã�‹ã‚‰å��æ˜ ã€�ã�§å��æ˜ ã�™ã‚‹ã€‚
 
-    _wb … 編集済み openpyxl ブック（openpyxl 経路時のみ save に使用）。
+    _wb â€¦ ç·¨é›†æ¸ˆã�¿ openpyxl ãƒ–ãƒƒã‚¯ï¼ˆopenpyxl çµŒè·¯æ™‚ã�®ã�¿ save ã�«ä½¿ç”¨ï¼‰ã€‚
     """
     global _exclude_rules_effective_read_path
 
@@ -8344,7 +8192,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
             _log_exclude_rules_sheet_debug(
                 "OPENPYXL_SAVE_FAIL",
                 log_prefix,
-                f"openpyxl での .xlsm 保存に失敗しました {which}（Excel で開きっぱなし・ロックの可能性）。",
+                f"openpyxl ã�§ã�® .xlsm ä¿�å­˜ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿ {which}ï¼ˆExcel ã�§é–‹ã��ã�£ã�±ã�ªã�—ãƒ»ãƒ­ãƒƒã‚¯ã�®å�¯èƒ½æ€§ï¼‰ã€‚",
                 details=f"path={wb_path}",
                 exc=ex,
             )
@@ -8354,11 +8202,11 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_OK",
             log_prefix,
-            "openpyxl で設定シートを含むブックを保存しました（A〜E）。",
+            "openpyxl ã�§è¨­å®šã‚·ãƒ¼ãƒˆã‚’å�«ã‚€ãƒ–ãƒƒã‚¯ã‚’ä¿�å­˜ã�—ã�¾ã�—ã�Ÿï¼ˆAã€œEï¼‰ã€‚",
             details=f"path={wb_path} {which}",
         )
         logging.info(
-            "%s: 設定シートを openpyxl でマクロブックに保存しました。%s",
+            "%s: è¨­å®šã‚·ãƒ¼ãƒˆã‚’ openpyxl ã�§ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�«ä¿�å­˜ã�—ã�¾ã�—ã�Ÿã€‚%s",
             log_prefix,
             which,
         )
@@ -8369,16 +8217,16 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
             log_prefix,
-            "設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。",
+            "è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�®ä¿�å­˜ã�§ã�¯ openpyxl save ã‚’è©¦è¡Œã�—ã�¾ã�›ã‚“ï¼ˆxlwings å�ŒæœŸã‚’å…ˆè¡Œã€‚å†�è©¦è¡Œã�™ã‚‹å ´å�ˆã�¯ EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1ï¼‰ã€‚",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: 設定_配台不要工程は openpyxl を試さず xlwings 同期→Save を試みます（不可なら VBA 用行列 TSV）。",
+            "%s: è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�¯ openpyxl ã‚’è©¦ã�•ã�š xlwings å�ŒæœŸâ†’Save ã‚’è©¦ã�¿ã�¾ã�™ï¼ˆä¸�å�¯ã�ªã‚‰ VBA ç”¨è¡Œåˆ— TSVï¼‰ã€‚",
             log_prefix,
         )
     elif not _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: 設定_配台不要工程は openpyxl で保存します（不可のときは xlwings 同期→Save、それも不可なら VBA 用行列 TSV）。",
+            "%s: è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�¯ openpyxl ã�§ä¿�å­˜ã�—ã�¾ã�™ï¼ˆä¸�å�¯ã�®ã�¨ã��ã�¯ xlwings å�ŒæœŸâ†’Saveã€�ã��ã‚Œã‚‚ä¸�å�¯ã�ªã‚‰ VBA ç”¨è¡Œåˆ— TSVï¼‰ã€‚",
             log_prefix,
         )
         labels = ("(1/4)", "(2/4)", "(3/4)", "(4/4)")
@@ -8387,7 +8235,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
                 _log_exclude_rules_sheet_debug(
                     "OPENPYXL_RETRY_WAIT",
                     log_prefix,
-                    f"openpyxl 再保存まで 2 秒待ちます {label}。",
+                    f"openpyxl å†�ä¿�å­˜ã�¾ã�§ 2 ç§’å¾…ã�¡ã�¾ã�™ {label}ã€‚",
                     details=f"path={wb_path}",
                 )
                 time_module.sleep(2.0)
@@ -8398,11 +8246,11 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_INCOMPATIBLE_SHEET",
             log_prefix,
-            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため openpyxl での保存を試みません。",
+            f"ãƒ–ãƒƒã‚¯ã�«ã€Œ{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}ã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl ã�§ã�®ä¿�å­˜ã‚’è©¦ã�¿ã�¾ã�›ã‚“ã€‚",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: ブックに「%s」があるため openpyxl save をスキップし、xlwings または行列 TSV に切り替えます。",
+            "%s: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� openpyxl save ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã€�xlwings ã�¾ã�Ÿã�¯è¡Œåˆ— TSV ã�«åˆ‡ã‚Šæ›¿ã�ˆã�¾ã�™ã€‚",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -8415,8 +8263,8 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
 
     if _write_exclude_rules_matrix_vba_tsv(wb_path, ws, log_prefix):
         logging.warning(
-            "%s: 設定シートを log\\%s に出力しました。"
-            " Excel でマクロ「設定_配台不要工程_AからE_TSVから反映」を実行してください。",
+            "%s: è¨­å®šã‚·ãƒ¼ãƒˆã‚’ log\\%s ã�«å‡ºåŠ›ã�—ã�¾ã�—ã�Ÿã€‚"
+            " Excel ã�§ãƒžã‚¯ãƒ­ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_Aã�‹ã‚‰E_TSVã�‹ã‚‰å��æ˜ ã€�ã‚’å®Ÿè¡Œã�—ã�¦ã��ã� ã�•ã�„ã€‚",
             log_prefix,
             EXCLUDE_RULES_MATRIX_VBA_FILENAME,
         )
@@ -8424,7 +8272,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     _log_exclude_rules_sheet_debug(
         "OPENPYXL_VBA_FALLBACK",
         log_prefix,
-        "openpyxl 保存に失敗したため VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映が必要な場合があります）。",
+        "openpyxl ä¿�å­˜ã�«å¤±æ•—ã�—ã�Ÿã�Ÿã‚� VBA ç”¨è¡Œåˆ— TSV ã‚’å‡ºåŠ›ã�—ã�¾ã�—ã�Ÿï¼ˆãƒ–ãƒƒã‚¯ã�¯ Excel ä¸Šã�§æ‰‹å‹•å��æ˜ ã�Œå¿…è¦�ã�ªå ´å�ˆã�Œã�‚ã‚Šã�¾ã�™ï¼‰ã€‚",
         details=f"path={wb_path}",
     )
     return False
@@ -8460,7 +8308,7 @@ def _serialize_cell_for_matrix_tsv(val) -> str:
 def _write_exclude_rules_matrix_vba_tsv(
     wb_path: str, ws, log_prefix: str
 ) -> bool:
-    """VBA 用: 設定シート 1 行目〜 max_row の A〜E を Base64(UTF-8) 付き TSV で出力する。"""
+    """VBA ç”¨: è¨­å®šã‚·ãƒ¼ãƒˆ 1 è¡Œç›®ã€œ max_row ã�® Aã€œE ã‚’ Base64(UTF-8) ä»˜ã�� TSV ã�§å‡ºåŠ›ã�™ã‚‹ã€‚"""
     max_r = max(1, int(ws.max_row or 1))
     lines = [
         "v1",
@@ -8483,19 +8331,19 @@ def _write_exclude_rules_matrix_vba_tsv(
         _log_exclude_rules_sheet_debug(
             "MATRIX_TSV_WRITTEN",
             log_prefix,
-            "設定シート A〜E を VBA 反映用 TSV に書き出しました（openpyxl 保存不可時）。",
+            "è¨­å®šã‚·ãƒ¼ãƒˆ Aã€œE ã‚’ VBA å��æ˜ ç”¨ TSV ã�«æ›¸ã��å‡ºã�—ã�¾ã�—ã�Ÿï¼ˆopenpyxl ä¿�å­˜ä¸�å�¯æ™‚ï¼‰ã€‚",
             details=f"path={path} rows={max_r}",
         )
         return True
     except OSError as ex:
-        logging.warning("%s: 行列 VBA 用 TSV を書けません: %s", log_prefix, ex)
+        logging.warning("%s: è¡Œåˆ— VBA ç”¨ TSV ã‚’æ›¸ã�‘ã�¾ã�›ã‚“: %s", log_prefix, ex)
         return False
 
 
 def _build_exclude_rules_list_from_openpyxl_ws(
     ws, c_proc: int, c_mach: int, c_flag: int, c_e: int
 ) -> list[dict]:
-    """openpyxl 上の設定シートから _load_exclude_rules_from_workbook と同形のリストを構築。"""
+    """openpyxl ä¸Šã�®è¨­å®šã‚·ãƒ¼ãƒˆã�‹ã‚‰ _load_exclude_rules_from_workbook ã�¨å�Œå½¢ã�®ãƒªã‚¹ãƒˆã‚’æ§‹ç¯‰ã€‚"""
     rules: list[dict] = []
     max_r = int(ws.max_row or 1)
     for r in range(2, max_r + 1):
@@ -8554,7 +8402,7 @@ def _clear_exclude_rules_e_apply_files() -> None:
 def _write_exclude_rules_e_vba_tsv_from_cells(
     wb_path: str, c_e: int, cells: dict[str, str], log_prefix: str
 ) -> None:
-    """VBA 用: 行番号と Base64(UTF-8) セル文字列の TSV。"""
+    """VBA ç”¨: è¡Œç•ªå�·ã�¨ Base64(UTF-8) ã‚»ãƒ«æ–‡å­—åˆ—ã�® TSVã€‚"""
     lines = [
         "v1",
         "workbook\t" + os.path.abspath(wb_path),
@@ -8574,19 +8422,19 @@ def _write_exclude_rules_e_vba_tsv_from_cells(
         _log_exclude_rules_sheet_debug(
             "E_VBA_TSV_WRITTEN",
             log_prefix,
-            "E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。",
+            "E åˆ—ã‚’ VBA å��æ˜ ç”¨ TSV ã�«æ›¸ã��å‡ºã�—ã�¾ã�—ã�Ÿï¼ˆä¿�å­˜å¤±æ•—æ™‚ã�®ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ç”¨ï¼‰ã€‚",
             details=f"path={path_tsv} cells={len(cells)}",
         )
     except OSError as ex:
-        logging.warning("%s: E 列 VBA 用 TSV を書けません: %s", log_prefix, ex)
+        logging.warning("%s: E åˆ— VBA ç”¨ TSV ã‚’æ›¸ã�‘ã�¾ã�›ã‚“: %s", log_prefix, ex)
 
 
 def _write_exclude_rules_e_apply_artifacts(
     wb_path: str, ws, c_e: int, log_prefix: str
 ) -> None:
     """
-    E 列（非空）を JSON サイドカードと VBA 用 TSV に書く。空なら両ファイルを削除。
-    Python 次回起動時の E 復元用 JSON と、マクロからの E 書込み用 TSV。
+    E åˆ—ï¼ˆé�žç©ºï¼‰ã‚’ JSON ã‚µã‚¤ãƒ‰ã‚«ãƒ¼ãƒ‰ã�¨ VBA ç”¨ TSV ã�«æ›¸ã��ã€‚ç©ºã�ªã‚‰ä¸¡ãƒ•ã‚¡ã‚¤ãƒ«ã‚’å‰Šé™¤ã€‚
+    Python æ¬¡å›žèµ·å‹•æ™‚ã�® E å¾©å…ƒç”¨ JSON ã�¨ã€�ãƒžã‚¯ãƒ­ã�‹ã‚‰ã�® E æ›¸è¾¼ã�¿ç”¨ TSVã€‚
     """
     cells: dict[str, str] = {}
     max_r = int(ws.max_row or 1)
@@ -8614,12 +8462,12 @@ def _write_exclude_rules_e_apply_artifacts(
         with open(path_sc, "w", encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except OSError as ex:
-        logging.warning("%s: E 列 JSON を書けません: %s", log_prefix, ex)
+        logging.warning("%s: E åˆ— JSON ã‚’æ›¸ã�‘ã�¾ã�›ã‚“: %s", log_prefix, ex)
     _write_exclude_rules_e_vba_tsv_from_cells(wb_path, c_e, cells, log_prefix)
     _log_exclude_rules_sheet_debug(
         "E_APPLY_FILES_WRITTEN",
         log_prefix,
-        "E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。",
+        "E åˆ—ã‚’ JSON ã�¨ VBA ç”¨ TSV ã�«æ›¸ã��å‡ºã�—ã�¾ã�—ã�Ÿï¼ˆãƒžã‚¯ãƒ­ã�§ E åˆ—ã‚’å��æ˜ å¾Œã€�ãƒ•ã‚¡ã‚¤ãƒ«å‰Šé™¤ï¼‰ã€‚",
         details=f"cells={len(cells)}",
     )
 
@@ -8628,8 +8476,8 @@ def _try_apply_pending_exclude_rules_e_column(
     wb_path: str, ws, c_e: int, log_prefix: str
 ) -> int:
     """
-    前回保存に失敗したとき書き出した JSON から E 列を復元する。
-    ブックパスが一致しなければ何もしない。適用後はサイドカードを削除する。
+    å‰�å›žä¿�å­˜ã�«å¤±æ•—ã�—ã�Ÿã�¨ã��æ›¸ã��å‡ºã�—ã�Ÿ JSON ã�‹ã‚‰ E åˆ—ã‚’å¾©å…ƒã�™ã‚‹ã€‚
+    ãƒ–ãƒƒã‚¯ãƒ‘ã‚¹ã�Œä¸€è‡´ã�—ã�ªã�‘ã‚Œã�°ä½•ã‚‚ã�—ã�ªã�„ã€‚é�©ç”¨å¾Œã�¯ã‚µã‚¤ãƒ‰ã‚«ãƒ¼ãƒ‰ã‚’å‰Šé™¤ã�™ã‚‹ã€‚
     """
     path_sc = _exclude_rules_e_sidecar_path()
     if not os.path.isfile(path_sc):
@@ -8673,11 +8521,11 @@ def _try_apply_pending_exclude_rules_e_column(
         _log_exclude_rules_sheet_debug(
             "E_SIDECAR_APPLIED",
             log_prefix,
-            f"未保存だった E 列をサイドカードから {n} セル復元しました。",
+            f"æœªä¿�å­˜ã� ã�£ã�Ÿ E åˆ—ã‚’ã‚µã‚¤ãƒ‰ã‚«ãƒ¼ãƒ‰ã�‹ã‚‰ {n} ã‚»ãƒ«å¾©å…ƒã�—ã�¾ã�—ã�Ÿã€‚",
             details=path_sc,
         )
         logging.info(
-            "%s: %s の内容をシートのロジック式列へ適用しました（続けて保存を試みます）。",
+            "%s: %s ã�®å†…å®¹ã‚’ã‚·ãƒ¼ãƒˆã�®ãƒ­ã‚¸ãƒƒã‚¯å¼�åˆ—ã�¸é�©ç”¨ã�—ã�¾ã�—ã�Ÿï¼ˆç¶šã�‘ã�¦ä¿�å­˜ã‚’è©¦ã�¿ã�¾ã�™ï¼‰ã€‚",
             log_prefix,
             path_sc,
         )
@@ -8688,8 +8536,8 @@ def _read_exclude_rules_d_cells_data_only_for_rows(
     wb_path: str, rows: list[int], c_d: int
 ) -> dict[int, object]:
     """
-    D 列が数式のとき、openpyxl の通常読込では '=...' しか取れない。
-    data_only=True でキャッシュ値を読む（Excel が一度でも保存・計算済みのブックで有効）。
+    D åˆ—ã�Œæ•°å¼�ã�®ã�¨ã��ã€�openpyxl ã�®é€šå¸¸èª­è¾¼ã�§ã�¯ '=...' ã�—ã�‹å�–ã‚Œã�ªã�„ã€‚
+    data_only=True ã�§ã‚­ãƒ£ãƒƒã‚·ãƒ¥å€¤ã‚’èª­ã‚€ï¼ˆExcel ã�Œä¸€åº¦ã�§ã‚‚ä¿�å­˜ãƒ»è¨ˆç®—æ¸ˆã�¿ã�®ãƒ–ãƒƒã‚¯ã�§æœ‰åŠ¹ï¼‰ã€‚
     """
     out: dict[int, object] = {}
     if not rows or not os.path.isfile(wb_path):
@@ -8731,28 +8579,28 @@ def run_exclude_rules_sheet_maintenance(
     wb_path: str, pairs: list[tuple[str, str]], log_prefix: str
 ) -> None:
     """
-    「設定_配台不要工程」の行同期・D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
+    ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã�®è¡Œå�ŒæœŸãƒ»Dâ†’E ã�® AI è£œå®Œãƒ»ãƒ‡ã‚£ã‚¹ã‚¯å��æ˜ ï¼ˆæ—¢å®šã�¯ xlwings ã�§ Aã€œE å�ŒæœŸâ†’Saveã€‚``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` ã�®ã�¨ã�� openpyxl save ã‚’è©¦è¡Œï¼‰ã€‚
 
-    xlwings でも保存できないときは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
-    ``設定_配台不要工程_AからE_TSVから反映`` で A〜E を反映する。
-    併せて従来どおり E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
-    保存成功時は TSV/JSON は削除される。
+    xlwings ã�§ã‚‚ä¿�å­˜ã�§ã��ã�ªã�„ã�¨ã��ã�¯ ``log/exclude_rules_matrix_vba.tsv`` ã‚’æ®‹ã�—ã€�ãƒžã‚¯ãƒ­
+    ``è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_Aã�‹ã‚‰E_TSVã�‹ã‚‰å��æ˜ `` ã�§ Aã€œE ã‚’å��æ˜ ã�™ã‚‹ã€‚
+    ä½µã�›ã�¦å¾“æ�¥ã�©ã�Šã‚Š E åˆ—ã�®ã�¿ã�® ``exclude_rules_e_column_vba.tsv`` ã‚‚å‡ºåŠ›ã�•ã‚Œå¾—ã‚‹ï¼ˆè¡Œåˆ— TSV å„ªå…ˆã�§å��æ˜ å¾Œã�¯å‰Šé™¤ï¼‰ã€‚
+    ä¿�å­˜æˆ�åŠŸæ™‚ã�¯ TSV/JSON ã�¯å‰Šé™¤ã�•ã‚Œã‚‹ã€‚
 
-    ``json/exclude_rules_e_column_pending.json`` は Python 次回起動時の E 列復元用。
-    シートの新規作成と 1 行目見出しは VBA「設定_配台不要工程_シートを確保」。
+    ``json/exclude_rules_e_column_pending.json`` ã�¯ Python æ¬¡å›žèµ·å‹•æ™‚ã�® E åˆ—å¾©å…ƒç”¨ã€‚
+    ã‚·ãƒ¼ãƒˆã�®æ–°è¦�ä½œæˆ�ã�¨ 1 è¡Œç›®è¦‹å‡ºã�—ã�¯ VBAã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_ã‚·ãƒ¼ãƒˆã‚’ç¢ºä¿�ã€�ã€‚
     """
     if not wb_path:
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_PATH",
             log_prefix,
-            "TASK_INPUT_WORKBOOK が空のため設定シート処理をしません。",
+            "TASK_INPUT_WORKBOOK ã�Œç©ºã�®ã�Ÿã‚�è¨­å®šã‚·ãƒ¼ãƒˆå‡¦ç�†ã‚’ã�—ã�¾ã�›ã‚“ã€‚",
         )
         return
     if not os.path.exists(wb_path):
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_FILE",
             log_prefix,
-            "ブックが存在しません。",
+            "ãƒ–ãƒƒã‚¯ã�Œå­˜åœ¨ã�—ã�¾ã�›ã‚“ã€‚",
             details=f"path={wb_path}",
         )
         return
@@ -8760,7 +8608,7 @@ def run_exclude_rules_sheet_maintenance(
     _log_exclude_rules_sheet_debug(
         "START",
         log_prefix,
-        "設定シート保守開始",
+        "è¨­å®šã‚·ãƒ¼ãƒˆä¿�å®ˆé–‹å§‹",
         details=f"path={wb_path} pairs={len(pairs)}",
     )
     global _exclude_rules_effective_read_path
@@ -8770,11 +8618,11 @@ def run_exclude_rules_sheet_maintenance(
         _log_exclude_rules_sheet_debug(
             "SKIP_OPENPYXL_INCOMPATIBLE_BOOK",
             log_prefix,
-            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」が含まれるため、openpyxl による設定シート保守は行いません。",
+            f"ãƒ–ãƒƒã‚¯ã�«ã€Œ{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}ã€�ã�Œå�«ã�¾ã‚Œã‚‹ã�Ÿã‚�ã€�openpyxl ã�«ã‚ˆã‚‹è¨­å®šã‚·ãƒ¼ãƒˆä¿�å®ˆã�¯è¡Œã�„ã�¾ã�›ã‚“ã€‚",
             details=f"path={wb_path}",
         )
         logging.warning(
-            "%s: 「%s」含有のため「%s」の openpyxl 保守をスキップしました（Excel／xlwings で編集してください）。",
+            "%s: ã€Œ%sã€�å�«æœ‰ã�®ã�Ÿã‚�ã€Œ%sã€�ã�® openpyxl ä¿�å®ˆã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿï¼ˆExcelï¼�xlwings ã�§ç·¨é›†ã�—ã�¦ã��ã� ã�•ã�„ï¼‰ã€‚",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
@@ -8790,7 +8638,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "OPEN_RETRY",
                 log_prefix,
-                "keep_vba=True でブックを開けず keep_vba=False で再試行します（マクロが失われる可能性）。",
+                "keep_vba=True ã�§ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�š keep_vba=False ã�§å†�è©¦è¡Œã�—ã�¾ã�™ï¼ˆãƒžã‚¯ãƒ­ã�Œå¤±ã‚�ã‚Œã‚‹å�¯èƒ½æ€§ï¼‰ã€‚",
                 exc=e1,
             )
             try:
@@ -8799,7 +8647,7 @@ def run_exclude_rules_sheet_maintenance(
                 _log_exclude_rules_sheet_debug(
                     "OPEN_FAIL",
                     log_prefix,
-                    "ブックを開けません。シートは作成・保存されません。",
+                    "ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“ã€‚ã‚·ãƒ¼ãƒˆã�¯ä½œæˆ�ãƒ»ä¿�å­˜ã�•ã‚Œã�¾ã�›ã‚“ã€‚",
                     details=f"path={wb_path}",
                     exc=e2,
                 )
@@ -8808,7 +8656,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "OPEN_FAIL",
                 log_prefix,
-                "ブックを開けません。シートは作成・保存されません。",
+                "ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“ã€‚ã‚·ãƒ¼ãƒˆã�¯ä½œæˆ�ãƒ»ä¿�å­˜ã�•ã‚Œã�¾ã�›ã‚“ã€‚",
                 details=f"path={wb_path}",
                 exc=e1,
             )
@@ -8817,7 +8665,7 @@ def run_exclude_rules_sheet_maintenance(
     _log_exclude_rules_sheet_debug(
         "OPEN_OK",
         log_prefix,
-        "ブックを開きました。",
+        "ãƒ–ãƒƒã‚¯ã‚’é–‹ã��ã�¾ã�—ã�Ÿã€‚",
         details=f"keep_vba={keep_vba} sheets={len(wb.sheetnames)}",
     )
 
@@ -8826,11 +8674,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SKIP_NO_SHEET",
                 log_prefix,
-                "シートがありません。VBA の「設定_配台不要工程_シートを確保」を実行するか、段階1/2 をマクロから起動してください。",
+                "ã‚·ãƒ¼ãƒˆã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚VBA ã�®ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_ã‚·ãƒ¼ãƒˆã‚’ç¢ºä¿�ã€�ã‚’å®Ÿè¡Œã�™ã‚‹ã�‹ã€�æ®µéšŽ1/2 ã‚’ãƒžã‚¯ãƒ­ã�‹ã‚‰èµ·å‹•ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
                 details=f"path={wb_path}",
             )
             logging.error(
-                "%s: 「%s」がありません。Python ではシートを作成しません。",
+                "%s: ã€Œ%sã€�ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚Python ã�§ã�¯ã‚·ãƒ¼ãƒˆã‚’ä½œæˆ�ã�—ã�¾ã�›ã‚“ã€‚",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
             )
@@ -8858,11 +8706,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "HEADER_FIX",
                 log_prefix,
-                "1行目に標準見出しを書き込みました（空シート・列名不一致の補正）。",
+                "1è¡Œç›®ã�«æ¨™æº–è¦‹å‡ºã�—ã‚’æ›¸ã��è¾¼ã�¿ã�¾ã�—ã�Ÿï¼ˆç©ºã‚·ãƒ¼ãƒˆãƒ»åˆ—å��ä¸�ä¸€è‡´ã�®è£œæ­£ï¼‰ã€‚",
                 details=f"cols=({c_proc},{c_mach},{c_flag},{c_d},{c_e})",
             )
 
-        # 前回ブック保存に失敗したとき退避した E 列を、先にワークシートへ戻す（続く保存でディスクへ載る）
+        # å‰�å›žãƒ–ãƒƒã‚¯ä¿�å­˜ã�«å¤±æ•—ã�—ã�Ÿã�¨ã��é€€é�¿ã�—ã�Ÿ E åˆ—ã‚’ã€�å…ˆã�«ãƒ¯ãƒ¼ã‚¯ã‚·ãƒ¼ãƒˆã�¸æˆ»ã�™ï¼ˆç¶šã��ä¿�å­˜ã�§ãƒ‡ã‚£ã‚¹ã‚¯ã�¸è¼‰ã‚‹ï¼‰
         _try_apply_pending_exclude_rules_e_column(wb_path, ws, c_e, log_prefix)
 
         existing_keys: set[tuple[str, str]] = set()
@@ -8890,33 +8738,33 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SYNC_ROWS",
                 log_prefix,
-                f"工程+機械の行を {added} 件追加しました。",
+                f"å·¥ç¨‹+æ©Ÿæ¢°ã�®è¡Œã‚’ {added} ä»¶è¿½åŠ ã�—ã�¾ã�—ã�Ÿã€‚",
             )
             logging.info(
-                "%s: 「%s」に工程+機械の組み合わせを %s 行追加しました。",
+                "%s: ã€Œ%sã€�ã�«å·¥ç¨‹+æ©Ÿæ¢°ã�®çµ„ã�¿å�ˆã‚�ã�›ã‚’ %s è¡Œè¿½åŠ ã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 added,
             )
 
-        # 加工計画からペアが1件も取れず、シートにもデータ行が無いときは例行のみ（従来の新規シート相当）
+        # åŠ å·¥è¨ˆç”»ã�‹ã‚‰ãƒšã‚¢ã�Œ1ä»¶ã‚‚å�–ã‚Œã�šã€�ã‚·ãƒ¼ãƒˆã�«ã‚‚ãƒ‡ãƒ¼ã‚¿è¡Œã�Œç„¡ã�„ã�¨ã��ã�¯ä¾‹è¡Œã�®ã�¿ï¼ˆå¾“æ�¥ã�®æ–°è¦�ã‚·ãƒ¼ãƒˆç›¸å½“ï¼‰
         if added == 0 and not existing_keys:
-            ws.append(["梱包", "", "yes", "", ""])
+            ws.append(["æ¢±åŒ…", "", "yes", "", ""])
             existing_keys.add(
-                (_normalize_process_name_for_rule_match("梱包"), _normalize_equipment_match_key(""))
+                (_normalize_process_name_for_rule_match("æ¢±åŒ…"), _normalize_equipment_match_key(""))
             )
             _log_exclude_rules_sheet_debug(
                 "EXAMPLE_ROW",
                 log_prefix,
-                "データ行が無かったため例（梱包=yes）を1行追加。",
+                "ãƒ‡ãƒ¼ã‚¿è¡Œã�Œç„¡ã�‹ã�£ã�Ÿã�Ÿã‚�ä¾‹ï¼ˆæ¢±åŒ…=yesï¼‰ã‚’1è¡Œè¿½åŠ ã€‚",
             )
             logging.info(
-                "%s: 「%s」にデータ行が無かったため、例（梱包=yes）を1行追加しました。",
+                "%s: ã€Œ%sã€�ã�«ãƒ‡ãƒ¼ã‚¿è¡Œã�Œç„¡ã�‹ã�£ã�Ÿã�Ÿã‚�ã€�ä¾‹ï¼ˆæ¢±åŒ…=yesï¼‰ã‚’1è¡Œè¿½åŠ ã�—ã�¾ã�—ã�Ÿã€‚",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
             )
 
-        # 空行詰めは AI より先に行う（後から詰めると、書き込んだ行番号と画面上の行がずれる）
+        # ç©ºè¡Œè©°ã‚�ã�¯ AI ã‚ˆã‚Šå…ˆã�«è¡Œã�†ï¼ˆå¾Œã�‹ã‚‰è©°ã‚�ã‚‹ã�¨ã€�æ›¸ã��è¾¼ã‚“ã� è¡Œç•ªå�·ã�¨ç”»é�¢ä¸Šã�®è¡Œã�Œã�šã‚Œã‚‹ï¼‰
         n_kept, n_removed_empty = _compact_exclude_rules_data_rows(
             ws, c_proc, c_mach, c_flag, c_d, c_e, log_prefix
         )
@@ -8924,7 +8772,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "DATA_COMPACT",
                 log_prefix,
-                "空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。",
+                "ç©ºè¡Œã‚’å‰Šé™¤ã�—ã�¦ãƒ‡ãƒ¼ã‚¿è¡Œã‚’è©°ã‚�ã�¾ã�—ã�Ÿï¼ˆä¸¦ã�³é †ã�¯ç¶­æŒ�ï¼‰ã€‚AI è£œå®Œã‚ˆã‚Šå‰�ã€‚",
                 details=f"rows={n_kept} removed_empty={n_removed_empty}",
             )
 
@@ -8933,14 +8781,14 @@ def run_exclude_rules_sheet_maintenance(
         for r in range(2, max_r + 1):
             dv = ws.cell(row=r, column=c_d).value
             ev = ws.cell(row=r, column=c_e).value
-            # C 列の有無に関係なく、D に説明があり E が空なら D→E を試す
+            # C åˆ—ã�®æœ‰ç„¡ã�«é–¢ä¿‚ã�ªã��ã€�D ã�«èª¬æ˜Žã�Œã�‚ã‚Š E ã�Œç©ºã�ªã‚‰ Dâ†’E ã‚’è©¦ã�™
             if _cell_is_blank_for_rule(dv):
                 continue
             if not _cell_is_blank_for_rule(ev):
                 continue
             pending_rows.append(r)
 
-        # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
+        # D ã�Œæ•°å¼�ã�®ã�¨ã��ã�¯é€šå¸¸èª­è¾¼ã�§ã�¯ '=...' ã� ã�‘å�–ã‚Œã‚‹ã€‚data_only ã�§ã‚­ãƒ£ãƒƒã‚·ãƒ¥è¡¨ç¤ºå€¤ã‚’è£œã�†ã€‚
         formula_rows = [
             r
             for r in pending_rows
@@ -8967,7 +8815,7 @@ def run_exclude_rules_sheet_maintenance(
                     blob = str(alt).strip()
                 else:
                     logging.warning(
-                        "%s: 「%s」%s 行目の D 列が数式で、キャッシュ値を読めませんでした（Excel で一度保存するか D を値にしてください）。",
+                        "%s: ã€Œ%sã€�%s è¡Œç›®ã�® D åˆ—ã�Œæ•°å¼�ã�§ã€�ã‚­ãƒ£ãƒƒã‚·ãƒ¥å€¤ã‚’èª­ã‚�ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆExcel ã�§ä¸€åº¦ä¿�å­˜ã�™ã‚‹ã�‹ D ã‚’å€¤ã�«ã�—ã�¦ã��ã� ã�•ã�„ï¼‰ã€‚",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
                         r,
@@ -8986,7 +8834,7 @@ def run_exclude_rules_sheet_maintenance(
             for r, parsed in zip(pending_rows, parsed_list):
                 if not parsed:
                     logging.warning(
-                        "%s: 「%s」%s 行目の D 列を JSON にできませんでした（APIキー・応答を確認）。",
+                        "%s: ã€Œ%sã€�%s è¡Œç›®ã�® D åˆ—ã‚’ JSON ã�«ã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆAPIã‚­ãƒ¼ãƒ»å¿œç­”ã‚’ç¢ºèª�ï¼‰ã€‚",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
                         r,
@@ -8996,9 +8844,9 @@ def run_exclude_rules_sheet_maintenance(
                 ws.cell(row=r, column=c_e, value=jstr)
                 cell_addr = f"{get_column_letter(c_e)}{r}"
                 ai_e_cell_addrs.append(cell_addr)
-                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
+                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "â€¦")
                 logging.info(
-                    "%s: 「%s」ロジック式列「%s」セル %s に JSON を書き込み: %s",
+                    "%s: ã€Œ%sã€�ãƒ­ã‚¸ãƒƒã‚¯å¼�åˆ—ã€Œ%sã€�ã‚»ãƒ« %s ã�« JSON ã‚’æ›¸ã��è¾¼ã�¿: %s",
                     log_prefix,
                     EXCLUDE_RULES_SHEET_NAME,
                     EXCLUDE_RULE_COL_LOGIC_JSON,
@@ -9010,11 +8858,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "AI_E_FILLED",
                 log_prefix,
-                f"D→E の AI 補完を {ai_filled} 行実施。",
+                f"Dâ†’E ã�® AI è£œå®Œã‚’ {ai_filled} è¡Œå®Ÿæ–½ã€‚",
                 details="cells=" + ",".join(ai_e_cell_addrs),
             )
             logging.info(
-                "%s: 「%s」で D→E の AI 補完を %s 行（セル: %s）。",
+                "%s: ã€Œ%sã€�ã�§ Dâ†’E ã�® AI è£œå®Œã‚’ %s è¡Œï¼ˆã‚»ãƒ«: %sï¼‰ã€‚",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 ai_filled,
@@ -9034,11 +8882,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "TEST_E1234",
                 log_prefix,
-                f'E列 {_e_addr} にテストで "1234" を書き込み',
+                f'Eåˆ— {_e_addr} ã�«ãƒ†ã‚¹ãƒˆã�§ "1234" ã‚’æ›¸ã��è¾¼ã�¿',
                 details=f"row={_er_row}",
             )
             logging.warning(
-                '%s: 【テスト】%s に "1234" を書き込み（EXCLUDE_RULES_TEST_E1234）。',
+                '%s: ã€�ãƒ†ã‚¹ãƒˆã€‘%s ã�« "1234" ã‚’æ›¸ã��è¾¼ã�¿ï¼ˆEXCLUDE_RULES_TEST_E1234ï¼‰ã€‚',
                 log_prefix,
                 _e_addr,
             )
@@ -9050,27 +8898,27 @@ def run_exclude_rules_sheet_maintenance(
         persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         if not persisted:
             logging.warning(
-                "%s: 設定シートの openpyxl 保存に失敗しました。"
-                " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」、"
-                "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
+                "%s: è¨­å®šã‚·ãƒ¼ãƒˆã�® openpyxl ä¿�å­˜ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿã€‚"
+                " log ã�®è¡Œåˆ— TSV ã‚’ãƒžã‚¯ãƒ­ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_Aã�‹ã‚‰E_TSVã�‹ã‚‰å��æ˜ ã€�ã€�"
+                "ã�¾ã�Ÿã�¯ E åˆ—ã�®ã�¿ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹_Eåˆ—_TSVã�‹ã‚‰å��æ˜ ã€�ã�§å��æ˜ ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
                 log_prefix,
             )
     except Exception as ex:
         _log_exclude_rules_sheet_debug(
             "FATAL",
             log_prefix,
-            "設定シート処理中に未捕捉例外が発生しました。",
+            "è¨­å®šã‚·ãƒ¼ãƒˆå‡¦ç�†ä¸­ã�«æœªæ�•æ�‰ä¾‹å¤–ã�Œç™ºç”Ÿã�—ã�¾ã�—ã�Ÿã€‚",
             exc=ex,
         )
-        logging.exception("%s: 設定_配台不要工程の処理で例外", log_prefix)
+        logging.exception("%s: è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�®å‡¦ç�†ã�§ä¾‹å¤–", log_prefix)
     finally:
         if wb is not None:
             wb.close()
-            _log_exclude_rules_sheet_debug("CLOSED", log_prefix, "ブックをクローズしました。")
+            _log_exclude_rules_sheet_debug("CLOSED", log_prefix, "ãƒ–ãƒƒã‚¯ã‚’ã‚¯ãƒ­ãƒ¼ã‚ºã�—ã�¾ã�—ã�Ÿã€‚")
 
 
 def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
-    """直前の保守で実効パスが変わったとき（通常は保存成功後の元ブック）にそれを使う。"""
+    """ç›´å‰�ã�®ä¿�å®ˆã�§å®ŸåŠ¹ãƒ‘ã‚¹ã�Œå¤‰ã‚�ã�£ã�Ÿã�¨ã��ï¼ˆé€šå¸¸ã�¯ä¿�å­˜æˆ�åŠŸå¾Œã�®å…ƒãƒ–ãƒƒã‚¯ï¼‰ã�«ã��ã‚Œã‚’ä½¿ã�†ã€‚"""
     p = _exclude_rules_effective_read_path
     if p and os.path.exists(p):
         return p
@@ -9078,7 +8926,7 @@ def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
 
 
 def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
-    """シートからルール行を読み、評価用リストを返す。"""
+    """ã‚·ãƒ¼ãƒˆã�‹ã‚‰ãƒ«ãƒ¼ãƒ«è¡Œã‚’èª­ã�¿ã€�è©•ä¾¡ç”¨ãƒªã‚¹ãƒˆã‚’è¿”ã�™ã€‚"""
     if not wb_path:
         return []
     global _exclude_rules_rules_snapshot, _exclude_rules_snapshot_wb
@@ -9096,7 +8944,7 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         return []
     if _workbook_should_skip_openpyxl_io(path):
         logging.warning(
-            "配台不要ルール: ブックに「%s」があるため pandas(openpyxl) での「%s」読込をスキップしました（ルールは未適用）。",
+            "é…�å�°ä¸�è¦�ãƒ«ãƒ¼ãƒ«: ãƒ–ãƒƒã‚¯ã�«ã€Œ%sã€�ã�Œã�‚ã‚‹ã�Ÿã‚� pandas(openpyxl) ã�§ã�®ã€Œ%sã€�èª­è¾¼ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿï¼ˆãƒ«ãƒ¼ãƒ«ã�¯æœªé�©ç”¨ï¼‰ã€‚",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
         )
@@ -9133,7 +8981,7 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
 def apply_exclude_rules_config_to_plan_df(
     df: pd.DataFrame, wb_path: str, log_prefix: str
 ) -> pd.DataFrame:
-    """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。"""
+    """è¨­å®šã‚·ãƒ¼ãƒˆã�«åŸºã�¥ã��ã€Œé…�å�°ä¸�è¦�ã€�ã‚’è¨­å®šï¼ˆC=yes ã�¾ã�Ÿã�¯ E ã�® JSON ã�ŒçœŸï¼‰ã€‚"""
     if df is None or df.empty:
         return df
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
@@ -9158,54 +9006,20 @@ def apply_exclude_rules_config_to_plan_df(
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
-                # #region agent log
-                _tid_er = _normalize_task_id_for_dup_grouping(row.get(TASK_COL_TASK_ID))
-                if _tid_er == "W4-13":
-                    _agent_debug_ndjson(
-                        "H2",
-                        "_core.py:apply_exclude_rules_config_to_plan_df",
-                        "exclude_rule_c_yes",
-                        {
-                            "task_id": _tid_er,
-                            "row_index": int(i),
-                            "process": tp,
-                            "machine_name": tm,
-                            "rule_proc": ru.get("proc"),
-                            "rule_mach": ru.get("mach"),
-                        },
-                    )
-                # #endregion
                 break
             if ru.get("parsed") and evaluate_exclude_rule_json_for_row(ru["parsed"], row):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
-                # #region agent log
-                _tid_er2 = _normalize_task_id_for_dup_grouping(row.get(TASK_COL_TASK_ID))
-                if _tid_er2 == "W4-13":
-                    _agent_debug_ndjson(
-                        "H2",
-                        "_core.py:apply_exclude_rules_config_to_plan_df",
-                        "exclude_rule_json_yes",
-                        {
-                            "task_id": _tid_er2,
-                            "row_index": int(i),
-                            "process": tp,
-                            "machine_name": tm,
-                            "rule_proc": ru.get("proc"),
-                            "rule_mach": ru.get("mach"),
-                        },
-                    )
-                # #endregion
                 break
     if n:
-        logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
+        logging.info("%s: è¨­å®šã€Œ%sã€�ã�«ã‚ˆã‚Šé…�å�°ä¸�è¦�=yes ã‚’ %s è¡Œã�«è¨­å®šã�—ã�¾ã�—ã�Ÿã€‚", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
     return df
 
 
 def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") -> "pd.DataFrame":
     """
-    段階1出力直前: 配台試行順番の昇順に行を並べ替えた DataFrame を返す。
-    正の整数でないセルは最後（同帯内は元の行順）。
+    æ®µéšŽ1å‡ºåŠ›ç›´å‰�: é…�å�°è©¦è¡Œé †ç•ªã�®æ˜‡é †ã�«è¡Œã‚’ä¸¦ã�¹æ›¿ã�ˆã�Ÿ DataFrame ã‚’è¿”ã�™ã€‚
+    æ­£ã�®æ•´æ•°ã�§ã�ªã�„ã‚»ãƒ«ã�¯æœ€å¾Œï¼ˆå�Œå¸¯å†…ã�¯å…ƒã�®è¡Œé †ï¼‰ã€‚
     """
     col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if plan_df is None or getattr(plan_df, "empty", True) or col not in plan_df.columns:
@@ -9231,28 +9045,28 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
 
 
 # =============================================================================
-# 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
-#   加工計画DATA 読取 → 配台不要自動処理 → 設定シート保守 → plan_input_tasks.xlsx 出力
+# æ®µéšŽ1ã‚¨ãƒ³ãƒˆãƒªï¼ˆtask_extract_stage1.py â†’ run_stage1_extractï¼‰
+#   åŠ å·¥è¨ˆç”»DATA èª­å�– â†’ é…�å�°ä¸�è¦�è‡ªå‹•å‡¦ç�† â†’ è¨­å®šã‚·ãƒ¼ãƒˆä¿�å®ˆ â†’ plan_input_tasks.xlsx å‡ºåŠ›
 # =============================================================================
 def run_stage1_extract():
     """
-    段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
-    同一依頼NOで同一機械名が複数行あるとき、工程名「分割」行の空の「配台不要」に yes を自動設定する。
-    マクロブックの「設定_配台不要工程」で工程+機械ごとの配台不要・条件式（AI）を管理する（シート作成は VBA）。
+    æ®µéšŽ1: åŠ å·¥è¨ˆç”»DATA ã�‹ã‚‰é…�å�°ç”¨ã‚¿ã‚¹ã‚¯ä¸€è¦§ã‚’æŠ½å‡ºã�— output/plan_input_tasks.xlsx ã�¸å‡ºåŠ›ã€‚
+    å�Œä¸€ä¾�é ¼NOã�§å�Œä¸€æ©Ÿæ¢°å��ã�Œè¤‡æ•°è¡Œã�‚ã‚‹ã�¨ã��ã€�å·¥ç¨‹å��ã€Œåˆ†å‰²ã€�è¡Œã�®ç©ºã�®ã€Œé…�å�°ä¸�è¦�ã€�ã�« yes ã‚’è‡ªå‹•è¨­å®šã�™ã‚‹ã€‚
+    ãƒžã‚¯ãƒ­ãƒ–ãƒƒã‚¯ã�®ã€Œè¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã€�ã�§å·¥ç¨‹+æ©Ÿæ¢°ã�”ã�¨ã�®é…�å�°ä¸�è¦�ãƒ»æ�¡ä»¶å¼�ï¼ˆAIï¼‰ã‚’ç®¡ç�†ã�™ã‚‹ï¼ˆã‚·ãƒ¼ãƒˆä½œæˆ�ã�¯ VBAï¼‰ã€‚
     """
     if not TASKS_INPUT_WORKBOOK:
-        logging.error("TASK_INPUT_WORKBOOK が未設定です。")
+        logging.error("TASK_INPUT_WORKBOOK ã�Œæœªè¨­å®šã�§ã�™ã€‚")
         return False
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        logging.error(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
+        logging.error(f"TASK_INPUT_WORKBOOK ã�Œå­˜åœ¨ã�—ã�¾ã�›ã‚“: {TASKS_INPUT_WORKBOOK}")
         return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
     try:
         _pm_pairs = _collect_process_machine_pairs_for_exclude_rules(df_src)
-        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "段階1")
+        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "æ®µéšŽ1")
     except Exception:
-        logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
+        logging.exception("æ®µéšŽ1: è¨­å®š_é…�å�°ä¸�è¦�å·¥ç¨‹ã�®ä¿�å®ˆã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰")
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -9279,7 +9093,7 @@ def run_stage1_extract():
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
-        # 工程名 + 機械名 を“因子”として表示用に追加（後段は計算キーにも使用）
+        # å·¥ç¨‹å�� + æ©Ÿæ¢°å�� ã‚’â€œå› å­�â€�ã�¨ã�—ã�¦è¡¨ç¤ºç”¨ã�«è¿½åŠ ï¼ˆå¾Œæ®µã�¯è¨ˆç®—ã‚­ãƒ¼ã�«ã‚‚ä½¿ç”¨ï¼‰
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
         else:
@@ -9292,7 +9106,7 @@ def run_stage1_extract():
         rec[PLAN_COL_AI_PARSE] = ""
         records.append(rec)
     if not records:
-        logging.warning("段階1: 抽出対象タスクがありません。")
+        logging.warning("æ®µéšŽ1: æŠ½å‡ºå¯¾è±¡ã‚¿ã‚¹ã‚¯ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
     order = plan_input_sheet_column_order()
     out_df = pd.DataFrame(records)
     if out_df.empty:
@@ -9319,23 +9133,23 @@ def run_stage1_extract():
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
     except PlanningValidationError:
-        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
+        logging.error("æ®µéšŽ1ã‚’ä¸­æ–­: ãƒžã‚¹ã‚¿ skills ã�®æ¤œè¨¼ã‚¨ãƒ©ãƒ¼ï¼ˆå„ªå…ˆåº¦ã�®æ•°å€¤é‡�è¤‡ã�ªã�©ï¼‰ã€‚")
         raise
     except Exception as e:
-        logging.info("段階1: マスタ need を読めず元列は need なしで埋めます (%s)", e)
+        logging.info("æ®µéšŽ1: ãƒžã‚¹ã‚¿ need ã‚’èª­ã‚�ã�šå…ƒåˆ—ã�¯ need ã�ªã�—ã�§åŸ‹ã‚�ã�¾ã�™ (%s)", e)
         req_map, need_rules = {}, []
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
-        _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
+        _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="æ®µéšŽ1")
     except Exception as ex:
-        logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
+        logging.exception("æ®µéšŽ1: åˆ†å‰²è¡Œã�®é…�å�°ä¸�è¦�è‡ªå‹•è¨­å®šã�§ä¾‹å¤–ï¼ˆå‡ºåŠ›ã�¯ç¶šè¡Œï¼‰: %s", ex)
     try:
-        out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
+        out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "æ®µéšŽ1")
     except Exception as ex:
-        logging.warning("段階1: 設定シートによる配台不要適用で例外（続行）: %s", ex)
+        logging.warning("æ®µéšŽ1: è¨­å®šã‚·ãƒ¼ãƒˆã�«ã‚ˆã‚‹é…�å�°ä¸�è¦�é�©ç”¨ã�§ä¾‹å¤–ï¼ˆç¶šè¡Œï¼‰: %s", ex)
     try:
         _ext_dt_s1 = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
@@ -9348,18 +9162,18 @@ def run_stage1_extract():
             equipment_list_stage1,
         )
     except Exception as ex:
-        logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
+        logging.warning("æ®µéšŽ1: é…�å�°è©¦è¡Œé †ç•ªåˆ—ã�®è¨ˆç®—ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿï¼ˆç¶šè¡Œï¼‰: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
-    out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
-    _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
-    _apply_plan_input_visual_format(out_path, "タスク一覧")
-    logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に取り込んでください。")
-    _try_write_main_sheet_gemini_usage_summary("段階1")
+    out_df.to_excel(out_path, sheet_name="ã‚¿ã‚¹ã‚¯ä¸€è¦§", index=False)
+    _apply_excel_date_columns_date_only_display(out_path, "ã‚¿ã‚¹ã‚¯ä¸€è¦§")
+    _apply_plan_input_visual_format(out_path, "ã‚¿ã‚¹ã‚¯ä¸€è¦§")
+    logging.info(f"æ®µéšŽ1å®Œäº†: '{out_path}' ã‚’å‡ºåŠ›ã�—ã�¾ã�—ã�Ÿã€‚ãƒžã‚¯ãƒ­ã�§ '{PLAN_INPUT_SHEET_NAME}' ã�«å�–ã‚Šè¾¼ã‚“ã�§ã��ã� ã�•ã�„ã€‚")
+    _try_write_main_sheet_gemini_usage_summary("æ®µéšŽ1")
     return True
 
 
-# 稼働ルール（デフォルト値・2026年3月基準）
+# ç¨¼åƒ�ãƒ«ãƒ¼ãƒ«ï¼ˆãƒ‡ãƒ•ã‚©ãƒ«ãƒˆå€¤ãƒ»2026å¹´3æœˆåŸºæº–ï¼‰
 TARGET_YEAR = 2026
 TARGET_MONTH = 3
 DEFAULT_START_TIME = time(8, 45)
@@ -9368,15 +9182,15 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-# 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
-# かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
-# 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
-# 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
-# ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
-# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
-# 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
-# 休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
-# （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES は廃止・無視）
+# çµ‚æ¥­ç›´å‰�ãƒ‡ãƒ•ã‚¡ãƒ¼: ASSIGN_END_OF_DAY_DEFER_MINUTES ã�Œæ­£ã�®ã�¨ã��ã€�team_end_limit ã�¾ã�§ã�®æ®‹ã‚Šã�Œã��ã�®åˆ†æ•°ä»¥ä¸‹ã�§ã€�
+# ã�‹ã�¤ remaining_unitsï¼ˆåˆ‡ã‚Šä¸Šã�’ï¼‰ã�Œ ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ä»¥ä¸‹ã�®ã�¨ã��ã€�ã��ã�®æ—¥ã�®é–‹å§‹ä¸�å�¯ï¼ˆNoneï¼‰ã€‚
+# å�Œã�˜ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã�§ã€ŒASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ãƒ­ãƒ¼ãƒ«åˆ†ä»¥ä¸Šã�¯å›žã�›ã�ªã�„ã€�ï¼ˆå�Žå®¹ã�Œé–¾å€¤æœªæº€ï¼‰ã�¨ã��ã�¯
+# æ–°è¦�ã�«åŠ å·¥ã‚’å§‹ã‚�ã�ªã�„ï¼ˆ_eod_reject_capacity_units_below_thresholdï¼‰ã€‚
+# ASSIGN_END_OF_DAY_DEFER_MINUTES æ—¢å®š 45ï¼ˆåˆ†ï¼‰ã€‚0 ã‚’æ˜Žç¤ºã�™ã‚‹ã�¨ç„¡åŠ¹ï¼ˆå¾“æ�¥ã�©ã�Šã‚Šï¼‰ã€‚
+# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS æ—¢å®š 5ã€‚å��åˆ†å¤§ã��ã�ªå€¤ï¼ˆä¾‹: 999999ï¼‰ã�«ã�™ã‚‹ã�¨å®Ÿè³ªã€Œæ®‹ãƒ­ãƒ¼ãƒ«ã�«ä¾�ã‚‰ã�šçµ‚æ¥­ç›´å‰�ã�¯ä¸�å�¯ã€�ã€‚
+# ä¼‘æ†©: å¸¯å†…ã�«è�½ã�¡ã�Ÿé–‹å§‹ã�¯ _defer_team_start_past_prebreak_and_end_of_day ã�§ä¼‘æ†©çµ‚äº†ã�¸ç¹°ã‚Šä¸‹ã�’ã€‚
+# ä¼‘æ†©ã‚’ã�¾ã�Ÿã��é€£ç¶šé…�å�°ã�¯ _contiguous_work_minutes_until_next_break_or_limit ã�§å�´ä¸‹ã€‚
+# ï¼ˆæ—§ ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES ã�¯å»ƒæ­¢ãƒ»ç„¡è¦–ï¼‰
 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
     0,
     int(os.environ.get("ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS", "5").strip() or 0),
@@ -9390,7 +9204,7 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
 def _eod_minutes_window_covers_start(
     team_start: datetime, team_end_limit: datetime
 ) -> bool:
-    """ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、開始が終業上限のその分数以内か。"""
+    """ASSIGN_END_OF_DAY_DEFER_MINUTES ã�Œæ­£ã�®ã�¨ã��ã€�é–‹å§‹ã�Œçµ‚æ¥­ä¸Šé™�ã�®ã��ã�®åˆ†æ•°ä»¥å†…ã�‹ã€‚"""
     gap = ASSIGN_END_OF_DAY_DEFER_MINUTES
     if gap <= 0:
         return False
@@ -9403,8 +9217,8 @@ def _eod_reject_capacity_units_below_threshold(
     units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
 ) -> bool:
     """
-    終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
-    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
+    çµ‚æ¥­ã�¾ã�§ã�‚ã�¨ ASSIGN_END_OF_DAY_DEFER_MINUTES åˆ†ä»¥å†…ã�®ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦å†…ã�§ã€�
+    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ãƒ­ãƒ¼ãƒ«åˆ†ä»¥ä¸Šã�¯å›žã�›ã�ªã�„ï¼ˆå�Žå®¹ãƒ­ãƒ¼ãƒ«æ•°ã�Œé–¾å€¤æœªæº€ï¼‰ã�¨ã�� Trueï¼ˆæ–°è¦�åŠ å·¥ã‚’å§‹ã‚�ã�ªã�„ï¼�å€™è£œå�´ä¸‹ï¼‰ã€‚
     """
     th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
     if th <= 0:
@@ -9415,11 +9229,11 @@ def _eod_reject_capacity_units_below_threshold(
 
 
 # =========================================================
-# 1. コア計算ロジック (日時ベース)
-#    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
+# 1. ã‚³ã‚¢è¨ˆç®—ãƒ­ã‚¸ãƒƒã‚¯ (æ—¥æ™‚ãƒ™ãƒ¼ã‚¹)
+#    ä¼‘æ†©å¸¯ã‚’æŒŸã‚“ã� ã€Œå®Ÿåƒ�åˆ†ã€�æ�›ç®—ãƒ»çµ‚äº†æ™‚åˆ»ã�®ç¹°ã‚Šä¸Šã�’ã€‚å‰²ä»˜ãƒ«ãƒ¼ãƒ—ã�®ä¸‹å›žã‚Šã€‚
 # =========================================================
 def merge_time_intervals(intervals):
-    """時刻区間のリストをソートし、重なる区間を結合して返す。"""
+    """æ™‚åˆ»åŒºé–“ã�®ãƒªã‚¹ãƒˆã‚’ã‚½ãƒ¼ãƒˆã�—ã€�é‡�ã�ªã‚‹åŒºé–“ã‚’çµ�å�ˆã�—ã�¦è¿”ã�™ã€‚"""
     if not intervals:
         return []
     intervals.sort(key=lambda x: x[0])
@@ -9439,8 +9253,8 @@ def _contiguous_work_minutes_until_next_break_or_limit(
     end_limit_dt: datetime,
 ) -> int:
     """
-    start_dt から次の休憩開始（または終業上限）までの、連続して実働に使える分数。
-    開始が休憩帯内なら 0（呼び出し元で却下）。breaks_dt は merge 済み想定。
+    start_dt ã�‹ã‚‰æ¬¡ã�®ä¼‘æ†©é–‹å§‹ï¼ˆã�¾ã�Ÿã�¯çµ‚æ¥­ä¸Šé™�ï¼‰ã�¾ã�§ã�®ã€�é€£ç¶šã�—ã�¦å®Ÿåƒ�ã�«ä½¿ã�ˆã‚‹åˆ†æ•°ã€‚
+    é–‹å§‹ã�Œä¼‘æ†©å¸¯å†…ã�ªã‚‰ 0ï¼ˆå‘¼ã�³å‡ºã�—å…ƒã�§å�´ä¸‹ï¼‰ã€‚breaks_dt ã�¯ merge æ¸ˆã�¿æƒ³å®šã€‚
     """
     if start_dt >= end_limit_dt:
         return 0
@@ -9463,9 +9277,9 @@ def _break_end_to_skip_if_contiguous_under(
     min_contiguous_mins: int,
 ) -> datetime | None:
     """
-    休憩帯外でも、次の休憩開始までの連続実働が min_contiguous_mins 未満なら、
-    その休憩区間の終了時刻を返す（午後休憩直前に 1 ロール分が収まらない開始だけ進める）。
-    終業までしか実働が続かない場合は None。
+    ä¼‘æ†©å¸¯å¤–ã�§ã‚‚ã€�æ¬¡ã�®ä¼‘æ†©é–‹å§‹ã�¾ã�§ã�®é€£ç¶šå®Ÿåƒ�ã�Œ min_contiguous_mins æœªæº€ã�ªã‚‰ã€�
+    ã��ã�®ä¼‘æ†©åŒºé–“ã�®çµ‚äº†æ™‚åˆ»ã‚’è¿”ã�™ï¼ˆå�ˆå¾Œä¼‘æ†©ç›´å‰�ã�« 1 ãƒ­ãƒ¼ãƒ«åˆ†ã�Œå�Žã�¾ã‚‰ã�ªã�„é–‹å§‹ã� ã�‘é€²ã‚�ã‚‹ï¼‰ã€‚
+    çµ‚æ¥­ã�¾ã�§ã�—ã�‹å®Ÿåƒ�ã�Œç¶šã�‹ã�ªã�„å ´å�ˆã�¯ Noneã€‚
     """
     if min_contiguous_mins <= 0:
         return None
@@ -9500,22 +9314,22 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     min_contiguous_work_mins: int | None = None,
 ) -> datetime | None:
     """
-    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
-      remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
-    - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
-      繰り下げのあと終業超過・EOD デファーに該当すれば None。
-    - min_contiguous_work_mins が正のとき、帯外でも **次の休憩までの連続実働**がそれ未満なら
-      当該休憩の終了へ繰り下げ（上と同様に refloor しループ）。
+    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 ã�‹ã�¤ (team_end_limit - è©¦è¡Œé–‹å§‹) ã�Œã��ã�®åˆ†æ•°ä»¥ä¸‹ã�§ã€�
+      remaining_units åˆ‡ã‚Šä¸Šã�’ã�Œ ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ä»¥ä¸‹ã�®ã�¨ã��ã€�å½“æ—¥é–‹å§‹ä¸�å�¯ï¼ˆNoneï¼‰ã€‚
+    - è©¦è¡Œé–‹å§‹ã�Œä¼‘æ†©å¸¯å†…ã�®ã�¨ã��ã�¯ **ä¼‘æ†©çµ‚äº†æ™‚åˆ»ã�¸ç¹°ã‚Šä¸‹ã�’**ã�—ã€�`refloor_fn` ã�§è¨­å‚™ä¸‹é™�ãƒ»avail ã‚’å†�é�©ç”¨ã�™ã‚‹ã€‚
+      ç¹°ã‚Šä¸‹ã�’ã�®ã�‚ã�¨çµ‚æ¥­è¶…é�Žãƒ»EOD ãƒ‡ãƒ•ã‚¡ãƒ¼ã�«è©²å½“ã�™ã‚Œã�° Noneã€‚
+    - min_contiguous_work_mins ã�Œæ­£ã�®ã�¨ã��ã€�å¸¯å¤–ã�§ã‚‚ **æ¬¡ã�®ä¼‘æ†©ã�¾ã�§ã�®é€£ç¶šå®Ÿåƒ�**ã�Œã��ã‚Œæœªæº€ã�ªã‚‰
+      å½“è©²ä¼‘æ†©ã�®çµ‚äº†ã�¸ç¹°ã‚Šä¸‹ã�’ï¼ˆä¸Šã�¨å�Œæ§˜ã�« refloor ã�—ãƒ«ãƒ¼ãƒ—ï¼‰ã€‚
     """
     _tid = str(task.get("task_id", "") or "").strip()
-    _team_txt = ", ".join(str(x) for x in team) if team else "—"
+    _team_txt = ", ".join(str(x) for x in team) if team else "â€”"
 
     def _trace_block(msg: str, *a) -> None:
         if not _trace_schedule_task_enabled(_tid):
             return
         _log_dispatch_trace_schedule(
             _tid,
-            "[配台トレース task=%s] ブロック判定: " + msg,
+            "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ãƒ–ãƒ­ãƒƒã‚¯åˆ¤å®š: " + msg,
             _tid,
             *a,
         )
@@ -9524,7 +9338,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     for _ in range(64):
         if ts >= team_end_limit:
             _trace_block(
-                "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
+                "é–‹å§‹ä¸�å�¯(çµ‚æ¥­è¶…é�Ž) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
@@ -9540,7 +9354,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 break
         if break_end is not None:
             _trace_block(
-                "休憩帯内のため終了へ繰り下げ machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
+                "ä¼‘æ†©å¸¯å†…ã�®ã�Ÿã‚�çµ‚äº†ã�¸ç¹°ã‚Šä¸‹ã�’ machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
@@ -9556,7 +9370,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             )
             if slip_end is not None:
                 _trace_block(
-                    "休憩直前で連続実働不足のため休憩終了へ繰り下げ machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
+                    "ä¼‘æ†©ç›´å‰�ã�§é€£ç¶šå®Ÿåƒ�ä¸�è¶³ã�®ã�Ÿã‚�ä¼‘æ†©çµ‚äº†ã�¸ç¹°ã‚Šä¸‹ã�’ machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
                     task.get("machine"),
                     _team_txt,
                     float(task.get("remaining_units") or 0),
@@ -9575,7 +9389,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
         ):
             _trace_block(
-                "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
+                "é–‹å§‹ä¸�å�¯(çµ‚æ¥­ç›´å‰�ãƒ»å°�æ®‹ãƒ­ãƒ¼ãƒ«) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
                 task.get("machine"),
                 _team_txt,
                 rem_ceil,
@@ -9589,7 +9403,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         return ts
 
     _trace_block(
-        "開始不可(休憩繰り下げ打切り) machine=%s team=%s rem=%.4f trial_start=%s",
+        "é–‹å§‹ä¸�å�¯(ä¼‘æ†©ç¹°ã‚Šä¸‹ã�’æ‰“åˆ‡ã‚Š) machine=%s team=%s rem=%.4f trial_start=%s",
         task.get("machine"),
         _team_txt,
         float(task.get("remaining_units") or 0),
@@ -9600,9 +9414,9 @@ def _defer_team_start_past_prebreak_and_end_of_day(
 
 def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
     """
-    設備毎の時間割・メンバー日程・稼働率用インデックス向け。
-    1 本のイベントが日をまたぐ場合、e["date"] だけ当日に載せると翌朝セグメントが欠けるため、
-    start_dt〜end_dt を各就業日 DEFAULT_START_TIME〜DEFAULT_END_TIME にクリップした複製へ展開する。
+    è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ãƒ»ãƒ¡ãƒ³ãƒ�ãƒ¼æ—¥ç¨‹ãƒ»ç¨¼åƒ�çŽ‡ç”¨ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹å�‘ã�‘ã€‚
+    1 æœ¬ã�®ã‚¤ãƒ™ãƒ³ãƒˆã�Œæ—¥ã‚’ã�¾ã�Ÿã��å ´å�ˆã€�e["date"] ã� ã�‘å½“æ—¥ã�«è¼‰ã�›ã‚‹ã�¨ç¿Œæœ�ã‚»ã‚°ãƒ¡ãƒ³ãƒˆã�Œæ¬ ã�‘ã‚‹ã�Ÿã‚�ã€�
+    start_dtã€œend_dt ã‚’å�„å°±æ¥­æ—¥ DEFAULT_START_TIMEã€œDEFAULT_END_TIME ã�«ã‚¯ãƒªãƒƒãƒ—ã�—ã�Ÿè¤‡è£½ã�¸å±•é–‹ã�™ã‚‹ã€‚
     """
     expanded: list = []
     for e in timeline_events:
@@ -9638,8 +9452,8 @@ def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
 
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
     """
-    start_dt から end_dt までの「休憩を除いた実働分数」。
-    breaks_dt … (区間開始, 区間終了) の列（datetime または time。呼び出し元の勤怠イベントと整合）。
+    start_dt ã�‹ã‚‰ end_dt ã�¾ã�§ã�®ã€Œä¼‘æ†©ã‚’é™¤ã�„ã�Ÿå®Ÿåƒ�åˆ†æ•°ã€�ã€‚
+    breaks_dt â€¦ (åŒºé–“é–‹å§‹, åŒºé–“çµ‚äº†) ã�®åˆ—ï¼ˆdatetime ã�¾ã�Ÿã�¯ timeã€‚å‘¼ã�³å‡ºã�—å…ƒã�®å‹¤æ€ ã‚¤ãƒ™ãƒ³ãƒˆã�¨æ•´å�ˆï¼‰ã€‚
     """
     current = start_dt
     actual_mins = 0
@@ -9665,8 +9479,8 @@ def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
 
 def calculate_end_time(start_dt, duration_minutes, breaks_dt, end_limit_dt):
     """
-    start_dt から実働 duration_minutes 分進めた終了 datetime を求める（休憩はスキップ）。
-    end_limit_dt を超えないよう打ち切り。戻り値: (終了時刻, 実際に進めた実働分, 残り未消化分)
+    start_dt ã�‹ã‚‰å®Ÿåƒ� duration_minutes åˆ†é€²ã‚�ã�Ÿçµ‚äº† datetime ã‚’æ±‚ã‚�ã‚‹ï¼ˆä¼‘æ†©ã�¯ã‚¹ã‚­ãƒƒãƒ—ï¼‰ã€‚
+    end_limit_dt ã‚’è¶…ã�ˆã�ªã�„ã‚ˆã�†æ‰“ã�¡åˆ‡ã‚Šã€‚æˆ»ã‚Šå€¤: (çµ‚äº†æ™‚åˆ», å®Ÿéš›ã�«é€²ã‚�ã�Ÿå®Ÿåƒ�åˆ†, æ®‹ã‚Šæœªæ¶ˆåŒ–åˆ†)
     """
     current = start_dt
     remaining_work = duration_minutes
@@ -9703,41 +9517,41 @@ def calculate_end_time(start_dt, duration_minutes, breaks_dt, end_limit_dt):
 
 def match_need_sheet_condition(condition_raw: str, task_id: str) -> bool:
     """
-    need シート「依頼NO条件」欄の解釈。
-    空・*・全件 → 常にマッチ。
-    prefix:ABC / 接頭辞:ABC → 依頼NO がその文字列で始まる
-    regex:... / 正規表現:... → 正規表現（部分一致）
-    それ以外の短文は接頭辞として扱う。従来の日本語例「依頼NOがJRで…」は JR を検出したら接頭辞JR扱い。
+    need ã‚·ãƒ¼ãƒˆã€Œä¾�é ¼NOæ�¡ä»¶ã€�æ¬„ã�®è§£é‡ˆã€‚
+    ç©ºãƒ»*ãƒ»å…¨ä»¶ â†’ å¸¸ã�«ãƒžãƒƒãƒ�ã€‚
+    prefix:ABC / æŽ¥é ­è¾ž:ABC â†’ ä¾�é ¼NO ã�Œã��ã�®æ–‡å­—åˆ—ã�§å§‹ã�¾ã‚‹
+    regex:... / æ­£è¦�è¡¨ç�¾:... â†’ æ­£è¦�è¡¨ç�¾ï¼ˆéƒ¨åˆ†ä¸€è‡´ï¼‰
+    ã��ã‚Œä»¥å¤–ã�®çŸ­æ–‡ã�¯æŽ¥é ­è¾žã�¨ã�—ã�¦æ‰±ã�†ã€‚å¾“æ�¥ã�®æ—¥æœ¬èªžä¾‹ã€Œä¾�é ¼NOã�ŒJRã�§â€¦ã€�ã�¯ JR ã‚’æ¤œå‡ºã�—ã�Ÿã‚‰æŽ¥é ­è¾žJRæ‰±ã�„ã€‚
     """
     cond = (condition_raw or "").strip()
     tid = str(task_id).strip()
-    if not cond or cond in ("*", "全件", "全て", "any", "ANY"):
+    if not cond or cond in ("*", "å…¨ä»¶", "å…¨ã�¦", "any", "ANY"):
         return True
     low = cond.lower()
-    cn = cond.replace("：", ":")
-    if low.startswith("prefix:") or low.startswith("接頭辞:"):
+    cn = cond.replace("ï¼š", ":")
+    if low.startswith("prefix:") or low.startswith("æŽ¥é ­è¾ž:"):
         pref = cn.split(":", 1)[1].strip() if ":" in cn else ""
         return bool(pref) and tid.startswith(pref)
-    if low.startswith("regex:") or low.startswith("正規表現:"):
+    if low.startswith("regex:") or low.startswith("æ­£è¦�è¡¨ç�¾:"):
         pat = cn.split(":", 1)[1].strip() if ":" in cn else ""
         if not pat:
             return False
         try:
             return re.search(pat, tid) is not None
         except re.error:
-            logging.warning(f"need 依頼NO条件の正規表現が無効です: {pat}")
+            logging.warning(f"need ä¾�é ¼NOæ�¡ä»¶ã�®æ­£è¦�è¡¨ç�¾ã�Œç„¡åŠ¹ã�§ã�™: {pat}")
             return False
-    if "依頼" in cond and "JR" in cond.upper():
+    if "ä¾�é ¼" in cond and "JR" in cond.upper():
         return tid.upper().startswith("JR")
     return tid.startswith(cond)
 
 
 def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col):
-    """特別指定1～99 行から、設備別の必要人数上書き（1～99）を抽出（先に定義された番号が優先）。"""
+    """ç‰¹åˆ¥æŒ‡å®š1ï½ž99 è¡Œã�‹ã‚‰ã€�è¨­å‚™åˆ¥ã�®å¿…è¦�äººæ•°ä¸Šæ›¸ã��ï¼ˆ1ï½ž99ï¼‰ã‚’æŠ½å‡ºï¼ˆå…ˆã�«å®šç¾©ã�•ã‚Œã�Ÿç•ªå�·ã�Œå„ªå…ˆï¼‰ã€‚"""
     rules = []
     for _, row in needs_df.iterrows():
         lab = str(row.get(label_col, "") or "").strip()
-        m = re.match(r"特別指定\s*(\d+)", lab)
+        m = re.match(r"ç‰¹åˆ¥æŒ‡å®š\s*(\d+)", lab)
         if not m:
             continue
         order = int(m.group(1))
@@ -9763,14 +9577,14 @@ def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col
 
 def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list) -> int:
     """
-    need シートの「工程名 + 機械名」で必要OP人数を解決（特別指定1〜99は order が小さいほど優先）。
+    need ã‚·ãƒ¼ãƒˆã�®ã€Œå·¥ç¨‹å�� + æ©Ÿæ¢°å��ã€�ã�§å¿…è¦�OPäººæ•°ã‚’è§£æ±ºï¼ˆç‰¹åˆ¥æŒ‡å®š1ã€œ99ã�¯ order ã�Œå°�ã�•ã�„ã�»ã�©å„ªå…ˆï¼‰ã€‚
 
-    req_map は
-      - f\"{process}+{machine_name}\"（厳密キー）
-      - machine_name（機械だけのフォールバック）
-      - process（工程だけのフォールバック）
-    のいずれかで base を引ける前提。
-    need_rules の overrides も同様にキーを持つ。
+    req_map ã�¯
+      - f\"{process}+{machine_name}\"ï¼ˆåŽ³å¯†ã‚­ãƒ¼ï¼‰
+      - machine_nameï¼ˆæ©Ÿæ¢°ã� ã�‘ã�®ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ï¼‰
+      - processï¼ˆå·¥ç¨‹ã� ã�‘ã�®ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ï¼‰
+    ã�®ã�„ã�šã‚Œã�‹ã�§ base ã‚’å¼•ã�‘ã‚‹å‰�æ��ã€‚
+    need_rules ã�® overrides ã‚‚å�Œæ§˜ã�«ã‚­ãƒ¼ã‚’æŒ�ã�¤ã€‚
     """
     p = str(process).strip()
     m = str(machine_name).strip()
@@ -9805,7 +9619,7 @@ def resolve_need_required_op_explain(
     process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list
 ) -> tuple[int, str]:
     """
-    resolve_need_required_op と同値を返しつつ、ログ用に参照元の説明文字列を付ける。
+    resolve_need_required_op ã�¨å�Œå€¤ã‚’è¿”ã�—ã�¤ã�¤ã€�ãƒ­ã‚°ç”¨ã�«å�‚ç…§å…ƒã�®èª¬æ˜Žæ–‡å­—åˆ—ã‚’ä»˜ã�‘ã‚‹ã€‚
     """
     p = str(process).strip()
     m = str(machine_name).strip()
@@ -9817,41 +9631,41 @@ def resolve_need_required_op_explain(
         base_src = f"req_map[{combo_key!r}]={base}"
     elif m and m in req_map:
         base = req_map[m]
-        base_src = f"req_map[機械名のみ {m!r}]={base}（複合キー不在）"
+        base_src = f"req_map[æ©Ÿæ¢°å��ã�®ã�¿ {m!r}]={base}ï¼ˆè¤‡å�ˆã‚­ãƒ¼ä¸�åœ¨ï¼‰"
     elif p and p in req_map:
         base = req_map[p]
-        base_src = f"req_map[工程名のみ {p!r}]={base}（複合・機械キー不在）"
+        base_src = f"req_map[å·¥ç¨‹å��ã�®ã�¿ {p!r}]={base}ï¼ˆè¤‡å�ˆãƒ»æ©Ÿæ¢°ã‚­ãƒ¼ä¸�åœ¨ï¼‰"
     else:
         base = 1
-        base_src = "req_map該当なし→既定1"
+        base_src = "req_mapè©²å½“ã�ªã�—â†’æ—¢å®š1"
     for rule in need_rules:
         if not match_need_sheet_condition(rule["condition"], task_id):
             continue
         order = rule.get("order", "?")
         if combo_key and combo_key in rule["overrides"]:
             v = int(rule["overrides"][combo_key])
-            return v, f"need特別指定{order} [{combo_key!r}]={v}"
+            return v, f"needç‰¹åˆ¥æŒ‡å®š{order} [{combo_key!r}]={v}"
         if m and m in rule["overrides"]:
             v = int(rule["overrides"][m])
-            return v, f"need特別指定{order} [機械名{m!r}]={v}"
+            return v, f"needç‰¹åˆ¥æŒ‡å®š{order} [æ©Ÿæ¢°å��{m!r}]={v}"
         if p and p in rule["overrides"]:
             v = int(rule["overrides"][p])
-            return v, f"need特別指定{order} [工程名{p!r}]={v}"
+            return v, f"needç‰¹åˆ¥æŒ‡å®š{order} [å·¥ç¨‹å��{p!r}]={v}"
     return int(base), base_src
 
 
 def _need_row_label_hints_surplus_add(label_a0: str) -> bool:
-    """need シート A列: 基本必要人数の直下にある「配台結果で余剰が出たときの追加増員上限」行か。"""
+    """need ã‚·ãƒ¼ãƒˆ Aåˆ—: åŸºæœ¬å¿…è¦�äººæ•°ã�®ç›´ä¸‹ã�«ã�‚ã‚‹ã€Œé…�å�°çµ�æžœã�§ä½™å‰°ã�Œå‡ºã�Ÿã�¨ã��ã�®è¿½åŠ å¢—å“¡ä¸Šé™�ã€�è¡Œã�‹ã€‚"""
     s = unicodedata.normalize("NFKC", str(label_a0 or "").strip())
-    if not s or s.startswith("特別指定"):
+    if not s or s.startswith("ç‰¹åˆ¥æŒ‡å®š"):
         return False
-    if "依頼" in s and "条件" in s:
+    if "ä¾�é ¼" in s and "æ�¡ä»¶" in s:
         return False
-    if "追加" in s and ("人数" in s or "人員" in s or "増員" in s):
+    if "è¿½åŠ " in s and ("äººæ•°" in s or "äººå“¡" in s or "å¢—å“¡" in s):
         return True
-    if "増員" in s or "余剰" in s:
+    if "å¢—å“¡" in s or "ä½™å‰°" in s:
         return True
-    if "配台" in s and ("追加" in s or "増" in s or "余剰" in s):
+    if "é…�å�°" in s and ("è¿½åŠ " in s or "å¢—" in s or "ä½™å‰°" in s):
         return True
     return False
 
@@ -9859,13 +9673,13 @@ def _need_row_label_hints_surplus_add(label_a0: str) -> bool:
 def _find_need_surplus_add_row_index(
     needs_raw, base_row: int, col0: int, pm_cols: list
 ) -> int | None:
-    """基本必要人数行の次行を優先。ラベルまたは数値で追加人数行と判定。"""
+    """åŸºæœ¬å¿…è¦�äººæ•°è¡Œã�®æ¬¡è¡Œã‚’å„ªå…ˆã€‚ãƒ©ãƒ™ãƒ«ã�¾ã�Ÿã�¯æ•°å€¤ã�§è¿½åŠ äººæ•°è¡Œã�¨åˆ¤å®šã€‚"""
     r = base_row + 1
     if r >= needs_raw.shape[0]:
         return None
     v0 = needs_raw.iat[r, col0]
     s0 = "" if pd.isna(v0) else str(v0).strip()
-    if s0.startswith("特別指定"):
+    if s0.startswith("ç‰¹åˆ¥æŒ‡å®š"):
         return None
     if _need_row_label_hints_surplus_add(s0):
         return r
@@ -9873,7 +9687,7 @@ def _find_need_surplus_add_row_index(
     for col_idx, _, _ in pm_cols:
         if parse_optional_int(needs_raw.iat[r, col_idx]) is not None:
             nz += 1
-    if nz > 0 and not unicodedata.normalize("NFKC", s0).startswith("特別"):
+    if nz > 0 and not unicodedata.normalize("NFKC", s0).startswith("ç‰¹åˆ¥"):
         return r
     return None
 
@@ -9886,9 +9700,9 @@ def resolve_need_surplus_extra_max(
     need_rules: list,
 ) -> int:
     """
-    need シート「配台時追加人数」行（工程×機械列）の値＝必要人数を満たしたうえで
-    さらに割り当て可能な人数の上限（0 なら従来どおり必要人数ちょうどのみ）。
-    need_rules は現状この行を上書きしない（将来拡張用に task_id を受け取る）。
+    need ã‚·ãƒ¼ãƒˆã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ã€�è¡Œï¼ˆå·¥ç¨‹Ã—æ©Ÿæ¢°åˆ—ï¼‰ã�®å€¤ï¼�å¿…è¦�äººæ•°ã‚’æº€ã�Ÿã�—ã�Ÿã�†ã�ˆã�§
+    ã�•ã‚‰ã�«å‰²ã‚Šå½“ã�¦å�¯èƒ½ã�ªäººæ•°ã�®ä¸Šé™�ï¼ˆ0 ã�ªã‚‰å¾“æ�¥ã�©ã�Šã‚Šå¿…è¦�äººæ•°ã�¡ã‚‡ã�†ã�©ã�®ã�¿ï¼‰ã€‚
+    need_rules ã�¯ç�¾çŠ¶ã�“ã�®è¡Œã‚’ä¸Šæ›¸ã��ã�—ã�ªã�„ï¼ˆå°†æ�¥æ‹¡å¼µç”¨ã�« task_id ã‚’å�—ã�‘å�–ã‚‹ï¼‰ã€‚
     """
     _ = (task_id, need_rules)
     if not surplus_map:
@@ -9919,13 +9733,13 @@ def resolve_need_surplus_extra_max_explain(
     surplus_map: dict,
     need_rules: list,
 ) -> tuple[int, str]:
-    """resolve_need_surplus_extra_max と同値＋参照元説明（ログ用）。"""
+    """resolve_need_surplus_extra_max ã�¨å�Œå€¤ï¼‹å�‚ç…§å…ƒèª¬æ˜Žï¼ˆãƒ­ã‚°ç”¨ï¼‰ã€‚"""
     val = resolve_need_surplus_extra_max(
         process, machine_name, task_id, surplus_map, need_rules
     )
     _ = need_rules
     if not surplus_map:
-        return val, "surplus_map空（配台時追加人数行なし）"
+        return val, "surplus_mapç©ºï¼ˆé…�å�°æ™‚è¿½åŠ äººæ•°è¡Œã�ªã�—ï¼‰"
     p = str(process).strip()
     m = str(machine_name).strip()
     combo_key = f"{p}+{m}" if p and m else None
@@ -9934,19 +9748,19 @@ def resolve_need_surplus_extra_max_explain(
         return val, f"surplus_map[{combo_key!r}]={raw}"
     if m and m in surplus_map:
         raw = surplus_map[m]
-        return val, f"surplus_map[機械名のみ {m!r}]={raw}（複合キー不在）"
+        return val, f"surplus_map[æ©Ÿæ¢°å��ã�®ã�¿ {m!r}]={raw}ï¼ˆè¤‡å�ˆã‚­ãƒ¼ä¸�åœ¨ï¼‰"
     if p and p in surplus_map:
         raw = surplus_map[p]
-        return val, f"surplus_map[工程名のみ {p!r}]={raw}（複合キー不在）"
-    return val, "surplus当キーなし→0"
+        return val, f"surplus_map[å·¥ç¨‹å��ã�®ã�¿ {p!r}]={raw}ï¼ˆè¤‡å�ˆã‚­ãƒ¼ä¸�åœ¨ï¼‰"
+    return val, "surpluså½“ã‚­ãƒ¼ã�ªã�—â†’0"
 
 
 def _surplus_team_time_factor(
     rq_base: int, team_len: int, extra_max_allowed: int
 ) -> float:
     """
-    必要人数を超えて入れたメンバーによる単位時間への係数（1.0＝短縮なし）。
-    追加枠（extra_max_allowed）を使い切ったときでも、短縮は SURPLUS_TEAM_MAX_SPEEDUP_RATIO を上限とする線形モデル。
+    å¿…è¦�äººæ•°ã‚’è¶…ã�ˆã�¦å…¥ã‚Œã�Ÿãƒ¡ãƒ³ãƒ�ãƒ¼ã�«ã‚ˆã‚‹å�˜ä½�æ™‚é–“ã�¸ã�®ä¿‚æ•°ï¼ˆ1.0ï¼�çŸ­ç¸®ã�ªã�—ï¼‰ã€‚
+    è¿½åŠ æž ï¼ˆextra_max_allowedï¼‰ã‚’ä½¿ã�„åˆ‡ã�£ã�Ÿã�¨ã��ã�§ã‚‚ã€�çŸ­ç¸®ã�¯ SURPLUS_TEAM_MAX_SPEEDUP_RATIO ã‚’ä¸Šé™�ã�¨ã�™ã‚‹ç·šå½¢ãƒ¢ãƒ‡ãƒ«ã€‚
     """
     rq = max(1, int(rq_base))
     tl = int(team_len)
@@ -9960,12 +9774,12 @@ def _surplus_team_time_factor(
 
 def _team_assign_trace_tuple_label() -> str:
     if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
-        return "(-人数, 開始, -単位数, 優先度合計)"
+        return "(-äººæ•°, é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ)"
     if TEAM_ASSIGN_START_SLACK_WAIT_MINUTES <= 0:
-        return "(開始, -単位数, 優先度合計)"
+        return "(é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ)"
     return (
-        f"最早開始から{TEAM_ASSIGN_START_SLACK_WAIT_MINUTES}分以内は"
-        "(0,-人数,開始,-単位数,優先度)、超過は(1,開始,-人数,-単位数,優先度)"
+        f"æœ€æ—©é–‹å§‹ã�‹ã‚‰{TEAM_ASSIGN_START_SLACK_WAIT_MINUTES}åˆ†ä»¥å†…ã�¯"
+        "(0,-äººæ•°,é–‹å§‹,-å�˜ä½�æ•°,å„ªå…ˆåº¦)ã€�è¶…é�Žã�¯(1,é–‹å§‹,-äººæ•°,-å�˜ä½�æ•°,å„ªå…ˆåº¦)"
     )
 
 
@@ -9977,12 +9791,12 @@ def _team_assignment_sort_tuple(
     t_min: datetime | None = None,
 ) -> tuple:
     """
-    チーム候補の優劣用タプル（辞書式で小さい方が採用）。
-    - TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF: (-人数, 開始, -単位数, 優先度合計)
-    - それ以外かつ TEAM_ASSIGN_START_SLACK_WAIT_MINUTES>0 かつ t_min あり:
-        最早開始からスラック以内 → (0, -人数, 開始, -単位数, 優先度) … 遅れても人数を厚く
-        スラック超 → (1, 開始, -人数, -単位数, 優先度) … 開始を優先
-    - 上記以外: (開始, -単位数, 優先度合計)
+    ãƒ�ãƒ¼ãƒ å€™è£œã�®å„ªåŠ£ç”¨ã‚¿ãƒ—ãƒ«ï¼ˆè¾žæ›¸å¼�ã�§å°�ã�•ã�„æ–¹ã�ŒæŽ¡ç”¨ï¼‰ã€‚
+    - TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF: (-äººæ•°, é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ)
+    - ã��ã‚Œä»¥å¤–ã�‹ã�¤ TEAM_ASSIGN_START_SLACK_WAIT_MINUTES>0 ã�‹ã�¤ t_min ã�‚ã‚Š:
+        æœ€æ—©é–‹å§‹ã�‹ã‚‰ã‚¹ãƒ©ãƒƒã‚¯ä»¥å†… â†’ (0, -äººæ•°, é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦) â€¦ é�…ã‚Œã�¦ã‚‚äººæ•°ã‚’åŽšã��
+        ã‚¹ãƒ©ãƒƒã‚¯è¶… â†’ (1, é–‹å§‹, -äººæ•°, -å�˜ä½�æ•°, å„ªå…ˆåº¦) â€¦ é–‹å§‹ã‚’å„ªå…ˆ
+    - ä¸Šè¨˜ä»¥å¤–: (é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ)
     """
     n = len(team)
     if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
@@ -9996,16 +9810,16 @@ def _team_assignment_sort_tuple(
     return (1, team_start, -n, -units_today, team_prio_sum)
 
 
-# skills セル: OP / AS + 任意の優先度整数（例 OP1, AS 3）。数値が小さいほど割当で先に選ばれる。
+# skills ã‚»ãƒ«: OP / AS + ä»»æ„�ã�®å„ªå…ˆåº¦æ•´æ•°ï¼ˆä¾‹ OP1, AS 3ï¼‰ã€‚æ•°å€¤ã�Œå°�ã�•ã�„ã�»ã�©å‰²å½“ã�§å…ˆã�«é�¸ã�°ã‚Œã‚‹ã€‚
 _SKILL_OP_AS_CELL_RE = re.compile(r"^(OP|AS)(\d*)$", re.IGNORECASE)
 
 
 def parse_op_as_skill_cell(cell_val):
     """
-    master.xlsm「skills」のセル1つを解釈する。
-    - 「OP」または「AS」の直後に優先度用の整数（空白は除去して解釈）。例: OP, OP1, AS3, AS 12
-    - 優先度は小さいほど高優先（同一条件のチーム候補から先に選ばれる）。数字省略時は 1。
-    - OP/AS で始まらない・空はスキルなし。
+    master.xlsmã€Œskillsã€�ã�®ã‚»ãƒ«1ã�¤ã‚’è§£é‡ˆã�™ã‚‹ã€‚
+    - ã€ŒOPã€�ã�¾ã�Ÿã�¯ã€ŒASã€�ã�®ç›´å¾Œã�«å„ªå…ˆåº¦ç”¨ã�®æ•´æ•°ï¼ˆç©ºç™½ã�¯é™¤åŽ»ã�—ã�¦è§£é‡ˆï¼‰ã€‚ä¾‹: OP, OP1, AS3, AS 12
+    - å„ªå…ˆåº¦ã�¯å°�ã�•ã�„ã�»ã�©é«˜å„ªå…ˆï¼ˆå�Œä¸€æ�¡ä»¶ã�®ãƒ�ãƒ¼ãƒ å€™è£œã�‹ã‚‰å…ˆã�«é�¸ã�°ã‚Œã‚‹ï¼‰ã€‚æ•°å­—çœ�ç•¥æ™‚ã�¯ 1ã€‚
+    - OP/AS ã�§å§‹ã�¾ã‚‰ã�ªã�„ãƒ»ç©ºã�¯ã‚¹ã‚­ãƒ«ã�ªã�—ã€‚
     """
     if cell_val is None or (isinstance(cell_val, float) and pd.isna(cell_val)):
         return None, 10**9
@@ -10034,9 +9848,9 @@ def _validate_skills_op_as_priority_numbers_unique(
     skills_dict: dict, column_keys: list
 ) -> None:
     """
-    master「skills」の各列（工程+機械キー等）について、OP/AS の割当優先度の**数値**が
-    メンバー間で重複していないか検証する。重複時は PlanningValidationError。
-    （OP1 と AS1 のようにロールが異なっても同一数値なら重複とみなす）
+    masterã€Œskillsã€�ã�®å�„åˆ—ï¼ˆå·¥ç¨‹+æ©Ÿæ¢°ã‚­ãƒ¼ç­‰ï¼‰ã�«ã�¤ã�„ã�¦ã€�OP/AS ã�®å‰²å½“å„ªå…ˆåº¦ã�®**æ•°å€¤**ã�Œ
+    ãƒ¡ãƒ³ãƒ�ãƒ¼é–“ã�§é‡�è¤‡ã�—ã�¦ã�„ã�ªã�„ã�‹æ¤œè¨¼ã�™ã‚‹ã€‚é‡�è¤‡æ™‚ã�¯ PlanningValidationErrorã€‚
+    ï¼ˆOP1 ã�¨ AS1 ã�®ã‚ˆã�†ã�«ãƒ­ãƒ¼ãƒ«ã�Œç•°ã�ªã�£ã�¦ã‚‚å�Œä¸€æ•°å€¤ã�ªã‚‰é‡�è¤‡ã�¨ã�¿ã�ªã�™ï¼‰
     """
     errors: list[str] = []
     for combo in column_keys:
@@ -10060,17 +9874,17 @@ def _validate_skills_op_as_priority_numbers_unique(
             pr_to_entries[int(pr)].append(f"{mnm}({role})")
         for pr, entries in sorted(pr_to_entries.items()):
             if len(entries) > 1:
-                errors.append(f'列「{ck}」: 優先度 {pr} が重複 → ' + "、".join(entries))
+                errors.append(f'åˆ—ã€Œ{ck}ã€�: å„ªå…ˆåº¦ {pr} ã�Œé‡�è¤‡ â†’ ' + "ã€�".join(entries))
     if errors:
         cap = 50
         tail = errors[:cap]
         msg = (
-            "マスタ「skills」で、同一列の OP/AS 優先度の数値が重複しています。"
-            " 列ごとに数値は1人につき1種類にしてください。\n"
+            "ãƒžã‚¹ã‚¿ã€Œskillsã€�ã�§ã€�å�Œä¸€åˆ—ã�® OP/AS å„ªå…ˆåº¦ã�®æ•°å€¤ã�Œé‡�è¤‡ã�—ã�¦ã�„ã�¾ã�™ã€‚"
+            " åˆ—ã�”ã�¨ã�«æ•°å€¤ã�¯1äººã�«ã�¤ã��1ç¨®é¡žã�«ã�—ã�¦ã��ã� ã�•ã�„ã€‚\n"
             + "\n".join(tail)
         )
         if len(errors) > cap:
-            msg += f"\n…他 {len(errors) - cap} 件"
+            msg += f"\nâ€¦ä»– {len(errors) - cap} ä»¶"
         raise PlanningValidationError(msg)
 
 
@@ -10079,9 +9893,9 @@ def build_member_assignment_priority_reference(
     members: list | None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    結果ブック用: マスタ skills の「工程名+機械名」列ごとに、割当アルゴリズムと同じ
-    (優先度値昇順, メンバー名昇順) で並べた参考表と、ルール説明の表を返す。
-    当日の出勤・設備空き・同一依頼の工程順・チーム人数は反映しない（あくまでマスタ上の順序）。
+    çµ�æžœãƒ–ãƒƒã‚¯ç”¨: ãƒžã‚¹ã‚¿ skills ã�®ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�åˆ—ã�”ã�¨ã�«ã€�å‰²å½“ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ ã�¨å�Œã�˜
+    (å„ªå…ˆåº¦å€¤æ˜‡é †, ãƒ¡ãƒ³ãƒ�ãƒ¼å��æ˜‡é †) ã�§ä¸¦ã�¹ã�Ÿå�‚è€ƒè¡¨ã�¨ã€�ãƒ«ãƒ¼ãƒ«èª¬æ˜Žã�®è¡¨ã‚’è¿”ã�™ã€‚
+    å½“æ—¥ã�®å‡ºå‹¤ãƒ»è¨­å‚™ç©ºã��ãƒ»å�Œä¸€ä¾�é ¼ã�®å·¥ç¨‹é †ãƒ»ãƒ�ãƒ¼ãƒ äººæ•°ã�¯å��æ˜ ã�—ã�ªã�„ï¼ˆã�‚ã��ã�¾ã�§ãƒžã‚¹ã‚¿ä¸Šã�®é †åº�ï¼‰ã€‚
     """
     mem_list = list(members) if members else list((skills_dict or {}).keys())
     mem_list = [str(m).strip() for m in mem_list if m and str(m).strip()]
@@ -10090,49 +9904,49 @@ def build_member_assignment_priority_reference(
     slack_m = TEAM_ASSIGN_START_SLACK_WAIT_MINUTES
     if surplus_on:
         team_rule = (
-            "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF=有効: "
-            "(-人数, 開始, -単位数, 優先度合計) の辞書式（人数最優先・従来）。"
+            "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF=æœ‰åŠ¹: "
+            "(-äººæ•°, é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ) ã�®è¾žæ›¸å¼�ï¼ˆäººæ•°æœ€å„ªå…ˆãƒ»å¾“æ�¥ï¼‰ã€‚"
         )
     elif slack_m > 0:
         team_rule = (
-            f"既定: その日の成立候補全体の「最早開始」を基準に、"
-            f"開始がその{slack_m}分以内の遅れなら人数を厚く優先（0,-人数,開始,-単位数,優先度）、"
-            f"それより遅い候補は開始を優先（1,開始,-人数,-単位数,優先度）。"
-            f"環境変数 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0 で無効化。"
+            f"æ—¢å®š: ã��ã�®æ—¥ã�®æˆ�ç«‹å€™è£œå…¨ä½“ã�®ã€Œæœ€æ—©é–‹å§‹ã€�ã‚’åŸºæº–ã�«ã€�"
+            f"é–‹å§‹ã�Œã��ã�®{slack_m}åˆ†ä»¥å†…ã�®é�…ã‚Œã�ªã‚‰äººæ•°ã‚’åŽšã��å„ªå…ˆï¼ˆ0,-äººæ•°,é–‹å§‹,-å�˜ä½�æ•°,å„ªå…ˆåº¦ï¼‰ã€�"
+            f"ã��ã‚Œã‚ˆã‚Šé�…ã�„å€™è£œã�¯é–‹å§‹ã‚’å„ªå…ˆï¼ˆ1,é–‹å§‹,-äººæ•°,-å�˜ä½�æ•°,å„ªå…ˆåº¦ï¼‰ã€‚"
+            f"ç’°å¢ƒå¤‰æ•° TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0 ã�§ç„¡åŠ¹åŒ–ã€‚"
         )
     else:
         team_rule = (
             "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0: "
-            "(開始, -単位数, 優先度合計) のみ（開始最優先）。"
+            "(é–‹å§‹, -å�˜ä½�æ•°, å„ªå…ˆåº¦å�ˆè¨ˆ) ã�®ã�¿ï¼ˆé–‹å§‹æœ€å„ªå…ˆï¼‰ã€‚"
         )
 
     legend_rows = [
         {
-            "区分": "スキル列の並び",
-            "内容": "各「工程名+機械名」列について、セルが OP/AS（+優先度整数）のメンバーのみ対象。"
-            " 数値が小さいほど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。"
-            " 同一列では優先度の数値はメンバー間で重複不可（マスタ読込時に検証）。",
+            "åŒºåˆ†": "ã‚¹ã‚­ãƒ«åˆ—ã�®ä¸¦ã�³",
+            "å†…å®¹": "å�„ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�åˆ—ã�«ã�¤ã�„ã�¦ã€�ã‚»ãƒ«ã�Œ OP/ASï¼ˆ+å„ªå…ˆåº¦æ•´æ•°ï¼‰ã�®ãƒ¡ãƒ³ãƒ�ãƒ¼ã�®ã�¿å¯¾è±¡ã€‚"
+            " æ•°å€¤ã�Œå°�ã�•ã�„ã�»ã�©é«˜å„ªå…ˆã€‚çœ�ç•¥æ™‚ã�¯å„ªå…ˆåº¦ 1ï¼ˆparse_op_as_skill_cell ã�¨å�Œä¸€ï¼‰ã€‚"
+            " å�Œä¸€åˆ—ã�§ã�¯å„ªå…ˆåº¦ã�®æ•°å€¤ã�¯ãƒ¡ãƒ³ãƒ�ãƒ¼é–“ã�§é‡�è¤‡ä¸�å�¯ï¼ˆãƒžã‚¹ã‚¿èª­è¾¼æ™‚ã�«æ¤œè¨¼ï¼‰ã€‚",
         },
         {
-            "区分": "当日との差",
-            "内容": "実際の配台は、この順のうちその日出勤かつ AS/OP 要件を満たす者だけが候補。"
-            " 設備の空き・同一依頼NOの工程順・必要人数・増員枠・指名OPで変わります。",
+            "åŒºåˆ†": "å½“æ—¥ã�¨ã�®å·®",
+            "å†…å®¹": "å®Ÿéš›ã�®é…�å�°ã�¯ã€�ã�“ã�®é †ã�®ã�†ã�¡ã��ã�®æ—¥å‡ºå‹¤ã�‹ã�¤ AS/OP è¦�ä»¶ã‚’æº€ã�Ÿã�™è€…ã� ã�‘ã�Œå€™è£œã€‚"
+            " è¨­å‚™ã�®ç©ºã��ãƒ»å�Œä¸€ä¾�é ¼NOã�®å·¥ç¨‹é †ãƒ»å¿…è¦�äººæ•°ãƒ»å¢—å“¡æž ãƒ»æŒ‡å��OPã�§å¤‰ã‚�ã‚Šã�¾ã�™ã€‚",
         },
         {
-            "区分": "チーム候補の比較",
-            "内容": team_rule,
+            "åŒºåˆ†": "ãƒ�ãƒ¼ãƒ å€™è£œã�®æ¯”è¼ƒ",
+            "å†…å®¹": team_rule,
         },
         {
-            "区分": "指名・グローバル上書き",
-            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指名は本表より優先されます。",
+            "åŒºåˆ†": "æŒ‡å��ãƒ»ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ä¸Šæ›¸ã��",
+            "å†…å®¹": "æ‹…å½“OP_æŒ‡å®šãƒ»ãƒ¡ã‚¤ãƒ³ã€Œå†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰ã€�ã�® OP æŒ‡å��ã�¯æœ¬è¡¨ã‚ˆã‚Šå„ªå…ˆã�•ã‚Œã�¾ã�™ã€‚",
         },
         {
-            "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
-            "内容": "1/有効（人数最優先・従来）" if surplus_on else "0/無効（既定）",
+            "åŒºåˆ†": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
+            "å†…å®¹": "1/æœ‰åŠ¹ï¼ˆäººæ•°æœ€å„ªå…ˆãƒ»å¾“æ�¥ï¼‰" if surplus_on else "0/ç„¡åŠ¹ï¼ˆæ—¢å®šï¼‰",
         },
         {
-            "区分": "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
-            "内容": str(slack_m),
+            "åŒºåˆ†": "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
+            "å†…å®¹": str(slack_m),
         },
     ]
     df_legend = pd.DataFrame(legend_rows)
@@ -10165,30 +9979,30 @@ def build_member_assignment_priority_reference(
         if not ranked:
             out.append(
                 {
-                    "工程名": proc,
-                    "機械名": mach,
-                    "スキル列キー": combo,
-                    "優先順位": "",
-                    "メンバー": "（なし）",
-                    "ロール": "",
-                    "優先度値_小さいほど先": "",
-                    "skillsセル値": "",
-                    "備考": "この列に OP/AS の資格セルがあるメンバーがいません",
+                    "å·¥ç¨‹å��": proc,
+                    "æ©Ÿæ¢°å��": mach,
+                    "ã‚¹ã‚­ãƒ«åˆ—ã‚­ãƒ¼": combo,
+                    "å„ªå…ˆé †ä½�": "",
+                    "ãƒ¡ãƒ³ãƒ�ãƒ¼": "ï¼ˆã�ªã�—ï¼‰",
+                    "ãƒ­ãƒ¼ãƒ«": "",
+                    "å„ªå…ˆåº¦å€¤_å°�ã�•ã�„ã�»ã�©å…ˆ": "",
+                    "skillsã‚»ãƒ«å€¤": "",
+                    "å‚™è€ƒ": "ã�“ã�®åˆ—ã�« OP/AS ã�®è³‡æ ¼ã‚»ãƒ«ã�Œã�‚ã‚‹ãƒ¡ãƒ³ãƒ�ãƒ¼ã�Œã�„ã�¾ã�›ã‚“",
                 }
             )
             continue
         for i, (pr, m, role, cell_s) in enumerate(ranked, start=1):
             out.append(
                 {
-                    "工程名": proc,
-                    "機械名": mach,
-                    "スキル列キー": combo,
-                    "優先順位": i,
-                    "メンバー": m,
-                    "ロール": role,
-                    "優先度値_小さいほど先": pr,
-                    "skillsセル値": cell_s,
-                    "備考": "",
+                    "å·¥ç¨‹å��": proc,
+                    "æ©Ÿæ¢°å��": mach,
+                    "ã‚¹ã‚­ãƒ«åˆ—ã‚­ãƒ¼": combo,
+                    "å„ªå…ˆé †ä½�": i,
+                    "ãƒ¡ãƒ³ãƒ�ãƒ¼": m,
+                    "ãƒ­ãƒ¼ãƒ«": role,
+                    "å„ªå…ˆåº¦å€¤_å°�ã�•ã�„ã�»ã�©å…ˆ": pr,
+                    "skillsã‚»ãƒ«å€¤": cell_s,
+                    "å‚™è€ƒ": "",
                 }
             )
 
@@ -10197,60 +10011,60 @@ def build_member_assignment_priority_reference(
 
 
 def _normalize_person_name_for_match(s):
-    """担当者指名のあいまい一致用（NFKC・富田/冨田の表記寄せ・空白除去・末尾敬称のみ除去）。"""
+    """æ‹…å½“è€…æŒ‡å��ã�®ã�‚ã�„ã�¾ã�„ä¸€è‡´ç”¨ï¼ˆNFKCãƒ»å¯Œç”°/å†¨ç”°ã�®è¡¨è¨˜å¯„ã�›ãƒ»ç©ºç™½é™¤åŽ»ãƒ»æœ«å°¾æ•¬ç§°ã�®ã�¿é™¤åŽ»ï¼‰ã€‚"""
     if s is None:
         return ""
     t = unicodedata.normalize("NFKC", str(s).strip())
-    if "富田" in t:
-        t = t.replace("富田", "冨田")
-    t = re.sub(r"[\s　]+", "", t)
-    t = re.sub(r"(さん|様|氏)$", "", t)
+    if "å¯Œç”°" in t:
+        t = t.replace("å¯Œç”°", "å†¨ç”°")
+    t = re.sub(r"[\sã€€]+", "", t)
+    t = re.sub(r"(ã�•ã‚“|æ§˜|æ°�)$", "", t)
     return t
 
 
 def _split_person_sei_mei(s) -> tuple[str, str]:
     """
-    氏名を姓・名に分ける。最初の半角／全角空白の手前を姓、以降を名とする。
-    空白が無い場合は (全体, '')（名なし扱い）。
-    末尾の さん／様／氏 は分割前に除去する。
+    æ°�å��ã‚’å§“ãƒ»å��ã�«åˆ†ã�‘ã‚‹ã€‚æœ€åˆ�ã�®å�Šè§’ï¼�å…¨è§’ç©ºç™½ã�®æ‰‹å‰�ã‚’å§“ã€�ä»¥é™�ã‚’å��ã�¨ã�™ã‚‹ã€‚
+    ç©ºç™½ã�Œç„¡ã�„å ´å�ˆã�¯ (å…¨ä½“, '')ï¼ˆå��ã�ªã�—æ‰±ã�„ï¼‰ã€‚
+    æœ«å°¾ã�® ã�•ã‚“ï¼�æ§˜ï¼�æ°� ã�¯åˆ†å‰²å‰�ã�«é™¤åŽ»ã�™ã‚‹ã€‚
     """
     if s is None:
         return "", ""
     t = unicodedata.normalize("NFKC", str(s).strip())
     if not t or t.lower() in ("nan", "none", "null"):
         return "", ""
-    t = re.sub(r"(さん|様|氏)$", "", t)
+    t = re.sub(r"(ã�•ã‚“|æ§˜|æ°�)$", "", t)
     for i, ch in enumerate(t):
         if ch in " \u3000":
             sei = t[:i].strip()
             rest = t[i + 1 :]
-            mei = re.sub(r"[\s　]+", "", rest.strip())
+            mei = re.sub(r"[\sã€€]+", "", rest.strip())
             return sei, mei
     return t.strip(), ""
 
 
 def _normalize_sei_for_match(sei: str) -> str:
-    """姓のみ正規化。表記ゆれは許容しない前提で、NFKC・富田/冨田寄せ・空白除去。"""
+    """å§“ã�®ã�¿æ­£è¦�åŒ–ã€‚è¡¨è¨˜ã‚†ã‚Œã�¯è¨±å®¹ã�—ã�ªã�„å‰�æ��ã�§ã€�NFKCãƒ»å¯Œç”°/å†¨ç”°å¯„ã�›ãƒ»ç©ºç™½é™¤åŽ»ã€‚"""
     if not sei:
         return ""
     t = unicodedata.normalize("NFKC", str(sei).strip())
-    if "富田" in t:
-        t = t.replace("富田", "冨田")
-    t = re.sub(r"[\s　]+", "", t)
+    if "å¯Œç”°" in t:
+        t = t.replace("å¯Œç”°", "å†¨ç”°")
+    t = re.sub(r"[\sã€€]+", "", t)
     return t
 
 
 def _normalize_mei_for_match(mei: str) -> str:
-    """名の正規化（ゆれ許容の前処理）。NFKC・空白除去。姓用の富田置換は行わない。"""
+    """å��ã�®æ­£è¦�åŒ–ï¼ˆã‚†ã‚Œè¨±å®¹ã�®å‰�å‡¦ç�†ï¼‰ã€‚NFKCãƒ»ç©ºç™½é™¤åŽ»ã€‚å§“ç”¨ã�®å¯Œç”°ç½®æ�›ã�¯è¡Œã‚�ã�ªã�„ã€‚"""
     if not mei:
         return ""
     t = unicodedata.normalize("NFKC", str(mei).strip())
-    t = re.sub(r"[\s　]+", "", t)
+    t = re.sub(r"[\sã€€]+", "", t)
     return t
 
 
 def _has_duplicate_surname_among_members(member_names) -> bool:
-    """skills メンバー一覧に、正規化後同一の姓が2人以上いるか。"""
+    """skills ãƒ¡ãƒ³ãƒ�ãƒ¼ä¸€è¦§ã�«ã€�æ­£è¦�åŒ–å¾Œå�Œä¸€ã�®å§“ã�Œ2äººä»¥ä¸Šã�„ã‚‹ã�‹ã€‚"""
     cnt = Counter()
     for name in member_names or []:
         if name is None or (isinstance(name, float) and pd.isna(name)):
@@ -10266,7 +10080,7 @@ def _has_duplicate_surname_among_members(member_names) -> bool:
 
 
 def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
-    """同一姓がロスターで重複しないときのみ使う名のゆれ許容。"""
+    """å�Œä¸€å§“ã�Œãƒ­ã‚¹ã‚¿ãƒ¼ã�§é‡�è¤‡ã�—ã�ªã�„ã�¨ã��ã�®ã�¿ä½¿ã�†å��ã�®ã‚†ã‚Œè¨±å®¹ã€‚"""
     if not r_mei_n and not m_mei_n:
         return True
     if not r_mei_n or not m_mei_n:
@@ -10278,15 +10092,15 @@ def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
 
 def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_member_names=None):
     """
-    自由記述の指名を、当日スキル上 OP/AS のメンバー名（skills シートの行キー）に解決する。
-    capable_candidates: その設備で OP または AS として割当可能なメンバー名リスト。
-    roster_member_names: skills の全メンバー名（省略時は capable_candidates）。同一姓の重複判定に使用。
+    è‡ªç”±è¨˜è¿°ã�®æŒ‡å��ã‚’ã€�å½“æ—¥ã‚¹ã‚­ãƒ«ä¸Š OP/AS ã�®ãƒ¡ãƒ³ãƒ�ãƒ¼å��ï¼ˆskills ã‚·ãƒ¼ãƒˆã�®è¡Œã‚­ãƒ¼ï¼‰ã�«è§£æ±ºã�™ã‚‹ã€‚
+    capable_candidates: ã��ã�®è¨­å‚™ã�§ OP ã�¾ã�Ÿã�¯ AS ã�¨ã�—ã�¦å‰²å½“å�¯èƒ½ã�ªãƒ¡ãƒ³ãƒ�ãƒ¼å��ãƒªã‚¹ãƒˆã€‚
+    roster_member_names: skills ã�®å…¨ãƒ¡ãƒ³ãƒ�ãƒ¼å��ï¼ˆçœ�ç•¥æ™‚ã�¯ capable_candidatesï¼‰ã€‚å�Œä¸€å§“ã�®é‡�è¤‡åˆ¤å®šã�«ä½¿ç”¨ã€‚
 
-    名前の表記ゆれ:
-    - 姓は正規化後に完全一致のみ（ゆれ許容しない。富田/冨田のみ従来どおり寄せ）。
-    - roster に同一姓が2人以上いないときだけ、名は部分一致（どちらかが他方を含む）または完全一致を許容。
-    - 同一姓がロスターにいる間は名も完全一致必須。
-    - 姓のみの入力で名ゆれモードのとき、姓が一致する候補が複数いれば解決不可（None）。
+    å��å‰�ã�®è¡¨è¨˜ã‚†ã‚Œ:
+    - å§“ã�¯æ­£è¦�åŒ–å¾Œã�«å®Œå…¨ä¸€è‡´ã�®ã�¿ï¼ˆã‚†ã‚Œè¨±å®¹ã�—ã�ªã�„ã€‚å¯Œç”°/å†¨ç”°ã�®ã�¿å¾“æ�¥ã�©ã�Šã‚Šå¯„ã�›ï¼‰ã€‚
+    - roster ã�«å�Œä¸€å§“ã�Œ2äººä»¥ä¸Šã�„ã�ªã�„ã�¨ã��ã� ã�‘ã€�å��ã�¯éƒ¨åˆ†ä¸€è‡´ï¼ˆã�©ã�¡ã‚‰ã�‹ã�Œä»–æ–¹ã‚’å�«ã‚€ï¼‰ã�¾ã�Ÿã�¯å®Œå…¨ä¸€è‡´ã‚’è¨±å®¹ã€‚
+    - å�Œä¸€å§“ã�Œãƒ­ã‚¹ã‚¿ãƒ¼ã�«ã�„ã‚‹é–“ã�¯å��ã‚‚å®Œå…¨ä¸€è‡´å¿…é ˆã€‚
+    - å§“ã�®ã�¿ã�®å…¥åŠ›ã�§å��ã‚†ã‚Œãƒ¢ãƒ¼ãƒ‰ã�®ã�¨ã��ã€�å§“ã�Œä¸€è‡´ã�™ã‚‹å€™è£œã�Œè¤‡æ•°ã�„ã‚Œã�°è§£æ±ºä¸�å�¯ï¼ˆNoneï¼‰ã€‚
     """
     if not raw or not capable_candidates:
         return None
@@ -10336,14 +10150,14 @@ def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_me
 
 
 def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None):
-    """当日スキル上 OP のみへ解決（従来 API）。実体は `_resolve_preferred_name_to_capable_member`。"""
+    """å½“æ—¥ã‚¹ã‚­ãƒ«ä¸Š OP ã�®ã�¿ã�¸è§£æ±ºï¼ˆå¾“æ�¥ APIï¼‰ã€‚å®Ÿä½“ã�¯ `_resolve_preferred_name_to_capable_member`ã€‚"""
     return _resolve_preferred_name_to_capable_member(
         raw, op_candidates, roster_member_names
     )
 
 
 def _task_process_matches_global_contains(machine_val: str, contains: str) -> bool:
-    """工程名（タスクの machine）に部分一致（NFKC・大小無視）。"""
+    """å·¥ç¨‹å��ï¼ˆã‚¿ã‚¹ã‚¯ã�® machineï¼‰ã�«éƒ¨åˆ†ä¸€è‡´ï¼ˆNFKCãƒ»å¤§å°�ç„¡è¦–ï¼‰ã€‚"""
     m = unicodedata.normalize("NFKC", str(machine_val or "").strip()).casefold()
     c = unicodedata.normalize("NFKC", str(contains or "").strip()).casefold()
     if not c:
@@ -10352,7 +10166,7 @@ def _task_process_matches_global_contains(machine_val: str, contains: str) -> bo
 
 
 def _coerce_global_day_process_operator_rules(raw_val) -> list:
-    """Gemini の global_day_process_operator_rules を正規化（空・不正は除外）。"""
+    """Gemini ã�® global_day_process_operator_rules ã‚’æ­£è¦�åŒ–ï¼ˆç©ºãƒ»ä¸�æ­£ã�¯é™¤å¤–ï¼‰ã€‚"""
     out: list[dict] = []
     if not isinstance(raw_val, list):
         return out
@@ -10403,8 +10217,8 @@ def _active_global_day_process_must_include(
     roster_members: list,
 ) -> tuple[list[str], list[str]]:
     """
-    グローバルコメント由来の「日付×工程×複数指名」で、その日・その工程タスクに
-    **チームへ必ず含める**メンバー（skills 行キー）と警告メッセージを返す。
+    ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆç”±æ�¥ã�®ã€Œæ—¥ä»˜Ã—å·¥ç¨‹Ã—è¤‡æ•°æŒ‡å��ã€�ã�§ã€�ã��ã�®æ—¥ãƒ»ã��ã�®å·¥ç¨‹ã‚¿ã‚¹ã‚¯ã�«
+    **ãƒ�ãƒ¼ãƒ ã�¸å¿…ã�šå�«ã‚�ã‚‹**ãƒ¡ãƒ³ãƒ�ãƒ¼ï¼ˆskills è¡Œã‚­ãƒ¼ï¼‰ã�¨è­¦å‘Šãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’è¿”ã�™ã€‚
     """
     rules = gpo.get("global_day_process_operator_rules") or []
     if not isinstance(rules, list):
@@ -10434,9 +10248,9 @@ def _active_global_day_process_must_include(
                     acc.append(mem)
             else:
                 warns.append(
-                    "メイングローバル(日付×工程)指名: "
-                    f"依頼NO={tid} 日付={current_date} 工程={machine!r} の "
-                    f"指名「{raw_name}」を当日スキル該当メンバーに解決できません"
+                    "ãƒ¡ã‚¤ãƒ³ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«(æ—¥ä»˜Ã—å·¥ç¨‹)æŒ‡å��: "
+                    f"ä¾�é ¼NO={tid} æ—¥ä»˜={current_date} å·¥ç¨‹={machine!r} ã�® "
+                    f"æŒ‡å��ã€Œ{raw_name}ã€�ã‚’å½“æ—¥ã‚¹ã‚­ãƒ«è©²å½“ãƒ¡ãƒ³ãƒ�ãƒ¼ã�«è§£æ±ºã�§ã��ã�¾ã�›ã‚“"
                 )
     return acc, warns
 
@@ -10444,7 +10258,7 @@ def _active_global_day_process_must_include(
 def _merge_global_day_process_and_pref_anchor(
     must_include: list, pref_mem, capable_members: list
 ) -> list[str]:
-    """必須メンバーと担当OP指名を1本化（capable にいるものだけ）。"""
+    """å¿…é ˆãƒ¡ãƒ³ãƒ�ãƒ¼ã�¨æ‹…å½“OPæŒ‡å��ã‚’1æœ¬åŒ–ï¼ˆcapable ã�«ã�„ã‚‹ã‚‚ã�®ã� ã�‘ï¼‰ã€‚"""
     fixed: list[str] = []
     seen: set[str] = set()
     for m in must_include or []:
@@ -10461,37 +10275,37 @@ def _merge_global_day_process_and_pref_anchor(
 
 
 # =========================================================
-# 2. マスタデータ・出勤簿(カレンダー) と AI解析
-#    master.xlsm の skills / need / 各メンバー勤怠シートを読み、
-#    備考・休暇区分は必要に応じて Gemini で構造化する。
+# 2. ãƒžã‚¹ã‚¿ãƒ‡ãƒ¼ã‚¿ãƒ»å‡ºå‹¤ç°¿(ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼) ã�¨ AIè§£æž�
+#    master.xlsm ã�® skills / need / å�„ãƒ¡ãƒ³ãƒ�ãƒ¼å‹¤æ€ ã‚·ãƒ¼ãƒˆã‚’èª­ã�¿ã€�
+#    å‚™è€ƒãƒ»ä¼‘æš‡åŒºåˆ†ã�¯å¿…è¦�ã�«å¿œã�˜ã�¦ Gemini ã�§æ§‹é€ åŒ–ã�™ã‚‹ã€‚
 # =========================================================
 def load_skills_and_needs():
     """
-    統合ファイル(MASTER_FILE)からスキルと need を動的に読み込みます。
+    çµ±å�ˆãƒ•ã‚¡ã‚¤ãƒ«(MASTER_FILE)ã�‹ã‚‰ã‚¹ã‚­ãƒ«ã�¨ need ã‚’å‹•çš„ã�«èª­ã�¿è¾¼ã�¿ã�¾ã�™ã€‚
 
-    戻り値は7要素。最後は need シート上の「工程名+機械名」列位置（左ほど小さい整数）の辞書
-    ``need_combo_col_index``（配台キューソート用）。
+    æˆ»ã‚Šå€¤ã�¯7è¦�ç´ ã€‚æœ€å¾Œã�¯ need ã‚·ãƒ¼ãƒˆä¸Šã�®ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�åˆ—ä½�ç½®ï¼ˆå·¦ã�»ã�©å°�ã�•ã�„æ•´æ•°ï¼‰ã�®è¾žæ›¸
+    ``need_combo_col_index``ï¼ˆé…�å�°ã‚­ãƒ¥ãƒ¼ã‚½ãƒ¼ãƒˆç”¨ï¼‰ã€‚
 
-    今回の need は（Excel上で）
-      工程名行・機械名行のあと「基本必要人数」行（A列に「必要人数」を含む）
-      その直下: 配台で余剰人員があるときに追加で入れられる人数（工程×機械ごと。未設定は 0）
-      以降: 特別指定1〜99
-    という構造のため、必要OPは「工程名+機械名」で解決する。
+    ä»Šå›žã�® need ã�¯ï¼ˆExcelä¸Šã�§ï¼‰
+      å·¥ç¨‹å��è¡Œãƒ»æ©Ÿæ¢°å��è¡Œã�®ã�‚ã�¨ã€ŒåŸºæœ¬å¿…è¦�äººæ•°ã€�è¡Œï¼ˆAåˆ—ã�«ã€Œå¿…è¦�äººæ•°ã€�ã‚’å�«ã‚€ï¼‰
+      ã��ã�®ç›´ä¸‹: é…�å�°ã�§ä½™å‰°äººå“¡ã�Œã�‚ã‚‹ã�¨ã��ã�«è¿½åŠ ã�§å…¥ã‚Œã‚‰ã‚Œã‚‹äººæ•°ï¼ˆå·¥ç¨‹Ã—æ©Ÿæ¢°ã�”ã�¨ã€‚æœªè¨­å®šã�¯ 0ï¼‰
+      ä»¥é™�: ç‰¹åˆ¥æŒ‡å®š1ã€œ99
+    ã�¨ã�„ã�†æ§‹é€ ã�®ã�Ÿã‚�ã€�å¿…è¦�OPã�¯ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�ã�§è§£æ±ºã�™ã‚‹ã€‚
 
-    skills 交差セルは OP/AS の後に優先度整数（例 OP1, AS3）。数値が小さいほど当該工程への割当で優先。
-    数字省略の OP/AS は優先度 1。
-    同一列（同一工程×機械）では優先度の数値はメンバー間で重複不可（重複時は PlanningValidationError）。
+    skills äº¤å·®ã‚»ãƒ«ã�¯ OP/AS ã�®å¾Œã�«å„ªå…ˆåº¦æ•´æ•°ï¼ˆä¾‹ OP1, AS3ï¼‰ã€‚æ•°å€¤ã�Œå°�ã�•ã�„ã�»ã�©å½“è©²å·¥ç¨‹ã�¸ã�®å‰²å½“ã�§å„ªå…ˆã€‚
+    æ•°å­—çœ�ç•¥ã�® OP/AS ã�¯å„ªå…ˆåº¦ 1ã€‚
+    å�Œä¸€åˆ—ï¼ˆå�Œä¸€å·¥ç¨‹Ã—æ©Ÿæ¢°ï¼‰ã�§ã�¯å„ªå…ˆåº¦ã�®æ•°å€¤ã�¯ãƒ¡ãƒ³ãƒ�ãƒ¼é–“ã�§é‡�è¤‡ä¸�å�¯ï¼ˆé‡�è¤‡æ™‚ã�¯ PlanningValidationErrorï¼‰ã€‚
     """
     try:
-        # 同一ブックを pd.read_excel で都度開くと I/O が重いため、ExcelFile を1回だけ開いてシートを parse する。
+        # å�Œä¸€ãƒ–ãƒƒã‚¯ã‚’ pd.read_excel ã�§éƒ½åº¦é–‹ã��ã�¨ I/O ã�Œé‡�ã�„ã�Ÿã‚�ã€�ExcelFile ã‚’1å›žã� ã�‘é–‹ã�„ã�¦ã‚·ãƒ¼ãƒˆã‚’ parse ã�™ã‚‹ã€‚
         with pd.ExcelFile(MASTER_FILE) as _master_xls:
-            # skills は新仕様:
-            #   1行目: 工程名
-            #   2行目: 機械名
-            #   A3以降: メンバー名
-            #   交差セル: OP または AS の後に割当優先度の整数（例 OP1, AS3）。数値が小さいほど当該工程へ優先割当。
-            #             数字省略の OP/AS は優先度 1（従来どおり最優先扱い）。
-            # を基本としつつ、旧仕様（1行ヘッダ）にもフォールバック対応する。
+            # skills ã�¯æ–°ä»•æ§˜:
+            #   1è¡Œç›®: å·¥ç¨‹å��
+            #   2è¡Œç›®: æ©Ÿæ¢°å��
+            #   A3ä»¥é™�: ãƒ¡ãƒ³ãƒ�ãƒ¼å��
+            #   äº¤å·®ã‚»ãƒ«: OP ã�¾ã�Ÿã�¯ AS ã�®å¾Œã�«å‰²å½“å„ªå…ˆåº¦ã�®æ•´æ•°ï¼ˆä¾‹ OP1, AS3ï¼‰ã€‚æ•°å€¤ã�Œå°�ã�•ã�„ã�»ã�©å½“è©²å·¥ç¨‹ã�¸å„ªå…ˆå‰²å½“ã€‚
+            #             æ•°å­—çœ�ç•¥ã�® OP/AS ã�¯å„ªå…ˆåº¦ 1ï¼ˆå¾“æ�¥ã�©ã�Šã‚Šæœ€å„ªå…ˆæ‰±ã�„ï¼‰ã€‚
+            # ã‚’åŸºæœ¬ã�¨ã�—ã�¤ã�¤ã€�æ—§ä»•æ§˜ï¼ˆ1è¡Œãƒ˜ãƒƒãƒ€ï¼‰ã�«ã‚‚ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯å¯¾å¿œã�™ã‚‹ã€‚
             skills_raw = pd.read_excel(
                 _master_xls, sheet_name="skills", header=None
             )
@@ -10552,7 +10366,7 @@ def load_skills_and_needs():
                     skills_dict[m_name] = row_skills
                 members = list(skills_dict.keys())
                 logging.info(
-                    "skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=%s列, メンバー=%s人）。",
+                    "skillsã‚·ãƒ¼ãƒˆ: 2æ®µãƒ˜ãƒƒãƒ€å½¢å¼�ã�§èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿï¼ˆå·¥ç¨‹+æ©Ÿæ¢°=%såˆ—, ãƒ¡ãƒ³ãƒ�ãƒ¼=%säººï¼‰ã€‚",
                     len(pm_cols),
                     len(members),
                 )
@@ -10567,13 +10381,13 @@ def load_skills_and_needs():
 
                 member_col = None
                 for c in skill_cols:
-                    if c in ("メンバー", "担当者", "氏名", "作業者"):
+                    if c in ("ãƒ¡ãƒ³ãƒ�ãƒ¼", "æ‹…å½“è€…", "æ°�å��", "ä½œæ¥­è€…"):
                         member_col = c
                         break
                 if member_col is None and skill_cols:
                     member_col = skill_cols[0]
                     logging.warning(
-                        "skillsシート: メンバー列名が標準と一致しないため、先頭列 '%s' をメンバー列として扱います。",
+                        "skillsã‚·ãƒ¼ãƒˆ: ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ—å��ã�Œæ¨™æº–ã�¨ä¸€è‡´ã�—ã�ªã�„ã�Ÿã‚�ã€�å…ˆé ­åˆ— '%s' ã‚’ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ—ã�¨ã�—ã�¦æ‰±ã�„ã�¾ã�™ã€‚",
                         member_col,
                     )
 
@@ -10611,18 +10425,18 @@ def load_skills_and_needs():
                     skills_dict[m_name] = row_skills
                 members = list(skills_dict.keys())
                 logging.info(
-                    "skillsシート: 1行ヘッダ形式（旧互換）で読み込みました（メンバー=%s人）。",
+                    "skillsã‚·ãƒ¼ãƒˆ: 1è¡Œãƒ˜ãƒƒãƒ€å½¢å¼�ï¼ˆæ—§äº’æ�›ï¼‰ã�§èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿï¼ˆãƒ¡ãƒ³ãƒ�ãƒ¼=%säººï¼‰ã€‚",
                     len(members),
                 )
 
             if not members:
-                logging.error("skillsシートからメンバーを読み込めませんでした。")
+                logging.error("skillsã‚·ãƒ¼ãƒˆã�‹ã‚‰ãƒ¡ãƒ³ãƒ�ãƒ¼ã‚’èª­ã�¿è¾¼ã‚�ã�¾ã�›ã‚“ã�§ã�—ã�Ÿã€‚")
             else:
                 _validate_skills_op_as_priority_numbers_unique(
                     skills_dict, equipment_list
                 )
 
-            # need は header=None で読み、先頭の複数行を“見出し行”として解釈
+            # need ã�¯ header=None ã�§èª­ã�¿ã€�å…ˆé ­ã�®è¤‡æ•°è¡Œã‚’â€œè¦‹å‡ºã�—è¡Œâ€�ã�¨ã�—ã�¦è§£é‡ˆ
             needs_raw = pd.read_excel(
                 _master_xls, sheet_name="need", header=None
             )
@@ -10637,19 +10451,19 @@ def load_skills_and_needs():
             if pd.isna(v0):
                 continue
             s0 = str(v0).strip()
-            if process_header_row is None and s0 == "工程名":
+            if process_header_row is None and s0 == "å·¥ç¨‹å��":
                 process_header_row = r
-            elif machine_header_row is None and s0 == "機械名":
+            elif machine_header_row is None and s0 == "æ©Ÿæ¢°å��":
                 machine_header_row = r
-            if base_row is None and "必要人数" in s0 and not s0.startswith("特別指定"):
+            if base_row is None and "å¿…è¦�äººæ•°" in s0 and not s0.startswith("ç‰¹åˆ¥æŒ‡å®š"):
                 base_row = r
             if process_header_row is not None and machine_header_row is not None and base_row is not None:
                 break
 
         if process_header_row is None or machine_header_row is None or base_row is None:
-            raise ValueError("need シートのヘッダー行（工程名/機械名/基本必要人数）が見つかりません。")
+            raise ValueError("need ã‚·ãƒ¼ãƒˆã�®ãƒ˜ãƒƒãƒ€ãƒ¼è¡Œï¼ˆå·¥ç¨‹å��/æ©Ÿæ¢°å��/åŸºæœ¬å¿…è¦�äººæ•°ï¼‰ã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“ã€‚")
 
-        # 「依頼NO条件」列位置（デフォルトは 1列目）
+        # ã€Œä¾�é ¼NOæ�¡ä»¶ã€�åˆ—ä½�ç½®ï¼ˆãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã�¯ 1åˆ—ç›®ï¼‰
         cond_col_idx = 1
         for r in range(needs_raw.shape[0]):
             c1 = needs_raw.iat[r, 1] if needs_raw.shape[1] > 1 else None
@@ -10660,7 +10474,7 @@ def load_skills_and_needs():
                 cond_col_idx = 1
                 break
 
-        # 工程名×機械名 の列一覧（列番号は Excel上の実列を保持）
+        # å·¥ç¨‹å��Ã—æ©Ÿæ¢°å�� ã�®åˆ—ä¸€è¦§ï¼ˆåˆ—ç•ªå�·ã�¯ Excelä¸Šã�®å®Ÿåˆ—ã‚’ä¿�æŒ�ï¼‰
         pm_cols = []
         for col_idx in range(needs_raw.shape[1]):
             if col_idx < 3:
@@ -10676,12 +10490,12 @@ def load_skills_and_needs():
             pm_cols.append((col_idx, p_s, m_s))
 
         req_map = {}
-        # 工程名+機械名コンボ → need シート上の列インデックス（左ほど小さい＝配台キューで先）
+        # å·¥ç¨‹å��+æ©Ÿæ¢°å��ã‚³ãƒ³ãƒœ â†’ need ã‚·ãƒ¼ãƒˆä¸Šã�®åˆ—ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ï¼ˆå·¦ã�»ã�©å°�ã�•ã�„ï¼�é…�å�°ã‚­ãƒ¥ãƒ¼ã�§å…ˆï¼‰
         need_combo_col_index: dict[str, int] = {}
         # need_rules: [{'order': int, 'condition': str, 'overrides': {combo_key/machine/process: int}}]
         need_rules = []
 
-        # 基本必要人数
+        # åŸºæœ¬å¿…è¦�äººæ•°
         for col_idx, p_s, m_s in pm_cols:
             n = parse_optional_int(needs_raw.iat[base_row, col_idx])
             if n is None or n < 1:
@@ -10689,7 +10503,7 @@ def load_skills_and_needs():
             combo_key = f"{p_s}+{m_s}"
             need_combo_col_index[combo_key] = col_idx
             req_map[combo_key] = n
-            # フォールバック用（機械名 or 工程名だけで引けるようにする）
+            # ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ç”¨ï¼ˆæ©Ÿæ¢°å�� or å·¥ç¨‹å��ã� ã�‘ã�§å¼•ã�‘ã‚‹ã‚ˆã�†ã�«ã�™ã‚‹ï¼‰
             if p_s not in req_map:
                 req_map[p_s] = n
             if m_s not in req_map:
@@ -10711,21 +10525,21 @@ def load_skills_and_needs():
                 if m_s not in surplus_map:
                     surplus_map[m_s] = ex
             logging.info(
-                "need シート: 配台時追加人数行を検出（Excel行≈%s）。列ごとの上限を読み込みました。",
+                "need ã‚·ãƒ¼ãƒˆ: é…�å�°æ™‚è¿½åŠ äººæ•°è¡Œã‚’æ¤œå‡ºï¼ˆExcelè¡Œâ‰ˆ%sï¼‰ã€‚åˆ—ã�”ã�¨ã�®ä¸Šé™�ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
                 surplus_row + 1,
             )
         else:
             logging.info(
-                "need シート: 基本必要人数の直下に配台時追加人数行を検出できませんでした（省略可）。"
+                "need ã‚·ãƒ¼ãƒˆ: åŸºæœ¬å¿…è¦�äººæ•°ã�®ç›´ä¸‹ã�«é…�å�°æ™‚è¿½åŠ äººæ•°è¡Œã‚’æ¤œå‡ºã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆçœ�ç•¥å�¯ï¼‰ã€‚"
             )
 
         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
             logging.info(
-                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW が有効: 配台時追加人数は読み込んでも常に 0 扱い（チームは基本必要人数のみ試行）。"
+                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW ã�Œæœ‰åŠ¹: é…�å�°æ™‚è¿½åŠ äººæ•°ã�¯èª­ã�¿è¾¼ã‚“ã�§ã‚‚å¸¸ã�« 0 æ‰±ã�„ï¼ˆãƒ�ãƒ¼ãƒ ã�¯åŸºæœ¬å¿…è¦�äººæ•°ã�®ã�¿è©¦è¡Œï¼‰ã€‚"
             )
 
         logging.info(
-            "need人数マスタ: %s の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。",
+            "needäººæ•°ãƒžã‚¹ã‚¿: %s ã�® need ã‚·ãƒ¼ãƒˆã‚’èª­ã�¿è¾¼ã�¿ï¼ˆskills ã�¨å�Œä¸€ ExcelFile ã�§é–‹ã�„ã�Ÿç›´å¾Œã€‚need å°‚ç”¨ãƒ‡ã‚£ã‚¹ã‚¯ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã�¯ç„¡ã�—ãƒ»AI json ã�¨ã�¯ç„¡é–¢ä¿‚ï¼‰ã€‚",
             os.path.abspath(MASTER_FILE),
         )
         for _ci, _ps, _ms in pm_cols:
@@ -10733,19 +10547,19 @@ def load_skills_and_needs():
             _bn = req_map.get(_ck)
             _sx = surplus_map.get(_ck, 0) if surplus_map else 0
             logging.info(
-                "need列サマリ combo=%r 基本必要人数=%s 配台時追加人数上限=%s",
+                "needåˆ—ã‚µãƒžãƒª combo=%r åŸºæœ¬å¿…è¦�äººæ•°=%s é…�å�°æ™‚è¿½åŠ äººæ•°ä¸Šé™�=%s",
                 _ck,
                 _bn,
                 _sx,
             )
 
-        # 特別指定
+        # ç‰¹åˆ¥æŒ‡å®š
         for r in range(needs_raw.shape[0]):
             v0 = needs_raw.iat[r, col0]
             if pd.isna(v0):
                 continue
             lab = str(v0).strip()
-            m = re.match(r"特別指定\s*(\d+)", lab)
+            m = re.match(r"ç‰¹åˆ¥æŒ‡å®š\s*(\d+)", lab)
             if not m:
                 continue
             order = int(m.group(1))
@@ -10762,7 +10576,7 @@ def load_skills_and_needs():
                 if n is not None and 1 <= n <= 99:
                     combo_key = f"{p_s}+{m_s}"
                     overrides[combo_key] = n
-                    # フォールバック用
+                    # ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ç”¨
                     overrides[p_s] = n
                     overrides[m_s] = n
 
@@ -10770,9 +10584,9 @@ def load_skills_and_needs():
                 need_rules.append({"order": order, "condition": cond, "overrides": overrides})
 
         need_rules.sort(key=lambda rr: rr["order"])
-        logging.info(f"need 特別指定ルール: {len(need_rules)} 件（工程名+機械名キー）。")
+        logging.info(f"need ç‰¹åˆ¥æŒ‡å®šãƒ«ãƒ¼ãƒ«: {len(need_rules)} ä»¶ï¼ˆå·¥ç¨‹å��+æ©Ÿæ¢°å��ã‚­ãƒ¼ï¼‰ã€‚")
 
-        logging.info(f"『{MASTER_FILE}』からスキルと設備要件(need)を読み込みました。")
+        logging.info(f"ã€Ž{MASTER_FILE}ã€�ã�‹ã‚‰ã‚¹ã‚­ãƒ«ã�¨è¨­å‚™è¦�ä»¶(need)ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚")
         return (
             skills_dict,
             members,
@@ -10786,7 +10600,7 @@ def load_skills_and_needs():
     except PlanningValidationError:
         raise
     except Exception as e:
-        logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
+        logging.error(f"ãƒžã‚¹ã‚¿ãƒ•ã‚¡ã‚¤ãƒ«({MASTER_FILE})ã�®ã‚¹ã‚­ãƒ«/needèª­ã�¿è¾¼ã�¿ã‚¨ãƒ©ãƒ¼: {e}")
         return {}, [], [], {}, [], [], {}
 
 
@@ -10794,13 +10608,13 @@ def load_team_combination_presets_from_master() -> dict[
     str, list[tuple[int, int | None, tuple[str, ...], int | None]]
 ]:
     """
-    master.xlsm「組み合わせ表」を読み、工程+機械キーごとに
-    [(組合せ優先度, 必要人数またはNone, メンバータプル, 組合せ行IDまたはNone), ...] を返す。
-    同一キー内は優先度昇順、同順位はシート上の行順。
-    「必要人数」列は配台時に need 基本人数より優先する（メンバー列人数と一致すること）。
-    配台では成立したプリセットをすべて候補に載せ、組合せ探索とまとめて team_start 等で最良を選ぶ
-    （シート優先度は試行順のみ。先頭プリセットの即決はしない）。
-    A 列「組合せ行ID」が無い／空の旧シートでは ID は None。
+    master.xlsmã€Œçµ„ã�¿å�ˆã‚�ã�›è¡¨ã€�ã‚’èª­ã�¿ã€�å·¥ç¨‹+æ©Ÿæ¢°ã‚­ãƒ¼ã�”ã�¨ã�«
+    [(çµ„å�ˆã�›å„ªå…ˆåº¦, å¿…è¦�äººæ•°ã�¾ã�Ÿã�¯None, ãƒ¡ãƒ³ãƒ�ãƒ¼ã‚¿ãƒ—ãƒ«, çµ„å�ˆã�›è¡ŒIDã�¾ã�Ÿã�¯None), ...] ã‚’è¿”ã�™ã€‚
+    å�Œä¸€ã‚­ãƒ¼å†…ã�¯å„ªå…ˆåº¦æ˜‡é †ã€�å�Œé †ä½�ã�¯ã‚·ãƒ¼ãƒˆä¸Šã�®è¡Œé †ã€‚
+    ã€Œå¿…è¦�äººæ•°ã€�åˆ—ã�¯é…�å�°æ™‚ã�« need åŸºæœ¬äººæ•°ã‚ˆã‚Šå„ªå…ˆã�™ã‚‹ï¼ˆãƒ¡ãƒ³ãƒ�ãƒ¼åˆ—äººæ•°ã�¨ä¸€è‡´ã�™ã‚‹ã�“ã�¨ï¼‰ã€‚
+    é…�å�°ã�§ã�¯æˆ�ç«‹ã�—ã�Ÿãƒ—ãƒªã‚»ãƒƒãƒˆã‚’ã�™ã�¹ã�¦å€™è£œã�«è¼‰ã�›ã€�çµ„å�ˆã�›æŽ¢ç´¢ã�¨ã�¾ã�¨ã‚�ã�¦ team_start ç­‰ã�§æœ€è‰¯ã‚’é�¸ã�¶
+    ï¼ˆã‚·ãƒ¼ãƒˆå„ªå…ˆåº¦ã�¯è©¦è¡Œé †ã�®ã�¿ã€‚å…ˆé ­ãƒ—ãƒªã‚»ãƒƒãƒˆã�®å�³æ±ºã�¯ã�—ã�ªã�„ï¼‰ã€‚
+    A åˆ—ã€Œçµ„å�ˆã�›è¡ŒIDã€�ã�Œç„¡ã�„ï¼�ç©ºã�®æ—§ã‚·ãƒ¼ãƒˆã�§ã�¯ ID ã�¯ Noneã€‚
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         return {}
@@ -10810,7 +10624,7 @@ def load_team_combination_presets_from_master() -> dict[
     try:
         df = pd.read_excel(path, sheet_name=MASTER_SHEET_TEAM_COMBINATIONS, header=0)
     except Exception as e:
-        logging.info("組み合わせ表シートの読込をスキップします: %s", e)
+        logging.info("çµ„ã�¿å�ˆã‚�ã�›è¡¨ã‚·ãƒ¼ãƒˆã�®èª­è¾¼ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�™: %s", e)
         return {}
     if df is None or df.empty:
         return {}
@@ -10821,19 +10635,19 @@ def load_team_combination_presets_from_master() -> dict[
         return str(x).strip()
 
     colmap = {norm_cell(c): c for c in df.columns if norm_cell(c)}
-    id_c = colmap.get("組合せ行ID") or colmap.get("インデックス")
-    proc_c = colmap.get("工程名")
-    mach_c = colmap.get("機械名")
-    combo_c = colmap.get("工程+機械")
-    prio_c = colmap.get("組合せ優先度")
-    req_c = colmap.get("必要人数")
+    id_c = colmap.get("çµ„å�ˆã�›è¡ŒID") or colmap.get("ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹")
+    proc_c = colmap.get("å·¥ç¨‹å��")
+    mach_c = colmap.get("æ©Ÿæ¢°å��")
+    combo_c = colmap.get("å·¥ç¨‹+æ©Ÿæ¢°")
+    prio_c = colmap.get("çµ„å�ˆã�›å„ªå…ˆåº¦")
+    req_c = colmap.get("å¿…è¦�äººæ•°")
 
     def mem_col_order(c) -> int:
-        m = re.search(r"メンバー\s*(\d+)", norm_cell(c))
+        m = re.search(r"ãƒ¡ãƒ³ãƒ�ãƒ¼\s*(\d+)", norm_cell(c))
         return int(m.group(1)) if m else 9999
 
     mem_keys = sorted(
-        [c for c in df.columns if norm_cell(str(c)).startswith("メンバー")],
+        [c for c in df.columns if norm_cell(str(c)).startswith("ãƒ¡ãƒ³ãƒ�ãƒ¼")],
         key=mem_col_order,
     )
     buckets: dict[
@@ -10889,9 +10703,9 @@ def _lookup_combo_sheet_row_id_for_preset_team(
     team: tuple,
 ) -> int | None:
     """
-    採用チームのメンバー集合（NFKC・trim）が組み合わせ表プリセットのいずれかと一致するとき、
-    その行の組合せ行ID（A列）を返す。組合せ探索のみで決まり combo_sheet_row_id が付いていない
-    履歴行の補完に使う。複数一致時は組合せ優先度（数値が小さい方）を採用。
+    æŽ¡ç”¨ãƒ�ãƒ¼ãƒ ã�®ãƒ¡ãƒ³ãƒ�ãƒ¼é›†å�ˆï¼ˆNFKCãƒ»trimï¼‰ã�Œçµ„ã�¿å�ˆã‚�ã�›è¡¨ãƒ—ãƒªã‚»ãƒƒãƒˆã�®ã�„ã�šã‚Œã�‹ã�¨ä¸€è‡´ã�™ã‚‹ã�¨ã��ã€�
+    ã��ã�®è¡Œã�®çµ„å�ˆã�›è¡ŒIDï¼ˆAåˆ—ï¼‰ã‚’è¿”ã�™ã€‚çµ„å�ˆã�›æŽ¢ç´¢ã�®ã�¿ã�§æ±ºã�¾ã‚Š combo_sheet_row_id ã�Œä»˜ã�„ã�¦ã�„ã�ªã�„
+    å±¥æ­´è¡Œã�®è£œå®Œã�«ä½¿ã�†ã€‚è¤‡æ•°ä¸€è‡´æ™‚ã�¯çµ„å�ˆã�›å„ªå…ˆåº¦ï¼ˆæ•°å€¤ã�Œå°�ã�•ã�„æ–¹ï¼‰ã‚’æŽ¡ç”¨ã€‚
     """
     if not preset_rows or not team:
         return None
@@ -10947,7 +10761,7 @@ def parse_time_str(time_str, default_time):
 
 
 def _excel_scalar_to_time_optional(v) -> time | None:
-    """master メインの時刻セル（datetime / time / 文字列）を time に。解釈不能は None。"""
+    """master ãƒ¡ã‚¤ãƒ³ã�®æ™‚åˆ»ã‚»ãƒ«ï¼ˆdatetime / time / æ–‡å­—åˆ—ï¼‰ã‚’ time ã�«ã€‚è§£é‡ˆä¸�èƒ½ã�¯ Noneã€‚"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
     if isinstance(v, time):
@@ -10959,14 +10773,14 @@ def _excel_scalar_to_time_optional(v) -> time | None:
 
 def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
     """
-    master.xlsm の「メイン」設定シート名を解決する（VBA MasterGetMainWorksheet と同趣旨）。
-    「〇月メインカレンダー」等を誤採用しないよう「カレンダー」を含む名前は除外し、
-    複数候補はシート名が最短のものを優先する。
+    master.xlsm ã�®ã€Œãƒ¡ã‚¤ãƒ³ã€�è¨­å®šã‚·ãƒ¼ãƒˆå��ã‚’è§£æ±ºã�™ã‚‹ï¼ˆVBA MasterGetMainWorksheet ã�¨å�Œè¶£æ—¨ï¼‰ã€‚
+    ã€Œã€‡æœˆãƒ¡ã‚¤ãƒ³ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã€�ç­‰ã‚’èª¤æŽ¡ç”¨ã�—ã�ªã�„ã‚ˆã�†ã€Œã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã€�ã‚’å�«ã‚€å��å‰�ã�¯é™¤å¤–ã�—ã€�
+    è¤‡æ•°å€™è£œã�¯ã‚·ãƒ¼ãƒˆå��ã�Œæœ€çŸ­ã�®ã‚‚ã�®ã‚’å„ªå…ˆã�™ã‚‹ã€‚
     """
-    for prefer in ("メイン", "メイン_", "Main"):
+    for prefer in ("ãƒ¡ã‚¤ãƒ³", "ãƒ¡ã‚¤ãƒ³_", "Main"):
         if prefer in sheetnames:
             return prefer
-    cand = [sn for sn in sheetnames if "メイン" in sn and "カレンダー" not in sn]
+    cand = [sn for sn in sheetnames if "ãƒ¡ã‚¤ãƒ³" in sn and "ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼" not in sn]
     if not cand:
         return None
     return min(cand, key=len)
@@ -10974,8 +10788,8 @@ def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
 
 def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | None, time | None]:
     """
-    master.xlsm のメインシート A12（稼働開始）・B12（稼働終了）を読む。
-    いずれか欠損・不正・開始>=終了のときは (None, None)。
+    master.xlsm ã�®ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆ A12ï¼ˆç¨¼åƒ�é–‹å§‹ï¼‰ãƒ»B12ï¼ˆç¨¼åƒ�çµ‚äº†ï¼‰ã‚’èª­ã‚€ã€‚
+    ã�„ã�šã‚Œã�‹æ¬ æ��ãƒ»ä¸�æ­£ãƒ»é–‹å§‹>=çµ‚äº†ã�®ã�¨ã��ã�¯ (None, None)ã€‚
     """
     p = (master_path or "").strip()
     if not p or not os.path.isfile(p):
@@ -10985,7 +10799,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
     try:
         wb = load_workbook(p, data_only=True, read_only=False)
     except Exception as e:
-        logging.warning("工場稼働時刻: master を openpyxl で開けませんでした（既定の日内枠を使います）: %s", e)
+        logging.warning("å·¥å ´ç¨¼åƒ�æ™‚åˆ»: master ã‚’ openpyxl ã�§é–‹ã�‘ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆæ—¢å®šã�®æ—¥å†…æž ã‚’ä½¿ã�„ã�¾ã�™ï¼‰: %s", e)
         return None, None
     try:
         sn = _pick_master_main_sheet_name(list(wb.sheetnames))
@@ -10998,7 +10812,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
             return None, None
         if st >= et:
             logging.warning(
-                "工場稼働時刻: master メイン A12/B12 が開始>=終了 (%s >= %s) のため既定値を使います。",
+                "å·¥å ´ç¨¼åƒ�æ™‚åˆ»: master ãƒ¡ã‚¤ãƒ³ A12/B12 ã�Œé–‹å§‹>=çµ‚äº† (%s >= %s) ã�®ã�Ÿã‚�æ—¢å®šå€¤ã‚’ä½¿ã�„ã�¾ã�™ã€‚",
                 st,
                 et,
             )
@@ -11013,8 +10827,8 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
 
 def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None, time | None]:
     """
-    master.xlsm のメインシート A15（定常開始）・B15（定常終了）を読む。
-    いずれか欠損・不正・開始>=終了のときは (None, None)。
+    master.xlsm ã�®ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆ A15ï¼ˆå®šå¸¸é–‹å§‹ï¼‰ãƒ»B15ï¼ˆå®šå¸¸çµ‚äº†ï¼‰ã‚’èª­ã‚€ã€‚
+    ã�„ã�šã‚Œã�‹æ¬ æ��ãƒ»ä¸�æ­£ãƒ»é–‹å§‹>=çµ‚äº†ã�®ã�¨ã��ã�¯ (None, None)ã€‚
     """
     p = (master_path or "").strip()
     if not p or not os.path.isfile(p):
@@ -11025,7 +10839,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
         wb = load_workbook(p, data_only=True, read_only=False)
     except Exception as e:
         logging.warning(
-            "定常時刻: master を openpyxl で開けませんでした（結果シートの定常外着色をスキップ）: %s",
+            "å®šå¸¸æ™‚åˆ»: master ã‚’ openpyxl ã�§é–‹ã�‘ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆçµ�æžœã‚·ãƒ¼ãƒˆã�®å®šå¸¸å¤–ç�€è‰²ã‚’ã‚¹ã‚­ãƒƒãƒ—ï¼‰: %s",
             e,
         )
         return None, None
@@ -11040,7 +10854,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
             return None, None
         if st >= et:
             logging.warning(
-                "定常時刻: master メイン A15/B15 が開始>=終了 (%s >= %s) のため着色・比較に使いません。",
+                "å®šå¸¸æ™‚åˆ»: master ãƒ¡ã‚¤ãƒ³ A15/B15 ã�Œé–‹å§‹>=çµ‚äº† (%s >= %s) ã�®ã�Ÿã‚�ç�€è‰²ãƒ»æ¯”è¼ƒã�«ä½¿ã�„ã�¾ã�›ã‚“ã€‚",
                 st,
                 et,
             )
@@ -11055,7 +10869,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
 
 @contextmanager
 def _override_default_factory_hours_from_master(master_path: str):
-    """段階2の間だけ DEFAULT_START_TIME / DEFAULT_END_TIME を master メイン A12/B12 で上書き。"""
+    """æ®µéšŽ2ã�®é–“ã� ã�‘ DEFAULT_START_TIME / DEFAULT_END_TIME ã‚’ master ãƒ¡ã‚¤ãƒ³ A12/B12 ã�§ä¸Šæ›¸ã��ã€‚"""
     global DEFAULT_START_TIME, DEFAULT_END_TIME
     orig_s, orig_e = DEFAULT_START_TIME, DEFAULT_END_TIME
     ns, ne = _read_master_main_factory_operating_times(master_path)
@@ -11064,7 +10878,7 @@ def _override_default_factory_hours_from_master(master_path: str):
             DEFAULT_START_TIME = ns
             DEFAULT_END_TIME = ne
             logging.info(
-                "工場稼働枠: master.xlsm メイン A12/B12 を採用 → %s ～ %s（結果_* の日内グリッド・配台枠）",
+                "å·¥å ´ç¨¼åƒ�æž : master.xlsm ãƒ¡ã‚¤ãƒ³ A12/B12 ã‚’æŽ¡ç”¨ â†’ %s ï½ž %sï¼ˆçµ�æžœ_* ã�®æ—¥å†…ã‚°ãƒªãƒƒãƒ‰ãƒ»é…�å�°æž ï¼‰",
                 DEFAULT_START_TIME.strftime("%H:%M"),
                 DEFAULT_END_TIME.strftime("%H:%M"),
             )
@@ -11075,15 +10889,15 @@ def _override_default_factory_hours_from_master(master_path: str):
 
 def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, break1_end=None):
     """
-    備考から中抜け時間を推定するローカル補正。
-    AIが中抜けを返さない場合のフェイルセーフとして使う。
-    master.xlsm カレンダー由来の休暇区分: 前休=午前年休・午後のみ勤務、後休=午後年休・午前のみ勤務（出勤簿.txt と同義）。
-    前休・後休の境界はメンバー勤怠の休憩時間1_開始/終了（未指定時は DEFAULT_BREAKS[0]）に合わせる。
+    å‚™è€ƒã�‹ã‚‰ä¸­æŠœã�‘æ™‚é–“ã‚’æŽ¨å®šã�™ã‚‹ãƒ­ãƒ¼ã‚«ãƒ«è£œæ­£ã€‚
+    AIã�Œä¸­æŠœã�‘ã‚’è¿”ã�•ã�ªã�„å ´å�ˆã�®ãƒ•ã‚§ã‚¤ãƒ«ã‚»ãƒ¼ãƒ•ã�¨ã�—ã�¦ä½¿ã�†ã€‚
+    master.xlsm ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ç”±æ�¥ã�®ä¼‘æš‡åŒºåˆ†: å‰�ä¼‘=å�ˆå‰�å¹´ä¼‘ãƒ»å�ˆå¾Œã�®ã�¿å‹¤å‹™ã€�å¾Œä¼‘=å�ˆå¾Œå¹´ä¼‘ãƒ»å�ˆå‰�ã�®ã�¿å‹¤å‹™ï¼ˆå‡ºå‹¤ç°¿.txt ã�¨å�Œç¾©ï¼‰ã€‚
+    å‰�ä¼‘ãƒ»å¾Œä¼‘ã�®å¢ƒç•Œã�¯ãƒ¡ãƒ³ãƒ�ãƒ¼å‹¤æ€ ã�®ä¼‘æ†©æ™‚é–“1_é–‹å§‹/çµ‚äº†ï¼ˆæœªæŒ‡å®šæ™‚ã�¯ DEFAULT_BREAKS[0]ï¼‰ã�«å�ˆã‚�ã�›ã‚‹ã€‚
     """
     if reason_text is None:
         return None, None
     txt = str(reason_text).strip()
-    if not txt or txt.lower() in ("nan", "none", "null", "通常"):
+    if not txt or txt.lower() in ("nan", "none", "null", "é€šå¸¸"):
         return None, None
 
     b1_s = break1_start if break1_start is not None else DEFAULT_BREAKS[0][0]
@@ -11091,64 +10905,64 @@ def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, 
 
     noon_end = time(12, 0)
     afternoon_start = time(13, 0)
-    # カレンダー記号と一致させる（シフト時刻が誤っている場合の補完用。正しい行では区間が空になり追加されない）
-    if txt == "前休":
-        # 正しい行は出勤が休憩1終了以降で補完不要。全日シフトの誤入力時はそこまでを中抜け（午前年休相当）
+    # ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼è¨˜å�·ã�¨ä¸€è‡´ã�•ã�›ã‚‹ï¼ˆã‚·ãƒ•ãƒˆæ™‚åˆ»ã�Œèª¤ã�£ã�¦ã�„ã‚‹å ´å�ˆã�®è£œå®Œç”¨ã€‚æ­£ã�—ã�„è¡Œã�§ã�¯åŒºé–“ã�Œç©ºã�«ã�ªã‚Šè¿½åŠ ã�•ã‚Œã�ªã�„ï¼‰
+    if txt == "å‰�ä¼‘":
+        # æ­£ã�—ã�„è¡Œã�¯å‡ºå‹¤ã�Œä¼‘æ†©1çµ‚äº†ä»¥é™�ã�§è£œå®Œä¸�è¦�ã€‚å…¨æ—¥ã‚·ãƒ•ãƒˆã�®èª¤å…¥åŠ›æ™‚ã�¯ã��ã�“ã�¾ã�§ã‚’ä¸­æŠœã�‘ï¼ˆå�ˆå‰�å¹´ä¼‘ç›¸å½“ï¼‰
         if start_t and start_t < b1_e:
             return start_t, b1_e
         return None, None
-    if txt == "後休":
+    if txt == "å¾Œä¼‘":
         if end_t and b1_s < end_t:
             return b1_s, end_t
         return None, None
 
-    # 1) 明示的な時刻範囲（例: 11:00-14:00 / 11:00～14:00）
-    m = re.search(r"(\d{1,2}[:：]\d{2})\s*[~〜\-－ー]\s*(\d{1,2}[:：]\d{2})", txt)
+    # 1) æ˜Žç¤ºçš„ã�ªæ™‚åˆ»ç¯„å›²ï¼ˆä¾‹: 11:00-14:00 / 11:00ï½ž14:00ï¼‰
+    m = re.search(r"(\d{1,2}[:ï¼š]\d{2})\s*[~ã€œ\-ï¼�ãƒ¼]\s*(\d{1,2}[:ï¼š]\d{2})", txt)
     if m:
-        s = parse_time_str(m.group(1).replace("：", ":"), None)
-        e = parse_time_str(m.group(2).replace("：", ":"), None)
+        s = parse_time_str(m.group(1).replace("ï¼š", ":"), None)
+        e = parse_time_str(m.group(2).replace("ï¼š", ":"), None)
         if s and e and s < e:
             return s, e
 
-    # 2) あいまい語（午前/午後/終日） + 現場離脱・休暇系キーワード
-    # 「午後休みです」等は「午後」を含むが、旧ロジックは「抜け」等のみ見ており中抜け推定に到達しなかった
+    # 2) ã�‚ã�„ã�¾ã�„èªžï¼ˆå�ˆå‰�/å�ˆå¾Œ/çµ‚æ—¥ï¼‰ + ç�¾å ´é›¢è„±ãƒ»ä¼‘æš‡ç³»ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰
+    # ã€Œå�ˆå¾Œä¼‘ã�¿ã�§ã�™ã€�ç­‰ã�¯ã€Œå�ˆå¾Œã€�ã‚’å�«ã‚€ã�Œã€�æ—§ãƒ­ã‚¸ãƒƒã‚¯ã�¯ã€ŒæŠœã�‘ã€�ç­‰ã�®ã�¿è¦‹ã�¦ã�Šã‚Šä¸­æŠœã�‘æŽ¨å®šã�«åˆ°é�”ã�—ã�ªã�‹ã�£ã�Ÿ
     leave_keywords = (
-        "事務所", "会議", "教育", "研修", "外出", "離れ", "抜け", "中抜け", "打合せ",
-        "休み", "休暇", "欠勤",
+        "äº‹å‹™æ‰€", "ä¼šè­°", "æ•™è‚²", "ç ”ä¿®", "å¤–å‡º", "é›¢ã‚Œ", "æŠœã�‘", "ä¸­æŠœã�‘", "æ‰“å�ˆã�›",
+        "ä¼‘ã�¿", "ä¼‘æš‡", "æ¬ å‹¤",
     )
     has_leave_hint = any(k in txt for k in leave_keywords)
     if not has_leave_hint:
         return None, None
 
-    if ("終日" in txt) or ("1日" in txt and "通常" not in txt):
+    if ("çµ‚æ—¥" in txt) or ("1æ—¥" in txt and "é€šå¸¸" not in txt):
         return start_t, end_t
-    if ("午前中" in txt) or ("午前" in txt):
+    if ("å�ˆå‰�ä¸­" in txt) or ("å�ˆå‰�" in txt):
         return start_t, noon_end
-    if ("午後" in txt):
+    if ("å�ˆå¾Œ" in txt):
         return afternoon_start, end_t
 
     return None, None
 
 
-# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に実質 休憩時間1_開始で終了とみなす。
+# çµ�æžœ_ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼(å‡ºå‹¤ç°¿) ã�®é€€å‹¤è¡¨ç¤ºã€‚VBA å‡ºå‹¤ç°¿ã€Œå¾Œä¼‘ã€�ï¼ˆå�ˆå¾Œå¹´ä¼‘ï¼‰ã�¨å�Œæ§˜ã�«å®Ÿè³ª ä¼‘æ†©æ™‚é–“1_é–‹å§‹ã�§çµ‚äº†ã�¨ã�¿ã�ªã�™ã€‚
 _AFTERNOON_OFF_DISPLAY_END = DEFAULT_BREAKS[0][0]
 
 
 def _reason_is_afternoon_off(reason: str) -> bool:
-    """後休（午後年休・午前のみ勤務）または備考の午後休系。"""
+    """å¾Œä¼‘ï¼ˆå�ˆå¾Œå¹´ä¼‘ãƒ»å�ˆå‰�ã�®ã�¿å‹¤å‹™ï¼‰ã�¾ã�Ÿã�¯å‚™è€ƒã�®å�ˆå¾Œä¼‘ç³»ã€‚"""
     r = str(reason or "")
-    return ("午後" in r and ("休" in r or "休み" in r)) or ("後休" in r)
+    return ("å�ˆå¾Œ" in r and ("ä¼‘" in r or "ä¼‘ã�¿" in r)) or ("å¾Œä¼‘" in r)
 
 
 def _reason_is_morning_off(reason: str) -> bool:
-    """前休（午前年休・午後のみ勤務）。カレンダー由来の略号のみ明示扱い（事務所勤務などと混同しない）。"""
-    return "前休" in str(reason or "")
+    """å‰�ä¼‘ï¼ˆå�ˆå‰�å¹´ä¼‘ãƒ»å�ˆå¾Œã�®ã�¿å‹¤å‹™ï¼‰ã€‚ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ç”±æ�¥ã�®ç•¥å�·ã�®ã�¿æ˜Žç¤ºæ‰±ã�„ï¼ˆäº‹å‹™æ‰€å‹¤å‹™ã�ªã�©ã�¨æ··å�Œã�—ã�ªã�„ï¼‰ã€‚"""
+    return "å‰�ä¼‘" in str(reason or "")
 
 
 def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
     """
-    配台は breaks_dt の午後中抜けで正しくなる一方、end_dt が 17:00 のままだと結果カレンダーの退勤列だけ誤る。
-    後休（午後年休）または備考が午後休み系で、定時まで続く午後の中抜けがあるときだけ退勤表示を休憩時間1_開始に揃える（end_dt 本体は変更しない）。
+    é…�å�°ã�¯ breaks_dt ã�®å�ˆå¾Œä¸­æŠœã�‘ã�§æ­£ã�—ã��ã�ªã‚‹ä¸€æ–¹ã€�end_dt ã�Œ 17:00 ã�®ã�¾ã�¾ã� ã�¨çµ�æžœã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã�®é€€å‹¤åˆ—ã� ã�‘èª¤ã‚‹ã€‚
+    å¾Œä¼‘ï¼ˆå�ˆå¾Œå¹´ä¼‘ï¼‰ã�¾ã�Ÿã�¯å‚™è€ƒã�Œå�ˆå¾Œä¼‘ã�¿ç³»ã�§ã€�å®šæ™‚ã�¾ã�§ç¶šã��å�ˆå¾Œã�®ä¸­æŠœã�‘ã�Œã�‚ã‚‹ã�¨ã��ã� ã�‘é€€å‹¤è¡¨ç¤ºã‚’ä¼‘æ†©æ™‚é–“1_é–‹å§‹ã�«æ�ƒã�ˆã‚‹ï¼ˆend_dt æœ¬ä½“ã�¯å¤‰æ›´ã�—ã�ªã�„ï¼‰ã€‚
     """
     if not entry.get("is_working"):
         return None
@@ -11181,9 +10995,9 @@ def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
 
 def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reason):
     """
-    個人_* スケジュールの10分枠が休憩帯に入るときの文言。
-    昼食など通常休憩は「休憩」。後休（午後年休）で定時まで工場にいない午後帯は「休暇」。
-    前休（午前年休）で午前の欠勤区間が休憩帯として入っている場合は「休暇」。
+    å€‹äºº_* ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«ã�®10åˆ†æž ã�Œä¼‘æ†©å¸¯ã�«å…¥ã‚‹ã�¨ã��ã�®æ–‡è¨€ã€‚
+    æ˜¼é£Ÿã�ªã�©é€šå¸¸ä¼‘æ†©ã�¯ã€Œä¼‘æ†©ã€�ã€‚å¾Œä¼‘ï¼ˆå�ˆå¾Œå¹´ä¼‘ï¼‰ã�§å®šæ™‚ã�¾ã�§å·¥å ´ã�«ã�„ã�ªã�„å�ˆå¾Œå¸¯ã�¯ã€Œä¼‘æš‡ã€�ã€‚
+    å‰�ä¼‘ï¼ˆå�ˆå‰�å¹´ä¼‘ï¼‰ã�§å�ˆå‰�ã�®æ¬ å‹¤åŒºé–“ã�Œä¼‘æ†©å¸¯ã�¨ã�—ã�¦å…¥ã�£ã�¦ã�„ã‚‹å ´å�ˆã�¯ã€Œä¼‘æš‡ã€�ã€‚
     """
     reason = str(reason or "")
     afternoon_off = _reason_is_afternoon_off(reason)
@@ -11198,12 +11012,12 @@ def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reas
             if isinstance(bs, datetime):
                 bs = bs.time()
             if afternoon_off and bs >= DEFAULT_BREAKS[0][0] and b_e >= shift_end_dt - timedelta(seconds=2):
-                return "休暇"
+                return "ä¼‘æš‡"
             if morning_off and bs < DEFAULT_BREAKS[0][0]:
                 be_t = b_e.time() if isinstance(b_e, datetime) else b_e
                 if be_t <= time(13, 0):
-                    return "休暇"
-        return "休憩"
+                    return "ä¼‘æš‡"
+        return "ä¼‘æ†©"
     return None
 
 
@@ -11215,40 +11029,40 @@ def _member_schedule_off_shift_label(
     reason: str,
 ) -> str:
     """
-    個人_* シートで所定出退勤の外側の10分枠。
-    前休の午前（工場日の所定開始～午後出勤まで）は年休、後休の午後は年休。それ以外のシフト外は勤務外。
+    å€‹äºº_* ã‚·ãƒ¼ãƒˆã�§æ‰€å®šå‡ºé€€å‹¤ã�®å¤–å�´ã�®10åˆ†æž ã€‚
+    å‰�ä¼‘ã�®å�ˆå‰�ï¼ˆå·¥å ´æ—¥ã�®æ‰€å®šé–‹å§‹ï½žå�ˆå¾Œå‡ºå‹¤ã�¾ã�§ï¼‰ã�¯å¹´ä¼‘ã€�å¾Œä¼‘ã�®å�ˆå¾Œã�¯å¹´ä¼‘ã€‚ã��ã‚Œä»¥å¤–ã�®ã‚·ãƒ•ãƒˆå¤–ã�¯å‹¤å‹™å¤–ã€‚
     """
     r = str(reason or "")
     day_start = datetime.combine(day_date, DEFAULT_START_TIME)
     day_end = datetime.combine(day_date, DEFAULT_END_TIME)
     if grid_mid_dt < d_start_dt:
         if _reason_is_morning_off(r) and grid_mid_dt >= day_start:
-            return "年休"
-        return "勤務外"
+            return "å¹´ä¼‘"
+        return "å‹¤å‹™å¤–"
     if grid_mid_dt >= d_end_dt:
         if _reason_is_afternoon_off(r) and grid_mid_dt < day_end:
-            return "年休"
-        return "勤務外"
-    return "勤務外"
+            return "å¹´ä¼‘"
+        return "å‹¤å‹™å¤–"
+    return "å‹¤å‹™å¤–"
 
 
 def _member_schedule_full_day_off_label(entry) -> str:
     """
-    全日非勤務（is_working=False）の個人シート列の表示。
-    休暇区分が年休（カレンダー *）のときは『年休』。工場休日などは『休』。
+    å…¨æ—¥é�žå‹¤å‹™ï¼ˆis_working=Falseï¼‰ã�®å€‹äººã‚·ãƒ¼ãƒˆåˆ—ã�®è¡¨ç¤ºã€‚
+    ä¼‘æš‡åŒºåˆ†ã�Œå¹´ä¼‘ï¼ˆã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ *ï¼‰ã�®ã�¨ã��ã�¯ã€Žå¹´ä¼‘ã€�ã€‚å·¥å ´ä¼‘æ—¥ã�ªã�©ã�¯ã€Žä¼‘ã€�ã€‚
     """
     if not entry:
-        return "休"
+        return "ä¼‘"
     r = str(entry.get("reason") or "").strip()
-    if r == "年休" or r.startswith("年休 "):
-        return "年休"
-    return "休"
+    if r == "å¹´ä¼‘" or r.startswith("å¹´ä¼‘ "):
+        return "å¹´ä¼‘"
+    return "ä¼‘"
 
 
 def _attendance_remark_text(row) -> str:
     """
-    勤怠1行から「備考」列のテキストのみ取得する。
-    勤怠AIの解析リストへの投入はこの列のみ。reason 文字列は load_attendance で備考と休暇区分を合成する。
+    å‹¤æ€ 1è¡Œã�‹ã‚‰ã€Œå‚™è€ƒã€�åˆ—ã�®ãƒ†ã‚­ã‚¹ãƒˆã�®ã�¿å�–å¾—ã�™ã‚‹ã€‚
+    å‹¤æ€ AIã�®è§£æž�ãƒªã‚¹ãƒˆã�¸ã�®æŠ•å…¥ã�¯ã�“ã�®åˆ—ã�®ã�¿ã€‚reason æ–‡å­—åˆ—ã�¯ load_attendance ã�§å‚™è€ƒã�¨ä¼‘æš‡åŒºåˆ†ã‚’å�ˆæˆ�ã�™ã‚‹ã€‚
     """
     if row is None:
         return ""
@@ -11267,7 +11081,7 @@ def _attendance_remark_text(row) -> str:
 
 
 def _attendance_leave_type_text(row) -> str:
-    """勤怠1行から「休暇区分」列（カレンダー由来の 前休/後休 等）。"""
+    """å‹¤æ€ 1è¡Œã�‹ã‚‰ã€Œä¼‘æš‡åŒºåˆ†ã€�åˆ—ï¼ˆã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ç”±æ�¥ã�® å‰�ä¼‘/å¾Œä¼‘ ç­‰ï¼‰ã€‚"""
     if row is None:
         return ""
     try:
@@ -11285,7 +11099,7 @@ def _attendance_leave_type_text(row) -> str:
 
 
 def _ai_json_bool(v, default: bool = False) -> bool:
-    """勤怠備考 AI の真偽値（bool / 数値 / 文字列の揺れを吸収）。"""
+    """å‹¤æ€ å‚™è€ƒ AI ã�®çœŸå�½å€¤ï¼ˆbool / æ•°å€¤ / æ–‡å­—åˆ—ã�®æ�ºã‚Œã‚’å�¸å�Žï¼‰ã€‚"""
     if v is None:
         return default
     if isinstance(v, bool):
@@ -11297,33 +11111,33 @@ def _ai_json_bool(v, default: bool = False) -> bool:
             return default
         return v != 0.0
     s = str(v).strip().lower()
-    if s in ("true", "1", "yes", "y", "はい", "真", "on"):
+    if s in ("true", "1", "yes", "y", "ã�¯ã�„", "çœŸ", "on"):
         return True
-    if s in ("false", "0", "no", "n", "いいえ", "偽", "off", ""):
+    if s in ("false", "0", "no", "n", "ã�„ã�„ã�ˆ", "å�½", "off", ""):
         return False
     return default
 
 
 def _parse_attendance_overtime_end_optional(v) -> time | None:
-    """勤怠「残業終業」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
+    """å‹¤æ€ ã€Œæ®‹æ¥­çµ‚æ¥­ã€�åˆ—ã€‚æœ‰åŠ¹ã�ªæ™‚åˆ»ã�®ã�¿ã€‚ç©ºãƒ»ä¸�æ­£ã�¯ Noneï¼ˆ_excel_scalar_to_time_optional ã�¨å�Œè¶£æ—¨ï¼‰ã€‚"""
     return _excel_scalar_to_time_optional(v)
 
 
 def load_attendance_and_analyze(members):
     attendance_data = {}
-    # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
+    # â€»ã€Œå‹¤æ€ å‚™è€ƒã€�ã�¯ master å�„ãƒ¡ãƒ³ãƒ�ãƒ¼ã‚·ãƒ¼ãƒˆã�®ã€Œå‚™è€ƒã€�åˆ—ã�®ã�¿ã€‚ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆãƒ»ç‰¹åˆ¥æŒ‡å®š_å‚™è€ƒã�¯åˆ¥APIï¼ˆgenerate_plan å�´ã�§è¿½è¨˜ï¼‰ã€‚
     ai_log = {
-        "（注）このシートの見方": "先頭2行は勤怠「備考」の出退勤AIのみ。メイン再優先・特別指定は下段のJSONと「_*_AI_API」行。",
-        "勤怠備考_AI_API": "なし",
-        "勤怠備考_AI_詳細": "解析対象の備考行なし",
+        "ï¼ˆæ³¨ï¼‰ã�“ã�®ã‚·ãƒ¼ãƒˆã�®è¦‹æ–¹": "å…ˆé ­2è¡Œã�¯å‹¤æ€ ã€Œå‚™è€ƒã€�ã�®å‡ºé€€å‹¤AIã�®ã�¿ã€‚ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆãƒ»ç‰¹åˆ¥æŒ‡å®šã�¯ä¸‹æ®µã�®JSONã�¨ã€Œ_*_AI_APIã€�è¡Œã€‚",
+        "å‹¤æ€ å‚™è€ƒ_AI_API": "ã�ªã�—",
+        "å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°": "è§£æž�å¯¾è±¡ã�®å‚™è€ƒè¡Œã�ªã�—",
     }
     
-    # 1. メンバー別シートからの読み込み
+    # 1. ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥ã‚·ãƒ¼ãƒˆã�‹ã‚‰ã�®èª­ã�¿è¾¼ã�¿
     all_records = []
     try:
         xls = pd.ExcelFile(MASTER_FILE)
         for sheet_name in xls.sheet_names:
-            if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
+            if "ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
                 continue 
                 
             m_name = sheet_name.strip()
@@ -11332,55 +11146,55 @@ def load_attendance_and_analyze(members):
                 
             df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
             df_sheet.columns = df_sheet.columns.str.strip()
-            df_sheet['メンバー'] = m_name 
+            df_sheet['ãƒ¡ãƒ³ãƒ�ãƒ¼'] = m_name 
             all_records.append(df_sheet)
             
         if all_records:
             df = pd.concat(all_records, ignore_index=True)
-            df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
-            df = df.dropna(subset=['日付'])
-            logging.info(f"『{MASTER_FILE}』の各メンバーの勤怠シートを読み込みました。")
+            df['æ—¥ä»˜'] = pd.to_datetime(df['æ—¥ä»˜'], errors='coerce').dt.date
+            df = df.dropna(subset=['æ—¥ä»˜'])
+            logging.info(f"ã€Ž{MASTER_FILE}ã€�ã�®å�„ãƒ¡ãƒ³ãƒ�ãƒ¼ã�®å‹¤æ€ ã‚·ãƒ¼ãƒˆã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚")
             _cols = {str(c).strip() for c in df.columns}
             if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
                 logging.info(
-                    "勤怠列: AI 入力は「%s」のみ。備考が空の日は「%s」（前休・後休・他拠点勤務など）を reason に反映します。",
+                    "å‹¤æ€ åˆ—: AI å…¥åŠ›ã�¯ã€Œ%sã€�ã�®ã�¿ã€‚å‚™è€ƒã�Œç©ºã�®æ—¥ã�¯ã€Œ%sã€�ï¼ˆå‰�ä¼‘ãƒ»å¾Œä¼‘ãƒ»ä»–æ‹ ç‚¹å‹¤å‹™ã�ªã�©ï¼‰ã‚’ reason ã�«å��æ˜ ã�—ã�¾ã�™ã€‚",
                     ATT_COL_REMARK,
                     ATT_COL_LEAVE_TYPE,
                 )
             elif ATT_COL_REMARK not in _cols:
                 logging.warning(
-                    "勤怠データに「%s」列がありません。備考ベースの AI 解析は空扱いになります。",
+                    "å‹¤æ€ ãƒ‡ãƒ¼ã‚¿ã�«ã€Œ%sã€�åˆ—ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚å‚™è€ƒãƒ™ãƒ¼ã‚¹ã�® AI è§£æž�ã�¯ç©ºæ‰±ã�„ã�«ã�ªã‚Šã�¾ã�™ã€‚",
                     ATT_COL_REMARK,
                 )
             if ATT_COL_OT_END in _cols:
                 logging.info(
-                    "勤怠列: 任意「%s」で退勤上限時刻を指定できます（全日休み行では無視）。",
+                    "å‹¤æ€ åˆ—: ä»»æ„�ã€Œ%sã€�ã�§é€€å‹¤ä¸Šé™�æ™‚åˆ»ã‚’æŒ‡å®šã�§ã��ã�¾ã�™ï¼ˆå…¨æ—¥ä¼‘ã�¿è¡Œã�§ã�¯ç„¡è¦–ï¼‰ã€‚",
                     ATT_COL_OT_END,
                 )
         else:
-            raise FileNotFoundError("有効なメンバー別勤怠シートが見つかりません。")
+            raise FileNotFoundError("æœ‰åŠ¹ã�ªãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥å‹¤æ€ ã‚·ãƒ¼ãƒˆã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“ã€‚")
             
     except Exception as e:
-        logging.warning(f"勤怠シート読み込みエラー: {e} デフォルトカレンダーを生成します。")
+        logging.warning(f"å‹¤æ€ ã‚·ãƒ¼ãƒˆèª­ã�¿è¾¼ã�¿ã‚¨ãƒ©ãƒ¼: {e} ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚’ç”Ÿæˆ�ã�—ã�¾ã�™ã€‚")
         default_dates = generate_default_calendar_dates(TARGET_YEAR, TARGET_MONTH)
         records = []
         for d in default_dates:
-            for m in members: records.append({'日付': d, 'メンバー': m, '備考': '通常'})
+            for m in members: records.append({'æ—¥ä»˜': d, 'ãƒ¡ãƒ³ãƒ�ãƒ¼': m, 'å‚™è€ƒ': 'é€šå¸¸'})
         df = pd.DataFrame(records)
 
-    # 2. AI による勤怠文脈の解析（備考が空でも休暇区分のみの行は AI に渡し、表記揺れはモデルに解釈させる）
+    # 2. AI ã�«ã‚ˆã‚‹å‹¤æ€ æ–‡è„ˆã�®è§£æž�ï¼ˆå‚™è€ƒã�Œç©ºã�§ã‚‚ä¼‘æš‡åŒºåˆ†ã�®ã�¿ã�®è¡Œã�¯ AI ã�«æ¸¡ã�—ã€�è¡¨è¨˜æ�ºã‚Œã�¯ãƒ¢ãƒ‡ãƒ«ã�«è§£é‡ˆã�•ã�›ã‚‹ï¼‰
     remarks_to_analyze = []
     for _, row in df.iterrows():
-        m = str(row.get('メンバー', '')).strip()
+        m = str(row.get('ãƒ¡ãƒ³ãƒ�ãƒ¼', '')).strip()
         if m not in members:
             continue
         rem = _attendance_remark_text(row)
         lt = _attendance_leave_type_text(row)
-        d_str = row['日付'].strftime("%Y-%m-%d") if pd.notna(row['日付']) else ""
+        d_str = row['æ—¥ä»˜'].strftime("%Y-%m-%d") if pd.notna(row['æ—¥ä»˜']) else ""
         if rem:
-            remarks_to_analyze.append(f"{d_str}_{m} の備考: {rem}")
-        elif lt and lt not in ("通常", ""):
-            remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
+            remarks_to_analyze.append(f"{d_str}_{m} ã�®å‚™è€ƒ: {rem}")
+        elif lt and lt not in ("é€šå¸¸", ""):
+            remarks_to_analyze.append(f"{d_str}_{m} ã�®ä¼‘æš‡åŒºåˆ†ï¼ˆå‚™è€ƒã�¯ç©ºï¼‰: {lt}")
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -11389,50 +11203,50 @@ def load_attendance_and_analyze(members):
         ).hexdigest()
         ai_cache = load_ai_cache()
 
-        # 同一備考セットはキャッシュを優先利用し、APIコールを節約
+        # å�Œä¸€å‚™è€ƒã‚»ãƒƒãƒˆã�¯ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’å„ªå…ˆåˆ©ç”¨ã�—ã€�APIã‚³ãƒ¼ãƒ«ã‚’ç¯€ç´„
         cached_data = get_cached_ai_result(ai_cache, cache_key)
         if cached_data is not None:
             ai_parsed = cached_data
-            ai_log["勤怠備考_AI_API"] = "なし(キャッシュ使用)"
-            ai_log["勤怠備考_AI_詳細"] = "キャッシュヒット"
+            ai_log["å‹¤æ€ å‚™è€ƒ_AI_API"] = "ã�ªã�—(ã‚­ãƒ£ãƒƒã‚·ãƒ¥ä½¿ç”¨)"
+            ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ’ãƒƒãƒˆ"
         elif not API_KEY:
             ai_parsed = {}
-            ai_log["勤怠備考_AI_API"] = "なし"
-            ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定のため勤怠備考AIをスキップ"
-            logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
+            ai_log["å‹¤æ€ å‚™è€ƒ_AI_API"] = "ã�ªã�—"
+            ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "GEMINI_API_KEYæœªè¨­å®šã�®ã�Ÿã‚�å‹¤æ€ å‚™è€ƒAIã‚’ã‚¹ã‚­ãƒƒãƒ—"
+            logging.info("GEMINI_API_KEY æœªè¨­å®šã�®ã�Ÿã‚�å‚™è€ƒAIè§£æž�ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿã€‚")
         else:
-            logging.info("■ AIが複数日の特記事項を解析中...")
-            ai_log["勤怠備考_AI_API"] = "あり"
+            logging.info("â–  AIã�Œè¤‡æ•°æ—¥ã�®ç‰¹è¨˜äº‹é …ã‚’è§£æž�ä¸­...")
+            ai_log["å‹¤æ€ å‚™è€ƒ_AI_API"] = "ã�‚ã‚Š"
             
             prompt = f"""
-            以下の各日・メンバーの備考を読み取り、出退勤時刻の変更や中抜け、休日の判定を行い、JSON形式で出力してください。
-            マークダウン記号(``` 等)は一切含めず、純粋なJSON文字列のみを返してください。
+            ä»¥ä¸‹ã�®å�„æ—¥ãƒ»ãƒ¡ãƒ³ãƒ�ãƒ¼ã�®å‚™è€ƒã‚’èª­ã�¿å�–ã‚Šã€�å‡ºé€€å‹¤æ™‚åˆ»ã�®å¤‰æ›´ã‚„ä¸­æŠœã�‘ã€�ä¼‘æ—¥ã�®åˆ¤å®šã‚’è¡Œã�„ã€�JSONå½¢å¼�ã�§å‡ºåŠ›ã�—ã�¦ã��ã� ã�•ã�„ã€‚
+            ãƒžãƒ¼ã‚¯ãƒ€ã‚¦ãƒ³è¨˜å�·(``` ç­‰)ã�¯ä¸€åˆ‡å�«ã‚�ã�šã€�ç´”ç²‹ã�ªJSONæ–‡å­—åˆ—ã�®ã�¿ã‚’è¿”ã�—ã�¦ã��ã� ã�•ã�„ã€‚
 
-            【JSONの出力形式（キー名を厳密に守ること）】
+            ã€�JSONã�®å‡ºåŠ›å½¢å¼�ï¼ˆã‚­ãƒ¼å��ã‚’åŽ³å¯†ã�«å®ˆã‚‹ã�“ã�¨ï¼‰ã€‘
             {{
-              "YYYY-MM-DD_メンバー名": {{
-                "出勤時刻": "HH:MM", 
-                "退勤時刻": "HH:MM", 
-                "中抜け開始": "HH:MM",
-                "中抜け終了": "HH:MM",
-                "作業効率": 1.0,     
+              "YYYY-MM-DD_ãƒ¡ãƒ³ãƒ�ãƒ¼å��": {{
+                "å‡ºå‹¤æ™‚åˆ»": "HH:MM", 
+                "é€€å‹¤æ™‚åˆ»": "HH:MM", 
+                "ä¸­æŠœã�‘é–‹å§‹": "HH:MM",
+                "ä¸­æŠœã�‘çµ‚äº†": "HH:MM",
+                "ä½œæ¥­åŠ¹çŽ‡": 1.0,     
                 "is_holiday": false,
-                "配台不参加": false
+                "é…�å�°ä¸�å�‚åŠ ": false
               }}
             }}
-            ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
-            ・出勤時刻/退勤時刻: 当該行の「備考」または「休暇区分（備考は空）」の文脈から推測。不明や変更なしなら null
-            ・中抜け開始/終了: 一時的な離脱（中抜け・事務所・会議など）がある場合、その開始・終了。ない場合は null
-            ・曖昧語の解釈例:
-              - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
-              - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
-            ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
-            ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
-              例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
-              通常勤務で特に制限が読み取れない場合は false
-            ・作業効率: 0.0〜1.0の数値
+            ãƒ»ã‚­ãƒ¼å��ã�¯ä¸Šè¨˜ã�®æ—¥æœ¬èªžã‚­ãƒ¼ã‚’ã��ã�®ã�¾ã�¾ä½¿ã�†ï¼ˆè‹±èªžã‚­ãƒ¼ã�«ç½®ã��æ�›ã�ˆã�ªã�„ï¼‰
+            ãƒ»å‡ºå‹¤æ™‚åˆ»/é€€å‹¤æ™‚åˆ»: å½“è©²è¡Œã�®ã€Œå‚™è€ƒã€�ã�¾ã�Ÿã�¯ã€Œä¼‘æš‡åŒºåˆ†ï¼ˆå‚™è€ƒã�¯ç©ºï¼‰ã€�ã�®æ–‡è„ˆã�‹ã‚‰æŽ¨æ¸¬ã€‚ä¸�æ˜Žã‚„å¤‰æ›´ã�ªã�—ã�ªã‚‰ null
+            ãƒ»ä¸­æŠœã�‘é–‹å§‹/çµ‚äº†: ä¸€æ™‚çš„ã�ªé›¢è„±ï¼ˆä¸­æŠœã�‘ãƒ»äº‹å‹™æ‰€ãƒ»ä¼šè­°ã�ªã�©ï¼‰ã�Œã�‚ã‚‹å ´å�ˆã€�ã��ã�®é–‹å§‹ãƒ»çµ‚äº†ã€‚ã�ªã�„å ´å�ˆã�¯ null
+            ãƒ»æ›–æ˜§èªžã�®è§£é‡ˆä¾‹:
+              - ã€Œå�ˆå‰�ä¸­ã�¯äº‹å‹™æ‰€ã�§ä½œæ¥­ã€�=> ä¸­æŠœã�‘é–‹å§‹ "08:45", ä¸­æŠœã�‘çµ‚äº† "12:00"
+              - ã€Œå�ˆå¾Œã�¯ä¼šè­°ã€�=> ä¸­æŠœã�‘é–‹å§‹ "13:00", ä¸­æŠœã�‘çµ‚äº† "17:00"
+            ãƒ»is_holiday: ã��ã�®æ—¥ã�Œä¼šç¤¾ã�«æ�¥ã�ªã�„ãƒ»çµ‚æ—¥ä¼‘æš‡ãƒ»æ¬ å‹¤ã�ªã�© **å‹¤å‹™è‡ªä½“ã�Œã�ªã�„** ã�¨åˆ¤æ–­ã�§ã��ã‚‹å ´å�ˆã�®ã�¿ trueã€‚å�ˆå‰�ä¼‘ãƒ»å�ˆå¾Œä¼‘ã�ªã�©éƒ¨åˆ†çš„ã�ªä¼‘ã�¿ã�¯ falseï¼ˆä¸­æŠœã�‘ã‚„æ™‚åˆ»ã�§è¡¨ç�¾ï¼‰
+            ãƒ»é…�å�°ä¸�å�‚åŠ : å‹¤å‹™ã�¯ã�‚ã‚‹ã�Œ **åŠ å·¥ãƒ©ã‚¤ãƒ³ã�¸ã�®é…�å�°ï¼ˆOP/AS ã�®å‰²å½“ï¼‰ã�«è¼‰ã�›ã�¦ã�¯ã�„ã�‘ã�ªã�„** ã�¨èª­ã�¿å�–ã‚Œã‚‹å ´å�ˆã�¯ trueã€‚è¡¨è¨˜ã�¯å•�ã‚�ã�šæ„�å‘³ã�§åˆ¤æ–­ã�™ã‚‹ã�“ã�¨ã€‚
+              ä¾‹: ã€Œé…�å�°ä¸�å�¯ã€�ã€Œé…�å�°ï¼®ï¼§ã€�ã€Œãƒ©ã‚¤ãƒ³ã�«ä¹—ã‚‰ã�ªã�„ã€�ã€Œæœˆæ¬¡ç‚¹æ¤œã�®ã�¿ã€�ã€Œç‚¹æ¤œã�§ä¸€æ—¥ã€�ã€Œäº‹å‹™ã�®ã�¿ã€�ã€Œæ•™è‚²ã�§ç�¾å ´ä¸�å�¯ã€�ã€Œæ‰‹é…�ã�ªã�—ã€�ã€Œã‚¢ã‚µã‚¤ãƒ³ä¸�è¦�ã€�ã�ªã�©ã�®æ�ºã‚Œã‚„å©‰æ›²è¡¨ç�¾ã‚‚å�«ã‚€ã€‚
+              é€šå¸¸å‹¤å‹™ã�§ç‰¹ã�«åˆ¶é™�ã�Œèª­ã�¿å�–ã‚Œã�ªã�„å ´å�ˆã�¯ false
+            ãƒ»ä½œæ¥­åŠ¹çŽ‡: 0.0ã€œ1.0ã�®æ•°å€¤
             
-            【特記事項リスト】
+            ã€�ç‰¹è¨˜äº‹é …ãƒªã‚¹ãƒˆã€‘
             {chr(10).join(remarks_to_analyze)}
             """
             try:
@@ -11444,10 +11258,10 @@ def load_attendance_and_analyze(members):
                     ai_parsed = json.loads(match.group(0))
                     put_cached_ai_result(ai_cache, cache_key, ai_parsed)
                     save_ai_cache(ai_cache)
-                    ai_log["勤怠備考_AI_詳細"] = "解析成功"
+                    ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "è§£æž�æˆ�åŠŸ"
                 else:
                     ai_parsed = {}
-                    ai_log["勤怠備考_AI_詳細"] = "JSONパース失敗"
+                    ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "JSONãƒ‘ãƒ¼ã‚¹å¤±æ•—"
             except Exception as e:
                 err_text = str(e)
                 is_quota_or_rate = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
@@ -11455,7 +11269,7 @@ def load_attendance_and_analyze(members):
 
                 if is_quota_or_rate and retry_sec is not None:
                     wait_sec = min(max(retry_sec, 1.0), 90.0)
-                    logging.warning(f"AI通信 429/RESOURCE_EXHAUSTED。{wait_sec:.1f}秒待機して1回だけ再試行します。")
+                    logging.warning(f"AIé€šä¿¡ 429/RESOURCE_EXHAUSTEDã€‚{wait_sec:.1f}ç§’å¾…æ©Ÿã�—ã�¦1å›žã� ã�‘å†�è©¦è¡Œã�—ã�¾ã�™ã€‚")
                     time_module.sleep(wait_sec)
                     try:
                         res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
@@ -11465,26 +11279,26 @@ def load_attendance_and_analyze(members):
                             ai_parsed = json.loads(match.group(0))
                             put_cached_ai_result(ai_cache, cache_key, ai_parsed)
                             save_ai_cache(ai_cache)
-                            ai_log["勤怠備考_AI_詳細"] = "再試行で解析成功"
+                            ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "å†�è©¦è¡Œã�§è§£æž�æˆ�åŠŸ"
                         else:
                             ai_parsed = {}
-                            ai_log["勤怠備考_AI_詳細"] = "再試行後JSONパース失敗"
+                            ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = "å†�è©¦è¡Œå¾ŒJSONãƒ‘ãƒ¼ã‚¹å¤±æ•—"
                     except Exception as e2:
                         ai_parsed = {}
-                        logging.warning(f"AI再試行エラー: {e2}")
-                        ai_log["勤怠備考_AI_詳細"] = f"429後再試行失敗: {e2}"
+                        logging.warning(f"AIå†�è©¦è¡Œã‚¨ãƒ©ãƒ¼: {e2}")
+                        ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = f"429å¾Œå†�è©¦è¡Œå¤±æ•—: {e2}"
                 else:
                     ai_parsed = {}
-                    logging.warning(f"AI通信エラー: {e}")
-                    ai_log["勤怠備考_AI_詳細"] = str(e)
+                    logging.warning(f"AIé€šä¿¡ã‚¨ãƒ©ãƒ¼: {e}")
+                    ai_log["å‹¤æ€ å‚™è€ƒ_AI_è©³ç´°"] = str(e)
     else:
         ai_parsed = {}
 
-    # 3. 日付ごとの制約辞書を構築
+    # 3. æ—¥ä»˜ã�”ã�¨ã�®åˆ¶ç´„è¾žæ›¸ã‚’æ§‹ç¯‰
     for _, row in df.iterrows():
-        if pd.isna(row['日付']): continue
-        curr_date = row['日付']
-        m = str(row.get('メンバー', '')).strip()
+        if pd.isna(row['æ—¥ä»˜']): continue
+        curr_date = row['æ—¥ä»˜']
+        m = str(row.get('ãƒ¡ãƒ³ãƒ�ãƒ¼', '')).strip()
         if m not in members: continue
 
         if curr_date not in attendance_data:
@@ -11496,12 +11310,12 @@ def load_attendance_and_analyze(members):
         key = f"{curr_date.strftime('%Y-%m-%d')}_{m}"
         ai_info = ai_parsed.get(key, {})
 
-        is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
+        is_empty_shift = pd.isna(row.get('å‡ºå‹¤æ™‚é–“')) and pd.isna(row.get('é€€å‹¤æ™‚é–“')) and not ai_info
         is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
-        exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
+        exclude_from_line = _ai_json_bool(ai_info.get("é…�å�°ä¸�å�‚åŠ "), False)
 
-        ai_eff = ai_info.get("作業効率")
-        excel_eff = row.get('作業効率')
+        ai_eff = ai_info.get("ä½œæ¥­åŠ¹çŽ‡")
+        excel_eff = row.get('ä½œæ¥­åŠ¹çŽ‡')
         
         if ai_eff is not None:
             eff_val = ai_eff
@@ -11518,37 +11332,37 @@ def load_attendance_and_analyze(members):
         if original_reason:
             if (
                 leave_type
-                and leave_type not in ("通常", "")
+                and leave_type not in ("é€šå¸¸", "")
                 and leave_type not in original_reason
             ):
                 reason = f"{leave_type} {original_reason}"
             else:
                 reason = original_reason
-        elif leave_type and leave_type not in ("通常", ""):
+        elif leave_type and leave_type not in ("é€šå¸¸", ""):
             reason = leave_type
         else:
-            reason = '通常' if not is_empty_shift else '休日シフト'
+            reason = 'é€šå¸¸' if not is_empty_shift else 'ä¼‘æ—¥ã‚·ãƒ•ãƒˆ'
 
-        # マスタに出勤・退勤の両方が入っている日は、勤怠AIの出勤/退勤時刻で上書きしない（休暇区分のみの行で誤推定されうる）
-        excel_s = row.get("出勤時間")
-        excel_e = row.get("退勤時間")
+        # ãƒžã‚¹ã‚¿ã�«å‡ºå‹¤ãƒ»é€€å‹¤ã�®ä¸¡æ–¹ã�Œå…¥ã�£ã�¦ã�„ã‚‹æ—¥ã�¯ã€�å‹¤æ€ AIã�®å‡ºå‹¤/é€€å‹¤æ™‚åˆ»ã�§ä¸Šæ›¸ã��ã�—ã�ªã�„ï¼ˆä¼‘æš‡åŒºåˆ†ã�®ã�¿ã�®è¡Œã�§èª¤æŽ¨å®šã�•ã‚Œã�†ã‚‹ï¼‰
+        excel_s = row.get("å‡ºå‹¤æ™‚é–“")
+        excel_e = row.get("é€€å‹¤æ™‚é–“")
         if not pd.isna(excel_s) and not pd.isna(excel_e):
             start_t = parse_time_str(excel_s, DEFAULT_START_TIME)
             end_t = parse_time_str(excel_e, DEFAULT_END_TIME)
         else:
-            start_t = parse_time_str(ai_info.get("出勤時刻") or excel_s, DEFAULT_START_TIME)
-            end_t = parse_time_str(ai_info.get("退勤時刻") or excel_e, DEFAULT_END_TIME)
+            start_t = parse_time_str(ai_info.get("å‡ºå‹¤æ™‚åˆ»") or excel_s, DEFAULT_START_TIME)
+            end_t = parse_time_str(ai_info.get("é€€å‹¤æ™‚åˆ»") or excel_e, DEFAULT_END_TIME)
         base_end_t = end_t
 
-        b1_s = parse_time_str(row.get('休憩時間1_開始'), DEFAULT_BREAKS[0][0])
-        b1_e = parse_time_str(row.get('休憩時間1_終了'), DEFAULT_BREAKS[0][1])
-        b2_s = parse_time_str(row.get('休憩時間2_開始'), DEFAULT_BREAKS[1][0])
-        b2_e = parse_time_str(row.get('休憩時間2_終了'), DEFAULT_BREAKS[1][1])
+        b1_s = parse_time_str(row.get('ä¼‘æ†©æ™‚é–“1_é–‹å§‹'), DEFAULT_BREAKS[0][0])
+        b1_e = parse_time_str(row.get('ä¼‘æ†©æ™‚é–“1_çµ‚äº†'), DEFAULT_BREAKS[0][1])
+        b2_s = parse_time_str(row.get('ä¼‘æ†©æ™‚é–“2_é–‹å§‹'), DEFAULT_BREAKS[1][0])
+        b2_e = parse_time_str(row.get('ä¼‘æ†©æ™‚é–“2_çµ‚äº†'), DEFAULT_BREAKS[1][1])
 
-        # ★追加: AIから中抜け時間を取得
-        mid_break_s = parse_time_str(ai_info.get("中抜け開始"), None)
-        mid_break_e = parse_time_str(ai_info.get("中抜け終了"), None)
-        # AIが中抜けを返さなかった場合は、備考文言からローカル推定で補完
+        # â˜…è¿½åŠ : AIã�‹ã‚‰ä¸­æŠœã�‘æ™‚é–“ã‚’å�–å¾—
+        mid_break_s = parse_time_str(ai_info.get("ä¸­æŠœã�‘é–‹å§‹"), None)
+        mid_break_e = parse_time_str(ai_info.get("ä¸­æŠœã�‘çµ‚äº†"), None)
+        # AIã�Œä¸­æŠœã�‘ã‚’è¿”ã�•ã�ªã�‹ã�£ã�Ÿå ´å�ˆã�¯ã€�å‚™è€ƒæ–‡è¨€ã�‹ã‚‰ãƒ­ãƒ¼ã‚«ãƒ«æŽ¨å®šã�§è£œå®Œ
         if not (mid_break_s and mid_break_e):
             fb_s, fb_e = infer_mid_break_from_reason(reason, start_t, end_t, b1_s, b1_e)
             if fb_s and fb_e:
@@ -11567,7 +11381,7 @@ def load_attendance_and_analyze(members):
         end_dt = combine_dt(end_t)
         if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
             logging.warning(
-                "勤怠 %s %s: 残業終業適用後に退勤が出勤以前となったため、残業終業を無視して定時退勤に戻します。",
+                "å‹¤æ€  %s %s: æ®‹æ¥­çµ‚æ¥­é�©ç”¨å¾Œã�«é€€å‹¤ã�Œå‡ºå‹¤ä»¥å‰�ã�¨ã�ªã�£ã�Ÿã�Ÿã‚�ã€�æ®‹æ¥­çµ‚æ¥­ã‚’ç„¡è¦–ã�—ã�¦å®šæ™‚é€€å‹¤ã�«æˆ»ã�—ã�¾ã�™ã€‚",
                 curr_date,
                 m,
             )
@@ -11575,11 +11389,11 @@ def load_attendance_and_analyze(members):
             end_dt = combine_dt(end_t)
         breaks_dt = []
         
-        # 通常の休憩を追加
+        # é€šå¸¸ã�®ä¼‘æ†©ã‚’è¿½åŠ 
         if b1_s and b1_e: breaks_dt.append((combine_dt(b1_s), combine_dt(b1_e)))
         if b2_s and b2_e: breaks_dt.append((combine_dt(b2_s), combine_dt(b2_e)))
         
-        # ★追加: 中抜け時間がある場合は、特別な「休憩」としてスケジュール計算に追加
+        # â˜…è¿½åŠ : ä¸­æŠœã�‘æ™‚é–“ã�Œã�‚ã‚‹å ´å�ˆã�¯ã€�ç‰¹åˆ¥ã�ªã€Œä¼‘æ†©ã€�ã�¨ã�—ã�¦ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«è¨ˆç®—ã�«è¿½åŠ 
         if mid_break_s and mid_break_e: breaks_dt.append((combine_dt(mid_break_s), combine_dt(mid_break_e)))
         
         is_working = not is_holiday
@@ -11597,69 +11411,69 @@ def load_attendance_and_analyze(members):
 
 
 # ---------------------------------------------------------------------------
-# 全依頼共通: 加工内容列の工程順序 / 個別: EC→検査ロールパイプライン
+# å…¨ä¾�é ¼å…±é€š: åŠ å·¥å†…å®¹åˆ—ã�®å·¥ç¨‹é †åº� / å€‹åˆ¥: ECâ†’æ¤œæŸ»ãƒ­ãƒ¼ãƒ«ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³
 # ---------------------------------------------------------------------------
 ROLL_PIPELINE_EC_PROCESS = "EC"
-ROLL_PIPELINE_EC_MACHINE = "EC機　湖南"
-ROLL_PIPELINE_INSP_PROCESS = "検査"
-ROLL_PIPELINE_INSP_MACHINE = "熱融着機　湖南"
-# §B-3: 後続は B-2 の「検査」に相当する工程として巻返し（同一依頼で EC 先行・ロール枠・リワインド等は B-2 と同趣旨）
-ROLL_PIPELINE_REWIND_PROCESS = "巻返し"
-ROLL_PIPELINE_REWIND_MACHINE = "EC機　湖南"
+ROLL_PIPELINE_EC_MACHINE = "ECæ©Ÿã€€æ¹–å�—"
+ROLL_PIPELINE_INSP_PROCESS = "æ¤œæŸ»"
+ROLL_PIPELINE_INSP_MACHINE = "ç†±èž�ç�€æ©Ÿã€€æ¹–å�—"
+# Â§B-3: å¾Œç¶šã�¯ B-2 ã�®ã€Œæ¤œæŸ»ã€�ã�«ç›¸å½“ã�™ã‚‹å·¥ç¨‹ã�¨ã�—ã�¦å·»è¿”ã�—ï¼ˆå�Œä¸€ä¾�é ¼ã�§ EC å…ˆè¡Œãƒ»ãƒ­ãƒ¼ãƒ«æž ãƒ»ãƒªãƒ¯ã‚¤ãƒ³ãƒ‰ç­‰ã�¯ B-2 ã�¨å�Œè¶£æ—¨ï¼‰
+ROLL_PIPELINE_REWIND_PROCESS = "å·»è¿”ã�—"
+ROLL_PIPELINE_REWIND_MACHINE = "ECæ©Ÿã€€æ¹–å�—"
 ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
-# 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
+# æ¤œæŸ»ã�®å‰²å½“ä¸Šé™� min ã�«ä½¿ã�†ã€‚å�Œä¸€ä¾�é ¼ã�« EC è¡Œã�Œç„¡ã�„ã�¨ã��ã�¯ needãƒ»ã‚¹ã‚­ãƒ«ã�«å¾“ã�„é€šå¸¸é…�å�°ã�™ã‚‹ï¼ˆec_done=0 å›ºå®šã�§æ°¸ä¹…ã‚¹ã‚­ãƒƒãƒ—ã�—ã�ªã�„ï¼‰ã€‚
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
-# 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
-# False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
+# å‹¤æ€ ã�«è¼‰ã�£ã�¦ã�„ã‚‹æœ€çµ‚æ—¥ã�¾ã�§ã�§å‰²ä»˜ã�Œçµ‚ã‚�ã‚‰ã�ªã�„ã�¨ã��ã€�æœ€çµ‚æ—¥ã�¨å�Œã�˜ã‚·ãƒ•ãƒˆåž‹ã�§æ—¥ä»˜ã‚’å»¶é•·ã�™ã‚‹ï¼ˆã‚ªãƒ—ã‚·ãƒ§ãƒ³ï¼‰ã€‚
+# False ã�®ã�¨ã��æ®µéšŽ2ã�¯ãƒžã‚¹ã‚¿å‹¤æ€ ã�®æ—¥ä»˜ç¯„å›²ã�®ã�¿ã�§å‰²ä»˜ã�—ã€�æ®‹ã‚Šã�¯é…�å�°æ®‹ãƒ»é…�å�°ä¸�å�¯ã�®ã�¾ã�¾ã�¨ã�™ã‚‹ã€‚
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
-# 納期基準日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
-# 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
-# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
-# 既定 **False**（配台試行順を正とし、計画基準超過でもこの巻き戻し再試行は行わない）。従来挙動が必要なときだけ True。
+# ç´�æœŸåŸºæº–æ—¥ã‚’é�Žã�Žã�¦ã‚‚å½“è©²ä¾�é ¼ã�«æ®‹é‡�ã�Œã�‚ã‚‹ã�¨ã��ã€�**ã��ã�®ä¾�é ¼NOã� ã�‘** due_basis ã‚’ +1 ã�—ã€�
+# å½“è©²ä¾�é ¼ã�®å‰²å½“ãƒ»ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‚’å·»ã��æˆ»ã�—ã�¦**ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å…ˆé ­ã�‹ã‚‰**å†�ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³ã�™ã‚‹ï¼ˆä»–ä¾�é ¼ã�®å‰²å½“ã�¯ç¶­æŒ�ï¼‰ã€‚
+# ãƒžã‚¹ã‚¿å‹¤æ€ ã�®æœ€çµ‚æ—¥ã‚’è¶…ã�ˆã�¦å¾Œã‚�å€’ã�—ã�§ã��ã�ªã�„ä¾�é ¼ã�¯ã€Œé…�å�°æ®‹(å‹¤å‹™ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ä¸�è¶³)ã€�ã�¨ã�™ã‚‹ã€‚å�„å†�è©¦è¡Œå‰�ã�«å‹¤æ€ æ‹¡å¼µåˆ†ã�¯ãƒžã‚¹ã‚¿æ—¥ä»˜ã�¸æˆ»ã�™ã€‚
+# æ—¢å®š **False**ï¼ˆé…�å�°è©¦è¡Œé †ã‚’æ­£ã�¨ã�—ã€�è¨ˆç”»åŸºæº–è¶…é�Žã�§ã‚‚ã�“ã�®å·»ã��æˆ»ã�—å†�è©¦è¡Œã�¯è¡Œã‚�ã�ªã�„ï¼‰ã€‚å¾“æ�¥æŒ™å‹•ã�Œå¿…è¦�ã�ªã�¨ã��ã� ã�‘ Trueã€‚
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
-# 納期基準の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
+# ç´�æœŸåŸºæº–ã�® +1 æ—¥ã�«ã‚ˆã‚‹å·»ã��æˆ»ã�—å†�ã‚·ãƒŸãƒ¥ã�¯ä¾�é ¼NOã�”ã�¨ã�«æœ€å¤§ã�“ã�®å›žæ•°ï¼ˆ6 å›žç›®ä»¥é™�ã�¯å½“è©²ä¾�é ¼ã�®ã�¿ã‚·ãƒ•ãƒˆã�›ã�šã€�æœªå®Œäº†è¡Œã�«ç´�æœŸè¦‹ç›´ã�—å¿…è¦�ã‚’ä»˜ä¸Žã�—å¾—ã‚‹ï¼‰ã€‚
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 5
 
-# True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼だけを
-# 当日候補に残し、完走してから次依頼へ進む。**他依頼は一切その日配台されない**ため、
-# アクティブ依頼の1行でも詰まると全体が配台不可に見える（ログ「依頼NO直列配台 直列後=1」）。
-# 既定 False。厳密な依頼NO直列が必要なときだけ STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 を設定する。
+# True ã�®ã�¨ã��ã€�é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆã�®èª­ã�¿è¾¼ã�¿è¡Œé †ï¼ˆå�„ä¾�é ¼NOã�®åˆ�å‡ºè¡Œã�Œæ—©ã�„ã�»ã�©å…ˆï¼‰ã�§ 1 ä¾�é ¼ã� ã�‘ã‚’
+# å½“æ—¥å€™è£œã�«æ®‹ã�—ã€�å®Œèµ°ã�—ã�¦ã�‹ã‚‰æ¬¡ä¾�é ¼ã�¸é€²ã‚€ã€‚**ä»–ä¾�é ¼ã�¯ä¸€åˆ‡ã��ã�®æ—¥é…�å�°ã�•ã‚Œã�ªã�„**ã�Ÿã‚�ã€�
+# ã‚¢ã‚¯ãƒ†ã‚£ãƒ–ä¾�é ¼ã�®1è¡Œã�§ã‚‚è©°ã�¾ã‚‹ã�¨å…¨ä½“ã�Œé…�å�°ä¸�å�¯ã�«è¦‹ã�ˆã‚‹ï¼ˆãƒ­ã‚°ã€Œä¾�é ¼NOç›´åˆ—é…�å�° ç›´åˆ—å¾Œ=1ã€�ï¼‰ã€‚
+# æ—¢å®š Falseã€‚åŽ³å¯†ã�ªä¾�é ¼NOç›´åˆ—ã�Œå¿…è¦�ã�ªã�¨ã��ã� ã�‘ STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 ã‚’è¨­å®šã�™ã‚‹ã€‚
 STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
     os.environ.get("STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "はい")
+    in ("1", "true", "yes", "on", "ã�¯ã�„")
 )
 
-# True: ①残タスクのうち配台試行順が最小の1タスクだけを選び、1ロールずつ割付。
-# ②原反投入日と同一日に開始する場合は 13:00 以降（same_day_raw_start_limit も 13:00）。
-# ③④設備空きを max で繰り上げ（日内。翌日は日付ループでタイムラインシード）。
-# ⑤⑥⑦⑧人の空きでチームを決め、ロールごとに avail を更新（同日は前ロールと同一チームを優先）。
-# 無効化: 環境変数 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
+# True: â‘ æ®‹ã‚¿ã‚¹ã‚¯ã�®ã�†ã�¡é…�å�°è©¦è¡Œé †ã�Œæœ€å°�ã�®1ã‚¿ã‚¹ã‚¯ã� ã�‘ã‚’é�¸ã�³ã€�1ãƒ­ãƒ¼ãƒ«ã�šã�¤å‰²ä»˜ã€‚
+# â‘¡åŽŸå��æŠ•å…¥æ—¥ã�¨å�Œä¸€æ—¥ã�«é–‹å§‹ã�™ã‚‹å ´å�ˆã�¯ 13:00 ä»¥é™�ï¼ˆsame_day_raw_start_limit ã‚‚ 13:00ï¼‰ã€‚
+# â‘¢â‘£è¨­å‚™ç©ºã��ã‚’ max ã�§ç¹°ã‚Šä¸Šã�’ï¼ˆæ—¥å†…ã€‚ç¿Œæ—¥ã�¯æ—¥ä»˜ãƒ«ãƒ¼ãƒ—ã�§ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‚·ãƒ¼ãƒ‰ï¼‰ã€‚
+# â‘¤â‘¥â‘¦â‘§äººã�®ç©ºã��ã�§ãƒ�ãƒ¼ãƒ ã‚’æ±ºã‚�ã€�ãƒ­ãƒ¼ãƒ«ã�”ã�¨ã�« avail ã‚’æ›´æ–°ï¼ˆå�Œæ—¥ã�¯å‰�ãƒ­ãƒ¼ãƒ«ã�¨å�Œä¸€ãƒ�ãƒ¼ãƒ ã‚’å„ªå…ˆï¼‰ã€‚
+# ç„¡åŠ¹åŒ–: ç’°å¢ƒå¤‰æ•° STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST = os.environ.get(
     "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1"
-).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
+).strip().lower() not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ", "ç„¡åŠ¹")
 
-# True（既定）: start_date_req<=当日 かつ残ありのタスクのうち、配台試行順の最小「枠」だけが割付対象。
-# より大きい試行順は、より小さい試行順に未完了が残る限りブロック（納期が近くても割り込まない）。
+# Trueï¼ˆæ—¢å®šï¼‰: start_date_req<=å½“æ—¥ ã�‹ã�¤æ®‹ã�‚ã‚Šã�®ã‚¿ã‚¹ã‚¯ã�®ã�†ã�¡ã€�é…�å�°è©¦è¡Œé †ã�®æœ€å°�ã€Œæž ã€�ã� ã�‘ã�Œå‰²ä»˜å¯¾è±¡ã€‚
+# ã‚ˆã‚Šå¤§ã��ã�„è©¦è¡Œé †ã�¯ã€�ã‚ˆã‚Šå°�ã�•ã�„è©¦è¡Œé †ã�«æœªå®Œäº†ã�Œæ®‹ã‚‹é™�ã‚Šãƒ–ãƒ­ãƒƒã‚¯ï¼ˆç´�æœŸã�Œè¿‘ã��ã�¦ã‚‚å‰²ã‚Šè¾¼ã�¾ã�ªã�„ï¼‰ã€‚
 STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT = os.environ.get(
     "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT", "1"
-).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
+).strip().lower() not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ", "ç„¡åŠ¹")
 
-# True（既定）: 割付候補を「設備・人の壁時計占有区間」で二重検査し、タイムライン追記と同期登録する
-# （ブロックテーブルと同趣旨。Excel セル逐次 I/O は行わない）。
-# False: 従来どおり avail_dt / machine_avail_dt のみ。
+# Trueï¼ˆæ—¢å®šï¼‰: å‰²ä»˜å€™è£œã‚’ã€Œè¨­å‚™ãƒ»äººã�®å£�æ™‚è¨ˆå� æœ‰åŒºé–“ã€�ã�§äºŒé‡�æ¤œæŸ»ã�—ã€�ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³è¿½è¨˜ã�¨å�ŒæœŸç™»éŒ²ã�™ã‚‹
+# ï¼ˆãƒ–ãƒ­ãƒƒã‚¯ãƒ†ãƒ¼ãƒ–ãƒ«ã�¨å�Œè¶£æ—¨ã€‚Excel ã‚»ãƒ«é€�æ¬¡ I/O ã�¯è¡Œã‚�ã�ªã�„ï¼‰ã€‚
+# False: å¾“æ�¥ã�©ã�Šã‚Š avail_dt / machine_avail_dt ã�®ã�¿ã€‚
 DISPATCH_INTERVAL_MIRROR_ENFORCE = os.environ.get(
     "DISPATCH_INTERVAL_MIRROR_ENFORCE", "1"
-).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
+).strip().lower() not in ("0", "false", "no", "off", "ã�„ã�„ã�ˆ", "ç„¡åŠ¹")
 
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
-    """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
+    """ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥å‹¤æ€ ãƒ–ãƒ­ãƒƒã‚¯ã‚’ new_date ã�«ã‚·ãƒ•ãƒˆã�—ã�Ÿæµ…ã�„ã‚³ãƒ”ãƒ¼ã‚’è¿”ã�™ã€‚"""
     delta_days = (new_date - old_date).days
     if delta_days == 0:
         return {m: dict(st) for m, st in source_day.items()}
@@ -11683,7 +11497,7 @@ def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: da
 
 
 def _pick_extension_template_date(attendance_data: dict, plan_dates: list):
-    """配台可能なメンバーが1人でもいる直近の日をテンプレに採用（最終日が全休でも有効な型を使う）。"""
+    """é…�å�°å�¯èƒ½ã�ªãƒ¡ãƒ³ãƒ�ãƒ¼ã�Œ1äººã�§ã‚‚ã�„ã‚‹ç›´è¿‘ã�®æ—¥ã‚’ãƒ†ãƒ³ãƒ—ãƒ¬ã�«æŽ¡ç”¨ï¼ˆæœ€çµ‚æ—¥ã�Œå…¨ä¼‘ã�§ã‚‚æœ‰åŠ¹ã�ªåž‹ã‚’ä½¿ã�†ï¼‰ã€‚"""
     for i in range(len(plan_dates) - 1, -1, -1):
         d = plan_dates[i]
         day = attendance_data.get(d)
@@ -11701,7 +11515,7 @@ def _extend_attendance_one_calendar_day(
     attendance_data: dict,
     plan_dates: list,
 ) -> bool:
-    """カレンダー上1日先を plan_dates に追加し、テンプレ日のシフト複製で attendance を埋める。失敗時 False。"""
+    """ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ä¸Š1æ—¥å…ˆã‚’ plan_dates ã�«è¿½åŠ ã�—ã€�ãƒ†ãƒ³ãƒ—ãƒ¬æ—¥ã�®ã‚·ãƒ•ãƒˆè¤‡è£½ã�§ attendance ã‚’åŸ‹ã‚�ã‚‹ã€‚å¤±æ•—æ™‚ Falseã€‚"""
     if not plan_dates:
         return False
     last_d = plan_dates[-1]
@@ -11715,7 +11529,7 @@ def _extend_attendance_one_calendar_day(
     attendance_data[next_d] = _clone_attendance_day_shifted(template, tmpl_d, next_d)
     plan_dates.append(next_d)
     logging.info(
-        "配台完了まで勤怠を自動拡張: %s を追加（テンプレ=%s、メンバー数=%s）",
+        "é…�å�°å®Œäº†ã�¾ã�§å‹¤æ€ ã‚’è‡ªå‹•æ‹¡å¼µ: %s ã‚’è¿½åŠ ï¼ˆãƒ†ãƒ³ãƒ—ãƒ¬=%sã€�ãƒ¡ãƒ³ãƒ�ãƒ¼æ•°=%sï¼‰",
         next_d,
         tmpl_d,
         len(attendance_data[next_d]),
@@ -11729,8 +11543,8 @@ def _iter_plan_dates_extending(
     task_queue: list,
 ):
     """
-    plan_dates を先頭から順に yield。末尾まで来ても残タスクがあれば勤怠を1日ずつ拡張して継続。
-    plan_dates / attendance_data はインプレース更新される。
+    plan_dates ã‚’å…ˆé ­ã�‹ã‚‰é †ã�« yieldã€‚æœ«å°¾ã�¾ã�§æ�¥ã�¦ã‚‚æ®‹ã‚¿ã‚¹ã‚¯ã�Œã�‚ã‚Œã�°å‹¤æ€ ã‚’1æ—¥ã�šã�¤æ‹¡å¼µã�—ã�¦ç¶™ç¶šã€‚
+    plan_dates / attendance_data ã�¯ã‚¤ãƒ³ãƒ—ãƒ¬ãƒ¼ã‚¹æ›´æ–°ã�•ã‚Œã‚‹ã€‚
     """
     si = 0
     ext_used = 0
@@ -11743,13 +11557,13 @@ def _iter_plan_dates_extending(
             return
         if ext_used >= SCHEDULE_EXTEND_MAX_EXTRA_DAYS:
             logging.warning(
-                "残タスクがありますが勤怠の自動拡張が上限（%s 日）に達しました。配台残・配台不可が残る可能性があります。",
+                "æ®‹ã‚¿ã‚¹ã‚¯ã�Œã�‚ã‚Šã�¾ã�™ã�Œå‹¤æ€ ã�®è‡ªå‹•æ‹¡å¼µã�Œä¸Šé™�ï¼ˆ%s æ—¥ï¼‰ã�«é�”ã�—ã�¾ã�—ã�Ÿã€‚é…�å�°æ®‹ãƒ»é…�å�°ä¸�å�¯ã�Œæ®‹ã‚‹å�¯èƒ½æ€§ã�Œã�‚ã‚Šã�¾ã�™ã€‚",
                 SCHEDULE_EXTEND_MAX_EXTRA_DAYS,
             )
             return
         if not _extend_attendance_one_calendar_day(attendance_data, plan_dates):
             logging.warning(
-                "勤怠を1日拡張できませんでした（テンプレ日のデータ欠落）。残タスクは未割当のままです。"
+                "å‹¤æ€ ã‚’1æ—¥æ‹¡å¼µã�§ã��ã�¾ã�›ã‚“ã�§ã�—ã�Ÿï¼ˆãƒ†ãƒ³ãƒ—ãƒ¬æ—¥ã�®ãƒ‡ãƒ¼ã‚¿æ¬ è�½ï¼‰ã€‚æ®‹ã‚¿ã‚¹ã‚¯ã�¯æœªå‰²å½“ã�®ã�¾ã�¾ã�§ã�™ã€‚"
             )
             return
         ext_used += 1
@@ -11765,7 +11579,7 @@ def _parse_process_content_tokens(val) -> list[str]:
 
 
 def _collect_process_content_order_by_task_id(tasks_df) -> dict[str, list[str]]:
-    """依頼NO → 加工内容の工程名リスト（表の上の方で最初に現れた非空の行を採用）。"""
+    """ä¾�é ¼NO â†’ åŠ å·¥å†…å®¹ã�®å·¥ç¨‹å��ãƒªã‚¹ãƒˆï¼ˆè¡¨ã�®ä¸Šã�®æ–¹ã�§æœ€åˆ�ã�«ç�¾ã‚Œã�Ÿé�žç©ºã�®è¡Œã‚’æŽ¡ç”¨ï¼‰ã€‚"""
     out: dict[str, list[str]] = {}
     if tasks_df is None or tasks_df.empty:
         return out
@@ -11785,8 +11599,8 @@ def _process_name_matches_kakou_content_tokens(
     process_name: str, content_tokens: list[str]
 ) -> bool:
     """
-    工程名（配台計画の「工程名」列）が、元データの「加工内容」カンマ区切りトークンのいずれかと
-    正規化一致するか。トークンが無い（加工内容未記入の依頼）は照合対象外として True。
+    å·¥ç¨‹å��ï¼ˆé…�å�°è¨ˆç”»ã�®ã€Œå·¥ç¨‹å��ã€�åˆ—ï¼‰ã�Œã€�å…ƒãƒ‡ãƒ¼ã‚¿ã�®ã€ŒåŠ å·¥å†…å®¹ã€�ã‚«ãƒ³ãƒžåŒºåˆ‡ã‚Šãƒˆãƒ¼ã‚¯ãƒ³ã�®ã�„ã�šã‚Œã�‹ã�¨
+    æ­£è¦�åŒ–ä¸€è‡´ã�™ã‚‹ã�‹ã€‚ãƒˆãƒ¼ã‚¯ãƒ³ã�Œç„¡ã�„ï¼ˆåŠ å·¥å†…å®¹æœªè¨˜å…¥ã�®ä¾�é ¼ï¼‰ã�¯ç…§å�ˆå¯¾è±¡å¤–ã�¨ã�—ã�¦ Trueã€‚
     """
     if not content_tokens:
         return True
@@ -11820,7 +11634,7 @@ def _task_rank_int_or_none(task) -> int | None:
 
 
 def _plan_sheet_priority_sort_value(t: dict) -> int:
-    """配台計画シートの「優先度」。小さいほど先。未入力・不正は 999。"""
+    """é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆã�®ã€Œå„ªå…ˆåº¦ã€�ã€‚å°�ã�•ã�„ã�»ã�©å…ˆã€‚æœªå…¥åŠ›ãƒ»ä¸�æ­£ã�¯ 999ã€‚"""
     p = t.get("priority", 999)
     try:
         return int(p)
@@ -11830,14 +11644,14 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
 
 def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     """
-    同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
-    - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
-    - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
-    §B-2 / §B-3: ``roll_pipeline_inspection`` または ``roll_pipeline_rewind`` 行が
-    ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
-    ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない。
-    前進配台では ``_trial_order_flow_eligible_tasks`` が EC 完走まで検査を外すため、
-    EC 残がある間は本分岐に到達しない。リワインド等で検査が載る局面との整合用。
+    å�Œä¸€ä¾�é ¼NOã�®ç•°ã�ªã‚‹å·¥ç¨‹ã‚’å�Œæ™‚åˆ»ã�«å›žã�•ã�ªã�„ï¼ˆé…�å�°ãƒ«ãƒ¼ãƒ« Â§A-1ãƒ»Â§A-2ï¼‰ã€‚
+    - ä¸¡è¡Œã�«åŠ å·¥å†…å®¹ç”±æ�¥ã�® rank ã�Œã�‚ã‚‹ã�¨ã��ã�¯ rank ã�®ã�¿ã�§å‰�å¾Œï¼ˆÂ§A-1ï¼‰ã€‚
+    - ã�©ã�¡ã‚‰ã�‹ã�« rank ã�Œç„¡ã�„ã�¨ã��ã�¯ã€�é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆã�®è¡Œé † same_request_line_seq ã�§å‰�å¾Œï¼ˆÂ§A-2ï¼‰ã€‚
+    Â§B-2 / Â§B-3: ``roll_pipeline_inspection`` ã�¾ã�Ÿã�¯ ``roll_pipeline_rewind`` è¡Œã�Œ
+    ``roll_pipeline_ec`` å…ˆè¡Œã�«ã‚ˆã‚Š Â§A-1 ã�§æ­¢ã�¾ã‚‹å ´å�ˆã€�
+    ``_roll_pipeline_inspection_assign_room`` > 0 ã�ªã‚‰å½“è©²ãƒšã‚¢ã� ã�‘ãƒ–ãƒ­ãƒƒã‚¯ã�—ã�ªã�„ã€‚
+    å‰�é€²é…�å�°ã�§ã�¯ ``_trial_order_flow_eligible_tasks`` ã�Œ EC å®Œèµ°ã�¾ã�§æ¤œæŸ»ã‚’å¤–ã�™ã�Ÿã‚�ã€�
+    EC æ®‹ã�Œã�‚ã‚‹é–“ã�¯æœ¬åˆ†å²�ã�«åˆ°é�”ã�—ã�ªã�„ã€‚ãƒªãƒ¯ã‚¤ãƒ³ãƒ‰ç­‰ã�§æ¤œæŸ»ã�Œè¼‰ã‚‹å±€é�¢ã�¨ã�®æ•´å�ˆç”¨ã€‚
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -11884,9 +11698,9 @@ def _task_not_yet_schedulable_due_to_dependency_or_b2_room(
     task: dict, task_queue: list
 ) -> bool:
     """
-    キュー状態上、この行はまだ日次配台で進められない（§A 同一依頼の前工程残、または §B-2/§B-3 の枠ゼロ）。
-    `_min_pending_dispatch_trial_order_for_date` と `_equipment_line_lower_dispatch_trial_still_pending`
-    で同じ基準を共有する。片方だけ直すと、同一設備キーで全件未割当が残るデッドロックが起き得る。
+    ã‚­ãƒ¥ãƒ¼çŠ¶æ…‹ä¸Šã€�ã�“ã�®è¡Œã�¯ã�¾ã� æ—¥æ¬¡é…�å�°ã�§é€²ã‚�ã‚‰ã‚Œã�ªã�„ï¼ˆÂ§A å�Œä¸€ä¾�é ¼ã�®å‰�å·¥ç¨‹æ®‹ã€�ã�¾ã�Ÿã�¯ Â§B-2/Â§B-3 ã�®æž ã‚¼ãƒ­ï¼‰ã€‚
+    `_min_pending_dispatch_trial_order_for_date` ã�¨ `_equipment_line_lower_dispatch_trial_still_pending`
+    ã�§å�Œã�˜åŸºæº–ã‚’å…±æœ‰ã�™ã‚‹ã€‚ç‰‡æ–¹ã� ã�‘ç›´ã�™ã�¨ã€�å�Œä¸€è¨­å‚™ã‚­ãƒ¼ã�§å…¨ä»¶æœªå‰²å½“ã�Œæ®‹ã‚‹ãƒ‡ãƒƒãƒ‰ãƒ­ãƒƒã‚¯ã�Œèµ·ã��å¾—ã‚‹ã€‚
     """
     if _task_blocked_by_same_request_dependency(task, task_queue):
         return True
@@ -11942,7 +11756,7 @@ def _pipeline_ec_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
-    """熱融着検査行のみの累計完了ロール（トレース用）。"""
+    """ç†±èž�ç�€æ¤œæŸ»è¡Œã�®ã�¿ã�®ç´¯è¨ˆå®Œäº†ãƒ­ãƒ¼ãƒ«ï¼ˆãƒˆãƒ¬ãƒ¼ã‚¹ç”¨ï¼‰ã€‚"""
     tid = str(tid or "").strip()
     s = 0.0
     for t in task_queue:
@@ -11957,7 +11771,7 @@ def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _pipeline_b2_follower_roll_done_units(task_queue, tid: str) -> float:
-    """§B-2 検査行＋§B-3 巻返し行の、同一依頼内の後続パイプライン累計完了ロール。"""
+    """Â§B-2 æ¤œæŸ»è¡Œï¼‹Â§B-3 å·»è¿”ã�—è¡Œã�®ã€�å�Œä¸€ä¾�é ¼å†…ã�®å¾Œç¶šãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ç´¯è¨ˆå®Œäº†ãƒ­ãƒ¼ãƒ«ã€‚"""
     tid = str(tid or "").strip()
     s = 0.0
     for t in task_queue:
@@ -11972,7 +11786,7 @@ def _pipeline_b2_follower_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
-    """同一依頼NOに EC（ロールパイプライン先行）タスクがキューに含まれるか。"""
+    """å�Œä¸€ä¾�é ¼NOã�« ECï¼ˆãƒ­ãƒ¼ãƒ«ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³å…ˆè¡Œï¼‰ã‚¿ã‚¹ã‚¯ã�Œã‚­ãƒ¥ãƒ¼ã�«å�«ã�¾ã‚Œã‚‹ã�‹ã€‚"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -11985,7 +11799,7 @@ def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
 
 
 def _pipeline_ec_fully_done_for_tid(task_queue, task_id: str) -> bool:
-    """同一依頼NOの EC ロールパイプライン行がすべて残量ゼロ（完走）か。"""
+    """å�Œä¸€ä¾�é ¼NOã�® EC ãƒ­ãƒ¼ãƒ«ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³è¡Œã�Œã�™ã�¹ã�¦æ®‹é‡�ã‚¼ãƒ­ï¼ˆå®Œèµ°ï¼‰ã�‹ã€‚"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -12007,13 +11821,13 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
     insp_done = _pipeline_b2_follower_roll_done_units(task_queue, task_id)
-    # EC 全ロール完了後は「EC 先行・バッファ」は既に満たされている。ここで max_insp を ec_done に
-    # 揃えると、シート上の検査（・巻返し）残ロール数が EC 完了ロール数を上回るデータで
-    # max_insp - insp_done が 0 のまま残り、検査行が eligible から外れ配台試行順が永久に詰まる
-    # （再現ログ: ec_fully_done かつ insp_done==max_insp==ec_done で room=0 → 後続試行順が配台不可）。
+    # EC å…¨ãƒ­ãƒ¼ãƒ«å®Œäº†å¾Œã�¯ã€ŒEC å…ˆè¡Œãƒ»ãƒ�ãƒƒãƒ•ã‚¡ã€�ã�¯æ—¢ã�«æº€ã�Ÿã�•ã‚Œã�¦ã�„ã‚‹ã€‚ã�“ã�“ã�§ max_insp ã‚’ ec_done ã�«
+    # æ�ƒã�ˆã‚‹ã�¨ã€�ã‚·ãƒ¼ãƒˆä¸Šã�®æ¤œæŸ»ï¼ˆãƒ»å·»è¿”ã�—ï¼‰æ®‹ãƒ­ãƒ¼ãƒ«æ•°ã�Œ EC å®Œäº†ãƒ­ãƒ¼ãƒ«æ•°ã‚’ä¸Šå›žã‚‹ãƒ‡ãƒ¼ã‚¿ã�§
+    # max_insp - insp_done ã�Œ 0 ã�®ã�¾ã�¾æ®‹ã‚Šã€�æ¤œæŸ»è¡Œã�Œ eligible ã�‹ã‚‰å¤–ã‚Œé…�å�°è©¦è¡Œé †ã�Œæ°¸ä¹…ã�«è©°ã�¾ã‚‹
+    # ï¼ˆå†�ç�¾ãƒ­ã‚°: ec_fully_done ã�‹ã�¤ insp_done==max_insp==ec_done ã�§ room=0 â†’ å¾Œç¶šè©¦è¡Œé †ã�Œé…�å�°ä¸�å�¯ï¼‰ã€‚
     if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
-    # EC 稼働中: 先行バッファ B により検査ロール上限を ec_done から遅延させる（B=2 の式はコメント参照）。
+    # EC ç¨¼åƒ�ä¸­: å…ˆè¡Œãƒ�ãƒƒãƒ•ã‚¡ B ã�«ã‚ˆã‚Šæ¤œæŸ»ãƒ­ãƒ¼ãƒ«ä¸Šé™�ã‚’ ec_done ã�‹ã‚‰é�…å»¶ã�•ã�›ã‚‹ï¼ˆB=2 ã�®å¼�ã�¯ã‚³ãƒ¡ãƒ³ãƒˆå�‚ç…§ï¼‰ã€‚
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
     _room = max(0.0, max_insp - insp_done)
     return _room
@@ -12022,7 +11836,7 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 def _roll_pipeline_inspection_task_row_for_tid(
     task_queue: list, task_id: str
 ) -> dict | None:
-    """同一依頼NOの §B-2 検査行または §B-3 巻返し行を1件返す。無ければ None。"""
+    """å�Œä¸€ä¾�é ¼NOã�® Â§B-2 æ¤œæŸ»è¡Œã�¾ã�Ÿã�¯ Â§B-3 å·»è¿”ã�—è¡Œã‚’1ä»¶è¿”ã�™ã€‚ç„¡ã�‘ã‚Œã�° Noneã€‚"""
     tid = str(task_id or "").strip()
     if not tid:
         return None
@@ -12037,7 +11851,7 @@ def _roll_pipeline_inspection_task_row_for_tid(
 def _pipeline_b2_ec_roll_end_datetimes_sorted(
     task_queue: list, task_id: str
 ) -> list[datetime]:
-    """同一依頼の EC ロール確定ごとの終了時刻を時系列で返す（assigned_history の end_dt）。"""
+    """å�Œä¸€ä¾�é ¼ã�® EC ãƒ­ãƒ¼ãƒ«ç¢ºå®šã�”ã�¨ã�®çµ‚äº†æ™‚åˆ»ã‚’æ™‚ç³»åˆ—ã�§è¿”ã�™ï¼ˆassigned_history ã�® end_dtï¼‰ã€‚"""
     tid = str(task_id or "").strip()
     ends: list[datetime] = []
     if not tid:
@@ -12059,11 +11873,11 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     task_queue: list, task_id: str
 ) -> datetime | None:
     """
-    次の検査ロールを開始してよい最早時刻。
-    累計検査完了ロール数を K、バッファを B（=ROLL_PIPELINE_INITIAL_BUFFER_ROLLS）とすると、
-    EC 完了ロールが時系列で (K+B) 本目に到達した時刻（そのロールの end_dt）未満には開始しない。
-    （業務ルール: 任意の時点で EC_RollEndCount - KENSA_RollEndCount >= B を満たすまで検査を進めない、
-    の「ロール終了時刻基準」の実装。）
+    æ¬¡ã�®æ¤œæŸ»ãƒ­ãƒ¼ãƒ«ã‚’é–‹å§‹ã�—ã�¦ã‚ˆã�„æœ€æ—©æ™‚åˆ»ã€‚
+    ç´¯è¨ˆæ¤œæŸ»å®Œäº†ãƒ­ãƒ¼ãƒ«æ•°ã‚’ Kã€�ãƒ�ãƒƒãƒ•ã‚¡ã‚’ Bï¼ˆ=ROLL_PIPELINE_INITIAL_BUFFER_ROLLSï¼‰ã�¨ã�™ã‚‹ã�¨ã€�
+    EC å®Œäº†ãƒ­ãƒ¼ãƒ«ã�Œæ™‚ç³»åˆ—ã�§ (K+B) æœ¬ç›®ã�«åˆ°é�”ã�—ã�Ÿæ™‚åˆ»ï¼ˆã��ã�®ãƒ­ãƒ¼ãƒ«ã�® end_dtï¼‰æœªæº€ã�«ã�¯é–‹å§‹ã�—ã�ªã�„ã€‚
+    ï¼ˆæ¥­å‹™ãƒ«ãƒ¼ãƒ«: ä»»æ„�ã�®æ™‚ç‚¹ã�§ EC_RollEndCount - KENSA_RollEndCount >= B ã‚’æº€ã�Ÿã�™ã�¾ã�§æ¤œæŸ»ã‚’é€²ã‚�ã�ªã�„ã€�
+    ã�®ã€Œãƒ­ãƒ¼ãƒ«çµ‚äº†æ™‚åˆ»åŸºæº–ã€�ã�®å®Ÿè£…ã€‚ï¼‰
     """
     tid = str(task_id or "").strip()
     if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
@@ -12079,14 +11893,14 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
 
 
 def _pipeline_b2_team_history_names(team_cell) -> set[str]:
-    """assigned_history の team 文字列（主・補を「,」「、」区切り）から担当者名を抽出（NFKC）。"""
+    """assigned_history ã�® team æ–‡å­—åˆ—ï¼ˆä¸»ãƒ»è£œã‚’ã€Œ,ã€�ã€Œã€�ã€�åŒºåˆ‡ã‚Šï¼‰ã�‹ã‚‰æ‹…å½“è€…å��ã‚’æŠ½å‡ºï¼ˆNFKCï¼‰ã€‚"""
     if team_cell is None:
         return set()
     s = str(team_cell).strip()
     if not s:
         return set()
     out: set[str] = set()
-    for part in re.split(r"[,、]", s):
+    for part in re.split(r"[,ã€�]", s):
         t = part.strip()
         if t:
             out.add(unicodedata.normalize("NFKC", t))
@@ -12096,7 +11910,7 @@ def _pipeline_b2_team_history_names(team_cell) -> set[str]:
 def _pipeline_b2_assigned_member_names_nfkc_for_side(
     task_queue: list, task_id: str, *, ec_side: bool
 ) -> set[str]:
-    """同一依頼の EC 行または検査行の assigned_history に出た担当者名（NFKC 集合）。"""
+    """å�Œä¸€ä¾�é ¼ã�® EC è¡Œã�¾ã�Ÿã�¯æ¤œæŸ»è¡Œã�® assigned_history ã�«å‡ºã�Ÿæ‹…å½“è€…å��ï¼ˆNFKC é›†å�ˆï¼‰ã€‚"""
     tid = str(task_id or "").strip()
     if not tid:
         return set()
@@ -12118,7 +11932,7 @@ def _pipeline_b2_assigned_member_names_nfkc_for_side(
 
 
 def _b2_ec_insp_pair_in_queue(task_queue: list, task_id: str) -> bool:
-    """同一依頼NOに §B-2/§B-3 の EC 行と後続行（検査または巻返し）の両方がキューにあるか。"""
+    """å�Œä¸€ä¾�é ¼NOã�« Â§B-2/Â§B-3 ã�® EC è¡Œã�¨å¾Œç¶šè¡Œï¼ˆæ¤œæŸ»ã�¾ã�Ÿã�¯å·»è¿”ã�—ï¼‰ã�®ä¸¡æ–¹ã�Œã‚­ãƒ¥ãƒ¼ã�«ã�‚ã‚‹ã�‹ã€‚"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -12132,9 +11946,9 @@ def _filter_capable_members_b2_disjoint_teams(
     task: dict, task_queue: list, capable_members: list
 ) -> list:
     """
-    §B-2 / §B-3 同一依頼では、EC 行に一度でも入った者は後続（検査／巻返し）の候補から外し、
-    後続に入った者は EC の候補から外す。
-    （社内ルール: 担当者集合を必ず分ける。`PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` で無効化可）
+    Â§B-2 / Â§B-3 å�Œä¸€ä¾�é ¼ã�§ã�¯ã€�EC è¡Œã�«ä¸€åº¦ã�§ã‚‚å…¥ã�£ã�Ÿè€…ã�¯å¾Œç¶šï¼ˆæ¤œæŸ»ï¼�å·»è¿”ã�—ï¼‰ã�®å€™è£œã�‹ã‚‰å¤–ã�—ã€�
+    å¾Œç¶šã�«å…¥ã�£ã�Ÿè€…ã�¯ EC ã�®å€™è£œã�‹ã‚‰å¤–ã�™ã€‚
+    ï¼ˆç¤¾å†…ãƒ«ãƒ¼ãƒ«: æ‹…å½“è€…é›†å�ˆã‚’å¿…ã�šåˆ†ã�‘ã‚‹ã€‚`PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` ã�§ç„¡åŠ¹åŒ–å�¯ï¼‰
     """
     if not capable_members:
         return capable_members
@@ -12169,30 +11983,30 @@ def _filter_capable_members_b2_disjoint_teams(
         if is_ec:
             _side = "EC"
         elif task.get("roll_pipeline_rewind"):
-            _side = "巻返し"
+            _side = "å·»è¿”ã�—"
         else:
-            _side = "検査"
+            _side = "æ¤œæŸ»"
         _log_dispatch_trace_schedule(
             tid,
-            "[配台トレース task=%s] ブロック判定: B-2担当者分離 side=%s machine=%s "
-            "候補除外=%s 残候補=%s(%s)",
+            "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ãƒ–ãƒ­ãƒƒã‚¯åˆ¤å®š: B-2æ‹…å½“è€…åˆ†é›¢ side=%s machine=%s "
+            "å€™è£œé™¤å¤–=%s æ®‹å€™è£œ=%s(%s)",
             tid,
             _side,
             task.get("machine"),
             ",".join(str(x) for x in removed),
             len(filtered),
-            ",".join(str(x) for x in filtered) if filtered else "なし",
+            ",".join(str(x) for x in filtered) if filtered else "ã�ªã�—",
         )
     return filtered
 
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
     """
-    同一物理機械（機械名ベースの占有キー）上で、§B-2 熱融着検査または §B-3 巻返しが **既に割付を開始** し残ロールが残る行があれば
-    そのタスク dict を1件返す（なければ None）。
+    å�Œä¸€ç‰©ç�†æ©Ÿæ¢°ï¼ˆæ©Ÿæ¢°å��ãƒ™ãƒ¼ã‚¹ã�®å� æœ‰ã‚­ãƒ¼ï¼‰ä¸Šã�§ã€�Â§B-2 ç†±èž�ç�€æ¤œæŸ»ã�¾ã�Ÿã�¯ Â§B-3 å·»è¿”ã�—ã�Œ **æ—¢ã�«å‰²ä»˜ã‚’é–‹å§‹** ã�—æ®‹ãƒ­ãƒ¼ãƒ«ã�Œæ®‹ã‚‹è¡Œã�Œã�‚ã‚Œã�°
+    ã��ã�®ã‚¿ã‚¹ã‚¯ dict ã‚’1ä»¶è¿”ã�™ï¼ˆã�ªã�‘ã‚Œã�° Noneï¼‰ã€‚
 
-    パイプライン枠で後続を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼** が同じ設備に入り、
-    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該物理機械では他タスクを試行しない。
+    ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³æž ã�§å¾Œç¶šã‚’æ•°ãƒ­ãƒ¼ãƒ«ã�šã�¤ã�—ã�‹å…¥ã‚Œã�ªã�„è¨­è¨ˆã�®ã�Ÿã‚�ã€�æž ã‚¼ãƒ­ã�®éš™é–“ã�« **åˆ¥ä¾�é ¼** ã�Œå�Œã�˜è¨­å‚™ã�«å…¥ã‚Šã€�
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�§ã‚¿ã‚¹ã‚¯è¡¨ç¤ºã�Œé€”ä¸­ã�§åˆ‡ã‚Šæ›¿ã‚�ã‚‹äº‹è±¡ã‚’é˜²ã��ã€‚å� æœ‰ä¸­ã�¯å½“è©²ç‰©ç�†æ©Ÿæ¢°ã�§ã�¯ä»–ã‚¿ã‚¹ã‚¯ã‚’è©¦è¡Œã�—ã�ªã�„ã€‚
     """
     m = str(occupant_key or "").strip()
     if not m:
@@ -12231,7 +12045,7 @@ def _need_sheet_pm_column_rank(
     machine_name,
     need_combo_col_index: dict | None,
 ) -> int:
-    """need シートで左にある「工程名+機械名」列ほど小さい値（キューで先）。"""
+    """need ã‚·ãƒ¼ãƒˆã�§å·¦ã�«ã�‚ã‚‹ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�åˆ—ã�»ã�©å°�ã�•ã�„å€¤ï¼ˆã‚­ãƒ¥ãƒ¼ã�§å…ˆï¼‰ã€‚"""
     if not need_combo_col_index:
         return 10**9
     p = str(process or "").strip()
@@ -12250,25 +12064,25 @@ def _generate_plan_task_queue_sort_key(
     need_combo_col_index: dict | None = None,
 ) -> tuple:
     """
-    generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
+    generate_plan å†’é ­ã�Šã‚ˆã�³ç´�æœŸã‚·ãƒ•ãƒˆå†�è©¦è¡Œæ™‚ã�® task_queue.sort ç”¨ã‚­ãƒ¼ã€‚
 
-    1. 加工途中（in_progress）を先
-    2. 納期基準 due_basis_date（回答納期→指定納期。早いほど先）
-    3. §B-1 → §B-2/§B-3 帯 → その他（b_tier）
-    4. §B-2/§B-3 帯内のみ EC を未着手の検査／巻返しより先（b2_queue_sub）
-    5. need シート左列ほど先（工程名+機械名列の位置）
-    6. 依頼NOタイブレーク（_task_id_same_machine_due_tiebreak_key）
+    1. åŠ å·¥é€”ä¸­ï¼ˆin_progressï¼‰ã‚’å…ˆ
+    2. ç´�æœŸåŸºæº– due_basis_dateï¼ˆå›žç­”ç´�æœŸâ†’æŒ‡å®šç´�æœŸã€‚æ—©ã�„ã�»ã�©å…ˆï¼‰
+    3. Â§B-1 â†’ Â§B-2/Â§B-3 å¸¯ â†’ ã��ã�®ä»–ï¼ˆb_tierï¼‰
+    4. Â§B-2/Â§B-3 å¸¯å†…ã�®ã�¿ EC ã‚’æœªç�€æ‰‹ã�®æ¤œæŸ»ï¼�å·»è¿”ã�—ã‚ˆã‚Šå…ˆï¼ˆb2_queue_subï¼‰
+    5. need ã‚·ãƒ¼ãƒˆå·¦åˆ—ã�»ã�©å…ˆï¼ˆå·¥ç¨‹å��+æ©Ÿæ¢°å��åˆ—ã�®ä½�ç½®ï¼‰
+    6. ä¾�é ¼NOã‚¿ã‚¤ãƒ–ãƒ¬ãƒ¼ã‚¯ï¼ˆ_task_id_same_machine_due_tiebreak_keyï¼‰
 
-    _req_map / _need_rules は呼び出し互換のため残す。
+    _req_map / _need_rules ã�¯å‘¼ã�³å‡ºã�—äº’æ�›ã�®ã�Ÿã‚�æ®‹ã�™ã€‚
     """
     insp = bool(task.get("roll_pipeline_inspection"))
     rw = bool(task.get("roll_pipeline_rewind"))
     ip = bool(task.get("in_progress"))
     ec = bool(task.get("roll_pipeline_ec"))
     if insp and ip:
-        b_tier = 0  # §B-1
+        b_tier = 0  # Â§B-1
     elif ec or (insp and not ip) or (rw and not ip):
-        b_tier = 1  # §B-2 / §B-3 帯
+        b_tier = 1  # Â§B-2 / Â§B-3 å¸¯
     else:
         b_tier = 2
     if b_tier == 1:
@@ -12295,8 +12109,8 @@ def _generate_plan_task_queue_sort_key(
 
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
     """
-    §B-2 / §B-3: 同一 task_id の `roll_pipeline_ec` 行の直後に、未着手の後続行
-    （`roll_pipeline_inspection` または `roll_pipeline_rewind`）を行順で隣接させる。
+    Â§B-2 / Â§B-3: å�Œä¸€ task_id ã�® `roll_pipeline_ec` è¡Œã�®ç›´å¾Œã�«ã€�æœªç�€æ‰‹ã�®å¾Œç¶šè¡Œ
+    ï¼ˆ`roll_pipeline_inspection` ã�¾ã�Ÿã�¯ `roll_pipeline_rewind`ï¼‰ã‚’è¡Œé †ã�§éš£æŽ¥ã�•ã�›ã‚‹ã€‚
     """
     if len(task_queue) < 2:
         return
@@ -12354,23 +12168,23 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
             break
     if moved_tids:
         logging.info(
-            "§B-2/§B-3 配台試行順: EC と未着手後続（検査／巻返し）を隣接した依頼NO: %s",
+            "Â§B-2/Â§B-3 é…�å�°è©¦è¡Œé †: EC ã�¨æœªç�€æ‰‹å¾Œç¶šï¼ˆæ¤œæŸ»ï¼�å·»è¿”ã�—ï¼‰ã‚’éš£æŽ¥ã�—ã�Ÿä¾�é ¼NO: %s",
             ",".join(moved_tids),
         )
 
 
 def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
     """
-    `task_queue` のリスト順に合わせて `dispatch_trial_order` を 1..n へ付け直す。
-    `_reorder_task_queue_b2_ec_inspection_consecutive` の直後（およびキュー再ソートの直後）に呼び、
-    EC と後続（検査／巻返し）の連続番号を保証する。
+    `task_queue` ã�®ãƒªã‚¹ãƒˆé †ã�«å�ˆã‚�ã�›ã�¦ `dispatch_trial_order` ã‚’ 1..n ã�¸ä»˜ã�‘ç›´ã�™ã€‚
+    `_reorder_task_queue_b2_ec_inspection_consecutive` ã�®ç›´å¾Œï¼ˆã�Šã‚ˆã�³ã‚­ãƒ¥ãƒ¼å†�ã‚½ãƒ¼ãƒˆã�®ç›´å¾Œï¼‰ã�«å‘¼ã�³ã€�
+    EC ã�¨å¾Œç¶šï¼ˆæ¤œæŸ»ï¼�å·»è¿”ã�—ï¼‰ã�®é€£ç¶šç•ªå�·ã‚’ä¿�è¨¼ã�™ã‚‹ã€‚
     """
     for i, t in enumerate(task_queue, start=1):
         t["dispatch_trial_order"] = i
 
 
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
-    """配台計画シートの「配台試行順番」がキュー全行に正の整数で入っているか。"""
+    """é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆã�®ã€Œé…�å�°è©¦è¡Œé †ç•ªã€�ã�Œã‚­ãƒ¥ãƒ¼å…¨è¡Œã�«æ­£ã�®æ•´æ•°ã�§å…¥ã�£ã�¦ã�„ã‚‹ã�‹ã€‚"""
     if not task_queue:
         return False
     for t in task_queue:
@@ -12393,8 +12207,8 @@ def _apply_dispatch_trial_order_for_generate_plan(
     need_combo_col_index: dict | None,
 ) -> None:
     """
-    配台試行順の確定。シートに全行分の試行順があればそれを採用（§B-2/3 の隣接繰り上げは行わない）。
-    欠損があれば従来どおりマスタ・納期・need 列順などでソートし、EC 隣接後に 1..n を付与。
+    é…�å�°è©¦è¡Œé †ã�®ç¢ºå®šã€‚ã‚·ãƒ¼ãƒˆã�«å…¨è¡Œåˆ†ã�®è©¦è¡Œé †ã�Œã�‚ã‚Œã�°ã��ã‚Œã‚’æŽ¡ç”¨ï¼ˆÂ§B-2/3 ã�®éš£æŽ¥ç¹°ã‚Šä¸Šã�’ã�¯è¡Œã‚�ã�ªã�„ï¼‰ã€‚
+    æ¬ æ��ã�Œã�‚ã‚Œã�°å¾“æ�¥ã�©ã�Šã‚Šãƒžã‚¹ã‚¿ãƒ»ç´�æœŸãƒ»need åˆ—é †ã�ªã�©ã�§ã‚½ãƒ¼ãƒˆã�—ã€�EC éš£æŽ¥å¾Œã�« 1..n ã‚’ä»˜ä¸Žã€‚
     """
     if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
         task_queue.sort(
@@ -12406,7 +12220,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
         for t in task_queue:
             t["dispatch_trial_order"] = int(t.get("dispatch_trial_order_from_sheet") or 10**9)
         logging.info(
-            "配台試行順番: 「%s」列の値をそのまま使用しました（全 %s 行）。",
+            "é…�å�°è©¦è¡Œé †ç•ª: ã€Œ%sã€�åˆ—ã�®å€¤ã‚’ã��ã�®ã�¾ã�¾ä½¿ç”¨ã�—ã�¾ã�—ã�Ÿï¼ˆå…¨ %s è¡Œï¼‰ã€‚",
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
             len(task_queue),
         )
@@ -12419,7 +12233,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
-        "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
+        "é…�å�°è©¦è¡Œé †ç•ª: ãƒžã‚¹ã‚¿ãƒ»ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�‹ã‚‰è‡ªå‹•è¨ˆç®—ã�— 1..%s ã‚’ä»˜ä¸Žã�—ã�¾ã�—ã�Ÿã€‚",
         len(task_queue),
     )
 
@@ -12433,8 +12247,8 @@ def fill_plan_dispatch_trial_order_column_stage1(
     equipment_list: list,
 ) -> None:
     """
-    段階1出力 DataFrame の「配台試行順番」を、段階2 冒頭と同じ手順（ソート・§B-2/3 隣接・連番）で埋める。
-    配台対象外の行は空のまま。
+    æ®µéšŽ1å‡ºåŠ› DataFrame ã�®ã€Œé…�å�°è©¦è¡Œé †ç•ªã€�ã‚’ã€�æ®µéšŽ2 å†’é ­ã�¨å�Œã�˜æ‰‹é †ï¼ˆã‚½ãƒ¼ãƒˆãƒ»Â§B-2/3 éš£æŽ¥ãƒ»é€£ç•ªï¼‰ã�§åŸ‹ã‚�ã‚‹ã€‚
+    é…�å�°å¯¾è±¡å¤–ã�®è¡Œã�¯ç©ºã�®ã�¾ã�¾ã€‚
     """
     if plan_df is None or getattr(plan_df, "empty", True):
         return
@@ -12483,7 +12297,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
         if dto is None:
             continue
         try:
-            # Excel 上は数値セルにし、フィルター・並べ替えをしやすくする（文字列だと数値と別グループになる）
+            # Excel ä¸Šã�¯æ•°å€¤ã‚»ãƒ«ã�«ã�—ã€�ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ãƒ»ä¸¦ã�¹æ›¿ã�ˆã‚’ã�—ã‚„ã�™ã��ã�™ã‚‹ï¼ˆæ–‡å­—åˆ—ã� ã�¨æ•°å€¤ã�¨åˆ¥ã‚°ãƒ«ãƒ¼ãƒ—ã�«ã�ªã‚‹ï¼‰
             plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
             plan_df.iat[iloc, col_idx] = float("nan")
@@ -12491,9 +12305,9 @@ def fill_plan_dispatch_trial_order_column_stage1(
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
     """
-    同一日・同一設備列キー・同一依頼NO の加工について、設備時間割セル用の「補」表示文字列。
-    タイムライン上の各ブロックの `sub` に現れた補助者名を和集合し、昇順で ", " 連結する。
-    メンバー日程・占有計算に使うタイムラインの `sub` は変更しない（表示専用）。
+    å�Œä¸€æ—¥ãƒ»å�Œä¸€è¨­å‚™åˆ—ã‚­ãƒ¼ãƒ»å�Œä¸€ä¾�é ¼NO ã�®åŠ å·¥ã�«ã�¤ã�„ã�¦ã€�è¨­å‚™æ™‚é–“å‰²ã‚»ãƒ«ç”¨ã�®ã€Œè£œã€�è¡¨ç¤ºæ–‡å­—åˆ—ã€‚
+    ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ä¸Šã�®å�„ãƒ–ãƒ­ãƒƒã‚¯ã�® `sub` ã�«ç�¾ã‚Œã�Ÿè£œåŠ©è€…å��ã‚’å’Œé›†å�ˆã�—ã€�æ˜‡é †ã�§ ", " é€£çµ�ã�™ã‚‹ã€‚
+    ãƒ¡ãƒ³ãƒ�ãƒ¼æ—¥ç¨‹ãƒ»å� æœ‰è¨ˆç®—ã�«ä½¿ã�†ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã�® `sub` ã�¯å¤‰æ›´ã�—ã�ªã�„ï¼ˆè¡¨ç¤ºå°‚ç”¨ï¼‰ã€‚
     """
     acc: dict = defaultdict(set)
     for e in timeline_for_eq_grid or []:
@@ -12520,8 +12334,8 @@ def _build_equipment_schedule_dataframe(
     first_eq_schedule_cell_by_task_id: dict | None = None,
 ) -> "pd.DataFrame":
     """
-    結果_設備毎の時間割と同形式の DataFrame（10 分枠・設備列＋進度列）。
-    first_eq_schedule_cell_by_task_id を渡したときのみ、初出セル座標を記録（結果ハイパーリンク用）。
+    çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�¨å�Œå½¢å¼�ã�® DataFrameï¼ˆ10 åˆ†æž ãƒ»è¨­å‚™åˆ—ï¼‹é€²åº¦åˆ—ï¼‰ã€‚
+    first_eq_schedule_cell_by_task_id ã‚’æ¸¡ã�—ã�Ÿã�¨ã��ã�®ã�¿ã€�åˆ�å‡ºã‚»ãƒ«åº§æ¨™ã‚’è¨˜éŒ²ï¼ˆçµ�æžœãƒ�ã‚¤ãƒ‘ãƒ¼ãƒªãƒ³ã‚¯ç”¨ï¼‰ã€‚
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     _eq_sched_unify_sub = _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid)
@@ -12533,7 +12347,7 @@ def _build_equipment_schedule_dataframe(
     eq_empty_cols = {}
     for eq in equipment_list:
         eq_empty_cols[eq] = ""
-        eq_empty_cols[f"{eq}進度"] = ""
+        eq_empty_cols[f"{eq}é€²åº¦"] = ""
 
     for d in sorted_dates:
         d_start = datetime.combine(d, DEFAULT_START_TIME)
@@ -12553,7 +12367,7 @@ def _build_equipment_schedule_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        all_eq_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **eq_empty_cols})
+        all_eq_rows.append({"æ—¥æ™‚å¸¯": f"â–  {d.strftime('%Y/%m/%d (%a)')} â– ", **eq_empty_cols})
 
         def _eq_cell_display_sub(ev, day_d) -> str:
             tid0 = str(ev.get("task_id") or "").strip()
@@ -12572,7 +12386,7 @@ def _build_equipment_schedule_dataframe(
 
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data = {
-                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "æ—¥æ™‚å¸¯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
 
             for eq in equipment_list:
@@ -12599,22 +12413,22 @@ def _build_equipment_schedule_dataframe(
                         and float(active_ev.get("eff_time_per_unit") or 0) > 0
                     )
                     if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                        eq_text = "休憩"
+                        eq_text = "ä¼‘æ†©"
                     elif not _use_prog:
                         _ek_disp = _timeline_event_kind(active_ev)
                         _tag = {
-                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
-                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "依頼切替後始末",
-                            TIMELINE_EVENT_CHANGEOVER_PREP: "加工前準備",
+                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "æ—¥æ¬¡å§‹æ¥­æº–å‚™",
+                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "ä¾�é ¼åˆ‡æ›¿å¾Œå§‹æœ«",
+                            TIMELINE_EVENT_CHANGEOVER_PREP: "åŠ å·¥å‰�æº–å‚™",
                         }.get(
                             _ek_disp,
-                            "セットアップ",
+                            "ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—",
                         )
                         _sub_n = _eq_cell_display_sub(active_ev, d)
-                        _sub_text = f" 補:{_sub_n}" if _sub_n else ""
+                        _sub_text = f" è£œ:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
                         eq_text = (
-                            f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
+                            f"[{_tid_d}] ä¸»:{active_ev.get('op', '')}{_sub_text} ({_tag})"
                         )
                         progress_text = ""
                     else:
@@ -12632,8 +12446,8 @@ def _build_equipment_schedule_dataframe(
                         total_u = active_ev["total_units"]
 
                         _sub_s = _eq_cell_display_sub(active_ev, d)
-                        sub_text = f" 補:{_sub_s}" if _sub_s else ""
-                        eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
+                        sub_text = f" è£œ:{_sub_s}" if _sub_s else ""
+                        eq_text = f"[{active_ev['task_id']}] ä¸»:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
                         _tid_sched = str(active_ev.get("task_id") or "").strip()
                         if (
@@ -12648,11 +12462,11 @@ def _build_equipment_schedule_dataframe(
                             )
 
                 row_data[eq] = eq_text
-                row_data[f"{eq}進度"] = progress_text
+                row_data[f"{eq}é€²åº¦"] = progress_text
 
             all_eq_rows.append(row_data)
             curr_grid = next_grid
-        all_eq_rows.append({"日時帯": "", **eq_empty_cols})
+        all_eq_rows.append({"æ—¥æ™‚å¸¯": "", **eq_empty_cols})
 
     df_eq = pd.DataFrame(all_eq_rows)
     _eq_hdr = _equipment_schedule_header_labels(equipment_list)
@@ -12660,16 +12474,16 @@ def _build_equipment_schedule_dataframe(
     for _eq, _lab in zip(equipment_list, _eq_hdr):
         if _eq in df_eq.columns:
             _eq_rename[_eq] = _lab
-        _pqc = f"{_eq}進度"
+        _pqc = f"{_eq}é€²åº¦"
         if _pqc in df_eq.columns:
-            _eq_rename[_pqc] = f"{_lab}進度"
+            _eq_rename[_pqc] = f"{_lab}é€²åº¦"
     if _eq_rename:
         df_eq = df_eq.rename(columns=_eq_rename)
     return df_eq
 
 
 def _machine_display_key_for_equipment(eq: str) -> str:
-    """skills 列キー「工程+機械」から機械名表示キーを得る（重複時は複合キーごとに別列）。"""
+    """skills åˆ—ã‚­ãƒ¼ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã�‹ã‚‰æ©Ÿæ¢°å��è¡¨ç¤ºã‚­ãƒ¼ã‚’å¾—ã‚‹ï¼ˆé‡�è¤‡æ™‚ã�¯è¤‡å�ˆã‚­ãƒ¼ã�”ã�¨ã�«åˆ¥åˆ—ï¼‰ã€‚"""
     s = str(eq).strip()
     if "+" in s:
         mpart = s.split("+", 1)[1].strip()
@@ -12684,15 +12498,15 @@ def _build_equipment_schedule_by_machine_name_dataframe(
     timeline_events: list,
 ) -> "pd.DataFrame":
     """
-    機械名単位に列をまとめ、各 10 分枠で占有中の依頼NO（複数時は「／」）を表示する。
-    列見出しは機械名のみ（工程+機械の複合キーは付けない）。同一物理機械は占有キーで1列に集約する。
+    æ©Ÿæ¢°å��å�˜ä½�ã�«åˆ—ã‚’ã�¾ã�¨ã‚�ã€�å�„ 10 åˆ†æž ã�§å� æœ‰ä¸­ã�®ä¾�é ¼NOï¼ˆè¤‡æ•°æ™‚ã�¯ã€Œï¼�ã€�ï¼‰ã‚’è¡¨ç¤ºã�™ã‚‹ã€‚
+    åˆ—è¦‹å‡ºã�—ã�¯æ©Ÿæ¢°å��ã�®ã�¿ï¼ˆå·¥ç¨‹+æ©Ÿæ¢°ã�®è¤‡å�ˆã‚­ãƒ¼ã�¯ä»˜ã�‘ã�ªã�„ï¼‰ã€‚å�Œä¸€ç‰©ç�†æ©Ÿæ¢°ã�¯å� æœ‰ã‚­ãƒ¼ã�§1åˆ—ã�«é›†ç´„ã�™ã‚‹ã€‚
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
     for e in timeline_for_eq_grid:
         events_by_date[e["date"]].append(e)
 
-    # 占有キー（機械名側・正規化）ごとに1列。見出しは equipment_list 初出の機械名表示のみ。
+    # å� æœ‰ã‚­ãƒ¼ï¼ˆæ©Ÿæ¢°å��å�´ãƒ»æ­£è¦�åŒ–ï¼‰ã�”ã�¨ã�«1åˆ—ã€‚è¦‹å‡ºã�—ã�¯ equipment_list åˆ�å‡ºã�®æ©Ÿæ¢°å��è¡¨ç¤ºã�®ã�¿ã€‚
     occ_key_to_header: dict[str, str] = {}
     machine_cols: list[str] = []
     eq_to_mcol: dict[str, str] = {}
@@ -12727,7 +12541,7 @@ def _build_equipment_schedule_by_machine_name_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        all_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **empty_tail})
+        all_rows.append({"æ—¥æ™‚å¸¯": f"â–  {d.strftime('%Y/%m/%d (%a)')} â– ", **empty_tail})
 
         curr_grid = d_start
         while curr_grid < d_end:
@@ -12736,7 +12550,7 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 next_grid = d_end
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data = {
-                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "æ—¥æ™‚å¸¯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
             for mcol in machine_cols:
                 row_data[mcol] = ""
@@ -12753,17 +12567,17 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 if not active_ev:
                     continue
                 if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                    tids_by_mcol[mcol].add("（休憩）")
+                    tids_by_mcol[mcol].add("ï¼ˆä¼‘æ†©ï¼‰")
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
                     if tid:
                         tids_by_mcol[mcol].add(tid)
             for mcol in machine_cols:
                 parts = sorted(tids_by_mcol.get(mcol, ()))
-                row_data[mcol] = "／".join(parts) if parts else ""
+                row_data[mcol] = "ï¼�".join(parts) if parts else ""
             all_rows.append(row_data)
             curr_grid = next_grid
-        all_rows.append({"日時帯": "", **empty_tail})
+        all_rows.append({"æ—¥æ™‚å¸¯": "", **empty_tail})
 
     return pd.DataFrame(all_rows)
 
@@ -12776,7 +12590,7 @@ def _build_block_table_dataframe(
     timeline_events: list,
 ) -> "pd.DataFrame":
     """
-    設備列（占有中の依頼NO）＋メンバー列（同）を 10 分枠で並べたブロック可視化用シート。
+    è¨­å‚™åˆ—ï¼ˆå� æœ‰ä¸­ã�®ä¾�é ¼NOï¼‰ï¼‹ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ—ï¼ˆå�Œï¼‰ã‚’ 10 åˆ†æž ã�§ä¸¦ã�¹ã�Ÿãƒ–ãƒ­ãƒƒã‚¯å�¯è¦–åŒ–ç”¨ã‚·ãƒ¼ãƒˆã€‚
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
@@ -12786,11 +12600,11 @@ def _build_block_table_dataframe(
     _eq_hdr = _equipment_schedule_header_labels(equipment_list)
     eq_disp_to_key: dict[str, str] = {}
     for eq, lab in zip(equipment_list, _eq_hdr):
-        eq_disp_to_key[f"設備:{lab}"] = eq
+        eq_disp_to_key[f"è¨­å‚™:{lab}"] = eq
 
-    mem_cols = [f"人:{m}" for m in members]
-    eq_cols = [f"設備:{lab}" for lab in _eq_hdr]
-    all_cols = ["日時帯"] + eq_cols + mem_cols
+    mem_cols = [f"äºº:{m}" for m in members]
+    eq_cols = [f"è¨­å‚™:{lab}" for lab in _eq_hdr]
+    all_cols = ["æ—¥æ™‚å¸¯"] + eq_cols + mem_cols
     rows_out = []
 
     for d in sorted_dates:
@@ -12811,8 +12625,8 @@ def _build_block_table_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        banner = {"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■"}
-        banner.update({c: "" for c in all_cols if c != "日時帯"})
+        banner = {"æ—¥æ™‚å¸¯": f"â–  {d.strftime('%Y/%m/%d (%a)')} â– "}
+        banner.update({c: "" for c in all_cols if c != "æ—¥æ™‚å¸¯"})
         rows_out.append(banner)
 
         curr_grid = d_start
@@ -12822,7 +12636,7 @@ def _build_block_table_dataframe(
                 next_grid = d_end
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data: dict = {
-                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "æ—¥æ™‚å¸¯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
             for c in eq_cols + mem_cols:
                 row_data[c] = ""
@@ -12839,10 +12653,10 @@ def _build_block_table_dataframe(
                 if not active_ev:
                     continue
                 if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                    row_data[col_eq] = "休憩"
+                    row_data[col_eq] = "ä¼‘æ†©"
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
-                    row_data[col_eq] = tid if tid else "占有"
+                    row_data[col_eq] = tid if tid else "å� æœ‰"
 
             busy_member_task: dict[str, set[str]] = defaultdict(set)
             for ev in events_today:
@@ -12858,7 +12672,7 @@ def _build_block_table_dataframe(
                     if any(
                         b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
                     ):
-                        busy_member_task[op].add("休憩" if tid else "休憩")
+                        busy_member_task[op].add("ä¼‘æ†©" if tid else "ä¼‘æ†©")
                     elif tid:
                         busy_member_task[op].add(tid)
                 for s in str(ev.get("sub") or "").split(","):
@@ -12868,20 +12682,20 @@ def _build_block_table_dataframe(
                     if any(
                         b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
                     ):
-                        busy_member_task[s].add("休憩")
+                        busy_member_task[s].add("ä¼‘æ†©")
                     elif tid:
                         busy_member_task[s].add(tid)
 
             for m in members:
-                col_m = f"人:{m}"
+                col_m = f"äºº:{m}"
                 parts = sorted(busy_member_task.get(m, ()))
-                row_data[col_m] = "／".join(parts) if parts else ""
+                row_data[col_m] = "ï¼�".join(parts) if parts else ""
 
             rows_out.append(row_data)
             curr_grid = next_grid
 
-        tail = {"日時帯": ""}
-        tail.update({c: "" for c in all_cols if c != "日時帯"})
+        tail = {"æ—¥æ™‚å¸¯": ""}
+        tail.update({c: "" for c in all_cols if c != "æ—¥æ™‚å¸¯"})
         rows_out.append(tail)
 
     return pd.DataFrame(rows_out, columns=all_cols)
@@ -12893,12 +12707,12 @@ def _day_schedule_task_sort_key(
     need_combo_col_index: dict | None = None,
 ):
     """
-    同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
-    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・納期基準 due_basis_date・§B 段・b2_queue_sub・need 列順・依頼NO）。
-    続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
-    同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
-    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 のときは _task_blocked_by_global_dispatch_trial_order が
-    より小さい試行順の未完了を跨いだ割り込みを別途ブロックする。
+    å�Œä¸€æ—¥å†…ã�®å‰²ä»˜è©¦è¡Œé †ï¼ˆSTAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 ã�®ä¸»ãƒ«ãƒ¼ãƒ—ç”¨ï¼‰ã€‚
+    å…ˆé ­ã‚­ãƒ¼ã�¯ _generate_plan_task_queue_sort_key ã�¨å�Œè¶£æ—¨ï¼ˆåŠ å·¥é€”ä¸­ãƒ»ç´�æœŸåŸºæº– due_basis_dateãƒ»Â§B æ®µãƒ»b2_queue_subãƒ»need åˆ—é †ãƒ»ä¾�é ¼NOï¼‰ã€‚
+    ç¶šã�‘ã�¦ Â§B-1 ã�®é…�å�°è©¦è¡Œé †ç¹°ã‚Šä¸Šã�’ã€�å·¥ç¨‹ rankã€�dispatch_trial_orderã€�Â§B-2 æ®µå†… EC å…ˆè¡Œã€�å„ªå…ˆåº¦ã€�çµ�æžœç”¨ã‚­ãƒ¼ã€‚
+    å�Œä¸€ç‰©ç�†æ©Ÿæ¢°ä¸Šã�®éš™é–“å‰²ã‚Šè¾¼ã�¿ã�¯ _equipment_line_lower_dispatch_trial_still_pending ã�§è©¦è¡Œé †ã‚’å¼·åˆ¶ã�™ã‚‹ã€‚
+    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 ã�®ã�¨ã��ã�¯ _task_blocked_by_global_dispatch_trial_order ã�Œ
+    ã‚ˆã‚Šå°�ã�•ã�„è©¦è¡Œé †ã�®æœªå®Œäº†ã‚’è·¨ã�„ã� å‰²ã‚Šè¾¼ã�¿ã‚’åˆ¥é€”ãƒ–ãƒ­ãƒƒã‚¯ã�™ã‚‹ã€‚
     """
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
@@ -12982,19 +12796,19 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     assign_probe_ctx: dict | None = None,
 ) -> bool:
     """
-    同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
-    machine_avail_dt はチャンク間の隙間に後続試行順が入り込めるため、ここで順序を強制する。
-    設備を跨いだ試行順の前後は _task_blocked_by_global_dispatch_trial_order で別途制御する。
+    å�Œä¸€ç‰©ç�†æ©Ÿæ¢°ï¼ˆmachine å� æœ‰ã‚­ãƒ¼ï¼‰ä¸Šã�§ã€�ã‚ˆã‚Šå°�ã�•ã�„é…�å�°è©¦è¡Œé †ã�®è¡Œã�Œã�¾ã� æ®‹é‡�ã‚’æŒ�ã�¤ã�‹ã€‚
+    machine_avail_dt ã�¯ãƒ�ãƒ£ãƒ³ã‚¯é–“ã�®éš™é–“ã�«å¾Œç¶šè©¦è¡Œé †ã�Œå…¥ã‚Šè¾¼ã‚�ã‚‹ã�Ÿã‚�ã€�ã�“ã�“ã�§é †åº�ã‚’å¼·åˆ¶ã�™ã‚‹ã€‚
+    è¨­å‚™ã‚’è·¨ã�„ã� è©¦è¡Œé †ã�®å‰�å¾Œã�¯ _task_blocked_by_global_dispatch_trial_order ã�§åˆ¥é€”åˆ¶å¾¡ã�™ã‚‹ã€‚
 
-    キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
-    start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
-    （まだ開始日に達していない行が全日ブロッカーになり、後続がほぼ配台不可になるのを防ぐ。）
+    ã‚­ãƒ¥ãƒ¼å…ˆé ­ã�«æ®‹é‡�ã�Œã�‚ã‚‹ã� ã�‘ã�§ã�¯ãƒ–ãƒ­ãƒƒã‚¯ã�—ã�ªã�„ã€‚tasks_today ã�¨å�Œæ§˜ã�«
+    start_date_req <= current_date ã�®è¡Œã� ã�‘ã‚’ã€Œå…ˆè©¦è¡Œé †ã�®ç«¶å�ˆã€�ã�¨ã�¿ã�ªã�™ã€‚
+    ï¼ˆã�¾ã� é–‹å§‹æ—¥ã�«é�”ã�—ã�¦ã�„ã�ªã�„è¡Œã�Œå…¨æ—¥ãƒ–ãƒ­ãƒƒã‚«ãƒ¼ã�«ã�ªã‚Šã€�å¾Œç¶šã�Œã�»ã�¼é…�å�°ä¸�å�¯ã�«ã�ªã‚‹ã�®ã‚’é˜²ã��ã€‚ï¼‰
 
-    より小さい試行順の行が **同一依頼の前工程待ち等でまだ割付不能**なときは「競合の残」とみなさない。
-    （当該行は eligible にも入らないため、ここで待たせると後続試行順が同一設備で永久停止し得る。）
+    ã‚ˆã‚Šå°�ã�•ã�„è©¦è¡Œé †ã�®è¡Œã�Œ **å�Œä¸€ä¾�é ¼ã�®å‰�å·¥ç¨‹å¾…ã�¡ç­‰ã�§ã�¾ã� å‰²ä»˜ä¸�èƒ½**ã�ªã�¨ã��ã�¯ã€Œç«¶å�ˆã�®æ®‹ã€�ã�¨ã�¿ã�ªã�•ã�ªã�„ã€‚
+    ï¼ˆå½“è©²è¡Œã�¯ eligible ã�«ã‚‚å…¥ã‚‰ã�ªã�„ã�Ÿã‚�ã€�ã�“ã�“ã�§å¾…ã�Ÿã�›ã‚‹ã�¨å¾Œç¶šè©¦è¡Œé †ã�Œå�Œä¸€è¨­å‚™ã�§æ°¸ä¹…å�œæ­¢ã�—å¾—ã‚‹ã€‚ï¼‰
 
-    より小さい試行順の行が **当日の機械カレンダーだけで計画窓を全日占有**（その設備は当日スロットゼロ）なら
-    「競合の残」とみなさない（グローバル試行順とあわせて他設備が全日止まるのを防ぐ）。
+    ã‚ˆã‚Šå°�ã�•ã�„è©¦è¡Œé †ã�®è¡Œã�Œ **å½“æ—¥ã�®æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã� ã�‘ã�§è¨ˆç”»çª“ã‚’å…¨æ—¥å� æœ‰**ï¼ˆã��ã�®è¨­å‚™ã�¯å½“æ—¥ã‚¹ãƒ­ãƒƒãƒˆã‚¼ãƒ­ï¼‰ã�ªã‚‰
+    ã€Œç«¶å�ˆã�®æ®‹ã€�ã�¨ã�¿ã�ªã�•ã�ªã�„ï¼ˆã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è©¦è¡Œé †ã�¨ã�‚ã‚�ã�›ã�¦ä»–è¨­å‚™ã�Œå…¨æ—¥æ­¢ã�¾ã‚‹ã�®ã‚’é˜²ã��ï¼‰ã€‚
     """
     line = (machine_occ_key or "").strip()
     if not line:
@@ -13060,19 +12874,19 @@ def _min_pending_dispatch_trial_order_for_date(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> int | None:
     """
-    start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
-    _equipment_line_lower_dispatch_trial_still_pending と同様、まだ開始日に達していない行は
-    「先行試行順の競合」に含めない。
+    start_date_req <= current_date ã�‹ã�¤æ®‹é‡�ã�‚ã‚Šã�®ã‚¿ã‚¹ã‚¯ã�®é…�å�°è©¦è¡Œé †ã�®æœ€å°�å€¤ã€‚
+    _equipment_line_lower_dispatch_trial_still_pending ã�¨å�Œæ§˜ã€�ã�¾ã� é–‹å§‹æ—¥ã�«é�”ã�—ã�¦ã�„ã�ªã�„è¡Œã�¯
+    ã€Œå…ˆè¡Œè©¦è¡Œé †ã�®ç«¶å�ˆã€�ã�«å�«ã‚�ã�ªã�„ã€‚
 
-    **グローバル試行順ブロック**（STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT）用に、
-    「この日まだ割付候補になり得ない」行は最小値から除外する。さもないと同一依頼の
-    §A-1/§A-2 前工程（試行順は後ろだが行順は先）が必要な行が、より小さい試行順の行と
-    循環して永久に動けない。
-    - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
-    - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
-    - （machine_avail_dt 等が渡るとき）設備壁時計が計画終端以上で当日スロットなしの行
+    **ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è©¦è¡Œé †ãƒ–ãƒ­ãƒƒã‚¯**ï¼ˆSTAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICTï¼‰ç”¨ã�«ã€�
+    ã€Œã�“ã�®æ—¥ã�¾ã� å‰²ä»˜å€™è£œã�«ã�ªã‚Šå¾—ã�ªã�„ã€�è¡Œã�¯æœ€å°�å€¤ã�‹ã‚‰é™¤å¤–ã�™ã‚‹ã€‚ã�•ã‚‚ã�ªã�„ã�¨å�Œä¸€ä¾�é ¼ã�®
+    Â§A-1/Â§A-2 å‰�å·¥ç¨‹ï¼ˆè©¦è¡Œé †ã�¯å¾Œã‚�ã� ã�Œè¡Œé †ã�¯å…ˆï¼‰ã�Œå¿…è¦�ã�ªè¡Œã�Œã€�ã‚ˆã‚Šå°�ã�•ã�„è©¦è¡Œé †ã�®è¡Œã�¨
+    å¾ªç’°ã�—ã�¦æ°¸ä¹…ã�«å‹•ã�‘ã�ªã�„ã€‚
+    - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` ã�Œ True ã�®è¡Œ
+    - ï¼ˆdaily_statusãƒ»members ã�Œæ¸¡ã‚‹ã�¨ã��ï¼‰å½“æ—¥æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã� ã�‘ã�§è¨ˆç”»çª“å…¨æ—¥å� æœ‰ã�®è¡Œ
+    - ï¼ˆmachine_avail_dt ç­‰ã�Œæ¸¡ã‚‹ã�¨ã��ï¼‰è¨­å‚™å£�æ™‚è¨ˆã�Œè¨ˆç”»çµ‚ç«¯ä»¥ä¸Šã�§å½“æ—¥ã‚¹ãƒ­ãƒƒãƒˆã�ªã�—ã�®è¡Œ
 
-    1 ロール割当プローブによる除外は行わない（`_effective_min_dispatch_trial_order_from_pool` 側で層ごとに判定）。
+    1 ãƒ­ãƒ¼ãƒ«å‰²å½“ãƒ—ãƒ­ãƒ¼ãƒ–ã�«ã‚ˆã‚‹é™¤å¤–ã�¯è¡Œã‚�ã�ªã�„ï¼ˆ`_effective_min_dispatch_trial_order_from_pool` å�´ã�§å±¤ã�”ã�¨ã�«åˆ¤å®šï¼‰ã€‚
     """
     pool = _tasks_in_min_pending_dispatch_pool(
         task_queue,
@@ -13111,8 +12925,8 @@ def _task_blocked_by_global_dispatch_trial_order(
     min_dispatch_effective: int | None = None,
 ) -> bool:
     """
-    より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
-    min_dispatch_effective: プール＋プローブで求めた実効最小試行順（未指定時は安価フィルタのみの最小）。
+    ã‚ˆã‚Šå°�ã�•ã�„é…�å�°è©¦è¡Œé †ã�«ã€�å½“æ—¥å‰²ä»˜å�¯èƒ½ã�ªæœªå®Œäº†ã�Œã�‚ã‚‹ã�¨ã��ã€�å½“è©²ã‚¿ã‚¹ã‚¯ã‚’ãƒ–ãƒ­ãƒƒã‚¯ã�™ã‚‹ã€‚
+    min_dispatch_effective: ãƒ—ãƒ¼ãƒ«ï¼‹ãƒ—ãƒ­ãƒ¼ãƒ–ã�§æ±‚ã‚�ã�Ÿå®ŸåŠ¹æœ€å°�è©¦è¡Œé †ï¼ˆæœªæŒ‡å®šæ™‚ã�¯å®‰ä¾¡ãƒ•ã‚£ãƒ«ã‚¿ã�®ã�¿ã�®æœ€å°�ï¼‰ã€‚
     """
     if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
         return False
@@ -13141,7 +12955,7 @@ def _task_blocked_by_global_dispatch_trial_order(
 
 
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
-    """勤怠辞書からマスタに無い日付キーを削除する（自動拡張分の巻き戻し）。"""
+    """å‹¤æ€ è¾žæ›¸ã�‹ã‚‰ãƒžã‚¹ã‚¿ã�«ç„¡ã�„æ—¥ä»˜ã‚­ãƒ¼ã‚’å‰Šé™¤ã�™ã‚‹ï¼ˆè‡ªå‹•æ‹¡å¼µåˆ†ã�®å·»ã��æˆ»ã�—ï¼‰ã€‚"""
     for dk in list(attendance_data.keys()):
         if dk not in keep_dates:
             del attendance_data[dk]
@@ -13151,11 +12965,11 @@ def _partial_task_id_due_shift_outcome(
     task_queue: list, task_id: str, calendar_last: date
 ) -> tuple[bool, bool]:
     """
-    配台残の依頼NOについて納期+1日リトライの分類。
-    戻り値: (shift_ok, calendar_shortfall)
-    - shift_ok: 納期基準（due_basis_date）を持つ行があり、それらすべてで +1 日がマスタ最終計画日以下
-    - calendar_shortfall: 納期基準を持つ行があり、いずれかで +1 日がマスタ最終計画日を超える
-    基準納期が一行も無い依頼は (False, False)（通常の配台残のまま）。
+    é…�å�°æ®‹ã�®ä¾�é ¼NOã�«ã�¤ã�„ã�¦ç´�æœŸ+1æ—¥ãƒªãƒˆãƒ©ã‚¤ã�®åˆ†é¡žã€‚
+    æˆ»ã‚Šå€¤: (shift_ok, calendar_shortfall)
+    - shift_ok: ç´�æœŸåŸºæº–ï¼ˆdue_basis_dateï¼‰ã‚’æŒ�ã�¤è¡Œã�Œã�‚ã‚Šã€�ã��ã‚Œã‚‰ã�™ã�¹ã�¦ã�§ +1 æ—¥ã�Œãƒžã‚¹ã‚¿æœ€çµ‚è¨ˆç”»æ—¥ä»¥ä¸‹
+    - calendar_shortfall: ç´�æœŸåŸºæº–ã‚’æŒ�ã�¤è¡Œã�Œã�‚ã‚Šã€�ã�„ã�šã‚Œã�‹ã�§ +1 æ—¥ã�Œãƒžã‚¹ã‚¿æœ€çµ‚è¨ˆç”»æ—¥ã‚’è¶…ã�ˆã‚‹
+    åŸºæº–ç´�æœŸã�Œä¸€è¡Œã‚‚ç„¡ã�„ä¾�é ¼ã�¯ (False, False)ï¼ˆé€šå¸¸ã�®é…�å�°æ®‹ã�®ã�¾ã�¾ï¼‰ã€‚
     """
     tid = (task_id or "").strip()
     if not tid:
@@ -13175,10 +12989,10 @@ def _partial_task_id_due_shift_outcome(
 
 def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     """
-    配台残リトライ用: **内部の納期基準（due_basis_date）だけ**を +1 日する。
-    結果_タスク一覧用の ``due_basis_date_result_sheet`` は変更しない（+1 前の日付を保持）。
-    回答納期・指定納期も配台計画シート由来のまま。
-    due_urgent はずらした due_basis_date で再計算する。
+    é…�å�°æ®‹ãƒªãƒˆãƒ©ã‚¤ç”¨: **å†…éƒ¨ã�®ç´�æœŸåŸºæº–ï¼ˆdue_basis_dateï¼‰ã� ã�‘**ã‚’ +1 æ—¥ã�™ã‚‹ã€‚
+    çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ç”¨ã�® ``due_basis_date_result_sheet`` ã�¯å¤‰æ›´ã�—ã�ªã�„ï¼ˆ+1 å‰�ã�®æ—¥ä»˜ã‚’ä¿�æŒ�ï¼‰ã€‚
+    å›žç­”ç´�æœŸãƒ»æŒ‡å®šç´�æœŸã‚‚é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆç”±æ�¥ã�®ã�¾ã�¾ã€‚
+    due_urgent ã�¯ã�šã‚‰ã�—ã�Ÿ due_basis_date ã�§å†�è¨ˆç®—ã�™ã‚‹ã€‚
     """
     if task.get("due_basis_date") is not None:
         task["due_basis_date"] = task["due_basis_date"] + timedelta(days=1)
@@ -13194,7 +13008,7 @@ def _seed_avail_from_timeline_for_date(
     avail_dt: dict,
     machine_day_start: datetime,
 ) -> None:
-    """同一日内の既存 timeline から設備空き・メンバー空きの下限を反映する（部分再配台用）。"""
+    """å�Œä¸€æ—¥å†…ã�®æ—¢å­˜ timeline ã�‹ã‚‰è¨­å‚™ç©ºã��ãƒ»ãƒ¡ãƒ³ãƒ�ãƒ¼ç©ºã��ã�®ä¸‹é™�ã‚’å��æ˜ ã�™ã‚‹ï¼ˆéƒ¨åˆ†å†�é…�å�°ç”¨ï¼‰ã€‚"""
     for e in timeline_events:
         if e.get("date") != current_date:
             continue
@@ -13247,7 +13061,7 @@ def _bump_dt_past_machine_calendar_blocks(
     t: datetime,
     blocks: list[tuple[datetime, datetime]],
 ) -> datetime:
-    """半開区間ブロック [start,end) に t が入る間、終端へ繰り上げる。"""
+    """å�Šé–‹åŒºé–“ãƒ–ãƒ­ãƒƒã‚¯ [start,end) ã�« t ã�Œå…¥ã‚‹é–“ã€�çµ‚ç«¯ã�¸ç¹°ã‚Šä¸Šã�’ã‚‹ã€‚"""
     if not blocks:
         return t
     changed = True
@@ -13284,7 +13098,7 @@ def _machine_cal_cell_is_occupied(cell) -> bool:
         return bool(cell.strip())
     if isinstance(cell, bool):
         return cell
-    # Excel で 0 を「空」としている列や、数式の結果 0 は占有しない（従来 True だと全日占有扱いになり得る）
+    # Excel ã�§ 0 ã‚’ã€Œç©ºã€�ã�¨ã�—ã�¦ã�„ã‚‹åˆ—ã‚„ã€�æ•°å¼�ã�®çµ�æžœ 0 ã�¯å� æœ‰ã�—ã�ªã�„ï¼ˆå¾“æ�¥ True ã� ã�¨å…¨æ—¥å� æœ‰æ‰±ã�„ã�«ã�ªã‚Šå¾—ã‚‹ï¼‰
     if isinstance(cell, (int, float)):
         try:
             return float(cell) != 0.0
@@ -13297,9 +13111,9 @@ def _clip_machine_calendar_slot_to_factory_window(
     day_d: date, slot_start: datetime, slot_end: datetime
 ) -> tuple[datetime, datetime] | None:
     """
-    機械カレンダー1スロット [slot_start, slot_end) を工場稼働枠にクリップする。
-    枠外のみのスロットは None（配台では無視）。段階2では master メイン A12/B12 で
-    DEFAULT_START_TIME / DEFAULT_END_TIME が上書き済み（generate_plan のコンテキスト内で読込）。
+    æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼1ã‚¹ãƒ­ãƒƒãƒˆ [slot_start, slot_end) ã‚’å·¥å ´ç¨¼åƒ�æž ã�«ã‚¯ãƒªãƒƒãƒ—ã�™ã‚‹ã€‚
+    æž å¤–ã�®ã�¿ã�®ã‚¹ãƒ­ãƒƒãƒˆã�¯ Noneï¼ˆé…�å�°ã�§ã�¯ç„¡è¦–ï¼‰ã€‚æ®µéšŽ2ã�§ã�¯ master ãƒ¡ã‚¤ãƒ³ A12/B12 ã�§
+    DEFAULT_START_TIME / DEFAULT_END_TIME ã�Œä¸Šæ›¸ã��æ¸ˆã�¿ï¼ˆgenerate_plan ã�®ã‚³ãƒ³ãƒ†ã‚­ã‚¹ãƒˆå†…ã�§èª­è¾¼ï¼‰ã€‚
     """
     w0 = datetime.combine(day_d, DEFAULT_START_TIME)
     w1 = datetime.combine(day_d, DEFAULT_END_TIME)
@@ -13316,9 +13130,9 @@ def _machine_calendar_planning_window_end_dt(
     members: list,
 ) -> datetime:
     """
-    機械カレンダー占有の右端を切る上限。工場マスタ終業（DEFAULT_END_TIME）と、
-    当日配台対象メンバーの勤務終了時刻の最小の小さい方（人がいない時間帯の「占有」で
-    設備床だけが終業を超えないようにする）。
+    æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã�®å�³ç«¯ã‚’åˆ‡ã‚‹ä¸Šé™�ã€‚å·¥å ´ãƒžã‚¹ã‚¿çµ‚æ¥­ï¼ˆDEFAULT_END_TIMEï¼‰ã�¨ã€�
+    å½“æ—¥é…�å�°å¯¾è±¡ãƒ¡ãƒ³ãƒ�ãƒ¼ã�®å‹¤å‹™çµ‚äº†æ™‚åˆ»ã�®æœ€å°�ã�®å°�ã�•ã�„æ–¹ï¼ˆäººã�Œã�„ã�ªã�„æ™‚é–“å¸¯ã�®ã€Œå� æœ‰ã€�ã�§
+    è¨­å‚™åºŠã� ã�‘ã�Œçµ‚æ¥­ã‚’è¶…ã�ˆã�ªã�„ã‚ˆã�†ã�«ã�™ã‚‹ï¼‰ã€‚
     """
     w_factory = datetime.combine(current_date, DEFAULT_END_TIME)
     ends: list[datetime] = []
@@ -13341,7 +13155,7 @@ def _clip_machine_busy_blocks_to_planning_window(
     w0: datetime,
     w1: datetime,
 ) -> list[tuple[datetime, datetime]]:
-    """占有半開区間を [w0, w1) にクリップしてからマージする。"""
+    """å� æœ‰å�Šé–‹åŒºé–“ã‚’ [w0, w1) ã�«ã‚¯ãƒªãƒƒãƒ—ã�—ã�¦ã�‹ã‚‰ãƒžãƒ¼ã‚¸ã�™ã‚‹ã€‚"""
     out: list[tuple[datetime, datetime]] = []
     for s, e in blocks or []:
         s2 = max(s, w0)
@@ -13386,8 +13200,8 @@ def load_machine_calendar_occupancy_blocks(
     equipment_list: list,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    master.xlsm「機械カレンダー」を読み、設備列の非空セル＝当該 1 時間スロット占有とみなす。
-    戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
+    master.xlsmã€Œæ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã€�ã‚’èª­ã�¿ã€�è¨­å‚™åˆ—ã�®é�žç©ºã‚»ãƒ«ï¼�å½“è©² 1 æ™‚é–“ã‚¹ãƒ­ãƒƒãƒˆå� æœ‰ã�¨ã�¿ã�ªã�™ã€‚
+    æˆ»ã‚Š: æ—¥ä»˜ -> equipment_list ã�®ã‚­ãƒ¼ -> å�Šé–‹åŒºé–“ [start, end) ã�®ãƒªã‚¹ãƒˆï¼ˆãƒžãƒ¼ã‚¸æ¸ˆã�¿ï¼‰ã€‚
     """
     if not master_path or not os.path.isfile(master_path):
         return {}
@@ -13397,7 +13211,7 @@ def load_machine_calendar_occupancy_blocks(
             return {}
         raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
-        logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
+        logging.warning("æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼: ã‚·ãƒ¼ãƒˆèª­è¾¼ã‚’ã‚¹ã‚­ãƒƒãƒ—ã�—ã�¾ã�—ã�Ÿ (%s)", e)
         return {}
     if raw.shape[0] < 3 or raw.shape[1] < 3:
         return {}
@@ -13498,7 +13312,7 @@ def _apply_machine_calendar_floor_for_date(
     *,
     machine_calendar_plan_end: datetime | None = None,
 ) -> None:
-    """当日のタイムラインシード後、機械カレンダー占有で設備空き下限を繰り上げる。"""
+    """å½“æ—¥ã�®ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‚·ãƒ¼ãƒ‰å¾Œã€�æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã�§è¨­å‚™ç©ºã��ä¸‹é™�ã‚’ç¹°ã‚Šä¸Šã�’ã‚‹ã€‚"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
         return
@@ -13537,7 +13351,7 @@ def _machine_calendar_blocks_for_occ_key(
     day_blocks: dict[str, list[tuple[datetime, datetime]]],
     occ: str,
 ) -> list[tuple[datetime, datetime]] | None:
-    """day_blocks から占有キー（表記ゆらぎ許容）に一致する区間リストを得る。"""
+    """day_blocks ã�‹ã‚‰å� æœ‰ã‚­ãƒ¼ï¼ˆè¡¨è¨˜ã‚†ã‚‰ã�Žè¨±å®¹ï¼‰ã�«ä¸€è‡´ã�™ã‚‹åŒºé–“ãƒªã‚¹ãƒˆã‚’å¾—ã‚‹ã€‚"""
     o = str(occ or "").strip()
     if not o or not day_blocks:
         return None
@@ -13557,8 +13371,8 @@ def _machine_calendar_occ_blocks_full_plan_window(
     members: list,
 ) -> bool:
     """
-    当日の機械カレンダー占有が計画窓 [始業, min(終業,稼働メンバー終了) ) 全体を塞ぎ、
-    その設備では当日 1 本も加工を入れられないとき True。
+    å½“æ—¥ã�®æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã�Œè¨ˆç”»çª“ [å§‹æ¥­, min(çµ‚æ¥­,ç¨¼åƒ�ãƒ¡ãƒ³ãƒ�ãƒ¼çµ‚äº†) ) å…¨ä½“ã‚’å¡žã�Žã€�
+    ã��ã�®è¨­å‚™ã�§ã�¯å½“æ—¥ 1 æœ¬ã‚‚åŠ å·¥ã‚’å…¥ã‚Œã‚‰ã‚Œã�ªã�„ã�¨ã�� Trueã€‚
     """
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
@@ -13582,8 +13396,8 @@ def _task_fully_machine_calendar_blocked_on_date(
     members: list | None,
 ) -> bool:
     """
-    当該タスクの占有設備が、当日の機械カレンダーだけで計画窓を全日塞がれている。
-    グローバル試行順ブロック用の「最小試行順」から外す（他設備の配台デッドロック防止）。
+    å½“è©²ã‚¿ã‚¹ã‚¯ã�®å� æœ‰è¨­å‚™ã�Œã€�å½“æ—¥ã�®æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã� ã�‘ã�§è¨ˆç”»çª“ã‚’å…¨æ—¥å¡žã�Œã‚Œã�¦ã�„ã‚‹ã€‚
+    ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è©¦è¡Œé †ãƒ–ãƒ­ãƒƒã‚¯ç”¨ã�®ã€Œæœ€å°�è©¦è¡Œé †ã€�ã�‹ã‚‰å¤–ã�™ï¼ˆä»–è¨­å‚™ã�®é…�å�°ãƒ‡ãƒƒãƒ‰ãƒ­ãƒƒã‚¯é˜²æ­¢ï¼‰ã€‚
     """
     if daily_status is None or members is None:
         return False
@@ -13611,14 +13425,14 @@ def _task_no_machining_window_left_from_avail_floor(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    machine_avail_dt（シード・機械カレンダー床・当日確定ロール反映後）で、
-    占有設備の空き下限が計画窓終端以上なら当日は当設備にスロットなし。
-    `machine_handoff` 等が渡るときは `_resolve_machine_changeover_floor_segments` により
-    `_assign_one_roll_trial_order_flow` と同じ **実効加工開始下限** で判定する
-    （生の machine_avail だけではチャンジオーバー後の下限が欠け、候補や min_dto が狂うのを防ぐ）。
-    また空き下限が終端より前でも、計画窓での **残り連続が 1 ロール分に足りない**
-    と判断できる場合は True（実働不足デッドロック防止）。
-    カレンダー区間照合のキー取りこぼしを防ぐ。
+    machine_avail_dtï¼ˆã‚·ãƒ¼ãƒ‰ãƒ»æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼åºŠãƒ»å½“æ—¥ç¢ºå®šãƒ­ãƒ¼ãƒ«å��æ˜ å¾Œï¼‰ã�§ã€�
+    å� æœ‰è¨­å‚™ã�®ç©ºã��ä¸‹é™�ã�Œè¨ˆç”»çª“çµ‚ç«¯ä»¥ä¸Šã�ªã‚‰å½“æ—¥ã�¯å½“è¨­å‚™ã�«ã‚¹ãƒ­ãƒƒãƒˆã�ªã�—ã€‚
+    `machine_handoff` ç­‰ã�Œæ¸¡ã‚‹ã�¨ã��ã�¯ `_resolve_machine_changeover_floor_segments` ã�«ã‚ˆã‚Š
+    `_assign_one_roll_trial_order_flow` ã�¨å�Œã�˜ **å®ŸåŠ¹åŠ å·¥é–‹å§‹ä¸‹é™�** ã�§åˆ¤å®šã�™ã‚‹
+    ï¼ˆç”Ÿã�® machine_avail ã� ã�‘ã�§ã�¯ãƒ�ãƒ£ãƒ³ã‚¸ã‚ªãƒ¼ãƒ�ãƒ¼å¾Œã�®ä¸‹é™�ã�Œæ¬ ã�‘ã€�å€™è£œã‚„ min_dto ã�Œç‹‚ã�†ã�®ã‚’é˜²ã��ï¼‰ã€‚
+    ã�¾ã�Ÿç©ºã��ä¸‹é™�ã�Œçµ‚ç«¯ã‚ˆã‚Šå‰�ã�§ã‚‚ã€�è¨ˆç”»çª“ã�§ã�® **æ®‹ã‚Šé€£ç¶šã�Œ 1 ãƒ­ãƒ¼ãƒ«åˆ†ã�«è¶³ã‚Šã�ªã�„**
+    ã�¨åˆ¤æ–­ã�§ã��ã‚‹å ´å�ˆã�¯ Trueï¼ˆå®Ÿåƒ�ä¸�è¶³ãƒ‡ãƒƒãƒ‰ãƒ­ãƒƒã‚¯é˜²æ­¢ï¼‰ã€‚
+    ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼åŒºé–“ç…§å�ˆã�®ã‚­ãƒ¼å�–ã‚Šã�“ã�¼ã�—ã‚’é˜²ã��ã€‚
     """
     if (
         daily_status is None
@@ -13679,7 +13493,7 @@ def _task_no_machining_window_left_from_avail_floor(
     t_eff = parse_float_safe(t.get("task_eff_factor"), 1.0)
     if t_eff <= 0:
         t_eff = 1.0
-    # eff_time_per_unit ≈ base / avg_eff / t_eff × 余力係数。avg_eff はチーム次第で下がる。
+    # eff_time_per_unit â‰ˆ base / avg_eff / t_eff Ã— ä½™åŠ›ä¿‚æ•°ã€‚avg_eff ã�¯ãƒ�ãƒ¼ãƒ æ¬¡ç¬¬ã�§ä¸‹ã�Œã‚‹ã€‚
     _avg_eff_floor = 0.5
     approx_need_mins = max(1.0, float(btp) / t_eff / _avg_eff_floor)
     return rem < timedelta(minutes=approx_need_mins)
@@ -13693,7 +13507,7 @@ def _bump_machine_avail_after_roll_for_calendar(
     machine_calendar_plan_end: datetime | None = None,
     machine_day_floor: datetime | None = None,
 ) -> None:
-    """ロール確定直後: 終了時刻がカレンダー占有スロット内なら終端まで繰り上げ。"""
+    """ãƒ­ãƒ¼ãƒ«ç¢ºå®šç›´å¾Œ: çµ‚äº†æ™‚åˆ»ã�Œã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã‚¹ãƒ­ãƒƒãƒˆå†…ã�ªã‚‰çµ‚ç«¯ã�¾ã�§ç¹°ã‚Šä¸Šã�’ã€‚"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
         return
@@ -13751,16 +13565,16 @@ def load_machine_changeover_settings(
     master_path: str,
 ) -> tuple[dict[str, tuple[int, int]], dict[str, int]]:
     """
-    master.xlsm の任意シート:
-      - 「設定_依頼切替前後時間」… 工程名・機械名・準備分・後始末分（1 行目見出し、2 行目以降データ）
-      - 「設定_機械_日次始業準備」… 機械名・日次始業準備分
+    master.xlsm ã�®ä»»æ„�ã‚·ãƒ¼ãƒˆ:
+      - ã€Œè¨­å®š_ä¾�é ¼åˆ‡æ›¿å‰�å¾Œæ™‚é–“ã€�â€¦ å·¥ç¨‹å��ãƒ»æ©Ÿæ¢°å��ãƒ»æº–å‚™åˆ†ãƒ»å¾Œå§‹æœ«åˆ†ï¼ˆ1 è¡Œç›®è¦‹å‡ºã�—ã€�2 è¡Œç›®ä»¥é™�ãƒ‡ãƒ¼ã‚¿ï¼‰
+      - ã€Œè¨­å®š_æ©Ÿæ¢°_æ—¥æ¬¡å§‹æ¥­æº–å‚™ã€�â€¦ æ©Ÿæ¢°å��ãƒ»æ—¥æ¬¡å§‹æ¥­æº–å‚™åˆ†
 
-    依頼NO（タスク）が同一物理機械上で切り替わるとき、直前ブロックの後始末→当該ブロックの準備を
-    設備空き下限に加算する。同一依頼NOの連続ロールの間には加算しない。
-    日次始業準備は、同一カレンダ日で当該機械の先頭ロールにのみ加算する。
+    ä¾�é ¼NOï¼ˆã‚¿ã‚¹ã‚¯ï¼‰ã�Œå�Œä¸€ç‰©ç�†æ©Ÿæ¢°ä¸Šã�§åˆ‡ã‚Šæ›¿ã‚�ã‚‹ã�¨ã��ã€�ç›´å‰�ãƒ–ãƒ­ãƒƒã‚¯ã�®å¾Œå§‹æœ«â†’å½“è©²ãƒ–ãƒ­ãƒƒã‚¯ã�®æº–å‚™ã‚’
+    è¨­å‚™ç©ºã��ä¸‹é™�ã�«åŠ ç®—ã�™ã‚‹ã€‚å�Œä¸€ä¾�é ¼NOã�®é€£ç¶šãƒ­ãƒ¼ãƒ«ã�®é–“ã�«ã�¯åŠ ç®—ã�—ã�ªã�„ã€‚
+    æ—¥æ¬¡å§‹æ¥­æº–å‚™ã�¯ã€�å�Œä¸€ã‚«ãƒ¬ãƒ³ãƒ€æ—¥ã�§å½“è©²æ©Ÿæ¢°ã�®å…ˆé ­ãƒ­ãƒ¼ãƒ«ã�«ã�®ã�¿åŠ ç®—ã�™ã‚‹ã€‚
 
-    戻り: (設備行キー「工程+機械」および正規化キー -> (準備分, 後始末分),
-          機械名および正規化キー -> 始業準備分)
+    æˆ»ã‚Š: (è¨­å‚™è¡Œã‚­ãƒ¼ã€Œå·¥ç¨‹+æ©Ÿæ¢°ã€�ã�Šã‚ˆã�³æ­£è¦�åŒ–ã‚­ãƒ¼ -> (æº–å‚™åˆ†, å¾Œå§‹æœ«åˆ†),
+          æ©Ÿæ¢°å��ã�Šã‚ˆã�³æ­£è¦�åŒ–ã‚­ãƒ¼ -> å§‹æ¥­æº–å‚™åˆ†)
     """
     changeover: dict[str, tuple[int, int]] = {}
     startup: dict[str, int] = {}
@@ -13769,7 +13583,7 @@ def load_machine_changeover_settings(
     try:
         xls = pd.ExcelFile(master_path)
     except Exception as e:
-        logging.warning("機械準備/切替設定: ブックを開けません (%s)", e)
+        logging.warning("æ©Ÿæ¢°æº–å‚™/åˆ‡æ›¿è¨­å®š: ãƒ–ãƒƒã‚¯ã‚’é–‹ã�‘ã�¾ã�›ã‚“ (%s)", e)
         return changeover, startup
 
     if SHEET_MACHINE_CHANGEOVER in xls.sheet_names:
@@ -13778,21 +13592,21 @@ def load_machine_changeover_settings(
                 master_path, sheet_name=SHEET_MACHINE_CHANGEOVER, header=0
             )
             df.columns = [str(c).strip() for c in df.columns]
-            c_proc = _df_pick_column(df, "工程名", "工程")
-            c_mac = _df_pick_column(df, "機械名", "機械")
+            c_proc = _df_pick_column(df, "å·¥ç¨‹å��", "å·¥ç¨‹")
+            c_mac = _df_pick_column(df, "æ©Ÿæ¢°å��", "æ©Ÿæ¢°")
             c_prep = _df_pick_column(
                 df,
-                "準備時間_分",
-                "準備分",
-                "加工前準備_分",
-                "加工開始前準備_分",
+                "æº–å‚™æ™‚é–“_åˆ†",
+                "æº–å‚™åˆ†",
+                "åŠ å·¥å‰�æº–å‚™_åˆ†",
+                "åŠ å·¥é–‹å§‹å‰�æº–å‚™_åˆ†",
             )
             c_clean = _df_pick_column(
                 df,
-                "後始末時間_分",
-                "後始末分",
-                "加工後後始末_分",
-                "加工終了後後始末_分",
+                "å¾Œå§‹æœ«æ™‚é–“_åˆ†",
+                "å¾Œå§‹æœ«åˆ†",
+                "åŠ å·¥å¾Œå¾Œå§‹æœ«_åˆ†",
+                "åŠ å·¥çµ‚äº†å¾Œå¾Œå§‹æœ«_åˆ†",
             )
             if c_proc and c_mac and c_prep and c_clean:
                 n_ent = 0
@@ -13821,13 +13635,13 @@ def load_machine_changeover_settings(
                     n_ent += 1
                 if n_ent:
                     logging.info(
-                        "マスタ「%s」: 工程+機械 %s 行の準備/後始末（分）を読み込みました。",
+                        "ãƒžã‚¹ã‚¿ã€Œ%sã€�: å·¥ç¨‹+æ©Ÿæ¢° %s è¡Œã�®æº–å‚™/å¾Œå§‹æœ«ï¼ˆåˆ†ï¼‰ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
                         SHEET_MACHINE_CHANGEOVER,
                         n_ent,
                     )
         except Exception as e:
             logging.warning(
-                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_CHANGEOVER, e
+                "ãƒžã‚¹ã‚¿ã€Œ%sã€�èª­è¾¼å¤±æ•—ï¼ˆç„¡è¦–ï¼‰: %s", SHEET_MACHINE_CHANGEOVER, e
             )
 
     if SHEET_MACHINE_DAILY_STARTUP in xls.sheet_names:
@@ -13836,9 +13650,9 @@ def load_machine_changeover_settings(
                 master_path, sheet_name=SHEET_MACHINE_DAILY_STARTUP, header=0
             )
             df2.columns = [str(c).strip() for c in df2.columns]
-            c_mn = _df_pick_column(df2, "機械名", "機械")
+            c_mn = _df_pick_column(df2, "æ©Ÿæ¢°å��", "æ©Ÿæ¢°")
             c_su = _df_pick_column(
-                df2, "日次始業準備_分", "始業準備_分", "日始業準備_分"
+                df2, "æ—¥æ¬¡å§‹æ¥­æº–å‚™_åˆ†", "å§‹æ¥­æº–å‚™_åˆ†", "æ—¥å§‹æ¥­æº–å‚™_åˆ†"
             )
             if c_mn and c_su:
                 for _, row in df2.iterrows():
@@ -13857,13 +13671,13 @@ def load_machine_changeover_settings(
                         startup[nk] = su
                 if startup:
                     logging.info(
-                        "マスタ「%s」: 機械 %s 件の日次始業準備（分）を読み込みました。",
+                        "ãƒžã‚¹ã‚¿ã€Œ%sã€�: æ©Ÿæ¢° %s ä»¶ã�®æ—¥æ¬¡å§‹æ¥­æº–å‚™ï¼ˆåˆ†ï¼‰ã‚’èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
                         SHEET_MACHINE_DAILY_STARTUP,
                         len({k for k in startup if "+" not in str(k)}),
                     )
         except Exception as e:
             logging.warning(
-                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_DAILY_STARTUP, e
+                "ãƒžã‚¹ã‚¿ã€Œ%sã€�èª­è¾¼å¤±æ•—ï¼ˆç„¡è¦–ï¼‰: %s", SHEET_MACHINE_DAILY_STARTUP, e
             )
 
     return changeover, startup
@@ -13923,8 +13737,8 @@ def _pick_skilled_op_for_changeover_interval(
     daily_status: dict,
 ) -> str | None:
     """
-    当日 eligible のうち、当該工程+機械で OP スキルを持つ者のうち優先度が最小の1名。
-    準備・日次始業の休憩スキップに用いる（avail_dt は見ない）。
+    å½“æ—¥ eligible ã�®ã�†ã�¡ã€�å½“è©²å·¥ç¨‹+æ©Ÿæ¢°ã�§ OP ã‚¹ã‚­ãƒ«ã‚’æŒ�ã�¤è€…ã�®ã�†ã�¡å„ªå…ˆåº¦ã�Œæœ€å°�ã�®1å��ã€‚
+    æº–å‚™ãƒ»æ—¥æ¬¡å§‹æ¥­ã�®ä¼‘æ†©ã‚¹ã‚­ãƒƒãƒ—ã�«ç”¨ã�„ã‚‹ï¼ˆavail_dt ã�¯è¦‹ã�ªã�„ï¼‰ã€‚
     """
     cands: list[tuple[int, str]] = []
     proc = (machine_proc or "").strip()
@@ -13963,7 +13777,7 @@ def _machine_effective_floor_timedelta_only(
     daily_startup_by_machine: dict[str, int] | None = None,
     current_date: date | None = None,
 ) -> datetime:
-    """スキル OP が拾えないときのフォールバック（壁時計に分を足す／定常開始基準の日次始業は終了時刻で max）。"""
+    """ã‚¹ã‚­ãƒ« OP ã�Œæ‹¾ã�ˆã�ªã�„ã�¨ã��ã�®ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ï¼ˆå£�æ™‚è¨ˆã�«åˆ†ã‚’è¶³ã�™ï¼�å®šå¸¸é–‹å§‹åŸºæº–ã�®æ—¥æ¬¡å§‹æ¥­ã�¯çµ‚äº†æ™‚åˆ»ã�§ maxï¼‰ã€‚"""
     if abolish_limits:
         return machine_day_floor
     mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
@@ -14011,13 +13825,13 @@ def _changeover_plan_segments_and_machining_lower_bound(
     abolish_limits: bool,
 ) -> tuple[datetime | None, list[dict]]:
     """
-    前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
-    組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
-    日次始業は master メイン A15（定常開始）が読めれば [開始, 開始+N分) の壁時計（勤怠 forward しない）。
-    A15 が読めないときのみ、従来どおり代表スキル OP の勤務・休憩に沿って forward する。
-    同一占有キーで直前加工と同一依頼NOのときは加工前準備を付けない（連続ロール）。
-    日次始業セグメントの op は空（タイムラインでは人を載せず設備のみ）。準備・後始末の op は forward 用の代表／直前主。
-    セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
+    å‰�ãƒ­ãƒ¼ãƒ«åŠ å·¥çµ‚äº† prev_machining_end_dt ã�‹ã‚‰ã€�æ—¥æ¬¡å§‹æ¥­ï¼ˆå½“æ—¥å…ˆé ­ã�®ã�¿ï¼‰ãƒ»å�Œæ—¥ä¾�é ¼åˆ‡æ›¿ã�®å¾Œå§‹æœ«ãƒ»æº–å‚™ã‚’
+    çµ„ã�¿ç«‹ã�¦ã€�(åŠ å·¥é–‹å§‹æœ€æ—©æ™‚åˆ», ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ç”¨ã‚»ã‚°ãƒ¡ãƒ³ãƒˆé››å½¢) ã‚’è¿”ã�™ã€‚
+    æ—¥æ¬¡å§‹æ¥­ã�¯ master ãƒ¡ã‚¤ãƒ³ A15ï¼ˆå®šå¸¸é–‹å§‹ï¼‰ã�Œèª­ã‚�ã‚Œã�° [é–‹å§‹, é–‹å§‹+Nåˆ†) ã�®å£�æ™‚è¨ˆï¼ˆå‹¤æ€  forward ã�—ã�ªã�„ï¼‰ã€‚
+    A15 ã�Œèª­ã‚�ã�ªã�„ã�¨ã��ã�®ã�¿ã€�å¾“æ�¥ã�©ã�Šã‚Šä»£è¡¨ã‚¹ã‚­ãƒ« OP ã�®å‹¤å‹™ãƒ»ä¼‘æ†©ã�«æ²¿ã�£ã�¦ forward ã�™ã‚‹ã€‚
+    å�Œä¸€å� æœ‰ã‚­ãƒ¼ã�§ç›´å‰�åŠ å·¥ã�¨å�Œä¸€ä¾�é ¼NOã�®ã�¨ã��ã�¯åŠ å·¥å‰�æº–å‚™ã‚’ä»˜ã�‘ã�ªã�„ï¼ˆé€£ç¶šãƒ­ãƒ¼ãƒ«ï¼‰ã€‚
+    æ—¥æ¬¡å§‹æ¥­ã‚»ã‚°ãƒ¡ãƒ³ãƒˆã�® op ã�¯ç©ºï¼ˆã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã�§ã�¯äººã‚’è¼‰ã�›ã�šè¨­å‚™ã�®ã�¿ï¼‰ã€‚æº–å‚™ãƒ»å¾Œå§‹æœ«ã�® op ã�¯ forward ç”¨ã�®ä»£è¡¨ï¼�ç›´å‰�ä¸»ã€‚
+    ã‚»ã‚°ãƒ¡ãƒ³ãƒˆ dict ã�¯ start_dt, end_dt, op, event_kind, machine, machine_occupancy_key ã‚’æŒ�ã�¤ã€‚
     """
     if abolish_limits:
         return prev_machining_end_dt, []
@@ -14156,9 +13970,9 @@ def _machine_effective_floor_for_assign(
     machine_proc: str | None = None,
 ) -> datetime:
     """
-    設備の壁時計における「当該ロールの加工開始」以前の下限。
-    daily_status・skills_dict・current_date が揃うときは、skills 適合 OP の勤務・休憩に沿って
-    日次始業・後始末・準備を forward した最早加工開始。揃わないときは分の壁時計加算にフォールバック。
+    è¨­å‚™ã�®å£�æ™‚è¨ˆã�«ã�Šã�‘ã‚‹ã€Œå½“è©²ãƒ­ãƒ¼ãƒ«ã�®åŠ å·¥é–‹å§‹ã€�ä»¥å‰�ã�®ä¸‹é™�ã€‚
+    daily_statusãƒ»skills_dictãƒ»current_date ã�Œæ�ƒã�†ã�¨ã��ã�¯ã€�skills é�©å�ˆ OP ã�®å‹¤å‹™ãƒ»ä¼‘æ†©ã�«æ²¿ã�£ã�¦
+    æ—¥æ¬¡å§‹æ¥­ãƒ»å¾Œå§‹æœ«ãƒ»æº–å‚™ã‚’ forward ã�—ã�Ÿæœ€æ—©åŠ å·¥é–‹å§‹ã€‚æ�ƒã‚�ã�ªã�„ã�¨ã��ã�¯åˆ†ã�®å£�æ™‚è¨ˆåŠ ç®—ã�«ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ã€‚
     """
     if abolish_limits:
         return machine_day_floor
@@ -14217,8 +14031,8 @@ def _resolve_machine_changeover_floor_segments(
     dispatch_interval_mirror: DispatchIntervalMirror | None,
 ) -> tuple[datetime, list[dict], bool]:
     """
-    設備の加工開始下限と、タイムライン追記用セットアップ区間。
-    戻り値 (floor_dt, segments, abort)。abort が True のときは当該ロール割当を全体として棄却する。
+    è¨­å‚™ã�®åŠ å·¥é–‹å§‹ä¸‹é™�ã�¨ã€�ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³è¿½è¨˜ç”¨ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—åŒºé–“ã€‚
+    æˆ»ã‚Šå€¤ (floor_dt, segments, abort)ã€‚abort ã�Œ True ã�®ã�¨ã��ã�¯å½“è©²ãƒ­ãƒ¼ãƒ«å‰²å½“ã‚’å…¨ä½“ã�¨ã�—ã�¦æ£„å�´ã�™ã‚‹ã€‚
     """
     if abolish_all_scheduling_limits:
         prev = machine_avail_dt.get(machine_occ_key, machine_day_floor)
@@ -14310,7 +14124,7 @@ def _changeover_timeline_op_sub_for_event(
     machine_handoff: dict,
     daily_status: dict,
 ) -> tuple[str, str]:
-    """タイムライン用の主／補。日次始業は人なし。準備は直後ロール、後始末は handoff の直前ロール。"""
+    """ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ç”¨ã�®ä¸»ï¼�è£œã€‚æ—¥æ¬¡å§‹æ¥­ã�¯äººã�ªã�—ã€‚æº–å‚™ã�¯ç›´å¾Œãƒ­ãƒ¼ãƒ«ã€�å¾Œå§‹æœ«ã�¯ handoff ã�®ç›´å‰�ãƒ­ãƒ¼ãƒ«ã€‚"""
     ek = str(event_kind or "").strip()
     op_s = str(op_from_segment or "").strip()
     _lead = str(machining_lead_op or "").strip()
@@ -14343,7 +14157,7 @@ def _append_changeover_segments_to_timeline(
     machining_sub_str: str | None = None,
     machine_handoff: dict | None = None,
 ) -> None:
-    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
+    """ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ç³»ã‚»ã‚°ãƒ¡ãƒ³ãƒˆã‚’ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ãƒ»ãƒŸãƒ©ãƒ¼ãƒ»æ‹…å½“è€… avail ã�«å��æ˜ ã€‚"""
     _mh = machine_handoff or {}
     _lead_m = str(machining_lead_op or "").strip()
     _sub_roll = str(machining_sub_str or "").strip()
@@ -14403,8 +14217,8 @@ def _append_changeover_segments_to_timeline(
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
-    当該日の終了時点で、納期基準日（当日含む）以前なのに残量が残る依頼NO。
-    「納期日内に完遂できなかった」= 後ろ倒し再試行の候補。
+    å½“è©²æ—¥ã�®çµ‚äº†æ™‚ç‚¹ã�§ã€�ç´�æœŸåŸºæº–æ—¥ï¼ˆå½“æ—¥å�«ã‚€ï¼‰ä»¥å‰�ã�ªã�®ã�«æ®‹é‡�ã�Œæ®‹ã‚‹ä¾�é ¼NOã€‚
+    ã€Œç´�æœŸæ—¥å†…ã�«å®Œé�‚ã�§ã��ã�ªã�‹ã�£ã�Ÿã€�= å¾Œã‚�å€’ã�—å†�è©¦è¡Œã�®å€™è£œã€‚
     """
     out = set()
     eps = 1e-9
@@ -14433,9 +14247,9 @@ def _machine_handoff_state_from_timeline(
     current_date: date,
 ) -> dict:
     """
-    タイムラインから、各 machine_occupancy_key について
-    計画日 current_date 以前の **加工 (machining)** イベントの最終終了を復元する。
-    セットアップ系 event_kind は last_tid / 後始末判定に含めない。
+    ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã�‹ã‚‰ã€�å�„ machine_occupancy_key ã�«ã�¤ã�„ã�¦
+    è¨ˆç”»æ—¥ current_date ä»¥å‰�ã�® **åŠ å·¥ (machining)** ã‚¤ãƒ™ãƒ³ãƒˆã�®æœ€çµ‚çµ‚äº†ã‚’å¾©å…ƒã�™ã‚‹ã€‚
+    ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—ç³» event_kind ã�¯ last_tid / å¾Œå§‹æœ«åˆ¤å®šã�«å�«ã‚�ã�ªã�„ã€‚
     """
     best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
     for e in timeline_events:
@@ -14508,11 +14322,11 @@ def _trial_order_flow_day_start_floor(
     macro_now_dt: datetime,
     task_queue: list | None = None,
 ) -> datetime:
-    """原反投入日を起点に、その日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
+    """åŽŸå��æŠ•å…¥æ—¥ã‚’èµ·ç‚¹ã�«ã€�ã��ã�®æ—¥ã�®åŠ å·¥é–‹å§‹ã�®ä¸‹é™�æ™‚åˆ»ï¼ˆå�Œæ—¥ã�¯ 13:00 ä»¥é™�ã‚’å�«ã‚€ï¼‰ã€‚"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
-    # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始できるため、
-    # 原反投入日（=同日13:00以降）の制約をそのまま適用すると後続が不必要に後ろへ倒れる。
-    # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を取る。
+    # Â§B-2 æ¤œæŸ» / Â§B-3 å·»è¿”ã�—ã�¯ EC å®Œäº†ã‚’å¾…ã�£ã�¦é–‹å§‹ã�§ã��ã‚‹ã�Ÿã‚�ã€�
+    # åŽŸå��æŠ•å…¥æ—¥ï¼ˆ=å�Œæ—¥13:00ä»¥é™�ï¼‰ã�®åˆ¶ç´„ã‚’ã��ã�®ã�¾ã�¾é�©ç”¨ã�™ã‚‹ã�¨å¾Œç¶šã�Œä¸�å¿…è¦�ã�«å¾Œã‚�ã�¸å€’ã‚Œã‚‹ã€‚
+    # ECå®Œäº†æ™‚åˆ»ä¸‹é™�ï¼ˆ_roll_pipeline_b2_inspection_ec_completion_floor_dtï¼‰ã�§æ•´å�ˆã‚’å�–ã‚‹ã€‚
     _tid_floor = str(task.get("task_id", "") or "").strip()
     is_b2_follower_delayed = bool(
         (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
@@ -14584,8 +14398,8 @@ def _trial_order_flow_eligible_tasks(
             min_dispatch_effective=min_dispatch_effective,
         ):
             continue
-        # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
-        # 試行順=min の占有行が残り、他試行順が永久停止し得る。当日スロットゼロの行は候補外にする。
+        # min_dto ã�‹ã‚‰å…¨æ—¥ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å� æœ‰ã�¯é™¤å¤–æ¸ˆã�¿ã�§ã‚‚ã€�å�Œæ—¥è©¦è¡Œé †ã�®ã€Œãƒ–ãƒ­ãƒƒã‚¯ã€�ã�¯ my_o>m ã�®ã�¿ã�®ã�Ÿã‚�
+        # è©¦è¡Œé †=min ã�®å� æœ‰è¡Œã�Œæ®‹ã‚Šã€�ä»–è©¦è¡Œé †ã�Œæ°¸ä¹…å�œæ­¢ã�—å¾—ã‚‹ã€‚å½“æ—¥ã‚¹ãƒ­ãƒƒãƒˆã‚¼ãƒ­ã�®è¡Œã�¯å€™è£œå¤–ã�«ã�™ã‚‹ã€‚
         if daily_status is not None and members is not None:
             if _task_fully_machine_calendar_blocked_on_date(
                 task, current_date, daily_status, members
@@ -14655,9 +14469,9 @@ def _combo_preset_team_size_bounds(
     max_team_size_need: int,
 ) -> tuple[int, int] | None:
     """
-    組み合わせ表プリセット1行の人数範囲 (lo, hi)。need の基本人数よりシート側を優先する。
-    - 必要人数列が正のときはメンバー列の人数と一致すること。
-    - hi は need の上限と実人数の大きい方（プリセットが need より少人数でも採用可能）。
+    çµ„ã�¿å�ˆã‚�ã�›è¡¨ãƒ—ãƒªã‚»ãƒƒãƒˆ1è¡Œã�®äººæ•°ç¯„å›² (lo, hi)ã€‚need ã�®åŸºæœ¬äººæ•°ã‚ˆã‚Šã‚·ãƒ¼ãƒˆå�´ã‚’å„ªå…ˆã�™ã‚‹ã€‚
+    - å¿…è¦�äººæ•°åˆ—ã�Œæ­£ã�®ã�¨ã��ã�¯ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ—ã�®äººæ•°ã�¨ä¸€è‡´ã�™ã‚‹ã�“ã�¨ã€‚
+    - hi ã�¯ need ã�®ä¸Šé™�ã�¨å®Ÿäººæ•°ã�®å¤§ã��ã�„æ–¹ï¼ˆãƒ—ãƒªã‚»ãƒƒãƒˆã�Œ need ã‚ˆã‚Šå°‘äººæ•°ã�§ã‚‚æŽ¡ç”¨å�¯èƒ½ï¼‰ã€‚
     """
     nmem = len(preset_team)
     if nmem < 1:
@@ -14675,7 +14489,7 @@ def _combo_preset_team_size_bounds(
 
 
 def _plan_sheet_required_op_optional(task: dict) -> int | None:
-    """加工計画の必要人数列が正の整数ならその値。無効なら None。"""
+    """åŠ å·¥è¨ˆç”»ã�®å¿…è¦�äººæ•°åˆ—ã�Œæ­£ã�®æ•´æ•°ã�ªã‚‰ã��ã�®å€¤ã€‚ç„¡åŠ¹ã�ªã‚‰ Noneã€‚"""
     ro = task.get("required_op")
     if ro is None or (isinstance(ro, float) and pd.isna(ro)):
         return None
@@ -14709,7 +14523,7 @@ def _append_legacy_dispatch_candidate_for_team(
     machine_day_floor: datetime | None = None,
     machine_floor_cached: datetime | None = None,
 ) -> bool:
-    """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
+    """ãƒ¬ã‚¬ã‚·ãƒ¼æ—¥æ¬¡é…�å�°ãƒ«ãƒ¼ãƒ—ç”¨: å�˜ä¸€ãƒ�ãƒ¼ãƒ ã�Œæˆ�ç«‹ã�™ã‚Œã�° team_candidates ã�« 1 ä»¶è¿½åŠ ã�—ã�¦ Trueã€‚"""
     _machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
     _floor_default = datetime.combine(current_date, DEFAULT_START_TIME)
@@ -14896,10 +14710,10 @@ def _assign_one_roll_trial_order_flow(
     machine_handoff: dict | None = None,
 ) -> dict | None:
     """
-    1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
-    preferred_team が与えられ、かつ「同一日内の直前ロール」として成立すれば、
-    組合せ探索より優先して採用する（翌日には持ち越さない）。
-    戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
+    1ãƒ­ãƒ¼ãƒ«åˆ†ã�®æœ€è‰¯ãƒ�ãƒ¼ãƒ ã‚’æ±ºå®šã�™ã‚‹ã€‚è¨­å‚™ç©ºã��ãƒ»æ—¥é–‹å§‹ä¸‹é™�ã‚’ team_start ã�«ç¹”ã‚Šè¾¼ã‚€ã€‚
+    preferred_team ã�Œä¸Žã�ˆã‚‰ã‚Œã€�ã�‹ã�¤ã€Œå�Œä¸€æ—¥å†…ã�®ç›´å‰�ãƒ­ãƒ¼ãƒ«ã€�ã�¨ã�—ã�¦æˆ�ç«‹ã�™ã‚Œã�°ã€�
+    çµ„å�ˆã�›æŽ¢ç´¢ã‚ˆã‚Šå„ªå…ˆã�—ã�¦æŽ¡ç”¨ã�™ã‚‹ï¼ˆç¿Œæ—¥ã�«ã�¯æŒ�ã�¡è¶Šã�•ã�ªã�„ï¼‰ã€‚
+    æˆ»ã‚Šå€¤: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
     machine = task["machine"]
     machine_name = str(task.get("machine_name", "") or "").strip()
@@ -14929,12 +14743,12 @@ def _assign_one_roll_trial_order_flow(
             need_rules,
         )
         if plan_ro is not None and plan_ro != req_num:
-            need_src_line = (need_src_line + "；") if need_src_line else ""
-            need_src_line += f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
+            need_src_line = (need_src_line + "ï¼›") if need_src_line else ""
+            need_src_line += f"è¨ˆç”»ã‚·ãƒ¼ãƒˆå¿…è¦�äººæ•°{plan_ro}ã�¯æœªä½¿ç”¨ï¼ˆneedåŸºæº–={req_num}ï¼‰"
     else:
         if plan_ro is not None:
             req_num = plan_ro
-            need_src_line = f"計画シート「必要OP(上書)」={req_num}"
+            need_src_line = f"è¨ˆç”»ã‚·ãƒ¼ãƒˆã€Œå¿…è¦�OP(ä¸Šæ›¸)ã€�={req_num}"
         else:
             req_num, need_src_line = resolve_need_required_op_explain(
                 machine,
@@ -14946,8 +14760,8 @@ def _assign_one_roll_trial_order_flow(
     if _gpo.get("ignore_need_minimum"):
         req_num = 1
         need_src_line = (
-            (need_src_line + " → ") if need_src_line else ""
-        ) + "メイン上書ignore_need_minimumでreq=1"
+            (need_src_line + " â†’ ") if need_src_line else ""
+        ) + "ãƒ¡ã‚¤ãƒ³ä¸Šæ›¸ignore_need_minimumã�§req=1"
 
     skill_meta_cache: dict = {}
 
@@ -14990,7 +14804,7 @@ def _assign_one_roll_trial_order_flow(
     )
     if _gdp_must:
         logging.info(
-            "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
+            "ãƒ¡ã‚¤ãƒ³ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«(æ—¥ä»˜Ã—å·¥ç¨‹): task=%s date=%s å·¥ç¨‹=%r ãƒ�ãƒ¼ãƒ å¿…é ˆ=%s",
             task.get("task_id"),
             current_date,
             machine,
@@ -14999,8 +14813,8 @@ def _assign_one_roll_trial_order_flow(
     if fixed_team_anchor:
         _nfix = len(fixed_team_anchor)
         if _nfix > req_num:
-            need_src_line = (need_src_line + " → ") if need_src_line else ""
-            need_src_line += f"グローバル(日付×工程)指名で最低{_nfix}人"
+            need_src_line = (need_src_line + " â†’ ") if need_src_line else ""
+            need_src_line += f"ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«(æ—¥ä»˜Ã—å·¥ç¨‹)æŒ‡å��ã�§æœ€ä½Ž{_nfix}äºº"
         req_num = max(req_num, _nfix)
 
     extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
@@ -15013,8 +14827,8 @@ def _assign_one_roll_trial_order_flow(
     if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
         extra_max_sheet = 0
         extra_src_line = (
-            (extra_src_line + " → ") if extra_src_line else ""
-        ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
+            (extra_src_line + " â†’ ") if extra_src_line else ""
+        ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWã�§0"
     extra_max = (
         extra_max_sheet if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS else 0
     )
@@ -15024,8 +14838,8 @@ def _assign_one_roll_trial_order_flow(
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
     ):
         extra_src_line = (
-            (extra_src_line + " → ") if extra_src_line else ""
-        ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
+            (extra_src_line + " â†’ ") if extra_src_line else ""
+        ) + "ãƒ¡ã‚¤ãƒ³ã�¯åŸºæœ¬äººæ•°ã�®ã�¿ï¼ˆä½™åŠ›æž ã�¯å…¨é…�å�°å¾Œã�«æœªå‰²å½“Ã—ã‚¹ã‚­ãƒ«ã�§è¿½è¨˜ï¼‰"
     max_team_size = min(req_num + extra_max, len(capable_members))
     if max_team_size < req_num:
         max_team_size = req_num
@@ -15045,8 +14859,8 @@ def _assign_one_roll_trial_order_flow(
     if _dto_head is not None and _dto_head not in _need_headcount_logged_orders:
         _need_headcount_logged_orders.add(_dto_head)
         logging.info(
-            "need人数(試行順優先フロー) order=%s task=%s 工程/機械=%s/%s "
-            "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
+            "needäººæ•°(è©¦è¡Œé †å„ªå…ˆãƒ•ãƒ­ãƒ¼) order=%s task=%s å·¥ç¨‹/æ©Ÿæ¢°=%s/%s "
+            "req_num=%s [%s] extra_max=%s [%s] max_teamå€™è£œ=%s capable=%säºº",
             _dto_head,
             task["task_id"],
             machine,
@@ -15071,7 +14885,7 @@ def _assign_one_roll_trial_order_flow(
             return
         _log_dispatch_trace_schedule(
             _tid_assign,
-            "[配台トレース task=%s] " + msg,
+            "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] " + msg,
             _tid_assign,
             *args,
         )
@@ -15116,7 +14930,7 @@ def _assign_one_roll_trial_order_flow(
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
             _trace_assign(
-                "候補却下: チーム人数外 team=%s size=%s req=%s max=%s",
+                "å€™è£œå�´ä¸‹: ãƒ�ãƒ¼ãƒ äººæ•°å¤– team=%s size=%s req=%s max=%s",
                 ",".join(str(x) for x in team),
                 len(team),
                 lo,
@@ -15126,13 +14940,13 @@ def _assign_one_roll_trial_order_flow(
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
             _trace_assign(
-                "候補却下: OP不在 team=%s",
+                "å€™è£œå�´ä¸‹: OPä¸�åœ¨ team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         if not all(m in daily_status for m in team):
             _trace_assign(
-                "候補却下: 当日勤怠キーなし team=%s",
+                "å€™è£œå�´ä¸‹: å½“æ—¥å‹¤æ€ ã‚­ãƒ¼ã�ªã�— team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
@@ -15148,7 +14962,7 @@ def _assign_one_roll_trial_order_flow(
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
             _trace_assign(
-                "候補却下: 開始>=終業 team=%s start=%s end_limit=%s",
+                "å€™è£œå�´ä¸‹: é–‹å§‹>=çµ‚æ¥­ team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 team_end_limit,
@@ -15196,14 +15010,14 @@ def _assign_one_roll_trial_order_flow(
         )
         if team_start_d is None:
             _trace_assign(
-                "候補却下: 休憩帯内・終業直前(小残)で当日不可 team=%s",
+                "å€™è£œå�´ä¸‹: ä¼‘æ†©å¸¯å†…ãƒ»çµ‚æ¥­ç›´å‰�(å°�æ®‹)ã�§å½“æ—¥ä¸�å�¯ team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
             _trace_assign(
-                "候補却下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
+                "å€™è£œå�´ä¸‹: ãƒ‡ãƒ•ã‚¡ãƒ¼å¾Œã�«é–‹å§‹>=çµ‚æ¥­ team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 team_end_limit,
@@ -15216,7 +15030,7 @@ def _assign_one_roll_trial_order_flow(
         _trial_units_cap = int(avail_mins / eff_time_per_unit)
         if _trial_units_cap < 1:
             _trace_assign(
-                "候補却下: 実働不足 team=%s start=%s avail_mins=%s need_mins=%.2f",
+                "å€™è£œå�´ä¸‹: å®Ÿåƒ�ä¸�è¶³ team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
                 team_start,
                 avail_mins,
@@ -15227,7 +15041,7 @@ def _assign_one_roll_trial_order_flow(
             _trial_units_cap, team_start, team_end_limit
         ):
             _trace_assign(
-                "候補却下: 終業直前で当日収容ロール数が閾値未満 team=%s cap=%s th=%s start=%s",
+                "å€™è£œå�´ä¸‹: çµ‚æ¥­ç›´å‰�ã�§å½“æ—¥å�Žå®¹ãƒ­ãƒ¼ãƒ«æ•°ã�Œé–¾å€¤æœªæº€ team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
                 _trial_units_cap,
                 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
@@ -15240,7 +15054,7 @@ def _assign_one_roll_trial_order_flow(
         )
         if _contig < work_mins_needed:
             _trace_assign(
-                "候補却下: 休憩またぎのため連続実働不足 team=%s contiguous_min=%s need_mins=%s start=%s",
+                "å€™è£œå�´ä¸‹: ä¼‘æ†©ã�¾ã�Ÿã�Žã�®ã�Ÿã‚�é€£ç¶šå®Ÿåƒ�ä¸�è¶³ team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
                 _contig,
                 work_mins_needed,
@@ -15254,7 +15068,7 @@ def _assign_one_roll_trial_order_flow(
             machine_occ_key, team, team_start, actual_end_dt
         ):
             _trace_assign(
-                "区間ミラー却下: team=%s start=%s end=%s eq=%s",
+                "åŒºé–“ãƒŸãƒ©ãƒ¼å�´ä¸‹: team=%s start=%s end=%s eq=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 actual_end_dt,
@@ -15279,7 +15093,7 @@ def _assign_one_roll_trial_order_flow(
             "changeover_segments": _co_segs,
         }
 
-    # 特別指定: 同一日・連続ロールは前回チームを優先（翌日へは持ち越さない）。
+    # ç‰¹åˆ¥æŒ‡å®š: å�Œä¸€æ—¥ãƒ»é€£ç¶šãƒ­ãƒ¼ãƒ«ã�¯å‰�å›žãƒ�ãƒ¼ãƒ ã‚’å„ªå…ˆï¼ˆç¿Œæ—¥ã�¸ã�¯æŒ�ã�¡è¶Šã�•ã�ªã�„ï¼‰ã€‚
     _hist = task.get("assigned_history") or []
     _last_hist_date = _hist[-1].get("date") if _hist else None
     _same_day_last_roll = _last_hist_date == current_date.strftime("%m/%d")
@@ -15311,8 +15125,8 @@ def _assign_one_roll_trial_order_flow(
                 }
 
     team_candidates: list[dict] = []
-    # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
-    # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
+    # çµ„ã�¿å�ˆã‚�ã�›è¡¨ãƒ—ãƒªã‚»ãƒƒãƒˆã�¯ã€Œæˆ�ç«‹ã�—ã�Ÿã‚‰å�³ returnã€�ã�›ã�šã€�çµ„å�ˆã�›æŽ¢ç´¢ã�¨ã�¾ã�¨ã‚�ã�¦
+    # team_start / ã‚¹ãƒ©ãƒƒã‚¯ä»˜ã��ã‚¿ãƒ—ãƒ«ã�§æœ€è‰¯ã‚’é�¸ã�¶ï¼ˆã‚·ãƒ¼ãƒˆä¸Šã�®å„ªå…ˆåº¦é †ã�¯è©¦è¡Œé †ã�®ã�¿ï¼‰ã€‚
     if preset_rows_assign:
         for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
             bounds = _combo_preset_team_size_bounds(
@@ -15363,7 +15177,7 @@ def _assign_one_roll_trial_order_flow(
         ):
             if tsize == 1:
                 _trace_assign(
-                    "候補固定: 担当OP指名=%s のため 1人チームは当人のみ試行",
+                    "å€™è£œå›ºå®š: æ‹…å½“OPæŒ‡å��=%s ã�®ã�Ÿã‚� 1äººãƒ�ãƒ¼ãƒ ã�¯å½“äººã�®ã�¿è©¦è¡Œ",
                     pref_mem,
                 )
             others = [m for m in capable_members if m != pref_mem]
@@ -15407,13 +15221,13 @@ def _assign_one_roll_trial_order_flow(
             and _mach_floor_eff >= _mem_max_end
         ):
             logging.warning(
-                "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でチーム候補が0件。"
-                "スキル適合(OP/AS)は %s 人いますが、設備の加工開始下限=%s が"
-                "当日の担当候補の退勤(%s)以降のためこの日は割当できません。"
-                "master「機械カレンダー」で当該日・当該機械列に不要な記入がないか、"
-                "または前工程の占有で設備下限が終業まで繰り上がっていないか確認してください"
-                "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
-                "参考: changeover前の設備空き下限=%s 占有キー=%s",
+                "æ®µéšŽ2: ä¾�é ¼NO=%s æ—¥ä»˜=%s å·¥ç¨‹/æ©Ÿæ¢°=%s/%s ã�§ãƒ�ãƒ¼ãƒ å€™è£œã�Œ0ä»¶ã€‚"
+                "ã‚¹ã‚­ãƒ«é�©å�ˆ(OP/AS)ã�¯ %s äººã�„ã�¾ã�™ã�Œã€�è¨­å‚™ã�®åŠ å·¥é–‹å§‹ä¸‹é™�=%s ã�Œ"
+                "å½“æ—¥ã�®æ‹…å½“å€™è£œã�®é€€å‹¤(%s)ä»¥é™�ã�®ã�Ÿã‚�ã�“ã�®æ—¥ã�¯å‰²å½“ã�§ã��ã�¾ã�›ã‚“ã€‚"
+                "masterã€Œæ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã€�ã�§å½“è©²æ—¥ãƒ»å½“è©²æ©Ÿæ¢°åˆ—ã�«ä¸�è¦�ã�ªè¨˜å…¥ã�Œã�ªã�„ã�‹ã€�"
+                "ã�¾ã�Ÿã�¯å‰�å·¥ç¨‹ã�®å� æœ‰ã�§è¨­å‚™ä¸‹é™�ã�Œçµ‚æ¥­ã�¾ã�§ç¹°ã‚Šä¸Šã�Œã�£ã�¦ã�„ã�ªã�„ã�‹ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„"
+                "ï¼ˆé…�å�°ãƒ«ãƒ¼ãƒ« 3.2.1 æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ãƒ»ãƒˆãƒ©ãƒ–ãƒ«ã‚·ãƒ¥ãƒ¼ãƒˆï¼‰ã€‚"
+                "å�‚è€ƒ: changeoverå‰�ã�®è¨­å‚™ç©ºã��ä¸‹é™�=%s å� æœ‰ã‚­ãƒ¼=%s",
                 task.get("task_id"),
                 current_date,
                 machine,
@@ -15471,10 +15285,10 @@ def _trial_order_assign_probe_fails(
     ctx: dict,
 ) -> bool:
     """
-    現在の avail_dt / machine_avail_dt / machine_handoff のスナップショットで
-    `_assign_one_roll_trial_order_flow` が None になるなら True。
-    機械枠は十分でも人・休憩・ミラー等で詰まり、グローバル試行順だけが先頭行に張り付くのを防ぐ。
-    副作用なし（need 人数ログ用 set は毎回空）。
+    ç�¾åœ¨ã�® avail_dt / machine_avail_dt / machine_handoff ã�®ã‚¹ãƒŠãƒƒãƒ—ã‚·ãƒ§ãƒƒãƒˆã�§
+    `_assign_one_roll_trial_order_flow` ã�Œ None ã�«ã�ªã‚‹ã�ªã‚‰ Trueã€‚
+    æ©Ÿæ¢°æž ã�¯å��åˆ†ã�§ã‚‚äººãƒ»ä¼‘æ†©ãƒ»ãƒŸãƒ©ãƒ¼ç­‰ã�§è©°ã�¾ã‚Šã€�ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«è©¦è¡Œé †ã� ã�‘ã�Œå…ˆé ­è¡Œã�«å¼µã‚Šä»˜ã��ã�®ã‚’é˜²ã��ã€‚
+    å‰¯ä½œç”¨ã�ªã�—ï¼ˆneed äººæ•°ãƒ­ã‚°ç”¨ set ã�¯æ¯Žå›žç©ºï¼‰ã€‚
     """
     try:
         r = _assign_one_roll_trial_order_flow(
@@ -15500,7 +15314,7 @@ def _trial_order_assign_probe_fails(
         )
     except Exception as ex:
         logging.warning(
-            "trial_order_assign_probe 例外のため当該行は除外しない: task=%s err=%s",
+            "trial_order_assign_probe ä¾‹å¤–ã�®ã�Ÿã‚�å½“è©²è¡Œã�¯é™¤å¤–ã�—ã�ªã�„: task=%s err=%s",
             task.get("task_id"),
             ex,
         )
@@ -15521,7 +15335,7 @@ def _tasks_in_min_pending_dispatch_pool(
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> list:
-    """`_min_pending_dispatch_trial_order_for_date` と同一の安価フィルタを通過したタスクのリスト。"""
+    """`_min_pending_dispatch_trial_order_for_date` ã�¨å�Œä¸€ã�®å®‰ä¾¡ãƒ•ã‚£ãƒ«ã‚¿ã‚’é€šé�Žã�—ã�Ÿã‚¿ã‚¹ã‚¯ã�®ãƒªã‚¹ãƒˆã€‚"""
     out: list = []
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
@@ -15559,10 +15373,10 @@ def _effective_min_dispatch_trial_order_from_pool(
     assign_probe_ctx: dict,
 ) -> int | None:
     """
-    pool を昇順 dto で見て、**その dto に属する行のうち 1 件でも** 1 ロール割当プローブが通れば
-    その dto を「実効の最小試行順」とする。
-    先頭 dto 層が全滅（機械は空いているが人で積めない等）のとき、次の dto に進みグローバル停止を防ぐ。
-    プローブ無しのときは pool の最小 dto を返す。
+    pool ã‚’æ˜‡é † dto ã�§è¦‹ã�¦ã€�**ã��ã�® dto ã�«å±žã�™ã‚‹è¡Œã�®ã�†ã�¡ 1 ä»¶ã�§ã‚‚** 1 ãƒ­ãƒ¼ãƒ«å‰²å½“ãƒ—ãƒ­ãƒ¼ãƒ–ã�Œé€šã‚Œã�°
+    ã��ã�® dto ã‚’ã€Œå®ŸåŠ¹ã�®æœ€å°�è©¦è¡Œé †ã€�ã�¨ã�™ã‚‹ã€‚
+    å…ˆé ­ dto å±¤ã�Œå…¨æ»…ï¼ˆæ©Ÿæ¢°ã�¯ç©ºã�„ã�¦ã�„ã‚‹ã�Œäººã�§ç©�ã‚�ã�ªã�„ç­‰ï¼‰ã�®ã�¨ã��ã€�æ¬¡ã�® dto ã�«é€²ã�¿ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«å�œæ­¢ã‚’é˜²ã��ã€‚
+    ãƒ—ãƒ­ãƒ¼ãƒ–ç„¡ã�—ã�®ã�¨ã��ã�¯ pool ã�®æœ€å°� dto ã‚’è¿”ã�™ã€‚
     """
     if not pool:
         return None
@@ -15611,22 +15425,22 @@ def _trial_order_first_schedule_pass(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    ①当日候補を配台試行順の昇順に並べる（1 パス分）。
-    **完全二相（§B-2 / §B-3）**: **フェーズ1**で **後続パイプライン行**（熱融着検査・巻返し）**を除く**候補（EC・他依頼・他工程）を試行順どおり
-    **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査／§B-3 巻返し行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
-    EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
-    カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
-    EC と後続を **同一担当者で** 交互に詰めると EC がブロックされるため、従来はフェーズ1を先に詰めた。
-    ただし後続が候補化した時点で **検査と同じ物理機械**のフェーズ1や **同一依頼の EC** が全日先に進むと、
-    検査は `start_ge_end_initial`（設備空きが終業より後）で全日失敗する。§B-2/§B-3 後続があるときは
-    「同一依頼EC・検査機と機械共有するフェーズ1・後続」を **配台試行順**でマージし、
-    同順では **後続を EC より先に**、**その他のフェーズ1** とあわせて **配台試行順**で整列し
-    **最大1ロールずつ**だけ周回する（マージ・rest とも一括ドレインしない。検査OPが他工程に
-    同日取り切られ start_ge_end_initial になるのを防ぐ）。
-    リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
-    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
-    試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
-    機械・人の空きはロールごとに更新する（⑦⑧）。
+    â‘ å½“æ—¥å€™è£œã‚’é…�å�°è©¦è¡Œé †ã�®æ˜‡é †ã�«ä¸¦ã�¹ã‚‹ï¼ˆ1 ãƒ‘ã‚¹åˆ†ï¼‰ã€‚
+    **å®Œå…¨äºŒç›¸ï¼ˆÂ§B-2 / Â§B-3ï¼‰**: **ãƒ•ã‚§ãƒ¼ã‚º1**ã�§ **å¾Œç¶šãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³è¡Œ**ï¼ˆç†±èž�ç�€æ¤œæŸ»ãƒ»å·»è¿”ã�—ï¼‰**ã‚’é™¤ã��**å€™è£œï¼ˆECãƒ»ä»–ä¾�é ¼ãƒ»ä»–å·¥ç¨‹ï¼‰ã‚’è©¦è¡Œé †ã�©ã�Šã‚Š
+    **`_drain_rolls_for_task`** ã�—ã€�**ãƒ•ã‚§ãƒ¼ã‚º2**ã�¯ Â§B-2 æ¤œæŸ»ï¼�Â§B-3 å·»è¿”ã�—è¡Œã�®ã�¿ï¼ˆ**å�Œä¸€ä¾�é ¼ã�® EC ã�Œå…¨æ—¥ã�§å®Œèµ°ã�—ã�Ÿå¾Œ**ã�«é™�ã‚Šå€™è£œåŒ–ã€‚
+    EC æ®‹ã�Œã�‚ã‚‹æ—¥ã�¯ `_trial_order_flow_eligible_tasks` ã�§å¾Œç¶šã‚’å¤–ã�—ã€�ç¿Œç¨¼åƒ�æ—¥ä»¥é™�ã‚‚ EC ã�®ã�¿å‰�é€²ã�™ã‚‹ã€‚
+    ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼é€šç®—ã�§ EC å®Œèµ°å¾Œã€�`_run_b2_inspection_rewind_pass` ã�Œæ—¥ä»˜å…ˆé ­ã�‹ã‚‰å¾Œç¶šã� ã�‘å†�èµ°æŸ»ã�™ã‚‹ï¼‰ã€‚
+    EC ã�¨å¾Œç¶šã‚’ **å�Œä¸€æ‹…å½“è€…ã�§** äº¤äº’ã�«è©°ã‚�ã‚‹ã�¨ EC ã�Œãƒ–ãƒ­ãƒƒã‚¯ã�•ã‚Œã‚‹ã�Ÿã‚�ã€�å¾“æ�¥ã�¯ãƒ•ã‚§ãƒ¼ã‚º1ã‚’å…ˆã�«è©°ã‚�ã�Ÿã€‚
+    ã�Ÿã� ã�—å¾Œç¶šã�Œå€™è£œåŒ–ã�—ã�Ÿæ™‚ç‚¹ã�§ **æ¤œæŸ»ã�¨å�Œã�˜ç‰©ç�†æ©Ÿæ¢°**ã�®ãƒ•ã‚§ãƒ¼ã‚º1ã‚„ **å�Œä¸€ä¾�é ¼ã�® EC** ã�Œå…¨æ—¥å…ˆã�«é€²ã‚€ã�¨ã€�
+    æ¤œæŸ»ã�¯ `start_ge_end_initial`ï¼ˆè¨­å‚™ç©ºã��ã�Œçµ‚æ¥­ã‚ˆã‚Šå¾Œï¼‰ã�§å…¨æ—¥å¤±æ•—ã�™ã‚‹ã€‚Â§B-2/Â§B-3 å¾Œç¶šã�Œã�‚ã‚‹ã�¨ã��ã�¯
+    ã€Œå�Œä¸€ä¾�é ¼ECãƒ»æ¤œæŸ»æ©Ÿã�¨æ©Ÿæ¢°å…±æœ‰ã�™ã‚‹ãƒ•ã‚§ãƒ¼ã‚º1ãƒ»å¾Œç¶šã€�ã‚’ **é…�å�°è©¦è¡Œé †**ã�§ãƒžãƒ¼ã‚¸ã�—ã€�
+    å�Œé †ã�§ã�¯ **å¾Œç¶šã‚’ EC ã‚ˆã‚Šå…ˆã�«**ã€�**ã��ã�®ä»–ã�®ãƒ•ã‚§ãƒ¼ã‚º1** ã�¨ã�‚ã‚�ã�›ã�¦ **é…�å�°è©¦è¡Œé †**ã�§æ•´åˆ—ã�—
+    **æœ€å¤§1ãƒ­ãƒ¼ãƒ«ã�šã�¤**ã� ã�‘å‘¨å›žã�™ã‚‹ï¼ˆãƒžãƒ¼ã‚¸ãƒ»rest ã�¨ã‚‚ä¸€æ‹¬ãƒ‰ãƒ¬ã‚¤ãƒ³ã�—ã�ªã�„ã€‚æ¤œæŸ»OPã�Œä»–å·¥ç¨‹ã�«
+    å�Œæ—¥å�–ã‚Šåˆ‡ã‚‰ã‚Œ start_ge_end_initial ã�«ã�ªã‚‹ã�®ã‚’é˜²ã��ï¼‰ã€‚
+    ãƒªãƒ¯ã‚¤ãƒ³ãƒ‰å�´ã�®å¾Œç¶šè¡Œã�¯å�„ãƒ­ãƒ¼ãƒ«ã�«ã�¤ã�„ã�¦ `_roll_pipeline_inspection_assign_room` ã�Šã‚ˆã�³
+    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`ï¼ˆEC ãƒ­ãƒ¼ãƒ«çµ‚äº†æ™‚åˆ»ä¸‹é™�ï¼‰ã�§æ•´å�ˆã�™ã‚‹ã€‚
+    è©¦è¡Œé †æœ€å°�ã�®è¡Œã� ã�‘ã�Œå½“æ—¥å…¥ã‚‰ã�ªã�„å ´å�ˆã�§ã‚‚ã€�**å�Œã�˜ãƒ•ã‚§ãƒ¼ã‚ºå†…ã�§æ¬¡ã�®è©¦è¡Œé †ã�¸é€²ã�¿**ä»–è¨­å‚™ã‚’åŸ‹ã‚�ã‚‹ã€‚
+    æ©Ÿæ¢°ãƒ»äººã�®ç©ºã��ã�¯ãƒ­ãƒ¼ãƒ«ã�”ã�¨ã�«æ›´æ–°ã�™ã‚‹ï¼ˆâ‘¦â‘§ï¼‰ã€‚
     """
     _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
@@ -15886,9 +15700,9 @@ def _trial_order_first_schedule_pass(
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
-                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
-                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
-                    "余剰人数適用(メイン)=%s team=%s",
+                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ãƒ­ãƒ¼ãƒ«ç¢ºå®š ãƒ¡ã‚¤ãƒ³ day=%s machine=%s machine_name=%s "
+                    "start=%s end=%s æŽ¡ç”¨äººæ•°=%s req_num=%s ãƒ¡ã‚¤ãƒ³æŽ¢ç´¢extra_max=%s "
+                    "ä½™å‰°äººæ•°é�©ç”¨(ãƒ¡ã‚¤ãƒ³)=%s team=%s",
                     task.get("task_id"),
                     current_date,
                     eq_line,
@@ -15947,8 +15761,8 @@ def _trial_order_first_schedule_pass(
             phase1_rest.append(t)
 
     def _b2_merged_sort_key(t: dict) -> tuple:
-        # 同じ配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着の壁時計を
-        # 同日早い段階で取りに行く（§B-2 担当者分離で EC と検査は別メンバー想定）。
+        # å�Œã�˜é…�å�°è©¦è¡Œé †ã�§ã�¯å¾Œç¶šï¼ˆæ¤œæŸ»ãƒ»å·»è¿”ã�—ï¼‰ã‚’ EC ã‚ˆã‚Šå…ˆã�«å›žã�—ã€�ç†±èž�ç�€ã�®å£�æ™‚è¨ˆã‚’
+        # å�Œæ—¥æ—©ã�„æ®µéšŽã�§å�–ã‚Šã�«è¡Œã��ï¼ˆÂ§B-2 æ‹…å½“è€…åˆ†é›¢ã�§ EC ã�¨æ¤œæŸ»ã�¯åˆ¥ãƒ¡ãƒ³ãƒ�ãƒ¼æƒ³å®šï¼‰ã€‚
         _fol = bool(
             t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
         )
@@ -16014,8 +15828,8 @@ def _run_b2_inspection_rewind_pass(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    §B-2 / §B-3: EC 側を先に全日で進めた後、検査／巻返し側のみを日付先頭から再走査して配台する。
-    timeline_events を人・設備のブロックテーブルとして使い、日跨ぎの占有を保持する。
+    Â§B-2 / Â§B-3: EC å�´ã‚’å…ˆã�«å…¨æ—¥ã�§é€²ã‚�ã�Ÿå¾Œã€�æ¤œæŸ»ï¼�å·»è¿”ã�—å�´ã�®ã�¿ã‚’æ—¥ä»˜å…ˆé ­ã�‹ã‚‰å†�èµ°æŸ»ã�—ã�¦é…�å�°ã�™ã‚‹ã€‚
+    timeline_events ã‚’äººãƒ»è¨­å‚™ã�®ãƒ–ãƒ­ãƒƒã‚¯ãƒ†ãƒ¼ãƒ–ãƒ«ã�¨ã�—ã�¦ä½¿ã�„ã€�æ—¥è·¨ã�Žã�®å� æœ‰ã‚’ä¿�æŒ�ã�™ã‚‹ã€‚
     """
     target_tids: set[str] = set()
     for t in task_queue:
@@ -16172,10 +15986,10 @@ def append_surplus_staff_after_main_dispatch(
     global_priority_override: dict | None,
 ) -> int:
     """
-    need「配台時追加人数／余力時追加人数」行の上限まで、メイン割付で採用しきれなかった枠を追記する。
-    各タイムラインブロックについて、その時間帯に他ブロックへ未参加（区間重なりなし）で
-    eligible かつ OP/AS スキルの者をサブに追加する。
-    日次始業・依頼切替後始末・加工前準備（event_kind が加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
+    needã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ï¼�ä½™åŠ›æ™‚è¿½åŠ äººæ•°ã€�è¡Œã�®ä¸Šé™�ã�¾ã�§ã€�ãƒ¡ã‚¤ãƒ³å‰²ä»˜ã�§æŽ¡ç”¨ã�—ã��ã‚Œã�ªã�‹ã�£ã�Ÿæž ã‚’è¿½è¨˜ã�™ã‚‹ã€‚
+    å�„ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ãƒ–ãƒ­ãƒƒã‚¯ã�«ã�¤ã�„ã�¦ã€�ã��ã�®æ™‚é–“å¸¯ã�«ä»–ãƒ–ãƒ­ãƒƒã‚¯ã�¸æœªå�‚åŠ ï¼ˆåŒºé–“é‡�ã�ªã‚Šã�ªã�—ï¼‰ã�§
+    eligible ã�‹ã�¤ OP/AS ã‚¹ã‚­ãƒ«ã�®è€…ã‚’ã‚µãƒ–ã�«è¿½åŠ ã�™ã‚‹ã€‚
+    æ—¥æ¬¡å§‹æ¥­ãƒ»ä¾�é ¼åˆ‡æ›¿å¾Œå§‹æœ«ãƒ»åŠ å·¥å‰�æº–å‚™ï¼ˆevent_kind ã�ŒåŠ å·¥ä»¥å¤–ï¼‰ã�¯æœ¬å‡¦ç�†ã�®å¯¾è±¡å¤–ï¼ˆä½™å‰°ã‚µãƒ–ã�¯åŠ å·¥ã�«ã�®ã�¿è¿½è¨˜ï¼‰ã€‚
     """
     gpo = global_priority_override or {}
     if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
@@ -16363,9 +16177,9 @@ def append_surplus_staff_after_main_dispatch(
         if _trace_schedule_task_enabled(tid):
             _log_dispatch_trace_schedule(
                 tid,
-                "[配台トレース task=%s] 余力追記(メイン完了後) day=%s machine=%s machine_name=%s "
-                "start=%s end=%s 追記人数=%s 追記前人数=%s 追記後人数=%s req_num=%s "
-                "need追加枠(シート)=%s 履歴黄(余剰人数超過)=%s 追記メンバー=%s",
+                "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ä½™åŠ›è¿½è¨˜(ãƒ¡ã‚¤ãƒ³å®Œäº†å¾Œ) day=%s machine=%s machine_name=%s "
+                "start=%s end=%s è¿½è¨˜äººæ•°=%s è¿½è¨˜å‰�äººæ•°=%s è¿½è¨˜å¾Œäººæ•°=%s req_num=%s "
+                "needè¿½åŠ æž (ã‚·ãƒ¼ãƒˆ)=%s å±¥æ­´é»„(ä½™å‰°äººæ•°è¶…é�Ž)=%s è¿½è¨˜ãƒ¡ãƒ³ãƒ�ãƒ¼=%s",
                 tid,
                 d,
                 str(machine or "").strip(),
@@ -16385,16 +16199,16 @@ def append_surplus_staff_after_main_dispatch(
 
 
 # =========================================================
-# 3. メイン計画生成 (日毎ループ・持ち越し対応)
-#    段階2の本体。plan_simulation_stage2 からのみ呼ばれる想定。
-#    配台計画シート読込 → タスクキュー → 日付ごとに設備・OP割付 → 結果ブック出力。
+# 3. ãƒ¡ã‚¤ãƒ³è¨ˆç”»ç”Ÿæˆ� (æ—¥æ¯Žãƒ«ãƒ¼ãƒ—ãƒ»æŒ�ã�¡è¶Šã�—å¯¾å¿œ)
+#    æ®µéšŽ2ã�®æœ¬ä½“ã€‚plan_simulation_stage2 ã�‹ã‚‰ã�®ã�¿å‘¼ã�°ã‚Œã‚‹æƒ³å®šã€‚
+#    é…�å�°è¨ˆç”»ã‚·ãƒ¼ãƒˆèª­è¾¼ â†’ ã‚¿ã‚¹ã‚¯ã‚­ãƒ¥ãƒ¼ â†’ æ—¥ä»˜ã�”ã�¨ã�«è¨­å‚™ãƒ»OPå‰²ä»˜ â†’ çµ�æžœãƒ–ãƒƒã‚¯å‡ºåŠ›ã€‚
 # =========================================================
 def generate_plan():
     """
-    段階2のメイン処理。戻り値なし（ログ・Excel 出力で完結）。
+    æ®µéšŽ2ã�®ãƒ¡ã‚¤ãƒ³å‡¦ç�†ã€‚æˆ»ã‚Šå€¤ã�ªã�—ï¼ˆãƒ­ã‚°ãƒ»Excel å‡ºåŠ›ã�§å®Œçµ�ï¼‰ã€‚
 
-    前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
-    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組のみ）、および log/execution_log.txt。
+    å‰�æ��: ç’°å¢ƒå¤‰æ•° TASK_INPUT_WORKBOOKã€�ã‚«ãƒ¬ãƒ³ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã�Œã‚¹ã‚¯ãƒªãƒ—ãƒˆãƒ•ã‚©ãƒ«ãƒ€ã€‚
+    å‡ºåŠ›: ``output_dir`` ç›´ä¸‹ã�® ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``ï¼ˆæœ€æ–°1çµ„ã�®ã�¿ï¼‰ã€�ã�Šã‚ˆã�³ log/execution_log.txtã€‚
     """
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     with _override_default_factory_hours_from_master(master_abs):
@@ -16402,8 +16216,8 @@ def generate_plan():
 
 
 def _generate_plan_impl():
-    # 配台トレース（設定シート A3 以降のみ）は、メンバー0人等で早期 return しても
-    # execution_log に残るよう skills 読込より前で確定・ログする。
+    # é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ï¼ˆè¨­å®šã‚·ãƒ¼ãƒˆ A3 ä»¥é™�ã�®ã�¿ï¼‰ã�¯ã€�ãƒ¡ãƒ³ãƒ�ãƒ¼0äººç­‰ã�§æ—©æœŸ return ã�—ã�¦ã‚‚
+    # execution_log ã�«æ®‹ã‚‹ã‚ˆã�† skills èª­è¾¼ã‚ˆã‚Šå‰�ã�§ç¢ºå®šãƒ»ãƒ­ã‚°ã�™ã‚‹ã€‚
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
@@ -16412,9 +16226,9 @@ def _generate_plan_impl():
     )
     if _ids_from_sheet:
         _preview = _ids_from_sheet[:25]
-        _suffix = " …" if len(_ids_from_sheet) > 25 else ""
+        _suffix = " â€¦" if len(_ids_from_sheet) > 25 else ""
         logging.info(
-            "設定シート「%s」A3 以降: トレース用依頼NOを %s 件読み込み（%s%s）",
+            "è¨­å®šã‚·ãƒ¼ãƒˆã€Œ%sã€�A3 ä»¥é™�: ãƒˆãƒ¬ãƒ¼ã‚¹ç”¨ä¾�é ¼NOã‚’ %s ä»¶èª­ã�¿è¾¼ã�¿ï¼ˆ%s%sï¼‰",
             APP_CONFIG_SHEET_NAME,
             len(_ids_from_sheet),
             ", ".join(_preview),
@@ -16422,17 +16236,17 @@ def _generate_plan_impl():
         )
     else:
         logging.info(
-            "設定シート「%s」A3 以降: トレース用依頼NOは無し（空またはシート無し）",
+            "è¨­å®šã‚·ãƒ¼ãƒˆã€Œ%sã€�A3 ä»¥é™�: ãƒˆãƒ¬ãƒ¼ã‚¹ç”¨ä¾�é ¼NOã�¯ç„¡ã�—ï¼ˆç©ºã�¾ã�Ÿã�¯ã‚·ãƒ¼ãƒˆç„¡ã�—ï¼‰",
             APP_CONFIG_SHEET_NAME,
         )
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
-            "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
+            "é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹: æœ‰åŠ¹ task_id = %sï¼ˆè¨­å®šã‚·ãƒ¼ãƒˆ A3 ä»¥é™�ï¼‰",
             ", ".join(sorted(TRACE_SCHEDULE_TASK_IDS)),
         )
     else:
         logging.info(
-            "配台トレース: 対象なし（[配台トレース …] ログは出ません）"
+            "é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹: å¯¾è±¡ã�ªã�—ï¼ˆ[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ â€¦] ãƒ­ã‚°ã�¯å‡ºã�¾ã�›ã‚“ï¼‰"
         )
     _ids_debug_dispatch_raw = _read_debug_dispatch_task_ids_from_config_sheet(_wb_trace)
     _dbg_norm: list[str] = []
@@ -16443,7 +16257,7 @@ def _generate_plan_impl():
     DEBUG_DISPATCH_ONLY_TASK_IDS = frozenset(_dbg_norm)
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
         logging.warning(
-            "デバッグ配台: 「%s」B3以降により配台対象を %s 件の依頼NOに限定します: %s",
+            "ãƒ‡ãƒ�ãƒƒã‚°é…�å�°: ã€Œ%sã€�B3ä»¥é™�ã�«ã‚ˆã‚Šé…�å�°å¯¾è±¡ã‚’ %s ä»¶ã�®ä¾�é ¼NOã�«é™�å®šã�—ã�¾ã�™: %s",
             APP_CONFIG_SHEET_NAME,
             len(DEBUG_DISPATCH_ONLY_TASK_IDS),
             ", ".join(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS)),
@@ -16451,7 +16265,7 @@ def _generate_plan_impl():
         _show_stage2_debug_dispatch_mode_dialog(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS))
     if TRACE_TEAM_ASSIGN_TASK_ID:
         logging.info(
-            "環境変数 TRACE_TEAM_ASSIGN_TASK_ID=%r → チーム割当トレース有効",
+            "ç’°å¢ƒå¤‰æ•° TRACE_TEAM_ASSIGN_TASK_ID=%r â†’ ãƒ�ãƒ¼ãƒ å‰²å½“ãƒˆãƒ¬ãƒ¼ã‚¹æœ‰åŠ¹",
             TRACE_TEAM_ASSIGN_TASK_ID,
         )
 
@@ -16470,21 +16284,21 @@ def _generate_plan_impl():
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
         logging.info(
-            "組み合わせ表: 工程+機械キー %s 種類・編成行 %s を配台プリセットとして読み込みました。",
+            "çµ„ã�¿å�ˆã‚�ã�›è¡¨: å·¥ç¨‹+æ©Ÿæ¢°ã‚­ãƒ¼ %s ç¨®é¡žãƒ»ç·¨æˆ�è¡Œ %s ã‚’é…�å�°ãƒ—ãƒªã‚»ãƒƒãƒˆã�¨ã�—ã�¦èª­ã�¿è¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
             len(team_combo_presets),
             _nrules,
         )
     elif TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         logging.info(
-            "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のチーム探索のみ。"
+            "çµ„ã�¿å�ˆã‚�ã�›è¡¨: ãƒ—ãƒªã‚»ãƒƒãƒˆç„¡ã�—ï¼ˆã‚·ãƒ¼ãƒˆæ¬ å¦‚ãƒ»ç©ºãƒ»ã�¾ã�Ÿã�¯èª­è¾¼å¤±æ•—ï¼‰ã€‚å¾“æ�¥ã�®ãƒ�ãƒ¼ãƒ æŽ¢ç´¢ã�®ã�¿ã€‚"
         )
     if not members:
         master_abs = os.path.abspath(MASTER_FILE)
         logging.error(
-            "段階2を中断しました: メンバーが0人です（マスタの skills が空、または読み込み失敗）。"
-            " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置き、"
-            "planning_core のカレントがそのフォルダになるよう python\\ 配置を確認してください。"
-            " この状態では production_plan / member_schedule は出力されません。",
+            "æ®µéšŽ2ã‚’ä¸­æ–­ã�—ã�¾ã�—ã�Ÿ: ãƒ¡ãƒ³ãƒ�ãƒ¼ã�Œ0äººã�§ã�™ï¼ˆãƒžã‚¹ã‚¿ã�® skills ã�Œç©ºã€�ã�¾ã�Ÿã�¯èª­ã�¿è¾¼ã�¿å¤±æ•—ï¼‰ã€‚"
+            " æœŸå¾…ãƒ‘ã‚¹: %s ï¼ˆã‚«ãƒ¬ãƒ³ãƒˆ: %sï¼‰ã€‚ãƒ†ã‚¹ãƒˆã‚³ãƒ¼ãƒ‰ç›´ä¸‹ã�« master.xlsm ã‚’ç½®ã��ã€�"
+            "planning_core ã�®ã‚«ãƒ¬ãƒ³ãƒˆã�Œã��ã�®ãƒ•ã‚©ãƒ«ãƒ€ã�«ã�ªã‚‹ã‚ˆã�† python\\ é…�ç½®ã‚’ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„ã€‚"
+            " ã�“ã�®çŠ¶æ…‹ã�§ã�¯ production_plan / member_schedule ã�¯å‡ºåŠ›ã�•ã‚Œã�¾ã�›ã‚“ã€‚",
             master_abs,
             os.getcwd(),
         )
@@ -16499,7 +16313,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
+            "æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼: èª­è¾¼ä¾‹å¤–ã�®ã�Ÿã‚�å� æœ‰ã�ªã�—ã�¨ã�—ã�¦ç¶šè¡Œã�—ã�¾ã�™ (%s)", e
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
     try:
@@ -16511,7 +16325,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "機械準備/依頼切替・日次始業設定: 読込例外のため無視します (%s)", e
+            "æ©Ÿæ¢°æº–å‚™/ä¾�é ¼åˆ‡æ›¿ãƒ»æ—¥æ¬¡å§‹æ¥­è¨­å®š: èª­è¾¼ä¾‹å¤–ã�®ã�Ÿã‚�ç„¡è¦–ã�—ã�¾ã�™ (%s)", e
         )
         _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
@@ -16522,11 +16336,11 @@ def _generate_plan_impl():
         _STAGE2_REGULAR_SHIFT_START = _rs_a15
         if _rs_a15 is not None:
             logging.info(
-                "日次始業準備: 定常開始 master メイン A15=%s を採用（[開始, 開始+分) を壁時計で占有。A15 無効時は従来の勤怠 forward）",
+                "æ—¥æ¬¡å§‹æ¥­æº–å‚™: å®šå¸¸é–‹å§‹ master ãƒ¡ã‚¤ãƒ³ A15=%s ã‚’æŽ¡ç”¨ï¼ˆ[é–‹å§‹, é–‹å§‹+åˆ†) ã‚’å£�æ™‚è¨ˆã�§å� æœ‰ã€‚A15 ç„¡åŠ¹æ™‚ã�¯å¾“æ�¥ã�®å‹¤æ€  forwardï¼‰",
                 _rs_a15.strftime("%H:%M"),
             )
     except Exception as e:
-        logging.warning("定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e)
+        logging.warning("å®šå¸¸é–‹å§‹(A15) èª­è¾¼å¤±æ•—: æ—¥æ¬¡å§‹æ¥­ã�¯å¾“æ�¥ã�®å‹¤æ€  forward ã�«ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯ (%s)", e)
         _STAGE2_REGULAR_SHIFT_START = None
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
@@ -16535,7 +16349,7 @@ def _generate_plan_impl():
             for ivs in _dm.values()
         )
         logging.info(
-            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映します。",
+            "æ©Ÿæ¢°ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼: %s æ—¥åˆ†ãƒ»è¨­å‚™å� æœ‰ãƒ–ãƒ­ãƒƒã‚¯è¨ˆ %s ã‚’é…�å�°ã�«å��æ˜ ã�—ã�¾ã�™ã€‚",
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
         )
@@ -16546,22 +16360,22 @@ def _generate_plan_impl():
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
     ):
         logging.info(
-            "need配台時追加人数: メイン割付は基本必要人数のみ。"
-            "余力は全シミュレーション後、時間重なりのない未割当かつスキル適合者をサブに追記します。"
-            "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
+            "needé…�å�°æ™‚è¿½åŠ äººæ•°: ãƒ¡ã‚¤ãƒ³å‰²ä»˜ã�¯åŸºæœ¬å¿…è¦�äººæ•°ã�®ã�¿ã€‚"
+            "ä½™åŠ›ã�¯å…¨ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³å¾Œã€�æ™‚é–“é‡�ã�ªã‚Šã�®ã�ªã�„æœªå‰²å½“ã�‹ã�¤ã‚¹ã‚­ãƒ«é�©å�ˆè€…ã‚’ã‚µãƒ–ã�«è¿½è¨˜ã�—ã�¾ã�™ã€‚"
+            "ï¼ˆãƒ¡ã‚¤ãƒ³ã�§å¢—å“¡æŽ¢ç´¢ã�™ã‚‹å¾“æ�¥æŒ™å‹•: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1ï¼‰"
         )
 
-    # 段階2の基準日時は「マクロ実行時刻」ではなく「データ抽出日」を使用
+    # æ®µéšŽ2ã�®åŸºæº–æ—¥æ™‚ã�¯ã€Œãƒžã‚¯ãƒ­å®Ÿè¡Œæ™‚åˆ»ã€�ã�§ã�¯ã�ªã��ã€Œãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥ã€�ã‚’ä½¿ç”¨
     data_extract_dt = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
     data_extract_dt_str = (
-        base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
+        base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "â€”"
     )
     logging.info(
-        "計画基準日時: %s（%s）",
+        "è¨ˆç”»åŸºæº–æ—¥æ™‚: %sï¼ˆ%sï¼‰",
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
-        "データ抽出日" if data_extract_dt is not None else "現在時刻フォールバック",
+        "ãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥" if data_extract_dt is not None else "ç�¾åœ¨æ™‚åˆ»ãƒ•ã‚©ãƒ¼ãƒ«ãƒ�ãƒƒã‚¯",
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
@@ -16579,32 +16393,32 @@ def _generate_plan_impl():
             attendance_data, members, _factory_closure_dates
         )
         logging.info(
-            "メイン・グローバルコメント: 工場休業扱いの日付 → %s",
+            "ãƒ¡ã‚¤ãƒ³ãƒ»ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆ: å·¥å ´ä¼‘æ¥­æ‰±ã�„ã�®æ—¥ä»˜ â†’ %s",
             ", ".join(str(x) for x in sorted(_factory_closure_dates)),
         )
-    ai_log_data["メイン_グローバル_工場休業日(解析)"] = (
+    ai_log_data["ãƒ¡ã‚¤ãƒ³_ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«_å·¥å ´ä¼‘æ¥­æ—¥(è§£æž�)"] = (
         ", ".join(str(x) for x in sorted(_factory_closure_dates))
         if _factory_closure_dates
-        else "（なし）"
+        else "ï¼ˆã�ªã�—ï¼‰"
     )
     _sn = str(global_priority_override.get("scheduler_notes_ja") or "").strip()
     if _sn:
-        ai_log_data["メイン_グローバル_未適用メモ(AI)"] = _sn[:2000]
+        ai_log_data["ãƒ¡ã‚¤ãƒ³_ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«_æœªé�©ç”¨ãƒ¡ãƒ¢(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 結果シートは「基準日（データ抽出日）」以降のみ表示・計画対象とする
+    # çµ�æžœã‚·ãƒ¼ãƒˆã�¯ã€ŒåŸºæº–æ—¥ï¼ˆãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥ï¼‰ã€�ä»¥é™�ã�®ã�¿è¡¨ç¤ºãƒ»è¨ˆç”»å¯¾è±¡ã�¨ã�™ã‚‹
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
-        logging.error("当日以降の処理対象日付がありません。")
-        _try_write_main_sheet_gemini_usage_summary("段階2")
+        logging.error("å½“æ—¥ä»¥é™�ã�®å‡¦ç�†å¯¾è±¡æ—¥ä»˜ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚")
+        _try_write_main_sheet_gemini_usage_summary("æ®µéšŽ2")
         return
 
-    # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
+    # ã‚¿ã‚¹ã‚¯å…¥åŠ›: ãƒ–ãƒƒã‚¯å†…ã€Œé…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã€�ï¼ˆæ®µéšŽ1ã�§å‡ºåŠ›â†’å�–ã‚Šè¾¼ã�¿å¾Œã�«ç·¨é›†ï¼‰
     try:
         tasks_df = load_planning_tasks_df()
     except Exception as e:
-        logging.error(f"配台計画タスクシート読み込みエラー: {e}")
-        _try_write_main_sheet_gemini_usage_summary("段階2")
+        logging.error(f"é…�å�°è¨ˆç”»ã‚¿ã‚¹ã‚¯ã‚·ãƒ¼ãƒˆèª­ã�¿è¾¼ã�¿ã‚¨ãƒ©ãƒ¼: {e}")
+        _try_write_main_sheet_gemini_usage_summary("æ®µéšŽ2")
         return
 
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
@@ -16617,47 +16431,47 @@ def _generate_plan_impl():
         tasks_df = tasks_df.loc[_dbg_mask].copy()
         _n_tasks_after = len(tasks_df)
         logging.warning(
-            "デバッグ配台: 「%s」の行を %s → %s に絞り込みました。",
+            "ãƒ‡ãƒ�ãƒƒã‚°é…�å�°: ã€Œ%sã€�ã�®è¡Œã‚’ %s â†’ %s ã�«çµžã‚Šè¾¼ã�¿ã�¾ã�—ã�Ÿã€‚",
             PLAN_INPUT_SHEET_NAME,
             _n_tasks_before,
             _n_tasks_after,
         )
         if _n_tasks_after == 0:
             logging.error(
-                "デバッグ配台: B3以降の依頼NOに一致する行がありません。段階2を中断します。"
+                "ãƒ‡ãƒ�ãƒƒã‚°é…�å�°: B3ä»¥é™�ã�®ä¾�é ¼NOã�«ä¸€è‡´ã�™ã‚‹è¡Œã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚æ®µéšŽ2ã‚’ä¸­æ–­ã�—ã�¾ã�™ã€‚"
             )
-            _try_write_main_sheet_gemini_usage_summary("段階2")
+            _try_write_main_sheet_gemini_usage_summary("æ®µéšŽ2")
             return
 
     if global_priority_raw.strip():
         snip = global_priority_raw[:2500]
         if len(global_priority_raw) > 2500:
-            snip += "…"
-        ai_log_data["メイン_再優先特別記載(原文)"] = snip
+            snip += "â€¦"
+        ai_log_data["ãƒ¡ã‚¤ãƒ³_å†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰(åŽŸæ–‡)"] = snip
     else:
-        ai_log_data["メイン_再優先特別記載(原文)"] = (
-            "（空、またはメインシートに「グローバルコメント」見出しが見つかりません）"
+        ai_log_data["ãƒ¡ã‚¤ãƒ³_å†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰(åŽŸæ–‡)"] = (
+            "ï¼ˆç©ºã€�ã�¾ã�Ÿã�¯ãƒ¡ã‚¤ãƒ³ã‚·ãƒ¼ãƒˆã�«ã€Œã‚°ãƒ­ãƒ¼ãƒ�ãƒ«ã‚³ãƒ¡ãƒ³ãƒˆã€�è¦‹å‡ºã�—ã�Œè¦‹ã�¤ã�‹ã‚Šã�¾ã�›ã‚“ï¼‰"
         )
-    ai_log_data["メイン_再優先特別記載(AI)"] = json.dumps(
+    ai_log_data["ãƒ¡ã‚¤ãƒ³_å†�å„ªå…ˆç‰¹åˆ¥è¨˜è¼‰(AI)"] = json.dumps(
         global_priority_override, ensure_ascii=False
     )
     if global_priority_override.get("ignore_skill_requirements"):
         logging.warning(
-            "メイン再優先特記: スキル要件を無視して配台します。%s",
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ã‚¹ã‚­ãƒ«è¦�ä»¶ã‚’ç„¡è¦–ã�—ã�¦é…�å�°ã�—ã�¾ã�™ã€‚%s",
             global_priority_override.get("interpretation_ja", ""),
         )
     if global_priority_override.get("ignore_need_minimum"):
         logging.warning(
-            "メイン再優先特記: チーム人数を1名に固定します（need・行の必要OP上書きより優先）。%s",
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: ãƒ�ãƒ¼ãƒ äººæ•°ã‚’1å��ã�«å›ºå®šã�—ã�¾ã�™ï¼ˆneedãƒ»è¡Œã�®å¿…è¦�OPä¸Šæ›¸ã��ã‚ˆã‚Šå„ªå…ˆï¼‰ã€‚%s",
             global_priority_override.get("interpretation_ja", ""),
         )
     if global_priority_override.get("abolish_all_scheduling_limits"):
         logging.warning(
-            "メイン再優先特記: 設備専有・原反同日開始・指定開始時刻・マクロ実行時刻下限を適用しません。%s",
+            "ãƒ¡ã‚¤ãƒ³å†�å„ªå…ˆç‰¹è¨˜: è¨­å‚™å°‚æœ‰ãƒ»åŽŸå��å�Œæ—¥é–‹å§‹ãƒ»æŒ‡å®šé–‹å§‹æ™‚åˆ»ãƒ»ãƒžã‚¯ãƒ­å®Ÿè¡Œæ™‚åˆ»ä¸‹é™�ã‚’é�©ç”¨ã�—ã�¾ã�›ã‚“ã€‚%s",
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日」判定と最早開始時刻には基準日時（データ抽出日）を使う
+    # ã€Œå½“æ—¥ã€�åˆ¤å®šã�¨æœ€æ—©é–‹å§‹æ™‚åˆ»ã�«ã�¯åŸºæº–æ—¥æ™‚ï¼ˆãƒ‡ãƒ¼ã‚¿æŠ½å‡ºæ—¥ï¼‰ã‚’ä½¿ã�†
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
@@ -16671,7 +16485,7 @@ def _generate_plan_impl():
         global_priority_override,
         equipment_list,
     )
-    # 開始日が非稼働日の場合は、直前の稼働日へ補正（例: 4/4, 4/5 が非稼働なら 4/3 へ）
+    # é–‹å§‹æ—¥ã�Œé�žç¨¼åƒ�æ—¥ã�®å ´å�ˆã�¯ã€�ç›´å‰�ã�®ç¨¼åƒ�æ—¥ã�¸è£œæ­£ï¼ˆä¾‹: 4/4, 4/5 ã�Œé�žç¨¼åƒ�ã�ªã‚‰ 4/3 ã�¸ï¼‰
     working_days = [
         d for d in sorted_dates
         if any(attendance_data[d][m]["is_working"] for m in attendance_data[d])
@@ -16692,7 +16506,7 @@ def _generate_plan_impl():
             if prev_work is not None:
                 if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID:
                     logging.info(
-                        "DEBUG[task=%s] start_date_req を非稼働日補正: %s -> %s",
+                        "DEBUG[task=%s] start_date_req ã‚’é�žç¨¼åƒ�æ—¥è£œæ­£: %s -> %s",
                         DEBUG_TASK_ID,
                         req_d,
                         prev_work,
@@ -16708,11 +16522,11 @@ def _generate_plan_impl():
 
     if not task_queue:
         logging.warning(
-            f"有効なタスクがありません。「{PLAN_INPUT_SHEET_NAME}」の「依頼NO」「工程名」「換算数量」、"
-            "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
+            f"æœ‰åŠ¹ã�ªã‚¿ã‚¹ã‚¯ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚ã€Œ{PLAN_INPUT_SHEET_NAME}ã€�ã�®ã€Œä¾�é ¼NOã€�ã€Œå·¥ç¨‹å��ã€�ã€Œæ�›ç®—æ•°é‡�ã€�ã€�"
+            "ã�¾ã�Ÿã�¯å®Œäº†åŒºåˆ†ãƒ»å®Ÿå‡ºæ�¥é«˜æ�›ç®—ã�«ã‚ˆã‚Šæ®‹é‡�ã�Œç„¡ã�„è¡Œã�®ã�¿ã�®å�¯èƒ½æ€§ã�Œã�‚ã‚Šã�¾ã�™ã€‚"
         )
 
-    # 配台試行順: シート列が揃っていればそれを採用。欠損時は §B 帯・納期・need 列順でソートし EC 隣接後に 1..n
+    # é…�å�°è©¦è¡Œé †: ã‚·ãƒ¼ãƒˆåˆ—ã�Œæ�ƒã�£ã�¦ã�„ã‚Œã�°ã��ã‚Œã‚’æŽ¡ç”¨ã€‚æ¬ æ��æ™‚ã�¯ Â§B å¸¯ãƒ»ç´�æœŸãƒ»need åˆ—é †ã�§ã‚½ãƒ¼ãƒˆã�— EC éš£æŽ¥å¾Œã�« 1..n
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
@@ -16721,7 +16535,7 @@ def _generate_plan_impl():
         if dbg_items:
             t0 = dbg_items[0]
             logging.info(
-                "DEBUG[task=%s] queue基準: start_date_req=%s due_basis=%s answer_due=%s specified_due=%s specified_due_ov=%s due_source=%s priority=%s in_progress=%s remark=%s",
+                "DEBUG[task=%s] queueåŸºæº–: start_date_req=%s due_basis=%s answer_due=%s specified_due=%s specified_due_ov=%s due_source=%s priority=%s in_progress=%s remark=%s",
                 DEBUG_TASK_ID,
                 t0.get("start_date_req"),
                 t0.get("due_basis_date"),
@@ -16734,15 +16548,15 @@ def _generate_plan_impl():
                 t0.get("has_special_remark"),
             )
         else:
-            logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残量0/依頼NO不一致の可能性）。", DEBUG_TASK_ID)
+            logging.info("DEBUG[task=%s] task_queueã�«å­˜åœ¨ã�—ã�¾ã�›ã‚“ï¼ˆå®Œäº†/æ®‹é‡�0/ä¾�é ¼NOä¸�ä¸€è‡´ã�®å�¯èƒ½æ€§ï¼‰ã€‚", DEBUG_TASK_ID)
     timeline_events = []
 
     # ---------------------------------------------------------
-    # 日毎のスケジューリングループ
-    # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
-    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING が True のときのみ: 納期基準を過ぎても残がある依頼について
-    # due_basis +1・当該依頼の割当戻し・先頭から再実行。各再試行前に勤怠拡張分はマスタ日付へ巻き戻す。
-    # 既定 False のため通常は 1 パス（カレンダー通し 1 回）のみ。
+    # æ—¥æ¯Žã�®ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒªãƒ³ã‚°ãƒ«ãƒ¼ãƒ—
+    # STAGE2_EXTEND_ATTENDANCE_CALENDAR ã�Œ True ã�®ã�¨ã��ã�®ã�¿ã€�æ®‹ã‚¿ã‚¹ã‚¯ã�Œã�‚ã‚Œã�°å‹¤æ€ ã‚’æ—¥ä»˜è¤‡è£½ã�§æ‹¡å¼µã€‚
+    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING ã�Œ True ã�®ã�¨ã��ã�®ã�¿: ç´�æœŸåŸºæº–ã‚’é�Žã�Žã�¦ã‚‚æ®‹ã�Œã�‚ã‚‹ä¾�é ¼ã�«ã�¤ã�„ã�¦
+    # due_basis +1ãƒ»å½“è©²ä¾�é ¼ã�®å‰²å½“æˆ»ã�—ãƒ»å…ˆé ­ã�‹ã‚‰å†�å®Ÿè¡Œã€‚å�„å†�è©¦è¡Œå‰�ã�«å‹¤æ€ æ‹¡å¼µåˆ†ã�¯ãƒžã‚¹ã‚¿æ—¥ä»˜ã�¸å·»ã��æˆ»ã�™ã€‚
+    # æ—¢å®š False ã�®ã�Ÿã‚�é€šå¸¸ã�¯ 1 ãƒ‘ã‚¹ï¼ˆã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼é€šã�— 1 å›žï¼‰ã�®ã�¿ã€‚
     # ---------------------------------------------------------
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
@@ -16757,18 +16571,18 @@ def _generate_plan_impl():
     if DISPATCH_INTERVAL_MIRROR_ENFORCE:
         _dispatch_interval_mirror = DispatchIntervalMirror()
         logging.info(
-            "DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡します"
-            "（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。"
+            "DISPATCH_INTERVAL_MIRROR_ENFORCE: è¨­å‚™ãƒ»äººã�®å� æœ‰ã‚’åŒºé–“ãƒŸãƒ©ãƒ¼ã�§è¿½è·¡ã�—ã�¾ã�™"
+            "ï¼ˆç„¡åŠ¹åŒ–ã�¯ è¨­å®š_ç’°å¢ƒå¤‰æ•° ç­‰ã�§ DISPATCH_INTERVAL_MIRROR_ENFORCE=0ï¼‰ã€‚"
         )
 
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
-            "依頼NO直列配台: 有効（STAGE2_SERIAL_DISPATCH_BY_TASK_ID）。"
-            " 各日はアクティブな依頼NOの行だけが候補のため、当該依頼が詰まると他依頼は一切進みません。"
+            "ä¾�é ¼NOç›´åˆ—é…�å�°: æœ‰åŠ¹ï¼ˆSTAGE2_SERIAL_DISPATCH_BY_TASK_IDï¼‰ã€‚"
+            " å�„æ—¥ã�¯ã‚¢ã‚¯ãƒ†ã‚£ãƒ–ã�ªä¾�é ¼NOã�®è¡Œã� ã�‘ã�Œå€™è£œã�®ã�Ÿã‚�ã€�å½“è©²ä¾�é ¼ã�Œè©°ã�¾ã‚‹ã�¨ä»–ä¾�é ¼ã�¯ä¸€åˆ‡é€²ã�¿ã�¾ã�›ã‚“ã€‚"
         )
     else:
         logging.info(
-            "依頼NO直列配台: 無効。start_date を満たす全行が当日候補になり、配台試行順・設備ルールで順序付けします。"
+            "ä¾�é ¼NOç›´åˆ—é…�å�°: ç„¡åŠ¹ã€‚start_date ã‚’æº€ã�Ÿã�™å…¨è¡Œã�Œå½“æ—¥å€™è£œã�«ã�ªã‚Šã€�é…�å�°è©¦è¡Œé †ãƒ»è¨­å‚™ãƒ«ãƒ¼ãƒ«ã�§é †åº�ä»˜ã�‘ã�—ã�¾ã�™ã€‚"
         )
 
     _due_shift_retry_count_by_request: dict[str, int] = {}
@@ -16800,7 +16614,7 @@ def _generate_plan_impl():
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
             daily_status = attendance_data[current_date]
-            # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
+            # è¨­å‚™ã�”ã�¨ã�®ç©ºã��æ™‚åˆ»ï¼ˆå�Œä¸€è¨­å‚™ã�®å�Œæ™‚ä¸¦è¡Œå‰²å½“ã‚’é˜²æ­¢ï¼‰
             machine_avail_dt = {}
             
             avail_dt = {}
@@ -16832,7 +16646,7 @@ def _generate_plan_impl():
                 )
 
             if not avail_dt:
-                logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
+                logging.info("DEBUG[day=%s] ç¨¼åƒ�ãƒ¡ãƒ³ãƒ�ãƒ¼0ã�®ã�Ÿã‚�å‰²ä»˜ã‚¹ã‚­ãƒƒãƒ—", current_date)
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -16860,11 +16674,11 @@ def _generate_plan_impl():
                 )
                 _pending_rows = sum(1 for t in task_queue if t["remaining_units"] > 0)
                 logging.info(
-                    "依頼NO直列配台 day=%s アクティブ依頼NO=%s 直列リスト位置=%s/%s "
-                    "当日候補行数(直列前)=%s 直列後=%s キュー残行(全日)=%s",
+                    "ä¾�é ¼NOç›´åˆ—é…�å�° day=%s ã‚¢ã‚¯ãƒ†ã‚£ãƒ–ä¾�é ¼NO=%s ç›´åˆ—ãƒªã‚¹ãƒˆä½�ç½®=%s/%s "
+                    "å½“æ—¥å€™è£œè¡Œæ•°(ç›´åˆ—å‰�)=%s ç›´åˆ—å¾Œ=%s ã‚­ãƒ¥ãƒ¼æ®‹è¡Œ(å…¨æ—¥)=%s",
                     current_date,
-                    _active_serial_tid if _active_serial_tid is not None else "—",
-                    _serial_pos if _serial_pos else "—",
+                    _active_serial_tid if _active_serial_tid is not None else "â€”",
+                    _serial_pos if _serial_pos else "â€”",
                     len(_serial_order_tids),
                     _tasks_today_before_serial,
                     len(tasks_today),
@@ -16877,7 +16691,7 @@ def _generate_plan_impl():
                     default=None,
                 )
                 logging.info(
-                    "DEBUG[day=%s] 割付対象タスク0件 pending_total=%s earliest_start_date_req=%s",
+                    "DEBUG[day=%s] å‰²ä»˜å¯¾è±¡ã‚¿ã‚¹ã‚¯0ä»¶ pending_total=%s earliest_start_date_req=%s",
                     current_date,
                     pending_total,
                     earliest_wait,
@@ -16886,7 +16700,7 @@ def _generate_plan_impl():
                 has_dbg_today = any(str(t.get("task_id", "")).strip() == DEBUG_TASK_ID for t in tasks_today)
                 if current_date.isoformat() == "2026-04-03" or has_dbg_today:
                     logging.info(
-                        "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s 含む=%s)",
+                        "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s å�«ã‚€=%s)",
                         current_date,
                         len(avail_dt),
                         len(tasks_today),
@@ -16995,7 +16809,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[配台トレース task=%s] スキップ: 同一依頼NOの先行工程待ち day=%s machine=%s rem=%.4f",
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: å�Œä¸€ä¾�é ¼NOã�®å…ˆè¡Œå·¥ç¨‹å¾…ã�¡ day=%s machine=%s rem=%.4f",
                                     task.get("task_id"),
                                     current_date,
                                     task.get("machine"),
@@ -17019,8 +16833,8 @@ def _generate_plan_impl():
                                 )
                                 _log_dispatch_trace_schedule(
                                     _tid_tr,
-                                    "[配台トレース task=%s] スキップ: §B-2/§B-3 後続ロール枠ゼロ day=%s machine=%s "
-                                    "ec累計完了R=%.4f 後続累計完了R=%.4f rem_follower=%.4f",
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: Â§B-2/Â§B-3 å¾Œç¶šãƒ­ãƒ¼ãƒ«æž ã‚¼ãƒ­ day=%s machine=%s "
+                                    "ecç´¯è¨ˆå®Œäº†R=%.4f å¾Œç¶šç´¯è¨ˆå®Œäº†R=%.4f rem_follower=%.4f",
                                     _tid_tr,
                                     current_date,
                                     task.get("machine"),
@@ -17043,8 +16857,8 @@ def _generate_plan_impl():
                                 if _trace_schedule_task_enabled(task.get("task_id")):
                                     _log_dispatch_trace_schedule(
                                         task.get("task_id"),
-                                        "[配台トレース task=%s] スキップ: 同一設備の検査占有中 day=%s "
-                                        "占有者依頼NO=%s 占有者試行順=%s",
+                                        "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: å�Œä¸€è¨­å‚™ã�®æ¤œæŸ»å� æœ‰ä¸­ day=%s "
+                                        "å� æœ‰è€…ä¾�é ¼NO=%s å� æœ‰è€…è©¦è¡Œé †=%s",
                                         task.get("task_id"),
                                         current_date,
                                         _b1_holder.get("task_id"),
@@ -17053,7 +16867,7 @@ def _generate_plan_impl():
                                 continue
                         if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
                             logging.info(
-                                "DEBUG[task=%s] day=%s 開始判定: start_date_req=%s remaining_units=%s machine=%s",
+                                "DEBUG[task=%s] day=%s é–‹å§‹åˆ¤å®š: start_date_req=%s remaining_units=%s machine=%s",
                                 DEBUG_TASK_ID,
                                 current_date,
                                 task.get("start_date_req"),
@@ -17062,7 +16876,7 @@ def _generate_plan_impl():
                             )
                         if task.get("has_done_deadline_override"):
                             logging.info(
-                                "DEBUG[完了日指定] 依頼NO=%s 日付=%s start_date_req=%s due_basis=%s 指定納期(上書き)=%s 進捗=%s/%s",
+                                "DEBUG[å®Œäº†æ—¥æŒ‡å®š] ä¾�é ¼NO=%s æ—¥ä»˜=%s start_date_req=%s due_basis=%s æŒ‡å®šç´�æœŸ(ä¸Šæ›¸ã��)=%s é€²æ�—=%s/%s",
                                 task.get("task_id"),
                                 current_date,
                                 task.get("start_date_req"),
@@ -17098,7 +16912,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[配台トレース task=%s] スキップ: より小さい配台試行順に未完了あり "
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: ã‚ˆã‚Šå°�ã�•ã�„é…�å�°è©¦è¡Œé †ã�«æœªå®Œäº†ã�‚ã‚Š "
                                     "day=%s my_order=%s",
                                     task.get("task_id"),
                                     current_date,
@@ -17147,7 +16961,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[配台トレース task=%s] スキップ: 同一設備で配台試行順が先の行が未完了 "
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: å�Œä¸€è¨­å‚™ã�§é…�å�°è©¦è¡Œé †ã�Œå…ˆã�®è¡Œã�Œæœªå®Œäº† "
                                     "day=%s eq_line=%s my_order=%s",
                                     task.get("task_id"),
                                     current_date,
@@ -17169,15 +16983,15 @@ def _generate_plan_impl():
                             )
                             if plan_ro is not None and plan_ro != req_num:
                                 need_src_line = (
-                                    (need_src_line + "；") if need_src_line else ""
+                                    (need_src_line + "ï¼›") if need_src_line else ""
                                 )
                                 need_src_line += (
-                                    f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
+                                    f"è¨ˆç”»ã‚·ãƒ¼ãƒˆå¿…è¦�äººæ•°{plan_ro}ã�¯æœªä½¿ç”¨ï¼ˆneedåŸºæº–={req_num}ï¼‰"
                                 )
                         else:
                             if plan_ro is not None:
                                 req_num = plan_ro
-                                need_src_line = f"計画シート「必要OP(上書)」={req_num}"
+                                need_src_line = f"è¨ˆç”»ã‚·ãƒ¼ãƒˆã€Œå¿…è¦�OP(ä¸Šæ›¸)ã€�={req_num}"
                             else:
                                 req_num, need_src_line = resolve_need_required_op_explain(
                                     machine,
@@ -17189,14 +17003,14 @@ def _generate_plan_impl():
                         if global_priority_override.get("ignore_need_minimum"):
                             req_num = 1
                             need_src_line = (
-                                (need_src_line + " → ")
+                                (need_src_line + " â†’ ")
                                 if need_src_line
                                 else ""
-                            ) + "メイン上書ignore_need_minimumでreq=1"
+                            ) + "ãƒ¡ã‚¤ãƒ³ä¸Šæ›¸ignore_need_minimumã�§req=1"
     
-                        # メンバー×設備スキル（parse_op_as_skill_cell: 小さい優先度ほど先にチーム候補へ採用）
-                        # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
-                        # 複合キー「工程名+機械名」のみを見る（別工程の同名機械の OP が流れ込まないようにする）。
+                        # ãƒ¡ãƒ³ãƒ�ãƒ¼Ã—è¨­å‚™ã‚¹ã‚­ãƒ«ï¼ˆparse_op_as_skill_cell: å°�ã�•ã�„å„ªå…ˆåº¦ã�»ã�©å…ˆã�«ãƒ�ãƒ¼ãƒ å€™è£œã�¸æŽ¡ç”¨ï¼‰
+                        # skills èª­è¾¼æ™‚ã�«ã€Œæ©Ÿæ¢°å��ã€�å�˜ç‹¬ã‚­ãƒ¼ã�¸ã‚¨ã‚¤ãƒªã‚¢ã‚¹ã�™ã‚‹ã�Ÿã‚�ã€�å·¥ç¨‹å��+æ©Ÿæ¢°å��ã�Œä¸¡æ–¹ã�‚ã‚‹è¡Œã�§ã�¯
+                        # è¤‡å�ˆã‚­ãƒ¼ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�ã�®ã�¿ã‚’è¦‹ã‚‹ï¼ˆåˆ¥å·¥ç¨‹ã�®å�Œå��æ©Ÿæ¢°ã�® OP ã�Œæµ�ã‚Œè¾¼ã�¾ã�ªã�„ã‚ˆã�†ã�«ã�™ã‚‹ï¼‰ã€‚
                         skill_meta_cache = {}
                         _gpo = global_priority_override
     
@@ -17236,7 +17050,7 @@ def _generate_plan_impl():
                                 machine_proc=machine_proc,
                             )
                             logging.info(
-                                "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
+                                "DEBUG[å®Œäº†æ—¥æŒ‡å®š] ä¾�é ¼NO=%s è¨­å‚™=%s req_num=%s capable_members=%s machine_free=%s",
                                 task.get("task_id"),
                                 eq_line,
                                 req_num,
@@ -17253,7 +17067,7 @@ def _generate_plan_impl():
                         )
                         if pref_raw and pref_mem is None and op_today:
                             logging.info(
-                                "担当OP指名: 当日のOP候補に一致せず制約なし task=%s raw=%r",
+                                "æ‹…å½“OPæŒ‡å��: å½“æ—¥ã�®OPå€™è£œã�«ä¸€è‡´ã�›ã�šåˆ¶ç´„ã�ªã�— task=%s raw=%r",
                                 task.get("task_id"),
                                 pref_raw,
                             )
@@ -17272,7 +17086,7 @@ def _generate_plan_impl():
                         )
                         if _gdp_must:
                             logging.info(
-                                "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
+                                "ãƒ¡ã‚¤ãƒ³ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«(æ—¥ä»˜Ã—å·¥ç¨‹): task=%s date=%s å·¥ç¨‹=%r ãƒ�ãƒ¼ãƒ å¿…é ˆ=%s",
                                 task.get("task_id"),
                                 current_date,
                                 machine,
@@ -17282,12 +17096,12 @@ def _generate_plan_impl():
                             _nfix = len(fixed_team_anchor)
                             if _nfix > req_num:
                                 need_src_line = (
-                                    (need_src_line + " → ")
+                                    (need_src_line + " â†’ ")
                                     if need_src_line
                                     else ""
                                 )
                                 need_src_line += (
-                                    f"グローバル(日付×工程)指名で最低{_nfix}人"
+                                    f"ã‚°ãƒ­ãƒ¼ãƒ�ãƒ«(æ—¥ä»˜Ã—å·¥ç¨‹)æŒ‡å��ã�§æœ€ä½Ž{_nfix}äºº"
                                 )
                             req_num = max(req_num, _nfix)
     
@@ -17301,10 +17115,10 @@ def _generate_plan_impl():
                         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
                             extra_max_sheet = 0
                             extra_src_line = (
-                                (extra_src_line + " → ")
+                                (extra_src_line + " â†’ ")
                                 if extra_src_line
                                 else ""
-                            ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
+                            ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWã�§0"
                         extra_max = (
                             extra_max_sheet
                             if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
@@ -17316,10 +17130,10 @@ def _generate_plan_impl():
                             and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
                         ):
                             extra_src_line = (
-                                (extra_src_line + " → ")
+                                (extra_src_line + " â†’ ")
                                 if extra_src_line
                                 else ""
-                            ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
+                            ) + "ãƒ¡ã‚¤ãƒ³ã�¯åŸºæœ¬äººæ•°ã�®ã�¿ï¼ˆä½™åŠ›æž ã�¯å…¨é…�å�°å¾Œã�«æœªå‰²å½“Ã—ã‚¹ã‚­ãƒ«ã�§è¿½è¨˜ï¼‰"
                         max_team_size = min(req_num + extra_max, len(capable_members))
                         if max_team_size < req_num:
                             max_team_size = req_num
@@ -17332,8 +17146,8 @@ def _generate_plan_impl():
                         ):
                             _need_headcount_logged_orders.add(_dto_head)
                             logging.info(
-                                "need人数(配台試行順初回) order=%s task=%s 工程/機械=%s/%s "
-                                "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
+                                "needäººæ•°(é…�å�°è©¦è¡Œé †åˆ�å›ž) order=%s task=%s å·¥ç¨‹/æ©Ÿæ¢°=%s/%s "
+                                "req_num=%s [%s] extra_max=%s [%s] max_teamå€™è£œ=%s capable=%säºº",
                                 _dto_head,
                                 task["task_id"],
                                 machine,
@@ -17351,8 +17165,8 @@ def _generate_plan_impl():
                         )
                         if trace_assign:
                             logging.info(
-                                "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
-                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%r→%s",
+                                "TRACEé…�å�°[%s] %s å·¥ç¨‹/æ©Ÿæ¢°=%s / %s req_num=%s extra_max=%s â†’ max_team=%s "
+                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s æ‹…å½“OPæŒ‡å®š=%râ†’%s",
                                 task["task_id"],
                                 current_date,
                                 machine,
@@ -17403,7 +17217,7 @@ def _generate_plan_impl():
                         )
                         if _abort_legacy:
                             continue
-                        # プリセットは成立分をすべて候補に載せ、下の組合せ探索とまとめて最良を選ぶ。
+                        # ãƒ—ãƒªã‚»ãƒƒãƒˆã�¯æˆ�ç«‹åˆ†ã‚’ã�™ã�¹ã�¦å€™è£œã�«è¼‰ã�›ã€�ä¸‹ã�®çµ„å�ˆã�›æŽ¢ç´¢ã�¨ã�¾ã�¨ã‚�ã�¦æœ€è‰¯ã‚’é�¸ã�¶ã€‚
                         if preset_rows:
                             for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
                                 pteam = tuple(preset_team)
@@ -17476,7 +17290,7 @@ def _generate_plan_impl():
                                     ]
                                 else:
                                     logging.info(
-                                        "担当OP指名: チーム人数を満たせないため指名を無視 task=%s size=%s raw=%r",
+                                        "æ‹…å½“OPæŒ‡å��: ãƒ�ãƒ¼ãƒ äººæ•°ã‚’æº€ã�Ÿã�›ã�ªã�„ã�Ÿã‚�æŒ‡å��ã‚’ç„¡è¦– task=%s size=%s raw=%r",
                                         task.get("task_id"),
                                         tsize,
                                         pref_raw,
@@ -17492,11 +17306,11 @@ def _generate_plan_impl():
     
                                 team_start = max(avail_dt[m] for m in team)
                                 if not _gpo.get("abolish_all_scheduling_limits"):
-                                    # 同一設備は1時点で1タスクのみ（設備空き＋日次始業/依頼切替の準備・後始末）
+                                    # å�Œä¸€è¨­å‚™ã�¯1æ™‚ç‚¹ã�§1ã‚¿ã‚¹ã‚¯ã�®ã�¿ï¼ˆè¨­å‚™ç©ºã��ï¼‹æ—¥æ¬¡å§‹æ¥­/ä¾�é ¼åˆ‡æ›¿ã�®æº–å‚™ãƒ»å¾Œå§‹æœ«ï¼‰
                                     machine_free_dt = _mach_floor_legacy
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
-                                    # 原反投入日と同日の開始は 13:00 以降（試行順優先フローと一致）
+                                    # åŽŸå��æŠ•å…¥æ—¥ã�¨å�Œæ—¥ã�®é–‹å§‹ã�¯ 13:00 ä»¥é™�ï¼ˆè©¦è¡Œé †å„ªå…ˆãƒ•ãƒ­ãƒ¼ã�¨ä¸€è‡´ï¼‰
                                     if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                                         min_start_dt = datetime.combine(
                                             current_date, task["same_day_raw_start_limit"]
@@ -17509,7 +17323,7 @@ def _generate_plan_impl():
                                         )
                                         if team_start < min_user_t:
                                             team_start = min_user_t
-                                    # 当日は「マクロ実行した時刻」より前に開始できない
+                                    # å½“æ—¥ã�¯ã€Œãƒžã‚¯ãƒ­å®Ÿè¡Œã�—ã�Ÿæ™‚åˆ»ã€�ã‚ˆã‚Šå‰�ã�«é–‹å§‹ã�§ã��ã�ªã�„
                                     if current_date == macro_run_date and team_start < macro_now_dt:
                                         team_start = macro_now_dt
                                 team_end_limit = min(daily_status[m]['end_dt'] for m in team)
@@ -17688,7 +17502,7 @@ def _generate_plan_impl():
                                 sub = [c for c in team_candidates if len(c["team"]) == tsize]
                                 if not sub:
                                     logging.info(
-                                        "TRACE配台[%s] %s tsize=%s → この人数で成立するチームなし",
+                                        "TRACEé…�å�°[%s] %s tsize=%s â†’ ã�“ã�®äººæ•°ã�§æˆ�ç«‹ã�™ã‚‹ãƒ�ãƒ¼ãƒ ã�ªã�—",
                                         tid,
                                         current_date,
                                         tsize,
@@ -17696,9 +17510,9 @@ def _generate_plan_impl():
                                 else:
                                     sm = min(sub, key=_team_cand_key)
                                     logging.info(
-                                        "TRACE配台[%s] %s tsize=%s 人数内最良: members=%s "
+                                        "TRACEé…�å�°[%s] %s tsize=%s äººæ•°å†…æœ€è‰¯: members=%s "
                                         "start=%s units_today=%s prio_sum=%s eff_t/unit=%.6f "
-                                        "比較ルール=%s ※全日最早開始=%s を基準に辞書式で小さい方が採用",
+                                        "æ¯”è¼ƒãƒ«ãƒ¼ãƒ«=%s â€»å…¨æ—¥æœ€æ—©é–‹å§‹=%s ã‚’åŸºæº–ã�«è¾žæ›¸å¼�ã�§å°�ã�•ã�„æ–¹ã�ŒæŽ¡ç”¨",
                                         tid,
                                         current_date,
                                         tsize,
@@ -17708,12 +17522,12 @@ def _generate_plan_impl():
                                         sm["prio_sum"],
                                         sm["eff_time_per_unit"],
                                         _tk,
-                                        t_min.isoformat(sep=" ") if t_min else "—",
+                                        t_min.isoformat(sep=" ") if t_min else "â€”",
                                     )
     
                         if trace_assign and best_team is not None:
                             logging.info(
-                                "TRACE配台[%s] %s ★採用 n=%s members=%s start=%s units_today=%s prio_sum=%s",
+                                "TRACEé…�å�°[%s] %s â˜…æŽ¡ç”¨ n=%s members=%s start=%s units_today=%s prio_sum=%s",
                                 task["task_id"],
                                 current_date,
                                 len(best_team),
@@ -17725,16 +17539,16 @@ def _generate_plan_impl():
                             if len(best_team) == 1 and max_team_size > req_num:
                                 if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
                                     logging.info(
-                                        "TRACE配台[%s] %s 1人採用（TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF）: "
-                                        "より大きい人数で有効なチームなし（OP不足・0単位・開始>=終了等）。",
+                                        "TRACEé…�å�°[%s] %s 1äººæŽ¡ç”¨ï¼ˆTEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFFï¼‰: "
+                                        "ã‚ˆã‚Šå¤§ã��ã�„äººæ•°ã�§æœ‰åŠ¹ã�ªãƒ�ãƒ¼ãƒ ã�ªã�—ï¼ˆOPä¸�è¶³ãƒ»0å�˜ä½�ãƒ»é–‹å§‹>=çµ‚äº†ç­‰ï¼‰ã€‚",
                                         task["task_id"],
                                         current_date,
                                     )
                                 else:
                                     logging.info(
-                                        "TRACE配台[%s] %s 1人採用: 人数を増やすと開始が遅れ、"
-                                        "スラック外では開始優先で1人が選ばれた可能性。"
-                                        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=%s、または従来の人数最優先は環境変数参照。",
+                                        "TRACEé…�å�°[%s] %s 1äººæŽ¡ç”¨: äººæ•°ã‚’å¢—ã‚„ã�™ã�¨é–‹å§‹ã�Œé�…ã‚Œã€�"
+                                        "ã‚¹ãƒ©ãƒƒã‚¯å¤–ã�§ã�¯é–‹å§‹å„ªå…ˆã�§1äººã�Œé�¸ã�°ã‚Œã�Ÿå�¯èƒ½æ€§ã€‚"
+                                        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=%sã€�ã�¾ã�Ÿã�¯å¾“æ�¥ã�®äººæ•°æœ€å„ªå…ˆã�¯ç’°å¢ƒå¤‰æ•°å�‚ç…§ã€‚",
                                         task["task_id"],
                                         current_date,
                                         TEAM_ASSIGN_START_SLACK_WAIT_MINUTES,
@@ -17743,8 +17557,8 @@ def _generate_plan_impl():
                         if best_team:
                             if len(best_team) > req_num:
                                 logging.info(
-                                    "配台採用人数>req_num task=%s day=%s order=%s 工程/機械=%s/%s "
-                                    "採用=%s人 req_num=%s extra_max=%s max_team=%s [%s] [%s]",
+                                    "é…�å�°æŽ¡ç”¨äººæ•°>req_num task=%s day=%s order=%s å·¥ç¨‹/æ©Ÿæ¢°=%s/%s "
+                                    "æŽ¡ç”¨=%säºº req_num=%s extra_max=%s max_team=%s [%s] [%s]",
                                     task["task_id"],
                                     current_date,
                                     task.get("dispatch_trial_order"),
@@ -17783,7 +17597,7 @@ def _generate_plan_impl():
                                         )
                                     _log_dispatch_trace_schedule(
                                         task.get("task_id"),
-                                        "[配台トレース task=%s] スキップ: チーム採用後の実効ユニット0 "
+                                        "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¹ã‚­ãƒƒãƒ—: ãƒ�ãƒ¼ãƒ æŽ¡ç”¨å¾Œã�®å®ŸåŠ¹ãƒ¦ãƒ‹ãƒƒãƒˆ0 "
                                         "day=%s machine=%s best_units_today=%s rp_room=%s rem=%.4f",
                                         task.get("task_id"),
                                         current_date,
@@ -17821,7 +17635,7 @@ def _generate_plan_impl():
                             rem_u_before = math.ceil(task['remaining_units'])
                             already_done = total_u - rem_u_before
                             
-                            # 「マクロ実行時点」の完了率（予定の進捗ではなく、実加工数ベース）
+                            # ã€Œãƒžã‚¯ãƒ­å®Ÿè¡Œæ™‚ç‚¹ã€�ã�®å®Œäº†çŽ‡ï¼ˆäºˆå®šã�®é€²æ�—ã�§ã�¯ã�ªã��ã€�å®ŸåŠ å·¥æ•°ãƒ™ãƒ¼ã‚¹ï¼‰
                             try:
                                 tot_qty = parse_float_safe(task.get('total_qty_m'), 0.0)
                                 done_qty = parse_float_safe(task.get('done_qty_reported'), 0.0)
@@ -17887,9 +17701,9 @@ def _generate_plan_impl():
                                     )
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[配台トレース task=%s] タイムライン追記 chunk day=%s machine=%s "
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³è¿½è¨˜ chunk day=%s machine=%s "
                                     "done_units=%s already_done=%s total_u=%s rem_after=%.4f "
-                                    "start=%s end=%s eff_t/unit=%.4f rp_room(当時)=%s",
+                                    "start=%s end=%s eff_t/unit=%.4f rp_room(å½“æ™‚)=%s",
                                     task.get("task_id"),
                                     current_date,
                                     eq_line,
@@ -17987,9 +17801,9 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
-                                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
-                                    "余剰人数適用(メイン)=%s team=%s",
+                                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ãƒ­ãƒ¼ãƒ«ç¢ºå®š ãƒ¡ã‚¤ãƒ³ day=%s machine=%s machine_name=%s "
+                                    "start=%s end=%s æŽ¡ç”¨äººæ•°=%s req_num=%s ãƒ¡ã‚¤ãƒ³æŽ¢ç´¢extra_max=%s "
+                                    "ä½™å‰°äººæ•°é�©ç”¨(ãƒ¡ã‚¤ãƒ³)=%s team=%s",
                                     task.get("task_id"),
                                     current_date,
                                     eq_line,
@@ -18006,7 +17820,7 @@ def _generate_plan_impl():
                         else:
                             if task.get("has_done_deadline_override"):
                                 logging.info(
-                                    "DEBUG[完了日指定] 依頼NO=%s 日付=%s は割当不可（要員/設備空き条件でチーム不成立）。remaining_units=%s",
+                                    "DEBUG[å®Œäº†æ—¥æŒ‡å®š] ä¾�é ¼NO=%s æ—¥ä»˜=%s ã�¯å‰²å½“ä¸�å�¯ï¼ˆè¦�å“¡/è¨­å‚™ç©ºã��æ�¡ä»¶ã�§ãƒ�ãƒ¼ãƒ ä¸�æˆ�ç«‹ï¼‰ã€‚remaining_units=%s",
                                     task.get("task_id"),
                                     current_date,
                                     task.get("remaining_units"),
@@ -18025,8 +17839,8 @@ def _generate_plan_impl():
                             continue
                         _log_dispatch_trace_schedule(
                             _tt,
-                            "[配台トレース task=%s] 日次終了時点の残 day=%s machine=%s "
-                            "machine_name=%s rem=%.4f roll_b2_follower=%s 試行順=%s",
+                            "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] æ—¥æ¬¡çµ‚äº†æ™‚ç‚¹ã�®æ®‹ day=%s machine=%s "
+                            "machine_name=%s rem=%.4f roll_b2_follower=%s è©¦è¡Œé †=%s",
                             _tt,
                             current_date,
                             _t.get("machine"),
@@ -18104,7 +17918,7 @@ def _generate_plan_impl():
                                 for tid in sorted(allowed_shift_tids)
                             )
                             logging.info(
-                                "納期超過リトライ: 計画基準+1日して当該依頼のみ再配台（検出日=%s 依頼NO=%s 当該依頼の累計試行=%s）",
+                                "ç´�æœŸè¶…é�Žãƒªãƒˆãƒ©ã‚¤: è¨ˆç”»åŸºæº–+1æ—¥ã�—ã�¦å½“è©²ä¾�é ¼ã�®ã�¿å†�é…�å�°ï¼ˆæ¤œå‡ºæ—¥=%s ä¾�é ¼NO=%s å½“è©²ä¾�é ¼ã�®ç´¯è¨ˆè©¦è¡Œ=%sï¼‰",
                                 current_date.isoformat(),
                                 ",".join(sorted(allowed_shift_tids)),
                                 _trials_detail,
@@ -18112,7 +17926,7 @@ def _generate_plan_impl():
                             _full_calendar_without_deadline_restart = False
                             break
                         else:
-                            # 依頼ごと上限でシフトできないだけのときは日付ループを継続する（break すると未処理日が残り配台不可が大量発生する）。
+                            # ä¾�é ¼ã�”ã�¨ä¸Šé™�ã�§ã‚·ãƒ•ãƒˆã�§ã��ã�ªã�„ã� ã�‘ã�®ã�¨ã��ã�¯æ—¥ä»˜ãƒ«ãƒ¼ãƒ—ã‚’ç¶™ç¶šã�™ã‚‹ï¼ˆbreak ã�™ã‚‹ã�¨æœªå‡¦ç�†æ—¥ã�Œæ®‹ã‚Šé…�å�°ä¸�å�¯ã�Œå¤§é‡�ç™ºç”Ÿã�™ã‚‹ï¼‰ã€‚
                             _cap_tids = sorted(
                                 tid
                                 for tid in shift_tid_list
@@ -18125,8 +17939,8 @@ def _generate_plan_impl():
                                 _due_shift_cap_warned_tids.add(tid)
                             if _first_cap_warn:
                                 logging.warning(
-                                    "納期後ろ倒し再配台: 次の依頼NOは依頼ごとの上限（各 %s 回）のためこの検出では +1 しません。"
-                                    " カレンダーは継続します（未完了は終了時に納期見直し必要を付け得ます）: %s",
+                                    "ç´�æœŸå¾Œã‚�å€’ã�—å†�é…�å�°: æ¬¡ã�®ä¾�é ¼NOã�¯ä¾�é ¼ã�”ã�¨ã�®ä¸Šé™�ï¼ˆå�„ %s å›žï¼‰ã�®ã�Ÿã‚�ã�“ã�®æ¤œå‡ºã�§ã�¯ +1 ã�—ã�¾ã�›ã‚“ã€‚"
+                                    " ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ã�¯ç¶™ç¶šã�—ã�¾ã�™ï¼ˆæœªå®Œäº†ã�¯çµ‚äº†æ™‚ã�«ç´�æœŸè¦‹ç›´ã�—å¿…è¦�ã‚’ä»˜ã�‘å¾—ã�¾ã�™ï¼‰: %s",
                                     STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
                                     ",".join(_cap_tids),
                                 )
@@ -18152,7 +17966,7 @@ def _generate_plan_impl():
             )
             if _rewind_made:
                 logging.info(
-                    "§B-2/§B-3 リワインド: EC 完走後に検査／巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
+                    "Â§B-2/Â§B-3 ãƒªãƒ¯ã‚¤ãƒ³ãƒ‰: EC å®Œèµ°å¾Œã�«æ¤œæŸ»ï¼�å·»è¿”ã�—ã�®ã�¿æ—¥ä»˜å…ˆé ­ã�‹ã‚‰å†�é…�å�°ã�—ã�¾ã�—ã�Ÿï¼ˆtimeline_events ã‚’å� æœ‰ãƒ†ãƒ¼ãƒ–ãƒ«ã�¨ã�—ã�¦åˆ©ç”¨ï¼‰ã€‚"
                 )
             break
 
@@ -18163,7 +17977,7 @@ def _generate_plan_impl():
                     continue
                 _log_dispatch_trace_schedule(
                     _tt,
-                    "[配台トレース task=%s] シミュレーション終了時 machine=%s machine_name=%s "
+                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³çµ‚äº†æ™‚ machine=%s machine_name=%s "
                     "rem=%.4f initial=%.4f roll_b2_follower=%s",
                     _tt,
                     _t.get("machine"),
@@ -18191,7 +18005,7 @@ def _generate_plan_impl():
                 _ud = int(_ev.get("units_done") or 0)
                 _log_dispatch_trace_schedule(
                     _tt,
-                    "[配台トレース task=%s] タイムライン最終塊(工程列ごと) machine=%s "
+                    "[é…�å�°ãƒˆãƒ¬ãƒ¼ã‚¹ task=%s] ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³æœ€çµ‚å¡Š(å·¥ç¨‹åˆ—ã�”ã�¨) machine=%s "
                     "already_done+units_done=%s+%s=%s total_units=%s end_dt=%s",
                     _tt,
                     _mk,
@@ -18202,10 +18016,10 @@ def _generate_plan_impl():
                     _ev.get("end_dt"),
                 )
 
-    # メイン割付までのタイムライン（need 余力追記前）。TEMP_設備毎の時間割用。
+    # ãƒ¡ã‚¤ãƒ³å‰²ä»˜ã�¾ã�§ã�®ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ï¼ˆneed ä½™åŠ›è¿½è¨˜å‰�ï¼‰ã€‚TEMP_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ç”¨ã€‚
     timeline_before_need_surplus = copy.deepcopy(timeline_events)
 
-    # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
+    # needã€Œé…�å�°æ™‚è¿½åŠ äººæ•°ã€�: ãƒ¡ã‚¤ãƒ³å‰²ä»˜å¾Œã�«ã€�æœªå�‚åŠ Ã—ã‚¹ã‚­ãƒ«é�©å�ˆè€…ã‚’ã‚µãƒ–ã�¸è¿½è¨˜ï¼ˆæ—¢å®šï¼‰
     if (
         not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
@@ -18225,14 +18039,14 @@ def _generate_plan_impl():
         )
         if _n_sur:
             logging.info(
-                "need余力: メイン割付完了後にサブ %s 名を追記（未割当×スキル・時間重なりなし）",
+                "needä½™åŠ›: ãƒ¡ã‚¤ãƒ³å‰²ä»˜å®Œäº†å¾Œã�«ã‚µãƒ– %s å��ã‚’è¿½è¨˜ï¼ˆæœªå‰²å½“Ã—ã‚¹ã‚­ãƒ«ãƒ»æ™‚é–“é‡�ã�ªã‚Šã�ªã�—ï¼‰",
                 _n_sur,
             )
 
     if _dispatch_interval_mirror is not None:
         _dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
 
-    # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
+    # ã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‚’æ—¥ä»˜åˆ¥ã�«ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹åŒ–ã�—ã€�ã‚µãƒ–ãƒ¡ãƒ³ãƒ�ãƒ¼ä¸€è¦§ã‚’äº‹å‰�è§£æž�ï¼ˆä»¥é™�ã�®å‡ºåŠ›ãƒ«ãƒ¼ãƒ—ã‚’é«˜é€ŸåŒ–ï¼‰
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
 
@@ -18241,15 +18055,15 @@ def _generate_plan_impl():
         events_by_date[e["date"]].append(e)
 
     # =========================================================
-    # 4. Excel出力 (メイン計画)
+    # 4. Excelå‡ºåŠ› (ãƒ¡ã‚¤ãƒ³è¨ˆç”»)
     # =========================================================
     _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_dir)
-    # 同一秒内の再実行でファイル名が衝突しないようマイクロ秒まで含める
+    # å�Œä¸€ç§’å†…ã�®å†�å®Ÿè¡Œã�§ãƒ•ã‚¡ã‚¤ãƒ«å��ã�Œè¡�çª�ã�—ã�ªã�„ã‚ˆã�†ãƒžã‚¤ã‚¯ãƒ­ç§’ã�¾ã�§å�«ã‚�ã‚‹
     _stage2_out_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
     output_filename = os.path.join(
         output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
-    # タスクID → 結果_設備毎の時間割で当該タスクが最初に現れるセル（例 B12）。結果_タスク一覧のリンク用。
+    # ã‚¿ã‚¹ã‚¯ID â†’ çµ�æžœ_è¨­å‚™æ¯Žã�®æ™‚é–“å‰²ã�§å½“è©²ã‚¿ã‚¹ã‚¯ã�Œæœ€åˆ�ã�«ç�¾ã‚Œã‚‹ã‚»ãƒ«ï¼ˆä¾‹ B12ï¼‰ã€‚çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®ãƒªãƒ³ã‚¯ç”¨ã€‚
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
     df_eq_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
@@ -18279,7 +18093,7 @@ def _generate_plan_impl():
         timeline_events,
     )
 
-    # 結果_タスク一覧用: シミュレーション上の当該タスクの最早開始・最遅終了（timeline_events 集約）
+    # çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ç”¨: ã‚·ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³ä¸Šã�®å½“è©²ã‚¿ã‚¹ã‚¯ã�®æœ€æ—©é–‹å§‹ãƒ»æœ€é�…çµ‚äº†ï¼ˆtimeline_events é›†ç´„ï¼‰
     plan_window_by_task_id: dict = {}
     for _ev in timeline_events:
         tid = _ev.get("task_id")
@@ -18298,8 +18112,8 @@ def _generate_plan_impl():
             if ed > w[1]:
                 w[1] = ed
 
-    # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
-    # 「原反投入日」は上書き列に日付があるときその値、無いとき列「原反投入日」（計画基準納期と混同しない）
+    # çµ�æžœ_ã‚¿ã‚¹ã‚¯ä¸€è¦§ã�®ã€Œå›žç­”ç´�æœŸã€�ã€ŒæŒ‡å®šç´�æœŸã€�ã�¯é…�å�°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ›ã�®å½“è©²è¡Œã‚»ãƒ«ã�®ã�¿ã€‚
+    # ã€ŒåŽŸå��æŠ•å…¥æ—¥ã€�ã�¯ä¸Šæ›¸ã��åˆ—ã�«æ—¥ä»˜ã�Œã�‚ã‚‹ã�¨ã��ã��ã�®å€¤ã€�ç„¡ã�„ã�¨ã��åˆ—ã€ŒåŽŸå��æŠ•å…¥æ—¥ã€�ï¼ˆè¨ˆç”»åŸºæº–ç´�æœŸã�¨æ··å�Œã�—ã�ªã�„ï¼‰
     _result_sheet_answer_spec_by_line = {}
     _result_sheet_raw_input_by_line: dict = {}
     if tasks_df is not None and not getattr(tasks_df, "empty", True):
@@ -18324,27 +18138,27 @@ def _generate_plan_impl():
     task_results = []
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
-    # ステータス（配台の可否・残）：完了相当=配台可／未割当=配台不可／一部のみ=配台残
-    # 計画基準+1 の再試行が依頼NOごとの上限に達した依頼の未完了行には（納期見直し必要）を付与する。
+    # ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹ï¼ˆé…�å�°ã�®å�¯å�¦ãƒ»æ®‹ï¼‰ï¼šå®Œäº†ç›¸å½“=é…�å�°å�¯ï¼�æœªå‰²å½“=é…�å�°ä¸�å�¯ï¼�ä¸€éƒ¨ã�®ã�¿=é…�å�°æ®‹
+    # è¨ˆç”»åŸºæº–+1 ã�®å†�è©¦è¡Œã�Œä¾�é ¼NOã�”ã�¨ã�®ä¸Šé™�ã�«é�”ã�—ã�Ÿä¾�é ¼ã�®æœªå®Œäº†è¡Œã�«ã�¯ï¼ˆç´�æœŸè¦‹ç›´ã�—å¿…è¦�ï¼‰ã‚’ä»˜ä¸Žã�™ã‚‹ã€‚
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
         if rem_u <= 1e-9:
-            status = "配台可"
+            status = "é…�å�°å�¯"
         elif hist and t.get("_partial_retry_calendar_blocked"):
-            status = "配台残(勤務カレンダー不足)"
+            status = "é…�å�°æ®‹(å‹¤å‹™ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ä¸�è¶³)"
         elif not hist and rem_u > 1e-9:
-            status = "配台不可"
+            status = "é…�å�°ä¸�å�¯"
         else:
-            status = "配台残"
+            status = "é…�å�°æ®‹"
         _tid_res = str(t.get("task_id", "") or "").strip()
         if (
             _tid_res in _due_shift_exhausted_requests
             and rem_u > 1e-9
-            and "納期見直し必要" not in status
+            and "ç´�æœŸè¦‹ç›´ã�—å¿…è¦�" not in status
         ):
-            status = f"{status}（納期見直し必要）"
+            status = f"{status}ï¼ˆç´�æœŸè¦‹ç›´ã�—å¿…è¦�ï¼‰"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
@@ -18381,23 +18195,23 @@ def _generate_plan_impl():
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
         rov = t.get("required_op")
-        # 列順: A=ステータス → タスクID/工程/機械/優先度 → 履歴1..n → その他 → 最後に特別指定_AI
-        row_status = {"ステータス": status}
+        # åˆ—é †: A=ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹ â†’ ã‚¿ã‚¹ã‚¯ID/å·¥ç¨‹/æ©Ÿæ¢°/å„ªå…ˆåº¦ â†’ å±¥æ­´1..n â†’ ã��ã�®ä»– â†’ æœ€å¾Œã�«ç‰¹åˆ¥æŒ‡å®š_AI
+        row_status = {"ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹": status}
         _dto = t.get("dispatch_trial_order")
         row_core = {
-            "タスクID": t['task_id'],
-            "工程名": t['machine'],
-            "機械名": t.get("machine_name", ""),
-            "優先度": t.get("priority", 999),
+            "ã‚¿ã‚¹ã‚¯ID": t['task_id'],
+            "å·¥ç¨‹å��": t['machine'],
+            "æ©Ÿæ¢°å��": t.get("machine_name", ""),
+            "å„ªå…ˆåº¦": t.get("priority", 999),
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
         row_history = {}
         for i in range(max_history_len):
             if i < len(t['assigned_history']):
                 h = t['assigned_history'][i]
-                row_history[f"履歴{i+1}"] = _format_result_task_history_cell(t, h)
+                row_history[f"å±¥æ­´{i+1}"] = _format_result_task_history_cell(t, h)
             else:
-                row_history[f"履歴{i+1}"] = ""
+                row_history[f"å±¥æ­´{i+1}"] = ""
 
         try:
             tot_qty = parse_float_safe(t.get("total_qty_m"), 0.0)
@@ -18424,25 +18238,25 @@ def _generate_plan_impl():
         )
 
         row_tail = {
-            "必要OP(上書)": rov if rov is not None else "",
-            "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
-            "加工途中": "はい" if t.get("in_progress") else "いいえ",
-            "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
-            "担当OP指名": (t.get("preferred_operator_raw") or "")[:120],
-            "回答納期": ans_s,
-            "指定納期": spec_s,
-            "計画基準納期": basis_s,
+            "å¿…è¦�OP(ä¸Šæ›¸)": rov if rov is not None else "",
+            "ã‚¿ã‚¹ã‚¯åŠ¹çŽ‡": parse_float_safe(t.get("task_eff_factor"), 1.0),
+            "åŠ å·¥é€”ä¸­": "ã�¯ã�„" if t.get("in_progress") else "ã�„ã�„ã�ˆ",
+            "ç‰¹åˆ¥æŒ‡å®šã�‚ã‚Š": "ã�¯ã�„" if t.get("has_special_remark") else "ã�„ã�„ã�ˆ",
+            "æ‹…å½“OPæŒ‡å��": (t.get("preferred_operator_raw") or "")[:120],
+            "å›žç­”ç´�æœŸ": ans_s,
+            "æŒ‡å®šç´�æœŸ": spec_s,
+            "è¨ˆç”»åŸºæº–ç´�æœŸ": basis_s,
             TASK_COL_RAW_INPUT_DATE: kenhan_s,
-            "納期緊急": "はい" if t.get("due_urgent") else "いいえ",
-            "加工開始日": start_req_s,
-            "配完_加工開始": plan_assign_start_s,
-            "配完_加工終了": plan_assign_end_s,
+            "ç´�æœŸç·Šæ€¥": "ã�¯ã�„" if t.get("due_urgent") else "ã�„ã�„ã�ˆ",
+            "åŠ å·¥é–‹å§‹æ—¥": start_req_s,
+            "é…�å®Œ_åŠ å·¥é–‹å§‹": plan_assign_start_s,
+            "é…�å®Œ_åŠ å·¥çµ‚äº†": plan_assign_end_s,
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16: _plan_end_ans_spec16,
-            "総加工量": f"{total_r}R ({t['total_qty_m']}m)",
-            "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
-            "完了率(実行時点)": f"{pct_macro}%",
+            "ç·�åŠ å·¥é‡�": f"{total_r}R ({t['total_qty_m']}m)",
+            "æ®‹åŠ å·¥é‡�": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
+            "å®Œäº†çŽ‡(å®Ÿè¡Œæ™‚ç‚¹)": f"{pct_macro}%",
         }
-        row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
+        row_ai_last = {"ç‰¹åˆ¥æŒ‡å®š_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
         task_results.append(row_data)
         
@@ -18456,20 +18270,20 @@ def _generate_plan_impl():
                     end_disp = cal_end if cal_end is not None else data['end_dt']
                     clock_out_s = end_disp.strftime("%H:%M")
                 else:
-                    clock_out_s = "休"
+                    clock_out_s = "ä¼‘"
                 cal_rows.append({
-                    "日付": d,
-                    "メンバー": m,
-                    "出勤": data['start_dt'].strftime("%H:%M") if data['is_working'] else "休",
-                    "退勤": clock_out_s,
-                    "効率": data['efficiency'],
-                    "備考": data['reason'],
+                    "æ—¥ä»˜": d,
+                    "ãƒ¡ãƒ³ãƒ�ãƒ¼": m,
+                    "å‡ºå‹¤": data['start_dt'].strftime("%H:%M") if data['is_working'] else "ä¼‘",
+                    "é€€å‹¤": clock_out_s,
+                    "åŠ¹çŽ‡": data['efficiency'],
+                    "å‚™è€ƒ": data['reason'],
                 })
 
     utilization_data = []
     for d in sorted_dates:
-        row_data = {"年月日": d.strftime("%Y/%m/%d (%a)")}
-        # その日のイベントからメンバー別作業分を一括集計（全メンバー×全イベントの二重ループを避ける）
+        row_data = {"å¹´æœˆæ—¥": d.strftime("%Y/%m/%d (%a)")}
+        # ã��ã�®æ—¥ã�®ã‚¤ãƒ™ãƒ³ãƒˆã�‹ã‚‰ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥ä½œæ¥­åˆ†ã‚’ä¸€æ‹¬é›†è¨ˆï¼ˆå…¨ãƒ¡ãƒ³ãƒ�ãƒ¼Ã—å…¨ã‚¤ãƒ™ãƒ³ãƒˆã�®äºŒé‡�ãƒ«ãƒ¼ãƒ—ã‚’é�¿ã�‘ã‚‹ï¼‰
         member_worked_mins = defaultdict(int)
         for ev in events_by_date[d]:
             mins = get_actual_work_minutes(ev["start_dt"], ev["end_dt"], ev["breaks"])
@@ -18499,9 +18313,9 @@ def _generate_plan_impl():
                 
                 worked_mins = member_worked_mins.get(m, 0)
                 ratio = (worked_mins / total_avail_mins) * 100
-                row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}分)"
+                row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}åˆ†)"
             else:
-                row_data[m] = "休"
+                row_data[m] = "ä¼‘"
         utilization_data.append(row_data)
         
     df_utilization = pd.DataFrame(utilization_data)
@@ -18513,22 +18327,22 @@ def _generate_plan_impl():
         df_mprio_tbl = pd.DataFrame(
             [
                 {
-                    "工程名": "",
-                    "機械名": "",
-                    "スキル列キー": "",
-                    "優先順位": "",
-                    "メンバー": "",
-                    "ロール": "",
-                    "優先度値_小さいほど先": "",
-                    "skillsセル値": "",
-                    "備考": "マスタ skills に「工程名+機械名」形式の列が見つからないか、データがありません。",
+                    "å·¥ç¨‹å��": "",
+                    "æ©Ÿæ¢°å��": "",
+                    "ã‚¹ã‚­ãƒ«åˆ—ã‚­ãƒ¼": "",
+                    "å„ªå…ˆé †ä½�": "",
+                    "ãƒ¡ãƒ³ãƒ�ãƒ¼": "",
+                    "ãƒ­ãƒ¼ãƒ«": "",
+                    "å„ªå…ˆåº¦å€¤_å°�ã�•ã�„ã�»ã�©å…ˆ": "",
+                    "skillsã‚»ãƒ«å€¤": "",
+                    "å‚™è€ƒ": "ãƒžã‚¹ã‚¿ skills ã�«ã€Œå·¥ç¨‹å��+æ©Ÿæ¢°å��ã€�å½¢å¼�ã�®åˆ—ã�Œè¦‹ã�¤ã�‹ã‚‰ã�ªã�„ã�‹ã€�ãƒ‡ãƒ¼ã‚¿ã�Œã�‚ã‚Šã�¾ã�›ã‚“ã€‚",
                 }
             ]
         )
 
     _usage_txt = build_gemini_usage_summary_text()
     if _usage_txt:
-        ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
+        ai_log_data["Gemini_ãƒˆãƒ¼ã‚¯ãƒ³ãƒ»æ–™é‡‘ã‚µãƒžãƒª"] = _usage_txt[:50000]
 
     _master_abs_for_result_fmt = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
@@ -18536,13 +18350,13 @@ def _generate_plan_impl():
     )
     if _reg_shift_start is not None and _reg_shift_end is not None:
         logging.info(
-            "定常枠: master メイン A15/B15 → %s ～ %s（結果の定常外「日時帯」着色）",
+            "å®šå¸¸æž : master ãƒ¡ã‚¤ãƒ³ A15/B15 â†’ %s ï½ž %sï¼ˆçµ�æžœã�®å®šå¸¸å¤–ã€Œæ—¥æ™‚å¸¯ã€�ç�€è‰²ï¼‰",
             _reg_shift_start.strftime("%H:%M"),
             _reg_shift_end.strftime("%H:%M"),
         )
 
     logging.info(
-        "段階2: 結果ブックを作成します → %s",
+        "æ®µéšŽ2: çµ�æžœãƒ–ãƒƒã‚¯ã‚’ä½œæˆ�ã�—ã�¾ã�™ â†’ %s",
         os.path.basename(output_filename),
     )
     try:
@@ -18557,8 +18371,8 @@ def _generate_plan_impl():
             df_equipment_by_machine_name.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
             )
-            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
-            df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割合', index=False)
+            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='çµ�æžœ_ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼(å‡ºå‹¤ç°¿)', index=False)
+            df_utilization.to_excel(writer, sheet_name='çµ�æžœ_ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥ä½œæ¥­å‰²å�ˆ', index=False)
             df_tasks = pd.DataFrame(task_results)
             df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
                 df_tasks, max_history_len
@@ -18574,12 +18388,12 @@ def _generate_plan_impl():
                 vis_list_dedup.append(bool(vis_map.get(c, True)))
             pd.DataFrame(
                 {
-                    "列名": task_column_order_dedup,
-                    "表示": vis_list_dedup,
+                    "åˆ—å��": task_column_order_dedup,
+                    "è¡¨ç¤º": vis_list_dedup,
                 }
             ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
             df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
-            pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
+            pd.DataFrame(list(ai_log_data.items()), columns=["é …ç›®", "å†…å®¹"]).to_excel(writer, sheet_name='çµ�æžœ_AIãƒ­ã‚°', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
             df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
@@ -18589,7 +18403,7 @@ def _generate_plan_impl():
             )
 
             logging.info(
-                "段階2: 設備ガントを生成しています（データ量により数分かかることがあります）"
+                "æ®µéšŽ2: è¨­å‚™ã‚¬ãƒ³ãƒˆã‚’ç”Ÿæˆ�ã�—ã�¦ã�„ã�¾ã�™ï¼ˆãƒ‡ãƒ¼ã‚¿é‡�ã�«ã‚ˆã‚Šæ•°åˆ†ã�‹ã�‹ã‚‹ã�“ã�¨ã�Œã�‚ã‚Šã�¾ã�™ï¼‰"
             )
             _write_results_equipment_gantt_sheet(
                 writer,
@@ -18657,10 +18471,10 @@ def _generate_plan_impl():
             _apply_result_task_history_rich_text(worksheet_tasks, list(df_tasks.columns))
             _apply_result_task_date_columns_blue_font(worksheet_tasks, list(df_tasks.columns))
 
-            # 未スケジュール行（配台不可・配台残）を目立たせる
+            # æœªã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«è¡Œï¼ˆé…�å�°ä¸�å�¯ãƒ»é…�å�°æ®‹ï¼‰ã‚’ç›®ç«‹ã�Ÿã�›ã‚‹
             status_col_idx = None
             for col_idx, col_name in enumerate(df_tasks.columns, 1):
-                if str(col_name) == "ステータス":
+                if str(col_name) == "ã‚¹ãƒ†ãƒ¼ã‚¿ã‚¹":
                     status_col_idx = col_idx
                     break
             if status_col_idx is not None:
@@ -18668,7 +18482,7 @@ def _generate_plan_impl():
                 for r in range(2, worksheet_tasks.max_row + 1):
                     st_val = worksheet_tasks.cell(row=r, column=status_col_idx).value
                     st = str(st_val).strip() if st_val is not None else ""
-                    if st in ("配台不可", "配台残"):
+                    if st in ("é…�å�°ä¸�å�¯", "é…�å�°æ®‹"):
                         for c in range(1, max_col + 1):
                             worksheet_tasks.cell(row=r, column=c).fill = unscheduled_fill
 
@@ -18692,8 +18506,8 @@ def _generate_plan_impl():
 
     except OSError as e:
         logging.error(
-            "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
-            "output 内の production_plan_multi_day_*.xlsx を Excel で開いていないか確認してください。",
+            "æ®µéšŽ2: çµ�æžœãƒ–ãƒƒã‚¯ã�®ä½œæˆ�ãƒ»ä¿�å­˜ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿ: %sï¼ˆ%sï¼‰ã€‚"
+            "output å†…ã�® production_plan_multi_day_*.xlsx ã‚’ Excel ã�§é–‹ã�„ã�¦ã�„ã�ªã�„ã�‹ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
             output_filename,
             e,
         )
@@ -18701,26 +18515,26 @@ def _generate_plan_impl():
 
     try:
         _apply_excel_date_columns_date_only_display(
-            output_filename, "結果_カレンダー(出勤簿)", frozenset({"日付"})
+            output_filename, "çµ�æžœ_ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼(å‡ºå‹¤ç°¿)", frozenset({"æ—¥ä»˜"})
         )
     except Exception as e:
-        logging.warning(f"結果_カレンダー(出勤簿)の日付列表示整形: {e}")
+        logging.warning(f"çµ�æžœ_ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼(å‡ºå‹¤ç°¿)ã�®æ—¥ä»˜åˆ—è¡¨ç¤ºæ•´å½¢: {e}")
 
     _stage2_try_copy_column_config_shapes_from_input(
         output_filename,
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
     )
 
-    logging.info(f"完了: '{output_filename}' を生成しました。")
+    logging.info(f"å®Œäº†: '{output_filename}' ã‚’ç”Ÿæˆ�ã�—ã�¾ã�—ã�Ÿã€‚")
 
     # =========================================================
-    # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
+    # 5. â˜…è¿½åŠ : ãƒ¡ãƒ³ãƒ�ãƒ¼æ¯Žã�®è¡Œå‹•ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ« (åˆ¥ãƒ•ã‚¡ã‚¤ãƒ«) å‡ºåŠ›
     # =========================================================
     member_output_filename = os.path.join(
         output_dir, f"member_schedule_{_stage2_out_stamp}.xlsx"
     )
     
-    # 時間帯は全メンバー共通で1回だけ生成（メンバー数分の重複計算を避ける）
+    # æ™‚é–“å¸¯ã�¯å…¨ãƒ¡ãƒ³ãƒ�ãƒ¼å…±é€šã�§1å›žã� ã�‘ç”Ÿæˆ�ï¼ˆãƒ¡ãƒ³ãƒ�ãƒ¼æ•°åˆ†ã�®é‡�è¤‡è¨ˆç®—ã‚’é�¿ã�‘ã‚‹ï¼‰
     time_labels = []
     time_grids = []
     curr_dt = datetime.combine(run_date, DEFAULT_START_TIME)
@@ -18734,20 +18548,20 @@ def _generate_plan_impl():
         curr_dt = next_dt
     
     logging.info(
-        "段階2: メンバー別スケジュールを作成します → %s",
+        "æ®µéšŽ2: ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«ã‚’ä½œæˆ�ã�—ã�¾ã�™ â†’ %s",
         os.path.basename(member_output_filename),
     )
     try:
         with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
             for m in members:
-                # 各行の辞書を初期化
-                m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
+                # å�„è¡Œã�®è¾žæ›¸ã‚’åˆ�æœŸåŒ–
+                m_schedule = {t_label: {"æ™‚é–“å¸¯": t_label} for t_label in time_labels}
             
-                # 各日付のスケジュールを列として埋めていく
+                # å�„æ—¥ä»˜ã�®ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«ã‚’åˆ—ã�¨ã�—ã�¦åŸ‹ã‚�ã�¦ã�„ã��
                 for d in sorted_dates:
                     d_str = d.strftime("%m/%d (%a)")
                 
-                    # 全日非勤務: 年休（カレンダー *）は『年休』、工場休日などは『休』
+                    # å…¨æ—¥é�žå‹¤å‹™: å¹´ä¼‘ï¼ˆã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ *ï¼‰ã�¯ã€Žå¹´ä¼‘ã€�ã€�å·¥å ´ä¼‘æ—¥ã�ªã�©ã�¯ã€Žä¼‘ã€�
                     if m not in attendance_data[d] or not attendance_data[d][m]['is_working']:
                         off_label = _member_schedule_full_day_off_label(
                             attendance_data[d].get(m) if m in attendance_data[d] else None
@@ -18766,7 +18580,7 @@ def _generate_plan_impl():
                     for i, (t_start, t_end) in enumerate(time_grids):
                         t_label = time_labels[i]
                     
-                        # 判定用の中間時刻を計算
+                        # åˆ¤å®šç”¨ã�®ä¸­é–“æ™‚åˆ»ã‚’è¨ˆç®—
                         grid_start_dt = datetime.combine(d, t_start)
                         grid_end_dt = datetime.combine(d, t_end)
                         grid_mid_dt = grid_start_dt + (grid_end_dt - grid_start_dt) / 2
@@ -18783,23 +18597,23 @@ def _generate_plan_impl():
                             if br_txt is not None:
                                 text = br_txt
                         if text == "":
-                            # 該当するタスクを探す（subs_list は事前解析済み）
+                            # è©²å½“ã�™ã‚‹ã‚¿ã‚¹ã‚¯ã‚’æŽ¢ã�™ï¼ˆsubs_list ã�¯äº‹å‰�è§£æž�æ¸ˆã�¿ï¼‰
                             active_ev = next((e for e in events_today if e['start_dt'] <= grid_mid_dt < e['end_dt'] and (e['op'] == m or m in e.get('subs_list', []))), None)
                             if active_ev:
-                                role = "主" if active_ev['op'] == m else "補"
+                                role = "ä¸»" if active_ev['op'] == m else "è£œ"
                                 text = f"[{active_ev['task_id']}] {active_ev['machine']}({role})"
                             else:
-                                text = "" # 何も割り当てられていない空き時間
+                                text = "" # ä½•ã‚‚å‰²ã‚Šå½“ã�¦ã‚‰ã‚Œã�¦ã�„ã�ªã�„ç©ºã��æ™‚é–“
                     
                         m_schedule[t_label][d_str] = text
                     
-                # データフレーム化してシートに書き込み
+                # ãƒ‡ãƒ¼ã‚¿ãƒ•ãƒ¬ãƒ¼ãƒ åŒ–ã�—ã�¦ã‚·ãƒ¼ãƒˆã�«æ›¸ã��è¾¼ã�¿
                 df_m = pd.DataFrame(list(m_schedule.values()))
-                cols = ["時間帯"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
+                cols = ["æ™‚é–“å¸¯"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
                 df_m = df_m[[c for c in cols if c in df_m.columns]]
                 df_m.to_excel(member_writer, sheet_name=m, index=False)
             
-                # --- 既定フォント・罫線・見出し背景（列幅は VBA 取り込み時の AutoFit） ---
+                # --- æ—¢å®šãƒ•ã‚©ãƒ³ãƒˆãƒ»ç½«ç·šãƒ»è¦‹å‡ºã�—èƒŒæ™¯ï¼ˆåˆ—å¹…ã�¯ VBA å�–ã‚Šè¾¼ã�¿æ™‚ã�® AutoFitï¼‰ ---
                 worksheet = member_writer.sheets[m]
                 _apply_output_font_to_result_sheet(worksheet)
                 header_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
@@ -18813,12 +18627,12 @@ def _generate_plan_impl():
 
     except OSError as e:
         logging.error(
-            "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
-            "member_schedule_*.xlsx を Excel で開いていないか確認してください。",
+            "æ®µéšŽ2: ãƒ¡ãƒ³ãƒ�ãƒ¼åˆ¥ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«ã�®ä¿�å­˜ã�«å¤±æ•—ã�—ã�¾ã�—ã�Ÿ: %sï¼ˆ%sï¼‰ã€‚"
+            "member_schedule_*.xlsx ã‚’ Excel ã�§é–‹ã�„ã�¦ã�„ã�ªã�„ã�‹ç¢ºèª�ã�—ã�¦ã��ã� ã�•ã�„ã€‚",
             member_output_filename,
             e,
         )
         raise
 
-    logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
-    _try_write_main_sheet_gemini_usage_summary("段階2")
+    logging.info(f"å®Œäº†: å€‹äººåˆ¥ã‚¹ã‚±ã‚¸ãƒ¥ãƒ¼ãƒ«ã‚’ '{member_output_filename}' ã�«å‡ºåŠ›ã�—ã�¾ã�—ã�Ÿã€‚")
+    _try_write_main_sheet_gemini_usage_summary("æ®µéšŽ2")
