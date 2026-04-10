@@ -605,9 +605,10 @@ PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
-# 配台計算で使う換算数量・ロール単位長さの下限（m）。正の値でこれ未満のときはこの値に引き上げる。
+# 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
 PLANNING_MIN_QTY_M = 100.0
-PLANNING_MIN_ROLL_UNIT_M = 100.0
+# ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
+ROLL_UNIT_LENGTH_CEIL_STEP_M = 100.0
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
@@ -2262,6 +2263,48 @@ def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
     if m <= 0:
         return v
     return float(m) if v < m else v
+
+
+def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -> float:
+    """
+    配台計画_タスク入力のロール単位長さ(m)。
+    正の値は step_m の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
+    """
+    v = parse_float_safe(roll_m, 0.0)
+    if v <= 0:
+        return v
+    step = parse_float_safe(
+        step_m if step_m is not None else ROLL_UNIT_LENGTH_CEIL_STEP_M, 0.0
+    )
+    if step <= 0:
+        return v
+    return float(math.ceil(v / step) * step)
+
+
+def _ceil_roll_unit_length_plan_sheet_cell(val):
+    """DataFrame セル用。空・非数値はそのまま。正の数値は ROLL_UNIT_LENGTH_CEIL_STEP_M 倍数に切り上げ。"""
+    if val is None:
+        return val
+    if isinstance(val, str):
+        s = val.strip()
+        if not s or s.lower() in ("nan", "none"):
+            return val
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return val
+    if x <= 0:
+        return val
+    return _ceil_roll_unit_length_m_to_next_step(x)
+
+
+def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
+    """段階1 DataFrame の ロール単位長さ 列を、マージ後も含めて切り上げ正規化する。"""
+    col = PLAN_COL_ROLL_UNIT_LENGTH
+    if df is None or df.empty or col not in df.columns:
+        return
+    for i in df.index:
+        df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
 
 
 def load_tasks_df():
@@ -9401,9 +9444,7 @@ def run_stage1_extract():
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-        _roll_len = _floor_positive_m_to_planning_minimum(
-            _roll_len, PLANNING_MIN_ROLL_UNIT_M
-        )
+        _roll_len = _ceil_roll_unit_length_m_to_next_step(_roll_len)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
         # 工程名 + 機械名 を“因子”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
@@ -9453,6 +9494,7 @@ def run_stage1_extract():
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
+    _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
