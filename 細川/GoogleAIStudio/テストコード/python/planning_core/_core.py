@@ -9870,13 +9870,16 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
 
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
-#   加工計画DATA 読取 → 配台不要自動処理 → 設定シート保守 → plan_input_tasks.xlsx 出力
+#   加工計画DATA 読取 → 計画 DataFrame 確定（マージ・分割の配台不要）→
+#   設定シート保守（D→E の AI 含む）→ 設定を計画へ反映 → 配台試行順番 → plan_input_tasks.xlsx 出力
 # =============================================================================
 def run_stage1_extract():
     """
     段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
     同一依頼NOで同一機械名が複数行あるとき、工程名「分割」行の空の「配台不要」に yes を自動設定する。
     マクロブックの「設定_配台不要工程」で工程+機械ごとの配台不要・条件式（AI）を管理する（シート作成は VBA）。
+    設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
+    「配台試行順番」の付与より前に行う。
     """
     if not TASKS_INPUT_WORKBOOK:
         logging.error("TASK_INPUT_WORKBOOK が未設定です。")
@@ -9886,11 +9889,6 @@ def run_stage1_extract():
         return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
-    try:
-        _pm_pairs = _collect_process_machine_pairs_for_exclude_rules(df_src)
-        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "段階1")
-    except Exception:
-        logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -9986,6 +9984,14 @@ def run_stage1_extract():
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
+    # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
+    try:
+        _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
+        run_exclude_rules_sheet_maintenance(
+            TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
+        )
+    except Exception:
+        logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     try:
         out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
     except Exception as ex:
