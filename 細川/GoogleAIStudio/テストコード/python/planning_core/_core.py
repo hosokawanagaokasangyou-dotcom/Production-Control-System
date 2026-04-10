@@ -2207,6 +2207,34 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
             pass
     return fallback_unit
 
+
+def _coerce_roll_unit_m_when_converted_qty_below_roll(
+    product_name, unit_m: float, qty_total: float
+) -> float:
+    """
+    加工長さ（1ロールあたりの m）の解釈。
+
+    換算数量（qty_total）が、製品名から推定したロール単位長さより小さいときは、
+    ロール単位長さを採用する（シート等で unit_m が換算数量未満に誤っている場合の救済）。
+    シート・手入力で unit_m が推定より大きい場合は上書きしない。
+    """
+    try:
+        u = float(unit_m)
+    except (TypeError, ValueError):
+        u = 0.0
+    roll_infer = infer_unit_m_from_product_name(product_name, fallback_unit=0.0)
+    try:
+        roll_infer = float(roll_infer)
+    except (TypeError, ValueError):
+        roll_infer = 0.0
+    if roll_infer <= 0:
+        return u
+    q = parse_float_safe(qty_total, 0.0)
+    if q > 0 and q < roll_infer and u < roll_infer:
+        return roll_infer
+    return u
+
+
 def load_tasks_df():
     """
     タスク入力を取得する（tasks.xlsx は使用しない）。
@@ -7120,6 +7148,16 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
+        unit = _coerce_roll_unit_m_when_converted_qty_below_roll(
+            product_name, unit, qty_total
+        )
+        try:
+            unit = float(unit)
+        except Exception:
+            unit = float(qty) if qty else 0.0
+        if unit <= 0:
+            unit = qty
+
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
             due_urgent = False
@@ -9326,6 +9364,15 @@ def run_stage1_extract():
             _roll_len = float(_roll_len)
         except (TypeError, ValueError):
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
+        if _roll_len <= 0:
+            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+        _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
+            _pn_stage1, _roll_len, _qty_total_s1
+        )
+        try:
+            _roll_len = float(_roll_len)
+        except (TypeError, ValueError):
+            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
