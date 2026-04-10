@@ -12804,6 +12804,42 @@ def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> di
     return {k: ", ".join(sorted(v)) for k, v in acc.items() if v}
 
 
+def _eq_grid_slot_overlaps_event(
+    curr_grid: datetime, next_grid: datetime, ev: dict
+) -> bool:
+    """10分枠 [curr_grid, next_grid) とイベント [start_dt, end_dt) が重なるか。"""
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    return (
+        isinstance(st, datetime)
+        and isinstance(ed, datetime)
+        and st < next_grid
+        and ed > curr_grid
+    )
+
+
+def _eq_grid_first_overlapping_event(evs: list, curr_grid: datetime, next_grid: datetime):
+    """evs は開始時刻順。枠と重なる最初のイベントを返す（短い加工が中点判定で落ちるのを防ぐ）。"""
+    for ev in evs:
+        if _eq_grid_slot_overlaps_event(curr_grid, next_grid, ev):
+            return ev
+    return None
+
+
+def _eq_grid_overlap_sample_t(
+    ev: dict, curr_grid: datetime, next_grid: datetime, slot_mid: datetime
+) -> datetime:
+    """休憩判定用: 枠とイベントの重なり区間の中点（重なりなければ枠中点）。"""
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    if isinstance(st, datetime) and isinstance(ed, datetime):
+        os_ = max(curr_grid, st)
+        oe = min(next_grid, ed)
+        if os_ < oe:
+            return os_ + (oe - os_) / 2
+    return slot_mid
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -12871,13 +12907,14 @@ def _build_equipment_schedule_dataframe(
             for eq in equipment_list:
                 eq_text = ""
                 progress_text = ""
-                active_ev = None
-                for ev in machine_to_events.get(eq, ()):
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
+                active_ev = _eq_grid_first_overlapping_event(
+                    machine_to_events.get(eq, ()), curr_grid, next_grid
+                )
 
                 if active_ev:
+                    _sample_t = _eq_grid_overlap_sample_t(
+                        active_ev, curr_grid, next_grid, mid_t
+                    )
                     _use_prog = (
                         _is_machining_timeline_event(active_ev)
                         and all(
@@ -12891,7 +12928,9 @@ def _build_equipment_schedule_dataframe(
                         )
                         and float(active_ev.get("eff_time_per_unit") or 0) > 0
                     )
-                    if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                    if any(
+                        b_s <= _sample_t < b_e for b_s, b_e in active_ev["breaks"]
+                    ):
                         eq_text = "休憩"
                     elif not _use_prog:
                         _ek_disp = _timeline_event_kind(active_ev)
@@ -12911,9 +12950,11 @@ def _build_equipment_schedule_dataframe(
                         )
                         progress_text = ""
                     else:
+                        _slice_a = max(curr_grid, active_ev["start_dt"])
+                        _slice_b = min(next_grid, active_ev["end_dt"])
                         elapsed = get_actual_work_minutes(
-                            active_ev["start_dt"],
-                            min(next_grid, active_ev["end_dt"]),
+                            _slice_a,
+                            _slice_b,
                             active_ev["breaks"],
                         )
                         block_done_now = min(
@@ -13038,14 +13079,15 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 mcol = eq_to_mcol.get(eq)
                 if not mcol:
                     continue
-                active_ev = None
-                for ev in evs:
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
+                active_ev = _eq_grid_first_overlapping_event(evs, curr_grid, next_grid)
                 if not active_ev:
                     continue
-                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                _sample_tm = _eq_grid_overlap_sample_t(
+                    active_ev, curr_grid, next_grid, mid_t
+                )
+                if any(
+                    b_s <= _sample_tm < b_e for b_s, b_e in active_ev["breaks"]
+                ):
                     tids_by_mcol[mcol].add("（休憩）")
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
@@ -13124,14 +13166,17 @@ def _build_block_table_dataframe(
                 eq_key = eq_disp_to_key.get(col_eq)
                 if not eq_key:
                     continue
-                active_ev = None
-                for ev in machine_to_events.get(eq_key, ()):
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
+                active_ev = _eq_grid_first_overlapping_event(
+                    machine_to_events.get(eq_key, ()), curr_grid, next_grid
+                )
                 if not active_ev:
                     continue
-                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                _sample_tb = _eq_grid_overlap_sample_t(
+                    active_ev, curr_grid, next_grid, mid_t
+                )
+                if any(
+                    b_s <= _sample_tb < b_e for b_s, b_e in active_ev["breaks"]
+                ):
                     row_data[col_eq] = "休憩"
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
@@ -13143,13 +13188,15 @@ def _build_block_table_dataframe(
                 ed = ev.get("end_dt")
                 if not isinstance(st, datetime) or not isinstance(ed, datetime):
                     continue
-                if not (st <= mid_t < ed):
+                if not _eq_grid_slot_overlaps_event(curr_grid, next_grid, ev):
                     continue
+                _sample_mem = _eq_grid_overlap_sample_t(ev, curr_grid, next_grid, mid_t)
                 tid = str(ev.get("task_id") or "").strip()
                 op = str(ev.get("op") or "").strip()
                 if op:
                     if any(
-                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
+                        b_s <= _sample_mem < b_e
+                        for b_s, b_e in ev.get("breaks") or ()
                     ):
                         busy_member_task[op].add("休憩" if tid else "休憩")
                     elif tid:
@@ -13159,7 +13206,8 @@ def _build_block_table_dataframe(
                     if not s:
                         continue
                     if any(
-                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
+                        b_s <= _sample_mem < b_e
+                        for b_s, b_e in ev.get("breaks") or ()
                     ):
                         busy_member_task[s].add("休憩")
                     elif tid:
