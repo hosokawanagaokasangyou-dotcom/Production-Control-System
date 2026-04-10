@@ -12879,6 +12879,23 @@ def _eq_grid_mcol_for_event_machine(
     return None
 
 
+def _eq_grid_timeline_event_use_progress_bar(ev: dict) -> bool:
+    """設備時間割の「進度R」表示・ハイパーリンク対象となる加工イベントか。"""
+    return (
+        _is_machining_timeline_event(ev)
+        and all(
+            k in ev
+            for k in (
+                "eff_time_per_unit",
+                "units_done",
+                "total_units",
+                "already_done_units",
+            )
+        )
+        and float(ev.get("eff_time_per_unit") or 0) > 0
+    )
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -12956,19 +12973,7 @@ def _build_equipment_schedule_dataframe(
                     _sample_t = _eq_grid_overlap_sample_t(
                         active_ev, curr_grid, next_grid, mid_t
                     )
-                    _use_prog = (
-                        _is_machining_timeline_event(active_ev)
-                        and all(
-                            k in active_ev
-                            for k in (
-                                "eff_time_per_unit",
-                                "units_done",
-                                "total_units",
-                                "already_done_units",
-                            )
-                        )
-                        and float(active_ev.get("eff_time_per_unit") or 0) > 0
-                    )
+                    _use_prog = _eq_grid_timeline_event_use_progress_bar(active_ev)
                     if any(
                         b_s <= _sample_t < b_e for b_s, b_e in active_ev["breaks"]
                     ):
@@ -13010,17 +13015,34 @@ def _build_equipment_schedule_dataframe(
                         sub_text = f" 補:{_sub_s}" if _sub_s else ""
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
-                        _tid_sched = str(active_ev.get("task_id") or "").strip()
-                        if (
-                            first_eq_schedule_cell_by_task_id is not None
-                            and _tid_sched
-                            and _tid_sched not in first_eq_schedule_cell_by_task_id
+
+                # 表示は「枠内で最も早く始まるイベント」1件だが、準備・セットアップが先にあると
+                # 加工が active_ev にならずタスクID→時間割リンクが欠ける。重なる加工イベントを別途走査する。
+                if first_eq_schedule_cell_by_task_id is not None:
+                    for _hev in _eq_grid_events_for_equipment_column(
+                        machine_to_events, eq
+                    ):
+                        if not _eq_grid_slot_overlaps_event(
+                            curr_grid, next_grid, _hev
                         ):
-                            _row_ex = len(all_eq_rows) + 2
-                            _ci = 2 + 2 * equipment_list.index(eq)
-                            first_eq_schedule_cell_by_task_id[_tid_sched] = (
-                                f"{get_column_letter(_ci)}{_row_ex}"
-                            )
+                            continue
+                        if not _eq_grid_timeline_event_use_progress_bar(_hev):
+                            continue
+                        _hs = _eq_grid_overlap_sample_t(
+                            _hev, curr_grid, next_grid, mid_t
+                        )
+                        if any(
+                            b_s <= _hs < b_e for b_s, b_e in _hev["breaks"]
+                        ):
+                            continue
+                        _htid = str(_hev.get("task_id") or "").strip()
+                        if not _htid or _htid in first_eq_schedule_cell_by_task_id:
+                            continue
+                        _row_ex = len(all_eq_rows) + 2
+                        _ci = 2 + 2 * equipment_list.index(eq)
+                        first_eq_schedule_cell_by_task_id[_htid] = (
+                            f"{get_column_letter(_ci)}{_row_ex}"
+                        )
 
                 row_data[eq] = eq_text
                 row_data[f"{eq}進度"] = progress_text
