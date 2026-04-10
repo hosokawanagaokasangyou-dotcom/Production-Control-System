@@ -538,6 +538,8 @@ if not API_KEY:
     )
 
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
+# 結果_設備ガントの横軸タイムスロット幅（分）
+GANTT_TIMELINE_SLOT_MINUTES = 5
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -1340,7 +1342,7 @@ def _paint_gantt_timeline_row_merged(
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
-    （細マス単体の塗りではなく15分刻み＋同一状態のセル結合で、帯状のバーとして表現する）
+    （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1654,7 +1656,7 @@ def _write_results_equipment_gantt_sheet(
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
-    横軸は15分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
+    横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     """
     wb = writer.book
@@ -1690,7 +1692,7 @@ def _write_results_equipment_gantt_sheet(
             for mk in by_dm_actual[d0]:
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
-    slot_mins = 15
+    slot_mins = GANTT_TIMELINE_SLOT_MINUTES
     hdr_font = _result_font(bold=True, color="000000", size=12)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
     hdr_time_font = _result_font(bold=True, color="000000", size=11)
@@ -1715,7 +1717,7 @@ def _write_results_equipment_gantt_sheet(
     )
     rs, re_ = (regular_shift_times or (None, None))
 
-    # 横軸(10分刻み)は日付で共通のため、slot_times を先に確定
+    # 横軸（slot_mins 刻み）は日付で共通のため、slot_times を先に確定
     base_dt = base_now_dt if isinstance(base_now_dt, datetime) else datetime.now()
     dummy_d = sorted_dates[0] if sorted_dates else base_dt.date()
     d_start0 = datetime.combine(dummy_d, DEFAULT_START_TIME)
