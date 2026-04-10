@@ -56,41 +56,6 @@ if os.path.isfile(_ai_cache_legacy) and not os.path.isfile(_ai_cache_new):
 ai_cache_path = _ai_cache_new
 # 「設定_酝坰丝覝工程〝シート作戝・保存㝮戝坦デポッグ（execution_log 㝨併用）
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
-# region agent log
-_AGENT_DEBUG_SESSION = "199241"
-_AGENT_DEBUG_LOG_PATH = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-199241.log"
-    )
-)
-_AGENT_DEBUG_FOCUS_TID = os.environ.get("AGENT_DEBUG_FOCUS_TID", "W4-13").strip().upper()
-
-
-def _agent_debug_ndjson(
-    *,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict | None = None,
-    run_id: str = "pre-fix",
-) -> None:
-    try:
-        rec = {
-            "sessionId": _AGENT_DEBUG_SESSION,
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
 # 保存失敗時㝫 E 列（ロジック弝）㝠㝑を退靿㝗〝次回 run_exclude_rules_sheet_maintenance 㝧自動革用㝙る（json フォルダ）
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
 # openpyxl 保存失敗時㝫 VBA 㝌 E 列㝸書㝝込む㝟ゝ㝮 UTF-8 TSV（Base64）。
@@ -6810,49 +6775,9 @@ def build_task_queue_from_planning_df(
     planning_sheet_row_seq = 0
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
-        _tid_dbg = _normalize_task_id_for_dup_grouping(
-            planning_task_id_str_from_plan_row(row)
-        )
-        if _tid_dbg == _AGENT_DEBUG_FOCUS_TID:
-            # region agent log
-            _agent_debug_ndjson(
-                hypothesis_id="H-scan",
-                location="build_task_queue_from_planning_df:iter",
-                message="focus_row",
-                data={
-                    "planning_df_iloc": planning_df_iloc,
-                    "process": str(row.get(TASK_COL_MACHINE, "") or ""),
-                    "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or ""),
-                    "exclude_cell": str(row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, "") or ""),
-                    "completion_flag": str(row.get(TASK_COL_COMPLETION_FLAG, "") or ""),
-                },
-            )
-            # endregion
         if row_has_completion_keyword(row):
-            if _tid_dbg == _AGENT_DEBUG_FOCUS_TID:
-                # region agent log
-                _agent_debug_ndjson(
-                    hypothesis_id="H3",
-                    location="build_task_queue_from_planning_df",
-                    message="skip_completed",
-                    data={"planning_df_iloc": planning_df_iloc},
-                )
-                # endregion
             continue
         if _plan_row_exclude_from_assignment(row):
-            if _tid_dbg == _AGENT_DEBUG_FOCUS_TID:
-                # region agent log
-                _agent_debug_ndjson(
-                    hypothesis_id="H4",
-                    location="build_task_queue_from_planning_df",
-                    message="skip_exclude_from_assignment",
-                    data={
-                        "planning_df_iloc": planning_df_iloc,
-                        "process": str(row.get(TASK_COL_MACHINE, "") or ""),
-                        "exclude_cell": str(row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, "") or ""),
-                    },
-                )
-                # endregion
             n_exclude_plan += 1
             continue
 
@@ -6898,21 +6823,6 @@ def build_task_queue_from_planning_df(
             speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
-            if _normalize_task_id_for_dup_grouping(task_id) == _AGENT_DEBUG_FOCUS_TID:
-                # region agent log
-                _agent_debug_ndjson(
-                    hypothesis_id="H2",
-                    location="build_task_queue_from_planning_df",
-                    message="skip_qty_or_machine",
-                    data={
-                        "qty": qty,
-                        "qty_total": qty_total,
-                        "done_qty": done_qty,
-                        "machine": machine,
-                        "task_id": task_id,
-                    },
-                )
-                # endregion
             continue
 
         _line_seq = same_tid_line_seq[task_id]
@@ -7345,30 +7255,6 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             counts[mn_key] += 1
         if not any(c >= 2 for c in counts.values()):
             continue
-        if _tid_key == _AGENT_DEBUG_FOCUS_TID:
-            # region agent log
-            row_snap = []
-            for _ri in idx_list:
-                row_snap.append(
-                    {
-                        "i": int(_ri),
-                        "process": str(df.at[_ri, TASK_COL_MACHINE]),
-                        "machine_name": str(df.at[_ri, TASK_COL_MACHINE_NAME]),
-                        "mn_key": _normalize_equipment_match_key(
-                            df.at[_ri, TASK_COL_MACHINE_NAME]
-                        ),
-                        "exclude_before": str(
-                            df.at[_ri, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] or ""
-                        ),
-                    }
-                )
-            _agent_debug_ndjson(
-                hypothesis_id="H1",
-                location="_apply_auto_exclude_bunkatsu_duplicate_machine",
-                message="duplicate_machine_group_for_tid",
-                data={"tid": _tid_key, "machine_key_counts": dict(counts), "rows": row_snap},
-            )
-            # endregion
         for i in idx_list:
             if not _process_name_is_bunkatsu_for_auto_exclude(df.at[i, TASK_COL_MACHINE]):
                 continue
@@ -7378,19 +7264,6 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
                 continue
             # 列㝌 StringDtype 㝮㝨㝝 int 代入㝧 TypeError 㝫㝪る㝟ゝ文字列㝫㝙る（_plan_row_exclude_from_assignment 㝯 yes を真㝨㝿㝪㝙）
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
-            if _tid_key == _AGENT_DEBUG_FOCUS_TID:
-                # region agent log
-                _agent_debug_ndjson(
-                    hypothesis_id="H1",
-                    location="_apply_auto_exclude_bunkatsu_duplicate_machine",
-                    message="set_exclude_yes_for_bunkatsu",
-                    data={
-                        "row_index": int(i),
-                        "process": str(df.at[i, TASK_COL_MACHINE]),
-                        "machine_name": str(df.at[i, TASK_COL_MACHINE_NAME]),
-                    },
-                )
-                # endregion
             n_set += 1
 
     if n_set:
