@@ -44,50 +44,6 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
-# region agent log
-def _agent_debug_watch_tids() -> set[str]:
-    """カンマ区切り依頼NO。未設定時は W4-13（デバッグセッション用）。"""
-    raw = (os.environ.get("AGENT_DEBUG_WATCH_TIDS") or "W4-13").strip()
-    out: set[str] = set()
-    for part in raw.split(","):
-        p = planning_task_id_str_from_scalar(part.strip()) if part.strip() else ""
-        if p:
-            out.add(p)
-    return out
-
-
-def _agent_ndjson_log(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        root = os.path.abspath(os.path.dirname(__file__))
-        for _ in range(16):
-            if os.path.isdir(os.path.join(root, ".git")):
-                break
-            parent = os.path.dirname(root)
-            if parent == root:
-                root = os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-                )
-                break
-            root = parent
-        log_path = os.path.join(root, "debug-242f09.log")
-        payload = {
-            "sessionId": "242f09",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(log_path, "a", encoding="utf-8") as _lf:
-            _lf.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
-
 # AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
@@ -2564,51 +2520,12 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
-    # region agent log
-    _watch0 = _agent_debug_watch_tids()
-    for _, row in df.iterrows():
-        tid0 = planning_task_id_str_from_plan_row(row)
-        if tid0 not in _watch0:
-            continue
-        _agent_ndjson_log(
-            "H0",
-            "_core.py:load_planning_tasks_df",
-            "sheet_before_mutations",
-            {
-                "tid": tid0,
-                "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
-                "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                "exclude_from_assignment": bool(_plan_row_exclude_from_assignment(row)),
-            },
-        )
-    # endregion
     _apply_planning_sheet_post_load_mutations(
         df,
         TASKS_INPUT_WORKBOOK,
         "配台シート読込",
         apply_exclude_rules_from_config=False,
     )
-    # region agent log
-    _watch = _agent_debug_watch_tids()
-    for _, row in df.iterrows():
-        tid = planning_task_id_str_from_plan_row(row)
-        if tid not in _watch:
-            continue
-        excl = bool(_plan_row_exclude_from_assignment(row))
-        _agent_ndjson_log(
-            "H1",
-            "_core.py:load_planning_tasks_df",
-            "post_mutations_row",
-            {
-                "tid": tid,
-                "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
-                "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                "exclude_from_assignment": excl,
-                "qty_total": parse_float_safe(row.get(TASK_COL_QTY), 0.0),
-                "done_eq": calc_done_qty_equivalent_from_row(row),
-            },
-        )
-    # endregion
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
@@ -4627,16 +4544,6 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None:
-        # region agent log
-        _agent_ndjson_log(
-            "H5",
-            "_core.py:_apply_result_task_id_hyperlinks",
-            "no_task_id_column",
-            {
-                "column_names": [str(x) for x in column_names[:20]],
-            },
-        )
-        # endregion
         return
     esc = schedule_sheet_name.replace("'", "''")
     loc_prefix = f"#'{esc}'!"
@@ -4644,18 +4551,6 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
     font_link_on_red = Font(color="FFFFFF", underline="single")
     top = Alignment(wrap_text=False, vertical="top")
     n_tasks = len(sorted_tasks_for_row_order)
-    # region agent log
-    _tw_h = _agent_debug_watch_tids()
-    _agent_ndjson_log(
-        "H5",
-        "_core.py:_apply_result_task_id_hyperlinks",
-        "apply_enter",
-        {
-            "task_id_col_idx": task_id_col_idx,
-            "map_has_watch": {t: (t in task_id_to_schedule_cell) for t in _tw_h},
-        },
-    )
-    # endregion
     for r in range(2, worksheet_tasks.max_row + 1):
         cell = worksheet_tasks.cell(row=r, column=task_id_col_idx)
         raw = cell.value
@@ -4665,15 +4560,6 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
         if not tid:
             continue
         addr = task_id_to_schedule_cell.get(tid)
-        # region agent log
-        if tid in _tw_h:
-            _agent_ndjson_log(
-                "H5",
-                "_core.py:_apply_result_task_id_hyperlinks",
-                "watch_row",
-                {"row": r, "tid": tid, "addr": addr or ""},
-            )
-        # endregion
         if not addr:
             continue
         cell.hyperlink = loc_prefix + addr
@@ -7106,7 +6992,6 @@ def build_task_queue_from_planning_df(
     same_tid_line_seq = defaultdict(int)
     # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
     planning_sheet_row_seq = 0
-    _watch_q = _agent_debug_watch_tids()
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
@@ -7114,19 +6999,6 @@ def build_task_queue_from_planning_df(
         task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
-            # region agent log
-            if task_id in _watch_q:
-                _agent_ndjson_log(
-                    "H2",
-                    "_core.py:build_task_queue_from_planning_df",
-                    "skipped_plan_exclude",
-                    {
-                        "tid": task_id,
-                        "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
-                        "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                    },
-                )
-            # endregion
             continue
 
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
@@ -7170,22 +7042,6 @@ def build_task_queue_from_planning_df(
             speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
-            # region agent log
-            if task_id in _watch_q:
-                _agent_ndjson_log(
-                    "H4",
-                    "_core.py:build_task_queue_from_planning_df",
-                    "skipped_qty_or_keys",
-                    {
-                        "tid": task_id,
-                        "process": machine,
-                        "machine_name": machine_name,
-                        "qty_total": qty_total,
-                        "done_qty": done_qty,
-                        "qty_net": qty,
-                    },
-                )
-            # endregion
             continue
 
         _line_seq = same_tid_line_seq[task_id]
@@ -7321,28 +7177,6 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
-        _btp = (qty / speed) / (qty / unit) if unit and speed and qty else 0
-        # region agent log
-        if task_id in _watch_q and str(machine).strip().upper() == "EC":
-            _agent_ndjson_log(
-                "H1",
-                "_core.py:build_task_queue_from_planning_df",
-                "w4_ec_base_time_inputs",
-                {
-                    "tid": task_id,
-                    "machine": machine,
-                    "machine_name": machine_name,
-                    "qty_total": qty_total,
-                    "qty_net": qty,
-                    "speed_raw": str(speed_raw),
-                    "speed_after_ai_global": speed,
-                    "unit_m": float(unit),
-                    "base_time_per_unit": _btp,
-                    "calc_time_val": qty * speed,
-                    "remaining_units": (qty / unit) if unit else 0,
-                },
-            )
-        # endregion
         task_queue.append(
             {
                 "task_id": task_id,
@@ -7367,7 +7201,9 @@ def build_task_queue_from_planning_df(
                 "total_qty_m": int(qty_total),
                 "unit_m": int(unit),
                 "remaining_units": qty / unit if unit else 0,
-                "base_time_per_unit": _btp,
+                "base_time_per_unit": (qty / speed) / (qty / unit)
+                if unit and speed and qty
+                else 0,
                 "assigned_history": [],
                 "calc_time_value": calc_time_val,
                 "required_op": req_op,
@@ -7403,25 +7239,6 @@ def build_task_queue_from_planning_df(
         len(task_queue),
         n_exclude_plan,
     )
-    # region agent log
-    if _watch_q:
-        _in_q = [
-            {
-                "tid": str(t.get("task_id", "") or "").strip(),
-                "process": str(t.get("machine", "") or "").strip(),
-                "machine_name": str(t.get("machine_name", "") or "").strip(),
-                "remaining_units": float(t.get("remaining_units") or 0),
-            }
-            for t in task_queue
-            if str(t.get("task_id", "") or "").strip() in _watch_q
-        ]
-        _agent_ndjson_log(
-            "H5",
-            "_core.py:build_task_queue_from_planning_df",
-            "queue_built_watch_summary",
-            {"n_in_queue": len(_in_q), "tasks": _in_q},
-        )
-    # endregion
     return task_queue
 
 
@@ -7660,19 +7477,6 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
                 continue
             counts[mn_key] += 1
         dup_ge2 = any(c >= 2 for c in counts.values())
-        # region agent log
-        if _tid_key in _agent_debug_watch_tids():
-            _agent_ndjson_log(
-                "H3",
-                "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
-                "bunkatsu_dup_check",
-                {
-                    "tid": _tid_key,
-                    "machine_counts": {str(k): int(v) for k, v in counts.items()},
-                    "any_machine_dup_ge2": dup_ge2,
-                },
-            )
-        # endregion
         if not dup_ge2:
             continue
         for i in idx_list:
@@ -7685,20 +7489,6 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             # 列が StringDtype のとき int 代入で TypeError になるため文字列にする（_plan_row_exclude_from_assignment は yes を真とみなす）
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
             n_set += 1
-            # region agent log
-            if _tid_key in _agent_debug_watch_tids():
-                _agent_ndjson_log(
-                    "H3",
-                    "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
-                    "bunkatsu_auto_yes_applied",
-                    {
-                        "tid": _tid_key,
-                        "df_index": int(i),
-                        "process": str(df.at[i, TASK_COL_MACHINE]),
-                        "machine_name": str(df.at[i, TASK_COL_MACHINE_NAME]),
-                    },
-                )
-            # endregion
 
     if n_set:
         logging.info(
@@ -9452,40 +9242,10 @@ def apply_exclude_rules_config_to_plan_df(
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
-                # region agent log
-                if _tid_er in _agent_debug_watch_tids():
-                    _agent_ndjson_log(
-                        "H6",
-                        "_core.py:apply_exclude_rules_config_to_plan_df",
-                        "exclude_rule_applied_c_yes",
-                        {
-                            "tid": _tid_er,
-                            "task_process": tp,
-                            "task_machine_name": tm,
-                            "rule_process": str(ru.get("proc") or ""),
-                            "rule_machine": str(ru.get("mach") or ""),
-                        },
-                    )
-                # endregion
                 break
             if ru.get("parsed") and evaluate_exclude_rule_json_for_row(ru["parsed"], row):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
-                # region agent log
-                if _tid_er in _agent_debug_watch_tids():
-                    _agent_ndjson_log(
-                        "H6",
-                        "_core.py:apply_exclude_rules_config_to_plan_df",
-                        "exclude_rule_applied_json",
-                        {
-                            "tid": _tid_er,
-                            "task_process": tp,
-                            "task_machine_name": tm,
-                            "rule_process": str(ru.get("proc") or ""),
-                            "rule_machine": str(ru.get("mach") or ""),
-                        },
-                    )
-                # endregion
                 break
     if n:
         logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
@@ -12858,6 +12618,17 @@ def _eq_grid_events_for_equipment_column(
     for mk, evs2 in machine_to_events.items():
         if _normalize_equipment_match_key(str(mk)) == nk:
             return evs2
+    pe, me = _split_equipment_line_process_machine(eq_col)
+    pe_n = _normalize_equipment_match_key(pe)
+    me_n = _normalize_equipment_match_key(me)
+    if pe_n and me_n:
+        for mk, evs2 in machine_to_events.items():
+            pk, mk_m = _split_equipment_line_process_machine(str(mk))
+            if (
+                _normalize_equipment_match_key(pk) == pe_n
+                and _normalize_equipment_match_key(mk_m) == me_n
+            ):
+                return evs2
     return []
 
 
@@ -16228,29 +15999,6 @@ def _trial_order_first_schedule_pass(
                     "event_kind": TIMELINE_EVENT_MACHINING,
                 }
             )
-            # region agent log
-            _tw_tl = _agent_debug_watch_tids()
-            _tid_tl = str(task.get("task_id") or "").strip()
-            if _tid_tl in _tw_tl and str(task.get("machine") or "").strip().upper() == "EC":
-                ev = timeline_events[-1]
-                _agent_ndjson_log(
-                    "H2",
-                    "_core.py:timeline.append_machining",
-                    "w4_ec_segment",
-                    {
-                        "start_dt": str(ev.get("start_dt")),
-                        "end_dt": str(ev.get("end_dt")),
-                        "dur_minutes": (
-                            (ev["end_dt"] - ev["start_dt"]).total_seconds() / 60.0
-                            if ev.get("start_dt") and ev.get("end_dt")
-                            else None
-                        ),
-                        "eff_time_per_unit": float(ev.get("eff_time_per_unit") or 0),
-                        "units_done": ev.get("units_done"),
-                        "machine": str(ev.get("machine") or ""),
-                    },
-                )
-            # endregion
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
@@ -18687,20 +18435,6 @@ def _generate_plan_impl():
         timeline_events,
         first_eq_schedule_cell_by_task_id=first_eq_schedule_cell_by_task_id,
     )
-    # region agent log
-    _tw_eq = _agent_debug_watch_tids()
-    for _tid_eq in _tw_eq:
-        _agent_ndjson_log(
-            "H4",
-            "_core.py:generate_plan:post_eq_schedule",
-            "hyperlink_first_cell",
-            {
-                "tid": _tid_eq,
-                "first_eq_cell": first_eq_schedule_cell_by_task_id.get(_tid_eq),
-                "map_size": len(first_eq_schedule_cell_by_task_id),
-            },
-        )
-    # endregion
     df_temp_equipment_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
         equipment_list,
