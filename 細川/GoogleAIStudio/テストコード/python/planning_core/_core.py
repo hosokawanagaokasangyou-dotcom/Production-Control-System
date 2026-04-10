@@ -91,7 +91,7 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # Gemini API キーは TASK_INPUT_WORKBOOK 確定後、下記「設定」B1 の JSON から解決（平文または format_version 2 の暗号化）。
 # 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
 
-GEMINI_MODEL_FLASH = "gemini-2.5-flash"
+GEMINI_MODEL_FLASH = "gemini-3.1-flash-lite-preview"
 # 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
 # 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
@@ -3498,7 +3498,7 @@ F) **global_day_process_operator_rules** （配列・必須）
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
@@ -6942,7 +6942,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
@@ -6968,7 +6968,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             logging.warning(f"タスク特別指定 AI 429。{wait_sec:.1f}秒待機して再試行します。")
             time_module.sleep(wait_sec)
             try:
-                res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
                 if parsed is not None:
@@ -6989,7 +6989,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             )
             time_module.sleep(wait_sec)
             try:
-                res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
                 if parsed is not None:
@@ -8401,7 +8401,7 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
         logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_last_response.txt")
@@ -8471,7 +8471,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
         logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_response.txt")
@@ -12025,7 +12025,7 @@ def load_attendance_and_analyze(members):
             """
             try:
                 client = genai.Client(api_key=API_KEY)
-                res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
                 record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                 match = re.search(r'\{.*\}', res.text, re.DOTALL)
                 if match:
@@ -12046,7 +12046,7 @@ def load_attendance_and_analyze(members):
                     logging.warning(f"AI通信 429/RESOURCE_EXHAUSTED。{wait_sec:.1f}秒待機して1回だけ再試行します。")
                     time_module.sleep(wait_sec)
                     try:
-                        res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                        res = client.models.generate_content(model=GEMINI_MODEL_FLASH, contents=prompt)
                         record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
                         match = re.search(r'\{.*\}', res.text, re.DOTALL)
                         if match:
