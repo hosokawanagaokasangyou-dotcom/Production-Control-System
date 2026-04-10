@@ -7896,6 +7896,8 @@ def _merge_plan_sheet_user_overrides(out_df):
 #   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
 #       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり。
 #       ``apply_exclude_rules_config_to_plan_df`` による計画 DataFrame への反映は **段階1のみ**。
+#       工程名が「分割」の行については、(A) と同じく **同一依頼NO内に同一機械名が複数行あるときだけ**
+#       C 列／E 列 JSON による配台不要=yes を適用する（EC と分割で機械が異なる依頼では設定行が残っていても配台可）。
 #       段階2は配台計画シートの「配台不要」列（段階1出力・手編集の結果）をそのまま使う。
 # ---------------------------------------------------------------------------
 
@@ -7930,6 +7932,25 @@ def _process_name_is_bunkatsu_for_auto_exclude(raw) -> bool:
     return t == "分割"
 
 
+def _same_tid_nonempty_machine_dup_ge2(
+    df: pd.DataFrame, idx_list: list
+) -> tuple[bool, dict[str, int]]:
+    """
+    ``_apply_auto_exclude_bunkatsu_duplicate_machine`` と同一の重複判定。
+    idx_list 内で、正規化後の非空「機械名」が同一の行が2件以上あるとき True。
+    """
+    if len(idx_list) < 2:
+        return False, {}
+    counts: dict[str, int] = defaultdict(int)
+    for i in idx_list:
+        mn_key = _normalize_equipment_match_key(df.at[i, TASK_COL_MACHINE_NAME])
+        if not mn_key:
+            continue
+        counts[mn_key] += 1
+    dup_ge2 = any(c >= 2 for c in counts.values())
+    return dup_ge2, dict(counts)
+
+
 def _apply_auto_exclude_bunkatsu_duplicate_machine(
     df: pd.DataFrame, log_prefix: str = "段階1"
 ) -> pd.DataFrame:
@@ -7958,15 +7979,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
 
     n_set = 0
     for _tid_key, idx_list in by_tid.items():
-        if len(idx_list) < 2:
-            continue
-        counts = defaultdict(int)
-        for i in idx_list:
-            mn_key = _normalize_equipment_match_key(df.at[i, TASK_COL_MACHINE_NAME])
-            if not mn_key:
-                continue
-            counts[mn_key] += 1
-        dup_ge2 = any(c >= 2 for c in counts.values())
+        dup_ge2, _counts = _same_tid_nonempty_machine_dup_ge2(df, idx_list)
         if not dup_ge2:
             continue
         for i in idx_list:
@@ -9703,6 +9716,10 @@ def apply_exclude_rules_config_to_plan_df(
 ) -> pd.DataFrame:
     """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。
 
+    工程名が「分割」の行は、同一依頼NO内に非空の同一「機械名」が複数行ある場合に限り
+    （``_apply_auto_exclude_bunkatsu_duplicate_machine`` と同じ重複条件）、C/E を適用する。
+    EC と分割で機械が異なる依頼では、設定行が残っていても当該分割行は配台対象のままとする。
+
     運用上は **段階1**（``run_stage1_extract``）から呼ぶ。段階2の ``load_planning_tasks_df`` では
     ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False)`` とし、
     本関数でシートの C/E を計画 DataFrame に再適用しない。
@@ -9715,6 +9732,12 @@ def apply_exclude_rules_config_to_plan_df(
     if not rules:
         return df
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
+    by_tid_idx: dict[str, list] = defaultdict(list)
+    if TASK_COL_TASK_ID in df.columns:
+        for j in df.index:
+            tid_j = _normalize_task_id_for_dup_grouping(df.at[j, TASK_COL_TASK_ID])
+            if tid_j:
+                by_tid_idx[tid_j].append(j)
     n = 0
     for i in df.index:
         try:
@@ -9725,10 +9748,19 @@ def apply_exclude_rules_config_to_plan_df(
         tm = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         if not tp:
             continue
+        tid_norm = _normalize_task_id_for_dup_grouping(row.get(TASK_COL_TASK_ID))
+        is_bunkatsu = _process_name_is_bunkatsu_for_auto_exclude(tp)
+        dup_ge2_for_tid = False
+        if tid_norm:
+            dup_ge2_for_tid, _mc = _same_tid_nonempty_machine_dup_ge2(
+                df, by_tid_idx.get(tid_norm, [])
+            )
+        bunkatsu_block_cfg = is_bunkatsu and bool(tid_norm) and not dup_ge2_for_tid
         for ru in rules:
             if not _task_row_matches_exclude_rule_target(tp, tm, ru["proc"], ru["mach"]):
                 continue
-            _tid_er = planning_task_id_str_from_plan_row(row)
+            if bunkatsu_block_cfg:
+                continue
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
