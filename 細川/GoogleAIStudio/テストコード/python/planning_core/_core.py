@@ -3904,8 +3904,10 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     if isinstance(dto_idx, slice):
         logging.error("配台試行順番更新: 列「%s」が複数あります。", dto_col)
         return False
-    for ri in range(len(df)):
-        df.iat[ri, dto_idx] = ""
+    if pd.api.types.is_numeric_dtype(df[dto_col]):
+        df[dto_col] = float("nan")
+    else:
+        df[dto_col] = ""
 
     data_extract_dt = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
@@ -12283,7 +12285,10 @@ def fill_plan_dispatch_trial_order_column_stage1(
             # Excel 上は数値セルにし、フィルター・並べ替えをしやすくする（文字列だと数値と別グループになる）
             plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
-            plan_df.iat[iloc, col_idx] = ""
+            if pd.api.types.is_numeric_dtype(plan_df.iloc[:, col_idx]):
+                plan_df.iat[iloc, col_idx] = float("nan")
+            else:
+                plan_df.iat[iloc, col_idx] = ""
 
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
