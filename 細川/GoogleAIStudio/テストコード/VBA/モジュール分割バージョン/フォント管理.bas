@@ -486,7 +486,61 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
     End If
 End Sub
 
-' グラデーション＋影付き図形（メインの「かっこいいボタン」と同趣旨）。同一図形名なら削除して付け直す。
+'==============================================================================
+' 配台計画_タスク入力: シートの「配台試行順番」を小数キーとして昇順に並べ替え 1..n（マスタ・上書き連携なし）
+' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え」
+' 図形の自動作成: 「配台計画_タスク入力_試行順小数キー並べ替えボタンを配置」
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "試行順の並べ替え"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "試行順の並べ替え"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    MacroSplash_SetStep "配台計画: 配台試行順番を小数キーで並べ替えています…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -3 -u python\apply_plan_input_dispatch_trial_order_sort_by_float_keys.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [plan-dispatch-trial-float-keys] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "試行順の並べ替え"
+    Else
+        MacroSplash_SetStep "「" & SHEET_PLAN_INPUT_TASK & "」の配台試行順番をキー順に並べ、1 から振り直しました。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
+' グラデーション＋影付き図形（メインの「かっこいいボタン」と同趣旨）。shapeName で図形名を区別する。
 Private Sub PlanInputSheet_AddGradientActionButton( _
     ByVal ws As Worksheet, _
     ByVal btnText As String, _
@@ -494,12 +548,13 @@ Private Sub PlanInputSheet_AddGradientActionButton( _
     ByVal leftPt As Single, _
     ByVal topPt As Single, _
     ByVal colorTop As Long, _
-    ByVal colorBottom As Long)
+    ByVal colorBottom As Long, _
+    ByVal shapeName As String)
     Dim shp As Shape
     Const BTN_W As Single = 268
     Const BTN_H As Single = 48
     Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftPt, topPt, BTN_W, BTN_H)
-    shp.Name = SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER
+    shp.Name = shapeName
     With shp
         With .TextFrame2.TextRange
             .text = btnText
@@ -580,7 +635,7 @@ Public Sub 配台計画_タスク入力_配台試行順再計算ボタンを配置()
     topPt = ws.Rows(1).Top + 1.5
     wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
     macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_配台試行順番を再計算"
-    PlanInputSheet_AddGradientActionButton ws, "配台試行順を更新", macroAnim, leftPt, topPt, RGB(100, 120, 220), RGB(40, 50, 120)
+    PlanInputSheet_AddGradientActionButton ws, "配台試行順を更新", macroAnim, leftPt, topPt, RGB(100, 120, 220), RGB(40, 50, 120), SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER
     ws.Activate
     On Error Resume Next
     ws.Range("A1").Select
@@ -590,6 +645,65 @@ Public Sub 配台計画_タスク入力_配台試行順再計算ボタンを配置()
     Exit Sub
 FailBtn:
     MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "配台試行順ボタン"
+End Sub
+
+'==============================================================================
+' 配台計画_タスク入力: 「小数キーで並べ替え→1..n」用グラデーション図形を 1 行目付近に配置（再計算ボタンの下）
+' 開発タブ → マクロ → 「配台計画_タスク入力_試行順小数キー並べ替えボタンを配置」
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順小数キー並べ替えボタンを配置()
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim anchorCol As Long
+    Dim leftPt As Single
+    Dim topPt As Single
+    Dim sh As Shape
+    Dim wbQuoted As String
+    Dim macroAnim As String
+    Dim i As Long
+    Const BTN_H As Single = 48
+    Const BTN_GAP As Single = 6
+    On Error GoTo FailBtn2
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo FailBtn2
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "試行順キーボタン"
+        Exit Sub
+    End If
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        Set sh = ws.Shapes(i)
+        If StrComp(sh.Name, SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS, vbTextCompare) = 0 Then
+            sh.Delete
+        End If
+    Next i
+    On Error GoTo FailBtn2
+    Set ur = Nothing
+    On Error Resume Next
+    Set ur = ws.UsedRange
+    On Error GoTo FailBtn2
+    anchorCol = 4
+    If Not ur Is Nothing Then
+        anchorCol = ur.Column + ur.Columns.Count + 1
+        If anchorCol < 4 Then anchorCol = 4
+        If anchorCol > 80 Then anchorCol = 80
+    End If
+    leftPt = ws.Cells(1, anchorCol).Left
+    topPt = ws.Rows(1).Top + 1.5 + BTN_H + BTN_GAP
+    wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え"
+    PlanInputSheet_AddGradientActionButton ws, "試行順をキーで並べ替え", macroAnim, leftPt, topPt, RGB(0, 150, 140), RGB(0, 75, 70), SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS
+    ws.Activate
+    On Error Resume Next
+    ws.Range("A1").Select
+    On Error GoTo 0
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "（配台試行順番に 1, 2, 1.5 などキーを入れたあと、クリックで昇順に並べ 1 から振り直します）", vbInformation, "試行順キーボタン"
+    Exit Sub
+FailBtn2:
+    MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "試行順キーボタン"
 End Sub
 
 '==============================================================================

@@ -161,10 +161,28 @@ Sub アニメ付き_配台計画_タスク入力_配台試行順番を再計算()
     アニメ付き_スプラッシュ付きで実行 "配台試行順番を再計算しています…", "配台計画_タスク入力_配台試行順番をPythonで再計算"
 End Sub
 
+' 配台試行順番列を小数キーとして昇順に並べ替え 1..n（マスタ・上書き連携なし）。図形 OnAction は本マクロ。
+Sub アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え()
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "配台試行順番をキー順に並べ替えています…", "配台計画_タスク入力_試行順を小数キーでPython並べ替え"
+End Sub
+
 ' 上記と同じ図形をシートに自動配置（初回・位置調整用）。本体は フォント管理 の 配台計画_タスク入力_配台試行順再計算ボタンを配置。
 Sub アニメ付き_配台計画_タスク入力_配台試行順再計算ボタンを配置()
     Call AnimateButtonPush
     配台計画_タスク入力_配台試行順再計算ボタンを配置
+End Sub
+
+' 小数キー並べ替えボタンを配置（グラデーション図形）。本体は フォント管理。
+Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_試行順小数キー並べ替えボタンを配置
+End Sub
+
+' 小数キー並べ替えボタンを配置（かっこいいボタン版）。
+Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えクールボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置
 End Sub
 
 Public Function GetMainWorksheet() As Worksheet
@@ -1261,6 +1279,49 @@ Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
     CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
     MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
+End Sub
+
+' 「配台試行順番」を小数キーで並べ替え 1..n 用（かっこいいボタン版）。試行順更新ボタンの下あたりに配置（同一マクロ割当の既存図形は削除）。
+' グラデーション版は フォント管理 の「配台計画_タスク入力_試行順小数キー並べ替えボタンを配置」。
+Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4 + 58
+    
+    CreateCoolButtonWithPreset "キー順に並べ替え", MACRO_ANIM, leftPos, topPos, 3
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================

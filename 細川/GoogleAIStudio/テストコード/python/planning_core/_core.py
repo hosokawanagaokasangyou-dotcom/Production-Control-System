@@ -4012,6 +4012,213 @@ def refresh_plan_input_dispatch_trial_order_only() -> bool:
     return refresh_plan_input_dispatch_trial_order_via_xlwings(p)
 
 
+def _plan_input_row_is_blank_task_row(plan_df: "pd.DataFrame", row_i: int) -> bool:
+    """依頼NO・工程名が両方空なら True（並べ替え・検証の対象外）。"""
+
+    def _cell_empty(val) -> bool:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return True
+        s = str(val).strip()
+        if not s or s.lower() in ("nan", "none"):
+            return True
+        return False
+
+    if TASK_COL_TASK_ID not in plan_df.columns or TASK_COL_MACHINE not in plan_df.columns:
+        return True
+    ti = plan_df.iat[row_i, plan_df.columns.get_loc(TASK_COL_TASK_ID)]
+    mc = plan_df.iat[row_i, plan_df.columns.get_loc(TASK_COL_MACHINE)]
+    return _cell_empty(ti) and _cell_empty(mc)
+
+
+def _parse_dispatch_trial_order_float_sort_key(val) -> float | None:
+    """「配台試行順番」セルを並べ替えキーとして float 化。空・不正・非有限は None。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        try:
+            x = float(val)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(x):
+            return None
+        return x
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none"):
+        return None
+    try:
+        x = float(s)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(x):
+        return None
+    return x
+
+
+def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
+    workbook_path: str | None = None,
+) -> bool:
+    """
+    「配台計画_タスク入力」の **現在のシート内容だけ** を使い、列「配台試行順番」を
+    小数を含む並べ替えキーとして解釈して昇順に行を並べ替え、1..n に振り直す。
+
+    - ``_apply_planning_sheet_post_load_mutations`` ・マスタ ・
+      ``fill_plan_dispatch_trial_order_column_stage1`` は **呼ばない**。
+    - 依頼NO・工程名が両方空の行は対象外。先頭の空行と、最後のデータ行より後の空行は
+      元の順のまま残す。
+    - 最初の対象行から最後の対象行までは **途切れなく対象行** でなければならない。
+    - 対象行はキーが **有限の float** で、**互いに重複してはならない**。
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("配台試行順番（小数キー並べ）: ブックパスが空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("配台試行順番（小数キー並べ）: xlwings がありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+    except Exception as e:
+        logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
+        return False
+
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("配台試行順番（小数キー並べ）: データ行がありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col not in df.columns:
+        logging.error("配台試行順番（小数キー並べ）: 列「%s」がありません。", dto_col)
+        return False
+    dto_idx = df.columns.get_loc(dto_col)
+    if isinstance(dto_idx, slice):
+        logging.error("配台試行順番（小数キー並べ）: 列「%s」が複数あります。", dto_col)
+        return False
+
+    n = len(df)
+    active = [i for i in range(n) if not _plan_input_row_is_blank_task_row(df, i)]
+    if not active:
+        logging.error(
+            "配台試行順番（小数キー並べ）: 依頼NO または 工程名 がある行がありません。"
+        )
+        return False
+    first = min(active)
+    last = max(active)
+    for k in range(first, last + 1):
+        if k not in active:
+            logging.error(
+                "配台試行順番（小数キー並べ）: %s 行目付近に、依頼NO・工程名が両方空の行が"
+                " データの途中にあります。",
+                k + 2,
+            )
+            return False
+
+    key_by_row: dict[int, float] = {}
+    row_by_key: dict[float, int] = {}
+    for i in active:
+        fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
+        if fk is None:
+            logging.error(
+                "配台試行順番（小数キー並べ）: %s 行目の「%s」が空か、数値として解釈できません。",
+                i + 2,
+                dto_col,
+            )
+            return False
+        if fk in row_by_key:
+            logging.error(
+                "配台試行順番（小数キー並べ）: 並べ替えキー %s が %s 行目と %s 行目で重複しています。",
+                fk,
+                row_by_key[fk] + 2,
+                i + 2,
+            )
+            return False
+        row_by_key[fk] = i
+        key_by_row[i] = fk
+
+    sorted_active = sorted(active, key=lambda ri: (key_by_row[ri], ri))
+    df_mut = df.copy()
+    for rank, i in enumerate(sorted_active, start=1):
+        df_mut.iat[i, dto_idx] = rank
+
+    leading = [i for i in range(0, first)]
+    trailing = [i for i in range(last + 1, n)]
+    orig_list = leading + sorted_active + trailing
+
+    rows_ordered = [df_mut.iloc[oi] for oi in orig_list]
+    df_sorted = pd.DataFrame(rows_ordered).reset_index(drop=True)
+
+    header_row = mat[0] if mat else []
+    n_hdr = len(header_row)
+    if n_hdr == 0:
+        return False
+
+    def _pad_row(r, n):
+        r = list(r) if r is not None else []
+        if len(r) < n:
+            r = r + [None] * (n - len(r))
+        return r
+
+    new_mat = [_pad_row(header_row, n_hdr)]
+    for i in range(len(df_sorted)):
+        orig = orig_list[i]
+        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+        src_row = _pad_row(src_row, n_hdr)
+        out_row = []
+        for j in range(n_hdr):
+            h_cell = header_row[j]
+            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                hname = ""
+            else:
+                hname = str(h_cell).strip()
+            if hname and hname in df_sorted.columns:
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                if pd.isna(v):
+                    out_row.append(None)
+                else:
+                    out_row.append(v)
+            else:
+                out_row.append(src_row[j])
+        new_mat.append(out_row)
+
+    try:
+        n_r = len(new_mat)
+        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+    except Exception as e:
+        logging.exception("配台試行順番（小数キー並べ）: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("配台試行順番（小数キー並べ）: Save 警告: %s", e)
+
+    logging.info(
+        "配台試行順番（小数キー並べ）: 「%s」を %s データ行で並べ替え・連番化しました。",
+        PLAN_INPUT_SHEET_NAME,
+        len(sorted_active),
+    )
+    return True
+
+
+def sort_plan_input_dispatch_trial_order_by_float_keys_only() -> bool:
+    """TASK_INPUT_WORKBOOK に対する「小数キーで並べ替え→1..n」（VBA / cmd 経由）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    return sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(p)
+
+
 def apply_plan_input_column_layout_only() -> bool:
     """
     配台計画_タスク入力の列順・表示のみを適用する予定（VBA 用）。

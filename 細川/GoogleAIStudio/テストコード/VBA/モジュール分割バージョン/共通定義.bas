@@ -123,6 +123,8 @@ Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
 ' 配台計画_タスク入力シート上の「配台試行順を再計算」図形名（再配置時に削除して付け直す）
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
+' 「配台試行順番」を小数キーで並べ替え（1..n）用グラデーション図形名
+Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS As String = "btn_PlanInput_DispatchTrialOrder_FloatKeys"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）

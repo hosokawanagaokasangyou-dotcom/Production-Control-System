@@ -236,6 +236,47 @@ def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
         _write_stage_vba_exit_code(rc)
 
 
+def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
+    """
+    ????_?????: ???????????????? 1..n?xlwings ???
+    VBA: XwRunConsoleRunner "run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings"
+    """
+    rc = 1
+    try:
+        try:
+            _prepare_from_caller_book()
+        except Exception:
+            logging.exception("xlwings: Book.caller() ?????")
+            rc = 2
+            return rc
+        _apply_workbook_env_overrides()
+        _append_execution_log_line(
+            "INFO",
+            "?????: xlwings run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings ??",
+        )
+        _purge_planning_core_modules()
+        try:
+            import planning_core as pc
+
+            ok = pc.sort_plan_input_dispatch_trial_order_by_float_keys_only()
+            rc = 0 if ok else 1
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                rc = 0
+            elif isinstance(c, int):
+                rc = 0 if c == 0 else c
+            else:
+                rc = 1
+        except Exception:
+            logging.exception("xlwings: ????????????????")
+            _append_execution_log_traceback("xlwings: ????????????????")
+            rc = 1
+        return rc
+    finally:
+        _write_stage_vba_exit_code(rc)
+
+
 def run_stage2_for_xlwings() -> int:
     """
     ????2???generate_plan???€????€?: 0=????????, 1=????, 2=caller ?????
