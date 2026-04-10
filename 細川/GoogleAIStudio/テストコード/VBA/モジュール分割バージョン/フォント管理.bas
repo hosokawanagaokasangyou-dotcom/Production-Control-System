@@ -430,19 +430,24 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 End Sub
 
 '==============================================================================
-' 配台計画_タスク入力 → 「配台試行順番」を段階2と同じ基準で再計算（planning_core / xlwings）。
-' 図形の OnAction には「アニメ付き_配台試行順番_タスク入力をPythonで更新」を指定（本体直指定だと AnimateButtonPush が動きにくい）。
-' ・配台不要を手動でクリアしたあとなど、キューに戻した行へ試行順を付け直すときに使用。
-' ・段階2コアと同様に「設定_配台不要工程」「設定_環境変数」を確保してから保存・Python 実行し、シート値と workbook_env_bootstrap の反映を整合。
-' ・Python: refresh_plan_input_dispatch_trial_order.py → fill_plan_dispatch_trial_order_column_stage1（段階2と同手順のソート・隣接化・1..n）後、行を試行順昇順に並べ替え。
+' 配台計画_タスク入力 → 「配台試行順番」を再計算（planning_core / xlwings）。
+' 【既定・図形ボタン用】配台試行順番_配台計画タスク入力をPythonで更新
+'   ・加工計画DATA からの再取り込みは行わない。シート上のセル（配台不要・原反投入日_上書き 等）の現状だけで試行順を付け直す。
+'   ・Python 環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1 … post_load（設定ルールの再適用・分割行の自動配台不要）をスキップ。
+' 【段階2 読込に近い挙動】配台試行順番_配台計画タスク入力をPythonで更新_設定ルール再適用
+'   ・LOCAL_ONLY=0 … _apply_planning_sheet_post_load_mutations を実行してから試行順を計算。
+' 図形の OnAction にはアニメ付き_* を指定（本体直指定だと AnimateButtonPush が動きにくい）。
 '==============================================================================
-Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
+Private Sub 配台試行順番_配台計画タスク入力をPythonで更新_実装(ByVal localSheetOnly As Boolean)
     Dim wsh As Object
     Dim runBat As String
     Dim targetDir As String
     Dim exitCode As Long
     Dim wsPlan As Worksheet
     Dim prevScreen As Boolean
+    Dim envLine As String
+    Dim stepMsg As String
+    Dim okMsg As String
 
     targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
@@ -470,10 +475,21 @@ Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
 
+    If localSheetOnly Then
+        envLine = "set ""PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1""" & vbCrLf
+        stepMsg = "配台試行順番: シート上の内容のみで再計算しています（元データ再取り込みなし）…"
+        okMsg = "「配台計画_タスク入力」の配台試行順番を更新しました（手編集したセル内容に基づき、試行順で並べ替え）。"
+    Else
+        envLine = "set ""PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=0""" & vbCrLf
+        stepMsg = "配台試行順番: 設定ルールを反映したうえで Python で再計算しています…"
+        okMsg = "「配台計画_タスク入力」の配台試行順番を更新しました（設定シートのルール適用後・試行順で並べ替え）。"
+    End If
+
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
-    MacroSplash_SetStep "配台試行順番: Python で配台計画_タスク入力を再計算しています…"
+    MacroSplash_SetStep stepMsg
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             envLine & _
              "py -3 -u python\refresh_plan_input_dispatch_trial_order.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
@@ -485,9 +501,18 @@ Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
         MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
             & "log\execution_log.txt を確認してください。", vbExclamation, "配台試行順番の更新"
     Else
-        MacroSplash_SetStep "「配台計画_タスク入力」の配台試行順番を更新し、行を試行順の昇順に並べ替えました。"
+        MacroSplash_SetStep okMsg
         m_animMacroSucceeded = True
     End If
+End Sub
+
+Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
+    Call 配台試行順番_配台計画タスク入力をPythonで更新_実装(True)
+End Sub
+
+' 段階2 読込直前に近い: 設定_配台不要工程の保守・分割行・ルールによる配台不要の再適用のあと試行順を計算
+Public Sub 配台試行順番_配台計画タスク入力をPythonで更新_設定ルール再適用()
+    Call 配台試行順番_配台計画タスク入力をPythonで更新_実装(False)
 End Sub
 
 '==============================================================================

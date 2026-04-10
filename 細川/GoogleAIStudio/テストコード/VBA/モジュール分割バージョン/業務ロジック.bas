@@ -155,10 +155,16 @@ Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
     アニメ付き_スプラッシュ付きで実行 "列設定シートの重複列名を整理しています…", "列設定_結果_タスク一覧_重複列名を整理"
 End Sub
 
-' 配台不要を手動でクリアしたあとなど、配台試行順番を段階2と同じロジックで付け直す（python\refresh_plan_input_dispatch_trial_order.py）。
+' シート上の手編集のみ反映（元データ再取り込みなし・設定ルールの再適用なし）。python\refresh_plan_input_dispatch_trial_order.py + LOCAL_ONLY=1。
 Sub アニメ付き_配台試行順番_タスク入力をPythonで更新()
     Call AnimateButtonPush
-    アニメ付き_スプラッシュ付きで実行 "配台計画_タスク入力: 配台試行順番を再計算しています…", "配台試行順番_配台計画タスク入力をPythonで更新"
+    アニメ付き_スプラッシュ付きで実行 "配台計画_タスク入力: 試行順をシート内容のみで再計算しています…", "配台試行順番_配台計画タスク入力をPythonで更新"
+End Sub
+
+' 設定_配台不要工程のルール等を適用したうえで試行順を付け直す（段階2 読込に近い post_load あり）。
+Sub アニメ付き_配台試行順番_タスク入力をPythonで更新_設定ルール再適用()
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "配台計画_タスク入力: 設定ルール反映後に試行順を再計算しています…", "配台試行順番_配台計画タスク入力をPythonで更新_設定ルール再適用"
 End Sub
 
 Public Function GetMainWorksheet() As Worksheet

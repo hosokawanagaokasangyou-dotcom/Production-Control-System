@@ -3845,14 +3845,27 @@ def apply_result_task_column_layout_only() -> bool:
 _PLAN_INPUT_XLWINGS_ORIG_ROW = "__orig_sheet_row__"
 
 
+def _plan_input_dispatch_trial_order_local_only_from_env() -> bool:
+    """環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY が真なら post_load をスキップする。"""
+    v = (os.environ.get("PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY") or "").strip().lower()
+    return v in ("1", "true", "yes", "on", "y")
+
+
 def refresh_plan_input_dispatch_trial_order_via_xlwings(
     workbook_path: str | None = None,
+    *,
+    apply_post_load_mutations: bool = True,
 ) -> bool:
     """
     Excel で開いたマクロブック内の「配台計画_タスク入力」について、
     段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
     再付与し、段階1 出力直前と同じ手順で行を並べ替える。
     （未保存の編集分も xlwings で反映させるため read_excel は使わない）
+
+    apply_post_load_mutations=False のときは ``_apply_planning_sheet_post_load_mutations`` を呼ばない。
+    加工計画DATA からの再取り込みは行わないが、True のときは段階2 読込と同様に
+    設定_配台不要工程の保守・分割行の自動配台不要・設定ルールによる配台不要の再適用が走る。
+    手動で「配台不要」を外したり「原反投入日_上書き」等のみ変更した内容をそのまま試行順に反映したい場合は False。
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
@@ -3887,7 +3900,12 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
     df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
-    _apply_planning_sheet_post_load_mutations(df, path, "配台試行順番更新")
+    if apply_post_load_mutations:
+        _apply_planning_sheet_post_load_mutations(df, path, "配台試行順番更新")
+    else:
+        logging.info(
+            "配台試行順番更新: シート内容のみモード（設定シート再適用・分割行の自動配台不要をスキップ）"
+        )
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
@@ -3990,9 +4008,14 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
 
 def refresh_plan_input_dispatch_trial_order_only() -> bool:
-    """TASK_INPUT_WORKBOOK に対する配台試行順番再計算（VBA / cmd 経由のエントリ）。"""
+    """TASK_INPUT_WORKBOOK に対する配台試行順番再計算（VBA / cmd 経由のエントリ）。
+    環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1 等でシート上のセル値のみを入力とする。
+    """
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
-    return refresh_plan_input_dispatch_trial_order_via_xlwings(p)
+    local = _plan_input_dispatch_trial_order_local_only_from_env()
+    return refresh_plan_input_dispatch_trial_order_via_xlwings(
+        p, apply_post_load_mutations=not local
+    )
 
 
 def apply_plan_input_column_layout_only() -> bool:
