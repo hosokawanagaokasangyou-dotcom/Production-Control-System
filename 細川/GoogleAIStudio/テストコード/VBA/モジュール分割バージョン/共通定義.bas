@@ -119,6 +119,8 @@ Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
 Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
+' planning_core.PLAN_INPUT_SHEET_NAME（TASK_PLAN_SHEET 未設定時の既定）と一致
+Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）

@@ -430,6 +430,62 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 End Sub
 
 '==============================================================================
+' 配台計画_タスク入力: 「配台試行順番」を Python（xlwings）で再計算・行並べ替え
+' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_配台試行順番を再計算」
+' ・段階2 の load_planning_tasks_df と同じ _apply_planning_sheet_post_load_mutations を
+'   経由するため、「配台不要」手動クリア後も設定シート・分割行ルールと整合する。
+' ・Excel で本ブックを開いたまま。保存してからの実行を推奨。
+'==============================================================================
+Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "配台試行順番の再計算"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "配台試行順番の再計算"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    MacroSplash_SetStep "配台計画: Python で配台試行順番を再計算しています…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -3 -u python\apply_plan_input_dispatch_trial_order.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "配台試行順番の再計算"
+    Else
+        MacroSplash_SetStep "「" & SHEET_PLAN_INPUT_TASK & "」の配台試行順番を更新し、行を並べ替えました。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
+'==============================================================================
 ' デバッグ: ブックを開いたまま「どのシートが COM 的に触りにくいか」を一覧する
 ' 開発タブ → マクロ → 「COM操作テスト_全シートをログに出す」を実行。
 ' シート「COM操作テストログ」を末尾に作成し、シートごとの OK/NG を出します。

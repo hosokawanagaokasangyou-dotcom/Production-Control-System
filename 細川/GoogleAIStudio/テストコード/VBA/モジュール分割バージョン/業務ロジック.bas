@@ -155,6 +155,12 @@ Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
     アニメ付き_スプラッシュ付きで実行 "列設定シートの重複列名を整理しています…", "列設定_結果_タスク一覧_重複列名を整理"
 End Sub
 
+' 配台計画_タスク入力: 「配台不要」を手動でクリアしたあと等に試行順を付け直す。図形の OnAction は本マクロ（本体直指定だと AnimateButtonPush が動かない）。
+Sub アニメ付き_配台計画_タスク入力_配台試行順番を再計算()
+    Call AnimateButtonPush
+    アニメ付き_スプラッシュ付きで実行 "配台試行順番を再計算しています…", "配台計画_タスク入力_配台試行順番をPythonで再計算"
+End Sub
+
 Public Function GetMainWorksheet() As Worksheet
     ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next
@@ -1206,6 +1212,49 @@ Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Sing
         .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
         On Error GoTo 0
     End With
+End Sub
+
+' 「配台計画_タスク入力」1行目の右側付近に、試行順再計算用のクールボタンを1つ配置する（同一 OnAction の既存図形は削除してから作成）。
+Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_配台試行順番を再計算"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim lastCol As Long
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4
+    
+    CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================
