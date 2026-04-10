@@ -1978,8 +1978,16 @@ Public Sub 段階1_コア実行()
                  "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
-                 "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
-                 "exit /b !STAGE1_PY_EXIT!"
+                 "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf
+        ' コンソール表示時のみ: Python 失敗後にウィンドウがすぐ閉じないよう pause（非表示・headless では付けない）
+        If Not hideStage12CmdSt1 Then
+            runBat = runBat & "if not !STAGE1_PY_EXIT! equ 0 (" & vbCrLf & _
+                     "echo." & vbCrLf & _
+                     "echo [stage1] Python error. Press any key to close this window..." & vbCrLf & _
+                     "pause" & vbCrLf & _
+                     ")" & vbCrLf
+        End If
+        runBat = runBat & "exit /b !STAGE1_PY_EXIT!"
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane
