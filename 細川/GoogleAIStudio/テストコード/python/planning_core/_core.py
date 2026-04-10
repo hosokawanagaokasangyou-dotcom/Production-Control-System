@@ -44,6 +44,50 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
+# region agent log
+def _agent_debug_watch_tids() -> set[str]:
+    """カンマ区切り依頼NO。未設定時は W4-13（デバッグセッション用）。"""
+    raw = (os.environ.get("AGENT_DEBUG_WATCH_TIDS") or "W4-13").strip()
+    out: set[str] = set()
+    for part in raw.split(","):
+        p = planning_task_id_str_from_scalar(part.strip()) if part.strip() else ""
+        if p:
+            out.add(p)
+    return out
+
+
+def _agent_ndjson_log(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        root = os.path.abspath(os.path.dirname(__file__))
+        for _ in range(16):
+            if os.path.isdir(os.path.join(root, ".git")):
+                break
+            parent = os.path.dirname(root)
+            if parent == root:
+                root = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+                )
+                break
+            root = parent
+        log_path = os.path.join(root, "debug-eeaf64.log")
+        payload = {
+            "sessionId": "eeaf64",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(log_path, "a", encoding="utf-8") as _lf:
+            _lf.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
+
 # AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
@@ -2516,6 +2560,27 @@ def load_planning_tasks_df():
         if c not in df.columns:
             df[c] = ""
     _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
+    # region agent log
+    _watch = _agent_debug_watch_tids()
+    for _, row in df.iterrows():
+        tid = planning_task_id_str_from_plan_row(row)
+        if tid not in _watch:
+            continue
+        excl = bool(_plan_row_exclude_from_assignment(row))
+        _agent_ndjson_log(
+            "H1",
+            "_core.py:load_planning_tasks_df",
+            "post_mutations_row",
+            {
+                "tid": tid,
+                "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
+                "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
+                "exclude_from_assignment": excl,
+                "qty_total": parse_float_safe(row.get(TASK_COL_QTY), 0.0),
+                "done_eq": calc_done_qty_equivalent_from_row(row),
+            },
+        )
+    # endregion
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
@@ -6982,15 +7047,29 @@ def build_task_queue_from_planning_df(
     same_tid_line_seq = defaultdict(int)
     # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
     planning_sheet_row_seq = 0
+    _watch_q = _agent_debug_watch_tids()
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
             continue
+        task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
+            # region agent log
+            if task_id in _watch_q:
+                _agent_ndjson_log(
+                    "H2",
+                    "_core.py:build_task_queue_from_planning_df",
+                    "skipped_plan_exclude",
+                    {
+                        "tid": task_id,
+                        "process": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
+                        "machine_name": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
+                    },
+                )
+            # endregion
             continue
 
-        task_id = planning_task_id_str_from_plan_row(row)
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
@@ -7032,6 +7111,22 @@ def build_task_queue_from_planning_df(
             speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
+            # region agent log
+            if task_id in _watch_q:
+                _agent_ndjson_log(
+                    "H4",
+                    "_core.py:build_task_queue_from_planning_df",
+                    "skipped_qty_or_keys",
+                    {
+                        "tid": task_id,
+                        "process": machine,
+                        "machine_name": machine_name,
+                        "qty_total": qty_total,
+                        "done_qty": done_qty,
+                        "qty_net": qty,
+                    },
+                )
+            # endregion
             continue
 
         _line_seq = same_tid_line_seq[task_id]
@@ -7227,6 +7322,25 @@ def build_task_queue_from_planning_df(
         len(task_queue),
         n_exclude_plan,
     )
+    # region agent log
+    if _watch_q:
+        _in_q = [
+            {
+                "tid": str(t.get("task_id", "") or "").strip(),
+                "process": str(t.get("machine", "") or "").strip(),
+                "machine_name": str(t.get("machine_name", "") or "").strip(),
+                "remaining_units": float(t.get("remaining_units") or 0),
+            }
+            for t in task_queue
+            if str(t.get("task_id", "") or "").strip() in _watch_q
+        ]
+        _agent_ndjson_log(
+            "H5",
+            "_core.py:build_task_queue_from_planning_df",
+            "queue_built_watch_summary",
+            {"n_in_queue": len(_in_q), "tasks": _in_q},
+        )
+    # endregion
     return task_queue
 
 
@@ -7462,7 +7576,21 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             if not mn_key:
                 continue
             counts[mn_key] += 1
-        if not any(c >= 2 for c in counts.values()):
+        dup_ge2 = any(c >= 2 for c in counts.values())
+        # region agent log
+        if _tid_key in _agent_debug_watch_tids():
+            _agent_ndjson_log(
+                "H3",
+                "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
+                "bunkatsu_dup_check",
+                {
+                    "tid": _tid_key,
+                    "machine_counts": {str(k): int(v) for k, v in counts.items()},
+                    "any_machine_dup_ge2": dup_ge2,
+                },
+            )
+        # endregion
+        if not dup_ge2:
             continue
         for i in idx_list:
             if not _process_name_is_bunkatsu_for_auto_exclude(df.at[i, TASK_COL_MACHINE]):
@@ -7474,6 +7602,20 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             # 列が StringDtype のとき int 代入で TypeError になるため文字列にする（_plan_row_exclude_from_assignment は yes を真とみなす）
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
             n_set += 1
+            # region agent log
+            if _tid_key in _agent_debug_watch_tids():
+                _agent_ndjson_log(
+                    "H3",
+                    "_core.py:_apply_auto_exclude_bunkatsu_duplicate_machine",
+                    "bunkatsu_auto_yes_applied",
+                    {
+                        "tid": _tid_key,
+                        "df_index": int(i),
+                        "process": str(df.at[i, TASK_COL_MACHINE]),
+                        "machine_name": str(df.at[i, TASK_COL_MACHINE_NAME]),
+                    },
+                )
+            # endregion
 
     if n_set:
         logging.info(
