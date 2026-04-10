@@ -605,6 +605,9 @@ PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+# 配台計算で使う換算数量・ロール単位長さの下限（m）。正の値でこれ未満のときはこの値に引き上げる。
+PLANNING_MIN_QTY_M = 100.0
+PLANNING_MIN_ROLL_UNIT_M = 100.0
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
@@ -2248,6 +2251,17 @@ def _coerce_roll_unit_m_when_converted_qty_below_roll(
     if q > 0 and q < roll_infer and u < roll_infer:
         return roll_infer
     return u
+
+
+def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
+    """正の長さ(m)のみ、minimum 未満なら minimum に引き上げる。0以下・欠損はそのまま。"""
+    v = parse_float_safe(val, 0.0)
+    if v <= 0:
+        return v
+    m = parse_float_safe(minimum, 0.0)
+    if m <= 0:
+        return v
+    return float(m) if v < m else v
 
 
 def load_tasks_df():
@@ -7048,6 +7062,9 @@ def build_task_queue_from_planning_df(
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         done_qty = calc_done_qty_equivalent_from_row(row)
+        qty_total = _floor_positive_m_to_planning_minimum(
+            qty_total, PLANNING_MIN_QTY_M
+        )
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
@@ -7172,6 +7189,8 @@ def build_task_queue_from_planning_df(
             unit = float(qty) if qty else 0.0
         if unit <= 0:
             unit = qty
+
+        unit = _floor_positive_m_to_planning_minimum(unit, PLANNING_MIN_ROLL_UNIT_M)
 
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
@@ -9372,6 +9391,11 @@ def run_stage1_extract():
         rec[TASK_COL_TASK_ID] = task_id
         _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
         _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+        _qty_total_s1 = _floor_positive_m_to_planning_minimum(
+            _qty_total_s1, PLANNING_MIN_QTY_M
+        )
+        if TASK_COL_QTY in rec:
+            rec[TASK_COL_QTY] = _qty_total_s1
         _roll_len = infer_unit_m_from_product_name(
             _pn_stage1, fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty
         )
@@ -9390,6 +9414,9 @@ def run_stage1_extract():
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+        _roll_len = _floor_positive_m_to_planning_minimum(
+            _roll_len, PLANNING_MIN_ROLL_UNIT_M
+        )
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
         # 工程名 + 機械名 を“因子”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
