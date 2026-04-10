@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """planning_core 実装本体（パッケージ内）。``import planning_core`` で bootstrap が先に実行されること。"""
 import pandas as pd
 from datetime import datetime, timedelta, time, date
