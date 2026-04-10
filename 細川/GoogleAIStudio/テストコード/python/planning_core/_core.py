@@ -2223,39 +2223,8 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     return fallback_unit
 
 
-# #region agent log
-_AGENT_DEBUG_LOG_ROLL = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-c6beb7.log")
-)
-
-
-def _agent_debug_w4_trace(
-    task_id, hypothesis_id: str, location: str, message: str, data: dict, run_id="verify-w4-13"
-):
-    """W4-13 追跡用 NDJSON（debug セッション c6beb7）。依頼NOに W4-13 を含む行のみ。"""
-    if task_id is None or "W4-13" not in str(task_id):
-        return
-    try:
-        rec = {
-            "sessionId": "c6beb7",
-            "timestamp": int(time_module.time() * 1000),
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": {**data, "task_id": str(task_id)},
-        }
-        with open(_AGENT_DEBUG_LOG_ROLL, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 def _coerce_roll_unit_m_when_converted_qty_below_roll(
-    product_name, unit_m: float, qty_total: float, trace_task_id=None
+    product_name, unit_m: float, qty_total: float
 ) -> float:
     """
     加工長さ（1ロールあたりの m）の解釈。
@@ -2273,45 +2242,12 @@ def _coerce_roll_unit_m_when_converted_qty_below_roll(
         roll_infer = float(roll_infer)
     except (TypeError, ValueError):
         roll_infer = 0.0
-    q = parse_float_safe(qty_total, 0.0)
     if roll_infer <= 0:
-        out = u
-        reason = "H2_roll_infer_le0"
-    elif q > 0 and q < roll_infer and u < roll_infer:
-        out = roll_infer
-        reason = "H3_coerced_to_roll_infer"
-    elif q <= 0:
-        out = u
-        reason = "H3_qty_total_le0"
-    elif q >= roll_infer:
-        out = u
-        reason = "H3_qty_not_below_roll_infer"
-    elif u >= roll_infer:
-        out = u
-        reason = "H3_unit_already_ge_roll_infer"
-    else:
-        out = u
-        reason = "H3_other_no_coerce"
-
-    # #region agent log
-    if trace_task_id is not None and "W4-13" in str(trace_task_id):
-        _agent_debug_w4_trace(
-            trace_task_id,
-            "H2-H3",
-            "_core.py:_coerce_roll_unit_m_when_converted_qty_below_roll",
-            "roll_coerce",
-            {
-                "unit_in": u,
-                "unit_out": out,
-                "qty_total": q,
-                "roll_infer": roll_infer,
-                "reason": reason,
-                "product_snippet": (str(product_name)[:80] if product_name is not None else None),
-            },
-        )
-    # #endregion
-
-    return out
+        return u
+    q = parse_float_safe(qty_total, 0.0)
+    if q > 0 and q < roll_infer and u < roll_infer:
+        return roll_infer
+    return u
 
 
 def load_tasks_df():
@@ -7102,29 +7038,10 @@ def build_task_queue_from_planning_df(
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
-            # #region agent log
-            _tid_prev = planning_task_id_str_from_plan_row(row)
-            _agent_debug_w4_trace(
-                _tid_prev,
-                "H1",
-                "_core.py:build_task_queue_from_planning_df",
-                "skipped_row_has_completion_keyword",
-                {"planning_df_iloc": planning_df_iloc},
-            )
-            # #endregion
             continue
         task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
-            # #region agent log
-            _agent_debug_w4_trace(
-                task_id,
-                "H1",
-                "_core.py:build_task_queue_from_planning_df",
-                "skipped_exclude_from_assignment",
-                {"planning_df_iloc": planning_df_iloc},
-            )
-            # #endregion
             continue
 
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
@@ -7168,21 +7085,6 @@ def build_task_queue_from_planning_df(
             speed = 1.0
 
         if qty <= 0 or not machine or not task_id:
-            # #region agent log
-            _agent_debug_w4_trace(
-                task_id,
-                "H1",
-                "_core.py:build_task_queue_from_planning_df",
-                "skipped_qty_machine_or_empty_tid",
-                {
-                    "planning_df_iloc": planning_df_iloc,
-                    "qty": qty,
-                    "qty_total": qty_total,
-                    "done_qty": done_qty,
-                    "machine": machine,
-                },
-            )
-            # #endregion
             continue
 
         _line_seq = same_tid_line_seq[task_id]
@@ -7262,7 +7164,7 @@ def build_task_queue_from_planning_df(
             unit = qty
 
         unit = _coerce_roll_unit_m_when_converted_qty_below_roll(
-            product_name, unit, qty_total, trace_task_id=task_id
+            product_name, unit, qty_total
         )
         try:
             unit = float(unit)
@@ -9465,15 +9367,6 @@ def run_stage1_extract():
         done_qty = calc_done_qty_equivalent_from_row(row)
         qty = max(0.0, qty_total - done_qty)
         if qty <= 0 or not machine or not task_id:
-            # #region agent log
-            _agent_debug_w4_trace(
-                task_id,
-                "H1",
-                "_core.py:run_stage1_extract",
-                "stage1_skipped_qty_machine_or_empty_tid",
-                {"qty": qty, "qty_total": qty_total, "machine": bool(machine)},
-            )
-            # #endregion
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
@@ -9489,7 +9382,7 @@ def run_stage1_extract():
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
-            _pn_stage1, _roll_len, _qty_total_s1, trace_task_id=task_id
+            _pn_stage1, _roll_len, _qty_total_s1
         )
         try:
             _roll_len = float(_roll_len)
