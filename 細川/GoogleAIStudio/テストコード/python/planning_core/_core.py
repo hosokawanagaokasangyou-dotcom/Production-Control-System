@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""planning_core 螳溯｣�譛ｬ菴難ｼ医ヱ繝�繧ｱ繝ｼ繧ｸ蜀��ｼ峨Ａ`import planning_core`` 縺ｧ bootstrap 縺悟�医↓螳溯｡後＆繧後ｋ縺薙→縲�"""
+"""planning_core 実装本体（パッケージ内）。``import planning_core`` で bootstrap が先に実行されること。"""
 import pandas as pd
 from datetime import datetime, timedelta, time, date
 from collections import Counter, defaultdict
@@ -44,7 +44,7 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
-# AI 蛯呵�繝ｻ驟榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ D竊脱 縺ｮ TTL 繧ｭ繝｣繝�繧ｷ繝･�ｼ域立 output/ 縺九ｉ json/ 縺ｸ遘ｻ陦鯉ｼ�
+# AI 備考・配台不能ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
 _ai_cache_new = os.path.join(json_data_dir, _ai_remarks_cache_name)
@@ -54,46 +54,46 @@ if os.path.isfile(_ai_cache_legacy) and not os.path.isfile(_ai_cache_new):
     except OSError:
         pass
 ai_cache_path = _ai_cache_new
-# 縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九阪す繝ｼ繝井ｽ懈�舌�ｻ菫晏ｭ倥�ｮ謌仙凄繝�繝舌ャ繧ｰ�ｼ�execution_log 縺ｨ菴ｵ逕ｨ�ｼ�
+# 「設定_配台不要工程」シート作成・保存の成否デバッグ（execution_log と併用）
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
-# 菫晏ｭ伜､ｱ謨玲凾縺ｫ E 蛻暦ｼ医Ο繧ｸ繝�繧ｯ蠑擾ｼ峨□縺代ｒ騾驕ｿ縺励∵ｬ｡蝗� run_exclude_rules_sheet_maintenance 縺ｧ閾ｪ蜍暮←逕ｨ縺吶ｋ�ｼ�json 繝輔か繝ｫ繝�ｼ�
+# 保存失敗時に E 列（ロジック式）だけを退避し、次回 run_exclude_rules_sheet_maintenance で自動適用する（json フォルダ）
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
-# openpyxl 菫晏ｭ伜､ｱ謨玲凾縺ｫ VBA 縺� E 蛻励∈譖ｸ縺崎ｾｼ繧縺溘ａ縺ｮ UTF-8 TSV�ｼ�Base64�ｼ峨�
+# openpyxl 保存失敗時に VBA が E 列へ書き込むための UTF-8 TSV（Base64）。
 EXCLUDE_RULES_E_VBA_TSV_FILENAME = "exclude_rules_e_column_vba.tsv"
-# openpyxl 菫晏ｭ伜､ｱ謨玲凾縺ｫ VBA 縺� A縲廢 繧剃ｸ諡ｬ蜿肴丐縺吶ｋ UTF-8 TSV�ｼ郁｡後＃縺ｨ縺ｫ 5 繧ｻ繝ｫ蛻� Base64�ｼ峨�
+# openpyxl 保存失敗時に VBA が A〜E を一括反映する UTF-8 TSV（行ごとに 5 セル分 Base64）。
 EXCLUDE_RULES_MATRIX_VBA_FILENAME = "exclude_rules_matrix_vba.tsv"
-# VBA 縺後Γ繧､繝ｳ P 蛻励∈譖ｸ縺崎ｾｼ繧縺溘ａ縺ｮ UTF-8 繝�繧ｭ繧ｹ繝茨ｼ�Excel 髢九＞縺溘∪縺ｾ save 縺ｧ縺阪↑縺�蝠城｡後�ｮ蝗樣∩�ｼ�
+# VBA がメイン P 列へ書き込むための UTF-8 テキスト（Excel 開いたまま save できない問題の回避）
 GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
-# 蜈ｨ螳溯｡後ｒ騾壹＠縺� Gemini 蛻ｩ逕ｨ繝ｻ謗ｨ螳壽侭驥代�ｮ邏ｯ險茨ｼ�API 蠢懃ｭ斐＃縺ｨ縺ｫ譖ｴ譁ｰ縲ゆｿ晏ｭ伜�医�ｯ API_Payment 繝輔か繝ｫ繝�ｼ�
+# 全実行を通した Gemini 利用・推定料金の累計（API 応答ごとに更新。保存先は API_Payment フォルダ）
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
-# 譛滄俣蛻･繝舌こ繝�繝医ｒ繝輔Λ繝�繝亥喧縺励◆ CSV�ｼ�Excel 縺ｮ謚倥ｌ邱壹�ｻ譽偵げ繝ｩ繝慕畑�ｼ�
+# 期間別バケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# 繝｡繧､繝ｳ繧ｷ繝ｼ繝医�ｻGemini 譌･谺｡謗ｨ遘ｻ�ｼ�xlwings: Q縲彝�ｼ晄侭驥代∪縺溘�ｯ蜻ｼ蜃ｺ縺励ヾ縲弋�ｼ晏粋險医ヨ繝ｼ繧ｯ繝ｳ�ｼ�
+# メインシート・Gemini 日次推移（xlwings: Q〜R＝料金または呼出し、S〜T＝合計トークン）
 GEMINI_USAGE_CHART_COL_DATE = 17  # Q
 GEMINI_USAGE_CHART_COL_VALUE = 18  # R
-GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S�ｼ医げ繝ｩ繝慕畑縺ｫ譌･莉倥ｒ隍�陬ｽ�ｼ�
-GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # T�ｼ�total_tokens 逶ｸ蠖難ｼ�
+GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S（グラフ用に日付を複製）
+GEMINI_USAGE_CHART_COL_TOK_VALUE = 20  # T（total_tokens 相当）
 GEMINI_USAGE_CHART_HEADER_ROW = 16
 GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
 GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL = "AA16"
 GEMINI_USAGE_CHART_MAX_DAYS = 14
 GEMINI_USAGE_CHART_CLEAR_ROWS = 36
-# xlwings 縺ｧ雋ｼ繧区釜繧檎ｷ壹�ｮ蜷榊燕�ｼ亥�榊ｮ溯｡梧凾縺ｫ蜑企勁縺励※縺九ｉ菴懊ｊ逶ｴ縺呻ｼ�
+# xlwings で貼る折れ線の名前（再実行時に削除してから作り直す）
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
-# 繝�繧ｹ繝�: EXCLUDE_RULES_TEST_E1234=1 縺ｧ EXCLUDE_RULES_SHEET_NAME�ｼ医瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九搾ｼ峨�ｮ E 蛻励↓ "1234" 繧呈嶌縺擾ｼ井ｿ晏ｭ倡ｵ瑚ｷｯ縺ｮ遒ｺ隱咲畑�ｼ峨�
-# TASK_INPUT_WORKBOOK 縺ｯ縲悟刈蟾･險育判DATA縲阪す繝ｼ繝井ｻ倥″繝悶ャ繧ｯ�ｼ井ｾ�: 逕溽肇邂｡逅�_AI驟榊床繝�繧ｹ繝�.xlsm�ｼ峨ｒ謖�螳壹☆繧九％縺ｨ縲�
-# 陦後�ｯ EXCLUDE_RULES_TEST_E1234_ROW�ｼ域里螳� 9縲�2 譛ｪ貅縺ｯ 9 縺ｫ荳ｸ繧√ｋ�ｼ峨�
+# テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書く（保存経路の確認用）。
+# TASK_INPUT_WORKBOOK は「加工計画DATA」シート付きブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
+# 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
 
 # =========================================================
-# 縲占ｨｭ螳壹羨PI繧ｭ繝ｼ / 蝓ｺ譛ｬ繝ｫ繝ｼ繝ｫ / 繝輔ぃ繧､繝ｫ蜷�
+# 【設定】APIキー / 基本ルール / ファイル名
 # =========================================================
-# Gemini API 繧ｭ繝ｼ縺ｯ TASK_INPUT_WORKBOOK 遒ｺ螳壼ｾ後∽ｸ玖ｨ倥瑚ｨｭ螳壹坑1 縺ｮ JSON 縺九ｉ隗｣豎ｺ�ｼ亥ｹｳ譁�縺ｾ縺溘�ｯ format_version 2 縺ｮ證怜捷蛹厄ｼ峨�
-# 譛ｪ險ｭ螳壽凾縺ｮ縺ｿ遘ｻ陦檎畑縺ｫ迺ｰ蠅�螟画焚 GEMINI_API_KEY 繧貞盾辣ｧ縲�
+# Gemini API キーは TASK_INPUT_WORKBOOK 確定後、下記「設定」B1 の JSON から解決（平文または format_version 2 の暗号化）。
+# 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
 
 GEMINI_MODEL_FLASH = "gemini-2.5-flash"
-# 謗ｨ螳壽侭驥�: USD / 1M tokens�ｼ亥�･蜉�, 蜃ｺ蜉幢ｼ峨ょ�ｬ蠑上�ｮ譛譁ｰ蜊倅ｾ｡縺ｫ蜷医ｏ縺帙※譖ｴ譁ｰ縺吶ｋ縺薙→縲�
-# 迺ｰ蠅�螟画焚 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M 縺ｧ荳頑嶌縺榊庄�ｼ�Flash 蜷代￠�ｼ峨�
+# 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
+# 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_IN_PER_M", "0.075") or 0.075
 )
@@ -103,60 +103,60 @@ _GEMINI_FLASH_OUT_PER_M = float(
 GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
 
 # ---------------------------------------------------------------------------
-# 莉･髯阪�ｮ螳壽焚繝悶Ο繝�繧ｯ縺ｯ縲窪xcel 蛻苓ｦ句�ｺ縺励阪→ 1:1 縺ｧ蟇ｾ蠢懊＆縺帙ｋ縲�
-# 蛻怜錐繧貞､峨∴繧句�ｴ蜷医�ｯ VBA繝ｻ繝槭け繝ｭ蛛ｴ繧ｷ繝ｼ繝医→蜷梧凾縺ｫ逶ｴ縺吶％縺ｨ縲�
+# 以降の定数ブロックは「Excel 列見出し」と 1:1 で対応させる。
+# 列名を変える場合は VBA・マクロ側シートと同時に直すこと。
 # ---------------------------------------------------------------------------
 
-MASTER_FILE = "master.xlsm" # skills縺ｨattendance(縺翫ｈ縺ｳtasks)繧堤ｵｱ蜷医＠縺溘ヵ繧｡繧､繝ｫ
-# VBA縲稽aster_讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ繧剃ｽ懈�舌阪す繝ｼ繝茨ｼ�1 譎る俣繧ｹ繝ｭ繝�繝亥頃譛峨ｒ谿ｵ髫�2縺ｮ machine_avail_dt 縺ｫ蜿肴丐�ｼ�
-SHEET_MACHINE_CALENDAR = "讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ"
-# ``generate_plan`` 髢句ｧ区凾縺ｫ蜀崎ｨｭ螳壹Ｅate -> 險ｭ蛯吶く繝ｼ -> [ (start, end), ... ] 蜊企幕蛹ｺ髢� [start, end)
+MASTER_FILE = "master.xlsm" # skillsとattendance(およびtasks)を統合したファイル
+# VBA「master_機械カレンダーを作成」シート（1 時間スロット占有を段階2の machine_avail_dt に反映）
+SHEET_MACHINE_CALENDAR = "機械カレンダー"
+# ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
 
-# master.xlsm: 萓晞�ｼNO 縺悟､峨ｏ繧句燕蠕後�ｮ蟾･遞凝玲ｩ滓｢ｰ縺斐→縺ｮ貅門ｙ繝ｻ蠕悟ｧ区忰�ｼ亥���ｼ会ｼ乗ｩ滓｢ｰ縺斐→縺ｮ譌･谺｡蟋区･ｭ貅門ｙ�ｼ亥���ｼ�
-SHEET_MACHINE_CHANGEOVER = "險ｭ螳喟萓晞�ｼ蛻�譖ｿ蜑榊ｾ梧凾髢�"
-SHEET_MACHINE_DAILY_STARTUP = "險ｭ螳喟讖滓｢ｰ_譌･谺｡蟋区･ｭ貅門ｙ"
-# ``generate_plan`` 髢句ｧ区凾縺ｫ蜀崎ｨｭ螳夲ｼ医す繝ｼ繝育┌縺励�ｻ遨ｺ縺ｯ遨ｺ霎樊嶌�ｼ晏ｾ捺擂縺ｩ縺翫ｊ�ｼ�
+# master.xlsm: 依頼NO が変わる前後の工程×機械ごとの準備・後始末（分）／機械ごとの日次始業準備（分）
+SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
+SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
+# ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
 _STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
-# master 繝｡繧､繝ｳ A15�ｼ亥ｮ壼ｸｸ髢句ｧ具ｼ峨よ律谺｡蟋区･ｭ貅門ｙ繧貞共諤� forward 縺ｧ縺ｯ縺ｪ縺� [髢句ｧ�, 髢句ｧ�+N蛻�) 縺ｮ螢∵凾險医↓霈峨○繧九�
+# master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) の壁時計に載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
-# timeline_events 縺ｮ event_kind�ｼ育怐逡･譎ゅ�ｯ蜉�蟾･縺ｨ縺ｿ縺ｪ縺呻ｼ�
+# timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
 TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
-# VBA縲稽aster_邨�縺ｿ蜷医ｏ縺幄｡ｨ繧呈峩譁ｰ縲阪〒菴懊ｋ繧ｷ繝ｼ繝茨ｼ亥ｷ･遞�+讖滓｢ｰ繧ｭ繝ｼ縺ｨ繝｡繝ｳ繝舌�ｼ邱ｨ謌撰ｼ�
-MASTER_SHEET_TEAM_COMBINATIONS = "邨�縺ｿ蜷医ｏ縺幄｡ｨ"
-# 繝｡繝ｳ繝舌�ｼ蛻･蜍､諤�繧ｷ繝ｼ繝�: master.xlsm 縺ｧ縺ｯ縲御ｼ第嚊蛹ｺ蛻�縲阪→縲悟ｙ閠�縲阪′蛻･蛻励�
-# 蜍､諤�AI縺ｮ蜈･蜉帙�ｯ蛯呵�縺ｮ縺ｿ縲ゅ◆縺�縺� reason�ｼ郁｡ｨ遉ｺ繝ｻ荳ｭ謚懊￠陬懈ｭ｣繝ｻ蛟倶ｺｺ繧ｷ繝ｼ繝医�ｮ莨第�ｩ/莨第嚊譁�險�ｼ峨�ｯ縲∝ｙ閠�縺檎ｩｺ縺ｮ縺ｨ縺堺ｼ第嚊蛹ｺ蛻�繧貞ｼ輔″邯吶＄縲�
-# master 繧ｫ繝ｬ繝ｳ繝繝ｼ�ｼ丞�ｺ蜍､邁ｿ.txt 貅匁侠: 蜑堺ｼ�=蜊亥燕蟷ｴ莨代�ｻ莨第�ｩ譎る俣1_邨ゆｺ��ｽ槫ｮ壼ｸｸ邨ゆｺ��ｼ亥壕蠕御ｼ第�ｩ14:45�ｽ�15:00�ｼ会ｼ丞ｾ御ｼ�=螳壼ｸｸ髢句ｧ具ｽ樔ｼ第�ｩ譎る俣1_髢句ｧ九�ｻ蜊亥ｾ悟ｹｴ莨托ｼ丞嵜=莉匁侠轤ｹ蜍､蜍吶�
-# 蛯呵�蛻励�ｻ莨第嚊蛹ｺ蛻�縺ｯ蜍､諤� AI 縺ｧ讒矩�蛹厄ｼ磯�榊床荳榊盾蜉�繝ｻis_holiday繝ｻ荳ｭ謚懊￠遲会ｼ峨ょｙ閠�縺檎ｩｺ縺ｧ繧ゆｼ第嚊蛹ｺ蛻�縺ｮ縺ｿ縺ｮ陦後�ｯ AI 縺ｫ貂｡縺吶�
-ATT_COL_LEAVE_TYPE = "莨第嚊蛹ｺ蛻�"
-ATT_COL_REMARK = "蛯呵�"
-# 繝｡繝ｳ繝舌�ｼ蜍､諤�繧ｷ繝ｼ繝茨ｼ�master.xlsm�ｼ�: 螳壽凾縺ｮ縲碁蜍､譎る俣縲阪→蛻�縺代※騾蜍､荳企剞繧呈欠螳夲ｼ井ｻｻ諢丞�暦ｼ�
-ATT_COL_OT_END = "谿区･ｭ邨よ･ｭ"
-# 蜍､諤�蛯呵� AI 縺ｮ JSON 繧ｹ繧ｭ繝ｼ繝槭ｒ螟峨∴縺溘ｉ譖ｴ譁ｰ縺励√く繝｣繝�繧ｷ繝･繧ｭ繝ｼ繧堤┌蜉ｹ蛹悶☆繧�
+# VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編成）
+MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
+# メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」が別列。
+# 勤怠AIの入力は備考のみ。ただし reason（表示・中抜け補正・個人シートの休憩/休暇文言）は、備考が空のとき休暇区分を引き継ぐ。
+# master カレンダー／出勤簿.txt 準拠: 前休=午前年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）／後休=定常開始～休憩時間1_開始・午後年休／国=他拠点勤務。
+# 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
+ATT_COL_LEAVE_TYPE = "休暇区分"
+ATT_COL_REMARK = "備考"
+# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列）
+ATT_COL_OT_END = "残業終業"
+# 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
-# need 繧ｷ繝ｼ繝�: 縲悟渕譛ｬ蠢�隕∽ｺｺ謨ｰ縲崎｡鯉ｼ�A蛻励↓縲悟ｿ�隕∽ｺｺ謨ｰ縲阪ｒ蜷ｫ繧�ｼ会ｼ� 縺昴�ｮ逶ｴ荳九�ｮ縲碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ�ｼ丈ｽ吝鴨譎りｿｽ蜉�莠ｺ謨ｰ縲咲ｭ�
-# �ｼ�Excel 荳翫�ｯ讎ゅ�ｭ 5 陦檎岼莉倩ｿ代ゆｽ吝臆譎ゅ↓蠅励ｄ縺帙ｋ莠ｺ謨ｰ荳企剞繝ｻ蟾･遞凝玲ｩ滓｢ｰ蛻暦ｼ�
-# �ｼ� 陦後檎音蛻･謖�螳�1縲搾ｽ槭檎音蛻･謖�螳�99縲搾ｼ亥ｿ�隕∽ｺｺ謨ｰ縺ｮ荳頑嶌縺阪�ｻ1�ｽ�99�ｼ�
-NEED_COL_CONDITION = "萓晞�ｼNO譚｡莉ｶ"
-NEED_COL_NOTE = "蛯呵�"
-# need縲碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ縲阪ｒ貅譫�菴ｿ縺｣縺ｦ繧ゅ∝腰菴阪≠縺溘ｊ蜉�蟾･譎る俣縺檎洒縺上↑繧九�ｮ縺ｯ譛螟ｧ縺ｧ縺薙�ｮ蜑ｲ蜷茨ｼ井ｾ�: 0.05 竕� 5%�ｼ�
+# need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数／余力時追加人数」等
+# （Excel 上は概ね 5 行目付近。余剰時に増やせる人数上限・工程×機械列）
+# ＋ 行「特別指定1」～「特別指定99」（必要人数の上書き・1～99）
+NEED_COL_CONDITION = "依頼NO条件"
+NEED_COL_NOTE = "備考"
+# need「配台時追加人数」を満枠使っても、単位あたり加工時間が短くなるのは最大でこの割合（例: 0.05 ≒ 5%）
 SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
-# 繧ｿ繧ｹ繧ｯ縺ｯ tasks.xlsx 繧剃ｽｿ繧上★縲〃BA 縺九ｉ貂｡縺� TASK_INPUT_WORKBOOK 縺ｮ縲悟刈蟾･險育判DATA縲阪�ｮ縺ｿ
+# タスクは tasks.xlsx を使わず、VBA から渡す TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
-TASKS_SHEET_NAME = "蜉�蟾･險育判DATA"
+TASKS_SHEET_NAME = "加工計画DATA"
 
-# 縺薙�ｮ繧ｷ繝ｼ繝亥錐繧貞性繧繝悶ャ繧ｯ縺ｯ openpyxl 縺瑚ｪｭ縺ｿ譖ｸ縺阪↓螟ｱ謨励☆繧九％縺ｨ縺後≠繧九◆繧√〕oad_workbook 繧定ｩｦ陦後＠縺ｪ縺�
-OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "驟榊床_驟榊床荳崎ｦ∝ｷ･遞�"
+# このシート名を含むブックは openpyxl が読み書きに失敗することがあるため、load_workbook を試行しない
+OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "配台_配台不要工程"
 
 
 def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
-    """ZIP 蜀� xl/workbook.xml 縺九ｉ繧ｷ繝ｼ繝亥錐荳隕ｧ繧貞叙繧具ｼ�openpyxl 繧剃ｽｿ繧上↑縺��ｼ峨�"""
+    """ZIP 内 xl/workbook.xml からシート名一覧を取る（openpyxl を使わない）。"""
     import zipfile
     import xml.etree.ElementTree as ET
 
@@ -188,7 +188,7 @@ def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
 
 
 def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
-    """蠖楢ｩｲ繝代せ縺� OOXML 縺ｧ繧ｷ繝ｼ繝医碁�榊床_驟榊床荳崎ｦ∝ｷ･遞九阪ｒ蜷ｫ繧縺ｨ縺� True�ｼ�openpyxl 蛻ｩ逕ｨ繧帝∩縺代ｋ�ｼ峨�"""
+    """当該パスが OOXML でシート「配台_配台不要工程」を含むとき True（openpyxl 利用を避ける）。"""
     p = (wb_path or "").strip()
     if not p:
         return False
@@ -198,9 +198,9 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
     return OPENPYXL_INCOMPATIBLE_SHEET_MARKER in names
 
 
-# 繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳壹坑1: 遉ｾ蜀�蜈ｱ譛我ｸ翫�ｮ Gemini 隱崎ｨｼ JSON 縺ｮ繝代せ
-APP_CONFIG_SHEET_NAME = "險ｭ螳�"
-# 證怜捷蛹冶ｪ崎ｨｼ JSON�ｼ�format_version 2�ｼ峨�ｮ蠕ｩ蜿ｷ縺ｯ蟶ｸ縺ｫ縺薙�ｮ螳壽焚縺ｮ縺ｿ�ｼ育､ｾ蜀�謇矩��縺ｮ繝代せ繝輔Ξ繝ｼ繧ｺ縺ｨ荳閾ｴ縺輔○繧九ゅΟ繧ｰ繝ｻUI 縺ｫ蜃ｺ縺輔↑縺��ｼ峨�
+# マクロブック「設定」B1: 社内共有上の Gemini 認証 JSON のパス
+APP_CONFIG_SHEET_NAME = "設定"
+# 暗号化認証 JSON（format_version 2）の復号は常にこの定数のみ（社内手順のパスフレーズと一致させる。ログ・UI に出さない）。
 _GEMINI_CREDENTIALS_PASSPHRASE_FIXED = "nagaoka1234"
 _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT = 480_000
 
@@ -222,12 +222,12 @@ def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
 
 
 def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None:
-    """縲瑚ｨｭ螳壹阪す繝ｼ繝� B1 縺九ｉ隱崎ｨｼ JSON 繝輔ぃ繧､繝ｫ繝代せ繧定ｪｭ繧縲ら┌縺代ｌ縺ｰ None縲�"""
+    """「設定」シート B1 から認証 JSON ファイルパスを読む。無ければ None。"""
     if not wb_path or not os.path.isfile(wb_path):
         return None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.debug(
-            "Gemini: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ縲�%s縲�!B1 繧定ｪｭ縺ｿ縺ｾ縺帙ｓ縲�",
+            "Gemini: ブックに「%s」があるため openpyxl で「%s」!B1 を読みません。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             APP_CONFIG_SHEET_NAME,
         )
@@ -246,7 +246,7 @@ def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None
             wb.close()
     except Exception as ex:
         logging.debug(
-            "Gemini: 繝槭け繝ｭ繝悶ャ繧ｯ縲�%s縲阪�ｮ縲�%s縲�!B1 繧定ｪｭ繧√∪縺帙ｓ: %s",
+            "Gemini: マクロブック「%s」の「%s」!B1 を読めません: %s",
             wb_path,
             APP_CONFIG_SHEET_NAME,
             ex,
@@ -266,16 +266,16 @@ def _read_task_ids_from_config_sheet_column(
     openpyxl_skip_hint: str | None = None,
 ) -> list[str]:
     """
-    繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝医�ｮ謖�螳壼�暦ｼ�1=A, 2=B�ｼ�3 陦檎岼莉･髯阪°繧我ｾ晞�ｼNO繧定ｪｭ繧縲�
-    遨ｺ繧ｻ繝ｫ縺ｯ繧ｹ繧ｭ繝�繝励る｣邯� 30 繧ｻ繝ｫ遨ｺ縺ｧ謇薙■蛻�繧翫よ怙螟ｧ 500 陦後ゅき繝ｳ繝槫玄蛻�繧翫〒隍�謨ｰ蜿ｯ縲�
+    マクロブック「設定」シートの指定列（1=A, 2=B）3 行目以降から依頼NOを読む。
+    空セルはスキップ。連続 30 セル空で打ち切り。最大 500 行。カンマ区切りで複数可。
     """
     out: list[str] = []
     if not wb_path or not os.path.isfile(wb_path):
         return out
     if _workbook_should_skip_openpyxl_io(wb_path):
         msg = (
-            f"{log_label}: 繝悶ャ繧ｯ縺ｫ縲鶏OPENPYXL_INCOMPATIBLE_SHEET_MARKER}縲阪′縺ゅｋ縺溘ａ"
-            f"縲鶏APP_CONFIG_SHEET_NAME}縲�!{column_letter_desc}3 莉･髯阪�ｯ openpyxl 縺ｧ隱ｭ繧√∪縺帙ｓ縲�"
+            f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため"
+            f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}3 以降は openpyxl で読めません。"
         )
         if openpyxl_skip_hint:
             msg += " " + openpyxl_skip_hint.strip()
@@ -310,7 +310,7 @@ def _read_task_ids_from_config_sheet_column(
             wb.close()
     except Exception as ex:
         logging.warning(
-            "%s: 縲�%s縲�!%s3 莉･髯阪�ｮ萓晞�ｼNO繧定ｪｭ繧√∪縺帙ｓ�ｼ育┌隕厄ｼ�: %s",
+            "%s: 「%s」!%s3 以降の依頼NOを読めません（無視）: %s",
             log_label,
             APP_CONFIG_SHEET_NAME,
             column_letter_desc,
@@ -322,47 +322,47 @@ def _read_task_ids_from_config_sheet_column(
 
 def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝� A 蛻励�ｮ 3 陦檎岼莉･髯阪ｒ縲�驟榊床繝医Ξ繝ｼ繧ｹ蟇ｾ雎｡縺ｮ萓晞�ｼNO縺ｨ縺励※隱ｭ繧縲�
-    遨ｺ繧ｻ繝ｫ縺ｯ繧ｹ繧ｭ繝�繝励る｣邯� 30 繧ｻ繝ｫ遨ｺ縺ｪ繧画遠縺｡蛻�繧翫よ怙螟ｧ 500 陦後∪縺ｧ襍ｰ譟ｻ縲�
+    マクロブック「設定」シート A 列の 3 行目以降を、配台トレース対象の依頼NOとして読む。
+    空セルはスキップ。連続 30 セル空なら打ち切り。最大 500 行まで走査。
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
         1,
-        "驟榊床繝医Ξ繝ｼ繧ｹ",
+        "配台トレース",
         "A",
-        openpyxl_skip_hint="驟榊床繝医Ξ繝ｼ繧ｹ縺ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝� A 蛻励ｒ openpyxl 縺ｧ隱ｭ繧√↑縺�縺溘ａ辟｡蜉ｹ縺ｧ縺吶�",
+        openpyxl_skip_hint="配台トレースは「設定」シート A 列を openpyxl で読めないため無効です。",
     )
 
 
 def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝� B 蛻励�ｮ 3 陦檎岼莉･髯阪ｒ縲∵ｮｵ髫�2繝�繝舌ャ繧ｰ驟榊床縺ｮ蟇ｾ雎｡萓晞�ｼNO縺ｨ縺励※隱ｭ繧縲�
-    1 莉ｶ繧ら┌縺�蝣ｴ蜷医�ｯ谿ｵ髫�2縺ｯ騾壼ｸｸ繝｢繝ｼ繝会ｼ亥�ｨ莉ｶ驟榊床�ｼ峨らｩｺ繧ｻ繝ｫ繝ｻ謇薙■蛻�繧顔ｭ峨�ｯ A 蛻励ヨ繝ｬ繝ｼ繧ｹ縺ｨ蜷後§縲�
+    マクロブック「設定」シート B 列の 3 行目以降を、段階2デバッグ配台の対象依頼NOとして読む。
+    1 件も無い場合は段階2は通常モード（全件配台）。空セル・打ち切り等は A 列トレースと同じ。
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
         2,
-        "繝�繝舌ャ繧ｰ驟榊床",
+        "デバッグ配台",
         "B",
-        openpyxl_skip_hint="繝�繝舌ャ繧ｰ驟榊床縺ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝� B 蛻励ｒ openpyxl 縺ｧ隱ｭ繧√↑縺�縺溘ａ辟｡蜉ｹ�ｼ亥�ｨ莉ｶ驟榊床�ｼ峨〒縺吶�",
+        openpyxl_skip_hint="デバッグ配台は「設定」シート B 列を openpyxl で読めないため無効（全件配台）です。",
     )
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
-    """險ｭ螳壹す繝ｼ繝� B3莉･髯阪′遨ｺ縺ｧ縺ｪ縺�縺ｨ縺阪□縺大他縺ｶ縲８indows 縺ｧ縺ｯ MessageBox縲√◎繧御ｻ･螟悶�ｯ WARNING 繝ｭ繧ｰ縲�"""
+    """設定シート B3以降が空でないときだけ呼ぶ。Windows では MessageBox、それ以外は WARNING ログ。"""
     if not task_ids_sorted:
         return
     preview_lines = task_ids_sorted[:30]
     preview = "\n".join(preview_lines)
     if len(task_ids_sorted) > 30:
-        preview += "\n窶ｦ"
+        preview += "\n…"
     body = (
-        "繝�繝舌ャ繧ｰ繝｢繝ｼ繝峨〒螳溯｡後＠縺ｾ縺吶�\n\n"
-        "縲瑚ｨｭ螳壹阪す繝ｼ繝� B3莉･髯阪↓蜈･蜉帙＠縺滉ｾ晞�ｼNO縺ｮ縺ｿ繧帝�榊床蟇ｾ雎｡縺ｨ縺励∪縺吶�\n\n"
-        "蟇ｾ雎｡萓晞�ｼNO:\n"
+        "デバッグモードで実行します。\n\n"
+        "「設定」シート B3以降に入力した依頼NOのみを配台対象とします。\n\n"
+        "対象依頼NO:\n"
         + preview
     )
-    title = "谿ｵ髫�2�ｼ磯�榊床�ｼ俄� 繝�繝舌ャ繧ｰ繝｢繝ｼ繝�"
+    title = "段階2（配台）— デバッグモード"
     if sys.platform != "win32":
         logging.warning("%s\n%s", title, body)
         return
@@ -370,7 +370,7 @@ def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
         ctypes.windll.user32.MessageBoxW(0, body, title, 0x00000040)
     except Exception as ex:
         logging.warning(
-            "繝�繝舌ャ繧ｰ驟榊床: 繝｡繝�繧ｻ繝ｼ繧ｸ繝懊ャ繧ｯ繧ｹ繧定｡ｨ遉ｺ縺ｧ縺阪∪縺帙ｓ (%s)縲�%s", ex, body
+            "デバッグ配台: メッセージボックスを表示できません (%s)。%s", ex, body
         )
 
 
@@ -380,7 +380,7 @@ def _extract_gemini_api_key_from_plain_dict(data: dict, json_path: str) -> str |
         key = data.get("GEMINI_API_KEY")
     if key is None:
         logging.warning(
-            "Gemini: 隱崎ｨｼ繝�繝ｼ繧ｿ縺ｫ gemini_api_key�ｼ医∪縺溘�ｯ GEMINI_API_KEY�ｼ峨′縺ゅｊ縺ｾ縺帙ｓ�ｼ�%s�ｼ峨�",
+            "Gemini: 認証データに gemini_api_key（または GEMINI_API_KEY）がありません（%s）。",
             json_path,
         )
         return None
@@ -420,50 +420,50 @@ def _decrypt_gemini_credentials_v2(
         from cryptography.fernet import Fernet
     except ImportError:
         logging.warning(
-            "Gemini: 證怜捷蛹冶ｪ崎ｨｼ JSON 縺ｫ縺ｯ cryptography 縺悟ｿ�隕√〒縺呻ｼ�pip install cryptography�ｼ峨�"
+            "Gemini: 暗号化認証 JSON には cryptography が必要です（pip install cryptography）。"
         )
         return None
     token_s = (data.get("fernet_ciphertext") or "").strip()
     if not token_s:
         logging.warning(
-            "Gemini: 證怜捷蛹冶ｪ崎ｨｼ JSON 縺ｫ fernet_ciphertext 縺後≠繧翫∪縺帙ｓ�ｼ�%s�ｼ峨�",
+            "Gemini: 暗号化認証 JSON に fernet_ciphertext がありません（%s）。",
             json_path,
         )
         return None
     salt_b64 = (data.get("salt_b64") or "").strip()
     if not salt_b64:
         logging.warning(
-            "Gemini: 證怜捷蛹冶ｪ崎ｨｼ JSON 縺ｫ salt_b64 縺後≠繧翫∪縺帙ｓ�ｼ�%s�ｼ峨�",
+            "Gemini: 暗号化認証 JSON に salt_b64 がありません（%s）。",
             json_path,
         )
         return None
     try:
         salt = base64.standard_b64decode(salt_b64)
     except Exception as ex:
-        logging.warning("Gemini: salt_b64 縺ｮ隗｣驥医↓螟ｱ謨励＠縺ｾ縺励◆�ｼ�%s�ｼ�: %s", json_path, ex)
+        logging.warning("Gemini: salt_b64 の解釈に失敗しました（%s）: %s", json_path, ex)
         return None
     iterations = int(data.get("iterations") or _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT)
     kdf_name = (data.get("kdf") or "pbkdf2_sha256").strip()
     if kdf_name != "pbkdf2_sha256":
-        logging.warning("Gemini: 譛ｪ蟇ｾ蠢懊�ｮ kdf�ｼ�%s�ｼ�: %s", kdf_name, json_path)
+        logging.warning("Gemini: 未対応の kdf（%s）: %s", kdf_name, json_path)
         return None
     try:
         fkey = _derive_fernet_key_from_passphrase(passphrase, salt, iterations)
         plain = Fernet(fkey).decrypt(token_s.encode("ascii"))
     except Exception:
-        logging.debug("Gemini: 證怜捷蛹冶ｪ崎ｨｼ縺ｮ蠕ｩ蜿ｷ蜃ｦ逅�縺ｫ螟ｱ謨励＠縺ｾ縺励◆�ｼ�%s�ｼ峨�", json_path)
+        logging.debug("Gemini: 暗号化認証の復号処理に失敗しました（%s）。", json_path)
         return None
     try:
         inner = json.loads(plain.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as ex:
         logging.warning(
-            "Gemini: 蠕ｩ蜿ｷ蠕後�ｮ JSON 縺御ｸ肴ｭ｣縺ｧ縺呻ｼ�%s�ｼ�: %s",
+            "Gemini: 復号後の JSON が不正です（%s）: %s",
             json_path,
             ex,
         )
         return None
     if not isinstance(inner, dict):
-        logging.warning("Gemini: 蠕ｩ蜿ｷ蠕後�ｮ JSON 縺ｯ繧ｪ繝悶ず繧ｧ繧ｯ繝医〒縺ゅｋ蠢�隕√′縺ゅｊ縺ｾ縺呻ｼ�%s�ｼ峨�", json_path)
+        logging.warning("Gemini: 復号後の JSON はオブジェクトである必要があります（%s）。", json_path)
         return None
     return inner
 
@@ -471,18 +471,18 @@ def _decrypt_gemini_credentials_v2(
 def _load_gemini_api_key_from_credentials_json(
     json_path: str, workbook_path: str | None = None
 ) -> tuple[str | None, bool]:
-    """謌ｻ繧雁､: (api_key 縺ｾ縺溘�ｯ None, 證怜捷蛹門ｽ｢蠑上□縺｣縺溘°)縲よ囓蜿ｷ蛹匁凾縺ｯ _GEMINI_CREDENTIALS_PASSPHRASE_FIXED 縺ｮ縺ｿ縺ｧ蠕ｩ蜿ｷ縲�"""
+    """戻り値: (api_key または None, 暗号化形式だったか)。暗号化時は _GEMINI_CREDENTIALS_PASSPHRASE_FIXED のみで復号。"""
     try:
         with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
     except OSError as ex:
-        logging.warning("Gemini: 隱崎ｨｼ JSON 繧帝幕縺代∪縺帙ｓ: %s (%s)", json_path, ex)
+        logging.warning("Gemini: 認証 JSON を開けません: %s (%s)", json_path, ex)
         return None, False
     except json.JSONDecodeError as ex:
-        logging.warning("Gemini: 隱崎ｨｼ JSON 縺ｮ蠖｢蠑上′荳肴ｭ｣縺ｧ縺�: %s (%s)", json_path, ex)
+        logging.warning("Gemini: 認証 JSON の形式が不正です: %s (%s)", json_path, ex)
         return None, False
     if not isinstance(data, dict):
-        logging.warning("Gemini: 隱崎ｨｼ JSON 縺ｯ繧ｪ繝悶ず繧ｧ繧ｯ繝亥ｽ｢蠑上〒縺ゅｋ蠢�隕√′縺ゅｊ縺ｾ縺�: %s", json_path)
+        logging.warning("Gemini: 認証 JSON はオブジェクト形式である必要があります: %s", json_path)
         return None, False
     if _credentials_json_is_encrypted_v2(data):
         inner = _decrypt_gemini_credentials_v2(
@@ -503,19 +503,19 @@ if _cred_path and os.path.isfile(_cred_path):
     )
     if API_KEY:
         if _used_encrypted_credentials:
-            logging.info("Gemini API 繧ｭ繝ｼ: 證怜捷蛹冶ｪ崎ｨｼ JSON 縺九ｉ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�")
+            logging.info("Gemini API キー: 暗号化認証 JSON から読み込みました。")
         else:
             logging.info(
-                "Gemini API 繧ｭ繝ｼ: 繝槭け繝ｭ繝悶ャ繧ｯ縲�%s縲坑1 縺ｮ繝代せ縺九ｉ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+                "Gemini API キー: マクロブック「%s」B1 のパスから読み込みました。",
                 APP_CONFIG_SHEET_NAME,
             )
 elif _cred_path:
     logging.warning(
-        "Gemini: 縲�%s縲坑1 縺ｧ謖�螳壹＆繧後◆隱崎ｨｼ JSON 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲�",
+        "Gemini: 「%s」B1 で指定された認証 JSON が見つかりません。",
         APP_CONFIG_SHEET_NAME,
     )
 
-# B1 縺梧囓蜿ｷ蛹� JSON 縺ｪ縺ｮ縺ｫ繧ｭ繝ｼ縺悟叙繧後↑縺��ｼ亥ｹｳ譁� JSON 縺ｧ繧ｭ繝ｼ谺�關ｽ縺ｨ縺ｮ蛹ｺ蛻･�ｼ峨ょ次蝗�縺ｮ迚ｹ螳壹�ｯ繝ｭ繧ｰ縺ｫ譖ｸ縺九★豎守畑繝｡繝�繧ｻ繝ｼ繧ｸ縺ｮ縺ｿ縲�
+# B1 が暗号化 JSON なのにキーが取れない（平文 JSON でキー欠落との区別）。原因の特定はログに書かず汎用メッセージのみ。
 _encrypted_json_missing_key = (
     bool(_cred_path)
     and os.path.isfile(_cred_path)
@@ -524,58 +524,58 @@ _encrypted_json_missing_key = (
 )
 if _encrypted_json_missing_key:
     logging.error(
-        "Gemini: 縲�%s縲坑1 縺ｮ隱崎ｨｼ繝輔ぃ繧､繝ｫ縺九ｉ API 繧ｭ繝ｼ繧貞茜逕ｨ縺ｧ縺阪∪縺帙ｓ縲�"
-        " 遉ｾ蜀�謇矩��縺ｫ蠕薙＞隱崎ｨｼ繧貞�崎ｨｭ螳壹☆繧九°縲∫ｮ｡逅�閠�縺ｫ蝠上＞蜷医ｏ縺帙※縺上□縺輔＞縲�",
+        "Gemini: 「%s」B1 の認証ファイルから API キーを利用できません。"
+        " 社内手順に従い認証を再設定するか、管理者に問い合わせてください。",
         APP_CONFIG_SHEET_NAME,
     )
 
 if not API_KEY:
     logging.warning(
-        "Gemini API 繧ｭ繝ｼ縺梧悴險ｭ螳壹〒縺吶ゅ�槭け繝ｭ繝悶ャ繧ｯ縺ｫ縲�%s縲阪す繝ｼ繝医ｒ逕ｨ諢上＠ B1 縺ｫ隱崎ｨｼ JSON 縺ｮ繝輔Ν繝代せ繧呈嶌縺�縺ｦ縺上□縺輔＞縲�"
-        " 蛯呵�縺ｮ AI 隗｣譫千ｭ峨�ｯ繧ｹ繧ｭ繝�繝励＆繧後∪縺吶�"
-        " 縺ｲ縺ｪ蝙�: gemini_credentials.example.json / encrypt_gemini_credentials.py�ｼ域囓蜿ｷ蛹厄ｼ峨�",
+        "Gemini API キーが未設定です。マクロブックに「%s」シートを用意し B1 に認証 JSON のフルパスを書いてください。"
+        " 備考の AI 解析等はスキップされます。"
+        " ひな型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。",
         APP_CONFIG_SHEET_NAME,
     )
 
-RESULT_SHEET_GANTT_NAME = "邨先棡_險ｭ蛯吶ぎ繝ｳ繝�"
+RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 
-# 繧ｿ繧ｹ繧ｯ蛻怜錐�ｼ医�槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縲悟刈蟾･險育判DATA縲搾ｼ�
-TASK_COL_TASK_ID = "萓晞�ｼNO"
-TASK_COL_MACHINE = "蟾･遞句錐"
-TASK_COL_MACHINE_NAME = "讖滓｢ｰ蜷�"
-TASK_COL_QTY = "謠帷ｮ玲焚驥�"
-TASK_COL_ORDER_QTY = "蜿玲ｳｨ謨ｰ"
-TASK_COL_SPEED = "蜉�蟾･騾溷ｺｦ"
-TASK_COL_PRODUCT = "陬ｽ蜩∝錐"
-TASK_COL_ANSWER_DUE = "蝗樒ｭ皮ｴ肴悄"
-TASK_COL_SPECIFIED_DUE = "謖�螳夂ｴ肴悄"
-TASK_COL_RAW_INPUT_DATE = "蜴溷渚謚募�･譌･"
-# 蜉�蟾･險育判DATA 逕ｱ譚･縲る�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙〒縺ｯ蜴溷渚謚募�･譌･縺ｮ蜿ｳ髫｣�ｼ�SOURCE_BASE_COLUMNS 鬆��ｼ峨�
-TASK_COL_STOCK_LOCATION = "蝨ｨ蠎ｫ蝣ｴ謇"
-# 蜷御ｸ萓晞�ｼNO縺ｮ蟾･遞矩���ｼ医き繝ｳ繝槫玄蛻�繧翫�ｮ蟾･遞句錐�ｼ峨ょ刈蟾･險育判DATA�ｼ城�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙�
-TASK_COL_PROCESS_CONTENT = "蜉�蟾･蜀�螳ｹ"
-# 謚募�･蜿ｯ閭ｽ譌･縺ｮ逶ｮ螳峨�ｯ縲悟屓遲皮ｴ肴悄縲阪∵悴蜈･蜉帶凾縺ｯ縲梧欠螳夂ｴ肴悄縲搾ｼ亥燕譌･蝓ｺ貅悶�ｻ蠖捺律/驕�繧後�ｯ譛蜆ｪ蜈茨ｼ峨ゅ悟刈蟾･髢句ｧ区律縲榊�励�ｯ蜿ら�ｧ縺励↑縺�縲�
-# 螳御ｺ�蛻､螳壹�ｻ騾ｲ謐暦ｼ亥刈蟾･險育判DATA�ｼ�
-TASK_COL_COMPLETION_FLAG = "蜉�蟾･螳御ｺ�蛹ｺ蛻�"
-TASK_COL_ACTUAL_DONE = "螳溷刈蟾･謨ｰ"   # 譌ｧ莠呈鋤�ｼ育峩謗･縺ｮ蜉�蟾･貂域焚驥擾ｼ�
-TASK_COL_ACTUAL_OUTPUT = "螳溷�ｺ譚･鬮�"  # 螳梧�仙刀謨ｰ驥擾ｼ域鋤邂励↓菴ｿ縺��ｼ�
-TASK_COL_DATA_EXTRACTION_DT = "繝�繝ｼ繧ｿ謚ｽ蜃ｺ譌･"
-AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6譎る俣
-# json/ai_remarks_cache.json 蜀�縺ｮ繧ｭ繝ｼ謗･鬆ｭ霎橸ｼ郁ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｻ驟榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ D竊脱�ｼ�
+# タスク列名（マクロ実行ブック「加工計画DATA」）
+TASK_COL_TASK_ID = "依頼NO"
+TASK_COL_MACHINE = "工程名"
+TASK_COL_MACHINE_NAME = "機械名"
+TASK_COL_QTY = "換算数量"
+TASK_COL_ORDER_QTY = "受注数"
+TASK_COL_SPEED = "加工速度"
+TASK_COL_PRODUCT = "製品名"
+TASK_COL_ANSWER_DUE = "回答納期"
+TASK_COL_SPECIFIED_DUE = "指定納期"
+TASK_COL_RAW_INPUT_DATE = "原反投入日"
+# 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
+TASK_COL_STOCK_LOCATION = "在庫場所"
+# 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA／配台計画_タスク入力。
+TASK_COL_PROCESS_CONTENT = "加工内容"
+# 投入可能日の目安は「回答納期」、未入力時は「指定納期」（前日基準・当日/遅れは最優先）。「加工開始日」列は参照しない。
+# 完了判定・進捗（加工計画DATA）
+TASK_COL_COMPLETION_FLAG = "加工完了区分"
+TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互換（直接の加工済数量）
+TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完成品数量（換算に使う）
+TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
+AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
+# json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不能ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
 
-# 繝槭け繝ｭ繝悶ャ繧ｯ縲悟刈蟾･螳溽ｸｾDATA縲搾ｼ�Power Query 遲峨〒蜿悶ｊ霎ｼ縺ｿ諠ｳ螳夲ｼ�
-ACTUALS_SHEET_NAME = "蜉�蟾･螳溽ｸｾDATA"
-ACT_COL_TASK_ID = "萓晞�ｼNO"
-ACT_COL_PROCESS = "蟾･遞句錐"
-ACT_COL_OPERATOR = "諡�蠖楢�"
-ACT_COL_START_DT = "髢句ｧ区律譎�"
-ACT_COL_END_DT = "邨ゆｺ�譌･譎�"
-ACT_COL_START_ALT = "螳溽ｸｾ髢句ｧ�"
-ACT_COL_END_ALT = "螳溽ｸｾ邨ゆｺ�"
-ACT_COL_DAY = "譌･莉�"
-ACT_COL_TIME_START = "髢句ｧ区凾蛻ｻ"
-ACT_COL_TIME_END = "邨ゆｺ�譎ょ綾"
+# マクロブック「加工実績DATA」（Power Query 等で取り込み想定）
+ACTUALS_SHEET_NAME = "加工実績DATA"
+ACT_COL_TASK_ID = "依頼NO"
+ACT_COL_PROCESS = "工程名"
+ACT_COL_OPERATOR = "担当者"
+ACT_COL_START_DT = "開始日時"
+ACT_COL_END_DT = "終了日時"
+ACT_COL_START_ALT = "実績開始"
+ACT_COL_END_ALT = "実績終了"
+ACT_COL_DAY = "日付"
+ACT_COL_TIME_START = "開始時刻"
+ACT_COL_TIME_END = "終了時刻"
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -589,30 +589,30 @@ ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TIME_END,
 )
 
-# --- 2谿ｵ髫主�ｦ逅�: 谿ｵ髫�1謚ｽ蜃ｺ 竊� 繝悶ャ繧ｯ縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙咲ｷｨ髮� 竊� 谿ｵ髫�2險育判 ---
+# --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
-PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉�"
-PLAN_COL_SPEED_OVERRIDE = "蜉�蟾･騾溷ｺｦ_荳頑嶌縺�"
-# 遨ｺ逋ｽ縺ｮ縺ｨ縺阪�ｯ蛻励悟次蜿肴兜蜈･譌･縲搾ｼ亥刈蟾･險育判DATA 逕ｱ譚･�ｼ峨ｒ縺昴�ｮ縺ｾ縺ｾ菴ｿ縺�縲よ律莉倥≠繧翫�ｮ縺ｨ縺阪�ｯ驟榊床縺ｮ蜴溷渚蛻ｶ邏�繝ｻ邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ陦ｨ遉ｺ縺ｮ荳｡譁ｹ縺ｧ縺薙�ｮ譌･莉倥ｒ謗｡逕ｨ縲�
-PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "蜴溷渚謚募�･譌･_荳頑嶌縺�"
-PLAN_COL_PREFERRED_OP = "諡�蠖徹P_謖�螳�"
-PLAN_COL_SPECIAL_REMARK = "迚ｹ蛻･謖�螳喟蛯呵�"
-# 蜿ら�ｧ蛻励鯉ｼ亥���ｼ蛾�榊床荳崎ｦ√阪�ｯ鄂ｮ縺九↑縺��ｼ亥��繝�繝ｼ繧ｿ縺ｫ逶ｸ蠖薙☆繧九�槭せ繧ｿ蛻励′辟｡縺�縺溘ａ�ｼ峨�
-# 繧ｻ繝ｫ蛟､縺ｮ萓具ｼ磯�榊床縺九ｉ螟悶☆�ｼ�: Excel 縺ｮ TRUE / 謨ｰ蛟､ 1 / 譁�蟄怜�励後�ｯ縺�縲阪軽es縲阪荊rue縲阪娯雷縲阪後�縲阪娯酪縲咲ｭ峨�
-# 遨ｺ繝ｻFALSE繝ｻ0繝ｻ縲後＞縺�縺医咲ｭ峨�ｯ驟榊床蟇ｾ雎｡縲りｩｳ邏ｰ縺ｯ _plan_row_exclude_from_assignment縲�
-PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "驟榊床荳崎ｦ�"
-PLAN_COL_AI_PARSE = "AI迚ｹ蛻･謖�螳喟隗｣譫�"
-PLAN_COL_PROCESS_FACTOR = "蜉�蟾･蟾･遞九�ｮ豎ｺ螳壹�励Ο繧ｻ繧ｹ縺ｮ蝗�蟄�"
-# 1繝ｭ繝ｼ繝ｫ縺ゅ◆繧翫�ｮ髟ｷ縺包ｼ�m�ｼ峨る�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙↓縺ｮ縺ｿ蟄伜惠�ｼ亥刈蟾･險育判DATA 縺ｫ縺ｯ辟｡縺��ｼ峨り｣ｽ蜩∝錐蛻励�ｮ蜿ｳ髫｣縺ｫ驟咲ｽｮ縲�
-PLAN_COL_ROLL_UNIT_LENGTH = "繝ｭ繝ｼ繝ｫ蜊倅ｽ埼聞縺�"
+PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
+PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
+# 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
+PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
+PLAN_COL_PREFERRED_OP = "担当OP_指定"
+PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
+# 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
+# セル値の例（配台から外す）: Excel の TRUE / 数値 1 / 文字列「はい」「yes」「true」「○」「〇」「●」等。
+# 空・FALSE・0・「いいえ」等は配台対象。詳細は _plan_row_exclude_from_assignment。
+PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
+PLAN_COL_AI_PARSE = "AI特別指定_解析"
+PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
+# 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
+PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
-# 萓�: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 窶ｦ 驟榊床繝ｫ繝ｼ繝励〒縲御ｺｺ謨ｰ蛻･縺ｮ譛濶ｯ蛟呵｣懊阪→謗｡逕ｨ逅�逕ｱ繧� INFO 繝ｭ繧ｰ縺ｫ蜃ｺ縺�
+# 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
-# 驟榊床繝医Ξ繝ｼ繧ｹ蟇ｾ雎｡縺ｯ繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳壹阪す繝ｼ繝� A 蛻� 3 陦檎岼莉･髯阪�ｮ縺ｿ�ｼ�generate_plan 蜀帝�ｭ縺ｧ遒ｺ螳夲ｼ峨ら腸蠅�螟画焚縺ｯ菴ｿ繧上↑縺�縲�
+# 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使わない。
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
-# 谿ｵ髫�2繝�繝舌ャ繧ｰ驟榊床: 縲瑚ｨｭ螳壹坑 蛻� 3 陦檎岼莉･髯阪↓萓晞�ｼNO縺後≠繧九→縺阪�ｮ縺ｿ縲√◎縺ｮ萓晞�ｼ縺ｮ陦後□縺鷹�榊床�ｼ�generate_plan 蜀帝�ｭ縺ｧ遒ｺ螳夲ｼ峨らｩｺ縺ｪ繧牙�ｨ莉ｶ縲�
+# 段階2デバッグ配台: 「設定」B 列 3 行目以降に依頼NOがあるときのみ、その依頼の行だけ配台（generate_plan 冒頭で確定）。空なら全件。
 DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
-# 邏肴悄雜�驕弱Μ繝医Λ繧､縺ｮ螟門�ｴ繝ｩ繧ｦ繝ｳ繝会ｼ�0=蛻晏屓繧ｫ繝ｬ繝ｳ繝繝ｼ騾壹＠縲∽ｻ･髯阪�ｯ while 蜈磯�ｭ縺ｧ譖ｴ譁ｰ�ｼ峨る�榊床繝医Ξ繝ｼ繧ｹ蜃ｺ蜉帙�ｮ繝輔ぃ繧､繝ｫ蜷阪�ｻ謗･鬆ｭ霎槭↓菴ｿ逕ｨ縲�
+# 納期超過リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
 
@@ -623,7 +623,7 @@ def _trace_schedule_task_enabled(task_id) -> bool:
 
 
 def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
-    """萓晞�ｼNO繧� log 繝輔ぃ繧､繝ｫ蜷阪↓菴ｿ縺�縺溘ａ縺ｮ邁｡譏薙し繝九ち繧､繧ｺ�ｼ�Windows 遖∵ｭ｢譁�蟄励ｒ驕ｿ縺代ｋ�ｼ峨�"""
+    """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
     s = "".join(
         c if (c.isalnum() or c in "-_.") else "_"
         for c in str(task_id or "").strip()
@@ -633,10 +633,10 @@ def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
 
 def _reset_dispatch_trace_per_task_logfiles() -> None:
     """
-    谿ｵ髫�2螳溯｡後�ｮ蜀帝�ｭ縺ｧ1蝗槭〕og 蜀�縺ｮ dispatch_trace_*.txt 繧偵☆縺ｹ縺ｦ蜑企勁縺吶ｋ�ｼ磯℃蜴ｻ螳溯｡後�ｮ谿矩ｪｸ繧呈ｮ九＆縺ｪ縺��ｼ峨�
-    蜷�螟門�ｴ繝ｩ繧ｦ繝ｳ繝臥畑繝輔ぃ繧､繝ｫ縺ｯ generate_plan 縺ｮ while 蜈磯�ｭ縺ｧ _dispatch_trace_begin_outer_round 縺後�倥ャ繝莉倥″譁ｰ隕丈ｽ懈�舌☆繧九�
-    execution_log.txt 縺ｨ縺ｯ蛻･繝輔ぃ繧､繝ｫ縲ょ��螳ｹ縺ｯ [驟榊床繝医Ξ繝ｼ繧ｹ task=窶ｦ] 陦後ｒ _log_dispatch_trace_schedule 縺ｧ霑ｽ險�
-    �ｼ域律谺｡谿九�ｻ繝ｭ繝ｼ繝ｫ遒ｺ螳壹�ｮ菴吝臆譛臥┌繝ｻ菴吝鴨霑ｽ險倥�ｻ邨ゆｺ�譎ゅし繝槭Μ遲会ｼ峨�
+    段階2実行の冒頭で1回、log 内の dispatch_trace_*.txt をすべて削除する（過去実行の残骸を残さない）。
+    各外側ラウンド用ファイルは generate_plan の while 先頭で _dispatch_trace_begin_outer_round がヘッダ付き新規作成する。
+    execution_log.txt とは別ファイル。内容は [配台トレース task=…] 行を _log_dispatch_trace_schedule で追記
+    （日次残・ロール確定の余剰有無・余力追記・終了時サマリ等）。
     """
     if not TRACE_SCHEDULE_TASK_IDS:
         return
@@ -660,7 +660,7 @@ def _reset_dispatch_trace_per_task_logfiles() -> None:
 
 
 def _dispatch_trace_begin_outer_round(round_n: int) -> None:
-    """邏肴悄雜�驕弱Μ繝医Λ繧､縺ｮ螟門�ｴ繝ｩ繧ｦ繝ｳ繝臥分蜿ｷ繧堤｢ｺ螳壹＠縲∝ｽ薙Λ繧ｦ繝ｳ繝臥畑 dispatch_trace_*_rNN.txt 縺ｮ繝倥ャ繝繧�1蝗槭□縺第嶌縺上�"""
+    """納期超過リトライの外側ラウンド番号を確定し、当ラウンド用 dispatch_trace_*_rNN.txt のヘッダを1回だけ書く。"""
     global DISPATCH_TRACE_OUTER_ROUND
     DISPATCH_TRACE_OUTER_ROUND = max(0, int(round_n))
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -683,16 +683,16 @@ def _dispatch_trace_begin_outer_round(round_n: int) -> None:
         try:
             with open(path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(
-                    "# 驟榊床繝医Ξ繝ｼ繧ｹ�ｼ井ｾ晞�ｼNO縺斐→繝ｻ螟門�ｴ繝ｩ繧ｦ繝ｳ繝牙挨�ｼ峨ょ酔荳陦後�ｯ log/execution_log.txt 縺ｫ繧ょ�ｺ蜉帙＆繧後∪縺吶�\n"
+                    "# 配台トレース（依頼NOごと・外側ラウンド別）。同一行は log/execution_log.txt にも出力されます。\n"
                     f"# task_id={t}  outer_round={DISPATCH_TRACE_OUTER_ROUND}  "
-                    "# �ｼ�0=蛻晏屓繧ｫ繝ｬ繝ｳ繝繝ｼ騾壹＠縲∽ｻ･髯阪�ｯ邏肴悄雜�驕弱Μ繝医Λ繧､縺斐→縺ｫ +1�ｼ噂n\n"
+                    "# （0=初回カレンダー通し、以降は納期超過リトライごとに +1）\n\n"
                 )
         except OSError as ex:
-            logging.warning("dispatch_trace 繝ｭ繧ｰ縺ｮ蛻晄悄蛹悶↓螟ｱ謨�: %s (%s)", path, ex)
+            logging.warning("dispatch_trace ログの初期化に失敗: %s (%s)", path, ex)
 
 
 def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
-    """[驟榊床繝医Ξ繝ｼ繧ｹ task=窶ｦ] 繧� execution_log 縺ｫ蜃ｺ縺励▽縺､縲∝ｯｾ雎｡萓晞�ｼNO蟆ら畑繝輔ぃ繧､繝ｫ縺ｫ繧りｿｽ險倥☆繧九�"""
+    """[配台トレース task=…] を execution_log に出しつつ、対象依頼NO専用ファイルにも追記する。"""
     t = str(task_id or "").strip()
     body_raw = msg % args if args else msg
     body = body_raw
@@ -713,19 +713,19 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             f.write(line)
     except OSError as ex:
         try:
-            logging.warning("dispatch_trace 蛛ｴ繝輔ぃ繧､繝ｫ縺ｸ縺ｮ霑ｽ險倥↓螟ｱ謨�: %s (%s)", path, ex)
+            logging.warning("dispatch_trace 側ファイルへの追記に失敗: %s (%s)", path, ex)
         except Exception:
             pass
 
 
-# True: 蠕捺擂縺ｮ縲御ｺｺ謨ｰ譛蜆ｪ蜈医阪ち繝励Ν (-莠ｺ謨ｰ, 髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�)縲�False 縺ｮ縺ｨ縺堺ｸ玖ｨ倥せ繝ｩ繝�繧ｯ蛻�縺ｨ邨�縺ｿ蜷医ｏ縺�
+# True: 従来の「人数最優先」タプル (-人数, 開始, -単位数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
-).strip().lower() not in ("0", "false", "no", "off", "縺�縺�縺�")
+).strip().lower() not in ("0", "false", "no", "off", "いいえ")
 
 
 def _team_assign_start_slack_wait_minutes() -> int:
-    """蜈ｨ譌･蛟呵｣懊�ｮ譛譌ｩ髢句ｧ九°繧峨％縺ｮ蛻�莉･蜀�縺ｮ驕�繧後↑繧峨�髢句ｧ九ｈ繧贋ｺｺ謨ｰ繧貞━蜈茨ｼ亥���ｼ峨�0 縺ｧ辟｡蜉ｹ縲�"""
+    """全日候補の最早開始からこの分以内の遅れなら、開始より人数を優先（分）。0 で無効。"""
     raw = os.environ.get("TEAM_ASSIGN_START_SLACK_WAIT_MINUTES", "60").strip()
     try:
         v = int(raw)
@@ -736,76 +736,76 @@ def _team_assign_start_slack_wait_minutes() -> int:
 
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES = _team_assign_start_slack_wait_minutes()
 
-# True 縺ｮ縺ｨ縺� need 繧ｷ繝ｼ繝医碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ縲崎｡後ｒ辟｡隕悶＠縲√メ繝ｼ繝�莠ｺ謨ｰ縺ｯ蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ�ｼ�req_num�ｼ峨�ｮ縺ｿ隧ｦ陦後＠縲√Γ繧､繝ｳ蠕瑚ｿｽ險倥ｂ縺励↑縺�縲�
+# True のとき need シート「配台時追加人数」行を無視し、チーム人数は基本必要人数（req_num）のみ試行し、メイン後追記もしない。
 TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW = (
     os.environ.get("TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW", "0")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "縺ｯ縺�")
+    in ("1", "true", "yes", "on", "はい")
 )
 
-# True: 蠕捺擂縺ｩ縺翫ｊ繝｡繧､繝ｳ蜑ｲ莉倥�ｮ邨�縺ｿ蜷医ｏ縺帶爾邏｢縺ｧ req_num縲徨eq_num+霑ｽ蜉�莠ｺ謨ｰ荳企剞縺ｾ縺ｧ隧ｦ縺吶�
-# False�ｼ域里螳夲ｼ�: 繝｡繧､繝ｳ縺ｯ req_num 縺ｮ縺ｿ縲りｿｽ蜉�莠ｺ謨ｰ荳企剞縺ｯ蜈ｨ繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ螳御ｺ�蠕後∝ｽ楢ｩｲ繝悶Ο繝�繧ｯ譎る俣縺ｫ
-#     莉悶ち繧ｹ繧ｯ縺ｸ譛ｪ蜑ｲ蠖難ｼ域凾髢馴㍾縺ｪ繧翫↑縺暦ｼ峨°縺､ skills 驕ｩ蜷医�ｮ閠�繧偵し繝悶→縺励※霑ｽ險假ｼ�append_surplus_staff_after_main_dispatch�ｼ峨�
+# True: 従来どおりメイン割付の組み合わせ探索で req_num〜req_num+追加人数上限まで試す。
+# False（既定）: メインは req_num のみ。追加人数上限は全シミュレーション完了後、当該ブロック時間に
+#     他タスクへ未割当（時間重なりなし）かつ skills 適合の者をサブとして追記（append_surplus_staff_after_main_dispatch）。
 TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
     os.environ.get("TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "縺ｯ縺�")
+    in ("1", "true", "yes", "on", "はい")
 )
 
-# True�ｼ域里螳夲ｼ�: 繝｡繧､繝ｳ驟榊床縺ｮ蠢�隕∽ｺｺ謨ｰ縺ｯ need�ｼ亥渕譛ｬ蠢�隕∽ｺｺ謨ｰ�ｼ狗音蛻･謖�螳夲ｼ峨�ｮ縺ｿ縲�
-# False 縺ｮ縺ｨ縺阪�ｯ迚ｹ蛻･謖�螳壼ｙ閠� AI 縺ｮ required_op 縺ｮ縺ｿ險育判蛛ｴ縺九ｉ蜿ら�ｧ縺怜ｾ励ｋ�ｼ医す繝ｼ繝亥�励悟ｿ�隕∽ｺｺ謨ｰ縲阪�ｯ蟒�豁｢貂医∩�ｼ峨�
+# True（既定）: メイン配台の必要人数は need（基本必要人数＋特別指定）のみ。
+# False のときは特別指定備考 AI の required_op のみ計画側から参照し得る（シート列「必要人数」は廃止済み）。
 TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY = (
     os.environ.get("TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "縺�縺�縺�")
+    not in ("0", "false", "no", "off", "いいえ")
 )
-# True�ｼ域里螳夲ｼ�: master縲檎ｵ�縺ｿ蜷医ｏ縺幄｡ｨ縲阪↓隧ｲ蠖楢｡後′縺ゅｋ蟾･遞�+讖滓｢ｰ縺ｯ縲∫ｵ�蜷医○蜆ｪ蜈亥ｺｦ縺ｮ譏�鬆�縺ｧ
-# 譛蛻昴↓謌千ｫ九＠縺溘Γ繝ｳ繝舌�ｼ邱ｨ謌舌ｒ謗｡逕ｨ縲ゅ☆縺ｹ縺ｦ荳榊庄縺ｪ繧牙ｾ捺擂縺ｮ itertools 邨�蜷医○謗｢邏｢縲�
+# True（既定）: master「組み合わせ表」に該当行がある工程+機械は、組合せ優先度の昇順で
+# 最初に成立したメンバー編成を採用。すべて不可なら従来の itertools 組合せ探索。
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET = (
     os.environ.get("TEAM_ASSIGN_USE_MASTER_COMBO_SHEET", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "縺�縺�縺�")
+    not in ("0", "false", "no", "off", "いいえ")
 )
 
-# ﾂｧB-2 辭ｱ陞咲捩讀懈渊繧貞酔荳險ｭ蛯呻ｼ亥ｷ･遞句�励く繝ｼ�ｼ峨〒縲碁幕蟋区ｸ医∩1莉ｶ縺ｫ谿九Ο繝ｼ繝ｫ縺後≠繧矩俣縺ｯ莉紋ｾ晞�ｼ縺ｮ讀懈渊繧定ｩｦ縺輔↑縺�縲阪°縲�
-# 0 / false / no / off 縺ｧ辟｡蜉ｹ縺ｫ縺吶ｋ縺ｨ險ｭ蛯呎凾髢灘牡荳翫〒萓晞�ｼ縺梧ｷｷ蝨ｨ縺怜ｾ励ｋ縺後∝頃譛峨↓繧医ｋ髟ｷ譛溘ヶ繝ｭ繝�繧ｯ�ｼ井ｾ�: W3-14 蝙具ｼ峨ｒ驕ｿ縺代ｉ繧後ｋ縲�
+# §B-2 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールがある間は他依頼の検査を試さない」か。
+# 0 / false / no / off で無効にすると設備時間割上で依頼が混在し得るが、占有による長期ブロック（例: W3-14 型）を避けられる。
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "縺�縺�縺�", "辟｡蜉ｹ")
+    not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# ﾂｧB-2 / ﾂｧB-3 蜷御ｸ萓晞�ｼ縺ｧ EC 縺ｨ蠕檎ｶ夲ｼ域､懈渊�ｼ丞ｷｻ霑斐＠�ｼ峨�ｮ諡�蠖楢�髮�蜷医ｒ謗剃ｻ悶☆繧九°縲�
-# 0 / false / no / off / 縺�縺�縺� / 辟｡蜉ｹ 縺ｧ辟｡蜉ｹ蛹悶☆繧九→縲∝ｱ･豁ｴ繝吶�ｼ繧ｹ縺ｮ逶ｸ莠帝勁螟悶ｒ陦後ｏ縺壼酔荳莠ｺ迚ｩ縺御ｸ｡蛛ｴ縺ｮ蛟呵｣懊↓谿九ｊ蠕励ｋ縲�
+# §B-2 / §B-3 同一依頼で EC と後続（検査／巻返し）の担当者集合を排他するか。
+# 0 / false / no / off / いいえ / 無効 で無効化すると、履歴ベースの相互除外を行わず同一人物が両側の候補に残り得る。
 PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     os.environ.get("PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1")
     .strip()
     .lower()
-    not in ("0", "false", "no", "off", "縺�縺�縺�", "辟｡蜉ｹ")
+    not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# 繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�: 譌｢螳壹〒縺ｯ openpyxl save 繧定ｩｦ縺輔★ xlwings 蜷梧悄竊担ave�ｼ�Excel 蜊�譛画凾縺ｯ openpyxl 縺悟ｮ溯ｳｪ螟ｱ謨励☆繧九◆繧��ｼ峨ょ､ｱ謨玲凾縺ｯ TSV竊歎BA 蜿肴丐縲�
-# 繧ｳ繝槭Φ繝臥ｭ峨〒 openpyxl 繧定ｩｦ縺吝�ｴ蜷医�ｯ EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1縲�
-EXCLUDE_RULES_SHEET_NAME = "險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞�"
+# マクロブック「設定_配台不要工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl が実質失敗するため）。失敗時は TSV→VBA 反映。
+# コマンド等で openpyxl を試す場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
+EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
 EXCLUDE_RULES_SKIP_OPENPYXL_SAVE = os.environ.get(
     "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", ""
 ).strip().lower() not in ("1", "true", "yes", "on")
-EXCLUDE_RULE_COL_PROCESS = "蟾･遞句錐"
-EXCLUDE_RULE_COL_MACHINE = "讖滓｢ｰ蜷�"
-EXCLUDE_RULE_COL_FLAG = "驟榊床荳崎ｦ�"
-EXCLUDE_RULE_COL_LOGIC_JA = "驟榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ"
-EXCLUDE_RULE_COL_LOGIC_JSON = "繝ｭ繧ｸ繝�繧ｯ蠑�"
-# 蜈�繝悶ャ繧ｯ縺後Ο繝�繧ｯ縺輔ｌ蛻･蜷堺ｿ晏ｭ倥＠縺溷�ｴ蜷医∝酔荳繝励Ο繧ｻ繧ｹ蜀�縺ｮ繝ｫ繝ｼ繝ｫ隱ｭ霎ｼ縺ｯ縺薙�ｮ繝代せ繧貞━蜈�
+EXCLUDE_RULE_COL_PROCESS = "工程名"
+EXCLUDE_RULE_COL_MACHINE = "機械名"
+EXCLUDE_RULE_COL_FLAG = "配台不要"
+EXCLUDE_RULE_COL_LOGIC_JA = "配台不能ロジック"
+EXCLUDE_RULE_COL_LOGIC_JSON = "ロジック式"
+# 元ブックがロックされ別名保存した場合、同一プロセス内のルール読込はこのパスを優先
 _exclude_rules_effective_read_path: str | None = None
-# 逶ｴ蠕後�ｮ apply_exclude_rules�ｼ亥酔荳繝励Ο繧ｻ繧ｹ�ｼ臥畑: VBA 蜿肴丐蜑阪〒繧� E 蛻嶺ｻ倥″繝ｫ繝ｼ繝ｫ繧剃ｽｿ縺�
+# 直後の apply_exclude_rules（同一プロセス）用: VBA 反映前でも E 列付きルールを使う
 _exclude_rules_rules_snapshot: list | None = None
 _exclude_rules_snapshot_wb: str | None = None
-# 繝ｫ繝ｼ繝ｫ JSON 縺ｮ conditions 縺ｧ蜿ら�ｧ蜿ｯ閭ｽ縺ｪ蛻暦ｼ�AI 繝励Ο繝ｳ繝励ヨ縺ｨ隧穂ｾ｡蝎ｨ繧剃ｸ閾ｴ縺輔○繧具ｼ�
+# ルール JSON の conditions で参照可能な列（AI プロンプトと評価器を一致させる）
 EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     {
         TASK_COL_TASK_ID,
@@ -833,23 +833,23 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     }
 )
 
-# 險育判邨先棡繝悶ャ繧ｯ縲檎ｵ先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪�ｮ蛻鈴��繝ｻ陦ｨ遉ｺ�ｼ医�槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縺ｮ蜷悟錐繧ｷ繝ｼ繝医〒荳頑嶌縺榊庄�ｼ�
-RESULT_TASK_SHEET_NAME = "邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ"
-RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ"
-# 菴吝鴨霑ｽ險伜燕縺ｮ繧ｿ繧､繝�繝ｩ繧､繝ｳ繧貞庄隕門喧�ｼ育ｵ先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｨ蜷後§ 10 蛻�譫�繝ｻ蛻玲ｧ矩��ｼ�
-TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ"
-# 險ｭ蛯吶�ｻ莠ｺ縺ｮ蜊�譛会ｼ医ヶ繝ｭ繝�繧ｯ�ｼ峨ｒ 10 蛻�譫�縺ｧ荳隕ｧ�ｼ郁ｪｿ譟ｻ繝ｻ讀懆ｨｼ逕ｨ�ｼ�
-BLOCK_TABLE_SHEET_NAME = "繝悶Ο繝�繧ｯ繝�繝ｼ繝悶Ν"
-# 蟾･遞句錐+讖滓｢ｰ縺ｮ隍�蜷亥�励〒縺ｯ縺ｪ縺上∵ｩ滓｢ｰ蜷榊腰菴阪〒蜷�譫�縺ｮ萓晞�ｼNO繧呈滑謠｡縺励ｄ縺吶￥縺吶ｋ
-RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ_讖滓｢ｰ蜷肴ｯ�"
-# master 繝｡繧､繝ｳ A15/B15 縺ｮ螳壼ｸｸ螟悶�ｮ縲梧律譎ょｸｯ縲崎ｦ句�ｺ縺礼捩濶ｲ�ｼ育ｵ先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ繝ｻ邨先棡_險ｭ蛯吶ぎ繝ｳ繝茨ｼ�
+# 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
+RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
+RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
+# 余力追記前のタイムラインを可視化（結果_設備毎の時間割と同じ 10 分枠・列構造）
+TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_設備毎の時間割"
+# 設備・人の占有（ブロック）を 10 分枠で一覧（調査・検証用）
+BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
+# 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
+RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
+# master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
-# 邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ_讖滓｢ｰ蜷肴ｯ�: 驟榊床貂医∩萓晞�ｼNO繧ｻ繝ｫ�ｼ域ｩ滓｢ｰ蛻暦ｼ峨�ｮ阮�縺�繧ｰ繝ｪ繝ｼ繝ｳ
-# 邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ�ｼ医♀繧医�ｳ TEMP�ｼ�: 蜉�蟾･蜑肴ｺ門ｙ繝ｻ萓晞�ｼ蛻�譖ｿ蠕悟ｧ区忰縺ｮ險ｭ蛯吶そ繝ｫ繧ょ酔邉ｻ濶ｲ
+# 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
+# 結果_設備毎の時間割（および TEMP）: 加工前準備・依頼切替後始末の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
-# 邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ: master縲梧ｩ滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縲榊頃譛峨→驥阪↑繧玖ｨｭ蛯吶そ繝ｫ�ｼ�10蛻�譫��ｼ�
+# 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
-# 邨先棡_險ｭ蛯吶ぎ繝ｳ繝�: 讖滓｢ｰ蜷阪げ繝ｫ繝ｼ繝暦ｼ域ｩ滓｢ｰ蜷榊�励�ｮ蜷御ｸ蜷咲ｧｰ�ｼ峨＃縺ｨ縺ｫ B縲廢 蛻励ｒ蛹ｺ蛻･縺吶ｋ豺｡濶ｲ�ｼ磯��縺ｫ蜑ｲ蠖薙�ｻ蠕ｪ迺ｰ�ｼ�
+# 結果_設備ガント: 機械名グループ（機械名列の同一名称）ごとに B〜E 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
     "FCE8F0",
@@ -862,29 +862,29 @@ RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "F5F5E0",
     "F0E8E8",
 )
-# 驟榊床繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ髢句ｧ句燕�ｼ亥�晏屓 task_queue.sort 蠕鯉ｼ峨�ｮ繧ｭ繝･繝ｼ鬆�縲�1 蟋九∪繧翫�ｻ蜈ｨ譌･遞九〒荳榊､�
-RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "驟榊床隧ｦ陦碁��逡ｪ"
-# 驟榊ｮ契蜉�蟾･邨ゆｺ�縺後悟屓遲皮ｴ肴悄+16:00縲阪∪縺溘�ｯ縲梧欠螳夂ｴ肴悄+16:00縲搾ｼ亥屓遲斐′遨ｺ縺ｮ縺ｨ縺搾ｼ我ｻ･蜑阪°繧定｡ｨ遉ｺ
-RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "驟榊ｮ契蝗樒ｭ疲欠螳�16譎ゅ∪縺ｧ"
-# 繝槭せ繧ｿ skills 縺ｮ蟾･遞�+讖滓｢ｰ蛻励＃縺ｨ縺ｮ OP/AS 蜑ｲ蠖灘盾閠�鬆��ｼ亥━蜈亥ｺｦ蛟､繝ｻ豌丞錐鬆��ｼ峨→繝√�ｼ繝�謗｡逕ｨ繝ｫ繝ｼ繝ｫ縺ｮ隱ｬ譏�
-RESULT_MEMBER_PRIORITY_SHEET_NAME = "邨先棡_莠ｺ蜩｡驟榊床蜆ｪ蜈磯��"
-COLUMN_CONFIG_SHEET_NAME = "蛻苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ"
-COLUMN_CONFIG_HEADER_COL = "蛻怜錐"
-COLUMN_CONFIG_VISIBLE_COL = "陦ｨ遉ｺ"
-# 谿ｵ髫�2縺ｮ邨先棡 xlsx 逕滓�仙ｾ後∝�･蜉帙ヶ繝�繧ｯ縺ｮ蛻苓ｨｭ螳壹す繝ｼ繝井ｸ翫�ｮ蝗ｳ蠖｢�ｼ医ヵ繧ｩ繝ｼ繝�繝懊ち繝ｳ遲会ｼ峨ｒ xlwings 縺ｧ隍�陬ｽ縺吶ｋ�ｼ域里螳� ON縲ら┌蜉ｹ蛹悶�ｯ STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0�ｼ�
+# 配台シミュレーション開始前（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で不変
+RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
+# 配完_加工終了が「回答納期+16:00」または「指定納期+16:00」（回答が空のとき）以前かを表示
+RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配完_回答指定16時まで"
+# マスタ skills の工程+機械列ごとの OP/AS 割当参考順（優先度値・氏名順）とチーム採用ルールの説明
+RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
+COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
+COLUMN_CONFIG_HEADER_COL = "列名"
+COLUMN_CONFIG_VISIBLE_COL = "表示"
+# 段階2の結果 xlsx 生成後、入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製する（既定 ON。無効化は STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
     "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
-# 邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ譌･莉倡ｳｻ�ｼ�yyyy/mm/dd 譁�蟄怜�暦ｼ峨↓莉倥￠繧九ヵ繧ｩ繝ｳ繝郁牡縲ょｱ･豁ｴ蛻励�ｮ縲先律莉倥代→謠�縺医ｋ
+# 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
-        "蝗樒ｭ皮ｴ肴悄",
-        "謖�螳夂ｴ肴悄",
-        "險育判蝓ｺ貅也ｴ肴悄",
+        "回答納期",
+        "指定納期",
+        "計画基準納期",
         TASK_COL_RAW_INPUT_DATE,
-        "蜉�蟾･髢句ｧ区律",
-        "驟榊ｮ契蜉�蟾･髢句ｧ�",
-        "驟榊ｮ契蜉�蟾･邨ゆｺ�",
+        "加工開始日",
+        "配完_加工開始",
+        "配完_加工終了",
     }
 )
 
@@ -902,39 +902,39 @@ PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
 ]
-# 遏帷崟讀懷�ｺ縺ｧ繝ｪ繧ｻ繝�繝亥ｯｾ雎｡縺ｫ縺吶ｋ蛻暦ｼ郁ｦ句�ｺ縺苓｡後�ｮ譁�險縺ｨ荳閾ｴ縺吶ｋ縺薙→�ｼ�
+# 矛盾検出でリセット対象にする列（見出し行の文言と一致すること）
 PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
-# 谿ｵ髫�1蜀肴歓蜃ｺ譎ゅ∵里蟄倥碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪°繧臥ｶ呎価縺吶ｋ蛻暦ｼ�AI縺ｮ隗｣譫千ｵ先棡蛻励�ｯ豈主屓遨ｺ縺ｫ謌ｻ縺呻ｼ�
+# 段階1再抽出時、既存「配台計画_タスク入力」から継承する列（AIの解析結果列は毎回空に戻す）
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
-# 荳頑嶌縺堺ｻ･螟悶〒縲∝�肴歓蜃ｺ譎ゅ↓譌ｧ繧ｷ繝ｼ繝医°繧牙ｼ輔″邯吶＄蛻暦ｼ医そ繝ｫ縺檎ｩｺ縺ｧ縺ｪ縺�縺ｨ縺阪�ｮ縺ｿ�ｼ�
-# 驟榊床隧ｦ陦碁��逡ｪ縺ｯ豈主屓遨ｺ繧ｯ繝ｪ繧｢縺ｮ縺�縺� fill_plan_dispatch_trial_order_column_stage1 縺ｧ莉倥￠逶ｴ縺吶◆繧∝ｯｾ雎｡螟悶�
+# 上書き以外で、再抽出時に旧シートから引き継ぐ列（セルが空でないときのみ）
+# 配台試行順番は毎回空クリアのうえ fill_plan_dispatch_trial_order_column_stage1 で付け直すため対象外。
 PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
-# openpyxl 菫晏ｭ倥′繝悶ャ繧ｯ繝ｭ繝�繧ｯ縺ｧ螟ｱ謨励＠縺溘→縺阪〃BA 縺碁幕縺�縺ｦ縺�繧九ヶ繝�繧ｯ縺ｸ譖ｸ蠑城←逕ｨ縺吶ｋ縺溘ａ縺ｮ謖�遉ｺ繝輔ぃ繧､繝ｫ
+# openpyxl 保存がブックロックで失敗したとき、VBA が開いているブックへ書式適用するための指示ファイル
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
-# 驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙∈縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌阪ｒ譖ｸ縺丞�暦ｼ郁｡ｨ縺ｮ蜿ｳ遶ｯ繧医ｊ螟門�ｴ縲�1陦檎岼縺九ｉ邵ｦ縺ｫ繝ｩ繝吶Ν�ｼ丞､�ｼ�
-# 笘� 蜿ら�ｧ陦ｨ遉ｺ縺ｮ縺ｿ: load_planning_tasks_df 遲峨�ｯ譛ｬ蛻励ｒ荳蛻�隱ｭ縺ｾ縺ｪ縺�縲る�榊床驕ｩ逕ｨ縺ｯ蟶ｸ縺ｫ繝｡繧､繝ｳ縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医�1邨瑚ｷｯ縺ｮ縺溘ａ莠碁㍾驕ｩ逕ｨ縺ｫ縺ｪ繧峨↑縺�縲�
+# 配台計画_タスク入力へ「グローバルコメント解析」を書く列（表の右端より外側。1行目から縦にラベル／値）
+# ★ 参照表示のみ: load_planning_tasks_df 等は本列を一切読まない。配台適用は常にメイン「グローバルコメント」1経路のため二重適用にならない。
 PLAN_SHEET_GLOBAL_PARSE_LABEL_COL = 50  # AX
 PLAN_SHEET_GLOBAL_PARSE_VALUE_COL = 51  # AY
 PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
 
 
 def plan_reference_column_name(override_col: str) -> str:
-    """荳頑嶌縺榊�励�ｮ蟾ｦ髫｣縺ｫ鄂ｮ縺丞盾辣ｧ蛻励�ｮ隕句�ｺ縺暦ｼ医そ繝ｫ蛟､縺ｯ諡ｬ蠑ｧ莉倥″縺ｧ蜈�繝�繝ｼ繧ｿ繧定｡ｨ遉ｺ�ｼ峨�"""
-    return f"�ｼ亥���ｼ閲override_col}"
+    """上書き列の左隣に置く参照列の見出し（セル値は括弧付きで元データを表示）。"""
+    return f"（元）{override_col}"
 
 
 def plan_input_sheet_column_order():
     """
-    驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙�ｮ蛻鈴���ｼ域ｮｵ髫�1蜃ｺ蜉帙�ｻ谿ｵ髫�2隱ｭ霎ｼ縺ｧ蜈ｱ騾夲ｼ峨�
+    配台計画_タスク入力の列順（段階1出力・段階2読込で共通）。
 
-    0. 驟榊床隧ｦ陦碁��逡ｪ�ｼ域ｮｵ髫�1謚ｽ蜃ｺ逶ｴ蠕後↓遨ｺ繧ｯ繝ｪ繧｢竊呈ｮｵ髫�2縺ｨ蜷瑚ｶ｣譌ｨ縺ｫ莉倅ｸ弱よｮｵ髫�2縺ｯ蜈ｨ陦後↓蛟､縺後≠繧九→縺阪％縺ｮ鬆�繧貞━蜈茨ｼ�
-    1. 驟榊床荳崎ｦ��ｼ亥盾辣ｧ蛻励↑縺暦ｼ�
-    2. 蜉�蟾･險育判DATA 逕ｱ譚･�ｼ�SOURCE_BASE_COLUMNS�ｼ俄ｦ 萓晞�ｼNO縲懷ｮ溷�ｺ譚･鬮倥∪縺ｧ�ｼ郁｣ｽ蜩∝錐縺ｮ逶ｴ蠕後↓繝ｭ繝ｼ繝ｫ蜊倅ｽ埼聞縺輔∝次蜿肴兜蜈･譌･縺ｮ逶ｴ蠕後↓蝨ｨ蠎ｫ蝣ｴ謇�ｼ�
-    3. 蜉�蟾･蟾･遞九�ｮ豎ｺ螳壹�励Ο繧ｻ繧ｹ縺ｮ蝗�蟄�
-    4. 荳頑嶌縺榊�冷ｦ 蜷�蛻励�ｮ逶ｴ蜑阪↓縲鯉ｼ亥���ｼ俄ｦ縲榊盾辣ｧ蛻励�AI迚ｹ蛻･謖�螳喟隗｣譫舌�ｮ縺ｿ蜿ら�ｧ蛻励↑縺励�
-       �ｼ域律莉倡ｳｻ荳頑嶌縺阪↓ 蜴溷渚謚募�･譌･_荳頑嶌縺� 繧貞性繧縲らｩｺ逋ｽ譎ゅ�ｯ蛻励悟次蜿肴兜蜈･譌･縲阪ｒ驟榊床縺ｫ菴ｿ逕ｨ�ｼ�
+    0. 配台試行順番（段階1抽出直後に空クリア→段階2と同趣旨に付与。段階2は全行に値があるときこの順を優先）
+    1. 配台不要（参照列なし）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール単位長さ、原反投入日の直後に在庫場所）
+    3. 加工工程の決定プロセスの因子
+    4. 上書き列… 各列の直前に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
+       （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
 
-    global_speed_rules 遲峨〒螟峨ｏ繧句ｮ溷柑騾溷ｺｦ縺ｯ繧ｷ繝ｼ繝亥�励〒縺ｯ謖√◆縺壹�驟榊床蜀�驛ｨ縺ｮ縺ｿ縺ｧ蜿肴丐縺吶ｋ縲�
+    global_speed_rules 等で変わる実効速度はシート列では持たず、配台内部のみで反映する。
     """
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
     for c in SOURCE_BASE_COLUMNS:
@@ -954,46 +954,46 @@ def plan_input_sheet_column_order():
 
 
 def _format_paren_ref_scalar(val):
-    """蜿ら�ｧ陦ｨ遉ｺ逕ｨ: 遨ｺ縺ｯ�ｼ遺包ｼ峨∵律莉倥�ｻ縺昴�ｮ莉悶�ｯ�ｼ亥､�ｼ峨�"""
+    """参照表示用: 空は（―）、日付・その他は（値）。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
-        return "�ｼ遺包ｼ�"
+        return "（―）"
     if isinstance(val, datetime):
         d = val.date() if hasattr(val, "date") else val
         if isinstance(d, date):
-            return f"�ｼ�{d.year}/{d.month}/{d.day}�ｼ�"
+            return f"（{d.year}/{d.month}/{d.day}）"
     if isinstance(val, date):
-        return f"�ｼ�{val.year}/{val.month}/{val.day}�ｼ�"
+        return f"（{val.year}/{val.month}/{val.day}）"
     s = str(val).strip()
     if not s or s.lower() in ("nan", "none"):
-        return "�ｼ遺包ｼ�"
-    return f"�ｼ�{s}�ｼ�"
+        return "（―）"
+    return f"（{s}）"
 
 
 def _reference_text_for_override_row(row, override_col: str, req_map: dict, need_rules: list) -> str:
-    """1陦悟��縺ｮ荳頑嶌縺榊�励↓蟇ｾ蠢懊☆繧句盾辣ｧ譁�險�ｼ域峡蠑ｧ莉倥″�ｼ峨�"""
-    _ = (req_map, need_rules)  # 譌ｧ縲鯉ｼ亥���ｼ牙ｿ�隕∽ｺｺ謨ｰ縲榊盾辣ｧ縺ｧ菴ｿ逕ｨ縲ょ�怜ｻ�豁｢縺ｫ繧医ｊ譛ｪ菴ｿ逕ｨ縺�縺悟他縺ｳ蜃ｺ縺嶺ｺ呈鋤縺ｮ縺溘ａ谿九☆縲�
+    """1行分の上書き列に対応する参照文言（括弧付き）。"""
+    _ = (req_map, need_rules)  # 旧「（元）必要人数」参照で使用。列廃止により未使用だが呼び出し互換のため残す。
     if override_col == PLAN_COL_SPEED_OVERRIDE:
         v = row.get(TASK_COL_SPEED)
         if v is None or (isinstance(v, float) and pd.isna(v)):
-            return "�ｼ遺包ｼ�"
+            return "（―）"
         try:
             x = float(v)
             if abs(x - round(x)) < 1e-9:
-                return f"�ｼ�{int(round(x))}�ｼ�"
-            return f"�ｼ�{x}�ｼ�"
+                return f"（{int(round(x))}）"
+            return f"（{x}）"
         except (TypeError, ValueError):
             return _format_paren_ref_scalar(v)
     if override_col in (PLAN_COL_PREFERRED_OP, PLAN_COL_SPECIAL_REMARK):
-        return "�ｼ遺包ｼ�"
+        return "（―）"
     if override_col == PLAN_COL_RAW_INPUT_DATE_OVERRIDE:
         return _format_paren_ref_scalar(
             parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
         )
-    return "�ｼ遺包ｼ�"
+    return "（―）"
 
 
 def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
-    """蜉�蟾･險育判DATA�ｼ熟eed 縺ｫ蝓ｺ縺･縺阪鯉ｼ亥���ｼ俄ｦ縲榊�励ｒ蜀崎ｨ育ｮ暦ｼ医�槭�ｼ繧ｸ蠕後↓蠢�縺壼他縺ｶ�ｼ峨�"""
+    """加工計画DATA／need に基づき「（元）…」列を再計算（マージ後に必ず呼ぶ）。"""
     if df is None or df.empty:
         return df
     need_rules = need_rules or []
@@ -1012,16 +1012,16 @@ def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
     return df
 
 
-def _apply_plan_input_visual_format(path: str, sheet_name: str = "繧ｿ繧ｹ繧ｯ荳隕ｧ"):
-    """荳頑嶌縺榊�･蜉帛�励↓阮�縺�鮟�濶ｲ繧剃ｻ倅ｸ趣ｼ亥盾辣ｧ蛻励�ｯ譛ｪ逹濶ｲ縲�AI隗｣譫仙�励�ｯ髯､螟厄ｼ峨�"""
-    # 隕句�ｺ縺玲枚蟄励�ｮ陦ｨ險倥ｆ繧後〒蛻怜錐讀懃ｴ｢縺ｫ螟ｱ謨励＠縺後■縺ｪ縺溘ａ縲∵ｮｵ髫�1縺ｮ蛻鈴���ｼ�plan_input_sheet_column_order�ｼ峨�ｮ
-    # 1-based 蛻礼分蜿ｷ縺ｧ蝪励ｋ�ｼ�to_excel 縺ｮ蛻鈴��縺ｨ荳閾ｴ縺輔○繧具ｼ峨�
+def _apply_plan_input_visual_format(path: str, sheet_name: str = "タスク一覧"):
+    """上書き入力列に薄い黄色を付与（参照列は未着色。AI解析列は除外）。"""
+    # 見出し文字の表記ゆれで列名検索に失敗しがちなため、段階1の列順（plan_input_sheet_column_order）の
+    # 1-based 列番号で塗る（to_excel の列順と一致させる）。
     fill_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
     order = plan_input_sheet_column_order()
     col_1based = {name: i + 1 for i, name in enumerate(order)}
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "驟榊床險育判縺ｮ隕冶ｦ壽紛蠖｢: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ縺ｮ逹濶ｲ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+            "配台計画の視覚整形: ブックに「%s」があるため openpyxl での着色をスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1063,8 +1063,8 @@ def _remove_planning_conflict_sidecar_safe():
 
 def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row):
     """
-    Excel 縺後ヶ繝�繧ｯ繧帝幕縺�縺溘∪縺ｾ縺ｮ縺ｨ縺堺ｿ晏ｭ倥〒縺阪↑縺�蝣ｴ蜷医↓縲〃BA 逕ｨ縺ｮ TSV 繧� log 縺ｫ譖ｸ縺上�
-    蠖｢蠑�: V1 / 繧ｷ繝ｼ繝亥錐 / 繝�繝ｼ繧ｿ陦梧焚 / 繧ｯ繝ｪ繧｢蛻励ｒ繧ｿ繝也ｵ仙粋 / 莉･髯� 陦檎分蜿ｷ\\t蛻怜錐
+    Excel がブックを開いたままのとき保存できない場合に、VBA 用の TSV を log に書く。
+    形式: V1 / シート名 / データ行数 / クリア列をタブ結合 / 以降 行番号\\t列名
     """
     path = _planning_conflict_sidecar_path()
     clear_cols = "\t".join(PLAN_CONFLICT_STYLABLE_COLS)
@@ -1075,7 +1075,7 @@ def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflic
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
-# 谿ｵ髫�1蜃ｺ蜉帙�ｻ繝悶ャ繧ｯ蜀�縺ｮ譌･莉伜�励ｒ Excel 荳翫梧律莉倥�ｮ縺ｿ縲�(譎ょ綾縺ｪ縺苓｡ｨ遉ｺ) 縺ｫ謨ｴ縺医ｋ
+# 段階1出力・ブック内の日付列を Excel 上「日付のみ」(時刻なし表示) に整える
 STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
     {
         TASK_COL_ANSWER_DUE,
@@ -1087,7 +1087,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """邨先棡繝悶ャ繧ｯ逕ｨ Font�ｼ亥他縺ｳ蜃ｺ縺怜�ｴ縺� name/size 遲峨ｒ謖�螳夲ｼ峨�"""
+    """結果ブック用 Font（呼び出し側が name/size 等を指定）。"""
     return Font(**kwargs)
 
 
@@ -1096,7 +1096,7 @@ def _output_book_font(bold=False):
 
 
 def _apply_output_font_to_result_sheet(ws):
-    """邨先棡_* 縺ｮ縺�縺｡繧ｬ繝ｳ繝井ｻ･螟門髄縺�: 譌｢螳壹ヵ繧ｩ繝ｳ繝医�ｻ1陦檎岼螟ｪ蟄励�ｮ縺ｿ�ｼ亥�怜ｹ�縺ｯ VBA AutoFit�ｼ峨�"""
+    """結果_* のうちガント以外向け: 既定フォント・1行目太字のみ（列幅は VBA AutoFit）。"""
     base = _output_book_font(bold=False)
     hdr = _output_book_font(bold=True)
     mr, mc = ws.max_row or 1, ws.max_column or 1
@@ -1108,13 +1108,13 @@ def _apply_output_font_to_result_sheet(ws):
 
 
 def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=None):
-    """openpyxl: 謖�螳壹�倥ャ繝繝ｼ蛻励ｒ yyyy/mm/dd 縺ｮ譌･莉倩｡ｨ遉ｺ縺ｫ縺吶ｋ�ｼ域凾蛻ｻ繧定｡ｨ遉ｺ縺励↑縺��ｼ峨�"""
+    """openpyxl: 指定ヘッダー列を yyyy/mm/dd の日付表示にする（時刻を表示しない）。"""
     from openpyxl import load_workbook
 
     headers = header_names or STAGE1_SHEET_DATEONLY_HEADERS
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "譌･莉伜�苓｡ｨ遉ｺ謨ｴ蠖｢: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ縺ｮ蜃ｦ逅�繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+            "日付列表示整形: ブックに「%s」があるため openpyxl での処理をスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1155,7 +1155,7 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 
 def _extract_data_extraction_datetime():
     """
-    `蜉�蟾･險育判DATA` 繧ｷ繝ｼ繝医�ｮ `繝�繝ｼ繧ｿ謚ｽ蜃ｺ譌･` 縺九ｉ datetime 繧貞叙蠕励☆繧九�
+    `加工計画DATA` シートの `データ抽出日` から datetime を取得する。
     """
     try:
         if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
@@ -1185,22 +1185,22 @@ def _extract_data_extraction_datetime():
 
 def _extract_data_extraction_datetime_str():
     """
-    `蜉�蟾･險育判DATA` 繧ｷ繝ｼ繝医�ｮ `繝�繝ｼ繧ｿ謚ｽ蜃ｺ譌･` 縺九ｉ縲後ョ繝ｼ繧ｿ蜷ｸ蜃ｺ縺玲律譎ゅ阪ｒ蜿門ｾ励＠縺ｦ譁�蟄怜�怜喧縺吶ｋ縲�
+    `加工計画DATA` シートの `データ抽出日` から「データ吸出し日時」を取得して文字列化する。
     """
     try:
         dt = _extract_data_extraction_datetime()
         if dt is None:
-            return "窶�"
+            return "—"
         return dt.strftime("%Y/%m/%d %H:%M:%S")
     except Exception:
-        return "窶�"
+        return "—"
 
 
 def _weekday_jp(d):
-    return "譛育↓豌ｴ譛ｨ驥大悄譌･"[d.weekday()]
+    return "月火水木金土日"[d.weekday()]
 
 
-# 繧ｬ繝ｳ繝医�ｮ菴懈･ｭ繝舌�ｼ�ｼ壹＞縺壹ｌ繧よ�弱ｋ縺�蝨ｰ濶ｲ�ｼ矩ｻ呈枚蟄励′隱ｭ繧√ｋ繝医�ｼ繝ｳ�ｼ医Δ繝弱け繝ｭ蜊ｰ蛻ｷ縺ｧ繧よｿ�豺｡縺ｧ隴伜挨縺励ｄ縺吶＞�ｼ�
+# ガントの作業バー：いずれも明るい地色＋黒文字が読めるトーン（モノクロ印刷でも濃淡で識別しやすい）
 _GANTT_BAR_FILLS_PRINT_SAFE = (
     "E8E8E8",
     "D8E4EF",
@@ -1212,7 +1212,7 @@ _GANTT_BAR_FILLS_PRINT_SAFE = (
     "E5DCE5",
 )
 
-# 螳溽ｸｾ繝舌�ｼ逕ｨ�ｼ郁ｨ育判縺ｨ荳ｦ縺ｹ縺ｦ繧ゅΔ繝弱け繝ｭ縺ｧ蛹ｺ蛻･縺励ｄ縺吶＞繝医�ｼ繝ｳ�ｼ�
+# 実績バー用（計画と並べてもモノクロで区別しやすいトーン）
 _GANTT_BAR_FILLS_ACTUAL = (
     "D4E4D4",
     "C9DDE8",
@@ -1224,12 +1224,12 @@ _GANTT_BAR_FILLS_ACTUAL = (
     "DCD2DC",
 )
 
-# 險ｭ蛯吶ぎ繝ｳ繝�: 譌･谺｡蟋区･ｭ貅門ｙ�ｼ�machine_daily_startup�ｼ峨�ｮ蟶ｯ濶ｲ�ｼ磯ｻ�濶ｲ邉ｻ�ｼ�
+# 設備ガント: 日次始業準備（machine_daily_startup）の帯色（黄色系）
 _GANTT_DAILY_STARTUP_FILL = "FFEB9C"
 
 
 def _gantt_bar_fill_for_task_id(task_id):
-    """萓晞�ｼNO縺斐→縺ｫ荳願ｨ倥ヱ繝ｬ繝�繝医°繧�1濶ｲ�ｼ�RRGGBB�ｼ峨よｿ�濶ｲ�ｼ狗區譁�蟄励�ｮ邨�縺ｿ蜷医ｏ縺帙�ｯ菴ｿ繧上↑縺�縲�"""
+    """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使わない。"""
     h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_PRINT_SAFE)
     return _GANTT_BAR_FILLS_PRINT_SAFE[i]
@@ -1241,7 +1241,7 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# 繧ｬ繝ｳ繝域凾蛻ｻ繧ｻ繝ｫ�ｼ育ｵ仙粋蟶ｯ縺ｮ蜈磯�ｭ繧ｻ繝ｫ�ｼ�: 豈弱そ繧ｰ繝｡繝ｳ繝� new 縺励↑縺�
+# ガント時刻セル（結合帯の先頭セル）: 毎セグメント new しない
 _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     horizontal="left",
     vertical="center",
@@ -1249,7 +1249,7 @@ _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     shrink_to_fit=False,
     indent=1,
 )
-# 繧ｿ繧ｹ繧ｯ蟶ｯ縺ｮ濶ｲ縺ｯ繝代Ξ繝�繝域怏髯舌↑縺ｮ縺ｧ PatternFill 繧� hex 蜊倅ｽ阪〒蜈ｱ譛会ｼ�openpyxl 縺ｮ繧ｹ繧ｿ繧､繝ｫ螻暮幕繧ｳ繧ｹ繝亥炎貂幢ｼ�
+# タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
 _GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
 
 
@@ -1262,7 +1262,7 @@ def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
 
 
 def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
-    """繧ｹ繝ｭ繝�繝井ｸｭ螟ｮ譎ょ綾縺ｫ縺翫￠繧�1繝槭せ蛻�縺ｮ迥ｶ諷九�('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
+    """スロット中央時刻における1マス分の状態。('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
     active = None
     for e in evlist:
@@ -1279,12 +1279,12 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     gh = fill_fn(active["task_id"])
     pct = None
     try:
-        # 縲後�槭け繝ｭ螳溯｡梧凾轤ｹ縲阪�ｮ螳御ｺ�邇�繧貞━蜈茨ｼ�pct_macro 繧� timeline_event 縺ｫ謖√◆縺帙ｋ�ｼ�
+        # 「マクロ実行時点」の完了率を優先（pct_macro を timeline_event に持たせる）
         if active.get("pct_macro") is not None:
             pct = int(round(parse_float_safe(active.get("pct_macro"), 0.0)))
             pct = max(0, min(100, pct))
         else:
-            # 繝輔ぉ繧､繝ｫ繧ｻ繝ｼ繝包ｼ亥ｾ捺擂縺ｮ謫ｬ莨ｼ騾ｲ謐苓ｨ育ｮ暦ｼ�
+            # フェイルセーフ（従来の擬似進捗計算）
             tot = parse_float_safe(active.get("total_units"), 0.0)
             done = parse_float_safe(active.get("already_done_units"), 0.0) + parse_float_safe(
                 active.get("units_done"), 0.0
@@ -1297,7 +1297,7 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
 
 
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
-    """邨仙粋繧ｻ繧ｰ繝｡繝ｳ繝亥｢�逡悟愛螳夲ｼ域ｯ弱せ繝ｭ繝�繝� tuple 繧貞牡繧雁ｽ薙※縺ｪ縺��ｼ峨�"""
+    """結合セグメント境界判定（毎スロット tuple を割り当てない）。"""
     if st_a[0] != st_b[0]:
         return False
     if st_a[0] == "idle" or st_a[0] == "break":
@@ -1321,8 +1321,8 @@ def _paint_gantt_timeline_row_merged(
     label_font=None,
 ):
     """
-    譎る俣霆ｸ繧貞｡励ｊ蛻�縺代◆縺�縺医〒縲∝酔荳迥ｶ諷九′騾｣邯壹☆繧九そ繝ｫ繧呈ｨｪ邨仙粋縺怜ｸｯ迥ｶ縺ｮ繝舌�ｼ縺ｫ縺吶ｋ縲�
-    �ｼ育ｴｰ繝槭せ蜊倅ｽ薙�ｮ蝪励ｊ縺ｧ縺ｯ縺ｪ縺�15蛻�蛻ｻ縺ｿ�ｼ句酔荳迥ｶ諷九�ｮ繧ｻ繝ｫ邨仙粋縺ｧ縲∝ｸｯ迥ｶ縺ｮ繝舌�ｼ縺ｨ縺励※陦ｨ迴ｾ縺吶ｋ�ｼ�
+    時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
+    （細マス単体の塗りではなく15分刻み＋同一状態のセル結合で、帯状のバーとして表現する）
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1353,7 +1353,7 @@ def _paint_gantt_timeline_row_merged(
                 _, gh_ds = st0
                 c.fill = _gantt_cached_pattern_fill(gh_ds)
                 if col == col_s:
-                    c.value = "(譌･谺｡蟋区･ｭ貅門ｙ)"
+                    c.value = "(日次始業準備)"
                     c.font = bar_label_font
                 else:
                     c.value = None
@@ -1371,7 +1371,7 @@ def _paint_gantt_timeline_row_merged(
 def _time_intervals_overlap_half_open(
     a_start: time, a_end: time, b_start: time, b_end: time
 ) -> bool:
-    """蜊企幕蛹ｺ髢� [a_start, a_end) 縺ｨ [b_start, b_end) 縺碁㍾縺ｪ繧九°�ｼ亥酔荳譌･蜀��ｼ峨�"""
+    """半開区間 [a_start, a_end) と [b_start, b_end) が重なるか（同一日内）。"""
 
     def _sec(t: time) -> int:
         return t.hour * 3600 + t.minute * 60 + t.second
@@ -1380,17 +1380,17 @@ def _time_intervals_overlap_half_open(
 
 
 def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | None]:
-    """邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縲梧律譎ょｸｯ縲阪そ繝ｫ�ｼ井ｾ� 08:45-09:00�ｼ峨ｒ隗｣驥医�"""
+    """結果_設備毎の時間割「日時帯」セル（例 08:45-09:00）を解釈。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None, None
     s = str(val).strip()
-    if not s or "笆�" in s:
+    if not s or "■" in s:
         return None, None
-    for sep in ("-", "�ｼ�", "~", "縲�"):
+    for sep in ("-", "－", "~", "〜"):
         if sep in s:
             left, right = s.split(sep, 1)
-            left = left.strip().replace("�ｼ�", ":")
-            right = right.strip().replace("�ｼ�", ":")
+            left = left.strip().replace("：", ":")
+            right = right.strip().replace("：", ":")
             t0 = parse_time_str(left, None)
             t1 = parse_time_str(right, None)
             if t0 is not None and t1 is not None and t0 < t1:
@@ -1402,7 +1402,7 @@ def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | N
 def _apply_equipment_schedule_outside_regular_fill(
     ws, reg_start: time, reg_end: time
 ) -> None:
-    """縲梧律譎ょｸｯ縲榊�励〒螳壼ｸｸ [reg_start, reg_end) 縺ｨ驥阪↑繧峨↑縺�陦後�ｮ繧ｻ繝ｫ縺ｫ逹濶ｲ縲�"""
+    """「日時帯」列で定常 [reg_start, reg_end) と重ならない行のセルに着色。"""
     fill = PatternFill(
         fill_type="solid",
         start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
@@ -1410,7 +1410,7 @@ def _apply_equipment_schedule_outside_regular_fill(
     )
     col_idx = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "譌･譎ょｸｯ":
+        if c.value is not None and str(c.value).strip() == "日時帯":
             col_idx = i
             break
     if col_idx is None:
@@ -1427,25 +1427,25 @@ def _apply_equipment_schedule_outside_regular_fill(
 
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
-    險ｭ蛯吝�暦ｼ磯ｲ蠎ｦ蛻励ｒ髯､縺擾ｼ峨〒縲∬｡ｨ遉ｺ縺ｫ縲梧律谺｡蟋区･ｭ貅門ｙ縲阪悟刈蟾･蜑肴ｺ門ｙ縲阪御ｾ晞�ｼ蛻�譖ｿ蠕悟ｧ区忰縲阪′蜷ｫ縺ｾ繧後ｋ繧ｻ繝ｫ繧定埋邱代↓縺吶ｋ縲�
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ / TEMP_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ 縺ｮ equip 繧ｻ繝ｫ逕ｨ�ｼ域律譎ょｸｯ蛻励�ｯ螟画峩縺励↑縺��ｼ峨�
+    設備列（進度列を除く）で、表示に「日次始業準備」「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
+    結果_設備毎の時間割 / TEMP_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
     """
     fill = PatternFill(
         fill_type="solid",
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(譌･谺｡蟋区･ｭ貅門ｙ)", "(蜉�蟾･蜑肴ｺ門ｙ)", "(萓晞�ｼ蛻�譖ｿ蠕悟ｧ区忰)")
+    markers = ("(日次始業準備)", "(加工前準備)", "(依頼切替後始末)")
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):
         if c.value is None:
             continue
         h = str(c.value).strip()
-        if h == "譌･譎ょｸｯ":
+        if h == "日時帯":
             col_tb = i
             continue
-        if h.endswith("騾ｲ蠎ｦ"):
+        if h.endswith("進度"):
             continue
         equip_cols.append(i)
     if col_tb is None or not equip_cols:
@@ -1463,7 +1463,7 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
 
 
 def _parse_equipment_schedule_day_header_date(val) -> date | None:
-    """譌･莉倩ｦ句�ｺ縺苓｡後娯蔓 YYYY/MM/DD 窶ｦ 笆�縲阪°繧画律莉倥ｒ蜿悶ｋ縲�"""
+    """日付見出し行「■ YYYY/MM/DD … ■」から日付を取る。"""
     if val is None:
         return None
     s = str(val).strip()
@@ -1481,7 +1481,7 @@ def _machine_calendar_intervals_for_equipment_line(
     eq_line: str,
     day_d: date,
 ) -> list[tuple[datetime, datetime]]:
-    """蠖捺律繝ｻ蠖楢ｩｲ險ｭ蛯吝�励く繝ｼ縺ｫ蟇ｾ蠢懊☆繧区ｩ滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛牙玄髢難ｼ亥ｷ･蝣ｴ遞ｼ蜒肴棧縺ｧ繧ｯ繝ｪ繝�繝玲ｸ医∩�ｼ峨�"""
+    """当日・当該設備列キーに対応する機械カレンダー占有区間（工場稼働枠でクリップ済み）。"""
     if not day_blocks:
         return []
     ek = str(eq_line or "").strip()
@@ -1515,8 +1515,8 @@ def _apply_equipment_schedule_machine_calendar_fill(
     calendar_blocks_by_date: dict[date, dict[str, list[tuple[datetime, datetime]]]],
 ) -> None:
     """
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ: 讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛峨→驥阪↑繧玖ｨｭ蛯吶そ繝ｫ�ｼ磯ｲ蠎ｦ蛻嶺ｻ･螟厄ｼ峨ｒ邏ｫ濶ｲ縺ｧ蝪励ｋ縲�
-    10 蛻�譫�縺ｮ蜊企幕蛹ｺ髢� [slot_start, slot_end) 縺ｨ蜊�譛� [bs, be) 縺碁㍾縺ｪ繧後�ｰ蟇ｾ雎｡縲�
+    結果_設備毎の時間割: 機械カレンダー占有と重なる設備セル（進度列以外）を紫色で塗る。
+    10 分枠の半開区間 [slot_start, slot_end) と占有 [bs, be) が重なれば対象。
     """
     if not calendar_blocks_by_date or not equipment_list:
         return
@@ -1527,7 +1527,7 @@ def _apply_equipment_schedule_machine_calendar_fill(
     )
     col_tb = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "譌･譎ょｸｯ":
+        if c.value is not None and str(c.value).strip() == "日時帯":
             col_tb = i
             break
     if col_tb is None:
@@ -1568,8 +1568,8 @@ def _apply_equipment_schedule_machine_calendar_fill(
 
 def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
     """
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ_讖滓｢ｰ蜷肴ｯ弱�ｮ讖滓｢ｰ蜷榊�励〒縲∽ｾ晞�ｼNO縺悟�･縺｣縺ｦ縺�繧九そ繝ｫ縺ｫ阮�邱代ｒ莉倅ｸ弱☆繧九�
-    縲鯉ｼ井ｼ第�ｩ�ｼ峨阪�ｮ縺ｿ縺ｮ繧ｻ繝ｫ縺ｯ蟇ｾ雎｡螟悶りｦ句�ｺ縺苓｡後�ｻ譌･譎ょｸｯ蛻励�ｯ螟画峩縺励↑縺�縲�
+    結果_設備毎の時間割_機械名毎の機械名列で、依頼NOが入っているセルに薄緑を付与する。
+    「（休憩）」のみのセルは対象外。見出し行・日時帯列は変更しない。
     """
     fill = PatternFill(
         fill_type="solid",
@@ -1578,7 +1578,7 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
     )
     col_tb = None
     for i, c in enumerate(ws[1], start=1):
-        if c.value is not None and str(c.value).strip() == "譌･譎ょｸｯ":
+        if c.value is not None and str(c.value).strip() == "日時帯":
             col_tb = i
             break
     if col_tb is None:
@@ -1592,21 +1592,21 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
             if val is None or (isinstance(val, float) and pd.isna(val)):
                 continue
             s = str(val).strip().replace("\r", "").replace("\n", "")
-            if not s or s == "�ｼ井ｼ第�ｩ�ｼ�":
+            if not s or s == "（休憩）":
                 continue
             cell.fill = fill
 
 
 def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
     """
-    邨先棡_險ｭ蛯吶ぎ繝ｳ繝医�ｮ蝗ｺ螳壼�暦ｼ�B縲廢縲、 縺ｯ譌･莉倡ｸｦ邨仙粋�ｼ臥畑縲Ｆquipment_list 蜀�縺ｮ讖滓｢ｰ蜷搾ｼ�+ 辟｡縺玲凾縺ｯ陦悟�ｨ菴薙ｒ讖滓｢ｰ蜷搾ｼ峨�ｮ蜃ｺ迴ｾ鬆�縺ｧ
-    豺｡濶ｲ繧貞牡繧雁ｽ薙※縲∝酔荳讖滓｢ｰ蜷阪�ｯ蟶ｸ縺ｫ蜷後§ PatternFill 繧貞�ｱ譛峨☆繧九�
+    結果_設備ガントの固定列（B〜E、A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出現順で
+    淡色を割り当て、同一機械名は常に同じ PatternFill を共有する。
     """
     order: list[str] = []
     seen: set[str] = set()
     for eq in equipment_list or []:
         _, mn = _split_equipment_line_process_machine(eq)
-        key = (mn or "").strip() or "窶�"
+        key = (mn or "").strip() or "—"
         if key not in seen:
             seen.add(key)
             order.append(key)
@@ -1634,17 +1634,17 @@ def _write_results_equipment_gantt_sheet(
     regular_shift_times: tuple[time | None, time | None] | None = None,
 ):
     """
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｨ蜷御ｸ繝�繝ｼ繧ｿ貅撰ｼ�timeline_events�ｼ峨↓蝓ｺ縺･縺阪�
-    險ｭ蛯凖玲ｨｪ霆ｸ譎る俣縺ｮ繧ｬ繝ｳ繝√Ε繝ｼ繝磯｢ｨ繧ｷ繝ｼ繝医ｒ霑ｽ蜉�縺吶ｋ縲�
-    讓ｪ霆ｸ縺ｯ15蛻�蛻ｻ縺ｿ縲る｣邯壹☆繧句酔荳繧ｿ繧ｹ繧ｯ�ｼ丈ｼ第�ｩ�ｼ冗ｩｺ縺阪�ｯ繧ｻ繝ｫ邨仙粋縺励※蟶ｯ迥ｶ縺ｫ陦ｨ遉ｺ縺吶ｋ縲�
-    actual_timeline_events 縺後≠繧後�ｰ險ｭ蛯吶＃縺ｨ縺ｫ縲悟ｮ溽ｸｾ縲崎｡後ｒ險育判陦後�ｮ荳九∈霑ｽ蜉�縺吶ｋ縲�
+    結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
+    設備×横軸時間のガンチャート風シートを追加する。
+    横軸は15分刻み。連続する同一タスク／休憩／空きはセル結合して帯状に表示する。
+    actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     """
     wb = writer.book
     try:
-        insert_at = wb.sheetnames.index("邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ") + 1
+        insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
     except ValueError:
         insert_at = len(wb.sheetnames)
-    ws = wb.create_sheet("邨先棡_險ｭ蛯吶ぎ繝ｳ繝�", insert_at)
+    ws = wb.create_sheet("結果_設備ガント", insert_at)
     try:
         ws.sheet_properties.tabColor = "7F7F7F"
     except Exception:
@@ -1697,7 +1697,7 @@ def _write_results_equipment_gantt_sheet(
     )
     rs, re_ = (regular_shift_times or (None, None))
 
-    # 讓ｪ霆ｸ(10蛻�蛻ｻ縺ｿ)縺ｯ譌･莉倥〒蜈ｱ騾壹�ｮ縺溘ａ縲《lot_times 繧貞�医↓遒ｺ螳�
+    # 横軸(10分刻み)は日付で共通のため、slot_times を先に確定
     base_dt = base_now_dt if isinstance(base_now_dt, datetime) else datetime.now()
     dummy_d = sorted_dates[0] if sorted_dates else base_dt.date()
     d_start0 = datetime.combine(dummy_d, DEFAULT_START_TIME)
@@ -1709,13 +1709,13 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=譌･莉假ｼ域律繝悶Ο繝�繧ｯ蜀�縺ｧ邵ｦ邨仙粋�ｼ�/ B縲廢=讖滓｢ｰ蜷阪�ｻ蟾･遞句錐繝ｻ諡�蠖楢�繝ｻ繧ｿ繧ｹ繧ｯ讎りｦ�
+    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概要
     last_col = n_fixed + n_slots
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
 
-    # 繧ｿ繧､繝医Ν�ｼ�譌･譎ゑｼ医�壹�ｼ繧ｸ荳企Κ�ｼ�
+    # タイトル＆日時（ページ上部）
     create_ts = base_dt.strftime("%Y/%m/%d %H:%M:%S")
     master_path = os.path.join(os.getcwd(), MASTER_FILE) if MASTER_FILE else ""
 
@@ -1725,16 +1725,16 @@ def _write_results_equipment_gantt_sheet(
                 return datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y/%m/%d %H:%M:%S")
         except Exception:
             pass
-        return "窶�"
+        return "—"
 
     master_mtime = _fmt_mtime(master_path)
 
     row = 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-    tcell = ws.cell(row=row, column=1, value="貉門漉蟾･蝣ｴ 蜉�蟾･險育判")
+    tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
     tcell.font = title_font
     tcell.fill = title_fill
-    # 邨仙粋繧ｻ繝ｫ縺ｧ繧ょｷｦ遶ｯ縺九ｉ陦ｨ遉ｺ�ｼ育ｸｮ蟆上�ｻ謚倥ｊ霑斐＠縺ｪ縺暦ｼ�
+    # 結合セルでも左端から表示（縮小・折り返しなし）
     tcell.alignment = Alignment(
         horizontal="left",
         vertical="center",
@@ -1748,9 +1748,9 @@ def _write_results_equipment_gantt_sheet(
 
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
     meta_line = (
-        f"菴懈�舌{create_ts}"
-        f"縲繝ｻ縲繝�繝ｼ繧ｿ蜷ｸ蜃ｺ縺励{data_extract_dt_str or '窶�'}"
-        f"縲繝ｻ縲繝槭せ繧ｿ�ｼ�master.xlsm�ｼ峨{master_mtime}"
+        f"作成　{create_ts}"
+        f"　・　データ吸出し　{data_extract_dt_str or '—'}"
+        f"　・　マスタ（master.xlsm）　{master_mtime}"
     )
     mtop = ws.cell(row=row, column=1, value=meta_line)
     mtop.font = meta_font
@@ -1778,7 +1778,7 @@ def _write_results_equipment_gantt_sheet(
         dates_to_show.append(d0)
 
     hdr_row = row
-    fixed_hdr = ["譌･莉�", "讖滓｢ｰ蜷�", "蟾･遞句錐", "諡�蠖楢�", "繧ｿ繧ｹ繧ｯ讎りｦ�"]
+    fixed_hdr = ["日付", "機械名", "工程名", "担当者", "タスク概要"]
     for ci, h in enumerate(fixed_hdr, 1):
         c = ws.cell(row=hdr_row, column=ci, value=h)
         c.font = hdr_font
@@ -1796,7 +1796,7 @@ def _write_results_equipment_gantt_sheet(
         c.fill = hdr_use
         c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
     ws.row_dimensions[hdr_row].height = 44
-    # 蜈磯�ｭ繝�繝ｼ繧ｿ陦後�ｮ蟾ｦ荳奇ｼ晄凾蛻ｻ蛻怜�磯�ｭ�ｼ�F4�ｼ峨〒遯捺棧蝗ｺ螳夲ｼ郁｡�1縲�3繝ｻ蛻輸縲廢繧貞崋螳夲ｼ�
+    # 先頭データ行の左上＝時刻列先頭（F4）で窓枠固定（行1〜3・列A〜Eを固定）
     ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
     row = hdr_row + 1
 
@@ -1812,7 +1812,7 @@ def _write_results_equipment_gantt_sheet(
         day_start = row
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
-            mk_key = (mach_nm or "").strip() or "窶�"
+            mk_key = (mach_nm or "").strip() or "—"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
             evlist = by_dm[d].get(eq, [])
             if evlist:
@@ -1823,14 +1823,14 @@ def _write_results_equipment_gantt_sheet(
                     if tid and tid not in seen_tid:
                         seen_tid.add(tid)
                         tids.append(tid)
-                task_sum = " ".join(tids) if tids else "窶�"
+                task_sum = " ".join(tids) if tids else "—"
                 member_disp = _gantt_row_member_names(evlist)
             else:
-                task_sum = "窶�"
-                member_disp = "窶�"
+                task_sum = "—"
+                member_disp = "—"
 
-            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "窶�")
-            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "窶�")
+            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
+            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
             c3 = ws.cell(row=row, column=4, value=member_disp)
             c4 = ws.cell(row=row, column=5, value=task_sum)
             for c in (c1, c2, c3, c4):
@@ -1869,22 +1869,22 @@ def _write_results_equipment_gantt_sheet(
                         if tid and tid not in seen_aid:
                             seen_aid.add(tid)
                             tids_a.append(tid)
-                    task_sum_a = " ".join(tids_a) if tids_a else "窶�"
+                    task_sum_a = " ".join(tids_a) if tids_a else "—"
                     member_disp_a = _gantt_row_member_names(evlist_a)
                 else:
-                    task_sum_a = "窶�"
-                    member_disp_a = "窶�"
+                    task_sum_a = "—"
+                    member_disp_a = "—"
 
                 lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
                 if mach_nm:
-                    act_mach = f"{mach_nm}�ｼ亥ｮ溽ｸｾ�ｼ�"
+                    act_mach = f"{mach_nm}（実績）"
                 elif proc_nm:
-                    act_mach = "�ｼ亥ｮ溽ｸｾ�ｼ�"
+                    act_mach = "（実績）"
                 else:
-                    act_mach = "窶�"
+                    act_mach = "—"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
-                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "窶�")
+                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
                 ca3 = ws.cell(row=row, column=4, value=member_disp_a)
                 ca4 = ws.cell(row=row, column=5, value=task_sum_a)
                 for c in (ca1, ca2, ca3, ca4):
@@ -1921,7 +1921,7 @@ def _write_results_equipment_gantt_sheet(
             ban = ws.cell(
                 row=day_start,
                 column=1,
-                value=f"縲須d.strftime('%Y/%m/%d')}縲�",
+                value=f"【{d.strftime('%Y/%m/%d')}】",
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
@@ -1942,21 +1942,21 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 5
             row += 1
 
-    # 蜃｡萓九�ｯ鬮倥＆遒ｺ菫昴�ｮ縺溘ａ逵∫払�ｼ医Δ繝弱け繝ｭ蜊ｰ蛻ｷ縺ｯ濶ｲ縺ｮ豼�豺｡/繧ｻ繝ｫ縺ｮ譫�縺ｧ隴伜挨�ｼ�
-    # 蛻怜ｹ�繝ｻ謚倥ｊ霑斐＠縺ｯ VBA 蜿悶ｊ霎ｼ縺ｿ譎ゑｼ育ｵ先棡_險ｭ蛯吶ぎ繝ｳ繝�_蛻怜ｹ�繧定ｨｭ螳夲ｼ峨〒險ｭ螳�
+    # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
+    # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
 
     try:
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToHeight = False
         ws.page_setup.fitToWidth = 1
-        # A3�ｼ�openpyxl 荳翫〒 paperSize=8 縺� A3 逶ｸ蠖難ｼ�
+        # A3（openpyxl 上で paperSize=8 が A3 相当）
         ws.page_setup.paperSize = 8
-        # 菴咏區繧堤強繧√※讓ｪ1繝壹�ｼ繧ｸ縺ｫ蜿弱∪繧翫ｄ縺吶￥縺吶ｋ�ｼ亥腰菴�: 繧､繝ｳ繝��ｼ�
+        # 余白を狭めて横1ページに収まりやすくする（単位: インチ）
         ws.page_margins.left = 0.2
         ws.page_margins.right = 0.2
         ws.page_margins.top = 0.2
         ws.page_margins.bottom = 0.2
-        # 繧ｿ繧､繝医Ν繝ｻ陦ｨ繧偵�壹�ｼ繧ｸ蟾ｦ蝓ｺ貅悶↓�ｼ医Ξ繝昴�ｼ繝磯｢ｨ�ｼ�
+        # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
@@ -1965,21 +1965,21 @@ def _write_results_equipment_gantt_sheet(
 
 
 def row_has_completion_keyword(row):
-    """蜉�蟾･螳御ｺ�蛹ｺ蛻�縺ｫ縲悟ｮ御ｺ�縲阪�ｮ譁�蟄励′蜷ｫ縺ｾ繧後ｋ蝣ｴ蜷医�ｯ繧ｿ繧ｹ繧ｯ螳御ｺ�縺ｨ縺ｿ縺ｪ縺吶�"""
+    """加工完了区分に「完了」の文字が含まれる場合はタスク完了とみなす。"""
     v = row.get(TASK_COL_COMPLETION_FLAG)
     if v is None or pd.isna(v):
         return False
-    return "螳御ｺ�" in str(v)
+    return "完了" in str(v)
 
 
 def _plan_row_exclude_from_assignment(row) -> bool:
     """
-    縲碁�榊床荳崎ｦ√榊�励′繧ｪ繝ｳ縺ｪ繧峨√◎縺ｮ陦後�ｯ驟榊床繧ｭ繝･繝ｼ縺ｸ蜈･繧後★縲∫音蛻･謖�螳喟蛯呵�縺ｮ AI 隗｣譫占｡後°繧峨ｂ髯､縺上�
+    「配台不要」列がオンなら、その行は配台キューへ入れず、特別指定_備考の AI 解析行からも除く。
 
-    驟榊床縺九ｉ螟悶☆�ｼ育悄�ｼ�: 隲也炊蛟､ True縲∵焚蛟､ 1縲∵枚蟄怜�暦ｼ�NFKC 蠕後�ｻ蟆乗枚蟄暦ｼ�
-      true / 1 / yes / on / y / t / 縺ｯ縺� / 笳� / 縲� / 笳�
-    驟榊床蟇ｾ雎｡�ｼ亥⊃�ｼ�: 遨ｺ縲¨one縲：alse縲�0縲］o / off / false / 縺�縺�縺� / 蜷ｦ 遲�
-    荳願ｨ倅ｻ･螟悶�ｮ譁�蟄怜�励�ｯ蛛ｽ�ｼ磯�榊床縺吶ｋ�ｼ峨ゅメ繧ｧ繝�繧ｯ繝懊ャ繧ｯ繧ｹ騾｣蜍輔そ繝ｫ縺ｯ騾壼ｸｸ TRUE/FALSE 縺ｾ縺溘�ｯ 1/0縲�
+    配台から外す（真）: 論理値 True、数値 1、文字列（NFKC 後・小文字）
+      true / 1 / yes / on / y / t / はい / ○ / 〇 / ●
+    配台対象（偽）: 空、None、False、0、no / off / false / いいえ / 否 等
+    上記以外の文字列は偽（配台する）。チェックボックス連動セルは通常 TRUE/FALSE または 1/0。
     """
     v = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
     if v is True:
@@ -1998,17 +1998,17 @@ def _plan_row_exclude_from_assignment(row) -> bool:
         except (TypeError, ValueError):
             pass
     s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-    if not s or s in ("nan", "none", "false", "0", "no", "off", "縺�縺�縺�", "蜷ｦ"):
+    if not s or s in ("nan", "none", "false", "0", "no", "off", "いいえ", "否"):
         return False
-    if s in ("true", "1", "yes", "on", "縺ｯ縺�", "y", "t", "笳�", "縲�", "笳�"):
+    if s in ("true", "1", "yes", "on", "はい", "y", "t", "○", "〇", "●"):
         return True
     return False
 
 
 def _coerce_plan_exclude_column_value_for_storage(v):
     """
-    縲碁�榊床荳崎ｦ√榊�励∈譖ｸ縺崎ｾｼ繧蛟､繧偵ヾtringDtype 蛻励〒繧ゆｻ｣蜈･繧ｨ繝ｩ繝ｼ縺ｫ縺ｪ繧峨↑縺�蠖｢縺ｫ縺昴ｍ縺医ｋ縲�
-    Excel 蜿悶ｊ霎ｼ縺ｿ縺ｮ True / 1 / False / 0 縺ｨ譁�蟄怜�励ｒ菫晄戟縺励＼plan_row_exclude_from_assignment 縺ｨ謨ｴ蜷医☆繧九�
+    「配台不要」列へ書き込む値を、StringDtype 列でも代入エラーにならない形にそろえる。
+    Excel 取り込みの True / 1 / False / 0 と文字列を保持し、_plan_row_exclude_from_assignment と整合する。
     """
     if v is None:
         return ""
@@ -2041,13 +2041,13 @@ def parse_float_safe(val, default=0.0):
 
 def calc_done_qty_equivalent_from_row(row):
     """
-    蜉�蟾･貂域焚驥擾ｼ亥ｷ･遞区兜蜈･驥乗鋤邂暦ｼ峨ｒ霑斐☆縲�
+    加工済数量（工程投入量換算）を返す。
 
-    蝓ｺ譛ｬ蠑�:
-      螳溷�ｺ譚･鬮� ﾃｷ (蜿玲ｳｨ謨ｰ ﾃｷ 謠帷ｮ玲焚驥�)
-    = 螳溷�ｺ譚･鬮� * 謠帷ｮ玲焚驥� / 蜿玲ｳｨ謨ｰ
+    基本式:
+      実出来高 ÷ (受注数 ÷ 換算数量)
+    = 実出来高 * 換算数量 / 受注数
 
-    蜿玲ｳｨ謨ｰ縺檎┌縺�/荳肴ｭ｣縺ｪ蝣ｴ蜷医�ｯ縲∵立蛻励悟ｮ溷刈蟾･謨ｰ縲阪ｒ莠呈鋤繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺ｨ縺励※菴ｿ縺�縲�
+    受注数が無い/不正な場合は、旧列「実加工数」を互換フォールバックとして使う。
     """
     qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     order_qty = parse_float_safe(row.get(TASK_COL_ORDER_QTY), 0.0)
@@ -2090,8 +2090,8 @@ def parse_optional_date(val):
 
 def _planning_df_cell_scalar(row, col_name):
     """
-    iterrows() 1陦悟��縺九ｉ蛻怜､繧貞叙繧九ょ酔荳隕句�ｺ縺励�ｮ驥崎､�蛻励′縺ゅｋ縺ｨ row.get 縺ｯ Series 縺ｫ縺ｪ繧翫�
-    str竊稚o_datetime 縺ｧ隱､縺｣縺滓律莉倥↓縺ｪ繧九％縺ｨ縺後≠繧九◆繧√∝�磯�ｭ縺ｮ髱樊ｬ�謳阪せ繧ｫ繝ｩ繝ｼ繧定ｿ斐☆縲�
+    iterrows() 1行分から列値を取る。同一見出しの重複列があると row.get は Series になり、
+    str→to_datetime で誤った日付になることがあるため、先頭の非欠損スカラーを返す。
     """
     v = row.get(col_name) if hasattr(row, "get") else None
     if isinstance(v, pd.Series):
@@ -2109,26 +2109,26 @@ def load_ai_cache():
             with open(ai_cache_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    # 譛滄剞蛻�繧後お繝ｳ繝医Μ繧帝勁蜴ｻ�ｼ�6譎る俣�ｼ�
+                    # 期限切れエントリを除去（6時間）
                     now_ts = time_module.time()
                     cleaned = {}
                     expired_count = 0
                     for k, v in data.items():
-                        # 譁ｰ蠖｢蠑�: {"ts": epoch_seconds, "data": {...}}
+                        # 新形式: {"ts": epoch_seconds, "data": {...}}
                         if isinstance(v, dict) and "ts" in v and "data" in v:
                             ts = parse_float_safe(v.get("ts"), 0.0)
                             if ts > 0 and (now_ts - ts) <= AI_CACHE_TTL_SECONDS:
                                 cleaned[k] = v
                             else:
                                 expired_count += 1
-                        # 譌ｧ蠖｢蠑�: 蛟､縺檎峩謗･AI邨先棡dict�ｼ井ｺ呈鋤縺ｧ隱ｭ縺ｿ蜿悶ｊ縲∝叉譎ゅ↓譁ｰ蠖｢蠑上∈蜀堺ｿ晏ｭ倥＆繧後ｋ�ｼ�
+                        # 旧形式: 値が直接AI結果dict（互換で読み取り、即時に新形式へ再保存される）
                         else:
                             cleaned[k] = {"ts": now_ts, "data": v}
                     if expired_count > 0:
-                        logging.info(f"AI繧ｭ繝｣繝�繧ｷ繝･譛滄剞蛻�繧後ｒ蜑企勁: {expired_count}莉ｶ")
+                        logging.info(f"AIキャッシュ期限切れを削除: {expired_count}件")
                     return cleaned
     except Exception as e:
-        logging.warning(f"AI繧ｭ繝｣繝�繧ｷ繝･隱ｭ縺ｿ霎ｼ縺ｿ螟ｱ謨�: {e}")
+        logging.warning(f"AIキャッシュ読み込み失敗: {e}")
     return {}
 
 def save_ai_cache(cache_obj):
@@ -2136,12 +2136,12 @@ def save_ai_cache(cache_obj):
         with open(ai_cache_path, "w", encoding="utf-8") as f:
             json.dump(cache_obj, f, ensure_ascii=False)
     except Exception as e:
-        logging.warning(f"AI繧ｭ繝｣繝�繧ｷ繝･菫晏ｭ伜､ｱ謨�: {e}")
+        logging.warning(f"AIキャッシュ保存失敗: {e}")
 
 def get_cached_ai_result(cache_obj, cache_key, content_key=None):
     """
-    content_key: 繧ｪ繝励す繝ｧ繝ｳ縲ゆｿ晏ｭ俶凾縺ｨ蜷御ｸ縺ｮ譁�蟄怜�励〒縺ｪ縺�繝偵ャ繝医�ｯ辟｡蜉ｹ蛹悶☆繧具ｼ育音蛻･謖�螳壹�ｻ辣ｧ蜷育畑縺ｮ莠梧ｬ｡繝√ぉ繝�繧ｯ�ｼ峨�
-    譌ｧ繧ｨ繝ｳ繝医Μ縺ｫ content_key 縺檎┌縺�蝣ｴ蜷医�ｯ SHA256 繧ｭ繝ｼ荳閾ｴ縺ｮ縺ｿ縺ｧ蠕捺擂縺ｩ縺翫ｊ繝偵ャ繝医→縺ｿ縺ｪ縺吶�
+    content_key: オプション。保存時と同一の文字列でないヒットは無効化する（特別指定・照合用の二次チェック）。
+    旧エントリに content_key が無い場合は SHA256 キー一致のみで従来どおりヒットとみなす。
     """
     entry = cache_obj.get(cache_key)
     if not isinstance(entry, dict):
@@ -2155,7 +2155,7 @@ def get_cached_ai_result(cache_obj, cache_key, content_key=None):
         stored_ck = entry.get("content_key")
         if stored_ck is not None and stored_ck != content_key:
             logging.info(
-                "AI繧ｭ繝｣繝�繧ｷ繝･: 繧ｭ繝ｼ縺ｯ荳閾ｴ縺励∪縺吶′ content_key 縺檎樟陦悟�･蜉帙→逡ｰ縺ｪ繧九◆繧∫┌蜉ｹ蛹悶＠縺ｾ縺吶�"
+                "AIキャッシュ: キーは一致しますが content_key が現行入力と異なるため無効化します。"
             )
             return None
     data = entry.get("data")
@@ -2170,14 +2170,14 @@ def put_cached_ai_result(cache_obj, cache_key, parsed_obj, content_key=None):
     cache_obj[cache_key] = payload
 
 def extract_retry_seconds(err_text):
-    # 萓�: "Please retry in 57.089735313s."
+    # 例: "Please retry in 57.089735313s."
     m = re.search(r"retry in ([0-9]+(?:\.[0-9]+)?)s", err_text, re.IGNORECASE)
     if m:
         try:
             return float(m.group(1))
         except ValueError:
             pass
-    # 萓�: "'retryDelay': '57s'"
+    # 例: "'retryDelay': '57s'"
     m = re.search(r"retryDelay'\s*:\s*'([0-9]+)s'", err_text)
     if m:
         try:
@@ -2189,14 +2189,14 @@ def extract_retry_seconds(err_text):
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
-    陬ｽ蜩∝錐譁�蟄怜�励°繧牙刈蟾･蜊倅ｽ�(m)繧呈耳螳壹☆繧区圻螳壹Ν繝ｼ繝ｫ縲�
-    萓�: 15020-JX5R- 770X300F-A   R -> 300
-    窶ｻ 繝舌Μ繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ縺悟､壹＞蜑肴署縺ｮ縺溘ａ縲√％縺薙ｒ驛ｽ蠎ｦ隱ｿ謨ｴ縺ｧ縺阪ｋ繧医≧髢｢謨ｰ蛹悶＠縺ｦ縺�繧九�
+    製品名文字列から加工単位(m)を推定する暫定ルール。
+    例: 15020-JX5R- 770X300F-A   R -> 300
+    ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
     s = str(product_name)
-    # "770X300..." 縺ｮ繧医≧縺ｪ繝代ち繝ｼ繝ｳ縺九ｉ X 縺ｮ蠕後�ｮ謨ｰ蛟､繧呈鏡縺��ｼ域怙蠕後↓隕九▽縺九▲縺盜繧貞━蜈茨ｼ�
+    # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
     matches = re.findall(r"[xX]\s*(\d{2,6})", s)
     if matches:
         try:
@@ -2209,29 +2209,29 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
 
 def load_tasks_df():
     """
-    繧ｿ繧ｹ繧ｯ蜈･蜉帙ｒ蜿門ｾ励☆繧具ｼ�tasks.xlsx 縺ｯ菴ｿ逕ｨ縺励↑縺��ｼ峨�
-    蠢�鬆�: 迺ｰ蠅�螟画焚 TASK_INPUT_WORKBOOK 縺ｫ繝槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縺ｮ繝輔Ν繝代せ�ｼ�VBA 縺瑚ｨｭ螳夲ｼ�
-         繧ｷ繝ｼ繝医悟刈蟾･險育判DATA縲阪ｒ隱ｭ縺ｿ霎ｼ繧�ｼ域兜蜈･逶ｮ螳峨�ｯ縲悟屓遲皮ｴ肴悄縲阪∵悴蜈･蜉帶凾縺ｯ縲梧欠螳夂ｴ肴悄縲搾ｼ峨�
+    タスク入力を取得する（tasks.xlsx は使用しない）。
+    必須: 環境変数 TASK_INPUT_WORKBOOK にマクロ実行ブックのフルパス（VBA が設定）
+         シート「加工計画DATA」を読み込む（投入目安は「回答納期」、未入力時は「指定納期」）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK 縺梧悴險ｭ螳壹〒縺吶７BA 縺ｮ RunPython 縺ｧ繝槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縺ｮ繝代せ繧呈ｸ｡縺励※縺上□縺輔＞縲�"
+            "TASK_INPUT_WORKBOOK が未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK 縺悟ｭ伜惠縺励∪縺帙ｓ: {TASKS_INPUT_WORKBOOK}")
+        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
     df.columns = df.columns.str.strip()
-    logging.info(f"繧ｿ繧ｹ繧ｯ蜈･蜉�: '{TASKS_INPUT_WORKBOOK}' 縺ｮ '{TASKS_SHEET_NAME}' 繧定ｪｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�")
+    logging.info(f"タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{TASKS_SHEET_NAME}' を読み込みました。")
     return df
 
 
 def _nfkc_column_aliases(canonical_name):
-    """隕句�ｺ縺励�ｮ陦ｨ險倥ｆ繧鯉ｼ亥�ｨ隗定ｨ伜捷繝ｻ莠呈鋤譁�蟄暦ｼ峨ｒ蜷ｸ蜿弱☆繧九◆繧√�ｮ豈碑ｼ�繧ｭ繝ｼ縲�"""
+    """見出しの表記ゆれ（全角記号・互換文字）を吸収するための比較キー。"""
     return unicodedata.normalize("NFKC", str(canonical_name).strip())
 
 
 def _align_dataframe_headers_to_canonical(df, canonical_names):
-    """蛻怜錐繧� NFKC 荳閾ｴ縺ｧ canonical 縺ｫ蟇�縺帙ｋ�ｼ�Excel 蛛ｴ縺悟�ｨ隗� '_' 遲峨〒繧りｪｭ繧√ｋ繧医≧縺ｫ�ｼ峨�"""
+    """列名を NFKC 一致で canonical に寄せる（Excel 側が全角 '_' 等でも読めるように）。"""
     key_to_canonical = {_nfkc_column_aliases(c): c for c in canonical_names}
     rename_map = {}
     for col in df.columns:
@@ -2247,8 +2247,8 @@ def _align_dataframe_headers_to_canonical(df, canonical_names):
 
 def _normalize_equipment_match_key(val):
     """
-    蟾･遞句錐�ｼ郁ｨｭ蛯吝錐�ｼ峨�ｮ辣ｧ蜷育畑繧ｭ繝ｼ縲�
-    NFKC繝ｻ蜑榊ｾ檎ｩｺ逋ｽ繝ｻ騾｣邯夂ｩｺ逋ｽ繝ｻNBSP/蜈ｨ隗偵せ繝壹�ｼ繧ｹ繝ｻ繧ｼ繝ｭ蟷�譁�蟄励ｒ豁｣隕丞喧縺吶ｋ縲�
+    工程名（設備名）の照合用キー。
+    NFKC・前後空白・連続空白・NBSP/全角スペース・ゼロ幅文字を正規化する。
     """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
@@ -2260,7 +2260,7 @@ def _normalize_equipment_match_key(val):
 
 
 def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
-    """險ｭ蛯吝�励く繝ｼ�ｼ亥ｷ･遞�+讖滓｢ｰ 遲会ｼ峨°繧峨∫黄逅�讖滓｢ｰ縺ｮ蜊�譛峨↓逕ｨ縺�繧九く繝ｼ�ｼ域ｩ滓｢ｰ蜷榊�ｴ繝ｻ豁｣隕丞喧�ｼ峨ｒ蠕励ｋ縲�"""
+    """設備列キー（工程+機械 等）から、物理機械の占有に用いるキー（機械名側・正規化）を得る。"""
     s = str(eq_line or "").strip()
     if not s:
         return ""
@@ -2272,13 +2272,13 @@ def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
 
 def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     """
-    險ｭ蛯吶�ｮ螢∵凾險亥頃譛会ｼ�machine_avail_dt繝ｻ髢馴囈繝溘Λ繝ｼ�ｼ峨↓逕ｨ縺�繧九く繝ｼ縲�
-    讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蛻励�ｯ equipment_line_key 縺ｮ縲悟ｷ･遞�+讖滓｢ｰ縲阪→荳閾ｴ縺吶ｋ縺溘ａ縲�
-    豁｣隕丞喧蠕後↓縲�+縲阪ｒ蜷ｫ繧縺ｨ縺阪�ｯ **machine_name 繧医ｊ蜈医↓** 縺昴％縺九ｉ迚ｩ逅�讖滓｢ｰ蜷阪ｒ謗｡逕ｨ縺吶ｋ縲�
-    �ｼ�machine_name 縺ｫ蟾･遞句錐縺ｮ縺ｿ縺ｪ縺ｩ縺悟�･繧翫∝ｺ翫く繝ｼ縲檎�ｱ陞咲捩讖� 貉門漉縲阪→縺壹ｌ縺ｦ蛟呵｣懷､悶＠貍上ｌ縺吶ｋ縺ｮ繧帝亟縺撰ｼ�
-    蜊倅ｸ蜷阪�ｮ縺ｨ縺阪�ｯ蠕捺擂縺ｩ縺翫ｊ machine_name 繧貞━蜈医＠縲∫┌縺代ｌ縺ｰ equipment_line_key / machine 縺九ｉ謗ｨ螳壹☆繧九�
-    machine_name 縺ｫ縲悟ｷ･遞�+讖滓｢ｰ縲阪→蜈･縺｣縺ｦ縺�繧句�ｴ蜷医〒繧ゅ∝頃譛峨�ｯ迚ｩ逅�讖滓｢ｰ蜷搾ｼ�+ 縺ｮ蜿ｳ蛛ｴ�ｼ峨↓蟇�縺帙ｋ縲�
-    蜈ｨ隗偵鯉ｼ九阪�ｮ縺ｿ縺ｮ蛻励�ｯ NFKC 蠕後↓蜊願ｧ偵�+縲阪↓縺ｪ繧九◆繧√∝��蜑ｲ蛻､螳壹�ｯ豁｣隕丞喧蠕後↓陦後≧縲�
+    設備の壁時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
+    機械カレンダー列は equipment_line_key の「工程+機械」と一致するため、
+    正規化後に「+」を含むときは **machine_name より先に** そこから物理機械名を採用する。
+    （machine_name に工程名のみなどが入り、床キー「熱融着機 湖南」とずれて候補外し漏れするのを防ぐ）
+    単一名のときは従来どおり machine_name を優先し、無ければ equipment_line_key / machine から推定する。
+    machine_name に「工程+機械」と入っている場合でも、占有は物理機械名（+ の右側）に寄せる。
+    全角「＋」のみの列は NFKC 後に半角「+」になるため、分割判定は正規化後に行う。
     """
     ek = str(task.get("equipment_line_key") or "").strip()
     nek = _normalize_equipment_match_key(ek)
@@ -2299,9 +2299,9 @@ def _physical_machine_occupancy_key_for_task(task: dict) -> str:
 
 def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
     """
-    machine_avail_dt繝ｻ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蠎翫→謨ｴ蜷医☆繧句頃譛峨く繝ｼ�ｼ亥次蜑�: 迚ｩ逅�讖滓｢ｰ蜷搾ｼ峨�
-    task 縺九ｉ蜿悶ｌ縺ｪ縺�縺ｨ縺阪�ｯ eq_line�ｼ亥ｷ･遞�+讖滓｢ｰ�ｼ峨°繧画ｩ滓｢ｰ蜷榊�ｴ繧呈耳螳壹＠縲∵怙蠕後�ｮ謇区ｮｵ縺ｧ eq_line縲�
-    縲娯ｦ or eq_line縲阪↓繧医ｋ蟾･遞�+讖滓｢ｰ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺ｯ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ迚ｩ逅�繧ｭ繝ｼ縺ｨ荳堺ｸ閾ｴ縺ｫ縺ｪ繧雁ｾ励ｋ縺溘ａ遖∵ｭ｢縲�
+    machine_avail_dt・機械カレンダー床と整合する占有キー（原則: 物理機械名）。
+    task から取れないときは eq_line（工程+機械）から機械名側を推定し、最後の手段で eq_line。
+    「… or eq_line」による工程+機械フォールバックは機械カレンダー物理キーと不一致になり得るため禁止。
     """
     occ = (_physical_machine_occupancy_key_for_task(task) or "").strip()
     if occ:
@@ -2314,13 +2314,13 @@ def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
 
 
 def _equipment_lookup_normalized_to_canonical(equipment_list):
-    """豁｣隕丞喧繧ｭ繝ｼ 竊� master 繧ｹ繧ｭ繝ｫ繧ｷ繝ｼ繝井ｸ翫�ｮ蛻怜錐�ｼ�canonical 陦ｨ險假ｼ峨�"""
+    """正規化キー → master スキルシート上の列名（canonical 表記）。"""
     lookup = {}
     for eq in equipment_list:
         k = _normalize_equipment_match_key(eq)
         if k and k not in lookup:
             lookup[k] = eq
-    # 蟾･遞句錐縺ｮ縺ｿ縺ｮ辣ｧ蜷茨ｼ亥刈蟾･螳溽ｸｾDATA遲会ｼ�: 蜷御ｸ蟾･遞九�ｮ蜈磯�ｭ蛻暦ｼ亥ｷ･遞�+讖滓｢ｰ�ｼ峨∈蟇�縺帙ｋ
+    # 工程名のみの照合（加工実績DATA等）: 同一工程の先頭列（工程+機械）へ寄せる
     for eq in equipment_list:
         s = str(eq).strip()
         if "+" not in s:
@@ -2334,8 +2334,8 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
 
 def _equipment_schedule_header_labels(equipment_list: list) -> list:
     """
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ繝ｻ邨先棡_險ｭ蛯吶ぎ繝ｳ繝医�ｮ陦鯉ｼ丞�苓ｦ句�ｺ縺礼畑縲�
-    蜀�驛ｨ繧ｭ繝ｼ縺後悟ｷ･遞�+讖滓｢ｰ縲阪�ｮ縺ｨ縺阪�ｯ讖滓｢ｰ蜷阪ｒ陦ｨ遉ｺ縺励∵ｩ滓｢ｰ蜷阪�ｮ驥崎､�譎ゅ�ｮ縺ｿ蟾･遞九ｒ諡ｬ蠑ｧ縺ｧ陬懊≧縲�
+    結果_設備毎の時間割・結果_設備ガントの行／列見出し用。
+    内部キーが「工程+機械」のときは機械名を表示し、機械名の重複時のみ工程を括弧で補う。
     """
     raw = []
     for eq in equipment_list:
@@ -2354,7 +2354,7 @@ def _equipment_schedule_header_labels(equipment_list: list) -> list:
             s = str(eq).strip()
             if "+" in s:
                 p = s.split("+", 1)[0].strip()
-                out.append(f"{r}�ｼ�{p}�ｼ�" if p else r)
+                out.append(f"{r}（{p}）" if p else r)
             else:
                 out.append(r)
         else:
@@ -2364,8 +2364,8 @@ def _equipment_schedule_header_labels(equipment_list: list) -> list:
 
 def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
     """
-    險ｭ蛯吶�槭せ繧ｿ縺ｮ蛻励く繝ｼ縲悟ｷ･遞�+讖滓｢ｰ縲阪ｒ (蟾･遞句錐, 讖滓｢ｰ蜷�) 縺ｫ蛻�蜑ｲ縺吶ｋ縲�
-    '+' 縺檎┌縺�縺ｨ縺阪�ｯ讖滓｢ｰ蜷阪�ｮ縺ｿ縺ｨ縺ｿ縺ｪ縺励∝ｷ･遞句錐縺ｯ遨ｺ譁�蟄励�
+    設備マスタの列キー「工程+機械」を (工程名, 機械名) に分割する。
+    '+' が無いときは機械名のみとみなし、工程名は空文字。
     """
     s = str(eq_line).strip()
     if not s:
@@ -2378,8 +2378,8 @@ def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
 
 def _gantt_member_label_surname_only(raw: str) -> str:
     """
-    險ｭ蛯吶ぎ繝ｳ繝医�ｮ諡�蠖楢�繧ｻ繝ｫ逕ｨ縲ょ濠隗抵ｼ丞�ｨ隗堤ｩｺ逋ｽ縺後≠繧後�ｰ謇句燕繧貞ｧ薙→縺ｿ縺ｪ縺励∫┌縺�縺ｨ縺阪�ｯ蜈ｨ菴薙ｒ陦ｨ遉ｺ
-    �ｼ域ｰ丞錐縺�1繝医�ｼ繧ｯ繝ｳ縺ｮ縺ｿ縺ｮ縺ｨ縺阪�ｯ蟋薙�ｮ蛻�繧雁�ｺ縺嶺ｸ榊庄縺ｮ縺溘ａ縺昴�ｮ縺ｾ縺ｾ�ｼ峨�NFKC繝ｻ蟇檎伐/蜀ｨ逕ｰ蟇�縺帙�ｯ蟋鍋畑縺ｨ蜷後§縲�
+    設備ガントの担当者セル用。半角／全角空白があれば手前を姓とみなし、無いときは全体を表示
+    （氏名が1トークンのみのときは姓の切り出し不可のためそのまま）。NFKC・富田/冨田寄せは姓用と同じ。
     """
     sei, mei = _split_person_sei_mei(raw)
     if not sei:
@@ -2389,7 +2389,7 @@ def _gantt_member_label_surname_only(raw: str) -> str:
 
 
 def _gantt_row_member_names(evlist) -> str:
-    """險ｭ蛯吶ぎ繝ｳ繝郁｡檎畑: 荳ｻ諡�蠖�(op)縺ｨ繧ｵ繝�(sub)繧貞�ｺ迴ｾ鬆�縺ｧ驥崎､�髯､蜴ｻ縺励∝ｧ薙�ｮ縺ｿ繧偵き繝ｳ繝�+蜊願ｧ偵せ繝壹�ｼ繧ｹ蛹ｺ蛻�繧翫�"""
+    """設備ガント行用: 主担当(op)とサブ(sub)を出現順で重複除去し、姓のみをカンマ+半角スペース区切り。"""
     raw_names: list[str] = []
     seen_raw: set[str] = set()
     for e in evlist or []:
@@ -2400,7 +2400,7 @@ def _gantt_row_member_names(evlist) -> str:
         sub_raw = str(e.get("sub") or "").strip()
         if not sub_raw:
             continue
-        for seg in re.split(r"[,縲‐", sub_raw):
+        for seg in re.split(r"[,、]", sub_raw):
             t = seg.strip()
             if t and t not in seen_raw:
                 seen_raw.add(t)
@@ -2412,13 +2412,13 @@ def _gantt_row_member_names(evlist) -> str:
         if lab and lab not in seen_label:
             seen_label.add(lab)
             labels.append(lab)
-    return ", ".join(labels) if labels else "窶�"
+    return ", ".join(labels) if labels else "—"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
     """
-    險ｭ蛯呎凾髢灘牡繝ｻ險ｭ蛯吝ｰよ怏遨ｺ縺阪�ｮ蛻励く繝ｼ�ｼ�skills / need 縺ｨ蜷後§縲悟ｷ･遞�+讖滓｢ｰ縲阪ｒ蝓ｺ譛ｬ縺ｨ縺吶ｋ�ｼ峨�
-    讖滓｢ｰ蜷阪′遨ｺ縺ｧ繝槭せ繧ｿ縺ｫ蠖楢ｩｲ蟾･遞九�ｮ蛻励′1縺､縺�縺代↑繧峨◎縺ｮ隍�蜷医く繝ｼ縺ｸ蟇�縺帙ｋ縲�
+    設備時間割・設備専有空きの列キー（skills / need と同じ「工程+機械」を基本とする）。
+    機械名が空でマスタに当該工程の列が1つだけならその複合キーへ寄せる。
     """
     p = str(task.get("machine") or "").strip()
     mn = str(task.get("machine_name") or "").strip()
@@ -2444,8 +2444,8 @@ def _apply_planning_sheet_post_load_mutations(
     df: "pd.DataFrame", wb_path: str, log_prefix: str
 ) -> None:
     """
-    驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙ｒ DataFrame 蛹悶＠縺溽峩蠕後�ｮ蜈ｱ騾壼�ｦ逅�縲�
-    谿ｵ髫�2縺ｮ ``load_planning_tasks_df`` 縺ｨ蜷後§�ｼ郁ｨｭ螳壹す繝ｼ繝医�ｻ蛻�蜑ｲ陦後�ｻ驟榊床荳崎ｦ√Ν繝ｼ繝ｫ�ｼ峨�
+    配台計画_タスク入力を DataFrame 化した直後の共通処理。
+    段階2の ``load_planning_tasks_df`` と同じ（設定シート・分割行・配台不要ルール）。
     """
     try:
         _pairs_lr = []
@@ -2465,12 +2465,12 @@ def _apply_planning_sheet_post_load_mutations(
             _pairs_lr.append((_p, _m))
         run_exclude_rules_sheet_maintenance(wb_path, _pairs_lr, log_prefix)
     except Exception:
-        logging.exception("%s: 險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｮ菫晏ｮ医〒萓句､厄ｼ育ｶ夊｡鯉ｼ�", log_prefix)
+        logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(df, log_prefix=log_prefix)
     except Exception as ex:
         logging.warning(
-            "%s: 蛻�蜑ｲ陦後�ｮ驟榊床荳崎ｦ∬�ｪ蜍戊ｨｭ螳壹〒萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s",
+            "%s: 分割行の配台不要自動設定で例外（続行）: %s",
             log_prefix,
             ex,
         )
@@ -2478,27 +2478,27 @@ def _apply_planning_sheet_post_load_mutations(
         apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)
     except Exception as ex:
         logging.warning(
-            "%s: 險ｭ螳壹す繝ｼ繝医↓繧医ｋ驟榊床荳崎ｦ�驕ｩ逕ｨ縺ｧ萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s",
+            "%s: 設定シートによる配台不要適用で例外（続行）: %s",
             log_prefix,
             ex,
         )
 
 def load_planning_tasks_df():
     """
-    2谿ｵ髫守岼逕ｨ: 繝槭け繝ｭ繝悶ャ繧ｯ荳翫�ｮ縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪す繝ｼ繝医ｒ隱ｭ縺ｿ霎ｼ繧縲�
+    2段階目用: マクロブック上の「配台計画_タスク入力」シートを読み込む。
 
-    縲梧球蠖徹P_謖�螳壹榊�励∪縺溘�ｯ迚ｹ蛻･謖�螳壼ｙ閠�縺ｮ AI 蜃ｺ蜉� preferred_operator 縺ｧ荳ｻ諡�蠖� OP 繧呈欠蜷阪〒縺阪ｋ�ｼ�skills 縺ｮ繝｡繝ｳ繝舌�ｼ蜷阪→縺ゅ＞縺ｾ縺�荳閾ｴ�ｼ峨�
-    繝｡繧､繝ｳ縲悟�榊━蜈育音蛻･險倩ｼ峨阪�ｮ task_preferred_operators 縺ｯ generate_plan 蛛ｴ縺ｧ譛蜆ｪ蜈医�槭�ｼ繧ｸ縺輔ｌ繧九�
-    縲碁�榊床荳崎ｦ√阪′繧ｪ繝ｳ�ｼ�TRUE/1/縺ｯ縺� 遲会ｼ峨�ｮ陦後�ｯ驟榊床蟇ｾ雎｡螟悶�
-    隱ｭ縺ｿ霎ｼ縺ｿ蠕後∝酔荳萓晞�ｼNO繝ｻ驥崎､�讖滓｢ｰ蜷阪′縺ゅｋ繧ｰ繝ｫ繝ｼ繝励�ｮ蟾･遞九悟��蜑ｲ縲崎｡後∈遨ｺ縺ｪ繧峨碁�榊床荳崎ｦ√�=yes�ｼ域ｮｵ髫�1縺ｨ蜷後§�ｼ峨�
-    縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九阪〒蟾･遞�+讖滓｢ｰ縺ｮ邨�繧貞酔譛溘＠縲，/D/E 縺ｫ蝓ｺ縺･縺埼�榊床荳崎ｦ√ｒ蜿肴丐縺吶ｋ�ｼ医す繝ｼ繝井ｽ懈�舌�ｯ VBA�ｼ峨�
+    「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
+    メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
+    「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外。
+    読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
+    「設定_配台不要工程」で工程+機械の組を同期し、C/D/E に基づき配台不要を反映する（シート作成は VBA）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK 縺梧悴險ｭ螳壹〒縺吶７BA 縺ｮ RunPython 縺ｧ繝槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縺ｮ繝代せ繧呈ｸ｡縺励※縺上□縺輔＞縲�"
+            "TASK_INPUT_WORKBOOK が未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK 縺悟ｭ伜惠縺励∪縺帙ｓ: {TASKS_INPUT_WORKBOOK}")
+        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
@@ -2507,58 +2507,58 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
-    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "驟榊床繧ｷ繝ｼ繝郁ｪｭ霎ｼ")
+    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
     logging.info(
-        f"險育判繧ｿ繧ｹ繧ｯ蜈･蜉�: '{TASKS_INPUT_WORKBOOK}' 縺ｮ '{PLAN_INPUT_SHEET_NAME}' 繧定ｪｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�"
+        f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
     return df
 
 
 def _main_sheet_cell_is_global_comment_label(val) -> bool:
-    """繝｡繧､繝ｳ繧ｷ繝ｼ繝井ｸ翫後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医崎ｦ句�ｺ縺励そ繝ｫ縺具ｼ郁｡ｨ險倥ｆ繧瑚ｨｱ螳ｹ�ｼ峨�"""
+    """メインシート上「グローバルコメント」見出しセルか（表記ゆれ許容）。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return False
     s = unicodedata.normalize("NFKC", str(val).strip())
     if not s:
         return False
-    if _nfkc_column_aliases(s) == _nfkc_column_aliases("繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝�"):
+    if _nfkc_column_aliases(s) == _nfkc_column_aliases("グローバルコメント"):
         return True
-    if "繧ｰ繝ｭ繝ｼ繝舌Ν" in s and "繧ｳ繝｡繝ｳ繝�" in s:
+    if "グローバル" in s and "コメント" in s:
         return True
     return False
 
 
 def load_main_sheet_global_priority_override_text() -> str:
     """
-    TASK_INPUT_WORKBOOK 縺ｮ繝｡繧､繝ｳ繧ｷ繝ｼ繝医〒縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医阪→譖ｸ縺九ｌ縺溘そ繝ｫ縺ｮ **逶ｴ荳�** 繧定ｪｭ繧縲�
-    繧ｷ繝ｼ繝亥錐: 縲後Γ繧､繝ｳ縲阪後Γ繧､繝ｳ_縲阪勲ain縲阪�ｮ縺�縺壹ｌ縺九√∪縺溘�ｯ蜷榊燕縺ｫ縲後Γ繧､繝ｳ縲阪ｒ蜷ｫ繧�ｼ�VBA GetMainWorksheet 縺ｨ蜷瑚ｶ｣譌ｨ�ｼ峨�
+    TASK_INPUT_WORKBOOK のメインシートで「グローバルコメント」と書かれたセルの **直下** を読む。
+    シート名: 「メイン」「メイン_」「Main」のいずれか、または名前に「メイン」を含む（VBA GetMainWorksheet と同趣旨）。
 
-    蜀�螳ｹ縺ｯ **Gemini 縺ｧ荳諡ｬ隗｣驥�**�ｼ�`analyze_global_priority_override_comment`�ｼ峨ょｷ･蝣ｴ莨第･ｭ譌･繝ｻ蜀榊━蜈医ヵ繝ｩ繧ｰ繝ｻ譛ｪ螳溯｣�謖�遉ｺ縺ｮ繝｡繝｢繧� JSON 蛹悶☆繧九�
-    API 繧ｭ繝ｼ縺檎┌縺�蝣ｴ蜷医�ｮ縺ｿ縲∝ｷ･蝣ｴ莨第･ｭ譌･縺ｯ繝ｫ繝ｼ繝ｫ繝吶�ｼ繧ｹ縺ｮ `parse_factory_closure_dates_from_global_comment` 縺ｧ陬懷ｮ後☆繧九�
+    内容は **Gemini で一括解釈**（`analyze_global_priority_override_comment`）。工場休業日・再優先フラグ・未実装指示のメモを JSON 化する。
+    API キーが無い場合のみ、工場休業日はルールベースの `parse_factory_closure_dates_from_global_comment` で補完する。
     """
     wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医ｒ隱ｭ縺ｿ縺ｾ縺帙ｓ縲�",
+            "メイン再優先特記: ブックに「%s」があるため openpyxl でグローバルコメントを読みません。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return ""
     try:
         wb = load_workbook(wb_path, data_only=True, read_only=False)
     except Exception as e:
-        logging.warning("繝｡繧､繝ｳ蜀榊━蜈育音險�: 繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ縺ｧ縺励◆: %s", e)
+        logging.warning("メイン再優先特記: ブックを開けませんでした: %s", e)
         return ""
     try:
         ws = None
-        for name in ("繝｡繧､繝ｳ", "繝｡繧､繝ｳ_", "Main"):
+        for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
                 ws = wb[name]
                 break
         if ws is None:
             for sn in wb.sheetnames:
-                if "繝｡繧､繝ｳ" in sn:
+                if "メイン" in sn:
                     ws = wb[sn]
                     break
         if ws is None:
@@ -2583,25 +2583,25 @@ def load_main_sheet_global_priority_override_text() -> str:
 
 def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
     """
-    繝｡繧､繝ｳ縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医阪�ｮ譁ｭ迚�縺後∝ｷ･蝣ｴ蜊倅ｽ阪�ｮ莨第･ｭ繝ｻ髱樒ｨｼ蜒阪ｒ諢丞袖縺吶ｋ縺具ｼ亥倶ｺｺ莨代∩縺�縺代ｒ隱､讀懷�ｺ縺励↑縺��ｼ峨�
+    メイン「グローバルコメント」の断片が、工場単位の休業・非稼働を意味するか（個人休みだけを誤検出しない）。
     """
     c = unicodedata.normalize("NFKC", str(chunk or ""))
     if not c.strip():
         return False
-    if re.search(r"閾ｨ譎�\s*莨第･ｭ", c):
+    if re.search(r"臨時\s*休業", c):
         return True
-    if "莨大�ｴ" in c:
+    if "休場" in c:
         return True
-    if re.search(r"蟾･蝣ｴ", c) and re.search(r"莨掃莨第･ｭ|莨代∩|蛛懈ｭ｢|縺贋ｼ代∩", c):
+    if re.search(r"工場", c) and re.search(r"休|休業|休み|停止|お休み", c):
         return True
-    if re.search(r"(?:蜈ｨ遉ｾ|蜈ｨ鬢ｨ|蜈ｨ蟾･蝣ｴ).{0,15}(?:莨掃莨第･ｭ|蛛懈ｭ｢)", c):
+    if re.search(r"(?:全社|全館|全工場).{0,15}(?:休|休業|停止)", c):
         return True
-    if re.search(r"(?:遞ｼ蜒鋼逕溽肇|繝ｩ繧､繝ｳ).{0,12}(?:蛛懈ｭ｢|縺ｪ縺慾辟｡縺�)", c):
+    if re.search(r"(?:稼働|生産|ライン).{0,12}(?:停止|なし|無し)", c):
         return True
-    if re.search(r"蜉�蟾･.{0,15}(?:縺励↑縺л辟｡縺慾縺ｪ縺慾縺贋ｼ代∩)", c):
+    if re.search(r"加工.{0,15}(?:しない|無し|なし|お休み)", c):
         return True
-    if "莨第･ｭ" in c and re.search(
-        r"(?:蟾･蝣ｴ|蜈ｨ遉ｾ|譛ｬ遉ｾ|蠖捺律|蠑顔､ｾ|蠖鍋､ｾ|蜈ｨ蜩｡|遉ｾ蜈ｨ菴�)", c
+    if "休業" in c and re.search(
+        r"(?:工場|全社|本社|当日|弊社|当社|全員|社全体)", c
     ):
         return True
     return False
@@ -2609,40 +2609,40 @@ def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
 
 def _md_slash_is_likely_fraction_not_date(t: str, start: int, end: int, mo: int, day: int) -> bool:
     """
-    縲悟刈蟾･騾溷ｺｦ縺ｯ1/3縺ｨ縺励∪縺吶阪�ｮ 1/3 繧� 1譛�3譌･ 縺ｨ隱､隱阪＠縺ｪ縺�縲�
-    縲�4/1縺ｯ蟾･蝣ｴ繧剃ｼ代∩縲阪�ｮ 4/1 縺ｯ譌･莉倥�ｮ縺ｾ縺ｾ�ｼ育峩蠕後′縲後�ｯ縲阪↑繧牙��謨ｰ謇ｱ縺�縺ｫ縺励↑縺��ｼ峨�
+    「加工速度は1/3とします」の 1/3 を 1月3日 と誤認しない。
+    「4/1は工場を休み」の 4/1 は日付のまま（直後が「は」なら分数扱いにしない）。
     """
     if mo <= 0 or day <= 0:
         return True
     before = t[max(0, start - 32) : start]
     after = t[end : min(len(t), end + 14)]
     after_st = after.lstrip()
-    if after_st.startswith("縺ｯ"):
+    if after_st.startswith("は"):
         return False
     if re.search(
-        r"(?:蜉�蟾･騾溷ｺｦ|蜉�蟾･\s*繧ｹ繝斐�ｼ繝榎騾溷ｺｦ|蛟咲紫|繧ｹ繝斐�ｼ繝榎蜉ｹ邇�|蜑ｲ蜷�)(?:\s*縺ｯ)?\s*$",
+        r"(?:加工速度|加工\s*スピード|速度|倍率|スピード|効率|割合)(?:\s*は)?\s*$",
         before,
     ):
         return True
-    # 1/2繝ｻ1/3繝ｻ2/3 遲� + 縲後→縺励∪縺吶阪悟阪坂ｦ 縺ｯ蛻�謨ｰ繝ｻ豈皮紫蟇�繧奇ｼ医�3/1縺ｧ縺吶咲ｭ峨�ｮ譌･莉倥ｒ隱､繧ｹ繧ｭ繝�繝励＠縺ｪ縺�繧医≧ 縺ｧ縺�/縺ｧ縺ゅｋ 縺ｯ蜷ｫ繧√↑縺��ｼ�
+    # 1/2・1/3・2/3 等 + 「とします」「倍」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよう です/である は含めない）
     frac_pat = re.compile(
-        r"^(?:縺ｨ縺励∪縺�?|縺ｨ縺吶ｋ|蛟鋼蜑ｲ蜷�|縺ｫ縺吶ｋ|縺ｫ險ｭ螳嘶縺上ｉ縺л遞句ｺｦ|縺ｫ蝗ｺ螳嘶縺ｫ螟画峩)"
+        r"^(?:とします?|とする|倍|割合|にする|に設定|くらい|程度|に固定|に変更)"
     )
     if mo <= 12 and day <= 12 and frac_pat.match(after_st):
         if mo <= 2 or (mo == 3 and day <= 3):
             return True
-    # 縲�1/2縺ｧ縺吶阪�1/10縺ｧ縺吶阪�ｮ繧医≧縺ｪ蛻�豈崎｡ｨ迴ｾ�ｼ亥�磯�ｭ縺� 1/ 縺ｮ縺ｿ�ｼ�
+    # 「1/2です」「1/10です」のような分母表現（先頭が 1/ のみ）
     if (
         mo == 1
         and 2 <= day <= 12
-        and re.match(r"^縺ｧ縺處縺ｧ縺ゅｋ\b", after_st)
+        and re.match(r"^です|である\b", after_st)
     ):
         return True
     return False
 
 
 def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
-    """繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝亥��縺ｮ譌･莉倩｡ｨ險倥ｒ date 縺ｫ螟画鋤�ｼ亥渕貅門ｹｴ縺ｯ險育判縺ｮ蝓ｺ貅門ｹｴ�ｼ峨�"""
+    """グローバルコメント内の日付表記を date に変換（基準年は計画の基準年）。"""
     t = unicodedata.normalize("NFKC", str(s or ""))
     found: list[date] = []
     seen: set[date] = set()
@@ -2657,19 +2657,19 @@ def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
             found.append(dd)
 
     for m in re.finditer(
-        r"(\d{4})\s*蟷ｴ\s*(\d{1,2})\s*譛�\s*(\d{1,2})\s*譌･?",
+        r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?",
         t,
     ):
         add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     for m in re.finditer(
-        r"(\d{4})\s*[/\-\.�ｼ従\s*(\d{1,2})\s*[/\-\.�ｼ従\s*(\d{1,2})",
+        r"(\d{4})\s*[/\-\.／]\s*(\d{1,2})\s*[/\-\.／]\s*(\d{1,2})",
         t,
     ):
         add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    for m in re.finditer(r"(\d{1,2})\s*譛�\s*(\d{1,2})\s*譌･", t):
+    for m in re.finditer(r"(\d{1,2})\s*月\s*(\d{1,2})\s*日", t):
         add(int(default_year), int(m.group(1)), int(m.group(2)))
     for m in re.finditer(
-        r"(?<!\d)(\d{1,2})\s*[/�ｼ従\s*(\d{1,2})(?!\d)",
+        r"(?<!\d)(\d{1,2})\s*[/／]\s*(\d{1,2})(?!\d)",
         t,
     ):
         mo_i, d_i = int(m.group(1)), int(m.group(2))
@@ -2681,8 +2681,8 @@ def _extract_calendar_dates_from_text(s: str, default_year: int) -> list[date]:
 
 def _split_global_comment_into_chunks(blob: str) -> list[str]:
     """
-    繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医ｒ縲檎峡遶九＠縺滓欠遉ｺ縲阪�ｮ蝪翫↓蛻�縺代ｋ縲�
-    謾ｹ陦鯉ｼ�Excel 縺ｮ Alt+Enter繝ｻUnicode 謾ｹ陦悟性繧�ｼ峨〒蠢�縺壼��蜑ｲ縺励∝酔荳陦悟��縺ｯ 縲�;�ｼ� 縺ｧ邯壹￠縺ｦ蛻�蜑ｲ縲�
+    グローバルコメントを「独立した指示」の塊に分ける。
+    改行（Excel の Alt+Enter・Unicode 改行含む）で必ず分割し、同一行内は 。;； で続けて分割。
     """
     t = unicodedata.normalize("NFKC", str(blob or "").strip())
     if not t:
@@ -2692,7 +2692,7 @@ def _split_global_comment_into_chunks(blob: str) -> list[str]:
         return []
     chunks: list[str] = []
     for line in lines:
-        subs = [c.strip() for c in re.split(r"[縲�;�ｼ嫋+", line) if c.strip()]
+        subs = [c.strip() for c in re.split(r"[。;；]+", line) if c.strip()]
         if subs:
             chunks.extend(subs)
         else:
@@ -2704,8 +2704,8 @@ def parse_factory_closure_dates_from_global_comment(
     text: str, default_year: int
 ) -> set[date]:
     """
-    繝｡繧､繝ｳ繧ｷ繝ｼ繝医後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医阪↓縲∝ｷ･蝣ｴ閾ｨ譎ゆｼ第･ｭ縺ｪ縺ｩ縺ｨ譌･莉倥′譖ｸ縺九ｌ縺ｦ縺�繧句�ｴ蜷医↓
-    縺昴�ｮ譌･繧貞ｷ･蝣ｴ莨代∩�ｼ亥�ｨ蜩｡髱樒ｨｼ蜒阪�ｻ驟榊床縺ｧ蜉�蟾･縺励↑縺��ｼ峨→縺励※謇ｱ縺�譌･莉倬寔蜷医ｒ霑斐☆縲�
+    メインシート「グローバルコメント」に、工場臨時休業などと日付が書かれている場合に
+    その日を工場休み（全員非稼働・配台で加工しない）として扱う日付集合を返す。
     """
     blob = unicodedata.normalize("NFKC", str(text or "").strip())
     if not blob:
@@ -2729,15 +2729,15 @@ def parse_factory_closure_dates_from_global_comment(
 def apply_factory_closure_dates_to_attendance(
     attendance_data: dict, members: list, closure_dates: set[date]
 ) -> None:
-    """蟾･蝣ｴ莨第･ｭ譌･: 蜍､諤�荳翫�ｯ蜈ｨ蜩｡ is_working=False 縺ｨ縺励√◎縺ｮ譌･縺ｯ險ｭ蛯吝牡莉倥ｒ陦後ｏ縺ｪ縺�縲�"""
+    """工場休業日: 勤怠上は全員 is_working=False とし、その日は設備割付を行わない。"""
     if not closure_dates or not attendance_data:
         return
-    tag = "蟾･蝣ｴ莨第･ｭ�ｼ医Γ繧､繝ｳ繝ｻ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝茨ｼ�"
+    tag = "工場休業（メイン・グローバルコメント）"
     for d in sorted(closure_dates):
         if d not in attendance_data:
             logging.warning(
-                "繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医�ｮ蟾･蝣ｴ莨第･ｭ譌･ %s 縺ｯ繝槭せ繧ｿ蜍､諤�縺ｫ陦後′縺ゅｊ縺ｾ縺帙ｓ縲�"
-                " 縺昴�ｮ譌･縺ｯ險育判繝ｫ繝ｼ繝励↓蜷ｫ縺ｾ繧後↑縺�蝣ｴ蜷医�驟榊床荳翫�ｮ蜉ｹ譫懊′髯仙ｮ夂噪縺ｧ縺吶�",
+                "グローバルコメントの工場休業日 %s はマスタ勤怠に行がありません。"
+                " その日は計画ループに含まれない場合、配台上の効果が限定的です。",
                 d,
             )
             continue
@@ -2754,20 +2754,20 @@ def apply_factory_closure_dates_to_attendance(
 
 def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
     """
-    縲悟宛髯先彫蟒�縲阪後≠繧峨ｆ繧区擅莉ｶ縲咲ｭ�: 險ｭ蛯吝ｰよ怏繝ｻ譎ょ綾繧ｬ繝ｼ繝峨∪縺ｧ蜷ｫ繧�驟榊床蛻ｶ邏�繧堤ｷｩ繧√ｋ�ｼ�abolish_all_scheduling_limits�ｼ峨�
+    「制限撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで含め配台制約を緩める（abolish_all_scheduling_limits）。
     """
     b = unicodedata.normalize("NFKC", str(blob or ""))
     strong = (
-        "蛻ｶ髯先彫蟒�",
-        "蛻ｶ髯舌ｒ謦､蟒�",
-        "縺吶∋縺ｦ縺ｮ蛻ｶ髯�",
-        "蜈ｨ縺ｦ縺ｮ蛻ｶ髯�",
-        "縺ゅｉ繧�繧句宛髯�",
-        "縺ゅｉ繧�繧区擅莉ｶ",
-        "縺吶∋縺ｦ縺ｮ譚｡莉ｶ",
-        "蜈ｨ縺ｦ縺ｮ譚｡莉ｶ",
-        "謦､蟒�縺励※",
-        "謦､蟒�縺�",
+        "制限撤廃",
+        "制限を撤廃",
+        "すべての制限",
+        "全ての制限",
+        "あらゆる制限",
+        "あらゆる条件",
+        "すべての条件",
+        "全ての条件",
+        "撤廃して",
+        "撤廃し",
     )
     if any(k in b for k in strong):
         out = dict(coerced)
@@ -2775,7 +2775,7 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
         out["ignore_skill_requirements"] = True
         out["ignore_need_minimum"] = True
         logging.warning(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 蛻ｶ髯先彫蟒�繧ｭ繝ｼ繝ｯ繝ｼ繝峨ｒ讀懷�ｺ縲りｨｭ蛯吝ｰよ怏繝ｻ譎ょ綾繧ｬ繝ｼ繝峨ｒ蜷ｫ繧�驟榊床荳翫�ｮ蛻ｶ邏�繧堤ｷｩ繧√∪縺吶�"
+            "メイン再優先特記: 制限撤廃キーワードを検出。設備専有・時刻ガードを含め配台上の制約を緩めます。"
         )
         return out
     return coerced
@@ -2783,8 +2783,8 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
 
 def _maybe_fill_global_speed_rules_from_scheduler_notes(coerced: dict) -> dict:
     """
-    AI 縺� global_speed_rules 繧堤ｩｺ縺ｫ縺励◆縺� scheduler_notes 縺ｫ蜈ｷ菴薙ヱ繧ｿ繝ｼ繝ｳ縺後≠繧句�ｴ蜷医�ｮ陬懷ｮ後�
-    蠎�縺乗耳貂ｬ縺励↑縺��ｼ育�ｱ陞咲捩�ｼ区､懈渊�ｼ�1/3 邉ｻ縺ｮ縺ｿ�ｼ峨�
+    AI が global_speed_rules を空にしたが scheduler_notes に具体パターンがある場合の補完。
+    広く推測しない（熱融着＋検査＋1/3 系のみ）。
     """
     if not isinstance(coerced, dict):
         return coerced
@@ -2792,26 +2792,26 @@ def _maybe_fill_global_speed_rules_from_scheduler_notes(coerced: dict) -> dict:
         return coerced
     sn = str(coerced.get("scheduler_notes_ja") or "")
     t = unicodedata.normalize("NFKC", sn)
-    if "辭ｱ陞咲捩" not in t or "讀懈渊" not in t:
+    if "熱融着" not in t or "検査" not in t:
         return coerced
-    if not re.search(r"(?:1\s*/\s*3|�ｼ曾s*/\s*3|荳牙��縺ｮ荳|3\s*蛻�縺ｮ\s*1)", t):
+    if not re.search(r"(?:1\s*/\s*3|１\s*/\s*3|三分の一|3\s*分の\s*1)", t):
         return coerced
     out = dict(coerced)
     out["global_speed_rules"] = [
         {
-            "process_contains": "辭ｱ陞咲捩",
-            "machine_contains": "讀懈渊",
+            "process_contains": "熱融着",
+            "machine_contains": "検査",
             "speed_multiplier": 1.0 / 3.0,
         }
     ]
     logging.info(
-        "繝｡繧､繝ｳ蜀榊━蜈育音險�: scheduler_notes_ja 縺九ｉ global_speed_rules 繧定｣懷ｮ鯉ｼ育�ｱ陞咲捩繝ｻ讀懈渊繝ｻ1/3�ｼ�"
+        "メイン再優先特記: scheduler_notes_ja から global_speed_rules を補完（熱融着・検査・1/3）"
     )
     return out
 
 
 def _finalize_global_priority_override(blob: str, coerced: dict) -> dict:
-    """繧ｽ繝ｭ陬懈ｭ｣縺ｮ蠕後∥bolish 縺� true 縺ｪ繧峨せ繧ｭ繝ｫ繝ｻ莠ｺ謨ｰ繧ょｼｷ蛻ｶ繧ｪ繝ｳ縲�"""
+    """ソロ補正の後、abolish が true ならスキル・人数も強制オン。"""
     coerced = _maybe_fill_global_speed_rules_from_scheduler_notes(dict(coerced))
     coerced = _apply_global_priority_solo_heuristic(blob, coerced)
     coerced = _apply_global_priority_abolish_heuristic(blob, coerced)
@@ -2825,25 +2825,25 @@ def _finalize_global_priority_override(blob: str, coerced: dict) -> dict:
 
 def _apply_global_priority_solo_heuristic(blob: str, coerced: dict) -> dict:
     """
-    縲御ｸ莠ｺ縺ｧ諡�蠖薙阪悟腰迢ｬ縲咲ｭ峨〒莠ｺ謨ｰ縺�縺醍ｷｩ繧√※繧ゅ∵欠蜷阪Γ繝ｳ繝舌�ｼ縺後せ繧ｭ繝ｫ髱櫁ｩｲ蠖薙□縺ｨ驟榊床縺輔ｌ縺ｪ縺�縲�
-    縺昴�ｮ蝣ｴ蜷医�ｯ繧ｹ繧ｭ繝ｫ辟｡隕悶ｒ蜷梧凾縺ｫ遶九※繧九�
+    「一人で担当」「単独」等で人数だけ緩めても、指名メンバーがスキル非該当だと配台されない。
+    その場合はスキル無視を同時に立てる。
     """
     if not coerced.get("ignore_need_minimum") or coerced.get("ignore_skill_requirements"):
         return coerced
     b = unicodedata.normalize("NFKC", str(blob or ""))
-    solo_kw = ("荳莠ｺ", "縺ｲ縺ｨ繧�", "蜊倡峡", "�ｼ台ｺｺ", "1莠ｺ", "迢ｬ閾ｪ", "蜊倩ｺｫ")
+    solo_kw = ("一人", "ひとり", "単独", "１人", "1人", "独自", "単身")
     if any(k in b for k in solo_kw):
         out = dict(coerced)
         out["ignore_skill_requirements"] = True
         logging.info(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 蜊倡峡邉ｻ繧ｭ繝ｼ繝ｯ繝ｼ繝峨�ｮ縺溘ａ ignore_skill_requirements 繧定｣懷勧逧�縺ｫ true 縺ｫ縺励∪縺励◆縲�"
+            "メイン再優先特記: 単独系キーワードのため ignore_skill_requirements を補助的に true にしました。"
         )
         return out
     return coerced
 
 
 def _coerce_task_preferred_operators_dict(raw_val) -> dict:
-    """AI 縺ｮ task_preferred_operators 繧� {萓晞�ｼNO: 豌丞錐} 縺ｫ豁｣隕丞喧縲�"""
+    """AI の task_preferred_operators を {依頼NO: 氏名} に正規化。"""
     out = {}
     if not isinstance(raw_val, dict):
         return out
@@ -2861,8 +2861,8 @@ def _coerce_task_preferred_operators_dict(raw_val) -> dict:
 
 def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[str]:
     """
-    AI 縺ｾ縺溘�ｯ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺ｮ譌･莉倥Μ繧ｹ繝医ｒ YYYY-MM-DD 譁�蟄怜�励�ｮ譏�鬆�繝ｦ繝九�ｼ繧ｯ縺ｫ豁｣隕丞喧縲�
-    隕∫ｴ�縺ｯ ISO 譁�蟄怜�励�ｻExcel 譌･莉倥�ｻ縲�4/1縲咲ｨ句ｺｦ縺ｮ遏ｭ譁�縺ｧ繧ょ庄縲�
+    AI またはフォールバックの日付リストを YYYY-MM-DD 文字列の昇順ユニークに正規化。
+    要素は ISO 文字列・Excel 日付・「4/1」程度の短文でも可。
     """
     y0 = int(default_year)
     seen: set[str] = set()
@@ -2892,8 +2892,8 @@ def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[st
 
 def _coerce_global_speed_rules(raw_val) -> list[dict]:
     """
-    Gemini 縺ｮ global_speed_rules 繧呈ｭ｣隕丞喧縲�
-    蜷�隕∫ｴ�: process_contains / machine_contains�ｼ医＞縺壹ｌ縺句ｿ�鬆医�ｻ驛ｨ蛻�荳閾ｴ逕ｨ�ｼ�, speed_multiplier�ｼ域里蟄倬溷ｺｦ縺ｫ荵礼ｮ励�0雜�縲�10莉･荳具ｼ峨�
+    Gemini の global_speed_rules を正規化。
+    各要素: process_contains / machine_contains（いずれか必須・部分一致用）, speed_multiplier（既存速度に乗算、0超〜10以下）。
     """
     out: list[dict] = []
     if not isinstance(raw_val, list):
@@ -2925,7 +2925,7 @@ def _coerce_global_speed_rules(raw_val) -> list[dict]:
 
 
 def _global_speed_rule_substring_matches_row(pnorm: str, mnorm: str, sub_nfkc: str) -> bool:
-    """sub 縺檎ｩｺ縺ｧ縺ｪ縺代ｌ縺ｰ縲∝ｷ･遞句錐縺ｾ縺溘�ｯ讖滓｢ｰ蜷阪�ｮ縺�縺壹ｌ縺九↓驛ｨ蛻�荳閾ｴ縺吶ｌ縺ｰ True縲�"""
+    """sub が空でなければ、工程名または機械名のいずれかに部分一致すれば True。"""
     if not sub_nfkc:
         return True
     return sub_nfkc in pnorm or sub_nfkc in mnorm
@@ -2933,11 +2933,11 @@ def _global_speed_rule_substring_matches_row(pnorm: str, mnorm: str, sub_nfkc: s
 
 def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules: list) -> float:
     """
-    蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪↓荳閾ｴ縺吶ｋ繝ｫ繝ｼ繝ｫ縺ｮ speed_multiplier 繧呈寺縺大粋繧上○繧具ｼ井ｸ閾ｴ縺ｪ縺励�ｯ 1.0�ｼ峨�
+    工程名・機械名に一致するルールの speed_multiplier を掛け合わせる（一致なしは 1.0）。
 
-    process_contains / machine_contains 縺ｯ縺昴ｌ縺槭ｌ **蟾･遞句錐縺ｾ縺溘�ｯ讖滓｢ｰ蜷阪�ｮ縺ｩ縺｡繧峨°** 縺ｫ蜷ｫ縺ｾ繧後ｌ縺ｰ繧医＞縲�
-    荳｡譁ｹ謖�螳壽凾縺ｯ AND�ｼ井ｾ�: 縲檎�ｱ陞咲捩縲阪→縲梧､懈渊縲阪′縲∝�励�ｮ邨�縺ｿ蜷医ｏ縺帙〒荳｡譁ｹ迴ｾ繧後ｋ陦後↓繝槭ャ繝√�
-    繝槭せ繧ｿ荳翫〒蟾･遞�=讀懈渊繝ｻ讖滓｢ｰ=辭ｱ陞咲捩讖� 縺ｮ繧医≧縺ｫ繧ｭ繝ｼ繝ｯ繝ｼ繝峨′騾�蛛ｴ縺ｮ蛻励↓縺ゅ▲縺ｦ繧ょ酔縺倥Ν繝ｼ繝ｫ縺ｧ蜉ｹ縺上�
+    process_contains / machine_contains はそれぞれ **工程名または機械名のどちらか** に含まれればよい。
+    両方指定時は AND（例: 「熱融着」と「検査」が、列の組み合わせで両方現れる行にマッチ。
+    マスタ上で工程=検査・機械=熱融着機 のようにキーワードが逆側の列にあっても同じルールで効く。
     """
     if not rules:
         return 1.0
@@ -2973,9 +2973,9 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
 
 def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
     """
-    Gemini 縺� task_preferred_operators 縺ｫ隱､縺｣縺ｦ髟ｷ譁�繧貞�･繧後◆蝣ｴ蜷医↑縺ｩ縲�
-    閾ｪ辟ｶ險隱樊妙迚�縺九ｉ global_day_process_operator_rules 逶ｸ蠖薙ｒ謗ｨ螳壹☆繧具ｼ井ｿ晏ｮ育噪�ｼ峨�
-    萓�: 縲�2026/4/4 蟾･遞句錐:EC 譽ｮ荳九→螳ｮ蟲ｶ繧帝�榊床縲�
+    Gemini が task_preferred_operators に誤って長文を入れた場合など、
+    自然言語断片から global_day_process_operator_rules 相当を推定する（保守的）。
+    例: 「2026/4/4 工程名:EC 森下と宮島を配台」
     """
     t = unicodedata.normalize("NFKC", str(text or "")).strip()
     if len(t) < 6:
@@ -2985,18 +2985,18 @@ def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> lis
         return []
     d0 = dates[0]
     proc_m = re.search(
-        r"蟾･遞句錐?\s*[:�ｼ咯?\s*([A-Za-z0-9荳-鮴ｯ繝ｼ繝ｻ縲�縲�]+)",
+        r"工程名?\s*[:：]?\s*([A-Za-z0-9一-龯ー・〆々]+)",
         t,
     )
     pc = proc_m.group(1).strip() if proc_m else ""
     if not pc:
-        m2 = re.search(r"([\dA-Za-z荳-鮴ｯ繝ｼ繝ｻ縲�縲�]{1,12})\s*蟾･遞�", t)
+        m2 = re.search(r"([\dA-Za-z一-龯ー・〆々]{1,12})\s*工程", t)
         pc = m2.group(1).strip() if m2 else ""
     if not pc:
         return []
     names: list[str] = []
     for m in re.finditer(
-        r"([\u3040-\u9FFF縲�繝ｼ繝ｻA-Za-z繝ｻ縲�縲�]{1,16}?)\s*縺ｨ\s*([\u3040-\u9FFF縲�繝ｼ繝ｻA-Za-z繝ｻ縲�縲�]{1,16}?)\s*繧�?\s*(?:驟榊床|驟榊ｱ桍邨�縺ｾ縺斈蜷御ｸ繝√�ｼ繝�)",
+        r"([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*と\s*([\u3040-\u9FFF々ー・A-Za-z・〆々]{1,16}?)\s*を?\s*(?:配台|配属|組ませ|同一チーム)",
         t,
     ):
         a, b = m.group(1).strip(), m.group(2).strip()
@@ -3017,8 +3017,8 @@ def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> lis
 
 def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dict:
     """
-    Gemini 縺� task_preferred_operators 縺ｫ **驟榊��**繧�隱､繧ｹ繧ｭ繝ｼ繝橸ｼ�workstation_id 遲会ｼ峨ｒ霑斐＠縺溘→縺阪�
-    謐ｨ縺ｦ縺壹↓ global_day_process_operator_rules / scheduler_notes_ja 縺ｸ謨第ｸ医☆繧九�
+    Gemini が task_preferred_operators に **配列**や誤スキーマ（workstation_id 等）を返したとき、
+    捨てずに global_day_process_operator_rules / scheduler_notes_ja へ救済する。
     """
     out = dict(raw)
     tpo = out.get("task_preferred_operators")
@@ -3047,7 +3047,7 @@ def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dic
                 "process_contains",
             ):
                 continue
-            if isinstance(v, str) and len(v) > 35 and ("驟�" in v or "蟾･遞�" in v):
+            if isinstance(v, str) and len(v) > 35 and ("配" in v or "工程" in v):
                 narratives.append(v[:800])
     out["task_preferred_operators"] = {}
     gdp_existing = out.get("global_day_process_operator_rules")
@@ -3068,7 +3068,7 @@ def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dic
 
 
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
-    """Gemini 謌ｻ繧翫ｒ驟榊床逕ｨ繝輔Λ繧ｰ繝ｻ蟾･蝣ｴ莨第･ｭ譌･繝ｪ繧ｹ繝医↓豁｣隕丞喧縲�"""
+    """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
 
     def as_bool(v):
@@ -3079,7 +3079,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
         if v is None or (isinstance(v, float) and pd.isna(v)):
             return False
         s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-        return s in ("true", "1", "yes", "縺ｯ縺�", "on")
+        return s in ("true", "1", "yes", "はい", "on")
 
     base = {
         "ignore_skill_requirements": False,
@@ -3120,7 +3120,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
 
 
 def _parse_global_priority_override_gemini_response(res):
-    """Gemini 蠢懃ｭ斐°繧� JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝�1縺､繧貞叙繧雁�ｺ縺呻ｼ�```json 繝輔ぉ繝ｳ繧ｹ莉倥″縺ｧ繧ょ庄�ｼ峨�"""
+    """Gemini 応答から JSON オブジェクト1つを取り出す（```json フェンス付きでも可）。"""
     raw = (_gemini_result_text(res) or "").strip()
     if not raw:
         return None
@@ -3147,7 +3147,7 @@ def _parse_global_priority_override_gemini_response(res):
 
 
 def _apply_regex_factory_closure_fallback(coerced: dict, blob: str, ref_y: int) -> dict:
-    """Gemini 譛ｪ菴ｿ逕ｨ繝ｻ蠢懃ｭ碑ｧ｣驥亥､ｱ謨玲凾: 繝ｫ繝ｼ繝ｫ繝吶�ｼ繧ｹ縺ｧ蟾･蝣ｴ莨第･ｭ譌･縺�縺題｣懷ｮ鯉ｼ亥ｾ捺擂莠呈鋤�ｼ峨�"""
+    """Gemini 未使用・応答解釈失敗時: ルールベースで工場休業日だけ補完（従来互換）。"""
     out = dict(coerced)
     rx = parse_factory_closure_dates_from_global_comment(blob, ref_y)
     out["factory_closure_dates"] = sorted({d.isoformat() for d in rx})
@@ -3158,22 +3158,22 @@ def analyze_global_priority_override_comment(
     text: str, members: list, reference_year: int, ai_sheet_sink: dict | None = None
 ) -> dict:
     """
-    繝｡繧､繝ｳ繧ｷ繝ｼ繝医後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医搾ｼ�UI 荳翫�ｮ閾ｪ逕ｱ險倩ｿｰ�ｼ峨ｒ **Gemini 縺ｧ荳諡ｬ隗｣驥�**縺励�驟榊床縺ｫ蜉ｹ縺� JSON 縺ｫ關ｽ縺ｨ縺吶�
-    閾ｪ辟ｶ險隱槭�ｮ譁�閼亥��繧雁��縺代�ｻ謾ｹ陦後�ｮ蛻･謖�遉ｺ隗｣驥医�ｯ AI 縺ｫ莉ｻ縺帙∵綾繧雁､縺ｮ繧ｭ繝ｼ縺�縺代す繧ｹ繝�繝�縺梧ｩ滓｢ｰ驕ｩ逕ｨ縺吶ｋ縲�
+    メインシート「グローバルコメント」（UI 上の自由記述）を **Gemini で一括解釈**し、配台に効く JSON に落とす。
+    自然言語の文脈切り分け・改行の別指示解釈は AI に任せ、戻り値のキーだけシステムが機械適用する。
 
-    - factory_closure_dates: **蟾･蝣ｴ蜈ｨ菴�**縺ｧ遞ｼ蜒阪＠縺ｪ縺�譌･�ｼ亥�ｨ蜩｡髱樒ｨｼ蜒肴桶縺��ｼ峨�ｮ YYYY-MM-DD 譁�蟄怜�励�ｮ驟榊�励りｩｲ蠖薙↑縺励�ｯ []縲�
-    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 蠕捺擂縺ｩ縺翫ｊ縲�
-    - global_speed_rules: **蟾･遞句錐繝ｻ讖滓｢ｰ蜷�**縺ｸ縺ｮ驛ｨ蛻�荳閾ｴ�ｼ亥推繧ｭ繝ｼ繝ｯ繝ｼ繝峨�ｯ **縺ｩ縺｡繧峨�ｮ蛻励↓縺ゅ▲縺ｦ繧ょ庄**�ｼ峨〒縲∵里蟄倥�ｮ蜉�蟾･騾溷ｺｦ�ｼ医す繝ｼ繝茨ｼ丈ｸ頑嶌縺榊ｾ鯉ｼ峨↓ **荵礼ｮ�**縺吶ｋ繝ｫ繝ｼ繝ｫ縺ｮ驟榊�励りｩｲ蠖薙↑縺励�ｯ []縲�
-    - global_day_process_operator_rules: **譌･莉假ｼ句ｷ･遞句錐縺ｮ驛ｨ蛻�荳閾ｴ�ｼ玖､�謨ｰ繝｡繝ｳ繝舌�ｼ**繧偵∝ｽ捺律縺昴�ｮ蟾･遞九�ｮ繧ｿ繧ｹ繧ｯ縺ｮ**繝√�ｼ繝�蜈ｨ蜩｡縺ｫ蠢�縺壼性繧√ｋ**繝ｫ繝ｼ繝ｫ縺ｮ驟榊�励りｩｲ蠖薙↑縺励�ｯ []縲�
-    - scheduler_notes_ja: 荳願ｨ倥↓關ｽ縺ｨ縺励″繧後↑縺�陬懆ｶｳ繧�驕狗畑繝｡繝｢�ｼ磯溷ｺｦ縺ｯ蜿ｯ閭ｽ縺ｪ繧� global_speed_rules 繧ゆｽｵ險假ｼ峨�
+    - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
+    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
+    - global_speed_rules: **工程名・機械名**への部分一致（各キーワードは **どちらの列にあっても可**）で、既存の加工速度（シート／上書き後）に **乗算**するルールの配列。該当なしは []。
+    - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を、当日その工程のタスクの**チーム全員に必ず含める**ルールの配列。該当なしは []。
+    - scheduler_notes_ja: 上記に落としきれない補足や運用メモ（速度は可能なら global_speed_rules も併記）。
 
-    API 繧ｭ繝ｼ辟｡縺励�ｻJSON 隗｣驥亥､ｱ謨玲凾: 荳願ｨ倥ヶ繝ｼ繝ｫ繝ｻ謖�蜷阪�ｯ譌｢螳壼､縲∝ｷ･蝣ｴ莨第･ｭ譌･縺ｮ縺ｿ蠕捺擂縺ｮ繝ｫ繝ｼ繝ｫ繝吶�ｼ繧ｹ隗｣譫舌〒陬懷ｮ後�
+    API キー無し・JSON 解釈失敗時: 上記ブール・指名は既定値、工場休業日のみ従来のルールベース解析で補完。
     """
     ref_y = int(reference_year) if reference_year is not None else date.today().year
     empty = _coerce_global_priority_override_dict({}, ref_y)
     if not text or not str(text).strip():
         if ai_sheet_sink is not None:
-            ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = "繧ｹ繧ｭ繝�繝暦ｼ医Γ繧､繝ｳ蜴滓枚縺ｪ縺暦ｼ�"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "スキップ（メイン原文なし）"
         return empty
     blob = str(text).strip()
     mem_sig = ",".join(sorted(str(m).strip() for m in (members or []) if m))
@@ -3182,17 +3182,17 @@ def analyze_global_priority_override_comment(
     ai_cache = load_ai_cache()
     cached = get_cached_ai_result(ai_cache, cache_key, content_key=cache_fingerprint)
     if cached is not None:
-        logging.info("繝｡繧､繝ｳ蜀榊━蜈育音險�: 繧ｭ繝｣繝�繧ｷ繝･繝偵ャ繝茨ｼ�Gemini 縺ｯ蜻ｼ縺ｳ縺ｾ縺帙ｓ�ｼ峨�")
+        logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼びません）。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = "縺ｪ縺暦ｼ医く繝｣繝�繧ｷ繝･菴ｿ逕ｨ�ｼ�"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
         return _finalize_global_priority_override(
             blob, _coerce_global_priority_override_dict(cached, ref_y)
         )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 譛ｪ險ｭ螳壹�ｮ縺溘ａ繝｡繧､繝ｳ蜀榊━蜈育音險倥�ｮ AI 隗｣譫舌ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�")
+        logging.info("GEMINI_API_KEY 未設定のためメイン再優先特記の AI 解析をスキップしました。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = "縺ｪ縺暦ｼ�API繧ｭ繝ｼ譛ｪ險ｭ螳壹�ｻ蟾･蝣ｴ莨第･ｭ縺ｮ縺ｿ繝ｫ繝ｼ繝ｫ陬懷ｮ鯉ｼ�"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3200,90 +3200,90 @@ def analyze_global_priority_override_comment(
 
     member_sample = ", ".join(str(m) for m in (members or [])[:80])
     if len(members or []) > 80:
-        member_sample += " 窶ｦ"
+        member_sample += " …"
 
-    prompt = f"""縺ゅ↑縺溘�ｯ蟾･蝣ｴ縺ｮ驟榊床險育判繧ｷ繧ｹ繝�繝�逕ｨ繧｢繧ｷ繧ｹ繧ｿ繝ｳ繝医〒縺吶�
-Excel 繝｡繧､繝ｳ繧ｷ繝ｼ繝医�ｮ **縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医�**�ｼ郁�ｪ逕ｱ險倩ｿｰ繝ｻ閾ｪ辟ｶ險隱橸ｼ峨�ｮ **蜈ｨ譁�** 繧定ｪｭ縺ｿ縲∵ｬ｡縺ｮ繧ｭ繝ｼ縺�縺代ｒ謖√▽ JSON 繧�1縺､霑斐＠縺ｦ縺上□縺輔＞縲�
+    prompt = f"""あなたは工場の配台計画システム用アシスタントです。
+Excel メインシートの **「グローバルコメント」**（自由記述・自然言語）の **全文** を読み、次のキーだけを持つ JSON を1つ返してください。
 
-縲仙ｽｹ蜑ｲ縲�
-繝ｦ繝ｼ繧ｶ繝ｼ縺ｯ謾ｹ陦後ｄ蜿･轤ｹ縺ｧ隍�謨ｰ縺ｮ謖�遉ｺ繧呈嶌縺上％縺ｨ縺後≠繧翫∪縺吶�**譁�閼医ｒ隱ｭ縺ｿ蛻�縺�**縲�驟榊床繧ｷ繧ｹ繝�繝�縺� **讖滓｢ｰ逧�縺ｫ驕ｩ逕ｨ縺ｧ縺阪ｋ蛟､** 縺ｫ關ｽ縺ｨ縺苓ｾｼ繧薙〒縺上□縺輔＞縲�
-謗ｨ貂ｬ縺ｧ繝悶�ｼ繝ｫ繧� true 縺ｫ縺励↑縺�縺薙→縲よ�ｹ諡�縺梧�守｢ｺ縺ｪ縺ｨ縺阪□縺� true縲�
+【役割】
+ユーザーは改行や句点で複数の指示を書くことがあります。**文脈を読み分け**、配台システムが **機械的に適用できる値** に落とし込んでください。
+推測でブールを true にしないこと。根拠が明確なときだけ true。
 
-縲先怙蜆ｪ蜈医�
-縺薙�ｮ谺�縺ｮ蜀�螳ｹ縺ｯ繝槭せ繧ｿ繝ｻ繧ｹ繧ｭ繝ｫ繝ｻneed繝ｻ繧ｿ繧ｹ繧ｯ陦後�ｻ迚ｹ蛻･謖�螳喟蛯呵�縺ｮ AI 謖�蜷阪ｈ繧雁━蜈医＆繧後ｋ萓句､匁欠遉ｺ縺ｨ縺励※謇ｱ繧上ｌ縺ｾ縺吶�
+【最優先】
+この欄の内容はマスタ・スキル・need・タスク行・特別指定_備考の AI 指名より優先される例外指示として扱われます。
 
-縲先隼陦後�ｻ隍�謨ｰ陦後�
-蜷�陦後�ｻ蜷�譁�縺ｯ **蜴溷援縺ｨ縺励※迢ｬ遶九＠縺滓欠遉ｺ** 縺ｧ縺吶り｡後ｒ縺ｾ縺溘＞縺ｧ1縺､縺ｫ縺ｾ縺ｨ繧√◆繧翫�**蜑ｲ蜷郁｡ｨ迴ｾ�ｼ井ｾ� 1/3�ｼ峨ｒ譌･莉倥→邨舌�ｳ莉倥￠縺溘ｊ縺励↑縺�**縺薙→縲�
+【改行・複数行】
+各行・各文は **原則として独立した指示** です。行をまたいで1つにまとめたり、**割合表現（例 1/3）を日付と結び付けたりしない**こと。
 
-縲舌く繝ｼ蛻･繝ｫ繝ｼ繝ｫ縲�
+【キー別ルール】
 
-A) **factory_closure_dates** �ｼ磯�榊�励�ｻ蠢�鬆茨ｼ�
-   - **蟾･蝣ｴ蜈ｨ菴�**縺檎ｨｼ蜒阪＠縺ｪ縺�譌･�ｼ郁�ｨ譎ゆｼ第･ｭ繝ｻ蜈ｨ蟾･蝣ｴ莨代∩繝ｻ縺昴�ｮ譌･縺ｯ蜉�蟾･縺励↑縺�遲会ｼ峨�ｮ譌･莉倥ｒ **YYYY-MM-DD** 縺ｮ譁�蟄怜�励〒蛻玲嫌縲�
-   - **蛟倶ｺｺ縺ｮ莨代∩繝ｻ迚ｹ螳壹Λ繧､繝ｳ縺�縺�**縺ｮ蛛懈ｭ｢縺ｯ縺薙％縺ｫ **蜷ｫ繧√↑縺�**�ｼ�[]�ｼ峨�
-   - 隧ｲ蠖薙′縺ｪ縺代ｌ縺ｰ **遨ｺ驟榊�� []**�ｼ医く繝ｼ逵∫払荳榊庄�ｼ峨�
-   - 蟷ｴ縺檎怐逡･縺輔ｌ縺ｦ縺�繧後�ｰ隘ｿ證ｦ {ref_y} 蟷ｴ縺ｨ縺励※隗｣驥医�
+A) **factory_closure_dates** （配列・必須）
+   - **工場全体**が稼働しない日（臨時休業・全工場休み・その日は加工しない等）の日付を **YYYY-MM-DD** の文字列で列挙。
+   - **個人の休み・特定ラインだけ**の停止はここに **含めない**（[]）。
+   - 該当がなければ **空配列 []**（キー省略不可）。
+   - 年が省略されていれば西暦 {ref_y} 年として解釈。
 
 B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits** / **task_preferred_operators**
-   - 蠕捺擂縺ｩ縺翫ｊ�ｼ磯�榊床縺ｮ繧ｹ繧ｭ繝ｫ辟｡隕悶�ｻ莠ｺ謨ｰ1蝗ｺ螳壹�ｻ蛻ｶ髯先彫蟒�繝ｻ萓晞�ｼNO竊剃ｸｻ諡�蠖徹P謖�蜷搾ｼ峨りｩｲ蠖薙↑縺代ｌ縺ｰ false 縺ｾ縺溘�ｯ {{}}縲�
+   - 従来どおり（配台のスキル無視・人数1固定・制限撤廃・依頼NO→主担当OP指名）。該当なければ false または {{}}。
 
-C) **global_speed_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨ｼ�
-   - 迚ｹ螳壹�ｮ **蟾･遞句錐**�ｼ�Excel縲悟ｷ･遞句錐縲榊�暦ｼ峨ｄ **讖滓｢ｰ蜷�**�ｼ医梧ｩ滓｢ｰ蜷阪榊�暦ｼ峨↓蟇ｾ縺励�**譌｢蟄倥�ｮ蜉�蟾･騾溷ｺｦ縺ｫ謗帙￠繧句咲紫** 繧呈欠螳壹☆繧九が繝悶ず繧ｧ繧ｯ繝医�ｮ繝ｪ繧ｹ繝医�
-   - 蜷�繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ繧ｭ繝ｼ:
-     - "process_contains": 譁�蟄怜�暦ｼ育怐逡･蜿ｯ�ｼ峨�**蟾･遞句錐縺ｾ縺溘�ｯ讖滓｢ｰ蜷阪�ｮ縺�縺壹ｌ縺�**縺ｫ **驛ｨ蛻�荳閾ｴ**�ｼ�NFKC 諠ｳ螳夲ｼ峨�
-     - "machine_contains": 譁�蟄怜�暦ｼ育怐逡･蜿ｯ�ｼ峨�**蟾･遞句錐縺ｾ縺溘�ｯ讖滓｢ｰ蜷阪�ｮ縺�縺壹ｌ縺�**縺ｫ **驛ｨ蛻�荳閾ｴ**縲�
-     - "speed_multiplier": 豁｣縺ｮ謨ｰ縲�**1/3 縺ｮ騾溷ｺｦ**縺ｪ繧臥ｴ� **0.333333**�ｼ域里蟄倬溷ｺｦ ﾃ� 縺薙�ｮ蛟､�ｼ峨�**2蛟埼�**縺ｪ繧� 2.0縲�
-   - **荳｡譁ｹ謖�螳壽凾縺ｯ AND**�ｼ�2縺､縺ｮ繧ｭ繝ｼ繝ｯ繝ｼ繝峨′縲�**荳｡譁ｹ縺ｨ繧�**縲悟ｷ･遞句錐繝ｻ讖滓｢ｰ蜷阪�ｮ縺ｩ縺｡繧峨°縲阪↓迴ｾ繧後ｋ陦鯉ｼ峨ゆｾ�: 蟾･遞�=讀懈渊繝ｻ讖滓｢ｰ=辭ｱ陞咲捩讖� 縺ｧ繧ゅ∝ｷ･遞�=辭ｱ陞咲捩繝ｻ讖滓｢ｰ=讀懈渊逕ｨ險ｭ蛯� 縺ｧ繧ゅ�槭ャ繝√＠縺�繧九�
-   - 縺ｩ縺｡繧峨°荳譁ｹ縺�縺第欠螳壹☆繧後�ｰ縲√◎縺ｮ繧ｭ繝ｼ繝ｯ繝ｼ繝峨′蟾･遞句錐縺ｾ縺溘�ｯ讖滓｢ｰ蜷阪�ｮ縺ｩ縺｡繧峨°縺ｫ縺ゅｌ縺ｰ繝槭ャ繝√�
-   - 隧ｲ蠖捺欠遉ｺ縺後↑縺代ｌ縺ｰ **遨ｺ驟榊�� []**縲�
-   - 萓�: 縲檎�ｱ陞咲捩繧剃ｽｿ縺�讀懈渊縺ｮ蜉�蟾･騾溷ｺｦ縺ｯ1/3縲坂��
-     [{{"process_contains":"辭ｱ陞咲捩","machine_contains":"讀懈渊","speed_multiplier":0.333333}}]
-     �ｼ医檎�ｱ陞咲捩縲阪→縲梧､懈渊縲阪′蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪�ｮ邨�縺ｿ蜷医ｏ縺帙〒謠�縺�繧ｿ繧ｹ繧ｯ縺ｮ騾溷ｺｦ縺檎ｴ�1/3縺ｫ縺ｪ繧具ｼ�
+C) **global_speed_rules** （配列・必須）
+   - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倍率** を指定するオブジェクトのリスト。
+   - 各オブジェクトのキー:
+     - "process_contains": 文字列（省略可）。**工程名または機械名のいずれか**に **部分一致**（NFKC 想定）。
+     - "machine_contains": 文字列（省略可）。**工程名または機械名のいずれか**に **部分一致**。
+     - "speed_multiplier": 正の数。**1/3 の速度**なら約 **0.333333**（既存速度 × この値）。**2倍速**なら 2.0。
+   - **両方指定時は AND**（2つのキーワードが、**両方とも**「工程名・機械名のどちらか」に現れる行）。例: 工程=検査・機械=熱融着機 でも、工程=熱融着・機械=検査用設備 でもマッチしうる。
+   - どちらか一方だけ指定すれば、そのキーワードが工程名または機械名のどちらかにあればマッチ。
+   - 該当指示がなければ **空配列 []**。
+   - 例: 「熱融着を使う検査の加工速度は1/3」→
+     [{{"process_contains":"熱融着","machine_contains":"検査","speed_multiplier":0.333333}}]
+     （「熱融着」と「検査」が工程名・機械名の組み合わせで揃うタスクの速度が約1/3になる）
 
-D) **scheduler_notes_ja** �ｼ域枚蟄怜�励�ｻ蠢�鬆茨ｼ�
-   - 荳願ｨ倥く繝ｼ縺ｫ關ｽ縺ｨ縺励″繧後↑縺�陬懆ｶｳ縲る溷ｺｦ縺ｯ **global_speed_rules 縺ｧ讒矩�蛹悶〒縺阪ｋ縺ｨ縺阪�ｯ蠢�縺壹◎縺｡繧峨↓繧ょ�ｺ縺�**�ｼ医％縺薙�ｯ莠ｺ髢灘髄縺題ｦ∫ｴ�縺ｧ繧ゅｈ縺��ｼ峨ら┌縺代ｌ縺ｰ ""縲�
+D) **scheduler_notes_ja** （文字列・必須）
+   - 上記キーに落としきれない補足。速度は **global_speed_rules で構造化できるときは必ずそちらにも出す**（ここは人間向け要約でもよい）。無ければ ""。
 
-E) **interpretation_ja** �ｼ域枚蟄怜�励�ｻ蠢�鬆茨ｼ�
-   - 蜴滓枚縺ｮ隕∫ｴ�繧�1譁��ｼ�200譁�蟄嶺ｻ･蜀��ｼ峨�
+E) **interpretation_ja** （文字列・必須）
+   - 原文の要約を1文（200文字以内）。
 
-F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨ｼ�
-   - **迚ｹ螳壹�ｮ遞ｼ蜒肴律**縺九▽ **蟾･遞句錐�ｼ�Excel縲悟ｷ･遞句錐縲榊�暦ｼ峨�ｮ驛ｨ蛻�荳閾ｴ** 縺ｫ蠖薙※縺ｯ縺ｾ繧九ち繧ｹ繧ｯ縺ｫ縺､縺�縺ｦ縲�
-     蛻玲嫌縺励◆ **蜈ｨ繝｡繝ｳ繝舌�ｼ繧貞酔荳繝√�ｼ繝�縺ｫ蠢�縺壼性繧√ｋ** 繝ｫ繝ｼ繝ｫ�ｼ�**OP/AS 縺ｩ縺｡繧峨�ｮ繧ｹ繧ｭ繝ｫ縺ｧ繧ょ庄**縲よｰ丞錐隗｣豎ｺ縺ｯ **諡�蠖徹P謖�蜷阪→蜷後§**�ｼ峨�
-   - **萓晞�ｼNO縺悟��縺九ｋ荳ｻ諡�蠖薙�ｮ1蜷肴欠蜷�**縺ｯ **task_preferred_operators** 繧剃ｽｿ縺�縺薙→縲ょ次譁�縺� **縲娯留譛遺留譌･縺ｮ笆ｳ蟾･遞九↓�ｼ｡縺ｨ�ｼ｢繧帝�榊床縲�** 縺ｮ繧医≧縺ｫ **譌･莉倥�ｻ蟾･遞九�ｻ隍�謨ｰ蜷�**縺ｮ縺ｨ縺阪�ｯ **譛ｬ驟榊��**縺ｸ關ｽ縺ｨ縺吶�
-   - 蜷�繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ繧ｭ繝ｼ:
-     - "date": **YYYY-MM-DD**�ｼ医◎縺ｮ譌･縺ｫ蜑ｲ繧雁ｽ薙※繧九Ο繝ｼ繝ｫ縺ｫ驕ｩ逕ｨ�ｼ�
-     - "process_contains": 蟾･遞句錐縺ｫ **驛ｨ蛻�荳閾ｴ**�ｼ�NFKC 諠ｳ螳夲ｼ峨ゆｾ�: "EC"
-     - "operator_names": 豌丞錐縺ｮ驟榊�暦ｼ井ｾ�: ["譽ｮ荳�", "螳ｮ蟲ｶ縲闃ｱ蟄�"]�ｼ�
-   - 隧ｲ蠖捺欠遉ｺ縺後↑縺代ｌ縺ｰ **遨ｺ驟榊�� []**縲�
+F) **global_day_process_operator_rules** （配列・必須）
+   - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当てはまるタスクについて、
+     列挙した **全メンバーを同一チームに必ず含める** ルール（**OP/AS どちらのスキルでも可**。氏名解決は **担当OP指名と同じ**）。
+   - **依頼NOが分かる主担当の1名指名**は **task_preferred_operators** を使うこと。原文が **「◯月◯日の△工程にＡとＢを配台」** のように **日付・工程・複数名**のときは **本配列**へ落とす。
+   - 各オブジェクトのキー:
+     - "date": **YYYY-MM-DD**（その日に割り当てるロールに適用）
+     - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
+     - "operator_names": 氏名の配列（例: ["森下", "宮島　花子"]）
+   - 該当指示がなければ **空配列 []**。
 
-縲占ｿ皮ｭ泌ｽ｢蠑上�
-蜈磯�ｭ縺� {{ 縺ｧ邨ゅｏ繧翫′ }} 縺ｮ **JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝�1縺､縺ｮ縺ｿ**�ｼ郁ｪｬ譏取枚繝ｻ繝槭�ｼ繧ｯ繝繧ｦ繝ｳ遖∵ｭ｢�ｼ峨�
+【返答形式】
+先頭が {{ で終わりが }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
 
-蠢�鬆医く繝ｼ荳隕ｧ:
-- "factory_closure_dates": string 縺ｮ驟榊�暦ｼ�YYYY-MM-DD�ｼ�
-- "ignore_skill_requirements": true 縺ｾ縺溘�ｯ false
-- "ignore_need_minimum": true 縺ｾ縺溘�ｯ false
-- "abolish_all_scheduling_limits": true 縺ｾ縺溘�ｯ false
-- "task_preferred_operators": **JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ縺ｿ**�ｼ医く繝ｼ=萓晞�ｼNO繝ｻ蛟､=荳ｻ諡�蠖捺ｰ丞錐�ｼ峨�**驟榊�励↓縺励※縺ｯ縺ｪ繧峨↑縺�**縲りｩｲ蠖薙↑縺励�ｯ {{}}
-- "global_speed_rules": 繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ驟榊�暦ｼ郁ｩｲ蠖薙↑縺励�ｯ []�ｼ�
-- "global_day_process_operator_rules": 繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ驟榊�暦ｼ郁ｩｲ蠖薙↑縺励�ｯ []�ｼ�
-- "scheduler_notes_ja": 譁�蟄怜��
-- "interpretation_ja": 譁�蟄怜��
+必須キー一覧:
+- "factory_closure_dates": string の配列（YYYY-MM-DD）
+- "ignore_skill_requirements": true または false
+- "ignore_need_minimum": true または false
+- "abolish_all_scheduling_limits": true または false
+- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当氏名）。**配列にしてはならない**。該当なしは {{}}
+- "global_speed_rules": オブジェクトの配列（該当なしは []）
+- "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
+- "scheduler_notes_ja": 文字列
+- "interpretation_ja": 文字列
 
-縲仙渕貅門ｹｴ縲� 譌･莉倩ｨ蜿翫′縺ゅｌ縺ｰ隘ｿ證ｦ {ref_y} 蟷ｴ縺ｨ縺励※隗｣驥医＠縺ｦ繧医＞縲�
+【基準年】 日付言及があれば西暦 {ref_y} 年として解釈してよい。
 
-縲千匳骭ｲ繝｡繝ｳ繝舌�ｼ蜷阪�ｮ蜿り�縲托ｼ育�ｧ蜷育畑縲�JSON 繧ｭ繝ｼ縺ｫ縺ｯ蜷ｫ繧√↑縺��ｼ�
+【登録メンバー名の参考】（照合用。JSON キーには含めない）
 {member_sample}
 
-縲舌げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医�ｻ蜴滓枚縲�
+【グローバルコメント・原文】
 {blob}
 """
     try:
         ppath = os.path.join(log_dir, "ai_global_priority_override_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("繝｡繧､繝ｳ蜀榊━蜈育音險�: 繝励Ο繝ｳ繝励ヨ蜈ｨ譁� 竊� %s", ppath)
+        logging.info("メイン再優先特記: プロンプト全文 → %s", ppath)
     except OSError as ex:
-        logging.warning("繝｡繧､繝ｳ蜀榊━蜈育音險�: 繝励Ο繝ｳ繝励ヨ菫晏ｭ伜､ｱ謨�: %s", ex)
+        logging.warning("メイン再優先特記: プロンプト保存失敗: %s", ex)
 
     client = genai.Client(api_key=API_KEY)
     try:
@@ -3292,7 +3292,7 @@ F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
             logging.warning(
-                "繝｡繧､繝ｳ蜀榊━蜈育音險�: AI 蠢懃ｭ斐°繧� JSON 繧定ｧ｣驥医〒縺阪∪縺帙ｓ縺ｧ縺励◆縲ゅく繝｣繝�繧ｷ繝･縺帙★縲∵ｬ｡蝗槫�崎ｩｦ陦後＆繧後∪縺吶�"
+                "メイン再優先特記: AI 応答から JSON を解釈できませんでした。キャッシュせず、次回再試行されます。"
             )
             try:
                 rpath = os.path.join(log_dir, "ai_global_priority_override_last_response.txt")
@@ -3301,7 +3301,7 @@ F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨
             except OSError:
                 pass
             if ai_sheet_sink is not None:
-                ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = "縺ゅｊ�ｼ�JSON隗｣驥亥､ｱ謨励�ｻ蟾･蝣ｴ莨第･ｭ縺ｯ繝ｫ繝ｼ繝ｫ陬懷ｮ鯉ｼ�"
+                ai_sheet_sink["メイン再優先特記_AI_API"] = "あり（JSON解釈失敗・工場休業はルール補完）"
             coerced = _apply_regex_factory_closure_fallback(
                 _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
             )
@@ -3321,7 +3321,7 @@ F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨
         _gsr = coerced.get("global_speed_rules") or []
         _gdp = coerced.get("global_day_process_operator_rules") or []
         logging.info(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: AI 隗｣驥� factory莨第･ｭ=%s譌･ 騾溷ｺｦ繝ｫ繝ｼ繝ｫ=%s莉ｶ 譌･ﾃ怜ｷ･遞九メ繝ｼ繝�=%s莉ｶ skill=%s need1=%s abolish=%s task_pref=%s莉ｶ 窶� %s",
+            "メイン再優先特記: AI 解釈 factory休業=%s日 速度ルール=%s件 日×工程チーム=%s件 skill=%s need1=%s abolish=%s task_pref=%s件 — %s",
             len(_fcd),
             len(_gsr),
             len(_gdp),
@@ -3332,12 +3332,12 @@ F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨
             coerced.get("interpretation_ja", "")[:100],
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = "縺ゅｊ"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "あり"
         return coerced
     except Exception as e:
-        logging.warning("繝｡繧､繝ｳ蜀榊━蜈育音險�: Gemini 蜻ｼ縺ｳ蜃ｺ縺怜､ｱ謨�: %s", e)
+        logging.warning("メイン再優先特記: Gemini 呼び出し失敗: %s", e)
         if ai_sheet_sink is not None:
-            ai_sheet_sink["繝｡繧､繝ｳ蜀榊━蜈育音險論AI_API"] = f"螟ｱ謨�: {e}"[:500]
+            ai_sheet_sink["メイン再優先特記_AI_API"] = f"失敗: {e}"[:500]
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3345,39 +3345,39 @@ F) **global_day_process_operator_rules** �ｼ磯�榊�励�ｻ蠢�鬆茨
 
 
 def default_result_task_sheet_column_order(max_history_len: int) -> list:
-    """邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ譌｢螳壼�鈴���ｼ亥ｱ･豁ｴ蛻玲焚縺ｯ螳溯｡梧凾縺ｫ豎ｺ縺ｾ繧具ｼ峨�"""
-    hist = [f"螻･豁ｴ{i+1}" for i in range(max_history_len)]
+    """結果_タスク一覧の既定列順（履歴列数は実行時に決まる）。"""
+    hist = [f"履歴{i+1}" for i in range(max_history_len)]
     return [
-        "繧ｹ繝�繝ｼ繧ｿ繧ｹ",
-        "繧ｿ繧ｹ繧ｯID",
-        "蟾･遞句錐",
-        "讖滓｢ｰ蜷�",
-        "蜆ｪ蜈亥ｺｦ",
+        "ステータス",
+        "タスクID",
+        "工程名",
+        "機械名",
+        "優先度",
         RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
         *hist,
-        "蠢�隕＾P(荳頑嶌)",
-        "繧ｿ繧ｹ繧ｯ蜉ｹ邇�",
-        "蜉�蟾･騾比ｸｭ",
-        "迚ｹ蛻･謖�螳壹≠繧�",
-        "諡�蠖徹P謖�蜷�",
-        "蝗樒ｭ皮ｴ肴悄",
-        "謖�螳夂ｴ肴悄",
-        "險育判蝓ｺ貅也ｴ肴悄",
+        "必要OP(上書)",
+        "タスク効率",
+        "加工途中",
+        "特別指定あり",
+        "担当OP指名",
+        "回答納期",
+        "指定納期",
+        "計画基準納期",
         TASK_COL_RAW_INPUT_DATE,
-        "邏肴悄邱頑･",
-        "蜉�蟾･髢句ｧ区律",
-        "驟榊ｮ契蜉�蟾･髢句ｧ�",
-        "驟榊ｮ契蜉�蟾･邨ゆｺ�",
+        "納期緊急",
+        "加工開始日",
+        "配完_加工開始",
+        "配完_加工終了",
         RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
-        "邱丞刈蟾･驥�",
-        "谿句刈蟾･驥�",
-        "螳御ｺ�邇�(螳溯｡梧凾轤ｹ)",
-        "迚ｹ蛻･謖�螳喟AI",
+        "総加工量",
+        "残加工量",
+        "完了率(実行時点)",
+        "特別指定_AI",
     ]
 
 
 def _task_date_key_for_result_sheet_sort(val):
-    """邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ荳ｦ縺ｹ譖ｿ縺育畑縲よｬ�謳阪�ｻ隗｣驥井ｸ崎�ｽ縺ｯ譛蠕鯉ｼ�date.max�ｼ峨�"""
+    """結果_タスク一覧の並べ替え用。欠損・解釈不能は最後（date.max）。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return date.max
     if isinstance(val, datetime):
@@ -3394,7 +3394,7 @@ def _task_date_key_for_result_sheet_sort(val):
 
 
 def _coerce_planning_date_for_deadline(d) -> date | None:
-    """蝗樒ｭ皮ｴ肴悄繝ｻ謖�螳夂ｴ肴悄縺ｪ縺ｩ繧� date 縺ｫ豁｣隕丞喧�ｼ域ｬ�謳阪�ｯ None�ｼ峨�"""
+    """回答納期・指定納期などを date に正規化（欠損は None）。"""
     if d is None:
         return None
     if isinstance(d, datetime):
@@ -3408,34 +3408,34 @@ def _result_task_plan_end_within_answer_or_spec_16_label(
     plan_window: list | None, answer_due, specified_due
 ) -> str:
     """
-    邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ逕ｨ: 縲碁�榊ｮ契蜉�蟾･邨ゆｺ�縲咲嶌蠖薙�ｮ譛邨らｵゆｺ�縺後�
-    蝗樒ｭ皮ｴ肴悄縺ｮ譌･莉� + PLAN_DUE_DAY_COMPLETION_TIME�ｼ域里螳� 16:00�ｼ我ｻ･荳九°繧貞愛螳壹�
-    蝗樒ｭ皮ｴ肴悄縺檎┌縺�陦後�ｯ謖�螳夂ｴ肴悄縺ｮ譌･莉� + 16:00 縺ｧ蛻､螳壹�
-    荳｡譁ｹ辟｡縺�蝣ｴ蜷医�ｯ縲檎ｴ肴悄縺ｪ縺励阪�
+    結果_タスク一覧用: 「配完_加工終了」相当の最終終了が、
+    回答納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを判定。
+    回答納期が無い行は指定納期の日付 + 16:00 で判定。
+    両方無い場合は「納期なし」。
     """
     if not plan_window or len(plan_window) < 2:
-        return "譛ｪ蜑ｲ蠖�"
+        return "未割当"
     _pe = plan_window[1]
     if _pe is None:
-        return "譛ｪ蜑ｲ蠖�"
+        return "未割当"
     dd = _coerce_planning_date_for_deadline(answer_due)
     if dd is None:
         dd = _coerce_planning_date_for_deadline(specified_due)
     if dd is None:
-        return "邏肴悄縺ｪ縺�"
+        return "納期なし"
     try:
         deadline_dt = datetime.combine(dd, PLAN_DUE_DAY_COMPLETION_TIME)
         if _pe <= deadline_dt:
-            return "縺ｯ縺�"
-        return "縺�縺�縺�"
+            return "はい"
+        return "いいえ"
     except Exception:
-        return "蛻､螳壻ｸ崎�ｽ"
+        return "判定不能"
 
 
 def _result_task_sheet_sort_key(t: dict):
     """
-    邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ陦ｨ遉ｺ鬆�縲や蔵驟榊床隧ｦ陦碁��逡ｪ�ｼ�generate_plan 蜀帝�ｭ縺ｧ繧ｭ繝･繝ｼ鬆�縺ｫ莉倅ｸ弱＠縺� 1..n�ｼ画��鬆�縲�
-    谺�謳阪�ｻ髱樊焚縺ｯ譛蠕後ょ酔荳隧ｦ陦碁��蜀�縺ｯ萓晞�ｼNO繝ｻ讖滓｢ｰ蜷阪∫ｶ壹￠縺ｦ蜉�蟾･髢句ｧ区律繝ｻ邏肴悄縺ｧ螳牙ｮ壼喧縲�
+    結果_タスク一覧の表示順。①配台試行順番（generate_plan 冒頭でキュー順に付与した 1..n）昇順。
+    欠損・非数は最後。同一試行順内は依頼NO・機械名、続けて加工開始日・納期で安定化。
     """
     _dto = t.get("dispatch_trial_order")
     try:
@@ -3453,15 +3453,15 @@ def _result_task_sheet_sort_key(t: dict):
 
 
 def _is_result_task_history_expand_token(cell_val) -> bool:
-    """蛻苓ｨｭ螳壹す繝ｼ繝医〒縲悟ｱ･豁ｴ縲�1陦後ｒ鄂ｮ縺上→螻･豁ｴ1�ｽ柤 繧偵◎縺ｮ菴咲ｽｮ縺ｫ螻暮幕縺吶ｋ縲�"""
+    """列設定シートで「履歴」1行を置くと履歴1～n をその位置に展開する。"""
     if cell_val is None or (isinstance(cell_val, float) and pd.isna(cell_val)):
         return False
     s = unicodedata.normalize("NFKC", str(cell_val).strip())
-    return s in ("螻･豁ｴ", "螻･豁ｴ*")
+    return s in ("履歴", "履歴*")
 
 
 def _result_task_column_alias_map(df_columns) -> dict:
-    """隕句�ｺ縺励�ｮ NFKC 豁｣隕丞喧繧ｭ繝ｼ 竊� DataFrame 荳翫�ｮ螳溷�怜錐縲�"""
+    """見出しの NFKC 正規化キー → DataFrame 上の実列名。"""
     m = {}
     for c in df_columns:
         m[_nfkc_column_aliases(str(c).strip())] = c
@@ -3478,8 +3478,8 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
     resolved = col_by_norm.get(nk)
     if resolved is not None:
         return resolved
-    # 譌ｧ蛻怜錐�ｼ郁ｨ育判蝓ｺ貅也ｴ肴悄繝吶�ｼ繧ｹ�ｼ俄�� 驟榊ｮ契蝗樒ｭ疲欠螳�16譎ゅ∪縺ｧ
-    if nk == _nfkc_column_aliases("驟榊ｮ契蝓ｺ貅�16譎ゅ∪縺ｧ"):
+    # 旧列名（計画基準納期ベース）→ 配完_回答指定16時まで
+    if nk == _nfkc_column_aliases("配完_基準16時まで"):
         return col_by_norm.get(
             _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
         )
@@ -3487,7 +3487,7 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
 
 
 def _parse_column_visible_cell(val) -> bool:
-    """陦ｨ遉ｺ蛻�: 遨ｺ繝ｻ譛ｪ險伜�･縺ｯ True�ｼ郁｡ｨ遉ｺ�ｼ峨�FALSE/0/縺�縺�縺� 遲峨〒髱櫁｡ｨ遉ｺ縲�"""
+    """表示列: 空・未記入は True（表示）。FALSE/0/いいえ 等で非表示。"""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return True
     if isinstance(val, bool):
@@ -3498,9 +3498,9 @@ def _parse_column_visible_cell(val) -> bool:
         if val == 1:
             return True
     s = unicodedata.normalize("NFKC", str(val).strip()).lower()
-    if s in ("", "true", "1", "縺ｯ縺�", "yes", "on", "陦ｨ遉ｺ", "笳�"):
+    if s in ("", "true", "1", "はい", "yes", "on", "表示", "○"):
         return True
-    if s in ("false", "flase", "0", "縺�縺�縺�", "no", "off", "髱櫁｡ｨ遉ｺ", "髫�縺�", "ﾃ�"):
+    if s in ("false", "flase", "0", "いいえ", "no", "off", "非表示", "隠す", "×"):
         return False
     return True
 
@@ -3509,10 +3509,10 @@ def parse_result_task_column_config_dataframe(
     df_cfg: pd.DataFrame | None, max_history_len: int
 ) -> list | None:
     """
-    縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲咲嶌蠖薙�ｮ DataFrame 縺九ｉ (蛻励Λ繝吶Ν, 陦ｨ遉ｺ) 繧剃ｸ翫°繧芽ｪｭ繧縲�
-    隕句�ｺ縺励悟�怜錐縲阪→縲瑚｡ｨ遉ｺ縲搾ｼ育┌縺�蝣ｴ蜷医�ｯ陦ｨ遉ｺ縺ｯ縺吶∋縺ｦ True�ｼ峨�
-    縲悟ｱ･豁ｴ縲阪悟ｱ･豁ｴ*縲阪�ｮ1陦後�ｯ螻･豁ｴ1�ｽ槫ｱ･豁ｴn 縺ｫ螻暮幕縺励∝酔荳陦後�ｮ陦ｨ遉ｺ繝輔Λ繧ｰ繧貞�ｱ譛峨☆繧九�
-    蜷御ｸ蛻怜錐�ｼ�NFKC繝ｻ蛻･蜷肴ｭ｣隕丞喧蠕鯉ｼ峨′隍�謨ｰ陦後≠繧句�ｴ蜷医�ｯ蜈磯�ｭ陦後�ｮ縺ｿ謗｡逕ｨ縺励∽ｻ･髯阪�ｯ繝ｭ繧ｰ縺ｫ蜃ｺ縺励※謐ｨ縺ｦ繧九�
+    「列設定_結果_タスク一覧」相当の DataFrame から (列ラベル, 表示) を上から読む。
+    見出し「列名」と「表示」（無い場合は表示はすべて True）。
+    「履歴」「履歴*」の1行は履歴1～履歴n に展開し、同一行の表示フラグを共有する。
+    同一列名（NFKC・別名正規化後）が複数行ある場合は先頭行のみ採用し、以降はログに出して捨てる。
     """
     if df_cfg is None or df_cfg.empty:
         return None
@@ -3544,7 +3544,7 @@ def parse_result_task_column_config_dataframe(
         nk = _nfkc_column_aliases(unicodedata.normalize("NFKC", lab))
         if nk in seen_norm:
             logging.warning(
-                "蛻苓ｨｭ螳壹�%s縲�: 驥崎､�蛻怜錐縲�%s縲阪ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆�ｼ井ｸ翫�ｮ陦後ｒ蜆ｪ蜈茨ｼ峨�",
+                "列設定「%s」: 重複列名「%s」をスキップしました（上の行を優先）。",
                 COLUMN_CONFIG_SHEET_NAME,
                 lab,
             )
@@ -3557,7 +3557,7 @@ def parse_result_task_column_config_dataframe(
         vis = _parse_column_visible_cell(df_cfg[vis_col].iloc[i] if vis_col is not None else None)
         if _is_result_task_history_expand_token(raw):
             for j in range(max_history_len):
-                _try_add(f"螻･豁ｴ{j+1}", vis)
+                _try_add(f"履歴{j+1}", vis)
             continue
         if raw is None or (isinstance(raw, float) and pd.isna(raw)):
             continue
@@ -3569,7 +3569,7 @@ def parse_result_task_column_config_dataframe(
 
 
 def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]) -> None:
-    """蛻苓ｨｭ螳壹す繝ｼ繝医�ｮ A:B 繧� 蛻怜錐繝ｻ陦ｨ遉ｺ 縺ｮ縺ｿ縺ｧ荳頑嶌縺搾ｼ�1陦檎岼隕句�ｺ縺暦ｼ九ョ繝ｼ繧ｿ�ｼ峨�"""
+    """列設定シートの A:B を 列名・表示 のみで上書き（1行目見出し＋データ）。"""
     mat = [[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]]
     for lab, vis in rows:
         mat.append([lab, bool(vis)])
@@ -3588,14 +3588,14 @@ def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]
 
 def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> list | None:
     """
-    TASK_INPUT_WORKBOOK 縺ｮ縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪す繝ｼ繝医°繧� (蛻励Λ繝吶Ν, 陦ｨ遉ｺ) 繧剃ｸ翫°繧芽ｪｭ繧縲�
+    TASK_INPUT_WORKBOOK の「列設定_結果_タスク一覧」シートから (列ラベル, 表示) を上から読む。
     """
     wb = TASKS_INPUT_WORKBOOK
     if not wb or not os.path.exists(wb):
         return None
     if _workbook_should_skip_openpyxl_io(wb):
         logging.info(
-            "蛻苓ｨｭ螳�: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ pandas(openpyxl) 縺ｧ縺ｮ縲�%s縲崎ｪｭ霎ｼ繧偵せ繧ｭ繝�繝暦ｼ域里螳壼�鈴��繧剃ｽｿ縺�縺ｾ縺呻ｼ峨�",
+            "列設定: ブックに「%s」があるため pandas(openpyxl) での「%s」読込をスキップ（既定列順を使います）。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             COLUMN_CONFIG_SHEET_NAME,
         )
@@ -3606,7 +3606,7 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
         return None
     except Exception as e:
         logging.warning(
-            "繧ｷ繝ｼ繝医�%s縲�: 隱ｭ縺ｿ霎ｼ縺ｿ縺ｫ螟ｱ謨励＠縺溘◆繧∵里螳壹�ｮ蛻鈴��繧剃ｽｿ縺�縺ｾ縺� (%s)",
+            "シート「%s」: 読み込みに失敗したため既定の列順を使います (%s)",
             COLUMN_CONFIG_SHEET_NAME,
             e,
         )
@@ -3621,9 +3621,9 @@ def apply_result_task_sheet_column_order(
     config_dataframe: pd.DataFrame | None = None,
 ):
     """
-    蛻苓ｨｭ螳壹す繝ｼ繝医′縺ゅｌ縺ｰ縺昴�ｮ鬆�繝ｻ陦ｨ遉ｺ繧貞━蜈医＠縲∫┌縺�蛻励�ｯ譌｢螳夐��縺ｧ蠕後ｍ縺ｫ霑ｽ險假ｼ郁｡ｨ遉ｺ縺ｯ True�ｼ峨�
-    config_dataframe 繧呈ｸ｡縺励◆蝣ｴ蜷医�ｯ繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｾ縺壹◎縺ｮ蜀�螳ｹ繧貞�苓ｨｭ螳壹→縺ｿ縺ｪ縺呻ｼ�xlwings 螳溯｡梧凾逕ｨ�ｼ峨�
-    謌ｻ繧雁､: (荳ｦ縺ｹ譖ｿ縺亥ｾ� DataFrame, 螳滄圀縺ｮ蛻怜錐繝ｪ繧ｹ繝�, 險ｭ螳壹た繝ｼ繧ｹ隱ｬ譏取枚蟄怜��, 蛻怜錐竊定｡ｨ遉ｺbool)
+    列設定シートがあればその順・表示を優先し、無い列は既定順で後ろに追記（表示は True）。
+    config_dataframe を渡した場合はファイルを読まずその内容を列設定とみなす（xlwings 実行時用）。
+    戻り値: (並べ替え後 DataFrame, 実際の列名リスト, 設定ソース説明文字列, 列名→表示bool)
     """
     default_order = default_result_task_sheet_column_order(max_history_len)
     if config_dataframe is not None:
@@ -3633,13 +3633,13 @@ def apply_result_task_sheet_column_order(
     if user_rows:
         primary = user_rows
         source = (
-            f"繝槭け繝ｭ繝悶ャ繧ｯ縲鶏COLUMN_CONFIG_SHEET_NAME}縲�"
+            f"マクロブック「{COLUMN_CONFIG_SHEET_NAME}」"
             if config_dataframe is None
-            else f"繧ｷ繝ｼ繝医鶏COLUMN_CONFIG_SHEET_NAME}縲搾ｼ亥ｮ溯｡御ｸｭ繝悶ャ繧ｯ�ｼ�"
+            else f"シート「{COLUMN_CONFIG_SHEET_NAME}」（実行中ブック）"
         )
     else:
         primary = [(n, True) for n in default_order]
-        source = "譌｢螳�"
+        source = "既定"
 
     actual = list(df.columns)
     actual_set = set(actual)
@@ -3673,15 +3673,15 @@ def apply_result_task_sheet_column_order(
 
     if unknown:
         logging.warning(
-            "蛻苓ｨｭ螳�: 邨先棡縺ｫ辟｡縺�蛻怜錐繧堤┌隕悶＠縺ｾ縺励◆�ｼ域怙螟ｧ20莉ｶ�ｼ�: %s",
-            ", ".join(unknown[:20]) + (" 窶ｦ" if len(unknown) > 20 else ""),
+            "列設定: 結果に無い列名を無視しました（最大20件）: %s",
+            ", ".join(unknown[:20]) + (" …" if len(unknown) > 20 else ""),
         )
-    logging.info("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ蛻鈴��繧ｽ繝ｼ繧ｹ: %s�ｼ�%s 蛻暦ｼ�", source, len(ordered))
+    logging.info("結果_タスク一覧の列順ソース: %s（%s 列）", source, len(ordered))
     if not user_rows and config_dataframe is None:
         logging.info(
-            "蛻鈴��繝ｻ陦ｨ遉ｺ縺ｮ繧ｫ繧ｹ繧ｿ繝槭う繧ｺ: 繝槭け繝ｭ螳溯｡後ヶ繝�繧ｯ縺ｫ繧ｷ繝ｼ繝医�%s縲阪ｒ霑ｽ蜉�縲�"
-            " 隕句�ｺ縺励�%s縲阪�%s縲坂ｦ 陦ｨ遉ｺ縺� FALSE 縺ｮ蛻励�ｯ邨先棡繧ｷ繝ｼ繝医〒髱櫁｡ｨ遉ｺ縲�"
-            " 1陦後悟ｱ･豁ｴ縲阪〒螻･豁ｴ1�ｽ柤 繧呈諺蜈･縲７BA 縺ｮ縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ_繝√ぉ繝�繧ｯ繝懊ャ繧ｯ繧ｹ繧帝�咲ｽｮ縲阪〒繝√ぉ繝�繧ｯ繝懊ャ繧ｯ繧ｹ繧定｡ｨ遉ｺ蛻励↓騾｣蜍募庄閭ｽ縲�",
+            "列順・表示のカスタマイズ: マクロ実行ブックにシート「%s」を追加。"
+            " 見出し「%s」「%s」… 表示が FALSE の列は結果シートで非表示。"
+            " 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。",
             COLUMN_CONFIG_SHEET_NAME,
             COLUMN_CONFIG_HEADER_COL,
             COLUMN_CONFIG_VISIBLE_COL,
@@ -3690,7 +3690,7 @@ def apply_result_task_sheet_column_order(
 
 
 def _xlwings_sheet_to_matrix(sheet) -> list:
-    """xlwings Sheet 縺ｮ UsedRange 繧堤洸蠖｢縺ｮ list[list] 縺ｫ縺吶ｋ�ｼ�1陦後�ｮ縺ｿ縺ｧ繧�2谺｡蜈��ｼ峨�"""
+    """xlwings Sheet の UsedRange を矩形の list[list] にする（1行のみでも2次元）。"""
     ur = sheet.used_range
     if ur is None:
         return []
@@ -3707,7 +3707,7 @@ def _xlwings_sheet_to_matrix(sheet) -> list:
 
 
 def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
-    """1陦檎岼繧貞�怜錐縺ｨ縺ｿ縺ｪ縺� DataFrame 繧定ｿ斐☆縲らｩｺ縺ｪ繧� None縲�"""
+    """1行目を列名とみなし DataFrame を返す。空なら None。"""
     if not matrix or not matrix[0]:
         return None
     header = []
@@ -3723,10 +3723,10 @@ def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
 
 
 def _max_history_len_from_result_task_df_columns(columns) -> int:
-    """邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ縲悟ｱ･豁ｴn縲榊�励°繧� n 縺ｮ譛螟ｧ繧定ｿ斐☆�ｼ育┌縺代ｌ縺ｰ 1�ｼ峨�"""
+    """結果_タスク一覧の「履歴n」列から n の最大を返す（無ければ 1）。"""
     imax = 0
     for c in columns:
-        m = re.match(r"^螻･豁ｴ(\d+)$", str(c).strip())
+        m = re.match(r"^履歴(\d+)$", str(c).strip())
         if m:
             imax = max(imax, int(m.group(1)))
     return max(imax, 1)
@@ -3734,31 +3734,31 @@ def _max_history_len_from_result_task_df_columns(columns) -> int:
 
 def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None) -> bool:
     """
-    Excel 縺ｧ髢九＞縺ｦ縺�繧九�槭け繝ｭ繝悶ャ繧ｯ縺ｫ縺､縺�縺ｦ縲�
-    縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪�ｮ蜀�螳ｹ縺ｫ蜷医ｏ縺帙※縲檎ｵ先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪�ｮ蛻鈴��縺ｨ蛻鈴撼陦ｨ遉ｺ繧呈峩譁ｰ縺吶ｋ縲�
-    繝悶ャ繧ｯ縺ｯ莠句燕縺ｫ菫晏ｭ倥＠縲∵悽蜃ｦ逅�荳ｭ繧� Excel 荳翫〒髢九＞縺溘∪縺ｾ縺ｫ縺吶ｋ縺薙→�ｼ�xlwings 縺梧磁邯壹☆繧具ｼ峨�
+    Excel で開いているマクロブックについて、
+    「列設定_結果_タスク一覧」の内容に合わせて「結果_タスク一覧」の列順と列非表示を更新する。
+    ブックは事前に保存し、本処理中も Excel 上で開いたままにすること（xlwings が接続する）。
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 繝悶ャ繧ｯ繝代せ縺檎ｩｺ縺ｧ縺呻ｼ�TASK_INPUT_WORKBOOK 繧定ｨｭ螳壹＠縺ｦ縺上□縺輔＞�ｼ峨�")
+        logging.error("結果_タスク一覧 列適用: ブックパスが空です（TASK_INPUT_WORKBOOK を設定してください）。")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: xlwings 縺� import 縺ｧ縺阪∪縺帙ｓ縲Ｑip install xlwings 繧堤｢ｺ隱阪＠縺ｦ縺上□縺輔＞縲�")
+        logging.error("結果_タスク一覧 列適用: xlwings が import できません。pip install xlwings を確認してください。")
         return False
 
     try:
         wb = xw.Book(path)
     except Exception as e:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 繝悶ャ繧ｯ縺ｫ謗･邯壹〒縺阪∪縺帙ｓ: %s", e)
+        logging.error("結果_タスク一覧 列適用: ブックに接続できません: %s", e)
         return False
 
     try:
         ws_res = wb.sheets[RESULT_TASK_SHEET_NAME]
         ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
     except Exception as e:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 蠢�隕√す繝ｼ繝医′隕九▽縺九ｊ縺ｾ縺帙ｓ: %s", e)
+        logging.error("結果_タスク一覧 列適用: 必要シートが見つかりません: %s", e)
         return False
 
     mat_res = _xlwings_sheet_to_matrix(ws_res)
@@ -3766,17 +3766,17 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
     df_res = _matrix_to_dataframe_header_first(mat_res)
     df_cfg = _matrix_to_dataframe_header_first(mat_cfg)
     if df_res is None or df_res.empty:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 縲�%s縲阪↓繝�繝ｼ繧ｿ縺後≠繧翫∪縺帙ｓ縲�", RESULT_TASK_SHEET_NAME)
+        logging.error("結果_タスク一覧 列適用: 「%s」にデータがありません。", RESULT_TASK_SHEET_NAME)
         return False
     if df_cfg is None:
-        logging.error("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 縲�%s縲阪�ｮ隕句�ｺ縺励ｒ隱ｭ繧√∪縺帙ｓ縲�", COLUMN_CONFIG_SHEET_NAME)
+        logging.error("結果_タスク一覧 列適用: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
         return False
 
     max_h = _max_history_len_from_result_task_df_columns(df_res.columns)
     rows_cfg = parse_result_task_column_config_dataframe(df_cfg, max_h)
     if not rows_cfg:
         logging.error(
-            "邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 縲�%s縲阪↓譛牙柑縺ｪ蛻怜錐陦後′縺ゅｊ縺ｾ縺帙ｓ縲�",
+            "結果_タスク一覧 列適用: 「%s」に有効な列名行がありません。",
             COLUMN_CONFIG_SHEET_NAME,
         )
         return False
@@ -3822,15 +3822,15 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
             try:
                 ws_res.range((1, ci)).api.EntireColumn.Hidden = True
             except Exception as e:
-                logging.warning("蛻鈴撼陦ｨ遉ｺ縺ｫ螟ｱ謨暦ｼ亥��%s %s�ｼ�: %s", ci, col_name, e)
+                logging.warning("列非表示に失敗（列%s %s）: %s", ci, col_name, e)
 
     try:
         wb.save()
     except Exception as e:
-        logging.warning("邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ: 菫晏ｭ倥〒隴ｦ蜻奇ｼ医ョ繝ｼ繧ｿ縺ｯ繧ｷ繝ｼ繝井ｸ翫�ｯ譖ｴ譁ｰ貂医∩縺ｮ蜿ｯ閭ｽ諤ｧ�ｼ�: %s", e)
+        logging.warning("結果_タスク一覧 列適用: 保存で警告（データはシート上は更新済みの可能性）: %s", e)
 
     logging.info(
-        "邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ 蛻鈴←逕ｨ螳御ｺ�: %s�ｼ�%s 蛻励�髱櫁｡ｨ遉ｺ=%s�ｼ�",
+        "結果_タスク一覧 列適用完了: %s（%s 列、非表示=%s）",
         source,
         len(ordered),
         sum(1 for c in ordered if not vis_map.get(c, True)),
@@ -3839,7 +3839,7 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
 
 
 def apply_result_task_column_layout_only() -> bool:
-    """迺ｰ蠅�螟画焚 TASK_INPUT_WORKBOOK 縺ｮ繝悶ャ繧ｯ縺ｫ蟇ｾ縺怜�苓ｨｭ螳壹ｒ驕ｩ逕ｨ縺吶ｋ�ｼ�VBA 繝懊ち繝ｳ逕ｨ�ｼ峨�"""
+    """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return apply_result_task_column_layout_via_xlwings(p)
 
@@ -3850,33 +3850,38 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     workbook_path: str | None = None,
 ) -> bool:
     """
-    Excel 縺ｧ髢九＞縺溘�槭け繝ｭ繝悶ャ繧ｯ蜀�縺ｮ縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪↓縺､縺�縺ｦ縲�
-    谿ｵ髫�2 縺ｨ蜷後§ ``fill_plan_dispatch_trial_order_column_stage1`` 縺ｧ縲碁�榊床隧ｦ陦碁��逡ｪ縲阪ｒ
-    蜀堺ｻ倅ｸ弱＠縲∵ｮｵ髫�1 蜃ｺ蜉帷峩蜑阪→蜷後§謇矩��縺ｧ陦後ｒ荳ｦ縺ｹ譖ｿ縺医ｋ縲�
-    �ｼ域悴菫晏ｭ倥�ｮ邱ｨ髮�蛻�繧� xlwings 縺ｧ蜿肴丐縺輔○繧九◆繧� read_excel 縺ｯ菴ｿ繧上↑縺��ｼ�
+    Excel で開いたマクロブック内の「配台計画_タスク入力」について、
+    段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
+    再付与し、段階1 出力直前と同じ手順で行を並べ替える。
+    （未保存の編集分も xlwings で反映させるため read_excel は使わない）
+
+    直前に ``_apply_planning_sheet_post_load_mutations`` を実行するため、
+    ``load_planning_tasks_df``（段階2 読込）と同じ経路で「設定_配台不要工程」の同期反映・
+    分割行の自動配台不要・ルール適用が行われる。「配台不要」を手動でクリアした行は、
+    ルールで再び yes にならない限り配台対象に戻り、試行順に含まれる。
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
     ).strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 繝悶ャ繧ｯ繝代せ縺檎ｩｺ縺ｧ縺吶�")
+        logging.error("配台試行順番更新: ブックパスが空です。")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: xlwings 縺後≠繧翫∪縺帙ｓ縲�")
+        logging.error("配台試行順番更新: xlwings がありません。")
         return False
     try:
         wb = xw.Book(path)
         ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
-        logging.error("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 繧ｷ繝ｼ繝域磁邯壹↓螟ｱ謨�: %s", e)
+        logging.error("配台試行順番更新: シート接続に失敗: %s", e)
         return False
 
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
-        logging.warning("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 繝�繝ｼ繧ｿ陦後′縺ゅｊ縺ｾ縺帙ｓ縲�")
+        logging.warning("配台試行順番更新: データ行がありません。")
         return False
 
     df = df.copy()
@@ -3888,16 +3893,16 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
     df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
-    _apply_planning_sheet_post_load_mutations(df, path, "驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ")
+    _apply_planning_sheet_post_load_mutations(df, path, "配台試行順番更新")
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
-        logging.error("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 蛻励�%s縲阪′縺ゅｊ縺ｾ縺帙ｓ縲�", dto_col)
+        logging.error("配台試行順番更新: 列「%s」がありません。", dto_col)
         return False
 
     dto_idx = df.columns.get_loc(dto_col)
     if isinstance(dto_idx, slice):
-        logging.error("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 蛻励�%s縲阪′隍�謨ｰ縺ゅｊ縺ｾ縺吶�", dto_col)
+        logging.error("配台試行順番更新: 列「%s」が複数あります。", dto_col)
         return False
     for ri in range(len(df)):
         df.iat[ri, dto_idx] = ""
@@ -3917,7 +3922,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
             need_combo_col_index,
         ) = load_skills_and_needs()
     except Exception as e:
-        logging.exception("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: master 隱ｭ霎ｼ縺ｫ螟ｱ謨�: %s", e)
+        logging.exception("配台試行順番更新: master 読込に失敗: %s", e)
         return False
 
     try:
@@ -3930,7 +3935,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
             equipment_list,
         )
     except Exception as e:
-        logging.exception("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 隧ｦ陦碁��險育ｮ励↓螟ｱ謨�: %s", e)
+        logging.exception("配台試行順番更新: 試行順計算に失敗: %s", e)
         return False
 
     df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
@@ -3974,16 +3979,16 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
         n_r = len(new_mat)
         ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
     except Exception as e:
-        logging.exception("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 繧ｷ繝ｼ繝域嶌霎ｼ縺ｫ螟ｱ謨�: %s", e)
+        logging.exception("配台試行順番更新: シート書込に失敗: %s", e)
         return False
 
     try:
         wb.save()
     except Exception as e:
-        logging.warning("驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: Save 隴ｦ蜻�: %s", e)
+        logging.warning("配台試行順番更新: Save 警告: %s", e)
 
     logging.info(
-        "驟榊床隧ｦ陦碁��逡ｪ譖ｴ譁ｰ: 縲�%s縲阪ｒ %s 陦後〒譖ｴ譁ｰ縺励∪縺励◆縲�",
+        "配台試行順番更新: 「%s」を %s 行で更新しました。",
         PLAN_INPUT_SHEET_NAME,
         len(df_sorted),
     )
@@ -3991,15 +3996,15 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
 
 def refresh_plan_input_dispatch_trial_order_only() -> bool:
-    """TASK_INPUT_WORKBOOK 縺ｫ蟇ｾ縺吶ｋ驟榊床隧ｦ陦碁��逡ｪ蜀崎ｨ育ｮ暦ｼ�VBA / cmd 邨檎罰縺ｮ繧ｨ繝ｳ繝医Μ�ｼ峨�"""
+    """TASK_INPUT_WORKBOOK に対する配台試行順番再計算（VBA / cmd 経由のエントリ）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return refresh_plan_input_dispatch_trial_order_via_xlwings(p)
 
 
 def apply_plan_input_column_layout_only() -> bool:
     """
-    驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙�ｮ蛻鈴��繝ｻ陦ｨ遉ｺ縺ｮ縺ｿ繧帝←逕ｨ縺吶ｋ莠亥ｮ夲ｼ�VBA 逕ｨ�ｼ峨�
-    譛ｪ螳溯｣�縲ょ�励�ｮ荳ｦ縺ｳ縺ｯ谿ｵ髫�1蜃ｺ蜉帙∪縺溘�ｯ謇句虚謨ｴ逅�繧剃ｽｿ逕ｨ縺励※縺上□縺輔＞縲�
+    配台計画_タスク入力の列順・表示のみを適用する予定（VBA 用）。
+    未実装。列の並びは段階1出力または手動整理を使用してください。
     """
     logging.warning("apply_plan_input_column_layout_only: not implemented")
     return False
@@ -4008,23 +4013,23 @@ def apply_plan_input_column_layout_only() -> bool:
 
 def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
     """
-    縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪�ｮ A:B 縺�縺代ｒ縲�驥崎､�蛻怜錐繧帝勁縺�縺滉ｸ隕ｧ縺ｧ譖ｸ縺咲峩縺呻ｼ亥�医�ｮ陦後ｒ蜆ｪ蜈茨ｼ峨�
-    縲檎ｵ先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲阪′縺ゅｌ縺ｰ螻･豁ｴ蛻玲焚縺ｮ隗｣驥医↓菴ｿ縺�縲らｵ先棡繧ｷ繝ｼ繝医�ｯ螟画峩縺励↑縺�縲�
+    「列設定_結果_タスク一覧」の A:B だけを、重複列名を除いた一覧で書き直す（先の行を優先）。
+    「結果_タスク一覧」があれば履歴列数の解釈に使う。結果シートは変更しない。
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: 繝悶ャ繧ｯ繝代せ縺檎ｩｺ縺ｧ縺吶�")
+        logging.error("列設定 重複整理: ブックパスが空です。")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: xlwings 縺� import 縺ｧ縺阪∪縺帙ｓ縲�")
+        logging.error("列設定 重複整理: xlwings が import できません。")
         return False
     try:
         wb = xw.Book(path)
         ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
     except Exception as e:
-        logging.error("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: 謗･邯壹∪縺溘�ｯ繧ｷ繝ｼ繝亥叙蠕励↓螟ｱ謨�: %s", e)
+        logging.error("列設定 重複整理: 接続またはシート取得に失敗: %s", e)
         return False
 
     max_h = 1
@@ -4038,19 +4043,19 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
     df_cfg = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_cfg))
     if df_cfg is None:
-        logging.error("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: 縲�%s縲阪�ｮ隕句�ｺ縺励ｒ隱ｭ繧√∪縺帙ｓ縲�", COLUMN_CONFIG_SHEET_NAME)
+        logging.error("列設定 重複整理: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
         return False
     rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
     if not rows:
-        logging.warning("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: 譛牙柑縺ｪ繝�繝ｼ繧ｿ陦後′縺ゅｊ縺ｾ縺帙ｓ縲�")
+        logging.warning("列設定 重複整理: 有効なデータ行がありません。")
         return False
     _xlwings_write_column_config_sheet_ab(ws_cfg, rows)
     try:
         wb.save()
     except Exception as e:
-        logging.warning("蛻苓ｨｭ螳� 驥崎､�謨ｴ逅�: 菫晏ｭ倩ｭｦ蜻�: %s", e)
+        logging.warning("列設定 重複整理: 保存警告: %s", e)
     logging.info(
-        "蛻苓ｨｭ螳壹�%s縲阪ｒ驥崎､�髯､蜴ｻ貂医∩縺ｧ %s 陦後↓謨ｴ逅�縺励∪縺励◆�ｼ亥ｱ･豁ｴ螻暮幕蠕後�ｮ陦梧焚�ｼ峨�",
+        "列設定「%s」を重複除去済みで %s 行に整理しました（履歴展開後の行数）。",
         COLUMN_CONFIG_SHEET_NAME,
         len(rows),
     )
@@ -4058,28 +4063,28 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
 
 def dedupe_result_task_column_config_sheet_only() -> bool:
-    """迺ｰ蠅�螟画焚 TASK_INPUT_WORKBOOK 縺ｮ繝悶ャ繧ｯ縺ｮ蛻苓ｨｭ螳壹す繝ｼ繝医□縺鷹㍾隍�謨ｴ逅��ｼ�VBA 逕ｨ�ｼ峨�"""
+    """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートだけ重複整理（VBA 用）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return dedupe_result_task_column_config_sheet_via_xlwings(p)
 
 
 def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vis_map: dict):
-    """邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｧ縲」is_map 縺� False 縺ｮ蛻励ｒ髱櫁｡ｨ遉ｺ縺ｫ縺吶ｋ縲�"""
+    """結果_タスク一覧で、vis_map が False の列を非表示にする。"""
     for idx, col_name in enumerate(column_names, 1):
         if not vis_map.get(col_name, True):
             worksheet.column_dimensions[get_column_letter(idx)].hidden = True
 
 
 def _norm_history_member_label(name: str) -> str:
-    """螻･豁ｴ縺ｮ諡�蠖灘錐豈碑ｼ�逕ｨ�ｼ亥�ｨ隗堤ｩｺ逋ｽ繧貞濠隗�1蛟句喧繝ｻ蜑榊ｾ荊rim繝ｻ騾｣邯夂ｩｺ逋ｽ縺ｮ蝨ｧ邵ｮ�ｼ峨�"""
+    """履歴の担当名比較用（全角空白を半角1個化・前後trim・連続空白の圧縮）。"""
     t = str(name or "").replace("\u3000", " ").strip()
     return " ".join(t.split())
 
 
 def _history_team_text_main_assignment_only(h: dict) -> str:
     """
-    邨先棡繧ｷ繝ｼ繝医梧球蠖薙肴ｬ�逕ｨ: 繝｡繧､繝ｳ蜑ｲ莉倡｢ｺ螳壽凾轤ｹ縺ｮ蜷榊燕�ｼ井ｽ吝鴨霑ｽ險倥し繝悶�ｯ蜷ｫ繧√↑縺��ｼ峨�
-    append_surplus 蠕後�ｮ h['team'] 縺九ｉ post_dispatch_surplus_names 繧帝勁螟悶☆繧九�
+    結果シート「担当」欄用: メイン割付確定時点の名前（余力追記サブは含めない）。
+    append_surplus 後の h['team'] から post_dispatch_surplus_names を除外する。
     """
     raw = (h.get("team") or "").strip()
     if not raw:
@@ -4098,37 +4103,37 @@ def _history_team_text_main_assignment_only(h: dict) -> str:
 
 
 def _format_result_task_history_cell(task: dict, h: dict) -> str:
-    """邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ螻･豁ｴ繧ｻ繝ｫ譁�蟄怜�暦ｼ育ｵ�蜷医○陦ｨ縺ｮ謗｡逕ｨ陦栗D繝ｻ繝｡繧､繝ｳ霑ｽ蜉�莠ｺ謨ｰ繝ｻ菴吝鴨霑ｽ險倥�ｮ譏守､ｺ繧貞性繧�ｼ峨�"""
+    """結果_タスク一覧の履歴セル文字列（組合せ表の採用行ID・メイン追加人数・余力追記の明示を含む）。"""
     um = task.get("unit_m") or 0
     try:
         done_r = int(h["done_m"] / um) if um else 0
     except (TypeError, ValueError, ZeroDivisionError):
         done_r = 0
     dm = h.get("done_m", 0)
-    parts_out: list[str] = [f"繝ｻ縲須h.get('date', '')}縲托ｼ嘴done_r}R ({dm}m)"]
+    parts_out: list[str] = [f"・【{h.get('date', '')}】：{done_r}R ({dm}m)"]
     cid = h.get("combo_sheet_row_id")
     if cid is not None:
         try:
-            parts_out.append(f"邨�蜷医○陦ｨ#{int(cid)}")
+            parts_out.append(f"組合せ表#{int(cid)}")
         except (TypeError, ValueError):
-            parts_out.append(f"邨�蜷医○陦ｨ#{cid}")
-    parts_out.append(f"諡�蠖甜{_history_team_text_main_assignment_only(h)}]")
+            parts_out.append(f"組合せ表#{cid}")
+    parts_out.append(f"担当[{_history_team_text_main_assignment_only(h)}]")
     sm = h.get("surplus_member_names") or []
     if sm:
-        parts_out.append(f"霑ｽ蜉�[{','.join(str(x) for x in sm)}]")
+        parts_out.append(f"追加[{','.join(str(x) for x in sm)}]")
     ps = h.get("post_dispatch_surplus_names") or []
     if ps:
-        parts_out.append(f"菴吝鴨霑ｽ險麓{','.join(str(x) for x in ps)}]")
+        parts_out.append(f"余力追記[{','.join(str(x) for x in ps)}]")
     return " ".join(parts_out)
 
 
-_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^繝ｻ(縲深^縲曽*縲�)(.*)$", re.DOTALL)
+_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^・(【[^】]*】)(.*)$", re.DOTALL)
 
 
 def _apply_result_task_history_rich_text(worksheet, column_names: list):
     """
-    螻･豁ｴ蛻�: 縲後�ｻ縲先律莉倥托ｼ壺ｦ縲阪�ｮ譌･莉俶峡蠑ｧ驛ｨ蛻�繧帝搨濶ｲ繝ｪ繝�繝√ユ繧ｭ繧ｹ繝医↓縺吶ｋ縲�
-    openpyxl 3.1 譛ｪ貅縺ｧ縺ｯ繧ｹ繧ｭ繝�繝暦ｼ域枚蟄怜�励�ｮ縲舌代�ｮ縺ｿ�ｼ峨�
+    履歴列: 「・【日付】：…」の日付括弧部分を青色リッチテキストにする。
+    openpyxl 3.1 未満ではスキップ（文字列の【】のみ）。
     """
     try:
         from openpyxl.cell.rich_text import CellRichText, TextBlock
@@ -4138,7 +4143,7 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
         return
 
     hist_cols = [
-        i + 1 for i, c in enumerate(column_names) if str(c).startswith("螻･豁ｴ")
+        i + 1 for i, c in enumerate(column_names) if str(c).startswith("履歴")
     ]
     if not hist_cols:
         return
@@ -4153,14 +4158,14 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
         for ci in hist_cols:
             cell = worksheet.cell(row=r, column=ci)
             v = cell.value
-            if not isinstance(v, str) or not v.startswith("繝ｻ縲�"):
+            if not isinstance(v, str) or not v.startswith("・【"):
                 continue
             m = _RESULT_TASK_HISTORY_RICH_HEAD_RE.match(v)
             if not m:
                 continue
             bracketed, rest = m.group(1), m.group(2)
             cell.value = CellRichText(
-                TextBlock(plain_if, "繝ｻ"),
+                TextBlock(plain_if, "・"),
                 TextBlock(blue_if, bracketed),
                 TextBlock(plain_if, rest),
             )
@@ -4169,8 +4174,8 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
 
 def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
     """
-    邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ: 蝗樒ｭ皮ｴ肴悄繝ｻ謖�螳夂ｴ肴悄繝ｻ險育判蝓ｺ貅也ｴ肴悄繝ｻ蜴溷渚謚募�･譌･繝ｻ蜉�蟾･髢句ｧ区律縺ｮ繧ｻ繝ｫ繧帝搨濶ｲ縺ｫ縺吶ｋ縲�
-    �ｼ亥ｱ･豁ｴ蛻励�ｮ縲先律莉倥代�ｯ _apply_result_task_history_rich_text 蛛ｴ縲り牡縺ｯ 0070C0 縺ｧ邨ｱ荳�ｼ�
+    結果_タスク一覧: 回答納期・指定納期・計画基準納期・原反投入日・加工開始日のセルを青色にする。
+    （履歴列の【日付】は _apply_result_task_history_rich_text 側。色は 0070C0 で統一）
     """
     blue = _result_font(color="0070C0")
     top = Alignment(wrap_text=False, vertical="top")
@@ -4192,12 +4197,12 @@ def _apply_result_task_history_need_surplus_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    need縲碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ縲咲嶌蠖薙〒蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ繧定ｶ�縺医※謗｡逕ｨ縺励◆繝悶Ο繝�繧ｯ縲√∪縺溘�ｯ
-    繝｡繧､繝ｳ螳御ｺ�蠕後�ｮ菴吝鴨霑ｽ險倥〒繧ｵ繝悶′蠅励∴縺溘ヶ繝ｭ繝�繧ｯ縺ｫ蟇ｾ蠢懊☆繧九悟ｱ･豁ｴn縲阪そ繝ｫ繧定埋鮟�縺ｫ蝪励ｋ縲�
+    need「配台時追加人数」相当で基本必要人数を超えて採用したブロック、または
+    メイン完了後の余力追記でサブが増えたブロックに対応する「履歴n」セルを薄黄に塗る。
     """
     hist_cols: list[tuple[int, int]] = []
     for col_idx, col_name in enumerate(column_names, 1):
-        m = re.match(r"^螻･豁ｴ(\d+)$", str(col_name).strip())
+        m = re.match(r"^履歴(\d+)$", str(col_name).strip())
         if m:
             hist_cols.append((int(m.group(1)), col_idx))
     hist_cols.sort(key=lambda x: x[0])
@@ -4225,11 +4230,11 @@ def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    蜉�蟾･蜀�螳ｹ縺ｫ蟾･遞句錐縺悟性縺ｾ繧後↑縺�陦後�ｮ縲後ち繧ｹ繧ｯID縲阪そ繝ｫ繧定ｵ､閭梧勹繝ｻ逋ｽ譁�蟄励↓縺吶ｋ�ｼ亥��繝�繝ｼ繧ｿ荳肴紛蜷医�ｮ隕冶ｪ咲畑�ｼ峨�
+    加工内容に工程名が含まれない行の「タスクID」セルを赤背景・白文字にする（元データ不整合の視認用）。
     """
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
-        if str(col_name) == "繧ｿ繧ｹ繧ｯID":
+        if str(col_name) == "タスクID":
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None or worksheet.max_row < 2:
@@ -4251,13 +4256,13 @@ def _apply_result_task_plan_end_answer_spec_16_no_highlight(
     worksheet, column_names: list
 ):
     """
-    蛻励碁�榊ｮ契蝗樒ｭ疲欠螳�16譎ゅ∪縺ｧ縲阪′縲後＞縺�縺医阪�ｮ繧ｻ繝ｫ繧定ｵ､閭梧勹繝ｻ逋ｽ譁�蟄励�ｻ螟ｪ蟄励↓縺吶ｋ縲�
-    蛻苓ｨｭ螳壹〒譌ｧ蜷阪碁�榊ｮ契蝓ｺ貅�16譎ゅ∪縺ｧ縲阪�ｮ縺ｾ縺ｾ縺ｮ隕句�ｺ縺励↓繧ょｯｾ蠢懊�
+    列「配完_回答指定16時まで」が「いいえ」のセルを赤背景・白文字・太字にする。
+    列設定で旧名「配完_基準16時まで」のままの見出しにも対応。
     """
     target_names = frozenset(
         {
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
-            "驟榊ｮ契蝓ｺ貅�16譎ゅ∪縺ｧ",
+            "配完_基準16時まで",
         }
     )
     col_idx = None
@@ -4276,7 +4281,7 @@ def _apply_result_task_plan_end_answer_spec_16_no_highlight(
         if v is None:
             continue
         s = str(v).strip()
-        if s != "縺�縺�縺�":
+        if s != "いいえ":
             continue
         cell.fill = fill_red
         cell.font = font_white_bold
@@ -4291,14 +4296,14 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
     schedule_sheet_name: str,
 ) -> None:
     """
-    邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ縲後ち繧ｹ繧ｯID縲阪そ繝ｫ縺ｫ縲∫ｵ先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｧ蠖楢ｩｲ繧ｿ繧ｹ繧ｯ縺梧怙蛻昴↓迴ｾ繧後ｋ繧ｻ繝ｫ縺ｸ縺ｮ蜀�驛ｨ繝上う繝代�ｼ繝ｪ繝ｳ繧ｯ繧剃ｻ倅ｸ弱☆繧九�
-    譎る俣蜑ｲ縺ｫ迴ｾ繧後↑縺�繧ｿ繧ｹ繧ｯ�ｼ域悴蜑ｲ蠖薙�ｮ縺ｿ遲会ｼ峨�ｯ繝ｪ繝ｳ繧ｯ縺ｪ縺励�
+    結果_タスク一覧の「タスクID」セルに、結果_設備毎の時間割で当該タスクが最初に現れるセルへの内部ハイパーリンクを付与する。
+    時間割に現れないタスク（未割当のみ等）はリンクなし。
     """
     if not task_id_to_schedule_cell or worksheet_tasks.max_row < 2:
         return
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
-        if str(col_name) == "繧ｿ繧ｹ繧ｯID":
+        if str(col_name) == "タスクID":
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None:
@@ -4331,7 +4336,7 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
 
 
 def _add_column_config_sheet_helpers(ws_cfg, num_data_rows: int):
-    """陦ｨ遉ｺ蛻励↓ TRUE/FALSE 繝ｪ繧ｹ繝茨ｼ医メ繧ｧ繝�繧ｯ縺ｮ莉｣繧上ｊ縺ｫ繝励Ν繝繧ｦ繝ｳ�ｼ峨ｒ莉倅ｸ弱�"""
+    """表示列に TRUE/FALSE リスト（チェックの代わりにプルダウン）を付与。"""
     last_r = max(num_data_rows + 1, 2)
     cap = max(last_r + 50, 500)
     dv = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
@@ -4344,11 +4349,11 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    pandas/openpyxl 縺ｧ譁ｰ隕丈ｽ懈�舌＠縺溽ｵ先棡繝悶ャ繧ｯ縺ｫ縺ｯ蝗ｳ蠖｢縺悟性縺ｾ繧後↑縺�縲�
-    譌｢螳壹〒譛牙柑�ｼ育腸蠅�螟画焚縺ｧ 0/false/no/off 縺ｮ縺ｨ縺咲┌蜉ｹ�ｼ峨ょ�･蜉帙ヶ繝�繧ｯ縺ｮ
-    縲悟�苓ｨｭ螳喟邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縲堺ｸ翫�ｮ Shapes 繧堤ｵ先棡繝悶ャ繧ｯ縺ｮ蜷悟錐繧ｷ繝ｼ繝医∈繧ｳ繝斐�ｼ縺励�
-    蜷�蝗ｳ蠖｢縺ｮ Left/Top/Width/Height�ｼ医♀繧医�ｳ蜿悶ｌ繧九→縺� Placement�ｼ峨ｒ蜈･蜉帛�ｴ縺ｨ蜷後§縺ｫ謌ｻ縺吶�
-    openpyxl 縺ｫ繧医ｋ蠖楢ｩｲ繝悶ャ繧ｯ縺ｸ縺ｮ菫晏ｭ倥′縺吶∋縺ｦ邨ゅｏ縺｣縺溷ｾ後↓蜻ｼ縺ｶ縺薙→縲�
+    pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
+    既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
+    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
+    各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
+    openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
@@ -4356,19 +4361,19 @@ def _stage2_try_copy_column_config_shapes_from_input(
     ip = (input_path or "").strip()
     if not rp or not os.path.isfile(rp):
         logging.warning(
-            "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 邨先棡繝代せ縺檎┌蜉ｹ縺ｮ縺溘ａ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�"
+            "列設定シート図形コピー: 結果パスが無効のためスキップしました。"
         )
         return
     if not ip or not os.path.isfile(ip):
         logging.warning(
-            "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: TASK_INPUT_WORKBOOK 縺檎┌蜉ｹ縺ｮ縺溘ａ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�"
+            "列設定シート図形コピー: TASK_INPUT_WORKBOOK が無効のためスキップしました。"
         )
         return
     try:
         import xlwings as xw
     except ImportError:
         logging.warning(
-            "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: xlwings 縺� import 縺ｧ縺阪∪縺帙ｓ縲�"
+            "列設定シート図形コピー: xlwings が import できません。"
         )
         return
     app = None
@@ -4383,7 +4388,7 @@ def _stage2_try_copy_column_config_shapes_from_input(
             ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
             logging.warning(
-                "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 邨先棡繝悶ャ繧ｯ縺ｫ繧ｷ繝ｼ繝医�%s縲阪′縺ゅｊ縺ｾ縺帙ｓ縲�",
+                "列設定シート図形コピー: 結果ブックにシート「%s」がありません。",
                 COLUMN_CONFIG_SHEET_NAME,
             )
             return
@@ -4391,14 +4396,14 @@ def _stage2_try_copy_column_config_shapes_from_input(
             ws_in = wb_in.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
             logging.warning(
-                "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 蜈･蜉帙ヶ繝�繧ｯ縺ｫ繧ｷ繝ｼ繝医�%s縲阪′縺ゅｊ縺ｾ縺帙ｓ縲�",
+                "列設定シート図形コピー: 入力ブックにシート「%s」がありません。",
                 COLUMN_CONFIG_SHEET_NAME,
             )
             return
         n_shapes = int(ws_in.api.Shapes.Count)
         if n_shapes <= 0:
             logging.info(
-                "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 蜈･蜉帛�ｴ縺ｫ蝗ｳ蠖｢縺後≠繧翫∪縺帙ｓ�ｼ医せ繧ｭ繝�繝暦ｼ峨�"
+                "列設定シート図形コピー: 入力側に図形がありません（スキップ）。"
             )
             return
         ws_out.activate()
@@ -4433,12 +4438,12 @@ def _stage2_try_copy_column_config_shapes_from_input(
             dst.Height = height
         wb_out.save()
         logging.info(
-            "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 蜈･蜉帙°繧� %s 蛟九�ｮ蝗ｳ蠖｢繧堤ｵ先棡繝悶ャ繧ｯ縺ｸ隍�陬ｽ縺励∪縺励◆縲�",
+            "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
             n_shapes,
         )
     except Exception as e:
         logging.warning(
-            "蛻苓ｨｭ螳壹す繝ｼ繝亥峙蠖｢繧ｳ繝斐�ｼ: 螟ｱ謨励＠縺ｾ縺励◆�ｼ�%s�ｼ峨�Excel 蜊�譛峨�ｻCOM 繧ｨ繝ｩ繝ｼ遲峨�ｮ蜿ｯ閭ｽ諤ｧ縺後≠繧翫∪縺吶�",
+            "列設定シート図形コピー: 失敗しました（%s）。Excel 占有・COM エラー等の可能性があります。",
             e,
         )
     finally:
@@ -4474,7 +4479,7 @@ def _coerce_actual_sheet_datetime(val):
 
 
 def _actual_row_time_bounds(row):
-    """蜉�蟾･螳溽ｸｾDATA 縺ｮ1陦後°繧� (髢句ｧ�, 邨ゆｺ�) 繧貞ｾ励ｋ縲りｧ｣縺代↑縺代ｌ縺ｰ (None, None)縲�"""
+    """加工実績DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
@@ -4520,8 +4525,8 @@ def _actual_row_time_bounds(row):
 
 def load_machining_actuals_df():
     """
-    繝槭け繝ｭ繝悶ャ繧ｯ縺ｮ縲悟刈蟾･螳溽ｸｾDATA縲阪ｒ隱ｭ繧�ｼ育┌縺代ｌ縺ｰ遨ｺ DataFrame�ｼ峨�
-    Power Query 遲峨〒逕ｨ諢上＠縺溘す繝ｼ繝医ｒ諠ｳ螳壹�
+    マクロブックの「加工実績DATA」を読む（無ければ空 DataFrame）。
+    Power Query 等で用意したシートを想定。
     """
     if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
         return pd.DataFrame()
@@ -4529,23 +4534,23 @@ def load_machining_actuals_df():
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUALS_SHEET_NAME)
     except ValueError:
         logging.info(
-            f"繧ｷ繝ｼ繝医鶏ACTUALS_SHEET_NAME}縲阪′辟｡縺�縺溘ａ縲√ぎ繝ｳ繝医�ｮ螳溽ｸｾ陦後�ｯ蜃ｺ蜉帙＠縺ｾ縺帙ｓ縲�"
+            f"シート「{ACTUALS_SHEET_NAME}」が無いため、ガントの実績行は出力しません。"
         )
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, ACTUAL_HEADER_CANONICAL)
     logging.info(
-        f"蜉�蟾･螳溽ｸｾ: '{TASKS_INPUT_WORKBOOK}' 縺ｮ '{ACTUALS_SHEET_NAME}' 繧� {len(df)} 陦瑚ｪｭ縺ｿ霎ｼ縺ｿ縲�"
+        f"加工実績: '{TASKS_INPUT_WORKBOOK}' の '{ACTUALS_SHEET_NAME}' を {len(df)} 行読み込み。"
     )
     return df
 
 
 def build_actual_timeline_events(df, equipment_list, sorted_dates):
     """
-    螳溽ｸｾ繧ｷ繝ｼ繝医�ｮ蜷�陦後ｒ繧ｬ繝ｳ繝育畑繧､繝吶Φ繝医∈螟画鋤縲�
-    險育判陦ｨ遉ｺ譌･�ｼ�sorted_dates�ｼ峨°縺､險ｭ蛯吶�槭せ繧ｿ縺ｫ荳閾ｴ縺吶ｋ縲悟ｷ･遞句錐縲阪□縺大ｯｾ雎｡縲�
-    蟾･遞句錐縺ｯ NFKC繝ｻ遨ｺ逋ｽ豁｣隕丞喧蠕後↓繝槭せ繧ｿ蛻怜錐縺ｸ繝槭ャ繝斐Φ繧ｰ縺吶ｋ縲�
-    譎ょ綾縺ｯ DEFAULT_START_TIME / DEFAULT_END_TIME 縺ｮ譫�蜀�縺ｫ繧ｯ繝ｪ繝�繝励�
+    実績シートの各行をガント用イベントへ変換。
+    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」だけ対象。
+    工程名は NFKC・空白正規化後にマスタ列名へマッピングする。
+    時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
     """
     if df is None or len(df) == 0:
         return []
@@ -4618,41 +4623,41 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
 
     if bad_eq:
         logging.warning(
-            f"蜉�蟾･螳溽ｸｾDATA: 蟾･遞句錐縺後�槭せ繧ｿ險ｭ蛯吶→荳閾ｴ縺励↑縺�陦後ｒ {bad_eq} 莉ｶ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆�ｼ育ｩｺ逋ｽ遲峨�ｯ豁｣隕丞喧貂医∩�ｼ峨�"
+            f"加工実績DATA: 工程名がマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
         )
         if mismatch_norm_samples:
             logging.info(
-                "  荳堺ｸ閾ｴ縺ｨ縺ｪ縺｣縺溷ｷ･遞句錐縺ｮ豁｣隕丞喧蠕後し繝ｳ繝励Ν: "
+                "  不一致となった工程名の正規化後サンプル: "
                 + " | ".join(mismatch_norm_samples[:12])
             )
     if bad_time:
         logging.info(
-            f"蜉�蟾･螳溽ｸｾDATA: 髢句ｧ�/邨ゆｺ�譌･譎ゅ′隗｣驥医〒縺阪↑縺�陦後ｒ {bad_time} 莉ｶ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�"
+            f"加工実績DATA: 開始/終了日時が解釈できない行を {bad_time} 件スキップしました。"
         )
     if no_plan_overlap and sorted_dates:
         logging.info(
-            f"蜉�蟾･螳溽ｸｾDATA: 險ｭ蛯吶�ｻ譌･譎ゅ�ｯ譛牙柑縺�縺後∬ｨ育判蟇ｾ雎｡譌･�ｼ亥ｽ捺律莉･髯阪�ｮ蜍､諤�譌･ﾃ養DEFAULT_START_TIME}�ｽ桀DEFAULT_END_TIME}�ｼ峨→驥阪↑繧峨↑縺�陦後′ {no_plan_overlap} 莉ｶ縺ゅｊ縺ｾ縺励◆縲�"
+            f"加工実績DATA: 設備・日時は有効だが、計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行が {no_plan_overlap} 件ありました。"
         )
     if not events and len(df) > 0:
         logging.info(
-            "蜉�蟾･螳溽ｸｾDATA: 繧ｬ繝ｳ繝育畑繧ｻ繧ｰ繝｡繝ｳ繝医′0莉ｶ縺ｧ縺吶る℃蜴ｻ譌･縺ｮ螳溽ｸｾ縺ｮ縺ｿ縺ｮ蝣ｴ蜷医∬ｨ育判縺ｮ陦ｨ遉ｺ譌･�ｼ�sorted_dates�ｼ峨↓蜷ｫ縺ｾ繧後↑縺�縺溘ａ謠冗判縺輔ｌ縺ｾ縺帙ｓ縲�"
+            "加工実績DATA: ガント用セグメントが0件です。過去日の実績のみの場合、計画の表示日（sorted_dates）に含まれないため描画されません。"
         )
-    logging.info(f"蜉�蟾･螳溽ｸｾDATA 縺九ｉ繧ｬ繝ｳ繝育畑繧ｻ繧ｰ繝｡繝ｳ繝� {len(events)} 莉ｶ繧堤函謌舌＠縺ｾ縺励◆縲�")
+    logging.info(f"加工実績DATA からガント用セグメント {len(events)} 件を生成しました。")
     return events
 
 
 TASK_SPECIAL_AI_LAST_RESPONSE_FILE = "ai_task_special_remark_last.txt"
-# 蜍､諤�蛯呵�繧ｭ繝｣繝�繧ｷ繝･縺ｨ繧ｭ繝ｼ遨ｺ髢薙ｒ蛻�髮｢�ｼ亥酔荳SHA陦晉ｪ√ｒ驕ｿ縺代ｋ�ｼ峨よ欠邏九↓蝓ｺ貅門ｹｴ繧貞性繧∵律莉倩ｧ｣驥医�ｮ繧ｺ繝ｬ繧帝亟縺舌�
+# 勤怠備考キャッシュとキー空間を分離（同一SHA衝突を避ける）。指紋に基準年を含め日付解釈のズレを防ぐ。
 TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v3|"
-# 繝｡繧､繝ｳ繧ｷ繝ｼ繝医後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医堺ｸ九�ｮ閾ｪ逕ｱ險倩ｿｰ 竊� Gemini 隗｣驥茨ｼ磯�榊床縺ｮ譛蜆ｪ蜈医が繝ｼ繝舌�ｼ繝ｩ繧､繝会ｼ�
+# メインシート「グローバルコメント」下の自由記述 → Gemini 解釈（配台の最優先オーバーライド）
 GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v8|"
 
 
 def _normalize_special_task_id_for_ai(val):
     """
-    萓晞�ｼNO繧偵く繝｣繝�繧ｷ繝･繧ｭ繝ｼ繝ｻ繝励Ο繝ｳ繝励ヨ陦後〒荳雋ｫ縺輔○繧九�
-    Excel 縺ｮ謨ｰ蛟､繧ｻ繝ｫ縺ｯ float 縺ｫ縺ｪ繧翫′縺｡縺ｪ縺ｮ縺ｧ 12345.0 竊� \"12345\" 縺ｫ謠�縺医ｋ縲�
-    譁�蟄怜�励�ｯ NFKC�ｼ亥�ｨ隗定恭謨ｰ蟄励↑縺ｩ�ｼ峨〒陦ｨ險倥ｆ繧後ｒ蜷ｸ蜿趣ｼ亥酔荳螳滉ｽ薙�ｮ蜀喉PI蜻ｼ縺ｳ蜃ｺ縺励ｒ貂帙ｉ縺呻ｼ峨�
+    依頼NOをキャッシュキー・プロンプト行で一貫させる。
+    Excel の数値セルは float になりがちなので 12345.0 → \"12345\" に揃える。
+    文字列は NFKC（全角英数字など）で表記ゆれを吸収（同一実体の再API呼び出しを減らす）。
     """
     if val is None:
         return None
@@ -4680,7 +4685,7 @@ def _normalize_special_task_id_for_ai(val):
     s = unicodedata.normalize("NFKC", s).strip()
     if not s or s.lower() in ("nan", "none", "null"):
         return None
-    # 譁�蟄怜�励→縺励※縺ｮ "20010.0" 遲会ｼ�Excel繝ｻCSV�ｼ峨ｒ謨ｴ謨ｰ陦ｨ險倥�ｮ萓晞�ｼNO縺ｫ蟇�縺帙ｋ
+    # 文字列としての "20010.0" 等（Excel・CSV）を整数表記の依頼NOに寄せる
     if re.fullmatch(r"-?\d+\.0+", s):
         try:
             return str(int(float(s)))
@@ -4690,19 +4695,19 @@ def _normalize_special_task_id_for_ai(val):
 
 
 def planning_task_id_str_from_scalar(val) -> str:
-    """驟榊床繝ｻ谿ｵ髫�1繝槭�ｼ繧ｸ繝ｻ繧ｭ繝･繝ｼ讒狗ｯ峨〒逕ｨ縺�繧倶ｾ晞�ｼNO縺ｮ螳牙ｮ壽枚蟄怜�暦ｼ育ｩｺ縺ｪ繧� \"\"�ｼ峨�"""
+    """配台・段階1マージ・キュー構築で用いる依頼NOの安定文字列（空なら \"\"）。"""
     return _normalize_special_task_id_for_ai(val) or ""
 
 
 def planning_task_id_str_from_plan_row(row) -> str:
-    """驥崎､�隕句�ｺ縺怜�励〒繧ょ�磯�ｭ繧ｹ繧ｫ繝ｩ繝ｼ繧呈鏡縺�縲∽ｾ晞�ｼNO繧� planning_task_id_str_from_scalar 縺ｫ貂｡縺吶�"""
+    """重複見出し列でも先頭スカラーを拾い、依頼NOを planning_task_id_str_from_scalar に渡す。"""
     return planning_task_id_str_from_scalar(_planning_df_cell_scalar(row, TASK_COL_TASK_ID))
 
 
 def _cell_text_task_special_remark(val):
     """
-    迚ｹ蛻･謖�螳喟蛯呵�繧偵�励Ο繝ｳ繝励ヨ逕ｨ縺ｫ蜿悶ｊ蜃ｺ縺吶ゆｻ墓ｧ倥←縺翫ｊ **strip 縺ｮ縺ｿ**
-    �ｼ亥�磯�ｭ譛ｫ蟆ｾ縺ｮ遨ｺ逋ｽ繝ｻExcel 縺ｮ蛛ｽ遨ｺ逋ｽ繧帝勁縺阪∵枚荳ｭ縺ｮ謾ｹ陦後�ｻ繧ｹ繝壹�ｼ繧ｹ縺ｯ菫晄戟縲よ焚蛟､繧ｻ繝ｫ縺ｯ陦ｨ險倥ｒ蝗ｺ螳夲ｼ峨�
+    特別指定_備考をプロンプト用に取り出す。仕様どおり **strip のみ**
+    （先頭末尾の空白・Excel の偽空白を除き、文中の改行・スペースは保持。数値セルは表記を固定）。
     """
     if val is None:
         return ""
@@ -4716,7 +4721,7 @@ def _cell_text_task_special_remark(val):
     elif isinstance(val, float):
         if math.isnan(val):
             return ""
-        # 蛯呵�蛻励↓謨ｰ蛟､縺�縺大�･縺｣縺ｦ縺�繧句�ｴ蜷医�ｮ陦ｨ險倥ｆ繧後ｒ貂帙ｉ縺�
+        # 備考列に数値だけ入っている場合の表記ゆれを減らす
         if val.is_integer():
             s = str(int(val))
         else:
@@ -4732,7 +4737,7 @@ def _cell_text_task_special_remark(val):
 
 
 def _task_special_prompt_lines(tasks_df):
-    """繝励Ο繝ｳ繝励ヨ縺ｫ霈峨○繧玖｡後Μ繧ｹ繝茨ｼ医た繝ｼ繝亥燕�ｼ峨よｭ｣隕丞喧縺ｯ荳願ｨ倥�倥Ν繝代�ｼ縺ｫ邨ｱ荳縲�"""
+    """プロンプトに載せる行リスト（ソート前）。正規化は上記ヘルパーに統一。"""
     lines = []
     for _, row in tasks_df.iterrows():
         if _plan_row_exclude_from_assignment(row):
@@ -4743,18 +4748,18 @@ def _task_special_prompt_lines(tasks_df):
             continue
         proc = str(row.get(TASK_COL_MACHINE, "") or "").strip()
         macn = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-        proc_disp = proc if proc else "�ｼ育ｩｺ�ｼ�"
-        macn_disp = macn if macn else "�ｼ育ｩｺ�ｼ�"
+        proc_disp = proc if proc else "（空）"
+        macn_disp = macn if macn else "（空）"
         lines.append(
-            f"- 萓晞�ｼNO縲須tid}縲掃 蟾･遞句錐縲鶏proc_disp}縲� | 讖滓｢ｰ蜷阪鶏macn_disp}縲� | 蛯呵�譛ｬ譁�: {rem}"
+            f"- 依頼NO【{tid}】| 工程名「{proc_disp}」 | 機械名「{macn_disp}」 | 備考本文: {rem}"
         )
     return lines
 
 
 def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict:
     """
-    蛯呵�縺悟刀逡ｪ繝ｻ蜴溷渚繧ｳ繝ｼ繝会ｼ井ｾ�: 20010 縺ｧ蟋九∪繧区焚蟄怜�暦ｼ峨〒蟋九∪繧九→縲√Δ繝�繝ｫ縺後◎縺ｮ蛻励ｒ JSON 繝医ャ繝励く繝ｼ縺ｫ
-    隱､逕ｨ縺吶ｋ縺薙→縺後≠繧九ゆｾ晞�ｼNO縲絶ｦ縲代→荳閾ｴ縺励↑縺�謨ｰ蟄励�ｮ縺ｿ縺ｮ繧ｭ繝ｼ繧偵∝ｽ楢ｩｲ蛯呵�繧呈戟縺､陦後�ｮ萓晞�ｼNO縺ｸ莉倥￠譖ｿ縺医ｋ縲�
+    備考が品番・原反コード（例: 20010 で始まる数字列）で始まると、モデルがその列を JSON トップキーに
+    誤用することがある。依頼NO【…】と一致しない数字のみのキーを、当該備考を持つ行の依頼NOへ付け替える。
     """
     if not isinstance(parsed, dict) or not parsed or tasks_df is None or getattr(tasks_df, "empty", True):
         return parsed
@@ -4784,7 +4789,7 @@ def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict
                 or r.startswith(sk + " ")
                 or r.startswith(sk + "\u3000")
                 or r.startswith(sk + "-")
-                or r.startswith(sk + "繝ｼ")
+                or r.startswith(sk + "ー")
                 for r in rems
             )
         ]
@@ -4797,7 +4802,7 @@ def _repair_task_special_ai_wrong_top_level_keys(parsed: dict, tasks_df) -> dict
         if target not in parsed:
             parsed[target] = val
             logging.info(
-                "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: JSON 繝医ャ繝励く繝ｼ隱､繧翫ｒ菫ｮ蠕ｩ�ｼ�%r 縺ｯ萓晞�ｼNO縺ｧ縺ｯ縺ｪ縺� 竊� %r�ｼ�",
+                "タスク特別指定: JSON トップキー誤りを修復（%r は依頼NOではない → %r）",
                 bad_key,
                 target,
             )
@@ -4814,8 +4819,8 @@ def _normalize_task_special_scope_str(s) -> str:
 
 def _task_special_scope_matches_row_field(row_val, restrict_val) -> bool:
     """
-    restrict 縺檎┌縺�繝ｻ遨ｺ縺ｪ繧牙宛髯舌↑縺暦ｼ�True�ｼ峨�
-    髱樒ｩｺ縺ｪ繧� Excel 蛛ｴ縺ｮ蛟､縺ｨ縺ゅ＞縺ｾ縺�荳閾ｴ�ｼ磯Κ蛻�荳閾ｴ蜿ｯ�ｼ峨�
+    restrict が無い・空なら制限なし（True）。
+    非空なら Excel 側の値とあいまい一致（部分一致可）。
     """
     if restrict_val is None:
         return True
@@ -4833,7 +4838,7 @@ def _task_special_scope_matches_row_field(row_val, restrict_val) -> bool:
 
 
 def _ai_remark_entry_applies_to_row(entry: dict, row) -> bool:
-    """restrict_to_* 縺檎┌縺�縺ｨ縺阪�ｯ蜷御ｸ萓晞�ｼNO縺ｮ蜈ｨ陦後↓驕ｩ逕ｨ縲�"""
+    """restrict_to_* が無いときは同一依頼NOの全行に適用。"""
     if not isinstance(entry, dict):
         return False
     rp = row.get(TASK_COL_MACHINE, "")
@@ -4847,8 +4852,8 @@ def _ai_remark_entry_applies_to_row(entry: dict, row) -> bool:
 
 def _row_matches_remark_source_row(entry: dict, row) -> bool:
     """
-    JSON 縺ｮ process_name / machine_name 縺後∝ｽ楢ｩｲ Excel 陦後�ｮ蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪→荳閾ｴ縺吶ｋ縺九�
-    �ｼ医�励Ο繝ｳ繝励ヨ縺ｧ貂｡縺励◆縲悟ｙ閠�縺後≠縺｣縺溯｡後阪→蟇ｾ蠢懊▼縺代ｋ縲ら援譁ｹ縺�縺台ｸ閾ｴ縺ｧ繧ょ庄�ｼ�
+    JSON の process_name / machine_name が、当該 Excel 行の工程名・機械名と一致するか。
+    （プロンプトで渡した「備考があった行」と対応づける。片方だけ一致でも可）
     """
     if not isinstance(entry, dict):
         return False
@@ -4862,7 +4867,7 @@ def _row_matches_remark_source_row(entry: dict, row) -> bool:
 
 
 def _entry_is_global_task_special_scope(entry: dict) -> bool:
-    """restrict_to_* 縺檎┌縺�繝ｻ遨ｺ�ｼ晏酔荳萓晞�ｼNO縺ｮ蜈ｨ蟾･遞玖｡後↓蜉ｹ縺九○繧区欠螳壹�"""
+    """restrict_to_* が無い・空＝同一依頼NOの全工程行に効かせる指定。"""
     if not isinstance(entry, dict):
         return False
     a = _normalize_task_special_scope_str(entry.get("restrict_to_process_name"))
@@ -4871,7 +4876,7 @@ def _entry_is_global_task_special_scope(entry: dict) -> bool:
 
 
 def _select_ai_task_special_entry_for_tid_value(val, row):
-    """1萓晞�ｼNO縺ｫ蟇ｾ縺吶ｋ蛟､縺� dict 縺ｾ縺溘�ｯ dict 縺ｮ驟榊�励�ｮ縺ｩ縺｡繧峨〒繧り｡後↓蜷医≧隕∫ｴ�繧定ｿ斐☆縲�"""
+    """1依頼NOに対する値が dict または dict の配列のどちらでも行に合う要素を返す。"""
     if val is None:
         return None
     if isinstance(val, list):
@@ -4902,10 +4907,10 @@ def _select_ai_task_special_entry_for_tid_value(val, row):
 
 def _ai_task_special_entry_for_row(ai_by_tid, row):
     """
-    analyze_task_special_remarks 縺ｮ謌ｻ繧翫°繧牙ｽ楢ｩｲ陦後�ｮ繧ｨ繝ｳ繝医Μ繧貞叙繧九�
-    繝励Ο繝ｳ繝励ヨ繧ｭ繝ｼ縺ｯ豁｣隕丞喧貂医∩萓晞�ｼNO縺ｪ縺ｮ縺ｧ縲・xcel 縺� 12345.0 縺ｧ繧ゅヲ繝�繝医☆繧九�
-    restrict_to_process_name / restrict_to_machine_name 縺檎┌縺�繝ｻ遨ｺ縺ｮ縺ｨ縺阪�ｯ
-    蜷御ｸ萓晞�ｼNO縺ｮ蟾･遞九�ｻ讖滓｢ｰ縺檎焚縺ｪ繧句�ｨ陦後↓蜷後§謖�遉ｺ繧帝←逕ｨ縺吶ｋ縲�
+    analyze_task_special_remarks の戻りから当該行のエントリを取る。
+    プロンプトキーは正規化済み依頼NOなので、Excel が 12345.0 でもヒットする。
+    restrict_to_process_name / restrict_to_machine_name が無い・空のときは
+    同一依頼NOの工程・機械が異なる全行に同じ指示を適用する。
     """
     if not isinstance(ai_by_tid, dict) or not ai_by_tid:
         return None
@@ -4947,7 +4952,7 @@ def _gemini_result_text(res):
         return ""
 
 
-# 1 蝗槭�ｮ Python 螳溯｡鯉ｼ域ｮｵ髫�1 縺ｾ縺溘�ｯ 谿ｵ髫�2�ｼ牙腰菴阪〒繝ｪ繧ｻ繝�繝医☆繧�
+# 1 回の Python 実行（段階1 または 段階2）単位でリセットする
 _gemini_usage_session: dict[str, dict[str, int]] = {}
 
 
@@ -4968,7 +4973,7 @@ def _gemini_cumulative_json_path() -> str:
 
 
 def _load_gemini_cumulative_payload() -> dict:
-    """API_Payment 蜀�縺ｮ邏ｯ險� JSON 繧定ｪｭ繧縲ら┌縺�繝ｻ螢翫ｌ縺ｦ縺�繧後�ｰ蛻晄悄蠖｢繧定ｿ斐☆縲�"""
+    """API_Payment 内の累計 JSON を読む。無い・壊れていれば初期形を返す。"""
     path = _gemini_cumulative_json_path()
     default: dict = {
         "version": 1,
@@ -5016,11 +5021,11 @@ def _save_gemini_cumulative_payload(data: dict) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
     except OSError as ex:
-        logging.debug("Gemini 邏ｯ險� JSON 縺ｮ菫晏ｭ倥↓螟ｱ謨�: %s", ex)
+        logging.debug("Gemini 累計 JSON の保存に失敗: %s", ex)
 
 
 def _gemini_buckets_ensure_structure(data: dict) -> None:
-    """邏ｯ險� JSON 縺ｫ譛滄俣蛻･繝舌こ繝�繝育畑縺ｮ霎樊嶌繧堤畑諢上☆繧具ｼ域里蟄� v1 繝輔ぃ繧､繝ｫ繧ゅ�槭�ｼ繧ｸ�ｼ峨�"""
+    """累計 JSON に期間別バケット用の辞書を用意する（既存 v1 ファイルもマージ）。"""
     b = data.setdefault("buckets", {})
     if not isinstance(b, dict):
         b = {}
@@ -5031,12 +5036,12 @@ def _gemini_buckets_ensure_structure(data: dict) -> None:
             b[sub] = {}
     b.setdefault(
         "timezone_note",
-        "period_key 縺ｯ PC 繝ｭ繝ｼ繧ｫ繝ｫ譎ょ綾�ｼ�datetime.now�ｼ峨〒莉倅ｸ弱ゆｻ� PC 縺ｨ縺ｮ髮�險医�ｯ豺ｷ縺懊↑縺�縺ｧ縺上□縺輔＞縲�",
+        "period_key は PC ローカル時刻（datetime.now）で付与。他 PC との集計は混ぜないでください。",
     )
 
 
 def _gemini_time_bucket_keys(dt: datetime) -> tuple[str, str, str, str, str]:
-    """蟷ｴ繝ｻ譛医�ｻISO騾ｱ繝ｻ譌･繝ｻ譎� 縺ｮ繧ｭ繝ｼ�ｼ域枚蟄怜�励た繝ｼ繝医〒譎らｳｻ蛻玲ｯ碑ｼ�縺励ｄ縺吶＞蠖｢�ｼ峨�"""
+    """年・月・ISO週・日・時 のキー（文字列ソートで時系列比較しやすい形）。"""
     iy, iw, _ = dt.isocalendar()
     y = dt.strftime("%Y")
     ym = dt.strftime("%Y-%m")
@@ -5056,7 +5061,7 @@ def _gemini_bucket_add_one_call(
     *,
     when: datetime | None = None,
 ) -> None:
-    """1 蝗槭�ｮ API 蜻ｼ蜃ｺ縺励ｒ蟷ｴ繝ｻ譛医�ｻ騾ｱ繝ｻ譌･繝ｻ譎ゅ�ｮ蜷�繝舌こ繝�繝医↓蜉�邂励☆繧九�"""
+    """1 回の API 呼出しを年・月・週・日・時の各バケットに加算する。"""
     dt = when or datetime.now()
     y, ym, wk, d, h = _gemini_time_bucket_keys(dt)
     pairs = (
@@ -5093,7 +5098,7 @@ def _gemini_bucket_add_one_call(
 def _append_gemini_cumulative_one_call(
     model_id: str, pt: int, ct: int, th: int, tt: int
 ) -> None:
-    """1 蝗槭�ｮ API 蠢懃ｭ泌��繧堤ｴｯ險� JSON 縺ｫ蜉�邂励☆繧具ｼ医Ο繧ｰ縺ｫ蜊倡匱譁咎≡縺ｯ蜃ｺ縺輔↑縺��ｼ峨�"""
+    """1 回の API 応答分を累計 JSON に加算する（ログに単発料金は出さない）。"""
     mid = str(model_id).strip()
     data = _load_gemini_cumulative_payload()
     data["calls_total"] = int(data["calls_total"]) + 1
@@ -5132,7 +5137,7 @@ def _append_gemini_cumulative_one_call(
 
 
 def record_gemini_response_usage(res, model_id: str) -> None:
-    """generate_content 縺ｮ蠢懃ｭ斐°繧� usage_metadata 繧帝寔險医☆繧具ｼ医そ繝�繧ｷ繝ｧ繝ｳ�ｼ狗ｴｯ險� JSON�ｼ峨�"""
+    """generate_content の応答から usage_metadata を集計する（セッション＋累計 JSON）。"""
     global _gemini_usage_session
     if res is None or not str(model_id or "").strip():
         return
@@ -5166,7 +5171,7 @@ def record_gemini_response_usage(res, model_id: str) -> None:
     try:
         _append_gemini_cumulative_one_call(mid, pt, ct, th, tt)
     except Exception as ex:
-        logging.debug("Gemini 邏ｯ險医�ｮ譖ｴ譁ｰ縺ｧ萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s", ex)
+        logging.debug("Gemini 累計の更新で例外（続行）: %s", ex)
 
 
 def _gemini_estimate_cost_usd(
@@ -5177,7 +5182,7 @@ def _gemini_estimate_cost_usd(
     if "flash" in m:
         rin, rout = _GEMINI_FLASH_IN_PER_M, _GEMINI_FLASH_OUT_PER_M
     elif "pro" in m:
-        # 逶ｮ螳会ｼ域悴菴ｿ逕ｨ繝｢繝�繝ｫ蜷代￠繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ�ｼ�
+        # 目安（未使用モデル向けフォールバック）
         rin, rout = 1.25, 5.0
     if rin is None:
         return None
@@ -5188,7 +5193,7 @@ def _gemini_estimate_cost_usd(
 def _gemini_daily_trend_series(
     cum: dict, *, max_days: int | None = None
 ) -> tuple[list[str], list[float], str] | None:
-    """邏ｯ險� JSON 縺ｮ by_day 縺九ｉ縲∵律莉倥く繝ｼ�ｼ亥商竊呈眠�ｼ峨�ｻ蛟､繝ｻ邉ｻ蛻怜錐縲ら┌縺代ｌ縺ｰ None縲�"""
+    """累計 JSON の by_day から、日付キー（古→新）・値・系列名。無ければ None。"""
     lim = GEMINI_USAGE_CHART_MAX_DAYS if max_days is None else max_days
     b = cum.get("buckets")
     if not isinstance(b, dict):
@@ -5210,12 +5215,12 @@ def _gemini_daily_trend_series(
             calls.append(0)
     use_calls = sum(usds) <= 0.0 and sum(calls) > 0
     series = [float(c) for c in calls] if use_calls else usds
-    label = "蜻ｼ蜃ｺ縺怜屓謨ｰ" if use_calls else "謗ｨ螳啅SD"
+    label = "呼出し回数" if use_calls else "推定USD"
     return (keys, series, label)
 
 
 def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[int]:
-    """by_day 縺ｮ蜷�繧ｭ繝ｼ縺ｫ縺､縺�縺ｦ縲》otal_tokens�ｼ育┌縺代ｌ縺ｰ prompt+candidates+thoughts�ｼ峨ｒ霑斐☆縲�"""
+    """by_day の各キーについて、total_tokens（無ければ prompt+candidates+thoughts）を返す。"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return [0] * len(day_keys)
@@ -5240,28 +5245,28 @@ def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[
 
 
 def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
-    """繝�繧ｭ繧ｹ繝亥�ｴ縺ｯ繧ｰ繝ｩ繝募盾辣ｧ縺ｨ CSV 譯亥��縺ｮ縺ｿ�ｼ�ASCII 繧ｹ繝代�ｼ繧ｯ繝ｩ繧､繝ｳ縺ｯ蜃ｺ縺輔↑縺��ｼ峨�"""
+    """テキスト側はグラフ参照と CSV 案内のみ（ASCII スパークラインは出さない）。"""
     ser = _gemini_daily_trend_series(cum)
     if ser is None:
         return []
     keys, _, label = ser
     b = cum.get("buckets")
     lines = [
-        "縲先耳遘ｻ繧ｰ繝ｩ繝輔第侭驥代�ｻ蜻ｼ蜃ｺ縺�: Q縲彝 蛻暦ｼ上ヨ繝ｼ繧ｯ繝ｳ驥�: S縲弋 蛻暦ｼ亥推繧ｰ繝ｩ繝輔�ｻ閾ｪ蜍墓峩譁ｰ�ｼ峨ｒ蜿ら�ｧ",
-        f"  邉ｻ蛻�1: 譌･谺｡ {label}�ｼ�{keys[0]} �ｽ� {keys[-1]}�ｼ�",
-        "  邉ｻ蛻�2: 譌･谺｡ 蜷郁ｨ医ヨ繝ｼ繧ｯ繝ｳ�ｼ�API 蝣ｱ蜻� total 縺ｾ縺溘�ｯ蜀�險ｳ蜷郁ｨ茨ｼ�",
-        f"  蟷ｴ繝ｻ譛医�ｻ騾ｱ繝ｻ譎ゅ↑縺ｩ縺ｮ蜀�險ｳ: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}�ｼ�Excel 縺ｧ繧ｰ繝ｩ繝募庄�ｼ�",
+        "【推移グラフ】料金・呼出し: Q〜R 列／トークン量: S〜T 列（各グラフ・自動更新）を参照",
+        f"  系列1: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
+        "  系列2: 日次 合計トークン（API 報告 total または内訳合計）",
+        f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ可）",
     ]
     if isinstance(b, dict):
         note = b.get("timezone_note")
         if note:
-            lines.append(f"  �ｼ�{note}�ｼ�")
+            lines.append(f"  （{note}）")
     return lines
 
 
 def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
-    """xlwings Book 縺九ｉ繝｡繧､繝ｳ逶ｸ蠖薙す繝ｼ繝医ｒ霑斐☆縲ら┌縺代ｌ縺ｰ None縲�"""
-    for name in ("繝｡繧､繝ｳ", "繝｡繧､繝ｳ_", "Main"):
+    """xlwings Book からメイン相当シートを返す。無ければ None。"""
+    for name in ("メイン", "メイン_", "Main"):
         try:
             return book.sheets[name]
         except Exception:
@@ -5269,7 +5274,7 @@ def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
     try:
         for sht in book.sheets:
             try:
-                if "繝｡繧､繝ｳ" in str(sht.name):
+                if "メイン" in str(sht.name):
                     return sht
             except Exception:
                 continue
@@ -5279,14 +5284,14 @@ def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
 
 
 def _strip_gemini_usage_charts_xlwings(ws) -> None:
-    """蠖捺ｩ溯�ｽ縺檎ｮ｡逅�縺吶ｋ謚倥ｌ邱夲ｼ亥錐蜑阪∪縺溘�ｯ繧ｰ繝ｩ繝輔ち繧､繝医Ν�ｼ峨ｒ蜑企勁縺吶ｋ縲�"""
+    """当機能が管理する折れ線（名前またはグラフタイトル）を削除する。"""
     managed_names = (
         GEMINI_USAGE_XLW_CHART_NAME,
         GEMINI_USAGE_XLW_CHART_TOKENS_NAME,
     )
     title_markers = (
-        "Gemini API 譌･谺｡謗ｨ遘ｻ",
-        "Gemini API 譌･谺｡繝医�ｼ繧ｯ繝ｳ",
+        "Gemini API 日次推移",
+        "Gemini API 日次トークン",
     )
     try:
         charts_iter = list(ws.charts)
@@ -5314,7 +5319,7 @@ def _strip_gemini_usage_charts_xlwings(ws) -> None:
 
 
 def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
-    """髢九＞縺溘ヶ繝�繧ｯ荳翫〒 Q縲彝繝ｻS縲弋 繧貞沂繧√∵釜繧檎ｷ壹げ繝ｩ繝輔ｒ 2 譛ｬ縺ｾ縺ｧ鄂ｮ縺擾ｼ�xlwings�ｼ峨�"""
+    """開いたブック上で Q〜R・S〜T を埋め、折れ線グラフを 2 本まで置く（xlwings）。"""
     hr = GEMINI_USAGE_CHART_HEADER_ROW
     cdt = GEMINI_USAGE_CHART_COL_DATE
     cvl = GEMINI_USAGE_CHART_COL_VALUE
@@ -5342,7 +5347,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     if n <= 0:
         return
 
-    ws.range((hr, cdt)).value = "譌･莉�"
+    ws.range((hr, cdt)).value = "日付"
     ws.range((hr, cvl)).value = val_label
     for i, (dk, val) in enumerate(zip(day_keys, values)):
         r = hr + 1 + i
@@ -5350,7 +5355,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
         ws.range((r, cvl)).value = val
     try:
         vrng = ws.range((hr + 1, cvl), (hr + n, cvl))
-        vrng.number_format = "0.000000" if val_label == "謗ｨ螳啅SD" else "0"
+        vrng.number_format = "0.000000" if val_label == "推定USD" else "0"
     except Exception:
         pass
 
@@ -5377,7 +5382,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     try:
         ca = chart.api
         ca.HasTitle = True
-        ca.ChartTitle.Text = "Gemini API 譌･谺｡謗ｨ遘ｻ"
+        ca.ChartTitle.Text = "Gemini API 日次推移"
         ca.HasLegend = False
     except Exception:
         pass
@@ -5386,8 +5391,8 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     if not tok_vals or max(tok_vals) <= 0:
         return
 
-    tok_label = "蜷郁ｨ医ヨ繝ｼ繧ｯ繝ｳ"
-    ws.range((hr, cts)).value = "譌･莉�"
+    tok_label = "合計トークン"
+    ws.range((hr, cts)).value = "日付"
     ws.range((hr, ctv)).value = tok_label
     for i, dk in enumerate(day_keys):
         r = hr + 1 + i
@@ -5421,7 +5426,7 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     try:
         ca2 = chart2.api
         ca2.HasTitle = True
-        ca2.ChartTitle.Text = "Gemini API 譌･谺｡繝医�ｼ繧ｯ繝ｳ"
+        ca2.ChartTitle.Text = "Gemini API 日次トークン"
         ca2.HasLegend = False
     except Exception:
         pass
@@ -5430,11 +5435,11 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
 def _write_main_sheet_gemini_usage_via_xlwings(
     macro_wb_path: str, text: str, log_prefix: str
 ) -> bool:
-    """Excel 縺ｧ繝悶ャ繧ｯ縺碁幕縺�縺ｦ縺�繧九→縺阪√Γ繧､繝ｳ P 蛻励�ｻQ縲弋繝ｻ謗ｨ遘ｻ繧ｰ繝ｩ繝包ｼ域怙螟ｧ2譛ｬ�ｼ峨ｒ xlwings 縺ｧ譖ｴ譁ｰ縺励※ Save縲�"""
+    """Excel でブックが開いているとき、メイン P 列・Q〜T・推移グラフ（最大2本）を xlwings で更新して Save。"""
     attached = _xlwings_attach_open_macro_workbook(macro_wb_path, log_prefix)
     if attached is None:
         logging.info(
-            "%s: xlwings 縺ｧ繝槭け繝ｭ繝悶ャ繧ｯ縺ｫ謗･邯壹〒縺阪★縲√Γ繧､繝ｳ AI 繧ｵ繝槭Μ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+            "%s: xlwings でマクロブックに接続できず、メイン AI サマリをスキップしました。",
             log_prefix,
         )
         return False
@@ -5448,7 +5453,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
         ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
         if ws_main is None:
             logging.info(
-                "%s: 繝｡繧､繝ｳ繧ｷ繝ｼ繝医′辟｡縺�縺溘ａ xlwings 縺ｧ縺ｮ AI 繧ｵ繝槭Μ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+                "%s: メインシートが無いため xlwings での AI サマリをスキップしました。",
                 log_prefix,
             )
             return False
@@ -5474,7 +5479,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             xw_book.save()
             ok = True
             logging.info(
-                "%s: 繝｡繧､繝ｳ繧ｷ繝ｼ繝� P%d 莉･髯阪�ｻGemini 謗ｨ遘ｻ繧ｰ繝ｩ繝包ｼ域侭驥�/蜻ｼ蜃ｺ縺励�ｻ繝医�ｼ繧ｯ繝ｳ�ｼ峨ｒ xlwings 縺ｧ菫晏ｭ倥＠縺ｾ縺励◆縲�",
+                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で保存しました。",
                 log_prefix,
                 start_r,
             )
@@ -5482,7 +5487,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
     except Exception as ex:
         logging.warning(
-            "%s: 繝｡繧､繝ｳ AI 繧ｵ繝槭Μ縺ｮ xlwings 菫晏ｭ倥↓螟ｱ謨�: %s", log_prefix, ex
+            "%s: メイン AI サマリの xlwings 保存に失敗: %s", log_prefix, ex
         )
         ok = False
     finally:
@@ -5491,12 +5496,12 @@ def _write_main_sheet_gemini_usage_via_xlwings(
 
 
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
-    """邏ｯ險医�ｻ蠖灘ｮ溯｡悟髄縺代�ｮ 2 蛻励ユ繧ｭ繧ｹ繝郁｡ｨ�ｼ亥ｱ･豁ｴ陦後�ｯ蜷ｫ繧√↑縺��ｼ峨�"""
+    """累計・当実行向けの 2 列テキスト表（履歴行は含めない）。"""
     out = [title]
     if not rows:
         return out
     lw = min(22, max(len(a) for a, _ in rows))
-    sep = "  " + ("笏" * (lw + 2 + 28))
+    sep = "  " + ("─" * (lw + 2 + 28))
     out.append(sep)
     for a, b in rows:
         out.append(f"  {a:<{lw}}  {b}")
@@ -5504,7 +5509,7 @@ def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]
 
 
 def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
-    """Excel 謚倥ｌ邱壹�ｻ譽偵げ繝ｩ繝募髄縺代↓髟ｷ蠖｢蠑� CSV 繧� log 縺ｫ譖ｸ縺榊�ｺ縺吶�"""
+    """Excel 折れ線・棒グラフ向けに長形式 CSV を log に書き出す。"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return
@@ -5564,11 +5569,11 @@ def _export_gemini_buckets_csv_for_charts(cum: dict) -> None:
             w.writeheader()
             w.writerows(rows_out)
     except OSError as ex:
-        logging.debug("Gemini 繝舌こ繝�繝� CSV 縺ｮ菫晏ｭ倥↓螟ｱ謨�: %s", ex)
+        logging.debug("Gemini バケット CSV の保存に失敗: %s", ex)
 
 
 def build_gemini_usage_summary_text() -> str:
-    """繝｡繧､繝ｳ陦ｨ遉ｺ繝ｻ邨先棡繝ｭ繧ｰ逕ｨ縺ｮ隍�謨ｰ陦後ユ繧ｭ繧ｹ繝茨ｼ医％縺ｮ螳溯｡悟���ｼ狗ｴｯ險� JSON�ｼ峨�"""
+    """メイン表示・結果ログ用の複数行テキスト（この実行分＋累計 JSON）。"""
     cum = _load_gemini_cumulative_payload()
     ct_tot = int(cum.get("calls_total") or 0)
     if not _gemini_usage_session and ct_tot <= 0:
@@ -5577,33 +5582,33 @@ def build_gemini_usage_summary_text() -> str:
     lines: list[str] = []
     ts = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     if _gemini_usage_session:
-        lines.append(f"髮�險域凾蛻ｻ: {ts}�ｼ医％縺ｮ螳溯｡後〒縺ｮ Gemini API�ｼ�")
+        lines.append(f"集計時刻: {ts}（この実行での Gemini API）")
         tot_calls = sum(b["calls"] for b in _gemini_usage_session.values())
         tot_p = sum(b["prompt"] for b in _gemini_usage_session.values())
         tot_c = sum(b["candidates"] for b in _gemini_usage_session.values())
         tot_th = sum(b["thoughts"] for b in _gemini_usage_session.values())
         tot_t = sum(b["total"] for b in _gemini_usage_session.values())
         sess_rows: list[tuple[str, str]] = [
-            ("蜻ｼ蜃ｺ縺�", f"{tot_calls:,} 蝗�"),
-            ("蜈･蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{tot_p:,}"),
-            ("蜃ｺ蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{tot_c:,}"),
+            ("呼出し", f"{tot_calls:,} 回"),
+            ("入力トークン", f"{tot_p:,}"),
+            ("出力トークン", f"{tot_c:,}"),
         ]
         if tot_th:
-            sess_rows.append(("諤晁�繝医�ｼ繧ｯ繝ｳ", f"{tot_th:,}"))
-        sess_rows.append(("total 蝣ｱ蜻�", f"{tot_t:,}"))
-        lines.extend(_gemini_kv_table_lines("縲舌％縺ｮ螳溯｡後�", sess_rows))
+            sess_rows.append(("思考トークン", f"{tot_th:,}"))
+        sess_rows.append(("total 報告", f"{tot_t:,}"))
+        lines.extend(_gemini_kv_table_lines("【この実行】", sess_rows))
         grand_usd = 0.0
         any_price = False
         for mid in sorted(_gemini_usage_session.keys()):
             b = _gemini_usage_session[mid]
             mrows: list[tuple[str, str]] = [
-                ("繝｢繝�繝ｫ", mid),
-                ("蜻ｼ蜃ｺ縺�", f"{b['calls']:,} 蝗�"),
-                ("蜈･蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{b['prompt']:,}"),
-                ("蜃ｺ蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{b['candidates']:,}"),
+                ("モデル", mid),
+                ("呼出し", f"{b['calls']:,} 回"),
+                ("入力トークン", f"{b['prompt']:,}"),
+                ("出力トークン", f"{b['candidates']:,}"),
             ]
             if b.get("thoughts", 0):
-                mrows.append(("諤晁�繝医�ｼ繧ｯ繝ｳ", f"{b['thoughts']:,}"))
+                mrows.append(("思考トークン", f"{b['thoughts']:,}"))
             mrows.append(("total_token_count", f"{b['total']:,}"))
             est = _gemini_estimate_cost_usd(
                 mid, b["prompt"], b["candidates"], b.get("thoughts", 0)
@@ -5611,68 +5616,68 @@ def build_gemini_usage_summary_text() -> str:
             if est is not None:
                 any_price = True
                 grand_usd += est
-                mrows.append(("謗ｨ螳啅SD", f"${est:.6f}"))
+                mrows.append(("推定USD", f"${est:.6f}"))
                 mrows.append(
                     (
-                        "謗ｨ螳哽PY",
-                        f"ﾂ･{est * GEMINI_JPY_PER_USD:.2f}�ｼ�{GEMINI_JPY_PER_USD:.0f}蜀�/USD�ｼ�",
+                        "推定JPY",
+                        f"¥{est * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
                     )
                 )
             else:
-                mrows.append(("謗ｨ螳壽侭驥�", "�ｼ亥腰萓｡譛ｪ逋ｻ骭ｲ繝｢繝�繝ｫ�ｼ�"))
+                mrows.append(("推定料金", "（単価未登録モデル）"))
             lines.append("")
-            lines.extend(_gemini_kv_table_lines(f"縲舌％縺ｮ螳溯｡後�ｻ繝｢繝�繝ｫ蛻･縲�", mrows))
+            lines.extend(_gemini_kv_table_lines(f"【この実行・モデル別】", mrows))
         if any_price:
             lines.append("")
             lines.extend(
                 _gemini_kv_table_lines(
-                    "縲舌％縺ｮ螳溯｡後�ｻ謗ｨ螳壽侭驥大粋險医�",
+                    "【この実行・推定料金合計】",
                     [
                         ("USD", f"${grand_usd:.6f}"),
                         (
                             "JPY",
-                            f"ﾂ･{grand_usd * GEMINI_JPY_PER_USD:.2f}�ｼ�{GEMINI_JPY_PER_USD:.0f}蜀�/USD�ｼ�",
+                            f"¥{grand_usd * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
                         ),
                     ],
                 )
             )
     else:
-        lines.append(f"髮�險域凾蛻ｻ: {ts}")
-        lines.append("�ｼ医％縺ｮ螳溯｡後〒縺ｮ Gemini API 蜻ｼ蜃ｺ縺励�ｯ縺ゅｊ縺ｾ縺帙ｓ�ｼ�")
-    lines.append("窶ｻ 繝医�ｼ繧ｯ繝ｳ縺ｯ API 縺ｮ usage_metadata 縺ｫ蝓ｺ縺･縺阪∪縺吶�")
+        lines.append(f"集計時刻: {ts}")
+        lines.append("（この実行での Gemini API 呼出しはありません）")
+    lines.append("※ トークンは API の usage_metadata に基づきます。")
     lines.append(
-        "窶ｻ USD 蜊倅ｾ｡縺ｯ繧ｳ繝ｼ繝会ｼ冗腸蠅�螟画焚縺ｮ逶ｮ螳峨〒縺吶ょｮ溯ｪｲ驥代�ｯ Google 縺ｮ隲区ｱゅｒ蜿ら�ｧ縺励※縺上□縺輔＞縲�"
+        "※ USD 単価はコード／環境変数の目安です。実課金は Google の請求を参照してください。"
     )
     lines.append(
-        "窶ｻ 蜷� API 蜻ｼ蜃ｺ縺励＃縺ｨ縺ｮ謗ｨ螳壽侭驥代�ｯ繧ｳ繝ｳ繧ｽ繝ｼ繝ｫ縺ｫ蜃ｺ縺輔★縲∽ｸ玖ｨ倡ｴｯ險� JSON 縺ｫ縺ｮ縺ｿ遨阪∩荳翫￡縺ｾ縺吶�"
+        "※ 各 API 呼出しごとの推定料金はコンソールに出さず、下記累計 JSON にのみ積み上げます。"
     )
 
     if ct_tot > 0:
         lines.append("")
         cum_hdr = (
-            f"縲千ｴｯ險医捜GEMINI_USAGE_CUMULATIVE_JSON_FILE} "
-            "�ｼ�API_Payment 繝輔か繝ｫ繝繝ｻ蜈ｨ螳溯｡後�ｮ謗ｨ螳壼､�ｼ�"
+            f"【累計】{GEMINI_USAGE_CUMULATIVE_JSON_FILE} "
+            "（API_Payment フォルダ・全実行の推定値）"
         )
         pt0 = int(cum.get("prompt_total") or 0)
         cc0 = int(cum.get("candidates_total") or 0)
         th0 = int(cum.get("thoughts_total") or 0)
         tt0 = int(cum.get("total_tokens_reported") or 0)
         cum_rows: list[tuple[str, str]] = [
-            ("譛邨よ峩譁ｰ", str(cum.get("updated_at") or "窶�")),
-            ("蜻ｼ蜃ｺ縺�", f"{ct_tot:,} 蝗�"),
-            ("蜈･蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{pt0:,}"),
-            ("蜃ｺ蜉帙ヨ繝ｼ繧ｯ繝ｳ", f"{cc0:,}"),
+            ("最終更新", str(cum.get("updated_at") or "—")),
+            ("呼出し", f"{ct_tot:,} 回"),
+            ("入力トークン", f"{pt0:,}"),
+            ("出力トークン", f"{cc0:,}"),
         ]
         if th0:
-            cum_rows.append(("諤晁�繝医�ｼ繧ｯ繝ｳ", f"{th0:,}"))
-        cum_rows.append(("total 蝣ｱ蜻�", f"{tt0:,}"))
+            cum_rows.append(("思考トークン", f"{th0:,}"))
+        cum_rows.append(("total 報告", f"{tt0:,}"))
         usd_all = float(cum.get("estimated_cost_usd_total") or 0.0)
         if usd_all > 0:
-            cum_rows.append(("謗ｨ螳啅SD 邏ｯ險�", f"${usd_all:.6f}"))
+            cum_rows.append(("推定USD 累計", f"${usd_all:.6f}"))
             cum_rows.append(
                 (
-                    "謗ｨ螳哽PY 邏ｯ險�",
-                    f"ﾂ･{usd_all * GEMINI_JPY_PER_USD:.2f}�ｼ�{GEMINI_JPY_PER_USD:.0f}蜀�/USD�ｼ�",
+                    "推定JPY 累計",
+                    f"¥{usd_all * GEMINI_JPY_PER_USD:.2f}（{GEMINI_JPY_PER_USD:.0f}円/USD）",
                 )
             )
         lines.extend(_gemini_kv_table_lines(cum_hdr, cum_rows))
@@ -5683,23 +5688,23 @@ def build_gemini_usage_summary_text() -> str:
                 if not isinstance(m, dict):
                     continue
                 mrows2: list[tuple[str, str]] = [
-                    ("繝｢繝�繝ｫ", mid),
-                    ("蜻ｼ蜃ｺ縺�", f"{int(m.get('calls') or 0):,} 蝗�"),
+                    ("モデル", mid),
+                    ("呼出し", f"{int(m.get('calls') or 0):,} 回"),
                     (
-                        "蜈･蜉� / 蜃ｺ蜉�",
+                        "入力 / 出力",
                         f"{int(m.get('prompt') or 0):,} / {int(m.get('candidates') or 0):,}",
                     ),
                 ]
                 if int(m.get("thoughts") or 0):
-                    mrows2.append(("諤晁�繝医�ｼ繧ｯ繝ｳ", f"{int(m.get('thoughts') or 0):,}"))
+                    mrows2.append(("思考トークン", f"{int(m.get('thoughts') or 0):,}"))
                 mud = float(m.get("estimated_cost_usd") or 0.0)
                 if mud > 0:
-                    mrows2.append(("謗ｨ螳啅SD 邏ｯ險�", f"${mud:.6f}"))
+                    mrows2.append(("推定USD 累計", f"${mud:.6f}"))
                     mrows2.append(
-                        ("謗ｨ螳哽PY 邏ｯ險�", f"ﾂ･{mud * GEMINI_JPY_PER_USD:.2f}")
+                        ("推定JPY 累計", f"¥{mud * GEMINI_JPY_PER_USD:.2f}")
                     )
                 lines.append("")
-                lines.extend(_gemini_kv_table_lines("縲千ｴｯ險医�ｻ繝｢繝�繝ｫ蛻･縲�", mrows2))
+                lines.extend(_gemini_kv_table_lines("【累計・モデル別】", mrows2))
         trend = _gemini_usage_trend_caption_lines(cum)
         if trend:
             lines.append("")
@@ -5708,7 +5713,7 @@ def build_gemini_usage_summary_text() -> str:
 
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 蛻ｩ逕ｨ繧ｵ繝槭Μ繧� log 縺ｫ譖ｸ縺阪』lwings 縺ｧ繝｡繧､繝ｳ P 蛻励�ｻ謗ｨ遘ｻ繧ｰ繝ｩ繝輔∈菫晏ｭ假ｼ磯幕縺�縺ｦ縺�繧九ヶ繝�繧ｯ蜷代￠�ｼ峨�"""
+    """Gemini 利用サマリを log に書き、xlwings でメイン P 列・推移グラフへ保存（開いているブック向け）。"""
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
     xw_ok = False
@@ -5719,7 +5724,7 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             )
         except Exception as ex:
             logging.warning(
-                "%s: AI 繧ｵ繝槭Μ縺ｮ xlwings 譖ｸ縺崎ｾｼ縺ｿ縺ｧ萓句､�: %s", log_prefix, ex
+                "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
             )
     try:
         os.makedirs(log_dir, exist_ok=True)
@@ -5732,19 +5737,19 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
         if int(cum2.get("calls_total") or 0) > 0:
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
-        logging.debug("Gemini 繝舌こ繝�繝� CSV 蜃ｺ蜉帙〒萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s", ex)
+        logging.debug("Gemini バケット CSV 出力で例外（続行）: %s", ex)
     if xw_ok:
         return
     if text.strip():
         logging.info(
-            "%s: 繝｡繧､繝ｳ P 蛻励�ｻ繧ｰ繝ｩ繝輔ｒ xlwings 縺ｧ菫晏ｭ倥〒縺阪∪縺帙ｓ縺ｧ縺励◆縲�"
-            " %s 縺ｫ蜃ｺ蜉帶ｸ医∩ 竊� 繝槭け繝ｭ縲後Γ繧､繝ｳ繧ｷ繝ｼ繝�_Gemini蛻ｩ逕ｨ繧ｵ繝槭Μ繧単蛻励↓蜿肴丐縲阪〒 P 蛻励�ｮ縺ｿ蜿肴丐縺ｧ縺阪∪縺吶�",
+            "%s: メイン P 列・グラフを xlwings で保存できませんでした。"
+            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
             log_prefix,
             path,
         )
     else:
         logging.info(
-            "%s: Gemini 譛ｪ菴ｿ逕ｨ: 繧ｵ繝槭Μ繧堤ｩｺ縺ｧ %s 縺ｫ蜃ｺ蜉帙�",
+            "%s: Gemini 未使用: サマリを空で %s に出力。",
             log_prefix,
             path,
         )
@@ -5755,7 +5760,7 @@ def _try_write_main_sheet_gemini_usage_summary(phase: str) -> None:
         write_main_sheet_gemini_usage_summary(TASKS_INPUT_WORKBOOK, phase)
     except Exception as ex:
         logging.warning(
-            "%s: 繝｡繧､繝ｳ繧ｷ繝ｼ繝医∈縺ｮ AI 蛻ｩ逕ｨ繧ｵ繝槭Μ譖ｸ縺崎ｾｼ縺ｿ縺ｧ萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s", phase, ex
+            "%s: メインシートへの AI 利用サマリ書き込みで例外（続行）: %s", phase, ex
         )
 
 
@@ -5764,7 +5769,7 @@ def _plan_sheet_write_global_parse_block_to_ws(
     global_priority_override: dict,
     when_str: str,
 ) -> None:
-    """譌｢縺ｫ髢九＞縺ｦ縺�繧九碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙咲嶌蠖薙す繝ｼ繝医∈ AX:AY 縺ｮ繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫舌ヶ繝ｭ繝�繧ｯ繧呈嶌縺上�"""
+    """既に開いている「配台計画_タスク入力」相当シートへ AX:AY のグローバル解析ブロックを書く。"""
     gpo = global_priority_override or {}
     lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
     vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
@@ -5774,60 +5779,60 @@ def _plan_sheet_write_global_parse_block_to_ws(
         ws.cell(row=1 + i, column=vc, value=None)
     align_top = Alignment(wrap_text=True, vertical="top")
     pairs: list[tuple[str, str]] = [
-        ("縲舌げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌�", "蜿ら�ｧ逕ｨ繝ｻ谿ｵ髫�2縺ｧ閾ｪ蜍戊ｨ倬鹸"),
+        ("【グローバルコメント解析】", "参照用・段階2で自動記録"),
         (
-            "窶ｻ莠碁㍾驕ｩ逕ｨ縺ｫ縺､縺�縺ｦ",
-            "驟榊床縺ｸ縺ｮ蜿肴丐縺ｯ繝｡繧､繝ｳ繧ｷ繝ｼ繝医後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医阪°繧峨�ｮ縺ｿ陦後ｏ繧後∪縺吶�"
-            "縺薙�ｮAX縲廣Y蛻励�ｯ隱ｭ縺ｿ蜿悶ｉ繧後∪縺帙ｓ縲らｷｨ髮�縺励※繧よｬ｡蝗槫ｮ溯｡後∪縺ｧ驟榊床縺ｫ蜉ｹ縺阪∪縺帙ｓ縲�"
-            "蜴滓枚縺ｯ繝｡繧､繝ｳ谺�繧貞盾辣ｧ縺励※縺上□縺輔＞縲�",
+            "※二重適用について",
+            "配台への反映はメインシート「グローバルコメント」からのみ行われます。"
+            "このAX〜AY列は読み取られません。編集しても次回実行まで配台に効きません。"
+            "原文はメイン欄を参照してください。",
         ),
-        ("險育判蝓ｺ貅匁律譎�", (when_str or "").strip() or "窶�"),
+        ("計画基準日時", (when_str or "").strip() or "―"),
         (
-            "蟾･蝣ｴ莨第･ｭ譌･",
+            "工場休業日",
             ", ".join(str(x) for x in (gpo.get("factory_closure_dates") or []))
             if gpo.get("factory_closure_dates")
-            else "�ｼ医↑縺暦ｼ�",
+            else "（なし）",
         ),
         (
-            "繧ｹ繧ｭ繝ｫ隕∽ｻｶ繧堤┌隕�",
-            "縺ｯ縺�" if gpo.get("ignore_skill_requirements") else "縺�縺�縺�",
+            "スキル要件を無視",
+            "はい" if gpo.get("ignore_skill_requirements") else "いいえ",
         ),
         (
-            "need莠ｺ謨ｰ1蝗ｺ螳�",
-            "縺ｯ縺�" if gpo.get("ignore_need_minimum") else "縺�縺�縺�",
+            "need人数1固定",
+            "はい" if gpo.get("ignore_need_minimum") else "いいえ",
         ),
         (
-            "驟榊床蛻ｶ髯舌�ｮ謦､蟒�",
-            "縺ｯ縺�" if gpo.get("abolish_all_scheduling_limits") else "縺�縺�縺�",
+            "配台制限の撤廃",
+            "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
         ),
         (
-            "繧ｰ繝ｭ繝ｼ繝舌ΝOP謖�蜷�",
+            "グローバルOP指名",
             json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
             if gpo.get("task_preferred_operators")
-            else "�ｼ医↑縺暦ｼ�",
+            else "（なし）",
         ),
         (
-            "譌･莉佚怜ｷ･遞九メ繝ｼ繝�謖�蜷�",
+            "日付×工程チーム指名",
             json.dumps(
                 gpo.get("global_day_process_operator_rules") or [],
                 ensure_ascii=False,
             )
             if gpo.get("global_day_process_operator_rules")
-            else "�ｼ医↑縺暦ｼ�",
+            else "（なし）",
         ),
         (
-            "繧ｰ繝ｭ繝ｼ繝舌Ν騾溷ｺｦ繝ｫ繝ｼ繝ｫ",
+            "グローバル速度ルール",
             json.dumps(gpo.get("global_speed_rules") or [], ensure_ascii=False)
             if gpo.get("global_speed_rules")
-            else "�ｼ医↑縺暦ｼ�",
+            else "（なし）",
         ),
         (
-            "譛ｪ驕ｩ逕ｨ繝｡繝｢(AI)",
-            str(gpo.get("scheduler_notes_ja") or "").strip() or "�ｼ医↑縺暦ｼ�",
+            "未適用メモ(AI)",
+            str(gpo.get("scheduler_notes_ja") or "").strip() or "（なし）",
         ),
         (
-            "AI隕∫ｴ�",
-            str(gpo.get("interpretation_ja") or "").strip() or "�ｼ医↑縺暦ｼ�",
+            "AI要約",
+            str(gpo.get("interpretation_ja") or "").strip() or "（なし）",
         ),
     ]
     for i, (lab, val) in enumerate(pairs):
@@ -5845,12 +5850,12 @@ def write_plan_sheet_global_comment_parse_block(
     global_priority_override: dict,
     *,
     when_str: str,
-    log_prefix: str = "谿ｵ髫�2",
+    log_prefix: str = "段階2",
 ) -> bool:
     """
-    縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪す繝ｼ繝医�ｮ蜿ｳ遶ｯ莉倩ｿ托ｼ�AX:AY�ｼ峨↓縲√げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医�ｮ隗｣譫千ｵ先棡繧呈嶌縺崎ｾｼ繧縲�
-    繝｡繧､繝ｳ蜴滓枚縺ｯ縺薙％縺ｫ霆｢險倥＠縺ｪ縺��ｼ医Γ繧､繝ｳ谺�縺ｨ縺ｮ驥崎､�繝ｻ隱､隗｣繧帝∩縺代ｋ�ｼ峨よ悽蛻励�ｯ蜀崎ｪｭ霎ｼ縺輔ｌ縺壼盾辣ｧ蟆ら畑縲�
-    Excel 縺ｧ繝悶ャ繧ｯ繧帝幕縺�縺溘∪縺ｾ縺�縺ｨ菫晏ｭ倥↓螟ｱ謨励☆繧九％縺ｨ縺後≠繧具ｼ井ｻ悶�ｮ openpyxl 譖ｸ霎ｼ縺ｨ蜷梧ｧ假ｼ峨�
+    「配台計画_タスク入力」シートの右端付近（AX:AY）に、グローバルコメントの解析結果を書き込む。
+    メイン原文はここに転記しない（メイン欄との重複・誤解を避ける）。本列は再読込されず参照専用。
+    Excel でブックを開いたままだと保存に失敗することがある（他の openpyxl 書込と同様）。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -5859,7 +5864,7 @@ def write_plan_sheet_global_comment_parse_block(
     wb = None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌ｒ驟榊床繧ｷ繝ｼ繝医∈譖ｸ縺崎ｾｼ縺ｿ縺ｾ縺帙ｓ縲�",
+            "%s: ブックに「%s」があるため openpyxl でグローバルコメント解析を配台シートへ書き込みません。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -5870,7 +5875,7 @@ def write_plan_sheet_global_comment_parse_block(
         )
     except Exception as ex:
         logging.info(
-            "%s: 繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌�ｮ驟榊床繧ｷ繝ｼ繝域嶌霎ｼ縺ｮ縺溘ａ繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ: %s",
+            "%s: グローバルコメント解析の配台シート書込のためブックを開けません: %s",
             log_prefix,
             ex,
         )
@@ -5878,7 +5883,7 @@ def write_plan_sheet_global_comment_parse_block(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: 繧ｷ繝ｼ繝� '%s' 縺檎┌縺�縺溘ａ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌�ｮ蜿肴丐繧偵せ繧ｭ繝�繝励�",
+                "%s: シート '%s' が無いためグローバルコメント解析の反映をスキップ。",
                 log_prefix,
                 sheet_name,
             )
@@ -5889,7 +5894,7 @@ def write_plan_sheet_global_comment_parse_block(
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
         wb.save(wb_path)
         logging.info(
-            "%s: 縲�%s縲�%s:%s 蛻励↓繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌ｒ菫晏ｭ倥＠縺ｾ縺励◆縲�",
+            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました。",
             log_prefix,
             sheet_name,
             get_column_letter(lc),
@@ -5898,14 +5903,14 @@ def write_plan_sheet_global_comment_parse_block(
         return True
     except OSError as ex:
         logging.warning(
-            "%s: 繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌ｒ驟榊床繧ｷ繝ｼ繝医∈菫晏ｭ倥〒縺阪∪縺帙ｓ縺ｧ縺励◆�ｼ�Excel 縺ｧ髢九＞縺溘∪縺ｾ遲会ｼ�: %s",
+            "%s: グローバルコメント解析を配台シートへ保存できませんでした（Excel で開いたまま等）: %s",
             log_prefix,
             ex,
         )
         return False
     except Exception as ex:
         logging.warning(
-            "%s: 繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌�ｮ驟榊床繧ｷ繝ｼ繝域嶌霎ｼ縺ｧ萓句､�: %s", log_prefix, ex
+            "%s: グローバルコメント解析の配台シート書込で例外: %s", log_prefix, ex
         )
         return False
     finally:
@@ -5926,11 +5931,11 @@ def _try_write_plan_sheet_global_comment_parse_block(
             PLAN_INPUT_SHEET_NAME,
             global_priority_override,
             when_str=when_str,
-            log_prefix="谿ｵ髫�2",
+            log_prefix="段階2",
         )
     except Exception as ex:
         logging.warning(
-            "谿ｵ髫�2: 驟榊床繧ｷ繝ｼ繝医∈縺ｮ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫先嶌縺崎ｾｼ縺ｿ縺ｧ萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s",
+            "段階2: 配台シートへのグローバルコメント解析書き込みで例外（続行）: %s",
             ex,
         )
 
@@ -5949,50 +5954,50 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
             when_str=when_str,
             num_data_rows=num_data_rows,
             conflicts_by_row=conflicts_by_row,
-            log_prefix="谿ｵ髫�2",
+            log_prefix="段階2",
         )
     except Exception as ex:
         logging.warning(
-            "谿ｵ髫�2: 驟榊床繧ｷ繝ｼ繝医∈縺ｮ繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫撰ｼ狗泝逶ｾ逹濶ｲ�ｼ�1蝗樔ｿ晏ｭ假ｼ峨〒萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s",
+            "段階2: 配台シートへのグローバル解析＋矛盾着色（1回保存）で例外（続行）: %s",
             ex,
         )
 
 
 def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_text=None):
-    """迚ｹ蛻･謖�螳喟蛯呵�蜷代￠ Gemini 縺ｮ繝励Ο繝ｳ繝励ヨ繝ｻ逕溘ユ繧ｭ繧ｹ繝医�ｻ謚ｽ蜃ｺJSON繝ｻ繝代�ｼ繧ｹ邨先棡繧�1繝輔ぃ繧､繝ｫ縺ｫ谿九☆縲�"""
+    """特別指定_備考向け Gemini のプロンプト・生テキスト・抽出JSON・パース結果を1ファイルに残す。"""
     path = os.path.join(log_dir, TASK_SPECIAL_AI_LAST_RESPONSE_FILE)
     try:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             if prompt_text is not None and str(prompt_text).strip():
-                f.write("=== Gemini 縺ｸ騾∽ｿ｡縺励◆繝励Ο繝ｳ繝励ヨ�ｼ亥�ｨ譁��ｼ� ===\n")
+                f.write("=== Gemini へ送信したプロンプト（全文） ===\n")
                 f.write(str(prompt_text).strip())
                 f.write("\n\n")
-            f.write("=== Gemini 霑泌唆繝�繧ｭ繧ｹ繝茨ｼ医Δ繝�繝ｫ蜃ｺ蜉帙◎縺ｮ縺ｾ縺ｾ�ｼ� ===\n")
+            f.write("=== Gemini 返却テキスト（モデル出力そのまま） ===\n")
             f.write(raw_text or "")
             f.write(
-                "\n\n=== AI 縺瑚ｿ斐＠縺溘ユ繧ｭ繧ｹ繝医°繧峨け繝ｩ繧､繧｢繝ｳ繝医′蛻�繧雁�ｺ縺励◆ JSON 譁�蟄怜�� ===\n"
-                "�ｼ遺ｻ繝ｦ繝ｼ繧ｶ繝ｼ迚ｹ蛻･謖�螳壹�ｮ隗｣譫舌↓豁｣隕剰｡ｨ迴ｾ縺ｯ菴ｿ縺｣縺ｦ縺�縺ｾ縺帙ｓ縲ゅΔ繝�繝ｫ蠢懃ｭ斐�ｮ繝代�ｼ繧ｹ逕ｨ縺ｧ縺呻ｼ噂n"
+                "\n\n=== AI が返したテキストからクライアントが切り出した JSON 文字列 ===\n"
+                "（※ユーザー特別指定の解析に正規表現は使っていません。モデル応答のパース用です）\n"
             )
-            f.write(extracted_json_str if extracted_json_str else "(謚ｽ蜃ｺ縺ｪ縺�)")
-            f.write("\n\n=== json.loads 蠕鯉ｼ井ｾ晞�ｼNO繧ｭ繝ｼ�ｼ� ===\n")
+            f.write(extracted_json_str if extracted_json_str else "(抽出なし)")
+            f.write("\n\n=== json.loads 後（依頼NOキー） ===\n")
             if isinstance(parsed, dict):
                 f.write(json.dumps(parsed, ensure_ascii=False, indent=2))
             else:
-                f.write("(繝代�ｼ繧ｹ縺ｧ縺阪★)")
+                f.write("(パースできず)")
         logging.info(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 繝励Ο繝ｳ繝励ヨ�ｼ帰I蠢懃ｭ斐�ｮ隧ｳ邏ｰ 竊� %s",
+            "タスク特別指定: プロンプト＋AI応答の詳細 → %s",
             path,
         )
     except OSError as ex:
-        logging.warning("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI蠢懃ｭ斐ヵ繧｡繧､繝ｫ菫晏ｭ倥↓螟ｱ謨�: %s", ex)
+        logging.warning("タスク特別指定: AI応答ファイル保存に失敗: %s", ex)
     if isinstance(parsed, dict) and parsed:
         logging.info(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 隗｣譫舌＆繧後◆萓晞�ｼNO: %s",
+            "タスク特別指定: 解析された依頼NO: %s",
             ", ".join(sorted(parsed.keys(), key=lambda x: str(x))),
         )
         for tid_k in sorted(parsed.keys(), key=lambda x: str(x)):
             logging.info(
-                "  萓晞�ｼNO [%s] AI隗｣譫舌ヵ繧｣繝ｼ繝ｫ繝�: %s",
+                "  依頼NO [%s] AI解析フィールド: %s",
                 tid_k,
                 json.dumps(parsed[tid_k], ensure_ascii=False),
             )
@@ -6000,8 +6005,8 @@ def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_t
 
 def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
     """
-    API 繝ｬ繧ｹ繝昴Φ繧ｹ繧� JSON 蛹悶＠繝ｭ繧ｰ�ｼ上ヵ繧｡繧､繝ｫ縺ｸ險倬鹸縲ょ､ｱ謨玲凾縺ｯ None縲�
-    繝ｦ繝ｼ繧ｶ繝ｼ縺ｮ迚ｹ蛻･謖�螳壽枚險縺ｫ縺ｯ隗ｦ繧後★縲√Δ繝�繝ｫ蜃ｺ蜉帙°繧� JSON 繝悶Ο繝�繧ｯ繧貞叙繧雁�ｺ縺吝�ｦ逅�縺ｮ縺ｿ縲�
+    API レスポンスを JSON 化しログ／ファイルへ記録。失敗時は None。
+    ユーザーの特別指定文言には触れず、モデル出力から JSON ブロックを取り出す処理のみ。
     """
     raw = _gemini_result_text(res)
     if raw:
@@ -6018,8 +6023,8 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
     if not match:
         _log_task_special_ai_response(raw, {}, None, prompt_text)
         logging.warning(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI蠢懃ｭ斐°繧� JSON 繧呈歓蜃ｺ縺ｧ縺阪∪縺帙ｓ縺ｧ縺励◆縲ら函繝�繧ｭ繧ｹ繝亥�磯�ｭ 3000 譁�蟄�:\n%s",
-            (raw[:3000] if raw else "(遨ｺ)"),
+            "タスク特別指定: AI応答から JSON を抽出できませんでした。生テキスト先頭 3000 文字:\n%s",
+            (raw[:3000] if raw else "(空)"),
         )
         return None
     extracted = match.group(0)
@@ -6027,11 +6032,11 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
         parsed = json.loads(extracted)
     except json.JSONDecodeError as je:
         _log_task_special_ai_response(raw, None, extracted, prompt_text)
-        logging.warning("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: JSON 繝代�ｼ繧ｹ螟ｱ謨�: %s", je)
+        logging.warning("タスク特別指定: JSON パース失敗: %s", je)
         return None
     if not isinstance(parsed, dict):
         _log_task_special_ai_response(raw, None, extracted, prompt_text)
-        logging.warning("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 繝医ャ繝励Ξ繝吶Ν縺� JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝医〒縺ｯ縺ゅｊ縺ｾ縺帙ｓ縲�")
+        logging.warning("タスク特別指定: トップレベルが JSON オブジェクトではありません。")
         return None
     _log_task_special_ai_response(raw, parsed, extracted, prompt_text)
     return parsed
@@ -6039,17 +6044,17 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
 
 def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: dict | None = None):
     """
-    縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪�ｮ縲檎音蛻･謖�螳喟蛯呵�縲阪ｒ AI 縺ｧ讒矩�蛹厄ｼ医そ繝ｫ縺ｫ蛟､縺後≠繧矩��逶ｮ縺ｯ蠕梧ｮｵ縺ｧ繧ｻ繝ｫ繧貞━蜈茨ｼ峨�
-    縲碁�榊床荳崎ｦ√阪′繧ｪ繝ｳ縺ｪ陦後�ｯ繝励Ο繝ｳ繝励ヨ縺ｫ霈峨○縺ｪ縺��ｼ�API 遽邏�繝ｻ蠖楢ｩｲ陦後�ｯ驟榊床縺励↑縺�縺溘ａ�ｼ峨�
-    諡�蠖徹P謖�蜷阪�ｯ繝励Ο繝ｳ繝励ヨ縺ｮ霑泌唆螂醍ｴ�縺ｧ繝｢繝�繝ｫ縺ｫ preferred_operator 繧貞�ｺ蜉帙＆縺帙ｋ�ｼ亥ｙ閠�繧呈ｭ｣隕剰｡ｨ迴ｾ縺ｧ蛻�繧雁�ｺ縺吝�ｦ逅�縺ｯ陦後ｏ縺ｪ縺��ｼ峨�
-    json/ai_remarks_cache.json 縺ｫ TTL AI_CACHE_TTL_SECONDS 縺ｧ繧ｭ繝｣繝�繧ｷ繝･�ｼ亥酔荳蜈･蜉帙�ｻ蜷御ｸ蝓ｺ貅門ｹｴ縺ｪ繧� API 繧貞他縺ｰ縺ｪ縺��ｼ峨�
-    萓晞�ｼNO縺ｯ謨ｰ蛟､陦ｨ險倥�ｻ蜈ｨ隗偵↑縺ｩ繧呈ｭ｣隕丞喧縺励※繧ｭ繝ｼ繧貞ｮ牙ｮ壼喧縺励∝渕貅門ｹｴ縺ｯ謖�邏九↓蜷ｫ繧√※譌･莉倩ｧ｣驥医�ｮ螟牙喧縺ｨ繧ｭ繝｣繝�繧ｷ繝･縺ｮ鬟溘＞驕輔＞繧帝亟縺舌�
+    「配台計画_タスク入力」の「特別指定_備考」を AI で構造化（セルに値がある項目は後段でセルを優先）。
+    「配台不要」がオンな行はプロンプトに載せない（API 節約・当該行は配台しないため）。
+    担当OP指名はプロンプトの返却契約でモデルに preferred_operator を出力させる（備考を正規表現で切り出す処理は行わない）。
+    json/ai_remarks_cache.json に TTL AI_CACHE_TTL_SECONDS でキャッシュ（同一入力・同一基準年なら API を呼ばない）。
+    依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に含めて日付解釈の変化とキャッシュの食い違いを防ぐ。
 
-    謌ｻ繧雁､縺ｮ萓�: 萓晞�ｼNO -> 繧ｪ繝悶ず繧ｧ繧ｯ繝医√∪縺溘�ｯ蜷御ｸ萓晞�ｼNO縺ｫ蛯呵�陦後′隍�謨ｰ縺ゅｋ蝣ｴ蜷医�ｯ繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ驟榊�励�
-      process_name, machine_name 窶ｦ 蠖楢ｩｲ蛯呵�繧ｻ繝ｫ縺後≠繧玖｡後�ｮ蟾･遞句錐繝ｻ讖滓｢ｰ蜷搾ｼ医�励Ο繝ｳ繝励ヨ縺ｮ陦後→荳閾ｴ�ｼ�
-      restrict_to_process_name, restrict_to_machine_name 窶ｦ 逵∫払縺ｾ縺溘�ｯ遨ｺ縺ｪ繧牙酔荳萓晞�ｼNO縺ｮ蜈ｨ蟾･遞九�ｻ蜈ｨ讖滓｢ｰ陦後↓驕ｩ逕ｨ縲�
-      縺昴�ｮ莉� required_op, speed_override, task_efficiency, priority, start_date, start_time,
-      target_completion_date, ship_by_date, preferred_operator 縺ｪ縺ｩ縲�
+    戻り値の例: 依頼NO -> オブジェクト、または同一依頼NOに備考行が複数ある場合はオブジェクトの配列。
+      process_name, machine_name … 当該備考セルがある行の工程名・機械名（プロンプトの行と一致）
+      restrict_to_process_name, restrict_to_machine_name … 省略または空なら同一依頼NOの全工程・全機械行に適用。
+      その他 required_op, speed_override, task_efficiency, priority, start_date, start_time,
+      target_completion_date, ship_by_date, preferred_operator など。
     """
     lines = _task_special_prompt_lines(tasks_df)
     if not lines:
@@ -6065,18 +6070,18 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 n_rem_only += 1
         miss_col = PLAN_COL_SPECIAL_REMARK not in tasks_df.columns
         logging.warning(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI 隗｣譫仙ｯｾ雎｡縺後≠繧翫∪縺帙ｓ�ｼ医�%s縲榊�励�ｯ%s�ｼ峨�"
-            "諤ｻ陦梧焚=%s縲∽ｾ晞�ｼNO縺ｮ縺ゅｋ陦�=%s縲∝ｙ閠�縺悟�･縺｣縺ｦ縺�繧玖｡�=%s縲�"
-            "谿ｵ髫�2螳溯｡悟燕縺ｫ繝悶ャ繧ｯ繧剃ｿ晏ｭ倥＠縲∵悽蠖薙↓縲�%s縲榊�励∈蜈･蜉帙＠縺ｦ縺�繧九°遒ｺ隱阪＠縺ｦ縺上□縺輔＞縲�",
+            "タスク特別指定: AI 解析対象がありません（「%s」列は%s）。"
+            "总行数=%s、依頼NOのある行=%s、備考が入っている行=%s。"
+            "段階2実行前にブックを保存し、本当に「%s」列へ入力しているか確認してください。",
             PLAN_COL_SPECIAL_REMARK,
-            "隕九▽縺九ｊ縺ｾ縺帙ｓ" if miss_col else "遨ｺ縺ｮ蜿ｯ閭ｽ諤ｧ縺後≠繧翫∪縺�",
+            "見つかりません" if miss_col else "空の可能性があります",
             n_rows,
             n_tid_raw,
             n_rem_only,
             PLAN_COL_SPECIAL_REMARK,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "繧ｹ繧ｭ繝�繝暦ｼ亥ｯｾ雎｡陦後↑縺暦ｼ�"
+            ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行なし）"
         return {}
 
     blob = "\n".join(sorted(lines))
@@ -6090,110 +6095,110 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     )
     if cached_parsed is not None:
         logging.info(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 繧ｭ繝｣繝�繧ｷ繝･繝偵ャ繝茨ｼ�%s 莉ｶ繝ｻ蝓ｺ貅門ｹｴ=%s�ｼ峨�Gemini 縺ｯ蜻ｼ縺ｳ縺ｾ縺帙ｓ縲�",
+            "タスク特別指定: キャッシュヒット（%s 件・基準年=%s）。Gemini は呼びません。",
             len(lines),
             ref_y,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ｪ縺暦ｼ医く繝｣繝�繧ｷ繝･菴ｿ逕ｨ�ｼ�"
+            ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
         out = copy.deepcopy(cached_parsed)
         if isinstance(out, dict):
             _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
         return out
 
     logging.info(
-        "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 繧ｭ繝｣繝�繧ｷ繝･縺ｪ縺励�Gemini 縺ｧ %s 莉ｶ縺ｮ蛯呵�繧定ｧ｣譫舌＠縺ｾ縺呻ｼ亥渕貅門ｹｴ=%s�ｼ峨�",
+        "タスク特別指定: キャッシュなし。Gemini で %s 件の備考を解析します（基準年=%s）。",
         len(lines),
         ref_y,
     )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 譛ｪ險ｭ螳壹�ｮ縺溘ａ繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳壹�ｮAI隗｣譫舌ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�")
+        logging.info("GEMINI_API_KEY 未設定のためタスク特別指定のAI解析をスキップしました。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ｪ縺暦ｼ�API繧ｭ繝ｼ譛ｪ險ｭ螳夲ｼ�"
+            ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
         return {}
 
     prompt = f"""
-縺ゅ↑縺溘�ｯ蟾･蝣ｴ縺ｮ驟榊床險育判蜷代￠縺ｫ縲・xcel縲檎音蛻･謖�螳喟蛯呵�縲肴ｬ�縺ｸ縺ｮ閾ｪ逕ｱ險倩ｿｰ繧定ｪｭ縺ｿ縲�驟榊床繝ｭ繧ｸ繝�繧ｯ縺御ｽｿ縺医ｋ繝輔ぅ繝ｼ繝ｫ繝峨□縺代↓關ｽ縺ｨ縺苓ｾｼ繧繧｢繧ｷ繧ｹ繧ｿ繝ｳ繝医〒縺吶�
+あなたは工場の配台計画向けに、Excel「特別指定_備考」欄への自由記述を読み、配台ロジックが使えるフィールドだけに落とし込むアシスタントです。
 
-縲先怙驥崎ｦ√�
-1) 縲千音蛻･謖�螳壼次譁�縲代�ｮ蜷�陦後�ｯ縲√Θ繝ｼ繧ｶ繝ｼ縺後そ繝ｫ縺ｫ蜈･蜉帙＠縺滓枚蟄怜�励ｒ **謾ｹ螟峨�ｻ隕∫ｴ�繝ｻ譁ｭ縺｡蛻�繧翫�ｯ縺励※縺翫ｉ縺�**�ｼ亥�磯�ｭ譛ｫ蟆ｾ縺ｮ遨ｺ逋ｽ縺ｮ縺ｿ髯､蜴ｻ�ｼ峨√◎縺ｮ縺ｾ縺ｾ貂｡縺励※縺�縺ｾ縺吶�**蜴滓枚縺ｮ莠句ｮ溘ｄ諢丞峙繧貞挨縺ｮ譁�險縺ｫ鄂ｮ縺肴鋤縺医↑縺�縺ｧ縺上□縺輔＞縲�**
-2) 縺ゅ↑縺溘�ｮ蠢懃ｭ斐�ｯ **1蛟九�ｮ JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝医�ｮ縺ｿ**�ｼ亥�磯�ｭ縺� {{ 縲∵忰蟆ｾ縺� }} �ｼ峨りｪｬ譏取枚繝ｻ繝槭�ｼ繧ｯ繝繧ｦ繝ｳ繝ｻ繧ｳ繝ｼ繝峨ヵ繧ｧ繝ｳ繧ｹ縺ｯ遖∵ｭ｢縲�
-3) JSON 縺ｮ繝医ャ繝励Ξ繝吶Ν繧ｭ繝ｼ縺ｯ縲∝推陦後�ｮ **萓晞�ｼNO縲舌→縲代�ｮ髢薙�ｮ譁�蟄怜�励�ｮ縺ｿ** 縺ｨ **螳悟�ｨ荳閾ｴ** 縺輔○繧九％縺ｨ縲�**蛯呵�譛ｬ譁�**縺ｫ譖ｸ縺九ｌ縺溷刀逡ｪ繝ｻ蜴溷渚蜷阪�ｻ陬ｽ蜩√さ繝ｼ繝会ｼ井ｾ�: 20010 縺ｧ蟋九∪繧狗分蜿ｷ蛻暦ｼ峨ｒ繧ｭ繝ｼ縺ｫ縺励※縺ｯ縺ｪ繧峨↑縺�縲ょｙ閠�縺後◎縺ｮ繧医≧縺ｪ逡ｪ蜿ｷ縺ｧ蟋九∪縺｣縺ｦ縺�縺ｦ繧ゅ√く繝ｼ縺ｯ蠢�縺壹舌大��縺ｮ萓晞�ｼNO縺�縺代→縺吶ｋ縲�
+【最重要】
+1) 【特別指定原文】の各行は、ユーザーがセルに入力した文字列を **改変・要約・断ち切りはしておらず**（先頭末尾の空白のみ除去）、そのまま渡しています。**原文の事実や意図を別の文言に置き換えないでください。**
+2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭が {{ 、末尾が }} ）。説明文・マークダウン・コードフェンスは禁止。
+3) JSON のトップレベルキーは、各行の **依頼NO【と】の間の文字列のみ** と **完全一致** させること。**備考本文**に書かれた品番・原反名・製品コード（例: 20010 で始まる番号列）をキーにしてはならない。備考がそのような番号で始まっていても、キーは必ず【】内の依頼NOだけとする。
 
-縲占ｿ泌唆JSON縺ｮ螂醍ｴ��ｼ医％縺ｮ遽縺ｩ縺翫ｊ縺ｫ蜃ｺ蜉帙☆繧九％縺ｨ�ｼ峨�
-笆� 繝医ャ繝励Ξ繝吶Ν
-- 繧ｭ繝ｼ: 荳願ｨ倥千音蛻･謖�螳壼次譁�縲代�ｮ **萓晞�ｼNO縲絶ｦ縲代�ｮ諡ｬ蠑ｧ蜀�** 縺ｮ譁�蟄怜�励→ **螳悟�ｨ荳閾ｴ**�ｼ郁｡ｨ險倥�ｻ繝上う繝輔Φ繝ｻ闍ｱ螟ｧ譁�蟄怜ｰ乗枚蟄励ｒ蜴滓枚縺ｩ縺翫ｊ�ｼ峨ょｙ閠�譛ｬ譁�荳ｭ縺ｮ謨ｰ蟄怜�励ｒ繧ｭ繝ｼ縺ｫ縺励↑縺�縲�
-- 蛟､: 谺｡縺ｮ縺�縺壹ｌ縺九�
-  (A) **JSON繧ｪ繝悶ず繧ｧ繧ｯ繝�1縺､** 窶ｦ 蠖楢ｩｲ萓晞�ｼNO縺ｮ蛯呵�縺後�励Ο繝ｳ繝励ヨ荳� **1陦後□縺�** 縺ｮ縺ｨ縺阪�
-  (B) **JSON驟榊��**�ｼ郁ｦ∫ｴ�縺ｯ繧ｪ繝悶ず繧ｧ繧ｯ繝茨ｼ俄ｦ 蜷御ｸ萓晞�ｼNO縺ｧ蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪′逡ｰ縺ｪ繧句ｙ閠�陦後′ **隍�謨ｰ** 縺ゅｋ縺ｨ縺阪りｦ∫ｴ�縺ｮ鬆�縺ｯ繝励Ο繝ｳ繝励ヨ縺ｮ陦碁��縺ｨ蟇ｾ蠢懊＆縺帙ｋ縲�
+【返却JSONの契約（この節どおりに出力すること）】
+■ トップレベル
+- キー: 上記【特別指定原文】の **依頼NO【…】の括弧内** の文字列と **完全一致**（表記・ハイフン・英大文字小文字を原文どおり）。備考本文中の数字列をキーにしない。
+- 値: 次のいずれか。
+  (A) **JSONオブジェクト1つ** … 当該依頼NOの備考がプロンプト上 **1行だけ** のとき。
+  (B) **JSON配列**（要素はオブジェクト）… 同一依頼NOで工程名・機械名が異なる備考行が **複数** あるとき。要素の順はプロンプトの行順と対応させる。
 
-笆� process_name�ｼ域枚蟄怜�暦ｼ峨�ｻmachine_name�ｼ域枚蟄怜�暦ｼ俄� **蠢�鬆�**
-- 蠖楢ｩｲ蛯呵�縺ｫ蟇ｾ蠢懊☆繧九�励Ο繝ｳ繝励ヨ陦後�ｮ **蟾･遞句錐縲娯ｦ縲�**繝ｻ**讖滓｢ｰ蜷阪娯ｦ縲�** 縺ｮ蛟､縺ｨ **荳閾ｴ** 縺輔○繧具ｼ医鯉ｼ育ｩｺ�ｼ峨阪�ｮ縺ｨ縺阪�ｯ遨ｺ譁�蟄怜�� ""�ｼ峨�
-- 繝ｭ繧ｰ繝ｻ繝医Ξ繝ｼ繧ｹ逕ｨ縲ら怐逡･荳榊庄縲�
+■ process_name（文字列）・machine_name（文字列）— **必須**
+- 当該備考に対応するプロンプト行の **工程名「…」**・**機械名「…」** の値と **一致** させる（「（空）」のときは空文字列 ""）。
+- ログ・トレース用。省略不可。
 
-笆� restrict_to_process_name�ｼ域枚蟄怜�暦ｼ峨�ｻrestrict_to_machine_name�ｼ域枚蟄怜�暦ｼ俄� **莉ｻ諢�**
-- **蜴滓枚縺後檎音螳壹�ｮ蟾･遞九□縺代阪後％縺ｮ讖滓｢ｰ縺�縺代阪↑縺ｩ縲�驕ｩ逕ｨ遽�蝗ｲ繧堤ｵ槭▲縺ｦ縺�繧九→縺阪□縺�** 蜃ｺ蜉帙☆繧九�
-- **蜴滓枚縺ｫ蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪�ｮ髯仙ｮ壹′辟｡縺�**�ｼ井ｾ晞�ｼ蜈ｨ菴薙�ｻ蜈ｨ陦檎ｨ九∈縺ｮ謖�遉ｺ�ｼ峨→縺阪�ｯ **荳｡譁ｹ縺ｨ繧ら怐逡･** 縺吶ｋ縺� **遨ｺ譁�蟄怜�� ""** 縺ｨ縺吶ｋ縲�
-- 縺昴�ｮ蝣ｴ蜷医�驟榊床繝ｭ繧ｸ繝�繧ｯ縺ｯ **蜷御ｸ萓晞�ｼNO縺ｮ蛻･陦鯉ｼ井ｾ�: 繧ｨ繝ｳ繝懊せ陦後→蛻�蜑ｲ陦鯉ｼ峨↓繧ょ酔縺俶欠遉ｺ繧帝←逕ｨ** 縺吶ｋ縲�
-- 邨槭ｋ蝣ｴ蜷医�ｯ縲∝次譁�縺ｧ遉ｺ縺輔ｌ縺溯ｭ伜挨蜷阪ｒ蜈･繧後ｋ�ｼ�Excel 縺ｮ蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪→辣ｧ蜷医＠繧�縺吶＞陦ｨ險假ｼ峨�
+■ restrict_to_process_name（文字列）・restrict_to_machine_name（文字列）— **任意**
+- **原文が「特定の工程だけ」「この機械だけ」など、適用範囲を絞っているときだけ** 出力する。
+- **原文に工程名・機械名の限定が無い**（依頼全体・全行程への指示）ときは **両方とも省略** するか **空文字列 ""** とする。
+- その場合、配台ロジックは **同一依頼NOの別行（例: エンボス行と分割行）にも同じ指示を適用** する。
+- 絞る場合は、原文で示された識別名を入れる（Excel の工程名・機械名と照合しやすい表記）。
 
-笆� preferred_operator�ｼ域枚蟄怜�暦ｼ俄� 譚｡莉ｶ莉倥″**蠢�鬆�**
-- **蠢�隕∵擅莉ｶ**: 蠖楢ｩｲ萓晞�ｼ縺ｮ蜴滓枚繧定ｪｭ縺ｿ縲√�**隱ｰ縺後％縺ｮ蜉�蟾･繝ｻ菴懈･ｭ縺ｮ荳ｻ諡�蠖難ｼ�OP�ｼ峨→縺励※蜑ｲ繧雁ｽ薙※縺溘＞縺�**縲阪′ **諢丞袖縺ｨ縺励※** 隱ｭ縺ｿ蜿悶ｌ繧九→縺阪�
-  萓�: 迚ｹ螳壹�ｮ莠ｺ縺ｫ繧�縺｣縺ｦ繧ゅｉ縺��ｼ上◎縺ｮ莠ｺ縺ｫ莉ｻ縺帙ｋ�ｼ乗球蠖薙�ｯ縺ゅ�ｮ莠ｺ�ｼ衆P縺ｯ縲懶ｼ上懊＆繧難ｼ域ｰ丞錐�ｼ峨↓萓晞�ｼ縲√↑縺ｩ縲�**陦ｨ迴ｾ縺ｮ蝙九↓萓晏ｭ倥○縺�**縲∵枚縺ｮ諢丞袖縺ｧ蛻､譁ｭ縺吶ｋ縲�
-- **貅縺溘＠縺溘→縺阪�ｮ蜃ｺ蜉帷ｾｩ蜍�**: 荳願ｨ倥�ｮ諢丞袖縺梧�千ｫ九☆繧九→蛻､譁ｭ縺励◆繧ｪ繝悶ず繧ｧ繧ｯ繝医〒縺ｯ縲�**蠢�縺�** 繧ｭ繝ｼ `preferred_operator` 繧貞性繧√∝､縺ｯ **遨ｺ縺ｧ縺ｪ縺�譁�蟄怜��** 縺ｨ縺吶ｋ縲ゆｽｵ縺帙※ **process_name / machine_name 縺ｯ蠢�鬆�**�ｼ井ｾ�: `{{"process_name":"窶ｦ","machine_name":"窶ｦ","preferred_operator":"窶ｦ"}}`�ｼ峨�
-- **蛟､縺ｮ蠖｢蠑�**: 蜴滓枚縺ｧ遉ｺ縺輔ｌ縺� **諡�蠖楢�縺ｮ隴伜挨蜷阪ｒ1蜷榊��**�ｼ亥ｧ薙�ｻ蜷阪�ｻ繝九ャ繧ｯ繝阪�ｼ繝�遲峨∝次譁�縺ｫ迴ｾ繧後◆陦ｨ險倥ｒ邯ｭ謖��ｼ峨よ忰蟆ｾ縺ｮ謨ｬ遘ｰ�ｼ医＆繧薙�ｻ蜷帙�ｻ豌擾ｼ峨�ｮ縺ｿ髯､蜴ｻ縲ゆｾ�:縲梧｣ｮ蟯｡縺輔ｓ縺ｫ繧�縺｣縺ｦ繧ゅｉ縺�縺ｾ縺吶坂�� `"譽ｮ蟯｡"`縲�
-- **蜃ｺ蜉帙＠縺ｦ縺ｯ縺�縺代↑縺�縺ｨ縺�**: 蜴滓枚縺ｫ諡�蠖楢�縺ｮ謖�諢上′ **荳蛻�縺ｪ縺�** 縺ｨ蛻､譁ｭ縺励◆萓晞�ｼNO縺ｧ縺ｯ `preferred_operator` 繧ｭ繝ｼ閾ｪ菴薙ｒ **逵∫払** 縺吶ｋ�ｼ育ｩｺ譁�蟄怜�励ｂ莉倥￠縺ｪ縺��ｼ峨�
+■ preferred_operator（文字列）— 条件付き**必須**
+- **必要条件**: 当該依頼の原文を読み、「**誰がこの加工・作業の主担当（OP）として割り当てたいか**」が **意味として** 読み取れるとき。
+  例: 特定の人にやってもらう／その人に任せる／担当はあの人／OPは〜／〜さん（氏名）に依頼、など。**表現の型に依存せず**、文の意味で判断する。
+- **満たしたときの出力義務**: 上記の意味が成立すると判断したオブジェクトでは、**必ず** キー `preferred_operator` を含め、値は **空でない文字列** とする。併せて **process_name / machine_name は必須**（例: `{{"process_name":"…","machine_name":"…","preferred_operator":"…"}}`）。
+- **値の形式**: 原文で示された **担当者の識別名を1名分**（姓・名・ニックネーム等、原文に現れた表記を維持）。末尾の敬称（さん・君・氏）のみ除去。例:「森岡さんにやってもらいます」→ `"森岡"`。
+- **出力してはいけないとき**: 原文に担当者の指意が **一切ない** と判断した依頼NOでは `preferred_operator` キー自体を **省略** する（空文字列も付けない）。
 
-笆� 縺昴�ｮ莉悶ヵ繧｣繝ｼ繝ｫ繝会ｼ�required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date�ｼ�
-- 蜴滓枚縺九ｉ **譏守｢ｺ縺ｫ** 隱ｭ縺ｿ蜿悶ｌ繧句�ｴ蜷医�ｮ縺ｿ蜃ｺ蜉帙りｪｭ縺ｿ蜿悶ｌ縺ｪ縺�謨ｰ蛟､繝ｻ譌･莉倥�ｯ **逵∫払**�ｼ域耳貂ｬ縺ｧ蝓九ａ縺ｪ縺��ｼ峨�
+■ その他フィールド（required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date）
+- 原文から **明確に** 読み取れる場合のみ出力。読み取れない数値・日付は **省略**（推測で埋めない）。
 
-縲仙酔荳萓晞�ｼNO繝ｻ隍�謨ｰ蟾･遞九�ｮ萓九�
-萓晞�ｼNO Y4-2 縺ｫ縲後お繝ｳ繝懊せ縲阪→縲悟��蜑ｲ縲阪�ｮ陦後′縺ゅｊ縲∝ｙ閠�縺後�4/5縺ｾ縺ｧ縺ｫ邨ゅｏ繧峨○繧九阪�ｮ縺ｿ縺ｧ蟾･遞九�ｮ髯仙ｮ壹′辟｡縺�蝣ｴ蜷�:
-- process_name / machine_name 縺ｯ **蛯呵�縺梧嶌縺九ｌ縺溯｡�** 縺ｮ蛟､繧貞�･繧後ｋ縲�
-- restrict_to_* 縺ｯ **蜃ｺ縺輔↑縺�縺狗ｩｺ** 縺ｫ縺励�**繧ｨ繝ｳ繝懊せ陦後�ｻ蛻�蜑ｲ陦後�ｮ荳｡譁ｹ** 縺ｫ蜷後§蜆ｪ蜈亥ｺｦ繝ｻ譌･莉倡ｭ峨′蜉ｹ縺上ｈ縺�縺ｫ縺吶ｋ縲�
+【同一依頼NO・複数工程の例】
+依頼NO Y4-2 に「エンボス」と「分割」の行があり、備考が「4/5までに終わらせる」のみで工程の限定が無い場合:
+- process_name / machine_name は **備考が書かれた行** の値を入れる。
+- restrict_to_* は **出さないか空** にし、**エンボス行・分割行の両方** に同じ優先度・日付等が効くようにする。
 
-縲仙渕貅門ｹｴ�ｼ亥ｹｴ縺ｪ縺玲律莉倡畑�ｼ峨�
-縲�4/5縲阪�4/5縺ｫ蜃ｺ闕ｷ縲阪�ｮ繧医≧縺ｫ **蟷ｴ縺檎┌縺�** 譌･莉倥�ｯ蜴溷援 **隘ｿ證ｦ {ref_y} 蟷ｴ** 縺ｨ縺励〆YYY-MM-DD 縺ｧ蜃ｺ蜉帙�
+【基準年（年なし日付用）】
+「4/5」「4/5に出荷」のように **年が無い** 日付は原則 **西暦 {ref_y} 年** とし、YYYY-MM-DD で出力。
 
-縲舌ヵ繧｣繝ｼ繝ｫ繝我ｸ隕ｧ�ｼ亥梛縺ｮ蜿り��ｼ峨�
-- process_name, machine_name: 譁�蟄怜�暦ｼ亥ｿ�鬆医ゅ�励Ο繝ｳ繝励ヨ陦後→荳閾ｴ�ｼ�
-- restrict_to_process_name, restrict_to_machine_name: 譁�蟄怜�暦ｼ井ｻｻ諢上る剞螳壹↑繧会ｼ�
-- preferred_operator: 譁�蟄怜�暦ｼ井ｸ願ｨ伜･醍ｴ�縺ｫ蠕薙≧�ｼ�
-- required_op: 豁｣縺ｮ謨ｴ謨ｰ
-- speed_override: 豁｣縺ｮ謨ｰ�ｼ�m/蛻��ｼ�
-- task_efficiency: 0縲�1
-- priority: 謨ｴ謨ｰ�ｼ亥ｰ上＆縺�縺ｻ縺ｩ蜈医↓蜑ｲ莉假ｼ�
+【フィールド一覧（型の参考）】
+- process_name, machine_name: 文字列（必須。プロンプト行と一致）
+- restrict_to_process_name, restrict_to_machine_name: 文字列（任意。限定なら）
+- preferred_operator: 文字列（上記契約に従う）
+- required_op: 正の整数
+- speed_override: 正の数（m/分）
+- task_efficiency: 0〜1
+- priority: 整数（小さいほど先に割付）
 - start_date: YYYY-MM-DD / start_time: HH:MM
 - target_completion_date, ship_by_date: YYYY-MM-DD
 
-縲占ｧ｣驥医�ｮ謖�驥昴�
-- 縲碁俣縺ｫ蜷医≧繧医≧縺ｫ縲阪檎ｹｰ繧贋ｸ翫￡繧九坂�� priority 繧剃ｸ翫￡繧具ｼ域焚蛟､繧剃ｸ九￡繧具ｼ峨よ律莉倥′譁�荳ｭ縺ｫ縺ゅｌ縺ｰ target_completion_date 縺ｾ縺溘�ｯ ship_by_date 縺ｫ蜈･繧後ｋ縲�
-- 諡�蠖楢�謖�蜷阪�ｯ **諢丞袖逅�隗｣** 縺ｧ preferred_operator 繧呈ｱｺ繧√ｋ�ｼ育音螳壹�ｮ繧ｭ繝ｼ繝ｯ繝ｼ繝牙�玲嫌縺ｫ鬆ｼ繧峨↑縺��ｼ峨�
-- 謨ｰ蛟､繝ｻ譌･莉倥�ｯ謗ｨ貂ｬ縺ｧ陬懊ｏ縺ｪ縺�縲�
-- **蛯呵�縺檎音螳壹�ｮ蟾･遞九�ｻ讖滓｢ｰ縺ｫ縺�縺題ｨ蜿翫＠縺ｦ縺�縺ｪ縺�髯舌ｊ**縲〉estrict_to_* 縺ｯ遨ｺ縺ｫ縺励∝酔荳萓晞�ｼNO縺ｮ莉冶｡後↓繧る←逕ｨ縺輔ｌ繧句ｽ｢縺ｫ縺吶ｋ縲�
+【解釈の指針】
+- 「間に合うように」「繰り上げる」→ priority を上げる（数値を下げる）。日付が文中にあれば target_completion_date または ship_by_date に入れる。
+- 担当者指名は **意味理解** で preferred_operator を決める（特定のキーワード列挙に頼らない）。
+- 数値・日付は推測で補わない。
+- **備考が特定の工程・機械にだけ言及していない限り**、restrict_to_* は空にし、同一依頼NOの他行にも適用される形にする。
 
-縲仙�ｺ蜉帷峩蜑阪�ｮ閾ｪ蟾ｱ讀懆ｨｼ�ｼ亥ｿ�縺壼ｮ溯｡後＠縺ｦ縺九ｉ JSON 繧帝哩縺倥ｋ�ｼ峨�
-- 縲千音蛻･謖�螳壼次譁�縲代�ｮ **蜷�陦�** 縺ｫ縺､縺�縺ｦ縲∝ｯｾ蠢懊☆繧九が繝悶ず繧ｧ繧ｯ繝医↓ **process_name** 縺ｨ **machine_name** 縺後≠繧九°縲�
-- 蜷御ｸ萓晞�ｼNO縺瑚､�謨ｰ陦後≠繧九→縺阪�ｯ **驟榊��** 縺ｧ蜷�陦後↓1繧ｪ繝悶ず繧ｧ繧ｯ繝医√∪縺溘�ｯ驕ｩ蛻�縺ｫ繝槭�ｼ繧ｸ縺励◆蜊倅ｸ繧ｪ繝悶ず繧ｧ繧ｯ繝茨ｼ脚estrict 縺ｮ驕狗畑繧剃ｸ雋ｫ縺輔○繧九�
-- 縲御ｸｻ諡�蠖徹P縺ｮ謖�諢上阪′縺ゅｋ陦後〒縺ｯ **髱樒ｩｺ縺ｮ preferred_operator** 繧剃ｻ倥￠繧九�
+【出力直前の自己検証（必ず実行してから JSON を閉じる）】
+- 【特別指定原文】の **各行** について、対応するオブジェクトに **process_name** と **machine_name** があるか。
+- 同一依頼NOが複数行あるときは **配列** で各行に1オブジェクト、または適切にマージした単一オブジェクト＋restrict の運用を一貫させる。
+- 「主担当OPの指意」がある行では **非空の preferred_operator** を付ける。
 
-縲仙�ｺ蜉帛ｽ｢蠑上�ｮ萓九托ｼ井ｾ晞�ｼNO繝ｻ蛟､縺ｯ螳溘ョ繝ｼ繧ｿ縺ｫ蜷医ｏ縺帶崛縺医ｋ縺薙→�ｼ�
+【出力形式の例】（依頼NO・値は実データに合わせ替えること）
 {{
   "W3-14": {{
-    "process_name": "讀懈渊",
-    "machine_name": "繝ｩ繧､繝ｳA",
-    "preferred_operator": "譽ｮ蟯｡"
+    "process_name": "検査",
+    "machine_name": "ラインA",
+    "preferred_operator": "森岡"
   }},
   "Y3-26": {{
-    "process_name": "繧ｳ繝ｼ繝�繧｣繝ｳ繧ｰ",
+    "process_name": "コーティング",
     "machine_name": "",
     "priority": 1,
     "ship_by_date": "{ref_y}-04-05",
     "target_completion_date": "{ref_y}-04-05"
   }},
   "Y4-2": {{
-    "process_name": "繧ｨ繝ｳ繝懊せ",
+    "process_name": "エンボス",
     "machine_name": "E1",
     "priority": 2,
     "restrict_to_process_name": "",
@@ -6201,16 +6206,16 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
   }}
 }}
 
-縲千音蛻･謖�螳壼次譁�縲托ｼ�Excel 縺九ｉ縺昴�ｮ縺ｾ縺ｾ縲�1陦鯉ｼ昜ｾ晞�ｼNO縺ｨ蛯呵�縺ｮ繝壹い�ｼ�
+【特別指定原文】（Excel からそのまま。1行＝依頼NOと備考のペア）
 {blob}
 """
     try:
         ppath = os.path.join(log_dir, "ai_task_special_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 莉雁屓 Gemini 縺ｫ貂｡縺励◆繝励Ο繝ｳ繝励ヨ蜈ｨ譁� 竊� %s", ppath)
+        logging.info("タスク特別指定: 今回 Gemini に渡したプロンプト全文 → %s", ppath)
     except OSError as ex:
-        logging.warning("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: 繝励Ο繝ｳ繝励ヨ菫晏ｭ伜､ｱ謨�: %s", ex)
+        logging.warning("タスク特別指定: プロンプト保存失敗: %s", ex)
 
     client = genai.Client(api_key=API_KEY)
     try:
@@ -6223,12 +6228,12 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                 ai_cache, cache_key, parsed, content_key=cache_fingerprint
             )
             save_ai_cache(ai_cache)
-            logging.info("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI隗｣譫舌′螳御ｺ�縺励∪縺励◆縲�")
+            logging.info("タスク特別指定: AI解析が完了しました。")
             if ai_sheet_sink is not None:
-                ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ゅｊ"
+                ai_sheet_sink["特別指定備考_AI_API"] = "あり"
             return parsed
         if ai_sheet_sink is not None:
-            ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ゅｊ�ｼ�JSON隗｣驥亥､ｱ謨暦ｼ�"
+            ai_sheet_sink["特別指定備考_AI_API"] = "あり（JSON解釈失敗）"
         return {}
     except Exception as e:
         err_text = str(e)
@@ -6237,7 +6242,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         retry_sec = extract_retry_seconds(err_text) if is_quota else None
         if is_quota and retry_sec is not None:
             wait_sec = min(max(retry_sec, 1.0), 90.0)
-            logging.warning(f"繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 429縲�{wait_sec:.1f}遘貞ｾ�讖溘＠縺ｦ蜀崎ｩｦ陦後＠縺ｾ縺吶�")
+            logging.warning(f"タスク特別指定 AI 429。{wait_sec:.1f}秒待機して再試行します。")
             time_module.sleep(wait_sec)
             try:
                 res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -6250,14 +6255,14 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                     )
                     save_ai_cache(ai_cache)
                     if ai_sheet_sink is not None:
-                        ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ゅｊ�ｼ�429蜀崎ｩｦ陦悟ｾ鯉ｼ�"
+                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（429再試行後）"
                     return parsed
             except Exception as e2:
-                logging.warning(f"繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 蜀崎ｩｦ陦悟､ｱ謨�: {e2}")
+                logging.warning(f"タスク特別指定 AI 再試行失敗: {e2}")
         elif is_unavailable:
             wait_sec = 8.0
             logging.warning(
-                f"繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 503/UNAVAILABLE縲�{wait_sec:.1f}遘貞ｾ�讖溘＠縺ｦ蜀崎ｩｦ陦後＠縺ｾ縺吶�"
+                f"タスク特別指定 AI 503/UNAVAILABLE。{wait_sec:.1f}秒待機して再試行します。"
             )
             time_module.sleep(wait_sec)
             try:
@@ -6270,26 +6275,26 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
                         ai_cache, cache_key, parsed, content_key=cache_fingerprint
                     )
                     save_ai_cache(ai_cache)
-                    logging.info("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI蜀崎ｩｦ陦後〒隗｣譫舌′螳御ｺ�縺励∪縺励◆縲�")
+                    logging.info("タスク特別指定: AI再試行で解析が完了しました。")
                     if ai_sheet_sink is not None:
-                        ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = "縺ゅｊ�ｼ�503蜀崎ｩｦ陦悟ｾ鯉ｼ�"
+                        ai_sheet_sink["特別指定備考_AI_API"] = "あり（503再試行後）"
                     return parsed
-                logging.warning("繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 503蜀崎ｩｦ陦�: JSON 謚ｽ蜃ｺ縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲�")
+                logging.warning("タスク特別指定 AI 503再試行: JSON 抽出に失敗しました。")
             except Exception as e2:
-                logging.warning(f"繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 503蜀崎ｩｦ陦悟､ｱ謨�: {e2}")
+                logging.warning(f"タスク特別指定 AI 503再試行失敗: {e2}")
         else:
-            logging.warning(f"繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳� AI 繧ｨ繝ｩ繝ｼ: {e}")
+            logging.warning(f"タスク特別指定 AI エラー: {e}")
         logging.warning(
-            "繧ｿ繧ｹ繧ｯ迚ｹ蛻･謖�螳�: AI隗｣譫千ｵ先棡繧貞叙蠕励〒縺阪↑縺九▲縺溘◆繧√∫音蛻･謖�螳喟蛯呵�縺ｮ髢句ｧ区律/蜆ｪ蜈域欠遉ｺ縺ｯ蜿肴丐縺輔ｌ縺ｾ縺帙ｓ縲�"
-            "�ｼ亥�励悟刈蟾･髢句ｧ区律_謖�螳壹阪梧欠螳夂ｴ肴悄_荳頑嶌縺阪阪�ｯ蟒�豁｢貂医∩縲ょｙ閠�縺ｮ蜀崎ｨ倩ｼ峨∪縺溘�ｯ蠕後°繧� AI 蜀榊ｮ溯｡後ｒ讀懆ｨ弱＠縺ｦ縺上□縺輔＞縲ゑｼ�"
+            "タスク特別指定: AI解析結果を取得できなかったため、特別指定_備考の開始日/優先指示は反映されません。"
+            "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してください。）"
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["迚ｹ蛻･謖�螳壼ｙ閠ダAI_API"] = f"螟ｱ謨�: {e}"[:500]
+            ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
         return {}
 
 
 def _merge_preferred_operator_cell_and_ai(row, ai_for_tid):
-    """Excel縲梧球蠖徹P_謖�螳壹阪ｒ蜆ｪ蜈医＠縲∫ｩｺ縺ｪ繧� AI 縺ｮ preferred_operator縲�"""
+    """Excel「担当OP_指定」を優先し、空なら AI の preferred_operator。"""
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
     v = row.get(PLAN_COL_PREFERRED_OP)
     if v is not None and not (isinstance(v, float) and pd.isna(v)):
@@ -6306,8 +6311,8 @@ def _merge_preferred_operator_cell_and_ai(row, ai_for_tid):
 
 def _global_override_preferred_operator_for_task(tpref, task_id) -> str | None:
     """
-    繝｡繧､繝ｳ縲悟�榊━蜈育音蛻･險倩ｼ峨阪�ｮ task_preferred_operators縲�
-    繧ｭ繝ｼ縺ｯ萓晞�ｼNO�ｼ亥､ｧ譁�蟄励�ｻ蟆乗枚蟄励�ｮ蟾ｮ縺ｯ辟｡隕厄ｼ峨�
+    メイン「再優先特別記載」の task_preferred_operators。
+    キーは依頼NO（大文字・小文字の差は無視）。
     """
     if not isinstance(tpref, dict) or not tpref:
         return None
@@ -6329,9 +6334,9 @@ def _merge_task_row_with_ai(
     row, ai_for_tid, *, allow_ai_dispatch_priority_from_remark: bool = True
 ):
     """
-    荳頑嶌縺榊�励�ｯ蜉�蟾･騾溷ｺｦ_荳頑嶌縺阪�ｻ蜴溷渚謚募�･譌･_荳頑嶌縺咲ｭ峨�ｮ縺ｿ�ｼ郁ｨ育判繧ｷ繝ｼ繝茨ｼ峨ゅ◎縺ｮ莉悶�ｯ迚ｹ蛻･謖�螳壼ｙ閠� AI 縺九ｉ縲�
-    allow_ai_dispatch_priority_from_remark 縺� False 縺ｮ縺ｨ縺阪、I 縺ｮ required_op / task_efficiency / priority /
-    start_date / start_time 縺ｯ謗｡逕ｨ縺励↑縺��ｼ亥ｙ閠�縺ｫ邏肴悄邉ｻ譁�險縺檎┌縺�陦悟髄縺托ｼ峨�
+    上書き列は加工速度_上書き・原反投入日_上書き等のみ（計画シート）。その他は特別指定備考 AI から。
+    allow_ai_dispatch_priority_from_remark が False のとき、AI の required_op / task_efficiency / priority /
+    start_date / start_time は採用しない（備考に納期系文言が無い行向け）。
     """
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
 
@@ -6409,8 +6414,8 @@ def _ai_float_for_conflict(ai, key):
 
 def detect_planning_remark_ai_conflicts(row, ai_for_tid):
     """
-    迚ｹ蛻･謖�螳喟蛯呵�縺ｫ萓昴ｋ AI 隗｣譫千ｵ先棡縺ｨ縲∵�守､ｺ繧ｻ繝ｫ縺ｮ荳｡譁ｹ縺ｫ蛟､縺後≠繧企｣溘＞驕輔≧蛻励ｒ霑斐☆縲�
-    蛯呵�繝ｻAI縺�縺壹ｌ縺区ｬ�縺代ｋ蝣ｴ蜷医�ｯ遨ｺ髮�蜷医�
+    特別指定_備考に依る AI 解析結果と、明示セルの両方に値があり食い違う列を返す。
+    備考・AIいずれか欠ける場合は空集合。
     """
     remark = str(row.get(PLAN_COL_SPECIAL_REMARK, "") or "").strip()
     if not remark or remark.lower() in ("nan", "none"):
@@ -6439,7 +6444,7 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
 
 
 def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
-    """Excel 陦檎分蜿ｷ(1蟋九∪繧翫�ｻ繝倥ャ繝繝ｼ=1陦檎岼) -> 遏帷崟縺後≠縺｣縺溷�怜錐縺ｮ髮�蜷�"""
+    """Excel 行番号(1始まり・ヘッダー=1行目) -> 矛盾があった列名の集合"""
     res = {}
     for i, (_, row) in enumerate(tasks_df.iterrows()):
         if _plan_row_exclude_from_assignment(row):
@@ -6452,7 +6457,7 @@ def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
 
 
 def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by_row) -> None:
-    """譌｢縺ｫ髢九＞縺ｦ縺�繧矩�榊床險育判繧ｷ繝ｼ繝医∈縲∫泝逶ｾ蛻励�ｮ逹濶ｲ�ｼ郁埋鮟�繝ｪ繧ｻ繝�繝遺�定ｵ､�ｼ峨ｒ驕ｩ逕ｨ縺吶ｋ縲ゆｿ晏ｭ倥�ｯ蜻ｼ縺ｳ蜃ｺ縺怜�ｴ縲�"""
+    """既に開いている配台計画シートへ、矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼び出し側。"""
     header_map = {}
     for col_idx in range(1, ws.max_column + 1):
         v = ws.cell(1, col_idx).value
@@ -6475,7 +6480,7 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
                 cell.fill = clear_fill
             else:
                 cell.fill = yellow_input_fill
-            # 繝輔か繝ｳ繝医�ｯ荳頑嶌縺阪＠縺ｪ縺��ｼ医ヶ繝�繧ｯ譌｢螳壹�ｻ繝ｦ繝ｼ繧ｶ繝ｼ險ｭ螳壹ｒ邯ｭ謖��ｼ�
+            # フォントは上書きしない（ブック既定・ユーザー設定を維持）
 
     for r, colnames in conflicts_by_row.items():
         if r < 2:
@@ -6497,17 +6502,17 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     when_str: str,
     num_data_rows: int,
     conflicts_by_row,
-    log_prefix: str = "谿ｵ髫�2",
+    log_prefix: str = "段階2",
 ) -> bool:
     """
-    谿ｵ髫�2蜷代￠: 繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝郁ｧ｣譫舌ヶ繝ｭ繝�繧ｯ�ｼ�AX:AY�ｼ峨→遏帷崟繝上う繝ｩ繧､繝医ｒ **1蝗槭�ｮ load/save** 縺ｧ蜿肴丐縺吶ｋ縲�
-    蠕捺擂縺ｯ蛻･髢｢謨ｰ縺ｧ繝悶ャ繧ｯ繧�2蝗樣幕縺�縺ｦ縺�縺溘◆繧√�.xlsm 縺悟､ｧ縺阪＞迺ｰ蠅�縺ｧ蜊∵焚遘貞腰菴阪�ｮ遏ｭ邵ｮ縺ｫ縺ｪ繧九�
+    段階2向け: グローバルコメント解析ブロック（AX:AY）と矛盾ハイライトを **1回の load/save** で反映する。
+    従来は別関数でブックを2回開いていたため、.xlsm が大きい環境で十数秒単位の短縮になる。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫舌�ｻ遏帷崟逹濶ｲ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+            "%s: ブックに「%s」があるため openpyxl でグローバル解析・矛盾着色をスキップしました。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -6520,7 +6525,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         )
     except Exception as ex:
         logging.info(
-            "%s: 驟榊床繧ｷ繝ｼ繝井ｸ諡ｬ譖ｸ霎ｼ縺ｮ縺溘ａ繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ: %s",
+            "%s: 配台シート一括書込のためブックを開けません: %s",
             log_prefix,
             ex,
         )
@@ -6528,7 +6533,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: 繧ｷ繝ｼ繝� '%s' 縺檎┌縺�縺溘ａ繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫舌�ｻ遏帷崟逹濶ｲ繧偵せ繧ｭ繝�繝励�",
+                "%s: シート '%s' が無いためグローバル解析・矛盾着色をスキップ。",
                 log_prefix,
                 sheet_name,
             )
@@ -6545,8 +6550,8 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
                 sheet_name, num_data_rows, conflicts_by_row or {}
             )
             logging.warning(
-                "%s: 驟榊床繧ｷ繝ｼ繝医∈縺ｮ荳諡ｬ菫晏ｭ倥↓螟ｱ謨暦ｼ�Excel 縺ｧ髢九＞縺溘∪縺ｾ遲会ｼ峨�"
-                " 遏帷崟繝上う繝ｩ繧､繝医�ｯ '%s' 縺ｫ譖ｸ縺榊�ｺ縺励∪縺励◆縲ゅげ繝ｭ繝ｼ繝舌Ν隗｣譫舌�ｯ譛ｪ菫晏ｭ倥�ｮ蜿ｯ閭ｽ諤ｧ縺後≠繧翫∪縺吶� (%s)",
+                "%s: 配台シートへの一括保存に失敗（Excel で開いたまま等）。"
+                " 矛盾ハイライトは '%s' に書き出しました。グローバル解析は未保存の可能性があります。 (%s)",
                 log_prefix,
                 _planning_conflict_sidecar_path(),
                 e,
@@ -6556,8 +6561,8 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         _n_conf = len(conflicts_by_row) if conflicts_by_row else 0
         if _n_conf:
             logging.info(
-                "%s: 縲�%s縲�%s:%s 蛻励↓繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫舌ｒ菫晏ｭ倥＠縲�"
-                "迚ｹ蛻･謖�螳喟蛯呵�縺ｨ蛻励�ｮ遏帷崟 %s 陦後ｒ蜷後§菫晏ｭ倥〒繝上う繝ｩ繧､繝医＠縺ｾ縺励◆縲�",
+                "%s: 「%s」%s:%s 列にグローバル解析を保存し、"
+                "特別指定_備考と列の矛盾 %s 行を同じ保存でハイライトしました。",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -6566,7 +6571,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
             )
         else:
             logging.info(
-                "%s: 縲�%s縲�%s:%s 蛻励↓繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫舌ｒ菫晏ｭ倥＠縺ｾ縺励◆�ｼ育泝逶ｾ陦後↑縺暦ｼ峨�",
+                "%s: 「%s」%s:%s 列にグローバル解析を保存しました（矛盾行なし）。",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -6575,14 +6580,14 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         return True
     except OSError as ex:
         logging.warning(
-            "%s: 驟榊床繧ｷ繝ｼ繝井ｸ諡ｬ菫晏ｭ倥〒 OSError: %s",
+            "%s: 配台シート一括保存で OSError: %s",
             log_prefix,
             ex,
         )
         return False
     except Exception as ex:
         logging.warning(
-            "%s: 驟榊床繧ｷ繝ｼ繝医∈縺ｮ繧ｰ繝ｭ繝ｼ繝舌Ν隗｣譫撰ｼ狗泝逶ｾ逹濶ｲ�ｼ井ｸ諡ｬ�ｼ峨〒萓句､�: %s",
+            "%s: 配台シートへのグローバル解析＋矛盾着色（一括）で例外: %s",
             log_prefix,
             ex,
         )
@@ -6597,16 +6602,16 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
 
 def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, conflicts_by_row):
     """
-    驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙す繝ｼ繝医�ｮ繝�繝ｼ繧ｿ陦後ｒ縲∫泝逶ｾ蛻励�ｮ縺ｿ襍､蝨ｰ繝ｻ逋ｽ螟ｪ蟄励↓縺吶ｋ縲�
-    莠句燕繝代せ縺ｧ縺ｯ荳頑嶌縺榊�･蜉帛�励ｒ谿ｵ髫�1縺ｨ蜷後§阮�鮟�濶ｲ縺ｫ謌ｻ縺励√ヵ繧ｩ繝ｳ繝医�ｯ螟画峩縺励↑縺��ｼ井ｽ楢｣∫ｶｭ謖��ｼ峨�
-    AI隗｣譫仙�励�ｯ逹濶ｲ縺励↑縺��ｼ域ｮｵ髫�1縺ｮ莉墓ｧ倥↓蜷医ｏ縺帙ｋ�ｼ峨�
-    .xlsm 縺ｯ keep_vba=True 縺ｧ菫晏ｭ倥☆繧九�
+    配台計画_タスク入力シートのデータ行を、矛盾列のみ赤地・白太字にする。
+    事前パスでは上書き入力列を段階1と同じ薄黄色に戻し、フォントは変更しない（体裁維持）。
+    AI解析列は着色しない（段階1の仕様に合わせる）。
+    .xlsm は keep_vba=True で保存する。
     """
     if not wb_path or not os.path.exists(wb_path):
         return
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "遏帷崟譖ｸ蠑�: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ縺ｮ繝上う繝ｩ繧､繝医ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�",
+            "矛盾書式: ブックに「%s」があるため openpyxl でのハイライトをスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -6614,7 +6619,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
     wb = load_workbook(wb_path, keep_vba=keep_vba)
     try:
         if sheet_name not in wb.sheetnames:
-            logging.warning(f"遏帷崟譖ｸ蠑�: 繧ｷ繝ｼ繝� '{sheet_name}' 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲�")
+            logging.warning(f"矛盾書式: シート '{sheet_name}' が見つかりません。")
             return
         ws = wb[sheet_name]
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row)
@@ -6624,8 +6629,8 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
         except OSError as e:
             write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row)
             logging.warning(
-                "驟榊床繧ｷ繝ｼ繝医∈縺ｮ遏帷崟繝上う繝ｩ繧､繝医ｒ繝輔ぃ繧､繝ｫ菫晏ｭ倥〒縺阪∪縺帙ｓ縺ｧ縺励◆�ｼ�Excel 縺ｧ繝悶ャ繧ｯ繧帝幕縺�縺溘∪縺ｾ遲会ｼ峨�"
-                " '%s' 縺ｫ謖�遉ｺ繧呈嶌縺榊�ｺ縺励∪縺励◆縲ゅ�槭け繝ｭ縺後す繝ｼ繝井ｸ翫↓逶ｴ謗･驕ｩ逕ｨ縺励∪縺吶� (%s)",
+                "配台シートへの矛盾ハイライトをファイル保存できませんでした（Excel でブックを開いたまま等）。"
+                " '%s' に指示を書き出しました。マクロがシート上に直接適用します。 (%s)",
                 _planning_conflict_sidecar_path(),
                 e,
             )
@@ -6633,14 +6638,14 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
             _remove_planning_conflict_sidecar_safe()
             if conflicts_by_row:
                 logging.info(
-                    f"迚ｹ蛻･謖�螳喟蛯呵�縺ｨ蛻励�ｮ遏帷崟: {len(conflicts_by_row)} 陦後ｒ '{sheet_name}' 縺ｧ繝上う繝ｩ繧､繝医＠縺ｾ縺励◆縲�"
+                    f"特別指定_備考と列の矛盾: {len(conflicts_by_row)} 行を '{sheet_name}' でハイライトしました。"
                 )
     finally:
         wb.close()
 
 
 def _ai_planning_target_due_date(ai_dict):
-    """AI JSON 縺ｮ螳御ｺ�繝ｻ蜃ｺ闕ｷ逶ｮ讓呎律縺九ｉ縲�驟榊床縺ｮ逶ｮ讓呎律1縺､繧呈ｱｺ繧√ｋ�ｼ郁､�謨ｰ縺ゅｌ縺ｰ譛繧よ掠縺�譌･�ｼ晏宍縺励＞譁ｹ�ｼ峨�"""
+    """AI JSON の完了・出荷目標日から、配台の目標日1つを決める（複数あれば最も早い日＝厳しい方）。"""
     if not isinstance(ai_dict, dict):
         return None
     dates = []
@@ -6655,8 +6660,8 @@ def _ai_planning_target_due_date(ai_dict):
 
 def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bool:
     """
-    迚ｹ蛻･謖�螳喟蛯呵�縺ｫ縲∫ｴ肴悄繝ｻ譛滄剞繝ｻ譛蜆ｪ蜈医↑縺ｩ縲碁�榊床隧ｦ陦後ｒ蜑阪↓蜃ｺ縺吶肴э蝗ｳ縺ｮ譁�險縺後≠繧九→縺� True縲�
-    蛯呵�縺瑚ｨ伜�･縺輔ｌ縺ｦ縺�繧九□縺代〒縺ｯ True 縺ｫ縺励↑縺��ｼ�AI 逕ｱ譚･縺ｮ逶ｮ讓呎律繝ｻ髢句ｧ区律繝ｻ蜆ｪ蜈亥ｺｦ縺ｯ菴ｿ繧上↑縺��ｼ峨�
+    特別指定_備考に、納期・期限・最優先など「配台試行を前に出す」意図の文言があるとき True。
+    備考が記入されているだけでは True にしない（AI 由来の目標日・開始日・優先度は使わない）。
     """
     if not remark_raw:
         return False
@@ -6666,45 +6671,45 @@ def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bo
     n = unicodedata.normalize("NFKC", s)
     n_lower = n.casefold()
     needles = (
-        "邏肴悄",
-        "謖�螳夂ｴ肴悄",
-        "蝗樒ｭ皮ｴ肴悄",
-        "險育判蝓ｺ貅�",
-        "譛滓律",
-        "邱�蛻�",
-        "邱�繧∝��繧�",
-        "譛滄剞",
-        "譛蜆ｪ蜈�",
-        "閾ｳ諤･",
-        "諤･縺�",
-        "逶ｴ縺｡縺ｫ",
-        "譌ｩ諤･",
-        "蜃ｺ闕ｷ",
-        "邏榊�･",
-        "蠢�逹",
+        "納期",
+        "指定納期",
+        "回答納期",
+        "計画基準",
+        "期日",
+        "締切",
+        "締め切り",
+        "期限",
+        "最優先",
+        "至急",
+        "急ぎ",
+        "直ちに",
+        "早急",
+        "出荷",
+        "納入",
+        "必着",
         "deadline",
-        "繝�繝�繝峨Λ繧､繝ｳ",
-        "蜑榊偵＠",
-        "譌ｩ繧√↓",
-        "蜴ｳ螳�",
-        "縺ｾ縺ｧ縺ｫ",
-        "髢薙↓蜷医ｏ",
-        "髢薙↓蜷医＞",
-        "驕�繧後↑縺�",
-        "驕�蟒ｶ荳榊庄",
-        "蜆ｪ蜈磯�榊床",
-        "蜈医↓驟榊床",
-        "螳御ｺ�莠亥ｮ�",
-        "譛ｬ邏肴悄",
-        "蝗樒ｭ疲悄髯�",
+        "デッドライン",
+        "前倒し",
+        "早めに",
+        "厳守",
+        "までに",
+        "間に合わ",
+        "間に合い",
+        "遅れない",
+        "遅延不可",
+        "優先配台",
+        "先に配台",
+        "完了予定",
+        "本納期",
+        "回答期限",
     )
     return any(w.casefold() in n_lower for w in needles)
 
 
 def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
     """
-    邏肴悄蝓ｺ貅厄ｼ亥屓遲披�呈欠螳夲ｼ峨�ｻ讖滓｢ｰ蜷阪′蜷後§蟶ｯ縺ｧ縺ｮ隧ｦ陦碁��縲�
-    Y3-24 縺ｯ譛ｫ蟆ｾ縺ｮ謨ｰ蛟､縲�Y4-1-1 縺ｮ繧医≧縺ｫ繝上う繝輔Φ縺�2縺､莉･荳翫≠繧九→縺阪�ｯ縲梧怙蛻昴�ｮ - 縺ｮ逶ｴ蠕後阪�ｮ謨ｰ蛟､驛ｨ繧呈治逕ｨ縲�
+    納期基準（回答→指定）・機械名が同じ帯での試行順。
+    Y3-24 は末尾の数値。Y4-1-1 のようにハイフンが2つ以上あるときは「最初の - の直後」の数値部を採用。
     """
     s = str(task_id or "").strip()
     if not s:
@@ -6727,8 +6732,8 @@ def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# 驟榊床逕ｨ繧ｿ繧ｹ繧ｯ繧ｭ繝･繝ｼ
-#   驟榊床險育判 DataFrame 1陦� 竊� 蜑ｲ莉倥い繝ｫ繧ｴ繝ｪ繧ｺ繝�逕ｨ dict 縺ｸ縺ｮ螟画鋤�ｼ亥━蜈亥ｺｦ繝ｻ邏肴悄繝ｻAI 荳頑嶌縺阪ｒ髮�邏��ｼ�
+# 配台用タスクキュー
+#   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変換（優先度・納期・AI 上書きを集約）
 # ---------------------------------------------------------------------------
 def build_task_queue_from_planning_df(
     tasks_df,
@@ -6739,8 +6744,8 @@ def build_task_queue_from_planning_df(
     equipment_list=None,
 ):
     """
-    ``generate_plan`` 蜀�縺ｧ蜻ｼ縺ｰ繧後ｋ縲ょｮ御ｺ�貂医∩繝ｻ驟榊床荳崎ｦ∬｡後ｒ髯､縺阪∵ｮ九ｊ繧� task_queue 縺ｫ遨阪�縲�
-    ai_by_tid 縺� None 縺ｮ縺ｨ縺阪□縺大��驛ｨ縺ｧ analyze_task_special_remarks 繧貞ｮ溯｡後☆繧九�
+    ``generate_plan`` 内で呼ばれる。完了済み・配台不要行を除き、残りを task_queue に積む。
+    ai_by_tid が None のときだけ内部で analyze_task_special_remarks を実行する。
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
@@ -6748,7 +6753,7 @@ def build_task_queue_from_planning_df(
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
     same_tid_line_seq = defaultdict(int)
-    # 萓晞�ｼNO逶ｴ蛻鈴�榊床縺ｮ鬆�蠎冗畑: iterrows 縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ鬆��ｼ�0 蟋九∪繧奇ｼ峨Ｕask_queue.sort 蠕後ｂ荳榊､峨�
+    # 依頼NO直列配台の順序用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も不変。
     planning_sheet_row_seq = 0
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
@@ -6768,7 +6773,7 @@ def build_task_queue_from_planning_df(
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
         specified_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_SPECIFIED_DUE))
         specified_due_ov = None
-        # 邏肴悄蝓ｺ貅�: 竭�蝗樒ｭ皮ｴ肴悄�ｼ育ｩｺ縺ｧ縺ｪ縺代ｌ縺ｰ�ｼ俄贈蛻励梧欠螳夂ｴ肴悄縲搾ｼ亥�励梧欠螳夂ｴ肴悄_荳頑嶌縺阪阪�ｯ蟒�豁｢貂医∩�ｼ�
+        # 納期基準: ①回答納期（空でなければ）②列「指定納期」（列「指定納期_上書き」は廃止済み）
         specified_basis = specified_due
         due_basis = None
         due_source = "none"
@@ -6788,7 +6793,7 @@ def build_task_queue_from_planning_df(
             and raw_input_date_ov != raw_input_sheet
         ):
             logging.info(
-                "蜴溷渚謚募�･譌･_荳頑嶌縺阪ｒ謗｡逕ｨ: 萓晞�ｼNO=%s 繧ｷ繝ｼ繝亥次蜿肴兜蜈･譌･=%s 荳頑嶌縺�=%s",
+                "原反投入日_上書きを採用: 依頼NO=%s シート原反投入日=%s 上書き=%s",
                 task_id,
                 raw_input_sheet,
                 raw_input_date_ov,
@@ -6826,7 +6831,7 @@ def build_task_queue_from_planning_df(
         if gop_name is not None:
             preferred_operator_raw = gop_name
             logging.info(
-                "繝｡繧､繝ｳ蜀榊━蜈育音險�: 萓晞�ｼNO=%s 縺ｮ諡�蠖徹P繧偵げ繝ｭ繝ｼ繝舌Ν謖�蜷阪〒荳頑嶌縺� %r�ｼ医そ繝ｫ繝ｻ迚ｹ蛻･謖�螳壼ｙ閠アI繧医ｊ蜆ｪ蜈茨ｼ�",
+                "メイン再優先特記: 依頼NO=%s の担当OPをグローバル指名で上書き %r（セル・特別指定備考AIより優先）",
                 task_id,
                 gop_name,
             )
@@ -6855,7 +6860,7 @@ def build_task_queue_from_planning_df(
             if speed <= 0:
                 speed = 1.0
             logging.info(
-                "繝｡繧､繝ｳ繧ｰ繝ｭ繝ｼ繝舌Ν: 萓晞�ｼNO=%s 蟾･遞�=%r 讖滓｢ｰ蜷�=%r 縺ｫ speed_multiplier 邏ｯ遨�=%s 繧帝←逕ｨ�ｼ磯溷ｺｦ %s 竊� %s�ｼ�",
+                "メイングローバル: 依頼NO=%s 工程=%r 機械名=%r に speed_multiplier 累積=%s を適用（速度 %s → %s）",
                 task_id,
                 machine,
                 machine_name,
@@ -6878,17 +6883,17 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
-        # 邏肴悄縺ｯ蜆ｪ蜈磯��菴阪�ｻ邱頑･蠎ｦ縺ｫ縺ｯ菴ｿ縺�縺後�髢句ｧ区律縺ｮ荳矩剞縺ｫ縺ｯ菴ｿ繧上↑縺��ｼ井ｽ吝鴨縺後≠繧後�ｰ蜑榊偵＠髢句ｧ九☆繧九◆繧��ｼ峨�
+        # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
             due_urgent = False
         else:
             due_urgent = due_basis <= run_date
 
-        # 髢句ｧ区律繝ｫ繝ｼ繝ｫ:
-        # 1) 蜴溷渚謚募�･譌･縺後≠繧九→縺阪�ｯ縲悟次蜿肴兜蜈･譌･ 13:00 莉･髯阪阪ｒ髢句ｧ句庄閭ｽ譌･譎ゅ�ｮ荳矩剞縺ｨ縺吶ｋ縲�
-        #    �ｼ域律莉倅ｸ矩剞: max(run_date, raw_input_date)縲∝酔譌･譎る俣荳矩剞: 13:00�ｼ�
-        # 2) 迚ｹ蛻･謖�螳夲ｼ医そ繝ｫ/AI�ｼ峨�ｮ髢句ｧ区律縺後≠繧句�ｴ蜷医ｂ縲∝次蜿肴兜蜈･譌･繧医ｊ蜑榊偵＠縺ｫ縺ｯ縺励↑縺��ｼ�date 荳矩剞繧堤ｶｭ謖��ｼ�
-        # 3) 蜴溷渚縺檎┌縺�縺ｨ縺阪�ｯ run_date
+        # 開始日ルール:
+        # 1) 原反投入日があるときは「原反投入日 13:00 以降」を開始可能日時の下限とする。
+        #    （日付下限: max(run_date, raw_input_date)、同日時間下限: 13:00）
+        # 2) 特別指定（セル/AI）の開始日がある場合も、原反投入日より前倒しにはしない（date 下限を維持）
+        # 3) 原反が無いときは run_date
         if raw_input_date:
             effective_start_date = max(run_date, raw_input_date)
         else:
@@ -6901,7 +6906,7 @@ def build_task_queue_from_planning_df(
             )
             if raw_input_date and start_date_ov < raw_input_date:
                 logging.info(
-                    "髢句ｧ区律荳頑嶌縺阪�ｯ蜴溷渚謚募�･譌･繧医ｊ蜑榊偵＠荳榊庄: 萓晞�ｼNO=%s 謖�螳夐幕蟋区律=%s 蜴溷渚謚募�･譌･=%s 謗｡逕ｨ髢句ｧ区律=%s",
+                    "開始日上書きは原反投入日より前倒し不可: 依頼NO=%s 指定開始日=%s 原反投入日=%s 採用開始日=%s",
                     task_id,
                     start_date_ov,
                     raw_input_date,
@@ -6949,7 +6954,7 @@ def build_task_queue_from_planning_df(
                 "specified_due_date": specified_due,
                 "specified_due_override": specified_due_ov,
                 "due_basis_date": due_basis,
-                # 邏肴悄蠕後ｍ蛟偵＠蜀崎ｩｦ陦後〒 due_basis_date 繧貞��驛ｨ +1 縺励※繧ゅ∫ｵ先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ蠖灘�暦ｼ亥�怜錐縺ｯ莠呈鋤縺ｧ縲瑚ｨ育判蝓ｺ貅也ｴ肴悄縲搾ｼ峨�ｯ縺薙�ｮ蛟､縺ｮ縺ｾ縺ｾ
+                # 納期後ろ倒し再試行で due_basis_date を内部 +1 しても、結果_タスク一覧の当列（列名は互換で「計画基準納期」）はこの値のまま
                 "due_basis_date_result_sheet": due_basis,
                 "due_source": due_source,
                 "due_source_rank": due_source_rank,
@@ -6991,7 +6996,7 @@ def build_task_queue_from_planning_df(
         planning_sheet_row_seq += 1
 
     logging.info(
-        "task_queue 讒狗ｯ牙ｮ御ｺ�: total=%s�ｼ磯�榊床荳崎ｦ√↓繧医ｊ繧ｹ繧ｭ繝�繝� %s 陦鯉ｼ�",
+        "task_queue 構築完了: total=%s（配台不要によりスキップ %s 行）",
         len(task_queue),
         n_exclude_plan,
     )
@@ -7000,8 +7005,8 @@ def build_task_queue_from_planning_df(
 
 def _task_id_priority_key(task_id):
     """
-    萓晞�ｼNO縺ｮ蜷梧擅莉ｶ繧ｿ繧､繝悶Ξ繝ｼ繧ｯ逕ｨ繧ｭ繝ｼ縲�
-    萓�: Y3-24, Y3-34 縺ｮ繧医≧縺ｪ蝣ｴ蜷医�ｯ繝上う繝輔Φ蠕悟濠縺ｮ謨ｰ蛟､縺悟ｰ上＆縺�譁ｹ繧貞━蜈医�
+    依頼NOの同条件タイブレーク用キー。
+    例: Y3-24, Y3-34 のような場合はハイフン後半の数値が小さい方を優先。
     """
     s = str(task_id or "").strip()
     if not s:
@@ -7017,9 +7022,9 @@ def _task_id_priority_key(task_id):
 
 def _serial_dispatch_order_task_ids(task_queue) -> list:
     """
-    萓晞�ｼNO逶ｴ蛻鈴�榊床縺ｮ蜃ｦ逅�鬆�縲ょ推萓晞�ｼNO縺ｫ縺､縺�縺ｦ **驟榊床隧ｦ陦碁��逡ｪ縺ｮ譛蟆丞､** 縺悟ｰ上＆縺�萓晞�ｼ繧貞�医↓螳瑚ｵｰ縺輔○繧�
-    �ｼ亥酔荳萓晞�ｼ蜀�縺ｮ隍�謨ｰ陦後�ｯ譛蟆丞ｹ�縺ｮ隧ｦ陦碁��縺ｧ莉｣陦ｨ�ｼ峨ゅち繧､繝悶Ξ繝ｼ繧ｯ縺ｯ險育判繧ｷ繝ｼ繝井ｸ翫�ｮ蜈郁｡瑚｡�
-    �ｼ�planning_sheet_row_seq�ｼ峨→萓晞�ｼNO繧ｭ繝ｼ縲�
+    依頼NO直列配台の処理順。各依頼NOについて **配台試行順番の最小値** が小さい依頼を先に完走させる
+    （同一依頼内の複数行は最小幅の試行順で代表）。タイブレークは計画シート上の先行行
+    （planning_sheet_row_seq）と依頼NOキー。
     """
     min_dto_by_tid: dict = {}
     first_seq_by_tid: dict = {}
@@ -7051,8 +7056,8 @@ def _serial_dispatch_order_task_ids(task_queue) -> list:
 
 def _excel_scalar_to_plan_string_cell(v):
     """
-    譌｢蟄倥す繝ｼ繝茨ｼ�read_excel�ｼ臥罰譚･縺ｮ繧ｹ繧ｫ繝ｩ繝ｼ繧偵�驟榊床險育判 DataFrame 縺ｮ譁�蟄怜�怜�暦ｼ�StringDtype�ｼ峨∈
-    莉｣蜈･縺ｧ縺阪ｋ str 縺ｫ豁｣隕丞喧縺吶ｋ縲�Excel 縺梧焚蛟､縺ｨ縺励※菫晄戟縺励◆蜆ｪ蜈亥ｺｦ 1 竊� \"1\" 縺ｪ縺ｩ縲�
+    既存シート（read_excel）由来のスカラーを、配台計画 DataFrame の文字列列（StringDtype）へ
+    代入できる str に正規化する。Excel が数値として保持した優先度 1 → \"1\" など。
     """
     if v is None:
         return ""
@@ -7088,9 +7093,9 @@ def _excel_scalar_to_plan_string_cell(v):
 
 def _merge_plan_sheet_user_overrides(out_df):
     """
-    繝悶ャ繧ｯ蜀�縺ｮ縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙阪↓繝ｦ繝ｼ繧ｶ繝ｼ縺悟�･蜉帙＠縺滉ｸ頑嶌縺榊�励ｒ縲�
-    谿ｵ髫�1縺ｮ謚ｽ蜃ｺ邨先棡縺ｸ (萓晞�ｼNO, 蟾･遞句錐) 蜊倅ｽ阪〒蠑輔″邯吶＄縲�
-    遨ｺ縺ｮ繧ｻ繝ｫ縺ｯ繝槭�ｼ繧ｸ縺励↑縺��ｼ域眠隕乗歓蜃ｺ蛛ｴ縺ｮ遨ｺ縺ｮ縺ｾ縺ｾ�ｼ峨�
+    ブック内の「配台計画_タスク入力」にユーザーが入力した上書き列を、
+    段階1の抽出結果へ (依頼NO, 工程名) 単位で引き継ぐ。
+    空のセルはマージしない（新規抽出側の空のまま）。
     """
     if out_df is None or out_df.empty:
         return out_df
@@ -7099,7 +7104,7 @@ def _merge_plan_sheet_user_overrides(out_df):
     try:
         df_old = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
     except Exception as e:
-        logging.info("谿ｵ髫�1: 譌｢蟄倥�ｮ驟榊床繧ｷ繝ｼ繝医ｒ隱ｭ繧√↑縺�縺溘ａ荳頑嶌縺咲ｶ呎価繧偵せ繧ｭ繝�繝� (%s)", e)
+        logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
         return out_df
     df_old.columns = df_old.columns.str.strip()
     df_old = _align_dataframe_headers_to_canonical(
@@ -7149,22 +7154,22 @@ def _merge_plan_sheet_user_overrides(out_df):
 
     if merged_rows:
         logging.info(
-            "谿ｵ髫�1: 譌｢蟄倥す繝ｼ繝医°繧我ｸ頑嶌縺榊�励ｒ %s 陦後∈蠑輔″邯吶℃縺ｾ縺励◆�ｼ医く繝ｼ: 萓晞�ｼNO+蟾･遞句錐�ｼ峨�",
+            "段階1: 既存シートから上書き列を %s 行へ引き継ぎました（キー: 依頼NO+工程名）。",
             merged_rows,
         )
     return out_df
 
 
 # ---------------------------------------------------------------------------
-# 驟榊床荳崎ｦ��ｼ�2邉ｻ邨ｱ�ｼ�
-#   (A) DataFrame 荳翫�ｮ繝ｫ繝ｼ繝ｫ 窶ｦ 蜷御ｸ萓晞�ｼNOﾃ怜酔荳讖滓｢ｰ縺ｧ縲悟��蜑ｲ縲崎｡後↓ yes�ｼ域焔蜈･蜉帙�ｯ荳頑嶌縺阪＠縺ｪ縺��ｼ�
-#   (B) 繝槭け繝ｭ繝悶ャ繧ｯ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九坂ｦ 蟾･遞�+讖滓｢ｰ縺斐→縺ｮ C/D/E 蛻励；emini 縺ｧ D竊脱縲�
-#       菫晏ｭ倥Ο繝�繧ｯ譎ゅ�ｯ xlwings 縺ｧ A:E 蜷梧悄竊担ave 縺ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺ゅｊ
-#   縺�縺壹ｌ繧� apply_exclude_rules_config_to_plan_df 縺ｧ險育判 DataFrame 縺ｫ蜿肴丐縺輔ｌ繧九�
+# 配台不要（2系統）
+#   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）
+#   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
+#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり
+#   いずれも apply_exclude_rules_config_to_plan_df で計画 DataFrame に反映される。
 # ---------------------------------------------------------------------------
 
 def _auto_exclude_cell_empty_for_autofill(v) -> bool:
-    """驟榊床荳崎ｦ√そ繝ｫ縺梧悴蜈･蜉帙�ｮ縺ｨ縺阪□縺題�ｪ蜍輔〒 yes 繧呈嶌縺崎ｾｼ繧縲�"""
+    """配台不要セルが未入力のときだけ自動で yes を書き込む。"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return True
     if isinstance(v, str):
@@ -7174,7 +7179,7 @@ def _auto_exclude_cell_empty_for_autofill(v) -> bool:
 
 
 def _normalize_task_id_for_dup_grouping(raw) -> str:
-    """蜷御ｸ萓晞�ｼNO縺ｮ繧ｰ繝ｫ繝ｼ繝斐Φ繧ｰ逕ｨ�ｼ郁｡ｨ險倥ｆ繧後�ｻ闍ｱ蟄励�ｮ螟ｧ蟆上ｒ蟇�縺帙ｋ�ｼ峨�"""
+    """同一依頼NOのグルーピング用（表記ゆれ・英字の大小を寄せる）。"""
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return ""
     if isinstance(raw, float) and raw == int(raw):
@@ -7188,19 +7193,19 @@ def _normalize_task_id_for_dup_grouping(raw) -> str:
 
 
 def _process_name_is_bunkatsu_for_auto_exclude(raw) -> bool:
-    """蟾･遞句錐縺後悟��蜑ｲ縲搾ｼ育ｩｺ逋ｽ髯､蜴ｻ繝ｻNFKC 蠕鯉ｼ峨�"""
+    """工程名が「分割」（空白除去・NFKC 後）。"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
-    t = re.sub(r"[\s縲]+", "", t)
-    return t == "蛻�蜑ｲ"
+    t = re.sub(r"[\s　]+", "", t)
+    return t == "分割"
 
 
 def _apply_auto_exclude_bunkatsu_duplicate_machine(
-    df: pd.DataFrame, log_prefix: str = "谿ｵ髫�1"
+    df: pd.DataFrame, log_prefix: str = "段階1"
 ) -> pd.DataFrame:
     """
-    蜷御ｸ萓晞�ｼNO縺�2陦御ｻ･荳翫≠繧翫√°縺､遨ｺ縺ｧ縺ｪ縺�蜷御ｸ讖滓｢ｰ蜷阪′2陦御ｻ･荳翫≠繧九げ繝ｫ繝ｼ繝励〒縺ｯ縲�
-    蟾･遞句錐縺後悟��蜑ｲ縲阪�ｮ陦後�ｮ縲碁�榊床荳崎ｦ√阪↓ yes 繧貞�･繧後ｋ�ｼ医そ繝ｫ縺檎ｩｺ縺ｮ縺ｨ縺阪�ｮ縺ｿ�ｼ峨�
-    讖滓｢ｰ蜷阪�ｯ _normalize_equipment_match_key 縺ｧ驥崎､�蛻､螳壹�
+    同一依頼NOが2行以上あり、かつ空でない同一機械名が2行以上あるグループでは、
+    工程名が「分割」の行の「配台不要」に yes を入れる（セルが空のときのみ）。
+    機械名は _normalize_equipment_match_key で重複判定。
     """
     if df is None or df.empty:
         return df
@@ -7210,7 +7215,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             return df
     if PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
-    # read_excel 遲峨〒 StringDtype 縺ｫ縺ｪ繧九→謨ｰ蛟､繝ｻ逵溷⊃縺ｮ .at 莉｣蜈･縺ｧ TypeError 縺ｫ縺ｪ繧九◆繧� object 縺ｫ蟇�縺帙ｋ
+    # read_excel 等で StringDtype になると数値・真偽の .at 代入で TypeError になるため object に寄せる
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
 
     by_tid = defaultdict(list)
@@ -7239,13 +7244,13 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
             ):
                 continue
-            # 蛻励′ StringDtype 縺ｮ縺ｨ縺� int 莉｣蜈･縺ｧ TypeError 縺ｫ縺ｪ繧九◆繧∵枚蟄怜�励↓縺吶ｋ�ｼ�_plan_row_exclude_from_assignment 縺ｯ yes 繧堤悄縺ｨ縺ｿ縺ｪ縺呻ｼ�
+            # 列が StringDtype のとき int 代入で TypeError になるため文字列にする（_plan_row_exclude_from_assignment は yes を真とみなす）
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
             n_set += 1
 
     if n_set:
         logging.info(
-            "%s: 蜷御ｸ萓晞�ｼNO縺九▽蜷御ｸ讖滓｢ｰ蜷阪′隍�謨ｰ陦後≠繧九げ繝ｫ繝ｼ繝励〒縲∝ｷ･遞句錐縲悟��蜑ｲ縲阪�ｮ陦� %s 莉ｶ縺ｫ縲碁�榊床荳崎ｦ√�=yes 繧定�ｪ蜍戊ｨｭ螳壹＠縺ｾ縺励◆縲�",
+            "%s: 同一依頼NOかつ同一機械名が複数行あるグループで、工程名「分割」の行 %s 件に「配台不要」=yes を自動設定しました。",
             log_prefix,
             n_set,
         )
@@ -7253,16 +7258,16 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
 
 
 def _normalize_process_name_for_rule_match(raw) -> str:
-    """蟾･遞句錐縺ｮ繝ｫ繝ｼ繝ｫ辣ｧ蜷茨ｼ�NFKC繝ｻ遨ｺ逋ｽ髯､蜴ｻ�ｼ峨�"""
+    """工程名のルール照合（NFKC・空白除去）。"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
-    t = re.sub(r"[\s縲]+", "", t)
+    t = re.sub(r"[\s　]+", "", t)
     return t
 
 
 def _exclude_rules_sheet_header_map(ws) -> dict:
-    """1陦檎岼隕句�ｺ縺� 竊� 蛻礼分蜿ｷ(1蟋九∪繧�)縲�
-    openpyxl 縺ｯ譁ｰ隕上す繝ｼ繝育峩蠕後↓ max_column 縺� 0 縺ｮ縺ｾ縺ｾ縺ｮ縺薙→縺後≠繧翫∬ｦ句�ｺ縺励′隱ｭ繧√★菫晏ｭ伜燕縺ｫ return 縺励※縺励∪縺�縲�
-    縺昴�ｮ縺溘ａ譛菴� A�ｽ昿 蛻励�ｯ蠢�縺夊ｵｰ譟ｻ縺吶ｋ縲�
+    """1行目見出し → 列番号(1始まり)。
+    openpyxl は新規シート直後に max_column が 0 のままのことがあり、見出しが読めず保存前に return してしまう。
+    そのため最低 A～E 列は必ず走査する。
     """
     h = {}
     last_col = max(5, int(ws.max_column or 0))
@@ -7275,8 +7280,8 @@ def _exclude_rules_sheet_header_map(ws) -> dict:
 
 def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tuple[int, int, int, int, int]:
     """
-    1陦檎岼縺ｫ讓呎ｺ冶ｦ句�ｺ縺暦ｼ亥ｷ･遞句錐繝ｻ讖滓｢ｰ蜷阪�ｻ驟榊床荳崎ｦ√�ｻ驟榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ繝ｻ繝ｭ繧ｸ繝�繧ｯ蠑擾ｼ峨′縺ゅｋ縺薙→繧剃ｿ晁ｨｼ縺吶ｋ縲�
-    謇句虚縺ｧ遨ｺ繧ｷ繝ｼ繝医□縺題ｿｽ蜉�縺励◆蝣ｴ蜷医�ｯ A1:E1 縺檎ｩｺ縺ｮ縺溘ａ縲√％縺薙〒譖ｸ縺崎ｾｼ繧薙〒蛻礼分蜿ｷ繧定ｿ斐☆縲�
+    1行目に標準見出し（工程名・機械名・配台不要・配台不能ロジック・ロジック式）があることを保証する。
+    手動で空シートだけ追加した場合は A1:E1 が空のため、ここで書き込んで列番号を返す。
     """
     headers = (
         EXCLUDE_RULE_COL_PROCESS,
@@ -7291,7 +7296,7 @@ def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tupl
     for i, name in enumerate(headers, start=1):
         ws.cell(row=1, column=i, value=name)
     logging.info(
-        "%s: 縲�%s縲阪�ｮ隕句�ｺ縺励′辟｡縺��ｼ丞�怜錐縺御ｸ閾ｴ縺励↑縺�縺溘ａ縲∵ｨ呎ｺ悶�ｮ1陦檎岼�ｼ�A1:E1�ｼ峨ｒ險ｭ螳壹＠縺ｾ縺励◆縲�",
+        "%s: 「%s」の見出しが無い／列名が一致しないため、標準の1行目（A1:E1）を設定しました。",
         log_prefix,
         EXCLUDE_RULES_SHEET_NAME,
     )
@@ -7308,9 +7313,9 @@ def _compact_exclude_rules_data_rows(
     log_prefix: str,
 ) -> tuple[int, int]:
     """
-    2 陦檎岼莉･髯阪°繧峨檎ｩｺ陦後阪ｒ髯､縺�縺ｦ荳翫↓隧ｰ繧√ｋ�ｼ亥��縺ｮ荳ｦ縺ｳ縺ｯ邯ｭ謖√√た繝ｼ繝医＠縺ｪ縺��ｼ峨�
-    遨ｺ陦�: 蟾･遞句錐縺檎ｩｺ縲√∪縺溘�ｯ A�ｽ昿 逶ｸ蠖薙�ｮ5繧ｻ繝ｫ縺後☆縺ｹ縺ｦ遨ｺ逋ｽ逶ｸ蠖薙�
-    Returns (谿九＠縺溘ョ繝ｼ繧ｿ陦梧焚, 蜑企勁縺励◆陦梧焚).
+    2 行目以降から「空行」を除いて上に詰める（元の並びは維持、ソートしない）。
+    空行: 工程名が空、または A～E 相当の5セルがすべて空白相当。
+    Returns (残したデータ行数, 削除した行数).
     """
     max_r = int(ws.max_row or 1)
     if max_r < 2:
@@ -7340,7 +7345,7 @@ def _compact_exclude_rules_data_rows(
         ws.delete_rows(2, old_body)
         if old_body > 0:
             logging.info(
-                "%s: 縲�%s縲阪�ｯ譛牙柑縺ｪ繝�繝ｼ繧ｿ陦後′辟｡縺九▲縺溘◆繧√√ョ繝ｼ繧ｿ陦� %s 陦後ｒ蜑企勁縺励∪縺励◆縲�",
+                "%s: 「%s」は有効なデータ行が無かったため、データ行 %s 行を削除しました。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 old_body,
@@ -7357,7 +7362,7 @@ def _compact_exclude_rules_data_rows(
 
     if n_skip:
         logging.info(
-            "%s: 縲�%s縲阪°繧臥ｩｺ陦後ｒ %s 莉ｶ蜑企勁縺励�%s 陦後↓隧ｰ繧√∪縺励◆�ｼ井ｸｦ縺ｳ鬆�縺ｯ邯ｭ謖��ｼ峨�",
+            "%s: 「%s」から空行を %s 件削除し、%s 行に詰めました（並び順は維持）。",
             log_prefix,
             EXCLUDE_RULES_SHEET_NAME,
             n_skip,
@@ -7376,7 +7381,7 @@ def _cell_is_blank_for_rule(v) -> bool:
 
 
 def _exclude_rule_c_column_is_yes(v) -> bool:
-    """C蛻励碁�榊床荳崎ｦ√阪′繧ｪ繝ｳ�ｼ医％縺ｮ蟾･遞�+讖滓｢ｰ繝代ち繝ｼ繝ｳ縺ｯ蟶ｸ縺ｫ驟榊床荳崎ｦ��ｼ峨�"""
+    """C列「配台不要」がオン（この工程+機械パターンは常に配台不要）。"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return False
     if isinstance(v, bool):
@@ -7387,7 +7392,7 @@ def _exclude_rule_c_column_is_yes(v) -> bool:
         except (TypeError, ValueError):
             pass
     s = unicodedata.normalize("NFKC", str(v).strip()).lower()
-    return s in ("yes", "true", "1", "y", "縺ｯ縺�", "笳�", "縲�", "笳�")
+    return s in ("yes", "true", "1", "y", "はい", "○", "〇", "●")
 
 
 def _task_row_matches_exclude_rule_target(
@@ -7404,7 +7409,7 @@ def _task_row_matches_exclude_rule_target(
 
 
 def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> list[tuple[str, str]]:
-    """蜉�蟾･險育判DATA 縺九ｉ縲∵ｮｵ髫�1縺ｨ蜷後§謚ｽ蜃ｺ譚｡莉ｶ縺ｧ (蟾･遞句錐, 讖滓｢ｰ蜷�) 縺ｮ荳隕ｧ�ｼ磯㍾隍�髯､縺上�ｻ鬆�蠎冗ｶｭ謖��ｼ峨�"""
+    """加工計画DATA から、段階1と同じ抽出条件で (工程名, 機械名) の一覧（重複除く・順序維持）。"""
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for _, row in df_src.iterrows():
@@ -7450,7 +7455,7 @@ def _parse_exclude_rule_json_cell(raw) -> dict | None:
 
 
 def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
-    """Gemini�ｼ拾蛻励°繧牙ｾ励◆ dict 縺碁�榊床荳崎ｦ√Ν繝ｼ繝ｫ縺ｨ縺励※譛牙柑縺九�"""
+    """Gemini／E列から得た dict が配台不要ルールとして有効か。"""
     if not isinstance(o, dict):
         return None
     if int(o.get("version") or 0) != 1:
@@ -7462,7 +7467,7 @@ def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
 
 
 def _exclude_rule_de_cache_key(stripped_blob: str) -> str:
-    """縲碁�榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ縲肴枚險�ｼ域ｭ｣隕丞喧貂医∩�ｼ峨↓蟇ｾ縺吶ｋ ai_remarks_cache 逕ｨ繧ｭ繝ｼ縲�"""
+    """「配台不能ロジック」文言（正規化済み）に対する ai_remarks_cache 用キー。"""
     h = hashlib.sha256(stripped_blob.encode("utf-8")).hexdigest()
     return f"{AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE}:{h}"
 
@@ -7495,22 +7500,22 @@ def _cache_put_exclude_rule_de_parsed(
 def _exclude_rule_logic_gemini_schema_instructions() -> str:
     allowed = ", ".join(sorted(EXCLUDE_RULE_ALLOWED_COLUMNS))
     return (
-        "縲舌せ繧ｭ繝ｼ繝� version 縺ｯ蠢�縺� 1縲曾n"
-        "1) 蟶ｸ縺ｫ驟榊床荳崎ｦ��ｼ郁ｪｬ譏弱′譚｡莉ｶ縺ｪ縺励〒螟悶☆諢丞袖�ｼ峨�ｮ縺ｨ縺�:\n"
+        "【スキーマ version は必ず 1】\n"
+        "1) 常に配台不要（説明が条件なしで外す意味）のとき:\n"
         '{"version":1,"mode":"always_exclude"}\n\n'
-        "2) 蛻励�ｮ譚｡莉ｶ縺ｧ驟榊床荳崎ｦ√→縺吶ｋ縺ｨ縺�:\n"
-        '{"version":1,"mode":"conditions","require_all": true 縺ｾ縺溘�ｯ false,"conditions":[ ... ]}\n\n'
-        "conditions 縺ｮ蜷�隕∫ｴ�:\n"
-        "- {\"column\":\"蛻怜錐\",\"op\":\"empty\"} 窶ｦ 繧ｻ繝ｫ縺檎ｩｺ\n"
-        "- {\"column\":\"蛻怜錐\",\"op\":\"not_empty\"}\n"
-        "- {\"column\":\"蛻怜錐\",\"op\":\"eq\",\"value\":\"譁�蟄怜�予"} / ne / contains / not_contains / regex�ｼ域ｭ｣隕剰｡ｨ迴ｾ�ｼ噂n"
-        "- {\"column\":\"蛻怜錐\",\"op\":\"gt\"|\"gte\"|\"lt\"|\"lte\",\"value\":謨ｰ蛟､} 窶ｦ 謨ｰ蛟､豈碑ｼ��ｼ亥�励�ｯ謨ｰ縺ｨ縺励※隗｣驥茨ｼ噂n\n"
-        f"縲蝉ｽｿ逕ｨ蜿ｯ閭ｽ縺ｪ蛻怜錐縺ｮ縺ｿ縲托ｼ医％繧御ｻ･螟悶�ｯ菴ｿ繧上↑縺��ｼ�:\n{allowed}\n"
+        "2) 列の条件で配台不要とするとき:\n"
+        '{"version":1,"mode":"conditions","require_all": true または false,"conditions":[ ... ]}\n\n'
+        "conditions の各要素:\n"
+        "- {\"column\":\"列名\",\"op\":\"empty\"} … セルが空\n"
+        "- {\"column\":\"列名\",\"op\":\"not_empty\"}\n"
+        "- {\"column\":\"列名\",\"op\":\"eq\",\"value\":\"文字列\"} / ne / contains / not_contains / regex（正規表現）\n"
+        "- {\"column\":\"列名\",\"op\":\"gt\"|\"gte\"|\"lt\"|\"lte\",\"value\":数値} … 数値比較（列は数として解釈）\n\n"
+        f"【使用可能な列名のみ】（これ以外は使わない）:\n{allowed}\n"
     )
 
 
 def _parse_exclude_rule_json_array_response(text: str) -> list | None:
-    """繝｢繝�繝ｫ蠢懃ｭ斐°繧� JSON 驟榊�励ｒ蜿悶ｊ蜃ｺ縺呻ｼ�```json 繝輔ぉ繝ｳ繧ｹ莉倥″蜿ｯ�ｼ峨�"""
+    """モデル応答から JSON 配列を取り出す（```json フェンス付き可）。"""
     s = (text or "").strip()
     if not s:
         return None
@@ -7540,7 +7545,7 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
         return False
     col = cond.get("column")
     if col not in EXCLUDE_RULE_ALLOWED_COLUMNS:
-        logging.warning("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 譛ｪ蟇ｾ蠢懊�ｮ蛻怜錐繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆: %s", col)
+        logging.warning("配台不要ルール: 未対応の列名をスキップしました: %s", col)
         return False
     op = str(cond.get("op") or "").strip().lower()
     val = _row_scalar_for_exclude_rule(row, col)
@@ -7592,7 +7597,7 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
 
 def evaluate_exclude_rule_json_for_row(rule: dict, row) -> bool:
     """
-    E蛻励�ｮ JSON�ｼ�version=1�ｼ峨ｒ隧穂ｾ｡縺励∝ｽ楢ｩｲ繧ｿ繧ｹ繧ｯ陦後ｒ驟榊床荳崎ｦ√→縺吶∋縺阪↑繧� True縲�
+    E列の JSON（version=1）を評価し、当該タスク行を配台不要とすべきなら True。
     mode: always_exclude | conditions
     """
     if not isinstance(rule, dict) or int(rule.get("version") or 0) != 1:
@@ -7617,8 +7622,8 @@ def evaluate_exclude_rule_json_for_row(rule: dict, row) -> bool:
 
 def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None:
     """
-    D蛻励�ｮ閾ｪ辟ｶ險隱槭ｒ Gemini 縺ｧ JSON 繝ｫ繝ｼ繝ｫ縺ｫ螟画鋤縲ょ､ｱ謨玲凾 None縲�
-    json/ai_remarks_cache.json 縺ｫ TTL 莉倥″縺ｧ繧ｭ繝｣繝�繧ｷ繝･�ｼ亥酔荳譁�險縺ｪ繧� API 繧貞他縺ｰ縺ｪ縺��ｼ峨�
+    D列の自然言語を Gemini で JSON ルールに変換。失敗時 None。
+    json/ai_remarks_cache.json に TTL 付きでキャッシュ（同一文言なら API を呼ばない）。
     """
     blob = str(natural_language or "").strip()
     if not blob:
@@ -7626,24 +7631,24 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
     ai_cache = load_ai_cache()
     hit = _cache_get_exclude_rule_de_parsed(ai_cache, blob)
     if hit is not None:
-        logging.info("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: AI繧ｭ繝｣繝�繧ｷ繝･繝偵ャ繝茨ｼ磯�榊床荳崎�ｽ繝ｭ繧ｸ繝�繧ｯ竊谷SON�ｼ�")
+        logging.info("配台不要ルール: AIキャッシュヒット（配台不能ロジック→JSON）")
         return hit
     if not API_KEY:
         return None
     schema = _exclude_rule_logic_gemini_schema_instructions()
     prompt = (
-        "縺ゅ↑縺溘�ｯ蟾･蝣ｴ縺ｮ驟榊床繧ｷ繧ｹ繝�繝�逕ｨ縺ｧ縺吶よｬ｡縺ｮ縲碁�榊床荳崎�ｽ縺ｮ隱ｬ譏弱阪ｒ縲√ち繧ｹ繧ｯ1陦後ｒ蛻､螳壹☆繧区ｩ滓｢ｰ蜿ｯ隱ｭ繝ｫ繝ｼ繝ｫ縺ｫ螟画鋤縺励※縺上□縺輔＞縲�\n\n"
-        "縲仙�ｺ蜉帙大�磯�ｭ縺� { 縺ｧ邨ゅｏ繧翫′ } 縺ｮ JSON 繧ｪ繝悶ず繧ｧ繧ｯ繝�1縺､縺ｮ縺ｿ�ｼ郁ｪｬ譏弱�ｻ繝槭�ｼ繧ｯ繝繧ｦ繝ｳ遖∵ｭ｢�ｼ峨�\n\n"
+        "あなたは工場の配台システム用です。次の「配台不能の説明」を、タスク1行を判定する機械可読ルールに変換してください。\n\n"
+        "【出力】先頭が { で終わりが } の JSON オブジェクト1つのみ（説明・マークダウン禁止）。\n\n"
         f"{schema}\n"
-        f"縲占ｪｬ譏取枚縲曾n{blob}\n"
+        f"【説明文】\n{blob}\n"
     )
     try:
         ppath = os.path.join(log_dir, "ai_exclude_rule_logic_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 繝励Ο繝ｳ繝励ヨ 竊� %s", ppath)
+        logging.info("配台不要ルール: プロンプト → %s", ppath)
     except OSError as ex:
-        logging.warning("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 繝励Ο繝ｳ繝励ヨ菫晏ｭ伜､ｱ謨�: %s", ex)
+        logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
         res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -7661,14 +7666,14 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
             save_ai_cache(ai_cache)
         return parsed
     except Exception as e:
-        logging.warning("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: Gemini 螟画鋤螟ｱ謨�: %s", e)
+        logging.warning("配台不要ルール: Gemini 変換失敗: %s", e)
         return None
 
 
 def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]:
     """
-    隍�謨ｰ縺ｮ D 蛻玲枚險繧� 1 蝗槭�ｮ Gemini 蜻ｼ縺ｳ蜃ｺ縺励〒 JSON 蛹悶ょ､ｱ謨励�ｻ隕∫ｴ�謨ｰ荳堺ｸ閾ｴ譎ゅ�ｯ 1 莉ｶ縺壹▽縺ｫ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縲�
-    json/ai_remarks_cache.json 縺ｫ繝偵ャ繝医＠縺滓枚險縺ｯ API 繧貞他縺ｰ縺ｪ縺�縲�
+    複数の D 列文言を 1 回の Gemini 呼び出しで JSON 化。失敗・要素数不一致時は 1 件ずつにフォールバック。
+    json/ai_remarks_cache.json にヒットした文言は API を呼ばない。
     """
     n = len(blobs)
     if n == 0:
@@ -7687,7 +7692,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             pend_b.append(s)
     if not pend_b:
         logging.info(
-            "驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: AI繧ｭ繝｣繝�繧ｷ繝･縺ｮ縺ｿ縺ｧ D竊脱 繝舌ャ繝� %s 莉ｶ繧貞ｮ檎ｵ撰ｼ�API 蜻ｼ縺ｳ蜃ｺ縺励↑縺暦ｼ峨�",
+            "配台不要ルール: AIキャッシュのみで D→E バッチ %s 件を完結（API 呼び出しなし）。",
             n,
         )
         return out
@@ -7701,19 +7706,19 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     schema = _exclude_rule_logic_gemini_schema_instructions()
     numbered = "\n".join(f"[{i + 1}] {str(b).strip()}" for i, b in enumerate(pend_b))
     prompt = (
-        "縺ゅ↑縺溘�ｯ蟾･蝣ｴ縺ｮ驟榊床繧ｷ繧ｹ繝�繝�逕ｨ縺ｧ縺吶ゆｻ･荳九�ｮ N 蛟九�ｮ縲碁�榊床荳崎�ｽ縺ｮ隱ｬ譏弱阪ｒ縲∽ｸ弱∴縺滄��蠎上〒縺昴ｌ縺槭ｌ JSON 繝ｫ繝ｼ繝ｫ縺ｫ螟画鋤縺励※縺上□縺輔＞縲�\n\n"
-        f"縲仙�ｺ蜉帙遷SON 驟榊�励�ｮ縺ｿ縲ょ�磯�ｭ縺� [ 縺ｧ邨ゅｏ繧翫′ ] 縲りｦ∫ｴ�謨ｰ縺ｯ蠢�縺� {m}�ｼ�Markdown繝ｻ隱ｬ譏守ｦ∵ｭ｢�ｼ峨�\n"
-        f"驟榊�励�ｮ蜈磯�ｭ隕∫ｴ�縺� [1]縲�2 逡ｪ逶ｮ縺� [2] 窶ｦ 縺ｫ蟇ｾ蠢懊＠縺ｾ縺吶�\n\n"
+        "あなたは工場の配台システム用です。以下の N 個の「配台不能の説明」を、与えた順序でそれぞれ JSON ルールに変換してください。\n\n"
+        f"【出力】JSON 配列のみ。先頭が [ で終わりが ] 。要素数は必ず {m}（Markdown・説明禁止）。\n"
+        f"配列の先頭要素が [1]、2 番目が [2] … に対応します。\n\n"
         f"{schema}\n"
-        f"縲占ｪｬ譏取枚縲曾n{numbered}\n"
+        f"【説明文】\n{numbered}\n"
     )
     try:
         ppath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_prompt.txt")
         with open(ppath, "w", encoding="utf-8", newline="\n") as pf:
             pf.write(prompt)
-        logging.info("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ(繝舌ャ繝�): 繝励Ο繝ｳ繝励ヨ 竊� %s", ppath)
+        logging.info("配台不要ルール(バッチ): プロンプト → %s", ppath)
     except OSError as ex:
-        logging.warning("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ(繝舌ャ繝�): 繝励Ο繝ｳ繝励ヨ菫晏ｭ伜､ｱ謨�: %s", ex)
+        logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
         res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -7728,7 +7733,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
         arr = _parse_exclude_rule_json_array_response(raw)
         if not isinstance(arr, list) or len(arr) != m:
             logging.warning(
-                "驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 繝舌ャ繝∝ｿ懃ｭ斐′荳肴ｭ｣�ｼ郁ｦ∫ｴ�謨ｰ %s縲∵悄蠕� %s�ｼ峨�1 莉ｶ縺壹▽蜀崎ｩｦ陦後＠縺ｾ縺吶�",
+                "配台不要ルール: バッチ応答が不正（要素数 %s、期待 %s）。1 件ずつ再試行します。",
                 len(arr) if isinstance(arr, list) else None,
                 m,
             )
@@ -7746,7 +7751,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             save_ai_cache(ai_cache)
         return out
     except Exception as e:
-        logging.warning("驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 繝舌ャ繝� Gemini 螟ｱ謨励∝腰逋ｺ縺ｫ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ: %s", e)
+        logging.warning("配台不要ルール: バッチ Gemini 失敗、単発にフォールバック: %s", e)
         for j, idx in enumerate(pend_i):
             out[idx] = _ai_compile_exclude_rule_logic_to_json(pend_b[j])
         return out
@@ -7760,10 +7765,10 @@ def _log_exclude_rules_sheet_debug(
     exc: BaseException | None = None,
 ) -> None:
     """
-    縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九阪�ｮ菫晏ｮ亥�ｦ逅�縺ｮ繧､繝吶Φ繝医Ο繧ｰ縲�
+    「設定_配台不要工程」の保守処理のイベントログ。
 
-    險ｭ螳壹す繝ｼ繝亥�ｦ逅�縺ｮ謌仙凄繧� log/exclude_rules_sheet_debug.txt 縺ｫ霑ｽ險倥＠縲‘xecution_log 縺ｫ繧ゅち繧ｰ莉倥″縺ｧ蜃ｺ蜉帙☆繧九�
-    event 萓�: START, OPEN_OK, OPEN_RETRY, OPEN_FAIL, HEADER_FIX, SYNC_ROWS, OPENPYXL_SAVE_OK, OPENPYXL_SAVE_FAIL,
+    設定シート処理の成否を log/exclude_rules_sheet_debug.txt に追記し、execution_log にもタグ付きで出力する。
+    event 例: START, OPEN_OK, OPEN_RETRY, OPEN_FAIL, HEADER_FIX, SYNC_ROWS, OPENPYXL_SAVE_OK, OPENPYXL_SAVE_FAIL,
     OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY, OPENPYXL_RETRY_WAIT, OPENPYXL_VBA_FALLBACK, MATRIX_TSV_WRITTEN,
     XLWINGS_UNAVAILABLE, XLWINGS_ATTACH_FAIL, XLWINGS_SYNC_SKIP, XLWINGS_SYNC_OK, XLWINGS_SYNC_FAIL,
     E_SIDECAR_WRITTEN, E_SIDECAR_APPLIED, FALLBACK_FAIL,
@@ -7787,9 +7792,9 @@ def _log_exclude_rules_sheet_debug(
         with open(exclude_rules_sheet_debug_log_path, "a", encoding="utf-8", newline="\n") as df:
             df.write(block)
     except OSError as wex:
-        logging.warning("exclude_rules_sheet_debug.txt 縺ｸ譖ｸ縺代∪縺帙ｓ: %s", wex)
+        logging.warning("exclude_rules_sheet_debug.txt へ書けません: %s", wex)
 
-    tag = "[險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞犠"
+    tag = "[設定_配台不要工程]"
     msg = f"{tag} {event} | {log_prefix} | {summary}"
     if details:
         msg += f" | {details}"
@@ -7832,7 +7837,7 @@ def _log_exclude_rules_sheet_debug(
 
 
 def _xlwings_paths_equivalent(disk_path: str, book_fullname: str) -> bool:
-    """繝�繧｣繧ｹ繧ｯ繝代せ縺ｨ xlwings Book.full_name 縺悟酔荳繝輔ぃ繧､繝ｫ繧呈欠縺吶°�ｼ郁｡ｨ險倥ｆ繧後ｒ螟壼ｰ大精蜿趣ｼ峨�"""
+    """ディスクパスと xlwings Book.full_name が同一ファイルを指すか（表記ゆれを多少吸収）。"""
     try:
         fn = str(book_fullname).strip()
     except Exception:
@@ -7878,7 +7883,7 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
 
 
 def _xlwings_find_book_on_running_instances(abs_path: str):
-    """襍ｷ蜍穂ｸｭ縺ｮ Excel 縺九ｉ繝代せ荳閾ｴ縺吶ｋ xlwings Book 繧定ｿ斐☆縲ら┌縺代ｌ縺ｰ None縲�"""
+    """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。"""
     try:
         import xlwings as xw
     except ImportError:
@@ -7901,7 +7906,7 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
 
 
 def _xlwings_try_open_in_running_apps(abs_path: str):
-    """譌｢蟄倥�ｮ Excel.App 縺ｧ Workbooks.Open 繧定ｩｦ縺吶よ�仙粥譎� Book縲∝､ｱ謨玲凾 None縲�"""
+    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。"""
     try:
         import xlwings as xw
     except ImportError:
@@ -7916,7 +7921,7 @@ def _xlwings_try_open_in_running_apps(abs_path: str):
 
 
 def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool) -> None:
-    """蟆ら畑襍ｷ蜍輔＠縺� Excel 縺ｯ邨ゆｺ�縺吶ｋ縲ょｮ溯｡御ｸｭ Excel 縺ｧ縺�縺� Open 縺励◆繝悶ャ繧ｯ縺ｯ螟ｱ謨玲凾縺ｮ縺ｿ髢峨§繧九�"""
+    """専用起動した Excel は終了する。実行中 Excel でだけ Open したブックは失敗時のみ閉じる。"""
     if xw_book is None:
         return
     mode = info.get("mode", "keep")
@@ -7940,9 +7945,9 @@ def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool)
 
 def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
     """
-    繝槭け繝ｭ繝悶ャ繧ｯ繧� xlwings 縺ｧ蜿門ｾ励☆繧具ｼ域悽逡ｪ繝ｻ繝�繧ｹ繝亥�ｱ騾夲ｼ峨�
-    謌ｻ繧雁､: (Book, release_info) / 螟ｱ謨玲凾 None縲�
-    release_info: mode 縺� keep 縺ｾ縺溘�ｯ quit_excel縲｛pened_wb_here 縺� bool縲�
+    マクロブックを xlwings で取得する（本番・テスト共通）。
+    戻り値: (Book, release_info) / 失敗時 None。
+    release_info: mode が keep または quit_excel、opened_wb_here が bool。
     """
     try:
         import xlwings as xw  # noqa: F401
@@ -7950,7 +7955,7 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         _log_exclude_rules_sheet_debug(
             "XLWINGS_UNAVAILABLE",
             log_prefix,
-            "xlwings 縺� import 縺ｧ縺阪∪縺帙ｓ�ｼ�pip install xlwings 繧堤｢ｺ隱搾ｼ峨�",
+            "xlwings が import できません（pip install xlwings を確認）。",
         )
         return None
 
@@ -7978,7 +7983,7 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         _log_exclude_rules_sheet_debug(
             "XLWINGS_ATTACH_FAIL",
             log_prefix,
-            "xlwings 縺ｧ繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ縺ｧ縺励◆縲�",
+            "xlwings でブックを開けませんでした。",
             details=f"path={abs_path}",
             exc=ex,
         )
@@ -7992,13 +7997,13 @@ def _xlwings_attach_workbook_for_tests(
     allow_dispatch_open: bool = False,
 ):
     """
-    讀懆ｨｼ繧ｹ繧ｯ繝ｪ繝励ヨ逕ｨ: 襍ｷ蜍穂ｸｭ繝悶ャ繧ｯ繧貞━蜈医＠縲∝ｿ�隕√↑繧芽｡ｨ遉ｺ莉倥″ Excel 縺ｧ髢九￥縲�
-    謌ｻ繧雁､: (Book, info, 隱ｬ譏取枚蟄怜��) 縺ｾ縺溘�ｯ None縲�
+    検証スクリプト用: 起動中ブックを優先し、必要なら表示付き Excel で開く。
+    戻り値: (Book, info, 説明文字列) または None。
     """
     abs_path = os.path.abspath(book_path)
     book = _xlwings_find_book_on_running_instances(abs_path)
     if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:譌｢蟄倥う繝ｳ繧ｹ繧ｿ繝ｳ繧ｹ"
+        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:既存インスタンス"
     if not allow_dispatch_open:
         return None
     try:
@@ -8016,7 +8021,7 @@ def _xlwings_attach_workbook_for_tests(
 
 
 def _xlwings_app_save_perf_state_push(app):
-    """VBA 蛛ｴ縺ｮ繧ｹ繝励Λ繝�繧ｷ繝･繝昴�ｼ繝ｪ繝ｳ繧ｰ縺ｨ遶ｶ蜷医＠縺ｫ縺上￥縺吶ｋ縺溘ａ縲∝酔譛溘�ｻ菫晏ｭ倥�ｮ遏ｭ譎る俣縺�縺� Excel 繧帝撕縺九↓縺吶ｋ縲�"""
+    """VBA 側のスプラッシュポーリングと競合しにくくするため、同期・保存の短時間だけ Excel を静かにする。"""
     snap = {}
     for attr in ("screen_updating", "calculation", "enable_events"):
         try:
@@ -8058,10 +8063,10 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
     """
-    openpyxl 縺ｧ菫晏ｭ倥〒縺阪↑縺�縺ｨ縺阪』lwings 縺ｧ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九喉:E 繧偵Γ繝｢繝ｪ荳翫�ｮ蛟､縺ｧ荳頑嶌縺阪＠ Save縲�
+    openpyxl で保存できないとき、xlwings で「設定_配台不要工程」A:E をメモリ上の値で上書きし Save。
 
-    陦ｨ遉ｺ荳ｭ繧ｷ繝ｼ繝医↓蟇ｾ縺吶ｋ荳諡ｬ .value 縺�縺代□縺ｨ縲√せ繝励Λ繝�繧ｷ繝･�ｼ九�昴�ｼ繝ｪ繝ｳ繧ｰ�ｼ�D3=true�ｼ我ｸ九〒
-    Range 莉｣蜈･縺梧焚蛻�縺九°繧玖ｨ域ｸｬ縺後≠繧雁ｾ励ｋ縲ょ酔譛滉ｸｭ縺ｮ縺ｿ繧ｷ繝ｼ繝医ｒ荳譎る撼陦ｨ遉ｺ縺ｫ縺� api.Value2 縺ｧ譖ｸ縺上�
+    表示中シートに対する一括 .value だけだと、スプラッシュ＋ポーリング（D3=true）下で
+    Range 代入が数分かかる計測があり得る。同期中のみシートを一時非表示にし api.Value2 で書く。
     """
     global _exclude_rules_effective_read_path
 
@@ -8070,7 +8075,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_SKIP",
             log_prefix,
-            "xlwings 縺ｧ繝悶ャ繧ｯ縺ｫ謗･邯壹〒縺阪★ A:E 蜷梧悄繧偵せ繧ｭ繝�繝励�",
+            "xlwings でブックに接続できず A:E 同期をスキップ。",
             details=f"path={wb_path}",
         )
         return False
@@ -8082,15 +8087,15 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             xw_book.app.display_alerts = False
         except Exception:
             pass
-        # 蜈ｨ繧ｷ繝ｼ繝亥錐繧貞�玲嫌縺吶ｋ縺ｨ繧ｷ繝ｼ繝域焚蛻�縺ｮ COM 蠕蠕ｩ縺ｫ縺ｪ繧翫．3=true 譎ゅ�ｯ VBA 繝昴�ｼ繝ｪ繝ｳ繧ｰ縺ｨ遶ｶ蜷医＠縺ｦ
-        # 1 繧ｷ繝ｼ繝域焚遘偵懷香謨ｰ遘偵°縺九ｋ縺薙→縺後≠繧具ｼ郁ｨ域ｸｬ縺ｧ 40 繧ｷ繝ｼ繝遺沿213s�ｼ峨ょ錐蜑阪〒逶ｴ謗･隗｣豎ｺ縺吶ｋ縲�
+        # 全シート名を列挙するとシート数分の COM 往復になり、D3=true 時は VBA ポーリングと競合して
+        # 1 シート数秒〜十数秒かかることがある（計測で 40 シート≈213s）。名前で直接解決する。
         try:
             sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         except Exception:
             _log_exclude_rules_sheet_debug(
                 "XLWINGS_SYNC_SKIP",
                 log_prefix,
-                f"xlwings 蛛ｴ縺ｫ繧ｷ繝ｼ繝医鶏EXCLUDE_RULES_SHEET_NAME}縲阪′縺ゅｊ縺ｾ縺帙ｓ縲�",
+                f"xlwings 側にシート「{EXCLUDE_RULES_SHEET_NAME}」がありません。",
                 details=f"path={wb_path}",
             )
             return False
@@ -8106,7 +8111,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         try:
             try:
                 if int(sht.api.Visible) == -1:  # xlSheetVisible
-                    sht.api.Visible = 0  # xlSheetHidden�ｼ亥酔譛滉ｸｭ縺�縺代ょ�肴緒逕ｻ繝ｻ繧ｦ繧｣繝ｳ繝峨え譖ｴ譁ｰ雋�闕ｷ繧呈椛縺医ｋ�ｼ�
+                    sht.api.Visible = 0  # xlSheetHidden（同期中だけ。再描画・ウィンドウ更新負荷を抑える）
                     hid_sheet_for_write = True
             except Exception:
                 pass
@@ -8128,11 +8133,11 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_OK",
             log_prefix,
-            "xlwings 邨檎罰縺ｧ險ｭ螳壹す繝ｼ繝� A縲廢 繧貞酔譛溘＠繝悶ャ繧ｯ繧剃ｿ晏ｭ倥＠縺ｾ縺励◆縲�",
+            "xlwings 経由で設定シート A〜E を同期しブックを保存しました。",
             details=f"path={wb_path} rows={max_r}",
         )
         logging.info(
-            "%s: 險ｭ螳壹す繝ｼ繝医ｒ xlwings 縺ｧ繝槭け繝ｭ繝悶ャ繧ｯ縺ｫ菫晏ｭ倥＠縺ｾ縺励◆�ｼ�A縲廢�ｼ峨�",
+            "%s: 設定シートを xlwings でマクロブックに保存しました（A〜E）。",
             log_prefix,
         )
         return True
@@ -8140,7 +8145,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_FAIL",
             log_prefix,
-            "xlwings 縺ｧ縺ｮ A:E 蜷梧悄縺ｾ縺溘�ｯ Save 縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲�",
+            "xlwings での A:E 同期または Save に失敗しました。",
             details=f"path={wb_path}",
             exc=ex,
         )
@@ -8149,17 +8154,17 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         _xlwings_release_book_after_mutation(xw_book, info, ok)
 
 
-# 險ｭ螳壹す繝ｼ繝医�ｮ蛻礼ｯ�蝗ｲ�ｼ�A縲廢�ｼ峨Ｙlwings 蜷梧悄繝ｻVBA 陦悟�� TSV 蜃ｺ蜉帙〒繧ゆｽｿ逕ｨ縲�
+# 設定シートの列範囲（A〜E）。xlwings 同期・VBA 行列 TSV 出力でも使用。
 EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL = 5
 EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 
 
 def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> bool:
     """
-    險ｭ螳壹す繝ｼ繝医�ｮ繝�繧｣繧ｹ繧ｯ蜿肴丐縲よ里螳壹�ｯ xlwings 縺ｧ A:E 蜷梧悄竊担ave�ｼ�EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 縺ｮ縺ｨ縺阪�ｮ縺ｿ openpyxl save 繧定ｩｦ陦鯉ｼ峨�
-    菫晏ｭ倥〒縺阪↑縺�縺ｨ縺阪�ｯ log 縺ｫ陦悟�� TSV 繧貞�ｺ縺励〃BA縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇A縺九ｉE_TSV縺九ｉ蜿肴丐縲阪〒蜿肴丐縺吶ｋ縲�
+    設定シートのディスク反映。既定は xlwings で A:E 同期→Save（EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 のときのみ openpyxl save を試行）。
+    保存できないときは log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映する。
 
-    _wb 窶ｦ 邱ｨ髮�貂医∩ openpyxl 繝悶ャ繧ｯ�ｼ�openpyxl 邨瑚ｷｯ譎ゅ�ｮ縺ｿ save 縺ｫ菴ｿ逕ｨ�ｼ峨�
+    _wb … 編集済み openpyxl ブック（openpyxl 経路時のみ save に使用）。
     """
     global _exclude_rules_effective_read_path
 
@@ -8170,7 +8175,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
             _log_exclude_rules_sheet_debug(
                 "OPENPYXL_SAVE_FAIL",
                 log_prefix,
-                f"openpyxl 縺ｧ縺ｮ .xlsm 菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆ {which}�ｼ�Excel 縺ｧ髢九″縺｣縺ｱ縺ｪ縺励�ｻ繝ｭ繝�繧ｯ縺ｮ蜿ｯ閭ｽ諤ｧ�ｼ峨�",
+                f"openpyxl での .xlsm 保存に失敗しました {which}（Excel で開きっぱなし・ロックの可能性）。",
                 details=f"path={wb_path}",
                 exc=ex,
             )
@@ -8180,11 +8185,11 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_OK",
             log_prefix,
-            "openpyxl 縺ｧ險ｭ螳壹す繝ｼ繝医ｒ蜷ｫ繧繝悶ャ繧ｯ繧剃ｿ晏ｭ倥＠縺ｾ縺励◆�ｼ�A縲廢�ｼ峨�",
+            "openpyxl で設定シートを含むブックを保存しました（A〜E）。",
             details=f"path={wb_path} {which}",
         )
         logging.info(
-            "%s: 險ｭ螳壹す繝ｼ繝医ｒ openpyxl 縺ｧ繝槭け繝ｭ繝悶ャ繧ｯ縺ｫ菫晏ｭ倥＠縺ｾ縺励◆縲�%s",
+            "%s: 設定シートを openpyxl でマクロブックに保存しました。%s",
             log_prefix,
             which,
         )
@@ -8195,16 +8200,16 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
             log_prefix,
-            "險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｮ菫晏ｭ倥〒縺ｯ openpyxl save 繧定ｩｦ陦後＠縺ｾ縺帙ｓ�ｼ�xlwings 蜷梧悄繧貞�郁｡後ょ�崎ｩｦ陦後☆繧句�ｴ蜷医�ｯ EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1�ｼ峨�",
+            "設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行する場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: 險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｯ openpyxl 繧定ｩｦ縺輔★ xlwings 蜷梧悄竊担ave 繧定ｩｦ縺ｿ縺ｾ縺呻ｼ井ｸ榊庄縺ｪ繧� VBA 逕ｨ陦悟�� TSV�ｼ峨�",
+            "%s: 設定_配台不要工程は openpyxl を試さず xlwings 同期→Save を試みます（不可なら VBA 用行列 TSV）。",
             log_prefix,
         )
     elif not _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: 險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｯ openpyxl 縺ｧ菫晏ｭ倥＠縺ｾ縺呻ｼ井ｸ榊庄縺ｮ縺ｨ縺阪�ｯ xlwings 蜷梧悄竊担ave縲√◎繧後ｂ荳榊庄縺ｪ繧� VBA 逕ｨ陦悟�� TSV�ｼ峨�",
+            "%s: 設定_配台不要工程は openpyxl で保存します（不可のときは xlwings 同期→Save、それも不可なら VBA 用行列 TSV）。",
             log_prefix,
         )
         labels = ("(1/4)", "(2/4)", "(3/4)", "(4/4)")
@@ -8213,7 +8218,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
                 _log_exclude_rules_sheet_debug(
                     "OPENPYXL_RETRY_WAIT",
                     log_prefix,
-                    f"openpyxl 蜀堺ｿ晏ｭ倥∪縺ｧ 2 遘貞ｾ�縺｡縺ｾ縺� {label}縲�",
+                    f"openpyxl 再保存まで 2 秒待ちます {label}。",
                     details=f"path={wb_path}",
                 )
                 time_module.sleep(2.0)
@@ -8224,11 +8229,11 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_INCOMPATIBLE_SHEET",
             log_prefix,
-            f"繝悶ャ繧ｯ縺ｫ縲鶏OPENPYXL_INCOMPATIBLE_SHEET_MARKER}縲阪′縺ゅｋ縺溘ａ openpyxl 縺ｧ縺ｮ菫晏ｭ倥ｒ隧ｦ縺ｿ縺ｾ縺帙ｓ縲�",
+            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため openpyxl での保存を試みません。",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ openpyxl save 繧偵せ繧ｭ繝�繝励＠縲』lwings 縺ｾ縺溘�ｯ陦悟�� TSV 縺ｫ蛻�繧頑崛縺医∪縺吶�",
+            "%s: ブックに「%s」があるため openpyxl save をスキップし、xlwings または行列 TSV に切り替えます。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -8241,8 +8246,8 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
 
     if _write_exclude_rules_matrix_vba_tsv(wb_path, ws, log_prefix):
         logging.warning(
-            "%s: 險ｭ螳壹す繝ｼ繝医ｒ log\\%s 縺ｫ蜃ｺ蜉帙＠縺ｾ縺励◆縲�"
-            " Excel 縺ｧ繝槭け繝ｭ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇A縺九ｉE_TSV縺九ｉ蜿肴丐縲阪ｒ螳溯｡後＠縺ｦ縺上□縺輔＞縲�",
+            "%s: 設定シートを log\\%s に出力しました。"
+            " Excel でマクロ「設定_配台不要工程_AからE_TSVから反映」を実行してください。",
             log_prefix,
             EXCLUDE_RULES_MATRIX_VBA_FILENAME,
         )
@@ -8250,7 +8255,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     _log_exclude_rules_sheet_debug(
         "OPENPYXL_VBA_FALLBACK",
         log_prefix,
-        "openpyxl 菫晏ｭ倥↓螟ｱ謨励＠縺溘◆繧� VBA 逕ｨ陦悟�� TSV 繧貞�ｺ蜉帙＠縺ｾ縺励◆�ｼ医ヶ繝�繧ｯ縺ｯ Excel 荳翫〒謇句虚蜿肴丐縺悟ｿ�隕√↑蝣ｴ蜷医′縺ゅｊ縺ｾ縺呻ｼ峨�",
+        "openpyxl 保存に失敗したため VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映が必要な場合があります）。",
         details=f"path={wb_path}",
     )
     return False
@@ -8286,7 +8291,7 @@ def _serialize_cell_for_matrix_tsv(val) -> str:
 def _write_exclude_rules_matrix_vba_tsv(
     wb_path: str, ws, log_prefix: str
 ) -> bool:
-    """VBA 逕ｨ: 險ｭ螳壹す繝ｼ繝� 1 陦檎岼縲� max_row 縺ｮ A縲廢 繧� Base64(UTF-8) 莉倥″ TSV 縺ｧ蜃ｺ蜉帙☆繧九�"""
+    """VBA 用: 設定シート 1 行目〜 max_row の A〜E を Base64(UTF-8) 付き TSV で出力する。"""
     max_r = max(1, int(ws.max_row or 1))
     lines = [
         "v1",
@@ -8309,19 +8314,19 @@ def _write_exclude_rules_matrix_vba_tsv(
         _log_exclude_rules_sheet_debug(
             "MATRIX_TSV_WRITTEN",
             log_prefix,
-            "險ｭ螳壹す繝ｼ繝� A縲廢 繧� VBA 蜿肴丐逕ｨ TSV 縺ｫ譖ｸ縺榊�ｺ縺励∪縺励◆�ｼ�openpyxl 菫晏ｭ倅ｸ榊庄譎ゑｼ峨�",
+            "設定シート A〜E を VBA 反映用 TSV に書き出しました（openpyxl 保存不可時）。",
             details=f"path={path} rows={max_r}",
         )
         return True
     except OSError as ex:
-        logging.warning("%s: 陦悟�� VBA 逕ｨ TSV 繧呈嶌縺代∪縺帙ｓ: %s", log_prefix, ex)
+        logging.warning("%s: 行列 VBA 用 TSV を書けません: %s", log_prefix, ex)
         return False
 
 
 def _build_exclude_rules_list_from_openpyxl_ws(
     ws, c_proc: int, c_mach: int, c_flag: int, c_e: int
 ) -> list[dict]:
-    """openpyxl 荳翫�ｮ險ｭ螳壹す繝ｼ繝医°繧� _load_exclude_rules_from_workbook 縺ｨ蜷悟ｽ｢縺ｮ繝ｪ繧ｹ繝医ｒ讒狗ｯ峨�"""
+    """openpyxl 上の設定シートから _load_exclude_rules_from_workbook と同形のリストを構築。"""
     rules: list[dict] = []
     max_r = int(ws.max_row or 1)
     for r in range(2, max_r + 1):
@@ -8380,7 +8385,7 @@ def _clear_exclude_rules_e_apply_files() -> None:
 def _write_exclude_rules_e_vba_tsv_from_cells(
     wb_path: str, c_e: int, cells: dict[str, str], log_prefix: str
 ) -> None:
-    """VBA 逕ｨ: 陦檎分蜿ｷ縺ｨ Base64(UTF-8) 繧ｻ繝ｫ譁�蟄怜�励�ｮ TSV縲�"""
+    """VBA 用: 行番号と Base64(UTF-8) セル文字列の TSV。"""
     lines = [
         "v1",
         "workbook\t" + os.path.abspath(wb_path),
@@ -8400,19 +8405,19 @@ def _write_exclude_rules_e_vba_tsv_from_cells(
         _log_exclude_rules_sheet_debug(
             "E_VBA_TSV_WRITTEN",
             log_prefix,
-            "E 蛻励ｒ VBA 蜿肴丐逕ｨ TSV 縺ｫ譖ｸ縺榊�ｺ縺励∪縺励◆�ｼ井ｿ晏ｭ伜､ｱ謨玲凾縺ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ�ｼ峨�",
+            "E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。",
             details=f"path={path_tsv} cells={len(cells)}",
         )
     except OSError as ex:
-        logging.warning("%s: E 蛻� VBA 逕ｨ TSV 繧呈嶌縺代∪縺帙ｓ: %s", log_prefix, ex)
+        logging.warning("%s: E 列 VBA 用 TSV を書けません: %s", log_prefix, ex)
 
 
 def _write_exclude_rules_e_apply_artifacts(
     wb_path: str, ws, c_e: int, log_prefix: str
 ) -> None:
     """
-    E 蛻暦ｼ磯撼遨ｺ�ｼ峨ｒ JSON 繧ｵ繧､繝峨き繝ｼ繝峨→ VBA 逕ｨ TSV 縺ｫ譖ｸ縺上らｩｺ縺ｪ繧我ｸ｡繝輔ぃ繧､繝ｫ繧貞炎髯､縲�
-    Python 谺｡蝗櫁ｵｷ蜍墓凾縺ｮ E 蠕ｩ蜈�逕ｨ JSON 縺ｨ縲√�槭け繝ｭ縺九ｉ縺ｮ E 譖ｸ霎ｼ縺ｿ逕ｨ TSV縲�
+    E 列（非空）を JSON サイドカードと VBA 用 TSV に書く。空なら両ファイルを削除。
+    Python 次回起動時の E 復元用 JSON と、マクロからの E 書込み用 TSV。
     """
     cells: dict[str, str] = {}
     max_r = int(ws.max_row or 1)
@@ -8440,12 +8445,12 @@ def _write_exclude_rules_e_apply_artifacts(
         with open(path_sc, "w", encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except OSError as ex:
-        logging.warning("%s: E 蛻� JSON 繧呈嶌縺代∪縺帙ｓ: %s", log_prefix, ex)
+        logging.warning("%s: E 列 JSON を書けません: %s", log_prefix, ex)
     _write_exclude_rules_e_vba_tsv_from_cells(wb_path, c_e, cells, log_prefix)
     _log_exclude_rules_sheet_debug(
         "E_APPLY_FILES_WRITTEN",
         log_prefix,
-        "E 蛻励ｒ JSON 縺ｨ VBA 逕ｨ TSV 縺ｫ譖ｸ縺榊�ｺ縺励∪縺励◆�ｼ医�槭け繝ｭ縺ｧ E 蛻励ｒ蜿肴丐蠕後√ヵ繧｡繧､繝ｫ蜑企勁�ｼ峨�",
+        "E 列を JSON と VBA 用 TSV に書き出しました（マクロで E 列を反映後、ファイル削除）。",
         details=f"cells={len(cells)}",
     )
 
@@ -8454,8 +8459,8 @@ def _try_apply_pending_exclude_rules_e_column(
     wb_path: str, ws, c_e: int, log_prefix: str
 ) -> int:
     """
-    蜑榊屓菫晏ｭ倥↓螟ｱ謨励＠縺溘→縺肴嶌縺榊�ｺ縺励◆ JSON 縺九ｉ E 蛻励ｒ蠕ｩ蜈�縺吶ｋ縲�
-    繝悶ャ繧ｯ繝代せ縺御ｸ閾ｴ縺励↑縺代ｌ縺ｰ菴輔ｂ縺励↑縺�縲る←逕ｨ蠕後�ｯ繧ｵ繧､繝峨き繝ｼ繝峨ｒ蜑企勁縺吶ｋ縲�
+    前回保存に失敗したとき書き出した JSON から E 列を復元する。
+    ブックパスが一致しなければ何もしない。適用後はサイドカードを削除する。
     """
     path_sc = _exclude_rules_e_sidecar_path()
     if not os.path.isfile(path_sc):
@@ -8499,11 +8504,11 @@ def _try_apply_pending_exclude_rules_e_column(
         _log_exclude_rules_sheet_debug(
             "E_SIDECAR_APPLIED",
             log_prefix,
-            f"譛ｪ菫晏ｭ倥□縺｣縺� E 蛻励ｒ繧ｵ繧､繝峨き繝ｼ繝峨°繧� {n} 繧ｻ繝ｫ蠕ｩ蜈�縺励∪縺励◆縲�",
+            f"未保存だった E 列をサイドカードから {n} セル復元しました。",
             details=path_sc,
         )
         logging.info(
-            "%s: %s 縺ｮ蜀�螳ｹ繧偵す繝ｼ繝医�ｮ繝ｭ繧ｸ繝�繧ｯ蠑丞�励∈驕ｩ逕ｨ縺励∪縺励◆�ｼ育ｶ壹￠縺ｦ菫晏ｭ倥ｒ隧ｦ縺ｿ縺ｾ縺呻ｼ峨�",
+            "%s: %s の内容をシートのロジック式列へ適用しました（続けて保存を試みます）。",
             log_prefix,
             path_sc,
         )
@@ -8514,8 +8519,8 @@ def _read_exclude_rules_d_cells_data_only_for_rows(
     wb_path: str, rows: list[int], c_d: int
 ) -> dict[int, object]:
     """
-    D 蛻励′謨ｰ蠑上�ｮ縺ｨ縺阪｛penpyxl 縺ｮ騾壼ｸｸ隱ｭ霎ｼ縺ｧ縺ｯ '=...' 縺励°蜿悶ｌ縺ｪ縺�縲�
-    data_only=True 縺ｧ繧ｭ繝｣繝�繧ｷ繝･蛟､繧定ｪｭ繧�ｼ�Excel 縺御ｸ蠎ｦ縺ｧ繧ゆｿ晏ｭ倥�ｻ險育ｮ玲ｸ医∩縺ｮ繝悶ャ繧ｯ縺ｧ譛牙柑�ｼ峨�
+    D 列が数式のとき、openpyxl の通常読込では '=...' しか取れない。
+    data_only=True でキャッシュ値を読む（Excel が一度でも保存・計算済みのブックで有効）。
     """
     out: dict[int, object] = {}
     if not rows or not os.path.isfile(wb_path):
@@ -8557,28 +8562,28 @@ def run_exclude_rules_sheet_maintenance(
     wb_path: str, pairs: list[tuple[str, str]], log_prefix: str
 ) -> None:
     """
-    縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九阪�ｮ陦悟酔譛溘�ｻD竊脱 縺ｮ AI 陬懷ｮ後�ｻ繝�繧｣繧ｹ繧ｯ蜿肴丐�ｼ域里螳壹�ｯ xlwings 縺ｧ A縲廢 蜷梧悄竊担ave縲Ａ`EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` 縺ｮ縺ｨ縺� openpyxl save 繧定ｩｦ陦鯉ｼ峨�
+    「設定_配台不要工程」の行同期・D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
 
-    xlwings 縺ｧ繧ゆｿ晏ｭ倥〒縺阪↑縺�縺ｨ縺阪�ｯ ``log/exclude_rules_matrix_vba.tsv`` 繧呈ｮ九＠縲√�槭け繝ｭ
-    ``險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇A縺九ｉE_TSV縺九ｉ蜿肴丐`` 縺ｧ A縲廢 繧貞渚譏�縺吶ｋ縲�
-    菴ｵ縺帙※蠕捺擂縺ｩ縺翫ｊ E 蛻励�ｮ縺ｿ縺ｮ ``exclude_rules_e_column_vba.tsv`` 繧ょ�ｺ蜉帙＆繧悟ｾ励ｋ�ｼ郁｡悟�� TSV 蜆ｪ蜈医〒蜿肴丐蠕後�ｯ蜑企勁�ｼ峨�
-    菫晏ｭ俶�仙粥譎ゅ�ｯ TSV/JSON 縺ｯ蜑企勁縺輔ｌ繧九�
+    xlwings でも保存できないときは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
+    ``設定_配台不要工程_AからE_TSVから反映`` で A〜E を反映する。
+    併せて従来どおり E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
+    保存成功時は TSV/JSON は削除される。
 
-    ``json/exclude_rules_e_column_pending.json`` 縺ｯ Python 谺｡蝗櫁ｵｷ蜍墓凾縺ｮ E 蛻怜ｾｩ蜈�逕ｨ縲�
-    繧ｷ繝ｼ繝医�ｮ譁ｰ隕丈ｽ懈�舌→ 1 陦檎岼隕句�ｺ縺励�ｯ VBA縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇繧ｷ繝ｼ繝医ｒ遒ｺ菫昴阪�
+    ``json/exclude_rules_e_column_pending.json`` は Python 次回起動時の E 列復元用。
+    シートの新規作成と 1 行目見出しは VBA「設定_配台不要工程_シートを確保」。
     """
     if not wb_path:
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_PATH",
             log_prefix,
-            "TASK_INPUT_WORKBOOK 縺檎ｩｺ縺ｮ縺溘ａ險ｭ螳壹す繝ｼ繝亥�ｦ逅�繧偵＠縺ｾ縺帙ｓ縲�",
+            "TASK_INPUT_WORKBOOK が空のため設定シート処理をしません。",
         )
         return
     if not os.path.exists(wb_path):
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_FILE",
             log_prefix,
-            "繝悶ャ繧ｯ縺悟ｭ伜惠縺励∪縺帙ｓ縲�",
+            "ブックが存在しません。",
             details=f"path={wb_path}",
         )
         return
@@ -8586,7 +8591,7 @@ def run_exclude_rules_sheet_maintenance(
     _log_exclude_rules_sheet_debug(
         "START",
         log_prefix,
-        "險ｭ螳壹す繝ｼ繝井ｿ晏ｮ磯幕蟋�",
+        "設定シート保守開始",
         details=f"path={wb_path} pairs={len(pairs)}",
     )
     global _exclude_rules_effective_read_path
@@ -8596,11 +8601,11 @@ def run_exclude_rules_sheet_maintenance(
         _log_exclude_rules_sheet_debug(
             "SKIP_OPENPYXL_INCOMPATIBLE_BOOK",
             log_prefix,
-            f"繝悶ャ繧ｯ縺ｫ縲鶏OPENPYXL_INCOMPATIBLE_SHEET_MARKER}縲阪′蜷ｫ縺ｾ繧後ｋ縺溘ａ縲｛penpyxl 縺ｫ繧医ｋ險ｭ螳壹す繝ｼ繝井ｿ晏ｮ医�ｯ陦後＞縺ｾ縺帙ｓ縲�",
+            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」が含まれるため、openpyxl による設定シート保守は行いません。",
             details=f"path={wb_path}",
         )
         logging.warning(
-            "%s: 縲�%s縲榊性譛峨�ｮ縺溘ａ縲�%s縲阪�ｮ openpyxl 菫晏ｮ医ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆�ｼ�Excel�ｼ駿lwings 縺ｧ邱ｨ髮�縺励※縺上□縺輔＞�ｼ峨�",
+            "%s: 「%s」含有のため「%s」の openpyxl 保守をスキップしました（Excel／xlwings で編集してください）。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
@@ -8616,7 +8621,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "OPEN_RETRY",
                 log_prefix,
-                "keep_vba=True 縺ｧ繝悶ャ繧ｯ繧帝幕縺代★ keep_vba=False 縺ｧ蜀崎ｩｦ陦後＠縺ｾ縺呻ｼ医�槭け繝ｭ縺悟､ｱ繧上ｌ繧句庄閭ｽ諤ｧ�ｼ峨�",
+                "keep_vba=True でブックを開けず keep_vba=False で再試行します（マクロが失われる可能性）。",
                 exc=e1,
             )
             try:
@@ -8625,7 +8630,7 @@ def run_exclude_rules_sheet_maintenance(
                 _log_exclude_rules_sheet_debug(
                     "OPEN_FAIL",
                     log_prefix,
-                    "繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ縲ゅす繝ｼ繝医�ｯ菴懈�舌�ｻ菫晏ｭ倥＆繧後∪縺帙ｓ縲�",
+                    "ブックを開けません。シートは作成・保存されません。",
                     details=f"path={wb_path}",
                     exc=e2,
                 )
@@ -8634,7 +8639,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "OPEN_FAIL",
                 log_prefix,
-                "繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ縲ゅす繝ｼ繝医�ｯ菴懈�舌�ｻ菫晏ｭ倥＆繧後∪縺帙ｓ縲�",
+                "ブックを開けません。シートは作成・保存されません。",
                 details=f"path={wb_path}",
                 exc=e1,
             )
@@ -8643,7 +8648,7 @@ def run_exclude_rules_sheet_maintenance(
     _log_exclude_rules_sheet_debug(
         "OPEN_OK",
         log_prefix,
-        "繝悶ャ繧ｯ繧帝幕縺阪∪縺励◆縲�",
+        "ブックを開きました。",
         details=f"keep_vba={keep_vba} sheets={len(wb.sheetnames)}",
     )
 
@@ -8652,11 +8657,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SKIP_NO_SHEET",
                 log_prefix,
-                "繧ｷ繝ｼ繝医′縺ゅｊ縺ｾ縺帙ｓ縲７BA 縺ｮ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇繧ｷ繝ｼ繝医ｒ遒ｺ菫昴阪ｒ螳溯｡後☆繧九°縲∵ｮｵ髫�1/2 繧偵�槭け繝ｭ縺九ｉ襍ｷ蜍輔＠縺ｦ縺上□縺輔＞縲�",
+                "シートがありません。VBA の「設定_配台不要工程_シートを確保」を実行するか、段階1/2 をマクロから起動してください。",
                 details=f"path={wb_path}",
             )
             logging.error(
-                "%s: 縲�%s縲阪′縺ゅｊ縺ｾ縺帙ｓ縲１ython 縺ｧ縺ｯ繧ｷ繝ｼ繝医ｒ菴懈�舌＠縺ｾ縺帙ｓ縲�",
+                "%s: 「%s」がありません。Python ではシートを作成しません。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
             )
@@ -8684,11 +8689,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "HEADER_FIX",
                 log_prefix,
-                "1陦檎岼縺ｫ讓呎ｺ冶ｦ句�ｺ縺励ｒ譖ｸ縺崎ｾｼ縺ｿ縺ｾ縺励◆�ｼ育ｩｺ繧ｷ繝ｼ繝医�ｻ蛻怜錐荳堺ｸ閾ｴ縺ｮ陬懈ｭ｣�ｼ峨�",
+                "1行目に標準見出しを書き込みました（空シート・列名不一致の補正）。",
                 details=f"cols=({c_proc},{c_mach},{c_flag},{c_d},{c_e})",
             )
 
-        # 蜑榊屓繝悶ャ繧ｯ菫晏ｭ倥↓螟ｱ謨励＠縺溘→縺埼驕ｿ縺励◆ E 蛻励ｒ縲∝�医↓繝ｯ繝ｼ繧ｯ繧ｷ繝ｼ繝医∈謌ｻ縺呻ｼ育ｶ壹￥菫晏ｭ倥〒繝�繧｣繧ｹ繧ｯ縺ｸ霈峨ｋ�ｼ�
+        # 前回ブック保存に失敗したとき退避した E 列を、先にワークシートへ戻す（続く保存でディスクへ載る）
         _try_apply_pending_exclude_rules_e_column(wb_path, ws, c_e, log_prefix)
 
         existing_keys: set[tuple[str, str]] = set()
@@ -8716,33 +8721,33 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SYNC_ROWS",
                 log_prefix,
-                f"蟾･遞�+讖滓｢ｰ縺ｮ陦後ｒ {added} 莉ｶ霑ｽ蜉�縺励∪縺励◆縲�",
+                f"工程+機械の行を {added} 件追加しました。",
             )
             logging.info(
-                "%s: 縲�%s縲阪↓蟾･遞�+讖滓｢ｰ縺ｮ邨�縺ｿ蜷医ｏ縺帙ｒ %s 陦瑚ｿｽ蜉�縺励∪縺励◆縲�",
+                "%s: 「%s」に工程+機械の組み合わせを %s 行追加しました。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 added,
             )
 
-        # 蜉�蟾･險育判縺九ｉ繝壹い縺�1莉ｶ繧ょ叙繧後★縲√す繝ｼ繝医↓繧ゅョ繝ｼ繧ｿ陦後′辟｡縺�縺ｨ縺阪�ｯ萓玖｡後�ｮ縺ｿ�ｼ亥ｾ捺擂縺ｮ譁ｰ隕上す繝ｼ繝育嶌蠖難ｼ�
+        # 加工計画からペアが1件も取れず、シートにもデータ行が無いときは例行のみ（従来の新規シート相当）
         if added == 0 and not existing_keys:
-            ws.append(["譴ｱ蛹�", "", "yes", "", ""])
+            ws.append(["梱包", "", "yes", "", ""])
             existing_keys.add(
-                (_normalize_process_name_for_rule_match("譴ｱ蛹�"), _normalize_equipment_match_key(""))
+                (_normalize_process_name_for_rule_match("梱包"), _normalize_equipment_match_key(""))
             )
             _log_exclude_rules_sheet_debug(
                 "EXAMPLE_ROW",
                 log_prefix,
-                "繝�繝ｼ繧ｿ陦後′辟｡縺九▲縺溘◆繧∽ｾ具ｼ域｢ｱ蛹�=yes�ｼ峨ｒ1陦瑚ｿｽ蜉�縲�",
+                "データ行が無かったため例（梱包=yes）を1行追加。",
             )
             logging.info(
-                "%s: 縲�%s縲阪↓繝�繝ｼ繧ｿ陦後′辟｡縺九▲縺溘◆繧√∽ｾ具ｼ域｢ｱ蛹�=yes�ｼ峨ｒ1陦瑚ｿｽ蜉�縺励∪縺励◆縲�",
+                "%s: 「%s」にデータ行が無かったため、例（梱包=yes）を1行追加しました。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
             )
 
-        # 遨ｺ陦瑚ｩｰ繧√�ｯ AI 繧医ｊ蜈医↓陦後≧�ｼ亥ｾ後°繧芽ｩｰ繧√ｋ縺ｨ縲∵嶌縺崎ｾｼ繧薙□陦檎分蜿ｷ縺ｨ逕ｻ髱｢荳翫�ｮ陦後′縺壹ｌ繧具ｼ�
+        # 空行詰めは AI より先に行う（後から詰めると、書き込んだ行番号と画面上の行がずれる）
         n_kept, n_removed_empty = _compact_exclude_rules_data_rows(
             ws, c_proc, c_mach, c_flag, c_d, c_e, log_prefix
         )
@@ -8750,7 +8755,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "DATA_COMPACT",
                 log_prefix,
-                "遨ｺ陦後ｒ蜑企勁縺励※繝�繝ｼ繧ｿ陦後ｒ隧ｰ繧√∪縺励◆�ｼ井ｸｦ縺ｳ鬆�縺ｯ邯ｭ謖��ｼ峨�AI 陬懷ｮ後ｈ繧雁燕縲�",
+                "空行を削除してデータ行を詰めました（並び順は維持）。AI 補完より前。",
                 details=f"rows={n_kept} removed_empty={n_removed_empty}",
             )
 
@@ -8759,14 +8764,14 @@ def run_exclude_rules_sheet_maintenance(
         for r in range(2, max_r + 1):
             dv = ws.cell(row=r, column=c_d).value
             ev = ws.cell(row=r, column=c_e).value
-            # C 蛻励�ｮ譛臥┌縺ｫ髢｢菫ゅ↑縺上． 縺ｫ隱ｬ譏弱′縺ゅｊ E 縺檎ｩｺ縺ｪ繧� D竊脱 繧定ｩｦ縺�
+            # C 列の有無に関係なく、D に説明があり E が空なら D→E を試す
             if _cell_is_blank_for_rule(dv):
                 continue
             if not _cell_is_blank_for_rule(ev):
                 continue
             pending_rows.append(r)
 
-        # D 縺梧焚蠑上�ｮ縺ｨ縺阪�ｯ騾壼ｸｸ隱ｭ霎ｼ縺ｧ縺ｯ '=...' 縺�縺大叙繧後ｋ縲Ｅata_only 縺ｧ繧ｭ繝｣繝�繧ｷ繝･陦ｨ遉ｺ蛟､繧定｣懊≧縲�
+        # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
         formula_rows = [
             r
             for r in pending_rows
@@ -8793,7 +8798,7 @@ def run_exclude_rules_sheet_maintenance(
                     blob = str(alt).strip()
                 else:
                     logging.warning(
-                        "%s: 縲�%s縲�%s 陦檎岼縺ｮ D 蛻励′謨ｰ蠑上〒縲√く繝｣繝�繧ｷ繝･蛟､繧定ｪｭ繧√∪縺帙ｓ縺ｧ縺励◆�ｼ�Excel 縺ｧ荳蠎ｦ菫晏ｭ倥☆繧九° D 繧貞､縺ｫ縺励※縺上□縺輔＞�ｼ峨�",
+                        "%s: 「%s」%s 行目の D 列が数式で、キャッシュ値を読めませんでした（Excel で一度保存するか D を値にしてください）。",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
                         r,
@@ -8812,7 +8817,7 @@ def run_exclude_rules_sheet_maintenance(
             for r, parsed in zip(pending_rows, parsed_list):
                 if not parsed:
                     logging.warning(
-                        "%s: 縲�%s縲�%s 陦檎岼縺ｮ D 蛻励ｒ JSON 縺ｫ縺ｧ縺阪∪縺帙ｓ縺ｧ縺励◆�ｼ�API繧ｭ繝ｼ繝ｻ蠢懃ｭ斐ｒ遒ｺ隱搾ｼ峨�",
+                        "%s: 「%s」%s 行目の D 列を JSON にできませんでした（APIキー・応答を確認）。",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
                         r,
@@ -8822,9 +8827,9 @@ def run_exclude_rules_sheet_maintenance(
                 ws.cell(row=r, column=c_e, value=jstr)
                 cell_addr = f"{get_column_letter(c_e)}{r}"
                 ai_e_cell_addrs.append(cell_addr)
-                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "窶ｦ")
+                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
                 logging.info(
-                    "%s: 縲�%s縲阪Ο繧ｸ繝�繧ｯ蠑丞�励�%s縲阪そ繝ｫ %s 縺ｫ JSON 繧呈嶌縺崎ｾｼ縺ｿ: %s",
+                    "%s: 「%s」ロジック式列「%s」セル %s に JSON を書き込み: %s",
                     log_prefix,
                     EXCLUDE_RULES_SHEET_NAME,
                     EXCLUDE_RULE_COL_LOGIC_JSON,
@@ -8836,11 +8841,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "AI_E_FILLED",
                 log_prefix,
-                f"D竊脱 縺ｮ AI 陬懷ｮ後ｒ {ai_filled} 陦悟ｮ滓命縲�",
+                f"D→E の AI 補完を {ai_filled} 行実施。",
                 details="cells=" + ",".join(ai_e_cell_addrs),
             )
             logging.info(
-                "%s: 縲�%s縲阪〒 D竊脱 縺ｮ AI 陬懷ｮ後ｒ %s 陦鯉ｼ医そ繝ｫ: %s�ｼ峨�",
+                "%s: 「%s」で D→E の AI 補完を %s 行（セル: %s）。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 ai_filled,
@@ -8860,11 +8865,11 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "TEST_E1234",
                 log_prefix,
-                f'E蛻� {_e_addr} 縺ｫ繝�繧ｹ繝医〒 "1234" 繧呈嶌縺崎ｾｼ縺ｿ',
+                f'E列 {_e_addr} にテストで "1234" を書き込み',
                 details=f"row={_er_row}",
             )
             logging.warning(
-                '%s: 縲舌ユ繧ｹ繝医�%s 縺ｫ "1234" 繧呈嶌縺崎ｾｼ縺ｿ�ｼ�EXCLUDE_RULES_TEST_E1234�ｼ峨�',
+                '%s: 【テスト】%s に "1234" を書き込み（EXCLUDE_RULES_TEST_E1234）。',
                 log_prefix,
                 _e_addr,
             )
@@ -8876,27 +8881,27 @@ def run_exclude_rules_sheet_maintenance(
         persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         if not persisted:
             logging.warning(
-                "%s: 險ｭ螳壹す繝ｼ繝医�ｮ openpyxl 菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆縲�"
-                " log 縺ｮ陦悟�� TSV 繧偵�槭け繝ｭ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇A縺九ｉE_TSV縺九ｉ蜿肴丐縲阪�"
-                "縺ｾ縺溘�ｯ E 蛻励�ｮ縺ｿ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞祇E蛻誉TSV縺九ｉ蜿肴丐縲阪〒蜿肴丐縺励※縺上□縺輔＞縲�",
+                "%s: 設定シートの openpyxl 保存に失敗しました。"
+                " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」、"
+                "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
             )
     except Exception as ex:
         _log_exclude_rules_sheet_debug(
             "FATAL",
             log_prefix,
-            "險ｭ螳壹す繝ｼ繝亥�ｦ逅�荳ｭ縺ｫ譛ｪ謐墓拷萓句､悶′逋ｺ逕溘＠縺ｾ縺励◆縲�",
+            "設定シート処理中に未捕捉例外が発生しました。",
             exc=ex,
         )
-        logging.exception("%s: 險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｮ蜃ｦ逅�縺ｧ萓句､�", log_prefix)
+        logging.exception("%s: 設定_配台不要工程の処理で例外", log_prefix)
     finally:
         if wb is not None:
             wb.close()
-            _log_exclude_rules_sheet_debug("CLOSED", log_prefix, "繝悶ャ繧ｯ繧偵け繝ｭ繝ｼ繧ｺ縺励∪縺励◆縲�")
+            _log_exclude_rules_sheet_debug("CLOSED", log_prefix, "ブックをクローズしました。")
 
 
 def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
-    """逶ｴ蜑阪�ｮ菫晏ｮ医〒螳溷柑繝代せ縺悟､峨ｏ縺｣縺溘→縺搾ｼ磯壼ｸｸ縺ｯ菫晏ｭ俶�仙粥蠕後�ｮ蜈�繝悶ャ繧ｯ�ｼ峨↓縺昴ｌ繧剃ｽｿ縺�縲�"""
+    """直前の保守で実効パスが変わったとき（通常は保存成功後の元ブック）にそれを使う。"""
     p = _exclude_rules_effective_read_path
     if p and os.path.exists(p):
         return p
@@ -8904,7 +8909,7 @@ def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
 
 
 def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
-    """繧ｷ繝ｼ繝医°繧峨Ν繝ｼ繝ｫ陦後ｒ隱ｭ縺ｿ縲∬ｩ穂ｾ｡逕ｨ繝ｪ繧ｹ繝医ｒ霑斐☆縲�"""
+    """シートからルール行を読み、評価用リストを返す。"""
     if not wb_path:
         return []
     global _exclude_rules_rules_snapshot, _exclude_rules_snapshot_wb
@@ -8922,7 +8927,7 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         return []
     if _workbook_should_skip_openpyxl_io(path):
         logging.warning(
-            "驟榊床荳崎ｦ√Ν繝ｼ繝ｫ: 繝悶ャ繧ｯ縺ｫ縲�%s縲阪′縺ゅｋ縺溘ａ pandas(openpyxl) 縺ｧ縺ｮ縲�%s縲崎ｪｭ霎ｼ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆�ｼ医Ν繝ｼ繝ｫ縺ｯ譛ｪ驕ｩ逕ｨ�ｼ峨�",
+            "配台不要ルール: ブックに「%s」があるため pandas(openpyxl) での「%s」読込をスキップしました（ルールは未適用）。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
         )
@@ -8959,7 +8964,7 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
 def apply_exclude_rules_config_to_plan_df(
     df: pd.DataFrame, wb_path: str, log_prefix: str
 ) -> pd.DataFrame:
-    """險ｭ螳壹す繝ｼ繝医↓蝓ｺ縺･縺阪碁�榊床荳崎ｦ√阪ｒ險ｭ螳夲ｼ�C=yes 縺ｾ縺溘�ｯ E 縺ｮ JSON 縺檎悄�ｼ峨�"""
+    """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。"""
     if df is None or df.empty:
         return df
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
@@ -8990,14 +8995,14 @@ def apply_exclude_rules_config_to_plan_df(
                 n += 1
                 break
     if n:
-        logging.info("%s: 險ｭ螳壹�%s縲阪↓繧医ｊ驟榊床荳崎ｦ�=yes 繧� %s 陦後↓險ｭ螳壹＠縺ｾ縺励◆縲�", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
+        logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
     return df
 
 
 def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") -> "pd.DataFrame":
     """
-    谿ｵ髫�1蜃ｺ蜉帷峩蜑�: 驟榊床隧ｦ陦碁��逡ｪ縺ｮ譏�鬆�縺ｫ陦後ｒ荳ｦ縺ｹ譖ｿ縺医◆ DataFrame 繧定ｿ斐☆縲�
-    豁｣縺ｮ謨ｴ謨ｰ縺ｧ縺ｪ縺�繧ｻ繝ｫ縺ｯ譛蠕鯉ｼ亥酔蟶ｯ蜀�縺ｯ蜈�縺ｮ陦碁���ｼ峨�
+    段階1出力直前: 配台試行順番の昇順に行を並べ替えた DataFrame を返す。
+    正の整数でないセルは最後（同帯内は元の行順）。
     """
     col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if plan_df is None or getattr(plan_df, "empty", True) or col not in plan_df.columns:
@@ -9023,28 +9028,28 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
 
 
 # =============================================================================
-# 谿ｵ髫�1繧ｨ繝ｳ繝医Μ�ｼ�task_extract_stage1.py 竊� run_stage1_extract�ｼ�
-#   蜉�蟾･險育判DATA 隱ｭ蜿� 竊� 驟榊床荳崎ｦ∬�ｪ蜍募�ｦ逅� 竊� 險ｭ螳壹す繝ｼ繝井ｿ晏ｮ� 竊� plan_input_tasks.xlsx 蜃ｺ蜉�
+# 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
+#   加工計画DATA 読取 → 配台不要自動処理 → 設定シート保守 → plan_input_tasks.xlsx 出力
 # =============================================================================
 def run_stage1_extract():
     """
-    谿ｵ髫�1: 蜉�蟾･險育判DATA 縺九ｉ驟榊床逕ｨ繧ｿ繧ｹ繧ｯ荳隕ｧ繧呈歓蜃ｺ縺� output/plan_input_tasks.xlsx 縺ｸ蜃ｺ蜉帙�
-    蜷御ｸ萓晞�ｼNO縺ｧ蜷御ｸ讖滓｢ｰ蜷阪′隍�謨ｰ陦後≠繧九→縺阪∝ｷ･遞句錐縲悟��蜑ｲ縲崎｡後�ｮ遨ｺ縺ｮ縲碁�榊床荳崎ｦ√阪↓ yes 繧定�ｪ蜍戊ｨｭ螳壹☆繧九�
-    繝槭け繝ｭ繝悶ャ繧ｯ縺ｮ縲瑚ｨｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九阪〒蟾･遞�+讖滓｢ｰ縺斐→縺ｮ驟榊床荳崎ｦ√�ｻ譚｡莉ｶ蠑擾ｼ�AI�ｼ峨ｒ邂｡逅�縺吶ｋ�ｼ医す繝ｼ繝井ｽ懈�舌�ｯ VBA�ｼ峨�
+    段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
+    同一依頼NOで同一機械名が複数行あるとき、工程名「分割」行の空の「配台不要」に yes を自動設定する。
+    マクロブックの「設定_配台不要工程」で工程+機械ごとの配台不要・条件式（AI）を管理する（シート作成は VBA）。
     """
     if not TASKS_INPUT_WORKBOOK:
-        logging.error("TASK_INPUT_WORKBOOK 縺梧悴險ｭ螳壹〒縺吶�")
+        logging.error("TASK_INPUT_WORKBOOK が未設定です。")
         return False
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        logging.error(f"TASK_INPUT_WORKBOOK 縺悟ｭ伜惠縺励∪縺帙ｓ: {TASKS_INPUT_WORKBOOK}")
+        logging.error(f"TASK_INPUT_WORKBOOK が存在しません: {TASKS_INPUT_WORKBOOK}")
         return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
     try:
         _pm_pairs = _collect_process_machine_pairs_for_exclude_rules(df_src)
-        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "谿ｵ髫�1")
+        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "段階1")
     except Exception:
-        logging.exception("谿ｵ髫�1: 險ｭ螳喟驟榊床荳崎ｦ∝ｷ･遞九�ｮ菫晏ｮ医〒萓句､厄ｼ育ｶ夊｡鯉ｼ�")
+        logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -9071,7 +9076,7 @@ def run_stage1_extract():
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
-        # 蟾･遞句錐 + 讖滓｢ｰ蜷� 繧停懷屏蟄絶昴→縺励※陦ｨ遉ｺ逕ｨ縺ｫ霑ｽ蜉��ｼ亥ｾ梧ｮｵ縺ｯ險育ｮ励く繝ｼ縺ｫ繧ゆｽｿ逕ｨ�ｼ�
+        # 工程名 + 機械名 を“因子”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
         else:
@@ -9084,7 +9089,7 @@ def run_stage1_extract():
         rec[PLAN_COL_AI_PARSE] = ""
         records.append(rec)
     if not records:
-        logging.warning("谿ｵ髫�1: 謚ｽ蜃ｺ蟇ｾ雎｡繧ｿ繧ｹ繧ｯ縺後≠繧翫∪縺帙ｓ縲�")
+        logging.warning("段階1: 抽出対象タスクがありません。")
     order = plan_input_sheet_column_order()
     out_df = pd.DataFrame(records)
     if out_df.empty:
@@ -9111,23 +9116,23 @@ def run_stage1_extract():
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
     except PlanningValidationError:
-        logging.error("谿ｵ髫�1繧剃ｸｭ譁ｭ: 繝槭せ繧ｿ skills 縺ｮ讀懆ｨｼ繧ｨ繝ｩ繝ｼ�ｼ亥━蜈亥ｺｦ縺ｮ謨ｰ蛟､驥崎､�縺ｪ縺ｩ�ｼ峨�")
+        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
     except Exception as e:
-        logging.info("谿ｵ髫�1: 繝槭せ繧ｿ need 繧定ｪｭ繧√★蜈�蛻励�ｯ need 縺ｪ縺励〒蝓九ａ縺ｾ縺� (%s)", e)
+        logging.info("段階1: マスタ need を読めず元列は need なしで埋めます (%s)", e)
         req_map, need_rules = {}, []
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
-        _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="谿ｵ髫�1")
+        _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
-        logging.exception("谿ｵ髫�1: 蛻�蜑ｲ陦後�ｮ驟榊床荳崎ｦ∬�ｪ蜍戊ｨｭ螳壹〒萓句､厄ｼ亥�ｺ蜉帙�ｯ邯夊｡鯉ｼ�: %s", ex)
+        logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
     try:
-        out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "谿ｵ髫�1")
+        out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
     except Exception as ex:
-        logging.warning("谿ｵ髫�1: 險ｭ螳壹す繝ｼ繝医↓繧医ｋ驟榊床荳崎ｦ�驕ｩ逕ｨ縺ｧ萓句､厄ｼ育ｶ夊｡鯉ｼ�: %s", ex)
+        logging.warning("段階1: 設定シートによる配台不要適用で例外（続行）: %s", ex)
     try:
         _ext_dt_s1 = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
@@ -9140,18 +9145,18 @@ def run_stage1_extract():
             equipment_list_stage1,
         )
     except Exception as ex:
-        logging.warning("谿ｵ髫�1: 驟榊床隧ｦ陦碁��逡ｪ蛻励�ｮ險育ｮ励ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆�ｼ育ｶ夊｡鯉ｼ�: %s", ex)
+        logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
-    out_df.to_excel(out_path, sheet_name="繧ｿ繧ｹ繧ｯ荳隕ｧ", index=False)
-    _apply_excel_date_columns_date_only_display(out_path, "繧ｿ繧ｹ繧ｯ荳隕ｧ")
-    _apply_plan_input_visual_format(out_path, "繧ｿ繧ｹ繧ｯ荳隕ｧ")
-    logging.info(f"谿ｵ髫�1螳御ｺ�: '{out_path}' 繧貞�ｺ蜉帙＠縺ｾ縺励◆縲ゅ�槭け繝ｭ縺ｧ '{PLAN_INPUT_SHEET_NAME}' 縺ｫ蜿悶ｊ霎ｼ繧薙〒縺上□縺輔＞縲�")
-    _try_write_main_sheet_gemini_usage_summary("谿ｵ髫�1")
+    out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
+    _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
+    _apply_plan_input_visual_format(out_path, "タスク一覧")
+    logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に取り込んでください。")
+    _try_write_main_sheet_gemini_usage_summary("段階1")
     return True
 
 
-# 遞ｼ蜒阪Ν繝ｼ繝ｫ�ｼ医ョ繝輔か繝ｫ繝亥､繝ｻ2026蟷ｴ3譛亥渕貅厄ｼ�
+# 稼働ルール（デフォルト値・2026年3月基準）
 TARGET_YEAR = 2026
 TARGET_MONTH = 3
 DEFAULT_START_TIME = time(8, 45)
@@ -9160,15 +9165,15 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-# 邨よ･ｭ逶ｴ蜑阪ョ繝輔ぃ繝ｼ: ASSIGN_END_OF_DAY_DEFER_MINUTES 縺梧ｭ｣縺ｮ縺ｨ縺阪》eam_end_limit 縺ｾ縺ｧ縺ｮ谿九ｊ縺後◎縺ｮ蛻�謨ｰ莉･荳九〒縲�
-# 縺九▽ remaining_units�ｼ亥��繧贋ｸ翫￡�ｼ峨′ ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 莉･荳九�ｮ縺ｨ縺阪√◎縺ｮ譌･縺ｮ髢句ｧ倶ｸ榊庄�ｼ�None�ｼ峨�
-# 蜷後§繧ｦ繧｣繝ｳ繝峨え縺ｧ縲窟SSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 繝ｭ繝ｼ繝ｫ蛻�莉･荳翫�ｯ蝗槭○縺ｪ縺�縲搾ｼ亥庶螳ｹ縺碁明蛟､譛ｪ貅�ｼ峨→縺阪�ｯ
-# 譁ｰ隕上↓蜉�蟾･繧貞ｧ九ａ縺ｪ縺��ｼ�_eod_reject_capacity_units_below_threshold�ｼ峨�
-# ASSIGN_END_OF_DAY_DEFER_MINUTES 譌｢螳� 45�ｼ亥���ｼ峨�0 繧呈�守､ｺ縺吶ｋ縺ｨ辟｡蜉ｹ�ｼ亥ｾ捺擂縺ｩ縺翫ｊ�ｼ峨�
-# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 譌｢螳� 5縲ょ香蛻�螟ｧ縺阪↑蛟､�ｼ井ｾ�: 999999�ｼ峨↓縺吶ｋ縺ｨ螳溯ｳｪ縲梧ｮ九Ο繝ｼ繝ｫ縺ｫ萓昴ｉ縺夂ｵよ･ｭ逶ｴ蜑阪�ｯ荳榊庄縲阪�
-# 莨第�ｩ: 蟶ｯ蜀�縺ｫ關ｽ縺｡縺滄幕蟋九�ｯ _defer_team_start_past_prebreak_and_end_of_day 縺ｧ莨第�ｩ邨ゆｺ�縺ｸ郢ｰ繧贋ｸ九￡縲�
-# 莨第�ｩ繧偵∪縺溘＄騾｣邯夐�榊床縺ｯ _contiguous_work_minutes_until_next_break_or_limit 縺ｧ蜊ｴ荳九�
-# �ｼ域立 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES 縺ｯ蟒�豁｢繝ｻ辟｡隕厄ｼ�
+# 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
+# かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
+# 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
+# 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
+# ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
+# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
+# 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
+# 休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
+# （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES は廃止・無視）
 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
     0,
     int(os.environ.get("ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS", "5").strip() or 0),
@@ -9182,7 +9187,7 @@ ASSIGN_END_OF_DAY_DEFER_MINUTES = max(
 def _eod_minutes_window_covers_start(
     team_start: datetime, team_end_limit: datetime
 ) -> bool:
-    """ASSIGN_END_OF_DAY_DEFER_MINUTES 縺梧ｭ｣縺ｮ縺ｨ縺阪�髢句ｧ九′邨よ･ｭ荳企剞縺ｮ縺昴�ｮ蛻�謨ｰ莉･蜀�縺九�"""
+    """ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、開始が終業上限のその分数以内か。"""
     gap = ASSIGN_END_OF_DAY_DEFER_MINUTES
     if gap <= 0:
         return False
@@ -9195,8 +9200,8 @@ def _eod_reject_capacity_units_below_threshold(
     units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
 ) -> bool:
     """
-    邨よ･ｭ縺ｾ縺ｧ縺ゅ→ ASSIGN_END_OF_DAY_DEFER_MINUTES 蛻�莉･蜀�縺ｮ繧ｦ繧｣繝ｳ繝峨え蜀�縺ｧ縲�
-    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 繝ｭ繝ｼ繝ｫ蛻�莉･荳翫�ｯ蝗槭○縺ｪ縺��ｼ亥庶螳ｹ繝ｭ繝ｼ繝ｫ謨ｰ縺碁明蛟､譛ｪ貅�ｼ峨→縺� True�ｼ域眠隕丞刈蟾･繧貞ｧ九ａ縺ｪ縺��ｼ晏呵｣懷唆荳具ｼ峨�
+    終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
+    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
     """
     th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
     if th <= 0:
@@ -9207,11 +9212,11 @@ def _eod_reject_capacity_units_below_threshold(
 
 
 # =========================================================
-# 1. 繧ｳ繧｢險育ｮ励Ο繧ｸ繝�繧ｯ (譌･譎ゅ�吶�ｼ繧ｹ)
-#    莨第�ｩ蟶ｯ繧呈検繧薙□縲悟ｮ溷ロ蛻�縲肴鋤邂励�ｻ邨ゆｺ�譎ょ綾縺ｮ郢ｰ繧贋ｸ翫￡縲ょ牡莉倥Ν繝ｼ繝励�ｮ荳句屓繧翫�
+# 1. コア計算ロジック (日時ベース)
+#    休憩帯を挟んだ「実働分」換算・終了時刻の繰り上げ。割付ループの下回り。
 # =========================================================
 def merge_time_intervals(intervals):
-    """譎ょ綾蛹ｺ髢薙�ｮ繝ｪ繧ｹ繝医ｒ繧ｽ繝ｼ繝医＠縲�驥阪↑繧句玄髢薙ｒ邨仙粋縺励※霑斐☆縲�"""
+    """時刻区間のリストをソートし、重なる区間を結合して返す。"""
     if not intervals:
         return []
     intervals.sort(key=lambda x: x[0])
@@ -9231,8 +9236,8 @@ def _contiguous_work_minutes_until_next_break_or_limit(
     end_limit_dt: datetime,
 ) -> int:
     """
-    start_dt 縺九ｉ谺｡縺ｮ莨第�ｩ髢句ｧ具ｼ医∪縺溘�ｯ邨よ･ｭ荳企剞�ｼ峨∪縺ｧ縺ｮ縲�騾｣邯壹＠縺ｦ螳溷ロ縺ｫ菴ｿ縺医ｋ蛻�謨ｰ縲�
-    髢句ｧ九′莨第�ｩ蟶ｯ蜀�縺ｪ繧� 0�ｼ亥他縺ｳ蜃ｺ縺怜��縺ｧ蜊ｴ荳具ｼ峨Ｃreaks_dt 縺ｯ merge 貂医∩諠ｳ螳壹�
+    start_dt から次の休憩開始（または終業上限）までの、連続して実働に使える分数。
+    開始が休憩帯内なら 0（呼び出し元で却下）。breaks_dt は merge 済み想定。
     """
     if start_dt >= end_limit_dt:
         return 0
@@ -9255,9 +9260,9 @@ def _break_end_to_skip_if_contiguous_under(
     min_contiguous_mins: int,
 ) -> datetime | None:
     """
-    莨第�ｩ蟶ｯ螟悶〒繧ゅ∵ｬ｡縺ｮ莨第�ｩ髢句ｧ九∪縺ｧ縺ｮ騾｣邯壼ｮ溷ロ縺� min_contiguous_mins 譛ｪ貅縺ｪ繧峨�
-    縺昴�ｮ莨第�ｩ蛹ｺ髢薙�ｮ邨ゆｺ�譎ょ綾繧定ｿ斐☆�ｼ亥壕蠕御ｼ第�ｩ逶ｴ蜑阪↓ 1 繝ｭ繝ｼ繝ｫ蛻�縺悟庶縺ｾ繧峨↑縺�髢句ｧ九□縺鷹ｲ繧√ｋ�ｼ峨�
-    邨よ･ｭ縺ｾ縺ｧ縺励°螳溷ロ縺檎ｶ壹°縺ｪ縺�蝣ｴ蜷医�ｯ None縲�
+    休憩帯外でも、次の休憩開始までの連続実働が min_contiguous_mins 未満なら、
+    その休憩区間の終了時刻を返す（午後休憩直前に 1 ロール分が収まらない開始だけ進める）。
+    終業までしか実働が続かない場合は None。
     """
     if min_contiguous_mins <= 0:
         return None
@@ -9292,22 +9297,22 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     min_contiguous_work_mins: int | None = None,
 ) -> datetime | None:
     """
-    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 縺九▽ (team_end_limit - 隧ｦ陦碁幕蟋�) 縺後◎縺ｮ蛻�謨ｰ莉･荳九〒縲�
-      remaining_units 蛻�繧贋ｸ翫￡縺� ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 莉･荳九�ｮ縺ｨ縺阪∝ｽ捺律髢句ｧ倶ｸ榊庄�ｼ�None�ｼ峨�
-    - 隧ｦ陦碁幕蟋九′莨第�ｩ蟶ｯ蜀�縺ｮ縺ｨ縺阪�ｯ **莨第�ｩ邨ゆｺ�譎ょ綾縺ｸ郢ｰ繧贋ｸ九￡**縺励～refloor_fn` 縺ｧ險ｭ蛯吩ｸ矩剞繝ｻavail 繧貞�埼←逕ｨ縺吶ｋ縲�
-      郢ｰ繧贋ｸ九￡縺ｮ縺ゅ→邨よ･ｭ雜�驕弱�ｻEOD 繝�繝輔ぃ繝ｼ縺ｫ隧ｲ蠖薙☆繧後�ｰ None縲�
-    - min_contiguous_work_mins 縺梧ｭ｣縺ｮ縺ｨ縺阪∝ｸｯ螟悶〒繧� **谺｡縺ｮ莨第�ｩ縺ｾ縺ｧ縺ｮ騾｣邯壼ｮ溷ロ**縺後◎繧梧悴貅縺ｪ繧�
-      蠖楢ｩｲ莨第�ｩ縺ｮ邨ゆｺ�縺ｸ郢ｰ繧贋ｸ九￡�ｼ井ｸ翫→蜷梧ｧ倥↓ refloor 縺励Ν繝ｼ繝暦ｼ峨�
+    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
+      remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
+    - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
+      繰り下げのあと終業超過・EOD デファーに該当すれば None。
+    - min_contiguous_work_mins が正のとき、帯外でも **次の休憩までの連続実働**がそれ未満なら
+      当該休憩の終了へ繰り下げ（上と同様に refloor しループ）。
     """
     _tid = str(task.get("task_id", "") or "").strip()
-    _team_txt = ", ".join(str(x) for x in team) if team else "窶�"
+    _team_txt = ", ".join(str(x) for x in team) if team else "—"
 
     def _trace_block(msg: str, *a) -> None:
         if not _trace_schedule_task_enabled(_tid):
             return
         _log_dispatch_trace_schedule(
             _tid,
-            "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繝悶Ο繝�繧ｯ蛻､螳�: " + msg,
+            "[配台トレース task=%s] ブロック判定: " + msg,
             _tid,
             *a,
         )
@@ -9316,7 +9321,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     for _ in range(64):
         if ts >= team_end_limit:
             _trace_block(
-                "髢句ｧ倶ｸ榊庄(邨よ･ｭ雜�驕�) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
+                "開始不可(終業超過) machine=%s team=%s rem=%.4f trial_start=%s end_limit=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
@@ -9332,7 +9337,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 break
         if break_end is not None:
             _trace_block(
-                "莨第�ｩ蟶ｯ蜀�縺ｮ縺溘ａ邨ゆｺ�縺ｸ郢ｰ繧贋ｸ九￡ machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
+                "休憩帯内のため終了へ繰り下げ machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
@@ -9348,7 +9353,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             )
             if slip_end is not None:
                 _trace_block(
-                    "莨第�ｩ逶ｴ蜑阪〒騾｣邯壼ｮ溷ロ荳崎ｶｳ縺ｮ縺溘ａ莨第�ｩ邨ゆｺ�縺ｸ郢ｰ繧贋ｸ九￡ machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
+                    "休憩直前で連続実働不足のため休憩終了へ繰り下げ machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
                     task.get("machine"),
                     _team_txt,
                     float(task.get("remaining_units") or 0),
@@ -9367,7 +9372,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
         ):
             _trace_block(
-                "髢句ｧ倶ｸ榊庄(邨よ･ｭ逶ｴ蜑阪�ｻ蟆乗ｮ九Ο繝ｼ繝ｫ) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
+                "開始不可(終業直前・小残ロール) machine=%s team=%s rem_ceil=%s max_rem=%s trial_start=%s end_limit=%s gap_end_min=%s",
                 task.get("machine"),
                 _team_txt,
                 rem_ceil,
@@ -9381,7 +9386,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         return ts
 
     _trace_block(
-        "髢句ｧ倶ｸ榊庄(莨第�ｩ郢ｰ繧贋ｸ九￡謇灘��繧�) machine=%s team=%s rem=%.4f trial_start=%s",
+        "開始不可(休憩繰り下げ打切り) machine=%s team=%s rem=%.4f trial_start=%s",
         task.get("machine"),
         _team_txt,
         float(task.get("remaining_units") or 0),
@@ -9392,9 +9397,9 @@ def _defer_team_start_past_prebreak_and_end_of_day(
 
 def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
     """
-    險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ繝ｻ繝｡繝ｳ繝舌�ｼ譌･遞九�ｻ遞ｼ蜒咲紫逕ｨ繧､繝ｳ繝�繝�繧ｯ繧ｹ蜷代￠縲�
-    1 譛ｬ縺ｮ繧､繝吶Φ繝医′譌･繧偵∪縺溘＄蝣ｴ蜷医‘["date"] 縺�縺大ｽ捺律縺ｫ霈峨○繧九→鄙梧悃繧ｻ繧ｰ繝｡繝ｳ繝医′谺�縺代ｋ縺溘ａ縲�
-    start_dt縲彳nd_dt 繧貞推蟆ｱ讌ｭ譌･ DEFAULT_START_TIME縲廛EFAULT_END_TIME 縺ｫ繧ｯ繝ｪ繝�繝励＠縺溯､�陬ｽ縺ｸ螻暮幕縺吶ｋ縲�
+    設備毎の時間割・メンバー日程・稼働率用インデックス向け。
+    1 本のイベントが日をまたぐ場合、e["date"] だけ当日に載せると翌朝セグメントが欠けるため、
+    start_dt〜end_dt を各就業日 DEFAULT_START_TIME〜DEFAULT_END_TIME にクリップした複製へ展開する。
     """
     expanded: list = []
     for e in timeline_events:
@@ -9430,8 +9435,8 @@ def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
 
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
     """
-    start_dt 縺九ｉ end_dt 縺ｾ縺ｧ縺ｮ縲御ｼ第�ｩ繧帝勁縺�縺溷ｮ溷ロ蛻�謨ｰ縲阪�
-    breaks_dt 窶ｦ (蛹ｺ髢馴幕蟋�, 蛹ｺ髢鍋ｵゆｺ�) 縺ｮ蛻暦ｼ�datetime 縺ｾ縺溘�ｯ time縲ょ他縺ｳ蜃ｺ縺怜��縺ｮ蜍､諤�繧､繝吶Φ繝医→謨ｴ蜷茨ｼ峨�
+    start_dt から end_dt までの「休憩を除いた実働分数」。
+    breaks_dt … (区間開始, 区間終了) の列（datetime または time。呼び出し元の勤怠イベントと整合）。
     """
     current = start_dt
     actual_mins = 0
@@ -9457,8 +9462,8 @@ def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
 
 def calculate_end_time(start_dt, duration_minutes, breaks_dt, end_limit_dt):
     """
-    start_dt 縺九ｉ螳溷ロ duration_minutes 蛻�騾ｲ繧√◆邨ゆｺ� datetime 繧呈ｱゅａ繧具ｼ井ｼ第�ｩ縺ｯ繧ｹ繧ｭ繝�繝暦ｼ峨�
-    end_limit_dt 繧定ｶ�縺医↑縺�繧医≧謇薙■蛻�繧翫よ綾繧雁､: (邨ゆｺ�譎ょ綾, 螳滄圀縺ｫ騾ｲ繧√◆螳溷ロ蛻�, 谿九ｊ譛ｪ豸亥喧蛻�)
+    start_dt から実働 duration_minutes 分進めた終了 datetime を求める（休憩はスキップ）。
+    end_limit_dt を超えないよう打ち切り。戻り値: (終了時刻, 実際に進めた実働分, 残り未消化分)
     """
     current = start_dt
     remaining_work = duration_minutes
@@ -9495,41 +9500,41 @@ def calculate_end_time(start_dt, duration_minutes, breaks_dt, end_limit_dt):
 
 def match_need_sheet_condition(condition_raw: str, task_id: str) -> bool:
     """
-    need 繧ｷ繝ｼ繝医御ｾ晞�ｼNO譚｡莉ｶ縲肴ｬ�縺ｮ隗｣驥医�
-    遨ｺ繝ｻ*繝ｻ蜈ｨ莉ｶ 竊� 蟶ｸ縺ｫ繝槭ャ繝√�
-    prefix:ABC / 謗･鬆ｭ霎�:ABC 竊� 萓晞�ｼNO 縺後◎縺ｮ譁�蟄怜�励〒蟋九∪繧�
-    regex:... / 豁｣隕剰｡ｨ迴ｾ:... 竊� 豁｣隕剰｡ｨ迴ｾ�ｼ磯Κ蛻�荳閾ｴ�ｼ�
-    縺昴ｌ莉･螟悶�ｮ遏ｭ譁�縺ｯ謗･鬆ｭ霎槭→縺励※謇ｱ縺�縲ょｾ捺擂縺ｮ譌･譛ｬ隱樔ｾ九御ｾ晞�ｼNO縺繰R縺ｧ窶ｦ縲阪�ｯ JR 繧呈､懷�ｺ縺励◆繧画磁鬆ｭ霎曷R謇ｱ縺�縲�
+    need シート「依頼NO条件」欄の解釈。
+    空・*・全件 → 常にマッチ。
+    prefix:ABC / 接頭辞:ABC → 依頼NO がその文字列で始まる
+    regex:... / 正規表現:... → 正規表現（部分一致）
+    それ以外の短文は接頭辞として扱う。従来の日本語例「依頼NOがJRで…」は JR を検出したら接頭辞JR扱い。
     """
     cond = (condition_raw or "").strip()
     tid = str(task_id).strip()
-    if not cond or cond in ("*", "蜈ｨ莉ｶ", "蜈ｨ縺ｦ", "any", "ANY"):
+    if not cond or cond in ("*", "全件", "全て", "any", "ANY"):
         return True
     low = cond.lower()
-    cn = cond.replace("�ｼ�", ":")
-    if low.startswith("prefix:") or low.startswith("謗･鬆ｭ霎�:"):
+    cn = cond.replace("：", ":")
+    if low.startswith("prefix:") or low.startswith("接頭辞:"):
         pref = cn.split(":", 1)[1].strip() if ":" in cn else ""
         return bool(pref) and tid.startswith(pref)
-    if low.startswith("regex:") or low.startswith("豁｣隕剰｡ｨ迴ｾ:"):
+    if low.startswith("regex:") or low.startswith("正規表現:"):
         pat = cn.split(":", 1)[1].strip() if ":" in cn else ""
         if not pat:
             return False
         try:
             return re.search(pat, tid) is not None
         except re.error:
-            logging.warning(f"need 萓晞�ｼNO譚｡莉ｶ縺ｮ豁｣隕剰｡ｨ迴ｾ縺檎┌蜉ｹ縺ｧ縺�: {pat}")
+            logging.warning(f"need 依頼NO条件の正規表現が無効です: {pat}")
             return False
-    if "萓晞�ｼ" in cond and "JR" in cond.upper():
+    if "依頼" in cond and "JR" in cond.upper():
         return tid.upper().startswith("JR")
     return tid.startswith(cond)
 
 
 def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col):
-    """迚ｹ蛻･謖�螳�1�ｽ�99 陦後°繧峨∬ｨｭ蛯吝挨縺ｮ蠢�隕∽ｺｺ謨ｰ荳頑嶌縺搾ｼ�1�ｽ�99�ｼ峨ｒ謚ｽ蜃ｺ�ｼ亥�医↓螳夂ｾｩ縺輔ｌ縺溽分蜿ｷ縺悟━蜈茨ｼ峨�"""
+    """特別指定1～99 行から、設備別の必要人数上書き（1～99）を抽出（先に定義された番号が優先）。"""
     rules = []
     for _, row in needs_df.iterrows():
         lab = str(row.get(label_col, "") or "").strip()
-        m = re.match(r"迚ｹ蛻･謖�螳喀s*(\d+)", lab)
+        m = re.match(r"特別指定\s*(\d+)", lab)
         if not m:
             continue
         order = int(m.group(1))
@@ -9555,14 +9560,14 @@ def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col
 
 def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list) -> int:
     """
-    need 繧ｷ繝ｼ繝医�ｮ縲悟ｷ･遞句錐 + 讖滓｢ｰ蜷阪阪〒蠢�隕＾P莠ｺ謨ｰ繧定ｧ｣豎ｺ�ｼ育音蛻･謖�螳�1縲�99縺ｯ order 縺悟ｰ上＆縺�縺ｻ縺ｩ蜆ｪ蜈茨ｼ峨�
+    need シートの「工程名 + 機械名」で必要OP人数を解決（特別指定1〜99は order が小さいほど優先）。
 
-    req_map 縺ｯ
-      - f\"{process}+{machine_name}\"�ｼ亥宍蟇�繧ｭ繝ｼ�ｼ�
-      - machine_name�ｼ域ｩ滓｢ｰ縺�縺代�ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ�ｼ�
-      - process�ｼ亥ｷ･遞九□縺代�ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ�ｼ�
-    縺ｮ縺�縺壹ｌ縺九〒 base 繧貞ｼ輔￠繧句燕謠舌�
-    need_rules 縺ｮ overrides 繧ょ酔讒倥↓繧ｭ繝ｼ繧呈戟縺､縲�
+    req_map は
+      - f\"{process}+{machine_name}\"（厳密キー）
+      - machine_name（機械だけのフォールバック）
+      - process（工程だけのフォールバック）
+    のいずれかで base を引ける前提。
+    need_rules の overrides も同様にキーを持つ。
     """
     p = str(process).strip()
     m = str(machine_name).strip()
@@ -9597,7 +9602,7 @@ def resolve_need_required_op_explain(
     process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list
 ) -> tuple[int, str]:
     """
-    resolve_need_required_op 縺ｨ蜷悟､繧定ｿ斐＠縺､縺､縲√Ο繧ｰ逕ｨ縺ｫ蜿ら�ｧ蜈�縺ｮ隱ｬ譏取枚蟄怜�励ｒ莉倥￠繧九�
+    resolve_need_required_op と同値を返しつつ、ログ用に参照元の説明文字列を付ける。
     """
     p = str(process).strip()
     m = str(machine_name).strip()
@@ -9609,41 +9614,41 @@ def resolve_need_required_op_explain(
         base_src = f"req_map[{combo_key!r}]={base}"
     elif m and m in req_map:
         base = req_map[m]
-        base_src = f"req_map[讖滓｢ｰ蜷阪�ｮ縺ｿ {m!r}]={base}�ｼ郁､�蜷医く繝ｼ荳榊惠�ｼ�"
+        base_src = f"req_map[機械名のみ {m!r}]={base}（複合キー不在）"
     elif p and p in req_map:
         base = req_map[p]
-        base_src = f"req_map[蟾･遞句錐縺ｮ縺ｿ {p!r}]={base}�ｼ郁､�蜷医�ｻ讖滓｢ｰ繧ｭ繝ｼ荳榊惠�ｼ�"
+        base_src = f"req_map[工程名のみ {p!r}]={base}（複合・機械キー不在）"
     else:
         base = 1
-        base_src = "req_map隧ｲ蠖薙↑縺冷�呈里螳�1"
+        base_src = "req_map該当なし→既定1"
     for rule in need_rules:
         if not match_need_sheet_condition(rule["condition"], task_id):
             continue
         order = rule.get("order", "?")
         if combo_key and combo_key in rule["overrides"]:
             v = int(rule["overrides"][combo_key])
-            return v, f"need迚ｹ蛻･謖�螳嘴order} [{combo_key!r}]={v}"
+            return v, f"need特別指定{order} [{combo_key!r}]={v}"
         if m and m in rule["overrides"]:
             v = int(rule["overrides"][m])
-            return v, f"need迚ｹ蛻･謖�螳嘴order} [讖滓｢ｰ蜷砿m!r}]={v}"
+            return v, f"need特別指定{order} [機械名{m!r}]={v}"
         if p and p in rule["overrides"]:
             v = int(rule["overrides"][p])
-            return v, f"need迚ｹ蛻･謖�螳嘴order} [蟾･遞句錐{p!r}]={v}"
+            return v, f"need特別指定{order} [工程名{p!r}]={v}"
     return int(base), base_src
 
 
 def _need_row_label_hints_surplus_add(label_a0: str) -> bool:
-    """need 繧ｷ繝ｼ繝� A蛻�: 蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ縺ｮ逶ｴ荳九↓縺ゅｋ縲碁�榊床邨先棡縺ｧ菴吝臆縺悟�ｺ縺溘→縺阪�ｮ霑ｽ蜉�蠅怜藤荳企剞縲崎｡後°縲�"""
+    """need シート A列: 基本必要人数の直下にある「配台結果で余剰が出たときの追加増員上限」行か。"""
     s = unicodedata.normalize("NFKC", str(label_a0 or "").strip())
-    if not s or s.startswith("迚ｹ蛻･謖�螳�"):
+    if not s or s.startswith("特別指定"):
         return False
-    if "萓晞�ｼ" in s and "譚｡莉ｶ" in s:
+    if "依頼" in s and "条件" in s:
         return False
-    if "霑ｽ蜉�" in s and ("莠ｺ謨ｰ" in s or "莠ｺ蜩｡" in s or "蠅怜藤" in s):
+    if "追加" in s and ("人数" in s or "人員" in s or "増員" in s):
         return True
-    if "蠅怜藤" in s or "菴吝臆" in s:
+    if "増員" in s or "余剰" in s:
         return True
-    if "驟榊床" in s and ("霑ｽ蜉�" in s or "蠅�" in s or "菴吝臆" in s):
+    if "配台" in s and ("追加" in s or "増" in s or "余剰" in s):
         return True
     return False
 
@@ -9651,13 +9656,13 @@ def _need_row_label_hints_surplus_add(label_a0: str) -> bool:
 def _find_need_surplus_add_row_index(
     needs_raw, base_row: int, col0: int, pm_cols: list
 ) -> int | None:
-    """蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ陦後�ｮ谺｡陦後ｒ蜆ｪ蜈医ゅΛ繝吶Ν縺ｾ縺溘�ｯ謨ｰ蛟､縺ｧ霑ｽ蜉�莠ｺ謨ｰ陦後→蛻､螳壹�"""
+    """基本必要人数行の次行を優先。ラベルまたは数値で追加人数行と判定。"""
     r = base_row + 1
     if r >= needs_raw.shape[0]:
         return None
     v0 = needs_raw.iat[r, col0]
     s0 = "" if pd.isna(v0) else str(v0).strip()
-    if s0.startswith("迚ｹ蛻･謖�螳�"):
+    if s0.startswith("特別指定"):
         return None
     if _need_row_label_hints_surplus_add(s0):
         return r
@@ -9665,7 +9670,7 @@ def _find_need_surplus_add_row_index(
     for col_idx, _, _ in pm_cols:
         if parse_optional_int(needs_raw.iat[r, col_idx]) is not None:
             nz += 1
-    if nz > 0 and not unicodedata.normalize("NFKC", s0).startswith("迚ｹ蛻･"):
+    if nz > 0 and not unicodedata.normalize("NFKC", s0).startswith("特別"):
         return r
     return None
 
@@ -9678,9 +9683,9 @@ def resolve_need_surplus_extra_max(
     need_rules: list,
 ) -> int:
     """
-    need 繧ｷ繝ｼ繝医碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ縲崎｡鯉ｼ亥ｷ･遞凝玲ｩ滓｢ｰ蛻暦ｼ峨�ｮ蛟､�ｼ晏ｿ�隕∽ｺｺ謨ｰ繧呈ｺ縺溘＠縺溘≧縺医〒
-    縺輔ｉ縺ｫ蜑ｲ繧雁ｽ薙※蜿ｯ閭ｽ縺ｪ莠ｺ謨ｰ縺ｮ荳企剞�ｼ�0 縺ｪ繧牙ｾ捺擂縺ｩ縺翫ｊ蠢�隕∽ｺｺ謨ｰ縺｡繧�縺�縺ｩ縺ｮ縺ｿ�ｼ峨�
-    need_rules 縺ｯ迴ｾ迥ｶ縺薙�ｮ陦後ｒ荳頑嶌縺阪＠縺ｪ縺��ｼ亥ｰ�譚･諡｡蠑ｵ逕ｨ縺ｫ task_id 繧貞女縺大叙繧具ｼ峨�
+    need シート「配台時追加人数」行（工程×機械列）の値＝必要人数を満たしたうえで
+    さらに割り当て可能な人数の上限（0 なら従来どおり必要人数ちょうどのみ）。
+    need_rules は現状この行を上書きしない（将来拡張用に task_id を受け取る）。
     """
     _ = (task_id, need_rules)
     if not surplus_map:
@@ -9711,13 +9716,13 @@ def resolve_need_surplus_extra_max_explain(
     surplus_map: dict,
     need_rules: list,
 ) -> tuple[int, str]:
-    """resolve_need_surplus_extra_max 縺ｨ蜷悟､�ｼ句盾辣ｧ蜈�隱ｬ譏趣ｼ医Ο繧ｰ逕ｨ�ｼ峨�"""
+    """resolve_need_surplus_extra_max と同値＋参照元説明（ログ用）。"""
     val = resolve_need_surplus_extra_max(
         process, machine_name, task_id, surplus_map, need_rules
     )
     _ = need_rules
     if not surplus_map:
-        return val, "surplus_map遨ｺ�ｼ磯�榊床譎りｿｽ蜉�莠ｺ謨ｰ陦後↑縺暦ｼ�"
+        return val, "surplus_map空（配台時追加人数行なし）"
     p = str(process).strip()
     m = str(machine_name).strip()
     combo_key = f"{p}+{m}" if p and m else None
@@ -9726,19 +9731,19 @@ def resolve_need_surplus_extra_max_explain(
         return val, f"surplus_map[{combo_key!r}]={raw}"
     if m and m in surplus_map:
         raw = surplus_map[m]
-        return val, f"surplus_map[讖滓｢ｰ蜷阪�ｮ縺ｿ {m!r}]={raw}�ｼ郁､�蜷医く繝ｼ荳榊惠�ｼ�"
+        return val, f"surplus_map[機械名のみ {m!r}]={raw}（複合キー不在）"
     if p and p in surplus_map:
         raw = surplus_map[p]
-        return val, f"surplus_map[蟾･遞句錐縺ｮ縺ｿ {p!r}]={raw}�ｼ郁､�蜷医く繝ｼ荳榊惠�ｼ�"
-    return val, "surplus蠖薙く繝ｼ縺ｪ縺冷��0"
+        return val, f"surplus_map[工程名のみ {p!r}]={raw}（複合キー不在）"
+    return val, "surplus当キーなし→0"
 
 
 def _surplus_team_time_factor(
     rq_base: int, team_len: int, extra_max_allowed: int
 ) -> float:
     """
-    蠢�隕∽ｺｺ謨ｰ繧定ｶ�縺医※蜈･繧後◆繝｡繝ｳ繝舌�ｼ縺ｫ繧医ｋ蜊倅ｽ肴凾髢薙∈縺ｮ菫よ焚�ｼ�1.0�ｼ晉洒邵ｮ縺ｪ縺暦ｼ峨�
-    霑ｽ蜉�譫��ｼ�extra_max_allowed�ｼ峨ｒ菴ｿ縺�蛻�縺｣縺溘→縺阪〒繧ゅ∫洒邵ｮ縺ｯ SURPLUS_TEAM_MAX_SPEEDUP_RATIO 繧剃ｸ企剞縺ｨ縺吶ｋ邱壼ｽ｢繝｢繝�繝ｫ縲�
+    必要人数を超えて入れたメンバーによる単位時間への係数（1.0＝短縮なし）。
+    追加枠（extra_max_allowed）を使い切ったときでも、短縮は SURPLUS_TEAM_MAX_SPEEDUP_RATIO を上限とする線形モデル。
     """
     rq = max(1, int(rq_base))
     tl = int(team_len)
@@ -9752,12 +9757,12 @@ def _surplus_team_time_factor(
 
 def _team_assign_trace_tuple_label() -> str:
     if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
-        return "(-莠ｺ謨ｰ, 髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�)"
+        return "(-人数, 開始, -単位数, 優先度合計)"
     if TEAM_ASSIGN_START_SLACK_WAIT_MINUTES <= 0:
-        return "(髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�)"
+        return "(開始, -単位数, 優先度合計)"
     return (
-        f"譛譌ｩ髢句ｧ九°繧閲TEAM_ASSIGN_START_SLACK_WAIT_MINUTES}蛻�莉･蜀�縺ｯ"
-        "(0,-莠ｺ謨ｰ,髢句ｧ�,-蜊倅ｽ肴焚,蜆ｪ蜈亥ｺｦ)縲∬ｶ�驕弱�ｯ(1,髢句ｧ�,-莠ｺ謨ｰ,-蜊倅ｽ肴焚,蜆ｪ蜈亥ｺｦ)"
+        f"最早開始から{TEAM_ASSIGN_START_SLACK_WAIT_MINUTES}分以内は"
+        "(0,-人数,開始,-単位数,優先度)、超過は(1,開始,-人数,-単位数,優先度)"
     )
 
 
@@ -9769,12 +9774,12 @@ def _team_assignment_sort_tuple(
     t_min: datetime | None = None,
 ) -> tuple:
     """
-    繝√�ｼ繝�蛟呵｣懊�ｮ蜆ｪ蜉｣逕ｨ繧ｿ繝励Ν�ｼ郁ｾ樊嶌蠑上〒蟆上＆縺�譁ｹ縺梧治逕ｨ�ｼ峨�
-    - TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF: (-莠ｺ謨ｰ, 髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�)
-    - 縺昴ｌ莉･螟悶°縺､ TEAM_ASSIGN_START_SLACK_WAIT_MINUTES>0 縺九▽ t_min 縺ゅｊ:
-        譛譌ｩ髢句ｧ九°繧峨せ繝ｩ繝�繧ｯ莉･蜀� 竊� (0, -莠ｺ謨ｰ, 髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ) 窶ｦ 驕�繧後※繧ゆｺｺ謨ｰ繧貞字縺�
-        繧ｹ繝ｩ繝�繧ｯ雜� 竊� (1, 髢句ｧ�, -莠ｺ謨ｰ, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ) 窶ｦ 髢句ｧ九ｒ蜆ｪ蜈�
-    - 荳願ｨ倅ｻ･螟�: (髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�)
+    チーム候補の優劣用タプル（辞書式で小さい方が採用）。
+    - TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF: (-人数, 開始, -単位数, 優先度合計)
+    - それ以外かつ TEAM_ASSIGN_START_SLACK_WAIT_MINUTES>0 かつ t_min あり:
+        最早開始からスラック以内 → (0, -人数, 開始, -単位数, 優先度) … 遅れても人数を厚く
+        スラック超 → (1, 開始, -人数, -単位数, 優先度) … 開始を優先
+    - 上記以外: (開始, -単位数, 優先度合計)
     """
     n = len(team)
     if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
@@ -9788,16 +9793,16 @@ def _team_assignment_sort_tuple(
     return (1, team_start, -n, -units_today, team_prio_sum)
 
 
-# skills 繧ｻ繝ｫ: OP / AS + 莉ｻ諢上�ｮ蜆ｪ蜈亥ｺｦ謨ｴ謨ｰ�ｼ井ｾ� OP1, AS 3�ｼ峨よ焚蛟､縺悟ｰ上＆縺�縺ｻ縺ｩ蜑ｲ蠖薙〒蜈医↓驕ｸ縺ｰ繧後ｋ縲�
+# skills セル: OP / AS + 任意の優先度整数（例 OP1, AS 3）。数値が小さいほど割当で先に選ばれる。
 _SKILL_OP_AS_CELL_RE = re.compile(r"^(OP|AS)(\d*)$", re.IGNORECASE)
 
 
 def parse_op_as_skill_cell(cell_val):
     """
-    master.xlsm縲茎kills縲阪�ｮ繧ｻ繝ｫ1縺､繧定ｧ｣驥医☆繧九�
-    - 縲薫P縲阪∪縺溘�ｯ縲窟S縲阪�ｮ逶ｴ蠕後↓蜆ｪ蜈亥ｺｦ逕ｨ縺ｮ謨ｴ謨ｰ�ｼ育ｩｺ逋ｽ縺ｯ髯､蜴ｻ縺励※隗｣驥茨ｼ峨ゆｾ�: OP, OP1, AS3, AS 12
-    - 蜆ｪ蜈亥ｺｦ縺ｯ蟆上＆縺�縺ｻ縺ｩ鬮伜━蜈茨ｼ亥酔荳譚｡莉ｶ縺ｮ繝√�ｼ繝�蛟呵｣懊°繧牙�医↓驕ｸ縺ｰ繧後ｋ�ｼ峨よ焚蟄礼怐逡･譎ゅ�ｯ 1縲�
-    - OP/AS 縺ｧ蟋九∪繧峨↑縺�繝ｻ遨ｺ縺ｯ繧ｹ繧ｭ繝ｫ縺ｪ縺励�
+    master.xlsm「skills」のセル1つを解釈する。
+    - 「OP」または「AS」の直後に優先度用の整数（空白は除去して解釈）。例: OP, OP1, AS3, AS 12
+    - 優先度は小さいほど高優先（同一条件のチーム候補から先に選ばれる）。数字省略時は 1。
+    - OP/AS で始まらない・空はスキルなし。
     """
     if cell_val is None or (isinstance(cell_val, float) and pd.isna(cell_val)):
         return None, 10**9
@@ -9826,9 +9831,9 @@ def _validate_skills_op_as_priority_numbers_unique(
     skills_dict: dict, column_keys: list
 ) -> None:
     """
-    master縲茎kills縲阪�ｮ蜷�蛻暦ｼ亥ｷ･遞�+讖滓｢ｰ繧ｭ繝ｼ遲会ｼ峨↓縺､縺�縺ｦ縲＾P/AS 縺ｮ蜑ｲ蠖灘━蜈亥ｺｦ縺ｮ**謨ｰ蛟､**縺�
-    繝｡繝ｳ繝舌�ｼ髢薙〒驥崎､�縺励※縺�縺ｪ縺�縺区､懆ｨｼ縺吶ｋ縲る㍾隍�譎ゅ�ｯ PlanningValidationError縲�
-    �ｼ�OP1 縺ｨ AS1 縺ｮ繧医≧縺ｫ繝ｭ繝ｼ繝ｫ縺檎焚縺ｪ縺｣縺ｦ繧ょ酔荳謨ｰ蛟､縺ｪ繧蛾㍾隍�縺ｨ縺ｿ縺ｪ縺呻ｼ�
+    master「skills」の各列（工程+機械キー等）について、OP/AS の割当優先度の**数値**が
+    メンバー間で重複していないか検証する。重複時は PlanningValidationError。
+    （OP1 と AS1 のようにロールが異なっても同一数値なら重複とみなす）
     """
     errors: list[str] = []
     for combo in column_keys:
@@ -9852,17 +9857,17 @@ def _validate_skills_op_as_priority_numbers_unique(
             pr_to_entries[int(pr)].append(f"{mnm}({role})")
         for pr, entries in sorted(pr_to_entries.items()):
             if len(entries) > 1:
-                errors.append(f'蛻励鶏ck}縲�: 蜆ｪ蜈亥ｺｦ {pr} 縺碁㍾隍� 竊� ' + "縲�".join(entries))
+                errors.append(f'列「{ck}」: 優先度 {pr} が重複 → ' + "、".join(entries))
     if errors:
         cap = 50
         tail = errors[:cap]
         msg = (
-            "繝槭せ繧ｿ縲茎kills縲阪〒縲∝酔荳蛻励�ｮ OP/AS 蜆ｪ蜈亥ｺｦ縺ｮ謨ｰ蛟､縺碁㍾隍�縺励※縺�縺ｾ縺吶�"
-            " 蛻励＃縺ｨ縺ｫ謨ｰ蛟､縺ｯ1莠ｺ縺ｫ縺､縺�1遞ｮ鬘槭↓縺励※縺上□縺輔＞縲�\n"
+            "マスタ「skills」で、同一列の OP/AS 優先度の数値が重複しています。"
+            " 列ごとに数値は1人につき1種類にしてください。\n"
             + "\n".join(tail)
         )
         if len(errors) > cap:
-            msg += f"\n窶ｦ莉� {len(errors) - cap} 莉ｶ"
+            msg += f"\n…他 {len(errors) - cap} 件"
         raise PlanningValidationError(msg)
 
 
@@ -9871,9 +9876,9 @@ def build_member_assignment_priority_reference(
     members: list | None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    邨先棡繝悶ャ繧ｯ逕ｨ: 繝槭せ繧ｿ skills 縺ｮ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪榊�励＃縺ｨ縺ｫ縲∝牡蠖薙い繝ｫ繧ｴ繝ｪ繧ｺ繝�縺ｨ蜷後§
-    (蜆ｪ蜈亥ｺｦ蛟､譏�鬆�, 繝｡繝ｳ繝舌�ｼ蜷肴��鬆�) 縺ｧ荳ｦ縺ｹ縺溷盾閠�陦ｨ縺ｨ縲√Ν繝ｼ繝ｫ隱ｬ譏弱�ｮ陦ｨ繧定ｿ斐☆縲�
-    蠖捺律縺ｮ蜃ｺ蜍､繝ｻ險ｭ蛯咏ｩｺ縺阪�ｻ蜷御ｸ萓晞�ｼ縺ｮ蟾･遞矩��繝ｻ繝√�ｼ繝�莠ｺ謨ｰ縺ｯ蜿肴丐縺励↑縺��ｼ医≠縺上∪縺ｧ繝槭せ繧ｿ荳翫�ｮ鬆�蠎擾ｼ峨�
+    結果ブック用: マスタ skills の「工程名+機械名」列ごとに、割当アルゴリズムと同じ
+    (優先度値昇順, メンバー名昇順) で並べた参考表と、ルール説明の表を返す。
+    当日の出勤・設備空き・同一依頼の工程順・チーム人数は反映しない（あくまでマスタ上の順序）。
     """
     mem_list = list(members) if members else list((skills_dict or {}).keys())
     mem_list = [str(m).strip() for m in mem_list if m and str(m).strip()]
@@ -9882,49 +9887,49 @@ def build_member_assignment_priority_reference(
     slack_m = TEAM_ASSIGN_START_SLACK_WAIT_MINUTES
     if surplus_on:
         team_rule = (
-            "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF=譛牙柑: "
-            "(-莠ｺ謨ｰ, 髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�) 縺ｮ霎樊嶌蠑擾ｼ井ｺｺ謨ｰ譛蜆ｪ蜈医�ｻ蠕捺擂�ｼ峨�"
+            "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF=有効: "
+            "(-人数, 開始, -単位数, 優先度合計) の辞書式（人数最優先・従来）。"
         )
     elif slack_m > 0:
         team_rule = (
-            f"譌｢螳�: 縺昴�ｮ譌･縺ｮ謌千ｫ句呵｣懷�ｨ菴薙�ｮ縲梧怙譌ｩ髢句ｧ九阪ｒ蝓ｺ貅悶↓縲�"
-            f"髢句ｧ九′縺昴�ｮ{slack_m}蛻�莉･蜀�縺ｮ驕�繧後↑繧我ｺｺ謨ｰ繧貞字縺丞━蜈茨ｼ�0,-莠ｺ謨ｰ,髢句ｧ�,-蜊倅ｽ肴焚,蜆ｪ蜈亥ｺｦ�ｼ峨�"
-            f"縺昴ｌ繧医ｊ驕�縺�蛟呵｣懊�ｯ髢句ｧ九ｒ蜆ｪ蜈茨ｼ�1,髢句ｧ�,-莠ｺ謨ｰ,-蜊倅ｽ肴焚,蜆ｪ蜈亥ｺｦ�ｼ峨�"
-            f"迺ｰ蠅�螟画焚 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0 縺ｧ辟｡蜉ｹ蛹悶�"
+            f"既定: その日の成立候補全体の「最早開始」を基準に、"
+            f"開始がその{slack_m}分以内の遅れなら人数を厚く優先（0,-人数,開始,-単位数,優先度）、"
+            f"それより遅い候補は開始を優先（1,開始,-人数,-単位数,優先度）。"
+            f"環境変数 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0 で無効化。"
         )
     else:
         team_rule = (
             "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=0: "
-            "(髢句ｧ�, -蜊倅ｽ肴焚, 蜆ｪ蜈亥ｺｦ蜷郁ｨ�) 縺ｮ縺ｿ�ｼ磯幕蟋区怙蜆ｪ蜈茨ｼ峨�"
+            "(開始, -単位数, 優先度合計) のみ（開始最優先）。"
         )
 
     legend_rows = [
         {
-            "蛹ｺ蛻�": "繧ｹ繧ｭ繝ｫ蛻励�ｮ荳ｦ縺ｳ",
-            "蜀�螳ｹ": "蜷�縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪榊�励↓縺､縺�縺ｦ縲√そ繝ｫ縺� OP/AS�ｼ�+蜆ｪ蜈亥ｺｦ謨ｴ謨ｰ�ｼ峨�ｮ繝｡繝ｳ繝舌�ｼ縺ｮ縺ｿ蟇ｾ雎｡縲�"
-            " 謨ｰ蛟､縺悟ｰ上＆縺�縺ｻ縺ｩ鬮伜━蜈医ら怐逡･譎ゅ�ｯ蜆ｪ蜈亥ｺｦ 1�ｼ�parse_op_as_skill_cell 縺ｨ蜷御ｸ�ｼ峨�"
-            " 蜷御ｸ蛻励〒縺ｯ蜆ｪ蜈亥ｺｦ縺ｮ謨ｰ蛟､縺ｯ繝｡繝ｳ繝舌�ｼ髢薙〒驥崎､�荳榊庄�ｼ医�槭せ繧ｿ隱ｭ霎ｼ譎ゅ↓讀懆ｨｼ�ｼ峨�",
+            "区分": "スキル列の並び",
+            "内容": "各「工程名+機械名」列について、セルが OP/AS（+優先度整数）のメンバーのみ対象。"
+            " 数値が小さいほど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。"
+            " 同一列では優先度の数値はメンバー間で重複不可（マスタ読込時に検証）。",
         },
         {
-            "蛹ｺ蛻�": "蠖捺律縺ｨ縺ｮ蟾ｮ",
-            "蜀�螳ｹ": "螳滄圀縺ｮ驟榊床縺ｯ縲√％縺ｮ鬆�縺ｮ縺�縺｡縺昴�ｮ譌･蜃ｺ蜍､縺九▽ AS/OP 隕∽ｻｶ繧呈ｺ縺溘☆閠�縺�縺代′蛟呵｣懊�"
-            " 險ｭ蛯吶�ｮ遨ｺ縺阪�ｻ蜷御ｸ萓晞�ｼNO縺ｮ蟾･遞矩��繝ｻ蠢�隕∽ｺｺ謨ｰ繝ｻ蠅怜藤譫�繝ｻ謖�蜷弘P縺ｧ螟峨ｏ繧翫∪縺吶�",
+            "区分": "当日との差",
+            "内容": "実際の配台は、この順のうちその日出勤かつ AS/OP 要件を満たす者だけが候補。"
+            " 設備の空き・同一依頼NOの工程順・必要人数・増員枠・指名OPで変わります。",
         },
         {
-            "蛹ｺ蛻�": "繝√�ｼ繝�蛟呵｣懊�ｮ豈碑ｼ�",
-            "蜀�螳ｹ": team_rule,
+            "区分": "チーム候補の比較",
+            "内容": team_rule,
         },
         {
-            "蛹ｺ蛻�": "謖�蜷阪�ｻ繧ｰ繝ｭ繝ｼ繝舌Ν荳頑嶌縺�",
-            "蜀�螳ｹ": "諡�蠖徹P_謖�螳壹�ｻ繝｡繧､繝ｳ縲悟�榊━蜈育音蛻･險倩ｼ峨阪�ｮ OP 謖�蜷阪�ｯ譛ｬ陦ｨ繧医ｊ蜆ｪ蜈医＆繧後∪縺吶�",
+            "区分": "指名・グローバル上書き",
+            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指名は本表より優先されます。",
         },
         {
-            "蛹ｺ蛻�": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
-            "蜀�螳ｹ": "1/譛牙柑�ｼ井ｺｺ謨ｰ譛蜆ｪ蜈医�ｻ蠕捺擂�ｼ�" if surplus_on else "0/辟｡蜉ｹ�ｼ域里螳夲ｼ�",
+            "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
+            "内容": "1/有効（人数最優先・従来）" if surplus_on else "0/無効（既定）",
         },
         {
-            "蛹ｺ蛻�": "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
-            "蜀�螳ｹ": str(slack_m),
+            "区分": "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
+            "内容": str(slack_m),
         },
     ]
     df_legend = pd.DataFrame(legend_rows)
@@ -9957,30 +9962,30 @@ def build_member_assignment_priority_reference(
         if not ranked:
             out.append(
                 {
-                    "蟾･遞句錐": proc,
-                    "讖滓｢ｰ蜷�": mach,
-                    "繧ｹ繧ｭ繝ｫ蛻励く繝ｼ": combo,
-                    "蜆ｪ蜈磯��菴�": "",
-                    "繝｡繝ｳ繝舌�ｼ": "�ｼ医↑縺暦ｼ�",
-                    "繝ｭ繝ｼ繝ｫ": "",
-                    "蜆ｪ蜈亥ｺｦ蛟､_蟆上＆縺�縺ｻ縺ｩ蜈�": "",
-                    "skills繧ｻ繝ｫ蛟､": "",
-                    "蛯呵�": "縺薙�ｮ蛻励↓ OP/AS 縺ｮ雉�譬ｼ繧ｻ繝ｫ縺後≠繧九Γ繝ｳ繝舌�ｼ縺後＞縺ｾ縺帙ｓ",
+                    "工程名": proc,
+                    "機械名": mach,
+                    "スキル列キー": combo,
+                    "優先順位": "",
+                    "メンバー": "（なし）",
+                    "ロール": "",
+                    "優先度値_小さいほど先": "",
+                    "skillsセル値": "",
+                    "備考": "この列に OP/AS の資格セルがあるメンバーがいません",
                 }
             )
             continue
         for i, (pr, m, role, cell_s) in enumerate(ranked, start=1):
             out.append(
                 {
-                    "蟾･遞句錐": proc,
-                    "讖滓｢ｰ蜷�": mach,
-                    "繧ｹ繧ｭ繝ｫ蛻励く繝ｼ": combo,
-                    "蜆ｪ蜈磯��菴�": i,
-                    "繝｡繝ｳ繝舌�ｼ": m,
-                    "繝ｭ繝ｼ繝ｫ": role,
-                    "蜆ｪ蜈亥ｺｦ蛟､_蟆上＆縺�縺ｻ縺ｩ蜈�": pr,
-                    "skills繧ｻ繝ｫ蛟､": cell_s,
-                    "蛯呵�": "",
+                    "工程名": proc,
+                    "機械名": mach,
+                    "スキル列キー": combo,
+                    "優先順位": i,
+                    "メンバー": m,
+                    "ロール": role,
+                    "優先度値_小さいほど先": pr,
+                    "skillsセル値": cell_s,
+                    "備考": "",
                 }
             )
 
@@ -9989,60 +9994,60 @@ def build_member_assignment_priority_reference(
 
 
 def _normalize_person_name_for_match(s):
-    """諡�蠖楢�謖�蜷阪�ｮ縺ゅ＞縺ｾ縺�荳閾ｴ逕ｨ�ｼ�NFKC繝ｻ蟇檎伐/蜀ｨ逕ｰ縺ｮ陦ｨ險伜ｯ�縺帙�ｻ遨ｺ逋ｽ髯､蜴ｻ繝ｻ譛ｫ蟆ｾ謨ｬ遘ｰ縺ｮ縺ｿ髯､蜴ｻ�ｼ峨�"""
+    """担当者指名のあいまい一致用（NFKC・富田/冨田の表記寄せ・空白除去・末尾敬称のみ除去）。"""
     if s is None:
         return ""
     t = unicodedata.normalize("NFKC", str(s).strip())
-    if "蟇檎伐" in t:
-        t = t.replace("蟇檎伐", "蜀ｨ逕ｰ")
-    t = re.sub(r"[\s縲]+", "", t)
-    t = re.sub(r"(縺輔ｓ|讒�|豌�)$", "", t)
+    if "富田" in t:
+        t = t.replace("富田", "冨田")
+    t = re.sub(r"[\s　]+", "", t)
+    t = re.sub(r"(さん|様|氏)$", "", t)
     return t
 
 
 def _split_person_sei_mei(s) -> tuple[str, str]:
     """
-    豌丞錐繧貞ｧ薙�ｻ蜷阪↓蛻�縺代ｋ縲よ怙蛻昴�ｮ蜊願ｧ抵ｼ丞�ｨ隗堤ｩｺ逋ｽ縺ｮ謇句燕繧貞ｧ薙∽ｻ･髯阪ｒ蜷阪→縺吶ｋ縲�
-    遨ｺ逋ｽ縺檎┌縺�蝣ｴ蜷医�ｯ (蜈ｨ菴�, '')�ｼ亥錐縺ｪ縺玲桶縺��ｼ峨�
-    譛ｫ蟆ｾ縺ｮ 縺輔ｓ�ｼ乗ｧ假ｼ乗ｰ� 縺ｯ蛻�蜑ｲ蜑阪↓髯､蜴ｻ縺吶ｋ縲�
+    氏名を姓・名に分ける。最初の半角／全角空白の手前を姓、以降を名とする。
+    空白が無い場合は (全体, '')（名なし扱い）。
+    末尾の さん／様／氏 は分割前に除去する。
     """
     if s is None:
         return "", ""
     t = unicodedata.normalize("NFKC", str(s).strip())
     if not t or t.lower() in ("nan", "none", "null"):
         return "", ""
-    t = re.sub(r"(縺輔ｓ|讒�|豌�)$", "", t)
+    t = re.sub(r"(さん|様|氏)$", "", t)
     for i, ch in enumerate(t):
         if ch in " \u3000":
             sei = t[:i].strip()
             rest = t[i + 1 :]
-            mei = re.sub(r"[\s縲]+", "", rest.strip())
+            mei = re.sub(r"[\s　]+", "", rest.strip())
             return sei, mei
     return t.strip(), ""
 
 
 def _normalize_sei_for_match(sei: str) -> str:
-    """蟋薙�ｮ縺ｿ豁｣隕丞喧縲り｡ｨ險倥ｆ繧後�ｯ險ｱ螳ｹ縺励↑縺�蜑肴署縺ｧ縲¨FKC繝ｻ蟇檎伐/蜀ｨ逕ｰ蟇�縺帙�ｻ遨ｺ逋ｽ髯､蜴ｻ縲�"""
+    """姓のみ正規化。表記ゆれは許容しない前提で、NFKC・富田/冨田寄せ・空白除去。"""
     if not sei:
         return ""
     t = unicodedata.normalize("NFKC", str(sei).strip())
-    if "蟇檎伐" in t:
-        t = t.replace("蟇檎伐", "蜀ｨ逕ｰ")
-    t = re.sub(r"[\s縲]+", "", t)
+    if "富田" in t:
+        t = t.replace("富田", "冨田")
+    t = re.sub(r"[\s　]+", "", t)
     return t
 
 
 def _normalize_mei_for_match(mei: str) -> str:
-    """蜷阪�ｮ豁｣隕丞喧�ｼ医ｆ繧瑚ｨｱ螳ｹ縺ｮ蜑榊�ｦ逅��ｼ峨�NFKC繝ｻ遨ｺ逋ｽ髯､蜴ｻ縲ょｧ鍋畑縺ｮ蟇檎伐鄂ｮ謠帙�ｯ陦後ｏ縺ｪ縺�縲�"""
+    """名の正規化（ゆれ許容の前処理）。NFKC・空白除去。姓用の富田置換は行わない。"""
     if not mei:
         return ""
     t = unicodedata.normalize("NFKC", str(mei).strip())
-    t = re.sub(r"[\s縲]+", "", t)
+    t = re.sub(r"[\s　]+", "", t)
     return t
 
 
 def _has_duplicate_surname_among_members(member_names) -> bool:
-    """skills 繝｡繝ｳ繝舌�ｼ荳隕ｧ縺ｫ縲∵ｭ｣隕丞喧蠕悟酔荳縺ｮ蟋薙′2莠ｺ莉･荳翫＞繧九°縲�"""
+    """skills メンバー一覧に、正規化後同一の姓が2人以上いるか。"""
     cnt = Counter()
     for name in member_names or []:
         if name is None or (isinstance(name, float) and pd.isna(name)):
@@ -10058,7 +10063,7 @@ def _has_duplicate_surname_among_members(member_names) -> bool:
 
 
 def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
-    """蜷御ｸ蟋薙′繝ｭ繧ｹ繧ｿ繝ｼ縺ｧ驥崎､�縺励↑縺�縺ｨ縺阪�ｮ縺ｿ菴ｿ縺�蜷阪�ｮ繧�繧瑚ｨｱ螳ｹ縲�"""
+    """同一姓がロスターで重複しないときのみ使う名のゆれ許容。"""
     if not r_mei_n and not m_mei_n:
         return True
     if not r_mei_n or not m_mei_n:
@@ -10070,15 +10075,15 @@ def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
 
 def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_member_names=None):
     """
-    閾ｪ逕ｱ險倩ｿｰ縺ｮ謖�蜷阪ｒ縲∝ｽ捺律繧ｹ繧ｭ繝ｫ荳� OP/AS 縺ｮ繝｡繝ｳ繝舌�ｼ蜷搾ｼ�skills 繧ｷ繝ｼ繝医�ｮ陦後く繝ｼ�ｼ峨↓隗｣豎ｺ縺吶ｋ縲�
-    capable_candidates: 縺昴�ｮ險ｭ蛯吶〒 OP 縺ｾ縺溘�ｯ AS 縺ｨ縺励※蜑ｲ蠖灘庄閭ｽ縺ｪ繝｡繝ｳ繝舌�ｼ蜷阪Μ繧ｹ繝医�
-    roster_member_names: skills 縺ｮ蜈ｨ繝｡繝ｳ繝舌�ｼ蜷搾ｼ育怐逡･譎ゅ�ｯ capable_candidates�ｼ峨ょ酔荳蟋薙�ｮ驥崎､�蛻､螳壹↓菴ｿ逕ｨ縲�
+    自由記述の指名を、当日スキル上 OP/AS のメンバー名（skills シートの行キー）に解決する。
+    capable_candidates: その設備で OP または AS として割当可能なメンバー名リスト。
+    roster_member_names: skills の全メンバー名（省略時は capable_candidates）。同一姓の重複判定に使用。
 
-    蜷榊燕縺ｮ陦ｨ險倥ｆ繧�:
-    - 蟋薙�ｯ豁｣隕丞喧蠕後↓螳悟�ｨ荳閾ｴ縺ｮ縺ｿ�ｼ医ｆ繧瑚ｨｱ螳ｹ縺励↑縺�縲ょｯ檎伐/蜀ｨ逕ｰ縺ｮ縺ｿ蠕捺擂縺ｩ縺翫ｊ蟇�縺幢ｼ峨�
-    - roster 縺ｫ蜷御ｸ蟋薙′2莠ｺ莉･荳翫＞縺ｪ縺�縺ｨ縺阪□縺代∝錐縺ｯ驛ｨ蛻�荳閾ｴ�ｼ医←縺｡繧峨°縺御ｻ匁婿繧貞性繧�ｼ峨∪縺溘�ｯ螳悟�ｨ荳閾ｴ繧定ｨｱ螳ｹ縲�
-    - 蜷御ｸ蟋薙′繝ｭ繧ｹ繧ｿ繝ｼ縺ｫ縺�繧矩俣縺ｯ蜷阪ｂ螳悟�ｨ荳閾ｴ蠢�鬆医�
-    - 蟋薙�ｮ縺ｿ縺ｮ蜈･蜉帙〒蜷阪ｆ繧後Δ繝ｼ繝峨�ｮ縺ｨ縺阪∝ｧ薙′荳閾ｴ縺吶ｋ蛟呵｣懊′隍�謨ｰ縺�繧後�ｰ隗｣豎ｺ荳榊庄�ｼ�None�ｼ峨�
+    名前の表記ゆれ:
+    - 姓は正規化後に完全一致のみ（ゆれ許容しない。富田/冨田のみ従来どおり寄せ）。
+    - roster に同一姓が2人以上いないときだけ、名は部分一致（どちらかが他方を含む）または完全一致を許容。
+    - 同一姓がロスターにいる間は名も完全一致必須。
+    - 姓のみの入力で名ゆれモードのとき、姓が一致する候補が複数いれば解決不可（None）。
     """
     if not raw or not capable_candidates:
         return None
@@ -10128,14 +10133,14 @@ def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_me
 
 
 def _resolve_preferred_op_to_member(raw, op_candidates, roster_member_names=None):
-    """蠖捺律繧ｹ繧ｭ繝ｫ荳� OP 縺ｮ縺ｿ縺ｸ隗｣豎ｺ�ｼ亥ｾ捺擂 API�ｼ峨ょｮ滉ｽ薙�ｯ `_resolve_preferred_name_to_capable_member`縲�"""
+    """当日スキル上 OP のみへ解決（従来 API）。実体は `_resolve_preferred_name_to_capable_member`。"""
     return _resolve_preferred_name_to_capable_member(
         raw, op_candidates, roster_member_names
     )
 
 
 def _task_process_matches_global_contains(machine_val: str, contains: str) -> bool:
-    """蟾･遞句錐�ｼ医ち繧ｹ繧ｯ縺ｮ machine�ｼ峨↓驛ｨ蛻�荳閾ｴ�ｼ�NFKC繝ｻ螟ｧ蟆冗┌隕厄ｼ峨�"""
+    """工程名（タスクの machine）に部分一致（NFKC・大小無視）。"""
     m = unicodedata.normalize("NFKC", str(machine_val or "").strip()).casefold()
     c = unicodedata.normalize("NFKC", str(contains or "").strip()).casefold()
     if not c:
@@ -10144,7 +10149,7 @@ def _task_process_matches_global_contains(machine_val: str, contains: str) -> bo
 
 
 def _coerce_global_day_process_operator_rules(raw_val) -> list:
-    """Gemini 縺ｮ global_day_process_operator_rules 繧呈ｭ｣隕丞喧�ｼ育ｩｺ繝ｻ荳肴ｭ｣縺ｯ髯､螟厄ｼ峨�"""
+    """Gemini の global_day_process_operator_rules を正規化（空・不正は除外）。"""
     out: list[dict] = []
     if not isinstance(raw_val, list):
         return out
@@ -10195,8 +10200,8 @@ def _active_global_day_process_must_include(
     roster_members: list,
 ) -> tuple[list[str], list[str]]:
     """
-    繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝育罰譚･縺ｮ縲梧律莉佚怜ｷ･遞凝苓､�謨ｰ謖�蜷阪阪〒縲√◎縺ｮ譌･繝ｻ縺昴�ｮ蟾･遞九ち繧ｹ繧ｯ縺ｫ
-    **繝√�ｼ繝�縺ｸ蠢�縺壼性繧√ｋ**繝｡繝ｳ繝舌�ｼ�ｼ�skills 陦後く繝ｼ�ｼ峨→隴ｦ蜻翫Γ繝�繧ｻ繝ｼ繧ｸ繧定ｿ斐☆縲�
+    グローバルコメント由来の「日付×工程×複数指名」で、その日・その工程タスクに
+    **チームへ必ず含める**メンバー（skills 行キー）と警告メッセージを返す。
     """
     rules = gpo.get("global_day_process_operator_rules") or []
     if not isinstance(rules, list):
@@ -10226,9 +10231,9 @@ def _active_global_day_process_must_include(
                     acc.append(mem)
             else:
                 warns.append(
-                    "繝｡繧､繝ｳ繧ｰ繝ｭ繝ｼ繝舌Ν(譌･莉佚怜ｷ･遞�)謖�蜷�: "
-                    f"萓晞�ｼNO={tid} 譌･莉�={current_date} 蟾･遞�={machine!r} 縺ｮ "
-                    f"謖�蜷阪鶏raw_name}縲阪ｒ蠖捺律繧ｹ繧ｭ繝ｫ隧ｲ蠖薙Γ繝ｳ繝舌�ｼ縺ｫ隗｣豎ｺ縺ｧ縺阪∪縺帙ｓ"
+                    "メイングローバル(日付×工程)指名: "
+                    f"依頼NO={tid} 日付={current_date} 工程={machine!r} の "
+                    f"指名「{raw_name}」を当日スキル該当メンバーに解決できません"
                 )
     return acc, warns
 
@@ -10236,7 +10241,7 @@ def _active_global_day_process_must_include(
 def _merge_global_day_process_and_pref_anchor(
     must_include: list, pref_mem, capable_members: list
 ) -> list[str]:
-    """蠢�鬆医Γ繝ｳ繝舌�ｼ縺ｨ諡�蠖徹P謖�蜷阪ｒ1譛ｬ蛹厄ｼ�capable 縺ｫ縺�繧九ｂ縺ｮ縺�縺托ｼ峨�"""
+    """必須メンバーと担当OP指名を1本化（capable にいるものだけ）。"""
     fixed: list[str] = []
     seen: set[str] = set()
     for m in must_include or []:
@@ -10253,37 +10258,37 @@ def _merge_global_day_process_and_pref_anchor(
 
 
 # =========================================================
-# 2. 繝槭せ繧ｿ繝�繝ｼ繧ｿ繝ｻ蜃ｺ蜍､邁ｿ(繧ｫ繝ｬ繝ｳ繝繝ｼ) 縺ｨ AI隗｣譫�
-#    master.xlsm 縺ｮ skills / need / 蜷�繝｡繝ｳ繝舌�ｼ蜍､諤�繧ｷ繝ｼ繝医ｒ隱ｭ縺ｿ縲�
-#    蛯呵�繝ｻ莨第嚊蛹ｺ蛻�縺ｯ蠢�隕√↓蠢懊§縺ｦ Gemini 縺ｧ讒矩�蛹悶☆繧九�
+# 2. マスタデータ・出勤簿(カレンダー) と AI解析
+#    master.xlsm の skills / need / 各メンバー勤怠シートを読み、
+#    備考・休暇区分は必要に応じて Gemini で構造化する。
 # =========================================================
 def load_skills_and_needs():
     """
-    邨ｱ蜷医ヵ繧｡繧､繝ｫ(MASTER_FILE)縺九ｉ繧ｹ繧ｭ繝ｫ縺ｨ need 繧貞虚逧�縺ｫ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺吶�
+    統合ファイル(MASTER_FILE)からスキルと need を動的に読み込みます。
 
-    謌ｻ繧雁､縺ｯ7隕∫ｴ�縲よ怙蠕後�ｯ need 繧ｷ繝ｼ繝井ｸ翫�ｮ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪榊�嶺ｽ咲ｽｮ�ｼ亥ｷｦ縺ｻ縺ｩ蟆上＆縺�謨ｴ謨ｰ�ｼ峨�ｮ霎樊嶌
-    ``need_combo_col_index``�ｼ磯�榊床繧ｭ繝･繝ｼ繧ｽ繝ｼ繝育畑�ｼ峨�
+    戻り値は7要素。最後は need シート上の「工程名+機械名」列位置（左ほど小さい整数）の辞書
+    ``need_combo_col_index``（配台キューソート用）。
 
-    莉雁屓縺ｮ need 縺ｯ�ｼ�Excel荳翫〒�ｼ�
-      蟾･遞句錐陦後�ｻ讖滓｢ｰ蜷崎｡後�ｮ縺ゅ→縲悟渕譛ｬ蠢�隕∽ｺｺ謨ｰ縲崎｡鯉ｼ�A蛻励↓縲悟ｿ�隕∽ｺｺ謨ｰ縲阪ｒ蜷ｫ繧�ｼ�
-      縺昴�ｮ逶ｴ荳�: 驟榊床縺ｧ菴吝臆莠ｺ蜩｡縺後≠繧九→縺阪↓霑ｽ蜉�縺ｧ蜈･繧後ｉ繧後ｋ莠ｺ謨ｰ�ｼ亥ｷ･遞凝玲ｩ滓｢ｰ縺斐→縲よ悴險ｭ螳壹�ｯ 0�ｼ�
-      莉･髯�: 迚ｹ蛻･謖�螳�1縲�99
-    縺ｨ縺�縺�讒矩�縺ｮ縺溘ａ縲∝ｿ�隕＾P縺ｯ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪阪〒隗｣豎ｺ縺吶ｋ縲�
+    今回の need は（Excel上で）
+      工程名行・機械名行のあと「基本必要人数」行（A列に「必要人数」を含む）
+      その直下: 配台で余剰人員があるときに追加で入れられる人数（工程×機械ごと。未設定は 0）
+      以降: 特別指定1〜99
+    という構造のため、必要OPは「工程名+機械名」で解決する。
 
-    skills 莠､蟾ｮ繧ｻ繝ｫ縺ｯ OP/AS 縺ｮ蠕後↓蜆ｪ蜈亥ｺｦ謨ｴ謨ｰ�ｼ井ｾ� OP1, AS3�ｼ峨よ焚蛟､縺悟ｰ上＆縺�縺ｻ縺ｩ蠖楢ｩｲ蟾･遞九∈縺ｮ蜑ｲ蠖薙〒蜆ｪ蜈医�
-    謨ｰ蟄礼怐逡･縺ｮ OP/AS 縺ｯ蜆ｪ蜈亥ｺｦ 1縲�
-    蜷御ｸ蛻暦ｼ亥酔荳蟾･遞凝玲ｩ滓｢ｰ�ｼ峨〒縺ｯ蜆ｪ蜈亥ｺｦ縺ｮ謨ｰ蛟､縺ｯ繝｡繝ｳ繝舌�ｼ髢薙〒驥崎､�荳榊庄�ｼ磯㍾隍�譎ゅ�ｯ PlanningValidationError�ｼ峨�
+    skills 交差セルは OP/AS の後に優先度整数（例 OP1, AS3）。数値が小さいほど当該工程への割当で優先。
+    数字省略の OP/AS は優先度 1。
+    同一列（同一工程×機械）では優先度の数値はメンバー間で重複不可（重複時は PlanningValidationError）。
     """
     try:
-        # 蜷御ｸ繝悶ャ繧ｯ繧� pd.read_excel 縺ｧ驛ｽ蠎ｦ髢九￥縺ｨ I/O 縺碁㍾縺�縺溘ａ縲・xcelFile 繧�1蝗槭□縺鷹幕縺�縺ｦ繧ｷ繝ｼ繝医ｒ parse 縺吶ｋ縲�
+        # 同一ブックを pd.read_excel で都度開くと I/O が重いため、ExcelFile を1回だけ開いてシートを parse する。
         with pd.ExcelFile(MASTER_FILE) as _master_xls:
-            # skills 縺ｯ譁ｰ莉墓ｧ�:
-            #   1陦檎岼: 蟾･遞句錐
-            #   2陦檎岼: 讖滓｢ｰ蜷�
-            #   A3莉･髯�: 繝｡繝ｳ繝舌�ｼ蜷�
-            #   莠､蟾ｮ繧ｻ繝ｫ: OP 縺ｾ縺溘�ｯ AS 縺ｮ蠕後↓蜑ｲ蠖灘━蜈亥ｺｦ縺ｮ謨ｴ謨ｰ�ｼ井ｾ� OP1, AS3�ｼ峨よ焚蛟､縺悟ｰ上＆縺�縺ｻ縺ｩ蠖楢ｩｲ蟾･遞九∈蜆ｪ蜈亥牡蠖薙�
-            #             謨ｰ蟄礼怐逡･縺ｮ OP/AS 縺ｯ蜆ｪ蜈亥ｺｦ 1�ｼ亥ｾ捺擂縺ｩ縺翫ｊ譛蜆ｪ蜈域桶縺��ｼ峨�
-            # 繧貞渕譛ｬ縺ｨ縺励▽縺､縲∵立莉墓ｧ假ｼ�1陦後�倥ャ繝�ｼ峨↓繧ゅヵ繧ｩ繝ｼ繝ｫ繝舌ャ繧ｯ蟇ｾ蠢懊☆繧九�
+            # skills は新仕様:
+            #   1行目: 工程名
+            #   2行目: 機械名
+            #   A3以降: メンバー名
+            #   交差セル: OP または AS の後に割当優先度の整数（例 OP1, AS3）。数値が小さいほど当該工程へ優先割当。
+            #             数字省略の OP/AS は優先度 1（従来どおり最優先扱い）。
+            # を基本としつつ、旧仕様（1行ヘッダ）にもフォールバック対応する。
             skills_raw = pd.read_excel(
                 _master_xls, sheet_name="skills", header=None
             )
@@ -10344,7 +10349,7 @@ def load_skills_and_needs():
                     skills_dict[m_name] = row_skills
                 members = list(skills_dict.keys())
                 logging.info(
-                    "skills繧ｷ繝ｼ繝�: 2谿ｵ繝倥ャ繝蠖｢蠑上〒隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆�ｼ亥ｷ･遞�+讖滓｢ｰ=%s蛻�, 繝｡繝ｳ繝舌�ｼ=%s莠ｺ�ｼ峨�",
+                    "skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=%s列, メンバー=%s人）。",
                     len(pm_cols),
                     len(members),
                 )
@@ -10359,13 +10364,13 @@ def load_skills_and_needs():
 
                 member_col = None
                 for c in skill_cols:
-                    if c in ("繝｡繝ｳ繝舌�ｼ", "諡�蠖楢�", "豌丞錐", "菴懈･ｭ閠�"):
+                    if c in ("メンバー", "担当者", "氏名", "作業者"):
                         member_col = c
                         break
                 if member_col is None and skill_cols:
                     member_col = skill_cols[0]
                     logging.warning(
-                        "skills繧ｷ繝ｼ繝�: 繝｡繝ｳ繝舌�ｼ蛻怜錐縺梧ｨ呎ｺ悶→荳閾ｴ縺励↑縺�縺溘ａ縲∝�磯�ｭ蛻� '%s' 繧偵Γ繝ｳ繝舌�ｼ蛻励→縺励※謇ｱ縺�縺ｾ縺吶�",
+                        "skillsシート: メンバー列名が標準と一致しないため、先頭列 '%s' をメンバー列として扱います。",
                         member_col,
                     )
 
@@ -10403,18 +10408,18 @@ def load_skills_and_needs():
                     skills_dict[m_name] = row_skills
                 members = list(skills_dict.keys())
                 logging.info(
-                    "skills繧ｷ繝ｼ繝�: 1陦後�倥ャ繝蠖｢蠑擾ｼ域立莠呈鋤�ｼ峨〒隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆�ｼ医Γ繝ｳ繝舌�ｼ=%s莠ｺ�ｼ峨�",
+                    "skillsシート: 1行ヘッダ形式（旧互換）で読み込みました（メンバー=%s人）。",
                     len(members),
                 )
 
             if not members:
-                logging.error("skills繧ｷ繝ｼ繝医°繧峨Γ繝ｳ繝舌�ｼ繧定ｪｭ縺ｿ霎ｼ繧√∪縺帙ｓ縺ｧ縺励◆縲�")
+                logging.error("skillsシートからメンバーを読み込めませんでした。")
             else:
                 _validate_skills_op_as_priority_numbers_unique(
                     skills_dict, equipment_list
                 )
 
-            # need 縺ｯ header=None 縺ｧ隱ｭ縺ｿ縲∝�磯�ｭ縺ｮ隍�謨ｰ陦後ｒ窶懆ｦ句�ｺ縺苓｡娯昴→縺励※隗｣驥�
+            # need は header=None で読み、先頭の複数行を“見出し行”として解釈
             needs_raw = pd.read_excel(
                 _master_xls, sheet_name="need", header=None
             )
@@ -10429,19 +10434,19 @@ def load_skills_and_needs():
             if pd.isna(v0):
                 continue
             s0 = str(v0).strip()
-            if process_header_row is None and s0 == "蟾･遞句錐":
+            if process_header_row is None and s0 == "工程名":
                 process_header_row = r
-            elif machine_header_row is None and s0 == "讖滓｢ｰ蜷�":
+            elif machine_header_row is None and s0 == "機械名":
                 machine_header_row = r
-            if base_row is None and "蠢�隕∽ｺｺ謨ｰ" in s0 and not s0.startswith("迚ｹ蛻･謖�螳�"):
+            if base_row is None and "必要人数" in s0 and not s0.startswith("特別指定"):
                 base_row = r
             if process_header_row is not None and machine_header_row is not None and base_row is not None:
                 break
 
         if process_header_row is None or machine_header_row is None or base_row is None:
-            raise ValueError("need 繧ｷ繝ｼ繝医�ｮ繝倥ャ繝繝ｼ陦鯉ｼ亥ｷ･遞句錐/讖滓｢ｰ蜷�/蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ�ｼ峨′隕九▽縺九ｊ縺ｾ縺帙ｓ縲�")
+            raise ValueError("need シートのヘッダー行（工程名/機械名/基本必要人数）が見つかりません。")
 
-        # 縲御ｾ晞�ｼNO譚｡莉ｶ縲榊�嶺ｽ咲ｽｮ�ｼ医ョ繝輔か繝ｫ繝医�ｯ 1蛻礼岼�ｼ�
+        # 「依頼NO条件」列位置（デフォルトは 1列目）
         cond_col_idx = 1
         for r in range(needs_raw.shape[0]):
             c1 = needs_raw.iat[r, 1] if needs_raw.shape[1] > 1 else None
@@ -10452,7 +10457,7 @@ def load_skills_and_needs():
                 cond_col_idx = 1
                 break
 
-        # 蟾･遞句錐ﾃ玲ｩ滓｢ｰ蜷� 縺ｮ蛻嶺ｸ隕ｧ�ｼ亥�礼分蜿ｷ縺ｯ Excel荳翫�ｮ螳溷�励ｒ菫晄戟�ｼ�
+        # 工程名×機械名 の列一覧（列番号は Excel上の実列を保持）
         pm_cols = []
         for col_idx in range(needs_raw.shape[1]):
             if col_idx < 3:
@@ -10468,12 +10473,12 @@ def load_skills_and_needs():
             pm_cols.append((col_idx, p_s, m_s))
 
         req_map = {}
-        # 蟾･遞句錐+讖滓｢ｰ蜷阪さ繝ｳ繝� 竊� need 繧ｷ繝ｼ繝井ｸ翫�ｮ蛻励う繝ｳ繝�繝�繧ｯ繧ｹ�ｼ亥ｷｦ縺ｻ縺ｩ蟆上＆縺��ｼ晞�榊床繧ｭ繝･繝ｼ縺ｧ蜈茨ｼ�
+        # 工程名+機械名コンボ → need シート上の列インデックス（左ほど小さい＝配台キューで先）
         need_combo_col_index: dict[str, int] = {}
         # need_rules: [{'order': int, 'condition': str, 'overrides': {combo_key/machine/process: int}}]
         need_rules = []
 
-        # 蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ
+        # 基本必要人数
         for col_idx, p_s, m_s in pm_cols:
             n = parse_optional_int(needs_raw.iat[base_row, col_idx])
             if n is None or n < 1:
@@ -10481,7 +10486,7 @@ def load_skills_and_needs():
             combo_key = f"{p_s}+{m_s}"
             need_combo_col_index[combo_key] = col_idx
             req_map[combo_key] = n
-            # 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ�ｼ域ｩ滓｢ｰ蜷� or 蟾･遞句錐縺�縺代〒蠑輔￠繧九ｈ縺�縺ｫ縺吶ｋ�ｼ�
+            # フォールバック用（機械名 or 工程名だけで引けるようにする）
             if p_s not in req_map:
                 req_map[p_s] = n
             if m_s not in req_map:
@@ -10503,21 +10508,21 @@ def load_skills_and_needs():
                 if m_s not in surplus_map:
                     surplus_map[m_s] = ex
             logging.info(
-                "need 繧ｷ繝ｼ繝�: 驟榊床譎りｿｽ蜉�莠ｺ謨ｰ陦後ｒ讀懷�ｺ�ｼ�Excel陦娯沿%s�ｼ峨ょ�励＃縺ｨ縺ｮ荳企剞繧定ｪｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+                "need シート: 配台時追加人数行を検出（Excel行≈%s）。列ごとの上限を読み込みました。",
                 surplus_row + 1,
             )
         else:
             logging.info(
-                "need 繧ｷ繝ｼ繝�: 蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ縺ｮ逶ｴ荳九↓驟榊床譎りｿｽ蜉�莠ｺ謨ｰ陦後ｒ讀懷�ｺ縺ｧ縺阪∪縺帙ｓ縺ｧ縺励◆�ｼ育怐逡･蜿ｯ�ｼ峨�"
+                "need シート: 基本必要人数の直下に配台時追加人数行を検出できませんでした（省略可）。"
             )
 
         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
             logging.info(
-                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW 縺梧怏蜉ｹ: 驟榊床譎りｿｽ蜉�莠ｺ謨ｰ縺ｯ隱ｭ縺ｿ霎ｼ繧薙〒繧ょｸｸ縺ｫ 0 謇ｱ縺��ｼ医メ繝ｼ繝�縺ｯ蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ縺ｮ縺ｿ隧ｦ陦鯉ｼ峨�"
+                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW が有効: 配台時追加人数は読み込んでも常に 0 扱い（チームは基本必要人数のみ試行）。"
             )
 
         logging.info(
-            "need莠ｺ謨ｰ繝槭せ繧ｿ: %s 縺ｮ need 繧ｷ繝ｼ繝医ｒ隱ｭ縺ｿ霎ｼ縺ｿ�ｼ�skills 縺ｨ蜷御ｸ ExcelFile 縺ｧ髢九＞縺溽峩蠕後Ｏeed 蟆ら畑繝�繧｣繧ｹ繧ｯ繧ｭ繝｣繝�繧ｷ繝･縺ｯ辟｡縺励�ｻAI json 縺ｨ縺ｯ辟｡髢｢菫ゑｼ峨�",
+            "need人数マスタ: %s の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。",
             os.path.abspath(MASTER_FILE),
         )
         for _ci, _ps, _ms in pm_cols:
@@ -10525,19 +10530,19 @@ def load_skills_and_needs():
             _bn = req_map.get(_ck)
             _sx = surplus_map.get(_ck, 0) if surplus_map else 0
             logging.info(
-                "need蛻励し繝槭Μ combo=%r 蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ=%s 驟榊床譎りｿｽ蜉�莠ｺ謨ｰ荳企剞=%s",
+                "need列サマリ combo=%r 基本必要人数=%s 配台時追加人数上限=%s",
                 _ck,
                 _bn,
                 _sx,
             )
 
-        # 迚ｹ蛻･謖�螳�
+        # 特別指定
         for r in range(needs_raw.shape[0]):
             v0 = needs_raw.iat[r, col0]
             if pd.isna(v0):
                 continue
             lab = str(v0).strip()
-            m = re.match(r"迚ｹ蛻･謖�螳喀s*(\d+)", lab)
+            m = re.match(r"特別指定\s*(\d+)", lab)
             if not m:
                 continue
             order = int(m.group(1))
@@ -10554,7 +10559,7 @@ def load_skills_and_needs():
                 if n is not None and 1 <= n <= 99:
                     combo_key = f"{p_s}+{m_s}"
                     overrides[combo_key] = n
-                    # 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ
+                    # フォールバック用
                     overrides[p_s] = n
                     overrides[m_s] = n
 
@@ -10562,9 +10567,9 @@ def load_skills_and_needs():
                 need_rules.append({"order": order, "condition": cond, "overrides": overrides})
 
         need_rules.sort(key=lambda rr: rr["order"])
-        logging.info(f"need 迚ｹ蛻･謖�螳壹Ν繝ｼ繝ｫ: {len(need_rules)} 莉ｶ�ｼ亥ｷ･遞句錐+讖滓｢ｰ蜷阪く繝ｼ�ｼ峨�")
+        logging.info(f"need 特別指定ルール: {len(need_rules)} 件（工程名+機械名キー）。")
 
-        logging.info(f"縲施MASTER_FILE}縲上°繧峨せ繧ｭ繝ｫ縺ｨ險ｭ蛯呵ｦ∽ｻｶ(need)繧定ｪｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�")
+        logging.info(f"『{MASTER_FILE}』からスキルと設備要件(need)を読み込みました。")
         return (
             skills_dict,
             members,
@@ -10578,7 +10583,7 @@ def load_skills_and_needs():
     except PlanningValidationError:
         raise
     except Exception as e:
-        logging.error(f"繝槭せ繧ｿ繝輔ぃ繧､繝ｫ({MASTER_FILE})縺ｮ繧ｹ繧ｭ繝ｫ/need隱ｭ縺ｿ霎ｼ縺ｿ繧ｨ繝ｩ繝ｼ: {e}")
+        logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
         return {}, [], [], {}, [], [], {}
 
 
@@ -10586,13 +10591,13 @@ def load_team_combination_presets_from_master() -> dict[
     str, list[tuple[int, int | None, tuple[str, ...], int | None]]
 ]:
     """
-    master.xlsm縲檎ｵ�縺ｿ蜷医ｏ縺幄｡ｨ縲阪ｒ隱ｭ縺ｿ縲∝ｷ･遞�+讖滓｢ｰ繧ｭ繝ｼ縺斐→縺ｫ
-    [(邨�蜷医○蜆ｪ蜈亥ｺｦ, 蠢�隕∽ｺｺ謨ｰ縺ｾ縺溘�ｯNone, 繝｡繝ｳ繝舌�ｼ繧ｿ繝励Ν, 邨�蜷医○陦栗D縺ｾ縺溘�ｯNone), ...] 繧定ｿ斐☆縲�
-    蜷御ｸ繧ｭ繝ｼ蜀�縺ｯ蜆ｪ蜈亥ｺｦ譏�鬆�縲∝酔鬆�菴阪�ｯ繧ｷ繝ｼ繝井ｸ翫�ｮ陦碁��縲�
-    縲悟ｿ�隕∽ｺｺ謨ｰ縲榊�励�ｯ驟榊床譎ゅ↓ need 蝓ｺ譛ｬ莠ｺ謨ｰ繧医ｊ蜆ｪ蜈医☆繧具ｼ医Γ繝ｳ繝舌�ｼ蛻嶺ｺｺ謨ｰ縺ｨ荳閾ｴ縺吶ｋ縺薙→�ｼ峨�
-    驟榊床縺ｧ縺ｯ謌千ｫ九＠縺溘�励Μ繧ｻ繝�繝医ｒ縺吶∋縺ｦ蛟呵｣懊↓霈峨○縲∫ｵ�蜷医○謗｢邏｢縺ｨ縺ｾ縺ｨ繧√※ team_start 遲峨〒譛濶ｯ繧帝∈縺ｶ
-    �ｼ医す繝ｼ繝亥━蜈亥ｺｦ縺ｯ隧ｦ陦碁��縺ｮ縺ｿ縲ょ�磯�ｭ繝励Μ繧ｻ繝�繝医�ｮ蜊ｳ豎ｺ縺ｯ縺励↑縺��ｼ峨�
-    A 蛻励檎ｵ�蜷医○陦栗D縲阪′辟｡縺��ｼ冗ｩｺ縺ｮ譌ｧ繧ｷ繝ｼ繝医〒縺ｯ ID 縺ｯ None縲�
+    master.xlsm「組み合わせ表」を読み、工程+機械キーごとに
+    [(組合せ優先度, 必要人数またはNone, メンバータプル, 組合せ行IDまたはNone), ...] を返す。
+    同一キー内は優先度昇順、同順位はシート上の行順。
+    「必要人数」列は配台時に need 基本人数より優先する（メンバー列人数と一致すること）。
+    配台では成立したプリセットをすべて候補に載せ、組合せ探索とまとめて team_start 等で最良を選ぶ
+    （シート優先度は試行順のみ。先頭プリセットの即決はしない）。
+    A 列「組合せ行ID」が無い／空の旧シートでは ID は None。
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         return {}
@@ -10602,7 +10607,7 @@ def load_team_combination_presets_from_master() -> dict[
     try:
         df = pd.read_excel(path, sheet_name=MASTER_SHEET_TEAM_COMBINATIONS, header=0)
     except Exception as e:
-        logging.info("邨�縺ｿ蜷医ｏ縺幄｡ｨ繧ｷ繝ｼ繝医�ｮ隱ｭ霎ｼ繧偵せ繧ｭ繝�繝励＠縺ｾ縺�: %s", e)
+        logging.info("組み合わせ表シートの読込をスキップします: %s", e)
         return {}
     if df is None or df.empty:
         return {}
@@ -10613,19 +10618,19 @@ def load_team_combination_presets_from_master() -> dict[
         return str(x).strip()
 
     colmap = {norm_cell(c): c for c in df.columns if norm_cell(c)}
-    id_c = colmap.get("邨�蜷医○陦栗D") or colmap.get("繧､繝ｳ繝�繝�繧ｯ繧ｹ")
-    proc_c = colmap.get("蟾･遞句錐")
-    mach_c = colmap.get("讖滓｢ｰ蜷�")
-    combo_c = colmap.get("蟾･遞�+讖滓｢ｰ")
-    prio_c = colmap.get("邨�蜷医○蜆ｪ蜈亥ｺｦ")
-    req_c = colmap.get("蠢�隕∽ｺｺ謨ｰ")
+    id_c = colmap.get("組合せ行ID") or colmap.get("インデックス")
+    proc_c = colmap.get("工程名")
+    mach_c = colmap.get("機械名")
+    combo_c = colmap.get("工程+機械")
+    prio_c = colmap.get("組合せ優先度")
+    req_c = colmap.get("必要人数")
 
     def mem_col_order(c) -> int:
-        m = re.search(r"繝｡繝ｳ繝舌�ｼ\s*(\d+)", norm_cell(c))
+        m = re.search(r"メンバー\s*(\d+)", norm_cell(c))
         return int(m.group(1)) if m else 9999
 
     mem_keys = sorted(
-        [c for c in df.columns if norm_cell(str(c)).startswith("繝｡繝ｳ繝舌�ｼ")],
+        [c for c in df.columns if norm_cell(str(c)).startswith("メンバー")],
         key=mem_col_order,
     )
     buckets: dict[
@@ -10681,9 +10686,9 @@ def _lookup_combo_sheet_row_id_for_preset_team(
     team: tuple,
 ) -> int | None:
     """
-    謗｡逕ｨ繝√�ｼ繝�縺ｮ繝｡繝ｳ繝舌�ｼ髮�蜷茨ｼ�NFKC繝ｻtrim�ｼ峨′邨�縺ｿ蜷医ｏ縺幄｡ｨ繝励Μ繧ｻ繝�繝医�ｮ縺�縺壹ｌ縺九→荳閾ｴ縺吶ｋ縺ｨ縺阪�
-    縺昴�ｮ陦後�ｮ邨�蜷医○陦栗D�ｼ�A蛻暦ｼ峨ｒ霑斐☆縲らｵ�蜷医○謗｢邏｢縺ｮ縺ｿ縺ｧ豎ｺ縺ｾ繧� combo_sheet_row_id 縺御ｻ倥＞縺ｦ縺�縺ｪ縺�
-    螻･豁ｴ陦後�ｮ陬懷ｮ後↓菴ｿ縺�縲り､�謨ｰ荳閾ｴ譎ゅ�ｯ邨�蜷医○蜆ｪ蜈亥ｺｦ�ｼ域焚蛟､縺悟ｰ上＆縺�譁ｹ�ｼ峨ｒ謗｡逕ｨ縲�
+    採用チームのメンバー集合（NFKC・trim）が組み合わせ表プリセットのいずれかと一致するとき、
+    その行の組合せ行ID（A列）を返す。組合せ探索のみで決まり combo_sheet_row_id が付いていない
+    履歴行の補完に使う。複数一致時は組合せ優先度（数値が小さい方）を採用。
     """
     if not preset_rows or not team:
         return None
@@ -10739,7 +10744,7 @@ def parse_time_str(time_str, default_time):
 
 
 def _excel_scalar_to_time_optional(v) -> time | None:
-    """master 繝｡繧､繝ｳ縺ｮ譎ょ綾繧ｻ繝ｫ�ｼ�datetime / time / 譁�蟄怜�暦ｼ峨ｒ time 縺ｫ縲りｧ｣驥井ｸ崎�ｽ縺ｯ None縲�"""
+    """master メインの時刻セル（datetime / time / 文字列）を time に。解釈不能は None。"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
     if isinstance(v, time):
@@ -10751,14 +10756,14 @@ def _excel_scalar_to_time_optional(v) -> time | None:
 
 def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
     """
-    master.xlsm 縺ｮ縲後Γ繧､繝ｳ縲崎ｨｭ螳壹す繝ｼ繝亥錐繧定ｧ｣豎ｺ縺吶ｋ�ｼ�VBA MasterGetMainWorksheet 縺ｨ蜷瑚ｶ｣譌ｨ�ｼ峨�
-    縲後�譛医Γ繧､繝ｳ繧ｫ繝ｬ繝ｳ繝繝ｼ縲咲ｭ峨ｒ隱､謗｡逕ｨ縺励↑縺�繧医≧縲後き繝ｬ繝ｳ繝繝ｼ縲阪ｒ蜷ｫ繧蜷榊燕縺ｯ髯､螟悶＠縲�
-    隍�謨ｰ蛟呵｣懊�ｯ繧ｷ繝ｼ繝亥錐縺梧怙遏ｭ縺ｮ繧ゅ�ｮ繧貞━蜈医☆繧九�
+    master.xlsm の「メイン」設定シート名を解決する（VBA MasterGetMainWorksheet と同趣旨）。
+    「〇月メインカレンダー」等を誤採用しないよう「カレンダー」を含む名前は除外し、
+    複数候補はシート名が最短のものを優先する。
     """
-    for prefer in ("繝｡繧､繝ｳ", "繝｡繧､繝ｳ_", "Main"):
+    for prefer in ("メイン", "メイン_", "Main"):
         if prefer in sheetnames:
             return prefer
-    cand = [sn for sn in sheetnames if "繝｡繧､繝ｳ" in sn and "繧ｫ繝ｬ繝ｳ繝繝ｼ" not in sn]
+    cand = [sn for sn in sheetnames if "メイン" in sn and "カレンダー" not in sn]
     if not cand:
         return None
     return min(cand, key=len)
@@ -10766,8 +10771,8 @@ def _pick_master_main_sheet_name(sheetnames: list[str]) -> str | None:
 
 def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | None, time | None]:
     """
-    master.xlsm 縺ｮ繝｡繧､繝ｳ繧ｷ繝ｼ繝� A12�ｼ育ｨｼ蜒埼幕蟋具ｼ峨�ｻB12�ｼ育ｨｼ蜒咲ｵゆｺ��ｼ峨ｒ隱ｭ繧縲�
-    縺�縺壹ｌ縺区ｬ�謳阪�ｻ荳肴ｭ｣繝ｻ髢句ｧ�>=邨ゆｺ�縺ｮ縺ｨ縺阪�ｯ (None, None)縲�
+    master.xlsm のメインシート A12（稼働開始）・B12（稼働終了）を読む。
+    いずれか欠損・不正・開始>=終了のときは (None, None)。
     """
     p = (master_path or "").strip()
     if not p or not os.path.isfile(p):
@@ -10777,7 +10782,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
     try:
         wb = load_workbook(p, data_only=True, read_only=False)
     except Exception as e:
-        logging.warning("蟾･蝣ｴ遞ｼ蜒肴凾蛻ｻ: master 繧� openpyxl 縺ｧ髢九￠縺ｾ縺帙ｓ縺ｧ縺励◆�ｼ域里螳壹�ｮ譌･蜀�譫�繧剃ｽｿ縺�縺ｾ縺呻ｼ�: %s", e)
+        logging.warning("工場稼働時刻: master を openpyxl で開けませんでした（既定の日内枠を使います）: %s", e)
         return None, None
     try:
         sn = _pick_master_main_sheet_name(list(wb.sheetnames))
@@ -10790,7 +10795,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
             return None, None
         if st >= et:
             logging.warning(
-                "蟾･蝣ｴ遞ｼ蜒肴凾蛻ｻ: master 繝｡繧､繝ｳ A12/B12 縺碁幕蟋�>=邨ゆｺ� (%s >= %s) 縺ｮ縺溘ａ譌｢螳壼､繧剃ｽｿ縺�縺ｾ縺吶�",
+                "工場稼働時刻: master メイン A12/B12 が開始>=終了 (%s >= %s) のため既定値を使います。",
                 st,
                 et,
             )
@@ -10805,8 +10810,8 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
 
 def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None, time | None]:
     """
-    master.xlsm 縺ｮ繝｡繧､繝ｳ繧ｷ繝ｼ繝� A15�ｼ亥ｮ壼ｸｸ髢句ｧ具ｼ峨�ｻB15�ｼ亥ｮ壼ｸｸ邨ゆｺ��ｼ峨ｒ隱ｭ繧縲�
-    縺�縺壹ｌ縺区ｬ�謳阪�ｻ荳肴ｭ｣繝ｻ髢句ｧ�>=邨ゆｺ�縺ｮ縺ｨ縺阪�ｯ (None, None)縲�
+    master.xlsm のメインシート A15（定常開始）・B15（定常終了）を読む。
+    いずれか欠損・不正・開始>=終了のときは (None, None)。
     """
     p = (master_path or "").strip()
     if not p or not os.path.isfile(p):
@@ -10817,7 +10822,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
         wb = load_workbook(p, data_only=True, read_only=False)
     except Exception as e:
         logging.warning(
-            "螳壼ｸｸ譎ょ綾: master 繧� openpyxl 縺ｧ髢九￠縺ｾ縺帙ｓ縺ｧ縺励◆�ｼ育ｵ先棡繧ｷ繝ｼ繝医�ｮ螳壼ｸｸ螟也捩濶ｲ繧偵せ繧ｭ繝�繝暦ｼ�: %s",
+            "定常時刻: master を openpyxl で開けませんでした（結果シートの定常外着色をスキップ）: %s",
             e,
         )
         return None, None
@@ -10832,7 +10837,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
             return None, None
         if st >= et:
             logging.warning(
-                "螳壼ｸｸ譎ょ綾: master 繝｡繧､繝ｳ A15/B15 縺碁幕蟋�>=邨ゆｺ� (%s >= %s) 縺ｮ縺溘ａ逹濶ｲ繝ｻ豈碑ｼ�縺ｫ菴ｿ縺�縺ｾ縺帙ｓ縲�",
+                "定常時刻: master メイン A15/B15 が開始>=終了 (%s >= %s) のため着色・比較に使いません。",
                 st,
                 et,
             )
@@ -10847,7 +10852,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
 
 @contextmanager
 def _override_default_factory_hours_from_master(master_path: str):
-    """谿ｵ髫�2縺ｮ髢薙□縺� DEFAULT_START_TIME / DEFAULT_END_TIME 繧� master 繝｡繧､繝ｳ A12/B12 縺ｧ荳頑嶌縺阪�"""
+    """段階2の間だけ DEFAULT_START_TIME / DEFAULT_END_TIME を master メイン A12/B12 で上書き。"""
     global DEFAULT_START_TIME, DEFAULT_END_TIME
     orig_s, orig_e = DEFAULT_START_TIME, DEFAULT_END_TIME
     ns, ne = _read_master_main_factory_operating_times(master_path)
@@ -10856,7 +10861,7 @@ def _override_default_factory_hours_from_master(master_path: str):
             DEFAULT_START_TIME = ns
             DEFAULT_END_TIME = ne
             logging.info(
-                "蟾･蝣ｴ遞ｼ蜒肴棧: master.xlsm 繝｡繧､繝ｳ A12/B12 繧呈治逕ｨ 竊� %s �ｽ� %s�ｼ育ｵ先棡_* 縺ｮ譌･蜀�繧ｰ繝ｪ繝�繝峨�ｻ驟榊床譫��ｼ�",
+                "工場稼働枠: master.xlsm メイン A12/B12 を採用 → %s ～ %s（結果_* の日内グリッド・配台枠）",
                 DEFAULT_START_TIME.strftime("%H:%M"),
                 DEFAULT_END_TIME.strftime("%H:%M"),
             )
@@ -10867,15 +10872,15 @@ def _override_default_factory_hours_from_master(master_path: str):
 
 def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, break1_end=None):
     """
-    蛯呵�縺九ｉ荳ｭ謚懊￠譎る俣繧呈耳螳壹☆繧九Ο繝ｼ繧ｫ繝ｫ陬懈ｭ｣縲�
-    AI縺御ｸｭ謚懊￠繧定ｿ斐＆縺ｪ縺�蝣ｴ蜷医�ｮ繝輔ぉ繧､繝ｫ繧ｻ繝ｼ繝輔→縺励※菴ｿ縺�縲�
-    master.xlsm 繧ｫ繝ｬ繝ｳ繝繝ｼ逕ｱ譚･縺ｮ莨第嚊蛹ｺ蛻�: 蜑堺ｼ�=蜊亥燕蟷ｴ莨代�ｻ蜊亥ｾ後�ｮ縺ｿ蜍､蜍吶∝ｾ御ｼ�=蜊亥ｾ悟ｹｴ莨代�ｻ蜊亥燕縺ｮ縺ｿ蜍､蜍呻ｼ亥�ｺ蜍､邁ｿ.txt 縺ｨ蜷檎ｾｩ�ｼ峨�
-    蜑堺ｼ代�ｻ蠕御ｼ代�ｮ蠅�逡後�ｯ繝｡繝ｳ繝舌�ｼ蜍､諤�縺ｮ莨第�ｩ譎る俣1_髢句ｧ�/邨ゆｺ��ｼ域悴謖�螳壽凾縺ｯ DEFAULT_BREAKS[0]�ｼ峨↓蜷医ｏ縺帙ｋ縲�
+    備考から中抜け時間を推定するローカル補正。
+    AIが中抜けを返さない場合のフェイルセーフとして使う。
+    master.xlsm カレンダー由来の休暇区分: 前休=午前年休・午後のみ勤務、後休=午後年休・午前のみ勤務（出勤簿.txt と同義）。
+    前休・後休の境界はメンバー勤怠の休憩時間1_開始/終了（未指定時は DEFAULT_BREAKS[0]）に合わせる。
     """
     if reason_text is None:
         return None, None
     txt = str(reason_text).strip()
-    if not txt or txt.lower() in ("nan", "none", "null", "騾壼ｸｸ"):
+    if not txt or txt.lower() in ("nan", "none", "null", "通常"):
         return None, None
 
     b1_s = break1_start if break1_start is not None else DEFAULT_BREAKS[0][0]
@@ -10883,64 +10888,64 @@ def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, 
 
     noon_end = time(12, 0)
     afternoon_start = time(13, 0)
-    # 繧ｫ繝ｬ繝ｳ繝繝ｼ險伜捷縺ｨ荳閾ｴ縺輔○繧具ｼ医す繝輔ヨ譎ょ綾縺瑚ｪ､縺｣縺ｦ縺�繧句�ｴ蜷医�ｮ陬懷ｮ檎畑縲よｭ｣縺励＞陦後〒縺ｯ蛹ｺ髢薙′遨ｺ縺ｫ縺ｪ繧願ｿｽ蜉�縺輔ｌ縺ｪ縺��ｼ�
-    if txt == "蜑堺ｼ�":
-        # 豁｣縺励＞陦後�ｯ蜃ｺ蜍､縺御ｼ第�ｩ1邨ゆｺ�莉･髯阪〒陬懷ｮ御ｸ崎ｦ√ょ�ｨ譌･繧ｷ繝輔ヨ縺ｮ隱､蜈･蜉帶凾縺ｯ縺昴％縺ｾ縺ｧ繧剃ｸｭ謚懊￠�ｼ亥壕蜑榊ｹｴ莨醍嶌蠖難ｼ�
+    # カレンダー記号と一致させる（シフト時刻が誤っている場合の補完用。正しい行では区間が空になり追加されない）
+    if txt == "前休":
+        # 正しい行は出勤が休憩1終了以降で補完不要。全日シフトの誤入力時はそこまでを中抜け（午前年休相当）
         if start_t and start_t < b1_e:
             return start_t, b1_e
         return None, None
-    if txt == "蠕御ｼ�":
+    if txt == "後休":
         if end_t and b1_s < end_t:
             return b1_s, end_t
         return None, None
 
-    # 1) 譏守､ｺ逧�縺ｪ譎ょ綾遽�蝗ｲ�ｼ井ｾ�: 11:00-14:00 / 11:00�ｽ�14:00�ｼ�
-    m = re.search(r"(\d{1,2}[:�ｼ咯\d{2})\s*[~縲彌-�ｼ阪�ｼ]\s*(\d{1,2}[:�ｼ咯\d{2})", txt)
+    # 1) 明示的な時刻範囲（例: 11:00-14:00 / 11:00～14:00）
+    m = re.search(r"(\d{1,2}[:：]\d{2})\s*[~〜\-－ー]\s*(\d{1,2}[:：]\d{2})", txt)
     if m:
-        s = parse_time_str(m.group(1).replace("�ｼ�", ":"), None)
-        e = parse_time_str(m.group(2).replace("�ｼ�", ":"), None)
+        s = parse_time_str(m.group(1).replace("：", ":"), None)
+        e = parse_time_str(m.group(2).replace("：", ":"), None)
         if s and e and s < e:
             return s, e
 
-    # 2) 縺ゅ＞縺ｾ縺�隱橸ｼ亥壕蜑�/蜊亥ｾ�/邨よ律�ｼ� + 迴ｾ蝣ｴ髮｢閼ｱ繝ｻ莨第嚊邉ｻ繧ｭ繝ｼ繝ｯ繝ｼ繝�
-    # 縲悟壕蠕御ｼ代∩縺ｧ縺吶咲ｭ峨�ｯ縲悟壕蠕後阪ｒ蜷ｫ繧縺後∵立繝ｭ繧ｸ繝�繧ｯ縺ｯ縲梧栢縺代咲ｭ峨�ｮ縺ｿ隕九※縺翫ｊ荳ｭ謚懊￠謗ｨ螳壹↓蛻ｰ驕斐＠縺ｪ縺九▲縺�
+    # 2) あいまい語（午前/午後/終日） + 現場離脱・休暇系キーワード
+    # 「午後休みです」等は「午後」を含むが、旧ロジックは「抜け」等のみ見ており中抜け推定に到達しなかった
     leave_keywords = (
-        "莠句漁謇", "莨夊ｭｰ", "謨呵ご", "遐比ｿｮ", "螟門�ｺ", "髮｢繧�", "謚懊￠", "荳ｭ謚懊￠", "謇灘粋縺�",
-        "莨代∩", "莨第嚊", "谺�蜍､",
+        "事務所", "会議", "教育", "研修", "外出", "離れ", "抜け", "中抜け", "打合せ",
+        "休み", "休暇", "欠勤",
     )
     has_leave_hint = any(k in txt for k in leave_keywords)
     if not has_leave_hint:
         return None, None
 
-    if ("邨よ律" in txt) or ("1譌･" in txt and "騾壼ｸｸ" not in txt):
+    if ("終日" in txt) or ("1日" in txt and "通常" not in txt):
         return start_t, end_t
-    if ("蜊亥燕荳ｭ" in txt) or ("蜊亥燕" in txt):
+    if ("午前中" in txt) or ("午前" in txt):
         return start_t, noon_end
-    if ("蜊亥ｾ�" in txt):
+    if ("午後" in txt):
         return afternoon_start, end_t
 
     return None, None
 
 
-# 邨先棡_繧ｫ繝ｬ繝ｳ繝繝ｼ(蜃ｺ蜍､邁ｿ) 縺ｮ騾蜍､陦ｨ遉ｺ縲７BA 蜃ｺ蜍､邁ｿ縲悟ｾ御ｼ代搾ｼ亥壕蠕悟ｹｴ莨托ｼ峨→蜷梧ｧ倥↓螳溯ｳｪ 莨第�ｩ譎る俣1_髢句ｧ九〒邨ゆｺ�縺ｨ縺ｿ縺ｪ縺吶�
+# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に実質 休憩時間1_開始で終了とみなす。
 _AFTERNOON_OFF_DISPLAY_END = DEFAULT_BREAKS[0][0]
 
 
 def _reason_is_afternoon_off(reason: str) -> bool:
-    """蠕御ｼ托ｼ亥壕蠕悟ｹｴ莨代�ｻ蜊亥燕縺ｮ縺ｿ蜍､蜍呻ｼ峨∪縺溘�ｯ蛯呵�縺ｮ蜊亥ｾ御ｼ醍ｳｻ縲�"""
+    """後休（午後年休・午前のみ勤務）または備考の午後休系。"""
     r = str(reason or "")
-    return ("蜊亥ｾ�" in r and ("莨�" in r or "莨代∩" in r)) or ("蠕御ｼ�" in r)
+    return ("午後" in r and ("休" in r or "休み" in r)) or ("後休" in r)
 
 
 def _reason_is_morning_off(reason: str) -> bool:
-    """蜑堺ｼ托ｼ亥壕蜑榊ｹｴ莨代�ｻ蜊亥ｾ後�ｮ縺ｿ蜍､蜍呻ｼ峨ゅき繝ｬ繝ｳ繝繝ｼ逕ｱ譚･縺ｮ逡･蜿ｷ縺ｮ縺ｿ譏守､ｺ謇ｱ縺��ｼ井ｺ句漁謇蜍､蜍吶↑縺ｩ縺ｨ豺ｷ蜷後＠縺ｪ縺��ｼ峨�"""
-    return "蜑堺ｼ�" in str(reason or "")
+    """前休（午前年休・午後のみ勤務）。カレンダー由来の略号のみ明示扱い（事務所勤務などと混同しない）。"""
+    return "前休" in str(reason or "")
 
 
 def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
     """
-    驟榊床縺ｯ breaks_dt 縺ｮ蜊亥ｾ御ｸｭ謚懊￠縺ｧ豁｣縺励￥縺ｪ繧倶ｸ譁ｹ縲‘nd_dt 縺� 17:00 縺ｮ縺ｾ縺ｾ縺�縺ｨ邨先棡繧ｫ繝ｬ繝ｳ繝繝ｼ縺ｮ騾蜍､蛻励□縺題ｪ､繧九�
-    蠕御ｼ托ｼ亥壕蠕悟ｹｴ莨托ｼ峨∪縺溘�ｯ蛯呵�縺悟壕蠕御ｼ代∩邉ｻ縺ｧ縲∝ｮ壽凾縺ｾ縺ｧ邯壹￥蜊亥ｾ後�ｮ荳ｭ謚懊￠縺後≠繧九→縺阪□縺鷹蜍､陦ｨ遉ｺ繧剃ｼ第�ｩ譎る俣1_髢句ｧ九↓謠�縺医ｋ�ｼ�end_dt 譛ｬ菴薙�ｯ螟画峩縺励↑縺��ｼ峨�
+    配台は breaks_dt の午後中抜けで正しくなる一方、end_dt が 17:00 のままだと結果カレンダーの退勤列だけ誤る。
+    後休（午後年休）または備考が午後休み系で、定時まで続く午後の中抜けがあるときだけ退勤表示を休憩時間1_開始に揃える（end_dt 本体は変更しない）。
     """
     if not entry.get("is_working"):
         return None
@@ -10973,9 +10978,9 @@ def _calendar_display_clock_out_for_calendar_sheet(entry: dict, day_date: date):
 
 def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reason):
     """
-    蛟倶ｺｺ_* 繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ縺ｮ10蛻�譫�縺御ｼ第�ｩ蟶ｯ縺ｫ蜈･繧九→縺阪�ｮ譁�險縲�
-    譏ｼ鬟溘↑縺ｩ騾壼ｸｸ莨第�ｩ縺ｯ縲御ｼ第�ｩ縲阪ょｾ御ｼ托ｼ亥壕蠕悟ｹｴ莨托ｼ峨〒螳壽凾縺ｾ縺ｧ蟾･蝣ｴ縺ｫ縺�縺ｪ縺�蜊亥ｾ悟ｸｯ縺ｯ縲御ｼ第嚊縲阪�
-    蜑堺ｼ托ｼ亥壕蜑榊ｹｴ莨托ｼ峨〒蜊亥燕縺ｮ谺�蜍､蛹ｺ髢薙′莨第�ｩ蟶ｯ縺ｨ縺励※蜈･縺｣縺ｦ縺�繧句�ｴ蜷医�ｯ縲御ｼ第嚊縲阪�
+    個人_* スケジュールの10分枠が休憩帯に入るときの文言。
+    昼食など通常休憩は「休憩」。後休（午後年休）で定時まで工場にいない午後帯は「休暇」。
+    前休（午前年休）で午前の欠勤区間が休憩帯として入っている場合は「休暇」。
     """
     reason = str(reason or "")
     afternoon_off = _reason_is_afternoon_off(reason)
@@ -10990,12 +10995,12 @@ def _member_schedule_break_cell_label(grid_mid_dt, breaks_dt, shift_end_dt, reas
             if isinstance(bs, datetime):
                 bs = bs.time()
             if afternoon_off and bs >= DEFAULT_BREAKS[0][0] and b_e >= shift_end_dt - timedelta(seconds=2):
-                return "莨第嚊"
+                return "休暇"
             if morning_off and bs < DEFAULT_BREAKS[0][0]:
                 be_t = b_e.time() if isinstance(b_e, datetime) else b_e
                 if be_t <= time(13, 0):
-                    return "莨第嚊"
-        return "莨第�ｩ"
+                    return "休暇"
+        return "休憩"
     return None
 
 
@@ -11007,40 +11012,40 @@ def _member_schedule_off_shift_label(
     reason: str,
 ) -> str:
     """
-    蛟倶ｺｺ_* 繧ｷ繝ｼ繝医〒謇螳壼�ｺ騾蜍､縺ｮ螟門�ｴ縺ｮ10蛻�譫�縲�
-    蜑堺ｼ代�ｮ蜊亥燕�ｼ亥ｷ･蝣ｴ譌･縺ｮ謇螳夐幕蟋具ｽ槫壕蠕悟�ｺ蜍､縺ｾ縺ｧ�ｼ峨�ｯ蟷ｴ莨代∝ｾ御ｼ代�ｮ蜊亥ｾ後�ｯ蟷ｴ莨代ゅ◎繧御ｻ･螟悶�ｮ繧ｷ繝輔ヨ螟悶�ｯ蜍､蜍吝､悶�
+    個人_* シートで所定出退勤の外側の10分枠。
+    前休の午前（工場日の所定開始～午後出勤まで）は年休、後休の午後は年休。それ以外のシフト外は勤務外。
     """
     r = str(reason or "")
     day_start = datetime.combine(day_date, DEFAULT_START_TIME)
     day_end = datetime.combine(day_date, DEFAULT_END_TIME)
     if grid_mid_dt < d_start_dt:
         if _reason_is_morning_off(r) and grid_mid_dt >= day_start:
-            return "蟷ｴ莨�"
-        return "蜍､蜍吝､�"
+            return "年休"
+        return "勤務外"
     if grid_mid_dt >= d_end_dt:
         if _reason_is_afternoon_off(r) and grid_mid_dt < day_end:
-            return "蟷ｴ莨�"
-        return "蜍､蜍吝､�"
-    return "蜍､蜍吝､�"
+            return "年休"
+        return "勤務外"
+    return "勤務外"
 
 
 def _member_schedule_full_day_off_label(entry) -> str:
     """
-    蜈ｨ譌･髱槫共蜍呻ｼ�is_working=False�ｼ峨�ｮ蛟倶ｺｺ繧ｷ繝ｼ繝亥�励�ｮ陦ｨ遉ｺ縲�
-    莨第嚊蛹ｺ蛻�縺悟ｹｴ莨托ｼ医き繝ｬ繝ｳ繝繝ｼ *�ｼ峨�ｮ縺ｨ縺阪�ｯ縲主ｹｴ莨代上ょｷ･蝣ｴ莨第律縺ｪ縺ｩ縺ｯ縲惹ｼ代上�
+    全日非勤務（is_working=False）の個人シート列の表示。
+    休暇区分が年休（カレンダー *）のときは『年休』。工場休日などは『休』。
     """
     if not entry:
-        return "莨�"
+        return "休"
     r = str(entry.get("reason") or "").strip()
-    if r == "蟷ｴ莨�" or r.startswith("蟷ｴ莨� "):
-        return "蟷ｴ莨�"
-    return "莨�"
+    if r == "年休" or r.startswith("年休 "):
+        return "年休"
+    return "休"
 
 
 def _attendance_remark_text(row) -> str:
     """
-    蜍､諤�1陦後°繧峨悟ｙ閠�縲榊�励�ｮ繝�繧ｭ繧ｹ繝医�ｮ縺ｿ蜿門ｾ励☆繧九�
-    蜍､諤�AI縺ｮ隗｣譫舌Μ繧ｹ繝医∈縺ｮ謚募�･縺ｯ縺薙�ｮ蛻励�ｮ縺ｿ縲Ｓeason 譁�蟄怜�励�ｯ load_attendance 縺ｧ蛯呵�縺ｨ莨第嚊蛹ｺ蛻�繧貞粋謌舌☆繧九�
+    勤怠1行から「備考」列のテキストのみ取得する。
+    勤怠AIの解析リストへの投入はこの列のみ。reason 文字列は load_attendance で備考と休暇区分を合成する。
     """
     if row is None:
         return ""
@@ -11059,7 +11064,7 @@ def _attendance_remark_text(row) -> str:
 
 
 def _attendance_leave_type_text(row) -> str:
-    """蜍､諤�1陦後°繧峨御ｼ第嚊蛹ｺ蛻�縲榊�暦ｼ医き繝ｬ繝ｳ繝繝ｼ逕ｱ譚･縺ｮ 蜑堺ｼ�/蠕御ｼ� 遲会ｼ峨�"""
+    """勤怠1行から「休暇区分」列（カレンダー由来の 前休/後休 等）。"""
     if row is None:
         return ""
     try:
@@ -11077,7 +11082,7 @@ def _attendance_leave_type_text(row) -> str:
 
 
 def _ai_json_bool(v, default: bool = False) -> bool:
-    """蜍､諤�蛯呵� AI 縺ｮ逵溷⊃蛟､�ｼ�bool / 謨ｰ蛟､ / 譁�蟄怜�励�ｮ謠ｺ繧後ｒ蜷ｸ蜿趣ｼ峨�"""
+    """勤怠備考 AI の真偽値（bool / 数値 / 文字列の揺れを吸収）。"""
     if v is None:
         return default
     if isinstance(v, bool):
@@ -11089,33 +11094,33 @@ def _ai_json_bool(v, default: bool = False) -> bool:
             return default
         return v != 0.0
     s = str(v).strip().lower()
-    if s in ("true", "1", "yes", "y", "縺ｯ縺�", "逵�", "on"):
+    if s in ("true", "1", "yes", "y", "はい", "真", "on"):
         return True
-    if s in ("false", "0", "no", "n", "縺�縺�縺�", "蛛ｽ", "off", ""):
+    if s in ("false", "0", "no", "n", "いいえ", "偽", "off", ""):
         return False
     return default
 
 
 def _parse_attendance_overtime_end_optional(v) -> time | None:
-    """蜍､諤�縲梧ｮ区･ｭ邨よ･ｭ縲榊�励よ怏蜉ｹ縺ｪ譎ょ綾縺ｮ縺ｿ縲らｩｺ繝ｻ荳肴ｭ｣縺ｯ None�ｼ�_excel_scalar_to_time_optional 縺ｨ蜷瑚ｶ｣譌ｨ�ｼ峨�"""
+    """勤怠「残業終業」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
     return _excel_scalar_to_time_optional(v)
 
 
 def load_attendance_and_analyze(members):
     attendance_data = {}
-    # 窶ｻ縲悟共諤�蛯呵�縲阪�ｯ master 蜷�繝｡繝ｳ繝舌�ｼ繧ｷ繝ｼ繝医�ｮ縲悟ｙ閠�縲榊�励�ｮ縺ｿ縲ゅΓ繧､繝ｳ蜀榊━蜈医�ｻ迚ｹ蛻･謖�螳喟蛯呵�縺ｯ蛻･API�ｼ�generate_plan 蛛ｴ縺ｧ霑ｽ險假ｼ峨�
+    # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
     ai_log = {
-        "�ｼ域ｳｨ�ｼ峨％縺ｮ繧ｷ繝ｼ繝医�ｮ隕区婿": "蜈磯�ｭ2陦後�ｯ蜍､諤�縲悟ｙ閠�縲阪�ｮ蜃ｺ騾蜍､AI縺ｮ縺ｿ縲ゅΓ繧､繝ｳ蜀榊━蜈医�ｻ迚ｹ蛻･謖�螳壹�ｯ荳区ｮｵ縺ｮJSON縺ｨ縲契*_AI_API縲崎｡後�",
-        "蜍､諤�蛯呵ダAI_API": "縺ｪ縺�",
-        "蜍､諤�蛯呵ダAI_隧ｳ邏ｰ": "隗｣譫仙ｯｾ雎｡縺ｮ蛯呵�陦後↑縺�",
+        "（注）このシートの見方": "先頭2行は勤怠「備考」の出退勤AIのみ。メイン再優先・特別指定は下段のJSONと「_*_AI_API」行。",
+        "勤怠備考_AI_API": "なし",
+        "勤怠備考_AI_詳細": "解析対象の備考行なし",
     }
     
-    # 1. 繝｡繝ｳ繝舌�ｼ蛻･繧ｷ繝ｼ繝医°繧峨�ｮ隱ｭ縺ｿ霎ｼ縺ｿ
+    # 1. メンバー別シートからの読み込み
     all_records = []
     try:
         xls = pd.ExcelFile(MASTER_FILE)
         for sheet_name in xls.sheet_names:
-            if "繧ｫ繝ｬ繝ｳ繝繝ｼ" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
+            if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
                 continue 
                 
             m_name = sheet_name.strip()
@@ -11124,55 +11129,55 @@ def load_attendance_and_analyze(members):
                 
             df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
             df_sheet.columns = df_sheet.columns.str.strip()
-            df_sheet['繝｡繝ｳ繝舌�ｼ'] = m_name 
+            df_sheet['メンバー'] = m_name 
             all_records.append(df_sheet)
             
         if all_records:
             df = pd.concat(all_records, ignore_index=True)
-            df['譌･莉�'] = pd.to_datetime(df['譌･莉�'], errors='coerce').dt.date
-            df = df.dropna(subset=['譌･莉�'])
-            logging.info(f"縲施MASTER_FILE}縲上�ｮ蜷�繝｡繝ｳ繝舌�ｼ縺ｮ蜍､諤�繧ｷ繝ｼ繝医ｒ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�")
+            df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
+            df = df.dropna(subset=['日付'])
+            logging.info(f"『{MASTER_FILE}』の各メンバーの勤怠シートを読み込みました。")
             _cols = {str(c).strip() for c in df.columns}
             if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
                 logging.info(
-                    "蜍､諤�蛻�: AI 蜈･蜉帙�ｯ縲�%s縲阪�ｮ縺ｿ縲ょｙ閠�縺檎ｩｺ縺ｮ譌･縺ｯ縲�%s縲搾ｼ亥燕莨代�ｻ蠕御ｼ代�ｻ莉匁侠轤ｹ蜍､蜍吶↑縺ｩ�ｼ峨ｒ reason 縺ｫ蜿肴丐縺励∪縺吶�",
+                    "勤怠列: AI 入力は「%s」のみ。備考が空の日は「%s」（前休・後休・他拠点勤務など）を reason に反映します。",
                     ATT_COL_REMARK,
                     ATT_COL_LEAVE_TYPE,
                 )
             elif ATT_COL_REMARK not in _cols:
                 logging.warning(
-                    "蜍､諤�繝�繝ｼ繧ｿ縺ｫ縲�%s縲榊�励′縺ゅｊ縺ｾ縺帙ｓ縲ょｙ閠�繝吶�ｼ繧ｹ縺ｮ AI 隗｣譫舌�ｯ遨ｺ謇ｱ縺�縺ｫ縺ｪ繧翫∪縺吶�",
+                    "勤怠データに「%s」列がありません。備考ベースの AI 解析は空扱いになります。",
                     ATT_COL_REMARK,
                 )
             if ATT_COL_OT_END in _cols:
                 logging.info(
-                    "蜍､諤�蛻�: 莉ｻ諢上�%s縲阪〒騾蜍､荳企剞譎ょ綾繧呈欠螳壹〒縺阪∪縺呻ｼ亥�ｨ譌･莨代∩陦後〒縺ｯ辟｡隕厄ｼ峨�",
+                    "勤怠列: 任意「%s」で退勤上限時刻を指定できます（全日休み行では無視）。",
                     ATT_COL_OT_END,
                 )
         else:
-            raise FileNotFoundError("譛牙柑縺ｪ繝｡繝ｳ繝舌�ｼ蛻･蜍､諤�繧ｷ繝ｼ繝医′隕九▽縺九ｊ縺ｾ縺帙ｓ縲�")
+            raise FileNotFoundError("有効なメンバー別勤怠シートが見つかりません。")
             
     except Exception as e:
-        logging.warning(f"蜍､諤�繧ｷ繝ｼ繝郁ｪｭ縺ｿ霎ｼ縺ｿ繧ｨ繝ｩ繝ｼ: {e} 繝�繝輔か繝ｫ繝医き繝ｬ繝ｳ繝繝ｼ繧堤函謌舌＠縺ｾ縺吶�")
+        logging.warning(f"勤怠シート読み込みエラー: {e} デフォルトカレンダーを生成します。")
         default_dates = generate_default_calendar_dates(TARGET_YEAR, TARGET_MONTH)
         records = []
         for d in default_dates:
-            for m in members: records.append({'譌･莉�': d, '繝｡繝ｳ繝舌�ｼ': m, '蛯呵�': '騾壼ｸｸ'})
+            for m in members: records.append({'日付': d, 'メンバー': m, '備考': '通常'})
         df = pd.DataFrame(records)
 
-    # 2. AI 縺ｫ繧医ｋ蜍､諤�譁�閼医�ｮ隗｣譫撰ｼ亥ｙ閠�縺檎ｩｺ縺ｧ繧ゆｼ第嚊蛹ｺ蛻�縺ｮ縺ｿ縺ｮ陦後�ｯ AI 縺ｫ貂｡縺励∬｡ｨ險俶昭繧後�ｯ繝｢繝�繝ｫ縺ｫ隗｣驥医＆縺帙ｋ�ｼ�
+    # 2. AI による勤怠文脈の解析（備考が空でも休暇区分のみの行は AI に渡し、表記揺れはモデルに解釈させる）
     remarks_to_analyze = []
     for _, row in df.iterrows():
-        m = str(row.get('繝｡繝ｳ繝舌�ｼ', '')).strip()
+        m = str(row.get('メンバー', '')).strip()
         if m not in members:
             continue
         rem = _attendance_remark_text(row)
         lt = _attendance_leave_type_text(row)
-        d_str = row['譌･莉�'].strftime("%Y-%m-%d") if pd.notna(row['譌･莉�']) else ""
+        d_str = row['日付'].strftime("%Y-%m-%d") if pd.notna(row['日付']) else ""
         if rem:
-            remarks_to_analyze.append(f"{d_str}_{m} 縺ｮ蛯呵�: {rem}")
-        elif lt and lt not in ("騾壼ｸｸ", ""):
-            remarks_to_analyze.append(f"{d_str}_{m} 縺ｮ莨第嚊蛹ｺ蛻��ｼ亥ｙ閠�縺ｯ遨ｺ�ｼ�: {lt}")
+            remarks_to_analyze.append(f"{d_str}_{m} の備考: {rem}")
+        elif lt and lt not in ("通常", ""):
+            remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -11181,50 +11186,50 @@ def load_attendance_and_analyze(members):
         ).hexdigest()
         ai_cache = load_ai_cache()
 
-        # 蜷御ｸ蛯呵�繧ｻ繝�繝医�ｯ繧ｭ繝｣繝�繧ｷ繝･繧貞━蜈亥茜逕ｨ縺励、PI繧ｳ繝ｼ繝ｫ繧堤ｯ邏�
+        # 同一備考セットはキャッシュを優先利用し、APIコールを節約
         cached_data = get_cached_ai_result(ai_cache, cache_key)
         if cached_data is not None:
             ai_parsed = cached_data
-            ai_log["蜍､諤�蛯呵ダAI_API"] = "縺ｪ縺�(繧ｭ繝｣繝�繧ｷ繝･菴ｿ逕ｨ)"
-            ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "繧ｭ繝｣繝�繧ｷ繝･繝偵ャ繝�"
+            ai_log["勤怠備考_AI_API"] = "なし(キャッシュ使用)"
+            ai_log["勤怠備考_AI_詳細"] = "キャッシュヒット"
         elif not API_KEY:
             ai_parsed = {}
-            ai_log["蜍､諤�蛯呵ダAI_API"] = "縺ｪ縺�"
-            ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "GEMINI_API_KEY譛ｪ險ｭ螳壹�ｮ縺溘ａ蜍､諤�蛯呵アI繧偵せ繧ｭ繝�繝�"
-            logging.info("GEMINI_API_KEY 譛ｪ險ｭ螳壹�ｮ縺溘ａ蛯呵アI隗｣譫舌ｒ繧ｹ繧ｭ繝�繝励＠縺ｾ縺励◆縲�")
+            ai_log["勤怠備考_AI_API"] = "なし"
+            ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定のため勤怠備考AIをスキップ"
+            logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
         else:
-            logging.info("笆� AI縺瑚､�謨ｰ譌･縺ｮ迚ｹ險倅ｺ矩��繧定ｧ｣譫蝉ｸｭ...")
-            ai_log["蜍､諤�蛯呵ダAI_API"] = "縺ゅｊ"
+            logging.info("■ AIが複数日の特記事項を解析中...")
+            ai_log["勤怠備考_AI_API"] = "あり"
             
             prompt = f"""
-            莉･荳九�ｮ蜷�譌･繝ｻ繝｡繝ｳ繝舌�ｼ縺ｮ蛯呵�繧定ｪｭ縺ｿ蜿悶ｊ縲∝�ｺ騾蜍､譎ょ綾縺ｮ螟画峩繧�荳ｭ謚懊￠縲∽ｼ第律縺ｮ蛻､螳壹ｒ陦後＞縲゛SON蠖｢蠑上〒蜃ｺ蜉帙＠縺ｦ縺上□縺輔＞縲�
-            繝槭�ｼ繧ｯ繝繧ｦ繝ｳ險伜捷(``` 遲�)縺ｯ荳蛻�蜷ｫ繧√★縲∫ｴ皮ｲ九↑JSON譁�蟄怜�励�ｮ縺ｿ繧定ｿ斐＠縺ｦ縺上□縺輔＞縲�
+            以下の各日・メンバーの備考を読み取り、出退勤時刻の変更や中抜け、休日の判定を行い、JSON形式で出力してください。
+            マークダウン記号(``` 等)は一切含めず、純粋なJSON文字列のみを返してください。
 
-            縲辱SON縺ｮ蜃ｺ蜉帛ｽ｢蠑擾ｼ医く繝ｼ蜷阪ｒ蜴ｳ蟇�縺ｫ螳医ｋ縺薙→�ｼ峨�
+            【JSONの出力形式（キー名を厳密に守ること）】
             {{
-              "YYYY-MM-DD_繝｡繝ｳ繝舌�ｼ蜷�": {{
-                "蜃ｺ蜍､譎ょ綾": "HH:MM", 
-                "騾蜍､譎ょ綾": "HH:MM", 
-                "荳ｭ謚懊￠髢句ｧ�": "HH:MM",
-                "荳ｭ謚懊￠邨ゆｺ�": "HH:MM",
-                "菴懈･ｭ蜉ｹ邇�": 1.0,     
+              "YYYY-MM-DD_メンバー名": {{
+                "出勤時刻": "HH:MM", 
+                "退勤時刻": "HH:MM", 
+                "中抜け開始": "HH:MM",
+                "中抜け終了": "HH:MM",
+                "作業効率": 1.0,     
                 "is_holiday": false,
-                "驟榊床荳榊盾蜉�": false
+                "配台不参加": false
               }}
             }}
-            繝ｻ繧ｭ繝ｼ蜷阪�ｯ荳願ｨ倥�ｮ譌･譛ｬ隱槭く繝ｼ繧偵◎縺ｮ縺ｾ縺ｾ菴ｿ縺��ｼ郁恭隱槭く繝ｼ縺ｫ鄂ｮ縺肴鋤縺医↑縺��ｼ�
-            繝ｻ蜃ｺ蜍､譎ょ綾/騾蜍､譎ょ綾: 蠖楢ｩｲ陦後�ｮ縲悟ｙ閠�縲阪∪縺溘�ｯ縲御ｼ第嚊蛹ｺ蛻��ｼ亥ｙ閠�縺ｯ遨ｺ�ｼ峨阪�ｮ譁�閼医°繧画耳貂ｬ縲ゆｸ肴�弱ｄ螟画峩縺ｪ縺励↑繧� null
-            繝ｻ荳ｭ謚懊￠髢句ｧ�/邨ゆｺ�: 荳譎ら噪縺ｪ髮｢閼ｱ�ｼ井ｸｭ謚懊￠繝ｻ莠句漁謇繝ｻ莨夊ｭｰ縺ｪ縺ｩ�ｼ峨′縺ゅｋ蝣ｴ蜷医√◎縺ｮ髢句ｧ九�ｻ邨ゆｺ�縲ゅ↑縺�蝣ｴ蜷医�ｯ null
-            繝ｻ譖匁乂隱槭�ｮ隗｣驥井ｾ�:
-              - 縲悟壕蜑堺ｸｭ縺ｯ莠句漁謇縺ｧ菴懈･ｭ縲�=> 荳ｭ謚懊￠髢句ｧ� "08:45", 荳ｭ謚懊￠邨ゆｺ� "12:00"
-              - 縲悟壕蠕後�ｯ莨夊ｭｰ縲�=> 荳ｭ謚懊￠髢句ｧ� "13:00", 荳ｭ謚懊￠邨ゆｺ� "17:00"
-            繝ｻis_holiday: 縺昴�ｮ譌･縺御ｼ夂､ｾ縺ｫ譚･縺ｪ縺�繝ｻ邨よ律莨第嚊繝ｻ谺�蜍､縺ｪ縺ｩ **蜍､蜍呵�ｪ菴薙′縺ｪ縺�** 縺ｨ蛻､譁ｭ縺ｧ縺阪ｋ蝣ｴ蜷医�ｮ縺ｿ true縲ょ壕蜑堺ｼ代�ｻ蜊亥ｾ御ｼ代↑縺ｩ驛ｨ蛻�逧�縺ｪ莨代∩縺ｯ false�ｼ井ｸｭ謚懊￠繧�譎ょ綾縺ｧ陦ｨ迴ｾ�ｼ�
-            繝ｻ驟榊床荳榊盾蜉�: 蜍､蜍吶�ｯ縺ゅｋ縺� **蜉�蟾･繝ｩ繧､繝ｳ縺ｸ縺ｮ驟榊床�ｼ�OP/AS 縺ｮ蜑ｲ蠖難ｼ峨↓霈峨○縺ｦ縺ｯ縺�縺代↑縺�** 縺ｨ隱ｭ縺ｿ蜿悶ｌ繧句�ｴ蜷医�ｯ true縲り｡ｨ險倥�ｯ蝠上ｏ縺壽э蜻ｳ縺ｧ蛻､譁ｭ縺吶ｋ縺薙→縲�
-              萓�: 縲碁�榊床荳榊庄縲阪碁�榊床�ｼｮ�ｼｧ縲阪後Λ繧､繝ｳ縺ｫ荵励ｉ縺ｪ縺�縲阪梧怦谺｡轤ｹ讀懊�ｮ縺ｿ縲阪檎せ讀懊〒荳譌･縲阪御ｺ句漁縺ｮ縺ｿ縲阪梧蕗閧ｲ縺ｧ迴ｾ蝣ｴ荳榊庄縲阪梧焔驟阪↑縺励阪後い繧ｵ繧､繝ｳ荳崎ｦ√阪↑縺ｩ縺ｮ謠ｺ繧後ｄ蟀画峇陦ｨ迴ｾ繧ょ性繧縲�
-              騾壼ｸｸ蜍､蜍吶〒迚ｹ縺ｫ蛻ｶ髯舌′隱ｭ縺ｿ蜿悶ｌ縺ｪ縺�蝣ｴ蜷医�ｯ false
-            繝ｻ菴懈･ｭ蜉ｹ邇�: 0.0縲�1.0縺ｮ謨ｰ蛟､
+            ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
+            ・出勤時刻/退勤時刻: 当該行の「備考」または「休暇区分（備考は空）」の文脈から推測。不明や変更なしなら null
+            ・中抜け開始/終了: 一時的な離脱（中抜け・事務所・会議など）がある場合、その開始・終了。ない場合は null
+            ・曖昧語の解釈例:
+              - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
+              - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
+            ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
+            ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
+              例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
+              通常勤務で特に制限が読み取れない場合は false
+            ・作業効率: 0.0〜1.0の数値
             
-            縲千音險倅ｺ矩��繝ｪ繧ｹ繝医�
+            【特記事項リスト】
             {chr(10).join(remarks_to_analyze)}
             """
             try:
@@ -11236,10 +11241,10 @@ def load_attendance_and_analyze(members):
                     ai_parsed = json.loads(match.group(0))
                     put_cached_ai_result(ai_cache, cache_key, ai_parsed)
                     save_ai_cache(ai_cache)
-                    ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "隗｣譫先�仙粥"
+                    ai_log["勤怠備考_AI_詳細"] = "解析成功"
                 else:
                     ai_parsed = {}
-                    ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "JSON繝代�ｼ繧ｹ螟ｱ謨�"
+                    ai_log["勤怠備考_AI_詳細"] = "JSONパース失敗"
             except Exception as e:
                 err_text = str(e)
                 is_quota_or_rate = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
@@ -11247,7 +11252,7 @@ def load_attendance_and_analyze(members):
 
                 if is_quota_or_rate and retry_sec is not None:
                     wait_sec = min(max(retry_sec, 1.0), 90.0)
-                    logging.warning(f"AI騾壻ｿ｡ 429/RESOURCE_EXHAUSTED縲�{wait_sec:.1f}遘貞ｾ�讖溘＠縺ｦ1蝗槭□縺大�崎ｩｦ陦後＠縺ｾ縺吶�")
+                    logging.warning(f"AI通信 429/RESOURCE_EXHAUSTED。{wait_sec:.1f}秒待機して1回だけ再試行します。")
                     time_module.sleep(wait_sec)
                     try:
                         res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
@@ -11257,26 +11262,26 @@ def load_attendance_and_analyze(members):
                             ai_parsed = json.loads(match.group(0))
                             put_cached_ai_result(ai_cache, cache_key, ai_parsed)
                             save_ai_cache(ai_cache)
-                            ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "蜀崎ｩｦ陦後〒隗｣譫先�仙粥"
+                            ai_log["勤怠備考_AI_詳細"] = "再試行で解析成功"
                         else:
                             ai_parsed = {}
-                            ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = "蜀崎ｩｦ陦悟ｾ繰SON繝代�ｼ繧ｹ螟ｱ謨�"
+                            ai_log["勤怠備考_AI_詳細"] = "再試行後JSONパース失敗"
                     except Exception as e2:
                         ai_parsed = {}
-                        logging.warning(f"AI蜀崎ｩｦ陦後お繝ｩ繝ｼ: {e2}")
-                        ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = f"429蠕悟�崎ｩｦ陦悟､ｱ謨�: {e2}"
+                        logging.warning(f"AI再試行エラー: {e2}")
+                        ai_log["勤怠備考_AI_詳細"] = f"429後再試行失敗: {e2}"
                 else:
                     ai_parsed = {}
-                    logging.warning(f"AI騾壻ｿ｡繧ｨ繝ｩ繝ｼ: {e}")
-                    ai_log["蜍､諤�蛯呵ダAI_隧ｳ邏ｰ"] = str(e)
+                    logging.warning(f"AI通信エラー: {e}")
+                    ai_log["勤怠備考_AI_詳細"] = str(e)
     else:
         ai_parsed = {}
 
-    # 3. 譌･莉倥＃縺ｨ縺ｮ蛻ｶ邏�霎樊嶌繧呈ｧ狗ｯ�
+    # 3. 日付ごとの制約辞書を構築
     for _, row in df.iterrows():
-        if pd.isna(row['譌･莉�']): continue
-        curr_date = row['譌･莉�']
-        m = str(row.get('繝｡繝ｳ繝舌�ｼ', '')).strip()
+        if pd.isna(row['日付']): continue
+        curr_date = row['日付']
+        m = str(row.get('メンバー', '')).strip()
         if m not in members: continue
 
         if curr_date not in attendance_data:
@@ -11288,12 +11293,12 @@ def load_attendance_and_analyze(members):
         key = f"{curr_date.strftime('%Y-%m-%d')}_{m}"
         ai_info = ai_parsed.get(key, {})
 
-        is_empty_shift = pd.isna(row.get('蜃ｺ蜍､譎る俣')) and pd.isna(row.get('騾蜍､譎る俣')) and not ai_info
+        is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
         is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
-        exclude_from_line = _ai_json_bool(ai_info.get("驟榊床荳榊盾蜉�"), False)
+        exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
 
-        ai_eff = ai_info.get("菴懈･ｭ蜉ｹ邇�")
-        excel_eff = row.get('菴懈･ｭ蜉ｹ邇�')
+        ai_eff = ai_info.get("作業効率")
+        excel_eff = row.get('作業効率')
         
         if ai_eff is not None:
             eff_val = ai_eff
@@ -11310,37 +11315,37 @@ def load_attendance_and_analyze(members):
         if original_reason:
             if (
                 leave_type
-                and leave_type not in ("騾壼ｸｸ", "")
+                and leave_type not in ("通常", "")
                 and leave_type not in original_reason
             ):
                 reason = f"{leave_type} {original_reason}"
             else:
                 reason = original_reason
-        elif leave_type and leave_type not in ("騾壼ｸｸ", ""):
+        elif leave_type and leave_type not in ("通常", ""):
             reason = leave_type
         else:
-            reason = '騾壼ｸｸ' if not is_empty_shift else '莨第律繧ｷ繝輔ヨ'
+            reason = '通常' if not is_empty_shift else '休日シフト'
 
-        # 繝槭せ繧ｿ縺ｫ蜃ｺ蜍､繝ｻ騾蜍､縺ｮ荳｡譁ｹ縺悟�･縺｣縺ｦ縺�繧区律縺ｯ縲∝共諤�AI縺ｮ蜃ｺ蜍､/騾蜍､譎ょ綾縺ｧ荳頑嶌縺阪＠縺ｪ縺��ｼ井ｼ第嚊蛹ｺ蛻�縺ｮ縺ｿ縺ｮ陦後〒隱､謗ｨ螳壹＆繧後≧繧具ｼ�
-        excel_s = row.get("蜃ｺ蜍､譎る俣")
-        excel_e = row.get("騾蜍､譎る俣")
+        # マスタに出勤・退勤の両方が入っている日は、勤怠AIの出勤/退勤時刻で上書きしない（休暇区分のみの行で誤推定されうる）
+        excel_s = row.get("出勤時間")
+        excel_e = row.get("退勤時間")
         if not pd.isna(excel_s) and not pd.isna(excel_e):
             start_t = parse_time_str(excel_s, DEFAULT_START_TIME)
             end_t = parse_time_str(excel_e, DEFAULT_END_TIME)
         else:
-            start_t = parse_time_str(ai_info.get("蜃ｺ蜍､譎ょ綾") or excel_s, DEFAULT_START_TIME)
-            end_t = parse_time_str(ai_info.get("騾蜍､譎ょ綾") or excel_e, DEFAULT_END_TIME)
+            start_t = parse_time_str(ai_info.get("出勤時刻") or excel_s, DEFAULT_START_TIME)
+            end_t = parse_time_str(ai_info.get("退勤時刻") or excel_e, DEFAULT_END_TIME)
         base_end_t = end_t
 
-        b1_s = parse_time_str(row.get('莨第�ｩ譎る俣1_髢句ｧ�'), DEFAULT_BREAKS[0][0])
-        b1_e = parse_time_str(row.get('莨第�ｩ譎る俣1_邨ゆｺ�'), DEFAULT_BREAKS[0][1])
-        b2_s = parse_time_str(row.get('莨第�ｩ譎る俣2_髢句ｧ�'), DEFAULT_BREAKS[1][0])
-        b2_e = parse_time_str(row.get('莨第�ｩ譎る俣2_邨ゆｺ�'), DEFAULT_BREAKS[1][1])
+        b1_s = parse_time_str(row.get('休憩時間1_開始'), DEFAULT_BREAKS[0][0])
+        b1_e = parse_time_str(row.get('休憩時間1_終了'), DEFAULT_BREAKS[0][1])
+        b2_s = parse_time_str(row.get('休憩時間2_開始'), DEFAULT_BREAKS[1][0])
+        b2_e = parse_time_str(row.get('休憩時間2_終了'), DEFAULT_BREAKS[1][1])
 
-        # 笘�霑ｽ蜉�: AI縺九ｉ荳ｭ謚懊￠譎る俣繧貞叙蠕�
-        mid_break_s = parse_time_str(ai_info.get("荳ｭ謚懊￠髢句ｧ�"), None)
-        mid_break_e = parse_time_str(ai_info.get("荳ｭ謚懊￠邨ゆｺ�"), None)
-        # AI縺御ｸｭ謚懊￠繧定ｿ斐＆縺ｪ縺九▲縺溷�ｴ蜷医�ｯ縲∝ｙ閠�譁�險縺九ｉ繝ｭ繝ｼ繧ｫ繝ｫ謗ｨ螳壹〒陬懷ｮ�
+        # ★追加: AIから中抜け時間を取得
+        mid_break_s = parse_time_str(ai_info.get("中抜け開始"), None)
+        mid_break_e = parse_time_str(ai_info.get("中抜け終了"), None)
+        # AIが中抜けを返さなかった場合は、備考文言からローカル推定で補完
         if not (mid_break_s and mid_break_e):
             fb_s, fb_e = infer_mid_break_from_reason(reason, start_t, end_t, b1_s, b1_e)
             if fb_s and fb_e:
@@ -11359,7 +11364,7 @@ def load_attendance_and_analyze(members):
         end_dt = combine_dt(end_t)
         if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
             logging.warning(
-                "蜍､諤� %s %s: 谿区･ｭ邨よ･ｭ驕ｩ逕ｨ蠕後↓騾蜍､縺悟�ｺ蜍､莉･蜑阪→縺ｪ縺｣縺溘◆繧√∵ｮ区･ｭ邨よ･ｭ繧堤┌隕悶＠縺ｦ螳壽凾騾蜍､縺ｫ謌ｻ縺励∪縺吶�",
+                "勤怠 %s %s: 残業終業適用後に退勤が出勤以前となったため、残業終業を無視して定時退勤に戻します。",
                 curr_date,
                 m,
             )
@@ -11367,11 +11372,11 @@ def load_attendance_and_analyze(members):
             end_dt = combine_dt(end_t)
         breaks_dt = []
         
-        # 騾壼ｸｸ縺ｮ莨第�ｩ繧定ｿｽ蜉�
+        # 通常の休憩を追加
         if b1_s and b1_e: breaks_dt.append((combine_dt(b1_s), combine_dt(b1_e)))
         if b2_s and b2_e: breaks_dt.append((combine_dt(b2_s), combine_dt(b2_e)))
         
-        # 笘�霑ｽ蜉�: 荳ｭ謚懊￠譎る俣縺後≠繧句�ｴ蜷医�ｯ縲∫音蛻･縺ｪ縲御ｼ第�ｩ縲阪→縺励※繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ險育ｮ励↓霑ｽ蜉�
+        # ★追加: 中抜け時間がある場合は、特別な「休憩」としてスケジュール計算に追加
         if mid_break_s and mid_break_e: breaks_dt.append((combine_dt(mid_break_s), combine_dt(mid_break_e)))
         
         is_working = not is_holiday
@@ -11389,69 +11394,69 @@ def load_attendance_and_analyze(members):
 
 
 # ---------------------------------------------------------------------------
-# 蜈ｨ萓晞�ｼ蜈ｱ騾�: 蜉�蟾･蜀�螳ｹ蛻励�ｮ蟾･遞矩��蠎� / 蛟句挨: EC竊呈､懈渊繝ｭ繝ｼ繝ｫ繝代う繝励Λ繧､繝ｳ
+# 全依頼共通: 加工内容列の工程順序 / 個別: EC→検査ロールパイプライン
 # ---------------------------------------------------------------------------
 ROLL_PIPELINE_EC_PROCESS = "EC"
-ROLL_PIPELINE_EC_MACHINE = "EC讖溘貉門漉"
-ROLL_PIPELINE_INSP_PROCESS = "讀懈渊"
-ROLL_PIPELINE_INSP_MACHINE = "辭ｱ陞咲捩讖溘貉門漉"
-# ﾂｧB-3: 蠕檎ｶ壹�ｯ B-2 縺ｮ縲梧､懈渊縲阪↓逶ｸ蠖薙☆繧句ｷ･遞九→縺励※蟾ｻ霑斐＠�ｼ亥酔荳萓晞�ｼ縺ｧ EC 蜈郁｡後�ｻ繝ｭ繝ｼ繝ｫ譫�繝ｻ繝ｪ繝ｯ繧､繝ｳ繝臥ｭ峨�ｯ B-2 縺ｨ蜷瑚ｶ｣譌ｨ�ｼ�
-ROLL_PIPELINE_REWIND_PROCESS = "蟾ｻ霑斐＠"
-ROLL_PIPELINE_REWIND_MACHINE = "EC讖溘貉門漉"
+ROLL_PIPELINE_EC_MACHINE = "EC機　湖南"
+ROLL_PIPELINE_INSP_PROCESS = "検査"
+ROLL_PIPELINE_INSP_MACHINE = "熱融着機　湖南"
+# §B-3: 後続は B-2 の「検査」に相当する工程として巻返し（同一依頼で EC 先行・ロール枠・リワインド等は B-2 と同趣旨）
+ROLL_PIPELINE_REWIND_PROCESS = "巻返し"
+ROLL_PIPELINE_REWIND_MACHINE = "EC機　湖南"
 ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
-# 讀懈渊縺ｮ蜑ｲ蠖謎ｸ企剞 min 縺ｫ菴ｿ縺�縲ょ酔荳萓晞�ｼ縺ｫ EC 陦後′辟｡縺�縺ｨ縺阪�ｯ need繝ｻ繧ｹ繧ｭ繝ｫ縺ｫ蠕薙＞騾壼ｸｸ驟榊床縺吶ｋ�ｼ�ec_done=0 蝗ｺ螳壹〒豌ｸ荵�繧ｹ繧ｭ繝�繝励＠縺ｪ縺��ｼ峨�
+# 検査の割当上限 min に使う。同一依頼に EC 行が無いときは need・スキルに従い通常配台する（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 
-# 蜍､諤�縺ｫ霈峨▲縺ｦ縺�繧区怙邨よ律縺ｾ縺ｧ縺ｧ蜑ｲ莉倥′邨ゅｏ繧峨↑縺�縺ｨ縺阪∵怙邨よ律縺ｨ蜷後§繧ｷ繝輔ヨ蝙九〒譌･莉倥ｒ蟒ｶ髟ｷ縺吶ｋ�ｼ医が繝励す繝ｧ繝ｳ�ｼ峨�
-# False 縺ｮ縺ｨ縺肴ｮｵ髫�2縺ｯ繝槭せ繧ｿ蜍､諤�縺ｮ譌･莉倡ｯ�蝗ｲ縺ｮ縺ｿ縺ｧ蜑ｲ莉倥＠縲∵ｮ九ｊ縺ｯ驟榊床谿九�ｻ驟榊床荳榊庄縺ｮ縺ｾ縺ｾ縺ｨ縺吶ｋ縲�
+# 勤怠に載っている最終日までで割付が終わらないとき、最終日と同じシフト型で日付を延長する（オプション）。
+# False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台不可のままとする。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
-# 邏肴悄蝓ｺ貅匁律繧帝℃縺弱※繧ょｽ楢ｩｲ萓晞�ｼ縺ｫ谿矩㍼縺後≠繧九→縺阪�**縺昴�ｮ萓晞�ｼNO縺�縺�** due_basis 繧� +1 縺励�
-# 蠖楢ｩｲ萓晞�ｼ縺ｮ蜑ｲ蠖薙�ｻ繧ｿ繧､繝�繝ｩ繧､繝ｳ繧貞ｷｻ縺肴綾縺励※**繧ｫ繝ｬ繝ｳ繝繝ｼ蜈磯�ｭ縺九ｉ**蜀阪す繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ縺吶ｋ�ｼ井ｻ紋ｾ晞�ｼ縺ｮ蜑ｲ蠖薙�ｯ邯ｭ謖��ｼ峨�
-# 繝槭せ繧ｿ蜍､諤�縺ｮ譛邨よ律繧定ｶ�縺医※蠕後ｍ蛟偵＠縺ｧ縺阪↑縺�萓晞�ｼ縺ｯ縲碁�榊床谿�(蜍､蜍吶き繝ｬ繝ｳ繝繝ｼ荳崎ｶｳ)縲阪→縺吶ｋ縲ょ推蜀崎ｩｦ陦悟燕縺ｫ蜍､諤�諡｡蠑ｵ蛻�縺ｯ繝槭せ繧ｿ譌･莉倥∈謌ｻ縺吶�
-# 譌｢螳� **False**�ｼ磯�榊床隧ｦ陦碁��繧呈ｭ｣縺ｨ縺励∬ｨ育判蝓ｺ貅冶ｶ�驕弱〒繧ゅ％縺ｮ蟾ｻ縺肴綾縺怜�崎ｩｦ陦後�ｯ陦後ｏ縺ｪ縺��ｼ峨ょｾ捺擂謖吝虚縺悟ｿ�隕√↑縺ｨ縺阪□縺� True縲�
+# 納期基準日を過ぎても当該依頼に残量があるとき、**その依頼NOだけ** due_basis を +1 し、
+# 当該依頼の割当・タイムラインを巻き戻して**カレンダー先頭から**再シミュレーションする（他依頼の割当は維持）。
+# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」とする。各再試行前に勤怠拡張分はマスタ日付へ戻す。
+# 既定 **False**（配台試行順を正とし、計画基準超過でもこの巻き戻し再試行は行わない）。従来挙動が必要なときだけ True。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
-# 邏肴悄蝓ｺ貅悶�ｮ +1 譌･縺ｫ繧医ｋ蟾ｻ縺肴綾縺怜�阪す繝溘Η縺ｯ萓晞�ｼNO縺斐→縺ｫ譛螟ｧ縺薙�ｮ蝗樊焚�ｼ�6 蝗樒岼莉･髯阪�ｯ蠖楢ｩｲ萓晞�ｼ縺ｮ縺ｿ繧ｷ繝輔ヨ縺帙★縲∵悴螳御ｺ�陦後↓邏肴悄隕狗峩縺怜ｿ�隕√ｒ莉倅ｸ弱＠蠕励ｋ�ｼ峨�
+# 納期基準の +1 日による巻き戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせず、未完了行に納期見直し必要を付与し得る）。
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 5
 
-# True 縺ｮ縺ｨ縺阪�驟榊床險育判繧ｷ繝ｼ繝医�ｮ隱ｭ縺ｿ霎ｼ縺ｿ陦碁���ｼ亥推萓晞�ｼNO縺ｮ蛻晏�ｺ陦後′譌ｩ縺�縺ｻ縺ｩ蜈茨ｼ峨〒 1 萓晞�ｼ縺�縺代ｒ
-# 蠖捺律蛟呵｣懊↓谿九＠縲∝ｮ瑚ｵｰ縺励※縺九ｉ谺｡萓晞�ｼ縺ｸ騾ｲ繧縲�**莉紋ｾ晞�ｼ縺ｯ荳蛻�縺昴�ｮ譌･驟榊床縺輔ｌ縺ｪ縺�**縺溘ａ縲�
-# 繧｢繧ｯ繝�繧｣繝紋ｾ晞�ｼ縺ｮ1陦後〒繧りｩｰ縺ｾ繧九→蜈ｨ菴薙′驟榊床荳榊庄縺ｫ隕九∴繧具ｼ医Ο繧ｰ縲御ｾ晞�ｼNO逶ｴ蛻鈴�榊床 逶ｴ蛻怜ｾ�=1縲搾ｼ峨�
-# 譌｢螳� False縲ょ宍蟇�縺ｪ萓晞�ｼNO逶ｴ蛻励′蠢�隕√↑縺ｨ縺阪□縺� STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 繧定ｨｭ螳壹☆繧九�
+# True のとき、配台計画シートの読み込み行順（各依頼NOの初出行が早いほど先）で 1 依頼だけを
+# 当日候補に残し、完走してから次依頼へ進む。**他依頼は一切その日配台されない**ため、
+# アクティブ依頼の1行でも詰まると全体が配台不可に見える（ログ「依頼NO直列配台 直列後=1」）。
+# 既定 False。厳密な依頼NO直列が必要なときだけ STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 を設定する。
 STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
     os.environ.get("STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0")
     .strip()
     .lower()
-    in ("1", "true", "yes", "on", "縺ｯ縺�")
+    in ("1", "true", "yes", "on", "はい")
 )
 
-# True: 竭�谿九ち繧ｹ繧ｯ縺ｮ縺�縺｡驟榊床隧ｦ陦碁��縺梧怙蟆上�ｮ1繧ｿ繧ｹ繧ｯ縺�縺代ｒ驕ｸ縺ｳ縲�1繝ｭ繝ｼ繝ｫ縺壹▽蜑ｲ莉倥�
-# 竭｡蜴溷渚謚募�･譌･縺ｨ蜷御ｸ譌･縺ｫ髢句ｧ九☆繧句�ｴ蜷医�ｯ 13:00 莉･髯搾ｼ�same_day_raw_start_limit 繧� 13:00�ｼ峨�
-# 竭｢竭｣險ｭ蛯咏ｩｺ縺阪ｒ max 縺ｧ郢ｰ繧贋ｸ翫￡�ｼ域律蜀�縲らｿ梧律縺ｯ譌･莉倥Ν繝ｼ繝励〒繧ｿ繧､繝�繝ｩ繧､繝ｳ繧ｷ繝ｼ繝会ｼ峨�
-# 竭､竭･竭ｦ竭ｧ莠ｺ縺ｮ遨ｺ縺阪〒繝√�ｼ繝�繧呈ｱｺ繧√√Ο繝ｼ繝ｫ縺斐→縺ｫ avail 繧呈峩譁ｰ�ｼ亥酔譌･縺ｯ蜑阪Ο繝ｼ繝ｫ縺ｨ蜷御ｸ繝√�ｼ繝�繧貞━蜈茨ｼ峨�
-# 辟｡蜉ｹ蛹�: 迺ｰ蠅�螟画焚 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
+# True: ①残タスクのうち配台試行順が最小の1タスクだけを選び、1ロールずつ割付。
+# ②原反投入日と同一日に開始する場合は 13:00 以降（same_day_raw_start_limit も 13:00）。
+# ③④設備空きを max で繰り上げ（日内。翌日は日付ループでタイムラインシード）。
+# ⑤⑥⑦⑧人の空きでチームを決め、ロールごとに avail を更新（同日は前ロールと同一チームを優先）。
+# 無効化: 環境変数 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST = os.environ.get(
     "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1"
-).strip().lower() not in ("0", "false", "no", "off", "縺�縺�縺�", "辟｡蜉ｹ")
+).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
-# True�ｼ域里螳夲ｼ�: start_date_req<=蠖捺律 縺九▽谿九≠繧翫�ｮ繧ｿ繧ｹ繧ｯ縺ｮ縺�縺｡縲�驟榊床隧ｦ陦碁��縺ｮ譛蟆上梧棧縲阪□縺代′蜑ｲ莉伜ｯｾ雎｡縲�
-# 繧医ｊ螟ｧ縺阪＞隧ｦ陦碁��縺ｯ縲√ｈ繧雁ｰ上＆縺�隧ｦ陦碁��縺ｫ譛ｪ螳御ｺ�縺梧ｮ九ｋ髯舌ｊ繝悶Ο繝�繧ｯ�ｼ育ｴ肴悄縺瑚ｿ代￥縺ｦ繧ょ牡繧願ｾｼ縺ｾ縺ｪ縺��ｼ峨�
+# True（既定）: start_date_req<=当日 かつ残ありのタスクのうち、配台試行順の最小「枠」だけが割付対象。
+# より大きい試行順は、より小さい試行順に未完了が残る限りブロック（納期が近くても割り込まない）。
 STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT = os.environ.get(
     "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT", "1"
-).strip().lower() not in ("0", "false", "no", "off", "縺�縺�縺�", "辟｡蜉ｹ")
+).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
-# True�ｼ域里螳夲ｼ�: 蜑ｲ莉伜呵｣懊ｒ縲瑚ｨｭ蛯吶�ｻ莠ｺ縺ｮ螢∵凾險亥頃譛牙玄髢薙阪〒莠碁㍾讀懈渊縺励√ち繧､繝�繝ｩ繧､繝ｳ霑ｽ險倥→蜷梧悄逋ｻ骭ｲ縺吶ｋ
-# �ｼ医ヶ繝ｭ繝�繧ｯ繝�繝ｼ繝悶Ν縺ｨ蜷瑚ｶ｣譌ｨ縲�Excel 繧ｻ繝ｫ騾先ｬ｡ I/O 縺ｯ陦後ｏ縺ｪ縺��ｼ峨�
-# False: 蠕捺擂縺ｩ縺翫ｊ avail_dt / machine_avail_dt 縺ｮ縺ｿ縲�
+# True（既定）: 割付候補を「設備・人の壁時計占有区間」で二重検査し、タイムライン追記と同期登録する
+# （ブロックテーブルと同趣旨。Excel セル逐次 I/O は行わない）。
+# False: 従来どおり avail_dt / machine_avail_dt のみ。
 DISPATCH_INTERVAL_MIRROR_ENFORCE = os.environ.get(
     "DISPATCH_INTERVAL_MIRROR_ENFORCE", "1"
-).strip().lower() not in ("0", "false", "no", "off", "縺�縺�縺�", "辟｡蜉ｹ")
+).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
-    """繝｡繝ｳ繝舌�ｼ蛻･蜍､諤�繝悶Ο繝�繧ｯ繧� new_date 縺ｫ繧ｷ繝輔ヨ縺励◆豬�縺�繧ｳ繝斐�ｼ繧定ｿ斐☆縲�"""
+    """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
     delta_days = (new_date - old_date).days
     if delta_days == 0:
         return {m: dict(st) for m, st in source_day.items()}
@@ -11475,7 +11480,7 @@ def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: da
 
 
 def _pick_extension_template_date(attendance_data: dict, plan_dates: list):
-    """驟榊床蜿ｯ閭ｽ縺ｪ繝｡繝ｳ繝舌�ｼ縺�1莠ｺ縺ｧ繧ゅ＞繧狗峩霑代�ｮ譌･繧偵ユ繝ｳ繝励Ξ縺ｫ謗｡逕ｨ�ｼ域怙邨よ律縺悟�ｨ莨代〒繧よ怏蜉ｹ縺ｪ蝙九ｒ菴ｿ縺��ｼ峨�"""
+    """配台可能なメンバーが1人でもいる直近の日をテンプレに採用（最終日が全休でも有効な型を使う）。"""
     for i in range(len(plan_dates) - 1, -1, -1):
         d = plan_dates[i]
         day = attendance_data.get(d)
@@ -11493,7 +11498,7 @@ def _extend_attendance_one_calendar_day(
     attendance_data: dict,
     plan_dates: list,
 ) -> bool:
-    """繧ｫ繝ｬ繝ｳ繝繝ｼ荳�1譌･蜈医ｒ plan_dates 縺ｫ霑ｽ蜉�縺励√ユ繝ｳ繝励Ξ譌･縺ｮ繧ｷ繝輔ヨ隍�陬ｽ縺ｧ attendance 繧貞沂繧√ｋ縲ょ､ｱ謨玲凾 False縲�"""
+    """カレンダー上1日先を plan_dates に追加し、テンプレ日のシフト複製で attendance を埋める。失敗時 False。"""
     if not plan_dates:
         return False
     last_d = plan_dates[-1]
@@ -11507,7 +11512,7 @@ def _extend_attendance_one_calendar_day(
     attendance_data[next_d] = _clone_attendance_day_shifted(template, tmpl_d, next_d)
     plan_dates.append(next_d)
     logging.info(
-        "驟榊床螳御ｺ�縺ｾ縺ｧ蜍､諤�繧定�ｪ蜍墓僑蠑ｵ: %s 繧定ｿｽ蜉��ｼ医ユ繝ｳ繝励Ξ=%s縲√Γ繝ｳ繝舌�ｼ謨ｰ=%s�ｼ�",
+        "配台完了まで勤怠を自動拡張: %s を追加（テンプレ=%s、メンバー数=%s）",
         next_d,
         tmpl_d,
         len(attendance_data[next_d]),
@@ -11521,8 +11526,8 @@ def _iter_plan_dates_extending(
     task_queue: list,
 ):
     """
-    plan_dates 繧貞�磯�ｭ縺九ｉ鬆�縺ｫ yield縲よ忰蟆ｾ縺ｾ縺ｧ譚･縺ｦ繧よｮ九ち繧ｹ繧ｯ縺後≠繧後�ｰ蜍､諤�繧�1譌･縺壹▽諡｡蠑ｵ縺励※邯咏ｶ壹�
-    plan_dates / attendance_data 縺ｯ繧､繝ｳ繝励Ξ繝ｼ繧ｹ譖ｴ譁ｰ縺輔ｌ繧九�
+    plan_dates を先頭から順に yield。末尾まで来ても残タスクがあれば勤怠を1日ずつ拡張して継続。
+    plan_dates / attendance_data はインプレース更新される。
     """
     si = 0
     ext_used = 0
@@ -11535,13 +11540,13 @@ def _iter_plan_dates_extending(
             return
         if ext_used >= SCHEDULE_EXTEND_MAX_EXTRA_DAYS:
             logging.warning(
-                "谿九ち繧ｹ繧ｯ縺後≠繧翫∪縺吶′蜍､諤�縺ｮ閾ｪ蜍墓僑蠑ｵ縺御ｸ企剞�ｼ�%s 譌･�ｼ峨↓驕斐＠縺ｾ縺励◆縲る�榊床谿九�ｻ驟榊床荳榊庄縺梧ｮ九ｋ蜿ｯ閭ｽ諤ｧ縺後≠繧翫∪縺吶�",
+                "残タスクがありますが勤怠の自動拡張が上限（%s 日）に達しました。配台残・配台不可が残る可能性があります。",
                 SCHEDULE_EXTEND_MAX_EXTRA_DAYS,
             )
             return
         if not _extend_attendance_one_calendar_day(attendance_data, plan_dates):
             logging.warning(
-                "蜍､諤�繧�1譌･諡｡蠑ｵ縺ｧ縺阪∪縺帙ｓ縺ｧ縺励◆�ｼ医ユ繝ｳ繝励Ξ譌･縺ｮ繝�繝ｼ繧ｿ谺�關ｽ�ｼ峨よｮ九ち繧ｹ繧ｯ縺ｯ譛ｪ蜑ｲ蠖薙�ｮ縺ｾ縺ｾ縺ｧ縺吶�"
+                "勤怠を1日拡張できませんでした（テンプレ日のデータ欠落）。残タスクは未割当のままです。"
             )
             return
         ext_used += 1
@@ -11557,7 +11562,7 @@ def _parse_process_content_tokens(val) -> list[str]:
 
 
 def _collect_process_content_order_by_task_id(tasks_df) -> dict[str, list[str]]:
-    """萓晞�ｼNO 竊� 蜉�蟾･蜀�螳ｹ縺ｮ蟾･遞句錐繝ｪ繧ｹ繝茨ｼ郁｡ｨ縺ｮ荳翫�ｮ譁ｹ縺ｧ譛蛻昴↓迴ｾ繧後◆髱樒ｩｺ縺ｮ陦後ｒ謗｡逕ｨ�ｼ峨�"""
+    """依頼NO → 加工内容の工程名リスト（表の上の方で最初に現れた非空の行を採用）。"""
     out: dict[str, list[str]] = {}
     if tasks_df is None or tasks_df.empty:
         return out
@@ -11577,8 +11582,8 @@ def _process_name_matches_kakou_content_tokens(
     process_name: str, content_tokens: list[str]
 ) -> bool:
     """
-    蟾･遞句錐�ｼ磯�榊床險育判縺ｮ縲悟ｷ･遞句錐縲榊�暦ｼ峨′縲∝��繝�繝ｼ繧ｿ縺ｮ縲悟刈蟾･蜀�螳ｹ縲阪き繝ｳ繝槫玄蛻�繧翫ヨ繝ｼ繧ｯ繝ｳ縺ｮ縺�縺壹ｌ縺九→
-    豁｣隕丞喧荳閾ｴ縺吶ｋ縺九ゅヨ繝ｼ繧ｯ繝ｳ縺檎┌縺��ｼ亥刈蟾･蜀�螳ｹ譛ｪ險伜�･縺ｮ萓晞�ｼ�ｼ峨�ｯ辣ｧ蜷亥ｯｾ雎｡螟悶→縺励※ True縲�
+    工程名（配台計画の「工程名」列）が、元データの「加工内容」カンマ区切りトークンのいずれかと
+    正規化一致するか。トークンが無い（加工内容未記入の依頼）は照合対象外として True。
     """
     if not content_tokens:
         return True
@@ -11612,7 +11617,7 @@ def _task_rank_int_or_none(task) -> int | None:
 
 
 def _plan_sheet_priority_sort_value(t: dict) -> int:
-    """驟榊床險育判繧ｷ繝ｼ繝医�ｮ縲悟━蜈亥ｺｦ縲阪ょｰ上＆縺�縺ｻ縺ｩ蜈医よ悴蜈･蜉帙�ｻ荳肴ｭ｣縺ｯ 999縲�"""
+    """配台計画シートの「優先度」。小さいほど先。未入力・不正は 999。"""
     p = t.get("priority", 999)
     try:
         return int(p)
@@ -11622,14 +11627,14 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
 
 def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     """
-    蜷御ｸ萓晞�ｼNO縺ｮ逡ｰ縺ｪ繧句ｷ･遞九ｒ蜷梧凾蛻ｻ縺ｫ蝗槭＆縺ｪ縺��ｼ磯�榊床繝ｫ繝ｼ繝ｫ ﾂｧA-1繝ｻﾂｧA-2�ｼ峨�
-    - 荳｡陦後↓蜉�蟾･蜀�螳ｹ逕ｱ譚･縺ｮ rank 縺後≠繧九→縺阪�ｯ rank 縺ｮ縺ｿ縺ｧ蜑榊ｾ鯉ｼ按ｧA-1�ｼ峨�
-    - 縺ｩ縺｡繧峨°縺ｫ rank 縺檎┌縺�縺ｨ縺阪�ｯ縲�驟榊床險育判繧ｷ繝ｼ繝医�ｮ陦碁�� same_request_line_seq 縺ｧ蜑榊ｾ鯉ｼ按ｧA-2�ｼ峨�
-    ﾂｧB-2 / ﾂｧB-3: ``roll_pipeline_inspection`` 縺ｾ縺溘�ｯ ``roll_pipeline_rewind`` 陦後′
-    ``roll_pipeline_ec`` 蜈郁｡後↓繧医ｊ ﾂｧA-1 縺ｧ豁｢縺ｾ繧句�ｴ蜷医�
-    ``_roll_pipeline_inspection_assign_room`` > 0 縺ｪ繧牙ｽ楢ｩｲ繝壹い縺�縺代ヶ繝ｭ繝�繧ｯ縺励↑縺�縲�
-    蜑埼ｲ驟榊床縺ｧ縺ｯ ``_trial_order_flow_eligible_tasks`` 縺� EC 螳瑚ｵｰ縺ｾ縺ｧ讀懈渊繧貞､悶☆縺溘ａ縲�
-    EC 谿九′縺ゅｋ髢薙�ｯ譛ｬ蛻�蟯舌↓蛻ｰ驕斐＠縺ｪ縺�縲ゅΜ繝ｯ繧､繝ｳ繝臥ｭ峨〒讀懈渊縺瑚ｼ峨ｋ螻髱｢縺ｨ縺ｮ謨ｴ蜷育畑縲�
+    同一依頼NOの異なる工程を同時刻に回さない（配台ルール §A-1・§A-2）。
+    - 両行に加工内容由来の rank があるときは rank のみで前後（§A-1）。
+    - どちらかに rank が無いときは、配台計画シートの行順 same_request_line_seq で前後（§A-2）。
+    §B-2 / §B-3: ``roll_pipeline_inspection`` または ``roll_pipeline_rewind`` 行が
+    ``roll_pipeline_ec`` 先行により §A-1 で止まる場合、
+    ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアだけブロックしない。
+    前進配台では ``_trial_order_flow_eligible_tasks`` が EC 完走まで検査を外すため、
+    EC 残がある間は本分岐に到達しない。リワインド等で検査が載る局面との整合用。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -11676,9 +11681,9 @@ def _task_not_yet_schedulable_due_to_dependency_or_b2_room(
     task: dict, task_queue: list
 ) -> bool:
     """
-    繧ｭ繝･繝ｼ迥ｶ諷倶ｸ翫√％縺ｮ陦後�ｯ縺ｾ縺�譌･谺｡驟榊床縺ｧ騾ｲ繧√ｉ繧後↑縺��ｼ按ｧA 蜷御ｸ萓晞�ｼ縺ｮ蜑榊ｷ･遞区ｮ九√∪縺溘�ｯ ﾂｧB-2/ﾂｧB-3 縺ｮ譫�繧ｼ繝ｭ�ｼ峨�
-    `_min_pending_dispatch_trial_order_for_date` 縺ｨ `_equipment_line_lower_dispatch_trial_still_pending`
-    縺ｧ蜷後§蝓ｺ貅悶ｒ蜈ｱ譛峨☆繧九ら援譁ｹ縺�縺醍峩縺吶→縲∝酔荳險ｭ蛯吶く繝ｼ縺ｧ蜈ｨ莉ｶ譛ｪ蜑ｲ蠖薙′谿九ｋ繝�繝�繝峨Ο繝�繧ｯ縺瑚ｵｷ縺榊ｾ励ｋ縲�
+    キュー状態上、この行はまだ日次配台で進められない（§A 同一依頼の前工程残、または §B-2/§B-3 の枠ゼロ）。
+    `_min_pending_dispatch_trial_order_for_date` と `_equipment_line_lower_dispatch_trial_still_pending`
+    で同じ基準を共有する。片方だけ直すと、同一設備キーで全件未割当が残るデッドロックが起き得る。
     """
     if _task_blocked_by_same_request_dependency(task, task_queue):
         return True
@@ -11734,7 +11739,7 @@ def _pipeline_ec_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
-    """辭ｱ陞咲捩讀懈渊陦後�ｮ縺ｿ縺ｮ邏ｯ險亥ｮ御ｺ�繝ｭ繝ｼ繝ｫ�ｼ医ヨ繝ｬ繝ｼ繧ｹ逕ｨ�ｼ峨�"""
+    """熱融着検査行のみの累計完了ロール（トレース用）。"""
     tid = str(tid or "").strip()
     s = 0.0
     for t in task_queue:
@@ -11749,7 +11754,7 @@ def _pipeline_inspection_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _pipeline_b2_follower_roll_done_units(task_queue, tid: str) -> float:
-    """ﾂｧB-2 讀懈渊陦鯉ｼ仰ｧB-3 蟾ｻ霑斐＠陦後�ｮ縲∝酔荳萓晞�ｼ蜀�縺ｮ蠕檎ｶ壹ヱ繧､繝励Λ繧､繝ｳ邏ｯ險亥ｮ御ｺ�繝ｭ繝ｼ繝ｫ縲�"""
+    """§B-2 検査行＋§B-3 巻返し行の、同一依頼内の後続パイプライン累計完了ロール。"""
     tid = str(tid or "").strip()
     s = 0.0
     for t in task_queue:
@@ -11764,7 +11769,7 @@ def _pipeline_b2_follower_roll_done_units(task_queue, tid: str) -> float:
 
 
 def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
-    """蜷御ｸ萓晞�ｼNO縺ｫ EC�ｼ医Ο繝ｼ繝ｫ繝代う繝励Λ繧､繝ｳ蜈郁｡鯉ｼ峨ち繧ｹ繧ｯ縺後く繝･繝ｼ縺ｫ蜷ｫ縺ｾ繧後ｋ縺九�"""
+    """同一依頼NOに EC（ロールパイプライン先行）タスクがキューに含まれるか。"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -11777,7 +11782,7 @@ def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
 
 
 def _pipeline_ec_fully_done_for_tid(task_queue, task_id: str) -> bool:
-    """蜷御ｸ萓晞�ｼNO縺ｮ EC 繝ｭ繝ｼ繝ｫ繝代う繝励Λ繧､繝ｳ陦後′縺吶∋縺ｦ谿矩㍼繧ｼ繝ｭ�ｼ亥ｮ瑚ｵｰ�ｼ峨°縲�"""
+    """同一依頼NOの EC ロールパイプライン行がすべて残量ゼロ（完走）か。"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -11799,13 +11804,13 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
     insp_done = _pipeline_b2_follower_roll_done_units(task_queue, task_id)
-    # EC 蜈ｨ繝ｭ繝ｼ繝ｫ螳御ｺ�蠕後�ｯ縲窪C 蜈郁｡後�ｻ繝舌ャ繝輔ぃ縲阪�ｯ譌｢縺ｫ貅縺溘＆繧後※縺�繧九ゅ％縺薙〒 max_insp 繧� ec_done 縺ｫ
-    # 謠�縺医ｋ縺ｨ縲√す繝ｼ繝井ｸ翫�ｮ讀懈渊�ｼ医�ｻ蟾ｻ霑斐＠�ｼ画ｮ九Ο繝ｼ繝ｫ謨ｰ縺� EC 螳御ｺ�繝ｭ繝ｼ繝ｫ謨ｰ繧剃ｸ雁屓繧九ョ繝ｼ繧ｿ縺ｧ
-    # max_insp - insp_done 縺� 0 縺ｮ縺ｾ縺ｾ谿九ｊ縲∵､懈渊陦後′ eligible 縺九ｉ螟悶ｌ驟榊床隧ｦ陦碁��縺梧ｰｸ荵�縺ｫ隧ｰ縺ｾ繧�
-    # �ｼ亥�咲樟繝ｭ繧ｰ: ec_fully_done 縺九▽ insp_done==max_insp==ec_done 縺ｧ room=0 竊� 蠕檎ｶ夊ｩｦ陦碁��縺碁�榊床荳榊庄�ｼ峨�
+    # EC 全ロール完了後は「EC 先行・バッファ」は既に満たされている。ここで max_insp を ec_done に
+    # 揃えると、シート上の検査（・巻返し）残ロール数が EC 完了ロール数を上回るデータで
+    # max_insp - insp_done が 0 のまま残り、検査行が eligible から外れ配台試行順が永久に詰まる
+    # （再現ログ: ec_fully_done かつ insp_done==max_insp==ec_done で room=0 → 後続試行順が配台不可）。
     if _pipeline_ec_fully_done_for_tid(task_queue, task_id):
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
-    # EC 遞ｼ蜒堺ｸｭ: 蜈郁｡後ヰ繝�繝輔ぃ B 縺ｫ繧医ｊ讀懈渊繝ｭ繝ｼ繝ｫ荳企剞繧� ec_done 縺九ｉ驕�蟒ｶ縺輔○繧具ｼ�B=2 縺ｮ蠑上�ｯ繧ｳ繝｡繝ｳ繝亥盾辣ｧ�ｼ峨�
+    # EC 稼働中: 先行バッファ B により検査ロール上限を ec_done から遅延させる（B=2 の式はコメント参照）。
     max_insp = max(0.0, ec_done - float(ROLL_PIPELINE_INITIAL_BUFFER_ROLLS) + 1.0)
     _room = max(0.0, max_insp - insp_done)
     return _room
@@ -11814,7 +11819,7 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 def _roll_pipeline_inspection_task_row_for_tid(
     task_queue: list, task_id: str
 ) -> dict | None:
-    """蜷御ｸ萓晞�ｼNO縺ｮ ﾂｧB-2 讀懈渊陦後∪縺溘�ｯ ﾂｧB-3 蟾ｻ霑斐＠陦後ｒ1莉ｶ霑斐☆縲ら┌縺代ｌ縺ｰ None縲�"""
+    """同一依頼NOの §B-2 検査行または §B-3 巻返し行を1件返す。無ければ None。"""
     tid = str(task_id or "").strip()
     if not tid:
         return None
@@ -11829,7 +11834,7 @@ def _roll_pipeline_inspection_task_row_for_tid(
 def _pipeline_b2_ec_roll_end_datetimes_sorted(
     task_queue: list, task_id: str
 ) -> list[datetime]:
-    """蜷御ｸ萓晞�ｼ縺ｮ EC 繝ｭ繝ｼ繝ｫ遒ｺ螳壹＃縺ｨ縺ｮ邨ゆｺ�譎ょ綾繧呈凾邉ｻ蛻励〒霑斐☆�ｼ�assigned_history 縺ｮ end_dt�ｼ峨�"""
+    """同一依頼の EC ロール確定ごとの終了時刻を時系列で返す（assigned_history の end_dt）。"""
     tid = str(task_id or "").strip()
     ends: list[datetime] = []
     if not tid:
@@ -11851,11 +11856,11 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
     task_queue: list, task_id: str
 ) -> datetime | None:
     """
-    谺｡縺ｮ讀懈渊繝ｭ繝ｼ繝ｫ繧帝幕蟋九＠縺ｦ繧医＞譛譌ｩ譎ょ綾縲�
-    邏ｯ險域､懈渊螳御ｺ�繝ｭ繝ｼ繝ｫ謨ｰ繧� K縲√ヰ繝�繝輔ぃ繧� B�ｼ�=ROLL_PIPELINE_INITIAL_BUFFER_ROLLS�ｼ峨→縺吶ｋ縺ｨ縲�
-    EC 螳御ｺ�繝ｭ繝ｼ繝ｫ縺梧凾邉ｻ蛻励〒 (K+B) 譛ｬ逶ｮ縺ｫ蛻ｰ驕斐＠縺滓凾蛻ｻ�ｼ医◎縺ｮ繝ｭ繝ｼ繝ｫ縺ｮ end_dt�ｼ画悴貅縺ｫ縺ｯ髢句ｧ九＠縺ｪ縺�縲�
-    �ｼ域･ｭ蜍吶Ν繝ｼ繝ｫ: 莉ｻ諢上�ｮ譎らせ縺ｧ EC_RollEndCount - KENSA_RollEndCount >= B 繧呈ｺ縺溘☆縺ｾ縺ｧ讀懈渊繧帝ｲ繧√↑縺�縲�
-    縺ｮ縲後Ο繝ｼ繝ｫ邨ゆｺ�譎ょ綾蝓ｺ貅悶阪�ｮ螳溯｣�縲ゑｼ�
+    次の検査ロールを開始してよい最早時刻。
+    累計検査完了ロール数を K、バッファを B（=ROLL_PIPELINE_INITIAL_BUFFER_ROLLS）とすると、
+    EC 完了ロールが時系列で (K+B) 本目に到達した時刻（そのロールの end_dt）未満には開始しない。
+    （業務ルール: 任意の時点で EC_RollEndCount - KENSA_RollEndCount >= B を満たすまで検査を進めない、
+    の「ロール終了時刻基準」の実装。）
     """
     tid = str(task_id or "").strip()
     if not tid or not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
@@ -11871,14 +11876,14 @@ def _roll_pipeline_b2_inspection_ec_completion_floor_dt(
 
 
 def _pipeline_b2_team_history_names(team_cell) -> set[str]:
-    """assigned_history 縺ｮ team 譁�蟄怜�暦ｼ井ｸｻ繝ｻ陬懊ｒ縲�,縲阪後√榊玄蛻�繧奇ｼ峨°繧画球蠖楢�蜷阪ｒ謚ｽ蜃ｺ�ｼ�NFKC�ｼ峨�"""
+    """assigned_history の team 文字列（主・補を「,」「、」区切り）から担当者名を抽出（NFKC）。"""
     if team_cell is None:
         return set()
     s = str(team_cell).strip()
     if not s:
         return set()
     out: set[str] = set()
-    for part in re.split(r"[,縲‐", s):
+    for part in re.split(r"[,、]", s):
         t = part.strip()
         if t:
             out.add(unicodedata.normalize("NFKC", t))
@@ -11888,7 +11893,7 @@ def _pipeline_b2_team_history_names(team_cell) -> set[str]:
 def _pipeline_b2_assigned_member_names_nfkc_for_side(
     task_queue: list, task_id: str, *, ec_side: bool
 ) -> set[str]:
-    """蜷御ｸ萓晞�ｼ縺ｮ EC 陦後∪縺溘�ｯ讀懈渊陦後�ｮ assigned_history 縺ｫ蜃ｺ縺滓球蠖楢�蜷搾ｼ�NFKC 髮�蜷茨ｼ峨�"""
+    """同一依頼の EC 行または検査行の assigned_history に出た担当者名（NFKC 集合）。"""
     tid = str(task_id or "").strip()
     if not tid:
         return set()
@@ -11910,7 +11915,7 @@ def _pipeline_b2_assigned_member_names_nfkc_for_side(
 
 
 def _b2_ec_insp_pair_in_queue(task_queue: list, task_id: str) -> bool:
-    """蜷御ｸ萓晞�ｼNO縺ｫ ﾂｧB-2/ﾂｧB-3 縺ｮ EC 陦後→蠕檎ｶ夊｡鯉ｼ域､懈渊縺ｾ縺溘�ｯ蟾ｻ霑斐＠�ｼ峨�ｮ荳｡譁ｹ縺後く繝･繝ｼ縺ｫ縺ゅｋ縺九�"""
+    """同一依頼NOに §B-2/§B-3 の EC 行と後続行（検査または巻返し）の両方がキューにあるか。"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -11924,9 +11929,9 @@ def _filter_capable_members_b2_disjoint_teams(
     task: dict, task_queue: list, capable_members: list
 ) -> list:
     """
-    ﾂｧB-2 / ﾂｧB-3 蜷御ｸ萓晞�ｼ縺ｧ縺ｯ縲・C 陦後↓荳蠎ｦ縺ｧ繧ょ�･縺｣縺溯�縺ｯ蠕檎ｶ夲ｼ域､懈渊�ｼ丞ｷｻ霑斐＠�ｼ峨�ｮ蛟呵｣懊°繧牙､悶＠縲�
-    蠕檎ｶ壹↓蜈･縺｣縺溯�縺ｯ EC 縺ｮ蛟呵｣懊°繧牙､悶☆縲�
-    �ｼ育､ｾ蜀�繝ｫ繝ｼ繝ｫ: 諡�蠖楢�髮�蜷医ｒ蠢�縺壼��縺代ｋ縲ＡPLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` 縺ｧ辟｡蜉ｹ蛹門庄�ｼ�
+    §B-2 / §B-3 同一依頼では、EC 行に一度でも入った者は後続（検査／巻返し）の候補から外し、
+    後続に入った者は EC の候補から外す。
+    （社内ルール: 担当者集合を必ず分ける。`PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` で無効化可）
     """
     if not capable_members:
         return capable_members
@@ -11961,30 +11966,30 @@ def _filter_capable_members_b2_disjoint_teams(
         if is_ec:
             _side = "EC"
         elif task.get("roll_pipeline_rewind"):
-            _side = "蟾ｻ霑斐＠"
+            _side = "巻返し"
         else:
-            _side = "讀懈渊"
+            _side = "検査"
         _log_dispatch_trace_schedule(
             tid,
-            "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繝悶Ο繝�繧ｯ蛻､螳�: B-2諡�蠖楢�蛻�髮｢ side=%s machine=%s "
-            "蛟呵｣憺勁螟�=%s 谿句呵｣�=%s(%s)",
+            "[配台トレース task=%s] ブロック判定: B-2担当者分離 side=%s machine=%s "
+            "候補除外=%s 残候補=%s(%s)",
             tid,
             _side,
             task.get("machine"),
             ",".join(str(x) for x in removed),
             len(filtered),
-            ",".join(str(x) for x in filtered) if filtered else "縺ｪ縺�",
+            ",".join(str(x) for x in filtered) if filtered else "なし",
         )
     return filtered
 
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
     """
-    蜷御ｸ迚ｩ逅�讖滓｢ｰ�ｼ域ｩ滓｢ｰ蜷阪�吶�ｼ繧ｹ縺ｮ蜊�譛峨く繝ｼ�ｼ我ｸ翫〒縲�ﾂｧB-2 辭ｱ陞咲捩讀懈渊縺ｾ縺溘�ｯ ﾂｧB-3 蟾ｻ霑斐＠縺� **譌｢縺ｫ蜑ｲ莉倥ｒ髢句ｧ�** 縺玲ｮ九Ο繝ｼ繝ｫ縺梧ｮ九ｋ陦後′縺ゅｌ縺ｰ
-    縺昴�ｮ繧ｿ繧ｹ繧ｯ dict 繧�1莉ｶ霑斐☆�ｼ医↑縺代ｌ縺ｰ None�ｼ峨�
+    同一物理機械（機械名ベースの占有キー）上で、§B-2 熱融着検査または §B-3 巻返しが **既に割付を開始** し残ロールが残る行があれば
+    そのタスク dict を1件返す（なければ None）。
 
-    繝代う繝励Λ繧､繝ｳ譫�縺ｧ蠕檎ｶ壹ｒ謨ｰ繝ｭ繝ｼ繝ｫ縺壹▽縺励°蜈･繧後↑縺�險ｭ險医�ｮ縺溘ａ縲∵棧繧ｼ繝ｭ縺ｮ髫咎俣縺ｫ **蛻･萓晞�ｼ** 縺悟酔縺倩ｨｭ蛯吶↓蜈･繧翫�
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｧ繧ｿ繧ｹ繧ｯ陦ｨ遉ｺ縺碁比ｸｭ縺ｧ蛻�繧頑崛繧上ｋ莠玖ｱ｡繧帝亟縺舌ょ頃譛我ｸｭ縺ｯ蠖楢ｩｲ迚ｩ逅�讖滓｢ｰ縺ｧ縺ｯ莉悶ち繧ｹ繧ｯ繧定ｩｦ陦後＠縺ｪ縺�縲�
+    パイプライン枠で後続を数ロールずつしか入れない設計のため、枠ゼロの隙間に **別依頼** が同じ設備に入り、
+    結果_設備毎の時間割でタスク表示が途中で切り替わる事象を防ぐ。占有中は当該物理機械では他タスクを試行しない。
     """
     m = str(occupant_key or "").strip()
     if not m:
@@ -12023,7 +12028,7 @@ def _need_sheet_pm_column_rank(
     machine_name,
     need_combo_col_index: dict | None,
 ) -> int:
-    """need 繧ｷ繝ｼ繝医〒蟾ｦ縺ｫ縺ゅｋ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪榊�励⊇縺ｩ蟆上＆縺�蛟､�ｼ医く繝･繝ｼ縺ｧ蜈茨ｼ峨�"""
+    """need シートで左にある「工程名+機械名」列ほど小さい値（キューで先）。"""
     if not need_combo_col_index:
         return 10**9
     p = str(process or "").strip()
@@ -12042,25 +12047,25 @@ def _generate_plan_task_queue_sort_key(
     need_combo_col_index: dict | None = None,
 ) -> tuple:
     """
-    generate_plan 蜀帝�ｭ縺翫ｈ縺ｳ邏肴悄繧ｷ繝輔ヨ蜀崎ｩｦ陦梧凾縺ｮ task_queue.sort 逕ｨ繧ｭ繝ｼ縲�
+    generate_plan 冒頭および納期シフト再試行時の task_queue.sort 用キー。
 
-    1. 蜉�蟾･騾比ｸｭ�ｼ�in_progress�ｼ峨ｒ蜈�
-    2. 邏肴悄蝓ｺ貅� due_basis_date�ｼ亥屓遲皮ｴ肴悄竊呈欠螳夂ｴ肴悄縲よ掠縺�縺ｻ縺ｩ蜈茨ｼ�
-    3. ﾂｧB-1 竊� ﾂｧB-2/ﾂｧB-3 蟶ｯ 竊� 縺昴�ｮ莉厄ｼ�b_tier�ｼ�
-    4. ﾂｧB-2/ﾂｧB-3 蟶ｯ蜀�縺ｮ縺ｿ EC 繧呈悴逹謇九�ｮ讀懈渊�ｼ丞ｷｻ霑斐＠繧医ｊ蜈茨ｼ�b2_queue_sub�ｼ�
-    5. need 繧ｷ繝ｼ繝亥ｷｦ蛻励⊇縺ｩ蜈茨ｼ亥ｷ･遞句錐+讖滓｢ｰ蜷榊�励�ｮ菴咲ｽｮ�ｼ�
-    6. 萓晞�ｼNO繧ｿ繧､繝悶Ξ繝ｼ繧ｯ�ｼ�_task_id_same_machine_due_tiebreak_key�ｼ�
+    1. 加工途中（in_progress）を先
+    2. 納期基準 due_basis_date（回答納期→指定納期。早いほど先）
+    3. §B-1 → §B-2/§B-3 帯 → その他（b_tier）
+    4. §B-2/§B-3 帯内のみ EC を未着手の検査／巻返しより先（b2_queue_sub）
+    5. need シート左列ほど先（工程名+機械名列の位置）
+    6. 依頼NOタイブレーク（_task_id_same_machine_due_tiebreak_key）
 
-    _req_map / _need_rules 縺ｯ蜻ｼ縺ｳ蜃ｺ縺嶺ｺ呈鋤縺ｮ縺溘ａ谿九☆縲�
+    _req_map / _need_rules は呼び出し互換のため残す。
     """
     insp = bool(task.get("roll_pipeline_inspection"))
     rw = bool(task.get("roll_pipeline_rewind"))
     ip = bool(task.get("in_progress"))
     ec = bool(task.get("roll_pipeline_ec"))
     if insp and ip:
-        b_tier = 0  # ﾂｧB-1
+        b_tier = 0  # §B-1
     elif ec or (insp and not ip) or (rw and not ip):
-        b_tier = 1  # ﾂｧB-2 / ﾂｧB-3 蟶ｯ
+        b_tier = 1  # §B-2 / §B-3 帯
     else:
         b_tier = 2
     if b_tier == 1:
@@ -12087,8 +12092,8 @@ def _generate_plan_task_queue_sort_key(
 
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
     """
-    ﾂｧB-2 / ﾂｧB-3: 蜷御ｸ task_id 縺ｮ `roll_pipeline_ec` 陦後�ｮ逶ｴ蠕後↓縲∵悴逹謇九�ｮ蠕檎ｶ夊｡�
-    �ｼ�`roll_pipeline_inspection` 縺ｾ縺溘�ｯ `roll_pipeline_rewind`�ｼ峨ｒ陦碁��縺ｧ髫｣謗･縺輔○繧九�
+    §B-2 / §B-3: 同一 task_id の `roll_pipeline_ec` 行の直後に、未着手の後続行
+    （`roll_pipeline_inspection` または `roll_pipeline_rewind`）を行順で隣接させる。
     """
     if len(task_queue) < 2:
         return
@@ -12146,23 +12151,23 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
             break
     if moved_tids:
         logging.info(
-            "ﾂｧB-2/ﾂｧB-3 驟榊床隧ｦ陦碁��: EC 縺ｨ譛ｪ逹謇句ｾ檎ｶ夲ｼ域､懈渊�ｼ丞ｷｻ霑斐＠�ｼ峨ｒ髫｣謗･縺励◆萓晞�ｼNO: %s",
+            "§B-2/§B-3 配台試行順: EC と未着手後続（検査／巻返し）を隣接した依頼NO: %s",
             ",".join(moved_tids),
         )
 
 
 def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
     """
-    `task_queue` 縺ｮ繝ｪ繧ｹ繝磯��縺ｫ蜷医ｏ縺帙※ `dispatch_trial_order` 繧� 1..n 縺ｸ莉倥￠逶ｴ縺吶�
-    `_reorder_task_queue_b2_ec_inspection_consecutive` 縺ｮ逶ｴ蠕鯉ｼ医♀繧医�ｳ繧ｭ繝･繝ｼ蜀阪た繝ｼ繝医�ｮ逶ｴ蠕鯉ｼ峨↓蜻ｼ縺ｳ縲�
-    EC 縺ｨ蠕檎ｶ夲ｼ域､懈渊�ｼ丞ｷｻ霑斐＠�ｼ峨�ｮ騾｣邯夂分蜿ｷ繧剃ｿ晁ｨｼ縺吶ｋ縲�
+    `task_queue` のリスト順に合わせて `dispatch_trial_order` を 1..n へ付け直す。
+    `_reorder_task_queue_b2_ec_inspection_consecutive` の直後（およびキュー再ソートの直後）に呼び、
+    EC と後続（検査／巻返し）の連続番号を保証する。
     """
     for i, t in enumerate(task_queue, start=1):
         t["dispatch_trial_order"] = i
 
 
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
-    """驟榊床險育判繧ｷ繝ｼ繝医�ｮ縲碁�榊床隧ｦ陦碁��逡ｪ縲阪′繧ｭ繝･繝ｼ蜈ｨ陦後↓豁｣縺ｮ謨ｴ謨ｰ縺ｧ蜈･縺｣縺ｦ縺�繧九°縲�"""
+    """配台計画シートの「配台試行順番」がキュー全行に正の整数で入っているか。"""
     if not task_queue:
         return False
     for t in task_queue:
@@ -12185,8 +12190,8 @@ def _apply_dispatch_trial_order_for_generate_plan(
     need_combo_col_index: dict | None,
 ) -> None:
     """
-    驟榊床隧ｦ陦碁��縺ｮ遒ｺ螳壹ゅす繝ｼ繝医↓蜈ｨ陦悟��縺ｮ隧ｦ陦碁��縺後≠繧後�ｰ縺昴ｌ繧呈治逕ｨ�ｼ按ｧB-2/3 縺ｮ髫｣謗･郢ｰ繧贋ｸ翫￡縺ｯ陦後ｏ縺ｪ縺��ｼ峨�
-    谺�謳阪′縺ゅｌ縺ｰ蠕捺擂縺ｩ縺翫ｊ繝槭せ繧ｿ繝ｻ邏肴悄繝ｻneed 蛻鈴��縺ｪ縺ｩ縺ｧ繧ｽ繝ｼ繝医＠縲・C 髫｣謗･蠕後↓ 1..n 繧剃ｻ倅ｸ弱�
+    配台試行順の確定。シートに全行分の試行順があればそれを採用（§B-2/3 の隣接繰り上げは行わない）。
+    欠損があれば従来どおりマスタ・納期・need 列順などでソートし、EC 隣接後に 1..n を付与。
     """
     if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
         task_queue.sort(
@@ -12198,7 +12203,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
         for t in task_queue:
             t["dispatch_trial_order"] = int(t.get("dispatch_trial_order_from_sheet") or 10**9)
         logging.info(
-            "驟榊床隧ｦ陦碁��逡ｪ: 縲�%s縲榊�励�ｮ蛟､繧偵◎縺ｮ縺ｾ縺ｾ菴ｿ逕ｨ縺励∪縺励◆�ｼ亥�ｨ %s 陦鯉ｼ峨�",
+            "配台試行順番: 「%s」列の値をそのまま使用しました（全 %s 行）。",
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
             len(task_queue),
         )
@@ -12211,7 +12216,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
-        "驟榊床隧ｦ陦碁��逡ｪ: 繝槭せ繧ｿ繝ｻ繧ｿ繧ｹ繧ｯ蜈･蜉帙°繧芽�ｪ蜍戊ｨ育ｮ励＠ 1..%s 繧剃ｻ倅ｸ弱＠縺ｾ縺励◆縲�",
+        "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
         len(task_queue),
     )
 
@@ -12225,8 +12230,8 @@ def fill_plan_dispatch_trial_order_column_stage1(
     equipment_list: list,
 ) -> None:
     """
-    谿ｵ髫�1蜃ｺ蜉� DataFrame 縺ｮ縲碁�榊床隧ｦ陦碁��逡ｪ縲阪ｒ縲∵ｮｵ髫�2 蜀帝�ｭ縺ｨ蜷後§謇矩���ｼ医た繝ｼ繝医�ｻﾂｧB-2/3 髫｣謗･繝ｻ騾｣逡ｪ�ｼ峨〒蝓九ａ繧九�
-    驟榊床蟇ｾ雎｡螟悶�ｮ陦後�ｯ遨ｺ縺ｮ縺ｾ縺ｾ縲�
+    段階1出力 DataFrame の「配台試行順番」を、段階2 冒頭と同じ手順（ソート・§B-2/3 隣接・連番）で埋める。
+    配台対象外の行は空のまま。
     """
     if plan_df is None or getattr(plan_df, "empty", True):
         return
@@ -12275,7 +12280,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
         if dto is None:
             continue
         try:
-            # Excel 荳翫�ｯ謨ｰ蛟､繧ｻ繝ｫ縺ｫ縺励√ヵ繧｣繝ｫ繧ｿ繝ｼ繝ｻ荳ｦ縺ｹ譖ｿ縺医ｒ縺励ｄ縺吶￥縺吶ｋ�ｼ域枚蟄怜�励□縺ｨ謨ｰ蛟､縺ｨ蛻･繧ｰ繝ｫ繝ｼ繝励↓縺ｪ繧具ｼ�
+            # Excel 上は数値セルにし、フィルター・並べ替えをしやすくする（文字列だと数値と別グループになる）
             plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
             plan_df.iat[iloc, col_idx] = ""
@@ -12283,9 +12288,9 @@ def fill_plan_dispatch_trial_order_column_stage1(
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
     """
-    蜷御ｸ譌･繝ｻ蜷御ｸ險ｭ蛯吝�励く繝ｼ繝ｻ蜷御ｸ萓晞�ｼNO 縺ｮ蜉�蟾･縺ｫ縺､縺�縺ｦ縲∬ｨｭ蛯呎凾髢灘牡繧ｻ繝ｫ逕ｨ縺ｮ縲瑚｣懊崎｡ｨ遉ｺ譁�蟄怜�励�
-    繧ｿ繧､繝�繝ｩ繧､繝ｳ荳翫�ｮ蜷�繝悶Ο繝�繧ｯ縺ｮ `sub` 縺ｫ迴ｾ繧後◆陬懷勧閠�蜷阪ｒ蜥碁寔蜷医＠縲∵��鬆�縺ｧ ", " 騾｣邨舌☆繧九�
-    繝｡繝ｳ繝舌�ｼ譌･遞九�ｻ蜊�譛芽ｨ育ｮ励↓菴ｿ縺�繧ｿ繧､繝�繝ｩ繧､繝ｳ縺ｮ `sub` 縺ｯ螟画峩縺励↑縺��ｼ郁｡ｨ遉ｺ蟆ら畑�ｼ峨�
+    同一日・同一設備列キー・同一依頼NO の加工について、設備時間割セル用の「補」表示文字列。
+    タイムライン上の各ブロックの `sub` に現れた補助者名を和集合し、昇順で ", " 連結する。
+    メンバー日程・占有計算に使うタイムラインの `sub` は変更しない（表示専用）。
     """
     acc: dict = defaultdict(set)
     for e in timeline_for_eq_grid or []:
@@ -12312,8 +12317,8 @@ def _build_equipment_schedule_dataframe(
     first_eq_schedule_cell_by_task_id: dict | None = None,
 ) -> "pd.DataFrame":
     """
-    邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｨ蜷悟ｽ｢蠑上�ｮ DataFrame�ｼ�10 蛻�譫�繝ｻ險ｭ蛯吝�暦ｼ矩ｲ蠎ｦ蛻暦ｼ峨�
-    first_eq_schedule_cell_by_task_id 繧呈ｸ｡縺励◆縺ｨ縺阪�ｮ縺ｿ縲∝�晏�ｺ繧ｻ繝ｫ蠎ｧ讓吶ｒ險倬鹸�ｼ育ｵ先棡繝上う繝代�ｼ繝ｪ繝ｳ繧ｯ逕ｨ�ｼ峨�
+    結果_設備毎の時間割と同形式の DataFrame（10 分枠・設備列＋進度列）。
+    first_eq_schedule_cell_by_task_id を渡したときのみ、初出セル座標を記録（結果ハイパーリンク用）。
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     _eq_sched_unify_sub = _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid)
@@ -12325,7 +12330,7 @@ def _build_equipment_schedule_dataframe(
     eq_empty_cols = {}
     for eq in equipment_list:
         eq_empty_cols[eq] = ""
-        eq_empty_cols[f"{eq}騾ｲ蠎ｦ"] = ""
+        eq_empty_cols[f"{eq}進度"] = ""
 
     for d in sorted_dates:
         d_start = datetime.combine(d, DEFAULT_START_TIME)
@@ -12345,7 +12350,7 @@ def _build_equipment_schedule_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        all_eq_rows.append({"譌･譎ょｸｯ": f"笆� {d.strftime('%Y/%m/%d (%a)')} 笆�", **eq_empty_cols})
+        all_eq_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **eq_empty_cols})
 
         def _eq_cell_display_sub(ev, day_d) -> str:
             tid0 = str(ev.get("task_id") or "").strip()
@@ -12364,7 +12369,7 @@ def _build_equipment_schedule_dataframe(
 
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data = {
-                "譌･譎ょｸｯ": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
 
             for eq in equipment_list:
@@ -12391,22 +12396,22 @@ def _build_equipment_schedule_dataframe(
                         and float(active_ev.get("eff_time_per_unit") or 0) > 0
                     )
                     if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                        eq_text = "莨第�ｩ"
+                        eq_text = "休憩"
                     elif not _use_prog:
                         _ek_disp = _timeline_event_kind(active_ev)
                         _tag = {
-                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "譌･谺｡蟋区･ｭ貅門ｙ",
-                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "萓晞�ｼ蛻�譖ｿ蠕悟ｧ区忰",
-                            TIMELINE_EVENT_CHANGEOVER_PREP: "蜉�蟾･蜑肴ｺ門ｙ",
+                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
+                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "依頼切替後始末",
+                            TIMELINE_EVENT_CHANGEOVER_PREP: "加工前準備",
                         }.get(
                             _ek_disp,
-                            "繧ｻ繝�繝医い繝�繝�",
+                            "セットアップ",
                         )
                         _sub_n = _eq_cell_display_sub(active_ev, d)
-                        _sub_text = f" 陬�:{_sub_n}" if _sub_n else ""
+                        _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
                         eq_text = (
-                            f"[{_tid_d}] 荳ｻ:{active_ev.get('op', '')}{_sub_text} ({_tag})"
+                            f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
                         )
                         progress_text = ""
                     else:
@@ -12424,8 +12429,8 @@ def _build_equipment_schedule_dataframe(
                         total_u = active_ev["total_units"]
 
                         _sub_s = _eq_cell_display_sub(active_ev, d)
-                        sub_text = f" 陬�:{_sub_s}" if _sub_s else ""
-                        eq_text = f"[{active_ev['task_id']}] 荳ｻ:{active_ev['op']}{sub_text}"
+                        sub_text = f" 補:{_sub_s}" if _sub_s else ""
+                        eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
                         _tid_sched = str(active_ev.get("task_id") or "").strip()
                         if (
@@ -12440,11 +12445,11 @@ def _build_equipment_schedule_dataframe(
                             )
 
                 row_data[eq] = eq_text
-                row_data[f"{eq}騾ｲ蠎ｦ"] = progress_text
+                row_data[f"{eq}進度"] = progress_text
 
             all_eq_rows.append(row_data)
             curr_grid = next_grid
-        all_eq_rows.append({"譌･譎ょｸｯ": "", **eq_empty_cols})
+        all_eq_rows.append({"日時帯": "", **eq_empty_cols})
 
     df_eq = pd.DataFrame(all_eq_rows)
     _eq_hdr = _equipment_schedule_header_labels(equipment_list)
@@ -12452,16 +12457,16 @@ def _build_equipment_schedule_dataframe(
     for _eq, _lab in zip(equipment_list, _eq_hdr):
         if _eq in df_eq.columns:
             _eq_rename[_eq] = _lab
-        _pqc = f"{_eq}騾ｲ蠎ｦ"
+        _pqc = f"{_eq}進度"
         if _pqc in df_eq.columns:
-            _eq_rename[_pqc] = f"{_lab}騾ｲ蠎ｦ"
+            _eq_rename[_pqc] = f"{_lab}進度"
     if _eq_rename:
         df_eq = df_eq.rename(columns=_eq_rename)
     return df_eq
 
 
 def _machine_display_key_for_equipment(eq: str) -> str:
-    """skills 蛻励く繝ｼ縲悟ｷ･遞�+讖滓｢ｰ縲阪°繧画ｩ滓｢ｰ蜷崎｡ｨ遉ｺ繧ｭ繝ｼ繧貞ｾ励ｋ�ｼ磯㍾隍�譎ゅ�ｯ隍�蜷医く繝ｼ縺斐→縺ｫ蛻･蛻暦ｼ峨�"""
+    """skills 列キー「工程+機械」から機械名表示キーを得る（重複時は複合キーごとに別列）。"""
     s = str(eq).strip()
     if "+" in s:
         mpart = s.split("+", 1)[1].strip()
@@ -12476,15 +12481,15 @@ def _build_equipment_schedule_by_machine_name_dataframe(
     timeline_events: list,
 ) -> "pd.DataFrame":
     """
-    讖滓｢ｰ蜷榊腰菴阪↓蛻励ｒ縺ｾ縺ｨ繧√∝推 10 蛻�譫�縺ｧ蜊�譛我ｸｭ縺ｮ萓晞�ｼNO�ｼ郁､�謨ｰ譎ゅ�ｯ縲鯉ｼ上搾ｼ峨ｒ陦ｨ遉ｺ縺吶ｋ縲�
-    蛻苓ｦ句�ｺ縺励�ｯ讖滓｢ｰ蜷阪�ｮ縺ｿ�ｼ亥ｷ･遞�+讖滓｢ｰ縺ｮ隍�蜷医く繝ｼ縺ｯ莉倥￠縺ｪ縺��ｼ峨ょ酔荳迚ｩ逅�讖滓｢ｰ縺ｯ蜊�譛峨く繝ｼ縺ｧ1蛻励↓髮�邏�縺吶ｋ縲�
+    機械名単位に列をまとめ、各 10 分枠で占有中の依頼NO（複数時は「／」）を表示する。
+    列見出しは機械名のみ（工程+機械の複合キーは付けない）。同一物理機械は占有キーで1列に集約する。
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
     for e in timeline_for_eq_grid:
         events_by_date[e["date"]].append(e)
 
-    # 蜊�譛峨く繝ｼ�ｼ域ｩ滓｢ｰ蜷榊�ｴ繝ｻ豁｣隕丞喧�ｼ峨＃縺ｨ縺ｫ1蛻励りｦ句�ｺ縺励�ｯ equipment_list 蛻晏�ｺ縺ｮ讖滓｢ｰ蜷崎｡ｨ遉ｺ縺ｮ縺ｿ縲�
+    # 占有キー（機械名側・正規化）ごとに1列。見出しは equipment_list 初出の機械名表示のみ。
     occ_key_to_header: dict[str, str] = {}
     machine_cols: list[str] = []
     eq_to_mcol: dict[str, str] = {}
@@ -12519,7 +12524,7 @@ def _build_equipment_schedule_by_machine_name_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        all_rows.append({"譌･譎ょｸｯ": f"笆� {d.strftime('%Y/%m/%d (%a)')} 笆�", **empty_tail})
+        all_rows.append({"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■", **empty_tail})
 
         curr_grid = d_start
         while curr_grid < d_end:
@@ -12528,7 +12533,7 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 next_grid = d_end
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data = {
-                "譌･譎ょｸｯ": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
             for mcol in machine_cols:
                 row_data[mcol] = ""
@@ -12545,17 +12550,17 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 if not active_ev:
                     continue
                 if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                    tids_by_mcol[mcol].add("�ｼ井ｼ第�ｩ�ｼ�")
+                    tids_by_mcol[mcol].add("（休憩）")
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
                     if tid:
                         tids_by_mcol[mcol].add(tid)
             for mcol in machine_cols:
                 parts = sorted(tids_by_mcol.get(mcol, ()))
-                row_data[mcol] = "�ｼ�".join(parts) if parts else ""
+                row_data[mcol] = "／".join(parts) if parts else ""
             all_rows.append(row_data)
             curr_grid = next_grid
-        all_rows.append({"譌･譎ょｸｯ": "", **empty_tail})
+        all_rows.append({"日時帯": "", **empty_tail})
 
     return pd.DataFrame(all_rows)
 
@@ -12568,7 +12573,7 @@ def _build_block_table_dataframe(
     timeline_events: list,
 ) -> "pd.DataFrame":
     """
-    險ｭ蛯吝�暦ｼ亥頃譛我ｸｭ縺ｮ萓晞�ｼNO�ｼ会ｼ九Γ繝ｳ繝舌�ｼ蛻暦ｼ亥酔�ｼ峨ｒ 10 蛻�譫�縺ｧ荳ｦ縺ｹ縺溘ヶ繝ｭ繝�繧ｯ蜿ｯ隕門喧逕ｨ繧ｷ繝ｼ繝医�
+    設備列（占有中の依頼NO）＋メンバー列（同）を 10 分枠で並べたブロック可視化用シート。
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
@@ -12578,11 +12583,11 @@ def _build_block_table_dataframe(
     _eq_hdr = _equipment_schedule_header_labels(equipment_list)
     eq_disp_to_key: dict[str, str] = {}
     for eq, lab in zip(equipment_list, _eq_hdr):
-        eq_disp_to_key[f"險ｭ蛯�:{lab}"] = eq
+        eq_disp_to_key[f"設備:{lab}"] = eq
 
-    mem_cols = [f"莠ｺ:{m}" for m in members]
-    eq_cols = [f"險ｭ蛯�:{lab}" for lab in _eq_hdr]
-    all_cols = ["譌･譎ょｸｯ"] + eq_cols + mem_cols
+    mem_cols = [f"人:{m}" for m in members]
+    eq_cols = [f"設備:{lab}" for lab in _eq_hdr]
+    all_cols = ["日時帯"] + eq_cols + mem_cols
     rows_out = []
 
     for d in sorted_dates:
@@ -12603,8 +12608,8 @@ def _build_block_table_dataframe(
         if not events_today and not is_anyone_working:
             continue
 
-        banner = {"譌･譎ょｸｯ": f"笆� {d.strftime('%Y/%m/%d (%a)')} 笆�"}
-        banner.update({c: "" for c in all_cols if c != "譌･譎ょｸｯ"})
+        banner = {"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■"}
+        banner.update({c: "" for c in all_cols if c != "日時帯"})
         rows_out.append(banner)
 
         curr_grid = d_start
@@ -12614,7 +12619,7 @@ def _build_block_table_dataframe(
                 next_grid = d_end
             mid_t = curr_grid + (next_grid - curr_grid) / 2
             row_data: dict = {
-                "譌･譎ょｸｯ": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
+                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
             }
             for c in eq_cols + mem_cols:
                 row_data[c] = ""
@@ -12631,10 +12636,10 @@ def _build_block_table_dataframe(
                 if not active_ev:
                     continue
                 if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                    row_data[col_eq] = "莨第�ｩ"
+                    row_data[col_eq] = "休憩"
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
-                    row_data[col_eq] = tid if tid else "蜊�譛�"
+                    row_data[col_eq] = tid if tid else "占有"
 
             busy_member_task: dict[str, set[str]] = defaultdict(set)
             for ev in events_today:
@@ -12650,7 +12655,7 @@ def _build_block_table_dataframe(
                     if any(
                         b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
                     ):
-                        busy_member_task[op].add("莨第�ｩ" if tid else "莨第�ｩ")
+                        busy_member_task[op].add("休憩" if tid else "休憩")
                     elif tid:
                         busy_member_task[op].add(tid)
                 for s in str(ev.get("sub") or "").split(","):
@@ -12660,20 +12665,20 @@ def _build_block_table_dataframe(
                     if any(
                         b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
                     ):
-                        busy_member_task[s].add("莨第�ｩ")
+                        busy_member_task[s].add("休憩")
                     elif tid:
                         busy_member_task[s].add(tid)
 
             for m in members:
-                col_m = f"莠ｺ:{m}"
+                col_m = f"人:{m}"
                 parts = sorted(busy_member_task.get(m, ()))
-                row_data[col_m] = "�ｼ�".join(parts) if parts else ""
+                row_data[col_m] = "／".join(parts) if parts else ""
 
             rows_out.append(row_data)
             curr_grid = next_grid
 
-        tail = {"譌･譎ょｸｯ": ""}
-        tail.update({c: "" for c in all_cols if c != "譌･譎ょｸｯ"})
+        tail = {"日時帯": ""}
+        tail.update({c: "" for c in all_cols if c != "日時帯"})
         rows_out.append(tail)
 
     return pd.DataFrame(rows_out, columns=all_cols)
@@ -12685,12 +12690,12 @@ def _day_schedule_task_sort_key(
     need_combo_col_index: dict | None = None,
 ):
     """
-    蜷御ｸ譌･蜀�縺ｮ蜑ｲ莉倩ｩｦ陦碁���ｼ�STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 縺ｮ荳ｻ繝ｫ繝ｼ繝礼畑�ｼ峨�
-    蜈磯�ｭ繧ｭ繝ｼ縺ｯ _generate_plan_task_queue_sort_key 縺ｨ蜷瑚ｶ｣譌ｨ�ｼ亥刈蟾･騾比ｸｭ繝ｻ邏肴悄蝓ｺ貅� due_basis_date繝ｻﾂｧB 谿ｵ繝ｻb2_queue_sub繝ｻneed 蛻鈴��繝ｻ萓晞�ｼNO�ｼ峨�
-    邯壹￠縺ｦ ﾂｧB-1 縺ｮ驟榊床隧ｦ陦碁��郢ｰ繧贋ｸ翫￡縲∝ｷ･遞� rank縲‥ispatch_trial_order縲�ﾂｧB-2 谿ｵ蜀� EC 蜈郁｡後∝━蜈亥ｺｦ縲∫ｵ先棡逕ｨ繧ｭ繝ｼ縲�
-    蜷御ｸ迚ｩ逅�讖滓｢ｰ荳翫�ｮ髫咎俣蜑ｲ繧願ｾｼ縺ｿ縺ｯ _equipment_line_lower_dispatch_trial_still_pending 縺ｧ隧ｦ陦碁��繧貞ｼｷ蛻ｶ縺吶ｋ縲�
-    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 縺ｮ縺ｨ縺阪�ｯ _task_blocked_by_global_dispatch_trial_order 縺�
-    繧医ｊ蟆上＆縺�隧ｦ陦碁��縺ｮ譛ｪ螳御ｺ�繧定ｷｨ縺�縺�蜑ｲ繧願ｾｼ縺ｿ繧貞挨騾斐ヶ繝ｭ繝�繧ｯ縺吶ｋ縲�
+    同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
+    先頭キーは _generate_plan_task_queue_sort_key と同趣旨（加工途中・納期基準 due_basis_date・§B 段・b2_queue_sub・need 列順・依頼NO）。
+    続けて §B-1 の配台試行順繰り上げ、工程 rank、dispatch_trial_order、§B-2 段内 EC 先行、優先度、結果用キー。
+    同一物理機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制する。
+    STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 のときは _task_blocked_by_global_dispatch_trial_order が
+    より小さい試行順の未完了を跨いだ割り込みを別途ブロックする。
     """
     raw_r = task.get("process_sequence_rank")
     if raw_r is None:
@@ -12774,19 +12779,19 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     assign_probe_ctx: dict | None = None,
 ) -> bool:
     """
-    蜷御ｸ迚ｩ逅�讖滓｢ｰ�ｼ�machine 蜊�譛峨く繝ｼ�ｼ我ｸ翫〒縲√ｈ繧雁ｰ上＆縺�驟榊床隧ｦ陦碁��縺ｮ陦後′縺ｾ縺�谿矩㍼繧呈戟縺､縺九�
-    machine_avail_dt 縺ｯ繝√Ε繝ｳ繧ｯ髢薙�ｮ髫咎俣縺ｫ蠕檎ｶ夊ｩｦ陦碁��縺悟�･繧願ｾｼ繧√ｋ縺溘ａ縲√％縺薙〒鬆�蠎上ｒ蠑ｷ蛻ｶ縺吶ｋ縲�
-    險ｭ蛯吶ｒ霍ｨ縺�縺�隧ｦ陦碁��縺ｮ蜑榊ｾ後�ｯ _task_blocked_by_global_dispatch_trial_order 縺ｧ蛻･騾泌宛蠕｡縺吶ｋ縲�
+    同一物理機械（machine 占有キー）上で、より小さい配台試行順の行がまだ残量を持つか。
+    machine_avail_dt はチャンク間の隙間に後続試行順が入り込めるため、ここで順序を強制する。
+    設備を跨いだ試行順の前後は _task_blocked_by_global_dispatch_trial_order で別途制御する。
 
-    繧ｭ繝･繝ｼ蜈磯�ｭ縺ｫ谿矩㍼縺後≠繧九□縺代〒縺ｯ繝悶Ο繝�繧ｯ縺励↑縺�縲Ｕasks_today 縺ｨ蜷梧ｧ倥↓
-    start_date_req <= current_date 縺ｮ陦後□縺代ｒ縲悟�郁ｩｦ陦碁��縺ｮ遶ｶ蜷医阪→縺ｿ縺ｪ縺吶�
-    �ｼ医∪縺�髢句ｧ区律縺ｫ驕斐＠縺ｦ縺�縺ｪ縺�陦後′蜈ｨ譌･繝悶Ο繝�繧ｫ繝ｼ縺ｫ縺ｪ繧翫∝ｾ檎ｶ壹′縺ｻ縺ｼ驟榊床荳榊庄縺ｫ縺ｪ繧九�ｮ繧帝亟縺舌ゑｼ�
+    キュー先頭に残量があるだけではブロックしない。tasks_today と同様に
+    start_date_req <= current_date の行だけを「先試行順の競合」とみなす。
+    （まだ開始日に達していない行が全日ブロッカーになり、後続がほぼ配台不可になるのを防ぐ。）
 
-    繧医ｊ蟆上＆縺�隧ｦ陦碁��縺ｮ陦後′ **蜷御ｸ萓晞�ｼ縺ｮ蜑榊ｷ･遞句ｾ�縺｡遲峨〒縺ｾ縺�蜑ｲ莉倅ｸ崎�ｽ**縺ｪ縺ｨ縺阪�ｯ縲檎ｫｶ蜷医�ｮ谿九阪→縺ｿ縺ｪ縺輔↑縺�縲�
-    �ｼ亥ｽ楢ｩｲ陦後�ｯ eligible 縺ｫ繧ょ�･繧峨↑縺�縺溘ａ縲√％縺薙〒蠕�縺溘○繧九→蠕檎ｶ夊ｩｦ陦碁��縺悟酔荳險ｭ蛯吶〒豌ｸ荵�蛛懈ｭ｢縺怜ｾ励ｋ縲ゑｼ�
+    より小さい試行順の行が **同一依頼の前工程待ち等でまだ割付不能**なときは「競合の残」とみなさない。
+    （当該行は eligible にも入らないため、ここで待たせると後続試行順が同一設備で永久停止し得る。）
 
-    繧医ｊ蟆上＆縺�隧ｦ陦碁��縺ｮ陦後′ **蠖捺律縺ｮ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縺�縺代〒險育判遯薙ｒ蜈ｨ譌･蜊�譛�**�ｼ医◎縺ｮ險ｭ蛯吶�ｯ蠖捺律繧ｹ繝ｭ繝�繝医ぞ繝ｭ�ｼ峨↑繧�
-    縲檎ｫｶ蜷医�ｮ谿九阪→縺ｿ縺ｪ縺輔↑縺��ｼ医げ繝ｭ繝ｼ繝舌Ν隧ｦ陦碁��縺ｨ縺ゅｏ縺帙※莉冶ｨｭ蛯吶′蜈ｨ譌･豁｢縺ｾ繧九�ｮ繧帝亟縺撰ｼ峨�
+    より小さい試行順の行が **当日の機械カレンダーだけで計画窓を全日占有**（その設備は当日スロットゼロ）なら
+    「競合の残」とみなさない（グローバル試行順とあわせて他設備が全日止まるのを防ぐ）。
     """
     line = (machine_occ_key or "").strip()
     if not line:
@@ -12852,19 +12857,19 @@ def _min_pending_dispatch_trial_order_for_date(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> int | None:
     """
-    start_date_req <= current_date 縺九▽谿矩㍼縺ゅｊ縺ｮ繧ｿ繧ｹ繧ｯ縺ｮ驟榊床隧ｦ陦碁��縺ｮ譛蟆丞､縲�
-    _equipment_line_lower_dispatch_trial_still_pending 縺ｨ蜷梧ｧ倥√∪縺�髢句ｧ区律縺ｫ驕斐＠縺ｦ縺�縺ｪ縺�陦後�ｯ
-    縲悟�郁｡瑚ｩｦ陦碁��縺ｮ遶ｶ蜷医阪↓蜷ｫ繧√↑縺�縲�
+    start_date_req <= current_date かつ残量ありのタスクの配台試行順の最小値。
+    _equipment_line_lower_dispatch_trial_still_pending と同様、まだ開始日に達していない行は
+    「先行試行順の競合」に含めない。
 
-    **繧ｰ繝ｭ繝ｼ繝舌Ν隧ｦ陦碁��繝悶Ο繝�繧ｯ**�ｼ�STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT�ｼ臥畑縺ｫ縲�
-    縲後％縺ｮ譌･縺ｾ縺�蜑ｲ莉伜呵｣懊↓縺ｪ繧雁ｾ励↑縺�縲崎｡後�ｯ譛蟆丞､縺九ｉ髯､螟悶☆繧九ゅ＆繧ゅ↑縺�縺ｨ蜷御ｸ萓晞�ｼ縺ｮ
-    ﾂｧA-1/ﾂｧA-2 蜑榊ｷ･遞具ｼ郁ｩｦ陦碁��縺ｯ蠕後ｍ縺�縺瑚｡碁��縺ｯ蜈茨ｼ峨′蠢�隕√↑陦後′縲√ｈ繧雁ｰ上＆縺�隧ｦ陦碁��縺ｮ陦後→
-    蠕ｪ迺ｰ縺励※豌ｸ荵�縺ｫ蜍輔￠縺ｪ縺�縲�
-    - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` 縺� True 縺ｮ陦�
-    - �ｼ�daily_status繝ｻmembers 縺梧ｸ｡繧九→縺搾ｼ牙ｽ捺律讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縺�縺代〒險育判遯灘�ｨ譌･蜊�譛峨�ｮ陦�
-    - �ｼ�machine_avail_dt 遲峨′貂｡繧九→縺搾ｼ芽ｨｭ蛯吝｣∵凾險医′險育判邨らｫｯ莉･荳翫〒蠖捺律繧ｹ繝ｭ繝�繝医↑縺励�ｮ陦�
+    **グローバル試行順ブロック**（STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT）用に、
+    「この日まだ割付候補になり得ない」行は最小値から除外する。さもないと同一依頼の
+    §A-1/§A-2 前工程（試行順は後ろだが行順は先）が必要な行が、より小さい試行順の行と
+    循環して永久に動けない。
+    - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` が True の行
+    - （daily_status・members が渡るとき）当日機械カレンダーだけで計画窓全日占有の行
+    - （machine_avail_dt 等が渡るとき）設備壁時計が計画終端以上で当日スロットなしの行
 
-    1 繝ｭ繝ｼ繝ｫ蜑ｲ蠖薙�励Ο繝ｼ繝悶↓繧医ｋ髯､螟悶�ｯ陦後ｏ縺ｪ縺��ｼ�`_effective_min_dispatch_trial_order_from_pool` 蛛ｴ縺ｧ螻､縺斐→縺ｫ蛻､螳夲ｼ峨�
+    1 ロール割当プローブによる除外は行わない（`_effective_min_dispatch_trial_order_from_pool` 側で層ごとに判定）。
     """
     pool = _tasks_in_min_pending_dispatch_pool(
         task_queue,
@@ -12903,8 +12908,8 @@ def _task_blocked_by_global_dispatch_trial_order(
     min_dispatch_effective: int | None = None,
 ) -> bool:
     """
-    繧医ｊ蟆上＆縺�驟榊床隧ｦ陦碁��縺ｫ縲∝ｽ捺律蜑ｲ莉伜庄閭ｽ縺ｪ譛ｪ螳御ｺ�縺後≠繧九→縺阪∝ｽ楢ｩｲ繧ｿ繧ｹ繧ｯ繧偵ヶ繝ｭ繝�繧ｯ縺吶ｋ縲�
-    min_dispatch_effective: 繝励�ｼ繝ｫ�ｼ九�励Ο繝ｼ繝悶〒豎ゅａ縺溷ｮ溷柑譛蟆剰ｩｦ陦碁���ｼ域悴謖�螳壽凾縺ｯ螳我ｾ｡繝輔ぅ繝ｫ繧ｿ縺ｮ縺ｿ縺ｮ譛蟆擾ｼ峨�
+    より小さい配台試行順に、当日割付可能な未完了があるとき、当該タスクをブロックする。
+    min_dispatch_effective: プール＋プローブで求めた実効最小試行順（未指定時は安価フィルタのみの最小）。
     """
     if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
         return False
@@ -12933,7 +12938,7 @@ def _task_blocked_by_global_dispatch_trial_order(
 
 
 def _purge_attendance_days_not_in_set(attendance_data: dict, keep_dates: frozenset) -> None:
-    """蜍､諤�霎樊嶌縺九ｉ繝槭せ繧ｿ縺ｫ辟｡縺�譌･莉倥く繝ｼ繧貞炎髯､縺吶ｋ�ｼ郁�ｪ蜍墓僑蠑ｵ蛻�縺ｮ蟾ｻ縺肴綾縺暦ｼ峨�"""
+    """勤怠辞書からマスタに無い日付キーを削除する（自動拡張分の巻き戻し）。"""
     for dk in list(attendance_data.keys()):
         if dk not in keep_dates:
             del attendance_data[dk]
@@ -12943,11 +12948,11 @@ def _partial_task_id_due_shift_outcome(
     task_queue: list, task_id: str, calendar_last: date
 ) -> tuple[bool, bool]:
     """
-    驟榊床谿九�ｮ萓晞�ｼNO縺ｫ縺､縺�縺ｦ邏肴悄+1譌･繝ｪ繝医Λ繧､縺ｮ蛻�鬘槭�
-    謌ｻ繧雁､: (shift_ok, calendar_shortfall)
-    - shift_ok: 邏肴悄蝓ｺ貅厄ｼ�due_basis_date�ｼ峨ｒ謖√▽陦後′縺ゅｊ縲√◎繧後ｉ縺吶∋縺ｦ縺ｧ +1 譌･縺後�槭せ繧ｿ譛邨りｨ育判譌･莉･荳�
-    - calendar_shortfall: 邏肴悄蝓ｺ貅悶ｒ謖√▽陦後′縺ゅｊ縲√＞縺壹ｌ縺九〒 +1 譌･縺後�槭せ繧ｿ譛邨りｨ育判譌･繧定ｶ�縺医ｋ
-    蝓ｺ貅也ｴ肴悄縺御ｸ陦後ｂ辟｡縺�萓晞�ｼ縺ｯ (False, False)�ｼ磯壼ｸｸ縺ｮ驟榊床谿九�ｮ縺ｾ縺ｾ�ｼ峨�
+    配台残の依頼NOについて納期+1日リトライの分類。
+    戻り値: (shift_ok, calendar_shortfall)
+    - shift_ok: 納期基準（due_basis_date）を持つ行があり、それらすべてで +1 日がマスタ最終計画日以下
+    - calendar_shortfall: 納期基準を持つ行があり、いずれかで +1 日がマスタ最終計画日を超える
+    基準納期が一行も無い依頼は (False, False)（通常の配台残のまま）。
     """
     tid = (task_id or "").strip()
     if not tid:
@@ -12967,10 +12972,10 @@ def _partial_task_id_due_shift_outcome(
 
 def _shift_task_due_calendar_fields_one_day(task: dict, run_date: date) -> None:
     """
-    驟榊床谿九Μ繝医Λ繧､逕ｨ: **蜀�驛ｨ縺ｮ邏肴悄蝓ｺ貅厄ｼ�due_basis_date�ｼ峨□縺�**繧� +1 譌･縺吶ｋ縲�
-    邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ逕ｨ縺ｮ ``due_basis_date_result_sheet`` 縺ｯ螟画峩縺励↑縺��ｼ�+1 蜑阪�ｮ譌･莉倥ｒ菫晄戟�ｼ峨�
-    蝗樒ｭ皮ｴ肴悄繝ｻ謖�螳夂ｴ肴悄繧る�榊床險育判繧ｷ繝ｼ繝育罰譚･縺ｮ縺ｾ縺ｾ縲�
-    due_urgent 縺ｯ縺壹ｉ縺励◆ due_basis_date 縺ｧ蜀崎ｨ育ｮ励☆繧九�
+    配台残リトライ用: **内部の納期基準（due_basis_date）だけ**を +1 日する。
+    結果_タスク一覧用の ``due_basis_date_result_sheet`` は変更しない（+1 前の日付を保持）。
+    回答納期・指定納期も配台計画シート由来のまま。
+    due_urgent はずらした due_basis_date で再計算する。
     """
     if task.get("due_basis_date") is not None:
         task["due_basis_date"] = task["due_basis_date"] + timedelta(days=1)
@@ -12986,7 +12991,7 @@ def _seed_avail_from_timeline_for_date(
     avail_dt: dict,
     machine_day_start: datetime,
 ) -> None:
-    """蜷御ｸ譌･蜀�縺ｮ譌｢蟄� timeline 縺九ｉ險ｭ蛯咏ｩｺ縺阪�ｻ繝｡繝ｳ繝舌�ｼ遨ｺ縺阪�ｮ荳矩剞繧貞渚譏�縺吶ｋ�ｼ磯Κ蛻�蜀埼�榊床逕ｨ�ｼ峨�"""
+    """同一日内の既存 timeline から設備空き・メンバー空きの下限を反映する（部分再配台用）。"""
     for e in timeline_events:
         if e.get("date") != current_date:
             continue
@@ -13039,7 +13044,7 @@ def _bump_dt_past_machine_calendar_blocks(
     t: datetime,
     blocks: list[tuple[datetime, datetime]],
 ) -> datetime:
-    """蜊企幕蛹ｺ髢薙ヶ繝ｭ繝�繧ｯ [start,end) 縺ｫ t 縺悟�･繧矩俣縲∫ｵらｫｯ縺ｸ郢ｰ繧贋ｸ翫￡繧九�"""
+    """半開区間ブロック [start,end) に t が入る間、終端へ繰り上げる。"""
     if not blocks:
         return t
     changed = True
@@ -13076,7 +13081,7 @@ def _machine_cal_cell_is_occupied(cell) -> bool:
         return bool(cell.strip())
     if isinstance(cell, bool):
         return cell
-    # Excel 縺ｧ 0 繧偵檎ｩｺ縲阪→縺励※縺�繧句�励ｄ縲∵焚蠑上�ｮ邨先棡 0 縺ｯ蜊�譛峨＠縺ｪ縺��ｼ亥ｾ捺擂 True 縺�縺ｨ蜈ｨ譌･蜊�譛画桶縺�縺ｫ縺ｪ繧雁ｾ励ｋ�ｼ�
+    # Excel で 0 を「空」としている列や、数式の結果 0 は占有しない（従来 True だと全日占有扱いになり得る）
     if isinstance(cell, (int, float)):
         try:
             return float(cell) != 0.0
@@ -13089,9 +13094,9 @@ def _clip_machine_calendar_slot_to_factory_window(
     day_d: date, slot_start: datetime, slot_end: datetime
 ) -> tuple[datetime, datetime] | None:
     """
-    讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ1繧ｹ繝ｭ繝�繝� [slot_start, slot_end) 繧貞ｷ･蝣ｴ遞ｼ蜒肴棧縺ｫ繧ｯ繝ｪ繝�繝励☆繧九�
-    譫�螟悶�ｮ縺ｿ縺ｮ繧ｹ繝ｭ繝�繝医�ｯ None�ｼ磯�榊床縺ｧ縺ｯ辟｡隕厄ｼ峨よｮｵ髫�2縺ｧ縺ｯ master 繝｡繧､繝ｳ A12/B12 縺ｧ
-    DEFAULT_START_TIME / DEFAULT_END_TIME 縺御ｸ頑嶌縺肴ｸ医∩�ｼ�generate_plan 縺ｮ繧ｳ繝ｳ繝�繧ｭ繧ｹ繝亥��縺ｧ隱ｭ霎ｼ�ｼ峨�
+    機械カレンダー1スロット [slot_start, slot_end) を工場稼働枠にクリップする。
+    枠外のみのスロットは None（配台では無視）。段階2では master メイン A12/B12 で
+    DEFAULT_START_TIME / DEFAULT_END_TIME が上書き済み（generate_plan のコンテキスト内で読込）。
     """
     w0 = datetime.combine(day_d, DEFAULT_START_TIME)
     w1 = datetime.combine(day_d, DEFAULT_END_TIME)
@@ -13108,9 +13113,9 @@ def _machine_calendar_planning_window_end_dt(
     members: list,
 ) -> datetime:
     """
-    讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛峨�ｮ蜿ｳ遶ｯ繧貞��繧倶ｸ企剞縲ょｷ･蝣ｴ繝槭せ繧ｿ邨よ･ｭ�ｼ�DEFAULT_END_TIME�ｼ峨→縲�
-    蠖捺律驟榊床蟇ｾ雎｡繝｡繝ｳ繝舌�ｼ縺ｮ蜍､蜍咏ｵゆｺ�譎ょ綾縺ｮ譛蟆上�ｮ蟆上＆縺�譁ｹ�ｼ井ｺｺ縺後＞縺ｪ縺�譎る俣蟶ｯ縺ｮ縲悟頃譛峨阪〒
-    險ｭ蛯吝ｺ翫□縺代′邨よ･ｭ繧定ｶ�縺医↑縺�繧医≧縺ｫ縺吶ｋ�ｼ峨�
+    機械カレンダー占有の右端を切る上限。工場マスタ終業（DEFAULT_END_TIME）と、
+    当日配台対象メンバーの勤務終了時刻の最小の小さい方（人がいない時間帯の「占有」で
+    設備床だけが終業を超えないようにする）。
     """
     w_factory = datetime.combine(current_date, DEFAULT_END_TIME)
     ends: list[datetime] = []
@@ -13133,7 +13138,7 @@ def _clip_machine_busy_blocks_to_planning_window(
     w0: datetime,
     w1: datetime,
 ) -> list[tuple[datetime, datetime]]:
-    """蜊�譛牙濠髢句玄髢薙ｒ [w0, w1) 縺ｫ繧ｯ繝ｪ繝�繝励＠縺ｦ縺九ｉ繝槭�ｼ繧ｸ縺吶ｋ縲�"""
+    """占有半開区間を [w0, w1) にクリップしてからマージする。"""
     out: list[tuple[datetime, datetime]] = []
     for s, e in blocks or []:
         s2 = max(s, w0)
@@ -13178,8 +13183,8 @@ def load_machine_calendar_occupancy_blocks(
     equipment_list: list,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    master.xlsm縲梧ｩ滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縲阪ｒ隱ｭ縺ｿ縲∬ｨｭ蛯吝�励�ｮ髱樒ｩｺ繧ｻ繝ｫ�ｼ晏ｽ楢ｩｲ 1 譎る俣繧ｹ繝ｭ繝�繝亥頃譛峨→縺ｿ縺ｪ縺吶�
-    謌ｻ繧�: 譌･莉� -> equipment_list 縺ｮ繧ｭ繝ｼ -> 蜊企幕蛹ｺ髢� [start, end) 縺ｮ繝ｪ繧ｹ繝茨ｼ医�槭�ｼ繧ｸ貂医∩�ｼ峨�
+    master.xlsm「機械カレンダー」を読み、設備列の非空セル＝当該 1 時間スロット占有とみなす。
+    戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
     """
     if not master_path or not os.path.isfile(master_path):
         return {}
@@ -13189,7 +13194,7 @@ def load_machine_calendar_occupancy_blocks(
             return {}
         raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
-        logging.warning("讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ: 繧ｷ繝ｼ繝郁ｪｭ霎ｼ繧偵せ繧ｭ繝�繝励＠縺ｾ縺励◆ (%s)", e)
+        logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
         return {}
     if raw.shape[0] < 3 or raw.shape[1] < 3:
         return {}
@@ -13290,7 +13295,7 @@ def _apply_machine_calendar_floor_for_date(
     *,
     machine_calendar_plan_end: datetime | None = None,
 ) -> None:
-    """蠖捺律縺ｮ繧ｿ繧､繝�繝ｩ繧､繝ｳ繧ｷ繝ｼ繝牙ｾ後∵ｩ滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛峨〒險ｭ蛯咏ｩｺ縺堺ｸ矩剞繧堤ｹｰ繧贋ｸ翫￡繧九�"""
+    """当日のタイムラインシード後、機械カレンダー占有で設備空き下限を繰り上げる。"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
         return
@@ -13329,7 +13334,7 @@ def _machine_calendar_blocks_for_occ_key(
     day_blocks: dict[str, list[tuple[datetime, datetime]]],
     occ: str,
 ) -> list[tuple[datetime, datetime]] | None:
-    """day_blocks 縺九ｉ蜊�譛峨く繝ｼ�ｼ郁｡ｨ險倥ｆ繧峨℃險ｱ螳ｹ�ｼ峨↓荳閾ｴ縺吶ｋ蛹ｺ髢薙Μ繧ｹ繝医ｒ蠕励ｋ縲�"""
+    """day_blocks から占有キー（表記ゆらぎ許容）に一致する区間リストを得る。"""
     o = str(occ or "").strip()
     if not o or not day_blocks:
         return None
@@ -13349,8 +13354,8 @@ def _machine_calendar_occ_blocks_full_plan_window(
     members: list,
 ) -> bool:
     """
-    蠖捺律縺ｮ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛峨′險育判遯� [蟋区･ｭ, min(邨よ･ｭ,遞ｼ蜒阪Γ繝ｳ繝舌�ｼ邨ゆｺ�) ) 蜈ｨ菴薙ｒ蝪槭℃縲�
-    縺昴�ｮ險ｭ蛯吶〒縺ｯ蠖捺律 1 譛ｬ繧ょ刈蟾･繧貞�･繧後ｉ繧後↑縺�縺ｨ縺� True縲�
+    当日の機械カレンダー占有が計画窓 [始業, min(終業,稼働メンバー終了) ) 全体を塞ぎ、
+    その設備では当日 1 本も加工を入れられないとき True。
     """
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
@@ -13374,8 +13379,8 @@ def _task_fully_machine_calendar_blocked_on_date(
     members: list | None,
 ) -> bool:
     """
-    蠖楢ｩｲ繧ｿ繧ｹ繧ｯ縺ｮ蜊�譛芽ｨｭ蛯吶′縲∝ｽ捺律縺ｮ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縺�縺代〒險育判遯薙ｒ蜈ｨ譌･蝪槭′繧後※縺�繧九�
-    繧ｰ繝ｭ繝ｼ繝舌Ν隧ｦ陦碁��繝悶Ο繝�繧ｯ逕ｨ縺ｮ縲梧怙蟆剰ｩｦ陦碁��縲阪°繧牙､悶☆�ｼ井ｻ冶ｨｭ蛯吶�ｮ驟榊床繝�繝�繝峨Ο繝�繧ｯ髦ｲ豁｢�ｼ峨�
+    当該タスクの占有設備が、当日の機械カレンダーだけで計画窓を全日塞がれている。
+    グローバル試行順ブロック用の「最小試行順」から外す（他設備の配台デッドロック防止）。
     """
     if daily_status is None or members is None:
         return False
@@ -13403,14 +13408,14 @@ def _task_no_machining_window_left_from_avail_floor(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    machine_avail_dt�ｼ医す繝ｼ繝峨�ｻ讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ蠎翫�ｻ蠖捺律遒ｺ螳壹Ο繝ｼ繝ｫ蜿肴丐蠕鯉ｼ峨〒縲�
-    蜊�譛芽ｨｭ蛯吶�ｮ遨ｺ縺堺ｸ矩剞縺瑚ｨ育判遯鍋ｵらｫｯ莉･荳翫↑繧牙ｽ捺律縺ｯ蠖楢ｨｭ蛯吶↓繧ｹ繝ｭ繝�繝医↑縺励�
-    `machine_handoff` 遲峨′貂｡繧九→縺阪�ｯ `_resolve_machine_changeover_floor_segments` 縺ｫ繧医ｊ
-    `_assign_one_roll_trial_order_flow` 縺ｨ蜷後§ **螳溷柑蜉�蟾･髢句ｧ倶ｸ矩剞** 縺ｧ蛻､螳壹☆繧�
-    �ｼ育函縺ｮ machine_avail 縺�縺代〒縺ｯ繝√Ε繝ｳ繧ｸ繧ｪ繝ｼ繝舌�ｼ蠕後�ｮ荳矩剞縺梧ｬ�縺代∝呵｣懊ｄ min_dto 縺檎汲縺�縺ｮ繧帝亟縺撰ｼ峨�
-    縺ｾ縺溽ｩｺ縺堺ｸ矩剞縺檎ｵらｫｯ繧医ｊ蜑阪〒繧ゅ∬ｨ育判遯薙〒縺ｮ **谿九ｊ騾｣邯壹′ 1 繝ｭ繝ｼ繝ｫ蛻�縺ｫ雜ｳ繧翫↑縺�**
-    縺ｨ蛻､譁ｭ縺ｧ縺阪ｋ蝣ｴ蜷医�ｯ True�ｼ亥ｮ溷ロ荳崎ｶｳ繝�繝�繝峨Ο繝�繧ｯ髦ｲ豁｢�ｼ峨�
-    繧ｫ繝ｬ繝ｳ繝繝ｼ蛹ｺ髢鍋�ｧ蜷医�ｮ繧ｭ繝ｼ蜿悶ｊ縺薙⊂縺励ｒ髦ｲ縺舌�
+    machine_avail_dt（シード・機械カレンダー床・当日確定ロール反映後）で、
+    占有設備の空き下限が計画窓終端以上なら当日は当設備にスロットなし。
+    `machine_handoff` 等が渡るときは `_resolve_machine_changeover_floor_segments` により
+    `_assign_one_roll_trial_order_flow` と同じ **実効加工開始下限** で判定する
+    （生の machine_avail だけではチャンジオーバー後の下限が欠け、候補や min_dto が狂うのを防ぐ）。
+    また空き下限が終端より前でも、計画窓での **残り連続が 1 ロール分に足りない**
+    と判断できる場合は True（実働不足デッドロック防止）。
+    カレンダー区間照合のキー取りこぼしを防ぐ。
     """
     if (
         daily_status is None
@@ -13471,7 +13476,7 @@ def _task_no_machining_window_left_from_avail_floor(
     t_eff = parse_float_safe(t.get("task_eff_factor"), 1.0)
     if t_eff <= 0:
         t_eff = 1.0
-    # eff_time_per_unit 竕� base / avg_eff / t_eff ﾃ� 菴吝鴨菫よ焚縲Ｂvg_eff 縺ｯ繝√�ｼ繝�谺｡隨ｬ縺ｧ荳九′繧九�
+    # eff_time_per_unit ≈ base / avg_eff / t_eff × 余力係数。avg_eff はチーム次第で下がる。
     _avg_eff_floor = 0.5
     approx_need_mins = max(1.0, float(btp) / t_eff / _avg_eff_floor)
     return rem < timedelta(minutes=approx_need_mins)
@@ -13485,7 +13490,7 @@ def _bump_machine_avail_after_roll_for_calendar(
     machine_calendar_plan_end: datetime | None = None,
     machine_day_floor: datetime | None = None,
 ) -> None:
-    """繝ｭ繝ｼ繝ｫ遒ｺ螳夂峩蠕�: 邨ゆｺ�譎ょ綾縺後き繝ｬ繝ｳ繝繝ｼ蜊�譛峨せ繝ｭ繝�繝亥��縺ｪ繧臥ｵらｫｯ縺ｾ縺ｧ郢ｰ繧贋ｸ翫￡縲�"""
+    """ロール確定直後: 終了時刻がカレンダー占有スロット内なら終端まで繰り上げ。"""
     day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
     if not day_blocks:
         return
@@ -13543,16 +13548,16 @@ def load_machine_changeover_settings(
     master_path: str,
 ) -> tuple[dict[str, tuple[int, int]], dict[str, int]]:
     """
-    master.xlsm 縺ｮ莉ｻ諢上す繝ｼ繝�:
-      - 縲瑚ｨｭ螳喟萓晞�ｼ蛻�譖ｿ蜑榊ｾ梧凾髢薙坂ｦ 蟾･遞句錐繝ｻ讖滓｢ｰ蜷阪�ｻ貅門ｙ蛻�繝ｻ蠕悟ｧ区忰蛻��ｼ�1 陦檎岼隕句�ｺ縺励�2 陦檎岼莉･髯阪ョ繝ｼ繧ｿ�ｼ�
-      - 縲瑚ｨｭ螳喟讖滓｢ｰ_譌･谺｡蟋区･ｭ貅門ｙ縲坂ｦ 讖滓｢ｰ蜷阪�ｻ譌･谺｡蟋区･ｭ貅門ｙ蛻�
+    master.xlsm の任意シート:
+      - 「設定_依頼切替前後時間」… 工程名・機械名・準備分・後始末分（1 行目見出し、2 行目以降データ）
+      - 「設定_機械_日次始業準備」… 機械名・日次始業準備分
 
-    萓晞�ｼNO�ｼ医ち繧ｹ繧ｯ�ｼ峨′蜷御ｸ迚ｩ逅�讖滓｢ｰ荳翫〒蛻�繧頑崛繧上ｋ縺ｨ縺阪∫峩蜑阪ヶ繝ｭ繝�繧ｯ縺ｮ蠕悟ｧ区忰竊貞ｽ楢ｩｲ繝悶Ο繝�繧ｯ縺ｮ貅門ｙ繧�
-    險ｭ蛯咏ｩｺ縺堺ｸ矩剞縺ｫ蜉�邂励☆繧九ょ酔荳萓晞�ｼNO縺ｮ騾｣邯壹Ο繝ｼ繝ｫ縺ｮ髢薙↓縺ｯ蜉�邂励＠縺ｪ縺�縲�
-    譌･谺｡蟋区･ｭ貅門ｙ縺ｯ縲∝酔荳繧ｫ繝ｬ繝ｳ繝譌･縺ｧ蠖楢ｩｲ讖滓｢ｰ縺ｮ蜈磯�ｭ繝ｭ繝ｼ繝ｫ縺ｫ縺ｮ縺ｿ蜉�邂励☆繧九�
+    依頼NO（タスク）が同一物理機械上で切り替わるとき、直前ブロックの後始末→当該ブロックの準備を
+    設備空き下限に加算する。同一依頼NOの連続ロールの間には加算しない。
+    日次始業準備は、同一カレンダ日で当該機械の先頭ロールにのみ加算する。
 
-    謌ｻ繧�: (險ｭ蛯呵｡後く繝ｼ縲悟ｷ･遞�+讖滓｢ｰ縲阪♀繧医�ｳ豁｣隕丞喧繧ｭ繝ｼ -> (貅門ｙ蛻�, 蠕悟ｧ区忰蛻�),
-          讖滓｢ｰ蜷阪♀繧医�ｳ豁｣隕丞喧繧ｭ繝ｼ -> 蟋区･ｭ貅門ｙ蛻�)
+    戻り: (設備行キー「工程+機械」および正規化キー -> (準備分, 後始末分),
+          機械名および正規化キー -> 始業準備分)
     """
     changeover: dict[str, tuple[int, int]] = {}
     startup: dict[str, int] = {}
@@ -13561,7 +13566,7 @@ def load_machine_changeover_settings(
     try:
         xls = pd.ExcelFile(master_path)
     except Exception as e:
-        logging.warning("讖滓｢ｰ貅門ｙ/蛻�譖ｿ險ｭ螳�: 繝悶ャ繧ｯ繧帝幕縺代∪縺帙ｓ (%s)", e)
+        logging.warning("機械準備/切替設定: ブックを開けません (%s)", e)
         return changeover, startup
 
     if SHEET_MACHINE_CHANGEOVER in xls.sheet_names:
@@ -13570,21 +13575,21 @@ def load_machine_changeover_settings(
                 master_path, sheet_name=SHEET_MACHINE_CHANGEOVER, header=0
             )
             df.columns = [str(c).strip() for c in df.columns]
-            c_proc = _df_pick_column(df, "蟾･遞句錐", "蟾･遞�")
-            c_mac = _df_pick_column(df, "讖滓｢ｰ蜷�", "讖滓｢ｰ")
+            c_proc = _df_pick_column(df, "工程名", "工程")
+            c_mac = _df_pick_column(df, "機械名", "機械")
             c_prep = _df_pick_column(
                 df,
-                "貅門ｙ譎る俣_蛻�",
-                "貅門ｙ蛻�",
-                "蜉�蟾･蜑肴ｺ門ｙ_蛻�",
-                "蜉�蟾･髢句ｧ句燕貅門ｙ_蛻�",
+                "準備時間_分",
+                "準備分",
+                "加工前準備_分",
+                "加工開始前準備_分",
             )
             c_clean = _df_pick_column(
                 df,
-                "蠕悟ｧ区忰譎る俣_蛻�",
-                "蠕悟ｧ区忰蛻�",
-                "蜉�蟾･蠕悟ｾ悟ｧ区忰_蛻�",
-                "蜉�蟾･邨ゆｺ�蠕悟ｾ悟ｧ区忰_蛻�",
+                "後始末時間_分",
+                "後始末分",
+                "加工後後始末_分",
+                "加工終了後後始末_分",
             )
             if c_proc and c_mac and c_prep and c_clean:
                 n_ent = 0
@@ -13613,13 +13618,13 @@ def load_machine_changeover_settings(
                     n_ent += 1
                 if n_ent:
                     logging.info(
-                        "繝槭せ繧ｿ縲�%s縲�: 蟾･遞�+讖滓｢ｰ %s 陦後�ｮ貅門ｙ/蠕悟ｧ区忰�ｼ亥���ｼ峨ｒ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+                        "マスタ「%s」: 工程+機械 %s 行の準備/後始末（分）を読み込みました。",
                         SHEET_MACHINE_CHANGEOVER,
                         n_ent,
                     )
         except Exception as e:
             logging.warning(
-                "繝槭せ繧ｿ縲�%s縲崎ｪｭ霎ｼ螟ｱ謨暦ｼ育┌隕厄ｼ�: %s", SHEET_MACHINE_CHANGEOVER, e
+                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_CHANGEOVER, e
             )
 
     if SHEET_MACHINE_DAILY_STARTUP in xls.sheet_names:
@@ -13628,9 +13633,9 @@ def load_machine_changeover_settings(
                 master_path, sheet_name=SHEET_MACHINE_DAILY_STARTUP, header=0
             )
             df2.columns = [str(c).strip() for c in df2.columns]
-            c_mn = _df_pick_column(df2, "讖滓｢ｰ蜷�", "讖滓｢ｰ")
+            c_mn = _df_pick_column(df2, "機械名", "機械")
             c_su = _df_pick_column(
-                df2, "譌･谺｡蟋区･ｭ貅門ｙ_蛻�", "蟋区･ｭ貅門ｙ_蛻�", "譌･蟋区･ｭ貅門ｙ_蛻�"
+                df2, "日次始業準備_分", "始業準備_分", "日始業準備_分"
             )
             if c_mn and c_su:
                 for _, row in df2.iterrows():
@@ -13649,13 +13654,13 @@ def load_machine_changeover_settings(
                         startup[nk] = su
                 if startup:
                     logging.info(
-                        "繝槭せ繧ｿ縲�%s縲�: 讖滓｢ｰ %s 莉ｶ縺ｮ譌･谺｡蟋区･ｭ貅門ｙ�ｼ亥���ｼ峨ｒ隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+                        "マスタ「%s」: 機械 %s 件の日次始業準備（分）を読み込みました。",
                         SHEET_MACHINE_DAILY_STARTUP,
                         len({k for k in startup if "+" not in str(k)}),
                     )
         except Exception as e:
             logging.warning(
-                "繝槭せ繧ｿ縲�%s縲崎ｪｭ霎ｼ螟ｱ謨暦ｼ育┌隕厄ｼ�: %s", SHEET_MACHINE_DAILY_STARTUP, e
+                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_DAILY_STARTUP, e
             )
 
     return changeover, startup
@@ -13715,8 +13720,8 @@ def _pick_skilled_op_for_changeover_interval(
     daily_status: dict,
 ) -> str | None:
     """
-    蠖捺律 eligible 縺ｮ縺�縺｡縲∝ｽ楢ｩｲ蟾･遞�+讖滓｢ｰ縺ｧ OP 繧ｹ繧ｭ繝ｫ繧呈戟縺､閠�縺ｮ縺�縺｡蜆ｪ蜈亥ｺｦ縺梧怙蟆上�ｮ1蜷阪�
-    貅門ｙ繝ｻ譌･谺｡蟋区･ｭ縺ｮ莨第�ｩ繧ｹ繧ｭ繝�繝励↓逕ｨ縺�繧具ｼ�avail_dt 縺ｯ隕九↑縺��ｼ峨�
+    当日 eligible のうち、当該工程+機械で OP スキルを持つ者のうち優先度が最小の1名。
+    準備・日次始業の休憩スキップに用いる（avail_dt は見ない）。
     """
     cands: list[tuple[int, str]] = []
     proc = (machine_proc or "").strip()
@@ -13755,7 +13760,7 @@ def _machine_effective_floor_timedelta_only(
     daily_startup_by_machine: dict[str, int] | None = None,
     current_date: date | None = None,
 ) -> datetime:
-    """繧ｹ繧ｭ繝ｫ OP 縺梧鏡縺医↑縺�縺ｨ縺阪�ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ�ｼ亥｣∵凾險医↓蛻�繧定ｶｳ縺呻ｼ丞ｮ壼ｸｸ髢句ｧ句渕貅悶�ｮ譌･谺｡蟋区･ｭ縺ｯ邨ゆｺ�譎ょ綾縺ｧ max�ｼ峨�"""
+    """スキル OP が拾えないときのフォールバック（壁時計に分を足す／定常開始基準の日次始業は終了時刻で max）。"""
     if abolish_limits:
         return machine_day_floor
     mf = machine_avail_dt.get(machine_occ_key, machine_day_floor)
@@ -13803,13 +13808,13 @@ def _changeover_plan_segments_and_machining_lower_bound(
     abolish_limits: bool,
 ) -> tuple[datetime | None, list[dict]]:
     """
-    蜑阪Ο繝ｼ繝ｫ蜉�蟾･邨ゆｺ� prev_machining_end_dt 縺九ｉ縲∵律谺｡蟋区･ｭ�ｼ亥ｽ捺律蜈磯�ｭ縺ｮ縺ｿ�ｼ峨�ｻ蜷梧律萓晞�ｼ蛻�譖ｿ縺ｮ蠕悟ｧ区忰繝ｻ貅門ｙ繧�
-    邨�縺ｿ遶九※縲�(蜉�蟾･髢句ｧ区怙譌ｩ譎ょ綾, 繧ｿ繧､繝�繝ｩ繧､繝ｳ逕ｨ繧ｻ繧ｰ繝｡繝ｳ繝磯屁蠖｢) 繧定ｿ斐☆縲�
-    譌･谺｡蟋区･ｭ縺ｯ master 繝｡繧､繝ｳ A15�ｼ亥ｮ壼ｸｸ髢句ｧ具ｼ峨′隱ｭ繧√ｌ縺ｰ [髢句ｧ�, 髢句ｧ�+N蛻�) 縺ｮ螢∵凾險茨ｼ亥共諤� forward 縺励↑縺��ｼ峨�
-    A15 縺瑚ｪｭ繧√↑縺�縺ｨ縺阪�ｮ縺ｿ縲∝ｾ捺擂縺ｩ縺翫ｊ莉｣陦ｨ繧ｹ繧ｭ繝ｫ OP 縺ｮ蜍､蜍吶�ｻ莨第�ｩ縺ｫ豐ｿ縺｣縺ｦ forward 縺吶ｋ縲�
-    蜷御ｸ蜊�譛峨く繝ｼ縺ｧ逶ｴ蜑榊刈蟾･縺ｨ蜷御ｸ萓晞�ｼNO縺ｮ縺ｨ縺阪�ｯ蜉�蟾･蜑肴ｺ門ｙ繧剃ｻ倥￠縺ｪ縺��ｼ磯｣邯壹Ο繝ｼ繝ｫ�ｼ峨�
-    譌･谺｡蟋区･ｭ繧ｻ繧ｰ繝｡繝ｳ繝医�ｮ op 縺ｯ遨ｺ�ｼ医ち繧､繝�繝ｩ繧､繝ｳ縺ｧ縺ｯ莠ｺ繧定ｼ峨○縺夊ｨｭ蛯吶�ｮ縺ｿ�ｼ峨よｺ門ｙ繝ｻ蠕悟ｧ区忰縺ｮ op 縺ｯ forward 逕ｨ縺ｮ莉｣陦ｨ�ｼ冗峩蜑堺ｸｻ縲�
-    繧ｻ繧ｰ繝｡繝ｳ繝� dict 縺ｯ start_dt, end_dt, op, event_kind, machine, machine_occupancy_key 繧呈戟縺､縲�
+    前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末・準備を
+    組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
+    日次始業は master メイン A15（定常開始）が読めれば [開始, 開始+N分) の壁時計（勤怠 forward しない）。
+    A15 が読めないときのみ、従来どおり代表スキル OP の勤務・休憩に沿って forward する。
+    同一占有キーで直前加工と同一依頼NOのときは加工前準備を付けない（連続ロール）。
+    日次始業セグメントの op は空（タイムラインでは人を載せず設備のみ）。準備・後始末の op は forward 用の代表／直前主。
+    セグメント dict は start_dt, end_dt, op, event_kind, machine, machine_occupancy_key を持つ。
     """
     if abolish_limits:
         return prev_machining_end_dt, []
@@ -13948,9 +13953,9 @@ def _machine_effective_floor_for_assign(
     machine_proc: str | None = None,
 ) -> datetime:
     """
-    險ｭ蛯吶�ｮ螢∵凾險医↓縺翫￠繧九悟ｽ楢ｩｲ繝ｭ繝ｼ繝ｫ縺ｮ蜉�蟾･髢句ｧ九堺ｻ･蜑阪�ｮ荳矩剞縲�
-    daily_status繝ｻskills_dict繝ｻcurrent_date 縺梧純縺�縺ｨ縺阪�ｯ縲《kills 驕ｩ蜷� OP 縺ｮ蜍､蜍吶�ｻ莨第�ｩ縺ｫ豐ｿ縺｣縺ｦ
-    譌･谺｡蟋区･ｭ繝ｻ蠕悟ｧ区忰繝ｻ貅門ｙ繧� forward 縺励◆譛譌ｩ蜉�蟾･髢句ｧ九よ純繧上↑縺�縺ｨ縺阪�ｯ蛻�縺ｮ螢∵凾險亥刈邂励↓繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縲�
+    設備の壁時計における「当該ロールの加工開始」以前の下限。
+    daily_status・skills_dict・current_date が揃うときは、skills 適合 OP の勤務・休憩に沿って
+    日次始業・後始末・準備を forward した最早加工開始。揃わないときは分の壁時計加算にフォールバック。
     """
     if abolish_limits:
         return machine_day_floor
@@ -14009,8 +14014,8 @@ def _resolve_machine_changeover_floor_segments(
     dispatch_interval_mirror: DispatchIntervalMirror | None,
 ) -> tuple[datetime, list[dict], bool]:
     """
-    險ｭ蛯吶�ｮ蜉�蟾･髢句ｧ倶ｸ矩剞縺ｨ縲√ち繧､繝�繝ｩ繧､繝ｳ霑ｽ險倡畑繧ｻ繝�繝医い繝�繝怜玄髢薙�
-    謌ｻ繧雁､ (floor_dt, segments, abort)縲Ｂbort 縺� True 縺ｮ縺ｨ縺阪�ｯ蠖楢ｩｲ繝ｭ繝ｼ繝ｫ蜑ｲ蠖薙ｒ蜈ｨ菴薙→縺励※譽�蜊ｴ縺吶ｋ縲�
+    設備の加工開始下限と、タイムライン追記用セットアップ区間。
+    戻り値 (floor_dt, segments, abort)。abort が True のときは当該ロール割当を全体として棄却する。
     """
     if abolish_all_scheduling_limits:
         prev = machine_avail_dt.get(machine_occ_key, machine_day_floor)
@@ -14102,7 +14107,7 @@ def _changeover_timeline_op_sub_for_event(
     machine_handoff: dict,
     daily_status: dict,
 ) -> tuple[str, str]:
-    """繧ｿ繧､繝�繝ｩ繧､繝ｳ逕ｨ縺ｮ荳ｻ�ｼ剰｣懊よ律谺｡蟋区･ｭ縺ｯ莠ｺ縺ｪ縺励よｺ門ｙ縺ｯ逶ｴ蠕後Ο繝ｼ繝ｫ縲∝ｾ悟ｧ区忰縺ｯ handoff 縺ｮ逶ｴ蜑阪Ο繝ｼ繝ｫ縲�"""
+    """タイムライン用の主／補。日次始業は人なし。準備は直後ロール、後始末は handoff の直前ロール。"""
     ek = str(event_kind or "").strip()
     op_s = str(op_from_segment or "").strip()
     _lead = str(machining_lead_op or "").strip()
@@ -14135,7 +14140,7 @@ def _append_changeover_segments_to_timeline(
     machining_sub_str: str | None = None,
     machine_handoff: dict | None = None,
 ) -> None:
-    """繧ｻ繝�繝医い繝�繝礼ｳｻ繧ｻ繧ｰ繝｡繝ｳ繝医ｒ繧ｿ繧､繝�繝ｩ繧､繝ｳ繝ｻ繝溘Λ繝ｼ繝ｻ諡�蠖楢� avail 縺ｫ蜿肴丐縲�"""
+    """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
     _mh = machine_handoff or {}
     _lead_m = str(machining_lead_op or "").strip()
     _sub_roll = str(machining_sub_str or "").strip()
@@ -14195,8 +14200,8 @@ def _append_changeover_segments_to_timeline(
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
-    蠖楢ｩｲ譌･縺ｮ邨ゆｺ�譎らせ縺ｧ縲∫ｴ肴悄蝓ｺ貅匁律�ｼ亥ｽ捺律蜷ｫ繧�ｼ我ｻ･蜑阪↑縺ｮ縺ｫ谿矩㍼縺梧ｮ九ｋ萓晞�ｼNO縲�
-    縲檎ｴ肴悄譌･蜀�縺ｫ螳碁≠縺ｧ縺阪↑縺九▲縺溘�= 蠕後ｍ蛟偵＠蜀崎ｩｦ陦後�ｮ蛟呵｣懊�
+    当該日の終了時点で、納期基準日（当日含む）以前なのに残量が残る依頼NO。
+    「納期日内に完遂できなかった」= 後ろ倒し再試行の候補。
     """
     out = set()
     eps = 1e-9
@@ -14225,9 +14230,9 @@ def _machine_handoff_state_from_timeline(
     current_date: date,
 ) -> dict:
     """
-    繧ｿ繧､繝�繝ｩ繧､繝ｳ縺九ｉ縲∝推 machine_occupancy_key 縺ｫ縺､縺�縺ｦ
-    險育判譌･ current_date 莉･蜑阪�ｮ **蜉�蟾･ (machining)** 繧､繝吶Φ繝医�ｮ譛邨らｵゆｺ�繧貞ｾｩ蜈�縺吶ｋ縲�
-    繧ｻ繝�繝医い繝�繝礼ｳｻ event_kind 縺ｯ last_tid / 蠕悟ｧ区忰蛻､螳壹↓蜷ｫ繧√↑縺�縲�
+    タイムラインから、各 machine_occupancy_key について
+    計画日 current_date 以前の **加工 (machining)** イベントの最終終了を復元する。
+    セットアップ系 event_kind は last_tid / 後始末判定に含めない。
     """
     best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
     for e in timeline_events:
@@ -14300,11 +14305,11 @@ def _trial_order_flow_day_start_floor(
     macro_now_dt: datetime,
     task_queue: list | None = None,
 ) -> datetime:
-    """蜴溷渚謚募�･譌･繧定ｵｷ轤ｹ縺ｫ縲√◎縺ｮ譌･縺ｮ蜉�蟾･髢句ｧ九�ｮ荳矩剞譎ょ綾�ｼ亥酔譌･縺ｯ 13:00 莉･髯阪ｒ蜷ｫ繧�ｼ峨�"""
+    """原反投入日を起点に、その日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
-    # ﾂｧB-2 讀懈渊 / ﾂｧB-3 蟾ｻ霑斐＠縺ｯ EC 螳御ｺ�繧貞ｾ�縺｣縺ｦ髢句ｧ九〒縺阪ｋ縺溘ａ縲�
-    # 蜴溷渚謚募�･譌･�ｼ�=蜷梧律13:00莉･髯搾ｼ峨�ｮ蛻ｶ邏�繧偵◎縺ｮ縺ｾ縺ｾ驕ｩ逕ｨ縺吶ｋ縺ｨ蠕檎ｶ壹′荳榊ｿ�隕√↓蠕後ｍ縺ｸ蛟偵ｌ繧九�
-    # EC螳御ｺ�譎ょ綾荳矩剞�ｼ�_roll_pipeline_b2_inspection_ec_completion_floor_dt�ｼ峨〒謨ｴ蜷医ｒ蜿悶ｋ縲�
+    # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始できるため、
+    # 原反投入日（=同日13:00以降）の制約をそのまま適用すると後続が不必要に後ろへ倒れる。
+    # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を取る。
     _tid_floor = str(task.get("task_id", "") or "").strip()
     is_b2_follower_delayed = bool(
         (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
@@ -14376,8 +14381,8 @@ def _trial_order_flow_eligible_tasks(
             min_dispatch_effective=min_dispatch_effective,
         ):
             continue
-        # min_dto 縺九ｉ蜈ｨ譌･繧ｫ繝ｬ繝ｳ繝繝ｼ蜊�譛峨�ｯ髯､螟匁ｸ医∩縺ｧ繧ゅ∝酔譌･隧ｦ陦碁��縺ｮ縲後ヶ繝ｭ繝�繧ｯ縲阪�ｯ my_o>m 縺ｮ縺ｿ縺ｮ縺溘ａ
-        # 隧ｦ陦碁��=min 縺ｮ蜊�譛芽｡後′谿九ｊ縲∽ｻ冶ｩｦ陦碁��縺梧ｰｸ荵�蛛懈ｭ｢縺怜ｾ励ｋ縲ょｽ捺律繧ｹ繝ｭ繝�繝医ぞ繝ｭ縺ｮ陦後�ｯ蛟呵｣懷､悶↓縺吶ｋ縲�
+        # min_dto から全日カレンダー占有は除外済みでも、同日試行順の「ブロック」は my_o>m のみのため
+        # 試行順=min の占有行が残り、他試行順が永久停止し得る。当日スロットゼロの行は候補外にする。
         if daily_status is not None and members is not None:
             if _task_fully_machine_calendar_blocked_on_date(
                 task, current_date, daily_status, members
@@ -14447,9 +14452,9 @@ def _combo_preset_team_size_bounds(
     max_team_size_need: int,
 ) -> tuple[int, int] | None:
     """
-    邨�縺ｿ蜷医ｏ縺幄｡ｨ繝励Μ繧ｻ繝�繝�1陦後�ｮ莠ｺ謨ｰ遽�蝗ｲ (lo, hi)縲Ｏeed 縺ｮ蝓ｺ譛ｬ莠ｺ謨ｰ繧医ｊ繧ｷ繝ｼ繝亥�ｴ繧貞━蜈医☆繧九�
-    - 蠢�隕∽ｺｺ謨ｰ蛻励′豁｣縺ｮ縺ｨ縺阪�ｯ繝｡繝ｳ繝舌�ｼ蛻励�ｮ莠ｺ謨ｰ縺ｨ荳閾ｴ縺吶ｋ縺薙→縲�
-    - hi 縺ｯ need 縺ｮ荳企剞縺ｨ螳滉ｺｺ謨ｰ縺ｮ螟ｧ縺阪＞譁ｹ�ｼ医�励Μ繧ｻ繝�繝医′ need 繧医ｊ蟆台ｺｺ謨ｰ縺ｧ繧よ治逕ｨ蜿ｯ閭ｽ�ｼ峨�
+    組み合わせ表プリセット1行の人数範囲 (lo, hi)。need の基本人数よりシート側を優先する。
+    - 必要人数列が正のときはメンバー列の人数と一致すること。
+    - hi は need の上限と実人数の大きい方（プリセットが need より少人数でも採用可能）。
     """
     nmem = len(preset_team)
     if nmem < 1:
@@ -14467,7 +14472,7 @@ def _combo_preset_team_size_bounds(
 
 
 def _plan_sheet_required_op_optional(task: dict) -> int | None:
-    """蜉�蟾･險育判縺ｮ蠢�隕∽ｺｺ謨ｰ蛻励′豁｣縺ｮ謨ｴ謨ｰ縺ｪ繧峨◎縺ｮ蛟､縲ら┌蜉ｹ縺ｪ繧� None縲�"""
+    """加工計画の必要人数列が正の整数ならその値。無効なら None。"""
     ro = task.get("required_op")
     if ro is None or (isinstance(ro, float) and pd.isna(ro)):
         return None
@@ -14501,7 +14506,7 @@ def _append_legacy_dispatch_candidate_for_team(
     machine_day_floor: datetime | None = None,
     machine_floor_cached: datetime | None = None,
 ) -> bool:
-    """繝ｬ繧ｬ繧ｷ繝ｼ譌･谺｡驟榊床繝ｫ繝ｼ繝礼畑: 蜊倅ｸ繝√�ｼ繝�縺梧�千ｫ九☆繧後�ｰ team_candidates 縺ｫ 1 莉ｶ霑ｽ蜉�縺励※ True縲�"""
+    """レガシー日次配台ループ用: 単一チームが成立すれば team_candidates に 1 件追加して True。"""
     _machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
     _gpo = global_priority_override or {}
     _floor_default = datetime.combine(current_date, DEFAULT_START_TIME)
@@ -14688,10 +14693,10 @@ def _assign_one_roll_trial_order_flow(
     machine_handoff: dict | None = None,
 ) -> dict | None:
     """
-    1繝ｭ繝ｼ繝ｫ蛻�縺ｮ譛濶ｯ繝√�ｼ繝�繧呈ｱｺ螳壹☆繧九りｨｭ蛯咏ｩｺ縺阪�ｻ譌･髢句ｧ倶ｸ矩剞繧� team_start 縺ｫ郢斐ｊ霎ｼ繧縲�
-    preferred_team 縺御ｸ弱∴繧峨ｌ縲√°縺､縲悟酔荳譌･蜀�縺ｮ逶ｴ蜑阪Ο繝ｼ繝ｫ縲阪→縺励※謌千ｫ九☆繧後�ｰ縲�
-    邨�蜷医○謗｢邏｢繧医ｊ蜆ｪ蜈医＠縺ｦ謗｡逕ｨ縺吶ｋ�ｼ育ｿ梧律縺ｫ縺ｯ謖√■雜翫＆縺ｪ縺��ｼ峨�
-    謌ｻ繧雁､: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
+    1ロール分の最良チームを決定する。設備空き・日開始下限を team_start に織り込む。
+    preferred_team が与えられ、かつ「同一日内の直前ロール」として成立すれば、
+    組合せ探索より優先して採用する（翌日には持ち越さない）。
+    戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
     machine = task["machine"]
     machine_name = str(task.get("machine_name", "") or "").strip()
@@ -14721,12 +14726,12 @@ def _assign_one_roll_trial_order_flow(
             need_rules,
         )
         if plan_ro is not None and plan_ro != req_num:
-            need_src_line = (need_src_line + "�ｼ�") if need_src_line else ""
-            need_src_line += f"險育判繧ｷ繝ｼ繝亥ｿ�隕∽ｺｺ謨ｰ{plan_ro}縺ｯ譛ｪ菴ｿ逕ｨ�ｼ�need蝓ｺ貅�={req_num}�ｼ�"
+            need_src_line = (need_src_line + "；") if need_src_line else ""
+            need_src_line += f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
     else:
         if plan_ro is not None:
             req_num = plan_ro
-            need_src_line = f"險育判繧ｷ繝ｼ繝医悟ｿ�隕＾P(荳頑嶌)縲�={req_num}"
+            need_src_line = f"計画シート「必要OP(上書)」={req_num}"
         else:
             req_num, need_src_line = resolve_need_required_op_explain(
                 machine,
@@ -14738,8 +14743,8 @@ def _assign_one_roll_trial_order_flow(
     if _gpo.get("ignore_need_minimum"):
         req_num = 1
         need_src_line = (
-            (need_src_line + " 竊� ") if need_src_line else ""
-        ) + "繝｡繧､繝ｳ荳頑嶌ignore_need_minimum縺ｧreq=1"
+            (need_src_line + " → ") if need_src_line else ""
+        ) + "メイン上書ignore_need_minimumでreq=1"
 
     skill_meta_cache: dict = {}
 
@@ -14782,7 +14787,7 @@ def _assign_one_roll_trial_order_flow(
     )
     if _gdp_must:
         logging.info(
-            "繝｡繧､繝ｳ繧ｰ繝ｭ繝ｼ繝舌Ν(譌･莉佚怜ｷ･遞�): task=%s date=%s 蟾･遞�=%r 繝√�ｼ繝�蠢�鬆�=%s",
+            "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
             task.get("task_id"),
             current_date,
             machine,
@@ -14791,8 +14796,8 @@ def _assign_one_roll_trial_order_flow(
     if fixed_team_anchor:
         _nfix = len(fixed_team_anchor)
         if _nfix > req_num:
-            need_src_line = (need_src_line + " 竊� ") if need_src_line else ""
-            need_src_line += f"繧ｰ繝ｭ繝ｼ繝舌Ν(譌･莉佚怜ｷ･遞�)謖�蜷阪〒譛菴施_nfix}莠ｺ"
+            need_src_line = (need_src_line + " → ") if need_src_line else ""
+            need_src_line += f"グローバル(日付×工程)指名で最低{_nfix}人"
         req_num = max(req_num, _nfix)
 
     extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
@@ -14805,8 +14810,8 @@ def _assign_one_roll_trial_order_flow(
     if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
         extra_max_sheet = 0
         extra_src_line = (
-            (extra_src_line + " 竊� ") if extra_src_line else ""
-        ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW縺ｧ0"
+            (extra_src_line + " → ") if extra_src_line else ""
+        ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
     extra_max = (
         extra_max_sheet if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS else 0
     )
@@ -14816,8 +14821,8 @@ def _assign_one_roll_trial_order_flow(
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
     ):
         extra_src_line = (
-            (extra_src_line + " 竊� ") if extra_src_line else ""
-        ) + "繝｡繧､繝ｳ縺ｯ蝓ｺ譛ｬ莠ｺ謨ｰ縺ｮ縺ｿ�ｼ井ｽ吝鴨譫�縺ｯ蜈ｨ驟榊床蠕後↓譛ｪ蜑ｲ蠖禿励せ繧ｭ繝ｫ縺ｧ霑ｽ險假ｼ�"
+            (extra_src_line + " → ") if extra_src_line else ""
+        ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
     max_team_size = min(req_num + extra_max, len(capable_members))
     if max_team_size < req_num:
         max_team_size = req_num
@@ -14837,8 +14842,8 @@ def _assign_one_roll_trial_order_flow(
     if _dto_head is not None and _dto_head not in _need_headcount_logged_orders:
         _need_headcount_logged_orders.add(_dto_head)
         logging.info(
-            "need莠ｺ謨ｰ(隧ｦ陦碁��蜆ｪ蜈医ヵ繝ｭ繝ｼ) order=%s task=%s 蟾･遞�/讖滓｢ｰ=%s/%s "
-            "req_num=%s [%s] extra_max=%s [%s] max_team蛟呵｣�=%s capable=%s莠ｺ",
+            "need人数(試行順優先フロー) order=%s task=%s 工程/機械=%s/%s "
+            "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
             _dto_head,
             task["task_id"],
             machine,
@@ -14863,7 +14868,7 @@ def _assign_one_roll_trial_order_flow(
             return
         _log_dispatch_trace_schedule(
             _tid_assign,
-            "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] " + msg,
+            "[配台トレース task=%s] " + msg,
             _tid_assign,
             *args,
         )
@@ -14908,7 +14913,7 @@ def _assign_one_roll_trial_order_flow(
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 繝√�ｼ繝�莠ｺ謨ｰ螟� team=%s size=%s req=%s max=%s",
+                "候補却下: チーム人数外 team=%s size=%s req=%s max=%s",
                 ",".join(str(x) for x in team),
                 len(team),
                 lo,
@@ -14918,13 +14923,13 @@ def _assign_one_roll_trial_order_flow(
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
             _trace_assign(
-                "蛟呵｣懷唆荳�: OP荳榊惠 team=%s",
+                "候補却下: OP不在 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         if not all(m in daily_status for m in team):
             _trace_assign(
-                "蛟呵｣懷唆荳�: 蠖捺律蜍､諤�繧ｭ繝ｼ縺ｪ縺� team=%s",
+                "候補却下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
@@ -14940,7 +14945,7 @@ def _assign_one_roll_trial_order_flow(
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 髢句ｧ�>=邨よ･ｭ team=%s start=%s end_limit=%s",
+                "候補却下: 開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 team_end_limit,
@@ -14988,14 +14993,14 @@ def _assign_one_roll_trial_order_flow(
         )
         if team_start_d is None:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 莨第�ｩ蟶ｯ蜀�繝ｻ邨よ･ｭ逶ｴ蜑�(蟆乗ｮ�)縺ｧ蠖捺律荳榊庄 team=%s",
+                "候補却下: 休憩帯内・終業直前(小残)で当日不可 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 繝�繝輔ぃ繝ｼ蠕後↓髢句ｧ�>=邨よ･ｭ team=%s start=%s end_limit=%s",
+                "候補却下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 team_end_limit,
@@ -15008,7 +15013,7 @@ def _assign_one_roll_trial_order_flow(
         _trial_units_cap = int(avail_mins / eff_time_per_unit)
         if _trial_units_cap < 1:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 螳溷ロ荳崎ｶｳ team=%s start=%s avail_mins=%s need_mins=%.2f",
+                "候補却下: 実働不足 team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
                 team_start,
                 avail_mins,
@@ -15019,7 +15024,7 @@ def _assign_one_roll_trial_order_flow(
             _trial_units_cap, team_start, team_end_limit
         ):
             _trace_assign(
-                "蛟呵｣懷唆荳�: 邨よ･ｭ逶ｴ蜑阪〒蠖捺律蜿主ｮｹ繝ｭ繝ｼ繝ｫ謨ｰ縺碁明蛟､譛ｪ貅 team=%s cap=%s th=%s start=%s",
+                "候補却下: 終業直前で当日収容ロール数が閾値未満 team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
                 _trial_units_cap,
                 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
@@ -15032,7 +15037,7 @@ def _assign_one_roll_trial_order_flow(
         )
         if _contig < work_mins_needed:
             _trace_assign(
-                "蛟呵｣懷唆荳�: 莨第�ｩ縺ｾ縺溘℃縺ｮ縺溘ａ騾｣邯壼ｮ溷ロ荳崎ｶｳ team=%s contiguous_min=%s need_mins=%s start=%s",
+                "候補却下: 休憩またぎのため連続実働不足 team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
                 _contig,
                 work_mins_needed,
@@ -15046,7 +15051,7 @@ def _assign_one_roll_trial_order_flow(
             machine_occ_key, team, team_start, actual_end_dt
         ):
             _trace_assign(
-                "蛹ｺ髢薙Α繝ｩ繝ｼ蜊ｴ荳�: team=%s start=%s end=%s eq=%s",
+                "区間ミラー却下: team=%s start=%s end=%s eq=%s",
                 ",".join(str(x) for x in team),
                 team_start,
                 actual_end_dt,
@@ -15071,7 +15076,7 @@ def _assign_one_roll_trial_order_flow(
             "changeover_segments": _co_segs,
         }
 
-    # 迚ｹ蛻･謖�螳�: 蜷御ｸ譌･繝ｻ騾｣邯壹Ο繝ｼ繝ｫ縺ｯ蜑榊屓繝√�ｼ繝�繧貞━蜈茨ｼ育ｿ梧律縺ｸ縺ｯ謖√■雜翫＆縺ｪ縺��ｼ峨�
+    # 特別指定: 同一日・連続ロールは前回チームを優先（翌日へは持ち越さない）。
     _hist = task.get("assigned_history") or []
     _last_hist_date = _hist[-1].get("date") if _hist else None
     _same_day_last_roll = _last_hist_date == current_date.strftime("%m/%d")
@@ -15103,8 +15108,8 @@ def _assign_one_roll_trial_order_flow(
                 }
 
     team_candidates: list[dict] = []
-    # 邨�縺ｿ蜷医ｏ縺幄｡ｨ繝励Μ繧ｻ繝�繝医�ｯ縲梧�千ｫ九＠縺溘ｉ蜊ｳ return縲阪○縺壹∫ｵ�蜷医○謗｢邏｢縺ｨ縺ｾ縺ｨ繧√※
-    # team_start / 繧ｹ繝ｩ繝�繧ｯ莉倥″繧ｿ繝励Ν縺ｧ譛濶ｯ繧帝∈縺ｶ�ｼ医す繝ｼ繝井ｸ翫�ｮ蜆ｪ蜈亥ｺｦ鬆�縺ｯ隧ｦ陦碁��縺ｮ縺ｿ�ｼ峨�
+    # 組み合わせ表プリセットは「成立したら即 return」せず、組合せ探索とまとめて
+    # team_start / スラック付きタプルで最良を選ぶ（シート上の優先度順は試行順のみ）。
     if preset_rows_assign:
         for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
             bounds = _combo_preset_team_size_bounds(
@@ -15155,7 +15160,7 @@ def _assign_one_roll_trial_order_flow(
         ):
             if tsize == 1:
                 _trace_assign(
-                    "蛟呵｣懷崋螳�: 諡�蠖徹P謖�蜷�=%s 縺ｮ縺溘ａ 1莠ｺ繝√�ｼ繝�縺ｯ蠖謎ｺｺ縺ｮ縺ｿ隧ｦ陦�",
+                    "候補固定: 担当OP指名=%s のため 1人チームは当人のみ試行",
                     pref_mem,
                 )
             others = [m for m in capable_members if m != pref_mem]
@@ -15199,13 +15204,13 @@ def _assign_one_roll_trial_order_flow(
             and _mach_floor_eff >= _mem_max_end
         ):
             logging.warning(
-                "谿ｵ髫�2: 萓晞�ｼNO=%s 譌･莉�=%s 蟾･遞�/讖滓｢ｰ=%s/%s 縺ｧ繝√�ｼ繝�蛟呵｣懊′0莉ｶ縲�"
-                "繧ｹ繧ｭ繝ｫ驕ｩ蜷�(OP/AS)縺ｯ %s 莠ｺ縺�縺ｾ縺吶′縲∬ｨｭ蛯吶�ｮ蜉�蟾･髢句ｧ倶ｸ矩剞=%s 縺�"
-                "蠖捺律縺ｮ諡�蠖灘呵｣懊�ｮ騾蜍､(%s)莉･髯阪�ｮ縺溘ａ縺薙�ｮ譌･縺ｯ蜑ｲ蠖薙〒縺阪∪縺帙ｓ縲�"
-                "master縲梧ｩ滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ縲阪〒蠖楢ｩｲ譌･繝ｻ蠖楢ｩｲ讖滓｢ｰ蛻励↓荳崎ｦ√↑險伜�･縺後↑縺�縺九�"
-                "縺ｾ縺溘�ｯ蜑榊ｷ･遞九�ｮ蜊�譛峨〒險ｭ蛯吩ｸ矩剞縺檎ｵよ･ｭ縺ｾ縺ｧ郢ｰ繧贋ｸ翫′縺｣縺ｦ縺�縺ｪ縺�縺狗｢ｺ隱阪＠縺ｦ縺上□縺輔＞"
-                "�ｼ磯�榊床繝ｫ繝ｼ繝ｫ 3.2.1 讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ繝ｻ繝医Λ繝悶Ν繧ｷ繝･繝ｼ繝茨ｼ峨�"
-                "蜿り�: changeover蜑阪�ｮ險ｭ蛯咏ｩｺ縺堺ｸ矩剞=%s 蜊�譛峨く繝ｼ=%s",
+                "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でチーム候補が0件。"
+                "スキル適合(OP/AS)は %s 人いますが、設備の加工開始下限=%s が"
+                "当日の担当候補の退勤(%s)以降のためこの日は割当できません。"
+                "master「機械カレンダー」で当該日・当該機械列に不要な記入がないか、"
+                "または前工程の占有で設備下限が終業まで繰り上がっていないか確認してください"
+                "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
+                "参考: changeover前の設備空き下限=%s 占有キー=%s",
                 task.get("task_id"),
                 current_date,
                 machine,
@@ -15263,10 +15268,10 @@ def _trial_order_assign_probe_fails(
     ctx: dict,
 ) -> bool:
     """
-    迴ｾ蝨ｨ縺ｮ avail_dt / machine_avail_dt / machine_handoff 縺ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医〒
-    `_assign_one_roll_trial_order_flow` 縺� None 縺ｫ縺ｪ繧九↑繧� True縲�
-    讖滓｢ｰ譫�縺ｯ蜊∝��縺ｧ繧ゆｺｺ繝ｻ莨第�ｩ繝ｻ繝溘Λ繝ｼ遲峨〒隧ｰ縺ｾ繧翫√げ繝ｭ繝ｼ繝舌Ν隧ｦ陦碁��縺�縺代′蜈磯�ｭ陦後↓蠑ｵ繧贋ｻ倥￥縺ｮ繧帝亟縺舌�
-    蜑ｯ菴懃畑縺ｪ縺暦ｼ�need 莠ｺ謨ｰ繝ｭ繧ｰ逕ｨ set 縺ｯ豈主屓遨ｺ�ｼ峨�
+    現在の avail_dt / machine_avail_dt / machine_handoff のスナップショットで
+    `_assign_one_roll_trial_order_flow` が None になるなら True。
+    機械枠は十分でも人・休憩・ミラー等で詰まり、グローバル試行順だけが先頭行に張り付くのを防ぐ。
+    副作用なし（need 人数ログ用 set は毎回空）。
     """
     try:
         r = _assign_one_roll_trial_order_flow(
@@ -15292,7 +15297,7 @@ def _trial_order_assign_probe_fails(
         )
     except Exception as ex:
         logging.warning(
-            "trial_order_assign_probe 萓句､悶�ｮ縺溘ａ蠖楢ｩｲ陦後�ｯ髯､螟悶＠縺ｪ縺�: task=%s err=%s",
+            "trial_order_assign_probe 例外のため当該行は除外しない: task=%s err=%s",
             task.get("task_id"),
             ex,
         )
@@ -15313,7 +15318,7 @@ def _tasks_in_min_pending_dispatch_pool(
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> list:
-    """`_min_pending_dispatch_trial_order_for_date` 縺ｨ蜷御ｸ縺ｮ螳我ｾ｡繝輔ぅ繝ｫ繧ｿ繧帝夐℃縺励◆繧ｿ繧ｹ繧ｯ縺ｮ繝ｪ繧ｹ繝医�"""
+    """`_min_pending_dispatch_trial_order_for_date` と同一の安価フィルタを通過したタスクのリスト。"""
     out: list = []
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
@@ -15351,10 +15356,10 @@ def _effective_min_dispatch_trial_order_from_pool(
     assign_probe_ctx: dict,
 ) -> int | None:
     """
-    pool 繧呈��鬆� dto 縺ｧ隕九※縲�**縺昴�ｮ dto 縺ｫ螻槭☆繧玖｡後�ｮ縺�縺｡ 1 莉ｶ縺ｧ繧�** 1 繝ｭ繝ｼ繝ｫ蜑ｲ蠖薙�励Ο繝ｼ繝悶′騾壹ｌ縺ｰ
-    縺昴�ｮ dto 繧偵悟ｮ溷柑縺ｮ譛蟆剰ｩｦ陦碁��縲阪→縺吶ｋ縲�
-    蜈磯�ｭ dto 螻､縺悟�ｨ貊��ｼ域ｩ滓｢ｰ縺ｯ遨ｺ縺�縺ｦ縺�繧九′莠ｺ縺ｧ遨阪ａ縺ｪ縺�遲会ｼ峨�ｮ縺ｨ縺阪∵ｬ｡縺ｮ dto 縺ｫ騾ｲ縺ｿ繧ｰ繝ｭ繝ｼ繝舌Ν蛛懈ｭ｢繧帝亟縺舌�
-    繝励Ο繝ｼ繝也┌縺励�ｮ縺ｨ縺阪�ｯ pool 縺ｮ譛蟆� dto 繧定ｿ斐☆縲�
+    pool を昇順 dto で見て、**その dto に属する行のうち 1 件でも** 1 ロール割当プローブが通れば
+    その dto を「実効の最小試行順」とする。
+    先頭 dto 層が全滅（機械は空いているが人で積めない等）のとき、次の dto に進みグローバル停止を防ぐ。
+    プローブ無しのときは pool の最小 dto を返す。
     """
     if not pool:
         return None
@@ -15403,22 +15408,22 @@ def _trial_order_first_schedule_pass(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    竭�蠖捺律蛟呵｣懊ｒ驟榊床隧ｦ陦碁��縺ｮ譏�鬆�縺ｫ荳ｦ縺ｹ繧具ｼ�1 繝代せ蛻��ｼ峨�
-    **螳悟�ｨ莠檎嶌�ｼ按ｧB-2 / ﾂｧB-3�ｼ�**: **繝輔ぉ繝ｼ繧ｺ1**縺ｧ **蠕檎ｶ壹ヱ繧､繝励Λ繧､繝ｳ陦�**�ｼ育�ｱ陞咲捩讀懈渊繝ｻ蟾ｻ霑斐＠�ｼ�**繧帝勁縺�**蛟呵｣懶ｼ�EC繝ｻ莉紋ｾ晞�ｼ繝ｻ莉門ｷ･遞具ｼ峨ｒ隧ｦ陦碁��縺ｩ縺翫ｊ
-    **`_drain_rolls_for_task`** 縺励�**繝輔ぉ繝ｼ繧ｺ2**縺ｯ ﾂｧB-2 讀懈渊�ｼ渉ｧB-3 蟾ｻ霑斐＠陦後�ｮ縺ｿ�ｼ�**蜷御ｸ萓晞�ｼ縺ｮ EC 縺悟�ｨ譌･縺ｧ螳瑚ｵｰ縺励◆蠕�**縺ｫ髯舌ｊ蛟呵｣懷喧縲�
-    EC 谿九′縺ゅｋ譌･縺ｯ `_trial_order_flow_eligible_tasks` 縺ｧ蠕檎ｶ壹ｒ螟悶＠縲∫ｿ檎ｨｼ蜒肴律莉･髯阪ｂ EC 縺ｮ縺ｿ蜑埼ｲ縺吶ｋ縲�
-    繧ｫ繝ｬ繝ｳ繝繝ｼ騾夂ｮ励〒 EC 螳瑚ｵｰ蠕後～_run_b2_inspection_rewind_pass` 縺梧律莉伜�磯�ｭ縺九ｉ蠕檎ｶ壹□縺大�崎ｵｰ譟ｻ縺吶ｋ�ｼ峨�
-    EC 縺ｨ蠕檎ｶ壹ｒ **蜷御ｸ諡�蠖楢�縺ｧ** 莠､莠偵↓隧ｰ繧√ｋ縺ｨ EC 縺後ヶ繝ｭ繝�繧ｯ縺輔ｌ繧九◆繧√∝ｾ捺擂縺ｯ繝輔ぉ繝ｼ繧ｺ1繧貞�医↓隧ｰ繧√◆縲�
-    縺溘□縺怜ｾ檎ｶ壹′蛟呵｣懷喧縺励◆譎らせ縺ｧ **讀懈渊縺ｨ蜷後§迚ｩ逅�讖滓｢ｰ**縺ｮ繝輔ぉ繝ｼ繧ｺ1繧� **蜷御ｸ萓晞�ｼ縺ｮ EC** 縺悟�ｨ譌･蜈医↓騾ｲ繧縺ｨ縲�
-    讀懈渊縺ｯ `start_ge_end_initial`�ｼ郁ｨｭ蛯咏ｩｺ縺阪′邨よ･ｭ繧医ｊ蠕鯉ｼ峨〒蜈ｨ譌･螟ｱ謨励☆繧九つｧB-2/ﾂｧB-3 蠕檎ｶ壹′縺ゅｋ縺ｨ縺阪�ｯ
-    縲悟酔荳萓晞�ｼEC繝ｻ讀懈渊讖溘→讖滓｢ｰ蜈ｱ譛峨☆繧九ヵ繧ｧ繝ｼ繧ｺ1繝ｻ蠕檎ｶ壹阪ｒ **驟榊床隧ｦ陦碁��**縺ｧ繝槭�ｼ繧ｸ縺励�
-    蜷碁��縺ｧ縺ｯ **蠕檎ｶ壹ｒ EC 繧医ｊ蜈医↓**縲�**縺昴�ｮ莉悶�ｮ繝輔ぉ繝ｼ繧ｺ1** 縺ｨ縺ゅｏ縺帙※ **驟榊床隧ｦ陦碁��**縺ｧ謨ｴ蛻励＠
-    **譛螟ｧ1繝ｭ繝ｼ繝ｫ縺壹▽**縺�縺大捉蝗槭☆繧具ｼ医�槭�ｼ繧ｸ繝ｻrest 縺ｨ繧ゆｸ諡ｬ繝峨Ξ繧､繝ｳ縺励↑縺�縲よ､懈渊OP縺御ｻ門ｷ･遞九↓
-    蜷梧律蜿悶ｊ蛻�繧峨ｌ start_ge_end_initial 縺ｫ縺ｪ繧九�ｮ繧帝亟縺撰ｼ峨�
-    繝ｪ繝ｯ繧､繝ｳ繝牙�ｴ縺ｮ蠕檎ｶ夊｡後�ｯ蜷�繝ｭ繝ｼ繝ｫ縺ｫ縺､縺�縺ｦ `_roll_pipeline_inspection_assign_room` 縺翫ｈ縺ｳ
-    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`�ｼ�EC 繝ｭ繝ｼ繝ｫ邨ゆｺ�譎ょ綾荳矩剞�ｼ峨〒謨ｴ蜷医☆繧九�
-    隧ｦ陦碁��譛蟆上�ｮ陦後□縺代′蠖捺律蜈･繧峨↑縺�蝣ｴ蜷医〒繧ゅ�**蜷後§繝輔ぉ繝ｼ繧ｺ蜀�縺ｧ谺｡縺ｮ隧ｦ陦碁��縺ｸ騾ｲ縺ｿ**莉冶ｨｭ蛯吶ｒ蝓九ａ繧九�
-    讖滓｢ｰ繝ｻ莠ｺ縺ｮ遨ｺ縺阪�ｯ繝ｭ繝ｼ繝ｫ縺斐→縺ｫ譖ｴ譁ｰ縺吶ｋ�ｼ遺即竭ｧ�ｼ峨�
+    ①当日候補を配台試行順の昇順に並べる（1 パス分）。
+    **完全二相（§B-2 / §B-3）**: **フェーズ1**で **後続パイプライン行**（熱融着検査・巻返し）**を除く**候補（EC・他依頼・他工程）を試行順どおり
+    **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査／§B-3 巻返し行のみ（**同一依頼の EC が全日で完走した後**に限り候補化。
+    EC 残がある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ前進する。
+    カレンダー通算で EC 完走後、`_run_b2_inspection_rewind_pass` が日付先頭から後続だけ再走査する）。
+    EC と後続を **同一担当者で** 交互に詰めると EC がブロックされるため、従来はフェーズ1を先に詰めた。
+    ただし後続が候補化した時点で **検査と同じ物理機械**のフェーズ1や **同一依頼の EC** が全日先に進むと、
+    検査は `start_ge_end_initial`（設備空きが終業より後）で全日失敗する。§B-2/§B-3 後続があるときは
+    「同一依頼EC・検査機と機械共有するフェーズ1・後続」を **配台試行順**でマージし、
+    同順では **後続を EC より先に**、**その他のフェーズ1** とあわせて **配台試行順**で整列し
+    **最大1ロールずつ**だけ周回する（マージ・rest とも一括ドレインしない。検査OPが他工程に
+    同日取り切られ start_ge_end_initial になるのを防ぐ）。
+    リワインド側の後続行は各ロールについて `_roll_pipeline_inspection_assign_room` および
+    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
+    試行順最小の行だけが当日入らない場合でも、**同じフェーズ内で次の試行順へ進み**他設備を埋める。
+    機械・人の空きはロールごとに更新する（⑦⑧）。
     """
     _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
     _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
@@ -15678,9 +15683,9 @@ def _trial_order_first_schedule_pass(
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
-                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繝ｭ繝ｼ繝ｫ遒ｺ螳� 繝｡繧､繝ｳ day=%s machine=%s machine_name=%s "
-                    "start=%s end=%s 謗｡逕ｨ莠ｺ謨ｰ=%s req_num=%s 繝｡繧､繝ｳ謗｢邏｢extra_max=%s "
-                    "菴吝臆莠ｺ謨ｰ驕ｩ逕ｨ(繝｡繧､繝ｳ)=%s team=%s",
+                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
+                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
+                    "余剰人数適用(メイン)=%s team=%s",
                     task.get("task_id"),
                     current_date,
                     eq_line,
@@ -15739,8 +15744,8 @@ def _trial_order_first_schedule_pass(
             phase1_rest.append(t)
 
     def _b2_merged_sort_key(t: dict) -> tuple:
-        # 蜷後§驟榊床隧ｦ陦碁��縺ｧ縺ｯ蠕檎ｶ夲ｼ域､懈渊繝ｻ蟾ｻ霑斐＠�ｼ峨ｒ EC 繧医ｊ蜈医↓蝗槭＠縲∫�ｱ陞咲捩縺ｮ螢∵凾險医ｒ
-        # 蜷梧律譌ｩ縺�谿ｵ髫弱〒蜿悶ｊ縺ｫ陦後￥�ｼ按ｧB-2 諡�蠖楢�蛻�髮｢縺ｧ EC 縺ｨ讀懈渊縺ｯ蛻･繝｡繝ｳ繝舌�ｼ諠ｳ螳夲ｼ峨�
+        # 同じ配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着の壁時計を
+        # 同日早い段階で取りに行く（§B-2 担当者分離で EC と検査は別メンバー想定）。
         _fol = bool(
             t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
         )
@@ -15806,8 +15811,8 @@ def _run_b2_inspection_rewind_pass(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> bool:
     """
-    ﾂｧB-2 / ﾂｧB-3: EC 蛛ｴ繧貞�医↓蜈ｨ譌･縺ｧ騾ｲ繧√◆蠕後∵､懈渊�ｼ丞ｷｻ霑斐＠蛛ｴ縺ｮ縺ｿ繧呈律莉伜�磯�ｭ縺九ｉ蜀崎ｵｰ譟ｻ縺励※驟榊床縺吶ｋ縲�
-    timeline_events 繧剃ｺｺ繝ｻ險ｭ蛯吶�ｮ繝悶Ο繝�繧ｯ繝�繝ｼ繝悶Ν縺ｨ縺励※菴ｿ縺�縲∵律霍ｨ縺弱�ｮ蜊�譛峨ｒ菫晄戟縺吶ｋ縲�
+    §B-2 / §B-3: EC 側を先に全日で進めた後、検査／巻返し側のみを日付先頭から再走査して配台する。
+    timeline_events を人・設備のブロックテーブルとして使い、日跨ぎの占有を保持する。
     """
     target_tids: set[str] = set()
     for t in task_queue:
@@ -15964,10 +15969,10 @@ def append_surplus_staff_after_main_dispatch(
     global_priority_override: dict | None,
 ) -> int:
     """
-    need縲碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ�ｼ丈ｽ吝鴨譎りｿｽ蜉�莠ｺ謨ｰ縲崎｡後�ｮ荳企剞縺ｾ縺ｧ縲√Γ繧､繝ｳ蜑ｲ莉倥〒謗｡逕ｨ縺励″繧後↑縺九▲縺滓棧繧定ｿｽ險倥☆繧九�
-    蜷�繧ｿ繧､繝�繝ｩ繧､繝ｳ繝悶Ο繝�繧ｯ縺ｫ縺､縺�縺ｦ縲√◎縺ｮ譎る俣蟶ｯ縺ｫ莉悶ヶ繝ｭ繝�繧ｯ縺ｸ譛ｪ蜿ょ刈�ｼ亥玄髢馴㍾縺ｪ繧翫↑縺暦ｼ峨〒
-    eligible 縺九▽ OP/AS 繧ｹ繧ｭ繝ｫ縺ｮ閠�繧偵し繝悶↓霑ｽ蜉�縺吶ｋ縲�
-    譌･谺｡蟋区･ｭ繝ｻ萓晞�ｼ蛻�譖ｿ蠕悟ｧ区忰繝ｻ蜉�蟾･蜑肴ｺ門ｙ�ｼ�event_kind 縺悟刈蟾･莉･螟厄ｼ峨�ｯ譛ｬ蜃ｦ逅�縺ｮ蟇ｾ雎｡螟厄ｼ井ｽ吝臆繧ｵ繝悶�ｯ蜉�蟾･縺ｫ縺ｮ縺ｿ霑ｽ險假ｼ峨�
+    need「配台時追加人数／余力時追加人数」行の上限まで、メイン割付で採用しきれなかった枠を追記する。
+    各タイムラインブロックについて、その時間帯に他ブロックへ未参加（区間重なりなし）で
+    eligible かつ OP/AS スキルの者をサブに追加する。
+    日次始業・依頼切替後始末・加工前準備（event_kind が加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
     """
     gpo = global_priority_override or {}
     if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
@@ -16155,9 +16160,9 @@ def append_surplus_staff_after_main_dispatch(
         if _trace_schedule_task_enabled(tid):
             _log_dispatch_trace_schedule(
                 tid,
-                "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 菴吝鴨霑ｽ險�(繝｡繧､繝ｳ螳御ｺ�蠕�) day=%s machine=%s machine_name=%s "
-                "start=%s end=%s 霑ｽ險倅ｺｺ謨ｰ=%s 霑ｽ險伜燕莠ｺ謨ｰ=%s 霑ｽ險伜ｾ御ｺｺ謨ｰ=%s req_num=%s "
-                "need霑ｽ蜉�譫�(繧ｷ繝ｼ繝�)=%s 螻･豁ｴ鮟�(菴吝臆莠ｺ謨ｰ雜�驕�)=%s 霑ｽ險倥Γ繝ｳ繝舌�ｼ=%s",
+                "[配台トレース task=%s] 余力追記(メイン完了後) day=%s machine=%s machine_name=%s "
+                "start=%s end=%s 追記人数=%s 追記前人数=%s 追記後人数=%s req_num=%s "
+                "need追加枠(シート)=%s 履歴黄(余剰人数超過)=%s 追記メンバー=%s",
                 tid,
                 d,
                 str(machine or "").strip(),
@@ -16177,16 +16182,16 @@ def append_surplus_staff_after_main_dispatch(
 
 
 # =========================================================
-# 3. 繝｡繧､繝ｳ險育判逕滓�� (譌･豈弱Ν繝ｼ繝励�ｻ謖√■雜翫＠蟇ｾ蠢�)
-#    谿ｵ髫�2縺ｮ譛ｬ菴薙Ｑlan_simulation_stage2 縺九ｉ縺ｮ縺ｿ蜻ｼ縺ｰ繧後ｋ諠ｳ螳壹�
-#    驟榊床險育判繧ｷ繝ｼ繝郁ｪｭ霎ｼ 竊� 繧ｿ繧ｹ繧ｯ繧ｭ繝･繝ｼ 竊� 譌･莉倥＃縺ｨ縺ｫ險ｭ蛯吶�ｻOP蜑ｲ莉� 竊� 邨先棡繝悶ャ繧ｯ蜃ｺ蜉帙�
+# 3. メイン計画生成 (日毎ループ・持ち越し対応)
+#    段階2の本体。plan_simulation_stage2 からのみ呼ばれる想定。
+#    配台計画シート読込 → タスクキュー → 日付ごとに設備・OP割付 → 結果ブック出力。
 # =========================================================
 def generate_plan():
     """
-    谿ｵ髫�2縺ｮ繝｡繧､繝ｳ蜃ｦ逅�縲よ綾繧雁､縺ｪ縺暦ｼ医Ο繧ｰ繝ｻExcel 蜃ｺ蜉帙〒螳檎ｵ撰ｼ峨�
+    段階2のメイン処理。戻り値なし（ログ・Excel 出力で完結）。
 
-    蜑肴署: 迺ｰ蠅�螟画焚 TASK_INPUT_WORKBOOK縲√き繝ｬ繝ｳ繝医ョ繧｣繝ｬ繧ｯ繝医Μ縺後せ繧ｯ繝ｪ繝励ヨ繝輔か繝ｫ繝縲�
-    蜃ｺ蜉�: ``output_dir`` 逶ｴ荳九�ｮ ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``�ｼ域怙譁ｰ1邨�縺ｮ縺ｿ�ｼ峨√♀繧医�ｳ log/execution_log.txt縲�
+    前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
+    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組のみ）、および log/execution_log.txt。
     """
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     with _override_default_factory_hours_from_master(master_abs):
@@ -16194,8 +16199,8 @@ def generate_plan():
 
 
 def _generate_plan_impl():
-    # 驟榊床繝医Ξ繝ｼ繧ｹ�ｼ郁ｨｭ螳壹す繝ｼ繝� A3 莉･髯阪�ｮ縺ｿ�ｼ峨�ｯ縲√Γ繝ｳ繝舌�ｼ0莠ｺ遲峨〒譌ｩ譛� return 縺励※繧�
-    # execution_log 縺ｫ谿九ｋ繧医≧ skills 隱ｭ霎ｼ繧医ｊ蜑阪〒遒ｺ螳壹�ｻ繝ｭ繧ｰ縺吶ｋ縲�
+    # 配台トレース（設定シート A3 以降のみ）は、メンバー0人等で早期 return しても
+    # execution_log に残るよう skills 読込より前で確定・ログする。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
@@ -16204,9 +16209,9 @@ def _generate_plan_impl():
     )
     if _ids_from_sheet:
         _preview = _ids_from_sheet[:25]
-        _suffix = " 窶ｦ" if len(_ids_from_sheet) > 25 else ""
+        _suffix = " …" if len(_ids_from_sheet) > 25 else ""
         logging.info(
-            "險ｭ螳壹す繝ｼ繝医�%s縲喉3 莉･髯�: 繝医Ξ繝ｼ繧ｹ逕ｨ萓晞�ｼNO繧� %s 莉ｶ隱ｭ縺ｿ霎ｼ縺ｿ�ｼ�%s%s�ｼ�",
+            "設定シート「%s」A3 以降: トレース用依頼NOを %s 件読み込み（%s%s）",
             APP_CONFIG_SHEET_NAME,
             len(_ids_from_sheet),
             ", ".join(_preview),
@@ -16214,17 +16219,17 @@ def _generate_plan_impl():
         )
     else:
         logging.info(
-            "險ｭ螳壹す繝ｼ繝医�%s縲喉3 莉･髯�: 繝医Ξ繝ｼ繧ｹ逕ｨ萓晞�ｼNO縺ｯ辟｡縺暦ｼ育ｩｺ縺ｾ縺溘�ｯ繧ｷ繝ｼ繝育┌縺暦ｼ�",
+            "設定シート「%s」A3 以降: トレース用依頼NOは無し（空またはシート無し）",
             APP_CONFIG_SHEET_NAME,
         )
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
-            "驟榊床繝医Ξ繝ｼ繧ｹ: 譛牙柑 task_id = %s�ｼ郁ｨｭ螳壹す繝ｼ繝� A3 莉･髯搾ｼ�",
+            "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
             ", ".join(sorted(TRACE_SCHEDULE_TASK_IDS)),
         )
     else:
         logging.info(
-            "驟榊床繝医Ξ繝ｼ繧ｹ: 蟇ｾ雎｡縺ｪ縺暦ｼ�[驟榊床繝医Ξ繝ｼ繧ｹ 窶ｦ] 繝ｭ繧ｰ縺ｯ蜃ｺ縺ｾ縺帙ｓ�ｼ�"
+            "配台トレース: 対象なし（[配台トレース …] ログは出ません）"
         )
     _ids_debug_dispatch_raw = _read_debug_dispatch_task_ids_from_config_sheet(_wb_trace)
     _dbg_norm: list[str] = []
@@ -16235,7 +16240,7 @@ def _generate_plan_impl():
     DEBUG_DISPATCH_ONLY_TASK_IDS = frozenset(_dbg_norm)
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
         logging.warning(
-            "繝�繝舌ャ繧ｰ驟榊床: 縲�%s縲坑3莉･髯阪↓繧医ｊ驟榊床蟇ｾ雎｡繧� %s 莉ｶ縺ｮ萓晞�ｼNO縺ｫ髯仙ｮ壹＠縺ｾ縺�: %s",
+            "デバッグ配台: 「%s」B3以降により配台対象を %s 件の依頼NOに限定します: %s",
             APP_CONFIG_SHEET_NAME,
             len(DEBUG_DISPATCH_ONLY_TASK_IDS),
             ", ".join(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS)),
@@ -16243,7 +16248,7 @@ def _generate_plan_impl():
         _show_stage2_debug_dispatch_mode_dialog(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS))
     if TRACE_TEAM_ASSIGN_TASK_ID:
         logging.info(
-            "迺ｰ蠅�螟画焚 TRACE_TEAM_ASSIGN_TASK_ID=%r 竊� 繝√�ｼ繝�蜑ｲ蠖薙ヨ繝ｬ繝ｼ繧ｹ譛牙柑",
+            "環境変数 TRACE_TEAM_ASSIGN_TASK_ID=%r → チーム割当トレース有効",
             TRACE_TEAM_ASSIGN_TASK_ID,
         )
 
@@ -16262,21 +16267,21 @@ def _generate_plan_impl():
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
         logging.info(
-            "邨�縺ｿ蜷医ｏ縺幄｡ｨ: 蟾･遞�+讖滓｢ｰ繧ｭ繝ｼ %s 遞ｮ鬘槭�ｻ邱ｨ謌占｡� %s 繧帝�榊床繝励Μ繧ｻ繝�繝医→縺励※隱ｭ縺ｿ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+            "組み合わせ表: 工程+機械キー %s 種類・編成行 %s を配台プリセットとして読み込みました。",
             len(team_combo_presets),
             _nrules,
         )
     elif TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         logging.info(
-            "邨�縺ｿ蜷医ｏ縺幄｡ｨ: 繝励Μ繧ｻ繝�繝育┌縺暦ｼ医す繝ｼ繝域ｬ�螯ゅ�ｻ遨ｺ繝ｻ縺ｾ縺溘�ｯ隱ｭ霎ｼ螟ｱ謨暦ｼ峨ょｾ捺擂縺ｮ繝√�ｼ繝�謗｢邏｢縺ｮ縺ｿ縲�"
+            "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のチーム探索のみ。"
         )
     if not members:
         master_abs = os.path.abspath(MASTER_FILE)
         logging.error(
-            "谿ｵ髫�2繧剃ｸｭ譁ｭ縺励∪縺励◆: 繝｡繝ｳ繝舌�ｼ縺�0莠ｺ縺ｧ縺呻ｼ医�槭せ繧ｿ縺ｮ skills 縺檎ｩｺ縲√∪縺溘�ｯ隱ｭ縺ｿ霎ｼ縺ｿ螟ｱ謨暦ｼ峨�"
-            " 譛溷ｾ�繝代せ: %s �ｼ医き繝ｬ繝ｳ繝�: %s�ｼ峨ゅユ繧ｹ繝医さ繝ｼ繝臥峩荳九↓ master.xlsm 繧堤ｽｮ縺阪�"
-            "planning_core 縺ｮ繧ｫ繝ｬ繝ｳ繝医′縺昴�ｮ繝輔か繝ｫ繝縺ｫ縺ｪ繧九ｈ縺� python\\ 驟咲ｽｮ繧堤｢ｺ隱阪＠縺ｦ縺上□縺輔＞縲�"
-            " 縺薙�ｮ迥ｶ諷九〒縺ｯ production_plan / member_schedule 縺ｯ蜃ｺ蜉帙＆繧後∪縺帙ｓ縲�",
+            "段階2を中断しました: メンバーが0人です（マスタの skills が空、または読み込み失敗）。"
+            " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置き、"
+            "planning_core のカレントがそのフォルダになるよう python\\ 配置を確認してください。"
+            " この状態では production_plan / member_schedule は出力されません。",
             master_abs,
             os.getcwd(),
         )
@@ -16291,7 +16296,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ: 隱ｭ霎ｼ萓句､悶�ｮ縺溘ａ蜊�譛峨↑縺励→縺励※邯夊｡後＠縺ｾ縺� (%s)", e
+            "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
     try:
@@ -16303,7 +16308,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "讖滓｢ｰ貅門ｙ/萓晞�ｼ蛻�譖ｿ繝ｻ譌･谺｡蟋区･ｭ險ｭ螳�: 隱ｭ霎ｼ萓句､悶�ｮ縺溘ａ辟｡隕悶＠縺ｾ縺� (%s)", e
+            "機械準備/依頼切替・日次始業設定: 読込例外のため無視します (%s)", e
         )
         _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
@@ -16314,11 +16319,11 @@ def _generate_plan_impl():
         _STAGE2_REGULAR_SHIFT_START = _rs_a15
         if _rs_a15 is not None:
             logging.info(
-                "譌･谺｡蟋区･ｭ貅門ｙ: 螳壼ｸｸ髢句ｧ� master 繝｡繧､繝ｳ A15=%s 繧呈治逕ｨ�ｼ�[髢句ｧ�, 髢句ｧ�+蛻�) 繧貞｣∵凾險医〒蜊�譛峨�A15 辟｡蜉ｹ譎ゅ�ｯ蠕捺擂縺ｮ蜍､諤� forward�ｼ�",
+                "日次始業準備: 定常開始 master メイン A15=%s を採用（[開始, 開始+分) を壁時計で占有。A15 無効時は従来の勤怠 forward）",
                 _rs_a15.strftime("%H:%M"),
             )
     except Exception as e:
-        logging.warning("螳壼ｸｸ髢句ｧ�(A15) 隱ｭ霎ｼ螟ｱ謨�: 譌･谺｡蟋区･ｭ縺ｯ蠕捺擂縺ｮ蜍､諤� forward 縺ｫ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ (%s)", e)
+        logging.warning("定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e)
         _STAGE2_REGULAR_SHIFT_START = None
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
@@ -16327,7 +16332,7 @@ def _generate_plan_impl():
             for ivs in _dm.values()
         )
         logging.info(
-            "讖滓｢ｰ繧ｫ繝ｬ繝ｳ繝繝ｼ: %s 譌･蛻�繝ｻ險ｭ蛯吝頃譛峨ヶ繝ｭ繝�繧ｯ險� %s 繧帝�榊床縺ｫ蜿肴丐縺励∪縺吶�",
+            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映します。",
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
         )
@@ -16338,22 +16343,22 @@ def _generate_plan_impl():
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
     ):
         logging.info(
-            "need驟榊床譎りｿｽ蜉�莠ｺ謨ｰ: 繝｡繧､繝ｳ蜑ｲ莉倥�ｯ蝓ｺ譛ｬ蠢�隕∽ｺｺ謨ｰ縺ｮ縺ｿ縲�"
-            "菴吝鴨縺ｯ蜈ｨ繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ蠕後∵凾髢馴㍾縺ｪ繧翫�ｮ縺ｪ縺�譛ｪ蜑ｲ蠖薙°縺､繧ｹ繧ｭ繝ｫ驕ｩ蜷郁�繧偵し繝悶↓霑ｽ險倥＠縺ｾ縺吶�"
-            "�ｼ医Γ繧､繝ｳ縺ｧ蠅怜藤謗｢邏｢縺吶ｋ蠕捺擂謖吝虚: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1�ｼ�"
+            "need配台時追加人数: メイン割付は基本必要人数のみ。"
+            "余力は全シミュレーション後、時間重なりのない未割当かつスキル適合者をサブに追記します。"
+            "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
-    # 谿ｵ髫�2縺ｮ蝓ｺ貅匁律譎ゅ�ｯ縲後�槭け繝ｭ螳溯｡梧凾蛻ｻ縲阪〒縺ｯ縺ｪ縺上後ョ繝ｼ繧ｿ謚ｽ蜃ｺ譌･縲阪ｒ菴ｿ逕ｨ
+    # 段階2の基準日時は「マクロ実行時刻」ではなく「データ抽出日」を使用
     data_extract_dt = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
     data_extract_dt_str = (
-        base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "窶�"
+        base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
     )
     logging.info(
-        "險育判蝓ｺ貅匁律譎�: %s�ｼ�%s�ｼ�",
+        "計画基準日時: %s（%s）",
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
-        "繝�繝ｼ繧ｿ謚ｽ蜃ｺ譌･" if data_extract_dt is not None else "迴ｾ蝨ｨ譎ょ綾繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ",
+        "データ抽出日" if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
@@ -16371,32 +16376,32 @@ def _generate_plan_impl():
             attendance_data, members, _factory_closure_dates
         )
         logging.info(
-            "繝｡繧､繝ｳ繝ｻ繧ｰ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝�: 蟾･蝣ｴ莨第･ｭ謇ｱ縺�縺ｮ譌･莉� 竊� %s",
+            "メイン・グローバルコメント: 工場休業扱いの日付 → %s",
             ", ".join(str(x) for x in sorted(_factory_closure_dates)),
         )
-    ai_log_data["繝｡繧､繝ｳ_繧ｰ繝ｭ繝ｼ繝舌Ν_蟾･蝣ｴ莨第･ｭ譌･(隗｣譫�)"] = (
+    ai_log_data["メイン_グローバル_工場休業日(解析)"] = (
         ", ".join(str(x) for x in sorted(_factory_closure_dates))
         if _factory_closure_dates
-        else "�ｼ医↑縺暦ｼ�"
+        else "（なし）"
     )
     _sn = str(global_priority_override.get("scheduler_notes_ja") or "").strip()
     if _sn:
-        ai_log_data["繝｡繧､繝ｳ_繧ｰ繝ｭ繝ｼ繝舌Ν_譛ｪ驕ｩ逕ｨ繝｡繝｢(AI)"] = _sn[:2000]
+        ai_log_data["メイン_グローバル_未適用メモ(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 邨先棡繧ｷ繝ｼ繝医�ｯ縲悟渕貅匁律�ｼ医ョ繝ｼ繧ｿ謚ｽ蜃ｺ譌･�ｼ峨堺ｻ･髯阪�ｮ縺ｿ陦ｨ遉ｺ繝ｻ險育判蟇ｾ雎｡縺ｨ縺吶ｋ
+    # 結果シートは「基準日（データ抽出日）」以降のみ表示・計画対象とする
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
-        logging.error("蠖捺律莉･髯阪�ｮ蜃ｦ逅�蟇ｾ雎｡譌･莉倥′縺ゅｊ縺ｾ縺帙ｓ縲�")
-        _try_write_main_sheet_gemini_usage_summary("谿ｵ髫�2")
+        logging.error("当日以降の処理対象日付がありません。")
+        _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
-    # 繧ｿ繧ｹ繧ｯ蜈･蜉�: 繝悶ャ繧ｯ蜀�縲碁�榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙搾ｼ域ｮｵ髫�1縺ｧ蜃ｺ蜉帚�貞叙繧願ｾｼ縺ｿ蠕後↓邱ｨ髮��ｼ�
+    # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
     try:
         tasks_df = load_planning_tasks_df()
     except Exception as e:
-        logging.error(f"驟榊床險育判繧ｿ繧ｹ繧ｯ繧ｷ繝ｼ繝郁ｪｭ縺ｿ霎ｼ縺ｿ繧ｨ繝ｩ繝ｼ: {e}")
-        _try_write_main_sheet_gemini_usage_summary("谿ｵ髫�2")
+        logging.error(f"配台計画タスクシート読み込みエラー: {e}")
+        _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
@@ -16409,47 +16414,47 @@ def _generate_plan_impl():
         tasks_df = tasks_df.loc[_dbg_mask].copy()
         _n_tasks_after = len(tasks_df)
         logging.warning(
-            "繝�繝舌ャ繧ｰ驟榊床: 縲�%s縲阪�ｮ陦後ｒ %s 竊� %s 縺ｫ邨槭ｊ霎ｼ縺ｿ縺ｾ縺励◆縲�",
+            "デバッグ配台: 「%s」の行を %s → %s に絞り込みました。",
             PLAN_INPUT_SHEET_NAME,
             _n_tasks_before,
             _n_tasks_after,
         )
         if _n_tasks_after == 0:
             logging.error(
-                "繝�繝舌ャ繧ｰ驟榊床: B3莉･髯阪�ｮ萓晞�ｼNO縺ｫ荳閾ｴ縺吶ｋ陦後′縺ゅｊ縺ｾ縺帙ｓ縲よｮｵ髫�2繧剃ｸｭ譁ｭ縺励∪縺吶�"
+                "デバッグ配台: B3以降の依頼NOに一致する行がありません。段階2を中断します。"
             )
-            _try_write_main_sheet_gemini_usage_summary("谿ｵ髫�2")
+            _try_write_main_sheet_gemini_usage_summary("段階2")
             return
 
     if global_priority_raw.strip():
         snip = global_priority_raw[:2500]
         if len(global_priority_raw) > 2500:
-            snip += "窶ｦ"
-        ai_log_data["繝｡繧､繝ｳ_蜀榊━蜈育音蛻･險倩ｼ�(蜴滓枚)"] = snip
+            snip += "…"
+        ai_log_data["メイン_再優先特別記載(原文)"] = snip
     else:
-        ai_log_data["繝｡繧､繝ｳ_蜀榊━蜈育音蛻･險倩ｼ�(蜴滓枚)"] = (
-            "�ｼ育ｩｺ縲√∪縺溘�ｯ繝｡繧､繝ｳ繧ｷ繝ｼ繝医↓縲後げ繝ｭ繝ｼ繝舌Ν繧ｳ繝｡繝ｳ繝医崎ｦ句�ｺ縺励′隕九▽縺九ｊ縺ｾ縺帙ｓ�ｼ�"
+        ai_log_data["メイン_再優先特別記載(原文)"] = (
+            "（空、またはメインシートに「グローバルコメント」見出しが見つかりません）"
         )
-    ai_log_data["繝｡繧､繝ｳ_蜀榊━蜈育音蛻･險倩ｼ�(AI)"] = json.dumps(
+    ai_log_data["メイン_再優先特別記載(AI)"] = json.dumps(
         global_priority_override, ensure_ascii=False
     )
     if global_priority_override.get("ignore_skill_requirements"):
         logging.warning(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 繧ｹ繧ｭ繝ｫ隕∽ｻｶ繧堤┌隕悶＠縺ｦ驟榊床縺励∪縺吶�%s",
+            "メイン再優先特記: スキル要件を無視して配台します。%s",
             global_priority_override.get("interpretation_ja", ""),
         )
     if global_priority_override.get("ignore_need_minimum"):
         logging.warning(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 繝√�ｼ繝�莠ｺ謨ｰ繧�1蜷阪↓蝗ｺ螳壹＠縺ｾ縺呻ｼ�need繝ｻ陦後�ｮ蠢�隕＾P荳頑嶌縺阪ｈ繧雁━蜈茨ｼ峨�%s",
+            "メイン再優先特記: チーム人数を1名に固定します（need・行の必要OP上書きより優先）。%s",
             global_priority_override.get("interpretation_ja", ""),
         )
     if global_priority_override.get("abolish_all_scheduling_limits"):
         logging.warning(
-            "繝｡繧､繝ｳ蜀榊━蜈育音險�: 險ｭ蛯吝ｰよ怏繝ｻ蜴溷渚蜷梧律髢句ｧ九�ｻ謖�螳夐幕蟋区凾蛻ｻ繝ｻ繝槭け繝ｭ螳溯｡梧凾蛻ｻ荳矩剞繧帝←逕ｨ縺励∪縺帙ｓ縲�%s",
+            "メイン再優先特記: 設備専有・原反同日開始・指定開始時刻・マクロ実行時刻下限を適用しません。%s",
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 縲悟ｽ捺律縲榊愛螳壹→譛譌ｩ髢句ｧ区凾蛻ｻ縺ｫ縺ｯ蝓ｺ貅匁律譎ゑｼ医ョ繝ｼ繧ｿ謚ｽ蜃ｺ譌･�ｼ峨ｒ菴ｿ縺�
+    # 「当日」判定と最早開始時刻には基準日時（データ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
@@ -16463,7 +16468,7 @@ def _generate_plan_impl():
         global_priority_override,
         equipment_list,
     )
-    # 髢句ｧ区律縺碁撼遞ｼ蜒肴律縺ｮ蝣ｴ蜷医�ｯ縲∫峩蜑阪�ｮ遞ｼ蜒肴律縺ｸ陬懈ｭ｣�ｼ井ｾ�: 4/4, 4/5 縺碁撼遞ｼ蜒阪↑繧� 4/3 縺ｸ�ｼ�
+    # 開始日が非稼働日の場合は、直前の稼働日へ補正（例: 4/4, 4/5 が非稼働なら 4/3 へ）
     working_days = [
         d for d in sorted_dates
         if any(attendance_data[d][m]["is_working"] for m in attendance_data[d])
@@ -16484,7 +16489,7 @@ def _generate_plan_impl():
             if prev_work is not None:
                 if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID:
                     logging.info(
-                        "DEBUG[task=%s] start_date_req 繧帝撼遞ｼ蜒肴律陬懈ｭ｣: %s -> %s",
+                        "DEBUG[task=%s] start_date_req を非稼働日補正: %s -> %s",
                         DEBUG_TASK_ID,
                         req_d,
                         prev_work,
@@ -16500,11 +16505,11 @@ def _generate_plan_impl():
 
     if not task_queue:
         logging.warning(
-            f"譛牙柑縺ｪ繧ｿ繧ｹ繧ｯ縺後≠繧翫∪縺帙ｓ縲ゅ鶏PLAN_INPUT_SHEET_NAME}縲阪�ｮ縲御ｾ晞�ｼNO縲阪悟ｷ･遞句錐縲阪梧鋤邂玲焚驥上阪�"
-            "縺ｾ縺溘�ｯ螳御ｺ�蛹ｺ蛻�繝ｻ螳溷�ｺ譚･鬮俶鋤邂励↓繧医ｊ谿矩㍼縺檎┌縺�陦後�ｮ縺ｿ縺ｮ蜿ｯ閭ｽ諤ｧ縺後≠繧翫∪縺吶�"
+            f"有効なタスクがありません。「{PLAN_INPUT_SHEET_NAME}」の「依頼NO」「工程名」「換算数量」、"
+            "または完了区分・実出来高換算により残量が無い行のみの可能性があります。"
         )
 
-    # 驟榊床隧ｦ陦碁��: 繧ｷ繝ｼ繝亥�励′謠�縺｣縺ｦ縺�繧後�ｰ縺昴ｌ繧呈治逕ｨ縲よｬ�謳肴凾縺ｯ ﾂｧB 蟶ｯ繝ｻ邏肴悄繝ｻneed 蛻鈴��縺ｧ繧ｽ繝ｼ繝医＠ EC 髫｣謗･蠕後↓ 1..n
+    # 配台試行順: シート列が揃っていればそれを採用。欠損時は §B 帯・納期・need 列順でソートし EC 隣接後に 1..n
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
@@ -16513,7 +16518,7 @@ def _generate_plan_impl():
         if dbg_items:
             t0 = dbg_items[0]
             logging.info(
-                "DEBUG[task=%s] queue蝓ｺ貅�: start_date_req=%s due_basis=%s answer_due=%s specified_due=%s specified_due_ov=%s due_source=%s priority=%s in_progress=%s remark=%s",
+                "DEBUG[task=%s] queue基準: start_date_req=%s due_basis=%s answer_due=%s specified_due=%s specified_due_ov=%s due_source=%s priority=%s in_progress=%s remark=%s",
                 DEBUG_TASK_ID,
                 t0.get("start_date_req"),
                 t0.get("due_basis_date"),
@@ -16526,15 +16531,15 @@ def _generate_plan_impl():
                 t0.get("has_special_remark"),
             )
         else:
-            logging.info("DEBUG[task=%s] task_queue縺ｫ蟄伜惠縺励∪縺帙ｓ�ｼ亥ｮ御ｺ�/谿矩㍼0/萓晞�ｼNO荳堺ｸ閾ｴ縺ｮ蜿ｯ閭ｽ諤ｧ�ｼ峨�", DEBUG_TASK_ID)
+            logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残量0/依頼NO不一致の可能性）。", DEBUG_TASK_ID)
     timeline_events = []
 
     # ---------------------------------------------------------
-    # 譌･豈弱�ｮ繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｪ繝ｳ繧ｰ繝ｫ繝ｼ繝�
-    # STAGE2_EXTEND_ATTENDANCE_CALENDAR 縺� True 縺ｮ縺ｨ縺阪�ｮ縺ｿ縲∵ｮ九ち繧ｹ繧ｯ縺後≠繧後�ｰ蜍､諤�繧呈律莉倩､�陬ｽ縺ｧ諡｡蠑ｵ縲�
-    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING 縺� True 縺ｮ縺ｨ縺阪�ｮ縺ｿ: 邏肴悄蝓ｺ貅悶ｒ驕弱℃縺ｦ繧よｮ九′縺ゅｋ萓晞�ｼ縺ｫ縺､縺�縺ｦ
-    # due_basis +1繝ｻ蠖楢ｩｲ萓晞�ｼ縺ｮ蜑ｲ蠖捺綾縺励�ｻ蜈磯�ｭ縺九ｉ蜀榊ｮ溯｡後ょ推蜀崎ｩｦ陦悟燕縺ｫ蜍､諤�諡｡蠑ｵ蛻�縺ｯ繝槭せ繧ｿ譌･莉倥∈蟾ｻ縺肴綾縺吶�
-    # 譌｢螳� False 縺ｮ縺溘ａ騾壼ｸｸ縺ｯ 1 繝代せ�ｼ医き繝ｬ繝ｳ繝繝ｼ騾壹＠ 1 蝗橸ｼ峨�ｮ縺ｿ縲�
+    # 日毎のスケジューリングループ
+    # STAGE2_EXTEND_ATTENDANCE_CALENDAR が True のときのみ、残タスクがあれば勤怠を日付複製で拡張。
+    # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING が True のときのみ: 納期基準を過ぎても残がある依頼について
+    # due_basis +1・当該依頼の割当戻し・先頭から再実行。各再試行前に勤怠拡張分はマスタ日付へ巻き戻す。
+    # 既定 False のため通常は 1 パス（カレンダー通し 1 回）のみ。
     # ---------------------------------------------------------
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
@@ -16549,18 +16554,18 @@ def _generate_plan_impl():
     if DISPATCH_INTERVAL_MIRROR_ENFORCE:
         _dispatch_interval_mirror = DispatchIntervalMirror()
         logging.info(
-            "DISPATCH_INTERVAL_MIRROR_ENFORCE: 險ｭ蛯吶�ｻ莠ｺ縺ｮ蜊�譛峨ｒ蛹ｺ髢薙Α繝ｩ繝ｼ縺ｧ霑ｽ霍｡縺励∪縺�"
-            "�ｼ育┌蜉ｹ蛹悶�ｯ 險ｭ螳喟迺ｰ蠅�螟画焚 遲峨〒 DISPATCH_INTERVAL_MIRROR_ENFORCE=0�ｼ峨�"
+            "DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡します"
+            "（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。"
         )
 
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
-            "萓晞�ｼNO逶ｴ蛻鈴�榊床: 譛牙柑�ｼ�STAGE2_SERIAL_DISPATCH_BY_TASK_ID�ｼ峨�"
-            " 蜷�譌･縺ｯ繧｢繧ｯ繝�繧｣繝悶↑萓晞�ｼNO縺ｮ陦後□縺代′蛟呵｣懊�ｮ縺溘ａ縲∝ｽ楢ｩｲ萓晞�ｼ縺瑚ｩｰ縺ｾ繧九→莉紋ｾ晞�ｼ縺ｯ荳蛻�騾ｲ縺ｿ縺ｾ縺帙ｓ縲�"
+            "依頼NO直列配台: 有効（STAGE2_SERIAL_DISPATCH_BY_TASK_ID）。"
+            " 各日はアクティブな依頼NOの行だけが候補のため、当該依頼が詰まると他依頼は一切進みません。"
         )
     else:
         logging.info(
-            "萓晞�ｼNO逶ｴ蛻鈴�榊床: 辟｡蜉ｹ縲Ｔtart_date 繧呈ｺ縺溘☆蜈ｨ陦後′蠖捺律蛟呵｣懊↓縺ｪ繧翫�驟榊床隧ｦ陦碁��繝ｻ險ｭ蛯吶Ν繝ｼ繝ｫ縺ｧ鬆�蠎丈ｻ倥￠縺励∪縺吶�"
+            "依頼NO直列配台: 無効。start_date を満たす全行が当日候補になり、配台試行順・設備ルールで順序付けします。"
         )
 
     _due_shift_retry_count_by_request: dict[str, int] = {}
@@ -16592,7 +16597,7 @@ def _generate_plan_impl():
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
             daily_status = attendance_data[current_date]
-            # 險ｭ蛯吶＃縺ｨ縺ｮ遨ｺ縺肴凾蛻ｻ�ｼ亥酔荳險ｭ蛯吶�ｮ蜷梧凾荳ｦ陦悟牡蠖薙ｒ髦ｲ豁｢�ｼ�
+            # 設備ごとの空き時刻（同一設備の同時並行割当を防止）
             machine_avail_dt = {}
             
             avail_dt = {}
@@ -16624,7 +16629,7 @@ def _generate_plan_impl():
                 )
 
             if not avail_dt:
-                logging.info("DEBUG[day=%s] 遞ｼ蜒阪Γ繝ｳ繝舌�ｼ0縺ｮ縺溘ａ蜑ｲ莉倥せ繧ｭ繝�繝�", current_date)
+                logging.info("DEBUG[day=%s] 稼働メンバー0のため割付スキップ", current_date)
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -16652,11 +16657,11 @@ def _generate_plan_impl():
                 )
                 _pending_rows = sum(1 for t in task_queue if t["remaining_units"] > 0)
                 logging.info(
-                    "萓晞�ｼNO逶ｴ蛻鈴�榊床 day=%s 繧｢繧ｯ繝�繧｣繝紋ｾ晞�ｼNO=%s 逶ｴ蛻励Μ繧ｹ繝井ｽ咲ｽｮ=%s/%s "
-                    "蠖捺律蛟呵｣懆｡梧焚(逶ｴ蛻怜燕)=%s 逶ｴ蛻怜ｾ�=%s 繧ｭ繝･繝ｼ谿玖｡�(蜈ｨ譌･)=%s",
+                    "依頼NO直列配台 day=%s アクティブ依頼NO=%s 直列リスト位置=%s/%s "
+                    "当日候補行数(直列前)=%s 直列後=%s キュー残行(全日)=%s",
                     current_date,
-                    _active_serial_tid if _active_serial_tid is not None else "窶�",
-                    _serial_pos if _serial_pos else "窶�",
+                    _active_serial_tid if _active_serial_tid is not None else "—",
+                    _serial_pos if _serial_pos else "—",
                     len(_serial_order_tids),
                     _tasks_today_before_serial,
                     len(tasks_today),
@@ -16669,7 +16674,7 @@ def _generate_plan_impl():
                     default=None,
                 )
                 logging.info(
-                    "DEBUG[day=%s] 蜑ｲ莉伜ｯｾ雎｡繧ｿ繧ｹ繧ｯ0莉ｶ pending_total=%s earliest_start_date_req=%s",
+                    "DEBUG[day=%s] 割付対象タスク0件 pending_total=%s earliest_start_date_req=%s",
                     current_date,
                     pending_total,
                     earliest_wait,
@@ -16678,7 +16683,7 @@ def _generate_plan_impl():
                 has_dbg_today = any(str(t.get("task_id", "")).strip() == DEBUG_TASK_ID for t in tasks_today)
                 if current_date.isoformat() == "2026-04-03" or has_dbg_today:
                     logging.info(
-                        "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s 蜷ｫ繧=%s)",
+                        "DEBUG[day=%s] avail_members=%s tasks_today=%s (task=%s 含む=%s)",
                         current_date,
                         len(avail_dt),
                         len(tasks_today),
@@ -16787,7 +16792,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: 蜷御ｸ萓晞�ｼNO縺ｮ蜈郁｡悟ｷ･遞句ｾ�縺｡ day=%s machine=%s rem=%.4f",
+                                    "[配台トレース task=%s] スキップ: 同一依頼NOの先行工程待ち day=%s machine=%s rem=%.4f",
                                     task.get("task_id"),
                                     current_date,
                                     task.get("machine"),
@@ -16811,8 +16816,8 @@ def _generate_plan_impl():
                                 )
                                 _log_dispatch_trace_schedule(
                                     _tid_tr,
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: ﾂｧB-2/ﾂｧB-3 蠕檎ｶ壹Ο繝ｼ繝ｫ譫�繧ｼ繝ｭ day=%s machine=%s "
-                                    "ec邏ｯ險亥ｮ御ｺ�R=%.4f 蠕檎ｶ夂ｴｯ險亥ｮ御ｺ�R=%.4f rem_follower=%.4f",
+                                    "[配台トレース task=%s] スキップ: §B-2/§B-3 後続ロール枠ゼロ day=%s machine=%s "
+                                    "ec累計完了R=%.4f 後続累計完了R=%.4f rem_follower=%.4f",
                                     _tid_tr,
                                     current_date,
                                     task.get("machine"),
@@ -16835,8 +16840,8 @@ def _generate_plan_impl():
                                 if _trace_schedule_task_enabled(task.get("task_id")):
                                     _log_dispatch_trace_schedule(
                                         task.get("task_id"),
-                                        "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: 蜷御ｸ險ｭ蛯吶�ｮ讀懈渊蜊�譛我ｸｭ day=%s "
-                                        "蜊�譛芽�萓晞�ｼNO=%s 蜊�譛芽�隧ｦ陦碁��=%s",
+                                        "[配台トレース task=%s] スキップ: 同一設備の検査占有中 day=%s "
+                                        "占有者依頼NO=%s 占有者試行順=%s",
                                         task.get("task_id"),
                                         current_date,
                                         _b1_holder.get("task_id"),
@@ -16845,7 +16850,7 @@ def _generate_plan_impl():
                                 continue
                         if DEBUG_TASK_ID and str(task.get("task_id", "")).strip() == DEBUG_TASK_ID:
                             logging.info(
-                                "DEBUG[task=%s] day=%s 髢句ｧ句愛螳�: start_date_req=%s remaining_units=%s machine=%s",
+                                "DEBUG[task=%s] day=%s 開始判定: start_date_req=%s remaining_units=%s machine=%s",
                                 DEBUG_TASK_ID,
                                 current_date,
                                 task.get("start_date_req"),
@@ -16854,7 +16859,7 @@ def _generate_plan_impl():
                             )
                         if task.get("has_done_deadline_override"):
                             logging.info(
-                                "DEBUG[螳御ｺ�譌･謖�螳咯 萓晞�ｼNO=%s 譌･莉�=%s start_date_req=%s due_basis=%s 謖�螳夂ｴ肴悄(荳頑嶌縺�)=%s 騾ｲ謐�=%s/%s",
+                                "DEBUG[完了日指定] 依頼NO=%s 日付=%s start_date_req=%s due_basis=%s 指定納期(上書き)=%s 進捗=%s/%s",
                                 task.get("task_id"),
                                 current_date,
                                 task.get("start_date_req"),
@@ -16890,7 +16895,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: 繧医ｊ蟆上＆縺�驟榊床隧ｦ陦碁��縺ｫ譛ｪ螳御ｺ�縺ゅｊ "
+                                    "[配台トレース task=%s] スキップ: より小さい配台試行順に未完了あり "
                                     "day=%s my_order=%s",
                                     task.get("task_id"),
                                     current_date,
@@ -16939,7 +16944,7 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: 蜷御ｸ險ｭ蛯吶〒驟榊床隧ｦ陦碁��縺悟�医�ｮ陦後′譛ｪ螳御ｺ� "
+                                    "[配台トレース task=%s] スキップ: 同一設備で配台試行順が先の行が未完了 "
                                     "day=%s eq_line=%s my_order=%s",
                                     task.get("task_id"),
                                     current_date,
@@ -16961,15 +16966,15 @@ def _generate_plan_impl():
                             )
                             if plan_ro is not None and plan_ro != req_num:
                                 need_src_line = (
-                                    (need_src_line + "�ｼ�") if need_src_line else ""
+                                    (need_src_line + "；") if need_src_line else ""
                                 )
                                 need_src_line += (
-                                    f"險育判繧ｷ繝ｼ繝亥ｿ�隕∽ｺｺ謨ｰ{plan_ro}縺ｯ譛ｪ菴ｿ逕ｨ�ｼ�need蝓ｺ貅�={req_num}�ｼ�"
+                                    f"計画シート必要人数{plan_ro}は未使用（need基準={req_num}）"
                                 )
                         else:
                             if plan_ro is not None:
                                 req_num = plan_ro
-                                need_src_line = f"險育判繧ｷ繝ｼ繝医悟ｿ�隕＾P(荳頑嶌)縲�={req_num}"
+                                need_src_line = f"計画シート「必要OP(上書)」={req_num}"
                             else:
                                 req_num, need_src_line = resolve_need_required_op_explain(
                                     machine,
@@ -16981,14 +16986,14 @@ def _generate_plan_impl():
                         if global_priority_override.get("ignore_need_minimum"):
                             req_num = 1
                             need_src_line = (
-                                (need_src_line + " 竊� ")
+                                (need_src_line + " → ")
                                 if need_src_line
                                 else ""
-                            ) + "繝｡繧､繝ｳ荳頑嶌ignore_need_minimum縺ｧreq=1"
+                            ) + "メイン上書ignore_need_minimumでreq=1"
     
-                        # 繝｡繝ｳ繝舌�ｼﾃ苓ｨｭ蛯吶せ繧ｭ繝ｫ�ｼ�parse_op_as_skill_cell: 蟆上＆縺�蜆ｪ蜈亥ｺｦ縺ｻ縺ｩ蜈医↓繝√�ｼ繝�蛟呵｣懊∈謗｡逕ｨ�ｼ�
-                        # skills 隱ｭ霎ｼ譎ゅ↓縲梧ｩ滓｢ｰ蜷阪榊腰迢ｬ繧ｭ繝ｼ縺ｸ繧ｨ繧､繝ｪ繧｢繧ｹ縺吶ｋ縺溘ａ縲∝ｷ･遞句錐+讖滓｢ｰ蜷阪′荳｡譁ｹ縺ゅｋ陦後〒縺ｯ
-                        # 隍�蜷医く繝ｼ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪阪�ｮ縺ｿ繧定ｦ九ｋ�ｼ亥挨蟾･遞九�ｮ蜷悟錐讖滓｢ｰ縺ｮ OP 縺梧ｵ√ｌ霎ｼ縺ｾ縺ｪ縺�繧医≧縺ｫ縺吶ｋ�ｼ峨�
+                        # メンバー×設備スキル（parse_op_as_skill_cell: 小さい優先度ほど先にチーム候補へ採用）
+                        # skills 読込時に「機械名」単独キーへエイリアスするため、工程名+機械名が両方ある行では
+                        # 複合キー「工程名+機械名」のみを見る（別工程の同名機械の OP が流れ込まないようにする）。
                         skill_meta_cache = {}
                         _gpo = global_priority_override
     
@@ -17028,7 +17033,7 @@ def _generate_plan_impl():
                                 machine_proc=machine_proc,
                             )
                             logging.info(
-                                "DEBUG[螳御ｺ�譌･謖�螳咯 萓晞�ｼNO=%s 險ｭ蛯�=%s req_num=%s capable_members=%s machine_free=%s",
+                                "DEBUG[完了日指定] 依頼NO=%s 設備=%s req_num=%s capable_members=%s machine_free=%s",
                                 task.get("task_id"),
                                 eq_line,
                                 req_num,
@@ -17045,7 +17050,7 @@ def _generate_plan_impl():
                         )
                         if pref_raw and pref_mem is None and op_today:
                             logging.info(
-                                "諡�蠖徹P謖�蜷�: 蠖捺律縺ｮOP蛟呵｣懊↓荳閾ｴ縺帙★蛻ｶ邏�縺ｪ縺� task=%s raw=%r",
+                                "担当OP指名: 当日のOP候補に一致せず制約なし task=%s raw=%r",
                                 task.get("task_id"),
                                 pref_raw,
                             )
@@ -17064,7 +17069,7 @@ def _generate_plan_impl():
                         )
                         if _gdp_must:
                             logging.info(
-                                "繝｡繧､繝ｳ繧ｰ繝ｭ繝ｼ繝舌Ν(譌･莉佚怜ｷ･遞�): task=%s date=%s 蟾･遞�=%r 繝√�ｼ繝�蠢�鬆�=%s",
+                                "メイングローバル(日付×工程): task=%s date=%s 工程=%r チーム必須=%s",
                                 task.get("task_id"),
                                 current_date,
                                 machine,
@@ -17074,12 +17079,12 @@ def _generate_plan_impl():
                             _nfix = len(fixed_team_anchor)
                             if _nfix > req_num:
                                 need_src_line = (
-                                    (need_src_line + " 竊� ")
+                                    (need_src_line + " → ")
                                     if need_src_line
                                     else ""
                                 )
                                 need_src_line += (
-                                    f"繧ｰ繝ｭ繝ｼ繝舌Ν(譌･莉佚怜ｷ･遞�)謖�蜷阪〒譛菴施_nfix}莠ｺ"
+                                    f"グローバル(日付×工程)指名で最低{_nfix}人"
                                 )
                             req_num = max(req_num, _nfix)
     
@@ -17093,10 +17098,10 @@ def _generate_plan_impl():
                         if TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
                             extra_max_sheet = 0
                             extra_src_line = (
-                                (extra_src_line + " 竊� ")
+                                (extra_src_line + " → ")
                                 if extra_src_line
                                 else ""
-                            ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW縺ｧ0"
+                            ) + "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROWで0"
                         extra_max = (
                             extra_max_sheet
                             if TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
@@ -17108,10 +17113,10 @@ def _generate_plan_impl():
                             and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
                         ):
                             extra_src_line = (
-                                (extra_src_line + " 竊� ")
+                                (extra_src_line + " → ")
                                 if extra_src_line
                                 else ""
-                            ) + "繝｡繧､繝ｳ縺ｯ蝓ｺ譛ｬ莠ｺ謨ｰ縺ｮ縺ｿ�ｼ井ｽ吝鴨譫�縺ｯ蜈ｨ驟榊床蠕後↓譛ｪ蜑ｲ蠖禿励せ繧ｭ繝ｫ縺ｧ霑ｽ險假ｼ�"
+                            ) + "メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）"
                         max_team_size = min(req_num + extra_max, len(capable_members))
                         if max_team_size < req_num:
                             max_team_size = req_num
@@ -17124,8 +17129,8 @@ def _generate_plan_impl():
                         ):
                             _need_headcount_logged_orders.add(_dto_head)
                             logging.info(
-                                "need莠ｺ謨ｰ(驟榊床隧ｦ陦碁��蛻晏屓) order=%s task=%s 蟾･遞�/讖滓｢ｰ=%s/%s "
-                                "req_num=%s [%s] extra_max=%s [%s] max_team蛟呵｣�=%s capable=%s莠ｺ",
+                                "need人数(配台試行順初回) order=%s task=%s 工程/機械=%s/%s "
+                                "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
                                 _dto_head,
                                 task["task_id"],
                                 machine,
@@ -17143,8 +17148,8 @@ def _generate_plan_impl():
                         )
                         if trace_assign:
                             logging.info(
-                                "TRACE驟榊床[%s] %s 蟾･遞�/讖滓｢ｰ=%s / %s req_num=%s extra_max=%s 竊� max_team=%s "
-                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 諡�蠖徹P謖�螳�=%r竊�%s",
+                                "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
+                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%r→%s",
                                 task["task_id"],
                                 current_date,
                                 machine,
@@ -17195,7 +17200,7 @@ def _generate_plan_impl():
                         )
                         if _abort_legacy:
                             continue
-                        # 繝励Μ繧ｻ繝�繝医�ｯ謌千ｫ句��繧偵☆縺ｹ縺ｦ蛟呵｣懊↓霈峨○縲∽ｸ九�ｮ邨�蜷医○謗｢邏｢縺ｨ縺ｾ縺ｨ繧√※譛濶ｯ繧帝∈縺ｶ縲�
+                        # プリセットは成立分をすべて候補に載せ、下の組合せ探索とまとめて最良を選ぶ。
                         if preset_rows:
                             for _prio, sheet_rs, preset_team, combo_row_id in preset_rows:
                                 pteam = tuple(preset_team)
@@ -17268,7 +17273,7 @@ def _generate_plan_impl():
                                     ]
                                 else:
                                     logging.info(
-                                        "諡�蠖徹P謖�蜷�: 繝√�ｼ繝�莠ｺ謨ｰ繧呈ｺ縺溘○縺ｪ縺�縺溘ａ謖�蜷阪ｒ辟｡隕� task=%s size=%s raw=%r",
+                                        "担当OP指名: チーム人数を満たせないため指名を無視 task=%s size=%s raw=%r",
                                         task.get("task_id"),
                                         tsize,
                                         pref_raw,
@@ -17284,11 +17289,11 @@ def _generate_plan_impl():
     
                                 team_start = max(avail_dt[m] for m in team)
                                 if not _gpo.get("abolish_all_scheduling_limits"):
-                                    # 蜷御ｸ險ｭ蛯吶�ｯ1譎らせ縺ｧ1繧ｿ繧ｹ繧ｯ縺ｮ縺ｿ�ｼ郁ｨｭ蛯咏ｩｺ縺搾ｼ区律谺｡蟋区･ｭ/萓晞�ｼ蛻�譖ｿ縺ｮ貅門ｙ繝ｻ蠕悟ｧ区忰�ｼ�
+                                    # 同一設備は1時点で1タスクのみ（設備空き＋日次始業/依頼切替の準備・後始末）
                                     machine_free_dt = _mach_floor_legacy
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
-                                    # 蜴溷渚謚募�･譌･縺ｨ蜷梧律縺ｮ髢句ｧ九�ｯ 13:00 莉･髯搾ｼ郁ｩｦ陦碁��蜆ｪ蜈医ヵ繝ｭ繝ｼ縺ｨ荳閾ｴ�ｼ�
+                                    # 原反投入日と同日の開始は 13:00 以降（試行順優先フローと一致）
                                     if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                                         min_start_dt = datetime.combine(
                                             current_date, task["same_day_raw_start_limit"]
@@ -17301,7 +17306,7 @@ def _generate_plan_impl():
                                         )
                                         if team_start < min_user_t:
                                             team_start = min_user_t
-                                    # 蠖捺律縺ｯ縲後�槭け繝ｭ螳溯｡後＠縺滓凾蛻ｻ縲阪ｈ繧雁燕縺ｫ髢句ｧ九〒縺阪↑縺�
+                                    # 当日は「マクロ実行した時刻」より前に開始できない
                                     if current_date == macro_run_date and team_start < macro_now_dt:
                                         team_start = macro_now_dt
                                 team_end_limit = min(daily_status[m]['end_dt'] for m in team)
@@ -17480,7 +17485,7 @@ def _generate_plan_impl():
                                 sub = [c for c in team_candidates if len(c["team"]) == tsize]
                                 if not sub:
                                     logging.info(
-                                        "TRACE驟榊床[%s] %s tsize=%s 竊� 縺薙�ｮ莠ｺ謨ｰ縺ｧ謌千ｫ九☆繧九メ繝ｼ繝�縺ｪ縺�",
+                                        "TRACE配台[%s] %s tsize=%s → この人数で成立するチームなし",
                                         tid,
                                         current_date,
                                         tsize,
@@ -17488,9 +17493,9 @@ def _generate_plan_impl():
                                 else:
                                     sm = min(sub, key=_team_cand_key)
                                     logging.info(
-                                        "TRACE驟榊床[%s] %s tsize=%s 莠ｺ謨ｰ蜀�譛濶ｯ: members=%s "
+                                        "TRACE配台[%s] %s tsize=%s 人数内最良: members=%s "
                                         "start=%s units_today=%s prio_sum=%s eff_t/unit=%.6f "
-                                        "豈碑ｼ�繝ｫ繝ｼ繝ｫ=%s 窶ｻ蜈ｨ譌･譛譌ｩ髢句ｧ�=%s 繧貞渕貅悶↓霎樊嶌蠑上〒蟆上＆縺�譁ｹ縺梧治逕ｨ",
+                                        "比較ルール=%s ※全日最早開始=%s を基準に辞書式で小さい方が採用",
                                         tid,
                                         current_date,
                                         tsize,
@@ -17500,12 +17505,12 @@ def _generate_plan_impl():
                                         sm["prio_sum"],
                                         sm["eff_time_per_unit"],
                                         _tk,
-                                        t_min.isoformat(sep=" ") if t_min else "窶�",
+                                        t_min.isoformat(sep=" ") if t_min else "—",
                                     )
     
                         if trace_assign and best_team is not None:
                             logging.info(
-                                "TRACE驟榊床[%s] %s 笘�謗｡逕ｨ n=%s members=%s start=%s units_today=%s prio_sum=%s",
+                                "TRACE配台[%s] %s ★採用 n=%s members=%s start=%s units_today=%s prio_sum=%s",
                                 task["task_id"],
                                 current_date,
                                 len(best_team),
@@ -17517,16 +17522,16 @@ def _generate_plan_impl():
                             if len(best_team) == 1 and max_team_size > req_num:
                                 if TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF:
                                     logging.info(
-                                        "TRACE驟榊床[%s] %s 1莠ｺ謗｡逕ｨ�ｼ�TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF�ｼ�: "
-                                        "繧医ｊ螟ｧ縺阪＞莠ｺ謨ｰ縺ｧ譛牙柑縺ｪ繝√�ｼ繝�縺ｪ縺暦ｼ�OP荳崎ｶｳ繝ｻ0蜊倅ｽ阪�ｻ髢句ｧ�>=邨ゆｺ�遲会ｼ峨�",
+                                        "TRACE配台[%s] %s 1人採用（TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF）: "
+                                        "より大きい人数で有効なチームなし（OP不足・0単位・開始>=終了等）。",
                                         task["task_id"],
                                         current_date,
                                     )
                                 else:
                                     logging.info(
-                                        "TRACE驟榊床[%s] %s 1莠ｺ謗｡逕ｨ: 莠ｺ謨ｰ繧貞｢励ｄ縺吶→髢句ｧ九′驕�繧後�"
-                                        "繧ｹ繝ｩ繝�繧ｯ螟悶〒縺ｯ髢句ｧ句━蜈医〒1莠ｺ縺碁∈縺ｰ繧後◆蜿ｯ閭ｽ諤ｧ縲�"
-                                        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=%s縲√∪縺溘�ｯ蠕捺擂縺ｮ莠ｺ謨ｰ譛蜆ｪ蜈医�ｯ迺ｰ蠅�螟画焚蜿ら�ｧ縲�",
+                                        "TRACE配台[%s] %s 1人採用: 人数を増やすと開始が遅れ、"
+                                        "スラック外では開始優先で1人が選ばれた可能性。"
+                                        "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES=%s、または従来の人数最優先は環境変数参照。",
                                         task["task_id"],
                                         current_date,
                                         TEAM_ASSIGN_START_SLACK_WAIT_MINUTES,
@@ -17535,8 +17540,8 @@ def _generate_plan_impl():
                         if best_team:
                             if len(best_team) > req_num:
                                 logging.info(
-                                    "驟榊床謗｡逕ｨ莠ｺ謨ｰ>req_num task=%s day=%s order=%s 蟾･遞�/讖滓｢ｰ=%s/%s "
-                                    "謗｡逕ｨ=%s莠ｺ req_num=%s extra_max=%s max_team=%s [%s] [%s]",
+                                    "配台採用人数>req_num task=%s day=%s order=%s 工程/機械=%s/%s "
+                                    "採用=%s人 req_num=%s extra_max=%s max_team=%s [%s] [%s]",
                                     task["task_id"],
                                     current_date,
                                     task.get("dispatch_trial_order"),
@@ -17575,7 +17580,7 @@ def _generate_plan_impl():
                                         )
                                     _log_dispatch_trace_schedule(
                                         task.get("task_id"),
-                                        "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｹ繧ｭ繝�繝�: 繝√�ｼ繝�謗｡逕ｨ蠕後�ｮ螳溷柑繝ｦ繝九ャ繝�0 "
+                                        "[配台トレース task=%s] スキップ: チーム採用後の実効ユニット0 "
                                         "day=%s machine=%s best_units_today=%s rp_room=%s rem=%.4f",
                                         task.get("task_id"),
                                         current_date,
@@ -17613,7 +17618,7 @@ def _generate_plan_impl():
                             rem_u_before = math.ceil(task['remaining_units'])
                             already_done = total_u - rem_u_before
                             
-                            # 縲後�槭け繝ｭ螳溯｡梧凾轤ｹ縲阪�ｮ螳御ｺ�邇��ｼ井ｺ亥ｮ壹�ｮ騾ｲ謐励〒縺ｯ縺ｪ縺上∝ｮ溷刈蟾･謨ｰ繝吶�ｼ繧ｹ�ｼ�
+                            # 「マクロ実行時点」の完了率（予定の進捗ではなく、実加工数ベース）
                             try:
                                 tot_qty = parse_float_safe(task.get('total_qty_m'), 0.0)
                                 done_qty = parse_float_safe(task.get('done_qty_reported'), 0.0)
@@ -17679,9 +17684,9 @@ def _generate_plan_impl():
                                     )
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｿ繧､繝�繝ｩ繧､繝ｳ霑ｽ險� chunk day=%s machine=%s "
+                                    "[配台トレース task=%s] タイムライン追記 chunk day=%s machine=%s "
                                     "done_units=%s already_done=%s total_u=%s rem_after=%.4f "
-                                    "start=%s end=%s eff_t/unit=%.4f rp_room(蠖捺凾)=%s",
+                                    "start=%s end=%s eff_t/unit=%.4f rp_room(当時)=%s",
                                     task.get("task_id"),
                                     current_date,
                                     eq_line,
@@ -17779,9 +17784,9 @@ def _generate_plan_impl():
                             if _trace_schedule_task_enabled(task.get("task_id")):
                                 _log_dispatch_trace_schedule(
                                     task.get("task_id"),
-                                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繝ｭ繝ｼ繝ｫ遒ｺ螳� 繝｡繧､繝ｳ day=%s machine=%s machine_name=%s "
-                                    "start=%s end=%s 謗｡逕ｨ莠ｺ謨ｰ=%s req_num=%s 繝｡繧､繝ｳ謗｢邏｢extra_max=%s "
-                                    "菴吝臆莠ｺ謨ｰ驕ｩ逕ｨ(繝｡繧､繝ｳ)=%s team=%s",
+                                    "[配台トレース task=%s] ロール確定 メイン day=%s machine=%s machine_name=%s "
+                                    "start=%s end=%s 採用人数=%s req_num=%s メイン探索extra_max=%s "
+                                    "余剰人数適用(メイン)=%s team=%s",
                                     task.get("task_id"),
                                     current_date,
                                     eq_line,
@@ -17798,7 +17803,7 @@ def _generate_plan_impl():
                         else:
                             if task.get("has_done_deadline_override"):
                                 logging.info(
-                                    "DEBUG[螳御ｺ�譌･謖�螳咯 萓晞�ｼNO=%s 譌･莉�=%s 縺ｯ蜑ｲ蠖謎ｸ榊庄�ｼ郁ｦ∝藤/險ｭ蛯咏ｩｺ縺肴擅莉ｶ縺ｧ繝√�ｼ繝�荳肴�千ｫ具ｼ峨Ｓemaining_units=%s",
+                                    "DEBUG[完了日指定] 依頼NO=%s 日付=%s は割当不可（要員/設備空き条件でチーム不成立）。remaining_units=%s",
                                     task.get("task_id"),
                                     current_date,
                                     task.get("remaining_units"),
@@ -17817,8 +17822,8 @@ def _generate_plan_impl():
                             continue
                         _log_dispatch_trace_schedule(
                             _tt,
-                            "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 譌･谺｡邨ゆｺ�譎らせ縺ｮ谿� day=%s machine=%s "
-                            "machine_name=%s rem=%.4f roll_b2_follower=%s 隧ｦ陦碁��=%s",
+                            "[配台トレース task=%s] 日次終了時点の残 day=%s machine=%s "
+                            "machine_name=%s rem=%.4f roll_b2_follower=%s 試行順=%s",
                             _tt,
                             current_date,
                             _t.get("machine"),
@@ -17896,7 +17901,7 @@ def _generate_plan_impl():
                                 for tid in sorted(allowed_shift_tids)
                             )
                             logging.info(
-                                "邏肴悄雜�驕弱Μ繝医Λ繧､: 險育判蝓ｺ貅�+1譌･縺励※蠖楢ｩｲ萓晞�ｼ縺ｮ縺ｿ蜀埼�榊床�ｼ域､懷�ｺ譌･=%s 萓晞�ｼNO=%s 蠖楢ｩｲ萓晞�ｼ縺ｮ邏ｯ險郁ｩｦ陦�=%s�ｼ�",
+                                "納期超過リトライ: 計画基準+1日して当該依頼のみ再配台（検出日=%s 依頼NO=%s 当該依頼の累計試行=%s）",
                                 current_date.isoformat(),
                                 ",".join(sorted(allowed_shift_tids)),
                                 _trials_detail,
@@ -17904,7 +17909,7 @@ def _generate_plan_impl():
                             _full_calendar_without_deadline_restart = False
                             break
                         else:
-                            # 萓晞�ｼ縺斐→荳企剞縺ｧ繧ｷ繝輔ヨ縺ｧ縺阪↑縺�縺�縺代�ｮ縺ｨ縺阪�ｯ譌･莉倥Ν繝ｼ繝励ｒ邯咏ｶ壹☆繧具ｼ�break 縺吶ｋ縺ｨ譛ｪ蜃ｦ逅�譌･縺梧ｮ九ｊ驟榊床荳榊庄縺悟､ｧ驥冗匱逕溘☆繧具ｼ峨�
+                            # 依頼ごと上限でシフトできないだけのときは日付ループを継続する（break すると未処理日が残り配台不可が大量発生する）。
                             _cap_tids = sorted(
                                 tid
                                 for tid in shift_tid_list
@@ -17917,8 +17922,8 @@ def _generate_plan_impl():
                                 _due_shift_cap_warned_tids.add(tid)
                             if _first_cap_warn:
                                 logging.warning(
-                                    "邏肴悄蠕後ｍ蛟偵＠蜀埼�榊床: 谺｡縺ｮ萓晞�ｼNO縺ｯ萓晞�ｼ縺斐→縺ｮ荳企剞�ｼ亥推 %s 蝗橸ｼ峨�ｮ縺溘ａ縺薙�ｮ讀懷�ｺ縺ｧ縺ｯ +1 縺励∪縺帙ｓ縲�"
-                                    " 繧ｫ繝ｬ繝ｳ繝繝ｼ縺ｯ邯咏ｶ壹＠縺ｾ縺呻ｼ域悴螳御ｺ�縺ｯ邨ゆｺ�譎ゅ↓邏肴悄隕狗峩縺怜ｿ�隕√ｒ莉倥￠蠕励∪縺呻ｼ�: %s",
+                                    "納期後ろ倒し再配台: 次の依頼NOは依頼ごとの上限（各 %s 回）のためこの検出では +1 しません。"
+                                    " カレンダーは継続します（未完了は終了時に納期見直し必要を付け得ます）: %s",
                                     STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
                                     ",".join(_cap_tids),
                                 )
@@ -17944,7 +17949,7 @@ def _generate_plan_impl():
             )
             if _rewind_made:
                 logging.info(
-                    "ﾂｧB-2/ﾂｧB-3 繝ｪ繝ｯ繧､繝ｳ繝�: EC 螳瑚ｵｰ蠕後↓讀懈渊�ｼ丞ｷｻ霑斐＠縺ｮ縺ｿ譌･莉伜�磯�ｭ縺九ｉ蜀埼�榊床縺励∪縺励◆�ｼ�timeline_events 繧貞頃譛峨ユ繝ｼ繝悶Ν縺ｨ縺励※蛻ｩ逕ｨ�ｼ峨�"
+                    "§B-2/§B-3 リワインド: EC 完走後に検査／巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
             break
 
@@ -17955,7 +17960,7 @@ def _generate_plan_impl():
                     continue
                 _log_dispatch_trace_schedule(
                     _tt,
-                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ邨ゆｺ�譎� machine=%s machine_name=%s "
+                    "[配台トレース task=%s] シミュレーション終了時 machine=%s machine_name=%s "
                     "rem=%.4f initial=%.4f roll_b2_follower=%s",
                     _tt,
                     _t.get("machine"),
@@ -17983,7 +17988,7 @@ def _generate_plan_impl():
                 _ud = int(_ev.get("units_done") or 0)
                 _log_dispatch_trace_schedule(
                     _tt,
-                    "[驟榊床繝医Ξ繝ｼ繧ｹ task=%s] 繧ｿ繧､繝�繝ｩ繧､繝ｳ譛邨ょ｡�(蟾･遞句�励＃縺ｨ) machine=%s "
+                    "[配台トレース task=%s] タイムライン最終塊(工程列ごと) machine=%s "
                     "already_done+units_done=%s+%s=%s total_units=%s end_dt=%s",
                     _tt,
                     _mk,
@@ -17994,10 +17999,10 @@ def _generate_plan_impl():
                     _ev.get("end_dt"),
                 )
 
-    # 繝｡繧､繝ｳ蜑ｲ莉倥∪縺ｧ縺ｮ繧ｿ繧､繝�繝ｩ繧､繝ｳ�ｼ�need 菴吝鴨霑ｽ險伜燕�ｼ峨５EMP_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ逕ｨ縲�
+    # メイン割付までのタイムライン（need 余力追記前）。TEMP_設備毎の時間割用。
     timeline_before_need_surplus = copy.deepcopy(timeline_events)
 
-    # need縲碁�榊床譎りｿｽ蜉�莠ｺ謨ｰ縲�: 繝｡繧､繝ｳ蜑ｲ莉伜ｾ後↓縲∵悴蜿ょ刈ﾃ励せ繧ｭ繝ｫ驕ｩ蜷郁�繧偵し繝悶∈霑ｽ險假ｼ域里螳夲ｼ�
+    # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
     if (
         not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
@@ -18017,14 +18022,14 @@ def _generate_plan_impl():
         )
         if _n_sur:
             logging.info(
-                "need菴吝鴨: 繝｡繧､繝ｳ蜑ｲ莉伜ｮ御ｺ�蠕後↓繧ｵ繝� %s 蜷阪ｒ霑ｽ險假ｼ域悴蜑ｲ蠖禿励せ繧ｭ繝ｫ繝ｻ譎る俣驥阪↑繧翫↑縺暦ｼ�",
+                "need余力: メイン割付完了後にサブ %s 名を追記（未割当×スキル・時間重なりなし）",
                 _n_sur,
             )
 
     if _dispatch_interval_mirror is not None:
         _dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
 
-    # 繧ｿ繧､繝�繝ｩ繧､繝ｳ繧呈律莉伜挨縺ｫ繧､繝ｳ繝�繝�繧ｯ繧ｹ蛹悶＠縲√し繝悶Γ繝ｳ繝舌�ｼ荳隕ｧ繧剃ｺ句燕隗｣譫撰ｼ井ｻ･髯阪�ｮ蜃ｺ蜉帙Ν繝ｼ繝励ｒ鬮倬溷喧�ｼ�
+    # タイムラインを日付別にインデックス化し、サブメンバー一覧を事前解析（以降の出力ループを高速化）
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
 
@@ -18033,15 +18038,15 @@ def _generate_plan_impl():
         events_by_date[e["date"]].append(e)
 
     # =========================================================
-    # 4. Excel蜃ｺ蜉� (繝｡繧､繝ｳ險育判)
+    # 4. Excel出力 (メイン計画)
     # =========================================================
     _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_dir)
-    # 蜷御ｸ遘貞��縺ｮ蜀榊ｮ溯｡後〒繝輔ぃ繧､繝ｫ蜷阪′陦晉ｪ√＠縺ｪ縺�繧医≧繝槭う繧ｯ繝ｭ遘偵∪縺ｧ蜷ｫ繧√ｋ
+    # 同一秒内の再実行でファイル名が衝突しないようマイクロ秒まで含める
     _stage2_out_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
     output_filename = os.path.join(
         output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
-    # 繧ｿ繧ｹ繧ｯID 竊� 邨先棡_險ｭ蛯呎ｯ弱�ｮ譎る俣蜑ｲ縺ｧ蠖楢ｩｲ繧ｿ繧ｹ繧ｯ縺梧怙蛻昴↓迴ｾ繧後ｋ繧ｻ繝ｫ�ｼ井ｾ� B12�ｼ峨らｵ先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ繝ｪ繝ｳ繧ｯ逕ｨ縲�
+    # タスクID → 結果_設備毎の時間割で当該タスクが最初に現れるセル（例 B12）。結果_タスク一覧のリンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
     df_eq_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
@@ -18071,7 +18076,7 @@ def _generate_plan_impl():
         timeline_events,
     )
 
-    # 邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ逕ｨ: 繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ荳翫�ｮ蠖楢ｩｲ繧ｿ繧ｹ繧ｯ縺ｮ譛譌ｩ髢句ｧ九�ｻ譛驕�邨ゆｺ��ｼ�timeline_events 髮�邏��ｼ�
+    # 結果_タスク一覧用: シミュレーション上の当該タスクの最早開始・最遅終了（timeline_events 集約）
     plan_window_by_task_id: dict = {}
     for _ev in timeline_events:
         tid = _ev.get("task_id")
@@ -18090,8 +18095,8 @@ def _generate_plan_impl():
             if ed > w[1]:
                 w[1] = ed
 
-    # 邨先棡_繧ｿ繧ｹ繧ｯ荳隕ｧ縺ｮ縲悟屓遲皮ｴ肴悄縲阪梧欠螳夂ｴ肴悄縲阪�ｯ驟榊床險育判_繧ｿ繧ｹ繧ｯ蜈･蜉帙�ｮ蠖楢ｩｲ陦後そ繝ｫ縺ｮ縺ｿ縲�
-    # 縲悟次蜿肴兜蜈･譌･縲阪�ｯ荳頑嶌縺榊�励↓譌･莉倥′縺ゅｋ縺ｨ縺阪◎縺ｮ蛟､縲∫┌縺�縺ｨ縺榊�励悟次蜿肴兜蜈･譌･縲搾ｼ郁ｨ育判蝓ｺ貅也ｴ肴悄縺ｨ豺ｷ蜷後＠縺ｪ縺��ｼ�
+    # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
+    # 「原反投入日」は上書き列に日付があるときその値、無いとき列「原反投入日」（計画基準納期と混同しない）
     _result_sheet_answer_spec_by_line = {}
     _result_sheet_raw_input_by_line: dict = {}
     if tasks_df is not None and not getattr(tasks_df, "empty", True):
@@ -18116,27 +18121,27 @@ def _generate_plan_impl():
     task_results = []
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
-    # 繧ｹ繝�繝ｼ繧ｿ繧ｹ�ｼ磯�榊床縺ｮ蜿ｯ蜷ｦ繝ｻ谿具ｼ会ｼ壼ｮ御ｺ�逶ｸ蠖�=驟榊床蜿ｯ�ｼ乗悴蜑ｲ蠖�=驟榊床荳榊庄�ｼ丈ｸ驛ｨ縺ｮ縺ｿ=驟榊床谿�
-    # 險育判蝓ｺ貅�+1 縺ｮ蜀崎ｩｦ陦後′萓晞�ｼNO縺斐→縺ｮ荳企剞縺ｫ驕斐＠縺滉ｾ晞�ｼ縺ｮ譛ｪ螳御ｺ�陦後↓縺ｯ�ｼ育ｴ肴悄隕狗峩縺怜ｿ�隕��ｼ峨ｒ莉倅ｸ弱☆繧九�
+    # ステータス（配台の可否・残）：完了相当=配台可／未割当=配台不可／一部のみ=配台残
+    # 計画基準+1 の再試行が依頼NOごとの上限に達した依頼の未完了行には（納期見直し必要）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
         if rem_u <= 1e-9:
-            status = "驟榊床蜿ｯ"
+            status = "配台可"
         elif hist and t.get("_partial_retry_calendar_blocked"):
-            status = "驟榊床谿�(蜍､蜍吶き繝ｬ繝ｳ繝繝ｼ荳崎ｶｳ)"
+            status = "配台残(勤務カレンダー不足)"
         elif not hist and rem_u > 1e-9:
-            status = "驟榊床荳榊庄"
+            status = "配台不可"
         else:
-            status = "驟榊床谿�"
+            status = "配台残"
         _tid_res = str(t.get("task_id", "") or "").strip()
         if (
             _tid_res in _due_shift_exhausted_requests
             and rem_u > 1e-9
-            and "邏肴悄隕狗峩縺怜ｿ�隕�" not in status
+            and "納期見直し必要" not in status
         ):
-            status = f"{status}�ｼ育ｴ肴悄隕狗峩縺怜ｿ�隕��ｼ�"
+            status = f"{status}（納期見直し必要）"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
@@ -18173,23 +18178,23 @@ def _generate_plan_impl():
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
         rov = t.get("required_op")
-        # 蛻鈴��: A=繧ｹ繝�繝ｼ繧ｿ繧ｹ 竊� 繧ｿ繧ｹ繧ｯID/蟾･遞�/讖滓｢ｰ/蜆ｪ蜈亥ｺｦ 竊� 螻･豁ｴ1..n 竊� 縺昴�ｮ莉� 竊� 譛蠕後↓迚ｹ蛻･謖�螳喟AI
-        row_status = {"繧ｹ繝�繝ｼ繧ｿ繧ｹ": status}
+        # 列順: A=ステータス → タスクID/工程/機械/優先度 → 履歴1..n → その他 → 最後に特別指定_AI
+        row_status = {"ステータス": status}
         _dto = t.get("dispatch_trial_order")
         row_core = {
-            "繧ｿ繧ｹ繧ｯID": t['task_id'],
-            "蟾･遞句錐": t['machine'],
-            "讖滓｢ｰ蜷�": t.get("machine_name", ""),
-            "蜆ｪ蜈亥ｺｦ": t.get("priority", 999),
+            "タスクID": t['task_id'],
+            "工程名": t['machine'],
+            "機械名": t.get("machine_name", ""),
+            "優先度": t.get("priority", 999),
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
         row_history = {}
         for i in range(max_history_len):
             if i < len(t['assigned_history']):
                 h = t['assigned_history'][i]
-                row_history[f"螻･豁ｴ{i+1}"] = _format_result_task_history_cell(t, h)
+                row_history[f"履歴{i+1}"] = _format_result_task_history_cell(t, h)
             else:
-                row_history[f"螻･豁ｴ{i+1}"] = ""
+                row_history[f"履歴{i+1}"] = ""
 
         try:
             tot_qty = parse_float_safe(t.get("total_qty_m"), 0.0)
@@ -18216,25 +18221,25 @@ def _generate_plan_impl():
         )
 
         row_tail = {
-            "蠢�隕＾P(荳頑嶌)": rov if rov is not None else "",
-            "繧ｿ繧ｹ繧ｯ蜉ｹ邇�": parse_float_safe(t.get("task_eff_factor"), 1.0),
-            "蜉�蟾･騾比ｸｭ": "縺ｯ縺�" if t.get("in_progress") else "縺�縺�縺�",
-            "迚ｹ蛻･謖�螳壹≠繧�": "縺ｯ縺�" if t.get("has_special_remark") else "縺�縺�縺�",
-            "諡�蠖徹P謖�蜷�": (t.get("preferred_operator_raw") or "")[:120],
-            "蝗樒ｭ皮ｴ肴悄": ans_s,
-            "謖�螳夂ｴ肴悄": spec_s,
-            "險育判蝓ｺ貅也ｴ肴悄": basis_s,
+            "必要OP(上書)": rov if rov is not None else "",
+            "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
+            "加工途中": "はい" if t.get("in_progress") else "いいえ",
+            "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
+            "担当OP指名": (t.get("preferred_operator_raw") or "")[:120],
+            "回答納期": ans_s,
+            "指定納期": spec_s,
+            "計画基準納期": basis_s,
             TASK_COL_RAW_INPUT_DATE: kenhan_s,
-            "邏肴悄邱頑･": "縺ｯ縺�" if t.get("due_urgent") else "縺�縺�縺�",
-            "蜉�蟾･髢句ｧ区律": start_req_s,
-            "驟榊ｮ契蜉�蟾･髢句ｧ�": plan_assign_start_s,
-            "驟榊ｮ契蜉�蟾･邨ゆｺ�": plan_assign_end_s,
+            "納期緊急": "はい" if t.get("due_urgent") else "いいえ",
+            "加工開始日": start_req_s,
+            "配完_加工開始": plan_assign_start_s,
+            "配完_加工終了": plan_assign_end_s,
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16: _plan_end_ans_spec16,
-            "邱丞刈蟾･驥�": f"{total_r}R ({t['total_qty_m']}m)",
-            "谿句刈蟾･驥�": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
-            "螳御ｺ�邇�(螳溯｡梧凾轤ｹ)": f"{pct_macro}%",
+            "総加工量": f"{total_r}R ({t['total_qty_m']}m)",
+            "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
+            "完了率(実行時点)": f"{pct_macro}%",
         }
-        row_ai_last = {"迚ｹ蛻･謖�螳喟AI": (t.get("task_special_ai_note") or "")[:300]}
+        row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
         task_results.append(row_data)
         
@@ -18248,20 +18253,20 @@ def _generate_plan_impl():
                     end_disp = cal_end if cal_end is not None else data['end_dt']
                     clock_out_s = end_disp.strftime("%H:%M")
                 else:
-                    clock_out_s = "莨�"
+                    clock_out_s = "休"
                 cal_rows.append({
-                    "譌･莉�": d,
-                    "繝｡繝ｳ繝舌�ｼ": m,
-                    "蜃ｺ蜍､": data['start_dt'].strftime("%H:%M") if data['is_working'] else "莨�",
-                    "騾蜍､": clock_out_s,
-                    "蜉ｹ邇�": data['efficiency'],
-                    "蛯呵�": data['reason'],
+                    "日付": d,
+                    "メンバー": m,
+                    "出勤": data['start_dt'].strftime("%H:%M") if data['is_working'] else "休",
+                    "退勤": clock_out_s,
+                    "効率": data['efficiency'],
+                    "備考": data['reason'],
                 })
 
     utilization_data = []
     for d in sorted_dates:
-        row_data = {"蟷ｴ譛域律": d.strftime("%Y/%m/%d (%a)")}
-        # 縺昴�ｮ譌･縺ｮ繧､繝吶Φ繝医°繧峨Γ繝ｳ繝舌�ｼ蛻･菴懈･ｭ蛻�繧剃ｸ諡ｬ髮�險茨ｼ亥�ｨ繝｡繝ｳ繝舌�ｼﾃ怜�ｨ繧､繝吶Φ繝医�ｮ莠碁㍾繝ｫ繝ｼ繝励ｒ驕ｿ縺代ｋ�ｼ�
+        row_data = {"年月日": d.strftime("%Y/%m/%d (%a)")}
+        # その日のイベントからメンバー別作業分を一括集計（全メンバー×全イベントの二重ループを避ける）
         member_worked_mins = defaultdict(int)
         for ev in events_by_date[d]:
             mins = get_actual_work_minutes(ev["start_dt"], ev["end_dt"], ev["breaks"])
@@ -18291,9 +18296,9 @@ def _generate_plan_impl():
                 
                 worked_mins = member_worked_mins.get(m, 0)
                 ratio = (worked_mins / total_avail_mins) * 100
-                row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}蛻�)"
+                row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}分)"
             else:
-                row_data[m] = "莨�"
+                row_data[m] = "休"
         utilization_data.append(row_data)
         
     df_utilization = pd.DataFrame(utilization_data)
@@ -18305,22 +18310,22 @@ def _generate_plan_impl():
         df_mprio_tbl = pd.DataFrame(
             [
                 {
-                    "蟾･遞句錐": "",
-                    "讖滓｢ｰ蜷�": "",
-                    "繧ｹ繧ｭ繝ｫ蛻励く繝ｼ": "",
-                    "蜆ｪ蜈磯��菴�": "",
-                    "繝｡繝ｳ繝舌�ｼ": "",
-                    "繝ｭ繝ｼ繝ｫ": "",
-                    "蜆ｪ蜈亥ｺｦ蛟､_蟆上＆縺�縺ｻ縺ｩ蜈�": "",
-                    "skills繧ｻ繝ｫ蛟､": "",
-                    "蛯呵�": "繝槭せ繧ｿ skills 縺ｫ縲悟ｷ･遞句錐+讖滓｢ｰ蜷阪榊ｽ｢蠑上�ｮ蛻励′隕九▽縺九ｉ縺ｪ縺�縺九√ョ繝ｼ繧ｿ縺後≠繧翫∪縺帙ｓ縲�",
+                    "工程名": "",
+                    "機械名": "",
+                    "スキル列キー": "",
+                    "優先順位": "",
+                    "メンバー": "",
+                    "ロール": "",
+                    "優先度値_小さいほど先": "",
+                    "skillsセル値": "",
+                    "備考": "マスタ skills に「工程名+機械名」形式の列が見つからないか、データがありません。",
                 }
             ]
         )
 
     _usage_txt = build_gemini_usage_summary_text()
     if _usage_txt:
-        ai_log_data["Gemini_繝医�ｼ繧ｯ繝ｳ繝ｻ譁咎≡繧ｵ繝槭Μ"] = _usage_txt[:50000]
+        ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
 
     _master_abs_for_result_fmt = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
@@ -18328,13 +18333,13 @@ def _generate_plan_impl():
     )
     if _reg_shift_start is not None and _reg_shift_end is not None:
         logging.info(
-            "螳壼ｸｸ譫�: master 繝｡繧､繝ｳ A15/B15 竊� %s �ｽ� %s�ｼ育ｵ先棡縺ｮ螳壼ｸｸ螟悶梧律譎ょｸｯ縲咲捩濶ｲ�ｼ�",
+            "定常枠: master メイン A15/B15 → %s ～ %s（結果の定常外「日時帯」着色）",
             _reg_shift_start.strftime("%H:%M"),
             _reg_shift_end.strftime("%H:%M"),
         )
 
     logging.info(
-        "谿ｵ髫�2: 邨先棡繝悶ャ繧ｯ繧剃ｽ懈�舌＠縺ｾ縺� 竊� %s",
+        "段階2: 結果ブックを作成します → %s",
         os.path.basename(output_filename),
     )
     try:
@@ -18349,8 +18354,8 @@ def _generate_plan_impl():
             df_equipment_by_machine_name.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
             )
-            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='邨先棡_繧ｫ繝ｬ繝ｳ繝繝ｼ(蜃ｺ蜍､邁ｿ)', index=False)
-            df_utilization.to_excel(writer, sheet_name='邨先棡_繝｡繝ｳ繝舌�ｼ蛻･菴懈･ｭ蜑ｲ蜷�', index=False)
+            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
+            df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割合', index=False)
             df_tasks = pd.DataFrame(task_results)
             df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
                 df_tasks, max_history_len
@@ -18366,12 +18371,12 @@ def _generate_plan_impl():
                 vis_list_dedup.append(bool(vis_map.get(c, True)))
             pd.DataFrame(
                 {
-                    "蛻怜錐": task_column_order_dedup,
-                    "陦ｨ遉ｺ": vis_list_dedup,
+                    "列名": task_column_order_dedup,
+                    "表示": vis_list_dedup,
                 }
             ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
             df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
-            pd.DataFrame(list(ai_log_data.items()), columns=["鬆�逶ｮ", "蜀�螳ｹ"]).to_excel(writer, sheet_name='邨先棡_AI繝ｭ繧ｰ', index=False)
+            pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
             df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
@@ -18381,7 +18386,7 @@ def _generate_plan_impl():
             )
 
             logging.info(
-                "谿ｵ髫�2: 險ｭ蛯吶ぎ繝ｳ繝医ｒ逕滓�舌＠縺ｦ縺�縺ｾ縺呻ｼ医ョ繝ｼ繧ｿ驥上↓繧医ｊ謨ｰ蛻�縺九°繧九％縺ｨ縺後≠繧翫∪縺呻ｼ�"
+                "段階2: 設備ガントを生成しています（データ量により数分かかることがあります）"
             )
             _write_results_equipment_gantt_sheet(
                 writer,
@@ -18449,10 +18454,10 @@ def _generate_plan_impl():
             _apply_result_task_history_rich_text(worksheet_tasks, list(df_tasks.columns))
             _apply_result_task_date_columns_blue_font(worksheet_tasks, list(df_tasks.columns))
 
-            # 譛ｪ繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ陦鯉ｼ磯�榊床荳榊庄繝ｻ驟榊床谿具ｼ峨ｒ逶ｮ遶九◆縺帙ｋ
+            # 未スケジュール行（配台不可・配台残）を目立たせる
             status_col_idx = None
             for col_idx, col_name in enumerate(df_tasks.columns, 1):
-                if str(col_name) == "繧ｹ繝�繝ｼ繧ｿ繧ｹ":
+                if str(col_name) == "ステータス":
                     status_col_idx = col_idx
                     break
             if status_col_idx is not None:
@@ -18460,7 +18465,7 @@ def _generate_plan_impl():
                 for r in range(2, worksheet_tasks.max_row + 1):
                     st_val = worksheet_tasks.cell(row=r, column=status_col_idx).value
                     st = str(st_val).strip() if st_val is not None else ""
-                    if st in ("驟榊床荳榊庄", "驟榊床谿�"):
+                    if st in ("配台不可", "配台残"):
                         for c in range(1, max_col + 1):
                             worksheet_tasks.cell(row=r, column=c).fill = unscheduled_fill
 
@@ -18484,8 +18489,8 @@ def _generate_plan_impl():
 
     except OSError as e:
         logging.error(
-            "谿ｵ髫�2: 邨先棡繝悶ャ繧ｯ縺ｮ菴懈�舌�ｻ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆: %s�ｼ�%s�ｼ峨�"
-            "output 蜀�縺ｮ production_plan_multi_day_*.xlsx 繧� Excel 縺ｧ髢九＞縺ｦ縺�縺ｪ縺�縺狗｢ｺ隱阪＠縺ｦ縺上□縺輔＞縲�",
+            "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
+            "output 内の production_plan_multi_day_*.xlsx を Excel で開いていないか確認してください。",
             output_filename,
             e,
         )
@@ -18493,26 +18498,26 @@ def _generate_plan_impl():
 
     try:
         _apply_excel_date_columns_date_only_display(
-            output_filename, "邨先棡_繧ｫ繝ｬ繝ｳ繝繝ｼ(蜃ｺ蜍､邁ｿ)", frozenset({"譌･莉�"})
+            output_filename, "結果_カレンダー(出勤簿)", frozenset({"日付"})
         )
     except Exception as e:
-        logging.warning(f"邨先棡_繧ｫ繝ｬ繝ｳ繝繝ｼ(蜃ｺ蜍､邁ｿ)縺ｮ譌･莉伜�苓｡ｨ遉ｺ謨ｴ蠖｢: {e}")
+        logging.warning(f"結果_カレンダー(出勤簿)の日付列表示整形: {e}")
 
     _stage2_try_copy_column_config_shapes_from_input(
         output_filename,
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
     )
 
-    logging.info(f"螳御ｺ�: '{output_filename}' 繧堤函謌舌＠縺ｾ縺励◆縲�")
+    logging.info(f"完了: '{output_filename}' を生成しました。")
 
     # =========================================================
-    # 5. 笘�霑ｽ蜉�: 繝｡繝ｳ繝舌�ｼ豈弱�ｮ陦悟虚繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ (蛻･繝輔ぃ繧､繝ｫ) 蜃ｺ蜉�
+    # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
     # =========================================================
     member_output_filename = os.path.join(
         output_dir, f"member_schedule_{_stage2_out_stamp}.xlsx"
     )
     
-    # 譎る俣蟶ｯ縺ｯ蜈ｨ繝｡繝ｳ繝舌�ｼ蜈ｱ騾壹〒1蝗槭□縺醍函謌撰ｼ医Γ繝ｳ繝舌�ｼ謨ｰ蛻�縺ｮ驥崎､�險育ｮ励ｒ驕ｿ縺代ｋ�ｼ�
+    # 時間帯は全メンバー共通で1回だけ生成（メンバー数分の重複計算を避ける）
     time_labels = []
     time_grids = []
     curr_dt = datetime.combine(run_date, DEFAULT_START_TIME)
@@ -18526,20 +18531,20 @@ def _generate_plan_impl():
         curr_dt = next_dt
     
     logging.info(
-        "谿ｵ髫�2: 繝｡繝ｳ繝舌�ｼ蛻･繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ繧剃ｽ懈�舌＠縺ｾ縺� 竊� %s",
+        "段階2: メンバー別スケジュールを作成します → %s",
         os.path.basename(member_output_filename),
     )
     try:
         with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
             for m in members:
-                # 蜷�陦後�ｮ霎樊嶌繧貞�晄悄蛹�
-                m_schedule = {t_label: {"譎る俣蟶ｯ": t_label} for t_label in time_labels}
+                # 各行の辞書を初期化
+                m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
             
-                # 蜷�譌･莉倥�ｮ繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ繧貞�励→縺励※蝓九ａ縺ｦ縺�縺�
+                # 各日付のスケジュールを列として埋めていく
                 for d in sorted_dates:
                     d_str = d.strftime("%m/%d (%a)")
                 
-                    # 蜈ｨ譌･髱槫共蜍�: 蟷ｴ莨托ｼ医き繝ｬ繝ｳ繝繝ｼ *�ｼ峨�ｯ縲主ｹｴ莨代上∝ｷ･蝣ｴ莨第律縺ｪ縺ｩ縺ｯ縲惹ｼ代�
+                    # 全日非勤務: 年休（カレンダー *）は『年休』、工場休日などは『休』
                     if m not in attendance_data[d] or not attendance_data[d][m]['is_working']:
                         off_label = _member_schedule_full_day_off_label(
                             attendance_data[d].get(m) if m in attendance_data[d] else None
@@ -18558,7 +18563,7 @@ def _generate_plan_impl():
                     for i, (t_start, t_end) in enumerate(time_grids):
                         t_label = time_labels[i]
                     
-                        # 蛻､螳夂畑縺ｮ荳ｭ髢捺凾蛻ｻ繧定ｨ育ｮ�
+                        # 判定用の中間時刻を計算
                         grid_start_dt = datetime.combine(d, t_start)
                         grid_end_dt = datetime.combine(d, t_end)
                         grid_mid_dt = grid_start_dt + (grid_end_dt - grid_start_dt) / 2
@@ -18575,23 +18580,23 @@ def _generate_plan_impl():
                             if br_txt is not None:
                                 text = br_txt
                         if text == "":
-                            # 隧ｲ蠖薙☆繧九ち繧ｹ繧ｯ繧呈爾縺呻ｼ�subs_list 縺ｯ莠句燕隗｣譫先ｸ医∩�ｼ�
+                            # 該当するタスクを探す（subs_list は事前解析済み）
                             active_ev = next((e for e in events_today if e['start_dt'] <= grid_mid_dt < e['end_dt'] and (e['op'] == m or m in e.get('subs_list', []))), None)
                             if active_ev:
-                                role = "荳ｻ" if active_ev['op'] == m else "陬�"
+                                role = "主" if active_ev['op'] == m else "補"
                                 text = f"[{active_ev['task_id']}] {active_ev['machine']}({role})"
                             else:
-                                text = "" # 菴輔ｂ蜑ｲ繧雁ｽ薙※繧峨ｌ縺ｦ縺�縺ｪ縺�遨ｺ縺肴凾髢�
+                                text = "" # 何も割り当てられていない空き時間
                     
                         m_schedule[t_label][d_str] = text
                     
-                # 繝�繝ｼ繧ｿ繝輔Ξ繝ｼ繝�蛹悶＠縺ｦ繧ｷ繝ｼ繝医↓譖ｸ縺崎ｾｼ縺ｿ
+                # データフレーム化してシートに書き込み
                 df_m = pd.DataFrame(list(m_schedule.values()))
-                cols = ["譎る俣蟶ｯ"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
+                cols = ["時間帯"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
                 df_m = df_m[[c for c in cols if c in df_m.columns]]
                 df_m.to_excel(member_writer, sheet_name=m, index=False)
             
-                # --- 譌｢螳壹ヵ繧ｩ繝ｳ繝医�ｻ鄂ｫ邱壹�ｻ隕句�ｺ縺苓レ譎ｯ�ｼ亥�怜ｹ�縺ｯ VBA 蜿悶ｊ霎ｼ縺ｿ譎ゅ�ｮ AutoFit�ｼ� ---
+                # --- 既定フォント・罫線・見出し背景（列幅は VBA 取り込み時の AutoFit） ---
                 worksheet = member_writer.sheets[m]
                 _apply_output_font_to_result_sheet(worksheet)
                 header_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
@@ -18605,12 +18610,12 @@ def _generate_plan_impl():
 
     except OSError as e:
         logging.error(
-            "谿ｵ髫�2: 繝｡繝ｳ繝舌�ｼ蛻･繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ縺ｮ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆: %s�ｼ�%s�ｼ峨�"
-            "member_schedule_*.xlsx 繧� Excel 縺ｧ髢九＞縺ｦ縺�縺ｪ縺�縺狗｢ｺ隱阪＠縺ｦ縺上□縺輔＞縲�",
+            "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
+            "member_schedule_*.xlsx を Excel で開いていないか確認してください。",
             member_output_filename,
             e,
         )
         raise
 
-    logging.info(f"螳御ｺ�: 蛟倶ｺｺ蛻･繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ繧� '{member_output_filename}' 縺ｫ蜃ｺ蜉帙＠縺ｾ縺励◆縲�")
-    _try_write_main_sheet_gemini_usage_summary("谿ｵ髫�2")
+    logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
+    _try_write_main_sheet_gemini_usage_summary("段階2")
