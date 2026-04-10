@@ -446,6 +446,76 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
 End Sub
 
 '==============================================================================
+' 配台計画_タスク入力 → 「配台試行順番」を段階2と同じ基準で再計算（Python / xlwings）
+' 図形のマクロ: 「アニメ付き_配台試行順番_タスク入力をPythonで更新」（押下アニメ付き）。
+'   本体を直指定するとボタン押下アニメーションが動かない場合があります。
+' ・配台不要を手動でクリアしたあとなど、試行順を付け直したいときに使用。
+' ・Excel で本ブックを開いたまま。保存してから実行推奨。
+' ・業務ロジック.bas に Public Sub アニメ付き_スプラッシュ付きで実行 がある構成向け。
+'==============================================================================
+Public Sub 配台試行順番_配台計画タスク入力をPythonで更新()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "配台試行順番の更新"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets("配台計画_タスク入力")
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「配台計画_タスク入力」がありません。", vbExclamation, "配台試行順番の更新"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    スプラッシュ_手順文を設定 "配台試行順番: Python で配台計画_タスク入力を再計算しています…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -3 -u python\refresh_plan_input_dispatch_trial_order.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, runBat)
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "配台試行順番の更新"
+    Else
+        スプラッシュ_手順文を設定 "「配台計画_タスク入力」の配台試行順番を更新し、行を試行順の昇順に並べ替えました。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
+Public Sub アニメ付き_配台試行順番_タスク入力をPythonで更新()
+    Dim errNum As Long
+    On Error Resume Next
+    Application.Run "アニメ付き_スプラッシュ付きで実行", _
+        "配台計画_タスク入力: 配台試行順番を再計算しています…", _
+        "配台試行順番_配台計画タスク入力をPythonで更新"
+    errNum = Err.Number
+    On Error GoTo 0
+    If errNum <> 0 Then
+        Call 配台試行順番_配台計画タスク入力をPythonで更新
+    End If
+End Sub
+
+'==============================================================================
 ' デバッグ: ブックを開いたまま「どのシートが COM 的に触りにくいか」を一覧する
 ' 開発タブ → マクロ → 「COM操作テスト_全シートをログに出す」を実行。
 ' シート「COM操作テストログ」を末尾に作成し、シートごとの OK/NG を出します。

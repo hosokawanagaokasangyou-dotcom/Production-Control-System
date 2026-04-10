@@ -2438,6 +2438,50 @@ def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None
     return p
 
 
+
+def _apply_planning_sheet_post_load_mutations(
+    df: "pd.DataFrame", wb_path: str, log_prefix: str
+) -> None:
+    """
+    配台計画_タスク入力を DataFrame 化した直後の共通処理。
+    段階2の ``load_planning_tasks_df`` と同じ（設定シート・分割行・配台不要ルール）。
+    """
+    try:
+        _pairs_lr = []
+        _seen_lr = set()
+        for _, _row_lr in df.iterrows():
+            _p = str(_row_lr.get(TASK_COL_MACHINE, "") or "").strip()
+            _m = str(_row_lr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
+            if not _p:
+                continue
+            _k = (
+                _normalize_process_name_for_rule_match(_p),
+                _normalize_equipment_match_key(_m),
+            )
+            if _k in _seen_lr:
+                continue
+            _seen_lr.add(_k)
+            _pairs_lr.append((_p, _m))
+        run_exclude_rules_sheet_maintenance(wb_path, _pairs_lr, log_prefix)
+    except Exception:
+        logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
+    try:
+        _apply_auto_exclude_bunkatsu_duplicate_machine(df, log_prefix=log_prefix)
+    except Exception as ex:
+        logging.warning(
+            "%s: 分割行の配台不要自動設定で例外（続行）: %s",
+            log_prefix,
+            ex,
+        )
+    try:
+        apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)
+    except Exception as ex:
+        logging.warning(
+            "%s: 設定シートによる配台不要適用で例外（続行）: %s",
+            log_prefix,
+            ex,
+        )
+
 def load_planning_tasks_df():
     """
     2段階目用: マクロブック上の「配台計画_タスク入力」シートを読み込む。
@@ -2462,33 +2506,7 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
-    try:
-        _pairs_lr = []
-        _seen_lr = set()
-        for _, _row_lr in df.iterrows():
-            _p = str(_row_lr.get(TASK_COL_MACHINE, "") or "").strip()
-            _m = str(_row_lr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-            if not _p:
-                continue
-            _k = (
-                _normalize_process_name_for_rule_match(_p),
-                _normalize_equipment_match_key(_m),
-            )
-            if _k in _seen_lr:
-                continue
-            _seen_lr.add(_k)
-            _pairs_lr.append((_p, _m))
-        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pairs_lr, "配台シート読込")
-    except Exception:
-        logging.exception("配台シート読込: 設定_配台不要工程の保守で例外（続行）")
-    try:
-        _apply_auto_exclude_bunkatsu_duplicate_machine(df, log_prefix="配台シート読込")
-    except Exception as ex:
-        logging.warning("配台シート読込: 分割行の配台不要自動設定で例外（続行）: %s", ex)
-    try:
-        df = apply_exclude_rules_config_to_plan_df(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
-    except Exception as ex:
-        logging.warning("配台シート読込: 設定シートによる配台不要適用で例外（続行）: %s", ex)
+    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
@@ -3823,6 +3841,168 @@ def apply_result_task_column_layout_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return apply_result_task_column_layout_via_xlwings(p)
+
+_PLAN_INPUT_XLWINGS_ORIG_ROW = "__orig_sheet_row__"
+
+
+def refresh_plan_input_dispatch_trial_order_via_xlwings(
+    workbook_path: str | None = None,
+) -> bool:
+    """
+    Excel で開いたマクロブック内の「配台計画_タスク入力」について、
+    段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
+    再付与し、段階1 出力直前と同じ手順で行を並べ替える。
+    （未保存の編集分も xlwings で反映させるため read_excel は使わない）
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("配台試行順番更新: ブックパスが空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("配台試行順番更新: xlwings がありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+    except Exception as e:
+        logging.error("配台試行順番更新: シート接続に失敗: %s", e)
+        return False
+
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("配台試行順番更新: データ行がありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
+
+    _apply_planning_sheet_post_load_mutations(df, path, "配台試行順番更新")
+
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col not in df.columns:
+        logging.error("配台試行順番更新: 列「%s」がありません。", dto_col)
+        return False
+
+    dto_idx = df.columns.get_loc(dto_col)
+    if isinstance(dto_idx, slice):
+        logging.error("配台試行順番更新: 列「%s」が複数あります。", dto_col)
+        return False
+    for ri in range(len(df)):
+        df.iat[ri, dto_idx] = ""
+
+    data_extract_dt = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("配台試行順番更新: master 読込に失敗: %s", e)
+        return False
+
+    try:
+        fill_plan_dispatch_trial_order_column_stage1(
+            df,
+            run_date,
+            req_map,
+            need_rules,
+            need_combo_col_index,
+            equipment_list,
+        )
+    except Exception as e:
+        logging.exception("配台試行順番更新: 試行順計算に失敗: %s", e)
+        return False
+
+    df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
+    orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
+    df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
+
+    header_row = mat[0] if mat else []
+    n_hdr = len(header_row)
+    if n_hdr == 0:
+        return False
+
+    def _pad_row(r, n):
+        r = list(r) if r is not None else []
+        if len(r) < n:
+            r = r + [None] * (n - len(r))
+        return r
+
+    new_mat = [_pad_row(header_row, n_hdr)]
+    for i in range(len(df_sorted)):
+        orig = orig_list[i]
+        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+        src_row = _pad_row(src_row, n_hdr)
+        out_row = []
+        for j in range(n_hdr):
+            h_cell = header_row[j]
+            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                hname = ""
+            else:
+                hname = str(h_cell).strip()
+            if hname and hname in df_sorted.columns:
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                if pd.isna(v):
+                    out_row.append(None)
+                else:
+                    out_row.append(v)
+            else:
+                out_row.append(src_row[j])
+        new_mat.append(out_row)
+
+    try:
+        n_r = len(new_mat)
+        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+    except Exception as e:
+        logging.exception("配台試行順番更新: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("配台試行順番更新: Save 警告: %s", e)
+
+    logging.info(
+        "配台試行順番更新: 「%s」を %s 行で更新しました。",
+        PLAN_INPUT_SHEET_NAME,
+        len(df_sorted),
+    )
+    return True
+
+
+def refresh_plan_input_dispatch_trial_order_only() -> bool:
+    """TASK_INPUT_WORKBOOK に対する配台試行順番再計算（VBA / cmd 経由のエントリ）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    return refresh_plan_input_dispatch_trial_order_via_xlwings(p)
+
+
+def apply_plan_input_column_layout_only() -> bool:
+    """
+    配台計画_タスク入力の列順・表示のみを適用する予定（VBA 用）。
+    未実装。列の並びは段階1出力または手動整理を使用してください。
+    """
+    logging.warning("apply_plan_input_column_layout_only: not implemented")
+    return False
+
 
 
 def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
