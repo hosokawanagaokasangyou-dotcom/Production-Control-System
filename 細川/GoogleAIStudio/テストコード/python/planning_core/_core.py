@@ -3894,12 +3894,12 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
         logging.error("配台試行順番更新: 列「%s」がありません。", dto_col)
         return False
 
-    dto_idx = df.columns.get_loc(dto_col)
-    if isinstance(dto_idx, slice):
+    _dto_loc = df.columns.get_loc(dto_col)
+    if isinstance(_dto_loc, slice):
         logging.error("配台試行順番更新: 列「%s」が複数あります。", dto_col)
         return False
-    for ri in range(len(df)):
-        df.iat[ri, dto_idx] = ""
+    # Excel 由来で列が float64 のとき "" を入れると pandas が拒否するため、クリアは NaN
+    df[dto_col] = float("nan")
 
     data_extract_dt = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
@@ -12277,7 +12277,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
             # Excel 上は数値セルにし、フィルター・並べ替えをしやすくする（文字列だと数値と別グループになる）
             plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
-            plan_df.iat[iloc, col_idx] = ""
+            plan_df.iat[iloc, col_idx] = float("nan")
 
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
