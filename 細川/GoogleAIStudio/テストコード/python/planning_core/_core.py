@@ -71,9 +71,9 @@ def _agent_ndjson_log(
                 )
                 break
             root = parent
-        log_path = os.path.join(root, "debug-eeaf64.log")
+        log_path = os.path.join(root, "debug-242f09.log")
         payload = {
-            "sessionId": "eeaf64",
+            "sessionId": "242f09",
             "hypothesisId": hypothesis_id,
             "location": location,
             "message": message,
@@ -4627,6 +4627,16 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
             task_id_col_idx = col_idx
             break
     if task_id_col_idx is None:
+        # region agent log
+        _agent_ndjson_log(
+            "H5",
+            "_core.py:_apply_result_task_id_hyperlinks",
+            "no_task_id_column",
+            {
+                "column_names": [str(x) for x in column_names[:20]],
+            },
+        )
+        # endregion
         return
     esc = schedule_sheet_name.replace("'", "''")
     loc_prefix = f"#'{esc}'!"
@@ -4634,6 +4644,18 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
     font_link_on_red = Font(color="FFFFFF", underline="single")
     top = Alignment(wrap_text=False, vertical="top")
     n_tasks = len(sorted_tasks_for_row_order)
+    # region agent log
+    _tw_h = _agent_debug_watch_tids()
+    _agent_ndjson_log(
+        "H5",
+        "_core.py:_apply_result_task_id_hyperlinks",
+        "apply_enter",
+        {
+            "task_id_col_idx": task_id_col_idx,
+            "map_has_watch": {t: (t in task_id_to_schedule_cell) for t in _tw_h},
+        },
+    )
+    # endregion
     for r in range(2, worksheet_tasks.max_row + 1):
         cell = worksheet_tasks.cell(row=r, column=task_id_col_idx)
         raw = cell.value
@@ -4643,6 +4665,15 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
         if not tid:
             continue
         addr = task_id_to_schedule_cell.get(tid)
+        # region agent log
+        if tid in _tw_h:
+            _agent_ndjson_log(
+                "H5",
+                "_core.py:_apply_result_task_id_hyperlinks",
+                "watch_row",
+                {"row": r, "tid": tid, "addr": addr or ""},
+            )
+        # endregion
         if not addr:
             continue
         cell.hyperlink = loc_prefix + addr
@@ -7290,6 +7321,28 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
+        _btp = (qty / speed) / (qty / unit) if unit and speed and qty else 0
+        # region agent log
+        if task_id in _watch_q and str(machine).strip().upper() == "EC":
+            _agent_ndjson_log(
+                "H1",
+                "_core.py:build_task_queue_from_planning_df",
+                "w4_ec_base_time_inputs",
+                {
+                    "tid": task_id,
+                    "machine": machine,
+                    "machine_name": machine_name,
+                    "qty_total": qty_total,
+                    "qty_net": qty,
+                    "speed_raw": str(speed_raw),
+                    "speed_after_ai_global": speed,
+                    "unit_m": float(unit),
+                    "base_time_per_unit": _btp,
+                    "calc_time_val": qty * speed,
+                    "remaining_units": (qty / unit) if unit else 0,
+                },
+            )
+        # endregion
         task_queue.append(
             {
                 "task_id": task_id,
@@ -7314,7 +7367,7 @@ def build_task_queue_from_planning_df(
                 "total_qty_m": int(qty_total),
                 "unit_m": int(unit),
                 "remaining_units": qty / unit if unit else 0,
-                "base_time_per_unit": (qty / speed) / (qty / unit) if unit and speed and qty else 0,
+                "base_time_per_unit": _btp,
                 "assigned_history": [],
                 "calc_time_value": calc_time_val,
                 "required_op": req_op,
@@ -16062,6 +16115,29 @@ def _trial_order_first_schedule_pass(
                     "event_kind": TIMELINE_EVENT_MACHINING,
                 }
             )
+            # region agent log
+            _tw_tl = _agent_debug_watch_tids()
+            _tid_tl = str(task.get("task_id") or "").strip()
+            if _tid_tl in _tw_tl and str(task.get("machine") or "").strip().upper() == "EC":
+                ev = timeline_events[-1]
+                _agent_ndjson_log(
+                    "H2",
+                    "_core.py:timeline.append_machining",
+                    "w4_ec_segment",
+                    {
+                        "start_dt": str(ev.get("start_dt")),
+                        "end_dt": str(ev.get("end_dt")),
+                        "dur_minutes": (
+                            (ev["end_dt"] - ev["start_dt"]).total_seconds() / 60.0
+                            if ev.get("start_dt") and ev.get("end_dt")
+                            else None
+                        ),
+                        "eff_time_per_unit": float(ev.get("eff_time_per_unit") or 0),
+                        "units_done": ev.get("units_done"),
+                        "machine": str(ev.get("machine") or ""),
+                    },
+                )
+            # endregion
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
@@ -18498,6 +18574,20 @@ def _generate_plan_impl():
         timeline_events,
         first_eq_schedule_cell_by_task_id=first_eq_schedule_cell_by_task_id,
     )
+    # region agent log
+    _tw_eq = _agent_debug_watch_tids()
+    for _tid_eq in _tw_eq:
+        _agent_ndjson_log(
+            "H4",
+            "_core.py:generate_plan:post_eq_schedule",
+            "hyperlink_first_cell",
+            {
+                "tid": _tid_eq,
+                "first_eq_cell": first_eq_schedule_cell_by_task_id.get(_tid_eq),
+                "map_size": len(first_eq_schedule_cell_by_task_id),
+            },
+        )
+    # endregion
     df_temp_equipment_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
         equipment_list,
