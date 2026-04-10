@@ -2492,11 +2492,15 @@ def _apply_planning_sheet_post_load_mutations(
     apply_exclude_rules_from_config: bool = True,
 ) -> None:
     """
-    配台計画_タスク入力を DataFrame 化した直後の共通処理。
-    段階2の ``load_planning_tasks_df`` と同じ（設定シートの行同期・分割行の自動配台不要）。
+    配台計画_タスク入力を DataFrame 化した直後の共通処理（設定シートの行同期・分割行の自動配台不要）。
 
-    ``apply_exclude_rules_from_config=False`` のときは「設定_配台不要工程」の C/E に基づく
-    計画シートへの「配台不要」の上書きを行わない（試行順のみ再計算する経路でシート上の手動クリアを残す）。
+    「設定_配台不要工程」の C/E による計画 DataFrame への「配台不要」上書きは **段階1のみ**
+    （``run_stage1_extract`` 内の ``apply_exclude_rules_config_to_plan_df``）。段階2の
+    ``load_planning_tasks_df`` では常に ``apply_exclude_rules_from_config=False`` を渡し、
+    シート上の「配台不要」列をそのまま解釈する。
+
+    ``apply_exclude_rules_from_config=False`` は本関数呼び出し側で明示する（上記のほか、
+    試行順のみ再計算する xlwings 経路でも同様）。
     """
     try:
         _pairs_lr = []
@@ -2541,9 +2545,10 @@ def load_planning_tasks_df():
 
     「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
     メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
-    「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外。
+    「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
     読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
-    「設定_配台不要工程」で工程+機械の組を同期し、C/D/E に基づき配台不要を反映する（シート作成は VBA）。
+    「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は行うが、
+    C/E に基づく計画シートへの配台不要の**再適用**（``apply_exclude_rules_config_to_plan_df``）は行わない（段階1のみ）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
@@ -2577,7 +2582,12 @@ def load_planning_tasks_df():
             },
         )
     # endregion
-    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "配台シート読込")
+    _apply_planning_sheet_post_load_mutations(
+        df,
+        TASKS_INPUT_WORKBOOK,
+        "配台シート読込",
+        apply_exclude_rules_from_config=False,
+    )
     # region agent log
     _watch = _agent_debug_watch_tids()
     for _, row in df.iterrows():
@@ -3947,8 +3957,8 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     （未保存の編集分も xlwings で反映させるため read_excel は使わない）
 
     事前処理は ``_apply_planning_sheet_post_load_mutations``（設定シートの行同期・分割行の自動配台不要）。
-    ただし本経路では **「設定_配台不要工程」の C/E による計画シートへの配台不要の強制上書きは行わない**。
-    シート上で消した「配台不要」は復活しない。段階2の ``load_planning_tasks_df`` では C/E 上書きが有効。
+    **「設定_配台不要工程」の C/E による計画シートへの配台不要の上書きは行わない**（段階1のみ。
+    段階2の ``load_planning_tasks_df`` も同様に再適用しない）。シート上で消した「配台不要」は本経路では復活しない。
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
@@ -7521,10 +7531,12 @@ def _merge_plan_sheet_user_overrides(out_df):
 
 # ---------------------------------------------------------------------------
 # 配台不要（2系統）
-#   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）
+#   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）。
+#       段階2読込後も ``_apply_auto_exclude_bunkatsu_duplicate_machine`` で適用。
 #   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
-#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり
-#   いずれも apply_exclude_rules_config_to_plan_df で計画 DataFrame に反映される。
+#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり。
+#       ``apply_exclude_rules_config_to_plan_df`` による計画 DataFrame への反映は **段階1のみ**。
+#       段階2は配台計画シートの「配台不要」列（段階1出力・手編集の結果）をそのまま使う。
 # ---------------------------------------------------------------------------
 
 def _auto_exclude_cell_empty_for_autofill(v) -> bool:
@@ -9356,7 +9368,12 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
 def apply_exclude_rules_config_to_plan_df(
     df: pd.DataFrame, wb_path: str, log_prefix: str
 ) -> pd.DataFrame:
-    """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。"""
+    """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。
+
+    運用上は **段階1**（``run_stage1_extract``）から呼ぶ。段階2の ``load_planning_tasks_df`` では
+    ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False)`` とし、
+    本関数でシートの C/E を計画 DataFrame に再適用しない。
+    """
     if df is None or df.empty:
         return df
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
