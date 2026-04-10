@@ -4970,39 +4970,6 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
         wb.close()
 
 
-# #region agent log
-def _agent_dbg_ndjson(hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    """Debug ingest: NDJSON 1行をワークスペース直下 debug-e6d621.log へ追記。"""
-    import json
-    import time as _agent_time
-
-    try:
-        _root = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-        )
-        _p = os.path.join(_root, "debug-e6d621.log")
-        with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(
-                json.dumps(
-                    {
-                        "sessionId": "e6d621",
-                        "hypothesisId": hypothesis_id,
-                        "location": location,
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(_agent_time.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: list) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
@@ -5025,12 +4992,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             n_specs,
         )
         app = xw.App(visible=False)
-        _agent_dbg_ndjson(
-            "H4",
-            "_gantt_add_timeline_rounded_rect_labels_xlwings:after_App",
-            "xlwings App created",
-            {"n_specs": n_specs, "rp_basename": os.path.basename(rp)},
-        )
         app.display_alerts = False
         try:
             app.screen_updating = False
@@ -5041,26 +5002,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 pass
         wb = app.books.open(os.path.abspath(rp), update_links=False)
         try:
-            _sn_head = list(wb.sheet_names)[:8]
-        except Exception:
-            _sn_head = []
-        _agent_dbg_ndjson(
-            "H4",
-            "_gantt_add_timeline_rounded_rect_labels_xlwings:after_open",
-            "workbook opened",
-            {"sheet_names_head": _sn_head},
-        )
-        try:
             sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
         except Exception:
             return False
         api_ws = sht.api
-        _agent_dbg_ndjson(
-            "H4",
-            "_gantt_add_timeline_rounded_rect_labels_xlwings:after_sheet",
-            "gantt sheet api ready",
-            {"name": RESULT_SHEET_GANTT_NAME},
-        )
         # msoShapeRoundedRectangle = 5
         _mso_round_rect = 5
         _mso_bring_to_front = 0
@@ -5077,44 +5022,16 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 )
             text = str(sp.get("text") or "").strip()
             if not text:
-                if idx <= 2:
-                    _agent_dbg_ndjson(
-                        "H5",
-                        "_gantt_add_timeline_rounded_rect_labels_xlwings:skip_empty",
-                        "empty text continue",
-                        {"idx": idx},
-                    )
                 continue
             row = int(sp["row"])
             col_s = int(sp["col_s"])
             col_e = int(sp["col_e"])
-            if idx <= 2:
-                _agent_dbg_ndjson(
-                    "H1",
-                    "_gantt_add_timeline_rounded_rect_labels_xlwings:before_range",
-                    "about to read Range geometry",
-                    {"idx": idx, "row": row, "col_s": col_s, "col_e": col_e, "text_len": len(text)},
-                )
             rng = sht.range((row, col_s), (row, col_e))
             left = float(rng.left)
             top = float(rng.top)
             w = float(rng.width)
             h = float(rng.height)
-            if idx <= 2:
-                _agent_dbg_ndjson(
-                    "H1",
-                    "_gantt_add_timeline_rounded_rect_labels_xlwings:after_range_geom",
-                    "Range left/top/w/h read",
-                    {"idx": idx, "left": left, "top": top, "w": w, "h": h},
-                )
             if w <= 0 or h <= 0:
-                if idx <= 2:
-                    _agent_dbg_ndjson(
-                        "H5",
-                        "_gantt_add_timeline_rounded_rect_labels_xlwings:skip_wh",
-                        "skip non-positive w/h",
-                        {"idx": idx, "w": w, "h": h},
-                    )
                 continue
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
@@ -5122,27 +5039,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             label_w = max(w, min_w)
             label_h = min(max(11.0, h * 0.78), max(9.0, h - 1.5))
             label_top = top + (h - label_h) / 2.0
-            if idx <= 2:
-                _agent_dbg_ndjson(
-                    "H2",
-                    "_gantt_add_timeline_rounded_rect_labels_xlwings:before_AddShape",
-                    "calling Shapes.AddShape",
-                    {
-                        "idx": idx,
-                        "left": left,
-                        "label_top": label_top,
-                        "label_w": label_w,
-                        "label_h": label_h,
-                    },
-                )
             shp = api_ws.Shapes.AddShape(_mso_round_rect, left, label_top, label_w, label_h)
-            if idx <= 2:
-                _agent_dbg_ndjson(
-                    "H2",
-                    "_gantt_add_timeline_rounded_rect_labels_xlwings:after_AddShape",
-                    "AddShape returned",
-                    {"idx": idx},
-                )
             try:
                 shp.Name = f"GanttLbl_R{row}_C{col_s}"
             except Exception:
@@ -5169,15 +5066,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             except Exception:
                 pass
             # TextFrame2 は環境によって初回アクセスで COM が長時間ブロックすることがあるため、
-            # レガシー TextFrame / Characters のみ使用する（実行証拠: debug-e6d621.log で H3 直後停止）。
+            # レガシー TextFrame / Characters のみ使用する。
             try:
-                if idx <= 2:
-                    _agent_dbg_ndjson(
-                        "H3",
-                        "_gantt_add_timeline_rounded_rect_labels_xlwings:before_TextFrame_legacy",
-                        "starting TextFrame legacy",
-                        {"idx": idx},
-                    )
                 tf0 = shp.TextFrame
                 try:
                     tf0.MarginLeft = 2
@@ -5202,50 +5092,17 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                     fnt.Color = text_bgr
                 except Exception:
                     pass
-                if idx <= 2:
-                    _agent_dbg_ndjson(
-                        "H3",
-                        "_gantt_add_timeline_rounded_rect_labels_xlwings:after_TextFrame_legacy",
-                        "legacy TextFrame applied",
-                        {"idx": idx},
-                    )
             except Exception:
-                if idx <= 2:
-                    _agent_dbg_ndjson(
-                        "H3",
-                        "_gantt_add_timeline_rounded_rect_labels_xlwings:TextFrame_legacy_failed",
-                        "legacy TextFrame failed; minimal Characters only",
-                        {"idx": idx},
-                    )
                 try:
                     shp.TextFrame.Characters().Text = text
                 except Exception:
                     pass
             n_added += 1
-            if idx <= 2:
-                _agent_dbg_ndjson(
-                    "H3",
-                    "_gantt_add_timeline_rounded_rect_labels_xlwings:after_shape_done",
-                    "first shapes iteration body complete",
-                    {"idx": idx, "n_added": n_added},
-                )
         logging.info(
             "結果_設備ガント: 角丸シェイプ %s 件を反映して保存します（xlwings）…",
             n_added,
         )
-        _agent_dbg_ndjson(
-            "H2",
-            "_gantt_add_timeline_rounded_rect_labels_xlwings:before_wb_save",
-            "all shapes loop done, saving",
-            {"n_added": n_added, "n_specs": n_specs},
-        )
         wb.save()
-        _agent_dbg_ndjson(
-            "H2",
-            "_gantt_add_timeline_rounded_rect_labels_xlwings:after_wb_save",
-            "wb.save returned",
-            {"n_added": n_added},
-        )
         return True
     except Exception as e:
         logging.warning(
