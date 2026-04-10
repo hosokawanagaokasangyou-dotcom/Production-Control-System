@@ -540,6 +540,8 @@ if not API_KEY:
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 # 結果_設備ガントの横軸タイムスロット幅（分）
 GANTT_TIMELINE_SLOT_MINUTES = 5
+# 結果_設備ガントの時刻列（F 列以降）の列幅（Excel / openpyxl の標準単位）
+GANTT_TIMELINE_COLUMN_WIDTH = 3
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -1963,7 +1965,11 @@ def _write_results_equipment_gantt_sheet(
             row += 1
 
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
-    # 列幅・折り返しは VBA 取り込み時（結果_設備ガント_列幅を設定）で設定
+    # 時刻列（F〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
+    if n_slots > 0:
+        gw = float(GANTT_TIMELINE_COLUMN_WIDTH)
+        for ci in range(n_fixed + 1, last_col + 1):
+            ws.column_dimensions[get_column_letter(ci)].width = gw
 
     try:
         ws.page_setup.orientation = "landscape"

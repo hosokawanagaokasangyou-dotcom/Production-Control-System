@@ -636,7 +636,7 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
     If lastCol < 6 Then Exit Sub
     For c = 6 To lastCol
-        ws.Columns(c).ColumnWidth = 7.5   ' 時刻見出し 90° 回転・帯ラベル用に拡大
+        ws.Columns(c).ColumnWidth = 3   ' 時刻グリッド（F 列?）
     Next c
     On Error Resume Next
     ws.Activate
