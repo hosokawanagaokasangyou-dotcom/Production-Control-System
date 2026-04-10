@@ -4985,8 +4985,21 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
     app = None
     wb = None
     try:
+        n_specs = len(specs)
+        logging.info(
+            "結果_設備ガント: xlwings で角丸シェイプを追加します（候補 %s 件）。"
+            " 件数が多いと数分かかり、完了までログが増えない時間が続くことがあります。",
+            n_specs,
+        )
         app = xw.App(visible=False)
         app.display_alerts = False
+        try:
+            app.screen_updating = False
+        except Exception:
+            try:
+                app.api.ScreenUpdating = False
+            except Exception:
+                pass
         wb = app.books.open(os.path.abspath(rp), update_links=False)
         try:
             sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
@@ -4997,7 +5010,16 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         _mso_round_rect = 5
         _mso_bring_to_front = 0
         _xl_move_and_size = 1
-        for sp in specs:
+        _progress_every = 200
+        n_added = 0
+        for idx, sp in enumerate(specs, start=1):
+            if idx == 1 or idx % _progress_every == 0 or idx == n_specs:
+                logging.info(
+                    "結果_設備ガント: シェイプ走査 %s/%s（確定追加 %s 件）…",
+                    idx,
+                    n_specs,
+                    n_added,
+                )
             text = str(sp.get("text") or "").strip()
             if not text:
                 continue
@@ -5073,6 +5095,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                     shp.TextFrame.Characters().Text = text
                 except Exception:
                     pass
+            n_added += 1
+        logging.info(
+            "結果_設備ガント: 角丸シェイプ %s 件を反映して保存します（xlwings）…",
+            n_added,
+        )
         wb.save()
         return True
     except Exception as e:
@@ -5082,6 +5109,14 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         )
         return False
     finally:
+        if app is not None:
+            try:
+                app.screen_updating = True
+            except Exception:
+                try:
+                    app.api.ScreenUpdating = True
+                except Exception:
+                    pass
         if wb is not None:
             try:
                 wb.close()
