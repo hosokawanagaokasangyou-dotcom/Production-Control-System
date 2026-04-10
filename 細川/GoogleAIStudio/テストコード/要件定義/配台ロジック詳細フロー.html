@@ -127,7 +127,7 @@
       <td>マクロ実行ブック</td>
       <td>VBA / RunPython が渡すパス</td>
       <td><span class="mono">TASK_INPUT_WORKBOOK</span></td>
-      <td>メイン「グローバルコメント」、<span class="mono">加工計画DATA</span>（データ抽出日）、<span class="mono">配台計画_タスク入力</span>（段階2入力）、設定シート</td>
+      <td>メイン「グローバルコメント」、<span class="mono">加工計画DATA</span>（抽出時間→データ抽出日の順で基準日時）、<span class="mono">配台計画_タスク入力</span>（段階2入力）、設定シート</td>
     </tr>
     <tr>
       <td>マスタ</td>
@@ -197,7 +197,7 @@
       <td><span class="mono">global_priority_override</span>（工場休業日、<span class="mono">ignore_skill_requirements</span>、<span class="mono">ignore_need_minimum</span>、<span class="mono">abolish_all_scheduling_limits</span>、依頼別の基準日・速度倍率・担当OP指名など）</td>
     </tr>
     <tr>
-      <td><span class="mono">加工計画DATA</span> シートの列 <strong>データ抽出日</strong>（先頭の非空値）</td>
+      <td><span class="mono">加工計画DATA</span> シートの列 <strong>抽出時間</strong>（先頭の非空値）を優先。列が無い・空のときは <strong>データ抽出日</strong></td>
       <td><span class="mono">_extract_data_extraction_datetime()</span></td>
       <td><span class="mono">base_now_dt</span> / <span class="mono">run_date</span> / <span class="mono">macro_run_date</span> / <span class="mono">macro_now_dt</span>（当日開始下限に使用）</td>
     </tr>
@@ -380,7 +380,7 @@ flowchart TB
   <li>設備: <span class="mono">machine_avail_dt[eq_line]</span>（同一設備の直前チャンク終了）。<span class="mono">abolish_all_scheduling_limits</span> なら適用しない</li>
   <li>原反同日: <span class="mono">same_day_raw_start_limit</span>（13:00）</li>
   <li>行指定: <span class="mono">earliest_start_time</span>（備考 AI の <span class="mono">start_time</span> のみ。列 <span class="mono">加工開始時刻_指定</span> は廃止）</li>
-  <li>当日かつデータ抽出日: <span class="mono">macro_now_dt</span> より前に開始しない</li>
+  <li>当日かつ基準日時（抽出時間／データ抽出日）: <span class="mono">macro_now_dt</span> より前に開始しない</li>
 </ul>
 
 <h2 id="sec7">7. 主要なソース内定数・環境変数（抜粋）</h2>

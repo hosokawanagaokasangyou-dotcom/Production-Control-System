@@ -560,6 +560,8 @@ TASK_COL_COMPLETION_FLAG = "加工完了区分"
 TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互換（直接の加工済数量）
 TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完成品数量（換算に使う）
 TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
+# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
+TASK_COL_EXTRACTION_TIME = "抽出時間"
 AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
 # json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不能ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
@@ -828,6 +830,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_DATA_EXTRACTION_DT,
+        TASK_COL_EXTRACTION_TIME,
         PLAN_COL_SPEED_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
         PLAN_COL_PREFERRED_OP,
@@ -1159,18 +1162,16 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 
 def _extract_data_extraction_datetime():
     """
-    `加工計画DATA` シートの `データ抽出日` から datetime を取得する。
+    `加工計画DATA` シートから配台基準日時を取得する。
+    列「抽出時間」の先頭非空値を優先。列が無い・有効値が無いときは「データ抽出日」を試す。
+
+    Returns:
+        tuple[datetime | None, str | None]: (日時, 採用した列名)。両方 None のときは現在時刻フォールバック。
     """
-    try:
-        if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
-            return None
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
-        df.columns = df.columns.str.strip()
-        if TASK_COL_DATA_EXTRACTION_DT not in df.columns:
-            return None
-        s = df[TASK_COL_DATA_EXTRACTION_DT]
+
+    def _first_valid_dt_from_series(series) -> datetime | None:
         first = None
-        for v in s:
+        for v in series:
             if v is None or (isinstance(v, float) and pd.isna(v)):
                 continue
             first = v
@@ -1183,16 +1184,29 @@ def _extract_data_extraction_datetime():
         if isinstance(dt, pd.Timestamp):
             return dt.to_pydatetime()
         return dt if isinstance(dt, datetime) else None
+
+    try:
+        if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+            return None, None
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
+        df.columns = df.columns.str.strip()
+        for col_name in (TASK_COL_EXTRACTION_TIME, TASK_COL_DATA_EXTRACTION_DT):
+            if col_name not in df.columns:
+                continue
+            dt = _first_valid_dt_from_series(df[col_name])
+            if dt is not None:
+                return dt, col_name
+        return None, None
     except Exception:
-        return None
+        return None, None
 
 
 def _extract_data_extraction_datetime_str():
     """
-    `加工計画DATA` シートの `データ抽出日` から「データ吸出し日時」を取得して文字列化する。
+    `加工計画DATA` から基準日時を文字列化する（抽出時間優先、なければデータ抽出日）。
     """
     try:
-        dt = _extract_data_extraction_datetime()
+        dt, _ = _extract_data_extraction_datetime()
         if dt is None:
             return "—"
         return dt.strftime("%Y/%m/%d %H:%M:%S")
@@ -4028,7 +4042,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     else:
         df[dto_col] = ""
 
-    data_extract_dt = _extract_data_extraction_datetime()
+    data_extract_dt, _ = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
 
@@ -9507,7 +9521,7 @@ def run_stage1_extract():
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台不要適用で例外（続行）: %s", ex)
     try:
-        _ext_dt_s1 = _extract_data_extraction_datetime()
+        _ext_dt_s1, _ = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
         fill_plan_dispatch_trial_order_column_stage1(
             out_df,
@@ -16848,8 +16862,8 @@ def _generate_plan_impl():
             "（メインで増員探索する従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
-    # 段階2の基準日時は「マクロ実行時刻」ではなく「データ抽出日」を使用
-    data_extract_dt = _extract_data_extraction_datetime()
+    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「抽出時間」（なければ「データ抽出日」）
+    data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
     data_extract_dt_str = (
@@ -16858,7 +16872,7 @@ def _generate_plan_impl():
     logging.info(
         "計画基準日時: %s（%s）",
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
-        "データ抽出日" if data_extract_dt is not None else "現在時刻フォールバック",
+        plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
@@ -16889,7 +16903,7 @@ def _generate_plan_impl():
         ai_log_data["メイン_グローバル_未適用メモ(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 結果シートは「基準日（データ抽出日）」以降のみ表示・計画対象とする
+    # 結果シートは「基準日（抽出時間／データ抽出日）」以降のみ表示・計画対象とする
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
         logging.error("当日以降の処理対象日付がありません。")
@@ -16954,7 +16968,7 @@ def _generate_plan_impl():
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日」判定と最早開始時刻には基準日時（データ抽出日）を使う
+    # 「当日」判定と最早開始時刻には基準日時（抽出時間優先、なければデータ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
