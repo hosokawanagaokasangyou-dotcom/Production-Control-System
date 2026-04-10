@@ -1271,6 +1271,21 @@ _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     shrink_to_fit=False,
     indent=1,
 )
+
+
+def _gantt_timeline_label_alignment(*, single_slot: bool) -> Alignment:
+    """
+    ガント帯のラベル用配置。
+    1スロット幅のみの帯では列幅が狭く見切れやすいため shrink_to_fit でセル内に収める。
+    複数スロット続く帯では shrink せず、空セルへはみ出して表示しやすくする（Excel の表示特性）。
+    """
+    return Alignment(
+        horizontal="left",
+        vertical="center",
+        wrap_text=False,
+        shrink_to_fit=bool(single_slot),
+        indent=1,
+    )
 # タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
 _GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
 
@@ -1361,6 +1376,7 @@ def _paint_gantt_timeline_row_merged(
             j += 1
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
+        single_slot_segment = col_s == col_e
         for col in range(col_s, col_e + 1):
             c = ws.cell(row=row, column=col)
             c.border = grid_border
@@ -1377,14 +1393,21 @@ def _paint_gantt_timeline_row_merged(
                 if col == col_s:
                     c.value = "(日次始業準備)"
                     c.font = bar_label_font
+                    c.alignment = _gantt_timeline_label_alignment(
+                        single_slot=single_slot_segment
+                    )
                 else:
                     c.value = None
             else:
                 _, tid, gh, pct = st0
                 c.fill = _gantt_cached_pattern_fill(gh)
                 if col == col_s:
-                    c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
+                    tid_s = str(tid or "").strip()
+                    c.value = f"{tid_s} {pct}%" if pct is not None else tid_s
                     c.font = bar_label_font
+                    c.alignment = _gantt_timeline_label_alignment(
+                        single_slot=single_slot_segment
+                    )
                 else:
                     c.value = None
         i = j
