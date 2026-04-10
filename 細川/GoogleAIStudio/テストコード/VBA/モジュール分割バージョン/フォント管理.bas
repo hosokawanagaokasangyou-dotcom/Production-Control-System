@@ -525,11 +525,9 @@ Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
     MacroSplash_SetStep "配台計画: 配台試行順番を小数キーで並べ替えています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\apply_plan_input_dispatch_trial_order_sort_by_float_keys.py" & vbCrLf & _
-             "set PM_AI_RC=%ERRORLEVEL%" & vbCrLf & _
              "echo." & vbCrLf & _
-             "echo [plan-dispatch-trial-float-keys] ERRORLEVEL=%PM_AI_RC%" & vbCrLf & _
-             "pause" & vbCrLf & _
-             "exit /b %PM_AI_RC%"
+             "echo [plan-dispatch-trial-float-keys] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
     Application.ScreenUpdating = prevScreen
 
