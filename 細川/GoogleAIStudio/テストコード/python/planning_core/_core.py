@@ -12228,6 +12228,15 @@ def _attendance_leave_type_is_full_day_paid_leave(leave_type: str) -> bool:
     return lt == "年休" or lt.startswith("年休 ")
 
 
+def _attendance_leave_type_is_calendar_no_dispatch(leave_type) -> bool:
+    """
+    master.xlsm カレンダー由来の休暇区分「-」（半角。NFKC で全角マイナス等も「-」に寄せる）。
+    休日ではないが加工ラインへの配台（OP/AS）には載せない日。勤怠 AI や API 未設定でも確定させる。
+    """
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "-"
+
+
 def _ai_json_bool(v, default: bool = False) -> bool:
     """勤怠備考 AI の真偽値（bool / 数値 / 文字列の揺れを吸収）。"""
     if v is None:
@@ -12373,7 +12382,9 @@ def load_attendance_and_analyze(members):
         if rem:
             remarks_to_analyze.append(f"{d_str}_{m} の備考: {rem}")
         elif lt and lt not in ("通常", ""):
-            remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
+            # 「-」は配台不参加をコード固定（API 不要）。他の休暇区分は従来どおり AI に渡す。
+            if not _attendance_leave_type_is_calendar_no_dispatch(lt):
+                remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -12427,6 +12438,7 @@ def load_attendance_and_analyze(members):
             ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
             ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
               例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
+              休暇区分が「-」（ハイフン1文字）のみのときは **is_holiday false・配台不参加 true**（休日ではないが加工に入れない日のマスタ記号）。
               通常勤務で特に制限が読み取れない場合は false
             ・作業効率: 0.0〜1.0の数値
             
@@ -12479,6 +12491,10 @@ def load_attendance_and_analyze(members):
         if forced_calendar_paid_leave:
             is_holiday = True
         exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
+        if _attendance_leave_type_is_calendar_no_dispatch(leave_type):
+            exclude_from_line = True
+            # 休日ではないが加工配台のみ除外（AI・空シフト推定で is_holiday になるのを防ぐ）
+            is_holiday = False
 
         ai_eff = ai_info.get("作業効率")
         excel_eff = row.get('作業効率')
