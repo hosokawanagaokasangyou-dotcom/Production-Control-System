@@ -24,6 +24,7 @@ import random
 import fnmatch
 import shutil
 import sys
+import threading
 import ctypes
 from contextlib import contextmanager
 from openpyxl import load_workbook
@@ -2401,6 +2402,46 @@ def _gemini_pre_request_jitter_sleep() -> None:
     time_module.sleep(random.uniform(0.0, mx))
 
 
+def _gemini_progress_log_interval_sec() -> float:
+    """Gemini 応答待ち中に INFO を出す間隔（秒）。0 以下でハートビート無効（送信ログのみ）。"""
+    try:
+        return float((os.environ.get("GEMINI_PROGRESS_LOG_INTERVAL_SEC") or "12").strip())
+    except (TypeError, ValueError):
+        return 12.0
+
+
+def _gemini_flush_log_handlers() -> None:
+    try:
+        for h in logging.getLogger().handlers:
+            flush = getattr(h, "flush", None)
+            if flush is not None:
+                flush()
+    except Exception:
+        pass
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+def _gemini_heartbeat_loop(
+    stop: threading.Event, prefix: str, model_id: str, interval_sec: float
+) -> None:
+    """ブロッキング中でもターミナルが固まって見えないよう、一定間隔で待機ログを出す。"""
+    start = time_module.monotonic()
+    while True:
+        if stop.wait(timeout=interval_sec):
+            break
+        elapsed = time_module.monotonic() - start
+        logging.info(
+            "%sGemini 応答待ち... 約%.0f秒経過（モデル: %s）",
+            prefix,
+            elapsed,
+            model_id,
+        )
+        _gemini_flush_log_handlers()
+
+
 def _gemini_generate_content_with_retry(
     client: genai.Client,
     *,
@@ -2427,12 +2468,40 @@ def _gemini_generate_content_with_retry(
         n = 1
     base = max(0.1, float(_GEMINI_RETRY_BACKOFF_BASE))
     prefix = f"{log_label}: " if log_label else ""
+    hb_interval = _gemini_progress_log_interval_sec()
     last_raise: BaseException | None = None
     for mi, mid in enumerate(chain):
         for attempt in range(n):
             _gemini_pre_request_jitter_sleep()
             try:
-                return client.models.generate_content(model=mid, contents=contents), mid
+                logging.info("%sGemini API を呼び出し中（モデル: %s）", prefix, mid)
+                _gemini_flush_log_handlers()
+                stop_hb = threading.Event()
+                hb_thread: threading.Thread | None = None
+                if hb_interval > 0:
+                    hb_thread = threading.Thread(
+                        target=_gemini_heartbeat_loop,
+                        args=(stop_hb, prefix, mid, hb_interval),
+                        name="gemini-progress-hb",
+                        daemon=True,
+                    )
+                    hb_thread.start()
+                t_req = time_module.monotonic()
+                try:
+                    res = client.models.generate_content(model=mid, contents=contents)
+                finally:
+                    stop_hb.set()
+                    if hb_thread is not None:
+                        hb_thread.join(timeout=2.0)
+                elapsed_req = time_module.monotonic() - t_req
+                logging.info(
+                    "%sGemini API 応答を受信しました（約%.1f秒、モデル: %s）",
+                    prefix,
+                    elapsed_req,
+                    mid,
+                )
+                _gemini_flush_log_handlers()
+                return res, mid
             except Exception as e:
                 err_text = _gemini_err_text_for_exc(e)
                 if _gemini_is_model_endpoint_unavailable_error(err_text) and mi < len(chain) - 1:
@@ -12249,7 +12318,10 @@ def load_attendance_and_analyze(members):
             ai_log["勤怠備考_Geminiモデル"] = "—（API キー未設定）"
             logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
         else:
-            logging.info("■ AIが複数日の特記事項を解析中...")
+            logging.info(
+                "■ AIが複数日の特記事項を解析中...（対象 %d 件）",
+                len(remarks_to_analyze),
+            )
             ai_log["勤怠備考_AI_API"] = "あり"
             
             prompt = f"""

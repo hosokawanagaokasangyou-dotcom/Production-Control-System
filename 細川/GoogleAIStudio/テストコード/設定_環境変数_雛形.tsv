@@ -24,6 +24,7 @@ GEMINI_PRICE_USD_OUT_PER_M	0.30
 GEMINI_JPY_PER_USD	150	
 GEMINI_MODEL		単一モデルに固定（空なら planning_core の精度順フォールバック列を使用）
 GEMINI_MODEL_TRY_ORDER		カンマ区切りで試行順を上書き（例: gemini-2.5-pro,gemini-2.5-flash）。上級者向け
+GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	Gemini 応答待ちのハートビートログ間隔（秒）。0 で無効
 EXCLUDE_RULES_TEST_E1234		テスト用（通常空）
 EXCLUDE_RULES_TEST_E1234_ROW	9	
 #TASK_INPUT_WORKBOOK		通常はVBAが設定（シートに書くと上書き）
