@@ -247,9 +247,8 @@ End Sub
 
 ' =========================================================
 ' メインシート A列上段：結果_* シートへのリンク
-' B7～：個人シートへのリンク（同名シートがあるとき）＋ 前日から12日間の出退勤
-' （出退勤は結果_カレンダー(出勤簿) から取得。メンバー一覧は個人_* が無いとき同シートのメンバー列から補完）
-' （シート名は「メイン」「Main」または名前に「メイン」を含むもの）
+' B7～：個人シートへのリンク ＋ 前日から12日間の出退勤
+' （結果_カレンダー(出勤簿) から取得。シート名は「メイン」「Main」または名前に「メイン」を含むもの）
 ' ★段階2(planning_core): 任意で見出しセルに「グローバルコメント」と書き、その直下のセルに「再優先特別記載」を入力可能。
 '   同文言は Gemini で解釈され、指示に応じてスキル無視・必要人数1名化などが通常ルールより最優先で適用される。
 ' ・勤怠セル: master.xlsm メイン A15/B15 の定常開始/終了と同じ「HH:MM / HH:MM」なら通常（背景なし）。読めないときは 08:45 / 17:00 基準。
@@ -915,16 +914,17 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
         wsMain.Cells(7, 3 + i).HorizontalAlignment = xlCenter
     Next i
     
+    ' 個人_* シートからメンバー名一覧（重複なし）
     Set members = CreateObject("Scripting.Dictionary")
-    Set dict = CreateObject("Scripting.Dictionary")
-    Set wsCal = Nothing
-    colDate = 0
-    colMem = 0
-    colIn = 0
-    colOut = 0
-    lastR = 0
+    For Each ws In wb.Worksheets
+        If Left$(ws.Name, 3) = "個人_" Then
+            mn = Mid$(ws.Name, 4)
+            If Len(mn) > 0 And Not members.Exists(mn) Then members.Add mn, mn
+        End If
+    Next ws
     
     ' 結果_カレンダー(出勤簿) から (メンバー,日付) → 出勤/退勤
+    Set dict = CreateObject("Scripting.Dictionary")
     On Error Resume Next
     Set wsCal = wb.Worksheets("結果_カレンダー(出勤簿)")
     On Error GoTo EH
@@ -949,24 +949,9 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
         End If
     End If
     
-    ' 個人_* シートからメンバー名一覧（重複なし）。無い場合は上記カレンダーのメンバー列から一意に拾う。
-    For Each ws In wb.Worksheets
-        If Left$(ws.Name, 3) = "個人_" Then
-            mn = Mid$(ws.Name, 4)
-            If Len(mn) > 0 And Not members.Exists(mn) Then members.Add mn, mn
-        End If
-    Next ws
-    
-    If members.Count = 0 And Not wsCal Is Nothing And colMem > 0 And lastR >= 2 Then
-        For r = 2 To lastR
-            mn = Trim$(CStr(wsCal.Cells(r, colMem).Value))
-            If Len(mn) > 0 And Not members.Exists(mn) Then members.Add mn, mn
-        Next r
-    End If
-    
     cnt = members.Count
     If cnt = 0 Then
-        wsMain.Cells(8, 2).Value = "（個人_* も結果_カレンダー(出勤簿) からもメンバーがありません）"
+        wsMain.Cells(8, 2).Value = "（個人_* のシートがありません）"
         メインシート_フォント属性を適用 wsMain.Cells(8, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
         lastMemberRow = 8
         GoTo CleanExit

@@ -2557,8 +2557,10 @@ Public Sub 段階2_取り込み結果を報告()
     Dim p As String
     p = ThisWorkbook.path
     
-    If m_stage2PlanImported Then
-        MacroSplash_SetStep "計画生成が完了しました（結果シートを取り込みました）。"
+    If m_stage2PlanImported And m_stage2MemberImported Then
+        MacroSplash_SetStep "計画生成が完了しました（結果シートと個人シートを取り込みました）。"
+    ElseIf m_stage2PlanImported Then
+        MacroSplash_SetStep "計画生成が完了しました（結果シートのみ。個人別 member_schedule は見つかりませんでした）。"
     ElseIf m_stage2MemberImported Then
         MacroSplash_SetStep "計画生成が完了しました（個人シートのみ。production_plan は見つかりませんでした）。"
     Else
@@ -2572,7 +2574,6 @@ End Sub
 
 ' =========================================================
 ' 段階2コア: plan_simulation_stage2.py → 結果取り込み・メイン更新
-' ※個人別 member_schedule のマクロブックへのシート取り込みは行わない（Python 出力は output に残る）。
 ' MsgBox は出さない。m_lastStage2ErrMsg / m_lastStage2ExitCode / m_stage2* を参照
 ' preserveStage1LogOnLogSheet=True … 段階1+2 連続時。LOG に段階1ログを残してから段階2を追記
 ' =========================================================
@@ -2596,6 +2597,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     Dim sourceWs As Worksheet
     Dim ws As Worksheet
     Dim sheetName As String
+    Dim memberWb As Workbook
+    Dim memberPath As String
+    Dim newSheetName As String
     Dim planImported As Boolean
     Dim memberImported As Boolean
     Dim warnRow2 As Long
@@ -2867,7 +2871,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' ---------------------------------------------------------
     ' 7. 生成されたExcelファイルのシートをこのブックに取り込む
     ' ---------------------------------------------------------
-    MacroSplash_SetStep "段階2: 出力 xlsx から結果シートを取り込みます…"
+    MacroSplash_SetStep "段階2: 出力 xlsx から結果シート・個人シートを取り込みます…"
     planImported = False
     memberImported = False
     Set targetWb = ThisWorkbook
@@ -2977,6 +2981,56 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         targetWb.Sheets(1).Activate
     End If
     
+    MacroSplash_SetStep "段階2: 個人別スケジュール（member_schedule）を取り込んでいます…"
+    ' 7b. member_schedule_*.xlsx（メンバー名シート → 個人_プレフィックスで取り込み）
+    memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
+    If Len(memberPath) > 0 Then
+        Application.ScreenUpdating = False
+        Application.DisplayAlerts = False
+        
+        Set memberWb = Workbooks.Open(memberPath)
+        
+        For Each sourceWs In memberWb.Sheets
+            sheetName = sourceWs.Name
+            newSheetName = SafePersonalSheetName(sheetName)
+            
+            ' 既に「個人_*」シートがある場合は削除せず、内容をクリアしてから上書き
+            On Error Resume Next
+            Set ws = targetWb.Sheets(newSheetName)
+            If Err.Number <> 0 Then
+                Err.Clear
+                On Error GoTo ErrHandler
+                sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
+                Set ws = 取込ブック内のコピー先シートを取得(targetWb, sheetName)
+                On Error Resume Next
+                ws.Name = newSheetName
+                On Error GoTo ErrHandler
+            Else
+                Err.Clear
+                On Error GoTo ErrHandler
+                ws.Cells.Clear
+                sourceWs.UsedRange.Copy Destination:=ws.Range("A1")
+            End If
+            
+            ' 個人_* もセルフォントは上書きしない（同上）
+            ' 個人シートの列幅も Python 側では設定しない（同上 AutoFit）
+            結果シート_列幅_AutoFit安定 ws
+            ws.UsedRange.Borders.LineStyle = 1
+            ws.UsedRange.Borders.Weight = 2
+            With ws.UsedRange.Rows(1)
+                .Font.Bold = True
+                .Interior.Color = RGB(226, 239, 218)
+            End With
+        Next sourceWs
+        
+        memberWb.Close SaveChanges:=False
+        Set memberWb = Nothing
+        memberImported = True
+        
+        Application.DisplayAlerts = prevDisplayAlerts
+        Application.ScreenUpdating = prevScreenUpdating
+    End If
+    
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
@@ -3019,6 +3073,10 @@ Finish:
     If Not sourceWb Is Nothing Then
         sourceWb.Close SaveChanges:=False
         Set sourceWb = Nothing
+    End If
+    If Not memberWb Is Nothing Then
+        memberWb.Close SaveChanges:=False
+        Set memberWb = Nothing
     End If
     On Error GoTo 0
     
