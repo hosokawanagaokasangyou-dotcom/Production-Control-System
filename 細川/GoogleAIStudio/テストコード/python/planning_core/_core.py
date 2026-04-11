@@ -8733,7 +8733,7 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
     """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。
 
     旧実装は ``list(xw.apps)`` / ``xw.apps.active`` / ``for app in xw.apps`` が
-    環境によって COM 無応答となり段階1が停止したため廃止（debug-a71bb9 で確認）。
+    環境によって COM 無応答となり段階1が停止したため廃止。
     マクロブックの保存は ``_xlwings_attach_open_macro_workbook`` が新規 ``xw.App`` で開く。
     """
     return None
