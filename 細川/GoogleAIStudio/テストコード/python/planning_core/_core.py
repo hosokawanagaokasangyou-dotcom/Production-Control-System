@@ -12027,6 +12027,52 @@ def _parse_attendance_overtime_end_optional(v) -> time | None:
     return _excel_scalar_to_time_optional(v)
 
 
+def _resolve_attendance_overtime_end(
+    raw,
+    *,
+    base_end_t: time,
+    curr_date: date,
+) -> time | None:
+    """
+    勤怠「残業終業」列の解釈（いずれかで成功したらその time を返す）。
+
+    1) 時刻（文字列 HH:MM、datetime、time、Excel 0<値<1 の日内小数）
+    2) 定時退勤からの延長「分」: 1〜720 の整数（Excel 数値・文字列の整数も可）
+    """
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    if isinstance(raw, bool):
+        return None
+    t_clock = _parse_attendance_overtime_end_optional(raw)
+    if t_clock is not None:
+        return t_clock
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.isdigit():
+            try:
+                raw = int(s)
+            except ValueError:
+                return None
+    if isinstance(raw, (int, float)):
+        x = float(raw)
+        if 0 < x < 1:
+            try:
+                new_dt = datetime.combine(curr_date, time(0, 0)) + timedelta(days=x)
+                return new_dt.time()
+            except (OverflowError, ValueError):
+                return None
+        if x == int(x) and 1 <= int(x) <= 720:
+            try:
+                base_dt = datetime.combine(curr_date, base_end_t)
+                new_dt = base_dt + timedelta(minutes=int(x))
+                if new_dt.date() != curr_date:
+                    return time(23, 59, 59)
+                return new_dt.time()
+            except (OverflowError, ValueError):
+                return None
+    return None
+
+
 # region agent log
 def _agent_debug_session_b7ba7c_ndjson(
     hypothesis_id: str, location: str, message: str, data: dict, run_id: str = "pre"
@@ -12310,7 +12356,11 @@ def load_attendance_and_analyze(members):
         ot_applied_flag = False
         ot_end: time | None = None
         if not is_holiday:
-            ot_end = _parse_attendance_overtime_end_optional(row.get(ATT_COL_OT_END))
+            ot_end = _resolve_attendance_overtime_end(
+                row.get(ATT_COL_OT_END),
+                base_end_t=base_end_t,
+                curr_date=curr_date,
+            )
             if ot_end is not None:
                 end_t = ot_end
                 ot_applied_flag = True
