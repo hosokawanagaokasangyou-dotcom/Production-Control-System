@@ -132,6 +132,8 @@ Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
 Public Const SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR As String = "btn_Main_AI_RemarksCacheClear"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
+' マクロブックと同じフォルダに置く（設定_環境変数_雛形TSVから同期 が読み込む）
+Public Const WORKBOOK_ENV_TEMPLATE_TSV_FILE As String = "設定_環境変数_雛形.tsv"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
 Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
@@ -149,7 +151,7 @@ Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
-' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
+' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。雛形 TSV とシートを一致させるときは Gemini連携 の 設定_環境変数_雛形TSVから同期（B/C は既存キー保持・雛形外の行は削除）。
 ' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウンはインライン一覧。F2:F4 は候補の目安）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 成功完了時は一覧更新のあと「ブックへ適用」まで自動実行（適用末尾で再び一覧同期）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
 '   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。

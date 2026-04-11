@@ -1436,6 +1436,261 @@ ErrHandler:
 End Sub
 
 ' =========================================================
+' 設定_環境変数: 雛形 TSV からシートへ同期（不足行の追加・雛形に無い変数行の削除、B/C は既存キーは保持）
+' ・同フォルダの WORKBOOK_ENV_TEMPLATE_TSV_FILE（共通定義）を UTF-8 で読む
+' ・1 行目が見出しのときはデータは 2 行目から。同期後も見出し＋雛形の順でデータ行を書き直す
+' =========================================================
+Private Function 設定_環境変数_TSVのA列は見出し(ByVal keyCell As String) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(keyCell))
+    If Len(t) = 0 Then
+        設定_環境変数_TSVのA列は見出し = False
+        Exit Function
+    End If
+    設定_環境変数_TSVのA列は見出し = (t = "変数名" Or t = "環境変数" Or t = "name" Or t = "key" Or t = "env")
+End Function
+
+Private Sub 設定_環境変数_TSVの1行を列へ(ByVal line As String, ByRef outKey As String, ByRef outDefB As String, ByRef outDescC As String, ByRef ok As Boolean)
+    Dim parts() As String
+    Dim ub As Long
+    Dim j As Long
+    Dim sb As String
+
+    ok = False
+    outKey = "": outDefB = "": outDescC = ""
+
+    line = Trim$(line)
+    If Len(line) = 0 Then Exit Sub
+    If Left$(line, 1) = "#" And InStr(line, vbTab) = 0 Then
+        ' コメント行のみ（タブ無し）のときはスキップ。先頭#付き変数名はタブありで通す
+        Exit Sub
+    End If
+
+    parts = Split(line, vbTab)
+    ub = UBound(parts)
+    If ub < 0 Then Exit Sub
+
+    outKey = Trim$(parts(0))
+    If Len(outKey) = 0 Then Exit Sub
+    If 設定_環境変数_TSVのA列は見出し(outKey) Then Exit Sub
+
+    If ub >= 1 Then
+        outDefB = CStr(parts(1))
+    Else
+        outDefB = ""
+    End If
+
+    If ub >= 2 Then
+        sb = CStr(parts(2))
+        For j = 3 To ub
+            sb = sb & vbTab & CStr(parts(j))
+        Next j
+        outDescC = sb
+    Else
+        outDescC = ""
+    End If
+
+    ok = True
+End Sub
+
+Public Sub 設定_環境変数_雛形TSVから同期()
+    Dim tsvPath As String
+    Dim wbFolder As String
+    Dim body As String
+    Dim lines() As String
+    Dim i As Long
+    Dim li As String
+    Dim k As String
+    Dim defB As String
+    Dim descC As String
+    Dim rowOk As Boolean
+
+    Dim colK As Collection
+    Dim colDefB As Collection
+    Dim colDefC As Collection
+    Dim seenTsv As Object
+
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+    Dim prevScreen As Boolean
+    Dim dataStart As Long
+    Dim r As Long
+    Dim lastOld As Long
+    Dim nk As String
+
+    Dim oldB As Object
+    Dim oldC As Object
+    Dim oldHad As Object
+
+    Dim outRow As Long
+    Dim j As Long
+    Dim nTsv As Long
+    Dim nOldData As Long
+    Dim nAfter As Long
+    Dim msg As String
+
+    On Error GoTo ErrHandler
+
+    wbFolder = ThisWorkbook.path
+    If Len(wbFolder) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください（雛形 TSV はブックと同じフォルダを参照します）。", vbExclamation
+        Exit Sub
+    End If
+
+    tsvPath = wbFolder & "\" & WORKBOOK_ENV_TEMPLATE_TSV_FILE
+    If Len(Dir(tsvPath)) = 0 Then
+        MsgBox "次の雛形ファイルが見つかりません。" & vbCrLf & tsvPath, vbCritical
+        Exit Sub
+    End If
+
+    body = GeminiReadUtf8File(tsvPath)
+    If Len(body) = 0 Then
+        MsgBox "雛形 TSV が空か読み取れません: " & tsvPath, vbCritical
+        Exit Sub
+    End If
+    If AscW(Left$(body, 1)) = &HFEFF Then
+        body = Mid$(body, 2)
+    End If
+
+    Set colK = New Collection
+    Set colDefB = New Collection
+    Set colDefC = New Collection
+    Set seenTsv = CreateObject("Scripting.Dictionary")
+    seenTsv.CompareMode = 1
+
+    body = Replace(Replace(body, vbCrLf, vbLf), vbCr, vbLf)
+    lines = Split(body, vbLf)
+    For i = LBound(lines) To UBound(lines)
+        li = lines(i)
+        Call 設定_環境変数_TSVの1行を列へ(li, k, defB, descC, rowOk)
+        If Not rowOk Then GoTo NextLine
+        nk = LCase$(k)
+        If seenTsv.Exists(nk) Then GoTo NextLine
+        seenTsv.Add nk, True
+        colK.Add k
+        colDefB.Add defB
+        colDefC.Add descC
+NextLine:
+    Next i
+
+    nTsv = colK.Count
+    If nTsv = 0 Then
+        MsgBox "雛形 TSV に有効な変数行がありません。", vbExclamation
+        Exit Sub
+    End If
+
+    prevDA = Application.DisplayAlerts
+    prevScreen = Application.ScreenUpdating
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_WORKBOOK_ENV
+    End If
+
+    If StrComp(ws.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 526, , "シート名を「" & SHEET_WORKBOOK_ENV & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+        dataStart = 2
+    ElseIf 設定_環境変数_1行目は見出し(ws) Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+        dataStart = 2
+    Else
+        ' 見出し無しでデータが 1 行目からの構成は、同期で見出しを付けずに上書きしない（手動構成を壊さない）
+        Application.DisplayAlerts = prevDA
+        Application.ScreenUpdating = prevScreen
+        MsgBox "「" & SHEET_WORKBOOK_ENV & "」の 1 行目が見出し（変数名）ではありません。" & vbCrLf & _
+               "先に「設定_環境変数_シートを確保」を実行するか、1 行目を 変数名 / 値 / 説明 にしてください。", vbExclamation
+        Exit Sub
+    End If
+
+    Set oldB = CreateObject("Scripting.Dictionary")
+    oldB.CompareMode = 1
+    Set oldC = CreateObject("Scripting.Dictionary")
+    oldC.CompareMode = 1
+    Set oldHad = CreateObject("Scripting.Dictionary")
+    oldHad.CompareMode = 1
+
+    lastOld = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastOld < dataStart Then lastOld = dataStart - 1
+
+    nOldData = 0
+    For r = dataStart To lastOld
+        k = Trim$(CStr(ws.Cells(r, 1).Value))
+        If Len(k) > 0 Then
+            nk = LCase$(k)
+            If Not oldHad.Exists(nk) Then
+                oldHad.Add nk, True
+                oldB.Add nk, ws.Cells(r, 2).Value
+                oldC.Add nk, ws.Cells(r, 3).Value
+                nOldData = nOldData + 1
+            End If
+        End If
+    Next r
+
+    outRow = dataStart
+    For j = 1 To nTsv
+        k = CStr(colK(j))
+        nk = LCase$(k)
+        ws.Cells(outRow, 1).Value = k
+        If oldHad.Exists(nk) Then
+            ws.Cells(outRow, 2).Value = oldB(nk)
+            ws.Cells(outRow, 3).Value = oldC(nk)
+        Else
+            ws.Cells(outRow, 2).Value = colDefB(j)
+            ws.Cells(outRow, 3).Value = colDefC(j)
+        End If
+        outRow = outRow + 1
+    Next j
+
+    nAfter = outRow - dataStart
+    If lastOld >= outRow Then
+        ws.Range(ws.Cells(outRow, 1), ws.Cells(lastOld, 3)).ClearContents
+    End If
+
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevScreen
+
+    msg = "雛形 TSV から「" & SHEET_WORKBOOK_ENV & "」を同期しました。" & vbCrLf & _
+          "・雛形の変数数: " & CStr(nTsv) & vbCrLf & _
+          "・同期前のデータ行（重複除く）: " & CStr(nOldData) & vbCrLf & _
+          "・同期後のデータ行: " & CStr(nAfter) & vbCrLf & vbCrLf & _
+          "既存の変数名の B・C 列は保持し、雛形に無い行は削除しました。"
+    MsgBox msg, vbInformation
+    Exit Sub
+
+ErrHandler:
+    On Error Resume Next
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevScreen
+    On Error GoTo 0
+    MsgBox "設定_環境変数_雛形TSVから同期 でエラー: " & CStr(Err.Number) & " " & Err.Description, vbCritical
+End Sub
+
+' =========================================================
 ' 設定_シート表示: タブの表示/非表示と並び順をシート上で編集しマクロで反映
 ' ・一覧をブックから再取得 … 全シートを列挙。シート名が一致する行は並び順・表示の意図を維持し、A 列は 1 からの連番に振り直す。C 列はドロップダウン（インライン一覧。F 列は候補表示）
 ' ・ブックへ適用 … A?C の内容で Visible と Move を実行（当シートは必ず表示）。成功後、自動で「一覧をブックから再取得」して表を現状に同期
