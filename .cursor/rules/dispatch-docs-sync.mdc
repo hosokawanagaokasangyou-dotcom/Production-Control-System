@@ -1,0 +1,18 @@
+---
+description: 配台ロジック変更の対象範囲と正本の整理。
+alwaysApply: true
+---
+
+# 配台ロジック変更（対象と正本）
+
+## 対象の目安（例）
+
+- `python/planning_core/_core.py` の `generate_plan`、日次割付、チーム割当、need／surplus、納期リトライ、§A／§B 関連
+- 段階2エントリやマスタ読込が配台に直結する変更（`plan_simulation_stage2.py`、need シート解釈の変更など）
+
+## 正本
+
+- **実装の正** … ソースコード
+- **業務・仕様の文章の正（リポジトリ内）** … `配台ルール.md`
+
+※ ローカルコミット手順・メッセージは `.cursor/rules/pre-edit-git-commit-push.mdc` に従う。

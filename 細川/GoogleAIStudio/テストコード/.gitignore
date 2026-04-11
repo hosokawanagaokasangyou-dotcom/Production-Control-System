@@ -1,0 +1,13 @@
+~$*
+
+__pycache__/
+*.pyc
+
+# 配台シミュレーションの生成物（日次の xlsx 等）。リポジトリには含めない。
+output/
+
+# 実行ログ・デバッグ出力（execution_log、トレース、AI 一時ファイル等）。ローカルのみ。
+log/
+python/log/
+# Cursor / エージェント用 NDJSON デバッグログ（ワークブックと同フォルダに生成されうる）
+debug-*.log
