@@ -93,7 +93,18 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # Gemini API キーは TASK_INPUT_WORKBOOK 確定後、下記「設定」B1 の JSON から解決（平文または format_version 2 の暗号化）。
 # 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
 
-GEMINI_MODEL_FLASH = "gemini-3.1-flash-lite-preview"
+# Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
+# https://ai.google.dev/gemini-api/docs/models
+# 精度の高い順。利用不可・未提供のときは _gemini_generate_content_with_retry が次点へ進む。
+GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
+    "gemini-3-flash-preview",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-2.5-flash-lite",
+)
+# 既定の先頭モデル（従来名 GEMINI_MODEL_FLASH のまま参照している箇所向け）
+GEMINI_MODEL_FLASH = GEMINI_MODEL_IDS_BY_QUALITY[0]
 # 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
 # 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
@@ -2349,6 +2360,40 @@ def _gemini_is_quota_style_error(err_text: str) -> bool:
     return ("429" in err_text) or ("RESOURCE_EXHAUSTED" in t)
 
 
+def _gemini_try_order_from_env() -> tuple[str, ...] | None:
+    raw = (os.environ.get("GEMINI_MODEL_TRY_ORDER") or "").strip()
+    if not raw:
+        return None
+    parts = tuple(p.strip() for p in raw.split(",") if p.strip())
+    return parts or None
+
+
+def _gemini_effective_model_chain(model: str | None) -> tuple[str, ...]:
+    """引数 model があればそれのみ。なければ GEMINI_MODEL（単一固定）または精度順リスト。"""
+    if model is not None and str(model).strip():
+        return (str(model).strip(),)
+    pinned = (os.environ.get("GEMINI_MODEL") or "").strip()
+    if pinned:
+        return (pinned,)
+    ovr = _gemini_try_order_from_env()
+    if ovr is not None:
+        return ovr
+    return GEMINI_MODEL_IDS_BY_QUALITY
+
+
+def _gemini_is_model_endpoint_unavailable_error(err_text: str) -> bool:
+    """モデル未提供・モデル名不正など、別モデルでの再試行が合理的な失敗。"""
+    t = err_text.upper()
+    u = err_text.lower()
+    if "NOT_FOUND" in t and ("MODEL" in t or "MODELS/" in t):
+        return True
+    if "404" in err_text and "model" in u:
+        return True
+    if ("DOES NOT EXIST" in t or "WAS NOT FOUND" in t) and "model" in u:
+        return True
+    return False
+
+
 def _gemini_pre_request_jitter_sleep() -> None:
     mx = max(0.0, _GEMINI_PRE_REQUEST_JITTER_MAX)
     if mx <= 0.0:
@@ -2364,45 +2409,65 @@ def _gemini_generate_content_with_retry(
     max_attempts: int | None = None,
     log_label: str = "",
 ):
-    """generate_content を一時エラー時に再試行する（Flash 系 API 共通）。
+    """generate_content を一時エラー時に再試行する（Gemini generateContent 共通）。
 
+    - モデル列は GEMINI_MODEL_IDS_BY_QUALITY（精度高い順）。環境変数 GEMINI_MODEL で単一固定、
+      GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。引数 model を渡したときはその1件のみ。
+    - モデル未提供などのときは列の次点へ進む（429/503 等の一時エラーでは切り替えない）。
     - 各試行の直前: 0〜_GEMINI_PRE_REQUEST_JITTER_MAX の乱数待機（同時リクエストのばらつき）
     - 待機時間は二系統:
       (1) 429 / RESOURCE_EXHAUSTED で本文に retry 秒数があるときはその値（クリップ）＋小ジッター
       (2) それ以外の一時エラーは指数バックオフ＋ジッター（503 / UNAVAILABLE 等）
+
+    戻り値: (応答オブジェクト, 実際に成功したモデル ID)
     """
-    mid = model if model is not None else GEMINI_MODEL_FLASH
+    chain = _gemini_effective_model_chain(model)
     n = max_attempts if max_attempts is not None else _GEMINI_RETRY_MAX_ATTEMPTS
     if n < 1:
         n = 1
     base = max(0.1, float(_GEMINI_RETRY_BACKOFF_BASE))
-    for attempt in range(n):
-        _gemini_pre_request_jitter_sleep()
-        try:
-            return client.models.generate_content(model=mid, contents=contents)
-        except Exception as e:
-            err_text = _gemini_err_text_for_exc(e)
-            if attempt >= n - 1 or not _gemini_is_transient_api_error(err_text):
-                raise
-            wait_sec = None
-            if _gemini_is_quota_style_error(err_text):
-                rs = extract_retry_seconds(err_text)
-                if rs is not None:
-                    wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
-            if wait_sec is None:
-                pow_part = base * (2**attempt)
-                jitter = random.uniform(0.0, min(4.0, base * 2.0))
-                wait_sec = min(pow_part + jitter, 90.0)
-            prefix = f"{log_label}: " if log_label else ""
-            logging.warning(
-                "%sGemini API 一時エラー（試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
-                prefix,
-                attempt + 1,
-                n,
-                err_text[:800],
-                wait_sec,
-            )
-            time_module.sleep(wait_sec)
+    prefix = f"{log_label}: " if log_label else ""
+    last_raise: BaseException | None = None
+    for mi, mid in enumerate(chain):
+        for attempt in range(n):
+            _gemini_pre_request_jitter_sleep()
+            try:
+                return client.models.generate_content(model=mid, contents=contents), mid
+            except Exception as e:
+                err_text = _gemini_err_text_for_exc(e)
+                if _gemini_is_model_endpoint_unavailable_error(err_text) and mi < len(chain) - 1:
+                    logging.warning(
+                        "%sGemini モデル %s が利用できません: %s — 次モデルへ切り替えます。",
+                        prefix,
+                        mid,
+                        err_text[:800],
+                    )
+                    last_raise = e
+                    break
+                if attempt >= n - 1 or not _gemini_is_transient_api_error(err_text):
+                    raise
+                wait_sec = None
+                if _gemini_is_quota_style_error(err_text):
+                    rs = extract_retry_seconds(err_text)
+                    if rs is not None:
+                        wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
+                if wait_sec is None:
+                    pow_part = base * (2**attempt)
+                    jitter = random.uniform(0.0, min(4.0, base * 2.0))
+                    wait_sec = min(pow_part + jitter, 90.0)
+                logging.warning(
+                    "%sGemini API 一時エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                    prefix,
+                    mid,
+                    attempt + 1,
+                    n,
+                    err_text[:800],
+                    wait_sec,
+                )
+                time_module.sleep(wait_sec)
+    if last_raise is not None:
+        raise last_raise
+    raise RuntimeError("Gemini: モデル列が空です。")
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
@@ -3630,10 +3695,10 @@ F) **global_day_process_operator_rules** （配列・必須）
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = _gemini_generate_content_with_retry(
+        res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="メイン再優先特記"
         )
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        record_gemini_response_usage(res, gem_model_used)
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
             logging.warning(
@@ -7080,10 +7145,10 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
     client = genai.Client(api_key=API_KEY)
     try:
-        res = _gemini_generate_content_with_retry(
+        res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="タスク特別指定"
         )
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        record_gemini_response_usage(res, gem_model_used)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
             _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
@@ -8494,10 +8559,10 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
         logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = _gemini_generate_content_with_retry(
+        res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="配台不要ルールD→E"
         )
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        record_gemini_response_usage(res, gem_model_used)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_last_response.txt")
         try:
@@ -8566,10 +8631,10 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
         logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
     try:
         client = genai.Client(api_key=API_KEY)
-        res = _gemini_generate_content_with_retry(
+        res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="配台不要ルールD→Eバッチ"
         )
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        record_gemini_response_usage(res, gem_model_used)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_response.txt")
         try:
@@ -12205,10 +12270,10 @@ def load_attendance_and_analyze(members):
             """
             try:
                 client = genai.Client(api_key=API_KEY)
-                res = _gemini_generate_content_with_retry(
+                res, gem_model_used = _gemini_generate_content_with_retry(
                     client, contents=prompt, log_label="勤怠備考AI"
                 )
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+                record_gemini_response_usage(res, gem_model_used)
                 match = re.search(r'\{.*\}', res.text, re.DOTALL)
                 if match:
                     ai_parsed = json.loads(match.group(0))
