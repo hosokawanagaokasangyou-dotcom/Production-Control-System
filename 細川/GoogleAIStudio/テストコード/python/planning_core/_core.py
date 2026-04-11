@@ -12027,6 +12027,40 @@ def _parse_attendance_overtime_end_optional(v) -> time | None:
     return _excel_scalar_to_time_optional(v)
 
 
+# region agent log
+def _agent_debug_session_b7ba7c_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict, run_id: str = "pre"
+) -> None:
+    try:
+        _p = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-b7ba7c.log",
+            )
+        )
+        _payload = {
+            "sessionId": "b7ba7c",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
+
+
 def load_attendance_and_analyze(members):
     attendance_data = {}
     # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
@@ -12046,6 +12080,16 @@ def load_attendance_and_analyze(members):
                 
             m_name = sheet_name.strip()
             if m_name not in members:
+                if "宮島" in m_name or "森岡" in m_name:
+                    _agent_debug_session_b7ba7c_ndjson(
+                        "H5",
+                        "_core.py:load_attendance sheet skip",
+                        "member sheet not in skills members list",
+                        {
+                            "sheet_name": m_name,
+                            "members_sample": list(members)[:30],
+                        },
+                    )
                 continue 
                 
             df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
@@ -12175,6 +12219,20 @@ def load_attendance_and_analyze(members):
     else:
         ai_parsed = {}
 
+    try:
+        _dbg_cols = {str(c).strip() for c in df.columns}
+    except Exception:
+        _dbg_cols = set()
+    _agent_debug_session_b7ba7c_ndjson(
+        "H3",
+        "_core.py:load_attendance_and_analyze",
+        "columns after attendance load",
+        {
+            "has_残業終業_col": ATT_COL_OT_END in _dbg_cols,
+            "master_file": str(MASTER_FILE),
+        },
+    )
+
     # 3. 日付ごとの制約辞書を構築
     for _, row in df.iterrows():
         if pd.isna(row['日付']): continue
@@ -12250,6 +12308,7 @@ def load_attendance_and_analyze(members):
                 mid_break_s, mid_break_e = fb_s, fb_e
 
         ot_applied_flag = False
+        ot_end: time | None = None
         if not is_holiday:
             ot_end = _parse_attendance_overtime_end_optional(row.get(ATT_COL_OT_END))
             if ot_end is not None:
@@ -12260,6 +12319,7 @@ def load_attendance_and_analyze(members):
         
         start_dt = combine_dt(start_t)
         end_dt = combine_dt(end_t)
+        _ot_reverted = False
         if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
             logging.warning(
                 "勤怠 %s %s: 残業終業適用後に退勤が出勤以前となったため、残業終業を無視して定時退勤に戻します。",
@@ -12268,6 +12328,31 @@ def load_attendance_and_analyze(members):
             )
             end_t = base_end_t
             end_dt = combine_dt(end_t)
+            _ot_reverted = True
+        if (curr_date.month == 4 and curr_date.day == 10) and (
+            "宮島" in m or "森岡" in m
+        ):
+            _raw_ot = row.get(ATT_COL_OT_END)
+            _agent_debug_session_b7ba7c_ndjson(
+                "H1,H2,H4,H5",
+                "_core.py:load_attendance_and_analyze:4-10",
+                "OT row trace",
+                {
+                    "member": m,
+                    "date": str(curr_date),
+                    "raw_残業終業": repr(_raw_ot),
+                    "raw_type": type(_raw_ot).__name__,
+                    "parsed_ot_end": str(ot_end) if ot_end is not None else None,
+                    "is_holiday": bool(is_holiday),
+                    "ot_applied_flag": bool(ot_applied_flag),
+                    "ot_reverted_invalid": bool(_ot_reverted),
+                    "excel_s": repr(excel_s),
+                    "excel_e": repr(excel_e),
+                    "start_t": str(start_t),
+                    "base_end_t": str(base_end_t),
+                    "end_t_final": str(end_t),
+                },
+            )
         breaks_dt = []
         
         # 通常の休憩を追加
