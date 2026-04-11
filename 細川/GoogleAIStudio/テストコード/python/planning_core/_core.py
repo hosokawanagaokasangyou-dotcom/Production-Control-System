@@ -190,6 +190,8 @@ TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
 TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
+# エージェント用 NDJSON（debug-dbc2c5）の全パス書き込み失敗を 1 回だけ logging に残す
+_AGENT_DEBUG_LOG_WRITE_WARNED = False
 # VBA「master_組㝿坈ゝ㝛表を更新〝㝧作るシート（工程+機械キー㝨メンポー編戝）
 MASTER_SHEET_TEAM_COMBINATIONS = "組㝿坈ゝ㝛表"
 # メンポー別勤怠シート: master.xlsm 㝧㝯「休暇区分〝㝨「備考〝㝌別列。
@@ -15129,6 +15131,7 @@ def _agent_debug_ndjson_log(
     runId: str = "pre-fix",
 ) -> None:
     # region agent log
+    global _AGENT_DEBUG_LOG_WRITE_WARNED
     _payload = {
         "sessionId": "dbc2c5",
         "hypothesisId": hypothesisId,
@@ -15139,24 +15142,31 @@ def _agent_debug_ndjson_log(
         "data": data or {},
     }
     _line = json.dumps(_payload, ensure_ascii=False, default=str) + "\n"
+    # 候補パス（先頭ほど Cursor ワークスペース直下に近い）
     _roots: list[str] = []
     try:
-        _here = os.path.abspath(__file__)
+        _d = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(5):
+            _d = os.path.dirname(_d)
+        _roots.append(os.path.join(_d, "debug-dbc2c5.log"))
+    except Exception:
+        pass
+    try:
         _roots.append(os.path.join(log_dir, "debug-dbc2c5.log"))
         _roots.append(os.path.join(output_dir, "debug-dbc2c5.log"))
-        _repo = os.path.dirname(
-            os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(os.path.dirname(_here))
-                    )
-                )
-            )
-        )
-        _roots.append(os.path.join(_repo, "debug-dbc2c5.log"))
     except Exception:
-        _roots = [os.path.join(log_dir, "debug-dbc2c5.log")]
+        pass
+    try:
+        import tempfile
+
+        _roots.append(os.path.join(tempfile.gettempdir(), "debug-dbc2c5.log"))
+    except Exception:
+        pass
+    if not _roots:
+        _roots = [os.path.join(os.getcwd(), "debug-dbc2c5.log")]
     _seen_paths: set[str] = set()
+    _last_ex: BaseException | None = None
+    _wrote_any = False
     for _path in _roots:
         try:
             _ap = os.path.normcase(os.path.abspath(_path))
@@ -15171,8 +15181,22 @@ def _agent_debug_ndjson_log(
                 os.makedirs(_d, exist_ok=True)
             with open(_path, "a", encoding="utf-8") as _f:
                 _f.write(_line)
-        except Exception:
+            _wrote_any = True
+        except Exception as ex:
+            _last_ex = ex
             continue
+    if not _wrote_any and not _AGENT_DEBUG_LOG_WRITE_WARNED:
+        _AGENT_DEBUG_LOG_WRITE_WARNED = True
+        try:
+            logging.warning(
+                "cursor_debug: debug-dbc2c5.log を書けませんでした。"
+                " 候補=%s cwd=%s last_error=%r",
+                _roots,
+                os.getcwd(),
+                _last_ex,
+            )
+        except Exception:
+            pass
     # endregion
 
 
