@@ -2955,6 +2955,24 @@ def load_tasks_df():
         # #endregion
         raise
     df.columns = df.columns.str.strip()
+    # 生産管理_AI配台_V2 等: 「残作数値」列が無く「換算数量」「未加工」だけがあるブック向け
+    if TASK_COL_QTY not in df.columns:
+        for _alt_qty in ("換算数量", "未加工"):
+            if _alt_qty in df.columns:
+                df[TASK_COL_QTY] = df[_alt_qty]
+                logging.info(
+                    "タスク入力: 列「%s」が無いため「%s」をコピーして補完しました。",
+                    TASK_COL_QTY,
+                    _alt_qty,
+                )
+                break
+    # 「块注数」が無く「受注数」があるブック（実出来高からの換算に使用）
+    if TASK_COL_ORDER_QTY not in df.columns and "受注数" in df.columns:
+        df[TASK_COL_ORDER_QTY] = df["受注数"]
+        logging.info(
+            "タスク入力: 列「%s」が無いため「受注数」をコピーして補完しました。",
+            TASK_COL_ORDER_QTY,
+        )
     # #region agent log
     _cols = [str(c) for c in df.columns.tolist()]
     _agent_debug_ndjson(
