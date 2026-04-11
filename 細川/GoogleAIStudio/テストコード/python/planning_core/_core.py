@@ -17862,6 +17862,20 @@ def _generate_plan_impl():
     # 酝坰トレース（設定シート A3 以陝㝮㝿）㝯〝メンポー0人等㝧早期 return 㝗㝦も
     # execution_log 㝫残るよ㝆 skills 読込より剝㝧確定・ログ㝙る。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
+    # region agent log
+    _agent_debug_ndjson_log(
+        hypothesisId="H0",
+        location="_core.py:_generate_plan_impl",
+        message="generate_plan_impl_entry",
+        data={
+            "cwd": os.getcwd(),
+            "task_input_workbook": (
+                os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+            ),
+        },
+        runId="pre-fix",
+    )
+    # endregion
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
