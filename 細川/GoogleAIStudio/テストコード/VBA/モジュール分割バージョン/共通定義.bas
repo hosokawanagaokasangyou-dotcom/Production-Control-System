@@ -125,6 +125,11 @@ Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
 ' 「配台試行順番」を小数キーで並べ替え（1..n）用グラデーション図形名
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS As String = "btn_PlanInput_DispatchTrialOrder_FloatKeys"
+' planning_core の ai_cache_path（json/ai_remarks_cache.json）と旧 output/ 退避先と一致
+Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
+Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
+' メイン_ 上の「AI解析キャッシュ削除」図形（再配置時に名前で削除）
+Public Const SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR As String = "btn_Main_AI_RemarksCacheClear"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
@@ -138,7 +143,7 @@ Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
-' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
+' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。AI 備考等の TTL キャッシュは json\ai_remarks_cache.json（手動削除は Gemini連携 の AI解析_Remarksキャッシュファイルを削除）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。

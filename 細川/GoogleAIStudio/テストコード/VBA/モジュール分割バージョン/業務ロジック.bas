@@ -1142,8 +1142,8 @@ Public Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     End Select
 End Function
 
-Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long)
-    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId)
+Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional stableShapeName As String)
+    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), stableShapeName
 End Sub
 
 Sub かっこいいボタンを作成()
@@ -1188,8 +1188,77 @@ Sub かっこいいボタン_配色サンプル作成()
            "クリックしてもマクロは動きません。不要なら図形を削除してください。", vbInformation
 End Sub
 
-' ボタン生成の共通ロジック
-Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long)
+' アクティブシート上に、グラデーション＋押下アニメ用のクールボタンを1つ配置（InputBox で文言・マクロ名・座標・配色を指定）
+' 割り当て先は「アニメ付き_*」など、先頭で AnimateButtonPush を呼ぶマクロを推奨（図形に本体を直割り当てするとアニメは動きません）
+Public Sub アニメ付きマクロ用_クールボタンを対話配置()
+    Dim cap As String
+    Dim mac As String
+    Dim ps As String
+    Dim pr As Long
+    Dim x As Single
+    Dim y As Single
+    Dim stable As String
+    
+    cap = InputBox( _
+        "ボタンに表示する文字列を入力してください。", _
+        "アニメ付きクールボタン (1/4)", _
+        "実行")
+    If Len(Trim$(cap)) = 0 Then Exit Sub
+    
+    mac = InputBox( _
+        "割り当てるマクロ名を入力してください。" & vbCrLf & _
+        "例: アニメ付き_計画生成を実行（このブック内の Public Sub 名）", _
+        "アニメ付きクールボタン (2/4)", _
+        "アニメ付き_計画生成を実行")
+    If Len(Trim$(mac)) = 0 Then Exit Sub
+    
+    ps = InputBox( _
+        "左位置と上位置をカンマ区切りで入力（ポイント）。例: 50, 120" & vbCrLf & _
+        "空欄なら 50, 50 を使います。", _
+        "アニメ付きクールボタン (3/4)", _
+        "50, 50")
+    If Len(Trim$(ps)) = 0 Then ps = "50, 50"
+    If Not ParseTwoSingleCsv(ps, x, y) Then
+        MsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
+        Exit Sub
+    End If
+    
+    ps = InputBox( _
+        "配色プリセット番号（1～10）を入力してください。" & vbCrLf & _
+        "1=ロイヤルブルー … 10=マゼンタ（CreateCoolButtonWithPreset と同じ）", _
+        "アニメ付きクールボタン (4/4)", _
+        "1")
+    pr = 1
+    If Len(Trim$(ps)) > 0 And IsNumeric(ps) Then pr = CLng(CDbl(ps))
+    If pr < 1 Or pr > 10 Then pr = 1
+    
+    Randomize
+    stable = "AnimCool_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+    
+    CreateCoolButtonWithPreset Trim$(cap), Trim$(mac), x, y, pr, stable
+    MsgBox "クールボタンを配置しました。" & vbCrLf & _
+           "図形名: " & stable & vbCrLf & _
+           "OnAction: " & Trim$(mac), vbInformation
+End Sub
+
+' カンマ区切りで2つの Single を読む（空白許容）
+Private Function ParseTwoSingleCsv(ByVal s As String, ByRef outX As Single, ByRef outY As Single) As Boolean
+    Dim p As Long
+    Dim a As String
+    Dim b As String
+    p = InStr(1, s, ",")
+    If p <= 0 Then Exit Function
+    a = Trim$(Left$(s, p - 1))
+    b = Trim$(Mid$(s, p + 1))
+    If Len(a) = 0 Or Len(b) = 0 Then Exit Function
+    If Not IsNumeric(a) Or Not IsNumeric(b) Then Exit Function
+    outX = CSng(CDbl(a))
+    outY = CSng(CDbl(b))
+    ParseTwoSingleCsv = True
+End Function
+
+' ボタン生成の共通ロジック（stableShapeName を渡すと図形名を固定。AnimateButtonPush は Application.Caller=図形名のためアニメ付きマクロ用ボタンでは推奨）
+Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional stableShapeName As String)
     Dim shp As Shape
     
     Set shp = ActiveSheet.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, 220, 50)
@@ -1232,8 +1301,12 @@ Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Sing
         .OnAction = macroName
         
         On Error Resume Next
-        Randomize
-        .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        If Len(Trim$(stableShapeName)) > 0 Then
+            .Name = stableShapeName
+        Else
+            Randomize
+            .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        End If
         On Error GoTo 0
     End With
 End Sub

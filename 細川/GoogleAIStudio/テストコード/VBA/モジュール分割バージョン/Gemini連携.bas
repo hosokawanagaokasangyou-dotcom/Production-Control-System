@@ -244,6 +244,122 @@ Public Sub メインシート_master開くボタンを配置()
     MsgBox "メインシートにボタンを配置しました。位置はドラッグで調整できます。", vbInformation
 End Sub
 
+' planning_core の json\ai_remarks_cache.json（および旧 output\ 同名）を削除。次回段階1/2 で TTL キャッシュが空の状態から再構築されます。
+Public Sub AI解析_Remarksキャッシュファイルを削除()
+    Dim base As String
+    Dim pJson As String
+    Dim pLegacy As String
+    Dim nOk As Long
+    Dim nMiss As Long
+    Dim nFail As Long
+    Dim msg As String
+    Dim dlgIcon As Long
+    
+    base = ThisWorkbook.path
+    If Len(base) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください。", vbExclamation, "AI解析キャッシュ"
+        Exit Sub
+    End If
+    
+    If MsgBox( _
+        "勤怠備考・タスク特別指定・配台不要ロジック等の AI 解析結果を、ディスク上のキャッシュ JSON から削除します。" & vbCrLf & _
+        "（次回の段階1/2 で必要に応じて Gemini を再呼び出しします）" & vbCrLf & vbCrLf & _
+        "削除対象:" & vbCrLf & _
+        "・" & base & "\" & AI_REMARKS_CACHE_JSON_SUBDIR & "\" & AI_REMARKS_CACHE_FILE_NAME & vbCrLf & _
+        "・" & base & "\output\" & AI_REMARKS_CACHE_FILE_NAME & "（旧配置があれば）" & vbCrLf & vbCrLf & _
+        "続行しますか？", _
+        vbYesNo Or vbQuestion, "AI解析キャッシュ") <> vbYes Then
+        Exit Sub
+    End If
+    
+    pJson = base & "\" & AI_REMARKS_CACHE_JSON_SUBDIR & "\" & AI_REMARKS_CACHE_FILE_NAME
+    pLegacy = base & "\output\" & AI_REMARKS_CACHE_FILE_NAME
+    nOk = 0
+    nMiss = 0
+    nFail = 0
+    msg = ""
+    
+    If Len(Dir(pJson)) > 0 Then
+        On Error Resume Next
+        Kill pJson
+        If Err.Number = 0 Then
+            nOk = nOk + 1
+            msg = msg & "削除: " & pJson & vbCrLf
+        Else
+            nFail = nFail + 1
+            msg = msg & "削除失敗: " & pJson & " ? " & Err.Description & vbCrLf
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Else
+        nMiss = nMiss + 1
+        msg = msg & "なし: " & pJson & vbCrLf
+    End If
+    
+    If Len(Dir(pLegacy)) > 0 Then
+        On Error Resume Next
+        Kill pLegacy
+        If Err.Number = 0 Then
+            nOk = nOk + 1
+            msg = msg & "削除: " & pLegacy & vbCrLf
+        Else
+            nFail = nFail + 1
+            msg = msg & "削除失敗: " & pLegacy & " ? " & Err.Description & vbCrLf
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Else
+        nMiss = nMiss + 1
+        msg = msg & "なし: " & pLegacy & vbCrLf
+    End If
+    
+    dlgIcon = vbInformation
+    If nFail > 0 Then dlgIcon = vbExclamation
+    MsgBox "AI解析キャッシュ処理が完了しました。" & vbCrLf & vbCrLf & msg & vbCrLf & _
+           "削除成功 " & CStr(nOk) & " 件 / 該当ファイルなし " & CStr(nMiss) & " 件 / 失敗 " & CStr(nFail) & " 件" & vbCrLf & vbCrLf & _
+           "削除に失敗した場合は、Python や別プロセスがファイルを開いていないか確認してください。", _
+           dlgIcon, "AI解析キャッシュ"
+End Sub
+
+Public Sub アニメ付き_AI解析_Remarksキャッシュファイルを削除()
+    Call AnimateButtonPush
+    AI解析_Remarksキャッシュファイルを削除
+End Sub
+
+' メイン_ シートに「AI解析キャッシュ削除」クールボタンを1つ配置（master ボタンの直下付近）。再実行で同名・同一 OnAction の図形を置き換え
+Public Sub メインシート_AI解析キャッシュ削除ボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_AI解析_Remarksキャッシュファイルを削除"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim si As Long
+    
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then
+        MsgBox "シート「メイン_」がありません。", vbExclamation, "AI解析キャッシュボタン"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For si = ws.Shapes.Count To 1 Step -1
+        Set shp = ws.Shapes(si)
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If StrComp(shp.Name, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR, vbTextCompare) = 0 _
+            Or InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next si
+    
+    CreateCoolButtonWithPreset "AI解析キャッシュ削除", MACRO_ANIM, 380, 68, 8, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR
+    MsgBox "メインシートに「AI解析キャッシュ削除」ボタンを配置しました。" & vbCrLf & _
+           "（位置はドラッグで調整できます）", vbInformation, "AI解析キャッシュボタン"
+End Sub
+
 
 ' =========================================================
 ' メインシート A列上段：結果_* シートへのリンク
