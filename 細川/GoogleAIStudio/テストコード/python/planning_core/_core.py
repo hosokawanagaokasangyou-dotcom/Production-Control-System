@@ -2888,6 +2888,30 @@ def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
         df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
 
 
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    # #region agent log
+    try:
+        _root = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), *[os.pardir] * 5)
+        )
+        _log_path = os.path.join(_root, "debug-783bce.log")
+        _payload = {
+            "sessionId": "783bce",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_log_path, "a", encoding="utf-8") as _lf:
+            _lf.write(json.dumps(_payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
 def load_tasks_df():
     """
     タスク入力を坖得れる（tasks.xlsx は使用しない）。
@@ -2900,8 +2924,54 @@ def load_tasks_df():
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
-    df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
+    # #region agent log
+    _sn_pre = _ooxml_workbook_sheet_names(TASKS_INPUT_WORKBOOK)
+    _agent_debug_ndjson(
+        "A",
+        "_core.py:load_tasks_df",
+        "pre read_excel",
+        {
+            "wb_basename": os.path.basename(TASKS_INPUT_WORKBOOK),
+            "sheet_in_ooxml": (
+                (TASKS_SHEET_NAME in _sn_pre) if _sn_pre else None
+            ),
+            "ooxml_sheet_count": len(_sn_pre) if _sn_pre else None,
+            "skip_openpyxl_marker_wb": _workbook_should_skip_openpyxl_io(
+                TASKS_INPUT_WORKBOOK
+            ),
+        },
+    )
+    # #endregion
+    try:
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
+    except Exception as _e:
+        # #region agent log
+        _agent_debug_ndjson(
+            "B",
+            "_core.py:load_tasks_df",
+            "read_excel raised",
+            {"exc_type": type(_e).__name__, "exc_msg": str(_e)[:800]},
+        )
+        # #endregion
+        raise
     df.columns = df.columns.str.strip()
+    # #region agent log
+    _cols = [str(c) for c in df.columns.tolist()]
+    _agent_debug_ndjson(
+        "C",
+        "_core.py:load_tasks_df",
+        "post read_excel",
+        {
+            "nrows": int(len(df)),
+            "ncols": int(len(df.columns)),
+            "has_依頼NO": TASK_COL_TASK_ID in df.columns,
+            "has_工程名": TASK_COL_MACHINE in df.columns,
+            "has_機械名": TASK_COL_MACHINE_NAME in df.columns,
+            "has_残作数値": TASK_COL_QTY in df.columns,
+            "columns_preview": _cols[:45],
+        },
+    )
+    # #endregion
     logging.info(f"タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{TASKS_SHEET_NAME}' を読み込みました。")
     return df
 
@@ -10302,11 +10372,31 @@ def run_stage1_extract():
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         logging.error(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
         return False
+    # #region agent log
+    _agent_debug_ndjson(
+        "A",
+        "_core.py:run_stage1_extract",
+        "entry",
+        {
+            "TASKS_INPUT_WORKBOOK_basename": os.path.basename(TASKS_INPUT_WORKBOOK),
+            "module_TASKS_INPUT_set": bool(TASKS_INPUT_WORKBOOK),
+        },
+    )
+    # #endregion
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
     records = []
+    # #region agent log
+    _s1_n_done = 0
+    _s1_n_skip_qty = 0
+    _s1_n_skip_no_machine = 0
+    _s1_n_skip_no_tid = 0
+    # #endregion
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
+            # #region agent log
+            _s1_n_done += 1
+            # #endregion
             continue
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
@@ -10315,6 +10405,14 @@ def run_stage1_extract():
         done_qty = calc_done_qty_equivalent_from_row(row)
         qty = max(0.0, qty_total - done_qty)
         if qty <= 0 or not machine or not task_id:
+            # #region agent log
+            if qty <= 0:
+                _s1_n_skip_qty += 1
+            if not machine:
+                _s1_n_skip_no_machine += 1
+            if not task_id:
+                _s1_n_skip_no_tid += 1
+            # #endregion
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
@@ -10357,6 +10455,21 @@ def run_stage1_extract():
         rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
         rec[PLAN_COL_AI_PARSE] = ""
         records.append(rec)
+    # #region agent log
+    _agent_debug_ndjson(
+        "C",
+        "_core.py:run_stage1_extract",
+        "after scan rows",
+        {
+            "src_rows": int(len(df_src)),
+            "records_out": int(len(records)),
+            "rows_completion_skip": _s1_n_done,
+            "rows_skip_qty_le0": _s1_n_skip_qty,
+            "rows_skip_no_machine": _s1_n_skip_no_machine,
+            "rows_skip_no_task_id": _s1_n_skip_no_tid,
+        },
+    )
+    # #endregion
     if not records:
         logging.warning("段階1: 抽出対象タスクはありません。")
     order = plan_input_sheet_column_order()
