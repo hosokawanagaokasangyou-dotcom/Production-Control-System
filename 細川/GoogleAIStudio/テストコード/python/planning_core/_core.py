@@ -859,16 +859,12 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
-# 余力追記前のタイムラインを可視化（結果_設備毎の時間割と同じ 10 分枠・列構造）
-TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_設備毎の時間割"
-# 設備・人の占有（ブロック）を 10 分枠で一覧（調査・検証用）
-BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
 # 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
 RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
-# 結果_設備毎の時間割（および TEMP）: 加工前準備・依頼切替後始末の設備セルも同系色
+# 結果_設備毎の時間割: 加工前準備・依頼切替後始末の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
@@ -1523,7 +1519,7 @@ def _apply_equipment_schedule_outside_regular_fill(
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
     設備列（進度列を除く）で、表示に「日次始業準備」「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
-    結果_設備毎の時間割 / TEMP_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
+    結果_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
     """
     fill = PatternFill(
         fill_type="solid",
@@ -13555,133 +13551,6 @@ def _build_equipment_schedule_by_machine_name_dataframe(
     return pd.DataFrame(all_rows)
 
 
-def _build_block_table_dataframe(
-    sorted_dates: list,
-    equipment_list: list,
-    members: list,
-    attendance_data: dict,
-    timeline_events: list,
-) -> "pd.DataFrame":
-    """
-    設備列（占有中の依頼NO）＋メンバー列（同）を 10 分枠で並べたブロック可視化用シート。
-    """
-    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
-    events_by_date = defaultdict(list)
-    for e in timeline_for_eq_grid:
-        events_by_date[e["date"]].append(e)
-
-    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
-    eq_disp_to_key: dict[str, str] = {}
-    for eq, lab in zip(equipment_list, _eq_hdr):
-        eq_disp_to_key[f"設備:{lab}"] = eq
-
-    mem_cols = [f"人:{m}" for m in members]
-    eq_cols = [f"設備:{lab}" for lab in _eq_hdr]
-    all_cols = ["日時帯"] + eq_cols + mem_cols
-    rows_out = []
-
-    for d in sorted_dates:
-        d_start = datetime.combine(d, DEFAULT_START_TIME)
-        d_end = datetime.combine(d, DEFAULT_END_TIME)
-        events_today = events_by_date[d]
-        machine_to_events = defaultdict(list)
-        for ev in events_today:
-            machine_to_events[ev["machine"]].append(ev)
-        for _evs in machine_to_events.values():
-            _evs.sort(
-                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
-            )
-
-        is_anyone_working = any(
-            daily_status["is_working"] for daily_status in attendance_data[d].values()
-        )
-        if not events_today and not is_anyone_working:
-            continue
-
-        banner = {"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■"}
-        banner.update({c: "" for c in all_cols if c != "日時帯"})
-        rows_out.append(banner)
-
-        curr_grid = d_start
-        while curr_grid < d_end:
-            next_grid = curr_grid + timedelta(minutes=10)
-            if next_grid > d_end:
-                next_grid = d_end
-            mid_t = curr_grid + (next_grid - curr_grid) / 2
-            row_data: dict = {
-                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
-            }
-            for c in eq_cols + mem_cols:
-                row_data[c] = ""
-
-            for col_eq, lab in zip(eq_cols, _eq_hdr):
-                eq_key = eq_disp_to_key.get(col_eq)
-                if not eq_key:
-                    continue
-                active_ev = _eq_grid_first_overlapping_event(
-                    _eq_grid_events_for_equipment_column(machine_to_events, eq_key),
-                    curr_grid,
-                    next_grid,
-                )
-                if not active_ev:
-                    continue
-                _sample_tb = _eq_grid_overlap_sample_t(
-                    active_ev, curr_grid, next_grid, mid_t
-                )
-                if any(
-                    b_s <= _sample_tb < b_e for b_s, b_e in active_ev["breaks"]
-                ):
-                    row_data[col_eq] = "休憩"
-                else:
-                    tid = str(active_ev.get("task_id") or "").strip()
-                    row_data[col_eq] = tid if tid else "占有"
-
-            busy_member_task: dict[str, set[str]] = defaultdict(set)
-            for ev in events_today:
-                st = ev.get("start_dt")
-                ed = ev.get("end_dt")
-                if not isinstance(st, datetime) or not isinstance(ed, datetime):
-                    continue
-                if not _eq_grid_slot_overlaps_event(curr_grid, next_grid, ev):
-                    continue
-                _sample_mem = _eq_grid_overlap_sample_t(ev, curr_grid, next_grid, mid_t)
-                tid = str(ev.get("task_id") or "").strip()
-                op = str(ev.get("op") or "").strip()
-                if op:
-                    if any(
-                        b_s <= _sample_mem < b_e
-                        for b_s, b_e in ev.get("breaks") or ()
-                    ):
-                        busy_member_task[op].add("休憩" if tid else "休憩")
-                    elif tid:
-                        busy_member_task[op].add(tid)
-                for s in str(ev.get("sub") or "").split(","):
-                    s = s.strip()
-                    if not s:
-                        continue
-                    if any(
-                        b_s <= _sample_mem < b_e
-                        for b_s, b_e in ev.get("breaks") or ()
-                    ):
-                        busy_member_task[s].add("休憩")
-                    elif tid:
-                        busy_member_task[s].add(tid)
-
-            for m in members:
-                col_m = f"人:{m}"
-                parts = sorted(busy_member_task.get(m, ()))
-                row_data[col_m] = "／".join(parts) if parts else ""
-
-            rows_out.append(row_data)
-            curr_grid = next_grid
-
-        tail = {"日時帯": ""}
-        tail.update({c: "" for c in all_cols if c != "日時帯"})
-        rows_out.append(tail)
-
-    return pd.DataFrame(rows_out, columns=all_cols)
-
-
 def _day_schedule_task_sort_key(
     task: dict,
     _task_queue: list | None = None,
@@ -18997,9 +18866,6 @@ def _generate_plan_impl():
                     _ev.get("end_dt"),
                 )
 
-    # メイン割付までのタイムライン（need 余力追記前）。TEMP_設備毎の時間割用。
-    timeline_before_need_surplus = copy.deepcopy(timeline_events)
-
     # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
     if (
         not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
@@ -19055,20 +18921,6 @@ def _generate_plan_impl():
         attendance_data,
         timeline_events,
         first_eq_schedule_cell_by_task_id=first_eq_schedule_cell_by_task_id,
-    )
-    df_temp_equipment_schedule = _build_equipment_schedule_dataframe(
-        sorted_dates,
-        equipment_list,
-        attendance_data,
-        timeline_before_need_surplus,
-        first_eq_schedule_cell_by_task_id=None,
-    )
-    df_block_table = _build_block_table_dataframe(
-        sorted_dates,
-        equipment_list,
-        members,
-        attendance_data,
-        timeline_events,
     )
     df_equipment_by_machine_name = _build_equipment_schedule_by_machine_name_dataframe(
         sorted_dates,
@@ -19349,10 +19201,6 @@ def _generate_plan_impl():
             df_eq_schedule.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
             )
-            df_temp_equipment_schedule.to_excel(
-                writer, sheet_name=TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
-            )
-            df_block_table.to_excel(writer, sheet_name=BLOCK_TABLE_SHEET_NAME, index=False)
             df_equipment_by_machine_name.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
             )
@@ -19409,7 +19257,6 @@ def _generate_plan_impl():
             if _reg_shift_start is not None and _reg_shift_end is not None:
                 for _eq_sched_sheet in (
                     RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
-                    TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
                     RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME,
                 ):
                     if _eq_sched_sheet in writer.sheets:
@@ -19424,14 +19271,10 @@ def _generate_plan_impl():
                     writer.sheets[RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME]
                 )
 
-            for _prep_sheet in (
-                RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
-                TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
-            ):
-                if _prep_sheet in writer.sheets:
-                    _apply_equipment_schedule_prep_cleanup_fill(
-                        writer.sheets[_prep_sheet]
-                    )
+            if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
+                _apply_equipment_schedule_prep_cleanup_fill(
+                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME]
+                )
 
             if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
                 _apply_equipment_schedule_machine_calendar_fill(
