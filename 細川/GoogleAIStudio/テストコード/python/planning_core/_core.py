@@ -781,7 +781,8 @@ ACTUAL_HEADER_CANONICAL = (
 
 # --- 2段階処睆: 段階1抽出 → ブック「酝坰計画_タスク入力〝編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
-PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "酝坰計画_タスク入力"
+# 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「酝坰計画_」は誤字（UTF-8 保存時の破損）で一致しない。
+PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書㝝"
 # 空白㝮㝨㝝㝯列「原坝投入日〝（加工計画DATA 由来）を㝝㝮㝾㝾使㝆。日付㝂り㝮㝨㝝㝯酝坰㝮原坝制約・絝果_タスク一覧表示㝮両方㝧㝓㝮日付を採用。
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原坝投入日_上書㝝"
