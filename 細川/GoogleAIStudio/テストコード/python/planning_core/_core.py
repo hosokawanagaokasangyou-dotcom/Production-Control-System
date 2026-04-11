@@ -8730,79 +8730,20 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
 
 
 def _xlwings_find_book_on_running_instances(abs_path: str):
-    """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。"""
-    try:
-        import xlwings as xw
-    except ImportError:
-        return None
-    target = os.path.abspath(abs_path)
-    # list(xw.apps) は全インスタンスを一度に COM 列挙し、ゾンビ登録等で無応答になることがある（計測ログで attach 直後に停止）。
-    try:
-        cl = getattr(xw.apps, "cleanup", None)
-        if callable(cl):
-            cl()
-    except Exception:
-        pass
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_find_book_on_running_instances",
-        "after_apps_cleanup",
-        {},
-    )
-    try:
-        act = getattr(xw.apps, "active", None)
-        if act is not None:
-            for book in act.books:
-                try:
-                    if _xlwings_book_matches_path(book, target):
-                        return book
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    try:
-        for app in xw.apps:
-            try:
-                for book in app.books:
-                    try:
-                        if _xlwings_book_matches_path(book, target):
-                            return book
-                    except Exception:
-                        continue
-            except Exception:
-                continue
-    except Exception:
-        return None
+    """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。
+
+    旧実装は ``list(xw.apps)`` / ``xw.apps.active`` / ``for app in xw.apps`` が
+    環境によって COM 無応答となり段階1が停止したため廃止（debug-a71bb9 で確認）。
+    マクロブックの保存は ``_xlwings_attach_open_macro_workbook`` が新規 ``xw.App`` で開く。
+    """
     return None
 
 
 def _xlwings_try_open_in_running_apps(abs_path: str):
-    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。"""
-    try:
-        import xlwings as xw
-    except ImportError:
-        return None
-    path = os.path.abspath(abs_path)
-    try:
-        cl = getattr(xw.apps, "cleanup", None)
-        if callable(cl):
-            cl()
-    except Exception:
-        pass
-    try:
-        act = getattr(xw.apps, "active", None)
-        if act is not None:
-            try:
-                return act.books.open(path, update_links=False)
-            except Exception:
-                pass
-    except Exception:
-        pass
-    for app in xw.apps:
-        try:
-            return app.books.open(path, update_links=False)
-        except Exception:
-            continue
+    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。
+
+    ``xw.apps`` 経由は上記と同理由で廃止。常に None。
+    """
     return None
 
 
@@ -8853,40 +8794,30 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         {"path": abs_path},
     )
 
-    _skip_scan = os.environ.get(
-        "EXCLUDE_RULES_XLWINGS_SKIP_RUNNING_INSTANCES", ""
-    ).strip().lower() in ("1", "true", "yes")
-    if _skip_scan:
-        _agent_dbg_a71bb9(
-            "H1",
-            "planning_core._core:_xlwings_attach_open_macro_workbook",
-            "skip_find_tryopen_env_EXCLUDE_RULES_XLWINGS_SKIP_RUNNING_INSTANCES",
-            {},
-        )
-        book = None
-    else:
-        book = _xlwings_find_book_on_running_instances(abs_path)
+    _log_exclude_rules_sheet_debug(
+        "XLWINGS_APPS_ENUM_SKIPPED",
+        log_prefix,
+        "xw.apps 列挙はスキップし、新規 Excel でブックを開きます（COM 無応答回避）。",
+        details=f"path={abs_path}",
+    )
+    _agent_dbg_a71bb9(
+        "H1",
+        "planning_core._core:_xlwings_attach_open_macro_workbook",
+        "skip_xw_apps_scan_new_excel_only",
+        {},
+    )
     _agent_dbg_a71bb9(
         "H1",
         "planning_core._core:_xlwings_attach_open_macro_workbook",
         "after_find_running_instance",
-        {"hit": book is not None},
+        {"hit": False, "skipped": True},
     )
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}
-
-    if _skip_scan:
-        book = None
-    else:
-        book = _xlwings_try_open_in_running_apps(abs_path)
     _agent_dbg_a71bb9(
         "H1",
         "planning_core._core:_xlwings_attach_open_macro_workbook",
         "after_try_open_in_running_apps",
-        {"hit": book is not None},
+        {"hit": False, "skipped": True},
     )
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": True}
 
     try:
         import xlwings as xw
@@ -8938,9 +8869,6 @@ def _xlwings_attach_workbook_for_tests(
     戻り値: (Book, info, 説明文字列) または None。
     """
     abs_path = os.path.abspath(book_path)
-    book = _xlwings_find_book_on_running_instances(abs_path)
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:既存インスタンス"
     if not allow_dispatch_open:
         return None
     try:
