@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 Option Explicit
 
 Public Function GetOrCreateFontScratchSheet() As Worksheet
@@ -20,47 +19,19 @@ End Function
 Public Sub RestoreCellFontProps(ByVal r As Range, ByVal oldName As String, _
     ByVal oldSize As Variant, ByVal oldBold As Variant, ByVal oldItalic As Variant, _
     ByVal oldUnderline As Variant, ByVal oldColor As Variant, ByVal oldStrike As Variant)
-=======
-Attribute VB_Name = "フォント管理"
-Option Explicit
-
-Sub アニメ付き_全シートフォントをリストから選択して統一()
-    Call AnimateButtonPush
-    ' xlDialogFormatFont 表示のためグリッド操作ブロックは使わない
-    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを一覧から選んで統一しています…", "全シートフォントをリストから選択して統一", , , False
-End Sub
-
-Sub アニメ付き_全シートフォントを手入力で統一()
-    Call AnimateButtonPush
-    ' Application.InputBox 用にグリッド操作ブロックは使わない
-    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを手入力の名前で統一しています…", "全シートフォントを手入力で統一", , , False
-End Sub
-
-Sub アニメ付き_全シートフォント_BIZ_UDPゴシックに統一()
-    Call AnimateButtonPush
-    アニメ付き_スプラッシュ付きで実行 "全シートのフォントを BIZ UDP ゴシックに統一しています…", "全シートフォント_BIZ_UDPゴシックに統一"
-End Sub
-
-Private Sub メインシート_フォント属性を取得( _
-    ByVal src As Range, _
-    ByRef fn As String, ByRef fs As Double, ByRef fc As Variant, _
-    ByRef fBold As Boolean, ByRef fItalic As Boolean, ByRef fUl As Long)
->>>>>>> hosokawa/main2
     On Error Resume Next
-    fn = "": fs = 0: fc = Empty: fBold = False: fItalic = False: fUl = xlUnderlineStyleNone
-    If src Is Nothing Then Exit Sub
-    With src.Font
-        fn = .Name
-        fs = .Size
-        fc = .Color
-        fBold = .Bold
-        fItalic = .Italic
-        fUl = .Underline
+    With r.Font
+        .Name = oldName
+        If Not IsEmpty(oldSize) Then .Size = oldSize
+        If Not IsEmpty(oldBold) Then .Bold = oldBold
+        If Not IsEmpty(oldItalic) Then .Italic = oldItalic
+        If Not IsEmpty(oldUnderline) Then .Underline = oldUnderline
+        If Not IsEmpty(oldColor) Then .Color = oldColor
+        If Not IsEmpty(oldStrike) Then .Strikethrough = oldStrike
     End With
     On Error GoTo 0
 End Sub
 
-<<<<<<< HEAD
 Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
     Dim i As Long
     For i = 1 To Application.FontNames.Count
@@ -70,80 +41,6 @@ Public Function FontNameExistsInExcel(ByVal fontName As String) As Boolean
         End If
     Next i
 End Function
-=======
-Private Sub メインシート_フォント属性を適用( _
-    ByVal tgt As Range, _
-    ByVal fn As String, ByVal fs As Double, ByVal fc As Variant, _
-    ByVal fBold As Boolean, ByVal fItalic As Boolean, ByVal fUl As Long)
-    On Error Resume Next
-    If tgt Is Nothing Then Exit Sub
-    With tgt.Font
-        If Len(fn) > 0 Then .Name = fn
-        If fs > 0 Then .Size = fs
-        If Not IsEmpty(fc) Then .Color = fc
-        .Bold = fBold
-        .Italic = fItalic
-        .Underline = fUl
-    End With
-    On Error GoTo 0
-End Sub
-
-Private Sub 配台計画_タスク入力_既存シートの基準フォントを取得( _
-    ByVal ws As Worksheet, _
-    ByRef fontName As String, _
-    ByRef fontSize As Double, _
-    ByRef haveFont As Boolean)
-    Dim r As Long, c As Long
-    Dim ur As Range
-    Dim r0 As Long, c0 As Long, rMax As Long, cMax As Long
-    
-    fontName = "": fontSize = 0: haveFont = False
-    If ws Is Nothing Then Exit Sub
-    On Error Resume Next
-    Set ur = ws.UsedRange
-    On Error GoTo 0
-    If ur Is Nothing Then Exit Sub
-    
-    r0 = ur.Row
-    c0 = ur.Column
-    rMax = r0 + ur.Rows.Count - 1
-    cMax = c0 + ur.Columns.Count - 1
-    
-    ' 先頭行を見出しとみなし、その次行以降で最初の非空セルのフォントを採用
-    For r = r0 + 1 To rMax
-        For c = c0 To cMax
-            If Len(Trim$(CStr(ws.Cells(r, c).Value))) > 0 Then
-                fontName = ws.Cells(r, c).Font.Name
-                fontSize = ws.Cells(r, c).Font.Size
-                If Len(fontName) > 0 And fontSize > 0 Then
-                    haveFont = True
-                    Exit Sub
-                End If
-            End If
-        Next c
-    Next r
-    
-    On Error Resume Next
-    fontName = ws.Cells(r0, c0).Font.Name
-    fontSize = ws.Cells(r0, c0).Font.Size
-    On Error GoTo 0
-    If Len(fontName) > 0 And fontSize > 0 Then haveFont = True
-End Sub
-
-Private Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
-    ByVal ws As Worksheet, _
-    ByVal fontName As String, _
-    ByVal fontSize As Double)
-    On Error Resume Next
-    If ws Is Nothing Then Exit Sub
-    If Len(fontName) = 0 Or fontSize <= 0 Then Exit Sub
-    With ws.UsedRange.Font
-        .Name = fontName
-        .Size = fontSize
-    End With
-    On Error GoTo 0
-End Sub
->>>>>>> hosokawa/main2
 
 Public Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut As String)
     Dim ws As Worksheet
@@ -172,12 +69,8 @@ Public Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut A
     Next ws
 End Sub
 
-<<<<<<< HEAD
 ' 段階1・段階2のコア処理が成功した直後に呼ぶ。MsgBox なしで BIZ UDPゴシックを全シート UsedRange に付与しメインを AutoFit。
 Public Sub 配台_全シートフォントBIZ_UDP_自動適用()
-=======
-Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
->>>>>>> hosokawa/main2
     Dim skipped As String
     On Error Resume Next
     ApplyFontToAllSheetCells BIZ_UDP_GOTHIC_FONT_NAME, skipped
@@ -186,6 +79,7 @@ Private Sub 配台_全シートフォントBIZ_UDP_自動適用()
     On Error GoTo 0
 End Sub
 
+' Excel 標準の［フォント］ダイアログで選んで全シートに適用
 Public Sub 全シートフォントをリストから選択して統一()
     Dim wsScratch As Worksheet
     Dim r As Range
@@ -354,7 +248,6 @@ FailB:
     MsgBox "フォント設定でエラー: " & Err.Description, vbCritical
 End Sub
 
-<<<<<<< HEAD
 '==============================================================================
 ' 列設定_結果_タスク一覧 ? 表示列(B)と連動するフォームのチェックボックスを配置
 ' 開発タブ → 挿入 → フォーム コントロールの「チェックボックス」と同等。
@@ -551,9 +444,6 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
     Dim exitCode As Long
     Dim wsPlan As Worksheet
     Dim prevScreen As Boolean
-    Dim envLine As String
-    Dim stepMsg As String
-    Dim okMsg As String
 
     targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
@@ -570,26 +460,11 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
     End If
 
     On Error Resume Next
-    設定_配台不要工程_シートを確保
-    設定_環境変数_シートを確保
-    On Error GoTo 0
-
-    On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo 0
 
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
-
-    If localSheetOnly Then
-        envLine = "set ""PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1""" & vbCrLf
-        stepMsg = "配台試行順番: シート上の内容のみで再計算しています（元データ再取り込みなし）…"
-        okMsg = "「配台計画_タスク入力」の配台試行順番を更新しました（手編集したセル内容に基づき、試行順で並べ替え）。"
-    Else
-        envLine = "set ""PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=0""" & vbCrLf
-        stepMsg = "配台試行順番: 設定ルールを反映したうえで Python で再計算しています…"
-        okMsg = "「配台計画_タスク入力」の配台試行順番を更新しました（設定シートのルール適用後・試行順で並べ替え）。"
-    End If
 
     prevScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
@@ -837,5 +712,5 @@ End Sub
 ' シート「COM操作テストログ」を末尾に作成し、シートごとの OK/NG を出します。
 ' （Excel 本体からの操作の目安。外部 Python/pywin32 の COM とはプロセスが異なる場合があります）
 '==============================================================================
-=======
->>>>>>> hosokawa/main2
+
+

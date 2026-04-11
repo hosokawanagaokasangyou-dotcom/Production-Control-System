@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 Option Explicit
 
 Public Function GeminiJsonStringEscape(ByVal s As String) As String
@@ -62,17 +61,6 @@ Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As Strin
     Kill tmp
 End Function
 
-=======
-Attribute VB_Name = "Gemini連携"
-Option Explicit
-
-Sub アニメ付き_Gemini認証を暗号化してB1に保存()
-    Call AnimateButtonPush
-    ' InputBox 等があるためグリッド操作ブロックは使わない（スプラッシュのみ）
-    アニメ付き_スプラッシュ付きで実行 "Gemini 認証を暗号化して保存しています…", "設定_Gemini認証を暗号化してB1に保存", , , False
-End Sub
-
->>>>>>> hosokawa/main2
 Public Sub 設定_Gemini認証を暗号化してB1に保存()
     Dim apiKey As String
     Dim pass1 As String
@@ -194,12 +182,18 @@ EH:
     MsgBox "エラー: " & Err.Description, vbCritical
 End Sub
 
-Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal targetDir As String)
-    Const START_ROW As Long = 16
-    Const USAGE_COL As Long = 16 ' P
-    Const CLEAR_ROWS As Long = 120
+' メインシートのリンク・出退勤のみ再反映したいとき（手動実行可）
+Sub メインシート_メンバー一覧と出勤表示_手動()
+    メインシート_メンバー一覧と出勤表示 False
+End Sub
+
+' 同じフォルダの master.xlsm を開く（既に開いていればアクティブ化）
+Public Sub メインシート_masterブックを開く()
+    Dim path As String
+    Dim folder As String
+    Dim wb As Workbook
+    Dim wbMaster As Workbook
     
-<<<<<<< HEAD
     folder = ThisWorkbook.path
     If Len(folder) = 0 Then
         MsgBox "ブックを一度保存してから実行してください。", vbExclamation
@@ -973,54 +967,161 @@ End Sub
 
 Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean = False)
     Dim wb As Workbook
-=======
->>>>>>> hosokawa/main2
     Dim wsMain As Worksheet
-    Dim fp As String
-    Dim adoStream As Object
-    Dim outputText As String
-    Dim logLines() As String
-    Dim i As Long
-    Dim r As Long
-    Dim lastClearRow As Long
+    Dim wsCal As Worksheet
+    Dim ws As Worksheet
+    Dim dict As Object
+    Dim members As Object
+    Dim keys As Variant
+    Dim keysArr() As String
+    Dim i As Long, j As Long, r As Long, col As Long
+    Dim lastR As Long
+    Dim mn As String
+    Dim sheetName As String
+    Dim d As Date
+    Dim k As String
+    Dim colDate As Long, colMem As Long, colIn As Long, colOut As Long
+    Dim wkStr As String
+    Dim temp As String
+    Dim cnt As Long
+    Dim srcHdr As Range, srcMem As Range
+    Dim bHdrFn As String, bHdrFs As Double, bHdrFc As Variant
+    Dim bHdrBold As Boolean, bHdrIt As Boolean, bHdrUl As Long
+    Dim bMemFn As String, bMemFs As Double, bMemFc As Variant
+    Dim bMemBold As Boolean, bMemIt As Boolean, bMemUl As Long
+    Dim lastMemberRow As Long
+    Dim stdDispCached As String
     
+    lastMemberRow = 0
+    On Error GoTo EH
+    
+    Set wb = ThisWorkbook
     Set wsMain = GetMainWorksheet()
-    If wsMain Is Nothing Then Exit Sub
-    
-    lastClearRow = START_ROW + CLEAR_ROWS - 1
-    wsMain.Range(wsMain.Cells(START_ROW, USAGE_COL), wsMain.Cells(lastClearRow, USAGE_COL)).ClearContents
-    
-    fp = targetDir & "\log\gemini_usage_summary_for_main.txt"
-    If Len(Dir(fp)) = 0 Then Exit Sub
-    
-    On Error GoTo GeminiUsageP_Fail
-    Set adoStream = CreateObject("ADODB.Stream")
-    adoStream.charset = "UTF-8"
-    adoStream.Open
-    adoStream.LoadFromFile fp
-    outputText = adoStream.ReadText
-    adoStream.Close
-    Set adoStream = Nothing
-    On Error GoTo 0
-    
-    outputText = Replace(outputText, vbCrLf, vbLf)
-    If Len(Trim$(outputText)) = 0 Then Exit Sub
-    
-    logLines = Split(outputText, vbLf)
+    If wsMain Is Nothing Then
+        If Not Silent Then MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
+        Exit Sub
+    End If
     
     Application.ScreenUpdating = False
-    For i = LBound(logLines) To UBound(logLines)
-        r = START_ROW + i
-        If r > lastClearRow Then Exit For
-        With wsMain.Cells(r, USAGE_COL)
-            .Value = logLines(i)
-            .WrapText = True
-            .VerticalAlignment = xlTop
-        End With
+    
+    ' クリア前に B 列・見出しの見本フォントを記憶（無ければ日付列 C から）
+    Set srcHdr = wsMain.Cells(7, 2)
+    If Len(Trim$(CStr(srcHdr.Value))) = 0 Then Set srcHdr = wsMain.Cells(7, 3)
+    メインシート_フォント属性を取得 srcHdr, bHdrFn, bHdrFs, bHdrFc, bHdrBold, bHdrIt, bHdrUl
+    Set srcMem = wsMain.Cells(8, 2)
+    If Len(Trim$(CStr(srcMem.Value))) = 0 Then Set srcMem = wsMain.Cells(8, 3)
+    If Len(Trim$(CStr(srcMem.Value))) = 0 Then Set srcMem = wsMain.Cells(7, 3)
+    メインシート_フォント属性を取得 srcMem, bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+    
+    ' Clear だとフォント等の書式まで消える → ClearContents のみ。B列の個人リンクは削除してから再付与
+    メインシート_指定範囲のハイパーリンクを削除 wsMain, wsMain.Range("B7:B500")
+    wsMain.Range("B7:N500").ClearContents
+    On Error Resume Next
+    wsMain.Range("C7:N500").Interior.Pattern = xlNone
+    On Error GoTo EH
+    
+    ' 見出し行（前日から12日間）
+    wsMain.Cells(7, 2).Value = "メンバー"
+    メインシート_フォント属性を適用 wsMain.Cells(7, 2), bHdrFn, bHdrFs, bHdrFc, bHdrBold, bHdrIt, bHdrUl
+    For i = 0 To 11
+        d = DateAdd("d", i - 1, Date)
+        wkStr = Split("月,火,水,木,金,土,日", ",")(Weekday(d, vbMonday) - 1)
+        wsMain.Cells(7, 3 + i).Value = Format$(d, "m/d") & "(" & wkStr & ")"
+        wsMain.Cells(7, 3 + i).HorizontalAlignment = xlCenter
     Next i
+    
+    ' 個人_* シートからメンバー名一覧（重複なし）
+    Set members = CreateObject("Scripting.Dictionary")
+    For Each ws In wb.Worksheets
+        If Left$(ws.Name, 3) = "個人_" Then
+            mn = Mid$(ws.Name, 4)
+            If Len(mn) > 0 And Not members.Exists(mn) Then members.Add mn, mn
+        End If
+    Next ws
+    
+    ' 結果_カレンダー(出勤簿) から (メンバー,日付) → 出勤/退勤
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error Resume Next
+    Set wsCal = wb.Worksheets("結果_カレンダー(出勤簿)")
+    On Error GoTo EH
+    
+    If Not wsCal Is Nothing Then
+        colDate = FindColHeader(wsCal, "日付")
+        colMem = FindColHeader(wsCal, "メンバー")
+        colIn = FindColHeader(wsCal, "出勤")
+        colOut = FindColHeader(wsCal, "退勤")
+        If colDate > 0 And colMem > 0 And colIn > 0 And colOut > 0 Then
+            lastR = wsCal.Cells(wsCal.Rows.Count, colDate).End(xlUp).Row
+            For r = 2 To lastR
+                If IsDate(wsCal.Cells(r, colDate).Value) Then
+                    d = CDate(wsCal.Cells(r, colDate).Value)
+                    mn = Trim$(CStr(wsCal.Cells(r, colMem).Value))
+                    If Len(mn) > 0 Then
+                        k = mn & "|" & Format$(d, "yyyy-mm-dd")
+                        dict(k) = Trim$(CStr(wsCal.Cells(r, colIn).Value)) & " / " & Trim$(CStr(wsCal.Cells(r, colOut).Value))
+                    End If
+                End If
+            Next r
+        End If
+    End If
+    
+    cnt = members.Count
+    If cnt = 0 Then
+        wsMain.Cells(8, 2).Value = "（個人_* のシートがありません）"
+        メインシート_フォント属性を適用 wsMain.Cells(8, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+        lastMemberRow = 8
+        GoTo CleanExit
+    End If
+    
+    keys = members.keys
+    ReDim keysArr(0 To UBound(keys))
+    For i = 0 To UBound(keys)
+        keysArr(i) = CStr(keys(i))
+    Next i
+    ' 単純ソート（表示順）
+    For i = 0 To UBound(keysArr) - 1
+        For j = i + 1 To UBound(keysArr)
+            If keysArr(i) > keysArr(j) Then
+                temp = keysArr(i): keysArr(i) = keysArr(j): keysArr(j) = temp
+            End If
+        Next j
+    Next i
+    
+    ' master.xlsm の定常表示はセルごとに読むと都度 Open/Close になり得るため、ここで1回だけ取得して勤怠セル着色に渡す
+    stdDispCached = マスタメイン_工場標準勤怠表示文字列()
+    
+    r = 8
+    For i = 0 To UBound(keysArr)
+        mn = keysArr(i)
+        sheetName = SafePersonalSheetName(mn)
+        On Error Resume Next
+        wsMain.Hyperlinks.Add anchor:=wsMain.Cells(r, 2), Address:="", SubAddress:="'" & Replace(sheetName, "'", "''") & "'!A1", TextToDisplay:=mn
+        On Error GoTo EH
+        メインシート_フォント属性を適用 wsMain.Cells(r, 2), bMemFn, bMemFs, bMemFc, bMemBold, bMemIt, bMemUl
+        
+        For col = 0 To 11
+            d = DateAdd("d", col - 1, Date)
+            k = mn & "|" & Format$(d, "yyyy-mm-dd")
+            If dict.Exists(k) Then
+                wsMain.Cells(r, 3 + col).Value = dict(k)
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), CStr(dict(k)), stdDispCached
+            Else
+                wsMain.Cells(r, 3 + col).Value = "-"
+                メインシート_勤怠セルに背景色を設定 wsMain.Cells(r, 3 + col), "-", stdDispCached
+            End If
+            wsMain.Cells(r, 3 + col).HorizontalAlignment = xlCenter
+        Next col
+        r = r + 1
+    Next i
+    lastMemberRow = r - 1
+
+CleanExit:
+    On Error Resume Next
+    メインシート_メンバー勤怠ブロックに罫線を設定 wsMain, lastMemberRow
+    メインシート_結果シートリンクを更新 wsMain
+    メインシート_AからK列_AutoFitOnSheet wsMain
     Application.ScreenUpdating = True
     Exit Sub
-<<<<<<< HEAD
 EH:
     If Not Silent Then MsgBox "メインシート更新エラー: " & Err.Description, vbCritical
     Resume CleanExit
@@ -1029,15 +1130,22 @@ End Sub
 ' メインシートの A～N 列オートフィット（メインの勤怠12日分＋A列リンク。フォント変更後・段階2後のレイアウト用）
 ' ※ScreenUpdating=False 中は効かないことがあるため、必要なら True にしてから実行
 Public Sub メインシート_AからK列_AutoFitOnSheet(ByVal wsMain As Worksheet)
-=======
-    
-GeminiUsageP_Fail:
->>>>>>> hosokawa/main2
     On Error Resume Next
-    If Not adoStream Is Nothing Then
-        adoStream.Close
-        Set adoStream = Nothing
-    End If
+    If wsMain Is Nothing Then Exit Sub
+    wsMain.Columns("A:N").AutoFit
+    On Error GoTo 0
+End Sub
+
+Public Sub メインシート_AからK列_AutoFit()
+    Dim ws As Worksheet
+    Dim su As Boolean
+    On Error Resume Next
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then Exit Sub
+    su = Application.ScreenUpdating
+    Application.ScreenUpdating = True
+    メインシート_AからK列_AutoFitOnSheet ws
+    Application.ScreenUpdating = su
     On Error GoTo 0
 End Sub
 
@@ -1054,16 +1162,12 @@ Public Function GeminiCredentialsJsonPathIsConfigured() As Boolean
     On Error GoTo 0
 End Function
 
-<<<<<<< HEAD
 ' =========================================================
 ' 外部データ／PQ の接続を「バックグラウンド更新しない」にそろえる。
 ' 背景更新のまま RefreshAll が先に返り、その直後の Save 等で Excel が
 ' 「この操作を実行すると、まだ実行されていないデータの更新が取り消されます」と出すのを防ぐ。
 ' =========================================================
 Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
-=======
-Private Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
->>>>>>> hosokawa/main2
     Const SH_LOG_AI As String = "LOG_AI"
     Const MAX_CELL As Long = 32700
     Dim ws As Worksheet
@@ -1153,7 +1257,6 @@ Private Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String
     ws.Columns(1).ColumnWidth = 100
 End Sub
 
-<<<<<<< HEAD
 ' =========================================================
 ' 設定_配台不要工程: シートの新規作成と見出し行のみ VBA（Python は工程+機械行の同期・AI・保存）
 ' 手動で空シートだけ用意したい場合も本マクロを実行可。
@@ -2002,5 +2105,5 @@ End Sub
 ' Python が出力した log\exclude_rules_e_column_vba.tsv から E 列（ロジック式）を書き込む。
 ' COM は A?D のみ同期するため、段階1/段階2 の Python 直後に呼ぶ。
 ' =========================================================
-=======
->>>>>>> hosokawa/main2
+
+

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 Option Explicit
 
 Public Function MacroCompleteChime_LocalWavPath() As String
@@ -110,11 +109,6 @@ Public Sub MacroCompleteChime()
 End Sub
 
 ' MP3 は sndPlaySound（別名 PlaySoundA 系）ではなく MCI（mciSendStringW）で再生。WAV のみの場合は PlaySoundW でも可。
-=======
-Attribute VB_Name = "サウンド制御"
-Option Explicit
-
->>>>>>> hosokawa/main2
 Public Sub PlayFinishSound()
     MacroCompleteChime
 End Sub
@@ -167,3 +161,4 @@ Public Sub MacroStartBgm_StartIfAvailable()
     If r = 0 Then m_macroStartBgmOpen = True
 End Sub
 
+' Excel メインウィンドウ（Application.hwnd）の下端・水平中央へ UserForm を SetWindowPos（モードレスのため API で座標指定）
