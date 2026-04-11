@@ -126,6 +126,40 @@ _GEMINI_RETRY_BACKOFF_BASE = float(
 _GEMINI_RETRY_MAX_ATTEMPTS = max(
     1, int(os.environ.get("GEMINI_RETRY_MAX_ATTEMPTS", "5") or 5)
 )
+# generate_content 1 リクエストの HTTP タイムアウト（秒）。0 で HttpOptions の timeout を付けず SDK 既定。
+# 環境変数 GEMINI_REQUEST_TIMEOUT_SEC（未設定時は 30）。
+
+
+def _gemini_request_timeout_sec() -> float:
+    raw = (os.environ.get("GEMINI_REQUEST_TIMEOUT_SEC") or "").strip()
+    if not raw:
+        return 30.0
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 30.0
+    return max(0.0, v)
+
+
+def _gemini_client(api_key: str) -> genai.Client:
+    """API キー付き Client。可能なら HttpOptions で読み取りタイムアウトを付与する。"""
+    sec = _gemini_request_timeout_sec()
+    if sec > 0:
+        try:
+            from google.genai import types as genai_types
+
+            ms = max(1000, int(round(sec * 1000.0)))
+            return genai.Client(
+                api_key=api_key,
+                http_options=genai_types.HttpOptions(timeout=ms),
+            )
+        except Exception:
+            logging.debug(
+                "Gemini Client: HttpOptions によるタイムアウト設定に失敗したため、既定クライアントを使用します。",
+                exc_info=True,
+            )
+    return genai.Client(api_key=api_key)
+
 
 # ---------------------------------------------------------------------------
 # 以降の定数ブロックは「Excel 列見出し」と 1:1 で対応させる。
@@ -2361,6 +2395,24 @@ def _gemini_is_quota_style_error(err_text: str) -> bool:
     return ("429" in err_text) or ("RESOURCE_EXHAUSTED" in t)
 
 
+def _gemini_is_timeout_error(exc: BaseException, err_text: str) -> bool:
+    """HTTP 読み取りタイムアウト・接続タイムアウト等（応答が期限内に返らない）。"""
+    if isinstance(exc, TimeoutError):
+        return True
+    tn = type(exc).__name__
+    if tn in ("ReadTimeout", "ConnectTimeout", "WriteTimeout", "PoolTimeout"):
+        return True
+    u = err_text.upper()
+    if "READ TIMEOUT" in u or "CONNECT TIMEOUT" in u or "WRITE TIMEOUT" in u:
+        return True
+    if "TIMED OUT" in u:
+        return True
+    # 504 等も TIMEOUT を含むが、DEADLINE_EXCEEDED 単体は一時エラー扱いに任せる
+    if "TIMEOUT" in u and "DEADLINE_EXCEEDED" not in u:
+        return True
+    return False
+
+
 def _gemini_try_order_from_env() -> tuple[str, ...] | None:
     raw = (os.environ.get("GEMINI_MODEL_TRY_ORDER") or "").strip()
     if not raw:
@@ -2459,6 +2511,8 @@ def _gemini_generate_content_with_retry(
     - 待機時間は二系統:
       (1) 429 / RESOURCE_EXHAUSTED で本文に retry 秒数があるときはその値（クリップ）＋小ジッター
       (2) それ以外の一時エラーは指数バックオフ＋ジッター（503 / UNAVAILABLE 等）
+    - HTTP タイムアウト（既定 30 秒・GEMINI_REQUEST_TIMEOUT_SEC）: 同一モデルに残試行があれば短待機で再試行。
+      試行を使い切ったらモデル列の次点へ進む（_gemini_client の HttpOptions と併用）。
 
     戻り値: (応答オブジェクト, 実際に成功したモデル ID)
     """
@@ -2513,6 +2567,30 @@ def _gemini_generate_content_with_retry(
                     )
                     last_raise = e
                     break
+                if _gemini_is_timeout_error(e, err_text):
+                    last_raise = e
+                    if attempt < n - 1:
+                        wait_sec = min(2.0 + random.uniform(0.0, 1.0), 5.0)
+                        logging.warning(
+                            "%sGemini API タイムアウト（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                            prefix,
+                            mid,
+                            attempt + 1,
+                            n,
+                            err_text[:800],
+                            wait_sec,
+                        )
+                        time_module.sleep(wait_sec)
+                        continue
+                    if mi < len(chain) - 1:
+                        logging.warning(
+                            "%sGemini API タイムアウト（モデル %s）: %s — 次モデルへ切り替えます。",
+                            prefix,
+                            mid,
+                            err_text[:800],
+                        )
+                        break
+                    raise
                 if attempt >= n - 1 or not _gemini_is_transient_api_error(err_text):
                     raise
                 wait_sec = None
@@ -3765,7 +3843,7 @@ F) **global_day_process_operator_rules** （配列・必須）
     except OSError as ex:
         logging.warning("メイン再優先特記: プロンプト保存失敗: %s", ex)
 
-    client = genai.Client(api_key=API_KEY)
+    client = _gemini_client(API_KEY)
     try:
         res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="メイン再優先特記"
@@ -7221,7 +7299,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     except OSError as ex:
         logging.warning("タスク特別指定: プロンプト保存失敗: %s", ex)
 
-    client = genai.Client(api_key=API_KEY)
+    client = _gemini_client(API_KEY)
     try:
         res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="タスク特別指定"
@@ -8639,7 +8717,7 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
     except OSError as ex:
         logging.warning("配台不要ルール: プロンプト保存失敗: %s", ex)
     try:
-        client = genai.Client(api_key=API_KEY)
+        client = _gemini_client(API_KEY)
         res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="配台不要ルールD→E"
         )
@@ -8711,7 +8789,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     except OSError as ex:
         logging.warning("配台不要ルール(バッチ): プロンプト保存失敗: %s", ex)
     try:
-        client = genai.Client(api_key=API_KEY)
+        client = _gemini_client(API_KEY)
         res, gem_model_used = _gemini_generate_content_with_retry(
             client, contents=prompt, log_label="配台不要ルールD→Eバッチ"
         )
@@ -12356,7 +12434,7 @@ def load_attendance_and_analyze(members):
             {chr(10).join(remarks_to_analyze)}
             """
             try:
-                client = genai.Client(api_key=API_KEY)
+                client = _gemini_client(API_KEY)
                 res, gem_model_used = _gemini_generate_content_with_retry(
                     client, contents=prompt, log_label="勤怠備考AI"
                 )
