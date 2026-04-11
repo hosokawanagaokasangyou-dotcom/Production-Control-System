@@ -10059,6 +10059,7 @@ DEFAULT_BREAKS = [
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
 # 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
 # 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
+# 占有キー上の直前加工が同一依頼NO（machine_handoff last_tid）のときは上記2点をスキップ（_eod_same_request_continuation_exempt）。
 # ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
 # 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
@@ -10086,13 +10087,39 @@ def _eod_minutes_window_covers_start(
     return (team_end_limit - team_start) <= timedelta(minutes=gap)
 
 
+def _eod_same_request_continuation_exempt(
+    machine_occ_key: str, task: dict, machine_handoff: dict | None
+) -> bool:
+    """
+    同一設備占有キーで直前に載せた加工が同一依頼NO（task_id）のとき True。
+    終業直前デファーは「新規開始」に寄せるため、この場合は小残・収容閾値の EOD 抑止を外す。
+    """
+    if not machine_handoff:
+        return False
+    occ = str(machine_occ_key or "").strip()
+    if not occ:
+        return False
+    prev = (machine_handoff.get("last_tid") or {}).get(occ)
+    cur = str(task.get("task_id") or "").strip()
+    if not prev or not cur:
+        return False
+    return str(prev).strip() == cur
+
+
 def _eod_reject_capacity_units_below_threshold(
-    units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
+    units_fit_until_close: int,
+    team_start: datetime,
+    team_end_limit: datetime,
+    *,
+    eod_same_request_continuation_exempt: bool = False,
 ) -> bool:
     """
     終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
     ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
+    eod_same_request_continuation_exempt が True のときは常に False（同一依頼の連続ロール）。
     """
+    if eod_same_request_continuation_exempt:
+        return False
     th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
     if th <= 0:
         return False
@@ -10185,10 +10212,13 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     team_breaks: list,
     refloor_fn,
     min_contiguous_work_mins: int | None = None,
+    *,
+    eod_same_request_continuation_exempt: bool = False,
 ) -> datetime | None:
     """
     - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
       remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
+      eod_same_request_continuation_exempt が True のときはこの終業直前・小残分岐をスキップ（同一依頼の連続ロール）。
     - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
       繰り下げのあと終業超過・EOD デファーに該当すれば None。
     - min_contiguous_work_mins が正のとき、帯外でも **次の休憩までの連続実働**がそれ未満なら
@@ -10257,7 +10287,8 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
         if (
-            gap_end > 0
+            not eod_same_request_continuation_exempt
+            and gap_end > 0
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
         ):
@@ -15444,6 +15475,9 @@ def _append_legacy_dispatch_candidate_for_team(
         * _surplus_team_time_factor(rq_base, len(team), extra_max)
     )
     _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+    _eod_cont_exempt = _eod_same_request_continuation_exempt(
+        _machine_occ_key, task, _mh_legacy
+    )
 
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
@@ -15488,6 +15522,7 @@ def _append_legacy_dispatch_candidate_for_team(
         team_breaks,
         _refloor_legacy_roll,
         min_contiguous_work_mins=_defer_min_contig,
+        eod_same_request_continuation_exempt=_eod_cont_exempt,
     )
     if team_start_adj is None:
         return False
@@ -15501,7 +15536,10 @@ def _append_legacy_dispatch_candidate_for_team(
         return False
     units_today = min(units_can_do, math.ceil(task["remaining_units"]))
     if _eod_reject_capacity_units_below_threshold(
-        units_today, team_start, team_end_limit
+        units_today,
+        team_start,
+        team_end_limit,
+        eod_same_request_continuation_exempt=_eod_cont_exempt,
     ):
         return False
     work_mins_needed = int(units_today * eff_time_per_unit)
@@ -15581,6 +15619,9 @@ def _assign_one_roll_trial_order_flow(
         "last_lead_op": {},
         "last_machining_sub": {},
     }
+    _eod_cont_exempt = _eod_same_request_continuation_exempt(
+        machine_occ_key, task, _mh
+    )
 
     plan_ro = _plan_sheet_required_op_optional(task)
     need_src_line = ""
@@ -15857,6 +15898,7 @@ def _assign_one_roll_trial_order_flow(
             team_breaks,
             _refloor_trial_roll,
             min_contiguous_work_mins=_defer_min_contig,
+            eod_same_request_continuation_exempt=_eod_cont_exempt,
         )
         if team_start_d is None:
             _trace_assign(
@@ -15888,7 +15930,10 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
         if _eod_reject_capacity_units_below_threshold(
-            _trial_units_cap, team_start, team_end_limit
+            _trial_units_cap,
+            team_start,
+            team_end_limit,
+            eod_same_request_continuation_exempt=_eod_cont_exempt,
         ):
             _trace_assign(
                 "候補却下: 終業直前で当日収容ロール数が閾値未満 team=%s cap=%s th=%s start=%s",
@@ -18199,7 +18244,12 @@ def _generate_plan_impl():
                                     * _surplus_team_time_factor(rq_base, len(team), extra_max)
                                 )
                                 _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
-    
+                                _eod_cont_exempt_il = (
+                                    _eod_same_request_continuation_exempt(
+                                        machine_occ_key, task, machine_handoff_legacy
+                                    )
+                                )
+
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
                                     if not _gpo.get("abolish_all_scheduling_limits"):
@@ -18239,6 +18289,7 @@ def _generate_plan_impl():
                                     team_breaks,
                                     _refloor_legacy_inline,
                                     min_contiguous_work_mins=_defer_min_contig,
+                                    eod_same_request_continuation_exempt=_eod_cont_exempt_il,
                                 )
                                 if _ts_adj is None:
                                     continue
@@ -18254,7 +18305,10 @@ def _generate_plan_impl():
     
                                 units_today = min(units_can_do, math.ceil(task['remaining_units']))
                                 if _eod_reject_capacity_units_below_threshold(
-                                    units_today, team_start, team_end_limit
+                                    units_today,
+                                    team_start,
+                                    team_end_limit,
+                                    eod_same_request_continuation_exempt=_eod_cont_exempt_il,
                                 ):
                                     continue
                                 work_mins_needed = int(units_today * eff_time_per_unit)
