@@ -15101,16 +15101,8 @@ def _agent_debug_ndjson_log(
 ) -> None:
     # region agent log
     try:
-        _repo_root = os.path.dirname(
-            os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(os.path.dirname(__file__))
-                    )
-                )
-            )
-        )
-        _path = os.path.join(_repo_root, "debug-dbc2c5.log")
+        _path = os.path.join(log_dir, "debug-dbc2c5.log")
+        os.makedirs(log_dir, exist_ok=True)
         _payload = {
             "sessionId": "dbc2c5",
             "hypothesisId": hypothesisId,
@@ -15125,6 +15117,39 @@ def _agent_debug_ndjson_log(
     except Exception:
         pass
     # endregion
+
+
+def _extend_changeover_prep_segment_end_for_timeline(
+    segments: list, machining_start: datetime | None
+) -> None:
+    """
+    タイムライン追記直前に、加工前準備セグメントの end_dt を実加工 start_dt まで延ばす。
+    依頼切替の準備区間は代表スキルOPの勤務で forward される一方、確定チームの開始は
+    max(メンバー avail, 機械下限) となり、準備終了より遅くなると設備時間割の 10 分枠が空く。
+    """
+    if not segments or not isinstance(machining_start, datetime):
+        return
+    for seg in reversed(segments):
+        if str(seg.get("event_kind") or "").strip() != TIMELINE_EVENT_CHANGEOVER_PREP:
+            continue
+        pe = seg.get("end_dt")
+        if not isinstance(pe, datetime):
+            return
+        if machining_start > pe:
+            # region agent log
+            _agent_debug_ndjson_log(
+                hypothesisId="H1fix",
+                location="_core.py:_extend_changeover_prep_segment_end_for_timeline",
+                message="extended_prep_end_dt_to_machining_start",
+                runId="post-fix",
+                data={
+                    "old_prep_end": str(pe),
+                    "machining_start": str(machining_start),
+                },
+            )
+            # endregion
+            seg["end_dt"] = machining_start
+        return
 
 
 def _agent_debug_scan_prep_followups(
@@ -17133,6 +17158,8 @@ def _trial_order_first_schedule_pass(
                         },
                     )
             # endregion
+            _co_append = list(res.get("changeover_segments") or [])
+            _extend_changeover_prep_segment_end_for_timeline(_co_append, best_start)
             _append_changeover_segments_to_timeline(
                 timeline_events,
                 dispatch_interval_mirror,
@@ -17141,7 +17168,7 @@ def _trial_order_first_schedule_pass(
                 current_date=current_date,
                 task_id=str(task.get("task_id") or ""),
                 machine_occ_key=machine_occ_key,
-                segments=list(res.get("changeover_segments") or []),
+                segments=_co_append,
                 machining_lead_op=str(lead_op or "").strip() or None,
                 machining_sub_str=_mach_sub_line or None,
                 machine_handoff=machine_handoff,
@@ -19226,6 +19253,10 @@ def _generate_plan_impl():
                                         },
                                     )
                             # endregion
+                            _co_append_l = list(_co_segs_legacy or [])
+                            _extend_changeover_prep_segment_end_for_timeline(
+                                _co_append_l, best_info.get("start_dt")
+                            )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
                                 _dispatch_interval_mirror,
@@ -19234,7 +19265,7 @@ def _generate_plan_impl():
                                 current_date=current_date,
                                 task_id=str(task.get("task_id") or ""),
                                 machine_occ_key=machine_occ_key,
-                                segments=list(_co_segs_legacy or []),
+                                segments=_co_append_l,
                                 machining_lead_op=str(
                                     best_info.get("op") or ""
                                 ).strip()
