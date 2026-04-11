@@ -31,6 +31,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.pagebreak import Break
 
 from .bootstrap import (
     _clear_stage2_blocking_message_file,
@@ -1898,6 +1899,9 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
+    # 印刷: 2 日分ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
+    gantt_day_first_rows: list[int] = []
+
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
@@ -1905,6 +1909,7 @@ def _write_results_equipment_gantt_sheet(
         slots = [datetime.combine(d, tm) for tm in slot_times]
 
         day_start = row
+        gantt_day_first_rows.append(day_start)
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             mk_key = (mach_nm or "").strip() or "—"
@@ -2048,17 +2053,30 @@ def _write_results_equipment_gantt_sheet(
         for ci in range(n_fixed + 1, last_col + 1):
             ws.column_dimensions[get_column_letter(ci)].width = gw
 
+    # 1 ページに 2 日分: 3 日目以降の各日ブロック先頭の直前に手動の横改ページ
+    try:
+        if len(gantt_day_first_rows) > 2:
+            for i in range(2, len(gantt_day_first_rows), 2):
+                ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
+    except Exception:
+        pass
+
     try:
         ws.page_setup.orientation = "landscape"
+        # 横 1 ページ・縦は自動（高さ方向のページ指定なし）
         ws.page_setup.fitToHeight = False
         ws.page_setup.fitToWidth = 1
         # A3（openpyxl 上で paperSize=8 が A3 相当）
         ws.page_setup.paperSize = 8
-        # 余白を狭めて横1ページに収まりやすくする（単位: インチ）
-        ws.page_margins.left = 0.2
-        ws.page_margins.right = 0.2
-        ws.page_margins.top = 0.2
-        ws.page_margins.bottom = 0.2
+        # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.75
+        ws.page_margins.bottom = 0.75
+        ws.page_margins.header = 0.3
+        ws.page_margins.footer = 0.3
+        # 全ページに繰り返すタイトル行（レポート 1〜3 行目）
+        ws.print_title_rows = "1:3"
         # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
