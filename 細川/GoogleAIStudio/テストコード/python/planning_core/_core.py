@@ -149,8 +149,10 @@ MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # 備考列・休暇区分は勤怠 AI で構造化（配台不参加・is_holiday・中抜け等）。備考が空でも休暇区分のみの行は AI に渡す。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
-# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列）
-ATT_COL_OT_END = "残業終業"
+# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列・見出しは「残業(分)」）
+ATT_COL_OT_END = "残業(分)"
+# 旧ブックの K 列見出し。load_attendance_and_analyze で ATT_COL_OT_END に正規化する。
+ATT_COL_OT_END_LEGACY = "残業終業"
 # 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
 # need シート: 「基本必要人数」行（A列に「必要人数」を含む）＋ その直下の「配台時追加人数／余力時追加人数」等
@@ -12047,7 +12049,7 @@ def _ai_json_bool(v, default: bool = False) -> bool:
 
 
 def _parse_attendance_overtime_end_optional(v) -> time | None:
-    """勤怠「残業終業」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
+    """勤怠「残業(分)」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
     return _excel_scalar_to_time_optional(v)
 
 
@@ -12058,7 +12060,7 @@ def _resolve_attendance_overtime_end(
     curr_date: date,
 ) -> time | None:
     """
-    勤怠「残業終業」列の解釈（いずれかで成功したらその time を返す）。
+    勤怠「残業(分)」列の解釈（いずれかで成功したらその time を返す）。
 
     1) 時刻（文字列 HH:MM、datetime、time、Excel 0<値<1 の日内小数）
     2) 定時退勤からの延長「分」: 1〜720 の整数（Excel 数値・文字列の整数も可）
@@ -12125,6 +12127,8 @@ def load_attendance_and_analyze(members):
             
         if all_records:
             df = pd.concat(all_records, ignore_index=True)
+            if ATT_COL_OT_END_LEGACY in df.columns and ATT_COL_OT_END not in df.columns:
+                df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
             df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
             df = df.dropna(subset=['日付'])
             logging.info(f"『{MASTER_FILE}』の各メンバーの勤怠シートを読み込みました。")
@@ -12340,9 +12344,11 @@ def load_attendance_and_analyze(members):
         end_dt = combine_dt(end_t)
         if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
             logging.warning(
-                "勤怠 %s %s: 残業終業適用後に退勤が出勤以前となったため、残業終業を無視して定時退勤に戻します。",
+                "勤怠 %s %s: %s 適用後に退勤が出勤以前となったため、%s を無視して定時退勤に戻します。",
                 curr_date,
                 m,
+                ATT_COL_OT_END,
+                ATT_COL_OT_END,
             )
             end_t = base_end_t
             end_dt = combine_dt(end_t)
