@@ -8787,12 +8787,6 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         return None
 
     abs_path = os.path.abspath(macro_wb_path)
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_attach_open_macro_workbook",
-        "attach_enter",
-        {"path": abs_path},
-    )
 
     _log_exclude_rules_sheet_debug(
         "XLWINGS_APPS_ENUM_SKIPPED",
@@ -8800,52 +8794,16 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         "xw.apps 列挙はスキップし、新規 Excel でブックを開きます（COM 無応答回避）。",
         details=f"path={abs_path}",
     )
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_attach_open_macro_workbook",
-        "skip_xw_apps_scan_new_excel_only",
-        {},
-    )
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_attach_open_macro_workbook",
-        "after_find_running_instance",
-        {"hit": False, "skipped": True},
-    )
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_attach_open_macro_workbook",
-        "after_try_open_in_running_apps",
-        {"hit": False, "skipped": True},
-    )
 
     try:
         import xlwings as xw
 
-        _agent_dbg_a71bb9(
-            "H1",
-            "planning_core._core:_xlwings_attach_open_macro_workbook",
-            "before_xw_App_new",
-            {"path": abs_path},
-        )
         app = xw.App(visible=False, add_book=False)
-        _agent_dbg_a71bb9(
-            "H1",
-            "planning_core._core:_xlwings_attach_open_macro_workbook",
-            "after_xw_App_new",
-            {},
-        )
         try:
             app.display_alerts = False
         except Exception:
             pass
         book = app.books.open(abs_path, update_links=False)
-        _agent_dbg_a71bb9(
-            "H1",
-            "planning_core._core:_xlwings_attach_open_macro_workbook",
-            "after_books_open_new_app",
-            {"hit": book is not None},
-        )
         return book, {"mode": "quit_excel", "opened_wb_here": True}
     except Exception as ex:
         _log_exclude_rules_sheet_debug(
@@ -8924,32 +8882,6 @@ def _xlwings_app_save_perf_state_pop(app, snap):
             pass
 
 
-# #region agent log
-def _agent_dbg_a71bb9(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    """Debug NDJSON for Cursor session a71bb9 → workspace debug-a71bb9.log"""
-    try:
-        from pathlib import Path as _Path
-
-        _path = _Path(__file__).resolve().parents[5] / "debug-a71bb9.log"
-        _rec = {
-            "sessionId": "a71bb9",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_path, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
@@ -8961,24 +8893,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     """
     global _exclude_rules_effective_read_path
 
-    _t_sync0 = time_module.time()
-    max_r_preview = max(1, int(ws_oxl.max_row or 1))
-    _agent_dbg_a71bb9(
-        "H0",
-        "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-        "sync_enter",
-        {"path": wb_path, "max_row": max_r_preview},
-    )
     attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-        "attach_returned",
-        {
-            "ok": attached is not None,
-            "ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000),
-        },
-    )
     if attached is None:
         _log_exclude_rules_sheet_debug(
             "XLWINGS_SYNC_SKIP",
@@ -8989,16 +8904,6 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         return False
 
     xw_book, info = attached
-    _agent_dbg_a71bb9(
-        "H1",
-        "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-        "book_resolved",
-        {
-            "mode": info.get("mode"),
-            "opened_wb_here": info.get("opened_wb_here"),
-            "ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000),
-        },
-    )
     ok = False
     try:
         try:
@@ -9019,22 +8924,10 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             return False
         max_r = max(1, int(ws_oxl.max_row or 1))
         ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
-        _t_data0 = time_module.time()
         data = [
             [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
             for r in range(1, max_r + 1)
         ]
-        _agent_dbg_a71bb9(
-            "H2",
-            "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-            "data_matrix_built",
-            {
-                "nrows": len(data),
-                "ncols": ncols,
-                "build_ms": int((time_module.time() - _t_data0) * 1000),
-                "ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000),
-            },
-        )
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
         rng = sht.range((1, 1)).resize(len(data), ncols)
         hid_sheet_for_write = False
@@ -9045,29 +8938,11 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                     hid_sheet_for_write = True
             except Exception:
                 pass
-            _agent_dbg_a71bb9(
-                "H3",
-                "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                "before_range_value2",
-                {"ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000)},
-            )
             try:
                 rng.api.Value2 = data
             except Exception:
                 rng.value = data
-            _agent_dbg_a71bb9(
-                "H3",
-                "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                "after_range_value2_before_save",
-                {"ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000)},
-            )
             xw_book.save()
-            _agent_dbg_a71bb9(
-                "H4",
-                "planning_core._core:_xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                "after_book_save",
-                {"ms_since_sync_enter": int((time_module.time() - _t_sync0) * 1000)},
-            )
         finally:
             if hid_sheet_for_write:
                 try:
@@ -9189,16 +9064,6 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     if saved_openpyxl:
         return True
 
-    try:
-        _mr_xw = max(1, int(getattr(ws, "max_row", None) or 1))
-    except Exception:
-        _mr_xw = -1
-    _agent_dbg_a71bb9(
-        "H0",
-        "planning_core._core:_persist_exclude_rules_workbook",
-        "invoke_xlwings_sync",
-        {"path": wb_path, "max_row": _mr_xw},
-    )
     if _xlwings_sync_exclude_rules_sheet_from_openpyxl(wb_path, ws, log_prefix):
         return True
 
