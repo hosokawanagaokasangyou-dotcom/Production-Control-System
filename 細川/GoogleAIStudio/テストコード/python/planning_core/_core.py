@@ -2744,6 +2744,7 @@ def _apply_planning_sheet_post_load_mutations(
     log_prefix: str,
     *,
     apply_exclude_rules_from_config: bool = True,
+    compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
     配台計画_タスク入力を DataFrame 化した直後の共通処理（設定シートの行同期・分割行の自動配台不要）。
@@ -2752,6 +2753,9 @@ def _apply_planning_sheet_post_load_mutations(
     （``run_stage1_extract`` 内の ``apply_exclude_rules_config_to_plan_df``）。段階2の
     ``load_planning_tasks_df`` では常に ``apply_exclude_rules_from_config=False`` を渡し、
     シート上の「配台不要」列をそのまま解釈する。
+
+    段階2および試行順のみの xlwings 更新では ``compile_exclude_rules_d_to_e_with_ai=False`` とし、
+    設定シートの D→E（ロジック式）の **Gemini 補完は行わない**（行同期・保存のみ）。
 
     ``apply_exclude_rules_from_config=False`` は本関数呼び出し側で明示する（上記のほか、
     試行順のみ再計算する xlwings 経路でも同様）。
@@ -2772,7 +2776,12 @@ def _apply_planning_sheet_post_load_mutations(
                 continue
             _seen_lr.add(_k)
             _pairs_lr.append((_p, _m))
-        run_exclude_rules_sheet_maintenance(wb_path, _pairs_lr, log_prefix)
+        run_exclude_rules_sheet_maintenance(
+            wb_path,
+            _pairs_lr,
+            log_prefix,
+            compile_exclude_rules_d_to_e_with_ai=compile_exclude_rules_d_to_e_with_ai,
+        )
     except Exception:
         logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
     try:
@@ -2802,7 +2811,8 @@ def load_planning_tasks_df():
     「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
     読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
     「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は行うが、
-    C/E に基づく計画シートへの配台不要の**再適用**（``apply_exclude_rules_config_to_plan_df``）は行わない（段階1のみ）。
+    D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
+    （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
@@ -2823,6 +2833,7 @@ def load_planning_tasks_df():
         TASKS_INPUT_WORKBOOK,
         "配台シート読込",
         apply_exclude_rules_from_config=False,
+        compile_exclude_rules_d_to_e_with_ai=False,
     )
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
@@ -4211,7 +4222,11 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
     _apply_planning_sheet_post_load_mutations(
-        df, path, "配台試行順番更新", apply_exclude_rules_from_config=False
+        df,
+        path,
+        "配台試行順番更新",
+        apply_exclude_rules_from_config=False,
+        compile_exclude_rules_d_to_e_with_ai=False,
     )
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
@@ -4886,7 +4901,7 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    pandas/openpyxl で新規作成した結果ブックには図形が含まれない。
+    pandas/openｎｎxl で新規作成した結果ブックには図形が含まれない。
     既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
     「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
     各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
@@ -9375,10 +9390,18 @@ def _read_exclude_rules_d_cells_data_only_for_rows(
 
 
 def run_exclude_rules_sheet_maintenance(
-    wb_path: str, pairs: list[tuple[str, str]], log_prefix: str
+    wb_path: str,
+    pairs: list[tuple[str, str]],
+    log_prefix: str,
+    *,
+    compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    「設定_配台不要工程」の行同期・D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
+    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
+
+    ``compile_exclude_rules_d_to_e_with_ai=False`` のときは D 列→E 列（ロジック式 JSON）の
+    Gemini 補完のみスキップする（行同期・空行詰め・退避 E の復元・保存は従来どおり）。
+    段階2の ``load_planning_tasks_df`` 経路では False を渡す。
 
     xlwings でも保存できないときは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
     ``設定_配台不要工程_AからE_TSVから反映`` で A〜E を反映する。
@@ -9408,7 +9431,7 @@ def run_exclude_rules_sheet_maintenance(
         "START",
         log_prefix,
         "設定シート保守開始",
-        details=f"path={wb_path} pairs={len(pairs)}",
+        details=f"path={wb_path} pairs={len(pairs)} ai_d_to_e={compile_exclude_rules_d_to_e_with_ai}",
     )
     global _exclude_rules_effective_read_path
     _exclude_rules_effective_read_path = None
@@ -9575,97 +9598,104 @@ def run_exclude_rules_sheet_maintenance(
                 details=f"rows={n_kept} removed_empty={n_removed_empty}",
             )
 
-        max_r = int(ws.max_row or 1)
-        pending_rows: list[int] = []
-        for r in range(2, max_r + 1):
-            dv = ws.cell(row=r, column=c_d).value
-            ev = ws.cell(row=r, column=c_e).value
-            # C 列の有無に関係なく、D に説明があり E が空なら D→E を試す
-            if _cell_is_blank_for_rule(dv):
-                continue
-            if not _cell_is_blank_for_rule(ev):
-                continue
-            pending_rows.append(r)
+        if compile_exclude_rules_d_to_e_with_ai:
+            max_r = int(ws.max_row or 1)
+            pending_rows: list[int] = []
+            for r in range(2, max_r + 1):
+                dv = ws.cell(row=r, column=c_d).value
+                ev = ws.cell(row=r, column=c_e).value
+                # C 列の有無に関係なく、D に説明があり E が空なら D→E を試す
+                if _cell_is_blank_for_rule(dv):
+                    continue
+                if not _cell_is_blank_for_rule(ev):
+                    continue
+                pending_rows.append(r)
 
-        # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
-        formula_rows = [
-            r
-            for r in pending_rows
-            if isinstance(ws.cell(row=r, column=c_d).value, str)
-            and str(ws.cell(row=r, column=c_d).value).strip().startswith("=")
-        ]
-        d_cached = (
-            _read_exclude_rules_d_cells_data_only_for_rows(wb_path, formula_rows, c_d)
-            if formula_rows
-            else {}
-        )
-        pending_texts: list[str] = []
-        filtered_rows: list[int] = []
-        for r in pending_rows:
-            dv = ws.cell(row=r, column=c_d).value
-            blob = (
-                ""
-                if dv is None or (isinstance(dv, float) and pd.isna(dv))
-                else str(dv).strip()
+            # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
+            formula_rows = [
+                r
+                for r in pending_rows
+                if isinstance(ws.cell(row=r, column=c_d).value, str)
+                and str(ws.cell(row=r, column=c_d).value).strip().startswith("=")
+            ]
+            d_cached = (
+                _read_exclude_rules_d_cells_data_only_for_rows(wb_path, formula_rows, c_d)
+                if formula_rows
+                else {}
             )
-            if blob.startswith("="):
-                alt = d_cached.get(r)
-                if alt is not None and not (isinstance(alt, float) and pd.isna(alt)):
-                    blob = str(alt).strip()
-                else:
-                    logging.warning(
-                        "%s: 「%s」%s 行目の D 列が数式で、キャッシュ値を読めませんでした（Excel で一度保存するか D を値にしてください）。",
-                        log_prefix,
-                        EXCLUDE_RULES_SHEET_NAME,
-                        r,
-                    )
+            pending_texts: list[str] = []
+            filtered_rows: list[int] = []
+            for r in pending_rows:
+                dv = ws.cell(row=r, column=c_d).value
+                blob = (
+                    ""
+                    if dv is None or (isinstance(dv, float) and pd.isna(dv))
+                    else str(dv).strip()
+                )
+                if blob.startswith("="):
+                    alt = d_cached.get(r)
+                    if alt is not None and not (isinstance(alt, float) and pd.isna(alt)):
+                        blob = str(alt).strip()
+                    else:
+                        logging.warning(
+                            "%s: 「%s」%s 行目の D 列が数式で、キャッシュ値を読めませんでした（Excel で一度保存するか D を値にしてください）。",
+                            log_prefix,
+                            EXCLUDE_RULES_SHEET_NAME,
+                            r,
+                        )
+                        continue
+                if _cell_is_blank_for_rule(blob):
                     continue
-            if _cell_is_blank_for_rule(blob):
-                continue
-            filtered_rows.append(r)
-            pending_texts.append(blob)
-        pending_rows = filtered_rows
+                filtered_rows.append(r)
+                pending_texts.append(blob)
+            pending_rows = filtered_rows
 
-        ai_filled = 0
-        ai_e_cell_addrs: list[str] = []
-        if pending_texts:
-            parsed_list = _ai_compile_exclude_rule_logics_batch(pending_texts)
-            for r, parsed in zip(pending_rows, parsed_list):
-                if not parsed:
-                    logging.warning(
-                        "%s: 「%s」%s 行目の D 列を JSON にできませんでした（APIキー・応答を確認）。",
+            ai_filled = 0
+            ai_e_cell_addrs: list[str] = []
+            if pending_texts:
+                parsed_list = _ai_compile_exclude_rule_logics_batch(pending_texts)
+                for r, parsed in zip(pending_rows, parsed_list):
+                    if not parsed:
+                        logging.warning(
+                            "%s: 「%s」%s 行目の D 列を JSON にできませんでした（APIキー・応答を確認）。",
+                            log_prefix,
+                            EXCLUDE_RULES_SHEET_NAME,
+                            r,
+                        )
+                        continue
+                    jstr = json.dumps(parsed, ensure_ascii=False)
+                    ws.cell(row=r, column=c_e, value=jstr)
+                    cell_addr = f"{get_column_letter(c_e)}{r}"
+                    ai_e_cell_addrs.append(cell_addr)
+                    preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
+                    logging.info(
+                        "%s: 「%s」ロジック式列「%s」セル %s に JSON を書き込み: %s",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
-                        r,
+                        EXCLUDE_RULE_COL_LOGIC_JSON,
+                        cell_addr,
+                        preview,
                     )
-                    continue
-                jstr = json.dumps(parsed, ensure_ascii=False)
-                ws.cell(row=r, column=c_e, value=jstr)
-                cell_addr = f"{get_column_letter(c_e)}{r}"
-                ai_e_cell_addrs.append(cell_addr)
-                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
+                    ai_filled += 1
+            if ai_filled:
+                _log_exclude_rules_sheet_debug(
+                    "AI_E_FILLED",
+                    log_prefix,
+                    f"D→E の AI 補完を {ai_filled} 行実施。",
+                    details="cells=" + ",".join(ai_e_cell_addrs),
+                )
                 logging.info(
-                    "%s: 「%s」ロジック式列「%s」セル %s に JSON を書き込み: %s",
+                    "%s: 「%s」で D→E の AI 補完を %s 行（セル: %s）。",
                     log_prefix,
                     EXCLUDE_RULES_SHEET_NAME,
-                    EXCLUDE_RULE_COL_LOGIC_JSON,
-                    cell_addr,
-                    preview,
+                    ai_filled,
+                    ",".join(ai_e_cell_addrs),
                 )
-                ai_filled += 1
-        if ai_filled:
+        else:
             _log_exclude_rules_sheet_debug(
-                "AI_E_FILLED",
+                "SKIP_AI_D_TO_E",
                 log_prefix,
-                f"D→E の AI 補完を {ai_filled} 行実施。",
-                details="cells=" + ",".join(ai_e_cell_addrs),
-            )
-            logging.info(
-                "%s: 「%s」で D→E の AI 補完を %s 行（セル: %s）。",
-                log_prefix,
-                EXCLUDE_RULES_SHEET_NAME,
-                ai_filled,
-                ",".join(ai_e_cell_addrs),
+                "D→E の AI 補完をスキップ（呼び出し側指定）。",
             )
 
         _er_test = os.environ.get("EXCLUDE_RULES_TEST_E1234", "").strip().lower()
@@ -9787,8 +9817,9 @@ def apply_exclude_rules_config_to_plan_df(
     EC と分割で機械が異なる依頼では、設定行が残っていても当該分割行は配台対象のままとする。
 
     運用上は **段階1**（``run_stage1_extract``）から呼ぶ。段階2の ``load_planning_tasks_df`` では
-    ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False)`` とし、
-    本関数でシートの C/E を計画 DataFrame に再適用しない。
+    ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False,
+    compile_exclude_rules_d_to_e_with_ai=False)`` とし、本関数でシートの C/E を計画 DataFrame に
+    再適用しない（設定シートの D→E AI も段階2では行わない）。
     """
     if df is None or df.empty:
         return df
