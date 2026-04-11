@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+Attribute VB_Name = "共通定義"
+>>>>>>> hosokawa/main2
 Option Explicit
 
 ' =========================================================
@@ -14,6 +18,7 @@ Public Type RECT
     Bottom As Long
 End Type
 #If VBA7 Then
+<<<<<<< HEAD
     Public Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
     Public Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
     Public Declare PtrSafe Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As LongPtr, ByVal hmod As LongPtr, ByVal fdw As Long) As Long
@@ -52,6 +57,46 @@ End Type
     Public Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Public Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
     Public Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
+=======
+Public Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+Public Declare PtrSafe Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As LongPtr, ByVal dwFlags As Long) As Long
+Public Declare PtrSafe Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As LongPtr, ByVal hmod As LongPtr, ByVal fdw As Long) As Long
+Public Declare PtrSafe Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As LongPtr, ByVal lpstrReturnString As LongPtr, ByVal uReturnLength As Long, ByVal hwndCallback As LongPtr) As Long
+Public Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As LongPtr, ByVal lpWindowName As String) As LongPtr
+Public Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
+Public Declare PtrSafe Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+Public Declare PtrSafe Function ShowWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal nCmdShow As Long) As Long
+Public Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
+Public Declare PtrSafe Function BringWindowToTop Lib "user32" (ByVal hwnd As LongPtr) As Long
+Public Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
+Public Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
+Public Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
+Public Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
+Public Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
+    #If Win64 Then
+Public Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
+Public Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+    #Else
+Public Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As Long
+Public Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As Long) As Long
+    #End If
+#Else
+Public Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+Public Declare Function PlaySound Lib "winmm.dll" Alias "PlaySoundA" (ByVal lpszName As String, ByVal hModule As Long, ByVal dwFlags As Long) As Long
+Public Declare Function PlaySoundW Lib "winmm.dll" (ByVal pszSound As Long, ByVal hmod As Long, ByVal fdw As Long) As Long
+Public Declare Function mciSendStringW Lib "winmm.dll" (ByVal lpstrCommand As Long, ByVal lpstrReturnString As Long, ByVal uReturnLength As Long, ByVal hwndCallback As Long) As Long
+Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As Long, ByVal lpWindowName As String) As Long
+Public Declare Function SetWindowPos Lib "user32" (ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal uFlags As Long) As Long
+Public Declare Function GetSystemMetrics Lib "user32" (ByVal nIndex As Long) As Long
+Public Declare Function ShowWindow Lib "user32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
+Public Declare Function SetForegroundWindow Lib "user32" (ByVal hwnd As Long) As Long
+Public Declare Function BringWindowToTop Lib "user32" (ByVal hwnd As Long) As Long
+Public Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, lpRect As RECT) As Long
+Public Declare Function ClientToScreen Lib "user32" (ByVal hwnd As Long, lpPoint As POINTAPI) As Long
+Public Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
+Public Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
+Public Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
+>>>>>>> hosokawa/main2
 #End If
 Public Const SW_HIDE As Long = 0
 Public Const SND_ASYNC As Long = &H1
@@ -119,6 +164,7 @@ Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
 Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
+<<<<<<< HEAD
 ' planning_core.PLAN_INPUT_SHEET_NAME（TASK_PLAN_SHEET 未設定時の既定）と一致
 Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
 ' 配台計画_タスク入力シート上の「配台試行順を再計算」図形名（再配置時に削除して付け直す）
@@ -138,6 +184,13 @@ Public Const WORKBOOK_ENV_TEMPLATE_TSV_FILE As String = "設定_環境変数_雛形.tsv"
 Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 ' 起動ショートカット.bas 等から OnKey 登録で参照するため Public
+=======
+' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
+Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
+' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
+Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
+' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
+>>>>>>> hosokawa/main2
 Public Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
@@ -187,7 +240,10 @@ Public m_stage2MemberImported As Boolean
 ' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
 Public m_lastRefreshQueriesErrMsg As String
 ' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
+<<<<<<< HEAD
 ' 業務ロジック・スプラッシュ表示 等の標準モジュールから参照するため Public
+=======
+>>>>>>> hosokawa/main2
 Public m_macroSplashShown As Boolean
 ' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
 Public m_macroSplashLockedExcel As Boolean

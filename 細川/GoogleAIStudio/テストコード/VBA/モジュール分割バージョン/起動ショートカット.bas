@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+Attribute VB_Name = "起動ショートカット"
+>>>>>>> hosokawa/main2
 Option Explicit
 
 Public Sub ShortcutMainSheet_CtrlShift0()
@@ -19,9 +23,12 @@ Public Sub ShortcutMainSheet_OnKeyUnregister()
     On Error GoTo 0
 End Sub
 
+<<<<<<< HEAD
 Sub Auto_Open()
     ShortcutMainSheet_OnKeyRegister
 End Sub
 
 
 
+=======
+>>>>>>> hosokawa/main2

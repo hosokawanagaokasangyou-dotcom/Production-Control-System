@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Option Explicit
 
 ' UserForm「frmMacroSplash」の既定グローバルインスタンス（VB_PredeclaredId）に依存しない。
@@ -12,6 +13,12 @@ Private Function MacroSplash_Form() As frmMacroSplash
 End Function
 
 Public Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
+=======
+Attribute VB_Name = "スプラッシュ表示"
+Option Explicit
+
+Private Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
+>>>>>>> hosokawa/main2
 #If VBA7 Then
     Dim hwndSplash As LongPtr
     Dim hdc As LongPtr
@@ -52,8 +59,12 @@ Fail:
     MacroSplash_GetTxtExecutionLogScreenRectPixels = False
 End Function
 
+<<<<<<< HEAD
 ' cmd をログ枠に重ねるとき、二重表示を避けるため TextBox を一時非表示
 Public Sub MacroSplash_BeginConsoleOverlay()
+=======
+Private Sub MacroSplash_BeginConsoleOverlay()
+>>>>>>> hosokawa/main2
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If m_splashConsoleOverlayActive Then Exit Sub
@@ -74,8 +85,12 @@ Public Sub MacroSplash_EndConsoleOverlay()
     On Error GoTo 0
 End Sub
 
+<<<<<<< HEAD
 ' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
 Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
+=======
+Private Sub MacroSplash_SetStep(ByVal stepMessage As String)
+>>>>>>> hosokawa/main2
     Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
@@ -100,8 +115,12 @@ Public Sub MacroSplash_ClearExecutionLogPane()
     If Not tb Is Nothing Then tb.text = ""
 End Sub
 
+<<<<<<< HEAD
 ' ログは末尾が最新。キャレットを最後に置き txtExecutionLog にフォーカス（UserForm には SetFocus がない）
 Public Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
+=======
+Private Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
+>>>>>>> hosokawa/main2
     On Error Resume Next
     tb.HideSelection = False
     tb.SelStart = Len(tb.text)
@@ -113,8 +132,12 @@ Public Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     DoEvents
 End Sub
 
+<<<<<<< HEAD
 ' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog へ（長いときは末尾のみ）
 Public Sub MacroSplash_RefreshExecutionLogPane()
+=======
+Private Sub MacroSplash_RefreshExecutionLogPane()
+>>>>>>> hosokawa/main2
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -175,15 +198,24 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
     tb.SelLength = 0
+<<<<<<< HEAD
     MacroSplash_Form.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
     MacroSplash_Form.Repaint
+=======
+    frmMacroSplash.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
+    frmMacroSplash.Repaint
+>>>>>>> hosokawa/main2
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
     m_splashReadErrShown = True
 End Sub
 
+<<<<<<< HEAD
 ' RunPython 終了直後など、同期 Python でポーリングできなかったあとに execution_log を一括表示（Interactive 一時 True で描画）
 Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
+=======
+Private Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
+>>>>>>> hosokawa/main2
     Dim tb As Object
     Dim s As String
     Dim n As Long
@@ -208,8 +240,13 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             Application.Interactive = True
             tb.text = errBanner & tb.text
             m_splashLastLogSnapshot = tb.text
+<<<<<<< HEAD
             MacroSplash_Form.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
             MacroSplash_Form.Repaint
+=======
+            frmMacroSplash.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
+            frmMacroSplash.Repaint
+>>>>>>> hosokawa/main2
             DoEvents
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
         End If
@@ -269,8 +306,12 @@ SplashDockDone:
     On Error GoTo 0
 End Sub
 
+<<<<<<< HEAD
 ' モードレス UserForm が背後に残ると再描画・ログ更新が止まったように見えることがある。Show 直後に前面へ（ユーザーがクリックしたときと同趣旨）。
 Public Sub MacroSplash_BringFormToFront()
+=======
+Private Sub MacroSplash_BringFormToFront()
+>>>>>>> hosokawa/main2
 #If VBA7 Then
     Dim hwnd As LongPtr
 #Else
@@ -293,9 +334,15 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
     End If
+<<<<<<< HEAD
     MacroSplash_Form.Caption = SPLASH_FORM_WINDOW_TITLE
     MacroSplash_Form.lblMessage.Caption = message
     MacroSplash_Form.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
+=======
+    frmMacroSplash.Caption = SPLASH_FORM_WINDOW_TITLE
+    frmMacroSplash.lblMessage.Caption = message
+    frmMacroSplash.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
+>>>>>>> hosokawa/main2
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
         Application.Interactive = False
@@ -338,6 +385,7 @@ Public Sub MacroSplash_Hide()
     End If
 End Sub
 
+<<<<<<< HEAD
 ' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
 Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     On Error Resume Next
@@ -384,3 +432,5 @@ Finish:
     m_splashAllowMacroSound = False
 End Sub
 
+=======
+>>>>>>> hosokawa/main2
