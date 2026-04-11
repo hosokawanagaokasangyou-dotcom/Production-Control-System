@@ -13711,6 +13711,33 @@ def _eq_grid_first_overlapping_event(evs: list, curr_grid: datetime, next_grid: 
     return None
 
 
+def _eq_grid_best_overlapping_event_for_cell(
+    evs: list, curr_grid: datetime, next_grid: datetime
+):
+    """
+    10 分枠と重なるイベントのうち表示に用いる 1 件を選ぶ。
+    加工（進度バー対象）が重なるときはそのうち開始が最も早い加工を優先し、
+    準備・後始末だけが先に重なって加工が隠れるのを防ぐ。
+    """
+    hits = [
+        ev
+        for ev in evs
+        if _eq_grid_slot_overlaps_event(curr_grid, next_grid, ev)
+    ]
+    if not hits:
+        return None
+    mach_hits = [ev for ev in hits if _eq_grid_timeline_event_use_progress_bar(ev)]
+    if mach_hits:
+        return min(
+            mach_hits,
+            key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")),
+        )
+    hits.sort(
+        key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+    )
+    return hits[0]
+
+
 def _eq_grid_overlap_sample_t(
     ev: dict, curr_grid: datetime, next_grid: datetime, slot_mid: datetime
 ) -> datetime:
@@ -13859,7 +13886,7 @@ def _build_equipment_schedule_dataframe(
             for eq in equipment_list:
                 eq_text = ""
                 progress_text = ""
-                active_ev = _eq_grid_first_overlapping_event(
+                active_ev = _eq_grid_best_overlapping_event_for_cell(
                     _eq_grid_events_for_equipment_column(machine_to_events, eq),
                     curr_grid,
                     next_grid,
@@ -14038,7 +14065,9 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 mcol = _eq_grid_mcol_for_event_machine(eq_to_mcol, str(eq))
                 if not mcol:
                     continue
-                active_ev = _eq_grid_first_overlapping_event(evs, curr_grid, next_grid)
+                active_ev = _eq_grid_best_overlapping_event_for_cell(
+                    evs, curr_grid, next_grid
+                )
                 if not active_ev:
                     continue
                 _sample_tm = _eq_grid_overlap_sample_t(
@@ -15100,22 +15129,50 @@ def _agent_debug_ndjson_log(
     runId: str = "pre-fix",
 ) -> None:
     # region agent log
+    _payload = {
+        "sessionId": "dbc2c5",
+        "hypothesisId": hypothesisId,
+        "location": location,
+        "message": message,
+        "timestamp": int(time_module.time() * 1000),
+        "runId": runId,
+        "data": data or {},
+    }
+    _line = json.dumps(_payload, ensure_ascii=False, default=str) + "\n"
+    _roots: list[str] = []
     try:
-        _path = os.path.join(log_dir, "debug-dbc2c5.log")
-        os.makedirs(log_dir, exist_ok=True)
-        _payload = {
-            "sessionId": "dbc2c5",
-            "hypothesisId": hypothesisId,
-            "location": location,
-            "message": message,
-            "timestamp": int(time_module.time() * 1000),
-            "runId": runId,
-            "data": data or {},
-        }
-        with open(_path, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_payload, ensure_ascii=False, default=str) + "\n")
+        _here = os.path.abspath(__file__)
+        _roots.append(os.path.join(log_dir, "debug-dbc2c5.log"))
+        _roots.append(os.path.join(output_dir, "debug-dbc2c5.log"))
+        _repo = os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(
+                        os.path.dirname(os.path.dirname(_here))
+                    )
+                )
+            )
+        )
+        _roots.append(os.path.join(_repo, "debug-dbc2c5.log"))
     except Exception:
-        pass
+        _roots = [os.path.join(log_dir, "debug-dbc2c5.log")]
+    _seen_paths: set[str] = set()
+    for _path in _roots:
+        try:
+            _ap = os.path.normcase(os.path.abspath(_path))
+        except Exception:
+            _ap = _path
+        if _ap in _seen_paths:
+            continue
+        _seen_paths.add(_ap)
+        try:
+            _d = os.path.dirname(_path)
+            if _d:
+                os.makedirs(_d, exist_ok=True)
+            with open(_path, "a", encoding="utf-8") as _f:
+                _f.write(_line)
+        except Exception:
+            continue
     # endregion
 
 
