@@ -1531,6 +1531,8 @@ Public Sub İ’è_ŠÂ‹«•Ï”_—Œ`TSV‚©‚ç“¯Šú()
     Dim msg As String
 
     On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    prevScreen = Application.ScreenUpdating
 
     wbFolder = ThisWorkbook.path
     If Len(wbFolder) = 0 Then
@@ -1580,8 +1582,6 @@ NextLine:
         Exit Sub
     End If
 
-    prevDA = Application.DisplayAlerts
-    prevScreen = Application.ScreenUpdating
     Application.DisplayAlerts = False
     Application.ScreenUpdating = False
 
