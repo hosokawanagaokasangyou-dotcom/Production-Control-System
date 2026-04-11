@@ -8,7 +8,6 @@ planning_core パッケージの import 時ブートストラップ。
 
 import ctypes
 import fnmatch
-import json
 import logging
 import os
 import shutil
@@ -233,51 +232,14 @@ _SINGLE_MOJIBAKE = (
     ("㝠", "て"),
 )
 
-_normalize_debug_sent = False
-
 
 def _normalize_log_line(text: str) -> str:
     """execution_log / コンソール向けに誤字置換（ソース定数は変更しない）。"""
-    global _normalize_debug_sent
-    raw = text
     for old, new in _LOG_MOJIBAKE_PAIRS:
         text = text.replace(old, new)
     for old, new in _SINGLE_MOJIBAKE:
         text = text.replace(old, new)
     text = text.replace("# 」設定】", "# 【設定】")
-    # #region agent log
-    if not _normalize_debug_sent and raw != text:
-        _normalize_debug_sent = True
-        try:
-            _here = os.path.abspath(os.path.dirname(__file__))
-            _root = _here
-            for _ in range(12):
-                if os.path.isdir(os.path.join(_root, ".git")):
-                    break
-                _parent = os.path.dirname(_root)
-                if _parent == _root:
-                    _root = os.getcwd()
-                    break
-                _root = _parent
-            _dbg = os.path.join(_root, "debug-f0607f.log")
-            with open(_dbg, "a", encoding="utf-8") as _df:
-                _df.write(
-                    json.dumps(
-                        {
-                            "sessionId": "f0607f",
-                            "hypothesisId": "H1",
-                            "location": "bootstrap._normalize_log_line",
-                            "message": "log line normalized (sample)",
-                            "data": {"before": raw[:180], "after": text[:180]},
-                            "timestamp": int(time_module.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-    # #endregion
     return text
 
 
