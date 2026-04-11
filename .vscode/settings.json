@@ -19,7 +19,6 @@
             ]
         }
     ],
-    // 新規・未指定の保存は UTF-8。既存の Shift_JIS 等は autoGuess で開き、エンコードは勝手に変えない
     "files.encoding": "utf8",
     "files.autoGuessEncoding": true
 }

@@ -1,24 +1,16 @@
-<<<<<<< HEAD
-Private Function Gemini_JSON文字列をエスケープ(ByVal s As String) As String
-=======
 Option Explicit
 
 Public Function GeminiJsonStringEscape(ByVal s As String) As String
->>>>>>> main4
     Dim t As String
     t = Replace(s, "\", "\\")
     t = Replace(t, """", "\""")
     t = Replace(t, vbCr, "\r")
     t = Replace(t, vbLf, "\n")
     t = Replace(t, vbTab, "\t")
-    Gemini_JSON文字列をエスケープ = t
+    GeminiJsonStringEscape = t
 End Function
 
-<<<<<<< HEAD
-Private Sub Gemini_UTF8でファイルに書込(ByVal filePath As String, ByVal textContent As String)
-=======
 Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
->>>>>>> main4
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
@@ -31,13 +23,9 @@ Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As St
 End Sub
 
 ' ログ表示用（暗号化失敗時の stderr など）
-<<<<<<< HEAD
-Private Function Gemini_UTF8ファイルを読込(ByVal filePath As String) As String
-=======
 Public Function GeminiReadUtf8File(ByVal filePath As String) As String
->>>>>>> main4
     Dim stm As Object
-    Gemini_UTF8ファイルを読込 = ""
+    GeminiReadUtf8File = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
     On Error GoTo CleanFail
     Set stm = CreateObject("ADODB.Stream")
@@ -45,7 +33,7 @@ Public Function GeminiReadUtf8File(ByVal filePath As String) As String
     stm.charset = "UTF-8"
     stm.Open
     stm.LoadFromFile filePath
-    Gemini_UTF8ファイルを読込 = stm.ReadText
+    GeminiReadUtf8File = stm.ReadText
     stm.Close
     Set stm = Nothing
     Exit Function
@@ -56,13 +44,9 @@ CleanFail:
 End Function
 
 ' Python が execution_log を開きっぱなしのとき LoadFromFile が共有違反で失敗することがある。一時コピーから読む。
-<<<<<<< HEAD
-Private Function Gemini_UTF8ファイルを一時コピーで読込(ByVal filePath As String) As String
-=======
 Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
->>>>>>> main4
     Dim tmp As String
-    Gemini_UTF8ファイルを一時コピーで読込 = ""
+    GeminiReadUtf8FileViaTempCopy = ""
     If Len(Dir(filePath)) = 0 Then Exit Function
     Randomize
     tmp = Environ("TEMP") & "\pm_ai_sp_" & Replace(Replace(Replace(CStr(Now), "/", ""), ":", ""), " ", "_") & "_" & CStr(Int(100000 * Rnd)) & ".txt"
@@ -72,7 +56,7 @@ Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As Strin
         Err.Clear
         Exit Function
     End If
-    Gemini_UTF8ファイルを一時コピーで読込 = Gemini_UTF8ファイルを読込(tmp)
+    GeminiReadUtf8FileViaTempCopy = GeminiReadUtf8File(tmp)
     On Error Resume Next
     Kill tmp
 End Function
@@ -153,20 +137,20 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
         End If
     End If
     
-    jsonBody = "{" & """gemini_api_key"": """ & Gemini_JSON文字列をエスケープ(Trim$(apiKey)) & """}"
-    Call Gemini_UTF8でファイルに書込(plainPath, jsonBody)
-    Call Gemini_UTF8でファイルに書込(passPath, pass1)
+    jsonBody = "{" & """gemini_api_key"": """ & GeminiJsonStringEscape(Trim$(apiKey)) & """}"
+    Call GeminiWriteUtf8File(plainPath, jsonBody)
+    Call GeminiWriteUtf8File(passPath, pass1)
     
     On Error Resume Next
     Kill errPath
     On Error GoTo EH
     
-    スプラッシュ_手順文を設定 "Gemini: Python で認証 JSON を暗号化しています…"
+    MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
     Set wsh = CreateObject("WScript.Shell")
     gemBat = "@echo off" & vbCrLf & "pushd """ & wbPath & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
              "py -3 -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = 一時CMDをコンソールレイアウト付きで実行(wsh, gemBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, gemBat)
     
     On Error Resume Next
     Kill plainPath
@@ -174,7 +158,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     On Error GoTo EH
     
     If Len(Dir(outPath)) = 0 Then
-        errLog = Trim$(Gemini_UTF8ファイルを読込(errPath))
+        errLog = Trim$(GeminiReadUtf8File(errPath))
         If Len(errLog) > 2500 Then errLog = Left$(errLog, 2500) & vbCrLf & "…（省略）"
         If Len(errLog) = 0 Then errLog = "（標準エラーに出力なし。py -3 が PATH に無い、または別のエラーの可能性があります）"
         MsgBox "暗号化ファイルができませんでした。（終了コード " & CStr(exitCode) & "）" & vbCrLf & vbCrLf & _
@@ -191,7 +175,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     ThisWorkbook.Save
     On Error GoTo 0
     
-    スプラッシュ_手順文を設定 "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
+    MacroSplash_SetStep "Gemini 認証の暗号化が完了しました。設定 B1 にパスを保存しました。"
     m_animMacroSucceeded = True
     Exit Sub
 EH:
@@ -224,17 +208,17 @@ Public Sub メインシート_masterブックを開く()
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
             wb.Activate
-            スプラッシュ_手順文を設定 "master.xlsm は既に開いています（アクティブにしました）。"
+            MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
             m_animMacroSucceeded = True
             Exit Sub
         End If
     Next wb
     
     On Error GoTo OpenFail
-    スプラッシュ_手順文を設定 "master.xlsm を開いています…"
+    MacroSplash_SetStep "master.xlsm を開いています…"
     Set wbMaster = Application.Workbooks.Open(Filename:=path)
     wbMaster.Activate
-    スプラッシュ_手順文を設定 "master.xlsm を開きました。"
+    MacroSplash_SetStep "master.xlsm を開きました。"
     m_animMacroSucceeded = True
     Exit Sub
 OpenFail:
@@ -242,7 +226,7 @@ OpenFail:
 End Sub
 
 Sub アニメ付き_メインシート_masterブックを開く()
-    Call ボタン押下アニメーション
+    Call AnimateButtonPush
     メインシート_masterブックを開く
 End Sub
 
@@ -250,14 +234,130 @@ End Sub
 Public Sub メインシート_master開くボタンを配置()
     Dim ws As Worksheet
     
-    Set ws = メインシートを取得()
+    Set ws = GetMainWorksheet()
     If ws Is Nothing Then
         MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
         Exit Sub
     End If
     ws.Activate
-    クールボタンをプリセットで作成 "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
+    CreateCoolButtonWithPreset "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
     MsgBox "メインシートにボタンを配置しました。位置はドラッグで調整できます。", vbInformation
+End Sub
+
+' planning_core の json\ai_remarks_cache.json（および旧 output\ 同名）を削除。次回段階1/2 で TTL キャッシュが空の状態から再構築されます。
+Public Sub AI解析_Remarksキャッシュファイルを削除()
+    Dim base As String
+    Dim pJson As String
+    Dim pLegacy As String
+    Dim nOk As Long
+    Dim nMiss As Long
+    Dim nFail As Long
+    Dim msg As String
+    Dim dlgIcon As Long
+    
+    base = ThisWorkbook.path
+    If Len(base) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください。", vbExclamation, "AI解析キャッシュ"
+        Exit Sub
+    End If
+    
+    If MsgBox( _
+        "勤怠備考・タスク特別指定・配台不要ロジック等の AI 解析結果を、ディスク上のキャッシュ JSON から削除します。" & vbCrLf & _
+        "（次回の段階1/2 で必要に応じて Gemini を再呼び出しします）" & vbCrLf & vbCrLf & _
+        "削除対象:" & vbCrLf & _
+        "・" & base & "\" & AI_REMARKS_CACHE_JSON_SUBDIR & "\" & AI_REMARKS_CACHE_FILE_NAME & vbCrLf & _
+        "・" & base & "\output\" & AI_REMARKS_CACHE_FILE_NAME & "（旧配置があれば）" & vbCrLf & vbCrLf & _
+        "続行しますか？", _
+        vbYesNo Or vbQuestion, "AI解析キャッシュ") <> vbYes Then
+        Exit Sub
+    End If
+    
+    pJson = base & "\" & AI_REMARKS_CACHE_JSON_SUBDIR & "\" & AI_REMARKS_CACHE_FILE_NAME
+    pLegacy = base & "\output\" & AI_REMARKS_CACHE_FILE_NAME
+    nOk = 0
+    nMiss = 0
+    nFail = 0
+    msg = ""
+    
+    If Len(Dir(pJson)) > 0 Then
+        On Error Resume Next
+        Kill pJson
+        If Err.Number = 0 Then
+            nOk = nOk + 1
+            msg = msg & "削除: " & pJson & vbCrLf
+        Else
+            nFail = nFail + 1
+            msg = msg & "削除失敗: " & pJson & " ? " & Err.Description & vbCrLf
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Else
+        nMiss = nMiss + 1
+        msg = msg & "なし: " & pJson & vbCrLf
+    End If
+    
+    If Len(Dir(pLegacy)) > 0 Then
+        On Error Resume Next
+        Kill pLegacy
+        If Err.Number = 0 Then
+            nOk = nOk + 1
+            msg = msg & "削除: " & pLegacy & vbCrLf
+        Else
+            nFail = nFail + 1
+            msg = msg & "削除失敗: " & pLegacy & " ? " & Err.Description & vbCrLf
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Else
+        nMiss = nMiss + 1
+        msg = msg & "なし: " & pLegacy & vbCrLf
+    End If
+    
+    dlgIcon = vbInformation
+    If nFail > 0 Then dlgIcon = vbExclamation
+    MsgBox "AI解析キャッシュ処理が完了しました。" & vbCrLf & vbCrLf & msg & vbCrLf & _
+           "削除成功 " & CStr(nOk) & " 件 / 該当ファイルなし " & CStr(nMiss) & " 件 / 失敗 " & CStr(nFail) & " 件" & vbCrLf & vbCrLf & _
+           "削除に失敗した場合は、Python や別プロセスがファイルを開いていないか確認してください。", _
+           dlgIcon, "AI解析キャッシュ"
+End Sub
+
+Public Sub アニメ付き_AI解析_Remarksキャッシュファイルを削除()
+    Call AnimateButtonPush
+    AI解析_Remarksキャッシュファイルを削除
+End Sub
+
+' メイン_ シートに「AI解析キャッシュ削除」クールボタンを1つ配置（master ボタンの直下付近）。再実行で同名・同一 OnAction の図形を置き換え
+Public Sub メインシート_AI解析キャッシュ削除ボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_AI解析_Remarksキャッシュファイルを削除"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim si As Long
+    
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then
+        MsgBox "シート「メイン_」がありません。", vbExclamation, "AI解析キャッシュボタン"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For si = ws.Shapes.Count To 1 Step -1
+        Set shp = ws.Shapes(si)
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If StrComp(shp.Name, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR, vbTextCompare) = 0 _
+            Or InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next si
+    
+    CreateCoolButtonWithPreset "AI解析キャッシュ削除", MACRO_ANIM, 380, 68, 8, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR
+    MsgBox "メインシートに「AI解析キャッシュ削除」ボタンを配置しました。" & vbCrLf & _
+           "（位置はドラッグで調整できます）", vbInformation, "AI解析キャッシュボタン"
 End Sub
 
 
@@ -344,13 +444,8 @@ Public Function 日時帯文字列を時刻範囲に(ByVal v As Variant, ByRef t0 As Date, B
     日時帯文字列を時刻範囲に = True
 End Function
 
-<<<<<<< HEAD
-' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の Masterメインシートを取得 と同趣旨）
-Private Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
-=======
 ' master.xlsm 内のメイン設定シート（テストコード master_xlsm_VBA の MasterGetMainWorksheet と同趣旨）
 Public Function マスタブック_メイン設定シートを取得(ByVal wb As Workbook) As Worksheet
->>>>>>> main4
     Dim ws As Worksheet
     Dim sh As Worksheet
     Dim best As Worksheet
@@ -481,7 +576,7 @@ Public Sub 結果_設備毎の時間割_マスタ時刻反映( _
     
     On Error GoTo CleanExit
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     If regOk Then
@@ -529,7 +624,7 @@ Public Sub 結果_機械名毎時間割_依頼NOセルを薄緑(ByVal ws As Worksheet)
     
     On Error GoTo CleanExit2
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
@@ -568,7 +663,7 @@ Public Sub 結果_設備時間割_準備後始末セルを薄緑(ByVal ws As Worksheet)
     
     On Error GoTo CleanExit3
     If ws Is Nothing Then Exit Sub
-    colTB = 見出し文字列の列番号を検索(ws, "日時帯")
+    colTB = FindColHeader(ws, "日時帯")
     If colTB = 0 Then Exit Sub
     
     lastR = ws.Cells(ws.Rows.Count, colTB).End(xlUp).Row
@@ -901,7 +996,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     On Error GoTo EH
     
     Set wb = ThisWorkbook
-    Set wsMain = メインシートを取得()
+    Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then
         If Not Silent Then MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
         Exit Sub
@@ -951,10 +1046,10 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     On Error GoTo EH
     
     If Not wsCal Is Nothing Then
-        colDate = 見出し文字列の列番号を検索(wsCal, "日付")
-        colMem = 見出し文字列の列番号を検索(wsCal, "メンバー")
-        colIn = 見出し文字列の列番号を検索(wsCal, "出勤")
-        colOut = 見出し文字列の列番号を検索(wsCal, "退勤")
+        colDate = FindColHeader(wsCal, "日付")
+        colMem = FindColHeader(wsCal, "メンバー")
+        colIn = FindColHeader(wsCal, "出勤")
+        colOut = FindColHeader(wsCal, "退勤")
         If colDate > 0 And colMem > 0 And colIn > 0 And colOut > 0 Then
             lastR = wsCal.Cells(wsCal.Rows.Count, colDate).End(xlUp).Row
             For r = 2 To lastR
@@ -1045,7 +1140,7 @@ Public Sub メインシート_AからK列_AutoFit()
     Dim ws As Worksheet
     Dim su As Boolean
     On Error Resume Next
-    Set ws = メインシートを取得()
+    Set ws = GetMainWorksheet()
     If ws Is Nothing Then Exit Sub
     su = Application.ScreenUpdating
     Application.ScreenUpdating = True
@@ -1054,18 +1149,14 @@ Public Sub メインシート_AからK列_AutoFit()
     On Error GoTo 0
 End Sub
 
-<<<<<<< HEAD
-Private Function Gemini認証JSONパスが設定済みか() As Boolean
-=======
 Public Function GeminiCredentialsJsonPathIsConfigured() As Boolean
->>>>>>> main4
     Dim rng As Range
-    Gemini認証JSONパスが設定済みか = False
+    GeminiCredentialsJsonPathIsConfigured = False
     On Error Resume Next
     Set rng = ThisWorkbook.Worksheets(SHEET_SETTINGS).Range("B1")
     If Err.Number = 0 And Not rng Is Nothing Then
         If Len(Trim$(CStr(rng.Value))) > 0 Then
-            Gemini認証JSONパスが設定済みか = True
+            GeminiCredentialsJsonPathIsConfigured = True
         End If
     End If
     On Error GoTo 0
@@ -1126,14 +1217,14 @@ Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
     ws.Cells(r, 1).Font.Bold = True
     r = r + 1
     If Len(Dir(promptPath)) > 0 Then
-        fileBody = 文字コード指定でテキストファイル読込(promptPath, "utf-8")
+        fileBody = ReadTextFileWithCharset(promptPath, "utf-8")
         fileBody = Replace(fileBody, vbCrLf, vbLf)
         lines = Split(fileBody, vbLf)
         For i = LBound(lines) To UBound(lines)
             If Len(lines(i)) > MAX_CELL Then
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
             Else
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(lines(i))
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
             End If
             r = r + 1
         Next i
@@ -1147,14 +1238,14 @@ Public Sub LOG_AIシートへ特別指定Geminiファイルを反映(ByVal targetDir As String)
     ws.Cells(r, 1).Font.Bold = True
     r = r + 1
     If Len(Dir(remarkPath)) > 0 Then
-        fileBody = 文字コード指定でテキストファイル読込(remarkPath, "utf-8")
+        fileBody = ReadTextFileWithCharset(remarkPath, "utf-8")
         fileBody = Replace(fileBody, vbCrLf, vbLf)
         lines = Split(fileBody, vbLf)
         For i = LBound(lines) To UBound(lines)
             If Len(lines(i)) > MAX_CELL Then
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(Left$(lines(i), MAX_CELL) & "…(切り詰め)")
             Else
-                ws.Cells(r, 1).Value = Excel数式用文字列にエスケープ(lines(i))
+                ws.Cells(r, 1).Value = EscapeExcelFormulaText(lines(i))
             End If
             r = r + 1
         Next i
@@ -1312,7 +1403,6 @@ Public Sub 設定_環境変数_シートを確保()
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1", "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0", "1=依頼NO直列")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE12_CMD_HIDE_WINDOW", "1", "段階1/2: cmd 1=非表示(既定) 0=画面上部にコンソール")
-    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE1_SYNC_MASTER_SHEETS_TO_MACRO_BOOK", "0", "段階1: master から機械カレンダー・勤怠をマクロブックへコピー 1=する 0=しない（配台は master 直読み）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1", "§B-2/§B-3 設備占有（0 で無効）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1", "B-2/3 ECと後続の担当者分離（0 で無効）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0", "1=人数最優先（従来）")
@@ -1343,6 +1433,261 @@ Public Sub 設定_環境変数_シートを確保()
 ErrHandler:
     Application.DisplayAlerts = prevDA
     Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+' =========================================================
+' 設定_環境変数: 雛形 TSV からシートへ同期（不足行の追加・雛形に無い変数行の削除、B/C は既存キーは保持）
+' ・同フォルダの WORKBOOK_ENV_TEMPLATE_TSV_FILE（共通定義）を UTF-8 で読む
+' ・1 行目が見出しのときはデータは 2 行目から。同期後も見出し＋雛形の順でデータ行を書き直す
+' =========================================================
+Private Function 設定_環境変数_TSVのA列は見出し(ByVal keyCell As String) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(keyCell))
+    If Len(t) = 0 Then
+        設定_環境変数_TSVのA列は見出し = False
+        Exit Function
+    End If
+    設定_環境変数_TSVのA列は見出し = (t = "変数名" Or t = "環境変数" Or t = "name" Or t = "key" Or t = "env")
+End Function
+
+Private Sub 設定_環境変数_TSVの1行を列へ(ByVal line As String, ByRef outKey As String, ByRef outDefB As String, ByRef outDescC As String, ByRef ok As Boolean)
+    Dim parts() As String
+    Dim ub As Long
+    Dim j As Long
+    Dim sb As String
+
+    ok = False
+    outKey = "": outDefB = "": outDescC = ""
+
+    line = Trim$(line)
+    If Len(line) = 0 Then Exit Sub
+    If Left$(line, 1) = "#" And InStr(line, vbTab) = 0 Then
+        ' コメント行のみ（タブ無し）のときはスキップ。先頭#付き変数名はタブありで通す
+        Exit Sub
+    End If
+
+    parts = Split(line, vbTab)
+    ub = UBound(parts)
+    If ub < 0 Then Exit Sub
+
+    outKey = Trim$(parts(0))
+    If Len(outKey) = 0 Then Exit Sub
+    If 設定_環境変数_TSVのA列は見出し(outKey) Then Exit Sub
+
+    If ub >= 1 Then
+        outDefB = CStr(parts(1))
+    Else
+        outDefB = ""
+    End If
+
+    If ub >= 2 Then
+        sb = CStr(parts(2))
+        For j = 3 To ub
+            sb = sb & vbTab & CStr(parts(j))
+        Next j
+        outDescC = sb
+    Else
+        outDescC = ""
+    End If
+
+    ok = True
+End Sub
+
+Public Sub 設定_環境変数_雛形TSVから同期()
+    Dim tsvPath As String
+    Dim wbFolder As String
+    Dim body As String
+    Dim lines() As String
+    Dim i As Long
+    Dim li As String
+    Dim k As String
+    Dim defB As String
+    Dim descC As String
+    Dim rowOk As Boolean
+
+    Dim colK As Collection
+    Dim colDefB As Collection
+    Dim colDefC As Collection
+    Dim seenTsv As Object
+
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim prevDA As Boolean
+    Dim prevScreen As Boolean
+    Dim dataStart As Long
+    Dim r As Long
+    Dim lastOld As Long
+    Dim nk As String
+
+    Dim oldB As Object
+    Dim oldC As Object
+    Dim oldHad As Object
+
+    Dim outRow As Long
+    Dim j As Long
+    Dim nTsv As Long
+    Dim nOldData As Long
+    Dim nAfter As Long
+    Dim msg As String
+
+    On Error GoTo ErrHandler
+    prevDA = Application.DisplayAlerts
+    prevScreen = Application.ScreenUpdating
+
+    wbFolder = ThisWorkbook.path
+    If Len(wbFolder) = 0 Then
+        MsgBox "ブックを一度保存してから実行してください（雛形 TSV はブックと同じフォルダを参照します）。", vbExclamation
+        Exit Sub
+    End If
+
+    tsvPath = wbFolder & "\" & WORKBOOK_ENV_TEMPLATE_TSV_FILE
+    If Len(Dir(tsvPath)) = 0 Then
+        MsgBox "次の雛形ファイルが見つかりません。" & vbCrLf & tsvPath, vbCritical
+        Exit Sub
+    End If
+
+    body = GeminiReadUtf8File(tsvPath)
+    If Len(body) = 0 Then
+        MsgBox "雛形 TSV が空か読み取れません: " & tsvPath, vbCritical
+        Exit Sub
+    End If
+    If AscW(Left$(body, 1)) = &HFEFF Then
+        body = Mid$(body, 2)
+    End If
+
+    Set colK = New Collection
+    Set colDefB = New Collection
+    Set colDefC = New Collection
+    Set seenTsv = CreateObject("Scripting.Dictionary")
+    seenTsv.CompareMode = 1
+
+    body = Replace(Replace(body, vbCrLf, vbLf), vbCr, vbLf)
+    lines = Split(body, vbLf)
+    For i = LBound(lines) To UBound(lines)
+        li = lines(i)
+        Call 設定_環境変数_TSVの1行を列へ(li, k, defB, descC, rowOk)
+        If Not rowOk Then GoTo NextLine
+        nk = LCase$(k)
+        If seenTsv.Exists(nk) Then GoTo NextLine
+        seenTsv.Add nk, True
+        colK.Add k
+        colDefB.Add defB
+        colDefC.Add descC
+NextLine:
+    Next i
+
+    nTsv = colK.Count
+    If nTsv = 0 Then
+        MsgBox "雛形 TSV に有効な変数行がありません。", vbExclamation
+        Exit Sub
+    End If
+
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_WORKBOOK_ENV
+    End If
+
+    If StrComp(ws.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 526, , "シート名を「" & SHEET_WORKBOOK_ENV & "」にできません（現在: " & ws.Name & "）。"
+    End If
+
+    ws.Visible = xlSheetVisible
+
+    If Len(Trim$(CStr(ws.Cells(1, 1).Value))) = 0 Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+        dataStart = 2
+    ElseIf 設定_環境変数_1行目は見出し(ws) Then
+        ws.Cells(1, 1).Value = "変数名"
+        ws.Cells(1, 2).Value = "値"
+        ws.Cells(1, 3).Value = "説明（任意）"
+        dataStart = 2
+    Else
+        ' 見出し無しでデータが 1 行目からの構成は、同期で見出しを付けずに上書きしない（手動構成を壊さない）
+        Application.DisplayAlerts = prevDA
+        Application.ScreenUpdating = prevScreen
+        MsgBox "「" & SHEET_WORKBOOK_ENV & "」の 1 行目が見出し（変数名）ではありません。" & vbCrLf & _
+               "先に「設定_環境変数_シートを確保」を実行するか、1 行目を 変数名 / 値 / 説明 にしてください。", vbExclamation
+        Exit Sub
+    End If
+
+    Set oldB = CreateObject("Scripting.Dictionary")
+    oldB.CompareMode = 1
+    Set oldC = CreateObject("Scripting.Dictionary")
+    oldC.CompareMode = 1
+    Set oldHad = CreateObject("Scripting.Dictionary")
+    oldHad.CompareMode = 1
+
+    lastOld = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastOld < dataStart Then lastOld = dataStart - 1
+
+    nOldData = 0
+    For r = dataStart To lastOld
+        k = Trim$(CStr(ws.Cells(r, 1).Value))
+        If Len(k) > 0 Then
+            nk = LCase$(k)
+            If Not oldHad.Exists(nk) Then
+                oldHad.Add nk, True
+                oldB.Add nk, ws.Cells(r, 2).Value
+                oldC.Add nk, ws.Cells(r, 3).Value
+                nOldData = nOldData + 1
+            End If
+        End If
+    Next r
+
+    outRow = dataStart
+    For j = 1 To nTsv
+        k = CStr(colK(j))
+        nk = LCase$(k)
+        ws.Cells(outRow, 1).Value = k
+        If oldHad.Exists(nk) Then
+            ws.Cells(outRow, 2).Value = oldB(nk)
+            ws.Cells(outRow, 3).Value = oldC(nk)
+        Else
+            ws.Cells(outRow, 2).Value = colDefB(j)
+            ws.Cells(outRow, 3).Value = colDefC(j)
+        End If
+        outRow = outRow + 1
+    Next j
+
+    nAfter = outRow - dataStart
+    If lastOld >= outRow Then
+        ws.Range(ws.Cells(outRow, 1), ws.Cells(lastOld, 3)).ClearContents
+    End If
+
+    ws.Columns(1).ColumnWidth = 28
+    ws.Columns(2).ColumnWidth = 14
+    ws.Columns(3).ColumnWidth = 52
+
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevScreen
+
+    msg = "雛形 TSV から「" & SHEET_WORKBOOK_ENV & "」を同期しました。" & vbCrLf & _
+          "・雛形の変数数: " & CStr(nTsv) & vbCrLf & _
+          "・同期前のデータ行（重複除く）: " & CStr(nOldData) & vbCrLf & _
+          "・同期後のデータ行: " & CStr(nAfter) & vbCrLf & vbCrLf & _
+          "既存の変数名の B・C 列は保持し、雛形に無い行は削除しました。"
+    MsgBox msg, vbInformation
+    Exit Sub
+
+ErrHandler:
+    On Error Resume Next
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevScreen
+    On Error GoTo 0
+    MsgBox "設定_環境変数_雛形TSVから同期 でエラー: " & CStr(Err.Number) & " " & Err.Description, vbCritical
 End Sub
 
 ' =========================================================

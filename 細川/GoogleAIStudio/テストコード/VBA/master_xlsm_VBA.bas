@@ -11,7 +11,7 @@ Private Const CALENDAR_LAST_DATA_COL As Long = 33  ' AG列
 ' （再生成時は Clear 前に A2（無ければ A1）のフォント名・サイズを退避し、罫線・見出し整形の後に復元）
 Private Const MEMBER_ATT_HEADER_A1 As String = "日付"
 Private Const MEMBER_ATT_FIRST_DATA_ROW As Long = 2
-Private Const MEMBER_ATT_LAST_INPUT_COL As Long = 11   ' K（備考・残業終業まで）
+Private Const MEMBER_ATT_LAST_INPUT_COL As Long = 11   ' K（備考・残業(分)まで）
 Private mAttRowHL_SheetName As String
 Private mAttRowHL_DataRow As Long
 
@@ -705,7 +705,7 @@ Private Function MemberAttendanceCellHasUserValue(ByVal v As Variant) As Boolean
 Quiet:
 End Function
 
-' 再生成前に、メンバー出勤簿の手入力列 J～K（備考・残業終業）を日付キーで退避する（空欄は退避しない）
+' 再生成前に、メンバー出勤簿の手入力列 J～K（備考・残業(分)）を日付キーで退避する（空欄は退避しない）
 Private Sub PreserveMemberAttendanceHandColumns(ByVal ws As Worksheet, ByVal notesMap As Object, ByVal otEndMap As Object)
     Dim lr As Long
     Dim rr As Long
@@ -862,7 +862,7 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     ws.Cells(1, 8).Value = "作業効率"
     ws.Cells(1, 9).Value = "休暇区分"
     ws.Cells(1, 10).Value = "備考"
-    ws.Cells(1, 11).Value = "残業終業"
+    ws.Cells(1, 11).Value = "残業(分)"
     
     r = 2
     For i = 1 To recs.Count
@@ -894,7 +894,7 @@ Private Sub WriteMemberAttendanceSheet(ByVal memberName As String, ByVal recs As
     
     Call MemberAttApplyNumberFormat(ws.Columns("A"), "yyyy/mm/dd")
     Call MemberAttApplyNumberFormat(ws.Columns("B:G"), "hh:mm")
-    ' K 列は「残業終業（時刻）」と「残業時間（数値）」の両方があり得るため、入力型に応じて表示形式を付ける
+    ' K 列は「残業(分)」で退勤上限の時刻または延長分（分）を指定（Python と同趣旨）。入力型に応じて表示形式を付ける
     Call MemberAttApplyNumberFormat(ws.Columns("K"), "General")
     If r > 2 Then
         For fmtR = 2 To r - 1

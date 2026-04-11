@@ -96,17 +96,10 @@ Public Const STAGE12_CMD_OVERLAY_BORDERLESS As Boolean = True
 ' False=同期 Run のみ（cmd は OS 既定表示）。xlwings 同期・応答なし疑い時は必ず False。
 Public Const STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT As Boolean = False
 ' 段階1/2 の cmd: True=ウィンドウ非表示。進捗は UserForm（txtExecutionLog）＝ execution_log.txt を Exec 待機中にポーリング。py の余剰 stdout/stderr は nul へ。False=画面上部にコンソール（1/4 高さ・全幅）
-<<<<<<< HEAD
-' 実効値は 段階12_CMDウィンドウ非表示_実効値（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
-Private Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
-' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 xlwings.RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 VBA「ダイアログ付き_段階2を実行」の可否に従う
-Private Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
-=======
 ' 実効値は Stage12CmdHideWindowEffective（シート「設定_環境変数」の STAGE12_CMD_HIDE_WINDOW → OS 環境変数同名 → 本定数）
 Public Const STAGE12_CMD_HIDE_WINDOW As Boolean = True
 ' True=スプラッシュに実行ログを「処理中」に表示したい → 同期 RunPython は使えないため常に cmd+Exec+ポーリング（本 True のとき STAGE12_USE_XLWINGS_RUNPYTHON は実質無視）。False=下記 RunPython の可否に従う
 Public Const STAGE12_USE_XLWINGS_SPLASH_LOG As Boolean = True
->>>>>>> main4
 ' True かつ STAGE12_USE_XLWINGS_SPLASH_LOG=False のときのみ xlwings.RunPython+runpy.run_path（Tools→参照に xlwings）。実行中はログ枠はほぼ更新されず終了後に一括表示。進捗表示優先なら SPLASH_LOG=True のまま（cmd になる）
 Public Const STAGE12_USE_XLWINGS_RUNPYTHON As Boolean = True
 
@@ -126,8 +119,21 @@ Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
 Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
+' planning_core.PLAN_INPUT_SHEET_NAME（TASK_PLAN_SHEET 未設定時の既定）と一致
+Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
+' 配台計画_タスク入力シート上の「配台試行順を再計算」図形名（再配置時に削除して付け直す）
+Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
+' 「配台試行順番」を小数キーで並べ替え（1..n）用グラデーション図形名
+Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS As String = "btn_PlanInput_DispatchTrialOrder_FloatKeys"
+' planning_core の ai_cache_path（json/ai_remarks_cache.json）と旧 output/ 退避先と一致
+Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
+Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
+' メイン_ 上の「AI解析キャッシュ削除」図形（再配置時に名前で削除）
+Public Const SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR As String = "btn_Main_AI_RemarksCacheClear"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
+' マクロブックと同じフォルダに置く（設定_環境変数_雛形TSVから同期 が読み込む）
+Public Const WORKBOOK_ENV_TEMPLATE_TSV_FILE As String = "設定_環境変数_雛形.tsv"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
 Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
@@ -139,33 +145,28 @@ Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
-' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。
+' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。AI 備考等の TTL キャッシュは json\ai_remarks_cache.json（手動削除は Gemini連携 の AI解析_Remarksキャッシュファイルを削除）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
 ' ★「設定」B4=配台結果 xlsx に Python が埋め込むフォント名（空なら書体名を付けず、取り込み後も「全シートフォント」が維持されやすい）。B5=ポイント（B4 指定時、空なら 11）。
 ' ★ TASK_INPUT_WORKBOOK には本ブック（ThisWorkbook）を渡す。
 ' ★ メインに「master.xlsm を開く」ボタン: 開発タブ→マクロ→「メインシート_master開くボタンを配置」を1回実行（既存ボタンと重なる場合は位置をドラッグ調整）
 ' ★「設定_配台不要工程」は Python で新規作成しない。段階1・段階2 の先頭で 設定_配台不要工程_シートを確保（見出し・表示 xlSheetVisible）。
-' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。
+' ★「設定_環境変数」は workbook_env_bootstrap が import 前に読む。段階1・段階2 先頭で 設定_環境変数_シートを確保（見出し・不足キーのみ追記。既存行は上書きしない）。雛形 TSV とシートを一致させるときは Gemini連携 の 設定_環境変数_雛形TSVから同期（B/C は既存キー保持・雛形外の行は削除）。
 ' ★「設定_シート表示」は A=並び順（1 始まり・小さいほど左のタブ）・B=シート名・C=表示（ドロップダウンはインライン一覧。F2:F4 は候補の目安）。マクロ「設定_シート表示_一覧をブックから再取得」「設定_シート表示_ブックへ適用」。段階1/2 成功完了時は一覧更新のあと「ブックへ適用」まで自動実行（適用末尾で再び一覧同期）。当シートは常に表示。
 ' ★ アニメ付き_* マクロは処理中に UserForm「frmMacroSplash」を表示する。作成手順は frmMacroSplash_VBA.txt。
-'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。スプラッシュ_フォームを最前面へ のたびに再配置（長時間処理中の Excel 移動に追従）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 スプラッシュ_実行ログ枠を更新 で execution_log.txt をポーリング（固まったように見えない）。
-'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 xlwings.RunPython（終了後 スプラッシュ_実行ログをパスから読込 で一括）。実行中はログ枠はほぼ動かない。
+'   ・表示位置は Application.hwnd のウィンドウ矩形に対し下端・水平中央（SPLASH_EXCEL_BOTTOM_GAP_PX）。MacroSplash_BringFormToFront のたびに再配置（長時間処理中の Excel 移動に追従）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=True … 段階1/2 の Python は必ず cmd+Exec。待機中 MacroSplash_RefreshExecutionLogPane で execution_log.txt をポーリング（固まったように見えない）。
+'   ・STAGE12_USE_XLWINGS_SPLASH_LOG=False かつ STAGE12_USE_XLWINGS_RUNPYTHON=True … 同期 RunPython（終了後 MacroSplash_LoadExecutionLogFromPath で一括）。実行中はログ枠はほぼ動かない。
 ' ★ 段階1/2: PowerShell は起動しない（cmd＋conhost --headless または cmd）。Exec 待機中に execution_log を UserForm へ。STAGE12_CMD_HIDE_WINDOW（シートまたは OS 環境・既定1）=True で WT 経由の黒画面を避ける。終了コードは log\stage_vba_exitcode.txt 優先。False なら cmd＋SetWindowPos。非表示時 py は 1>nul 2>&1。
 '
 ' ★ xlwings「Show Console」で cmd なしに Python ログを見る（任意・要 xlwings アドイン・参照設定）
-'   ・import 解決のため xlwings.RunPython に渡す文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
+'   ・import 解決のため RunPython 文字列は runpy.run_path で python\xlwings_console_runner.py を実行する形式を使う。
 '       xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
-'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ Xlwings_コンソールランナー実行。SPLASH_LOG=True のときは cmd（進捗優先）。
+'   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ XwRunConsoleRunner。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
-<<<<<<< HEAD
-' 環境コンポーネントをインストール: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
-Private Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
-=======
 ' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
 Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
->>>>>>> main4
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
 Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
@@ -179,18 +180,6 @@ Public Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
 Public m_lastStage1ExitCode As Long
 Public m_lastStage1ErrMsg As String
 ' 段階2コア用（ダイアログは呼び出し元で出す）
-<<<<<<< HEAD
-Private m_lastStage2ErrMsg As String
-Private m_lastStage2ExitCode As Long
-Private m_stage2PlanImported As Boolean
-Private m_stage2MemberImported As Boolean
-' ブックのクエリ更新を試行 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
-Private m_lastRefreshQueriesErrMsg As String
-' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
-Private m_macroSplashShown As Boolean
-' スプラッシュ_表示 で Application.Interactive=False を立てたときだけ スプラッシュ_非表示 で True に戻す
-Private m_macroSplashLockedExcel As Boolean
-=======
 Public m_lastStage2ErrMsg As String
 Public m_lastStage2ExitCode As Long
 Public m_stage2PlanImported As Boolean
@@ -202,7 +191,6 @@ Public m_lastRefreshQueriesErrMsg As String
 Public m_macroSplashShown As Boolean
 ' MacroSplash_Show で Application.Interactive=False を立てたときだけ Hide で True に戻す
 Public m_macroSplashLockedExcel As Boolean
->>>>>>> main4
 ' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
 Public m_animMacroSucceeded As Boolean
 ' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）
@@ -234,3 +222,4 @@ Public mGanttHL_Row As Long
 Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
+

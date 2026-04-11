@@ -155,16 +155,34 @@ Sub アニメ付き_列設定_結果_タスク一覧_重複列名を整理()
     アニメ付き_スプラッシュ付きで実行 "列設定シートの重複列名を整理しています…", "列設定_結果_タスク一覧_重複列名を整理"
 End Sub
 
-' シート上の手編集のみ反映（元データ再取り込みなし・設定ルールの再適用なし）。python\refresh_plan_input_dispatch_trial_order.py + LOCAL_ONLY=1。
-Sub アニメ付き_配台試行順番_タスク入力をPythonで更新()
+' 配台計画_タスク入力: 「配台不要」を手動でクリアしたあと等に試行順を付け直す。図形の OnAction は本マクロ（本体直指定だと AnimateButtonPush が動かない）。
+Sub アニメ付き_配台計画_タスク入力_配台試行順番を再計算()
     Call AnimateButtonPush
-    アニメ付き_スプラッシュ付きで実行 "配台計画_タスク入力: 試行順をシート内容のみで再計算しています…", "配台試行順番_配台計画タスク入力をPythonで更新"
+    アニメ付き_スプラッシュ付きで実行 "配台試行順番を再計算しています…", "配台計画_タスク入力_配台試行順番をPythonで再計算"
 End Sub
 
-' 設定_配台不要工程のルール等を適用したうえで試行順を付け直す（段階2 読込に近い post_load あり）。
-Sub アニメ付き_配台試行順番_タスク入力をPythonで更新_設定ルール再適用()
+' 配台試行順番列を小数キーとして昇順に並べ替え 1..n（マスタ・上書き連携なし）。図形 OnAction は本マクロ。
+Sub アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え()
     Call AnimateButtonPush
-    アニメ付き_スプラッシュ付きで実行 "配台計画_タスク入力: 設定ルール反映後に試行順を再計算しています…", "配台試行順番_配台計画タスク入力をPythonで更新_設定ルール再適用"
+    アニメ付き_スプラッシュ付きで実行 "配台試行順番をキー順に並べ替えています…", "配台計画_タスク入力_試行順を小数キーでPython並べ替え"
+End Sub
+
+' 上記と同じ図形をシートに自動配置（初回・位置調整用）。本体は フォント管理 の 配台計画_タスク入力_配台試行順再計算ボタンを配置。
+Sub アニメ付き_配台計画_タスク入力_配台試行順再計算ボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_配台試行順再計算ボタンを配置
+End Sub
+
+' 小数キー並べ替えボタンを配置（グラデーション図形）。本体は フォント管理。
+Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_試行順小数キー並べ替えボタンを配置
+End Sub
+
+' 小数キー並べ替えボタンを配置（かっこいいボタン版）。
+Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えクールボタンを配置()
+    Call AnimateButtonPush
+    配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置
 End Sub
 
 Public Function GetMainWorksheet() As Worksheet
@@ -618,7 +636,7 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
     If lastCol < 6 Then Exit Sub
     For c = 6 To lastCol
-        ws.Columns(c).ColumnWidth = 7.5   ' 時刻見出し 90° 回転・帯ラベル用に拡大
+        ws.Columns(c).ColumnWidth = 3   ' 時刻グリッド（F 列?）
     Next c
     On Error Resume Next
     ws.Activate
@@ -945,48 +963,6 @@ Public Sub 配台計画_タスク入力を前へ並べ替え()
 End Sub
 
 ' =========================================================
-' 配台計画_タスク入力: 配台試行順更新ボタン（クールボタン）を1つ配置。既存の同名図形があれば削除してから作成。
-' マクロ一覧から「配台計画_タスク入力_配台試行順更新ボタンを配置」を実行（対象シートをアクティブにしてから配置）。
-' =========================================================
-Public Sub 配台計画_タスク入力_配台試行順更新ボタンを配置()
-    Const PLAN_SHEET As String = "配台計画_タスク入力"
-    Const BTN_SHAPE_NAME As String = "Btn_配台試行順番更新"
-    Dim ws As Worksheet
-    Dim lastCol As Long
-    Dim posX As Single
-    Dim posY As Single
-    Dim anchorLeft As Single
-
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(PLAN_SHEET)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        MsgBox "シート「" & PLAN_SHEET & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    ws.Activate
-
-    On Error Resume Next
-    ws.Shapes(BTN_SHAPE_NAME).Delete
-    On Error GoTo 0
-
-    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-    If lastCol < 1 Then lastCol = 1
-    anchorLeft = ws.Columns(lastCol).Left + ws.Columns(lastCol).Width
-    posX = anchorLeft + 12
-    If posX > 700 Then posX = 420
-    posY = 6
-
-    CreateCoolButtonWithPreset "配台試行順を更新", "アニメ付き_配台試行順番_タスク入力をPythonで更新", posX, posY, 2
-    On Error Resume Next
-    ws.Shapes(ws.Shapes.Count).Name = BTN_SHAPE_NAME
-    On Error GoTo 0
-
-    MsgBox "「" & PLAN_SHEET & "」に配台試行順更新ボタンを配置しました。" & vbCrLf & _
-           "位置は表の右側です。重なる場合はドラッグで移動してください。", vbInformation, "ボタン配置"
-End Sub
-
-' =========================================================
 ' 共通：ボタンを押し込むアニメーション処理
 ' ※ActiveSheet.Shapes(名前) だけだと、別シートに同じ図形名（既定の角丸1 等）があると
 '   誤ってそちらを動かし、意図しないシートが前面に出ることがあります。
@@ -1166,8 +1142,8 @@ Public Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     End Select
 End Function
 
-Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long)
-    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId)
+Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional stableShapeName As String)
+    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), stableShapeName
 End Sub
 
 Sub かっこいいボタンを作成()
@@ -1212,8 +1188,77 @@ Sub かっこいいボタン_配色サンプル作成()
            "クリックしてもマクロは動きません。不要なら図形を削除してください。", vbInformation
 End Sub
 
-' ボタン生成の共通ロジック
-Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long)
+' アクティブシート上に、グラデーション＋押下アニメ用のクールボタンを1つ配置（InputBox で文言・マクロ名・座標・配色を指定）
+' 割り当て先は「アニメ付き_*」など、先頭で AnimateButtonPush を呼ぶマクロを推奨（図形に本体を直割り当てするとアニメは動きません）
+Public Sub アニメ付きマクロ用_クールボタンを対話配置()
+    Dim cap As String
+    Dim mac As String
+    Dim ps As String
+    Dim pr As Long
+    Dim x As Single
+    Dim y As Single
+    Dim stable As String
+    
+    cap = InputBox( _
+        "ボタンに表示する文字列を入力してください。", _
+        "アニメ付きクールボタン (1/4)", _
+        "実行")
+    If Len(Trim$(cap)) = 0 Then Exit Sub
+    
+    mac = InputBox( _
+        "割り当てるマクロ名を入力してください。" & vbCrLf & _
+        "例: アニメ付き_計画生成を実行（このブック内の Public Sub 名）", _
+        "アニメ付きクールボタン (2/4)", _
+        "アニメ付き_計画生成を実行")
+    If Len(Trim$(mac)) = 0 Then Exit Sub
+    
+    ps = InputBox( _
+        "左位置と上位置をカンマ区切りで入力（ポイント）。例: 50, 120" & vbCrLf & _
+        "空欄なら 50, 50 を使います。", _
+        "アニメ付きクールボタン (3/4)", _
+        "50, 50")
+    If Len(Trim$(ps)) = 0 Then ps = "50, 50"
+    If Not ParseTwoSingleCsv(ps, x, y) Then
+        MsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
+        Exit Sub
+    End If
+    
+    ps = InputBox( _
+        "配色プリセット番号（1～10）を入力してください。" & vbCrLf & _
+        "1=ロイヤルブルー … 10=マゼンタ（CreateCoolButtonWithPreset と同じ）", _
+        "アニメ付きクールボタン (4/4)", _
+        "1")
+    pr = 1
+    If Len(Trim$(ps)) > 0 And IsNumeric(ps) Then pr = CLng(CDbl(ps))
+    If pr < 1 Or pr > 10 Then pr = 1
+    
+    Randomize
+    stable = "AnimCool_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+    
+    CreateCoolButtonWithPreset Trim$(cap), Trim$(mac), x, y, pr, stable
+    MsgBox "クールボタンを配置しました。" & vbCrLf & _
+           "図形名: " & stable & vbCrLf & _
+           "OnAction: " & Trim$(mac), vbInformation
+End Sub
+
+' カンマ区切りで2つの Single を読む（空白許容）
+Private Function ParseTwoSingleCsv(ByVal s As String, ByRef outX As Single, ByRef outY As Single) As Boolean
+    Dim p As Long
+    Dim a As String
+    Dim b As String
+    p = InStr(1, s, ",")
+    If p <= 0 Then Exit Function
+    a = Trim$(Left$(s, p - 1))
+    b = Trim$(Mid$(s, p + 1))
+    If Len(a) = 0 Or Len(b) = 0 Then Exit Function
+    If Not IsNumeric(a) Or Not IsNumeric(b) Then Exit Function
+    outX = CSng(CDbl(a))
+    outY = CSng(CDbl(b))
+    ParseTwoSingleCsv = True
+End Function
+
+' ボタン生成の共通ロジック（stableShapeName を渡すと図形名を固定。AnimateButtonPush は Application.Caller=図形名のためアニメ付きマクロ用ボタンでは推奨）
+Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional stableShapeName As String)
     Dim shp As Shape
     
     Set shp = ActiveSheet.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, 220, 50)
@@ -1256,10 +1301,100 @@ Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Sing
         .OnAction = macroName
         
         On Error Resume Next
-        Randomize
-        .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        If Len(Trim$(stableShapeName)) > 0 Then
+            .Name = stableShapeName
+        Else
+            Randomize
+            .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+        End If
         On Error GoTo 0
     End With
+End Sub
+
+' 「配台計画_タスク入力」1行目の右側付近に、試行順再計算用のクールボタンを1つ配置する（同一 OnAction の既存図形は削除してから作成）。
+Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_配台試行順番を再計算"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim lastCol As Long
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4
+    
+    CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
+End Sub
+
+' 「配台試行順番」を小数キーで並べ替え 1..n 用（かっこいいボタン版）。試行順更新ボタンの下あたりに配置（同一マクロ割当の既存図形は削除）。
+' グラデーション版は フォント管理 の「配台計画_タスク入力_試行順小数キー並べ替えボタンを配置」。
+Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4 + 58
+    
+    CreateCoolButtonWithPreset "キー順に並べ替え", MACRO_ANIM, leftPos, topPos, 3
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================
@@ -1977,8 +2112,16 @@ Public Sub 段階1_コア実行()
                  "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
-                 "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf & _
-                 "exit /b !STAGE1_PY_EXIT!"
+                 "(echo !STAGE1_PY_EXIT!)>log\stage_vba_exitcode.txt" & vbCrLf
+        ' コンソール表示時のみ: Python 失敗後にウィンドウがすぐ閉じないよう pause（非表示・headless では付けない）
+        If Not hideStage12CmdSt1 Then
+            runBat = runBat & "if not !STAGE1_PY_EXIT! equ 0 (" & vbCrLf & _
+                     "echo." & vbCrLf & _
+                     "echo [stage1] Python error. Press any key to close this window..." & vbCrLf & _
+                     "pause" & vbCrLf & _
+                     ")" & vbCrLf
+        End If
+        runBat = runBat & "exit /b !STAGE1_PY_EXIT!"
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane

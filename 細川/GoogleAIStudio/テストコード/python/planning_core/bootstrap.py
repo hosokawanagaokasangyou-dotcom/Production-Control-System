@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 planning_core パッケージの import 時ブートストラップ。
 

@@ -1,29 +1,21 @@
-<<<<<<< HEAD
-Function 最新の出力ファイルパスを取得(folderPath As String, filePattern As String) As String
-=======
 Option Explicit
 
 Function GetLatestOutputFile(folderPath As String, filePattern As String) As String
->>>>>>> main4
     Dim latestPath As String
     Dim latestDate As Date
 
     If Len(Dir(folderPath, vbDirectory)) = 0 Then
-        最新の出力ファイルパスを取得 = ""
+        GetLatestOutputFile = ""
         Exit Function
     End If
 
     latestDate = 0
     latestPath = ""
-    最新出力ファイルを再帰検索 folderPath, filePattern, latestPath, latestDate
-    最新の出力ファイルパスを取得 = latestPath
+    CollectLatestOutputFileRecursive folderPath, filePattern, latestPath, latestDate
+    GetLatestOutputFile = latestPath
 End Function
 
-<<<<<<< HEAD
-Private Sub 最新出力ファイルを再帰検索(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
-=======
 Public Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal filePattern As String, ByRef latestPath As String, ByRef latestDate As Date)
->>>>>>> main4
     Dim fso As Object
     Dim fldr As Object
     Dim subFldr As Object
@@ -56,25 +48,15 @@ Public Sub CollectLatestOutputFileRecursive(ByVal folderPath As String, ByVal fi
     Next fil
 
     For Each subFldr In fldr.SubFolders
-        最新出力ファイルを再帰検索 CStr(subFldr.path), filePattern, latestPath, latestDate
+        CollectLatestOutputFileRecursive CStr(subFldr.path), filePattern, latestPath, latestDate
     Next subFldr
 End Sub
 
 ' =========================================================
-<<<<<<< HEAD
-' 全シートのセルフォントを統一（手動実行・ボタン割当可）
-' ※セルグリッドのみ。図形・グラフ内テキストは対象外。
-' ※保護の解除・再保護は呼び出し元（段階1/2 コアまたは全シートフォント各マクロ）が 配台マクロ_* で実施。本サブは UsedRange のフォント名のみ変更。
-' ※解除できないシートはスキップし、ダイアログに列挙。
-' ※フォント後の列幅調整はメイン A:K と 結果_主要4結果シート_列オートフィット のみ。結果_設備ガントは専用列幅（オートフィットしない）。
-' ※「リスト選択」は Excel 標準の［セルの書式設定］→［フォント］ダイアログを使用。
-' ※図形のマクロには「アニメ付き_全シートフォントをリストから選択して統一」を指定（押下アニメ用。本体を直指定すると ボタン押下アニメーション が動かない）。
-=======
 ' ファイル探索（最新の出力ファイルパスを返す）
 ' GetLatestOutputFile:
 '   folderPath 配下を再帰的に走査し、filePattern（Like パターン）に一致するファイルのうち
 '   DateLastModified が最大のもののフルパスを返す。該当なし・フォルダ不正時は "" 。
 ' CollectLatestOutputFileRecursive:
 '   上記の内部処理。Scripting.FileSystemObject で Files / SubFolders を辿る。
->>>>>>> main4
 ' =========================================================

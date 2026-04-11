@@ -1,8 +1,10 @@
-"""planning_core 実装本体（パッケージ内）。``import planning_core`` 㝧 bootstrap 㝌先㝫実行㝕れる㝓㝨。"""
+# -*- coding: utf-8 -*-
+"""planning_core 実装本体（パッケージ内）。``import planning_core`` で bootstrap が先に実行されること。"""
 import pandas as pd
 from datetime import datetime, timedelta, time, date
 from collections import Counter, defaultdict
 import itertools
+import functools
 import csv
 import json
 import copy
@@ -19,9 +21,11 @@ import logging
 import calendar
 import math
 import os
+import random
 import fnmatch
 import shutil
 import sys
+import threading
 import ctypes
 from contextlib import contextmanager
 from openpyxl import load_workbook
@@ -29,6 +33,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.pagebreak import Break
 
 from .bootstrap import (
     PlanningValidationError,
@@ -91,9 +96,21 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # Gemini API キー㝯 TASK_INPUT_WORKBOOK 確定後〝下記「設定〝B1 㝮 JSON 㝋ら解決（平文㝾㝟㝯 format_version 2 㝮暗坷化）。
 # 未設定時㝮㝿移行用㝫環境変数 GEMINI_API_KEY を坂照。
 
-GEMINI_MODEL_FLASH = "gemini-2.5-flash"
-# 推定料金: USD / 1M tokens（入力, 出力）。公弝㝮最新坘価㝫坈ゝ㝛㝦更新㝙る㝓㝨。
-# 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M 㝧上書㝝坯（Flash 坑㝑）。
+# Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
+# https://ai.google.dev/gemini-api/docs/models
+# 既定の試行順（精度の高い順）。マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
+# 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
+GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
+    "gemini-3-flash-preview",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-2.5-flash-lite",
+)
+# 既定の先頭モデル（従来名 GEMINI_MODEL_FLASH のまま参照している箇所向け）
+GEMINI_MODEL_FLASH = GEMINI_MODEL_IDS_BY_QUALITY[0]
+# 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
+# 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_IN_PER_M", "0.075") or 0.075
 )
@@ -101,6 +118,51 @@ _GEMINI_FLASH_OUT_PER_M = float(
     os.environ.get("GEMINI_PRICE_USD_OUT_PER_M", "0.30") or 0.30
 )
 GEMINI_JPY_PER_USD = float(os.environ.get("GEMINI_JPY_PER_USD", "150") or 150)
+# 503 / UNAVAILABLE / 429 等: 呼び出し直前の一様乱数ジッター（秒・上限）。0 で無効。
+_GEMINI_PRE_REQUEST_JITTER_MAX = float(
+    os.environ.get("GEMINI_PRE_REQUEST_JITTER_MAX_SEC", "0.75") or 0.75
+)
+# 再試行の指数バックオフ基底（秒）。試行 k 目の待ちの目安: base * 2^k + 小ジッター
+_GEMINI_RETRY_BACKOFF_BASE = float(
+    os.environ.get("GEMINI_RETRY_BACKOFF_BASE_SEC", "2.0") or 2.0
+)
+_GEMINI_RETRY_MAX_ATTEMPTS = max(
+    1, int(os.environ.get("GEMINI_RETRY_MAX_ATTEMPTS", "3") or 3)
+)
+# generate_content 1 リクエストの HTTP タイムアウト（秒）。0 で HttpOptions の timeout を付けず SDK 既定。
+# 環境変数 GEMINI_REQUEST_TIMEOUT_SEC（未設定時は 60）。
+
+
+def _gemini_request_timeout_sec() -> float:
+    raw = (os.environ.get("GEMINI_REQUEST_TIMEOUT_SEC") or "").strip()
+    if not raw:
+        return 60.0
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 60.0
+    return max(0.0, v)
+
+
+def _gemini_client(api_key: str) -> genai.Client:
+    """API キー付き Client。可能なら HttpOptions で読み取りタイムアウトを付与する。"""
+    sec = _gemini_request_timeout_sec()
+    if sec > 0:
+        try:
+            from google.genai import types as genai_types
+
+            ms = max(1000, int(round(sec * 1000.0)))
+            return genai.Client(
+                api_key=api_key,
+                http_options=genai_types.HttpOptions(timeout=ms),
+            )
+        except Exception:
+            logging.debug(
+                "Gemini Client: HttpOptions によるタイムアウト設定に失敗したため、既定クライアントを使用します。",
+                exc_info=True,
+            )
+    return genai.Client(api_key=api_key)
+
 
 # ---------------------------------------------------------------------------
 # 以陝㝮定数ブロック㝯「Excel 列見出㝗〝㝨 1:1 㝧対応㝕㝛る。
@@ -136,9 +198,11 @@ MASTER_SHEET_TEAM_COMBINATIONS = "組㝿坈ゝ㝛表"
 # 備考列・休暇区分㝯勤怠 AI 㝧構造化（酝坰丝坂加・is_holiday・中抜㝑等）。備考㝌空㝧も休暇区分㝮㝿㝮行㝯 AI 㝫渡㝙。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
-# メンポー勤怠シート（master.xlsm）: 定時㝮「退勤時間〝㝨分㝑㝦退勤上陝を指定（任愝列）
-ATT_COL_OT_END = "残業終業"
-# 勤怠備考 AI 㝮 JSON スキーマを変㝈㝟ら更新㝗〝キャッシュキーを無効化㝙る
+# メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列・見出しは「残業(分)」）
+ATT_COL_OT_END = "残業(分)"
+# 旧ブックの K 列見出し。load_attendance_and_analyze で ATT_COL_OT_END に正規化する。
+ATT_COL_OT_END_LEGACY = "残業終業"
+# 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
 # need シート: 「基本必覝人数〝行（A列㝫「必覝人数〝を坫む）＋ 㝝㝮直下㝮「酝坰時追加人数＝余力時追加人数〝等
 # （Excel 上㝯概㝭 5 行目付近。余剰時㝫増や㝛る人数上陝・工程×機械列）
@@ -200,7 +264,13 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
 
 # マクロブック「設定〝B1: 社内共有上㝮 Gemini 誝証 JSON 㝮パス
 APP_CONFIG_SHEET_NAME = "設定"
-# 暗坷化誝証 JSON（format_version 2）㝮復坷㝯常㝫㝓㝮定数㝮㝿（社内手順㝮パスフレーズ㝨一致㝕㝛る。ログ・UI 㝫出㝕㝪㝄）。
+# 「設定」シート D3 以降: Gemini 試行モデル ID（Google の model code）。E 列が真の行だけを上から順に試行する。
+# （A/B 列は配台トレース・デバッグ依頼NO用のため、モデル一覧は D/E に配置）
+GEMINI_MODEL_SHEET_COL_MODEL = 4  # D
+GEMINI_MODEL_SHEET_COL_ENABLE = 5  # E
+GEMINI_MODEL_SHEET_FIRST_ROW = 3
+GEMINI_MODEL_SHEET_MAX_ROWS = 40
+# 暗号化認証 JSON（format_version 2）の復号は常にこの定数のみ（社内手順のパスフレーズと一致させる。ログ・UI に出さない）。
 _GEMINI_CREDENTIALS_PASSPHRASE_FIXED = "nagaoka1234"
 _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT = 480_000
 
@@ -209,6 +279,40 @@ def _config_cell_text(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
     return str(v).strip()
+
+
+def _config_cell_truthy_enabled(v) -> bool:
+    """設定シートの「試行に含める」列。Excel の TRUE / チェックボックス / 1 等を真とみなす。"""
+    if v is True:
+        return True
+    if v is False:
+        return False
+    if isinstance(v, (int, float)) and not pd.isna(v):
+        try:
+            return int(round(float(v))) != 0
+        except (TypeError, ValueError):
+            return False
+    s = _config_cell_text(v)
+    if not s:
+        return False
+    u = s.lower()
+    if u in (
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+        "○",
+        "〇",
+        "はい",
+        "有効",
+        "含む",
+        "試行",
+    ):
+        return True
+    if u in ("0", "false", "no", "n", "off", "×", "いいえ", "無効", "除外"):
+        return False
+    return False
 
 
 def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
@@ -346,6 +450,84 @@ def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
         "B",
         openpyxl_skip_hint="デポッグ酝坰㝯「設定〝シート B 列を openpyxl 㝧読ゝ㝪㝄㝟ゝ無効（全件酝坰）㝧㝙。",
     )
+
+
+@functools.lru_cache(maxsize=32)
+def _read_gemini_model_try_chain_from_settings_sheet_cached(
+    wb_path_norm: str, mtime_key: int
+) -> tuple[str, ...]:
+    """「設定」!D:E から試行モデル列を読む。mtime_key でブック保存後にキャッシュ無効化。"""
+    out: list[str] = []
+    if not wb_path_norm or not os.path.isfile(wb_path_norm):
+        return tuple()
+    if _workbook_should_skip_openpyxl_io(wb_path_norm):
+        logging.info(
+            "Gemini 試行モデル: ブックに「%s」があるため「%s」!D:E を openpyxl で読めません（既定モデル列を使用）。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
+            APP_CONFIG_SHEET_NAME,
+        )
+        return tuple()
+    try:
+        keep_vba = str(wb_path_norm).lower().endswith(".xlsm")
+        wb = load_workbook(
+            wb_path_norm, read_only=True, data_only=True, keep_vba=keep_vba
+        )
+        try:
+            if APP_CONFIG_SHEET_NAME not in wb.sheetnames:
+                return tuple()
+            ws = wb[APP_CONFIG_SHEET_NAME]
+            consecutive_empty = 0
+            last = GEMINI_MODEL_SHEET_FIRST_ROW + GEMINI_MODEL_SHEET_MAX_ROWS
+            for r in range(GEMINI_MODEL_SHEET_FIRST_ROW, last):
+                mid = _config_cell_text(
+                    ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_MODEL).value
+                )
+                en_raw = ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_ENABLE).value
+                if not mid:
+                    consecutive_empty += 1
+                    if consecutive_empty >= 20:
+                        break
+                    continue
+                consecutive_empty = 0
+                if not _config_cell_truthy_enabled(en_raw):
+                    continue
+                out.append(mid)
+        finally:
+            wb.close()
+    except Exception as ex:
+        logging.warning(
+            "Gemini 試行モデル: 「%s」!D%d:E を読めません（既定モデル列を使用）: %s",
+            APP_CONFIG_SHEET_NAME,
+            GEMINI_MODEL_SHEET_FIRST_ROW,
+            ex,
+        )
+        return tuple()
+    return tuple(out)
+
+
+def _read_gemini_model_try_chain_from_settings_sheet(wb_path: str) -> tuple[str, ...] | None:
+    """マクロブック「設定」シートの D/E 列で有効化されたモデルを上から返す。1 件も無ければ None。"""
+    p = (wb_path or "").strip()
+    if not p:
+        return None
+    try:
+        norm = os.path.normpath(os.path.abspath(p))
+    except Exception:
+        norm = p
+    try:
+        mkey = int(os.path.getmtime(norm))
+    except OSError:
+        mkey = 0
+    chain = _read_gemini_model_try_chain_from_settings_sheet_cached(norm, mkey)
+    if not chain:
+        return None
+    logging.info(
+        "Gemini 試行モデル: 「%s」シート D/E から %s 件を読み込みました（順: %s）。",
+        APP_CONFIG_SHEET_NAME,
+        len(chain),
+        ", ".join(chain),
+    )
+    return chain
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
@@ -537,7 +719,11 @@ if not API_KEY:
         APP_CONFIG_SHEET_NAME,
     )
 
-RESULT_SHEET_GANTT_NAME = "絝果_設備ガント"
+RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
+# 結果_設備ガントの横軸タイムスロット幅（分）
+GANTT_TIMELINE_SLOT_MINUTES = 5
+# 結果_設備ガントの時刻列（F 列以降）の列幅（Excel / openpyxl の標準単位）
+GANTT_TIMELINE_COLUMN_WIDTH = 3
 
 # タスク列坝（マクロ実行ブック「加工計画DATA〝）
 TASK_COL_TASK_ID = "依頼NO"
@@ -560,6 +746,8 @@ TASK_COL_COMPLETION_FLAG = "加工完了区分"
 TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互杛（直接㝮加工済数針）
 TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完戝哝数針（杛算㝫使㝆）
 TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
+# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
+TASK_COL_EXTRACTION_TIME = "抽出時間"
 AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
 # json/ai_remarks_cache.json 内㝮キー接頭辞（設定_酝坰丝覝工程・酝坰丝能ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
@@ -597,14 +785,18 @@ PLAN_COL_SPEED_OVERRIDE = "加工速度_上書㝝"
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原坝投入日_上書㝝"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
-# 坂照列「（元）酝坰丝覝〝㝯置㝋㝪㝄（元データ㝫相当㝙るマスタ列㝌無㝄㝟ゝ）。
-# セル値㝮例（酝坰㝋ら外㝙）: Excel 㝮 TRUE / 数値 1 / 文字列「㝯㝄〝「yes〝「true〝「○〝「〇〝「◝〝等。
-# 空・FALSE・0・「㝄㝄㝈〝等㝯酝坰対象。詳細㝯 _plan_row_exclude_from_assignment。
-PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "酝坰丝覝"
-PLAN_COL_AI_PARSE = "AI特別指定_解枝"
-PLAN_COL_PROCESS_FACTOR = "加工工程㝮決定プロセス㝮因孝"
-# 1ロール㝂㝟り㝮長㝕（m）。酝坰計画_タスク入力㝫㝮㝿存在（加工計画DATA 㝫㝯無㝄）。製哝坝列㝮坳隣㝫酝置。
-PLAN_COL_ROLL_UNIT_LENGTH = "ロール坘佝長㝕"
+# 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
+# セル値の例（配台から外す）: Excel の TRUE / 数値 1 / 文字列「はい」「yes」「true」「○」「〇」「●」等。
+# 空・FALSE・0・「いいえ」等は配台対象。詳細は _plan_row_exclude_from_assignment。
+PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
+PLAN_COL_AI_PARSE = "AI特別指定_解析"
+PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
+# 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
+PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+# 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
+PLANNING_MIN_QTY_M = 100.0
+# ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
+ROLL_UNIT_LENGTH_CEIL_STEP_M = 100.0
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 酝坰ループ㝧「人数別㝮最良候補〝㝨採用睆由を INFO ログ㝫出㝙
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
@@ -824,6 +1016,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_DATA_EXTRACTION_DT,
+        TASK_COL_EXTRACTION_TIME,
         PLAN_COL_SPEED_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
         PLAN_COL_PREFERRED_OP,
@@ -833,19 +1026,15 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     }
 )
 
-# 計画絝果ブック「絝果_タスク一覧〝㝮列順・表示（マクロ実行ブック㝮坌坝シート㝧上書㝝坯）
-RESULT_TASK_SHEET_NAME = "絝果_タスク一覧"
-RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "絝果_設備毎㝮時間割"
-# 余力追記剝㝮タイムラインを坯視化（絝果_設備毎㝮時間割㝨坌㝘 10 分枠・列構造）
-TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME = "TEMP_設備毎㝮時間割"
-# 設備・人㝮坠有（ブロック）を 10 分枠㝧一覧（調査・検証用）
-BLOCK_TABLE_SHEET_NAME = "ブロックテーブル"
-# 工程坝+機械㝮複坈列㝧㝯㝪㝝〝機械坝坘佝㝧坄枠㝮依頼NOを把条㝗や㝙㝝㝙る
-RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "絝果_設備毎㝮時間割_機械坝毎"
-# master メイン A15/B15 㝮定常外㝮「日時帯〝見出㝗着色（絝果_設備毎㝮時間割・絝果_設備ガント）
+# 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
+RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
+RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
+# 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
+RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
+# master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
-# 絝果_設備毎㝮時間割_機械坝毎: 酝坰済㝿依頼NOセル（機械列）㝮薄㝄グリーン
-# 絝果_設備毎㝮時間割（㝊よ㝳 TEMP）: 加工剝準備・依頼切替後始末㝮設備セルも坌系色
+# 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
+# 結果_設備毎の時間割: 加工前準備・依頼切替後始末の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 絝果_設備毎㝮時間割: master「機械カレンダー〝坠有㝨針㝪る設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
@@ -875,7 +1064,12 @@ COLUMN_CONFIG_VISIBLE_COL = "表示"
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
     "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
-# 絝果_タスク一覧㝮日付系（yyyy/mm/dd 文字列）㝫付㝑るフォント色。履歴列㝮〝日付】㝨权㝈る
+# 結果_設備ガントのタイムライン上ラベル（依頼NO 等）をセル文字ではなく角丸四角シェイプで重ねる。
+# xlwings + Excel が必要。失敗時は openpyxl でセルにフォールバック。無効化: GANTT_TIMELINE_SHAPE_LABELS=0
+GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
+    "GANTT_TIMELINE_SHAPE_LABELS", "1"
+).strip().lower() in ("1", "true", "yes", "on")
+# 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
         "回答紝期",
@@ -1155,18 +1349,16 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 
 def _extract_data_extraction_datetime():
     """
-    `加工計画DATA` シート㝮 `データ抽出日` 㝋ら datetime を坖得㝙る。
+    `加工計画DATA` シートから配台基準日時を取得する。
+    列「抽出時間」の先頭非空値を優先。列が無い・有効値が無いときは「データ抽出日」を試す。
+
+    Returns:
+        tuple[datetime | None, str | None]: (日時, 採用した列名)。両方 None のときは現在時刻フォールバック。
     """
-    try:
-        if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
-            return None
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
-        df.columns = df.columns.str.strip()
-        if TASK_COL_DATA_EXTRACTION_DT not in df.columns:
-            return None
-        s = df[TASK_COL_DATA_EXTRACTION_DT]
+
+    def _first_valid_dt_from_series(series) -> datetime | None:
         first = None
-        for v in s:
+        for v in series:
             if v is None or (isinstance(v, float) and pd.isna(v)):
                 continue
             first = v
@@ -1179,16 +1371,29 @@ def _extract_data_extraction_datetime():
         if isinstance(dt, pd.Timestamp):
             return dt.to_pydatetime()
         return dt if isinstance(dt, datetime) else None
+
+    try:
+        if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+            return None, None
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
+        df.columns = df.columns.str.strip()
+        for col_name in (TASK_COL_EXTRACTION_TIME, TASK_COL_DATA_EXTRACTION_DT):
+            if col_name not in df.columns:
+                continue
+            dt = _first_valid_dt_from_series(df[col_name])
+            if dt is not None:
+                return dt, col_name
+        return None, None
     except Exception:
-        return None
+        return None, None
 
 
 def _extract_data_extraction_datetime_str():
     """
-    `加工計画DATA` シート㝮 `データ抽出日` 㝋ら「データ坸出㝗日時〝を坖得㝗㝦文字列化㝙る。
+    `加工計画DATA` から基準日時を文字列化する（抽出時間優先、なければデータ抽出日）。
     """
     try:
-        dt = _extract_data_extraction_datetime()
+        dt, _ = _extract_data_extraction_datetime()
         if dt is None:
             return "—"
         return dt.strftime("%Y/%m/%d %H:%M:%S")
@@ -1249,7 +1454,22 @@ _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     shrink_to_fit=False,
     indent=1,
 )
-# タスク帯㝮色㝯パレット有陝㝪㝮㝧 PatternFill を hex 坘佝㝧共有（openpyxl 㝮スタイル展開コスト削減）
+
+
+def _gantt_timeline_label_alignment(*, single_slot: bool) -> Alignment:
+    """
+    ガント帯のラベル用配置。
+    1スロット幅のみの帯では列幅が狭く見切れやすいため shrink_to_fit でセル内に収める。
+    複数スロット続く帯では shrink せず、空セルへはみ出して表示しやすくする（Excel の表示特性）。
+    """
+    return Alignment(
+        horizontal="left",
+        vertical="center",
+        wrap_text=False,
+        shrink_to_fit=bool(single_slot),
+        indent=1,
+    )
+# タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
 _GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
 
 
@@ -1319,10 +1539,14 @@ def _paint_gantt_timeline_row_merged(
     grid_border,
     task_fill_fn=None,
     label_font=None,
+    shape_label_specs: list | None = None,
+    label_italic: bool = False,
 ):
     """
-    時間軸を塗り分㝑㝟㝆㝈㝧〝坌一状態㝌連続㝙るセルを横絝坈㝗帯状㝮ポー㝫㝙る。
-    （細マス坘体㝮塗り㝧㝯㝪㝝15分刻㝿＋坌一状態㝮セル絝坈㝧〝帯状㝮ポー㝨㝗㝦表睾㝙る）
+    時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
+    （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
+    shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（xlwings）で
+    角丸シェイプとして追加するための座標・文言を蓄積する。
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1339,6 +1563,7 @@ def _paint_gantt_timeline_row_merged(
             j += 1
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
+        single_slot_segment = col_s == col_e
         for col in range(col_s, col_e + 1):
             c = ws.cell(row=row, column=col)
             c.border = grid_border
@@ -1353,16 +1578,52 @@ def _paint_gantt_timeline_row_merged(
                 _, gh_ds = st0
                 c.fill = _gantt_cached_pattern_fill(gh_ds)
                 if col == col_s:
-                    c.value = "(日次始業準備)"
-                    c.font = bar_label_font
+                    _ds_txt = "(日次始業準備)"
+                    if shape_label_specs is not None:
+                        shape_label_specs.append(
+                            {
+                                "row": row,
+                                "col_s": col_s,
+                                "col_e": col_e,
+                                "text": _ds_txt,
+                                "italic": bool(label_italic),
+                                "fill_hex": str(gh_ds),
+                            }
+                        )
+                        c.value = None
+                    else:
+                        c.value = _ds_txt
+                        c.font = bar_label_font
+                        c.alignment = _gantt_timeline_label_alignment(
+                            single_slot=single_slot_segment
+                        )
                 else:
                     c.value = None
             else:
                 _, tid, gh, pct = st0
                 c.fill = _gantt_cached_pattern_fill(gh)
                 if col == col_s:
-                    c.value = f"{tid[:9]} {pct}%" if pct is not None else tid[:9]
-                    c.font = bar_label_font
+                    tid_s = str(tid or "").strip()
+                    _lbl = f"{tid_s} {pct}%" if pct is not None else tid_s
+                    if shape_label_specs is not None:
+                        if tid_s:
+                            shape_label_specs.append(
+                                {
+                                    "row": row,
+                                    "col_s": col_s,
+                                    "col_e": col_e,
+                                    "text": _lbl,
+                                    "italic": bool(label_italic),
+                                    "fill_hex": str(gh),
+                                }
+                            )
+                        c.value = None
+                    else:
+                        c.value = _lbl
+                        c.font = bar_label_font
+                        c.alignment = _gantt_timeline_label_alignment(
+                            single_slot=single_slot_segment
+                        )
                 else:
                     c.value = None
         i = j
@@ -1427,8 +1688,8 @@ def _apply_equipment_schedule_outside_regular_fill(
 
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
-    設備列（進度列を除㝝）㝧〝表示㝫「日次始業準備〝「加工剝準備〝「依頼切替後始末〝㝌坫㝾れるセルを薄緑㝫㝙る。
-    絝果_設備毎㝮時間割 / TEMP_設備毎㝮時間割 㝮 equip セル用（日時帯列㝯変更㝗㝪㝄）。
+    設備列（進度列を除く）で、表示に「日次始業準備」「加工前準備」「依頼切替後始末」が含まれるセルを薄緑にする。
+    結果_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
     """
     fill = PatternFill(
         fill_type="solid",
@@ -1634,10 +1895,12 @@ def _write_results_equipment_gantt_sheet(
     regular_shift_times: tuple[time | None, time | None] | None = None,
 ):
     """
-    絝果_設備毎㝮時間割㝨坌一データ溝（timeline_events）㝫基㝥㝝〝
-    設備×横軸時間㝮ガンポャート風シートを追加㝙る。
-    横軸㝯15分刻㝿。連続㝙る坌一タスク＝休憩＝空㝝㝯セル絝坈㝗㝦帯状㝫表示㝙る。
-    actual_timeline_events 㝌㝂れ㝰設備㝔㝨㝫「実績〝行を計画行㝮下㝸追加㝙る。
+    結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
+    設備×横軸時間のガンチャート風シートを追加する。
+    横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。同一状態の連続は帯状に塗分けする。
+    actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
+    GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
+    角丸シェイプ用の仕様 dict の list を返す（保存後に xlwings で描画）。
     """
     wb = writer.book
     try:
@@ -1672,7 +1935,7 @@ def _write_results_equipment_gantt_sheet(
             for mk in by_dm_actual[d0]:
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
-    slot_mins = 15
+    slot_mins = GANTT_TIMELINE_SLOT_MINUTES
     hdr_font = _result_font(bold=True, color="000000", size=12)
     hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
     hdr_time_font = _result_font(bold=True, color="000000", size=11)
@@ -1697,7 +1960,7 @@ def _write_results_equipment_gantt_sheet(
     )
     rs, re_ = (regular_shift_times or (None, None))
 
-    # 横軸(10分刻㝿)㝯日付㝧共通㝮㝟ゝ〝slot_times を先㝫確定
+    # 横軸（slot_mins 刻み）は日付で共通のため、slot_times を先に確定
     base_dt = base_now_dt if isinstance(base_now_dt, datetime) else datetime.now()
     dummy_d = sorted_dates[0] if sorted_dates else base_dt.date()
     d_start0 = datetime.combine(dummy_d, DEFAULT_START_TIME)
@@ -1711,6 +1974,8 @@ def _write_results_equipment_gantt_sheet(
     n_slots = len(slot_times)
     n_fixed = 5  # A=日付（日ブロック内㝧縦絝坈）/ B〜E=機械坝・工程坝・担当者・タスク概覝
     last_col = n_fixed + n_slots
+    gantt_shape_label_specs: list[dict] = []
+    _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
@@ -1803,6 +2068,9 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
+    # 印刷: 2 日分ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
+    gantt_day_first_rows: list[int] = []
+
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
         a_evs_day = actual_events_by_date.get(d, []) if show_actual_rows else []
@@ -1810,6 +2078,7 @@ def _write_results_equipment_gantt_sheet(
         slots = [datetime.combine(d, tm) for tm in slot_times]
 
         day_start = row
+        gantt_day_first_rows.append(day_start)
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             mk_key = (mach_nm or "").strip() or "—"
@@ -1854,6 +2123,8 @@ def _write_results_equipment_gantt_sheet(
                 break_fill,
                 gantt_label_font,
                 grid_border,
+                shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                label_italic=False,
             )
 
             ws.row_dimensions[row].height = 52
@@ -1910,6 +2181,8 @@ def _write_results_equipment_gantt_sheet(
                     grid_border,
                     task_fill_fn=_gantt_bar_fill_actual_for_task_id,
                     label_font=gantt_label_font_actual,
+                    shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                    label_italic=True,
                 )
 
                 ws.row_dimensions[row].height = 52
@@ -1942,26 +2215,48 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 5
             row += 1
 
-    # 凡例㝯高㝕確保㝮㝟ゝ眝略（モノクロ坰刷㝯色㝮濃淡/セル㝮枠㝧識別）
-    # 列幅・折り返㝗㝯 VBA 坖り込㝿時（絝果_設備ガント_列幅を設定）㝧設定
+    # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
+    # 時刻列（F〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
+    if n_slots > 0:
+        gw = float(GANTT_TIMELINE_COLUMN_WIDTH)
+        for ci in range(n_fixed + 1, last_col + 1):
+            ws.column_dimensions[get_column_letter(ci)].width = gw
+
+    # 1 ページに 2 日分: 3 日目以降の各日ブロック先頭の直前に手動の横改ページ
+    try:
+        if len(gantt_day_first_rows) > 2:
+            for i in range(2, len(gantt_day_first_rows), 2):
+                ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
+    except Exception:
+        pass
 
     try:
+        # 印刷ページ設定（ガンチャート作成完了時点で付与）
+        # A3 横・余白「狭い」・横1ページ・縦は自動・先頭行1〜3を全ページに繰り返し・縦は手動改ページで2日分/ページ
         ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToHeight = False
+        # 「ページに合わせる」を有効にしないと fitToWidth が Excel で無視されうる
+        ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
-        # A3（openpyxl 上㝧 paperSize=8 㝌 A3 相当）
+        ws.page_setup.fitToHeight = 0  # 0 = 縦方向ページ数は自動（必要な枚数）
+        # A3（Excel / openpyxl の paperSize=8）
         ws.page_setup.paperSize = 8
-        # 余白を狭ゝ㝦横1ページ㝫坎㝾りや㝙㝝㝙る（坘佝: インポ）
-        ws.page_margins.left = 0.2
-        ws.page_margins.right = 0.2
-        ws.page_margins.top = 0.2
-        ws.page_margins.bottom = 0.2
-        # タイトル・表をページ左基準㝫（レポート風）
+        # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.75
+        ws.page_margins.bottom = 0.75
+        ws.page_margins.header = 0.3
+        ws.page_margins.footer = 0.3
+        # 全ページに繰り返すタイトル行（レポート 1〜3 行目）
+        ws.print_title_rows = "1:3"
+        # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
     except Exception:
         pass
+
+    return gantt_shape_label_specs if _use_gantt_shape_labels else []
 
 
 def row_has_completion_keyword(row):
@@ -2187,16 +2482,320 @@ def extract_retry_seconds(err_text):
     return None
 
 
+def _gemini_err_text_for_exc(exc: BaseException) -> str:
+    parts = [str(exc), repr(exc)]
+    for attr in ("status_code", "code", "message"):
+        v = getattr(exc, attr, None)
+        if v is not None:
+            parts.append(str(v))
+    return " ".join(parts)
+
+
+def _gemini_is_transient_api_error(err_text: str) -> bool:
+    """503 / 過負荷 / 期限切れなど、待てば再試行に値する API 失敗。"""
+    t = err_text.upper()
+    if "429" in err_text:
+        return True
+    if "503" in err_text:
+        return True
+    if "504" in err_text:
+        return True
+    for needle in (
+        "UNAVAILABLE",
+        "RESOURCE_EXHAUSTED",
+        "DEADLINE_EXCEEDED",
+        "DEADLINE EXCEEDED",
+        "SERVICE UNAVAILABLE",
+        "INTERNAL ERROR",
+        "UNRECOVERABLE",
+    ):
+        if needle in t:
+            return True
+    return False
+
+
+def _gemini_is_quota_style_error(err_text: str) -> bool:
+    t = err_text.upper()
+    return ("429" in err_text) or ("RESOURCE_EXHAUSTED" in t)
+
+
+def _gemini_is_timeout_error(exc: BaseException, err_text: str) -> bool:
+    """HTTP 読み取りタイムアウト・接続タイムアウト等（応答が期限内に返らない）。"""
+    if isinstance(exc, TimeoutError):
+        return True
+    tn = type(exc).__name__
+    if tn in ("ReadTimeout", "ConnectTimeout", "WriteTimeout", "PoolTimeout"):
+        return True
+    u = err_text.upper()
+    if "READ TIMEOUT" in u or "CONNECT TIMEOUT" in u or "WRITE TIMEOUT" in u:
+        return True
+    if "TIMED OUT" in u:
+        return True
+    # 504 等も TIMEOUT を含むが、DEADLINE_EXCEEDED 単体は一時エラー扱いに任せる
+    if "TIMEOUT" in u and "DEADLINE_EXCEEDED" not in u:
+        return True
+    return False
+
+
+def _gemini_try_order_from_env() -> tuple[str, ...] | None:
+    raw = (os.environ.get("GEMINI_MODEL_TRY_ORDER") or "").strip()
+    if not raw:
+        return None
+    parts = tuple(p.strip() for p in raw.split(",") if p.strip())
+    return parts or None
+
+
+def _gemini_effective_model_chain(model: str | None) -> tuple[str, ...]:
+    """引数 model があればそれのみ。なければ GEMINI_MODEL、設定シート D/E、環境変数の順で決定。"""
+    if model is not None and str(model).strip():
+        return (str(model).strip(),)
+    pinned = (os.environ.get("GEMINI_MODEL") or "").strip()
+    if pinned:
+        return (pinned,)
+    sheet_chain = _read_gemini_model_try_chain_from_settings_sheet(
+        (TASKS_INPUT_WORKBOOK or "").strip()
+    )
+    if sheet_chain:
+        return sheet_chain
+    ovr = _gemini_try_order_from_env()
+    if ovr is not None:
+        return ovr
+    return GEMINI_MODEL_IDS_BY_QUALITY
+
+
+def _gemini_is_model_endpoint_unavailable_error(err_text: str) -> bool:
+    """モデル未提供・モデル名不正など、別モデルでの再試行が合理的な失敗。"""
+    t = err_text.upper()
+    u = err_text.lower()
+    if "NOT_FOUND" in t and ("MODEL" in t or "MODELS/" in t):
+        return True
+    if "404" in err_text and "model" in u:
+        return True
+    if ("DOES NOT EXIST" in t or "WAS NOT FOUND" in t) and "model" in u:
+        return True
+    return False
+
+
+def _gemini_pre_request_jitter_sleep() -> None:
+    mx = max(0.0, _GEMINI_PRE_REQUEST_JITTER_MAX)
+    if mx <= 0.0:
+        return
+    time_module.sleep(random.uniform(0.0, mx))
+
+
+def _gemini_progress_log_interval_sec() -> float:
+    """Gemini 応答待ち中に INFO を出す間隔（秒）。0 以下でハートビート無効（送信ログのみ）。"""
+    try:
+        return float((os.environ.get("GEMINI_PROGRESS_LOG_INTERVAL_SEC") or "12").strip())
+    except (TypeError, ValueError):
+        return 12.0
+
+
+def _gemini_flush_log_handlers() -> None:
+    try:
+        for h in logging.getLogger().handlers:
+            flush = getattr(h, "flush", None)
+            if flush is not None:
+                flush()
+    except Exception:
+        pass
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+def _gemini_heartbeat_loop(
+    stop: threading.Event, prefix: str, model_id: str, interval_sec: float
+) -> None:
+    """ブロッキング中でもターミナルが固まって見えないよう、一定間隔で待機ログを出す。"""
+    start = time_module.monotonic()
+    while True:
+        if stop.wait(timeout=interval_sec):
+            break
+        elapsed = time_module.monotonic() - start
+        logging.info(
+            "%sGemini 応答待ち... 約%.0f秒経過（モデル: %s）",
+            prefix,
+            elapsed,
+            model_id,
+        )
+        _gemini_flush_log_handlers()
+
+
+def _gemini_generate_content_with_retry(
+    client: genai.Client,
+    *,
+    contents,
+    model: str | None = None,
+    max_attempts: int | None = None,
+    log_label: str = "",
+):
+    """generate_content を再試行する（Gemini generateContent 共通）。
+
+    - モデル列: マクロブック「設定」シート D/E で有効化した ID（上から順）、なければ
+      GEMINI_MODEL_IDS_BY_QUALITY（精度高い順）。環境変数 GEMINI_MODEL で単一固定、
+      GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。引数 model を渡したときはその1件のみ。
+    - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
+      そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
+    - モデル未提供（404 等）は直ちに次モデルへ進む。
+    - 各試行の直前: 0〜_GEMINI_PRE_REQUEST_JITTER_MAX の乱数待機（同時リクエストのばらつき）
+    - 一時エラー待機: (1) 429 等で本文に retry 秒数 (2) 指数バックオフ＋ジッター
+    - HTTP タイムアウト（既定 60 秒・GEMINI_REQUEST_TIMEOUT_SEC）: 同一モデルに残試行があれば短待機で再試行。
+      試行を使い切ったらモデル列の次点へ進む（_gemini_client の HttpOptions と併用）。
+
+    戻り値: (応答オブジェクト, 実際に成功したモデル ID)
+    """
+    chain = _gemini_effective_model_chain(model)
+    n = max_attempts if max_attempts is not None else _GEMINI_RETRY_MAX_ATTEMPTS
+    if n < 1:
+        n = 1
+    base = max(0.1, float(_GEMINI_RETRY_BACKOFF_BASE))
+    prefix = f"{log_label}: " if log_label else ""
+    hb_interval = _gemini_progress_log_interval_sec()
+    last_raise: BaseException | None = None
+    for mi, mid in enumerate(chain):
+        for attempt in range(n):
+            _gemini_pre_request_jitter_sleep()
+            try:
+                logging.info("%sGemini API を呼び出し中（モデル: %s）", prefix, mid)
+                _gemini_flush_log_handlers()
+                stop_hb = threading.Event()
+                hb_thread: threading.Thread | None = None
+                if hb_interval > 0:
+                    hb_thread = threading.Thread(
+                        target=_gemini_heartbeat_loop,
+                        args=(stop_hb, prefix, mid, hb_interval),
+                        name="gemini-progress-hb",
+                        daemon=True,
+                    )
+                    hb_thread.start()
+                t_req = time_module.monotonic()
+                try:
+                    res = client.models.generate_content(model=mid, contents=contents)
+                finally:
+                    stop_hb.set()
+                    if hb_thread is not None:
+                        hb_thread.join(timeout=2.0)
+                elapsed_req = time_module.monotonic() - t_req
+                logging.info(
+                    "%sGemini API 応答を受信しました（約%.1f秒、モデル: %s）",
+                    prefix,
+                    elapsed_req,
+                    mid,
+                )
+                _gemini_flush_log_handlers()
+                return res, mid
+            except Exception as e:
+                err_text = _gemini_err_text_for_exc(e)
+                if _gemini_is_model_endpoint_unavailable_error(err_text) and mi < len(chain) - 1:
+                    logging.warning(
+                        "%sGemini モデル %s が利用できません: %s — 次モデルへ切り替えます。",
+                        prefix,
+                        mid,
+                        err_text[:800],
+                    )
+                    last_raise = e
+                    break
+                if _gemini_is_timeout_error(e, err_text):
+                    last_raise = e
+                    if attempt < n - 1:
+                        wait_sec = min(2.0 + random.uniform(0.0, 1.0), 5.0)
+                        logging.warning(
+                            "%sGemini API タイムアウト（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                            prefix,
+                            mid,
+                            attempt + 1,
+                            n,
+                            err_text[:800],
+                            wait_sec,
+                        )
+                        time_module.sleep(wait_sec)
+                        continue
+                    if mi < len(chain) - 1:
+                        logging.warning(
+                            "%sGemini API タイムアウト（モデル %s）: %s — 次モデルへ切り替えます。",
+                            prefix,
+                            mid,
+                            err_text[:800],
+                        )
+                        break
+                    raise
+                if _gemini_is_transient_api_error(err_text) and attempt < n - 1:
+                    wait_sec = None
+                    if _gemini_is_quota_style_error(err_text):
+                        rs = extract_retry_seconds(err_text)
+                        if rs is not None:
+                            wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
+                    if wait_sec is None:
+                        pow_part = base * (2**attempt)
+                        jitter = random.uniform(0.0, min(4.0, base * 2.0))
+                        wait_sec = min(pow_part + jitter, 90.0)
+                    logging.warning(
+                        "%sGemini API 一時エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                        prefix,
+                        mid,
+                        attempt + 1,
+                        n,
+                        err_text[:800],
+                        wait_sec,
+                    )
+                    time_module.sleep(wait_sec)
+                    continue
+                if attempt < n - 1:
+                    wait_sec = min(2.0 + random.uniform(0.0, 1.0), 5.0)
+                    logging.warning(
+                        "%sGemini API エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                        prefix,
+                        mid,
+                        attempt + 1,
+                        n,
+                        err_text[:800],
+                        wait_sec,
+                    )
+                    time_module.sleep(wait_sec)
+                    continue
+                if mi < len(chain) - 1:
+                    logging.warning(
+                        "%sGemini モデル %s が %s 回とも失敗したため次モデルへ切り替えます: %s",
+                        prefix,
+                        mid,
+                        n,
+                        err_text[:800],
+                    )
+                    last_raise = e
+                    break
+                raise
+    if last_raise is not None:
+        raise last_raise
+    raise RuntimeError("Gemini: モデル列が空です。")
+
+
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     製哝坝文字列㝋ら加工坘佝(m)を推定㝙る暫定ルール。
     例: 15020-JX5R- 770X300F-A   R -> 300
-    ※ ポリエーション㝌多㝄剝杝㝮㝟ゝ〝㝓㝓を都度調整㝧㝝るよ㝆関数化㝗㝦㝄る。
+    例: 1550X 40F のように「ロール長×幅」で X 直後が小さいときは X 前を採用（1550）。
+    ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
     s = str(product_name)
-    # "770X300..." 㝮よ㝆㝪パターン㝋ら X 㝮後㝮数値を拾㝆（最後㝫見㝤㝋㝣㝟Xを優先）
+    # 「NNNX MM」形式: 最後のペアで、一方が他方のおおよそ3倍以上なら長い側をロール長とみなす
+    # （770X300 のように近い二数は従来どおり X 後を優先するため閾値を使う）
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if dim_pairs:
+        try:
+            a_str, b_str = dim_pairs[-1]
+            a, b = int(a_str), int(b_str)
+            if a > 0 and b > 0:
+                if a >= 3 * b:
+                    return a
+                if b >= 3 * a:
+                    return b
+        except ValueError:
+            pass
+    # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
     matches = re.findall(r"[xX]\s*(\d{2,6})", s)
     if matches:
         try:
@@ -2206,6 +2805,87 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
         except ValueError:
             pass
     return fallback_unit
+
+
+def _coerce_roll_unit_m_when_converted_qty_below_roll(
+    product_name, unit_m: float, qty_total: float
+) -> float:
+    """
+    加工長さ（1ロールあたりの m）の解釈。
+
+    換算数量（qty_total）が、製品名から推定したロール単位長さより小さいときは、
+    ロール単位長さを採用する（シート等で unit_m が換算数量未満に誤っている場合の救済）。
+    シート・手入力で unit_m が推定より大きい場合は上書きしない。
+    """
+    try:
+        u = float(unit_m)
+    except (TypeError, ValueError):
+        u = 0.0
+    roll_infer = infer_unit_m_from_product_name(product_name, fallback_unit=0.0)
+    try:
+        roll_infer = float(roll_infer)
+    except (TypeError, ValueError):
+        roll_infer = 0.0
+    if roll_infer <= 0:
+        return u
+    q = parse_float_safe(qty_total, 0.0)
+    if q > 0 and q < roll_infer and u < roll_infer:
+        return roll_infer
+    return u
+
+
+def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
+    """正の長さ(m)のみ、minimum 未満なら minimum に引き上げる。0以下・欠損はそのまま。"""
+    v = parse_float_safe(val, 0.0)
+    if v <= 0:
+        return v
+    m = parse_float_safe(minimum, 0.0)
+    if m <= 0:
+        return v
+    return float(m) if v < m else v
+
+
+def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -> float:
+    """
+    正の長さ(m)を step の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
+    段階1の **ロール単位長さ** と、段階2の **換算数量（配台用内部）** で共用（刻みは `ROLL_UNIT_LENGTH_CEIL_STEP_M`）。
+    """
+    v = parse_float_safe(roll_m, 0.0)
+    if v <= 0:
+        return v
+    step = parse_float_safe(
+        step_m if step_m is not None else ROLL_UNIT_LENGTH_CEIL_STEP_M, 0.0
+    )
+    if step <= 0:
+        return v
+    return float(math.ceil(v / step) * step)
+
+
+def _ceil_roll_unit_length_plan_sheet_cell(val):
+    """DataFrame セル用。空・非数値はそのまま。正の数値は ROLL_UNIT_LENGTH_CEIL_STEP_M 倍数に切り上げ。"""
+    if val is None:
+        return val
+    if isinstance(val, str):
+        s = val.strip()
+        if not s or s.lower() in ("nan", "none"):
+            return val
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return val
+    if x <= 0:
+        return val
+    return _ceil_roll_unit_length_m_to_next_step(x)
+
+
+def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
+    """段階1 DataFrame の ロール単位長さ 列を、マージ後も含めて切り上げ正規化する。"""
+    col = PLAN_COL_ROLL_UNIT_LENGTH
+    if df is None or df.empty or col not in df.columns:
+        return
+    for i in df.index:
+        df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
+
 
 def load_tasks_df():
     """
@@ -2441,11 +3121,26 @@ def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None
 
 
 def _apply_planning_sheet_post_load_mutations(
-    df: "pd.DataFrame", wb_path: str, log_prefix: str
+    df: "pd.DataFrame",
+    wb_path: str,
+    log_prefix: str,
+    *,
+    apply_exclude_rules_from_config: bool = True,
+    compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    酝坰計画_タスク入力を DataFrame 化㝗㝟直後㝮共通処睆。
-    段階2㝮 ``load_planning_tasks_df`` 㝨坌㝘（設定シート・分割行・酝坰丝覝ルール）。
+    配台計画_タスク入力を DataFrame 化した直後の共通処理（設定シートの行同期・分割行の自動配台不要）。
+
+    「設定_配台不要工程」の C/E による計画 DataFrame への「配台不要」上書きは **段階1のみ**
+    （``run_stage1_extract`` 内の ``apply_exclude_rules_config_to_plan_df``）。段階2の
+    ``load_planning_tasks_df`` では常に ``apply_exclude_rules_from_config=False`` を渡し、
+    シート上の「配台不要」列をそのまま解釈する。
+
+    段階2および試行順のみの xlwings 更新では ``compile_exclude_rules_d_to_e_with_ai=False`` とし、
+    設定シートの D→E（ロジック式）の **Gemini 補完は行わない**（行同期・保存のみ）。
+
+    ``apply_exclude_rules_from_config=False`` は本関数呼び出し側で明示する（上記のほか、
+    試行順のみ再計算する xlwings 経路でも同様）。
     """
     try:
         _pairs_lr = []
@@ -2463,7 +3158,12 @@ def _apply_planning_sheet_post_load_mutations(
                 continue
             _seen_lr.add(_k)
             _pairs_lr.append((_p, _m))
-        run_exclude_rules_sheet_maintenance(wb_path, _pairs_lr, log_prefix)
+        run_exclude_rules_sheet_maintenance(
+            wb_path,
+            _pairs_lr,
+            log_prefix,
+            compile_exclude_rules_d_to_e_with_ai=compile_exclude_rules_d_to_e_with_ai,
+        )
     except Exception:
         logging.exception("%s: 設定_酝坰丝覝工程㝮保守㝧例外（続行）", log_prefix)
     try:
@@ -2474,24 +3174,27 @@ def _apply_planning_sheet_post_load_mutations(
             log_prefix,
             ex,
         )
-    try:
-        apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)
-    except Exception as ex:
-        logging.warning(
-            "%s: 設定シート㝫よる酝坰丝覝革用㝧例外（続行）: %s",
-            log_prefix,
-            ex,
-        )
+    if apply_exclude_rules_from_config:
+        try:
+            apply_exclude_rules_config_to_plan_df(df, wb_path, log_prefix)
+        except Exception as ex:
+            logging.warning(
+                "%s: 設定シートによる配台不要適用で例外（続行）: %s",
+                log_prefix,
+                ex,
+            )
 
 def load_planning_tasks_df():
     """
     2段階目用: マクロブック上㝮「酝坰計画_タスク入力〝シートを読㝿込む。
 
-    「担当OP_指定〝列㝾㝟㝯特別指定備考㝮 AI 出力 preferred_operator 㝧主担当 OP を指坝㝧㝝る（skills 㝮メンポー坝㝨㝂㝄㝾㝄一致）。
-    メイン「冝優先特別記載〝㝮 task_preferred_operators 㝯 generate_plan 坴㝧最優先マージ㝕れる。
-    「酝坰丝覝〝㝌オン（TRUE/1/㝯㝄 等）㝮行㝯酝坰対象外。
-    読㝿込㝿後〝坌一依頼NO・針複機械坝㝌㝂るグループ㝮工程「分割〝行㝸空㝪ら「酝坰丝覝〝=yes（段階1㝨坌㝘）。
-    「設定_酝坰丝覝工程〝㝧工程+機械㝮組を坌期㝗〝C/D/E 㝫基㝥㝝酝坰丝覝を坝映㝙る（シート作戝㝯 VBA）。
+    「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
+    メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
+    「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
+    読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
+    「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は行うが、
+    D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
+    （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
@@ -2507,7 +3210,13 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
-    _apply_planning_sheet_post_load_mutations(df, TASKS_INPUT_WORKBOOK, "酝坰シート読込")
+    _apply_planning_sheet_post_load_mutations(
+        df,
+        TASKS_INPUT_WORKBOOK,
+        "配台シート読込",
+        apply_exclude_rules_from_config=False,
+        compile_exclude_rules_d_to_e_with_ai=False,
+    )
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' 㝮 '{PLAN_INPUT_SHEET_NAME}' を読㝿込㝿㝾㝗㝟。"
     )
@@ -3173,7 +3882,8 @@ def analyze_global_priority_override_comment(
     empty = _coerce_global_priority_override_dict({}, ref_y)
     if not text or not str(text).strip():
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン冝優先特記_AI_API"] = "スキップ（メイン原文㝪㝗）"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "スキップ（メイン原文なし）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（メイン原文なし・API 未実行）"
         return empty
     blob = str(text).strip()
     mem_sig = ",".join(sorted(str(m).strip() for m in (members or []) if m))
@@ -3184,7 +3894,8 @@ def analyze_global_priority_override_comment(
     if cached is not None:
         logging.info("メイン冝優先特記: キャッシュヒット（Gemini 㝯呼㝳㝾㝛ん）。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン冝優先特記_AI_API"] = "㝪㝗（キャッシュ使用）"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         return _finalize_global_priority_override(
             blob, _coerce_global_priority_override_dict(cached, ref_y)
         )
@@ -3192,7 +3903,8 @@ def analyze_global_priority_override_comment(
     if not API_KEY:
         logging.info("GEMINI_API_KEY 未設定㝮㝟ゝメイン冝優先特記㝮 AI 解枝をスキップ㝗㝾㝗㝟。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン冝優先特記_AI_API"] = "㝪㝗（APIキー未設定・工場休業㝮㝿ルール補完）"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（API キー未設定）"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3285,10 +3997,12 @@ F) **global_day_process_operator_rules** （酝列・必須）
     except OSError as ex:
         logging.warning("メイン冝優先特記: プロンプト保存失敗: %s", ex)
 
-    client = genai.Client(api_key=API_KEY)
+    client = _gemini_client(API_KEY)
     try:
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        res, gem_model_used = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="メイン再優先特記"
+        )
+        record_gemini_response_usage(res, gem_model_used)
         parsed = _parse_global_priority_override_gemini_response(res)
         if parsed is None:
             logging.warning(
@@ -3301,7 +4015,8 @@ F) **global_day_process_operator_rules** （酝列・必須）
             except OSError:
                 pass
             if ai_sheet_sink is not None:
-                ai_sheet_sink["メイン冝優先特記_AI_API"] = "㝂り（JSON解釈失敗・工場休業㝯ルール補完）"
+                ai_sheet_sink["メイン再優先特記_AI_API"] = "あり（JSON解釈失敗・工場休業はルール補完）"
+                ai_sheet_sink["メイン再優先特記_Geminiモデル"] = gem_model_used
             coerced = _apply_regex_factory_closure_fallback(
                 _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
             )
@@ -3332,12 +4047,14 @@ F) **global_day_process_operator_rules** （酝列・必須）
             coerced.get("interpretation_ja", "")[:100],
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン冝優先特記_AI_API"] = "㝂り"
+            ai_sheet_sink["メイン再優先特記_AI_API"] = "あり"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = gem_model_used
         return coerced
     except Exception as e:
         logging.warning("メイン冝優先特記: Gemini 呼㝳出㝗失敗: %s", e)
         if ai_sheet_sink is not None:
-            ai_sheet_sink["メイン冝優先特記_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["メイン再優先特記_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（呼び出し失敗）"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3858,15 +4575,14 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    Excel 㝧開㝄㝟マクロブック内㝮「酝坰計画_タスク入力〝㝫㝤㝄㝦〝
-    段階2 㝨坌㝘 ``fill_plan_dispatch_trial_order_column_stage1`` 㝧「酝坰試行順番〝を
-    冝付与㝗〝段階1 出力直剝㝨坌㝘手順㝧行を並㝹替㝈る。
-    （未保存㝮編集分も xlwings 㝧坝映㝕㝛る㝟ゝ read_excel 㝯使ゝ㝪㝄）
+    Excel で開いたマクロブック内の「配台計画_タスク入力」について、
+    段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
+    再付与し、段階1 出力直前と同じ手順で行を並べ替える。
+    （未保存の編集分も xlwings で反映させるため read_excel は使わない）
 
-    apply_post_load_mutations=False 㝮㝨㝝㝯 ``_apply_planning_sheet_post_load_mutations`` を呼㝰㝪㝄。
-    加工計画DATA 㝋ら㝮冝坖り込㝿㝯行ゝ㝪㝄㝌〝True 㝮㝨㝝㝯段階2 読込㝨坌様㝫
-    設定_酝坰丝覝工程㝮保守・分割行㝮自動酝坰丝覝・設定ルール㝫よる酝坰丝覝㝮冝革用㝌走る。
-    手動㝧「酝坰丝覝〝を外㝗㝟り「原坝投入日_上書㝝〝等㝮㝿変更㝗㝟内容を㝝㝮㝾㝾試行順㝫坝映㝗㝟㝄場坈㝯 False。
+    事前処理は ``_apply_planning_sheet_post_load_mutations``（設定シートの行同期・分割行の自動配台不要）。
+    **「設定_配台不要工程」の C/E による計画シートへの配台不要の上書きは行わない**（段階1のみ。
+    段階2の ``load_planning_tasks_df`` も同様に再適用しない）。シート上で消した「配台不要」は本経路では復活しない。
     """
     path = (workbook_path or "").strip() or os.environ.get(
         "TASK_INPUT_WORKBOOK", ""
@@ -3901,12 +4617,13 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
 
     df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
-    if apply_post_load_mutations:
-        _apply_planning_sheet_post_load_mutations(df, path, "酝坰試行順番更新")
-    else:
-        logging.info(
-            "酝坰試行順番更新: シート内容㝮㝿モード（設定シート冝革用・分割行㝮自動酝坰丝覝をスキップ）"
-        )
+    _apply_planning_sheet_post_load_mutations(
+        df,
+        path,
+        "配台試行順番更新",
+        apply_exclude_rules_from_config=False,
+        compile_exclude_rules_d_to_e_with_ai=False,
+    )
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
@@ -3917,10 +4634,12 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     if isinstance(_dto_loc, slice):
         logging.error("酝坰試行順番更新: 列「%s〝㝌複数㝂り㝾㝙。", dto_col)
         return False
-    # Excel 由来㝧列㝌 float64 㝮㝨㝝 "" を入れる㝨 pandas 㝌拒坦㝙る㝟ゝ〝クリア㝯 NaN
-    df[dto_col] = float("nan")
+    if pd.api.types.is_numeric_dtype(df[dto_col]):
+        df[dto_col] = float("nan")
+    else:
+        df[dto_col] = ""
 
-    data_extract_dt = _extract_data_extraction_datetime()
+    data_extract_dt, _ = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
 
@@ -4017,6 +4736,222 @@ def refresh_plan_input_dispatch_trial_order_only() -> bool:
     return refresh_plan_input_dispatch_trial_order_via_xlwings(
         p, apply_post_load_mutations=not local
     )
+
+
+def _plan_input_row_is_blank_task_row(plan_df: "pd.DataFrame", row_i: int) -> bool:
+    """依頼NO・工程名が両方空なら True（並べ替え・検証の対象外）。"""
+
+    def _cell_empty(val) -> bool:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return True
+        s = str(val).strip()
+        if not s or s.lower() in ("nan", "none"):
+            return True
+        return False
+
+    if TASK_COL_TASK_ID not in plan_df.columns or TASK_COL_MACHINE not in plan_df.columns:
+        return True
+    ti = plan_df.iat[row_i, plan_df.columns.get_loc(TASK_COL_TASK_ID)]
+    mc = plan_df.iat[row_i, plan_df.columns.get_loc(TASK_COL_MACHINE)]
+    return _cell_empty(ti) and _cell_empty(mc)
+
+
+def _parse_dispatch_trial_order_float_sort_key(val) -> float | None:
+    """「配台試行順番」セルを並べ替えキーとして float 化。空・不正・非有限は None。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        try:
+            x = float(val)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(x):
+            return None
+        return x
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none"):
+        return None
+    try:
+        x = float(s)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(x):
+        return None
+    return x
+
+
+def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
+    workbook_path: str | None = None,
+) -> bool:
+    """
+    「配台計画_タスク入力」の **現在のシート内容だけ** を使い、列「配台試行順番」を
+    小数を含む並べ替えキーとして解釈して昇順に行を並べ替え、1..n に振り直す。
+
+    - ``_apply_planning_sheet_post_load_mutations`` ・マスタ ・
+      ``fill_plan_dispatch_trial_order_column_stage1`` は **呼ばない**。
+    - 依頼NO・工程名が両方空の行は対象外。先頭の空行と、最後のデータ行より後の空行は
+      元の順のまま残す。
+    - 最初の対象行から最後の対象行までは **途切れなく対象行** でなければならない。
+    - **有限の float** として解釈できるキー同士は **重複してはならない**。
+    - キーが空・解釈不能の対象行は、**すべての有効キー行の後ろ**に元の行順を保って並べ、
+      連番 1..n はその並びで振り直す。
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("配台試行順番（小数キー並べ）: ブックパスが空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("配台試行順番（小数キー並べ）: xlwings がありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+    except Exception as e:
+        logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
+        return False
+
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("配台試行順番（小数キー並べ）: データ行がありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col not in df.columns:
+        logging.error("配台試行順番（小数キー並べ）: 列「%s」がありません。", dto_col)
+        return False
+    dto_idx = df.columns.get_loc(dto_col)
+    if isinstance(dto_idx, slice):
+        logging.error("配台試行順番（小数キー並べ）: 列「%s」が複数あります。", dto_col)
+        return False
+
+    n = len(df)
+    active = [i for i in range(n) if not _plan_input_row_is_blank_task_row(df, i)]
+    if not active:
+        logging.error(
+            "配台試行順番（小数キー並べ）: 依頼NO または 工程名 がある行がありません。"
+        )
+        return False
+    first = min(active)
+    last = max(active)
+    for k in range(first, last + 1):
+        if k not in active:
+            logging.error(
+                "配台試行順番（小数キー並べ）: %s 行目付近に、依頼NO・工程名が両方空の行が"
+                " データの途中にあります。",
+                k + 2,
+            )
+            return False
+
+    row_by_key: dict[float, int] = {}
+    sort_tuple_by_row: dict[int, tuple] = {}
+    n_invalid_key = 0
+    for i in active:
+        fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
+        if fk is None:
+            n_invalid_key += 1
+            # 有効 float より後ろ。同帯は元の行番号で安定化。
+            sort_tuple_by_row[i] = (1, i)
+            continue
+        if fk in row_by_key:
+            logging.error(
+                "配台試行順番（小数キー並べ）: 並べ替えキー %s が %s 行目と %s 行目で重複しています。",
+                fk,
+                row_by_key[fk] + 2,
+                i + 2,
+            )
+            return False
+        row_by_key[fk] = i
+        sort_tuple_by_row[i] = (0, fk, i)
+
+    if n_invalid_key:
+        logging.info(
+            "配台試行順番（小数キー並べ）: 「%s」が空・非数値のデータ行が %s 行あります。"
+            " 有効キー行の後ろに並べ、連番化します。",
+            dto_col,
+            n_invalid_key,
+        )
+
+    sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
+    df_mut = df.copy()
+    for rank, i in enumerate(sorted_active, start=1):
+        df_mut.iat[i, dto_idx] = rank
+
+    leading = [i for i in range(0, first)]
+    trailing = [i for i in range(last + 1, n)]
+    orig_list = leading + sorted_active + trailing
+
+    rows_ordered = [df_mut.iloc[oi] for oi in orig_list]
+    df_sorted = pd.DataFrame(rows_ordered).reset_index(drop=True)
+
+    header_row = mat[0] if mat else []
+    n_hdr = len(header_row)
+    if n_hdr == 0:
+        return False
+
+    def _pad_row(r, n):
+        r = list(r) if r is not None else []
+        if len(r) < n:
+            r = r + [None] * (n - len(r))
+        return r
+
+    new_mat = [_pad_row(header_row, n_hdr)]
+    for i in range(len(df_sorted)):
+        orig = orig_list[i]
+        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+        src_row = _pad_row(src_row, n_hdr)
+        out_row = []
+        for j in range(n_hdr):
+            h_cell = header_row[j]
+            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                hname = ""
+            else:
+                hname = str(h_cell).strip()
+            if hname and hname in df_sorted.columns:
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                if pd.isna(v):
+                    out_row.append(None)
+                else:
+                    out_row.append(v)
+            else:
+                out_row.append(src_row[j])
+        new_mat.append(out_row)
+
+    try:
+        n_r = len(new_mat)
+        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+    except Exception as e:
+        logging.exception("配台試行順番（小数キー並べ）: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("配台試行順番（小数キー並べ）: Save 警告: %s", e)
+
+    logging.info(
+        "配台試行順番（小数キー並べ）: 「%s」を %s データ行で並べ替え・連番化しました。",
+        PLAN_INPUT_SHEET_NAME,
+        len(sorted_active),
+    )
+    return True
+
+
+def sort_plan_input_dispatch_trial_order_by_float_keys_only() -> bool:
+    """TASK_INPUT_WORKBOOK に対する「小数キーで並べ替え→1..n」（VBA / cmd 経由）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    return sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(p)
 
 
 def apply_plan_input_column_layout_only() -> bool:
@@ -4367,11 +5302,11 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    pandas/openpyxl 㝧新覝作戝㝗㝟絝果ブック㝫㝯図形㝌坫㝾れ㝪㝄。
-    既定㝧有効（環境変数㝧 0/false/no/off 㝮㝨㝝無効）。入力ブック㝮
-    「列設定_絝果_タスク一覧〝上㝮 Shapes を絝果ブック㝮坌坝シート㝸コピー㝗〝
-    坄図形㝮 Left/Top/Width/Height（㝊よ㝳坖れる㝨㝝 Placement）を入力坴㝨坌㝘㝫戻㝙。
-    openpyxl 㝫よる当該ブック㝸㝮保存㝌㝙㝹㝦終ゝ㝣㝟後㝫呼㝶㝓㝨。
+    pandas/openｎｎxl で新規作成した結果ブックには図形が含まれない。
+    既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
+    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
+    各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
+    openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
@@ -4476,6 +5411,299 @@ def _stage2_try_copy_column_config_shapes_from_input(
                 app.quit()
             except Exception:
                 pass
+
+
+def _com_excel_bgr_rgb(r: int, g: int, b: int) -> int:
+    """Office COM の Color.RGB（BGR リトルエンディアン）。"""
+    return int(r) & 255 | ((int(g) & 255) << 8) | ((int(b) & 255) << 16)
+
+
+def _hex_rrggbb_to_rgb_triple(hx: str) -> tuple[int, int, int]:
+    """6 桁 RRGGBB（# 可）を (R,G,B) に。不正時は中間グレー。"""
+    s = (hx or "").strip().lstrip("#").upper()
+    if len(s) != 6 or any(c not in "0123456789ABCDEF" for c in s):
+        return (180, 180, 180)
+    return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+
+
+def _gantt_label_luminance_01(r: int, g: int, b: int) -> float:
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+
+
+def _gantt_com_colors_from_fill_hex(fill_hex: str) -> tuple[int, int, int]:
+    """
+    ガント帯色（RRGGBB）から COM 用 (塗り BGR, 枠 BGR, 文字 BGR)。
+    淡色帯は黒寄り文字、やや濃い帯は白文字（モックのコントラストに近づける）。
+    """
+    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
+    fill_bgr = _com_excel_bgr_rgb(r, g, b)
+    lr = max(0, min(255, int(r * 0.52)))
+    lg = max(0, min(255, int(g * 0.52)))
+    lb = max(0, min(255, int(b * 0.52)))
+    line_bgr = _com_excel_bgr_rgb(lr, lg, lb)
+    lum = _gantt_label_luminance_01(r, g, b)
+    if lum > 0.74:
+        text_bgr = _com_excel_bgr_rgb(26, 26, 26)
+    else:
+        text_bgr = _com_excel_bgr_rgb(255, 255, 255)
+    return fill_bgr, line_bgr, text_bgr
+
+
+def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
+    """openpyxl Font.color 用 6 桁（RGB 文字列）。"""
+    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
+    lum = _gantt_label_luminance_01(r, g, b)
+    if lum > 0.74:
+        return "1A1A1A"
+    return "FFFFFF"
+
+
+def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
+    """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
+    from openpyxl import load_workbook
+
+    if _workbook_should_skip_openpyxl_io(result_path):
+        return
+    wb = load_workbook(result_path)
+    try:
+        ws = wb[RESULT_SHEET_GANTT_NAME]
+    except KeyError:
+        wb.close()
+        return
+    try:
+        for sp in specs:
+            row = int(sp["row"])
+            col_s = int(sp["col_s"])
+            col_e = int(sp["col_e"])
+            text = str(sp.get("text") or "").strip()
+            if not text:
+                continue
+            c = ws.cell(row=row, column=col_s)
+            c.value = text
+            _fh = str(sp.get("fill_hex") or "E8E8E8")
+            c.font = _result_font(
+                size=10,
+                bold=True,
+                color=_gantt_openpyxl_font_color_for_fill_hex(_fh),
+                italic=bool(sp.get("italic")),
+            )
+            c.alignment = _gantt_timeline_label_alignment(single_slot=(col_s == col_e))
+        wb.save(result_path)
+    finally:
+        wb.close()
+
+
+def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: list) -> bool:
+    """
+    結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
+    成功時 True。xlwings / Excel 不可時は False。
+    """
+    rp = (result_path or "").strip()
+    if not rp or not os.path.isfile(rp) or not specs:
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        return False
+    app = None
+    wb = None
+    try:
+        n_specs = len(specs)
+        logging.info(
+            "結果_設備ガント: xlwings で角丸シェイプを追加します（候補 %s 件）。"
+            " 件数が多いと数分かかり、完了までログが増えない時間が続くことがあります。",
+            n_specs,
+        )
+        app = xw.App(visible=False)
+        app.display_alerts = False
+        try:
+            app.screen_updating = False
+        except Exception:
+            try:
+                app.api.ScreenUpdating = False
+            except Exception:
+                pass
+        wb = app.books.open(os.path.abspath(rp), update_links=False)
+        try:
+            sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
+        except Exception:
+            return False
+        api_ws = sht.api
+        # msoShapeRoundedRectangle = 5
+        _mso_round_rect = 5
+        _mso_bring_to_front = 0
+        _xl_move_and_size = 1
+        _progress_every = 30
+        n_added = 0
+        # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
+        _row_shape_seq: dict[int, int] = {}
+        for idx, sp in enumerate(specs, start=1):
+            if idx == 1 or idx % _progress_every == 0 or idx == n_specs:
+                logging.info(
+                    "結果_設備ガント: シェイプ走査 %s/%s（確定追加 %s 件）…",
+                    idx,
+                    n_specs,
+                    n_added,
+                )
+            text = str(sp.get("text") or "").strip()
+            if not text:
+                continue
+            row = int(sp["row"])
+            col_s = int(sp["col_s"])
+            col_e = int(sp["col_e"])
+            rng = sht.range((row, col_s), (row, col_e))
+            left = float(rng.left)
+            top = float(rng.top)
+            w = float(rng.width)
+            h = float(rng.height)
+            if w <= 0 or h <= 0:
+                continue
+            _fh = str(sp.get("fill_hex") or "E8E8E8")
+            fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
+            min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
+            label_w = max(w, min_w)
+            # 縦幅 = 配置行の 1/3。縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）
+            _band = float(h) / 3.0
+            label_h = max(9.0, _band)
+            _n_on_row = int(_row_shape_seq.get(row, 0))
+            _slot = _n_on_row % 3
+            _row_shape_seq[row] = _n_on_row + 1
+            label_top = top + _slot * _band
+            shp = api_ws.Shapes.AddShape(_mso_round_rect, left, label_top, label_w, label_h)
+            try:
+                shp.Name = f"GanttLbl_R{row}_C{col_s}_{_n_on_row}"
+            except Exception:
+                pass
+            try:
+                shp.Placement = _xl_move_and_size
+            except Exception:
+                pass
+            try:
+                shp.ZOrder(_mso_bring_to_front)
+            except Exception:
+                pass
+            try:
+                shp.Fill.Visible = True
+                shp.Fill.Solid()
+                shp.Fill.ForeColor.RGB = fill_bgr
+                shp.Line.Visible = True
+                shp.Line.ForeColor.RGB = line_bgr
+                shp.Line.Weight = 0.75
+            except Exception:
+                pass
+            try:
+                shp.Adjustments[1] = 0.2
+            except Exception:
+                pass
+            try:
+                sd = shp.Shadow
+                sd.Visible = -1  # msoTrue
+                sd.OffsetX = 3
+                sd.OffsetY = 3
+                sd.Transparency = 0.55
+                try:
+                    sd.Blur = 4
+                except Exception:
+                    pass
+                try:
+                    sd.ForeColor.RGB = _com_excel_bgr_rgb(40, 40, 50)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            # TextFrame2 は環境によって初回アクセスで COM が長時間ブロックすることがあるため、
+            # レガシー TextFrame / Characters のみ使用する。
+            try:
+                tf0 = shp.TextFrame
+                try:
+                    tf0.MarginLeft = 2
+                    tf0.MarginRight = 2
+                    tf0.MarginTop = 1
+                    tf0.MarginBottom = 1
+                except Exception:
+                    pass
+                try:
+                    tf0.VerticalAlignment = -4108  # xlVAlignCenter
+                    tf0.HorizontalAlignment = -4131  # xlHAlignLeft
+                except Exception:
+                    pass
+                tf0.Characters().Text = text
+                nch = len(text)
+                fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
+                fnt.Size = 9
+                fnt.Bold = True
+                if sp.get("italic"):
+                    fnt.Italic = True
+                try:
+                    fnt.Color = text_bgr
+                except Exception:
+                    pass
+            except Exception:
+                try:
+                    shp.TextFrame.Characters().Text = text
+                except Exception:
+                    pass
+            n_added += 1
+        logging.info(
+            "結果_設備ガント: 角丸シェイプ %s 件を反映して保存します（xlwings）…",
+            n_added,
+        )
+        wb.save()
+        return True
+    except Exception as e:
+        logging.warning(
+            "結果_設備ガント: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            e,
+        )
+        return False
+    finally:
+        if app is not None:
+            try:
+                app.screen_updating = True
+            except Exception:
+                try:
+                    app.api.ScreenUpdating = True
+                except Exception:
+                    pass
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        if app is not None:
+            try:
+                app.quit()
+            except Exception:
+                pass
+
+
+def _stage2_try_add_gantt_timeline_shape_labels(result_path: str, specs: list | None) -> None:
+    """
+    openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
+    失敗時は openpyxl でセルにフォールバック。
+    """
+    if not GANTT_TIMELINE_SHAPE_LABELS or not specs:
+        return
+    rp = (result_path or "").strip()
+    if not rp or not os.path.isfile(rp):
+        return
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs):
+        logging.info(
+            "結果_設備ガント: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            len(specs),
+        )
+        return
+    try:
+        _gantt_fallback_timeline_labels_openpyxl(rp, specs)
+        logging.info(
+            "結果_設備ガント: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            len(specs),
+        )
+    except Exception as e:
+        logging.warning(
+            "結果_設備ガント: セルへのラベルフォールバックも失敗しました（%s）。",
+            e,
+        )
 
 
 def _coerce_actual_sheet_datetime(val):
@@ -6099,7 +7327,8 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             PLAN_COL_SPECIAL_REMARK,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行㝪㝗）"
+            ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行なし）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（対象行なし・API 未実行）"
         return {}
 
     blob = "\n".join(sorted(lines))
@@ -6118,7 +7347,8 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             ref_y,
         )
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "㝪㝗（キャッシュ使用）"
+            ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         out = copy.deepcopy(cached_parsed)
         if isinstance(out, dict):
             _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
@@ -6133,7 +7363,8 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     if not API_KEY:
         logging.info("GEMINI_API_KEY 未設定㝮㝟ゝタスク特別指定㝮AI解枝をスキップ㝗㝾㝗㝟。")
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "㝪㝗（APIキー未設定）"
+            ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（API キー未設定）"
         return {}
 
     prompt = f"""
@@ -6235,10 +7466,12 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     except OSError as ex:
         logging.warning("タスク特別指定: プロンプト保存失敗: %s", ex)
 
-    client = genai.Client(api_key=API_KEY)
+    client = _gemini_client(API_KEY)
     try:
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        res, gem_model_used = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="タスク特別指定"
+        )
+        record_gemini_response_usage(res, gem_model_used)
         parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
         if parsed is not None:
             _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
@@ -6248,66 +7481,22 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             save_ai_cache(ai_cache)
             logging.info("タスク特別指定: AI解枝㝌完了㝗㝾㝗㝟。")
             if ai_sheet_sink is not None:
-                ai_sheet_sink["特別指定備考_AI_API"] = "㝂り"
+                ai_sheet_sink["特別指定備考_AI_API"] = "あり"
+                ai_sheet_sink["特別指定備考_Geminiモデル"] = gem_model_used
             return parsed
         if ai_sheet_sink is not None:
-            ai_sheet_sink["特別指定備考_AI_API"] = "㝂り（JSON解釈失敗）"
+            ai_sheet_sink["特別指定備考_AI_API"] = "あり（JSON解釈失敗）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = gem_model_used
         return {}
     except Exception as e:
-        err_text = str(e)
-        is_quota = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
-        is_unavailable = ("503" in err_text) or ("UNAVAILABLE" in err_text)
-        retry_sec = extract_retry_seconds(err_text) if is_quota else None
-        if is_quota and retry_sec is not None:
-            wait_sec = min(max(retry_sec, 1.0), 90.0)
-            logging.warning(f"タスク特別指定 AI 429。{wait_sec:.1f}秒待機㝗㝦冝試行㝗㝾㝙。")
-            time_module.sleep(wait_sec)
-            try:
-                res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
-                if parsed is not None:
-                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
-                    put_cached_ai_result(
-                        ai_cache, cache_key, parsed, content_key=cache_fingerprint
-                    )
-                    save_ai_cache(ai_cache)
-                    if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "㝂り（429冝試行後）"
-                    return parsed
-            except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 冝試行失敗: {e2}")
-        elif is_unavailable:
-            wait_sec = 8.0
-            logging.warning(
-                f"タスク特別指定 AI 503/UNAVAILABLE。{wait_sec:.1f}秒待機㝗㝦冝試行㝗㝾㝙。"
-            )
-            time_module.sleep(wait_sec)
-            try:
-                res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                parsed = _parse_and_log_task_special_gemini_response(res, prompt_text=prompt)
-                if parsed is not None:
-                    _repair_task_special_ai_wrong_top_level_keys(parsed, tasks_df)
-                    put_cached_ai_result(
-                        ai_cache, cache_key, parsed, content_key=cache_fingerprint
-                    )
-                    save_ai_cache(ai_cache)
-                    logging.info("タスク特別指定: AI冝試行㝧解枝㝌完了㝗㝾㝗㝟。")
-                    if ai_sheet_sink is not None:
-                        ai_sheet_sink["特別指定備考_AI_API"] = "㝂り（503冝試行後）"
-                    return parsed
-                logging.warning("タスク特別指定 AI 503冝試行: JSON 抽出㝫失敗㝗㝾㝗㝟。")
-            except Exception as e2:
-                logging.warning(f"タスク特別指定 AI 503冝試行失敗: {e2}")
-        else:
-            logging.warning(f"タスク特別指定 AI エラー: {e}")
+        logging.warning("タスク特別指定: Gemini 呼び出し失敗（再試行尽き）: %s", e)
         logging.warning(
             "タスク特別指定: AI解枝絝果を坖得㝧㝝㝪㝋㝣㝟㝟ゝ〝特別指定_備考㝮開始日/優先指示㝯坝映㝕れ㝾㝛ん。"
             "（列「加工開始日_指定〝「指定紝期_上書㝝〝㝯廃止済㝿。備考㝮冝記載㝾㝟㝯後㝋ら AI 冝実行を検討㝗㝦㝝㝠㝕㝄。）"
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（呼び出し失敗）"
         return {}
 
 
@@ -6777,15 +7966,17 @@ def build_task_queue_from_planning_df(
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
             continue
+        task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
             continue
 
-        task_id = planning_task_id_str_from_plan_row(row)
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         done_qty = calc_done_qty_equivalent_from_row(row)
+        # 換算数量はシート値のまま実績換算。配台用 total のみ 100m 刻みに切り上げ（例: 40→100、125→200）。Excel セルは書き換えない。
+        qty_total = _ceil_roll_unit_length_m_to_next_step(qty_total)
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
@@ -6901,7 +8092,9 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
-        # 紝期㝯優先順佝・緊急度㝫㝯使㝆㝌〝開始日㝮下陝㝫㝯使ゝ㝪㝄（余力㝌㝂れ㝰剝倒㝗開始㝙る㝟ゝ）。
+        # 換算数量・ロール単位長さの補正（推定・100m 下限・換算<ロール時の引き上げ）は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
+
+        # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
             due_urgent = False
         else:
@@ -6982,7 +8175,9 @@ def build_task_queue_from_planning_df(
                 "total_qty_m": int(qty_total),
                 "unit_m": int(unit),
                 "remaining_units": qty / unit if unit else 0,
-                "base_time_per_unit": (qty / speed) / (qty / unit) if unit and speed and qty else 0,
+                "base_time_per_unit": (qty / speed) / (qty / unit)
+                if unit and speed and qty
+                else 0,
                 "assigned_history": [],
                 "calc_time_value": calc_time_val,
                 "required_op": req_op,
@@ -7179,11 +8374,15 @@ def _merge_plan_sheet_user_overrides(out_df):
 
 
 # ---------------------------------------------------------------------------
-# 酝坰丝覝（2系統）
-#   (A) DataFrame 上㝮ルール … 坌一依頼NO×坌一機械㝧「分割〝行㝫 yes（手入力㝯上書㝝㝗㝪㝄）
-#   (B) マクロブック「設定_酝坰丝覝工程〝… 工程+機械㝔㝨㝮 C/D/E 列〝Gemini 㝧 D→E〝
-#       保存ロック時㝯 xlwings 㝧 A:E 坌期→Save 㝮フォールポック㝂り
-#   㝄㝚れも apply_exclude_rules_config_to_plan_df 㝧計画 DataFrame 㝫坝映㝕れる。
+# 配台不要（2系統）
+#   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）。
+#       段階2読込後も ``_apply_auto_exclude_bunkatsu_duplicate_machine`` で適用。
+#   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
+#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり。
+#       ``apply_exclude_rules_config_to_plan_df`` による計画 DataFrame への反映は **段階1のみ**。
+#       工程名が「分割」の行については、(A) と同じく **同一依頼NO内に同一機械名が複数行あるときだけ**
+#       C 列／E 列 JSON による配台不要=yes を適用する（EC と分割で機械が異なる依頼では設定行が残っていても配台可）。
+#       段階2は配台計画シートの「配台不要」列（段階1出力・手編集の結果）をそのまま使う。
 # ---------------------------------------------------------------------------
 
 def _auto_exclude_cell_empty_for_autofill(v) -> bool:
@@ -7217,6 +8416,25 @@ def _process_name_is_bunkatsu_for_auto_exclude(raw) -> bool:
     return t == "分割"
 
 
+def _same_tid_nonempty_machine_dup_ge2(
+    df: pd.DataFrame, idx_list: list
+) -> tuple[bool, dict[str, int]]:
+    """
+    ``_apply_auto_exclude_bunkatsu_duplicate_machine`` と同一の重複判定。
+    idx_list 内で、正規化後の非空「機械名」が同一の行が2件以上あるとき True。
+    """
+    if len(idx_list) < 2:
+        return False, {}
+    counts: dict[str, int] = defaultdict(int)
+    for i in idx_list:
+        mn_key = _normalize_equipment_match_key(df.at[i, TASK_COL_MACHINE_NAME])
+        if not mn_key:
+            continue
+        counts[mn_key] += 1
+    dup_ge2 = any(c >= 2 for c in counts.values())
+    return dup_ge2, dict(counts)
+
+
 def _apply_auto_exclude_bunkatsu_duplicate_machine(
     df: pd.DataFrame, log_prefix: str = "段階1"
 ) -> pd.DataFrame:
@@ -7245,15 +8463,8 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
 
     n_set = 0
     for _tid_key, idx_list in by_tid.items():
-        if len(idx_list) < 2:
-            continue
-        counts = defaultdict(int)
-        for i in idx_list:
-            mn_key = _normalize_equipment_match_key(df.at[i, TASK_COL_MACHINE_NAME])
-            if not mn_key:
-                continue
-            counts[mn_key] += 1
-        if not any(c >= 2 for c in counts.values()):
+        dup_ge2, _counts = _same_tid_nonempty_machine_dup_ge2(df, idx_list)
+        if not dup_ge2:
             continue
         for i in idx_list:
             if not _process_name_is_bunkatsu_for_auto_exclude(df.at[i, TASK_COL_MACHINE]):
@@ -7422,6 +8633,11 @@ def _task_row_matches_exclude_rule_target(
         return False
     rm = str(rule_mach or "").strip()
     if not rm:
+        # 機械名が空のルールは「当該工程の全機械」を意味するが、工程「分割」は同一依頼で別行の
+        # スリット等と同じ機械名が重なるケースが多く、ワイルドカード一致だと実設備向け分割行まで
+        # 一律配台不要になる。分割を除外する場合は設定シートで機械名を明示する。
+        if _process_name_is_bunkatsu_for_auto_exclude(task_proc):
+            return False
         return True
     return _normalize_equipment_match_key(task_mach) == _normalize_equipment_match_key(rm)
 
@@ -7668,9 +8884,11 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
     except OSError as ex:
         logging.warning("酝坰丝覝ルール: プロンプト保存失敗: %s", ex)
     try:
-        client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        client = _gemini_client(API_KEY)
+        res, gem_model_used = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="配台不要ルールD→E"
+        )
+        record_gemini_response_usage(res, gem_model_used)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_last_response.txt")
         try:
@@ -7738,9 +8956,11 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     except OSError as ex:
         logging.warning("酝坰丝覝ルール(ポッポ): プロンプト保存失敗: %s", ex)
     try:
-        client = genai.Client(api_key=API_KEY)
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+        client = _gemini_client(API_KEY)
+        res, gem_model_used = _gemini_generate_content_with_retry(
+            client, contents=prompt, log_label="配台不要ルールD→Eバッチ"
+        )
+        record_gemini_response_usage(res, gem_model_used)
         raw = (_gemini_result_text(res) or "").strip()
         rpath = os.path.join(log_dir, "ai_exclude_rule_logic_batch_last_response.txt")
         try:
@@ -7901,40 +9121,20 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
 
 
 def _xlwings_find_book_on_running_instances(abs_path: str):
-    """起動中㝮 Excel 㝋らパス一致㝙る xlwings Book を返㝙。無㝑れ㝰 None。"""
-    try:
-        import xlwings as xw
-    except ImportError:
-        return None
-    target = os.path.abspath(abs_path)
-    try:
-        for app in list(xw.apps):
-            try:
-                for book in app.books:
-                    try:
-                        if _xlwings_book_matches_path(book, target):
-                            return book
-                    except Exception:
-                        continue
-            except Exception:
-                continue
-    except Exception:
-        return None
+    """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。
+
+    旧実装は ``list(xw.apps)`` / ``xw.apps.active`` / ``for app in xw.apps`` が
+    環境によって COM 無応答となり段階1が停止したため廃止。
+    マクロブックの保存は ``_xlwings_attach_open_macro_workbook`` が新規 ``xw.App`` で開く。
+    """
     return None
 
 
 def _xlwings_try_open_in_running_apps(abs_path: str):
-    """既存㝮 Excel.App 㝧 Workbooks.Open を試㝙。戝功時 Book〝失敗時 None。"""
-    try:
-        import xlwings as xw
-    except ImportError:
-        return None
-    path = os.path.abspath(abs_path)
-    for app in list(xw.apps):
-        try:
-            return app.books.open(path, update_links=False)
-        except Exception:
-            continue
+    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。
+
+    ``xw.apps`` 経由は上記と同理由で廃止。常に None。
+    """
     return None
 
 
@@ -7979,13 +9179,12 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     abs_path = os.path.abspath(macro_wb_path)
 
-    book = _xlwings_find_book_on_running_instances(abs_path)
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}
-
-    book = _xlwings_try_open_in_running_apps(abs_path)
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": True}
+    _log_exclude_rules_sheet_debug(
+        "XLWINGS_APPS_ENUM_SKIPPED",
+        log_prefix,
+        "xw.apps 列挙はスキップし、新規 Excel でブックを開きます（COM 無応答回避）。",
+        details=f"path={abs_path}",
+    )
 
     try:
         import xlwings as xw
@@ -8019,9 +9218,6 @@ def _xlwings_attach_workbook_for_tests(
     戻り値: (Book, info, 説明文字列) 㝾㝟㝯 None。
     """
     abs_path = os.path.abspath(book_path)
-    book = _xlwings_find_book_on_running_instances(abs_path)
-    if book is not None:
-        return book, {"mode": "keep", "opened_wb_here": False}, f"{label}:既存インスタンス"
     if not allow_dispatch_open:
         return None
     try:
@@ -8577,10 +9773,18 @@ def _read_exclude_rules_d_cells_data_only_for_rows(
 
 
 def run_exclude_rules_sheet_maintenance(
-    wb_path: str, pairs: list[tuple[str, str]], log_prefix: str
+    wb_path: str,
+    pairs: list[tuple[str, str]],
+    log_prefix: str,
+    *,
+    compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    「設定_酝坰丝覝工程〝㝮行坌期・D→E 㝮 AI 補完・ディスク坝映（既定㝯 xlwings 㝧 A〜E 坌期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` 㝮㝨㝝 openpyxl save を試行）。
+    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
+
+    ``compile_exclude_rules_d_to_e_with_ai=False`` のときは D 列→E 列（ロジック式 JSON）の
+    Gemini 補完のみスキップする（行同期・空行詰め・退避 E の復元・保存は従来どおり）。
+    段階2の ``load_planning_tasks_df`` 経路では False を渡す。
 
     xlwings 㝧も保存㝧㝝㝪㝄㝨㝝㝯 ``log/exclude_rules_matrix_vba.tsv`` を残㝗〝マクロ
     ``設定_酝坰丝覝工程_A㝋らE_TSV㝋ら坝映`` 㝧 A〜E を坝映㝙る。
@@ -8610,7 +9814,7 @@ def run_exclude_rules_sheet_maintenance(
         "START",
         log_prefix,
         "設定シート保守開始",
-        details=f"path={wb_path} pairs={len(pairs)}",
+        details=f"path={wb_path} pairs={len(pairs)} ai_d_to_e={compile_exclude_rules_d_to_e_with_ai}",
     )
     global _exclude_rules_effective_read_path
     _exclude_rules_effective_read_path = None
@@ -8777,97 +9981,104 @@ def run_exclude_rules_sheet_maintenance(
                 details=f"rows={n_kept} removed_empty={n_removed_empty}",
             )
 
-        max_r = int(ws.max_row or 1)
-        pending_rows: list[int] = []
-        for r in range(2, max_r + 1):
-            dv = ws.cell(row=r, column=c_d).value
-            ev = ws.cell(row=r, column=c_e).value
-            # C 列㝮有無㝫関係㝪㝝〝D 㝫説明㝌㝂り E 㝌空㝪ら D→E を試㝙
-            if _cell_is_blank_for_rule(dv):
-                continue
-            if not _cell_is_blank_for_rule(ev):
-                continue
-            pending_rows.append(r)
+        if compile_exclude_rules_d_to_e_with_ai:
+            max_r = int(ws.max_row or 1)
+            pending_rows: list[int] = []
+            for r in range(2, max_r + 1):
+                dv = ws.cell(row=r, column=c_d).value
+                ev = ws.cell(row=r, column=c_e).value
+                # C 列の有無に関係なく、D に説明があり E が空なら D→E を試す
+                if _cell_is_blank_for_rule(dv):
+                    continue
+                if not _cell_is_blank_for_rule(ev):
+                    continue
+                pending_rows.append(r)
 
-        # D 㝌数弝㝮㝨㝝㝯通常読込㝧㝯 '=...' 㝠㝑坖れる。data_only 㝧キャッシュ表示値を補㝆。
-        formula_rows = [
-            r
-            for r in pending_rows
-            if isinstance(ws.cell(row=r, column=c_d).value, str)
-            and str(ws.cell(row=r, column=c_d).value).strip().startswith("=")
-        ]
-        d_cached = (
-            _read_exclude_rules_d_cells_data_only_for_rows(wb_path, formula_rows, c_d)
-            if formula_rows
-            else {}
-        )
-        pending_texts: list[str] = []
-        filtered_rows: list[int] = []
-        for r in pending_rows:
-            dv = ws.cell(row=r, column=c_d).value
-            blob = (
-                ""
-                if dv is None or (isinstance(dv, float) and pd.isna(dv))
-                else str(dv).strip()
+            # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
+            formula_rows = [
+                r
+                for r in pending_rows
+                if isinstance(ws.cell(row=r, column=c_d).value, str)
+                and str(ws.cell(row=r, column=c_d).value).strip().startswith("=")
+            ]
+            d_cached = (
+                _read_exclude_rules_d_cells_data_only_for_rows(wb_path, formula_rows, c_d)
+                if formula_rows
+                else {}
             )
-            if blob.startswith("="):
-                alt = d_cached.get(r)
-                if alt is not None and not (isinstance(alt, float) and pd.isna(alt)):
-                    blob = str(alt).strip()
-                else:
-                    logging.warning(
-                        "%s: 「%s〝%s 行目㝮 D 列㝌数弝㝧〝キャッシュ値を読ゝ㝾㝛ん㝧㝗㝟（Excel 㝧一度保存㝙る㝋 D を値㝫㝗㝦㝝㝠㝕㝄）。",
-                        log_prefix,
-                        EXCLUDE_RULES_SHEET_NAME,
-                        r,
-                    )
+            pending_texts: list[str] = []
+            filtered_rows: list[int] = []
+            for r in pending_rows:
+                dv = ws.cell(row=r, column=c_d).value
+                blob = (
+                    ""
+                    if dv is None or (isinstance(dv, float) and pd.isna(dv))
+                    else str(dv).strip()
+                )
+                if blob.startswith("="):
+                    alt = d_cached.get(r)
+                    if alt is not None and not (isinstance(alt, float) and pd.isna(alt)):
+                        blob = str(alt).strip()
+                    else:
+                        logging.warning(
+                            "%s: 「%s」%s 行目の D 列が数式で、キャッシュ値を読めませんでした（Excel で一度保存するか D を値にしてください）。",
+                            log_prefix,
+                            EXCLUDE_RULES_SHEET_NAME,
+                            r,
+                        )
+                        continue
+                if _cell_is_blank_for_rule(blob):
                     continue
-            if _cell_is_blank_for_rule(blob):
-                continue
-            filtered_rows.append(r)
-            pending_texts.append(blob)
-        pending_rows = filtered_rows
+                filtered_rows.append(r)
+                pending_texts.append(blob)
+            pending_rows = filtered_rows
 
-        ai_filled = 0
-        ai_e_cell_addrs: list[str] = []
-        if pending_texts:
-            parsed_list = _ai_compile_exclude_rule_logics_batch(pending_texts)
-            for r, parsed in zip(pending_rows, parsed_list):
-                if not parsed:
-                    logging.warning(
-                        "%s: 「%s〝%s 行目㝮 D 列を JSON 㝫㝧㝝㝾㝛ん㝧㝗㝟（APIキー・応答を確誝）。",
+            ai_filled = 0
+            ai_e_cell_addrs: list[str] = []
+            if pending_texts:
+                parsed_list = _ai_compile_exclude_rule_logics_batch(pending_texts)
+                for r, parsed in zip(pending_rows, parsed_list):
+                    if not parsed:
+                        logging.warning(
+                            "%s: 「%s」%s 行目の D 列を JSON にできませんでした（APIキー・応答を確認）。",
+                            log_prefix,
+                            EXCLUDE_RULES_SHEET_NAME,
+                            r,
+                        )
+                        continue
+                    jstr = json.dumps(parsed, ensure_ascii=False)
+                    ws.cell(row=r, column=c_e, value=jstr)
+                    cell_addr = f"{get_column_letter(c_e)}{r}"
+                    ai_e_cell_addrs.append(cell_addr)
+                    preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
+                    logging.info(
+                        "%s: 「%s」ロジック式列「%s」セル %s に JSON を書き込み: %s",
                         log_prefix,
                         EXCLUDE_RULES_SHEET_NAME,
-                        r,
+                        EXCLUDE_RULE_COL_LOGIC_JSON,
+                        cell_addr,
+                        preview,
                     )
-                    continue
-                jstr = json.dumps(parsed, ensure_ascii=False)
-                ws.cell(row=r, column=c_e, value=jstr)
-                cell_addr = f"{get_column_letter(c_e)}{r}"
-                ai_e_cell_addrs.append(cell_addr)
-                preview = jstr if len(jstr) <= 160 else (jstr[:160] + "…")
+                    ai_filled += 1
+            if ai_filled:
+                _log_exclude_rules_sheet_debug(
+                    "AI_E_FILLED",
+                    log_prefix,
+                    f"D→E の AI 補完を {ai_filled} 行実施。",
+                    details="cells=" + ",".join(ai_e_cell_addrs),
+                )
                 logging.info(
-                    "%s: 「%s〝ロジック弝列「%s〝セル %s 㝫 JSON を書㝝込㝿: %s",
+                    "%s: 「%s」で D→E の AI 補完を %s 行（セル: %s）。",
                     log_prefix,
                     EXCLUDE_RULES_SHEET_NAME,
-                    EXCLUDE_RULE_COL_LOGIC_JSON,
-                    cell_addr,
-                    preview,
+                    ai_filled,
+                    ",".join(ai_e_cell_addrs),
                 )
-                ai_filled += 1
-        if ai_filled:
+        else:
             _log_exclude_rules_sheet_debug(
-                "AI_E_FILLED",
+                "SKIP_AI_D_TO_E",
                 log_prefix,
-                f"D→E 㝮 AI 補完を {ai_filled} 行実施。",
-                details="cells=" + ",".join(ai_e_cell_addrs),
-            )
-            logging.info(
-                "%s: 「%s〝㝧 D→E 㝮 AI 補完を %s 行（セル: %s）。",
-                log_prefix,
-                EXCLUDE_RULES_SHEET_NAME,
-                ai_filled,
-                ",".join(ai_e_cell_addrs),
+                "D→E の AI 補完をスキップ（呼び出し側指定）。",
             )
 
         _er_test = os.environ.get("EXCLUDE_RULES_TEST_E1234", "").strip().lower()
@@ -8982,7 +10193,17 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
 def apply_exclude_rules_config_to_plan_df(
     df: pd.DataFrame, wb_path: str, log_prefix: str
 ) -> pd.DataFrame:
-    """設定シート㝫基㝥㝝「酝坰丝覝〝を設定（C=yes 㝾㝟㝯 E 㝮 JSON 㝌真）。"""
+    """設定シートに基づき「配台不要」を設定（C=yes または E の JSON が真）。
+
+    工程名が「分割」の行は、同一依頼NO内に非空の同一「機械名」が複数行ある場合に限り
+    （``_apply_auto_exclude_bunkatsu_duplicate_machine`` と同じ重複条件）、C/E を適用する。
+    EC と分割で機械が異なる依頼では、設定行が残っていても当該分割行は配台対象のままとする。
+
+    運用上は **段階1**（``run_stage1_extract``）から呼ぶ。段階2の ``load_planning_tasks_df`` では
+    ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False,
+    compile_exclude_rules_d_to_e_with_ai=False)`` とし、本関数でシートの C/E を計画 DataFrame に
+    再適用しない（設定シートの D→E AI も段階2では行わない）。
+    """
     if df is None or df.empty:
         return df
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
@@ -8991,6 +10212,12 @@ def apply_exclude_rules_config_to_plan_df(
     if not rules:
         return df
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
+    by_tid_idx: dict[str, list] = defaultdict(list)
+    if TASK_COL_TASK_ID in df.columns:
+        for j in df.index:
+            tid_j = _normalize_task_id_for_dup_grouping(df.at[j, TASK_COL_TASK_ID])
+            if tid_j:
+                by_tid_idx[tid_j].append(j)
     n = 0
     for i in df.index:
         try:
@@ -9001,8 +10228,18 @@ def apply_exclude_rules_config_to_plan_df(
         tm = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
         if not tp:
             continue
+        tid_norm = _normalize_task_id_for_dup_grouping(row.get(TASK_COL_TASK_ID))
+        is_bunkatsu = _process_name_is_bunkatsu_for_auto_exclude(tp)
+        dup_ge2_for_tid = False
+        if tid_norm:
+            dup_ge2_for_tid, _mc = _same_tid_nonempty_machine_dup_ge2(
+                df, by_tid_idx.get(tid_norm, [])
+            )
+        bunkatsu_block_cfg = is_bunkatsu and bool(tid_norm) and not dup_ge2_for_tid
         for ru in rules:
             if not _task_row_matches_exclude_rule_target(tp, tm, ru["proc"], ru["mach"]):
+                continue
+            if bunkatsu_block_cfg:
                 continue
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
@@ -9047,13 +10284,16 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
 
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
-#   加工計画DATA 読坖 → 酝坰丝覝自動処睆 → 設定シート保守 → plan_input_tasks.xlsx 出力
+#   加工計画DATA 読取 → 計画 DataFrame 確定（マージ・分割の配台不要）→
+#   設定シート保守（D→E の AI 含む）→ 設定を計画へ反映 → 配台試行順番 → plan_input_tasks.xlsx 出力
 # =============================================================================
 def run_stage1_extract():
     """
-    段階1: 加工計画DATA 㝋ら酝坰用タスク一覧を抽出㝗 output/plan_input_tasks.xlsx 㝸出力。
-    坌一依頼NO㝧坌一機械坝㝌複数行㝂る㝨㝝〝工程坝「分割〝行㝮空㝮「酝坰丝覝〝㝫 yes を自動設定㝙る。
-    マクロブック㝮「設定_酝坰丝覝工程〝㝧工程+機械㝔㝨㝮酝坰丝覝・条件弝（AI）を管睆㝙る（シート作戝㝯 VBA）。
+    段階1: 加工計画DATA から配台用タスク一覧を抽出し output/plan_input_tasks.xlsx へ出力。
+    同一依頼NOで同一機械名が複数行あるとき、工程名「分割」行の空の「配台不要」に yes を自動設定する。
+    マクロブックの「設定_配台不要工程」で工程+機械ごとの配台不要・条件式（AI）を管理する（シート作成は VBA）。
+    設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
+    「配台試行順番」の付与より前に行う。
     """
     if not TASKS_INPUT_WORKBOOK:
         logging.error("TASK_INPUT_WORKBOOK 㝌未設定㝧㝙。")
@@ -9063,11 +10303,6 @@ def run_stage1_extract():
         return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
-    try:
-        _pm_pairs = _collect_process_machine_pairs_for_exclude_rules(df_src)
-        run_exclude_rules_sheet_maintenance(TASKS_INPUT_WORKBOOK, _pm_pairs, "段階1")
-    except Exception:
-        logging.exception("段階1: 設定_酝坰丝覝工程㝮保守㝧例外（続行）")
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -9084,6 +10319,11 @@ def run_stage1_extract():
         rec[TASK_COL_TASK_ID] = task_id
         _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
         _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+        _qty_total_s1 = _floor_positive_m_to_planning_minimum(
+            _qty_total_s1, PLANNING_MIN_QTY_M
+        )
+        if TASK_COL_QTY in rec:
+            rec[TASK_COL_QTY] = _qty_total_s1
         _roll_len = infer_unit_m_from_product_name(
             _pn_stage1, fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty
         )
@@ -9093,6 +10333,16 @@ def run_stage1_extract():
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
         if _roll_len <= 0:
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+        _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
+            _pn_stage1, _roll_len, _qty_total_s1
+        )
+        try:
+            _roll_len = float(_roll_len)
+        except (TypeError, ValueError):
+            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+        if _roll_len <= 0:
+            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+        _roll_len = _ceil_roll_unit_length_m_to_next_step(_roll_len)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
         # 工程坝 + 機械坝 を“因孝”㝨㝗㝦表示用㝫追加（後段㝯計算キー㝫も使用）
         if machine_name:
@@ -9142,17 +10392,26 @@ def run_stage1_extract():
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
+    _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
-        logging.exception("段階1: 分割行㝮酝坰丝覝自動設定㝧例外（出力㝯続行）: %s", ex)
+        logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
+    # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
+    try:
+        _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
+        run_exclude_rules_sheet_maintenance(
+            TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
+        )
+    except Exception:
+        logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     try:
         out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
     except Exception as ex:
         logging.warning("段階1: 設定シート㝫よる酝坰丝覝革用㝧例外（続行）: %s", ex)
     try:
-        _ext_dt_s1 = _extract_data_extraction_datetime()
+        _ext_dt_s1, _ = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
         fill_plan_dispatch_trial_order_column_stage1(
             out_df,
@@ -9183,15 +10442,16 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-# 終業直剝デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES 㝌正㝮㝨㝝〝team_end_limit 㝾㝧㝮残り㝌㝝㝮分数以下㝧〝
-# 㝋㝤 remaining_units（切り上㝒）㝌 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下㝮㝨㝝〝㝝㝮日㝮開始丝坯（None）。
-# 坌㝘ウィンドウ㝧「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上㝯回㝛㝪㝄〝（坎容㝌閾値未満）㝨㝝㝯
-# 新覝㝫加工を始ゝ㝪㝄（_eod_reject_capacity_units_below_threshold）。
-# ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示㝙る㝨無効（従来㝩㝊り）。
-# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。坝分大㝝㝪値（例: 999999）㝫㝙る㝨実質「残ロール㝫依ら㝚終業直剝㝯丝坯〝。
-# 休憩: 帯内㝫蝽㝡㝟開始㝯 _defer_team_start_past_prebreak_and_end_of_day 㝧休憩終了㝸繰り下㝒。
-# 休憩を㝾㝟㝝連続酝坰㝯 _contiguous_work_minutes_until_next_break_or_limit 㝧坴下。
-# （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES 㝯廃止・無視）
+# 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
+# かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
+# 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
+# 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
+# 占有キー上の直前加工が同一依頼NO（machine_handoff last_tid）のときは上記2点をスキップ（_eod_same_request_continuation_exempt）。
+# ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
+# ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
+# 休憩: 帯内に落ちた開始は _defer_team_start_past_prebreak_and_end_of_day で休憩終了へ繰り下げ。
+# 休憩をまたぐ連続配台は _contiguous_work_minutes_until_next_break_or_limit で却下。
+# （旧 ASSIGN_DEFER_MIN_REMAINING_ROLLS / ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES は廃止・無視）
 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS = max(
     0,
     int(os.environ.get("ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS", "5").strip() or 0),
@@ -9214,13 +10474,39 @@ def _eod_minutes_window_covers_start(
     return (team_end_limit - team_start) <= timedelta(minutes=gap)
 
 
-def _eod_reject_capacity_units_below_threshold(
-    units_fit_until_close: int, team_start: datetime, team_end_limit: datetime
+def _eod_same_request_continuation_exempt(
+    machine_occ_key: str, task: dict, machine_handoff: dict | None
 ) -> bool:
     """
-    終業㝾㝧㝂㝨 ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内㝮ウィンドウ内㝧〝
-    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上㝯回㝛㝪㝄（坎容ロール数㝌閾値未満）㝨㝝 True（新覝加工を始ゝ㝪㝄＝候補坴下）。
+    同一設備占有キーで直前に載せた加工が同一依頼NO（task_id）のとき True。
+    終業直前デファーは「新規開始」に寄せるため、この場合は小残・収容閾値の EOD 抑止を外す。
     """
+    if not machine_handoff:
+        return False
+    occ = str(machine_occ_key or "").strip()
+    if not occ:
+        return False
+    prev = (machine_handoff.get("last_tid") or {}).get(occ)
+    cur = str(task.get("task_id") or "").strip()
+    if not prev or not cur:
+        return False
+    return str(prev).strip() == cur
+
+
+def _eod_reject_capacity_units_below_threshold(
+    units_fit_until_close: int,
+    team_start: datetime,
+    team_end_limit: datetime,
+    *,
+    eod_same_request_continuation_exempt: bool = False,
+) -> bool:
+    """
+    終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
+    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
+    eod_same_request_continuation_exempt が True のときは常に False（同一依頼の連続ロール）。
+    """
+    if eod_same_request_continuation_exempt:
+        return False
     th = ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
     if th <= 0:
         return False
@@ -9313,14 +10599,17 @@ def _defer_team_start_past_prebreak_and_end_of_day(
     team_breaks: list,
     refloor_fn,
     min_contiguous_work_mins: int | None = None,
+    *,
+    eod_same_request_continuation_exempt: bool = False,
 ) -> datetime | None:
     """
-    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 㝋㝤 (team_end_limit - 試行開始) 㝌㝝㝮分数以下㝧〝
-      remaining_units 切り上㝒㝌 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下㝮㝨㝝〝当日開始丝坯（None）。
-    - 試行開始㝌休憩帯内㝮㝨㝝㝯 **休憩終了時刻㝸繰り下㝒**㝗〝`refloor_fn` 㝧設備下陝・avail を冝革用㝙る。
-      繰り下㝒㝮㝂㝨終業超靎・EOD デファー㝫該当㝙れ㝰 None。
-    - min_contiguous_work_mins 㝌正㝮㝨㝝〝帯外㝧も **次㝮休憩㝾㝧㝮連続実僝**㝌㝝れ未満㝪ら
-      当該休憩㝮終了㝸繰り下㝒（上㝨坌様㝫 refloor 㝗ループ）。
+    - ASSIGN_END_OF_DAY_DEFER_MINUTES > 0 かつ (team_end_limit - 試行開始) がその分数以下で、
+      remaining_units 切り上げが ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、当日開始不可（None）。
+      eod_same_request_continuation_exempt が True のときはこの終業直前・小残分岐をスキップ（同一依頼の連続ロール）。
+    - 試行開始が休憩帯内のときは **休憩終了時刻へ繰り下げ**し、`refloor_fn` で設備下限・avail を再適用する。
+      繰り下げのあと終業超過・EOD デファーに該当すれば None。
+    - min_contiguous_work_mins が正のとき、帯外でも **次の休憩までの連続実働**がそれ未満なら
+      当該休憩の終了へ繰り下げ（上と同様に refloor しループ）。
     """
     _tid = str(task.get("task_id", "") or "").strip()
     _team_txt = ", ".join(str(x) for x in team) if team else "—"
@@ -9385,7 +10674,8 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
         if (
-            gap_end > 0
+            not eod_same_request_continuation_exempt
+            and gap_end > 0
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
         ):
@@ -11104,6 +12394,21 @@ def _attendance_leave_type_text(row) -> str:
     return s
 
 
+def _attendance_leave_type_is_full_day_paid_leave(leave_type: str) -> bool:
+    """休暇区分がマスタ上の『終日年休』とみなせるとき True（前休・後休は午前/午後のみ勤務のため除外）。"""
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "年休" or lt.startswith("年休 ")
+
+
+def _attendance_leave_type_is_calendar_no_dispatch(leave_type) -> bool:
+    """
+    master.xlsm カレンダー由来の休暇区分「-」（半角。NFKC で全角マイナス等も「-」に寄せる）。
+    休日ではないが加工ラインへの配台（OP/AS）には載せない日。勤怠 AI や API 未設定でも確定させる。
+    """
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "-"
+
+
 def _ai_json_bool(v, default: bool = False) -> bool:
     """勤怠備考 AI 㝮真坽値（bool / 数値 / 文字列㝮杺れを坸坎）。"""
     if v is None:
@@ -11125,17 +12430,64 @@ def _ai_json_bool(v, default: bool = False) -> bool:
 
 
 def _parse_attendance_overtime_end_optional(v) -> time | None:
-    """勤怠「残業終業〝列。有効㝪時刻㝮㝿。空・丝正㝯 None（_excel_scalar_to_time_optional 㝨坌趣旨）。"""
+    """勤怠「残業(分)」列。有効な時刻のみ。空・不正は None（_excel_scalar_to_time_optional と同趣旨）。"""
     return _excel_scalar_to_time_optional(v)
+
+
+def _resolve_attendance_overtime_end(
+    raw,
+    *,
+    base_end_t: time,
+    curr_date: date,
+) -> time | None:
+    """
+    勤怠「残業(分)」列の解釈（いずれかで成功したらその time を返す）。
+
+    1) 時刻（文字列 HH:MM、datetime、time、Excel 0<値<1 の日内小数）
+    2) 定時退勤からの延長「分」: 1〜720 の整数（Excel 数値・文字列の整数も可）
+    """
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    if isinstance(raw, bool):
+        return None
+    t_clock = _parse_attendance_overtime_end_optional(raw)
+    if t_clock is not None:
+        return t_clock
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.isdigit():
+            try:
+                raw = int(s)
+            except ValueError:
+                return None
+    if isinstance(raw, (int, float)):
+        x = float(raw)
+        if 0 < x < 1:
+            try:
+                new_dt = datetime.combine(curr_date, time(0, 0)) + timedelta(days=x)
+                return new_dt.time()
+            except (OverflowError, ValueError):
+                return None
+        if x == int(x) and 1 <= int(x) <= 720:
+            try:
+                base_dt = datetime.combine(curr_date, base_end_t)
+                new_dt = base_dt + timedelta(minutes=int(x))
+                if new_dt.date() != curr_date:
+                    return time(23, 59, 59)
+                return new_dt.time()
+            except (OverflowError, ValueError):
+                return None
+    return None
 
 
 def load_attendance_and_analyze(members):
     attendance_data = {}
     # ※「勤怠備考〝㝯 master 坄メンポーシート㝮「備考〝列㝮㝿。メイン冝優先・特別指定_備考㝯別API（generate_plan 坴㝧追記）。
     ai_log = {
-        "（注）㝓㝮シート㝮見方": "先頭2行㝯勤怠「備考〝㝮出退勤AI㝮㝿。メイン冝優先・特別指定㝯下段㝮JSON㝨「_*_AI_API〝行。",
-        "勤怠備考_AI_API": "㝪㝗",
-        "勤怠備考_AI_詳細": "解枝対象㝮備考行㝪㝗",
+        "（注）このシートの見方": "勤怠は「勤怠備考_*」と「勤怠備考_Geminiモデル」。メイン再優先・特別指定は JSON と「_*_AI_API」「_*_Geminiモデル」行で確認。",
+        "勤怠備考_AI_API": "なし",
+        "勤怠備考_AI_詳細": "解析対象の備考行なし",
+        "勤怠備考_Geminiモデル": "—（解析対象の備考行なし）",
     }
     
     # 1. メンポー別シート㝋ら㝮読㝿込㝿
@@ -11157,6 +12509,8 @@ def load_attendance_and_analyze(members):
             
         if all_records:
             df = pd.concat(all_records, ignore_index=True)
+            if ATT_COL_OT_END_LEGACY in df.columns and ATT_COL_OT_END not in df.columns:
+                df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
             df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
             df = df.dropna(subset=['日付'])
             logging.info(f"『{MASTER_FILE}〝㝮坄メンポー㝮勤怠シートを読㝿込㝿㝾㝗㝟。")
@@ -11174,7 +12528,7 @@ def load_attendance_and_analyze(members):
                 )
             if ATT_COL_OT_END in _cols:
                 logging.info(
-                    "勤怠列: 任愝「%s〝㝧退勤上陝時刻を指定㝧㝝㝾㝙（全日休㝿行㝧㝯無視）。",
+                    "勤怠列: 任意「%s」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。",
                     ATT_COL_OT_END,
                 )
         else:
@@ -11200,7 +12554,9 @@ def load_attendance_and_analyze(members):
         if rem:
             remarks_to_analyze.append(f"{d_str}_{m} 㝮備考: {rem}")
         elif lt and lt not in ("通常", ""):
-            remarks_to_analyze.append(f"{d_str}_{m} 㝮休暇区分（備考㝯空）: {lt}")
+            # 「-」は配台不参加をコード固定（API 不要）。他の休暇区分は従来どおり AI に渡す。
+            if not _attendance_leave_type_is_calendar_no_dispatch(lt):
+                remarks_to_analyze.append(f"{d_str}_{m} の休暇区分（備考は空）: {lt}")
 
     if remarks_to_analyze:
         remarks_blob = "\n".join(remarks_to_analyze)
@@ -11215,14 +12571,19 @@ def load_attendance_and_analyze(members):
             ai_parsed = cached_data
             ai_log["勤怠備考_AI_API"] = "㝪㝗(キャッシュ使用)"
             ai_log["勤怠備考_AI_詳細"] = "キャッシュヒット"
+            ai_log["勤怠備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         elif not API_KEY:
             ai_parsed = {}
-            ai_log["勤怠備考_AI_API"] = "㝪㝗"
-            ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定㝮㝟ゝ勤怠備考AIをスキップ"
-            logging.info("GEMINI_API_KEY 未設定㝮㝟ゝ備考AI解枝をスキップ㝗㝾㝗㝟。")
+            ai_log["勤怠備考_AI_API"] = "なし"
+            ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定のため勤怠備考AIをスキップ"
+            ai_log["勤怠備考_Geminiモデル"] = "—（API キー未設定）"
+            logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
         else:
-            logging.info("■ AI㝌複数日㝮特記事項を解枝中...")
-            ai_log["勤怠備考_AI_API"] = "㝂り"
+            logging.info(
+                "■ AIが複数日の特記事項を解析中...（対象 %d 件）",
+                len(remarks_to_analyze),
+            )
+            ai_log["勤怠備考_AI_API"] = "あり"
             
             prompt = f"""
             以下㝮坄日・メンポー㝮備考を読㝿坖り〝出退勤時刻㝮変更や中抜㝑〝休日㝮判定を行㝄〝JSON形弝㝧出力㝗㝦㝝㝠㝕㝄。
@@ -11240,25 +12601,29 @@ def load_attendance_and_analyze(members):
                 "酝坰丝坂加": false
               }}
             }}
-            ・キー坝㝯上記㝮日本語キーを㝝㝮㝾㝾使㝆（英語キー㝫置㝝杛㝈㝪㝄）
-            ・出勤時刻/退勤時刻: 当該行㝮「備考〝㝾㝟㝯「休暇区分（備考㝯空）〝㝮文脈㝋ら推測。丝明や変更㝪㝗㝪ら null
-            ・中抜㝑開始/終了: 一時的㝪離脱（中抜㝑・事務所・会議㝪㝩）㝌㝂る場坈〝㝝㝮開始・終了。㝪㝄場坈㝯 null
-            ・曖昧語㝮解釈例:
-              - 「坈剝中㝯事務所㝧作業〝=> 中抜㝑開始 "08:45", 中抜㝑終了 "12:00"
-              - 「坈後㝯会議〝=> 中抜㝑開始 "13:00", 中抜㝑終了 "17:00"
-            ・is_holiday: 㝝㝮日㝌会社㝫来㝪㝄・終日休暇・欠勤㝪㝩 **勤務自体㝌㝪㝄** 㝨判断㝧㝝る場坈㝮㝿 true。坈剝休・坈後休㝪㝩部分的㝪休㝿㝯 false（中抜㝑や時刻㝧表睾）
-            ・酝坰丝坂加: 勤務㝯㝂る㝌 **加工ライン㝸㝮酝坰（OP/AS 㝮割当）㝫載㝛㝦㝯㝄㝑㝪㝄** 㝨読㝿坖れる場坈㝯 true。表記㝯啝ゝ㝚愝味㝧判断㝙る㝓㝨。
-              例: 「酝坰丝坯〝「酝坰ＮＧ〝「ライン㝫乗ら㝪㝄〝「月次点検㝮㝿〝「点検㝧一日〝「事務㝮㝿〝「教育㝧睾場丝坯〝「手酝㝪㝗〝「アサイン丝覝〝㝪㝩㝮杺れや婉曲表睾も坫む。
-              通常勤務㝧特㝫制陝㝌読㝿坖れ㝪㝄場坈㝯 false
-            ・作業効率: 0.0〜1.0㝮数値
+            ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
+            ・出勤時刻/退勤時刻: 当該行の「備考」または「休暇区分（備考は空）」の文脈から推測。不明や変更なしなら null
+            ・中抜け開始/終了: 一時的な離脱（中抜け・事務所・会議など）がある場合、その開始・終了。ない場合は null
+            ・曖昧語の解釈例:
+              - 「午前中は事務所で作業」=> 中抜け開始 "08:45", 中抜け終了 "12:00"
+              - 「午後は会議」=> 中抜け開始 "13:00", 中抜け終了 "17:00"
+            ・is_holiday: その日が会社に来ない・終日休暇・欠勤など **勤務自体がない** と判断できる場合のみ true。午前休・午後休など部分的な休みは false（中抜けや時刻で表現）
+            ・配台不参加: 勤務はあるが **加工ラインへの配台（OP/AS の割当）に載せてはいけない** と読み取れる場合は true。表記は問わず意味で判断すること。
+              例: 「配台不可」「配台ＮＧ」「ラインに乗らない」「月次点検のみ」「点検で一日」「事務のみ」「教育で現場不可」「手配なし」「アサイン不要」などの揺れや婉曲表現も含む。
+              休暇区分が「-」（ハイフン1文字）のみのときは **is_holiday false・配台不参加 true**（休日ではないが加工に入れない日のマスタ記号）。
+              通常勤務で特に制限が読み取れない場合は false
+            ・作業効率: 0.0〜1.0の数値
             
             〝特記事項リスト】
             {chr(10).join(remarks_to_analyze)}
             """
             try:
-                client = genai.Client(api_key=API_KEY)
-                res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
-                record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
+                client = _gemini_client(API_KEY)
+                res, gem_model_used = _gemini_generate_content_with_retry(
+                    client, contents=prompt, log_label="勤怠備考AI"
+                )
+                record_gemini_response_usage(res, gem_model_used)
+                ai_log["勤怠備考_Geminiモデル"] = gem_model_used
                 match = re.search(r'\{.*\}', res.text, re.DOTALL)
                 if match:
                     ai_parsed = json.loads(match.group(0))
@@ -11269,34 +12634,10 @@ def load_attendance_and_analyze(members):
                     ai_parsed = {}
                     ai_log["勤怠備考_AI_詳細"] = "JSONパース失敗"
             except Exception as e:
-                err_text = str(e)
-                is_quota_or_rate = ("429" in err_text) or ("RESOURCE_EXHAUSTED" in err_text)
-                retry_sec = extract_retry_seconds(err_text) if is_quota_or_rate else None
-
-                if is_quota_or_rate and retry_sec is not None:
-                    wait_sec = min(max(retry_sec, 1.0), 90.0)
-                    logging.warning(f"AI通信 429/RESOURCE_EXHAUSTED。{wait_sec:.1f}秒待機㝗㝦1回㝠㝑冝試行㝗㝾㝙。")
-                    time_module.sleep(wait_sec)
-                    try:
-                        res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
-                        record_gemini_response_usage(res, GEMINI_MODEL_FLASH)
-                        match = re.search(r'\{.*\}', res.text, re.DOTALL)
-                        if match:
-                            ai_parsed = json.loads(match.group(0))
-                            put_cached_ai_result(ai_cache, cache_key, ai_parsed)
-                            save_ai_cache(ai_cache)
-                            ai_log["勤怠備考_AI_詳細"] = "冝試行㝧解枝戝功"
-                        else:
-                            ai_parsed = {}
-                            ai_log["勤怠備考_AI_詳細"] = "冝試行後JSONパース失敗"
-                    except Exception as e2:
-                        ai_parsed = {}
-                        logging.warning(f"AI冝試行エラー: {e2}")
-                        ai_log["勤怠備考_AI_詳細"] = f"429後冝試行失敗: {e2}"
-                else:
-                    ai_parsed = {}
-                    logging.warning(f"AI通信エラー: {e}")
-                    ai_log["勤怠備考_AI_詳細"] = str(e)
+                ai_parsed = {}
+                logging.warning("AI通信エラー: %s", e)
+                ai_log["勤怠備考_AI_詳細"] = str(e)
+                ai_log["勤怠備考_Geminiモデル"] = "—（呼び出し失敗）"
     else:
         ai_parsed = {}
 
@@ -11318,7 +12659,14 @@ def load_attendance_and_analyze(members):
 
         is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
         is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
-        exclude_from_line = _ai_json_bool(ai_info.get("酝坰丝坂加"), False)
+        forced_calendar_paid_leave = _attendance_leave_type_is_full_day_paid_leave(leave_type)
+        if forced_calendar_paid_leave:
+            is_holiday = True
+        exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
+        if _attendance_leave_type_is_calendar_no_dispatch(leave_type):
+            exclude_from_line = True
+            # 休日ではないが加工配台のみ除外（AI・空シフト推定で is_holiday になるのを防ぐ）
+            is_holiday = False
 
         ai_eff = ai_info.get("作業効率")
         excel_eff = row.get('作業効率')
@@ -11375,8 +12723,13 @@ def load_attendance_and_analyze(members):
                 mid_break_s, mid_break_e = fb_s, fb_e
 
         ot_applied_flag = False
+        ot_end: time | None = None
         if not is_holiday:
-            ot_end = _parse_attendance_overtime_end_optional(row.get(ATT_COL_OT_END))
+            ot_end = _resolve_attendance_overtime_end(
+                row.get(ATT_COL_OT_END),
+                base_end_t=base_end_t,
+                curr_date=curr_date,
+            )
             if ot_end is not None:
                 end_t = ot_end
                 ot_applied_flag = True
@@ -11387,9 +12740,11 @@ def load_attendance_and_analyze(members):
         end_dt = combine_dt(end_t)
         if (not is_holiday) and start_dt and end_dt and end_dt <= start_dt:
             logging.warning(
-                "勤怠 %s %s: 残業終業革用後㝫退勤㝌出勤以剝㝨㝪㝣㝟㝟ゝ〝残業終業を無視㝗㝦定時退勤㝫戻㝗㝾㝙。",
+                "勤怠 %s %s: %s 適用後に退勤が出勤以前となったため、%s を無視して定時退勤に戻します。",
                 curr_date,
                 m,
+                ATT_COL_OT_END,
+                ATT_COL_OT_END,
             )
             end_t = base_end_t
             end_dt = combine_dt(end_t)
@@ -12306,7 +13661,10 @@ def fill_plan_dispatch_trial_order_column_stage1(
             # Excel 上㝯数値セル㝫㝗〝フィルター・並㝹替㝈を㝗や㝙㝝㝙る（文字列㝠㝨数値㝨別グループ㝫㝪る）
             plan_df.iat[iloc, col_idx] = int(dto)
         except (TypeError, ValueError):
-            plan_df.iat[iloc, col_idx] = float("nan")
+            if pd.api.types.is_numeric_dtype(plan_df.iloc[:, col_idx]):
+                plan_df.iat[iloc, col_idx] = float("nan")
+            else:
+                plan_df.iat[iloc, col_idx] = ""
 
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
@@ -12329,6 +13687,109 @@ def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> di
             if t:
                 acc[(d0, m, tid)].add(t)
     return {k: ", ".join(sorted(v)) for k, v in acc.items() if v}
+
+
+def _eq_grid_slot_overlaps_event(
+    curr_grid: datetime, next_grid: datetime, ev: dict
+) -> bool:
+    """10分枠 [curr_grid, next_grid) とイベント [start_dt, end_dt) が重なるか。"""
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    return (
+        isinstance(st, datetime)
+        and isinstance(ed, datetime)
+        and st < next_grid
+        and ed > curr_grid
+    )
+
+
+def _eq_grid_first_overlapping_event(evs: list, curr_grid: datetime, next_grid: datetime):
+    """evs は開始時刻順。枠と重なる最初のイベントを返す（短い加工が中点判定で落ちるのを防ぐ）。"""
+    for ev in evs:
+        if _eq_grid_slot_overlaps_event(curr_grid, next_grid, ev):
+            return ev
+    return None
+
+
+def _eq_grid_overlap_sample_t(
+    ev: dict, curr_grid: datetime, next_grid: datetime, slot_mid: datetime
+) -> datetime:
+    """休憩判定用: 枠とイベントの重なり区間の中点（重なりなければ枠中点）。"""
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    if isinstance(st, datetime) and isinstance(ed, datetime):
+        os_ = max(curr_grid, st)
+        oe = min(next_grid, ed)
+        if os_ < oe:
+            return os_ + (oe - os_) / 2
+    return slot_mid
+
+
+def _eq_grid_events_for_equipment_column(
+    machine_to_events: dict, eq_col: str
+) -> list:
+    """
+    equipment_list の列キーと ev['machine'] の表記ゆれ（全角空白・NBSP 等）を正規化して対応づける。
+    一致しないと 10 分枠に何も出ず、結果_タスク一覧の時間割リンクも付かない。
+    """
+    if not eq_col or not machine_to_events:
+        return []
+    evs = machine_to_events.get(eq_col)
+    if evs:
+        return evs
+    nk = _normalize_equipment_match_key(eq_col)
+    if not nk:
+        return []
+    for mk, evs2 in machine_to_events.items():
+        if _normalize_equipment_match_key(str(mk)) == nk:
+            return evs2
+    pe, me = _split_equipment_line_process_machine(eq_col)
+    pe_n = _normalize_equipment_match_key(pe)
+    me_n = _normalize_equipment_match_key(me)
+    if pe_n and me_n:
+        for mk, evs2 in machine_to_events.items():
+            pk, mk_m = _split_equipment_line_process_machine(str(mk))
+            if (
+                _normalize_equipment_match_key(pk) == pe_n
+                and _normalize_equipment_match_key(mk_m) == me_n
+            ):
+                return evs2
+    return []
+
+
+def _eq_grid_mcol_for_event_machine(
+    eq_to_mcol: dict[str, str], event_machine: str
+) -> str | None:
+    """機械名集約時間割: イベント側 machine キーから表示列 mcol を正規化照合で解決。"""
+    if not event_machine or not eq_to_mcol:
+        return None
+    mcol = eq_to_mcol.get(event_machine)
+    if mcol:
+        return mcol
+    nk = _normalize_equipment_match_key(event_machine)
+    if not nk:
+        return None
+    for ek, mc in eq_to_mcol.items():
+        if _normalize_equipment_match_key(str(ek)) == nk:
+            return mc
+    return None
+
+
+def _eq_grid_timeline_event_use_progress_bar(ev: dict) -> bool:
+    """設備時間割の「進度R」表示・ハイパーリンク対象となる加工イベントか。"""
+    return (
+        _is_machining_timeline_event(ev)
+        and all(
+            k in ev
+            for k in (
+                "eff_time_per_unit",
+                "units_done",
+                "total_units",
+                "already_done_units",
+            )
+        )
+        and float(ev.get("eff_time_per_unit") or 0) > 0
+    )
 
 
 def _build_equipment_schedule_dataframe(
@@ -12398,27 +13859,20 @@ def _build_equipment_schedule_dataframe(
             for eq in equipment_list:
                 eq_text = ""
                 progress_text = ""
-                active_ev = None
-                for ev in machine_to_events.get(eq, ()):
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
+                active_ev = _eq_grid_first_overlapping_event(
+                    _eq_grid_events_for_equipment_column(machine_to_events, eq),
+                    curr_grid,
+                    next_grid,
+                )
 
                 if active_ev:
-                    _use_prog = (
-                        _is_machining_timeline_event(active_ev)
-                        and all(
-                            k in active_ev
-                            for k in (
-                                "eff_time_per_unit",
-                                "units_done",
-                                "total_units",
-                                "already_done_units",
-                            )
-                        )
-                        and float(active_ev.get("eff_time_per_unit") or 0) > 0
+                    _sample_t = _eq_grid_overlap_sample_t(
+                        active_ev, curr_grid, next_grid, mid_t
                     )
-                    if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                    _use_prog = _eq_grid_timeline_event_use_progress_bar(active_ev)
+                    if any(
+                        b_s <= _sample_t < b_e for b_s, b_e in active_ev["breaks"]
+                    ):
                         eq_text = "休憩"
                     elif not _use_prog:
                         _ek_disp = _timeline_event_kind(active_ev)
@@ -12438,9 +13892,11 @@ def _build_equipment_schedule_dataframe(
                         )
                         progress_text = ""
                     else:
+                        _slice_a = max(curr_grid, active_ev["start_dt"])
+                        _slice_b = min(next_grid, active_ev["end_dt"])
                         elapsed = get_actual_work_minutes(
-                            active_ev["start_dt"],
-                            min(next_grid, active_ev["end_dt"]),
+                            _slice_a,
+                            _slice_b,
                             active_ev["breaks"],
                         )
                         block_done_now = min(
@@ -12455,17 +13911,34 @@ def _build_equipment_schedule_dataframe(
                         sub_text = f" 補:{_sub_s}" if _sub_s else ""
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
                         progress_text = f"{cumulative_done}/{total_u}R"
-                        _tid_sched = str(active_ev.get("task_id") or "").strip()
-                        if (
-                            first_eq_schedule_cell_by_task_id is not None
-                            and _tid_sched
-                            and _tid_sched not in first_eq_schedule_cell_by_task_id
+
+                # 表示は「枠内で最も早く始まるイベント」1件だが、準備・セットアップが先にあると
+                # 加工が active_ev にならずタスクID→時間割リンクが欠ける。重なる加工イベントを別途走査する。
+                if first_eq_schedule_cell_by_task_id is not None:
+                    for _hev in _eq_grid_events_for_equipment_column(
+                        machine_to_events, eq
+                    ):
+                        if not _eq_grid_slot_overlaps_event(
+                            curr_grid, next_grid, _hev
                         ):
-                            _row_ex = len(all_eq_rows) + 2
-                            _ci = 2 + 2 * equipment_list.index(eq)
-                            first_eq_schedule_cell_by_task_id[_tid_sched] = (
-                                f"{get_column_letter(_ci)}{_row_ex}"
-                            )
+                            continue
+                        if not _eq_grid_timeline_event_use_progress_bar(_hev):
+                            continue
+                        _hs = _eq_grid_overlap_sample_t(
+                            _hev, curr_grid, next_grid, mid_t
+                        )
+                        if any(
+                            b_s <= _hs < b_e for b_s, b_e in _hev["breaks"]
+                        ):
+                            continue
+                        _htid = str(_hev.get("task_id") or "").strip()
+                        if not _htid or _htid in first_eq_schedule_cell_by_task_id:
+                            continue
+                        _row_ex = len(all_eq_rows) + 2
+                        _ci = 2 + 2 * equipment_list.index(eq)
+                        first_eq_schedule_cell_by_task_id[_htid] = (
+                            f"{get_column_letter(_ci)}{_row_ex}"
+                        )
 
                 row_data[eq] = eq_text
                 row_data[f"{eq}進度"] = progress_text
@@ -12562,17 +14035,18 @@ def _build_equipment_schedule_by_machine_name_dataframe(
                 row_data[mcol] = ""
             tids_by_mcol: dict[str, set[str]] = defaultdict(set)
             for eq, evs in machine_to_events.items():
-                mcol = eq_to_mcol.get(eq)
+                mcol = _eq_grid_mcol_for_event_machine(eq_to_mcol, str(eq))
                 if not mcol:
                     continue
-                active_ev = None
-                for ev in evs:
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
+                active_ev = _eq_grid_first_overlapping_event(evs, curr_grid, next_grid)
                 if not active_ev:
                     continue
-                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
+                _sample_tm = _eq_grid_overlap_sample_t(
+                    active_ev, curr_grid, next_grid, mid_t
+                )
+                if any(
+                    b_s <= _sample_tm < b_e for b_s, b_e in active_ev["breaks"]
+                ):
                     tids_by_mcol[mcol].add("（休憩）")
                 else:
                     tid = str(active_ev.get("task_id") or "").strip()
@@ -12586,125 +14060,6 @@ def _build_equipment_schedule_by_machine_name_dataframe(
         all_rows.append({"日時帯": "", **empty_tail})
 
     return pd.DataFrame(all_rows)
-
-
-def _build_block_table_dataframe(
-    sorted_dates: list,
-    equipment_list: list,
-    members: list,
-    attendance_data: dict,
-    timeline_events: list,
-) -> "pd.DataFrame":
-    """
-    設備列（坠有中㝮依頼NO）＋メンポー列（坌）を 10 分枠㝧並㝹㝟ブロック坯視化用シート。
-    """
-    timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
-    events_by_date = defaultdict(list)
-    for e in timeline_for_eq_grid:
-        events_by_date[e["date"]].append(e)
-
-    _eq_hdr = _equipment_schedule_header_labels(equipment_list)
-    eq_disp_to_key: dict[str, str] = {}
-    for eq, lab in zip(equipment_list, _eq_hdr):
-        eq_disp_to_key[f"設備:{lab}"] = eq
-
-    mem_cols = [f"人:{m}" for m in members]
-    eq_cols = [f"設備:{lab}" for lab in _eq_hdr]
-    all_cols = ["日時帯"] + eq_cols + mem_cols
-    rows_out = []
-
-    for d in sorted_dates:
-        d_start = datetime.combine(d, DEFAULT_START_TIME)
-        d_end = datetime.combine(d, DEFAULT_END_TIME)
-        events_today = events_by_date[d]
-        machine_to_events = defaultdict(list)
-        for ev in events_today:
-            machine_to_events[ev["machine"]].append(ev)
-        for _evs in machine_to_events.values():
-            _evs.sort(
-                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
-            )
-
-        is_anyone_working = any(
-            daily_status["is_working"] for daily_status in attendance_data[d].values()
-        )
-        if not events_today and not is_anyone_working:
-            continue
-
-        banner = {"日時帯": f"■ {d.strftime('%Y/%m/%d (%a)')} ■"}
-        banner.update({c: "" for c in all_cols if c != "日時帯"})
-        rows_out.append(banner)
-
-        curr_grid = d_start
-        while curr_grid < d_end:
-            next_grid = curr_grid + timedelta(minutes=10)
-            if next_grid > d_end:
-                next_grid = d_end
-            mid_t = curr_grid + (next_grid - curr_grid) / 2
-            row_data: dict = {
-                "日時帯": f"{curr_grid.strftime('%H:%M')}-{next_grid.strftime('%H:%M')}"
-            }
-            for c in eq_cols + mem_cols:
-                row_data[c] = ""
-
-            for col_eq, lab in zip(eq_cols, _eq_hdr):
-                eq_key = eq_disp_to_key.get(col_eq)
-                if not eq_key:
-                    continue
-                active_ev = None
-                for ev in machine_to_events.get(eq_key, ()):
-                    if ev["start_dt"] <= mid_t < ev["end_dt"]:
-                        active_ev = ev
-                        break
-                if not active_ev:
-                    continue
-                if any(b_s <= mid_t < b_e for b_s, b_e in active_ev["breaks"]):
-                    row_data[col_eq] = "休憩"
-                else:
-                    tid = str(active_ev.get("task_id") or "").strip()
-                    row_data[col_eq] = tid if tid else "坠有"
-
-            busy_member_task: dict[str, set[str]] = defaultdict(set)
-            for ev in events_today:
-                st = ev.get("start_dt")
-                ed = ev.get("end_dt")
-                if not isinstance(st, datetime) or not isinstance(ed, datetime):
-                    continue
-                if not (st <= mid_t < ed):
-                    continue
-                tid = str(ev.get("task_id") or "").strip()
-                op = str(ev.get("op") or "").strip()
-                if op:
-                    if any(
-                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
-                    ):
-                        busy_member_task[op].add("休憩" if tid else "休憩")
-                    elif tid:
-                        busy_member_task[op].add(tid)
-                for s in str(ev.get("sub") or "").split(","):
-                    s = s.strip()
-                    if not s:
-                        continue
-                    if any(
-                        b_s <= mid_t < b_e for b_s, b_e in ev.get("breaks") or ()
-                    ):
-                        busy_member_task[s].add("休憩")
-                    elif tid:
-                        busy_member_task[s].add(tid)
-
-            for m in members:
-                col_m = f"人:{m}"
-                parts = sorted(busy_member_task.get(m, ()))
-                row_data[col_m] = "＝".join(parts) if parts else ""
-
-            rows_out.append(row_data)
-            curr_grid = next_grid
-
-        tail = {"日時帯": ""}
-        tail.update({c: "" for c in all_cols if c != "日時帯"})
-        rows_out.append(tail)
-
-    return pd.DataFrame(rows_out, columns=all_cols)
 
 
 def _day_schedule_task_sort_key(
@@ -14600,6 +15955,9 @@ def _append_legacy_dispatch_candidate_for_team(
         * _surplus_team_time_factor(rq_base, len(team), extra_max)
     )
     _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+    _eod_cont_exempt = _eod_same_request_continuation_exempt(
+        _machine_occ_key, task, _mh_legacy
+    )
 
     def _refloor_legacy_roll(ts: datetime) -> datetime:
         ts = max(ts, max(avail_dt[m] for m in team))
@@ -14644,6 +16002,7 @@ def _append_legacy_dispatch_candidate_for_team(
         team_breaks,
         _refloor_legacy_roll,
         min_contiguous_work_mins=_defer_min_contig,
+        eod_same_request_continuation_exempt=_eod_cont_exempt,
     )
     if team_start_adj is None:
         return False
@@ -14657,7 +16016,10 @@ def _append_legacy_dispatch_candidate_for_team(
         return False
     units_today = min(units_can_do, math.ceil(task["remaining_units"]))
     if _eod_reject_capacity_units_below_threshold(
-        units_today, team_start, team_end_limit
+        units_today,
+        team_start,
+        team_end_limit,
+        eod_same_request_continuation_exempt=_eod_cont_exempt,
     ):
         return False
     work_mins_needed = int(units_today * eff_time_per_unit)
@@ -14737,6 +16099,9 @@ def _assign_one_roll_trial_order_flow(
         "last_lead_op": {},
         "last_machining_sub": {},
     }
+    _eod_cont_exempt = _eod_same_request_continuation_exempt(
+        machine_occ_key, task, _mh
+    )
 
     plan_ro = _plan_sheet_required_op_optional(task)
     need_src_line = ""
@@ -15013,6 +16378,7 @@ def _assign_one_roll_trial_order_flow(
             team_breaks,
             _refloor_trial_roll,
             min_contiguous_work_mins=_defer_min_contig,
+            eod_same_request_continuation_exempt=_eod_cont_exempt,
         )
         if team_start_d is None:
             _trace_assign(
@@ -15044,7 +16410,10 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
         if _eod_reject_capacity_units_below_threshold(
-            _trial_units_cap, team_start, team_end_limit
+            _trial_units_cap,
+            team_start,
+            team_end_limit,
+            eod_same_request_continuation_exempt=_eod_cont_exempt,
         ):
             _trace_assign(
                 "候補坴下: 終業直剝㝧当日坎容ロール数㝌閾値未満 team=%s cap=%s th=%s start=%s",
@@ -16213,8 +17582,8 @@ def generate_plan():
     """
     段階2㝮メイン処睆。戻り値㝪㝗（ログ・Excel 出力㝧完絝）。
 
-    剝杝: 環境変数 TASK_INPUT_WORKBOOK〝カレントディレクトリ㝌スクリプトフォルダ。
-    出力: ``output_dir`` 直下㝮 ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（最新1組㝮㝿）〝㝊よ㝳 log/execution_log.txt。
+    前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
+    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
     """
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     with _override_default_factory_hours_from_master(master_abs):
@@ -16371,8 +17740,8 @@ def _generate_plan_impl():
             "（メイン㝧増員探索㝙る従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
-    # 段階2㝮基準日時㝯「マクロ実行時刻〝㝧㝯㝪㝝「データ抽出日〝を使用
-    data_extract_dt = _extract_data_extraction_datetime()
+    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「抽出時間」（なければ「データ抽出日」）
+    data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
     data_extract_dt_str = (
@@ -16381,7 +17750,7 @@ def _generate_plan_impl():
     logging.info(
         "計画基準日時: %s（%s）",
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
-        "データ抽出日" if data_extract_dt is not None else "睾在時刻フォールポック",
+        plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
@@ -16412,7 +17781,7 @@ def _generate_plan_impl():
         ai_log_data["メイン_グローポル_未革用メモ(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 絝果シート㝯「基準日（データ抽出日）〝以陝㝮㝿表示・計画対象㝨㝙る
+    # 結果シートは「基準日（抽出時間／データ抽出日）」以降のみ表示・計画対象とする
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
         logging.error("当日以陝㝮処睆対象日付㝌㝂り㝾㝛ん。")
@@ -16477,7 +17846,7 @@ def _generate_plan_impl():
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日〝判定㝨最早開始時刻㝫㝯基準日時（データ抽出日）を使㝆
+    # 「当日」判定と最早開始時刻には基準日時（抽出時間優先、なければデータ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
@@ -17355,7 +18724,12 @@ def _generate_plan_impl():
                                     * _surplus_team_time_factor(rq_base, len(team), extra_max)
                                 )
                                 _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
-    
+                                _eod_cont_exempt_il = (
+                                    _eod_same_request_continuation_exempt(
+                                        machine_occ_key, task, machine_handoff_legacy
+                                    )
+                                )
+
                                 def _refloor_legacy_inline(ts):
                                     ts = max(ts, max(avail_dt[m] for m in team))
                                     if not _gpo.get("abolish_all_scheduling_limits"):
@@ -17395,6 +18769,7 @@ def _generate_plan_impl():
                                     team_breaks,
                                     _refloor_legacy_inline,
                                     min_contiguous_work_mins=_defer_min_contig,
+                                    eod_same_request_continuation_exempt=_eod_cont_exempt_il,
                                 )
                                 if _ts_adj is None:
                                     continue
@@ -17410,7 +18785,10 @@ def _generate_plan_impl():
     
                                 units_today = min(units_can_do, math.ceil(task['remaining_units']))
                                 if _eod_reject_capacity_units_below_threshold(
-                                    units_today, team_start, team_end_limit
+                                    units_today,
+                                    team_start,
+                                    team_end_limit,
+                                    eod_same_request_continuation_exempt=_eod_cont_exempt_il,
                                 ):
                                     continue
                                 work_mins_needed = int(units_today * eff_time_per_unit)
@@ -18022,10 +19400,7 @@ def _generate_plan_impl():
                     _ev.get("end_dt"),
                 )
 
-    # メイン割付㝾㝧㝮タイムライン（need 余力追記剝）。TEMP_設備毎㝮時間割用。
-    timeline_before_need_surplus = copy.deepcopy(timeline_events)
-
-    # need「酝坰時追加人数〝: メイン割付後㝫〝未坂加×スキル革坈者をサブ㝸追記（既定）
+    # need「配台時追加人数」: メイン割付後に、未参加×スキル適合者をサブへ追記（既定）
     if (
         not TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS
         and not TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW
@@ -18064,8 +19439,11 @@ def _generate_plan_impl():
     # 4. Excel出力 (メイン計画)
     # =========================================================
     _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_dir)
-    # 坌一秒内㝮冝実行㝧ファイル坝㝌衝窝㝗㝪㝄よ㝆マイクロ秒㝾㝧坫ゝる
-    _stage2_out_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
+    # ファイル名の主部はデータ抽出基準日時（シートメタと整合）。同一抽出データの再実行でも
+    # パスがぶつからないよう、壁時計のサフィックスを付与（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
+    _stage2_data_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
+    _stage2_run_stamp = datetime.now().strftime("%H%M%S_%f")
+    _stage2_out_stamp = f"{_stage2_data_stamp}_{_stage2_run_stamp}"
     output_filename = os.path.join(
         output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
@@ -18077,20 +19455,6 @@ def _generate_plan_impl():
         attendance_data,
         timeline_events,
         first_eq_schedule_cell_by_task_id=first_eq_schedule_cell_by_task_id,
-    )
-    df_temp_equipment_schedule = _build_equipment_schedule_dataframe(
-        sorted_dates,
-        equipment_list,
-        attendance_data,
-        timeline_before_need_surplus,
-        first_eq_schedule_cell_by_task_id=None,
-    )
-    df_block_table = _build_block_table_dataframe(
-        sorted_dates,
-        equipment_list,
-        members,
-        attendance_data,
-        timeline_events,
     )
     df_equipment_by_machine_name = _build_equipment_schedule_by_machine_name_dataframe(
         sorted_dates,
@@ -18365,15 +19729,12 @@ def _generate_plan_impl():
         "段階2: 絝果ブックを作戝㝗㝾㝙 → %s",
         os.path.basename(output_filename),
     )
+    gantt_tl_label_specs: list = []
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
             )
-            df_temp_equipment_schedule.to_excel(
-                writer, sheet_name=TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
-            )
-            df_block_table.to_excel(writer, sheet_name=BLOCK_TABLE_SHEET_NAME, index=False)
             df_equipment_by_machine_name.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
             )
@@ -18411,7 +19772,7 @@ def _generate_plan_impl():
             logging.info(
                 "段階2: 設備ガントを生戝㝗㝦㝄㝾㝙（データ針㝫より数分㝋㝋る㝓㝨㝌㝂り㝾㝙）"
             )
-            _write_results_equipment_gantt_sheet(
+            gantt_tl_label_specs = _write_results_equipment_gantt_sheet(
                 writer,
                 timeline_events,
                 equipment_list,
@@ -18430,7 +19791,6 @@ def _generate_plan_impl():
             if _reg_shift_start is not None and _reg_shift_end is not None:
                 for _eq_sched_sheet in (
                     RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
-                    TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
                     RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME,
                 ):
                     if _eq_sched_sheet in writer.sheets:
@@ -18445,14 +19805,10 @@ def _generate_plan_impl():
                     writer.sheets[RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME]
                 )
 
-            for _prep_sheet in (
-                RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
-                TEMP_EQUIPMENT_SCHEDULE_SHEET_NAME,
-            ):
-                if _prep_sheet in writer.sheets:
-                    _apply_equipment_schedule_prep_cleanup_fill(
-                        writer.sheets[_prep_sheet]
-                    )
+            if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
+                _apply_equipment_schedule_prep_cleanup_fill(
+                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME]
+                )
 
             if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
                 _apply_equipment_schedule_machine_calendar_fill(
@@ -18531,7 +19887,9 @@ def _generate_plan_impl():
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
     )
 
-    logging.info(f"完了: '{output_filename}' を生戝㝗㝾㝗㝟。")
+    _stage2_try_add_gantt_timeline_shape_labels(output_filename, gantt_tl_label_specs)
+
+    logging.info(f"完了: '{output_filename}' を生成しました。")
 
     # =========================================================
     # 5. ★追加: メンポー毎㝮行動スケジュール (別ファイル) 出力

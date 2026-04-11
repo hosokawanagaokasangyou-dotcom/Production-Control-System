@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-段階1/2: logging 出力を xlwings 経由で開いている Excel の UserForm 上の txtExecutionLog に逐次追記する。
 
-利用条件:
-  - 環境変数 PM_AI_SPLASH_XLWINGS=1（VBA または .cmd で set）
-  - TASK_INPUT_WORKBOOK にマクロブックのフルパスを設定し、その Excel を開いていること
-  - 標準モジュールに Public Sub SplashLog_AppendChunk(ByVal chunk As String) を用意する。
-    名前を変える場合は PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.マクロ名
-
-execution_log.txt へのファイル出力は別ハンドラが担う（本モジュールは UserForm 表示用。LOG シート取り込み等とは別経路）。
-"""
 from __future__ import annotations
 
 import os
