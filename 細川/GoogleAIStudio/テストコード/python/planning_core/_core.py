@@ -2110,11 +2110,14 @@ def _write_results_equipment_gantt_sheet(
         pass
 
     try:
+        # 印刷ページ設定（ガンチャート作成完了時点で付与）
+        # A3 横・余白「狭い」・横1ページ・縦は自動・先頭行1〜3を全ページに繰り返し・縦は手動改ページで2日分/ページ
         ws.page_setup.orientation = "landscape"
-        # 横 1 ページ・縦は自動（高さ方向のページ指定なし）
-        ws.page_setup.fitToHeight = False
+        # 「ページに合わせる」を有効にしないと fitToWidth が Excel で無視されうる
+        ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
-        # A3（openpyxl 上で paperSize=8 が A3 相当）
+        ws.page_setup.fitToHeight = 0  # 0 = 縦方向ページ数は自動（必要な枚数）
+        # A3（Excel / openpyxl の paperSize=8）
         ws.page_setup.paperSize = 8
         # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
         ws.page_margins.left = 0.25
