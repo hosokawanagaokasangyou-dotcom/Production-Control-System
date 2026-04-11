@@ -15170,6 +15170,39 @@ def _machine_effective_floor_timedelta_only(
     return mf
 
 
+# #region agent log
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        _p = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-dbc2c5.log",
+            )
+        )
+        _payload = {
+            "sessionId": "dbc2c5",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_payload, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 def _changeover_plan_segments_and_machining_lower_bound(
     *,
     prev_machining_end_dt: datetime,
@@ -15308,6 +15341,23 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 "machine_occupancy_key": mach_occ,
             }
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            "H4",
+            "_changeover_plan_segments_and_machining_lower_bound:prep_segment",
+            "prep_segment_added",
+            {
+                "machine_occ": mach_occ,
+                "eq_line": eq_line,
+                "last_tid": _lt_s,
+                "cur_tid": cur_tid,
+                "prep_min": prep,
+                "prep_start": str(t) if t else None,
+                "prep_end": str(pe),
+                "need_cleanup": bool(need_cleanup),
+            },
+        )
+        # #endregion
         t = pe
 
     return t, segments
@@ -15563,6 +15613,23 @@ def _append_changeover_segments_to_timeline(
             "units_done": 0,
             "event_kind": ek,
         }
+        # #region agent log
+        if ek == TIMELINE_EVENT_CHANGEOVER_PREP:
+            _agent_debug_ndjson(
+                "H1",
+                "_append_changeover_segments_to_timeline:prep",
+                "timeline_prep_append",
+                {
+                    "task_id": tid_ev,
+                    "machine_occ": m_occ,
+                    "machine_line": m_line,
+                    "prep_start": str(st),
+                    "prep_end": str(ed),
+                    "op": op,
+                    "sub": sub,
+                },
+            )
+        # #endregion
         timeline_events.append(ev)
         if dispatch_interval_mirror is not None:
             dispatch_interval_mirror.register_from_event(ev)
@@ -17011,6 +17078,45 @@ def _trial_order_first_schedule_pass(
                     "event_kind": TIMELINE_EVENT_MACHINING,
                 }
             )
+            # #region agent log
+            _prep_ends = [
+                s.get("end_dt")
+                for s in (res.get("changeover_segments") or [])
+                if str(s.get("event_kind") or "").strip()
+                == TIMELINE_EVENT_CHANGEOVER_PREP
+                and isinstance(s.get("end_dt"), datetime)
+            ]
+            _last_prep_end = max(_prep_ends) if _prep_ends else None
+            _gap_sec = (
+                (best_start - _last_prep_end).total_seconds()
+                if _last_prep_end is not None and isinstance(best_start, datetime)
+                else None
+            )
+            _agent_debug_ndjson(
+                "H1",
+                "_drain_rolls_for_task:after_machining_append",
+                "trial_order_machining_after_changeover",
+                {
+                    "task_id": str(task.get("task_id") or ""),
+                    "machine_occ": machine_occ_key,
+                    "machining_start": str(best_start),
+                    "machining_end": str(best_end),
+                    "last_prep_end": str(_last_prep_end) if _last_prep_end else None,
+                    "gap_prep_end_to_machining_start_sec": _gap_sec,
+                },
+            )
+            if _gap_sec is not None and _gap_sec > 1:
+                _agent_debug_ndjson(
+                    "H2",
+                    "_drain_rolls_for_task:gap",
+                    "positive_gap_after_prep",
+                    {
+                        "task_id": str(task.get("task_id") or ""),
+                        "machine_occ": machine_occ_key,
+                        "gap_sec": _gap_sec,
+                    },
+                )
+            # #endregion
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
             task["remaining_units"] -= float(done_units)
@@ -19070,6 +19176,51 @@ def _generate_plan_impl():
                                 "unit_m": task['unit_m'],
                                 "event_kind": TIMELINE_EVENT_MACHINING,
                             })
+                            # #region agent log
+                            _leg_st = best_info.get("start_dt")
+                            _leg_prep_ends = [
+                                s.get("end_dt")
+                                for s in (_co_segs_legacy or [])
+                                if str(s.get("event_kind") or "").strip()
+                                == TIMELINE_EVENT_CHANGEOVER_PREP
+                                and isinstance(s.get("end_dt"), datetime)
+                            ]
+                            _leg_last_pe = (
+                                max(_leg_prep_ends) if _leg_prep_ends else None
+                            )
+                            _leg_gap = (
+                                (_leg_st - _leg_last_pe).total_seconds()
+                                if _leg_last_pe is not None
+                                and isinstance(_leg_st, datetime)
+                                else None
+                            )
+                            _agent_debug_ndjson(
+                                "H1",
+                                "_schedule_task_chunk:legacy_after_machining",
+                                "legacy_machining_after_changeover",
+                                {
+                                    "task_id": str(task.get("task_id") or ""),
+                                    "machine_occ": machine_occ_key,
+                                    "machining_start": str(_leg_st),
+                                    "machining_end": str(best_info.get("end_dt")),
+                                    "last_prep_end": str(_leg_last_pe)
+                                    if _leg_last_pe
+                                    else None,
+                                    "gap_prep_end_to_machining_start_sec": _leg_gap,
+                                },
+                            )
+                            if _leg_gap is not None and _leg_gap > 1:
+                                _agent_debug_ndjson(
+                                    "H2",
+                                    "_schedule_task_chunk:legacy_gap",
+                                    "legacy_positive_gap_after_prep",
+                                    {
+                                        "task_id": str(task.get("task_id") or ""),
+                                        "machine_occ": machine_occ_key,
+                                        "gap_sec": _leg_gap,
+                                    },
+                                )
+                            # #endregion
                             if _dispatch_interval_mirror is not None:
                                 _dispatch_interval_mirror.register_from_event(
                                     timeline_events[-1]
