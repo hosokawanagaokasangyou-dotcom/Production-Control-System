@@ -8736,8 +8736,32 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
     except ImportError:
         return None
     target = os.path.abspath(abs_path)
+    # list(xw.apps) は全インスタンスを一度に COM 列挙し、ゾンビ登録等で無応答になることがある（計測ログで attach 直後に停止）。
     try:
-        for app in list(xw.apps):
+        cl = getattr(xw.apps, "cleanup", None)
+        if callable(cl):
+            cl()
+    except Exception:
+        pass
+    _agent_dbg_a71bb9(
+        "H1",
+        "planning_core._core:_xlwings_find_book_on_running_instances",
+        "after_apps_cleanup",
+        {},
+    )
+    try:
+        act = getattr(xw.apps, "active", None)
+        if act is not None:
+            for book in act.books:
+                try:
+                    if _xlwings_book_matches_path(book, target):
+                        return book
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    try:
+        for app in xw.apps:
             try:
                 for book in app.books:
                     try:
@@ -8759,7 +8783,22 @@ def _xlwings_try_open_in_running_apps(abs_path: str):
     except ImportError:
         return None
     path = os.path.abspath(abs_path)
-    for app in list(xw.apps):
+    try:
+        cl = getattr(xw.apps, "cleanup", None)
+        if callable(cl):
+            cl()
+    except Exception:
+        pass
+    try:
+        act = getattr(xw.apps, "active", None)
+        if act is not None:
+            try:
+                return act.books.open(path, update_links=False)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    for app in xw.apps:
         try:
             return app.books.open(path, update_links=False)
         except Exception:
@@ -8814,7 +8853,19 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
         {"path": abs_path},
     )
 
-    book = _xlwings_find_book_on_running_instances(abs_path)
+    _skip_scan = os.environ.get(
+        "EXCLUDE_RULES_XLWINGS_SKIP_RUNNING_INSTANCES", ""
+    ).strip().lower() in ("1", "true", "yes")
+    if _skip_scan:
+        _agent_dbg_a71bb9(
+            "H1",
+            "planning_core._core:_xlwings_attach_open_macro_workbook",
+            "skip_find_tryopen_env_EXCLUDE_RULES_XLWINGS_SKIP_RUNNING_INSTANCES",
+            {},
+        )
+        book = None
+    else:
+        book = _xlwings_find_book_on_running_instances(abs_path)
     _agent_dbg_a71bb9(
         "H1",
         "planning_core._core:_xlwings_attach_open_macro_workbook",
@@ -8824,7 +8875,10 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
     if book is not None:
         return book, {"mode": "keep", "opened_wb_here": False}
 
-    book = _xlwings_try_open_in_running_apps(abs_path)
+    if _skip_scan:
+        book = None
+    else:
+        book = _xlwings_try_open_in_running_apps(abs_path)
     _agent_dbg_a71bb9(
         "H1",
         "planning_core._core:_xlwings_attach_open_macro_workbook",
