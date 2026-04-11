@@ -12002,6 +12002,12 @@ def _attendance_leave_type_text(row) -> str:
     return s
 
 
+def _attendance_leave_type_is_full_day_paid_leave(leave_type: str) -> bool:
+    """休暇区分がマスタ上の『終日年休』とみなせるとき True（前休・後休は午前/午後のみ勤務のため除外）。"""
+    lt = unicodedata.normalize("NFKC", str(leave_type or "").strip())
+    return lt == "年休" or lt.startswith("年休 ")
+
+
 def _ai_json_bool(v, default: bool = False) -> bool:
     """勤怠備考 AI の真偽値（bool / 数値 / 文字列の揺れを吸収）。"""
     if v is None:
@@ -12071,6 +12077,28 @@ def _resolve_attendance_overtime_end(
             except (OverflowError, ValueError):
                 return None
     return None
+
+
+def _agent_debug_log_ndjson(payload: dict) -> None:
+    # #region agent log
+    try:
+        root = os.path.abspath(os.getcwd())
+        for _ in range(8):
+            if os.path.isfile(os.path.join(root, ".git")) or os.path.isdir(
+                os.path.join(root, ".git")
+            ):
+                break
+            parent = os.path.dirname(root)
+            if parent == root:
+                break
+            root = parent
+        path = os.path.join(root, "debug-bc3453.log")
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        with open(path, "a", encoding="utf-8") as _f:
+            _f.write(line)
+    except Exception:
+        pass
+    # #endregion
 
 
 def load_attendance_and_analyze(members):
@@ -12239,6 +12267,9 @@ def load_attendance_and_analyze(members):
 
         is_empty_shift = pd.isna(row.get('出勤時間')) and pd.isna(row.get('退勤時間')) and not ai_info
         is_holiday = _ai_json_bool(ai_info.get("is_holiday"), False) or is_empty_shift
+        forced_calendar_paid_leave = _attendance_leave_type_is_full_day_paid_leave(leave_type)
+        if forced_calendar_paid_leave:
+            is_holiday = True
         exclude_from_line = _ai_json_bool(ai_info.get("配台不参加"), False)
 
         ai_eff = ai_info.get("作業効率")
@@ -12329,6 +12360,41 @@ def load_attendance_and_analyze(members):
         if mid_break_s and mid_break_e: breaks_dt.append((combine_dt(mid_break_s), combine_dt(mid_break_e)))
         
         is_working = not is_holiday
+        # #region agent log
+        if "森下" in m or (curr_date.month == 4 and curr_date.day == 10):
+            _agent_debug_log_ndjson(
+                {
+                    "sessionId": "bc3453",
+                    "timestamp": int(time_module.time() * 1000),
+                    "location": "_core.py:load_attendance_and_analyze",
+                    "message": "attendance_row",
+                    "hypothesisId": "H1-H4",
+                    "data": {
+                        "date": curr_date.isoformat(),
+                        "member": m,
+                        "leave_type": leave_type,
+                        "remark_head": (original_reason or "")[:100],
+                        "excel_in_empty": bool(pd.isna(row.get("出勤時間"))),
+                        "excel_out_empty": bool(pd.isna(row.get("退勤時間"))),
+                        "excel_in": None
+                        if pd.isna(row.get("出勤時間"))
+                        else str(row.get("出勤時間"))[:32],
+                        "excel_out": None
+                        if pd.isna(row.get("退勤時間"))
+                        else str(row.get("退勤時間"))[:32],
+                        "ai_is_holiday": ai_info.get("is_holiday"),
+                        "ai_nonempty": bool(ai_info),
+                        "is_empty_shift": bool(is_empty_shift),
+                        "is_holiday": bool(is_holiday),
+                        "is_working": bool(is_working),
+                        "start_t": start_t.strftime("%H:%M") if start_t else None,
+                        "end_t": end_t.strftime("%H:%M") if end_t else None,
+                        "reason_final_head": (reason or "")[:120],
+                        "forced_calendar_paid_leave": bool(forced_calendar_paid_leave),
+                    },
+                }
+            )
+        # #endregion
         attendance_data[curr_date][m] = {
             "is_working": is_working,
             "eligible_for_assignment": is_working and (not exclude_from_line),
