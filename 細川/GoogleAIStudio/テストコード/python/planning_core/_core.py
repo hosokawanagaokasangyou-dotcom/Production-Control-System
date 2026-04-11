@@ -3582,6 +3582,7 @@ def analyze_global_priority_override_comment(
     if not text or not str(text).strip():
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "スキップ（メイン原文なし）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（メイン原文なし・API 未実行）"
         return empty
     blob = str(text).strip()
     mem_sig = ",".join(sorted(str(m).strip() for m in (members or []) if m))
@@ -3593,6 +3594,7 @@ def analyze_global_priority_override_comment(
         logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼びません）。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         return _finalize_global_priority_override(
             blob, _coerce_global_priority_override_dict(cached, ref_y)
         )
@@ -3601,6 +3603,7 @@ def analyze_global_priority_override_comment(
         logging.info("GEMINI_API_KEY 未設定のためメイン再優先特記の AI 解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（API キー未設定）"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -3712,6 +3715,7 @@ F) **global_day_process_operator_rules** （配列・必須）
                 pass
             if ai_sheet_sink is not None:
                 ai_sheet_sink["メイン再優先特記_AI_API"] = "あり（JSON解釈失敗・工場休業はルール補完）"
+                ai_sheet_sink["メイン再優先特記_Geminiモデル"] = gem_model_used
             coerced = _apply_regex_factory_closure_fallback(
                 _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
             )
@@ -3743,11 +3747,13 @@ F) **global_day_process_operator_rules** （配列・必須）
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "あり"
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = gem_model_used
         return coerced
     except Exception as e:
         logging.warning("メイン再優先特記: Gemini 呼び出し失敗: %s", e)
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（呼び出し失敗）"
         coerced = _apply_regex_factory_closure_fallback(
             _coerce_global_priority_override_dict({}, ref_y), blob, ref_y
         )
@@ -7008,6 +7014,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行なし）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（対象行なし・API 未実行）"
         return {}
 
     blob = "\n".join(sorted(lines))
@@ -7027,6 +7034,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（キャッシュ使用）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         out = copy.deepcopy(cached_parsed)
         if isinstance(out, dict):
             _repair_task_special_ai_wrong_top_level_keys(out, tasks_df)
@@ -7042,6 +7050,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         logging.info("GEMINI_API_KEY 未設定のためタスク特別指定のAI解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（API キー未設定）"
         return {}
 
     prompt = f"""
@@ -7159,9 +7168,11 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
             logging.info("タスク特別指定: AI解析が完了しました。")
             if ai_sheet_sink is not None:
                 ai_sheet_sink["特別指定備考_AI_API"] = "あり"
+                ai_sheet_sink["特別指定備考_Geminiモデル"] = gem_model_used
             return parsed
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "あり（JSON解釈失敗）"
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = gem_model_used
         return {}
     except Exception as e:
         logging.warning("タスク特別指定: Gemini 呼び出し失敗（再試行尽き）: %s", e)
@@ -7171,6 +7182,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
+            ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（呼び出し失敗）"
         return {}
 
 
@@ -12144,9 +12156,10 @@ def load_attendance_and_analyze(members):
     attendance_data = {}
     # ※「勤怠備考」は master 各メンバーシートの「備考」列のみ。メイン再優先・特別指定_備考は別API（generate_plan 側で追記）。
     ai_log = {
-        "（注）このシートの見方": "先頭2行は勤怠「備考」の出退勤AIのみ。メイン再優先・特別指定は下段のJSONと「_*_AI_API」行。",
+        "（注）このシートの見方": "勤怠は「勤怠備考_*」と「勤怠備考_Geminiモデル」。メイン再優先・特別指定は JSON と「_*_AI_API」「_*_Geminiモデル」行で確認。",
         "勤怠備考_AI_API": "なし",
         "勤怠備考_AI_詳細": "解析対象の備考行なし",
+        "勤怠備考_Geminiモデル": "—（解析対象の備考行なし）",
     }
     
     # 1. メンバー別シートからの読み込み
@@ -12228,10 +12241,12 @@ def load_attendance_and_analyze(members):
             ai_parsed = cached_data
             ai_log["勤怠備考_AI_API"] = "なし(キャッシュ使用)"
             ai_log["勤怠備考_AI_詳細"] = "キャッシュヒット"
+            ai_log["勤怠備考_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
         elif not API_KEY:
             ai_parsed = {}
             ai_log["勤怠備考_AI_API"] = "なし"
             ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定のため勤怠備考AIをスキップ"
+            ai_log["勤怠備考_Geminiモデル"] = "—（API キー未設定）"
             logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
         else:
             logging.info("■ AIが複数日の特記事項を解析中...")
@@ -12274,6 +12289,7 @@ def load_attendance_and_analyze(members):
                     client, contents=prompt, log_label="勤怠備考AI"
                 )
                 record_gemini_response_usage(res, gem_model_used)
+                ai_log["勤怠備考_Geminiモデル"] = gem_model_used
                 match = re.search(r'\{.*\}', res.text, re.DOTALL)
                 if match:
                     ai_parsed = json.loads(match.group(0))
@@ -12287,6 +12303,7 @@ def load_attendance_and_analyze(members):
                 ai_parsed = {}
                 logging.warning("AI通信エラー: %s", e)
                 ai_log["勤怠備考_AI_詳細"] = str(e)
+                ai_log["勤怠備考_Geminiモデル"] = "—（呼び出し失敗）"
     else:
         ai_parsed = {}
 
