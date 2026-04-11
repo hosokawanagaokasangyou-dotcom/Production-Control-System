@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta, time, date
 from collections import Counter, defaultdict
 import itertools
+import functools
 import csv
 import json
 import copy
@@ -96,7 +97,8 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
-# 精度の高い順。利用不可・未提供のときは _gemini_generate_content_with_retry が次点へ進む。
+# 既定の試行順（精度の高い順）。マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
+# 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
     "gemini-3-flash-preview",
     "gemini-2.5-pro",
@@ -124,20 +126,20 @@ _GEMINI_RETRY_BACKOFF_BASE = float(
     os.environ.get("GEMINI_RETRY_BACKOFF_BASE_SEC", "2.0") or 2.0
 )
 _GEMINI_RETRY_MAX_ATTEMPTS = max(
-    1, int(os.environ.get("GEMINI_RETRY_MAX_ATTEMPTS", "5") or 5)
+    1, int(os.environ.get("GEMINI_RETRY_MAX_ATTEMPTS", "3") or 3)
 )
 # generate_content 1 リクエストの HTTP タイムアウト（秒）。0 で HttpOptions の timeout を付けず SDK 既定。
-# 環境変数 GEMINI_REQUEST_TIMEOUT_SEC（未設定時は 30）。
+# 環境変数 GEMINI_REQUEST_TIMEOUT_SEC（未設定時は 60）。
 
 
 def _gemini_request_timeout_sec() -> float:
     raw = (os.environ.get("GEMINI_REQUEST_TIMEOUT_SEC") or "").strip()
     if not raw:
-        return 30.0
+        return 60.0
     try:
         v = float(raw)
     except (TypeError, ValueError):
-        return 30.0
+        return 60.0
     return max(0.0, v)
 
 
@@ -261,6 +263,12 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
 
 # マクロブック「設定」B1: 社内共有上の Gemini 認証 JSON のパス
 APP_CONFIG_SHEET_NAME = "設定"
+# 「設定」シート D3 以降: Gemini 試行モデル ID（Google の model code）。E 列が真の行だけを上から順に試行する。
+# （A/B 列は配台トレース・デバッグ依頼NO用のため、モデル一覧は D/E に配置）
+GEMINI_MODEL_SHEET_COL_MODEL = 4  # D
+GEMINI_MODEL_SHEET_COL_ENABLE = 5  # E
+GEMINI_MODEL_SHEET_FIRST_ROW = 3
+GEMINI_MODEL_SHEET_MAX_ROWS = 40
 # 暗号化認証 JSON（format_version 2）の復号は常にこの定数のみ（社内手順のパスフレーズと一致させる。ログ・UI に出さない）。
 _GEMINI_CREDENTIALS_PASSPHRASE_FIXED = "nagaoka1234"
 _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT = 480_000
@@ -270,6 +278,40 @@ def _config_cell_text(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
     return str(v).strip()
+
+
+def _config_cell_truthy_enabled(v) -> bool:
+    """設定シートの「試行に含める」列。Excel の TRUE / チェックボックス / 1 等を真とみなす。"""
+    if v is True:
+        return True
+    if v is False:
+        return False
+    if isinstance(v, (int, float)) and not pd.isna(v):
+        try:
+            return int(round(float(v))) != 0
+        except (TypeError, ValueError):
+            return False
+    s = _config_cell_text(v)
+    if not s:
+        return False
+    u = s.lower()
+    if u in (
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+        "○",
+        "〇",
+        "はい",
+        "有効",
+        "含む",
+        "試行",
+    ):
+        return True
+    if u in ("0", "false", "no", "n", "off", "×", "いいえ", "無効", "除外"):
+        return False
+    return False
 
 
 def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
@@ -407,6 +449,84 @@ def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
         "B",
         openpyxl_skip_hint="デバッグ配台は「設定」シート B 列を openpyxl で読めないため無効（全件配台）です。",
     )
+
+
+@functools.lru_cache(maxsize=32)
+def _read_gemini_model_try_chain_from_settings_sheet_cached(
+    wb_path_norm: str, mtime_key: int
+) -> tuple[str, ...]:
+    """「設定」!D:E から試行モデル列を読む。mtime_key でブック保存後にキャッシュ無効化。"""
+    out: list[str] = []
+    if not wb_path_norm or not os.path.isfile(wb_path_norm):
+        return tuple()
+    if _workbook_should_skip_openpyxl_io(wb_path_norm):
+        logging.info(
+            "Gemini 試行モデル: ブックに「%s」があるため「%s」!D:E を openpyxl で読めません（既定モデル列を使用）。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
+            APP_CONFIG_SHEET_NAME,
+        )
+        return tuple()
+    try:
+        keep_vba = str(wb_path_norm).lower().endswith(".xlsm")
+        wb = load_workbook(
+            wb_path_norm, read_only=True, data_only=True, keep_vba=keep_vba
+        )
+        try:
+            if APP_CONFIG_SHEET_NAME not in wb.sheetnames:
+                return tuple()
+            ws = wb[APP_CONFIG_SHEET_NAME]
+            consecutive_empty = 0
+            last = GEMINI_MODEL_SHEET_FIRST_ROW + GEMINI_MODEL_SHEET_MAX_ROWS
+            for r in range(GEMINI_MODEL_SHEET_FIRST_ROW, last):
+                mid = _config_cell_text(
+                    ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_MODEL).value
+                )
+                en_raw = ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_ENABLE).value
+                if not mid:
+                    consecutive_empty += 1
+                    if consecutive_empty >= 20:
+                        break
+                    continue
+                consecutive_empty = 0
+                if not _config_cell_truthy_enabled(en_raw):
+                    continue
+                out.append(mid)
+        finally:
+            wb.close()
+    except Exception as ex:
+        logging.warning(
+            "Gemini 試行モデル: 「%s」!D%d:E を読めません（既定モデル列を使用）: %s",
+            APP_CONFIG_SHEET_NAME,
+            GEMINI_MODEL_SHEET_FIRST_ROW,
+            ex,
+        )
+        return tuple()
+    return tuple(out)
+
+
+def _read_gemini_model_try_chain_from_settings_sheet(wb_path: str) -> tuple[str, ...] | None:
+    """マクロブック「設定」シートの D/E 列で有効化されたモデルを上から返す。1 件も無ければ None。"""
+    p = (wb_path or "").strip()
+    if not p:
+        return None
+    try:
+        norm = os.path.normpath(os.path.abspath(p))
+    except Exception:
+        norm = p
+    try:
+        mkey = int(os.path.getmtime(norm))
+    except OSError:
+        mkey = 0
+    chain = _read_gemini_model_try_chain_from_settings_sheet_cached(norm, mkey)
+    if not chain:
+        return None
+    logging.info(
+        "Gemini 試行モデル: 「%s」シート D/E から %s 件を読み込みました（順: %s）。",
+        APP_CONFIG_SHEET_NAME,
+        len(chain),
+        ", ".join(chain),
+    )
+    return chain
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
@@ -2425,12 +2545,17 @@ def _gemini_try_order_from_env() -> tuple[str, ...] | None:
 
 
 def _gemini_effective_model_chain(model: str | None) -> tuple[str, ...]:
-    """引数 model があればそれのみ。なければ GEMINI_MODEL（単一固定）または精度順リスト。"""
+    """引数 model があればそれのみ。なければ GEMINI_MODEL、設定シート D/E、環境変数の順で決定。"""
     if model is not None and str(model).strip():
         return (str(model).strip(),)
     pinned = (os.environ.get("GEMINI_MODEL") or "").strip()
     if pinned:
         return (pinned,)
+    sheet_chain = _read_gemini_model_try_chain_from_settings_sheet(
+        (TASKS_INPUT_WORKBOOK or "").strip()
+    )
+    if sheet_chain:
+        return sheet_chain
     ovr = _gemini_try_order_from_env()
     if ovr is not None:
         return ovr
@@ -2505,16 +2630,17 @@ def _gemini_generate_content_with_retry(
     max_attempts: int | None = None,
     log_label: str = "",
 ):
-    """generate_content を一時エラー時に再試行する（Gemini generateContent 共通）。
+    """generate_content を再試行する（Gemini generateContent 共通）。
 
-    - モデル列は GEMINI_MODEL_IDS_BY_QUALITY（精度高い順）。環境変数 GEMINI_MODEL で単一固定、
+    - モデル列: マクロブック「設定」シート D/E で有効化した ID（上から順）、なければ
+      GEMINI_MODEL_IDS_BY_QUALITY（精度高い順）。環境変数 GEMINI_MODEL で単一固定、
       GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。引数 model を渡したときはその1件のみ。
-    - モデル未提供などのときは列の次点へ進む（429/503 等の一時エラーでは切り替えない）。
+    - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
+      そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
+    - モデル未提供（404 等）は直ちに次モデルへ進む。
     - 各試行の直前: 0〜_GEMINI_PRE_REQUEST_JITTER_MAX の乱数待機（同時リクエストのばらつき）
-    - 待機時間は二系統:
-      (1) 429 / RESOURCE_EXHAUSTED で本文に retry 秒数があるときはその値（クリップ）＋小ジッター
-      (2) それ以外の一時エラーは指数バックオフ＋ジッター（503 / UNAVAILABLE 等）
-    - HTTP タイムアウト（既定 30 秒・GEMINI_REQUEST_TIMEOUT_SEC）: 同一モデルに残試行があれば短待機で再試行。
+    - 一時エラー待機: (1) 429 等で本文に retry 秒数 (2) 指数バックオフ＋ジッター
+    - HTTP タイムアウト（既定 60 秒・GEMINI_REQUEST_TIMEOUT_SEC）: 同一モデルに残試行があれば短待機で再試行。
       試行を使い切ったらモデル列の次点へ進む（_gemini_client の HttpOptions と併用）。
 
     戻り値: (応答オブジェクト, 実際に成功したモデル ID)
@@ -2594,27 +2720,51 @@ def _gemini_generate_content_with_retry(
                         )
                         break
                     raise
-                if attempt >= n - 1 or not _gemini_is_transient_api_error(err_text):
-                    raise
-                wait_sec = None
-                if _gemini_is_quota_style_error(err_text):
-                    rs = extract_retry_seconds(err_text)
-                    if rs is not None:
-                        wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
-                if wait_sec is None:
-                    pow_part = base * (2**attempt)
-                    jitter = random.uniform(0.0, min(4.0, base * 2.0))
-                    wait_sec = min(pow_part + jitter, 90.0)
-                logging.warning(
-                    "%sGemini API 一時エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
-                    prefix,
-                    mid,
-                    attempt + 1,
-                    n,
-                    err_text[:800],
-                    wait_sec,
-                )
-                time_module.sleep(wait_sec)
+                if _gemini_is_transient_api_error(err_text) and attempt < n - 1:
+                    wait_sec = None
+                    if _gemini_is_quota_style_error(err_text):
+                        rs = extract_retry_seconds(err_text)
+                        if rs is not None:
+                            wait_sec = min(max(rs, 1.0), 120.0) + random.uniform(0.0, 1.5)
+                    if wait_sec is None:
+                        pow_part = base * (2**attempt)
+                        jitter = random.uniform(0.0, min(4.0, base * 2.0))
+                        wait_sec = min(pow_part + jitter, 90.0)
+                    logging.warning(
+                        "%sGemini API 一時エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                        prefix,
+                        mid,
+                        attempt + 1,
+                        n,
+                        err_text[:800],
+                        wait_sec,
+                    )
+                    time_module.sleep(wait_sec)
+                    continue
+                if attempt < n - 1:
+                    wait_sec = min(2.0 + random.uniform(0.0, 1.0), 5.0)
+                    logging.warning(
+                        "%sGemini API エラー（モデル %s 試行 %s/%s）: %s — %.1f 秒待機して再試行します。",
+                        prefix,
+                        mid,
+                        attempt + 1,
+                        n,
+                        err_text[:800],
+                        wait_sec,
+                    )
+                    time_module.sleep(wait_sec)
+                    continue
+                if mi < len(chain) - 1:
+                    logging.warning(
+                        "%sGemini モデル %s が %s 回とも失敗したため次モデルへ切り替えます: %s",
+                        prefix,
+                        mid,
+                        n,
+                        err_text[:800],
+                    )
+                    last_raise = e
+                    break
+                raise
     if last_raise is not None:
         raise last_raise
     raise RuntimeError("Gemini: モデル列が空です。")
