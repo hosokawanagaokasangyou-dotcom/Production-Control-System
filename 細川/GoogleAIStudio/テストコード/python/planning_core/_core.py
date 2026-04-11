@@ -190,8 +190,6 @@ TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
 TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
-# エージェント用 NDJSON（debug-dbc2c5）の全パス書き込み失敗を 1 回だけ logging に残す
-_AGENT_DEBUG_LOG_WRITE_WARNED = False
 # VBA「master_組㝿坈ゝ㝛表を更新〝㝧作るシート（工程+機械キー㝨メンポー編戝）
 MASTER_SHEET_TEAM_COMBINATIONS = "組㝿坈ゝ㝛表"
 # メンポー別勤怠シート: master.xlsm 㝧㝯「休暇区分〝㝨「備考〝㝌別列。
@@ -15123,84 +15121,6 @@ def _is_machining_timeline_event(ev: dict) -> bool:
     return _timeline_event_kind(ev) == TIMELINE_EVENT_MACHINING
 
 
-def _agent_debug_ndjson_log(
-    *,
-    hypothesisId: str,
-    location: str,
-    message: str,
-    data: dict | None = None,
-    runId: str = "pre-fix",
-) -> None:
-    # region agent log
-    global _AGENT_DEBUG_LOG_WRITE_WARNED
-    _payload = {
-        "sessionId": "dbc2c5",
-        "hypothesisId": hypothesisId,
-        "location": location,
-        "message": message,
-        "timestamp": int(time_module.time() * 1000),
-        "runId": runId,
-        "data": data or {},
-    }
-    _line = json.dumps(_payload, ensure_ascii=False, default=str) + "\n"
-    # 候補パス（先頭ほど Cursor ワークスペース直下に近い）
-    _roots: list[str] = []
-    try:
-        _d = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(5):
-            _d = os.path.dirname(_d)
-        _roots.append(os.path.join(_d, "debug-dbc2c5.log"))
-    except Exception:
-        pass
-    try:
-        _roots.append(os.path.join(log_dir, "debug-dbc2c5.log"))
-        _roots.append(os.path.join(output_dir, "debug-dbc2c5.log"))
-    except Exception:
-        pass
-    try:
-        import tempfile
-
-        _roots.append(os.path.join(tempfile.gettempdir(), "debug-dbc2c5.log"))
-    except Exception:
-        pass
-    if not _roots:
-        _roots = [os.path.join(os.getcwd(), "debug-dbc2c5.log")]
-    _seen_paths: set[str] = set()
-    _last_ex: BaseException | None = None
-    _wrote_any = False
-    for _path in _roots:
-        try:
-            _ap = os.path.normcase(os.path.abspath(_path))
-        except Exception:
-            _ap = _path
-        if _ap in _seen_paths:
-            continue
-        _seen_paths.add(_ap)
-        try:
-            _d = os.path.dirname(_path)
-            if _d:
-                os.makedirs(_d, exist_ok=True)
-            with open(_path, "a", encoding="utf-8") as _f:
-                _f.write(_line)
-            _wrote_any = True
-        except Exception as ex:
-            _last_ex = ex
-            continue
-    if not _wrote_any and not _AGENT_DEBUG_LOG_WRITE_WARNED:
-        _AGENT_DEBUG_LOG_WRITE_WARNED = True
-        try:
-            logging.warning(
-                "cursor_debug: debug-dbc2c5.log を書けませんでした。"
-                " 候補=%s cwd=%s last_error=%r",
-                _roots,
-                os.getcwd(),
-                _last_ex,
-            )
-        except Exception:
-            pass
-    # endregion
-
-
 def _extend_changeover_prep_segment_end_for_timeline(
     segments: list, machining_start: datetime | None
 ) -> None:
@@ -15218,117 +15138,8 @@ def _extend_changeover_prep_segment_end_for_timeline(
         if not isinstance(pe, datetime):
             return
         if machining_start > pe:
-            # region agent log
-            _agent_debug_ndjson_log(
-                hypothesisId="H1fix",
-                location="_core.py:_extend_changeover_prep_segment_end_for_timeline",
-                message="extended_prep_end_dt_to_machining_start",
-                runId="post-fix",
-                data={
-                    "old_prep_end": str(pe),
-                    "machining_start": str(machining_start),
-                },
-            )
-            # endregion
             seg["end_dt"] = machining_start
         return
-
-
-def _agent_debug_scan_prep_followups(
-    timeline_events: list, *, runId: str = "pre-fix"
-) -> None:
-    # region agent log
-    """加工前準備の直後に同一占有キー上で加工イベントが無い／大きく空くケースを記録する。"""
-    by_key: dict[tuple, list] = defaultdict(list)
-    for ev in timeline_events or []:
-        d0 = ev.get("date")
-        occ = str(ev.get("machine_occupancy_key") or "").strip()
-        if d0 is None or not occ:
-            continue
-        st0 = ev.get("start_dt")
-        if not isinstance(st0, datetime):
-            continue
-        by_key[(d0, occ)].append(ev)
-    for (d0, occ), evs in by_key.items():
-        evs.sort(key=lambda x: (x.get("start_dt") or datetime.min,))
-        for i, ev in enumerate(evs):
-            if _timeline_event_kind(ev) != TIMELINE_EVENT_CHANGEOVER_PREP:
-                continue
-            prep_end = ev.get("end_dt")
-            if not isinstance(prep_end, datetime):
-                continue
-            next_m = None
-            next_any = None
-            for j in range(i + 1, len(evs)):
-                x = evs[j]
-                stx = x.get("start_dt")
-                if not isinstance(stx, datetime):
-                    continue
-                if stx < prep_end:
-                    continue
-                if next_any is None:
-                    next_any = x
-                if _is_machining_timeline_event(x):
-                    next_m = x
-                    break
-            if next_m is None:
-                _agent_debug_ndjson_log(
-                    hypothesisId="H2",
-                    location="_core.py:_agent_debug_scan_prep_followups",
-                    message="prep_no_subsequent_machining_same_occ",
-                    runId=runId,
-                    data={
-                        "date": str(d0),
-                        "machine_occupancy_key": occ,
-                        "prep_start": str(ev.get("start_dt")),
-                        "prep_end": str(prep_end),
-                        "task_id": str(ev.get("task_id") or ""),
-                        "next_non_machining_kind": (
-                            _timeline_event_kind(next_any)
-                            if next_any is not None
-                            else None
-                        ),
-                        "next_non_machining_start": (
-                            str(next_any.get("start_dt")) if next_any else None
-                        ),
-                    },
-                )
-            else:
-                _pm = str(ev.get("machine") or "").strip()
-                _mm = str(next_m.get("machine") or "").strip()
-                if _pm and _mm and _pm != _mm:
-                    _agent_debug_ndjson_log(
-                        hypothesisId="H3",
-                        location="_core.py:_agent_debug_scan_prep_followups",
-                        message="prep_then_machining_different_machine_field",
-                        runId=runId,
-                        data={
-                            "date": str(d0),
-                            "machine_occupancy_key": occ,
-                            "prep_machine": _pm,
-                            "machining_machine": _mm,
-                            "prep_task_id": str(ev.get("task_id") or ""),
-                            "mach_task_id": str(next_m.get("task_id") or ""),
-                        },
-                    )
-                gap_sec = (next_m.get("start_dt") - prep_end).total_seconds()
-                if gap_sec > 90:
-                    _agent_debug_ndjson_log(
-                        hypothesisId="H1",
-                        location="_core.py:_agent_debug_scan_prep_followups",
-                        message="gap_between_prep_end_and_machining_start",
-                        runId=runId,
-                        data={
-                            "date": str(d0),
-                            "machine_occupancy_key": occ,
-                            "prep_task_id": str(ev.get("task_id") or ""),
-                            "mach_task_id": str(next_m.get("task_id") or ""),
-                            "prep_end": str(prep_end),
-                            "machining_start": str(next_m.get("start_dt")),
-                            "gap_seconds": gap_sec,
-                        },
-                    )
-    # endregion
 
 
 def _pick_skilled_op_for_changeover_interval(
@@ -17213,33 +17024,6 @@ def _trial_order_first_schedule_pass(
             _mach_sub_line = ", ".join(
                 str(s).strip() for s in sub_members if s and str(s).strip()
             )
-            # region agent log
-            _prep_end_roll: datetime | None = None
-            for __seg in res.get("changeover_segments") or []:
-                if (
-                    str(__seg.get("event_kind") or "").strip()
-                    == TIMELINE_EVENT_CHANGEOVER_PREP
-                ):
-                    __ed = __seg.get("end_dt")
-                    if isinstance(__ed, datetime):
-                        _prep_end_roll = __ed
-            if _prep_end_roll is not None and isinstance(best_start, datetime):
-                _gap_roll = (best_start - _prep_end_roll).total_seconds()
-                if _gap_roll > 90:
-                    _agent_debug_ndjson_log(
-                        hypothesisId="H1",
-                        location="_core.py:_drain_rolls_for_task",
-                        message="roll_team_start_after_prep_end",
-                        data={
-                            "day": str(current_date),
-                            "task_id": str(task.get("task_id") or ""),
-                            "machine_occ_key": machine_occ_key,
-                            "prep_end": str(_prep_end_roll),
-                            "machining_start": str(best_start),
-                            "gap_seconds": _gap_roll,
-                        },
-                    )
-            # endregion
             _co_append = list(res.get("changeover_segments") or [])
             _extend_changeover_prep_segment_end_for_timeline(_co_append, best_start)
             _append_changeover_segments_to_timeline(
@@ -17863,20 +17647,6 @@ def _generate_plan_impl():
     # 酝坰トレース（設定シート A3 以陝㝮㝿）㝯〝メンポー0人等㝧早期 return 㝗㝦も
     # execution_log 㝫残るよ㝆 skills 読込より剝㝧確定・ログ㝙る。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
-    # region agent log
-    _agent_debug_ndjson_log(
-        hypothesisId="H0",
-        location="_core.py:_generate_plan_impl",
-        message="generate_plan_impl_entry",
-        data={
-            "cwd": os.getcwd(),
-            "task_input_workbook": (
-                os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
-            ),
-        },
-        runId="pre-fix",
-    )
-    # endregion
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
@@ -19321,34 +19091,6 @@ def _generate_plan_impl():
                                 for s in sub_members
                                 if s and str(s).strip()
                             )
-                            # region agent log
-                            _prep_end_l: datetime | None = None
-                            for __sg in _co_segs_legacy or []:
-                                if (
-                                    str(__sg.get("event_kind") or "").strip()
-                                    == TIMELINE_EVENT_CHANGEOVER_PREP
-                                ):
-                                    __e2 = __sg.get("end_dt")
-                                    if isinstance(__e2, datetime):
-                                        _prep_end_l = __e2
-                            _bs_l = best_info.get("start_dt")
-                            if _prep_end_l is not None and isinstance(_bs_l, datetime):
-                                _gap_l = (_bs_l - _prep_end_l).total_seconds()
-                                if _gap_l > 90:
-                                    _agent_debug_ndjson_log(
-                                        hypothesisId="H1",
-                                        location="_core.py:legacy_dispatch_chunk",
-                                        message="roll_team_start_after_prep_end",
-                                        data={
-                                            "day": str(current_date),
-                                            "task_id": str(task.get("task_id") or ""),
-                                            "machine_occ_key": machine_occ_key,
-                                            "prep_end": str(_prep_end_l),
-                                            "machining_start": str(_bs_l),
-                                            "gap_seconds": _gap_l,
-                                        },
-                                    )
-                            # endregion
                             _co_append_l = list(_co_segs_legacy or [])
                             _extend_changeover_prep_segment_end_for_timeline(
                                 _co_append_l, best_info.get("start_dt")
@@ -19764,9 +19506,6 @@ def _generate_plan_impl():
     )
     # タスクID → 絝果_設備毎㝮時間割㝧当該タスク㝌最初㝫睾れるセル（例 B12）。絝果_タスク一覧㝮リンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
-    # region agent log
-    _agent_debug_scan_prep_followups(timeline_events, runId="pre-fix")
-    # endregion
     df_eq_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
         equipment_list,
