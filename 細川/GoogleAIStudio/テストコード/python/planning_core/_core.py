@@ -2799,27 +2799,27 @@ def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
-    製品名文字列から加工短縮(m)を推定する暫定ルール。
-    例: 15020-JX5R- 770X300F-A   R -> 300
-    例: 1550X 40F のように「ロール長×幅」で X 直後が小さいときは X 前を採用（1550）。
-    寸法は半角 x/X のほか ×（U+00D7）・全角Ｘｘ も解釈する（正規化後に上記ルールを適用）。
-    ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
+    製品名文字列から 1 ロールあたりの長さ(m)を推定する。
+
+    実データ（テストコード直下「製品名,ロール単位の長さ.txt」）に合わせ、
+    **最後に現れる「左数 x 右数」（2〜6 桁同士）ペアの右側**をロール長の候補とする。
+    例: 870x200→200、1440x300→300、1550x40→40、770x300→300。
+    寸法区切りは半角 x/X のほか ×（U+00D7）・全角Ｘｘ 等を正規化してから判定する。
+
+    上記ペアが無いときは、従来どおり最後の「X の直後の 2〜6 桁」を拾う。
+    いずれもマッチしない場合は fallback_unit（段階1では換算数量など）。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
     s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
-    # 「NNNX MM」形式: 最後のペアで、一方が他方のおおよそ3倍以上なら長い側をロール長とみなす
-    # （770X300 のように近い二数は従来どおり X 後を優先するため閾値を使う）
+    # 「NNNX MM」形式: 最後のペアの **右側（X 後）**をロール長候補とする（製品名,ロール単位の長さ.txt 準拠）
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
     if dim_pairs:
         try:
-            a_str, b_str = dim_pairs[-1]
-            a, b = int(a_str), int(b_str)
-            if a > 0 and b > 0:
-                if a >= 3 * b:
-                    return a
-                if b >= 3 * a:
-                    return b
+            _a_str, b_str = dim_pairs[-1]
+            b = int(b_str)
+            if b > 0:
+                return b
         except ValueError:
             pass
     # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
