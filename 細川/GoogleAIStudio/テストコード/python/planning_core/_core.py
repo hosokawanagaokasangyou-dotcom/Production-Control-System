@@ -2123,6 +2123,17 @@ def _write_results_equipment_gantt_sheet(
         )
     except Exception:
         pass
+    # #region agent log
+    _debug_emit_2c0acb(
+        "FIX",
+        "gantt_sheet_write_started",
+        {
+            "slot_minutes": int(GANTT_TIMELINE_SLOT_MINUTES),
+            "slot_state_rule": "eq_grid_best_overlap_and_overlap_sample",
+        },
+        "post-fix",
+    )
+    # #endregion
 
     events_by_date = defaultdict(list)
     for e in timeline_events:
