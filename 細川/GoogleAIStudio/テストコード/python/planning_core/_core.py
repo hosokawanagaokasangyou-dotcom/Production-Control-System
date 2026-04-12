@@ -5539,7 +5539,8 @@ def _stage2_try_copy_column_config_shapes_from_input(
     """
     pandas/openｎｎxl で新規作成した結果ブックには図形が含まれない。
     既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
-    「列設定_結果_タスク一覧」上の Shapes を結果ブックの同名シートへコピーし、
+    「列設定_結果_タスク一覧」上の **Shapes**（フォームのボタン・チェックボックス等）と
+    **OLEObjects**（ActiveX コントロール等）を結果ブックの同名シートへコピーし、
     各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
     openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
@@ -5588,15 +5589,20 @@ def _stage2_try_copy_column_config_shapes_from_input(
                 COLUMN_CONFIG_SHEET_NAME,
             )
             return
-        n_shapes = int(ws_in.api.Shapes.Count)
-        if n_shapes <= 0:
+        api_in = ws_in.api
+        api_out = ws_out.api
+        n_shapes = int(api_in.Shapes.Count)
+        try:
+            n_ole = int(api_in.OLEObjects.Count)
+        except Exception:
+            n_ole = 0
+        if n_shapes <= 0 and n_ole <= 0:
             logging.info(
-                "列設定シート図形コピー: 入力坴に図形はありません（スキップ）。"
+                "列設定シート図形コピー: 入力側に Shapes（フォーム等）も "
+                "OLEObjects（ActiveX 等）もありません（スキップ）。"
             )
             return
         ws_out.activate()
-        api_in = ws_in.api
-        api_out = ws_out.api
         for i in range(1, n_shapes + 1):
             src = api_in.Shapes(i)
             left = float(src.Left)
@@ -5624,10 +5630,31 @@ def _stage2_try_copy_column_config_shapes_from_input(
             dst.Top = top
             dst.Width = width
             dst.Height = height
+        for j in range(1, n_ole + 1):
+            try:
+                src_ole = api_in.OLEObjects(j)
+                left_o = float(src_ole.Left)
+                top_o = float(src_ole.Top)
+                width_o = float(src_ole.Width)
+                height_o = float(src_ole.Height)
+                src_ole.Copy()
+                api_out.Paste()
+                dst_ole = api_out.OLEObjects(int(api_out.OLEObjects.Count))
+                dst_ole.Left = left_o
+                dst_ole.Top = top_o
+                dst_ole.Width = width_o
+                dst_ole.Height = height_o
+            except Exception as e_ole:
+                logging.warning(
+                    "列設定シート図形コピー: OLEObject（ActiveX 等）%s の複製に失敗しました: %s",
+                    j,
+                    e_ole,
+                )
         wb_out.save()
         logging.info(
-            "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
+            "列設定シート図形コピー: 入力から Shapes %s 個・OLEObjects %s 個を結果ブックへ複製しました。",
             n_shapes,
+            n_ole,
         )
     except Exception as e:
         logging.warning(
