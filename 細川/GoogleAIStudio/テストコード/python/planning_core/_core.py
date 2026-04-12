@@ -1616,6 +1616,9 @@ def _paint_gantt_timeline_row_merged(
                                     "text": _lbl,
                                     "italic": bool(label_italic),
                                     "fill_hex": str(gh),
+                                    "member_labels": _gantt_member_labels_for_task(
+                                        evlist, tid_s
+                                    ),
                                 }
                             )
                         c.value = None
@@ -3085,6 +3088,41 @@ def _gantt_member_label_surname_only(raw: str) -> str:
         return ""
     n = _normalize_sei_for_match(sei)
     return n if n else sei
+
+
+def _gantt_member_labels_for_task(evlist, task_id: str) -> list[str]:
+    """
+    設備ガントのタイムライン1セグメント用: 指定 task_id のイベントから担当者姓を出現順で重複除去。
+    （シェイプの上下チップ用。行全体の _gantt_row_member_names より狭い範囲）
+    """
+    tid = str(task_id or "").strip()
+    if not tid:
+        return []
+    raw_names: list[str] = []
+    seen_raw: set[str] = set()
+    for e in evlist or []:
+        if str(e.get("task_id") or "").strip() != tid:
+            continue
+        op = str(e.get("op") or "").strip()
+        if op and op not in seen_raw:
+            seen_raw.add(op)
+            raw_names.append(op)
+        sub_raw = str(e.get("sub") or "").strip()
+        if not sub_raw:
+            continue
+        for seg in re.split(r"[,」]", sub_raw):
+            t = seg.strip()
+            if t and t not in seen_raw:
+                seen_raw.add(t)
+                raw_names.append(t)
+    labels: list[str] = []
+    seen_label: set[str] = set()
+    for raw in raw_names:
+        lab = _gantt_member_label_surname_only(raw)
+        if lab and lab not in seen_label:
+            seen_label.add(lab)
+            labels.append(lab)
+    return labels
 
 
 def _gantt_row_member_names(evlist) -> str:
@@ -5498,7 +5536,18 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
             if not text:
                 continue
             c = ws.cell(row=row, column=col_s)
-            c.value = text
+            mems = [
+                str(x).strip()
+                for x in (sp.get("member_labels") or [])
+                if str(x).strip()
+            ]
+            if mems:
+                head = "・".join(mems[:5])
+                rest = len(mems) - 5
+                line2 = head + (f" ほか{rest}名" if rest > 0 else "")
+                c.value = text + "\n" + line2
+            else:
+                c.value = text
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             c.font = _result_font(
                 size=10,
@@ -5507,6 +5556,17 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
                 italic=bool(sp.get("italic")),
             )
             c.alignment = _gantt_timeline_label_alignment(single_slot=(col_s == col_e))
+            if mems:
+                try:
+                    c.alignment = Alignment(
+                        horizontal="left",
+                        vertical="center",
+                        wrap_text=True,
+                        shrink_to_fit=False,
+                        indent=1,
+                    )
+                except Exception:
+                    pass
         wb.save(result_path)
     finally:
         wb.close()
@@ -5515,6 +5575,7 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
 def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: list) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
+    依頼NOは中央のメインシェイプ、担当者姓はその直上・直下に小さな角丸チップ（member_labels）で表示する。
     成功時 True。xlwings / Excel 不可時は False。
     """
     rp = (result_path or "").strip()
@@ -5556,6 +5617,108 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         n_added = 0
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
         _row_shape_seq: dict[int, int] = {}
+
+        def _gantt_xlw_add_round_rect(
+            x_left,
+            x_top,
+            x_w,
+            x_h,
+            caption,
+            *,
+            fill_rgb,
+            line_rgb,
+            text_rgb,
+            font_pt=9.0,
+            bold=True,
+            italic=False,
+            line_wt=0.75,
+            adj_round=0.2,
+            shadow=False,
+            shape_name=None,
+        ):
+            cap = str(caption or "").strip()
+            if x_w <= 0 or x_h <= 0 or not cap:
+                return None
+            shp_local = api_ws.Shapes.AddShape(
+                _mso_round_rect, float(x_left), float(x_top), float(x_w), float(x_h)
+            )
+            if shape_name:
+                try:
+                    shp_local.Name = shape_name
+                except Exception:
+                    pass
+            try:
+                shp_local.Placement = _xl_move_and_size
+            except Exception:
+                pass
+            try:
+                shp_local.ZOrder(_mso_bring_to_front)
+            except Exception:
+                pass
+            try:
+                shp_local.Fill.Visible = True
+                shp_local.Fill.Solid()
+                shp_local.Fill.ForeColor.RGB = fill_rgb
+                shp_local.Line.Visible = True
+                shp_local.Line.ForeColor.RGB = line_rgb
+                shp_local.Line.Weight = line_wt
+            except Exception:
+                pass
+            if adj_round is not None:
+                try:
+                    shp_local.Adjustments[1] = adj_round
+                except Exception:
+                    pass
+            if shadow:
+                try:
+                    sd0 = shp_local.Shadow
+                    sd0.Visible = -1  # msoTrue
+                    sd0.OffsetX = 3
+                    sd0.OffsetY = 3
+                    sd0.Transparency = 0.55
+                    try:
+                        sd0.Blur = 4
+                    except Exception:
+                        pass
+                    try:
+                        sd0.ForeColor.RGB = _com_excel_bgr_rgb(40, 40, 50)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            try:
+                tf0 = shp_local.TextFrame
+                try:
+                    mrg = 1.0 if font_pt <= 7.0 else 2.0
+                    tf0.MarginLeft = mrg
+                    tf0.MarginRight = mrg
+                    tf0.MarginTop = 0.5
+                    tf0.MarginBottom = 0.5
+                except Exception:
+                    pass
+                try:
+                    tf0.VerticalAlignment = -4108  # xlVAlignCenter
+                    tf0.HorizontalAlignment = -4131  # xlHAlignCenter
+                except Exception:
+                    pass
+                tf0.Characters().Text = cap
+                nch = len(cap)
+                fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
+                fnt.Size = font_pt
+                fnt.Bold = bold
+                if italic:
+                    fnt.Italic = True
+                try:
+                    fnt.Color = text_rgb
+                except Exception:
+                    pass
+            except Exception:
+                try:
+                    shp_local.TextFrame.Characters().Text = cap
+                except Exception:
+                    pass
+            return shp_local
+
         for idx, sp in enumerate(specs, start=1):
             if idx == 1 or idx % _progress_every == 0 or idx == n_specs:
                 logging.info(
@@ -5583,86 +5746,114 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             label_w = max(w, min_w)
             # 縦幅 = 配置行の 1/3。縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）
             _band = float(h) / 3.0
-            label_h = max(9.0, _band)
             _n_on_row = int(_row_shape_seq.get(row, 0))
             _slot = _n_on_row % 3
             _row_shape_seq[row] = _n_on_row + 1
-            label_top = top + _slot * _band
-            shp = api_ws.Shapes.AddShape(_mso_round_rect, left, label_top, label_w, label_h)
-            try:
-                shp.Name = f"GanttLbl_R{row}_C{col_s}_{_n_on_row}"
-            except Exception:
-                pass
-            try:
-                shp.Placement = _xl_move_and_size
-            except Exception:
-                pass
-            try:
-                shp.ZOrder(_mso_bring_to_front)
-            except Exception:
-                pass
-            try:
-                shp.Fill.Visible = True
-                shp.Fill.Solid()
-                shp.Fill.ForeColor.RGB = fill_bgr
-                shp.Line.Visible = True
-                shp.Line.ForeColor.RGB = line_bgr
-                shp.Line.Weight = 0.75
-            except Exception:
-                pass
-            try:
-                shp.Adjustments[1] = 0.2
-            except Exception:
-                pass
-            try:
-                sd = shp.Shadow
-                sd.Visible = -1  # msoTrue
-                sd.OffsetX = 3
-                sd.OffsetY = 3
-                sd.Transparency = 0.55
-                try:
-                    sd.Blur = 4
-                except Exception:
-                    pass
-                try:
-                    sd.ForeColor.RGB = _com_excel_bgr_rgb(40, 40, 50)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            # TextFrame2 は環境によって初回アクセスで COM が長時間ブロックすることがあるため、
-            # レガシー TextFrame / Characters のみ使用する。
-            try:
-                tf0 = shp.TextFrame
-                try:
-                    tf0.MarginLeft = 2
-                    tf0.MarginRight = 2
-                    tf0.MarginTop = 1
-                    tf0.MarginBottom = 1
-                except Exception:
-                    pass
-                try:
-                    tf0.VerticalAlignment = -4108  # xlVAlignCenter
-                    tf0.HorizontalAlignment = -4131  # xlHAlignLeft
-                except Exception:
-                    pass
-                tf0.Characters().Text = text
-                nch = len(text)
-                fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
-                fnt.Size = 9
-                fnt.Bold = True
-                if sp.get("italic"):
-                    fnt.Italic = True
-                try:
-                    fnt.Color = text_bgr
-                except Exception:
-                    pass
-            except Exception:
-                try:
-                    shp.TextFrame.Characters().Text = text
-                except Exception:
-                    pass
-            n_added += 1
+            band_top = top + _slot * _band
+            mems_all = [
+                str(x).strip() for x in (sp.get("member_labels") or []) if str(x).strip()
+            ]
+            mems_all = mems_all[:8]
+            mem_fill = _com_excel_bgr_rgb(252, 252, 254)
+            mem_line = _com_excel_bgr_rgb(175, 180, 188)
+            mem_txt = _com_excel_bgr_rgb(38, 40, 46)
+            if mems_all:
+                gap_mid = 1.0
+                h_mem = min(11.0, max(6.5, _band * 0.24))
+                h_main = max(9.0, _band - 2.0 * h_mem - 2.0 * gap_mid - 0.5)
+                y_top = band_top + 0.35
+                y_main = band_top + h_mem + gap_mid
+                y_bot = band_top + h_mem + gap_mid + h_main + gap_mid
+                h_mem_use = max(5.5, h_mem - 0.45)
+                n_top = (len(mems_all) + 1) // 2
+                top_names = mems_all[:n_top]
+                bot_names = mems_all[n_top:]
+                gx = 1.0
+
+                def _emit_member_pills(names: list[str], y0: float, pill_h: float) -> None:
+                    nonlocal n_added
+                    if not names or pill_h <= 1.0:
+                        return
+                    nn = len(names)
+                    pill_w = (w - max(0, nn - 1) * gx) / float(nn)
+                    pill_w = max(10.0, pill_w)
+                    x_cur = left
+                    for mi, nm in enumerate(names):
+                        nm2 = nm if len(nm) <= 6 else (nm[:5] + "…")
+                        use_w = min(pill_w, max(18.0, 5.2 * len(nm2)))
+                        if x_cur + use_w > left + w + 0.5:
+                            use_w = max(10.0, left + w - x_cur)
+                        s_mem = _gantt_xlw_add_round_rect(
+                            x_cur,
+                            y0,
+                            use_w,
+                            pill_h,
+                            nm2,
+                            fill_rgb=mem_fill,
+                            line_rgb=mem_line,
+                            text_rgb=mem_txt,
+                            font_pt=6.5,
+                            bold=True,
+                            italic=False,
+                            line_wt=0.55,
+                            adj_round=0.42,
+                            shadow=False,
+                            shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}_{mi}",
+                        )
+                        if s_mem is not None:
+                            n_added += 1
+                        x_cur += use_w + gx
+
+                _emit_member_pills(top_names, y_top, h_mem_use)
+                shp_main = _gantt_xlw_add_round_rect(
+                    left,
+                    y_main,
+                    label_w,
+                    h_main,
+                    text,
+                    fill_rgb=fill_bgr,
+                    line_rgb=line_bgr,
+                    text_rgb=text_bgr,
+                    font_pt=9.0,
+                    bold=True,
+                    italic=bool(sp.get("italic")),
+                    line_wt=0.75,
+                    adj_round=0.2,
+                    shadow=True,
+                    shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                )
+                if shp_main is not None:
+                    n_added += 1
+                    try:
+                        shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
+                    except Exception:
+                        pass
+                _emit_member_pills(bot_names, y_bot, h_mem_use)
+            else:
+                label_h = max(9.0, _band)
+                shp = _gantt_xlw_add_round_rect(
+                    left,
+                    band_top,
+                    label_w,
+                    label_h,
+                    text,
+                    fill_rgb=fill_bgr,
+                    line_rgb=line_bgr,
+                    text_rgb=text_bgr,
+                    font_pt=9.0,
+                    bold=True,
+                    italic=bool(sp.get("italic")),
+                    line_wt=0.75,
+                    adj_round=0.2,
+                    shadow=True,
+                    shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                )
+                if shp is not None:
+                    n_added += 1
+                    try:
+                        shp.TextFrame.HorizontalAlignment = -4131
+                    except Exception:
+                        pass
         logging.info(
             "結果_設備ガント: 角丸シェイプ %s 件を反映して保存します（xlwings）…",
             n_added,
