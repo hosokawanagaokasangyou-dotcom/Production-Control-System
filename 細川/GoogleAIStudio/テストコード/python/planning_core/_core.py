@@ -20469,7 +20469,7 @@ def _generate_plan_impl():
                             _full_calendar_without_deadline_restart = False
                             break
                         else:
-                            # 依頼とと上限でシフトでしないの値のときは日付ループを継続れる（break れると未処理日は残り配台試行は大針発生れる）。
+                            # 依頼とと上限でシフトでしないの値のときは日付ループを継続れる（break れると未処理日は残り配台試行は大量発生れる）。
                             _cap_tids = sorted(
                                 tid
                                 for tid in shift_tid_list
@@ -20957,7 +20957,7 @@ def _generate_plan_impl():
             )
 
             logging.info(
-                "段階2: 設備ガントチャートを生成（データ針により数分かかることはありした）"
+                "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
             )
             gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
                 writer,
