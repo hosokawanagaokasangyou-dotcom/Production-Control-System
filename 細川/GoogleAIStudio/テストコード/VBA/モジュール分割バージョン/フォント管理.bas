@@ -307,6 +307,95 @@ FailChk:
 End Sub
 
 '==============================================================================
+' 列設定_結果_タスク一覧: 「結果_タスク一覧」の1行目（列見出し）から A:B を再構成する（VBA のみ）。
+' 見出し行は「列名」「表示」（planning_core と同じ）。各列の表示は True で初期化。
+' 同一見出し（英大文字小文字無視）は1回だけ。空の見出しセルはスキップ。
+' 既存のデータ行が新しい行数より下に残る場合は A:B の余白を ClearContents。
+' 図形のマクロ: 「アニメ付き_列設定_結果_タスク一覧_結果シート見出しから再構成」。
+' チェックボックスを B 列に付けている場合は、実行後に「列設定_結果_タスク一覧_チェックボックスを配置」を推奨。
+'==============================================================================
+Public Sub 列設定_結果_タスク一覧_結果シート見出しから再構成()
+    Dim wsRes As Worksheet
+    Dim wsCfg As Worksheet
+    Dim lastCol As Long
+    Dim c As Long
+    Dim r As Long
+    Dim hdr As String
+    Dim prevScr As Boolean
+    Dim oldLR As Long
+    Dim seen As Object
+
+    prevScr = Application.ScreenUpdating
+    On Error GoTo FailRebuild
+
+    On Error Resume Next
+    Set wsRes = ThisWorkbook.Worksheets(SHEET_RESULT_TASK_LIST)
+    Set wsCfg = ThisWorkbook.Worksheets(SHEET_COL_CONFIG_RESULT_TASK)
+    On Error GoTo FailRebuild
+    If wsRes Is Nothing Then
+        MsgBox "シート「" & SHEET_RESULT_TASK_LIST & "」がありません。", vbExclamation, "列設定の再構成"
+        Exit Sub
+    End If
+    If wsCfg Is Nothing Then
+        MsgBox "シート「" & SHEET_COL_CONFIG_RESULT_TASK & "」がありません。", vbExclamation, "列設定の再構成"
+        Exit Sub
+    End If
+
+    lastCol = wsRes.Cells(1, wsRes.Columns.Count).End(xlToLeft).Column
+    If lastCol < 1 Then
+        MsgBox "「" & SHEET_RESULT_TASK_LIST & "」の1行目に列見出しがありません。", vbExclamation, "列設定の再構成"
+        Exit Sub
+    End If
+
+    oldLR = wsCfg.Cells(wsCfg.Rows.Count, 1).End(xlUp).Row
+    If oldLR < 1 Then oldLR = 1
+
+    Set seen = CreateObject("Scripting.Dictionary")
+    On Error Resume Next
+    seen.CompareMode = vbTextCompare
+    On Error GoTo FailRebuild
+
+    Application.ScreenUpdating = False
+
+    wsCfg.Cells(1, 1).Value = "列名"
+    wsCfg.Cells(1, 2).Value = "表示"
+
+    r = 1
+    For c = 1 To lastCol
+        hdr = Trim$(CStr(wsRes.Cells(1, c).Value))
+        If Len(hdr) = 0 Then GoTo NextHdrCol
+        If seen.Exists(hdr) Then GoTo NextHdrCol
+        seen.Add hdr, True
+        r = r + 1
+        wsCfg.Cells(r, 1).Value = hdr
+        wsCfg.Cells(r, 2).Value = True
+NextHdrCol:
+    Next c
+
+    If r < 2 Then
+        Application.ScreenUpdating = prevScr
+        MsgBox "有効な列見出しが見つかりませんでした。", vbExclamation, "列設定の再構成"
+        Exit Sub
+    End If
+
+    If oldLR > r Then
+        wsCfg.Range(wsCfg.Cells(r + 1, 1), wsCfg.Cells(oldLR, 2)).ClearContents
+    End If
+
+    Application.ScreenUpdating = prevScr
+    m_animMacroSucceeded = True
+    MsgBox "「" & SHEET_COL_CONFIG_RESULT_TASK & "」を " & CStr(r - 1) & " 列で更新しました。" & vbCrLf & _
+           "チェックボックスを使っている場合は「列設定_結果_タスク一覧_チェックボックスを配置」を再実行してください。", vbInformation
+    Exit Sub
+
+FailRebuild:
+    On Error Resume Next
+    Application.ScreenUpdating = prevScr
+    On Error GoTo 0
+    MsgBox "列設定の再構成でエラー: " & Err.Description, vbCritical
+End Sub
+
+'==============================================================================
 ' 列設定_結果_タスク一覧 → 結果_タスク一覧 へ列順・列非表示を適用（Python / xlwings）
 ' 図形のマクロ: 「アニメ付き_列設定_結果_タスク一覧_列順表示をPython適用」（押下アニメ付き）。
 '   重複列名の整理のみ: 「アニメ付き_列設定_結果_タスク一覧_重複列名を整理」。
