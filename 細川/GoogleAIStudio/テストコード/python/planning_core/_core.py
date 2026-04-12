@@ -90,25 +90,6 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付しブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
 
-# region agent log
-_AGENT_DEBUG_LOG_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-2e937a.log")
-)
-
-
-def _agent_debug_ndjson(payload: dict) -> None:
-    try:
-        pl = dict(payload)
-        pl.setdefault("sessionId", "2e937a")
-        pl.setdefault("timestamp", int(time_module.time() * 1000))
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(pl, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
-
 # =========================================================
 # 【設定】APIキー / 基本ルール / ファイル名
 # =========================================================
@@ -3406,20 +3387,6 @@ def _apply_planning_sheet_post_load_mutations(
     ``apply_exclude_rules_from_config=False`` は本関数呼び出し側で明示する（上記のほか、
     試行順のみ再計算する xlwings 経路でも同様）。
     """
-    # region agent log
-    _agent_debug_ndjson(
-        {
-            "hypothesisId": "H4",
-            "location": "_core.py:_apply_planning_sheet_post_load_mutations",
-            "message": "entry",
-            "data": {
-                "log_prefix": log_prefix,
-                "apply_exclude_rules_from_config": bool(apply_exclude_rules_from_config),
-                "plan_rows": int(len(df)) if df is not None else 0,
-            },
-        }
-    )
-    # endregion
     try:
         _pairs_lr = []
         _seen_lr = set()
@@ -10921,46 +10888,11 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         snap = list(_exclude_rules_rules_snapshot)
         _exclude_rules_rules_snapshot = None
         _exclude_rules_snapshot_wb = None
-        # region agent log
-        _agent_debug_ndjson(
-            {
-                "hypothesisId": "H1",
-                "location": "_core.py:_load_exclude_rules_from_workbook",
-                "message": "rules_from_snapshot",
-                "data": {"rule_count": len(snap), "wb": os.path.basename(ap_arg)},
-            }
-        )
-        # endregion
         return snap
     path = _resolve_exclude_rules_workbook_path_for_read(wb_path)
     if not os.path.exists(path):
-        # region agent log
-        _agent_debug_ndjson(
-            {
-                "hypothesisId": "H1",
-                "location": "_core.py:_load_exclude_rules_from_workbook",
-                "message": "path_missing",
-                "data": {"path": path[:200] if path else ""},
-            }
-        )
-        # endregion
         return []
-    _skip_oxl = _workbook_should_skip_openpyxl_io(path)
-    # region agent log
-    _agent_debug_ndjson(
-        {
-            "hypothesisId": "H2",
-            "location": "_core.py:_load_exclude_rules_from_workbook",
-            "message": "pre_read",
-            "data": {
-                "sheet_const": EXCLUDE_RULES_SHEET_NAME,
-                "skip_openpyxl_marker": bool(_skip_oxl),
-                "path_base": os.path.basename(path),
-            },
-        }
-    )
-    # endregion
-    if _skip_oxl:
+    if _workbook_should_skip_openpyxl_io(path):
         logging.warning(
             "配台試行ルール: ブックに「%s」があるため、pandas(openpyxl) での「%s」読込をスキップしました（ルールは未適用）。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
@@ -10969,38 +10901,12 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         return []
     try:
         df = pd.read_excel(path, sheet_name=EXCLUDE_RULES_SHEET_NAME)
-    except Exception as _ex_lr:
-        # region agent log
-        _agent_debug_ndjson(
-            {
-                "hypothesisId": "H1",
-                "location": "_core.py:_load_exclude_rules_from_workbook",
-                "message": "read_excel_failed",
-                "data": {
-                    "sheet": EXCLUDE_RULES_SHEET_NAME,
-                    "err": str(_ex_lr)[:400],
-                },
-            }
-        )
-        # endregion
+    except Exception:
         return []
     df.columns = df.columns.str.strip()
     need = [EXCLUDE_RULE_COL_PROCESS, EXCLUDE_RULE_COL_MACHINE]
     for c in need:
         if c not in df.columns:
-            # region agent log
-            _agent_debug_ndjson(
-                {
-                    "hypothesisId": "H3",
-                    "location": "_core.py:_load_exclude_rules_from_workbook",
-                    "message": "header_mismatch",
-                    "data": {
-                        "missing": c,
-                        "columns": [str(x) for x in df.columns.tolist()[:20]],
-                    },
-                }
-            )
-            # endregion
             return []
     rules = []
     for _, row in df.iterrows():
@@ -11019,22 +10925,6 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
                 "parsed": parsed,
             }
         )
-    # region agent log
-    _sample = rules[:3] if rules else []
-    _agent_debug_ndjson(
-        {
-            "hypothesisId": "H4",
-            "location": "_core.py:_load_exclude_rules_from_workbook",
-            "message": "rules_loaded",
-            "data": {
-                "rule_count": len(rules),
-                "sample_proc_mach": [
-                    {"proc": x.get("proc"), "mach": x.get("mach")} for x in _sample
-                ],
-            },
-        }
-    )
-    # endregion
     return rules
 
 
@@ -11057,20 +10947,6 @@ def apply_exclude_rules_config_to_plan_df(
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         return df
     rules = _load_exclude_rules_from_workbook(wb_path)
-    # region agent log
-    _agent_debug_ndjson(
-        {
-            "hypothesisId": "H5",
-            "location": "_core.py:apply_exclude_rules_config_to_plan_df",
-            "message": "entry",
-            "data": {
-                "log_prefix": log_prefix,
-                "plan_rows": int(len(df)),
-                "rule_count": len(rules) if rules else 0,
-            },
-        }
-    )
-    # endregion
     if not rules:
         return df
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
@@ -11113,16 +10989,6 @@ def apply_exclude_rules_config_to_plan_df(
                 break
     if n:
         logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
-    # region agent log
-    _agent_debug_ndjson(
-        {
-            "hypothesisId": "H5",
-            "location": "_core.py:apply_exclude_rules_config_to_plan_df",
-            "message": "exit",
-            "data": {"log_prefix": log_prefix, "yes_rows_set": int(n)},
-        }
-    )
-    # endregion
     return df
 
 
