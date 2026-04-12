@@ -2775,16 +2775,39 @@ def _gemini_generate_content_with_retry(
     raise RuntimeError("Gemini: モデル列が空です。")
 
 
+def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
+    """
+    製品名に混ざる寸法区切りを ASCII の x に寄せる。
+    半角 X/x 以外（×・全角Ｘｘ・罫線系の乗号）だけがあると正規表現に一致せず、
+    換算数量フォールバックでロール単位長さが誤ることがある。
+    """
+    if not s:
+        return s
+    t = s
+    for ch in (
+        "\u00d7",  # × MULTIPLICATION SIGN
+        "\u2715",  # ✕ MULTIPLICATION X
+        "\u2716",  # ✖ HEAVY MULTIPLICATION X
+        "\u2a2f",  # ⨯ VECTOR OR CROSS PRODUCT
+        "\u2a09",  # ⨉ CROSS MULTIPLICATION
+        "\uff38",  # Ｘ FULLWIDTH LATIN CAPITAL LETTER X
+        "\uff58",  # ｘ FULLWIDTH LATIN SMALL LETTER X
+    ):
+        t = t.replace(ch, "x")
+    return t
+
+
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     製品名文字列から加工短縮(m)を推定する暫定ルール。
     例: 15020-JX5R- 770X300F-A   R -> 300
     例: 1550X 40F のように「ロール長×幅」で X 直後が小さいときは X 前を採用（1550）。
+    寸法は半角 x/X のほか ×（U+00D7）・全角Ｘｘ も解釈する（正規化後に上記ルールを適用）。
     ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
-    s = str(product_name)
+    s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
     # 「NNNX MM」形式: 最後のペアで、一方が他方のおおよそ3倍以上なら長い側をロール長とみなす
     # （770X300 のように近い二数は従来どおり X 後を優先するため閾値を使う）
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
