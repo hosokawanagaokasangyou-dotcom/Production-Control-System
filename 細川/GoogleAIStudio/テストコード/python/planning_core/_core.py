@@ -6022,7 +6022,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
         # 依頼NO メインは行高の 1/4 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
-        # メンバー名は上下分割せず、依頼NO の直上に 1 列で置く（隙間を空け、依頼NO シェイプと重ねない）。
+        # メンバー名は上下分割せず、依頼NO の直上に 1 列で置く（隙間を空けて重ねない）。
+        # メンバー 1 ピルの縦幅は依頼NO メインと同じ。帯・行からはみ出してもよい。
         _row_shape_seq: dict[int, int] = {}
 
         def _gantt_xlw_add_round_rect(
@@ -6175,36 +6176,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバーを帯の上側に置き、隙間を空けて依頼NO の下にメイン帯（重ねない）。
-                _avail_v = _band - 2.0 * _band_inset
+                # メンバー縦幅＝依頼NO と同じ（行高の 1/4 目標）。メンバーは帯外へはみ出してよい。
                 _gap_mm = 1.35
-                h_mem_use = max(8.5, min(11.0, 0.68 * _avail_v))
-                h_main = max(
-                    9.0,
-                    min(_h_req_no, _avail_v - h_mem_use - _gap_mm),
-                )
-                need = h_mem_use + _gap_mm + h_main
-                _fit_i = 0
-                while need > _avail_v + 1e-6 and _fit_i < 40:
-                    _fit_i += 1
-                    if h_main > 9.0:
-                        h_main -= 0.12
-                    elif h_mem_use > 8.0:
-                        h_mem_use -= 0.08
-                    elif _gap_mm > 0.5:
-                        _gap_mm -= 0.1
-                    else:
-                        break
-                    h_main = max(
-                        9.0,
-                        min(_h_req_no, _avail_v - h_mem_use - _gap_mm),
-                    )
-                    need = h_mem_use + _gap_mm + h_main
-                y_mem = band_top + _band_inset
-                y_main = y_mem + h_mem_use + _gap_mm
-                if y_main + h_main > band_bot - _band_inset:
-                    y_main = band_bot - _band_inset - h_main
-                    y_mem = max(band_top + _band_inset, y_main - h_mem_use - _gap_mm)
+                h_main = max(9.0, float(_h_req_no))
+                h_mem_use = h_main
+                y_main = band_bot - _band_inset - h_main
+                y_mem = y_main - _gap_mm - h_mem_use
                 gx = 1.0
 
                 def _emit_member_pills(
