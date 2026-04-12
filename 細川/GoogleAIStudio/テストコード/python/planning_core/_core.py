@@ -1919,6 +1919,26 @@ def _write_results_equipment_gantt_sheet(
     except Exception:
         pass
 
+    # region agent log
+    _AGENT_GANTT_DEBUG_LOG = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-bc950f.log")
+    )
+
+    def _agent_gantt_debug(payload: dict):
+        try:
+            import json
+            import time as _agent_time
+
+            payload.setdefault("sessionId", "bc950f")
+            payload.setdefault("timestamp", int(_agent_time.time() * 1000))
+            payload.setdefault("location", "_write_results_equipment_gantt_sheet")
+            with open(_AGENT_GANTT_DEBUG_LOG, "a", encoding="utf-8") as _agent_f:
+                _agent_f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        except Exception:
+            pass
+
+    # endregion agent log
+
     events_by_date = defaultdict(list)
     for e in timeline_events:
         events_by_date[e["date"]].append(e)
@@ -2047,6 +2067,24 @@ def _write_results_equipment_gantt_sheet(
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
+
+    # region agent log
+    _agent_gantt_debug(
+        {
+            "hypothesisId": "H4",
+            "message": "dates_to_show built",
+            "runId": "pre-fix",
+            "data": {
+                "n_sorted_dates": len(sorted_dates),
+                "n_dates_to_show": len(dates_to_show),
+                "dates_iso": [str(x) for x in dates_to_show],
+                "show_actual_rows": show_actual_rows,
+                "n_equipment": len(equipment_list),
+                "n_slots": n_slots,
+            },
+        }
+    )
+    # endregion agent log
 
     hdr_row = row
     fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
@@ -2223,12 +2261,50 @@ def _write_results_equipment_gantt_sheet(
             # openpyxl 3.1+ では customWidth は width 有無から導出される読み取り専用のため代入しない
 
     # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ
+    _manual_hbreak_ids: list[int] = []
     try:
         if len(gantt_day_first_rows) > 1:
             for i in range(1, len(gantt_day_first_rows)):
-                ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
-    except Exception:
+                bid = gantt_day_first_rows[i]
+                ws.row_breaks.append(Break(id=bid, man=True))
+                _manual_hbreak_ids.append(int(bid))
+    except Exception as _rb_exc:
+        # region agent log
+        _agent_gantt_debug(
+            {
+                "hypothesisId": "H2",
+                "message": "row_breaks append failed",
+                "runId": "pre-fix",
+                "data": {"err": str(_rb_exc), "gantt_day_first_rows": list(gantt_day_first_rows)},
+            }
+        )
+        # endregion agent log
         pass
+
+    _day_row_counts: list[int] = []
+    for _i, _fs in enumerate(gantt_day_first_rows):
+        if _i + 1 < len(gantt_day_first_rows):
+            _day_row_counts.append(gantt_day_first_rows[_i + 1] - _fs - 1)
+        else:
+            _day_row_counts.append(max(0, row - _fs))
+
+    # region agent log
+    _agent_gantt_debug(
+        {
+            "hypothesisId": "H1-H3",
+            "message": "row layout before page_setup",
+            "runId": "pre-fix",
+            "data": {
+                "hdr_row": hdr_row,
+                "gantt_day_first_rows": list(gantt_day_first_rows),
+                "manual_break_row_ids": list(_manual_hbreak_ids),
+                "day_row_counts": _day_row_counts,
+                "last_occupied_row": row - 1,
+                "print_title_rows_will_be": "1:3",
+            },
+        }
+    )
+    # endregion agent log
 
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
@@ -2257,7 +2333,36 @@ def _write_results_equipment_gantt_sheet(
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
-    except Exception:
+        # region agent log
+        _agent_gantt_debug(
+            {
+                "hypothesisId": "H1-H5",
+                "message": "page_setup applied",
+                "runId": "pre-fix",
+                "data": {
+                    "fitToPage": bool(ws.page_setup.fitToPage),
+                    "fitToWidth": ws.page_setup.fitToWidth,
+                    "fitToHeight": ws.page_setup.fitToHeight,
+                    "scale": getattr(ws.page_setup, "scale", None),
+                    "orientation": ws.page_setup.orientation,
+                    "paperSize": ws.page_setup.paperSize,
+                    "print_title_rows": ws.print_title_rows,
+                    "n_dates_to_show": len(dates_to_show),
+                },
+            }
+        )
+        # endregion agent log
+    except Exception as _ps_exc:
+        # region agent log
+        _agent_gantt_debug(
+            {
+                "hypothesisId": "H5",
+                "message": "page_setup block exception",
+                "runId": "pre-fix",
+                "data": {"err": str(_ps_exc)},
+            }
+        )
+        # endregion agent log
         pass
 
     return gantt_shape_label_specs if _use_gantt_shape_labels else []
