@@ -2074,7 +2074,7 @@ def _write_results_equipment_gantt_sheet(
     sep_fill = PatternFill(fill_type="solid", start_color="000000", end_color="000000")
     no_border = Border()
 
-    # 印刷: 2 日分ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
+    # 印刷: 1 日ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
     gantt_day_first_rows: list[int] = []
 
     for di, d in enumerate(dates_to_show):
@@ -2220,17 +2220,17 @@ def _write_results_equipment_gantt_sheet(
         for ci in range(n_fixed + 1, last_col + 1):
             ws.column_dimensions[get_column_letter(ci)].width = gw
 
-    # 1 ページに 2 日分: 3 日目以降の各日ブロック先頭の直前に手動の横改ページ
+    # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ
     try:
-        if len(gantt_day_first_rows) > 2:
-            for i in range(2, len(gantt_day_first_rows), 2):
+        if len(gantt_day_first_rows) > 1:
+            for i in range(1, len(gantt_day_first_rows)):
                 ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
     except Exception:
         pass
 
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # A3 横・余白「狭い」・横1ページ・縦は自動・先頭行1〜3を全ページに繰り返し・縦は手動改ページで2日分/ページ
+        # A3 横・余白「狭い」・横1ページ（fitToWidth=1）・縦は自動・先頭行1〜3を全ページに繰り返し・縦は手動改ページで1日区切り
         ws.page_setup.orientation = "landscape"
         # 「ページに合わせる」を有効にしないと fitToWidth が Excel で無視されうる
         ws.page_setup.fitToPage = True
