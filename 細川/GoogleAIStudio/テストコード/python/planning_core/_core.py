@@ -1078,6 +1078,10 @@ STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
 GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
     "GANTT_TIMELINE_SHAPE_LABELS", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
+# 角丸ラベルシェイプを「日ブロック」単位で 1 枚の画像にまとめ、シェイプ数・描画負荷を抑える（既定 ON。従来の大量シェイプ: GANTT_TIMELINE_LABELS_DAY_FLATTEN=0）
+GANTT_TIMELINE_LABELS_DAY_FLATTEN = os.environ.get(
+    "GANTT_TIMELINE_LABELS_DAY_FLATTEN", "1"
+).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
@@ -1550,12 +1554,14 @@ def _paint_gantt_timeline_row_merged(
     label_font=None,
     shape_label_specs: list | None = None,
     label_italic: bool = False,
+    shape_day_key: str | None = None,
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
     （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
     shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（xlwings）で
     角丸シェイプとして追加するための座標・文言を蓄積する。
+    shape_day_key に ISO 日付文字列等を渡すと、後段で日単位の画像化（フラット化）に利用する。
     """
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
@@ -1597,6 +1603,7 @@ def _paint_gantt_timeline_row_merged(
                                 "text": _ds_txt,
                                 "italic": bool(label_italic),
                                 "fill_hex": str(gh_ds),
+                                "day_key": shape_day_key or "",
                             }
                         )
                         c.value = None
@@ -1627,6 +1634,7 @@ def _paint_gantt_timeline_row_merged(
                                     "member_labels": _gantt_member_labels_for_task(
                                         evlist, tid_s
                                     ),
+                                    "day_key": shape_day_key or "",
                                 }
                             )
                         c.value = None
@@ -1912,7 +1920,8 @@ def _write_results_equipment_gantt_sheet(
     横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。同一状態の連続は帯状に塗分けする。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
-    角丸シェイプ用の仕様 dict の list を返す（保存後に xlwings で描画）。
+    角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に xlwings で描画・画像化）。
+    無効時は ([], []) を返す。
     """
     wb = writer.book
     try:
@@ -1987,6 +1996,7 @@ def _write_results_equipment_gantt_sheet(
     n_fixed = 4  # A=日付（日ブロック内で縦結合）/ B〜D=機械名・工程名・タスク概覝
     last_col = n_fixed + n_slots
     gantt_shape_label_specs: list[dict] = []
+    gantt_timeline_day_blocks: list[dict] = []
     _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
     fb_gantt = "F5F5F5"
@@ -2134,6 +2144,7 @@ def _write_results_equipment_gantt_sheet(
                 grid_border,
                 shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                 label_italic=False,
+                shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
             )
 
             ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
@@ -2188,12 +2199,23 @@ def _write_results_equipment_gantt_sheet(
                     label_font=gantt_label_font_actual,
                     shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                     label_italic=True,
+                    shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
                 )
 
                 ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
                 row += 1
 
         day_end = row - 1
+        if day_end >= day_start and _use_gantt_shape_labels:
+            gantt_timeline_day_blocks.append(
+                {
+                    "first_row": day_start,
+                    "last_row": day_end,
+                    "day_key": d.isoformat(),
+                    "first_col": n_fixed + 1,
+                    "last_col": last_col,
+                }
+            )
         if day_end >= day_start:
             ws.merge_cells(start_row=day_start, start_column=1, end_row=day_end, end_column=1)
             ban = ws.cell(
@@ -2272,7 +2294,9 @@ def _write_results_equipment_gantt_sheet(
     except Exception:
         pass
 
-    return gantt_shape_label_specs if _use_gantt_shape_labels else []
+    if _use_gantt_shape_labels:
+        return gantt_shape_label_specs, gantt_timeline_day_blocks
+    return [], []
 
 
 def row_has_completion_keyword(row):
@@ -5720,10 +5744,95 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
         wb.close()
 
 
-def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: list) -> bool:
+def _gantt_flatten_day_label_shapes_to_pictures_xlw(
+    api_ws, day_blocks: list, names_by_day: dict
+) -> int:
+    """
+    各日キーに属する角丸ラベルシェイプを、Group（複数時）または単体のまま CopyPicture
+    （xlScreen + xlBitmap）で 1 枚の Picture に置換し、元シェイプを削除する。
+    names_by_day[day_key] に蓄積された Name を消費する（成功時は空リストに戻す）。
+    """
+    if not day_blocks:
+        return 0
+    _xl_screen = 1  # xlScreen
+    _xl_bitmap = 2  # xlBitmap
+    _xl_move_and_size = 1
+    n_out = 0
+    for blk in day_blocks:
+        dk = str(blk.get("day_key") or "").strip()
+        raw_names = list(names_by_day.get(dk, []))
+        if not raw_names:
+            continue
+        seen: set[str] = set()
+        names: list[str] = []
+        for nm in raw_names:
+            if nm and nm not in seen:
+                seen.add(nm)
+                names.append(nm)
+        if not names:
+            continue
+        try:
+            if len(names) == 1:
+                shp0 = api_ws.Shapes(names[0])
+                left0 = float(shp0.Left)
+                top0 = float(shp0.Top)
+                w0 = float(shp0.Width)
+                h0 = float(shp0.Height)
+                shp0.CopyPicture(Appearance=_xl_screen, Format=_xl_bitmap)
+                api_ws.Paste()
+                pic = api_ws.Shapes(int(api_ws.Shapes.Count))
+                try:
+                    shp0.Delete()
+                except Exception:
+                    pass
+            else:
+                sr = api_ws.Shapes.Range(tuple(names))
+                grp = sr.Group()
+                left0 = float(grp.Left)
+                top0 = float(grp.Top)
+                w0 = float(grp.Width)
+                h0 = float(grp.Height)
+                grp.CopyPicture(Appearance=_xl_screen, Format=_xl_bitmap)
+                api_ws.Paste()
+                pic = api_ws.Shapes(int(api_ws.Shapes.Count))
+                try:
+                    grp.Delete()
+                except Exception:
+                    pass
+            pic.Left = left0
+            pic.Top = top0
+            pic.Width = w0
+            pic.Height = h0
+            try:
+                pic.Placement = _xl_move_and_size
+            except Exception:
+                pass
+            safe = "".join(
+                ch if ch.isalnum() or ch in "._-" else "_" for ch in dk
+            )[:200]
+            try:
+                pic.Name = f"GanttDayImg_{safe}"
+            except Exception:
+                pass
+            names_by_day[dk] = []
+            n_out += 1
+        except Exception as e_fl:
+            logging.warning(
+                "結果_設備ガント: 日別シェイプ画像化をスキップしました（日キー=%s、名称数=%s: %s）",
+                dk,
+                len(names),
+                e_fl,
+            )
+    return n_out
+
+
+def _gantt_add_timeline_rounded_rect_labels_xlwings(
+    result_path: str, specs: list, day_blocks: list | None = None
+) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
     依頼NOは中央のメインシェイプ、担当者姓はその直上・直下に小さな角丸チップ（member_labels）で表示する。
+    day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
     rp = (result_path or "").strip()
@@ -5763,6 +5872,16 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
         _xl_move_and_size = 1
         _progress_every = 30
         n_added = 0
+        names_by_day: dict[str, list[str]] = defaultdict(list)
+
+        def _record_day_shape(shp_obj, day_k: str):
+            if not day_k or shp_obj is None:
+                return
+            try:
+                names_by_day[day_k].append(str(shp_obj.Name))
+            except Exception:
+                pass
+
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
         _row_shape_seq: dict[int, int] = {}
 
@@ -5878,6 +5997,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
             text = str(sp.get("text") or "").strip()
             if not text:
                 continue
+            dk = str(sp.get("day_key") or "").strip()
             row = int(sp["row"])
             col_s = int(sp["col_s"])
             col_e = int(sp["col_e"])
@@ -5918,7 +6038,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 bot_names = mems_all[n_top:]
                 gx = 1.0
 
-                def _emit_member_pills(names: list[str], y0: float, pill_h: float) -> None:
+                def _emit_member_pills(
+                    names: list[str], y0: float, pill_h: float, day_k: str
+                ) -> None:
                     nonlocal n_added
                     if not names or pill_h <= 1.0:
                         return
@@ -5950,9 +6072,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                         )
                         if s_mem is not None:
                             n_added += 1
+                            _record_day_shape(s_mem, day_k)
                         x_cur += use_w + gx
 
-                _emit_member_pills(top_names, y_top, h_mem_use)
+                _emit_member_pills(top_names, y_top, h_mem_use, dk)
                 shp_main = _gantt_xlw_add_round_rect(
                     left,
                     y_main,
@@ -5972,11 +6095,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 )
                 if shp_main is not None:
                     n_added += 1
+                    _record_day_shape(shp_main, dk)
                     try:
                         shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
                     except Exception:
                         pass
-                _emit_member_pills(bot_names, y_bot, h_mem_use)
+                _emit_member_pills(bot_names, y_bot, h_mem_use, dk)
             else:
                 label_h = max(9.0, _band)
                 shp = _gantt_xlw_add_round_rect(
@@ -5998,13 +6122,30 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 )
                 if shp is not None:
                     n_added += 1
+                    _record_day_shape(shp, dk)
                     try:
                         shp.TextFrame.HorizontalAlignment = -4131
                     except Exception:
                         pass
+        n_flat = 0
+        if (
+            GANTT_TIMELINE_LABELS_DAY_FLATTEN
+            and day_blocks
+            and GANTT_TIMELINE_SHAPE_LABELS
+        ):
+            try:
+                n_flat = _gantt_flatten_day_label_shapes_to_pictures_xlw(
+                    api_ws, day_blocks, names_by_day
+                )
+            except Exception as e_flat:
+                logging.warning(
+                    "結果_設備ガント: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    e_flat,
+                )
         logging.info(
-            "結果_設備ガント: 角丸シェイプ %s 件を反映して保存します（xlwings）…",
+            "結果_設備ガント: 角丸シェイプ %s 件を反映%sして保存します（xlwings）…",
             n_added,
+            f"し、日別に画像 {n_flat} 枚へ集約" if n_flat else "",
         )
         wb.save()
         return True
@@ -6035,9 +6176,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(result_path: str, specs: lis
                 pass
 
 
-def _stage2_try_add_gantt_timeline_shape_labels(result_path: str, specs: list | None) -> None:
+def _stage2_try_add_gantt_timeline_shape_labels(
+    result_path: str, specs: list | None, day_blocks: list | None = None
+) -> None:
     """
     openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
+    day_blocks があれば既定で日単位に画像化してシェイプ数を抑える。
     失敗時は openpyxl でセルにフォールバック。
     """
     if not GANTT_TIMELINE_SHAPE_LABELS or not specs:
@@ -6045,7 +6189,7 @@ def _stage2_try_add_gantt_timeline_shape_labels(result_path: str, specs: list | 
     rp = (result_path or "").strip()
     if not rp or not os.path.isfile(rp):
         return
-    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs):
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs, day_blocks):
         logging.info(
             "結果_設備ガント: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
             len(specs),
@@ -20536,6 +20680,7 @@ def _generate_plan_impl():
         os.path.basename(output_filename),
     )
     gantt_tl_label_specs: list = []
+    gantt_tl_day_blocks: list = []
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -20578,7 +20723,7 @@ def _generate_plan_impl():
             logging.info(
                 "段階2: 設備ガントチャートを生成（データ針により数分かかることはありした）"
             )
-            gantt_tl_label_specs = _write_results_equipment_gantt_sheet(
+            gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
                 writer,
                 timeline_events,
                 equipment_list,
@@ -20693,7 +20838,9 @@ def _generate_plan_impl():
         (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
     )
 
-    _stage2_try_add_gantt_timeline_shape_labels(output_filename, gantt_tl_label_specs)
+    _stage2_try_add_gantt_timeline_shape_labels(
+        output_filename, gantt_tl_label_specs, gantt_tl_day_blocks
+    )
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
