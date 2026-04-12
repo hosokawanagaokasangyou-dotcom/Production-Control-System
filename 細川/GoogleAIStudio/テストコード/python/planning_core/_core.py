@@ -2218,7 +2218,10 @@ def _write_results_equipment_gantt_sheet(
     if n_slots > 0:
         gw = float(GANTT_TIMELINE_COLUMN_WIDTH)
         for ci in range(n_fixed + 1, last_col + 1):
-            ws.column_dimensions[get_column_letter(ci)].width = gw
+            dim = ws.column_dimensions[get_column_letter(ci)]
+            dim.width = gw
+            # Excel で既定列幅のままに見えないよう明示（列 E 以降＝時刻グリッド）
+            dim.customWidth = True
 
     # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ
     try:
