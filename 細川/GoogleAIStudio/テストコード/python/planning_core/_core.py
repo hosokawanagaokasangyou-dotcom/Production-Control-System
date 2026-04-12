@@ -15613,7 +15613,7 @@ def _machine_effective_floor_timedelta_only(
                 )
                 resume_after_break = _resumed_after_work_break(lmend, mf, br2)
     if prep > 0 and (not had_machine_daily_startup) and (
-        (not _pt or _pt != _ct) or resume_after_break
+        (_pt and _pt != _ct) or resume_after_break
     ):
         mf = mf + timedelta(minutes=prep)
     return mf
@@ -15639,7 +15639,9 @@ def _changeover_plan_segments_and_machining_lower_bound(
     組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
     日次始業は master メイン A15（定常開始）が読めれば [開始, 開始+N分) の壁時計（勤怠 forward しない）。
     A15 が無いときは従来どおり代表スキル OP の勤務・休憩に沿って forward。
-    同一占有キーで直後加工と同一依頼 NO かつ休憩を挟まないときは準備時間を付けない（連続ロール）。
+    準備時間は (1) 直前加工の依頼 NO が取れ、かつ直後加工と異なる依頼 NO に切り替わるとき、
+    または (2) 同一依頼でも直前加工終了から本下限までの間に勤務休憩を挟む再開のときのみ付与する。
+    上記以外（直前依頼 NO が無い初回や、同一依頼の連続ロールで休憩を挟まないとき等）には準備を付けない。
     日次始業準備の直後の当該加工には準備時間を付けない。
     日次始業セグメントの op は空。準備時間・後始末時間の op は forward 用の代表＝直後主（後始末は可能なら直前主）。
     """
@@ -15751,7 +15753,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     need_prep = (
         prep > 0
         and (not had_machine_daily_startup)
-        and ((not _lt_s or _lt_s != cur_tid) or resume_after_break)
+        and ((_lt_s and _lt_s != cur_tid) or resume_after_break)
     )
     if need_prep:
         if rep is None or not st_r or end_r is None:
