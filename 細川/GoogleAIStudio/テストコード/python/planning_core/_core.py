@@ -2236,13 +2236,14 @@ def _write_results_equipment_gantt_sheet(
             ban = ws.cell(
                 row=day_start,
                 column=1,
-                value=f"」{d.strftime('%Y/%m/%d')}】",
+                value=f"【{d.strftime('%Y/%m/%d')}】",
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
+            # 縦書き日付を結合ブロックの下寄せにし、最終機械行と「日付が届いていない」ように見えるのを抑える
             ban.alignment = Alignment(
                 horizontal="center",
-                vertical="center",
+                vertical="bottom",
                 wrap_text=False,
                 textRotation=90,
             )
@@ -2356,7 +2357,7 @@ def _write_results_equipment_gantt_sheet(
                 "message": "page_setup applied",
                 "runId": "post-page-fix-4",
                 "data": {
-                    "fixTag": "default-fitW1-rowh36-hdr38",
+                    "fixTag": "default-fitW1-rowh36-hdr38-bannerBottom-bracketFix",
                     "printMode": _gantt_print_mode,
                     "fitToPage": bool(ws.page_setup.fitToPage),
                     "fitToWidth": ws.page_setup.fitToWidth,
