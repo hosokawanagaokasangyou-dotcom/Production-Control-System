@@ -6357,8 +6357,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 continue
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
-            min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
-            label_w = max(w, min_w)
+            # 依頼NO シェイプ幅は結合セル矩形を超えないこと（max(w, min_w) だと狭い帯が隣セルへ
+            # はみ出し、時間重なりのないタスク同士でもシェイプが重なる）。
+            label_w = float(w)
             # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/4。
             _band = float(h) / 3.0
             _h_req_no = max(9.0, float(h) / 4.0)
