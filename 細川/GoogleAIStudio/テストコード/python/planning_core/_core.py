@@ -6587,8 +6587,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     combined = "\u3000".join(parts)
                     if not combined.strip():
                         return
-                    use_w = min(float(w), max(12.0, est_w))
-                    use_w = min(use_w, float(w))
+                    # 結合セル幅 w だけに min すると 1 スロット幅で極端に潰れるため、
+                    # 最低幅（pt）を確保しつつ、広い帯では推定幅まで広げる。
+                    _min_member_chip_w = 34.0
+                    want_w = max(_min_member_chip_w, float(est_w))
+                    use_w = min(max(float(w), _min_member_chip_w), want_w)
                     _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, combined)
                     s_mem = _gantt_xlw_add_round_rect(
                         left,
