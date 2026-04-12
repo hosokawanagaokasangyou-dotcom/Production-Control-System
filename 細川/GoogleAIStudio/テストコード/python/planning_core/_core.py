@@ -6286,7 +6286,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         _mso_round_rect = 5
         _mso_bring_to_front = 0
         _xl_move_and_size = 1
-        _progress_every = 30
+        # 件数が多いときの進捗ログ間隔（小さすぎると I/O 負荷、大きすぎると停止に見える）
+        _progress_every = 10
         n_added = 0
         names_by_day: dict[str, list[str]] = defaultdict(list)
         # #region agent log
@@ -6416,10 +6417,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     tf0.HorizontalAlignment = -4131  # xlHAlignCenter
                 except Exception:
                     pass
-                try:
-                    tf0.WordWrap = True
-                except Exception:
-                    pass
+                # WordWrap=True は環境によって TextFrame の再レイアウトが極端に重く、
+                # 先頭シェイプ追加付近で「進まない」ように見えることがあるため付けない。
                 tf0.Characters().Text = cap
                 nch = len(cap)
                 fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
@@ -6586,7 +6585,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         # max(18, …) は狭いタイムスロットでピル幅が帯を超え、隣セル上で重なって見える原因になる。
                         use_w = min(pill_w, max(9.0, 5.2 * len(nm2)))
                         if x_cur + use_w > left + w + 0.5:
-                            use_w = max(10.0, left + w - x_cur)
+                            use_w = max(3.5, left + w - x_cur)
                         _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, nm2)
                         s_mem = _gantt_xlw_add_round_rect(
                             x_cur,
@@ -6677,6 +6676,15 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         shp.TextFrame.HorizontalAlignment = -4131
                     except Exception:
                         pass
+            # #region agent log
+            if idx <= 3:
+                _adg_emit(
+                    "H7",
+                    "gantt_spec_iter_done",
+                    {"idx": idx, "n_added": n_added},
+                    "perf",
+                )
+            # #endregion
         # #region agent log
         _adg_emit(
             "H1",
