@@ -6042,6 +6042,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             adj_round=0.2,
             shadow=False,
             shape_name=None,
+            tf_margin_tb=None,
+            tf_margin_lr=None,
         ):
             cap = str(caption or "").strip()
             if x_w <= 0 or x_h <= 0 or not cap:
@@ -6096,11 +6098,15 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             try:
                 tf0 = shp_local.TextFrame
                 try:
-                    mrg = 1.0 if font_pt <= 7.0 else 2.0
-                    tf0.MarginLeft = mrg
-                    tf0.MarginRight = mrg
-                    tf0.MarginTop = 0.5
-                    tf0.MarginBottom = 0.5
+                    if tf_margin_lr is not None:
+                        mrg_lr = float(tf_margin_lr)
+                    else:
+                        mrg_lr = 1.0 if font_pt <= 7.0 else 2.0
+                    tf0.MarginLeft = mrg_lr
+                    tf0.MarginRight = mrg_lr
+                    m_tb = 0.5 if tf_margin_tb is None else float(tf_margin_tb)
+                    tf0.MarginTop = m_tb
+                    tf0.MarginBottom = m_tb
                 except Exception:
                     pass
                 try:
@@ -6169,19 +6175,28 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバーは依頼NO の上辺へ数 pt 重なるよう配置（上下 2 段にはしない）
-                _overlap_mem = 2.25
-                h_mem_use = max(
-                    5.0,
-                    min(10.0, max(5.5, _band * 0.22) - 0.45),
-                )
+                # メンバーは依頼NO の上辺へ重なるよう配置（上下 2 段にはしない）。
+                # ピル高さは日本語が切れないよう 9pt 台を目安にし、帯に収まらないときは重なり→メンバー高の順で調整。
+                _avail_v = _band - 2.0 * _band_inset
+                _overlap_mem = 5.0
+                h_mem_use = max(9.0, min(11.0, 0.71 * _avail_v))
                 h_main = max(
                     9.0,
-                    min(
-                        _h_req_no,
-                        _band - 2.0 * _band_inset - h_mem_use + _overlap_mem,
-                    ),
+                    min(_h_req_no, _avail_v - h_mem_use + _overlap_mem),
                 )
+                _fit_i = 0
+                while h_mem_use + h_main - _overlap_mem > _avail_v + 1e-6 and _fit_i < 36:
+                    _fit_i += 1
+                    if _overlap_mem < 7.8:
+                        _overlap_mem += 0.25
+                    elif h_mem_use > 8.15:
+                        h_mem_use -= 0.1
+                    else:
+                        break
+                    h_main = max(
+                        9.0,
+                        min(_h_req_no, _avail_v - h_mem_use + _overlap_mem),
+                    )
                 y_main = band_bot - _band_inset - h_main
                 y_mem = y_main - h_mem_use + _overlap_mem
                 if y_mem < band_top + _band_inset:
@@ -6225,6 +6240,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                             adj_round=0.42,
                             shadow=False,
                             shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}_{mi}",
+                            tf_margin_tb=0.0,
+                            tf_margin_lr=0.75,
                         )
                         if s_mem is not None:
                             n_added += 1
