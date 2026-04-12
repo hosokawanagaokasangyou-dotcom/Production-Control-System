@@ -3386,11 +3386,11 @@ def _md_slash_is_likely_fraction_not_date(t: str, start: int, end: int, mo: int,
     if after_st.startswith("は"):
         return False
     if re.search(
-        r"(?:加工速度|加工\s*スピード|速度|倝率|スピード|効率|割引)(?:\s*は)?\s*$",
+        r"(?:加工速度|加工\s*スピード|速度|倍率|スピード|効率|割引)(?:\s*は)?\s*$",
         before,
     ):
         return True
-    # 1/2・1/3・2/3 等 + 「とした」「倝」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよご です/である は坫ゝない）
+    # 1/2・1/3・2/3 等 + 「とした」「倝」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよご です/である は含まない）
     frac_pat = re.compile(
         r"^(?:としした?|とれる|倝|割引|にれる|に設定|しらい|程度|に固定|に変更)"
     )
@@ -3503,7 +3503,7 @@ def apply_factory_closure_dates_to_attendance(
         if d not in attendance_data:
             logging.warning(
                 "グローバルコメントの工場休業日 %s はマスタ勤怠に行はありません。"
-                " しの日は計画ループに坫まれない場合」配台上の効果は陝定的です。",
+                " しの日は計画ループに含まれない場合」配台上の効果は限定的です。",
                 d,
             )
             continue
@@ -3520,7 +3520,7 @@ def apply_factory_closure_dates_to_attendance(
 
 def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
     """
-    「制限撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで坫ゝ配台制約を緩ゝる（abolish_all_scheduling_limits）。
+    「制限撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで含む配台制約を緩める（abolish_all_scheduling_limits）。
     """
     b = unicodedata.normalize("NFKC", str(blob or ""))
     strong = (
@@ -3541,7 +3541,7 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
         out["ignore_skill_requirements"] = True
         out["ignore_need_minimum"] = True
         logging.warning(
-            "メイン再優先特記: 制限撤廃キーワードを検出。設備専有・時刻ガードを坫ゝ配台上の制約を緩ゝした。"
+            "メイン再優先特記: 制限撤廃キーワードを検出。設備専有・時刻ガードを含む配台上の制約を緩めた。"
         )
         return out
     return coerced
@@ -3701,7 +3701,7 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
     """
     工程名・機械名に一致するルールの speed_multiplier を掛け合わせる（一致なしは 1.0）。
 
-    process_contains / machine_contains はしれずれ **工程名または機械名のどうらか** に坫まれれみよい。
+    process_contains / machine_contains はしれずれ **工程名または機械名のどうらか** に含まれていればよい。
     両方指定時は AND（例: 「熱融着」と「検査」は」列の組み合わせで両方睾れる行にマッポ。
     マスタ上で工程=検査・機械=熱融着機 のよごにキーワードは逆坴の列にあっても同じルールで効く。
     """
@@ -3783,7 +3783,7 @@ def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> lis
 
 def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dict:
     """
-    Gemini は task_preferred_operators に **酝列**や誤スキーマ（workstation_id 等）を返したとし」
+    Gemini は task_preferred_operators に **配列**や誤スキーマ（workstation_id 等）を返したとし」
     杨でうに global_day_process_operator_rules / scheduler_notes_ja へ救済れる。
     """
     out = dict(raw)
@@ -3927,10 +3927,10 @@ def analyze_global_priority_override_comment(
     メインシート「グローバルコメント」（UI 上の自由記述）を **Gemini で一括解釈**し、配台に効し JSON に蝽とれ。
     自然言語の文脈切り分け・改行の別指示解釈は AI に任せ」戻り値のキーの値システムは機械適用する。
 
-    - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の酝列。該当なしは []。
+    - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の配列。該当なしは []。
     - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
-    - global_speed_rules: **工程名・機械名**への部分一致（坄キーワードは **どうらの列にあっても坯**）で」既存の加工速度（シート＝上書き後）に **乗算**れるルールの酝列。該当なしは []。
-    - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を」当日しの工程のタスクの**フォーム全員に必う坫ゝる**ルールの酝列。該当なしは []。
+    - global_speed_rules: **工程名・機械名**への部分一致（坄キーワードは **どうらの列にあっても坯**）で」既存の加工速度（シート＝上書き後）に **乗算**れるルールの配列。該当なしは []。
+    - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を」当日しの工程のタスクの**フォーム全員に必う含むる**ルールの配列。該当なしは []。
     - scheduler_notes_ja: 上記に蝽とししれない補足や靋用メモ（速度は可能なら global_speed_rules も併記）。
 
     API キー無し・JSON 解釈失敗時: 上記ブール・指定は既定値」工場休業日のみ従来のルールベース解析で補完。
@@ -3986,17 +3986,17 @@ Excel メインシートの **「グローバルコメント」**（自由記述
 
 」キー別ルール】
 
-A) **factory_closure_dates** （酝列・必須）
+A) **factory_closure_dates** （配列・必須）
    - **工場全体**は稼働しない日（臨時休業・全工場休み・しの日は加工しない等）の日付を **YYYY-MM-DD** の文字列で列挙。
-   - **個人の休み・特定ラインの値**の坜止はここに **坫ゝない**（[]）。
+   - **個人の休み・特定ラインの値**の坜止はここに **含まない**（[]）。
    - 該当はなけれみ **空の配列 []**（キー省略試行）。
    - 年は省略されでいれみ西暦 {ref_y} 年として解釈。
 
 B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits** / **task_preferred_operators**
    - 従来どおり（配台のスキル無視・人数1固定・制限撤廃・依頼NO→主担当OP指定）。該当なけれみ false または {{}}。
 
-C) **global_speed_rules** （酝列・必須）
-   - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倝率** を指定するオブジェクトのリスト。
+C) **global_speed_rules** （配列・必須）
+   - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倍率** を指定するオブジェクトのリスト。
    - 坄オブジェクトのキー:
      - "process_contains": 文字列（省略坯）。**工程名または機械名のいうれか**に **部分一致**（NFKC 想定）。
      - "machine_contains": 文字列（省略坯）。**工程名または機械名のいうれか**に **部分一致**。
@@ -4014,33 +4014,33 @@ D) **scheduler_notes_ja** （文字列・必須）
 E) **interpretation_ja** （文字列・必須）
    - 原文の覝約を1文（200文字以内）。
 
-F) **global_day_process_operator_rules** （酝列・必須）
+F) **global_day_process_operator_rules** （配列・必須）
    - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当ではまるタスクについで」
-     列挙した **全メンバーを同一フォームに必う坫ゝる** ルール（**OP/AS どうらのスキルでも坯**。並び解決は **担当OP指定とともに**）。
-   - **依頼NOは分かる主担当の1坝指定**は **task_preferred_operators** を使うこと。原文は **「◯月◯日の△工程にＡとＢを配台」** のよごに **日付・工程・複数坝**のときは **本酝列**へ蝽とれ。
+     列挙した **全メンバーを同一フォームに必う含むる** ルール（**OP/AS どうらのスキルでも坯**。並び解決は **担当OP指定とともに**）。
+   - **依頼NOは分かる主担当の1坝指定**は **task_preferred_operators** を使うこと。原文は **「◯月◯日の△工程にＡとＢを配台」** のよごに **日付・工程・複数坝**のときは **本配列**へ蝽とれ。
    - 坄オブジェクトのキー:
      - "date": **YYYY-MM-DD**（しの日に割り当でるロールに適用）
      - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
-     - "operator_names": 並びの酝列（例: ["森下", "宮島　花孝"]）
+     - "operator_names": 並びの配列（例: ["森下", "宮島　花孝"]）
    - 該当指示はなけれみ **空の配列 []**。
 
 」返答形式】
 先頭は {{ で終ゝりは }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
 
 必須キー一覧:
-- "factory_closure_dates": string の酝列（YYYY-MM-DD）
+- "factory_closure_dates": string の配列（YYYY-MM-DD）
 - "ignore_skill_requirements": true または false
 - "ignore_need_minimum": true または false
 - "abolish_all_scheduling_limits": true または false
-- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当並び）。**酝列にしてはならない**。該当なしは {{}}
-- "global_speed_rules": オブジェクトの酝列（該当なしは []）
-- "global_day_process_operator_rules": オブジェクトの酝列（該当なしは []）
+- "task_preferred_operators": **JSON オブジェクトのみ**（キー=依頼NO・値=主担当並び）。**配列にしてはならない**。該当なしは {{}}
+- "global_speed_rules": オブジェクトの配列（該当なしは []）
+- "global_day_process_operator_rules": オブジェクトの配列（該当なしは []）
 - "scheduler_notes_ja": 文字列
 - "interpretation_ja": 文字列
 
 」基準年】 日付言坊はあれみ西暦 {ref_y} 年として解釈してよい。
 
-」登録メンバー坝の参考】（照合用。JSON キーには坫ゝない）
+」登録メンバー坝の参考】（照合用。JSON キーには含まない）
 {member_sample}
 
 」グローバルコメント・原文】
@@ -5093,7 +5093,7 @@ def _norm_history_member_label(name: str) -> str:
 
 def _history_team_text_main_assignment_only(h: dict) -> str:
     """
-    結果シート「担当」欄用: メイン割付確定時点の坝剝（余力追記サブは坫ゝない）。
+    結果シート「担当」欄用: メイン割付確定時点の坝剝（余力追記サブは含まない）。
     append_surplus 後の h['team'] から post_dispatch_surplus_names を除外れる。
     """
     raw = (h.get("team") or "").strip()
@@ -5240,7 +5240,7 @@ def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    加工内容に工程名は坫まれない行の「タスクID」セルを赤背景・白文字にれる（元データ丝整合の視誝用）。
+    加工内容に工程名は含まれない行の「タスクID」セルを赤背景・白文字にれる（元データとの整合の視誝用）。
     """
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
@@ -6103,7 +6103,7 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
 
 
 TASK_SPECIAL_AI_LAST_RESPONSE_FILE = "ai_task_special_remark_last.txt"
-# 勤怠備考キャッシュとキー空間を分離（同一SHA衝窝を避ける）。指紋に基準年を坫ゝ日付解釈のズレを防し。
+# 勤怠備考キャッシュとキー空間を分離（同一SHA衝窝を避ける）。指紋に基準年を含む日付解釈のズレを防し。
 TASK_SPECIAL_CACHE_KEY_PREFIX = "TASK_SPECIAL_v3|"
 # メインシート「グローバルコメント」下の自由記述 → Gemini 解釈（配台の最優先オーポーライド）
 GLOBAL_PRIORITY_OVERRIDE_CACHE_PREFIX = "GLOBAL_PRIO_v8|"
@@ -6332,7 +6332,7 @@ def _entry_is_global_task_special_scope(entry: dict) -> bool:
 
 
 def _select_ai_task_special_entry_for_tid_value(val, row):
-    """1依頼NOに対れる値は dict または dict の酝列のどうらでも行に坈ご覝素を返す。"""
+    """1依頼NOに対れる値は dict または dict の配列のどうらでも行に坈ご覝素を返す。"""
     if val is None:
         return None
     if isinstance(val, list):
@@ -6952,7 +6952,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
 
 
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
-    """累計・当実行坑けの 2 列テキスト表（履歴行は坫ゝない）。"""
+    """累計・当実行坑けの 2 列テキスト表（履歴行は含まない）。"""
     out = [title]
     if not rows:
         return out
@@ -7504,9 +7504,9 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     「配台試行」はオンな行はプロンプトに載せない（API 節約・当該行は配台しないため）。
     担当OP指定はプロンプトの返坴契約でモデルに preferred_operator を出力させる（備考を正覝表睾で切り出す処理は行ゝない）。
     json/ai_remarks_cache.json に TTL AI_CACHE_TTL_SECONDS でキャッシュ（同一入力・同一基準年なら API を呼みない）。
-    依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に坫ゝで日付解釈の変化とキャッシュの食い靕いを防し。
+    依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に含むで日付解釈の変化とキャッシュの食い靕いを防し。
 
-    戻り値の例: 依頼NO -> オブジェクト」または同一依頼NOに備考行は複数ある場合はオブジェクトの酝列。
+    戻り値の例: 依頼NO -> オブジェクト」または同一依頼NOに備考行は複数ある場合はオブジェクトの配列。
       process_name, machine_name … 当該備考セルはある行の工程名・機械名（プロンプトの行と一致）
       restrict_to_process_name, restrict_to_machine_name … 省略または空なら同一依頼NOの全工程・全機械行に適用。
       しの他 required_op, speed_override, task_efficiency, priority, start_date, start_time,
@@ -7590,7 +7590,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 - キー: 上記」特別指定原文】の **依頼NO」…】の括弧内** の文字列と **完全一致**（表記・ポイフン・英大文字尝文字を原文どより）。備考本文中の数字列をキーにしない。
 - 値: 次のいうれか。
   (A) **JSONオブジェクト1つ** … 当該依頼NOの備考はプロンプト上 **1行の値** のとき。
-  (B) **JSON酝列**（覝素はオブジェクト）… 同一依頼NOで工程名・機械名は異なる備考行は **複数** あるとし。覝素の順はプロンプトの行順と対応させる。
+  (B) **JSON配列**（覝素はオブジェクト）… 同一依頼NOで工程名・機械名は異なる備考行は **複数** あるとし。覝素の順はプロンプトの行順と対応させる。
 
 ■ process_name（文字列）・machine_name（文字列）— **必須**
 - 当該備考に対応れるプロンプト行の **工程名「…」**・**機械名「…」** の値と **一致** させる（「（空）」のときは空文字列 ""）。
@@ -7605,7 +7605,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 ■ preferred_operator（文字列）— 条件付し**必須**
 - **必須条件**: 当該依頼の原文を読み」「**誰はこの加工・作業の主担当（OP）として割り当でたいか**」は **愝味として** 読み坖れるとし。
   例: 特定の人にやってもらご＝しの人に任せる＝担当はあの人＝OPは〜＝〜さん（並び）に依頼」など。**表睾の型に依存せう**」文の愝味で判断れる。
-- **満たしたとしの出力義務**: 上記の愝味は成立れると判断したオブジェクトでは」**必う** キー `preferred_operator` を坫ゝ」値は **空でない文字列** とれる。併せで **process_name / machine_name は必須**（例: `{{"process_name":"…","machine_name":"…","preferred_operator":"…"}}`）。
+- **満たしたとしの出力義務**: 上記の愝味は成立れると判断したオブジェクトでは」**必う** キー `preferred_operator` を含む」値は **空でない文字列** とれる。併せで **process_name / machine_name は必須**（例: `{{"process_name":"…","machine_name":"…","preferred_operator":"…"}}`）。
 - **値の形式**: 原文で示された **担当者の識別名を1坝分**（姓・坝・ニックフォーム等」原文に睾れた表記を維挝）。末尾の敬称（さん・坛・氝）のみ除去。例:「森岡さんにやってもらいした」→ `"森岡"`。
 - **出力してはいけないとし**: 原文に担当者の指愝は **一切ない** と判断した依頼NOでは `preferred_operator` キー自体を **省略** れる（空文字列も付けない）。
 
@@ -7639,7 +7639,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
 」出力直後の自己検証（必う実行してから JSON を閉もる）】
 - 」特別指定原文】の **坄行** についで」対応れるオブジェクトに **process_name** と **machine_name** はあるか。
-- 同一依頼NOは複数行あるとしは **酝列** で坄行に1オブジェクト」または革切にマージした坘一オブジェクト＋restrict の靋用を一貫させる。
+- 同一依頼NOは複数行あるとしは **配列** で坄行に1オブジェクト」または革切にマージした坘一オブジェクト＋restrict の靋用を一貫させる。
 - 「主担当OPの指愝」はある行では **非空の preferred_operator** を付ける。
 
 」出力形式の例】（依頼NO・値は実データに合わせ替ごること）
@@ -8959,7 +8959,7 @@ def _exclude_rule_logic_gemini_schema_instructions() -> str:
 
 
 def _parse_exclude_rule_json_array_response(text: str) -> list | None:
-    """モデル応答から JSON 酝列を取り出す（```json フェンス付し坯）。"""
+    """モデル応答から JSON 配列を取り出す（```json フェンス付し坯）。"""
     s = (text or "").strip()
     if not s:
         return None
@@ -9153,8 +9153,8 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     numbered = "\n".join(f"[{i + 1}] {str(b).strip()}" for i, b in enumerate(pend_b))
     prompt = (
         "あなたは工場の配台システム用です。以下の N 個の「配台試行の説明」を」与ごた順庝でしれずれ JSON ルールに変杛してください。\n\n"
-        f"」出力】JSON 酝列のみ。先頭は [ で終ゝりは ] 。覝素数は必う {m}（Markdown・説明禁止）。\n"
-        f"酝列の先頭覝素は [1]」2 番目は [2] … に対応しした。\n\n"
+        f"」出力】JSON 配列のみ。先頭は [ で終ゝりは ] 。覝素数は必う {m}（Markdown・説明禁止）。\n"
+        f"配列の先頭覝素は [1]」2 番目は [2] … に対応しした。\n\n"
         f"{schema}\n"
         f"」説明文】\n{numbered}\n"
     )
@@ -10037,7 +10037,7 @@ def run_exclude_rules_sheet_maintenance(
             details=f"path={wb_path}",
         )
         logging.warning(
-            "%s: 「%s」坫有のため、「%s」の openpyxl 保守をスキップしました（Excel＝xlwings で編集してください）。",
+            "%s: 「%s」併有のため、「%s」の openpyxl 保守をスキップしました（Excel＝xlwings で編集してください）。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
@@ -11719,7 +11719,7 @@ def _active_global_day_process_must_include(
 ) -> tuple[list[str], list[str]]:
     """
     グローバルコメント由来の「日付×工程×複数指定」で」しの日・しの工程タスクに
-    **フォームへ必う坫ゝる**メンバー（skills 行キー）と警告メッセージを返す。
+    **フォームへ必う含むる**メンバー（skills 行キー）と警告メッセージを返す。
     """
     rules = gpo.get("global_day_process_operator_rules") or []
     if not isinstance(rules, list):
@@ -12797,7 +12797,7 @@ def load_attendance_and_analyze(members):
             
             prompt = f"""
             以下の坄日・メンバーの備考を読み取り」出退勤時刻の変更や中抜き」休日の判定を行い」JSON形式で出力してください。
-            マークダウン記坷(``` 等)は一切坫ゝう」純粋なJSON文字列のみを返してください。
+            マークダウン記坷(``` 等)は一切含むう」純粋なJSON文字列のみを返してください。
 
             」JSONの出力形式（キー坝を厳密に守ること）】
             {{
@@ -14476,7 +14476,7 @@ def _min_pending_dispatch_trial_order_for_date(
     """
     start_date_req <= current_date かつ残量ありのタスクの配台試行順の最尝値。
     _equipment_line_lower_dispatch_trial_still_pending と同様」まて開始日に靔していない行は
-    「先行試行順の競坈」に坫ゝない。
+    「先行試行順の競坈」に含まない。
 
     **グローバル試行順ブロック**（STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT）用に」
     「この日まて割付候補になり得ない」行は最尝値から除外れる。さもないと同一依頼の
@@ -16176,7 +16176,7 @@ def _machine_handoff_state_from_timeline(
     """
     タイムラインから」坄 machine_occupancy_key についで
     計画日 current_date 以降の **加工 (machining)** イベントの最終終了を復元れる。
-    セットアップ系 event_kind は last_tid / 後始末判定に坫ゝない。
+    セットアップ系 event_kind は last_tid / 後始末判定に含まない。
     """
     best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
     for e in timeline_events:
