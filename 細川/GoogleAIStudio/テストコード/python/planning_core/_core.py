@@ -2220,8 +2220,39 @@ def _write_results_equipment_gantt_sheet(
         for ci in range(n_fixed + 1, last_col + 1):
             dim = ws.column_dimensions[get_column_letter(ci)]
             dim.width = gw
-            # Excel で既定列幅のままに見えないよう明示（列 E 以降＝時刻グリッド）
-            dim.customWidth = True
+            # openpyxl 3.1+ では customWidth は width 有無から導出される読み取り専用のため代入しない
+
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        from pathlib import Path as _Path
+
+        import openpyxl as _oxl
+
+        _root = next(
+            (a for a in _Path(__file__).resolve().parents if (a / ".git").is_dir()),
+            None,
+        )
+        if _root is not None:
+            _rec = {
+                "sessionId": "94d94e",
+                "hypothesisId": "H1",
+                "location": "_core.py:_write_results_equipment_gantt_sheet",
+                "message": "gantt timeline column widths applied (no customWidth assign)",
+                "data": {
+                    "openpyxl": getattr(_oxl, "__version__", None),
+                    "n_slots": int(n_slots),
+                    "last_col": int(last_col),
+                    "n_fixed": int(n_fixed),
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+            with open(_root / "debug-94d94e.log", "a", encoding="utf-8") as _f:
+                _f.write(_json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
 
     # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ
     try:
