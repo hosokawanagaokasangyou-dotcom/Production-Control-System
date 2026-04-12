@@ -5308,37 +5308,40 @@ def _history_team_text_main_assignment_only(h: dict) -> str:
 
 
 def _format_result_task_history_cell(task: dict, h: dict) -> str:
-    """結果_タスク一覧の履歴セル文字列（組み合わせ表の採用行ID・メイン追加人数・余力追記の明示を含む）。"""
+    """結果_タスク一覧の履歴セル文字列（短い記号: #=組合せ行ID, 主=メイン担当, +=超過, 余=余力追記）。"""
     um = task.get("unit_m") or 0
     try:
         done_r = int(h["done_m"] / um) if um else 0
     except (TypeError, ValueError, ZeroDivisionError):
         done_r = 0
     dm = h.get("done_m", 0)
-    parts_out: list[str] = [f"・」{h.get('date', '')}】：{done_r}R ({dm}m)"]
+    d = h.get("date", "") or ""
+    parts_out: list[str] = [f"・【{d}】：{done_r}R/{dm}m"]
     cid = h.get("combo_sheet_row_id")
     if cid is not None:
         try:
-            parts_out.append(f"組み合わせ表#{int(cid)}")
+            parts_out.append(f"#{int(cid)}")
         except (TypeError, ValueError):
-            parts_out.append(f"組み合わせ表#{cid}")
-    parts_out.append(f"担当[{_history_team_text_main_assignment_only(h)}]")
+            parts_out.append(f"#{cid}")
+    team = _history_team_text_main_assignment_only(h)
+    if team:
+        parts_out.append(f"主:{team}")
     sm = h.get("surplus_member_names") or []
     if sm:
-        parts_out.append(f"追加[{','.join(str(x) for x in sm)}]")
+        parts_out.append("+" + ",".join(str(x) for x in sm))
     ps = h.get("post_dispatch_surplus_names") or []
     if ps:
-        parts_out.append(f"余力追記[{','.join(str(x) for x in ps)}]")
+        parts_out.append("余:" + ",".join(str(x) for x in ps))
     return " ".join(parts_out)
 
 
-_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^・(」[^】]*】)(.*)$", re.DOTALL)
+_RESULT_TASK_HISTORY_RICH_HEAD_RE = re.compile(r"^・(【[^】]*】)(.*)$", re.DOTALL)
 
 
 def _apply_result_task_history_rich_text(worksheet, column_names: list):
     """
-    履歴列: 「・」日付】：…」の日付括弧部分を青色リッポテキストにれる。
-    openpyxl 3.1 未満ではスキップ（文字列の」】のみ）。
+    履歴列: 「・【日付】：…」の日付括弧部分を青色リッチテキストにする。
+    openpyxl 3.1 未満ではスキップ（文字列の【】のみ）。
     """
     try:
         from openpyxl.cell.rich_text import CellRichText, TextBlock
@@ -5363,7 +5366,7 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
         for ci in hist_cols:
             cell = worksheet.cell(row=r, column=ci)
             v = cell.value
-            if not isinstance(v, str) or not v.startswith("・」"):
+            if not isinstance(v, str) or not v.startswith("・【"):
                 continue
             m = _RESULT_TASK_HISTORY_RICH_HEAD_RE.match(v)
             if not m:
@@ -5380,7 +5383,7 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
 def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
     """
     結果_タスク一覧: 回答納期・指定納期・計画基準納期・原反投入日・加工開始日のセルを青色にれる。
-    （履歴列の」日付】は _apply_result_task_history_rich_text 坴。色は 0070C0 で統一）
+    （履歴列の【日付】は _apply_result_task_history_rich_text で着色。色は 0070C0 で統一）
     """
     blue = _result_font(color="0070C0")
     top = Alignment(wrap_text=False, vertical="top")
