@@ -798,6 +798,8 @@ PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 PLANNING_MIN_QTY_M = 100.0
 # ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
 ROLL_UNIT_LENGTH_CEIL_STEP_M = 100.0
+# 製品名から寸法（NNNxMM 等）を解釈できないときの 1 ロール長(m)。換算数量へは落とさない（FEL 品番で 2000 等になるのを防ぐ）。
+INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M = 100.0
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
@@ -2814,7 +2816,9 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     寸法区切りは半角 x/X のほか ×（U+00D7）・全角Ｘｘ 等を正規化してから判定する。
 
     上記ペアが無いときは、従来どおり最後の「X の直後の 2〜6 桁」を拾う。
-    いずれもマッチしない場合は fallback_unit（段階1では換算数量など）。
+    いずれもマッチしない場合（寸法なし、または X 後が 2〜6 桁で解釈不能）は
+    ``INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M``（100）を返す。製品名が欠損のときのみ
+    ``fallback_unit`` を返す。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
@@ -2838,7 +2842,7 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
                 return v
         except ValueError:
             pass
-    return fallback_unit
+    return float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M)
 
 
 def _coerce_roll_unit_m_when_converted_qty_below_roll(
