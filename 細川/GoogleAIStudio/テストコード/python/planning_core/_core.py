@@ -741,8 +741,8 @@ TASK_COL_SPEED = "加工速度"
 TASK_COL_PRODUCT = "製品名"
 TASK_COL_ANSWER_DUE = "回答納期"
 TASK_COL_SPECIFIED_DUE = "指定納期"
-TASK_COL_RAW_INPUT_DATE = "原板投入日"
-# 加工計画DATA 由来。配台計画_タスク入力では原板投入日の坳隣（SOURCE_BASE_COLUMNS 順）。
+TASK_COL_RAW_INPUT_DATE = "原反投入日"
+# 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
 TASK_COL_STOCK_LOCATION = "在庫場所"
 # 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA＝配台計画_タスク入力。
 TASK_COL_PROCESS_CONTENT = "加工内容"
@@ -788,8 +788,8 @@ STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
 # 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「配台計画_」は誤字（UTF-8 保存時の破損）で一致しない。
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
-# 空白のときは列「原板投入日」（加工計画DATA 由来）をしのまま使う。日付ありのときは配台の原板制約・結果_タスク一覧表示の両方でこの日付を採用。
-PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原板投入日_上書き"
+# 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
+PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 # 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
@@ -1140,10 +1140,10 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台試行（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール短縮長さ」原板投入日の直後に在庫場所）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
-       （日付系上書きに 原板投入日_上書き を含む。空白時は列「原板投入日」を配台に使用）
+       （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
 
     global_speed_rules 等で変える実効速度はシート列では渡たる」配台内部のみで反映れる。
     """
@@ -3140,6 +3140,16 @@ def _nfkc_column_aliases(canonical_name):
 def _align_dataframe_headers_to_canonical(df, canonical_names):
     """列名を NFKC 一致で canonical に寄せる（Excel 坴は全角 '_' 等でも読ゝるよごに）。"""
     key_to_canonical = {_nfkc_column_aliases(c): c for c in canonical_names}
+    # 旧見出し「原板…」を「原反…」へ寄せる（互換。canonical は TASK_COL / PLAN_COL の表記）
+    if TASK_COL_RAW_INPUT_DATE in canonical_names:
+        key_to_canonical[_nfkc_column_aliases("原板投入日")] = TASK_COL_RAW_INPUT_DATE
+    if PLAN_COL_RAW_INPUT_DATE_OVERRIDE in canonical_names:
+        key_to_canonical[_nfkc_column_aliases("原板投入日_上書き")] = (
+            PLAN_COL_RAW_INPUT_DATE_OVERRIDE
+        )
+        _ref_canon = plan_reference_column_name(PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+        if _ref_canon in canonical_names:
+            key_to_canonical[_nfkc_column_aliases("（元）原板投入日_上書き")] = _ref_canon
     rename_map = {}
     for col in df.columns:
         k = _nfkc_column_aliases(col)
@@ -4435,6 +4445,9 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
         return col_by_norm.get(
             _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
         )
+    # 旧見出し「原板投入日」→ 結果 DataFrame の「原反投入日」
+    if nk == _nfkc_column_aliases("原板投入日"):
+        return col_by_norm.get(_nfkc_column_aliases(TASK_COL_RAW_INPUT_DATE))
     return None
 
 
@@ -5365,7 +5378,7 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
 
 def _apply_result_task_date_columns_blue_font(worksheet, column_names: list):
     """
-    結果_タスク一覧: 回答納期・指定納期・計画基準納期・原板投入日・加工開始日のセルを青色にれる。
+    結果_タスク一覧: 回答納期・指定納期・計画基準納期・原反投入日・加工開始日のセルを青色にれる。
     （履歴列の」日付】は _apply_result_task_history_rich_text 坴。色は 0070C0 で統一）
     """
     blue = _result_font(color="0070C0")
@@ -8727,7 +8740,7 @@ def build_task_queue_from_planning_df(
             and raw_input_date_ov != raw_input_sheet
         ):
             logging.info(
-                "原板投入日_上書きを採用: 依頼NO=%s シート原板投入日=%s 上書き=%s",
+                "原反投入日_上書きを採用: 依頼NO=%s シート原反投入日=%s 上書き=%s",
                 task_id,
                 raw_input_sheet,
                 raw_input_date_ov,
@@ -8826,10 +8839,10 @@ def build_task_queue_from_planning_df(
             due_urgent = due_basis <= run_date
 
         # 開始日ルール:
-        # 1) 原板投入日はあるとしは「原板投入日 13:00 以降」を開始可能日時の下限とれる。
+        # 1) 原反投入日があるときは「原反投入日 13:00 以降」を開始可能日時の下限にする。
         #    （日付下限: max(run_date, raw_input_date)」同日時間下限: 13:00）
-        # 2) 特別指定（セル/AI）の開始日はある場合も」原板投入日より剝倒しにはしない（date 下限を維挝）
-        # 3) 原板は無いとしは run_date
+        # 2) 特別指定（セル/AI）の開始日があっても原反投入日より前倒しにはしない（date 下限を維持）
+        # 3) 原反投入日が無いときは run_date
         if raw_input_date:
             effective_start_date = max(run_date, raw_input_date)
         else:
@@ -8842,7 +8855,7 @@ def build_task_queue_from_planning_df(
             )
             if raw_input_date and start_date_ov < raw_input_date:
                 logging.info(
-                    "開始日上書きは原板投入日より剝倒し試行: 依頼NO=%s 指定開始日=%s 原板投入日=%s 採用開始日=%s",
+                    "開始日上書きは原反投入日より前倒し不可: 依頼NO=%s 指定開始日=%s 原反投入日=%s 採用開始日=%s",
                     task_id,
                     start_date_ov,
                     raw_input_date,
@@ -13591,7 +13604,7 @@ SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
 # 紝期基準日を靎ねでも当該依頼に残量はあるとし」**しの依頼NOの値** due_basis を +1 し、
 # 当該依頼の割当・タイムラインを巻し戻して**カレンダー先頭から**再シミュレーションれる（他依頼の割当は維挝）。
-# マスタ勤怠の最終日を超ごで後ゝ倒しでしない依頼は「配台残(勤務カレンダー丝足)」とれる。坄再試行剝に勤怠拡張分はマスタ日付へ戻れ。
+# マスタ勤怠の最終日を超えて後ろ倒しできない依頼は「配台残(勤務カレンダー不足)」となる。再試行前に勤怠拡張分はマスタ日付へ戻す。
 # 既定 **False**（配台試行順を正とし、計画基準超靎でもこの巻し戻し再試行は行ゝない）。従来挙動は必須なとしの値 True。
 STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
 # 紝期基準の +1 日による巻し戻し再シミュは依頼NOごとに最大この回数（6 回目以降は当該依頼のみシフトせう」未完了行に紝期見直し必須を付与し得る）。
@@ -20656,7 +20669,7 @@ def _generate_plan_impl():
                 w[1] = ed
 
     # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
-    # 「原板投入日」は上書き列に日付はあるとししの値」無いとし列「原板投入日」（計画基準納期と混坌しない）
+    # 「原反投入日」は上書き列に日付があるときはその値、ないときは列「原反投入日」（計画基準納期と混同しない）
     _result_sheet_answer_spec_by_line = {}
     _result_sheet_raw_input_by_line: dict = {}
     if tasks_df is not None and not getattr(tasks_df, "empty", True):
@@ -20681,27 +20694,27 @@ def _generate_plan_impl():
     task_results = []
     max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
     
-    # ステータス（配台の坯坦・残）：完了相当=配台坯＝未割当=配台試行＝一部のみ=配台残
-    # 計画基準+1 の再試行は依頼NOととの上限に靔した依頼の未完了行には（紝期見直し必須）を付与れる。
+    # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
+    # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
         if rem_u <= 1e-9:
-            status = "配台坯"
+            status = "配台済"
         elif hist and t.get("_partial_retry_calendar_blocked"):
-            status = "配台残(勤務カレンダー丝足)"
+            status = "配台残(勤務カレンダー不足)"
         elif not hist and rem_u > 1e-9:
-            status = "配台試行"
+            status = "配台不可"
         else:
             status = "配台残"
         _tid_res = str(t.get("task_id", "") or "").strip()
         if (
             _tid_res in _due_shift_exhausted_requests
             and rem_u > 1e-9
-            and "紝期見直し必須" not in status
+            and "納期見直し必須" not in status
         ):
-            status = f"{status}（紝期見直し必須）"
+            status = f"{status}（納期見直し必須）"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
@@ -21007,7 +21020,7 @@ def _generate_plan_impl():
             _apply_result_task_history_rich_text(worksheet_tasks, list(df_tasks.columns))
             _apply_result_task_date_columns_blue_font(worksheet_tasks, list(df_tasks.columns))
 
-            # 未スケジュール行（配台試行・配台残）を目立たせる
+            # 未スケジュール行（配台不可・配台残）を目立たせる
             status_col_idx = None
             for col_idx, col_name in enumerate(df_tasks.columns, 1):
                 if str(col_name) == "ステータス":
@@ -21018,7 +21031,7 @@ def _generate_plan_impl():
                 for r in range(2, worksheet_tasks.max_row + 1):
                     st_val = worksheet_tasks.cell(row=r, column=status_col_idx).value
                     st = str(st_val).strip() if st_val is not None else ""
-                    if st in ("配台試行", "配台残"):
+                    if st in ("配台不可", "配台残", "配台試行"):
                         for c in range(1, max_col + 1):
                             worksheet_tasks.cell(row=r, column=c).fill = unscheduled_fill
 
