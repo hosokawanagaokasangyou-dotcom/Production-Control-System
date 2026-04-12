@@ -5240,7 +5240,7 @@ def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    加工内容に工程名は含まれない行の「タスクID」セルを赤背景・白文字にれる（元データとの整合の視誝用）。
+    加工内容に工程名は含まれない行の「タスクID」セルを赤背景・白文字にする（元データとの整合の確認用）。
     """
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
