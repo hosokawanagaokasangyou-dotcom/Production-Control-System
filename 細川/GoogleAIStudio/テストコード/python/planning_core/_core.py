@@ -15330,6 +15330,34 @@ def _is_machining_timeline_event(ev: dict) -> bool:
     return _timeline_event_kind(ev) == TIMELINE_EVENT_MACHINING
 
 
+def _agent_debug_ndjson_041e24(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+    run_id: str = "pre-fix",
+) -> None:
+    # #region agent log
+    try:
+        from pathlib import Path
+
+        p = Path(__file__).resolve().parents[5] / "debug-041e24.log"
+        rec = {
+            "sessionId": "041e24",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(p, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
 def _extend_changeover_prep_segment_end_for_timeline(
     segments: list, machining_start: datetime | None
 ) -> None:
@@ -15346,8 +15374,31 @@ def _extend_changeover_prep_segment_end_for_timeline(
         pe = seg.get("end_dt")
         if not isinstance(pe, datetime):
             return
+        ps = seg.get("start_dt")
+        _agent_debug_ndjson_041e24(
+            "H2",
+            "_extend_changeover_prep_segment_end_for_timeline",
+            "prep segment vs machining_start",
+            {
+                "prep_start": ps.isoformat() if isinstance(ps, datetime) else None,
+                "prep_end_before": pe.isoformat(),
+                "machining_start": machining_start.isoformat(),
+                "will_extend": bool(machining_start > pe),
+            },
+        )
         if machining_start > pe:
             seg["end_dt"] = machining_start
+        _pe2 = seg.get("end_dt")
+        _agent_debug_ndjson_041e24(
+            "H2",
+            "_extend_changeover_prep_segment_end_for_timeline",
+            "prep segment after",
+            {
+                "prep_end_after": _pe2.isoformat()
+                if isinstance(_pe2, datetime)
+                else None,
+            },
+        )
         return
 
 
@@ -15770,6 +15821,25 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 "machine": eq_line,
                 "machine_occupancy_key": mach_occ,
             }
+        )
+        _agent_debug_ndjson_041e24(
+            "H1",
+            "_changeover_plan_segments_and_machining_lower_bound",
+            "changeover_prep planned (rep calendar)",
+            {
+                "machine_occ_key": mach_occ,
+                "eq_line": eq_line,
+                "cur_tid": cur_tid,
+                "last_tid": _lt_s,
+                "resume_after_break": resume_after_break,
+                "rep_op": rep,
+                "prep_min": prep,
+                "prep_start": t.isoformat(),
+                "prep_end": pe.isoformat(),
+                "rep_breaks": [
+                    (a.isoformat(), b.isoformat()) for a, b in (br_r or [])[:12]
+                ],
+            },
         )
         t = pe
 
@@ -16839,6 +16909,7 @@ def _assign_one_roll_trial_order_flow(
                 ts = b2_insp_ec_floor
             return ts
 
+        _ts_before_defer = team_start
         team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
             task,
             team,
@@ -16924,6 +16995,25 @@ def _assign_one_roll_trial_order_flow(
         else:
             lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
         team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
+        _tb_s = [
+            (a.isoformat(), b.isoformat())
+            for a, b in (team_breaks or [])[:12]
+            if isinstance(a, datetime) and isinstance(b, datetime)
+        ]
+        _agent_debug_ndjson_041e24(
+            "H4",
+            "_one_roll_from_team",
+            "team_start vs machine floor (defer effect)",
+            {
+                "task_id": str(task.get("task_id") or ""),
+                "machine_occ_key": machine_occ_key,
+                "mach_floor_eff": _mach_floor_eff.isoformat(),
+                "team_start_before_defer": _ts_before_defer.isoformat(),
+                "team_start_after_defer": team_start.isoformat(),
+                "team": list(team),
+                "team_breaks_head": _tb_s,
+            },
+        )
         return {
             "team": team,
             "team_start": team_start,
@@ -17443,6 +17533,22 @@ def _trial_order_first_schedule_pass(
                 str(s).strip() for s in sub_members if s and str(s).strip()
             )
             _co_append = list(res.get("changeover_segments") or [])
+            _agent_debug_ndjson_041e24(
+                "H3",
+                "trial_order_assign_loop",
+                "before extend prep; best_start for timeline",
+                {
+                    "task_id": str(task.get("task_id") or ""),
+                    "machine_occ_key": machine_occ_key,
+                    "best_start": best_start.isoformat()
+                    if isinstance(best_start, datetime)
+                    else None,
+                    "co_seg_kinds": [
+                        str(s.get("event_kind") or "")
+                        for s in (_co_append or [])[:6]
+                    ],
+                },
+            )
             _extend_changeover_prep_segment_end_for_timeline(_co_append, best_start)
             _append_changeover_segments_to_timeline(
                 timeline_events,
@@ -20273,7 +20379,7 @@ def _generate_plan_impl():
             )
 
             logging.info(
-                "段階2: 設備ガントを生成していした（データ針により数分かかることはありした）"
+                "段階2: 設備ガントチャートを生成（データ針により数分かかることはありした）"
             )
             gantt_tl_label_specs = _write_results_equipment_gantt_sheet(
                 writer,
