@@ -11016,6 +11016,109 @@ def calculate_end_time(start_dt, duration_minutes, breaks_dt, end_limit_dt):
     end_dt = min(current, end_limit_dt)
     return end_dt, actual_work_time, remaining_work
 
+
+def _dt_close_minutes(a: datetime, b: datetime, tol_sec: int = 59) -> bool:
+    return abs((a - b).total_seconds()) <= tol_sec
+
+
+def _find_latest_prep_start_matching_end(
+    end_at: datetime,
+    dur_mins: int,
+    breaks_merged: list,
+    earliest_start: datetime,
+) -> datetime | None:
+    """
+    実働 dur_mins 分を forward した終了が end_at になる最遅の開始時刻（なければ None）。
+    breaks_merged は merge 済み休憩帯。分単位の探索＋念のための線形フォールバック。
+    """
+    if (
+        dur_mins <= 0
+        or not isinstance(end_at, datetime)
+        or not isinstance(earliest_start, datetime)
+    ):
+        return None
+    if end_at <= earliest_start:
+        return None
+    br = list(breaks_merged or [])
+    cap = end_at + timedelta(days=2)
+    e0, a0, r0 = calculate_end_time(earliest_start, dur_mins, br, cap)
+    if r0 > 0 or a0 != dur_mins:
+        return None
+    if e0 > end_at and not _dt_close_minutes(e0, end_at):
+        return None
+    if _dt_close_minutes(e0, end_at):
+        return earliest_start
+    hi_i = max(0, int((end_at - earliest_start).total_seconds() // 60))
+    lo_i = 0
+    ans: datetime | None = None
+    while lo_i <= hi_i:
+        mid_i = (lo_i + hi_i) // 2
+        s = earliest_start + timedelta(minutes=mid_i)
+        if s > end_at:
+            hi_i = mid_i - 1
+            continue
+        e, act, rem = calculate_end_time(s, dur_mins, br, cap)
+        if rem != 0 or act != dur_mins:
+            lo_i = mid_i + 1
+            continue
+        if e < end_at and not _dt_close_minutes(e, end_at):
+            lo_i = mid_i + 1
+        elif e > end_at and not _dt_close_minutes(e, end_at):
+            hi_i = mid_i - 1
+        else:
+            ans = s
+            lo_i = mid_i + 1
+    if ans is not None:
+        return ans
+    for mid_i in range(hi_i, -1, -1):
+        s = earliest_start + timedelta(minutes=mid_i)
+        e, act, rem = calculate_end_time(s, dur_mins, br, cap)
+        if rem == 0 and act == dur_mins and _dt_close_minutes(e, end_at):
+            return s
+    return None
+
+
+def _try_realign_changeover_prep_segment_to_machining_start(
+    seg: dict,
+    machining_start: datetime,
+    breaks_union: list,
+    start_not_before: datetime,
+    *,
+    dur_mins: int,
+) -> bool:
+    """休憩直前に準備が孤立するのを防し、加工開始直前に準備区間を後ろシフトする。成功時 True。"""
+    ps = seg.get("start_dt")
+    if not isinstance(ps, datetime) or not isinstance(machining_start, datetime):
+        return False
+    if dur_mins <= 0:
+        return False
+    new_start = _find_latest_prep_start_matching_end(
+        machining_start, dur_mins, breaks_union, start_not_before
+    )
+    if new_start is None or new_start < ps:
+        return False
+    cap = machining_start + timedelta(days=1)
+    e2, act2, rem2 = calculate_end_time(new_start, dur_mins, breaks_union, cap)
+    if rem2 != 0 or act2 != dur_mins or not _dt_close_minutes(e2, machining_start):
+        return False
+    seg["start_dt"] = new_start
+    seg["end_dt"] = machining_start
+    # #region agent log
+    _agent_debug_ndjson_c6dbbd(
+        "H2",
+        "_try_realign_changeover_prep_segment_to_machining_start",
+        "realigned changeover prep immediately before machining",
+        {
+            "prep_start_after": new_start.isoformat(),
+            "prep_end_after": machining_start.isoformat(),
+            "dur_mins": dur_mins,
+        },
+        run_id="post-fix",
+    )
+    # #endregion
+    return True
+
+
 def match_need_sheet_condition(condition_raw: str, task_id: str) -> bool:
     """
     need シート「依頼NO条件」欄の解釈。
@@ -15441,12 +15544,14 @@ def _extend_changeover_prep_segment_end_for_timeline(
     machining_start: datetime | None,
     *,
     team_breaks_merged: list | None = None,
+    daily_status: dict | None = None,
 ) -> None:
     """
     タイムライン追記直前に、準備時間セグメントの end_dt を実加工 start_dt まで延ばす。
     依頼切替の準備区間は代表スキルOPの勤務で forward される一方、確定チームの開始は
     max(メンバー avail, 機械下限) となり、準備終了より遅くなると設備時間割の 10 分枠が空く。
     確定チームの休憩が (準備終了, 加工開始) に重なる場合は伸ばさない（休憩を準備時間で埋めない）。
+    その場合は準備区間を加工開始直前へ後ろシフトし、休憩直前に準備だけが載る見え方を避ける。
     """
     if not segments or not isinstance(machining_start, datetime):
         return
@@ -15460,6 +15565,18 @@ def _extend_changeover_prep_segment_end_for_timeline(
         _block = _changeover_prep_extend_overlaps_team_break(
             pe, machining_start, team_breaks_merged
         )
+        prep_op = str(seg.get("op") or "").strip()
+        prep_br: list = []
+        if prep_op and daily_status and daily_status.get(prep_op):
+            prep_br = merge_time_intervals(
+                list(daily_status[prep_op].get("breaks_dt") or [])
+            )
+        br_union = merge_time_intervals(list(team_breaks_merged or []) + prep_br)
+        dur_m = 0
+        if isinstance(ps, datetime):
+            dur_m = int(get_actual_work_minutes(ps, pe, prep_br))
+            if dur_m <= 0:
+                dur_m = int(max(1, (pe - ps).total_seconds() // 60))
         _agent_debug_ndjson_041e24(
             "H2",
             "_extend_changeover_prep_segment_end_for_timeline",
@@ -15474,6 +15591,19 @@ def _extend_changeover_prep_segment_end_for_timeline(
         )
         if machining_start > pe and not _block:
             seg["end_dt"] = machining_start
+        elif (
+            machining_start > pe
+            and _block
+            and isinstance(ps, datetime)
+            and dur_m > 0
+        ):
+            _try_realign_changeover_prep_segment_to_machining_start(
+                seg,
+                machining_start,
+                br_union,
+                ps,
+                dur_mins=dur_m,
+            )
         _pe2 = seg.get("end_dt")
         _agent_debug_ndjson_041e24(
             "H2",
@@ -17703,6 +17833,7 @@ def _trial_order_first_schedule_pass(
                 _co_append,
                 best_start,
                 team_breaks_merged=best_breaks,
+                daily_status=daily_status,
             )
             _append_changeover_segments_to_timeline(
                 timeline_events,
@@ -19775,6 +19906,7 @@ def _generate_plan_impl():
                                 _co_append_l,
                                 best_info.get("start_dt"),
                                 team_breaks_merged=best_info.get("breaks"),
+                                daily_status=daily_status,
                             )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
