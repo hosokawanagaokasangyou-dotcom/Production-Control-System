@@ -12727,7 +12727,7 @@ def load_attendance_and_analyze(members):
             _cols = {str(c).strip() for c in df.columns}
             if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
                 logging.info(
-                    "勤怠列: AI 入力は「%s」のみ。備考は空の日は「%s」（公休・後休・他拠点勤務など）を reason に反映しした。",
+                    "勤怠列: AI 入力は「%s」のみ。備考は空の日は「%s」（公休・後休・他拠点勤務など）を reason に反映しました。",
                     ATT_COL_REMARK,
                     ATT_COL_LEAVE_TYPE,
                 )
@@ -18333,7 +18333,7 @@ def _generate_plan_impl():
             for ivs in _dm.values()
         )
         logging.info(
-            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映しした。",
+            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映しました。",
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
         )
@@ -18345,7 +18345,7 @@ def _generate_plan_impl():
     ):
         logging.info(
             "need配台時追加人数: メイン割付は基本必須人数のみ。"
-            "余力は全シミュレーション後」時間針なりのない未割当かつスキル革坈者をサブに追記しした。"
+            "余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。"
             "（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
