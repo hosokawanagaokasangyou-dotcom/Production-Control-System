@@ -49,7 +49,7 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
-# AI 備考・配台試行ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
+# AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
 _ai_cache_new = os.path.join(json_data_dir, _ai_remarks_cache_name)
@@ -59,7 +59,7 @@ if os.path.isfile(_ai_cache_legacy) and not os.path.isfile(_ai_cache_new):
     except OSError:
         pass
 ai_cache_path = _ai_cache_new
-# 「設定_配台試行工程」シート作成・保存の追跡デバッグ（execution_log と併用）
+# 「設定_配台不要工程」シート作成・保存の追跡デバッグ（execution_log と併用）
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
 # 保存失敗時に E 列（ロジック式）の値を退避し、次回 run_exclude_rules_sheet_maintenance で自動適用する（json フォルダ）
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
@@ -86,7 +86,7 @@ GEMINI_USAGE_CHART_CLEAR_ROWS = 36
 # xlwings で貼る折れ線グラフ名（再実行時に削除してから作り直し）
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
-# テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台試行工程」）の E 列に "1234" を書き（保存経路の確認用）。
+# テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書き（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付しブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
 
@@ -774,7 +774,7 @@ TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
 # 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
 TASK_COL_EXTRACTION_TIME = "抽出時間"
 AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
-# json/ai_remarks_cache.json 内のキー接頭辞（設定_配台試行工程・配台試行ロジック D→E）
+# json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不要ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
 
 # マクロブック「加工実績DATA」（Power Query 等で取り込み想定）
@@ -1009,16 +1009,16 @@ PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# マクロブック「設定_配台試行工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl は実質失敗するため）。失敗時は TSV→VBA 反映。
+# マクロブック「設定_配台不要工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl は実質失敗するため）。失敗時は TSV→VBA 反映。
 # コマンド等で openpyxl を試れ場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
-EXCLUDE_RULES_SHEET_NAME = "設定_配台試行工程"
+EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
 EXCLUDE_RULES_SKIP_OPENPYXL_SAVE = os.environ.get(
     "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", ""
 ).strip().lower() not in ("1", "true", "yes", "on")
 EXCLUDE_RULE_COL_PROCESS = "工程名"
 EXCLUDE_RULE_COL_MACHINE = "機械名"
-EXCLUDE_RULE_COL_FLAG = "配台試行"
-EXCLUDE_RULE_COL_LOGIC_JA = "配台試行ロジック"
+EXCLUDE_RULE_COL_FLAG = "配台不要"
+EXCLUDE_RULE_COL_LOGIC_JA = "配台不要ロジック"
 EXCLUDE_RULE_COL_LOGIC_JSON = "ロジック式"
 # 元ブックはロックされ別名保存した場合」同一プロセス内のルール読込はこのパスを優先
 _exclude_rules_effective_read_path: str | None = None
@@ -1158,7 +1158,7 @@ def plan_input_sheet_column_order():
     配台計画_タスク入力の列順（段階1出力・段階2読込で共通）。
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
-    1. 配台試行（参照列なし）
+    1. 配台不要（参照列なし）
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
@@ -3443,7 +3443,7 @@ def _apply_planning_sheet_post_load_mutations(
             compile_exclude_rules_d_to_e_with_ai=compile_exclude_rules_d_to_e_with_ai,
         )
     except Exception:
-        logging.exception("%s: 設定_配台試行工程の保守で例外（続行）", log_prefix)
+        logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(df, log_prefix=log_prefix)
     except Exception as ex:
@@ -9280,7 +9280,7 @@ def _exclude_rules_sheet_header_map(ws) -> dict:
 
 def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tuple[int, int, int, int, int]:
     """
-    1行目に標準見出し（工程名・機械名・配台試行・配台試行ロジック・ロジック式）はあることを保証れる。
+    1行目に標準見出し（工程名・機械名・配台不要・配台不要ロジック・ロジック式）はあることを保証れる。
     手動で空シートの値追加した場合は A1:E1 は空のため、ここで書き込んで列番坷を返す。
     """
     headers = (
@@ -9381,7 +9381,7 @@ def _cell_is_blank_for_rule(v) -> bool:
 
 
 def _exclude_rule_c_column_is_yes(v) -> bool:
-    """C列「配台試行」はオン（この工程+機械パターンは常に配台試行）。"""
+    """C列「配台不要」はオン（この工程+機械は常に配台対象外）。"""
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return False
     if isinstance(v, bool):
@@ -9472,7 +9472,7 @@ def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
 
 
 def _exclude_rule_de_cache_key(stripped_blob: str) -> str:
-    """「配台試行ロジック」文言（正規化済み）に対れる ai_remarks_cache 用キー。"""
+    """「配台不要ロジック」文言（正規化済み）に対れる ai_remarks_cache 用キー。"""
     h = hashlib.sha256(stripped_blob.encode("utf-8")).hexdigest()
     return f"{AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE}:{h}"
 
@@ -9636,7 +9636,7 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
     ai_cache = load_ai_cache()
     hit = _cache_get_exclude_rule_de_parsed(ai_cache, blob)
     if hit is not None:
-        logging.info("配台試行ルール: AIキャッシュヒット（配台試行ロジック→JSON）")
+        logging.info("配台不要ルール: AIキャッシュヒット（配台不要ロジック→JSON）")
         return hit
     if not API_KEY:
         return None
@@ -9774,7 +9774,7 @@ def _log_exclude_rules_sheet_debug(
     exc: BaseException | None = None,
 ) -> None:
     """
-    「設定_配台試行工程」の保守処理のイベントログ。
+    「設定_配台不要工程」の保守処理のイベントログ。
 
     設定シート処理の追跡を log/exclude_rules_sheet_debug.txt に追記し、execution_log にもタグ付しで出力れる。
     event 例: START, OPEN_OK, OPEN_RETRY, OPEN_FAIL, HEADER_FIX, SYNC_ROWS, OPENPYXL_SAVE_OK, OPENPYXL_SAVE_FAIL,
@@ -9803,7 +9803,7 @@ def _log_exclude_rules_sheet_debug(
     except OSError as wex:
         logging.warning("exclude_rules_sheet_debug.txt へ書けません: %s", wex)
 
-    tag = "[設定_配台試行工程]"
+    tag = "[設定_配台不要工程]"
     msg = f"{tag} {event} | {log_prefix} | {summary}"
     if details:
         msg += f" | {details}"
@@ -10048,7 +10048,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     wb_path: str, ws_oxl, log_prefix: str
 ) -> bool:
     """
-    openpyxl で保存でしないとし」xlwings で「設定_配台試行工程」A:E をメモリ上の値で上書きし Save。
+    openpyxl で保存でしないとし」xlwings で「設定_配台不要工程」A:E をメモリ上の値で上書きし Save。
 
     表示中シートに対れる一括 .value の値てと」スプラッシュ＋ポーリング（D3=true）下で
     Range 代入は数分かかる計測はあり得る。同期中のみシートを一時非表示にし api.Value2 で書き。
@@ -10147,7 +10147,7 @@ EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> bool:
     """
     設定シートのディスク反映。既定は xlwings で A:E 同期→Save（EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 のときのみ openpyxl save を試行）。
-    保存でしないとしは log に行列 TSV を出し、VBA「設定_配台試行工程_AからE_TSVから反映」で反映れる。
+    保存でしないとしは log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映れる。
 
     _wb … 編集済み openpyxl ブック（openpyxl 経路時のみ save に使用）。
     """
@@ -10185,16 +10185,16 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
             log_prefix,
-            "設定_配台試行工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行れる場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。",
+            "設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行れる場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: 設定_配台試行工程は openpyxl を試さず xlwings 同期→Save を試みした（試行なら VBA 用行列 TSV）。",
+            "%s: 設定_配台不要工程は openpyxl を試さず xlwings 同期→Save を試みした（試行なら VBA 用行列 TSV）。",
             log_prefix,
         )
     elif not _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: 設定_配台試行工程は openpyxl で保存しした（試行のときは xlwings 同期→Save」しれも試行なら VBA 用行列 TSV）。",
+            "%s: 設定_配台不要工程は openpyxl で保存しした（試行のときは xlwings 同期→Save」しれも試行なら VBA 用行列 TSV）。",
             log_prefix,
         )
         labels = ("(1/4)", "(2/4)", "(3/4)", "(4/4)")
@@ -10232,7 +10232,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     if _write_exclude_rules_matrix_vba_tsv(wb_path, ws, log_prefix):
         logging.warning(
             "%s: 設定シートを log\\%s に出力しました。"
-            " Excel でマクロ「設定_配台試行工程_AからE_TSVから反映」を実行してください。",
+            " Excel でマクロ「設定_配台不要工程_AからE_TSVから反映」を実行してください。",
             log_prefix,
             EXCLUDE_RULES_MATRIX_VBA_FILENAME,
         )
@@ -10558,12 +10558,12 @@ def run_exclude_rules_sheet_maintenance(
     段階2の ``load_planning_tasks_df`` 経路では False を渡す。
 
     xlwings でも保存でしないとしは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
-    ``設定_配台試行工程_AからE_TSVから反映`` で A〜E を反映れる。
+    ``設定_配台不要工程_AからE_TSVから反映`` で A〜E を反映れる。
     併せで従来どおり E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
     保存成功時は TSV/JSON は削除される。
 
     ``json/exclude_rules_e_column_pending.json`` は Python 次回起動時の E 列復元用。
-    シートの新規作成と 1 行目見出しは VBA「設定_配台試行工程_シートを確保」。
+    シートの新規作成と 1 行目見出しは VBA「設定_配台不要工程_シートを確保」。
     """
     if not wb_path:
         _log_exclude_rules_sheet_debug(
@@ -10650,7 +10650,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SKIP_NO_SHEET",
                 log_prefix,
-                "シートはありません。VBA の「設定_配台試行工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。",
+                "シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。",
                 details=f"path={wb_path}",
             )
             logging.error(
@@ -10882,8 +10882,8 @@ def run_exclude_rules_sheet_maintenance(
         if not persisted:
             logging.warning(
                 "%s: 設定シートの openpyxl 保存に失敗しました。"
-                " log の行列 TSV をマクロ「設定_配台試行工程_AからE_TSVから反映」」"
-                "または E 列のみ「設定_配台試行工程_E列_TSVから反映」で反映してください。",
+                " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」」"
+                "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
             )
     except Exception as ex:
@@ -10893,7 +10893,7 @@ def run_exclude_rules_sheet_maintenance(
             "設定シート処理中に未杕杉例外は発生しました。",
             exc=ex,
         )
-        logging.exception("%s: 設定_配台試行工程の処理で例外", log_prefix)
+        logging.exception("%s: 設定_配台不要工程の処理で例外", log_prefix)
     finally:
         if wb is not None:
             wb.close()
@@ -11112,7 +11112,7 @@ def apply_exclude_rules_config_to_plan_df(
                 n += 1
                 break
     if n:
-        logging.info("%s: 設定「%s」により配台試行=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
+        logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
     # region agent log
     _agent_debug_ndjson(
         {
