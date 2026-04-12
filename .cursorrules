@@ -46,3 +46,11 @@ Generate commit messages in Japanese only. Never use English-only commit message
 ## 配台ロジック変更時の参照
 
 対象範囲・正本の整理: リポジトリ直下 **`.cursor/rules/dispatch-docs-sync.mdc`**（`alwaysApply: true`）。
+
+---
+
+## Markdown / HTML の編集（トークン節約）
+
+**`*.md` / `*.html` は、ユーザーがパスで明示するか、ドキュメント更新を依頼したときのみ編集する**（推測での修正や先回り同期はしない）。
+
+正本: **`.cursor/rules/markdown-html-edit-only-when-requested.mdc`**（`alwaysApply: true`）。ペア同期の例外条件は **`.cursor/rules/md-paired-html-sync.mdc`** 冒頭を参照。
