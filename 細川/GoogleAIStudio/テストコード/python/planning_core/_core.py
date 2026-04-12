@@ -721,7 +721,7 @@ if not API_KEY:
 
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 # 結果_設備ガントの横軸タイムスロット幅（分）
-GANTT_TIMELINE_SLOT_MINUTES = 5
+GANTT_TIMELINE_SLOT_MINUTES = 10
 # 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
 
