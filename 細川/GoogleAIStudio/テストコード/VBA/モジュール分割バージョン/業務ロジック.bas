@@ -623,25 +623,23 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     ws.Columns("A").ColumnWidth = 12   ' 日付（縦結合）
     ws.Columns("B").ColumnWidth = 16   ' 機械名（Python 側フォント拡大に合わせる）
     ws.Columns("C").ColumnWidth = 16   ' 工程名
-    ws.Columns("D").ColumnWidth = 26   ' 担当者（主担当＋サブ列挙）
-    ' E: タスク概要（依頼NO）… 列幅を約 38 ポイントにし折り返し
-    ws.Columns("E").ColumnWidth = 8
-    wE = ws.Columns("E").Width
+    ' D: タスク概要（依頼NO）… 列幅を約 38 ポイントにし折り返し（担当者専用列は廃止）
+    ws.Columns("D").ColumnWidth = 8
+    wE = ws.Columns("D").Width
     If wE > 0 Then
-        ws.Columns("E").ColumnWidth = 38
+        ws.Columns("D").ColumnWidth = 38
     End If
-    ws.Columns("E").WrapText = True
     ws.Columns("D").WrapText = True
     lastCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     On Error GoTo 0
-    If lastCol < 6 Then Exit Sub
-    For c = 6 To lastCol
-        ws.Columns(c).ColumnWidth = 3   ' 時刻グリッド（F 列?）
+    If lastCol < 5 Then Exit Sub
+    For c = 5 To lastCol
+        ws.Columns(c).ColumnWidth = 3   ' 時刻グリッド（E 列?）
     Next c
     On Error Resume Next
     ws.Activate
     ActiveWindow.FreezePanes = False
-    ws.Range("F4").Activate
+    ws.Range("E4").Activate
     ActiveWindow.FreezePanes = True
     ws.Range("A1").Activate
     ActiveWindow.Zoom = 85
