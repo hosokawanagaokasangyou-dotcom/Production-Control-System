@@ -1145,7 +1145,7 @@ def plan_input_sheet_column_order():
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
 
-    global_speed_rules 等で変える実効速度はシート列では渡たる」配台内部のみで反映れる。
+    global_speed_rules 等で変える実効速度は計画シート列では増えないが」配台内部で確定した値は結果_タスク一覧の「加工速度」に出す。
     """
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
     for c in SOURCE_BASE_COLUMNS:
@@ -4314,6 +4314,7 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "タスクID",
         "工程名",
         "機械名",
+        TASK_COL_SPEED,
         "優先度",
         RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
         *hist,
@@ -8918,6 +8919,8 @@ def build_task_queue_from_planning_df(
                 else 0,
                 "assigned_history": [],
                 "calc_time_value": calc_time_val,
+                # シートの加工速度・上書き・global_speed_rules 適用後の m/分（配台シミュレーションと同一）
+                TASK_COL_SPEED: float(speed),
                 "required_op": req_op,
                 "task_eff_factor": task_eff_factor,
                 "priority": priority,
@@ -20799,6 +20802,7 @@ def _generate_plan_impl():
             "加工途中": "はい" if t.get("in_progress") else "いいえ",
             "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
             "担当OP指定": (t.get("preferred_operator_raw") or "")[:120],
+            TASK_COL_SPEED: t.get(TASK_COL_SPEED, ""),
             "回答納期": ans_s,
             "指定納期": spec_s,
             "計画基準納期": basis_s,
