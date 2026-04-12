@@ -725,12 +725,11 @@ GANTT_TIMELINE_SLOT_MINUTES = 10
 # 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
-GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "30")))
+GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
-GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "28")))
-# 印刷の縮小率（%）。post-page-fix-2（52%）でも日内改ページが残るケース向けに既定を下げる。
-# 環境変数 GANTT_PRINT_SCALE_PERCENT で上書き可（10〜400 の整数）。
-GANTT_PRINT_SCALE_PERCENT = max(10, min(400, int(os.environ.get("GANTT_PRINT_SCALE_PERCENT", "42"))))
+GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "36")))
+# 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
+# どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -2310,22 +2309,31 @@ def _write_results_equipment_gantt_sheet(
                 "print_title_rows_will_be": "1:3",
                 "gantt_machine_row_height_pt": float(GANTT_MACHINE_ROW_HEIGHT_PT),
                 "gantt_hdr_row_height_pt": float(GANTT_HDR_ROW_HEIGHT_PT),
-                "gantt_print_scale_percent": int(GANTT_PRINT_SCALE_PERCENT),
+                "gantt_print_scale_override": (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
+                or None,
             },
         }
     )
     # endregion agent log
 
+    _gantt_scale_override_raw = (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # post-page-fix-2 ログでは scale=52・行高32/34 でも日内改ページが残る（再現）。
-        # print_title_rows 1:3 の繰り返しが縦を圧迫するため、既定スケール・行高をさらに下げる。
-        # 微調整は環境変数 GANTT_PRINT_SCALE_PERCENT / GANTT_MACHINE_ROW_HEIGHT_PT / GANTT_HDR_ROW_HEIGHT_PT。
+        # 既定: 横1ページに収める（タイムラインが読める）。縦は自動（日内改ページは行高で緩和）。
+        # GANTT_PRINT_SCALE_PERCENT を指定したときのみ固定%（横幅が細くなりやすい）。
         ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToPage = False
-        ws.page_setup.fitToWidth = False
-        ws.page_setup.fitToHeight = False
-        ws.page_setup.scale = int(GANTT_PRINT_SCALE_PERCENT)
+        if _gantt_scale_override_raw:
+            _pct = max(10, min(400, int(_gantt_scale_override_raw)))
+            ws.page_setup.fitToPage = False
+            ws.page_setup.fitToWidth = False
+            ws.page_setup.fitToHeight = False
+            ws.page_setup.scale = _pct
+            _gantt_print_mode = f"scale{_pct}"
+        else:
+            ws.page_setup.fitToPage = True
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            _gantt_print_mode = "fitWidth1_heightAuto"
         # A3（Excel / openpyxl の paperSize=8）
         ws.page_setup.paperSize = 8
         # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
@@ -2346,9 +2354,10 @@ def _write_results_equipment_gantt_sheet(
             {
                 "hypothesisId": "H8",
                 "message": "page_setup applied",
-                "runId": "post-page-fix-3",
+                "runId": "post-page-fix-4",
                 "data": {
-                    "fixTag": "fitOff-scale42-rowh28-hdr30-env",
+                    "fixTag": "default-fitW1-rowh36-hdr38",
+                    "printMode": _gantt_print_mode,
                     "fitToPage": bool(ws.page_setup.fitToPage),
                     "fitToWidth": ws.page_setup.fitToWidth,
                     "fitToHeight": ws.page_setup.fitToHeight,
@@ -2359,7 +2368,7 @@ def _write_results_equipment_gantt_sheet(
                     "n_dates_to_show": len(dates_to_show),
                     "gantt_machine_row_height_pt": float(GANTT_MACHINE_ROW_HEIGHT_PT),
                     "gantt_hdr_row_height_pt": float(GANTT_HDR_ROW_HEIGHT_PT),
-                    "gantt_print_scale_percent": int(GANTT_PRINT_SCALE_PERCENT),
+                    "gantt_print_scale_override": _gantt_scale_override_raw or None,
                 },
             }
         )
