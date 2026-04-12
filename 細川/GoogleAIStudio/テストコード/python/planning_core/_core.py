@@ -6173,12 +6173,45 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
+    # #region agent log
+    _ADG_LOG = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-742490.log"
+        )
+    )
+
+    def _adg_emit(
+        hypothesis_id: str, message: str, data: dict, run_id: str = "pre"
+    ) -> None:
+        try:
+            with open(_ADG_LOG, "a", encoding="utf-8") as _af:
+                _af.write(
+                    json.dumps(
+                        {
+                            "sessionId": "742490",
+                            "runId": run_id,
+                            "hypothesisId": hypothesis_id,
+                            "location": "_gantt_add_timeline_rounded_rect_labels_xlwings",
+                            "message": message,
+                            "data": data,
+                            "timestamp": int(time_module.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+
+    # #endregion
     rp = (result_path or "").strip()
     if not rp or not os.path.isfile(rp) or not specs:
+        _adg_emit("H5", "gantt_xlwings_skip", {"reason": "no_path_or_specs"}, "pre")
         return False
     try:
         import xlwings as xw
     except ImportError:
+        _adg_emit("H5", "gantt_xlwings_skip", {"reason": "no_xlwings"}, "pre")
         return False
     app = None
     wb = None
@@ -6202,8 +6235,53 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         try:
             sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
         except Exception:
+            _adg_emit(
+                "H5",
+                "gantt_xlwings_skip",
+                {"reason": "no_gantt_sheet", "sheet": RESULT_SHEET_GANTT_NAME},
+                "pre",
+            )
             return False
         api_ws = sht.api
+        # #region agent log
+        _gantt_dbg_row_rects: dict[
+            int, list[tuple[float, float, float, float, int, int]]
+        ] = {}
+        _gantt_dbg_overlap_samples: list[dict] = []
+        _gantt_dbg_max_label_minus_w = 0.0
+        _gantt_dbg_first_samples: list[dict] = []
+
+        def _gantt_dbg_rects_intersect(
+            a: tuple[float, float, float, float],
+            b: tuple[float, float, float, float],
+        ) -> bool:
+            return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+
+        def _gantt_dbg_register_rects(
+            row_i: int,
+            rects: list[tuple[float, float, float, float]],
+            cs: int,
+            ce: int,
+        ) -> None:
+            bucket = _gantt_dbg_row_rects.setdefault(row_i, [])
+            for rt in rects:
+                for prev in bucket:
+                    if _gantt_dbg_rects_intersect(rt, prev[:4]):
+                        if len(_gantt_dbg_overlap_samples) < 20:
+                            _gantt_dbg_overlap_samples.append(
+                                {
+                                    "row": row_i,
+                                    "new_ltrb": list(rt),
+                                    "prev_ltrb": list(prev[:4]),
+                                    "col_s": cs,
+                                    "col_e": ce,
+                                    "prev_cs": prev[4],
+                                    "prev_ce": prev[5],
+                                }
+                            )
+                bucket.append((rt[0], rt[1], rt[2], rt[3], cs, ce))
+
+        # #endregion
         # msoShapeRoundedRectangle = 5
         _mso_round_rect = 5
         _mso_bring_to_front = 0
@@ -6211,6 +6289,18 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         _progress_every = 30
         n_added = 0
         names_by_day: dict[str, list[str]] = defaultdict(list)
+        # #region agent log
+        _adg_emit(
+            "H5",
+            "gantt_xlwings_enter",
+            {
+                "n_specs": n_specs,
+                "result_basename": os.path.basename(rp),
+                "shape_labels_env": os.environ.get("GANTT_TIMELINE_SHAPE_LABELS", ""),
+            },
+            "pre",
+        )
+        # #endregion
 
         def _record_day_shape(shp_obj, day_k: str):
             if not day_k or shp_obj is None:
@@ -6360,6 +6450,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             # 依頼NO シェイプ幅は結合セル矩形を超えないこと（max(w, min_w) だと狭い帯が隣セルへ
             # はみ出し、時間重なりのないタスク同士でもシェイプが重なる）。
             label_w = float(w)
+            # #region agent log
+            _gantt_dbg_max_label_minus_w = max(
+                _gantt_dbg_max_label_minus_w, float(label_w) - float(w)
+            )
+            # #endregion
             # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/4。
             _band = float(h) / 3.0
             _h_req_no = max(9.0, float(h) / 4.0)
@@ -6373,6 +6468,24 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 str(x).strip() for x in (sp.get("member_labels") or []) if str(x).strip()
             ]
             mems_all = mems_all[:8]
+            # #region agent log
+            if len(_gantt_dbg_first_samples) < 18:
+                _gantt_dbg_first_samples.append(
+                    {
+                        "row": row,
+                        "col_s": col_s,
+                        "col_e": col_e,
+                        "w": round(w, 2),
+                        "h": round(h, 2),
+                        "label_w": round(float(label_w), 2),
+                        "slot": int(_slot),
+                        "band_h": round(_band, 2),
+                        "has_mem": bool(mems_all),
+                        "text_len": len(text),
+                        "n_mem": len(mems_all),
+                    }
+                )
+            # #endregion
             mem_fill = _com_excel_bgr_rgb(252, 252, 254)
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
@@ -6425,6 +6538,23 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 h_main = float(_hmain_eff)
                 h_mem_use = float(_hmem_eff)
                 gx = 1.0
+                # #region agent log
+                _pills_union = (
+                    float(left),
+                    float(y_mem),
+                    float(left) + float(w),
+                    float(y_mem) + float(h_mem_use),
+                )
+                _main_union = (
+                    float(left),
+                    float(y_main),
+                    float(left) + float(label_w),
+                    float(y_main) + float(h_main),
+                )
+                _gantt_dbg_register_rects(
+                    row, [_pills_union, _main_union], col_s, col_e
+                )
+                # #endregion
 
                 def _emit_member_pills(
                     names: list[str], y0: float, pill_h: float, day_k: str
@@ -6495,6 +6625,15 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 y_lbl = band_top + _band_inset + max(
                     0.0, (_band - 2.0 * _band_inset - label_h) / 2.0
                 )
+                # #region agent log
+                _solo = (
+                    float(left),
+                    float(y_lbl),
+                    float(left) + float(label_w),
+                    float(y_lbl) + float(label_h),
+                )
+                _gantt_dbg_register_rects(row, [_solo], col_s, col_e)
+                # #endregion
                 shp = _gantt_xlw_add_round_rect(
                     left,
                     y_lbl,
@@ -6519,6 +6658,35 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         shp.TextFrame.HorizontalAlignment = -4131
                     except Exception:
                         pass
+        # #region agent log
+        _adg_emit(
+            "H1",
+            "gantt_label_width_metrics",
+            {"max_label_minus_w": round(_gantt_dbg_max_label_minus_w, 4)},
+            "pre",
+        )
+        _adg_emit(
+            "H2",
+            "gantt_AABB_overlap_samples",
+            {
+                "overlap_count": len(_gantt_dbg_overlap_samples),
+                "samples": _gantt_dbg_overlap_samples[:12],
+            },
+            "pre",
+        )
+        _adg_emit(
+            "H3",
+            "gantt_first_geometry_samples",
+            {"n": len(_gantt_dbg_first_samples), "samples": _gantt_dbg_first_samples},
+            "pre",
+        )
+        _adg_emit(
+            "H5",
+            "gantt_xlwings_shapes_loop_done",
+            {"n_added": n_added, "n_specs": n_specs},
+            "pre",
+        )
+        # #endregion
         n_flat = 0
         if (
             GANTT_TIMELINE_LABELS_DAY_FLATTEN
