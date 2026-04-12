@@ -1082,7 +1082,7 @@ GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
 GANTT_TIMELINE_LABELS_DAY_FLATTEN = os.environ.get(
     "GANTT_TIMELINE_LABELS_DAY_FLATTEN", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
-# 日別画像: 外接矩形にクロマキー色を敷き Picture 透明化（セル帯が透ける）。既定 OFF（xlBitmap+透明で真っ黒になる環境があるため）。有効化: GANTT_DAY_IMAGE_CHROMA_TRANSPARENT=1。敷き色 GANTT_DAY_IMAGE_CHROMA_HEX（既定 FF00FF）。コピー形式: GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT=picture|bitmap（空なら透明時は EMF、非透明時はビットマップ）
+# 日別画像: 外接矩形にクロマキー色を敷き Picture 透明化（任意）。既定 OFF。敷き色 GANTT_DAY_IMAGE_CHROMA_HEX（既定 FF00FF）。CopyPicture の形式: GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT=picture|bitmap（空なら既定 xlPicture=EMF。手動の「図としてコピー」に近く、シェイプ実体以外が透明になりやすい。bitmap は余白が不透明になりがち）
 GANTT_DAY_IMAGE_CHROMA_TRANSPARENT = os.environ.get(
     "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "0"
 ).strip().lower() in ("1", "true", "yes", "on")
@@ -5794,17 +5794,22 @@ def _gantt_flatten_apply_picture_chroma_transparency_xlw(pic, fill_bgr: int) -> 
         pass
 
 
-def _gantt_flatten_copy_picture_format_xlw(use_chroma_backdrop: bool) -> int:
+def _gantt_flatten_copy_picture_format_xlw() -> int:
     """
-    CopyPicture の Format。xlBitmap(2) と PictureFormat 透明の併用で貼り付けが真っ黒になることがあるため、
-    クロマ敷きありのときは既定 xlPicture(-4147)（EMF 系）を使う。
+    CopyPicture の Format（XlCopyPictureFormat）。
+
+    Excel でグループ化→クリップボード経由で画像貼り付けしたとき、**外接矩形のうち
+    シェイプの実画素以外が透明**になりやすいのは **xlPicture（-4147, EMF 系）** 側。
+    **xlBitmap（2）** は余白が **不透明（白など）** になりやすく、手動の見え方とずれる。
+
+    ``GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT`` で上書き可能（既定は xlPicture）。
     """
     v = (os.environ.get("GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT", "") or "").strip().lower()
     if v in ("bitmap", "xlbitmap", "2", "bmp"):
         return 2
     if v in ("picture", "xlpicture", "emf", "wmf", "meta", "-4147"):
         return -4147
-    return -4147 if use_chroma_backdrop else 2
+    return -4147
 
 
 def _gantt_clipboard_picture_from_shape_names_xlw(
@@ -5818,7 +5823,7 @@ def _gantt_clipboard_picture_from_shape_names_xlw(
     ラベル等の図形を「1 枚の画像」に置き換える Excel 標準フロー（クリップボード経由）。
 
     1. 名前が複数なら ``Shapes.Range(...).Group()`` でグループ化（単一ならそのまま）
-    2. ``CopyPicture`` … クリップボードに画像（ビットマップまたは EMF）として載せる
+    2. ``CopyPicture`` … クリップボードに画像として載せる（Format は ``_gantt_flatten_copy_picture_format_xlw``。既定 EMF 系で手動に近い「外側透明」）
     3. ``Worksheet.Paste`` … シート上に画像シェイプとして貼り付け
     4. 元グループ／元シェイプを削除（貼り付け後の画像のみ残す）
 
@@ -5917,7 +5922,7 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                     group_names = (bd_nm_try,) + tuple(names)
 
             chroma_backdrop = backdrop_nm is not None
-            _cpy_fmt = _gantt_flatten_copy_picture_format_xlw(chroma_backdrop)
+            _cpy_fmt = _gantt_flatten_copy_picture_format_xlw()
 
             pic, left0, top0, w0, h0 = _gantt_clipboard_picture_from_shape_names_xlw(
                 api_ws,
