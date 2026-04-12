@@ -21252,7 +21252,9 @@ def _generate_plan_impl():
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
-        if rem_u <= 1e-9:
+        # 負の残は「配台済」に含めない（-0.5R 等は配台残）。浮動小数で -1m 程度の誤差は配台済扱い。
+        _rem_abs_m = abs(rem_u * float(t.get("unit_m") or 0))
+        if rem_u <= 1e-9 and (rem_u >= 0 or _rem_abs_m < 2.0):
             status = "配台済"
         elif hist and t.get("_partial_retry_calendar_blocked"):
             status = "配台残(勤務カレンダー不足)"
@@ -21269,7 +21271,7 @@ def _generate_plan_impl():
             status = f"{status}（納期見直し必須）"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
-        rem_r = int(t['remaining_units'])
+        rem_r = max(0, int(float(t.get("remaining_units") or 0)))
         
         _line_key = (str(t.get("task_id", "") or "").strip(), str(t.get("machine", "") or "").strip())
         _sheet_pair = _result_sheet_answer_spec_by_line.get(_line_key)
