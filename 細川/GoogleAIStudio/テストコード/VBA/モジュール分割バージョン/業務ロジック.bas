@@ -620,19 +620,14 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastUsed As Long
     Dim lastTitle As Long
     Dim c As Long
-    Dim wD As Double
     Const HDR_ROW As Long = 3   ' Python 表見出し行（A?D 固定見出し＋E? 時刻）に合わせる
     
     On Error Resume Next
     ws.Columns("A").ColumnWidth = 12   ' 日付（縦結合）
     ws.Columns("B").ColumnWidth = 16   ' 機械名（Python 側フォント拡大に合わせる）
-    ws.Columns("C").ColumnWidth = 16   ' 工程名
-    ' D: タスク概要（依頼NO）… 列幅を約 38 ポイントにし折り返し（担当者専用列は廃止）
-    ws.Columns("D").ColumnWidth = 8
-    wD = ws.Columns("D").Width
-    If wD > 0 Then
-        ws.Columns("D").ColumnWidth = 38
-    End If
+    ws.Columns("C").ColumnWidth = 12   ' 工程名
+    ' D: タスク概要（依頼NO）… 折り返し
+    ws.Columns("D").ColumnWidth = 25
     ws.Columns("D").WrapText = True
     ' UsedRange だけだと E 列以降が「未使用」とみなされ lastCol<5 になり、時刻列幅が付かないことがある
     lastHdr = ws.Cells(HDR_ROW, ws.Columns.Count).End(xlToLeft).Column
