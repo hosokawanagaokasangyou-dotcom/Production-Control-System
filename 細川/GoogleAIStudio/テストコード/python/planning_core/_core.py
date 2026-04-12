@@ -21252,9 +21252,11 @@ def _generate_plan_impl():
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
-        # 負の残は「配台済」に含めない（-0.5R 等は配台残）。浮動小数で -1m 程度の誤差は配台済扱い。
-        _rem_abs_m = abs(rem_u * float(t.get("unit_m") or 0))
-        if rem_u <= 1e-9 and (rem_u >= 0 or _rem_abs_m < 2.0):
+        # 負の残は「配台済」に含めない（-0.5R 等は配台残）。浮動小数の負残は反長に比例したメートル幅で配台済に含める。
+        _um0 = float(t.get("unit_m") or 0)
+        _rem_abs_m = abs(rem_u * _um0)
+        _noise_tol_m = max(3.0, min(100.0, 0.025 * abs(_um0)))
+        if rem_u <= 1e-9 and (rem_u >= 0 or _rem_abs_m <= _noise_tol_m):
             status = "配台済"
         elif hist and t.get("_partial_retry_calendar_blocked"):
             status = "配台残(勤務カレンダー不足)"
@@ -21373,6 +21375,46 @@ def _generate_plan_impl():
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
         task_results.append(row_data)
+    # #region agent log
+    try:
+        _neg_rem: list[float] = []
+        for _tx in sorted_tasks_for_result:
+            _rx = float(_tx.get("remaining_units") or 0)
+            if _rx < -1e-12:
+                _neg_rem.append(_rx)
+        _agp_sum = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-0a44f7.log",
+            )
+        )
+        with open(_agp_sum, "a", encoding="utf-8") as _agf_sum:
+            _agf_sum.write(
+                json.dumps(
+                    {
+                        "sessionId": "0a44f7",
+                        "hypothesisId": "emit_summary",
+                        "location": "_core.py:after_result_task_loop",
+                        "message": "remaining_units after simulation",
+                        "data": {
+                            "n_tasks": len(sorted_tasks_for_result),
+                            "negative_remaining_count": len(_neg_rem),
+                            "min_remaining_units": min(_neg_rem) if _neg_rem else None,
+                        },
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
         
     cal_rows = []
     for d in sorted_dates:
