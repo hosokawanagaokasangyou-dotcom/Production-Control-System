@@ -2921,6 +2921,85 @@ def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
         df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
 
 
+def _stage1_roll_length_for_planning_row(row) -> float:
+    """段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。"""
+    _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
+    qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+    done_qty = calc_done_qty_equivalent_from_row(row)
+    qty = max(0.0, qty_total - done_qty)
+    _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+    _qty_total_s1 = _floor_positive_m_to_planning_minimum(
+        _qty_total_s1, PLANNING_MIN_QTY_M
+    )
+    _roll_len = infer_unit_m_from_product_name(
+        _pn_stage1, fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty
+    )
+    try:
+        _roll_len = float(_roll_len)
+    except (TypeError, ValueError):
+        _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
+    if _roll_len <= 0:
+        _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
+        _pn_stage1, _roll_len, _qty_total_s1
+    )
+    try:
+        _roll_len = float(_roll_len)
+    except (TypeError, ValueError):
+        _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    if _roll_len <= 0:
+        _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    return float(_ceil_roll_unit_length_m_to_next_step(_roll_len))
+
+
+def _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df: "pd.DataFrame") -> None:
+    """
+    段階1: 既存シートのマージで「寸法ペア左側（例: 870）を 100m 切上した値」がロール単位長さに
+    残った場合、製品名からの再計算で矯正する（誤マージ・誤フォールバックの典型: 900 を期待 200 の行）。
+    手入力で意図的に左側切上と同じ値にした行は稀なため、一致時のみ上書きする。
+    """
+    if out_df is None or getattr(out_df, "empty", True):
+        return
+    if (
+        PLAN_COL_ROLL_UNIT_LENGTH not in out_df.columns
+        or TASK_COL_PRODUCT not in out_df.columns
+    ):
+        return
+    healed = 0
+    for i in out_df.index:
+        row = out_df.loc[i]
+        pn = row.get(TASK_COL_PRODUCT, None)
+        s = _normalize_product_dim_separators_for_roll_inference(str(pn or ""))
+        dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+        if not dim_pairs:
+            continue
+        try:
+            left_w = int(dim_pairs[-1][0])
+        except ValueError:
+            continue
+        if left_w <= 0:
+            continue
+        width_ceiled = float(_ceil_roll_unit_length_m_to_next_step(float(left_w)))
+        cur = parse_float_safe(row.get(PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
+        if cur <= 0:
+            continue
+        if abs(cur - width_ceiled) > 1e-6:
+            continue
+        try:
+            want = _stage1_roll_length_for_planning_row(row)
+        except Exception:
+            continue
+        if abs(cur - want) <= 1e-6:
+            continue
+        out_df.at[i, PLAN_COL_ROLL_UNIT_LENGTH] = want
+        healed += 1
+    if healed:
+        logging.info(
+            "段階1: ロール単位長さが寸法左側の100m切上と誤一致していた行を %s 件、製品名ベースで矯正しました。",
+            healed,
+        )
+
+
 def load_tasks_df():
     """
     タスク入力を取得れる（tasks.xlsx は使用しない）。
@@ -10557,33 +10636,13 @@ def run_stage1_extract():
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
-        _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
         _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
         _qty_total_s1 = _floor_positive_m_to_planning_minimum(
             _qty_total_s1, PLANNING_MIN_QTY_M
         )
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = _qty_total_s1
-        _roll_len = infer_unit_m_from_product_name(
-            _pn_stage1, fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty
-        )
-        try:
-            _roll_len = float(_roll_len)
-        except (TypeError, ValueError):
-            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
-        if _roll_len <= 0:
-            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-        _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
-            _pn_stage1, _roll_len, _qty_total_s1
-        )
-        try:
-            _roll_len = float(_roll_len)
-        except (TypeError, ValueError):
-            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-        if _roll_len <= 0:
-            _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-        _roll_len = _ceil_roll_unit_length_m_to_next_step(_roll_len)
-        rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
+        rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
@@ -10632,6 +10691,8 @@ def run_stage1_extract():
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
+    _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
+    _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
