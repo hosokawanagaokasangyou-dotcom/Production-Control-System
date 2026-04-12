@@ -17782,7 +17782,8 @@ def _generate_plan_impl():
         _STAGE2_REGULAR_SHIFT_START = _rs_a15
         if _rs_a15 is not None:
             logging.info(
-                "日次始業準備: 定常開始 master メイン A15=%s を採用（[開始, 開始+分) を壝時計で占有。A15 無効時は従来の勤怠 forward）",
+                "日次始業準備: 定常開始 master メイン A15=%s を採用（[開始, 開始+分) を時刻で占有。A15 無効時は従来の勤怠 forward）",
+           
                 _rs_a15.strftime("%H:%M"),
             )
     except Exception as e:
