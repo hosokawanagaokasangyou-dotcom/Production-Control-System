@@ -4580,6 +4580,56 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
     return parse_result_task_column_config_dataframe(df_cfg, max_history_len)
 
 
+def _result_task_column_config_fallback_from_existing(
+    df_tasks: pd.DataFrame, max_history_len: int
+) -> tuple[list[str], dict[str, bool]]:
+    """
+    段階2で列順リストが空のときの補完。
+    1) 結果 DataFrame に列があればその既存列順を採用し、マクロブック「列設定_結果_タスク一覧」
+       で解決できる列は表示フラグを上書きする。
+    2) 列が無ければ同シートから列名・表示を読む（TASK_INPUT_WORKBOOK・openpyxl 可のとき）。
+    3) それも無ければ default_result_task_sheet_column_order。
+    """
+    rows_in = load_result_task_column_rows_from_input_workbook(max_history_len)
+    cols = [str(c) for c in df_tasks.columns]
+
+    if cols:
+        vis_map = {c: True for c in cols}
+        if rows_in:
+            col_by_norm = _result_task_column_alias_map(cols)
+            for item, vis in rows_in:
+                resolved = _resolve_result_task_column_label(item, col_by_norm)
+                if resolved and resolved in vis_map:
+                    vis_map[resolved] = bool(vis)
+        logging.warning(
+            "段階2: 列順リストが空でした。結果 DataFrame の既存列（%s 列）で「%s」を補完しました。"
+            + (" マクロブック列設定の表示フラグを反映しました。" if rows_in else ""),
+            len(cols),
+            COLUMN_CONFIG_SHEET_NAME,
+        )
+        return cols, vis_map
+
+    if rows_in:
+        order: list[str] = []
+        vis_map: dict[str, bool] = {}
+        for lab, vis in rows_in:
+            order.append(lab)
+            vis_map[lab] = bool(vis)
+        logging.warning(
+            "段階2: タスク行・列が無いため、マクロブック「%s」から %s 列で補完しました。",
+            COLUMN_CONFIG_SHEET_NAME,
+            len(order),
+        )
+        return order, vis_map
+
+    dflt = list(default_result_task_sheet_column_order(max_history_len))
+    logging.warning(
+        "段階2: タスク行が 0 件かつ列設定の読込も無いため「%s」に既定の列名一覧を書き込みました。",
+        COLUMN_CONFIG_SHEET_NAME,
+    )
+    return dflt, {c: True for c in dflt}
+
+
 def apply_result_task_sheet_column_order(
     df: pd.DataFrame,
     max_history_len: int,
@@ -21050,22 +21100,9 @@ def _generate_plan_impl():
             # 列設定シートは「列名」「表示」のデータ行が必須。task_results が空だと
             # apply_result_task_sheet_column_order は ordered が空になり、見出しのみのシートになる。
             if not task_column_order:
-                if len(df_tasks.columns) > 0:
-                    task_column_order = [str(c) for c in df_tasks.columns]
-                    vis_map = {c: True for c in task_column_order}
-                    logging.warning(
-                        "段階2: 列順リストが空でした。結果 DataFrame の列名で「%s」を補完しました。",
-                        COLUMN_CONFIG_SHEET_NAME,
-                    )
-                else:
-                    task_column_order = list(
-                        default_result_task_sheet_column_order(max_history_len)
-                    )
-                    vis_map = {c: True for c in task_column_order}
-                    logging.warning(
-                        "段階2: タスク行が 0 件のため「%s」に既定の列名一覧を書き込みました。",
-                        COLUMN_CONFIG_SHEET_NAME,
-                    )
+                task_column_order, vis_map = _result_task_column_config_fallback_from_existing(
+                    df_tasks, max_history_len
+                )
             seen_tc: set[str] = set()
             task_column_order_dedup: list = []
             vis_list_dedup: list = []
