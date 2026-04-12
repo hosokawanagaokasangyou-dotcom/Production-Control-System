@@ -725,13 +725,12 @@ GANTT_TIMELINE_SLOT_MINUTES = 10
 # 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
-GANTT_HDR_ROW_HEIGHT_PT = 34
+GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "30")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
-# 52pt×設備数では A3 横1列でも日内に自動改ページが入りやすいため抑える。
-GANTT_MACHINE_ROW_HEIGHT_PT = 32
-# 印刷の縮小率（%）。fitToWidth=1 のみだと横に強く縮み日内改ページが残るため、
-# fitToPage を切り固定スケールにする（10〜400 の整数）。
-GANTT_PRINT_SCALE_PERCENT = 52
+GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "28")))
+# 印刷の縮小率（%）。post-page-fix-2（52%）でも日内改ページが残るケース向けに既定を下げる。
+# 環境変数 GANTT_PRINT_SCALE_PERCENT で上書き可（10〜400 の整数）。
+GANTT_PRINT_SCALE_PERCENT = max(10, min(400, int(os.environ.get("GANTT_PRINT_SCALE_PERCENT", "42"))))
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -2319,9 +2318,9 @@ def _write_results_equipment_gantt_sheet(
 
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # post-page-fix-1 ログでは fitToHeight=0・行高38でも日内改ページが残る（再現）。
-        # fitToWidth=1 のみは横方向に強く縮小し、縦が1物理ページに収まらないことがある。
-        # fitToPage を切り GANTT_PRINT_SCALE_PERCENT で固定縮小し、行高も抑える。
+        # post-page-fix-2 ログでは scale=52・行高32/34 でも日内改ページが残る（再現）。
+        # print_title_rows 1:3 の繰り返しが縦を圧迫するため、既定スケール・行高をさらに下げる。
+        # 微調整は環境変数 GANTT_PRINT_SCALE_PERCENT / GANTT_MACHINE_ROW_HEIGHT_PT / GANTT_HDR_ROW_HEIGHT_PT。
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToPage = False
         ws.page_setup.fitToWidth = False
@@ -2345,11 +2344,11 @@ def _write_results_equipment_gantt_sheet(
         # region agent log
         _agent_gantt_debug(
             {
-                "hypothesisId": "H7",
+                "hypothesisId": "H8",
                 "message": "page_setup applied",
-                "runId": "post-page-fix-2",
+                "runId": "post-page-fix-3",
                 "data": {
-                    "fixTag": "fitOff-scale52-rowh32-hdr34",
+                    "fixTag": "fitOff-scale42-rowh28-hdr30-env",
                     "fitToPage": bool(ws.page_setup.fitToPage),
                     "fitToWidth": ws.page_setup.fitToWidth,
                     "fitToHeight": ws.page_setup.fitToHeight,
