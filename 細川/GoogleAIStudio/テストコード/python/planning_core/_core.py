@@ -1082,6 +1082,10 @@ GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
 GANTT_TIMELINE_LABELS_DAY_FLATTEN = os.environ.get(
     "GANTT_TIMELINE_LABELS_DAY_FLATTEN", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
+# 日別画像化: コピー前に青い矩形を敷き、貼り付け後に同じ色を Picture の透明色に設定（セル側の帯色が透ける）。無効: GANTT_DAY_IMAGE_CHROMA_TRANSPARENT=0。色は GANTT_DAY_IMAGE_CHROMA_HEX（既定 0000FF）
+GANTT_DAY_IMAGE_CHROMA_TRANSPARENT = os.environ.get(
+    "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "1"
+).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
@@ -5744,12 +5748,50 @@ def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> N
         wb.close()
 
 
+def _gantt_day_image_chroma_rgb() -> tuple[int, int, int]:
+    """日別画像の背景／透明色に使う RGB（環境変数 GANTT_DAY_IMAGE_CHROMA_HEX、既定 純青）。"""
+    hx = (os.environ.get("GANTT_DAY_IMAGE_CHROMA_HEX", "0000FF") or "0000FF").strip()
+    return _hex_rrggbb_to_rgb_triple(hx)
+
+
+def _gantt_union_bbox_names_xlw(
+    api_ws, names: list[str]
+) -> tuple[float, float, float, float] | None:
+    """シェイプ名の列の外接矩形 (Left, Top, Width, Height)。取得できなければ None。"""
+    min_l = min_t = None
+    max_r = max_b = None
+    for nm in names:
+        try:
+            sh = api_ws.Shapes(nm)
+            l = float(sh.Left)
+            t = float(sh.Top)
+            r = l + float(sh.Width)
+            b = t + float(sh.Height)
+        except Exception:
+            continue
+        if min_l is None:
+            min_l, min_t, max_r, max_b = l, t, r, b
+        else:
+            min_l = min(min_l, l)
+            min_t = min(min_t, t)
+            max_r = max(max_r, r)
+            max_b = max(max_b, b)
+    if min_l is None:
+        return None
+    pad = 1.0
+    w = max(max_r - min_l + 2.0 * pad, 2.0)
+    h = max(max_b - min_t + 2.0 * pad, 2.0)
+    return (min_l - pad, min_t - pad, w, h)
+
+
 def _gantt_flatten_day_label_shapes_to_pictures_xlw(
     api_ws, day_blocks: list, names_by_day: dict
 ) -> int:
     """
-    各日キーに属する角丸ラベルシェイプを、Group（複数時）または単体のまま CopyPicture
-    （xlScreen + xlBitmap）で 1 枚の Picture に置換し、元シェイプを削除する。
+    各日キーに属する角丸ラベルシェイプを、Group + CopyPicture（xlScreen + xlBitmap）で
+    1 枚の Picture に置換し、元シェイプを削除する。
+    GANTT_DAY_IMAGE_CHROMA_TRANSPARENT が有効なとき、コピー前に外接矩形いっぱいの青矩形を
+    同グループに含め、貼り付け後に PictureFormat で同じ色を透明にしてセル帯が透けるようにする。
     names_by_day[day_key] に蓄積された Name を消費する（成功時は空リストに戻す）。
     """
     if not day_blocks:
@@ -5757,6 +5799,7 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
     _xl_screen = 1  # xlScreen
     _xl_bitmap = 2  # xlBitmap
     _xl_move_and_size = 1
+    _mso_rectangle = 1
     n_out = 0
     for blk in day_blocks:
         dk = str(blk.get("day_key") or "").strip()
@@ -5771,9 +5814,39 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                 names.append(nm)
         if not names:
             continue
+        backdrop_nm: str | None = None
         try:
-            if len(names) == 1:
-                shp0 = api_ws.Shapes(names[0])
+            r_ch, g_ch, b_ch = _gantt_day_image_chroma_rgb()
+            fill_bgr = _com_excel_bgr_rgb(r_ch, g_ch, b_ch)
+            group_names: tuple[str, ...] = tuple(names)
+
+            if GANTT_DAY_IMAGE_CHROMA_TRANSPARENT:
+                ubox = _gantt_union_bbox_names_xlw(api_ws, names)
+                if ubox:
+                    L, T, Wb, Hb = ubox
+                    bd_nm_try = f"GanttChromaBg_{random.randint(100000, 999999)}"
+                    bd = api_ws.Shapes.AddShape(_mso_rectangle, L, T, Wb, Hb)
+                    try:
+                        bd.Name = bd_nm_try
+                    except Exception:
+                        bd_nm_try = str(bd.Name)
+                    bd.Fill.Visible = True
+                    bd.Fill.Solid()
+                    bd.Fill.ForeColor.RGB = fill_bgr
+                    try:
+                        bd.Line.Visible = False
+                    except Exception:
+                        pass
+                    try:
+                        bd.Placement = _xl_move_and_size
+                    except Exception:
+                        pass
+                    backdrop_nm = bd_nm_try
+                    # 先頭＝背面に近い順でグループ化（青地 → ラベル）
+                    group_names = (bd_nm_try,) + tuple(names)
+
+            if len(group_names) == 1:
+                shp0 = api_ws.Shapes(group_names[0])
                 left0 = float(shp0.Left)
                 top0 = float(shp0.Top)
                 w0 = float(shp0.Width)
@@ -5786,7 +5859,7 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                 except Exception:
                     pass
             else:
-                sr = api_ws.Shapes.Range(tuple(names))
+                sr = api_ws.Shapes.Range(group_names)
                 grp = sr.Group()
                 left0 = float(grp.Left)
                 top0 = float(grp.Top)
@@ -5807,6 +5880,13 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                 pic.Placement = _xl_move_and_size
             except Exception:
                 pass
+            if GANTT_DAY_IMAGE_CHROMA_TRANSPARENT and backdrop_nm is not None:
+                try:
+                    pf = pic.PictureFormat
+                    pf.TransparentBackground = -1  # msoTrue
+                    pf.TransparencyColor = fill_bgr
+                except Exception:
+                    pass
             safe = "".join(
                 ch if ch.isalnum() or ch in "._-" else "_" for ch in dk
             )[:200]
@@ -5817,6 +5897,11 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
             names_by_day[dk] = []
             n_out += 1
         except Exception as e_fl:
+            if backdrop_nm:
+                try:
+                    api_ws.Shapes(backdrop_nm).Delete()
+                except Exception:
+                    pass
             logging.warning(
                 "結果_設備ガント: 日別シェイプ画像化をスキップしました（日キー=%s、名称数=%s: %s）",
                 dk,
