@@ -6316,6 +6316,17 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         # メンバー 1 ピルの縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
         _row_shape_seq: dict[int, int] = {}
 
+        def _gantt_xlw_timeline_main_font_pt(xw: float, cap: str) -> float:
+            """狭い結合セルではフォントを下げ、glyph のシェイプ外はみ出しを抑える。"""
+            nch = max(1, len(str(cap or "").strip()))
+            raw = float(xw) / max(nch * 0.62, 4.0)
+            return max(5.25, min(9.0, raw))
+
+        def _gantt_xlw_member_pill_font_pt(pwidth: float, nm: str) -> float:
+            nch = max(1, len(str(nm or "").strip()))
+            raw = float(pwidth) / max(nch * 1.05, 3.2)
+            return max(5.0, min(6.5, raw))
+
         def _gantt_xlw_add_round_rect(
             x_left,
             x_top,
@@ -6403,6 +6414,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 try:
                     tf0.VerticalAlignment = -4108  # xlVAlignCenter
                     tf0.HorizontalAlignment = -4131  # xlHAlignCenter
+                except Exception:
+                    pass
+                try:
+                    tf0.WordWrap = True
                 except Exception:
                     pass
                 tf0.Characters().Text = cap
@@ -6568,9 +6583,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     x_cur = left
                     for mi, nm in enumerate(names):
                         nm2 = nm if len(nm) <= 6 else (nm[:5] + "…")
-                        use_w = min(pill_w, max(18.0, 5.2 * len(nm2)))
+                        # max(18, …) は狭いタイムスロットでピル幅が帯を超え、隣セル上で重なって見える原因になる。
+                        use_w = min(pill_w, max(9.0, 5.2 * len(nm2)))
                         if x_cur + use_w > left + w + 0.5:
                             use_w = max(10.0, left + w - x_cur)
+                        _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, nm2)
                         s_mem = _gantt_xlw_add_round_rect(
                             x_cur,
                             y0,
@@ -6580,7 +6597,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                             fill_rgb=mem_fill,
                             line_rgb=mem_line,
                             text_rgb=mem_txt,
-                            font_pt=6.5,
+                            font_pt=float(_fp_mem),
                             bold=True,
                             italic=False,
                             line_wt=0.55,
@@ -6596,6 +6613,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         x_cur += use_w + gx
 
                 _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
                 shp_main = _gantt_xlw_add_round_rect(
                     left,
                     y_main,
@@ -6605,12 +6623,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     fill_rgb=fill_bgr,
                     line_rgb=line_bgr,
                     text_rgb=text_bgr,
-                    font_pt=9.0,
+                    font_pt=float(_main_fp),
                     bold=True,
                     italic=bool(sp.get("italic")),
                     line_wt=0.75,
                     adj_round=0.2,
-                    shadow=True,
+                    shadow=False,
                     shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
                 )
                 if shp_main is not None:
@@ -6634,6 +6652,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 )
                 _gantt_dbg_register_rects(row, [_solo], col_s, col_e)
                 # #endregion
+                _solo_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
                 shp = _gantt_xlw_add_round_rect(
                     left,
                     y_lbl,
@@ -6643,12 +6662,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     fill_rgb=fill_bgr,
                     line_rgb=line_bgr,
                     text_rgb=text_bgr,
-                    font_pt=9.0,
+                    font_pt=float(_solo_fp),
                     bold=True,
                     italic=bool(sp.get("italic")),
                     line_wt=0.75,
                     adj_round=0.2,
-                    shadow=True,
+                    shadow=False,
                     shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
                 )
                 if shp is not None:
