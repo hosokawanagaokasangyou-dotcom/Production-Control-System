@@ -618,6 +618,7 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     Dim lastCol As Long
     Dim lastHdr As Long
     Dim lastUsed As Long
+    Dim lastTitle As Long
     Dim c As Long
     Dim wD As Double
     Const HDR_ROW As Long = 3   ' Python 表見出し行（A?D 固定見出し＋E? 時刻）に合わせる
@@ -638,8 +639,18 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     lastUsed = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     lastCol = lastHdr
     If lastUsed > lastCol Then lastCol = lastUsed
+    ' 1 行目は Python 側で A1 から全幅結合のため、MergeArea の列数で最終列を確定（End(xlToLeft) は結合外空白で A 列に飛ぶことがある）
+    If ws.Range("A1").MergeCells Then
+        lastTitle = ws.Range("A1").MergeArea.Column + ws.Range("A1").MergeArea.Columns.Count - 1
+    Else
+        lastTitle = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    End If
+    If lastTitle > lastCol Then lastCol = lastTitle
     On Error GoTo 0
-    If lastCol < 5 Then Exit Sub
+    If lastCol < 5 Then
+        ws.Columns(5).ColumnWidth = 3
+        Exit Sub
+    End If
     For c = 5 To lastCol
         ws.Columns(c).ColumnWidth = 3   ' 時刻グリッド（E 列?）
     Next c
