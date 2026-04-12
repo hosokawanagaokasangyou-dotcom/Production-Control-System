@@ -6169,8 +6169,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
-    依頼NOは中央のメインシェイプ（結合幅が 1 スロットでも、タイムライン 1 列幅の 2 倍を下限とし文字潰れを抑える）。
-    担当者姓はその直上に小さな角丸チップ 1 つ（member_labels を全角空白区切りで結合）で表示する。
+    依頼NOは中央のメインシェイプ（高さは行の約 1/5。結合幅が 1 スロットでもタイムライン 1 列幅の 2 倍を下限とし文字潰れを抑える）。
+    担当者姓はその直上に小さな角丸チップ 1 つ（結合文字が潰れない下限幅までシェイプ幅を確保）。
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
@@ -6313,7 +6313,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 pass
 
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
-        # 依頼NO メインは行高の 1/4 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
+        # 依頼NO メインは行高の 1/5 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
         # メンバー名は上下分割せず、依頼NO の直上に 1 シェイプで置く（全角空白区切り。人数分の AddShape はしない）。
         # メンバー帯の縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
         _row_shape_seq: dict[int, int] = {}
@@ -6327,7 +6327,13 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         def _gantt_xlw_member_pill_font_pt(pwidth: float, nm: str) -> float:
             nch = max(1, len(str(nm or "").strip()))
             raw = float(pwidth) / max(nch * 1.05, 3.2)
-            return max(5.0, min(6.5, raw))
+            return max(5.5, min(6.5, raw))
+
+        def _gantt_xlw_member_combined_min_width_pt(combined: str) -> float:
+            """メンバー結合文字列が最低フォントでも潰れないよう必要幅（pt）の粗い下限。"""
+            nch = max(1, len(str(combined or "").strip()))
+            f_min = 5.75
+            return f_min * max(float(nch) * 1.1, 4.0) + 7.0
 
         def _gantt_xlw_add_round_rect(
             x_left,
@@ -6477,9 +6483,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 _gantt_dbg_max_label_minus_w, float(label_w) - float(w)
             )
             # #endregion
-            # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/4。
+            # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/5。
             _band = float(h) / 3.0
-            _h_req_no = max(9.0, float(h) / 4.0)
+            _h_req_no = max(9.0, float(h) / 5.0)
             _n_on_row = int(_row_shape_seq.get(row, 0))
             _slot = _n_on_row % 3
             _row_shape_seq[row] = _n_on_row + 1
@@ -6512,7 +6518,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバー縦幅＝依頼NO と同じ（行高の 1/4 目標）。行全体 [top, top+h] に収まるよう
+                # メンバー縦幅＝依頼NO と同じ（行高の 1/5 目標）。行全体 [top, top+h] に収まるよう
                 # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。
                 _gap_mm = 1.35
                 h_main = max(9.0, float(_h_req_no))
@@ -6595,11 +6601,14 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     combined = "\u3000".join(parts)
                     if not combined.strip():
                         return
-                    # 結合セル幅 w だけに min すると 1 スロット幅で極端に潰れるため、
-                    # 最低幅（pt）を確保しつつ、広い帯では推定幅まで広げる。
+                    # 結合幅 w に縛ると文字が潰れるため、ピル分割時と同様の推定に加え、
+                    # 最低フォント相当の下限幅を満たすまでシェイプ幅を広げる（隣セル上にはみ出し得る）。
                     _min_member_chip_w = 34.0
-                    want_w = max(_min_member_chip_w, float(est_w))
-                    use_w = min(max(float(w), _min_member_chip_w), want_w)
+                    text_min_w = _gantt_xlw_member_combined_min_width_pt(combined)
+                    want_w = max(
+                        _min_member_chip_w, float(est_w), float(text_min_w)
+                    )
+                    use_w = max(max(float(w), _min_member_chip_w), want_w)
                     _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, combined)
                     s_mem = _gantt_xlw_add_round_rect(
                         left,
