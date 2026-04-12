@@ -1571,46 +1571,6 @@ def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
     return fi
 
 
-def _debug_emit_2c0acb(
-    hypothesis_id: str, message: str, data: dict, run_id: str = "pre"
-) -> None:
-    """#region agent log — debug session 2c0acb（ガント 13:50 枠欠落調査）"""
-    _line = (
-        json.dumps(
-            {
-                "sessionId": "2c0acb",
-                "runId": run_id,
-                "hypothesisId": hypothesis_id,
-                "location": "planning_core._core",
-                "message": message,
-                "data": data,
-                "timestamp": int(time_module.time() * 1000),
-            },
-            ensure_ascii=False,
-        )
-        + "\n"
-    )
-    _paths = []
-    try:
-        _root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-        )
-        _paths.append(os.path.join(_root, "debug-2c0acb.log"))
-    except Exception:
-        pass
-    try:
-        if log_dir:
-            _paths.append(os.path.join(log_dir, "debug-2c0acb.log"))
-    except Exception:
-        pass
-    for _p in _paths:
-        try:
-            with open(_p, "a", encoding="utf-8") as _af:
-                _af.write(_line)
-        except Exception:
-            pass
-
-
 def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
     """
     10 分枠 [slot_start, slot_end) の 1 マス分の状態。
@@ -1680,7 +1640,6 @@ def _paint_gantt_timeline_row_merged(
     shape_label_specs: list | None = None,
     label_italic: bool = False,
     shape_day_key: str | None = None,
-    gantt_debug_ctx: dict | None = None,
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
@@ -1695,32 +1654,6 @@ def _paint_gantt_timeline_row_merged(
     for slot_start in slots:
         states.append(_gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn))
     tcol0 = n_fixed + 1
-    # #region agent log
-    _k13 = None
-    if gantt_debug_ctx:
-        _day_k = str(gantt_debug_ctx.get("day") or "")
-        _eq_k = str(gantt_debug_ctx.get("eq") or "")
-        if "-04-13" in _day_k and "W4-13" in _eq_k and "EC" in _eq_k:
-            for _ki, _sl in enumerate(slots):
-                if _sl.time() == time(13, 50):
-                    _k13 = _ki
-                    break
-            if _k13 is not None:
-                _mid13 = slots[_k13] + timedelta(minutes=slot_mins / 2)
-                _debug_emit_2c0acb(
-                    "H2",
-                    "gantt_slot1350_mid_state",
-                    {
-                        "row": row,
-                        "eq": _eq_k,
-                        "day": _day_k,
-                        "k13": _k13,
-                        "state_k13": repr(states[_k13]),
-                        "mid_iso": _mid13.isoformat(timespec="seconds"),
-                    },
-                    "pre",
-                )
-    # #endregion
     i = 0
     while i < n_slots:
         st0 = states[i]
@@ -1730,39 +1663,6 @@ def _paint_gantt_timeline_row_merged(
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
         single_slot_segment = col_s == col_e
-        # #region agent log
-        if (
-            gantt_debug_ctx
-            and _k13 is not None
-            and i <= _k13 < j
-            and "-04-13" in str(gantt_debug_ctx.get("day") or "")
-            and "W4-13" in str(gantt_debug_ctx.get("eq") or "")
-            and "EC" in str(gantt_debug_ctx.get("eq") or "")
-        ):
-            _tid_probe = ""
-            if st0[0] == "task" and len(st0) > 1:
-                _tid_probe = str(st0[1] or "").strip()
-            _debug_emit_2c0acb(
-                "H1",
-                "gantt_segment_covering_1350",
-                {
-                    "row": row,
-                    "seg_i": i,
-                    "seg_j": j,
-                    "col_s": col_s,
-                    "col_e": col_e,
-                    "st0_kind": st0[0],
-                    "tid_s": _tid_probe,
-                    "shape_mode": shape_label_specs is not None,
-                    "will_append_label_shape": bool(
-                        shape_label_specs is not None
-                        and st0[0] == "task"
-                        and bool(_tid_probe)
-                    ),
-                },
-                "pre",
-            )
-        # #endregion
         for col in range(col_s, col_e + 1):
             c = ws.cell(row=row, column=col)
             c.border = grid_border
@@ -2123,39 +2023,16 @@ def _write_results_equipment_gantt_sheet(
         )
     except Exception:
         pass
-    # #region agent log
-    _debug_emit_2c0acb(
-        "FIX",
-        "gantt_sheet_write_started",
-        {
-            "slot_minutes": int(GANTT_TIMELINE_SLOT_MINUTES),
-            "slot_state_rule": "eq_grid_best_overlap_and_overlap_sample",
-        },
-        "post-fix",
-    )
-    # #endregion
 
     events_by_date = defaultdict(list)
     for e in timeline_events:
         events_by_date[e["date"]].append(e)
 
-    by_dm = defaultdict(lambda: defaultdict(list))
-    for e in timeline_events:
-        by_dm[e["date"]][e["machine"]].append(e)
-    for d0 in by_dm:
-        for mk in by_dm[d0]:
-            by_dm[d0][mk].sort(key=lambda x: x["start_dt"])
-
-    by_dm_actual = defaultdict(lambda: defaultdict(list))
     show_actual_rows = bool(actual_timeline_events)
     actual_events_by_date = defaultdict(list)
     if show_actual_rows:
         for e in actual_timeline_events:
             actual_events_by_date[e["date"]].append(e)
-            by_dm_actual[e["date"]][e["machine"]].append(e)
-        for d0 in by_dm_actual:
-            for mk in by_dm_actual[d0]:
-                by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = GANTT_TIMELINE_SLOT_MINUTES
     _g_cf = _gantt_color_mode_full()
@@ -2350,22 +2227,7 @@ def _write_results_equipment_gantt_sheet(
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             mk_key = (mach_nm or "").strip() or "—"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
-            evlist_raw = by_dm[d].get(eq, [])
             evlist = _eq_grid_events_for_equipment_column(machine_to_events, eq)
-            # #region agent log
-            if "-04-13" in d.isoformat() and "W4-13" in eq and "EC" in eq:
-                _debug_emit_2c0acb(
-                    "H4",
-                    "gantt_evlist_resolve",
-                    {
-                        "eq": eq,
-                        "day": d.isoformat(),
-                        "n_raw_by_dm": len(evlist_raw),
-                        "n_resolved_eq_grid": len(evlist),
-                    },
-                    "post-fix",
-                )
-            # #endregion
             if evlist:
                 tids: list[str] = []
                 seen_tid: set[str] = set()
@@ -2390,30 +2252,6 @@ def _write_results_equipment_gantt_sheet(
             c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-            _dbg_ctx = {"eq": eq, "day": d.isoformat()}
-            if "-04-13" in d.isoformat() and "W4-13" in eq and "EC" in eq:
-                _w_s = datetime.combine(d, time(13, 50))
-                _w_e = datetime.combine(d, time(14, 0))
-                _overs = [e for e in evlist if e["start_dt"] < _w_e and e["end_dt"] > _w_s]
-                _debug_emit_2c0acb(
-                    "H3",
-                    "gantt_evlist_window_1350_1400",
-                    {
-                        "eq": eq,
-                        "day": d.isoformat(),
-                        "n_overlap": len(_overs),
-                        "sample": [
-                            {
-                                "task_id": str(x.get("task_id") or ""),
-                                "start": x["start_dt"].isoformat(timespec="seconds"),
-                                "end": x["end_dt"].isoformat(timespec="seconds"),
-                                "kind": _timeline_event_kind(x),
-                            }
-                            for x in _overs[:8]
-                        ],
-                    },
-                    "pre",
-                )
             _paint_gantt_timeline_row_merged(
                 ws,
                 row,
@@ -2428,7 +2266,6 @@ def _write_results_equipment_gantt_sheet(
                 shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                 label_italic=False,
                 shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
-                gantt_debug_ctx=_dbg_ctx,
             )
 
             ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
@@ -2488,7 +2325,6 @@ def _write_results_equipment_gantt_sheet(
                     shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                     label_italic=True,
                     shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
-                    gantt_debug_ctx=_dbg_ctx,
                 )
 
                 ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
@@ -6775,27 +6611,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     n_added,
                 )
             text = str(sp.get("text") or "").strip()
-            dk = str(sp.get("day_key") or "").strip()
             if not text:
-                # #region agent log
-                if "-04-13" in dk:
-                    try:
-                        _debug_emit_2c0acb(
-                            "H5",
-                            "gantt_xlw_skip_empty_text",
-                            {
-                                "idx": idx,
-                                "row": int(sp.get("row") or 0),
-                                "col_s": int(sp.get("col_s") or 0),
-                                "col_e": int(sp.get("col_e") or 0),
-                                "day_key": dk,
-                            },
-                            "pre",
-                        )
-                    except Exception:
-                        pass
-                # #endregion
                 continue
+            dk = str(sp.get("day_key") or "").strip()
             row = int(sp["row"])
             col_s = int(sp["col_s"])
             col_e = int(sp["col_e"])
@@ -6805,24 +6623,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             w = float(rng.width)
             h = float(rng.height)
             if w <= 0 or h <= 0:
-                # #region agent log
-                if "-04-13" in dk:
-                    _debug_emit_2c0acb(
-                        "H5",
-                        "gantt_xlw_skip_zero_wh",
-                        {
-                            "idx": idx,
-                            "row": row,
-                            "col_s": col_s,
-                            "col_e": col_e,
-                            "w": w,
-                            "h": h,
-                            "day_key": dk,
-                            "text_head": (text[:24] if text else ""),
-                        },
-                        "pre",
-                    )
-                # #endregion
                 continue
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
