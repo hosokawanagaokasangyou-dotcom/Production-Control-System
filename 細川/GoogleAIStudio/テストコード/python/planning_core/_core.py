@@ -15358,6 +15358,53 @@ def _agent_debug_ndjson_041e24(
     # #endregion
 
 
+def _agent_debug_ndjson_c6dbbd(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+    run_id: str = "pre-fix",
+) -> None:
+    # #region agent log
+    try:
+        from pathlib import Path
+
+        p = Path(__file__).resolve().parents[5] / "debug-c6dbbd.log"
+        rec = {
+            "sessionId": "c6dbbd",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(p, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
+def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
+    """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
+    if not isinstance(dt, datetime) or not breaks_merged:
+        return None
+    best: float | None = None
+    for item in breaks_merged:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            continue
+        bs = item[0]
+        if not isinstance(bs, datetime):
+            continue
+        if bs < dt:
+            continue
+        m = (bs - dt).total_seconds() / 60.0
+        if best is None or m < best:
+            best = float(m)
+    return best
+
+
 def _changeover_prep_extend_overlaps_team_break(
     prep_end_before: datetime,
     machining_start: datetime,
@@ -15373,6 +15420,18 @@ def _changeover_prep_extend_overlaps_team_break(
         if not isinstance(bs, datetime) or not isinstance(be, datetime):
             continue
         if prep_end_before < be and bs < machining_start:
+            # #region agent log
+            _agent_debug_ndjson_c6dbbd(
+                "H2",
+                "_changeover_prep_extend_overlaps_team_break",
+                "prep interval overlaps team break (extend blocked)",
+                {
+                    "prep_end_before": prep_end_before.isoformat(),
+                    "machining_start": machining_start.isoformat(),
+                    "overlap_break": (bs.isoformat(), be.isoformat()),
+                },
+            )
+            # #endregion
             return True
     return False
 
@@ -15426,6 +15485,28 @@ def _extend_changeover_prep_segment_end_for_timeline(
                 else None,
             },
         )
+        # #region agent log
+        _g_team = (
+            _gap_minutes_until_next_break_start(_pe2, team_breaks_merged)
+            if isinstance(_pe2, datetime)
+            else None
+        )
+        _agent_debug_ndjson_c6dbbd(
+            "H2",
+            "_extend_changeover_prep_segment_end_for_timeline",
+            "prep end vs team next break after extend",
+            {
+                "machining_start": machining_start.isoformat()
+                if isinstance(machining_start, datetime)
+                else None,
+                "prep_end_final": _pe2.isoformat()
+                if isinstance(_pe2, datetime)
+                else None,
+                "skip_extend_overlap_team_break": _block,
+                "gap_min_prep_end_to_next_team_break_start": _g_team,
+            },
+        )
+        # #endregion
         return
 
 
@@ -15448,6 +15529,18 @@ def _resumed_after_work_break(
         if not isinstance(bs, datetime) or not isinstance(be, datetime):
             continue
         if last_machining_end <= bs and lower_bound_before_prep >= be:
+            # #region agent log
+            _agent_debug_ndjson_c6dbbd(
+                "H3",
+                "_resumed_after_work_break",
+                "resume_after_break True",
+                {
+                    "last_machining_end": last_machining_end.isoformat(),
+                    "lower_bound_before_prep": lower_bound_before_prep.isoformat(),
+                    "break_span": (bs.isoformat(), be.isoformat()),
+                },
+            )
+            # #endregion
             return True
     return False
 
@@ -15821,6 +15914,20 @@ def _changeover_plan_segments_and_machining_lower_bound(
             }
         )
         t = max(t, ce)
+        # #region agent log
+        _agent_debug_ndjson_c6dbbd(
+            "H5",
+            "_changeover_plan_segments_and_machining_lower_bound",
+            "cleanup ended (before prep branch)",
+            {
+                "machine_occ_key": mach_occ,
+                "cleanup_end": ce.isoformat(),
+                "gap_min_cleanup_end_to_next_cleanup_op_break": _gap_minutes_until_next_break_start(
+                    ce, br_c
+                ),
+            },
+        )
+        # #endregion
 
     _lt_s = str(last_tid or "").strip()
     lm_date = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
@@ -15868,6 +15975,22 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 ],
             },
         )
+        # #region agent log
+        _g_rep = _gap_minutes_until_next_break_start(pe, br_r)
+        _agent_debug_ndjson_c6dbbd(
+            "H1",
+            "_changeover_plan_segments_and_machining_lower_bound",
+            "prep_end vs rep next break (abuts break?)",
+            {
+                "machine_occ_key": mach_occ,
+                "cur_tid": cur_tid,
+                "prep_start": t.isoformat(),
+                "prep_end": pe.isoformat(),
+                "gap_min_prep_end_to_next_rep_break_start": _g_rep,
+                "resume_after_break": resume_after_break,
+            },
+        )
+        # #endregion
         t = pe
 
     return t, segments
