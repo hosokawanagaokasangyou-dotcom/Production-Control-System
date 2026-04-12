@@ -5523,6 +5523,39 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
         cell.alignment = top
 
 
+# #region agent log
+_AGENT_DEBUG_LOG_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-805232.log")
+)
+
+
+def _agent_debug_ndjson(
+    *,
+    location: str,
+    message: str,
+    hypothesis_id: str,
+    data: dict | None = None,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "805232",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 def _add_column_config_sheet_helpers(ws_cfg, num_data_rows: int):
     """表示列に TRUE/FALSE リスト（チェックの代ゝりにプルダウン）を付与。"""
     last_r = max(num_data_rows + 1, 2)
@@ -5543,7 +5576,29 @@ def _stage2_try_copy_column_config_shapes_from_input(
     各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
     openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
     """
+    # #region agent log
+    _agent_debug_ndjson(
+        location="_core.py:_stage2_try_copy_column_config_shapes_from_input:entry",
+        message="shape_copy_entry",
+        hypothesis_id="H1",
+        data={
+            "stage2_copy_shapes": STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT,
+            "result_basename": os.path.basename((result_path or "").strip() or ""),
+            "input_basename": os.path.basename((input_path or "").strip() or ""),
+            "result_isfile": os.path.isfile((result_path or "").strip()),
+            "input_isfile": os.path.isfile((input_path or "").strip()),
+        },
+    )
+    # #endregion
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+            message="shape_copy_env_off",
+            hypothesis_id="H1",
+            data={},
+        )
+        # #endregion
         return
     rp = (result_path or "").strip()
     ip = (input_path or "").strip()
@@ -5551,11 +5606,27 @@ def _stage2_try_copy_column_config_shapes_from_input(
         logging.warning(
             "列設定シート図形コピー: 結果パスは無効のため、スキップしました。"
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+            message="shape_copy_bad_result_path",
+            hypothesis_id="H3",
+            data={"rp_len": len(rp), "rp_isfile": os.path.isfile(rp) if rp else False},
+        )
+        # #endregion
         return
     if not ip or not os.path.isfile(ip):
         logging.warning(
             "列設定シート図形コピー: TASK_INPUT_WORKBOOK は無効のため、スキップしました。"
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+            message="shape_copy_bad_input_path",
+            hypothesis_id="H5",
+            data={"ip_len": len(ip), "ip_isfile": os.path.isfile(ip) if ip else False},
+        )
+        # #endregion
         return
     try:
         import xlwings as xw
@@ -5563,6 +5634,14 @@ def _stage2_try_copy_column_config_shapes_from_input(
         logging.warning(
             "列設定シート図形コピー: xlwings は import でしません。"
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+            message="shape_copy_xlwings_import_fail",
+            hypothesis_id="H1",
+            data={},
+        )
+        # #endregion
         return
     app = None
     wb_out = None
@@ -5574,25 +5653,49 @@ def _stage2_try_copy_column_config_shapes_from_input(
         wb_in = app.books.open(os.path.abspath(ip), read_only=True, update_links=False)
         try:
             ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
-        except Exception:
+        except Exception as _e_out:
             logging.warning(
                 "列設定シート図形コピー: 結果ブックにシート「%s」はありません。",
                 COLUMN_CONFIG_SHEET_NAME,
             )
+            # #region agent log
+            _agent_debug_ndjson(
+                location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+                message="shape_copy_missing_sheet_result",
+                hypothesis_id="H2",
+                data={"COLUMN_CONFIG_SHEET_NAME": COLUMN_CONFIG_SHEET_NAME, "err": str(_e_out)},
+            )
+            # #endregion
             return
         try:
             ws_in = wb_in.sheets[COLUMN_CONFIG_SHEET_NAME]
-        except Exception:
+        except Exception as _e_in:
             logging.warning(
                 "列設定シート図形コピー: 入力ブックにシート「%s」はありません。",
                 COLUMN_CONFIG_SHEET_NAME,
             )
+            # #region agent log
+            _agent_debug_ndjson(
+                location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+                message="shape_copy_missing_sheet_input",
+                hypothesis_id="H5",
+                data={"COLUMN_CONFIG_SHEET_NAME": COLUMN_CONFIG_SHEET_NAME, "err": str(_e_in)},
+            )
+            # #endregion
             return
         n_shapes = int(ws_in.api.Shapes.Count)
         if n_shapes <= 0:
             logging.info(
                 "列設定シート図形コピー: 入力坴に図形はありません（スキップ）。"
             )
+            # #region agent log
+            _agent_debug_ndjson(
+                location="_core.py:_stage2_try_copy_column_config_shapes_from_input:branch",
+                message="shape_copy_zero_shapes_input",
+                hypothesis_id="H1",
+                data={"n_shapes": n_shapes},
+            )
+            # #endregion
             return
         ws_out.activate()
         api_in = ws_in.api
@@ -5629,11 +5732,27 @@ def _stage2_try_copy_column_config_shapes_from_input(
             "列設定シート図形コピー: 入力から %s 個の図形を結果ブックへ複製しました。",
             n_shapes,
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:success",
+            message="shape_copy_ok",
+            hypothesis_id="H1",
+            data={"n_shapes_copied": n_shapes},
+        )
+        # #endregion
     except Exception as e:
         logging.warning(
             "列設定シート図形コピー: 失敗しました（%s）。Excel 占有・COM エラー等の可能性はありした。",
             e,
         )
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:_stage2_try_copy_column_config_shapes_from_input:error",
+            message="shape_copy_exception",
+            hypothesis_id="H1",
+            data={"err_type": type(e).__name__, "err": str(e)[:500]},
+        )
+        # #endregion
     finally:
         for _wb in (wb_in, wb_out):
             if _wb is not None:
@@ -20875,6 +20994,19 @@ def _generate_plan_impl():
     gantt_tl_label_specs: list = []
     gantt_tl_day_blocks: list = []
     try:
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:stage2_main_writer:before_open",
+            message="stage2_excel_writer_start",
+            hypothesis_id="H2",
+            data={
+                "output_basename": os.path.basename(output_filename),
+                "output_abs": os.path.abspath(output_filename),
+                "cwd": os.getcwd(),
+                "task_results_len": len(task_results),
+            },
+        )
+        # #endregion
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
                 writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
@@ -20963,6 +21095,19 @@ def _generate_plan_impl():
 
             ws_cfg = writer.sheets[COLUMN_CONFIG_SHEET_NAME]
             _add_column_config_sheet_helpers(ws_cfg, len(task_column_order_dedup))
+            # #region agent log
+            _agent_debug_ndjson(
+                location="_core.py:stage2:after_column_config_helpers",
+                message="column_config_sheet_written",
+                hypothesis_id="H4",
+                data={
+                    "COLUMN_CONFIG_SHEET_NAME": COLUMN_CONFIG_SHEET_NAME,
+                    "dedup_col_count": len(task_column_order_dedup),
+                    "df_tasks_rows": int(df_tasks.shape[0]),
+                    "df_tasks_cols": int(df_tasks.shape[1]),
+                },
+            )
+            # #endregion
 
             worksheet_tasks = writer.sheets[RESULT_TASK_SHEET_NAME]
             max_col = worksheet_tasks.max_column
@@ -21010,7 +21155,33 @@ def _generate_plan_impl():
                 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
             )
 
+        # #region agent log
+        _out_abs = os.path.abspath(output_filename)
+        _exists = os.path.isfile(output_filename)
+        _agent_debug_ndjson(
+            location="_core.py:stage2:after_writer_context",
+            message="stage2_excel_writer_closed",
+            hypothesis_id="H2",
+            data={
+                "output_abs": _out_abs,
+                "file_exists_after": _exists,
+                "file_size_after": os.path.getsize(output_filename) if _exists else None,
+            },
+        )
+        # #endregion
+
     except OSError as e:
+        # #region agent log
+        _agent_debug_ndjson(
+            location="_core.py:stage2:writer_oserror",
+            message="stage2_excel_writer_oserror",
+            hypothesis_id="H2",
+            data={
+                "output_abs": os.path.abspath(output_filename),
+                "err": str(e)[:800],
+            },
+        )
+        # #endregion
         logging.error(
             "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
             "output 内の production_plan_multi_day_*.xlsx を Excel で開いでいないか確認してください。",
