@@ -21047,6 +21047,25 @@ def _generate_plan_impl():
             df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
                 df_tasks, max_history_len
             )
+            # 列設定シートは「列名」「表示」のデータ行が必須。task_results が空だと
+            # apply_result_task_sheet_column_order は ordered が空になり、見出しのみのシートになる。
+            if not task_column_order:
+                if len(df_tasks.columns) > 0:
+                    task_column_order = [str(c) for c in df_tasks.columns]
+                    vis_map = {c: True for c in task_column_order}
+                    logging.warning(
+                        "段階2: 列順リストが空でした。結果 DataFrame の列名で「%s」を補完しました。",
+                        COLUMN_CONFIG_SHEET_NAME,
+                    )
+                else:
+                    task_column_order = list(
+                        default_result_task_sheet_column_order(max_history_len)
+                    )
+                    vis_map = {c: True for c in task_column_order}
+                    logging.warning(
+                        "段階2: タスク行が 0 件のため「%s」に既定の列名一覧を書き込みました。",
+                        COLUMN_CONFIG_SHEET_NAME,
+                    )
             seen_tc: set[str] = set()
             task_column_order_dedup: list = []
             vis_list_dedup: list = []
