@@ -4688,6 +4688,8 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
     """
     Excel で開いているマクロブックについで」
     「列設定_結果_タスク一覧」の内容に合わせで「結果_タスク一覧」の列順と列非表示を更新れる。
+    「列設定_結果_タスク一覧」のセルは上書きしない（メモ・表外の A:B を消さない）。重複整理は
+    dedupe_result_task_column_config_sheet_via_xlwings / VBA「重複列名を整理」を使う。
     ブックは事剝に保存し、本処理中も Excel 上で開いたままにれること（xlwings は接続れる）。
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
@@ -4732,7 +4734,8 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
             COLUMN_CONFIG_SHEET_NAME,
         )
         return False
-    _xlwings_write_column_config_sheet_ab(ws_cfg, rows_cfg)
+    # 列設定シートの A:B は上書きしない（clear_contents が UsedRange まで広がり、
+    # 表外のメモ・余白の文字やチェック連動セルが消えるのを防ぐ）。並べ替え・非表示は結果シートのみ反映。
     df_cfg_clean = pd.DataFrame(
         rows_cfg, columns=[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]
     )
