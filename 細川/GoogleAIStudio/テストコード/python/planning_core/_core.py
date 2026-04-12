@@ -6873,7 +6873,7 @@ def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
     keys, _, label = ser
     b = cum.get("buckets")
     lines = [
-        "」推移グラフ】料金・呼出し: Q〜R 列＝トークン針: S〜T 列（坄グラフ・自動更新）を参照",
+        "」推移グラフ】料金・呼出し: Q〜R 列＝トークン量: S〜T 列（坄グラフ・自動更新）を参照",
         f"  系列1: 日次 {label}（{keys[0]} ～ {keys[-1]}）",
         "  系列2: 日次 合計トークン（API 報告 total または内訳合計）",
         f"  年・月・週・時などの内訳: log\\{GEMINI_USAGE_BUCKETS_CSV_FILE}（Excel でグラフ坯）",
