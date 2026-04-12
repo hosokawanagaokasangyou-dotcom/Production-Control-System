@@ -670,6 +670,63 @@ Public Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     End With
 End Sub
 
+' 結果_設備ガント：印刷のページ設定。Excel では適用順を変えるとプレビューがずれるため、
+' ? 印刷タイトル 1～3 行 → ① A3 横向き → ② 余白「狭い」→ ③ 横 1 ページに合わせる → ④ 1 日ごとの手動改ページ、の順で固定する。
+Public Sub 結果_設備ガント_印刷ページ設定を適用(ByVal ws As Worksheet)
+    Dim prevPrintComm As Boolean
+    Dim lr As Long
+    Dim r As Long
+    Dim dayStarts As Collection
+    Dim i As Long
+    
+    If ws Is Nothing Then Exit Sub
+    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then Exit Sub
+    
+    On Error Resume Next
+    prevPrintComm = Application.PrintCommunication
+    Application.PrintCommunication = True
+    
+    With ws.PageSetup
+        ' ?
+        .PrintTitleRows = "$1:$3"
+        ' ①
+        .PaperSize = xlPaperA3
+        .Orientation = xlLandscape
+        ' ② 余白「狭い」（Narrow 相当）
+        .LeftMargin = Application.InchesToPoints(0.25)
+        .RightMargin = Application.InchesToPoints(0.25)
+        .TopMargin = Application.InchesToPoints(0.75)
+        .BottomMargin = Application.InchesToPoints(0.75)
+        .HeaderMargin = Application.InchesToPoints(0.3)
+        .FooterMargin = Application.InchesToPoints(0.3)
+        ' ③ 横 1 ページ（縦は自動）
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+    End With
+    
+    ' ④ 1 日＝1 ページ縦ブロック（日付ブロック間の薄い区切り行の次行が翌日先頭）
+    ws.ResetAllPageBreaks
+    Set dayStarts = New Collection
+    lr = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    If lr >= 4 Then
+        dayStarts.Add 4&
+        r = 5
+        Do While r <= lr
+            If 結果_設備ガント_行は区切り行か(ws, r) Then
+                If r + 1 <= lr Then dayStarts.Add CLng(r + 1)
+            End If
+            r = r + 1
+        Loop
+        For i = 2 To dayStarts.Count
+            ws.HPageBreaks.Add Before:=ws.Rows(CLng(dayStarts(i)))
+        Next i
+    End If
+    
+    Application.PrintCommunication = prevPrintComm
+    On Error GoTo 0
+End Sub
+
 ' planning_core のガント罫線 thin color 666666 に合わせる（ハイライト解除時）
 Public Sub 結果_設備ガント_行枠を通常に戻す(ByVal rng As Range)
     On Error Resume Next
@@ -3047,6 +3104,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         If Err.Number = 0 Then
             結果_設備ガント_列幅を設定 ws
             結果_設備ガント_タイトルA1を左寄せに固定 ws
+            結果_設備ガント_印刷ページ設定を適用 ws
         End If
         Err.Clear
         On Error GoTo ErrHandler

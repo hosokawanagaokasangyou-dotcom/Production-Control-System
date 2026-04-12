@@ -2256,20 +2256,25 @@ def _write_results_equipment_gantt_sheet(
             dim.width = gw
             # openpyxl 3.1+ では customWidth は width 有無から導出される読み取り専用のため代入しない
 
-    # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ
-    try:
-        if len(gantt_day_first_rows) > 1:
-            for i in range(1, len(gantt_day_first_rows)):
-                ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
-    except Exception:
-        pass
-
     _gantt_scale_override_raw = (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
+        # 適用順: ⓪タイトル行 → ①用紙・向き → ②余白 → ③横1ページ → ④改ページは try の外で付与（順を変えるとずれやすい）
         # 既定: 横1ページに収める（タイムラインが読める）。縦は自動（日内改ページは行高で緩和）。
         # GANTT_PRINT_SCALE_PERCENT を指定したときのみ固定%（横幅が細くなりやすい）。
+        # ⓪ 全ページに繰り返すタイトル行（レポート 1〜3 行目）
+        ws.print_title_rows = "1:3"
+        # ① A3 横向き
         ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = 8
+        # ② 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.75
+        ws.page_margins.bottom = 0.75
+        ws.page_margins.header = 0.3
+        ws.page_margins.footer = 0.3
+        # ③ 横 1 ページに収める
         if _gantt_scale_override_raw:
             _pct = max(10, min(400, int(_gantt_scale_override_raw)))
             ws.page_setup.fitToPage = False
@@ -2280,21 +2285,18 @@ def _write_results_equipment_gantt_sheet(
             ws.page_setup.fitToPage = True
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 0
-        # A3（Excel / openpyxl の paperSize=8）
-        ws.page_setup.paperSize = 8
-        # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
-        ws.page_margins.left = 0.25
-        ws.page_margins.right = 0.25
-        ws.page_margins.top = 0.75
-        ws.page_margins.bottom = 0.75
-        ws.page_margins.header = 0.3
-        ws.page_margins.footer = 0.3
-        # 全ページに繰り返すタイトル行（レポート 1〜3 行目）
-        ws.print_title_rows = "1:3"
         # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
         ws.print_options.gridLines = False
+    except Exception:
+        pass
+
+    # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ（上記ページ設定の後）
+    try:
+        if len(gantt_day_first_rows) > 1:
+            for i in range(1, len(gantt_day_first_rows)):
+                ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
     except Exception:
         pass
 
