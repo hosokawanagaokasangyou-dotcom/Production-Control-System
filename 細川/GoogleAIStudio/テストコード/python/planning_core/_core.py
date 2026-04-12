@@ -1082,9 +1082,9 @@ GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
 GANTT_TIMELINE_LABELS_DAY_FLATTEN = os.environ.get(
     "GANTT_TIMELINE_LABELS_DAY_FLATTEN", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
-# 日別画像: 外接矩形にクロマキー色の矩形を敷き、貼り付け後にその色のみ Picture 透明化（セル帯が透ける）。無効: GANTT_DAY_IMAGE_CHROMA_TRANSPARENT=0。敷き色は GANTT_DAY_IMAGE_CHROMA_HEX（既定 FF00FF＝マゼンタ。青系は帯・影とぶつかり全透明化しやすい）
+# 日別画像: 外接矩形にクロマキー色を敷き Picture 透明化（セル帯が透ける）。既定 OFF（xlBitmap+透明で真っ黒になる環境があるため）。有効化: GANTT_DAY_IMAGE_CHROMA_TRANSPARENT=1。敷き色 GANTT_DAY_IMAGE_CHROMA_HEX（既定 FF00FF）。コピー形式: GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT=picture|bitmap（空なら透明時は EMF、非透明時はビットマップ）
 GANTT_DAY_IMAGE_CHROMA_TRANSPARENT = os.environ.get(
-    "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "1"
+    "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "0"
 ).strip().lower() in ("1", "true", "yes", "on")
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
@@ -5794,20 +5794,33 @@ def _gantt_flatten_apply_picture_chroma_transparency_xlw(pic, fill_bgr: int) -> 
         pass
 
 
+def _gantt_flatten_copy_picture_format_xlw(use_chroma_backdrop: bool) -> int:
+    """
+    CopyPicture の Format。xlBitmap(2) と PictureFormat 透明の併用で貼り付けが真っ黒になることがあるため、
+    クロマ敷きありのときは既定 xlPicture(-4147)（EMF 系）を使う。
+    """
+    v = (os.environ.get("GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT", "") or "").strip().lower()
+    if v in ("bitmap", "xlbitmap", "2", "bmp"):
+        return 2
+    if v in ("picture", "xlpicture", "emf", "wmf", "meta", "-4147"):
+        return -4147
+    return -4147 if use_chroma_backdrop else 2
+
+
 def _gantt_flatten_day_label_shapes_to_pictures_xlw(
     api_ws, day_blocks: list, names_by_day: dict
 ) -> int:
     """
-    各日キーに属する角丸ラベルシェイプを、Group + CopyPicture（xlScreen + xlBitmap）で
+    各日キーに属する角丸ラベルシェイプを、Group + CopyPicture（xlScreen + Format は状況依存）で
     1 枚の Picture に置換し、元シェイプを削除する。
     GANTT_DAY_IMAGE_CHROMA_TRANSPARENT が有効なとき、外接矩形にクロマキー矩形を敷いてから
-    グループ化し、貼り付け後にその色のみ透明化する（既定色はマゼンタでラベル帯と衝突しにくい）。
+    グループ化し、貼り付け後にその色のみ透明化する（既定色はマゼンタ）。
+    透明化時は既定 xlPicture（EMF）を使い、xlBitmap との組み合わせで貼り付けが真っ黒になる事象を避ける。
     names_by_day[day_key] に蓄積された Name を消費する（成功時は空リストに戻す）。
     """
     if not day_blocks:
         return 0
     _xl_screen = 1  # xlScreen
-    _xl_bitmap = 2  # xlBitmap
     _xl_move_and_size = 1
     _mso_rectangle = 1
     n_out = 0
@@ -5854,13 +5867,16 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                     backdrop_nm = bd_nm_try
                     group_names = (bd_nm_try,) + tuple(names)
 
+            chroma_backdrop = backdrop_nm is not None
+            _cpy_fmt = _gantt_flatten_copy_picture_format_xlw(chroma_backdrop)
+
             if len(group_names) == 1:
                 shp0 = api_ws.Shapes(group_names[0])
                 left0 = float(shp0.Left)
                 top0 = float(shp0.Top)
                 w0 = float(shp0.Width)
                 h0 = float(shp0.Height)
-                shp0.CopyPicture(Appearance=_xl_screen, Format=_xl_bitmap)
+                shp0.CopyPicture(Appearance=_xl_screen, Format=_cpy_fmt)
                 api_ws.Paste()
                 pic = api_ws.Shapes(int(api_ws.Shapes.Count))
                 try:
@@ -5874,7 +5890,7 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                 top0 = float(grp.Top)
                 w0 = float(grp.Width)
                 h0 = float(grp.Height)
-                grp.CopyPicture(Appearance=_xl_screen, Format=_xl_bitmap)
+                grp.CopyPicture(Appearance=_xl_screen, Format=_cpy_fmt)
                 api_ws.Paste()
                 pic = api_ws.Shapes(int(api_ws.Shapes.Count))
                 try:
@@ -5889,7 +5905,7 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
                 pic.Placement = _xl_move_and_size
             except Exception:
                 pass
-            if GANTT_DAY_IMAGE_CHROMA_TRANSPARENT and backdrop_nm is not None:
+            if chroma_backdrop:
                 _gantt_flatten_apply_picture_chroma_transparency_xlw(pic, fill_bgr)
             safe = "".join(
                 ch if ch.isalnum() or ch in "._-" else "_" for ch in dk
