@@ -6170,7 +6170,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
     依頼NOは中央のメインシェイプ（高さは行の約 1/5。結合幅が 1 スロットでもタイムライン 1 列幅の 2 倍を下限とし文字潰れを抑える）。
-    担当者姓はその直上に小さな角丸チップ 1 つ（結合文字が潰れない下限幅までシェイプ幅を確保）。
+    担当者姓はその直上に小さな角丸チップ 1 つ（結合文字が潰れない下限幅までシェイプ幅を確保、
+    テキストはシェイプ内右寄せ。Z オーダーはメンバーを背面・依頼NO を前面に寄せる）。
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
@@ -6318,6 +6319,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
         # 依頼NO メインは行高の 1/5 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
         # メンバー名は上下分割せず、依頼NO の直上に 1 シェイプで置く（全角空白区切り。人数分の AddShape はしない）。
+        # メンバーは ZOrder SendToBack、依頼NO は BringToFront（幅はみ出し時も依頼NOが手前に来る）。
         # メンバー帯の縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
         _row_shape_seq: dict[int, int] = {}
 
