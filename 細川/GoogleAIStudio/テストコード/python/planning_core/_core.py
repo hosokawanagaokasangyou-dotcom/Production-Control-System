@@ -727,7 +727,7 @@ GANTT_TIMELINE_COLUMN_WIDTH = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
 GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
-GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "45")))
+GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "50")))
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
 
@@ -6022,7 +6022,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
         # 依頼NO メインは行高の 1/4 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
-        # メンバー名は上下分割せず、依頼NO の直上に 1 列で少しだけ重ねる。
+        # メンバー名は上下分割せず、依頼NO の直上に 1 列で置く（隙間を空け、依頼NO シェイプと重ねない）。
         _row_shape_seq: dict[int, int] = {}
 
         def _gantt_xlw_add_round_rect(
@@ -6175,38 +6175,36 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバーは依頼NO の上辺へ重なるよう配置（上下 2 段にはしない）。
-                # ピル高さは日本語が切れないよう 9pt 台を目安にし、帯に収まらないときは重なり→メンバー高の順で調整。
+                # メンバーを帯の上側に置き、隙間を空けて依頼NO の下にメイン帯（重ねない）。
                 _avail_v = _band - 2.0 * _band_inset
-                _overlap_mem = 5.0
-                h_mem_use = max(9.0, min(11.0, 0.71 * _avail_v))
+                _gap_mm = 1.35
+                h_mem_use = max(8.5, min(11.0, 0.68 * _avail_v))
                 h_main = max(
                     9.0,
-                    min(_h_req_no, _avail_v - h_mem_use + _overlap_mem),
+                    min(_h_req_no, _avail_v - h_mem_use - _gap_mm),
                 )
+                need = h_mem_use + _gap_mm + h_main
                 _fit_i = 0
-                while h_mem_use + h_main - _overlap_mem > _avail_v + 1e-6 and _fit_i < 36:
+                while need > _avail_v + 1e-6 and _fit_i < 40:
                     _fit_i += 1
-                    if _overlap_mem < 7.8:
-                        _overlap_mem += 0.25
-                    elif h_mem_use > 8.15:
-                        h_mem_use -= 0.1
+                    if h_main > 9.0:
+                        h_main -= 0.12
+                    elif h_mem_use > 8.0:
+                        h_mem_use -= 0.08
+                    elif _gap_mm > 0.5:
+                        _gap_mm -= 0.1
                     else:
                         break
                     h_main = max(
                         9.0,
-                        min(_h_req_no, _avail_v - h_mem_use + _overlap_mem),
+                        min(_h_req_no, _avail_v - h_mem_use - _gap_mm),
                     )
-                y_main = band_bot - _band_inset - h_main
-                y_mem = y_main - h_mem_use + _overlap_mem
-                if y_mem < band_top + _band_inset:
-                    y_mem = band_top + _band_inset
-                    y_main = y_mem + h_mem_use - _overlap_mem
-                if y_main + h_main > band_bot - _band_inset:
-                    h_main = max(9.0, band_bot - _band_inset - y_main)
+                    need = h_mem_use + _gap_mm + h_main
+                y_mem = band_top + _band_inset
+                y_main = y_mem + h_mem_use + _gap_mm
                 if y_main + h_main > band_bot - _band_inset:
                     y_main = band_bot - _band_inset - h_main
-                    y_mem = max(band_top + _band_inset, y_main - h_mem_use + _overlap_mem)
+                    y_mem = max(band_top + _band_inset, y_main - h_mem_use - _gap_mm)
                 gx = 1.0
 
                 def _emit_member_pills(
@@ -6248,6 +6246,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                             _record_day_shape(s_mem, day_k)
                         x_cur += use_w + gx
 
+                _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
                 shp_main = _gantt_xlw_add_round_rect(
                     left,
                     y_main,
@@ -6272,7 +6271,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
                     except Exception:
                         pass
-                _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
             else:
                 label_h = _h_req_no
                 y_lbl = band_top + _band_inset + max(
