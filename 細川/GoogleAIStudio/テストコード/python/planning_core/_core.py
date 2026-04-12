@@ -6169,7 +6169,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
-    依頼NOは中央のメインシェイプ、担当者姓はその直上・直下に小さな角丸チップ（member_labels）で表示する。
+    依頼NOは中央のメインシェイプ、担当者姓はその直上に小さな角丸チップ 1 つ（member_labels を全角空白区切りで結合）で表示する。
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
@@ -6313,8 +6313,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
         # 依頼NO メインは行高の 1/4 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
-        # メンバー名は上下分割せず、依頼NO の直上に 1 列で置く（隙間を空けて重ねない）。
-        # メンバー 1 ピルの縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
+        # メンバー名は上下分割せず、依頼NO の直上に 1 シェイプで置く（全角空白区切り。人数分の AddShape はしない）。
+        # メンバー帯の縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
         _row_shape_seq: dict[int, int] = {}
 
         def _gantt_xlw_timeline_main_font_pt(xw: float, cap: str) -> float:
@@ -6576,40 +6576,42 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     nonlocal n_added
                     if not names or pill_h <= 1.0:
                         return
-                    nn = len(names)
-                    pill_w = (w - max(0, nn - 1) * gx) / float(nn)
-                    pill_w = max(10.0, pill_w)
-                    x_cur = left
-                    for mi, nm in enumerate(names):
+                    parts: list[str] = []
+                    est_w = 0.0
+                    for nm in names:
                         nm2 = nm if len(nm) <= 6 else (nm[:5] + "…")
-                        # max(18, …) は狭いタイムスロットでピル幅が帯を超え、隣セル上で重なって見える原因になる。
-                        use_w = min(pill_w, max(9.0, 5.2 * len(nm2)))
-                        if x_cur + use_w > left + w + 0.5:
-                            use_w = max(3.5, left + w - x_cur)
-                        _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, nm2)
-                        s_mem = _gantt_xlw_add_round_rect(
-                            x_cur,
-                            y0,
-                            use_w,
-                            pill_h,
-                            nm2,
-                            fill_rgb=mem_fill,
-                            line_rgb=mem_line,
-                            text_rgb=mem_txt,
-                            font_pt=float(_fp_mem),
-                            bold=True,
-                            italic=False,
-                            line_wt=0.55,
-                            adj_round=0.42,
-                            shadow=False,
-                            shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}_{mi}",
-                            tf_margin_tb=0.0,
-                            tf_margin_lr=0.75,
-                        )
-                        if s_mem is not None:
-                            n_added += 1
-                            _record_day_shape(s_mem, day_k)
-                        x_cur += use_w + gx
+                        parts.append(nm2)
+                        est_w += max(9.0, 5.2 * float(len(nm2)))
+                    if len(parts) > 1:
+                        est_w += float(len(parts) - 1) * gx
+                    combined = "\u3000".join(parts)
+                    if not combined.strip():
+                        return
+                    use_w = min(float(w), max(12.0, est_w))
+                    use_w = min(use_w, float(w))
+                    _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, combined)
+                    s_mem = _gantt_xlw_add_round_rect(
+                        left,
+                        y0,
+                        use_w,
+                        pill_h,
+                        combined,
+                        fill_rgb=mem_fill,
+                        line_rgb=mem_line,
+                        text_rgb=mem_txt,
+                        font_pt=float(_fp_mem),
+                        bold=True,
+                        italic=False,
+                        line_wt=0.55,
+                        adj_round=0.42,
+                        shadow=False,
+                        shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}",
+                        tf_margin_tb=0.0,
+                        tf_margin_lr=0.75,
+                    )
+                    if s_mem is not None:
+                        n_added += 1
+                        _record_day_shape(s_mem, day_k)
 
                 _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
                 _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
