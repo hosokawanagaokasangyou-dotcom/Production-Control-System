@@ -6025,7 +6025,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
         # 依頼NO メインは行高の 1/4 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
         # メンバー名は上下分割せず、依頼NO の直上に 1 列で置く（隙間を空けて重ねない）。
-        # メンバー 1 ピルの縦幅は依頼NO メインと同じ。帯・行からはみ出してもよい。
+        # メンバー 1 ピルの縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
         _row_shape_seq: dict[int, int] = {}
 
         def _gantt_xlw_add_round_rect(
@@ -6178,12 +6178,53 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             mem_line = _com_excel_bgr_rgb(175, 180, 188)
             mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバー縦幅＝依頼NO と同じ（行高の 1/4 目標）。メンバーは帯外へはみ出してよい。
+                # メンバー縦幅＝依頼NO と同じ（行高の 1/4 目標）。行全体 [top, top+h] に収まるよう
+                # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。
                 _gap_mm = 1.35
                 h_main = max(9.0, float(_h_req_no))
                 h_mem_use = h_main
-                y_main = band_bot - _band_inset - h_main
-                y_mem = y_main - _gap_mm - h_mem_use
+                _rin_row = 1.0
+                _rout_row = 1.0
+                row_top_b = float(top)
+                row_bot_b = float(top) + float(h)
+                _gap_eff = float(_gap_mm)
+                _hmem_eff = float(h_mem_use)
+                _hmain_eff = float(h_main)
+                y_main = band_bot - _band_inset - _hmain_eff
+                y_mem = y_main - _gap_eff - _hmem_eff
+                for _squeeze in range(28):
+                    st = float(y_mem)
+                    sb = float(y_main) + float(_hmain_eff)
+                    lo = (row_top_b + _rin_row) - st
+                    hi = (row_bot_b - _rout_row) - sb
+                    if lo <= hi:
+                        if lo > 0.0:
+                            delta = lo
+                        elif hi < 0.0:
+                            delta = hi
+                        else:
+                            delta = 0.0
+                        y_mem += delta
+                        y_main += delta
+                        break
+                    if _gap_eff > 0.35:
+                        _gap_eff = max(0.35, _gap_eff - 0.35)
+                    elif _hmem_eff > 6.0:
+                        _hmem_eff = max(6.0, _hmem_eff - 0.5)
+                    elif _hmain_eff > 8.0:
+                        _hmain_eff = max(8.0, _hmain_eff - 0.5)
+                    else:
+                        y_main = band_bot - _band_inset - _hmain_eff
+                        y_mem = y_main - _gap_eff - _hmem_eff
+                        lo2 = (row_top_b + _rin_row) - float(y_mem)
+                        if lo2 > 0.0:
+                            y_mem += lo2
+                            y_main += lo2
+                        break
+                    y_main = band_bot - _band_inset - _hmain_eff
+                    y_mem = y_main - _gap_eff - _hmem_eff
+                h_main = float(_hmain_eff)
+                h_mem_use = float(_hmem_eff)
                 gx = 1.0
 
                 def _emit_member_pills(
