@@ -17775,20 +17775,6 @@ def _run_b2_inspection_rewind_pass(
             if not _made:
                 break
             _any_progress = True
-        if not _gpo.get("abolish_all_scheduling_limits"):
-            _append_end_of_day_machine_cleanup_for_plan_date(
-                current_date=current_date,
-                timeline_events=timeline_events,
-                task_queue=task_queue,
-                daily_status=daily_status,
-                skills_dict=skills_dict,
-                avail_dt=avail_dt,
-                dispatch_interval_mirror=dispatch_interval_mirror,
-                changeover_by_eq=_STAGE2_MACHINE_CHANGEOVER_BY_EQ,
-                abolish_all_scheduling_limits=bool(
-                    _gpo.get("abolish_all_scheduling_limits")
-                ),
-            )
     return _any_progress
 
 
@@ -19701,21 +19687,6 @@ def _generate_plan_impl():
                 if not _sched_made_progress:
                     break
 
-            if not global_priority_override.get("abolish_all_scheduling_limits"):
-                _append_end_of_day_machine_cleanup_for_plan_date(
-                    current_date=current_date,
-                    timeline_events=timeline_events,
-                    task_queue=task_queue,
-                    daily_status=daily_status,
-                    skills_dict=skills_dict,
-                    avail_dt=avail_dt,
-                    dispatch_interval_mirror=_dispatch_interval_mirror,
-                    changeover_by_eq=_STAGE2_MACHINE_CHANGEOVER_BY_EQ,
-                    abolish_all_scheduling_limits=bool(
-                        global_priority_override.get("abolish_all_scheduling_limits")
-                    ),
-                )
-
             if TRACE_SCHEDULE_TASK_IDS:
                 for _tt in TRACE_SCHEDULE_TASK_IDS:
                     for _t in task_queue:
@@ -19855,6 +19826,33 @@ def _generate_plan_impl():
                 logging.info(
                     "§B-2/§B-3 リワインド: EC 完走後に検査＝巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
+            if not global_priority_override.get("abolish_all_scheduling_limits"):
+                for _d_eod in sorted_dates:
+                    _ds_eod = attendance_data.get(_d_eod)
+                    if not _ds_eod:
+                        continue
+                    _avail_eod: dict = {}
+                    for m in members:
+                        if m not in _ds_eod:
+                            continue
+                        st_e = _ds_eod[m]
+                        if st_e.get("eligible_for_assignment", st_e.get("is_working", False)):
+                            _avail_eod[m] = st_e["start_dt"]
+                    if not _avail_eod:
+                        continue
+                    _append_end_of_day_machine_cleanup_for_plan_date(
+                        current_date=_d_eod,
+                        timeline_events=timeline_events,
+                        task_queue=task_queue,
+                        daily_status=_ds_eod,
+                        skills_dict=skills_dict,
+                        avail_dt=_avail_eod,
+                        dispatch_interval_mirror=_dispatch_interval_mirror,
+                        changeover_by_eq=_STAGE2_MACHINE_CHANGEOVER_BY_EQ,
+                        abolish_all_scheduling_limits=bool(
+                            global_priority_override.get("abolish_all_scheduling_limits")
+                        ),
+                    )
             break
 
     if TRACE_SCHEDULE_TASK_IDS:
