@@ -2232,12 +2232,16 @@ def _write_results_equipment_gantt_sheet(
 
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # A3 横・余白「狭い」・横1ページ（fitToWidth=1）・縦は自動・先頭行1〜3を全ページに繰り返し・縦は手動改ページで1日区切り
+        # A3 横・余白「狭い」・横1ページ（fitToWidth=1）・縦は「日数」ページに固定
+        # ※ fitToHeight=0（縦自動）だと、横1ページに合わせた縮小後でも1日分の行が
+        #    1ページの高さに収まらない場合に Excel が日の途中へ自動改ページし、
+        #    「1日1ページ」とずれる。日数に合わせて縦ページ数を指定して全体を
+        #    さらに縮小し、各日ブロックが縦1ページに収まるようにする。
         ws.page_setup.orientation = "landscape"
         # 「ページに合わせる」を有効にしないと fitToWidth が Excel で無視されうる
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0  # 0 = 縦方向ページ数は自動（必要な枚数）
+        ws.page_setup.fitToHeight = max(1, len(dates_to_show))
         # A3（Excel / openpyxl の paperSize=8）
         ws.page_setup.paperSize = 8
         # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
