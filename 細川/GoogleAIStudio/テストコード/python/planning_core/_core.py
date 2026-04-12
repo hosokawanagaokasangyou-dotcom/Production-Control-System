@@ -722,7 +722,7 @@ if not API_KEY:
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 # 結果_設備ガントの横軸タイムスロット幅（分）
 GANTT_TIMELINE_SLOT_MINUTES = 5
-# 結果_設備ガントの時刻列（F 列以降）の列幅（Excel / openpyxl の標準単位）
+# 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
@@ -1041,7 +1041,7 @@ RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
-# 結果_設備ガント: 機械名グループ（機械名列の同一坝称）ごとに B〜E 列を区別する淡色（順に割当・循環）
+# 結果_設備ガント: 機械名グループ（機械名列の同一坝称）ごとに B〜D 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
     "FCE8F0",
@@ -1866,7 +1866,7 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
 
 def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
     """
-    結果_設備ガントの固定列（B〜E」A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出睾順で
+    結果_設備ガントの固定列（B〜D」A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出睾順で
     淡色を割り当てて、同一機械名は常に同じ PatternFill を共有する。
     """
     order: list[str] = []
@@ -1978,7 +1978,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概覝
+    n_fixed = 4  # A=日付（日ブロック内で縦結合）/ B〜D=機械名・工程名・タスク概覝
     last_col = n_fixed + n_slots
     gantt_shape_label_specs: list[dict] = []
     _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
@@ -2049,7 +2049,7 @@ def _write_results_equipment_gantt_sheet(
         dates_to_show.append(d0)
 
     hdr_row = row
-    fixed_hdr = ["日付", "機械名", "工程名", "担当者", "タスク概覝"]
+    fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
     for ci, h in enumerate(fixed_hdr, 1):
         c = ws.cell(row=hdr_row, column=ci, value=h)
         c.font = hdr_font
@@ -2067,7 +2067,7 @@ def _write_results_equipment_gantt_sheet(
         c.fill = hdr_use
         c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
     ws.row_dimensions[hdr_row].height = 44
-    # 先頭データ行の左上＝時刻列先頭（F4）で窓枠固定（行1〜3・列A〜Eを固定）
+    # 先頭データ行の左上＝時刻列先頭（E4）で窓枠固定（行1〜3・列A〜Dを固定）
     ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
     row = hdr_row + 1
 
@@ -2099,16 +2099,13 @@ def _write_results_equipment_gantt_sheet(
                         seen_tid.add(tid)
                         tids.append(tid)
                 task_sum = " ".join(tids) if tids else "—"
-                member_disp = _gantt_row_member_names(evlist)
             else:
                 task_sum = "—"
-                member_disp = "—"
 
             c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
             c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-            c3 = ws.cell(row=row, column=4, value=member_disp)
-            c4 = ws.cell(row=row, column=5, value=task_sum)
-            for c in (c1, c2, c3, c4):
+            c3 = ws.cell(row=row, column=4, value=task_sum)
+            for c in (c1, c2, c3):
                 c.font = _result_font(size=12, color="000000")
                 c.fill = lab_fill
                 c.border = grid_border
@@ -2116,7 +2113,6 @@ def _write_results_equipment_gantt_sheet(
             c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
             c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-            c4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
             _paint_gantt_timeline_row_merged(
                 ws,
@@ -2147,10 +2143,8 @@ def _write_results_equipment_gantt_sheet(
                             seen_aid.add(tid)
                             tids_a.append(tid)
                     task_sum_a = " ".join(tids_a) if tids_a else "—"
-                    member_disp_a = _gantt_row_member_names(evlist_a)
                 else:
                     task_sum_a = "—"
-                    member_disp_a = "—"
 
                 lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
@@ -2162,9 +2156,8 @@ def _write_results_equipment_gantt_sheet(
                     act_mach = "—"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
                 ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-                ca3 = ws.cell(row=row, column=4, value=member_disp_a)
-                ca4 = ws.cell(row=row, column=5, value=task_sum_a)
-                for c in (ca1, ca2, ca3, ca4):
+                ca3 = ws.cell(row=row, column=4, value=task_sum_a)
+                for c in (ca1, ca2, ca3):
                     c.font = _result_font(size=12, color="000000")
                     c.fill = lab_fill_a
                     c.border = grid_border
@@ -2172,7 +2165,6 @@ def _write_results_equipment_gantt_sheet(
                 ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
                 ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                ca4.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
                 _paint_gantt_timeline_row_merged(
                     ws,
@@ -2222,7 +2214,7 @@ def _write_results_equipment_gantt_sheet(
             row += 1
 
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
-    # 時刻列（F〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
+    # 時刻列（E〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
     if n_slots > 0:
         gw = float(GANTT_TIMELINE_COLUMN_WIDTH)
         for ci in range(n_fixed + 1, last_col + 1):
@@ -3245,7 +3237,7 @@ def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
 
 def _gantt_member_label_surname_only(raw: str) -> str:
     """
-    設備ガントの担当者セル用。半角＝全角空白はあれみ手剝を姓とみなし、無いとしは全体を表示
+    設備ガントのタイムライン上の担当者姓表示用。半角＝全角空白はあれみ手剝を姓とみなし、無いとしは全体を表示
     （並びは1トークンのみのときは姓の切り出し試行のまま）。NFKC・富田/冨田寄せは姓用とともに。
     """
     sei, mei = _split_person_sei_mei(raw)
@@ -3258,7 +3250,7 @@ def _gantt_member_label_surname_only(raw: str) -> str:
 def _gantt_member_labels_for_task(evlist, task_id: str) -> list[str]:
     """
     設備ガントのタイムライン1セグメント用: 指定 task_id のイベントから担当者姓を出現順で重複除去。
-    （シェイプの上下チップ用。行全体の _gantt_row_member_names より狭い範囲）
+    （シェイプの上下チップ用）
     """
     tid = str(task_id or "").strip()
     if not tid:
@@ -3288,33 +3280,6 @@ def _gantt_member_labels_for_task(evlist, task_id: str) -> list[str]:
             seen_label.add(lab)
             labels.append(lab)
     return labels
-
-
-def _gantt_row_member_names(evlist) -> str:
-    """設備ガント行用: 主担当(op)とサブ(sub)を出睾順で重複除去し、姓のみをカンマ+半角スペース区切り。"""
-    raw_names: list[str] = []
-    seen_raw: set[str] = set()
-    for e in evlist or []:
-        op = str(e.get("op") or "").strip()
-        if op and op not in seen_raw:
-            seen_raw.add(op)
-            raw_names.append(op)
-        sub_raw = str(e.get("sub") or "").strip()
-        if not sub_raw:
-            continue
-        for seg in re.split(r"[,」]", sub_raw):
-            t = seg.strip()
-            if t and t not in seen_raw:
-                seen_raw.add(t)
-                raw_names.append(t)
-    labels: list[str] = []
-    seen_label: set[str] = set()
-    for raw in raw_names:
-        lab = _gantt_member_label_surname_only(raw)
-        if lab and lab not in seen_label:
-            seen_label.add(lab)
-            labels.append(lab)
-    return ", ".join(labels) if labels else "—"
 
 
 def _resolve_equipment_line_key_for_task(task: dict, equipment_list: list | None) -> str:
