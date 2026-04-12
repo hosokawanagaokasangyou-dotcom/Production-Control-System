@@ -5307,6 +5307,105 @@ def _history_team_text_main_assignment_only(h: dict) -> str:
     return ", ".join(kept) if kept else raw
 
 
+def _result_assigned_history_team_key(team_s: str) -> str:
+    """結果シート用: 履歴セグメント同士の担当文字列比較（NFKC・空白正規化）。"""
+    s = unicodedata.normalize("NFKC", str(team_s or "").strip())
+    return " ".join(s.split())
+
+
+def _union_name_lists_preserve_order(
+    a: list | None, b: list | None
+) -> list[str]:
+    """名前列を重複なく結合（先勝ちで順序維持）。"""
+    out: list[str] = []
+    seen: set[str] = set()
+    for xs in (a or [], b or []):
+        for x in xs:
+            t = str(x).strip()
+            if not t:
+                continue
+            k = _norm_history_member_label(t)
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(t)
+    return out
+
+
+def _assigned_history_segment_copy(h: dict) -> dict:
+    """履歴 dict の浅いコピー（名前リストは複製してマージ時に汚染しない）。"""
+    out = dict(h)
+    for k in ("surplus_member_names", "post_dispatch_surplus_names"):
+        v = out.get(k)
+        if isinstance(v, list):
+            out[k] = list(v)
+    return out
+
+
+def _assigned_history_contiguous_mergeable(a: dict, b: dict) -> bool:
+    """
+    連続作業として 1 履歴にまとめられるか。
+    前セグメント終了 == 次セグメント開始・同一担当・同一組合せ行 ID のときのみ。
+    """
+    a_end = a.get("end_dt")
+    b_start = b.get("start_dt")
+    if not isinstance(a_end, datetime) or not isinstance(b_start, datetime):
+        return False
+    if a_end != b_start:
+        return False
+    if _result_assigned_history_team_key(a.get("team", "")) != _result_assigned_history_team_key(
+        b.get("team", "")
+    ):
+        return False
+    return (a.get("combo_sheet_row_id")) == (b.get("combo_sheet_row_id"))
+
+
+def _merge_two_assigned_history_display_segments(a: dict, b: dict) -> dict:
+    """連続セグメント b を a に取り込んだ新 dict（結果シート表示専用）。"""
+    out = _assigned_history_segment_copy(a)
+    try:
+        da = int(a.get("done_m") or 0)
+    except (TypeError, ValueError):
+        da = 0
+    try:
+        db = int(b.get("done_m") or 0)
+    except (TypeError, ValueError):
+        db = 0
+    out["done_m"] = da + db
+    out["end_dt"] = b.get("end_dt")
+    out["need_surplus_assigned"] = bool(
+        a.get("need_surplus_assigned") or b.get("need_surplus_assigned")
+    )
+    out["surplus_member_names"] = _union_name_lists_preserve_order(
+        a.get("surplus_member_names"), b.get("surplus_member_names")
+    )
+    out["post_dispatch_surplus_names"] = _union_name_lists_preserve_order(
+        a.get("post_dispatch_surplus_names"), b.get("post_dispatch_surplus_names")
+    )
+    return out
+
+
+def merge_assigned_history_contiguous_for_result_sheet(hist: list | None) -> list:
+    """
+    結果_タスク一覧向け: ロール確定ごとの内部履歴を、時刻・担当・組合せ ID が連続する塊で 1 件にまとめる。
+    配台中のロールパイプライン等は生の assigned_history を参照するため、本関数は出力直前にのみ使う。
+    """
+    hist = hist or []
+    if len(hist) < 2:
+        return [_assigned_history_segment_copy(h) for h in hist]
+    out: list[dict] = []
+    cur = _assigned_history_segment_copy(hist[0])
+    for nxt_raw in hist[1:]:
+        nxt = _assigned_history_segment_copy(nxt_raw)
+        if _assigned_history_contiguous_mergeable(cur, nxt):
+            cur = _merge_two_assigned_history_display_segments(cur, nxt)
+        else:
+            out.append(cur)
+            cur = nxt
+    out.append(cur)
+    return out
+
+
 def _format_result_task_history_cell(task: dict, h: dict) -> str:
     """結果_タスク一覧の履歴セル文字列（短い記号: #=組合せ行ID, 主=メイン担当, +=超過, 余=余力追記）。"""
     um = task.get("unit_m") or 0
@@ -5424,7 +5523,9 @@ def _apply_result_task_history_need_surplus_highlight(
         ti = r - 2
         if ti < 0 or ti >= n_tasks:
             continue
-        ah = sorted_tasks[ti].get("assigned_history") or []
+        ah = merge_assigned_history_contiguous_for_result_sheet(
+            sorted_tasks[ti].get("assigned_history")
+        )
         for ord1, cidx in hist_cols:
             i = ord1 - 1
             if i < 0 or i >= len(ah):
@@ -20698,11 +20799,16 @@ def _generate_plan_impl():
             _result_sheet_raw_input_by_line[(_tid, _mach)] = _rid
 
     task_results = []
-    max_history_len = max([len(t['assigned_history']) for t in task_queue] + [0])
-    
     # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
     # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
+    max_history_len = max(
+        [
+            len(merge_assigned_history_contiguous_for_result_sheet(t.get("assigned_history")))
+            for t in sorted_tasks_for_result
+        ]
+        + [0]
+    )
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
@@ -20768,9 +20874,12 @@ def _generate_plan_impl():
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
         row_history = {}
+        _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
+            t.get("assigned_history")
+        )
         for i in range(max_history_len):
-            if i < len(t['assigned_history']):
-                h = t['assigned_history'][i]
+            if i < len(_hist_for_sheet):
+                h = _hist_for_sheet[i]
                 row_history[f"履歴{i+1}"] = _format_result_task_history_cell(t, h)
             else:
                 row_history[f"履歴{i+1}"] = ""
