@@ -727,7 +727,7 @@ GANTT_TIMELINE_COLUMN_WIDTH = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
 GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
-GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "36")))
+GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "40")))
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
 
