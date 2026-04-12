@@ -15358,13 +15358,36 @@ def _agent_debug_ndjson_041e24(
     # #endregion
 
 
+def _changeover_prep_extend_overlaps_team_break(
+    prep_end_before: datetime,
+    machining_start: datetime,
+    team_breaks_merged: list | None,
+) -> bool:
+    """準備終了〜加工開始の間に、確定チームの休憩帯が重なるとき True（準備 end を加工開始まで伸ばさない）。"""
+    if not team_breaks_merged:
+        return False
+    for item in team_breaks_merged:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            continue
+        bs, be = item[0], item[1]
+        if not isinstance(bs, datetime) or not isinstance(be, datetime):
+            continue
+        if prep_end_before < be and bs < machining_start:
+            return True
+    return False
+
+
 def _extend_changeover_prep_segment_end_for_timeline(
-    segments: list, machining_start: datetime | None
+    segments: list,
+    machining_start: datetime | None,
+    *,
+    team_breaks_merged: list | None = None,
 ) -> None:
     """
     タイムライン追記直前に、準備時間セグメントの end_dt を実加工 start_dt まで延ばす。
     依頼切替の準備区間は代表スキルOPの勤務で forward される一方、確定チームの開始は
     max(メンバー avail, 機械下限) となり、準備終了より遅くなると設備時間割の 10 分枠が空く。
+    確定チームの休憩が (準備終了, 加工開始) に重なる場合は伸ばさない（休憩を準備時間で埋めない）。
     """
     if not segments or not isinstance(machining_start, datetime):
         return
@@ -15375,6 +15398,9 @@ def _extend_changeover_prep_segment_end_for_timeline(
         if not isinstance(pe, datetime):
             return
         ps = seg.get("start_dt")
+        _block = _changeover_prep_extend_overlaps_team_break(
+            pe, machining_start, team_breaks_merged
+        )
         _agent_debug_ndjson_041e24(
             "H2",
             "_extend_changeover_prep_segment_end_for_timeline",
@@ -15384,9 +15410,10 @@ def _extend_changeover_prep_segment_end_for_timeline(
                 "prep_end_before": pe.isoformat(),
                 "machining_start": machining_start.isoformat(),
                 "will_extend": bool(machining_start > pe),
+                "skip_extend_overlap_team_break": _block,
             },
         )
-        if machining_start > pe:
+        if machining_start > pe and not _block:
             seg["end_dt"] = machining_start
         _pe2 = seg.get("end_dt")
         _agent_debug_ndjson_041e24(
@@ -17549,7 +17576,11 @@ def _trial_order_first_schedule_pass(
                     ],
                 },
             )
-            _extend_changeover_prep_segment_end_for_timeline(_co_append, best_start)
+            _extend_changeover_prep_segment_end_for_timeline(
+                _co_append,
+                best_start,
+                team_breaks_merged=best_breaks,
+            )
             _append_changeover_segments_to_timeline(
                 timeline_events,
                 dispatch_interval_mirror,
@@ -19618,7 +19649,9 @@ def _generate_plan_impl():
                             )
                             _co_append_l = list(_co_segs_legacy or [])
                             _extend_changeover_prep_segment_end_for_timeline(
-                                _co_append_l, best_info.get("start_dt")
+                                _co_append_l,
+                                best_info.get("start_dt"),
+                                team_breaks_merged=best_info.get("breaks"),
                             )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
