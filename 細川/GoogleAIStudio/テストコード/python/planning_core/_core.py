@@ -3004,6 +3004,93 @@ def _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df: "pd.DataFrame
         )
 
 
+def _agent_dbg_fel_ndjson(
+    message: str, data: dict, hypothesis_id: str = ""
+) -> None:
+    # #region agent log
+    try:
+        _root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+        )
+        _path = os.path.join(_root, "debug-5baffb.log")
+        _rec = {
+            "sessionId": "5baffb",
+            "message": message,
+            "hypothesisId": hypothesis_id,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_path, "a", encoding="utf-8") as _fp:
+            _fp.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
+def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
+    out_df: "pd.DataFrame",
+) -> None:
+    """
+    寸法パターンが無い品番で、ロール単位長さが換算数量（下限適用後）またはその 100m 切上と
+    同じになっている行を矯正する（旧シートマージで FEL 等に換算数量が載った誤り向け）。
+    小さい値（<500）は「意図的に換算数量と同じロール長」とみなし触れない。
+    """
+    if out_df is None or getattr(out_df, "empty", True):
+        return
+    if (
+        PLAN_COL_ROLL_UNIT_LENGTH not in out_df.columns
+        or TASK_COL_PRODUCT not in out_df.columns
+        or TASK_COL_QTY not in out_df.columns
+    ):
+        return
+    healed = 0
+    min_heal_cur = 500.0
+    want = float(
+        _ceil_roll_unit_length_m_to_next_step(
+            float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M)
+        )
+    )
+    for i in out_df.index:
+        row = out_df.loc[i]
+        pn = row.get(TASK_COL_PRODUCT, None)
+        s = _normalize_product_dim_separators_for_roll_inference(str(pn or ""))
+        if re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s):
+            continue
+        qty_floor = _floor_positive_m_to_planning_minimum(
+            parse_float_safe(row.get(TASK_COL_QTY), 0.0), PLANNING_MIN_QTY_M
+        )
+        if qty_floor <= 0:
+            continue
+        qty_ceiled = float(_ceil_roll_unit_length_m_to_next_step(float(qty_floor)))
+        cur = parse_float_safe(row.get(PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
+        if cur + 1e-9 < min_heal_cur:
+            continue
+        if abs(cur - qty_floor) > 1e-4 and abs(cur - qty_ceiled) > 1e-4:
+            continue
+        if abs(cur - want) < 1e-6:
+            continue
+        _agent_dbg_fel_ndjson(
+            "heal_no_dim_roll_qty_mistake",
+            {
+                "row_index": int(i) if isinstance(i, (int, float)) else str(i),
+                "product_sample": str(pn or "")[:120],
+                "cur_before": cur,
+                "qty_floor": qty_floor,
+                "qty_ceiled": qty_ceiled,
+                "want": want,
+            },
+            "H3",
+        )
+        out_df.at[i, PLAN_COL_ROLL_UNIT_LENGTH] = want
+        healed += 1
+    if healed:
+        logging.info(
+            "段階1: 寸法なしでロール単位長さが換算数量と誤一致していた行を %s 件、既定 %sm へ矯正しました。",
+            healed,
+            int(want) if abs(want - int(want)) < 1e-9 else want,
+        )
+
+
 def load_tasks_df():
     """
     タスク入力を取得れる（tasks.xlsx は使用しない）。
@@ -8686,6 +8773,20 @@ def _merge_plan_sheet_user_overrides(out_df):
                 v = _coerce_plan_exclude_column_value_for_storage(v)
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
+            if c == PLAN_COL_ROLL_UNIT_LENGTH:
+                _prev_roll = parse_float_safe(
+                    out_df.at[i, c] if c in out_df.columns else None, -1.0
+                )
+                _agent_dbg_fel_ndjson(
+                    "merge_roll_length",
+                    {
+                        "task_id": tid,
+                        "process": mach,
+                        "prev_roll": _prev_roll,
+                        "merged_roll": str(v)[:40],
+                    },
+                    "H2",
+                )
             out_df.at[i, c] = v
 
     if merged_rows:
@@ -10696,6 +10797,7 @@ def run_stage1_extract():
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
+    _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
