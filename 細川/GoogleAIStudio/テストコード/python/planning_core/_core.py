@@ -65,9 +65,9 @@ exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
 # openpyxl 保存失敗時に VBA は E 列へ書き込むための UTF-8 TSV（Base64）。
 EXCLUDE_RULES_E_VBA_TSV_FILENAME = "exclude_rules_e_column_vba.tsv"
-# openpyxl 保存失敗時に VBA は A〜E を一括反映れる UTF-8 TSV（行ごとに 5 セル分 Base64）。
+# openpyxl 保存失敗時に VBA は A〜E を一括反映する UTF-8 TSV（行ごとに 5 セル分 Base64）。
 EXCLUDE_RULES_MATRIX_VBA_FILENAME = "exclude_rules_matrix_vba.tsv"
-# VBA はメイン P 列へ書き込むための UTF-8 テキスト（Excel 開いたまま save でしない相題の回避）
+# VBA はメイン P 列へ書き込むための UTF-8 テキスト（Excel 開いたまま 保存しない場合の不具合の回避）
 GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 # 全実行を通した Gemini 利用・推定料金の累計（API 応答ごとに更新。保存先は API_Payment フォルダ）
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
@@ -88,7 +88,7 @@ GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台試行工程」）の E 列に "1234" を書き（保存経路の確認用）。
 # TASK_INPUT_WORKBOOK は「加工計画DATA」シート付しブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
-# 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸ゝる）。
+# 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
 
 # =========================================================
 # 【設定】APIキー / 基本ルール / ファイル名
@@ -165,11 +165,11 @@ def _gemini_client(api_key: str) -> genai.Client:
 
 
 # ---------------------------------------------------------------------------
-# 以降の定数ブロックは「Excel 列見出し、と 1:1 で対応させる。
-# 列名を変える場合は VBA・マクロ坴シートと同時に直れこと。
+# 以降の定数ブロックは「Excel 列見出し」と 1:1 で対応させる。
+# 列名を変える場合は VBA・マクロ付きシートと同時に直すこと。
 # ---------------------------------------------------------------------------
 
-MASTER_FILE = "master.xlsm" # skillsとattendance(よよよtasks)を統坈したファイル
+MASTER_FILE = "master.xlsm"  # skills と attendance（tasks）を統合したファイル
 # VBA「master_機械カレンダーを作成」シート（1 時間スロット占有を段階2の machine_avail_dt に反映）
 SHEET_MACHINE_CALENDAR = "機械カレンダー"
 # ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
@@ -177,15 +177,15 @@ _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
 
-# master.xlsm: 依頼NO は変える剝後の工程×機械ととの準備・後始末（分）＝機械ととの日次始業準備（分）
+# master.xlsm: 依頼NO は切り替え前後の工程×機械との準備・後始末（分）＝機械との日次始業準備（分）
 SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
 SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
-# ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どより）
+# ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
 _STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
-# master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなし [開始, 開始+N分) の壝時計に載せる。
+# master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) のタイムラインに載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
-# timeline_events の event_kind（省略時は加工とみなれ）
+# timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
@@ -193,9 +193,9 @@ TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」は別列。
-# 勤怠AIの入力は備考のみ。として reason（表示・中抜き補正・個人シートの休憩/休暇文言）は「備考は空のとき休暇区分を引き継ぎ。
+# 勤怠AIの入力は備考のみ。reason（表示・中抜き補正・個人シートの休憩/休暇文言）は「備考が空のとき休暇区分を引き継ぐ」。
 # master カレンダー＝出勤簿.txt 準拠: 公休=公休年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）＝後休=定常開始～休憩時間1_開始・午後年休＝国=他拠点勤務。
-# 備考列・休暇区分は勤怠 AI で構造化（配台試行加・is_holiday・中抜き等）。備考は空でも休暇区分のみの行は AI に渡れ。
+# 備考列・休暇区分は勤怠 AI で構造化（配台試行時・is_holiday・中抜き等）。備考は空でも休暇区分のみの行は AI に渡す。
 ATT_COL_LEAVE_TYPE = "休暇区分"
 ATT_COL_REMARK = "備考"
 # メンバー勤怠シート（master.xlsm）: 定時の「退勤時間」と分けて退勤上限を指定（任意列・見出しは「残業(分)」）
@@ -204,18 +204,18 @@ ATT_COL_OT_END = "残業(分)"
 ATT_COL_OT_END_LEGACY = "残業終業"
 # 勤怠備考 AI の JSON スキーマを変えたら更新し、キャッシュキーを無効化する
 ATTENDANCE_REMARK_AI_SCHEMA_ID = "v2_haitai_fuka"
-# need シート: 「基本必須人数」行（A列に「必須人数」を含む）＋ しの直下の「配台時追加人数＝余力時追加人数」等
+# need シート: 「基本必須人数」行（A列に「必須人数」を含む）＋ その直下の「配台時追加人数＝余力時追加人数」等
 # （Excel 上は概ね 5 行目付近。余剰時に増やせる人数上限・工程×機械列）
 # ＋ 行「特別指定1」～「特別指定99」（必須人数の上書き・1～99）
 NEED_COL_CONDITION = "依頼NO条件"
 NEED_COL_NOTE = "備考"
-# need「配台時追加人数」を満枠使っても、短縮あたり加工時間は短しなるのは最大でこの割引（例: 0.05 ≒ 5%）
+# need「配台時追加人数」を満枠使っても、短縮あたり加工時間は短くなるのは最大でこの割引（例: 0.05 ≒ 5%）
 SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
 # タスクは tasks.xlsx を使うので、VBA から渡される TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
 TASKS_SHEET_NAME = "加工計画DATA"
 
-# このシート名を含むブックは openpyxl は読み書きに失敗することはあるたゝ」load_workbook を試行する
+# このシート名を含むブックは openpyxl は読み書きに失敗することがあるため、load_workbook を試行する
 OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "配台_配台不要工程"
 
 
@@ -252,7 +252,7 @@ def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
 
 
 def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
-    """当該パスは OOXML でシート「配台_配台不要工程」を含むとし True（openpyxl 利用を避ける）。"""
+    """当該パスは OOXML でシート「配台_配台不要工程」を含むとする True（openpyxl 利用を避ける）。"""
     p = (wb_path or "").strip()
     if not p:
         return False
@@ -331,7 +331,7 @@ def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None
         return None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.debug(
-            "Gemini: ブックに「%s」はあるたゝ openpyxl で「%s」!B1 を読みません。",
+            "Gemini: ブックに「%s」があるため、openpyxl で「%s」!B1 を読みません。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             APP_CONFIG_SHEET_NAME,
         )
@@ -378,7 +378,7 @@ def _read_task_ids_from_config_sheet_column(
         return out
     if _workbook_should_skip_openpyxl_io(wb_path):
         msg = (
-            f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」はあるたゝ"
+            f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため、"
             f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}3 以降は openpyxl で読めません。"
         )
         if openpyxl_skip_hint:
@@ -531,7 +531,7 @@ def _read_gemini_model_try_chain_from_settings_sheet(wb_path: str) -> tuple[str,
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
-    """設定シート B3以降は空でないとしの値呼め。Windows では MessageBox。それ以外は WARNING ログ。"""
+    """設定シート B3 以降が空でないことが前提。Windows では MessageBox。それ以外は WARNING ログ。"""
     if not task_ids_sorted:
         return
     preview_lines = task_ids_sorted[:30]
@@ -539,8 +539,8 @@ def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
     if len(task_ids_sorted) > 30:
         preview += "\n…"
     body = (
-        "デバッグモードで実行しした。\n\n"
-        "「設定」シート B3以降に入力した依頼NOのみを配台対象としした。\n\n"
+        "デバッグモードで実行した。\n\n"
+        "「設定」シート B3以降に入力した依頼NOのみを配台対象とした。\n\n"
         "対象依頼NO:\n"
         + preview
     )
@@ -552,7 +552,7 @@ def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
         ctypes.windll.user32.MessageBoxW(0, body, title, 0x00000040)
     except Exception as ex:
         logging.warning(
-            "デバッグ配台: メッセージボックスを表示でしません (%s)。%s", ex, body
+            "デバッグ配台: メッセージボックスを表示できません (%s)。%s", ex, body
         )
 
 
@@ -697,7 +697,7 @@ elif _cred_path:
         APP_CONFIG_SHEET_NAME,
     )
 
-# B1 は暗号化 JSON なのにキーは坖れない（平文 JSON でキー欠損との区別）。原因の特定はログに書かう汎用メッセージのみ。
+# B1 は暗号化 JSON なのにキーは取れない（平文 JSON でキー欠損との区別）。原因の特定はログに書かう汎用メッセージのみ。
 _encrypted_json_missing_key = (
     bool(_cred_path)
     and os.path.isfile(_cred_path)
@@ -730,7 +730,7 @@ TASK_COL_TASK_ID = "依頼NO"
 TASK_COL_MACHINE = "工程名"
 TASK_COL_MACHINE_NAME = "機械名"
 TASK_COL_QTY = "残作数値"
-TASK_COL_ORDER_QTY = "块注数"
+TASK_COL_ORDER_QTY = "受注数"
 TASK_COL_SPEED = "加工速度"
 TASK_COL_PRODUCT = "製品名"
 TASK_COL_ANSWER_DUE = "回答納期"
@@ -752,7 +752,7 @@ AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
 # json/ai_remarks_cache.json 内のキー接頭辞（設定_配台試行工程・配台試行ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
 
-# マクロブック「加工実績DATA」（Power Query 等で坖り込み想定）
+# マクロブック「加工実績DATA」（Power Query 等で取り込み想定）
 ACTUALS_SHEET_NAME = "加工実績DATA"
 ACT_COL_TASK_ID = "依頼NO"
 ACT_COL_PROCESS = "工程名"
@@ -816,7 +816,7 @@ def _trace_schedule_task_enabled(task_id) -> bool:
 
 
 def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
-    """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禝止文字を避ける）。"""
+    """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
     s = "".join(
         c if (c.isalnum() or c in "-_.") else "_"
         for c in str(task_id or "").strip()
@@ -937,9 +937,9 @@ TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW = (
     in ("1", "true", "yes", "on", "はい")
 )
 
-# True: 従来どよりメイン割付の組み合わせ探索で req_num〜req_num+追加人数上限まで試れ。
+# True: 従来どおりメイン割付の組み合わせ探索で req_num〜req_num+追加人数上限まで試す。
 # False（既定）: メインは req_num のみ。追加人数上限は全シミュレーション完了後」当該ブロック時間に
-#     他タスクへ未割当（時間針なりなし）かつ skills 革坈の者をサブとして追記（append_surplus_staff_after_main_dispatch）。
+#     他タスクへ未割当（時間重なりなし）かつ skills 革坈の者をサブとして追記（append_surplus_staff_after_main_dispatch）。
 TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS = (
     os.environ.get("TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS", "")
     .strip()
@@ -965,7 +965,7 @@ TEAM_ASSIGN_USE_MASTER_COMBO_SHEET = (
 )
 
 # §B-2 熱融着検査を同一設備（工程列キー）で「開始済み1件に残ロールはある間は他依頼の検査を試さない」か。
-# 0 / false / no / off で無効にれると設備時間割上で依頼は混在し得るは」占有による長期ブロック（例: W3-14 型）を避けられる。
+# 0 / false / no / off で無効にすると設備時間割上で依頼は混在し得るは」占有による長期ブロック（例: W3-14 型）を避けられる。
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     os.environ.get("PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE", "1")
     .strip()
@@ -973,8 +973,8 @@ PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# §B-2 / §B-3 同一依頼で EC と後続（検査＝巻返し）の担当者集坈を排他れるか。
-# 0 / false / no / off / いいえ / 無効 で無効化れると」履歴ベースの相互除外を行う同一人物は両側の候補に残り得る。
+# §B-2 / §B-3 同一依頼で EC と後続（検査＝巻返し）の担当者集合を排他するか。
+# 0 / false / no / off / いいえ / 無効 で無効化すると」履歴ベースの相互除外を行う同一人物は両側の候補に残り得る。
 PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     os.environ.get("PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS", "1")
     .strip()
@@ -982,7 +982,7 @@ PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# マクロブック「設定_配台試行工程」: 既定では openpyxl save を試さう xlwings 同期→Save（Excel 占有時は openpyxl は実質失敗するたゝ）。失敗時は TSV→VBA 反映。
+# マクロブック「設定_配台試行工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl は実質失敗するため）。失敗時は TSV→VBA 反映。
 # コマンド等で openpyxl を試れ場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台試行工程"
 EXCLUDE_RULES_SKIP_OPENPYXL_SAVE = os.environ.get(
@@ -1037,9 +1037,9 @@ RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
 # 結果_設備毎の時間割: 準備時間・後始末時間の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
-# 結果_設備毎の時間割: master「機械カレンダー」占有と針なる設備セル（10分枠）
+# 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
-# 結果_設備ガント: 機械名グループ（機械名列の同一坝称）ごとに B〜E 列を区別れる淡色（順に割当・循環）
+# 結果_設備ガント: 機械名グループ（機械名列の同一坝称）ごとに B〜E 列を区別する淡色（順に割当・循環）
 RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "E8F4FC",
     "FCE8F0",
@@ -1097,17 +1097,17 @@ PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
 ]
-# 矛盾検出でリセット対象にれる列（見出し行の文言と一致れること）
+# 矛盾検出でリセット対象にれる列（見出し行の文言と一致すること）
 PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
 # 段階1再抽出時」既存「配台計画_タスク入力」から継承れる列（AIの解析結果列は毎回空に戻れ）
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
 # 上書き以外で」再抽出時に旧シートから引き継ぎ列（セルは空でないとしのみ）
-# 配台試行順番は毎回空クリアのごご fill_plan_dispatch_trial_order_column_stage1 で付け直れたゝ対象外。
+# 配台試行順番は毎回空クリア後に fill_plan_dispatch_trial_order_column_stage1 で付け直すが対象外。
 PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
 # openpyxl 保存はブックロックで失敗したとし」VBA は開いているブックへ書式適用するための指示ファイル
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
 # 配台計画_タスク入力へ「グローバルコメント解析」を書き列（表の坳端より外側。1行目から縦にラベル＝値）
-# ★ 参照表示のみ: load_planning_tasks_df 等は本列を一切読まない。配台適用は常にメイン「グローバルコメント」1経路のたゝ二針適用にならない。
+# ★ 参照表示のみ: load_planning_tasks_df 等は本列を一切読まない。配台適用は常にメイン「グローバルコメント」1経路のため、二重適用にならない。
 PLAN_SHEET_GLOBAL_PARSE_LABEL_COL = 50  # AX
 PLAN_SHEET_GLOBAL_PARSE_VALUE_COL = 51  # AY
 PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
@@ -1166,7 +1166,7 @@ def _format_paren_ref_scalar(val):
 
 def _reference_text_for_override_row(row, override_col: str, req_map: dict, need_rules: list) -> str:
     """1行分の上書き列に対応れる参照文言（括弧付し）。"""
-    _ = (req_map, need_rules)  # 旧「（元）必須人数」参照で使用。列廃止により未使用ては呼よ出し互換のたゝ残れ。
+    _ = (req_map, need_rules)  # 旧「（元）必須人数」参照で使用。列廃止により未使用だが呼び出し互換のため残す。
     if override_col == PLAN_COL_SPEED_OVERRIDE:
         v = row.get(TASK_COL_SPEED)
         if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -1209,14 +1209,14 @@ def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
 
 def _apply_plan_input_visual_format(path: str, sheet_name: str = "タスク一覧"):
     """上書き入力列に薄い黄色を付与（参照列は未着色。AI解析列は除外）。"""
-    # 見出し文字の表記ゆれで列名検索に失敗しはうなたゝ」段階1の列順（plan_input_sheet_column_order）の
+    # 見出し文字の表記ゆれで列名検索に失敗しはうなため、段階1の列順（plan_input_sheet_column_order）の
     # 1-based 列番坷で塗る（to_excel の列順と一致させる）。
     fill_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
     order = plan_input_sheet_column_order()
     col_1based = {name: i + 1 for i, name in enumerate(order)}
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "配台計画の視覚整形: ブックに「%s」はあるたゝ openpyxl での着色をスキップしました。",
+            "配台計画の視覚整形: ブックに「%s」があるため、openpyxl での着色をスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1259,7 +1259,7 @@ def _remove_planning_conflict_sidecar_safe():
 def write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row):
     """
     Excel はブックを開いたままのとき保存でしない場合に」VBA 用の TSV を log に書き。
-    形式: V1 / シート名 / データ行数 / クリア列をタブ絝坈 / 以降 行番坷\\t列名
+    形式: V1 / シート名 / データ行数 / クリア列をタブ結合 / 以降 行番坷\\t列名
     """
     path = _planning_conflict_sidecar_path()
     clear_cols = "\t".join(PLAN_CONFLICT_STYLABLE_COLS)
@@ -1282,7 +1282,7 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """結果ブック用 Font（呼よ出し坴は name/size 等を指定）。"""
+    """結果ブック用 Font（呼び出し坴は name/size 等を指定）。"""
     return Font(**kwargs)
 
 
@@ -1309,7 +1309,7 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
     headers = header_names or STAGE1_SHEET_DATEONLY_HEADERS
     if _workbook_should_skip_openpyxl_io(path):
         logging.info(
-            "日付列表示整形: ブックに「%s」はあるたゝ openpyxl での処理をスキップしました。",
+            "日付列表示整形: ブックに「%s」があるため、openpyxl での処理をスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -1447,7 +1447,7 @@ def _gantt_bar_fill_actual_for_task_id(task_id):
     return _GANTT_BAR_FILLS_ACTUAL[i]
 
 
-# ガント時刻セル（絝坈帯の先頭セル）: 毎セグメント new しない
+# ガント時刻セル（結合帯の先頭セル）: 毎セグメント new しない
 _GANTT_TIMELINE_CELL_ALIGNMENT = Alignment(
     horizontal="left",
     vertical="center",
@@ -1518,7 +1518,7 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
 
 
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
-    """絝坈セグメント境界判定（毎スロット tuple を割り当でない）。"""
+    """結合セグメント境界判定（毎スロット tuple を割り当でない）。"""
     if st_a[0] != st_b[0]:
         return False
     if st_a[0] == "idle" or st_a[0] == "break":
@@ -1636,7 +1636,7 @@ def _paint_gantt_timeline_row_merged(
 def _time_intervals_overlap_half_open(
     a_start: time, a_end: time, b_start: time, b_end: time
 ) -> bool:
-    """半開区間 [a_start, a_end) と [b_start, b_end) は針なるか（同一日内）。"""
+    """半開区間 [a_start, a_end) と [b_start, b_end) は重なるか（同一日内）。"""
 
     def _sec(t: time) -> int:
         return t.hour * 3600 + t.minute * 60 + t.second
@@ -1667,7 +1667,7 @@ def _parse_equipment_schedule_time_band_cell(val) -> tuple[time | None, time | N
 def _apply_equipment_schedule_outside_regular_fill(
     ws, reg_start: time, reg_end: time
 ) -> None:
-    """「日時帯」列で定常 [reg_start, reg_end) と針ならない行のセルに着色。"""
+    """「日時帯」列で定常 [reg_start, reg_end) と重ならない行のセルに着色。"""
     fill = PatternFill(
         fill_type="solid",
         start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
@@ -1780,8 +1780,8 @@ def _apply_equipment_schedule_machine_calendar_fill(
     calendar_blocks_by_date: dict[date, dict[str, list[tuple[datetime, datetime]]]],
 ) -> None:
     """
-    結果_設備毎の時間割: 機械カレンダー占有と針なる設備セル（進度列以外）を紫色で塗る。
-    10 分枠の半開区間 [slot_start, slot_end) と占有 [bs, be) は針なれみ対象。
+    結果_設備毎の時間割: 機械カレンダー占有と重なる設備セル（進度列以外）を紫色で塗る。
+    10 分枠の半開区間 [slot_start, slot_end) と占有 [bs, be) は重ならない対象。
     """
     if not calendar_blocks_by_date or not equipment_list:
         return
@@ -1864,7 +1864,7 @@ def _apply_equipment_by_machine_dispatched_request_fill(ws) -> None:
 
 def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternFill]:
     """
-    結果_設備ガントの固定列（B〜E」A は日付縦絝坈）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出睾順で
+    結果_設備ガントの固定列（B〜E」A は日付縦結合）用。equipment_list 内の機械名（+ 無し時は行全体を機械名）の出睾順で
     淡色を割り当てて、同一機械名は常に同じ PatternFill を共有する。
     """
     order: list[str] = []
@@ -1976,7 +1976,7 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 5  # A=日付（日ブロック内で縦絝坈）/ B〜E=機械名・工程名・担当者・タスク概覝
+    n_fixed = 5  # A=日付（日ブロック内で縦結合）/ B〜E=機械名・工程名・担当者・タスク概覝
     last_col = n_fixed + n_slots
     gantt_shape_label_specs: list[dict] = []
     _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
@@ -2003,7 +2003,7 @@ def _write_results_equipment_gantt_sheet(
     tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
     tcell.font = title_font
     tcell.fill = title_fill
-    # 絝坈セルでも左端から表示（縮尝・折り返しなし）
+    # 結合セルでも左端から表示（縮尝・折り返しなし）
     tcell.alignment = Alignment(
         horizontal="left",
         vertical="center",
@@ -2264,7 +2264,7 @@ def _write_results_equipment_gantt_sheet(
 
 
 def row_has_completion_keyword(row):
-    """加工完了区分に「完了」の文字は含まれる場合はタスク完了とみなれ。"""
+    """加工完了区分に「完了」の文字は含まれる場合はタスク完了とみなす。"""
     v = row.get(TASK_COL_COMPLETION_FLAG)
     if v is None or pd.isna(v):
         return False
@@ -2307,7 +2307,7 @@ def _plan_row_exclude_from_assignment(row) -> bool:
 def _coerce_plan_exclude_column_value_for_storage(v):
     """
     「配台試行」列へ書き込む値を」StringDtype 列でも代入エラーにならない形にしゝごる。
-    Excel 坖り込みの True / 1 / False / 0 と文字列を保挝し、_plan_row_exclude_from_assignment と整坈れる。
+    Excel 取り込みの True / 1 / False / 0 と文字列を保挝し、_plan_row_exclude_from_assignment と整合する。
     """
     if v is None:
         return ""
@@ -2340,13 +2340,13 @@ def parse_float_safe(val, default=0.0):
 
 def calc_done_qty_equivalent_from_row(row):
     """
-    加工済数値（工程投入針残作）を返れ。
+    加工済数値（工程投入から残作）を返す。
 
     基本弝:
-      実出来高 ÷ (块注数 ÷ 残作数値)
-    = 実出来高 * 残作数値 / 块注数
+      実出来高 ÷ (受注数 ÷ 残作数値)
+    = 実出来高 * 残作数値 / 受注数
 
-    块注数は無い/正常な場合は」旧列「実加工数」を互換フォールポックとして使う。
+    受注数は無い/正常な場合は」旧列「実加工数」を互換フォールバックとして使う。
     """
     qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     order_qty = parse_float_safe(row.get(TASK_COL_ORDER_QTY), 0.0)
@@ -2389,8 +2389,8 @@ def parse_optional_date(val):
 
 def _planning_df_cell_scalar(row, col_name):
     """
-    iterrows() 1行分から列値を得る。同一見出しの針複列はあると row.get は Series になり」
-    str→to_datetime で誤った日付になることはあるたゝ」先頭の非欠損スカラーを返れ。
+    iterrows() 1行分から列値を得る。同一見出しの重複列はあると row.get は Series になり」
+    str→to_datetime で誤った日付になることがあるため、先頭の非欠損スカラーを返す。
     """
     v = row.get(col_name) if hasattr(row, "get") else None
     if isinstance(v, pd.Series):
@@ -2420,7 +2420,7 @@ def load_ai_cache():
                                 cleaned[k] = v
                             else:
                                 expired_count += 1
-                        # 旧形式: 値は直接AI結果dict（互換で読み坖り」坳時に新形式へ再保存される）
+                        # 旧形式: 値は直接AI結果dict（互換で読み取り」坳時に新形式へ再保存される）
                         else:
                             cleaned[k] = {"ts": now_ts, "data": v}
                     if expired_count > 0:
@@ -2439,8 +2439,8 @@ def save_ai_cache(cache_obj):
 
 def get_cached_ai_result(cache_obj, cache_key, content_key=None):
     """
-    content_key: オプション。保存時と同一の文字列でないヒットは無効化れる（特別指定・照坈用の二次チェック）。
-    旧エントリに content_key は無い場合は SHA256 キー一致のみで従来どよりヒットとみなれ。
+    content_key: オプション。保存時と同一の文字列でないヒットは無効化する（特別指定・照合用の二次チェック）。
+    旧エントリに content_key は無い場合は SHA256 キー一致のみで従来どおりヒットとみなす。
     """
     entry = cache_obj.get(cache_key)
     if not isinstance(entry, dict):
@@ -2454,7 +2454,7 @@ def get_cached_ai_result(cache_obj, cache_key, content_key=None):
         stored_ck = entry.get("content_key")
         if stored_ck is not None and stored_ck != content_key:
             logging.info(
-                "AIキャッシュ: キーは一致ししたは content_key は睾行入力と異なるたゝ無効化しした。"
+                "AIキャッシュ: キーは一致したが、content_key は実行入力と異なるため無効化した。"
             )
             return None
     data = entry.get("data")
@@ -2777,7 +2777,7 @@ def _gemini_generate_content_with_retry(
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
-    製品名文字列から加工短縮(m)を推定れる暫定ルール。
+    製品名文字列から加工短縮(m)を推定する暫定ルール。
     例: 15020-JX5R- 770X300F-A   R -> 300
     例: 1550X 40F のように「ロール長×幅」で X 直後が小さいときは X 前を採用（1550）。
     ※ バリエーションが多い前提のため、ここを都度調整できるよう関数化している。
@@ -2893,13 +2893,13 @@ def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
 
 def load_tasks_df():
     """
-    タスク入力を坖得れる（tasks.xlsx は使用しない）。
+    タスク入力を取得れる（tasks.xlsx は使用しない）。
     必須: 環境変数 TASK_INPUT_WORKBOOK にマクロ実行ブックのフルパス（VBA は設定）
          シート「加工計画DATA」を読み込む（投入目安は「回答納期」。未入力時は「指定納期」）。
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してしてさい。"
+            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
@@ -2916,7 +2916,7 @@ def load_tasks_df():
                     _alt_qty,
                 )
                 break
-    # 「块注数」が無く「受注数」があるブック（実出来高からの換算に使用）
+    # 「受注数」が無く「受注数」があるブック（実出来高からの換算に使用）
     if TASK_COL_ORDER_QTY not in df.columns and "受注数" in df.columns:
         df[TASK_COL_ORDER_QTY] = df["受注数"]
         logging.info(
@@ -2949,8 +2949,8 @@ def _align_dataframe_headers_to_canonical(df, canonical_names):
 
 def _normalize_equipment_match_key(val):
     """
-    工程名（設備坝）の照坈用キー。
-    NFKC・剝後空白・連続空白・NBSP/全角スペース・ゼロ幅文字を正覝化れる。
+    工程名（設備坝）の照合用キー。
+    NFKC・剝後空白・連続空白・NBSP/全角スペース・ゼロ幅文字を正規化する。
     """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
@@ -2962,7 +2962,7 @@ def _normalize_equipment_match_key(val):
 
 
 def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
-    """設備列キー（工程+機械 等）から」物睆機械の占有に用いるキー（機械名坴・正覝化）を得る。"""
+    """設備列キー（工程+機械 等）から」実機械の占有に用いるキー（機械名ベース・正規化）を得る。"""
     s = str(eq_line or "").strip()
     if not s:
         return ""
@@ -2974,13 +2974,13 @@ def _equipment_line_key_to_physical_occupancy_key(eq_line: str) -> str:
 
 def _physical_machine_occupancy_key_for_task(task: dict) -> str:
     """
-    設備の壝時計占有（machine_avail_dt・間隔ミラー）に用いるキー。
-    機械カレンダー列は equipment_line_key の「工程+機械」と一致れるたゝ」
-    正覝化後に「+」を含むとしは **machine_name より先に** しこから物睆機械名を採用れる。
+    設備のタイムライン占有（machine_avail_dt・間隔ミラー）に用いるキー。
+    機械カレンダー列は equipment_line_key の「工程+機械」と一致するため、
+    正規化後に「+」を含むとしは **machine_name より先に** しこから実機械名を採用する。
     （machine_name に工程名のみなどは入り」床キー「熱融着機 湖南」とうれで候補外し漝れれるのを防し）
-    坘一坝のときは従来どより machine_name を優先し、無ければ equipment_line_key / machine から推定れる。
-    machine_name に「工程+機械」と入っている場合でも」占有は物睆機械名（+ の坳坴）に寄せる。
-    全角「＋」のみの列は NFKC 後に坊角「+」になるたゝ」分割判定は正覝化後に行ご。
+    坘一坝のときは従来どおり machine_name を優先し、無ければ equipment_line_key / machine から推定する。
+    machine_name に「工程+機械」と入っている場合でも」占有は実機械名（+ の坳坴）に寄せる。
+    全角「＋」のみの列は NFKC 後に半角「+」になるため、分割判定は正規化後に行う。
     """
     ek = str(task.get("equipment_line_key") or "").strip()
     nek = _normalize_equipment_match_key(ek)
@@ -3001,9 +3001,9 @@ def _physical_machine_occupancy_key_for_task(task: dict) -> str:
 
 def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
     """
-    machine_avail_dt・機械カレンダー床と整坈れる占有キー（原則: 物睆機械名）。
-    task から坖れないとしは eq_line（工程+機械）から機械名坴を推定し、最後の手段で eq_line。
-    「… or eq_line」による工程+機械フォールポックは機械カレンダー物睆キーと丝一致になり得るたゝ禝止。
+    machine_avail_dt・機械カレンダー床と整合する占有キー（原則: 実機械名）。
+    task から取れないとしは eq_line（工程+機械）から機械名ベースを推定し、最後の手段で eq_line。
+    「… or eq_line」による工程+機械フォールバックは機械カレンダー実キーと厳密一致になり得るため廃止。
     """
     occ = (_physical_machine_occupancy_key_for_task(task) or "").strip()
     if occ:
@@ -3016,13 +3016,13 @@ def _machine_occupancy_key_resolve(task: dict, eq_line: str) -> str:
 
 
 def _equipment_lookup_normalized_to_canonical(equipment_list):
-    """正覝化キー → master スキルシート上の列名（canonical 表記）。"""
+    """正規化キー → master スキルシート上の列名（canonical 表記）。"""
     lookup = {}
     for eq in equipment_list:
         k = _normalize_equipment_match_key(eq)
         if k and k not in lookup:
             lookup[k] = eq
-    # 工程名のみの照坈（加工実績DATA等）: 同一工程の先頭列（工程+機械）へ寄せる
+    # 工程名のみの照合（加工実績DATA等）: 同一工程の先頭列（工程+機械）へ寄せる
     for eq in equipment_list:
         s = str(eq).strip()
         if "+" not in s:
@@ -3037,7 +3037,7 @@ def _equipment_lookup_normalized_to_canonical(equipment_list):
 def _equipment_schedule_header_labels(equipment_list: list) -> list:
     """
     結果_設備毎の時間割・結果_設備ガントの行＝列見出し用。
-    内部キーは「工程+機械」のときは機械名を表示し、機械名の針複時のみ工程を括弧で補ご。
+    内部キーは「工程+機械」のときは機械名を表示し、機械名の重複時のみ工程を括弧で補ご。
     """
     raw = []
     for eq in equipment_list:
@@ -3080,8 +3080,8 @@ def _split_equipment_line_process_machine(eq_line: str) -> tuple[str, str]:
 
 def _gantt_member_label_surname_only(raw: str) -> str:
     """
-    設備ガントの担当者セル用。坊角＝全角空白はあれみ手剝を姓とみなし、無いとしは全体を表示
-    （並びは1トークンのみのときは姓の切り出し試行のたゝしのまま）。NFKC・富田/冨田寄せは姓用とともに。
+    設備ガントの担当者セル用。半角＝全角空白はあれみ手剝を姓とみなし、無いとしは全体を表示
+    （並びは1トークンのみのときは姓の切り出し試行のまま）。NFKC・富田/冨田寄せは姓用とともに。
     """
     sei, mei = _split_person_sei_mei(raw)
     if not sei:
@@ -3126,7 +3126,7 @@ def _gantt_member_labels_for_task(evlist, task_id: str) -> list[str]:
 
 
 def _gantt_row_member_names(evlist) -> str:
-    """設備ガント行用: 主担当(op)とサブ(sub)を出睾順で針複除去し、姓のみをカンマ+坊角スペース区切り。"""
+    """設備ガント行用: 主担当(op)とサブ(sub)を出睾順で重複除去し、姓のみをカンマ+半角スペース区切り。"""
     raw_names: list[str] = []
     seen_raw: set[str] = set()
     for e in evlist or []:
@@ -3255,7 +3255,7 @@ def load_planning_tasks_df():
     """
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してしてさい。"
+            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
@@ -3307,7 +3307,7 @@ def load_main_sheet_global_priority_override_text() -> str:
         return ""
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "メイン再優先特記: ブックに「%s」はあるたゝ openpyxl でグローバルコメントを読みません。",
+            "メイン再優先特記: ブックに「%s」があるため、openpyxl でグローバルコメントを読みません。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return ""
@@ -3375,7 +3375,7 @@ def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
 
 def _md_slash_is_likely_fraction_not_date(t: str, start: int, end: int, mo: int, day: int) -> bool:
     """
-    「加工速度は1/3としした」の 1/3 を 1月3日 と誤誝しない。
+    「加工速度は1/3とした」の 1/3 を 1月3日 と誤誝しない。
     「4/1は工場を休み」の 4/1 は日付のまま（直後は「は」なら分数扱いにしない）。
     """
     if mo <= 0 or day <= 0:
@@ -3390,7 +3390,7 @@ def _md_slash_is_likely_fraction_not_date(t: str, start: int, end: int, mo: int,
         before,
     ):
         return True
-    # 1/2・1/3・2/3 等 + 「としした」「倝」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよご です/である は坫ゝない）
+    # 1/2・1/3・2/3 等 + 「とした」「倝」… は分数・比率寄り（「3/1です」等の日付を誤スキップしないよご です/である は坫ゝない）
     frac_pat = re.compile(
         r"^(?:としした?|とれる|倝|割引|にれる|に設定|しらい|程度|に固定|に変更)"
     )
@@ -3471,7 +3471,7 @@ def parse_factory_closure_dates_from_global_comment(
 ) -> set[date]:
     """
     メインシート「グローバルコメント」に」工場臨時休業などと日付は書かれでいる場合に
-    しの日を工場休み（全員非稼働・配台で加工している）として扱ご日付集坈を返れ。
+    しの日を工場休み（全員非稼働・配台で加工している）として扱ご日付集合を返す。
     """
     blob = unicodedata.normalize("NFKC", str(text or "").strip())
     if not blob:
@@ -3520,15 +3520,15 @@ def apply_factory_closure_dates_to_attendance(
 
 def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
     """
-    「制陝撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで坫ゝ配台制約を緩ゝる（abolish_all_scheduling_limits）。
+    「制限撤廃」「あらゆる条件」等: 設備専有・時刻ガードまで坫ゝ配台制約を緩ゝる（abolish_all_scheduling_limits）。
     """
     b = unicodedata.normalize("NFKC", str(blob or ""))
     strong = (
-        "制陝撤廃",
-        "制陝を撤廃",
-        "まとめての制陝",
-        "全での制陝",
-        "あらゆる制陝",
+        "制限撤廃",
+        "制限を撤廃",
+        "まとめての制限",
+        "全での制限",
+        "あらゆる制限",
         "あらゆる条件",
         "まとめての条件",
         "全での条件",
@@ -3541,7 +3541,7 @@ def _apply_global_priority_abolish_heuristic(blob: str, coerced: dict) -> dict:
         out["ignore_skill_requirements"] = True
         out["ignore_need_minimum"] = True
         logging.warning(
-            "メイン再優先特記: 制陝撤廃キーワードを検出。設備専有・時刻ガードを坫ゝ配台上の制約を緩ゝした。"
+            "メイン再優先特記: 制限撤廃キーワードを検出。設備専有・時刻ガードを坫ゝ配台上の制約を緩ゝした。"
         )
         return out
     return coerced
@@ -3591,25 +3591,25 @@ def _finalize_global_priority_override(blob: str, coerced: dict) -> dict:
 
 def _apply_global_priority_solo_heuristic(blob: str, coerced: dict) -> dict:
     """
-    「一人で担当」「坘独」等で人数の値緩んでも」指坝メンバーはスキル非該当てと配台されない。
+    「一人で担当」「独立」等で人数の値緩んでも」指定メンバーはスキル非該当てと配台されない。
     しの場合はスキル無視を同時に立でる。
     """
     if not coerced.get("ignore_need_minimum") or coerced.get("ignore_skill_requirements"):
         return coerced
     b = unicodedata.normalize("NFKC", str(blob or ""))
-    solo_kw = ("一人", "参とり", "坘独", "１人", "1人", "独自", "坘身")
+    solo_kw = ("一人", "参とり", "独立", "１人", "1人", "独自", "坘身")
     if any(k in b for k in solo_kw):
         out = dict(coerced)
         out["ignore_skill_requirements"] = True
         logging.info(
-            "メイン再優先特記: 坘独系キーワードのたゝ ignore_skill_requirements を補助的に true にしました。"
+            "メイン再優先特記: 独立系キーワードのため、 ignore_skill_requirements を補助的に true にしました。"
         )
         return out
     return coerced
 
 
 def _coerce_task_preferred_operators_dict(raw_val) -> dict:
-    """AI の task_preferred_operators を {依頼NO: 並び} に正覝化。"""
+    """AI の task_preferred_operators を {依頼NO: 並び} に正規化。"""
     out = {}
     if not isinstance(raw_val, dict):
         return out
@@ -3627,7 +3627,7 @@ def _coerce_task_preferred_operators_dict(raw_val) -> dict:
 
 def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[str]:
     """
-    AI またはフォールポックの日付リストを YYYY-MM-DD 文字列の昇順ユニークに正覝化。
+    AI またはフォールバックの日付リストを YYYY-MM-DD 文字列の昇順ユニークに正規化。
     覝素は ISO 文字列・Excel 日付・「4/1」程度の短文でも坯。
     """
     y0 = int(default_year)
@@ -3658,7 +3658,7 @@ def _normalize_factory_closure_dates_iso_list(val, default_year: int) -> list[st
 
 def _coerce_global_speed_rules(raw_val) -> list[dict]:
     """
-    Gemini の global_speed_rules を正覝化。
+    Gemini の global_speed_rules を正規化。
     坄覝素: process_contains / machine_contains（いうれか必須・部分一致用）, speed_multiplier（既存速度に乗算」0超〜10以下）。
     """
     out: list[dict] = []
@@ -3699,7 +3699,7 @@ def _global_speed_rule_substring_matches_row(pnorm: str, mnorm: str, sub_nfkc: s
 
 def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules: list) -> float:
     """
-    工程名・機械名に一致れるルールの speed_multiplier を掛け合わせる（一致なしは 1.0）。
+    工程名・機械名に一致するルールの speed_multiplier を掛け合わせる（一致なしは 1.0）。
 
     process_contains / machine_contains はしれずれ **工程名または機械名のどうらか** に坫まれれみよい。
     両方指定時は AND（例: 「熱融着」と「検査」は」列の組み合わせで両方睾れる行にマッポ。
@@ -3740,7 +3740,7 @@ def _global_speed_multiplier_for_row(process_name: str, machine_name: str, rules
 def _infer_global_day_process_rules_from_free_text(text: str, ref_y: int) -> list[dict]:
     """
     Gemini は task_preferred_operators に誤って長文を入れた場合など」
-    自然言語断片から global_day_process_operator_rules 相当を推定れる（保守的）。
+    自然言語断片から global_day_process_operator_rules 相当を推定する（保守的）。
     例: 「2026/4/4 工程名:EC 森下と宮島を配台」
     """
     t = unicodedata.normalize("NFKC", str(text or "")).strip()
@@ -3834,7 +3834,7 @@ def _salvage_malformed_global_priority_gemini_dict(raw: dict, ref_y: int) -> dic
 
 
 def _coerce_global_priority_override_dict(raw, reference_year: int | None = None) -> dict:
-    """Gemini 戻りを配台用フラグ・工場休業日リストに正覝化。"""
+    """Gemini 戻りを配台用フラグ・工場休業日リストに正規化。"""
     y0 = int(reference_year) if reference_year is not None else date.today().year
 
     def as_bool(v):
@@ -3886,7 +3886,7 @@ def _coerce_global_priority_override_dict(raw, reference_year: int | None = None
 
 
 def _parse_global_priority_override_gemini_response(res):
-    """Gemini 応答から JSON オブジェクト1つを坖り出す（```json フェンス付しでも坯）。"""
+    """Gemini 応答から JSON オブジェクト1つを取り出す（```json フェンス付しでも坯）。"""
     raw = (_gemini_result_text(res) or "").strip()
     if not raw:
         return None
@@ -3928,12 +3928,12 @@ def analyze_global_priority_override_comment(
     自然言語の文脈切り分け・改行の別指示解釈は AI に任せ」戻り値のキーの値システムは機械適用する。
 
     - factory_closure_dates: **工場全体**で稼働しない日（全員非稼働扱い）の YYYY-MM-DD 文字列の酝列。該当なしは []。
-    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どより。
+    - ignore_skill_requirements / ignore_need_minimum / abolish_all_scheduling_limits / task_preferred_operators: 従来どおり。
     - global_speed_rules: **工程名・機械名**への部分一致（坄キーワードは **どうらの列にあっても坯**）で」既存の加工速度（シート＝上書き後）に **乗算**れるルールの酝列。該当なしは []。
     - global_day_process_operator_rules: **日付＋工程名の部分一致＋複数メンバー**を」当日しの工程のタスクの**フォーム全員に必う坫ゝる**ルールの酝列。該当なしは []。
     - scheduler_notes_ja: 上記に蝽とししれない補足や靋用メモ（速度は可能なら global_speed_rules も併記）。
 
-    API キー無し・JSON 解釈失敗時: 上記ブール・指坝は既定値」工場休業日のみ従来のルールベース解析で補完。
+    API キー無し・JSON 解釈失敗時: 上記ブール・指定は既定値」工場休業日のみ従来のルールベース解析で補完。
     """
     ref_y = int(reference_year) if reference_year is not None else date.today().year
     empty = _coerce_global_priority_override_dict({}, ref_y)
@@ -3949,7 +3949,7 @@ def analyze_global_priority_override_comment(
     ai_cache = load_ai_cache()
     cached = get_cached_ai_result(ai_cache, cache_key, content_key=cache_fingerprint)
     if cached is not None:
-        logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼よません）。")
+        logging.info("メイン再優先特記: キャッシュヒット（Gemini は呼びません）。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（キャッシュ使用）"
             ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（キャッシュ利用・今回 API 未実行）"
@@ -3958,7 +3958,7 @@ def analyze_global_priority_override_comment(
         )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のたゝメイン再優先特記の AI 解析をスキップしました。")
+        logging.info("GEMINI_API_KEY 未設定のため、メイン再優先特記の AI 解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
             ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（API キー未設定）"
@@ -3972,14 +3972,14 @@ def analyze_global_priority_override_comment(
         member_sample += " …"
 
     prompt = f"""あなたは工場の配台計画システム用アシスタントです。
-Excel メインシートの **「グローバルコメント」**（自由記述・自然言語）の **全文** を読み」次のキーの値を挝つ JSON を1つ返してしてさい。
+Excel メインシートの **「グローバルコメント」**（自由記述・自然言語）の **全文** を読み」次のキーの値を挝つ JSON を1つ返してください。
 
 」役割】
 ユーザーは改行や坥点で複数の指示を書きことはありした。**文脈を読み分け**」配台システムは **機械的に適用でしる値** に蝽とし込んでしてさい。
 推測でブールを true にしないこと。根拠は明確なとしの値 true。
 
 」最優先】
-この欄の内容はマスタ・スキル・need・タスク行・特別指定_備考の AI 指坝より優先される例外指示として扱ゝれした。
+この欄の内容はマスタ・スキル・need・タスク行・特別指定_備考の AI 指定より優先される例外指示として扱ゝれした。
 
 」改行・複数行】
 坄行・坄文は **原則として独立した指示** です。行をまたいで1つにまとめたり」**割引表睾（例 1/3）を日付と結び付けたりしない**こと。
@@ -3993,7 +3993,7 @@ A) **factory_closure_dates** （酝列・必須）
    - 年は省略されでいれみ西暦 {ref_y} 年として解釈。
 
 B) **ignore_skill_requirements** / **ignore_need_minimum** / **abolish_all_scheduling_limits** / **task_preferred_operators**
-   - 従来どより（配台のスキル無視・人数1固定・制陝撤廃・依頼NO→主担当OP指坝）。該当なけれみ false または {{}}。
+   - 従来どおり（配台のスキル無視・人数1固定・制限撤廃・依頼NO→主担当OP指定）。該当なけれみ false または {{}}。
 
 C) **global_speed_rules** （酝列・必須）
    - 特定の **工程名**（Excel「工程名」列）や **機械名**（「機械名」列）に対し、**既存の加工速度に掛ける倝率** を指定するオブジェクトのリスト。
@@ -4016,8 +4016,8 @@ E) **interpretation_ja** （文字列・必須）
 
 F) **global_day_process_operator_rules** （酝列・必須）
    - **特定の稼働日**かつ **工程名（Excel「工程名」列）の部分一致** に当ではまるタスクについで」
-     列挙した **全メンバーを同一フォームに必う坫ゝる** ルール（**OP/AS どうらのスキルでも坯**。並び解決は **担当OP指坝とともに**）。
-   - **依頼NOは分かる主担当の1坝指坝**は **task_preferred_operators** を使うこと。原文は **「◯月◯日の△工程にＡとＢを配台」** のよごに **日付・工程・複数坝**のときは **本酝列**へ蝽とれ。
+     列挙した **全メンバーを同一フォームに必う坫ゝる** ルール（**OP/AS どうらのスキルでも坯**。並び解決は **担当OP指定とともに**）。
+   - **依頼NOは分かる主担当の1坝指定**は **task_preferred_operators** を使うこと。原文は **「◯月◯日の△工程にＡとＢを配台」** のよごに **日付・工程・複数坝**のときは **本酝列**へ蝽とれ。
    - 坄オブジェクトのキー:
      - "date": **YYYY-MM-DD**（しの日に割り当でるロールに適用）
      - "process_contains": 工程名に **部分一致**（NFKC 想定）。例: "EC"
@@ -4025,7 +4025,7 @@ F) **global_day_process_operator_rules** （酝列・必須）
    - 該当指示はなけれみ **空の配列 []**。
 
 」返答形式】
-先頭は {{ で終ゝりは }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禝止）。
+先頭は {{ で終ゝりは }} の **JSON オブジェクト1つのみ**（説明文・マークダウン禁止）。
 
 必須キー一覧:
 - "factory_closure_dates": string の酝列（YYYY-MM-DD）
@@ -4040,7 +4040,7 @@ F) **global_day_process_operator_rules** （酝列・必須）
 
 」基準年】 日付言坊はあれみ西暦 {ref_y} 年として解釈してよい。
 
-」登録メンバー坝の参考】（照坈用。JSON キーには坫ゝない）
+」登録メンバー坝の参考】（照合用。JSON キーには坫ゝない）
 {member_sample}
 
 」グローバルコメント・原文】
@@ -4108,7 +4108,7 @@ F) **global_day_process_operator_rules** （酝列・必須）
             ai_sheet_sink["メイン再優先特記_Geminiモデル"] = gem_model_used
         return coerced
     except Exception as e:
-        logging.warning("メイン再優先特記: Gemini 呼よ出し失敗: %s", e)
+        logging.warning("メイン再優先特記: Gemini 呼び出し失敗: %s", e)
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = f"失敗: {e}"[:500]
             ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（呼び出し失敗）"
@@ -4133,7 +4133,7 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "タスク効率",
         "加工途中",
         "特別指定あり",
-        "担当OP指坝",
+        "担当OP指定",
         "回答納期",
         "指定納期",
         "計画基準納期",
@@ -4143,8 +4143,8 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "配台済_加工開始",
         "配台済_加工終了",
         RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
-        "緝加工針",
-        "残加工針",
+        "累計加工量",
+        "残加工量",
         "完了率(実行時点)",
         "特別指定_AI",
     ]
@@ -4168,7 +4168,7 @@ def _task_date_key_for_result_sheet_sort(val):
 
 
 def _coerce_planning_date_for_deadline(d) -> date | None:
-    """回答納期・指定納期などを date に正覝化（欠損は None）。"""
+    """回答納期・指定納期などを date に正規化（欠損は None）。"""
     if d is None:
         return None
     if isinstance(d, datetime):
@@ -4235,7 +4235,7 @@ def _is_result_task_history_expand_token(cell_val) -> bool:
 
 
 def _result_task_column_alias_map(df_columns) -> dict:
-    """見出しの NFKC 正覝化キー → DataFrame 上の実列名。"""
+    """見出しの NFKC 正規化キー → DataFrame 上の実列名。"""
     m = {}
     for c in df_columns:
         m[_nfkc_column_aliases(str(c).strip())] = c
@@ -4286,7 +4286,7 @@ def parse_result_task_column_config_dataframe(
     「列設定_結果_タスク一覧」相当の DataFrame から (列ラベル, 表示) を上から読む。
     見出し「列名」と「表示」（無い場合は表示はまとめて True）。
     「履歴」「履歴*」の1行は履歴1～履歴n に展開し、同一行の表示フラグを共有れる。
-    同一列名（NFKC・別名正覝化後）は複数行ある場合は先頭行のみ採用し、以降はログに出して杨でる。
+    同一列名（NFKC・別名正規化後）は複数行ある場合は先頭行のみ採用し、以降はログに出して杨でる。
     """
     if df_cfg is None or df_cfg.empty:
         return None
@@ -4318,7 +4318,7 @@ def parse_result_task_column_config_dataframe(
         nk = _nfkc_column_aliases(unicodedata.normalize("NFKC", lab))
         if nk in seen_norm:
             logging.warning(
-                "列設定「%s」: 針複列名「%s」をスキップしました（上の行を優先）。",
+                "列設定「%s」: 重複列名「%s」をスキップしました（上の行を優先）。",
                 COLUMN_CONFIG_SHEET_NAME,
                 lab,
             )
@@ -4369,7 +4369,7 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
         return None
     if _workbook_should_skip_openpyxl_io(wb):
         logging.info(
-            "列設定: ブックに「%s」はあるたゝ pandas(openpyxl) での「%s」読込をスキップ（既定列順を使いした）。",
+            "列設定: ブックに「%s」があるため、pandas(openpyxl) での「%s」読込をスキップ（既定列順を使用した）。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             COLUMN_CONFIG_SHEET_NAME,
         )
@@ -4380,7 +4380,7 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
         return None
     except Exception as e:
         logging.warning(
-            "シート「%s」: 読み込みに失敗したたゝ既定の列順を使いした (%s)",
+            "シート「%s」: 読み込みに失敗したため、既定の列順を使用した (%s)",
             COLUMN_CONFIG_SHEET_NAME,
             e,
         )
@@ -4396,7 +4396,7 @@ def apply_result_task_sheet_column_order(
 ):
     """
     列設定シートはあれみしの順・表示を優先し、無い列は既定順で後ゝに追記（表示は True）。
-    config_dataframe を渡した場合はファイルを読まうしの内容を列設定とみなれ（xlwings 実行時用）。
+    config_dataframe を渡した場合はファイルを読まうしの内容を列設定とみなす（xlwings 実行時用）。
     戻り値: (並き替ご後 DataFrame, 実際の列名リスト, 設定ソース説明文字列, 列名→表示bool)
     """
     default_order = default_result_task_sheet_column_order(max_history_len)
@@ -4481,7 +4481,7 @@ def _xlwings_sheet_to_matrix(sheet) -> list:
 
 
 def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
-    """1行目を列名とみなし DataFrame を返れ。空なら None。"""
+    """1行目を列名とみなし DataFrame を返す。空なら None。"""
     if not matrix or not matrix[0]:
         return None
     header = []
@@ -4497,7 +4497,7 @@ def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
 
 
 def _max_history_len_from_result_task_df_columns(columns) -> int:
-    """結果_タスク一覧の「履歴n」列から n の最大を返れ（無ければ 1）。"""
+    """結果_タスク一覧の「履歴n」列から n の最大を返す（無ければ 1）。"""
     imax = 0
     for c in columns:
         m = re.match(r"^履歴(\d+)$", str(c).strip())
@@ -4514,12 +4514,12 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("結果_タスク一覧 列適用: ブックパスは空です（TASK_INPUT_WORKBOOK を設定してしてさい）。")
+        logging.error("結果_タスク一覧 列適用: ブックパスは空です（TASK_INPUT_WORKBOOK を設定してください）。")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("結果_タスク一覧 列適用: xlwings は import でしません。pip install xlwings を確認してしてさい。")
+        logging.error("結果_タスク一覧 列適用: xlwings は import でしません。pip install xlwings を確認してください。")
         return False
 
     try:
@@ -5014,7 +5014,7 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_only() -> bool:
 def apply_plan_input_column_layout_only() -> bool:
     """
     配台計画_タスク入力の列順・表示のみを適用する予定（VBA 用）。
-    未実装。列の並よは段階1出力または手動整睆を使用してしてさい。
+    未実装。列の並よは段階1出力または手動整睆を使用してください。
     """
     logging.warning("apply_plan_input_column_layout_only: not implemented")
     return False
@@ -5023,23 +5023,23 @@ def apply_plan_input_column_layout_only() -> bool:
 
 def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
     """
-    「列設定_結果_タスク一覧」の A:B の値を」針複列名を除いた一覧で書き直れ（先の行を優先）。
+    「列設定_結果_タスク一覧」の A:B の値を」重複列名を除いた一覧で書き直れ（先の行を優先）。
     「結果_タスク一覧」はあれみ履歴列数の解釈に使う。結果シートは変更しない。
     """
     path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
     if not path:
-        logging.error("列設定 針複整睆: ブックパスは空です。")
+        logging.error("列設定 重複整睆: ブックパスは空です。")
         return False
     try:
         import xlwings as xw
     except ImportError:
-        logging.error("列設定 針複整睆: xlwings は import でしません。")
+        logging.error("列設定 重複整睆: xlwings は import でしません。")
         return False
     try:
         wb = xw.Book(path)
         ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
     except Exception as e:
-        logging.error("列設定 針複整睆: 接続またはシート坖得に失敗: %s", e)
+        logging.error("列設定 重複整睆: 接続またはシート取得に失敗: %s", e)
         return False
 
     max_h = 1
@@ -5053,19 +5053,19 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
     df_cfg = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_cfg))
     if df_cfg is None:
-        logging.error("列設定 針複整睆: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+        logging.error("列設定 重複整睆: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
         return False
     rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
     if not rows:
-        logging.warning("列設定 針複整睆: 有効なデータ行はありません。")
+        logging.warning("列設定 重複整睆: 有効なデータ行はありません。")
         return False
     _xlwings_write_column_config_sheet_ab(ws_cfg, rows)
     try:
         wb.save()
     except Exception as e:
-        logging.warning("列設定 針複整睆: 保存警告: %s", e)
+        logging.warning("列設定 重複整睆: 保存警告: %s", e)
     logging.info(
-        "列設定「%s」を針複除去済みで %s 行に整睆しました（履歴展開後の行数）。",
+        "列設定「%s」を重複除去済みで %s 行に整睆しました（履歴展開後の行数）。",
         COLUMN_CONFIG_SHEET_NAME,
         len(rows),
     )
@@ -5073,7 +5073,7 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
 
 def dedupe_result_task_column_config_sheet_only() -> bool:
-    """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートの値針複整睆（VBA 用）。"""
+    """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートの値重複整睆（VBA 用）。"""
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     return dedupe_result_task_column_config_sheet_via_xlwings(p)
 
@@ -5086,7 +5086,7 @@ def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vi
 
 
 def _norm_history_member_label(name: str) -> str:
-    """履歴の担当坝比較用（全角空白を坊角1個化・剝後trim・連続空白の圧縮）。"""
+    """履歴の担当坝比較用（全角空白を半角1個化・剝後trim・連続空白の圧縮）。"""
     t = str(name or "").replace("\u3000", " ").strip()
     return " ".join(t.split())
 
@@ -5240,7 +5240,7 @@ def _apply_result_task_task_id_content_mismatch_highlight(
     worksheet, column_names: list, sorted_tasks: list
 ):
     """
-    加工内容に工程名は坫まれない行の「タスクID」セルを赤背景・白文字にれる（元データ丝整坈の視誝用）。
+    加工内容に工程名は坫まれない行の「タスクID」セルを赤背景・白文字にれる（元データ丝整合の視誝用）。
     """
     task_id_col_idx = None
     for col_idx, col_name in enumerate(column_names, 1):
@@ -5371,12 +5371,12 @@ def _stage2_try_copy_column_config_shapes_from_input(
     ip = (input_path or "").strip()
     if not rp or not os.path.isfile(rp):
         logging.warning(
-            "列設定シート図形コピー: 結果パスは無効のたゝスキップしました。"
+            "列設定シート図形コピー: 結果パスは無効のため、スキップしました。"
         )
         return
     if not ip or not os.path.isfile(ip):
         logging.warning(
-            "列設定シート図形コピー: TASK_INPUT_WORKBOOK は無効のたゝスキップしました。"
+            "列設定シート図形コピー: TASK_INPUT_WORKBOOK は無効のため、スキップしました。"
         )
         return
     try:
@@ -5990,7 +5990,7 @@ def load_machining_actuals_df():
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUALS_SHEET_NAME)
     except ValueError:
         logging.info(
-            f"シート「{ACTUALS_SHEET_NAME}」は無いたゝ」ガントの実績行は出力しません。"
+            f"シート「{ACTUALS_SHEET_NAME}」は無いため、ガントの実績行は出力しません。"
         )
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
@@ -6004,8 +6004,8 @@ def load_machining_actuals_df():
 def build_actual_timeline_events(df, equipment_list, sorted_dates):
     """
     実績シートの坄行をガント用イベントへ変杛。
-    計画表示日（sorted_dates）かつ設備マスタに一致れる「工程名」の値対象。
-    工程名は NFKC・空白正覝化後にマスタ列名へマッピングれる。
+    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」の値対象。
+    工程名は NFKC・空白正規化後にマスタ列名へマッピングれる。
     時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
     """
     if df is None or len(df) == 0:
@@ -6079,11 +6079,11 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
 
     if bad_eq:
         logging.warning(
-            f"加工実績DATA: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正覝化済み）。"
+            f"加工実績DATA: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
         )
         if mismatch_norm_samples:
             logging.info(
-                "  丝一致となった工程名の正覝化後サンプル: "
+                "  厳密一致となった工程名の正規化後サンプル: "
                 + " | ".join(mismatch_norm_samples[:12])
             )
     if bad_time:
@@ -6092,11 +6092,11 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
         )
     if no_plan_overlap and sorted_dates:
         logging.info(
-            f"加工実績DATA: 設備・日時は有効ては」計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と針ならない行は {no_plan_overlap} 件ありました。"
+            f"加工実績DATA: 設備・日時は有効ては」計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行は {no_plan_overlap} 件ありました。"
         )
     if not events and len(df) > 0:
         logging.info(
-            "加工実績DATA: ガント用セグメントは0件です。除去日の実績のみの場合」計画の表示日（sorted_dates）に坫まれないたゝ杝画されません。"
+            "加工実績DATA: ガント用セグメントは0件です。除去日の実績のみの場合、計画の表示日（sorted_dates）に含まれないため描画されません。"
         )
     logging.info(f"加工実績DATA からガント用セグメント {len(events)} 件を生成しました。")
     return events
@@ -6113,7 +6113,7 @@ def _normalize_special_task_id_for_ai(val):
     """
     依頼NOをキャッシュキー・プロンプト行で一貫させる。
     Excel の数値セルは float になりはうなので 12345.0 → \"12345\" に权ごる。
-    文字列は NFKC（全角英数字など）で表記ゆれを坸坎（同一実体の再API呼よ出しを減られ）。
+    文字列は NFKC（全角英数字など）で表記ゆれを坸坎（同一実体の再API呼び出しを減られ）。
     """
     if val is None:
         return None
@@ -6156,13 +6156,13 @@ def planning_task_id_str_from_scalar(val) -> str:
 
 
 def planning_task_id_str_from_plan_row(row) -> str:
-    """針複見出し列でも先頭スカラーを拾い」依頼NOを planning_task_id_str_from_scalar に渡れ。"""
+    """重複見出し列でも先頭スカラーを拾い」依頼NOを planning_task_id_str_from_scalar に渡す。"""
     return planning_task_id_str_from_scalar(_planning_df_cell_scalar(row, TASK_COL_TASK_ID))
 
 
 def _cell_text_task_special_remark(val):
     """
-    特別指定_備考をプロンプト用に坖り出す。仕様どより **strip のみ**
+    特別指定_備考をプロンプト用に取り出す。仕様どより **strip のみ**
     （先頭末尾の空白・Excel の坽空白を除し」文中の改行・スペースは保挝。数値セルは表記を固定）。
     """
     if val is None:
@@ -6193,7 +6193,7 @@ def _cell_text_task_special_remark(val):
 
 
 def _task_special_prompt_lines(tasks_df):
-    """プロンプトに載せる行リスト（ソート剝）。正覝化は上記ヘルパーに統一。"""
+    """プロンプトに載せる行リスト（ソート剝）。正規化は上記ヘルパーに統一。"""
     lines = []
     for _, row in tasks_df.iterrows():
         if _plan_row_exclude_from_assignment(row):
@@ -6275,7 +6275,7 @@ def _normalize_task_special_scope_str(s) -> str:
 
 def _task_special_scope_matches_row_field(row_val, restrict_val) -> bool:
     """
-    restrict は無い・空なら制陝なし（True）。
+    restrict は無い・空なら制限なし（True）。
     非空なら Excel 坴の値とあいまい一致（部分一致坯）。
     """
     if restrict_val is None:
@@ -6308,7 +6308,7 @@ def _ai_remark_entry_applies_to_row(entry: dict, row) -> bool:
 
 def _row_matches_remark_source_row(entry: dict, row) -> bool:
     """
-    JSON の process_name / machine_name は」当該 Excel 行の工程名・機械名と一致れるか。
+    JSON の process_name / machine_name は」当該 Excel 行の工程名・機械名と一致するか。
     （プロンプトで渡した「備考はあった行」と対応るける。片方の値一致でも坯）
     """
     if not isinstance(entry, dict):
@@ -6332,7 +6332,7 @@ def _entry_is_global_task_special_scope(entry: dict) -> bool:
 
 
 def _select_ai_task_special_entry_for_tid_value(val, row):
-    """1依頼NOに対れる値は dict または dict の酝列のどうらでも行に坈ご覝素を返れ。"""
+    """1依頼NOに対れる値は dict または dict の酝列のどうらでも行に坈ご覝素を返す。"""
     if val is None:
         return None
     if isinstance(val, list):
@@ -6364,7 +6364,7 @@ def _select_ai_task_special_entry_for_tid_value(val, row):
 def _ai_task_special_entry_for_row(ai_by_tid, row):
     """
     analyze_task_special_remarks の戻りから当該行のエントリを得る。
-    プロンプトキーは正覝化済み依頼NOなので」Excel は 12345.0 でもヒットれる。
+    プロンプトキーは正規化済み依頼NOなので」Excel は 12345.0 でもヒットれる。
     restrict_to_process_name / restrict_to_machine_name は無い・空のときは
     同一依頼NOの工程・機械は異なる全行にも指示を適用する。
     """
@@ -6429,7 +6429,7 @@ def _gemini_cumulative_json_path() -> str:
 
 
 def _load_gemini_cumulative_payload() -> dict:
-    """API_Payment 内の累計 JSON を読む。無い・壊れでいれみ初期形を返れ。"""
+    """API_Payment 内の累計 JSON を読む。無い・壊れでいれみ初期形を返す。"""
     path = _gemini_cumulative_json_path()
     default: dict = {
         "version": 1,
@@ -6638,7 +6638,7 @@ def _gemini_estimate_cost_usd(
     if "flash" in m:
         rin, rout = _GEMINI_FLASH_IN_PER_M, _GEMINI_FLASH_OUT_PER_M
     elif "pro" in m:
-        # 目安（未使用モデル坑けフォールポック）
+        # 目安（未使用モデル坑けフォールバック）
         rin, rout = 1.25, 5.0
     if rin is None:
         return None
@@ -6676,7 +6676,7 @@ def _gemini_daily_trend_series(
 
 
 def _gemini_daily_total_tokens_for_days(cum: dict, day_keys: list[str]) -> list[int]:
-    """by_day の坄キーについで」total_tokens（無ければ prompt+candidates+thoughts）を返れ。"""
+    """by_day の坄キーについで」total_tokens（無ければ prompt+candidates+thoughts）を返す。"""
     b = cum.get("buckets")
     if not isinstance(b, dict):
         return [0] * len(day_keys)
@@ -6721,7 +6721,7 @@ def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
 
 
 def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
-    """xlwings Book からメイン相当シートを返れ。無ければ None。"""
+    """xlwings Book からメイン相当シートを返す。無ければ None。"""
     for name in ("メイン", "メイン_", "Main"):
         try:
             return book.sheets[name]
@@ -6909,7 +6909,7 @@ def _write_main_sheet_gemini_usage_via_xlwings(
         ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
         if ws_main is None:
             logging.info(
-                "%s: メインシートは無いたゝ xlwings での AI サマリをスキップしました。",
+                "%s: メインシートはないため、xlwings での AI サマリをスキップしました。",
                 log_prefix,
             )
             return False
@@ -7102,7 +7102,7 @@ def build_gemini_usage_summary_text() -> str:
         lines.append("（この実行での Gemini API 呼出しはありません）")
     lines.append("※ トークンは API の usage_metadata に基るしした。")
     lines.append(
-        "※ USD 坘価はコード＝環境変数の目安です。実課金は Google の請求を参照してしてさい。"
+        "※ USD 坘価はコード＝環境変数の目安です。実課金は Google の請求を参照してください。"
     )
     lines.append(
         "※ 坄 API 呼出しととの推定料金はコンソールに出さう」下記累計 JSON にのみ穝み上きした。"
@@ -7237,10 +7237,10 @@ def _plan_sheet_write_global_parse_block_to_ws(
     pairs: list[tuple[str, str]] = [
         ("」グローバルコメント解析】", "参照用・段階2で自動記録"),
         (
-            "※二針適用についで",
+            "※二重適用についで",
             "配台への反映はメインシート「グローバルコメント」からのみ行ゝれした。"
             "このAX〜AY列は読み坖られません。編集しても次回実行まで配台に効しません。"
-            "原文はメイン欄を参照してしてさい。",
+            "原文はメイン欄を参照してください。",
         ),
         ("計画基準日時", (when_str or "").strip() or "―"),
         (
@@ -7258,17 +7258,17 @@ def _plan_sheet_write_global_parse_block_to_ws(
             "はい" if gpo.get("ignore_need_minimum") else "いいえ",
         ),
         (
-            "配台制陝の撤廃",
+            "配台制限の撤廃",
             "はい" if gpo.get("abolish_all_scheduling_limits") else "いいえ",
         ),
         (
-            "グローバルOP指坝",
+            "グローバルOP指定",
             json.dumps(gpo.get("task_preferred_operators") or {}, ensure_ascii=False)
             if gpo.get("task_preferred_operators")
             else "（なし）",
         ),
         (
-            "日付×工程フォーム指坝",
+            "日付×工程フォーム指定",
             json.dumps(
                 gpo.get("global_day_process_operator_rules") or [],
                 ensure_ascii=False,
@@ -7310,7 +7310,7 @@ def write_plan_sheet_global_comment_parse_block(
 ) -> bool:
     """
     「配台計画_タスク入力」シートの坳端付近（AX:AY）に」グローバルコメントの解析結果を書き込む。
-    メイン原文はここに転記しない（メイン欄との針複・誤解を避ける）。本列は再読込されう参照専用。
+    メイン原文はここに転記しない（メイン欄との重複・誤解を避ける）。本列は再読込されう参照専用。
     Excel でブックを開いたままてと保存に失敗することはある（他の openpyxl 書込と同様）。
     """
     if not wb_path or not os.path.isfile(wb_path):
@@ -7320,7 +7320,7 @@ def write_plan_sheet_global_comment_parse_block(
     wb = None
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: ブックに「%s」はあるたゝ openpyxl でグローバルコメント解析を配台シートへ書き込みません。",
+            "%s: ブックに「%s」があるため、openpyxl でグローバルコメント解析を配台シートへ書き込みません。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -7331,7 +7331,7 @@ def write_plan_sheet_global_comment_parse_block(
         )
     except Exception as ex:
         logging.info(
-            "%s: グローバルコメント解析の配台シート書込のたゝブックを開きません: %s",
+            "%s: グローバルコメント解析の配台シート書込のため、ブックを開きません: %s",
             log_prefix,
             ex,
         )
@@ -7339,7 +7339,7 @@ def write_plan_sheet_global_comment_parse_block(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: シート '%s' は無いたゝグローバルコメント解析の反映をスキップ。",
+                "%s: シート '%s' はないため、グローバルコメント解析の反映をスキップ。",
                 log_prefix,
                 sheet_name,
             )
@@ -7462,7 +7462,7 @@ def _log_task_special_ai_response(raw_text, parsed, extracted_json_str, prompt_t
 def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
     """
     API レスポンスを JSON 化しログ＝ファイルへ記録。失敗時は None。
-    ユーザーの特別指定文言には触れう」モデル出力から JSON ブロックを坖り出す処理のみ。
+    ユーザーの特別指定文言には触れう」モデル出力から JSON ブロックを取り出す処理のみ。
     """
     raw = _gemini_result_text(res)
     if raw:
@@ -7501,10 +7501,10 @@ def _parse_and_log_task_special_gemini_response(res, prompt_text=None):
 def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: dict | None = None):
     """
     「配台計画_タスク入力」の「特別指定_備考」を AI で構造化（セルに値はある項目は後段でセルを優先）。
-    「配台試行」はオンな行はプロンプトに載せない（API 節約・当該行は配台しないたゝ）。
-    担当OP指坝はプロンプトの返坴契約でモデルに preferred_operator を出力させる（備考を正覝表睾で切り出す処理は行ゝない）。
+    「配台試行」はオンな行はプロンプトに載せない（API 節約・当該行は配台しないため）。
+    担当OP指定はプロンプトの返坴契約でモデルに preferred_operator を出力させる（備考を正覝表睾で切り出す処理は行ゝない）。
     json/ai_remarks_cache.json に TTL AI_CACHE_TTL_SECONDS でキャッシュ（同一入力・同一基準年なら API を呼みない）。
-    依頼NOは数値表記・全角などを正覝化してキーを安定化し、基準年は指紋に坫ゝで日付解釈の変化とキャッシュの食い靕いを防し。
+    依頼NOは数値表記・全角などを正規化してキーを安定化し、基準年は指紋に坫ゝで日付解釈の変化とキャッシュの食い靕いを防し。
 
     戻り値の例: 依頼NO -> オブジェクト」または同一依頼NOに備考行は複数ある場合はオブジェクトの酝列。
       process_name, machine_name … 当該備考セルはある行の工程名・機械名（プロンプトの行と一致）
@@ -7528,7 +7528,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
         logging.warning(
             "タスク特別指定: AI 解析対象はありません（「%s」列は%s）。"
             "总行数=%s」依頼NOのある行=%s」備考は入っている行=%s。"
-            "段階2実行剝にブックを保存し、本当に「%s」列へ入力しているか確認してしてさい。",
+            "段階2実行剝にブックを保存し、本当に「%s」列へ入力しているか確認してください。",
             PLAN_COL_SPECIAL_REMARK,
             "見つかりません" if miss_col else "空の可能性はありした",
             n_rows,
@@ -7552,7 +7552,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     )
     if cached_parsed is not None:
         logging.info(
-            "タスク特別指定: キャッシュヒット（%s 件・基準年=%s）。Gemini は呼よません。",
+            "タスク特別指定: キャッシュヒット（%s 件・基準年=%s）。Gemini は呼びません。",
             len(lines),
             ref_y,
         )
@@ -7571,7 +7571,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のたゝタスク特別指定のAI解析をスキップしました。")
+        logging.info("GEMINI_API_KEY 未設定のため、タスク特別指定のAI解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（API キー未設定）"
@@ -7582,7 +7582,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
 」最針覝】
 1) 」特別指定原文】の坄行は」ユーザーはセルに入力した文字列を **改変・覝約・断う切りはしてよらう**（先頭末尾の空白のみ除去）」しのまま渡していした。**原文の事実や愝図を別の文言に置し杛ごないでしてさい。**
-2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭は {{ 」末尾は }} ）。説明文・マークダウン・コードフェンスは禝止。
+2) あなたの応答は **1個の JSON オブジェクトのみ**（先頭は {{ 」末尾は }} ）。説明文・マークダウン・コードフェンスは禁止。
 3) JSON のトップレベルキーは」坄行の **依頼NO」と】の間の文字列のみ** と **完全一致** させること。**備考本文**に書かれた哝番・原板坝・製哝コード（例: 20010 で始まる番坷列）をキーにしてはならない。備考はしのよごな番坷で始まっていでも」キーは必う」】内の依頼NOの値とれる。
 
 」返坴JSONの契約（この節どよりに出力れること）】
@@ -7600,7 +7600,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 - **原文は「特定の工程の値」「この機械の値」など」適用範囲を絞っているとしの値** 出力れる。
 - **原文に工程名・機械名の陝定は無い**（依頼全体・全行程への指示）としは **両方とも省略** れるか **空文字列 ""** とれる。
 - しの場合」配台ロジックは **同一依頼NOの別行（例: エンボス行と分割行）にも指示を適用** れる。
-- 絞る場合は」原文で示された識別名を入れる（Excel の工程名・機械名と照坈しやれい表記）。
+- 絞る場合は」原文で示された識別名を入れる（Excel の工程名・機械名と照合しやれい表記）。
 
 ■ preferred_operator（文字列）— 条件付し**必須**
 - **必須条件**: 当該依頼の原文を読み」「**誰はこの加工・作業の主担当（OP）として割り当でたいか**」は **愝味として** 読み坖れるとし。
@@ -7610,7 +7610,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 - **出力してはいけないとし**: 原文に担当者の指愝は **一切ない** と判断した依頼NOでは `preferred_operator` キー自体を **省略** れる（空文字列も付けない）。
 
 ■ しの他フィールド（required_op, speed_override, task_efficiency, priority, start_date, start_time, target_completion_date, ship_by_date）
-- 原文から **明確に** 読み坖れる場合のみ出力。読み坖れない数値・日付は **省略**（推測で埋ゝない）。
+- 原文から **明確に** 読み坖れる場合のみ出力。読み取れない数値・日付は **省略**（推測で埋ゝない）。
 
 」同一依頼NO・複数工程の例】
 依頼NO Y4-2 に「エンボス」と「分割」の行はあり」備考は「4/5までに終ゝらせる」のみで工程の陝定は無い場合:
@@ -7633,7 +7633,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 
 」解釈の指針】
 - 「間に坈ごよごに」「繰り上きる」→ priority を上きる（数値を下きる）。日付は文中にあれみ target_completion_date または ship_by_date に入れる。
-- 担当者指坝は **愝味睆解** で preferred_operator を決ゝる（特定のキーワード列挙に頼らない）。
+- 担当者指定は **愝味睆解** で preferred_operator を決ゝる（特定のキーワード列挙に頼らない）。
 - 数値・日付は推測で補ゝない。
 - **備考は特定の工程・機械にの値言坊していない陝り**」restrict_to_* は空にし、同一依頼NOの他行にも適用される形にれる。
 
@@ -7701,8 +7701,8 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     except Exception as e:
         logging.warning("タスク特別指定: Gemini 呼び出し失敗（再試行尽き）: %s", e)
         logging.warning(
-            "タスク特別指定: AI解析結果を坖得でしなかったたゝ」特別指定_備考の開始日/優先指示は反映されません。"
-            "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してしてさい。）"
+            "タスク特別指定: AI解析結果を取得でしなかったため、特別指定_備考の開始日/優先指示は反映されません。"
+            "（列「加工開始日_指定」「指定納期_上書き」は廃止済み。備考の再記載または後から AI 再実行を検討してください。）"
         )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = f"失敗: {e}"[:500]
@@ -7831,8 +7831,8 @@ def _ai_float_for_conflict(ai, key):
 
 def detect_planning_remark_ai_conflicts(row, ai_for_tid):
     """
-    特別指定_備考に依る AI 解析結果と」明示セルの両方に値はあり食い靕ご列を返れ。
-    備考・AIいうれか欠ける場合は空集坈。
+    特別指定_備考に依る AI 解析結果と」明示セルの両方に値はあり食い靕ご列を返す。
+    備考・AIいうれか欠ける場合は空集合。
     """
     remark = str(row.get(PLAN_COL_SPECIAL_REMARK, "") or "").strip()
     if not remark or remark.lower() in ("nan", "none"):
@@ -7861,7 +7861,7 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
 
 
 def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
-    """Excel 行番坷(1始まり・ヘッダー=1行目) -> 矛盾はあった列名の集坈"""
+    """Excel 行番坷(1始まり・ヘッダー=1行目) -> 矛盾はあった列名の集合"""
     res = {}
     for i, (_, row) in enumerate(tasks_df.iterrows()):
         if _plan_row_exclude_from_assignment(row):
@@ -7874,7 +7874,7 @@ def collect_planning_conflicts_by_excel_row(tasks_df, ai_by_tid):
 
 
 def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by_row) -> None:
-    """既に開いている配台計画シートへ」矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼よ出し坴。"""
+    """既に開いている配台計画シートへ」矛盾列の着色（薄黄リセット→赤）を適用する。保存は呼び出し坴。"""
     header_map = {}
     for col_idx in range(1, ws.max_column + 1):
         v = ws.cell(1, col_idx).value
@@ -7923,13 +7923,13 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
 ) -> bool:
     """
     段階2坑け: グローバルコメント解析ブロック（AX:AY）と矛盾ハイライトを **1回の load/save** で反映れる。
-    従来は別関数でブックを2回開いでいたたゝ」.xlsm は大しい環境で坝数秒短縮の短縮になる。
+    従来は別関数でブックを2回開いでいたため、.xlsm は大しい環境で坝数秒短縮の短縮になる。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "%s: ブックに「%s」はあるたゝ openpyxl でグローバル解析・矛盾着色をスキップしました。",
+            "%s: ブックに「%s」があるため、openpyxl でグローバル解析・矛盾着色をスキップしました。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -7942,7 +7942,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         )
     except Exception as ex:
         logging.info(
-            "%s: 配台シート一括書込のたゝブックを開きません: %s",
+            "%s: 配台シート一括書込のため、ブックを開きません: %s",
             log_prefix,
             ex,
         )
@@ -7950,7 +7950,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     try:
         if sheet_name not in wb.sheetnames:
             logging.info(
-                "%s: シート '%s' は無いたゝグローバル解析・矛盾着色をスキップ。",
+                "%s: シート '%s' はないため、グローバル解析・矛盾着色をスキップ。",
                 log_prefix,
                 sheet_name,
             )
@@ -8028,7 +8028,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
         return
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
-            "矛盾書式: ブックに「%s」はあるたゝ openpyxl でのハイライトをスキップしました。",
+            "矛盾書式: ブックに「%s」があるため、openpyxl でのハイライトをスキップしました。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return
@@ -8250,7 +8250,7 @@ def build_task_queue_from_planning_df(
         if gop_name is not None:
             preferred_operator_raw = gop_name
             logging.info(
-                "メイン再優先特記: 依頼NO=%s の担当OPをグローバル指坝で上書き %r（セル・特別指定備考AIより優先）",
+                "メイン再優先特記: 依頼NO=%s の担当OPをグローバル指定で上書き %r（セル・特別指定備考AIより優先）",
                 task_id,
                 gop_name,
             )
@@ -8480,7 +8480,7 @@ def _serial_dispatch_order_task_ids(task_queue) -> list:
 def _excel_scalar_to_plan_string_cell(v):
     """
     既存シート（read_excel）由来のスカラーを」配台計画 DataFrame の文字列列（StringDtype）へ
-    代入でしる str に正覝化れる。Excel は数値として保挝した優先度 1 → \"1\" など。
+    代入でしる str に正規化する。Excel は数値として保挝した優先度 1 → \"1\" など。
     """
     if v is None:
         return ""
@@ -8651,7 +8651,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
     """
     同一依頼NOは2行以上あり」かつ空でない同一機械名は2行以上あるグループでは」
     工程名は「分割」の行の「配台試行」に yes を入れる（セルは空のときのみ）。
-    機械名は _normalize_equipment_match_key で針複判定。
+    機械名は _normalize_equipment_match_key で重複判定。
     """
     if df is None or df.empty:
         return df
@@ -8661,7 +8661,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
             return df
     if PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
-    # read_excel 等で StringDtype になると数値・真坽の .at 代入で TypeError になるたゝ object に寄せる
+    # read_excel 等で StringDtype になると数値・真偽の .at 代入で TypeError になるため、 object に寄せる
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
 
     by_tid = defaultdict(list)
@@ -8683,7 +8683,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
             ):
                 continue
-            # 列は StringDtype のとき int 代入で TypeError になるたゝ文字列にれる（_plan_row_exclude_from_assignment は yes を真とみなれ）
+            # 列は StringDtype のとき int 代入で TypeError になるため、文字列にれる（_plan_row_exclude_from_assignment は yes を真とみなす）
             df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
             n_set += 1
 
@@ -8697,7 +8697,7 @@ def _apply_auto_exclude_bunkatsu_duplicate_machine(
 
 
 def _normalize_process_name_for_rule_match(raw) -> str:
-    """工程名のルール照坈（NFKC・空白除去）。"""
+    """工程名のルール照合（NFKC・空白除去）。"""
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
     t = re.sub(r"[\s　]+", "", t)
     return t
@@ -8706,7 +8706,7 @@ def _normalize_process_name_for_rule_match(raw) -> str:
 def _exclude_rules_sheet_header_map(ws) -> dict:
     """1行目見出し → 列番坷(1始まり)。
     openpyxl は新規シート直後に max_column は 0 のままのことはあり」見出しは読ゝう保存剝に return してしまご。
-    しのたゝ最低 A～E 列は必う走査れる。
+    しのため、最低 A～E 列は必う走査れる。
     """
     h = {}
     last_col = max(5, int(ws.max_column or 0))
@@ -8720,7 +8720,7 @@ def _exclude_rules_sheet_header_map(ws) -> dict:
 def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tuple[int, int, int, int, int]:
     """
     1行目に標準見出し（工程名・機械名・配台試行・配台試行ロジック・ロジック式）はあることを保証れる。
-    手動で空シートの値追加した場合は A1:E1 は空のたゝ」ここで書き込んで列番坷を返れ。
+    手動で空シートの値追加した場合は A1:E1 は空のため、ここで書き込んで列番坷を返す。
     """
     headers = (
         EXCLUDE_RULE_COL_PROCESS,
@@ -8735,7 +8735,7 @@ def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tupl
     for i, name in enumerate(headers, start=1):
         ws.cell(row=1, column=i, value=name)
     logging.info(
-        "%s: 「%s」の見出しは無い＝列名は一致しないたゝ」標準の1行目（A1:E1）を設定しました。",
+        "%s: 「%s」の見出しは無い＝列名は一致しないため、標準の1行目（A1:E1）を設定しました。",
         log_prefix,
         EXCLUDE_RULES_SHEET_NAME,
     )
@@ -8784,7 +8784,7 @@ def _compact_exclude_rules_data_rows(
         ws.delete_rows(2, old_body)
         if old_body > 0:
             logging.info(
-                "%s: 「%s」は有効なデータ行はなかったたゝ」データ行 %s 行を削除しました。",
+                "%s: 「%s」は有効なデータ行はなかったため、データ行 %s 行を削除しました。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
                 old_body,
@@ -8853,7 +8853,7 @@ def _task_row_matches_exclude_rule_target(
 
 
 def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> list[tuple[str, str]]:
-    """加工計画DATA から」段階1とともに抽出条件で (工程名, 機械名) の一覧（針複除し・順庝維挝）。"""
+    """加工計画DATA から」段階1とともに抽出条件で (工程名, 機械名) の一覧（重複除し・順庝維挝）。"""
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for _, row in df_src.iterrows():
@@ -8911,7 +8911,7 @@ def _validate_exclude_rule_parsed_dict(o: object) -> dict | None:
 
 
 def _exclude_rule_de_cache_key(stripped_blob: str) -> str:
-    """「配台試行ロジック」文言（正覝化済み）に対れる ai_remarks_cache 用キー。"""
+    """「配台試行ロジック」文言（正規化済み）に対れる ai_remarks_cache 用キー。"""
     h = hashlib.sha256(stripped_blob.encode("utf-8")).hexdigest()
     return f"{AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE}:{h}"
 
@@ -8959,7 +8959,7 @@ def _exclude_rule_logic_gemini_schema_instructions() -> str:
 
 
 def _parse_exclude_rule_json_array_response(text: str) -> list | None:
-    """モデル応答から JSON 酝列を坖り出す（```json フェンス付し坯）。"""
+    """モデル応答から JSON 酝列を取り出す（```json フェンス付し坯）。"""
     s = (text or "").strip()
     if not s:
         return None
@@ -9081,8 +9081,8 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
         return None
     schema = _exclude_rule_logic_gemini_schema_instructions()
     prompt = (
-        "あなたは工場の配台システム用です。次の「配台試行の説明」を」タスク1行を判定れる機械坯読ルールに変杛してしてさい。\n\n"
-        "」出力】先頭は { で終ゝりは } の JSON オブジェクト1つのみ（説明・マークダウン禝止）。\n\n"
+        "あなたは工場の配台システム用です。次の「配台試行の説明」を」タスク1行を判定れる機械坯読ルールに変杛してください。\n\n"
+        "」出力】先頭は { で終ゝりは } の JSON オブジェクト1つのみ（説明・マークダウン禁止）。\n\n"
         f"{schema}\n"
         f"」説明文】\n{blob}\n"
     )
@@ -9118,7 +9118,7 @@ def _ai_compile_exclude_rule_logic_to_json(natural_language: str) -> dict | None
 
 def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]:
     """
-    複数の D 列文言を 1 回の Gemini 呼よ出しで JSON 化。失敗・覝素数丝一致時は 1 件うつにフォールポック。
+    複数の D 列文言を 1 回の Gemini 呼び出しで JSON 化。失敗・覝素数厳密一致時は 1 件うつにフォールバック。
     json/ai_remarks_cache.json にヒットした文言は API を呼みない。
     """
     n = len(blobs)
@@ -9138,7 +9138,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             pend_b.append(s)
     if not pend_b:
         logging.info(
-            "配台試行ルール: AIキャッシュのみで D→E ポッポ %s 件を完絝（API 呼よ出しなし）。",
+            "配台試行ルール: AIキャッシュのみで D→E ポッポ %s 件を完絝（API 呼び出しなし）。",
             n,
         )
         return out
@@ -9152,8 +9152,8 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
     schema = _exclude_rule_logic_gemini_schema_instructions()
     numbered = "\n".join(f"[{i + 1}] {str(b).strip()}" for i, b in enumerate(pend_b))
     prompt = (
-        "あなたは工場の配台システム用です。以下の N 個の「配台試行の説明」を」与ごた順庝でしれずれ JSON ルールに変杛してしてさい。\n\n"
-        f"」出力】JSON 酝列のみ。先頭は [ で終ゝりは ] 。覝素数は必う {m}（Markdown・説明禝止）。\n"
+        "あなたは工場の配台システム用です。以下の N 個の「配台試行の説明」を」与ごた順庝でしれずれ JSON ルールに変杛してください。\n\n"
+        f"」出力】JSON 酝列のみ。先頭は [ で終ゝりは ] 。覝素数は必う {m}（Markdown・説明禁止）。\n"
         f"酝列の先頭覝素は [1]」2 番目は [2] … に対応しした。\n\n"
         f"{schema}\n"
         f"」説明文】\n{numbered}\n"
@@ -9199,7 +9199,7 @@ def _ai_compile_exclude_rule_logics_batch(blobs: list[str]) -> list[dict | None]
             save_ai_cache(ai_cache)
         return out
     except Exception as e:
-        logging.warning("配台試行ルール: ポッポ Gemini 失敗」坘発にフォールポック: %s", e)
+        logging.warning("配台試行ルール: ポッポ Gemini 失敗」坘発にフォールバック: %s", e)
         for j, idx in enumerate(pend_i):
             out[idx] = _ai_compile_exclude_rule_logic_to_json(pend_b[j])
         return out
@@ -9373,7 +9373,7 @@ def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool)
 
 def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
     """
-    マクロブックを xlwings で坖得れる（本番・テスト共通）。
+    マクロブックを xlwings で取得れる（本番・テスト共通）。
     戻り値: (Book, release_info) / 失敗時 None。
     release_info: mode は keep または quit_excel」opened_wb_here は bool。
     """
@@ -9445,7 +9445,7 @@ def _xlwings_attach_workbook_for_tests(
 
 
 def _xlwings_app_save_perf_state_push(app):
-    """VBA 坴のスプラッシュポーリングと競坈しにししれるたゝ」同期・保存の短時間の値 Excel を静かにれる。"""
+    """VBA 坴のスプラッシュポーリングと競坈しにししれるため、同期・保存の短時間の値 Excel を静かにれる。"""
     snap = {}
     for attr in ("screen_updating", "calculation", "enable_events"):
         try:
@@ -9628,7 +9628,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: 設定_配台試行工程は openpyxl を試さう xlwings 同期→Save を試みした（試行なら VBA 用行列 TSV）。",
+            "%s: 設定_配台試行工程は openpyxl を試さず xlwings 同期→Save を試みした（試行なら VBA 用行列 TSV）。",
             log_prefix,
         )
     elif not _workbook_should_skip_openpyxl_io(wb_path):
@@ -9653,11 +9653,11 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
         _log_exclude_rules_sheet_debug(
             "OPENPYXL_SAVE_SKIPPED_INCOMPATIBLE_SHEET",
             log_prefix,
-            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」はあるたゝ openpyxl での保存を試みません。",
+            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため、openpyxl での保存を試みません。",
             details=f"path={wb_path}",
         )
         logging.info(
-            "%s: ブックに「%s」はあるたゝ openpyxl save をスキップし、xlwings または行列 TSV に切り替ごした。",
+            "%s: ブックに「%s」があるため、openpyxl save をスキップし、xlwings または行列 TSV に切り替ごした。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
@@ -9671,7 +9671,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     if _write_exclude_rules_matrix_vba_tsv(wb_path, ws, log_prefix):
         logging.warning(
             "%s: 設定シートを log\\%s に出力しました。"
-            " Excel でマクロ「設定_配台試行工程_AからE_TSVから反映」を実行してしてさい。",
+            " Excel でマクロ「設定_配台試行工程_AからE_TSVから反映」を実行してください。",
             log_prefix,
             EXCLUDE_RULES_MATRIX_VBA_FILENAME,
         )
@@ -9679,7 +9679,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     _log_exclude_rules_sheet_debug(
         "OPENPYXL_VBA_FALLBACK",
         log_prefix,
-        "openpyxl 保存に失敗したたゝ VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映は必須な場合はありした）。",
+        "openpyxl 保存に失敗したため、 VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映は必須な場合はありした）。",
         details=f"path={wb_path}",
     )
     return False
@@ -9829,7 +9829,7 @@ def _write_exclude_rules_e_vba_tsv_from_cells(
         _log_exclude_rules_sheet_debug(
             "E_VBA_TSV_WRITTEN",
             log_prefix,
-            "E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールポック用）。",
+            "E 列を VBA 反映用 TSV に書き出しました（保存失敗時のフォールバック用）。",
             details=f"path={path_tsv} cells={len(cells)}",
         )
     except OSError as ex:
@@ -9943,7 +9943,7 @@ def _read_exclude_rules_d_cells_data_only_for_rows(
     wb_path: str, rows: list[int], c_d: int
 ) -> dict[int, object]:
     """
-    D 列は数弝のとき」openpyxl の通常読込では '=...' しか坖れない。
+    D 列は数弝のとき」openpyxl の通常読込では '=...' しか取れない。
     data_only=True でキャッシュ値を読む（Excel は一度でも保存・計算済みのブックで有効）。
     """
     out: dict[int, object] = {}
@@ -9998,7 +9998,7 @@ def run_exclude_rules_sheet_maintenance(
 
     xlwings でも保存でしないとしは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
     ``設定_配台試行工程_AからE_TSVから反映`` で A〜E を反映れる。
-    併せで従来どより E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
+    併せで従来どおり E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
     保存成功時は TSV/JSON は削除される。
 
     ``json/exclude_rules_e_column_pending.json`` は Python 次回起動時の E 列復元用。
@@ -10008,7 +10008,7 @@ def run_exclude_rules_sheet_maintenance(
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_PATH",
             log_prefix,
-            "TASK_INPUT_WORKBOOK は空のたゝ設定シート処理をしません。",
+            "TASK_INPUT_WORKBOOK は空のため、設定シート処理をしません。",
         )
         return
     if not os.path.exists(wb_path):
@@ -10033,11 +10033,11 @@ def run_exclude_rules_sheet_maintenance(
         _log_exclude_rules_sheet_debug(
             "SKIP_OPENPYXL_INCOMPATIBLE_BOOK",
             log_prefix,
-            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」は含まれるたゝ」openpyxl による設定シート保守は行いません。",
+            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」は含まれるため、openpyxl による設定シート保守は行いません。",
             details=f"path={wb_path}",
         )
         logging.warning(
-            "%s: 「%s」坫有のたゝ「%s」の openpyxl 保守をスキップしました（Excel＝xlwings で編集してしてさい）。",
+            "%s: 「%s」坫有のため、「%s」の openpyxl 保守をスキップしました（Excel＝xlwings で編集してください）。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
@@ -10089,7 +10089,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SKIP_NO_SHEET",
                 log_prefix,
-                "シートはありません。VBA の「設定_配台試行工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してしてさい。",
+                "シートはありません。VBA の「設定_配台試行工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。",
                 details=f"path={wb_path}",
             )
             logging.error(
@@ -10121,7 +10121,7 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "HEADER_FIX",
                 log_prefix,
-                "1行目に標準見出しを書き込みました（空シート・列名丝一致の補正）。",
+                "1行目に標準見出しを書き込みました（空シート・列名厳密一致の補正）。",
                 details=f"cols=({c_proc},{c_mach},{c_flag},{c_d},{c_e})",
             )
 
@@ -10171,10 +10171,10 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "EXAMPLE_ROW",
                 log_prefix,
-                "データ行はなかったたゝ例（梱包=yes）を1行追加。",
+                "データ行はなかったため、例（梱包=yes）を1行追加。",
             )
             logging.info(
-                "%s: 「%s」にデータ行はなかったたゝ」例（梱包=yes）を1行追加しました。",
+                "%s: 「%s」にデータ行はなかったため、例（梱包=yes）を1行追加しました。",
                 log_prefix,
                 EXCLUDE_RULES_SHEET_NAME,
             )
@@ -10322,7 +10322,7 @@ def run_exclude_rules_sheet_maintenance(
             logging.warning(
                 "%s: 設定シートの openpyxl 保存に失敗しました。"
                 " log の行列 TSV をマクロ「設定_配台試行工程_AからE_TSVから反映」」"
-                "または E 列のみ「設定_配台試行工程_E列_TSVから反映」で反映してしてさい。",
+                "または E 列のみ「設定_配台試行工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
             )
     except Exception as ex:
@@ -10348,7 +10348,7 @@ def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
 
 
 def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
-    """シートからルール行を読み」評価用リストを返れ。"""
+    """シートからルール行を読み」評価用リストを返す。"""
     if not wb_path:
         return []
     global _exclude_rules_rules_snapshot, _exclude_rules_snapshot_wb
@@ -10366,7 +10366,7 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         return []
     if _workbook_should_skip_openpyxl_io(path):
         logging.warning(
-            "配台試行ルール: ブックに「%s」はあるたゝ pandas(openpyxl) での「%s」読込をスキップしました（ルールは未適用）。",
+            "配台試行ルール: ブックに「%s」があるため、pandas(openpyxl) での「%s」読込をスキップしました（ルールは未適用）。",
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
         )
@@ -10466,7 +10466,7 @@ def apply_exclude_rules_config_to_plan_df(
 
 def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") -> "pd.DataFrame":
     """
-    段階1出力直後: 配台試行順番の昇順に行を並き替ごた DataFrame を返れ。
+    段階1出力直後: 配台試行順番の昇順に行を並き替ごた DataFrame を返す。
     正の整数でないセルは最後（同一帯内は元の行順）。
     """
     col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
@@ -10594,7 +10594,7 @@ def run_stage1_extract():
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
     except PlanningValidationError:
-        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値針複など）。")
+        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
     except Exception as e:
         logging.info("段階1: マスタ need を読ゝう元列は need なしで埋ゝした (%s)", e)
@@ -10730,7 +10730,7 @@ def _eod_reject_capacity_units_below_threshold(
 #    休憩帯を挟んて「実僝分」残作・終了時刻の繰り上き。割付ループの下回り。
 # =========================================================
 def merge_time_intervals(intervals):
-    """時刻区間のリストをソートし、針なる区間を絝坈して返れ。"""
+    """時刻区間のリストをソートし、重なる区間を統合して返す。"""
     if not intervals:
         return []
     intervals.sort(key=lambda x: x[0])
@@ -10751,7 +10751,7 @@ def _contiguous_work_minutes_until_next_break_or_limit(
 ) -> int:
     """
     start_dt から次の休憩開始（または終業上限）までの」連続して実僝に使うる分数。
-    開始は休憩帯内なら 0（呼よ出し元で坴下）。breaks_dt は merge 済み想定。
+    開始は休憩帯内なら 0（呼び出し元で坴下）。breaks_dt は merge 済み想定。
     """
     if start_dt >= end_limit_dt:
         return 0
@@ -10775,7 +10775,7 @@ def _break_end_to_skip_if_contiguous_under(
 ) -> datetime | None:
     """
     休憩帯外でも」次の休憩開始までの連続実僝は min_contiguous_mins 未満なら」
-    しの休憩区間の終了時刻を返れ（午後休憩直後に 1 ロール分は坎まらない開始の値進ゝる）。
+    しの休憩区間の終了時刻を返す（午後休憩直後に 1 ロール分は坎まらない開始の値進ゝる）。
     終業までしか実僝は続かない場合は None。
     """
     if min_contiguous_mins <= 0:
@@ -10854,7 +10854,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
                 break
         if break_end is not None:
             _trace_block(
-                "休憩帯内のたゝ終了へ繰り下き machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
+                "休憩帯内のため、終了へ繰り下き machine=%s team=%s rem=%.4f break_end=%s trial_was=%s",
                 task.get("machine"),
                 _team_txt,
                 float(task.get("remaining_units") or 0),
@@ -10870,7 +10870,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
             )
             if slip_end is not None:
                 _trace_block(
-                    "休憩直後で連続実僝丝足のたゝ休憩終了へ繰り下き machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
+                    "休憩直後で連続実僝丝足のため、休憩終了へ繰り下き machine=%s team=%s rem=%.4f need_contig_min=%s trial_was=%s break_end=%s",
                     task.get("machine"),
                     _team_txt,
                     float(task.get("remaining_units") or 0),
@@ -10916,7 +10916,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
 def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
     """
     設備毎の時間割・メンバー日程・稼働率用インデックス坑け。
-    1 本のイベントは日をまたし場合」e["date"] の値当日に載せると翌朝セグメントは欠けるたゝ」
+    1 本のイベントは日をまたし場合」e["date"] の値当日に載せると翌朝セグメントは欠けるため、
     start_dt〜end_dt を坄就業日 DEFAULT_START_TIME〜DEFAULT_END_TIME にクリップした複製へ展開れる。
     """
     expanded: list = []
@@ -10954,7 +10954,7 @@ def _expand_timeline_events_for_equipment_grid(timeline_events: list) -> list:
 def get_actual_work_minutes(start_dt, end_dt, breaks_dt):
     """
     start_dt から end_dt までの「休憩を除いた実僝分数」。
-    breaks_dt … (区間開始, 区間終了) の列（datetime または time。呼よ出し元の勤怠イベントと整坈）。
+    breaks_dt … (区間開始, 区間終了) の列（datetime または time。呼び出し元の勤怠イベントと整合）。
     """
     current = start_dt
     actual_mins = 0
@@ -11082,8 +11082,8 @@ def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_
 
     req_map は
       - f\"{process}+{machine_name}\"（厳密キー）
-      - machine_name（機械の値のフォールポック）
-      - process（工程の値のフォールポック）
+      - machine_name（機械の値のフォールバック）
+      - process（工程の値のフォールバック）
     のいうれかで base を引ける剝杝。
     need_rules の overrides も同様にキーを挝つ。
     """
@@ -11202,7 +11202,7 @@ def resolve_need_surplus_extra_max(
 ) -> int:
     """
     need シート「配台時追加人数」行（工程×機械列）の値＝必須人数を満たしたごごで
-    さらに割り当で可能な人数の上限（0 なら従来どより必須人数うょごどのみ）。
+    さらに割り当で可能な人数の上限（0 なら従来どおり必須人数うょごどのみ）。
     need_rules は睾状この行を上書きしない（将来拡張用に task_id を块け得る）。
     """
     _ = (task_id, need_rules)
@@ -11350,8 +11350,8 @@ def _validate_skills_op_as_priority_numbers_unique(
 ) -> None:
     """
     master「skills」の複数列（工程+機械キー等）についで」OP/AS の割当優先度の**数値**は
-    メンバー間で針複していないか検証れる。針複時は PlanningValidationError。
-    （OP1 と AS1 のよごにロールは異なっても同一数値なら針複とみなれ）
+    メンバー間で重複していないか検証れる。重複時は PlanningValidationError。
+    （OP1 と AS1 のよごにロールは異なっても同一数値なら重複とみなす）
     """
     errors: list[str] = []
     for combo in column_keys:
@@ -11375,13 +11375,13 @@ def _validate_skills_op_as_priority_numbers_unique(
             pr_to_entries[int(pr)].append(f"{mnm}({role})")
         for pr, entries in sorted(pr_to_entries.items()):
             if len(entries) > 1:
-                errors.append(f'列「{ck}」: 優先度 {pr} は針複 → ' + "」".join(entries))
+                errors.append(f'列「{ck}」: 優先度 {pr} は重複 → ' + "」".join(entries))
     if errors:
         cap = 50
         tail = errors[:cap]
         msg = (
-            "マスタ「skills」で」同一列の OP/AS 優先度の数値は針複していした。"
-            " 列ごとに数値は1人につし1種類にしてしてさい。\n"
+            "マスタ「skills」で」同一列の OP/AS 優先度の数値は重複していした。"
+            " 列ごとに数値は1人につし1種類にしてください。\n"
             + "\n".join(tail)
         )
         if len(errors) > cap:
@@ -11395,7 +11395,7 @@ def build_member_assignment_priority_reference(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     結果ブック用: マスタ skills の「工程名+機械名」列ごとに」割当アルゴリズムとともに
-    (優先度値昇順, メンバー坝昇順) で並きた参考表と」ルール説明の表を返れ。
+    (優先度値昇順, メンバー坝昇順) で並きた参考表と」ルール説明の表を返す。
     当日の出勤・設備空し・同一依頼の工程順・フォーム人数は反映しない（あしまでマスタ上の順庝）。
     """
     mem_list = list(members) if members else list((skills_dict or {}).keys())
@@ -11426,20 +11426,20 @@ def build_member_assignment_priority_reference(
             "区分": "スキル列の並よ",
             "内容": "坄「工程名+機械名」列についで」セルは OP/AS（+優先度整数）のメンバーのみ対象。"
             " 数値は尝さいろど高優先。省略時は優先度 1（parse_op_as_skill_cell と同一）。"
-            " 同一列では優先度の数値はメンバー間で針複試行（マスタ読込時に検証）。",
+            " 同一列では優先度の数値はメンバー間で重複試行（マスタ読込時に検証）。",
         },
         {
             "区分": "当日との差",
             "内容": "実際の配台は」この順のごうしの日出勤かつ AS/OP 覝件を満たれ者の値は候補。"
-            " 設備の空し・同一依頼NOの工程順・必須人数・増員枠・指坝OPで変ゝりした。",
+            " 設備の空し・同一依頼NOの工程順・必須人数・増員枠・指定OPで変ゝりした。",
         },
         {
             "区分": "フォーム候補の比較",
             "内容": team_rule,
         },
         {
-            "区分": "指坝・グローバル上書き",
-            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指坝は本表より優先されした。",
+            "区分": "指定・グローバル上書き",
+            "内容": "担当OP_指定・メイン「再優先特別記載」の OP 指定は本表より優先されした。",
         },
         {
             "区分": "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
@@ -11512,7 +11512,7 @@ def build_member_assignment_priority_reference(
 
 
 def _normalize_person_name_for_match(s):
-    """担当者指坝のあいまい一致用（NFKC・富田/冨田の表記寄せ・空白除去・末尾敬称のみ除去）。"""
+    """担当者指定のあいまい一致用（NFKC・富田/冨田の表記寄せ・空白除去・末尾敬称のみ除去）。"""
     if s is None:
         return ""
     t = unicodedata.normalize("NFKC", str(s).strip())
@@ -11525,7 +11525,7 @@ def _normalize_person_name_for_match(s):
 
 def _split_person_sei_mei(s) -> tuple[str, str]:
     """
-    並びを姓・坝に分ける。最初の坊角＝全角空白の手剝を姓」以降を坝とれる。
+    並びを姓・坝に分ける。最初の半角＝全角空白の手剝を姓」以降を坝とれる。
     空白は無い場合は (全体, '')（坝なし扱い）。
     末尾の さん＝様＝氝 は分割剝に除去れる。
     """
@@ -11545,7 +11545,7 @@ def _split_person_sei_mei(s) -> tuple[str, str]:
 
 
 def _normalize_sei_for_match(sei: str) -> str:
-    """姓のみ正覝化。表記ゆれは許容しない剝杝で」NFKC・富田/冨田寄せ・空白除去。"""
+    """姓のみ正規化。表記ゆれは許容しない剝杝で」NFKC・富田/冨田寄せ・空白除去。"""
     if not sei:
         return ""
     t = unicodedata.normalize("NFKC", str(sei).strip())
@@ -11556,7 +11556,7 @@ def _normalize_sei_for_match(sei: str) -> str:
 
 
 def _normalize_mei_for_match(mei: str) -> str:
-    """坝の正覝化（ゆれ許容の剝処理）。NFKC・空白除去。姓用の富田置杛は行ゝない。"""
+    """坝の正規化（ゆれ許容の剝処理）。NFKC・空白除去。姓用の富田置杛は行ゝない。"""
     if not mei:
         return ""
     t = unicodedata.normalize("NFKC", str(mei).strip())
@@ -11565,7 +11565,7 @@ def _normalize_mei_for_match(mei: str) -> str:
 
 
 def _has_duplicate_surname_among_members(member_names) -> bool:
-    """skills メンバー一覧に」正覝化後同一の姓は2人以上いるか。"""
+    """skills メンバー一覧に」正規化後同一の姓は2人以上いるか。"""
     cnt = Counter()
     for name in member_names or []:
         if name is None or (isinstance(name, float) and pd.isna(name)):
@@ -11581,7 +11581,7 @@ def _has_duplicate_surname_among_members(member_names) -> bool:
 
 
 def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
-    """同一姓はロスターで針複しないとしのみ使う坝のゆれ許容。"""
+    """同一姓はロスターで重複しないとしのみ使う坝のゆれ許容。"""
     if not r_mei_n and not m_mei_n:
         return True
     if not r_mei_n or not m_mei_n:
@@ -11593,15 +11593,15 @@ def _mei_matches_with_fuzzy_allowed(r_mei_n: str, m_mei_n: str) -> bool:
 
 def _resolve_preferred_name_to_capable_member(raw, capable_candidates, roster_member_names=None):
     """
-    自由記述の指坝を」当日スキル上 OP/AS のメンバー坝（skills シートの行キー）に解決れる。
+    自由記述の指定を」当日スキル上 OP/AS のメンバー坝（skills シートの行キー）に解決れる。
     capable_candidates: しの設備で OP または AS として割当可能なメンバー坝リスト。
-    roster_member_names: skills の全メンバー坝（省略時は capable_candidates）。同一姓の針複判定に使用。
+    roster_member_names: skills の全メンバー坝（省略時は capable_candidates）。同一姓の重複判定に使用。
 
     坝剝の表記ゆれ:
-    - 姓は正覝化後に完全一致のみ（ゆれ許容しない。富田/冨田のみ従来どより寄せ）。
+    - 姓は正規化後に完全一致のみ（ゆれ許容しない。富田/冨田のみ従来どおり寄せ）。
     - roster に同一姓は2人以上いないとしの値」坝は部分一致（どうらかは他方を含む）または完全一致を許容。
     - 同一姓はロスターにいる間は坝も完全一致必須。
-    - 姓のみの入力で坝ゆれモードのとき」姓は一致れる候補は複数いれみ解決試行（None）。
+    - 姓のみの入力で坝ゆれモードのとき」姓は一致する候補は複数いれみ解決試行（None）。
     """
     if not raw or not capable_candidates:
         return None
@@ -11667,7 +11667,7 @@ def _task_process_matches_global_contains(machine_val: str, contains: str) -> bo
 
 
 def _coerce_global_day_process_operator_rules(raw_val) -> list:
-    """Gemini の global_day_process_operator_rules を正覝化（空・正常は除外）。"""
+    """Gemini の global_day_process_operator_rules を正規化（空・正常は除外）。"""
     out: list[dict] = []
     if not isinstance(raw_val, list):
         return out
@@ -11718,8 +11718,8 @@ def _active_global_day_process_must_include(
     roster_members: list,
 ) -> tuple[list[str], list[str]]:
     """
-    グローバルコメント由来の「日付×工程×複数指坝」で」しの日・しの工程タスクに
-    **フォームへ必う坫ゝる**メンバー（skills 行キー）と警告メッセージを返れ。
+    グローバルコメント由来の「日付×工程×複数指定」で」しの日・しの工程タスクに
+    **フォームへ必う坫ゝる**メンバー（skills 行キー）と警告メッセージを返す。
     """
     rules = gpo.get("global_day_process_operator_rules") or []
     if not isinstance(rules, list):
@@ -11749,9 +11749,9 @@ def _active_global_day_process_must_include(
                     acc.append(mem)
             else:
                 warns.append(
-                    "メイングローバル(日付×工程)指坝: "
+                    "メイングローバル(日付×工程)指定: "
                     f"依頼NO={tid} 日付={current_date} 工程={machine!r} の "
-                    f"指坝「{raw_name}」を当日スキル該当メンバーに解決でしません"
+                    f"指定「{raw_name}」を当日スキル該当メンバーに解決でしません"
                 )
     return acc, warns
 
@@ -11759,7 +11759,7 @@ def _active_global_day_process_must_include(
 def _merge_global_day_process_and_pref_anchor(
     must_include: list, pref_mem, capable_members: list
 ) -> list[str]:
-    """必須メンバーと担当OP指坝を1本化（capable にいるものの値）。"""
+    """必須メンバーと担当OP指定を1本化（capable にいるものの値）。"""
     fixed: list[str] = []
     seen: set[str] = set()
     for m in must_include or []:
@@ -11782,7 +11782,7 @@ def _merge_global_day_process_and_pref_anchor(
 # =========================================================
 def load_skills_and_needs():
     """
-    統坈ファイル(MASTER_FILE)からスキルと need を動的に読み込みした。
+    統合ファイル(MASTER_FILE)からスキルと need を動的に読み込みした。
 
     戻り値は7覝素。最後は need シート上の「工程名+機械名」列佝置（左ろど尝さい整数）の辞書
     ``need_combo_col_index``（配台キューソート用）。
@@ -11791,22 +11791,22 @@ def load_skills_and_needs():
       工程名行・機械名行のあと「基本必須人数」行（A列に「必須人数」を含む）
       しの直下: 配台で余剰人員はあるとしに追加で入れられる人数（工程×機械とと。未設定は 0）
       以降: 特別指定1〜99
-    といご構造のたゝ」必須OPは「工程名+機械名」で解決れる。
+    といご構造のため、必須OPは「工程名+機械名」で解決れる。
 
     skills 交差セルは OP/AS の後に優先度整数（例 OP1, AS3）。数値は尝さいろど当該工程への割当で優先。
     数字省略の OP/AS は優先度 1。
-    同一列（同一工程×機械）では優先度の数値はメンバー間で針複試行（針複時は PlanningValidationError）。
+    同一列（同一工程×機械）では優先度の数値はメンバー間で重複試行（重複時は PlanningValidationError）。
     """
     try:
-        # 同一ブックを pd.read_excel で都度開しと I/O は針いたゝ」ExcelFile を1回の値開いでシートを parse れる。
+        # 同一ブックを pd.read_excel で都度開しと I/O は重いめ、ExcelFile を1回の値開いでシートを parse れる。
         with pd.ExcelFile(MASTER_FILE) as _master_xls:
             # skills は新仕様:
             #   1行目: 工程名
             #   2行目: 機械名
             #   A3以降: メンバー坝
             #   交差セル: OP または AS の後に割当優先度の整数（例 OP1, AS3）。数値は尝さいろど当該工程へ優先割当。
-            #             数字省略の OP/AS は優先度 1（従来どより最優先扱い）。
-            # を基本としつつ」旧仕様（1行ヘッダ）にもフォールポック対応れる。
+            #             数字省略の OP/AS は優先度 1（従来どおり最優先扱い）。
+            # を基本としつつ」旧仕様（1行ヘッダ）にもフォールバック対応れる。
             skills_raw = pd.read_excel(
                 _master_xls, sheet_name="skills", header=None
             )
@@ -11888,7 +11888,7 @@ def load_skills_and_needs():
                 if member_col is None and skill_cols:
                     member_col = skill_cols[0]
                     logging.warning(
-                        "skillsシート: メンバー列名は標準と一致しないたゝ」先頭列 '%s' をメンバー列として扱いした。",
+                        "skillsシート: メンバー列名は標準と一致しないため、先頭列 '%s' をメンバー列として扱いした。",
                         member_col,
                     )
 
@@ -12009,7 +12009,7 @@ def load_skills_and_needs():
             combo_key = f"{p_s}+{m_s}"
             need_combo_col_index[combo_key] = col_idx
             req_map[combo_key] = n
-            # フォールポック用（機械名 or 工程名の値で引けるよごにれる）
+            # フォールバック用（機械名 or 工程名の値で引けるよごにれる）
             if p_s not in req_map:
                 req_map[p_s] = n
             if m_s not in req_map:
@@ -12082,7 +12082,7 @@ def load_skills_and_needs():
                 if n is not None and 1 <= n <= 99:
                     combo_key = f"{p_s}+{m_s}"
                     overrides[combo_key] = n
-                    # フォールポック用
+                    # フォールバック用
                     overrides[p_s] = n
                     overrides[m_s] = n
 
@@ -12115,9 +12115,9 @@ def load_team_combination_presets_from_master() -> dict[
 ]:
     """
     master.xlsm「組み合わせ表」を読み」工程+機械キーごとに
-    [(組み合わせ優先度, 必須人数またはNone, メンバータプル, 組み合わせ行IDまたはNone), ...] を返れ。
+    [(組み合わせ優先度, 必須人数またはNone, メンバータプル, 組み合わせ行IDまたはNone), ...] を返す。
     同一キー内は優先度昇順」坌順佝はシート上の行順。
-    「必須人数」列は配台時に need 基本人数より優先れる（メンバー列人数と一致れること）。
+    「必須人数」列は配台時に need 基本人数より優先れる（メンバー列人数と一致すること）。
     配台では成立したプリセットをまとめて候補に載せ」組み合わせ探索とまとめで team_start 等で最良を決める
     （シート優先度は試行順のみ。先頭プリセットの坳決はしない）。
     A 列「組み合わせ行ID」は無い＝空の旧シートでは ID は None。
@@ -12209,8 +12209,8 @@ def _lookup_combo_sheet_row_id_for_preset_team(
     team: tuple,
 ) -> int | None:
     """
-    採用フォームのメンバー集坈（NFKC・trim）は組み合わせ表プリセットのいうれかと一致れるとし」
-    しの行の組み合わせ行ID（A列）を返れ。組み合わせ探索のみで決まり combo_sheet_row_id は付いでいない
+    採用フォームのメンバー集合（NFKC・trim）は組み合わせ表プリセットのいうれかと一致するとし」
+    しの行の組み合わせ行ID（A列）を返す。組み合わせ探索のみで決まり combo_sheet_row_id は付いでいない
     履歴行の補完に使う。複数一致時は組み合わせ優先度（数値は尝さい方）を採用。
     """
     if not preset_rows or not team:
@@ -12305,7 +12305,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
     try:
         wb = load_workbook(p, data_only=True, read_only=False)
     except Exception as e:
-        logging.warning("工場稼働時刻: master を openpyxl で開きませんでした（既定の日内枠を使いした）: %s", e)
+        logging.warning("工場稼働時刻: master を openpyxl で開きませんでした（既定の日内枠を使用した）: %s", e)
         return None, None
     try:
         sn = _pick_master_main_sheet_name(list(wb.sheetnames))
@@ -12318,7 +12318,7 @@ def _read_master_main_factory_operating_times(master_path: str) -> tuple[time | 
             return None, None
         if st >= et:
             logging.warning(
-                "工場稼働時刻: master メイン A12/B12 は開始>=終了 (%s >= %s) のたゝ既定値を使いした。",
+                "工場稼働時刻: master メイン A12/B12 は開始>=終了 (%s >= %s) のため、既定値を使用した。",
                 st,
                 et,
             )
@@ -12360,7 +12360,7 @@ def _read_master_main_regular_shift_times(master_path: str) -> tuple[time | None
             return None, None
         if st >= et:
             logging.warning(
-                "定常時刻: master メイン A15/B15 は開始>=終了 (%s >= %s) のたゝ着色・比較に使いません。",
+                "定常時刻: master メイン A15/B15 は開始>=終了 (%s >= %s) のため、着色・比較に使いません。",
                 st,
                 et,
             )
@@ -12395,7 +12395,7 @@ def _override_default_factory_hours_from_master(master_path: str):
 
 def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, break1_end=None):
     """
-    備考から中抜き時間を推定れるローカル補正。
+    備考から中抜き時間を推定するローカル補正。
     AIは中抜きを返さない場合のフェイルセーフとして使う。
     master.xlsm カレンダー由来の休暇区分: 公休=公休年休・午後のみ勤務」後休=午後年休・公休のみ勤務（出勤簿.txt と坌義）。
     公休・後休の境界はメンバー勤怠の休憩時間1_開始/終了（未指定時は DEFAULT_BREAKS[0]）に合わせる。
@@ -12450,7 +12450,7 @@ def infer_mid_break_from_reason(reason_text, start_t, end_t, break1_start=None, 
     return None, None
 
 
-# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に実質 休憩時間1_開始で終了とみなれ。
+# 結果_カレンダー(出勤簿) の退勤表示。VBA 出勤簿「後休」（午後年休）と同様に実質 休憩時間1_開始で終了とみなす。
 _AFTERNOON_OFF_DISPLAY_END = DEFAULT_BREAKS[0][0]
 
 
@@ -12567,7 +12567,7 @@ def _member_schedule_full_day_off_label(entry) -> str:
 
 def _attendance_remark_text(row) -> str:
     """
-    勤怠1行から「備考」列のテキストのみ坖得れる。
+    勤怠1行から「備考」列のテキストのみ取得れる。
     勤怠AIの解析リストへの投入はこの列のみ。reason 文字列は load_attendance で備考と休暇区分を読み取れる。
     """
     if row is None:
@@ -12620,7 +12620,7 @@ def _attendance_leave_type_is_calendar_no_dispatch(leave_type) -> bool:
 
 
 def _ai_json_bool(v, default: bool = False) -> bool:
-    """勤怠備考 AI の真坽値（bool / 数値 / 文字列の杺れを坸坎）。"""
+    """勤怠備考 AI の真偽値（bool / 数値 / 文字列の杺れを坸坎）。"""
     if v is None:
         return default
     if isinstance(v, bool):
@@ -12796,8 +12796,8 @@ def load_attendance_and_analyze(members):
             ai_log["勤怠備考_AI_API"] = "あり"
             
             prompt = f"""
-            以下の坄日・メンバーの備考を読み坖り」出退勤時刻の変更や中抜き」休日の判定を行い」JSON形式で出力してしてさい。
-            マークダウン記坷(``` 等)は一切坫ゝう」純粋なJSON文字列のみを返してしてさい。
+            以下の坄日・メンバーの備考を読み取り」出退勤時刻の変更や中抜き」休日の判定を行い」JSON形式で出力してください。
+            マークダウン記坷(``` 等)は一切坫ゝう」純粋なJSON文字列のみを返してください。
 
             」JSONの出力形式（キー坝を厳密に守ること）】
             {{
@@ -12808,7 +12808,7 @@ def load_attendance_and_analyze(members):
                 "中抜き終了": "HH:MM",
                 "作業効率": 1.0,     
                 "is_holiday": false,
-                "配台試行加": false
+                "配台試行時": false
               }}
             }}
             ・キー名は上記の日本語キーをそのまま使う（英語キーに置き換えない）
@@ -12923,7 +12923,7 @@ def load_attendance_and_analyze(members):
         b2_s = parse_time_str(row.get('休憩時間2_開始'), DEFAULT_BREAKS[1][0])
         b2_e = parse_time_str(row.get('休憩時間2_終了'), DEFAULT_BREAKS[1][1])
 
-        # ★追加: AIから中抜き時間を坖得
+        # ★追加: AIから中抜き時間を取得
         mid_break_s = parse_time_str(ai_info.get("中抜き開始"), None)
         mid_break_e = parse_time_str(ai_info.get("中抜き終了"), None)
         # AIは中抜きを返さなかった場合は「備考文言からローカル推定で補完
@@ -13001,7 +13001,7 @@ ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
-# 紝期基準日を靎ねでも当該依頼に残針はあるとし」**しの依頼NOの値** due_basis を +1 し、
+# 紝期基準日を靎ねでも当該依頼に残量はあるとし」**しの依頼NOの値** due_basis を +1 し、
 # 当該依頼の割当・タイムラインを巻し戻して**カレンダー先頭から**再シミュレーションれる（他依頼の割当は維挝）。
 # マスタ勤怠の最終日を超ごで後ゝ倒しでしない依頼は「配台残(勤務カレンダー丝足)」とれる。坄再試行剝に勤怠拡張分はマスタ日付へ戻れ。
 # 既定 **False**（配台試行順を正とし、計画基準超靎でもこの巻し戻し再試行は行ゝない）。従来挙動は必須なとしの値 True。
@@ -13010,7 +13010,7 @@ STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING = False
 STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS = 5
 
 # True のとき」配台計画シートの読み込み行順（坄依頼NOの初出行は早いろど先）で 1 依頼の値を
-# 当日候補に残し、完走してから次依頼へ進む。**他依頼は一切しの日配台されない**たゝ」
+# 当日候補に残し、完走してから次依頼へ進む。**他依頼は一切しの日配台されない**ため、
 # アクティブ依頼の1行でも詰まると全体は配台試行に見ごる（ログ「依頼NO直列配台 直列後=1」）。
 # 既定 False。厳密な依頼NO直列は必須なとしの値 STAGE2_SERIAL_DISPATCH_BY_TASK_ID=1 を設定れる。
 STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
@@ -13035,16 +13035,16 @@ STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT = os.environ.get(
     "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT", "1"
 ).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
-# True（既定）: 割付候補を「設備・人の壝時計占有区間」で二針検査し、タイムライン追記と同期登録れる
+# True（既定）: 割付候補を「設備・人のタイムライン占有区間」で二重検査し、タイムライン追記と同期登録れる
 # （ブロックテーブルと同じ趣旨。Excel セル逝次 I/O は行ゝない）。
-# False: 従来どより avail_dt / machine_avail_dt のみ。
+# False: 従来どおり avail_dt / machine_avail_dt のみ。
 DISPATCH_INTERVAL_MIRROR_ENFORCE = os.environ.get(
     "DISPATCH_INTERVAL_MIRROR_ENFORCE", "1"
 ).strip().lower() not in ("0", "false", "no", "off", "いいえ", "無効")
 
 
 def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: date) -> dict:
-    """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返れ。"""
+    """メンバー別勤怠ブロックを new_date にシフトした浅いコピーを返す。"""
     delta_days = (new_date - old_date).days
     if delta_days == 0:
         return {m: dict(st) for m, st in source_day.items()}
@@ -13171,7 +13171,7 @@ def _process_name_matches_kakou_content_tokens(
 ) -> bool:
     """
     工程名（配台計画の「工程名」列）は」元データの「加工内容」カンマ区切りトークンのいうれかと
-    正覝化一致れるか。トークンは無い（加工内容未記入の依頼）は照坈対象外として True。
+    正規化一致するか。トークンは無い（加工内容未記入の依頼）は照合対象外として True。
     """
     if not content_tokens:
         return True
@@ -13221,8 +13221,8 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     §B-2 / §B-3: ``roll_pipeline_inspection`` または ``roll_pipeline_rewind`` 行は
     ``roll_pipeline_ec`` 先行により §A-1 で止まる場合」
     ``_roll_pipeline_inspection_assign_room`` > 0 なら当該ペアの値ブロックしない。
-    剝進配台では ``_trial_order_flow_eligible_tasks`` は EC 完走まで検査を外れたゝ」
-    EC 残はある間は本分岝に到靔しない。リワインド等で検査は載る局面との整坈用。
+    剝進配台では ``_trial_order_flow_eligible_tasks`` は EC 完走まで検査を外れため、
+    EC 残はある間は本分岝に到靔しない。リワインド等で検査は載る局面との整合用。
     """
     tid = str(task.get("task_id", "") or "").strip()
     if not tid:
@@ -13370,7 +13370,7 @@ def _task_queue_has_roll_pipeline_ec_for_tid(task_queue, task_id: str) -> bool:
 
 
 def _pipeline_ec_fully_done_for_tid(task_queue, task_id: str) -> bool:
-    """同一依頼NOの EC ロールパイプライン行はまとめて残針ゼロ（完走）か。"""
+    """同一依頼NOの EC ロールパイプライン行はまとめて残量ゼロ（完走）か。"""
     tid = str(task_id or "").strip()
     if not tid:
         return False
@@ -13407,7 +13407,7 @@ def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
 def _roll_pipeline_inspection_task_row_for_tid(
     task_queue: list, task_id: str
 ) -> dict | None:
-    """同一依頼NOの §B-2 検査行または §B-3 巻返し行を1件返れ。無ければ None。"""
+    """同一依頼NOの §B-2 検査行または §B-3 巻返し行を1件返す。無ければ None。"""
     tid = str(task_id or "").strip()
     if not tid:
         return None
@@ -13422,7 +13422,7 @@ def _roll_pipeline_inspection_task_row_for_tid(
 def _pipeline_b2_ec_roll_end_datetimes_sorted(
     task_queue: list, task_id: str
 ) -> list[datetime]:
-    """同一依頼の EC ロール確定ととの終了時刻を時系列で返れ（assigned_history の end_dt）。"""
+    """同一依頼の EC ロール確定時の終了時刻を時系列で返す（assigned_history の end_dt）。"""
     tid = str(task_id or "").strip()
     ends: list[datetime] = []
     if not tid:
@@ -13481,7 +13481,7 @@ def _pipeline_b2_team_history_names(team_cell) -> set[str]:
 def _pipeline_b2_assigned_member_names_nfkc_for_side(
     task_queue: list, task_id: str, *, ec_side: bool
 ) -> set[str]:
-    """同一依頼の EC 行または検査行の assigned_history に出た担当者坝（NFKC 集坈）。"""
+    """同一依頼の EC 行または検査行の assigned_history に出た担当者坝（NFKC 集合）。"""
     tid = str(task_id or "").strip()
     if not tid:
         return set()
@@ -13519,7 +13519,7 @@ def _filter_capable_members_b2_disjoint_teams(
     """
     §B-2 / §B-3 同一依頼では」EC 行に一度でも入った者は後続（検査＝巻返し）の候補から外し、
     後続に入った者は EC の候補から外れ。
-    （社内ルール: 担当者集坈を必う分ける。`PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` で無効化坯）
+    （社内ルール: 担当者集合を必う分ける。`PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS` で無効化坯）
     """
     if not capable_members:
         return capable_members
@@ -13573,11 +13573,11 @@ def _filter_capable_members_b2_disjoint_teams(
 
 def _exclusive_b1_inspection_holder_for_machine(task_queue, occupant_key: str):
     """
-    同一物睆機械（機械名ベースの占有キー）上で」§B-2 熱融着検査または §B-3 巻返しは **既に割付を開始** し残ロールは残る行はあれみ
-    しのタスク dict を1件返れ（なけれみ None）。
+    同一実機械（機械名ベースの占有キー）上で」§B-2 熱融着検査または §B-3 巻返しは **既に割付を開始** し残ロールは残る行はあれみ
+    しのタスク dict を1件返す（なければ None）。
 
-    パイプライン枠で後続を数ロールうつしか入れない設計のたゝ」枠ゼロの隙間に **別依頼** は坌も設備に入り」
-    結果_設備毎の時間割でタスク表示は途中で切り替ゝる事象を防し。占有中は当該物睆機械では他タスクを試行する。
+    パイプライン枠で後続を数ロールうつしか入れない設計のため、枠ゼロの隙間に **別依頼** は坌も設備に入り」
+    結果_設備毎の時間割でタスク表示は途中で切り替ゝる事象を防し。占有中は当該実機械では他タスクを試行する。
     """
     m = str(occupant_key or "").strip()
     if not m:
@@ -13644,7 +13644,7 @@ def _generate_plan_task_queue_sort_key(
     5. need シート左列ろど先（工程名+機械名列の佝置）
     6. 依頼NOタイブレーク（_task_id_same_machine_due_tiebreak_key）
 
-    _req_map / _need_rules は呼よ出し互換のたゝ残れ。
+    _req_map / _need_rules は呼び出し互換のため残す。
     """
     insp = bool(task.get("roll_pipeline_inspection"))
     rw = bool(task.get("roll_pipeline_rewind"))
@@ -13779,7 +13779,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
 ) -> None:
     """
     配台試行順の確定。シートに全行分の試行順はあれみしれを採用（§B-2/3 の隣接繰り上きは行ゝない）。
-    欠損はあれみ従来どよりマスタ・紝期・need 列順などでソートし、EC 隣接後に 1..n を付与。
+    欠損はあれみ従来どおりマスタ・紝期・need 列順などでソートし、EC 隣接後に 1..n を付与。
     """
     if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
         task_queue.sort(
@@ -13880,7 +13880,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
     """
     同一日・同一設備列キー・同一依頼NO の加工についで」設備時間割セル用の「補」表示文字列。
-    タイムライン上の坄ブロックの `sub` に睾れた補助者坝を和集坈し、昇順で ", " 連絝れる。
+    タイムライン上の坄ブロックの `sub` に睾れた補助者坝を和集合し、昇順で ", " 連絝れる。
     メンバー日程・占有計算に使うタイムラインの `sub` は変更しない（表示専用）。
     """
     acc: dict = defaultdict(set)
@@ -14199,7 +14199,7 @@ def _build_equipment_schedule_dataframe(
 
 
 def _machine_display_key_for_equipment(eq: str) -> str:
-    """skills 列キー「工程+機械」から機械名表示キーを得る（針複時は複坈キーごとに別列）。"""
+    """skills 列キー「工程+機械」から機械名表示キーを得る（重複時は複坈キーごとに別列）。"""
     s = str(eq).strip()
     if "+" in s:
         mpart = s.split("+", 1)[1].strip()
@@ -14215,14 +14215,14 @@ def _build_equipment_schedule_by_machine_name_dataframe(
 ) -> "pd.DataFrame":
     """
     機械名短縮に列をまとめ」坄 10 分枠で占有中の依頼NO（複数時は「＝」）を表示れる。
-    列見出しは機械名のみ（工程+機械の複坈キーは付けない）。同一物睆機械は占有キーで1列に集約れる。
+    列見出しは機械名のみ（工程+機械の複坈キーは付けない）。同一実機械は占有キーで1列に集約れる。
     """
     timeline_for_eq_grid = _expand_timeline_events_for_equipment_grid(timeline_events)
     events_by_date = defaultdict(list)
     for e in timeline_for_eq_grid:
         events_by_date[e["date"]].append(e)
 
-    # 占有キー（機械名坴・正覝化）ごとに1列。見出しは equipment_list 初出の機械名表示のみ。
+    # 占有キー（機械名ベース・正規化）ごとに1列。見出しは equipment_list 初出の機械名表示のみ。
     occ_key_to_header: dict[str, str] = {}
     machine_cols: list[str] = []
     eq_to_mcol: dict[str, str] = {}
@@ -14310,7 +14310,7 @@ def _day_schedule_task_sort_key(
     同一日内の割付試行順（STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0 の主ループ用）。
     先頭キーは _generate_plan_task_queue_sort_key と同じ趣旨（加工途中・紝期基準 due_basis_date・§B 段・b2_queue_sub・need 列順・依頼NO）。
     続けて §B-1 の配台試行順繰り上き」工程 rank」dispatch_trial_order」§B-2 段内 EC 先行」優先度」結果用キー。
-    同一物睆機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制れる。
+    同一実機械上の隙間割り込みは _equipment_line_lower_dispatch_trial_still_pending で試行順を強制れる。
     STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT=1 のときは _task_blocked_by_global_dispatch_trial_order は
     より尝さい試行順の未完了を跨いて割り込みを別途ブロックれる。
     """
@@ -14396,16 +14396,16 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     assign_probe_ctx: dict | None = None,
 ) -> bool:
     """
-    同一物睆機械（machine 占有キー）上で」より尝さい配台試行順の行はまて残針を挝つか。
-    machine_avail_dt はポャンク間の隙間に後続試行順は入り込ゝるたゝ」ここで順庝を強制れる。
+    同一実機械（machine 占有キー）上で」より尝さい配台試行順の行はまて残量を挝つか。
+    machine_avail_dt はポャンク間の隙間に後続試行順は入り込ゝるため、ここで順庝を強制れる。
     設備を跨いて試行順の剝後は _task_blocked_by_global_dispatch_trial_order で別途制御れる。
 
-    キュー先頭に残針はあるの値ではブロックしない。tasks_today と同様に
-    start_date_req <= current_date の行の値を「先試行順の競坈」とみなれ。
+    キュー先頭に残量はあるの値ではブロックしない。tasks_today と同様に
+    start_date_req <= current_date の行の値を「先試行順の競坈」とみなす。
     （まて開始日に靔していない行は全日ブロッカーになり」後続はろれ配台試行になるのを防し。）
 
     より尝さい試行順の行は **同一依頼の剝工程待う等でまて割付試行**なとしは「競坈の残」とみなさない。
-    （当該行は eligible にも入らないたゝ」ここで待たせると後続試行順は同一設備で永久坜止し得る。）
+    （当該行は eligible にも入らないため、ここで待たせると後続試行順は同一設備で永久坜止し得る。）
 
     より尝さい試行順の行は **当日の機械カレンダーの値で計画窓を全日占有**（しの設備は当日スロットゼロ）なら
     「競坈の残」とみなさない（グローバル試行順とあゝせで他設備は全日止まるのを防し）。
@@ -14474,7 +14474,7 @@ def _min_pending_dispatch_trial_order_for_date(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
 ) -> int | None:
     """
-    start_date_req <= current_date かつ残針ありのタスクの配台試行順の最尝値。
+    start_date_req <= current_date かつ残量ありのタスクの配台試行順の最尝値。
     _equipment_line_lower_dispatch_trial_still_pending と同様」まて開始日に靔していない行は
     「先行試行順の競坈」に坫ゝない。
 
@@ -14484,7 +14484,7 @@ def _min_pending_dispatch_trial_order_for_date(
     循環して永久に動けない。
     - `_task_not_yet_schedulable_due_to_dependency_or_b2_room` は True の行
     - （daily_status・members は渡るとし）当日機械カレンダーの値で計画窓全日占有の行
-    - （machine_avail_dt 等は渡るとし）設備壝時計は計画終端以上で当日スロットなしの行
+    - （machine_avail_dt 等は渡るとし）設備タイムラインは計画終端以上で当日スロットなしの行
 
     1 ロール割当プローブによる除外は行ゝない（`_effective_min_dispatch_trial_order_from_pool` 坴で層ごとに判定）。
     """
@@ -14800,7 +14800,7 @@ def load_machine_calendar_occupancy_blocks(
     equipment_list: list,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該 1 時間スロット占有とみなれ。
+    master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該 1 時間スロット占有とみなす。
     戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
     """
     if not master_path or not os.path.isfile(master_path):
@@ -14951,7 +14951,7 @@ def _machine_calendar_blocks_for_occ_key(
     day_blocks: dict[str, list[tuple[datetime, datetime]]],
     occ: str,
 ) -> list[tuple[datetime, datetime]] | None:
-    """day_blocks から占有キー（表記ゆらね許容）に一致れる区間リストを得る。"""
+    """day_blocks から占有キー（表記ゆらね許容）に一致する区間リストを得る。"""
     o = str(occ or "").strip()
     if not o or not day_blocks:
         return None
@@ -15032,7 +15032,7 @@ def _task_no_machining_window_left_from_avail_floor(
     （生の machine_avail の値ではポャンジオーポー後の下限は欠け」候補や min_dto は狂ごのを防し）。
     また空し下限は終端より版でも」計画窓での **残り連続は 1 ロール分に足りない**
     と判断でしる場合は True（実僝丝足デッドロック防止）。
-    カレンダー区間照坈のキー坖りこれしを防し。
+    カレンダー区間照合のキー坖りこれしを防し。
     """
     if (
         daily_status is None
@@ -15169,12 +15169,12 @@ def load_machine_changeover_settings(
       - 「設定_依頼切替前後時間」… 工程名・機械名・準備分・後始末分（1 行目見出し、2 行目以降データ）
       - 「設定_機械_日次始業準備」… 機械名・日次始業準備分
 
-    依頼NO（タスク）は同一物睆機械上で切り替ゝるとし」直後ブロックの後始末→当該ブロックの準備を
+    依頼NO（タスク）は同一実機械上で切り替ゝるとし」直後ブロックの後始末→当該ブロックの準備を
     設備空し下限に加算れる。同一依頼NOの連続ロールの間には加算しない。
     日次始業準備は」同一カレンダ日で当該機械の先頭ロールにのみ加算れる。
 
-    戻り: (設備行キー「工程+機械」よよよ正覝化キー -> (準備分, 後始末分),
-          機械名よよよ正覝化キー -> 始業準備分)
+    戻り: (設備行キー「工程+機械」よよよ正規化キー -> (準備分, 後始末分),
+          機械名よよよ正規化キー -> 始業準備分)
     """
     changeover: dict[str, tuple[int, int]] = {}
     startup: dict[str, int] = {}
@@ -15891,9 +15891,9 @@ def _machine_effective_floor_for_assign(
     machine_proc: str | None = None,
 ) -> datetime:
     """
-    設備の壝時計によける「当該ロールの加工開始」以降の下限。
+    設備のタイムラインによける「当該ロールの加工開始」以降の下限。
     daily_status・skills_dict・current_date は权ごとしは」skills 革坈 OP の勤務・休憩に沿って
-    日次始業・後始末・準備を forward した最早加工開始。权ゝないとしは分の壝時計加算にフォールポック。
+    日次始業・後始末・準備を forward した最早加工開始。权ゝないとしは分のタイムライン加算にフォールバック。
     """
     if abolish_limits:
         return machine_day_floor
@@ -16144,7 +16144,7 @@ def _append_changeover_segments_to_timeline(
 
 def _collect_task_ids_missed_deadline_after_day(task_queue: list, current_date: date) -> set:
     """
-    当該日の終了時点で」紝期基準日（当日含む）以降なのに残針は残る依頼NO。
+    当該日の終了時点で」紝期基準日（当日含む）以降なのに残量は残る依頼NO。
     「紝期日内に完靂でしなかった」= 後ゝ倒し再試行の候補。
     """
     out = set()
@@ -16251,9 +16251,9 @@ def _trial_order_flow_day_start_floor(
 ) -> datetime:
     """原板投入日を起点に」しの日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
-    # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるたゝ」
+    # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるため、
     # 原板投入日（=同日13:00以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
-    # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整坈を得る。
+    # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を得る。
     _tid_floor = str(task.get("task_id", "") or "").strip()
     is_b2_follower_delayed = bool(
         (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
@@ -16325,7 +16325,7 @@ def _trial_order_flow_eligible_tasks(
             min_dispatch_effective=min_dispatch_effective,
         ):
             continue
-        # min_dto から全日カレンダー占有は除外済みでも」同日試行順の「ブロック」は my_o>m のみのたゝ
+        # min_dto から全日カレンダー占有は除外済みでも」同日試行順の「ブロック」は my_o>m のみのため、
         # 試行順=min の占有行は残り」他試行順は永久坜止し得る。当日スロットゼロの行は候補外にれる。
         if daily_status is not None and members is not None:
             if _task_fully_machine_calendar_blocked_on_date(
@@ -16397,7 +16397,7 @@ def _combo_preset_team_size_bounds(
 ) -> tuple[int, int] | None:
     """
     組み合わせ表プリセット1行の人数範囲 (lo, hi)。need の基本人数よりシート坴を優先れる。
-    - 必須人数列は正のときはメンバー列の人数と一致れること。
+    - 必須人数列は正のときはメンバー列の人数と一致すること。
     - hi は need の上限と実人数の大しい方（プリセットは need より少人数でも採用可能）。
     """
     nmem = len(preset_team)
@@ -16646,7 +16646,7 @@ def _assign_one_roll_trial_order_flow(
     """
     1ロール分の最良フォームを決定れる。設備空し・日開始下限を team_start に織り込む。
     preferred_team は与ごられ」かつ「同一日内の直後ロール」として成立れれみ」
-    組み合わせ探索より優先して採用れる（翌日には挝う越さない）。
+    組み合わせ探索より優先して採用する（翌日には挝う越さない）。
     戻り値: team(tuple), start_dt, end_dt, breaks, eff, op, eff_time_per_unit, extra_max, rq_base, need_src_line, extra_src_line, machine, machine_name, eq_line, req_num, max_team_size
     """
     machine = task["machine"]
@@ -16751,7 +16751,7 @@ def _assign_one_roll_trial_order_flow(
         _nfix = len(fixed_team_anchor)
         if _nfix > req_num:
             need_src_line = (need_src_line + " → ") if need_src_line else ""
-            need_src_line += f"グローバル(日付×工程)指坝で最低{_nfix}人"
+            need_src_line += f"グローバル(日付×工程)指定で最低{_nfix}人"
         req_num = max(req_num, _nfix)
 
     extra_max_sheet, extra_src_line = resolve_need_surplus_extra_max_explain(
@@ -16996,7 +16996,7 @@ def _assign_one_roll_trial_order_flow(
         )
         if _contig < work_mins_needed:
             _trace_assign(
-                "候補坴下: 休憩またねのたゝ連続実僝丝足 team=%s contiguous_min=%s need_mins=%s start=%s",
+                "候補坴下: 休憩またねのため、連続実僝丝足 team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
                 _contig,
                 work_mins_needed,
@@ -17138,7 +17138,7 @@ def _assign_one_roll_trial_order_flow(
         ):
             if tsize == 1:
                 _trace_assign(
-                    "候補固定: 担当OP指坝=%s のたゝ 1人フォームは当人のみ試行",
+                    "候補固定: 担当OP指定=%s のため、 1人フォームは当人のみ試行",
                     pref_mem,
                 )
             others = [m for m in capable_members if m != pref_mem]
@@ -17184,9 +17184,9 @@ def _assign_one_roll_trial_order_flow(
             logging.warning(
                 "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でフォーム候補は0件。"
                 "スキル革坈(OP/AS)は %s 人いしたは」設備の加工開始下限=%s は"
-                "当日の担当候補の退勤(%s)以降のたゝこの日は割当でしません。"
+                "当日の担当候補の退勤(%s)以降のため、この日は割当でしません。"
                 "master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」"
-                "または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してしてさい"
+                "または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください"
                 "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
                 "参考: changeover剝の設備空し下限=%s 占有キー=%s",
                 task.get("task_id"),
@@ -17275,7 +17275,7 @@ def _trial_order_assign_probe_fails(
         )
     except Exception as ex:
         logging.warning(
-            "trial_order_assign_probe 例外のたゝ当該行は除外しない: task=%s err=%s",
+            "trial_order_assign_probe 例外のため、当該行は除外しない: task=%s err=%s",
             task.get("task_id"),
             ex,
         )
@@ -17337,7 +17337,7 @@ def _effective_min_dispatch_trial_order_from_pool(
     pool を昇順 dto で見で」**しの dto に属れる行のごう 1 件でも** 1 ロール割当プローブは通れみ
     しの dto を「実効の最尝試行順」とれる。
     先頭 dto 層は全滅（機械は空いでいるは人で穝ゝない等）のとき」次の dto に進みグローバル坜止を防し。
-    プローブ無しのときは pool の最尝 dto を返れ。
+    プローブ無しのときは pool の最尝 dto を返す。
     """
     if not pool:
         return None
@@ -17391,15 +17391,15 @@ def _trial_order_first_schedule_pass(
     **`_drain_rolls_for_task`** し、**フェーズ2**は §B-2 検査＝§B-3 巻返し行のみ（**同一依頼の EC は全日で完走した後**に陝り候補化。
     EC 残はある日は `_trial_order_flow_eligible_tasks` で後続を外し、翌稼働日以降も EC のみ剝進れる。
     カレンダー通算で EC 完走後」`_run_b2_inspection_rewind_pass` は日付先頭から後続の値再走査れる）。
-    EC と後続を **同一担当者で** 交互に詰ゝると EC はブロックされるたゝ」従来はフェーズ1を先に詰ゝた。
-    として後続は候補化した時点で **検査とともに物睆機械**のフェーズ1や **同一依頼の EC** は全日先に進むと」
+    EC と後続を **同一担当者で** 交互に詰ゝると EC はブロックされるため、従来はフェーズ1を先に詰ゝた。
+    として後続は候補化した時点で **検査とともに実機械**のフェーズ1や **同一依頼の EC** は全日先に進むと」
     検査は `start_ge_end_initial`（設備空しは終業より後）で全日失敗する。§B-2/§B-3 後続はあるとしは
     「同一依頼EC・検査機と機械共有れるフェーズ1・後続」を **配台試行順**でマージし、
     坌順では **後続を EC より先に**」**しの他のフェーズ1** とあゝせで **配台試行順**で整列し
     **最大1ロールうつ**の値周回れる（マージ・rest とも一括ドレインしない。検査OPは他工程に
     同日坖り切られ start_ge_end_initial になるのを防し）。
     リワインド坴の後続行は坄ロールについで `_roll_pipeline_inspection_assign_room` よよよ
-    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整坈れる。
+    `_roll_pipeline_b2_inspection_ec_completion_floor_dt`（EC ロール終了時刻下限）で整合する。
     試行順最尝の行の値は当日入らない場合でも」**坌もフェーズ内で次の試行順へ進み**他設備を埋ゝる。
     機械・人の空しはロールごとに更新れる（⑦⑧）。
     """
@@ -17744,7 +17744,7 @@ def _trial_order_first_schedule_pass(
             phase1_rest.append(t)
 
     def _b2_merged_sort_key(t: dict) -> tuple:
-        # 坌も配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着の壝時計を
+        # 坌も配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着のタイムラインを
         # 同日早い段階で坖りに行し（§B-2 担当者分離で EC と検査は別メンバー想定）。
         _fol = bool(
             t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
@@ -17970,7 +17970,7 @@ def append_surplus_staff_after_main_dispatch(
 ) -> int:
     """
     need「配台時追加人数＝余力時追加人数」行の上限まで」メイン割付で採用ししれなかった枠を追記れる。
-    坄タイムラインブロックについで」しの時間帯に他ブロックへ未坂加（区間針なりなし）で
+    坄タイムラインブロックについで」しの時間帯に他ブロックへ未坂加（区間重なりなし）で
     eligible かつ OP/AS スキルの者をサブに追加れる。
     日次始業・後始末時間・準備時間（event_kind は加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
     """
@@ -18280,7 +18280,7 @@ def _generate_plan_impl():
         logging.error(
             "段階2を中断しました: メンバーは0人です（マスタの skills は空」または読み込み失敗）。"
             " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置し」"
-            "planning_core のカレントはしのフォルダになるよご python\\ 配置を確認してしてさい。"
+            "planning_core のカレントはしのフォルダになるよご python\\ 配置を確認してください。"
             " この状態では production_plan / member_schedule は出力されません。",
             master_abs,
             os.getcwd(),
@@ -18296,7 +18296,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "機械カレンダー: 読込例外のたゝ占有なしとして続行しした (%s)", e
+            "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
     try:
@@ -18308,7 +18308,7 @@ def _generate_plan_impl():
         )
     except Exception as e:
         logging.warning(
-            "機械準備/依頼切替・日次始業設定: 読込例外のたゝ無視しした (%s)", e
+            "機械準備/依頼切替・日次始業設定: 読込例外のため、無視しした (%s)", e
         )
         _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
@@ -18324,7 +18324,7 @@ def _generate_plan_impl():
                 _rs_a15.strftime("%H:%M"),
             )
     except Exception as e:
-        logging.warning("定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールポック (%s)", e)
+        logging.warning("定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e)
         _STAGE2_REGULAR_SHIFT_START = None
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
@@ -18397,7 +18397,7 @@ def _generate_plan_impl():
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
-    # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→坖り込み後に編集）
+    # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
     try:
         tasks_df = load_planning_tasks_df()
     except Exception as e:
@@ -18422,7 +18422,7 @@ def _generate_plan_impl():
         )
         if _n_tasks_after == 0:
             logging.error(
-                "デバッグ配台: B3以降の依頼NOに一致れる行はありません。段階2を中断しした。"
+                "デバッグ配台: B3以降の依頼NOに一致する行はありません。段階2を中断しした。"
             )
             _try_write_main_sheet_gemini_usage_summary("段階2")
             return
@@ -18507,7 +18507,7 @@ def _generate_plan_impl():
     if not task_queue:
         logging.warning(
             f"有効なタスクはありません。「{PLAN_INPUT_SHEET_NAME}」の「依頼NO」「工程名」「残作数値」」"
-            "または完了区分・実出来高残作により残針は無い行のみの可能性はありした。"
+            "または完了区分・実出来高残作により残量は無い行のみの可能性はありした。"
         )
 
     # 配台試行順: シート列は权っていれみしれを採用。欠損時は §B 帯・紝期・need 列順でソートし EC 隣接後に 1..n
@@ -18532,7 +18532,7 @@ def _generate_plan_impl():
                 t0.get("has_special_remark"),
             )
         else:
-            logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残針0/依頼NO丝一致の可能性）。", DEBUG_TASK_ID)
+            logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", DEBUG_TASK_ID)
     timeline_events = []
 
     # ---------------------------------------------------------
@@ -18540,7 +18540,7 @@ def _generate_plan_impl():
     # STAGE2_EXTEND_ATTENDANCE_CALENDAR は True のときのみ」残タスクはあれみ勤怠を日付複製で拡張。
     # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING は True のときのみ: 紝期基準を靎ねでも残はある依頼についで
     # due_basis +1・当該依頼の割当戻し・先頭から再実行。坄再試行剝に勤怠拡張分はマスタ日付へ巻し戻れ。
-    # 既定 False のたゝ通常は 1 パス（カレンダー通し 1 回）のみ。
+    # 既定 False のため、通常は 1 パス（カレンダー通し 1 回）のみ。
     # ---------------------------------------------------------
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
@@ -18562,7 +18562,7 @@ def _generate_plan_impl():
     if STAGE2_SERIAL_DISPATCH_BY_TASK_ID:
         logging.info(
             "依頼NO直列配台: 有効（STAGE2_SERIAL_DISPATCH_BY_TASK_ID）。"
-            " 坄日はアクティブな依頼NOの行の値は候補のたゝ」当該依頼は詰まると他依頼は一切進みません。"
+            " 坄日はアクティブな依頼NOの行の値は候補のため、当該依頼は詰まると他依頼は一切進みません。"
         )
     else:
         logging.info(
@@ -18630,7 +18630,7 @@ def _generate_plan_impl():
                 )
 
             if not avail_dt:
-                logging.info("DEBUG[day=%s] 稼働メンバー0のたゝ割付スキップ", current_date)
+                logging.info("DEBUG[day=%s] 稼働メンバー0のため、割付スキップ", current_date)
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -18993,7 +18993,7 @@ def _generate_plan_impl():
                             ) + "メイン上書ignore_need_minimumでreq=1"
     
                         # メンバー×設備スキル（parse_op_as_skill_cell: 尝さい優先度ろど先にフォーム候補へ採用）
-                        # skills 読込時に「機械名」坘独キーへエイリアスれるたゝ」工程名+機械名は両方ある行では
+                        # skills 読込時に「機械名」独立キーへエイリアスれるため、工程名+機械名は両方ある行では
                         # 複坈キー「工程名+機械名」のみを見る（別工程の坌坝機械の OP は浝れ込まないよごにれる）。
                         skill_meta_cache = {}
                         _gpo = global_priority_override
@@ -19051,7 +19051,7 @@ def _generate_plan_impl():
                         )
                         if pref_raw and pref_mem is None and op_today:
                             logging.info(
-                                "担当OP指坝: 当日のOP候補に一致せう制約なし task=%s raw=%r",
+                                "担当OP指定: 当日のOP候補に一致せう制約なし task=%s raw=%r",
                                 task.get("task_id"),
                                 pref_raw,
                             )
@@ -19085,7 +19085,7 @@ def _generate_plan_impl():
                                     else ""
                                 )
                                 need_src_line += (
-                                    f"グローバル(日付×工程)指坝で最低{_nfix}人"
+                                    f"グローバル(日付×工程)指定で最低{_nfix}人"
                                 )
                             req_num = max(req_num, _nfix)
     
@@ -19274,7 +19274,7 @@ def _generate_plan_impl():
                                     ]
                                 else:
                                     logging.info(
-                                        "担当OP指坝: フォーム人数を満たせないたゝ指坝を無視 task=%s size=%s raw=%r",
+                                        "担当OP指定: フォーム人数を満たせないため、指定を無視 task=%s size=%s raw=%r",
                                         task.get("task_id"),
                                         tsize,
                                         pref_raw,
@@ -19628,7 +19628,7 @@ def _generate_plan_impl():
                             rem_u_before = math.ceil(task['remaining_units'])
                             already_done = total_u - rem_u_before
                             
-                            # 「マクロ実行時点」の完了率（予定の進杗ではなし」実加工数ベース）
+                            # 「マクロ実行時点」の完了率（予定の進杗ではなく」実加工数ベース）
                             try:
                                 tot_qty = parse_float_safe(task.get('total_qty_m'), 0.0)
                                 done_qty = parse_float_safe(task.get('done_qty_reported'), 0.0)
@@ -19938,7 +19938,7 @@ def _generate_plan_impl():
                                 _due_shift_cap_warned_tids.add(tid)
                             if _first_cap_warn:
                                 logging.warning(
-                                    "紝期後ゝ倒し再配台: 次の依頼NOは依頼ととの上限（坄 %s 回）のたゝこの検出では +1 しません。"
+                                    "紝期後ゝ倒し再配台: 次の依頼NOは依頼ごとの上限（坄 %s 回）のため、この検出では +1 しません。"
                                     " カレンダーは継続しした（未完了は終了時に紝期見直し必須を付け得した）: %s",
                                     STAGE2_RETRY_SHIFT_DUE_MAX_ROUNDS,
                                     ",".join(_cap_tids),
@@ -20062,7 +20062,7 @@ def _generate_plan_impl():
         )
         if _n_sur:
             logging.info(
-                "need余力: メイン割付完了後にサブ %s 坝を追記（未割当×スキル・時間針なりなし）",
+                "need余力: メイン割付完了後にサブ %s 坝を追記（未割当×スキル・時間重なりなし）",
                 _n_sur,
             )
 
@@ -20254,7 +20254,7 @@ def _generate_plan_impl():
             "タスク効率": parse_float_safe(t.get("task_eff_factor"), 1.0),
             "加工途中": "はい" if t.get("in_progress") else "いいえ",
             "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
-            "担当OP指坝": (t.get("preferred_operator_raw") or "")[:120],
+            "担当OP指定": (t.get("preferred_operator_raw") or "")[:120],
             "回答納期": ans_s,
             "指定納期": spec_s,
             "計画基準納期": basis_s,
@@ -20264,8 +20264,8 @@ def _generate_plan_impl():
             "配台済_加工開始": plan_assign_start_s,
             "配台済_加工終了": plan_assign_end_s,
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16: _plan_end_ans_spec16,
-            "緝加工針": f"{total_r}R ({t['total_qty_m']}m)",
-            "残加工針": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
+            "累計加工量": f"{total_r}R ({t['total_qty_m']}m)",
+            "残加工量": f"{rem_r}R ({int(t['remaining_units'] * t['unit_m'])}m)",
             "完了率(実行時点)": f"{pct_macro}%",
         }
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
@@ -20295,7 +20295,7 @@ def _generate_plan_impl():
     utilization_data = []
     for d in sorted_dates:
         row_data = {"年月日": d.strftime("%Y/%m/%d (%a)")}
-        # しの日のイベントからメンバー別作業分を一括集計（全メンバー×全イベントの二針ループを避ける）
+        # しの日のイベントからメンバー別作業分を一括集計（全メンバー×全イベントの二重ループを避ける）
         member_worked_mins = defaultdict(int)
         for ev in events_by_date[d]:
             mins = get_actual_work_minutes(ev["start_dt"], ev["end_dt"], ev["breaks"])
@@ -20511,7 +20511,7 @@ def _generate_plan_impl():
     except OSError as e:
         logging.error(
             "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
-            "output 内の production_plan_multi_day_*.xlsx を Excel で開いでいないか確認してしてさい。",
+            "output 内の production_plan_multi_day_*.xlsx を Excel で開いでいないか確認してください。",
             output_filename,
             e,
         )
@@ -20540,7 +20540,7 @@ def _generate_plan_impl():
         output_dir, f"member_schedule_{_stage2_out_stamp}.xlsx"
     )
     
-    # 時間帯は全メンバー共通で1回の値生成（メンバー数分の針複計算を避ける）
+    # 時間帯は全メンバー共通で1回の値生成（メンバー数分の重複計算を避ける）
     time_labels = []
     time_grids = []
     curr_dt = datetime.combine(run_date, DEFAULT_START_TIME)
@@ -20619,7 +20619,7 @@ def _generate_plan_impl():
                 df_m = df_m[[c for c in cols if c in df_m.columns]]
                 df_m.to_excel(member_writer, sheet_name=m, index=False)
             
-                # --- 既定フォント・罫線・見出し背景（列幅は VBA 坖り込み時の AutoFit） ---
+                # --- 既定フォント・罫線・見出し背景（列幅は VBA 取り込み時の AutoFit） ---
                 worksheet = member_writer.sheets[m]
                 _apply_output_font_to_result_sheet(worksheet)
                 header_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
@@ -20634,7 +20634,7 @@ def _generate_plan_impl():
     except OSError as e:
         logging.error(
             "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
-            "member_schedule_*.xlsx を Excel で開いでいないか確認してしてさい。",
+            "member_schedule_*.xlsx を Excel で開いでいないか確認してください。",
             member_output_filename,
             e,
         )
