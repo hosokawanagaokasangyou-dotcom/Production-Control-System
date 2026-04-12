@@ -2778,12 +2778,14 @@ def _gemini_generate_content_with_retry(
 def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     """
     製品名に混ざる寸法区切りを ASCII の x に寄せる。
+    先に NFKC で互換分解（全角英数字・互換記号など）を寄せ、列名 `_align_dataframe_headers_to_canonical`
+    と同趣旨に Excel 由来の表記ゆれを弱める。
     半角 X/x 以外（×・全角Ｘｘ・罫線系の乗号）だけがあると正規表現に一致せず、
     換算数量フォールバックでロール単位長さが誤ることがある。
     """
     if not s:
         return s
-    t = s
+    t = unicodedata.normalize("NFKC", s)
     for ch in (
         "\u00d7",  # × MULTIPLICATION SIGN
         "\u2715",  # ✕ MULTIPLICATION X
