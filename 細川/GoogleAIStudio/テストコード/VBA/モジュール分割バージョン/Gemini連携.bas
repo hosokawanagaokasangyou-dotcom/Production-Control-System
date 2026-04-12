@@ -1668,9 +1668,8 @@ NextLine:
         ws.Range(ws.Cells(outRow, 1), ws.Cells(lastOld, 3)).ClearContents
     End If
 
-    ws.Columns(1).ColumnWidth = 28
-    ws.Columns(2).ColumnWidth = 14
-    ws.Columns(3).ColumnWidth = 52
+    ws.Columns("A:C").AutoFit
+    ws.Columns(2).ColumnWidth = 27
 
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevScreen
