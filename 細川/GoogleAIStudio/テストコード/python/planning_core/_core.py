@@ -1575,44 +1575,63 @@ def _debug_emit_2c0acb(
     hypothesis_id: str, message: str, data: dict, run_id: str = "pre"
 ) -> None:
     """#region agent log — debug session 2c0acb（ガント 13:50 枠欠落調査）"""
+    _line = (
+        json.dumps(
+            {
+                "sessionId": "2c0acb",
+                "runId": run_id,
+                "hypothesisId": hypothesis_id,
+                "location": "planning_core._core",
+                "message": message,
+                "data": data,
+                "timestamp": int(time_module.time() * 1000),
+            },
+            ensure_ascii=False,
+        )
+        + "\n"
+    )
+    _paths = []
     try:
         _root = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
         )
-        _p = os.path.join(_root, "debug-2c0acb.log")
-        with open(_p, "a", encoding="utf-8") as _af:
-            _af.write(
-                json.dumps(
-                    {
-                        "sessionId": "2c0acb",
-                        "runId": run_id,
-                        "hypothesisId": hypothesis_id,
-                        "location": "planning_core._core",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+        _paths.append(os.path.join(_root, "debug-2c0acb.log"))
     except Exception:
         pass
+    try:
+        if log_dir:
+            _paths.append(os.path.join(log_dir, "debug-2c0acb.log"))
+    except Exception:
+        pass
+    for _p in _paths:
+        try:
+            with open(_p, "a", encoding="utf-8") as _af:
+                _af.write(_line)
+        except Exception:
+            pass
 
 
-def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
-    """スロット中央時刻によける1マス分の状態。('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)"""
+def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
+    """
+    10 分枠 [slot_start, slot_end) の 1 マス分の状態。
+    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)
+
+    結果_設備毎の時間割・結果_設備毎の時間割_機械名毎（``_build_equipment_schedule_*``）と同様に、
+    枠と重なるイベントの選定に ``_eq_grid_best_overlapping_event_for_cell``、
+    休憩判定の参照時刻に ``_eq_grid_overlap_sample_t``（枠∩イベント区間の中点）を用いる。
+    従来の「枠中点を含む最初のイベント」のみを見る方式では、準備と加工が重なる枠で
+    時間割は加工を出すのにガントが準備側へ寄り、依頼NO シェイプが欠けることがあった。
+    """
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
-    active = None
-    for e in evlist:
-        if e["start_dt"] <= slot_mid < e["end_dt"]:
-            active = e
-            break
+    slot_end = slot_start + timedelta(minutes=float(slot_mins))
+    slot_mid = slot_start + timedelta(minutes=float(slot_mins) / 2.0)
+    active = _eq_grid_best_overlapping_event_for_cell(evlist, slot_start, slot_end)
     if active is None:
         return ("idle",)
     if _timeline_event_kind(active) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
         return ("daily_startup", _gantt_daily_startup_fill_hex())
-    if any(b_s <= slot_mid < b_e for b_s, b_e in active.get("breaks") or ()):
+    sample_t = _eq_grid_overlap_sample_t(active, slot_start, slot_end, slot_mid)
+    if any(b_s <= sample_t < b_e for b_s, b_e in active.get("breaks") or ()):
         return ("break",)
     tid = str(active["task_id"])
     gh = fill_fn(active["task_id"])
@@ -1674,8 +1693,7 @@ def _paint_gantt_timeline_row_merged(
     n_slots = len(slots)
     states = []
     for slot_start in slots:
-        mid = slot_start + timedelta(minutes=slot_mins / 2)
-        states.append(_gantt_slot_state_tuple(evlist, mid, task_fill_fn))
+        states.append(_gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn))
     tcol0 = n_fixed + 1
     # #region agent log
     _k13 = None
