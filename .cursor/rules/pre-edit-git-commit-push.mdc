@@ -60,7 +60,3 @@ alwaysApply: true
 ※ Cursor の Generate は主に **リポジトリ直下の `.cursorrules`** でも同趣旨の要点を参照する。
 
 （チャット先頭 300 文字ルールの対象は **このファイルの「変更前ローカルコミット」手順**に限る。Generate は上記日本語ルール。）
-
-## 既存ルールとの関係
-
-- **配台ロジックを変更したターン**で対象範囲・正本を確認するときは **`.cursor/rules/dispatch-docs-sync.mdc`** を参照する。

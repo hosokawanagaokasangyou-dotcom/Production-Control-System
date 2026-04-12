@@ -312,7 +312,7 @@
   <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">
     <h2 id="h-doc-sync">ソース変更時のドキュメント同期（開発）</h2>
     <p><span class="file">python/planning_core/_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
-    <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。同趣旨の要約はリポジトリ直下 <span class="file">.cursorrules</span> にもあります。</p>
+    <p>Cursor 運用: リポジトリ直下 <span class="file">.cursorrules</span>、およびテストコード配下の Markdown 編集時の HTML ペア同期 <span class="file">.cursor/rules/md-paired-html-sync.mdc</span> を参照してください。</p>
     <p><strong>作業ディレクトリ</strong>: 環境変数 <code>TASK_INPUT_WORKBOOK</code> があるときはそのブックのフォルダへ <code>chdir</code> し、<code>log/</code>・<code>output/</code> を VBA のブック配置と揃える。未設定時は <code>python</code> の親フォルダ基準（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
     <p><strong>段階2の output</strong>: 実行前に <code>production_plan_multi_day_*.xlsx</code> と <code>member_schedule_*.xlsx</code> を削除しようとします。<strong>Excel で開いたまま</strong>だと削除・保存に失敗しうるので閉じてから実行。削除は短いリトライし、残ったファイルは ERROR ログに列挙。ファイル名の時刻はマイクロ秒まで含め衝突を避ける。設備ガント生成は重く、ログが止まって見えることがある（詳細は <span class="file">配台ルール.md</span> セクション8）。<strong>マクロブック取り込み</strong>では、出力 xlsx の各シートについて<strong>同名および番号付き複製</strong>（半角・全角の括弧・スペースの違いを含む）をコピー前に削除し、<code>TEMP_設備毎の時間割</code> や <code>ブロックテーブル</code> の重複を掃除する（VBA は <span class="file">生産管理_AI配台テスト_xlsm_VBA.txt</span> の <code>シート名は計画取込の同源名またはExcel番号付き複製か</code> を参照）。</p>
     <p><strong>計画ブックに追加されるシート</strong>（<code>production_plan_multi_day_*.xlsx</code>）:</p>
