@@ -6169,7 +6169,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
-    依頼NOは中央のメインシェイプ、担当者姓はその直上に小さな角丸チップ 1 つ（member_labels を全角空白区切りで結合）で表示する。
+    依頼NOは中央のメインシェイプ（結合幅が 1 スロットでも、タイムライン 1 列幅の 2 倍を下限とし文字潰れを抑える）。
+    担当者姓はその直上に小さな角丸チップ 1 つ（member_labels を全角空白区切りで結合）で表示する。
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
     成功時 True。xlwings / Excel 不可時は False。
     """
@@ -6461,9 +6462,16 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 continue
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
-            # 依頼NO シェイプ幅は結合セル矩形を超えないこと（max(w, min_w) だと狭い帯が隣セルへ
-            # はみ出し、時間重なりのないタスク同士でもシェイプが重なる）。
-            label_w = float(w)
+            # 依頼NO メインシェイプ: 1 スロット幅だけのとき文字が潰れるため、10 分 1 列の幅の 2 倍を確保する
+            # （隣スロット上にはみ出すが、結合が複数列なら結合幅のまま）。
+            try:
+                slot_w = float(sht.range((row, col_s), (row, col_s)).width)
+            except Exception:
+                slot_w = 0.0
+            if slot_w <= 0.0:
+                _ns0 = max(1, int(col_e) - int(col_s) + 1)
+                slot_w = float(w) / float(_ns0)
+            label_w = max(float(w), 2.0 * float(slot_w))
             # #region agent log
             _gantt_dbg_max_label_minus_w = max(
                 _gantt_dbg_max_label_minus_w, float(label_w) - float(w)
