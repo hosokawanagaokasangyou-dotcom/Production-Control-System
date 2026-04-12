@@ -5807,15 +5807,64 @@ def _gantt_flatten_copy_picture_format_xlw(use_chroma_backdrop: bool) -> int:
     return -4147 if use_chroma_backdrop else 2
 
 
+def _gantt_clipboard_picture_from_shape_names_xlw(
+    api_ws,
+    group_names: tuple[str, ...],
+    *,
+    copy_format: int,
+    xl_screen: int = 1,
+) -> tuple[object, float, float, float, float]:
+    """
+    ラベル等の図形を「1 枚の画像」に置き換える Excel 標準フロー（クリップボード経由）。
+
+    1. 名前が複数なら ``Shapes.Range(...).Group()`` でグループ化（単一ならそのまま）
+    2. ``CopyPicture`` … クリップボードに画像（ビットマップまたは EMF）として載せる
+    3. ``Worksheet.Paste`` … シート上に画像シェイプとして貼り付け
+    4. 元グループ／元シェイプを削除（貼り付け後の画像のみ残す）
+
+    戻り値: (貼り付けた Shape COM オブジェクト, Left, Top, Width, Height)
+    """
+    if not group_names:
+        raise ValueError("group_names が空です")
+    if len(group_names) == 1:
+        shp0 = api_ws.Shapes(group_names[0])
+        left0 = float(shp0.Left)
+        top0 = float(shp0.Top)
+        w0 = float(shp0.Width)
+        h0 = float(shp0.Height)
+        shp0.CopyPicture(Appearance=xl_screen, Format=int(copy_format))
+        api_ws.Paste()
+        pic = api_ws.Shapes(int(api_ws.Shapes.Count))
+        try:
+            shp0.Delete()
+        except Exception:
+            pass
+        return pic, left0, top0, w0, h0
+    sr = api_ws.Shapes.Range(group_names)
+    grp = sr.Group()
+    left0 = float(grp.Left)
+    top0 = float(grp.Top)
+    w0 = float(grp.Width)
+    h0 = float(grp.Height)
+    grp.CopyPicture(Appearance=xl_screen, Format=int(copy_format))
+    api_ws.Paste()
+    pic = api_ws.Shapes(int(api_ws.Shapes.Count))
+    try:
+        grp.Delete()
+    except Exception:
+        pass
+    return pic, left0, top0, w0, h0
+
+
 def _gantt_flatten_day_label_shapes_to_pictures_xlw(
     api_ws, day_blocks: list, names_by_day: dict
 ) -> int:
     """
-    各日キーに属する角丸ラベルシェイプを、Group + CopyPicture（xlScreen + Format は状況依存）で
-    1 枚の Picture に置換し、元シェイプを削除する。
-    GANTT_DAY_IMAGE_CHROMA_TRANSPARENT が有効なとき、外接矩形にクロマキー矩形を敷いてから
-    グループ化し、貼り付け後にその色のみ透明化する（既定色はマゼンタ）。
-    透明化時は既定 xlPicture（EMF）を使い、xlBitmap との組み合わせで貼り付けが真っ黒になる事象を避ける。
+    各日キーに属する角丸ラベルシェイプを、上記
+    ``_gantt_clipboard_picture_from_shape_names_xlw``（グループ化→CopyPicture→Paste）
+    で 1 枚の Picture に置換する。
+    GANTT_DAY_IMAGE_CHROMA_TRANSPARENT が有効なときのみ、敷き矩形を同グループに含め、
+    貼り付け後に ``PictureFormat`` で敷き色を透明化する（オプション。核フローはクリップボード画像化）。
     names_by_day[day_key] に蓄積された Name を消費する（成功時は空リストに戻す）。
     """
     if not day_blocks:
@@ -5870,33 +5919,12 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
             chroma_backdrop = backdrop_nm is not None
             _cpy_fmt = _gantt_flatten_copy_picture_format_xlw(chroma_backdrop)
 
-            if len(group_names) == 1:
-                shp0 = api_ws.Shapes(group_names[0])
-                left0 = float(shp0.Left)
-                top0 = float(shp0.Top)
-                w0 = float(shp0.Width)
-                h0 = float(shp0.Height)
-                shp0.CopyPicture(Appearance=_xl_screen, Format=_cpy_fmt)
-                api_ws.Paste()
-                pic = api_ws.Shapes(int(api_ws.Shapes.Count))
-                try:
-                    shp0.Delete()
-                except Exception:
-                    pass
-            else:
-                sr = api_ws.Shapes.Range(group_names)
-                grp = sr.Group()
-                left0 = float(grp.Left)
-                top0 = float(grp.Top)
-                w0 = float(grp.Width)
-                h0 = float(grp.Height)
-                grp.CopyPicture(Appearance=_xl_screen, Format=_cpy_fmt)
-                api_ws.Paste()
-                pic = api_ws.Shapes(int(api_ws.Shapes.Count))
-                try:
-                    grp.Delete()
-                except Exception:
-                    pass
+            pic, left0, top0, w0, h0 = _gantt_clipboard_picture_from_shape_names_xlw(
+                api_ws,
+                group_names,
+                copy_format=_cpy_fmt,
+                xl_screen=_xl_screen,
+            )
             pic.Left = left0
             pic.Top = top0
             pic.Width = w0
