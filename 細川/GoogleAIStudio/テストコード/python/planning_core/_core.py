@@ -1100,6 +1100,8 @@ GANTT_DAY_IMAGE_CHROMA_TRANSPARENT = os.environ.get(
     "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "0"
 ).strip().lower() in ("1", "true", "yes", "on")
 # 結果_設備ガントの配色。未設定・monotone で従来（淡色・モノトーン寄り）。full で依頼NO単位のHSV帯色＋周辺色をやや鮮やかに。
+# OS の環境変数に加え、マクロブック「設定_環境変数」シート（A=GANTT_COLOR_MODE・B=値）でも指定可。
+# workbook_env_bootstrap が import planning_core より前に os.environ へ反映する。
 # 例: GANTT_COLOR_MODE=full / GANTT_COLOR_MODE=monotone
 
 

@@ -13,6 +13,7 @@ TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	0=計画シート必要人数も参照
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	0=組合せ表プリセットを使わない
 DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1=配台中の占有区間ミラーで二重検査（0 で無効）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピー（0 で無効）
+GANTT_COLOR_MODE		結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに
 EXCLUDE_RULES_TRY_OPENPYXL_SAVE		1=配台不要シートを openpyxl で保存試行
 ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS	5	終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時
 ASSIGN_END_OF_DAY_DEFER_MINUTES	45	終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効	
