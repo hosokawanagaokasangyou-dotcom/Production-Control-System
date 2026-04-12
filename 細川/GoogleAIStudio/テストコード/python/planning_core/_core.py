@@ -11194,19 +11194,6 @@ def _try_realign_changeover_prep_segment_to_machining_start(
         return False
     seg["start_dt"] = new_start
     seg["end_dt"] = machining_start
-    # #region agent log
-    _agent_debug_ndjson_c6dbbd(
-        "H2",
-        "_try_realign_changeover_prep_segment_to_machining_start",
-        "realigned changeover prep immediately before machining",
-        {
-            "prep_start_after": new_start.isoformat(),
-            "prep_end_after": machining_start.isoformat(),
-            "dur_mins": dur_mins,
-        },
-        run_id="post-fix",
-    )
-    # #endregion
     return True
 
 
@@ -15524,62 +15511,6 @@ def _is_machining_timeline_event(ev: dict) -> bool:
     return _timeline_event_kind(ev) == TIMELINE_EVENT_MACHINING
 
 
-def _agent_debug_ndjson_041e24(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-    run_id: str = "pre-fix",
-) -> None:
-    # #region agent log
-    try:
-        from pathlib import Path
-
-        p = Path(__file__).resolve().parents[5] / "debug-041e24.log"
-        rec = {
-            "sessionId": "041e24",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(p, "a", encoding="utf-8") as _af:
-            _af.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
-
-def _agent_debug_ndjson_c6dbbd(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-    run_id: str = "pre-fix",
-) -> None:
-    # #region agent log
-    try:
-        from pathlib import Path
-
-        p = Path(__file__).resolve().parents[5] / "debug-c6dbbd.log"
-        rec = {
-            "sessionId": "c6dbbd",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(p, "a", encoding="utf-8") as _af:
-            _af.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
-
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
     if not isinstance(dt, datetime) or not breaks_merged:
@@ -15614,18 +15545,6 @@ def _changeover_prep_extend_overlaps_team_break(
         if not isinstance(bs, datetime) or not isinstance(be, datetime):
             continue
         if prep_end_before < be and bs < machining_start:
-            # #region agent log
-            _agent_debug_ndjson_c6dbbd(
-                "H2",
-                "_changeover_prep_extend_overlaps_team_break",
-                "prep interval overlaps team break (extend blocked)",
-                {
-                    "prep_end_before": prep_end_before.isoformat(),
-                    "machining_start": machining_start.isoformat(),
-                    "overlap_break": (bs.isoformat(), be.isoformat()),
-                },
-            )
-            # #endregion
             return True
     return False
 
@@ -15668,18 +15587,6 @@ def _extend_changeover_prep_segment_end_for_timeline(
             dur_m = int(get_actual_work_minutes(ps, pe, prep_br))
             if dur_m <= 0:
                 dur_m = int(max(1, (pe - ps).total_seconds() // 60))
-        _agent_debug_ndjson_041e24(
-            "H2",
-            "_extend_changeover_prep_segment_end_for_timeline",
-            "prep segment vs machining_start",
-            {
-                "prep_start": ps.isoformat() if isinstance(ps, datetime) else None,
-                "prep_end_before": pe.isoformat(),
-                "machining_start": machining_start.isoformat(),
-                "will_extend": bool(machining_start > pe),
-                "skip_extend_overlap_team_break": _block,
-            },
-        )
         if machining_start > pe and not _block:
             seg["end_dt"] = machining_start
         elif (
@@ -15695,39 +15602,6 @@ def _extend_changeover_prep_segment_end_for_timeline(
                 ps,
                 dur_mins=dur_m,
             )
-        _pe2 = seg.get("end_dt")
-        _agent_debug_ndjson_041e24(
-            "H2",
-            "_extend_changeover_prep_segment_end_for_timeline",
-            "prep segment after",
-            {
-                "prep_end_after": _pe2.isoformat()
-                if isinstance(_pe2, datetime)
-                else None,
-            },
-        )
-        # #region agent log
-        _g_team = (
-            _gap_minutes_until_next_break_start(_pe2, team_breaks_merged)
-            if isinstance(_pe2, datetime)
-            else None
-        )
-        _agent_debug_ndjson_c6dbbd(
-            "H2",
-            "_extend_changeover_prep_segment_end_for_timeline",
-            "prep end vs team next break after extend",
-            {
-                "machining_start": machining_start.isoformat()
-                if isinstance(machining_start, datetime)
-                else None,
-                "prep_end_final": _pe2.isoformat()
-                if isinstance(_pe2, datetime)
-                else None,
-                "skip_extend_overlap_team_break": _block,
-                "gap_min_prep_end_to_next_team_break_start": _g_team,
-            },
-        )
-        # #endregion
         return
 
 
@@ -15750,18 +15624,6 @@ def _resumed_after_work_break(
         if not isinstance(bs, datetime) or not isinstance(be, datetime):
             continue
         if last_machining_end <= bs and lower_bound_before_prep >= be:
-            # #region agent log
-            _agent_debug_ndjson_c6dbbd(
-                "H3",
-                "_resumed_after_work_break",
-                "resume_after_break True",
-                {
-                    "last_machining_end": last_machining_end.isoformat(),
-                    "lower_bound_before_prep": lower_bound_before_prep.isoformat(),
-                    "break_span": (bs.isoformat(), be.isoformat()),
-                },
-            )
-            # #endregion
             return True
     return False
 
@@ -16135,20 +15997,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
             }
         )
         t = max(t, ce)
-        # #region agent log
-        _agent_debug_ndjson_c6dbbd(
-            "H5",
-            "_changeover_plan_segments_and_machining_lower_bound",
-            "cleanup ended (before prep branch)",
-            {
-                "machine_occ_key": mach_occ,
-                "cleanup_end": ce.isoformat(),
-                "gap_min_cleanup_end_to_next_cleanup_op_break": _gap_minutes_until_next_break_start(
-                    ce, br_c
-                ),
-            },
-        )
-        # #endregion
 
     _lt_s = str(last_tid or "").strip()
     lm_date = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
@@ -16177,41 +16025,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 "machine_occupancy_key": mach_occ,
             }
         )
-        _agent_debug_ndjson_041e24(
-            "H1",
-            "_changeover_plan_segments_and_machining_lower_bound",
-            "changeover_prep planned (rep calendar)",
-            {
-                "machine_occ_key": mach_occ,
-                "eq_line": eq_line,
-                "cur_tid": cur_tid,
-                "last_tid": _lt_s,
-                "resume_after_break": resume_after_break,
-                "rep_op": rep,
-                "prep_min": prep,
-                "prep_start": t.isoformat(),
-                "prep_end": pe.isoformat(),
-                "rep_breaks": [
-                    (a.isoformat(), b.isoformat()) for a, b in (br_r or [])[:12]
-                ],
-            },
-        )
-        # #region agent log
-        _g_rep = _gap_minutes_until_next_break_start(pe, br_r)
-        _agent_debug_ndjson_c6dbbd(
-            "H1",
-            "_changeover_plan_segments_and_machining_lower_bound",
-            "prep_end vs rep next break (abuts break?)",
-            {
-                "machine_occ_key": mach_occ,
-                "cur_tid": cur_tid,
-                "prep_start": t.isoformat(),
-                "prep_end": pe.isoformat(),
-                "gap_min_prep_end_to_next_rep_break_start": _g_rep,
-                "resume_after_break": resume_after_break,
-            },
-        )
-        # #endregion
         t = pe
 
     return t, segments
@@ -17366,25 +17179,6 @@ def _assign_one_roll_trial_order_flow(
         else:
             lead_op = min(op_list, key=lambda mm: (skill_role_priority(mm)[1], mm))
         team_prio_sum = sum(skill_role_priority(m)[1] for m in team)
-        _tb_s = [
-            (a.isoformat(), b.isoformat())
-            for a, b in (team_breaks or [])[:12]
-            if isinstance(a, datetime) and isinstance(b, datetime)
-        ]
-        _agent_debug_ndjson_041e24(
-            "H4",
-            "_one_roll_from_team",
-            "team_start vs machine floor (defer effect)",
-            {
-                "task_id": str(task.get("task_id") or ""),
-                "machine_occ_key": machine_occ_key,
-                "mach_floor_eff": _mach_floor_eff.isoformat(),
-                "team_start_before_defer": _ts_before_defer.isoformat(),
-                "team_start_after_defer": team_start.isoformat(),
-                "team": list(team),
-                "team_breaks_head": _tb_s,
-            },
-        )
         return {
             "team": team,
             "team_start": team_start,
@@ -17904,22 +17698,6 @@ def _trial_order_first_schedule_pass(
                 str(s).strip() for s in sub_members if s and str(s).strip()
             )
             _co_append = list(res.get("changeover_segments") or [])
-            _agent_debug_ndjson_041e24(
-                "H3",
-                "trial_order_assign_loop",
-                "before extend prep; best_start for timeline",
-                {
-                    "task_id": str(task.get("task_id") or ""),
-                    "machine_occ_key": machine_occ_key,
-                    "best_start": best_start.isoformat()
-                    if isinstance(best_start, datetime)
-                    else None,
-                    "co_seg_kinds": [
-                        str(s.get("event_kind") or "")
-                        for s in (_co_append or [])[:6]
-                    ],
-                },
-            )
             _extend_changeover_prep_segment_end_for_timeline(
                 _co_append,
                 best_start,
