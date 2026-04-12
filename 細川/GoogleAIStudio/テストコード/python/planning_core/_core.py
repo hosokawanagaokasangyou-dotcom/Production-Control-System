@@ -18333,7 +18333,7 @@ def _generate_plan_impl():
             for ivs in _dm.values()
         )
         logging.info(
-            "機械カレンダー: %s 日分・設備占有ブロック計 %s を配台に反映しました。",
+            "機械カレンダー: %s 日分・設備占有ブロック合計 %s 件を配台に反映しました。",
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
         )
