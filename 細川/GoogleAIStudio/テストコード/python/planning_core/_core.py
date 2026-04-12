@@ -21375,46 +21375,6 @@ def _generate_plan_impl():
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
         task_results.append(row_data)
-    # #region agent log
-    try:
-        _neg_rem: list[float] = []
-        for _tx in sorted_tasks_for_result:
-            _rx = float(_tx.get("remaining_units") or 0)
-            if _rx < -1e-12:
-                _neg_rem.append(_rx)
-        _agp_sum = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "..",
-                "..",
-                "..",
-                "..",
-                "debug-0a44f7.log",
-            )
-        )
-        with open(_agp_sum, "a", encoding="utf-8") as _agf_sum:
-            _agf_sum.write(
-                json.dumps(
-                    {
-                        "sessionId": "0a44f7",
-                        "hypothesisId": "emit_summary",
-                        "location": "_core.py:after_result_task_loop",
-                        "message": "remaining_units after simulation",
-                        "data": {
-                            "n_tasks": len(sorted_tasks_for_result),
-                            "negative_remaining_count": len(_neg_rem),
-                            "min_remaining_units": min(_neg_rem) if _neg_rem else None,
-                        },
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
         
     cal_rows = []
     for d in sorted_dates:
