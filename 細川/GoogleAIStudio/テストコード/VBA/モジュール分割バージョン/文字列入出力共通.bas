@@ -1,23 +1,22 @@
-<<<<<<< HEAD
 Option Explicit
 
 Public Function ParseStage12CmdHideWindowBool(ByVal s As String, ByVal defaultVal As Boolean) As Boolean
-=======
-Attribute VB_Name = "文字列入出力共通"
-Option Explicit
-
-Public Function GeminiJsonStringEscape(ByVal s As String) As String
->>>>>>> hosokawa/main2
     Dim t As String
-    t = Replace(s, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCr, "\r")
-    t = Replace(t, vbLf, "\n")
-    t = Replace(t, vbTab, "\t")
-    GeminiJsonStringEscape = t
+    t = LCase$(Trim$(s))
+    If Len(t) = 0 Then ParseStage12CmdHideWindowBool = defaultVal: Exit Function
+    If t = "1" Or t = "true" Or t = "yes" Or t = "on" Or t = "y" Then
+        ParseStage12CmdHideWindowBool = True
+        Exit Function
+    End If
+    If t = "0" Or t = "false" Or t = "no" Or t = "off" Or t = "n" Then
+        ParseStage12CmdHideWindowBool = False
+        Exit Function
+    End If
+    If Trim$(s) = "はい" Then ParseStage12CmdHideWindowBool = True: Exit Function
+    If Trim$(s) = "いいえ" Then ParseStage12CmdHideWindowBool = False: Exit Function
+    ParseStage12CmdHideWindowBool = defaultVal
 End Function
 
-<<<<<<< HEAD
 Public Function FileHasUtf8Bom(ByVal filePath As String) As Boolean
     Dim ff As Integer
     Dim b1 As Byte, b2 As Byte, b3 As Byte
@@ -38,41 +37,17 @@ CleanFail:
 End Function
 
 Public Function ReadTextFileWithCharset(ByVal filePath As String, ByVal charset As String) As String
-=======
-Public Sub GeminiWriteUtf8File(ByVal filePath As String, ByVal textContent As String)
->>>>>>> hosokawa/main2
     Dim stm As Object
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
-    stm.charset = "UTF-8"
-    stm.Open
-    stm.WriteText textContent
-    stm.SaveToFile filePath, 2
-    stm.Close
-    Set stm = Nothing
-End Sub
-
-Public Function GeminiReadUtf8File(ByVal filePath As String) As String
-    Dim stm As Object
-    GeminiReadUtf8File = ""
-    If Len(Dir(filePath)) = 0 Then Exit Function
-    On Error GoTo CleanFail
-    Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2
-    stm.charset = "UTF-8"
+    stm.charset = charset
     stm.Open
     stm.LoadFromFile filePath
-    GeminiReadUtf8File = stm.ReadText
+    ReadTextFileWithCharset = stm.ReadText
     stm.Close
-    Set stm = Nothing
-    Exit Function
-CleanFail:
-    On Error Resume Next
-    If Not stm Is Nothing Then stm.Close
     Set stm = Nothing
 End Function
 
-<<<<<<< HEAD
 ' cmd.exe が生成した capture ログ用（UTF-8 BOM が無ければ日本語環境では Shift_JIS として読む）
 Public Function ReadCmdCaptureLogText(ByVal filePath As String) As String
     On Error GoTo EH
@@ -353,22 +328,15 @@ Public Function ParseOpAsSkillCellForValidate(ByVal s As String, ByRef roleOut A
         roleOut = "AS"
         tail = Mid$(t, 3)
     Else
-=======
-Public Function GeminiReadUtf8FileViaTempCopy(ByVal filePath As String) As String
-    Dim tmp As String
-    GeminiReadUtf8FileViaTempCopy = ""
-    If Len(Dir(filePath)) = 0 Then Exit Function
-    Randomize
-    tmp = Environ("TEMP") & "\pm_ai_sp_" & Replace(Replace(Replace(CStr(Now), "/", ""), ":", ""), " ", "_") & "_" & CStr(Int(100000 * Rnd)) & ".txt"
-    On Error Resume Next
-    FileCopy filePath, tmp
-    If Err.Number <> 0 Then
-        Err.Clear
->>>>>>> hosokawa/main2
         Exit Function
     End If
-    GeminiReadUtf8FileViaTempCopy = GeminiReadUtf8File(tmp)
-    On Error Resume Next
-    Kill tmp
+    If Len(tail) = 0 Then
+        prOut = 1
+    Else
+        If Not IsNumeric(tail) Then Exit Function
+        prOut = CLng(CDbl(tail))
+        If prOut < 0 Then prOut = 0
+    End If
+    ParseOpAsSkillCellForValidate = True
 End Function
 

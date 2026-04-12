@@ -109,6 +109,12 @@ def _append_execution_log_line(level: str, msg: str) -> None:
     """
     cmd 版の task_extract_stage1 と同様、planning_core の log に加え、VBA のログ枠へ送る行を追記する。
     """
+    try:
+        from planning_core.bootstrap import _normalize_log_line
+
+        msg = _normalize_log_line(msg)
+    except Exception:
+        pass
     path = _execution_log_path()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{ts} - {level} - {msg}\n"

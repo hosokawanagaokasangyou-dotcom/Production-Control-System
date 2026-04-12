@@ -68,7 +68,22 @@ logger.setLevel(logging.INFO)
 if logger.hasHandlers():
     logger.handlers.clear()
 
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+# _core.py のコメント・文字列は UTF-8 正字に修正済み。旧 execution_log 向けの誤 Unicode 置換は撤廃した。
+_LOG_MOJIBAKE_PAIRS: tuple[tuple[str, str], ...] = ()
+_SINGLE_MOJIBAKE: tuple[tuple[str, str], ...] = ()
+
+
+def _normalize_log_line(text: str) -> str:
+    """execution_log / コンソール向け（互換のため残置。現状は変換なし）。"""
+    return text
+
+
+class _MojibakeFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return _normalize_log_line(super().format(record))
+
+
+formatter = _MojibakeFormatter("%(asctime)s - %(levelname)s - %(message)s")
 
 
 class _FlushingFileHandler(logging.Handler):

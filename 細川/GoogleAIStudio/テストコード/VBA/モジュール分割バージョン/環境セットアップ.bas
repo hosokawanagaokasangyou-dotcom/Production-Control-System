@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 Option Explicit
 
 Public Function Py3VersionOutput(wsh As Object) As String
@@ -57,12 +56,6 @@ End Function
 
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
 Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
-=======
-Attribute VB_Name = "環境セットアップ"
-Option Explicit
-
-Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
->>>>>>> hosokawa/main2
     If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
         SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
     ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
@@ -72,7 +65,6 @@ Private Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As 
     End If
 End Function
 
-<<<<<<< HEAD
 Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
     Dim ps As String
     Dim shellCmd As String
@@ -91,8 +83,6 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
 End Function
 
-=======
->>>>>>> hosokawa/main2
 Sub InstallComponents()
     Dim wsh As Object
     Dim wingetExit As Long
@@ -163,3 +153,7 @@ Sub InstallComponents()
     m_animMacroSucceeded = True
 End Sub
 
+' =========================================================
+' Gemini 認証: Python は「設定」B1 の JSON ファイルパスからキーを読む（平文または暗号化）。
+' 暗号化 JSON の復号は planning_core のソース内定数のみ。パスフレーズはシートに保存しない（B2 は未使用またはクリア）。
+' =========================================================

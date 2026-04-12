@@ -211,8 +211,8 @@
       <summary>（詳細）設備ガントのレイアウト変更（2026-04 追補）を開く</summary>
       <div class="inner">
         <ul>
-          <li><code>結果_設備ガント</code> は <strong>A列に日付を縦結合</strong>、<strong>B〜E</strong> が <strong>機械名／工程名／担当者（姓のみ）／タスク概要（依頼NOのみ）</strong>。時刻グリッドは <strong>F列から</strong>（5分刻み）。</li>
-          <li>日付ブロック間に <strong>行高 5pt・黒背景</strong>の区切り行。窓枠固定は <strong>F4</strong>（VBA が貼付後に再固定・ズーム 85%・左上スクロールへ復帰）。</li>
+          <li><code>結果_設備ガント</code> は <strong>A列に日付を縦結合</strong>、<strong>B〜D</strong> が <strong>機械名／工程名／タスク概要（依頼NOのみ）</strong>。時刻グリッドは <strong>E列から</strong>（10分刻み）。</li>
+          <li>日付ブロック間に <strong>行高 5pt・黒背景</strong>の区切り行。窓枠固定は <strong>E4</strong>（VBA が貼付後に再固定・ズーム 85%・左上スクロールへ復帰）。</li>
           <li>設備ガントは自動列幅の対象外のため、取込み後に専用列幅を再適用（詳細は <span class="file">配台ルール.md</span> 4.4）。</li>
         </ul>
       </div>
@@ -312,7 +312,7 @@
   <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">
     <h2 id="h-doc-sync">ソース変更時のドキュメント同期（開発）</h2>
     <p><span class="file">python/planning_core/_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
-    <p>Cursor 用の正本ルール: リポジトリ直下 <span class="file">.cursor/rules/dispatch-docs-sync.mdc</span>（<code>alwaysApply: true</code>）。同趣旨の要約はリポジトリ直下 <span class="file">.cursorrules</span> にもあります。</p>
+    <p>Cursor 運用: リポジトリ直下 <span class="file">.cursorrules</span>、およびテストコード配下の Markdown 編集時の HTML ペア同期 <span class="file">.cursor/rules/md-paired-html-sync.mdc</span> を参照してください。</p>
     <p><strong>作業ディレクトリ</strong>: 環境変数 <code>TASK_INPUT_WORKBOOK</code> があるときはそのブックのフォルダへ <code>chdir</code> し、<code>log/</code>・<code>output/</code> を VBA のブック配置と揃える。未設定時は <code>python</code> の親フォルダ基準（詳細は <span class="file">配台ルール.md</span> セクション8）。</p>
     <p><strong>段階2の output</strong>: 実行前に <code>production_plan_multi_day_*.xlsx</code> と <code>member_schedule_*.xlsx</code> を削除しようとします。<strong>Excel で開いたまま</strong>だと削除・保存に失敗しうるので閉じてから実行。削除は短いリトライし、残ったファイルは ERROR ログに列挙。ファイル名の時刻はマイクロ秒まで含め衝突を避ける。設備ガント生成は重く、ログが止まって見えることがある（詳細は <span class="file">配台ルール.md</span> セクション8）。<strong>マクロブック取り込み</strong>では、出力 xlsx の各シートについて<strong>同名および番号付き複製</strong>（半角・全角の括弧・スペースの違いを含む）をコピー前に削除し、<code>TEMP_設備毎の時間割</code> や <code>ブロックテーブル</code> の重複を掃除する（VBA は <span class="file">生産管理_AI配台テスト_xlsm_VBA.txt</span> の <code>シート名は計画取込の同源名またはExcel番号付き複製か</code> を参照）。</p>
     <p><strong>計画ブックに追加されるシート</strong>（<code>production_plan_multi_day_*.xlsx</code>）:</p>
@@ -331,8 +331,8 @@
     <h2 id="h-roll-unit">ロール単位長さ（配台計画_タスク入力）</h2>
     <ul>
       <li><strong>列</strong>: <code>ロール単位長さ</code>（<code>PLAN_COL_ROLL_UNIT_LENGTH</code>）。シートでは <strong>製品名の右隣</strong>。</li>
-      <li><strong>段階1</strong>: <code>infer_unit_m_from_product_name</code> と換算数量フォールバックで <strong>1ロールあたりの m</strong> を計算して出力。再抽出時は <code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code>（<strong>ロール単位長さ</strong>のみ）で <strong>依頼NO＋工程名</strong>キーにより旧値を引き継ぎ。<strong>配台試行順番</strong>は対象外（段階1冒頭で空クリアし、別途付け直し）。</li>
-      <li><strong>段階2</strong>: <code>build_task_queue_from_planning_df</code> は<strong>まずこの列の数値</strong>を <code>unit_m</code> に使う。<strong>空・0・不正</strong>のときだけ従来の製品名推定へフォールバック。</li>
+      <li><strong>段階1</strong>: <code>infer_unit_m_from_product_name</code> で <strong>1ロールあたりの m</strong> を計算して出力（寸法が解釈できないときは既定 <code>INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M</code>＝100、換算数量には落とさない。製品名欠損のみ <code>fallback</code>）。再抽出時は <code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code>（<strong>ロール単位長さ</strong>のみ）で <strong>依頼NO＋工程名</strong>キーにより旧値を引き継ぎ。<strong>配台試行順番</strong>は対象外（段階1冒頭で空クリアし、別途付け直し）。</li>
+      <li><strong>段階2</strong>: <code>build_task_queue_from_planning_df</code> は<strong>まずこの列の数値</strong>を <code>unit_m</code> に使う。<strong>空・0・不正</strong>のときだけ製品名推定（寸法不能時は既定 100m）。</li>
     </ul>
   </section>
 
