@@ -2775,6 +2775,28 @@ def _gemini_generate_content_with_retry(
     raise RuntimeError("Gemini: モデル列が空です。")
 
 
+def _agent_dbg_roll_ndjson(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # #region agent log
+    try:
+        _root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+        )
+        _path = os.path.join(_root, "debug-5baffb.log")
+        _entry = {
+            "sessionId": "5baffb",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_path, "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(_entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
 def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     """
     製品名に混ざる寸法区切りを ASCII の x に寄せる。
@@ -2792,6 +2814,11 @@ def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
         "\u2a09",  # ⨉ CROSS MULTIPLICATION
         "\uff38",  # Ｘ FULLWIDTH LATIN CAPITAL LETTER X
         "\uff58",  # ｘ FULLWIDTH LATIN SMALL LETTER X
+        # 寸法区切りに誤入力されがちな「X に見えるが ASCII [xX] にマッチしない」文字（推定失敗→換算数量→100m 切上で 870→900 等）
+        "\u0425",  # CYRILLIC CAPITAL LETTER HA
+        "\u0445",  # CYRILLIC SMALL LETTER HA
+        "\u03a7",  # GREEK CAPITAL LETTER CHI
+        "\u03c7",  # GREEK SMALL LETTER CHI
     ):
         t = t.replace(ch, "x")
     return t
@@ -2819,6 +2846,19 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
             _a_str, b_str = dim_pairs[-1]
             b = int(b_str)
             if b > 0:
+                _agent_dbg_roll_ndjson(
+                    "H2",
+                    "_core.py:infer_unit_m_from_product_name",
+                    "roll_infer_pair",
+                    {
+                        "s_sample": s[:160],
+                        "dim_pairs_last": [_a_str, b_str],
+                        "result": b,
+                        "fb": float(fallback_unit)
+                        if isinstance(fallback_unit, (int, float))
+                        else str(fallback_unit)[:40],
+                    },
+                )
                 return b
         except ValueError:
             pass
@@ -2828,9 +2868,30 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
         try:
             v = int(matches[-1])
             if v > 0:
+                _agent_dbg_roll_ndjson(
+                    "H2",
+                    "_core.py:infer_unit_m_from_product_name",
+                    "roll_infer_after_x",
+                    {"s_sample": s[:160], "matches_last": matches[-1], "result": v},
+                )
                 return v
         except ValueError:
             pass
+    try:
+        _fbn = float(fallback_unit)
+    except (TypeError, ValueError):
+        _fbn = 0.0
+    _agent_dbg_roll_ndjson(
+        "H2",
+        "_core.py:infer_unit_m_from_product_name",
+        "roll_infer_fallback",
+        {
+            "s_sample": s[:160],
+            "dim_pairs_n": len(dim_pairs),
+            "matches_n": len(matches),
+            "fallback_unit": _fbn,
+        },
+    )
     return fallback_unit
 
 
@@ -8596,6 +8657,19 @@ def _merge_plan_sheet_user_overrides(out_df):
                 v = _coerce_plan_exclude_column_value_for_storage(v)
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
+            if c == PLAN_COL_ROLL_UNIT_LENGTH:
+                _prev_r = out_df.at[i, c] if c in out_df.columns else None
+                _agent_dbg_roll_ndjson(
+                    "H1",
+                    "_core.py:_merge_plan_sheet_user_overrides",
+                    "merge_roll_unit_length",
+                    {
+                        "task_id": tid,
+                        "process_key": mach,
+                        "prev": str(_prev_r),
+                        "merged_from_sheet": str(v),
+                    },
+                )
             out_df.at[i, c] = v
 
     if merged_rows:
@@ -10577,6 +10651,19 @@ def run_stage1_extract():
             _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
         _roll_len = _ceil_roll_unit_length_m_to_next_step(_roll_len)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len
+        _agent_dbg_roll_ndjson(
+            "H3",
+            "_core.py:run_stage1_extract",
+            "roll_after_infer_ceil_pre_merge",
+            {
+                "task_id": task_id,
+                "machine": machine,
+                "product_sample": str(_pn_stage1)[:160] if _pn_stage1 is not None else "",
+                "qty_total_s1": _qty_total_s1,
+                "qty_remain": qty,
+                "roll_len_cell": _roll_len,
+            },
+        )
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
