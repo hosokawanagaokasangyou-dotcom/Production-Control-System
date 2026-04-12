@@ -727,7 +727,7 @@ GANTT_TIMELINE_COLUMN_WIDTH = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
 GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
-GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "40")))
+GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "45")))
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
 
@@ -6020,7 +6020,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             except Exception:
                 pass
 
-        # 同一データ行ごとにシェイプを 3 段（行高の各 1/3）でローテーション配置（4 件目は上段に戻る）
+        # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
+        # 依頼NO メインシェイプの高さは行高さの 1/4（帯内で上下センタリングする）。
         _row_shape_seq: dict[int, int] = {}
 
         def _gantt_xlw_add_round_rect(
@@ -6150,8 +6151,9 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
             min_w = max(44.0, min(260.0, 6.0 + len(text) * 5.8))
             label_w = max(w, min_w)
-            # 縦幅 = 配置行の 1/3。縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）
+            # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/4。
             _band = float(h) / 3.0
+            _h_req_no = max(9.0, float(h) / 4.0)
             _n_on_row = int(_row_shape_seq.get(row, 0))
             _slot = _n_on_row % 3
             _row_shape_seq[row] = _n_on_row + 1
@@ -6166,7 +6168,13 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             if mems_all:
                 gap_mid = 1.0
                 h_mem = min(11.0, max(6.5, _band * 0.24))
-                h_main = max(9.0, _band - 2.0 * h_mem - 2.0 * gap_mid - 0.5)
+                h_main = max(
+                    9.0,
+                    min(
+                        _h_req_no,
+                        _band - 2.0 * h_mem - 2.0 * gap_mid - 0.5,
+                    ),
+                )
                 y_top = band_top + 0.35
                 y_main = band_top + h_mem + gap_mid
                 y_bot = band_top + h_mem + gap_mid + h_main + gap_mid
@@ -6240,10 +6248,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         pass
                 _emit_member_pills(bot_names, y_bot, h_mem_use, dk)
             else:
-                label_h = max(9.0, _band)
+                label_h = _h_req_no
+                y_lbl = band_top + max(0.0, (_band - label_h) / 2.0)
                 shp = _gantt_xlw_add_round_rect(
                     left,
-                    band_top,
+                    y_lbl,
                     label_w,
                     label_h,
                     text,
