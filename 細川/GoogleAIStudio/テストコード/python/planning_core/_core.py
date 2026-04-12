@@ -724,6 +724,9 @@ RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 GANTT_TIMELINE_SLOT_MINUTES = 10
 # 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
+# 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
+# 52pt×設備数では A3 横1列でも日内に自動改ページが入りやすいためやや抑える。
+GANTT_MACHINE_ROW_HEIGHT_PT = 38
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -2167,7 +2170,7 @@ def _write_results_equipment_gantt_sheet(
                 label_italic=False,
             )
 
-            ws.row_dimensions[row].height = 52
+            ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
             row += 1
 
             if show_actual_rows:
@@ -2221,7 +2224,7 @@ def _write_results_equipment_gantt_sheet(
                     label_italic=True,
                 )
 
-                ws.row_dimensions[row].height = 52
+                ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
                 row += 1
 
         day_end = row - 1
@@ -2301,6 +2304,7 @@ def _write_results_equipment_gantt_sheet(
                 "day_row_counts": _day_row_counts,
                 "last_occupied_row": row - 1,
                 "print_title_rows_will_be": "1:3",
+                "gantt_machine_row_height_pt": float(GANTT_MACHINE_ROW_HEIGHT_PT),
             },
         }
     )
@@ -2308,16 +2312,15 @@ def _write_results_equipment_gantt_sheet(
 
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # A3 横・余白「狭い」・横1ページ（fitToWidth=1）・縦は「日数」ページに固定
-        # ※ fitToHeight=0（縦自動）だと、横1ページに合わせた縮小後でも1日分の行が
-        #    1ページの高さに収まらない場合に Excel が日の途中へ自動改ページし、
-        #    「1日1ページ」とずれる。日数に合わせて縦ページ数を指定して全体を
-        #    さらに縮小し、各日ブロックが縦1ページに収まるようにする。
+        # A3 横・横1ページ（fitToWidth=1）。縦の「ページ数固定」（旧 fitToHeight=日数）は、
+        # ランタイム確認（debug-bc950f）でシート全体一括スケールとなり手動改ページの
+        # 日境界と一致せず日内へ自動改ページが入るため付けない（fitToHeight=0）。
+        # 日内分割は行高 GANTT_MACHINE_ROW_HEIGHT_PT を抑えて緩和する。
         ws.page_setup.orientation = "landscape"
         # 「ページに合わせる」を有効にしないと fitToWidth が Excel で無視されうる
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = max(1, len(dates_to_show))
+        ws.page_setup.fitToHeight = 0
         # A3（Excel / openpyxl の paperSize=8）
         ws.page_setup.paperSize = 8
         # 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
@@ -2338,8 +2341,9 @@ def _write_results_equipment_gantt_sheet(
             {
                 "hypothesisId": "H1-H5",
                 "message": "page_setup applied",
-                "runId": "pre-fix",
+                "runId": "post-page-fix-1",
                 "data": {
+                    "fixTag": "no-fitToHeight-daycount_rowh38",
                     "fitToPage": bool(ws.page_setup.fitToPage),
                     "fitToWidth": ws.page_setup.fitToWidth,
                     "fitToHeight": ws.page_setup.fitToHeight,
@@ -2348,6 +2352,7 @@ def _write_results_equipment_gantt_sheet(
                     "paperSize": ws.page_setup.paperSize,
                     "print_title_rows": ws.print_title_rows,
                     "n_dates_to_show": len(dates_to_show),
+                    "gantt_machine_row_height_pt": float(GANTT_MACHINE_ROW_HEIGHT_PT),
                 },
             }
         )
