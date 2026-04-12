@@ -2325,13 +2325,47 @@ def _write_results_equipment_gantt_sheet(
 
         slots = [datetime.combine(d, tm) for tm in slot_times]
 
+        # 設備時間割と同じく ev['machine'] と equipment_list の表記ゆれを正規化して対応づける。
+        # by_dm[d].get(eq) のみだとキー不一致の行が空になり、機械名毎シートだけに依頼NOが出ることがある。
+        machine_to_events = defaultdict(list)
+        for ev in evs:
+            machine_to_events[ev["machine"]].append(ev)
+        for _k_m, _evl in machine_to_events.items():
+            _evl.sort(
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+            )
+        machine_to_events_a = None
+        if show_actual_rows:
+            machine_to_events_a = defaultdict(list)
+            for ev in a_evs_day:
+                machine_to_events_a[ev["machine"]].append(ev)
+            for _k_m2, _evl2 in machine_to_events_a.items():
+                _evl2.sort(
+                    key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+                )
+
         day_start = row
         gantt_day_first_rows.append(day_start)
         for eq in equipment_list:
             proc_nm, mach_nm = _split_equipment_line_process_machine(eq)
             mk_key = (mach_nm or "").strip() or "—"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
-            evlist = by_dm[d].get(eq, [])
+            evlist_raw = by_dm[d].get(eq, [])
+            evlist = _eq_grid_events_for_equipment_column(machine_to_events, eq)
+            # #region agent log
+            if "-04-13" in d.isoformat() and "W4-13" in eq and "EC" in eq:
+                _debug_emit_2c0acb(
+                    "H4",
+                    "gantt_evlist_resolve",
+                    {
+                        "eq": eq,
+                        "day": d.isoformat(),
+                        "n_raw_by_dm": len(evlist_raw),
+                        "n_resolved_eq_grid": len(evlist),
+                    },
+                    "post-fix",
+                )
+            # #endregion
             if evlist:
                 tids: list[str] = []
                 seen_tid: set[str] = set()
@@ -2401,7 +2435,11 @@ def _write_results_equipment_gantt_sheet(
             row += 1
 
             if show_actual_rows:
-                evlist_a = by_dm_actual[d].get(eq, [])
+                evlist_a = (
+                    _eq_grid_events_for_equipment_column(machine_to_events_a, eq)
+                    if machine_to_events_a is not None
+                    else []
+                )
                 if evlist_a:
                     tids_a: list[str] = []
                     seen_aid: set[str] = set()
