@@ -6286,7 +6286,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         # msoShapeRoundedRectangle = 5
         _mso_round_rect = 5
         _mso_bring_to_front = 0
+        _mso_send_to_back = 1
         _xl_move_and_size = 1
+        _xl_h_align_center = -4131
+        _xl_h_align_right = -4152
         # 件数が多いときの進捗ログ間隔（小さすぎると I/O 負荷、大きすぎると停止に見える）
         _progress_every = 10
         n_added = 0
@@ -6354,6 +6357,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             shape_name=None,
             tf_margin_tb=None,
             tf_margin_lr=None,
+            z_bring_to_front=True,
+            text_h_align=None,
         ):
             cap = str(caption or "").strip()
             if x_w <= 0 or x_h <= 0 or not cap:
@@ -6371,7 +6376,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             except Exception:
                 pass
             try:
-                shp_local.ZOrder(_mso_bring_to_front)
+                if z_bring_to_front:
+                    shp_local.ZOrder(_mso_bring_to_front)
+                else:
+                    shp_local.ZOrder(_mso_send_to_back)
             except Exception:
                 pass
             try:
@@ -6421,7 +6429,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     pass
                 try:
                     tf0.VerticalAlignment = -4108  # xlVAlignCenter
-                    tf0.HorizontalAlignment = -4131  # xlHAlignCenter
+                    _hal = (
+                        int(text_h_align)
+                        if text_h_align is not None
+                        else int(_xl_h_align_center)
+                    )
+                    tf0.HorizontalAlignment = _hal
                 except Exception:
                     pass
                 # WordWrap=True は環境によって TextFrame の再レイアウトが極端に重く、
@@ -6628,6 +6641,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}",
                         tf_margin_tb=0.0,
                         tf_margin_lr=0.75,
+                        z_bring_to_front=False,
+                        text_h_align=_xl_h_align_right,
                     )
                     if s_mem is not None:
                         n_added += 1
