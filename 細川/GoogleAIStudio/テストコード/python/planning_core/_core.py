@@ -20816,53 +20816,6 @@ def _generate_plan_impl():
                                 float(task.get("remaining_units") or 0)
                                 - float(done_units),
                             )
-                            # #region agent log
-                            try:
-                                _ru_after = float(task.get("remaining_units") or 0)
-                                if _ru_after < -1e-12:
-                                    _agp = os.path.normpath(
-                                        os.path.join(
-                                            os.path.dirname(__file__),
-                                            "..",
-                                            "..",
-                                            "..",
-                                            "..",
-                                            "..",
-                                            "debug-0a44f7.log",
-                                        )
-                                    )
-                                    with open(_agp, "a", encoding="utf-8") as _agf:
-                                        _agf.write(
-                                            json.dumps(
-                                                {
-                                                    "sessionId": "0a44f7",
-                                                    "hypothesisId": "H4",
-                                                    "location": "_core.py:remaining_units_subtract",
-                                                    "message": "remaining_units negative after subtract",
-                                                    "data": {
-                                                        "task_id": str(
-                                                            task.get("task_id", "")
-                                                        ),
-                                                        "machine": str(
-                                                            task.get("machine", "")
-                                                        ),
-                                                        "remaining_after": _ru_after,
-                                                        "done_units": float(done_units),
-                                                        "unit_m": float(
-                                                            task.get("unit_m") or 0
-                                                        ),
-                                                    },
-                                                    "timestamp": int(
-                                                        time_module.time() * 1000
-                                                    ),
-                                                },
-                                                ensure_ascii=False,
-                                            )
-                                            + "\n"
-                                        )
-                            except Exception:
-                                pass
-                            # #endregion
                             op_main = (best_info.get("op") or "").strip()
                             subs_part = ",".join(
                                 s.strip() for s in sub_members if s and str(s).strip()
@@ -21317,51 +21270,6 @@ def _generate_plan_impl():
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
         rem_r = int(t['remaining_units'])
-        # #region agent log
-        try:
-            _um_dbg = float(t.get("unit_m") or 0)
-            _prod_dbg = rem_u * _um_dbg
-            _m_int_dbg = int(_prod_dbg)
-            if _m_int_dbg < 0 or (rem_u <= 1e-9 and _m_int_dbg != 0):
-                _agp2 = os.path.normpath(
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "debug-0a44f7.log",
-                    )
-                )
-                with open(_agp2, "a", encoding="utf-8") as _agf2:
-                    _agf2.write(
-                        json.dumps(
-                            {
-                                "sessionId": "0a44f7",
-                                "hypothesisId": "H1",
-                                "location": "_core.py:result_task_remaining_display",
-                                "message": "anomaly: rem meters vs status/rem_r",
-                                "data": {
-                                    "task_id": str(t.get("task_id", "")),
-                                    "machine": str(t.get("machine", "")),
-                                    "status": status,
-                                    "rem_u": rem_u,
-                                    "rem_r": rem_r,
-                                    "unit_m": _um_dbg,
-                                    "prod_m": _prod_dbg,
-                                    "m_int": _m_int_dbg,
-                                    "total_qty_m": t.get("total_qty_m"),
-                                },
-                                "timestamp": int(time_module.time() * 1000),
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-        except Exception:
-            pass
-        # #endregion
         
         _line_key = (str(t.get("task_id", "") or "").strip(), str(t.get("machine", "") or "").strip())
         _sheet_pair = _result_sheet_answer_spec_by_line.get(_line_key)
