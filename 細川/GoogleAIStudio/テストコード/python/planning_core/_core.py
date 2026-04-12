@@ -1060,6 +1060,19 @@ RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS = (
     "F5F5E0",
     "F0E8E8",
 )
+# GANTT_COLOR_MODE=full 時の機械名列グループ（B〜D）用。やや彩度の高いパステル。
+RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS_FULL = (
+    "B3E5FC",
+    "F8BBD0",
+    "C8E6C9",
+    "FFE0B2",
+    "E1BEE7",
+    "B2EBF2",
+    "FFF59D",
+    "D1C4E9",
+    "FFCDD2",
+    "C5CAE9",
+)
 # 配台シミュレーション開始剝（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で試行
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 配台済_加工終了は「回答納期+16:00」または「指定納期+16:00」（回答は空のとき）以降かを表示
@@ -1086,6 +1099,18 @@ GANTT_TIMELINE_LABELS_DAY_FLATTEN = os.environ.get(
 GANTT_DAY_IMAGE_CHROMA_TRANSPARENT = os.environ.get(
     "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT", "0"
 ).strip().lower() in ("1", "true", "yes", "on")
+# 結果_設備ガントの配色。未設定・monotone で従来（淡色・モノトーン寄り）。full で依頼NO単位のHSV帯色＋周辺色をやや鮮やかに。
+# 例: GANTT_COLOR_MODE=full / GANTT_COLOR_MODE=monotone
+
+
+def _gantt_color_mode_raw() -> str:
+    return (os.environ.get("GANTT_COLOR_MODE", "") or "").strip().lower()
+
+
+def _gantt_color_mode_full() -> bool:
+    return _gantt_color_mode_raw() in ("full", "color", "vivid", "1", "true", "yes", "on")
+
+
 # 結果_タスク一覧の日付系（yyyy/mm/dd 文字列）に付けるフォント色。履歴列の【日付】と揃える
 RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
     {
@@ -1446,18 +1471,64 @@ _GANTT_BAR_FILLS_ACTUAL = (
     "DCD2DC",
 )
 
-# 設備ガント: 日次始業準備（machine_daily_startup）の帯色（黄色系）
+# 設備ガント: 日次始業準備（machine_daily_startup）の帯色（黄色系・モノトーン既定）
 _GANTT_DAILY_STARTUP_FILL = "FFEB9C"
 
 
+def _gantt_hsv_to_rgb_u8(h01: float, s: float, v: float) -> tuple[int, int, int]:
+    """h01∈[0,1), s・v∈[0,1] を sRGB 0..255 に。"""
+    h = (float(h01) % 1.0) * 6.0
+    c = float(v) * float(s)
+    x = c * (1.0 - abs((h % 2.0) - 1.0))
+    m = float(v) - c
+    if h < 1.0:
+        rp, gp, bp = c, x, 0.0
+    elif h < 2.0:
+        rp, gp, bp = x, c, 0.0
+    elif h < 3.0:
+        rp, gp, bp = 0.0, c, x
+    elif h < 4.0:
+        rp, gp, bp = 0.0, x, c
+    elif h < 5.0:
+        rp, gp, bp = x, 0.0, c
+    else:
+        rp, gp, bp = c, 0.0, x
+    r = int((rp + m) * 255.0)
+    g = int((gp + m) * 255.0)
+    b = int((bp + m) * 255.0)
+    return max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))
+
+
+def _gantt_fullcolor_fill_hex_for_task_id(task_id, *, is_actual: bool) -> str:
+    """依頼NO（task_id）ごとに色相を固定。実績行は色相をずらして計画と区別。"""
+    hx = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
+    hue01 = (int(hx[0:8], 16) % 360) / 360.0
+    if is_actual:
+        hue01 = (hue01 + 47.0 / 360.0) % 1.0
+    s = 0.36 + (int(hx[8:12], 16) % 26) / 100.0
+    v = 0.80 + (int(hx[12:16], 16) % 16) / 100.0
+    r, g, b = _gantt_hsv_to_rgb_u8(hue01, s, v)
+    return f"{r:02X}{g:02X}{b:02X}"
+
+
+def _gantt_daily_startup_fill_hex() -> str:
+    if _gantt_color_mode_full():
+        return "FFC107"
+    return _GANTT_DAILY_STARTUP_FILL
+
+
 def _gantt_bar_fill_for_task_id(task_id):
-    """依頼NOごとに上記パレットから1色（RRGGBB）。濃色＋白文字の組み合わせは使えない。"""
+    """依頼NOごとに1色（RRGGBB）。full 時はHSV、monotone 時は淡色パレット。"""
+    if _gantt_color_mode_full():
+        return _gantt_fullcolor_fill_hex_for_task_id(task_id, is_actual=False)
     h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_PRINT_SAFE)
     return _GANTT_BAR_FILLS_PRINT_SAFE[i]
 
 
 def _gantt_bar_fill_actual_for_task_id(task_id):
+    if _gantt_color_mode_full():
+        return _gantt_fullcolor_fill_hex_for_task_id(task_id, is_actual=True)
     h = hashlib.md5(str(task_id).encode("utf-8")).hexdigest()
     i = int(h[:8], 16) % len(_GANTT_BAR_FILLS_ACTUAL)
     return _GANTT_BAR_FILLS_ACTUAL[i]
@@ -1509,7 +1580,7 @@ def _gantt_slot_state_tuple(evlist, slot_mid, task_fill_fn=None):
     if active is None:
         return ("idle",)
     if _timeline_event_kind(active) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
-        return ("daily_startup", _GANTT_DAILY_STARTUP_FILL)
+        return ("daily_startup", _gantt_daily_startup_fill_hex())
     if any(b_s <= slot_mid < b_e for b_s, b_e in active.get("breaks") or ()):
         return ("break",)
     tid = str(active["task_id"])
@@ -1895,7 +1966,11 @@ def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternF
         if key not in seen:
             seen.add(key)
             order.append(key)
-    palette = RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS
+    palette = (
+        RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS_FULL
+        if _gantt_color_mode_full()
+        else RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS
+    )
     if not palette:
         fb = "F5F5F5"
         return {k: PatternFill(fill_type="solid", start_color=fb, end_color=fb) for k in order}
@@ -1934,7 +2009,9 @@ def _write_results_equipment_gantt_sheet(
         insert_at = len(wb.sheetnames)
     ws = wb.create_sheet("結果_設備ガント", insert_at)
     try:
-        ws.sheet_properties.tabColor = "7F7F7F"
+        ws.sheet_properties.tabColor = (
+            "1976D2" if _gantt_color_mode_full() else "7F7F7F"
+        )
     except Exception:
         pass
 
@@ -1961,27 +2038,51 @@ def _write_results_equipment_gantt_sheet(
                 by_dm_actual[d0][mk].sort(key=lambda x: x["start_dt"])
 
     slot_mins = GANTT_TIMELINE_SLOT_MINUTES
+    _g_cf = _gantt_color_mode_full()
     hdr_font = _result_font(bold=True, color="000000", size=12)
-    hdr_fill = PatternFill(fill_type="solid", start_color="D9D9D9", end_color="D9D9D9")
+    hdr_fill = PatternFill(
+        fill_type="solid",
+        start_color=("BBDEFB" if _g_cf else "D9D9D9"),
+        end_color=("BBDEFB" if _g_cf else "D9D9D9"),
+    )
     hdr_time_font = _result_font(bold=True, color="000000", size=11)
     title_font = _result_font(bold=True, size=24, color="1A1A1A")
-    title_fill = PatternFill(fill_type="solid", start_color="DDDDDD", end_color="DDDDDD")
+    title_fill = PatternFill(
+        fill_type="solid",
+        start_color=("E3F2FD" if _g_cf else "DDDDDD"),
+        end_color=("E3F2FD" if _g_cf else "DDDDDD"),
+    )
     meta_font = _result_font(size=11, color="333333")
-    meta_fill = PatternFill(fill_type="solid", start_color="F3F3F3", end_color="F3F3F3")
+    meta_fill = PatternFill(
+        fill_type="solid",
+        start_color=("F1F8E9" if _g_cf else "F3F3F3"),
+        end_color=("F1F8E9" if _g_cf else "F3F3F3"),
+    )
     day_banner_font = _result_font(bold=True, size=13, color="1A1A1A")
-    day_banner_fill = PatternFill(fill_type="solid", start_color="D0D0D0", end_color="D0D0D0")
+    day_banner_fill = PatternFill(
+        fill_type="solid",
+        start_color=("C5E1A5" if _g_cf else "D0D0D0"),
+        end_color=("C5E1A5" if _g_cf else "D0D0D0"),
+    )
     accent_left = Side(style="thick", color="2B2B2B")
     banner_sep = Side(style="thin", color="7A7A7A")
-    thin = Side(style="thin", color="666666")
+    thin = Side(style="thin", color=("5C6BC0" if _g_cf else "666666"))
     grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     idle_fill = PatternFill(fill_type="solid", start_color="FFFFFF", end_color="FFFFFF")
-    break_fill = PatternFill(fill_type="solid", start_color="B8B8B8", end_color="B8B8B8")
+    break_fill = PatternFill(
+        fill_type="solid",
+        start_color=("90CAF9" if _g_cf else "B8B8B8"),
+        end_color=("90CAF9" if _g_cf else "B8B8B8"),
+    )
     gantt_label_font = _result_font(size=10, bold=True, color="000000")
     gantt_label_font_actual = _result_font(size=10, bold=True, color="000000", italic=True)
+    _outside_hex = (
+        "FFCCBC" if _g_cf else str(RESULT_OUTSIDE_REGULAR_TIME_FILL or "FCE4D6")
+    )
     hdr_fill_outside_regular = PatternFill(
         fill_type="solid",
-        start_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
-        end_color=RESULT_OUTSIDE_REGULAR_TIME_FILL,
+        start_color=_outside_hex,
+        end_color=_outside_hex,
     )
     rs, re_ = (regular_shift_times or (None, None))
 
@@ -2003,7 +2104,7 @@ def _write_results_equipment_gantt_sheet(
     gantt_timeline_day_blocks: list[dict] = []
     _use_gantt_shape_labels = GANTT_TIMELINE_SHAPE_LABELS
     fills_by_mach = _equipment_gantt_fills_by_machine_name(equipment_list)
-    fb_gantt = "F5F5F5"
+    fb_gantt = "ECEFF1" if _g_cf else "F5F5F5"
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
 
     # タイトル＆日時（ページ上部）
@@ -5891,6 +5992,28 @@ def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
     return "FFFFFF"
 
 
+def _gantt_member_pill_bgrs_for_task_fill_hex(fill_hex: str) -> tuple[int, int, int]:
+    """
+    GANTT_COLOR_MODE=full 時の担当者チップ用 (塗り BGR, 線 BGR, 文字 BGR)。
+    依頼NO帯色を薄く混ぜた地色とし、文字は輝度から黒／白を選択。
+    """
+    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
+    rf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(r))))
+    gf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(g))))
+    bf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(b))))
+    mem_fill_bgr = _com_excel_bgr_rgb(rf, gf, bf)
+    lr = max(0, min(255, int(rf * 0.52)))
+    lg = max(0, min(255, int(gf * 0.52)))
+    lb = max(0, min(255, int(bf * 0.52)))
+    mem_line_bgr = _com_excel_bgr_rgb(lr, lg, lb)
+    lum = _gantt_label_luminance_01(rf, gf, bf)
+    if lum > 0.74:
+        mem_txt_bgr = _com_excel_bgr_rgb(26, 26, 26)
+    else:
+        mem_txt_bgr = _com_excel_bgr_rgb(255, 255, 255)
+    return mem_fill_bgr, mem_line_bgr, mem_txt_bgr
+
+
 def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
     """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
     from openpyxl import load_workbook
@@ -6529,9 +6652,14 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     }
                 )
             # #endregion
-            mem_fill = _com_excel_bgr_rgb(252, 252, 254)
-            mem_line = _com_excel_bgr_rgb(175, 180, 188)
-            mem_txt = _com_excel_bgr_rgb(38, 40, 46)
+            if _gantt_color_mode_full():
+                mem_fill, mem_line, mem_txt = _gantt_member_pill_bgrs_for_task_fill_hex(
+                    _fh
+                )
+            else:
+                mem_fill = _com_excel_bgr_rgb(252, 252, 254)
+                mem_line = _com_excel_bgr_rgb(175, 180, 188)
+                mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
                 # メンバー縦幅＝依頼NO と同じ（行高の 1/5 目標）。行全体 [top, top+h] に収まるよう
                 # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。
