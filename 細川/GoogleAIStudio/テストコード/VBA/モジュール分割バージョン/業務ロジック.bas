@@ -3036,6 +3036,8 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         
         ' 出力されたブックを開く
         Set sourceWb = Workbooks.Open(outputFilePath)
+        ' 取り込み元ブックのウィンドウのみ非表示（Excel 本体は表示のまま。Copy 中に前面へ出さない）
+        sourceWb.Windows(1).Visible = False
         
         For Each sourceWs In sourceWb.Sheets
             sheetName = Trim$(sourceWs.Name)
@@ -3137,6 +3139,8 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         Application.DisplayAlerts = False
         
         Set memberWb = Workbooks.Open(memberPath)
+        ' 取り込み元ブックのウィンドウのみ非表示（同上）
+        memberWb.Windows(1).Visible = False
         
         For Each sourceWs In memberWb.Sheets
             sheetName = sourceWs.Name
