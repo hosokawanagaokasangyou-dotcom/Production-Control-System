@@ -16613,7 +16613,7 @@ def _resume_after_work_break_extended(
     lower_t: datetime,
     breaks_merged: list,
     *,
-    min_long_break_minutes: int = 45,
+    min_long_break_minutes: int = 30,
     prebreak_gap_min_minutes: int = 4,
     prebreak_gap_max_minutes: int = 20,
 ) -> tuple[bool, datetime, datetime | None, datetime | None, bool]:
@@ -16623,7 +16623,7 @@ def _resume_after_work_break_extended(
              長休憩直前ギャップに同一依頼の後始末を挟むべきか)
 
     従来 _resumed_after_work_break と同じ厳密条件に加え、
-    長い勤務休憩（既定 45 分以上）の直前に加工が終わり、設備下限がまだ休憩終了より前のときは
+    長い勤務休憩（既定 30 分以上）の直前に加工が終わり、設備下限がまだ休憩終了より前のときは
     下限を休憩終了まで繰り上げて再開とみなす（同一依頼の昼休み跨ぎなど）。
     """
     if last_end is None or not isinstance(last_end, datetime) or not isinstance(
@@ -17097,7 +17097,12 @@ def _repair_timeline_for_same_tid_prebreak_cleanup(
     st_ld = daily_status.get(last_lead) or (daily_status.get(rep) if rep else None)
     if not st_ld:
         return False
-    br_resume = merge_time_intervals(list(st_ld.get("breaks_dt") or []))
+    _brk_parts = list(st_ld.get("breaks_dt") or [])
+    if rep:
+        st_rep_m = daily_status.get(rep)
+        if st_rep_m:
+            _brk_parts.extend(list(st_rep_m.get("breaks_dt") or []))
+    br_resume = merge_time_intervals(_brk_parts)
     _hit, _tf, bs_a, be_a, pre_gap = _resume_after_work_break_extended(
         lm_end, lm_end, br_resume
     )
@@ -17551,7 +17556,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     A15 が無いときは従来どおり代表スキル OP の勤務・休憩に沿って forward。
     準備時間は (1) 直前加工の依頼 NO が取れ、かつ直後加工と異なる依頼 NO に切り替わるとき、
     または (2) 同一依頼でも直前加工終了から本下限までの間に勤務休憩を挟む再開のときのみ付与する。
-    長い勤務休憩（既定 45 分以上）の直前に加工が終了し設備下限が休憩終了より前のときも (2) に含め、
+    長い勤務休憩（既定 30 分以上）の直前に加工が終了し設備下限が休憩終了より前のときも (2) に含め、
     必要なら同一依頼でも休憩開始までの壁時計で後始末（changeover_cleanup）を逆算挿入する。
     上記以外（直前依頼 NO が無い初回や、同一依頼の連続ロールで休憩を挟まないとき等）には準備を付けない。
     日次始業準備の直後の当該加工には準備時間を付けない。
@@ -17584,10 +17589,13 @@ def _changeover_plan_segments_and_machining_lower_bound(
     start_r = st_r["start_dt"] if st_r else None
     _lt_lead_br = str(last_lead or "").strip()
     _st_bresume = daily_status.get(_lt_lead_br) if _lt_lead_br else None
-    br_resume = (
-        merge_time_intervals(list(_st_bresume.get("breaks_dt") or []))
-        if _st_bresume
-        else list(br_r or [])
+    _sandwich_parts: list = []
+    if _st_bresume:
+        _sandwich_parts.extend(list(_st_bresume.get("breaks_dt") or []))
+    if st_r:
+        _sandwich_parts.extend(list(st_r.get("breaks_dt") or []))
+    br_sandwich = (
+        merge_time_intervals(_sandwich_parts) if _sandwich_parts else list(br_r or [])
     )
 
     segments: list[dict] = []
@@ -17678,7 +17686,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
             pre_gap_bs,
             pre_gap_be,
             pre_gap_cleanup_needed,
-        ) = _resume_after_work_break_extended(lm_end, t, br_resume)
+        ) = _resume_after_work_break_extended(lm_end, t, br_sandwich)
         if (
             pre_gap_cleanup_needed
             and _lt_s == cur_tid
@@ -17730,9 +17738,13 @@ def _changeover_plan_segments_and_machining_lower_bound(
             and cu_prev > 0
             and mach_occ in machining_today_occ
         )
+        _mx_br = 0.0
+        for _bs0, _be0 in br_sandwich or []:
+            if isinstance(_bs0, datetime) and isinstance(_be0, datetime):
+                _mx_br = max(_mx_br, (_be0 - _bs0).total_seconds() / 60.0)
         _agent_debug_ndjson_e28d9b(
             {
-                "hypothesisId": "H1-H4",
+                "hypothesisId": "H5-H6",
                 "location": "_changeover_plan_segments_and_machining_lower_bound:resume",
                 "message": "W4-3 changeover resume/cleanup trace",
                 "runId": "post-fix",
@@ -17757,6 +17769,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
                     else None,
                     "last_lead": _lt_lead_br or None,
                     "rep": str(rep or "") or None,
+                    "br_sandwich_max_min": round(_mx_br, 2),
                 },
             }
         )
