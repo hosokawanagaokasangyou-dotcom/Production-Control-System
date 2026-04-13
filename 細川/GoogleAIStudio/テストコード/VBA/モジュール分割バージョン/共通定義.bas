@@ -86,7 +86,7 @@ Public Const GWL_STYLE As Long = -16
 ' コンソール枠除去用（Caption/ThickFrame/MinMax/SysMenu）。環境によっては conhost が無視する場合あり
 Public Const WS_CONSOLE_OVERLAY_STRIP As Long = &HCF0000
 ' D3=false オーバーレイ待機（ms）。短すぎると Python→xlwings の COM 同期と Excel 主スレッドが奪い合い「応答していません」になりやすいため SPLASH_LOG と同程度にする
-Public Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1200
+Public Const STAGE12_CMD_OVERLAY_POLL_MS As Long = 1000
 ' ログ枠（TextBox）の画面矩形よりコンソール外周を四辺いくら縮めるか（px）。conhost の内側の黒余白で「枠が大きい」と感じる場合に調整
 Public Const STAGE12_CMD_OVERLAY_RECT_INSET_PX As Long = 10
 ' True=上記オーバーレイ時にタイトルバー等を API で外す（うまくいかない PC では False）
@@ -205,8 +205,8 @@ Public Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
 ' UserForm 前面化用（Caption を一意にし FindWindow で HWND を得る。フォームの Caption プロパティも同じ文字列にするとよい）
 Public Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
 ' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
-' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（400→1200）
-Public Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1200
+' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（処理中は約 1 秒間隔を既定とする）
+Public Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1000
 ' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
 Public m_splashPollLastFileLen As Long
 Public m_splashPollHaveCachedFileLen As Boolean
