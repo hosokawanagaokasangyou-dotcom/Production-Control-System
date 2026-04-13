@@ -2464,9 +2464,7 @@ def _planning_completion_flag_cell_is_mikan(v) -> bool:
     return tail == "未完"
 
 
-def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
-    row, *, debug_log: bool = True, debug_context: str = ""
-) -> bool:
+def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row) -> bool:
     """
     加工計画DATA／配台計画_タスク入力の同一列前提で、次をすべて満たす行は加工済みとみなし配台対象外とする。
 
@@ -2480,47 +2478,7 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
     ok_mikan = _planning_completion_flag_cell_is_mikan(cf_v)
     ok_act = abs(act_v) > 1e-12
     ok_unp = unp_v is not None and abs(float(unp_v)) <= 1e-12
-    result = bool(ok_mikan and ok_act and ok_unp)
-    # #region agent log
-    try:
-        if (
-            debug_log
-            and ok_act
-            and (unp_v is None or abs(float(unp_v)) <= 1e-12)
-            and (not row_has_completion_keyword(row))
-        ):
-            _repo = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-            )
-            _logp = os.path.join(_repo, "debug-c67f14.log")
-            _tid = planning_task_id_str_from_plan_row(row) if row is not None else ""
-            _payload = {
-                "sessionId": "c67f14",
-                "runId": "post-fix",
-                "hypothesisId": (
-                    "H4"
-                    if debug_context == "load_planning_tasks_df"
-                    else "H1-H3"
-                ),
-                "location": "_core.py:_plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule",
-                "message": "near-user-pattern",
-                "data": {
-                    "task_id": _tid,
-                    "context": debug_context or "(default)",
-                    "completion_flag_repr": repr(cf_v),
-                    "is_mikan": ok_mikan,
-                    "actual_done": act_v,
-                    "unprocessed": None if unp_v is None else float(unp_v),
-                    "exclude_as_completed": result,
-                },
-                "timestamp": int(time_module.time() * 1000),
-            }
-            with open(_logp, "a", encoding="utf-8") as _df:
-                _df.write(json.dumps(_payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-    return result
+    return bool(ok_mikan and ok_act and ok_unp)
 
 
 def _plan_row_exclude_from_assignment(row) -> bool:
@@ -3758,15 +3716,6 @@ def load_planning_tasks_df():
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
-    # #region agent log
-    try:
-        for _, _r in df.iterrows():
-            _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
-                _r, debug_context="load_planning_tasks_df"
-            )
-    except Exception:
-        pass
-    # #endregion
     return df
 
 
@@ -11634,38 +11583,6 @@ def run_stage1_extract():
         qty, _, _, _ = _plan_row_dispatch_qty_metrics(row)
         if qty <= 0 or not machine or not task_id:
             continue
-        # #region agent log
-        try:
-            if "y4-30" in str(task_id).lower():
-                _repo_s1 = os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-                )
-                _logp_s1 = os.path.join(_repo_s1, "debug-c67f14.log")
-                _unp_s1 = _optional_unprocessed_m_from_plan_row(row)
-                _payload_s1 = {
-                    "sessionId": "c67f14",
-                    "runId": "post-fix",
-                    "hypothesisId": "H5",
-                    "location": "_core.py:run_stage1_extract",
-                    "message": "y4-30_row_included_in_stage1_output",
-                    "data": {
-                        "task_id": str(task_id),
-                        "machine": machine,
-                        "machine_name": machine_name,
-                        "completion_flag_repr": repr(row.get(TASK_COL_COMPLETION_FLAG)),
-                        "actual_done": parse_float_safe(
-                            row.get(TASK_COL_ACTUAL_DONE), 0.0
-                        ),
-                        "unprocessed": None if _unp_s1 is None else float(_unp_s1),
-                        "qty_dispatch_metric": float(qty),
-                    },
-                    "timestamp": int(time_module.time() * 1000),
-                }
-                with open(_logp_s1, "a", encoding="utf-8") as _df_s1:
-                    _df_s1.write(json.dumps(_payload_s1, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
         _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
