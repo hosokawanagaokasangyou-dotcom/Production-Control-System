@@ -15256,9 +15256,17 @@ def _build_equipment_schedule_dataframe(
                         _sub_n = _eq_cell_display_sub(active_ev, d)
                         _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
-                        eq_text = (
-                            f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
-                        )
+                        # 日次始業準備・準備・後始末は括弧ラベルのみ（進度列なし・薄緑着色と整合）
+                        if _ek_disp in (
+                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                            TIMELINE_EVENT_CHANGEOVER_CLEANUP,
+                            TIMELINE_EVENT_CHANGEOVER_PREP,
+                        ):
+                            eq_text = f"({_tag})"
+                        else:
+                            eq_text = (
+                                f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
+                            )
                         progress_text = ""
                     else:
                         _slice_a = max(curr_grid, active_ev["start_dt"])
