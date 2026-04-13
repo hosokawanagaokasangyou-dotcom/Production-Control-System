@@ -2450,11 +2450,18 @@ def row_has_completion_keyword(row):
 
 
 def _planning_completion_flag_cell_is_mikan(v) -> bool:
-    """加工完了区分がセル値として「未完」とみなすか（NFKC・前後空白除去）。"""
+    """加工完了区分がセル値として「未完」とみなすか（NFKC・前後空白除去）。
+
+    セルが「0:未完」のように区分値とコロンで前置される場合は、**最後のコロン以降**が厳密に
+    「未完」のときのみ True（実データで未完区分が数値プレフィックス付きで格納される）。
+    「未完了」は末尾が「未完」にならないため False のまま。
+    """
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return False
     s = unicodedata.normalize("NFKC", str(v).strip())
-    return s == "未完"
+    s = s.replace("\uff1a", ":").replace("：", ":")
+    tail = s.rsplit(":", 1)[-1].strip() if ":" in s else s
+    return tail == "未完"
 
 
 def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
@@ -2465,7 +2472,7 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
 
     - 「未加工」列があり数値 0（空・列無しは対象外）
     - 「実加工数」が 0 以外
-    - 「加工完了区分」が「未完」（「未完了」等は含めない）
+    - 「加工完了区分」が「未完」または「0:未完」形式で末尾が「未完」（「未完了」等は含めない）
     """
     cf_v = row.get(TASK_COL_COMPLETION_FLAG)
     act_v = parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)
@@ -2489,7 +2496,7 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
             _tid = planning_task_id_str_from_plan_row(row) if row is not None else ""
             _payload = {
                 "sessionId": "c67f14",
-                "runId": "pre",
+                "runId": "post-fix",
                 "hypothesisId": (
                     "H4"
                     if debug_context == "load_planning_tasks_df"
@@ -11637,7 +11644,7 @@ def run_stage1_extract():
                 _unp_s1 = _optional_unprocessed_m_from_plan_row(row)
                 _payload_s1 = {
                     "sessionId": "c67f14",
-                    "runId": "pre",
+                    "runId": "post-fix",
                     "hypothesisId": "H5",
                     "location": "_core.py:run_stage1_extract",
                     "message": "y4-30_row_included_in_stage1_output",
