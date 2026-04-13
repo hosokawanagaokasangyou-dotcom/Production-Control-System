@@ -160,6 +160,7 @@
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#day-flow">日内割付・環境変数</a></li>
       <li><a href="#need-surplus">need 追加人数（余力・メイン後追記）</a></li>
+      <li><a href="#excel-sheets-columns">マスタ／マクロブックのシート・列名</a></li>
       <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#roll-unit-length">ロール単位長さ（配台計画_タスク入力）</a></li>
       <li><a href="#stock-location">在庫場所（配台計画_タスク入力）</a></li>
@@ -307,6 +308,51 @@
       <li><strong>時刻は変えない</strong>（表示・同席記録向け。メインで決めた <code>end_dt</code> のまま）。</li>
       <li>詳細・表は <span class="file">配台ルール.md</span> セクション 3.5。</li>
     </ul>
+  </section>
+
+  <section id="excel-sheets-columns" class="card" aria-labelledby="h-excel-cols">
+    <h2 id="h-excel-cols">マスタブックとマクロブックでロジックが参照するシート・列名</h2>
+    <p class="queue-note"><strong>実装の正</strong>は <span class="file">python/planning_core/_core.py</span> と <span class="file">python/workbook_env_bootstrap.py</span>、環境変数 <code>TASK_INPUT_WORKBOOK</code>。マスタの既定ファイル名は <code>master.xlsm</code>（<code>MASTER_FILE</code>）。<strong><code>master.xlsx</code> 等でも</strong>シート名・列見出しが同じであることが前提です。マクロ側の例として <span class="file">生産管理_AI配台_V2.xlsm</span> を挙げます（版により名称は変わり得ます）。詳細表は <span class="file">配台ルール.md</span> セクション <strong>8.0.0</strong> と同一内容です。</p>
+
+    <h3>マスタ（<code>master.xlsm</code> 相当）</h3>
+    <table>
+      <thead><tr><th>シート</th><th>主な参照</th></tr></thead>
+      <tbody>
+        <tr><td><code>skills</code></td><td>1行目＝工程名、2行目＝機械名、<strong>A列</strong>＝メンバー。交差セルに OP/AS と優先度。</td></tr>
+        <tr><td><code>need</code></td><td>工程×機械のマトリクス、必須人数・配台時追加人数行、特別指定1〜99、列 <code>依頼NO条件</code>・<code>備考</code>。列の左右位置は need 由来ソートに使用。</td></tr>
+        <tr><td><code>メイン</code>（名称解決あり）</td><td><strong>A12/B12</strong> 工場稼働、<strong>A15/B15</strong> 定常、<code>グローバルコメント</code> 直下（Gemini）、再優先系セル（表記ゆれ許容）。</td></tr>
+        <tr><td><code>機械カレンダー</code></td><td><strong>A</strong>＝1時間スロット、<strong>B</strong>＝曜日、<strong>C以降</strong>＝設備占有。時台はメイン A12/B12 と整合。</td></tr>
+        <tr><td><code>設定_機械_日次始業準備</code>（任意）</td><td>列 <code>機械名</code>（または <code>機械</code>）と <code>日次始業準備_分</code> 等の分列。</td></tr>
+        <tr><td><code>組み合わせ表</code>（任意）</td><td><code>組み合わせ行ID</code>／<code>インデックス</code>、<code>工程名</code>、<code>機械名</code>、<code>工程+機械</code>、<code>組み合わせ優先度</code>、<code>必須人数</code>、<code>メンバー1</code>…</td></tr>
+        <tr><td>メンバー個別シート</td><td><code>日付</code>、<code>出勤時間</code>、<code>退勤時間</code>、休憩1/2の開始・終了、<code>作業効率</code>、<code>休暇区分</code>、<code>備考</code>、<code>残業(分)</code>（旧 <code>残業終業</code> 可）。<code>skills</code>／<code>need</code>／名前に「カレンダー」を含むシートは除外。</td></tr>
+      </tbody>
+    </table>
+    <p><strong>読まない例</strong>: <code>設定_依頼切替前後時間</code>（現行 Python では未読込）。</p>
+
+    <h3>マクロブック（<code>TASK_INPUT_WORKBOOK</code> … 例: <code>生産管理_AI配台_V2.xlsm</code>）</h3>
+    <table>
+      <thead><tr><th>シート</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td><code>加工計画DATA</code></td><td>段階1の抽出元。</td></tr>
+        <tr><td><code>配台計画_タスク入力</code></td><td>段階1出力・段階2入力（既定。環境変数 <code>TASK_PLAN_SHEET</code> で変更可）。AX:AY はグローバルコメント解析の参照表示のみ。</td></tr>
+        <tr><td><code>設定</code></td><td>B1＝証明書パス、D/E 列＝Gemini モデル一覧、A3以降＝トレース依頼NO、B3以降＝デバッグ依頼NO。</td></tr>
+        <tr><td><code>設定_環境変数</code></td><td>A＝変数名、B＝値（import 前に <code>os.environ</code>）。</td></tr>
+        <tr><td><code>設定_配台不要工程</code></td><td>工程名・機械名・配台不要・配台不要ロジック・ロジック式。</td></tr>
+        <tr><td><code>列設定_結果_タスク一覧</code></td><td>列名・表示。</td></tr>
+        <tr><td><code>配台_配台不要工程</code></td><td>存在時は openpyxl 回避判定に使用。</td></tr>
+        <tr><td><code>加工実績DATA</code></td><td>オプションの実績参照。</td></tr>
+        <tr><td>段階2出力 xlsx</td><td><code>結果_タスク一覧</code>、<code>結果_設備毎の時間割</code>、<code>TEMP_設備毎の時間割</code>、<code>ブロックテーブル</code>、<code>結果_設備毎の時間割_機械名毎</code>、<code>結果_設備ガント</code>、<code>結果_人員配台優先順</code>、<code>結果_カレンダー(出勤簿)</code> 等。個人別は <code>member_schedule_*.xlsx</code>。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>列名（代表）</h3>
+    <ul>
+      <li><strong>加工計画DATA</strong>: 依頼NO、工程名、機械名、換算数量、未加工、受注数、加工速度、製品名、回答納期、指定納期、原反投入日、在庫場所（任意）、加工内容、加工完了区分、実加工数、実出来高、データ抽出日、抽出時間。</li>
+      <li><strong>配台計画_タスク入力</strong>: 配台試行順番、配台不要、上記ベース列＋配台使用残数量（未加工の直後）、ロール単位長さ（製品名の直後）、加工工程の決定プロセスの因子、（元）／本体の上書き列（加工速度_上書き、原反投入日_上書き、担当OP_指定、特別指定_備考）、AI特別指定_解析。</li>
+      <li><strong>加工実績DATA</strong>: 依頼NO、工程名、担当者、開始日時、終了日時、実績開始、実績終了、日付、開始時刻、終了時刻。</li>
+      <li><strong>結果_タスク一覧</strong>（既定骨格）: ステータス、タスクID、工程名、機械名、加工速度、優先度、配台試行順番、履歴1…（可変）、必須OP(上書)、タスク効率、加工途中、特別指定あり、担当OP指定、回答納期、指定納期、計画基準納期、原反投入日、納期緊急、加工開始日、配台済_加工開始／終了、配台済_回答指定16時まで、累計加工量、残加工量、完了率(実行時点)、特別指定_AI。</li>
+    </ul>
+    <p class="queue-note">計画シートから廃止した列（優先度・必要人数など）と、結果シート既定の「優先度」列の関係は <span class="file">配台ルール.md</span> 8.0.0 の注記を参照。</p>
   </section>
 
   <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">
