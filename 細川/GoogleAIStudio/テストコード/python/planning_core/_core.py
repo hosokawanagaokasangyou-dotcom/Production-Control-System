@@ -1041,32 +1041,6 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     }
 )
 
-# #region agent log
-_AGENT_DEBUG_LOG_EC2761 = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-ec2761.log")
-)
-
-
-def _debug_agent_ndjson_ec2761(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    try:
-        payload = {
-            "sessionId": "ec2761",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG_EC2761, "a", encoding="utf-8") as _df:
-            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
 # 計画結果ブック「結果_タスク一覧」の列順・表示（マクロ実行ブックの同名シートで上書き可）
 RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
@@ -10109,27 +10083,7 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
             except re.error:
                 return False
         if op == "eq":
-            _eq_ok = _exclude_rule_string_eq_allow_csv_tokens(val_s, pat)
-            # #region agent log
-            if (
-                col == TASK_COL_PROCESS_CONTENT
-                and ("欠点" in val_s or "欠点" in str(pat or ""))
-            ):
-                _debug_agent_ndjson_ec2761(
-                    "H5",
-                    "_core.py:_evaluate_exclude_rule_one_condition",
-                    "eq_加工内容",
-                    {
-                        "val_s": val_s,
-                        "pat": pat,
-                        "repr_val": repr(val_s),
-                        "repr_pat": repr(pat),
-                        "eq_strict": val_s == pat,
-                        "eq_tokens": _eq_ok,
-                    },
-                )
-            # #endregion
-            return _eq_ok
+            return _exclude_rule_string_eq_allow_csv_tokens(val_s, pat)
         if op == "ne":
             return not _exclude_rule_string_eq_allow_csv_tokens(val_s, pat)
 
@@ -11534,18 +11488,6 @@ def apply_exclude_rules_config_to_plan_df(
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         return df
     rules = _load_exclude_rules_from_workbook(wb_path)
-    # #region agent log
-    _debug_agent_ndjson_ec2761(
-        "H3",
-        "_core.py:apply_exclude_rules_config_to_plan_df",
-        "enter",
-        {
-            "plan_rows": int(len(df)),
-            "rules_count": len(rules),
-            "wb_suffix": (wb_path or "")[-120:],
-        },
-    )
-    # #endregion
     if not rules:
         return df
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
@@ -11573,87 +11515,19 @@ def apply_exclude_rules_config_to_plan_df(
                 df, by_tid_idx.get(tid_norm, [])
             )
         bunkatsu_block_cfg = is_bunkatsu and bool(tid_norm) and not dup_ge2_for_tid
-        # #region agent log
-        _pc_dbg = str(row.get(TASK_COL_PROCESS_CONTENT, "") or "").strip()
-        _trace_rows = "欠点" in _pc_dbg
-        _traces: list | None = [] if _trace_rows else None
-        # #endregion
         for ru in rules:
             if not _task_row_matches_exclude_rule_target(tp, tm, ru["proc"], ru["mach"]):
-                # #region agent log
-                if _traces is not None:
-                    _traces.append(
-                        {
-                            "rule_proc": ru["proc"],
-                            "rule_mach": ru["mach"],
-                            "step": "no_target_match",
-                            "norm_task_proc": _normalize_process_name_for_rule_match(tp),
-                            "norm_rule_proc": _normalize_process_name_for_rule_match(ru["proc"]),
-                        }
-                    )
-                # #endregion
                 continue
             if bunkatsu_block_cfg:
-                # #region agent log
-                if _traces is not None:
-                    _traces.append(
-                        {
-                            "rule_proc": ru["proc"],
-                            "rule_mach": ru["mach"],
-                            "step": "bunkatsu_block",
-                        }
-                    )
-                # #endregion
                 continue
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
-                # #region agent log
-                if _traces is not None:
-                    _traces.append(
-                        {
-                            "rule_proc": ru["proc"],
-                            "rule_mach": ru["mach"],
-                            "step": "c_yes",
-                        }
-                    )
-                # #endregion
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
                 break
-            # #region agent log
-            _parsed = ru.get("parsed")
-            _jok = bool(_parsed) and evaluate_exclude_rule_json_for_row(_parsed, row)
-            if _traces is not None:
-                _traces.append(
-                    {
-                        "rule_proc": ru["proc"],
-                        "rule_mach": ru["mach"],
-                        "step": "json_eval",
-                        "parsed_is_none": _parsed is None,
-                        "json_true": _jok,
-                    }
-                )
-            # #endregion
-            if _parsed and _jok:
+            if ru.get("parsed") and evaluate_exclude_rule_json_for_row(ru["parsed"], row):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
                 break
-        # #region agent log
-        if _traces is not None:
-            _debug_agent_ndjson_ec2761(
-                "H1",
-                "_core.py:apply_exclude_rules_config_to_plan_df",
-                "row_欠点系_トレース",
-                {
-                    "task_id": str(row.get(TASK_COL_TASK_ID, "")),
-                    "task_proc_工程名": tp,
-                    "task_mach": tm,
-                    "加工内容": _pc_dbg,
-                    "bunkatsu_block_cfg": bunkatsu_block_cfg,
-                    "is_bunkatsu_工程名": is_bunkatsu,
-                    "traces": _traces[:20],
-                },
-            )
-        # #endregion
     if n:
         logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
     return df
