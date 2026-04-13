@@ -16383,7 +16383,7 @@ def _pick_skilled_op_for_changeover_interval(
 ) -> str | None:
     """
     当日 eligible のごう」当該工程+機械で OP スキルを挝つ者のごう優先度は最尝の1坝。
-    準備・日次始業の休憩スキップに用いる（avail_dt は見ない）。
+    日次始業の休憩スキップに用いる（avail_dt は見ない）。
     """
     cands: list[tuple[int, str]] = []
     proc = (machine_proc or "").strip()
