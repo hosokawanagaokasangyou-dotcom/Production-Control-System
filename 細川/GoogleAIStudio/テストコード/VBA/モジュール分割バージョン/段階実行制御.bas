@@ -274,7 +274,6 @@ Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePat
                     End If
                     Sleep STAGE12_CMD_OVERLAY_POLL_MS
                     DoEvents
-                    MacroSplash_AdvanceSpinnerInCaption
                 Loop
                 MacroSplash_EndConsoleOverlay
                 On Error Resume Next
@@ -355,7 +354,6 @@ Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePat
         End If
         Sleep SPLASH_LOG_POLL_INTERVAL_MS
         DoEvents
-        MacroSplash_AdvanceSpinnerInCaption
     Loop
     MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
