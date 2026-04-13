@@ -2314,6 +2314,7 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
     Dim preserveFontName As String
     Dim preserveFontSize As Double
     Dim havePreserveFont As Boolean
+    Dim fitSU As Boolean
 
     path = targetDir & "\output\plan_input_tasks.xlsx"
     If Len(Dir(path)) = 0 Then
@@ -2354,8 +2355,6 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
     srcWb.Close SaveChanges:=False
     Set srcWb = Nothing
 
-    On Error Resume Next
-    ws.UsedRange.Columns.AutoFit
     If havePreserveFont Then
         配台計画_タスク入力_UsedRangeにフォント名とサイズを適用 ws, preserveFontName, preserveFontSize
     End If
@@ -2408,6 +2407,16 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
             ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).AutoFilter
         End If
     End If
+    On Error GoTo 0
+
+    ' 列幅はオートフィルタの▼分を考慮するため、フィルタ適用後に AutoFit（先に AutoFit すると見出しと重なる）
+    fitSU = Application.ScreenUpdating
+    On Error Resume Next
+    Application.ScreenUpdating = True
+    ws.Activate
+    DoEvents
+    ws.UsedRange.Columns.AutoFit
+    Application.ScreenUpdating = fitSU
     On Error GoTo 0
 
     ' 上書き入力列に薄い黄色（Python planning_core と同系色）? 取り込み後も確実に付与
