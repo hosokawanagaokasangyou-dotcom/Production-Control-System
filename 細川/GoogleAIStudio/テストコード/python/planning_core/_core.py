@@ -2542,31 +2542,6 @@ def parse_float_safe(val, default=0.0):
         return default
 
 
-def calc_done_qty_equivalent_from_row(row):
-    """
-    加工済数値（工程投入から残作）を返す。
-
-    基本弝:
-      実出来高 ÷ (受注数 ÷ 換算数量)
-    = 実出来高 * 換算数量 / 受注数
-
-    受注数は無い/正常な場合は」旧列「実加工数」を互換フォールバックとして使う。
-    """
-    qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-    order_qty = parse_float_safe(row.get(TASK_COL_ORDER_QTY), 0.0)
-    actual_output = parse_float_safe(row.get(TASK_COL_ACTUAL_OUTPUT), 0.0)
-    legacy_done = parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)
-
-    if qty_total <= 0:
-        return max(0.0, legacy_done)
-
-    if order_qty > 0 and actual_output >= 0:
-        done_qty = actual_output * qty_total / order_qty
-        return max(0.0, done_qty)
-
-    return max(0.0, legacy_done)
-
-
 def _optional_unprocessed_m_from_plan_row(row) -> float | None:
     """行の「未加工」セルを数値化。列が無い・空なら None。"""
     if row is None:
@@ -2580,17 +2555,34 @@ def _optional_unprocessed_m_from_plan_row(row) -> float | None:
     return _optional_float_unprocessed_column(row.get(TASK_COL_UNPROCESSED))
 
 
+def _ensure_dataframe_has_unprocessed_column(
+    df: pd.DataFrame, *, context_label: str
+) -> None:
+    """加工計画DATA／配台計画_タスク入力に「未加工」列が無いとき配台を中止する。"""
+    if df is None:
+        raise PlanningValidationError(
+            f"{context_label}: 列「{TASK_COL_UNPROCESSED}」が必須です。"
+            "この列が無いため配台処理を中止します。"
+        )
+    if TASK_COL_UNPROCESSED not in df.columns:
+        raise PlanningValidationError(
+            f"{context_label}: 列「{TASK_COL_UNPROCESSED}」が必須です。"
+            "この列が無いため配台処理を中止します。"
+        )
+
+
 def _plan_row_dispatch_qty_metrics(row):
     """
     1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
 
-    未加工に有効数値があるとき（加工計画DATA 由来を段階1でコピーした値と同じ前提）:
+    **未加工列は必須**（シートに列が無い場合は ``load_tasks_df`` / ``load_planning_tasks_df`` で
+    ``PlanningValidationError``）。セルが空・数値化できない場合も同様にエラーとする。
+    実出来高・実加工数からの済相当フォールバックは行わない。
+
+    未加工に有効数値があるとき:
       ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
       ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それがロール単位長さ未満ならロール長を採用（最小加工単位=1ロール）。済相当m = 0。
       換算数量の100m切上は total_qty_m 用に第三要素で返す。
-    未加工が無い・空のとき（従来）:
-      済相当m = calc_done_qty_equivalent_from_row
-      残りm = max(0, 換算数量(100m切上) - 済相当m)
 
     Returns:
         tuple[float, float, float, bool]:
@@ -2613,9 +2605,10 @@ def _plan_row_dispatch_qty_metrics(row):
             remaining_m = max(base_m, roll_m) if roll_m > 0 else base_m
             done_m = 0.0
         return remaining_m, done_m, qty_total_ceiled, True
-    done_m = calc_done_qty_equivalent_from_row(row)
-    remaining_m = max(0.0, qty_total_ceiled - done_m)
-    return remaining_m, done_m, qty_total_ceiled, False
+    raise PlanningValidationError(
+        f"「{TASK_COL_UNPROCESSED}」が数値として読めません（セルが空または不正）、"
+        "または列がありません。配台残量は未加工列のみで算定するため、配台処理を中止します。"
+    )
 
 
 def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
@@ -3352,6 +3345,10 @@ def load_tasks_df():
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
     df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
+    _ensure_dataframe_has_unprocessed_column(
+        df, context_label=f"シート「{TASKS_SHEET_NAME}」"
+    )
     # 加工計画DATA の主列は「換算数量」（TASK_COL_QTY）。無いブックは未加工→旧「残作数値」の順で補完。
     if TASK_COL_QTY not in df.columns:
         for _alt_qty in ("未加工", "残作数値"):
@@ -3363,7 +3360,7 @@ def load_tasks_df():
                     _alt_qty,
                 )
                 break
-    # 「受注数」が無く「受注数」があるブック（実出来高からの換算に使用）
+    # 「受注数」列名の表記ゆれを「受注数」（TASK_COL_ORDER_QTY）へ寄せる補完
     if TASK_COL_ORDER_QTY not in df.columns and "受注数" in df.columns:
         df[TASK_COL_ORDER_QTY] = df["受注数"]
         logging.info(
@@ -3696,6 +3693,9 @@ def load_planning_tasks_df():
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
+    )
+    _ensure_dataframe_has_unprocessed_column(
+        df, context_label=f"シート「{PLAN_INPUT_SHEET_NAME}」"
     )
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
@@ -19471,6 +19471,8 @@ def _generate_plan_impl():
     # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
     try:
         tasks_df = load_planning_tasks_df()
+    except PlanningValidationError:
+        raise
     except Exception as e:
         logging.error(f"配台計画タスクシート読み込みエラー: {e}")
         _try_write_main_sheet_gemini_usage_summary("段階2")
