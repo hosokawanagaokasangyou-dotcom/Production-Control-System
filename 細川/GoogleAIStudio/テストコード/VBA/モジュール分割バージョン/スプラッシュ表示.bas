@@ -3,6 +3,18 @@ Option Explicit
 ' UserForm「frmMacroSplash」の既定グローバルインスタンス（VB_PredeclaredId）に依存しない。
 ' 手作業で追加した UserForm は事前宣言 ID が無効になり「frmMacroSplash が未定義」になることがあるため、New で確保する。
 Private m_frmMacroSplash As frmMacroSplash
+' lblMessage 用: 先頭に付ける ASCII スピナー（-\|/）の回転。本体文言は m_splashCaptionBase
+Private m_splashCaptionBase As String
+Private m_splashSpinnerPhase As Long
+Private Const SPLASH_SPINNER_FRAMES As String = "-\|/"
+
+Private Function MacroSplash_FormattedStepCaption() As String
+    If Len(m_splashCaptionBase) = 0 Then
+        MacroSplash_FormattedStepCaption = ""
+    Else
+        MacroSplash_FormattedStepCaption = Mid$(SPLASH_SPINNER_FRAMES, (m_splashSpinnerPhase And 3) + 1, 1) & "  " & m_splashCaptionBase
+    End If
+End Function
 
 Private Function MacroSplash_Form() As frmMacroSplash
     If m_frmMacroSplash Is Nothing Then
@@ -79,9 +91,26 @@ Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
     Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
+    m_splashCaptionBase = stepMessage
+    m_splashSpinnerPhase = 0
     prevSU = Application.ScreenUpdating
     If Not prevSU Then Application.ScreenUpdating = True
-    MacroSplash_Form.lblMessage.Caption = stepMessage
+    MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
+    MacroSplash_Form.Repaint
+    DoEvents
+    If Not prevSU Then Application.ScreenUpdating = False
+End Sub
+
+' 段階実行制御.RunCmdFileStageExecAndPoll の Sleep 後から呼ぶ。lblMessage 先頭の ASCII スピナーを 1 枠進める
+Public Sub MacroSplash_AdvanceSpinnerInCaption()
+    Dim prevSU As Boolean
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    If Len(m_splashCaptionBase) = 0 Then Exit Sub
+    m_splashSpinnerPhase = (m_splashSpinnerPhase + 1) And 3
+    prevSU = Application.ScreenUpdating
+    If Not prevSU Then Application.ScreenUpdating = True
+    MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
     MacroSplash_Form.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
@@ -175,7 +204,9 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
     tb.SelLength = 0
-    MacroSplash_Form.lblMessage.Caption = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
+    m_splashCaptionBase = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
+    m_splashSpinnerPhase = 0
+    MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
     MacroSplash_Form.Repaint
     DoEvents
     If Not prevSU Then Application.ScreenUpdating = False
@@ -208,7 +239,9 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             Application.Interactive = True
             tb.text = errBanner & tb.text
             m_splashLastLogSnapshot = tb.text
-            MacroSplash_Form.lblMessage.Caption = "…（実行ログの一括表示に失敗 ? 下記を参照）"
+            m_splashCaptionBase = "…（実行ログの一括表示に失敗 ? 下記を参照）"
+            m_splashSpinnerPhase = 0
+            MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
             MacroSplash_Form.Repaint
             DoEvents
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
@@ -294,7 +327,9 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
         message = "処理中です。しばらくお待ちください。"
     End If
     MacroSplash_Form.Caption = SPLASH_FORM_WINDOW_TITLE
-    MacroSplash_Form.lblMessage.Caption = message
+    m_splashCaptionBase = message
+    m_splashSpinnerPhase = 0
+    MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
     MacroSplash_Form.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
     If lockExcelUI Then
@@ -324,6 +359,8 @@ End Sub
 Public Sub MacroSplash_Hide()
     On Error Resume Next
     MacroStartBgm_FadeOutAndClose
+    m_splashCaptionBase = vbNullString
+    m_splashSpinnerPhase = 0
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
         If Not m_frmMacroSplash Is Nothing Then
