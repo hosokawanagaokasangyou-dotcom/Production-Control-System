@@ -1099,8 +1099,8 @@ End Sub
 ' ・シート「設定」D4: マクロ成功時の完了チャイム用 MP3 トラック番号 1?4（空・不正は 1）。ファイル名は標準モジュール MACRO_COMPLETE_MP3_1?4。sounds フォルダに配置。MP3 が無い／再生失敗時は macro_complete_chime.wav
 ' ・段階1／段階2のスプラッシュのみ: BGM（sounds 配下の Glass_Architecture1.mp3 等）を MCI ループ再生。終了時はフェードアウト後に close（完了チャイムより先）。他マクロのスプラッシュでは BGM・チャイムは再生しない
 ' ・UserForm「frmMacroSplash」をプロジェクトに追加（未追加時は表示せず続行）
-' ・lockExcelUI=True のとき Application.Interactive=False でブック操作をブロック（対話マクロは False）
-' ・ただし Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくい。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）。
+' ・lockExcelUI=True のときのみ Application.Interactive=False（グレーアウト・操作ブロック）。既定 False でメインシートを通常表示のまま見せる
+' ・Interactive=False のままだと UserForm の再描画が滞り execution_log ポーリングが見えにくいことがある。段階1/2 の Exec 待機中は一時的に True に戻す（RunCmdFileStageExecAndPoll）
 ' ・終了・エラー時は必ず MacroSplash_Hide で Interactive を戻す
 ' ・作成手順とフォームコードは frmMacroSplash_VBA.txt
 ' ・完了の vbInformation MsgBox は原則やめ、段階1／段階2成功時はスプラッシュ最終文＋完了チャイム（MacroCompleteChime・設定 D4・sounds\*.mp3／WAV・失敗時 SystemAsterisk）
@@ -1154,7 +1154,7 @@ Def1:
     SettingsSheet_GetCompleteChimeTrack1to4 = 1
 End Function
 
-Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
+Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = False, Optional ByVal allowMacroSound As Boolean = False)
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
     MacroSplash_Show splashMessage, lockExcelUI

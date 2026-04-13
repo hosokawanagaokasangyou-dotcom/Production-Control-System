@@ -436,7 +436,7 @@ Public Sub MacroSplash_BringFormToFront()
     On Error GoTo 0
 End Sub
 
-Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
+Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = False)
     On Error GoTo CleanupFail
     If m_macroSplashShown Then MacroSplash_Hide
     m_splashSavedScreenUpdating = Application.ScreenUpdating
@@ -451,6 +451,7 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     MacroSplash_Form.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
     MacroSplash_CaptureAnchorWorkbookView
+    ' lockExcelUI=True … Application.Interactive=False（ウィンドウがグレーアウトしセル操作不可）。既定 False でメインシートを通常表示のまま見せる
     If lockExcelUI Then
         Application.Interactive = False
         m_macroSplashLockedExcel = True
@@ -525,9 +526,9 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
 End Sub
 
 ' アニメ付き_* から呼び出し：スプラッシュ表示 → マクロ実行（引数は最大2つまで Application.Run に委譲）
-' lockExcelUI：False = InputBox／フォントダイアログなど Excel 対話が必要なマクロ向け
+' lockExcelUI：True = Application.Interactive=False（グレーアウト・操作ブロック）。False= 通常表示のまま（既定）。InputBox 等は False のままでよい
 ' allowMacroSound：True = 段階1／段階2と同様に BGM・成功時チャイムを許可（既定 False）
-Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = True, Optional ByVal allowMacroSound As Boolean = False)
+Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVal procName As String, Optional ByVal arg1 As Variant, Optional ByVal arg2 As Variant, Optional ByVal lockExcelUI As Boolean = False, Optional ByVal allowMacroSound As Boolean = False)
     m_splashAllowMacroSound = allowMacroSound
     On Error GoTo EH
     MacroSplash_Show splashMessage, lockExcelUI
