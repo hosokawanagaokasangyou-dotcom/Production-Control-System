@@ -802,6 +802,8 @@ PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+# 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
+PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
 PLANNING_MIN_QTY_M = 100.0
 # ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
@@ -1035,6 +1037,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         PLAN_COL_SPECIAL_REMARK,
         PLAN_COL_PROCESS_FACTOR,
         PLAN_COL_ROLL_UNIT_LENGTH,
+        PLAN_COL_DISPATCH_REMAINING_QTY,
     }
 )
 
@@ -1177,7 +1180,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工があれば出力、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -1187,6 +1190,8 @@ def plan_input_sheet_column_order():
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
     for c in SOURCE_BASE_COLUMNS:
         cols.append(c)
+        if c == TASK_COL_UNPROCESSED:
+            cols.append(PLAN_COL_DISPATCH_REMAINING_QTY)
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
     cols.append(PLAN_COL_PROCESS_FACTOR)
@@ -2554,8 +2559,8 @@ def _plan_row_dispatch_qty_metrics(row):
     1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
 
     未加工に有効数値があるとき（加工計画DATA 由来を段階1でコピーした値と同じ前提）:
-      ① 済相当m = max(0, 換算数量(raw) - 未加工)
-      ② 残りm = max(0, 未加工)
+      ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
+      ② 未加工 <= 0: 換算数量(100m切上)をそのまま残りm とし、済相当m = 0（配台は換算数量全量）
       換算数量の100m切上は total_qty_m 用に第三要素で返す。
     未加工が無い・空のとき（従来）:
       済相当m = calc_done_qty_equivalent_from_row
@@ -2569,13 +2574,30 @@ def _plan_row_dispatch_qty_metrics(row):
     qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
     unp = _optional_unprocessed_m_from_plan_row(row)
     if unp is not None:
-        u = max(0.0, float(unp))
-        remaining_m = u
-        done_m = max(0.0, qty_conv_raw - float(unp))
+        fu = float(unp)
+        if fu > 1e-12:
+            remaining_m = max(0.0, fu)
+            done_m = max(0.0, qty_conv_raw - fu)
+        else:
+            # 未加工が 0: 換算数量(100m切上)を配台残量(m)としてそのまま使う
+            remaining_m = max(0.0, qty_total_ceiled)
+            done_m = 0.0
         return remaining_m, done_m, qty_total_ceiled, True
     done_m = calc_done_qty_equivalent_from_row(row)
     remaining_m = max(0.0, qty_total_ceiled - done_m)
     return remaining_m, done_m, qty_total_ceiled, False
+
+
+def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
+    """配台計画 DataFrame の「配台使用残数量」を _plan_row_dispatch_qty_metrics と同一式で埋める。"""
+    if plan_df is None or getattr(plan_df, "empty", True):
+        return
+    if PLAN_COL_DISPATCH_REMAINING_QTY not in plan_df.columns:
+        return
+    for i in plan_df.index:
+        row = plan_df.loc[i]
+        rem, _d, _t, _fu = _plan_row_dispatch_qty_metrics(row)
+        plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = rem
 
 
 def parse_optional_int(val):
@@ -11592,6 +11614,7 @@ def run_stage1_extract():
     except Exception as ex:
         logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
+    _fill_plan_dispatch_remaining_qty_column(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
