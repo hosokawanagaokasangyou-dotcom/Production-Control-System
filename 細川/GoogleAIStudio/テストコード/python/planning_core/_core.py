@@ -2449,6 +2449,32 @@ def row_has_completion_keyword(row):
     return "完了" in str(v)
 
 
+def _planning_completion_flag_cell_is_mikan(v) -> bool:
+    """加工完了区分がセル値として「未完」とみなすか（NFKC・前後空白除去）。"""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return False
+    s = unicodedata.normalize("NFKC", str(v).strip())
+    return s == "未完"
+
+
+def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row) -> bool:
+    """
+    加工計画DATA／配台計画_タスク入力の同一列前提で、次をすべて満たす行は加工済みとみなし配台対象外とする。
+
+    - 「未加工」列があり数値 0（空・列無しは対象外）
+    - 「実加工数」が 0 以外
+    - 「加工完了区分」が「未完」（「未完了」等は含めない）
+    """
+    if not _planning_completion_flag_cell_is_mikan(row.get(TASK_COL_COMPLETION_FLAG)):
+        return False
+    if abs(parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)) <= 1e-12:
+        return False
+    unp = _optional_unprocessed_m_from_plan_row(row)
+    if unp is None:
+        return False
+    return abs(float(unp)) <= 1e-12
+
+
 def _plan_row_exclude_from_assignment(row) -> bool:
     """
     「配台試行」列はオンなら」しの行は配台キューへ入れう」特別指定_備考の AI 解析行からも除し。
@@ -9185,6 +9211,8 @@ def build_task_queue_from_planning_df(
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
             continue
+        if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
+            continue
         task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
@@ -9882,6 +9910,8 @@ def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> li
     seen: set[tuple[str, str]] = set()
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
+            continue
+        if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
             continue
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "") or "").strip()
@@ -11538,6 +11568,8 @@ def run_stage1_extract():
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
+            continue
+        if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
             continue
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
