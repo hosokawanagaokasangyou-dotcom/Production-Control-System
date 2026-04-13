@@ -827,27 +827,6 @@ def _trace_schedule_task_enabled(task_id) -> bool:
     return str(task_id or "").strip() in TRACE_SCHEDULE_TASK_IDS
 
 
-def _agent_debug_ndjson_e28d9b(payload: dict) -> None:
-    """DEBUG: workspace 直下 debug-e28d9b.log へ NDJSON 1 行追記（機微情報は入れない）。"""
-    try:
-        d = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(20):
-            if os.path.isdir(os.path.join(d, ".git")):
-                p = os.path.join(d, "debug-e28d9b.log")
-                out = dict(payload)
-                out["sessionId"] = "e28d9b"
-                out["timestamp"] = int(time_module.time() * 1000)
-                with open(p, "a", encoding="utf-8") as fo:
-                    fo.write(json.dumps(out, ensure_ascii=False) + "\n")
-                return
-            nd = os.path.dirname(d)
-            if nd == d:
-                break
-            d = nd
-    except Exception:
-        pass
-
-
 def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
     """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
     s = "".join(
@@ -17727,53 +17706,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
             t = max(t, ce2, t_resume_floor)
         else:
             t = max(t, t_resume_floor)
-    # #region agent log
-    _dbg_tid_u = str(task_id or "").strip().upper()
-    if _dbg_tid_u == "W4-3":
-        _nc = (
-            bool(last_tid)
-            and bool(cur_tid)
-            and last_tid != cur_tid
-            and last_d == current_date
-            and cu_prev > 0
-            and mach_occ in machining_today_occ
-        )
-        _mx_br = 0.0
-        for _bs0, _be0 in br_sandwich or []:
-            if isinstance(_bs0, datetime) and isinstance(_be0, datetime):
-                _mx_br = max(_mx_br, (_be0 - _bs0).total_seconds() / 60.0)
-        _agent_debug_ndjson_e28d9b(
-            {
-                "hypothesisId": "H5-H6",
-                "location": "_changeover_plan_segments_and_machining_lower_bound:resume",
-                "message": "W4-3 changeover resume/cleanup trace",
-                "runId": "post-fix",
-                "data": {
-                    "mach_occ": mach_occ,
-                    "cur_tid": cur_tid,
-                    "last_tid": last_tid,
-                    "need_cleanup": _nc,
-                    "cu_prev": int(cu_prev) if cu_prev else 0,
-                    "had_machine_daily_startup": had_machine_daily_startup,
-                    "lm_end": lm_end.isoformat()
-                    if isinstance(lm_end, datetime)
-                    else None,
-                    "t_after_resume_logic": t.isoformat() if isinstance(t, datetime) else None,
-                    "resume_after_break": resume_after_break,
-                    "pre_gap_cleanup_needed": pre_gap_cleanup_needed,
-                    "pre_gap_bs": pre_gap_bs.isoformat()
-                    if isinstance(pre_gap_bs, datetime)
-                    else None,
-                    "t_resume_floor": t_resume_floor.isoformat()
-                    if isinstance(t_resume_floor, datetime)
-                    else None,
-                    "last_lead": _lt_lead_br or None,
-                    "rep": str(rep or "") or None,
-                    "br_sandwich_max_min": round(_mx_br, 2),
-                },
-            }
-        )
-    # #endregion
     need_prep = (
         prep > 0
         and (not had_machine_daily_startup)
