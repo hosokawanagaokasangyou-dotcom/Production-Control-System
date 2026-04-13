@@ -735,7 +735,7 @@ GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT
 TASK_COL_TASK_ID = "依頼NO"
 TASK_COL_MACHINE = "工程名"
 TASK_COL_MACHINE_NAME = "機械名"
-TASK_COL_QTY = "残作数値"
+TASK_COL_QTY = "換算数量"
 # 加工計画DATA にある場合のみ段階1で配台計画へコピー。結果_タスク一覧「残加工量」はこの列の数値基準で出力する。
 TASK_COL_UNPROCESSED = "未加工"
 TASK_COL_ORDER_QTY = "受注数"
@@ -1177,7 +1177,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（残作数値の次に未加工があれば出力、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工があれば出力、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -2516,8 +2516,8 @@ def calc_done_qty_equivalent_from_row(row):
     加工済数値（工程投入から残作）を返す。
 
     基本弝:
-      実出来高 ÷ (受注数 ÷ 残作数値)
-    = 実出来高 * 残作数値 / 受注数
+      実出来高 ÷ (受注数 ÷ 換算数量)
+    = 実出来高 * 換算数量 / 受注数
 
     受注数は無い/正常な場合は」旧列「実加工数」を互換フォールバックとして使う。
     """
@@ -3241,9 +3241,9 @@ def load_tasks_df():
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
     df.columns = df.columns.str.strip()
-    # 生産管理_AI配台_V2 等: 「残作数値」列が無く「換算数量」「未加工」だけがあるブック向け
+    # 加工計画DATA の主列は「換算数量」（TASK_COL_QTY）。無いブックは未加工→旧「残作数値」の順で補完。
     if TASK_COL_QTY not in df.columns:
-        for _alt_qty in ("換算数量", "未加工"):
+        for _alt_qty in ("未加工", "残作数値"):
             if _alt_qty in df.columns:
                 df[TASK_COL_QTY] = df[_alt_qty]
                 logging.info(
@@ -3271,6 +3271,9 @@ def _nfkc_column_aliases(canonical_name):
 def _align_dataframe_headers_to_canonical(df, canonical_names):
     """列名を NFKC 一致で canonical に寄せる（Excel 坴は全角 '_' 等でも読ゝるよごに）。"""
     key_to_canonical = {_nfkc_column_aliases(c): c for c in canonical_names}
+    # 旧見出し「残作数値」→ 現行「換算数量」（TASK_COL_QTY）
+    if TASK_COL_QTY in canonical_names:
+        key_to_canonical[_nfkc_column_aliases("残作数値")] = TASK_COL_QTY
     # 旧見出し「原板…」を「原反…」へ寄せる（互換。canonical は TASK_COL / PLAN_COL の表記）
     if TASK_COL_RAW_INPUT_DATE in canonical_names:
         key_to_canonical[_nfkc_column_aliases("原板投入日")] = TASK_COL_RAW_INPUT_DATE
@@ -19454,7 +19457,7 @@ def _generate_plan_impl():
 
     if not task_queue:
         logging.warning(
-            f"有効なタスクはありません。「{PLAN_INPUT_SHEET_NAME}」の「依頼NO」「工程名」「残作数値」」"
+            f"有効なタスクはありません。「{PLAN_INPUT_SHEET_NAME}」の「依頼NO」「工程名」「{TASK_COL_QTY}」"
             "または完了区分・実出来高残作により残量は無い行のみの可能性はありした。"
         )
 
