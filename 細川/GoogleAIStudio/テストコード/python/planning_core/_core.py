@@ -2560,7 +2560,7 @@ def _plan_row_dispatch_qty_metrics(row):
 
     未加工に有効数値があるとき（加工計画DATA 由来を段階1でコピーした値と同じ前提）:
       ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
-      ② 未加工 <= 0: 換算数量(100m切上)をそのまま残りm とし、済相当m = 0（配台は換算数量全量）
+      ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それがロール単位長さ未満ならロール長を採用（最小加工単位=1ロール）。済相当m = 0。
       換算数量の100m切上は total_qty_m 用に第三要素で返す。
     未加工が無い・空のとき（従来）:
       済相当m = calc_done_qty_equivalent_from_row
@@ -2579,8 +2579,12 @@ def _plan_row_dispatch_qty_metrics(row):
             remaining_m = max(0.0, fu)
             done_m = max(0.0, qty_conv_raw - fu)
         else:
-            # 未加工が 0: 換算数量(100m切上)を配台残量(m)としてそのまま使う
-            remaining_m = max(0.0, qty_total_ceiled)
+            # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、ロール単位長さ未満は 1 ロール分に引き上げ
+            roll_m = _roll_unit_m_estimate_from_plan_row(
+                row, qty_total_ceiled or qty_conv_raw or 1.0
+            )
+            base_m = max(0.0, qty_total_ceiled)
+            remaining_m = max(base_m, roll_m) if roll_m > 0 else base_m
             done_m = 0.0
         return remaining_m, done_m, qty_total_ceiled, True
     done_m = calc_done_qty_equivalent_from_row(row)
@@ -2637,6 +2641,25 @@ def _planning_df_cell_scalar(row, col_name):
             return x
         return None
     return v
+
+
+def _roll_unit_m_estimate_from_plan_row(row, fallback_m: float) -> float:
+    """
+    配台計画1行から 1 ロールあたりの長さ(m)。シートのロール単位長さを優先し、
+    空・0 のときは build_task_queue と同趣旨で製品名から推定する。
+    """
+    product_name = row.get(TASK_COL_PRODUCT, None) if hasattr(row, "get") else None
+    unit = parse_float_safe(_planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
+    fb = max(1e-9, float(parse_float_safe(fallback_m, 0.0)))
+    if unit <= 0:
+        unit = infer_unit_m_from_product_name(product_name, fallback_unit=fb)
+    try:
+        unit = float(unit)
+    except (TypeError, ValueError):
+        unit = 0.0
+    if unit <= 0:
+        unit = fb
+    return float(unit)
 
 
 def load_ai_cache():
