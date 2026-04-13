@@ -16832,6 +16832,430 @@ def _machine_effective_floor_timedelta_only(
     return mf
 
 
+def _machining_events_same_occ_day_sorted(
+    timeline_events: list,
+    current_date: date,
+    machine_occ_key: str,
+) -> list[dict]:
+    occ = str(machine_occ_key or "").strip()
+    if not occ:
+        return []
+    out: list[dict] = []
+    for ev in timeline_events or []:
+        if ev.get("date") != current_date:
+            continue
+        if str(ev.get("machine_occupancy_key") or "").strip() != occ:
+            continue
+        if not _is_machining_timeline_event(ev):
+            continue
+        st = ev.get("start_dt")
+        ed = ev.get("end_dt")
+        if not isinstance(st, datetime) or not isinstance(ed, datetime) or ed <= st:
+            continue
+        out.append(ev)
+    out.sort(key=lambda e: (e["start_dt"], e["end_dt"]))
+    return out
+
+
+def _machining_timeline_event_min_end_dt(ev: dict) -> datetime | None:
+    """当該加工イベントを業務上の最小量まで短くしたときの終了時刻（これ以上は短縮しない）。"""
+    s0 = ev.get("start_dt")
+    e0 = ev.get("end_dt")
+    if not isinstance(s0, datetime) or not isinstance(e0, datetime) or e0 <= s0:
+        return None
+    br = merge_time_intervals(list(ev.get("breaks") or []))
+    eff = float(ev.get("eff_time_per_unit") or 0.0)
+    units = float(ev.get("units_done") or 0.0)
+    if eff <= 0 or units <= 0:
+        return e0
+    min_u = 1.0 if units >= 1.0 else units
+    min_wm = max(1, int(math.ceil(min_u * eff)))
+    end_limit = e0 + timedelta(days=1)
+    e_min, act, rem = calculate_end_time(s0, min_wm, br, end_limit)
+    if rem > 0 or act < min_wm:
+        return e0
+    return e_min
+
+
+def _cleanup_full_duration_fits_from_start(
+    cleanup_start: datetime,
+    cleanup_minutes: int,
+    breaks_merged: list,
+    shift_end: datetime,
+) -> bool:
+    if cleanup_minutes <= 0:
+        return True
+    if not isinstance(cleanup_start, datetime) or not isinstance(shift_end, datetime):
+        return False
+    _ce, act, rem = calculate_end_time(
+        cleanup_start, cleanup_minutes, breaks_merged, shift_end
+    )
+    return rem <= 0 and act >= cleanup_minutes
+
+
+def _changeover_need_cleanup_for_next_assign(
+    *,
+    machine_handoff: dict,
+    machine_occ_key: str,
+    current_date: date,
+    cur_task_id: str,
+    last_eq: str | None,
+) -> tuple[bool, int, str, str]:
+    """
+    依頼切替後始末が次ロール前に必要か、後始末分、直前主、直前設備行を返す。
+    _changeover_plan_segments_and_machining_lower_bound の need_cleanup と整合。
+    """
+    mach_occ = str(machine_occ_key or "").strip()
+    machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    last_tid = (machine_handoff.get("last_tid") or {}).get(mach_occ, "")
+    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
+    cur_tid = str(cur_task_id or "").strip()
+    last_eq_s = str(last_eq or "").strip() or str(
+        (machine_handoff.get("last_eq") or {}).get(mach_occ, "") or ""
+    ).strip()
+    _prep_unused, cu_prev = _lookup_changeover_minutes_for_eq(last_eq_s, None)
+    need = (
+        bool(str(last_tid or "").strip())
+        and bool(cur_tid)
+        and str(last_tid).strip() != cur_tid
+        and last_d == current_date
+        and cu_prev > 0
+        and mach_occ in machining_today_occ
+    )
+    last_lead = str((machine_handoff.get("last_lead_op") or {}).get(mach_occ, "") or "").strip()
+    return need, cu_prev, last_lead, last_eq_s
+
+
+def _avail_dt_reapply_member_max_end_from_timeline(
+    timeline_events: list,
+    avail_dt: dict,
+    members: set[str],
+) -> None:
+    """指定メンバーについて、タイムライン全体の終了の最大で avail_dt を上書き（短縮後の整合）。"""
+    for m in members:
+        mm = str(m or "").strip()
+        if not mm or mm not in avail_dt:
+            continue
+        best: datetime | None = None
+        for ev in timeline_events or []:
+            names: list[str] = []
+            op = str(ev.get("op") or "").strip()
+            if op:
+                names.append(op)
+            for s in str(ev.get("sub") or "").split(","):
+                s = s.strip()
+                if s:
+                    names.append(s)
+            if mm not in names:
+                continue
+            ed = ev.get("end_dt")
+            if isinstance(ed, datetime):
+                best = ed if best is None else max(best, ed)
+        if best is not None:
+            avail_dt[mm] = best
+
+
+def _repair_timeline_shorten_machining_for_changeover_cleanup(
+    *,
+    timeline_events: list,
+    machine_avail_dt: dict,
+    machine_handoff: dict,
+    current_date: date,
+    machine_occ_key: str,
+    next_task_id: str,
+    machine_proc: str,
+    machine_name: str,
+    daily_status: dict,
+    skills_dict: dict,
+    avail_dt: dict | None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None,
+    task_queue: list,
+    machine_day_floor: datetime,
+) -> bool:
+    """
+    依頼切替の後始末が担当者勤務線で実寸積めないとき、当日・同一占有の加工タイムラインを
+    終了が新しい順に短縮し、必要ならその直後以降の区間を壁時計で繰り上げる。
+    後始末実寸優先（加工量は短縮で犠牲）。
+    """
+    need, cu_prev, last_lead, last_eq_s = _changeover_need_cleanup_for_next_assign(
+        machine_handoff=machine_handoff,
+        machine_occ_key=machine_occ_key,
+        current_date=current_date,
+        cur_task_id=next_task_id,
+        last_eq=None,
+    )
+    if not need or cu_prev <= 0:
+        return False
+    rep = _pick_skilled_op_for_changeover_interval(
+        str(machine_proc or "").strip(),
+        str(machine_name or "").strip(),
+        skills_dict,
+        daily_status,
+    )
+    if not last_lead:
+        last_lead = str(rep or "").strip()
+    if not last_lead:
+        return False
+    st_c = daily_status.get(last_lead) or (
+        daily_status.get(rep) if rep else None
+    )
+    if not st_c:
+        return False
+    br_c = merge_time_intervals(list(st_c.get("breaks_dt") or []))
+    end_c = st_c["end_dt"]
+    if not isinstance(end_c, datetime):
+        return False
+
+    def _cleanup_ok_at_machining_end(mach_end: datetime) -> bool:
+        return _cleanup_full_duration_fits_from_start(
+            mach_end, cu_prev, br_c, end_c
+        )
+
+    occ = str(machine_occ_key or "").strip()
+    touched_members: set[str] = set()
+
+    for _pass in range(64):
+        ml = _machining_events_same_occ_day_sorted(
+            timeline_events, current_date, occ
+        )
+        if not ml:
+            return False
+        last_ev = ml[-1]
+        e0 = last_ev["end_dt"]
+        if not isinstance(e0, datetime):
+            return False
+        if _cleanup_ok_at_machining_end(e0):
+            machine_avail_dt[occ] = e0
+            machine_handoff.setdefault("last_machining_dt", {})
+            machine_handoff["last_machining_dt"][occ] = e0
+            return True
+
+        e_min = _machining_timeline_event_min_end_dt(last_ev)
+        if e_min is None or not isinstance(e_min, datetime):
+            return False
+        s0 = last_ev.get("start_dt")
+        if not isinstance(s0, datetime):
+            return False
+
+        lo = e_min
+        hi = e0
+        best_e: datetime | None = None
+        while lo <= hi:
+            mid = lo + (hi - lo) // 2
+            if _cleanup_ok_at_machining_end(mid):
+                best_e = mid
+                lo = mid + timedelta(minutes=1)
+            else:
+                hi = mid - timedelta(minutes=1)
+
+        if best_e is not None and isinstance(best_e, datetime) and best_e < e0:
+            delta = e0 - best_e
+            old_anchor = e0
+            du = float(last_ev.get("units_done") or 0.0)
+            br_ev = merge_time_intervals(list(last_ev.get("breaks") or []))
+            _cap_m = max(1, int((e0 - s0).total_seconds() // 60) + 1440)
+            _, wm_old, _ = calculate_end_time(s0, _cap_m, br_ev, e0)
+            _, wm_new, _ = calculate_end_time(s0, _cap_m, br_ev, best_e)
+            if wm_old <= 0:
+                return False
+            new_u = max(1e-12, du * (wm_new / wm_old))
+            min_u = 1.0 if du >= 1.0 else du
+            new_u = max(min_u, new_u)
+            tid = str(last_ev.get("task_id") or "").strip()
+            for t in task_queue or []:
+                if str(t.get("task_id") or "").strip() != tid:
+                    continue
+                t["remaining_units"] = float(t.get("remaining_units") or 0) + (du - new_u)
+                for row in reversed(t.get("assigned_history") or []):
+                    edh = row.get("end_dt")
+                    if isinstance(edh, datetime) and edh == e0:
+                        row["end_dt"] = best_e
+                        try:
+                            row["done_m"] = int(
+                                float(new_u) * float(t.get("unit_m") or 0)
+                            )
+                        except Exception:
+                            pass
+                        break
+                break
+            last_ev["end_dt"] = best_e
+            last_ev["units_done"] = new_u
+            for opn, sb in (
+                (str(last_ev.get("op") or "").strip(), str(last_ev.get("sub") or ""))
+            ):
+                if opn:
+                    touched_members.add(opn)
+                for s in sb.split(","):
+                    s = s.strip()
+                    if s:
+                        touched_members.add(s)
+            for ev2 in timeline_events:
+                if ev2.get("date") != current_date:
+                    continue
+                if str(ev2.get("machine_occupancy_key") or "").strip() != occ:
+                    continue
+                st2 = ev2.get("start_dt")
+                ed2 = ev2.get("end_dt")
+                if not isinstance(st2, datetime) or not isinstance(ed2, datetime):
+                    continue
+                if st2 >= old_anchor:
+                    ev2["start_dt"] = st2 - delta
+                    ev2["end_dt"] = ed2 - delta
+                    op2 = str(ev2.get("op") or "").strip()
+                    if op2:
+                        touched_members.add(op2)
+                    for s in str(ev2.get("sub") or "").split(","):
+                        s = s.strip()
+                        if s:
+                            touched_members.add(s)
+            machine_avail_dt[occ] = best_e
+            machine_handoff.setdefault("last_machining_dt", {})
+            machine_handoff["last_machining_dt"][occ] = best_e
+            if avail_dt is not None and touched_members:
+                _avail_dt_reapply_member_max_end_from_timeline(
+                    timeline_events, avail_dt, touched_members
+                )
+            if dispatch_interval_mirror is not None:
+                dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
+            _bump_machine_avail_after_roll_for_calendar(
+                current_date,
+                occ,
+                machine_avail_dt,
+                machine_calendar_plan_end=None,
+                machine_day_floor=machine_day_floor,
+            )
+            continue
+
+        if len(ml) < 2:
+            return False
+        applied_prev = False
+        for shorten_idx in range(len(ml) - 2, -1, -1):
+            prev_ev = ml[shorten_idx]
+            eP0 = prev_ev.get("end_dt")
+            sP0 = prev_ev.get("start_dt")
+            if not isinstance(eP0, datetime) or not isinstance(sP0, datetime):
+                continue
+            last_ev2 = ml[-1]
+            eL_end = last_ev2.get("end_dt")
+            if not isinstance(eL_end, datetime):
+                return False
+            eP_min = _machining_timeline_event_min_end_dt(prev_ev)
+            if eP_min is None or not isinstance(eP_min, datetime):
+                continue
+
+            def _last_end_after_shrink_prev_end(end_pe: datetime) -> datetime | None:
+                if end_pe > eP0 or end_pe < eP_min:
+                    return None
+                dlt = eP0 - end_pe
+                try:
+                    return last_ev2["end_dt"] - dlt
+                except Exception:
+                    return None
+
+            lo2 = eP_min
+            hi2 = eP0
+            best_pe: datetime | None = None
+            while lo2 <= hi2:
+                midp = lo2 + (hi2 - lo2) // 2
+                le = _last_end_after_shrink_prev_end(midp)
+                if le is not None and _cleanup_ok_at_machining_end(le):
+                    best_pe = midp
+                    lo2 = midp + timedelta(minutes=1)
+                else:
+                    hi2 = midp - timedelta(minutes=1)
+
+            if best_pe is None or best_pe >= eP0:
+                continue
+
+            delta_p = eP0 - best_pe
+            old_anchor_p = eP0
+            du_p = float(prev_ev.get("units_done") or 0.0)
+            br_p = merge_time_intervals(list(prev_ev.get("breaks") or []))
+            _cap_p = max(1, int((eP0 - sP0).total_seconds() // 60) + 1440)
+            _, wm_old_p, _ = calculate_end_time(sP0, _cap_p, br_p, eP0)
+            _, wm_new_p, _ = calculate_end_time(sP0, _cap_p, br_p, best_pe)
+            if wm_old_p <= 0:
+                return False
+            new_u_p = max(1e-12, du_p * (wm_new_p / wm_old_p))
+            min_u_p = 1.0 if du_p >= 1.0 else du_p
+            new_u_p = max(min_u_p, new_u_p)
+            tidp = str(prev_ev.get("task_id") or "").strip()
+            for t in task_queue or []:
+                if str(t.get("task_id") or "").strip() != tidp:
+                    continue
+                t["remaining_units"] = float(t.get("remaining_units") or 0) + (
+                    du_p - new_u_p
+                )
+                for row in reversed(t.get("assigned_history") or []):
+                    edh = row.get("end_dt")
+                    if isinstance(edh, datetime) and edh == eP0:
+                        row["end_dt"] = best_pe
+                        try:
+                            row["done_m"] = int(
+                                float(new_u_p) * float(t.get("unit_m") or 0)
+                            )
+                        except Exception:
+                            pass
+                        break
+                break
+            prev_ev["end_dt"] = best_pe
+            prev_ev["units_done"] = new_u_p
+            for opn, sb in (
+                (str(prev_ev.get("op") or "").strip(), str(prev_ev.get("sub") or ""))
+            ):
+                if opn:
+                    touched_members.add(opn)
+                for s in sb.split(","):
+                    s = s.strip()
+                    if s:
+                        touched_members.add(s)
+            for ev2 in timeline_events:
+                if ev2.get("date") != current_date:
+                    continue
+                if str(ev2.get("machine_occupancy_key") or "").strip() != occ:
+                    continue
+                st2 = ev2.get("start_dt")
+                ed2 = ev2.get("end_dt")
+                if not isinstance(st2, datetime) or not isinstance(ed2, datetime):
+                    continue
+                if st2 >= old_anchor_p:
+                    ev2["start_dt"] = st2 - delta_p
+                    ev2["end_dt"] = ed2 - delta_p
+                    op2 = str(ev2.get("op") or "").strip()
+                    if op2:
+                        touched_members.add(op2)
+                    for s in str(ev2.get("sub") or "").split(","):
+                        s = s.strip()
+                        if s:
+                            touched_members.add(s)
+            new_last_end = ml[-1]["end_dt"]
+            if isinstance(new_last_end, datetime):
+                machine_avail_dt[occ] = new_last_end
+                machine_handoff.setdefault("last_machining_dt", {})
+                machine_handoff["last_machining_dt"][occ] = new_last_end
+            if avail_dt is not None and touched_members:
+                _avail_dt_reapply_member_max_end_from_timeline(
+                    timeline_events, avail_dt, touched_members
+                )
+            if dispatch_interval_mirror is not None:
+                dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
+            _bump_machine_avail_after_roll_for_calendar(
+                current_date,
+                occ,
+                machine_avail_dt,
+                machine_calendar_plan_end=None,
+                machine_day_floor=machine_day_floor,
+            )
+            applied_prev = True
+            break
+        if applied_prev:
+            continue
+        return False
+    return False
+
+
 def _changeover_plan_segments_and_machining_lower_bound(
     *,
     prev_machining_end_dt: datetime,
@@ -17069,6 +17493,9 @@ def _resolve_machine_changeover_floor_segments(
     daily_status: dict,
     skills_dict: dict,
     dispatch_interval_mirror: DispatchIntervalMirror | None,
+    timeline_events: list | None = None,
+    task_queue: list | None = None,
+    avail_dt: dict | None = None,
 ) -> tuple[datetime, list[dict], bool]:
     """
     設備の加工開始下限と」タイムライン追記用セットアップ区間。
@@ -17092,6 +17519,50 @@ def _resolve_machine_changeover_floor_segments(
         skills_dict=skills_dict,
         abolish_limits=False,
     )
+    if co_lb is None:
+        if (
+            timeline_events is not None
+            and task_queue is not None
+            and _repair_timeline_shorten_machining_for_changeover_cleanup(
+                timeline_events=timeline_events,
+                machine_avail_dt=machine_avail_dt,
+                machine_handoff=machine_handoff,
+                current_date=current_date,
+                machine_occ_key=machine_occ_key,
+                next_task_id=task_id,
+                machine_proc=str(machine_proc or "").strip(),
+                machine_name=str(machine_name or "").strip(),
+                daily_status=daily_status,
+                skills_dict=skills_dict,
+                avail_dt=avail_dt,
+                dispatch_interval_mirror=dispatch_interval_mirror,
+                task_queue=task_queue,
+                machine_day_floor=machine_day_floor,
+            )
+        ):
+            prev_mach = machine_avail_dt.get(machine_occ_key, machine_day_floor)
+            co_lb, co_segs = _changeover_plan_segments_and_machining_lower_bound(
+                prev_machining_end_dt=prev_mach,
+                machine_day_floor=machine_day_floor,
+                current_date=current_date,
+                machine_occ_key=machine_occ_key,
+                task_id=task_id,
+                eq_line=eq_line,
+                machine_name=machine_name,
+                machine_proc=str(machine_proc or "").strip(),
+                machine_handoff=machine_handoff,
+                daily_status=daily_status,
+                skills_dict=skills_dict,
+                abolish_limits=False,
+            )
+            if co_lb is not None:
+                logging.info(
+                    "依頼切替後始末の勤務線確保のため、当日タイムライン上の加工を短縮しました。"
+                    " date=%s occ=%s next_task=%s",
+                    current_date,
+                    machine_occ_key,
+                    task_id,
+                )
     if co_lb is None:
         if (
             _pick_skilled_op_for_changeover_interval(
@@ -17758,6 +18229,7 @@ def _assign_one_roll_trial_order_flow(
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     machine_handoff: dict | None = None,
+    timeline_events: list | None = None,
 ) -> dict | None:
     """
     1ロール分の最良フォームを決定れる。設備空し・日開始下限を team_start に織り込む。
@@ -17970,6 +18442,9 @@ def _assign_one_roll_trial_order_flow(
         daily_status=daily_status,
         skills_dict=skills_dict,
         dispatch_interval_mirror=dispatch_interval_mirror,
+        timeline_events=timeline_events,
+        task_queue=task_queue,
+        avail_dt=avail_dt,
     )
     if _co_abort:
         return None
@@ -18604,6 +19079,7 @@ def _trial_order_first_schedule_pass(
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
                 machine_handoff=machine_handoff,
+                timeline_events=timeline_events,
             )
             if res is None:
                 break
@@ -20285,6 +20761,9 @@ def _generate_plan_impl():
                             daily_status=daily_status,
                             skills_dict=skills_dict,
                             dispatch_interval_mirror=_dispatch_interval_mirror,
+                            timeline_events=timeline_events,
+                            task_queue=task_queue,
+                            avail_dt=avail_dt,
                         )
                         if _abort_legacy:
                             continue
