@@ -827,6 +827,27 @@ def _trace_schedule_task_enabled(task_id) -> bool:
     return str(task_id or "").strip() in TRACE_SCHEDULE_TASK_IDS
 
 
+def _agent_debug_ndjson_e28d9b(payload: dict) -> None:
+    """DEBUG: workspace 直下 debug-e28d9b.log へ NDJSON 1 行追記（機微情報は入れない）。"""
+    try:
+        d = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(20):
+            if os.path.isdir(os.path.join(d, ".git")):
+                p = os.path.join(d, "debug-e28d9b.log")
+                out = dict(payload)
+                out["sessionId"] = "e28d9b"
+                out["timestamp"] = int(time_module.time() * 1000)
+                with open(p, "a", encoding="utf-8") as fo:
+                    fo.write(json.dumps(out, ensure_ascii=False) + "\n")
+                return
+            nd = os.path.dirname(d)
+            if nd == d:
+                break
+            d = nd
+    except Exception:
+        pass
+
+
 def _sanitize_dispatch_trace_filename_part(task_id: str) -> str:
     """依頼NOを log ファイル名に使うための簡易サニタイズ（Windows 禁止文字を避ける）。"""
     s = "".join(
@@ -17387,6 +17408,73 @@ def _changeover_plan_segments_and_machining_lower_bound(
     resume_after_break = False
     if lm_date == current_date and isinstance(lm_end, datetime):
         resume_after_break = _resumed_after_work_break(lm_end, t, br_r)
+    # #region agent log
+    _dbg_tid_u = str(task_id or "").strip().upper()
+    if _dbg_tid_u == "W4-3":
+        _nc = (
+            bool(last_tid)
+            and bool(cur_tid)
+            and last_tid != cur_tid
+            and last_d == current_date
+            and cu_prev > 0
+            and mach_occ in machining_today_occ
+        )
+        _lt_ld = str(last_lead or "").strip()
+        _st_ld2 = daily_status.get(_lt_ld) if _lt_ld else None
+        _br_ld2 = (
+            merge_time_intervals(list(_st_ld2.get("breaks_dt") or []))
+            if _st_ld2
+            else list(br_r or [])
+        )
+        _tb = max(t, lm_end) if isinstance(lm_end, datetime) else t
+        _tb2 = _tb
+        if isinstance(_tb2, datetime):
+            for _ in range(64):
+                _moved = False
+                for _bs, _be in _br_ld2:
+                    if (
+                        isinstance(_bs, datetime)
+                        and isinstance(_be, datetime)
+                        and _bs <= _tb2 < _be
+                    ):
+                        _tb2 = _be
+                        _moved = True
+                        break
+                if not _moved:
+                    break
+        _resume_ld = (
+            _resumed_after_work_break(lm_end, _tb2, _br_ld2)
+            if lm_date == current_date and isinstance(lm_end, datetime)
+            else False
+        )
+        _agent_debug_ndjson_e28d9b(
+            {
+                "hypothesisId": "H1-H4",
+                "location": "_changeover_plan_segments_and_machining_lower_bound:resume",
+                "message": "W4-3 changeover resume/cleanup trace",
+                "runId": "pre-fix",
+                "data": {
+                    "mach_occ": mach_occ,
+                    "cur_tid": cur_tid,
+                    "last_tid": last_tid,
+                    "need_cleanup": _nc,
+                    "cu_prev": int(cu_prev) if cu_prev else 0,
+                    "had_machine_daily_startup": had_machine_daily_startup,
+                    "lm_end": lm_end.isoformat()
+                    if isinstance(lm_end, datetime)
+                    else None,
+                    "t_before_resume": t.isoformat() if isinstance(t, datetime) else None,
+                    "resume_after_break_br_r": resume_after_break,
+                    "t_bumped_for_resume_check": _tb2.isoformat()
+                    if isinstance(_tb2, datetime)
+                    else None,
+                    "resume_after_break_br_ld_bumped": _resume_ld,
+                    "last_lead": _lt_ld or None,
+                    "rep": str(rep or "") or None,
+                },
+            }
+        )
+    # #endregion
     need_prep = (
         prep > 0
         and (not had_machine_daily_startup)
