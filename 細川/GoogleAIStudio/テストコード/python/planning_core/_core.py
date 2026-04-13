@@ -2536,6 +2536,48 @@ def calc_done_qty_equivalent_from_row(row):
     return max(0.0, legacy_done)
 
 
+def _optional_unprocessed_m_from_plan_row(row) -> float | None:
+    """行の「未加工」セルを数値化。列が無い・空なら None。"""
+    if row is None:
+        return None
+    try:
+        idx = row.index  # type: ignore[attr-defined]
+    except AttributeError:
+        return None
+    if TASK_COL_UNPROCESSED not in idx:
+        return None
+    return _optional_float_unprocessed_column(row.get(TASK_COL_UNPROCESSED))
+
+
+def _plan_row_dispatch_qty_metrics(row):
+    """
+    1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
+
+    未加工に有効数値があるとき（加工計画DATA 由来を段階1でコピーした値と同じ前提）:
+      ① 済相当m = max(0, 換算数量(raw) - 未加工)
+      ② 残りm = max(0, 未加工)
+      換算数量の100m切上は total_qty_m 用に第三要素で返す。
+    未加工が無い・空のとき（従来）:
+      済相当m = calc_done_qty_equivalent_from_row
+      残りm = max(0, 換算数量(100m切上) - 済相当m)
+
+    Returns:
+        tuple[float, float, float, bool]:
+            (remaining_m, done_m, qty_total_ceiled, used_unprocessed)
+    """
+    qty_conv_raw = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+    qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
+    unp = _optional_unprocessed_m_from_plan_row(row)
+    if unp is not None:
+        u = max(0.0, float(unp))
+        remaining_m = u
+        done_m = max(0.0, qty_conv_raw - float(unp))
+        return remaining_m, done_m, qty_total_ceiled, True
+    done_m = calc_done_qty_equivalent_from_row(row)
+    remaining_m = max(0.0, qty_total_ceiled - done_m)
+    return remaining_m, done_m, qty_total_ceiled, False
+
+
 def parse_optional_int(val):
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -3099,9 +3141,7 @@ def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
 def _stage1_roll_length_for_planning_row(row) -> float:
     """段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。"""
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
-    qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-    done_qty = calc_done_qty_equivalent_from_row(row)
-    qty = max(0.0, qty_total - done_qty)
+    qty, _done_m, _qtceiled, _from_unp = _plan_row_dispatch_qty_metrics(row)
     _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     _qty_total_s1 = _floor_positive_m_to_planning_minimum(
         _qty_total_s1, PLANNING_MIN_QTY_M
@@ -9107,10 +9147,9 @@ def build_task_queue_from_planning_df(
 
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-        qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-        done_qty = calc_done_qty_equivalent_from_row(row)
-        # 換算数量はシート値のまま実績換算。配台用 total のみ 100m 刻みに切り上げ（例: 40→100、125→200）。Excel セルは書き換えない。
-        qty_total = _ceil_roll_unit_length_m_to_next_step(qty_total)
+        qty, done_qty, qty_total, from_unprocessed_qty = _plan_row_dispatch_qty_metrics(
+            row
+        )
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
@@ -9274,7 +9313,11 @@ def build_task_queue_from_planning_df(
 
         _order_list = seq_by_tid.get(task_id) or []
         _p_rank = _process_sequence_rank_for_machine(machine, _order_list)
-        _init_rem = float(qty / unit if unit else 0.0)
+        if from_unprocessed_qty and unit > 0:
+            # ③ 未加工(m) ÷ ロール単位長さ を切り上げ整数ロール
+            _init_rem = float(math.ceil(max(0.0, qty) / float(unit)))
+        else:
+            _init_rem = float(qty / unit if unit else 0.0)
         _process_content_mismatch = bool(_order_list) and not _process_name_matches_kakou_content_tokens(
             machine, _order_list
         )
@@ -9285,11 +9328,14 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
-        _unp_base = None
-        if _has_unprocessed_col:
+        if from_unprocessed_qty:
+            _unp_base = max(0.0, qty)
+        elif _has_unprocessed_col:
             _unp_base = _optional_float_unprocessed_column(
                 _planning_df_cell_scalar(row, TASK_COL_UNPROCESSED)
             )
+        else:
+            _unp_base = None
 
         task_queue.append(
             {
@@ -9314,7 +9360,7 @@ def build_task_queue_from_planning_df(
                 "same_day_raw_start_limit": same_day_raw_start_limit,
                 "total_qty_m": int(qty_total),
                 "unit_m": int(unit),
-                "remaining_units": qty / unit if unit else 0,
+                "remaining_units": _init_rem,
                 "base_time_per_unit": (qty / speed) / (qty / unit)
                 if unit and speed and qty
                 else 0,
@@ -9795,9 +9841,7 @@ def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> li
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "") or "").strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-        qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-        done_qty = calc_done_qty_equivalent_from_row(row)
-        qty = max(0.0, qty_total - done_qty)
+        qty, _done_qty, _qty_total, _from_unp = _plan_row_dispatch_qty_metrics(row)
         if qty <= 0 or not machine or not task_id:
             continue
         key = (
@@ -11453,9 +11497,7 @@ def run_stage1_extract():
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "")).strip()
-        qty_total = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-        done_qty = calc_done_qty_equivalent_from_row(row)
-        qty = max(0.0, qty_total - done_qty)
+        qty, _, _, _ = _plan_row_dispatch_qty_metrics(row)
         if qty <= 0 or not machine or not task_id:
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
