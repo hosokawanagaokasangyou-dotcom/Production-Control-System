@@ -16608,6 +16608,69 @@ def _resumed_after_work_break(
     return False
 
 
+def _resume_after_work_break_extended(
+    last_end: datetime | None,
+    lower_t: datetime,
+    breaks_merged: list,
+    *,
+    min_long_break_minutes: int = 45,
+    prebreak_gap_min_minutes: int = 4,
+    prebreak_gap_max_minutes: int = 20,
+) -> tuple[bool, datetime, datetime | None, datetime | None, bool]:
+    """
+    休憩挟み再開の判定を拡張する。
+    戻り値: (再開とみなすか, 準備・後始末後の下限, 参照した休憩開始, 参照した休憩終了,
+             長休憩直前ギャップに同一依頼の後始末を挟むべきか)
+
+    従来 _resumed_after_work_break と同じ厳密条件に加え、
+    長い勤務休憩（既定 45 分以上）の直前に加工が終わり、設備下限がまだ休憩終了より前のときは
+    下限を休憩終了まで繰り上げて再開とみなす（同一依頼の昼休み跨ぎなど）。
+    """
+    if last_end is None or not isinstance(last_end, datetime) or not isinstance(
+        lower_t, datetime
+    ):
+        return False, lower_t, None, None, False
+    t_floor = lower_t
+    hit_any = False
+    best_bs: datetime | None = None
+    best_be: datetime | None = None
+    pre_gap_cleanup = False
+    for bs, be in list(breaks_merged or []):
+        if not isinstance(bs, datetime) or not isinstance(be, datetime):
+            continue
+        br_len_min = (be - bs).total_seconds() / 60.0
+        is_long = br_len_min >= float(min_long_break_minutes)
+        if last_end <= bs and t_floor >= be:
+            hit_any = True
+            t_floor = max(t_floor, be)
+            if is_long:
+                best_bs, best_be = bs, be
+            continue
+        if not is_long:
+            continue
+        if last_end >= be:
+            continue
+        if lower_t > last_end and lower_t < bs:
+            continue
+        if last_end <= bs:
+            gap_min = (bs - last_end).total_seconds() / 60.0
+            if (
+                float(prebreak_gap_min_minutes) <= gap_min <= float(prebreak_gap_max_minutes)
+                and t_floor < be
+            ):
+                hit_any = True
+                t_floor = max(t_floor, be)
+                best_bs, best_be = bs, be
+                pre_gap_cleanup = True
+            continue
+        if bs <= last_end < be and t_floor < be:
+            hit_any = True
+            t_floor = max(t_floor, be)
+            best_bs, best_be = bs, be
+            pre_gap_cleanup = True
+    return hit_any, t_floor, best_bs, best_be, pre_gap_cleanup
+
+
 def _machine_occ_has_pending_same_day_tasks(
     task_queue: list,
     machine_occ_key: str,
@@ -16978,6 +17041,176 @@ def _avail_dt_reapply_member_max_end_from_timeline(
             avail_dt[mm] = best
 
 
+def _repair_timeline_for_same_tid_prebreak_cleanup(
+    *,
+    timeline_events: list,
+    machine_avail_dt: dict,
+    machine_handoff: dict,
+    current_date: date,
+    machine_occ_key: str,
+    next_task_id: str,
+    machine_proc: str,
+    machine_name: str,
+    daily_status: dict,
+    skills_dict: dict,
+    avail_dt: dict | None,
+    dispatch_interval_mirror: DispatchIntervalMirror | None,
+    task_queue: list,
+    machine_day_floor: datetime,
+) -> bool:
+    """
+    同一依頼のまま長い勤務休憩の直前に後始末を載せるため、直前加工終了を逆算開始に合わせて短縮する。
+    """
+    mach_occ = str(machine_occ_key or "").strip()
+    if not mach_occ:
+        return False
+    machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    last_tid = str((machine_handoff.get("last_tid") or {}).get(mach_occ, "") or "").strip()
+    cur_tid = str(next_task_id or "").strip()
+    if not last_tid or not cur_tid or last_tid != cur_tid:
+        return False
+    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
+    if last_d != current_date or mach_occ not in machining_today_occ:
+        return False
+    last_eq_s = str(
+        (machine_handoff.get("last_eq") or {}).get(mach_occ, "") or ""
+    ).strip()
+    _pu, cu_prev = _lookup_changeover_minutes_for_eq(last_eq_s, None)
+    if cu_prev <= 0:
+        return False
+    lm_end = (machine_handoff.get("last_machining_dt") or {}).get(mach_occ)
+    if not isinstance(lm_end, datetime):
+        return False
+    last_lead = str((machine_handoff.get("last_lead_op") or {}).get(mach_occ, "") or "").strip()
+    rep = _pick_skilled_op_for_changeover_interval(
+        str(machine_proc or "").strip(),
+        str(machine_name or "").strip(),
+        skills_dict,
+        daily_status,
+    )
+    if not last_lead:
+        last_lead = str(rep or "").strip()
+    if not last_lead:
+        return False
+    st_ld = daily_status.get(last_lead) or (daily_status.get(rep) if rep else None)
+    if not st_ld:
+        return False
+    br_resume = merge_time_intervals(list(st_ld.get("breaks_dt") or []))
+    _hit, _tf, bs_a, be_a, pre_gap = _resume_after_work_break_extended(
+        lm_end, lm_end, br_resume
+    )
+    if not pre_gap or bs_a is None or be_a is None:
+        return False
+    br_c = merge_time_intervals(list(st_ld.get("breaks_dt") or []))
+    end_c = st_ld["end_dt"]
+    if not isinstance(end_c, datetime):
+        return False
+    st_inv = _find_latest_prep_start_matching_end(
+        bs_a, cu_prev, br_c, machine_day_floor
+    )
+    if st_inv is None:
+        return False
+    ce_chk, act_chk, rem_chk = calculate_end_time(st_inv, cu_prev, br_c, end_c)
+    if rem_chk > 0 or act_chk < cu_prev or not _dt_close_minutes(ce_chk, bs_a):
+        return False
+    if st_inv >= lm_end - timedelta(seconds=90):
+        return False
+    occ = mach_occ
+    ml = _machining_events_same_occ_day_sorted(timeline_events, current_date, occ)
+    if not ml:
+        return False
+    last_ev = ml[-1]
+    e0 = last_ev["end_dt"]
+    if not isinstance(e0, datetime):
+        return False
+    e_min = _machining_timeline_event_min_end_dt(last_ev)
+    if e_min is None or not isinstance(e_min, datetime):
+        return False
+    best_e = st_inv
+    if best_e < e_min or best_e >= e0:
+        return False
+    delta = e0 - best_e
+    old_anchor = e0
+    s0 = last_ev.get("start_dt")
+    if not isinstance(s0, datetime):
+        return False
+    touched_members: set[str] = set()
+    du = float(last_ev.get("units_done") or 0.0)
+    br_ev = merge_time_intervals(list(last_ev.get("breaks") or []))
+    _cap_m = max(1, int((e0 - s0).total_seconds() // 60) + 1440)
+    _, wm_old, _ = calculate_end_time(s0, _cap_m, br_ev, e0)
+    _, wm_new, _ = calculate_end_time(s0, _cap_m, br_ev, best_e)
+    if wm_old <= 0:
+        return False
+    new_u = max(1e-12, du * (wm_new / wm_old))
+    min_u = 1.0 if du >= 1.0 else du
+    new_u = max(min_u, new_u)
+    tid = str(last_ev.get("task_id") or "").strip()
+    for tq in task_queue or []:
+        if str(tq.get("task_id") or "").strip() != tid:
+            continue
+        tq["remaining_units"] = float(tq.get("remaining_units") or 0) + (du - new_u)
+        for row in reversed(tq.get("assigned_history") or []):
+            edh = row.get("end_dt")
+            if isinstance(edh, datetime) and edh == e0:
+                row["end_dt"] = best_e
+                try:
+                    row["done_m"] = int(float(new_u) * float(tq.get("unit_m") or 0))
+                except Exception:
+                    pass
+                break
+        break
+    last_ev["end_dt"] = best_e
+    last_ev["units_done"] = new_u
+    for opn, sb in (
+        (str(last_ev.get("op") or "").strip(), str(last_ev.get("sub") or "")),
+    ):
+        if opn:
+            touched_members.add(opn)
+        for s in sb.split(","):
+            s = s.strip()
+            if s:
+                touched_members.add(s)
+    for ev2 in timeline_events:
+        if ev2.get("date") != current_date:
+            continue
+        if str(ev2.get("machine_occupancy_key") or "").strip() != occ:
+            continue
+        st2 = ev2.get("start_dt")
+        ed2 = ev2.get("end_dt")
+        if not isinstance(st2, datetime) or not isinstance(ed2, datetime):
+            continue
+        if st2 >= old_anchor:
+            ev2["start_dt"] = st2 - delta
+            ev2["end_dt"] = ed2 - delta
+            op2 = str(ev2.get("op") or "").strip()
+            if op2:
+                touched_members.add(op2)
+            for s in str(ev2.get("sub") or "").split(","):
+                s = s.strip()
+                if s:
+                    touched_members.add(s)
+    machine_avail_dt[occ] = best_e
+    machine_handoff.setdefault("last_machining_dt", {})
+    machine_handoff["last_machining_dt"][occ] = best_e
+    if avail_dt is not None and touched_members:
+        _avail_dt_reapply_member_max_end_from_timeline(
+            timeline_events, avail_dt, touched_members
+        )
+    if dispatch_interval_mirror is not None:
+        dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
+    _bump_machine_avail_after_roll_for_calendar(
+        current_date,
+        occ,
+        machine_avail_dt,
+        machine_calendar_plan_end=None,
+        machine_day_floor=machine_day_floor,
+    )
+    return True
+
+
 def _repair_timeline_shorten_machining_for_changeover_cleanup(
     *,
     timeline_events: list,
@@ -17007,7 +17240,26 @@ def _repair_timeline_shorten_machining_for_changeover_cleanup(
         cur_task_id=next_task_id,
         last_eq=None,
     )
-    if not need or cu_prev <= 0:
+    if not need:
+        if _repair_timeline_for_same_tid_prebreak_cleanup(
+            timeline_events=timeline_events,
+            machine_avail_dt=machine_avail_dt,
+            machine_handoff=machine_handoff,
+            current_date=current_date,
+            machine_occ_key=machine_occ_key,
+            next_task_id=next_task_id,
+            machine_proc=str(machine_proc or "").strip(),
+            machine_name=str(machine_name or "").strip(),
+            daily_status=daily_status,
+            skills_dict=skills_dict,
+            avail_dt=avail_dt,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+            task_queue=task_queue,
+            machine_day_floor=machine_day_floor,
+        ):
+            return True
+        return False
+    if cu_prev <= 0:
         return False
     rep = _pick_skilled_op_for_changeover_interval(
         str(machine_proc or "").strip(),
@@ -17299,6 +17551,8 @@ def _changeover_plan_segments_and_machining_lower_bound(
     A15 が無いときは従来どおり代表スキル OP の勤務・休憩に沿って forward。
     準備時間は (1) 直前加工の依頼 NO が取れ、かつ直後加工と異なる依頼 NO に切り替わるとき、
     または (2) 同一依頼でも直前加工終了から本下限までの間に勤務休憩を挟む再開のときのみ付与する。
+    長い勤務休憩（既定 45 分以上）の直前に加工が終了し設備下限が休憩終了より前のときも (2) に含め、
+    必要なら同一依頼でも休憩開始までの壁時計で後始末（changeover_cleanup）を逆算挿入する。
     上記以外（直前依頼 NO が無い初回や、同一依頼の連続ロールで休憩を挟まないとき等）には準備を付けない。
     日次始業準備の直後の当該加工には準備時間を付けない。
     日次始業セグメントの op は空。準備時間・後始末時間の op は forward 用の代表＝直後主（後始末は可能なら直前主）。
@@ -17328,6 +17582,13 @@ def _changeover_plan_segments_and_machining_lower_bound(
     br_r = merge_time_intervals(list(st_r.get("breaks_dt") or [])) if st_r else []
     end_r = st_r["end_dt"] if st_r else None
     start_r = st_r["start_dt"] if st_r else None
+    _lt_lead_br = str(last_lead or "").strip()
+    _st_bresume = daily_status.get(_lt_lead_br) if _lt_lead_br else None
+    br_resume = (
+        merge_time_intervals(list(_st_bresume.get("breaks_dt") or []))
+        if _st_bresume
+        else list(br_r or [])
+    )
 
     segments: list[dict] = []
     t = prev_machining_end_dt
@@ -17406,8 +17667,58 @@ def _changeover_plan_segments_and_machining_lower_bound(
     lm_date = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
     lm_end = (machine_handoff.get("last_machining_dt") or {}).get(mach_occ)
     resume_after_break = False
+    t_resume_floor = t
+    pre_gap_bs: datetime | None = None
+    pre_gap_be: datetime | None = None
+    pre_gap_cleanup_needed = False
     if lm_date == current_date and isinstance(lm_end, datetime):
-        resume_after_break = _resumed_after_work_break(lm_end, t, br_r)
+        (
+            resume_after_break,
+            t_resume_floor,
+            pre_gap_bs,
+            pre_gap_be,
+            pre_gap_cleanup_needed,
+        ) = _resume_after_work_break_extended(lm_end, t, br_resume)
+        if (
+            pre_gap_cleanup_needed
+            and _lt_s == cur_tid
+            and cu_prev > 0
+            and mach_occ in machining_today_occ
+            and last_d == current_date
+            and (not need_cleanup)
+            and pre_gap_bs is not None
+        ):
+            cop2 = (_lt_lead_br.strip() if _lt_lead_br else "") or (str(rep or "").strip())
+            if not cop2:
+                return None, []
+            st_c2 = daily_status.get(cop2) or st_r
+            if not st_c2:
+                return None, []
+            br_c2 = merge_time_intervals(list(st_c2.get("breaks_dt") or []))
+            end_c2 = st_c2["end_dt"]
+            st_inv = _find_latest_prep_start_matching_end(
+                pre_gap_bs, cu_prev, br_c2, machine_day_floor
+            )
+            if st_inv is None:
+                return None, []
+            if st_inv < prev_machining_end_dt - timedelta(seconds=90):
+                return None, []
+            ce2, act2, rem2 = calculate_end_time(st_inv, cu_prev, br_c2, end_c2)
+            if rem2 > 0 or act2 < cu_prev or not _dt_close_minutes(ce2, pre_gap_bs):
+                return None, []
+            segments.append(
+                {
+                    "start_dt": st_inv,
+                    "end_dt": ce2,
+                    "op": cop2,
+                    "event_kind": TIMELINE_EVENT_CHANGEOVER_CLEANUP,
+                    "machine": last_eq or eq_line,
+                    "machine_occupancy_key": mach_occ,
+                }
+            )
+            t = max(t, ce2, t_resume_floor)
+        else:
+            t = max(t, t_resume_floor)
     # #region agent log
     _dbg_tid_u = str(task_id or "").strip().upper()
     if _dbg_tid_u == "W4-3":
@@ -17419,40 +17730,12 @@ def _changeover_plan_segments_and_machining_lower_bound(
             and cu_prev > 0
             and mach_occ in machining_today_occ
         )
-        _lt_ld = str(last_lead or "").strip()
-        _st_ld2 = daily_status.get(_lt_ld) if _lt_ld else None
-        _br_ld2 = (
-            merge_time_intervals(list(_st_ld2.get("breaks_dt") or []))
-            if _st_ld2
-            else list(br_r or [])
-        )
-        _tb = max(t, lm_end) if isinstance(lm_end, datetime) else t
-        _tb2 = _tb
-        if isinstance(_tb2, datetime):
-            for _ in range(64):
-                _moved = False
-                for _bs, _be in _br_ld2:
-                    if (
-                        isinstance(_bs, datetime)
-                        and isinstance(_be, datetime)
-                        and _bs <= _tb2 < _be
-                    ):
-                        _tb2 = _be
-                        _moved = True
-                        break
-                if not _moved:
-                    break
-        _resume_ld = (
-            _resumed_after_work_break(lm_end, _tb2, _br_ld2)
-            if lm_date == current_date and isinstance(lm_end, datetime)
-            else False
-        )
         _agent_debug_ndjson_e28d9b(
             {
                 "hypothesisId": "H1-H4",
                 "location": "_changeover_plan_segments_and_machining_lower_bound:resume",
                 "message": "W4-3 changeover resume/cleanup trace",
-                "runId": "pre-fix",
+                "runId": "post-fix",
                 "data": {
                     "mach_occ": mach_occ,
                     "cur_tid": cur_tid,
@@ -17463,13 +17746,16 @@ def _changeover_plan_segments_and_machining_lower_bound(
                     "lm_end": lm_end.isoformat()
                     if isinstance(lm_end, datetime)
                     else None,
-                    "t_before_resume": t.isoformat() if isinstance(t, datetime) else None,
-                    "resume_after_break_br_r": resume_after_break,
-                    "t_bumped_for_resume_check": _tb2.isoformat()
-                    if isinstance(_tb2, datetime)
+                    "t_after_resume_logic": t.isoformat() if isinstance(t, datetime) else None,
+                    "resume_after_break": resume_after_break,
+                    "pre_gap_cleanup_needed": pre_gap_cleanup_needed,
+                    "pre_gap_bs": pre_gap_bs.isoformat()
+                    if isinstance(pre_gap_bs, datetime)
                     else None,
-                    "resume_after_break_br_ld_bumped": _resume_ld,
-                    "last_lead": _lt_ld or None,
+                    "t_resume_floor": t_resume_floor.isoformat()
+                    if isinstance(t_resume_floor, datetime)
+                    else None,
+                    "last_lead": _lt_lead_br or None,
                     "rep": str(rep or "") or None,
                 },
             }
