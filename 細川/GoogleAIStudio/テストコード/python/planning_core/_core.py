@@ -736,6 +736,8 @@ TASK_COL_TASK_ID = "依頼NO"
 TASK_COL_MACHINE = "工程名"
 TASK_COL_MACHINE_NAME = "機械名"
 TASK_COL_QTY = "残作数値"
+# 加工計画DATA にある場合のみ段階1で配台計画へコピー。結果_タスク一覧「残加工量」はこの列の数値基準で出力する。
+TASK_COL_UNPROCESSED = "未加工"
 TASK_COL_ORDER_QTY = "受注数"
 TASK_COL_SPEED = "加工速度"
 TASK_COL_PRODUCT = "製品名"
@@ -1013,6 +1015,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_MACHINE,
         TASK_COL_MACHINE_NAME,
         TASK_COL_QTY,
+        TASK_COL_UNPROCESSED,
         TASK_COL_ORDER_QTY,
         TASK_COL_SPEED,
         TASK_COL_PRODUCT,
@@ -1127,7 +1130,14 @@ RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
 )
 
 SOURCE_BASE_COLUMNS = [
-    TASK_COL_TASK_ID, TASK_COL_MACHINE, TASK_COL_MACHINE_NAME, TASK_COL_QTY, TASK_COL_ORDER_QTY, TASK_COL_SPEED, TASK_COL_PRODUCT,
+    TASK_COL_TASK_ID,
+    TASK_COL_MACHINE,
+    TASK_COL_MACHINE_NAME,
+    TASK_COL_QTY,
+    TASK_COL_UNPROCESSED,
+    TASK_COL_ORDER_QTY,
+    TASK_COL_SPEED,
+    TASK_COL_PRODUCT,
     TASK_COL_ANSWER_DUE, TASK_COL_SPECIFIED_DUE, TASK_COL_RAW_INPUT_DATE, TASK_COL_STOCK_LOCATION,
     TASK_COL_PROCESS_CONTENT,
     TASK_COL_COMPLETION_FLAG, TASK_COL_ACTUAL_DONE, TASK_COL_ACTUAL_OUTPUT,
@@ -1167,7 +1177,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（残作数値の次に未加工があれば出力、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -9037,6 +9047,27 @@ def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
         return (1, 10**9, s)
 
 
+def _optional_float_unprocessed_column(val):
+    """
+    配台計画シートの「未加工」セルを float 化する。
+    空・無効なら None（結果_タスク一覧の残加工量は従来どおり m 換算にフォールバック）。
+    """
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if isinstance(val, str):
+        s = val.strip()
+        if not s or s.lower() in ("nan", "none", "-", "—", "―"):
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # 配台用タスクキュー
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変杛（優先度・紝期・AI 上書きを集約）
@@ -9061,6 +9092,7 @@ def build_task_queue_from_planning_df(
     same_tid_line_seq = defaultdict(int)
     # 依頼NO直列配台の順庝用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も試行。
     planning_sheet_row_seq = 0
+    _has_unprocessed_col = TASK_COL_UNPROCESSED in tasks_df.columns
 
     for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
@@ -9250,6 +9282,12 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
+        _unp_base = None
+        if _has_unprocessed_col:
+            _unp_base = _optional_float_unprocessed_column(
+                _planning_df_cell_scalar(row, TASK_COL_UNPROCESSED)
+            )
+
         task_queue.append(
             {
                 "task_id": task_id,
@@ -9305,6 +9343,7 @@ def build_task_queue_from_planning_df(
                 "planning_sheet_row_seq": planning_sheet_row_seq,
                 "planning_df_iloc": planning_df_iloc,
                 "dispatch_trial_order_from_sheet": _dto_from_sheet,
+                "unprocessed_baseline_m": _unp_base,
             }
         )
         planning_sheet_row_seq += 1
@@ -21096,8 +21135,7 @@ def _generate_plan_impl():
             status = f"{status}（納期見直し必須）"
         
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
-        rem_r = max(0, int(float(t.get("remaining_units") or 0)))
-        
+
         _line_key = (str(t.get("task_id", "") or "").strip(), str(t.get("machine", "") or "").strip())
         _sheet_pair = _result_sheet_answer_spec_by_line.get(_line_key)
         if _sheet_pair is not None:
@@ -21158,6 +21196,16 @@ def _generate_plan_impl():
         except Exception:
             pct_macro = 0
 
+        _ub = t.get("unprocessed_baseline_m")
+        _init_rem_u = float(t.get("initial_remaining_units") or 0)
+        if _ub is not None:
+            if _init_rem_u > 1e-12:
+                _rem_qty_out = float(_ub) * (float(rem_u) / _init_rem_u)
+            else:
+                _rem_qty_out = float(_ub) if rem_u > 1e-12 else 0.0
+        else:
+            _rem_qty_out = max(0.0, float(rem_u) * float(t.get("unit_m") or 0))
+
         _pw = plan_window_by_task_id.get(t["task_id"])
         if _pw:
             _ps, _pe = _pw[0], _pw[1]
@@ -21192,7 +21240,7 @@ def _generate_plan_impl():
             "配台済_加工終了": plan_assign_end_s,
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16: _plan_end_ans_spec16,
             "累計加工量": f"{total_r}R ({t['total_qty_m']}m)",
-            "残加工量": f"{rem_r}R ({max(0, int(float(t.get('remaining_units') or 0) * float(t.get('unit_m') or 0)))}m)",
+            "残加工量": _rem_qty_out,
             "完了率(実行時点)": f"{pct_macro}%",
         }
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
