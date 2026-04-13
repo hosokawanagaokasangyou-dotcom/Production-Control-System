@@ -274,6 +274,7 @@ Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePat
                     End If
                     Sleep STAGE12_CMD_OVERLAY_POLL_MS
                     DoEvents
+                    MacroSplash_AdvanceSpinnerInCaption
                 Loop
                 MacroSplash_EndConsoleOverlay
                 On Error Resume Next
@@ -334,9 +335,9 @@ Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePat
     Do While execObj.Status = 0
         MacroSplash_RefreshExecutionLogPane
         splashPollIter = splashPollIter + 1
-        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1200ms×20?24秒）
+        ' 長時間 COM（xlwings 等）で背後に回ると固まったように見えることがある。約20回ポーリングごとに前面化（1000ms×20?20秒）
         If splashPollIter Mod 20 = 0 Then MacroSplash_BringFormToFront
-        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1200ms）。FileLen 不変時は全文読みスキップ
+        ' ポーリング間隔 SPLASH_LOG_POLL_INTERVAL_MS: 短すぎると xlwings COM と競合しやすい（既定 1000ms）。FileLen 不変時は全文読みスキップ
         ' ヘッドレス時はコンソール HWND が無い。従来表示時のみ位置調整
         If Not hideConsoleWindow Then
             If Len(consoleTitle) > 0 And Not positioned Then
@@ -354,6 +355,7 @@ Public Function RunCmdFileStageExecAndPoll(ByVal wsh As Object, ByVal cmdFilePat
         End If
         Sleep SPLASH_LOG_POLL_INTERVAL_MS
         DoEvents
+        MacroSplash_AdvanceSpinnerInCaption
     Loop
     MacroSplash_RefreshExecutionLogPane
     On Error Resume Next
