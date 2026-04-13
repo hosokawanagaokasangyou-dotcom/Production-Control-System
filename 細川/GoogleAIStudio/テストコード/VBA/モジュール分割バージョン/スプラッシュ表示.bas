@@ -7,6 +7,18 @@ Private m_frmMacroSplash As frmMacroSplash
 Private m_splashCaptionBase As String
 Private m_splashSpinnerPhase As Long
 Private Const SPLASH_SPINNER_FRAMES As String = "-\|/"
+' スプラッシュ中: シートの見た目を固定（論理状態は処理で変わっても、再描画停止＋アンカーへ戻す）
+Private m_splashGridRedrawFrozen As Boolean
+Private m_splashSavedScreenUpdating As Boolean
+Private m_splashAnchorScrollRow As Long
+Private m_splashAnchorScrollColumn As Long
+Private m_splashAnchorAddr As String
+Private m_splashAnchorSheet As Worksheet
+#If VBA7 Then
+Private m_splashFrozenGridHwnd As LongPtr
+#Else
+Private m_splashFrozenGridHwnd As Long
+#End If
 
 Private Function MacroSplash_FormattedStepCaption() As String
     If Len(m_splashCaptionBase) = 0 Then
@@ -22,6 +34,128 @@ Private Function MacroSplash_Form() As frmMacroSplash
     End If
     Set MacroSplash_Form = m_frmMacroSplash
 End Function
+
+#If VBA7 Then
+Private Function MacroSplash_ActiveGridHwnd() As LongPtr
+#Else
+Private Function MacroSplash_ActiveGridHwnd() As Long
+#End If
+    MacroSplash_ActiveGridHwnd = 0
+    On Error Resume Next
+    MacroSplash_ActiveGridHwnd = ActiveWindow.hwnd
+    If Err.Number <> 0 Then Err.Clear
+    If MacroSplash_ActiveGridHwnd = 0 Then MacroSplash_ActiveGridHwnd = Application.hwnd
+End Function
+
+Private Sub MacroSplash_CaptureAnchorWorkbookView()
+    On Error Resume Next
+    Set m_splashAnchorSheet = Nothing
+    m_splashAnchorAddr = vbNullString
+    m_splashAnchorScrollRow = 1
+    m_splashAnchorScrollColumn = 1
+    If Not ActiveSheet Is Nothing Then
+        If TypeOf ActiveSheet Is Worksheet Then
+            Set m_splashAnchorSheet = ActiveSheet
+        End If
+    End If
+    If Not ActiveWindow Is Nothing Then
+        m_splashAnchorScrollRow = ActiveWindow.ScrollRow
+        m_splashAnchorScrollColumn = ActiveWindow.ScrollColumn
+    End If
+    If Not m_splashAnchorSheet Is Nothing Then
+        m_splashAnchorAddr = ActiveCell.Address(False, False, xlA1, False)
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub MacroSplash_ClearAnchorWorkbookView()
+    Set m_splashAnchorSheet = Nothing
+    m_splashAnchorAddr = vbNullString
+    m_splashAnchorScrollRow = 1
+    m_splashAnchorScrollColumn = 1
+End Sub
+
+' ScreenUpdating=False 中でも、グリッド側の論理表示をスプラッシュ直前の「アンカー」に戻す（再描画は WM_SETREDRAW で止めている想定）
+Private Sub MacroSplash_EnforceFrozenWorkbookView()
+    On Error Resume Next
+    If Not m_macroSplashShown Then Exit Sub
+    If m_splashAnchorSheet Is Nothing Then Exit Sub
+    m_splashAnchorSheet.Activate
+    ActiveWindow.ScrollRow = m_splashAnchorScrollRow
+    ActiveWindow.ScrollColumn = m_splashAnchorScrollColumn
+    If Len(m_splashAnchorAddr) > 0 Then m_splashAnchorSheet.Range(m_splashAnchorAddr).Select
+    On Error GoTo 0
+End Sub
+
+Private Sub MacroSplash_BeginExcelGridRedrawLock()
+#If VBA7 Then
+    Dim h As LongPtr
+#Else
+    Dim h As Long
+#End If
+    On Error Resume Next
+    If m_splashGridRedrawFrozen Then Exit Sub
+    h = MacroSplash_ActiveGridHwnd()
+    If h = 0 Then Exit Sub
+#If VBA7 Then
+    Call SplashWin_SendMessage(h, WM_SETREDRAW, CLngPtr(0), CLngPtr(0))
+#Else
+    Call SplashWin_SendMessage(h, WM_SETREDRAW, 0, 0)
+#End If
+    m_splashFrozenGridHwnd = h
+    m_splashGridRedrawFrozen = True
+    On Error GoTo 0
+End Sub
+
+Private Sub MacroSplash_EndExcelGridRedrawLock()
+    On Error Resume Next
+    If Not m_splashGridRedrawFrozen Then Exit Sub
+    If m_splashFrozenGridHwnd <> 0 Then
+#If VBA7 Then
+        Call SplashWin_SendMessage(m_splashFrozenGridHwnd, WM_SETREDRAW, CLngPtr(1), CLngPtr(0))
+#Else
+        Call SplashWin_SendMessage(m_splashFrozenGridHwnd, WM_SETREDRAW, 1, 0)
+#End If
+    End If
+    m_splashFrozenGridHwnd = 0
+    m_splashGridRedrawFrozen = False
+    On Error GoTo 0
+End Sub
+
+Private Sub MacroSplash_InvalidateSplashHwnd()
+#If VBA7 Then
+    Dim hwndSplash As LongPtr
+#Else
+    Dim hwndSplash As Long
+#End If
+    On Error Resume Next
+    hwndSplash = FindWindow(0&, SPLASH_FORM_WINDOW_TITLE)
+    If hwndSplash = 0 Then Exit Sub
+#If VBA7 Then
+    Call SplashWin_InvalidateRect(hwndSplash, CLngPtr(0), 0)
+#Else
+    Call SplashWin_InvalidateRect(hwndSplash, 0, 0)
+#End If
+    Call SplashWin_UpdateWindow(hwndSplash)
+    On Error GoTo 0
+End Sub
+
+' UserForm 本体のみ再描画（ログ TextBox の SetFocus 後にアンカー復帰するとフォーカスが奪われるため、ログ更新ではこちらのみ使う）
+Private Sub MacroSplash_PaintSplashChrome()
+    On Error Resume Next
+    MacroSplash_Form.Repaint
+    MacroSplash_InvalidateSplashHwnd
+    DoEvents
+    On Error GoTo 0
+End Sub
+
+' ラベル／スピナー等: グリッドの論理表示をアンカーへ戻してから UserForm を描画
+Private Sub MacroSplash_EnforceAnchorAndPaintSplash()
+    On Error Resume Next
+    MacroSplash_EnforceFrozenWorkbookView
+    MacroSplash_PaintSplashChrome
+    On Error GoTo 0
+End Sub
 
 Public Function MacroSplash_GetTxtExecutionLogScreenRectPixels(ByRef outL As Long, ByRef outT As Long, ByRef outW As Long, ByRef outH As Long) As Boolean
 #If VBA7 Then
@@ -71,7 +205,7 @@ Public Sub MacroSplash_BeginConsoleOverlay()
     If m_splashConsoleOverlayActive Then Exit Sub
     MacroSplash_Form.Controls("txtExecutionLog").Visible = False
     m_splashConsoleOverlayActive = True
-    MacroSplash_Form.Repaint
+    MacroSplash_PaintSplashChrome
     On Error GoTo 0
 End Sub
 
@@ -81,39 +215,29 @@ Public Sub MacroSplash_EndConsoleOverlay()
     m_splashConsoleOverlayActive = False
     If m_macroSplashShown Then
         MacroSplash_Form.Controls("txtExecutionLog").Visible = True
-        MacroSplash_Form.Repaint
+        MacroSplash_PaintSplashChrome
     End If
     On Error GoTo 0
 End Sub
 
 ' コンソール枠の簡易除去（Win32/Win64。WT ホスト HWND には無効な場合あり ― オーバーレイは conhost 強制と併用）
 Public Sub MacroSplash_SetStep(ByVal stepMessage As String)
-    Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     m_splashCaptionBase = stepMessage
     m_splashSpinnerPhase = 0
-    prevSU = Application.ScreenUpdating
-    If Not prevSU Then Application.ScreenUpdating = True
     MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
-    MacroSplash_Form.Repaint
-    DoEvents
-    If Not prevSU Then Application.ScreenUpdating = False
+    MacroSplash_EnforceAnchorAndPaintSplash
 End Sub
 
 ' 段階実行制御.RunCmdFileStageExecAndPoll の Sleep 後から呼ぶ。lblMessage 先頭の ASCII スピナーを 1 枠進める
 Public Sub MacroSplash_AdvanceSpinnerInCaption()
-    Dim prevSU As Boolean
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
     If Len(m_splashCaptionBase) = 0 Then Exit Sub
     m_splashSpinnerPhase = (m_splashSpinnerPhase + 1) And 3
-    prevSU = Application.ScreenUpdating
-    If Not prevSU Then Application.ScreenUpdating = True
     MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
-    MacroSplash_Form.Repaint
-    DoEvents
-    If Not prevSU Then Application.ScreenUpdating = False
+    MacroSplash_EnforceAnchorAndPaintSplash
 End Sub
 
 Public Sub MacroSplash_ClearExecutionLogPane()
@@ -138,8 +262,7 @@ Public Sub MacroSplash_TextBoxScrollToTail(ByVal tb As Object)
     If Application.Interactive Then
         tb.SetFocus
     End If
-    MacroSplash_Form.Repaint
-    DoEvents
+    MacroSplash_PaintSplashChrome
 End Sub
 
 ' m_splashExecutionLogPath の UTF-8 ログを txtExecutionLog へ（長いときは末尾のみ）
@@ -147,7 +270,6 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     Dim tb As Object
     Dim s As String
     Dim n As Long
-    Dim prevSU As Boolean
     Dim errBanner As String
     Dim flen As Long
     Dim flenAtStart As Long
@@ -183,11 +305,9 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
         m_splashLastLogSnapshot = s
         m_splashPollLastFileLen = flenAtStart
         m_splashPollHaveCachedFileLen = True
-        prevSU = Application.ScreenUpdating
-        If Not prevSU Then Application.ScreenUpdating = True
+        MacroSplash_EnforceFrozenWorkbookView
         tb.text = s
         MacroSplash_TextBoxScrollToTail tb
-        If Not prevSU Then Application.ScreenUpdating = False
         Exit Sub
     End If
     If Len(Dir(m_splashExecutionLogPath)) = 0 Then Exit Sub
@@ -198,8 +318,6 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     If m_splashReadErrShown Then Exit Sub
     m_splashPollHaveCachedFileLen = False
     errBanner = "【ログ表示エラー】execution_log.txt を VBA から読めませんでした（Python がファイルを開いている等）。LOG シートまたはエディタで " & m_splashExecutionLogPath & " を直接開いて確認してください。" & vbCrLf & vbCrLf
-    prevSU = Application.ScreenUpdating
-    If Not prevSU Then Application.ScreenUpdating = True
     tb.text = errBanner & tb.text
     m_splashLastLogSnapshot = tb.text
     tb.SelStart = 1
@@ -207,9 +325,7 @@ Public Sub MacroSplash_RefreshExecutionLogPane()
     m_splashCaptionBase = "…（実行ログの表示に失敗 ? 下記の【ログ表示エラー】を参照）"
     m_splashSpinnerPhase = 0
     MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
-    MacroSplash_Form.Repaint
-    DoEvents
-    If Not prevSU Then Application.ScreenUpdating = False
+    MacroSplash_EnforceAnchorAndPaintSplash
     m_splashReadErrShown = True
 End Sub
 
@@ -237,13 +353,13 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
             errBanner = "【ログ表示エラー】execution_log.txt を読み込めませんでした。パス: " & fullPath & vbCrLf & vbCrLf
             prevInt = Application.Interactive
             Application.Interactive = True
+            MacroSplash_EnforceFrozenWorkbookView
             tb.text = errBanner & tb.text
             m_splashLastLogSnapshot = tb.text
             m_splashCaptionBase = "…（実行ログの一括表示に失敗 ? 下記を参照）"
             m_splashSpinnerPhase = 0
             MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
-            MacroSplash_Form.Repaint
-            DoEvents
+            MacroSplash_EnforceAnchorAndPaintSplash
             If m_macroSplashLockedExcel Then Application.Interactive = False Else Application.Interactive = prevInt
         End If
         Exit Sub
@@ -254,6 +370,7 @@ Public Sub MacroSplash_LoadExecutionLogFromPath(ByVal fullPath As String)
     End If
     prevInt = Application.Interactive
     Application.Interactive = True
+    MacroSplash_EnforceFrozenWorkbookView
     tb.text = s
     m_splashLastLogSnapshot = s
     MacroSplash_TextBoxScrollToTail tb
@@ -322,6 +439,7 @@ End Sub
 Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal lockExcelUI As Boolean = True)
     On Error GoTo CleanupFail
     If m_macroSplashShown Then MacroSplash_Hide
+    m_splashSavedScreenUpdating = Application.ScreenUpdating
     m_animMacroSucceeded = False
     If Len(Trim$(message)) = 0 Then
         message = "処理中です。しばらくお待ちください。"
@@ -332,6 +450,7 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     MacroSplash_Form.lblMessage.Caption = MacroSplash_FormattedStepCaption()
     MacroSplash_Form.StartUpPosition = 2  ' 初期のみ。直後に MacroSplash_PositionDockExcelBottomCenter で Excel 下端中央へ
     m_macroSplashLockedExcel = False
+    MacroSplash_CaptureAnchorWorkbookView
     If lockExcelUI Then
         Application.Interactive = False
         m_macroSplashLockedExcel = True
@@ -341,12 +460,17 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     m_macroSplashShown = True
     On Error Resume Next
     MacroSplash_Form.Controls("txtExecutionLog").HideSelection = False
+    MacroSplash_BeginExcelGridRedrawLock
+    Application.ScreenUpdating = False
     MacroSplash_BringFormToFront
     DoEvents
     MacroStartBgm_StartIfAvailable
     Exit Sub
 CleanupFail:
     On Error Resume Next
+    MacroSplash_EndExcelGridRedrawLock
+    Application.ScreenUpdating = m_splashSavedScreenUpdating
+    MacroSplash_ClearAnchorWorkbookView
     If m_macroSplashLockedExcel Then Application.Interactive = True
     m_macroSplashLockedExcel = False
     m_macroSplashShown = False
@@ -359,6 +483,11 @@ End Sub
 Public Sub MacroSplash_Hide()
     On Error Resume Next
     MacroStartBgm_FadeOutAndClose
+    If m_macroSplashShown Then
+        MacroSplash_EndExcelGridRedrawLock
+        Application.ScreenUpdating = m_splashSavedScreenUpdating
+        MacroSplash_ClearAnchorWorkbookView
+    End If
     m_splashCaptionBase = vbNullString
     m_splashSpinnerPhase = 0
     m_splashConsoleOverlayActive = False
@@ -382,9 +511,10 @@ Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     If Not SettingsSheet_IsSplashExecutionLogWriteEnabled() Then Exit Sub
     If Not m_macroSplashShown Then Exit Sub
     Dim tb As Object
+    Dim n As Long
     Set tb = MacroSplash_Form.Controls("txtExecutionLog")
     If tb Is Nothing Then Exit Sub
-    Dim n As Long
+    MacroSplash_EnforceFrozenWorkbookView
     n = Len(tb.text) + Len(chunk)
     If n > SPLASH_LOG_MAX_DISPLAY_CHARS Then
         tb.text = Right$(tb.text & chunk, SPLASH_LOG_MAX_DISPLAY_CHARS)

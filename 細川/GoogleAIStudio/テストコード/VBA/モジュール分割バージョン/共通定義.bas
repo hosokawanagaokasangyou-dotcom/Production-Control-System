@@ -29,6 +29,10 @@ End Type
     Public Declare PtrSafe Function GetDC Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
     Public Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hwnd As LongPtr, ByVal hdc As LongPtr) As Long
     Public Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
+    ' スプラッシュ表示.bas: グリッドのみ再描画停止（WM_SETREDRAW）／UserForm 枠の明示再描画（InvalidateRect）
+    Public Declare PtrSafe Function SplashWin_SendMessage Lib "user32" Alias "SendMessageW" (ByVal hwnd As LongPtr, ByVal wMsg As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+    Public Declare PtrSafe Function SplashWin_InvalidateRect Lib "user32" (ByVal hwnd As LongPtr, ByVal lpRect As LongPtr, ByVal bErase As Long) As Long
+    Public Declare PtrSafe Function SplashWin_UpdateWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
     #If Win64 Then
     Public Declare PtrSafe Function SplashGetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long) As LongPtr
     Public Declare PtrSafe Function SplashSetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hwnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
@@ -52,6 +56,9 @@ End Type
     Public Declare Function GetDC Lib "user32" (ByVal hwnd As Long) As Long
     Public Declare Function ReleaseDC Lib "user32" (ByVal hwnd As Long, ByVal hdc As Long) As Long
     Public Declare Function GetDeviceCaps Lib "gdi32" (ByVal hdc As Long, ByVal nIndex As Long) As Long
+    Public Declare Function SplashWin_SendMessage Lib "user32" Alias "SendMessageW" (ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, ByVal lParam As Long) As Long
+    Public Declare Function SplashWin_InvalidateRect Lib "user32" (ByVal hwnd As Long, ByVal lpRect As Long, ByVal bErase As Long) As Long
+    Public Declare Function SplashWin_UpdateWindow Lib "user32" (ByVal hwnd As Long) As Long
 #End If
 Public Const SW_HIDE As Long = 0
 Public Const SND_ASYNC As Long = &H1
@@ -80,6 +87,8 @@ Public Const SWP_NOMOVE As Long = &H2
 Public Const SWP_NOSIZE As Long = &H1
 Public Const SWP_FRAMECHANGED As Long = &H20
 Public Const SWP_NOACTIVATE As Long = &H10
+' Win32: ウィンドウの子に対する WM_PAINT を抑制／再開（LockWindowUpdate より軽く、オーナー UserForm とは別 HWND を狙える）
+Public Const WM_SETREDRAW As Long = &HB
 Public Const LOGPIXELSX As Long = 88
 Public Const LOGPIXELSY As Long = 90
 Public Const GWL_STYLE As Long = -16
