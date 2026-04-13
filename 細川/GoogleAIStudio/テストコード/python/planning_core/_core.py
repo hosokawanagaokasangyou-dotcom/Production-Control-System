@@ -49,6 +49,37 @@ from .bootstrap import (
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
+# region agent log
+def _debug_log_e28d9b(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    try:
+        _root = os.path.abspath(os.path.dirname(__file__))
+        for _ in range(14):
+            if os.path.isdir(os.path.join(_root, ".git")):
+                break
+            _p = os.path.dirname(_root)
+            if _p == _root:
+                _root = os.getcwd()
+                break
+            _root = _p
+        _path = os.path.join(_root, "debug-e28d9b.log")
+        _line = {
+            "sessionId": "e28d9b",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_path, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
 _ai_remarks_cache_name = "ai_remarks_cache.json"
 _ai_cache_legacy = os.path.join(output_dir, _ai_remarks_cache_name)
@@ -16988,6 +17019,20 @@ def _repair_timeline_shorten_machining_for_changeover_cleanup(
     )
     if not need or cu_prev <= 0:
         return False
+    # region agent log
+    _debug_log_e28d9b(
+        "H3",
+        "_repair_timeline_shorten_machining_for_changeover_cleanup:entry",
+        "repair entered",
+        {
+            "cu_prev": cu_prev,
+            "last_lead": str(last_lead or ""),
+            "last_eq": str(last_eq_s or ""),
+            "occ": str(machine_occ_key or ""),
+            "next_task_id": str(next_task_id or ""),
+        },
+    )
+    # endregion agent log
     rep = _pick_skilled_op_for_changeover_interval(
         str(machine_proc or "").strip(),
         str(machine_name or "").strip(),
@@ -17519,6 +17564,24 @@ def _resolve_machine_changeover_floor_segments(
         skills_dict=skills_dict,
         abolish_limits=False,
     )
+    # region agent log
+    _sk = [str(s.get("event_kind") or "") for s in (co_segs or [])]
+    _debug_log_e28d9b(
+        "H1_H2",
+        "_resolve_machine_changeover_floor_segments:after_first_plan",
+        "first changeover plan",
+        {
+            "co_lb_is_none": co_lb is None,
+            "n_segs": len(co_segs or []),
+            "seg_kinds": _sk,
+            "has_cleanup": TIMELINE_EVENT_CHANGEOVER_CLEANUP in _sk,
+            "task_id": str(task_id or ""),
+            "machine_occ_key": str(machine_occ_key or ""),
+            "timeline_is_none": timeline_events is None,
+            "task_queue_is_none": task_queue is None,
+        },
+    )
+    # endregion agent log
     if co_lb is None:
         if (
             timeline_events is not None
@@ -17563,6 +17626,33 @@ def _resolve_machine_changeover_floor_segments(
                     machine_occ_key,
                     task_id,
                 )
+            # region agent log
+            _sk2 = [str(s.get("event_kind") or "") for s in (co_segs or [])]
+            _debug_log_e28d9b(
+                "H3",
+                "_resolve_machine_changeover_floor_segments:after_repair_retry",
+                "after repair branch",
+                {
+                    "co_lb_is_none": co_lb is None,
+                    "n_segs": len(co_segs or []),
+                    "seg_kinds": _sk2,
+                    "has_cleanup": TIMELINE_EVENT_CHANGEOVER_CLEANUP in _sk2,
+                    "repair_ran": True,
+                },
+            )
+            # endregion agent log
+        elif timeline_events is None or task_queue is None:
+            # region agent log
+            _debug_log_e28d9b(
+                "H2",
+                "_resolve_machine_changeover_floor_segments:repair_skipped_no_context",
+                "co_lb None and repair cannot run",
+                {
+                    "timeline_is_none": timeline_events is None,
+                    "task_queue_is_none": task_queue is None,
+                },
+            )
+            # endregion agent log
     if co_lb is None:
         if (
             _pick_skilled_op_for_changeover_interval(
@@ -17611,12 +17701,33 @@ def _resolve_machine_changeover_floor_segments(
                 if dispatch_interval_mirror.would_block_roll(
                     sok, tuple(_team_chk), st_seg, ed_seg
                 ):
+                    # region agent log
+                    _debug_log_e28d9b(
+                        "H4",
+                        "_resolve:mirror_abort_cleanup",
+                        "would_block_roll cleanup segment",
+                        {
+                            "ek": ek_chk,
+                            "occ": sok,
+                            "st": str(st_seg),
+                            "ed": str(ed_seg),
+                        },
+                    )
+                    # endregion agent log
                     return machine_day_floor, [], True
                 continue
             if (
                 sop
                 and dispatch_interval_mirror.would_block_member(sop, st_seg, ed_seg)
             ):
+                # region agent log
+                _debug_log_e28d9b(
+                    "H4",
+                    "_resolve:mirror_abort_member",
+                    "would_block_member setup segment",
+                    {"ek": ek_chk, "sop": sop, "st": str(st_seg), "ed": str(ed_seg)},
+                )
+                # endregion agent log
                 return machine_day_floor, [], True
             if (
                 sok
@@ -17624,7 +17735,29 @@ def _resolve_machine_changeover_floor_segments(
                     sok, st_seg, ed_seg
                 )
             ):
+                # region agent log
+                _debug_log_e28d9b(
+                    "H4",
+                    "_resolve:mirror_abort_equipment",
+                    "would_block_equipment setup segment",
+                    {"ek": ek_chk, "occ": sok, "st": str(st_seg), "ed": str(ed_seg)},
+                )
+                # endregion agent log
                 return machine_day_floor, [], True
+    # region agent log
+    if co_segs:
+        _skf = [str(s.get("event_kind") or "") for s in (co_segs or [])]
+        _debug_log_e28d9b(
+            "H1_H5",
+            "_resolve_machine_changeover_floor_segments:success_return_nonempty",
+            "returning floor with setup segments",
+            {
+                "n_segs": len(co_segs or []),
+                "seg_kinds": _skf,
+                "has_cleanup": TIMELINE_EVENT_CHANGEOVER_CLEANUP in _skf,
+            },
+        )
+    # endregion agent log
     return co_lb, co_segs, False
 
 
@@ -17672,6 +17805,22 @@ def _append_changeover_segments_to_timeline(
     machine_handoff: dict | None = None,
 ) -> None:
     """セットアップ系セグメントをタイムライン・ミラー・担当者 avail に反映。"""
+    # region agent log
+    if segments:
+        _ks = [str(s.get("event_kind") or "") for s in (segments or [])]
+        _debug_log_e28d9b(
+            "H5",
+            "_append_changeover_segments_to_timeline:entry",
+            "append changeover segments",
+            {
+                "n": len(segments or []),
+                "kinds": _ks,
+                "has_cleanup": TIMELINE_EVENT_CHANGEOVER_CLEANUP in _ks,
+                "task_id": str(task_id or ""),
+                "occ": str(machine_occ_key or ""),
+            },
+        )
+    # endregion agent log
     _mh = machine_handoff or {}
     _lead_m = str(machining_lead_op or "").strip()
     _sub_roll = str(machining_sub_str or "").strip()
