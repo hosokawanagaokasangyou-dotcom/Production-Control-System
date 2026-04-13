@@ -17690,22 +17690,17 @@ def _resolve_machine_changeover_floor_segments(
             if not isinstance(st_seg, datetime) or not isinstance(ed_seg, datetime):
                 continue
             if ek_chk == TIMELINE_EVENT_CHANGEOVER_CLEANUP and sok:
-                _sc = str(_last_sub_m.get(sok, "") or "").strip()
-                _team_chk: list[str] = []
-                if sop:
-                    _team_chk.append(sop)
-                for _p in _sc.split(","):
-                    _t = _p.strip()
-                    if _t and _t not in _team_chk:
-                        _team_chk.append(_t)
-                if dispatch_interval_mirror.would_block_roll(
-                    sok, tuple(_team_chk), st_seg, ed_seg
+                # 依頼切替後始末は直前加工と同一主・補の帯であり、メンバー側ミラーは
+                # 隣接境界や直前ブロックとの二重解釈で誤って would_block_roll になり得る。
+                # 設備占有（同一占有キー）のみ検査し、人は直前加工と連続とみなす。
+                if dispatch_interval_mirror.would_block_equipment(
+                    sok, st_seg, ed_seg
                 ):
                     # region agent log
                     _debug_log_e28d9b(
                         "H4",
-                        "_resolve:mirror_abort_cleanup",
-                        "would_block_roll cleanup segment",
+                        "_resolve:mirror_abort_cleanup_equipment",
+                        "would_block_equipment cleanup segment",
                         {
                             "ek": ek_chk,
                             "occ": sok,
