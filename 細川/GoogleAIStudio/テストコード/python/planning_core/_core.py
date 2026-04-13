@@ -2458,7 +2458,7 @@ def _planning_completion_flag_cell_is_mikan(v) -> bool:
 
 
 def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
-    row, *, debug_log: bool = True
+    row, *, debug_log: bool = True, debug_context: str = ""
 ) -> bool:
     """
     加工計画DATA／配台計画_タスク入力の同一列前提で、次をすべて満たす行は加工済みとみなし配台対象外とする。
@@ -2490,11 +2490,16 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
             _payload = {
                 "sessionId": "c67f14",
                 "runId": "pre",
-                "hypothesisId": "H1-H3",
+                "hypothesisId": (
+                    "H4"
+                    if debug_context == "load_planning_tasks_df"
+                    else "H1-H3"
+                ),
                 "location": "_core.py:_plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule",
                 "message": "near-user-pattern",
                 "data": {
                     "task_id": _tid,
+                    "context": debug_context or "(default)",
                     "completion_flag_repr": repr(cf_v),
                     "is_mikan": ok_mikan,
                     "actual_done": act_v,
@@ -3748,26 +3753,10 @@ def load_planning_tasks_df():
     )
     # #region agent log
     try:
-        _repo = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-        )
-        _logp = os.path.join(_repo, "debug-c67f14.log")
         for _, _r in df.iterrows():
-            if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
-                _r, debug_log=False
-            ):
-                _tid2 = planning_task_id_str_from_plan_row(_r)
-                _payload2 = {
-                    "sessionId": "c67f14",
-                    "runId": "pre",
-                    "hypothesisId": "H4",
-                    "location": "_core.py:load_planning_tasks_df",
-                    "message": "plan_sheet_row_matches_exclude_completed_rule",
-                    "data": {"task_id": _tid2},
-                    "timestamp": int(time_module.time() * 1000),
-                }
-                with open(_logp, "a", encoding="utf-8") as _df2:
-                    _df2.write(json.dumps(_payload2, ensure_ascii=False) + "\n")
+            _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(
+                _r, debug_context="load_planning_tasks_df"
+            )
     except Exception:
         pass
     # #endregion
