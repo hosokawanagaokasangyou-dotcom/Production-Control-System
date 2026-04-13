@@ -7,7 +7,7 @@ Private m_frmMacroSplash As frmMacroSplash
 Private m_splashCaptionBase As String
 Private m_splashSpinnerPhase As Long
 Private Const SPLASH_SPINNER_FRAMES As String = "-\|/"
-' スプラッシュ中: シートの見た目を固定（論理状態は処理で変わっても、再描画停止＋アンカーへ戻す）
+' スプラッシュ中: アンカーへ論理表示を戻す（WM_SETREDRAW は Excel 全体がグレー化する報告があるため使わない）
 Private m_splashGridRedrawFrozen As Boolean
 Private m_splashSavedScreenUpdating As Boolean
 Private m_splashAnchorScrollRow As Long
@@ -33,18 +33,6 @@ Private Function MacroSplash_Form() As frmMacroSplash
         Set m_frmMacroSplash = New frmMacroSplash
     End If
     Set MacroSplash_Form = m_frmMacroSplash
-End Function
-
-#If VBA7 Then
-Private Function MacroSplash_ActiveGridHwnd() As LongPtr
-#Else
-Private Function MacroSplash_ActiveGridHwnd() As Long
-#End If
-    MacroSplash_ActiveGridHwnd = 0
-    On Error Resume Next
-    MacroSplash_ActiveGridHwnd = ActiveWindow.hwnd
-    If Err.Number <> 0 Then Err.Clear
-    If MacroSplash_ActiveGridHwnd = 0 Then MacroSplash_ActiveGridHwnd = Application.hwnd
 End Function
 
 Private Sub MacroSplash_CaptureAnchorWorkbookView()
@@ -75,7 +63,7 @@ Private Sub MacroSplash_ClearAnchorWorkbookView()
     m_splashAnchorScrollColumn = 1
 End Sub
 
-' ScreenUpdating=False 中でも、グリッド側の論理表示をスプラッシュ直前の「アンカー」に戻す（再描画は WM_SETREDRAW で止めている想定）
+' グリッド側の論理表示をスプラッシュ直前の「アンカー」に戻す（見た目の固定は呼び出し側の ScreenUpdating 等に依存）
 Private Sub MacroSplash_EnforceFrozenWorkbookView()
     On Error Resume Next
     If Not m_macroSplashShown Then Exit Sub
@@ -88,23 +76,8 @@ Private Sub MacroSplash_EnforceFrozenWorkbookView()
 End Sub
 
 Private Sub MacroSplash_BeginExcelGridRedrawLock()
-#If VBA7 Then
-    Dim h As LongPtr
-#Else
-    Dim h As Long
-#End If
-    On Error Resume Next
-    If m_splashGridRedrawFrozen Then Exit Sub
-    h = MacroSplash_ActiveGridHwnd()
-    If h = 0 Then Exit Sub
-#If VBA7 Then
-    Call SplashWin_SendMessage(h, WM_SETREDRAW, CLngPtr(0), CLngPtr(0))
-#Else
-    Call SplashWin_SendMessage(h, WM_SETREDRAW, 0, 0)
-#End If
-    m_splashFrozenGridHwnd = h
-    m_splashGridRedrawFrozen = True
-    On Error GoTo 0
+    ' 以前: ActiveWindow.hwnd へ WM_SETREDRAW=False。環境によってワークシート領域が実行中ずっと真っ暗／グレーになるため廃止。
+    Exit Sub
 End Sub
 
 Private Sub MacroSplash_EndExcelGridRedrawLock()
@@ -459,7 +432,7 @@ Public Sub MacroSplash_Show(Optional ByVal message As String, Optional ByVal loc
     On Error Resume Next
     MacroSplash_Form.Controls("txtExecutionLog").HideSelection = False
     MacroSplash_BeginExcelGridRedrawLock
-    Application.ScreenUpdating = False
+    ' ScreenUpdating は呼び出し側に任せる（Show 直後に False にするとグリッドが描画されず暗く見えることがある）
     MacroSplash_BringFormToFront
     DoEvents
     MacroStartBgm_StartIfAvailable
