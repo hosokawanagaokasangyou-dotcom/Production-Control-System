@@ -160,6 +160,7 @@
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#day-flow">日内割付・環境変数</a></li>
       <li><a href="#need-surplus">need 追加人数（余力・メイン後追記）</a></li>
+      <li><a href="#unprocessed-col">未加工列・残量算定（必須）</a></li>
       <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#roll-unit-length">ロール単位長さ（配台計画_タスク入力）</a></li>
       <li><a href="#stock-location">在庫場所（配台計画_タスク入力）</a></li>
@@ -309,6 +310,20 @@
     </ul>
   </section>
 
+  <section id="unprocessed-col" class="card" aria-labelledby="h-unprocessed">
+    <h2 id="h-unprocessed">未加工列（必須）・残量算定と完了扱いの特例</h2>
+    <p class="queue-note"><span class="file">planning_core/_core.py</span> の <code>_plan_row_dispatch_qty_metrics</code>・<code>build_task_queue_from_planning_df</code>・<code>_plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule</code> に一致させています。</p>
+    <ul>
+      <li><strong>列「未加工」は必須</strong>（段階2読込で列なし・数値化できない行があると <code>PlanningValidationError</code> で中止）。</li>
+      <li><strong>済相当・残量は未加工のみ</strong>で算定し、<strong>実加工数から済へフォールバックしない</strong>。</li>
+      <li><strong>未加工 &gt; 0</strong>: 残りm = 未加工、済相当 = max(0, 換算数量(raw) − 未加工)。</li>
+      <li><strong>未加工 ≤ 0</strong>（数値 0）: 換算数量（100m 切上げ）を基礎にし、ロール単位長さ未満なら <strong>ロール単位まで引き上げ</strong>（最小＝1 ロール・済相当 0）。業務上の<strong>全数未加工</strong>（換算あり・実加工 0・未加工 0）に対応。</li>
+      <li><strong>キューへ載せない</strong>: 未加工＝0 かつ <strong>実加工数 ≠ 0</strong> かつ <strong>加工完了区分</strong>が「未完」または <code>0:未完</code> のように<strong>末尾が未完</strong>のとき → 加工済み扱いでスキップ（上記完了キーワード・配台不要とは別）。</li>
+      <li><strong>ロール本数の初期値</strong>: 未加工由来（<code>from_unprocessed_qty</code>）でロール単位長さ &gt; 0 のとき <code>ceil(残りm / unit_m)</code>。それ以外は残りm / ロール単位の商。</li>
+      <li><strong>最小加工長さ ≥ ロール単位</strong>の業務ルールは <span class="file">配台ルール.md</span> §7.1 末尾とリポジトリルール <code>dispatch-min-processing-length-vs-roll-unit.mdc</code> を参照。</li>
+    </ul>
+  </section>
+
   <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">
     <h2 id="h-doc-sync">ソース変更時のドキュメント同期（開発）</h2>
     <p><span class="file">python/planning_core/_core.py</span> など<strong>配台ロジックを変えたときは</strong>、必ず <span class="file">配台ルール.md</span> と本 <span class="file">配台ルール.html</span> を<strong>同じ内容に合わせて更新</strong>してください。</p>
@@ -333,6 +348,7 @@
       <li><strong>列</strong>: <code>ロール単位長さ</code>（<code>PLAN_COL_ROLL_UNIT_LENGTH</code>）。シートでは <strong>製品名の右隣</strong>。</li>
       <li><strong>段階1</strong>: <code>infer_unit_m_from_product_name</code> で <strong>1ロールあたりの m</strong> を計算して出力（寸法が解釈できないときは既定 <code>INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M</code>＝100、換算数量には落とさない。製品名欠損のみ <code>fallback</code>）。再抽出時は <code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code>（<strong>ロール単位長さ</strong>のみ）で <strong>依頼NO＋工程名</strong>キーにより旧値を引き継ぎ。<strong>配台試行順番</strong>は対象外（段階1冒頭で空クリアし、別途付け直し）。</li>
       <li><strong>段階2</strong>: <code>build_task_queue_from_planning_df</code> は<strong>まずこの列の数値</strong>を <code>unit_m</code> に使う。<strong>空・0・不正</strong>のときだけ製品名推定（寸法不能時は既定 100m）。</li>
+      <li><strong>最小加工長さとロール単位（業務）</strong>: 配台に使う加工の最小長さはロール単位を下回ってはならない（リポジトリルール）。実装は <a href="#unprocessed-col">未加工≤0 時の残量引き上げ</a> と段階1の換算・切上げと併せて整合（<span class="file">配台ルール.md</span> §7.1）。</li>
     </ul>
   </section>
 
@@ -480,7 +496,7 @@
   </section>
 
   <footer>
-    同一ソース: 配台ルール.md（2026-04-07・§11 デバッグ配台（設定シート B3 以降）を追記）
+    同一ソース: 配台ルール.md（2026-04-13・§1.1 未加工列必須／残量算定・§7.1 最小加工長さ注記）
   </footer>
 </body>
 </html>
