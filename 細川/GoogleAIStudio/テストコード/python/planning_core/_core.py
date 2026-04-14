@@ -8916,6 +8916,15 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
       target_completion_date, ship_by_date, preferred_operator など。
     """
     lines = _task_special_prompt_lines(tasks_df)
+    # #region agent log
+    _w4_lines = [ln for ln in lines if "W4-5" in ln or "w4-5" in ln.casefold()]
+    _debug_agent_ndjson_55ab3a(
+        "H4",
+        "_core.py:analyze_task_special_remarks:prompt_lines",
+        "特別指定AIプロンプト行にW4-5が含まれるか",
+        {"n_lines": len(lines), "w4_5_line_count": len(_w4_lines)},
+    )
+    # #endregion
     if not lines:
         n_rows = len(tasks_df)
         n_rem_only = 0
@@ -9478,6 +9487,43 @@ def _ai_planning_target_due_date(ai_dict):
     return min(dates)
 
 
+def _debug_agent_ndjson_55ab3a(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        from pathlib import Path as _Path
+
+        _cur = _Path(__file__).resolve().parent
+        _root = None
+        for _ in range(12):
+            if (_cur / ".git").is_dir():
+                _root = _cur
+                break
+            if _cur.parent == _cur:
+                break
+            _cur = _cur.parent
+        if _root is None:
+            _root = _Path(__file__).resolve().parents[5]
+        _logf = _root / "debug-55ab3a.log"
+        _payload = {
+            "sessionId": "55ab3a",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(_time.time() * 1000),
+        }
+        with open(_logf, "a", encoding="utf-8") as _af:
+            _af.write(_json.dumps(_payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
 def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bool:
     """
     特別指定_備考に」紝期・期陝・最優先など「配台試行を剝に出す」愝図の文言はあるとし True。
@@ -9490,38 +9536,40 @@ def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bo
         return False
     n = unicodedata.normalize("NFKC", s)
     n_lower = n.casefold()
+    # キーワードはユーザー入力（UTF-8 正しい表記）と一致させる。
     needles = (
-        "紝期",
-        "指定納期",
-        "回答納期",
+        "紹期",
+        "指定紹期",
+        "回答紹期",
         "計画基準",
         "期日",
         "締切",
-        "締ゝ切り",
-        "期陝",
+        "締め切り",
+        "期限",
         "最優先",
         "至急",
-        "急ね",
-        "直うに",
+        "急ぎ",
+        "直ちに",
         "早急",
-        "出蝷",
-        "紝入",
+        "出荷",
+        "紹入",
         "必着",
         "deadline",
         "デッドライン",
-        "剝倒し",
-        "早ゝに",
+        "前倒し",
+        "早めに",
         "厳守",
         "までに",
-        "間に坈ゝ",
-        "間に坈い",
+        "間に合わせ",
+        "間に合い",
         "遅れない",
-        "靅延試行",
+        "繧り上げ",
+        "遅延",
         "優先配台",
         "先に配台",
         "完了予定",
-        "本紝期",
-        "回答期陝",
+        "本紹期",
+        "回答期限",
     )
     return any(w.casefold() in n_lower for w in needles)
 
@@ -9604,7 +9652,17 @@ def build_task_queue_from_planning_df(
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
             continue
         task_id = planning_task_id_str_from_plan_row(row)
-        if _plan_row_exclude_from_assignment(row):
+        _plan_excl = _plan_row_exclude_from_assignment(row)
+        # #region agent log
+        if task_id.casefold() == "w4-5":
+            _debug_agent_ndjson_55ab3a(
+                "H2",
+                "_core.py:build_task_queue_from_planning_df:exclude",
+                "W4-5 配台試行除外フラグ",
+                {"excluded": bool(_plan_excl)},
+            )
+        # #endregion
+        if _plan_excl:
             n_exclude_plan += 1
             continue
 
@@ -9660,9 +9718,39 @@ def build_task_queue_from_planning_df(
         remark_implies_due_dispatch_priority = (
             _special_remark_implies_due_related_dispatch_priority(remark_raw)
         )
+        # #region agent log
+        if task_id.casefold() == "w4-5" and has_special_remark:
+            _nou = "\u7d39\u671f" in remark_raw
+            _spec_n = "\u6307\u5b9a\u7d39\u671f" in remark_raw
+            _debug_agent_ndjson_55ab3a(
+                "H1",
+                "_core.py:build_task_queue_from_planning_df:remark_implies",
+                "W4-5 備考と allow_ai 判定",
+                {
+                    "remark_implies_due_dispatch_priority": bool(
+                        remark_implies_due_dispatch_priority
+                    ),
+                    "remark_len": len(remark_raw),
+                    "remark_has_correct_nouki": _nou,
+                    "remark_has_correct_shitei_nouki": _spec_n,
+                },
+            )
+        # #endregion
         in_progress = done_qty > 0.0
 
         ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
+        # #region agent log
+        if task_id.casefold() == "w4-5":
+            _debug_agent_ndjson_55ab3a(
+                "H3",
+                "_core.py:build_task_queue_from_planning_df:ai_entry",
+                "W4-5 AI 行エントリ",
+                {
+                    "ai_type": type(ai_one).__name__,
+                    "ai_nonempty": bool(ai_one),
+                },
+            )
+        # #endregion
         req_op, speed_ov, task_eff_factor, priority, start_date_ov, start_time_ov, ai_used = _merge_task_row_with_ai(
             row,
             ai_one,
