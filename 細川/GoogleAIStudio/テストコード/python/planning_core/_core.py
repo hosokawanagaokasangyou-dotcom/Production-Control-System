@@ -2101,36 +2101,12 @@ def _write_results_equipment_gantt_sheet(
     無効時は ([], []) を返す。
     """
     sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
-    # region agent log
-    _agent_debug_ndjson(
-        "H1",
-        "_core.py:_write_results_equipment_gantt_sheet",
-        "enter",
-        {
-            "sheet_nm": sheet_nm,
-            "plan_rows": plan_rows,
-            "has_actual_timeline_events": bool(actual_timeline_events),
-            "timeline_events_len": len(timeline_events or []),
-            "equipment_list_len": len(equipment_list or []),
-            "sorted_dates_len": len(sorted_dates or []),
-            "data_extract_dt_str": (data_extract_dt_str or ""),
-        },
-    )
-    # endregion agent log
     if not plan_rows:
         if not actual_timeline_events:
             logging.info(
                 "設備ガント（%s）: 実績のみモードですがイベントが空のためシートを作成しません。",
                 sheet_nm,
             )
-            # region agent log
-            _agent_debug_ndjson(
-                "H2",
-                "_core.py:_write_results_equipment_gantt_sheet",
-                "early_return_no_actual_events",
-                {"sheet_nm": sheet_nm, "plan_rows": plan_rows},
-            )
-            # endregion agent log
             return [], []
     wb = writer.book
     if sheet_name_override:
@@ -2293,22 +2269,6 @@ def _write_results_equipment_gantt_sheet(
     mtop.border = Border(left=accent_left, bottom=banner_sep)
     ws.row_dimensions[row].height = 26
     row += 1
-    # region agent log
-    try:
-        _agent_debug_ndjson(
-            "H3",
-            "_core.py:_write_results_equipment_gantt_sheet",
-            "wrote_meta_line",
-            {
-                "sheet_nm": sheet_nm,
-                "meta_addr": f"{get_column_letter(title_start_col)}2",
-                "meta_line": meta_line[:200],
-                "mtop_value": str(mtop.value)[:200] if mtop.value is not None else None,
-            },
-        )
-    except Exception:
-        pass
-    # endregion agent log
 
     dates_to_show: list = []
     for d0 in sorted_dates:
@@ -2325,21 +2285,6 @@ def _write_results_equipment_gantt_sheet(
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
-
-    # region agent log
-    if sheet_name_override:
-        _agent_debug_ndjson(
-            "H4",
-            "_core.py:_write_results_equipment_gantt_sheet",
-            "after_dates_to_show",
-            {
-                "sheet_nm": sheet_nm,
-                "plan_rows": plan_rows,
-                "len_dates_to_show": len(dates_to_show),
-                "n_actual_events": len(actual_timeline_events or []),
-            },
-        )
-    # endregion agent log
 
     hdr_row = row
     fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
@@ -7304,19 +7249,6 @@ def load_machining_actual_detail_df():
     列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
     """
     if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
-        # region agent log
-        _agent_debug_ndjson(
-            "H1",
-            "_core.py:load_machining_actual_detail_df",
-            "no_workbook_path",
-            {
-                "TASKS_INPUT_WORKBOOK_set": bool(TASKS_INPUT_WORKBOOK),
-                "path_exists": bool(
-                    TASKS_INPUT_WORKBOOK and os.path.exists(TASKS_INPUT_WORKBOOK)
-                ),
-            },
-        )
-        # endregion agent log
         return pd.DataFrame()
     try:
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
@@ -7324,14 +7256,6 @@ def load_machining_actual_detail_df():
         logging.info(
             f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
         )
-        # region agent log
-        _agent_debug_ndjson(
-            "H2",
-            "_core.py:load_machining_actual_detail_df",
-            "sheet_missing_ValueError",
-            {"workbook": os.path.basename(str(TASKS_INPUT_WORKBOOK)), "sheet": ACTUAL_DETAIL_SHEET_NAME},
-        )
-        # endregion agent log
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     if ACT_DETAIL_COL_ROLL not in df.columns:
@@ -7343,20 +7267,6 @@ def load_machining_actual_detail_df():
     logging.info(
         f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
     )
-    # region agent log
-    _cols = [str(c) for c in df.columns[:25]]
-    _agent_debug_ndjson(
-        "H1",
-        "_core.py:load_machining_actual_detail_df",
-        "loaded_ok",
-        {
-            "nrows": int(len(df)),
-            "columns_head": _cols,
-            "has_依頼NO": ACT_COL_TASK_ID in df.columns,
-            "has_工程名": ACT_COL_PROCESS in df.columns,
-        },
-    )
-    # endregion agent log
     return df
 
 
@@ -7550,22 +7460,6 @@ def build_actual_timeline_events(
             f"{log_sheet_name}: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。"
         )
     logging.info(f"{log_sheet_name} からガント用セグメント {len(events)} 件を生成しました。")
-    # region agent log
-    _agent_debug_ndjson(
-        "H3",
-        "_core.py:build_actual_timeline_events",
-        "build_done",
-        {
-            "log_sheet_name": log_sheet_name,
-            "roll_detail": roll_detail,
-            "n_events": len(events),
-            "bad_eq": bad_eq,
-            "bad_time": bad_time,
-            "no_plan_overlap": no_plan_overlap,
-            "input_rows": int(len(df)) if df is not None else 0,
-        },
-    )
-    # endregion agent log
     return events
 
 
@@ -19332,22 +19226,6 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         )
 
         df_actual_detail = load_machining_actual_detail_df()
-        # region agent log
-        try:
-            _agent_debug_ndjson(
-                "H6",
-                "_core.py:refresh_equipment_gantt_actual_detail_only",
-                "base_dt_before_detail_override",
-                {
-                    "base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
-                    if isinstance(base_now_dt, datetime)
-                    else None,
-                    "plan_base_dt_column": plan_base_dt_column,
-                },
-            )
-        except Exception:
-            pass
-        # endregion agent log
 
         def _first_valid_dt_from_df_col(_df, _col) -> datetime | None:
             try:
@@ -19381,26 +19259,6 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
             plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
         )
-        # region agent log
-        try:
-            _agent_debug_ndjson(
-                "H6",
-                "_core.py:refresh_equipment_gantt_actual_detail_only",
-                "base_dt_after_detail_override",
-                {
-                    "detail_extract_dt": detail_extract_dt.strftime("%Y/%m/%d %H:%M:%S")
-                    if isinstance(detail_extract_dt, datetime)
-                    else None,
-                    "effective_base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
-                    if isinstance(base_now_dt, datetime)
-                    else None,
-                    "effective_base_dt_source": plan_base_dt_column,
-                    "data_extract_dt_str": data_extract_dt_str,
-                },
-            )
-        except Exception:
-            pass
-        # endregion agent log
         detail_timeline_events: list = []
         sorted_dates_detail = list(sorted_dates)
         chart_title_actual_detail = "湖南工場 加工実績（明細）"
@@ -19489,38 +19347,6 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             "実績明細ガントのみ: %s を出力しました。",
             os.path.basename(out_path),
         )
-        # region agent log
-        try:
-            _agent_debug_ndjson(
-                "H5",
-                "_core.py:refresh_equipment_gantt_actual_detail_only",
-                "output_written",
-                {"out_path": os.path.abspath(out_path)},
-            )
-            _wb_dbg = load_workbook(out_path, data_only=True)
-            try:
-                _ws_dbg = _wb_dbg[RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME]
-                _agent_debug_ndjson(
-                    "H5",
-                    "_core.py:refresh_equipment_gantt_actual_detail_only",
-                    "output_d2_check",
-                    {
-                        "sheet": RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
-                        "d2": str(_ws_dbg["D2"].value)[:200]
-                        if _ws_dbg["D2"].value is not None
-                        else None,
-                    },
-                )
-            finally:
-                _wb_dbg.close()
-        except Exception as _e:
-            _agent_debug_ndjson(
-                "H5",
-                "_core.py:refresh_equipment_gantt_actual_detail_only",
-                "output_check_failed",
-                {"err": str(_e)[:200]},
-            )
-        # endregion agent log
         return os.path.abspath(out_path)
 
 
@@ -21738,27 +21564,6 @@ def _generate_plan_impl():
             log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
             roll_detail=True,
         )
-    # region agent log
-    _agent_debug_ndjson(
-        "H5",
-        "_core.py:_generate_plan_impl",
-        "detail_gantt_branch",
-        {
-            "_core_py": os.path.abspath(__file__),
-            "df_detail_rows": int(len(df_actual_detail)) if df_actual_detail is not None else -1,
-            "detail_timeline_events_n": len(detail_timeline_events),
-            "sorted_dates_n": len(sorted_dates),
-            "sorted_dates_detail_n": len(sorted_dates_detail),
-        },
-    )
-    if not detail_timeline_events:
-        _agent_debug_ndjson(
-            "H3",
-            "_core.py:_generate_plan_impl",
-            "skip_detail_sheet_write",
-            {"reason": "detail_timeline_events_empty"},
-        )
-    # endregion agent log
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
