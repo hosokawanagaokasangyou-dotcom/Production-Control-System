@@ -796,8 +796,9 @@ ACT_COL_TIME_END = "終了時刻"
 # 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
 ACT_COL_MACHINING_START_DT = "加工開始日時"
 ACT_COL_MACHINING_END_DT = "加工終了日時"
-# 加工実績明細DATA（Power Query 等）… 完了率は 実加工数÷換算数量（ガントの角丸シェイプに pct 表示）
+# 加工実績明細DATA（Power Query 等）… 完了率は 実加工数÷加工予定数（ガントの角丸シェイプに pct 表示）
 ACT_COL_ACTUAL_QTY = "実加工数"
+ACT_COL_PLANNED_QTY = "加工予定数"
 ACT_COL_CONVERTED_QTY = "換算数量"
 # 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
 ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
@@ -831,6 +832,7 @@ ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
 ACT_DETAIL_COL_ROLL = "ロールNO"
 ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
     ACT_COL_ACTUAL_QTY,
+    ACT_COL_PLANNED_QTY,
     ACT_COL_CONVERTED_QTY,
     ACT_DETAIL_COL_ROLL,
 ) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
@@ -7319,17 +7321,17 @@ def load_machining_actual_detail_df():
 
 def _actual_row_completion_pct_macro(row) -> int | None:
     """
-    加工実績明細DATA の「実加工数」「換算数量」から完了率（0～100 の整数）を返す。
-    列が無い・換算数量が 0 以下・数値化不可のときは None（シェイプは依頼NOのみ等）。
+    加工実績明細DATA の「実加工数」「加工予定数」から完了率（0～100 の整数）を返す。
+    列が無い・加工予定数が 0 以下・数値化不可のときは None（シェイプは依頼NOのみ等）。
     """
     try:
-        conv = float(parse_float_safe(row.get(ACT_COL_CONVERTED_QTY), 0.0))
+        planned = float(parse_float_safe(row.get(ACT_COL_PLANNED_QTY), 0.0))
         act = float(parse_float_safe(row.get(ACT_COL_ACTUAL_QTY), 0.0))
     except (TypeError, ValueError):
         return None
-    if conv <= 1e-12:
+    if planned <= 1e-12:
         return None
-    pct = int(round((act / conv) * 100.0))
+    pct = int(round((act / planned) * 100.0))
     return max(0, min(100, pct))
 
 
@@ -7376,7 +7378,7 @@ def build_actual_timeline_events(
     roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
     同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
     ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
-    roll_detail=True のとき「実加工数」「換算数量」列があれば完了率を算出し、
+    roll_detail=True のとき「実加工数」「加工予定数」列があれば完了率（実÷予定）を算出し、
     タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す。
     """
     if df is None or len(df) == 0:
