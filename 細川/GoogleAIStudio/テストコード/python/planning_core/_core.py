@@ -796,6 +796,9 @@ ACT_COL_TIME_END = "終了時刻"
 # 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
 ACT_COL_MACHINING_START_DT = "加工開始日時"
 ACT_COL_MACHINING_END_DT = "加工終了日時"
+# 加工実績明細DATA（Power Query 等）… 完了率は 実加工数÷換算数量（ガントの角丸シェイプに pct 表示）
+ACT_COL_ACTUAL_QTY = "実加工数"
+ACT_COL_CONVERTED_QTY = "換算数量"
 # 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
 ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
 ACT_COL_MACHINING_ASSIGNEE_2 = "加工担当者名2"
@@ -827,6 +830,8 @@ ACTUAL_HEADER_CANONICAL = (
 ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
 ACT_DETAIL_COL_ROLL = "ロールNO"
 ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
+    ACT_COL_ACTUAL_QTY,
+    ACT_COL_CONVERTED_QTY,
     ACT_DETAIL_COL_ROLL,
 ) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
 # 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
@@ -7312,6 +7317,22 @@ def load_machining_actual_detail_df():
     return df
 
 
+def _actual_row_completion_pct_macro(row) -> int | None:
+    """
+    加工実績明細DATA の「実加工数」「換算数量」から完了率（0～100 の整数）を返す。
+    列が無い・換算数量が 0 以下・数値化不可のときは None（シェイプは依頼NOのみ等）。
+    """
+    try:
+        conv = float(parse_float_safe(row.get(ACT_COL_CONVERTED_QTY), 0.0))
+        act = float(parse_float_safe(row.get(ACT_COL_ACTUAL_QTY), 0.0))
+    except (TypeError, ValueError):
+        return None
+    if conv <= 1e-12:
+        return None
+    pct = int(round((act / conv) * 100.0))
+    return max(0, min(100, pct))
+
+
 def _actual_row_detail_assignee_op_sub(row) -> tuple[str, str]:
     """
     加工実績明細DATA 行からガント用 op / sub を組み立てる。
@@ -7355,6 +7376,8 @@ def build_actual_timeline_events(
     roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
     同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
     ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
+    roll_detail=True のとき「実加工数」「換算数量」列があれば完了率を算出し、
+    タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す。
     """
     if df is None or len(df) == 0:
         return []
@@ -7404,6 +7427,8 @@ def build_actual_timeline_events(
                 op_s = str(op_val).strip()
             sub_s = ""
 
+        pct_macro = _actual_row_completion_pct_macro(row)
+
         before = len(events)
         for d in sorted_dates:
             if d not in date_ok:
@@ -7416,23 +7441,24 @@ def build_actual_timeline_events(
             e_clip = min(end_dt, day_end)
             if s_clip >= e_clip:
                 continue
-            events.append(
-                {
-                    "date": d,
-                    "task_id": display_tid,
-                    "machine": mach,
-                    "op": op_s,
-                    "sub": sub_s,
-                    "start_dt": s_clip,
-                    "end_dt": e_clip,
-                    "breaks": [],
-                    "units_done": 0,
-                    "already_done_units": 0,
-                    "total_units": 0,
-                    "eff_time_per_unit": 0.0,
-                    "unit_m": 0.0,
-                }
-            )
+            ev_row = {
+                "date": d,
+                "task_id": display_tid,
+                "machine": mach,
+                "op": op_s,
+                "sub": sub_s,
+                "start_dt": s_clip,
+                "end_dt": e_clip,
+                "breaks": [],
+                "units_done": 0,
+                "already_done_units": 0,
+                "total_units": 0,
+                "eff_time_per_unit": 0.0,
+                "unit_m": 0.0,
+            }
+            if pct_macro is not None:
+                ev_row["pct_macro"] = pct_macro
+            events.append(ev_row)
         if len(events) == before:
             no_plan_overlap += 1
 
