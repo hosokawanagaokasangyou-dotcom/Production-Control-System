@@ -831,6 +831,10 @@ ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
 ) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
 # 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
 RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME = "結果_設備ガント_実績明細"
+# 設備実績ガント（上記シート）の「表示する暦日」を段階2生成時に絞る。設定_環境変数の A 列＝変数名・B 列＝値（空＝その側の制限なし）
+# 日付は ISO（2026-04-01）・Excel 日付セル相当の数値文字列・2026/4/1 等を parse_optional_date で解釈。
+ENV_GANTT_ACTUAL_DETAIL_DATE_FROM = "GANTT_ACTUAL_DETAIL_DATE_FROM"
+ENV_GANTT_ACTUAL_DETAIL_DATE_TO = "GANTT_ACTUAL_DETAIL_DATE_TO"
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
@@ -2495,10 +2499,10 @@ def _write_results_equipment_gantt_sheet(
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
-            # 縦書き日付を結合ブロックの下寄せにし、最終機械行と「日付が届いていない」ように見えるのを抑える
+            # 縦書き日付は結合ブロックの上寄せ（下寄せだとセル下端に寄って見える）
             ban.alignment = Alignment(
                 horizontal="center",
-                vertical="bottom",
+                vertical="top",
                 wrap_text=False,
                 textRotation=90,
             )
@@ -2781,6 +2785,14 @@ def parse_optional_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _parse_env_optional_date(env_key: str):
+    """os.environ の 1 キーを暦日に解釈。空・解釈不能は None。"""
+    raw = (os.environ.get(env_key) or "").strip()
+    if not raw:
+        return None
+    return parse_optional_date(raw)
 
 
 def _planning_df_cell_scalar(row, col_name):
@@ -7203,6 +7215,31 @@ def _sorted_dates_union_actual_bounds_df(sorted_dates: list, df) -> list:
     u = set(sorted_dates)
     u |= _calendar_dates_spanned_by_actual_bounds_df(df)
     return sorted(u)
+
+
+def _sorted_dates_filter_inclusive_range(
+    sorted_dates: list,
+    d_from: date | None,
+    d_to: date | None,
+) -> list:
+    """
+    暦日リストを両端込みで絞る。d_from / d_to がともに None のときはコピーを返す。
+    両端指定で from > to のときは from/to を入れ替える。
+    """
+    if d_from is None and d_to is None:
+        return list(sorted_dates)
+    a = d_from
+    b = d_to
+    if a is not None and b is not None and a > b:
+        a, b = b, a
+    out: list = []
+    for d in sorted_dates:
+        if a is not None and d < a:
+            continue
+        if b is not None and d > b:
+            continue
+        out.append(d)
+    return out
 
 
 def load_machining_actual_detail_df():
@@ -21269,10 +21306,41 @@ def _generate_plan_impl():
     df_actual_detail = load_machining_actual_detail_df()
     detail_timeline_events: list = []
     sorted_dates_detail = list(sorted_dates)
+    chart_title_actual_detail = "湖南工場 加工実績（明細）"
     if df_actual_detail is not None and len(df_actual_detail) > 0:
         sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
             sorted_dates, df_actual_detail
         )
+        d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+        d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+        if d_from is not None or d_to is not None:
+            n_before = len(sorted_dates_detail)
+            filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                sorted_dates_detail, d_from, d_to
+            )
+            if not filtered_detail_dates and sorted_dates_detail:
+                logging.warning(
+                    "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                    "（%s=%r, %s=%r）",
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                )
+            else:
+                sorted_dates_detail = filtered_detail_dates
+                logging.info(
+                    "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                    n_before,
+                    len(sorted_dates_detail),
+                    d_from.isoformat() if d_from else "（指定なし）",
+                    d_to.isoformat() if d_to else "（指定なし）",
+                )
+                rng_lo = d_from.isoformat() if d_from else "…"
+                rng_hi = d_to.isoformat() if d_to else "…"
+                chart_title_actual_detail = (
+                    f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                )
         detail_timeline_events = build_actual_timeline_events(
             df_actual_detail,
             equipment_list,
@@ -21378,7 +21446,7 @@ def _generate_plan_impl():
                     actual_timeline_events=detail_timeline_events,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
                     plan_rows=False,
-                    chart_title="湖南工場 加工実績（明細）",
+                    chart_title=chart_title_actual_detail,
                     sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
                 )
 
