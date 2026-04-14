@@ -46,20 +46,20 @@ Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
     Select Case grp
         Case 0
             cmdOK.Visible = True
-            cmdOK.Left = (Me.ClientWidth - cmdOK.Width) / 2
+            cmdOK.Left = (Me.InsideWidth - cmdOK.Width) / 2
         Case vbOKCancel
             cmdOK.Visible = True
             cmdCancel.Visible = True
-            cmdOK.Left = Me.ClientWidth / 2 - cmdOK.Width - 120
-            cmdCancel.Left = Me.ClientWidth / 2 + 120
+            cmdOK.Left = Me.InsideWidth / 2 - cmdOK.Width - 120
+            cmdCancel.Left = Me.InsideWidth / 2 + 120
         Case vbYesNo
             cmdYes.Visible = True
             cmdNo.Visible = True
-            cmdYes.Left = Me.ClientWidth / 2 - cmdYes.Width - 120
-            cmdNo.Left = Me.ClientWidth / 2 + 120
+            cmdYes.Left = Me.InsideWidth / 2 - cmdYes.Width - 120
+            cmdNo.Left = Me.InsideWidth / 2 + 120
         Case Else
             cmdOK.Visible = True
-            cmdOK.Left = (Me.ClientWidth - cmdOK.Width) / 2
+            cmdOK.Left = (Me.InsideWidth - cmdOK.Width) / 2
     End Select
 End Sub
 
