@@ -2223,8 +2223,8 @@ def _write_results_equipment_gantt_sheet(
 
     master_mtime = _fmt_mtime(master_path)
 
-    # 行1の A〜B 列はマクロで日付ジャンプ用コンボを置く領域。タイトル・メタ行は C 列から全幅結合。
-    title_start_col = 3
+    # 行1の A〜B はコンボ、C は更新ボタン（マクロ）。タイトル・メタ行は D 列から全幅結合。
+    title_start_col = 4
     row = 1
     ws.merge_cells(
         start_row=row, start_column=title_start_col, end_row=row, end_column=last_col

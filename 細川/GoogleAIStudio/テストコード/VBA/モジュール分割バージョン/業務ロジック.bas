@@ -656,8 +656,10 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     lastUsed = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     lastCol = lastHdr
     If lastUsed > lastCol Then lastCol = lastUsed
-    ' 1 行目: 新形式は C1 から全幅結合（A-B はコンボ）、旧形式は A1 結合のため両方を試す
-    If ws.Range("C1").MergeCells Then
+    ' 1 行目: 新形式は D1 から全幅結合（A-B コンボ・C 更新ボタン）、中間は C1、旧形式は A1
+    If ws.Range("D1").MergeCells Then
+        lastTitle = ws.Range("D1").MergeArea.Column + ws.Range("D1").MergeArea.Columns.Count - 1
+    ElseIf ws.Range("C1").MergeCells Then
         lastTitle = ws.Range("C1").MergeArea.Column + ws.Range("C1").MergeArea.Columns.Count - 1
     ElseIf ws.Range("A1").MergeCells Then
         lastTitle = ws.Range("A1").MergeArea.Column + ws.Range("A1").MergeArea.Columns.Count - 1
@@ -685,10 +687,15 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' 結果_設備ガント：タイトルは結合セル先頭 C1（A-B はコンボ領域）。旧ブックは A1 結合のため両対応。
+' 結果_設備ガント：タイトルは結合セル先頭 D1（A-B コンボ・C 更新ボタン）。C1／A1 は旧ブック用。
 Public Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     On Error Resume Next
-    If ws.Range("C1").MergeCells Then
+    If ws.Range("D1").MergeCells Then
+        With ws.Range("D1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    ElseIf ws.Range("C1").MergeCells Then
         With ws.Range("C1")
             .HorizontalAlignment = xlLeft
             .VerticalAlignment = xlCenter
