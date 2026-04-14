@@ -656,8 +656,10 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     lastUsed = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     lastCol = lastHdr
     If lastUsed > lastCol Then lastCol = lastUsed
-    ' 1 行目は Python 側で A1 から全幅結合のため、MergeArea の列数で最終列を確定（End(xlToLeft) は結合外空白で A 列に飛ぶことがある）
-    If ws.Range("A1").MergeCells Then
+    ' 1 行目: 新形式は C1 から全幅結合（A-B はコンボ）、旧形式は A1 結合のため両方を試す
+    If ws.Range("C1").MergeCells Then
+        lastTitle = ws.Range("C1").MergeArea.Column + ws.Range("C1").MergeArea.Columns.Count - 1
+    ElseIf ws.Range("A1").MergeCells Then
         lastTitle = ws.Range("A1").MergeArea.Column + ws.Range("A1").MergeArea.Columns.Count - 1
     Else
         lastTitle = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
@@ -683,13 +685,20 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' 結果_設備ガント：タイトルは結合セル先頭 A1。取り込み後の 1 行目一括書式のあと左寄せが崩れることがあるため固定する。
+' 結果_設備ガント：タイトルは結合セル先頭 C1（A-B はコンボ領域）。旧ブックは A1 結合のため両対応。
 Public Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     On Error Resume Next
-    With ws.Range("A1")
-        .HorizontalAlignment = xlLeft
-        .VerticalAlignment = xlCenter
-    End With
+    If ws.Range("C1").MergeCells Then
+        With ws.Range("C1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    Else
+        With ws.Range("A1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    End If
 End Sub
 
 ' 結果_設備ガント：印刷のページ設定。Excel では適用順を変えるとプレビューがずれるため、
@@ -3284,6 +3293,14 @@ Finish:
     
     Application.DisplayAlerts = prevDisplayAlerts
     Application.ScreenUpdating = prevScreenUpdating
+    
+    ' 設備ガント系シートは openpyxl 再出力で OLE が消えるため、保護の前に日付ジャンプ用コンボを再配置する
+    On Error Resume Next
+    If planImported Then
+        結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
+    End If
+    Err.Clear
+    On Error GoTo 0
     
     If st2DidUnlock Then
         On Error Resume Next

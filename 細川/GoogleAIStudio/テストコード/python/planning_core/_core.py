@@ -2214,12 +2214,16 @@ def _write_results_equipment_gantt_sheet(
 
     master_mtime = _fmt_mtime(master_path)
 
+    # 行1の A〜B 列はマクロで日付ジャンプ用コンボを置く領域。タイトル・メタ行は C 列から全幅結合。
+    title_start_col = 3
     row = 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
     _title_main = (
         chart_title if chart_title is not None else "湖南工場 加工計画"
     )
-    tcell = ws.cell(row=row, column=1, value=_title_main)
+    tcell = ws.cell(row=row, column=title_start_col, value=_title_main)
     tcell.font = title_font
     tcell.fill = title_fill
     # 結合セルでも左端から表示（縮尝・折り返しなし）
@@ -2234,13 +2238,15 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 40
     row += 1
 
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
     meta_line = (
         f"作成　{create_ts}"
         f"　・　データ坸出し　{data_extract_dt_str or '—'}"
         f"　・　マスタ（master.xlsm）　{master_mtime}"
     )
-    mtop = ws.cell(row=row, column=1, value=meta_line)
+    mtop = ws.cell(row=row, column=title_start_col, value=meta_line)
     mtop.font = meta_font
     mtop.fill = meta_fill
     mtop.alignment = Alignment(
