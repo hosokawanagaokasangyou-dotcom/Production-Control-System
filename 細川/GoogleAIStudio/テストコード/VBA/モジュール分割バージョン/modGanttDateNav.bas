@@ -6,6 +6,8 @@ Option Explicit
 Public mGanttDateNavFillBusy As Boolean
 
 Private Const GANTT_DATE_NAV_OLE_NAME As String = "GanttDateNavCombo"
+Private Const GANTT_DATE_NAV_UPDATE_BTN As String = "GanttDateNavUpdateBtn"
+Private Const GANTT_DATE_NAV_FORM_BTN_CAPTION As String = "更新"
 Private Const GANTT_DATE_BANNER_L As String = "【"
 Private Const GANTT_DATE_BANNER_R As String = "】"
 
@@ -95,6 +97,65 @@ Private Sub GanttDateNav_PositionOleCombo(ByVal ole As OLEObject, ByVal ws As Wo
     On Error GoTo 0
 End Sub
 
+Private Sub GanttDateNav_DeleteUpdateButtonIfPresent(ByVal ws As Worksheet)
+    On Error Resume Next
+    ws.Shapes(GANTT_DATE_NAV_UPDATE_BTN).Delete
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+Private Sub GanttDateNav_PositionUpdateButton(ByVal shp As Shape, ByVal ole As OLEObject)
+    On Error Resume Next
+    shp.Left = ole.Left + ole.Width + 4#
+    shp.Top = ole.Top
+    If ole.Height > 8# Then
+        shp.Height = ole.Height
+    Else
+        shp.Height = 20#
+    End If
+    If shp.Height < 16# Then shp.Height = 16#
+    shp.Width = 52#
+    shp.Placement = xlFreeFloating
+    shp.PrintObject = False
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+Private Function GanttDateNav_GetOrCreateFormUpdateButton(ByVal ws As Worksheet, ByVal ole As OLEObject) As Shape
+    Dim shp As Shape
+    Dim needNew As Boolean
+    needNew = True
+    
+    On Error Resume Next
+    Set shp = ws.Shapes(GANTT_DATE_NAV_UPDATE_BTN)
+    If Err.Number = 0 And Not shp Is Nothing Then
+        needNew = False
+    End If
+    Err.Clear
+    On Error GoTo 0
+    
+    If needNew Then
+        GanttDateNav_DeleteUpdateButtonIfPresent ws
+        On Error GoTo GanttDateNav_CreateUpdateBtnFail
+        Set shp = ws.Shapes.AddFormControl(xlButtonControl, ole.Left + ole.Width + 4#, ole.Top, 52#, ole.Height)
+        shp.Name = GANTT_DATE_NAV_UPDATE_BTN
+        shp.OnAction = "modGanttDateNav.GanttDateNav_RunRefreshActualDetail_Click"
+        On Error Resume Next
+        shp.TextFrame.Characters.Text = GANTT_DATE_NAV_FORM_BTN_CAPTION
+        Err.Clear
+    End If
+    On Error GoTo 0
+    
+    If Not shp Is Nothing Then
+        GanttDateNav_PositionUpdateButton shp, ole
+    End If
+    Set GanttDateNav_GetOrCreateFormUpdateButton = shp
+    Exit Function
+    
+GanttDateNav_CreateUpdateBtnFail:
+    Set GanttDateNav_GetOrCreateFormUpdateButton = Nothing
+End Function
+
 Private Function GanttDateNav_GetOrCreateOleCombo(ByVal ws As Worksheet) As OLEObject
     Dim ole As OLEObject
     Dim needNew As Boolean
@@ -137,10 +198,17 @@ Private Sub GanttDateNav_EnsureComboOnSheetQuiet(ByVal ws As Worksheet)
     On Error Resume Next
     If Not 結果_設備ガント日付ナビ_対象シートか(ws) Then Exit Sub
     Dim ole As OLEObject
+    Dim shp As Shape
     Set ole = GanttDateNav_GetOrCreateOleCombo(ws)
     If ole Is Nothing Then GoTo X
     GanttDateNav_WireHostIfNeeded ws, ole.Object
     GanttDateNav_FillMsFormsList ole.Object, ws
+    
+    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) = 0 Then
+        Set shp = GanttDateNav_GetOrCreateFormUpdateButton(ws, ole)
+    Else
+        GanttDateNav_DeleteUpdateButtonIfPresent ws
+    End If
 X:
     Err.Clear
     On Error GoTo 0
@@ -190,6 +258,13 @@ FailOle:
 End Sub
 
 ' 既にコンボがある場合のみリストを再構築（段階2取込直後などから呼ぶ場合用）
+' 図形ボタン OnAction 用（標準モジュール名 modGanttDateNav を前提）
+Public Sub GanttDateNav_RunRefreshActualDetail_Click()
+    On Error Resume Next
+    実績設備ガント_のみ更新_実行
+    On Error GoTo 0
+End Sub
+
 Public Sub 結果_設備ガント系_日付コンボを再充填()
     Dim ws As Worksheet
     Dim ole As OLEObject

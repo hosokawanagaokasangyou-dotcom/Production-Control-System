@@ -835,6 +835,8 @@ RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME = "結果_設備ガント_実績明細"
 # 日付は ISO（2026-04-01）・Excel 日付セル相当の数値文字列・2026/4/1 等を parse_optional_date で解釈。
 ENV_GANTT_ACTUAL_DETAIL_DATE_FROM = "GANTT_ACTUAL_DETAIL_DATE_FROM"
 ENV_GANTT_ACTUAL_DETAIL_DATE_TO = "GANTT_ACTUAL_DETAIL_DATE_TO"
+# 段階2を回さず実績明細ガントのみ再生成するときの単一シート xlsx（マクロが取り込み）
+ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
@@ -19138,6 +19140,198 @@ def generate_plan():
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     with _override_default_factory_hours_from_master(master_abs):
         _generate_plan_impl()
+
+
+def refresh_equipment_gantt_actual_detail_only() -> str:
+    """
+    段階2全体を実行せず、「結果_設備ガント_実績明細」相当のシートだけを
+    ``output_dir`` 直下の ``ACTUAL_DETAIL_GANTT_REFRESH_FILENAME`` に出力する。
+
+    マクロブックの勤怠・実績明細DATA・master（工場枠・定常枠・機械カレンダー等）を
+    段階2と同様に読み、実績タイムラインのみ描画する。
+
+    Returns:
+        生成した xlsx の絶対パス。
+
+    Raises:
+        PlanningValidationError: メンバー0人・表示対象日なし・実績イベント空など。
+    """
+    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    with _override_default_factory_hours_from_master(master_abs):
+        global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+        global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+        global _STAGE2_REGULAR_SHIFT_START
+        (
+            _skills_dict,
+            members,
+            equipment_list,
+            _req_map,
+            _need_rules,
+            _surplus_map,
+            _need_combo_col_index,
+        ) = load_skills_and_needs()
+        if not members:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: メンバーが0人です（マスタ skills を確認してください）。"
+            )
+        try:
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+                master_abs,
+                equipment_list,
+            )
+        except Exception as e:
+            logging.warning(
+                "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
+            )
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        try:
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = (
+                load_machine_daily_startup_settings(master_abs)
+            )
+        except Exception as e:
+            logging.warning(
+                "機械日次始業準備設定: 読込例外のため無視します (%s)", e
+            )
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
+        try:
+            _rs_a15, _ = _read_master_main_regular_shift_times(master_abs)
+            _STAGE2_REGULAR_SHIFT_START = _rs_a15
+        except Exception as e:
+            logging.warning(
+                "定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e
+            )
+            _STAGE2_REGULAR_SHIFT_START = None
+
+        data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
+        data_extract_dt_str = (
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            if data_extract_dt is not None
+            else "—"
+        )
+        logging.info(
+            "実績明細ガントのみ: 計画基準日時 %s（%s）",
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+            plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
+        )
+
+        attendance_data, ai_log_data = load_attendance_and_analyze(members)
+        global_priority_raw = load_main_sheet_global_priority_override_text()
+        global_priority_override = analyze_global_priority_override_comment(
+            global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
+        )
+        _factory_closure_dates: set[date] = set()
+        for _iso in global_priority_override.get("factory_closure_dates") or []:
+            _d = parse_optional_date(_iso)
+            if _d is not None:
+                _factory_closure_dates.add(_d)
+        if _factory_closure_dates:
+            apply_factory_closure_dates_to_attendance(
+                attendance_data, members, _factory_closure_dates
+            )
+
+        sorted_dates = sorted(list(attendance_data.keys()))
+        sorted_dates = [d for d in sorted_dates if d >= run_date]
+        if not sorted_dates:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: 当日以降の処理対象日付がありません。"
+            )
+
+        _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
+            master_abs
+        )
+
+        df_actual_detail = load_machining_actual_detail_df()
+        detail_timeline_events: list = []
+        sorted_dates_detail = list(sorted_dates)
+        chart_title_actual_detail = "湖南工場 加工実績（明細）"
+        if df_actual_detail is not None and len(df_actual_detail) > 0:
+            sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+                sorted_dates, df_actual_detail
+            )
+            d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+            d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+            if d_from is not None or d_to is not None:
+                n_before = len(sorted_dates_detail)
+                filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                    sorted_dates_detail, d_from, d_to
+                )
+                if not filtered_detail_dates and sorted_dates_detail:
+                    logging.warning(
+                        "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                        "（%s=%r, %s=%r）",
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                    )
+                else:
+                    sorted_dates_detail = filtered_detail_dates
+                    logging.info(
+                        "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                        n_before,
+                        len(sorted_dates_detail),
+                        d_from.isoformat() if d_from else "（指定なし）",
+                        d_to.isoformat() if d_to else "（指定なし）",
+                    )
+                    rng_lo = d_from.isoformat() if d_from else "…"
+                    rng_hi = d_to.isoformat() if d_to else "…"
+                    chart_title_actual_detail = (
+                        f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                    )
+            detail_timeline_events = build_actual_timeline_events(
+                df_actual_detail,
+                equipment_list,
+                sorted_dates_detail,
+                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                roll_detail=True,
+            )
+
+        if not detail_timeline_events:
+            raise PlanningValidationError(
+                "実績明細ガントを生成できるイベントがありません。"
+                "「加工実績明細DATA」の有無・日付・必須列を確認してください。"
+            )
+
+        out_path = os.path.join(output_dir, ACTUAL_DETAIL_GANTT_REFRESH_FILENAME)
+        _try_remove_path_with_retries(out_path)
+
+        gantt_detail_tl_label_specs: list = []
+        gantt_detail_tl_day_blocks: list = []
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as writer:
+            gantt_detail_tl_label_specs, gantt_detail_tl_day_blocks = (
+                _write_results_equipment_gantt_sheet(
+                    writer,
+                    [],
+                    equipment_list,
+                    sorted_dates_detail,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    actual_timeline_events=detail_timeline_events,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=False,
+                    chart_title=chart_title_actual_detail,
+                    sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                )
+            )
+            wb = writer.book
+            for _sn in list(wb.sheetnames):
+                if _sn != RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME:
+                    wb.remove(wb[_sn])
+
+        _stage2_try_add_gantt_timeline_shape_labels(
+            out_path,
+            gantt_detail_tl_label_specs,
+            gantt_detail_tl_day_blocks,
+            sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+        )
+        logging.info(
+            "実績明細ガントのみ: %s を出力しました。",
+            os.path.basename(out_path),
+        )
+        return os.path.abspath(out_path)
 
 
 def _generate_plan_impl():

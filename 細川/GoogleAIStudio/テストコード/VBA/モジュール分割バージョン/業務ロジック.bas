@@ -3333,6 +3333,187 @@ ErrHandler:
     Resume Finish
 End Sub
 
+' =========================================================
+' 実績設備ガントのみ: plan_refresh_actual_detail_gantt.py → output から当該シートを取り込み
+' =========================================================
+Public Sub 実績設備ガント_のみ更新_実行()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim refreshPath As String
+    Dim targetWb As Workbook
+    Dim sourceWb As Workbook
+    Dim sourceWs As Worksheet
+    Dim ws As Worksheet
+    Dim prevScreenUpdating As Boolean
+    Dim prevDisplayAlerts As Boolean
+    Dim stUnlock As Boolean
+    Dim hideCmd As Boolean
+    Dim st2XwErr As Long
+    Dim st2XwDesc As String
+    Dim sheetName As String
+    Dim blockMsg As String
+    
+    On Error GoTo EH
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        AppMsgBox "先にこのブックを保存してください。", vbExclamation, "実績ガント更新"
+        Exit Sub
+    End If
+    
+    If Not TryRefreshWorkbookQueries() Then
+        AppMsgBox "データ接続の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "実績ガント更新"
+        Exit Sub
+    End If
+    
+    prevScreenUpdating = Application.ScreenUpdating
+    prevDisplayAlerts = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    ThisWorkbook.Save
+    
+    stUnlock = False
+    配台マクロ_全シート保護を試行解除
+    stUnlock = True
+    
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    
+    On Error Resume Next
+    Kill targetDir & "\log\stage_actual_gantt_refresh_exitcode.txt"
+    On Error GoTo EH
+    
+    If STAGE12_USE_XLWINGS_RUNPYTHON And Not STAGE12_USE_XLWINGS_SPLASH_LOG Then
+        On Error Resume Next
+        Err.Clear
+        XwRunConsoleRunner "run_refresh_actual_detail_gantt_for_xlwings"
+        If Err.Number <> 0 Then
+            st2XwErr = Err.Number
+            st2XwDesc = Err.Description
+            Err.Clear
+            On Error GoTo EH
+            AppMsgBox "xlwings RunPython が失敗しました (" & CStr(st2XwErr) & "): " & st2XwDesc, vbCritical, "実績ガント更新"
+            GoTo DoneProtect
+        End If
+        On Error GoTo EH
+        exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_actual_gantt_refresh_exitcode.txt")
+        If exitCode = &H7FFFFFFF Then exitCode = 1
+    Else
+        hideCmd = Stage12CmdHideWindowEffective()
+        wsh.CurrentDirectory = Environ("TEMP")
+        runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+                 "if not exist log mkdir log" & vbCrLf & _
+                 "chcp 65001>nul" & vbCrLf & _
+                 "echo [actual_gantt] Running plan_refresh_actual_detail_gantt.py ..." & vbCrLf & _
+                 "py -3 -u python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
+                 "set PM_ACT_EXIT=!ERRORLEVEL!" & vbCrLf & _
+                 "echo." & vbCrLf & _
+                 "echo [actual_gantt] Finished. ERRORLEVEL=!PM_ACT_EXIT!" & vbCrLf & _
+                 "(echo !PM_ACT_EXIT!)>log\stage_actual_gantt_refresh_exitcode.txt" & vbCrLf
+        If Not hideCmd Then
+            runBat = runBat & "if not !PM_ACT_EXIT! equ 0 (" & vbCrLf & _
+                     "echo." & vbCrLf & _
+                     "echo [actual_gantt] Python error. Press any key to close..." & vbCrLf & _
+                     "pause" & vbCrLf & ")" & vbCrLf
+        End If
+        runBat = runBat & "exit /b !PM_ACT_EXIT!"
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideCmd, hideCmd)
+    End If
+    
+    If exitCode <> 0 Then
+        blockMsg = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
+        If Len(blockMsg) > 0 Then
+            AppMsgBox blockMsg, vbExclamation, "実績ガント更新"
+        Else
+            AppMsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf & _
+                       "log\execution_log.txt を確認してください。", vbExclamation, "実績ガント更新"
+        End If
+        GoTo DoneProtect
+    End If
+    
+    refreshPath = targetDir & "\output\actual_detail_gantt_refresh.xlsx"
+    If Len(Dir(refreshPath)) = 0 Then
+        AppMsgBox "出力ファイルが見つかりません: " & refreshPath, vbExclamation, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+    
+    Set targetWb = ThisWorkbook
+    マクロブックから計画取込シート同源名シートを削除 targetWb, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL
+    
+    Set sourceWb = Workbooks.Open(refreshPath)
+    sourceWb.Windows(1).Visible = False
+    Set sourceWs = Nothing
+    On Error Resume Next
+    Set sourceWs = sourceWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+    On Error GoTo EH
+    If sourceWs Is Nothing Then
+        sourceWb.Close SaveChanges:=False
+        AppMsgBox "取込元ブックに「" & SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & "」シートがありません。", vbCritical, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+    
+    sheetName = Trim$(sourceWs.Name)
+    sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
+    sourceWb.Close SaveChanges:=False
+    Set sourceWb = Nothing
+    
+    Set ws = 取込ブック内のコピー先シートを取得(targetWb, sheetName)
+    If ws Is Nothing Then
+        AppMsgBox "シートの取り込みに失敗しました。", vbCritical, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+    
+    If 結果_設備ガント系シート名か(sheetName) Then
+        結果_設備ガント_列幅を設定 ws
+    End If
+    ws.UsedRange.Borders.LineStyle = 1
+    ws.UsedRange.Borders.Weight = 2
+    If 結果_設備ガント系シート名か(sheetName) Then
+        結果_設備ガント_列幅を設定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
+        結果_設備ガント_印刷ページ設定を適用 ws
+    End If
+    On Error Resume Next
+    If Left$(sheetName, 3) = "結果_" Then 結果シート_メインへ戻るリンクを付与 ws
+    On Error GoTo EH
+    
+    On Error Resume Next
+    取込後_結果シートへマスタ時刻を反映 targetWb
+    On Error GoTo EH
+    
+    結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
+    
+    On Error Resume Next
+    targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL).Activate
+    On Error GoTo EH
+    
+    AppMsgBox "「" & SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & "」を更新しました。", vbInformation, "実績ガント更新"
+    GoTo DoneProtectOk
+    
+DoneProtect:
+DoneProtectOk:
+    If stUnlock Then
+        On Error Resume Next
+        配台マクロ_対象シートを条件どおりに保護 targetDir
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = prevDisplayAlerts
+    Application.ScreenUpdating = prevScreenUpdating
+    Exit Sub
+    
+EH:
+    On Error Resume Next
+    If Not sourceWb Is Nothing Then
+        sourceWb.Close SaveChanges:=False
+        Set sourceWb = Nothing
+    End If
+    On Error GoTo 0
+    AppMsgBox "VBAエラー: " & Err.Number & " / " & Err.Description, vbCritical, "実績ガント更新"
+    Resume DoneProtect
+End Sub
+
 ' 互換・他モジュール用: 段階2のみ（エラー時 MsgBox。成功時はスプラッシュ＋チャイム）
 Public Function SafePersonalSheetName(ByVal baseName As String) As String
     Dim s As String
