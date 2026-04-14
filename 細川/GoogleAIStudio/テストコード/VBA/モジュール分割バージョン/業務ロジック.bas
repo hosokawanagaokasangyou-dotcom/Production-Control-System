@@ -106,7 +106,7 @@ Sub アニメ付き_環境構築を実行()
         "環境構築の実行確認")
     
     If StrComp(Trim$(userInput), ENV_BUILD_PASSWORD, vbBinaryCompare) <> 0 Then
-        MsgBox "パスワードが一致しないため、環境構築は実行されませんでした。", vbInformation
+        AppMsgBox "パスワードが一致しないため、環境構築は実行されませんでした。", vbInformation
         Exit Sub
     End If
     
@@ -1268,7 +1268,7 @@ Sub かっこいいボタンを作成()
     y = y + gap
     CreateCoolButtonWithPreset "Gemini鍵を暗号化", "アニメ付き_Gemini認証を暗号化してB1に保存", 50, y, 6
     
-    MsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
+    AppMsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
            "グラデーションはプリセット 1/3/5/4 を使用しています（全 10 色はコード先頭のコメント参照）。" & vbCrLf & _
            "好きな場所にドラッグして配置してください。", vbInformation
 End Sub
@@ -1291,7 +1291,7 @@ Sub かっこいいボタン_配色サンプル作成()
         ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
         On Error GoTo 0
     Next i
-    MsgBox "配色プリセット P1～P10 の見本を配置しました。" & vbCrLf & _
+    AppMsgBox "配色プリセット P1～P10 の見本を配置しました。" & vbCrLf & _
            "クリックしてもマクロは動きません。不要なら図形を削除してください。", vbInformation
 End Sub
 
@@ -1326,7 +1326,7 @@ Public Sub アニメ付きマクロ用_クールボタンを対話配置()
         "50, 50")
     If Len(Trim$(ps)) = 0 Then ps = "50, 50"
     If Not ParseTwoSingleCsv(ps, x, y) Then
-        MsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
+        AppMsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
         Exit Sub
     End If
     
@@ -1343,7 +1343,7 @@ Public Sub アニメ付きマクロ用_クールボタンを対話配置()
     stable = "AnimCool_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
     
     CreateCoolButtonWithPreset Trim$(cap), Trim$(mac), x, y, pr, stable
-    MsgBox "クールボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "クールボタンを配置しました。" & vbCrLf & _
            "図形名: " & stable & vbCrLf & _
            "OnAction: " & Trim$(mac), vbInformation
 End Sub
@@ -1434,7 +1434,7 @@ Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
     Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
     On Error GoTo 0
     If ws Is Nothing Then
-        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
         Exit Sub
     End If
     
@@ -1457,7 +1457,7 @@ Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
     topPos = ws.Cells(1, 1).Top + 4
     
     CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
-    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
 End Sub
 
@@ -1477,7 +1477,7 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
     Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
     On Error GoTo 0
     If ws Is Nothing Then
-        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
         Exit Sub
     End If
     
@@ -1500,7 +1500,7 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
     topPos = ws.Cells(1, 1).Top + 4 + 58
     
     CreateCoolButtonWithPreset "キー順に並べ替え", MACRO_ANIM, leftPos, topPos, 3
-    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
 End Sub
 
@@ -2753,7 +2753,7 @@ Public Sub 段階2_取り込み結果を報告()
     ElseIf m_stage2MemberImported Then
         MacroSplash_SetStep "計画生成が完了しました（個人シートのみ。production_plan は見つかりませんでした）。"
     Else
-        MsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
+        AppMsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
                "Python 終了コード: " & CStr(m_lastStage2ExitCode) & vbCrLf & _
                IIf(Len(p) > 0, "探索したフォルダ: " & p & "\output", "ブックが未保存のため output パスを表示できません。先に保存してください。") & vbCrLf & vbCrLf & _
                "LOG シートまたは " & IIf(Len(p) > 0, p & "\log\execution_log.txt", "log\execution_log.txt（ブックと同じフォルダ）") & " で「段階2を中断」「マスタファイル」「メンバーが0人」等を確認してください。" & vbCrLf & _
@@ -3502,7 +3502,7 @@ NextSheetIter:
     wsLog.Activate
     wsLog.Range("A1").Select
     
-    MsgBox "シート「" & LOG_SHEET & "」に結果を出しました。" & vbCrLf & vbCrLf & _
+    AppMsgBox "シート「" & LOG_SHEET & "」に結果を出しました。" & vbCrLf & vbCrLf & _
         "列の意味:" & vbCrLf & _
         "・A99 列: 文字列「A666」を A99 に書き、読み戻して一致→OK、元の値に復元。" & vbCrLf & _
         "・読取/UsedRange/書込/Activate の NG は、その操作で Err が出たシートです。" & vbCrLf & _

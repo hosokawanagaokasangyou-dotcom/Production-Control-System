@@ -1,0 +1,8 @@
+UF_LargeMessage（大きな文字のメッセージ框）をブックに取り込む手順
+
+1. Excel で対象の .xlsm を開き、Alt+F11 で VBE を開く。
+2. ファイル → ファイルのインポート → このフォルダの「UF_LargeMessage.frm」を選択。
+3. 同じく「AppMsgBox.bas」をまだインポートしていなければインポートする（標準モジュール）。
+4. 既に手貼りで同名モジュールがある場合は、重複を避けてからインポートする。
+5. デバッグ → VBAProject のコンパイル でエラーがないことを確認する。
+6. インポートで「無効なキーワード」等のエラーになる場合は、VBE で「挿入」→「ユーザーフォーム」を手動追加し、フォーム名を UF_LargeMessage に変更したうえで、UF_LargeMessage.frm 内の「Option Explicit」以降のコードをコードウィンドウにコピーし、プロパティで TextBox 名 txtBody・ボタン名 cmdOK / cmdCancel / cmdYes / cmdNo・ラベル名 lblStripe をデザイナ上で合わせる。
