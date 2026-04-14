@@ -796,10 +796,11 @@ ACT_COL_TIME_END = "終了時刻"
 # 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
 ACT_COL_MACHINING_START_DT = "加工開始日時"
 ACT_COL_MACHINING_END_DT = "加工終了日時"
-# 加工実績明細DATA（Power Query 等）… 完了率は 実加工数÷加工予定数（ガントの角丸シェイプに pct 表示）
+# 加工実績明細DATA（Power Query 等）… ガント角丸シェイプの %% は「累積完了率」列をそのまま用いる（計算しない）
 ACT_COL_ACTUAL_QTY = "実加工数"
 ACT_COL_PLANNED_QTY = "加工予定数"
 ACT_COL_CONVERTED_QTY = "換算数量"
+ACT_COL_CUMULATIVE_COMPLETION_PCT = "累積完了率"
 # 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
 ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
 ACT_COL_MACHINING_ASSIGNEE_2 = "加工担当者名2"
@@ -834,6 +835,7 @@ ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
     ACT_COL_ACTUAL_QTY,
     ACT_COL_PLANNED_QTY,
     ACT_COL_CONVERTED_QTY,
+    ACT_COL_CUMULATIVE_COMPLETION_PCT,
     ACT_DETAIL_COL_ROLL,
 ) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
 # 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
@@ -7319,19 +7321,42 @@ def load_machining_actual_detail_df():
     return df
 
 
-def _actual_row_completion_pct_macro(row) -> int | None:
+def _actual_row_cumulative_completion_pct_macro(row) -> int | None:
     """
-    加工実績明細DATA の「実加工数」「加工予定数」から完了率（0～100 の整数）を返す。
-    列が無い・加工予定数が 0 以下・数値化不可のときは None（シェイプは依頼NOのみ等）。
+    加工実績明細DATA の「累積完了率」をシート値のまま 0～100 の整数に解釈して返す（実÷予定等は計算しない）。
+
+    対応: 数値・「45」「45%」「45.5%」・Excel 割合セル由来の 0.45（=45%）など。
+    列が無い・空・数値化不可のときは None。
     """
+    if row is None:
+        return None
+    v = row.get(ACT_COL_CUMULATIVE_COMPLETION_PCT)
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, datetime):
+        return None
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return None
     try:
-        planned = float(parse_float_safe(row.get(ACT_COL_PLANNED_QTY), 0.0))
-        act = float(parse_float_safe(row.get(ACT_COL_ACTUAL_QTY), 0.0))
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            f = float(v)
+        else:
+            s = unicodedata.normalize("NFKC", str(v).strip())
+            if not s or s.lower() in ("nan", "none", "-", "—", "―"):
+                return None
+            s = s.replace("%", "").replace(",", "").strip()
+            if not s:
+                return None
+            f = float(s)
     except (TypeError, ValueError):
         return None
-    if planned <= 1e-12:
+    if math.isnan(f) or math.isinf(f) or f < 0:
         return None
-    pct = int(round((act / planned) * 100.0))
+    # Excel の「割合」表示は 0.45 のように小数で渡ることが多い（= 45%）
+    if f <= 1.0 + 1e-9:
+        pct = int(round(f * 100.0))
+    else:
+        pct = int(round(f))
     return max(0, min(100, pct))
 
 
@@ -7378,8 +7403,8 @@ def build_actual_timeline_events(
     roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
     同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
     ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
-    roll_detail=True のとき「実加工数」「加工予定数」列があれば完了率（実÷予定）を算出し、
-    タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す。
+    roll_detail=True のとき「累積完了率」列があればその値を解釈し、
+    タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す（計算はしない）。
     """
     if df is None or len(df) == 0:
         return []
@@ -7429,7 +7454,7 @@ def build_actual_timeline_events(
                 op_s = str(op_val).strip()
             sub_s = ""
 
-        pct_macro = _actual_row_completion_pct_macro(row)
+        pct_macro = _actual_row_cumulative_completion_pct_macro(row)
 
         before = len(events)
         for d in sorted_dates:
