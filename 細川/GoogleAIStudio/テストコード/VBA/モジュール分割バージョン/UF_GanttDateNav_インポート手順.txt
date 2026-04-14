@@ -1,14 +1,23 @@
 UF_GanttDateNav（設備ガント：日付リストで行へジャンプ）をブックに取り込む手順
 
-【前提】共通定義.bas に SHEET_RESULT_EQUIP_GANTT / SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL があること（本リポジトリのモジュール分割バージョンと同じ）。
+【前提】共通定義.bas に SHEET_RESULT_EQUIP_GANTT / SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL があること。
 
-【重要】UserForm は「UF_GanttDateNav.frm」と同じフォルダに「UF_GanttDateNav.frx」が無いとインポートに失敗します。.frm のみコピーしないでください。
+【重要】UF_GanttDateNav.frm は「空のユーザーフォーム」としてエクスポート互換の形にしてあります。
+コントロールは .frm 本文に含めていません（MSForms がロードできない／OleObjectBlob 不一致でインポート失敗するため）。
+インポート後、必ず VBE で ListBox とボタンを置き、名前を次のとおりにしてください。
 
-1. Excel で対象の .xlsm を開き、Alt+F11 で VBE を開く。
-2. 「UF_GanttDateNav.frm」「UF_GanttDateNav.frx」を同じフォルダに置く。
-3. ファイル → ファイルのインポート →「UF_GanttDateNav.frm」を選択。
-4. 「modGanttDateNav.bas」をまだ無ければインポートする（標準モジュール名 modGanttDateNav）。
-5. マクロ「結果_設備ガント系_日付ジャンプフォームを表示」をボタンやショートカットに割り当てる（結果_設備ガント／結果_設備ガント_実績明細を表示した状態で実行）。
+1. Excel で .xlsm を開き、Alt+F11 で VBE を開く。
+2. ファイル → ファイルのインポート →「UF_GanttDateNav.frm」を選択。
+   ※ UF_GanttDateNav.frx は不要です（同梱しません）。.frm のみでインポートできます。
+3. VBE で UF_GanttDateNav をデザイン表示し、ツールボックスから次を配置する。
+   ・ListBox を1つ → プロパティ (Name) を **lstDates** にする。
+     MultiSelect = 0 - fmMultiSelectSingle、IntegralHeight = False で可。
+   ・CommandButton を1つ → (Name) を **cmdClose**、Caption を「閉じる」。
+4. フォームのサイズ・コントロール位置は任意（ListBox は縦に長め推奨）。
+5. 「modGanttDateNav.bas」をインポート（未導入の場合）。
 6. デバッグ → VBAProject のコンパイル でエラーがないことを確認する。
+7. マクロ「結果_設備ガント系_日付ジャンプフォームを表示」をボタン等に割り当てる。
 
-【動作】列 A の日付見出し（Python 出力の「【yyyy/mm/dd】」形式の結合セル先頭行）を走査し、リストに載せます。リストで行を選ぶと、その日ブロック先頭行の列 A がアクティブセルになります（スクロール位置も合わせます）。
+【動作】列 A の「【yyyy/mm/dd】」形式の結合セル先頭行を走査し、リストに載せます。リストで選ぶとその行の列 A がアクティブになります。
+
+【既に失敗した .frx を置いた場合】古い UF_GanttDateNav.frx がフォルダに残っていると、インポート時に参照されることがあります。削除してから .frm のみをインポートしてください。
