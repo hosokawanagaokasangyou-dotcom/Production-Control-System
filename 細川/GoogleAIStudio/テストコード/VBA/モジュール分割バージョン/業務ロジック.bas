@@ -400,8 +400,8 @@ End Sub
 Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
-    ' 結果_設備ガントは専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
-    If StrComp(Trim$(targetWs.Name), "結果_設備ガント", vbBinaryCompare) = 0 Then Exit Sub
+    ' 結果_設備ガント／実績明細は専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
+    If 結果_設備ガント系シート名か(targetWs.Name) Then Exit Sub
     su = Application.ScreenUpdating
     On Error Resume Next
     Application.ScreenUpdating = True
@@ -604,18 +604,34 @@ Public Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal 
     Application.ScreenUpdating = prevScr
 End Sub
 
-' 結果_設備ガントのみ表示倍率を設定（シートをアクティブにして ActiveWindow.Zoom）
+' 結果_設備ガント／実績明細は同一ガントレイアウトのため同一扱い（列幅・印刷・Zoom 等）
+Private Function 結果_設備ガント系シート名か(ByVal sheetName As String) As Boolean
+    Dim s As String
+    s = Trim$(sheetName)
+    If StrComp(s, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+        結果_設備ガント系シート名か = True
+    ElseIf StrComp(s, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) = 0 Then
+        結果_設備ガント系シート名か = True
+    End If
+End Function
+
+' 結果_設備ガント（および実績明細）の表示倍率を設定（各シートをアクティブにして ActiveWindow.Zoom）
 Public Sub 結果_設備ガント_表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
     Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
-    If ws Is Nothing Then GoTo CleanZoom
-    ws.Activate
-    ActiveWindow.Zoom = zoomPercent
-    ws.Range("A1").Activate
-    ActiveWindow.ScrollColumn = 1
-    ActiveWindow.ScrollRow = 1
-CleanZoom:
+    Dim nm As Variant
+    
+    For Each nm In Array(SHEET_RESULT_EQUIP_GANTT, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+        On Error Resume Next
+        Set ws = wb.Worksheets(CStr(nm))
+        If Not ws Is Nothing Then
+            ws.Activate
+            ActiveWindow.Zoom = zoomPercent
+            ws.Range("A1").Activate
+            ActiveWindow.ScrollColumn = 1
+            ActiveWindow.ScrollRow = 1
+        End If
+        Err.Clear
+    Next nm
     On Error GoTo 0
 End Sub
 
@@ -686,7 +702,7 @@ Public Sub 結果_設備ガント_印刷ページ設定を適用(ByVal ws As Worksheet)
     Dim i As Long
     
     If ws Is Nothing Then Exit Sub
-    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then Exit Sub
+    If Not 結果_設備ガント系シート名か(ws.Name) Then Exit Sub
     
     On Error Resume Next
     prevPrintComm = Application.PrintCommunication
@@ -856,7 +872,7 @@ Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal sh As Object, ByVal Ta
     
     結果_設備ガント_行ハイライト_Clear wb
     
-    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then Exit Sub
+    If Not 結果_設備ガント系シート名か(ws.Name) Then Exit Sub
     If Target Is Nothing Then Exit Sub
     
     r = Target.Cells(1, 1).Row
@@ -879,27 +895,34 @@ End Sub
 ' 既存ブックで設備ガントが「セルの書式設定」無効の保護のとき、ハイライト罫線が効かない。パスワードは SHEET_FONT_UNPROTECT_PASSWORD のみ対応（手動パスワードはユーザーが一度解除してから実行）
 Public Sub 結果_設備ガント_保護を書式設定許可で更新()
     Dim ws As Worksheet
-    On Error GoTo Quiet
-    Set ws = ThisWorkbook.Worksheets(SHEET_RESULT_EQUIP_GANTT)
-    If ws Is Nothing Then Exit Sub
-    If ws.ProtectContents Then
-        If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-            ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+    Dim nm As Variant
+    
+    For Each nm In Array(SHEET_RESULT_EQUIP_GANTT, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+        On Error Resume Next
+        Set ws = Nothing
+        Set ws = ThisWorkbook.Worksheets(CStr(nm))
+        If ws Is Nothing Then GoTo NextGanttProt
+        If ws.ProtectContents Then
+            If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+            End If
+            If ws.ProtectContents Then ws.Unprotect
         End If
-        If ws.ProtectContents Then ws.Unprotect
-    End If
-    If ws.ProtectContents Then Exit Sub
-    If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-        ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-    Else
-        ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-    End If
-Quiet:
+        If ws.ProtectContents Then GoTo NextGanttProt
+        If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+            ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+        Else
+            ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+        End If
+NextGanttProt:
+        Err.Clear
+    Next nm
+    On Error GoTo 0
 End Sub
 
 ' 段階1/2 終盤・全シートフォント適用後: 結果の主要4シートの列オートフィット
 ' ・結果_タスク一覧 は非表示列を開かない（結果シート_列幅_AutoFit非表示を維持）
-' ・結果_設備ガント は専用列幅（時刻列を潰さない）＋タイトル A1 左寄せ再固定
+' ・結果_設備ガント／結果_設備ガント_実績明細 は専用列幅（時刻列を潰さない）＋タイトル A1 左寄せ再固定
 Public Sub 結果_主要4結果シート_列オートフィット()
     Dim wb As Workbook
     Dim ws As Worksheet
@@ -936,7 +959,17 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     
     Err.Clear
     Set ws = Nothing
-    Set ws = wb.Worksheets("結果_設備ガント")
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+    If Err.Number = 0 Then
+        結果_設備ガント_列幅を設定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
     If Err.Number = 0 Then
         結果_設備ガント_列幅を設定 ws
         結果_設備ガント_タイトルA1を左寄せに固定 ws
@@ -2003,7 +2036,7 @@ Public Sub 配台マクロ_対象シートを条件どおりに保護(Optional ByVal targetDir As S
     For Each ws In ThisWorkbook.Worksheets
         If Left$(ws.Name, 3) = "結果_" Then
             If ws.ProtectContents Then ws.Unprotect
-            If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(ws.Name) Then
                 ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
             Else
                 ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
@@ -3068,7 +3101,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
             ' (1b) 列幅: Python 出力では列幅を書かない。設備ガントは専用、それ以外は AutoFit。
             '     結果_タスク一覧 は非表示列があるため、全列 Select+AutoFit すると非表示が解除される。
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_列幅を設定 ws
             ElseIf StrComp(sheetName, "結果_タスク一覧", vbBinaryCompare) = 0 Then
                 結果シート_列幅_AutoFit非表示を維持 ws
@@ -3081,21 +3114,21 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             ws.UsedRange.Borders.LineStyle = 1 ' xlContinuous
             ws.UsedRange.Borders.Weight = 2    ' xlThin
             ' 罫線付与で列幅が変わる環境があるため、設備ガントは専用幅を再適用
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_列幅を設定 ws
             End If
             
             ' (3) 見出し（1行目）：太字・薄い黄緑（表形式シート向け）
-            '     結果_設備ガント は 1 行目がレポートタイトル（Python でサイズ・背景を指定）のため上書きしない
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) <> 0 Then
+            '     結果_設備ガント／実績明細 は 1 行目がレポートタイトル（Python でサイズ・背景を指定）のため上書きしない
+            If Not 結果_設備ガント系シート名か(sheetName) Then
                 With ws.UsedRange.Rows(1)
                     .Font.Bold = True
                     .Interior.Color = RGB(226, 239, 218) ' 薄い黄緑色
                 End With
             End If
             
-            ' (3b) 結果_設備ガントのみ：タイトル A1（結合先頭）を強制的に左寄せ
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            ' (3b) 結果_設備ガント／実績明細：タイトル A1（結合先頭）を強制的に左寄せ
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_タイトルA1を左寄せに固定 ws
             End If
             
@@ -3115,9 +3148,17 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         On Error Resume Next
         取込後_結果シートへマスタ時刻を反映 targetWb
         Err.Clear
-        ' マスタ反映・保護後も、設備ガントの列幅は専用設定に戻す（AutoFit 混入防止）
+        ' マスタ反映・保護後も、設備ガント／実績明細の列幅は専用設定に戻す（AutoFit 混入防止）
         Set ws = Nothing
-        Set ws = targetWb.Worksheets("結果_設備ガント")
+        Set ws = targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+        If Err.Number = 0 Then
+            結果_設備ガント_列幅を設定 ws
+            結果_設備ガント_タイトルA1を左寄せに固定 ws
+            結果_設備ガント_印刷ページ設定を適用 ws
+        End If
+        Err.Clear
+        Set ws = Nothing
+        Set ws = targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
         If Err.Number = 0 Then
             結果_設備ガント_列幅を設定 ws
             結果_設備ガント_タイトルA1を左寄せに固定 ws

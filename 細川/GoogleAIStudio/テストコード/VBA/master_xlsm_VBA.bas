@@ -23,6 +23,7 @@ Private Const SCRATCH_SHEET_FONT As String = "_FontPick"
 Private Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
 ' 配台ブックと同名シートがある場合、列オートフィットで時刻グリッドが潰れないよう除外
 Private Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
+Private Const SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL As String = "結果_設備ガント_実績明細"
 ' =========================================================
 ' 組み合わせ表（skills の OP/AS 列 × need の必要人数から、OP1名以上を含む組合せを列挙）
 ' ・A列「組合せ行ID」… データ行ごとに 1 からの一意番号（配台で採用時は結果_タスク一覧の履歴に組合せ表#として転記）
@@ -1820,7 +1821,8 @@ Private Sub ApplyFontToAllSheetCells(ByVal fontName As String, ByRef skippedOut 
                     If Not AssignFontNameToRange(ur, fontName) Then
                         skippedOut = skippedOut & "・" & ws.Name & "（フォント適用失敗）" & vbCrLf
                     Else
-                        If StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then
+                        If StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 _
+                            And StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) <> 0 Then
                             ur.Columns.AutoFit
                         End If
                     End If
