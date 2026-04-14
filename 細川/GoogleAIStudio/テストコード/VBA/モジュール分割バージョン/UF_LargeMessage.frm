@@ -123,13 +123,13 @@ Private Sub SetupStripeColor(ByVal buttons As VbMsgBoxStyle)
     ic = buttons And &HF0&
     Select Case ic
         Case vbCritical
-            lblStripe.BackColor = &HC0&
+            lblStripe.BackColor = RGB(200, 55, 45)
         Case vbExclamation
-            lblStripe.BackColor = &H80FFFF&
+            lblStripe.BackColor = RGB(255, 185, 0)
         Case vbInformation, vbQuestion
-            lblStripe.BackColor = &HFFC080&
+            lblStripe.BackColor = RGB(0, 115, 200)
         Case Else
-            lblStripe.BackColor = &HC0C0C0
+            lblStripe.BackColor = RGB(170, 170, 170)
     End Select
 End Sub
 
