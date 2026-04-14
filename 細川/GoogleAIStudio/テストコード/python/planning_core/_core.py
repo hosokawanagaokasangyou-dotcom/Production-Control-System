@@ -2101,6 +2101,22 @@ def _write_results_equipment_gantt_sheet(
     無効時は ([], []) を返す。
     """
     sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
+    # region agent log
+    _agent_debug_ndjson(
+        "H1",
+        "_core.py:_write_results_equipment_gantt_sheet",
+        "enter",
+        {
+            "sheet_nm": sheet_nm,
+            "plan_rows": plan_rows,
+            "has_actual_timeline_events": bool(actual_timeline_events),
+            "timeline_events_len": len(timeline_events or []),
+            "equipment_list_len": len(equipment_list or []),
+            "sorted_dates_len": len(sorted_dates or []),
+            "data_extract_dt_str": (data_extract_dt_str or ""),
+        },
+    )
+    # endregion agent log
     if not plan_rows:
         if not actual_timeline_events:
             logging.info(
@@ -2109,7 +2125,7 @@ def _write_results_equipment_gantt_sheet(
             )
             # region agent log
             _agent_debug_ndjson(
-                "H4",
+                "H2",
                 "_core.py:_write_results_equipment_gantt_sheet",
                 "early_return_no_actual_events",
                 {"sheet_nm": sheet_nm, "plan_rows": plan_rows},
@@ -2277,6 +2293,22 @@ def _write_results_equipment_gantt_sheet(
     mtop.border = Border(left=accent_left, bottom=banner_sep)
     ws.row_dimensions[row].height = 26
     row += 1
+    # region agent log
+    try:
+        _agent_debug_ndjson(
+            "H3",
+            "_core.py:_write_results_equipment_gantt_sheet",
+            "wrote_meta_line",
+            {
+                "sheet_nm": sheet_nm,
+                "meta_addr": f"{get_column_letter(title_start_col)}2",
+                "meta_line": meta_line[:200],
+                "mtop_value": str(mtop.value)[:200] if mtop.value is not None else None,
+            },
+        )
+    except Exception:
+        pass
+    # endregion agent log
 
     dates_to_show: list = []
     for d0 in sorted_dates:
@@ -19391,6 +19423,38 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             "実績明細ガントのみ: %s を出力しました。",
             os.path.basename(out_path),
         )
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H5",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "output_written",
+                {"out_path": os.path.abspath(out_path)},
+            )
+            _wb_dbg = load_workbook(out_path, data_only=True)
+            try:
+                _ws_dbg = _wb_dbg[RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME]
+                _agent_debug_ndjson(
+                    "H5",
+                    "_core.py:refresh_equipment_gantt_actual_detail_only",
+                    "output_d2_check",
+                    {
+                        "sheet": RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                        "d2": str(_ws_dbg["D2"].value)[:200]
+                        if _ws_dbg["D2"].value is not None
+                        else None,
+                    },
+                )
+            finally:
+                _wb_dbg.close()
+        except Exception as _e:
+            _agent_debug_ndjson(
+                "H5",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "output_check_failed",
+                {"err": str(_e)[:200]},
+            )
+        # endregion agent log
         return os.path.abspath(out_path)
 
 

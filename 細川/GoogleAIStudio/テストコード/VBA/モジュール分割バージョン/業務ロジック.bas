@@ -3353,6 +3353,7 @@ Public Sub 実績設備ガント_のみ更新_実行()
     Dim sourceWb As Workbook
     Dim sourceWs As Worksheet
     Dim ws As Worksheet
+    Dim metaD2 As Variant
     Dim prevScreenUpdating As Boolean
     Dim prevDisplayAlerts As Boolean
     Dim stUnlock As Boolean
@@ -3462,6 +3463,7 @@ Public Sub 実績設備ガント_のみ更新_実行()
     End If
     
     sheetName = Trim$(sourceWs.Name)
+    metaD2 = sourceWs.Range("D2").Value
     sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
     sourceWb.Close SaveChanges:=False
     Set sourceWb = Nothing
@@ -3471,6 +3473,16 @@ Public Sub 実績設備ガント_のみ更新_実行()
         AppMsgBox "シートの取り込みに失敗しました。", vbCritical, "実績ガント更新"
         GoTo DoneProtect
     End If
+
+    ' D2（メタ行: 作成/データ抽出/マスタ時刻）は、取り込み後の整形処理で結合範囲が変わる場合があるため、
+    ' 取込元の値を明示的に再適用しておく（見た目の更新漏れ対策）。
+    On Error Resume Next
+    If ws.Range("D2").MergeCells Then
+        ws.Range("D2").MergeArea.Cells(1, 1).Value = metaD2
+    Else
+        ws.Range("D2").Value = metaD2
+    End If
+    On Error GoTo EH
     
     If 結果_設備ガント系シート名か(sheetName) Then
         結果_設備ガント_列幅を設定 ws
