@@ -47,31 +47,6 @@ from .bootstrap import (
     output_dir,
 )
 
-# region agent log
-def _agent_debug_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    """Debug NDJSON（セッション fc9417）。ワークスペース直下 debug-fc9417.log へ追記。"""
-    try:
-        _p = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-fc9417.log")
-        )
-        _line = {
-            "sessionId": "fc9417",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion agent log
-
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
