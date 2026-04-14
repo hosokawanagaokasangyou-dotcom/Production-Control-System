@@ -1,113 +1,12 @@
 VERSION 5.00
-Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_LargeMessage
-   BackColor       =   &H8000000F&
-   BorderStyle     =   1  'fmBorderStyleSingle
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_LargeMessage 
    Caption         =   "お知らせ"
-   ClientHeight    =   4860
-   ClientLeft      =   0
-   ClientTop       =   0
-   ClientWidth     =   8280
-   ShowModal       =   -1  'True
-   StartUpPosition =   1  'CenterOwner
-   Begin MSForms.Label lblStripe
-      BackColor       =   &H00C0C0C0&
-      Height          =   4860
-      Left            =   0
-      Top             =   0
-      Width           =   120
-      BorderStyle     =   0
-      VariousPropertyBits=   8388627
-      Size            =   "635;6350"
-      SpecialEffect   =   0
-      FontName        =   "Meiryo UI"
-      FontHeight      =   200
-      FontWeight      =   400
-      FontCharSet     =   128
-   End
-   Begin MSForms.TextBox txtBody
-      Height          =   3960
-      Left            =   240
-      TabIndex        =   0
-      Top             =   240
-      Width           =   7800
-      VariousPropertyBits=   746604571
-      Size            =   "5292;6350"
-      SpecialEffect   =   0
-      FontName        =   "Meiryo UI"
-      FontHeight      =   280
-      FontWeight      =   400
-      FontCharSet     =   128
-      BorderStyle     =   1
-      ScrollBars      =   2
-      PasswordChar    =   0
-      MatchEntry      =   0
-      ShowDropButtonWhen=   0
-      DropButtonStyle =   0
-      MultiLine       =   -1  'True
-      AutoSize        =   0   'False
-      WordWrap        =   -1  'True
-      Locked          =   -1  'True
-      EnterKeyBehavior=   -1  'True
-   End
-   Begin MSForms.CommandButton cmdOK
-      Caption         =   "OK"
-      Height          =   420
-      Left            =   3360
-      TabIndex        =   1
-      Top             =   4320
-      Width           =   1560
-      Default         =   -1  'True
-      VariousPropertyBits=   8388739
-      Size            =   "2640;635"
-      FontName        =   "Meiryo UI"
-      FontHeight      =   240
-      FontWeight      =   400
-      FontCharSet     =   128
-      Accelerator     =   79
-   End
-   Begin MSForms.CommandButton cmdCancel
-      Caption         =   "キャンセル"
-      Height          =   420
-      Left            =   5160
-      TabIndex        =   2
-      Top             =   4320
-      Width           =   1680
-      Cancel          =   -1  'True
-      VariousPropertyBits=   8388739
-      Size            =   "2640;635"
-      FontName        =   "Meiryo UI"
-      FontHeight      =   240
-      FontWeight      =   400
-      FontCharSet     =   128
-   End
-   Begin MSForms.CommandButton cmdYes
-      Caption         =   "はい"
-      Height          =   420
-      Left            =   2760
-      TabIndex        =   3
-      Top             =   4320
-      Width           =   1560
-      VariousPropertyBits=   8388739
-      Size            =   "2640;635"
-      FontName        =   "Meiryo UI"
-      FontHeight      =   240
-      FontWeight      =   400
-      FontCharSet     =   128
-   End
-   Begin MSForms.CommandButton cmdNo
-      Caption         =   "いいえ"
-      Height          =   420
-      Left            =   4560
-      TabIndex        =   4
-      Top             =   4320
-      Width           =   1560
-      VariousPropertyBits=   8388739
-      Size            =   "2640;635"
-      FontName        =   "Meiryo UI"
-      FontHeight      =   240
-      FontWeight      =   400
-      FontCharSet     =   128
-   End
+   ClientHeight    =   3040
+   ClientLeft      =   110
+   ClientTop       =   450
+   ClientWidth     =   4580
+   OleObjectBlob   =   "UF_LargeMessage.frx":0000
+   StartUpPosition =   1  'オーナー フォームの中央
 End
 Attribute VB_Name = "UF_LargeMessage"
 Attribute VB_GlobalNameSpace = False
