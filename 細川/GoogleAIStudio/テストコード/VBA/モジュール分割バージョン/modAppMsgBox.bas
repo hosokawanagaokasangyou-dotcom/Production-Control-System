@@ -1,8 +1,9 @@
-Attribute VB_Name = "AppMsgBox"
+Attribute VB_Name = "modAppMsgBox"
 Option Explicit
 
-' MsgBox の代替。ユーザーフォーム UF_LargeMessage で本文を大きめフォント表示する。
-' ブックに UF_LargeMessage をインポート済みであること（同フォルダの UF_LargeMessage.frm）。
+' MsgBox の代替。Public 関数 AppMsgBox を呼び出す。
+' ※標準モジュール名を AppMsgBox にすると関数 AppMsgBox と衝突し「モジュールではなく…」コンパイルエラーになるため、モジュール名は modAppMsgBox とする。
+' ユーザーフォーム UF_LargeMessage を同じ VBA プロジェクトにインポート済みであること（UF_LargeMessage.frm + .frx）。
 
 Public Function AppMsgBox(ByVal Prompt As String, Optional ByVal Buttons As VbMsgBoxStyle = vbOKOnly, Optional ByVal Title As String = vbNullString) As VbMsgBoxResult
     Dim grp As Long
