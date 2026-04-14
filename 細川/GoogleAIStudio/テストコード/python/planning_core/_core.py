@@ -1529,6 +1529,48 @@ def _extract_data_extraction_datetime_str():
         return "—"
 
 
+def _parse_equipment_gantt_meta_line_data_extract_display(meta_line) -> str | None:
+    """
+    設備ガント系シートのメタ行（行2付近）から「データ抽出」の表示文字列を取り出す。
+    ``_write_results_equipment_gantt_sheet`` の ``meta_line`` 形式と整合させる。
+    """
+    if meta_line is None:
+        return None
+    s = str(meta_line).replace("\r", "").replace("\n", "")
+    needle = "　・　データ抽出　"
+    pos = s.find(needle)
+    if pos < 0:
+        return None
+    rest = s[pos + len(needle) :]
+    end_mark = "　・　マスタ"
+    end_pos = rest.find(end_mark)
+    if end_pos < 0:
+        return None
+    out = rest[:end_pos].strip()
+    return out if out else None
+
+
+def _read_existing_equipment_gantt_data_extract_display(path: str, sheet_name: str) -> str | None:
+    """
+    既存の設備ガント xlsx のメタ行からデータ抽出表示を読む（失敗時は None）。
+    メタは ``title_start_col=4`` の結合先頭セル（通常 D2）。
+    """
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        wb = load_workbook(path, data_only=True)
+        try:
+            if sheet_name not in wb.sheetnames:
+                return None
+            ws = wb[sheet_name]
+            val = ws.cell(row=2, column=4).value
+            return _parse_equipment_gantt_meta_line_data_extract_display(val)
+        finally:
+            wb.close()
+    except Exception:
+        return None
+
+
 def _weekday_jp(d):
     return "月睫水木金土日"[d.weekday()]
 
@@ -19821,8 +19863,12 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
     マクロブックの勤怠・実績明細DATA・master（工場枠・定常枠・機械カレンダー等）を
     段階2と同様に読み、実績タイムラインのみ描画する。
 
+    既存の出力ファイルがあり、メタ行の「データ抽出」表示が今回採用した
+    ``データ抽出時間``（加工実績明細DATA 優先、無ければ加工計画DATA）の表示と
+    一致する場合は、再生成をスキップしてそのファイルパスを返す。
+
     Returns:
-        生成した xlsx の絶対パス。
+        生成した（またはスキップ時は既存の）xlsx の絶対パス。
 
     Raises:
         PlanningValidationError: メンバー0人・表示対象日なし・実績イベント空など。
@@ -19944,6 +19990,24 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
             plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
         )
+
+        out_path = os.path.join(output_dir, ACTUAL_DETAIL_GANTT_REFRESH_FILENAME)
+        prev_extract_display = _read_existing_equipment_gantt_data_extract_display(
+            out_path, RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME
+        )
+        cur_extract_display = (data_extract_dt_str or "").strip()
+        if (
+            cur_extract_display
+            and cur_extract_display not in ("—", "-")
+            and prev_extract_display is not None
+            and prev_extract_display.strip() == cur_extract_display
+        ):
+            logging.info(
+                "実績明細ガントのみ: データ抽出時間が前回出力と同一のためファイル更新をスキップしました（%s）。",
+                cur_extract_display,
+            )
+            return os.path.abspath(out_path)
+
         detail_timeline_events: list = []
         sorted_dates_detail = list(sorted_dates)
         chart_title_actual_detail = "湖南工場 加工実績（明細）"
@@ -19995,7 +20059,6 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
                 "「加工実績明細DATA」の有無・日付・必須列を確認してください。"
             )
 
-        out_path = os.path.join(output_dir, ACTUAL_DETAIL_GANTT_REFRESH_FILENAME)
         _try_remove_path_with_retries(out_path)
 
         gantt_detail_tl_label_specs: list = []
