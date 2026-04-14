@@ -47,6 +47,31 @@ from .bootstrap import (
     output_dir,
 )
 
+# region agent log
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    """Debug NDJSON（セッション fc9417）。ワークスペース直下 debug-fc9417.log へ追記。"""
+    try:
+        _p = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-fc9417.log")
+        )
+        _line = {
+            "sessionId": "fc9417",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -2040,6 +2065,14 @@ def _write_results_equipment_gantt_sheet(
                 "設備ガント（%s）: 実績のみモードですがイベントが空のためシートを作成しません。",
                 sheet_nm,
             )
+            # region agent log
+            _agent_debug_ndjson(
+                "H4",
+                "_core.py:_write_results_equipment_gantt_sheet",
+                "early_return_no_actual_events",
+                {"sheet_nm": sheet_nm, "plan_rows": plan_rows},
+            )
+            # endregion agent log
             return [], []
     wb = writer.book
     if sheet_name_override:
@@ -2207,6 +2240,21 @@ def _write_results_equipment_gantt_sheet(
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
+
+    # region agent log
+    if sheet_name_override:
+        _agent_debug_ndjson(
+            "H4",
+            "_core.py:_write_results_equipment_gantt_sheet",
+            "after_dates_to_show",
+            {
+                "sheet_nm": sheet_nm,
+                "plan_rows": plan_rows,
+                "len_dates_to_show": len(dates_to_show),
+                "n_actual_events": len(actual_timeline_events or []),
+            },
+        )
+    # endregion agent log
 
     hdr_row = row
     fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
@@ -7081,6 +7129,19 @@ def load_machining_actual_detail_df():
     列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
     """
     if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+        # region agent log
+        _agent_debug_ndjson(
+            "H1",
+            "_core.py:load_machining_actual_detail_df",
+            "no_workbook_path",
+            {
+                "TASKS_INPUT_WORKBOOK_set": bool(TASKS_INPUT_WORKBOOK),
+                "path_exists": bool(
+                    TASKS_INPUT_WORKBOOK and os.path.exists(TASKS_INPUT_WORKBOOK)
+                ),
+            },
+        )
+        # endregion agent log
         return pd.DataFrame()
     try:
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
@@ -7088,6 +7149,14 @@ def load_machining_actual_detail_df():
         logging.info(
             f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
         )
+        # region agent log
+        _agent_debug_ndjson(
+            "H2",
+            "_core.py:load_machining_actual_detail_df",
+            "sheet_missing_ValueError",
+            {"workbook": os.path.basename(str(TASKS_INPUT_WORKBOOK)), "sheet": ACTUAL_DETAIL_SHEET_NAME},
+        )
+        # endregion agent log
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     if ACT_DETAIL_COL_ROLL not in df.columns:
@@ -7099,6 +7168,20 @@ def load_machining_actual_detail_df():
     logging.info(
         f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
     )
+    # region agent log
+    _cols = [str(c) for c in df.columns[:25]]
+    _agent_debug_ndjson(
+        "H1",
+        "_core.py:load_machining_actual_detail_df",
+        "loaded_ok",
+        {
+            "nrows": int(len(df)),
+            "columns_head": _cols,
+            "has_依頼NO": ACT_COL_TASK_ID in df.columns,
+            "has_工程名": ACT_COL_PROCESS in df.columns,
+        },
+    )
+    # endregion agent log
     return df
 
 
@@ -7215,6 +7298,22 @@ def build_actual_timeline_events(
             f"{log_sheet_name}: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。"
         )
     logging.info(f"{log_sheet_name} からガント用セグメント {len(events)} 件を生成しました。")
+    # region agent log
+    _agent_debug_ndjson(
+        "H3",
+        "_core.py:build_actual_timeline_events",
+        "build_done",
+        {
+            "log_sheet_name": log_sheet_name,
+            "roll_detail": roll_detail,
+            "n_events": len(events),
+            "bad_eq": bad_eq,
+            "bad_time": bad_time,
+            "no_plan_overlap": no_plan_overlap,
+            "input_rows": int(len(df)) if df is not None else 0,
+        },
+    )
+    # endregion agent log
     return events
 
 
@@ -21062,6 +21161,26 @@ def _generate_plan_impl():
             log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
             roll_detail=True,
         )
+    # region agent log
+    _agent_debug_ndjson(
+        "H5",
+        "_core.py:_generate_plan_impl",
+        "detail_gantt_branch",
+        {
+            "_core_py": os.path.abspath(__file__),
+            "df_detail_rows": int(len(df_actual_detail)) if df_actual_detail is not None else -1,
+            "detail_timeline_events_n": len(detail_timeline_events),
+            "sorted_dates_n": len(sorted_dates),
+        },
+    )
+    if not detail_timeline_events:
+        _agent_debug_ndjson(
+            "H3",
+            "_core.py:_generate_plan_impl",
+            "skip_detail_sheet_write",
+            {"reason": "detail_timeline_events_empty"},
+        )
+    # endregion agent log
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
