@@ -7,24 +7,24 @@ Public Sub ShortcutMainSheet_CtrlShift0()
     On Error GoTo 0
 End Sub
 
-' Ctrl+Shift+1 … 図形「アニメ付き_タスク抽出を実行」と同じ（段階1）
-Public Sub ShortcutStage1_CtrlShift1()
+' Ctrl+Shift+テンキー / … 図形「アニメ付き_タスク抽出を実行」と同じ（段階1）
+Public Sub ShortcutStage1_OnKey()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     アニメ付き_タスク抽出を実行
     On Error GoTo 0
 End Sub
 
-' Ctrl+Shift+2 … 図形「アニメ付き_計画生成を実行」と同じ（段階2）
-Public Sub ShortcutStage2_CtrlShift2()
+' Ctrl+Shift+テンキー * … 図形「アニメ付き_計画生成を実行」と同じ（段階2）
+Public Sub ShortcutStage2_OnKey()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     アニメ付き_計画生成を実行
     On Error GoTo 0
 End Sub
 
-' Ctrl+Shift+0 … 図形「アニメ付き_段階1と段階2を連続実行」と同じ
-Public Sub ShortcutStage1Then2_CtrlShift0()
+' Ctrl+Shift+テンキー + … 図形「アニメ付き_段階1と段階2を連続実行」と同じ
+Public Sub ShortcutStage1Then2_OnKey()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
     アニメ付き_段階1と段階2を連続実行
@@ -34,9 +34,9 @@ End Sub
 Public Sub ShortcutMainSheet_OnKeyRegister()
     On Error Resume Next
     Application.OnKey Key:=SHORTCUT_MAIN_SHEET_ONKEY, Procedure:="ShortcutMainSheet_CtrlShift0"
-    Application.OnKey Key:=SHORTCUT_STAGE1_ONKEY, Procedure:="ShortcutStage1_CtrlShift1"
-    Application.OnKey Key:=SHORTCUT_STAGE2_ONKEY, Procedure:="ShortcutStage2_CtrlShift2"
-    Application.OnKey Key:=SHORTCUT_STAGE1_THEN_STAGE2_ONKEY, Procedure:="ShortcutStage1Then2_CtrlShift0"
+    Application.OnKey Key:=SHORTCUT_STAGE1_ONKEY, Procedure:="ShortcutStage1_OnKey"
+    Application.OnKey Key:=SHORTCUT_STAGE2_ONKEY, Procedure:="ShortcutStage2_OnKey"
+    Application.OnKey Key:=SHORTCUT_STAGE1_THEN_STAGE2_ONKEY, Procedure:="ShortcutStage1Then2_OnKey"
     On Error GoTo 0
 End Sub
 

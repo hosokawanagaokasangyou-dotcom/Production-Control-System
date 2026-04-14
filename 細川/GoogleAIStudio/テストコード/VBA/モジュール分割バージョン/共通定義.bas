@@ -150,10 +150,10 @@ Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 ' 起動ショートカット.bas 等から OnKey 登録で参照するため Public
 Public Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
-' Ctrl+Shift+1 / 2 / 0 → 段階1（タスク抽出）・段階2（計画生成）・段階1+2 連続（アニメ付き入口と同じ）
-Public Const SHORTCUT_STAGE1_ONKEY As String = "^+1"
-Public Const SHORTCUT_STAGE2_ONKEY As String = "^+2"
-Public Const SHORTCUT_STAGE1_THEN_STAGE2_ONKEY As String = "^+0"
+' Ctrl+Shift+テンキー / * + → 段階1・段階2・段階1+2 連続（アニメ付き入口と同じ）。{111}{106}{107}=vbKeyDivide/Multiply/Add（{SUBTRACT} 同様に数値で指定）
+Public Const SHORTCUT_STAGE1_ONKEY As String = "^+{111}"
+Public Const SHORTCUT_STAGE2_ONKEY As String = "^+{106}"
+Public Const SHORTCUT_STAGE1_THEN_STAGE2_ONKEY As String = "^+{107}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"

@@ -3511,6 +3511,6 @@ NextSheetIter:
         vbInformation, "COM 操作テスト"
 End Sub
 
-' ブックを開いたときに OnKey を登録（Ctrl+Shift+テンキー -＝メイン、+1/+2/+0＝段階1/2/連続。ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
+' ブックを開いたときに OnKey を登録（Ctrl+Shift+テンキー -＝メイン、/ * +＝段階1/2/連続。ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
 
 
