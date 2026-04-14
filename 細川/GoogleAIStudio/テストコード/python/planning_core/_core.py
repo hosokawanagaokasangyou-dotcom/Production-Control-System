@@ -796,6 +796,19 @@ ACT_COL_TIME_END = "終了時刻"
 # 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
 ACT_COL_MACHINING_START_DT = "加工開始日時"
 ACT_COL_MACHINING_END_DT = "加工終了日時"
+# 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
+ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
+ACT_COL_MACHINING_ASSIGNEE_2 = "加工担当者名2"
+ACT_COL_MACHINING_ASSIGNEE_3 = "加工担当者名3"
+ACT_COL_MACHINING_ASSIGNEE_4 = "加工担当者名4"
+ACT_COL_MACHINING_ASSIGNEE_5 = "加工担当者名5"
+ACT_COL_MACHINING_ASSIGNEES_ORDERED = (
+    ACT_COL_MACHINING_ASSIGNEE_1,
+    ACT_COL_MACHINING_ASSIGNEE_2,
+    ACT_COL_MACHINING_ASSIGNEE_3,
+    ACT_COL_MACHINING_ASSIGNEE_4,
+    ACT_COL_MACHINING_ASSIGNEE_5,
+)
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -813,7 +826,9 @@ ACTUAL_HEADER_CANONICAL = (
 # マクロブック「加工実績明細DATA」… ロール単位の実績行（列は加工実績DATA に準拠＋任意のロール識別列）
 ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
 ACT_DETAIL_COL_ROLL = "ロールNO"
-ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (ACT_DETAIL_COL_ROLL,)
+ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
+    ACT_DETAIL_COL_ROLL,
+) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
 # 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
 RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME = "結果_設備ガント_実績明細"
 
@@ -2383,8 +2398,33 @@ def _write_results_equipment_gantt_sheet(
                     seen_aid: set[str] = set()
                     for e_a in evlist_a:
                         tid = str(e_a.get("task_id") or "").strip()
-                        if tid and tid not in seen_aid:
-                            seen_aid.add(tid)
+                        if not tid or tid in seen_aid:
+                            continue
+                        seen_aid.add(tid)
+                        if not plan_rows:
+                            opv = str(e_a.get("op") or "").strip()
+                            subv = str(e_a.get("sub") or "").strip()
+                            who_parts: list[str] = []
+                            if opv:
+                                who_parts.append(opv)
+                            if subv:
+                                for seg in subv.split(","):
+                                    t = seg.strip()
+                                    if t:
+                                        who_parts.append(t)
+                            who_show: list[str] = []
+                            who_seen: set[str] = set()
+                            for p in who_parts:
+                                k = unicodedata.normalize("NFKC", p)
+                                if k in who_seen:
+                                    continue
+                                who_seen.add(k)
+                                who_show.append(p)
+                            if who_show:
+                                tids_a.append(f"{tid}（{'・'.join(who_show)}）")
+                            else:
+                                tids_a.append(tid)
+                        else:
                             tids_a.append(tid)
                     task_sum_a = " ".join(tids_a) if tids_a else "—"
                 else:
@@ -7227,6 +7267,33 @@ def load_machining_actual_detail_df():
     return df
 
 
+def _actual_row_detail_assignee_op_sub(row) -> tuple[str, str]:
+    """
+    加工実績明細DATA 行からガント用 op / sub を組み立てる。
+    「担当者」に続けて「加工担当者名1」～「加工担当者名5」を順に見て非空のみ採用し、
+    NFKC 後の文字列で重複を除く。先頭を op、2人目以降を sub（カンマ区切り）。
+    """
+    names: list[str] = []
+    seen_k: set[str] = set()
+    for col in (ACT_COL_OPERATOR,) + ACT_COL_MACHINING_ASSIGNEES_ORDERED:
+        val = row.get(col)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            continue
+        s = str(val).strip()
+        if not s:
+            continue
+        k = unicodedata.normalize("NFKC", s)
+        if k in seen_k:
+            continue
+        seen_k.add(k)
+        names.append(s)
+    if not names:
+        return "", ""
+    if len(names) == 1:
+        return names[0], ""
+    return names[0], ", ".join(names[1:])
+
+
 def build_actual_timeline_events(
     df,
     equipment_list,
@@ -7241,6 +7308,8 @@ def build_actual_timeline_events(
     工程名は NFKC・空白正規化後にマスタ列名へマッピングする。
     時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
     roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
+    同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
+    ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
     """
     if df is None or len(df) == 0:
         return []
@@ -7281,10 +7350,14 @@ def build_actual_timeline_events(
         if not start_dt or not end_dt or start_dt >= end_dt:
             bad_time += 1
             continue
-        op_val = row.get(ACT_COL_OPERATOR)
-        op_s = ""
-        if op_val is not None and not pd.isna(op_val):
-            op_s = str(op_val).strip()
+        if roll_detail:
+            op_s, sub_s = _actual_row_detail_assignee_op_sub(row)
+        else:
+            op_val = row.get(ACT_COL_OPERATOR)
+            op_s = ""
+            if op_val is not None and not pd.isna(op_val):
+                op_s = str(op_val).strip()
+            sub_s = ""
 
         before = len(events)
         for d in sorted_dates:
@@ -7304,7 +7377,7 @@ def build_actual_timeline_events(
                     "task_id": display_tid,
                     "machine": mach,
                     "op": op_s,
-                    "sub": "",
+                    "sub": sub_s,
                     "start_dt": s_clip,
                     "end_dt": e_clip,
                     "breaks": [],
