@@ -2239,9 +2239,14 @@ def _write_results_equipment_gantt_sheet(
     for d0 in sorted_dates:
         evs0 = events_by_date.get(d0, []) if plan_rows else []
         a_evs0 = actual_events_by_date.get(d0, []) if show_actual_rows else []
-        is_anyone_working0 = any(
-            attendance_data[d0][mm]["is_working"] for mm in attendance_data[d0] if mm in attendance_data[d0]
-        )
+        if d0 not in attendance_data:
+            is_anyone_working0 = False
+        else:
+            is_anyone_working0 = any(
+                attendance_data[d0][mm]["is_working"]
+                for mm in attendance_data[d0]
+                if mm in attendance_data[d0]
+            )
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
@@ -7130,6 +7135,34 @@ def load_machining_actuals_df():
         f"加工実績: '{TASKS_INPUT_WORKBOOK}' の '{ACTUALS_SHEET_NAME}' を {len(df)} 行読み込み。"
     )
     return df
+
+
+def _calendar_dates_spanned_by_actual_bounds_df(df) -> set[date]:
+    """
+    実績明細等の各行の (開始, 終了) が跨ぐ暦日を収集する。
+    計画の sorted_dates に含まれない過去日の実績もガントに載せるために使う。
+    """
+    out: set[date] = set()
+    if df is None or len(df) == 0:
+        return out
+    for _, row in df.iterrows():
+        s_dt, e_dt = _actual_row_time_bounds(row)
+        if not s_dt or not e_dt or s_dt >= e_dt:
+            continue
+        d0 = s_dt.date()
+        d1 = e_dt.date()
+        cur = d0
+        while cur <= d1:
+            out.add(cur)
+            cur += timedelta(days=1)
+    return out
+
+
+def _sorted_dates_union_actual_bounds_df(sorted_dates: list, df) -> list:
+    """計画表示日と実績行の暦日の和集合（昇順）。"""
+    u = set(sorted_dates)
+    u |= _calendar_dates_spanned_by_actual_bounds_df(df)
+    return sorted(u)
 
 
 def load_machining_actual_detail_df():
@@ -21162,11 +21195,15 @@ def _generate_plan_impl():
     gantt_detail_tl_day_blocks: list = []
     df_actual_detail = load_machining_actual_detail_df()
     detail_timeline_events: list = []
+    sorted_dates_detail = list(sorted_dates)
     if df_actual_detail is not None and len(df_actual_detail) > 0:
+        sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+            sorted_dates, df_actual_detail
+        )
         detail_timeline_events = build_actual_timeline_events(
             df_actual_detail,
             equipment_list,
-            sorted_dates,
+            sorted_dates_detail,
             log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
             roll_detail=True,
         )
@@ -21180,6 +21217,7 @@ def _generate_plan_impl():
             "df_detail_rows": int(len(df_actual_detail)) if df_actual_detail is not None else -1,
             "detail_timeline_events_n": len(detail_timeline_events),
             "sorted_dates_n": len(sorted_dates),
+            "sorted_dates_detail_n": len(sorted_dates_detail),
         },
     )
     if not detail_timeline_events:
@@ -21260,7 +21298,7 @@ def _generate_plan_impl():
                     writer,
                     [],
                     equipment_list,
-                    sorted_dates,
+                    sorted_dates_detail,
                     attendance_data,
                     data_extract_dt_str,
                     base_now_dt,
