@@ -9574,6 +9574,63 @@ def _special_remark_implies_due_related_dispatch_priority(remark_raw: str) -> bo
     return any(w.casefold() in n_lower for w in needles)
 
 
+def _ai_task_special_entry_has_dispatch_priority_signals(ai_for_row) -> bool:
+    """
+    備考テキストのキーワード検出に漏れても、AI が既に priority / 日付 / 人数 等を返しているときは
+    _merge_task_row_with_ai の allow を立てる（ログ H1: 備考に「納期」が無いが AI 非空、の救済）。
+    preferred_operator のみのときは False（従来どおりセル側マージで足りる）。
+    """
+    if not isinstance(ai_for_row, dict) or not ai_for_row:
+        return False
+    meta = frozenset(
+        {
+            "process_name",
+            "machine_name",
+            "restrict_to_process_name",
+            "restrict_to_machine_name",
+            "preferred_operator",
+        }
+    )
+    for k, v in ai_for_row.items():
+        if k in meta or v is None:
+            continue
+        if k in (
+            "ship_by_date",
+            "target_completion_date",
+            "latest_ship_date",
+            "due_date",
+            "start_date",
+        ):
+            if parse_optional_date(v) is not None:
+                return True
+        elif k == "start_time":
+            if parse_time_str(str(v), None) is not None:
+                return True
+        elif k == "priority":
+            if parse_optional_int(v) is not None:
+                return True
+        elif k == "required_op":
+            try:
+                if int(v) >= 1:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        elif k == "task_efficiency":
+            try:
+                f = float(v)
+                if f > 0 and f <= 1.0 + 1e-9:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        elif k == "speed_override":
+            try:
+                if float(v) > 0:
+                    return True
+            except (TypeError, ValueError):
+                pass
+    return False
+
+
 def _task_id_same_machine_due_tiebreak_key(task_id) -> tuple:
     """
     紝期基準（回答→指定）・機械名は坌も帯での試行順。
@@ -9718,6 +9775,16 @@ def build_task_queue_from_planning_df(
         remark_implies_due_dispatch_priority = (
             _special_remark_implies_due_related_dispatch_priority(remark_raw)
         )
+        in_progress = done_qty > 0.0
+
+        ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
+        allow_from_ai_dispatch_signals = (
+            has_special_remark
+            and _ai_task_special_entry_has_dispatch_priority_signals(ai_one)
+        )
+        allow_ai_dispatch_priority = (
+            remark_implies_due_dispatch_priority or allow_from_ai_dispatch_signals
+        )
         # #region agent log
         if task_id.casefold() == "w4-5" and has_special_remark:
             _nou = "\u7d39\u671f" in remark_raw
@@ -9730,15 +9797,16 @@ def build_task_queue_from_planning_df(
                     "remark_implies_due_dispatch_priority": bool(
                         remark_implies_due_dispatch_priority
                     ),
+                    "allow_from_ai_dispatch_signals": bool(
+                        allow_from_ai_dispatch_signals
+                    ),
+                    "allow_ai_dispatch_priority": bool(allow_ai_dispatch_priority),
                     "remark_len": len(remark_raw),
                     "remark_has_correct_nouki": _nou,
                     "remark_has_correct_shitei_nouki": _spec_n,
                 },
             )
         # #endregion
-        in_progress = done_qty > 0.0
-
-        ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
         # #region agent log
         if task_id.casefold() == "w4-5":
             _debug_agent_ndjson_55ab3a(
@@ -9754,7 +9822,7 @@ def build_task_queue_from_planning_df(
         req_op, speed_ov, task_eff_factor, priority, start_date_ov, start_time_ov, ai_used = _merge_task_row_with_ai(
             row,
             ai_one,
-            allow_ai_dispatch_priority_from_remark=remark_implies_due_dispatch_priority,
+            allow_ai_dispatch_priority_from_remark=allow_ai_dispatch_priority,
         )
         preferred_operator_raw = _merge_preferred_operator_cell_and_ai(row, ai_one)
         gpo = global_priority_override or {}
