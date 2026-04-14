@@ -793,6 +793,9 @@ ACT_COL_END_ALT = "実績終了"
 ACT_COL_DAY = "日付"
 ACT_COL_TIME_START = "開始時刻"
 ACT_COL_TIME_END = "終了時刻"
+# 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
+ACT_COL_MACHINING_START_DT = "加工開始日時"
+ACT_COL_MACHINING_END_DT = "加工終了日時"
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -804,6 +807,8 @@ ACTUAL_HEADER_CANONICAL = (
     ACT_COL_DAY,
     ACT_COL_TIME_START,
     ACT_COL_TIME_END,
+    ACT_COL_MACHINING_START_DT,
+    ACT_COL_MACHINING_END_DT,
 )
 # マクロブック「加工実績明細DATA」… ロール単位の実績行（列は加工実績DATA に準拠＋任意のロール識別列）
 ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
@@ -7057,9 +7062,13 @@ def _coerce_actual_sheet_datetime(val):
 
 
 def _actual_row_time_bounds(row):
-    """加工実績DATA の1行から (開始, 終了) を得る。解けなけれみ (None, None)。"""
+    """加工実績DATA／加工実績明細DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
+    if s_dt and e_dt and s_dt < e_dt:
+        return s_dt, e_dt
+    s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_START_DT))
+    e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
         return s_dt, e_dt
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_ALT))
