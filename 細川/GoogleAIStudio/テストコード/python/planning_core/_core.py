@@ -19294,6 +19294,8 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             )
             _STAGE2_REGULAR_SHIFT_START = None
 
+        # 実績明細ガントの「データ抽出」は、加工計画DATAではなく「加工実績明細DATA」のデータ抽出時間を優先する。
+        # ただし勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
         data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
         base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
         run_date = base_now_dt.date()
@@ -19301,11 +19303,6 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
             if data_extract_dt is not None
             else "—"
-        )
-        logging.info(
-            "実績明細ガントのみ: 計画基準日時 %s（%s）",
-            base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
-            plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
         )
 
         attendance_data, ai_log_data = load_attendance_and_analyze(members)
@@ -19335,6 +19332,75 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         )
 
         df_actual_detail = load_machining_actual_detail_df()
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H6",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "base_dt_before_detail_override",
+                {
+                    "base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(base_now_dt, datetime)
+                    else None,
+                    "plan_base_dt_column": plan_base_dt_column,
+                },
+            )
+        except Exception:
+            pass
+        # endregion agent log
+
+        def _first_valid_dt_from_df_col(_df, _col) -> datetime | None:
+            try:
+                if _df is None or _col not in _df.columns:
+                    return None
+                for _v in _df[_col].tolist():
+                    if _v is None or (isinstance(_v, float) and pd.isna(_v)):
+                        continue
+                    _dt = pd.to_datetime(_v, errors="coerce")
+                    if pd.isna(_dt):
+                        continue
+                    if isinstance(_dt, pd.Timestamp):
+                        return _dt.to_pydatetime()
+                    return _dt if isinstance(_dt, datetime) else None
+            except Exception:
+                return None
+            return None
+
+        # 加工実績明細DATA の「データ抽出時間」を最優先（無い/空なら従来どおり加工計画DATA基準）
+        detail_extract_dt = _first_valid_dt_from_df_col(
+            df_actual_detail, TASK_COL_DATA_EXTRACTION_TIME
+        )
+        if detail_extract_dt is not None:
+            base_now_dt = detail_extract_dt
+            run_date = base_now_dt.date()
+            data_extract_dt_str = base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            plan_base_dt_column = f"{ACTUAL_DETAIL_SHEET_NAME}:{TASK_COL_DATA_EXTRACTION_TIME}"
+
+        logging.info(
+            "実績明細ガントのみ: 抽出基準日時 %s（%s）",
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+            plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
+        )
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H6",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "base_dt_after_detail_override",
+                {
+                    "detail_extract_dt": detail_extract_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(detail_extract_dt, datetime)
+                    else None,
+                    "effective_base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(base_now_dt, datetime)
+                    else None,
+                    "effective_base_dt_source": plan_base_dt_column,
+                    "data_extract_dt_str": data_extract_dt_str,
+                },
+            )
+        except Exception:
+            pass
+        # endregion agent log
         detail_timeline_events: list = []
         sorted_dates_detail = list(sorted_dates)
         chart_title_actual_detail = "湖南工場 加工実績（明細）"
