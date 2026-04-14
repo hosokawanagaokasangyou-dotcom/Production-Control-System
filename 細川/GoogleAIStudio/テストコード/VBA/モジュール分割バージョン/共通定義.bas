@@ -125,6 +125,8 @@ Public Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
 Public Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"
 Public Const SHEET_RESULT_CALENDAR_ATTEND As String = "結果_カレンダー(出勤簿)"
 Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
+' planning_core.RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME と一致（段階2 xlsx → マクロブック取込）
+Public Const SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL As String = "結果_設備ガント_実績明細"
 Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
@@ -148,6 +150,10 @@ Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
 ' 起動ショートカット.bas 等から OnKey 登録で参照するため Public
 Public Const SHORTCUT_MAIN_SHEET_ONKEY As String = "^+{109}"
+' Ctrl+Shift+テンキー 0/1/2 → 段階1+2 連続・段階1・段階2（アニメ付き入口と同じ）。{96}{97}{98}=vbKeyNumpad0/1/2（メインの {109} と同様に数値で指定）
+Public Const SHORTCUT_STAGE1_THEN_STAGE2_ONKEY As String = "^+{96}"
+Public Const SHORTCUT_STAGE1_ONKEY As String = "^+{97}"
+Public Const SHORTCUT_STAGE2_ONKEY As String = "^+{98}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
 ' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
 Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"

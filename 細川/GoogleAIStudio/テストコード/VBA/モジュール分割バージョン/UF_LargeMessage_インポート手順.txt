@@ -1,0 +1,12 @@
+UF_LargeMessage（大きな文字のメッセージ框）をブックに取り込む手順
+
+【重要】UserForm は「UF_LargeMessage.frm」と同じフォルダに「UF_LargeMessage.frx」が無いとインポートに失敗します（&H80004005 や「メモリが不足」等）。.frm をコピーするときは .frx も必ず一緒にコピーしてください。
+
+1. Excel で対象の .xlsm を開き、Alt+F11 で VBE を開く。
+2. 「UF_LargeMessage.frm」と「UF_LargeMessage.frx」を同じフォルダに置く（リポジトリのモジュール分割バージョン直下で可）。
+3. ファイル → ファイルのインポート →「UF_LargeMessage.frm」を選択（.frx は自動参照されます）。
+4. 「modAppMsgBox.bas」をまだインポートしていなければインポートする（標準モジュール。VBA 上の名前は modAppMsgBox。関数は AppMsgBox のまま）。
+5. 既に同名のユーザーフォーム／標準モジュールがある場合は、重複を避けてからインポートする。
+6. デバッグ → VBAProject のコンパイル でエラーがないことを確認する。
+7. インポート元のパスに日本語や非常に長いパスがあると環境によっては失敗することがあります。そのときは C:\Temp など ASCII の短いフォルダに .frm と .frx の両方をコピーしてからインポートを試してください。
+8. デザインを作り直して .frm/.frx を再生成する場合は、信頼センターで「VBA プロジェクト オブジェクト モデルへのアクセスを信頼する」をオンにしたうえで、同梱の _export_uf_large_message.py を参照してください（--out-dir に ASCII パスを指定）。

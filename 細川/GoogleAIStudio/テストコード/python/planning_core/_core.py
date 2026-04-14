@@ -47,6 +47,31 @@ from .bootstrap import (
     output_dir,
 )
 
+# region agent log
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    """Debug NDJSON（セッション fc9417）。ワークスペース直下 debug-fc9417.log へ追記。"""
+    try:
+        _p = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-fc9417.log")
+        )
+        _line = {
+            "sessionId": "fc9417",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -750,7 +775,9 @@ TASK_COL_COMPLETION_FLAG = "加工完了区分"
 TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互換（直接の加工済数値）
 TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完了品数値（残作に使う）
 TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
-# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
+# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_EXTRACTION_TIME / TASK_COL_DATA_EXTRACTION_DT を参照。
+TASK_COL_DATA_EXTRACTION_TIME = "データ抽出時間"
+# 配台基準日時の旧列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
 TASK_COL_EXTRACTION_TIME = "抽出時間"
 AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
 # json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不要ロジック D→E）
@@ -768,6 +795,27 @@ ACT_COL_END_ALT = "実績終了"
 ACT_COL_DAY = "日付"
 ACT_COL_TIME_START = "開始時刻"
 ACT_COL_TIME_END = "終了時刻"
+# 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
+ACT_COL_MACHINING_START_DT = "加工開始日時"
+ACT_COL_MACHINING_END_DT = "加工終了日時"
+# 加工実績明細DATA（Power Query 等）… ガント角丸シェイプの %% は「累積完了率」列をそのまま用いる（計算しない）
+ACT_COL_ACTUAL_QTY = "実加工数"
+ACT_COL_PLANNED_QTY = "加工予定数"
+ACT_COL_CONVERTED_QTY = "換算数量"
+ACT_COL_CUMULATIVE_COMPLETION_PCT = "累積完了率"
+# 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
+ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
+ACT_COL_MACHINING_ASSIGNEE_2 = "加工担当者名2"
+ACT_COL_MACHINING_ASSIGNEE_3 = "加工担当者名3"
+ACT_COL_MACHINING_ASSIGNEE_4 = "加工担当者名4"
+ACT_COL_MACHINING_ASSIGNEE_5 = "加工担当者名5"
+ACT_COL_MACHINING_ASSIGNEES_ORDERED = (
+    ACT_COL_MACHINING_ASSIGNEE_1,
+    ACT_COL_MACHINING_ASSIGNEE_2,
+    ACT_COL_MACHINING_ASSIGNEE_3,
+    ACT_COL_MACHINING_ASSIGNEE_4,
+    ACT_COL_MACHINING_ASSIGNEE_5,
+)
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -779,7 +827,27 @@ ACTUAL_HEADER_CANONICAL = (
     ACT_COL_DAY,
     ACT_COL_TIME_START,
     ACT_COL_TIME_END,
+    ACT_COL_MACHINING_START_DT,
+    ACT_COL_MACHINING_END_DT,
 )
+# マクロブック「加工実績明細DATA」… ロール単位の実績行（列は加工実績DATA に準拠＋任意のロール識別列）
+ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
+ACT_DETAIL_COL_ROLL = "ロールNO"
+ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
+    ACT_COL_ACTUAL_QTY,
+    ACT_COL_PLANNED_QTY,
+    ACT_COL_CONVERTED_QTY,
+    ACT_COL_CUMULATIVE_COMPLETION_PCT,
+    ACT_DETAIL_COL_ROLL,
+) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
+# 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
+RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME = "結果_設備ガント_実績明細"
+# 設備実績ガント（上記シート）の「表示する暦日」を段階2生成時に絞る。設定_環境変数の A 列＝変数名・B 列＝値（空＝その側の制限なし）
+# 日付は ISO（2026-04-01）・Excel 日付セル相当の数値文字列・2026/4/1 等を parse_optional_date で解釈。
+ENV_GANTT_ACTUAL_DETAIL_DATE_FROM = "GANTT_ACTUAL_DETAIL_DATE_FROM"
+ENV_GANTT_ACTUAL_DETAIL_DATE_TO = "GANTT_ACTUAL_DETAIL_DATE_TO"
+# 段階2を回さず実績明細ガントのみ再生成するときの単一シート xlsx（マクロが取り込み）
+ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
@@ -1026,6 +1094,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_DATA_EXTRACTION_DT,
+        TASK_COL_DATA_EXTRACTION_TIME,
         TASK_COL_EXTRACTION_TIME,
         PLAN_COL_SPEED_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
@@ -1405,7 +1474,7 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 def _extract_data_extraction_datetime():
     """
     `加工計画DATA` シートから配台基準日時を取得する。
-    列「抽出時間」の先頭非空値を優先。列が無い・有効値が無いときは「データ抽出日」を試す。
+    列「データ抽出時間」の先頭非空値を最優先。次に列「抽出時間」。列が無い・有効値が無いときは「データ抽出日」を試す。
 
     Returns:
         tuple[datetime | None, str | None]: (日時, 採用した列名)。両方 None のときは現在時刻フォールバック。
@@ -1432,7 +1501,11 @@ def _extract_data_extraction_datetime():
             return None, None
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
         df.columns = df.columns.str.strip()
-        for col_name in (TASK_COL_EXTRACTION_TIME, TASK_COL_DATA_EXTRACTION_DT):
+        for col_name in (
+            TASK_COL_DATA_EXTRACTION_TIME,
+            TASK_COL_EXTRACTION_TIME,
+            TASK_COL_DATA_EXTRACTION_DT,
+        ):
             if col_name not in df.columns:
                 continue
             dt = _first_valid_dt_from_series(df[col_name])
@@ -1445,7 +1518,7 @@ def _extract_data_extraction_datetime():
 
 def _extract_data_extraction_datetime_str():
     """
-    `加工計画DATA` から基準日時を文字列化する（抽出時間優先、なければデータ抽出日）。
+    `加工計画DATA` から基準日時を文字列化する（データ抽出時間→抽出時間→データ抽出日）。
     """
     try:
         dt, _ = _extract_data_extraction_datetime()
@@ -2012,22 +2085,68 @@ def _write_results_equipment_gantt_sheet(
     base_now_dt=None,
     actual_timeline_events=None,
     regular_shift_times: tuple[time | None, time | None] | None = None,
+    *,
+    plan_rows: bool = True,
+    chart_title: str | None = None,
+    sheet_name_override: str | None = None,
 ):
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
     横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。同一状態の連続は帯状に塗分けする。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
+    plan_rows=False のときは計画行を出さず actual_timeline_events のみを各行に描画する（実績明細ガント用）。
     GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
     角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に xlwings で描画・画像化）。
     無効時は ([], []) を返す。
     """
+    sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
+    # region agent log
+    _agent_debug_ndjson(
+        "H1",
+        "_core.py:_write_results_equipment_gantt_sheet",
+        "enter",
+        {
+            "sheet_nm": sheet_nm,
+            "plan_rows": plan_rows,
+            "has_actual_timeline_events": bool(actual_timeline_events),
+            "timeline_events_len": len(timeline_events or []),
+            "equipment_list_len": len(equipment_list or []),
+            "sorted_dates_len": len(sorted_dates or []),
+            "data_extract_dt_str": (data_extract_dt_str or ""),
+        },
+    )
+    # endregion agent log
+    if not plan_rows:
+        if not actual_timeline_events:
+            logging.info(
+                "設備ガント（%s）: 実績のみモードですがイベントが空のためシートを作成しません。",
+                sheet_nm,
+            )
+            # region agent log
+            _agent_debug_ndjson(
+                "H2",
+                "_core.py:_write_results_equipment_gantt_sheet",
+                "early_return_no_actual_events",
+                {"sheet_nm": sheet_nm, "plan_rows": plan_rows},
+            )
+            # endregion agent log
+            return [], []
     wb = writer.book
-    try:
-        insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
-    except ValueError:
-        insert_at = len(wb.sheetnames)
-    ws = wb.create_sheet("結果_設備ガント", insert_at)
+    if sheet_name_override:
+        try:
+            insert_at = wb.sheetnames.index(RESULT_SHEET_GANTT_NAME) + 1
+        except ValueError:
+            try:
+                insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
+            except ValueError:
+                insert_at = len(wb.sheetnames)
+    else:
+        try:
+            insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
+        except ValueError:
+            insert_at = len(wb.sheetnames)
+    ws = wb.create_sheet(sheet_nm, insert_at)
     try:
         ws.sheet_properties.tabColor = (
             "1976D2" if _gantt_color_mode_full() else "7F7F7F"
@@ -2129,9 +2248,16 @@ def _write_results_equipment_gantt_sheet(
 
     master_mtime = _fmt_mtime(master_path)
 
+    # 行1の A〜B はコンボ、C は更新ボタン（マクロ）。タイトル・メタ行は D 列から全幅結合。
+    title_start_col = 4
     row = 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-    tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
+    _title_main = (
+        chart_title if chart_title is not None else "湖南工場 加工計画"
+    )
+    tcell = ws.cell(row=row, column=title_start_col, value=_title_main)
     tcell.font = title_font
     tcell.fill = title_fill
     # 結合セルでも左端から表示（縮尝・折り返しなし）
@@ -2146,13 +2272,15 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 40
     row += 1
 
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
     meta_line = (
         f"作成　{create_ts}"
-        f"　・　データ坸出し　{data_extract_dt_str or '—'}"
+        f"　・　データ抽出　{data_extract_dt_str or '—'}"
         f"　・　マスタ（master.xlsm）　{master_mtime}"
     )
-    mtop = ws.cell(row=row, column=1, value=meta_line)
+    mtop = ws.cell(row=row, column=title_start_col, value=meta_line)
     mtop.font = meta_font
     mtop.fill = meta_fill
     mtop.alignment = Alignment(
@@ -2165,17 +2293,53 @@ def _write_results_equipment_gantt_sheet(
     mtop.border = Border(left=accent_left, bottom=banner_sep)
     ws.row_dimensions[row].height = 26
     row += 1
+    # region agent log
+    try:
+        _agent_debug_ndjson(
+            "H3",
+            "_core.py:_write_results_equipment_gantt_sheet",
+            "wrote_meta_line",
+            {
+                "sheet_nm": sheet_nm,
+                "meta_addr": f"{get_column_letter(title_start_col)}2",
+                "meta_line": meta_line[:200],
+                "mtop_value": str(mtop.value)[:200] if mtop.value is not None else None,
+            },
+        )
+    except Exception:
+        pass
+    # endregion agent log
 
     dates_to_show: list = []
     for d0 in sorted_dates:
-        evs0 = events_by_date.get(d0, [])
+        evs0 = events_by_date.get(d0, []) if plan_rows else []
         a_evs0 = actual_events_by_date.get(d0, []) if show_actual_rows else []
-        is_anyone_working0 = any(
-            attendance_data[d0][mm]["is_working"] for mm in attendance_data[d0] if mm in attendance_data[d0]
-        )
+        if d0 not in attendance_data:
+            is_anyone_working0 = False
+        else:
+            is_anyone_working0 = any(
+                attendance_data[d0][mm]["is_working"]
+                for mm in attendance_data[d0]
+                if mm in attendance_data[d0]
+            )
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
+
+    # region agent log
+    if sheet_name_override:
+        _agent_debug_ndjson(
+            "H4",
+            "_core.py:_write_results_equipment_gantt_sheet",
+            "after_dates_to_show",
+            {
+                "sheet_nm": sheet_nm,
+                "plan_rows": plan_rows,
+                "len_dates_to_show": len(dates_to_show),
+                "n_actual_events": len(actual_timeline_events or []),
+            },
+        )
+    # endregion agent log
 
     hdr_row = row
     fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
@@ -2239,48 +2403,49 @@ def _write_results_equipment_gantt_sheet(
             mk_key = (mach_nm or "").strip() or "—"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
             evlist = _eq_grid_events_for_equipment_column(machine_to_events, eq)
-            if evlist:
-                tids: list[str] = []
-                seen_tid: set[str] = set()
-                for e in evlist:
-                    tid = str(e.get("task_id") or "").strip()
-                    if tid and tid not in seen_tid:
-                        seen_tid.add(tid)
-                        tids.append(tid)
-                task_sum = " ".join(tids) if tids else "—"
-            else:
-                task_sum = "—"
+            if plan_rows:
+                if evlist:
+                    tids: list[str] = []
+                    seen_tid: set[str] = set()
+                    for e in evlist:
+                        tid = str(e.get("task_id") or "").strip()
+                        if tid and tid not in seen_tid:
+                            seen_tid.add(tid)
+                            tids.append(tid)
+                    task_sum = " ".join(tids) if tids else "—"
+                else:
+                    task_sum = "—"
 
-            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
-            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-            c3 = ws.cell(row=row, column=4, value=task_sum)
-            for c in (c1, c2, c3):
-                c.font = _result_font(size=12, color="000000")
-                c.fill = lab_fill
-                c.border = grid_border
-            c1.font = _result_font(size=12, bold=True, color="000000")
-            c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-            c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-            c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
+                c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                c3 = ws.cell(row=row, column=4, value=task_sum)
+                for c in (c1, c2, c3):
+                    c.font = _result_font(size=12, color="000000")
+                    c.fill = lab_fill
+                    c.border = grid_border
+                c1.font = _result_font(size=12, bold=True, color="000000")
+                c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-            _paint_gantt_timeline_row_merged(
-                ws,
-                row,
-                n_fixed,
-                slots,
-                slot_mins,
-                evlist,
-                idle_fill,
-                break_fill,
-                gantt_label_font,
-                grid_border,
-                shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
-                label_italic=False,
-                shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
-            )
+                _paint_gantt_timeline_row_merged(
+                    ws,
+                    row,
+                    n_fixed,
+                    slots,
+                    slot_mins,
+                    evlist,
+                    idle_fill,
+                    break_fill,
+                    gantt_label_font,
+                    grid_border,
+                    shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                    label_italic=False,
+                    shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
+                )
 
-            ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
-            row += 1
+                ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
+                row += 1
 
             if show_actual_rows:
                 evlist_a = (
@@ -2293,8 +2458,33 @@ def _write_results_equipment_gantt_sheet(
                     seen_aid: set[str] = set()
                     for e_a in evlist_a:
                         tid = str(e_a.get("task_id") or "").strip()
-                        if tid and tid not in seen_aid:
-                            seen_aid.add(tid)
+                        if not tid or tid in seen_aid:
+                            continue
+                        seen_aid.add(tid)
+                        if not plan_rows:
+                            opv = str(e_a.get("op") or "").strip()
+                            subv = str(e_a.get("sub") or "").strip()
+                            who_parts: list[str] = []
+                            if opv:
+                                who_parts.append(opv)
+                            if subv:
+                                for seg in subv.split(","):
+                                    t = seg.strip()
+                                    if t:
+                                        who_parts.append(t)
+                            who_show: list[str] = []
+                            who_seen: set[str] = set()
+                            for p in who_parts:
+                                k = unicodedata.normalize("NFKC", p)
+                                if k in who_seen:
+                                    continue
+                                who_seen.add(k)
+                                who_show.append(p)
+                            if who_show:
+                                tids_a.append(f"{tid}（{'・'.join(who_show)}）")
+                            else:
+                                tids_a.append(tid)
+                        else:
                             tids_a.append(tid)
                     task_sum_a = " ".join(tids_a) if tids_a else "—"
                 else:
@@ -2303,9 +2493,13 @@ def _write_results_equipment_gantt_sheet(
                 lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
                 if mach_nm:
-                    act_mach = f"{mach_nm}（実績）"
+                    act_mach = (
+                        f"{mach_nm}（実績明細）"
+                        if not plan_rows
+                        else f"{mach_nm}（実績）"
+                    )
                 elif proc_nm:
-                    act_mach = "（実績）"
+                    act_mach = "（実績明細）" if not plan_rows else "（実績）"
                 else:
                     act_mach = "—"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
@@ -2361,10 +2555,10 @@ def _write_results_equipment_gantt_sheet(
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
-            # 縦書き日付を結合ブロックの下寄せにし、最終機械行と「日付が届いていない」ように見えるのを抑える
+            # 縦書き日付は結合ブロックの上寄せ（下寄せだとセル下端に寄って見える）
             ban.alignment = Alignment(
                 horizontal="center",
-                vertical="bottom",
+                vertical="top",
                 wrap_text=False,
                 textRotation=90,
             )
@@ -2647,6 +2841,14 @@ def parse_optional_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _parse_env_optional_date(env_key: str):
+    """os.environ の 1 キーを暦日に解釈。空・解釈不能は None。"""
+    raw = (os.environ.get(env_key) or "").strip()
+    if not raw:
+        return None
+    return parse_optional_date(raw)
 
 
 def _planning_df_cell_scalar(row, col_name):
@@ -6160,15 +6362,18 @@ def _gantt_member_pill_bgrs_for_task_fill_hex(fill_hex: str) -> tuple[int, int, 
     return mem_fill_bgr, mem_line_bgr, mem_txt_bgr
 
 
-def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
+def _gantt_fallback_timeline_labels_openpyxl(
+    result_path: str, specs: list, sheet_name: str | None = None
+) -> None:
     """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
     from openpyxl import load_workbook
 
     if _workbook_should_skip_openpyxl_io(result_path):
         return
+    shn = sheet_name or RESULT_SHEET_GANTT_NAME
     wb = load_workbook(result_path)
     try:
-        ws = wb[RESULT_SHEET_GANTT_NAME]
+        ws = wb[shn]
     except KeyError:
         wb.close()
         return
@@ -6434,7 +6639,11 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
 
 
 def _gantt_add_timeline_rounded_rect_labels_xlwings(
-    result_path: str, specs: list, day_blocks: list | None = None
+    result_path: str,
+    specs: list,
+    day_blocks: list | None = None,
+    *,
+    sheet_name: str | None = None,
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
@@ -6455,9 +6664,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
     wb = None
     try:
         n_specs = len(specs)
+        shn = sheet_name or RESULT_SHEET_GANTT_NAME
         logging.info(
-            "結果_設備ガント: xlwings で角丸シェイプを追加します（候補 %s 件）。"
+            "%s: xlwings で角丸シェイプを追加します（候補 %s 件）。"
             " 件数が多いと数分かかり、完了までログが増えない時間が続くことがあります。",
+            shn,
             n_specs,
         )
         app = xw.App(visible=False)
@@ -6471,7 +6682,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 pass
         wb = app.books.open(os.path.abspath(rp), update_links=False)
         try:
-            sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
+            sht = wb.sheets[shn]
         except Exception:
             return False
         api_ws = sht.api
@@ -6862,19 +7073,23 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 )
             except Exception as e_flat:
                 logging.warning(
-                    "結果_設備ガント: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    "%s: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    shn,
                     e_flat,
                 )
         logging.info(
-            "結果_設備ガント: 角丸シェイプ %s 件を反映%sして保存します（xlwings）…",
+            "%s: 角丸シェイプ %s 件を反映%sして保存します（xlwings）…",
+            shn,
             n_added,
             f"し、日別に画像 {n_flat} 枚へ集約" if n_flat else "",
         )
         wb.save()
         return True
     except Exception as e:
+        _shn_fb = sheet_name or RESULT_SHEET_GANTT_NAME
         logging.warning(
-            "結果_設備ガント: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            "%s: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            _shn_fb,
             e,
         )
         return False
@@ -6900,7 +7115,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
 
 def _stage2_try_add_gantt_timeline_shape_labels(
-    result_path: str, specs: list | None, day_blocks: list | None = None
+    result_path: str,
+    specs: list | None,
+    day_blocks: list | None = None,
+    *,
+    sheet_name: str | None = None,
 ) -> None:
     """
     openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
@@ -6912,21 +7131,27 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     rp = (result_path or "").strip()
     if not rp or not os.path.isfile(rp):
         return
-    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs, day_blocks):
+    shn = sheet_name or RESULT_SHEET_GANTT_NAME
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(
+        rp, specs, day_blocks, sheet_name=shn
+    ):
         logging.info(
-            "結果_設備ガント: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            shn,
             len(specs),
         )
         return
     try:
-        _gantt_fallback_timeline_labels_openpyxl(rp, specs)
+        _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
         logging.info(
-            "結果_設備ガント: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            shn,
             len(specs),
         )
     except Exception as e:
         logging.warning(
-            "結果_設備ガント: セルへのラベルフォールバックも失敗しました（%s）。",
+            "%s: セルへのラベルフォールバックも失敗しました（%s）。",
+            shn,
             e,
         )
 
@@ -6950,9 +7175,13 @@ def _coerce_actual_sheet_datetime(val):
 
 
 def _actual_row_time_bounds(row):
-    """加工実績DATA の1行から (開始, 終了) を得る。解けなけれみ (None, None)。"""
+    """加工実績DATA／加工実績明細DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
+    if s_dt and e_dt and s_dt < e_dt:
+        return s_dt, e_dt
+    s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_START_DT))
+    e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
         return s_dt, e_dt
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_ALT))
@@ -7016,12 +7245,205 @@ def load_machining_actuals_df():
     return df
 
 
-def build_actual_timeline_events(df, equipment_list, sorted_dates):
+def _calendar_dates_spanned_by_actual_bounds_df(df) -> set[date]:
     """
-    実績シートの坄行をガント用イベントへ変杛。
-    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」の値対象。
-    工程名は NFKC・空白正規化後にマスタ列名へマッピングれる。
+    実績明細等の各行の (開始, 終了) が跨ぐ暦日を収集する。
+    計画の sorted_dates に含まれない過去日の実績もガントに載せるために使う。
+    """
+    out: set[date] = set()
+    if df is None or len(df) == 0:
+        return out
+    for _, row in df.iterrows():
+        s_dt, e_dt = _actual_row_time_bounds(row)
+        if not s_dt or not e_dt or s_dt >= e_dt:
+            continue
+        d0 = s_dt.date()
+        d1 = e_dt.date()
+        cur = d0
+        while cur <= d1:
+            out.add(cur)
+            cur += timedelta(days=1)
+    return out
+
+
+def _sorted_dates_union_actual_bounds_df(sorted_dates: list, df) -> list:
+    """計画表示日と実績行の暦日の和集合（昇順）。"""
+    u = set(sorted_dates)
+    u |= _calendar_dates_spanned_by_actual_bounds_df(df)
+    return sorted(u)
+
+
+def _sorted_dates_filter_inclusive_range(
+    sorted_dates: list,
+    d_from: date | None,
+    d_to: date | None,
+) -> list:
+    """
+    暦日リストを両端込みで絞る。d_from / d_to がともに None のときはコピーを返す。
+    両端指定で from > to のときは from/to を入れ替える。
+    """
+    if d_from is None and d_to is None:
+        return list(sorted_dates)
+    a = d_from
+    b = d_to
+    if a is not None and b is not None and a > b:
+        a, b = b, a
+    out: list = []
+    for d in sorted_dates:
+        if a is not None and d < a:
+            continue
+        if b is not None and d > b:
+            continue
+        out.append(d)
+    return out
+
+
+def load_machining_actual_detail_df():
+    """
+    マクロブックの「加工実績明細DATA」を読む（無ければ空 DataFrame）。
+    列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
+    """
+    if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+        # region agent log
+        _agent_debug_ndjson(
+            "H1",
+            "_core.py:load_machining_actual_detail_df",
+            "no_workbook_path",
+            {
+                "TASKS_INPUT_WORKBOOK_set": bool(TASKS_INPUT_WORKBOOK),
+                "path_exists": bool(
+                    TASKS_INPUT_WORKBOOK and os.path.exists(TASKS_INPUT_WORKBOOK)
+                ),
+            },
+        )
+        # endregion agent log
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
+    except ValueError:
+        logging.info(
+            f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
+        )
+        # region agent log
+        _agent_debug_ndjson(
+            "H2",
+            "_core.py:load_machining_actual_detail_df",
+            "sheet_missing_ValueError",
+            {"workbook": os.path.basename(str(TASKS_INPUT_WORKBOOK)), "sheet": ACTUAL_DETAIL_SHEET_NAME},
+        )
+        # endregion agent log
+        return pd.DataFrame()
+    df.columns = df.columns.str.strip()
+    if ACT_DETAIL_COL_ROLL not in df.columns:
+        for alias in ("ロール番号", "ロール", "巻番"):
+            if alias in df.columns:
+                df = df.rename(columns={alias: ACT_DETAIL_COL_ROLL})
+                break
+    df = _align_dataframe_headers_to_canonical(df, ACTUAL_DETAIL_HEADER_CANONICAL)
+    logging.info(
+        f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
+    )
+    # region agent log
+    _cols = [str(c) for c in df.columns[:25]]
+    _agent_debug_ndjson(
+        "H1",
+        "_core.py:load_machining_actual_detail_df",
+        "loaded_ok",
+        {
+            "nrows": int(len(df)),
+            "columns_head": _cols,
+            "has_依頼NO": ACT_COL_TASK_ID in df.columns,
+            "has_工程名": ACT_COL_PROCESS in df.columns,
+        },
+    )
+    # endregion agent log
+    return df
+
+
+def _actual_row_cumulative_completion_pct_macro(row) -> int | None:
+    """
+    加工実績明細DATA の「累積完了率」をシート値のまま 0～100 の整数に解釈して返す（実÷予定等は計算しない）。
+
+    対応: 数値・「45」「45%」「45.5%」・Excel 割合セル由来の 0.45（=45%）など。
+    列が無い・空・数値化不可のときは None。
+    """
+    if row is None:
+        return None
+    v = row.get(ACT_COL_CUMULATIVE_COMPLETION_PCT)
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, datetime):
+        return None
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return None
+    try:
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            f = float(v)
+        else:
+            s = unicodedata.normalize("NFKC", str(v).strip())
+            if not s or s.lower() in ("nan", "none", "-", "—", "―"):
+                return None
+            s = s.replace("%", "").replace(",", "").strip()
+            if not s:
+                return None
+            f = float(s)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f) or f < 0:
+        return None
+    # Excel の「割合」表示は 0.45 のように小数で渡ることが多い（= 45%）
+    if f <= 1.0 + 1e-9:
+        pct = int(round(f * 100.0))
+    else:
+        pct = int(round(f))
+    return max(0, min(100, pct))
+
+
+def _actual_row_detail_assignee_op_sub(row) -> tuple[str, str]:
+    """
+    加工実績明細DATA 行からガント用 op / sub を組み立てる。
+    「担当者」に続けて「加工担当者名1」～「加工担当者名5」を順に見て非空のみ採用し、
+    NFKC 後の文字列で重複を除く。先頭を op、2人目以降を sub（カンマ区切り）。
+    """
+    names: list[str] = []
+    seen_k: set[str] = set()
+    for col in (ACT_COL_OPERATOR,) + ACT_COL_MACHINING_ASSIGNEES_ORDERED:
+        val = row.get(col)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            continue
+        s = str(val).strip()
+        if not s:
+            continue
+        k = unicodedata.normalize("NFKC", s)
+        if k in seen_k:
+            continue
+        seen_k.add(k)
+        names.append(s)
+    if not names:
+        return "", ""
+    if len(names) == 1:
+        return names[0], ""
+    return names[0], ", ".join(names[1:])
+
+
+def build_actual_timeline_events(
+    df,
+    equipment_list,
+    sorted_dates,
+    *,
+    log_sheet_name: str = "加工実績DATA",
+    roll_detail: bool = False,
+):
+    """
+    実績シートの各行をガント用イベントへ変換。
+    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」の値が対象。
+    工程名は NFKC・空白正規化後にマスタ列名へマッピングする。
     時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
+    roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
+    同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
+    ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
+    roll_detail=True のとき「累積完了率」列があればその値を解釈し、
+    タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す（計算はしない）。
     """
     if df is None or len(df) == 0:
         return []
@@ -7040,6 +7462,13 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
         tid_s = str(tid).strip()
         if not tid_s:
             continue
+        display_tid = tid_s
+        if roll_detail:
+            rv = row.get(ACT_DETAIL_COL_ROLL)
+            if rv is not None and not (isinstance(rv, float) and pd.isna(rv)):
+                rs = str(rv).strip()
+                if rs:
+                    display_tid = f"{tid_s}/{rs}"
         proc = row.get(ACT_COL_PROCESS)
         if proc is None or pd.isna(proc):
             continue
@@ -7055,10 +7484,16 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
         if not start_dt or not end_dt or start_dt >= end_dt:
             bad_time += 1
             continue
-        op_val = row.get(ACT_COL_OPERATOR)
-        op_s = ""
-        if op_val is not None and not pd.isna(op_val):
-            op_s = str(op_val).strip()
+        if roll_detail:
+            op_s, sub_s = _actual_row_detail_assignee_op_sub(row)
+        else:
+            op_val = row.get(ACT_COL_OPERATOR)
+            op_s = ""
+            if op_val is not None and not pd.isna(op_val):
+                op_s = str(op_val).strip()
+            sub_s = ""
+
+        pct_macro = _actual_row_cumulative_completion_pct_macro(row)
 
         before = len(events)
         for d in sorted_dates:
@@ -7072,29 +7507,30 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
             e_clip = min(end_dt, day_end)
             if s_clip >= e_clip:
                 continue
-            events.append(
-                {
-                    "date": d,
-                    "task_id": tid_s,
-                    "machine": mach,
-                    "op": op_s,
-                    "sub": "",
-                    "start_dt": s_clip,
-                    "end_dt": e_clip,
-                    "breaks": [],
-                    "units_done": 0,
-                    "already_done_units": 0,
-                    "total_units": 0,
-                    "eff_time_per_unit": 0.0,
-                    "unit_m": 0.0,
-                }
-            )
+            ev_row = {
+                "date": d,
+                "task_id": display_tid,
+                "machine": mach,
+                "op": op_s,
+                "sub": sub_s,
+                "start_dt": s_clip,
+                "end_dt": e_clip,
+                "breaks": [],
+                "units_done": 0,
+                "already_done_units": 0,
+                "total_units": 0,
+                "eff_time_per_unit": 0.0,
+                "unit_m": 0.0,
+            }
+            if pct_macro is not None:
+                ev_row["pct_macro"] = pct_macro
+            events.append(ev_row)
         if len(events) == before:
             no_plan_overlap += 1
 
     if bad_eq:
         logging.warning(
-            f"加工実績DATA: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
+            f"{log_sheet_name}: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
         )
         if mismatch_norm_samples:
             logging.info(
@@ -7103,17 +7539,33 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
             )
     if bad_time:
         logging.info(
-            f"加工実績DATA: 開始/終了日時は解釈でしない行を {bad_time} 件スキップしました。"
+            f"{log_sheet_name}: 開始/終了日時を解釈できない行を {bad_time} 件スキップしました。"
         )
     if no_plan_overlap and sorted_dates:
         logging.info(
-            f"加工実績DATA: 設備・日時は有効ては」計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行は {no_plan_overlap} 件ありました。"
+            f"{log_sheet_name}: 設備・日時は有効だが計画対象日（勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行が {no_plan_overlap} 件ありました。"
         )
     if not events and len(df) > 0:
         logging.info(
-            "加工実績DATA: ガント用セグメントは0件です。除去日の実績のみの場合、計画の表示日（sorted_dates）に含まれないため描画されません。"
+            f"{log_sheet_name}: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。"
         )
-    logging.info(f"加工実績DATA からガント用セグメント {len(events)} 件を生成しました。")
+    logging.info(f"{log_sheet_name} からガント用セグメント {len(events)} 件を生成しました。")
+    # region agent log
+    _agent_debug_ndjson(
+        "H3",
+        "_core.py:build_actual_timeline_events",
+        "build_done",
+        {
+            "log_sheet_name": log_sheet_name,
+            "roll_detail": roll_detail,
+            "n_events": len(events),
+            "bad_eq": bad_eq,
+            "bad_time": bad_time,
+            "no_plan_overlap": no_plan_overlap,
+            "input_rows": int(len(df)) if df is not None else 0,
+        },
+    )
+    # endregion agent log
     return events
 
 
@@ -18782,6 +19234,296 @@ def generate_plan():
         _generate_plan_impl()
 
 
+def refresh_equipment_gantt_actual_detail_only() -> str:
+    """
+    段階2全体を実行せず、「結果_設備ガント_実績明細」相当のシートだけを
+    ``output_dir`` 直下の ``ACTUAL_DETAIL_GANTT_REFRESH_FILENAME`` に出力する。
+
+    マクロブックの勤怠・実績明細DATA・master（工場枠・定常枠・機械カレンダー等）を
+    段階2と同様に読み、実績タイムラインのみ描画する。
+
+    Returns:
+        生成した xlsx の絶対パス。
+
+    Raises:
+        PlanningValidationError: メンバー0人・表示対象日なし・実績イベント空など。
+    """
+    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    with _override_default_factory_hours_from_master(master_abs):
+        global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+        global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+        global _STAGE2_REGULAR_SHIFT_START
+        (
+            _skills_dict,
+            members,
+            equipment_list,
+            _req_map,
+            _need_rules,
+            _surplus_map,
+            _need_combo_col_index,
+        ) = load_skills_and_needs()
+        if not members:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: メンバーが0人です（マスタ skills を確認してください）。"
+            )
+        try:
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+                master_abs,
+                equipment_list,
+            )
+        except Exception as e:
+            logging.warning(
+                "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
+            )
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        try:
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = (
+                load_machine_daily_startup_settings(master_abs)
+            )
+        except Exception as e:
+            logging.warning(
+                "機械日次始業準備設定: 読込例外のため無視します (%s)", e
+            )
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
+        try:
+            _rs_a15, _ = _read_master_main_regular_shift_times(master_abs)
+            _STAGE2_REGULAR_SHIFT_START = _rs_a15
+        except Exception as e:
+            logging.warning(
+                "定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e
+            )
+            _STAGE2_REGULAR_SHIFT_START = None
+
+        # 実績明細ガントの「データ抽出」は、加工計画DATAではなく「加工実績明細DATA」のデータ抽出時間を優先する。
+        # ただし勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
+        data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
+        data_extract_dt_str = (
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            if data_extract_dt is not None
+            else "—"
+        )
+
+        attendance_data, ai_log_data = load_attendance_and_analyze(members)
+        global_priority_raw = load_main_sheet_global_priority_override_text()
+        global_priority_override = analyze_global_priority_override_comment(
+            global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
+        )
+        _factory_closure_dates: set[date] = set()
+        for _iso in global_priority_override.get("factory_closure_dates") or []:
+            _d = parse_optional_date(_iso)
+            if _d is not None:
+                _factory_closure_dates.add(_d)
+        if _factory_closure_dates:
+            apply_factory_closure_dates_to_attendance(
+                attendance_data, members, _factory_closure_dates
+            )
+
+        sorted_dates = sorted(list(attendance_data.keys()))
+        sorted_dates = [d for d in sorted_dates if d >= run_date]
+        if not sorted_dates:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: 当日以降の処理対象日付がありません。"
+            )
+
+        _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
+            master_abs
+        )
+
+        df_actual_detail = load_machining_actual_detail_df()
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H6",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "base_dt_before_detail_override",
+                {
+                    "base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(base_now_dt, datetime)
+                    else None,
+                    "plan_base_dt_column": plan_base_dt_column,
+                },
+            )
+        except Exception:
+            pass
+        # endregion agent log
+
+        def _first_valid_dt_from_df_col(_df, _col) -> datetime | None:
+            try:
+                if _df is None or _col not in _df.columns:
+                    return None
+                for _v in _df[_col].tolist():
+                    if _v is None or (isinstance(_v, float) and pd.isna(_v)):
+                        continue
+                    _dt = pd.to_datetime(_v, errors="coerce")
+                    if pd.isna(_dt):
+                        continue
+                    if isinstance(_dt, pd.Timestamp):
+                        return _dt.to_pydatetime()
+                    return _dt if isinstance(_dt, datetime) else None
+            except Exception:
+                return None
+            return None
+
+        # 加工実績明細DATA の「データ抽出時間」を最優先（無い/空なら従来どおり加工計画DATA基準）
+        detail_extract_dt = _first_valid_dt_from_df_col(
+            df_actual_detail, TASK_COL_DATA_EXTRACTION_TIME
+        )
+        if detail_extract_dt is not None:
+            base_now_dt = detail_extract_dt
+            run_date = base_now_dt.date()
+            data_extract_dt_str = base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            plan_base_dt_column = f"{ACTUAL_DETAIL_SHEET_NAME}:{TASK_COL_DATA_EXTRACTION_TIME}"
+
+        logging.info(
+            "実績明細ガントのみ: 抽出基準日時 %s（%s）",
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+            plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
+        )
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H6",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "base_dt_after_detail_override",
+                {
+                    "detail_extract_dt": detail_extract_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(detail_extract_dt, datetime)
+                    else None,
+                    "effective_base_now_dt": base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+                    if isinstance(base_now_dt, datetime)
+                    else None,
+                    "effective_base_dt_source": plan_base_dt_column,
+                    "data_extract_dt_str": data_extract_dt_str,
+                },
+            )
+        except Exception:
+            pass
+        # endregion agent log
+        detail_timeline_events: list = []
+        sorted_dates_detail = list(sorted_dates)
+        chart_title_actual_detail = "湖南工場 加工実績（明細）"
+        if df_actual_detail is not None and len(df_actual_detail) > 0:
+            sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+                sorted_dates, df_actual_detail
+            )
+            d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+            d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+            if d_from is not None or d_to is not None:
+                n_before = len(sorted_dates_detail)
+                filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                    sorted_dates_detail, d_from, d_to
+                )
+                if not filtered_detail_dates and sorted_dates_detail:
+                    logging.warning(
+                        "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                        "（%s=%r, %s=%r）",
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                    )
+                else:
+                    sorted_dates_detail = filtered_detail_dates
+                    logging.info(
+                        "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                        n_before,
+                        len(sorted_dates_detail),
+                        d_from.isoformat() if d_from else "（指定なし）",
+                        d_to.isoformat() if d_to else "（指定なし）",
+                    )
+                    rng_lo = d_from.isoformat() if d_from else "…"
+                    rng_hi = d_to.isoformat() if d_to else "…"
+                    chart_title_actual_detail = (
+                        f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                    )
+            detail_timeline_events = build_actual_timeline_events(
+                df_actual_detail,
+                equipment_list,
+                sorted_dates_detail,
+                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                roll_detail=True,
+            )
+
+        if not detail_timeline_events:
+            raise PlanningValidationError(
+                "実績明細ガントを生成できるイベントがありません。"
+                "「加工実績明細DATA」の有無・日付・必須列を確認してください。"
+            )
+
+        out_path = os.path.join(output_dir, ACTUAL_DETAIL_GANTT_REFRESH_FILENAME)
+        _try_remove_path_with_retries(out_path)
+
+        gantt_detail_tl_label_specs: list = []
+        gantt_detail_tl_day_blocks: list = []
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as writer:
+            gantt_detail_tl_label_specs, gantt_detail_tl_day_blocks = (
+                _write_results_equipment_gantt_sheet(
+                    writer,
+                    [],
+                    equipment_list,
+                    sorted_dates_detail,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    actual_timeline_events=detail_timeline_events,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=False,
+                    chart_title=chart_title_actual_detail,
+                    sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                )
+            )
+            wb = writer.book
+            for _sn in list(wb.sheetnames):
+                if _sn != RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME:
+                    wb.remove(wb[_sn])
+
+        _stage2_try_add_gantt_timeline_shape_labels(
+            out_path,
+            gantt_detail_tl_label_specs,
+            gantt_detail_tl_day_blocks,
+            sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+        )
+        logging.info(
+            "実績明細ガントのみ: %s を出力しました。",
+            os.path.basename(out_path),
+        )
+        # region agent log
+        try:
+            _agent_debug_ndjson(
+                "H5",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "output_written",
+                {"out_path": os.path.abspath(out_path)},
+            )
+            _wb_dbg = load_workbook(out_path, data_only=True)
+            try:
+                _ws_dbg = _wb_dbg[RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME]
+                _agent_debug_ndjson(
+                    "H5",
+                    "_core.py:refresh_equipment_gantt_actual_detail_only",
+                    "output_d2_check",
+                    {
+                        "sheet": RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                        "d2": str(_ws_dbg["D2"].value)[:200]
+                        if _ws_dbg["D2"].value is not None
+                        else None,
+                    },
+                )
+            finally:
+                _wb_dbg.close()
+        except Exception as _e:
+            _agent_debug_ndjson(
+                "H5",
+                "_core.py:refresh_equipment_gantt_actual_detail_only",
+                "output_check_failed",
+                {"err": str(_e)[:200]},
+            )
+        # endregion agent log
+        return os.path.abspath(out_path)
+
+
 def _generate_plan_impl():
     # 配台トレース（設定シート A3 以降のみ）は」メンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -18929,7 +19671,7 @@ def _generate_plan_impl():
             "（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
-    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「抽出時間」（なければ「データ抽出日」）
+    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
@@ -18970,7 +19712,7 @@ def _generate_plan_impl():
         ai_log_data["メイン_グローバル_未適用メモ(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 結果シートは「基準日（抽出時間／データ抽出日）」以降のみ表示・計画対象とする
+    # 結果シートは「基準日（データ抽出時間／抽出時間／データ抽出日）」以降のみ表示・計画対象とする
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
         logging.error("当日以降の処理対象日付はありません。")
@@ -19037,7 +19779,7 @@ def _generate_plan_impl():
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日」判定と最早開始時刻には基準日時（抽出時間優先、なければデータ抽出日）を使う
+    # 「当日」判定と最早開始時刻には基準日時（データ抽出時間→抽出時間→データ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
@@ -20949,6 +21691,74 @@ def _generate_plan_impl():
     )
     gantt_tl_label_specs: list = []
     gantt_tl_day_blocks: list = []
+    gantt_detail_tl_label_specs: list = []
+    gantt_detail_tl_day_blocks: list = []
+    df_actual_detail = load_machining_actual_detail_df()
+    detail_timeline_events: list = []
+    sorted_dates_detail = list(sorted_dates)
+    chart_title_actual_detail = "湖南工場 加工実績（明細）"
+    if df_actual_detail is not None and len(df_actual_detail) > 0:
+        sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+            sorted_dates, df_actual_detail
+        )
+        d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+        d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+        if d_from is not None or d_to is not None:
+            n_before = len(sorted_dates_detail)
+            filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                sorted_dates_detail, d_from, d_to
+            )
+            if not filtered_detail_dates and sorted_dates_detail:
+                logging.warning(
+                    "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                    "（%s=%r, %s=%r）",
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                )
+            else:
+                sorted_dates_detail = filtered_detail_dates
+                logging.info(
+                    "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                    n_before,
+                    len(sorted_dates_detail),
+                    d_from.isoformat() if d_from else "（指定なし）",
+                    d_to.isoformat() if d_to else "（指定なし）",
+                )
+                rng_lo = d_from.isoformat() if d_from else "…"
+                rng_hi = d_to.isoformat() if d_to else "…"
+                chart_title_actual_detail = (
+                    f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                )
+        detail_timeline_events = build_actual_timeline_events(
+            df_actual_detail,
+            equipment_list,
+            sorted_dates_detail,
+            log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+            roll_detail=True,
+        )
+    # region agent log
+    _agent_debug_ndjson(
+        "H5",
+        "_core.py:_generate_plan_impl",
+        "detail_gantt_branch",
+        {
+            "_core_py": os.path.abspath(__file__),
+            "df_detail_rows": int(len(df_actual_detail)) if df_actual_detail is not None else -1,
+            "detail_timeline_events_n": len(detail_timeline_events),
+            "sorted_dates_n": len(sorted_dates),
+            "sorted_dates_detail_n": len(sorted_dates_detail),
+        },
+    )
+    if not detail_timeline_events:
+        _agent_debug_ndjson(
+            "H3",
+            "_core.py:_generate_plan_impl",
+            "skip_detail_sheet_write",
+            {"reason": "detail_timeline_events_empty"},
+        )
+    # endregion agent log
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -21008,8 +21818,33 @@ def _generate_plan_impl():
                 regular_shift_times=(_reg_shift_start, _reg_shift_end),
             )
 
+            if detail_timeline_events:
+                logging.info(
+                    "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
+                )
+                (
+                    gantt_detail_tl_label_specs,
+                    gantt_detail_tl_day_blocks,
+                ) = _write_results_equipment_gantt_sheet(
+                    writer,
+                    [],
+                    equipment_list,
+                    sorted_dates_detail,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    actual_timeline_events=detail_timeline_events,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=False,
+                    chart_title=chart_title_actual_detail,
+                    sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                )
+
             for sheet_name, ws_out in writer.sheets.items():
-                if sheet_name == RESULT_SHEET_GANTT_NAME:
+                if sheet_name in (
+                    RESULT_SHEET_GANTT_NAME,
+                    RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                ):
                     continue
                 _apply_output_font_to_result_sheet(ws_out)
 
@@ -21115,6 +21950,13 @@ def _generate_plan_impl():
     _stage2_try_add_gantt_timeline_shape_labels(
         output_filename, gantt_tl_label_specs, gantt_tl_day_blocks
     )
+    if gantt_detail_tl_label_specs:
+        _stage2_try_add_gantt_timeline_shape_labels(
+            output_filename,
+            gantt_detail_tl_label_specs,
+            gantt_detail_tl_day_blocks,
+            sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+        )
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
