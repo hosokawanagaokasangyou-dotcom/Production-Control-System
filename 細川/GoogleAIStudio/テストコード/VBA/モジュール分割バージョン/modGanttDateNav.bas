@@ -10,8 +10,11 @@ Private Const GANTT_DATE_NAV_UPDATE_BTN As String = "GanttDateNavUpdateBtn"
 Private Const GANTT_DATE_NAV_FORM_BTN_CAPTION As String = "更新"
 Private Const GANTT_DATE_BANNER_L As String = "【"
 Private Const GANTT_DATE_BANNER_R As String = "】"
+' ガント日付コンボのフォント（小さすぎると視認性が悪い。既存 OLE にも再適用する）
+Private Const GANTT_COMBO_FONT_SIZE As Single = 12!
 
-Private mNavComboHost As clsGanttDateNavCombo
+Private mNavComboHostPlan As clsGanttDateNavCombo
+Private mNavComboHostActual As clsGanttDateNavCombo
 
 Public Function 結果_設備ガント日付ナビ_対象シートか(ByVal ws As Worksheet) As Boolean
     If ws Is Nothing Then Exit Function
@@ -37,7 +40,7 @@ Public Sub GanttDateNav_FillMsFormsList(ByVal lst As Object, ByVal ws As Workshe
     On Error Resume Next
     lst.Clear
     lst.ColumnCount = 2
-    lst.ColumnWidths = "110 pt;0 pt"
+    lst.ColumnWidths = "130 pt;0 pt"
     On Error GoTo CleanBusy
     
     If ws Is Nothing Then GoTo CleanBusy
@@ -72,11 +75,35 @@ CleanBusy:
 End Sub
 
 Private Sub GanttDateNav_WireHostIfNeeded(ByVal ws As Worksheet, ByVal cb As MSForms.ComboBox)
-    If mNavComboHost Is Nothing Then
-        Set mNavComboHost = New clsGanttDateNavCombo
+    ' シートが2枚あるため WithEvents はシートごとに別インスタンスが必要。
+    ' シート差し替え後は OLE が新規になるため、都度ホストを作り直してイベントを確実に再接続する。
+    Dim h As clsGanttDateNavCombo
+    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) = 0 Then
+        Set mNavComboHostActual = Nothing
+        Set mNavComboHostActual = New clsGanttDateNavCombo
+        Set h = mNavComboHostActual
+    ElseIf StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+        Set mNavComboHostPlan = Nothing
+        Set mNavComboHostPlan = New clsGanttDateNavCombo
+        Set h = mNavComboHostPlan
+    Else
+        Exit Sub
     End If
-    Set mNavComboHost.HostSheet = ws
-    Set mNavComboHost.cbo = cb
+    Set h.HostSheet = ws
+    Set h.cbo = cb
+End Sub
+
+Private Sub GanttDateNav_ApplyComboFont(ByVal ole As OLEObject)
+    On Error Resume Next
+    If ole Is Nothing Then GoTo X
+    If TypeOf ole.Object Is MSForms.ComboBox Then
+        Dim cb As MSForms.ComboBox
+        Set cb = ole.Object
+        cb.Font.Size = GANTT_COMBO_FONT_SIZE
+    End If
+X:
+    Err.Clear
+    On Error GoTo 0
 End Sub
 
 Private Sub GanttDateNav_PositionOleCombo(ByVal ole As OLEObject, ByVal ws As Worksheet)
@@ -89,8 +116,8 @@ Private Sub GanttDateNav_PositionOleCombo(ByVal ole As OLEObject, ByVal ws As Wo
     ole.Width = ws.Range("A1:B1").Width
     rh = ws.Rows(1).RowHeight
     If rh < 12 Then rh = 15
-    ole.Height = rh - 1#
-    If ole.Height < 16 Then ole.Height = 16
+    ' フォント 12pt 程度でも切れにくいよう最小高さを確保
+    ole.Height = Application.Max(rh - 1#, 22#)
     ole.Placement = xlFreeFloating
     ole.PrintObject = False
     Err.Clear
@@ -182,14 +209,11 @@ Private Function GanttDateNav_GetOrCreateOleCombo(ByVal ws As Worksheet) As OLEO
             Width:=ws.Range("A1:B1").Width, _
             Height:=20)
         ole.Name = GANTT_DATE_NAV_OLE_NAME
-        On Error Resume Next
-        ole.Object.Font.Size = 10
-        Err.Clear
-        On Error GoTo 0
     End If
     
     If Not ole Is Nothing Then
         GanttDateNav_PositionOleCombo ole, ws
+        GanttDateNav_ApplyComboFont ole
     End If
     Set GanttDateNav_GetOrCreateOleCombo = ole
 End Function
