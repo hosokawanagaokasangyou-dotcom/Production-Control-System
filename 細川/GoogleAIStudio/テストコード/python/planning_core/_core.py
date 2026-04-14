@@ -47,6 +47,31 @@ from .bootstrap import (
     output_dir,
 )
 
+# region agent log
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    """Debug NDJSON（セッション fc9417）。ワークスペース直下 debug-fc9417.log へ追記。"""
+    try:
+        _p = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-fc9417.log")
+        )
+        _line = {
+            "sessionId": "fc9417",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -177,19 +202,15 @@ _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
 ] = {}
 
-# master.xlsm: 依頼NO は切り替え前後の工程×機械との準備・後始末（分）＝機械との日次始業準備（分）
-SHEET_MACHINE_CHANGEOVER = "設定_依頼切替前後時間"
+# master.xlsm: 機械との日次始業準備（分）。依頼切替の準備・後始末は廃止（シートは未読込）。
 SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
 # ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
-_STAGE2_MACHINE_CHANGEOVER_BY_EQ: dict[str, tuple[int, int]] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
 # master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) のタイムラインに載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
 # timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
-TIMELINE_EVENT_CHANGEOVER_CLEANUP = "changeover_cleanup"
-TIMELINE_EVENT_CHANGEOVER_PREP = "changeover_prep"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」は別列。
@@ -754,7 +775,9 @@ TASK_COL_COMPLETION_FLAG = "加工完了区分"
 TASK_COL_ACTUAL_DONE = "実加工数"   # 旧互換（直接の加工済数値）
 TASK_COL_ACTUAL_OUTPUT = "実出来高"  # 完了品数値（残作に使う）
 TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
-# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
+# 配台基準日時の主列（加工計画DATA）。無い・空のときは TASK_COL_EXTRACTION_TIME / TASK_COL_DATA_EXTRACTION_DT を参照。
+TASK_COL_DATA_EXTRACTION_TIME = "データ抽出時間"
+# 配台基準日時の旧列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
 TASK_COL_EXTRACTION_TIME = "抽出時間"
 AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
 # json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不要ロジック D→E）
@@ -772,6 +795,27 @@ ACT_COL_END_ALT = "実績終了"
 ACT_COL_DAY = "日付"
 ACT_COL_TIME_START = "開始時刻"
 ACT_COL_TIME_END = "終了時刻"
+# 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
+ACT_COL_MACHINING_START_DT = "加工開始日時"
+ACT_COL_MACHINING_END_DT = "加工終了日時"
+# 加工実績明細DATA（Power Query 等）… ガント角丸シェイプの %% は「累積完了率」列をそのまま用いる（計算しない）
+ACT_COL_ACTUAL_QTY = "実加工数"
+ACT_COL_PLANNED_QTY = "加工予定数"
+ACT_COL_CONVERTED_QTY = "換算数量"
+ACT_COL_CUMULATIVE_COMPLETION_PCT = "累積完了率"
+# 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
+ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
+ACT_COL_MACHINING_ASSIGNEE_2 = "加工担当者名2"
+ACT_COL_MACHINING_ASSIGNEE_3 = "加工担当者名3"
+ACT_COL_MACHINING_ASSIGNEE_4 = "加工担当者名4"
+ACT_COL_MACHINING_ASSIGNEE_5 = "加工担当者名5"
+ACT_COL_MACHINING_ASSIGNEES_ORDERED = (
+    ACT_COL_MACHINING_ASSIGNEE_1,
+    ACT_COL_MACHINING_ASSIGNEE_2,
+    ACT_COL_MACHINING_ASSIGNEE_3,
+    ACT_COL_MACHINING_ASSIGNEE_4,
+    ACT_COL_MACHINING_ASSIGNEE_5,
+)
 ACTUAL_HEADER_CANONICAL = (
     ACT_COL_TASK_ID,
     ACT_COL_PROCESS,
@@ -783,7 +827,27 @@ ACTUAL_HEADER_CANONICAL = (
     ACT_COL_DAY,
     ACT_COL_TIME_START,
     ACT_COL_TIME_END,
+    ACT_COL_MACHINING_START_DT,
+    ACT_COL_MACHINING_END_DT,
 )
+# マクロブック「加工実績明細DATA」… ロール単位の実績行（列は加工実績DATA に準拠＋任意のロール識別列）
+ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
+ACT_DETAIL_COL_ROLL = "ロールNO"
+ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
+    ACT_COL_ACTUAL_QTY,
+    ACT_COL_PLANNED_QTY,
+    ACT_COL_CONVERTED_QTY,
+    ACT_COL_CUMULATIVE_COMPLETION_PCT,
+    ACT_DETAIL_COL_ROLL,
+) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
+# 加工実績明細由来。見た目・印刷設定は RESULT_SHEET_GANTT_NAME と同型（計画行なし・実績帯のみ）。
+RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME = "結果_設備ガント_実績明細"
+# 設備実績ガント（上記シート）の「表示する暦日」を段階2生成時に絞る。設定_環境変数の A 列＝変数名・B 列＝値（空＝その側の制限なし）
+# 日付は ISO（2026-04-01）・Excel 日付セル相当の数値文字列・2026/4/1 等を parse_optional_date で解釈。
+ENV_GANTT_ACTUAL_DETAIL_DATE_FROM = "GANTT_ACTUAL_DETAIL_DATE_FROM"
+ENV_GANTT_ACTUAL_DETAIL_DATE_TO = "GANTT_ACTUAL_DETAIL_DATE_TO"
+# 段階2を回さず実績明細ガントのみ再生成するときの単一シート xlsx（マクロが取り込み）
+ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
@@ -1030,6 +1094,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_ACTUAL_DONE,
         TASK_COL_ACTUAL_OUTPUT,
         TASK_COL_DATA_EXTRACTION_DT,
+        TASK_COL_DATA_EXTRACTION_TIME,
         TASK_COL_EXTRACTION_TIME,
         PLAN_COL_SPEED_OVERRIDE,
         PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
@@ -1049,7 +1114,7 @@ RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
-# 結果_設備毎の時間割: 準備時間・後始末時間の設備セルも同系色
+# 結果_設備毎の時間割: 日次始業準備の設備セルも同系色
 RESULT_DISPATCHED_REQUEST_FILL = "C6EFCE"
 # 結果_設備毎の時間割: master「機械カレンダー」占有と重なる設備セル（10分枠）
 RESULT_MACHINE_CALENDAR_BLOCK_FILL = "D4B3E8"
@@ -1409,7 +1474,7 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
 def _extract_data_extraction_datetime():
     """
     `加工計画DATA` シートから配台基準日時を取得する。
-    列「抽出時間」の先頭非空値を優先。列が無い・有効値が無いときは「データ抽出日」を試す。
+    列「データ抽出時間」の先頭非空値を最優先。次に列「抽出時間」。列が無い・有効値が無いときは「データ抽出日」を試す。
 
     Returns:
         tuple[datetime | None, str | None]: (日時, 採用した列名)。両方 None のときは現在時刻フォールバック。
@@ -1436,7 +1501,11 @@ def _extract_data_extraction_datetime():
             return None, None
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
         df.columns = df.columns.str.strip()
-        for col_name in (TASK_COL_EXTRACTION_TIME, TASK_COL_DATA_EXTRACTION_DT):
+        for col_name in (
+            TASK_COL_DATA_EXTRACTION_TIME,
+            TASK_COL_EXTRACTION_TIME,
+            TASK_COL_DATA_EXTRACTION_DT,
+        ):
             if col_name not in df.columns:
                 continue
             dt = _first_valid_dt_from_series(df[col_name])
@@ -1449,7 +1518,7 @@ def _extract_data_extraction_datetime():
 
 def _extract_data_extraction_datetime_str():
     """
-    `加工計画DATA` から基準日時を文字列化する（抽出時間優先、なければデータ抽出日）。
+    `加工計画DATA` から基準日時を文字列化する（データ抽出時間→抽出時間→データ抽出日）。
     """
     try:
         dt, _ = _extract_data_extraction_datetime()
@@ -1807,7 +1876,7 @@ def _apply_equipment_schedule_outside_regular_fill(
 
 def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
     """
-    設備列（進度列を除く）で、表示に「日次始業準備」「準備時間」「後始末時間」が含まれるセルを薄緑にする。
+    設備列（進度列を除く）で、表示に「日次始業準備」が含まれるセルを薄緑にする。
     結果_設備毎の時間割 の equip セル用（日時帯列は変更しない）。
     """
     fill = PatternFill(
@@ -1815,7 +1884,7 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(日次始業準備)", "(準備時間)", "(後始末時間)")
+    markers = ("(日次始業準備)",)
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):
@@ -2016,22 +2085,44 @@ def _write_results_equipment_gantt_sheet(
     base_now_dt=None,
     actual_timeline_events=None,
     regular_shift_times: tuple[time | None, time | None] | None = None,
+    *,
+    plan_rows: bool = True,
+    chart_title: str | None = None,
+    sheet_name_override: str | None = None,
 ):
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
     設備×横軸時間のガンチャート風シートを追加する。
     横軸は GANTT_TIMELINE_SLOT_MINUTES 分刻み。同一状態の連続は帯状に塗分けする。
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
+    plan_rows=False のときは計画行を出さず actual_timeline_events のみを各行に描画する（実績明細ガント用）。
     GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
     角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に xlwings で描画・画像化）。
     無効時は ([], []) を返す。
     """
+    sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
+    if not plan_rows:
+        if not actual_timeline_events:
+            logging.info(
+                "設備ガント（%s）: 実績のみモードですがイベントが空のためシートを作成しません。",
+                sheet_nm,
+            )
+            return [], []
     wb = writer.book
-    try:
-        insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
-    except ValueError:
-        insert_at = len(wb.sheetnames)
-    ws = wb.create_sheet("結果_設備ガント", insert_at)
+    if sheet_name_override:
+        try:
+            insert_at = wb.sheetnames.index(RESULT_SHEET_GANTT_NAME) + 1
+        except ValueError:
+            try:
+                insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
+            except ValueError:
+                insert_at = len(wb.sheetnames)
+    else:
+        try:
+            insert_at = wb.sheetnames.index("結果_設備毎の時間割") + 1
+        except ValueError:
+            insert_at = len(wb.sheetnames)
+    ws = wb.create_sheet(sheet_nm, insert_at)
     try:
         ws.sheet_properties.tabColor = (
             "1976D2" if _gantt_color_mode_full() else "7F7F7F"
@@ -2133,9 +2224,16 @@ def _write_results_equipment_gantt_sheet(
 
     master_mtime = _fmt_mtime(master_path)
 
+    # 行1の A〜B はコンボ、C は更新ボタン（マクロ）。タイトル・メタ行は D 列から全幅結合。
+    title_start_col = 4
     row = 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-    tcell = ws.cell(row=row, column=1, value="湖南工場 加工計画")
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
+    _title_main = (
+        chart_title if chart_title is not None else "湖南工場 加工計画"
+    )
+    tcell = ws.cell(row=row, column=title_start_col, value=_title_main)
     tcell.font = title_font
     tcell.fill = title_fill
     # 結合セルでも左端から表示（縮尝・折り返しなし）
@@ -2150,13 +2248,15 @@ def _write_results_equipment_gantt_sheet(
     ws.row_dimensions[row].height = 40
     row += 1
 
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+    ws.merge_cells(
+        start_row=row, start_column=title_start_col, end_row=row, end_column=last_col
+    )
     meta_line = (
         f"作成　{create_ts}"
-        f"　・　データ坸出し　{data_extract_dt_str or '—'}"
+        f"　・　データ抽出　{data_extract_dt_str or '—'}"
         f"　・　マスタ（master.xlsm）　{master_mtime}"
     )
-    mtop = ws.cell(row=row, column=1, value=meta_line)
+    mtop = ws.cell(row=row, column=title_start_col, value=meta_line)
     mtop.font = meta_font
     mtop.fill = meta_fill
     mtop.alignment = Alignment(
@@ -2172,11 +2272,16 @@ def _write_results_equipment_gantt_sheet(
 
     dates_to_show: list = []
     for d0 in sorted_dates:
-        evs0 = events_by_date.get(d0, [])
+        evs0 = events_by_date.get(d0, []) if plan_rows else []
         a_evs0 = actual_events_by_date.get(d0, []) if show_actual_rows else []
-        is_anyone_working0 = any(
-            attendance_data[d0][mm]["is_working"] for mm in attendance_data[d0] if mm in attendance_data[d0]
-        )
+        if d0 not in attendance_data:
+            is_anyone_working0 = False
+        else:
+            is_anyone_working0 = any(
+                attendance_data[d0][mm]["is_working"]
+                for mm in attendance_data[d0]
+                if mm in attendance_data[d0]
+            )
         if not evs0 and not a_evs0 and not is_anyone_working0:
             continue
         dates_to_show.append(d0)
@@ -2243,48 +2348,49 @@ def _write_results_equipment_gantt_sheet(
             mk_key = (mach_nm or "").strip() or "—"
             lab_fill = fills_by_mach.get(mk_key) or fill_gantt_fallback
             evlist = _eq_grid_events_for_equipment_column(machine_to_events, eq)
-            if evlist:
-                tids: list[str] = []
-                seen_tid: set[str] = set()
-                for e in evlist:
-                    tid = str(e.get("task_id") or "").strip()
-                    if tid and tid not in seen_tid:
-                        seen_tid.add(tid)
-                        tids.append(tid)
-                task_sum = " ".join(tids) if tids else "—"
-            else:
-                task_sum = "—"
+            if plan_rows:
+                if evlist:
+                    tids: list[str] = []
+                    seen_tid: set[str] = set()
+                    for e in evlist:
+                        tid = str(e.get("task_id") or "").strip()
+                        if tid and tid not in seen_tid:
+                            seen_tid.add(tid)
+                            tids.append(tid)
+                    task_sum = " ".join(tids) if tids else "—"
+                else:
+                    task_sum = "—"
 
-            c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
-            c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-            c3 = ws.cell(row=row, column=4, value=task_sum)
-            for c in (c1, c2, c3):
-                c.font = _result_font(size=12, color="000000")
-                c.fill = lab_fill
-                c.border = grid_border
-            c1.font = _result_font(size=12, bold=True, color="000000")
-            c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-            c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-            c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
+                c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                c3 = ws.cell(row=row, column=4, value=task_sum)
+                for c in (c1, c2, c3):
+                    c.font = _result_font(size=12, color="000000")
+                    c.fill = lab_fill
+                    c.border = grid_border
+                c1.font = _result_font(size=12, bold=True, color="000000")
+                c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+                c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-            _paint_gantt_timeline_row_merged(
-                ws,
-                row,
-                n_fixed,
-                slots,
-                slot_mins,
-                evlist,
-                idle_fill,
-                break_fill,
-                gantt_label_font,
-                grid_border,
-                shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
-                label_italic=False,
-                shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
-            )
+                _paint_gantt_timeline_row_merged(
+                    ws,
+                    row,
+                    n_fixed,
+                    slots,
+                    slot_mins,
+                    evlist,
+                    idle_fill,
+                    break_fill,
+                    gantt_label_font,
+                    grid_border,
+                    shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
+                    label_italic=False,
+                    shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
+                )
 
-            ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
-            row += 1
+                ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
+                row += 1
 
             if show_actual_rows:
                 evlist_a = (
@@ -2297,8 +2403,33 @@ def _write_results_equipment_gantt_sheet(
                     seen_aid: set[str] = set()
                     for e_a in evlist_a:
                         tid = str(e_a.get("task_id") or "").strip()
-                        if tid and tid not in seen_aid:
-                            seen_aid.add(tid)
+                        if not tid or tid in seen_aid:
+                            continue
+                        seen_aid.add(tid)
+                        if not plan_rows:
+                            opv = str(e_a.get("op") or "").strip()
+                            subv = str(e_a.get("sub") or "").strip()
+                            who_parts: list[str] = []
+                            if opv:
+                                who_parts.append(opv)
+                            if subv:
+                                for seg in subv.split(","):
+                                    t = seg.strip()
+                                    if t:
+                                        who_parts.append(t)
+                            who_show: list[str] = []
+                            who_seen: set[str] = set()
+                            for p in who_parts:
+                                k = unicodedata.normalize("NFKC", p)
+                                if k in who_seen:
+                                    continue
+                                who_seen.add(k)
+                                who_show.append(p)
+                            if who_show:
+                                tids_a.append(f"{tid}（{'・'.join(who_show)}）")
+                            else:
+                                tids_a.append(tid)
+                        else:
                             tids_a.append(tid)
                     task_sum_a = " ".join(tids_a) if tids_a else "—"
                 else:
@@ -2307,9 +2438,13 @@ def _write_results_equipment_gantt_sheet(
                 lab_fill_a = fills_by_mach.get(mk_key) or fill_gantt_fallback
 
                 if mach_nm:
-                    act_mach = f"{mach_nm}（実績）"
+                    act_mach = (
+                        f"{mach_nm}（実績明細）"
+                        if not plan_rows
+                        else f"{mach_nm}（実績）"
+                    )
                 elif proc_nm:
-                    act_mach = "（実績）"
+                    act_mach = "（実績明細）" if not plan_rows else "（実績）"
                 else:
                     act_mach = "—"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
@@ -2365,10 +2500,10 @@ def _write_results_equipment_gantt_sheet(
             )
             ban.font = day_banner_font
             ban.fill = day_banner_fill
-            # 縦書き日付を結合ブロックの下寄せにし、最終機械行と「日付が届いていない」ように見えるのを抑える
+            # 縦書き日付は結合ブロックの上寄せ（下寄せだとセル下端に寄って見える）
             ban.alignment = Alignment(
                 horizontal="center",
-                vertical="bottom",
+                vertical="top",
                 wrap_text=False,
                 textRotation=90,
             )
@@ -2651,6 +2786,14 @@ def parse_optional_date(val):
         return pd.to_datetime(val).date()
     except Exception:
         return None
+
+
+def _parse_env_optional_date(env_key: str):
+    """os.environ の 1 キーを暦日に解釈。空・解釈不能は None。"""
+    raw = (os.environ.get(env_key) or "").strip()
+    if not raw:
+        return None
+    return parse_optional_date(raw)
 
 
 def _planning_df_cell_scalar(row, col_name):
@@ -6164,15 +6307,18 @@ def _gantt_member_pill_bgrs_for_task_fill_hex(fill_hex: str) -> tuple[int, int, 
     return mem_fill_bgr, mem_line_bgr, mem_txt_bgr
 
 
-def _gantt_fallback_timeline_labels_openpyxl(result_path: str, specs: list) -> None:
+def _gantt_fallback_timeline_labels_openpyxl(
+    result_path: str, specs: list, sheet_name: str | None = None
+) -> None:
     """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
     from openpyxl import load_workbook
 
     if _workbook_should_skip_openpyxl_io(result_path):
         return
+    shn = sheet_name or RESULT_SHEET_GANTT_NAME
     wb = load_workbook(result_path)
     try:
-        ws = wb[RESULT_SHEET_GANTT_NAME]
+        ws = wb[shn]
     except KeyError:
         wb.close()
         return
@@ -6438,7 +6584,11 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
 
 
 def _gantt_add_timeline_rounded_rect_labels_xlwings(
-    result_path: str, specs: list, day_blocks: list | None = None
+    result_path: str,
+    specs: list,
+    day_blocks: list | None = None,
+    *,
+    sheet_name: str | None = None,
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
@@ -6459,9 +6609,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
     wb = None
     try:
         n_specs = len(specs)
+        shn = sheet_name or RESULT_SHEET_GANTT_NAME
         logging.info(
-            "結果_設備ガント: xlwings で角丸シェイプを追加します（候補 %s 件）。"
+            "%s: xlwings で角丸シェイプを追加します（候補 %s 件）。"
             " 件数が多いと数分かかり、完了までログが増えない時間が続くことがあります。",
+            shn,
             n_specs,
         )
         app = xw.App(visible=False)
@@ -6475,7 +6627,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 pass
         wb = app.books.open(os.path.abspath(rp), update_links=False)
         try:
-            sht = wb.sheets[RESULT_SHEET_GANTT_NAME]
+            sht = wb.sheets[shn]
         except Exception:
             return False
         api_ws = sht.api
@@ -6866,19 +7018,23 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 )
             except Exception as e_flat:
                 logging.warning(
-                    "結果_設備ガント: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    "%s: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    shn,
                     e_flat,
                 )
         logging.info(
-            "結果_設備ガント: 角丸シェイプ %s 件を反映%sして保存します（xlwings）…",
+            "%s: 角丸シェイプ %s 件を反映%sして保存します（xlwings）…",
+            shn,
             n_added,
             f"し、日別に画像 {n_flat} 枚へ集約" if n_flat else "",
         )
         wb.save()
         return True
     except Exception as e:
+        _shn_fb = sheet_name or RESULT_SHEET_GANTT_NAME
         logging.warning(
-            "結果_設備ガント: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            "%s: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            _shn_fb,
             e,
         )
         return False
@@ -6904,7 +7060,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
 
 def _stage2_try_add_gantt_timeline_shape_labels(
-    result_path: str, specs: list | None, day_blocks: list | None = None
+    result_path: str,
+    specs: list | None,
+    day_blocks: list | None = None,
+    *,
+    sheet_name: str | None = None,
 ) -> None:
     """
     openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
@@ -6916,21 +7076,27 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     rp = (result_path or "").strip()
     if not rp or not os.path.isfile(rp):
         return
-    if _gantt_add_timeline_rounded_rect_labels_xlwings(rp, specs, day_blocks):
+    shn = sheet_name or RESULT_SHEET_GANTT_NAME
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(
+        rp, specs, day_blocks, sheet_name=shn
+    ):
         logging.info(
-            "結果_設備ガント: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            shn,
             len(specs),
         )
         return
     try:
-        _gantt_fallback_timeline_labels_openpyxl(rp, specs)
+        _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
         logging.info(
-            "結果_設備ガント: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            shn,
             len(specs),
         )
     except Exception as e:
         logging.warning(
-            "結果_設備ガント: セルへのラベルフォールバックも失敗しました（%s）。",
+            "%s: セルへのラベルフォールバックも失敗しました（%s）。",
+            shn,
             e,
         )
 
@@ -6954,9 +7120,13 @@ def _coerce_actual_sheet_datetime(val):
 
 
 def _actual_row_time_bounds(row):
-    """加工実績DATA の1行から (開始, 終了) を得る。解けなけれみ (None, None)。"""
+    """加工実績DATA／加工実績明細DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
+    if s_dt and e_dt and s_dt < e_dt:
+        return s_dt, e_dt
+    s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_START_DT))
+    e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
         return s_dt, e_dt
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_ALT))
@@ -7020,12 +7190,170 @@ def load_machining_actuals_df():
     return df
 
 
-def build_actual_timeline_events(df, equipment_list, sorted_dates):
+def _calendar_dates_spanned_by_actual_bounds_df(df) -> set[date]:
     """
-    実績シートの坄行をガント用イベントへ変杛。
-    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」の値対象。
-    工程名は NFKC・空白正規化後にマスタ列名へマッピングれる。
+    実績明細等の各行の (開始, 終了) が跨ぐ暦日を収集する。
+    計画の sorted_dates に含まれない過去日の実績もガントに載せるために使う。
+    """
+    out: set[date] = set()
+    if df is None or len(df) == 0:
+        return out
+    for _, row in df.iterrows():
+        s_dt, e_dt = _actual_row_time_bounds(row)
+        if not s_dt or not e_dt or s_dt >= e_dt:
+            continue
+        d0 = s_dt.date()
+        d1 = e_dt.date()
+        cur = d0
+        while cur <= d1:
+            out.add(cur)
+            cur += timedelta(days=1)
+    return out
+
+
+def _sorted_dates_union_actual_bounds_df(sorted_dates: list, df) -> list:
+    """計画表示日と実績行の暦日の和集合（昇順）。"""
+    u = set(sorted_dates)
+    u |= _calendar_dates_spanned_by_actual_bounds_df(df)
+    return sorted(u)
+
+
+def _sorted_dates_filter_inclusive_range(
+    sorted_dates: list,
+    d_from: date | None,
+    d_to: date | None,
+) -> list:
+    """
+    暦日リストを両端込みで絞る。d_from / d_to がともに None のときはコピーを返す。
+    両端指定で from > to のときは from/to を入れ替える。
+    """
+    if d_from is None and d_to is None:
+        return list(sorted_dates)
+    a = d_from
+    b = d_to
+    if a is not None and b is not None and a > b:
+        a, b = b, a
+    out: list = []
+    for d in sorted_dates:
+        if a is not None and d < a:
+            continue
+        if b is not None and d > b:
+            continue
+        out.append(d)
+    return out
+
+
+def load_machining_actual_detail_df():
+    """
+    マクロブックの「加工実績明細DATA」を読む（無ければ空 DataFrame）。
+    列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
+    """
+    if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
+    except ValueError:
+        logging.info(
+            f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
+        )
+        return pd.DataFrame()
+    df.columns = df.columns.str.strip()
+    if ACT_DETAIL_COL_ROLL not in df.columns:
+        for alias in ("ロール番号", "ロール", "巻番"):
+            if alias in df.columns:
+                df = df.rename(columns={alias: ACT_DETAIL_COL_ROLL})
+                break
+    df = _align_dataframe_headers_to_canonical(df, ACTUAL_DETAIL_HEADER_CANONICAL)
+    logging.info(
+        f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
+    )
+    return df
+
+
+def _actual_row_cumulative_completion_pct_macro(row) -> int | None:
+    """
+    加工実績明細DATA の「累積完了率」をシート値のまま 0～100 の整数に解釈して返す（実÷予定等は計算しない）。
+
+    対応: 数値・「45」「45%」「45.5%」・Excel 割合セル由来の 0.45（=45%）など。
+    列が無い・空・数値化不可のときは None。
+    """
+    if row is None:
+        return None
+    v = row.get(ACT_COL_CUMULATIVE_COMPLETION_PCT)
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, datetime):
+        return None
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return None
+    try:
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            f = float(v)
+        else:
+            s = unicodedata.normalize("NFKC", str(v).strip())
+            if not s or s.lower() in ("nan", "none", "-", "—", "―"):
+                return None
+            s = s.replace("%", "").replace(",", "").strip()
+            if not s:
+                return None
+            f = float(s)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f) or f < 0:
+        return None
+    # Excel の「割合」表示は 0.45 のように小数で渡ることが多い（= 45%）
+    if f <= 1.0 + 1e-9:
+        pct = int(round(f * 100.0))
+    else:
+        pct = int(round(f))
+    return max(0, min(100, pct))
+
+
+def _actual_row_detail_assignee_op_sub(row) -> tuple[str, str]:
+    """
+    加工実績明細DATA 行からガント用 op / sub を組み立てる。
+    「担当者」に続けて「加工担当者名1」～「加工担当者名5」を順に見て非空のみ採用し、
+    NFKC 後の文字列で重複を除く。先頭を op、2人目以降を sub（カンマ区切り）。
+    """
+    names: list[str] = []
+    seen_k: set[str] = set()
+    for col in (ACT_COL_OPERATOR,) + ACT_COL_MACHINING_ASSIGNEES_ORDERED:
+        val = row.get(col)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            continue
+        s = str(val).strip()
+        if not s:
+            continue
+        k = unicodedata.normalize("NFKC", s)
+        if k in seen_k:
+            continue
+        seen_k.add(k)
+        names.append(s)
+    if not names:
+        return "", ""
+    if len(names) == 1:
+        return names[0], ""
+    return names[0], ", ".join(names[1:])
+
+
+def build_actual_timeline_events(
+    df,
+    equipment_list,
+    sorted_dates,
+    *,
+    log_sheet_name: str = "加工実績DATA",
+    roll_detail: bool = False,
+):
+    """
+    実績シートの各行をガント用イベントへ変換。
+    計画表示日（sorted_dates）かつ設備マスタに一致する「工程名」の値が対象。
+    工程名は NFKC・空白正規化後にマスタ列名へマッピングする。
     時刻は DEFAULT_START_TIME / DEFAULT_END_TIME の枠内にクリップ。
+    roll_detail=True のとき ACT_DETAIL_COL_ROLL があれば task_id を「依頼NO/ロール」表記にし帯の分離に使う。
+    同じく roll_detail=True のときは「担当者」および「加工担当者名1」～「加工担当者名5」を
+    ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
+    roll_detail=True のとき「累積完了率」列があればその値を解釈し、
+    タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す（計算はしない）。
     """
     if df is None or len(df) == 0:
         return []
@@ -7044,6 +7372,13 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
         tid_s = str(tid).strip()
         if not tid_s:
             continue
+        display_tid = tid_s
+        if roll_detail:
+            rv = row.get(ACT_DETAIL_COL_ROLL)
+            if rv is not None and not (isinstance(rv, float) and pd.isna(rv)):
+                rs = str(rv).strip()
+                if rs:
+                    display_tid = f"{tid_s}/{rs}"
         proc = row.get(ACT_COL_PROCESS)
         if proc is None or pd.isna(proc):
             continue
@@ -7059,10 +7394,16 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
         if not start_dt or not end_dt or start_dt >= end_dt:
             bad_time += 1
             continue
-        op_val = row.get(ACT_COL_OPERATOR)
-        op_s = ""
-        if op_val is not None and not pd.isna(op_val):
-            op_s = str(op_val).strip()
+        if roll_detail:
+            op_s, sub_s = _actual_row_detail_assignee_op_sub(row)
+        else:
+            op_val = row.get(ACT_COL_OPERATOR)
+            op_s = ""
+            if op_val is not None and not pd.isna(op_val):
+                op_s = str(op_val).strip()
+            sub_s = ""
+
+        pct_macro = _actual_row_cumulative_completion_pct_macro(row)
 
         before = len(events)
         for d in sorted_dates:
@@ -7076,29 +7417,30 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
             e_clip = min(end_dt, day_end)
             if s_clip >= e_clip:
                 continue
-            events.append(
-                {
-                    "date": d,
-                    "task_id": tid_s,
-                    "machine": mach,
-                    "op": op_s,
-                    "sub": "",
-                    "start_dt": s_clip,
-                    "end_dt": e_clip,
-                    "breaks": [],
-                    "units_done": 0,
-                    "already_done_units": 0,
-                    "total_units": 0,
-                    "eff_time_per_unit": 0.0,
-                    "unit_m": 0.0,
-                }
-            )
+            ev_row = {
+                "date": d,
+                "task_id": display_tid,
+                "machine": mach,
+                "op": op_s,
+                "sub": sub_s,
+                "start_dt": s_clip,
+                "end_dt": e_clip,
+                "breaks": [],
+                "units_done": 0,
+                "already_done_units": 0,
+                "total_units": 0,
+                "eff_time_per_unit": 0.0,
+                "unit_m": 0.0,
+            }
+            if pct_macro is not None:
+                ev_row["pct_macro"] = pct_macro
+            events.append(ev_row)
         if len(events) == before:
             no_plan_overlap += 1
 
     if bad_eq:
         logging.warning(
-            f"加工実績DATA: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
+            f"{log_sheet_name}: 工程名はマスタ設備と一致しない行を {bad_eq} 件スキップしました（空白等は正規化済み）。"
         )
         if mismatch_norm_samples:
             logging.info(
@@ -7107,17 +7449,17 @@ def build_actual_timeline_events(df, equipment_list, sorted_dates):
             )
     if bad_time:
         logging.info(
-            f"加工実績DATA: 開始/終了日時は解釈でしない行を {bad_time} 件スキップしました。"
+            f"{log_sheet_name}: 開始/終了日時を解釈できない行を {bad_time} 件スキップしました。"
         )
     if no_plan_overlap and sorted_dates:
         logging.info(
-            f"加工実績DATA: 設備・日時は有効ては」計画対象日（当日以降の勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行は {no_plan_overlap} 件ありました。"
+            f"{log_sheet_name}: 設備・日時は有効だが計画対象日（勤怠日×{DEFAULT_START_TIME}～{DEFAULT_END_TIME}）と重ならない行が {no_plan_overlap} 件ありました。"
         )
     if not events and len(df) > 0:
         logging.info(
-            "加工実績DATA: ガント用セグメントは0件です。除去日の実績のみの場合、計画の表示日（sorted_dates）に含まれないため描画されません。"
+            f"{log_sheet_name}: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。"
         )
-    logging.info(f"加工実績DATA からガント用セグメント {len(events)} 件を生成しました。")
+    logging.info(f"{log_sheet_name} からガント用セグメント {len(events)} 件を生成しました。")
     return events
 
 
@@ -10042,6 +10384,17 @@ def _row_scalar_for_exclude_rule(row, col_name: str):
         return None
 
 
+def _exclude_rule_string_eq_allow_csv_tokens(val_s: str, pat_raw) -> bool:
+    """配台不要条件の eq 用。完全一致に加え、セルが「A,B」「A、B」のように複数トークンを含むときはいずれかが pat と一致すれば真。"""
+    pat = "" if pat_raw is None else str(pat_raw).strip()
+    if val_s == pat:
+        return True
+    if "," in val_s or "\u3001" in val_s:
+        parts = [p.strip() for p in re.split(r"[,、]", val_s) if p.strip()]
+        return bool(pat) and pat in parts
+    return False
+
+
 def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
     if not isinstance(cond, dict):
         return False
@@ -10072,9 +10425,9 @@ def _evaluate_exclude_rule_one_condition(cond: dict, row) -> bool:
             except re.error:
                 return False
         if op == "eq":
-            return val_s == pat
+            return _exclude_rule_string_eq_allow_csv_tokens(val_s, pat)
         if op == "ne":
-            return val_s != pat
+            return not _exclude_rule_string_eq_allow_csv_tokens(val_s, pat)
 
     def _num(x):
         try:
@@ -12118,34 +12471,6 @@ def _find_latest_prep_start_matching_end(
         if rem == 0 and act == dur_mins and _dt_close_minutes(e, end_at):
             return s
     return None
-
-
-def _try_realign_changeover_prep_segment_to_machining_start(
-    seg: dict,
-    machining_start: datetime,
-    breaks_union: list,
-    start_not_before: datetime,
-    *,
-    dur_mins: int,
-) -> bool:
-    """休憩直前に準備が孤立するのを防し、加工開始直前に準備区間を後ろシフトする。成功時 True。"""
-    ps = seg.get("start_dt")
-    if not isinstance(ps, datetime) or not isinstance(machining_start, datetime):
-        return False
-    if dur_mins <= 0:
-        return False
-    new_start = _find_latest_prep_start_matching_end(
-        machining_start, dur_mins, breaks_union, start_not_before
-    )
-    if new_start is None or new_start < ps:
-        return False
-    cap = machining_start + timedelta(days=1)
-    e2, act2, rem2 = calculate_end_time(new_start, dur_mins, breaks_union, cap)
-    if rem2 != 0 or act2 != dur_mins or not _dt_close_minutes(e2, machining_start):
-        return False
-    seg["start_dt"] = new_start
-    seg["end_dt"] = machining_start
-    return True
 
 
 def match_need_sheet_condition(condition_raw: str, task_id: str) -> bool:
@@ -15247,8 +15572,6 @@ def _build_equipment_schedule_dataframe(
                         _ek_disp = _timeline_event_kind(active_ev)
                         _tag = {
                             TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
-                            TIMELINE_EVENT_CHANGEOVER_CLEANUP: "後始末時間",
-                            TIMELINE_EVENT_CHANGEOVER_PREP: "準備時間",
                         }.get(
                             _ek_disp,
                             "セットアップ",
@@ -15256,12 +15579,8 @@ def _build_equipment_schedule_dataframe(
                         _sub_n = _eq_cell_display_sub(active_ev, d)
                         _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
-                        # 日次始業準備・準備・後始末は括弧ラベルのみ（進度列なし・薄緑着色と整合）
-                        if _ek_disp in (
-                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
-                            TIMELINE_EVENT_CHANGEOVER_CLEANUP,
-                            TIMELINE_EVENT_CHANGEOVER_PREP,
-                        ):
+                        # 日次始業準備は括弧ラベルのみ（進度列なし・薄緑着色と整合）
+                        if _ek_disp in (TIMELINE_EVENT_MACHINE_DAILY_STARTUP,):
                             eq_text = f"({_tag})"
                         else:
                             eq_text = (
@@ -16301,88 +16620,20 @@ def _df_pick_column(df, *candidates: str) -> str | None:
     return None
 
 
-def load_machine_changeover_settings(
-    master_path: str,
-) -> tuple[dict[str, tuple[int, int]], dict[str, int]]:
+def load_machine_daily_startup_settings(master_path: str) -> dict[str, int]:
     """
-    master.xlsm の任愝シート:
-      - 「設定_依頼切替前後時間」… 工程名・機械名・準備分・後始末分（1 行目見出し、2 行目以降データ）
-      - 「設定_機械_日次始業準備」… 機械名・日次始業準備分
+    master.xlsm の任意シート「設定_機械_日次始業準備」… 機械名・日次始業準備分（1 行目見出し、2 行目以降）。
 
-    依頼NO（タスク）は同一実機械上で切り替ゝるとし」直後ブロックの後始末→当該ブロックの準備を
-    設備空し下限に加算れる。同一依頼NOの連続ロールの間には加算しない。
-    日次始業準備は」同一カレンダ日で当該機械の先頭ロールにのみ加算れる。
-
-    戻り: (設備行キー「工程+機械」よよよ正規化キー -> (準備分, 後始末分),
-          機械名よよよ正規化キー -> 始業準備分)
+    「設定_依頼切替前後時間」による準備・後始末は読み込まない（廃止）。
     """
-    changeover: dict[str, tuple[int, int]] = {}
     startup: dict[str, int] = {}
     if not master_path or not os.path.isfile(master_path):
-        return changeover, startup
+        return startup
     try:
         xls = pd.ExcelFile(master_path)
     except Exception as e:
-        logging.warning("機械準備/切替設定: ブックを開きません (%s)", e)
-        return changeover, startup
-
-    if SHEET_MACHINE_CHANGEOVER in xls.sheet_names:
-        try:
-            df = pd.read_excel(
-                master_path, sheet_name=SHEET_MACHINE_CHANGEOVER, header=0
-            )
-            df.columns = [str(c).strip() for c in df.columns]
-            c_proc = _df_pick_column(df, "工程名", "工程")
-            c_mac = _df_pick_column(df, "機械名", "機械")
-            c_prep = _df_pick_column(
-                df,
-                "準備時間_分",
-                "準備分",
-                "加工剝準備_分",
-                "加工開始剝準備_分",
-            )
-            c_clean = _df_pick_column(
-                df,
-                "後始末時間_分",
-                "後始末分",
-                "加工後後始末_分",
-                "加工終了後後始末_分",
-            )
-            if c_proc and c_mac and c_prep and c_clean:
-                n_ent = 0
-                for _, row in df.iterrows():
-                    p = row.get(c_proc)
-                    m = row.get(c_mac)
-                    if p is None or m is None:
-                        continue
-                    if isinstance(p, float) and pd.isna(p):
-                        continue
-                    if isinstance(m, float) and pd.isna(m):
-                        continue
-                    p_s = str(p).strip()
-                    m_s = str(m).strip()
-                    if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
-                        continue
-                    combo = f"{p_s}+{m_s}"
-                    prep = _parse_nonneg_minutes_cell(row.get(c_prep))
-                    clean = _parse_nonneg_minutes_cell(row.get(c_clean))
-                    if prep == 0 and clean == 0:
-                        continue
-                    changeover[combo] = (prep, clean)
-                    nk = _normalize_equipment_match_key(combo)
-                    if nk:
-                        changeover[nk] = (prep, clean)
-                    n_ent += 1
-                if n_ent:
-                    logging.info(
-                        "マスタ「%s」: 工程+機械 %s 行の準備/後始末（分）を読み込みました。",
-                        SHEET_MACHINE_CHANGEOVER,
-                        n_ent,
-                    )
-        except Exception as e:
-            logging.warning(
-                "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_CHANGEOVER, e
-            )
+        logging.warning("機械日次始業準備設定: ブックを開きません (%s)", e)
+        return startup
 
     if SHEET_MACHINE_DAILY_STARTUP in xls.sheet_names:
         try:
@@ -16420,26 +16671,7 @@ def load_machine_changeover_settings(
                 "マスタ「%s」読込失敗（無視）: %s", SHEET_MACHINE_DAILY_STARTUP, e
             )
 
-    return changeover, startup
-
-
-def _lookup_changeover_minutes_for_eq(
-    eq_line: str,
-    by_eq: dict[str, tuple[int, int]] | None,
-) -> tuple[int, int]:
-    mp = by_eq if by_eq is not None else _STAGE2_MACHINE_CHANGEOVER_BY_EQ
-    k0 = str(eq_line or "").strip()
-    if not k0:
-        return (0, 0)
-    if k0 in mp:
-        return mp[k0]
-    nk = _normalize_equipment_match_key(k0)
-    if nk in mp:
-        return mp[nk]
-    for k, v in mp.items():
-        if _normalize_equipment_match_key(str(k)) == nk:
-            return v
-    return (0, 0)
+    return startup
 
 
 def _lookup_daily_startup_minutes(
@@ -16489,305 +16721,6 @@ def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     return best
 
 
-def _changeover_prep_extend_overlaps_team_break(
-    prep_end_before: datetime,
-    machining_start: datetime,
-    team_breaks_merged: list | None,
-) -> bool:
-    """準備終了〜加工開始の間に、確定チームの休憩帯が重なるとき True（準備 end を加工開始まで伸ばさない）。"""
-    if not team_breaks_merged:
-        return False
-    for item in team_breaks_merged:
-        if not isinstance(item, (list, tuple)) or len(item) < 2:
-            continue
-        bs, be = item[0], item[1]
-        if not isinstance(bs, datetime) or not isinstance(be, datetime):
-            continue
-        if prep_end_before < be and bs < machining_start:
-            return True
-    return False
-
-
-def _extend_changeover_prep_segment_end_for_timeline(
-    segments: list,
-    machining_start: datetime | None,
-    *,
-    team_breaks_merged: list | None = None,
-    daily_status: dict | None = None,
-) -> None:
-    """
-    タイムライン追記直前に、準備時間セグメントの end_dt を実加工 start_dt まで延ばす。
-    依頼切替の準備区間は代表スキルOPの勤務で forward される一方、確定チームの開始は
-    max(メンバー avail, 機械下限) となり、準備終了より遅くなると設備時間割の 10 分枠が空く。
-    確定チームの休憩が (準備終了, 加工開始) に重なる場合は伸ばさない（休憩を準備時間で埋めない）。
-    その場合は準備区間を加工開始直前へ後ろシフトし、休憩直前に準備だけが載る見え方を避ける。
-    """
-    if not segments or not isinstance(machining_start, datetime):
-        return
-    for seg in reversed(segments):
-        if str(seg.get("event_kind") or "").strip() != TIMELINE_EVENT_CHANGEOVER_PREP:
-            continue
-        pe = seg.get("end_dt")
-        if not isinstance(pe, datetime):
-            return
-        ps = seg.get("start_dt")
-        _block = _changeover_prep_extend_overlaps_team_break(
-            pe, machining_start, team_breaks_merged
-        )
-        prep_op = str(seg.get("op") or "").strip()
-        prep_br: list = []
-        if prep_op and daily_status and daily_status.get(prep_op):
-            prep_br = merge_time_intervals(
-                list(daily_status[prep_op].get("breaks_dt") or [])
-            )
-        br_union = merge_time_intervals(list(team_breaks_merged or []) + prep_br)
-        dur_m = 0
-        if isinstance(ps, datetime):
-            dur_m = int(get_actual_work_minutes(ps, pe, prep_br))
-            if dur_m <= 0:
-                dur_m = int(max(1, (pe - ps).total_seconds() // 60))
-        if machining_start > pe and not _block:
-            seg["end_dt"] = machining_start
-        elif (
-            machining_start > pe
-            and _block
-            and isinstance(ps, datetime)
-            and dur_m > 0
-        ):
-            _try_realign_changeover_prep_segment_to_machining_start(
-                seg,
-                machining_start,
-                br_union,
-                ps,
-                dur_mins=dur_m,
-            )
-        return
-
-
-def _resumed_after_work_break(
-    last_machining_end: datetime | None,
-    lower_bound_before_prep: datetime,
-    breaks_merged: list,
-) -> bool:
-    """
-    同一依頼の連続ロールでも、直前の加工終了から当該下限までの間に勤務休憩を挟んだとみなすとき True。
-    last_machining_end は当日の直前加工終了時刻、lower_bound_before_prep は準備挿入直前の時刻（日次始業・後始末反映後）。
-    """
-    if last_machining_end is None or not isinstance(
-        last_machining_end, datetime
-    ) or not isinstance(lower_bound_before_prep, datetime):
-        return False
-    if not breaks_merged:
-        return False
-    for bs, be in breaks_merged:
-        if not isinstance(bs, datetime) or not isinstance(be, datetime):
-            continue
-        if last_machining_end <= bs and lower_bound_before_prep >= be:
-            return True
-    return False
-
-
-def _resume_after_work_break_extended(
-    last_end: datetime | None,
-    lower_t: datetime,
-    breaks_merged: list,
-    *,
-    min_long_break_minutes: int = 30,
-    prebreak_gap_min_minutes: int = 4,
-    prebreak_gap_max_minutes: int = 20,
-) -> tuple[bool, datetime, datetime | None, datetime | None, bool]:
-    """
-    休憩挟み再開の判定を拡張する。
-    戻り値: (再開とみなすか, 準備・後始末後の下限, 参照した休憩開始, 参照した休憩終了,
-             長休憩直前ギャップに同一依頼の後始末を挟むべきか)
-
-    従来 _resumed_after_work_break と同じ厳密条件に加え、
-    長い勤務休憩（既定 30 分以上）の直前に加工が終わり、設備下限がまだ休憩終了より前のときは
-    下限を休憩終了まで繰り上げて再開とみなす（同一依頼の昼休み跨ぎなど）。
-    """
-    if last_end is None or not isinstance(last_end, datetime) or not isinstance(
-        lower_t, datetime
-    ):
-        return False, lower_t, None, None, False
-    t_floor = lower_t
-    hit_any = False
-    best_bs: datetime | None = None
-    best_be: datetime | None = None
-    pre_gap_cleanup = False
-    for bs, be in list(breaks_merged or []):
-        if not isinstance(bs, datetime) or not isinstance(be, datetime):
-            continue
-        br_len_min = (be - bs).total_seconds() / 60.0
-        is_long = br_len_min >= float(min_long_break_minutes)
-        if last_end <= bs and t_floor >= be:
-            hit_any = True
-            t_floor = max(t_floor, be)
-            if is_long:
-                best_bs, best_be = bs, be
-            continue
-        if not is_long:
-            continue
-        if last_end >= be:
-            continue
-        if lower_t > last_end and lower_t < bs:
-            continue
-        if last_end <= bs:
-            gap_min = (bs - last_end).total_seconds() / 60.0
-            if (
-                float(prebreak_gap_min_minutes) <= gap_min <= float(prebreak_gap_max_minutes)
-                and t_floor < be
-            ):
-                hit_any = True
-                t_floor = max(t_floor, be)
-                best_bs, best_be = bs, be
-                pre_gap_cleanup = True
-            continue
-        if bs <= last_end < be and t_floor < be:
-            hit_any = True
-            t_floor = max(t_floor, be)
-            best_bs, best_be = bs, be
-            pre_gap_cleanup = True
-    return hit_any, t_floor, best_bs, best_be, pre_gap_cleanup
-
-
-def _machine_occ_has_pending_same_day_tasks(
-    task_queue: list,
-    machine_occ_key: str,
-    current_date: date,
-) -> bool:
-    """占有キー一致・残ロールあり・start_date_req が当日内のタスクが1件でもあれば True。"""
-    occ_t = str(machine_occ_key or "").strip()
-    if not occ_t:
-        return False
-    for t in task_queue:
-        if float(t.get("remaining_units") or 0) <= 1e-12:
-            continue
-        try:
-            sreq = t.get("start_date_req")
-            if sreq is not None and sreq > current_date:
-                continue
-        except TypeError:
-            continue
-        _tm = t.get("machine")
-        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
-        if _machine_occupancy_key_resolve(t, _eqt) == occ_t:
-            return True
-    return False
-
-
-def _timeline_occ_has_cleanup_starting_near(
-    timeline_events: list,
-    machine_occ_key: str,
-    current_date: date,
-    anchor_dt: datetime,
-    *,
-    tol_seconds: int = 90,
-) -> bool:
-    """同一日・同一占有で anchor に近い開始の後始末（changeover_cleanup）が既にあるとき True。"""
-    occ_t = str(machine_occ_key or "").strip()
-    if not occ_t or not isinstance(anchor_dt, datetime):
-        return False
-    for ev in timeline_events:
-        if ev.get("date") != current_date:
-            continue
-        if str(ev.get("event_kind") or "").strip() != TIMELINE_EVENT_CHANGEOVER_CLEANUP:
-            continue
-        ev_occ = str(ev.get("machine_occupancy_key") or "").strip()
-        if ev_occ != occ_t:
-            continue
-        st = ev.get("start_dt")
-        if isinstance(st, datetime) and abs((st - anchor_dt).total_seconds()) <= tol_seconds:
-            return True
-    return False
-
-
-def _append_end_of_day_machine_cleanup_for_plan_date(
-    *,
-    current_date: date,
-    timeline_events: list,
-    task_queue: list,
-    daily_status: dict,
-    skills_dict: dict,
-    avail_dt: dict,
-    dispatch_interval_mirror,
-    changeover_by_eq: dict[str, tuple[int, int]],
-    abolish_all_scheduling_limits: bool,
-) -> None:
-    """
-    当日その設備に未割当の残タスクがなく、最後に加工があった占有キーに対し、後始末時間を1区間追加する。
-    （依頼NO切替時の後始末とは別経路。タイムラインは加工イベントのみで handoff を復元する。）
-    """
-    if abolish_all_scheduling_limits:
-        return
-    mh = _machine_handoff_state_from_timeline(timeline_events, current_date)
-    last_tid = mh.get("last_tid") or {}
-    last_eq = mh.get("last_eq") or {}
-    last_mdt = mh.get("last_machining_dt") or {}
-    last_md = mh.get("last_machining_date") or {}
-    last_lead = mh.get("last_lead_op") or {}
-    for occ, lm_date in list(last_md.items()):
-        if lm_date != current_date:
-            continue
-        if _machine_occ_has_pending_same_day_tasks(
-            task_queue, str(occ), current_date
-        ):
-            continue
-        tid_last = str(last_tid.get(occ) or "").strip()
-        if not tid_last:
-            continue
-        lm_end = last_mdt.get(occ)
-        if not isinstance(lm_end, datetime):
-            continue
-        if _timeline_occ_has_cleanup_starting_near(
-            timeline_events, str(occ), current_date, lm_end
-        ):
-            continue
-        eq_line = str(last_eq.get(occ) or "").strip()
-        _, cu = _lookup_changeover_minutes_for_eq(eq_line, changeover_by_eq)
-        if cu <= 0:
-            continue
-        cop = str(last_lead.get(occ) or "").strip()
-        if not cop:
-            proc_guess, mach_nm_guess = _split_equipment_line_process_machine(eq_line)
-            cop = _pick_skilled_op_for_changeover_interval(
-                str(proc_guess or "").strip(),
-                str(mach_nm_guess or "").strip(),
-                skills_dict,
-                daily_status,
-            ) or ""
-        if not cop:
-            continue
-        st_c = daily_status.get(cop)
-        if not st_c:
-            continue
-        br_c = merge_time_intervals(list(st_c.get("breaks_dt") or []))
-        end_c = st_c["end_dt"]
-        ce, act, rem = calculate_end_time(lm_end, cu, br_c, end_c)
-        if rem > 0 or act < cu:
-            continue
-        seg = {
-            "start_dt": lm_end,
-            "end_dt": ce,
-            "op": cop,
-            "event_kind": TIMELINE_EVENT_CHANGEOVER_CLEANUP,
-            "machine": eq_line,
-            "machine_occupancy_key": str(occ),
-        }
-        _append_changeover_segments_to_timeline(
-            timeline_events,
-            dispatch_interval_mirror,
-            avail_dt,
-            daily_status,
-            current_date=current_date,
-            task_id=tid_last,
-            machine_occ_key=str(occ),
-            segments=[seg],
-            machining_lead_op=cop,
-            machining_sub_str=None,
-            machine_handoff=mh,
-        )
-
-
 def _pick_skilled_op_for_changeover_interval(
     machine_proc: str,
     machine_name: str,
@@ -16796,7 +16729,7 @@ def _pick_skilled_op_for_changeover_interval(
 ) -> str | None:
     """
     当日 eligible のごう」当該工程+機械で OP スキルを挝つ者のごう優先度は最尝の1坝。
-    準備・日次始業の休憩スキップに用いる（avail_dt は見ない）。
+    日次始業の休憩スキップに用いる（avail_dt は見ない）。
     """
     cands: list[tuple[int, str]] = []
     proc = (machine_proc or "").strip()
@@ -16831,7 +16764,6 @@ def _machine_effective_floor_timedelta_only(
     machine_day_floor: datetime,
     abolish_limits: bool,
     *,
-    changeover_by_eq: dict[str, tuple[int, int]] | None = None,
     daily_startup_by_machine: dict[str, int] | None = None,
     current_date: date | None = None,
     daily_status: dict | None = None,
@@ -16845,7 +16777,6 @@ def _machine_effective_floor_timedelta_only(
     mto = machine_handoff.get("machining_today_occ") or machine_handoff.get(
         "started_today", set()
     )
-    had_machine_daily_startup = False
     if machine_occ_key not in mto:
         su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
         if su:
@@ -16856,42 +16787,6 @@ def _machine_effective_floor_timedelta_only(
                 mf = max(mf, reg_end)
             else:
                 mf = mf + timedelta(minutes=su)
-            had_machine_daily_startup = True
-    prev_tid = (machine_handoff.get("last_tid") or {}).get(machine_occ_key)
-    cur_tid = str(task_id or "").strip()
-    prev_eq = (machine_handoff.get("last_eq") or {}).get(machine_occ_key, "")
-    if prev_tid and cur_tid and prev_tid != cur_tid:
-        _, cu = _lookup_changeover_minutes_for_eq(prev_eq, changeover_by_eq)
-        if cu:
-            mf = mf + timedelta(minutes=cu)
-    prep, _ = _lookup_changeover_minutes_for_eq(eq_line, changeover_by_eq)
-    _pt = str(prev_tid or "").strip()
-    _ct = str(cur_tid or "").strip()
-    resume_after_break = False
-    if (
-        daily_status is not None
-        and skills_dict is not None
-        and machine_proc is not None
-        and current_date is not None
-    ):
-        lmd = (machine_handoff.get("last_machining_date") or {}).get(machine_occ_key)
-        lmend = (machine_handoff.get("last_machining_dt") or {}).get(machine_occ_key)
-        if lmd == current_date and isinstance(lmend, datetime):
-            rep2 = _pick_skilled_op_for_changeover_interval(
-                str(machine_proc or "").strip(),
-                str(machine_name or "").strip(),
-                skills_dict,
-                daily_status,
-            )
-            if rep2 and daily_status.get(rep2):
-                br2 = merge_time_intervals(
-                    list(daily_status[rep2].get("breaks_dt") or [])
-                )
-                resume_after_break = _resumed_after_work_break(lmend, mf, br2)
-    if prep > 0 and (not had_machine_daily_startup) and (
-        (_pt and _pt != _ct) or resume_after_break
-    ):
-        mf = mf + timedelta(minutes=prep)
     return mf
 
 
@@ -17529,17 +17424,11 @@ def _changeover_plan_segments_and_machining_lower_bound(
     abolish_limits: bool,
 ) -> tuple[datetime | None, list[dict]]:
     """
-    前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）・同日依頼切替の後始末時間・準備時間を
+    前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）のみを
     組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
     日次始業は master メイン A15（定常開始）が読めれば [開始, 開始+N分) の壁時計（勤怠 forward しない）。
     A15 が無いときは従来どおり代表スキル OP の勤務・休憩に沿って forward。
-    準備時間は (1) 直前加工の依頼 NO が取れ、かつ直後加工と異なる依頼 NO に切り替わるとき、
-    または (2) 同一依頼でも直前加工終了から本下限までの間に勤務休憩を挟む再開のときのみ付与する。
-    長い勤務休憩（既定 30 分以上）の直前に加工が終了し設備下限が休憩終了より前のときも (2) に含め、
-    必要なら同一依頼でも休憩開始までの壁時計で後始末（changeover_cleanup）を逆算挿入する。
-    上記以外（直前依頼 NO が無い初回や、同一依頼の連続ロールで休憩を挟まないとき等）には準備を付けない。
-    日次始業準備の直後の当該加工には準備時間を付けない。
-    日次始業セグメントの op は空。準備時間・後始末時間の op は forward 用の代表＝直後主（後始末は可能なら直前主）。
+    日次始業セグメントの op は空。
     """
     if abolish_limits:
         return prev_machining_end_dt, []
@@ -17548,16 +17437,7 @@ def _changeover_plan_segments_and_machining_lower_bound(
     machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
         "started_today", set()
     )
-    last_tid = (machine_handoff.get("last_tid") or {}).get(mach_occ, "")
-    last_eq = (machine_handoff.get("last_eq") or {}).get(mach_occ, "")
-    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
-    last_lead = (machine_handoff.get("last_lead_op") or {}).get(mach_occ, "")
-    cur_tid = str(task_id or "").strip()
     su = _lookup_daily_startup_minutes(machine_name, None)
-    prep, _cu_line = _lookup_changeover_minutes_for_eq(eq_line, None)
-    _prep_unused, cu_prev = (
-        _lookup_changeover_minutes_for_eq(last_eq, None) if last_eq else (0, 0)
-    )
 
     rep = _pick_skilled_op_for_changeover_interval(
         machine_proc, machine_name, skills_dict, daily_status
@@ -17579,7 +17459,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
 
     segments: list[dict] = []
     t = prev_machining_end_dt
-    had_machine_daily_startup = False
 
     if mach_occ not in machining_today_occ and su > 0:
         if reg_ts is not None:
@@ -17596,7 +17475,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 }
             )
             t = max(t, reg_end_dt)
-            had_machine_daily_startup = True
         else:
             if rep is None or not st_r or end_r is None or start_r is None:
                 return None, []
@@ -17615,119 +17493,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
                 }
             )
             t = ce
-            had_machine_daily_startup = True
-
-    need_cleanup = (
-        bool(last_tid)
-        and bool(cur_tid)
-        and last_tid != cur_tid
-        and last_d == current_date
-        and cu_prev > 0
-        and mach_occ in machining_today_occ
-    )
-    if need_cleanup:
-        cop = (str(last_lead).strip() or rep)
-        if not cop:
-            return None, []
-        st_c = daily_status.get(cop) or st_r
-        if not st_c:
-            return None, []
-        br_c = merge_time_intervals(list(st_c.get("breaks_dt") or []))
-        end_c = st_c["end_dt"]
-        cs = prev_machining_end_dt
-        ce, act, rem = calculate_end_time(cs, cu_prev, br_c, end_c)
-        if rem > 0 or act < cu_prev:
-            return None, []
-        segments.append(
-            {
-                "start_dt": cs,
-                "end_dt": ce,
-                "op": cop,
-                "event_kind": TIMELINE_EVENT_CHANGEOVER_CLEANUP,
-                "machine": last_eq or eq_line,
-                "machine_occupancy_key": mach_occ,
-            }
-        )
-        t = max(t, ce)
-
-    _lt_s = str(last_tid or "").strip()
-    lm_date = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
-    lm_end = (machine_handoff.get("last_machining_dt") or {}).get(mach_occ)
-    resume_after_break = False
-    t_resume_floor = t
-    pre_gap_bs: datetime | None = None
-    pre_gap_be: datetime | None = None
-    pre_gap_cleanup_needed = False
-    if lm_date == current_date and isinstance(lm_end, datetime):
-        (
-            resume_after_break,
-            t_resume_floor,
-            pre_gap_bs,
-            pre_gap_be,
-            pre_gap_cleanup_needed,
-        ) = _resume_after_work_break_extended(lm_end, t, br_sandwich)
-        if (
-            pre_gap_cleanup_needed
-            and _lt_s == cur_tid
-            and cu_prev > 0
-            and mach_occ in machining_today_occ
-            and last_d == current_date
-            and (not need_cleanup)
-            and pre_gap_bs is not None
-        ):
-            cop2 = (_lt_lead_br.strip() if _lt_lead_br else "") or (str(rep or "").strip())
-            if not cop2:
-                return None, []
-            st_c2 = daily_status.get(cop2) or st_r
-            if not st_c2:
-                return None, []
-            br_c2 = merge_time_intervals(list(st_c2.get("breaks_dt") or []))
-            end_c2 = st_c2["end_dt"]
-            st_inv = _find_latest_prep_start_matching_end(
-                pre_gap_bs, cu_prev, br_c2, machine_day_floor
-            )
-            if st_inv is None:
-                return None, []
-            if st_inv < prev_machining_end_dt - timedelta(seconds=90):
-                return None, []
-            ce2, act2, rem2 = calculate_end_time(st_inv, cu_prev, br_c2, end_c2)
-            if rem2 > 0 or act2 < cu_prev or not _dt_close_minutes(ce2, pre_gap_bs):
-                return None, []
-            segments.append(
-                {
-                    "start_dt": st_inv,
-                    "end_dt": ce2,
-                    "op": cop2,
-                    "event_kind": TIMELINE_EVENT_CHANGEOVER_CLEANUP,
-                    "machine": last_eq or eq_line,
-                    "machine_occupancy_key": mach_occ,
-                }
-            )
-            t = max(t, ce2, t_resume_floor)
-        else:
-            t = max(t, t_resume_floor)
-    need_prep = (
-        prep > 0
-        and (not had_machine_daily_startup)
-        and ((_lt_s and _lt_s != cur_tid) or resume_after_break)
-    )
-    if need_prep:
-        if rep is None or not st_r or end_r is None:
-            return None, []
-        pe, act, rem = calculate_end_time(t, prep, br_r, end_r)
-        if rem > 0 or act < prep:
-            return None, []
-        segments.append(
-            {
-                "start_dt": t,
-                "end_dt": pe,
-                "op": rep,
-                "event_kind": TIMELINE_EVENT_CHANGEOVER_PREP,
-                "machine": eq_line,
-                "machine_occupancy_key": mach_occ,
-            }
-        )
-        t = pe
 
     return t, segments
 
@@ -17742,7 +17507,6 @@ def _machine_effective_floor_for_assign(
     machine_day_floor: datetime,
     abolish_limits: bool,
     *,
-    changeover_by_eq: dict[str, tuple[int, int]] | None = None,
     daily_startup_by_machine: dict[str, int] | None = None,
     current_date: date | None = None,
     daily_status: dict | None = None,
@@ -17752,7 +17516,7 @@ def _machine_effective_floor_for_assign(
     """
     設備のタイムラインによける「当該ロールの加工開始」以降の下限。
     daily_status・skills_dict・current_date は权ごとしは」skills 革坈 OP の勤務・休憩に沿って
-    日次始業・後始末・準備を forward した最早加工開始。权ゝないとしは分のタイムライン加算にフォールバック。
+    日次始業を forward した最早加工開始。权ゝないとしは分のタイムライン加算にフォールバック。
     """
     if abolish_limits:
         return machine_day_floor
@@ -17788,7 +17552,6 @@ def _machine_effective_floor_for_assign(
         machine_handoff,
         machine_day_floor,
         False,
-        changeover_by_eq=changeover_by_eq,
         daily_startup_by_machine=daily_startup_by_machine,
         current_date=current_date,
         daily_status=daily_status,
@@ -17914,17 +17677,7 @@ def _resolve_machine_changeover_floor_segments(
             sok = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
             st_seg = seg.get("start_dt")
             ed_seg = seg.get("end_dt")
-            ek_chk = str(seg.get("event_kind") or "").strip()
             if not isinstance(st_seg, datetime) or not isinstance(ed_seg, datetime):
-                continue
-            if ek_chk == TIMELINE_EVENT_CHANGEOVER_CLEANUP and sok:
-                # 依頼切替後始末は直前加工と同一主・補の帯であり、メンバー側ミラーは
-                # 隣接境界や直前ブロックとの二重解釈で誤って would_block_roll になり得る。
-                # 設備占有（同一占有キー）のみ検査し、人は直前加工と連続とみなす。
-                if dispatch_interval_mirror.would_block_equipment(
-                    sok, st_seg, ed_seg
-                ):
-                    return machine_day_floor, [], True
                 continue
             if (
                 sop
@@ -17951,22 +17704,11 @@ def _changeover_timeline_op_sub_for_event(
     machine_handoff: dict,
     daily_status: dict,
 ) -> tuple[str, str]:
-    """タイムライン用の主＝補。日次始業は人なし。準備は直後ロール」後始末は handoff の直後ロール。"""
+    """タイムライン用の主＝補。日次始業は人なし。"""
     ek = str(event_kind or "").strip()
     op_s = str(op_from_segment or "").strip()
-    _lead = str(machining_lead_op or "").strip()
-    _sub_new = str(machining_sub_str or "").strip()
     if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
         return "", ""
-    if ek == TIMELINE_EVENT_CHANGEOVER_PREP:
-        op_u = _lead if _lead in daily_status else op_s
-        return op_u, _sub_new
-    if ek == TIMELINE_EVENT_CHANGEOVER_CLEANUP:
-        mocc = str(machine_occ_key or "").strip()
-        sub_prev = str(
-            (machine_handoff.get("last_machining_sub") or {}).get(mocc, "") or ""
-        ).strip()
-        return op_s, sub_prev
     return op_s, ""
 
 
@@ -17996,7 +17738,7 @@ def _append_changeover_segments_to_timeline(
             continue
         m_line = str(seg.get("machine") or "").strip()
         m_occ = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
-        ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_CHANGEOVER_PREP
+        ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_MACHINING
         op, sub = _changeover_timeline_op_sub_for_event(
             event_kind=ek,
             op_from_segment=op_seg,
@@ -18076,7 +17818,7 @@ def _machine_handoff_state_from_timeline(
     """
     タイムラインから」坄 machine_occupancy_key についで
     計画日 current_date 以降の **加工 (machining)** イベントの最終終了を復元れる。
-    セットアップ系 event_kind は last_tid / 後始末判定に含まない。
+    セットアップ系 event_kind は last_tid 等の復元に含まない。
     """
     best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
     for e in timeline_events:
@@ -19446,12 +19188,6 @@ def _trial_order_first_schedule_pass(
                 str(s).strip() for s in sub_members if s and str(s).strip()
             )
             _co_append = list(res.get("changeover_segments") or [])
-            _extend_changeover_prep_segment_end_for_timeline(
-                _co_append,
-                best_start,
-                team_breaks_merged=best_breaks,
-                daily_status=daily_status,
-            )
             _append_changeover_segments_to_timeline(
                 timeline_events,
                 dispatch_interval_mirror,
@@ -19846,7 +19582,7 @@ def append_surplus_staff_after_main_dispatch(
     need「配台時追加人数＝余力時追加人数」行の上限まで」メイン割付で採用ししれなかった枠を追記れる。
     坄タイムラインブロックについで」しの時間帯に他ブロックへ未坂加（区間重なりなし）で
     eligible かつ OP/AS スキルの者をサブに追加れる。
-    日次始業・後始末時間・準備時間（event_kind は加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
+    日次始業（event_kind は加工以外）は本処理の対象外（余剰サブは加工にのみ追記）。
     """
     gpo = global_priority_override or {}
     if not surplus_map or TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW:
@@ -20072,6 +19808,228 @@ def generate_plan():
         _generate_plan_impl()
 
 
+def refresh_equipment_gantt_actual_detail_only() -> str:
+    """
+    段階2全体を実行せず、「結果_設備ガント_実績明細」相当のシートだけを
+    ``output_dir`` 直下の ``ACTUAL_DETAIL_GANTT_REFRESH_FILENAME`` に出力する。
+
+    マクロブックの勤怠・実績明細DATA・master（工場枠・定常枠・機械カレンダー等）を
+    段階2と同様に読み、実績タイムラインのみ描画する。
+
+    Returns:
+        生成した xlsx の絶対パス。
+
+    Raises:
+        PlanningValidationError: メンバー0人・表示対象日なし・実績イベント空など。
+    """
+    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    with _override_default_factory_hours_from_master(master_abs):
+        global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+        global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+        global _STAGE2_REGULAR_SHIFT_START
+        (
+            _skills_dict,
+            members,
+            equipment_list,
+            _req_map,
+            _need_rules,
+            _surplus_map,
+            _need_combo_col_index,
+        ) = load_skills_and_needs()
+        if not members:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: メンバーが0人です（マスタ skills を確認してください）。"
+            )
+        try:
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+                master_abs,
+                equipment_list,
+            )
+        except Exception as e:
+            logging.warning(
+                "機械カレンダー: 読込例外のため占有なしとして続行します (%s)", e
+            )
+            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        try:
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = (
+                load_machine_daily_startup_settings(master_abs)
+            )
+        except Exception as e:
+            logging.warning(
+                "機械日次始業準備設定: 読込例外のため無視します (%s)", e
+            )
+            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
+        try:
+            _rs_a15, _ = _read_master_main_regular_shift_times(master_abs)
+            _STAGE2_REGULAR_SHIFT_START = _rs_a15
+        except Exception as e:
+            logging.warning(
+                "定常開始(A15) 読込失敗: 日次始業は従来の勤怠 forward にフォールバック (%s)", e
+            )
+            _STAGE2_REGULAR_SHIFT_START = None
+
+        # 実績明細ガントの「データ抽出」は、加工計画DATAではなく「加工実績明細DATA」のデータ抽出時間を優先する。
+        # ただし勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
+        data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
+        data_extract_dt_str = (
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            if data_extract_dt is not None
+            else "—"
+        )
+
+        attendance_data, ai_log_data = load_attendance_and_analyze(members)
+        global_priority_raw = load_main_sheet_global_priority_override_text()
+        global_priority_override = analyze_global_priority_override_comment(
+            global_priority_raw, members, run_date.year, ai_sheet_sink=ai_log_data
+        )
+        _factory_closure_dates: set[date] = set()
+        for _iso in global_priority_override.get("factory_closure_dates") or []:
+            _d = parse_optional_date(_iso)
+            if _d is not None:
+                _factory_closure_dates.add(_d)
+        if _factory_closure_dates:
+            apply_factory_closure_dates_to_attendance(
+                attendance_data, members, _factory_closure_dates
+            )
+
+        sorted_dates = sorted(list(attendance_data.keys()))
+        sorted_dates = [d for d in sorted_dates if d >= run_date]
+        if not sorted_dates:
+            raise PlanningValidationError(
+                "実績明細ガントのみ更新を中断しました: 当日以降の処理対象日付がありません。"
+            )
+
+        _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
+            master_abs
+        )
+
+        df_actual_detail = load_machining_actual_detail_df()
+
+        def _first_valid_dt_from_df_col(_df, _col) -> datetime | None:
+            try:
+                if _df is None or _col not in _df.columns:
+                    return None
+                for _v in _df[_col].tolist():
+                    if _v is None or (isinstance(_v, float) and pd.isna(_v)):
+                        continue
+                    _dt = pd.to_datetime(_v, errors="coerce")
+                    if pd.isna(_dt):
+                        continue
+                    if isinstance(_dt, pd.Timestamp):
+                        return _dt.to_pydatetime()
+                    return _dt if isinstance(_dt, datetime) else None
+            except Exception:
+                return None
+            return None
+
+        # 加工実績明細DATA の「データ抽出時間」を最優先（無い/空なら従来どおり加工計画DATA基準）
+        detail_extract_dt = _first_valid_dt_from_df_col(
+            df_actual_detail, TASK_COL_DATA_EXTRACTION_TIME
+        )
+        if detail_extract_dt is not None:
+            base_now_dt = detail_extract_dt
+            run_date = base_now_dt.date()
+            data_extract_dt_str = base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
+            plan_base_dt_column = f"{ACTUAL_DETAIL_SHEET_NAME}:{TASK_COL_DATA_EXTRACTION_TIME}"
+
+        logging.info(
+            "実績明細ガントのみ: 抽出基準日時 %s（%s）",
+            base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+            plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
+        )
+        detail_timeline_events: list = []
+        sorted_dates_detail = list(sorted_dates)
+        chart_title_actual_detail = "湖南工場 加工実績（明細）"
+        if df_actual_detail is not None and len(df_actual_detail) > 0:
+            sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+                sorted_dates, df_actual_detail
+            )
+            d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+            d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+            if d_from is not None or d_to is not None:
+                n_before = len(sorted_dates_detail)
+                filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                    sorted_dates_detail, d_from, d_to
+                )
+                if not filtered_detail_dates and sorted_dates_detail:
+                    logging.warning(
+                        "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                        "（%s=%r, %s=%r）",
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                    )
+                else:
+                    sorted_dates_detail = filtered_detail_dates
+                    logging.info(
+                        "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                        n_before,
+                        len(sorted_dates_detail),
+                        d_from.isoformat() if d_from else "（指定なし）",
+                        d_to.isoformat() if d_to else "（指定なし）",
+                    )
+                    rng_lo = d_from.isoformat() if d_from else "…"
+                    rng_hi = d_to.isoformat() if d_to else "…"
+                    chart_title_actual_detail = (
+                        f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                    )
+            detail_timeline_events = build_actual_timeline_events(
+                df_actual_detail,
+                equipment_list,
+                sorted_dates_detail,
+                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                roll_detail=True,
+            )
+
+        if not detail_timeline_events:
+            raise PlanningValidationError(
+                "実績明細ガントを生成できるイベントがありません。"
+                "「加工実績明細DATA」の有無・日付・必須列を確認してください。"
+            )
+
+        out_path = os.path.join(output_dir, ACTUAL_DETAIL_GANTT_REFRESH_FILENAME)
+        _try_remove_path_with_retries(out_path)
+
+        gantt_detail_tl_label_specs: list = []
+        gantt_detail_tl_day_blocks: list = []
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as writer:
+            gantt_detail_tl_label_specs, gantt_detail_tl_day_blocks = (
+                _write_results_equipment_gantt_sheet(
+                    writer,
+                    [],
+                    equipment_list,
+                    sorted_dates_detail,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    actual_timeline_events=detail_timeline_events,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=False,
+                    chart_title=chart_title_actual_detail,
+                    sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                )
+            )
+            wb = writer.book
+            for _sn in list(wb.sheetnames):
+                if _sn != RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME:
+                    wb.remove(wb[_sn])
+
+        _stage2_try_add_gantt_timeline_shape_labels(
+            out_path,
+            gantt_detail_tl_label_specs,
+            gantt_detail_tl_day_blocks,
+            sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+        )
+        logging.info(
+            "実績明細ガントのみ: %s を出力しました。",
+            os.path.basename(out_path),
+        )
+        return os.path.abspath(out_path)
+
+
 def _generate_plan_impl():
     # 配台トレース（設定シート A3 以降のみ）は」メンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -20161,7 +20119,7 @@ def _generate_plan_impl():
         )
         return
     global _MACHINE_CALENDAR_BLOCKS_BY_DATE
-    global _STAGE2_MACHINE_CHANGEOVER_BY_EQ, _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
+    global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
     try:
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
@@ -20174,17 +20132,13 @@ def _generate_plan_impl():
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
     try:
-        (
-            _STAGE2_MACHINE_CHANGEOVER_BY_EQ,
-            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
-        ) = load_machine_changeover_settings(
+        _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = load_machine_daily_startup_settings(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
         )
     except Exception as e:
         logging.warning(
-            "機械準備/依頼切替・日次始業設定: 読込例外のため、無視しした (%s)", e
+            "機械日次始業準備設定: 読込例外のため、無視しした (%s)", e
         )
-        _STAGE2_MACHINE_CHANGEOVER_BY_EQ = {}
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
     try:
         _rs_a15, _ = _read_master_main_regular_shift_times(
@@ -20223,7 +20177,7 @@ def _generate_plan_impl():
             "（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）"
         )
 
-    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「抽出時間」（なければ「データ抽出日」）
+    # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
@@ -20264,7 +20218,7 @@ def _generate_plan_impl():
         ai_log_data["メイン_グローバル_未適用メモ(AI)"] = _sn[:2000]
 
     sorted_dates = sorted(list(attendance_data.keys()))
-    # 結果シートは「基準日（抽出時間／データ抽出日）」以降のみ表示・計画対象とする
+    # 結果シートは「基準日（データ抽出時間／抽出時間／データ抽出日）」以降のみ表示・計画対象とする
     sorted_dates = [d for d in sorted_dates if d >= run_date]
     if not sorted_dates:
         logging.error("当日以降の処理対象日付はありません。")
@@ -20331,7 +20285,7 @@ def _generate_plan_impl():
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日」判定と最早開始時刻には基準日時（抽出時間優先、なければデータ抽出日）を使う
+    # 「当日」判定と最早開始時刻には基準日時（データ抽出時間→抽出時間→データ抽出日）を使う
     macro_now_dt = base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
@@ -21527,12 +21481,6 @@ def _generate_plan_impl():
                                 if s and str(s).strip()
                             )
                             _co_append_l = list(_co_segs_legacy or [])
-                            _extend_changeover_prep_segment_end_for_timeline(
-                                _co_append_l,
-                                best_info.get("start_dt"),
-                                team_breaks_merged=best_info.get("breaks"),
-                                daily_status=daily_status,
-                            )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
                                 _dispatch_interval_mirror,
@@ -21851,33 +21799,6 @@ def _generate_plan_impl():
                 logging.info(
                     "§B-2/§B-3 リワインド: EC 完走後に検査＝巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
-            if not global_priority_override.get("abolish_all_scheduling_limits"):
-                for _d_eod in sorted_dates:
-                    _ds_eod = attendance_data.get(_d_eod)
-                    if not _ds_eod:
-                        continue
-                    _avail_eod: dict = {}
-                    for m in members:
-                        if m not in _ds_eod:
-                            continue
-                        st_e = _ds_eod[m]
-                        if st_e.get("eligible_for_assignment", st_e.get("is_working", False)):
-                            _avail_eod[m] = st_e["start_dt"]
-                    if not _avail_eod:
-                        continue
-                    _append_end_of_day_machine_cleanup_for_plan_date(
-                        current_date=_d_eod,
-                        timeline_events=timeline_events,
-                        task_queue=task_queue,
-                        daily_status=_ds_eod,
-                        skills_dict=skills_dict,
-                        avail_dt=_avail_eod,
-                        dispatch_interval_mirror=_dispatch_interval_mirror,
-                        changeover_by_eq=_STAGE2_MACHINE_CHANGEOVER_BY_EQ,
-                        abolish_all_scheduling_limits=bool(
-                            global_priority_override.get("abolish_all_scheduling_limits")
-                        ),
-                    )
             break
 
     if TRACE_SCHEDULE_TASK_IDS:
@@ -22279,6 +22200,53 @@ def _generate_plan_impl():
     )
     gantt_tl_label_specs: list = []
     gantt_tl_day_blocks: list = []
+    gantt_detail_tl_label_specs: list = []
+    gantt_detail_tl_day_blocks: list = []
+    df_actual_detail = load_machining_actual_detail_df()
+    detail_timeline_events: list = []
+    sorted_dates_detail = list(sorted_dates)
+    chart_title_actual_detail = "湖南工場 加工実績（明細）"
+    if df_actual_detail is not None and len(df_actual_detail) > 0:
+        sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+            sorted_dates, df_actual_detail
+        )
+        d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+        d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+        if d_from is not None or d_to is not None:
+            n_before = len(sorted_dates_detail)
+            filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                sorted_dates_detail, d_from, d_to
+            )
+            if not filtered_detail_dates and sorted_dates_detail:
+                logging.warning(
+                    "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                    "（%s=%r, %s=%r）",
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                    ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                )
+            else:
+                sorted_dates_detail = filtered_detail_dates
+                logging.info(
+                    "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                    n_before,
+                    len(sorted_dates_detail),
+                    d_from.isoformat() if d_from else "（指定なし）",
+                    d_to.isoformat() if d_to else "（指定なし）",
+                )
+                rng_lo = d_from.isoformat() if d_from else "…"
+                rng_hi = d_to.isoformat() if d_to else "…"
+                chart_title_actual_detail = (
+                    f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                )
+        detail_timeline_events = build_actual_timeline_events(
+            df_actual_detail,
+            equipment_list,
+            sorted_dates_detail,
+            log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+            roll_detail=True,
+        )
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -22338,8 +22306,33 @@ def _generate_plan_impl():
                 regular_shift_times=(_reg_shift_start, _reg_shift_end),
             )
 
+            if detail_timeline_events:
+                logging.info(
+                    "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
+                )
+                (
+                    gantt_detail_tl_label_specs,
+                    gantt_detail_tl_day_blocks,
+                ) = _write_results_equipment_gantt_sheet(
+                    writer,
+                    [],
+                    equipment_list,
+                    sorted_dates_detail,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    actual_timeline_events=detail_timeline_events,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=False,
+                    chart_title=chart_title_actual_detail,
+                    sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                )
+
             for sheet_name, ws_out in writer.sheets.items():
-                if sheet_name == RESULT_SHEET_GANTT_NAME:
+                if sheet_name in (
+                    RESULT_SHEET_GANTT_NAME,
+                    RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                ):
                     continue
                 _apply_output_font_to_result_sheet(ws_out)
 
@@ -22445,6 +22438,13 @@ def _generate_plan_impl():
     _stage2_try_add_gantt_timeline_shape_labels(
         output_filename, gantt_tl_label_specs, gantt_tl_day_blocks
     )
+    if gantt_detail_tl_label_specs:
+        _stage2_try_add_gantt_timeline_shape_labels(
+            output_filename,
+            gantt_detail_tl_label_specs,
+            gantt_detail_tl_day_blocks,
+            sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+        )
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 

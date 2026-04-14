@@ -160,7 +160,7 @@
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#day-flow">日内割付・環境変数</a></li>
       <li><a href="#need-surplus">need 追加人数（余力・メイン後追記）</a></li>
-      <li><a href="#unprocessed-col">未加工列・残量算定（必須）</a></li>
+      <li><a href="#excel-sheets-columns">マスタ／マクロブックのシート・列名</a></li>
       <li><a href="#doc-sync">ソース変更時のドキュメント同期</a></li>
       <li><a href="#roll-unit-length">ロール単位長さ（配台計画_タスク入力）</a></li>
       <li><a href="#stock-location">在庫場所（配台計画_タスク入力）</a></li>
@@ -295,7 +295,7 @@
       <li><code>TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW</code> … <code>1</code> で need 追加人数行を全面無視（後追いもなし）。</li>
       <li><code>TEAM_ASSIGN_*</code>（人数優先・スラック）… <span class="file">配台ルール.md</span> セクション5。</li>
       <li><strong>機械カレンダー</strong>: マスタ <code>機械カレンダー</code> の占有は列キーに加え<strong>機械名集約キー</strong>でも <code>machine_avail_dt</code> に載り、<code>_apply_machine_calendar_floor_for_date</code> および <code>_bump_machine_avail_after_roll_for_calendar</code> で反映（<span class="file">配台ルール.md</span> 3.2.1）。セルが数値 <strong>0</strong> のときは<strong>空欄同様・非占有</strong>。特定時刻以降どの設備にも入らないときは午後スロットの誤占有・メイン A12/B12 終了・出勤退勤を確認。</li>
-      <li><strong>2026-04 追補（依頼切替・日次始業）</strong>: マスタ任意シート <code>設定_依頼切替前後時間</code> と <code>設定_機械_日次始業準備</code>。依頼NO切替・「その日初回の加工」判定はタイムラインの<strong>加工イベントのみ</strong>（<code>event_kind</code>）。<strong>同一占有キー・同一依頼NO</strong>の連続加工ロールでは <strong>加工前準備</strong>をタイムライン・壁時計下限にも載せない。<strong>日次始業</strong>は <code>メイン</code> <strong>A15（定常開始）</strong>が有効なとき<strong>勤怠と無関係</strong>に <strong>[定常開始, 定常開始+分)</strong> の壁時計ブロック（設備占有・加工不可）。A15 無効時のみ従来どおり代表スキルOPの勤務線で forward。<strong>加工前準備・後始末</strong>は引き続き代表OP／直前主の勤務線。スキルOPが誰もいないときのフォールバックは <span class="file">配台ルール.md</span> 3.2.1.1。<strong>結果_設備ガント</strong>の日次始業帯は<strong>黄色系</strong>（<code>machine_daily_startup</code>）。詳細は <span class="file">配台ルール.md</span> 3.2.1.1。</li>
+      <li><strong>2026-04 追補（日次始業）</strong>: マスタ任意シート <code>設定_機械_日次始業準備</code> を <code>load_machine_daily_startup_settings</code> で読み込み、壁時計・加工開始下限に反映。<code>設定_依頼切替前後時間</code>（準備・後始末）は<strong>現行 Python では未読込・未適用</strong>。「その日初回の加工」判定はタイムラインの<strong>加工イベントのみ</strong>（<code>event_kind</code>）。<strong>日次始業</strong>は <code>メイン</code> <strong>A15（定常開始）</strong>が有効なとき<strong>勤怠と無関係</strong>に <strong>[定常開始, 定常開始+分)</strong> の壁時計ブロック。A15 無効時のみ代表スキルOPの勤務線で forward。スキルOPが誰もいないときのフォールバックは <span class="file">配台ルール.md</span> 3.2.1.1。<strong>結果_設備ガント</strong>の日次始業帯は<strong>黄色系</strong>（<code>machine_daily_startup</code>）。<strong>結果_設備毎の時間割</strong>の薄緑は <code>(日次始業準備)</code> のみ。詳細は <span class="file">配台ルール.md</span> 3.2.1.1。</li>
       <li><strong>2026-04 追補（休憩・終業直前）</strong>: <strong>終業まで残り <code>ASSIGN_END_OF_DAY_DEFER_MINUTES</code> 分以下</strong>かつ<strong> <code>ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS</code> ロール分以上は回せない</strong>ときは<strong>新たに加工を始めない</strong>（<code>ASSIGN_END_OF_DAY_DEFER_MINUTES</code> は Python 既定 45 分、<code>0</code> で無効）。実装は (1) 依頼全体の残ロールが閾値以下で当日開始拒否、(2) その開始から終業までに収容できるロール数が閾値<strong>未満</strong>で候補却下。<strong>設備占有キー上の直前加工が同一依頼NO</strong>の連続ロールでは (1)(2) を適用しない（<code>_eod_same_request_continuation_exempt</code>）。<strong>休憩帯内</strong>に落ちた試行開始は<strong>休憩終了へ繰り下げ</strong>（下限を再適用）。<strong>帯外でも</strong> 1 ブロック分の連続実働が<strong>次の休憩まで足りない</strong>ときは<strong>その休憩終了まで繰り下げ</strong>。それでも次の休憩までの連続枠に収まらない候補は却下（休憩またぎの連続配台なし）。旧 <code>ASSIGN_DEFER_MIN_REMAINING_ROLLS</code> / <code>ASSIGN_PRE_BREAK_DEFER_GAP_MINUTES</code> は無視。設備時間割の <code>14/54R</code> 形式は<strong>累積完了/総ロール</strong>（左は残りではない）。詳細は <span class="file">配台ルール.md</span> 改定（2026-04）・4.2。</li>
     </ul>
   </section>
@@ -304,24 +304,55 @@
     <h2 id="h-need-surplus">need 追加人数（余力・メイン後追記）</h2>
     <p><span class="file">master.xlsm</span> の need で、基本必要人数の<strong>直下</strong>（目安 Excel 5 行目付近）の「配台時追加人数／余力時追加人数」列は、工程×機械ごとに <strong>req を満たしたあと追加で入れられる人数の上限</strong>です。</p>
     <ul>
-      <li><strong>既定</strong>: メインの割付シミュレーションではこの上限を<strong>人数探索に使わず</strong> <code>req_num</code> ちょうどで組む。シミュレーション<strong>完了後</strong>、<strong>加工イベント</strong>のタイムラインブロックだけを対象に、枠が空き、かつその時間帯に<strong>他ブロックと重ならない</strong>・<strong>スキル OP/AS 適合</strong>・<strong>eligible</strong> の人を <strong>サブ（<code>sub</code>）に追記</strong>（<code>append_surplus_staff_after_main_dispatch</code>）。<strong>日次始業・後始末・準備</strong>の3種は<strong>サブ追記対象外</strong>（日次始業は人なし。準備・後始末の補はメインで確定した加工チームに合わせる）。</li>
+      <li><strong>既定</strong>: メインの割付シミュレーションではこの上限を<strong>人数探索に使わず</strong> <code>req_num</code> ちょうどで組む。シミュレーション<strong>完了後</strong>、<strong>加工イベント</strong>のタイムラインブロックだけを対象に、枠が空き、かつその時間帯に<strong>他ブロックと重ならない</strong>・<strong>スキル OP/AS 適合</strong>・<strong>eligible</strong> の人を <strong>サブ（<code>sub</code>）に追記</strong>（<code>append_surplus_staff_after_main_dispatch</code>）。<strong>日次始業</strong>（<code>machine_daily_startup</code>）は<strong>サブ追記対象外</strong>（人員を載せない区間）。</li>
       <li><strong>時刻は変えない</strong>（表示・同席記録向け。メインで決めた <code>end_dt</code> のまま）。</li>
       <li>詳細・表は <span class="file">配台ルール.md</span> セクション 3.5。</li>
     </ul>
   </section>
 
-  <section id="unprocessed-col" class="card" aria-labelledby="h-unprocessed">
-    <h2 id="h-unprocessed">未加工列（必須）・残量算定と完了扱いの特例</h2>
-    <p class="queue-note"><span class="file">planning_core/_core.py</span> の <code>_plan_row_dispatch_qty_metrics</code>・<code>build_task_queue_from_planning_df</code>・<code>_plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule</code> に一致させています。</p>
+  <section id="excel-sheets-columns" class="card" aria-labelledby="h-excel-cols">
+    <h2 id="h-excel-cols">マスタブックとマクロブックでロジックが参照するシート・列名</h2>
+    <p class="queue-note"><strong>実装の正</strong>は <span class="file">python/planning_core/_core.py</span> と <span class="file">python/workbook_env_bootstrap.py</span>、環境変数 <code>TASK_INPUT_WORKBOOK</code>。マスタの既定ファイル名は <code>master.xlsm</code>（<code>MASTER_FILE</code>）。<strong><code>master.xlsx</code> 等でも</strong>シート名・列見出しが同じであることが前提です。マクロ側の例として <span class="file">生産管理_AI配台_V2.xlsm</span> を挙げます（版により名称は変わり得ます）。詳細表は <span class="file">配台ルール.md</span> セクション <strong>8.0.0</strong> と同一内容です。</p>
+
+    <h3>マスタ（<code>master.xlsm</code> 相当）</h3>
+    <table>
+      <thead><tr><th>シート</th><th>主な参照</th></tr></thead>
+      <tbody>
+        <tr><td><code>skills</code></td><td>1行目＝工程名、2行目＝機械名、<strong>A列</strong>＝メンバー。交差セルに OP/AS と優先度。</td></tr>
+        <tr><td><code>need</code></td><td>工程×機械のマトリクス、必須人数・配台時追加人数行、特別指定1〜99、列 <code>依頼NO条件</code>・<code>備考</code>。列の左右位置は need 由来ソートに使用。</td></tr>
+        <tr><td><code>メイン</code>（名称解決あり）</td><td><strong>A12/B12</strong> 工場稼働、<strong>A15/B15</strong> 定常、<code>グローバルコメント</code> 直下（Gemini）、再優先系セル（表記ゆれ許容）。</td></tr>
+        <tr><td><code>機械カレンダー</code></td><td><strong>A</strong>＝1時間スロット、<strong>B</strong>＝曜日、<strong>C以降</strong>＝設備占有。時台はメイン A12/B12 と整合。</td></tr>
+        <tr><td><code>設定_機械_日次始業準備</code>（任意）</td><td>列 <code>機械名</code>（または <code>機械</code>）と <code>日次始業準備_分</code> 等の分列。</td></tr>
+        <tr><td><code>組み合わせ表</code>（任意）</td><td><code>組み合わせ行ID</code>／<code>インデックス</code>、<code>工程名</code>、<code>機械名</code>、<code>工程+機械</code>、<code>組み合わせ優先度</code>、<code>必須人数</code>、<code>メンバー1</code>…</td></tr>
+        <tr><td>メンバー個別シート</td><td><code>日付</code>、<code>出勤時間</code>、<code>退勤時間</code>、休憩1/2の開始・終了、<code>作業効率</code>、<code>休暇区分</code>、<code>備考</code>、<code>残業(分)</code>（旧 <code>残業終業</code> 可）。<code>skills</code>／<code>need</code>／名前に「カレンダー」を含むシートは除外。</td></tr>
+      </tbody>
+    </table>
+    <p><strong>読まない例</strong>: <code>設定_依頼切替前後時間</code>（現行 Python では未読込）。</p>
+
+    <h3>マクロブック（<code>TASK_INPUT_WORKBOOK</code> … 例: <code>生産管理_AI配台_V2.xlsm</code>）</h3>
+    <table>
+      <thead><tr><th>シート</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td><code>加工計画DATA</code></td><td>段階1の抽出元。</td></tr>
+        <tr><td><code>配台計画_タスク入力</code></td><td>段階1出力・段階2入力（既定。環境変数 <code>TASK_PLAN_SHEET</code> で変更可）。AX:AY はグローバルコメント解析の参照表示のみ。</td></tr>
+        <tr><td><code>設定</code></td><td>B1＝証明書パス、D/E 列＝Gemini モデル一覧、A3以降＝トレース依頼NO、B3以降＝デバッグ依頼NO。</td></tr>
+        <tr><td><code>設定_環境変数</code></td><td>A＝変数名、B＝値（import 前に <code>os.environ</code>）。</td></tr>
+        <tr><td><code>設定_配台不要工程</code></td><td>工程名・機械名・配台不要・配台不要ロジック・ロジック式。</td></tr>
+        <tr><td><code>列設定_結果_タスク一覧</code></td><td>列名・表示。</td></tr>
+        <tr><td><code>配台_配台不要工程</code></td><td>存在時は openpyxl 回避判定に使用。</td></tr>
+        <tr><td><code>加工実績DATA</code></td><td>オプションの実績参照。</td></tr>
+        <tr><td>段階2出力 xlsx</td><td><code>結果_タスク一覧</code>、<code>結果_設備毎の時間割</code>、<code>TEMP_設備毎の時間割</code>、<code>ブロックテーブル</code>、<code>結果_設備毎の時間割_機械名毎</code>、<code>結果_設備ガント</code>、<code>結果_人員配台優先順</code>、<code>結果_カレンダー(出勤簿)</code> 等。個人別は <code>member_schedule_*.xlsx</code>。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>列名（代表）</h3>
     <ul>
-      <li><strong>列「未加工」は必須</strong>（段階2読込で列なし・数値化できない行があると <code>PlanningValidationError</code> で中止）。</li>
-      <li><strong>済相当・残量は未加工のみ</strong>で算定し、<strong>実加工数から済へフォールバックしない</strong>。</li>
-      <li><strong>未加工 &gt; 0</strong>: 残りm = 未加工、済相当 = max(0, 換算数量(raw) − 未加工)。</li>
-      <li><strong>未加工 ≤ 0</strong>（数値 0）: 換算数量（100m 切上げ）を基礎にし、ロール単位長さ未満なら <strong>ロール単位まで引き上げ</strong>（最小＝1 ロール・済相当 0）。業務上の<strong>全数未加工</strong>（換算あり・実加工 0・未加工 0）に対応。</li>
-      <li><strong>キューへ載せない</strong>: 未加工＝0 かつ <strong>実加工数 ≠ 0</strong> かつ <strong>加工完了区分</strong>が「未完」または <code>0:未完</code> のように<strong>末尾が未完</strong>のとき → 加工済み扱いでスキップ（上記完了キーワード・配台不要とは別）。</li>
-      <li><strong>ロール本数の初期値</strong>: 未加工由来（<code>from_unprocessed_qty</code>）でロール単位長さ &gt; 0 のとき <code>ceil(残りm / unit_m)</code>。それ以外は残りm / ロール単位の商。</li>
-      <li><strong>最小加工長さ ≥ ロール単位</strong>の業務ルールは <span class="file">配台ルール.md</span> §7.1 末尾とリポジトリルール <code>dispatch-min-processing-length-vs-roll-unit.mdc</code> を参照。</li>
+      <li><strong>加工計画DATA</strong>: 依頼NO、工程名、機械名、換算数量、未加工、受注数、加工速度、製品名、回答納期、指定納期、原反投入日、在庫場所（任意）、加工内容、加工完了区分、実加工数、実出来高、データ抽出日、抽出時間。</li>
+      <li><strong>配台計画_タスク入力</strong>: 配台試行順番、配台不要、上記ベース列＋配台使用残数量（未加工の直後）、ロール単位長さ（製品名の直後）、加工工程の決定プロセスの因子、（元）／本体の上書き列（加工速度_上書き、原反投入日_上書き、担当OP_指定、特別指定_備考）、AI特別指定_解析。</li>
+      <li><strong>加工実績DATA</strong>: 依頼NO、工程名、担当者、開始日時、終了日時、実績開始、実績終了、日付、開始時刻、終了時刻。</li>
+      <li><strong>結果_タスク一覧</strong>（既定骨格）: ステータス、タスクID、工程名、機械名、加工速度、優先度、配台試行順番、履歴1…（可変）、必須OP(上書)、タスク効率、加工途中、特別指定あり、担当OP指定、回答納期、指定納期、計画基準納期、原反投入日、納期緊急、加工開始日、配台済_加工開始／終了、配台済_回答指定16時まで、累計加工量、残加工量、完了率(実行時点)、特別指定_AI。</li>
     </ul>
+    <p class="queue-note">計画シートから廃止した列（優先度・必要人数など）と、結果シート既定の「優先度」列の関係は <span class="file">配台ルール.md</span> 8.0.0 の注記を参照。</p>
   </section>
 
   <section id="doc-sync" class="card" aria-labelledby="h-doc-sync">

@@ -106,7 +106,7 @@ Sub アニメ付き_環境構築を実行()
         "環境構築の実行確認")
     
     If StrComp(Trim$(userInput), ENV_BUILD_PASSWORD, vbBinaryCompare) <> 0 Then
-        MsgBox "パスワードが一致しないため、環境構築は実行されませんでした。", vbInformation
+        AppMsgBox "パスワードが一致しないため、環境構築は実行されませんでした。", vbInformation
         Exit Sub
     End If
     
@@ -400,8 +400,8 @@ End Sub
 Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
-    ' 結果_設備ガントは専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
-    If StrComp(Trim$(targetWs.Name), "結果_設備ガント", vbBinaryCompare) = 0 Then Exit Sub
+    ' 結果_設備ガント／実績明細は専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
+    If 結果_設備ガント系シート名か(targetWs.Name) Then Exit Sub
     su = Application.ScreenUpdating
     On Error Resume Next
     Application.ScreenUpdating = True
@@ -604,18 +604,34 @@ Public Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal 
     Application.ScreenUpdating = prevScr
 End Sub
 
-' 結果_設備ガントのみ表示倍率を設定（シートをアクティブにして ActiveWindow.Zoom）
+' 結果_設備ガント／実績明細は同一ガントレイアウトのため同一扱い（列幅・印刷・Zoom 等）
+Private Function 結果_設備ガント系シート名か(ByVal sheetName As String) As Boolean
+    Dim s As String
+    s = Trim$(sheetName)
+    If StrComp(s, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+        結果_設備ガント系シート名か = True
+    ElseIf StrComp(s, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, vbBinaryCompare) = 0 Then
+        結果_設備ガント系シート名か = True
+    End If
+End Function
+
+' 結果_設備ガント（および実績明細）の表示倍率を設定（各シートをアクティブにして ActiveWindow.Zoom）
 Public Sub 結果_設備ガント_表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
     Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
-    If ws Is Nothing Then GoTo CleanZoom
-    ws.Activate
-    ActiveWindow.Zoom = zoomPercent
-    ws.Range("A1").Activate
-    ActiveWindow.ScrollColumn = 1
-    ActiveWindow.ScrollRow = 1
-CleanZoom:
+    Dim nm As Variant
+    
+    For Each nm In Array(SHEET_RESULT_EQUIP_GANTT, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+        On Error Resume Next
+        Set ws = wb.Worksheets(CStr(nm))
+        If Not ws Is Nothing Then
+            ws.Activate
+            ActiveWindow.Zoom = zoomPercent
+            ws.Range("A1").Activate
+            ActiveWindow.ScrollColumn = 1
+            ActiveWindow.ScrollRow = 1
+        End If
+        Err.Clear
+    Next nm
     On Error GoTo 0
 End Sub
 
@@ -640,8 +656,12 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     lastUsed = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
     lastCol = lastHdr
     If lastUsed > lastCol Then lastCol = lastUsed
-    ' 1 行目は Python 側で A1 から全幅結合のため、MergeArea の列数で最終列を確定（End(xlToLeft) は結合外空白で A 列に飛ぶことがある）
-    If ws.Range("A1").MergeCells Then
+    ' 1 行目: 新形式は D1 から全幅結合（A-B コンボ・C 更新ボタン）、中間は C1、旧形式は A1
+    If ws.Range("D1").MergeCells Then
+        lastTitle = ws.Range("D1").MergeArea.Column + ws.Range("D1").MergeArea.Columns.Count - 1
+    ElseIf ws.Range("C1").MergeCells Then
+        lastTitle = ws.Range("C1").MergeArea.Column + ws.Range("C1").MergeArea.Columns.Count - 1
+    ElseIf ws.Range("A1").MergeCells Then
         lastTitle = ws.Range("A1").MergeArea.Column + ws.Range("A1").MergeArea.Columns.Count - 1
     Else
         lastTitle = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
@@ -667,13 +687,25 @@ Public Sub 結果_設備ガント_列幅を設定(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' 結果_設備ガント：タイトルは結合セル先頭 A1。取り込み後の 1 行目一括書式のあと左寄せが崩れることがあるため固定する。
+' 結果_設備ガント：タイトルは結合セル先頭 D1（A-B コンボ・C 更新ボタン）。C1／A1 は旧ブック用。
 Public Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     On Error Resume Next
-    With ws.Range("A1")
-        .HorizontalAlignment = xlLeft
-        .VerticalAlignment = xlCenter
-    End With
+    If ws.Range("D1").MergeCells Then
+        With ws.Range("D1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    ElseIf ws.Range("C1").MergeCells Then
+        With ws.Range("C1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    Else
+        With ws.Range("A1")
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+        End With
+    End If
 End Sub
 
 ' 結果_設備ガント：印刷のページ設定。Excel では適用順を変えるとプレビューがずれるため、
@@ -686,7 +718,7 @@ Public Sub 結果_設備ガント_印刷ページ設定を適用(ByVal ws As Worksheet)
     Dim i As Long
     
     If ws Is Nothing Then Exit Sub
-    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then Exit Sub
+    If Not 結果_設備ガント系シート名か(ws.Name) Then Exit Sub
     
     On Error Resume Next
     prevPrintComm = Application.PrintCommunication
@@ -856,7 +888,7 @@ Public Sub 結果_設備ガント_行ハイライト_OnSelection(ByVal sh As Object, ByVal Ta
     
     結果_設備ガント_行ハイライト_Clear wb
     
-    If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) <> 0 Then Exit Sub
+    If Not 結果_設備ガント系シート名か(ws.Name) Then Exit Sub
     If Target Is Nothing Then Exit Sub
     
     r = Target.Cells(1, 1).Row
@@ -879,27 +911,34 @@ End Sub
 ' 既存ブックで設備ガントが「セルの書式設定」無効の保護のとき、ハイライト罫線が効かない。パスワードは SHEET_FONT_UNPROTECT_PASSWORD のみ対応（手動パスワードはユーザーが一度解除してから実行）
 Public Sub 結果_設備ガント_保護を書式設定許可で更新()
     Dim ws As Worksheet
-    On Error GoTo Quiet
-    Set ws = ThisWorkbook.Worksheets(SHEET_RESULT_EQUIP_GANTT)
-    If ws Is Nothing Then Exit Sub
-    If ws.ProtectContents Then
-        If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-            ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+    Dim nm As Variant
+    
+    For Each nm In Array(SHEET_RESULT_EQUIP_GANTT, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+        On Error Resume Next
+        Set ws = Nothing
+        Set ws = ThisWorkbook.Worksheets(CStr(nm))
+        If ws Is Nothing Then GoTo NextGanttProt
+        If ws.ProtectContents Then
+            If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+                ws.Unprotect Password:=SHEET_FONT_UNPROTECT_PASSWORD
+            End If
+            If ws.ProtectContents Then ws.Unprotect
         End If
-        If ws.ProtectContents Then ws.Unprotect
-    End If
-    If ws.ProtectContents Then Exit Sub
-    If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
-        ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-    Else
-        ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
-    End If
-Quiet:
+        If ws.ProtectContents Then GoTo NextGanttProt
+        If Len(SHEET_FONT_UNPROTECT_PASSWORD) > 0 Then
+            ws.Protect Password:=SHEET_FONT_UNPROTECT_PASSWORD, DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+        Else
+            ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
+        End If
+NextGanttProt:
+        Err.Clear
+    Next nm
+    On Error GoTo 0
 End Sub
 
 ' 段階1/2 終盤・全シートフォント適用後: 結果の主要4シートの列オートフィット
 ' ・結果_タスク一覧 は非表示列を開かない（結果シート_列幅_AutoFit非表示を維持）
-' ・結果_設備ガント は専用列幅（時刻列を潰さない）＋タイトル A1 左寄せ再固定
+' ・結果_設備ガント／結果_設備ガント_実績明細 は専用列幅（時刻列を潰さない）＋タイトル A1 左寄せ再固定
 Public Sub 結果_主要4結果シート_列オートフィット()
     Dim wb As Workbook
     Dim ws As Worksheet
@@ -936,7 +975,17 @@ Public Sub 結果_主要4結果シート_列オートフィット()
     
     Err.Clear
     Set ws = Nothing
-    Set ws = wb.Worksheets("結果_設備ガント")
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+    If Err.Number = 0 Then
+        結果_設備ガント_列幅を設定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
+    Else
+        Err.Clear
+    End If
+    
+    Err.Clear
+    Set ws = Nothing
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
     If Err.Number = 0 Then
         結果_設備ガント_列幅を設定 ws
         結果_設備ガント_タイトルA1を左寄せに固定 ws
@@ -1235,7 +1284,7 @@ Sub かっこいいボタンを作成()
     y = y + gap
     CreateCoolButtonWithPreset "Gemini鍵を暗号化", "アニメ付き_Gemini認証を暗号化してB1に保存", 50, y, 6
     
-    MsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
+    AppMsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
            "グラデーションはプリセット 1/3/5/4 を使用しています（全 10 色はコード先頭のコメント参照）。" & vbCrLf & _
            "好きな場所にドラッグして配置してください。", vbInformation
 End Sub
@@ -1258,7 +1307,7 @@ Sub かっこいいボタン_配色サンプル作成()
         ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
         On Error GoTo 0
     Next i
-    MsgBox "配色プリセット P1～P10 の見本を配置しました。" & vbCrLf & _
+    AppMsgBox "配色プリセット P1～P10 の見本を配置しました。" & vbCrLf & _
            "クリックしてもマクロは動きません。不要なら図形を削除してください。", vbInformation
 End Sub
 
@@ -1293,7 +1342,7 @@ Public Sub アニメ付きマクロ用_クールボタンを対話配置()
         "50, 50")
     If Len(Trim$(ps)) = 0 Then ps = "50, 50"
     If Not ParseTwoSingleCsv(ps, x, y) Then
-        MsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
+        AppMsgBox "位置の形式が不正です。例: 50, 120", vbExclamation
         Exit Sub
     End If
     
@@ -1310,7 +1359,7 @@ Public Sub アニメ付きマクロ用_クールボタンを対話配置()
     stable = "AnimCool_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
     
     CreateCoolButtonWithPreset Trim$(cap), Trim$(mac), x, y, pr, stable
-    MsgBox "クールボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "クールボタンを配置しました。" & vbCrLf & _
            "図形名: " & stable & vbCrLf & _
            "OnAction: " & Trim$(mac), vbInformation
 End Sub
@@ -1401,7 +1450,7 @@ Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
     Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
     On Error GoTo 0
     If ws Is Nothing Then
-        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
         Exit Sub
     End If
     
@@ -1424,7 +1473,7 @@ Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
     topPos = ws.Cells(1, 1).Top + 4
     
     CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
-    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
 End Sub
 
@@ -1444,7 +1493,7 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
     Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
     On Error GoTo 0
     If ws Is Nothing Then
-        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
         Exit Sub
     End If
     
@@ -1467,7 +1516,7 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
     topPos = ws.Cells(1, 1).Top + 4 + 58
     
     CreateCoolButtonWithPreset "キー順に並べ替え", MACRO_ANIM, leftPos, topPos, 3
-    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
 End Sub
 
@@ -2003,7 +2052,7 @@ Public Sub 配台マクロ_対象シートを条件どおりに保護(Optional ByVal targetDir As S
     For Each ws In ThisWorkbook.Worksheets
         If Left$(ws.Name, 3) = "結果_" Then
             If ws.ProtectContents Then ws.Unprotect
-            If StrComp(ws.Name, SHEET_RESULT_EQUIP_GANTT, vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(ws.Name) Then
                 ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True, AllowFormattingCells:=True
             Else
                 ws.Protect DrawingObjects:=True, Contents:=True, UserInterfaceOnly:=True
@@ -2314,6 +2363,7 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
     Dim preserveFontName As String
     Dim preserveFontSize As Double
     Dim havePreserveFont As Boolean
+    Dim fitSU As Boolean
 
     path = targetDir & "\output\plan_input_tasks.xlsx"
     If Len(Dir(path)) = 0 Then
@@ -2354,8 +2404,6 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
     srcWb.Close SaveChanges:=False
     Set srcWb = Nothing
 
-    On Error Resume Next
-    ws.UsedRange.Columns.AutoFit
     If havePreserveFont Then
         配台計画_タスク入力_UsedRangeにフォント名とサイズを適用 ws, preserveFontName, preserveFontSize
     End If
@@ -2408,6 +2456,16 @@ Public Function ImportPlanInputTasksFromOutput(ByVal targetDir As String) As Boo
             ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).AutoFilter
         End If
     End If
+    On Error GoTo 0
+
+    ' 列幅はオートフィルタの▼分を考慮するため、フィルタ適用後に AutoFit（先に AutoFit すると見出しと重なる）
+    fitSU = Application.ScreenUpdating
+    On Error Resume Next
+    Application.ScreenUpdating = True
+    ws.Activate
+    DoEvents
+    ws.UsedRange.Columns.AutoFit
+    Application.ScreenUpdating = fitSU
     On Error GoTo 0
 
     ' 上書き入力列に薄い黄色（Python planning_core と同系色）? 取り込み後も確実に付与
@@ -2711,7 +2769,7 @@ Public Sub 段階2_取り込み結果を報告()
     ElseIf m_stage2MemberImported Then
         MacroSplash_SetStep "計画生成が完了しました（個人シートのみ。production_plan は見つかりませんでした）。"
     Else
-        MsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
+        AppMsgBox "Pythonの実行は完了しましたが、output フォルダに計画・個人別のいずれの xlsx も見つかりませんでした。" & vbCrLf & vbCrLf & _
                "Python 終了コード: " & CStr(m_lastStage2ExitCode) & vbCrLf & _
                IIf(Len(p) > 0, "探索したフォルダ: " & p & "\output", "ブックが未保存のため output パスを表示できません。先に保存してください。") & vbCrLf & vbCrLf & _
                "LOG シートまたは " & IIf(Len(p) > 0, p & "\log\execution_log.txt", "log\execution_log.txt（ブックと同じフォルダ）") & " で「段階2を中断」「マスタファイル」「メンバーが0人」等を確認してください。" & vbCrLf & _
@@ -3059,7 +3117,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
             ' (1b) 列幅: Python 出力では列幅を書かない。設備ガントは専用、それ以外は AutoFit。
             '     結果_タスク一覧 は非表示列があるため、全列 Select+AutoFit すると非表示が解除される。
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_列幅を設定 ws
             ElseIf StrComp(sheetName, "結果_タスク一覧", vbBinaryCompare) = 0 Then
                 結果シート_列幅_AutoFit非表示を維持 ws
@@ -3072,21 +3130,21 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             ws.UsedRange.Borders.LineStyle = 1 ' xlContinuous
             ws.UsedRange.Borders.Weight = 2    ' xlThin
             ' 罫線付与で列幅が変わる環境があるため、設備ガントは専用幅を再適用
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_列幅を設定 ws
             End If
             
             ' (3) 見出し（1行目）：太字・薄い黄緑（表形式シート向け）
-            '     結果_設備ガント は 1 行目がレポートタイトル（Python でサイズ・背景を指定）のため上書きしない
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) <> 0 Then
+            '     結果_設備ガント／実績明細 は 1 行目がレポートタイトル（Python でサイズ・背景を指定）のため上書きしない
+            If Not 結果_設備ガント系シート名か(sheetName) Then
                 With ws.UsedRange.Rows(1)
                     .Font.Bold = True
                     .Interior.Color = RGB(226, 239, 218) ' 薄い黄緑色
                 End With
             End If
             
-            ' (3b) 結果_設備ガントのみ：タイトル A1（結合先頭）を強制的に左寄せ
-            If StrComp(sheetName, "結果_設備ガント", vbBinaryCompare) = 0 Then
+            ' (3b) 結果_設備ガント／実績明細：タイトル A1（結合先頭）を強制的に左寄せ
+            If 結果_設備ガント系シート名か(sheetName) Then
                 結果_設備ガント_タイトルA1を左寄せに固定 ws
             End If
             
@@ -3106,9 +3164,17 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         On Error Resume Next
         取込後_結果シートへマスタ時刻を反映 targetWb
         Err.Clear
-        ' マスタ反映・保護後も、設備ガントの列幅は専用設定に戻す（AutoFit 混入防止）
+        ' マスタ反映・保護後も、設備ガント／実績明細の列幅は専用設定に戻す（AutoFit 混入防止）
         Set ws = Nothing
-        Set ws = targetWb.Worksheets("結果_設備ガント")
+        Set ws = targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+        If Err.Number = 0 Then
+            結果_設備ガント_列幅を設定 ws
+            結果_設備ガント_タイトルA1を左寄せに固定 ws
+            結果_設備ガント_印刷ページ設定を適用 ws
+        End If
+        Err.Clear
+        Set ws = Nothing
+        Set ws = targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
         If Err.Number = 0 Then
             結果_設備ガント_列幅を設定 ws
             結果_設備ガント_タイトルA1を左寄せに固定 ws
@@ -3235,6 +3301,14 @@ Finish:
     Application.DisplayAlerts = prevDisplayAlerts
     Application.ScreenUpdating = prevScreenUpdating
     
+    ' 設備ガント系シートは openpyxl 再出力で OLE が消えるため、保護の前に日付ジャンプ用コンボを再配置する
+    On Error Resume Next
+    If planImported Then
+        結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
+    End If
+    Err.Clear
+    On Error GoTo 0
+    
     If st2DidUnlock Then
         On Error Resume Next
         配台マクロ_対象シートを条件どおりに保護 targetDir
@@ -3264,6 +3338,199 @@ ErrHandler:
         wsLog.Cells(1, 1).Value = m_lastStage2ErrMsg
     End If
     Resume Finish
+End Sub
+
+' =========================================================
+' 実績設備ガントのみ: plan_refresh_actual_detail_gantt.py → output から当該シートを取り込み
+' =========================================================
+Public Sub 実績設備ガント_のみ更新_実行()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim refreshPath As String
+    Dim targetWb As Workbook
+    Dim sourceWb As Workbook
+    Dim sourceWs As Worksheet
+    Dim ws As Worksheet
+    Dim metaD2 As Variant
+    Dim prevScreenUpdating As Boolean
+    Dim prevDisplayAlerts As Boolean
+    Dim stUnlock As Boolean
+    Dim hideCmd As Boolean
+    Dim st2XwErr As Long
+    Dim st2XwDesc As String
+    Dim sheetName As String
+    Dim blockMsg As String
+    
+    On Error GoTo EH
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        AppMsgBox "先にこのブックを保存してください。", vbExclamation, "実績ガント更新"
+        Exit Sub
+    End If
+    
+    If Not TryRefreshWorkbookQueries() Then
+        AppMsgBox "データ接続の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "実績ガント更新"
+        Exit Sub
+    End If
+    
+    prevScreenUpdating = Application.ScreenUpdating
+    prevDisplayAlerts = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    ThisWorkbook.Save
+    
+    stUnlock = False
+    配台マクロ_全シート保護を試行解除
+    stUnlock = True
+    
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    
+    On Error Resume Next
+    Kill targetDir & "\log\stage_actual_gantt_refresh_exitcode.txt"
+    On Error GoTo EH
+    
+    If STAGE12_USE_XLWINGS_RUNPYTHON And Not STAGE12_USE_XLWINGS_SPLASH_LOG Then
+        On Error Resume Next
+        Err.Clear
+        XwRunConsoleRunner "run_refresh_actual_detail_gantt_for_xlwings"
+        If Err.Number <> 0 Then
+            st2XwErr = Err.Number
+            st2XwDesc = Err.Description
+            Err.Clear
+            On Error GoTo EH
+            AppMsgBox "xlwings RunPython が失敗しました (" & CStr(st2XwErr) & "): " & st2XwDesc, vbCritical, "実績ガント更新"
+            GoTo DoneProtect
+        End If
+        On Error GoTo EH
+        exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_actual_gantt_refresh_exitcode.txt")
+        If exitCode = &H7FFFFFFF Then exitCode = 1
+    Else
+        hideCmd = Stage12CmdHideWindowEffective()
+        wsh.CurrentDirectory = Environ("TEMP")
+        runBat = "@echo off" & vbCrLf & "setlocal EnableDelayedExpansion" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & _
+                 "if not exist log mkdir log" & vbCrLf & _
+                 "chcp 65001>nul" & vbCrLf & _
+                 "echo [actual_gantt] Running plan_refresh_actual_detail_gantt.py ..." & vbCrLf & _
+                 "py -3 -u python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
+                 "set PM_ACT_EXIT=!ERRORLEVEL!" & vbCrLf & _
+                 "echo." & vbCrLf & _
+                 "echo [actual_gantt] Finished. ERRORLEVEL=!PM_ACT_EXIT!" & vbCrLf & _
+                 "(echo !PM_ACT_EXIT!)>log\stage_actual_gantt_refresh_exitcode.txt" & vbCrLf
+        If Not hideCmd Then
+            runBat = runBat & "if not !PM_ACT_EXIT! equ 0 (" & vbCrLf & _
+                     "echo." & vbCrLf & _
+                     "echo [actual_gantt] Python error. Press any key to close..." & vbCrLf & _
+                     "pause" & vbCrLf & ")" & vbCrLf
+        End If
+        runBat = runBat & "exit /b !PM_ACT_EXIT!"
+        exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideCmd, hideCmd)
+    End If
+    
+    If exitCode <> 0 Then
+        blockMsg = Trim$(GeminiReadUtf8File(targetDir & "\log\stage2_blocking_message.txt"))
+        If Len(blockMsg) > 0 Then
+            AppMsgBox blockMsg, vbExclamation, "実績ガント更新"
+        Else
+            AppMsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf & _
+                       "log\execution_log.txt を確認してください。", vbExclamation, "実績ガント更新"
+        End If
+        GoTo DoneProtect
+    End If
+    
+    refreshPath = targetDir & "\output\actual_detail_gantt_refresh.xlsx"
+    If Len(Dir(refreshPath)) = 0 Then
+        AppMsgBox "出力ファイルが見つかりません: " & refreshPath, vbExclamation, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+    
+    Set targetWb = ThisWorkbook
+    マクロブックから計画取込シート同源名シートを削除 targetWb, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL
+    
+    Set sourceWb = Workbooks.Open(refreshPath)
+    sourceWb.Windows(1).Visible = False
+    Set sourceWs = Nothing
+    On Error Resume Next
+    Set sourceWs = sourceWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL)
+    On Error GoTo EH
+    If sourceWs Is Nothing Then
+        sourceWb.Close SaveChanges:=False
+        AppMsgBox "取込元ブックに「" & SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & "」シートがありません。", vbCritical, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+    
+    sheetName = Trim$(sourceWs.Name)
+    metaD2 = sourceWs.Range("D2").Value
+    sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
+    sourceWb.Close SaveChanges:=False
+    Set sourceWb = Nothing
+    
+    Set ws = 取込ブック内のコピー先シートを取得(targetWb, sheetName)
+    If ws Is Nothing Then
+        AppMsgBox "シートの取り込みに失敗しました。", vbCritical, "実績ガント更新"
+        GoTo DoneProtect
+    End If
+
+    ' D2（メタ行: 作成/データ抽出/マスタ時刻）は、取り込み後の整形処理で結合範囲が変わる場合があるため、
+    ' 取込元の値を明示的に再適用しておく（見た目の更新漏れ対策）。
+    On Error Resume Next
+    If ws.Range("D2").MergeCells Then
+        ws.Range("D2").MergeArea.Cells(1, 1).Value = metaD2
+    Else
+        ws.Range("D2").Value = metaD2
+    End If
+    On Error GoTo EH
+    
+    If 結果_設備ガント系シート名か(sheetName) Then
+        結果_設備ガント_列幅を設定 ws
+    End If
+    ws.UsedRange.Borders.LineStyle = 1
+    ws.UsedRange.Borders.Weight = 2
+    If 結果_設備ガント系シート名か(sheetName) Then
+        結果_設備ガント_列幅を設定 ws
+        結果_設備ガント_タイトルA1を左寄せに固定 ws
+        結果_設備ガント_印刷ページ設定を適用 ws
+    End If
+    On Error Resume Next
+    If Left$(sheetName, 3) = "結果_" Then 結果シート_メインへ戻るリンクを付与 ws
+    On Error GoTo EH
+    
+    On Error Resume Next
+    取込後_結果シートへマスタ時刻を反映 targetWb
+    On Error GoTo EH
+    
+    結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
+    
+    On Error Resume Next
+    targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL).Activate
+    On Error GoTo EH
+    
+    AppMsgBox "「" & SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & "」を更新しました。", vbInformation, "実績ガント更新"
+    GoTo DoneProtectOk
+    
+DoneProtect:
+DoneProtectOk:
+    If stUnlock Then
+        On Error Resume Next
+        配台マクロ_対象シートを条件どおりに保護 targetDir
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = prevDisplayAlerts
+    Application.ScreenUpdating = prevScreenUpdating
+    Exit Sub
+    
+EH:
+    On Error Resume Next
+    If Not sourceWb Is Nothing Then
+        sourceWb.Close SaveChanges:=False
+        Set sourceWb = Nothing
+    End If
+    On Error GoTo 0
+    AppMsgBox "VBAエラー: " & Err.Number & " / " & Err.Description, vbCritical, "実績ガント更新"
+    Resume DoneProtect
 End Sub
 
 ' 互換・他モジュール用: 段階2のみ（エラー時 MsgBox。成功時はスプラッシュ＋チャイム）
@@ -3452,7 +3719,7 @@ NextSheetIter:
     wsLog.Activate
     wsLog.Range("A1").Select
     
-    MsgBox "シート「" & LOG_SHEET & "」に結果を出しました。" & vbCrLf & vbCrLf & _
+    AppMsgBox "シート「" & LOG_SHEET & "」に結果を出しました。" & vbCrLf & vbCrLf & _
         "列の意味:" & vbCrLf & _
         "・A99 列: 文字列「A666」を A99 に書き、読み戻して一致→OK、元の値に復元。" & vbCrLf & _
         "・読取/UsedRange/書込/Activate の NG は、その操作で Err が出たシートです。" & vbCrLf & _
@@ -3461,6 +3728,6 @@ NextSheetIter:
         vbInformation, "COM 操作テスト"
 End Sub
 
-' ブックを開いたときに Ctrl+Shift+テンキー - を登録（ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
+' ブックを開いたときに OnKey を登録（Ctrl+Shift+テンキー -＝メイン、0/1/2＝段階1+2連続・段階1・段階2。ThisWorkbook の BeforeClose で解除する例は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt）
 
 

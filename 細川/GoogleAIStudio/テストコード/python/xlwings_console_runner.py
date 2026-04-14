@@ -42,6 +42,7 @@ import traceback
 from datetime import datetime
 
 STAGE_VBA_EXIT_CODE_FILE = "stage_vba_exitcode.txt"
+STAGE_ACTUAL_GANTT_REFRESH_EXIT_CODE_FILE = "stage_actual_gantt_refresh_exitcode.txt"
 
 
 def _ensure_this_python_dir_on_syspath() -> None:
@@ -76,6 +77,20 @@ def _write_stage_vba_exit_code(code: int) -> None:
         logd = os.path.join(os.getcwd(), "log")
         os.makedirs(logd, exist_ok=True)
         p = os.path.join(logd, STAGE_VBA_EXIT_CODE_FILE)
+        with open(p, "w", encoding="utf-8", newline="\n") as f:
+            f.write(str(int(code)))
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        pass
+
+
+def _write_actual_gantt_refresh_stage_vba_exit_code(code: int) -> None:
+    """実績明細ガントのみ更新: VBA が読む終了コード（段階1/2 の stage_vba_exitcode と分離）。"""
+    try:
+        logd = os.path.join(os.getcwd(), "log")
+        os.makedirs(logd, exist_ok=True)
+        p = os.path.join(logd, STAGE_ACTUAL_GANTT_REFRESH_EXIT_CODE_FILE)
         with open(p, "w", encoding="utf-8", newline="\n") as f:
             f.write(str(int(code)))
             f.flush()
@@ -282,6 +297,56 @@ def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
         return rc
     finally:
         _write_stage_vba_exit_code(rc)
+
+
+def run_refresh_actual_detail_gantt_for_xlwings() -> int:
+    """
+    実績明細ガントのみ: ``refresh_equipment_gantt_actual_detail_only`` を実行。
+    VBA: XwRunConsoleRunner "run_refresh_actual_detail_gantt_for_xlwings"
+    終了コードは ``log/stage_actual_gantt_refresh_exitcode.txt`` に書く。
+    """
+    rc = 1
+    try:
+        try:
+            _prepare_from_caller_book()
+        except Exception:
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            rc = 2
+            return rc
+        _apply_workbook_env_overrides()
+        _append_execution_log_line(
+            "INFO",
+            "実績明細ガント: xlwings run_refresh_actual_detail_gantt_for_xlwings 開始",
+        )
+        _purge_planning_core_modules()
+        try:
+            import planning_core as pc
+
+            pc.refresh_equipment_gantt_actual_detail_only()
+            rc = 0
+        except pc.PlanningValidationError as e:
+            msg = str(e).strip() or "実績明細ガントの生成を中断しました。"
+            if not os.path.isfile(pc.stage2_blocking_message_path):
+                pc._write_stage2_blocking_message(msg)
+            logging.warning("xlwings: %s", msg)
+            rc = 3
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                rc = 0
+            elif isinstance(c, int):
+                rc = 0 if c == 0 else c
+            else:
+                rc = 1
+        except Exception:
+            logging.exception("xlwings: 実績明細ガントのみ更新で失敗しました。")
+            _append_execution_log_traceback(
+                "xlwings: 実績明細ガントのみ更新で失敗しました。"
+            )
+            rc = 1
+        return rc
+    finally:
+        _write_actual_gantt_refresh_stage_vba_exit_code(rc)
 
 
 def run_stage2_for_xlwings() -> int:
