@@ -2252,7 +2252,7 @@ def _write_results_equipment_gantt_sheet(
     )
     meta_line = (
         f"作成　{create_ts}"
-        f"　・　データ坸出し　{data_extract_dt_str or '—'}"
+        f"　・　データ抽出　{data_extract_dt_str or '—'}"
         f"　・　マスタ（master.xlsm）　{master_mtime}"
     )
     mtop = ws.cell(row=row, column=title_start_col, value=meta_line)
