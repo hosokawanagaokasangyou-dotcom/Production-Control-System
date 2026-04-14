@@ -70,28 +70,6 @@ def _agent_debug_ndjson(
         pass
 
 
-def _agent_debug_ndjson_acad41(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    """Debug NDJSON（セッション acad41）。リポジトリ直下 debug-acad41.log へ追記。"""
-    try:
-        _p = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-acad41.log")
-        )
-        _line = {
-            "sessionId": "acad41",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 # endregion agent log
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
@@ -17469,14 +17447,6 @@ def _changeover_plan_segments_and_machining_lower_bound(
     ).strip()
     if not last_lead:
         last_lead = str(rep or "").strip()
-    # region agent log
-    _agent_debug_ndjson_acad41(
-        "H1",
-        "_changeover_plan_segments_and_machining_lower_bound",
-        "last_lead_resolved",
-        {"mach_occ": mach_occ, "has_last_lead": bool(last_lead), "has_rep": bool(rep)},
-    )
-    # endregion agent log
     st_r = daily_status.get(rep) if rep else None
     br_r = merge_time_intervals(list(st_r.get("breaks_dt") or [])) if st_r else []
     end_r = st_r["end_dt"] if st_r else None
