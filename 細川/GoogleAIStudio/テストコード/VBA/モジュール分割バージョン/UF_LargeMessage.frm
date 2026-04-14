@@ -1,12 +1,12 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_LargeMessage 
-   Caption         =   "ãŠçŸ¥ã‚‰ã›"
+   Caption         =   "‚¨’m‚ç‚¹"
    ClientHeight    =   3040
    ClientLeft      =   110
    ClientTop       =   450
    ClientWidth     =   4580
    OleObjectBlob   =   "UF_LargeMessage.frx":0000
-   StartUpPosition =   1  'ã‚ªãƒ¼ãƒŠãƒ¼ ãƒ•ã‚©ãƒ¼ãƒ ã®ä¸­å¤®
+   StartUpPosition =   1  'ƒI[ƒi[ ƒtƒH[ƒ€‚Ì’†‰›
 End
 Attribute VB_Name = "UF_LargeMessage"
 Attribute VB_GlobalNameSpace = False
@@ -33,7 +33,7 @@ Private Sub SetupStripeColor(ByVal buttons As VbMsgBoxStyle)
 End Sub
 
 Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
-    ' MSForms.UserForm ã« ClientWidth ã¯ç„¡ã„ã€‚æ ä»˜ãå…¨ä½“ã®å¹…ã¯ Me.Widthï¼ˆInsideWidth ã§ã‚‚å¯ï¼‰ã€‚
+    ' MSForms.UserForm ‚É ClientWidth ‚Í–³‚¢B˜g•t‚«‘S‘Ì‚Ì•‚Í Me.WidthiInsideWidth ‚Å‚à‰ÂjB
     Dim innerW As Single
     innerW = Me.Width
     Dim grp As Long
@@ -43,9 +43,9 @@ Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
     cmdYes.Visible = False
     cmdNo.Visible = False
     cmdOK.Caption = "OK"
-    cmdCancel.Caption = "ã‚­ãƒ£ãƒ³ã‚»ãƒ«"
-    cmdYes.Caption = "ã¯ã„"
-    cmdNo.Caption = "ã„ã„ãˆ"
+    cmdCancel.Caption = "ƒLƒƒƒ“ƒZƒ‹"
+    cmdYes.Caption = "‚Í‚¢"
+    cmdNo.Caption = "‚¢‚¢‚¦"
     Select Case grp
         Case 0
             cmdOK.Visible = True
@@ -71,7 +71,7 @@ Public Sub ApplySetup(ByVal prompt As String, ByVal buttons As VbMsgBoxStyle, By
     If Len(title) > 0 Then
         Me.Caption = title
     Else
-        Me.Caption = "ãŠçŸ¥ã‚‰ã›"
+        Me.Caption = "‚¨’m‚ç‚¹"
     End If
     SetupStripeColor buttons
     LayoutButtons buttons
