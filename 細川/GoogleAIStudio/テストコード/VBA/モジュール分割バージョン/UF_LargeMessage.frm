@@ -33,6 +33,9 @@ Private Sub SetupStripeColor(ByVal buttons As VbMsgBoxStyle)
 End Sub
 
 Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
+    ' MSForms.UserForm に ClientWidth は無い。枠付き全体の幅は Me.Width（InsideWidth でも可）。
+    Dim innerW As Single
+    innerW = Me.Width
     Dim grp As Long
     grp = buttons And &H7&
     cmdOK.Visible = False
@@ -46,20 +49,20 @@ Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
     Select Case grp
         Case 0
             cmdOK.Visible = True
-            cmdOK.Left = (Me.InsideWidth - cmdOK.Width) / 2
+            cmdOK.Left = (innerW - cmdOK.Width) / 2
         Case vbOKCancel
             cmdOK.Visible = True
             cmdCancel.Visible = True
-            cmdOK.Left = Me.InsideWidth / 2 - cmdOK.Width - 120
-            cmdCancel.Left = Me.InsideWidth / 2 + 120
+            cmdOK.Left = innerW / 2 - cmdOK.Width - 120
+            cmdCancel.Left = innerW / 2 + 120
         Case vbYesNo
             cmdYes.Visible = True
             cmdNo.Visible = True
-            cmdYes.Left = Me.InsideWidth / 2 - cmdYes.Width - 120
-            cmdNo.Left = Me.InsideWidth / 2 + 120
+            cmdYes.Left = innerW / 2 - cmdYes.Width - 120
+            cmdNo.Left = innerW / 2 + 120
         Case Else
             cmdOK.Visible = True
-            cmdOK.Left = (Me.InsideWidth - cmdOK.Width) / 2
+            cmdOK.Left = (innerW - cmdOK.Width) / 2
     End Select
 End Sub
 
