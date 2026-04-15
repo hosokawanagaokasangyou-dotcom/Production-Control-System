@@ -1791,7 +1791,21 @@ def _paint_gantt_timeline_row_merged(
                         if _mem_ds:
                             # xlwings の TextFrame.WordWrap=True は先頭シェイプ付近で極端に遅く
                             # 「途中で止まった」ように見えるため、1 行（全角空白区切り）にする。
-                            _shape_text = _ds_txt + "\u3000" + "・".join(_mem_ds[:8])
+                            _mem1l: list[str] = []
+                            for _x in _mem_ds[:8]:
+                                _t = (
+                                    str(_x)
+                                    .replace("\r", "")
+                                    .replace("\n", "")
+                                    .strip()
+                                )
+                                if _t:
+                                    _mem1l.append(_t)
+                            _shape_text = (
+                                _ds_txt + "\u3000" + "・".join(_mem1l)
+                                if _mem1l
+                                else _ds_txt
+                            )
                         # #region agent log
                         try:
                             _p = os.path.normpath(
@@ -3825,14 +3839,14 @@ def _gantt_member_labels_for_startup_in_range(
         return []
     raw_names: list[str] = []
     seen_raw: set[str] = set()
-    op = str(best_ev.get("op") or "").strip()
+    op = " ".join(str(best_ev.get("op") or "").split())
     if op and op not in seen_raw:
         seen_raw.add(op)
         raw_names.append(op)
-    sub_raw = str(best_ev.get("sub") or "").strip()
+    sub_raw = " ".join(str(best_ev.get("sub") or "").split())
     if sub_raw:
         for seg in re.split(r"[,、]", sub_raw):
-            t = seg.strip()
+            t = " ".join(str(seg or "").split())
             if t and t not in seen_raw:
                 seen_raw.add(t)
                 raw_names.append(t)
@@ -17101,6 +17115,15 @@ def _daily_startup_fill_segment_staff(
         ):
             continue
         chosen.append(m)
+    # 日次始業は同一ロール直後の短区間のため、ミラーのみで母集団全員が落ちると
+    # タイムライン op が空になりガントに氏名が出ない。表示・整合優先でミラーを無視して埋める。
+    if len(chosen) < need_n:
+        for m in eligible:
+            if len(chosen) >= need_n:
+                break
+            if m in chosen:
+                continue
+            chosen.append(m)
     if not chosen:
         # #region agent log
         try:
