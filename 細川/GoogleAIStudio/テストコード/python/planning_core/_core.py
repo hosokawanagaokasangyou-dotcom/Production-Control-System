@@ -20764,7 +20764,20 @@ def _trial_order_first_schedule_pass(
         return False
     eligible_sorted = sorted(
         eligible,
-        key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
+        key=lambda t: (
+            int(t.get("dispatch_trial_order") or 10**9),
+            # 特別ルール（特別ルール列挙.md）:
+            # SEC×SEC機 湖南で「PN」を含む依頼NOは、同日に配台する場合は「JR」等より優先（同一試行順帯の先頭側へ寄せる）
+            0
+            if (
+                _normalize_process_name_for_rule_match(t.get("machine"))
+                == _normalize_process_name_for_rule_match("SEC")
+                and _normalize_equipment_match_key(t.get("machine_name"))
+                == _normalize_equipment_match_key("SEC機　湖南")
+                and "PN" in unicodedata.normalize("NFKC", str(t.get("task_id") or ""))
+            )
+            else 1,
+        ),
     )
     _mc_plan_end = _machine_calendar_planning_window_end_dt(
         current_date, daily_status, members
