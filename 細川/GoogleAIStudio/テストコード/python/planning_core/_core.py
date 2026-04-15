@@ -1788,10 +1788,8 @@ def _paint_gantt_timeline_row_merged(
                             evlist, _seg_lo, _seg_hi
                         )
                         _shape_text = _ds_txt
+                        _mem1l: list[str] = []
                         if _mem_ds:
-                            # xlwings の TextFrame.WordWrap=True は先頭シェイプ付近で極端に遅く
-                            # 「途中で止まった」ように見えるため、1 行（全角空白区切り）にする。
-                            _mem1l: list[str] = []
                             for _x in _mem_ds[:8]:
                                 _t = (
                                     str(_x)
@@ -1801,11 +1799,6 @@ def _paint_gantt_timeline_row_merged(
                                 )
                                 if _t:
                                     _mem1l.append(_t)
-                            _shape_text = (
-                                _ds_txt + "\u3000" + "・".join(_mem1l)
-                                if _mem1l
-                                else _ds_txt
-                            )
                         # #region agent log
                         try:
                             _p = os.path.normpath(
@@ -1828,6 +1821,7 @@ def _paint_gantt_timeline_row_merged(
                                     "row": int(row),
                                     "mem_ds_len": len(_mem_ds),
                                     "text_has_nl": "\n" in str(_shape_text),
+                                    "member_chip_below": bool(_mem1l),
                                     "evlist_len": len(evlist or []),
                                 },
                                 "timestamp": int(time_module.time() * 1000),
@@ -1845,7 +1839,8 @@ def _paint_gantt_timeline_row_merged(
                                 "text": _shape_text,
                                 "italic": bool(label_italic),
                                 "fill_hex": str(gh_ds),
-                                "member_labels": [],
+                                "member_labels": list(_mem1l),
+                                "member_chip_below": bool(_mem1l),
                                 "day_key": shape_day_key or "",
                             }
                         )
@@ -7044,53 +7039,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 mem_line = _com_excel_bgr_rgb(175, 180, 188)
                 mem_txt = _com_excel_bgr_rgb(38, 40, 46)
             if mems_all:
-                # メンバー縦幅＝依頼NO と同じ（行高の 1/5 目標）。行全体 [top, top+h] に収まるよう
-                # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。
-                _gap_mm = 1.35
-                h_main = max(9.0, float(_h_req_no))
-                h_mem_use = h_main
-                _rin_row = 1.0
-                _rout_row = 1.0
-                row_top_b = float(top)
-                row_bot_b = float(top) + float(h)
-                _gap_eff = float(_gap_mm)
-                _hmem_eff = float(h_mem_use)
-                _hmain_eff = float(h_main)
-                y_main = band_bot - _band_inset - _hmain_eff
-                y_mem = y_main - _gap_eff - _hmem_eff
-                for _squeeze in range(28):
-                    st = float(y_mem)
-                    sb = float(y_main) + float(_hmain_eff)
-                    lo = (row_top_b + _rin_row) - st
-                    hi = (row_bot_b - _rout_row) - sb
-                    if lo <= hi:
-                        if lo > 0.0:
-                            delta = lo
-                        elif hi < 0.0:
-                            delta = hi
-                        else:
-                            delta = 0.0
-                        y_mem += delta
-                        y_main += delta
-                        break
-                    if _gap_eff > 0.35:
-                        _gap_eff = max(0.35, _gap_eff - 0.35)
-                    elif _hmem_eff > 6.0:
-                        _hmem_eff = max(6.0, _hmem_eff - 0.5)
-                    elif _hmain_eff > 8.0:
-                        _hmain_eff = max(8.0, _hmain_eff - 0.5)
-                    else:
-                        y_main = band_bot - _band_inset - _hmain_eff
-                        y_mem = y_main - _gap_eff - _hmem_eff
-                        lo2 = (row_top_b + _rin_row) - float(y_mem)
-                        if lo2 > 0.0:
-                            y_mem += lo2
-                            y_main += lo2
-                        break
-                    y_main = band_bot - _band_inset - _hmain_eff
-                    y_mem = y_main - _gap_eff - _hmem_eff
-                h_main = float(_hmain_eff)
-                h_mem_use = float(_hmem_eff)
+                _chip_below = bool(sp.get("member_chip_below"))
                 gx = 1.0
 
                 def _emit_member_pills(
@@ -7144,32 +7093,131 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         n_added += 1
                         _record_day_shape(s_mem, day_k)
 
-                _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
-                _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
-                shp_main = _gantt_xlw_add_round_rect(
-                    left,
-                    y_main,
-                    label_w,
-                    h_main,
-                    text,
-                    fill_rgb=fill_bgr,
-                    line_rgb=line_bgr,
-                    text_rgb=text_bgr,
-                    font_pt=float(_main_fp),
-                    bold=True,
-                    italic=bool(sp.get("italic")),
-                    line_wt=0.75,
-                    adj_round=0.2,
-                    shadow=False,
-                    shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
-                )
-                if shp_main is not None:
-                    n_added += 1
-                    _record_day_shape(shp_main, dk)
-                    try:
-                        shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
-                    except Exception:
-                        pass
+                if _chip_below:
+                    # 日次始業準備: メイン（タイトル）の直下に担当者チップを別シェイプで置く
+                    _gap_eff = 1.35
+                    _hmain_eff = max(9.0, float(_h_req_no))
+                    _hmem_eff = max(9.0, float(_h_req_no))
+                    row_top_lim = float(band_top) + _band_inset
+                    row_bot_lim = float(band_bot) - _band_inset
+                    for _squeeze in range(28):
+                        y_main = row_top_lim
+                        y_mem = y_main + _hmain_eff + _gap_eff
+                        if y_mem + _hmem_eff <= row_bot_lim + 1e-9:
+                            break
+                        if _gap_eff > 0.35:
+                            _gap_eff = max(0.35, _gap_eff - 0.35)
+                        elif _hmem_eff > 5.5:
+                            _hmem_eff = max(5.5, _hmem_eff - 0.5)
+                        elif _hmain_eff > 5.5:
+                            _hmain_eff = max(5.5, _hmain_eff - 0.5)
+                        else:
+                            _hmem_eff = max(5.0, _hmem_eff - 0.25)
+                            _hmain_eff = max(5.0, _hmain_eff - 0.25)
+                    h_main = float(_hmain_eff)
+                    h_mem_use = float(_hmem_eff)
+                    y_main = row_top_lim
+                    y_mem = y_main + h_main + _gap_eff
+                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                    _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
+                    shp_main = _gantt_xlw_add_round_rect(
+                        left,
+                        y_main,
+                        label_w,
+                        h_main,
+                        text,
+                        fill_rgb=fill_bgr,
+                        line_rgb=line_bgr,
+                        text_rgb=text_bgr,
+                        font_pt=float(_main_fp),
+                        bold=True,
+                        italic=bool(sp.get("italic")),
+                        line_wt=0.75,
+                        adj_round=0.2,
+                        shadow=False,
+                        shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                    )
+                    if shp_main is not None:
+                        n_added += 1
+                        _record_day_shape(shp_main, dk)
+                        try:
+                            shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
+                        except Exception:
+                            pass
+                else:
+                    # メンバー縦幅＝依頼NO と同じ（行高の 1/5 目標）。行全体 [top, top+h] に収まるよう
+                    # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。（既定: メンバーは依頼NO の直上）
+                    _gap_mm = 1.35
+                    h_main = max(9.0, float(_h_req_no))
+                    h_mem_use = h_main
+                    _rin_row = 1.0
+                    _rout_row = 1.0
+                    row_top_b = float(top)
+                    row_bot_b = float(top) + float(h)
+                    _gap_eff = float(_gap_mm)
+                    _hmem_eff = float(h_mem_use)
+                    _hmain_eff = float(h_main)
+                    y_main = band_bot - _band_inset - _hmain_eff
+                    y_mem = y_main - _gap_eff - _hmem_eff
+                    for _squeeze in range(28):
+                        st = float(y_mem)
+                        sb = float(y_main) + float(_hmain_eff)
+                        lo = (row_top_b + _rin_row) - st
+                        hi = (row_bot_b - _rout_row) - sb
+                        if lo <= hi:
+                            if lo > 0.0:
+                                delta = lo
+                            elif hi < 0.0:
+                                delta = hi
+                            else:
+                                delta = 0.0
+                            y_mem += delta
+                            y_main += delta
+                            break
+                        if _gap_eff > 0.35:
+                            _gap_eff = max(0.35, _gap_eff - 0.35)
+                        elif _hmem_eff > 6.0:
+                            _hmem_eff = max(6.0, _hmem_eff - 0.5)
+                        elif _hmain_eff > 8.0:
+                            _hmain_eff = max(8.0, _hmain_eff - 0.5)
+                        else:
+                            y_main = band_bot - _band_inset - _hmain_eff
+                            y_mem = y_main - _gap_eff - _hmem_eff
+                            lo2 = (row_top_b + _rin_row) - float(y_mem)
+                            if lo2 > 0.0:
+                                y_mem += lo2
+                                y_main += lo2
+                            break
+                        y_main = band_bot - _band_inset - _hmain_eff
+                        y_mem = y_main - _gap_eff - _hmem_eff
+                    h_main = float(_hmain_eff)
+                    h_mem_use = float(_hmem_eff)
+                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                    _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
+                    shp_main = _gantt_xlw_add_round_rect(
+                        left,
+                        y_main,
+                        label_w,
+                        h_main,
+                        text,
+                        fill_rgb=fill_bgr,
+                        line_rgb=line_bgr,
+                        text_rgb=text_bgr,
+                        font_pt=float(_main_fp),
+                        bold=True,
+                        italic=bool(sp.get("italic")),
+                        line_wt=0.75,
+                        adj_round=0.2,
+                        shadow=False,
+                        shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                    )
+                    if shp_main is not None:
+                        n_added += 1
+                        _record_day_shape(shp_main, dk)
+                        try:
+                            shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
+                        except Exception:
+                            pass
             else:
                 _nlines = max(1, str(text).count("\n") + 1)
                 label_h = _h_req_no
