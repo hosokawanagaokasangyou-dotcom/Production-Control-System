@@ -1176,9 +1176,6 @@ SOURCE_BASE_COLUMNS = [
     TASK_COL_COMPLETION_FLAG,
     TASK_COL_ACTUAL_DONE,
     TASK_COL_ACTUAL_OUTPUT,
-    TASK_COL_DATA_EXTRACTION_DT,
-    TASK_COL_DATA_EXTRACTION_TIME,
-    TASK_COL_EXTRACTION_TIME,
 ]
 PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_EXCLUDE_FROM_ASSIGNMENT,
@@ -1215,7 +1212,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜抽出時間まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反幅）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反幅）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
