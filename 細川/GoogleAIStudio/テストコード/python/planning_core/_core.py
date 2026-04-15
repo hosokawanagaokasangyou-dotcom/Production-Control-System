@@ -864,6 +864,44 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
 
+# region agent log
+def _agent_ndjson_log(
+    *,
+    hypothesisId: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+    runId: str = "pre-fix",
+) -> None:
+    try:
+        import json, time, os
+        from pathlib import Path
+
+        payload = {
+            "sessionId": "8a848c",
+            "timestamp": int(time.time() * 1000),
+            "hypothesisId": str(hypothesisId),
+            "runId": str(runId),
+            "location": str(location),
+            "message": str(message),
+            "data": data or {},
+        }
+        # どの実行経路（xlwings / cmd / IDE）でも同じ場所に残すため、常にリポジトリ直下へ出力する。
+        # __file__ = .../細川/GoogleAIStudio/テストコード/python/planning_core/_core.py
+        # repo root = parents[5]
+        try:
+            repo_root = Path(__file__).resolve().parents[5]
+            log_path = repo_root / "debug-8a848c.log"
+        except Exception:
+            log_path = Path(os.path.abspath("debug-8a848c.log"))
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+# endregion
+
+
 def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
         return False
@@ -15472,6 +15510,17 @@ SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
+# 段階2の「当日」判定に使う macro_now_dt（データ抽出時刻由来）について:
+# - 既定では **日付のみ** を採用し、時刻は DEFAULT_START_TIME に正規化する。
+#   加工計画DATA のデータ抽出が夕方でも、同日シフト全体を配台探索できるようにするため。
+# - 旧挙動（抽出時刻の時分まで下限に反映）が必要なら STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。
+STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK = (
+    os.environ.get("STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK", "0")
+    .strip()
+    .lower()
+    in ("1", "true", "yes", "on", "はい")
+)
+
 
 # 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台試行のままとれる。
@@ -20068,6 +20117,27 @@ def _assign_one_roll_trial_order_flow(
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
+    _agent_ndjson_log(
+        hypothesisId="B",
+        location="_core.py:_assign_one_roll_trial_order_flow",
+        message="assign_capability_snapshot",
+        data={
+            "task_id": str(task.get("task_id") or ""),
+            "day": str(current_date),
+            "process": str(machine_proc or ""),
+            "machine_name": str(machine_name or ""),
+            "req_num": int(req_num) if req_num is not None else None,
+            "capable_members": int(len(capable_members)),
+            "op_today": int(len(op_today)),
+            "base_time_per_unit": float(task.get("base_time_per_unit") or 0.0),
+            "remaining_units": float(task.get("remaining_units") or 0.0),
+            "start_date_req": str(task.get("start_date_req")),
+            "due_basis_date": str(task.get("due_basis_date")),
+            "need_src": str(need_src_line)[:160],
+            "ignore_skill_requirements": bool(_gpo.get("ignore_skill_requirements")),
+            "ignore_need_minimum": bool(_gpo.get("ignore_need_minimum")),
+        },
+    )
     pref_mem = (
         _resolve_preferred_op_to_member(pref_raw, op_today, members)
         if pref_raw
@@ -20204,7 +20274,35 @@ def _assign_one_roll_trial_order_flow(
         avail_dt=avail_dt,
     )
     if _co_abort:
+        _agent_ndjson_log(
+            hypothesisId="E",
+            location="_core.py:_resolve_machine_changeover_floor_segments",
+            message="assign_abort_changeover",
+            data={
+                "task_id": str(task.get("task_id") or ""),
+                "day": str(current_date),
+                "process": str(machine_proc or ""),
+                "machine_name": str(machine_name or ""),
+                "machine_occ_key": str(machine_occ_key or ""),
+            },
+        )
         return None
+
+    # region agent log
+    _agent_reject = {
+        "size_bounds": 0,
+        "no_op": 0,
+        "missing_daily_status": 0,
+        "start_ge_end": 0,
+        "defer_none": 0,
+        "defer_start_ge_end": 0,
+        "insufficient_capacity": 0,
+        "eod_capacity_threshold": 0,
+        "contiguous_insufficient": 0,
+        "mirror_block": 0,
+        "ok": 0,
+    }
+    # endregion
 
     def _one_roll_from_team(
         team: tuple,
@@ -20214,6 +20312,7 @@ def _assign_one_roll_trial_order_flow(
         lo = req_num if min_n is None else min_n
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
+            _agent_reject["size_bounds"] += 1
             _trace_assign(
                 "候補坴下: フォーム人数外 team=%s size=%s req=%s max=%s",
                 ",".join(str(x) for x in team),
@@ -20224,12 +20323,14 @@ def _assign_one_roll_trial_order_flow(
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
+            _agent_reject["no_op"] += 1
             _trace_assign(
                 "候補坴下: OP丝在 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         if not all(m in daily_status for m in team):
+            _agent_reject["missing_daily_status"] += 1
             _trace_assign(
                 "候補坴下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
@@ -20246,6 +20347,7 @@ def _assign_one_roll_trial_order_flow(
             team_start = b2_insp_ec_floor
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
+            _agent_reject["start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20296,6 +20398,7 @@ def _assign_one_roll_trial_order_flow(
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         )
         if team_start_d is None:
+            _agent_reject["defer_none"] += 1
             _trace_assign(
                 "候補坴下: 休憩帯内・終業直後(尝残)で当日試行 team=%s",
                 ",".join(str(x) for x in team),
@@ -20303,6 +20406,7 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
+            _agent_reject["defer_start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20316,6 +20420,7 @@ def _assign_one_roll_trial_order_flow(
         )
         _trial_units_cap = int(avail_mins / eff_time_per_unit)
         if _trial_units_cap < 1:
+            _agent_reject["insufficient_capacity"] += 1
             _trace_assign(
                 "候補坴下: 実僝丝足 team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
@@ -20330,6 +20435,7 @@ def _assign_one_roll_trial_order_flow(
             team_end_limit,
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         ):
+            _agent_reject["eod_capacity_threshold"] += 1
             _trace_assign(
                 "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20343,6 +20449,7 @@ def _assign_one_roll_trial_order_flow(
             team_start, team_breaks, team_end_limit
         )
         if _contig < work_mins_needed:
+            _agent_reject["contiguous_insufficient"] += 1
             _trace_assign(
                 "候補坴下: 休憩またねのため、連続実僝丝足 team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20357,6 +20464,7 @@ def _assign_one_roll_trial_order_flow(
         if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
             machine_occ_key, team, team_start, actual_end_dt
         ):
+            _agent_reject["mirror_block"] += 1
             _trace_assign(
                 "区間ミラー坴下: team=%s start=%s end=%s eq=%s",
                 ",".join(str(x) for x in team),
@@ -20365,6 +20473,7 @@ def _assign_one_roll_trial_order_flow(
                 eq_line,
             )
             return None
+        _agent_reject["ok"] += 1
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
         else:
@@ -20635,6 +20744,25 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
+            _agent_ndjson_log(
+                hypothesisId="C",
+                location="_core.py:_assign_one_roll_trial_order_flow:no_team_candidates",
+                message="assign_failed_no_team_candidates",
+                data={
+                    "task_id": str(task.get("task_id") or ""),
+                    "day": str(current_date),
+                    "process": str(machine_proc or ""),
+                    "machine_name": str(machine_name or ""),
+                    "req_num": int(req_num) if req_num is not None else None,
+                    "capable_members": int(len(capable_members)),
+                    "mach_floor_eff": str(_mach_floor_eff),
+                    "mem_max_end": str(_mem_max_end),
+                    "prev_mach_before_co": str(_prev_mach_before_co),
+                    "machine_occ_key": str(machine_occ_key or ""),
+                    "need_src": str(need_src_line)[:160],
+                    "reject_counts": dict(_agent_reject),
+                },
+            )
             return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -22271,6 +22399,22 @@ def _generate_plan_impl():
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    # データ抽出時刻が「夕方」でも、同日の配台探索が終業前まで進むよう macro_now の時刻を正規化する（既定）。
+    # 旧挙動が必要な場合のみ STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。
+    if (
+        data_extract_dt is not None
+        and not STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK
+        and isinstance(base_now_dt, datetime)
+    ):
+        _orig_macro = base_now_dt
+        base_now_dt = datetime.combine(base_now_dt.date(), DEFAULT_START_TIME)
+        if _orig_macro != base_now_dt:
+            logging.info(
+                "計画基準日時(正規化): データ抽出の日付は維持し、時刻を %s に寄せました（元=%s）。"
+                "旧挙動は STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。",
+                base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+                _orig_macro.strftime("%Y/%m/%d %H:%M:%S"),
+            )
     run_date = base_now_dt.date()
     data_extract_dt_str = (
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
@@ -22555,6 +22699,33 @@ def _generate_plan_impl():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            _agent_ndjson_log(
+                hypothesisId="A",
+                location="_core.py:tasks_today",
+                message="stage2_day_candidates",
+                data={
+                    "day": str(current_date),
+                    "avail_members": int(len(avail_dt)),
+                    "tasks_today": int(len(tasks_today)),
+                    "pending_total": int(
+                        sum(
+                            1
+                            for t in task_queue
+                            if float(t.get("remaining_units") or 0) > 1e-12
+                        )
+                    ),
+                    "earliest_start_date_req": str(
+                        min(
+                            [
+                                t["start_date_req"]
+                                for t in task_queue
+                                if float(t.get("remaining_units") or 0) > 1e-12
+                            ],
+                            default=None,
+                        )
+                    ),
+                },
+            )
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
                 _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
