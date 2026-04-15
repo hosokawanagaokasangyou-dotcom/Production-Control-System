@@ -476,6 +476,24 @@
       <li><strong>ルール</strong>: WIP が上限以上のときは <strong>スリットを新たに配台しません</strong>（候補から除外）。その結果、<strong>SECが相対的に優先</strong>され、WIPが解消される方向へ進みます。</li>
       <li><strong>上限（環境変数）</strong>: <code>WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS</code>（既定 20、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code> 冒頭で算出し候補から除外します（配台ルール.md B-4）。</li>
     </ul>
+    <h4>B-4.1 5ロール以上でSEC開始（加工内容がスリット→SECの依頼のみ）</h4>
+    <p>加工内容が <strong>スリット→SEC</strong> の依頼について、<strong>スリット完了 − SEC完了 &lt; 5</strong> の間は <strong>SECを候補から除外</strong>し、スリットが <strong>5ロール以上</strong>終わった時点でSECを開始します。実装は <code>_trial_order_flow_eligible_tasks</code>（タスク辞書の <code>process_content_tokens</code> を参照）。</p>
+    <h4>B-4.2 スリット行とSEC行の隣接（自動算出の配台試行順）</h4>
+    <p>加工内容がスリット→SECの依頼について、自動算出の配台試行順では <strong>同一依頼NO内でスリット行の直後にSEC行が来る</strong>ようにキューを軽く並べ替えます（隣接）。シートで全行の試行順が指定されている場合は適用しません（<code>_apply_dispatch_trial_order_for_generate_plan</code>）。</p>
+
+    <h3>B-5 — 特別ルール列挙（速度・人数・日内優先）</h3>
+    <p><span class="file">特別ルール列挙.md</span> のうち、実装済みの要点です。</p>
+    <ul>
+      <li><strong>L2</strong>（スライス×スライス機1　湖南）: ロール単位長さ=100mのとき <strong>原則3名</strong>。3名が成立しない場合のみ <strong>速度20m/分</strong>へフォールバック（以後は同タスクで維持）。</li>
+      <li><strong>L3</strong>（EC×EC機　湖南）: 製品名に <code>NR28</code> を含む場合は <strong>必須3名</strong>。</li>
+      <li><strong>L4</strong>（SEC×SEC機　湖南）: 製品幅=935 のとき <strong>速度20m/分</strong>。</li>
+      <li><strong>L5</strong>（SEC×SEC機　湖南）: 製品幅&lt;=680 のとき <strong>速度20m/分</strong>。</li>
+      <li><strong>L6</strong>（SEC×SEC機　湖南）: 依頼NOに <code>JR</code> または <code>PN</code> を含む場合は <strong>速度20m/分</strong>。</li>
+      <li><strong>L7</strong>（SEC×SEC機　湖南）: 依頼NOに <code>PN</code> を含む場合は <strong>2名でも配台可</strong>（最低人数を2まで緩和）。</li>
+      <li><strong>L8</strong>（接続×熱融着機　湖南）: <strong>製品長=105</strong> のとき <strong>速度20m/分</strong>（製品長は段階1算出列 <code>製品長</code> を参照）。</li>
+      <li><strong>L9</strong>（スライス×スライス機1　湖南）: 日内配台で、直前ロールの <strong>試行順±10</strong> かつ <strong>同厚み</strong>のスライスを優先。ただし開始日（<code>start_date_req</code>）や納期基準（<code>due_basis_date</code>）を満たさない場合は優先しない。</li>
+      <li><strong>PN優先（SEC同日）</strong>: 日内配台で、同一試行順帯の中では <strong>PNを含む依頼NOのSEC</strong> を先に並べます（同日に配台する場合）。</li>
+    </ul>
   </section>
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
