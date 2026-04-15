@@ -17309,6 +17309,152 @@ def _pick_skilled_op_for_changeover_interval(
     return min(cands)[1]
 
 
+def _stage2_calendar_anchor_datetime(day_d: date) -> datetime:
+    """
+    日次始業のカレンダ下限（定常開始 A15 が読めていればそれ、無ければ工場開始 DEFAULT_START_TIME）。
+    """
+    st_t = (
+        _STAGE2_REGULAR_SHIFT_START
+        if _STAGE2_REGULAR_SHIFT_START is not None
+        else DEFAULT_START_TIME
+    )
+    return datetime.combine(day_d, st_t)
+
+
+def _eligible_ops_sorted_for_daily_startup(
+    machine_proc: str,
+    machine_name: str,
+    skills_dict: dict,
+    daily_status: dict,
+) -> list[str]:
+    """当日 eligible かつ当該工程+機械で OP の者を優先度昇順に列挙。"""
+    cands: list[tuple[int, str]] = []
+    proc = (machine_proc or "").strip()
+    mnm = (machine_name or "").strip()
+    for mem, st in (daily_status or {}).items():
+        if not st.get("eligible_for_assignment", st.get("is_working", False)):
+            continue
+        srow = (skills_dict or {}).get(mem, {})
+        if proc and mnm:
+            v = srow.get(f"{proc}+{mnm}", "")
+        elif mnm:
+            v = srow.get(mnm, "")
+        elif proc:
+            v = srow.get(proc, "")
+        else:
+            v = ""
+        role, prio = parse_op_as_skill_cell(v)
+        if role == "OP":
+            cands.append((prio, str(mem).strip()))
+    cands.sort(key=lambda x: (x[0], x[1]))
+    return [m for _p, m in cands if m]
+
+
+def _daily_startup_required_count_for_placement(machine_name: str) -> int:
+    """壁時計ブロックを置くときに同時に確保すべき OP 数（未指定は 1 名）。"""
+    need_n = _lookup_daily_startup_required_staff(machine_name, None)
+    if need_n <= 0:
+        return 1
+    return int(need_n)
+
+
+def _count_ops_covering_wall_interval(
+    members_sorted: list[str],
+    daily_status: dict,
+    st: datetime,
+    ed: datetime,
+) -> int:
+    n = 0
+    for m in members_sorted:
+        if _member_covers_interval_no_break_overlap(daily_status, m, st, ed):
+            n += 1
+    return n
+
+
+def _earliest_daily_startup_wall_start(
+    *,
+    current_date: date,
+    prev_machining_end_dt: datetime,
+    machine_name: str,
+    machine_proc: str,
+    skills_dict: dict,
+    daily_status: dict,
+    su_minutes: int,
+) -> datetime | None:
+    """
+    壁時計 su 分の日次始業を、当該機械の OP 母集団が勤務帯で一括覆える最早の開始時刻。
+    見つからないとき None（呼び出し側でカレンダ下限にフォールバック）。
+    """
+    if su_minutes <= 0:
+        return None
+    t_lo = max(prev_machining_end_dt, _stage2_calendar_anchor_datetime(current_date))
+    members = _eligible_ops_sorted_for_daily_startup(
+        machine_proc, machine_name, skills_dict, daily_status
+    )
+    req = _daily_startup_required_count_for_placement(machine_name)
+    if not members:
+        return None
+    req = min(req, len(members))
+    day_hi = datetime.combine(current_date, DEFAULT_END_TIME)
+    search_limit = day_hi + timedelta(hours=18)
+    max_iter = int((search_limit - t_lo).total_seconds() // 60) + su_minutes + 120
+    max_iter = max(0, min(max_iter, 2880))
+    for off in range(max_iter + 1):
+        st = t_lo + timedelta(minutes=off)
+        ed = st + timedelta(minutes=su_minutes)
+        if ed > search_limit:
+            break
+        if _count_ops_covering_wall_interval(members, daily_status, st, ed) >= req:
+            return st
+    return None
+
+
+def _daily_startup_segment_start_end(
+    *,
+    prev_machining_end_dt: datetime,
+    current_date: date,
+    machine_name: str,
+    machine_proc: str,
+    machine_occ_key: str,
+    machine_handoff: dict,
+    skills_dict: dict | None,
+    daily_status: dict | None,
+    daily_startup_by_machine: dict[str, int] | None = None,
+) -> tuple[datetime, datetime] | None:
+    """
+    当日先頭占有・日次始業が有効なとき [開始, 終了) を返す。不要なら None。
+    開始はカレンダ下限と機械占有のうち遅い方から、OP 勤務帯で同時に覆える最早に寄せる。
+    """
+    mach_occ = str(machine_occ_key or "").strip()
+    if not mach_occ:
+        return None
+    mto = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    if mach_occ in mto:
+        return None
+    su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
+    if su <= 0:
+        return None
+    cal_anchor = _stage2_calendar_anchor_datetime(current_date)
+    t_lo = max(prev_machining_end_dt, cal_anchor)
+    reg_start: datetime | None = None
+    if daily_status and skills_dict:
+        reg_start = _earliest_daily_startup_wall_start(
+            current_date=current_date,
+            prev_machining_end_dt=prev_machining_end_dt,
+            machine_name=machine_name,
+            machine_proc=str(machine_proc or "").strip(),
+            skills_dict=skills_dict,
+            daily_status=daily_status,
+            su_minutes=su,
+        )
+    if reg_start is None:
+        reg_start = t_lo
+    reg_end = reg_start + timedelta(minutes=su)
+    return reg_start, reg_end
+
+
 def _machine_effective_floor_timedelta_only(
     machine_occ_key: str,
     task_id: str,
@@ -17336,8 +17482,22 @@ def _machine_effective_floor_timedelta_only(
         su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
         if su:
             cd = current_date if current_date is not None else machine_day_floor.date()
-            reg_end = datetime.combine(cd, DEFAULT_START_TIME) + timedelta(minutes=su)
-            mf = max(mf, reg_end)
+            se = _daily_startup_segment_start_end(
+                prev_machining_end_dt=mf,
+                current_date=cd,
+                machine_name=machine_name,
+                machine_proc=str(machine_proc or "").strip(),
+                machine_occ_key=machine_occ_key,
+                machine_handoff=machine_handoff,
+                skills_dict=skills_dict,
+                daily_status=daily_status,
+                daily_startup_by_machine=daily_startup_by_machine,
+            )
+            if se:
+                mf = max(mf, se[1])
+            else:
+                reg_end = _stage2_calendar_anchor_datetime(cd) + timedelta(minutes=su)
+                mf = max(mf, reg_end)
     return mf
 
 
@@ -17977,8 +18137,8 @@ def _changeover_plan_segments_and_machining_lower_bound(
     """
     前ロール加工終了 prev_machining_end_dt から、日次始業（当日先頭のみ）のみを
     組み立て、(加工開始最早時刻, タイムライン用セグメント雛形) を返す。
-    日次始業の壁時計ブロックは **master メイン A12（工場稼働開始）＝段階2中の DEFAULT_START_TIME**
-    を基準とした半開区間 [A12, A12+N分)（勤務 forward は行わない）。
+    日次始業の壁時計ブロックは、定常／工場開始と機械占有のうち遅い時刻を下限とし、
+    当該機械の OP スキル保持者が勤務帯で一括覆える最早の半開区間 [開始, 開始+N分) に置く。
     担当者名はタイムライン追記時に別途埋める（セグメント生成時点では op は空のまま）。
     """
     if abolish_limits:
@@ -17987,14 +18147,23 @@ def _changeover_plan_segments_and_machining_lower_bound(
     machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
         "started_today", set()
     )
-    su = _lookup_daily_startup_minutes(machine_name, None)
 
     segments: list[dict] = []
     t = prev_machining_end_dt
 
-    if mach_occ not in machining_today_occ and su > 0:
-        reg_start_dt = datetime.combine(current_date, DEFAULT_START_TIME)
-        reg_end_dt = reg_start_dt + timedelta(minutes=su)
+    se = _daily_startup_segment_start_end(
+        prev_machining_end_dt=prev_machining_end_dt,
+        current_date=current_date,
+        machine_name=machine_name,
+        machine_proc=str(machine_proc or "").strip(),
+        machine_occ_key=mach_occ,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        daily_status=daily_status,
+        daily_startup_by_machine=None,
+    )
+    if se:
+        reg_start_dt, reg_end_dt = se
         segments.append(
             {
                 "start_dt": reg_start_dt,
