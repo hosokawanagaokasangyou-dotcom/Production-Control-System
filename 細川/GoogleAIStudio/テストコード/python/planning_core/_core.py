@@ -17071,15 +17071,32 @@ def _daily_startup_fill_segment_staff(
         if t and t not in seen:
             seen.add(t)
             pool.append(t)
-    eligible: list[str] = []
-    for m in pool:
-        if not _member_covers_interval_no_break_overlap(daily_status, m, st, ed):
-            continue
-        prev_a = avail_dt.get(m, st)
-        if isinstance(prev_a, datetime) and prev_a > st:
-            continue
-        eligible.append(m)
-    eligible.sort(key=lambda mm: (skill_role_priority(mm)[1], str(mm)))
+
+    def _eligible_for_startup(require_avail_before_start: bool) -> list[str]:
+        out: list[str] = []
+        for m in pool:
+            if not _member_covers_interval_no_break_overlap(daily_status, m, st, ed):
+                continue
+            if require_avail_before_start:
+                prev_a = avail_dt.get(m, st)
+                if isinstance(prev_a, datetime) and prev_a > st:
+                    continue
+            out.append(m)
+        out.sort(key=lambda mm: (skill_role_priority(mm)[1], str(mm)))
+        return out
+
+    # 1) 厳格: 勤務帯覆い + avail が始業準備開始以前
+    # 2) 日次始業は工場定時直後の短区間のため、同一ロール母集団では avail のみ緩めて再試行
+    # 3) 最終: 母集団のうち daily_status にいる者（表示用のフェイルセーフ）
+    eligible = _eligible_for_startup(True)
+    _eligible_pass = 1
+    if not eligible:
+        eligible = _eligible_for_startup(False)
+        _eligible_pass = 2
+    if not eligible:
+        eligible = [m for m in pool if m in daily_status]
+        eligible.sort(key=lambda mm: (skill_role_priority(mm)[1], str(mm)))
+        _eligible_pass = 3
     chosen: list[str] = []
     for m in eligible:
         if len(chosen) >= need_n:
@@ -17112,6 +17129,7 @@ def _daily_startup_fill_segment_staff(
                     "need_n": int(need_n),
                     "pool_len": len(pool),
                     "eligible_len": len(eligible),
+                    "eligible_pass": int(_eligible_pass),
                 },
                 "timestamp": int(time_module.time() * 1000),
             }
@@ -17147,6 +17165,8 @@ def _daily_startup_fill_segment_staff(
                 "need_n": int(need_n),
                 "chosen_len": len(chosen),
                 "sub_rest_len": len(rest),
+                "eligible_pass": int(_eligible_pass),
+                "runId": "post-fix",
             },
             "timestamp": int(time_module.time() * 1000),
         }
