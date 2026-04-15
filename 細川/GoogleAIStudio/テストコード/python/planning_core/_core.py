@@ -7110,26 +7110,33 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     # 幅は結合セルと同じロジックのまま、縦（メイン・メンバー帯）のみ約 2 倍で読みやすくする。
                     _gap_eff = 1.35
                     _h0 = max(9.0, float(_h_req_no))
-                    _hmain_eff = 2.0 * _h0
-                    _hmem_eff = 2.0 * _h0
+                    _want = 2.0 * _h0
                     row_top_lim = float(band_top) + _band_inset
                     row_bot_lim = float(band_bot) - _band_inset
-                    for _squeeze in range(28):
-                        y_main = row_top_lim
-                        y_mem = y_main + _hmain_eff + _gap_eff
-                        if y_mem + _hmem_eff <= row_bot_lim + 1e-9:
-                            break
-                        if _gap_eff > 0.35:
-                            _gap_eff = max(0.35, _gap_eff - 0.35)
-                        elif _hmem_eff > 5.5:
-                            _hmem_eff = max(5.5, _hmem_eff - 0.5)
-                        elif _hmain_eff > 5.5:
-                            _hmain_eff = max(5.5, _hmain_eff - 0.5)
-                        else:
-                            _hmem_eff = max(5.0, _hmem_eff - 0.25)
-                            _hmain_eff = max(5.0, _hmain_eff - 0.25)
+                    _inner = max(0.0, row_bot_lim - row_top_lim - _gap_eff)
+                    _tmin = 5.5
+                    # 帯内に収める。メンバー名シェイプを可能な限り高さ _want にし、足りない分だけタイトルを縮める
+                    # （旧ループは hmem を先に削っていたため、メインだけ高く見えていた）。
+                    if _inner + 1e-9 >= 2.0 * _want:
+                        _hmain_eff = _want
+                        _hmem_eff = _want
+                    elif _inner + 1e-9 >= _want + _tmin:
+                        _hmem_eff = _want
+                        _hmain_eff = max(_tmin, min(_want, _inner - _hmem_eff))
+                    else:
+                        _hmain_eff = max(_tmin, min(_want, _inner - _h0))
+                        _hmem_eff = max(_h0, min(_want, _inner - _hmain_eff))
                     h_main = float(_hmain_eff)
                     h_mem_use = float(_hmem_eff)
+                    _stack = h_main + _gap_eff + h_mem_use
+                    _room = row_bot_lim - row_top_lim
+                    if _stack > _room + 1e-9:
+                        _ex = _stack - _room
+                        _from_main = min(_ex, max(0.0, h_main - _tmin))
+                        h_main -= _from_main
+                        _ex -= _from_main
+                        if _ex > 1e-9:
+                            h_mem_use = max(4.0, h_mem_use - _ex)
                     y_main = row_top_lim
                     y_mem = y_main + h_main + _gap_eff
                     _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
