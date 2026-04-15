@@ -10023,6 +10023,19 @@ def build_task_queue_from_planning_df(
         ):
             speed = 20.0
 
+        # -------------------------------------------------------------------
+        # 特別ルール L5（SEC×SEC機 湖南）: 製品幅<=680 のときは加工速度を 20m/分
+        # -------------------------------------------------------------------
+        if (
+            _normalize_process_name_for_rule_match(machine)
+            == _normalize_process_name_for_rule_match("SEC")
+            and _normalize_equipment_match_key(machine_name)
+            == _normalize_equipment_match_key("SEC機　湖南")
+            and _prod_w_i is not None
+            and _prod_w_i <= 680
+        ):
+            speed = 20.0
+
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
