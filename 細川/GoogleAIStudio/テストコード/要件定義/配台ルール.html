@@ -448,6 +448,9 @@
         <strong>EC 全ロール完了後</strong>: 同一依頼NOの EC パイプライン行がすべて残量ゼロのときは、上記だけでは検査が 1 本足りなくなるため、上限を <code>ec_done</code> まで引き上げ、検査も EC と同じ本数まで完了できます（<code>_pipeline_ec_fully_done_for_tid</code> / <code>_roll_pipeline_inspection_assign_room</code>）。</li>
       <li><strong>当日候補への入り方</strong>: <code>_trial_order_flow_eligible_tasks</code> で §A 同一依頼ブロック・<code>_roll_pipeline_inspection_assign_room</code>（ロール枠）・（既定で）設備占有・試行順強制を順に判定。通過後にチーム割付。前進・再走査の両方で同ロール枠と時刻下限が効きます。詳細は <span class="file">配台ルール.md</span> B-2.6。</li>
       <li><strong>担当者の排他（同一依頼NO）</strong>: 既定では EC 行と検査行で <strong>履歴に出たメンバーは他側の候補から除外</strong>（<code>_filter_capable_members_b2_disjoint_teams</code>・NFKC 突合）。<code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code> でオフにすると除外しません。配台トレース対象依頼NOでは、除外が発生した時点で <code>ブロック判定: B-2担当者分離 ...</code> を出力。さらに候補試行時に <code>候補固定: 担当OP指名=...</code>・<code>候補却下: ...</code>（OP不在/実働不足など）も出力。</li>
+      <li><strong>工程間WIP上限（総ロール数）</strong>: 依頼NO・加工日をまたいだ総ロール数として、<strong>検査前WIP</strong> を次で定義し、上限以上のときは <strong>EC（隣接するEC工程）を新たに配台しません</strong>。<br />
+        <code>WIP = max(0, EC_DONE_TOTAL - FOLLOW_DONE_TOTAL)</code>（FOLLOW は <strong>検査＋巻返し</strong>を合算）<br />
+        上限は環境変数 <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code>（既定 15、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code> 冒頭で算出し候補から除外します（配台ルール.md B-2.8）。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core/_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
     <h3>B-3 — EC → 巻返し（ロール単位パイプライン・B-2 同趣旨）</h3>
@@ -464,6 +467,14 @@
     <ul>
       <li><strong>実装</strong>: タスク辞書の <code>roll_pipeline_rewind</code>。定数 <code>ROLL_PIPELINE_REWIND_PROCESS</code> / <code>ROLL_PIPELINE_REWIND_MACHINE</code>。完了ロール集計は <code>_pipeline_b2_follower_roll_done_units</code>（検査＋巻返しを合算）。</li>
       <li><strong>詳細</strong>: <span class="file">配台ルール.md</span> §B-3 および §B-2.2〜B-2.7（語の読み替え）。</li>
+    </ul>
+    <h3>B-4 — スリット → SEC（工程間WIP上限・SEC優先）</h3>
+    <p><strong>目的</strong>: スリット後（SEC前）のロールが作業スペースへ蓄積しすぎることを防ぎ、<strong>SECを優先</strong>してWIPを解消します（依頼NO・加工日をまたいだ総ロール数）。</p>
+    <ul>
+      <li><strong>対象</strong>: 工程名 <strong>スリット</strong>×機械名 <strong>スリット機1　湖南</strong> と、工程名 <strong>SEC</strong>×機械名 <strong>SEC機　湖南</strong>。</li>
+      <li><strong>定義</strong>: <code>WIP = max(0, SLIT_DONE_TOTAL - SEC_DONE_TOTAL)</code>（完了ロールは <code>initial_remaining_units - remaining_units</code> を合算）。</li>
+      <li><strong>ルール</strong>: WIP が上限以上のときは <strong>スリットを新たに配台しません</strong>（候補から除外）。その結果、<strong>SECが相対的に優先</strong>され、WIPが解消される方向へ進みます。</li>
+      <li><strong>上限（環境変数）</strong>: <code>WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS</code>（既定 20、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code> 冒頭で算出し候補から除外します（配台ルール.md B-4）。</li>
     </ul>
   </section>
 
