@@ -20330,6 +20330,151 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
     return None
 
 
+def _repair_timeline_daily_startup_snapped_to_first_machining(
+    timeline_events: list,
+    task_queue: list,
+    attendance_data: dict,
+    skills_dict: dict,
+    global_priority_override: dict | None,
+) -> int:
+    """
+    当日・同一占有キーで、日次始業準備の終了が先頭の加工開始より前に空きがあるとき、
+    壁時計の長さを保ったまま [加工開始−N分, 加工開始) に寄せる（表示・ミラー整合用の後処理）。
+    """
+    gpo = global_priority_override or {}
+    if not timeline_events:
+        return 0
+    keys: set[tuple[date, str]] = set()
+    for e in timeline_events:
+        if _timeline_event_kind(e) != TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+            continue
+        d = e.get("date")
+        occ = str(e.get("machine_occupancy_key") or "").strip()
+        if isinstance(d, date) and occ:
+            keys.add((d, occ))
+    n_adj = 0
+    align_tol = timedelta(seconds=90)
+    for day_d, occ in keys:
+        daily_status = attendance_data.get(day_d)
+        if not daily_status:
+            continue
+        su_candidates = [
+            e
+            for e in timeline_events
+            if e.get("date") == day_d
+            and str(e.get("machine_occupancy_key") or "").strip() == occ
+            and _timeline_event_kind(e) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP
+        ]
+        mach_sorted = sorted(
+            (
+                e
+                for e in timeline_events
+                if e.get("date") == day_d
+                and str(e.get("machine_occupancy_key") or "").strip() == occ
+                and _is_machining_timeline_event(e)
+            ),
+            key=lambda e: (e.get("start_dt") or datetime.max),
+        )
+        if not su_candidates or not mach_sorted:
+            continue
+        su_ev = min(
+            su_candidates,
+            key=lambda e: e.get("start_dt") or datetime.min,
+        )
+        first_m = mach_sorted[0]
+        st0 = su_ev.get("start_dt")
+        ed0 = su_ev.get("end_dt")
+        m_st = first_m.get("start_dt")
+        if (
+            not isinstance(st0, datetime)
+            or not isinstance(ed0, datetime)
+            or not isinstance(m_st, datetime)
+        ):
+            continue
+        if ed0 <= st0 or st0 >= m_st:
+            continue
+        if ed0 >= m_st - align_tol:
+            continue
+        dur = ed0 - st0
+        if dur <= timedelta(0):
+            continue
+        new_ed = m_st
+        new_st = new_ed - dur
+        if new_st >= m_st:
+            continue
+        blocked = False
+        for e in timeline_events:
+            if e is su_ev:
+                continue
+            if e.get("date") != day_d:
+                continue
+            if str(e.get("machine_occupancy_key") or "").strip() != occ:
+                continue
+            o_st = e.get("start_dt")
+            o_ed = e.get("end_dt")
+            if not isinstance(o_st, datetime) or not isinstance(o_ed, datetime):
+                continue
+            if new_st < o_ed and o_st < new_ed:
+                blocked = True
+                break
+        if blocked:
+            continue
+        su_ev["start_dt"] = new_st
+        su_ev["end_dt"] = new_ed
+        task = _task_dict_for_timeline_event(first_m, task_queue)
+        machine_name = str((task or {}).get("machine_name") or "").strip()
+        if not machine_name:
+            machine_name = str(su_ev.get("machine") or "").strip()
+        if task and machine_name:
+            skill_meta_cache: dict = {}
+
+            def skill_role_priority(mem: str):
+                if gpo.get("ignore_skill_requirements"):
+                    return ("OP", 100)
+                mm = str(mem or "").strip()
+                if not mm:
+                    return ("", 9999)
+                if mm not in skill_meta_cache:
+                    srow = skills_dict.get(mm, {})
+                    mp = str(task.get("machine") or "").strip()
+                    mn = str(task.get("machine_name") or "").strip()
+                    if mp and mn:
+                        v = srow.get(f"{mp}+{mn}", "")
+                    elif mn:
+                        v = srow.get(mn, "")
+                    elif mp:
+                        v = srow.get(mp, "")
+                    else:
+                        v = ""
+                    skill_meta_cache[mm] = parse_op_as_skill_cell(v)
+                return skill_meta_cache[mm]
+
+            su_ev["op"] = ""
+            su_ev["sub"] = ""
+            _daily_startup_fill_segment_staff(
+                su_ev,
+                machine_name=machine_name,
+                lead_op=str(first_m.get("op") or "").strip(),
+                sub_csv=str(first_m.get("sub") or "").strip(),
+                skill_role_priority=skill_role_priority,
+                daily_status=daily_status,
+                avail_dt={},
+                dispatch_interval_mirror=None,
+            )
+        else:
+            su_ev["op"] = ""
+            su_ev["sub"] = ""
+        br_acc: list = []
+        op_s = str(su_ev.get("op") or "").strip()
+        sub_s = str(su_ev.get("sub") or "").strip()
+        for nm in (op_s, *[x.strip() for x in sub_s.split(",") if x.strip()]):
+            if nm and nm in daily_status:
+                br_acc.extend(daily_status[nm].get("breaks_dt") or [])
+        su_ev["breaks"] = merge_time_intervals(br_acc)
+        n_adj += 1
+    return n_adj
+
+
 def _member_overlaps_busy(
     busy_map: dict, member: str, st: datetime, ed: datetime
 ) -> bool:
@@ -22687,6 +22832,19 @@ def _generate_plan_impl():
                 "need余力: メイン割付完了後にサブ %s 坝を追記（未割当×スキル・時間重なりなし）",
                 _n_sur,
             )
+
+    _n_snap = _repair_timeline_daily_startup_snapped_to_first_machining(
+        timeline_events,
+        task_queue,
+        attendance_data,
+        skills_dict,
+        global_priority_override,
+    )
+    if _n_snap:
+        logging.info(
+            "日次始業準備: 当日先頭の加工から離れていた帯を %s 件、先頭加工の直前に寄せました。",
+            _n_snap,
+        )
 
     if _dispatch_interval_mirror is not None:
         _dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
