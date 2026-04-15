@@ -1790,6 +1790,37 @@ def _paint_gantt_timeline_row_merged(
                         _shape_text = _ds_txt
                         if _mem_ds:
                             _shape_text = _ds_txt + "\n" + "・".join(_mem_ds[:8])
+                        # #region agent log
+                        try:
+                            _p = os.path.normpath(
+                                os.path.join(
+                                    os.path.dirname(__file__),
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "..",
+                                    "debug-ed345b.log",
+                                )
+                            )
+                            _rec = {
+                                "sessionId": "ed345b",
+                                "hypothesisId": "E",
+                                "location": "_core.py:_paint_gantt_timeline_row_merged",
+                                "message": "daily_startup_shape_spec",
+                                "data": {
+                                    "row": int(row),
+                                    "mem_ds_len": len(_mem_ds),
+                                    "text_has_nl": "\n" in str(_shape_text),
+                                    "evlist_len": len(evlist or []),
+                                },
+                                "timestamp": int(time_module.time() * 1000),
+                            }
+                            with open(_p, "a", encoding="utf-8") as _f:
+                                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+                        except Exception:
+                            pass
+                        # #endregion
                         shape_label_specs.append(
                             {
                                 "row": row,
@@ -3731,6 +3762,9 @@ def _gantt_member_labels_for_startup_in_range(
     半開区間 [range_start, range_end) に重なる日次始業イベントから担当者姓を得る。
     （`_eq_grid_best_overlapping_event_for_cell` は加工を優先するため使わない）
     """
+    # #region agent log
+    _overlap_startup = 0
+    # #endregion
     best_ev: dict | None = None
     best_st: datetime | None = None
     for ev in evlist or []:
@@ -3741,10 +3775,51 @@ def _gantt_member_labels_for_startup_in_range(
         if not isinstance(st, datetime) or not isinstance(ed, datetime) or ed <= st:
             continue
         if st < range_end and ed > range_start:
+            # #region agent log
+            _overlap_startup += 1
+            # #endregion
             if best_ev is None or best_st is None or st < best_st:
                 best_ev = ev
                 best_st = st
     if best_ev is None:
+        # #region agent log
+        try:
+            _p = os.path.normpath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "debug-ed345b.log",
+                )
+            )
+            _rec = {
+                "sessionId": "ed345b",
+                "hypothesisId": "D",
+                "location": "_core.py:_gantt_member_labels_for_startup_in_range",
+                "message": "no_startup_ev_overlap",
+                "data": {
+                    "overlap_count": int(_overlap_startup),
+                    "evlist_len": len(evlist or []),
+                    "range_iso": (
+                        range_start.isoformat() if isinstance(range_start, datetime) else ""
+                    )
+                    + "/"
+                    + (
+                        range_end.isoformat()
+                        if isinstance(range_end, datetime)
+                        else ""
+                    ),
+                },
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return []
     raw_names: list[str] = []
     seen_raw: set[str] = set()
@@ -3766,6 +3841,38 @@ def _gantt_member_labels_for_startup_in_range(
         if lab and lab not in seen_label:
             seen_label.add(lab)
             labels.append(lab)
+    # #region agent log
+    try:
+        _p = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-ed345b.log",
+            )
+        )
+        _rec = {
+            "sessionId": "ed345b",
+            "hypothesisId": "A,B,D",
+            "location": "_core.py:_gantt_member_labels_for_startup_in_range",
+            "message": "startup_labels_result",
+            "data": {
+                "overlap_count": int(_overlap_startup),
+                "raw_name_count": len(raw_names),
+                "label_count": len(labels),
+                "best_ev_op_nonempty": bool(str(best_ev.get("op") or "").strip()),
+                "best_ev_sub_nonempty": bool(str(best_ev.get("sub") or "").strip()),
+            },
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
     return labels
 
 
@@ -16925,8 +17032,34 @@ def _daily_startup_fill_segment_staff(
     if not isinstance(st, datetime) or not isinstance(ed, datetime) or ed <= st:
         return
     need_n = _lookup_daily_startup_required_staff(machine_name, None)
+    # #region agent log
     if need_n <= 0:
+        try:
+            _p = os.path.normpath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "debug-ed345b.log",
+                )
+            )
+            _rec = {
+                "sessionId": "ed345b",
+                "hypothesisId": "A",
+                "location": "_core.py:_daily_startup_fill_segment_staff",
+                "message": "skip_need_n_le_0",
+                "data": {"need_n": int(need_n), "machine_key_len": len(str(machine_name or ""))},
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
         return
+    # #endregion
     pool: list[str] = []
     seen: set[str] = set()
     for raw in (str(lead_op or "").strip(),):
@@ -16957,11 +17090,71 @@ def _daily_startup_fill_segment_staff(
             continue
         chosen.append(m)
     if not chosen:
+        # #region agent log
+        try:
+            _p = os.path.normpath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "debug-ed345b.log",
+                )
+            )
+            _rec = {
+                "sessionId": "ed345b",
+                "hypothesisId": "A",
+                "location": "_core.py:_daily_startup_fill_segment_staff",
+                "message": "skip_chosen_empty",
+                "data": {
+                    "need_n": int(need_n),
+                    "pool_len": len(pool),
+                    "eligible_len": len(eligible),
+                },
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return
     op0 = chosen[0]
     rest = chosen[1:]
     seg["op"] = op0
     seg["sub"] = ", ".join(rest) if rest else ""
+    # #region agent log
+    try:
+        _p = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "debug-ed345b.log",
+            )
+        )
+        _rec = {
+            "sessionId": "ed345b",
+            "hypothesisId": "A",
+            "location": "_core.py:_daily_startup_fill_segment_staff",
+            "message": "staff_assigned",
+            "data": {
+                "need_n": int(need_n),
+                "chosen_len": len(chosen),
+                "sub_rest_len": len(rest),
+            },
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
 
 
 def _timeline_event_kind(ev: dict) -> str:
@@ -17940,6 +18133,32 @@ def _changeover_timeline_op_sub_for_event(
     if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
         if op_s:
             return op_s, str(sub_from_segment or "").strip()
+        # #region agent log
+        try:
+            _p = os.path.normpath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "debug-ed345b.log",
+                )
+            )
+            _rec = {
+                "sessionId": "ed345b",
+                "hypothesisId": "B",
+                "location": "_core.py:_changeover_timeline_op_sub_for_event",
+                "message": "startup_cleared_empty_op",
+                "data": {"op_seg_empty": True},
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return "", ""
     return op_s, ""
 
@@ -17972,6 +18191,42 @@ def _append_changeover_segments_to_timeline(
         m_line = str(seg.get("machine") or "").strip()
         m_occ = str(seg.get("machine_occupancy_key") or machine_occ_key).strip()
         ek = str(seg.get("event_kind") or "").strip() or TIMELINE_EVENT_MACHINING
+        # #region agent log
+        if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+            try:
+                _p = os.path.normpath(
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "debug-ed345b.log",
+                    )
+                )
+                _mns = str(machine_name_for_startup or "").strip()
+                _rec = {
+                    "sessionId": "ed345b",
+                    "hypothesisId": "C",
+                    "location": "_core.py:_append_changeover_segments_to_timeline",
+                    "message": "startup_seg_before_fill",
+                    "data": {
+                        "will_call_fill": bool(
+                            skill_role_priority is not None and _mns
+                        ),
+                        "skill_rp_ok": skill_role_priority is not None,
+                        "mname_nonempty": bool(_mns),
+                        "lead_nonempty": bool(_lead_m),
+                        "sub_roll_nonempty": bool(_sub_roll),
+                    },
+                    "timestamp": int(time_module.time() * 1000),
+                }
+                with open(_p, "a", encoding="utf-8") as _f:
+                    _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+        # #endregion
         if (
             ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP
             and skill_role_priority is not None
