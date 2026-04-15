@@ -19684,6 +19684,32 @@ def _assign_one_roll_trial_order_flow(
             (need_src_line + " → ") if need_src_line else ""
         ) + "メイン上書ignore_need_minimumでreq=1"
 
+    # -------------------------------------------------------------------
+    # 特別ルール L2（スライス×スライス機1 湖南）:
+    # ロール単位長さ=100m のときは原則 3 名で配台し、成立しない場合のみ速度 20m/分へフォールバック。
+    # - remaining_units / unit_m はロール本数・ロール長(m)（既存仕様）
+    # - 速度フォールバックを一度採用したタスクは以降も speed=20 を維持する（探索の無駄を避ける）
+    # -------------------------------------------------------------------
+    _l2_target = False
+    try:
+        _unit_m_i = int(task.get("unit_m") or 0)
+    except (TypeError, ValueError):
+        _unit_m_i = 0
+    if _unit_m_i == 100:
+        _p = _normalize_process_name_for_rule_match(machine_proc)
+        _m = _normalize_equipment_match_key(machine_name)
+        if (
+            _p == _normalize_process_name_for_rule_match("スライス")
+            and _m == _normalize_equipment_match_key("スライス機1　湖南")
+        ):
+            _l2_target = True
+    _l2_req_before = int(req_num) if req_num is not None else 1
+    _l2_enforced = False
+    if _l2_target and not task.get("_special_l2_speed20_fallback"):
+        if req_num < 3:
+            req_num = 3
+            _l2_enforced = True
+
     skill_meta_cache: dict = {}
 
     def skill_role_priority(mem):
@@ -19821,6 +19847,8 @@ def _assign_one_roll_trial_order_flow(
             task_queue, _tid_assign
         )
 
+    _base_time_per_unit = float(task.get("base_time_per_unit") or 0.0)
+
     _prev_mach_before_co = machine_avail_dt.get(
         machine_occ_key, machine_day_floor
     )
@@ -19904,7 +19932,7 @@ def _assign_one_roll_trial_order_flow(
         if t_eff <= 0:
             t_eff = 1.0
         eff_time_per_unit = (
-            task["base_time_per_unit"]
+            _base_time_per_unit
             / avg_eff
             / t_eff
             * _surplus_team_time_factor(rq_base, len(team), extra_max)
@@ -20136,40 +20164,145 @@ def _assign_one_roll_trial_order_flow(
                 )
 
     if not team_candidates:
-        _mem_max_end: datetime | None = None
-        for _m in capable_members:
-            if _m not in daily_status:
-                continue
-            _ed = daily_status[_m].get("end_dt")
-            if isinstance(_ed, datetime):
-                _mem_max_end = (
-                    _ed if _mem_max_end is None else max(_mem_max_end, _ed)
-                )
+        # L2 フォールバック: 3名が成立しない場合は req を元に戻し、速度20m/分相当へ切替えて再探索。
         if (
-            len(capable_members) >= req_num
-            and _mem_max_end is not None
-            and isinstance(_mach_floor_eff, datetime)
-            and _mach_floor_eff >= _mem_max_end
+            _l2_target
+            and _l2_enforced
+            and _l2_req_before < 3
+            and not task.get("_special_l2_speed20_fallback")
         ):
-            logging.warning(
-                "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でフォーム候補は0件。"
-                "スキル革坈(OP/AS)は %s 人いしたは」設備の加工開始下限=%s は"
-                "当日の担当候補の退勤(%s)以降のため、この日は割当でしません。"
-                "master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」"
-                "または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください"
-                "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
-                "参考: changeover剝の設備空し下限=%s 占有キー=%s",
-                task.get("task_id"),
-                current_date,
-                machine,
-                machine_name,
-                len(capable_members),
-                _mach_floor_eff.strftime("%Y-%m-%d %H:%M"),
-                _mem_max_end.strftime("%H:%M"),
-                _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
-                machine_occ_key,
-            )
-        return None
+            _orig_speed = task.get(TASK_COL_SPEED)
+            _orig_btpu = task.get("base_time_per_unit")
+            try:
+                req_num = max(1, int(_l2_req_before))
+            except (TypeError, ValueError):
+                req_num = 1
+            max_team_size = min(req_num + extra_max, len(capable_members))
+            if max_team_size < req_num:
+                max_team_size = req_num
+            rq_base = max(1, int(req_num))
+            # unit_m/speed(20m/分) = 1ロールあたり分
+            _speed20 = 20.0
+            task[TASK_COL_SPEED] = _speed20
+            task["base_time_per_unit"] = float(_unit_m_i) / _speed20 if _unit_m_i > 0 else _base_time_per_unit
+            _base_time_per_unit = float(task.get("base_time_per_unit") or _base_time_per_unit)
+
+            team_candidates = []
+            if preset_rows_assign:
+                for _prio, sheet_rs, preset_team, combo_row_id in preset_rows_assign:
+                    bounds = _combo_preset_team_size_bounds(
+                        tuple(preset_team), sheet_rs, max_team_size
+                    )
+                    if bounds is None:
+                        continue
+                    lo_pt, hi_pt = bounds
+                    if fixed_team_anchor and not all(m in preset_team for m in fixed_team_anchor):
+                        continue
+                    if pref_mem is not None and pref_mem not in preset_team:
+                        continue
+                    if not all(m in capable_members for m in preset_team):
+                        continue
+                    if sum(1 for m in preset_team if skill_role_priority(m)[0] == "OP") < 1:
+                        continue
+                    got = _one_roll_from_team(
+                        tuple(preset_team), min_n=lo_pt, max_n=hi_pt
+                    )
+                    if got is not None:
+                        team_candidates.append(
+                            {
+                                **got,
+                                "combo_sheet_row_id": combo_row_id,
+                                "combo_preset_team": tuple(preset_team),
+                            }
+                        )
+            for tsize in range(req_num, max_team_size + 1):
+                if fixed_team_anchor:
+                    _ft = list(fixed_team_anchor)
+                    others = [m for m in capable_members if m not in _ft]
+                    need_extra = tsize - len(_ft)
+                    if need_extra < 0:
+                        teams_iter = []
+                    elif need_extra == 0:
+                        teams_iter = [tuple(_ft)]
+                    elif len(others) >= need_extra:
+                        teams_iter = [
+                            tuple(_ft + list(rest))
+                            for rest in itertools.combinations(others, need_extra)
+                        ]
+                    else:
+                        teams_iter = []
+                elif (
+                    pref_mem is not None
+                    and pref_mem in capable_members
+                    and skill_role_priority(pref_mem)[0] == "OP"
+                ):
+                    others = [m for m in capable_members if m != pref_mem]
+                    if tsize == 1:
+                        teams_iter = [(pref_mem,)]
+                    elif len(others) >= tsize - 1:
+                        teams_iter = [
+                            tuple([pref_mem] + list(rest))
+                            for rest in itertools.combinations(others, tsize - 1)
+                        ]
+                    else:
+                        teams_iter = itertools.combinations(capable_members, tsize)
+                else:
+                    teams_iter = itertools.combinations(capable_members, tsize)
+
+                for team in teams_iter:
+                    got = _one_roll_from_team(team)
+                    if got is not None:
+                        team_candidates.append(
+                            {
+                                **got,
+                                "combo_sheet_row_id": None,
+                                "combo_preset_team": None,
+                            }
+                        )
+
+            if team_candidates:
+                task["_special_l2_speed20_fallback"] = True
+            else:
+                # 速度切替でも成立しない → もとの値へ戻す
+                task[TASK_COL_SPEED] = _orig_speed
+                task["base_time_per_unit"] = _orig_btpu
+                _base_time_per_unit = float(task.get("base_time_per_unit") or _base_time_per_unit)
+
+        if not team_candidates:
+            _mem_max_end: datetime | None = None
+            for _m in capable_members:
+                if _m not in daily_status:
+                    continue
+                _ed = daily_status[_m].get("end_dt")
+                if isinstance(_ed, datetime):
+                    _mem_max_end = (
+                        _ed if _mem_max_end is None else max(_mem_max_end, _ed)
+                    )
+            if (
+                len(capable_members) >= req_num
+                and _mem_max_end is not None
+                and isinstance(_mach_floor_eff, datetime)
+                and _mach_floor_eff >= _mem_max_end
+            ):
+                logging.warning(
+                    "段階2: 依頼NO=%s 日付=%s 工程/機械=%s/%s でフォーム候補は0件。"
+                    "スキル革坈(OP/AS)は %s 人いしたは」設備の加工開始下限=%s は"
+                    "当日の担当候補の退勤(%s)以降のため、この日は割当でしません。"
+                    "master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」"
+                    "または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください"
+                    "（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。"
+                    "参考: changeover剝の設備空し下限=%s 占有キー=%s",
+                    task.get("task_id"),
+                    current_date,
+                    machine,
+                    machine_name,
+                    len(capable_members),
+                    _mach_floor_eff.strftime("%Y-%m-%d %H:%M"),
+                    _mem_max_end.strftime("%H:%M"),
+                    _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
+                    machine_occ_key,
+                )
+            return None
     t_min = min(c["team_start"] for c in team_candidates)
 
     def _team_cand_key(c):
