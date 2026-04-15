@@ -1780,7 +1780,7 @@ def _paint_gantt_timeline_row_merged(
                 _, gh_ds = st0
                 c.fill = _gantt_cached_pattern_fill(gh_ds)
                 if col == col_s:
-                    _ds_txt = "(日次始業準備)"
+                    _ds_txt = "日次始業準備"
                     if shape_label_specs is not None:
                         _seg_lo = slots[i]
                         _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
@@ -1954,7 +1954,7 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(日次始業準備)",)
+    markers = ("(日次始業準備)", "日次始業準備")
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):
@@ -7106,38 +7106,22 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         _record_day_shape(s_mem, day_k)
 
                 if _chip_below:
-                    # 日次始業準備: メイン（タイトル）の直下に担当者チップを別シェイプで置く
-                    # 幅は結合セルと同じロジックのまま、縦（メイン・メンバー帯）のみ約 2 倍で読みやすくする。
+                    # 日次始業準備: メイン文言は「日次始業準備」のみ。メイン・直下メンバーとも高さは行の 1/4（収まらないときは等分縮小）。
                     _gap_eff = 1.35
-                    _h0 = max(9.0, float(_h_req_no))
-                    _want = 2.0 * _h0
-                    row_top_lim = float(band_top) + _band_inset
-                    row_bot_lim = float(band_bot) - _band_inset
-                    _inner = max(0.0, row_bot_lim - row_top_lim - _gap_eff)
-                    _tmin = 5.5
-                    # 帯内に収める。「(日次始業準備)」メインを高さ _want（=2*h0）優先、残りをメンバーに配分。
-                    # はみ出し時はメンバー側を先に削る（タイトルが潰れて読めないのを防ぐ）。
-                    if _inner + 1e-9 >= 2.0 * _want:
-                        _hmain_eff = _want
-                        _hmem_eff = _want
-                    elif _inner + 1e-9 >= _want + _h0:
-                        _hmain_eff = _want
-                        _hmem_eff = max(_h0, _inner - _hmain_eff)
+                    _h_quarter = max(8.0, float(h) * 0.25)
+                    row_top_lim = float(top) + _band_inset
+                    row_bot_lim = float(top) + float(h) - _band_inset
+                    room = max(0.0, row_bot_lim - row_top_lim)
+                    _twin_need = 2.0 * _h_quarter + _gap_eff
+                    if room + 1e-9 >= _twin_need:
+                        h_main = _h_quarter
+                        h_mem_use = _h_quarter
                     else:
-                        _hmain_eff = max(_tmin, min(_want, _inner - _h0))
-                        _hmem_eff = max(_h0, _inner - _hmain_eff)
-                    h_main = float(_hmain_eff)
-                    h_mem_use = float(_hmem_eff)
+                        _avail = max(0.0, room - _gap_eff)
+                        h_main = _avail / 2.0
+                        h_mem_use = _avail / 2.0
                     _stack = h_main + _gap_eff + h_mem_use
-                    _room = row_bot_lim - row_top_lim
-                    if _stack > _room + 1e-9:
-                        _ex = _stack - _room
-                        _from_mem = min(_ex, max(0.0, h_mem_use - _h0))
-                        h_mem_use -= _from_mem
-                        _ex -= _from_mem
-                        if _ex > 1e-9:
-                            h_main = max(_tmin, h_main - _ex)
-                    y_main = row_top_lim
+                    y_main = row_top_lim + max(0.0, (room - _stack) / 2.0)
                     y_mem = y_main + h_main + _gap_eff
                     _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
                     _main_fp = float(_gantt_xlw_timeline_main_font_pt(label_w, text))
@@ -15914,9 +15898,9 @@ def _build_equipment_schedule_dataframe(
                         _sub_n = _eq_cell_display_sub(active_ev, d)
                         _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
-                        # 日次始業準備は括弧ラベルのみ（進度列なし・薄緑着色と整合）
+                        # 日次始業準備は括弧なし（設備ガントのメインシェイプ文言と整合）
                         if _ek_disp in (TIMELINE_EVENT_MACHINE_DAILY_STARTUP,):
-                            eq_text = f"({_tag})"
+                            eq_text = str(_tag)
                         else:
                             eq_text = (
                                 f"[{_tid_d}] 主:{active_ev.get('op', '')}{_sub_text} ({_tag})"
