@@ -7115,28 +7115,28 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     row_bot_lim = float(band_bot) - _band_inset
                     _inner = max(0.0, row_bot_lim - row_top_lim - _gap_eff)
                     _tmin = 5.5
-                    # 帯内に収める。メンバー名シェイプを可能な限り高さ _want にし、足りない分だけタイトルを縮める
-                    # （旧ループは hmem を先に削っていたため、メインだけ高く見えていた）。
+                    # 帯内に収める。「(日次始業準備)」メインを高さ _want（=2*h0）優先、残りをメンバーに配分。
+                    # はみ出し時はメンバー側を先に削る（タイトルが潰れて読めないのを防ぐ）。
                     if _inner + 1e-9 >= 2.0 * _want:
                         _hmain_eff = _want
                         _hmem_eff = _want
-                    elif _inner + 1e-9 >= _want + _tmin:
-                        _hmem_eff = _want
-                        _hmain_eff = max(_tmin, min(_want, _inner - _hmem_eff))
+                    elif _inner + 1e-9 >= _want + _h0:
+                        _hmain_eff = _want
+                        _hmem_eff = max(_h0, _inner - _hmain_eff)
                     else:
                         _hmain_eff = max(_tmin, min(_want, _inner - _h0))
-                        _hmem_eff = max(_h0, min(_want, _inner - _hmain_eff))
+                        _hmem_eff = max(_h0, _inner - _hmain_eff)
                     h_main = float(_hmain_eff)
                     h_mem_use = float(_hmem_eff)
                     _stack = h_main + _gap_eff + h_mem_use
                     _room = row_bot_lim - row_top_lim
                     if _stack > _room + 1e-9:
                         _ex = _stack - _room
-                        _from_main = min(_ex, max(0.0, h_main - _tmin))
-                        h_main -= _from_main
-                        _ex -= _from_main
+                        _from_mem = min(_ex, max(0.0, h_mem_use - _h0))
+                        h_mem_use -= _from_mem
+                        _ex -= _from_mem
                         if _ex > 1e-9:
-                            h_mem_use = max(4.0, h_mem_use - _ex)
+                            h_main = max(_tmin, h_main - _ex)
                     y_main = row_top_lim
                     y_mem = y_main + h_main + _gap_eff
                     _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
