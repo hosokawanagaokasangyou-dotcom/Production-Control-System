@@ -15238,6 +15238,31 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 # 検査の割当上限 min に使う。同一依頼に EC 行は無いとしは need・スキルに従い通常配台れる（ec_done=0 固定で永久スキップしない）。
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
+# ---------------------------------------------------------------------------
+# 特別ルール（工程間WIP上限）: 依頼NO・加工日をまたいだ総ロール数の作業スペース制約
+# ---------------------------------------------------------------------------
+# 0 以下で無効（上限制約なし）
+WIP_LIMIT_EC_BEFORE_INSP_ROLLS = os.environ.get(
+    "WIP_LIMIT_EC_BEFORE_INSP_ROLLS", "15"
+).strip()
+try:
+    WIP_LIMIT_EC_BEFORE_INSP_ROLLS = int(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+except (TypeError, ValueError):
+    WIP_LIMIT_EC_BEFORE_INSP_ROLLS = 15
+
+WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = os.environ.get(
+    "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS", "20"
+).strip()
+try:
+    WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = int(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS)
+except (TypeError, ValueError):
+    WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = 20
+
+SPECIAL_WIP_SLIT_PROCESS = "スリット"
+SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
+SPECIAL_WIP_SEC_PROCESS = "SEC"
+SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
+
 
 # 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台試行のままとれる。
@@ -19197,10 +19222,75 @@ def _trial_order_flow_eligible_tasks(
     min_dispatch_effective: int | None = None,
     assign_probe_ctx: dict | None = None,
 ) -> list:
+    # 特別ルール（工程間WIP上限）: 依頼NO・加工日をまたいだ「総ロール数」の仕掛制約。
+    # - L11: EC→（検査＋巻返し）の前段WIPが上限以上なら EC を配台しない
+    # - L10: スリット→SEC の前段WIPが上限以上なら スリット を配台しない（SECは優先して進める）
+    # remaining_units はロール本数（1ロール完了で 1 減）である前提。
+    wip_ec_before_insp = None
+    if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+        ec_done_total = 0.0
+        follower_done_total = 0.0
+        for _t in task_queue:
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if _t.get("roll_pipeline_ec"):
+                ec_done_total += done
+            elif _t.get("roll_pipeline_inspection") or _t.get("roll_pipeline_rewind"):
+                follower_done_total += done
+        wip_ec_before_insp = max(0.0, ec_done_total - follower_done_total)
+
+    wip_slit_before_sec = None
+    if (
+        isinstance(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS, int)
+        and WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS > 0
+    ):
+        slit_done_total = 0.0
+        sec_done_total = 0.0
+        _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+        _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+        _sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+        _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        for _t in task_queue:
+            proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+            mach = _normalize_equipment_match_key(_t.get("machine_name"))
+            if not proc or not mach:
+                continue
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if proc == _slit_proc and mach == _slit_mach:
+                slit_done_total += done
+            elif proc == _sec_proc and mach == _sec_mach:
+                sec_done_total += done
+        wip_slit_before_sec = max(0.0, slit_done_total - sec_done_total)
+
     out = []
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
+        # L11: 検査前WIPが限界以上ならECをブロック（依頼NO・加工日を跨いだ総ロール数）
+        if (
+            wip_ec_before_insp is not None
+            and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+            and task.get("roll_pipeline_ec")
+        ):
+            continue
+        # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
+        if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
+            WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
+        ):
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+            ):
+                continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
         if _task_blocked_by_global_dispatch_trial_order(
