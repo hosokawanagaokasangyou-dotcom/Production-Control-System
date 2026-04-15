@@ -16096,6 +16096,78 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
         t["dispatch_trial_order"] = i
 
 
+def _reorder_task_queue_slit_sec_consecutive(task_queue: list) -> None:
+    """
+    特別ルール L10（スリット→SEC）: 同一依頼NO内でスリット行の直後に SEC 行が来るよう、
+    task_queue（自動算出時の並び）を軽く並べ替える。
+
+    - 対象: 加工内容トークンに「スリット」「SEC」があり、かつその順序がスリット→SEC の依頼
+    - 判定: 工程名×機械名で、スリット=スリット機1 湖南、SEC=SEC機 湖南 を採用
+    - シートで配台試行順が全行指定されている場合は本関数は呼ばれない（_apply_dispatch_trial_order...側）
+    """
+    if not task_queue:
+        return
+    slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+
+    idx_by_tid: dict[str, dict[str, int]] = {}
+    ok_tid: set[str] = set()
+    for i, t in enumerate(task_queue):
+        tid = str(t.get("task_id") or "").strip()
+        if not tid:
+            continue
+        toks = t.get("process_content_tokens") or []
+        norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+        if slit_proc in norm and sec_proc in norm:
+            try:
+                if norm.index(slit_proc) < norm.index(sec_proc):
+                    ok_tid.add(tid)
+            except Exception:
+                pass
+        proc = _normalize_process_name_for_rule_match(t.get("machine"))
+        mach = _normalize_equipment_match_key(t.get("machine_name"))
+        if proc == slit_proc and mach == slit_mach:
+            idx_by_tid.setdefault(tid, {})["slit"] = i
+        elif proc == sec_proc and mach == sec_mach:
+            idx_by_tid.setdefault(tid, {})["sec"] = i
+
+    moved: list[str] = []
+    # 依頼NOごとに 1 回だけ調整（インデックスが動くので都度再探索する）
+    for tid in sorted(ok_tid):
+        pos = idx_by_tid.get(tid) or {}
+        if "slit" not in pos or "sec" not in pos:
+            continue
+        # 現在位置を再探索（前の移動でズレるため）
+        slit_i = None
+        sec_i = None
+        for i, t in enumerate(task_queue):
+            if str(t.get("task_id") or "").strip() != tid:
+                continue
+            proc = _normalize_process_name_for_rule_match(t.get("machine"))
+            mach = _normalize_equipment_match_key(t.get("machine_name"))
+            if slit_i is None and proc == slit_proc and mach == slit_mach:
+                slit_i = i
+            if sec_i is None and proc == sec_proc and mach == sec_mach:
+                sec_i = i
+        if slit_i is None or sec_i is None:
+            continue
+        if sec_i == slit_i + 1:
+            continue
+        sec_task = task_queue.pop(sec_i)
+        insert_at = slit_i + 1
+        if sec_i < insert_at:
+            insert_at -= 1
+        task_queue.insert(insert_at, sec_task)
+        moved.append(tid)
+    if moved:
+        logging.info(
+            "特別ルールL10 配台試行順: スリット行の直後にSEC行を隣接した依頼NO: %s",
+            ",".join(moved),
+        )
+
+
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
     """配台計画シートの「配台試行順番」はキュー全行に正の整数で入っているか。"""
     if not task_queue:
@@ -16144,6 +16216,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
         )
     )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+    _reorder_task_queue_slit_sec_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
         "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
