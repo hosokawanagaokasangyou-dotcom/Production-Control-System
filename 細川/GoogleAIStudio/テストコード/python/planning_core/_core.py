@@ -19685,6 +19685,22 @@ def _assign_one_roll_trial_order_flow(
         ) + "メイン上書ignore_need_minimumでreq=1"
 
     # -------------------------------------------------------------------
+    # 特別ルール L3（EC×EC機 湖南）: 製品名に NR28 を含む場合は 3名配台が必要
+    # -------------------------------------------------------------------
+    _l3_prod = str(task.get(TASK_COL_PRODUCT) or "")
+    if (
+        _normalize_process_name_for_rule_match(machine_proc)
+        == _normalize_process_name_for_rule_match("EC")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("EC機　湖南")
+        and "NR28" in unicodedata.normalize("NFKC", _l3_prod)
+    ):
+        if req_num < 3:
+            req_num = 3
+            need_src_line = (need_src_line + " → ") if need_src_line else ""
+            need_src_line += "特別ルールL3(NR28)で必須人数=3"
+
+    # -------------------------------------------------------------------
     # 特別ルール L2（スライス×スライス機1 湖南）:
     # ロール単位長さ=100m のときは原則 3 名で配台し、成立しない場合のみ速度 20m/分へフォールバック。
     # - remaining_units / unit_m はロール本数・ロール長(m)（既存仕様）
