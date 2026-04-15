@@ -725,6 +725,8 @@ TASK_COL_SPECIFIED_DUE = "指定納期"
 TASK_COL_RAW_INPUT_DATE = "原反投入日"
 # 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
 TASK_COL_STOCK_LOCATION = "在庫場所"
+# 加工計画DATA にある場合のみ段階1で配台計画へコピー（在庫場所の右隣。配台アルゴリズムは参照しない）。
+TASK_COL_USED_RAW_WIDTH = "使用原反幅"
 # 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA＝配台計画_タスク入力。
 TASK_COL_PROCESS_CONTENT = "加工内容"
 # 投入可能日の目安は「回答納期」。未入力時は「指定納期」（剝日基準・当日/遅れは最優先）。「加工開始日」列は参照しない。
@@ -1047,6 +1049,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_SPECIFIED_DUE,
         TASK_COL_RAW_INPUT_DATE,
         TASK_COL_STOCK_LOCATION,
+        TASK_COL_USED_RAW_WIDTH,
         TASK_COL_PROCESS_CONTENT,
         TASK_COL_COMPLETION_FLAG,
         TASK_COL_ACTUAL_DONE,
@@ -1164,9 +1167,18 @@ SOURCE_BASE_COLUMNS = [
     TASK_COL_ORDER_QTY,
     TASK_COL_SPEED,
     TASK_COL_PRODUCT,
-    TASK_COL_ANSWER_DUE, TASK_COL_SPECIFIED_DUE, TASK_COL_RAW_INPUT_DATE, TASK_COL_STOCK_LOCATION,
+    TASK_COL_ANSWER_DUE,
+    TASK_COL_SPECIFIED_DUE,
+    TASK_COL_RAW_INPUT_DATE,
+    TASK_COL_STOCK_LOCATION,
+    TASK_COL_USED_RAW_WIDTH,
     TASK_COL_PROCESS_CONTENT,
-    TASK_COL_COMPLETION_FLAG, TASK_COL_ACTUAL_DONE, TASK_COL_ACTUAL_OUTPUT,
+    TASK_COL_COMPLETION_FLAG,
+    TASK_COL_ACTUAL_DONE,
+    TASK_COL_ACTUAL_OUTPUT,
+    TASK_COL_DATA_EXTRACTION_DT,
+    TASK_COL_DATA_EXTRACTION_TIME,
+    TASK_COL_EXTRACTION_TIME,
 ]
 PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_EXCLUDE_FROM_ASSIGNMENT,
@@ -1203,7 +1215,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール短縮長さ、原反投入日の直後に在庫場所）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜抽出時間まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反幅）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
