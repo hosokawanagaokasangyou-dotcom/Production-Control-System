@@ -1789,7 +1789,9 @@ def _paint_gantt_timeline_row_merged(
                         )
                         _shape_text = _ds_txt
                         if _mem_ds:
-                            _shape_text = _ds_txt + "\n" + "・".join(_mem_ds[:8])
+                            # xlwings の TextFrame.WordWrap=True は先頭シェイプ付近で極端に遅く
+                            # 「途中で止まった」ように見えるため、1 行（全角空白区切り）にする。
+                            _shape_text = _ds_txt + "\u3000" + "・".join(_mem_ds[:8])
                         # #region agent log
                         try:
                             _p = os.path.normpath(
@@ -6876,7 +6878,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             tf_margin_lr=None,
             z_bring_to_front=True,
             text_h_align=None,
-            word_wrap: bool = False,
         ):
             cap = str(caption or "").strip()
             if x_w <= 0 or x_h <= 0 or not cap:
@@ -6953,11 +6954,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         else int(_xl_h_align_center)
                     )
                     tf0.HorizontalAlignment = _hal
-                except Exception:
-                    pass
-                try:
-                    if word_wrap:
-                        tf0.WordWrap = -1  # msoTrue（日次始業＋氏名の2行表示のみで使用）
                 except Exception:
                     pass
                 tf0.Characters().Text = cap
@@ -7188,7 +7184,6 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     adj_round=0.2,
                     shadow=False,
                     shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
-                    word_wrap=("\n" in str(text or "")),
                 )
                 if shp is not None:
                     n_added += 1
