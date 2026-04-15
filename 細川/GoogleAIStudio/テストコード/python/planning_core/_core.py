@@ -10036,6 +10036,19 @@ def build_task_queue_from_planning_df(
         ):
             speed = 20.0
 
+        # -------------------------------------------------------------------
+        # 特別ルール L6（SEC×SEC機 湖南）: 依頼NOに「JR」又は「PN」が含まれている場合は加工速度を20m/分
+        # -------------------------------------------------------------------
+        _tid_nfkc = unicodedata.normalize("NFKC", str(task_id or ""))
+        if (
+            _normalize_process_name_for_rule_match(machine)
+            == _normalize_process_name_for_rule_match("SEC")
+            and _normalize_equipment_match_key(machine_name)
+            == _normalize_equipment_match_key("SEC機　湖南")
+            and (("JR" in _tid_nfkc) or ("PN" in _tid_nfkc))
+        ):
+            speed = 20.0
+
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
