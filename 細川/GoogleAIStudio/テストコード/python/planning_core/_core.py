@@ -837,6 +837,10 @@ RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 PLAN_COL_PRODUCT_WIDTH = "製品幅"
 PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME = "製品名, 製品幅.txt"
 PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
+# 製品長（mm 想定）。段階1のみ算出。テーブル「製品名,製品長.txt」優先、未登録時は最後の NNNxMM の右辺。いずれも不可なら PlanningValidationError。
+PLAN_COL_PRODUCT_LENGTH = "製品長"
+PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
+PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
 # 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」必須。
 # 英字開始でないときは「製品名の先頭5文字」の末尾3桁を厚みコードとして code/10 を採用（例: 040→4.0, 100→10.0）。
 # いずれも不可なら PlanningValidationError（段階1中断）。
@@ -1067,6 +1071,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_USED_RAW,
         PLAN_COL_RAW_FABRIC_WIDTH,
         PLAN_COL_PRODUCT_WIDTH,
+        PLAN_COL_PRODUCT_LENGTH,
         PLAN_COL_PRODUCT_THICKNESS,
         TASK_COL_PROCESS_CONTENT,
         TASK_COL_COMPLETION_FLAG,
@@ -1245,6 +1250,7 @@ def plan_input_sheet_column_order():
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_WIDTH)
+            cols.append(PLAN_COL_PRODUCT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_THICKNESS)
         if c == TASK_COL_USED_RAW:
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
@@ -12380,6 +12386,22 @@ def _infer_width_mm_from_last_dim_pair_left(text: str) -> int | None:
         return None
 
 
+def _infer_length_mm_from_last_dim_pair_right(text: str) -> int | None:
+    """
+    最後の「左数 x 右数」（2〜6 桁）ペアの右側を長さ(mm)候補とする。
+    製品長テーブル未登録時のフォールバック。寸法区切りは infer_unit_m と同様に正規化する。
+    """
+    s = _normalize_product_dim_separators_for_roll_inference(str(text or ""))
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if not dim_pairs:
+        return None
+    try:
+        right = int(dim_pairs[-1][1])
+        return right if right > 0 else None
+    except ValueError:
+        return None
+
+
 def _load_raw_fabric_width_mm_table() -> dict[str, int]:
     """
     原反幅テーブル（使用原反→原反幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
@@ -12550,6 +12572,122 @@ def _load_product_width_mm_table() -> dict[str, int]:
         out[key] = w
     logging.info("製品幅テーブルを読み込みました: %s (%s 件)", path_found, len(out))
     return out
+
+
+def _product_length_table_search_paths() -> list[str]:
+    """製品長テーブル CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(PRODUCT_LENGTH_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME,
+            )
+        )
+    paths.append(os.path.join(os.getcwd(), PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _load_product_length_mm_table() -> dict[str, int]:
+    """
+    製品長テーブル（製品名→製品長）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    """
+    path_found = ""
+    for p in _product_length_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        hint = " / ".join(_product_length_table_search_paths()[:4])
+        raise PlanningValidationError(
+            f"製品長テーブルが見つかりません。{PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME} を配置するか、"
+            f"環境変数 {PRODUCT_LENGTH_TABLE_PATH_ENV} で CSV のフルパスを指定してください。探索: {hint}"
+        )
+    out: dict[str, int] = {}
+    with open(path_found, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        raise PlanningValidationError(f"製品長テーブルが空です: {path_found}")
+    hdr = [_normalize_mm_table_lookup_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_mm_table_lookup_key("製品名"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_w = hdr.index(_normalize_mm_table_lookup_key("製品長"))
+    except ValueError:
+        i_w = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_w):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_w = parts[i_w]
+        key = _normalize_mm_table_lookup_key(raw_k)
+        if not key:
+            continue
+        try:
+            w = _parse_int_mm_width_table_cell(raw_w)
+        except ValueError as ex:
+            raise PlanningValidationError(
+                f"製品長テーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
+            ) from ex
+        if key in out and out[key] != w:
+            raise PlanningValidationError(
+                f"製品長テーブルで同一キーに矛盾する値があります: {key!r} → {out[key]} と {w} ({path_found})"
+            )
+        out[key] = w
+    logging.info("製品長テーブルを読み込みました: %s (%s 件)", path_found, len(out))
+    return out
+
+
+def _product_length_lookup_source_strings(row: "pd.Series") -> list[str]:
+    """照会用文字列（正規化済み・重複除き）。製品名 → 使用原反。"""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for col in (TASK_COL_PRODUCT, TASK_COL_USED_RAW):
+        if col not in row.index:
+            continue
+        v = row.get(col)
+        k = _normalize_mm_table_lookup_key(v)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        ordered.append(k)
+    return ordered
+
+
+def _resolve_product_length_mm_for_stage1_row(row: "pd.Series", table: dict[str, int]) -> int:
+    """
+    テーブル照会を優先し、未登録なら寸法パターンで製品長(mm)を決定。決められなければ PlanningValidationError。
+    """
+    keys = _product_length_lookup_source_strings(row)
+    for k in keys:
+        w = table.get(k)
+        if w is not None and w > 0:
+            return int(w)
+    for k in keys:
+        inferred = _infer_length_mm_from_last_dim_pair_right(k)
+        if inferred is not None and inferred > 0:
+            return int(inferred)
+    tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    raise PlanningValidationError(
+        "製品長を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、製品名／使用原反のいずれかに"
+        "「…NNNxMM…」形式の寸法を含めてください。"
+    )
 
 
 def _product_width_lookup_source_strings(row: "pd.Series") -> list[str]:
@@ -12774,6 +12912,7 @@ def run_stage1_extract():
     df_src = load_tasks_df()
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()
+    pl_table = _load_product_length_mm_table()
     pt_table = _load_product_thickness_mm_table()
     records = []
     for _, row in df_src.iterrows():
@@ -12798,6 +12937,9 @@ def run_stage1_extract():
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
             row, pw_table
+        )
+        rec[PLAN_COL_PRODUCT_LENGTH] = _resolve_product_length_mm_for_stage1_row(
+            row, pl_table
         )
         rec[PLAN_COL_PRODUCT_THICKNESS] = _resolve_product_thickness_mm_for_stage1_row(
             row, pt_table
