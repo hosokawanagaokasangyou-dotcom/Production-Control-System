@@ -1782,20 +1782,23 @@ def _paint_gantt_timeline_row_merged(
                 if col == col_s:
                     _ds_txt = "(日次始業準備)"
                     if shape_label_specs is not None:
-                        _ss0 = slots[i]
-                        _se0 = _ss0 + timedelta(minutes=float(slot_mins))
-                        _mem_ds = _gantt_member_labels_for_startup_overlap_event(
-                            evlist, _ss0, _se0
+                        _seg_lo = slots[i]
+                        _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                        _mem_ds = _gantt_member_labels_for_startup_in_range(
+                            evlist, _seg_lo, _seg_hi
                         )
+                        _shape_text = _ds_txt
+                        if _mem_ds:
+                            _shape_text = _ds_txt + "\n" + "・".join(_mem_ds[:8])
                         shape_label_specs.append(
                             {
                                 "row": row,
                                 "col_s": col_s,
                                 "col_e": col_e,
-                                "text": _ds_txt,
+                                "text": _shape_text,
                                 "italic": bool(label_italic),
                                 "fill_hex": str(gh_ds),
-                                "member_labels": _mem_ds,
+                                "member_labels": [],
                                 "day_key": shape_day_key or "",
                             }
                         )
@@ -3721,22 +3724,35 @@ def _gantt_member_label_surname_only(raw: str) -> str:
     return n if n else sei
 
 
-def _gantt_member_labels_for_startup_overlap_event(
-    evlist, slot_start: datetime, slot_end: datetime
+def _gantt_member_labels_for_startup_in_range(
+    evlist, range_start: datetime, range_end: datetime
 ) -> list[str]:
     """
-    設備ガントのタイムライン上で、当該スロットに重なる日次始業イベントから担当者姓を得る。
+    半開区間 [range_start, range_end) に重なる日次始業イベントから担当者姓を得る。
+    （`_eq_grid_best_overlapping_event_for_cell` は加工を優先するため使わない）
     """
-    active = _eq_grid_best_overlapping_event_for_cell(evlist, slot_start, slot_end)
-    if active is None or _timeline_event_kind(active) != TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+    best_ev: dict | None = None
+    best_st: datetime | None = None
+    for ev in evlist or []:
+        if _timeline_event_kind(ev) != TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+            continue
+        st = ev.get("start_dt")
+        ed = ev.get("end_dt")
+        if not isinstance(st, datetime) or not isinstance(ed, datetime) or ed <= st:
+            continue
+        if st < range_end and ed > range_start:
+            if best_ev is None or best_st is None or st < best_st:
+                best_ev = ev
+                best_st = st
+    if best_ev is None:
         return []
     raw_names: list[str] = []
     seen_raw: set[str] = set()
-    op = str(active.get("op") or "").strip()
+    op = str(best_ev.get("op") or "").strip()
     if op and op not in seen_raw:
         seen_raw.add(op)
         raw_names.append(op)
-    sub_raw = str(active.get("sub") or "").strip()
+    sub_raw = str(best_ev.get("sub") or "").strip()
     if sub_raw:
         for seg in re.split(r"[,、]", sub_raw):
             t = seg.strip()
@@ -6408,14 +6424,14 @@ def _gantt_fallback_timeline_labels_openpyxl(
                 italic=bool(sp.get("italic")),
             )
             c.alignment = _gantt_timeline_label_alignment(single_slot=(col_s == col_e))
-            if mems:
+            if mems or ("\n" in str(c.value or "")):
                 try:
                     c.alignment = Alignment(
                         horizontal="left",
                         vertical="center",
                         wrap_text=True,
                         shrink_to_fit=False,
-                        indent=1,
+                        indent=1 if mems else 0,
                     )
                 except Exception:
                     pass
@@ -6753,6 +6769,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             tf_margin_lr=None,
             z_bring_to_front=True,
             text_h_align=None,
+            word_wrap: bool = False,
         ):
             cap = str(caption or "").strip()
             if x_w <= 0 or x_h <= 0 or not cap:
@@ -6831,8 +6848,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     tf0.HorizontalAlignment = _hal
                 except Exception:
                     pass
-                # WordWrap=True は環境によって TextFrame の再レイアウトが極端に重く、
-                # 先頭シェイプ追加付近で「進まない」ように見えることがあるため付けない。
+                try:
+                    if word_wrap:
+                        tf0.WordWrap = -1  # msoTrue（日次始業＋氏名の2行表示のみで使用）
+                except Exception:
+                    pass
                 tf0.Characters().Text = cap
                 nch = len(cap)
                 fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
@@ -7034,7 +7054,13 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     except Exception:
                         pass
             else:
+                _nlines = max(1, str(text).count("\n") + 1)
                 label_h = _h_req_no
+                if _nlines > 1:
+                    label_h = min(
+                        _band - 2.0 * _band_inset,
+                        max(_h_req_no, _h_req_no * (0.55 + 0.48 * float(_nlines))),
+                    )
                 y_lbl = band_top + _band_inset + max(
                     0.0, (_band - 2.0 * _band_inset - label_h) / 2.0
                 )
@@ -7055,6 +7081,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     adj_round=0.2,
                     shadow=False,
                     shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                    word_wrap=("\n" in str(text or "")),
                 )
                 if shp is not None:
                     n_added += 1
