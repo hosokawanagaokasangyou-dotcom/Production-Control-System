@@ -10169,6 +10169,7 @@ def build_task_queue_from_planning_df(
                 PLAN_COL_PRODUCT_THICKNESS: _planning_df_cell_scalar(
                     row, PLAN_COL_PRODUCT_THICKNESS
                 ),
+                "process_content_tokens": list(_order_list) if _order_list else [],
                 "equipment_line_key": _resolve_equipment_line_key_for_task(
                     {"machine": machine, "machine_name": machine_name},
                     equipment_list,
@@ -19364,6 +19365,24 @@ def _trial_order_flow_eligible_tasks(
                 and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
             ):
                 continue
+
+        # L10: 加工内容が「スリット,SEC」の依頼では、スリットが 5 ロール以上終わるまで SEC を開始しない
+        if wip_slit_before_sec is not None and wip_slit_before_sec < 5.0:
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+            ):
+                toks = task.get("process_content_tokens") or []
+                _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+                if (
+                    _normalize_process_name_for_rule_match("スリット") in _norm
+                    and _normalize_process_name_for_rule_match("SEC") in _norm
+                    and _norm.index(_normalize_process_name_for_rule_match("スリット"))
+                    < _norm.index(_normalize_process_name_for_rule_match("SEC"))
+                ):
+                    continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
         if _task_blocked_by_global_dispatch_trial_order(
