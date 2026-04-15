@@ -10049,6 +10049,30 @@ def build_task_queue_from_planning_df(
         ):
             speed = 20.0
 
+        # -------------------------------------------------------------------
+        # 特別ルール L8（接続×熱融着機 湖南）: 製品長=105m のときは加工速度を20m/分
+        # 本実装では「製品長」を ロール単位長さ(m)（unit）として解釈する。
+        # -------------------------------------------------------------------
+        _unit_for_l8 = parse_float_safe(
+            _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
+        )
+        if _unit_for_l8 <= 0:
+            _unit_for_l8 = infer_unit_m_from_product_name(
+                product_name, fallback_unit=qty_total if qty_total > 0 else qty
+            )
+        try:
+            _unit_for_l8_i = int(float(_unit_for_l8))
+        except (TypeError, ValueError):
+            _unit_for_l8_i = None
+        if (
+            _normalize_process_name_for_rule_match(machine)
+            == _normalize_process_name_for_rule_match("接続")
+            and _normalize_equipment_match_key(machine_name)
+            == _normalize_equipment_match_key("熱融着機　湖南")
+            and _unit_for_l8_i == 105
+        ):
+            speed = 20.0
+
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
