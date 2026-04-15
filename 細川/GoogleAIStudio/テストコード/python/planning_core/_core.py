@@ -725,10 +725,8 @@ TASK_COL_SPECIFIED_DUE = "指定納期"
 TASK_COL_RAW_INPUT_DATE = "原反投入日"
 # 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
 TASK_COL_STOCK_LOCATION = "在庫場所"
-# 加工計画DATA に任意で存在。原反幅テーブル照会の第1キー（無ければ使用原反幅・製品名を順に試す）。
+# 加工計画DATA に任意で存在。原反幅テーブル照会の第1キー（無ければ製品名を順に試す）。
 TASK_COL_USED_RAW = "使用原反"
-# 加工計画DATA にある場合のみ段階1で配台計画へコピー（在庫場所の右隣。配台アルゴリズムは参照しない）。
-TASK_COL_USED_RAW_WIDTH = "使用原反幅"
 # 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA＝配台計画_タスク入力。
 TASK_COL_PROCESS_CONTENT = "加工内容"
 # 投入可能日の目安は「回答納期」。未入力時は「指定納期」（剝日基準・当日/遅れは最優先）。「加工開始日」列は参照しない。
@@ -1061,7 +1059,6 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_RAW_INPUT_DATE,
         TASK_COL_STOCK_LOCATION,
         TASK_COL_USED_RAW,
-        TASK_COL_USED_RAW_WIDTH,
         PLAN_COL_RAW_FABRIC_WIDTH,
         PLAN_COL_PRODUCT_WIDTH,
         TASK_COL_PROCESS_CONTENT,
@@ -1186,7 +1183,6 @@ SOURCE_BASE_COLUMNS = [
     TASK_COL_RAW_INPUT_DATE,
     TASK_COL_STOCK_LOCATION,
     TASK_COL_USED_RAW,
-    TASK_COL_USED_RAW_WIDTH,
     TASK_COL_PROCESS_CONTENT,
     TASK_COL_COMPLETION_FLAG,
     TASK_COL_ACTUAL_DONE,
@@ -1227,7 +1223,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反・使用原反幅の直後に原反幅）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に原反幅）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -1242,7 +1238,7 @@ def plan_input_sheet_column_order():
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_WIDTH)
-        if c == TASK_COL_USED_RAW_WIDTH:
+        if c == TASK_COL_USED_RAW:
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
     cols.append(PLAN_COL_PROCESS_FACTOR)
     for c in PLAN_OVERRIDE_COLUMNS:
@@ -12357,10 +12353,10 @@ def _load_raw_fabric_width_mm_table() -> dict[str, int]:
 
 
 def _raw_fabric_width_lookup_source_strings(row: "pd.Series") -> list[str]:
-    """照会用文字列（正規化済み・重複除き）。使用原反 → 使用原反幅 → 製品名。"""
+    """照会用文字列（正規化済み・重複除き）。使用原反 → 製品名。"""
     ordered: list[str] = []
     seen: set[str] = set()
-    for col in (TASK_COL_USED_RAW, TASK_COL_USED_RAW_WIDTH, TASK_COL_PRODUCT):
+    for col in (TASK_COL_USED_RAW, TASK_COL_PRODUCT):
         if col not in row.index:
             continue
         v = row.get(col)
@@ -12390,7 +12386,7 @@ def _resolve_raw_fabric_width_mm_for_stage1_row(
     tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
     raise PlanningValidationError(
         "原反幅を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
-        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、使用原反／使用原反幅／製品名のいずれかに"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、使用原反／製品名のいずれかに"
         "「…NNNxMM…」形式の寸法を含めてください。"
     )
 
@@ -12475,10 +12471,10 @@ def _load_product_width_mm_table() -> dict[str, int]:
 
 
 def _product_width_lookup_source_strings(row: "pd.Series") -> list[str]:
-    """照会用文字列（正規化済み・重複除き）。製品名 → 使用原反幅 → 使用原反。"""
+    """照会用文字列（正規化済み・重複除き）。製品名 → 使用原反。"""
     ordered: list[str] = []
     seen: set[str] = set()
-    for col in (TASK_COL_PRODUCT, TASK_COL_USED_RAW_WIDTH, TASK_COL_USED_RAW):
+    for col in (TASK_COL_PRODUCT, TASK_COL_USED_RAW):
         if col not in row.index:
             continue
         v = row.get(col)
@@ -12508,7 +12504,7 @@ def _resolve_product_width_mm_for_stage1_row(
     tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
     raise PlanningValidationError(
         "製品幅を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
-        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、製品名／使用原反幅／使用原反のいずれかに"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、製品名／使用原反のいずれかに"
         "「…NNNxMM…」形式の寸法を含めてください。"
     )
 
