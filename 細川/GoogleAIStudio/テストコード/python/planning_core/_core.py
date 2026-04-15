@@ -185,6 +185,8 @@ _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
 _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE: dict[str, int] = {}
 # master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) のタイムラインに載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
+# 段階2で採用した加工計画DATAのデータ抽出日時（generate_plan / 実績明細ガント更新入口で設定。無いとき None）。
+_STAGE2_DATA_EXTRACTION_DATETIME: datetime | None = None
 # timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
@@ -17302,6 +17304,22 @@ def _stage2_calendar_anchor_datetime(day_d: date) -> datetime:
     return datetime.combine(day_d, st_t)
 
 
+def _omit_machine_daily_startup_for_data_extraction_day(current_date: date) -> bool:
+    """
+    データ抽出当日で、かつ加工計画DATAのデータ抽出日時の時刻が定常開始（A15、無ければ工場既定開始）以上のとき、
+    その暦日のみ日次始業準備ブロックを置かない（抽出が日付のみのときは時刻 0:00 とみなし、通常は定常前のため置く）。
+    """
+    ext = _STAGE2_DATA_EXTRACTION_DATETIME
+    if ext is None or current_date != ext.date():
+        return False
+    reg_t = (
+        _STAGE2_REGULAR_SHIFT_START
+        if _STAGE2_REGULAR_SHIFT_START is not None
+        else DEFAULT_START_TIME
+    )
+    return ext.time() >= reg_t
+
+
 def _eligible_ops_sorted_for_daily_startup(
     machine_proc: str,
     machine_name: str,
@@ -17417,6 +17435,8 @@ def _daily_startup_segment_start_end(
     su = _lookup_daily_startup_minutes(machine_name, daily_startup_by_machine)
     if su <= 0:
         return None
+    if _omit_machine_daily_startup_for_data_extraction_day(current_date):
+        return None
     cal_anchor = _stage2_calendar_anchor_datetime(current_date)
     t_lo = max(prev_machining_end_dt, cal_anchor)
     reg_start: datetime | None = None
@@ -17476,7 +17496,7 @@ def _machine_effective_floor_timedelta_only(
             )
             if se:
                 mf = max(mf, se[1])
-            else:
+            elif not _omit_machine_daily_startup_for_data_extraction_day(cd):
                 reg_end = _stage2_calendar_anchor_datetime(cd) + timedelta(minutes=su)
                 mf = max(mf, reg_end)
     return mf
@@ -20730,6 +20750,7 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
         global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
         global _STAGE2_REGULAR_SHIFT_START
+        global _STAGE2_DATA_EXTRACTION_DATETIME
         (
             _skills_dict,
             members,
@@ -20783,6 +20804,7 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         # 実績明細ガントの「データ抽出」は、加工計画DATAではなく「加工実績明細DATA」のデータ抽出時間を優先する。
         # ただし勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
         data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+        _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
         base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
         run_date = base_now_dt.date()
         data_extract_dt_str = (
@@ -21051,6 +21073,7 @@ def _generate_plan_impl():
     global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
     global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
+    global _STAGE2_DATA_EXTRACTION_DATETIME
     try:
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
@@ -21119,6 +21142,7 @@ def _generate_plan_impl():
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+    _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
     data_extract_dt_str = (
