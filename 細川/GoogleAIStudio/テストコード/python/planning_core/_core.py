@@ -835,6 +835,10 @@ PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
 # マクロブックと同じフォルダ（またはカレント）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
 RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
+# 製品幅（mm 想定）。段階1のみ算出。テーブル「製品名, 製品幅.txt」優先、未登録時は最後の NNNxMM の左辺。いずれも不可なら PlanningValidationError。
+PLAN_COL_PRODUCT_WIDTH = "製品幅"
+PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME = "製品名, 製品幅.txt"
+PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
 # 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
 PLANNING_MIN_QTY_M = 100.0
 # ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
@@ -1059,6 +1063,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_USED_RAW,
         TASK_COL_USED_RAW_WIDTH,
         PLAN_COL_RAW_FABRIC_WIDTH,
+        PLAN_COL_PRODUCT_WIDTH,
         TASK_COL_PROCESS_CONTENT,
         TASK_COL_COMPLETION_FLAG,
         TASK_COL_ACTUAL_DONE,
@@ -1222,7 +1227,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反・使用原反幅の直後に原反幅）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反・使用原反幅の直後に原反幅）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -1236,6 +1241,7 @@ def plan_input_sheet_column_order():
             cols.append(PLAN_COL_DISPATCH_REMAINING_QTY)
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
+            cols.append(PLAN_COL_PRODUCT_WIDTH)
         if c == TASK_COL_USED_RAW_WIDTH:
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
     cols.append(PLAN_COL_PROCESS_FACTOR)
@@ -12251,7 +12257,7 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
     return out
 
 
-def _normalize_raw_fabric_lookup_key(val) -> str:
+def _normalize_mm_table_lookup_key(val) -> str:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
     s = unicodedata.normalize("NFKC", str(val).strip())
@@ -12259,7 +12265,7 @@ def _normalize_raw_fabric_lookup_key(val) -> str:
     return s.strip()
 
 
-def _parse_int_mm_raw_fabric_width_cell(val) -> int:
+def _parse_int_mm_width_table_cell(val) -> int:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         raise ValueError("empty")
     if isinstance(val, (int, float)) and not isinstance(val, bool):
@@ -12280,10 +12286,10 @@ def _parse_int_mm_raw_fabric_width_cell(val) -> int:
     return n
 
 
-def _infer_raw_fabric_width_mm_from_pattern(text: str) -> int | None:
+def _infer_width_mm_from_last_dim_pair_left(text: str) -> int | None:
     """
-    最後の「左数 x 右数」（2〜6 桁）ペアの左側を原反幅(mm)候補とする。
-    テーブル未登録時のフォールバック。寸法区切りは infer_unit_m と同様に正規化する。
+    最後の「左数 x 右数」（2〜6 桁）ペアの左側を幅(mm)候補とする。
+    原反幅・製品幅テーブル未登録時のフォールバック。寸法区切りは infer_unit_m と同様に正規化する。
     """
     s = _normalize_product_dim_separators_for_roll_inference(str(text or ""))
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
@@ -12316,13 +12322,13 @@ def _load_raw_fabric_width_mm_table() -> dict[str, int]:
         rows = list(csv.reader(f))
     if not rows:
         raise PlanningValidationError(f"原反幅テーブルが空です: {path_found}")
-    hdr = [_normalize_raw_fabric_lookup_key(x) for x in rows[0]]
+    hdr = [_normalize_mm_table_lookup_key(x) for x in rows[0]]
     try:
-        i_key = hdr.index(_normalize_raw_fabric_lookup_key("使用原反"))
+        i_key = hdr.index(_normalize_mm_table_lookup_key("使用原反"))
     except ValueError:
         i_key = 0
     try:
-        i_w = hdr.index(_normalize_raw_fabric_lookup_key("原反幅"))
+        i_w = hdr.index(_normalize_mm_table_lookup_key("原反幅"))
     except ValueError:
         i_w = 1 if len(hdr) > 1 else 0
     for parts in rows[1:]:
@@ -12332,11 +12338,11 @@ def _load_raw_fabric_width_mm_table() -> dict[str, int]:
             parts.append("")
         raw_k = parts[i_key]
         raw_w = parts[i_w]
-        key = _normalize_raw_fabric_lookup_key(raw_k)
+        key = _normalize_mm_table_lookup_key(raw_k)
         if not key:
             continue
         try:
-            w = _parse_int_mm_raw_fabric_width_cell(raw_w)
+            w = _parse_int_mm_width_table_cell(raw_w)
         except ValueError as ex:
             raise PlanningValidationError(
                 f"原反幅テーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
@@ -12358,7 +12364,7 @@ def _raw_fabric_width_lookup_source_strings(row: "pd.Series") -> list[str]:
         if col not in row.index:
             continue
         v = row.get(col)
-        k = _normalize_raw_fabric_lookup_key(v)
+        k = _normalize_mm_table_lookup_key(v)
         if not k or k in seen:
             continue
         seen.add(k)
@@ -12378,13 +12384,131 @@ def _resolve_raw_fabric_width_mm_for_stage1_row(
         if w is not None and w > 0:
             return int(w)
     for k in keys:
-        inferred = _infer_raw_fabric_width_mm_from_pattern(k)
+        inferred = _infer_width_mm_from_last_dim_pair_left(k)
         if inferred is not None and inferred > 0:
             return int(inferred)
     tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
     raise PlanningValidationError(
         "原反幅を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
         f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、使用原反／使用原反幅／製品名のいずれかに"
+        "「…NNNxMM…」形式の寸法を含めてください。"
+    )
+
+
+def _product_width_table_search_paths() -> list[str]:
+    """製品幅テーブル CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(PRODUCT_WIDTH_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME,
+            )
+        )
+    paths.append(os.path.join(os.getcwd(), PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _load_product_width_mm_table() -> dict[str, int]:
+    """
+    製品幅テーブル（製品名→製品幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    """
+    path_found = ""
+    for p in _product_width_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        hint = " / ".join(_product_width_table_search_paths()[:4])
+        raise PlanningValidationError(
+            f"製品幅テーブルが見つかりません。{PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME} を配置するか、"
+            f"環境変数 {PRODUCT_WIDTH_TABLE_PATH_ENV} で CSV のフルパスを指定してください。探索: {hint}"
+        )
+    out: dict[str, int] = {}
+    with open(path_found, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        raise PlanningValidationError(f"製品幅テーブルが空です: {path_found}")
+    hdr = [_normalize_mm_table_lookup_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_mm_table_lookup_key("製品名"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_w = hdr.index(_normalize_mm_table_lookup_key("製品幅"))
+    except ValueError:
+        i_w = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_w):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_w = parts[i_w]
+        key = _normalize_mm_table_lookup_key(raw_k)
+        if not key:
+            continue
+        try:
+            w = _parse_int_mm_width_table_cell(raw_w)
+        except ValueError as ex:
+            raise PlanningValidationError(
+                f"製品幅テーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
+            ) from ex
+        if key in out and out[key] != w:
+            raise PlanningValidationError(
+                f"製品幅テーブルで同一キーに矛盾する値があります: {key!r} → {out[key]} と {w} ({path_found})"
+            )
+        out[key] = w
+    logging.info("製品幅テーブルを読み込みました: %s (%s 件)", path_found, len(out))
+    return out
+
+
+def _product_width_lookup_source_strings(row: "pd.Series") -> list[str]:
+    """照会用文字列（正規化済み・重複除き）。製品名 → 使用原反幅 → 使用原反。"""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for col in (TASK_COL_PRODUCT, TASK_COL_USED_RAW_WIDTH, TASK_COL_USED_RAW):
+        if col not in row.index:
+            continue
+        v = row.get(col)
+        k = _normalize_mm_table_lookup_key(v)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        ordered.append(k)
+    return ordered
+
+
+def _resolve_product_width_mm_for_stage1_row(
+    row: "pd.Series", table: dict[str, int]
+) -> int:
+    """
+    テーブル照会を優先し、未登録なら寸法パターンで製品幅(mm)を決定。決められなければ PlanningValidationError。
+    """
+    keys = _product_width_lookup_source_strings(row)
+    for k in keys:
+        w = table.get(k)
+        if w is not None and w > 0:
+            return int(w)
+    for k in keys:
+        inferred = _infer_width_mm_from_last_dim_pair_left(k)
+        if inferred is not None and inferred > 0:
+            return int(inferred)
+    tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    raise PlanningValidationError(
+        "製品幅を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、製品名／使用原反幅／使用原反のいずれかに"
         "「…NNNxMM…」形式の寸法を含めてください。"
     )
 
@@ -12411,6 +12535,7 @@ def run_stage1_extract():
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
     rw_table = _load_raw_fabric_width_mm_table()
+    pw_table = _load_product_width_mm_table()
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -12432,6 +12557,9 @@ def run_stage1_extract():
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = _qty_total_s1
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
+        rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
+            row, pw_table
+        )
         rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
             row, rw_table
         )
