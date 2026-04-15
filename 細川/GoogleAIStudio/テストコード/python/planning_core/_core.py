@@ -7107,10 +7107,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
                 if _chip_below:
                     # 日次始業準備: メイン（タイトル）の直下に担当者チップを別シェイプで置く
-                    # 既定比で幅・フォントが小さく読みにくいため、結合幅の 2 倍相当＋フォント下限を上げる。
+                    # 幅は結合セルと同じロジックのまま、縦（メイン・メンバー帯）のみ約 2 倍で読みやすくする。
                     _gap_eff = 1.35
-                    _hmain_eff = max(10.5, float(_h_req_no) * 1.1)
-                    _hmem_eff = max(11.5, float(_h_req_no) * 1.15)
+                    _h0 = max(9.0, float(_h_req_no))
+                    _hmain_eff = 2.0 * _h0
+                    _hmem_eff = 2.0 * _h0
                     row_top_lim = float(band_top) + _band_inset
                     row_bot_lim = float(band_bot) - _band_inset
                     for _squeeze in range(28):
@@ -7131,23 +7132,12 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     h_mem_use = float(_hmem_eff)
                     y_main = row_top_lim
                     y_mem = y_main + h_main + _gap_eff
-                    _emit_member_pills(
-                        mems_all,
-                        y_mem,
-                        h_mem_use,
-                        dk,
-                        cell_w_scale=2.0,
-                        min_chip_w=68.0,
-                        font_floor=8.75,
-                    )
-                    _lw_main = max(float(label_w) * 2.0, 2.0 * float(slot_w))
-                    _main_fp = max(
-                        float(_gantt_xlw_timeline_main_font_pt(_lw_main, text)), 8.25
-                    )
+                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                    _main_fp = float(_gantt_xlw_timeline_main_font_pt(label_w, text))
                     shp_main = _gantt_xlw_add_round_rect(
                         left,
                         y_main,
-                        _lw_main,
+                        label_w,
                         h_main,
                         text,
                         fill_rgb=fill_bgr,
