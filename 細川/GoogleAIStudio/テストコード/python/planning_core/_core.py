@@ -699,6 +699,8 @@ RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 GANTT_TIMELINE_SLOT_MINUTES = 10
 # 結果_設備ガントの時刻列（E 列以降）の列幅（Excel / openpyxl の標準単位）
 GANTT_TIMELINE_COLUMN_WIDTH = 3
+# タイムライン上の角丸ラベルシェイプ（依頼NO 等）の横幅下限（10 分スロット列の本数換算）
+GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS = 3
 # 結果_設備ガントの時刻見出し行（hdr_row）の RowDimension.height（ポイント）
 GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
@@ -6760,7 +6762,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 ) -> bool:
     """
     結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
-    依頼NOは中央のメインシェイプ（高さは行の約 1/5。結合幅が 1 スロットでもタイムライン 1 列幅の 2 倍を下限とし文字潰れを抑える）。
+    依頼NOは中央のメインシェイプ（高さは行の約 1/5。結合幅が狭くてもタイムライン列幅の
+    GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS 本相当を下限とし文字潰れを抑える。隣スロット上にはみ出し得る）。
     担当者姓はその直上に小さな角丸チップ 1 つ（結合文字が潰れない下限幅までシェイプ幅を確保、
     テキストはシェイプ内右寄せ。Z オーダーはメンバーを背面・依頼NO を前面に寄せる）。
     day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
@@ -6984,8 +6987,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 continue
             _fh = str(sp.get("fill_hex") or "E8E8E8")
             fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
-            # 依頼NO メインシェイプ: 1 スロット幅だけのとき文字が潰れるため、10 分 1 列の幅の 2 倍を確保する
-            # （隣スロット上にはみ出すが、結合が複数列なら結合幅のまま）。
+            # 依頼NO メインシェイプ: 狭い結合幅でも文字が潰れないよう、スロット列幅×下限本数を確保する
+            # （隣スロット上にはみ出し得る。結合がそれ以上なら結合幅のまま）。
             try:
                 slot_w = float(sht.range((row, col_s), (row, col_s)).width)
             except Exception:
@@ -6993,7 +6996,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
             if slot_w <= 0.0:
                 _ns0 = max(1, int(col_e) - int(col_s) + 1)
                 slot_w = float(w) / float(_ns0)
-            label_w = max(float(w), 2.0 * float(slot_w))
+            _min_slot_cols = max(1, int(GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS))
+            label_w = max(float(w), float(_min_slot_cols) * float(slot_w))
             # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/5。
             _band = float(h) / 3.0
             _h_req_no = max(9.0, float(h) / 5.0)
