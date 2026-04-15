@@ -260,7 +260,8 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
     return OPENPYXL_INCOMPATIBLE_SHEET_MARKER in names
 
 
-# マクロブック「設定」B1: 社内共有上の Gemini 証明書 JSON のパス
+# Gemini 証明書 JSON はマクロ実行ブックと同一フォルダの固定ファイル名のみ参照（設定シート B1 は使わない）。
+GEMINI_CREDENTIALS_ENCRYPTED_FILENAME = "gemini_credentials.encrypted.json"
 APP_CONFIG_SHEET_NAME = "設定"
 # 「設定」シート D3 以降: Gemini 試行モデル ID（Google の model code）。E 列が真の行だけを上から順に試行する。
 # （A/B 列は配台トレース・デバッグ依頼NO用のため、モデル一覧は D/E に配置）
@@ -323,40 +324,16 @@ def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
     return os.path.normpath(os.path.join(base, p))
 
 
-def _read_gemini_credentials_json_path_from_workbook(wb_path: str) -> str | None:
-    """「設定」シート B1 から証明書 JSON ファイルパスを読む。無ければ None。"""
+def _gemini_credentials_json_path_next_to_workbook(wb_path: str) -> str | None:
+    """マクロ実行ブックと同一フォルダの GEMINI_CREDENTIALS_ENCRYPTED_FILENAME。ブックパスが有効なファイルでない場合は None。"""
     if not wb_path or not os.path.isfile(wb_path):
         return None
-    if _workbook_should_skip_openpyxl_io(wb_path):
-        logging.debug(
-            "Gemini: ブックに「%s」があるため、openpyxl で「%s」!B1 を読みません。",
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-            APP_CONFIG_SHEET_NAME,
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(wb_path)),
+            GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
         )
-        return None
-    try:
-        keep_vba = str(wb_path).lower().endswith(".xlsm")
-        wb = load_workbook(
-            wb_path, read_only=True, data_only=True, keep_vba=keep_vba
-        )
-        try:
-            if APP_CONFIG_SHEET_NAME not in wb.sheetnames:
-                return None
-            ws = wb[APP_CONFIG_SHEET_NAME]
-            b1 = _config_cell_text(ws.cell(row=1, column=2).value)
-        finally:
-            wb.close()
-    except Exception as ex:
-        logging.debug(
-            "Gemini: マクロブック「%s」の「%s」!B1 を読めません: %s",
-            wb_path,
-            APP_CONFIG_SHEET_NAME,
-            ex,
-        )
-        return None
-    if not b1:
-        return None
-    return _resolve_path_relative_to_workbook(wb_path, b1) or None
+    )
 
 
 def _read_task_ids_from_config_sheet_column(
@@ -675,7 +652,7 @@ def _load_gemini_api_key_from_credentials_json(
 
 
 API_KEY = None
-_cred_path = _read_gemini_credentials_json_path_from_workbook(TASKS_INPUT_WORKBOOK)
+_cred_path = _gemini_credentials_json_path_next_to_workbook(TASKS_INPUT_WORKBOOK)
 _used_encrypted_credentials = False
 if _cred_path and os.path.isfile(_cred_path):
     API_KEY, _used_encrypted_credentials = _load_gemini_api_key_from_credentials_json(
@@ -686,13 +663,13 @@ if _cred_path and os.path.isfile(_cred_path):
             logging.info("Gemini API キー: 暗号化証明書 JSON から読み込みました。")
         else:
             logging.info(
-                "Gemini API キー: マクロブック「%s」B1 のパスから読み込みました。",
-                APP_CONFIG_SHEET_NAME,
+                "Gemini API キー: マクロブック同階層の「%s」から読み込みました。",
+                GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
             )
 elif _cred_path:
     logging.warning(
-        "Gemini: 「%s」B1 で指定された証明書 JSON は見つかりません。",
-        APP_CONFIG_SHEET_NAME,
+        "Gemini: マクロブック同階層の「%s」は見つかりません。",
+        GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
 
 # B1 は暗号化 JSON なのにキーは取れない（平文 JSON でキー欠損との区別）。原因の特定はログに書かう汎用メッセージのみ。
@@ -704,17 +681,17 @@ _encrypted_json_missing_key = (
 )
 if _encrypted_json_missing_key:
     logging.error(
-        "Gemini: 「%s」B1 の証明書ファイルから API キーを利用できません。"
+        "Gemini: マクロブック同階層の「%s」から API キーを利用できません。"
         " 社内手順に従い証明書を再設定れるか」管理者に相い合わせでしてさい。",
-        APP_CONFIG_SHEET_NAME,
+        GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
 
 if not API_KEY:
     logging.warning(
-        "Gemini API キーは未設定です。マクロブックに「%s」シートを用意し B1 に証明書 JSON のフルパスを書いてください。"
+        "Gemini API キーは未設定です。マクロ実行ブックと同一フォルダに「%s」を配置してください。"
         " 備考の AI 解析等はスキップされした。"
         " 参考型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。",
-        APP_CONFIG_SHEET_NAME,
+        GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
 
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
