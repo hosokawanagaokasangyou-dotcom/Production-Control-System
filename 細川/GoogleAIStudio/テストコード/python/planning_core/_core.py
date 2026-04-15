@@ -19750,6 +19750,23 @@ def _assign_one_roll_trial_order_flow(
             need_src_line += "特別ルールL3(NR28)で必須人数=3"
 
     # -------------------------------------------------------------------
+    # 特別ルール L7（SEC×SEC機 湖南）: 依頼NOに「PN」が含まれている場合はOPが2名でも配台可能
+    # ＝最低人数（req_num）を 2 まで緩和（他の強い必須条件がある場合はそちらを優先）
+    # -------------------------------------------------------------------
+    _l7_tid_nfkc = unicodedata.normalize("NFKC", str(task.get("task_id") or ""))
+    if (
+        _normalize_process_name_for_rule_match(machine_proc)
+        == _normalize_process_name_for_rule_match("SEC")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("SEC機　湖南")
+        and "PN" in _l7_tid_nfkc
+    ):
+        if req_num > 2:
+            req_num = 2
+            need_src_line = (need_src_line + " → ") if need_src_line else ""
+            need_src_line += "特別ルールL7(PN)で必須人数を2まで緩和"
+
+    # -------------------------------------------------------------------
     # 特別ルール L2（スライス×スライス機1 湖南）:
     # ロール単位長さ=100m のときは原則 3 名で配台し、成立しない場合のみ速度 20m/分へフォールバック。
     # - remaining_units / unit_m はロール本数・ロール長(m)（既存仕様）
