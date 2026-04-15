@@ -725,6 +725,8 @@ TASK_COL_SPECIFIED_DUE = "指定納期"
 TASK_COL_RAW_INPUT_DATE = "原反投入日"
 # 加工計画DATA 由来。配台計画_タスク入力では原反投入日の右隣（SOURCE_BASE_COLUMNS 順）。
 TASK_COL_STOCK_LOCATION = "在庫場所"
+# 加工計画DATA に任意で存在。原反幅テーブル照会の第1キー（無ければ使用原反幅・製品名を順に試す）。
+TASK_COL_USED_RAW = "使用原反"
 # 加工計画DATA にある場合のみ段階1で配台計画へコピー（在庫場所の右隣。配台アルゴリズムは参照しない）。
 TASK_COL_USED_RAW_WIDTH = "使用原反幅"
 # 同一依頼NOの工程順（カンマ区切りの工程名）。加工計画DATA＝配台計画_タスク入力。
@@ -828,6 +830,11 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 # 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
+# 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
+PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
+# マクロブックと同じフォルダ（またはカレント）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
+RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
+RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 # 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
 PLANNING_MIN_QTY_M = 100.0
 # ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
@@ -1049,7 +1056,9 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_SPECIFIED_DUE,
         TASK_COL_RAW_INPUT_DATE,
         TASK_COL_STOCK_LOCATION,
+        TASK_COL_USED_RAW,
         TASK_COL_USED_RAW_WIDTH,
+        PLAN_COL_RAW_FABRIC_WIDTH,
         TASK_COL_PROCESS_CONTENT,
         TASK_COL_COMPLETION_FLAG,
         TASK_COL_ACTUAL_DONE,
@@ -1171,6 +1180,7 @@ SOURCE_BASE_COLUMNS = [
     TASK_COL_SPECIFIED_DUE,
     TASK_COL_RAW_INPUT_DATE,
     TASK_COL_STOCK_LOCATION,
+    TASK_COL_USED_RAW,
     TASK_COL_USED_RAW_WIDTH,
     TASK_COL_PROCESS_CONTENT,
     TASK_COL_COMPLETION_FLAG,
@@ -1212,7 +1222,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反幅）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ、原反投入日の直後に在庫場所・使用原反・使用原反幅の直後に原反幅）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -1226,6 +1236,8 @@ def plan_input_sheet_column_order():
             cols.append(PLAN_COL_DISPATCH_REMAINING_QTY)
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
+        if c == TASK_COL_USED_RAW_WIDTH:
+            cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
     cols.append(PLAN_COL_PROCESS_FACTOR)
     for c in PLAN_OVERRIDE_COLUMNS:
         if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
@@ -12214,6 +12226,169 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
     return plan_df.iloc[order].reset_index(drop=True)
 
 
+def _raw_fabric_width_table_search_paths() -> list[str]:
+    """原反幅テーブル CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(RAW_FABRIC_WIDTH_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME,
+            )
+        )
+    paths.append(os.path.join(os.getcwd(), RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _normalize_raw_fabric_lookup_key(val) -> str:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    s = unicodedata.normalize("NFKC", str(val).strip())
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+def _parse_int_mm_raw_fabric_width_cell(val) -> int:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        raise ValueError("empty")
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        if isinstance(val, float) and (not math.isfinite(val)):
+            raise ValueError("non-finite")
+        n = int(round(float(val)))
+        if n <= 0:
+            raise ValueError("non-positive")
+        return n
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none"):
+        raise ValueError("empty")
+    s = unicodedata.normalize("NFKC", s)
+    s = s.replace(",", "")
+    n = int(round(float(s)))
+    if n <= 0:
+        raise ValueError("non-positive")
+    return n
+
+
+def _infer_raw_fabric_width_mm_from_pattern(text: str) -> int | None:
+    """
+    最後の「左数 x 右数」（2〜6 桁）ペアの左側を原反幅(mm)候補とする。
+    テーブル未登録時のフォールバック。寸法区切りは infer_unit_m と同様に正規化する。
+    """
+    s = _normalize_product_dim_separators_for_roll_inference(str(text or ""))
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if not dim_pairs:
+        return None
+    try:
+        left = int(dim_pairs[-1][0])
+        return left if left > 0 else None
+    except ValueError:
+        return None
+
+
+def _load_raw_fabric_width_mm_table() -> dict[str, int]:
+    """
+    原反幅テーブル（使用原反→原反幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    """
+    path_found = ""
+    for p in _raw_fabric_width_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        hint = " / ".join(_raw_fabric_width_table_search_paths()[:4])
+        raise PlanningValidationError(
+            f"原反幅テーブルが見つかりません。{RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME} を配置するか、"
+            f"環境変数 {RAW_FABRIC_WIDTH_TABLE_PATH_ENV} で CSV のフルパスを指定してください。探索: {hint}"
+        )
+    out: dict[str, int] = {}
+    with open(path_found, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        raise PlanningValidationError(f"原反幅テーブルが空です: {path_found}")
+    hdr = [_normalize_raw_fabric_lookup_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_raw_fabric_lookup_key("使用原反"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_w = hdr.index(_normalize_raw_fabric_lookup_key("原反幅"))
+    except ValueError:
+        i_w = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_w):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_w = parts[i_w]
+        key = _normalize_raw_fabric_lookup_key(raw_k)
+        if not key:
+            continue
+        try:
+            w = _parse_int_mm_raw_fabric_width_cell(raw_w)
+        except ValueError as ex:
+            raise PlanningValidationError(
+                f"原反幅テーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
+            ) from ex
+        if key in out and out[key] != w:
+            raise PlanningValidationError(
+                f"原反幅テーブルで同一キーに矛盾する値があります: {key!r} → {out[key]} と {w} ({path_found})"
+            )
+        out[key] = w
+    logging.info("原反幅テーブルを読み込みました: %s (%s 件)", path_found, len(out))
+    return out
+
+
+def _raw_fabric_width_lookup_source_strings(row: "pd.Series") -> list[str]:
+    """照会用文字列（正規化済み・重複除き）。使用原反 → 使用原反幅 → 製品名。"""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for col in (TASK_COL_USED_RAW, TASK_COL_USED_RAW_WIDTH, TASK_COL_PRODUCT):
+        if col not in row.index:
+            continue
+        v = row.get(col)
+        k = _normalize_raw_fabric_lookup_key(v)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        ordered.append(k)
+    return ordered
+
+
+def _resolve_raw_fabric_width_mm_for_stage1_row(
+    row: "pd.Series", table: dict[str, int]
+) -> int:
+    """
+    テーブル照会を優先し、未登録なら寸法パターンで原反幅(mm)を決定。決められなければ PlanningValidationError。
+    """
+    keys = _raw_fabric_width_lookup_source_strings(row)
+    for k in keys:
+        w = table.get(k)
+        if w is not None and w > 0:
+            return int(w)
+    for k in keys:
+        inferred = _infer_raw_fabric_width_mm_from_pattern(k)
+        if inferred is not None and inferred > 0:
+            return int(inferred)
+    tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    raise PlanningValidationError(
+        "原反幅を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、使用原反／使用原反幅／製品名のいずれかに"
+        "「…NNNxMM…」形式の寸法を含めてください。"
+    )
+
+
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
 #   加工計画DATA 読取 → 計画 DataFrame 確定（マージ・分割の配台不要）→
@@ -12235,6 +12410,7 @@ def run_stage1_extract():
         return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
+    rw_table = _load_raw_fabric_width_mm_table()
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -12256,6 +12432,9 @@ def run_stage1_extract():
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = _qty_total_s1
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
+        rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
+            row, rw_table
+        )
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
