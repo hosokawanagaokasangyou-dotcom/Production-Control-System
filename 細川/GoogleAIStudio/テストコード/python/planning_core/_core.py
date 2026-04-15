@@ -10005,6 +10005,24 @@ def build_task_queue_from_planning_df(
                 speed,
             )
 
+        # -------------------------------------------------------------------
+        # 特別ルール L4（SEC×SEC機 湖南）: 製品幅=935 のときは加工速度を 20m/分
+        # ※ 製品幅は段階1で算出済みの列「製品幅」を参照（未取得時は None）
+        # -------------------------------------------------------------------
+        _prod_w = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_WIDTH)
+        try:
+            _prod_w_i = int(float(_prod_w)) if _prod_w is not None else None
+        except (TypeError, ValueError):
+            _prod_w_i = None
+        if (
+            _normalize_process_name_for_rule_match(machine)
+            == _normalize_process_name_for_rule_match("SEC")
+            and _normalize_equipment_match_key(machine_name)
+            == _normalize_equipment_match_key("SEC機　湖南")
+            and _prod_w_i == 935
+        ):
+            speed = 20.0
+
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
@@ -10096,6 +10114,11 @@ def build_task_queue_from_planning_df(
                 "task_id": task_id,
                 "machine": machine,
                 "machine_name": machine_name,
+                TASK_COL_PRODUCT: product_name,
+                PLAN_COL_PRODUCT_WIDTH: _prod_w_i,
+                PLAN_COL_PRODUCT_THICKNESS: _planning_df_cell_scalar(
+                    row, PLAN_COL_PRODUCT_THICKNESS
+                ),
                 "equipment_line_key": _resolve_equipment_line_key_for_task(
                     {"machine": machine, "machine_name": machine_name},
                     equipment_list,
