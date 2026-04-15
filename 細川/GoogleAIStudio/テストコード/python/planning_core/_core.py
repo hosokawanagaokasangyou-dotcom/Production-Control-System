@@ -7043,7 +7043,14 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                 gx = 1.0
 
                 def _emit_member_pills(
-                    names: list[str], y0: float, pill_h: float, day_k: str
+                    names: list[str],
+                    y0: float,
+                    pill_h: float,
+                    day_k: str,
+                    *,
+                    cell_w_scale: float = 1.0,
+                    min_chip_w: float | None = None,
+                    font_floor: float | None = None,
                 ) -> None:
                     nonlocal n_added
                     if not names or pill_h <= 1.0:
@@ -7061,13 +7068,18 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                         return
                     # 結合幅 w に縛ると文字が潰れるため、ピル分割時と同様の推定に加え、
                     # 最低フォント相当の下限幅を満たすまでシェイプ幅を広げる（隣セル上にはみ出し得る）。
-                    _min_member_chip_w = 34.0
+                    _min_member_chip_w = (
+                        float(min_chip_w) if min_chip_w is not None else 34.0
+                    )
                     text_min_w = _gantt_xlw_member_combined_min_width_pt(combined)
                     want_w = max(
                         _min_member_chip_w, float(est_w), float(text_min_w)
                     )
-                    use_w = max(max(float(w), _min_member_chip_w), want_w)
-                    _fp_mem = _gantt_xlw_member_pill_font_pt(use_w, combined)
+                    _w_base = max(float(w) * float(cell_w_scale), _min_member_chip_w)
+                    use_w = max(_w_base, want_w)
+                    _fp_mem = float(_gantt_xlw_member_pill_font_pt(use_w, combined))
+                    if font_floor is not None:
+                        _fp_mem = max(_fp_mem, float(font_floor))
                     s_mem = _gantt_xlw_add_round_rect(
                         left,
                         y0,
@@ -7095,9 +7107,10 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
 
                 if _chip_below:
                     # 日次始業準備: メイン（タイトル）の直下に担当者チップを別シェイプで置く
+                    # 既定比で幅・フォントが小さく読みにくいため、結合幅の 2 倍相当＋フォント下限を上げる。
                     _gap_eff = 1.35
-                    _hmain_eff = max(9.0, float(_h_req_no))
-                    _hmem_eff = max(9.0, float(_h_req_no))
+                    _hmain_eff = max(10.5, float(_h_req_no) * 1.1)
+                    _hmem_eff = max(11.5, float(_h_req_no) * 1.15)
                     row_top_lim = float(band_top) + _band_inset
                     row_bot_lim = float(band_bot) - _band_inset
                     for _squeeze in range(28):
@@ -7118,12 +7131,23 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
                     h_mem_use = float(_hmem_eff)
                     y_main = row_top_lim
                     y_mem = y_main + h_main + _gap_eff
-                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
-                    _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
+                    _emit_member_pills(
+                        mems_all,
+                        y_mem,
+                        h_mem_use,
+                        dk,
+                        cell_w_scale=2.0,
+                        min_chip_w=68.0,
+                        font_floor=8.75,
+                    )
+                    _lw_main = max(float(label_w) * 2.0, 2.0 * float(slot_w))
+                    _main_fp = max(
+                        float(_gantt_xlw_timeline_main_font_pt(_lw_main, text)), 8.25
+                    )
                     shp_main = _gantt_xlw_add_round_rect(
                         left,
                         y_main,
-                        label_w,
+                        _lw_main,
                         h_main,
                         text,
                         fill_rgb=fill_bgr,
