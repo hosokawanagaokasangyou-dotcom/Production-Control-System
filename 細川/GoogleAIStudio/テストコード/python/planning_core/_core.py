@@ -20686,7 +20686,77 @@ def _trial_order_first_schedule_pass(
         "last_machining_date": dict(_mh_init.get("last_machining_date") or {}),
         "last_lead_op": dict(_mh_init.get("last_lead_op") or {}),
         "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
+        # 特別ルール（L9 等）向け: 直前ロールの試行順・製品厚み
+        "last_dispatch_trial_order": dict(_mh_init.get("last_dispatch_trial_order") or {}),
+        "last_product_thickness": dict(_mh_init.get("last_product_thickness") or {}),
     }
+
+    def _l9_slice_continuity_key(t: dict) -> tuple:
+        """
+        L9: スライス×スライス機1 湖南で、直前ロールの試行順±10 かつ同厚みなら優先する。
+        ただし原反投入日（start_date_req）・納期基準（due_basis_date）を満たさない場合は優先しない。
+        """
+        dto = int(t.get("dispatch_trial_order") or 10**9)
+        proc = _normalize_process_name_for_rule_match(t.get("machine"))
+        mach = _normalize_equipment_match_key(t.get("machine_name"))
+        if not (
+            proc == _normalize_process_name_for_rule_match("スライス")
+            and mach == _normalize_equipment_match_key("スライス機1　湖南")
+        ):
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        # 除外条件: 原反投入日（開始日下限）・納期基準を満たさない場合は優先しない
+        sreq = t.get("start_date_req")
+        if isinstance(sreq, date) and current_date < sreq:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        due = t.get("due_basis_date")
+        if isinstance(due, date) and current_date > due:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        eqt = str(t.get("equipment_line_key") or t.get("machine") or "").strip() or (
+            t.get("machine") or ""
+        )
+        occ = (_machine_occupancy_key_resolve(t, eqt) or "").strip()
+        if not occ:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        prev_dto = (machine_handoff.get("last_dispatch_trial_order") or {}).get(occ)
+        prev_th = (machine_handoff.get("last_product_thickness") or {}).get(occ)
+        th = t.get(PLAN_COL_PRODUCT_THICKNESS)
+        prefer = False
+        try:
+            if (
+                prev_dto is not None
+                and abs(int(prev_dto) - int(dto)) <= 10
+                and prev_th is not None
+                and th is not None
+            ):
+                prefer = float(prev_th) == float(th)
+        except Exception:
+            prefer = False
+        return (
+            dto,
+            0 if prefer else 1,
+            str(t.get("task_id") or ""),
+            int(t.get("same_request_line_seq") or 0),
+        )
 
     def _drain_rolls_for_task(
         task: dict, *, max_rolls: int | None = None
@@ -20876,6 +20946,14 @@ def _trial_order_first_schedule_pass(
             machine_handoff["last_lead_op"][machine_occ_key] = lead_op
             machine_handoff.setdefault("last_machining_sub", {})
             machine_handoff["last_machining_sub"][machine_occ_key] = _mach_sub_line
+            machine_handoff.setdefault("last_dispatch_trial_order", {})
+            machine_handoff.setdefault("last_product_thickness", {})
+            machine_handoff["last_dispatch_trial_order"][machine_occ_key] = int(
+                task.get("dispatch_trial_order") or 10**9
+            )
+            machine_handoff["last_product_thickness"][machine_occ_key] = task.get(
+                PLAN_COL_PRODUCT_THICKNESS
+            )
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -20956,23 +21034,19 @@ def _trial_order_first_schedule_pass(
     if phase2_tasks:
         merged_b2 = sorted(
             phase1_interleave + phase2_tasks,
-            key=_b2_merged_sort_key,
+            key=_l9_slice_continuity_key,
         )
         _merged_row_ids = {id(x) for x in merged_b2}
 
         def _b2_rr_key(t: dict) -> tuple:
             if id(t) in _merged_row_ids:
-                return _b2_merged_sort_key(t)
-            return (
-                int(t.get("dispatch_trial_order") or 10**9),
-                2,
-                str(t.get("task_id") or ""),
-                int(t.get("same_request_line_seq") or 0),
-            )
+                return _l9_slice_continuity_key(t)
+            dto = int(t.get("dispatch_trial_order") or 10**9)
+            return (dto, 2, str(t.get("task_id") or ""), int(t.get("same_request_line_seq") or 0))
 
-        all_rr = sorted(merged_b2 + phase1_rest, key=_b2_rr_key)
         while True:
             round_made = False
+            all_rr = sorted(merged_b2 + phase1_rest, key=_b2_rr_key)
             for task in all_rr:
                 if float(task.get("remaining_units") or 0) <= 1e-12:
                     continue
@@ -20982,7 +21056,7 @@ def _trial_order_first_schedule_pass(
                 break
             pass_made = True
     else:
-        for task in phase1_tasks:
+        for task in sorted(phase1_tasks, key=_l9_slice_continuity_key):
             if _drain_rolls_for_task(task):
                 pass_made = True
     return pass_made
