@@ -1,21 +1,26 @@
 planning_core/_core.py 行帯の目安（AI・人間が局所読みするための索引）
-更新日: 2026-04-12 時点の構成。行番号はソース変更でずれるので、迷ったら grep で再確認。
+更新日: 2026-04-17 時点の構成（総行数約 24372）。行番号はソース変更でずれるので、迷ったら grep で再確認。
 
 【全体】
-  約 2 万行・単一モジュール。import planning_core は __init__ から本モジュールの公開名をすべて再エクスポート。
+  単一モジュール（約 2.4 万行）。import planning_core は __init__ から本モジュールの公開名をすべて再エクスポート。
 
 【大まかなブロック】
-  1-170        import・bootstrap からの取り込み・初期パス・Gemini 周辺の定数
-  170-8150     Excel 列定数・マスタ/タスク列名・ヘルパ（設定シート・Gemini・ガント着色等を含む広い下地）
-  8151-10493   配台用タスクキュー build_task_queue_* ～ 配台不要ルール・DataFrame 操作の続き
-  10495-11770  段階1 run_stage1_extract およびその周辺
-  11771-12980  コア日時計算（merge_time_intervals 等）とマスタ読込 load_skills_and_needs・勤怠 AI 周辺
-  12984-18182  ロールパイプライン定数・段階2 の割付ループ・need/surplus 等の本体に近い領域
-  18184-20644  generate_plan / _generate_plan_impl（段階2メイン）および結果ブック・メンバースケジュール出力
+  1-220        import・bootstrap・先頭付近の設定読取・Gemini 関連ヘルパ
+  221-9987     Excel 列定数・マスタ/タスク列名・ガント/設備時間割ヘルパ等の広い下地
+  9988-12886   配台用タスクキュー build_task_queue_from_planning_df ～ 配台不要・DataFrame 操作の続き
+  12887-14227  段階1 run_stage1_extract、merge_time_intervals 等の日時ユーティリティ、load_skills_and_needs 直前まで
+  14228-20575  load_skills_and_needs・勤怠 AI 周辺からロールパイプライン・日内割付ループ本体に近い領域
+  20576-21794  _trial_order_first_schedule_pass・generate_plan 入口付近
+  21795-24372  _generate_plan_impl（段階2メイン）および結果ブック・メンバースケジュール出力
 
-【外部スクリプトから直接触ることが多い入口】
-  run_stage1_extract   … 付近は「段階1エントリ」コメントブロック（約 10495 行付近）
-  generate_plan        … 約 18189 行付近（「メイン計画生成」セクション）
+【外部スクリプトから直接触ることが多い入口】（grep で行番号再確認）
+  build_task_queue_from_planning_df … 約 9988 行付近
+  run_stage1_extract                  … 約 12887 行付近
+  merge_time_intervals                … 約 13115 行付近
+  load_skills_and_needs               … 約 14228 行付近
+  _trial_order_first_schedule_pass    … 約 20576 行付近
+  generate_plan                       … 約 21528 行付近
+  _generate_plan_impl                 … 約 21795 行付近
 
 【シンボル位置の調べ方】
   トップレベル定義の一覧: 正規表現 ^def  または ^[A-Z][A-Z0-9_]* =  で _core.py を検索。
