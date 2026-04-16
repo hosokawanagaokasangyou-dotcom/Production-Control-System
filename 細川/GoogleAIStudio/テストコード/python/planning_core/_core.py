@@ -5803,6 +5803,20 @@ def _apply_plan_input_excel_accounting_speed_fix_to_df(df: "pd.DataFrame") -> di
     return {"per_col": per, "total": int(total)}
 
 
+def _df_first_col_index_for_header(columns: pd.Index, hname: str) -> int | None:
+    """列名が重複している DataFrame でも、先頭一致列の 0 始まり整数インデックスを返す。"""
+    if not hname:
+        return None
+    for i, c in enumerate(columns):
+        if c is None or (isinstance(c, float) and pd.isna(c)):
+            lab = ""
+        else:
+            lab = str(c).strip()
+        if lab == hname:
+            return i
+    return None
+
+
 def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     workbook_path: str | None = None,
 ) -> bool:
@@ -5849,6 +5863,15 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
+
+    if df.columns.duplicated().any():
+        dup_labels = sorted(
+            {str(c) for c in df.columns[df.columns.duplicated(keep=False)]}
+        )
+        logging.warning(
+            "配台試行順番（小数キー並べ）: 見出しの重複列があります（先頭列を参照します）: %s",
+            dup_labels[:25],
+        )
 
     _apply_plan_input_excel_accounting_speed_fix_to_df(df)
 
@@ -5917,8 +5940,8 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     trailing = [i for i in range(last + 1, n)]
     orig_list = leading + sorted_active + trailing
 
-    rows_ordered = [df_mut.iloc[oi] for oi in orig_list]
-    df_sorted = pd.DataFrame(rows_ordered).reset_index(drop=True)
+    # 列名重複時は list[Series] からの DataFrame 構築で InvalidIndexError になるため iloc で行並べ替え
+    df_sorted = df_mut.iloc[orig_list].reset_index(drop=True)
 
     header_row = mat[0] if mat else []
     n_hdr = len(header_row)
@@ -5943,8 +5966,9 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
                 hname = ""
             else:
                 hname = str(h_cell).strip()
-            if hname and hname in df_sorted.columns:
-                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+            ci_hdr = _df_first_col_index_for_header(df_sorted.columns, hname)
+            if ci_hdr is not None:
+                v = df_sorted.iat[i, ci_hdr]
                 if pd.isna(v):
                     out_row.append(None)
                 else:
