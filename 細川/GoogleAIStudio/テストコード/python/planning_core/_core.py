@@ -23813,13 +23813,22 @@ def _generate_plan_impl():
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
         rov = t.get("required_op")
-        # 列順: A=ステータス → タスクID/工程/機械/優先度 → 履歴1..n → しの他 → 最後に特別指定_AI
+        # 列順: A=ステータス → タスクID/工程/機械/加工速度(配台実効)/優先度 → 履歴1..n → しの他 → 最後に特別指定_AI
         row_status = {"ステータス": status}
         _dto = t.get("dispatch_trial_order")
+        _spd = t.get(TASK_COL_SPEED)
+        if _spd is None or (isinstance(_spd, float) and pd.isna(_spd)):
+            _spd_out = ""
+        elif isinstance(_spd, (int, float)) and not isinstance(_spd, bool):
+            _f = float(_spd)
+            _spd_out = int(_f) if _f == int(_f) else round(_f, 6)
+        else:
+            _spd_out = _spd
         row_core = {
             "タスクID": t['task_id'],
             "工程名": t['machine'],
             "機械名": t.get("machine_name", ""),
+            TASK_COL_SPEED: _spd_out,
             "優先度": t.get("priority", 999),
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
@@ -23874,7 +23883,6 @@ def _generate_plan_impl():
             "加工途中": "はい" if t.get("in_progress") else "いいえ",
             "特別指定あり": "はい" if t.get("has_special_remark") else "いいえ",
             "担当OP指定": (t.get("preferred_operator_raw") or "")[:120],
-            TASK_COL_SPEED: t.get(TASK_COL_SPEED, ""),
             "回答納期": ans_s,
             "指定納期": spec_s,
             "計画基準納期": basis_s,
