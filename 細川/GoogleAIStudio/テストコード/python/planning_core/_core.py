@@ -5679,6 +5679,68 @@ def _parse_dispatch_trial_order_float_sort_key(val) -> float | None:
     return x
 
 
+def _scalar_excel_accounting_speed_paren_negative_to_positive(val):
+    """
+    Excel は (数値) や会計表示で負数として格納・取得されることがある。
+    配台計画の加工速度(m/分)は正として扱うため、数値が負のときは絶対値に戻す。
+    """
+    if val is None:
+        return val
+    if isinstance(val, float) and pd.isna(val):
+        return val
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        try:
+            x = float(val)
+        except (TypeError, ValueError):
+            return val
+        if math.isfinite(x) and x < 0:
+            return abs(x)
+    return val
+
+
+def _plan_input_header_is_speed_excel_paren_fix_target(hname: str) -> bool:
+    """見出しが加工速度／上書き／（元）参照のいずれか（NFKC 一致）なら True。"""
+    if not hname or not str(hname).strip():
+        return False
+    k = _nfkc_column_aliases(str(hname).strip())
+    ref = plan_reference_column_name(PLAN_COL_SPEED_OVERRIDE)
+    for canon in (TASK_COL_SPEED, PLAN_COL_SPEED_OVERRIDE, ref):
+        if k == _nfkc_column_aliases(canon):
+            return True
+    return False
+
+
+def _apply_plan_input_excel_accounting_speed_fix_to_df(df: "pd.DataFrame") -> dict:
+    """加工速度関連列の負数を正に補正。変更件数を返す。"""
+    ref = plan_reference_column_name(PLAN_COL_SPEED_OVERRIDE)
+    cols = [c for c in (TASK_COL_SPEED, PLAN_COL_SPEED_OVERRIDE, ref) if c in df.columns]
+    per: dict[str, int] = {c: 0 for c in cols}
+    for col in cols:
+        loc = df.columns.get_loc(col)
+        if isinstance(loc, slice):
+            continue
+        try:
+            li = int(loc)
+        except (TypeError, ValueError):
+            continue
+        for ri in range(len(df)):
+            old = df.iat[ri, li]
+            if (
+                isinstance(old, (int, float))
+                and not isinstance(old, bool)
+                and not pd.isna(old)
+            ):
+                try:
+                    x = float(old)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(x) and x < 0:
+                    df.iat[ri, li] = abs(x)
+                    per[col] += 1
+    total = sum(per.values())
+    return {"per_col": per, "total": int(total)}
+
+
 def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     workbook_path: str | None = None,
 ) -> bool:
@@ -5725,6 +5787,35 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
+
+    _speed_paren_stats = _apply_plan_input_excel_accounting_speed_fix_to_df(df)
+    # region agent log
+    try:
+        _dbg_path = os.path.join(
+            os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
+            ),
+            "debug-28aad8.log",
+        )
+        with open(_dbg_path, "a", encoding="utf-8") as _df:
+            _df.write(
+                json.dumps(
+                    {
+                        "sessionId": "28aad8",
+                        "hypothesisId": "H1-H5",
+                        "location": "_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings:speed_paren_fix",
+                        "message": "Excel ( ) 会計表示に伴う速度列の負数を正に補正",
+                        "data": _speed_paren_stats,
+                        "timestamp": int(time_module.time() * 1000),
+                        "runId": "speed-paren-fix",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # endregion
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
@@ -5822,9 +5913,14 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
                 if pd.isna(v):
                     out_row.append(None)
                 else:
+                    if _plan_input_header_is_speed_excel_paren_fix_target(hname):
+                        v = _scalar_excel_accounting_speed_paren_negative_to_positive(v)
                     out_row.append(v)
             else:
-                out_row.append(src_row[j])
+                _v = src_row[j]
+                if _plan_input_header_is_speed_excel_paren_fix_target(hname):
+                    _v = _scalar_excel_accounting_speed_paren_negative_to_positive(_v)
+                out_row.append(_v)
         new_mat.append(out_row)
 
     try:
