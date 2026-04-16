@@ -10306,7 +10306,7 @@ def _excel_scalar_to_plan_string_cell(v):
                             "location": "_core.py:_excel_scalar_to_plan_string_cell:entry",
                             "message": "scalar_normalize_risky",
                             "hypothesisId": "H1",
-                            "runId": "pre-fix",
+                            "runId": "post-fix",
                             "data": {
                                 "type_name": type(v).__name__,
                                 "is_pd_Timestamp": isinstance(v, pd.Timestamp),
@@ -10343,6 +10343,9 @@ def _excel_scalar_to_plan_string_cell(v):
             return v.strftime("%Y/%m/%d")
         return v.strftime("%Y/%m/%d %H:%M")
     if isinstance(v, datetime):
+        # pd.NaT は Timestamp ではないが datetime 互換で strftime 不可
+        if pd.isna(v):
+            return ""
         if v.hour == 0 and v.minute == 0 and v.second == 0 and v.microsecond == 0:
             return v.date().strftime("%Y/%m/%d")
         return v.strftime("%Y/%m/%d %H:%M")
@@ -10388,41 +10391,9 @@ def _merge_plan_sheet_user_overrides(out_df):
             if c not in df_old.columns or c not in out_df.columns:
                 continue
             v = r.get(c)
-            if v is None or (isinstance(v, float) and pd.isna(v)):
+            # float 以外の欠損（例: pd.NaT）も空セル扱いでマージしない
+            if v is None or pd.isna(v):
                 continue
-            # #region agent log
-            try:
-                if c in (*PLAN_STAGE1_MERGE_COLUMNS, *PLAN_STAGE1_MERGE_EXTRA_COLUMNS) and pd.isna(
-                    v
-                ) and not isinstance(v, float):
-                    _dbg_path2 = os.path.abspath(
-                        os.path.join(
-                            os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-45e4a1.log"
-                        )
-                    )
-                    with open(_dbg_path2, "a", encoding="utf-8") as _df2:
-                        _df2.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "45e4a1",
-                                    "timestamp": int(time_module.time() * 1000),
-                                    "location": "_core.py:_merge_plan_sheet_user_overrides:bucket",
-                                    "message": "non_float_pd_isna_in_sheet_cell",
-                                    "hypothesisId": "H3",
-                                    "runId": "pre-fix",
-                                    "data": {
-                                        "col": str(c),
-                                        "type_name": type(v).__name__,
-                                        "is_datetime": isinstance(v, datetime),
-                                    },
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
-            except Exception:
-                pass
-            # #endregion
             if isinstance(v, str):
                 s = v.strip()
                 if not s or s.lower() in ("nan", "none"):
