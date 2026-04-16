@@ -7740,11 +7740,11 @@ def build_actual_timeline_events(
             sub_s = ""
 
         pct_macro = _actual_row_cumulative_completion_pct_macro(row)
-        converted_qty_m = None
+        actual_done_m = None
         try:
-            converted_qty_m = parse_float_safe(row.get(ACT_COL_CONVERTED_QTY), None)
+            actual_done_m = parse_float_safe(row.get(ACT_COL_ACTUAL_QTY), None)
         except Exception:
-            converted_qty_m = None
+            actual_done_m = None
 
         before = len(events)
         total_seconds = None
@@ -7780,22 +7780,24 @@ def build_actual_timeline_events(
             }
             if pct_macro is not None:
                 ev_row["pct_macro"] = pct_macro
-            # 依頼NOシェイプ横の表示は完了率ではなく「そのシェイプの加工長さ(m)」へ。
-            # 実績明細の「換算数量」をイベント全体の秒数で按分して、日跨ぎのクリップでも整合させる。
+            # 依頼NOシェイプ横の表示は「そのシェイプの加工長さ(m)」。
+            # ケースA: 加工実績明細DATA 1行の「実加工数」は、その行の時間帯で完了した長さ(m)そのもの。
+            # よって unit_m（ロール単位長さ）は使わず、実加工数(m)を採用する。
             try:
                 if (
-                    converted_qty_m is not None
-                    and isinstance(converted_qty_m, (int, float))
-                    and float(converted_qty_m) > 1e-12
+                    actual_done_m is not None
+                    and isinstance(actual_done_m, (int, float))
+                    and float(actual_done_m) > 1e-12
                     and total_seconds
                     and float(total_seconds) > 1e-9
                 ):
                     seg_seconds = float((e_clip - s_clip).total_seconds())
                     if seg_seconds > 0:
-                        _v = float(converted_qty_m) * (
+                        # クリップで行の時間帯が一部欠ける場合のみ、時間比で表示長さを調整する。
+                        # （通常は seg_seconds==total_seconds でそのまま実加工数になる）
+                        ev_row["label_len_m"] = float(actual_done_m) * (
                             seg_seconds / float(total_seconds)
                         )
-                        ev_row["label_len_m"] = _v
             except Exception:
                 pass
             events.append(ev_row)
