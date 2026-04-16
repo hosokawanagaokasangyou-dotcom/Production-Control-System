@@ -26,15 +26,6 @@ import planning_core as pc  # noqa: E402
 
 def main() -> int:
     logging.info("apply_plan_input_dispatch_trial_order_sort_by_float_keys: 開始")
-    try:
-        import planning_core._core as _pc_core
-
-        logging.info(
-            "planning_core._core 実体パス（旧 _core だと InvalidIndexError のまま）: %s",
-            getattr(_pc_core, "__file__", "?"),
-        )
-    except Exception:
-        pass
     ok = pc.sort_plan_input_dispatch_trial_order_by_float_keys_only()
     logging.info(
         "apply_plan_input_dispatch_trial_order_sort_by_float_keys: 終了 ok=%s", ok
