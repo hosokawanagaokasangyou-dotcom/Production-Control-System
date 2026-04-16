@@ -5735,60 +5735,6 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         logging.error("配台試行順番（小数キー並べ）: 列「%s」が複数あります。", dto_col)
         return False
 
-    # region agent log
-    def _agent_dbg28(payload: dict) -> None:
-        try:
-            import json
-            import time as _agent_time
-
-            _root = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-            )
-            _path = os.path.join(_root, "debug-28aad8.log")
-            payload.setdefault("sessionId", "28aad8")
-            payload.setdefault("timestamp", int(_agent_time.time() * 1000))
-            with open(_path, "a", encoding="utf-8") as _af:
-                _af.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-        except Exception:
-            pass
-
-    _cols_list = list(df.columns)
-    _dupes = sorted({str(c) for c in df.columns if list(df.columns).count(c) > 1})
-    _ref_spd = plan_reference_column_name(PLAN_COL_SPEED_OVERRIDE)
-    _probe = []
-    for _ri in range(min(n := len(df), 8)):
-        _row = {}
-        for _cn in (
-            dto_col,
-            TASK_COL_SPEED,
-            PLAN_COL_SPEED_OVERRIDE,
-            _ref_spd,
-        ):
-            if _cn in df.columns:
-                _loc = df.columns.get_loc(_cn)
-                try:
-                    _row[_cn] = df.iat[_ri, int(_loc)]
-                except (TypeError, ValueError, OverflowError):
-                    _row[_cn] = f"<non_scalar_loc:{type(_loc).__name__}>"
-        _probe.append({"row": _ri, "cells": _row})
-    _agent_dbg28(
-        {
-            "hypothesisId": "H1_H2_H5",
-            "location": "_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings:post_dto_idx",
-            "message": "df shape, dto_idx, dup headers, speed-related probe",
-            "data": {
-                "n_rows": int(n),
-                "n_cols_df": len(_cols_list),
-                "n_hdr_mat": len(mat[0]) if mat else 0,
-                "dto_idx": int(dto_idx),
-                "dup_column_names": _dupes[:30],
-                "probe_first_rows": _probe,
-            },
-            "runId": "pre-fix",
-        }
-    )
-    # endregion
-
     n = len(df)
     active = [i for i in range(n) if not _plan_input_row_is_blank_task_row(df, i)]
     if not active:
@@ -5848,36 +5794,6 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     rows_ordered = [df_mut.iloc[oi] for oi in orig_list]
     df_sorted = pd.DataFrame(rows_ordered).reset_index(drop=True)
 
-    # region agent log
-    _probe2 = []
-    for _ri in range(min(len(df_sorted), 6)):
-        _row2 = {}
-        for _cn in (dto_col, TASK_COL_SPEED, PLAN_COL_SPEED_OVERRIDE, _ref_spd):
-            if _cn in df_sorted.columns:
-                try:
-                    _row2[_cn] = df_sorted.iat[_ri, int(df_sorted.columns.get_loc(_cn))]
-                except (TypeError, ValueError, OverflowError):
-                    _gl = df_sorted.columns.get_loc(_cn)
-                    _row2[_cn] = f"<loc {type(_gl).__name__}>"
-        _probe2.append({"row": _ri, "cells": _row2})
-    _dup2 = sorted(
-        {str(c) for c in df_sorted.columns if list(df_sorted.columns).count(c) > 1}
-    )
-    _agent_dbg28(
-        {
-            "hypothesisId": "H3_H4",
-            "location": "_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings:post_df_sorted",
-            "message": "df_sorted probe and duplicate headers",
-            "data": {
-                "dup_column_names": _dup2[:30],
-                "probe_reordered_rows": _probe2,
-                "orig_list_head": orig_list[: min(12, len(orig_list))],
-            },
-            "runId": "pre-fix",
-        }
-    )
-    # endregion
-
     header_row = mat[0] if mat else []
     n_hdr = len(header_row)
     if n_hdr == 0:
@@ -5890,7 +5806,6 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         return r
 
     new_mat = [_pad_row(header_row, n_hdr)]
-    _trace_speed_cols = []
     for i in range(len(df_sorted)):
         orig = orig_list[i]
         src_row = mat[orig + 1] if orig + 1 < len(mat) else []
@@ -5903,54 +5818,14 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             else:
                 hname = str(h_cell).strip()
             if hname and hname in df_sorted.columns:
-                _glc = df_sorted.columns.get_loc(hname)
-                v = df_sorted.iat[i, _glc]
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
                 if pd.isna(v):
                     out_row.append(None)
                 else:
                     out_row.append(v)
-                if i < 3 and ("加工速度" in hname or hname == dto_col):
-                    _trace_speed_cols.append(
-                        {
-                            "i": i,
-                            "j": j,
-                            "orig_sheet_row_1based": orig + 2,
-                            "hname": hname,
-                            "branch": "df_sorted",
-                            "get_loc_type": type(_glc).__name__,
-                            "written": None if pd.isna(v) else v,
-                            "src_row_j": src_row[j] if j < len(src_row) else None,
-                        }
-                    )
             else:
                 out_row.append(src_row[j])
-                if i < 3 and hname and (
-                    "加工速度" in hname or hname == dto_col
-                ):
-                    _trace_speed_cols.append(
-                        {
-                            "i": i,
-                            "j": j,
-                            "orig_sheet_row_1based": orig + 2,
-                            "hname": hname,
-                            "branch": "src_row",
-                            "get_loc_type": None,
-                            "written": src_row[j] if j < len(src_row) else None,
-                            "src_row_j": src_row[j] if j < len(src_row) else None,
-                        }
-                    )
         new_mat.append(out_row)
-    # region agent log
-    _agent_dbg28(
-        {
-            "hypothesisId": "H2_H3",
-            "location": "_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings:write_trace",
-            "message": "per-cell branch for speed / trial columns (first 3 logical rows)",
-            "data": {"trace": _trace_speed_cols[:80]},
-            "runId": "pre-fix",
-        }
-    )
-    # endregion
 
     try:
         n_r = len(new_mat)
