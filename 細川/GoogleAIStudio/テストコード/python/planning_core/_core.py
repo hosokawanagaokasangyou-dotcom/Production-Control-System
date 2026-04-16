@@ -764,6 +764,8 @@ ACT_COL_MACHINING_END_DT = "加工終了日時"
 ACT_COL_ACTUAL_QTY = "実加工数"
 ACT_COL_PLANNED_QTY = "加工予定数"
 ACT_COL_CONVERTED_QTY = "換算数量"
+# 加工実績明細DATA: 依頼NO の累積実績（m）をガント角丸シェイプの長さ表示に用いる
+ACT_COL_CUMULATIVE_ACTUAL_QTY = "累積実績"
 ACT_COL_CUMULATIVE_COMPLETION_PCT = "累積完了率"
 # 加工実績明細DATA のロール単位担当（1～5。見出しは Excel シートと一致させる）
 ACT_COL_MACHINING_ASSIGNEE_1 = "加工担当者名1"
@@ -799,6 +801,7 @@ ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
     ACT_COL_ACTUAL_QTY,
     ACT_COL_PLANNED_QTY,
     ACT_COL_CONVERTED_QTY,
+    ACT_COL_CUMULATIVE_ACTUAL_QTY,
     ACT_COL_CUMULATIVE_COMPLETION_PCT,
     ACT_DETAIL_COL_ROLL,
 ) + ACT_COL_MACHINING_ASSIGNEES_ORDERED
@@ -1720,6 +1723,7 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
         return None, 0, None
     total = 0.0
     n = 0
+    cum_max = None
     pct_pick = None
     seen: set[tuple] = set()
     for ev in evlist:
@@ -1753,8 +1757,16 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
                     lm = float(u) * float(um)
             if lm is None:
                 continue
-            total += float(lm)
-            n += 1
+            # 実績明細: label_len_m は「累積」値である場合がある（その場合は合計せず最大を採る）
+            if bool(ev.get("label_len_m_is_cumulative")):
+                try:
+                    cum_max = float(lm) if cum_max is None else max(float(cum_max), float(lm))
+                    n += 1
+                except Exception:
+                    pass
+            else:
+                total += float(lm)
+                n += 1
             if pct_pick is None and ev.get("pct_macro") is not None:
                 try:
                     pct_pick = int(round(parse_float_safe(ev.get("pct_macro"), None)))
@@ -1762,8 +1774,10 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
                     pct_pick = None
         except Exception:
             continue
-    if n <= 0:
+    if n <= 0 and cum_max is None:
         return None, 0, pct_pick
+    if cum_max is not None:
+        return float(cum_max), n, pct_pick
     return total, n, pct_pick
 
 
@@ -1805,6 +1819,9 @@ def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
             if u > 1e-12 and um > 1e-12:
                 ev_total_len_m = float(u) * float(um)
 
+        # 累積値は区間按分表示に向かないため、slot_len_m は算出しない（ラベル側で表示する）
+        if bool(active.get("label_len_m_is_cumulative")):
+            ev_total_len_m = None
         if ev_total_len_m is not None and float(ev_total_len_m) > 1e-12:
             s0 = active.get("start_dt")
             e0 = active.get("end_dt")
@@ -7741,10 +7758,15 @@ def build_actual_timeline_events(
 
         pct_macro = _actual_row_cumulative_completion_pct_macro(row)
         actual_done_m = None
+        cumulative_actual_m = None
         try:
             actual_done_m = parse_float_safe(row.get(ACT_COL_ACTUAL_QTY), None)
         except Exception:
             actual_done_m = None
+        try:
+            cumulative_actual_m = parse_float_safe(row.get(ACT_COL_CUMULATIVE_ACTUAL_QTY), None)
+        except Exception:
+            cumulative_actual_m = None
 
         before = len(events)
         total_seconds = None
@@ -7780,11 +7802,17 @@ def build_actual_timeline_events(
             }
             if pct_macro is not None:
                 ev_row["pct_macro"] = pct_macro
-            # 依頼NOシェイプ横の表示は「そのシェイプの加工長さ(m)」。
-            # ケースA: 加工実績明細DATA 1行の「実加工数」は、その行の時間帯で完了した長さ(m)そのもの。
-            # よって unit_m（ロール単位長さ）は使わず、実加工数(m)を採用する。
+            # 依頼NOシェイプ横の表示は「累積実績(m)」を優先する。
+            # 「累積実績」が無い/不正のときのみ、従来どおり「実加工数」を採用（クリップ時は時間比で按分）。
             try:
                 if (
+                    cumulative_actual_m is not None
+                    and isinstance(cumulative_actual_m, (int, float))
+                    and float(cumulative_actual_m) > 1e-12
+                ):
+                    ev_row["label_len_m"] = float(cumulative_actual_m)
+                    ev_row["label_len_m_is_cumulative"] = True
+                elif (
                     actual_done_m is not None
                     and isinstance(actual_done_m, (int, float))
                     and float(actual_done_m) > 1e-12
@@ -7793,8 +7821,6 @@ def build_actual_timeline_events(
                 ):
                     seg_seconds = float((e_clip - s_clip).total_seconds())
                     if seg_seconds > 0:
-                        # クリップで行の時間帯が一部欠ける場合のみ、時間比で表示長さを調整する。
-                        # （通常は seg_seconds==total_seconds でそのまま実加工数になる）
                         ev_row["label_len_m"] = float(actual_done_m) * (
                             seg_seconds / float(total_seconds)
                         )
