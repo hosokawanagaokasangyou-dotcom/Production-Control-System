@@ -130,3 +130,58 @@ def apply_from_task_input_workbook() -> int:
     if not p or not os.path.isfile(p):
         return 0
     return apply_workbook_environment_sheet(p)
+
+
+def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
+    """
+    Windows の cmd 経由起動で、ウィンドウがすぐ閉じてトレースバックをコピーできない場合向け。
+    異常終了時のみ ``pause`` を挟む。
+
+    無効化: 環境変数 ``PM_AI_CMD_PAUSE_ON_ERROR`` を ``0`` / ``false`` / ``no`` / ``off``。
+    未設定時は **有効**（既定で pause する）。
+    """
+    if os.name != "nt":
+        return
+    try:
+        code = int(exit_code)
+    except (TypeError, ValueError):
+        code = 1
+    if code == 0:
+        return
+    raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return
+    try:
+        os.system("pause")
+    except Exception:
+        pass
+
+
+def run_cli_with_optional_pause_on_error(main_fn):
+    """
+    ``if __name__ == "__main__"`` 用: ``main_fn`` を実行し、終了コード int を返す。
+
+    ``main_fn`` が ``sys.exit(n)`` した場合は ``n`` を採用する。
+    未捕捉例外は traceback 出力のうえコード 1。
+    Windows かつ非 0 終了なら :func:`pause_cmd_window_on_cli_error` を呼ぶ。
+    """
+    import traceback
+
+    code = 0
+    try:
+        result = main_fn()
+        if result is not None:
+            code = int(result)
+    except SystemExit as e:
+        c = e.code
+        if isinstance(c, int):
+            code = c
+        elif c:
+            code = 1
+        else:
+            code = 0
+    except BaseException:
+        traceback.print_exc()
+        code = 1
+    pause_cmd_window_on_cli_error(code)
+    return code

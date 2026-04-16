@@ -71,4 +71,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import workbook_env_bootstrap as _wbe_exit
+
+    sys.exit(_wbe_exit.run_cli_with_optional_pause_on_error(main))
