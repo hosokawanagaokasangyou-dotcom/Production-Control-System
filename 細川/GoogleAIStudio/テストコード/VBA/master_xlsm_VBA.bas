@@ -36,7 +36,7 @@ Private Const SHEET_NEED_DATA As String = "need"
 ' =========================================================
 ' 機械カレンダー（シート 1 枚「機械カレンダー」）
 ' ・1 行目＝工程名、2 行目＝機械名（skills の設備列と同じ並び・値を転記）。見出しに色付け
-' ・A 列＝日付＋時刻（1 時間単位・メイン A12/B12 の時台～の毎正時、空なら 6:00～22:00）／B 列＝曜日（略称）
+' ・A 列＝日付＋時刻（30 分単位・メイン A12/B12 の時台～、空なら 6:00～22:00）／B 列＝曜日（略称）
 ' ・C 列以降＝skills と同型の工程名・機械名。データ行は日ごとに薄い青系のストライプ（交互）
 ' ・設備列: 空白でないセル＝そのスロットで稼働不可（コメント）。再作成時は日時×工程×機械キーで復元
 ' =========================================================
@@ -47,8 +47,10 @@ Private Const SHEET_MACHINE_DAILY_STARTUP As String = "設定_機械_日次始業準備"
 Private Const MACHINE_CAL_HORIZON_DAYS As Long = 365
 Private Const MACHINE_CAL_SLOT_HOUR_FIRST As Long = 6
 Private Const MACHINE_CAL_SLOT_HOUR_LAST As Long = 22
-' 6～22 時の毎正時（17 行/日）… A12/B12 未設定時の既定。設定時は (終了時－開始時)+1 行/日
-Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 17
+Private Const MACHINE_CAL_SLOT_MINUTES As Long = 30
+' 6:00～22:00 の 30 分刻み（33 行/日）… A12/B12 未設定時の既定。
+' 設定時は ((終了時-開始時)*60/30)+1 行/日（ただし終端の「:30」は作らない）
+Private Const MACHINE_CAL_SLOTS_PER_DAY As Long = 33
 ' メインシート D 列: skills A 列（3 行目～）のメンバー名から、同名シートの勤怠簿 A1 への HYPERLINK 一覧
 ' （master_メインの勤怠リンクリストを更新、または master_カレンダーからメンバー出勤簿を生成 成功時に更新）
 Private Const MAIN_ATTENDANCE_LINK_COL As Long = 4
@@ -456,7 +458,7 @@ Private Function MasterMainReadRegularShiftTimes(ByVal wb As Workbook, ByRef tRe
     MasterMainReadRegularShiftTimes = True
 End Function
 
-' メイン A12・B12 からスロットの開始・終了「時」（毎正時）を取得。空・不正時は 6～22。
+' メイン A12・B12 からスロットの開始・終了「時」（30分刻みの時台）を取得。空・不正時は 6～22。
 Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As Long, ByRef hLast As Long, ByRef slotsPer As Long)
     Dim ws As Worksheet
     Dim vS As Variant, vE As Variant
@@ -480,7 +482,7 @@ Private Sub MasterMachineCalReadSlotHours(ByVal wb As Workbook, ByRef hFirst As 
     
     hFirst = hhF
     hLast = hhL
-    slotsPer = hLast - hFirst + 1
+    slotsPer = (hLast - hFirst) * (60 \ MACHINE_CAL_SLOT_MINUTES) + 1
 End Sub
 ' =========================================================
 ' master.xlsm 用（テキストバックアップ）。配台・Python 起動は 生産管理_AI配台テスト.xlsm 側の 生産管理_AI配台テスト_xlsm_VBA.txt を参照。
@@ -1030,24 +1032,30 @@ NextHdr:
     r = 3
     For dayOffset = 0 To MACHINE_CAL_HORIZON_DAYS - 1
         For slotHour = hFirst To hLast
-            slotTime = (startDay + dayOffset) + TimeSerial(slotHour, 0, 0)
-            wsOut.Cells(r, 1).Value = slotTime
-            wsOut.Cells(r, 2).Value = MachineCalWeekdayShort(slotTime)
-            For c = 2 To lastC
-                If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextCell
-                outCol = c + 1
-                procH = Trim$(CStr(wsOut.Cells(1, outCol).Value))
-                machH = Trim$(CStr(wsOut.Cells(2, outCol).Value))
-                colKey = procH & vbTab & machH
-                mapKey = Format$(slotTime, "yyyy-mm-dd hh:nn") & "|" & colKey
-                If preserved.Exists(mapKey) Then
-                    wsOut.Cells(r, outCol).Value = preserved(mapKey)
-                Else
-                    wsOut.Cells(r, outCol).ClearContents
-                End If
+            Dim slotMin As Long
+            For slotMin = 0 To 60 - MACHINE_CAL_SLOT_MINUTES Step MACHINE_CAL_SLOT_MINUTES
+                ' 終端の「:30」は作らない（hLast=22 のとき 22:30 は出さない）
+                If slotHour = hLast And slotMin > 0 Then Exit For
+                
+                slotTime = (startDay + dayOffset) + TimeSerial(slotHour, slotMin, 0)
+                wsOut.Cells(r, 1).Value = slotTime
+                wsOut.Cells(r, 2).Value = MachineCalWeekdayShort(slotTime)
+                For c = 2 To lastC
+                    If Not MachineCalSkillsColumnUsable(wsSkill, c, useTwoHeader) Then GoTo NextCell
+                    outCol = c + 1
+                    procH = Trim$(CStr(wsOut.Cells(1, outCol).Value))
+                    machH = Trim$(CStr(wsOut.Cells(2, outCol).Value))
+                    colKey = procH & vbTab & machH
+                    mapKey = Format$(slotTime, "yyyy-mm-dd hh:nn") & "|" & colKey
+                    If preserved.Exists(mapKey) Then
+                        wsOut.Cells(r, outCol).Value = preserved(mapKey)
+                    Else
+                        wsOut.Cells(r, outCol).ClearContents
+                    End If
 NextCell:
-            Next c
-            r = r + 1
+                Next c
+                r = r + 1
+            Next slotMin
         Next slotHour
     Next dayOffset
     
@@ -1059,7 +1067,7 @@ NextCell:
     
     MsgBox "「" & SHEET_MACHINE_CALENDAR & "」を更新しました。" & vbCrLf & _
            "開始日: " & Format$(startDay, "yyyy/mm/dd") & "（本日） / 先読み: " & CStr(MACHINE_CAL_HORIZON_DAYS) & " 日" & vbCrLf & _
-           "A 列＝日時・B 列＝曜日、1 時間単位（" & CStr(hFirst) & ":00～" & CStr(hLast) & ":00・1 日 " & CStr(slotsPer) & " 行）・日ストライプ。" & vbCrLf & _
+           "A 列＝日時・B 列＝曜日、30 分単位（" & CStr(hFirst) & ":00～" & CStr(hLast) & ":00・1 日 " & CStr(slotsPer) & " 行）・日ストライプ。" & vbCrLf & _
            "（稼働スロット: メイン A12/B12。空なら 6～22 時）" & vbCrLf & _
            "（定常外の色: メイン A15/B15・A 列のみ。空なら着色なし）" & vbCrLf & _
            "設備列へ入力した文言は、同一日時・同一工程・機械のセルがあれば再作成後も復元されます。", vbInformation, "機械カレンダー"
