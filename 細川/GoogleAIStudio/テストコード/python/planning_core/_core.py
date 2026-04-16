@@ -10288,6 +10288,39 @@ def _excel_scalar_to_plan_string_cell(v):
     既存シート（read_excel）由来のスカラーを」配台計画 DataFrame の文字列列（StringDtype）へ
     代入でしる str に正規化する。Excel は数値として保挝した優先度 1 → \"1\" など。
     """
+    # #region agent log
+    if v is not None and (
+        (isinstance(v, datetime) and not isinstance(v, pd.Timestamp))
+        or (bool(pd.isna(v)) and not isinstance(v, float))
+    ):
+        try:
+            _dbg_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-45e4a1.log")
+            )
+            with open(_dbg_path, "a", encoding="utf-8") as _df:
+                _df.write(
+                    json.dumps(
+                        {
+                            "sessionId": "45e4a1",
+                            "timestamp": int(time_module.time() * 1000),
+                            "location": "_core.py:_excel_scalar_to_plan_string_cell:entry",
+                            "message": "scalar_normalize_risky",
+                            "hypothesisId": "H1",
+                            "runId": "pre-fix",
+                            "data": {
+                                "type_name": type(v).__name__,
+                                "is_pd_Timestamp": isinstance(v, pd.Timestamp),
+                                "is_datetime": isinstance(v, datetime),
+                                "pd_isna": bool(pd.isna(v)),
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+    # #endregion
     if v is None:
         return ""
     if isinstance(v, float) and pd.isna(v):
@@ -10357,6 +10390,39 @@ def _merge_plan_sheet_user_overrides(out_df):
             v = r.get(c)
             if v is None or (isinstance(v, float) and pd.isna(v)):
                 continue
+            # #region agent log
+            try:
+                if c in (*PLAN_STAGE1_MERGE_COLUMNS, *PLAN_STAGE1_MERGE_EXTRA_COLUMNS) and pd.isna(
+                    v
+                ) and not isinstance(v, float):
+                    _dbg_path2 = os.path.abspath(
+                        os.path.join(
+                            os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-45e4a1.log"
+                        )
+                    )
+                    with open(_dbg_path2, "a", encoding="utf-8") as _df2:
+                        _df2.write(
+                            json.dumps(
+                                {
+                                    "sessionId": "45e4a1",
+                                    "timestamp": int(time_module.time() * 1000),
+                                    "location": "_core.py:_merge_plan_sheet_user_overrides:bucket",
+                                    "message": "non_float_pd_isna_in_sheet_cell",
+                                    "hypothesisId": "H3",
+                                    "runId": "pre-fix",
+                                    "data": {
+                                        "col": str(c),
+                                        "type_name": type(v).__name__,
+                                        "is_datetime": isinstance(v, datetime),
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+            except Exception:
+                pass
+            # #endregion
             if isinstance(v, str):
                 s = v.strip()
                 if not s or s.lower() in ("nan", "none"):
