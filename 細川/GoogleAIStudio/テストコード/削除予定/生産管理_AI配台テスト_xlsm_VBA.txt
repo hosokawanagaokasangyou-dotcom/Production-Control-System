@@ -114,6 +114,8 @@ Private Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
 Private Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"
 Private Const SHEET_RESULT_CALENDAR_ATTEND As String = "結果_カレンダー(出勤簿)"
 Private Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
+' 段階2 完了時: 結果_設備ガント を UTF-8 HTML で書き出すフォルダ（マクロ実行ブック\結果html\）
+Private Const RESULT_GANTT_HTML_REL_FOLDER As String = "結果html"
 Private Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Private Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
@@ -2345,6 +2347,161 @@ Private Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
         .HorizontalAlignment = xlLeft
         .VerticalAlignment = xlCenter
     End With
+End Sub
+
+' ---------------------------------------------------------------------------
+' 結果_設備ガント: UsedRange を HTML テーブル化し targetDir\結果html\結果_設備ガント.html に保存
+' （段階2の production_plan 取り込み・列幅・マスタ時刻反映の直後に呼ぶ。失敗時は黙ってスキップ）
+' ---------------------------------------------------------------------------
+Private Function HtmlEscapeCellDisplay(ByVal s As String) As String
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, """", "&quot;")
+    HtmlEscapeCellDisplay = s
+End Function
+
+Private Function XlBgrLongToHtmlHex(ByVal xlColor As Long) As String
+    Dim r As Long, g As Long, b As Long
+    On Error GoTo EmptyHex
+    If xlColor < 0 Or xlColor > &HFFFFFF Then GoTo EmptyHex
+    b = xlColor And &HFF&
+    g = (xlColor \ 256&) And &HFF&
+    r = (xlColor \ 65536&) And &HFF&
+    XlBgrLongToHtmlHex = Right$("0" & Hex(r), 2) & Right$("0" & Hex(g), 2) & Right$("0" & Hex(b), 2)
+    Exit Function
+EmptyHex:
+    XlBgrLongToHtmlHex = ""
+End Function
+
+Private Function CssTextAlignFromXl(ByVal ha As Long) As String
+    Select Case ha
+        Case xlCenter: CssTextAlignFromXl = "center"
+        Case xlRight: CssTextAlignFromXl = "right"
+        Case Else: CssTextAlignFromXl = "left"
+    End Select
+End Function
+
+Private Sub 結果_設備ガント_SheetをHTMLファイルへ書き出し(ByVal targetDir As String)
+    Const HTML_NAME As String = "結果_設備ガント.html"
+    Dim fso As Object
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim outDir As String
+    Dim outPath As String
+    Dim stm As Object
+    Dim nR As Long
+    Dim nC As Long
+    Dim rr As Long
+    Dim cc As Long
+    Dim cel As Range
+    Dim skipMap() As Boolean
+    Dim rs As Long
+    Dim cs As Long
+    Dim bgHex As String
+    Dim fgHex As String
+    Dim st As String
+    Dim rowSb As String
+    
+    If Len(targetDir) = 0 Then Exit Sub
+    
+    On Error GoTo QuietHtmlOut
+    
+    Set ws = Nothing
+    Set ws = ThisWorkbook.Worksheets(SHEET_RESULT_EQUIP_GANTT)
+    If ws Is Nothing Then Exit Sub
+    
+    Set ur = Nothing
+    Set ur = ws.UsedRange
+    If ur Is Nothing Then Exit Sub
+    
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If fso Is Nothing Then Exit Sub
+    outDir = fso.BuildPath(targetDir, RESULT_GANTT_HTML_REL_FOLDER)
+    If Not fso.FolderExists(outDir) Then fso.CreateFolder outDir
+    outPath = fso.BuildPath(outDir, HTML_NAME)
+    
+    nR = ur.Rows.Count
+    nC = ur.Columns.Count
+    If nR < 1 Or nC < 1 Then Exit Sub
+    
+    ReDim skipMap(1 To nR, 1 To nC)
+    For rr = 1 To nR
+        For cc = 1 To nC
+            Set cel = ur.Cells(rr, cc)
+            If cel.MergeCells Then
+                If cel.Row <> cel.MergeArea.Row Or cel.Column <> cel.MergeArea.Column Then
+                    skipMap(rr, cc) = True
+                End If
+            End If
+        Next cc
+    Next rr
+    
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.charset = "utf-8"
+    stm.Open
+    stm.WriteText "<!DOCTYPE html>" & vbCrLf, 0
+    stm.WriteText "<html lang=""ja""><head><meta charset=""utf-8""/>" & vbCrLf, 0
+    stm.WriteText "<meta name=""viewport"" content=""width=device-width, initial-scale=1""/>" & vbCrLf, 0
+    stm.WriteText "<title>" & HtmlEscapeCellDisplay(SHEET_RESULT_EQUIP_GANTT) & "</title>" & vbCrLf, 0
+    stm.WriteText "<style>body{margin:8px;background:#f5f5f5;}" & vbCrLf, 0
+    stm.WriteText "table{border-collapse:collapse;background:#fff;font:11pt Meiryo,Segoe UI,sans-serif;}" & vbCrLf, 0
+    stm.WriteText "td,th{border:1px solid #999;padding:2px 4px;vertical-align:middle;white-space:pre-wrap;word-break:break-all;}</style>" & vbCrLf, 0
+    stm.WriteText "</head><body><table>" & vbCrLf, 0
+    
+    For rr = 1 To nR
+        rowSb = "<tr>"
+        For cc = 1 To nC
+            If skipMap(rr, cc) Then GoTo NextCcHtml
+            Set cel = ur.Cells(rr, cc)
+            rs = 1
+            cs = 1
+            If cel.MergeCells Then
+                rs = cel.MergeArea.Rows.Count
+                cs = cel.MergeArea.Columns.Count
+            End If
+            
+            On Error Resume Next
+            st = "text-align:" & CssTextAlignFromXl(CLng(cel.HorizontalAlignment)) & ";"
+            If Err.Number <> 0 Then
+                Err.Clear
+                st = "text-align:left;"
+            End If
+            If cel.Font.Bold Then st = st & "font-weight:bold;"
+            
+            bgHex = vbNullString
+            If cel.Interior.Pattern <> xlNone Then
+                bgHex = XlBgrLongToHtmlHex(cel.Interior.Color)
+            End If
+            If Len(bgHex) > 0 Then st = st & "background-color:#" & bgHex & ";"
+            
+            fgHex = XlBgrLongToHtmlHex(cel.Font.Color)
+            If Len(fgHex) > 0 Then st = st & "color:#" & fgHex & ";"
+            On Error GoTo QuietHtmlOut
+            
+            rowSb = rowSb & "<td style=""" & st & """"
+            If rs > 1 Then rowSb = rowSb & " rowspan=""" & CStr(rs) & """"
+            If cs > 1 Then rowSb = rowSb & " colspan=""" & CStr(cs) & """"
+            rowSb = rowSb & ">" & HtmlEscapeCellDisplay(CStr(cel.Text)) & "</td>"
+NextCcHtml:
+        Next cc
+        rowSb = rowSb & "</tr>" & vbCrLf
+        stm.WriteText rowSb, 0
+    Next rr
+    
+    stm.WriteText "</table></body></html>" & vbCrLf, 0
+    stm.SaveToFile outPath, 2
+    stm.Close
+    Set stm = Nothing
+    Set fso = Nothing
+    Exit Sub
+QuietHtmlOut:
+    On Error Resume Next
+    If Not stm Is Nothing Then stm.Close
+    Set stm = Nothing
+    Set fso = Nothing
+    On Error GoTo 0
 End Sub
 
 ' planning_core のガント罫線 thin color 666666 に合わせる（ハイライト解除時）
@@ -6293,6 +6450,12 @@ Private Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean
             結果_設備ガント_列幅を設定 ws
             結果_設備ガント_タイトルA1を左寄せに固定 ws
         End If
+        Err.Clear
+        On Error GoTo ErrHandler
+        
+        ' 結果_設備ガントを HTML 化（マクロ実行ブックフォルダ\結果html\結果_設備ガント.html）
+        On Error Resume Next
+        結果_設備ガント_SheetをHTMLファイルへ書き出し targetDir
         Err.Clear
         On Error GoTo ErrHandler
         
