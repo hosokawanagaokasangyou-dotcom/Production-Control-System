@@ -14422,12 +14422,17 @@ def load_team_combination_presets_from_master() -> dict[
         return str(x).strip()
 
     colmap = {norm_cell(c): c for c in df.columns if norm_cell(c)}
-    id_c = colmap.get("組み合わせ行ID") or colmap.get("インデックス")
+    # 旧シート互換: 「組合せ」表記も許容
+    id_c = (
+        colmap.get("組み合わせ行ID")
+        or colmap.get("組合せ行ID")
+        or colmap.get("インデックス")
+    )
     proc_c = colmap.get("工程名")
     mach_c = colmap.get("機械名")
     combo_c = colmap.get("工程+機械")
-    prio_c = colmap.get("組み合わせ優先度")
-    req_c = colmap.get("必須人数")
+    prio_c = colmap.get("組み合わせ優先度") or colmap.get("組合せ優先度")
+    req_c = colmap.get("必須人数") or colmap.get("必要人数")
 
     def mem_col_order(c) -> int:
         m = re.search(r"メンバー\s*(\d+)", norm_cell(c))
@@ -20031,6 +20036,7 @@ def _assign_one_roll_trial_order_flow(
                         **got,
                         "combo_sheet_row_id": combo_row_id,
                         "combo_preset_team": tuple(preset_team),
+                        "combo_preset_priority": _prio,
                     }
                 )
     for tsize in range(req_num, max_team_size + 1):
@@ -20080,6 +20086,7 @@ def _assign_one_roll_trial_order_flow(
                         **got,
                         "combo_sheet_row_id": None,
                         "combo_preset_team": None,
+                        "combo_preset_priority": None,
                     }
                 )
 
@@ -20226,13 +20233,26 @@ def _assign_one_roll_trial_order_flow(
     t_min = min(c["team_start"] for c in team_candidates)
 
     def _team_cand_key(c):
-        return _team_assignment_sort_tuple(
+        _base = _team_assignment_sort_tuple(
             c["team"],
             c["team_start"],
             1,
             c["prio_sum"],
             t_min,
         )
+        # シート「組合せ優先度」は試行順だけでなく、同条件のタイブレークにも使う
+        # （開始・人数・短縮数などが同じなら、優先度が小さいプリセットを優先）
+        _combo_rank = c.get("combo_preset_priority")
+        try:
+            _combo_rank_i = int(_combo_rank) if _combo_rank is not None else 10**9
+        except (TypeError, ValueError):
+            _combo_rank_i = 10**9
+        try:
+            if isinstance(_base, tuple) and len(_base) >= 1:
+                return _base[:-1] + (_combo_rank_i, _base[-1])
+        except Exception:
+            pass
+        return (_combo_rank_i, _base)
 
     best_c = min(team_candidates, key=_team_cand_key)
     if best_c.get("combo_sheet_row_id") is None and preset_rows_assign:
@@ -22858,6 +22878,7 @@ def _generate_plan_impl():
                                         "eff_time_per_unit": eff_time_per_unit,
                                         "combo_sheet_row_id": None,
                                         "combo_preset_team": None,
+                                        "combo_preset_priority": None,
                                     }
                                 )
     
@@ -22874,13 +22895,26 @@ def _generate_plan_impl():
                         )
     
                         def _team_cand_key(c):
-                            return _team_assignment_sort_tuple(
+                            _base = _team_assignment_sort_tuple(
                                 c["team"],
                                 c["team_start"],
                                 c["units_today"],
                                 c["prio_sum"],
                                 t_min,
                             )
+                            _combo_rank = c.get("combo_preset_priority")
+                            try:
+                                _combo_rank_i = (
+                                    int(_combo_rank) if _combo_rank is not None else 10**9
+                                )
+                            except (TypeError, ValueError):
+                                _combo_rank_i = 10**9
+                            try:
+                                if isinstance(_base, tuple) and len(_base) >= 1:
+                                    return _base[:-1] + (_combo_rank_i, _base[-1])
+                            except Exception:
+                                pass
+                            return (_combo_rank_i, _base)
     
                         if team_candidates:
                             best_c = min(team_candidates, key=_team_cand_key)
