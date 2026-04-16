@@ -1686,10 +1686,30 @@ def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
     return fi
 
 
+def _gantt_format_length_m(val) -> str | None:
+    """
+    タイムライン帯ラベル用の「加工長さ(m)」表示。
+    0/空/不正は None（表示しない）。
+    """
+    try:
+        f = parse_float_safe(val, None)
+        if f is None or math.isnan(float(f)) or math.isinf(float(f)):
+            return None
+        f = float(f)
+    except Exception:
+        return None
+    if f <= 1e-12:
+        return None
+    # 整数に近い値は整数表示、そうでなければ小数1桁（過度に長いラベルを避ける）
+    if abs(f - round(f)) <= 1e-9:
+        return str(int(round(f)))
+    return f"{f:.1f}".rstrip("0").rstrip(".")
+
+
 def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
     """
     10 分枠 [slot_start, slot_end) の 1 マス分の状態。
-    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, pct)
+    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, slot_len_m)
 
     結果_設備毎の時間割・結果_設備毎の時間割_機械名毎（``_build_equipment_schedule_*``）と同様に、
     枠と重なるイベントの選定に ``_eq_grid_best_overlapping_event_for_cell``、
@@ -1710,23 +1730,30 @@ def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
         return ("break",)
     tid = str(active["task_id"])
     gh = fill_fn(active["task_id"])
-    pct = None
+    slot_len_m = None
     try:
-        # 「マクロ実行時点」の完了率を優先（pct_macro を timeline_event に挝たせる）
-        if active.get("pct_macro") is not None:
-            pct = int(round(parse_float_safe(active.get("pct_macro"), 0.0)))
-            pct = max(0, min(100, pct))
+        # イベント総加工長さ(m)
+        ev_total_len_m = None
+        if active.get("label_len_m") is not None:
+            ev_total_len_m = parse_float_safe(active.get("label_len_m"), None)
         else:
-            # フェイルセーフ（従来の擬似進杗計算）
-            tot = parse_float_safe(active.get("total_units"), 0.0)
-            done = parse_float_safe(active.get("already_done_units"), 0.0) + parse_float_safe(
-                active.get("units_done"), 0.0
-            )
-            if tot > 0:
-                pct = max(0, min(100, int(round((done / tot) * 100))))
+            # 計画帯: units_done × unit_m を加工長さとして表示
+            u = parse_float_safe(active.get("units_done"), 0.0)
+            um = parse_float_safe(active.get("unit_m"), 0.0)
+            if u > 1e-12 and um > 1e-12:
+                ev_total_len_m = float(u) * float(um)
+
+        if ev_total_len_m is not None and float(ev_total_len_m) > 1e-12:
+            s0 = active.get("start_dt")
+            e0 = active.get("end_dt")
+            if isinstance(s0, datetime) and isinstance(e0, datetime) and s0 < e0:
+                ev_sec = float((e0 - s0).total_seconds())
+                ov_sec = float((min(slot_end, e0) - max(slot_start, s0)).total_seconds())
+                if ev_sec > 1e-9 and ov_sec > 1e-9:
+                    slot_len_m = float(ev_total_len_m) * (ov_sec / ev_sec)
     except Exception:
-        pct = None
-    return ("task", tid, gh, pct)
+        slot_len_m = None
+    return ("task", tid, gh, slot_len_m)
 
 
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
@@ -1834,11 +1861,29 @@ def _paint_gantt_timeline_row_merged(
                 else:
                     c.value = None
             else:
-                _, tid, gh, pct = st0
+                _, tid, gh, _slot_len_m0 = st0
                 c.fill = _gantt_cached_pattern_fill(gh)
                 if col == col_s:
                     tid_s = str(tid or "").strip()
-                    _lbl = f"{tid_s} {pct}%" if pct is not None else tid_s
+                    _sum_len = 0.0
+                    _has_len = False
+                    try:
+                        for _k in range(i, j):
+                            _st = states[_k]
+                            if len(_st) >= 4 and _st[0] == "task":
+                                _v = _st[3]
+                                if _v is None:
+                                    continue
+                                _f = parse_float_safe(_v, None)
+                                if _f is None:
+                                    continue
+                                _sum_len += float(_f)
+                                _has_len = True
+                    except Exception:
+                        _has_len = False
+                        _sum_len = 0.0
+                    _len_s = _gantt_format_length_m(_sum_len if _has_len else None)
+                    _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
                     if shape_label_specs is not None:
                         if tid_s:
                             shape_label_specs.append(
@@ -7632,8 +7677,18 @@ def build_actual_timeline_events(
             sub_s = ""
 
         pct_macro = _actual_row_cumulative_completion_pct_macro(row)
+        converted_qty_m = None
+        try:
+            converted_qty_m = parse_float_safe(row.get(ACT_COL_CONVERTED_QTY), None)
+        except Exception:
+            converted_qty_m = None
 
         before = len(events)
+        total_seconds = None
+        try:
+            total_seconds = max(0.0, float((end_dt - start_dt).total_seconds()))
+        except Exception:
+            total_seconds = None
         for d in sorted_dates:
             if d not in date_ok:
                 continue
@@ -7662,6 +7717,23 @@ def build_actual_timeline_events(
             }
             if pct_macro is not None:
                 ev_row["pct_macro"] = pct_macro
+            # 依頼NOシェイプ横の表示は完了率ではなく「そのシェイプの加工長さ(m)」へ。
+            # 実績明細の「換算数量」をイベント全体の秒数で按分して、日跨ぎのクリップでも整合させる。
+            try:
+                if (
+                    converted_qty_m is not None
+                    and isinstance(converted_qty_m, (int, float))
+                    and float(converted_qty_m) > 1e-12
+                    and total_seconds
+                    and float(total_seconds) > 1e-9
+                ):
+                    seg_seconds = float((e_clip - s_clip).total_seconds())
+                    if seg_seconds > 0:
+                        ev_row["label_len_m"] = float(converted_qty_m) * (
+                            seg_seconds / float(total_seconds)
+                        )
+            except Exception:
+                pass
             events.append(ev_row)
         if len(events) == before:
             no_plan_overlap += 1
