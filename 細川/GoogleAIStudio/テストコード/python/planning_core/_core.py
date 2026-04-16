@@ -170,8 +170,10 @@ def _gemini_client(api_key: str) -> genai.Client:
 # ---------------------------------------------------------------------------
 
 MASTER_FILE = "master.xlsm"  # skills と attendance（tasks）を統合したファイル
-# VBA「master_機械カレンダーを作成」シート（1 時間スロット占有を段階2の machine_avail_dt に反映）
+# VBA「master_機械カレンダーを作成」シート（30分スロット占有を段階2の machine_avail_dt に反映）
 SHEET_MACHINE_CALENDAR = "機械カレンダー"
+# master.xlsm「機械カレンダー」の1行=何分スロットとして解釈するか（VBA 出力仕様に合わせる）
+MACHINE_CALENDAR_SLOT_MINUTES = 30
 # ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
@@ -1677,6 +1679,64 @@ def _gantt_timeline_label_alignment(*, single_slot: bool) -> Alignment:
 # タスク帯の色はパレット有限なので PatternFill を hex 単位で共有（openpyxl のスタイル展開コスト削減）
 _GANTT_TASK_PATTERN_FILL_BY_HEX: dict[str, PatternFill] = {}
 
+# #region agent log
+# --- agent debug instrumentation (session ee54ab) ---
+_AGENT_DBG_LIMITS: dict[str, int] = defaultdict(int)
+_AGENT_DBG_WRITE_FAIL_WARNED = False
+
+
+def _agent_dbg_log(hypothesis_id: str, location: str, message: str, data: dict):
+    """
+    NDJSON を debug-ee54ab.log へ追記する（Cursor debug mode）。
+    """
+    global _AGENT_DBG_WRITE_FAIL_WARNED
+    try:
+        k = f"{hypothesis_id}:{location}"
+        _AGENT_DBG_LIMITS[k] = int(_AGENT_DBG_LIMITS.get(k, 0)) + 1
+        if _AGENT_DBG_LIMITS[k] > 40:
+            return
+        p = {
+            "sessionId": "ee54ab",
+            "runId": str(os.environ.get("AGENT_DBG_RUN_ID") or "pre-fix"),
+            "hypothesisId": str(hypothesis_id),
+            "location": str(location),
+            "message": str(message),
+            "data": data or {},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+        }
+        lines = json.dumps(p, ensure_ascii=False) + "\n"
+        # 1) planning_core と同階層（実行cwdに依存しない）
+        _log_path1 = os.path.join(os.path.dirname(__file__), "debug-ee54ab.log")
+        # 2) ワークスペース直下（絶対パス固定・回収しやすい）
+        _log_path2 = r"c:\工程管理AIプロジェクト\----AI-------1\debug-ee54ab.log"
+        try:
+            with open(_log_path1, "a", encoding="utf-8") as f:
+                f.write(lines)
+            if os.path.abspath(_log_path2) != os.path.abspath(_log_path1):
+                with open(_log_path2, "a", encoding="utf-8") as f2:
+                    f2.write(lines)
+        except Exception as e:
+            if not _AGENT_DBG_WRITE_FAIL_WARNED:
+                _AGENT_DBG_WRITE_FAIL_WARNED = True
+                try:
+                    logging.warning(
+                        "agent debug log write failed: %s (path1=%s, path2=%s)",
+                        e,
+                        _log_path1,
+                        _log_path2,
+                    )
+                except Exception:
+                    pass
+    except Exception as e:
+        if not _AGENT_DBG_WRITE_FAIL_WARNED:
+            _AGENT_DBG_WRITE_FAIL_WARNED = True
+            try:
+                logging.warning("agent debug log internal failure: %s", e)
+            except Exception:
+                pass
+
+# #endregion
+
 
 def _gantt_cached_pattern_fill(hex_rrggbb: str) -> PatternFill:
     fi = _GANTT_TASK_PATTERN_FILL_BY_HEX.get(hex_rrggbb)
@@ -1706,10 +1766,69 @@ def _gantt_format_length_m(val) -> str | None:
     return f"{f:.1f}".rstrip("0").rstrip(".")
 
 
+def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: datetime):
+    """
+    依頼NO（task_id）シェイプ区間 [seg_lo, seg_hi) に重なるイベントを単位として
+    加工長さを合計する（時間按分しない）。
+
+    - 計画帯: units_done×unit_m
+    - 実績明細帯: label_len_m（=加工実績明細DATA由来）を優先
+    """
+    if not tid_s or not evlist or seg_lo is None or seg_hi is None:
+        return None, 0, None
+    total = 0.0
+    n = 0
+    pct_pick = None
+    seen: set[tuple] = set()
+    for ev in evlist:
+        try:
+            if str(ev.get("task_id") or "").strip() != tid_s:
+                continue
+            s0 = ev.get("start_dt")
+            e0 = ev.get("end_dt")
+            if not isinstance(s0, datetime) or not isinstance(e0, datetime) or not (s0 < e0):
+                continue
+            # overlap: [s0,e0) ∩ [seg_lo,seg_hi)
+            if e0 <= seg_lo or s0 >= seg_hi:
+                continue
+            k = (
+                tid_s,
+                ev.get("event_kind"),
+                s0,
+                e0,
+                str(ev.get("machine") or ""),
+            )
+            if k in seen:
+                continue
+            seen.add(k)
+            lm = None
+            if ev.get("label_len_m") is not None:
+                lm = parse_float_safe(ev.get("label_len_m"), None)
+            if lm is None:
+                u = parse_float_safe(ev.get("units_done"), 0.0)
+                um = parse_float_safe(ev.get("unit_m"), 0.0)
+                if u > 1e-12 and um > 1e-12:
+                    lm = float(u) * float(um)
+            if lm is None:
+                continue
+            total += float(lm)
+            n += 1
+            if pct_pick is None and ev.get("pct_macro") is not None:
+                try:
+                    pct_pick = int(round(parse_float_safe(ev.get("pct_macro"), None)))
+                except Exception:
+                    pct_pick = None
+        except Exception:
+            continue
+    if n <= 0:
+        return None, 0, pct_pick
+    return total, n, pct_pick
+
+
 def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
     """
     10 分枠 [slot_start, slot_end) の 1 マス分の状態。
-    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, slot_len_m)
+    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, slot_len_m, pct)
 
     結果_設備毎の時間割・結果_設備毎の時間割_機械名毎（``_build_equipment_schedule_*``）と同様に、
     枠と重なるイベントの選定に ``_eq_grid_best_overlapping_event_for_cell``、
@@ -1731,6 +1850,7 @@ def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
     tid = str(active["task_id"])
     gh = fill_fn(active["task_id"])
     slot_len_m = None
+    pct = None
     try:
         # イベント総加工長さ(m)
         ev_total_len_m = None
@@ -1753,7 +1873,40 @@ def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
                     slot_len_m = float(ev_total_len_m) * (ov_sec / ev_sec)
     except Exception:
         slot_len_m = None
-    return ("task", tid, gh, slot_len_m)
+    try:
+        if active.get("pct_macro") is not None:
+            pct = int(round(parse_float_safe(active.get("pct_macro"), 0.0)))
+            pct = max(0, min(100, pct))
+    except Exception:
+        pct = None
+    # #region agent log
+    if slot_len_m is not None:
+        _agent_dbg_log(
+            "H4",
+            "_core.py:_gantt_slot_state_tuple",
+            "slot_len_m computed",
+            {
+                "task_id": tid,
+                "slot_start": slot_start.isoformat()
+                if isinstance(slot_start, datetime)
+                else str(slot_start),
+                "slot_mins": slot_mins,
+                "active_start": active.get("start_dt").isoformat()
+                if isinstance(active.get("start_dt"), datetime)
+                else str(active.get("start_dt")),
+                "active_end": active.get("end_dt").isoformat()
+                if isinstance(active.get("end_dt"), datetime)
+                else str(active.get("end_dt")),
+                "active_label_len_m": active.get("label_len_m"),
+                "units_done": active.get("units_done"),
+                "unit_m": active.get("unit_m"),
+                "slot_len_m": slot_len_m,
+                "pct": pct,
+                "event_kind": active.get("event_kind"),
+            },
+        )
+    # #endregion
+    return ("task", tid, gh, slot_len_m, pct)
 
 
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
@@ -1782,6 +1935,7 @@ def _paint_gantt_timeline_row_merged(
     shape_label_specs: list | None = None,
     label_italic: bool = False,
     shape_day_key: str | None = None,
+    show_completion_pct_in_label: bool = False,
 ):
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
@@ -1861,29 +2015,45 @@ def _paint_gantt_timeline_row_merged(
                 else:
                     c.value = None
             else:
-                _, tid, gh, _slot_len_m0 = st0
+                _, tid, gh, _slot_len_m0, _pct0 = st0
                 c.fill = _gantt_cached_pattern_fill(gh)
                 if col == col_s:
                     tid_s = str(tid or "").strip()
-                    _sum_len = 0.0
-                    _has_len = False
-                    try:
-                        for _k in range(i, j):
-                            _st = states[_k]
-                            if len(_st) >= 4 and _st[0] == "task":
-                                _v = _st[3]
-                                if _v is None:
-                                    continue
-                                _f = parse_float_safe(_v, None)
-                                if _f is None:
-                                    continue
-                                _sum_len += float(_f)
-                                _has_len = True
-                    except Exception:
-                        _has_len = False
-                        _sum_len = 0.0
-                    _len_s = _gantt_format_length_m(_sum_len if _has_len else None)
+                    _seg_lo = slots[i]
+                    _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                    _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
+                        evlist, tid_s, _seg_lo, _seg_hi
+                    )
+                    _len_s = _gantt_format_length_m(_tot_len)
                     _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
+                    if show_completion_pct_in_label and _pct_seg is not None and tid_s:
+                        _lbl = f"{_lbl} {_pct_seg}%"
+                    # #region agent log
+                    _agent_dbg_log(
+                        "H1",
+                        "_core.py:_paint_gantt_timeline_row_merged",
+                        "segment label built",
+                        {
+                            "row": row,
+                            "col_s": col_s,
+                            "col_e": col_e,
+                            "task_id": tid_s,
+                            "sum_len_m": _tot_len,
+                            "n_events_in_segment": _n_ev,
+                            "seg_lo": _seg_lo.isoformat()
+                            if isinstance(_seg_lo, datetime)
+                            else str(_seg_lo),
+                            "seg_hi": _seg_hi.isoformat()
+                            if isinstance(_seg_hi, datetime)
+                            else str(_seg_hi),
+                            "label": _lbl,
+                            "n_slots_in_segment": int(j - i),
+                            "day_key": shape_day_key or "",
+                            "show_pct": bool(show_completion_pct_in_label),
+                            "pct_seg": _pct_seg,
+                        },
+                    )
+                    # #endregion
                     if shape_label_specs is not None:
                         if tid_s:
                             shape_label_specs.append(
@@ -2482,6 +2652,7 @@ def _write_results_equipment_gantt_sheet(
                     shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                     label_italic=False,
                     shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
+                    show_completion_pct_in_label=False,
                 )
 
                 ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
@@ -2570,6 +2741,9 @@ def _write_results_equipment_gantt_sheet(
                     shape_label_specs=gantt_shape_label_specs if _use_gantt_shape_labels else None,
                     label_italic=True,
                     shape_day_key=d.isoformat() if _use_gantt_shape_labels else None,
+                    show_completion_pct_in_label=bool(
+                        sheet_nm == RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME
+                    ),
                 )
 
                 ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
@@ -7729,9 +7903,38 @@ def build_actual_timeline_events(
                 ):
                     seg_seconds = float((e_clip - s_clip).total_seconds())
                     if seg_seconds > 0:
-                        ev_row["label_len_m"] = float(converted_qty_m) * (
+                        _v = float(converted_qty_m) * (
                             seg_seconds / float(total_seconds)
                         )
+                        ev_row["label_len_m"] = _v
+                        # #region agent log
+                        _agent_dbg_log(
+                            "H2",
+                            "_core.py:build_actual_timeline_events",
+                            "label_len_m from converted_qty_m (time-proportioned)",
+                            {
+                                "task_id": display_tid,
+                                "machine": mach,
+                                "converted_qty_m": converted_qty_m,
+                                "start_dt": start_dt.isoformat()
+                                if isinstance(start_dt, datetime)
+                                else str(start_dt),
+                                "end_dt": end_dt.isoformat()
+                                if isinstance(end_dt, datetime)
+                                else str(end_dt),
+                                "s_clip": s_clip.isoformat()
+                                if isinstance(s_clip, datetime)
+                                else str(s_clip),
+                                "e_clip": e_clip.isoformat()
+                                if isinstance(e_clip, datetime)
+                                else str(e_clip),
+                                "total_seconds": total_seconds,
+                                "seg_seconds": seg_seconds,
+                                "label_len_m": _v,
+                                "roll_detail": bool(roll_detail),
+                            },
+                        )
+                        # #endregion
             except Exception:
                 pass
             events.append(ev_row)
@@ -17185,7 +17388,7 @@ def load_machine_calendar_occupancy_blocks(
     equipment_list: list,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
-    master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該 1 時間スロット占有とみなす。
+    master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該スロット占有とみなす。
     戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
     """
     if not master_path or not os.path.isfile(master_path):
@@ -17261,7 +17464,7 @@ def load_machine_calendar_occupancy_blocks(
             if not _machine_cal_cell_is_occupied(cell):
                 continue
             slot_start = slot0
-            slot_end = slot_start + timedelta(hours=1)
+            slot_end = slot_start + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
             _clipped_mc = _clip_machine_calendar_slot_to_factory_window(
                 day_d, slot_start, slot_end
             )
