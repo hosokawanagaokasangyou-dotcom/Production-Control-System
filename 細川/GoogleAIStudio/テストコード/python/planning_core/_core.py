@@ -10288,39 +10288,6 @@ def _excel_scalar_to_plan_string_cell(v):
     既存シート（read_excel）由来のスカラーを」配台計画 DataFrame の文字列列（StringDtype）へ
     代入でしる str に正規化する。Excel は数値として保挝した優先度 1 → \"1\" など。
     """
-    # #region agent log
-    if v is not None and (
-        (isinstance(v, datetime) and not isinstance(v, pd.Timestamp))
-        or (bool(pd.isna(v)) and not isinstance(v, float))
-    ):
-        try:
-            _dbg_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-45e4a1.log")
-            )
-            with open(_dbg_path, "a", encoding="utf-8") as _df:
-                _df.write(
-                    json.dumps(
-                        {
-                            "sessionId": "45e4a1",
-                            "timestamp": int(time_module.time() * 1000),
-                            "location": "_core.py:_excel_scalar_to_plan_string_cell:entry",
-                            "message": "scalar_normalize_risky",
-                            "hypothesisId": "H1",
-                            "runId": "post-fix",
-                            "data": {
-                                "type_name": type(v).__name__,
-                                "is_pd_Timestamp": isinstance(v, pd.Timestamp),
-                                "is_datetime": isinstance(v, datetime),
-                                "pd_isna": bool(pd.isna(v)),
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-    # #endregion
     if v is None:
         return ""
     if isinstance(v, float) and pd.isna(v):
