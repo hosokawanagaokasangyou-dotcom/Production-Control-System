@@ -4052,17 +4052,62 @@ def load_planning_tasks_df():
     D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
     （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
     """
+    # #region agent log
+    try:
+        from planning_core.agent_debug_session_log import agent_ndjson_log
+    except Exception:
+        agent_ndjson_log = lambda **kwargs: None
+    # #endregion
     if not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
             "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
         )
     if not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
+    # #region agent log
+    agent_ndjson_log(
+        hypothesis_id="C",
+        location="_core.py:load_planning_tasks_df",
+        message="read_excel 直前",
+        data={
+            "wb": os.path.basename(TASKS_INPUT_WORKBOOK),
+            "sheet": str(PLAN_INPUT_SHEET_NAME),
+        },
+    )
+    # #endregion
     df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
+    # #region agent log
+    raw_cols = [str(c) for c in df.columns]
+    raw_strip = [str(c).strip() for c in df.columns]
+    dup_raw = {k: v for k, v in Counter(raw_strip).items() if v > 1}
+    agent_ndjson_log(
+        hypothesis_id="A",
+        location="_core.py:load_planning_tasks_df",
+        message="read_excel 直後（strip 前）",
+        data={
+            "n_cols": len(raw_cols),
+            "dup_headers_after_strip_sim": dup_raw,
+            "first_20": raw_cols[:20],
+        },
+    )
+    # #endregion
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
     )
+    # #region agent log
+    ac = [str(c) for c in df.columns]
+    dup_align = {k: v for k, v in Counter(ac).items() if v > 1}
+    agent_ndjson_log(
+        hypothesis_id="A",
+        location="_core.py:load_planning_tasks_df",
+        message="_align 後の列重複",
+        data={
+            "dup_after_align": dup_align,
+            "has_unprocessed": TASK_COL_UNPROCESSED in df.columns,
+        },
+    )
+    # #endregion
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{PLAN_INPUT_SHEET_NAME}」"
     )
