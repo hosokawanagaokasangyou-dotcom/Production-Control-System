@@ -5788,34 +5788,7 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         if c not in df.columns:
             df[c] = ""
 
-    _speed_paren_stats = _apply_plan_input_excel_accounting_speed_fix_to_df(df)
-    # region agent log
-    try:
-        _dbg_path = os.path.join(
-            os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")
-            ),
-            "debug-28aad8.log",
-        )
-        with open(_dbg_path, "a", encoding="utf-8") as _df:
-            _df.write(
-                json.dumps(
-                    {
-                        "sessionId": "28aad8",
-                        "hypothesisId": "H1-H5",
-                        "location": "_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings:speed_paren_fix",
-                        "message": "Excel ( ) 会計表示に伴う速度列の負数を正に補正",
-                        "data": _speed_paren_stats,
-                        "timestamp": int(time_module.time() * 1000),
-                        "runId": "speed-paren-fix",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # endregion
+    _apply_plan_input_excel_accounting_speed_fix_to_df(df)
 
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     if dto_col not in df.columns:
