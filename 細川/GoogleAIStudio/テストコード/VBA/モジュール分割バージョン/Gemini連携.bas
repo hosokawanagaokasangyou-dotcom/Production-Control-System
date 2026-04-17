@@ -148,7 +148,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
     Set wsh = CreateObject("WScript.Shell")
     gemBat = "@echo off" & vbCrLf & "pushd """ & wbPath & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -3 -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, gemBat)
     
@@ -160,11 +160,11 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     If Len(Dir(outPath)) = 0 Then
         errLog = Trim$(GeminiReadUtf8File(errPath))
         If Len(errLog) > 2500 Then errLog = Left$(errLog, 2500) & vbCrLf & "…（省略）"
-        If Len(errLog) = 0 Then errLog = "（標準エラーに出力なし。py -3 が PATH に無い、または別のエラーの可能性があります）"
+        If Len(errLog) = 0 Then errLog = "（標準エラーに出力なし。py -" & PM_AI_SETUP_PY_MINOR & " が PATH に無い、または別のエラーの可能性があります）"
         MsgBox "暗号化ファイルができませんでした。（終了コード " & CStr(exitCode) & "）" & vbCrLf & vbCrLf & _
                "【Python のメッセージ】" & vbCrLf & errLog & vbCrLf & vbCrLf & _
-               "よくある対処: py -3 -m pip install cryptography" & vbCrLf & _
-               "または: py -3 -m pip install -r python\requirements.txt", vbCritical
+               "よくある対処: py -" & PM_AI_SETUP_PY_MINOR & " -m pip install cryptography" & vbCrLf & _
+               "または: py -" & PM_AI_SETUP_PY_MINOR & " -m pip install -r python\requirements.txt", vbCritical
         Exit Sub
     End If
     

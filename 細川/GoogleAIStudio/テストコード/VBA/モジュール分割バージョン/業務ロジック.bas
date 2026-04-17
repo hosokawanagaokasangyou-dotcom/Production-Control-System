@@ -135,7 +135,7 @@ End Sub
 ' =========================================================
 ' Gemini API キーを暗号化 JSON にし「設定」B1 にパスを書く（押下アニメ付きはアニメ付き_* を図形に割当）
 ' 暗号化パスフレーズは InputBox で入力し --passphrase-file 経由で Python に渡す。B2 にはパスフレーズを書かない。
-' Python: python\encrypt_gemini_credentials.py（要 cryptography）。起動は py -3 を推奨。
+' Python: python\encrypt_gemini_credentials.py（要 cryptography）。起動は py -3.14（共通定義 PM_AI_SETUP_PY_MINOR と同じ系列）を推奨。
 ' =========================================================
 Sub アニメ付き_Gemini認証を暗号化してB1に保存()
     Call AnimateButtonPush
@@ -1522,8 +1522,8 @@ End Sub
 
 ' =========================================================
 ' ① Python本体と必要なコンポーネントをインストールするマクロ（修正版）
-' ・Python 3 の検出は py -3（ランチャーで 3 系を明示）
-' ・未導入時: winget（Python.Python.3.12）→ 失敗時は公式 amd64 インストーラ
+' ・Python 3.14 の検出は py -3.14（ランチャーで系列を明示。定数 PM_AI_SETUP_PY_MINOR）
+' ・未導入時: winget（Python.Python.3.14）→ 失敗時は公式 amd64 インストーラ
 ' ・pip は PowerShell 内で Machine/User の PATH を再合成（Excel 起動後でも py を拾いやすく）
 ' ・pip 依存は setup_environment.py が requirements.txt を読み込んで一括（cryptography 含む）。スクリプトは python\setup_environment.py を優先（旧: ブック直下）
 ' ・xlwings: 本ブックの段階1/2 は WScript.Shell で py を起動するため planning_core 側では未使用。
@@ -2231,7 +2231,7 @@ Public Sub 段階1_コア実行()
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
                  "echo [stage1] Running Python... Progress below. See also LOG sheet and log\execution_log.txt" & vbCrLf & _
-                 "py -3 -u python\task_extract_stage1.py" & vbCrLf & _
+                 "py -" & PM_AI_SETUP_PY_MINOR & " -u python\task_extract_stage1.py" & vbCrLf & _
                  "set STAGE1_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [stage1] Finished. ERRORLEVEL=!STAGE1_PY_EXIT!" & vbCrLf & _
@@ -2969,7 +2969,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
                  "echo [stage2] Running plan simulation... Progress below. Log file: log\execution_log.txt" & vbCrLf & _
-                 "py -3 -u python\plan_simulation_stage2.py" & vbCrLf & _
+                 "py -" & PM_AI_SETUP_PY_MINOR & " -u python\plan_simulation_stage2.py" & vbCrLf & _
                  "set STAGE2_PY_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [stage2] Finished. ERRORLEVEL=!STAGE2_PY_EXIT!" & vbCrLf & _
@@ -3420,7 +3420,7 @@ Public Sub 実績設備ガント_のみ更新_実行()
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
                  "echo [actual_gantt] Running plan_refresh_actual_detail_gantt.py ..." & vbCrLf & _
-                 "py -3 -u python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
+                 "py -" & PM_AI_SETUP_PY_MINOR & " -u python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
                  "set PM_ACT_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [actual_gantt] Finished. ERRORLEVEL=!PM_ACT_EXIT!" & vbCrLf & _
