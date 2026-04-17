@@ -82,6 +82,7 @@ End Function
 
 Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal fullName As String, ByVal wbPath As String)
     Const LOGP As String = "c:\工程管理AIプロジェクト\----AI-------1\debug-8b603e.log"
+    Const CODE_VER As String = "a0dc069"
     Dim stm As Object
     Dim js As String
     Dim escF As String
@@ -105,7 +106,7 @@ Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As
     envSkip = CStr(Environ$("PM_AI_DEBUG_SKIP_SAVE"))
     sheetSkip = CStr(DbgAgentReadEnvFromSheet("PM_AI_DEBUG_SKIP_SAVE"))
     effSkip = IIf(DebugSkipThisWorkbookSaveEffective(), "1", "0")
-    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """,""envSkipSave"":""" & DbgAgentJsonEscape(envSkip) & """,""sheetSkipSave"":""" & DbgAgentJsonEscape(sheetSkip) & """,""skipSaveEffective"":""" & DbgAgentJsonEscape(effSkip) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
+    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""codeVer"":""" & CODE_VER & """,""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """,""envSkipSave"":""" & DbgAgentJsonEscape(envSkip) & """,""sheetSkipSave"":""" & DbgAgentJsonEscape(sheetSkip) & """,""skipSaveEffective"":""" & DbgAgentJsonEscape(effSkip) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
     stm.Mode = 3
