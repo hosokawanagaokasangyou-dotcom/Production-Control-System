@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.14
 """
 製品名,ロール単位の長さ.txt と infer_unit_m_from_product_name の整合を確認する。
 
 使い方（テストコードの python フォルダで）:
-  py -3 verify_roll_unit_golden.py
+  py -3.14 verify_roll_unit_golden.py
 
 期待値はシート上の「ロール単位長さ」と同様、次のいずれかと一致すれば合格とみなす:
   - 推定 raw 値そのもの
@@ -29,6 +29,15 @@ def _ceil_step(v: float, step: float) -> float:
 
 
 def main() -> int:
+    if sys.version_info < (3, 14):
+        v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        print(
+            "Python 3.14 以上が必要です（現在 "
+            + v
+            + "）。例: py -3.14 verify_roll_unit_golden.py",
+            file=sys.stderr,
+        )
+        return 2
     if not GOLDEN.is_file():
         print(f"ゴールデンファイルが見つかりません: {GOLDEN}", file=sys.stderr)
         return 2

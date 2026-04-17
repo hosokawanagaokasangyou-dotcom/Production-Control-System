@@ -38,6 +38,16 @@ def _derive_fernet_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
 
 
 def main() -> int:
+    if sys.version_info < (3, 14):
+        v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        print(
+            "Python 3.14 以上が必要です（現在 "
+            + v
+            + "）。例: py -3.14 encrypt_gemini_credentials.py …",
+            file=sys.stderr,
+        )
+        return 2
+
     parser = argparse.ArgumentParser(
         description="Gemini 認証 JSON を Fernet + PBKDF2 で暗号化（--passphrase / --passphrase-file でパスフレーズ指定。復号は planning_core の定数のみ）"
     )
@@ -66,9 +76,9 @@ def main() -> int:
     except ImportError:
         print(
             "cryptography が未インストールです。次を実行してください:\n"
-            "  py -3 -m pip install cryptography\n"
+            "  py -3.14 -m pip install cryptography\n"
             "または:\n"
-            "  py -3 -m pip install -r python\\requirements.txt",
+            "  py -3.14 -m pip install -r python\\requirements.txt",
             file=sys.stderr,
         )
         return 1

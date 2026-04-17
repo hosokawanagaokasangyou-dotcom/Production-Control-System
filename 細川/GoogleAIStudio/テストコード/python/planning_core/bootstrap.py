@@ -6,12 +6,23 @@ planning_core パッケージの import 時ブートストラップ。
 ``import planning_core`` の最初に本モジュールが読み込まれること。
 """
 
+import sys
+
+if sys.version_info < (3, 14):
+    _v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    sys.stderr.write(
+        "[planning_core] Python 3.14 以上が必要です（現在 "
+        + _v
+        + "）。\n"
+        "Windows の例: py -3.14 -X utf8 -u python\\\\setup_environment.py\n"
+    )
+    raise SystemExit(2)
+
 import ctypes
 import fnmatch
 import logging
 import os
 import shutil
-import sys
 import time as time_module
 
 # =========================================================

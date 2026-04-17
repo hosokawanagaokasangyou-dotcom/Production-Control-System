@@ -3,9 +3,9 @@
 工程管理AI テストコード用の環境セットアップ（単独実行可）。
 
   ブック所在フォルダで:
-    py -3 -X utf8 -u python\\setup_environment.py
+    py -3.14 -X utf8 -u python\\setup_environment.py
   本ファイルと同じフォルダで:
-    py -3 -X utf8 -u setup_environment.py
+    py -3.14 -X utf8 -u setup_environment.py
 
 - pip を更新し、本スクリプトと同じフォルダの requirements.txt から依存をインストール（無い場合は既定リスト: numpy, pandas ほか）
 - Windows: xlwings の Excel アドインを配置
@@ -337,6 +337,17 @@ def _strip_show_console_from_xlwings_user_conf() -> None:
 
 
 def main() -> int:
+    if sys.version_info < (3, 14):
+        v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        print(
+            "Python 3.14 以上が必要です（現在 "
+            + v
+            + "）。\n例: py -3.14 -X utf8 -u setup_environment.py",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 2
+
     py = Path(sys.executable)
 
     _log("==== 工程管理AI 環境セットアップ ====")

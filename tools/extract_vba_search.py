@@ -5,6 +5,15 @@ from oletools.olevba import VBA_Parser
 
 
 def main() -> int:
+    if sys.version_info < (3, 14):
+        v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        print(
+            "Python 3.14 以上が必要です（現在 "
+            + v
+            + "）。例: py -3.14 tools/extract_vba_search.py",
+            file=sys.stderr,
+        )
+        return 2
     if len(sys.argv) < 2:
         print("usage: extract_vba_search.py <xlsm/xlsb/xls> [keyword ...]")
         return 2
