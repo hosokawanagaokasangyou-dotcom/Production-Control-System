@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import os
+import sys
 
 WORKBOOK_ENV_SHEET_NAME = "設定_環境変数"
 
@@ -151,10 +152,30 @@ def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
     raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
     if raw in ("0", "false", "no", "off"):
         return
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
     try:
-        os.system("pause")
+        if getattr(sys.stdin, "isatty", lambda: False)():
+            print(
+                "\n[PM_AI] エラー終了です（終了コード "
+                + str(code)
+                + "）。ログを確認してから Enter キーを押してください…",
+                flush=True,
+            )
+            try:
+                input()
+            except EOFError:
+                os.system("pause")
+        else:
+            os.system("pause")
     except Exception:
-        pass
+        try:
+            os.system("pause")
+        except Exception:
+            pass
 
 
 def run_cli_with_optional_pause_on_error(main_fn):
@@ -169,19 +190,24 @@ def run_cli_with_optional_pause_on_error(main_fn):
 
     code = 0
     try:
-        result = main_fn()
-        if result is not None:
-            code = int(result)
-    except SystemExit as e:
-        c = e.code
-        if isinstance(c, int):
-            code = c
-        elif c:
+        try:
+            result = main_fn()
+            if result is not None:
+                code = int(result)
+        except SystemExit as e:
+            c = e.code
+            if isinstance(c, int):
+                code = c
+            elif c:
+                code = 1
+            else:
+                code = 0
+        except BaseException:
+            traceback.print_exc()
             code = 1
-        else:
-            code = 0
-    except BaseException:
-        traceback.print_exc()
-        code = 1
-    pause_cmd_window_on_cli_error(code)
+    finally:
+        try:
+            pause_cmd_window_on_cli_error(code)
+        except Exception:
+            pass
     return code

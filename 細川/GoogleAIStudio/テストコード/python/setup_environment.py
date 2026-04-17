@@ -426,6 +426,45 @@ def main() -> int:
     return 0
 
 
+def _pause_cli_error_standalone(exit_code: int | None) -> None:
+    """workbook_env_bootstrap 不在時。pause_cmd_window_on_cli_error と同趣旨。"""
+    if os.name != "nt":
+        return
+    try:
+        code = int(exit_code)
+    except (TypeError, ValueError):
+        code = 1
+    if code == 0:
+        return
+    raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    try:
+        if getattr(sys.stdin, "isatty", lambda: False)():
+            print(
+                "\n[PM_AI] エラー終了です（終了コード "
+                + str(code)
+                + "）。ログを確認してから Enter キーを押してください…",
+                flush=True,
+            )
+            try:
+                input()
+            except EOFError:
+                os.system("pause")
+        else:
+            os.system("pause")
+    except Exception:
+        try:
+            os.system("pause")
+        except Exception:
+            pass
+
+
 def _run_main_with_optional_pause() -> int:
     try:
         from workbook_env_bootstrap import (
@@ -442,32 +481,26 @@ def _run_main_with_optional_pause() -> int:
         def _run_cli_guarded(main_fn):
             code = 0
             try:
-                result = main_fn()
-                if result is not None:
-                    code = int(result)
-            except SystemExit as e:
-                c = e.code
-                if isinstance(c, int):
-                    code = c
-                elif c:
-                    code = 1
-                else:
-                    code = 0
-            except BaseException:
-                traceback.print_exc()
-                code = 1
-            if os.name == "nt":
                 try:
-                    c = int(code)
-                except (TypeError, ValueError):
-                    c = 1
-                if c != 0:
-                    raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
-                    if raw not in ("0", "false", "no", "off"):
-                        try:
-                            os.system("pause")
-                        except OSError:
-                            pass
+                    result = main_fn()
+                    if result is not None:
+                        code = int(result)
+                except SystemExit as e:
+                    c = e.code
+                    if isinstance(c, int):
+                        code = c
+                    elif c:
+                        code = 1
+                    else:
+                        code = 0
+                except BaseException:
+                    traceback.print_exc()
+                    code = 1
+            finally:
+                try:
+                    _pause_cli_error_standalone(code)
+                except Exception:
+                    pass
             return code
 
     return int(_run_cli_guarded(main))
