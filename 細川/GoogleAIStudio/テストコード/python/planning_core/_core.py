@@ -20,6 +20,7 @@ from google import genai
 import logging
 import calendar
 import math
+from numbers import Integral
 import os
 import random
 import fnmatch
@@ -2949,6 +2950,40 @@ def parse_optional_int(val):
         return int(round(float(s)))
     except (TypeError, ValueError):
         return None
+
+
+def _dispatch_trial_order_cell_is_strict_positive_integer(val) -> bool:
+    """
+    段階2用: 「配台試行順番」セルが正の整数として解釈できるか（空・小数・非数・1 未満は不可）。
+    Excel の 1.0 のような実数は整数値とみなす。parse_optional_int より厳しく、1.4 等は不可。
+    """
+    if val is None:
+        return False
+    if isinstance(val, float) and pd.isna(val):
+        return False
+    if isinstance(val, bool):
+        return False
+    if isinstance(val, Integral):
+        return int(val) >= 1
+    if isinstance(val, str):
+        s = val.strip()
+        if not s or s.lower() in ("nan", "none", ""):
+            return False
+        try:
+            fv = float(s.replace(",", ""))
+        except (TypeError, ValueError):
+            return False
+    else:
+        try:
+            fv = float(val)
+        except (TypeError, ValueError):
+            return False
+    if not math.isfinite(fv):
+        return False
+    iv = int(round(fv))
+    if abs(fv - float(iv)) > 1e-9:
+        return False
+    return iv >= 1
 
 
 def parse_optional_date(val):
@@ -10294,9 +10329,14 @@ def build_task_queue_from_planning_df(
         )
 
         _dto_from_sheet = None
+        _dto_sheet_strict_ok = False
         if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER in tasks_df.columns:
-            _dto_from_sheet = parse_optional_int(
-                _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
+            _raw_dto_cell = _planning_df_cell_scalar(
+                row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+            )
+            _dto_from_sheet = parse_optional_int(_raw_dto_cell)
+            _dto_sheet_strict_ok = _dispatch_trial_order_cell_is_strict_positive_integer(
+                _raw_dto_cell
             )
 
         if from_unprocessed_qty:
@@ -10368,6 +10408,7 @@ def build_task_queue_from_planning_df(
                 "planning_sheet_row_seq": planning_sheet_row_seq,
                 "planning_df_iloc": planning_df_iloc,
                 "dispatch_trial_order_from_sheet": _dto_from_sheet,
+                "dispatch_trial_order_sheet_strict_integer_ok": _dto_sheet_strict_ok,
                 "unprocessed_baseline_m": _unp_base,
             }
         )
@@ -16275,11 +16316,35 @@ def _apply_dispatch_trial_order_for_generate_plan(
     req_map: dict,
     need_rules: list,
     need_combo_col_index: dict | None,
+    *,
+    require_valid_sheet_dispatch_trial_order: bool = False,
 ) -> None:
     """
     配台試行順の確定。シートに全行分の試行順はあれみしれを採用（§B-2/3 の隣接繰り上きは行ゝない）。
     欠損はあれみ従来どおりマスタ・紝期・need 列順などでソートし、EC 隣接後に 1..n を付与。
+
+    require_valid_sheet_dispatch_trial_order:
+        段階2用。True のときは配台キュー各行の「配台試行順番」が正の整数（厳密）でなければ
+        PlanningValidationError で停止し、自動付与にフォールバックしない。
     """
+    if require_valid_sheet_dispatch_trial_order and task_queue:
+        bad = [
+            t
+            for t in task_queue
+            if not bool(t.get("dispatch_trial_order_sheet_strict_integer_ok"))
+        ]
+        if bad:
+            parts: list[str] = []
+            for t in bad[:20]:
+                tid = str(t.get("task_id") or "").strip()
+                proc = str(t.get("machine") or "").strip()
+                mn = str(t.get("machine_name") or "").strip()
+                parts.append(f"依頼NO={tid} 工程={proc!r} 機械名={mn!r}")
+            more = f" …他{len(bad) - 20}行" if len(bad) > 20 else ""
+            raise PlanningValidationError(
+                "段階2: 「配台試行順番」は配台対象の全行で正の整数（空欄・小数・文字列は不可）が必須です。"
+                f" 不正な行: {'; '.join(parts)}{more}"
+            )
     if _task_queue_all_have_sheet_dispatch_trial_order(task_queue):
         task_queue.sort(
             key=lambda t: (
@@ -16351,7 +16416,11 @@ def fill_plan_dispatch_trial_order_column_stage1(
         equipment_list,
     )
     _apply_dispatch_trial_order_for_generate_plan(
-        tq, req_map, need_rules, need_combo_col_index
+        tq,
+        req_map,
+        need_rules,
+        need_combo_col_index,
+        require_valid_sheet_dispatch_trial_order=False,
     )
     try:
         col_idx = plan_df.columns.get_loc(col)
@@ -22139,9 +22208,13 @@ def _generate_plan_impl():
             "または完了区分・実出来高残作により残量は無い行のみの可能性はありした。"
         )
 
-    # 配台試行順: シート列は权っていれみしれを採用。欠損時は §B 帯・紝期・need 列順でソートし EC 隣接後に 1..n
+    # 配台試行順: 段階2はシートの正の整数必須（欠損・小数は PlanningValidationError）。§B 隣接は採用後に適用されない（シート値優先分岐）。
     _apply_dispatch_trial_order_for_generate_plan(
-        task_queue, req_map, need_rules, need_combo_col_index
+        task_queue,
+        req_map,
+        need_rules,
+        need_combo_col_index,
+        require_valid_sheet_dispatch_trial_order=True,
     )
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
@@ -23559,6 +23632,7 @@ def _generate_plan_impl():
                                 req_map,
                                 need_rules,
                                 need_combo_col_index,
+                                require_valid_sheet_dispatch_trial_order=True,
                             )
                             _trials_detail = ",".join(
                                 f"{tid}:{_due_shift_retry_count_by_request[tid]}"
