@@ -22,6 +22,44 @@ Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     EnsureStageBatchStdoutRedirect = body
 End Function
 
+' #region agent log
+Private Function DbgAgentJsonEscape(ByVal s As String) As String
+    DbgAgentJsonEscape = Replace(Replace(Replace(s, "\", "\\"), """", "\"""), vbCrLf, "\n")
+End Function
+
+Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal fullName As String, ByVal wbPath As String)
+    Const LOGP As String = "c:\工程管理AIプロジェクト\----AI-------1\debug-8b603e.log"
+    Dim stm As Object
+    Dim js As String
+    Dim escF As String
+    Dim escP As String
+    On Error Resume Next
+    escF = DbgAgentJsonEscape(fullName)
+    escP = DbgAgentJsonEscape(wbPath)
+    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.Mode = 3
+    stm.Charset = "UTF-8"
+    stm.Open
+    Err.Clear
+    stm.LoadFromFile LOGP
+    If Err.Number <> 0 Then
+        Err.Clear
+        stm.Close
+        stm.Charset = "UTF-8"
+        stm.Open
+    Else
+        stm.Position = stm.Size
+    End If
+    stm.WriteText js & vbLf, 0
+    stm.SaveToFile LOGP, 2
+    stm.Close
+    Set stm = Nothing
+    On Error GoTo 0
+End Sub
+' #endregion
+
 Public Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal hideCmdWindow As Boolean = False) As Long
     Dim p As String
     Dim uniq As String
@@ -2111,6 +2149,9 @@ Public Sub 段階1_コア実行()
         m_lastStage1ErrMsg = "先にこのExcelファイルを保存してください。"
         Exit Sub
     End If
+    ' #region agent log
+    DbgAgentNdjsonAppend "H1", "業務ロジック:段階1_コア実行", "after targetDir ok", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
 
     Application.ScreenUpdating = False
 
@@ -2146,8 +2187,14 @@ Public Sub 段階1_コア実行()
     MacroSplash_SetStep "段階1: ブックを保存し LOG シートを初期化します…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
+    ' #region agent log
+    DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "before first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     On Error Resume Next
     ThisWorkbook.Save
+    ' #region agent log
+    DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "after first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     Application.StatusBar = False
     On Error GoTo ErrStage1
 
@@ -2184,6 +2231,9 @@ Public Sub 段階1_コア実行()
     End If
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    ' #region agent log
+    DbgAgentNdjsonAppend "H4", "業務ロジック:段階1_コア実行", "after TASK_INPUT_WORKBOOK env set", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
 
     On Error Resume Next
     Kill targetDir & "\log\execution_log.txt"
@@ -2905,6 +2955,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' 任意: シート「列設定_結果_タスク一覧」（列名・表示）で結果_タスク一覧の列順と表示/非表示を変更可。
     '       表示=FALSE の列は結果シートで列非表示。マクロ「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列(B)に連動可能。
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    ' #region agent log
+    DbgAgentNdjsonAppend "H4", "業務ロジック:段階2_コア実行", "after TASK_INPUT_WORKBOOK env set", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     
     ' ★修正：削除対象のログファイルのパスを output フォルダ配下に変更
     On Error Resume Next
@@ -2924,6 +2977,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
+    ' #region agent log
+    DbgAgentNdjsonAppend "H1", "業務ロジック:段階2_コア実行", "before stage2 ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     ThisWorkbook.Save
     Application.StatusBar = False
     

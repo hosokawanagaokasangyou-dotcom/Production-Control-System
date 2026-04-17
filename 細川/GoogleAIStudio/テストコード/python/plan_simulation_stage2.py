@@ -24,6 +24,22 @@ import planning_core as pc
 
 
 def main():
+    # #region agent log
+    try:
+        import debug_agent_session_log as _dbg
+
+        _dbg.append(
+            "H4",
+            "plan_simulation_stage2.py:main",
+            "cmd entry before generate_plan",
+            {
+                "task_input_workbook": (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip(),
+                "cwd": os.getcwd(),
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
     try:
         pc.generate_plan()
     except pc.PlanningValidationError as e:
