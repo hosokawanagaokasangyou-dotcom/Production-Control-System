@@ -842,6 +842,10 @@ RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 PLAN_COL_PRODUCT_WIDTH = "製品幅"
 PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME = "製品名, 製品幅.txt"
 PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
+# 製品長（mm 想定）。段階1のみ算出。テーブル「製品名,製品長.txt」優先、未登録時は最後の NNNxMM の右辺。いずれも不可なら PlanningValidationError。
+PLAN_COL_PRODUCT_LENGTH = "製品長"
+PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
+PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
 # 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」必須。
 # 英字開始でないときは「製品名の先頭5文字」の末尾3桁を厚みコードとして code/10 を採用（例: 040→4.0, 100→10.0）。
 # いずれも不可なら PlanningValidationError（段階1中断）。
@@ -863,6 +867,44 @@ TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
 DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 紝期超靎リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
+
+
+# region agent log
+def _agent_ndjson_log(
+    *,
+    hypothesisId: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+    runId: str = "pre-fix",
+) -> None:
+    try:
+        import json, time, os
+        from pathlib import Path
+
+        payload = {
+            "sessionId": "8a848c",
+            "timestamp": int(time.time() * 1000),
+            "hypothesisId": str(hypothesisId),
+            "runId": str(runId),
+            "location": str(location),
+            "message": str(message),
+            "data": data or {},
+        }
+        # どの実行経路（xlwings / cmd / IDE）でも同じ場所に残すため、常にリポジトリ直下へ出力する。
+        # __file__ = .../細川/GoogleAIStudio/テストコード/python/planning_core/_core.py
+        # repo root = parents[5]
+        try:
+            repo_root = Path(__file__).resolve().parents[5]
+            log_path = repo_root / "debug-8a848c.log"
+        except Exception:
+            log_path = Path(os.path.abspath("debug-8a848c.log"))
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+# endregion
 
 
 def _trace_schedule_task_enabled(task_id) -> bool:
@@ -1072,6 +1114,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         TASK_COL_USED_RAW,
         PLAN_COL_RAW_FABRIC_WIDTH,
         PLAN_COL_PRODUCT_WIDTH,
+        PLAN_COL_PRODUCT_LENGTH,
         PLAN_COL_PRODUCT_THICKNESS,
         TASK_COL_PROCESS_CONTENT,
         TASK_COL_COMPLETION_FLAG,
@@ -1250,6 +1293,7 @@ def plan_input_sheet_column_order():
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_WIDTH)
+            cols.append(PLAN_COL_PRODUCT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_THICKNESS)
         if c == TASK_COL_USED_RAW:
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
@@ -10200,25 +10244,18 @@ def build_task_queue_from_planning_df(
 
         # -------------------------------------------------------------------
         # 特別ルール L8（接続×熱融着機 湖南）: 製品長=105m のときは加工速度を20m/分
-        # 本実装では「製品長」を ロール単位長さ(m)（unit）として解釈する。
+        # ※ 製品長は段階1で算出済みの列「製品長」（mm想定）を参照する。
         # -------------------------------------------------------------------
-        _unit_for_l8 = parse_float_safe(
-            _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
-        )
-        if _unit_for_l8 <= 0:
-            _unit_for_l8 = infer_unit_m_from_product_name(
-                product_name, fallback_unit=qty_total if qty_total > 0 else qty
-            )
         try:
-            _unit_for_l8_i = int(float(_unit_for_l8))
+            _prod_len_i = int(float(_planning_df_cell_scalar(row, PLAN_COL_PRODUCT_LENGTH)))
         except (TypeError, ValueError):
-            _unit_for_l8_i = None
+            _prod_len_i = None
         if (
             _normalize_process_name_for_rule_match(machine)
             == _normalize_process_name_for_rule_match("接続")
             and _normalize_equipment_match_key(machine_name)
             == _normalize_equipment_match_key("熱融着機　湖南")
-            and _unit_for_l8_i == 105
+            and _prod_len_i == 105
         ):
             speed = 20.0
 
@@ -10318,6 +10355,7 @@ def build_task_queue_from_planning_df(
                 PLAN_COL_PRODUCT_THICKNESS: _planning_df_cell_scalar(
                     row, PLAN_COL_PRODUCT_THICKNESS
                 ),
+                "process_content_tokens": list(_order_list) if _order_list else [],
                 "equipment_line_key": _resolve_equipment_line_key_for_task(
                     {"machine": machine, "machine_name": machine_name},
                     equipment_list,
@@ -12532,6 +12570,22 @@ def _infer_width_mm_from_last_dim_pair_left(text: str) -> int | None:
         return None
 
 
+def _infer_length_mm_from_last_dim_pair_right(text: str) -> int | None:
+    """
+    最後の「左数 x 右数」（2〜6 桁）ペアの右側を長さ(mm)候補とする。
+    製品長テーブル未登録時のフォールバック。寸法区切りは infer_unit_m と同様に正規化する。
+    """
+    s = _normalize_product_dim_separators_for_roll_inference(str(text or ""))
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if not dim_pairs:
+        return None
+    try:
+        right = int(dim_pairs[-1][1])
+        return right if right > 0 else None
+    except ValueError:
+        return None
+
+
 def _load_raw_fabric_width_mm_table() -> dict[str, int]:
     """
     原反幅テーブル（使用原反→原反幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
@@ -12702,6 +12756,122 @@ def _load_product_width_mm_table() -> dict[str, int]:
         out[key] = w
     logging.info("製品幅テーブルを読み込みました: %s (%s 件)", path_found, len(out))
     return out
+
+
+def _product_length_table_search_paths() -> list[str]:
+    """製品長テーブル CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(PRODUCT_LENGTH_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME,
+            )
+        )
+    paths.append(os.path.join(os.getcwd(), PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _load_product_length_mm_table() -> dict[str, int]:
+    """
+    製品長テーブル（製品名→製品長）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    """
+    path_found = ""
+    for p in _product_length_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        hint = " / ".join(_product_length_table_search_paths()[:4])
+        raise PlanningValidationError(
+            f"製品長テーブルが見つかりません。{PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME} を配置するか、"
+            f"環境変数 {PRODUCT_LENGTH_TABLE_PATH_ENV} で CSV のフルパスを指定してください。探索: {hint}"
+        )
+    out: dict[str, int] = {}
+    with open(path_found, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        raise PlanningValidationError(f"製品長テーブルが空です: {path_found}")
+    hdr = [_normalize_mm_table_lookup_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_mm_table_lookup_key("製品名"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_w = hdr.index(_normalize_mm_table_lookup_key("製品長"))
+    except ValueError:
+        i_w = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_w):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_w = parts[i_w]
+        key = _normalize_mm_table_lookup_key(raw_k)
+        if not key:
+            continue
+        try:
+            w = _parse_int_mm_width_table_cell(raw_w)
+        except ValueError as ex:
+            raise PlanningValidationError(
+                f"製品長テーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
+            ) from ex
+        if key in out and out[key] != w:
+            raise PlanningValidationError(
+                f"製品長テーブルで同一キーに矛盾する値があります: {key!r} → {out[key]} と {w} ({path_found})"
+            )
+        out[key] = w
+    logging.info("製品長テーブルを読み込みました: %s (%s 件)", path_found, len(out))
+    return out
+
+
+def _product_length_lookup_source_strings(row: "pd.Series") -> list[str]:
+    """照会用文字列（正規化済み・重複除き）。製品名 → 使用原反。"""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for col in (TASK_COL_PRODUCT, TASK_COL_USED_RAW):
+        if col not in row.index:
+            continue
+        v = row.get(col)
+        k = _normalize_mm_table_lookup_key(v)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        ordered.append(k)
+    return ordered
+
+
+def _resolve_product_length_mm_for_stage1_row(row: "pd.Series", table: dict[str, int]) -> int:
+    """
+    テーブル照会を優先し、未登録なら寸法パターンで製品長(mm)を決定。決められなければ PlanningValidationError。
+    """
+    keys = _product_length_lookup_source_strings(row)
+    for k in keys:
+        w = table.get(k)
+        if w is not None and w > 0:
+            return int(w)
+    for k in keys:
+        inferred = _infer_length_mm_from_last_dim_pair_right(k)
+        if inferred is not None and inferred > 0:
+            return int(inferred)
+    tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    raise PlanningValidationError(
+        "製品長を決定できません（テーブル未登録かつ寸法パターンからも解釈不可）。"
+        f"依頼NO={tid} 照会キー={keys!r}。テーブルにキーを追加するか、製品名／使用原反のいずれかに"
+        "「…NNNxMM…」形式の寸法を含めてください。"
+    )
 
 
 def _product_width_lookup_source_strings(row: "pd.Series") -> list[str]:
@@ -12926,6 +13096,7 @@ def run_stage1_extract():
     df_src = load_tasks_df()
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()
+    pl_table = _load_product_length_mm_table()
     pt_table = _load_product_thickness_mm_table()
     records = []
     for _, row in df_src.iterrows():
@@ -12950,6 +13121,9 @@ def run_stage1_extract():
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
             row, pw_table
+        )
+        rec[PLAN_COL_PRODUCT_LENGTH] = _resolve_product_length_mm_for_stage1_row(
+            row, pl_table
         )
         rec[PLAN_COL_PRODUCT_THICKNESS] = _resolve_product_thickness_mm_for_stage1_row(
             row, pt_table
@@ -15494,6 +15668,17 @@ SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
+# 段階2の「当日」判定に使う macro_now_dt（データ抽出時刻由来）について:
+# - 既定では **日付のみ** を採用し、時刻は DEFAULT_START_TIME に正規化する。
+#   加工計画DATA のデータ抽出が夕方でも、同日シフト全体を配台探索できるようにするため。
+# - 旧挙動（抽出時刻の時分まで下限に反映）が必要なら STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。
+STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK = (
+    os.environ.get("STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK", "0")
+    .strip()
+    .lower()
+    in ("1", "true", "yes", "on", "はい")
+)
+
 
 # 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台試行のままとれる。
@@ -16253,6 +16438,78 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
         t["dispatch_trial_order"] = i
 
 
+def _reorder_task_queue_slit_sec_consecutive(task_queue: list) -> None:
+    """
+    特別ルール L10（スリット→SEC）: 同一依頼NO内でスリット行の直後に SEC 行が来るよう、
+    task_queue（自動算出時の並び）を軽く並べ替える。
+
+    - 対象: 加工内容トークンに「スリット」「SEC」があり、かつその順序がスリット→SEC の依頼
+    - 判定: 工程名×機械名で、スリット=スリット機1 湖南、SEC=SEC機 湖南 を採用
+    - シートで配台試行順が全行指定されている場合は本関数は呼ばれない（_apply_dispatch_trial_order...側）
+    """
+    if not task_queue:
+        return
+    slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+
+    idx_by_tid: dict[str, dict[str, int]] = {}
+    ok_tid: set[str] = set()
+    for i, t in enumerate(task_queue):
+        tid = str(t.get("task_id") or "").strip()
+        if not tid:
+            continue
+        toks = t.get("process_content_tokens") or []
+        norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+        if slit_proc in norm and sec_proc in norm:
+            try:
+                if norm.index(slit_proc) < norm.index(sec_proc):
+                    ok_tid.add(tid)
+            except Exception:
+                pass
+        proc = _normalize_process_name_for_rule_match(t.get("machine"))
+        mach = _normalize_equipment_match_key(t.get("machine_name"))
+        if proc == slit_proc and mach == slit_mach:
+            idx_by_tid.setdefault(tid, {})["slit"] = i
+        elif proc == sec_proc and mach == sec_mach:
+            idx_by_tid.setdefault(tid, {})["sec"] = i
+
+    moved: list[str] = []
+    # 依頼NOごとに 1 回だけ調整（インデックスが動くので都度再探索する）
+    for tid in sorted(ok_tid):
+        pos = idx_by_tid.get(tid) or {}
+        if "slit" not in pos or "sec" not in pos:
+            continue
+        # 現在位置を再探索（前の移動でズレるため）
+        slit_i = None
+        sec_i = None
+        for i, t in enumerate(task_queue):
+            if str(t.get("task_id") or "").strip() != tid:
+                continue
+            proc = _normalize_process_name_for_rule_match(t.get("machine"))
+            mach = _normalize_equipment_match_key(t.get("machine_name"))
+            if slit_i is None and proc == slit_proc and mach == slit_mach:
+                slit_i = i
+            if sec_i is None and proc == sec_proc and mach == sec_mach:
+                sec_i = i
+        if slit_i is None or sec_i is None:
+            continue
+        if sec_i == slit_i + 1:
+            continue
+        sec_task = task_queue.pop(sec_i)
+        insert_at = slit_i + 1
+        if sec_i < insert_at:
+            insert_at -= 1
+        task_queue.insert(insert_at, sec_task)
+        moved.append(tid)
+    if moved:
+        logging.info(
+            "特別ルールL10 配台試行順: スリット行の直後にSEC行を隣接した依頼NO: %s",
+            ",".join(moved),
+        )
+
+
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
     """配台計画シートの「配台試行順番」はキュー全行に正の整数で入っているか。"""
     if not task_queue:
@@ -16301,6 +16558,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
         )
     )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+    _reorder_task_queue_slit_sec_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
         "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
@@ -19371,6 +19629,24 @@ def _trial_order_flow_eligible_tasks(
                 and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
             ):
                 continue
+
+        # L10: 加工内容が「スリット,SEC」の依頼では、スリットが 5 ロール以上終わるまで SEC を開始しない
+        if wip_slit_before_sec is not None and wip_slit_before_sec < 5.0:
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+            ):
+                toks = task.get("process_content_tokens") or []
+                _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+                if (
+                    _normalize_process_name_for_rule_match("スリット") in _norm
+                    and _normalize_process_name_for_rule_match("SEC") in _norm
+                    and _norm.index(_normalize_process_name_for_rule_match("スリット"))
+                    < _norm.index(_normalize_process_name_for_rule_match("SEC"))
+                ):
+                    continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
         if _task_blocked_by_global_dispatch_trial_order(
@@ -19848,6 +20124,27 @@ def _assign_one_roll_trial_order_flow(
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
+    _agent_ndjson_log(
+        hypothesisId="B",
+        location="_core.py:_assign_one_roll_trial_order_flow",
+        message="assign_capability_snapshot",
+        data={
+            "task_id": str(task.get("task_id") or ""),
+            "day": str(current_date),
+            "process": str(machine_proc or ""),
+            "machine_name": str(machine_name or ""),
+            "req_num": int(req_num) if req_num is not None else None,
+            "capable_members": int(len(capable_members)),
+            "op_today": int(len(op_today)),
+            "base_time_per_unit": float(task.get("base_time_per_unit") or 0.0),
+            "remaining_units": float(task.get("remaining_units") or 0.0),
+            "start_date_req": str(task.get("start_date_req")),
+            "due_basis_date": str(task.get("due_basis_date")),
+            "need_src": str(need_src_line)[:160],
+            "ignore_skill_requirements": bool(_gpo.get("ignore_skill_requirements")),
+            "ignore_need_minimum": bool(_gpo.get("ignore_need_minimum")),
+        },
+    )
     pref_mem = (
         _resolve_preferred_op_to_member(pref_raw, op_today, members)
         if pref_raw
@@ -19984,7 +20281,35 @@ def _assign_one_roll_trial_order_flow(
         avail_dt=avail_dt,
     )
     if _co_abort:
+        _agent_ndjson_log(
+            hypothesisId="E",
+            location="_core.py:_resolve_machine_changeover_floor_segments",
+            message="assign_abort_changeover",
+            data={
+                "task_id": str(task.get("task_id") or ""),
+                "day": str(current_date),
+                "process": str(machine_proc or ""),
+                "machine_name": str(machine_name or ""),
+                "machine_occ_key": str(machine_occ_key or ""),
+            },
+        )
         return None
+
+    # region agent log
+    _agent_reject = {
+        "size_bounds": 0,
+        "no_op": 0,
+        "missing_daily_status": 0,
+        "start_ge_end": 0,
+        "defer_none": 0,
+        "defer_start_ge_end": 0,
+        "insufficient_capacity": 0,
+        "eod_capacity_threshold": 0,
+        "contiguous_insufficient": 0,
+        "mirror_block": 0,
+        "ok": 0,
+    }
+    # endregion
 
     def _one_roll_from_team(
         team: tuple,
@@ -19994,6 +20319,7 @@ def _assign_one_roll_trial_order_flow(
         lo = req_num if min_n is None else min_n
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
+            _agent_reject["size_bounds"] += 1
             _trace_assign(
                 "候補坴下: フォーム人数外 team=%s size=%s req=%s max=%s",
                 ",".join(str(x) for x in team),
@@ -20004,12 +20330,14 @@ def _assign_one_roll_trial_order_flow(
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
+            _agent_reject["no_op"] += 1
             _trace_assign(
                 "候補坴下: OP丝在 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         if not all(m in daily_status for m in team):
+            _agent_reject["missing_daily_status"] += 1
             _trace_assign(
                 "候補坴下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
@@ -20026,6 +20354,7 @@ def _assign_one_roll_trial_order_flow(
             team_start = b2_insp_ec_floor
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
+            _agent_reject["start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20076,6 +20405,7 @@ def _assign_one_roll_trial_order_flow(
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         )
         if team_start_d is None:
+            _agent_reject["defer_none"] += 1
             _trace_assign(
                 "候補坴下: 休憩帯内・終業直後(尝残)で当日試行 team=%s",
                 ",".join(str(x) for x in team),
@@ -20083,6 +20413,7 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
+            _agent_reject["defer_start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20096,6 +20427,7 @@ def _assign_one_roll_trial_order_flow(
         )
         _trial_units_cap = int(avail_mins / eff_time_per_unit)
         if _trial_units_cap < 1:
+            _agent_reject["insufficient_capacity"] += 1
             _trace_assign(
                 "候補坴下: 実僝丝足 team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
@@ -20110,6 +20442,7 @@ def _assign_one_roll_trial_order_flow(
             team_end_limit,
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         ):
+            _agent_reject["eod_capacity_threshold"] += 1
             _trace_assign(
                 "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20123,6 +20456,7 @@ def _assign_one_roll_trial_order_flow(
             team_start, team_breaks, team_end_limit
         )
         if _contig < work_mins_needed:
+            _agent_reject["contiguous_insufficient"] += 1
             _trace_assign(
                 "候補坴下: 休憩またねのため、連続実僝丝足 team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20137,6 +20471,7 @@ def _assign_one_roll_trial_order_flow(
         if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
             machine_occ_key, team, team_start, actual_end_dt
         ):
+            _agent_reject["mirror_block"] += 1
             _trace_assign(
                 "区間ミラー坴下: team=%s start=%s end=%s eq=%s",
                 ",".join(str(x) for x in team),
@@ -20145,6 +20480,7 @@ def _assign_one_roll_trial_order_flow(
                 eq_line,
             )
             return None
+        _agent_reject["ok"] += 1
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
         else:
@@ -20417,6 +20753,25 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
+            _agent_ndjson_log(
+                hypothesisId="C",
+                location="_core.py:_assign_one_roll_trial_order_flow:no_team_candidates",
+                message="assign_failed_no_team_candidates",
+                data={
+                    "task_id": str(task.get("task_id") or ""),
+                    "day": str(current_date),
+                    "process": str(machine_proc or ""),
+                    "machine_name": str(machine_name or ""),
+                    "req_num": int(req_num) if req_num is not None else None,
+                    "capable_members": int(len(capable_members)),
+                    "mach_floor_eff": str(_mach_floor_eff),
+                    "mem_max_end": str(_mem_max_end),
+                    "prev_mach_before_co": str(_prev_mach_before_co),
+                    "machine_occ_key": str(machine_occ_key or ""),
+                    "need_src": str(need_src_line)[:160],
+                    "reject_counts": dict(_agent_reject),
+                },
+            )
             return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -20694,7 +21049,20 @@ def _trial_order_first_schedule_pass(
         return False
     eligible_sorted = sorted(
         eligible,
-        key=lambda t: int(t.get("dispatch_trial_order") or 10**9),
+        key=lambda t: (
+            int(t.get("dispatch_trial_order") or 10**9),
+            # 特別ルール（特別ルール列挙.md）:
+            # SEC×SEC機 湖南で「PN」を含む依頼NOは、同日に配台する場合は「JR」等より優先（同一試行順帯の先頭側へ寄せる）
+            0
+            if (
+                _normalize_process_name_for_rule_match(t.get("machine"))
+                == _normalize_process_name_for_rule_match("SEC")
+                and _normalize_equipment_match_key(t.get("machine_name"))
+                == _normalize_equipment_match_key("SEC機　湖南")
+                and "PN" in unicodedata.normalize("NFKC", str(t.get("task_id") or ""))
+            )
+            else 1,
+        ),
     )
     _mc_plan_end = _machine_calendar_planning_window_end_dt(
         current_date, daily_status, members
@@ -20708,7 +21076,77 @@ def _trial_order_first_schedule_pass(
         "last_machining_date": dict(_mh_init.get("last_machining_date") or {}),
         "last_lead_op": dict(_mh_init.get("last_lead_op") or {}),
         "last_machining_sub": dict(_mh_init.get("last_machining_sub") or {}),
+        # 特別ルール（L9 等）向け: 直前ロールの試行順・製品厚み
+        "last_dispatch_trial_order": dict(_mh_init.get("last_dispatch_trial_order") or {}),
+        "last_product_thickness": dict(_mh_init.get("last_product_thickness") or {}),
     }
+
+    def _l9_slice_continuity_key(t: dict) -> tuple:
+        """
+        L9: スライス×スライス機1 湖南で、直前ロールの試行順±10 かつ同厚みなら優先する。
+        ただし原反投入日（start_date_req）・納期基準（due_basis_date）を満たさない場合は優先しない。
+        """
+        dto = int(t.get("dispatch_trial_order") or 10**9)
+        proc = _normalize_process_name_for_rule_match(t.get("machine"))
+        mach = _normalize_equipment_match_key(t.get("machine_name"))
+        if not (
+            proc == _normalize_process_name_for_rule_match("スライス")
+            and mach == _normalize_equipment_match_key("スライス機1　湖南")
+        ):
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        # 除外条件: 原反投入日（開始日下限）・納期基準を満たさない場合は優先しない
+        sreq = t.get("start_date_req")
+        if isinstance(sreq, date) and current_date < sreq:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        due = t.get("due_basis_date")
+        if isinstance(due, date) and current_date > due:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        eqt = str(t.get("equipment_line_key") or t.get("machine") or "").strip() or (
+            t.get("machine") or ""
+        )
+        occ = (_machine_occupancy_key_resolve(t, eqt) or "").strip()
+        if not occ:
+            return (
+                dto,
+                1,
+                str(t.get("task_id") or ""),
+                int(t.get("same_request_line_seq") or 0),
+            )
+        prev_dto = (machine_handoff.get("last_dispatch_trial_order") or {}).get(occ)
+        prev_th = (machine_handoff.get("last_product_thickness") or {}).get(occ)
+        th = t.get(PLAN_COL_PRODUCT_THICKNESS)
+        prefer = False
+        try:
+            if (
+                prev_dto is not None
+                and abs(int(prev_dto) - int(dto)) <= 10
+                and prev_th is not None
+                and th is not None
+            ):
+                prefer = float(prev_th) == float(th)
+        except Exception:
+            prefer = False
+        return (
+            dto,
+            0 if prefer else 1,
+            str(t.get("task_id") or ""),
+            int(t.get("same_request_line_seq") or 0),
+        )
 
     def _drain_rolls_for_task(
         task: dict, *, max_rolls: int | None = None
@@ -20898,6 +21336,14 @@ def _trial_order_first_schedule_pass(
             machine_handoff["last_lead_op"][machine_occ_key] = lead_op
             machine_handoff.setdefault("last_machining_sub", {})
             machine_handoff["last_machining_sub"][machine_occ_key] = _mach_sub_line
+            machine_handoff.setdefault("last_dispatch_trial_order", {})
+            machine_handoff.setdefault("last_product_thickness", {})
+            machine_handoff["last_dispatch_trial_order"][machine_occ_key] = int(
+                task.get("dispatch_trial_order") or 10**9
+            )
+            machine_handoff["last_product_thickness"][machine_occ_key] = task.get(
+                PLAN_COL_PRODUCT_THICKNESS
+            )
             if _trace_schedule_task_enabled(task.get("task_id")):
                 _log_dispatch_trace_schedule(
                     task.get("task_id"),
@@ -20978,23 +21424,19 @@ def _trial_order_first_schedule_pass(
     if phase2_tasks:
         merged_b2 = sorted(
             phase1_interleave + phase2_tasks,
-            key=_b2_merged_sort_key,
+            key=_l9_slice_continuity_key,
         )
         _merged_row_ids = {id(x) for x in merged_b2}
 
         def _b2_rr_key(t: dict) -> tuple:
             if id(t) in _merged_row_ids:
-                return _b2_merged_sort_key(t)
-            return (
-                int(t.get("dispatch_trial_order") or 10**9),
-                2,
-                str(t.get("task_id") or ""),
-                int(t.get("same_request_line_seq") or 0),
-            )
+                return _l9_slice_continuity_key(t)
+            dto = int(t.get("dispatch_trial_order") or 10**9)
+            return (dto, 2, str(t.get("task_id") or ""), int(t.get("same_request_line_seq") or 0))
 
-        all_rr = sorted(merged_b2 + phase1_rest, key=_b2_rr_key)
         while True:
             round_made = False
+            all_rr = sorted(merged_b2 + phase1_rest, key=_b2_rr_key)
             for task in all_rr:
                 if float(task.get("remaining_units") or 0) <= 1e-12:
                     continue
@@ -21004,7 +21446,7 @@ def _trial_order_first_schedule_pass(
                 break
             pass_made = True
     else:
-        for task in phase1_tasks:
+        for task in sorted(phase1_tasks, key=_l9_slice_continuity_key):
             if _drain_rolls_for_task(task):
                 pass_made = True
     return pass_made
@@ -21979,6 +22421,22 @@ def _generate_plan_impl():
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    # データ抽出時刻が「夕方」でも、同日の配台探索が終業前まで進むよう macro_now の時刻を正規化する（既定）。
+    # 旧挙動が必要な場合のみ STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。
+    if (
+        data_extract_dt is not None
+        and not STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK
+        and isinstance(base_now_dt, datetime)
+    ):
+        _orig_macro = base_now_dt
+        base_now_dt = datetime.combine(base_now_dt.date(), DEFAULT_START_TIME)
+        if _orig_macro != base_now_dt:
+            logging.info(
+                "計画基準日時(正規化): データ抽出の日付は維持し、時刻を %s に寄せました（元=%s）。"
+                "旧挙動は STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。",
+                base_now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+                _orig_macro.strftime("%Y/%m/%d %H:%M:%S"),
+            )
     run_date = base_now_dt.date()
     data_extract_dt_str = (
         base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
@@ -22263,6 +22721,33 @@ def _generate_plan_impl():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
+            _agent_ndjson_log(
+                hypothesisId="A",
+                location="_core.py:tasks_today",
+                message="stage2_day_candidates",
+                data={
+                    "day": str(current_date),
+                    "avail_members": int(len(avail_dt)),
+                    "tasks_today": int(len(tasks_today)),
+                    "pending_total": int(
+                        sum(
+                            1
+                            for t in task_queue
+                            if float(t.get("remaining_units") or 0) > 1e-12
+                        )
+                    ),
+                    "earliest_start_date_req": str(
+                        min(
+                            [
+                                t["start_date_req"]
+                                for t in task_queue
+                                if float(t.get("remaining_units") or 0) > 1e-12
+                            ],
+                            default=None,
+                        )
+                    ),
+                },
+            )
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
                 _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
