@@ -21,14 +21,12 @@ TASK_INPUT_WORKBOOK が渡され、pip で依存インストール成功後に�
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import sysconfig
-import time
 from pathlib import Path
 
 # 本ファイルのあるフォルダ（通常は python\\）。os.chdir に依存しない。
@@ -43,42 +41,6 @@ _FALLBACK_PKGS = [
     "google-genai>=1.0",
     "cryptography>=42.0",
 ]
-
-# #region agent log
-_AGENT_SESSION = "fc8b0e"
-
-
-def _agent_debug_log_path() -> Path:
-    for anc in SCRIPT_PATH.parents:
-        if (anc / ".git").is_dir():
-            return anc / "debug-fc8b0e.log"
-    return PYTHON_DIR / "debug-fc8b0e.log"
-
-
-def _agent_dbg(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict | None = None,
-) -> None:
-    payload = {
-        "sessionId": _AGENT_SESSION,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data or {},
-        "timestamp": int(time.time() * 1000),
-    }
-    try:
-        logf = _agent_debug_log_path()
-        logf.parent.mkdir(parents=True, exist_ok=True)
-        with logf.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
-
-
-# #endregion
 
 
 def _log(msg: str) -> None:
@@ -194,25 +156,6 @@ def _user_xlstart_dir_win32() -> Path | None:
 
 
 def _xlwings_addin_install_fallback_copy() -> int:
-    # #region agent log
-    try:
-        import win32api  # type: ignore[import-not-found, unused-import]
-    except ImportError:
-        _agent_dbg(
-            "H2",
-            "setup_environment:_xlwings_addin_install_fallback_copy",
-            "pywin32 (win32api) not importable",
-            {"python": sys.version},
-        )
-    else:
-        _agent_dbg(
-            "H2",
-            "setup_environment:_xlwings_addin_install_fallback_copy",
-            "pywin32 (win32api) import ok",
-            {},
-        )
-    # #endregion
-
     try:
         from xlwings.cli import get_addin_dir
     except ImportError as ex:
@@ -226,32 +169,8 @@ def _xlwings_addin_install_fallback_copy() -> int:
     dest_dir: Path | None = None
     try:
         dest_dir = Path(get_addin_dir(False))
-        # #region agent log
-        _agent_dbg(
-            "H1",
-            "setup_environment:get_addin_dir",
-            "get_addin_dir ok",
-            {"dest_dir": str(dest_dir)},
-        )
-        # #endregion
     except Exception as ex:
-        # #region agent log
-        _agent_dbg(
-            "H1",
-            "setup_environment:get_addin_dir",
-            "get_addin_dir raised",
-            {"exc_type": type(ex).__name__, "exc": str(ex)[:500]},
-        )
-        # #endregion
         alt = _user_xlstart_dir_win32()
-        # #region agent log
-        _agent_dbg(
-            "H3",
-            "setup_environment:xlstart_appdata_fallback",
-            "computed APPDATA XLSTART",
-            {"alt": str(alt) if alt else None},
-        )
-        # #endregion
         if alt is not None:
             dest_dir = alt
             _log(
@@ -301,14 +220,6 @@ def _xlwings_addin_install_fallback_copy() -> int:
         "反映を確実にするには、Excel をすべて終了してから起動し直してください。",
         flush=True,
     )
-    # #region agent log
-    _agent_dbg(
-        "H3",
-        "setup_environment:_xlwings_addin_install_fallback_copy",
-        "copy success",
-        {"dest": str(dest_dir / "xlwings.xlam")},
-    )
-    # #endregion
     return 0
 
 
