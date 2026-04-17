@@ -869,44 +869,6 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
 
-# region agent log
-def _agent_ndjson_log(
-    *,
-    hypothesisId: str,
-    location: str,
-    message: str,
-    data: dict | None = None,
-    runId: str = "pre-fix",
-) -> None:
-    try:
-        import json, time, os
-        from pathlib import Path
-
-        payload = {
-            "sessionId": "8a848c",
-            "timestamp": int(time.time() * 1000),
-            "hypothesisId": str(hypothesisId),
-            "runId": str(runId),
-            "location": str(location),
-            "message": str(message),
-            "data": data or {},
-        }
-        # どの実行経路（xlwings / cmd / IDE）でも同じ場所に残すため、常にリポジトリ直下へ出力する。
-        # __file__ = .../細川/GoogleAIStudio/テストコード/python/planning_core/_core.py
-        # repo root = parents[5]
-        try:
-            repo_root = Path(__file__).resolve().parents[5]
-            log_path = repo_root / "debug-8a848c.log"
-        except Exception:
-            log_path = Path(os.path.abspath("debug-8a848c.log"))
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-# endregion
-
-
 def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
         return False
@@ -15668,6 +15630,38 @@ SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
+# L10「スリットが5ロール以上終わるまで SEC を開始しない」用: **同一依頼NO** のスリット完了 − SEC 完了。
+# 工場全体の wip_slit_before_sec を使うと、他依頼の SEC が進むと差が sleみ、当依頼のスリットを完走しても
+# SEC 行が候補外のまま残る（配台不可）ため、依頼単位の差のみを見る。
+def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) -> float:
+    tid = (task_id or "").strip()
+    if not tid:
+        return 0.0
+    _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    _sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+    slit_done = 0.0
+    sec_done = 0.0
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if not proc or not mach:
+            continue
+        init = float(_t.get("initial_remaining_units") or 0)
+        rem = float(_t.get("remaining_units") or 0)
+        done = max(0.0, init - rem)
+        if done <= 1e-12:
+            continue
+        if proc == _slit_proc and mach == _slit_mach:
+            slit_done += done
+        elif proc == _sec_proc and mach == _sec_mach:
+            sec_done += done
+    return max(0.0, slit_done - sec_done)
+
+
 # 段階2の「当日」判定に使う macro_now_dt（データ抽出時刻由来）について:
 # - 既定では **日付のみ** を採用し、時刻は DEFAULT_START_TIME に正規化する。
 #   加工計画DATA のデータ抽出が夕方でも、同日シフト全体を配台探索できるようにするため。
@@ -19630,8 +19624,10 @@ def _trial_order_flow_eligible_tasks(
             ):
                 continue
 
-        # L10: 加工内容が「スリット,SEC」の依頼では、スリットが 5 ロール以上終わるまで SEC を開始しない
-        if wip_slit_before_sec is not None and wip_slit_before_sec < 5.0:
+        # L10: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが 5 ロール以上終わるまで SEC を開始しない
+        _l10_tid = str(task.get("task_id") or "").strip()
+        _l10_pair_gap = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid)
+        if _l10_pair_gap < 5.0 - 1e-9:
             proc = _normalize_process_name_for_rule_match(task.get("machine"))
             mach = _normalize_equipment_match_key(task.get("machine_name"))
             if (
@@ -20124,27 +20120,6 @@ def _assign_one_roll_trial_order_flow(
 
     pref_raw = str(task.get("preferred_operator_raw") or "").strip()
     op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-    _agent_ndjson_log(
-        hypothesisId="B",
-        location="_core.py:_assign_one_roll_trial_order_flow",
-        message="assign_capability_snapshot",
-        data={
-            "task_id": str(task.get("task_id") or ""),
-            "day": str(current_date),
-            "process": str(machine_proc or ""),
-            "machine_name": str(machine_name or ""),
-            "req_num": int(req_num) if req_num is not None else None,
-            "capable_members": int(len(capable_members)),
-            "op_today": int(len(op_today)),
-            "base_time_per_unit": float(task.get("base_time_per_unit") or 0.0),
-            "remaining_units": float(task.get("remaining_units") or 0.0),
-            "start_date_req": str(task.get("start_date_req")),
-            "due_basis_date": str(task.get("due_basis_date")),
-            "need_src": str(need_src_line)[:160],
-            "ignore_skill_requirements": bool(_gpo.get("ignore_skill_requirements")),
-            "ignore_need_minimum": bool(_gpo.get("ignore_need_minimum")),
-        },
-    )
     pref_mem = (
         _resolve_preferred_op_to_member(pref_raw, op_today, members)
         if pref_raw
@@ -20281,35 +20256,7 @@ def _assign_one_roll_trial_order_flow(
         avail_dt=avail_dt,
     )
     if _co_abort:
-        _agent_ndjson_log(
-            hypothesisId="E",
-            location="_core.py:_resolve_machine_changeover_floor_segments",
-            message="assign_abort_changeover",
-            data={
-                "task_id": str(task.get("task_id") or ""),
-                "day": str(current_date),
-                "process": str(machine_proc or ""),
-                "machine_name": str(machine_name or ""),
-                "machine_occ_key": str(machine_occ_key or ""),
-            },
-        )
         return None
-
-    # region agent log
-    _agent_reject = {
-        "size_bounds": 0,
-        "no_op": 0,
-        "missing_daily_status": 0,
-        "start_ge_end": 0,
-        "defer_none": 0,
-        "defer_start_ge_end": 0,
-        "insufficient_capacity": 0,
-        "eod_capacity_threshold": 0,
-        "contiguous_insufficient": 0,
-        "mirror_block": 0,
-        "ok": 0,
-    }
-    # endregion
 
     def _one_roll_from_team(
         team: tuple,
@@ -20319,7 +20266,6 @@ def _assign_one_roll_trial_order_flow(
         lo = req_num if min_n is None else min_n
         hi = max_team_size if max_n is None else max_n
         if len(team) < lo or len(team) > hi:
-            _agent_reject["size_bounds"] += 1
             _trace_assign(
                 "候補坴下: フォーム人数外 team=%s size=%s req=%s max=%s",
                 ",".join(str(x) for x in team),
@@ -20330,14 +20276,12 @@ def _assign_one_roll_trial_order_flow(
             return None
         op_list = [m for m in team if skill_role_priority(m)[0] == "OP"]
         if not op_list:
-            _agent_reject["no_op"] += 1
             _trace_assign(
                 "候補坴下: OP丝在 team=%s",
                 ",".join(str(x) for x in team),
             )
             return None
         if not all(m in daily_status for m in team):
-            _agent_reject["missing_daily_status"] += 1
             _trace_assign(
                 "候補坴下: 当日勤怠キーなし team=%s",
                 ",".join(str(x) for x in team),
@@ -20354,7 +20298,6 @@ def _assign_one_roll_trial_order_flow(
             team_start = b2_insp_ec_floor
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
-            _agent_reject["start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20405,7 +20348,6 @@ def _assign_one_roll_trial_order_flow(
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         )
         if team_start_d is None:
-            _agent_reject["defer_none"] += 1
             _trace_assign(
                 "候補坴下: 休憩帯内・終業直後(尝残)で当日試行 team=%s",
                 ",".join(str(x) for x in team),
@@ -20413,7 +20355,6 @@ def _assign_one_roll_trial_order_flow(
             return None
         team_start = team_start_d
         if team_start >= team_end_limit:
-            _agent_reject["defer_start_ge_end"] += 1
             _trace_assign(
                 "候補坴下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
                 ",".join(str(x) for x in team),
@@ -20427,7 +20368,6 @@ def _assign_one_roll_trial_order_flow(
         )
         _trial_units_cap = int(avail_mins / eff_time_per_unit)
         if _trial_units_cap < 1:
-            _agent_reject["insufficient_capacity"] += 1
             _trace_assign(
                 "候補坴下: 実僝丝足 team=%s start=%s avail_mins=%s need_mins=%.2f",
                 ",".join(str(x) for x in team),
@@ -20442,7 +20382,6 @@ def _assign_one_roll_trial_order_flow(
             team_end_limit,
             eod_same_request_continuation_exempt=_eod_cont_exempt,
         ):
-            _agent_reject["eod_capacity_threshold"] += 1
             _trace_assign(
                 "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20456,7 +20395,6 @@ def _assign_one_roll_trial_order_flow(
             team_start, team_breaks, team_end_limit
         )
         if _contig < work_mins_needed:
-            _agent_reject["contiguous_insufficient"] += 1
             _trace_assign(
                 "候補坴下: 休憩またねのため、連続実僝丝足 team=%s contiguous_min=%s need_mins=%s start=%s",
                 ",".join(str(x) for x in team),
@@ -20471,7 +20409,6 @@ def _assign_one_roll_trial_order_flow(
         if dispatch_interval_mirror is not None and dispatch_interval_mirror.would_block_roll(
             machine_occ_key, team, team_start, actual_end_dt
         ):
-            _agent_reject["mirror_block"] += 1
             _trace_assign(
                 "区間ミラー坴下: team=%s start=%s end=%s eq=%s",
                 ",".join(str(x) for x in team),
@@ -20480,7 +20417,6 @@ def _assign_one_roll_trial_order_flow(
                 eq_line,
             )
             return None
-        _agent_reject["ok"] += 1
         if pref_mem and pref_mem in op_list:
             lead_op = pref_mem
         else:
@@ -20753,25 +20689,6 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
-            _agent_ndjson_log(
-                hypothesisId="C",
-                location="_core.py:_assign_one_roll_trial_order_flow:no_team_candidates",
-                message="assign_failed_no_team_candidates",
-                data={
-                    "task_id": str(task.get("task_id") or ""),
-                    "day": str(current_date),
-                    "process": str(machine_proc or ""),
-                    "machine_name": str(machine_name or ""),
-                    "req_num": int(req_num) if req_num is not None else None,
-                    "capable_members": int(len(capable_members)),
-                    "mach_floor_eff": str(_mach_floor_eff),
-                    "mem_max_end": str(_mem_max_end),
-                    "prev_mach_before_co": str(_prev_mach_before_co),
-                    "machine_occ_key": str(machine_occ_key or ""),
-                    "need_src": str(need_src_line)[:160],
-                    "reject_counts": dict(_agent_reject),
-                },
-            )
             return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -20826,6 +20743,116 @@ def _assign_one_roll_trial_order_flow(
     }
 
 
+def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list) -> bool:
+    """
+    `_trial_order_flow_eligible_tasks` で `_task_blocked_by_global_dispatch_trial_order`
+    より前に適用される条件のうち、1 ロール assign プローブ単体では表れないもの。
+    これをプローブ前に適用し」同一依頼依存や B1 占有等で先頭 dto が実際には候補に入れないとき
+    `_effective_min_dispatch_trial_order_from_pool` が dto=1 に張り付し、他行が global_dto で
+    全日止まる膠着を防し。
+    """
+    if float(task.get("remaining_units") or 0) <= 1e-12:
+        return True
+    wip_ec_before_insp = None
+    if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+        ec_done_total = 0.0
+        follower_done_total = 0.0
+        for _t in task_queue:
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if _t.get("roll_pipeline_ec"):
+                ec_done_total += done
+            elif _t.get("roll_pipeline_inspection") or _t.get("roll_pipeline_rewind"):
+                follower_done_total += done
+        wip_ec_before_insp = max(0.0, ec_done_total - follower_done_total)
+
+    wip_slit_before_sec = None
+    if (
+        isinstance(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS, int)
+        and WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS > 0
+    ):
+        slit_done_total = 0.0
+        sec_done_total = 0.0
+        _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+        _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+        _sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+        _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        for _t in task_queue:
+            proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+            mach = _normalize_equipment_match_key(_t.get("machine_name"))
+            if not proc or not mach:
+                continue
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if proc == _slit_proc and mach == _slit_mach:
+                slit_done_total += done
+            elif proc == _sec_proc and mach == _sec_mach:
+                sec_done_total += done
+        wip_slit_before_sec = max(0.0, slit_done_total - sec_done_total)
+
+    if (
+        wip_ec_before_insp is not None
+        and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+        and task.get("roll_pipeline_ec")
+    ):
+        return True
+    if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
+        WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
+    ):
+        proc = _normalize_process_name_for_rule_match(task.get("machine"))
+        mach = _normalize_equipment_match_key(task.get("machine_name"))
+        if (
+            proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+            and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+        ):
+            return True
+    _l10_tid_p = str(task.get("task_id") or "").strip()
+    _l10_gap_p = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid_p)
+    if _l10_gap_p < 5.0 - 1e-9:
+        proc = _normalize_process_name_for_rule_match(task.get("machine"))
+        mach = _normalize_equipment_match_key(task.get("machine_name"))
+        if (
+            proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+            and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        ):
+            toks = task.get("process_content_tokens") or []
+            _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+            if (
+                _normalize_process_name_for_rule_match("スリット") in _norm
+                and _normalize_process_name_for_rule_match("SEC") in _norm
+                and _norm.index(_normalize_process_name_for_rule_match("スリット"))
+                < _norm.index(_normalize_process_name_for_rule_match("SEC"))
+            ):
+                return True
+    if _task_blocked_by_same_request_dependency(task, task_queue):
+        return True
+    if (
+        task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
+    ) and (
+        _roll_pipeline_inspection_assign_room(
+            task_queue, str(task.get("task_id", "") or "").strip()
+        )
+        <= 1e-12
+    ):
+        return True
+    machine = task["machine"]
+    eq_line = str(
+        task.get("equipment_line_key") or machine or ""
+    ).strip() or machine
+    _mocc_trial = _machine_occupancy_key_resolve(task, eq_line)
+    if PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE:
+        _b1_holder = _exclusive_b1_inspection_holder_for_machine(task_queue, _mocc_trial)
+        if _b1_holder is not None and _b1_holder is not task:
+            return True
+    return False
+
+
 def _trial_order_assign_probe_fails(
     task: dict,
     current_date: date,
@@ -20838,6 +20865,8 @@ def _trial_order_assign_probe_fails(
     機械枠は坝分でも人・休憩・ミラー等で詰まり」グローバル試行順の値は先頭行に張り付しのを防し。
     副作用なし（need 人数ログ用 set は毎回空）。
     """
+    if _trial_order_hard_precheck_blocks_assign_probe(task, ctx["task_queue"]):
+        return True
     try:
         r = _assign_one_roll_trial_order_flow(
             task,
@@ -22721,33 +22750,6 @@ def _generate_plan_impl():
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
-            _agent_ndjson_log(
-                hypothesisId="A",
-                location="_core.py:tasks_today",
-                message="stage2_day_candidates",
-                data={
-                    "day": str(current_date),
-                    "avail_members": int(len(avail_dt)),
-                    "tasks_today": int(len(tasks_today)),
-                    "pending_total": int(
-                        sum(
-                            1
-                            for t in task_queue
-                            if float(t.get("remaining_units") or 0) > 1e-12
-                        )
-                    ),
-                    "earliest_start_date_req": str(
-                        min(
-                            [
-                                t["start_date_req"]
-                                for t in task_queue
-                                if float(t.get("remaining_units") or 0) > 1e-12
-                            ],
-                            default=None,
-                        )
-                    ),
-                },
-            )
             if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
                 _tasks_today_before_serial = len(tasks_today)
                 _active_serial_tid = None
@@ -24277,104 +24279,6 @@ def _generate_plan_impl():
         ]
         + [0]
     )
-    # #region agent log
-    _agent_dbg_path = os.path.normpath(
-        os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-fadc0a.log"
-        )
-    )
-    try:
-        _n_done = _n_fuka = _n_zan = _n_cal = 0
-        _fuka_samples: list = []
-        for _tw in sorted_tasks_for_result:
-            _ru = float(_tw.get("remaining_units") or 0)
-            _hh = bool(_tw.get("assigned_history"))
-            _um0w = float(_tw.get("unit_m") or 0)
-            _ram = abs(_ru * _um0w)
-            _tol = max(3.0, min(100.0, 0.025 * abs(_um0w)))
-            _is_done = _ru <= 1e-9 and (_ru >= 0 or _ram <= _tol)
-            if _is_done:
-                _n_done += 1
-            elif _hh and _tw.get("_partial_retry_calendar_blocked"):
-                _n_cal += 1
-            elif not _hh and _ru > 1e-9:
-                _n_fuka += 1
-                if len(_fuka_samples) < 20:
-                    _fuka_samples.append(
-                        {
-                            "task_id": str(_tw.get("task_id") or ""),
-                            "machine": str(
-                                _tw.get("machine_name") or _tw.get("machine") or ""
-                            ),
-                            "dto": _tw.get("dispatch_trial_order"),
-                            "rem": round(_ru, 6),
-                            "start_date_req": str(_tw.get("start_date_req") or ""),
-                            "process": str(_tw.get("process_name") or ""),
-                            "req_op": str(_tw.get("required_op") or ""),
-                            "in_progress": bool(_tw.get("in_progress")),
-                            "ec_pipe": bool(
-                                _tw.get("roll_pipeline_inspection")
-                                or _tw.get("roll_pipeline_rewind")
-                            ),
-                        }
-                    )
-            elif _hh and _ru > 1e-9:
-                _n_zan += 1
-        _tid_tl: set = set()
-        for _ev in timeline_events:
-            _tx = _ev.get("task_id")
-            if _tx is not None:
-                _tid_tl.add(str(_tx).strip())
-        _agent_payload = {
-            "sessionId": "fadc0a",
-            "hypothesisId": "H_summary",
-            "location": "_core.py:_generate_plan_impl:pre_result_status",
-            "message": "配台結果直前サマリ（配台不可=履歴なしかつ残量>0）",
-            "data": {
-                "extend_cal": STAGE2_EXTEND_ATTENDANCE_CALENDAR,
-                "serial_by_task_id": STAGE2_SERIAL_DISPATCH_BY_TASK_ID,
-                "global_dto_strict": STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT,
-                "dispatch_flow_trial_first": STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST,
-                "debug_dispatch_only_n": len(DEBUG_DISPATCH_ONLY_TASK_IDS),
-                "outer_retry_round": _outer_retry_round,
-                "macro_run_date": str(macro_run_date),
-                "sorted_dates_n": len(sorted_dates),
-                "sorted_dates_first": str(sorted_dates[0]) if sorted_dates else None,
-                "sorted_dates_last": str(sorted_dates[-1]) if sorted_dates else None,
-                "timeline_distinct_tasks": len(_tid_tl),
-                "timeline_events_n": len(timeline_events),
-                "counts": {
-                    "total": len(sorted_tasks_for_result),
-                    "done_equiv": _n_done,
-                    "fuka_no_hist": _n_fuka,
-                    "zan_partial_hist": _n_zan,
-                    "zan_calendar": _n_cal,
-                },
-                "fuka_samples": _fuka_samples,
-            },
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_agent_dbg_path, "a", encoding="utf-8") as _agent_f:
-            _agent_f.write(json.dumps(_agent_payload, ensure_ascii=False) + "\n")
-    except Exception as _agent_ex:
-        try:
-            with open(_agent_dbg_path, "a", encoding="utf-8") as _agent_f:
-                _agent_f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "fadc0a",
-                            "hypothesisId": "H_log_err",
-                            "location": "_core.py:_generate_plan_impl:pre_result_status",
-                            "message": str(_agent_ex),
-                            "timestamp": int(time_module.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-    # #endregion
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))

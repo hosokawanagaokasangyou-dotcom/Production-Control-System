@@ -7,7 +7,7 @@
   本ファイルと同じフォルダで:
     py -3 -X utf8 -u setup_environment.py
 
-- pip を更新し、本スクリプトと同じフォルダの requirements.txt から依存をインストール（無い場合は既定リスト）
+- pip を更新し、本スクリプトと同じフォルダの requirements.txt から依存をインストール（無い場合は既定リスト: numpy, pandas ほか）
 - Windows: xlwings の Excel アドインを配置
 
 VBA の「環境構築」マクロはブック直下から python\\setup_environment.py を実行します。
@@ -17,6 +17,9 @@ workbook_env_bootstrap.pause_cmd_window_on_cli_error(..., always=True) で pause
 無効化: 環境変数 PM_AI_CMD_PAUSE_ON_ERROR=0 / false / no / off、またはマクロブックの
 「設定_環境変数」シートで A 列=PM_AI_CMD_PAUSE_ON_ERROR・B 列に同様の値（マクロから
 TASK_INPUT_WORKBOOK が渡され、pip で依存インストール成功後にシートを読み込みます）。
+
+Windows では成功時にメッセージダイアログを表示する（コンソールだけでは気づきにくいため）。
+無効化: PM_AI_SETUP_COMPLETION_MSGBOX=0 / false / no / off（未設定時は表示する）。
 """
 from __future__ import annotations
 
@@ -35,6 +38,7 @@ PYTHON_DIR = SCRIPT_PATH.parent
 REQ_FILE = PYTHON_DIR / "requirements.txt"
 
 _FALLBACK_PKGS = [
+    "numpy>=1.24",
     "pandas>=2.0",
     "openpyxl>=3.1",
     "xlwings>=0.30",
@@ -271,6 +275,32 @@ def _xlwings_addin_install() -> int:
     return _xlwings_addin_install_fallback_copy()
 
 
+def _win32_setup_completion_message_box() -> None:
+    """成功時の完了通知（Windows のネイティブダイアログ）。失敗時は呼ばない。"""
+    if sys.platform != "win32":
+        return
+    raw = (os.environ.get("PM_AI_SETUP_COMPLETION_MSGBOX") or "1").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return
+    try:
+        import ctypes
+
+        title = "工程管理AI 環境セットアップ"
+        body = (
+            "環境セットアップが完了しました。\n\n"
+            "注意事項（xlwings アドインの上書きなど）がある場合は、\n"
+            "このあと表示するコンソールのログをご確認ください。"
+        )
+        MB_OK = 0x00000000
+        MB_ICONINFORMATION = 0x00000040
+        MB_TOPMOST = 0x00040000
+        ctypes.windll.user32.MessageBoxW(
+            0, body, title, MB_OK | MB_ICONINFORMATION | MB_TOPMOST
+        )
+    except Exception:
+        pass
+
+
 def _strip_show_console_from_xlwings_user_conf() -> None:
     if sys.platform != "win32":
         return
@@ -350,6 +380,7 @@ def main() -> int:
     _strip_show_console_from_xlwings_user_conf()
 
     print("環境セットアップが完了しました。", flush=True)
+    _win32_setup_completion_message_box()
     return 0
 
 

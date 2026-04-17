@@ -1,4 +1,6 @@
 # 工程管理AI テストコード（planning_core / 段階1・2 / 環境構築 setup_environment.py）
+# 数値・表計算: numpy は pandas の依存だが、環境によって明示指定した方が確実に入る
+numpy>=1.24
 pandas>=2.0
 openpyxl>=3.1
 xlwings>=0.30
