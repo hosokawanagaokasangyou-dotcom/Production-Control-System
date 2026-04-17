@@ -120,6 +120,11 @@ Public Const SCRATCH_SHEET_FONT As String = "_FontPick"
 Public Const SHEET_FONT_UNPROTECT_PASSWORD As String = ""
 ' planning_core の COLUMN_CONFIG_SHEET_NAME / RESULT_TASK_SHEET_NAME と一致させる
 Public Const SHEET_COL_CONFIG_RESULT_TASK As String = "列設定_結果_タスク一覧"
+' 配台計画_タスク入力_列設定.bas 専用（planning_core に同名定数は無いが、結果側と同様「列設定_」接頭で統一）
+Public Const SHEET_COL_CONFIG_PLAN_INPUT_TASK As String = "列設定_配台計画_タスク入力"
+' 配台計画_タスク入力 上の列設定ボタン（配台計画_タスク入力_列設定.bas が再配置時に名前で参照）
+Public Const SHAPE_PLAN_INPUT_COL_CONFIG_REFRESH As String = "btn_PlanInput_ColConfigRefresh"
+Public Const SHAPE_PLAN_INPUT_COL_CONFIG_APPLY As String = "btn_PlanInput_ColConfigApply"
 Public Const SHEET_RESULT_TASK_LIST As String = "結果_タスク一覧"
 Public Const SHEET_RESULT_EQUIP_SCHEDULE As String = "結果_設備毎の時間割"
 Public Const SHEET_RESULT_EQUIP_BY_MACHINE As String = "結果_設備毎の時間割_機械名毎"

@@ -40,7 +40,6 @@ Public Sub 配台計画_タスク入力_列設定__Core_RefreshColConfigSheet()
     Dim existing As Object
     Dim writeRow As Long
     Dim nextOrder As Double
-    Dim i As Long
     Dim keys As Variant
     Dim oldOrd As Double
     Dim oldVis As Boolean
@@ -104,16 +103,12 @@ Public Sub 配台計画_タスク入力_列設定__Core_ApplyColConfigToTaskShee
     Dim wsTask As Worksheet
     Dim wsCfg As Worksheet
     Dim entries As Collection
-    Dim dictWanted As Object
     Dim i As Long
-    Dim it As Variant
     Dim targetPos As Long
-    Dim nameKey As String
     Dim colName As String
     Dim vis As Boolean
     Dim colIndex As Long
     Dim lastColAfter As Long
-    Dim ur As Range
 
     On Error Resume Next
     Set wsTask = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
@@ -132,27 +127,15 @@ Public Sub 配台計画_タスク入力_列設定__Core_ApplyColConfigToTaskShee
     Set entries = ReadConfigEntries(wsCfg)
     If entries Is Nothing Or entries.Count = 0 Then Exit Sub
 
-    Set dictWanted = CreateObject("Scripting.Dictionary")
-    dictWanted.CompareMode = 1 ' vbTextCompare
-    For Each it In entries
-        colName = CStr(it(0))
-        dictWanted(NormalizeKey(colName)) = True
-    Next it
-
     On Error GoTo CleanExit
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     Application.CutCopyMode = False
 
-    On Error Resume Next
-    Set ur = wsTask.UsedRange
-    On Error GoTo 0
-
     targetPos = 1
     For i = 1 To entries.Count
         colName = CStr(entries(i)(0))
         vis = CBool(entries(i)(1))
-        nameKey = NormalizeKey(colName)
 
         colIndex = FindHeaderColumn(wsTask, PLAN_INPUT_HEADER_ROW, colName)
         If colIndex <= 0 Then GoTo NextEntry
