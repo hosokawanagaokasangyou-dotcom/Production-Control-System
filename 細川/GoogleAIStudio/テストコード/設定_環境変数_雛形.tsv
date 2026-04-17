@@ -13,6 +13,10 @@ TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	0=計画シート必要人数も参照
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	0=組合せ表プリセットを使わない
 DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1=配台中の占有区間ミラーで二重検査（0 で無効）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピー（0 で無効）
+DISPATCH_TRIAL_PATTERN_RANDOM_COUNT	3	配台試行順_パターン一覧: ランダム並びのパターン数（0～50）。空または未設定時は 3
+DISPATCH_TRIAL_PATTERN_RANDOM_SEED		同: 整数を入れると R1,R2,… の乱数シードが連番で固定。空なら実行のたびに起点を乱数化
+DISPATCH_TRIAL_PATTERN_LIST_SHEET		同: 出力シート名（空なら既定 配台試行順_パターン一覧）
+DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）
 GANTT_COLOR_MODE		結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに
 GANTT_ACTUAL_DETAIL_DATE_FROM		結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1
 GANTT_ACTUAL_DETAIL_DATE_TO		結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効

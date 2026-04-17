@@ -16438,7 +16438,12 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
 
 
 def _dispatch_trial_pattern_random_count() -> int:
-    """環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）。0～50 に丸める。"""
+    """
+    ランダム並びパターン数。環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）。
+    マクロブック「設定_環境変数」シートの A 列同名・B 列の値でも指定可（各エントリで
+    import planning_core より前に workbook_env_bootstrap.apply_from_task_input_workbook を呼ぶこと）。
+    0～50 に丸める。
+    """
     raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_RANDOM_COUNT") or "3").strip()
     try:
         n = int(raw)
