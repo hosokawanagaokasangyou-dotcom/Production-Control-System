@@ -27,16 +27,40 @@ Private Function DbgAgentJsonEscape(ByVal s As String) As String
     DbgAgentJsonEscape = Replace(Replace(Replace(s, "\", "\\"), """", "\"""), vbCrLf, "\n")
 End Function
 
+Private Function DbgAgentOneDriveCandPath() As String
+    DbgAgentOneDriveCandPath = "C:\Users\0585\OneDrive\ドキュメント\生産管理_AI配台_V2.xlsm"
+End Function
+
+Private Function DbgAgentFileMTimeSafe(ByVal p As String) As String
+    On Error Resume Next
+    If Len(Dir(p)) = 0 Then
+        DbgAgentFileMTimeSafe = ""
+    Else
+        DbgAgentFileMTimeSafe = CStr(FileDateTime(p))
+    End If
+    On Error GoTo 0
+End Function
+
 Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal fullName As String, ByVal wbPath As String)
     Const LOGP As String = "c:\工程管理AIプロジェクト\----AI-------1\debug-8b603e.log"
     Dim stm As Object
     Dim js As String
     Dim escF As String
     Dim escP As String
+    Dim dfp As String
+    Dim aw As String
+    Dim od As String
+    Dim odMt As String
     On Error Resume Next
     escF = DbgAgentJsonEscape(fullName)
     escP = DbgAgentJsonEscape(wbPath)
-    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
+    dfp = ""
+    aw = ""
+    dfp = CStr(Application.DefaultFilePath)
+    If Not Application.ActiveWorkbook Is Nothing Then aw = CStr(Application.ActiveWorkbook.FullName)
+    od = DbgAgentOneDriveCandPath()
+    odMt = DbgAgentFileMTimeSafe(od)
+    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
     stm.Mode = 3
@@ -3389,6 +3413,7 @@ Finish:
     
     On Error Resume Next
     ThisWorkbook.Save
+    DbgAgentNdjsonAppend "H2", "業務ロジック:段階2_コア実行", "after final ThisWorkbook.Save (Finish)", ThisWorkbook.FullName, ThisWorkbook.path
     On Error GoTo 0
     
     Exit Sub
