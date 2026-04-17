@@ -30,7 +30,40 @@ End Function
 Private Function DebugSkipThisWorkbookSaveEffective() As Boolean
     Dim v As String
     v = LCase$(Trim$(Environ$("PM_AI_DEBUG_SKIP_SAVE")))
+    If Len(v) = 0 Then
+        v = LCase$(Trim$(DbgAgentReadEnvFromSheet("PM_AI_DEBUG_SKIP_SAVE")))
+    End If
     DebugSkipThisWorkbookSaveEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
+End Function
+
+Private Function DbgAgentReadEnvFromSheet(ByVal key As String) As String
+    On Error Resume Next
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim r As Long
+    Dim k As String
+    Dim v As String
+    If Len(Trim$(key)) = 0 Then
+        DbgAgentReadEnvFromSheet = ""
+        Exit Function
+    End If
+    Set ws = ThisWorkbook.Worksheets("ê›íË_ä¬ã´ïœêî")
+    If ws Is Nothing Then
+        DbgAgentReadEnvFromSheet = ""
+        Exit Function
+    End If
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastRow < 1 Then lastRow = 1
+    For r = 1 To lastRow
+        k = Trim$(CStr(ws.Cells(r, 1).Value))
+        If StrComp(k, key, vbBinaryCompare) = 0 Then
+            v = CStr(ws.Cells(r, 2).Value)
+            DbgAgentReadEnvFromSheet = v
+            Exit Function
+        End If
+    Next r
+    DbgAgentReadEnvFromSheet = ""
+    On Error GoTo 0
 End Function
 
 Private Function DbgAgentOneDriveCandPath() As String
