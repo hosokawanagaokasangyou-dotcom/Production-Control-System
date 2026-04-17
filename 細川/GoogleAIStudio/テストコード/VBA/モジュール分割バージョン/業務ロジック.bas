@@ -90,6 +90,9 @@ Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As
     Dim aw As String
     Dim od As String
     Dim odMt As String
+    Dim envSkip As String
+    Dim sheetSkip As String
+    Dim effSkip As String
     On Error Resume Next
     escF = DbgAgentJsonEscape(fullName)
     escP = DbgAgentJsonEscape(wbPath)
@@ -99,7 +102,10 @@ Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As
     If Not Application.ActiveWorkbook Is Nothing Then aw = CStr(Application.ActiveWorkbook.FullName)
     od = DbgAgentOneDriveCandPath()
     odMt = DbgAgentFileMTimeSafe(od)
-    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
+    envSkip = CStr(Environ$("PM_AI_DEBUG_SKIP_SAVE"))
+    sheetSkip = CStr(DbgAgentReadEnvFromSheet("PM_AI_DEBUG_SKIP_SAVE"))
+    effSkip = IIf(DebugSkipThisWorkbookSaveEffective(), "1", "0")
+    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """,""envSkipSave"":""" & DbgAgentJsonEscape(envSkip) & """,""sheetSkipSave"":""" & DbgAgentJsonEscape(sheetSkip) & """,""skipSaveEffective"":""" & DbgAgentJsonEscape(effSkip) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2
     stm.Mode = 3
