@@ -14,7 +14,9 @@ VBA の「環境構築」マクロはブック直下から python\\setup_environ
 
 cmd / PowerShell 経由で失敗したときウィンドウが閉じないよう、非 0 終了時は
 workbook_env_bootstrap.pause_cmd_window_on_cli_error（既定で pause）を挟む。
-無効化: 環境変数 PM_AI_CMD_PAUSE_ON_ERROR=0 / false / no / off。
+無効化: 環境変数 PM_AI_CMD_PAUSE_ON_ERROR=0 / false / no / off、またはマクロブックの
+「設定_環境変数」シートで A 列=PM_AI_CMD_PAUSE_ON_ERROR・B 列に同様の値（マクロから
+TASK_INPUT_WORKBOOK が渡され、pip で依存インストール成功後にシートを読み込みます）。
 """
 from __future__ import annotations
 
@@ -81,6 +83,18 @@ def _agent_dbg(
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def _apply_workbook_env_from_macro() -> None:
+    """
+    TASK_INPUT_WORKBOOK がプロセスにあるとき、マクロブックの「設定_環境変数」を os.environ に反映する。
+    （openpyxl が import できる前提。pip install 成功後に呼ぶ。）
+    """
+    try:
+        from workbook_env_bootstrap import apply_from_task_input_workbook
+    except ImportError:
+        return
+    apply_from_task_input_workbook()
 
 
 def _child_env() -> dict[str, str]:
@@ -415,6 +429,8 @@ def main() -> int:
             print("\n".join(pip_blob.splitlines()[-80:]), file=sys.stderr, flush=True)
         return code
 
+    _apply_workbook_env_from_macro()
+
     code = _xlwings_addin_install()
     if code != 0:
         print("xlwings アドイン手順で失敗しました。", file=sys.stderr, flush=True)
@@ -427,7 +443,7 @@ def main() -> int:
 
 
 def _pause_cli_error_standalone(exit_code: int | None) -> None:
-    """workbook_env_bootstrap 不在時。pause_cmd_window_on_cli_error と同趣旨。"""
+    """workbook_env_bootstrap 不在時。pause_cmd_window_on_cli_error と同趣旨（PM_AI_CMD_PAUSE_ON_ERROR は os.environ のみ）。"""
     if os.name != "nt":
         return
     try:

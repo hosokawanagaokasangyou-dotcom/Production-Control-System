@@ -139,6 +139,10 @@ def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
     異常終了時のみ ``pause`` を挟む。
 
     無効化: 環境変数 ``PM_AI_CMD_PAUSE_ON_ERROR`` を ``0`` / ``false`` / ``no`` / ``off``。
+    マクロブックにシート「設定_環境変数」があり ``TASK_INPUT_WORKBOOK`` がプロセスに設定されているときは、
+    同シートの A 列=``PM_AI_CMD_PAUSE_ON_ERROR``・B 列=上記いずれかで OS 環境変数に触れず指定できる
+    （``setup_environment`` は依存インストール成功後にシートを読み込む）。
+
     未設定時は **有効**（既定で pause する）。
     """
     if os.name != "nt":

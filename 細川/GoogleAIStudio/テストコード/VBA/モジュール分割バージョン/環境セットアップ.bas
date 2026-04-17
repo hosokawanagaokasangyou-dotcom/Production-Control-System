@@ -65,15 +65,21 @@ Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As S
     End If
 End Function
 
-Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String) As Long
+Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As String, ByVal setupRel As String, ByVal macroBookFullName As String) As Long
     Dim ps As String
     Dim shellCmd As String
     Dim wdEsc As String
     Dim setupEsc As String
+    Dim wbEsc As String
     ' PATH を再合成したうえで、ブックフォルダで setup_environment.py を実行（pip + requirements + xlwings addin）
+    ' TASK_INPUT_WORKBOOK: Python が「設定_環境変数」シート（例: PM_AI_CMD_PAUSE_ON_ERROR）を読むため
+    On Error Resume Next
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = macroBookFullName
+    On Error GoTo 0
     wdEsc = Replace(workDir, "'", "''")
     setupEsc = Replace(setupRel, "'", "''")
-    ps = "$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; " & _
+    wbEsc = Replace(macroBookFullName, "'", "''")
+    ps = "$env:TASK_INPUT_WORKBOOK='" & wbEsc & "'; $env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; " & _
          "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
          "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
@@ -141,7 +147,7 @@ Sub InstallComponents()
     End If
     
     MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
-    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel)
+    pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel, ThisWorkbook.FullName)
     If pipExit <> 0 Then
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
                "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
