@@ -23792,6 +23792,104 @@ def _generate_plan_impl():
         ]
         + [0]
     )
+    # #region agent log
+    _agent_dbg_path = os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "..", "debug-fadc0a.log"
+        )
+    )
+    try:
+        _n_done = _n_fuka = _n_zan = _n_cal = 0
+        _fuka_samples: list = []
+        for _tw in sorted_tasks_for_result:
+            _ru = float(_tw.get("remaining_units") or 0)
+            _hh = bool(_tw.get("assigned_history"))
+            _um0w = float(_tw.get("unit_m") or 0)
+            _ram = abs(_ru * _um0w)
+            _tol = max(3.0, min(100.0, 0.025 * abs(_um0w)))
+            _is_done = _ru <= 1e-9 and (_ru >= 0 or _ram <= _tol)
+            if _is_done:
+                _n_done += 1
+            elif _hh and _tw.get("_partial_retry_calendar_blocked"):
+                _n_cal += 1
+            elif not _hh and _ru > 1e-9:
+                _n_fuka += 1
+                if len(_fuka_samples) < 20:
+                    _fuka_samples.append(
+                        {
+                            "task_id": str(_tw.get("task_id") or ""),
+                            "machine": str(
+                                _tw.get("machine_name") or _tw.get("machine") or ""
+                            ),
+                            "dto": _tw.get("dispatch_trial_order"),
+                            "rem": round(_ru, 6),
+                            "start_date_req": str(_tw.get("start_date_req") or ""),
+                            "process": str(_tw.get("process_name") or ""),
+                            "req_op": str(_tw.get("required_op") or ""),
+                            "in_progress": bool(_tw.get("in_progress")),
+                            "ec_pipe": bool(
+                                _tw.get("roll_pipeline_inspection")
+                                or _tw.get("roll_pipeline_rewind")
+                            ),
+                        }
+                    )
+            elif _hh and _ru > 1e-9:
+                _n_zan += 1
+        _tid_tl: set = set()
+        for _ev in timeline_events:
+            _tx = _ev.get("task_id")
+            if _tx is not None:
+                _tid_tl.add(str(_tx).strip())
+        _agent_payload = {
+            "sessionId": "fadc0a",
+            "hypothesisId": "H_summary",
+            "location": "_core.py:_generate_plan_impl:pre_result_status",
+            "message": "配台結果直前サマリ（配台不可=履歴なしかつ残量>0）",
+            "data": {
+                "extend_cal": STAGE2_EXTEND_ATTENDANCE_CALENDAR,
+                "serial_by_task_id": STAGE2_SERIAL_DISPATCH_BY_TASK_ID,
+                "global_dto_strict": STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT,
+                "dispatch_flow_trial_first": STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST,
+                "debug_dispatch_only_n": len(DEBUG_DISPATCH_ONLY_TASK_IDS),
+                "outer_retry_round": _outer_retry_round,
+                "macro_run_date": str(macro_run_date),
+                "sorted_dates_n": len(sorted_dates),
+                "sorted_dates_first": str(sorted_dates[0]) if sorted_dates else None,
+                "sorted_dates_last": str(sorted_dates[-1]) if sorted_dates else None,
+                "timeline_distinct_tasks": len(_tid_tl),
+                "timeline_events_n": len(timeline_events),
+                "counts": {
+                    "total": len(sorted_tasks_for_result),
+                    "done_equiv": _n_done,
+                    "fuka_no_hist": _n_fuka,
+                    "zan_partial_hist": _n_zan,
+                    "zan_calendar": _n_cal,
+                },
+                "fuka_samples": _fuka_samples,
+            },
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_agent_dbg_path, "a", encoding="utf-8") as _agent_f:
+            _agent_f.write(json.dumps(_agent_payload, ensure_ascii=False) + "\n")
+    except Exception as _agent_ex:
+        try:
+            with open(_agent_dbg_path, "a", encoding="utf-8") as _agent_f:
+                _agent_f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "fadc0a",
+                            "hypothesisId": "H_log_err",
+                            "location": "_core.py:_generate_plan_impl:pre_result_status",
+                            "message": str(_agent_ex),
+                            "timestamp": int(time_module.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+    # #endregion
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
