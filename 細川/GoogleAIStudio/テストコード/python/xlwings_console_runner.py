@@ -388,3 +388,47 @@ def run_stage2_for_xlwings() -> int:
         return rc
     finally:
         _write_stage_vba_exit_code(rc)
+
+
+def run_dispatch_trial_pattern_list_for_xlwings() -> int:
+    """
+    配台試行順のパターン一覧シート: ``refresh_dispatch_trial_pattern_list_sheet_only`` を実行。
+    VBA: XwRunConsoleRunner "run_dispatch_trial_pattern_list_for_xlwings"
+    終了コードは ``log/stage_vba_exitcode.txt`` にも書く。
+    """
+    rc = 1
+    try:
+        try:
+            _prepare_from_caller_book()
+        except Exception:
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            rc = 2
+            return rc
+        _apply_workbook_env_overrides()
+        _append_execution_log_line(
+            "INFO",
+            "配台試行順パターン一覧: xlwings run_dispatch_trial_pattern_list_for_xlwings 開始",
+        )
+        _purge_planning_core_modules()
+        try:
+            import planning_core as pc
+
+            ok = pc.refresh_dispatch_trial_pattern_list_sheet_only()
+            rc = 0 if ok else 1
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                rc = 0
+            elif isinstance(c, int):
+                rc = 0 if c == 0 else c
+            else:
+                rc = 1
+        except Exception:
+            logging.exception("xlwings: 配台試行順パターン一覧の作成で失敗しました。")
+            _append_execution_log_traceback(
+                "xlwings: 配台試行順パターン一覧の作成で失敗しました。"
+            )
+            rc = 1
+        return rc
+    finally:
+        _write_stage_vba_exit_code(rc)

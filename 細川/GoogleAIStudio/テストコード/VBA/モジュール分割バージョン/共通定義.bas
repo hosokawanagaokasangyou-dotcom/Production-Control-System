@@ -141,6 +141,9 @@ Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
 ' 「配台試行順番」を小数キーで並べ替え（1..n）用グラデーション図形名
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS As String = "btn_PlanInput_DispatchTrialOrder_FloatKeys"
+' 配台試行順の複数パターン一覧シート作成（Python / xlwings）。planning_core.DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME と一致
+Public Const SHEET_DISPATCH_TRIAL_PATTERN_LIST As String = "配台試行順_パターン一覧"
+Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_LIST As String = "btn_PlanInput_DispatchTrialPatternList"
 ' planning_core の ai_cache_path（json/ai_remarks_cache.json）と旧 output/ 退避先と一致
 Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
 Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"

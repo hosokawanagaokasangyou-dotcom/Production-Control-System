@@ -1520,6 +1520,53 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
            "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
 End Sub
 
+' 配台試行順の複数パターン一覧シート作成（スプラッシュ付き）
+Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成()
+    Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, False)
+End Sub
+
+' 「試行順パターン一覧」用かっこいいボタン（キー並べ替えボタンの下あたり）
+Public Sub 配台計画_タスク入力_試行順パターン一覧_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4 + 2 * 58
+    
+    CreateCoolButtonWithPreset "試行順パターン一覧", MACRO_ANIM, leftPos, topPos, 5
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "押すとシート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」に各パターンの試行順一覧を書き込みます。", vbInformation, "ボタン配置"
+End Sub
+
 ' =========================================================
 ' ① Python本体と必要なコンポーネントをインストールするマクロ（修正版）
 ' ・Python 3.14 の検出は py -3.14（ランチャーで系列を明示。定数 PM_AI_SETUP_PY_MINOR）

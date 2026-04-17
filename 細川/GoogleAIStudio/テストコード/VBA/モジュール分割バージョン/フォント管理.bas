@@ -629,6 +629,62 @@ Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
     End If
 End Sub
 
+'==============================================================================
+' 配台試行順: 複数パターン（納期優先・機械名+納期・ランダム等）の一覧シートを Python（xlwings）で作成
+' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成」
+' 図形の自動作成: 「配台計画_タスク入力_試行順パターン一覧ボタンを配置」
+' ・出力シート名は planning_core の DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME（既定「配台試行順_パターン一覧」）
+' ・ランダム件数は環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "試行順パターン一覧"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "試行順パターン一覧"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    MacroSplash_SetStep "配台試行順: パターン一覧シートを作成しています…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_trial_pattern_list_sheet.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [dispatch-trial-pattern-list] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "試行順パターン一覧"
+    Else
+        MacroSplash_SetStep "シート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」を更新しました。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
 ' グラデーション＋影付き図形（メインの「かっこいいボタン」と同趣旨）。shapeName で図形名を区別する。
 Private Sub PlanInputSheet_AddGradientActionButton( _
     ByVal ws As Worksheet, _
@@ -793,6 +849,66 @@ Public Sub 配台計画_タスク入力_試行順小数キー並べ替えボタンを配置()
     Exit Sub
 FailBtn2:
     MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "試行順キーボタン"
+End Sub
+
+'==============================================================================
+' 配台計画_タスク入力: 「試行順パターン一覧」用グラデーション図形（試行順キーボタンの下）
+' 開発タブ → マクロ → 「配台計画_タスク入力_試行順パターン一覧ボタンを配置」
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順パターン一覧ボタンを配置()
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim anchorCol As Long
+    Dim leftPt As Single
+    Dim topPt As Single
+    Dim sh As Shape
+    Dim wbQuoted As String
+    Dim macroAnim As String
+    Dim i As Long
+    Const BTN_H As Single = 48
+    Const BTN_GAP As Single = 6
+    On Error GoTo FailBtn3
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo FailBtn3
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "パターン一覧ボタン"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        Set sh = ws.Shapes(i)
+        If StrComp(sh.Name, SHAPE_PLAN_INPUT_DISPATCH_PATTERN_LIST, vbTextCompare) = 0 Then
+            sh.Delete
+        End If
+    Next i
+    On Error GoTo FailBtn3
+    Set ur = Nothing
+    On Error Resume Next
+    Set ur = ws.UsedRange
+    On Error GoTo FailBtn3
+    anchorCol = 4
+    If Not ur Is Nothing Then
+        anchorCol = ur.Column + ur.Columns.Count + 1
+        If anchorCol < 4 Then anchorCol = 4
+        If anchorCol > 80 Then anchorCol = 80
+    End If
+    leftPt = ws.Cells(1, anchorCol).Left
+    topPt = ws.Rows(1).Top + 1.5 + 2 * (BTN_H + BTN_GAP)
+    wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン一覧", macroAnim, leftPt, topPt, RGB(120, 90, 200), RGB(60, 40, 120), SHAPE_PLAN_INPUT_DISPATCH_PATTERN_LIST
+    ws.Activate
+    On Error Resume Next
+    ws.Range("A1").Select
+    On Error GoTo 0
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf _
+        & "クリックでシート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」に各パターンの試行順一覧を書き込みます。", vbInformation, "パターン一覧ボタン"
+    Exit Sub
+FailBtn3:
+    MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "パターン一覧ボタン"
 End Sub
 
 '==============================================================================

@@ -818,6 +818,11 @@ ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
 # 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「配台計画_」は誤字（UTF-8 保存時の破損）で一致しない。
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
+# 配台試行順の比較用パターン一覧（xlwings でマクロブックに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
+DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
+    os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
+    or "配台試行順_パターン一覧"
+)
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
 # 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
@@ -16430,6 +16435,301 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
     """
     for i, t in enumerate(task_queue, start=1):
         t["dispatch_trial_order"] = i
+
+
+def _dispatch_trial_pattern_random_count() -> int:
+    """環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）。0～50 に丸める。"""
+    raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_RANDOM_COUNT") or "3").strip()
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 3
+    return max(0, min(n, 50))
+
+
+def _dispatch_trial_pattern_random_seeds(n: int) -> list[int]:
+    """連番シード。DISPATCH_TRIAL_PATTERN_RANDOM_SEED が整数なら起点、空なら乱数起点。"""
+    if n <= 0:
+        return []
+    env = (os.environ.get("DISPATCH_TRIAL_PATTERN_RANDOM_SEED") or "").strip()
+    if env:
+        try:
+            base = int(env)
+        except (TypeError, ValueError):
+            base = random.randrange(1, 2**31 - 2 - n)
+    else:
+        base = random.randrange(1, 2**31 - 2 - n)
+    return [base + i for i in range(n)]
+
+
+def _due_basis_date_for_dispatch_pattern_sort(t: dict) -> date:
+    d = t.get("due_basis_date")
+    if isinstance(d, date):
+        return d
+    return date.max
+
+
+def _machine_name_primary_for_dispatch_pattern(t: dict) -> str:
+    mn = str(t.get("machine_name") or "").strip()
+    if not mn:
+        mn = str(t.get("machine") or "").strip()
+    return unicodedata.normalize("NFKC", mn).casefold()
+
+
+def _pattern_sort_key_due_priority(t: dict):
+    return (
+        _due_basis_date_for_dispatch_pattern_sort(t),
+        int(t.get("planning_sheet_row_seq") or 10**9),
+        _task_id_priority_key(str(t.get("task_id") or "")),
+    )
+
+
+def _pattern_sort_key_machine_then_due(t: dict):
+    return (
+        _machine_name_primary_for_dispatch_pattern(t),
+        _due_basis_date_for_dispatch_pattern_sort(t),
+        int(t.get("planning_sheet_row_seq") or 10**9),
+        _task_id_priority_key(str(t.get("task_id") or "")),
+    )
+
+
+def _apply_dispatch_trial_pattern_sort_pipeline(
+    task_queue: list,
+    sort_key,
+) -> None:
+    """パターン用の先頭ソートのあと、段階2と同じ特別ルール（§B 隣接・スリット→SEC）と連番付与。"""
+    task_queue.sort(key=sort_key)
+    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+    _reorder_task_queue_slit_sec_consecutive(task_queue)
+    _assign_sequential_dispatch_trial_order(task_queue)
+
+
+def _build_dispatch_trial_pattern_list_matrix(
+    tasks_df: "pd.DataFrame",
+    run_date: date,
+    req_map: dict,
+    need_rules: list,
+    need_combo_col_index: dict | None,
+    equipment_list: list,
+) -> list[list]:
+    """
+    パターン①納期最優先、②機械名グループ＋納期、③ランダム（件数は環境変数）の
+    確定後試行順を長形式で返す（先頭に説明行・見出し行）。
+    """
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    df = tasks_df.copy()
+    if dto_col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[dto_col]):
+            df[dto_col] = float("nan")
+        else:
+            df[dto_col] = ""
+
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(MASTER_FILE) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
+    gpo = analyze_global_priority_override_comment(
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+    )
+    ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
+    tq_template = build_task_queue_from_planning_df(
+        df, run_date, req_map, ai_by_tid, gpo, equipment_list
+    )
+    if not tq_template:
+        return [
+            [
+                "（配台対象タスクがありません。依頼NO・工程名・残数量を確認してください。）"
+            ]
+        ]
+
+    tq_template = copy.deepcopy(tq_template)
+    rnd_n = _dispatch_trial_pattern_random_count()
+    rnd_seeds = _dispatch_trial_pattern_random_seeds(rnd_n)
+
+    pattern_jobs: list[tuple[str, str, int | None, object]] = [
+        ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
+        ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
+    ]
+    for i, sd in enumerate(rnd_seeds):
+        pattern_jobs.append(
+            (f"R{i + 1}", f"ランダム{i + 1}", sd, None),
+        )
+
+    intro = (
+        "各パターンは、パターン用の並べ（ランダムはシャッフル）のあと、"
+        "段階2と同様に §B-2/3 EC 隣接・スリット→SEC 連続・配台試行順 1..n 付与まで適用した結果です。"
+        f" ランダム件数={rnd_n}（DISPATCH_TRIAL_PATTERN_RANDOM_COUNT）。"
+    )
+    headers = [
+        "パターンID",
+        "パターン名",
+        "乱数シード",
+        "配台試行順番",
+        "依頼NO",
+        "工程名",
+        "機械名",
+        "納期基準",
+    ]
+    rows: list[list] = [[intro], [], headers]
+
+    for pid, pname, seed, sk in pattern_jobs:
+        tq = copy.deepcopy(tq_template)
+        if sk is not None:
+            _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
+        else:
+            rng = random.Random(int(seed) if seed is not None else 0)
+            rng.shuffle(tq)
+            _reorder_task_queue_b2_ec_inspection_consecutive(tq)
+            _reorder_task_queue_slit_sec_consecutive(tq)
+            _assign_sequential_dispatch_trial_order(tq)
+        for t in sorted(tq, key=lambda x: int(x.get("dispatch_trial_order") or 10**9)):
+            dto = int(t.get("dispatch_trial_order") or 0)
+            tid = str(t.get("task_id") or "").strip()
+            proc = str(t.get("machine") or "").strip()
+            mname = str(t.get("machine_name") or "").strip()
+            db = t.get("due_basis_date")
+            db_s = db.strftime("%Y/%m/%d") if isinstance(db, date) else ""
+            seed_s = "" if seed is None else str(int(seed))
+            rows.append([pid, pname, seed_s, dto, tid, proc, mname, db_s])
+    return rows
+
+
+def write_dispatch_trial_pattern_list_via_xlwings(
+    workbook_path: str | None = None,
+    *,
+    apply_post_load_mutations: bool = True,
+) -> bool:
+    """
+    マクロブックを xlwings で開き、「配台計画_タスク入力」を読み、
+    試行順パターン一覧を DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME に書き込む。
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("配台試行順パターン一覧: ブックパスは空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("配台試行順パターン一覧: xlwings はありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+    except Exception as e:
+        logging.error("配台試行順パターン一覧: シート接続に失敗: %s", e)
+        return False
+
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("配台試行順パターン一覧: データ行はありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "配台試行順パターン一覧",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
+        )
+
+    data_extract_dt, _ = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: master 読込に失敗: %s", e)
+        return False
+
+    try:
+        matrix = _build_dispatch_trial_pattern_list_matrix(
+            df, run_date, req_map, need_rules, need_combo_col_index, equipment_list
+        )
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: 行列生成に失敗: %s", e)
+        return False
+
+    sheet_name = DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME
+    try:
+        ws_out = wb.sheets[sheet_name]
+    except Exception:
+        try:
+            ws_out = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
+        except Exception as e2:
+            logging.error("配台試行順パターン一覧: シート作成に失敗: %s", e2)
+            return False
+
+    try:
+        ur0 = ws_out.used_range
+        if ur0:
+            ur0.clear_contents()
+    except Exception:
+        pass
+
+    n_cols = max((len(r) for r in matrix), default=1)
+    padded: list[list] = []
+    for r in matrix:
+        row = list(r)
+        if len(row) < n_cols:
+            row.extend([None] * (n_cols - len(row)))
+        padded.append(row)
+    n_rows = len(padded)
+    try:
+        ws_out.range((1, 1)).resize(n_rows, n_cols).value = padded
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("配台試行順パターン一覧: Save 警告: %s", e)
+
+    logging.info(
+        "配台試行順パターン一覧: 「%s」に %s 行を書き込みました。",
+        sheet_name,
+        n_rows,
+    )
+    return True
+
+
+def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
+    """TASK_INPUT_WORKBOOK に対する配台試行順パターン一覧シート作成（VBA / cmd 用）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    local = _plan_input_dispatch_trial_order_local_only_from_env()
+    return write_dispatch_trial_pattern_list_via_xlwings(
+        p, apply_post_load_mutations=not local
+    )
 
 
 def _reorder_task_queue_slit_sec_consecutive(task_queue: list) -> None:
