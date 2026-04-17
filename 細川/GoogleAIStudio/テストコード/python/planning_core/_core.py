@@ -10412,6 +10412,8 @@ def build_task_queue_from_planning_df(
                 "dispatch_trial_order_from_sheet": _dto_from_sheet,
                 "dispatch_trial_order_sheet_strict_integer_ok": _dto_sheet_strict_ok,
                 "unprocessed_baseline_m": _unp_base,
+                # 段階1試行順: 未加工列由来の基準値か（True のとき unprocessed_baseline_m は残量と同義のため未加工≠0 判定に使わない）
+                "dispatch_qty_from_unprocessed_rule": bool(from_unprocessed_qty),
             }
         )
         planning_sheet_row_seq += 1
@@ -16331,14 +16333,35 @@ def _task_product_thickness_sort_pair_for_stage1(task: dict) -> tuple[int, float
     return (0, v)
 
 
+def _stage1_after_remaining_in_progress_or_sheet_unprocessed_priority(task: dict) -> int:
+    """
+    ③換算残量の直後用キー（昇順で小さいほど先）: 加工途中(in_progress) または
+    シート「未加工」列由来の基準値が 0 超なら 0。from_unprocessed_qty 行は同値が残量と同義のため
+    未加工≠0 判定には使わず、加工途中のみで 0 になり得る。
+    """
+    if bool(task.get("in_progress")):
+        return 0
+    if bool(task.get("dispatch_qty_from_unprocessed_rule")):
+        return 1
+    up = task.get("unprocessed_baseline_m")
+    if up is None:
+        return 1
+    try:
+        if float(up) > 1e-12:
+            return 0
+    except (TypeError, ValueError):
+        pass
+    return 1
+
+
 def _stage1_dispatch_trial_order_sort_key(
     task: dict,
     machine_priority_by_norm_name: dict[str, int] | None = None,
 ) -> tuple:
     """
     段階1のみ: ①機械（master「設定_機械優先順位」の数値順。表に無い機械は後方、その後機械名で安定）→
-    ②納期(早い順) → ③換算残量(少ない順) → ④スライス/SEC は厚み(小さい順)
-    → planning_sheet_row_seq で安定化。その後 §B EC 隣接は呼び出し側で適用。
+    ②納期(早い順) → ③換算残量(少ない順) → 加工途中または未加工列>0 を先 →
+    ④スライス/SEC は厚み(小さい順) → planning_sheet_row_seq で安定化。その後 §B EC 隣接は呼び出し側で適用。
 
     machine_priority_by_norm_name が空のときは①を正規化機械名の文字列順のみとする。
     """
@@ -16357,9 +16380,10 @@ def _stage1_dispatch_trial_order_sort_key(
     if not isinstance(due, date):
         due = date.max
     rem = _task_remaining_qty_m_for_stage1_dispatch_order(task)
+    mid_pri = _stage1_after_remaining_in_progress_or_sheet_unprocessed_priority(task)
     thick_tier, thick_mm = _task_product_thickness_sort_pair_for_stage1(task)
     seq = int(task.get("planning_sheet_row_seq") or 10**9)
-    return (*mach_key, due, rem, thick_tier, thick_mm, seq)
+    return (*mach_key, due, rem, mid_pri, thick_tier, thick_mm, seq)
 
 
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
@@ -16528,7 +16552,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     _assign_sequential_dispatch_trial_order(task_queue)
     if use_stage1_machine_due_dispatch_order_sort:
         logging.info(
-            "配台試行順番: 段階1ルール（機械名・納期・換算残量・スライス/SEC厚み）でソートし §B 隣接後に 1..%s を付与しました。",
+            "配台試行順番: 段階1ルール（機械優先・納期・換算残量・加工途中/未加工列>0・スライス/SEC厚み）でソートし §B 隣接後に 1..%s を付与しました。",
             len(task_queue),
         )
     else:
@@ -16548,7 +16572,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
 ) -> None:
     """
     段階1出力 DataFrame の「配台試行順番」を、master「設定_機械優先順位」に従う機械順・納期・換算残量・
-    (スライス/SEC の)厚みでソートし、§B-2/3 EC 隣接後に連番で埋める。
+    加工途中または未加工列>0 を優先し、(スライス/SEC の)厚みでソートし、§B-2/3 EC 隣接後に連番で埋める。
     優先順位シートが無い・空のときは機械名（正規化文字列）順にフォールバックする。
     段階2の generate_plan では別キー（本フラグは False）を使う。配台対象外の行は空のまま。
     """
