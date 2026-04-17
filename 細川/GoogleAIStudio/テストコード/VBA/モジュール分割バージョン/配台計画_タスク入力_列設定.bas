@@ -127,8 +127,6 @@ Public Sub 配台計画_タスク入力_列設定__Core_ApplyColConfigToTaskShee
         Exit Sub
     End If
 
-    Call EnsurePlanInputColConfigButtons(wsTask)
-
     Call SortAndRenumberConfig(wsCfg)
 
     Set entries = ReadConfigEntries(wsCfg)
