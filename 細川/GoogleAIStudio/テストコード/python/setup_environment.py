@@ -2,9 +2,12 @@
 """
 工程管理AI テストコード用の環境セットアップ（単独実行可）。
 
-  py -3 setup_environment.py
+  ブック所在フォルダで:
+    py -3 -X utf8 -u python\\setup_environment.py
+  本ファイルと同じフォルダで:
+    py -3 -X utf8 -u setup_environment.py
 
-- pip を更新し、同フォルダの requirements.txt から依存をインストール（無い場合は既定リスト）
+- pip を更新し、本スクリプトと同じフォルダの requirements.txt から依存をインストール（無い場合は既定リスト）
 - Windows: xlwings の Excel アドインを配置
 
 VBA の「環境構築」マクロはブック直下から python\\setup_environment.py を実行します。
@@ -24,9 +27,11 @@ import sys
 import sysconfig
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parent
-_REQUIREMENTS = _ROOT / "requirements.txt"
-# requirements.txt が無い環境向け（planning_core / マクロと揃える）
+# 本ファイルのあるフォルダ（通常は python\\）。os.chdir に依存しない。
+SCRIPT_PATH = Path(__file__).resolve()
+PYTHON_DIR = SCRIPT_PATH.parent
+REQ_FILE = PYTHON_DIR / "requirements.txt"
+
 _FALLBACK_PKGS = [
     "pandas>=2.0",
     "openpyxl>=3.1",
@@ -36,15 +41,31 @@ _FALLBACK_PKGS = [
 ]
 
 
-def _run(cmd: list[str], cwd: Path | None = None) -> int:
-    print("+", " ".join(cmd), flush=True)
-    r = subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=False)
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def _child_env() -> dict[str, str]:
+    env = dict(os.environ)
+    if sys.platform == "win32":
+        env.setdefault("PYTHONUTF8", "1")
+        env.setdefault("PYTHONIOENCODING", "utf-8")
+    return env
+
+
+def _run_streaming(cmd: list[str], *, cwd: Path | None) -> int:
+    _log("+ " + " ".join(cmd))
+    r = subprocess.run(
+        cmd,
+        cwd=str(cwd) if cwd else None,
+        check=False,
+        env=_child_env(),
+    )
     return int(r.returncode)
 
 
-def _run_capture_stdout_stderr(cmd: list[str], cwd: Path | None = None) -> int:
-    """標準出力・標準エラーをコンソールに流さず終了コードだけ返す（xlwings.exe の長い Traceback 抑止用）。"""
-    print("+", " ".join(cmd), flush=True)
+def _run_capture(cmd: list[str], *, cwd: Path | None) -> tuple[int, str]:
+    _log("+ " + " ".join(cmd))
     r = subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -53,18 +74,53 @@ def _run_capture_stdout_stderr(cmd: list[str], cwd: Path | None = None) -> int:
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=_child_env(),
     )
-    return int(r.returncode)
+    blob = ((r.stdout or "") + "\n" + (r.stderr or "")).strip()
+    return int(r.returncode), blob
 
 
-def _excel_instances_visible_to_xlwings() -> bool:
-    """マクロ実行中など、COM 上で Excel が既に動いているか（おおよそ）。"""
-    try:
-        import xlwings as xw
-
-        return len(xw.apps) > 0
-    except Exception:
+def _is_excel_exe_running_win32() -> bool | None:
+    """
+    tasklist で EXCEL.EXE を検出。True=起動中、False=未起動、None=判定不能。
+    None のときは保守的に「addin install を避けコピーへ」の経路に寄せる。
+    """
+    if sys.platform != "win32":
         return False
+    try:
+        r = subprocess.run(
+            [
+                "tasklist",
+                "/FI",
+                "IMAGENAME eq EXCEL.EXE",
+                "/FO",
+                "CSV",
+                "/NH",
+            ],
+            capture_output=True,
+            text=True,
+            encoding=sys.getfilesystemencoding() or "utf-8",
+            errors="replace",
+            timeout=60,
+            env=_child_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    out = r.stdout or ""
+    for line in out.splitlines():
+        cell0 = line.strip().strip('"').split(",")[0].strip('"')
+        if cell0.upper() == "EXCEL.EXE":
+            return True
+    return False
+
+
+def _xlwings_cli_exe() -> Path | None:
+    scripts = Path(sysconfig.get_path("scripts"))
+    for name in ("xlwings.exe", "xlwings.cmd"):
+        p = scripts / name
+        if p.is_file():
+            return p
+    return None
 
 
 def _xlwings_xlam_source_path() -> Path | None:
@@ -76,10 +132,6 @@ def _xlwings_xlam_source_path() -> Path | None:
 
 
 def _xlwings_addin_install_fallback_copy() -> int:
-    """
-    Excel 起動中は ``xlwings addin install`` がアドインの Close で COM エラーになることがある。
-    Close を行わず、パッケージ同梱の xlwings.xlam をユーザ XLSTART にコピーする。
-    """
     try:
         from xlwings.cli import get_addin_dir
     except ImportError as ex:
@@ -102,33 +154,30 @@ def _xlwings_addin_install_fallback_copy() -> int:
     except OSError as ex:
         errno = getattr(ex, "errno", None)
         winerror = getattr(ex, "winerror", None)
-        # Excel が xlwings.xlam を掴んでいると上書きできない。
-        # Windows では errno 13 だけでなく WinError 32（他プロセスが使用中）などになる。
         locked = errno == 13 or winerror in (32, 33)
-        if locked and dest.is_file():
-            locked_size = dest.stat().st_size
-            if locked_size > 0:
-                print(
-                    "xlwings アドイン（xlwings.xlam）は既に XLSTART にありますが、"
-                    "Excel がファイルを使用中のため上書きできませんでした。\n"
-                    "pip と Python パッケージの更新は完了しています。\n"
-                    "アドイン本体を最新ファイルに差し替えるには、すべての Excel を終了してから\n"
-                    "「環境構築」を再実行するか、`xlwings addin install` を実行してください。",
-                    flush=True,
-                )
-                return 0
+        if locked and dest.is_file() and dest.stat().st_size > 0:
+            print(
+                "xlwings アドイン（xlwings.xlam）は既に XLSTART にありますが、\n"
+                "Excel がファイルを使用中のため上書きできませんでした。\n"
+                "pip と Python パッケージの更新は完了しています。\n"
+                "アドイン本体を最新ファイルに差し替えるには、すべての Excel を終了してから\n"
+                "「環境構築」を再実行するか、`xlwings addin install` を実行してください。",
+                flush=True,
+            )
+            return 0
         print(
             "xlwings アドインのコピーに失敗しました（ファイルが使用中の可能性があります）。\n"
             "対処: すべての Excel を終了してから「環境構築」を再実行するか、\n"
             "コマンドプロンプトで次を実行してください。\n"
-            f"  xlwings addin install\n\n詳細: {ex}",
+            "  xlwings addin install\n\n"
+            f"詳細: {ex}",
             file=sys.stderr,
             flush=True,
         )
         return 93
     print(
         "xlwings.xlam をユーザーの XLSTART にコピーしました。\n"
-        "※ 実行中の Excel がアドインを閉じられなかったため、公式の addin install の代わりにコピーで配置しました。\n"
+        "※ 実行中の Excel がアドインを閉じられなかったため、公式の addin install の代わりにコピーで配置した場合があります。\n"
         "反映を確実にするには、Excel をすべて終了してから起動し直してください。",
         flush=True,
     )
@@ -139,35 +188,51 @@ def _xlwings_addin_install() -> int:
     if sys.platform != "win32":
         print("（Windows 以外では xlwings アドインはスキップ）", flush=True)
         return 0
-    scripts = Path(sysconfig.get_path("scripts"))
-    xw_exe = scripts / "xlwings.exe"
-    if not xw_exe.is_file():
-        print(f"xlwings.exe が見つかりません: {xw_exe}", file=sys.stderr, flush=True)
-        return 94
-    # Excel 起動中に xlwings.exe addin install を走らせると Close で COM 例外となり、
-    # 子プロセスが Traceback を大量に出すだけなので避ける。
-    if _excel_instances_visible_to_xlwings():
+    xw_exe = _xlwings_cli_exe()
+    if xw_exe is None:
+        scripts = Path(sysconfig.get_path("scripts"))
         print(
-            "Excel が起動中のため、xlwings.exe addin install はスキップし、"
+            f"xlwings の CLI が見つかりません（検索先: {scripts}）。\n"
+            "直前の pip install が、この Python に xlwings を入れたか確認してください。",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 94
+
+    running = _is_excel_exe_running_win32()
+    if running is True:
+        print(
+            "EXCEL.EXE が起動中のため、xlwings.exe addin install はスキップし、\n"
             "XLSTART へ xlwings.xlam をコピーする手順に進みます。",
             flush=True,
         )
         return _xlwings_addin_install_fallback_copy()
-    code = _run_capture_stdout_stderr([str(xw_exe), "addin", "install"])
+    if running is None:
+        print(
+            "Excel の起動有無を tasklist で判定できませんでした。\n"
+            "COM トラブルを避けるため、XLSTART への直接コピーを試みます。",
+            flush=True,
+        )
+        return _xlwings_addin_install_fallback_copy()
+
+    code, blob = _run_capture([str(xw_exe), "addin", "install"], cwd=PYTHON_DIR)
     if code == 0:
         return 0
     print(
-        "xlwings addin install が失敗したため、XLSTART への xlwings.xlam 直接コピーを試します。",
+        f"xlwings addin install が終了コード {code} で失敗したため、XLSTART への直接コピーを試します。",
         flush=True,
     )
+    if blob:
+        tail = "\n".join(blob.splitlines()[-40:])
+        print(
+            "--- xlwings CLI 出力（末尾） ---\n" + tail + "\n--- end ---",
+            file=sys.stderr,
+            flush=True,
+        )
     return _xlwings_addin_install_fallback_copy()
 
 
 def _strip_show_console_from_xlwings_user_conf() -> None:
-    """
-    以前の環境構築で書いた SHOW CONSOLE を %USERPROFILE%\\.xlwings\\xlwings.conf から外す。
-    段階1/2 は cmd.exe 経由を既定とする（xlwings のコンソールを自動では有効にしない）。
-    """
     if sys.platform != "win32":
         return
     conf_path = Path.home() / ".xlwings" / "xlwings.conf"
@@ -203,35 +268,42 @@ def _strip_show_console_from_xlwings_user_conf() -> None:
 
 
 def main() -> int:
-    os.chdir(_ROOT)
-    py = sys.executable
+    py = Path(sys.executable)
 
-    code = _run([py, "-m", "pip", "install", "--upgrade", "pip"])
+    _log("==== 工程管理AI 環境セットアップ ====")
+    _log(f"Python: {py}")
+    _log(f"スクリプト: {SCRIPT_PATH}")
+    _log(f"pip の cwd: {PYTHON_DIR}")
+    _log(f"requirements: {REQ_FILE} （存在: {'はい' if REQ_FILE.is_file() else 'いいえ'}）")
+    _log("")
+
+    code = _run_streaming([str(py), "-m", "pip", "install", "--upgrade", "pip"], cwd=PYTHON_DIR)
     if code != 0:
-        print("pip の更新に失敗しました。", file=sys.stderr, flush=True)
+        print("pip の更新に失敗しました。上記ログを確認するか、手動で次を実行してください。", file=sys.stderr, flush=True)
+        print(f"  {py} -m pip install --upgrade pip", file=sys.stderr, flush=True)
         return code
 
-    if _REQUIREMENTS.is_file():
-        code = _run(
-            [py, "-m", "pip", "install", "--upgrade", "-r", str(_REQUIREMENTS)],
-            cwd=_ROOT,
+    if REQ_FILE.is_file():
+        code, pip_blob = _run_capture(
+            [str(py), "-m", "pip", "install", "--upgrade", "-r", str(REQ_FILE)],
+            cwd=PYTHON_DIR,
         )
     else:
-        print(
-            f"requirements.txt が無いため既定パッケージを入れます: {_REQUIREMENTS}",
-            flush=True,
-        )
-        code = _run(
-            [py, "-m", "pip", "install", "--upgrade"] + _FALLBACK_PKGS,
-            cwd=_ROOT,
+        _log(f"requirements.txt が無いため既定パッケージを入れます: {REQ_FILE}")
+        code, pip_blob = _run_capture(
+            [str(py), "-m", "pip", "install", "--upgrade"] + _FALLBACK_PKGS,
+            cwd=PYTHON_DIR,
         )
     if code != 0:
         print("依存パッケージのインストールに失敗しました。", file=sys.stderr, flush=True)
+        if pip_blob:
+            print("--- pip 出力（末尾 80 行） ---", file=sys.stderr, flush=True)
+            print("\n".join(pip_blob.splitlines()[-80:]), file=sys.stderr, flush=True)
         return code
 
     code = _xlwings_addin_install()
     if code != 0:
-        print("xlwings addin install に失敗しました。", file=sys.stderr, flush=True)
+        print("xlwings アドイン手順で失敗しました。", file=sys.stderr, flush=True)
         return code
 
     _strip_show_console_from_xlwings_user_conf()
@@ -240,7 +312,52 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    import workbook_env_bootstrap as _wbe_exit
+def _run_main_with_optional_pause() -> int:
+    try:
+        from workbook_env_bootstrap import (
+            run_cli_with_optional_pause_on_error as _run_cli_guarded,
+        )
+    except ImportError:
+        import traceback
 
-    raise SystemExit(_wbe_exit.run_cli_with_optional_pause_on_error(main))
+        _log(
+            "注意: workbook_env_bootstrap を import できませんでした。"
+            "エラー時 pause のみ簡易実装で続行します。"
+        )
+
+        def _run_cli_guarded(main_fn):
+            code = 0
+            try:
+                result = main_fn()
+                if result is not None:
+                    code = int(result)
+            except SystemExit as e:
+                c = e.code
+                if isinstance(c, int):
+                    code = c
+                elif c:
+                    code = 1
+                else:
+                    code = 0
+            except BaseException:
+                traceback.print_exc()
+                code = 1
+            if os.name == "nt":
+                try:
+                    c = int(code)
+                except (TypeError, ValueError):
+                    c = 1
+                if c != 0:
+                    raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
+                    if raw not in ("0", "false", "no", "off"):
+                        try:
+                            os.system("pause")
+                        except OSError:
+                            pass
+            return code
+
+    return int(_run_cli_guarded(main))
+
+
+if __name__ == "__main__":
+    raise SystemExit(_run_main_with_optional_pause())

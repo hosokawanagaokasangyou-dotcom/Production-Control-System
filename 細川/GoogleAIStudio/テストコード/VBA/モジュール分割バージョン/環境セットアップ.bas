@@ -73,11 +73,12 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
     ' PATH を再合成したうえで、ブックフォルダで setup_environment.py を実行（pip + requirements + xlwings addin）
     wdEsc = Replace(workDir, "'", "''")
     setupEsc = Replace(setupRel, "'", "''")
-    ps = "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
+    ps = "$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; " & _
+         "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
          "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
          "Set-Location -LiteralPath '" & wdEsc & "'; " & _
-         "& py -3 -u .\" & setupEsc & "; " & _
+         "& py -3 -X utf8 -u .\" & setupEsc & "; " & _
          "exit $LASTEXITCODE"
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
