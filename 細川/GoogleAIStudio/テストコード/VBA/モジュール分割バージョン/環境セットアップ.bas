@@ -62,8 +62,7 @@ Private Function BuildPmAiPrependPathScriptBody(ByVal pyMinor As String) As Stri
         "  [string] $Scope" & vbCrLf & _
         ")" & vbCrLf & _
         "$ErrorActionPreference = 'Stop'" & vbCrLf & _
-        "$minor = '" & pyMinor & "'" & vbCrLf & _
-        "$pyRoot = (cmd /c ('py -' + $minor + ' -c ""import os,sys;print(os.path.dirname(sys.executable))""')).Trim()" & vbCrLf & _
+        "$pyRoot = (& py -" & pyMinor & " -c 'import os,sys; print(os.path.dirname(sys.executable))').Trim()" & vbCrLf & _
         "if (-not $pyRoot) { exit 2 }" & vbCrLf & _
         "$scripts = [System.IO.Path]::Combine($pyRoot, 'Scripts')" & vbCrLf & _
         "$cur = [Environment]::GetEnvironmentVariable('Path', $Scope)" & vbCrLf & _
@@ -162,7 +161,7 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
     setupEsc = Replace(setupRel, "'", "''")
     wbEsc = Replace(macroBookFullName, "'", "''")
     ps = "$env:TASK_INPUT_WORKBOOK='" & wbEsc & "'; $env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; " & _
-         "$pmPyRoot = (cmd /c 'py -" & PM_AI_SETUP_PY_MINOR & " -c ""import os,sys;print(os.path.dirname(sys.executable))""').Trim(); " & _
+         "$pmPyRoot = (& py -" & PM_AI_SETUP_PY_MINOR & " -c 'import os,sys; print(os.path.dirname(sys.executable))').Trim(); " & _
          "$pmPre = ''; if ($pmPyRoot) { $pmPre = ($pmPyRoot + ';' + ([System.IO.Path]::Combine($pmPyRoot, 'Scripts')) + ';') }; " & _
          "$env:Path = $pmPre + [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
