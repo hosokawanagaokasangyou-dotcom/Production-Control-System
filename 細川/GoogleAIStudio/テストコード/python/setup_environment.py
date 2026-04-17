@@ -12,8 +12,8 @@
 
 VBA の「環境構築」マクロはブック直下から python\\setup_environment.py を実行します。
 
-cmd / PowerShell 経由で失敗したときウィンドウが閉じないよう、非 0 終了時は
-workbook_env_bootstrap.pause_cmd_window_on_cli_error（既定で pause）を挟む。
+cmd / PowerShell 経由でウィンドウがすぐ閉じないよう、終了時（成功・失敗どちらでも）
+workbook_env_bootstrap.pause_cmd_window_on_cli_error(..., always=True) で pause／Enter 待ちを挟む。
 無効化: 環境変数 PM_AI_CMD_PAUSE_ON_ERROR=0 / false / no / off、またはマクロブックの
 「設定_環境変数」シートで A 列=PM_AI_CMD_PAUSE_ON_ERROR・B 列に同様の値（マクロから
 TASK_INPUT_WORKBOOK が渡され、pip で依存インストール成功後にシートを読み込みます）。
@@ -353,16 +353,14 @@ def main() -> int:
     return 0
 
 
-def _pause_cli_error_standalone(exit_code: int | None) -> None:
-    """workbook_env_bootstrap 不在時。pause_cmd_window_on_cli_error と同趣旨（PM_AI_CMD_PAUSE_ON_ERROR は os.environ のみ）。"""
+def _pause_setup_standalone(exit_code: int | None) -> None:
+    """workbook_env_bootstrap 不在時。成功・失敗にかかわらず pause（PM_AI_CMD_PAUSE_ON_ERROR のみ参照）。"""
     if os.name != "nt":
         return
     try:
         code = int(exit_code)
     except (TypeError, ValueError):
         code = 1
-    if code == 0:
-        return
     raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
     if raw in ("0", "false", "no", "off"):
         return
@@ -373,12 +371,18 @@ def _pause_cli_error_standalone(exit_code: int | None) -> None:
             pass
     try:
         if getattr(sys.stdin, "isatty", lambda: False)():
-            print(
-                "\n[PM_AI] エラー終了です（終了コード "
-                + str(code)
-                + "）。ログを確認してから Enter キーを押してください…",
-                flush=True,
-            )
+            if code == 0:
+                print(
+                    "\n[PM_AI] 正常終了しました。ログを確認してから Enter キーを押してください…",
+                    flush=True,
+                )
+            else:
+                print(
+                    "\n[PM_AI] エラー終了です（終了コード "
+                    + str(code)
+                    + "）。ログを確認してから Enter キーを押してください…",
+                    flush=True,
+                )
             try:
                 input()
             except EOFError:
@@ -393,44 +397,40 @@ def _pause_cli_error_standalone(exit_code: int | None) -> None:
 
 
 def _run_main_with_optional_pause() -> int:
+    import traceback
+
     try:
-        from workbook_env_bootstrap import (
-            run_cli_with_optional_pause_on_error as _run_cli_guarded,
-        )
+        from workbook_env_bootstrap import pause_cmd_window_on_cli_error
     except ImportError:
-        import traceback
+        pause_cmd_window_on_cli_error = None  # type: ignore[assignment]
 
-        _log(
-            "注意: workbook_env_bootstrap を import できませんでした。"
-            "エラー時 pause のみ簡易実装で続行します。"
-        )
-
-        def _run_cli_guarded(main_fn):
-            code = 0
-            try:
-                try:
-                    result = main_fn()
-                    if result is not None:
-                        code = int(result)
-                except SystemExit as e:
-                    c = e.code
-                    if isinstance(c, int):
-                        code = c
-                    elif c:
-                        code = 1
-                    else:
-                        code = 0
-                except BaseException:
-                    traceback.print_exc()
-                    code = 1
-            finally:
-                try:
-                    _pause_cli_error_standalone(code)
-                except Exception:
-                    pass
-            return code
-
-    return int(_run_cli_guarded(main))
+    code = 0
+    try:
+        try:
+            result = main()
+            if result is not None:
+                code = int(result)
+        except SystemExit as e:
+            c = e.code
+            if isinstance(c, int):
+                code = c
+            elif c:
+                code = 1
+            else:
+                code = 0
+        except BaseException:
+            traceback.print_exc()
+            code = 1
+    finally:
+        try:
+            if pause_cmd_window_on_cli_error is not None:
+                pause_cmd_window_on_cli_error(code, always=True)
+            else:
+                _log("注意: workbook_env_bootstrap を import できませんでした。簡易 pause に切り替えます。")
+                _pause_setup_standalone(code)
+        except Exception:
+            pass
+    return code
 
 
 if __name__ == "__main__":

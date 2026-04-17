@@ -133,10 +133,12 @@ def apply_from_task_input_workbook() -> int:
     return apply_workbook_environment_sheet(p)
 
 
-def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
+def pause_cmd_window_on_cli_error(exit_code: int | None, *, always: bool = False) -> None:
     """
-    Windows の cmd 経由起動で、ウィンドウがすぐ閉じてトレースバックをコピーできない場合向け。
-    異常終了時のみ ``pause`` を挟む。
+    Windows の cmd 経由起動で、ウィンドウがすぐ閉じてログを確認できない場合向け。
+
+    ``always=False``（既定）: 非 0 終了時のみ ``pause``／Enter 待ち。
+    ``always=True``: 成功・失敗にかかわらず終了時に待つ（環境構築 ``setup_environment`` 用）。
 
     無効化: 環境変数 ``PM_AI_CMD_PAUSE_ON_ERROR`` を ``0`` / ``false`` / ``no`` / ``off``。
     マクロブックにシート「設定_環境変数」があり ``TASK_INPUT_WORKBOOK`` がプロセスに設定されているときは、
@@ -151,7 +153,7 @@ def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
         code = int(exit_code)
     except (TypeError, ValueError):
         code = 1
-    if code == 0:
+    if not always and code == 0:
         return
     raw = (os.environ.get("PM_AI_CMD_PAUSE_ON_ERROR") or "1").strip().lower()
     if raw in ("0", "false", "no", "off"):
@@ -163,12 +165,18 @@ def pause_cmd_window_on_cli_error(exit_code: int | None) -> None:
             pass
     try:
         if getattr(sys.stdin, "isatty", lambda: False)():
-            print(
-                "\n[PM_AI] エラー終了です（終了コード "
-                + str(code)
-                + "）。ログを確認してから Enter キーを押してください…",
-                flush=True,
-            )
+            if code == 0:
+                print(
+                    "\n[PM_AI] 正常終了しました。ログを確認してから Enter キーを押してください…",
+                    flush=True,
+                )
+            else:
+                print(
+                    "\n[PM_AI] エラー終了です（終了コード "
+                    + str(code)
+                    + "）。ログを確認してから Enter キーを押してください…",
+                    flush=True,
+                )
             try:
                 input()
             except EOFError:
@@ -188,7 +196,7 @@ def run_cli_with_optional_pause_on_error(main_fn):
 
     ``main_fn`` が ``sys.exit(n)`` した場合は ``n`` を採用する。
     未捕捉例外は traceback 出力のうえコード 1。
-    Windows かつ非 0 終了なら :func:`pause_cmd_window_on_cli_error` を呼ぶ。
+    Windows かつ非 0 終了なら :func:`pause_cmd_window_on_cli_error`（``always=False``）を呼ぶ。
     """
     import traceback
 
