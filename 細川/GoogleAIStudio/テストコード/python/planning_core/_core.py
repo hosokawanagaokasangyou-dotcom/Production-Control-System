@@ -16578,6 +16578,7 @@ def _build_dispatch_trial_pattern_list_matrix(
         "依頼NO",
         "工程名",
         "機械名",
+        TASK_COL_QTY,
         "納期基準",
     ]
     rows: list[list] = [[intro], [], headers]
@@ -16600,8 +16601,75 @@ def _build_dispatch_trial_pattern_list_matrix(
             db = t.get("due_basis_date")
             db_s = db.strftime("%Y/%m/%d") if isinstance(db, date) else ""
             seed_s = "" if seed is None else str(int(seed))
-            rows.append([pid, pname, seed_s, dto, tid, proc, mname, db_s])
+            qty_m = t.get("total_qty_m")
+            try:
+                qty_out = int(qty_m) if qty_m is not None else None
+            except (TypeError, ValueError):
+                qty_out = None
+            rows.append([pid, pname, seed_s, dto, tid, proc, mname, qty_out, db_s])
     return rows
+
+
+def _xlwings_format_dispatch_trial_pattern_list_sheet(
+    ws_out,
+    n_rows: int,
+    n_cols: int,
+    *,
+    header_row: int = 3,
+) -> None:
+    """
+    パターン一覧シートの見やすさ: 1 行目説明の横結合、見出し行の太字、データ範囲を Excel 表（ListObject）にする。
+    環境変数 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE=1 で表のみスキップ（結合・太字は実施）。
+    """
+    if n_rows < header_row or n_cols < 1:
+        return
+    try:
+        ws_out.range((1, 1), (1, n_cols)).merge()
+        c1 = ws_out.range((1, 1)).api
+        c1.VerticalAlignment = -4160  # xlTop
+        c1.WrapText = True
+        c1.HorizontalAlignment = -4131  # xlLeft
+    except Exception:
+        logging.debug("パターン一覧: 1 行目の結合に失敗（無視）", exc_info=True)
+    try:
+        ws_out.range((header_row, 1), (header_row, n_cols)).api.Font.Bold = True
+    except Exception:
+        pass
+
+    no_tbl = (os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE") or "").strip().lower()
+    if no_tbl in ("1", "true", "yes", "on", "y"):
+        return
+    tbl_name = "TblDispatchTrialPatterns"
+    try:
+        lots = ws_out.api.ListObjects
+        for i in range(int(lots.Count), 0, -1):
+            try:
+                if str(lots.Item(i).Name) == tbl_name:
+                    lots.Item(i).Delete()
+            except Exception:
+                continue
+    except Exception:
+        pass
+    try:
+        tbl_nrows = n_rows - header_row + 1
+        if tbl_nrows < 2:
+            return
+        data_rng = ws_out.range((header_row, 1)).resize(tbl_nrows, n_cols)
+        # xlSrcRange=1, HasHeaders=xlYes=1
+        ws_out.api.ListObjects.Add(1, data_rng.api, None, 1)
+        lots = ws_out.api.ListObjects
+        lo = lots.Item(int(lots.Count))
+        lo.Name = tbl_name
+        try:
+            lo.TableStyle = "TableStyleMedium2"
+        except Exception:
+            pass
+    except Exception as e:
+        logging.warning("パターン一覧: Excel 表（ListObject）の設定をスキップしました: %s", e)
+    try:
+        ws_out.used_range.columns.api.AutoFit()
+    except Exception:
+        pass
 
 
 def write_dispatch_trial_pattern_list_via_xlwings(
@@ -16709,6 +16777,11 @@ def write_dispatch_trial_pattern_list_via_xlwings(
     except Exception as e:
         logging.exception("配台試行順パターン一覧: シート書込に失敗: %s", e)
         return False
+
+    try:
+        _xlwings_format_dispatch_trial_pattern_list_sheet(ws_out, n_rows, n_cols, header_row=3)
+    except Exception:
+        logging.exception("配台試行順パターン一覧: 書式・表の適用で例外（続行）")
 
     try:
         wb.save()
