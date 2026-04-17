@@ -2315,6 +2315,11 @@ Public Sub 段階1_コア実行()
     配台計画_タスク入力を前へ並べ替え
     On Error GoTo 0
 
+    MacroSplash_SetStep "段階1: 「配台計画_タスク入力」の列設定（並び順・表示）を反映しています…"
+    On Error Resume Next
+    配台計画_タスク入力_列設定_反映
+    On Error GoTo 0
+
     MacroSplash_SetStep "段階1: フォント統一と表示調整を行っています…"
     Application.ScreenUpdating = True
     DoEvents
