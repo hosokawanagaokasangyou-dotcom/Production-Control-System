@@ -195,6 +195,8 @@ TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
+# 段階1「配台試行順番」ソート用: 機械名と数値優先順位（小さいほど先）。キーは _normalize_equipment_match_key。
+SHEET_MACHINE_PRIORITY_ORDER = "設定_機械優先順位"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」は別列。
 # 勤怠AIの入力は備考のみ。reason（表示・中抜き補正・個人シートの休憩/休暇文言）は「備考が空のとき休暇区分を引き継ぐ」。
 # master カレンダー＝出勤簿.txt 準拠: 公休=公休年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）＝後休=定常開始～休憩時間1_開始・午後年休＝国=他拠点勤務。
@@ -16218,6 +16220,79 @@ def _generate_plan_task_queue_sort_key(
     )
 
 
+def load_stage1_machine_priority_rank_by_normalized_name_from_master() -> dict[str, int]:
+    """
+    master.xlsm の「設定_機械優先順位」から、正規化機械名 → 優先順位（昇順＝小さいほど先）を返す。
+    シート・ファイルが無い、必須列が無い、読込失敗時は {}（呼び出し側で機械名文字列順にフォールバック）。
+    同一機械名が複数行あるときは下の行が優先。
+    """
+    path = MASTER_FILE
+    if not path or not os.path.exists(path):
+        logging.info(
+            "設定_機械優先順位: マスタファイルがありません（%s）。機械名の文字列順でソートします。",
+            path or "(未設定)",
+        )
+        return {}
+    try:
+        with pd.ExcelFile(path) as xf:
+            if SHEET_MACHINE_PRIORITY_ORDER not in xf.sheet_names:
+                logging.info(
+                    "設定_機械優先順位: シート「%s」がありません。機械名の文字列順でソートします。",
+                    SHEET_MACHINE_PRIORITY_ORDER,
+                )
+                return {}
+            df = pd.read_excel(xf, sheet_name=SHEET_MACHINE_PRIORITY_ORDER, header=0)
+    except Exception as e:
+        logging.warning(
+            "設定_機械優先順位: 読込に失敗しました（機械名の文字列順でソート）: %s",
+            e,
+        )
+        return {}
+    if df is None or getattr(df, "empty", True):
+        logging.info("設定_機械優先順位: 表が空です。機械名の文字列順でソートします。")
+        return {}
+    col_m = None
+    col_p = None
+    for c in df.columns:
+        lab = str(c).strip()
+        if lab == "機械名":
+            col_m = c
+        elif lab == "優先順位":
+            col_p = c
+    if col_m is None or col_p is None:
+        logging.warning(
+            "設定_機械優先順位: 列「機械名」「優先順位」が見つかりません。機械名の文字列順でソートします。"
+        )
+        return {}
+    out: dict[str, int] = {}
+    for _, row in df.iterrows():
+        raw_name = row.get(col_m)
+        nk = _normalize_equipment_match_key(raw_name)
+        if not nk:
+            continue
+        raw_p = row.get(col_p)
+        if raw_p is None or (isinstance(raw_p, float) and pd.isna(raw_p)):
+            continue
+        try:
+            pr = int(round(float(str(raw_p).replace(",", "").strip())))
+        except (TypeError, ValueError):
+            continue
+        if pr < 1:
+            continue
+        out[nk] = pr
+    if out:
+        logging.info(
+            "設定_機械優先順位: %s 件を読み込みました（シート「%s」）。",
+            len(out),
+            SHEET_MACHINE_PRIORITY_ORDER,
+        )
+    else:
+        logging.info(
+            "設定_機械優先順位: 有効行がありません。機械名の文字列順でソートします。"
+        )
+    return out
+
+
 def _process_is_slice_or_sec_for_stage1_dispatch_order(machine) -> bool:
     """段階1配台試行順: 工程名がスライスまたは SEC（表記ゆれは _normalize_process_name_for_rule_match）。"""
     n = _normalize_process_name_for_rule_match(machine)
@@ -16256,19 +16331,35 @@ def _task_product_thickness_sort_pair_for_stage1(task: dict) -> tuple[int, float
     return (0, v)
 
 
-def _stage1_dispatch_trial_order_sort_key(task: dict) -> tuple:
+def _stage1_dispatch_trial_order_sort_key(
+    task: dict,
+    machine_priority_by_norm_name: dict[str, int] | None = None,
+) -> tuple:
     """
-    段階1のみ: ①機械名 → ②納期(早い順) → ③換算残量(少ない順) → ④スライス/SEC は厚み(小さい順)
+    段階1のみ: ①機械（master「設定_機械優先順位」の数値順。表に無い機械は後方、その後機械名で安定）→
+    ②納期(早い順) → ③換算残量(少ない順) → ④スライス/SEC は厚み(小さい順)
     → planning_sheet_row_seq で安定化。その後 §B EC 隣接は呼び出し側で適用。
+
+    machine_priority_by_norm_name が空のときは①を正規化機械名の文字列順のみとする。
     """
     mn = _normalize_equipment_match_key(task.get("machine_name"))
+    if machine_priority_by_norm_name:
+        if mn in machine_priority_by_norm_name:
+            mach_tier = 0
+            mach_pri = int(machine_priority_by_norm_name[mn])
+        else:
+            mach_tier = 1
+            mach_pri = 10**9
+        mach_key = (mach_tier, mach_pri, mn)
+    else:
+        mach_key = (0, 0, mn)
     due = task.get("due_basis_date")
     if not isinstance(due, date):
         due = date.max
     rem = _task_remaining_qty_m_for_stage1_dispatch_order(task)
     thick_tier, thick_mm = _task_product_thickness_sort_pair_for_stage1(task)
     seq = int(task.get("planning_sheet_row_seq") or 10**9)
-    return (mn, due, rem, thick_tier, thick_mm, seq)
+    return (*mach_key, due, rem, thick_tier, thick_mm, seq)
 
 
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
@@ -16372,6 +16463,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     *,
     require_valid_sheet_dispatch_trial_order: bool = False,
     use_stage1_machine_due_dispatch_order_sort: bool = False,
+    stage1_machine_priority_by_norm_name: dict[str, int] | None = None,
 ) -> None:
     """
     配台試行順の確定。シートに全行分の試行順はあれみしれを採用（§B-2/3 の隣接繰り上きは行ゝない）。
@@ -16382,8 +16474,11 @@ def _apply_dispatch_trial_order_for_generate_plan(
         PlanningValidationError で停止し、自動付与にフォールバックしない。
 
     use_stage1_machine_due_dispatch_order_sort:
-        段階1用。True かつシート試行順が全行未充足のとき、機械名・納期・換算残量・(スライス/SEC の)厚み
+        段階1用。True かつシート試行順が全行未充足のとき、設定_機械優先順位・納期・換算残量・(スライス/SEC の)厚み
         でソートしたうえで §B EC 隣接と連番付与を行う。段階2では False のまま。
+
+    stage1_machine_priority_by_norm_name:
+        段階1用。master「設定_機械優先順位」の 機械名→優先順位（正規化キー）。空でなければ①で数値順を採用。
     """
     if require_valid_sheet_dispatch_trial_order and task_queue:
         bad = [
@@ -16419,7 +16514,10 @@ def _apply_dispatch_trial_order_for_generate_plan(
         )
         return
     if use_stage1_machine_due_dispatch_order_sort:
-        task_queue.sort(key=_stage1_dispatch_trial_order_sort_key)
+        _pri = stage1_machine_priority_by_norm_name
+        task_queue.sort(
+            key=lambda t: _stage1_dispatch_trial_order_sort_key(t, _pri),
+        )
     else:
         task_queue.sort(
             key=lambda x: _generate_plan_task_queue_sort_key(
@@ -16449,9 +16547,10 @@ def fill_plan_dispatch_trial_order_column_stage1(
     equipment_list: list,
 ) -> None:
     """
-    段階1出力 DataFrame の「配台試行順番」を、機械名・納期・換算残量・(スライス/SEC の)厚みでソートし、
-    §B-2/3 EC 隣接後に連番で埋める。段階2の generate_plan では別キー（本フラグは False）を使う。
-    配台対象外の行は空のまま。
+    段階1出力 DataFrame の「配台試行順番」を、master「設定_機械優先順位」に従う機械順・納期・換算残量・
+    (スライス/SEC の)厚みでソートし、§B-2/3 EC 隣接後に連番で埋める。
+    優先順位シートが無い・空のときは機械名（正規化文字列）順にフォールバックする。
+    段階2の generate_plan では別キー（本フラグは False）を使う。配台対象外の行は空のまま。
     """
     if plan_df is None or getattr(plan_df, "empty", True):
         return
@@ -16483,6 +16582,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
         gpo,
         equipment_list,
     )
+    _stage1_pri = load_stage1_machine_priority_rank_by_normalized_name_from_master()
     _apply_dispatch_trial_order_for_generate_plan(
         tq,
         req_map,
@@ -16490,6 +16590,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
         need_combo_col_index,
         require_valid_sheet_dispatch_trial_order=False,
         use_stage1_machine_due_dispatch_order_sort=True,
+        stage1_machine_priority_by_norm_name=_stage1_pri if _stage1_pri else None,
     )
     try:
         col_idx = plan_df.columns.get_loc(col)
