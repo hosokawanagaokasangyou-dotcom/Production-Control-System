@@ -5,7 +5,7 @@ Public Function Py3VersionOutput(wsh As Object) As String
     Dim s As String
     Py3VersionOutput = ""
     On Error GoTo CleanExit
-    Set execObj = wsh.Exec("cmd.exe /c py -3 --version")
+    Set execObj = wsh.Exec("cmd.exe /c py -" & PM_AI_SETUP_PY_MINOR & " --version")
     Do While execObj.Status = 0
         Sleep 50
     Loop
@@ -18,13 +18,13 @@ End Function
 Public Function IsPython3Available(wsh As Object) As Boolean
     Dim s As String
     s = Py3VersionOutput(wsh)
-    IsPython3Available = (InStr(1, s, "Python 3", vbTextCompare) > 0)
+    IsPython3Available = (InStr(1, s, "Python " & PM_AI_SETUP_PY_MINOR, vbTextCompare) > 0)
 End Function
 
 Public Function TryInstallPythonViaWinget(wsh As Object) As Boolean
     On Error GoTo Fail
     Dim wingetBat As String
-    wingetBat = "@echo off" & vbCrLf & "winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
+    wingetBat = "@echo off" & vbCrLf & "winget install -e --id " & PM_AI_SETUP_WINGET_PYTHON_ID & " --silent --accept-package-agreements --accept-source-agreements" & vbCrLf & "exit /b %ERRORLEVEL%"
     RunTempCmdWithConsoleLayout wsh, wingetBat
     TryInstallPythonViaWinget = True
     Exit Function
@@ -54,6 +54,29 @@ Fail:
     TryInstallPythonViaOfficialInstaller = False
 End Function
 
+' Python 3.14 インストール先と Scripts を、重複除去のうえ PATH の先頭へ（Machine は権限があれば、続けて User を必ず更新）。
+Public Function PrependPmAiPythonInstallDirsOnRegistryPath(wsh As Object) As Boolean
+    Dim ps As String
+    Dim shellCmd As String
+    Dim exitCode As Long
+    On Error GoTo Fail
+    ps = "$pyRoot = (cmd /c 'py -" & PM_AI_SETUP_PY_MINOR & " -c ""import os,sys;print(os.path.dirname(sys.executable))""').Trim(); " & _
+         "if (-not $pyRoot) { exit 2 }; " & _
+         "$scripts = [System.IO.Path]::Combine($pyRoot, 'Scripts'); " & _
+         "function Dedup-Prepend([string]$scope) { try { $cur = [Environment]::GetEnvironmentVariable('Path', $scope); if ($null -eq $cur) { $cur = '' }; " & _
+         "$parts = @(); if ($cur) { $parts = $cur -split ';' | ForEach-Object { $t = $_.Trim(); if ($t) { $t.TrimEnd([char]92) } } | Where-Object { $_ -and ($_ -ne $pyRoot) -and ($_ -ne $scripts) } }; " & _
+         "$new = ($pyRoot + ';' + $scripts + ';' + ($parts -join ';')).TrimEnd(';'); " & _
+         "[Environment]::SetEnvironmentVariable('Path', $new, $scope); return $true } catch { return $false } }; " & _
+         "$null = Dedup-Prepend 'Machine'; " & _
+         "if (-not (Dedup-Prepend 'User')) { exit 1 }; exit 0"
+    shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
+    exitCode = wsh.Run(shellCmd, 0, True)
+    PrependPmAiPythonInstallDirsOnRegistryPath = (exitCode = 0)
+    Exit Function
+Fail:
+    PrependPmAiPythonInstallDirsOnRegistryPath = False
+End Function
+
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
 Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
     If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
@@ -80,11 +103,13 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
     setupEsc = Replace(setupRel, "'", "''")
     wbEsc = Replace(macroBookFullName, "'", "''")
     ps = "$env:TASK_INPUT_WORKBOOK='" & wbEsc & "'; $env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; " & _
-         "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
+         "$pmPyRoot = (cmd /c 'py -" & PM_AI_SETUP_PY_MINOR & " -c ""import os,sys;print(os.path.dirname(sys.executable))""').Trim(); " & _
+         "$pmPre = ''; if ($pmPyRoot) { $pmPre = ($pmPyRoot + ';' + ([System.IO.Path]::Combine($pmPyRoot, 'Scripts')) + ';') }; " & _
+         "$env:Path = $pmPre + [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); " & _
          "$py = Get-Command py -ErrorAction SilentlyContinue; " & _
          "if (-not $py) { Write-Error 'py が見つかりません。Excel を一度終了してから再実行するか、PATH を確認してください。'; exit 91 }; " & _
          "Set-Location -LiteralPath '" & wdEsc & "'; " & _
-         "& py -3 -X utf8 -u .\" & setupEsc & "; " & _
+         "& py -" & PM_AI_SETUP_PY_MINOR & " -X utf8 -u .\" & setupEsc & "; " & _
          "exit $LASTEXITCODE"
     shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
@@ -116,7 +141,7 @@ Sub InstallComponents()
     End If
     
     If Not IsPython3Available(wsh) Then
-        MsgBox "Python 3（py -3）が見つかりません。" & vbCrLf & _
+        MsgBox "Python " & PM_AI_SETUP_PY_MINOR & "（py -" & PM_AI_SETUP_PY_MINOR & "）が見つかりません。" & vbCrLf & _
                "自動インストールを開始します（winget → 失敗時は python.org のインストーラ）。" & vbCrLf & _
                "管理者権限や UAC の承認が求められる場合があります。数分かかることがあります。", vbInformation
         
@@ -131,13 +156,13 @@ Sub InstallComponents()
         If Not IsPython3Available(wsh) Then
             If Not TryInstallPythonViaOfficialInstaller(wsh) Then
                 MsgBox "公式インストーラによるセットアップに失敗しました。" & vbCrLf & _
-                       "https://www.python.org/downloads/windows/ から Python 3.12 をインストール（Add python.exe to PATH）後、本マクロを再実行してください。", vbCritical
+                       "https://www.python.org/downloads/windows/ から Python " & PM_AI_SETUP_PY_MINOR & " をインストール（Add python.exe to PATH）後、本マクロを再実行してください。", vbCritical
                 Exit Sub
             End If
         End If
         
         If Not IsPython3Available(wsh) Then
-            MsgBox "インストール後も py -3 を認識できませんでした。" & vbCrLf & _
+            MsgBox "インストール後も py -" & PM_AI_SETUP_PY_MINOR & " を認識できませんでした。" & vbCrLf & _
                    "Excel をいったん終了し、再起動してから再度「環境構築」を実行してください。", vbExclamation
             Exit Sub
         End If
@@ -146,13 +171,20 @@ Sub InstallComponents()
         MacroSplash_SetStep "Python を検出しました（" & Left$(msg, 80) & "…）。pip でライブラリをインストールします…"
     End If
     
+    MacroSplash_SetStep "環境構築: Python " & PM_AI_SETUP_PY_MINOR & " を PATH 先頭に登録しています…"
+    If Not PrependPmAiPythonInstallDirsOnRegistryPath(wsh) Then
+        MsgBox "Python " & PM_AI_SETUP_PY_MINOR & " は検出できましたが、環境変数 Path への先頭登録に失敗した可能性があります。" & vbCrLf & _
+               "（システム Path は管理者権限がないと更新できません。ユーザー Path は更新済みの場合があります。）" & vbCrLf & _
+               "setup_environment.py の実行は続行します。", vbExclamation
+    End If
+    
     MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
     pipExit = RunPipInstallWithRefreshedPath(wsh, workDir, setupRel, ThisWorkbook.FullName)
     If pipExit <> 0 Then
         MsgBox "setup_environment.py の実行に失敗しました（exitCode=" & CStr(pipExit) & "）。" & vbCrLf & _
                "コマンドプロンプトでブックのフォルダを開き、次を手動実行してください。" & vbCrLf & vbCrLf & _
                "cd /d """ & workDir & """" & vbCrLf & _
-               "py -3 " & setupRel, vbCritical
+               "py -" & PM_AI_SETUP_PY_MINOR & " " & setupRel, vbCritical
         Exit Sub
     End If
 

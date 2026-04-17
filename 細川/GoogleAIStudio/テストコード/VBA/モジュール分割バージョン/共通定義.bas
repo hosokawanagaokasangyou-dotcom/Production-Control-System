@@ -185,8 +185,11 @@ Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 '   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ XwRunConsoleRunner。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
 
-' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（必要なら 3.12 のパッチ版に更新）
-Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（3.14 のパッチ版に合わせて更新）
+Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
+' 環境構築（環境セットアップ.bas）で使う Python 3.14: py ランチャー・winget パッケージ ID
+Public Const PM_AI_SETUP_PY_MINOR As String = "3.14"
+Public Const PM_AI_SETUP_WINGET_PYTHON_ID As String = "Python.Python.3.14"
 
 ' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
 Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
