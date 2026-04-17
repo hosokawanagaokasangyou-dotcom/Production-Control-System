@@ -22,114 +22,6 @@ Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     EnsureStageBatchStdoutRedirect = body
 End Function
 
-' #region agent log
-Private Function DbgAgentJsonEscape(ByVal s As String) As String
-    DbgAgentJsonEscape = Replace(Replace(Replace(s, "\", "\\"), """", "\"""), vbCrLf, "\n")
-End Function
-
-Private Function DebugSkipThisWorkbookSaveEffective() As Boolean
-    Dim v As String
-    v = LCase$(Trim$(Environ$("PM_AI_DEBUG_SKIP_SAVE")))
-    If Len(v) = 0 Then
-        v = LCase$(Trim$(DbgAgentReadEnvFromSheet("PM_AI_DEBUG_SKIP_SAVE")))
-    End If
-    DebugSkipThisWorkbookSaveEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
-End Function
-
-Private Function DbgAgentReadEnvFromSheet(ByVal key As String) As String
-    On Error Resume Next
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim r As Long
-    Dim k As String
-    Dim v As String
-    If Len(Trim$(key)) = 0 Then
-        DbgAgentReadEnvFromSheet = ""
-        Exit Function
-    End If
-    Set ws = ThisWorkbook.Worksheets("設定_環境変数")
-    If ws Is Nothing Then
-        DbgAgentReadEnvFromSheet = ""
-        Exit Function
-    End If
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    If lastRow < 1 Then lastRow = 1
-    For r = 1 To lastRow
-        k = Trim$(CStr(ws.Cells(r, 1).Value))
-        If StrComp(k, key, vbBinaryCompare) = 0 Then
-            v = CStr(ws.Cells(r, 2).Value)
-            DbgAgentReadEnvFromSheet = v
-            Exit Function
-        End If
-    Next r
-    DbgAgentReadEnvFromSheet = ""
-    On Error GoTo 0
-End Function
-
-Private Function DbgAgentOneDriveCandPath() As String
-    DbgAgentOneDriveCandPath = "C:\Users\0585\OneDrive\ドキュメント\生産管理_AI配台_V2.xlsm"
-End Function
-
-Private Function DbgAgentFileMTimeSafe(ByVal p As String) As String
-    On Error Resume Next
-    If Len(Dir(p)) = 0 Then
-        DbgAgentFileMTimeSafe = ""
-    Else
-        DbgAgentFileMTimeSafe = CStr(FileDateTime(p))
-    End If
-    On Error GoTo 0
-End Function
-
-Private Sub DbgAgentNdjsonAppend(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal fullName As String, ByVal wbPath As String)
-    Const LOGP As String = "c:\工程管理AIプロジェクト\----AI-------1\debug-8b603e.log"
-    Const CODE_VER As String = "a0dc069"
-    Dim stm As Object
-    Dim js As String
-    Dim escF As String
-    Dim escP As String
-    Dim dfp As String
-    Dim aw As String
-    Dim od As String
-    Dim odMt As String
-    Dim envSkip As String
-    Dim sheetSkip As String
-    Dim effSkip As String
-    On Error Resume Next
-    escF = DbgAgentJsonEscape(fullName)
-    escP = DbgAgentJsonEscape(wbPath)
-    dfp = ""
-    aw = ""
-    dfp = CStr(Application.DefaultFilePath)
-    If Not Application.ActiveWorkbook Is Nothing Then aw = CStr(Application.ActiveWorkbook.FullName)
-    od = DbgAgentOneDriveCandPath()
-    odMt = DbgAgentFileMTimeSafe(od)
-    envSkip = CStr(Environ$("PM_AI_DEBUG_SKIP_SAVE"))
-    sheetSkip = CStr(DbgAgentReadEnvFromSheet("PM_AI_DEBUG_SKIP_SAVE"))
-    effSkip = IIf(DebugSkipThisWorkbookSaveEffective(), "1", "0")
-    js = "{""sessionId"":""8b603e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & message & """,""data"":{""codeVer"":""" & CODE_VER & """,""fullName"":""" & escF & """,""wbPath"":""" & escP & """,""defaultFilePath"":""" & DbgAgentJsonEscape(dfp) & """,""activeWorkbook"":""" & DbgAgentJsonEscape(aw) & """,""oneDriveCand"":""" & DbgAgentJsonEscape(od) & """,""oneDriveMTime"":""" & DbgAgentJsonEscape(odMt) & """,""envSkipSave"":""" & DbgAgentJsonEscape(envSkip) & """,""sheetSkipSave"":""" & DbgAgentJsonEscape(sheetSkip) & """,""skipSaveEffective"":""" & DbgAgentJsonEscape(effSkip) & """},""timestamp"":" & CStr(CLng(Timer * 1000#)) & "}"
-    Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2
-    stm.Mode = 3
-    stm.Charset = "UTF-8"
-    stm.Open
-    Err.Clear
-    stm.LoadFromFile LOGP
-    If Err.Number <> 0 Then
-        Err.Clear
-        stm.Close
-        stm.Charset = "UTF-8"
-        stm.Open
-    Else
-        stm.Position = stm.Size
-    End If
-    stm.WriteText js & vbLf, 0
-    stm.SaveToFile LOGP, 2
-    stm.Close
-    Set stm = Nothing
-    On Error GoTo 0
-End Sub
-' #endregion
-
 Public Function RunTempCmdWithConsoleLayout(ByVal wsh As Object, ByVal body As String, Optional ByVal applyTopQuarterFullWidthConsole As Boolean = False, Optional ByVal hideCmdWindow As Boolean = False) As Long
     Dim p As String
     Dim uniq As String
@@ -2219,9 +2111,6 @@ Public Sub 段階1_コア実行()
         m_lastStage1ErrMsg = "先にこのExcelファイルを保存してください。"
         Exit Sub
     End If
-    ' #region agent log
-    DbgAgentNdjsonAppend "H1", "業務ロジック:段階1_コア実行", "after targetDir ok", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
 
     Application.ScreenUpdating = False
 
@@ -2257,18 +2146,8 @@ Public Sub 段階1_コア実行()
     MacroSplash_SetStep "段階1: ブックを保存し LOG シートを初期化します…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
-    ' #region agent log
-    DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "before first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
     On Error Resume Next
-    If DebugSkipThisWorkbookSaveEffective() Then
-        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階1_コア実行", "SKIP ThisWorkbook.Save (PM_AI_DEBUG_SKIP_SAVE)", ThisWorkbook.FullName, ThisWorkbook.path
-    Else
-        ThisWorkbook.Save
-    End If
-    ' #region agent log
-    DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "after first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
+    ThisWorkbook.Save
     Application.StatusBar = False
     On Error GoTo ErrStage1
 
@@ -2305,9 +2184,6 @@ Public Sub 段階1_コア実行()
     End If
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
-    ' #region agent log
-    DbgAgentNdjsonAppend "H4", "業務ロジック:段階1_コア実行", "after TASK_INPUT_WORKBOOK env set", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
 
     On Error Resume Next
     Kill targetDir & "\log\execution_log.txt"
@@ -2428,9 +2304,6 @@ Public Sub 段階1_コア実行()
     End If
 
     MacroSplash_SetStep "段階1: output\plan_input_tasks.xlsx を開き「配台計画_タスク入力」へ取り込んでいます…"
-    ' #region agent log
-    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "before ImportPlanInputTasksFromOutput", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
     If Not ImportPlanInputTasksFromOutput(targetDir) Then
         m_lastStage1ExitCode = -1
         Application.ScreenUpdating = prevScreenUpdating
@@ -2438,9 +2311,6 @@ Public Sub 段階1_コア実行()
         If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
         Exit Sub
     End If
-    ' #region agent log
-    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "after ImportPlanInputTasksFromOutput", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
     On Error Resume Next
     配台計画_タスク入力を前へ並べ替え
     On Error GoTo 0
@@ -2472,15 +2342,8 @@ Public Sub 段階1_コア実行()
     Application.ScreenUpdating = prevScreenUpdating
     Application.DisplayAlerts = prevDisplayAlerts
     On Error Resume Next
-    If DebugSkipThisWorkbookSaveEffective() Then
-        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階1_コア実行", "SKIP ThisWorkbook.Save (Stage1 end)", ThisWorkbook.FullName, ThisWorkbook.path
-    Else
-        ThisWorkbook.Save
-    End If
+    ThisWorkbook.Save
     On Error GoTo 0
-    ' #region agent log
-    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "after final ThisWorkbook.Save (Stage1 end)", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
     If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
     Exit Sub
 
@@ -3042,9 +2905,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' 任意: シート「列設定_結果_タスク一覧」（列名・表示）で結果_タスク一覧の列順と表示/非表示を変更可。
     '       表示=FALSE の列は結果シートで列非表示。マクロ「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列(B)に連動可能。
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
-    ' #region agent log
-    DbgAgentNdjsonAppend "H4", "業務ロジック:段階2_コア実行", "after TASK_INPUT_WORKBOOK env set", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
     
     ' ★修正：削除対象のログファイルのパスを output フォルダ配下に変更
     On Error Resume Next
@@ -3064,14 +2924,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
-    ' #region agent log
-    DbgAgentNdjsonAppend "H1", "業務ロジック:段階2_コア実行", "before stage2 ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
-    ' #endregion
-    If DebugSkipThisWorkbookSaveEffective() Then
-        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階2_コア実行", "SKIP ThisWorkbook.Save (before stage2 Python)", ThisWorkbook.FullName, ThisWorkbook.path
-    Else
-        ThisWorkbook.Save
-    End If
+    ThisWorkbook.Save
     Application.StatusBar = False
     
     st2DidUnlock = False
@@ -3479,12 +3332,7 @@ Finish:
     On Error GoTo 0
     
     On Error Resume Next
-    If DebugSkipThisWorkbookSaveEffective() Then
-        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階2_コア実行", "SKIP ThisWorkbook.Save (Finish)", ThisWorkbook.FullName, ThisWorkbook.path
-    Else
-        ThisWorkbook.Save
-    End If
-    DbgAgentNdjsonAppend "H2", "業務ロジック:段階2_コア実行", "after final ThisWorkbook.Save (Finish)", ThisWorkbook.FullName, ThisWorkbook.path
+    ThisWorkbook.Save
     On Error GoTo 0
     
     Exit Sub

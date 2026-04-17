@@ -121,22 +121,6 @@ except Exception:
 
 
 def main():
-    # #region agent log
-    try:
-        import debug_agent_session_log as _dbg
-
-        _dbg.append(
-            "H4",
-            "task_extract_stage1.py:main",
-            "cmd entry before run_stage1_extract",
-            {
-                "task_input_workbook": (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip(),
-                "cwd": os.getcwd(),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     if not pc.TASKS_INPUT_WORKBOOK:
         print("TASK_INPUT_WORKBOOK が未設定です。VBA からマクロ実行してください。", file=sys.stderr)
         sys.exit(2)

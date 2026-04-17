@@ -113,23 +113,6 @@ def _prepare_from_caller_book() -> str:
     root = os.path.dirname(path)
     os.chdir(root)
     os.environ["TASK_INPUT_WORKBOOK"] = path
-    # #region agent log
-    try:
-        import debug_agent_session_log as _dbg
-
-        _dbg.append(
-            "H3",
-            "xlwings_console_runner.py:_prepare_from_caller_book",
-            "after chdir and TASK_INPUT_WORKBOOK set",
-            {
-                "task_input_workbook": path,
-                "cwd": os.getcwd(),
-                "caller_name": str(wb.name),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     return path
 
 
