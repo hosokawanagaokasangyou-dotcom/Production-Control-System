@@ -27,6 +27,12 @@ Private Function DbgAgentJsonEscape(ByVal s As String) As String
     DbgAgentJsonEscape = Replace(Replace(Replace(s, "\", "\\"), """", "\"""), vbCrLf, "\n")
 End Function
 
+Private Function DebugSkipThisWorkbookSaveEffective() As Boolean
+    Dim v As String
+    v = LCase$(Trim$(Environ$("PM_AI_DEBUG_SKIP_SAVE")))
+    DebugSkipThisWorkbookSaveEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
+End Function
+
 Private Function DbgAgentOneDriveCandPath() As String
     DbgAgentOneDriveCandPath = "C:\Users\0585\OneDrive\ドキュメント\生産管理_AI配台_V2.xlsm"
 End Function
@@ -2215,7 +2221,11 @@ Public Sub 段階1_コア実行()
     DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "before first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
     ' #endregion
     On Error Resume Next
-    ThisWorkbook.Save
+    If DebugSkipThisWorkbookSaveEffective() Then
+        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階1_コア実行", "SKIP ThisWorkbook.Save (PM_AI_DEBUG_SKIP_SAVE)", ThisWorkbook.FullName, ThisWorkbook.path
+    Else
+        ThisWorkbook.Save
+    End If
     ' #region agent log
     DbgAgentNdjsonAppend "H2", "業務ロジック:段階1_コア実行", "after first ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
     ' #endregion
@@ -2422,7 +2432,11 @@ Public Sub 段階1_コア実行()
     Application.ScreenUpdating = prevScreenUpdating
     Application.DisplayAlerts = prevDisplayAlerts
     On Error Resume Next
-    ThisWorkbook.Save
+    If DebugSkipThisWorkbookSaveEffective() Then
+        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階1_コア実行", "SKIP ThisWorkbook.Save (Stage1 end)", ThisWorkbook.FullName, ThisWorkbook.path
+    Else
+        ThisWorkbook.Save
+    End If
     On Error GoTo 0
     ' #region agent log
     DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "after final ThisWorkbook.Save (Stage1 end)", ThisWorkbook.FullName, ThisWorkbook.path
@@ -3013,7 +3027,11 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' #region agent log
     DbgAgentNdjsonAppend "H1", "業務ロジック:段階2_コア実行", "before stage2 ThisWorkbook.Save", ThisWorkbook.FullName, ThisWorkbook.path
     ' #endregion
-    ThisWorkbook.Save
+    If DebugSkipThisWorkbookSaveEffective() Then
+        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階2_コア実行", "SKIP ThisWorkbook.Save (before stage2 Python)", ThisWorkbook.FullName, ThisWorkbook.path
+    Else
+        ThisWorkbook.Save
+    End If
     Application.StatusBar = False
     
     st2DidUnlock = False
@@ -3421,7 +3439,11 @@ Finish:
     On Error GoTo 0
     
     On Error Resume Next
-    ThisWorkbook.Save
+    If DebugSkipThisWorkbookSaveEffective() Then
+        DbgAgentNdjsonAppend "H_SKIP", "業務ロジック:段階2_コア実行", "SKIP ThisWorkbook.Save (Finish)", ThisWorkbook.FullName, ThisWorkbook.path
+    Else
+        ThisWorkbook.Save
+    End If
     DbgAgentNdjsonAppend "H2", "業務ロジック:段階2_コア実行", "after final ThisWorkbook.Save (Finish)", ThisWorkbook.FullName, ThisWorkbook.path
     On Error GoTo 0
     
