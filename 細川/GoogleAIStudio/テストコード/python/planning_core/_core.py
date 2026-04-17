@@ -16218,6 +16218,59 @@ def _generate_plan_task_queue_sort_key(
     )
 
 
+def _process_is_slice_or_sec_for_stage1_dispatch_order(machine) -> bool:
+    """段階1配台試行順: 工程名がスライスまたは SEC（表記ゆれは _normalize_process_name_for_rule_match）。"""
+    n = _normalize_process_name_for_rule_match(machine)
+    return n in ("スライス", "SEC")
+
+
+def _task_remaining_qty_m_for_stage1_dispatch_order(task: dict) -> float:
+    """換算数量の残量(m): total_qty_m - done_qty_reported を下限 0。"""
+    try:
+        total = float(task.get("total_qty_m") or 0)
+    except (TypeError, ValueError):
+        total = 0.0
+    try:
+        done = float(task.get("done_qty_reported") or 0)
+    except (TypeError, ValueError):
+        done = 0.0
+    return max(0.0, total - done)
+
+
+def _task_product_thickness_sort_pair_for_stage1(task: dict) -> tuple[int, float]:
+    """
+    ④用: スライス/SEC のときのみ厚み昇順。それ以外は (0, 0) で③のタイブレークに影響しない。
+    厚み欠損・不正は (1, 0) とし、正の厚みより後ろに並べる。
+    """
+    if not _process_is_slice_or_sec_for_stage1_dispatch_order(task.get("machine")):
+        return (0, 0.0)
+    raw = task.get(PLAN_COL_PRODUCT_THICKNESS)
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return (1, 0.0)
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return (1, 0.0)
+    if not math.isfinite(v) or v <= 0:
+        return (1, 0.0)
+    return (0, v)
+
+
+def _stage1_dispatch_trial_order_sort_key(task: dict) -> tuple:
+    """
+    段階1のみ: ①機械名 → ②納期(早い順) → ③換算残量(少ない順) → ④スライス/SEC は厚み(小さい順)
+    → planning_sheet_row_seq で安定化。その後 §B EC 隣接は呼び出し側で適用。
+    """
+    mn = _normalize_equipment_match_key(task.get("machine_name"))
+    due = task.get("due_basis_date")
+    if not isinstance(due, date):
+        due = date.max
+    rem = _task_remaining_qty_m_for_stage1_dispatch_order(task)
+    thick_tier, thick_mm = _task_product_thickness_sort_pair_for_stage1(task)
+    seq = int(task.get("planning_sheet_row_seq") or 10**9)
+    return (mn, due, rem, thick_tier, thick_mm, seq)
+
+
 def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
     """
     §B-2 / §B-3: 同一 task_id の `roll_pipeline_ec` 行の直後に」未着手の後続行
@@ -16318,6 +16371,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     need_combo_col_index: dict | None,
     *,
     require_valid_sheet_dispatch_trial_order: bool = False,
+    use_stage1_machine_due_dispatch_order_sort: bool = False,
 ) -> None:
     """
     配台試行順の確定。シートに全行分の試行順はあれみしれを採用（§B-2/3 の隣接繰り上きは行ゝない）。
@@ -16326,6 +16380,10 @@ def _apply_dispatch_trial_order_for_generate_plan(
     require_valid_sheet_dispatch_trial_order:
         段階2用。True のときは配台キュー各行の「配台試行順番」が正の整数（厳密）でなければ
         PlanningValidationError で停止し、自動付与にフォールバックしない。
+
+    use_stage1_machine_due_dispatch_order_sort:
+        段階1用。True かつシート試行順が全行未充足のとき、機械名・納期・換算残量・(スライス/SEC の)厚み
+        でソートしたうえで §B EC 隣接と連番付与を行う。段階2では False のまま。
     """
     if require_valid_sheet_dispatch_trial_order and task_queue:
         bad = [
@@ -16360,17 +16418,26 @@ def _apply_dispatch_trial_order_for_generate_plan(
             len(task_queue),
         )
         return
-    task_queue.sort(
-        key=lambda x: _generate_plan_task_queue_sort_key(
-            x, req_map, need_rules, need_combo_col_index
+    if use_stage1_machine_due_dispatch_order_sort:
+        task_queue.sort(key=_stage1_dispatch_trial_order_sort_key)
+    else:
+        task_queue.sort(
+            key=lambda x: _generate_plan_task_queue_sort_key(
+                x, req_map, need_rules, need_combo_col_index
+            )
         )
-    )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
-    logging.info(
-        "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
-        len(task_queue),
-    )
+    if use_stage1_machine_due_dispatch_order_sort:
+        logging.info(
+            "配台試行順番: 段階1ルール（機械名・納期・換算残量・スライス/SEC厚み）でソートし §B 隣接後に 1..%s を付与しました。",
+            len(task_queue),
+        )
+    else:
+        logging.info(
+            "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
+            len(task_queue),
+        )
 
 
 def fill_plan_dispatch_trial_order_column_stage1(
@@ -16382,7 +16449,8 @@ def fill_plan_dispatch_trial_order_column_stage1(
     equipment_list: list,
 ) -> None:
     """
-    段階1出力 DataFrame の「配台試行順番」を」段階2 冒頭とともに手順（ソート・§B-2/3 隣接・連番）で埋ゝる。
+    段階1出力 DataFrame の「配台試行順番」を、機械名・納期・換算残量・(スライス/SEC の)厚みでソートし、
+    §B-2/3 EC 隣接後に連番で埋める。段階2の generate_plan では別キー（本フラグは False）を使う。
     配台対象外の行は空のまま。
     """
     if plan_df is None or getattr(plan_df, "empty", True):
@@ -16421,6 +16489,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
         need_rules,
         need_combo_col_index,
         require_valid_sheet_dispatch_trial_order=False,
+        use_stage1_machine_due_dispatch_order_sort=True,
     )
     try:
         col_idx = plan_df.columns.get_loc(col)
