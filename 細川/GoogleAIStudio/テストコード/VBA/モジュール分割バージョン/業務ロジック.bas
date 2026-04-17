@@ -2378,6 +2378,9 @@ Public Sub 段階1_コア実行()
     End If
 
     MacroSplash_SetStep "段階1: output\plan_input_tasks.xlsx を開き「配台計画_タスク入力」へ取り込んでいます…"
+    ' #region agent log
+    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "before ImportPlanInputTasksFromOutput", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     If Not ImportPlanInputTasksFromOutput(targetDir) Then
         m_lastStage1ExitCode = -1
         Application.ScreenUpdating = prevScreenUpdating
@@ -2385,6 +2388,9 @@ Public Sub 段階1_コア実行()
         If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
         Exit Sub
     End If
+    ' #region agent log
+    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "after ImportPlanInputTasksFromOutput", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     On Error Resume Next
     配台計画_タスク入力を前へ並べ替え
     On Error GoTo 0
@@ -2418,6 +2424,9 @@ Public Sub 段階1_コア実行()
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo 0
+    ' #region agent log
+    DbgAgentNdjsonAppend "H_TIMING", "業務ロジック:段階1_コア実行", "after final ThisWorkbook.Save (Stage1 end)", ThisWorkbook.FullName, ThisWorkbook.path
+    ' #endregion
     If st1DidUnlock Then 配台マクロ_対象シートを条件どおりに保護 targetDir
     Exit Sub
 
