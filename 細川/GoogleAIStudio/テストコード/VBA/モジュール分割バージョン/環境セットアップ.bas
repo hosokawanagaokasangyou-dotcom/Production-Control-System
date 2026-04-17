@@ -54,24 +54,83 @@ Fail:
     TryInstallPythonViaOfficialInstaller = False
 End Function
 
-' Python 3.14 インストール先と Scripts を、重複除去のうえ PATH の先頭へ（Machine は権限があれば、続けて User を必ず更新）。
-Public Function PrependPmAiPythonInstallDirsOnRegistryPath(wsh As Object) As Boolean
-    Dim ps As String
-    Dim shellCmd As String
-    Dim exitCode As Long
+Private Function BuildPmAiPrependPathScriptBody(ByVal pyMinor As String) As String
+    BuildPmAiPrependPathScriptBody = _
+        "param(" & vbCrLf & _
+        "  [Parameter(Mandatory = $true)]" & vbCrLf & _
+        "  [ValidateSet('User', 'Machine')]" & vbCrLf & _
+        "  [string] $Scope" & vbCrLf & _
+        ")" & vbCrLf & _
+        "$ErrorActionPreference = 'Stop'" & vbCrLf & _
+        "$minor = '" & pyMinor & "'" & vbCrLf & _
+        "$pyRoot = (cmd /c ('py -' + $minor + ' -c ""import os,sys;print(os.path.dirname(sys.executable))""')).Trim()" & vbCrLf & _
+        "if (-not $pyRoot) { exit 2 }" & vbCrLf & _
+        "$scripts = [System.IO.Path]::Combine($pyRoot, 'Scripts')" & vbCrLf & _
+        "$cur = [Environment]::GetEnvironmentVariable('Path', $Scope)" & vbCrLf & _
+        "if ($null -eq $cur) { $cur = '' }" & vbCrLf & _
+        "$parts = @()" & vbCrLf & _
+        "if ($cur) {" & vbCrLf & _
+        "  $parts = $cur -split ';' | ForEach-Object {" & vbCrLf & _
+        "    $t = $_.Trim()" & vbCrLf & _
+        "    if ($t) { $t.TrimEnd([char]92) }" & vbCrLf & _
+        "  } | Where-Object { $_ -and ($_ -ne $pyRoot) -and ($_ -ne $scripts) }" & vbCrLf & _
+        "}" & vbCrLf & _
+        "$new = ($pyRoot + ';' + $scripts + ';' + ($parts -join ';')).TrimEnd(';')" & vbCrLf & _
+        "[Environment]::SetEnvironmentVariable('Path', $new, $Scope)" & vbCrLf & _
+        "exit 0"
+End Function
+
+Private Sub WritePmAiPrependPathScriptFile(ByVal fullPath As String, ByVal pyMinor As String)
+    Dim fn As Integer
+    Dim txt As String
+    Dim lines() As String
+    Dim i As Long
+    txt = BuildPmAiPrependPathScriptBody(pyMinor)
+    fn = FreeFile
+    Open fullPath For Output As #fn
+    lines = Split(txt, vbCrLf)
+    For i = LBound(lines) To UBound(lines)
+        Print #fn, lines(i)
+    Next i
+    Close #fn
+End Sub
+
+' Python インストール先と Scripts を PATH 先頭へ（User は通常実行、Machine は UAC 昇格で更新）。
+' machinePathUpdated: 昇格プロセスが exit 0 で終わったとき True（キャンセル・失敗は False）。
+Public Function PrependPmAiPythonInstallDirsOnRegistryPath(wsh As Object, ByRef machinePathUpdated As Boolean) As Boolean
+    Dim ps1 As String
+    Dim rcUser As Long
+    Dim rcElev As Long
+    Dim outerPs As String
+    
+    machinePathUpdated = False
     On Error GoTo Fail
-    ps = "$pyRoot = (cmd /c 'py -" & PM_AI_SETUP_PY_MINOR & " -c ""import os,sys;print(os.path.dirname(sys.executable))""').Trim(); " & _
-         "if (-not $pyRoot) { exit 2 }; " & _
-         "$scripts = [System.IO.Path]::Combine($pyRoot, 'Scripts'); " & _
-         "function Dedup-Prepend([string]$scope) { try { $cur = [Environment]::GetEnvironmentVariable('Path', $scope); if ($null -eq $cur) { $cur = '' }; " & _
-         "$parts = @(); if ($cur) { $parts = $cur -split ';' | ForEach-Object { $t = $_.Trim(); if ($t) { $t.TrimEnd([char]92) } } | Where-Object { $_ -and ($_ -ne $pyRoot) -and ($_ -ne $scripts) } }; " & _
-         "$new = ($pyRoot + ';' + $scripts + ';' + ($parts -join ';')).TrimEnd(';'); " & _
-         "[Environment]::SetEnvironmentVariable('Path', $new, $scope); return $true } catch { return $false } }; " & _
-         "$null = Dedup-Prepend 'Machine'; " & _
-         "if (-not (Dedup-Prepend 'User')) { exit 1 }; exit 0"
-    shellCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & ps & Chr(34)
-    exitCode = wsh.Run(shellCmd, 0, True)
-    PrependPmAiPythonInstallDirsOnRegistryPath = (exitCode = 0)
+    
+    ps1 = wsh.ExpandEnvironmentStrings("%TEMP%\pm_ai_prepend_python_path.ps1")
+    Call WritePmAiPrependPathScriptFile(ps1, CStr(PM_AI_SETUP_PY_MINOR))
+    
+    rcUser = wsh.Run("powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & ps1 & """ -Scope User", 0, True)
+    If rcUser <> 0 Then
+        PrependPmAiPythonInstallDirsOnRegistryPath = False
+        Exit Function
+    End If
+    
+    MacroSplash_SetStep "環境構築: システムの環境変数 Path を更新します。UAC で許可してください…"
+    
+    outerPs = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & _
+              "$p = Join-Path $env:TEMP 'pm_ai_prepend_python_path.ps1'; " & _
+              "if (-not (Test-Path -LiteralPath $p)) { exit 9 }; " & _
+              "try { " & _
+              "  $pr = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru " & _
+              "    -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$p,'-Scope','Machine'); " & _
+              "  if ($null -eq $pr) { exit 6 }; " & _
+              "  exit $pr.ExitCode " & _
+              "} catch { exit 5 }" & Chr(34)
+    
+    rcElev = wsh.Run(outerPs, 0, True)
+    machinePathUpdated = (rcElev = 0)
+    
+    PrependPmAiPythonInstallDirsOnRegistryPath = True
     Exit Function
 Fail:
     PrependPmAiPythonInstallDirsOnRegistryPath = False
@@ -122,6 +181,7 @@ Sub InstallComponents()
     Dim msg As String
     Dim workDir As String
     Dim setupRel As String
+    Dim machinePathUpdated As Boolean
     
     Set wsh = CreateObject("WScript.Shell")
     
@@ -172,10 +232,14 @@ Sub InstallComponents()
     End If
     
     MacroSplash_SetStep "環境構築: Python " & PM_AI_SETUP_PY_MINOR & " を PATH 先頭に登録しています…"
-    If Not PrependPmAiPythonInstallDirsOnRegistryPath(wsh) Then
-        MsgBox "Python " & PM_AI_SETUP_PY_MINOR & " は検出できましたが、環境変数 Path への先頭登録に失敗した可能性があります。" & vbCrLf & _
-               "（システム Path は管理者権限がないと更新できません。ユーザー Path は更新済みの場合があります。）" & vbCrLf & _
-               "setup_environment.py の実行は続行します。", vbExclamation
+    machinePathUpdated = False
+    If Not PrependPmAiPythonInstallDirsOnRegistryPath(wsh, machinePathUpdated) Then
+        MsgBox "Python " & PM_AI_SETUP_PY_MINOR & " は検出できましたが、ユーザー環境変数 Path への先頭登録に失敗しました。" & vbCrLf & _
+               "setup_environment.py の実行は続行しますが、手動で Path を確認してください。", vbExclamation
+    ElseIf Not machinePathUpdated Then
+        MsgBox "システム（マシン）環境変数 Path の先頭登録は、UAC をキャンセルしたか管理者権限での更新に失敗したためスキップされました。" & vbCrLf & _
+               "ユーザー Path は更新済みです。システム全体で python を最優先にしたい場合は、環境構築を再実行し UAC で許可してください。" & vbCrLf & _
+               "setup_environment.py の実行は続行します。", vbInformation
     End If
     
     MacroSplash_SetStep "環境構築: setup_environment.py を実行しています（しばらくお待ちください）…"
