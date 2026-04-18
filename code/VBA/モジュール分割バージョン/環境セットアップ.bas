@@ -173,6 +173,61 @@ Public Function RunPipInstallWithRefreshedPath(wsh As Object, ByVal workDir As S
     RunPipInstallWithRefreshedPath = wsh.Run(shellCmd, 1, True)
 End Function
 
+' python\環境セットアップ_Excel終了後に実行.bat を非同期で起動する。
+' ・Excel を閉じてから pip / xlwings アドインを確実に通したいとき用（xlwings.xlam ロック回避）。
+' ・Python 未導入の PC では先に通常の InstallComponents（winget 等）を実行すること。
+' マクロブックの「アニメ付き_環境構築を実行」から本プロシージャを呼ぶ場合の置換例は
+' 「アニメ付き_環境構築を実行_置換用コード.txt」を参照。
+Public Sub InstallComponentsViaExcelSafeBatch()
+    Dim wsh As Object
+    Dim workDir As String
+    Dim batPath As String
+    Dim setupRel As String
+
+    Set wsh = CreateObject("WScript.Shell")
+    workDir = Trim$(ThisWorkbook.path)
+    If Len(workDir) = 0 Then
+        MsgBox "先にこのブックを保存してから環境構築を実行してください。" & vbCrLf & _
+               "（環境セットアップ_Excel終了後に実行.bat は python\ に配置）", vbExclamation
+        Exit Sub
+    End If
+
+    setupRel = SetupEnvironmentScriptRelativePath(workDir)
+    If Len(setupRel) = 0 Then
+        MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
+               workDir & "\python\setup_environment.py" & vbCrLf & _
+               "または " & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
+               "テストコード一式（python フォルダ含む）をブックと同じフォルダにコピーしてから再実行してください。", vbCritical
+        Exit Sub
+    End If
+
+    batPath = workDir & "\python\環境セットアップ_Excel終了後に実行.bat"
+    If Len(Dir(batPath)) = 0 Then
+        MsgBox "次のファイルが見つかりません:" & vbCrLf & batPath & vbCrLf & vbCrLf & _
+               "リポジトリの code\python から当該 .bat と .ps1 を python\ にコピーしてください。", vbCritical
+        Exit Sub
+    End If
+
+    If Not IsPython3Available(wsh) Then
+        MsgBox "Python " & PM_AI_SETUP_PY_MINOR & "（py -" & PM_AI_SETUP_PY_MINOR & "）が見つかりません。" & vbCrLf & _
+               "先に通常の「環境構築」（InstallComponents）で Python と pip を整えてから、" & vbCrLf & _
+               "本手順（Excel 終了後バッチ）を実行してください。", vbExclamation
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    On Error GoTo 0
+
+    m_animMacroSucceeded = True
+    ' bWaitOnReturn=False のとき Run の戻り値は常に 0（非同期起動のため成否は判定しない）
+    wsh.Run """" & batPath & """", 1, False
+
+    MsgBox "環境セットアップ用のウィンドウを起動しました。" & vbCrLf & vbCrLf & _
+           "表示に従い、Excel を終了すると pip / xlwings の処理が続き、終了前に開いていた保存済みブックを開き直します。" & vbCrLf & vbCrLf & _
+           "この Excel は、保存の確認後に閉じてください。", vbInformation
+End Sub
+
 Sub InstallComponents()
     Dim wsh As Object
     Dim wingetExit As Long
