@@ -128,3 +128,20 @@ Public Sub スナップショット_pdfとcsvを出力(ByVal targetDir As String
     ExportSheetCsvIfExists wb, SHEET_ACTUAL_DETAIL_DATA, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
 End Sub
+
+' 図形の「マクロの登録」用（引数なし）。メイン等にボタンを置くときはこのプロシージャを指定する。
+Public Sub スナップショット_手動でpdfとcsv出力()
+    Dim p As String
+    p = ThisWorkbook.path
+    If Len(p) = 0 Then
+        AppMsgBox "先にこのブックを保存してください。", vbExclamation, "PDF・CSVスナップショット"
+        Exit Sub
+    End If
+    On Error Resume Next
+    スナップショット_pdfとcsvを出力 p, ThisWorkbook
+    If Err.Number <> 0 Then
+        AppMsgBox "出力でエラー: " & Err.Description, vbExclamation, "PDF・CSVスナップショット"
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Sub
