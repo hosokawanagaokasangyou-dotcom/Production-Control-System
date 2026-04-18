@@ -196,6 +196,7 @@
     <ul>
       <li><strong>配台試行順番（追補）</strong>: 段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。</li>
       <li><strong>段階1の継承方針（2026-04-06 追補）</strong>: 抽出直後に <strong>配台試行順番</strong> を空にクリアし既存シートからは継承しない（<code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code> は <strong>ロール単位長さ</strong> のみ）。出力直前に同列昇順で行ソート。VBA <code>ImportPlanInputTasksFromOutput</code> も貼り付け後に同列昇順ソート（無いときのみ指定納期）。</li>
+      <li><strong>試行順パターン P5（比較用）</strong>: まず <strong>P2</strong>（機械名＋納期）で試行順を付けた計画を<strong>一度だけ段階2にプローブ</strong>し、<strong>配台済_回答指定16時まで＝いいえ</strong>の<strong>依頼NO</strong>について <strong>原反投入日／原反投入日_上書き</strong>を<strong>1暦日前</strong>にずらしたあと、キューを組み直して<strong>再度 P2</strong>を適用した試行順。本番のパターン別段階2ではシフト後シートでシミュする。詳細は <span class="file">配台ルール.md</span> §2.0.4。</li>
       <li><strong>成果物の追加（追補）</strong>: <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
     </ul>
 
