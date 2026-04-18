@@ -11849,18 +11849,26 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
 def _xlwings_find_book_on_running_instances(abs_path: str):
     """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。
 
-    旧実装は ``list(xw.apps)`` / ``xw.apps.active`` / ``for app in xw.apps`` が
-    環境によって COM 無応答となり段階1が停止したため廃止。
-    マクロブックの保存は ``_xlwings_attach_open_macro_workbook`` が新規 ``xw.App`` で開く。
+    ``for app in xw.apps`` の列挙は環境によって COM 無応答になり得るが、
+    ユーザー操作の Excel 上で既にマクロブックを開いているときは再利用した方が安全なため列挙する。
+    見つからないときは ``_xlwings_attach_open_macro_workbook`` が非表示の新規 ``xw.App`` で開く。
     """
-    return None
-
-
-def _xlwings_try_open_in_running_apps(abs_path: str):
-    """既存の Excel.App で Workbooks.Open を試す。成功時 Book、失敗時 None。
-
-    ``xw.apps`` 経由は上記と同理由で廃止。常に None。
-    """
+    if not (abs_path or "").strip():
+        return None
+    try:
+        import xlwings as xw
+    except ImportError:
+        return None
+    try:
+        for app in xw.apps:
+            try:
+                for book in app.books:
+                    if _xlwings_book_matches_path(book, abs_path):
+                        return book
+            except Exception:
+                continue
+    except Exception:
+        return None
     return None
 
 
@@ -11905,10 +11913,20 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     abs_path = os.path.abspath(macro_wb_path)
 
+    book_existing = _xlwings_find_book_on_running_instances(abs_path)
+    if book_existing is not None:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_BOOK_REUSED",
+            log_prefix,
+            "起動中の Excel から同一路径のブックを再利用します（xw.apps 列挙）。",
+            details=f"path={abs_path}",
+        )
+        return book_existing, {"mode": "keep", "opened_wb_here": False}
+
     _log_exclude_rules_sheet_debug(
-        "XLWINGS_APPS_ENUM_SKIPPED",
+        "XLWINGS_NEW_APP_FALLBACK",
         log_prefix,
-        "xw.apps 列挙はスキップし、新規 Excel でブックを開きます（COM 無応答回避）。",
+        "起動中に該当ブックは見つかりません。非表示の新規 Excel で開きます。",
         details=f"path={abs_path}",
     )
 
