@@ -11830,7 +11830,7 @@ def _log_exclude_rules_sheet_debug(
 
 
 def _xlwings_paths_equivalent(disk_path: str, book_fullname: str) -> bool:
-    """ディスクパスと xlwings Book.full_name は同一ファイルを指れか（表記ゆれを多少坸坎）。"""
+    """ディスクパスと xlwings ``Book.fullname``（パス文字列）が同一ファイルを指すか（表記ゆれを多少吸収）。"""
     try:
         fn = str(book_fullname).strip()
     except Exception:
@@ -11867,31 +11867,25 @@ def _xlwings_paths_equivalent(disk_path: str, book_fullname: str) -> bool:
     return False
 
 
+def _xlwings_book_path_str(book) -> str | None:
+    """xlwings ``Book`` のディスクパス。公式 API は ``fullname``（``full_name`` は存在しない）。"""
+    for attr in ("fullname", "full_name"):
+        try:
+            fn = getattr(book, attr, None)
+            if fn is not None:
+                s = str(fn).strip()
+                if s:
+                    return s
+        except Exception:
+            continue
+    return None
+
+
 def _xlwings_book_matches_path(book, disk_path: str) -> bool:
-    try:
-        fn = book.full_name
-    except Exception:
+    fn = _xlwings_book_path_str(book)
+    if not fn:
         return False
     return _xlwings_paths_equivalent(disk_path, fn)
-
-
-def _agent_dbg_xlw_reuse_scan(payload: dict) -> None:
-    # region agent log
-    try:
-        import json
-        import time
-        from pathlib import Path
-
-        root = Path(__file__).resolve().parent.parents[4]
-        p = root / "debug-b7ff0d.log"
-        row = dict(payload)
-        row.setdefault("sessionId", "b7ff0d")
-        row["timestamp"] = int(time.time() * 1000)
-        with open(p, "a", encoding="utf-8", newline="\n") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # endregion
 
 
 def _xlwings_find_book_on_running_instances(abs_path: str):
@@ -11906,83 +11900,17 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
     try:
         import xlwings as xw
     except ImportError:
-        _agent_dbg_xlw_reuse_scan(
-            {
-                "hypothesisId": "H3",
-                "location": "_xlwings_find_book_on_running_instances",
-                "message": "import_xlwings_fail",
-                "data": {"abs_path": (abs_path or "")[:500]},
-            }
-        )
         return None
     try:
-        abs_norm = os.path.normcase(os.path.abspath(abs_path))
-    except Exception:
-        abs_norm = str(abs_path)
-    outer_ex = None
-    apps_scan: list = []
-    n_apps_seen = 0
-    try:
         for app in xw.apps:
-            n_apps_seen += 1
-            pid = None
-            try:
-                pid = int(app.pid)
-            except Exception:
-                pass
-            books_scan: list = []
             try:
                 for book in app.books:
-                    fn_s = ""
-                    try:
-                        fn_s = str(book.full_name)
-                    except Exception as ex_fn:
-                        fn_s = f"<full_name_error:{type(ex_fn).__name__}>"
-                    matched = False
-                    try:
-                        matched = _xlwings_book_matches_path(book, abs_path)
-                    except Exception:
-                        matched = False
-                    books_scan.append({"fn": fn_s[:500], "match": matched})
-                    if matched:
-                        _agent_dbg_xlw_reuse_scan(
-                            {
-                                "hypothesisId": "H4",
-                                "location": "_xlwings_find_book_on_running_instances",
-                                "message": "book_reuse_match",
-                                "data": {
-                                    "target_norm": abs_norm[:500],
-                                    "pid": pid,
-                                    "matched_fn": fn_s[:500],
-                                },
-                            }
-                        )
+                    if _xlwings_book_matches_path(book, abs_path):
                         return book
-            except Exception as ex_books:
-                books_scan.append({"books_iter_error": repr(ex_books)[:500]})
-            apps_scan.append(
-                {
-                    "pid": pid,
-                    "n_books": len(books_scan),
-                    "books_head": books_scan[:10],
-                }
-            )
-    except Exception as ex_outer:
-        outer_ex = repr(ex_outer)[:800]
-
-    _agent_dbg_xlw_reuse_scan(
-        {
-            "hypothesisId": "H1_H2_H5",
-            "location": "_xlwings_find_book_on_running_instances",
-            "message": "no_running_book_match",
-            "data": {
-                "target_norm": abs_norm[:500],
-                "n_apps_seen": n_apps_seen,
-                "outer_ex": outer_ex,
-                "apps_scan_head": apps_scan[:6],
-            },
-        }
-    )
+            except Exception:
+                continue
+    except Exception:
+        return None
     return None
 
 

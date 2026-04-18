@@ -40,8 +40,10 @@ def _get_book():
         return None
     if _book_ref is not None:
         try:
-            fn = _book_ref.full_name
-            if fn and os.path.normcase(os.path.normpath(os.path.abspath(fn))) == target:
+            fn = getattr(_book_ref, "fullname", None) or getattr(
+                _book_ref, "full_name", None
+            )
+            if fn and os.path.normcase(os.path.normpath(os.path.abspath(str(fn)))) == target:
                 return _book_ref
         except Exception:
             pass
@@ -50,8 +52,10 @@ def _get_book():
         try:
             for book in app.books:
                 try:
-                    fn = book.full_name
-                    if fn and os.path.normcase(os.path.normpath(os.path.abspath(fn))) == target:
+                    fn = getattr(book, "fullname", None) or getattr(
+                        book, "full_name", None
+                    )
+                    if fn and os.path.normcase(os.path.normpath(os.path.abspath(str(fn)))) == target:
                         _book_ref = book
                         return book
                 except Exception:
