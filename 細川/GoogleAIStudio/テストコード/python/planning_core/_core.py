@@ -2081,34 +2081,6 @@ def _gantt_timeline_same_segment(st_a, st_b) -> bool:
     return st_a[1] == st_b[1]
 
 
-def _agent_debug_gantt_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    # #region agent log
-    """ガント性能デバッグ用 NDJSON（workspace 直下 debug-ebf106.log）。"""
-    try:
-        _log_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-ebf106.log")
-        )
-        _line = json.dumps(
-            {
-                "sessionId": "ebf106",
-                "hypothesisId": hypothesis_id,
-                "location": location,
-                "message": message,
-                "data": data or {},
-                "timestamp": int(time_module.time() * 1000),
-            },
-            ensure_ascii=False,
-        )
-        with open(_log_path, "a", encoding="utf-8") as _f:
-            _f.write(_line + "\n")
-    except Exception:
-        pass
-
-    # #endregion
-
-
 def _paint_gantt_timeline_row_merged(
     ws,
     row,
@@ -2134,9 +2106,6 @@ def _paint_gantt_timeline_row_merged(
     角丸シェイプとして追加するための座標・文言を蓄積する。
     shape_day_key に ISO 日付文字列等を渡すと、後段で日単位の画像化（フラット化）に利用する。
     """
-    # #region agent log
-    _ts0 = time_module.perf_counter()
-    # #endregion
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
     _chosen = _gantt_best_overlapping_events_for_slots_line_sweep(
@@ -2149,10 +2118,6 @@ def _paint_gantt_timeline_row_merged(
                 active, slot_start, slot_mins, task_fill_fn
             )
         )
-    # #region agent log
-    _ts1 = time_module.perf_counter()
-    _tw0 = time_module.perf_counter()
-    # #endregion
     tcol0 = n_fixed + 1
     i = 0
     while i < n_slots:
@@ -2256,20 +2221,6 @@ def _paint_gantt_timeline_row_merged(
                     single_slot=single_slot_segment
                 )
         i = j
-    # #region agent log
-    _tw1 = time_module.perf_counter()
-    _ds = _ts1 - _ts0
-    _dw = _tw1 - _tw0
-    _paint_gantt_timeline_row_merged._dbg_states_sec = getattr(
-        _paint_gantt_timeline_row_merged, "_dbg_states_sec", 0.0
-    ) + float(_ds)
-    _paint_gantt_timeline_row_merged._dbg_write_sec = getattr(
-        _paint_gantt_timeline_row_merged, "_dbg_write_sec", 0.0
-    ) + float(_dw)
-    _paint_gantt_timeline_row_merged._dbg_calls = int(
-        getattr(_paint_gantt_timeline_row_merged, "_dbg_calls", 0)
-    ) + 1
-    # #endregion
 
 
 def _time_intervals_overlap_half_open(
@@ -2585,10 +2536,6 @@ def _write_results_equipment_gantt_sheet(
     except Exception:
         pass
 
-    # #region agent log
-    _gantt_write_sheet_t0 = time_module.perf_counter()
-    # #endregion
-
     events_by_date = defaultdict(list)
     for e in timeline_events:
         events_by_date[e["date"]].append(e)
@@ -2774,13 +2721,6 @@ def _write_results_equipment_gantt_sheet(
 
     # 印刷: 1 日ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
     gantt_day_first_rows: list[int] = []
-
-    # #region agent log
-    _paint_gantt_timeline_row_merged._dbg_states_sec = 0.0
-    _paint_gantt_timeline_row_merged._dbg_write_sec = 0.0
-    _paint_gantt_timeline_row_merged._dbg_calls = 0
-    _gantt_t_before_day = time_module.perf_counter()
-    # #endregion
 
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
@@ -2988,10 +2928,6 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 3
             row += 1
 
-    # #region agent log
-    _gantt_t_after_day = time_module.perf_counter()
-    # #endregion
-
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 時刻列（E〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
     if n_slots > 0:
@@ -3044,44 +2980,6 @@ def _write_results_equipment_gantt_sheet(
                 ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
     except Exception:
         pass
-
-    # #region agent log
-    _gantt_t_end = time_module.perf_counter()
-    _ps = float(getattr(_paint_gantt_timeline_row_merged, "_dbg_states_sec", 0.0))
-    _pw = float(getattr(_paint_gantt_timeline_row_merged, "_dbg_write_sec", 0.0))
-    _pc = int(getattr(_paint_gantt_timeline_row_merged, "_dbg_calls", 0))
-    _setup_ms = round((_gantt_t_before_day - _gantt_write_sheet_t0) * 1000.0, 2)
-    _day_ms = round((_gantt_t_after_day - _gantt_t_before_day) * 1000.0, 2)
-    _post_ms = round((_gantt_t_end - _gantt_t_after_day) * 1000.0, 2)
-    _paint_states_ms = round(_ps * 1000.0, 2)
-    _paint_write_ms = round(_pw * 1000.0, 2)
-    _paint_total_ms = round((_ps + _pw) * 1000.0, 2)
-    _day_non_paint_ms = round(_day_ms - _paint_total_ms, 2)
-    _agent_debug_gantt_ndjson(
-        "H1-H2-H3-H5",
-        "_write_results_equipment_gantt_sheet:end",
-        "gantt_sheet_profile",
-        {
-            "sheet": sheet_nm,
-            "n_dates_shown": len(dates_to_show),
-            "n_equipment": len(equipment_list or []),
-            "n_slots": n_slots,
-            "plan_rows": bool(plan_rows),
-            "show_actual_rows": bool(show_actual_rows),
-            "use_shape_labels": bool(_use_gantt_shape_labels),
-            "setup_ms": _setup_ms,
-            "day_loop_ms": _day_ms,
-            "post_loop_ms": _post_ms,
-            "paint_calls": _pc,
-            "paint_states_ms": _paint_states_ms,
-            "paint_write_ms": _paint_write_ms,
-            "paint_total_ms": _paint_total_ms,
-            "day_loop_non_paint_ms": _day_non_paint_ms,
-            "shape_specs_count": len(gantt_shape_label_specs),
-            "overlap_pick": "line_sweep_in_paint",
-        },
-    )
-    # #endregion
 
     if _use_gantt_shape_labels:
         return gantt_shape_label_specs, gantt_timeline_day_blocks
@@ -7821,47 +7719,28 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     if not rp or not os.path.isfile(rp):
         return
     shn = sheet_name or RESULT_SHEET_GANTT_NAME
-    # #region agent log
-    _xlw0 = time_module.perf_counter()
-    try:
-        if _gantt_add_timeline_rounded_rect_labels_xlwings(
-            rp, specs, day_blocks, sheet_name=shn
-        ):
-            logging.info(
-                "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
-                shn,
-                len(specs),
-            )
-            return
-        try:
-            _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
-            logging.info(
-                "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
-                shn,
-                len(specs),
-            )
-        except Exception as e:
-            logging.warning(
-                "%s: セルへのラベルフォールバックも失敗しました（%s）。",
-                shn,
-                e,
-            )
-    # #region agent log
-    finally:
-        _agent_debug_gantt_ndjson(
-            "H4",
-            "_stage2_try_add_gantt_timeline_shape_labels",
-            "gantt_xlwings_stage",
-            {
-                "sheet": shn,
-                "specs_len": len(specs),
-                "day_blocks_len": len(day_blocks) if day_blocks else 0,
-                "elapsed_ms": round(
-                    (time_module.perf_counter() - _xlw0) * 1000.0, 2
-                ),
-            },
+    if _gantt_add_timeline_rounded_rect_labels_xlwings(
+        rp, specs, day_blocks, sheet_name=shn
+    ):
+        logging.info(
+            "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+            shn,
+            len(specs),
         )
-    # #endregion
+        return
+    try:
+        _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
+        logging.info(
+            "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            shn,
+            len(specs),
+        )
+    except Exception as e:
+        logging.warning(
+            "%s: セルへのラベルフォールバックも失敗しました（%s）。",
+            shn,
+            e,
+        )
 
 
 def _coerce_actual_sheet_datetime(val):
