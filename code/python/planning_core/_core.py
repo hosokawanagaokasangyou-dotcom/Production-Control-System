@@ -17412,16 +17412,66 @@ def _dataframe_shift_raw_input_dates_minus_one_day_for_task_ids(
         ci = df.columns.get_loc(col)
         if isinstance(ci, slice):
             continue
+        try:
+            col_idx = ci.__index__()
+        except (AttributeError, TypeError):
+            continue
+        try:
+            col_dtype = df.dtypes.iloc[col_idx]
+        except Exception:
+            col_dtype = None
         for ri in range(len(df)):
             tid = planning_task_id_str_from_plan_row(df.iloc[ri])
             if tid not in task_ids:
                 continue
-            val = df.iat[ri, ci]
+            val = df.iat[ri, col_idx]
             d = parse_optional_date(val)
             if d is None:
                 continue
             new_d = d - timedelta(days=1)
-            df.iat[ri, ci] = new_d
+            # datetime64 列には python の date を直接入れられない（pandas 3.x で TypeError）
+            _cell_val = (
+                pd.Timestamp(new_d)
+                if col_dtype is not None
+                and pd.api.types.is_datetime64_any_dtype(col_dtype)
+                else new_d
+            )
+            # #region agent log
+            try:
+                import json as _json_dbg
+
+                _dbg_p = os.path.normpath(
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "..",
+                        "debug-f04990.log",
+                    )
+                )
+                with open(_dbg_p, "a", encoding="utf-8") as _lf:
+                    _lf.write(
+                        _json_dbg.dumps(
+                            {
+                                "sessionId": "f04990",
+                                "hypothesisId": "H1",
+                                "location": "_dataframe_shift_raw_input_dates_minus_one_day_for_task_ids",
+                                "message": "raw_shift_cell_assign",
+                                "data": {
+                                    "col": col,
+                                    "dtype": str(col_dtype),
+                                    "assign_cls": type(_cell_val).__name__,
+                                },
+                                "timestamp": int(time_module.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            df.iat[ri, col_idx] = _cell_val
             n_changed += 1
     return n_changed
 
