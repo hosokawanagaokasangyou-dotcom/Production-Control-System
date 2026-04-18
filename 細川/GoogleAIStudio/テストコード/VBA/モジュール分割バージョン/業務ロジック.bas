@@ -191,10 +191,27 @@ Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えクールボタンを配置()
     配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置
 End Sub
 
+' 図形の「マクロの登録」用（引数なし）。中核は スナップショット出力 の スナップショット_pdfとcsvを出力。
+Public Sub スナップショット_手動でpdfとcsv出力()
+    Dim p As String
+    p = ThisWorkbook.path
+    If Len(p) = 0 Then
+        AppMsgBox "先にこのブックを保存してください。", vbExclamation, "PDF・CSVスナップショット"
+        Exit Sub
+    End If
+    On Error Resume Next
+    Call スナップショット_pdfとcsvを出力(p, ThisWorkbook)
+    If Err.Number <> 0 Then
+        AppMsgBox "出力でエラー: " & Err.Description, vbExclamation, "PDF・CSVスナップショット"
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Sub
+
 ' メイン_ 用: pdf フォルダへ設備ガント PDF と主要シート CSV を出力（押下アニメ付き）。図形の OnAction は本マクロ。
 Sub アニメ付き_PDFとCSVスナップショットを出力()
     Call AnimateButtonPush
-    スナップショット_手動でpdfとcsv出力
+    Call スナップショット_手動でpdfとcsv出力
 End Sub
 
 ' メイン_ の L2 付近に「PDF・CSV出力」クールボタンを配置（同一 OnAction または図形名の既存は削除してから作成）。
@@ -3464,7 +3481,7 @@ Finish:
     
     On Error Resume Next
     If planImported And exitCode = 0 Then
-        スナップショット_pdfとcsvを出力 targetDir, ThisWorkbook
+        Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
     End If
     Err.Clear
     On Error GoTo 0
@@ -3669,7 +3686,7 @@ Public Sub 実績設備ガント_のみ更新_実行()
     On Error GoTo EH
     
     On Error Resume Next
-    スナップショット_pdfとcsvを出力 targetDir, ThisWorkbook
+    Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
     Err.Clear
     On Error GoTo EH
     
