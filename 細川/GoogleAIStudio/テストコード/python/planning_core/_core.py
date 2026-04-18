@@ -6598,20 +6598,37 @@ def _stage2_try_copy_column_config_shapes_from_input(
         )
         return
     try:
-        import xlwings as xw
+        import xlwings as xw  # noqa: F401
     except ImportError:
         logging.warning(
             "列設定シート図形コピー: xlwings は import でしません。"
         )
         return
+    abs_rp = os.path.abspath(rp)
+    abs_ip = os.path.abspath(ip)
     app = None
     wb_out = None
     wb_in = None
+    owns_app = False
+    opened_out_here = False
+    opened_in_here = False
+    attached = _xlwings_attach_two_workbooks_same_app(abs_rp, abs_ip)
+    if attached is None:
+        logging.warning(
+            "列設定シート図形コピー: 結果・入力ブックを同一 Excel 上に開けませんでした。"
+        )
+        return
+    app, wb_out, wb_in, owns_app, opened_out_here, opened_in_here = attached
+    if owns_app:
+        logging.info(
+            "列設定シート図形コピー: 起動中に同一プロセスで揃えられなかったため、"
+            "非表示の新規 Excel で両ブックを開きます。"
+        )
+    else:
+        logging.info(
+            "列設定シート図形コピー: 起動中の Excel を再利用し、同一プロセスで処理します。"
+        )
     try:
-        app = xw.App(visible=False)
-        app.display_alerts = False
-        wb_out = app.books.open(os.path.abspath(rp), update_links=False)
-        wb_in = app.books.open(os.path.abspath(ip), read_only=True, update_links=False)
         try:
             ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
@@ -6701,17 +6718,29 @@ def _stage2_try_copy_column_config_shapes_from_input(
             e,
         )
     finally:
-        for _wb in (wb_in, wb_out):
-            if _wb is not None:
+        if owns_app:
+            for _wb in (wb_in, wb_out):
+                if _wb is not None:
+                    try:
+                        _wb.close()
+                    except Exception:
+                        pass
+            if app is not None:
                 try:
-                    _wb.close()
+                    app.quit()
                 except Exception:
                     pass
-        if app is not None:
-            try:
-                app.quit()
-            except Exception:
-                pass
+        else:
+            if opened_in_here and wb_in is not None:
+                try:
+                    wb_in.close()
+                except Exception:
+                    pass
+            if opened_out_here and wb_out is not None:
+                try:
+                    wb_out.close()
+                except Exception:
+                    pass
 
 
 def _com_excel_bgr_rgb(r: int, g: int, b: int) -> int:
@@ -11846,6 +11875,25 @@ def _xlwings_book_matches_path(book, disk_path: str) -> bool:
     return _xlwings_paths_equivalent(disk_path, fn)
 
 
+def _agent_dbg_xlw_reuse_scan(payload: dict) -> None:
+    # region agent log
+    try:
+        import json
+        import time
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parents[4]
+        p = root / "debug-b7ff0d.log"
+        row = dict(payload)
+        row.setdefault("sessionId", "b7ff0d")
+        row["timestamp"] = int(time.time() * 1000)
+        with open(p, "a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # endregion
+
+
 def _xlwings_find_book_on_running_instances(abs_path: str):
     """起動中の Excel からパス一致する xlwings Book を返す。無ければ None。
 
@@ -11858,18 +11906,175 @@ def _xlwings_find_book_on_running_instances(abs_path: str):
     try:
         import xlwings as xw
     except ImportError:
+        _agent_dbg_xlw_reuse_scan(
+            {
+                "hypothesisId": "H3",
+                "location": "_xlwings_find_book_on_running_instances",
+                "message": "import_xlwings_fail",
+                "data": {"abs_path": (abs_path or "")[:500]},
+            }
+        )
         return None
     try:
+        abs_norm = os.path.normcase(os.path.abspath(abs_path))
+    except Exception:
+        abs_norm = str(abs_path)
+    outer_ex = None
+    apps_scan: list = []
+    n_apps_seen = 0
+    try:
         for app in xw.apps:
+            n_apps_seen += 1
+            pid = None
+            try:
+                pid = int(app.pid)
+            except Exception:
+                pass
+            books_scan: list = []
             try:
                 for book in app.books:
-                    if _xlwings_book_matches_path(book, abs_path):
+                    fn_s = ""
+                    try:
+                        fn_s = str(book.full_name)
+                    except Exception as ex_fn:
+                        fn_s = f"<full_name_error:{type(ex_fn).__name__}>"
+                    matched = False
+                    try:
+                        matched = _xlwings_book_matches_path(book, abs_path)
+                    except Exception:
+                        matched = False
+                    books_scan.append({"fn": fn_s[:500], "match": matched})
+                    if matched:
+                        _agent_dbg_xlw_reuse_scan(
+                            {
+                                "hypothesisId": "H4",
+                                "location": "_xlwings_find_book_on_running_instances",
+                                "message": "book_reuse_match",
+                                "data": {
+                                    "target_norm": abs_norm[:500],
+                                    "pid": pid,
+                                    "matched_fn": fn_s[:500],
+                                },
+                            }
+                        )
                         return book
+            except Exception as ex_books:
+                books_scan.append({"books_iter_error": repr(ex_books)[:500]})
+            apps_scan.append(
+                {
+                    "pid": pid,
+                    "n_books": len(books_scan),
+                    "books_head": books_scan[:10],
+                }
+            )
+    except Exception as ex_outer:
+        outer_ex = repr(ex_outer)[:800]
+
+    _agent_dbg_xlw_reuse_scan(
+        {
+            "hypothesisId": "H1_H2_H5",
+            "location": "_xlwings_find_book_on_running_instances",
+            "message": "no_running_book_match",
+            "data": {
+                "target_norm": abs_norm[:500],
+                "n_apps_seen": n_apps_seen,
+                "outer_ex": outer_ex,
+                "apps_scan_head": apps_scan[:6],
+            },
+        }
+    )
+    return None
+
+
+def _xlwings_find_book_in_app(app, abs_path: str):
+    """同一 ``Application`` 内の ``Books`` からパス一致する ``Book`` を返す。無ければ None。"""
+    if app is None or not (abs_path or "").strip():
+        return None
+    try:
+        for book in app.books:
+            if _xlwings_book_matches_path(book, abs_path):
+                return book
+    except Exception:
+        pass
+    return None
+
+
+def _xlwings_same_excel_app(app_a, app_b) -> bool:
+    """2 つの xlwings App が同一 Excel プロセスか。"""
+    if app_a is None or app_b is None:
+        return False
+    if app_a is app_b:
+        return True
+    try:
+        return int(app_a.pid) == int(app_b.pid)
+    except Exception:
+        return False
+
+
+def _xlwings_attach_two_workbooks_same_app(abs_result: str, abs_input: str):
+    """
+    図形の Copy/Paste 用に、結果ブックと入力ブックを **同一 Application** 上に揃える。
+
+    戻り値: ``(app, wb_out, wb_in, owns_app, opened_out_here, opened_in_here)`` または失敗時 ``None``。
+
+    - ``owns_app`` … この関数が新規 ``xw.App`` を起動したとき True（終了時に ``quit`` する）。
+    - ``opened_*_here`` … 当該ブックを本関数が ``books.open`` したとき True（終了時にそのブックだけ ``close``）。
+    """
+    try:
+        import xlwings as xw
+    except ImportError:
+        return None
+    abs_r = os.path.abspath(abs_result)
+    abs_i = os.path.abspath(abs_input)
+
+    bo = _xlwings_find_book_on_running_instances(abs_r)
+    bi = _xlwings_find_book_on_running_instances(abs_i)
+
+    if bo is not None and bi is not None and _xlwings_same_excel_app(bo.app, bi.app):
+        try:
+            bo.app.display_alerts = False
+        except Exception:
+            pass
+        return (bo.app, bo, bi, False, False, False)
+
+    if bo is not None:
+        try:
+            ap = bo.app
+            try:
+                ap.display_alerts = False
             except Exception:
-                continue
+                pass
+            bi2 = _xlwings_find_book_in_app(ap, abs_i)
+            if bi2 is None:
+                bi2 = ap.books.open(abs_i, read_only=True, update_links=False)
+                return (ap, bo, bi2, False, False, True)
+            return (ap, bo, bi2, False, False, False)
+        except Exception:
+            pass
+
+    if bi is not None:
+        try:
+            ap = bi.app
+            try:
+                ap.display_alerts = False
+            except Exception:
+                pass
+            bo2 = _xlwings_find_book_in_app(ap, abs_r)
+            if bo2 is None:
+                bo2 = ap.books.open(abs_r, update_links=False)
+                return (ap, bo2, bi, False, True, False)
+            return (ap, bo2, bi, False, False, False)
+        except Exception:
+            pass
+
+    try:
+        ap = xw.App(visible=False, add_book=False)
+        ap.display_alerts = False
+        wb_o = ap.books.open(abs_r, update_links=False)
+        wb_i = ap.books.open(abs_i, read_only=True, update_links=False)
+        return (ap, wb_o, wb_i, True, True, True)
     except Exception:
         return None
-    return None
 
 
 def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool) -> None:
