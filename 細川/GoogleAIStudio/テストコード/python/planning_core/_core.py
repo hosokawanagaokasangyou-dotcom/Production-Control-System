@@ -831,10 +831,11 @@ DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME = (
     os.environ.get("DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET", "").strip()
     or "配台試行順_パターン別段階2"
 )
-# パターン別段階2の最大シミュレーション件数（P1/P2/P3 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
+# パターン別段階2の最大シミュレーション件数（P1/P2/P3/P4 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
 DISPATCH_PATTERN_STAGE2_META_FILENAME = "pattern_jobs_meta.json"
-# 試行順パターン P3: 機械グループの日数合計を先に求めるため、単純 sort キーではなく専用処理を使う。
+# 試行順パターン P3/P4: 単純 sort キーだけでは表現できないため専用処理を使う。
 _DISPATCH_TRIAL_PATTERN_P3_SORT = object()
+_DISPATCH_TRIAL_PATTERN_P4_SORT = object()
 
 
 def _dispatch_pattern_stage2_max_patterns() -> int:
@@ -848,7 +849,7 @@ def _dispatch_pattern_stage2_max_patterns() -> int:
 
 def _dispatch_pattern_stage2_capped_jobs() -> list[tuple[str, str, int | None, object]]:
     """
-    P1/P2/P3 のリスト。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えるときは先頭から切り詰める。
+    P1/P2/P3/P4 のリスト。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えるときは先頭から切り詰める。
     """
     cap = _dispatch_pattern_stage2_max_patterns()
     jobs = _dispatch_trial_pattern_job_list()
@@ -868,6 +869,8 @@ def _dispatch_pattern_jobs_meta_list(
             kind = "machine_due"
         elif pid == "P3":
             kind = "due_buffer"
+        elif pid == "P4":
+            kind = "due_minus_raw"
         else:
             kind = "random"
         out.append({"id": pid, "name": pname, "seed": seed, "kind": kind})
@@ -886,17 +889,24 @@ def _pattern_job_tuple_from_meta_entry(ent: dict) -> tuple[str, str, int | None,
     if pid == "P3" or kind == "due_buffer":
         return (
             pid or "P3",
-            pname or "納期順・機械グループ(原反〜納期の日数合計が短い順)",
+            pname or "納期順・機械グループ(納期−原反合計が短い順)・途中依頼優先",
             None,
             _DISPATCH_TRIAL_PATTERN_P3_SORT,
         )
-    # 旧 pattern_jobs_meta（P4 廃止）の互換: 当時の並びに近い P2 キーで再生する
-    if pid == "P4" or kind == "machine_qty_due":
+    # 旧 pattern_jobs_meta: kind のみ machine_qty_due のときは当時の P4（換算数量）を P2 キーで再生
+    if kind == "machine_qty_due":
         return (
             pid or "P4",
-            pname or "（廃止）機械名+換算数量降順+納期",
+            pname or "（旧互換）機械名+換算数量降順+納期",
             None,
             _pattern_sort_key_machine_then_due,
+        )
+    if pid == "P4" or kind == "due_minus_raw":
+        return (
+            pid or "P4",
+            pname or "納期−原反日数の短い順(途中依頼優先)",
+            None,
+            _DISPATCH_TRIAL_PATTERN_P4_SORT,
         )
     # 旧 R* / kind random はシャッフル廃止のため納期最優先で決定論再生する
     if kind == "random" or (pid and str(pid).upper().startswith("R")):
@@ -17072,12 +17082,32 @@ def _reorder_task_queue_in_progress_front_stable(task_queue: list) -> None:
     task_queue.sort(key=lambda t: (0 if bool(t.get("in_progress")) else 1))
 
 
+def _reorder_task_queue_in_progress_task_id_family_front_stable(
+    task_queue: list,
+) -> None:
+    """
+    同一依頼NO（task_id）のいずれかが加工途中なら、その依頼NOの全行を前寄りにまとめる（安定ソート）。
+    """
+    if len(task_queue) < 2:
+        return
+    ip_tids = {
+        str(t.get("task_id") or "").strip()
+        for t in task_queue
+        if bool(t.get("in_progress")) and str(t.get("task_id") or "").strip()
+    }
+    if not ip_tids:
+        return
+    task_queue.sort(
+        key=lambda t: (0 if str(t.get("task_id") or "").strip() in ip_tids else 1,)
+    )
+
+
 def _finalize_dispatch_trial_pattern_queue_after_pattern_sort(
     task_queue: list,
 ) -> None:
     """
-    配台試行順パターン一覧用: パターン用ソートのあとに適用する共通後処理。
-    §B-2/3 EC 隣接 → スリット→SEC 連続 → 加工途中を前へ（最後）→ 試行順 1..n。
+    配台試行順パターン一覧用: ⑤特別ルール相当の共通後処理（パターン用ソートのあと）。
+    §B-2/3 EC 隣接 → スリット→SEC 連続 → 加工途中タスク単位を前へ → 試行順 1..n。
     """
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _reorder_task_queue_slit_sec_consecutive(task_queue)
@@ -17153,8 +17183,9 @@ def _pattern_p3_machine_group_span_sum_map(task_queue: list) -> dict[str, int]:
 
 def _apply_dispatch_trial_pattern_p3_sort(task_queue: list) -> None:
     """
-    P3: ①同一機械グループ内は納期順、②機械グループの並びは
-    （納期基準−原反投入日）の暦日をタスクごとに足した合計の昇順（合計が小さい機械が先）。
+    P3: ①納期順（機械グループ内）、②機械名でグループ化、③グループ単位で
+    （納期基準−原反投入日）の暦日合計が小さい機械から、④加工途中の依頼NO（同一task_id）を前へ、
+    ⑤_finalize（§B EC・スリット→SEC・加工途中行・試行順付与）。
     """
     sums = _pattern_p3_machine_group_span_sum_map(task_queue)
 
@@ -17168,6 +17199,29 @@ def _apply_dispatch_trial_pattern_p3_sort(task_queue: list) -> None:
         )
 
     task_queue.sort(key=sort_key)
+    _reorder_task_queue_in_progress_task_id_family_front_stable(task_queue)
+    _finalize_dispatch_trial_pattern_queue_after_pattern_sort(task_queue)
+
+
+def _pattern_sort_key_p4_due_minus_raw(t: dict):
+    """P4 用: （納期基準−原反投入日）の暦日が小さい順。欠損は末尾寄せ。"""
+    sp = _pattern_p3_span_days_due_minus_raw(t)
+    span_k = sp if sp is not None else 10**9
+    return (
+        span_k,
+        _due_basis_date_for_dispatch_pattern_sort(t),
+        int(t.get("planning_sheet_row_seq") or 10**9),
+        _task_id_priority_key(str(t.get("task_id") or "")),
+    )
+
+
+def _apply_dispatch_trial_pattern_p4_sort(task_queue: list) -> None:
+    """
+    P4: ①（納期基準−原反投入日）の暦日が小さい順、②加工途中の依頼NOを前へ、
+    ③_finalize（§B EC・スリット→SEC・加工途中行・試行順付与）。
+    """
+    task_queue.sort(key=_pattern_sort_key_p4_due_minus_raw)
+    _reorder_task_queue_in_progress_task_id_family_front_stable(task_queue)
     _finalize_dispatch_trial_pattern_queue_after_pattern_sort(task_queue)
 
 
@@ -17181,15 +17235,21 @@ def _apply_dispatch_trial_pattern_sort_pipeline(
 
 
 def _dispatch_trial_pattern_job_list() -> list[tuple[str, str, int | None, object]]:
-    """試行順パターン P1～P3（決定論のみ）。"""
+    """試行順パターン P1～P4（決定論のみ）。"""
     return [
         ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
         ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
         (
             "P3",
-            "納期順・機械グループ(原反〜納期の日数合計が短い機械から)",
+            "納期順・機械グループ(納期−原反合計が短い順)・途中依頼優先",
             None,
             _DISPATCH_TRIAL_PATTERN_P3_SORT,
+        ),
+        (
+            "P4",
+            "納期−原反日数の短い順・途中依頼優先",
+            None,
+            _DISPATCH_TRIAL_PATTERN_P4_SORT,
         ),
     ]
 
@@ -17204,6 +17264,8 @@ def _iter_dispatch_trial_pattern_variant_queues(
         if sk is not None:
             if sk is _DISPATCH_TRIAL_PATTERN_P3_SORT:
                 _apply_dispatch_trial_pattern_p3_sort(tq)
+            elif sk is _DISPATCH_TRIAL_PATTERN_P4_SORT:
+                _apply_dispatch_trial_pattern_p4_sort(tq)
             else:
                 _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
         else:
@@ -17510,8 +17572,8 @@ def _build_dispatch_trial_pattern_list_matrix(
     equipment_list: list,
 ) -> list[list]:
     """
-    パターン①納期最優先、②機械名グループ＋納期、③納期順＋機械グループ（原反〜納期の日数合計が短い機械から）の
-    確定後試行順を長形式で返す（先頭に説明行・見出し行）。
+    パターン①納期最優先、②機械名グループ＋納期、③P3（納期順・機械グループの納期−原反合計順・途中依頼優先）、
+    ④P4（納期−原反日数の短い順・途中依頼優先）の確定後試行順を長形式で返す（先頭に説明行・見出し行）。
     """
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     df = tasks_df.copy()
@@ -17550,13 +17612,14 @@ def _build_dispatch_trial_pattern_list_matrix(
         ]
 
     tq_template = copy.deepcopy(tq_template)
-    # 一覧シートは参照用のため P1/P2/P3 を全列挙する（段階2バッチの件数上限とは切り離す）。
+    # 一覧シートは参照用のため P1/P2/P3/P4 を全列挙する（段階2バッチの件数上限とは切り離す）。
     pattern_jobs = _dispatch_trial_pattern_job_list()
     intro = (
-        "各パターンは、パターン用の並べのあと、"
-        "§B-2/3 EC 隣接・スリット→SEC 連続のあと、最後に加工途中を前へ寄せ、配台試行順 1..n を付与した結果です。"
+        "各パターンは、パターン用の並べのあと（P3/P4 は加工途中の同一依頼NOを前寄せ）、"
+        "§B-2/3 EC 隣接・スリット→SEC 連続のあと、加工途中行を前へ寄せ、配台試行順 1..n を付与した結果です。"
         " 決定論: P1納期最優先、P2機械名+納期、"
-        "P3納期順で機械グループ化し、(納期基準日−原反投入日)の暦日をタスクごとに足した合計が小さい機械グループを先に。"
+        "P3は機械グループの(納期基準−原反投入日)暦日合計が小さい機械から並べグループ内は納期順、"
+        "P4はタスクごとの(納期基準−原反投入日)暦日が小さい順。"
         " 「試行順パターン別段階2」バッチのみ DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で件数を抑えます。"
     )
     headers = [
@@ -17801,7 +17864,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    各試行順パターン（P1/P2/P3）ごとに段階2を実行し、
+    各試行順パターン（P1/P2/P3/P4）ごとに段階2を実行し、
     ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
     マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
     """
