@@ -831,13 +831,15 @@ DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME = (
     os.environ.get("DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET", "").strip()
     or "配台試行順_パターン別段階2"
 )
-# パターン別段階2の最大シミュレーション件数（P1/P2/P3/P4 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
+# パターン別段階2の最大シミュレーション件数（P1～P6 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
 DISPATCH_PATTERN_STAGE2_META_FILENAME = "pattern_jobs_meta.json"
 # 試行順パターン P3/P4: 単純 sort キーだけでは表現できないため専用処理を使う。
 _DISPATCH_TRIAL_PATTERN_P3_SORT = object()
 _DISPATCH_TRIAL_PATTERN_P4_SORT = object()
 # P5: P2 でプローブ段階2 → 納期遅れ依頼のみ原反投入を 1 日前 → 再キュー化して P2 並べ直し
 _DISPATCH_TRIAL_PATTERN_P5_SORT = object()
+# P6: P5 相当のあと、もう一度プローブし、まだ納期遅れの依頼のみ原反をさらに 1 日前 →P2
+_DISPATCH_TRIAL_PATTERN_P6_SORT = object()
 
 
 def _dispatch_pattern_stage2_max_patterns() -> int:
@@ -851,7 +853,7 @@ def _dispatch_pattern_stage2_max_patterns() -> int:
 
 def _dispatch_pattern_stage2_capped_jobs() -> list[tuple[str, str, int | None, object]]:
     """
-    P1/P2/P3/P4 のリスト。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えるときは先頭から切り詰める。
+    P1～P6 のリスト。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えるときは先頭から切り詰める。
     """
     cap = _dispatch_pattern_stage2_max_patterns()
     jobs = _dispatch_trial_pattern_job_list()
@@ -875,6 +877,8 @@ def _dispatch_pattern_jobs_meta_list(
             kind = "due_minus_raw"
         elif pid == "P5":
             kind = "p2_probe_shift_raw_minus1_due_late"
+        elif pid == "P6":
+            kind = "p5_then_shift_raw_minus1_due_late_again"
         else:
             kind = "random"
         out.append({"id": pid, "name": pname, "seed": seed, "kind": kind})
@@ -918,6 +922,13 @@ def _pattern_job_tuple_from_meta_entry(ent: dict) -> tuple[str, str, int | None,
             pname or "P2→納期遅れ依頼のみ原反-1日→P2",
             None,
             _DISPATCH_TRIAL_PATTERN_P5_SORT,
+        )
+    if pid == "P6" or kind == "p5_then_shift_raw_minus1_due_late_again":
+        return (
+            pid or "P6",
+            pname or "P5後に納期遅れのみ原反さらに-1日→P2",
+            None,
+            _DISPATCH_TRIAL_PATTERN_P6_SORT,
         )
     # 旧 R* / kind random はシャッフル廃止のため納期最優先で決定論再生する
     if kind == "random" or (pid and str(pid).upper().startswith("R")):
@@ -17317,7 +17328,7 @@ def _apply_dispatch_trial_pattern_sort_pipeline(
 
 
 def _dispatch_trial_pattern_job_list() -> list[tuple[str, str, int | None, object]]:
-    """試行順パターン P1～P5（決定論のみ）。P5 は P2 プローブ後に納期遅れ依頼の原反のみ 1 日前。"""
+    """試行順パターン P1～P6（決定論のみ）。P5/P6 はプローブと原反日シフトを含む。"""
     return [
         ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
         ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
@@ -17338,6 +17349,12 @@ def _dispatch_trial_pattern_job_list() -> list[tuple[str, str, int | None, objec
             "P2→納期遅れ依頼のみ原反-1日→P2",
             None,
             _DISPATCH_TRIAL_PATTERN_P5_SORT,
+        ),
+        (
+            "P6",
+            "P5後に納期遅れのみ原反さらに-1日→P2",
+            None,
+            _DISPATCH_TRIAL_PATTERN_P6_SORT,
         ),
     ]
 
@@ -17479,6 +17496,111 @@ def _build_dispatch_trial_pattern_p5_task_queue(
     return tq5, df5
 
 
+def _build_dispatch_trial_pattern_p6_task_queue(
+    planning_df: "pd.DataFrame",
+    tq_frozen_from_planning_df: list,
+    *,
+    run_date: date,
+    req_map: dict,
+    need_rules: list,
+    need_combo_col_index: dict | None,
+    equipment_list: list,
+    gpo: dict,
+    nested_probe_parent: str,
+) -> tuple[list, "pd.DataFrame | None"]:
+    """
+    ① P5 と同じ（P2 プローブ→納期遅れ依頼のみ原反 1 日前→P2）まで実行。
+    ② その結果の計画表（P5 でシフト済みならその DataFrame、未シフトなら元表）に P5 確定の試行順を載せて再度段階2をプローブ。
+    ③ まだ納期遅れの依頼のみ原反投入日（＋上書き）をさらに 1 暦日前にし、キュー組み直し＋ P2 finalize。
+    ②で遅れなし・プローブ失敗時は P5 の戻り (tq, df_override) と同じ。
+    """
+    try:
+        os.makedirs(nested_probe_parent, exist_ok=True)
+    except OSError as e:
+        logging.warning("P6: 作業フォルダを作成できません: %s（P2 のみ）", e)
+        tq = copy.deepcopy(tq_frozen_from_planning_df)
+        _apply_dispatch_trial_pattern_sort_pipeline(tq, _pattern_sort_key_machine_then_due)
+        return tq, None
+
+    p5_inner = os.path.join(nested_probe_parent, "inner_p5")
+    tq5, df5 = _build_dispatch_trial_pattern_p5_task_queue(
+        planning_df,
+        tq_frozen_from_planning_df,
+        run_date=run_date,
+        req_map=req_map,
+        need_rules=need_rules,
+        need_combo_col_index=need_combo_col_index,
+        equipment_list=equipment_list,
+        gpo=gpo,
+        probe_stage2_root=p5_inner,
+    )
+    planning_base = df5 if df5 is not None else planning_df
+    tq_after_p5 = tq5
+
+    df_probe2 = planning_base.copy()
+    _apply_pattern_dispatch_trial_orders_to_tasks_df(df_probe2, tq_after_p5)
+    p6_probe = os.path.join(nested_probe_parent, "after_p5_probe")
+    paths2 = None
+    try:
+        os.makedirs(p6_probe, exist_ok=True)
+    except OSError as e:
+        logging.warning("P6: 第2プローブ用フォルダを作成できません: %s", e)
+        try:
+            shutil.rmtree(nested_probe_parent, ignore_errors=True)
+        except Exception:
+            pass
+        return tq5, df5
+
+    try:
+        paths2 = _generate_plan_impl(
+            tasks_df_override=df_probe2,
+            stage2_output_root=p6_probe,
+            skip_remove_prior_stage2_workbooks=True,
+            return_output_paths=True,
+        )
+    except Exception:
+        logging.exception("P6: P5 後の第2プローブ段階2で例外（P5 結果で打ち切り）")
+
+    prod2 = (paths2 or {}).get("production_plan") or ""
+    probe2_ok = bool(prod2 and os.path.isfile(prod2))
+    late2: set[str] = set()
+    if probe2_ok:
+        late2 = _late_task_ids_missed_answer_deadline_from_plan_xlsx(prod2)
+
+    try:
+        shutil.rmtree(p6_probe, ignore_errors=True)
+    except Exception:
+        pass
+    try:
+        shutil.rmtree(nested_probe_parent, ignore_errors=True)
+    except Exception:
+        pass
+
+    if not probe2_ok:
+        logging.info("P6: 第2プローブが得られなかったため P5 相当で返します。")
+        return tq5, df5
+    if not late2:
+        logging.info("P6: P5 後のプローブで納期遅れ依頼なし（P5 と同一）。")
+        return tq5, df5
+
+    df6 = planning_base.copy()
+    n2 = _dataframe_shift_raw_input_dates_minus_one_day_for_task_ids(df6, late2)
+    logging.info(
+        "P6: P5 後も遅れの依頼 %s 件・原反日セル %s 件をさらに 1 日前にシフトして P2 を再適用します。",
+        len(late2),
+        n2,
+    )
+    ai6 = analyze_task_special_remarks(df6, reference_year=run_date.year)
+    tq6 = build_task_queue_from_planning_df(
+        df6, run_date, req_map, ai6, gpo, equipment_list
+    )
+    if not tq6:
+        logging.warning("P6: 第2シフト後に配台対象タスクが空のため P5 にフォールバックします。")
+        return tq5, df5
+    _apply_dispatch_trial_pattern_sort_pipeline(tq6, _pattern_sort_key_machine_then_due)
+    return tq6, df6
+
+
 def _iter_dispatch_trial_pattern_variant_queues(
     tq_template_frozen: list,
     pattern_jobs: list[tuple[str, str, int | None, object]],
@@ -17487,9 +17609,41 @@ def _iter_dispatch_trial_pattern_variant_queues(
 ):
     """
     各パターンの確定 task_queue（ディープコピー）を順に返す。
-    戻り: (pid, pname, tq, df_override)。df_override は P5 で原反シフト後の計画 DataFrame のみ（それ以外 None）。
+    戻り: (pid, pname, tq, df_override)。df_override は P5/P6 で原反シフト後の計画 DataFrame のみ（それ以外 None）。
     """
     for pid, pname, seed, sk in pattern_jobs:
+        if sk is _DISPATCH_TRIAL_PATTERN_P6_SORT:
+            pb = p5_bundle or {}
+            planning_df = pb.get("planning_df")
+            if planning_df is None:
+                logging.warning(
+                    "試行順 P6: planning_df が無いため P2 のみ適用します（id=%s）。",
+                    pid,
+                )
+                tq = copy.deepcopy(tq_template_frozen)
+                _apply_dispatch_trial_pattern_sort_pipeline(tq, _pattern_sort_key_machine_then_due)
+                yield pid, pname, tq, None
+                continue
+            nest = pb.get("p6_nested_probe_parent") or os.path.join(
+                output_dir,
+                "dispatch_pattern_stage2",
+                "p6_probe_fallback",
+                datetime.now().strftime("%Y%m%d_%H%M%S_%f"),
+            )
+            tq6, df6 = _build_dispatch_trial_pattern_p6_task_queue(
+                planning_df,
+                tq_template_frozen,
+                run_date=pb["run_date"],
+                req_map=pb["req_map"],
+                need_rules=pb["need_rules"],
+                need_combo_col_index=pb["need_combo_col_index"],
+                equipment_list=pb["equipment_list"],
+                gpo=pb["gpo"],
+                nested_probe_parent=nest,
+            )
+            yield pid, pname, tq6, df6
+            continue
+
         if sk is _DISPATCH_TRIAL_PATTERN_P5_SORT:
             pb = p5_bundle or {}
             planning_df = pb.get("planning_df")
@@ -17835,7 +17989,8 @@ def _build_dispatch_trial_pattern_list_matrix(
 ) -> list[list]:
     """
     パターン①納期最優先、②機械名グループ＋納期、③P3（納期順・機械グループの納期−原反合計順・途中依頼優先）、
-    ④P4（納期−原反日数の短い順・途中依頼優先）、⑤P5（P2 プローブ後に納期遅れ依頼のみ原反 1 日前→P2 再適用）
+    ④P4（納期−原反日数の短い順・途中依頼優先）、⑤P5（P2 プローブ後に納期遅れ依頼のみ原反 1 日前→P2 再適用）、
+    ⑥P6（P5 後に再プローブし、まだ遅れの依頼のみ原反をさらに 1 日前→P2）
     の確定後試行順を長形式で返す（先頭に説明行・見出し行）。
     """
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
@@ -17875,7 +18030,7 @@ def _build_dispatch_trial_pattern_list_matrix(
         ]
 
     tq_template = copy.deepcopy(tq_template)
-    # 一覧シートは参照用のため P1～P5 を全列挙する（段階2バッチの件数上限とは切り離す）。
+    # 一覧シートは参照用のため P1～P6 を全列挙する（段階2バッチの件数上限とは切り離す）。
     pattern_jobs = _dispatch_trial_pattern_job_list()
     intro = (
         "各パターンは、パターン用の並べのあと（P3/P4 は加工途中の同一依頼NOを前寄せ）、"
@@ -17884,8 +18039,9 @@ def _build_dispatch_trial_pattern_list_matrix(
         "P3は機械グループの(納期基準−原反投入日)暦日合計が小さい機械から並べグループ内は納期順、"
         "P4はタスクごとの(納期基準−原反投入日)暦日が小さい順。"
         " P5は一度 P2 で試行順を付けた計画を段階2でプローブし、"
-        "「配台済_回答指定16時まで」がいいえの依頼NOだけ原反投入日（と上書き列）を1暦日前にしてから P2 を再適用した試行順"
-        "（プローブは一覧生成時に output/dispatch_pattern_stage2/p5_list_matrix_probe 配下へ一時出力します）。"
+        "「配台済_回答指定16時まで」がいいえの依頼NOだけ原反投入日（と上書き列）を1暦日前にしてから P2 を再適用した試行順。"
+        " P6はそのP5後の計画でもう一度プローブし、まだ遅れの依頼のみ原反をさらに1暦日前にしてからP2を再適用。"
+        "（プローブは一覧生成時に output/dispatch_pattern_stage2 の p5_list_matrix_probe / p6_list_matrix_probe 配下へ一時出力）。"
         " 「試行順パターン別段階2」バッチのみ DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で件数を抑えます。"
     )
     headers = [
@@ -17901,6 +18057,7 @@ def _build_dispatch_trial_pattern_list_matrix(
     ]
     rows: list[list] = [[intro], [], headers]
 
+    _mtx_probe_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     p5_bundle_mtx = {
         "planning_df": df,
         "run_date": run_date,
@@ -17913,7 +18070,13 @@ def _build_dispatch_trial_pattern_list_matrix(
             output_dir,
             "dispatch_pattern_stage2",
             "p5_list_matrix_probe",
-            datetime.now().strftime("%Y%m%d_%H%M%S_%f"),
+            _mtx_probe_stamp,
+        ),
+        "p6_nested_probe_parent": os.path.join(
+            output_dir,
+            "dispatch_pattern_stage2",
+            "p6_list_matrix_probe",
+            _mtx_probe_stamp,
         ),
     }
     for pid, pname, tq, _df_ov in _iter_dispatch_trial_pattern_variant_queues(
@@ -18145,7 +18308,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    各試行順パターン（P1/P2/P3/P4）ごとに段階2を実行し、
+    各試行順パターン（P1～P6）ごとに段階2を実行し、
     ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
     マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
     """
@@ -18262,6 +18425,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         "equipment_list": equipment_list,
         "gpo": gpo,
         "probe_stage2_root": os.path.join(batch_root, "_p5_p2_probe"),
+        "p6_nested_probe_parent": os.path.join(batch_root, "_p6_nested_probes"),
     }
     summary_rows: list[dict] = []
     for pid, pname, tq, df_p5_ov in _iter_dispatch_trial_pattern_variant_queues(
@@ -18530,6 +18694,7 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
         "equipment_list": equipment_list,
         "gpo": gpo,
         "probe_stage2_root": os.path.join(batch_root, "_p5_selection_probe"),
+        "p6_nested_probe_parent": os.path.join(batch_root, "_p6_selection_nested"),
     }
     _pid_applied, _pname_applied, tq_sel, df_p5_ov = next(
         _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job], p5_bundle=p5_bundle_sel)
