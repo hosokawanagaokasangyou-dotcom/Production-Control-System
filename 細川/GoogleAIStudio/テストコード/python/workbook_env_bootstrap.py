@@ -115,6 +115,13 @@ def apply_workbook_environment_sheet(workbook_path: str) -> int:
                 continue
             val_cell = row[1] if len(row) > 1 else None
             v = _cell_to_env_str(val_cell)
+            if k == "TASK_INPUT_WORKBOOK":
+                if not v:
+                    continue
+                if not os.path.isabs(v):
+                    v = os.path.normpath(
+                        os.path.join(os.path.dirname(os.path.abspath(p)), v)
+                    )
             os.environ[k] = v
             applied += 1
         return applied
