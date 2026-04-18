@@ -1,0 +1,130 @@
+Option Explicit
+
+' pdf\ 直下 … 常に参照する最新版（上書き）
+' pdf\yyyymmdd_hhnnss\ … 履歴（削除しない）。中身は直下と同じファイル名
+
+Private Const FMT_CSV_UTF8 As Long = 62 ' xlCSVUTF8（Excel 2019 以降）
+
+Private Sub EnsureFolder(ByVal folderPath As String)
+    If Len(Dir(folderPath, vbDirectory)) > 0 Then Exit Sub
+    On Error Resume Next
+    MkDir folderPath
+    On Error GoTo 0
+End Sub
+
+Private Function SnapshotStampDirName() As String
+    SnapshotStampDirName = Format$(Year(Now), "0000") & Format$(Month(Now), "00") & Format$(Day(Now), "00") & "_" & _
+        Format$(Hour(Now), "00") & Format$(Minute(Now), "00") & Format$(Second(Now), "00")
+End Function
+
+Private Sub TryDeleteFile(ByVal fp As String)
+    On Error Resume Next
+    If Len(Dir(fp)) > 0 Then Kill fp
+    On Error GoTo 0
+End Sub
+
+Private Sub CopySnapshotToRoot(ByVal snapPath As String, ByVal rootPath As String)
+    If Len(Dir(snapPath)) = 0 Then Exit Sub
+    On Error Resume Next
+    TryDeleteFile rootPath
+    FileCopy snapPath, rootPath
+    On Error GoTo 0
+End Sub
+
+Private Function WorksheetExists(ByVal wb As Workbook, ByVal sheetName As String) As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = wb.Worksheets(sheetName)
+    WorksheetExists = Not ws Is Nothing
+    Set ws = Nothing
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+Private Sub ExportSheetPdfIfExists(ByVal wb As Workbook, ByVal sheetName As String, ByVal pdfPath As String)
+    Dim ws As Worksheet
+    If Not WorksheetExists(wb, sheetName) Then Exit Sub
+    On Error Resume Next
+    Set ws = wb.Worksheets(sheetName)
+    ws.ExportAsFixedFormat Type:=xlTypePDF, Filename:=pdfPath, Quality:=xlQualityStandard, _
+        IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False
+    Set ws = Nothing
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+Private Sub ExportSheetCsvIfExists(ByVal wb As Workbook, ByVal sheetName As String, ByVal csvPath As String)
+    Dim ws As Worksheet
+    Dim tmpWb As Workbook
+    Dim prevAlerts As Boolean
+    Set tmpWb = Nothing
+    If Not WorksheetExists(wb, sheetName) Then Exit Sub
+    prevAlerts = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+    On Error GoTo CsvCleanup
+    Set ws = wb.Worksheets(sheetName)
+    ws.Copy
+    Set tmpWb = ActiveWorkbook
+    If tmpWb Is Nothing Then GoTo CsvCleanup
+    On Error Resume Next
+    tmpWb.SaveAs Filename:=csvPath, FileFormat:=FMT_CSV_UTF8, Local:=True
+    If Err.Number <> 0 Then
+        Err.Clear
+        tmpWb.SaveAs Filename:=csvPath, FileFormat:=xlCSV, Local:=True
+    End If
+CsvCleanup:
+    On Error Resume Next
+    If Not tmpWb Is Nothing Then
+        tmpWb.Close SaveChanges:=False
+        Set tmpWb = Nothing
+    End If
+    Set ws = Nothing
+    Application.DisplayAlerts = prevAlerts
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+' targetDir … マクロ実行ブック直下（ThisWorkbook.path）
+' wb … 通常 ThisWorkbook（加工計画DATA・配台計画・結果シートを同一ブックで参照）
+Public Sub スナップショット_pdfとcsvを出力(ByVal targetDir As String, ByVal wb As Workbook)
+    Dim pdfRoot As String
+    Dim stamp As String
+    Dim snapDir As String
+    Dim f As String
+    
+    If Len(targetDir) = 0 Then Exit Sub
+    If wb Is Nothing Then Exit Sub
+    
+    pdfRoot = targetDir & "\" & PDF_SNAPSHOT_REL_FOLDER
+    EnsureFolder pdfRoot
+    
+    stamp = SnapshotStampDirName()
+    snapDir = pdfRoot & "\" & stamp
+    EnsureFolder snapDir
+    
+    ' --- PDF（計画+実績の設備ガント、実績明細ガント）---
+    f = SHEET_RESULT_EQUIP_GANTT & ".pdf"
+    ExportSheetPdfIfExists wb, SHEET_RESULT_EQUIP_GANTT, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    
+    f = SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & ".pdf"
+    ExportSheetPdfIfExists wb, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    
+    ' --- CSV ---
+    f = SHEET_RESULT_TASK_LIST & ".csv"
+    ExportSheetCsvIfExists wb, SHEET_RESULT_TASK_LIST, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    
+    f = SHEET_PLAN_INPUT_TASK & ".csv"
+    ExportSheetCsvIfExists wb, SHEET_PLAN_INPUT_TASK, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    
+    f = SHEET_TASKS_RAW_PLAN_DATA & ".csv"
+    ExportSheetCsvIfExists wb, SHEET_TASKS_RAW_PLAN_DATA, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    
+    f = SHEET_ACTUAL_DETAIL_DATA & ".csv"
+    ExportSheetCsvIfExists wb, SHEET_ACTUAL_DETAIL_DATA, snapDir & "\" & f
+    CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+End Sub

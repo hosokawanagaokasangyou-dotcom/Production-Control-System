@@ -3408,6 +3408,13 @@ Finish:
     Err.Clear
     On Error GoTo 0
     
+    On Error Resume Next
+    If planImported And exitCode = 0 Then
+        スナップショット_pdfとcsvを出力 targetDir, ThisWorkbook
+    End If
+    Err.Clear
+    On Error GoTo 0
+    
     If st2DidUnlock Then
         On Error Resume Next
         配台マクロ_対象シートを条件どおりに保護 targetDir
@@ -3605,6 +3612,11 @@ Public Sub 実績設備ガント_のみ更新_実行()
     
     On Error Resume Next
     targetWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL).Activate
+    On Error GoTo EH
+    
+    On Error Resume Next
+    スナップショット_pdfとcsvを出力 targetDir, ThisWorkbook
+    Err.Clear
     On Error GoTo EH
     
     AppMsgBox "「" & SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & "」を更新しました。", vbInformation, "実績ガント更新"

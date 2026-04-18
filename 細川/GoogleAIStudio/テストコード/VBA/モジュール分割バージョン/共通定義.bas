@@ -137,6 +137,11 @@ Public Const SHEET_SETTINGS As String = "設定"
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"
 ' planning_core.PLAN_INPUT_SHEET_NAME（TASK_PLAN_SHEET 未設定時の既定）と一致
 Public Const SHEET_PLAN_INPUT_TASK As String = "配台計画_タスク入力"
+' planning_core.TASKS_SHEET_NAME / ACTUAL_DETAIL_SHEET_NAME と一致（スナップショット CSV 用）
+Public Const SHEET_TASKS_RAW_PLAN_DATA As String = "加工計画DATA"
+Public Const SHEET_ACTUAL_DETAIL_DATA As String = "加工実績明細DATA"
+' マクロブック直下の PDF・CSV スナップショット（段階2 成功時・実績ガント更新成功時）
+Public Const PDF_SNAPSHOT_REL_FOLDER As String = "pdf"
 ' 配台計画_タスク入力シート上の「配台試行順を再計算」図形名（再配置時に削除して付け直す）
 Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER As String = "btn_PlanInput_DispatchTrialOrder"
 ' 「配台試行順番」を小数キーで並べ替え（1..n）用グラデーション図形名
