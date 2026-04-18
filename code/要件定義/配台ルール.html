@@ -197,6 +197,8 @@
       <li><strong>配台試行順番（追補）</strong>: 段階1で段階2と同趣旨のソート＋EC隣接＋連番を付与。段階2は<strong>全行が正の整数で埋まっている</strong>ときだけその順を採用（欠損時は自動計算にフォールバック）。</li>
       <li><strong>段階1の継承方針（2026-04-06 追補）</strong>: 抽出直後に <strong>配台試行順番</strong> を空にクリアし既存シートからは継承しない（<code>PLAN_STAGE1_MERGE_EXTRA_COLUMNS</code> は <strong>ロール単位長さ</strong> のみ）。出力直前に同列昇順で行ソート。VBA <code>ImportPlanInputTasksFromOutput</code> も貼り付け後に同列昇順ソート（無いときのみ指定納期）。</li>
       <li><strong>試行順パターン P5（比較用）</strong>: まず <strong>P2</strong>（機械名＋納期）で試行順を付けた計画を<strong>一度だけ段階2にプローブ</strong>し、<strong>配台済_回答指定16時まで＝いいえ</strong>の<strong>依頼NO</strong>について <strong>原反投入日／原反投入日_上書き</strong>を<strong>1暦日前</strong>にずらしたあと、キューを組み直して<strong>再度 P2</strong>を適用した試行順。本番のパターン別段階2ではシフト後シートでシミュする。詳細は <span class="file">配台ルール.md</span> §2.0.4。</li>
+      <li><strong>試行順パターン P6（比較用）</strong>: <strong>P5 完了後の計画</strong>でもう一度プローブし、<strong>まだ遅れの依頼のみ</strong>原反を<strong>P5 よりさらに 1 暦日前</strong>にしてから <strong>P2</strong> を再適用。詳細は <span class="file">配台ルール.md</span> §2.0.4。</li>
+      <li><strong>パターン別段階2の P5/P6 本番出力</strong>: <strong>結果_タスク一覧</strong>に <code>原反投入日_試行前</code> と <code>試行順パターン原反前倒し</code>（例: <code>P6・原反2日前</code>）が付き、試行前から前倒しが無い行は空。P1～P4・通常段階2では空のまま。</li>
       <li><strong>成果物の追加（追補）</strong>: <code>TEMP_設備毎の時間割</code>（余力追記前）・<code>ブロックテーブル</code>（10分枠×設備・人）・<code>結果_設備毎の時間割_機械名毎</code> を追加。</li>
     </ul>
 
@@ -351,7 +353,7 @@
       <li><strong>加工計画DATA</strong>: 依頼NO、工程名、機械名、換算数量、未加工、受注数、加工速度（段階1では一旦取り込み）、製品名、回答納期、指定納期、原反投入日、在庫場所（任意）、加工内容、加工完了区分、実加工数、実出来高、データ抽出日、抽出時間。</li>
       <li><strong>配台計画_タスク入力</strong>: 配台試行順番、配台不要、上記ベース列＋配台使用残数量（未加工の直後）、ロール単位長さ（製品名の直後）、加工工程の決定プロセスの因子、（元）／本体の上書き列（加工速度_上書き、原反投入日_上書き、担当OP_指定、特別指定_備考）、AI特別指定_解析。<strong>加工速度</strong>列への入力は <code>master.xlsm</code> の <code>speed</code>（1行目=工程名、2行目=機械名、4行目=基本速度、5行目=実稼働比率、設備列既定は D 列から）で工程名＋機械名が一致すると<strong>基本速度×実稼働比率</strong>（m/分）を書き込み（無効化: <code>MASTER_USE_SPEED_SHEET=0</code> 等）。<strong>実効速度の優先順</strong>: ①列 <strong>加工速度_上書き</strong> → ②列 <strong>加工速度</strong>。備考 AI の <code>speed_override</code> は速度計算に使わない。その後 <code>global_speed_rules</code> 等（<span class="file">python/planning_core/_core.py</span> の <code>build_task_queue_from_planning_df</code>）。</li>
       <li><strong>加工実績DATA</strong>: 依頼NO、工程名、担当者、開始日時、終了日時、実績開始、実績終了、日付、開始時刻、終了時刻。</li>
-      <li><strong>結果_タスク一覧</strong>（既定骨格）: ステータス、タスクID、工程名、機械名、加工速度、優先度、配台試行順番、履歴1…（可変）、必須OP(上書)、タスク効率、加工途中、特別指定あり、担当OP指定、回答納期、指定納期、計画基準納期、原反投入日、納期緊急、加工開始日、配台済_加工開始／終了、配台済_回答指定16時まで、累計加工量、残加工量、完了率(実行時点)、特別指定_AI。</li>
+      <li><strong>結果_タスク一覧</strong>（既定骨格）: ステータス、タスクID、工程名、機械名、加工速度、優先度、配台試行順番、履歴1…（可変）、必須OP(上書)、タスク効率、加工途中、特別指定あり、担当OP指定、回答納期、指定納期、計画基準納期、原反投入日、原反投入日_試行前、試行順パターン原反前倒し、納期緊急、加工開始日、配台済_加工開始／終了、配台済_回答指定16時まで、累計加工量、残加工量、完了率(実行時点)、特別指定_AI。</li>
     </ul>
     <p class="queue-note">計画シートから廃止した列（優先度・必要人数など）と、結果シート既定の「優先度」列の関係は <span class="file">配台ルール.md</span> 8.0.0 の注記を参照。</p>
   </section>
@@ -397,7 +399,7 @@
     <ul>
       <li><strong>列</strong>: <code>原反投入日_上書き</code>（<code>PLAN_COL_RAW_INPUT_DATE_OVERRIDE</code>）。参照列 <code>（元）原反投入日_上書き</code> は括弧内に列 <code>原反投入日</code> を表示。</li>
       <li><strong>段階2</strong>: 日付があるときその値を <code>raw_input_date</code> として採用（開始下限・同日 13:00 下限・備考 AI の <code>start_date</code>（該当行）との max 等）。空のときは列 <code>原反投入日</code> のみ。</li>
-      <li><strong>結果_タスク一覧</strong>の <code>原反投入日</code> 表示も、上記と同じ優先で日付を出します。詳細は <span class="file">配台ルール.md</span> 2.1・7.3。</li>
+      <li><strong>結果_タスク一覧</strong>の <code>原反投入日</code> 表示も、上記と同じ優先で日付を出します。パターン別段階2の P5/P6 では <code>原反投入日_試行前</code> と <code>試行順パターン原反前倒し</code> も参照できます。詳細は <span class="file">配台ルール.md</span> 2.1・2.0.4・7.3。</li>
     </ul>
   </section>
 

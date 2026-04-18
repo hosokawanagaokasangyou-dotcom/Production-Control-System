@@ -1311,6 +1311,9 @@ RESULT_EQUIP_GANTT_MACHINE_GROUP_FILL_COLORS_FULL = (
 )
 # 配台シミュレーション開始剝（初回 task_queue.sort 後）のキュー順。1 始まり・全日程で試行
 RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
+# 試行順パターン P5/P6 等で原反を前倒ししたとき、結果に「試行前の実効原反日」と注記を出す
+RESULT_TASK_COL_RAW_INPUT_DATE_PRE_PATTERN = "原反投入日_試行前"
+RESULT_TASK_COL_PATTERN_RAW_SHIFT_NOTE = "試行順パターン原反前倒し"
 # 配台済_加工終了は「回答納期+16:00」または「指定納期+16:00」（回答は空のとき）以降かを表示
 RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配台済_回答指定16時まで"
 # マスタ skills の工程+機械列ととの OP/AS 割当参考順（優先度値・並び順）とフォーム採用ルールの説明
@@ -1358,6 +1361,7 @@ RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
         "指定納期",
         "計画基準納期",
         TASK_COL_RAW_INPUT_DATE,
+        RESULT_TASK_COL_RAW_INPUT_DATE_PRE_PATTERN,
         "加工開始日",
         "配台済_加工開始",
         "配台済_加工終了",
@@ -5199,6 +5203,8 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
         "指定納期",
         "計画基準納期",
         TASK_COL_RAW_INPUT_DATE,
+        RESULT_TASK_COL_RAW_INPUT_DATE_PRE_PATTERN,
+        RESULT_TASK_COL_PATTERN_RAW_SHIFT_NOTE,
         "紝期緊急",
         "加工開始日",
         "配台済_加工開始",
@@ -17420,6 +17426,45 @@ def _dataframe_shift_raw_input_dates_minus_one_day_for_task_ids(
     return n_changed
 
 
+def _build_result_sheet_effective_raw_input_date_by_line(
+    tasks_df_opt: "pd.DataFrame | None",
+) -> dict[tuple[str, str], date | None]:
+    """
+    配台計画 DataFrame から、(依頼NO, 工程名) キーごとの実効原反日（上書き列優先）を返す。
+    結果_タスク一覧の原反列・試行前比較に使う。
+    """
+    out: dict[tuple[str, str], date | None] = {}
+    if tasks_df_opt is None or getattr(tasks_df_opt, "empty", True):
+        return out
+    for _, _r in tasks_df_opt.iterrows():
+        if _plan_row_exclude_from_assignment(_r):
+            continue
+        _tid = str(_planning_df_cell_scalar(_r, TASK_COL_TASK_ID) or "").strip()
+        _mach = str(_planning_df_cell_scalar(_r, TASK_COL_MACHINE) or "").strip()
+        if not _tid or not _mach:
+            continue
+        _rid = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_RAW_INPUT_DATE))
+        _rid_ov = parse_optional_date(
+            _planning_df_cell_scalar(_r, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+        )
+        if _rid_ov is not None:
+            _rid = _rid_ov
+        if isinstance(_rid, datetime):
+            _rid = _rid.date()
+        out[(_tid, _mach)] = _rid if isinstance(_rid, date) else None
+    return out
+
+
+def _coerce_task_raw_input_to_date(val) -> date | None:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    return None
+
+
 def _build_dispatch_trial_pattern_p5_task_queue(
     planning_df: "pd.DataFrame",
     tq_frozen_from_planning_df: list,
@@ -18467,6 +18512,8 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
                 stage2_output_root=out_sub,
                 skip_remove_prior_stage2_workbooks=True,
                 return_output_paths=True,
+                tasks_df_raw_input_baseline=(df0 if df_p5_ov is not None else None),
+                result_pattern_shift_label=(pid if df_p5_ov is not None else None),
             )
         except PlanningValidationError as e:
             row["備考"] = f"検証エラー: {e}"[:500]
@@ -24627,6 +24674,8 @@ def _generate_plan_impl(
     stage2_output_root=None,
     skip_remove_prior_stage2_workbooks=False,
     return_output_paths=False,
+    tasks_df_raw_input_baseline=None,
+    result_pattern_shift_label=None,
 ):
     # 配台トレース（設定シート A3 以降のみ）は」メンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -26600,7 +26649,9 @@ def _generate_plan_impl(
     # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
     # 「原反投入日」は上書き列に日付があるときはその値、ないときは列「原反投入日」（計画基準納期と混同しない）
     _result_sheet_answer_spec_by_line = {}
-    _result_sheet_raw_input_by_line: dict = {}
+    _result_sheet_raw_input_by_line = _build_result_sheet_effective_raw_input_date_by_line(
+        tasks_df
+    )
     if tasks_df is not None and not getattr(tasks_df, "empty", True):
         for _, _r in tasks_df.iterrows():
             if _plan_row_exclude_from_assignment(_r):
@@ -26611,14 +26662,7 @@ def _generate_plan_impl(
                 continue
             _ad = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_ANSWER_DUE))
             _sd = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_SPECIFIED_DUE))
-            _rid = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_RAW_INPUT_DATE))
-            _rid_ov = parse_optional_date(
-                _planning_df_cell_scalar(_r, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
-            )
-            if _rid_ov is not None:
-                _rid = _rid_ov
             _result_sheet_answer_spec_by_line[(_tid, _mach)] = (_ad, _sd)
-            _result_sheet_raw_input_by_line[(_tid, _mach)] = _rid
 
     task_results = []
     # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
@@ -26631,6 +26675,10 @@ def _generate_plan_impl(
         ]
         + [0]
     )
+    _baseline_raw_by_line = _build_result_sheet_effective_raw_input_date_by_line(
+        tasks_df_raw_input_baseline
+    )
+    _pat_label = (result_pattern_shift_label or "").strip()
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
@@ -26685,6 +26733,16 @@ def _generate_plan_impl(
                 if _rid_t is not None and hasattr(_rid_t, "strftime")
                 else ""
             )
+        _pre_w = _baseline_raw_by_line.get(_line_key) if _baseline_raw_by_line else None
+        pre_pattern_kenhan_s = (
+            _pre_w.strftime("%Y/%m/%d") if isinstance(_pre_w, date) else ""
+        )
+        _cur_d = _coerce_task_raw_input_to_date(t.get("raw_input_date"))
+        pattern_shift_note = ""
+        if _pat_label and isinstance(_pre_w, date) and _cur_d is not None:
+            _delta_days = (_pre_w - _cur_d).days
+            if _delta_days > 0:
+                pattern_shift_note = f"{_pat_label}・原反{_delta_days}日前"
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
         rov = t.get("required_op")
@@ -26762,6 +26820,8 @@ def _generate_plan_impl(
             "指定納期": spec_s,
             "計画基準納期": basis_s,
             TASK_COL_RAW_INPUT_DATE: kenhan_s,
+            RESULT_TASK_COL_RAW_INPUT_DATE_PRE_PATTERN: pre_pattern_kenhan_s,
+            RESULT_TASK_COL_PATTERN_RAW_SHIFT_NOTE: pattern_shift_note,
             "紝期緊急": "はい" if t.get("due_urgent") else "いいえ",
             "加工開始日": start_req_s,
             "配台済_加工開始": plan_assign_start_s,
