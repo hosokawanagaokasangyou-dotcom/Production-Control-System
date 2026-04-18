@@ -1945,21 +1945,71 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
     return total, n, pct_pick
 
 
-def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
+def _gantt_best_overlapping_events_for_slots_line_sweep(evlist, slots, slot_mins):
     """
-    10 分枠 [slot_start, slot_end) の 1 マス分の状態。
-    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, slot_len_m, pct)
+    各スロットについて ``_eq_grid_best_overlapping_event_for_cell(evlist, cs, ce)`` と同じ 1 件を返す。
+    イベントは開始時刻順に走査し、スロット進行に合わせて active を更新する（スロット×全件走査を避ける）。
+    """
+    nS = len(slots)
+    if nS == 0:
+        return []
+    if not evlist:
+        return [None] * nS
+    slot_mins_f = float(slot_mins)
+    evs: list = []
+    for ev in evlist:
+        st = ev.get("start_dt")
+        ed = ev.get("end_dt")
+        if isinstance(st, datetime) and isinstance(ed, datetime) and st < ed:
+            evs.append(ev)
+    if not evs:
+        return [None] * nS
+    evs.sort(
+        key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+    )
+    nE = len(evs)
+    ei = 0
+    active: list = []
+    out: list = [None] * nS
+    for k in range(nS):
+        cs = slots[k]
+        ce = cs + timedelta(minutes=slot_mins_f)
+        if active:
+            active = [e for e in active if _eq_grid_slot_overlaps_event(cs, ce, e)]
+        while ei < nE:
+            e = evs[ei]
+            st = e.get("start_dt")
+            if not isinstance(st, datetime):
+                ei += 1
+                continue
+            if st >= ce:
+                break
+            ed = e.get("end_dt")
+            if isinstance(ed, datetime) and ed > cs and st < ce:
+                active.append(e)
+            ei += 1
+        if not active:
+            out[k] = None
+            continue
+        mach_hits = [ev for ev in active if _eq_grid_timeline_event_use_progress_bar(ev)]
+        if mach_hits:
+            out[k] = min(
+                mach_hits,
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")),
+            )
+        else:
+            out[k] = min(
+                active,
+                key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")),
+            )
+    return out
 
-    結果_設備毎の時間割・結果_設備毎の時間割_機械名毎（``_build_equipment_schedule_*``）と同様に、
-    枠と重なるイベントの選定に ``_eq_grid_best_overlapping_event_for_cell``、
-    休憩判定の参照時刻に ``_eq_grid_overlap_sample_t``（枠∩イベント区間の中点）を用いる。
-    従来の「枠中点を含む最初のイベント」のみを見る方式では、準備と加工が重なる枠で
-    時間割は加工を出すのにガントが準備側へ寄り、依頼NO シェイプが欠けることがあった。
-    """
+
+def _gantt_slot_state_tuple_from_active(active, slot_start, slot_mins, task_fill_fn=None):
+    """枠内の代表イベント active が既に決まっているときの 1 マス分の状態（``_gantt_slot_state_tuple`` の後半）。"""
     fill_fn = task_fill_fn or _gantt_bar_fill_for_task_id
     slot_end = slot_start + timedelta(minutes=float(slot_mins))
     slot_mid = slot_start + timedelta(minutes=float(slot_mins) / 2.0)
-    active = _eq_grid_best_overlapping_event_for_cell(evlist, slot_start, slot_end)
     if active is None:
         return ("idle",)
     if _timeline_event_kind(active) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
@@ -2005,6 +2055,22 @@ def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
     return ("task", tid, gh, slot_len_m, pct)
 
 
+def _gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn=None):
+    """
+    10 分枠 [slot_start, slot_end) の 1 マス分の状態。
+    ('idle',) | ('break',) | ('daily_startup', fill_hex) | ('task', tid, fill_hex, slot_len_m, pct)
+
+    結果_設備毎の時間割・結果_設備毎の時間割_機械名毎（``_build_equipment_schedule_*``）と同様に、
+    枠と重なるイベントの選定に ``_eq_grid_best_overlapping_event_for_cell``、
+    休憩判定の参照時刻に ``_eq_grid_overlap_sample_t``（枠∩イベント区間の中点）を用いる。
+    従来の「枠中点を含む最初のイベント」のみを見る方式では、準備と加工が重なる枠で
+    時間割は加工を出すのにガントが準備側へ寄り、依頼NO シェイプが欠けることがあった。
+    """
+    slot_end = slot_start + timedelta(minutes=float(slot_mins))
+    active = _eq_grid_best_overlapping_event_for_cell(evlist, slot_start, slot_end)
+    return _gantt_slot_state_tuple_from_active(active, slot_start, slot_mins, task_fill_fn)
+
+
 def _gantt_timeline_same_segment(st_a, st_b) -> bool:
     """結合セグメント境界判定（毎スロット tuple を割り当でない）。"""
     if st_a[0] != st_b[0]:
@@ -2013,6 +2079,34 @@ def _gantt_timeline_same_segment(st_a, st_b) -> bool:
         return True
     # daily_startup: [1]=fill / task: [1]=task_id
     return st_a[1] == st_b[1]
+
+
+def _agent_debug_gantt_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    # #region agent log
+    """ガント性能デバッグ用 NDJSON（workspace 直下 debug-ebf106.log）。"""
+    try:
+        _log_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), *([".."] * 5), "debug-ebf106.log")
+        )
+        _line = json.dumps(
+            {
+                "sessionId": "ebf106",
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data or {},
+                "timestamp": int(time_module.time() * 1000),
+            },
+            ensure_ascii=False,
+        )
+        with open(_log_path, "a", encoding="utf-8") as _f:
+            _f.write(_line + "\n")
+    except Exception:
+        pass
+
+    # #endregion
 
 
 def _paint_gantt_timeline_row_merged(
@@ -2040,11 +2134,25 @@ def _paint_gantt_timeline_row_merged(
     角丸シェイプとして追加するための座標・文言を蓄積する。
     shape_day_key に ISO 日付文字列等を渡すと、後段で日単位の画像化（フラット化）に利用する。
     """
+    # #region agent log
+    _ts0 = time_module.perf_counter()
+    # #endregion
     bar_label_font = label_font or gantt_label_font
     n_slots = len(slots)
+    _chosen = _gantt_best_overlapping_events_for_slots_line_sweep(
+        evlist, slots, slot_mins
+    )
     states = []
-    for slot_start in slots:
-        states.append(_gantt_slot_state_tuple(evlist, slot_start, slot_mins, task_fill_fn))
+    for slot_start, active in zip(slots, _chosen):
+        states.append(
+            _gantt_slot_state_tuple_from_active(
+                active, slot_start, slot_mins, task_fill_fn
+            )
+        )
+    # #region agent log
+    _ts1 = time_module.perf_counter()
+    _tw0 = time_module.perf_counter()
+    # #endregion
     tcol0 = n_fixed + 1
     i = 0
     while i < n_slots:
@@ -2055,101 +2163,113 @@ def _paint_gantt_timeline_row_merged(
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
         single_slot_segment = col_s == col_e
-        for col in range(col_s, col_e + 1):
-            c = ws.cell(row=row, column=col)
-            c.border = grid_border
-            c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
-            if st0[0] == "idle":
-                c.fill = idle_fill
+        # 同一スタイルの連続列は結合し先頭セルのみ openpyxl へ書く（セル単位ループが H2 ボトルネック）
+        if col_e > col_s:
+            ws.merge_cells(
+                start_row=row, start_column=col_s, end_row=row, end_column=col_e
+            )
+        c = ws.cell(row=row, column=col_s)
+        c.border = grid_border
+        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+        if st0[0] == "idle":
+            c.fill = idle_fill
+            c.value = None
+        elif st0[0] == "break":
+            c.fill = break_fill
+            c.value = None
+        elif st0[0] == "daily_startup":
+            _, gh_ds = st0
+            c.fill = _gantt_cached_pattern_fill(gh_ds)
+            _ds_txt = "日次始業準備"
+            if shape_label_specs is not None:
+                _seg_lo = slots[i]
+                _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                _mem_ds = _gantt_member_labels_for_startup_in_range(
+                    evlist, _seg_lo, _seg_hi
+                )
+                _shape_text = _ds_txt
+                _mem1l: list[str] = []
+                if _mem_ds:
+                    for _x in _mem_ds[:8]:
+                        _t = (
+                            str(_x)
+                            .replace("\r", "")
+                            .replace("\n", "")
+                            .strip()
+                        )
+                        if _t:
+                            _mem1l.append(_t)
+                shape_label_specs.append(
+                    {
+                        "row": row,
+                        "col_s": col_s,
+                        "col_e": col_e,
+                        "text": _shape_text,
+                        "italic": bool(label_italic),
+                        "fill_hex": str(gh_ds),
+                        "member_labels": list(_mem1l),
+                        "member_chip_below": bool(_mem1l),
+                        "day_key": shape_day_key or "",
+                    }
+                )
                 c.value = None
-            elif st0[0] == "break":
-                c.fill = break_fill
-                c.value = None
-            elif st0[0] == "daily_startup":
-                _, gh_ds = st0
-                c.fill = _gantt_cached_pattern_fill(gh_ds)
-                if col == col_s:
-                    _ds_txt = "日次始業準備"
-                    if shape_label_specs is not None:
-                        _seg_lo = slots[i]
-                        _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
-                        _mem_ds = _gantt_member_labels_for_startup_in_range(
-                            evlist, _seg_lo, _seg_hi
-                        )
-                        _shape_text = _ds_txt
-                        _mem1l: list[str] = []
-                        if _mem_ds:
-                            for _x in _mem_ds[:8]:
-                                _t = (
-                                    str(_x)
-                                    .replace("\r", "")
-                                    .replace("\n", "")
-                                    .strip()
-                                )
-                                if _t:
-                                    _mem1l.append(_t)
-                        shape_label_specs.append(
-                            {
-                                "row": row,
-                                "col_s": col_s,
-                                "col_e": col_e,
-                                "text": _shape_text,
-                                "italic": bool(label_italic),
-                                "fill_hex": str(gh_ds),
-                                "member_labels": list(_mem1l),
-                                "member_chip_below": bool(_mem1l),
-                                "day_key": shape_day_key or "",
-                            }
-                        )
-                        c.value = None
-                    else:
-                        c.value = _ds_txt
-                        c.font = bar_label_font
-                        c.alignment = _gantt_timeline_label_alignment(
-                            single_slot=single_slot_segment
-                        )
-                else:
-                    c.value = None
             else:
-                _, tid, gh, _slot_len_m0, _pct0 = st0
-                c.fill = _gantt_cached_pattern_fill(gh)
-                if col == col_s:
-                    tid_s = str(tid or "").strip()
-                    _seg_lo = slots[i]
-                    _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
-                    _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
-                        evlist, tid_s, _seg_lo, _seg_hi
+                c.value = _ds_txt
+                c.font = bar_label_font
+                c.alignment = _gantt_timeline_label_alignment(
+                    single_slot=single_slot_segment
+                )
+        else:
+            _, tid, gh, _slot_len_m0, _pct0 = st0
+            c.fill = _gantt_cached_pattern_fill(gh)
+            tid_s = str(tid or "").strip()
+            _seg_lo = slots[i]
+            _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+            _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
+                evlist, tid_s, _seg_lo, _seg_hi
+            )
+            _len_s = _gantt_format_length_m(_tot_len)
+            _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
+            if show_completion_pct_in_label and _pct_seg is not None and tid_s:
+                _lbl = f"{_lbl} {_pct_seg}%"
+            if shape_label_specs is not None:
+                if tid_s:
+                    shape_label_specs.append(
+                        {
+                            "row": row,
+                            "col_s": col_s,
+                            "col_e": col_e,
+                            "text": _lbl,
+                            "italic": bool(label_italic),
+                            "fill_hex": str(gh),
+                            "member_labels": _gantt_member_labels_for_task(
+                                evlist, tid_s
+                            ),
+                            "day_key": shape_day_key or "",
+                        }
                     )
-                    _len_s = _gantt_format_length_m(_tot_len)
-                    _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
-                    if show_completion_pct_in_label and _pct_seg is not None and tid_s:
-                        _lbl = f"{_lbl} {_pct_seg}%"
-                    if shape_label_specs is not None:
-                        if tid_s:
-                            shape_label_specs.append(
-                                {
-                                    "row": row,
-                                    "col_s": col_s,
-                                    "col_e": col_e,
-                                    "text": _lbl,
-                                    "italic": bool(label_italic),
-                                    "fill_hex": str(gh),
-                                    "member_labels": _gantt_member_labels_for_task(
-                                        evlist, tid_s
-                                    ),
-                                    "day_key": shape_day_key or "",
-                                }
-                            )
-                        c.value = None
-                    else:
-                        c.value = _lbl
-                        c.font = bar_label_font
-                        c.alignment = _gantt_timeline_label_alignment(
-                            single_slot=single_slot_segment
-                        )
-                else:
-                    c.value = None
+                c.value = None
+            else:
+                c.value = _lbl
+                c.font = bar_label_font
+                c.alignment = _gantt_timeline_label_alignment(
+                    single_slot=single_slot_segment
+                )
         i = j
+    # #region agent log
+    _tw1 = time_module.perf_counter()
+    _ds = _ts1 - _ts0
+    _dw = _tw1 - _tw0
+    _paint_gantt_timeline_row_merged._dbg_states_sec = getattr(
+        _paint_gantt_timeline_row_merged, "_dbg_states_sec", 0.0
+    ) + float(_ds)
+    _paint_gantt_timeline_row_merged._dbg_write_sec = getattr(
+        _paint_gantt_timeline_row_merged, "_dbg_write_sec", 0.0
+    ) + float(_dw)
+    _paint_gantt_timeline_row_merged._dbg_calls = int(
+        getattr(_paint_gantt_timeline_row_merged, "_dbg_calls", 0)
+    ) + 1
+    # #endregion
 
 
 def _time_intervals_overlap_half_open(
@@ -2465,6 +2585,10 @@ def _write_results_equipment_gantt_sheet(
     except Exception:
         pass
 
+    # #region agent log
+    _gantt_write_sheet_t0 = time_module.perf_counter()
+    # #endregion
+
     events_by_date = defaultdict(list)
     for e in timeline_events:
         events_by_date[e["date"]].append(e)
@@ -2650,6 +2774,13 @@ def _write_results_equipment_gantt_sheet(
 
     # 印刷: 1 日ごとの手動改ページ用（各日のデータ先頭行＝機械行の開始）
     gantt_day_first_rows: list[int] = []
+
+    # #region agent log
+    _paint_gantt_timeline_row_merged._dbg_states_sec = 0.0
+    _paint_gantt_timeline_row_merged._dbg_write_sec = 0.0
+    _paint_gantt_timeline_row_merged._dbg_calls = 0
+    _gantt_t_before_day = time_module.perf_counter()
+    # #endregion
 
     for di, d in enumerate(dates_to_show):
         evs = events_by_date.get(d, [])
@@ -2857,6 +2988,10 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 3
             row += 1
 
+    # #region agent log
+    _gantt_t_after_day = time_module.perf_counter()
+    # #endregion
+
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 時刻列（E〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
     if n_slots > 0:
@@ -2909,6 +3044,44 @@ def _write_results_equipment_gantt_sheet(
                 ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
     except Exception:
         pass
+
+    # #region agent log
+    _gantt_t_end = time_module.perf_counter()
+    _ps = float(getattr(_paint_gantt_timeline_row_merged, "_dbg_states_sec", 0.0))
+    _pw = float(getattr(_paint_gantt_timeline_row_merged, "_dbg_write_sec", 0.0))
+    _pc = int(getattr(_paint_gantt_timeline_row_merged, "_dbg_calls", 0))
+    _setup_ms = round((_gantt_t_before_day - _gantt_write_sheet_t0) * 1000.0, 2)
+    _day_ms = round((_gantt_t_after_day - _gantt_t_before_day) * 1000.0, 2)
+    _post_ms = round((_gantt_t_end - _gantt_t_after_day) * 1000.0, 2)
+    _paint_states_ms = round(_ps * 1000.0, 2)
+    _paint_write_ms = round(_pw * 1000.0, 2)
+    _paint_total_ms = round((_ps + _pw) * 1000.0, 2)
+    _day_non_paint_ms = round(_day_ms - _paint_total_ms, 2)
+    _agent_debug_gantt_ndjson(
+        "H1-H2-H3-H5",
+        "_write_results_equipment_gantt_sheet:end",
+        "gantt_sheet_profile",
+        {
+            "sheet": sheet_nm,
+            "n_dates_shown": len(dates_to_show),
+            "n_equipment": len(equipment_list or []),
+            "n_slots": n_slots,
+            "plan_rows": bool(plan_rows),
+            "show_actual_rows": bool(show_actual_rows),
+            "use_shape_labels": bool(_use_gantt_shape_labels),
+            "setup_ms": _setup_ms,
+            "day_loop_ms": _day_ms,
+            "post_loop_ms": _post_ms,
+            "paint_calls": _pc,
+            "paint_states_ms": _paint_states_ms,
+            "paint_write_ms": _paint_write_ms,
+            "paint_total_ms": _paint_total_ms,
+            "day_loop_non_paint_ms": _day_non_paint_ms,
+            "shape_specs_count": len(gantt_shape_label_specs),
+            "overlap_pick": "line_sweep_in_paint",
+        },
+    )
+    # #endregion
 
     if _use_gantt_shape_labels:
         return gantt_shape_label_specs, gantt_timeline_day_blocks
@@ -7648,28 +7821,47 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     if not rp or not os.path.isfile(rp):
         return
     shn = sheet_name or RESULT_SHEET_GANTT_NAME
-    if _gantt_add_timeline_rounded_rect_labels_xlwings(
-        rp, specs, day_blocks, sheet_name=shn
-    ):
-        logging.info(
-            "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
-            shn,
-            len(specs),
-        )
-        return
+    # #region agent log
+    _xlw0 = time_module.perf_counter()
     try:
-        _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
-        logging.info(
-            "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
-            shn,
-            len(specs),
+        if _gantt_add_timeline_rounded_rect_labels_xlwings(
+            rp, specs, day_blocks, sheet_name=shn
+        ):
+            logging.info(
+                "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
+                shn,
+                len(specs),
+            )
+            return
+        try:
+            _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
+            logging.info(
+                "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+                shn,
+                len(specs),
+            )
+        except Exception as e:
+            logging.warning(
+                "%s: セルへのラベルフォールバックも失敗しました（%s）。",
+                shn,
+                e,
+            )
+    # #region agent log
+    finally:
+        _agent_debug_gantt_ndjson(
+            "H4",
+            "_stage2_try_add_gantt_timeline_shape_labels",
+            "gantt_xlwings_stage",
+            {
+                "sheet": shn,
+                "specs_len": len(specs),
+                "day_blocks_len": len(day_blocks) if day_blocks else 0,
+                "elapsed_ms": round(
+                    (time_module.perf_counter() - _xlw0) * 1000.0, 2
+                ),
+            },
         )
-    except Exception as e:
-        logging.warning(
-            "%s: セルへのラベルフォールバックも失敗しました（%s）。",
-            shn,
-            e,
-        )
+    # #endregion
 
 
 def _coerce_actual_sheet_datetime(val):
@@ -18561,10 +18753,10 @@ def _eq_grid_best_overlapping_event_for_cell(
             mach_hits,
             key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")),
         )
-    hits.sort(
-        key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or ""))
+    return min(
+        hits,
+        key=lambda e: (e.get("start_dt") or datetime.min, str(e.get("task_id") or "")),
     )
-    return hits[0]
 
 
 def _eq_grid_overlap_sample_t(
