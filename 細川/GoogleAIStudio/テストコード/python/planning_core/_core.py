@@ -831,8 +831,10 @@ DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME = (
     os.environ.get("DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET", "").strip()
     or "配台試行順_パターン別段階2"
 )
-# パターン別段階2の最大シミュレーション件数（P1/P2 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
+# パターン別段階2の最大シミュレーション件数（P1/P2/P3 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
 DISPATCH_PATTERN_STAGE2_META_FILENAME = "pattern_jobs_meta.json"
+# 試行順パターン P3: 機械グループの日数合計を先に求めるため、単純 sort キーではなく専用処理を使う。
+_DISPATCH_TRIAL_PATTERN_P3_SORT = object()
 
 
 def _dispatch_pattern_stage2_max_patterns() -> int:
@@ -846,7 +848,7 @@ def _dispatch_pattern_stage2_max_patterns() -> int:
 
 def _dispatch_pattern_stage2_capped_jobs() -> list[tuple[str, str, int | None, object]]:
     """
-    P1/P2/P3/P4 + ランダム R* のリスト。合計が DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えないよう
+    P1/P2/P3 + ランダム R* のリスト。合計が DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えないよう
     ランダム件数を抑える。固定パターン本数は _dispatch_trial_pattern_job_list_from_random_params(0,[]) の長さ。
     """
     cap = _dispatch_pattern_stage2_max_patterns()
@@ -878,8 +880,6 @@ def _dispatch_pattern_jobs_meta_list(
             kind = "machine_due"
         elif pid == "P3":
             kind = "due_buffer"
-        elif pid == "P4":
-            kind = "machine_qty_due"
         else:
             kind = "random"
         out.append({"id": pid, "name": pname, "seed": seed, "kind": kind})
@@ -899,16 +899,17 @@ def _pattern_job_tuple_from_meta_entry(ent: dict) -> tuple[str, str, int | None,
     if pid == "P3" or kind == "due_buffer":
         return (
             pid or "P3",
-            pname or "納期(バッファ日前倒しキー)",
+            pname or "納期順・機械グループ(原反〜納期の日数合計が短い順)",
             None,
-            _pattern_sort_key_p3_buffered_due_priority,
+            _DISPATCH_TRIAL_PATTERN_P3_SORT,
         )
+    # 旧 pattern_jobs_meta（P4 廃止）の互換: 当時の並びに近い P2 キーで再生する
     if pid == "P4" or kind == "machine_qty_due":
         return (
             pid or "P4",
-            pname or "機械名+換算数量降順+納期",
+            pname or "（廃止）機械名+換算数量降順+納期",
             None,
-            _pattern_sort_key_machine_qty_desc_then_due,
+            _pattern_sort_key_machine_then_due,
         )
     sd = None
     if seed_v is not None and str(seed_v).strip() != "":
@@ -17094,7 +17095,7 @@ def _finalize_dispatch_trial_pattern_queue_after_pattern_sort(
 def _dispatch_trial_pattern_random_count() -> int:
     """
     ランダム並び（R*）パターン数。環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 0＝ランダムは出さない）。
-    方針として決定的な P1/P2 のみとし、旧挙動が必要なときだけ正の整数を設定する。
+    方針として決定的な P1/P2/P3 のみとし、旧挙動が必要なときだけ正の整数を設定する。
     マクロブック「設定_環境変数」シートの A 列同名・B 列の値でも指定可（各エントリで
     import planning_core より前に workbook_env_bootstrap.apply_from_task_input_workbook を呼ぶこと）。
     0～50 に丸める。
@@ -17153,57 +17154,59 @@ def _pattern_sort_key_machine_then_due(t: dict):
     )
 
 
-def _dispatch_pattern_p3_buffer_days() -> int:
+def _pattern_p3_span_days_due_minus_raw(t: dict) -> int | None:
     """
-    P3 用: 納期基準日から減算する暦日数（0～14）。
-    環境変数 DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS（空なら 3）。
+    納期基準日 − 原反投入日の暦日数（タスクごと）。いずれか欠けるときは None。
+    （「原反投入日から納期までの日数」と同じ差分の符号）
     """
-    raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS") or "3").strip()
-    try:
-        n = int(raw)
-    except (TypeError, ValueError):
-        n = 3
-    return max(0, min(n, 14))
+    due = _due_basis_date_for_dispatch_pattern_sort(t)
+    if due == date.max:
+        return None
+    rid = t.get("raw_input_date")
+    if not isinstance(rid, date):
+        return None
+    return (due - rid).days
 
 
-def _pattern_sort_key_p3_buffered_due_priority(t: dict):
+def _pattern_p3_machine_group_span_sum_map(task_queue: list) -> dict[str, int]:
     """
-    納期基準から N 日分前倒しした日付で昇順ソート（許容遅れを探索に効かせる決定論パターン）。
+    機械名グループごとに、上記スパン日数の合計（納期−原反の合計が小さいほど窓が狭い）。
+    グループ内に有効なタスクが1件も無いときは大きな定数を返す（並びの末尾寄せ）。
     """
-    d0 = _due_basis_date_for_dispatch_pattern_sort(t)
-    if d0 == date.max:
+    spans_by_machine: dict[str, list[int]] = defaultdict(list)
+    machines_seen: set[str] = set()
+    for t in task_queue:
+        mn = _machine_name_primary_for_dispatch_pattern(t)
+        machines_seen.add(mn)
+        sp = _pattern_p3_span_days_due_minus_raw(t)
+        if sp is not None:
+            spans_by_machine[mn].append(sp)
+    large = 10**9
+    out: dict[str, int] = {}
+    for mn in machines_seen:
+        spans = spans_by_machine.get(mn) or []
+        out[mn] = sum(spans) if spans else large
+    return out
+
+
+def _apply_dispatch_trial_pattern_p3_sort(task_queue: list) -> None:
+    """
+    P3: ①同一機械グループ内は納期順、②機械グループの並びは
+    （納期基準−原反投入日）の暦日をタスクごとに足した合計の昇順（合計が小さい機械が先）。
+    """
+    sums = _pattern_p3_machine_group_span_sum_map(task_queue)
+
+    def sort_key(t: dict):
+        mn = _machine_name_primary_for_dispatch_pattern(t)
         return (
-            d0,
+            sums.get(mn, 10**9),
+            _due_basis_date_for_dispatch_pattern_sort(t),
             int(t.get("planning_sheet_row_seq") or 10**9),
             _task_id_priority_key(str(t.get("task_id") or "")),
         )
-    buf = _dispatch_pattern_p3_buffer_days()
-    eff = d0 if buf <= 0 else (d0 - timedelta(days=buf))
-    return (
-        eff,
-        int(t.get("planning_sheet_row_seq") or 10**9),
-        _task_id_priority_key(str(t.get("task_id") or "")),
-    )
 
-
-def _pattern_sort_key_machine_qty_desc_then_due(t: dict):
-    """
-    機械名グループ内で換算数量（m）の大きい順→納期→行（設備連続寄せの決定論パターン）。
-    """
-    qty_raw = t.get("total_qty_m")
-    try:
-        qf = float(qty_raw) if qty_raw is not None else 0.0
-        if not math.isfinite(qf):
-            qf = 0.0
-    except (TypeError, ValueError):
-        qf = 0.0
-    return (
-        _machine_name_primary_for_dispatch_pattern(t),
-        -qf,
-        _due_basis_date_for_dispatch_pattern_sort(t),
-        int(t.get("planning_sheet_row_seq") or 10**9),
-        _task_id_priority_key(str(t.get("task_id") or "")),
-    )
+    task_queue.sort(key=sort_key)
+    _finalize_dispatch_trial_pattern_queue_after_pattern_sort(task_queue)
 
 
 def _apply_dispatch_trial_pattern_sort_pipeline(
@@ -17221,8 +17224,12 @@ def _dispatch_trial_pattern_job_list_from_random_params(
     jobs: list[tuple[str, str, int | None, object]] = [
         ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
         ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
-        ("P3", "納期(バッファ日前倒しキー)", None, _pattern_sort_key_p3_buffered_due_priority),
-        ("P4", "機械名+換算数量降順+納期", None, _pattern_sort_key_machine_qty_desc_then_due),
+        (
+            "P3",
+            "納期順・機械グループ(原反〜納期の日数合計が短い機械から)",
+            None,
+            _DISPATCH_TRIAL_PATTERN_P3_SORT,
+        ),
     ]
     for i, sd in enumerate(rnd_seeds):
         jobs.append((f"R{i + 1}", f"ランダム{i + 1}", sd, None))
@@ -17237,7 +17244,10 @@ def _iter_dispatch_trial_pattern_variant_queues(
     for pid, pname, seed, sk in pattern_jobs:
         tq = copy.deepcopy(tq_template_frozen)
         if sk is not None:
-            _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
+            if sk is _DISPATCH_TRIAL_PATTERN_P3_SORT:
+                _apply_dispatch_trial_pattern_p3_sort(tq)
+            else:
+                _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
         else:
             rng = random.Random(int(seed) if seed is not None else 0)
             rng.shuffle(tq)
@@ -17540,8 +17550,8 @@ def _build_dispatch_trial_pattern_list_matrix(
     equipment_list: list,
 ) -> list[list]:
     """
-    パターン①納期最優先、②機械名グループ＋納期、③ランダム（件数は環境変数）の
-    確定後試行順を長形式で返す（先頭に説明行・見出し行）。
+    パターン①納期最優先、②機械名グループ＋納期、③納期順＋機械グループ（原反〜納期の日数合計が短い機械から）、
+    ランダム（件数は環境変数）の確定後試行順を長形式で返す（先頭に説明行・見出し行）。
     """
     dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
     df = tasks_df.copy()
@@ -17580,15 +17590,15 @@ def _build_dispatch_trial_pattern_list_matrix(
         ]
 
     tq_template = copy.deepcopy(tq_template)
-    # 一覧シートは参照用のため P1/P2/R* を環境変数どおり全列挙する（段階2バッチの件数上限とは切り離す）。
+    # 一覧シートは参照用のため P1/P2/P3/R* を環境変数どおり全列挙する（段階2バッチの件数上限とは切り離す）。
     rnd_n = _dispatch_trial_pattern_random_count()
     rnd_seeds = _dispatch_trial_pattern_random_seeds(rnd_n)
     pattern_jobs = _dispatch_trial_pattern_job_list_from_random_params(rnd_n, rnd_seeds)
     intro = (
         "各パターンは、パターン用の並べ（ランダムはシャッフル）のあと、"
         "§B-2/3 EC 隣接・スリット→SEC 連続のあと、最後に加工途中を前へ寄せ、配台試行順 1..n を付与した結果です。"
-        " 決定論: P1納期最優先、P2機械名+納期、P3納期(バッファ日前倒しキー・DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS)、"
-        "P4機械名+換算数量降順+納期。"
+        " 決定論: P1納期最優先、P2機械名+納期、"
+        "P3納期順で機械グループ化し、(納期基準日−原反投入日)の暦日をタスクごとに足した合計が小さい機械グループを先に。"
         f" ランダム（R*）件数={rnd_n}（DISPATCH_TRIAL_PATTERN_RANDOM_COUNT、既定0）。"
         " 「試行順パターン別段階2」バッチのみ DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で件数を抑えます。"
     )
@@ -17834,7 +17844,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    各試行順パターン（P1/P2/R*）ごとに段階2を実行し、
+    各試行順パターン（P1/P2/P3/R*）ごとに段階2を実行し、
     ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
     マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
     """

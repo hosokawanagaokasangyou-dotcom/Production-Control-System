@@ -2,7 +2,7 @@
 """
 VBA / cmd から起動: 試行順パターンごとに段階2（配台シミュレーション）を実行する。
 
-- 「配台計画_タスク入力」を xlwings で読み、P1～P4（既定）および DISPATCH_TRIAL_PATTERN_RANDOM_COUNT>0 のとき R* の
+- 「配台計画_タスク入力」を xlwings で読み、P1～P3（既定）および DISPATCH_TRIAL_PATTERN_RANDOM_COUNT>0 のとき R* の
   試行順を DataFrame に反映して ``_generate_plan_impl`` を回す。
 - 成果物はマクロブックではなく ``output/dispatch_pattern_stage2/<実行時刻>/<パターンID>/`` に保存
   （production_plan_multi_day_*.xlsx / member_schedule_*.xlsx）。
