@@ -1525,6 +1525,11 @@ Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成()
     Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, False)
 End Sub
 
+' 各試行順パターンで段階2を実行し output に別ブック保存＋サマリシート（スプラッシュ付き・所要時間大）
+Public Sub アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行()
+    Call アニメ付き_スプラッシュ付きで実行("各試行順パターンで段階2を実行しています…（時間がかかります）", "配台計画_タスク入力_試行順パターン別段階2をPythonで作成", , , False, False)
+End Sub
+
 ' 「試行順パターン一覧」用かっこいいボタン（キー並べ替えボタンの下あたり）
 Public Sub 配台計画_タスク入力_試行順パターン一覧_クールボタンを配置()
     Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成"
@@ -1565,6 +1570,48 @@ Public Sub 配台計画_タスク入力_試行順パターン一覧_クールボタンを配置()
     CreateCoolButtonWithPreset "試行順パターン一覧", MACRO_ANIM, leftPos, topPos, 5
     AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "押すとシート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」に各パターンの試行順一覧を書き込みます。", vbInformation, "ボタン配置"
+End Sub
+
+' 「試行順パターン別段階2」用かっこいいボタン（試行順パターン一覧の下あたり）
+Public Sub 配台計画_タスク入力_試行順パターン別段階2_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4 + 3 * 58
+    
+    CreateCoolButtonWithPreset "パターン別段階2", MACRO_ANIM, leftPos, topPos, 7
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "押すと各パターンで段階2を実行し、シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」にリンクとスコアを書き込みます（所要時間大）。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================

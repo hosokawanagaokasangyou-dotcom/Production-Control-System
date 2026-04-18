@@ -144,6 +144,9 @@ Public Const SHAPE_PLAN_INPUT_DISPATCH_TRIAL_ORDER_FLOAT_KEYS As String = "btn_P
 ' 配台試行順の複数パターン一覧シート作成（Python / xlwings）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET 未設定時の既定名と一致
 Public Const SHEET_DISPATCH_TRIAL_PATTERN_LIST As String = "配台試行順_パターン一覧"
 Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_LIST As String = "btn_PlanInput_DispatchTrialPatternList"
+' 各試行順パターンで段階2を実行した結果・リンク・スコア（planning_core の DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME と既定を一致）
+Public Const SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY As String = "配台試行順_パターン別段階2"
+Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2 As String = "btn_PlanInput_DispatchPatternStage2Batch"
 ' planning_core の ai_cache_path（json/ai_remarks_cache.json）と旧 output/ 退避先と一致
 Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
 Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
