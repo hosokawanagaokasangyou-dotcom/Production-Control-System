@@ -191,6 +191,60 @@ Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えクールボタンを配置()
     配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置
 End Sub
 
+' メイン_ 用: pdf フォルダへ設備ガント PDF と主要シート CSV を出力（押下アニメ付き）。図形の OnAction は本マクロ。
+Sub アニメ付き_PDFとCSVスナップショットを出力()
+    Call AnimateButtonPush
+    スナップショット_手動でpdfとcsv出力
+End Sub
+
+' メイン_ の L2 付近に「PDF・CSV出力」クールボタンを配置（同一 OnAction または図形名の既存は削除してから作成）。
+Public Sub メイン_PDFとCSVスナップショット_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_PDFとCSVスナップショットを出力"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim leftPos As Single
+    Dim topPos As Single
+    Dim si As Long
+    
+    On Error Resume Next
+    Set ws = GetMainWorksheet()
+    On Error GoTo 0
+    If ws Is Nothing Then
+        AppMsgBox "シート「メイン_」が見つかりません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For si = ws.Shapes.Count To 1 Step -1
+        Set shp = ws.Shapes(si)
+        On Error Resume Next
+        If StrComp(shp.Name, SHAPE_MAIN_PDF_CSV_SNAPSHOT_ANIM, vbBinaryCompare) = 0 Then
+            shp.Delete
+        Else
+            oa = shp.OnAction
+            If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+                shp.Delete
+            End If
+        End If
+        On Error GoTo 0
+    Next si
+    
+    leftPos = ws.Cells(2, 12).Left
+    topPos = ws.Cells(2, 12).Top + 2
+    
+    CreateCoolButtonWithPreset "PDF・CSV出力", MACRO_ANIM, leftPos, topPos, 2, SHAPE_MAIN_PDF_CSV_SNAPSHOT_ANIM
+    AppMsgBox "「メイン_」にボタンを配置しました。" & vbCrLf & _
+           "押すとブック直下の「" & PDF_SNAPSHOT_REL_FOLDER & "」フォルダへ、設備ガント PDF と結果・配台・加工計画・実績明細の CSV を出力します。", vbInformation, "ボタン配置"
+End Sub
+
+' 上記ボタンをシートに自動配置（初回・位置調整用）。本体は メイン_PDFとCSVスナップショット_クールボタンを配置。
+Sub アニメ付き_メイン_PDFとCSVスナップショット_クールボタンを配置()
+    Call AnimateButtonPush
+    メイン_PDFとCSVスナップショット_クールボタンを配置
+End Sub
+
 Public Function GetMainWorksheet() As Worksheet
     ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next

@@ -157,6 +157,8 @@ Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
 Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
 ' メイン_ 上の「AI解析キャッシュ削除」図形（再配置時に名前で削除）
 Public Const SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR As String = "btn_Main_AI_RemarksCacheClear"
+' メイン_ 上の「PDF・CSVスナップショット出力」（アニメ付き入口）図形名（再配置時に名前で削除）
+Public Const SHAPE_MAIN_PDF_CSV_SNAPSHOT_ANIM As String = "btn_Main_PdfCsvSnapshotAnim"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' マクロブックと同じフォルダに置く（設定_環境変数_雛形TSVから同期 が読み込む）
