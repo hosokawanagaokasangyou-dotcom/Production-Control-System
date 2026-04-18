@@ -16,12 +16,10 @@ TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	0=計画シート必要人数も参照
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	0=組合せ表プリセットを使わない
 DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1=配台中の占有区間ミラーで二重検査（0 で無効）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピー（0 で無効）
-DISPATCH_TRIAL_PATTERN_RANDOM_COUNT	0	配台試行順_パターン一覧・パターン別段階2: ランダム並び R* の件数（0～50）。既定 0＝ランダムなし。必要なときだけ正の整数
-DISPATCH_TRIAL_PATTERN_RANDOM_SEED		同: 整数を入れると R1,R2,… の乱数シードが連番で固定（一覧シートには列を出さない）。空なら実行のたびに起点を乱数化
-DISPATCH_TRIAL_PATTERN_LIST_SHEET		同: 出力シート名（空なら既定 配台試行順_パターン一覧）
+DISPATCH_TRIAL_PATTERN_LIST_SHEET		配台試行順_パターン一覧: 出力シート名（空なら既定 配台試行順_パターン一覧）
 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）
 DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET		パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）
-DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P3（＋R*）を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
+DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P3 を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
 DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア(自動) の納期遵守率(%)の重み（空なら 3）
 DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合(%)の重み（空なら 1）
 DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）
