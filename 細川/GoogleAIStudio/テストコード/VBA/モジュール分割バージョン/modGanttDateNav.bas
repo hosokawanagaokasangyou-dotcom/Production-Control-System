@@ -11,7 +11,7 @@ Private Const GANTT_DATE_NAV_FORM_BTN_CAPTION As String = "更新"
 Private Const GANTT_DATE_BANNER_L As String = "【"
 Private Const GANTT_DATE_BANNER_R As String = "】"
 ' ガント日付コンボのフォント（小さすぎると視認性が悪い。既存 OLE にも再適用する）
-Private Const GANTT_COMBO_FONT_SIZE As Single = 12!
+Private Const GANTT_COMBO_FONT_SIZE As Single = 20!
 
 Private mNavComboHostPlan As clsGanttDateNavCombo
 Private mNavComboHostActual As clsGanttDateNavCombo
@@ -100,6 +100,7 @@ Private Sub GanttDateNav_ApplyComboFont(ByVal ole As OLEObject)
         Dim cb As MSForms.ComboBox
         Set cb = ole.Object
         cb.Font.Size = GANTT_COMBO_FONT_SIZE
+        cb.TextAlign = fmTextAlignCenter
     End If
 X:
     Err.Clear
@@ -116,8 +117,8 @@ Private Sub GanttDateNav_PositionOleCombo(ByVal ole As OLEObject, ByVal ws As Wo
     ole.Width = ws.Range("A1:B1").Width
     rh = ws.Rows(1).RowHeight
     If rh < 12 Then rh = 15
-    ' フォント 12pt 程度でも切れにくいよう最小高さを確保
-    ole.Height = Application.Max(rh - 1#, 22#)
+    ' フォントサイズに応じて切れにくい最小高さを確保
+    ole.Height = Application.Max(rh - 1#, CDbl(GANTT_COMBO_FONT_SIZE) * 1.75 + 2#)
     ole.Placement = xlFreeFloating
     ole.PrintObject = False
     Err.Clear

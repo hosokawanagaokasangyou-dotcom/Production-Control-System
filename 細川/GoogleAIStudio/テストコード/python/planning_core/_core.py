@@ -194,6 +194,8 @@ TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
+# master.xlsm「speed」: 1行目=工程名、2行目=機械名、4行目=基本速度、5行目=実稼働比率（データ列は既定で D 列から）
+MASTER_SHEET_SPEED = os.environ.get("MASTER_SPEED_SHEET_NAME", "").strip() or "speed"
 # メンバー別勤怠シート: master.xlsm では「休暇区分」と「備考」は別列。
 # 勤怠AIの入力は備考のみ。reason（表示・中抜き補正・個人シートの休憩/休暇文言）は「備考が空のとき休暇区分を引き継ぐ」。
 # master カレンダー＝出勤簿.txt 準拠: 公休=公休年休・休憩時間1_終了～定常終了（午後休憩14:45～15:00）＝後休=定常開始～休憩時間1_開始・午後年休＝国=他拠点勤務。
@@ -720,6 +722,7 @@ TASK_COL_QTY = "換算数量"
 # 加工計画DATA にある場合のみ段階1で配台計画へコピー。結果_タスク一覧「残加工量」はこの列の数値基準で出力する。
 TASK_COL_UNPROCESSED = "未加工"
 TASK_COL_ORDER_QTY = "受注数"
+# 加工速度: 加工計画DATA から段階1でコピー後、master.xlsm「speed」で (工程名, 機械名) が一致すれば基本速度×実稼働比率で上書き。
 TASK_COL_SPEED = "加工速度"
 TASK_COL_PRODUCT = "製品名"
 TASK_COL_ANSWER_DUE = "回答納期"
@@ -823,6 +826,152 @@ DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
     os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
     or "配台試行順_パターン一覧"
 )
+# 各試行順パターンで段階2を回した結果・リンク・スコア（xlwings）。DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET で上書き可。
+DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME = (
+    os.environ.get("DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET", "").strip()
+    or "配台試行順_パターン別段階2"
+)
+# パターン別段階2の最大シミュレーション件数（P1/P2 を含む合計）。DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で上書き（既定 20、1～50）。
+DISPATCH_PATTERN_STAGE2_META_FILENAME = "pattern_jobs_meta.json"
+
+
+def _dispatch_pattern_stage2_max_patterns() -> int:
+    raw = (os.environ.get("DISPATCH_PATTERN_STAGE2_MAX_PATTERNS") or "20").strip()
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 20
+    return max(1, min(n, 50))
+
+
+def _dispatch_pattern_stage2_capped_jobs() -> list[tuple[str, str, int | None, object]]:
+    """
+    P1/P2/P3/P4 + ランダム R* のリスト。合計が DISPATCH_PATTERN_STAGE2_MAX_PATTERNS を超えないよう
+    ランダム件数を抑える。固定パターン本数は _dispatch_trial_pattern_job_list_from_random_params(0,[]) の長さ。
+    """
+    cap = _dispatch_pattern_stage2_max_patterns()
+    rnd_raw = _dispatch_trial_pattern_random_count()
+    n_fixed = len(_dispatch_trial_pattern_job_list_from_random_params(0, []))
+    eff_rnd = max(0, min(rnd_raw, max(0, cap - n_fixed)))
+    if eff_rnd < rnd_raw:
+        logging.info(
+            "パターン別段階2: パターン数上限 %s のためランダム件数を %s → %s に抑えました。",
+            cap,
+            rnd_raw,
+            eff_rnd,
+        )
+    seeds = _dispatch_trial_pattern_random_seeds(eff_rnd)
+    jobs = _dispatch_trial_pattern_job_list_from_random_params(eff_rnd, seeds)
+    if len(jobs) > cap:
+        jobs = jobs[:cap]
+    return jobs
+
+
+def _dispatch_pattern_jobs_meta_list(
+    pattern_jobs: list[tuple[str, str, int | None, object]],
+) -> list[dict]:
+    out: list[dict] = []
+    for pid, pname, seed, sk in pattern_jobs:
+        if pid == "P1":
+            kind = "due"
+        elif pid == "P2":
+            kind = "machine_due"
+        elif pid == "P3":
+            kind = "due_buffer"
+        elif pid == "P4":
+            kind = "machine_qty_due"
+        else:
+            kind = "random"
+        out.append({"id": pid, "name": pname, "seed": seed, "kind": kind})
+    return out
+
+
+def _pattern_job_tuple_from_meta_entry(ent: dict) -> tuple[str, str, int | None, object]:
+    """pattern_jobs_meta.json の 1 要素から試行順ジョブタプルを復元する。"""
+    pid = str(ent.get("id") or "").strip()
+    pname = str(ent.get("name") or "").strip()
+    kind = str(ent.get("kind") or "").strip()
+    seed_v = ent.get("seed")
+    if pid == "P1" or kind == "due":
+        return (pid or "P1", pname or "納期最優先", None, _pattern_sort_key_due_priority)
+    if pid == "P2" or kind == "machine_due":
+        return (pid or "P2", pname or "機械名グループ+納期", None, _pattern_sort_key_machine_then_due)
+    if pid == "P3" or kind == "due_buffer":
+        return (
+            pid or "P3",
+            pname or "納期(バッファ日前倒しキー)",
+            None,
+            _pattern_sort_key_p3_buffered_due_priority,
+        )
+    if pid == "P4" or kind == "machine_qty_due":
+        return (
+            pid or "P4",
+            pname or "機械名+換算数量降順+納期",
+            None,
+            _pattern_sort_key_machine_qty_desc_then_due,
+        )
+    sd = None
+    if seed_v is not None and str(seed_v).strip() != "":
+        try:
+            sd = int(seed_v)
+        except (TypeError, ValueError):
+            sd = None
+    return (pid, pname or pid, sd, None)
+
+
+def _dispatch_pattern_reference_score_from_metrics(
+    due_pct, mem_pct, eq_cells
+) -> float | None:
+    """
+    人の最終判断用の参考値（大きいほど良い想定の単純加重）。
+    環境変数 DISPATCH_PATTERN_SCORE_WEIGHT_DUE / _MEMBER / _EQUIP（空なら 3 / 1 / 0.0001）。
+    """
+    try:
+        w_d = float((os.environ.get("DISPATCH_PATTERN_SCORE_WEIGHT_DUE") or "3").strip() or 3)
+    except (TypeError, ValueError):
+        w_d = 3.0
+    try:
+        w_m = float((os.environ.get("DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER") or "1").strip() or 1)
+    except (TypeError, ValueError):
+        w_m = 1.0
+    try:
+        w_e = float((os.environ.get("DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP") or "0.0001").strip() or 0.0001)
+    except (TypeError, ValueError):
+        w_e = 0.0001
+    if due_pct is None or due_pct == "":
+        return None
+    try:
+        d = float(due_pct)
+    except (TypeError, ValueError):
+        return None
+    m = 0.0
+    if mem_pct is not None and mem_pct != "":
+        try:
+            m = float(mem_pct)
+        except (TypeError, ValueError):
+            pass
+    e = 0.0
+    if eq_cells is not None and eq_cells != "":
+        try:
+            e = float(eq_cells)
+        except (TypeError, ValueError):
+            pass
+    return round(w_d * d + w_m * m + w_e * e, 4)
+
+
+def _write_dispatch_pattern_stage2_jobs_meta(batch_root: str, pattern_jobs: list) -> None:
+    p = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
+    try:
+        payload = {
+            "batch_root": os.path.abspath(batch_root),
+            "patterns": _dispatch_pattern_jobs_meta_list(pattern_jobs),
+        }
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logging.warning("パターン別段階2: メタ JSON の書込に失敗しました: %s (%s)", p, e)
+
+
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
 # 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
@@ -847,7 +996,7 @@ RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 PLAN_COL_PRODUCT_WIDTH = "製品幅"
 PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME = "製品名, 製品幅.txt"
 PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
-# 製品長（mm 想定）。段階1のみ算出。テーブル「製品名,製品長.txt」優先、未登録時は最後の NNNxMM の右辺。いずれも不可なら PlanningValidationError。
+# 製品長。段階1では主に mm 整数を格納（テーブル「製品名,製品長.txt」・寸法パターン）。特別ルール L8（105 m）は m 列値 105 と mm の 105000 を同値扱い。
 PLAN_COL_PRODUCT_LENGTH = "製品長"
 PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
 PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
@@ -1144,6 +1293,8 @@ RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配台済_回答指定16時まで"
 # マスタ skills の工程+機械列ととの OP/AS 割当参考順（優先度値・並び順）とフォーム採用ルールの説明
 RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
+# 計画結果ブック: メンバー×日の作業時間に対する配台実績比（旧誤記「…作業割引」は読込のみフォールバック）
+RESULT_MEMBER_WORK_UTIL_SHEET_NAME = "結果_メンバー別作業割合"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
@@ -1250,6 +1401,8 @@ def plan_input_sheet_column_order():
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
 
+    「加工速度」列は master.xlsm「speed」（基本速度×実稼働比率）で埋め、配台の実効速度は
+    「加工速度_上書き」→「加工速度」の列のみ（備考 AI の speed_override は速度に使わない）。
     global_speed_rules 等で変える実効速度は計画シート列には出ないが、配台で確定した値は結果_タスク一覧の「加工速度」列に出力される。
     """
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
@@ -4087,6 +4240,7 @@ def load_planning_tasks_df():
         apply_exclude_rules_from_config=False,
         compile_exclude_rules_d_to_e_with_ai=False,
     )
+    _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
     logging.info(
         f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
     )
@@ -9413,7 +9567,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
 - restrict_to_process_name, restrict_to_machine_name: 文字列（任愝。陝定なら）
 - preferred_operator: 文字列（上記契約に従ご）
 - required_op: 正の整数
-- speed_override: 正の数（m/分）
+- speed_override: 正の数（m/分）。※配台の実効速度は列「加工速度_上書き」「加工速度」のみ使用。本キーは速度計算には反映せず、列との食い違い検出に用いる。
 - task_efficiency: 0〜1
 - priority: 整数（尝さいろど先に割付）
 - start_date: YYYY-MM-DD / start_time: HH:MM
@@ -9535,27 +9689,27 @@ def _global_override_preferred_operator_for_task(tpref, task_id) -> str | None:
     return None
 
 
+def _planning_speed_override_sheet_column_only(row) -> float | None:
+    """
+    配台シミュレーションの実効速度のうち、列「加工速度」を上書きする値（m/分）。
+    列「加工速度_上書き」に正の数があるときのみ返す。無いときは None（列「加工速度」を採用）。
+    """
+    cv = parse_float_safe(row.get(PLAN_COL_SPEED_OVERRIDE), None)
+    if cv is not None and cv > 0:
+        return float(cv)
+    return None
+
+
 def _merge_task_row_with_ai(
     row, ai_for_tid, *, allow_ai_dispatch_priority_from_remark: bool = True
 ):
     """
     上書き列は加工速度_上書き・原板投入日_上書き等のみ（計画シート）。しの他は特別指定備考 AI から。
+    加工速度の上書きは列「加工速度_上書き」のみ（備考 AI の speed_override は配台速度に使わない）。
     allow_ai_dispatch_priority_from_remark は False のとき」AI の required_op / task_efficiency / priority /
     start_date / start_time は採用しない（備考に紝期系文言は無い行坑け）。
     """
     ai = ai_for_tid if isinstance(ai_for_tid, dict) else {}
-
-    def first_float_pos_cell_or_ai(cell, ai_key):
-        v = parse_float_safe(row.get(cell), None)
-        if v is not None and (not isinstance(v, float) or not pd.isna(v)) and float(v) > 0:
-            return float(v)
-        a = ai.get(ai_key)
-        try:
-            if a is not None and float(a) > 0:
-                return float(a)
-        except (TypeError, ValueError):
-            pass
-        return None
 
     if allow_ai_dispatch_priority_from_remark:
         req_op = parse_optional_int(ai.get("required_op"))
@@ -9592,7 +9746,7 @@ def _merge_task_row_with_ai(
     if allow_ai_dispatch_priority_from_remark and ai.get("start_time"):
         st_time = parse_time_str(str(ai.get("start_time")), None)
 
-    speed_ov = first_float_pos_cell_or_ai(PLAN_COL_SPEED_OVERRIDE, "speed_override")
+    speed_ov = _planning_speed_override_sheet_column_only(row)
 
     return req_op, speed_ov, te, pri, st_date, st_time, ai
 
@@ -9621,6 +9775,8 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
     """
     特別指定_備考に依る AI 解析結果と」明示セルの両方に値はあり食い靕ご列を返す。
     備考・AIいうれか欠ける場合は空集合。
+    配台の実効速度は列「加工速度_上書き」→「加工速度」のみのため、
+    備考 AI の speed_override が列「加工速度_上書き」と食い違うときは「加工速度_上書き」を矛盾列に含める。
     """
     remark = str(row.get(PLAN_COL_SPECIAL_REMARK, "") or "").strip()
     if not remark or remark.lower() in ("nan", "none"):
@@ -10016,6 +10172,90 @@ def _optional_float_unprocessed_column(val):
         return None
 
 
+def _planning_product_length_cell_is_105_meters(row) -> bool:
+    """
+    特別ルール L8 用: 列「製品長」が **105 m** に相当するか。
+    シートが **m** 単位なら 105、段階1由来の **mm** 整数なら 105000 を同一条件とする。
+    """
+    raw = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_LENGTH)
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return False
+    try:
+        xi = int(round(float(raw)))
+    except (TypeError, ValueError):
+        return False
+    return xi in (105, 105000)
+
+
+def _apply_dispatch_speed_special_rules_enumerated_md(
+    *,
+    row,
+    task_id,
+    machine: str,
+    machine_name: str,
+    speed: float,
+) -> float:
+    """
+    ``細川/GoogleAIStudio/テストコード/特別ルール列挙.md`` のうち **加工速度を 20 m/分へ上書き** する条件
+    （L4 / L5 / L6 / L8）を適用する。
+
+    呼び出し元で **列「加工速度_上書き」「加工速度」** および **global_speed_rules** による速度を
+    確定した **あと** に呼ぶこと（本関数はさらに上書きするのみ）。
+    L2（スライス・100 m は 3 名 or 20 m/分）は need 探索のフォールバックで別処理。
+    """
+    spd = float(speed)
+
+    _prod_w = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_WIDTH)
+    try:
+        _prod_w_i = int(float(_prod_w)) if _prod_w is not None else None
+    except (TypeError, ValueError):
+        _prod_w_i = None
+
+    # 特別ルール L4（SEC×SEC機 湖南）: 製品幅=935 のときは加工速度を 20m/分
+    if (
+        _normalize_process_name_for_rule_match(machine)
+        == _normalize_process_name_for_rule_match("SEC")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("SEC機　湖南")
+        and _prod_w_i == 935
+    ):
+        spd = 20.0
+
+    # 特別ルール L5（SEC×SEC機 湖南）: 製品幅<=680 のときは加工速度を 20m/分
+    if (
+        _normalize_process_name_for_rule_match(machine)
+        == _normalize_process_name_for_rule_match("SEC")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("SEC機　湖南")
+        and _prod_w_i is not None
+        and _prod_w_i <= 680
+    ):
+        spd = 20.0
+
+    # 特別ルール L6（SEC×SEC機 湖南）: 依頼NOに「JR」又は「PN」が含まれている場合は加工速度を20m/分
+    _tid_nfkc = unicodedata.normalize("NFKC", str(task_id or ""))
+    if (
+        _normalize_process_name_for_rule_match(machine)
+        == _normalize_process_name_for_rule_match("SEC")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("SEC機　湖南")
+        and (("JR" in _tid_nfkc) or ("PN" in _tid_nfkc))
+    ):
+        spd = 20.0
+
+    # 特別ルール L8（接続×熱融着機 湖南）: 製品長=105m のときは加工速度を20m/分
+    if (
+        _normalize_process_name_for_rule_match(machine)
+        == _normalize_process_name_for_rule_match("接続")
+        and _normalize_equipment_match_key(machine_name)
+        == _normalize_equipment_match_key("熱融着機　湖南")
+        and _planning_product_length_cell_is_105_meters(row)
+    ):
+        spd = 20.0
+
+    return spd
+
+
 # ---------------------------------------------------------------------------
 # 配台用タスクキュー
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変杛（優先度・紝期・AI 上書きを集約）
@@ -10057,6 +10297,8 @@ def build_task_queue_from_planning_df(
         qty, done_qty, qty_total, from_unprocessed_qty = _plan_row_dispatch_qty_metrics(
             row
         )
+        # 加工速度: ②列「加工速度」（master.xlsm speed で基本速度×実稼働比率を反映）→
+        # speed_ov は列「加工速度_上書き」のみ（①があれば上書き）。
         speed_raw = row.get(TASK_COL_SPEED, 1)
         product_name = row.get(TASK_COL_PRODUCT, None)
         answer_due = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_ANSWER_DUE))
@@ -10165,66 +10407,20 @@ def build_task_queue_from_planning_df(
                 speed,
             )
 
-        # -------------------------------------------------------------------
-        # 特別ルール L4（SEC×SEC機 湖南）: 製品幅=935 のときは加工速度を 20m/分
-        # ※ 製品幅は段階1で算出済みの列「製品幅」を参照（未取得時は None）
-        # -------------------------------------------------------------------
+        # 特別ルール列挙.md（L4/L5/L6/L8）: 列・global_speed で確定した速度のあとに上書き
+        speed = _apply_dispatch_speed_special_rules_enumerated_md(
+            row=row,
+            task_id=task_id,
+            machine=machine,
+            machine_name=machine_name,
+            speed=speed,
+        )
+
         _prod_w = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_WIDTH)
         try:
             _prod_w_i = int(float(_prod_w)) if _prod_w is not None else None
         except (TypeError, ValueError):
             _prod_w_i = None
-        if (
-            _normalize_process_name_for_rule_match(machine)
-            == _normalize_process_name_for_rule_match("SEC")
-            and _normalize_equipment_match_key(machine_name)
-            == _normalize_equipment_match_key("SEC機　湖南")
-            and _prod_w_i == 935
-        ):
-            speed = 20.0
-
-        # -------------------------------------------------------------------
-        # 特別ルール L5（SEC×SEC機 湖南）: 製品幅<=680 のときは加工速度を 20m/分
-        # -------------------------------------------------------------------
-        if (
-            _normalize_process_name_for_rule_match(machine)
-            == _normalize_process_name_for_rule_match("SEC")
-            and _normalize_equipment_match_key(machine_name)
-            == _normalize_equipment_match_key("SEC機　湖南")
-            and _prod_w_i is not None
-            and _prod_w_i <= 680
-        ):
-            speed = 20.0
-
-        # -------------------------------------------------------------------
-        # 特別ルール L6（SEC×SEC機 湖南）: 依頼NOに「JR」又は「PN」が含まれている場合は加工速度を20m/分
-        # -------------------------------------------------------------------
-        _tid_nfkc = unicodedata.normalize("NFKC", str(task_id or ""))
-        if (
-            _normalize_process_name_for_rule_match(machine)
-            == _normalize_process_name_for_rule_match("SEC")
-            and _normalize_equipment_match_key(machine_name)
-            == _normalize_equipment_match_key("SEC機　湖南")
-            and (("JR" in _tid_nfkc) or ("PN" in _tid_nfkc))
-        ):
-            speed = 20.0
-
-        # -------------------------------------------------------------------
-        # 特別ルール L8（接続×熱融着機 湖南）: 製品長=105m のときは加工速度を20m/分
-        # ※ 製品長は段階1で算出済みの列「製品長」（mm想定）を参照する。
-        # -------------------------------------------------------------------
-        try:
-            _prod_len_i = int(float(_planning_df_cell_scalar(row, PLAN_COL_PRODUCT_LENGTH)))
-        except (TypeError, ValueError):
-            _prod_len_i = None
-        if (
-            _normalize_process_name_for_rule_match(machine)
-            == _normalize_process_name_for_rule_match("接続")
-            and _normalize_equipment_match_key(machine_name)
-            == _normalize_equipment_match_key("熱融着機　湖南")
-            and _prod_len_i == 105
-        ):
-            speed = 20.0
 
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
@@ -10347,7 +10543,7 @@ def build_task_queue_from_planning_df(
                 else 0,
                 "assigned_history": [],
                 "calc_time_value": calc_time_val,
-                # シートの加工速度・上書き・global_speed_rules 適用後の m/分（配台シミュレーションと同一）
+                # 列「加工速度_上書き」「加工速度」・global_speed_rules・特別ルール列挙.md（L4/L5/L6/L8）適用後の m/分
                 TASK_COL_SPEED: float(speed),
                 "required_op": req_op,
                 "task_eff_factor": task_eff_factor,
@@ -10665,6 +10861,153 @@ def _normalize_process_name_for_rule_match(raw) -> str:
     t = unicodedata.normalize("NFKC", str(raw or "").strip())
     t = re.sub(r"[\s　]+", "", t)
     return t
+
+
+def _master_speed_sheet_apply_enabled() -> bool:
+    """環境変数 MASTER_USE_SPEED_SHEET で master.xlsm の speed 由来の加工速度上書きを無効化できる。"""
+    raw = os.environ.get("MASTER_USE_SPEED_SHEET", "1")
+    v = str(raw).strip().lower()
+    if not v:
+        return True
+    return v not in ("0", "false", "no", "off")
+
+
+def _master_speed_first_excel_col_1based() -> int:
+    """speed シートで設備列が始まる Excel 列番号（既定 4 = D 列）。環境変数 MASTER_SPEED_FIRST_EXCEL_COL。"""
+    raw = os.environ.get("MASTER_SPEED_FIRST_EXCEL_COL", "").strip()
+    if not raw:
+        return 4
+    try:
+        n = int(raw)
+    except ValueError:
+        return 4
+    return n if n >= 1 else 4
+
+
+def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], float]:
+    """
+    master.xlsm の speed シートから (工程名, 機械名) 正規化キー → 加工速度 (m/分)。
+    速度は Excel 4 行目×5 行目（基本速度×実稼働比率）。同一キーが複数列で数値が食い違うときは先頭列を採用。
+    """
+    out: dict[tuple[str, str], float] = {}
+    if not _master_speed_sheet_apply_enabled():
+        logging.info("master.xlsm speed シートによる加工速度の上書きは無効です（MASTER_USE_SPEED_SHEET）。")
+        return out
+    path = MASTER_FILE
+    if not path or not os.path.isfile(path):
+        logging.info(
+            "master.xlsm speed: マスタファイルがありません (%r)。加工計画DATA／シート上の加工速度をそのまま使います。",
+            path,
+        )
+        return out
+    sheet = MASTER_SHEET_SPEED
+    try:
+        raw = pd.read_excel(path, sheet_name=sheet, header=None, dtype=object)
+    except Exception as e:
+        logging.info(
+            "master.xlsm speed: シート %r を読めません（%s）。加工速度は従来どおりです。",
+            sheet,
+            e,
+        )
+        return out
+    if raw is None or raw.empty or raw.shape[0] < 5:
+        logging.info("master.xlsm speed: 行が不足しています（5行目まで必須）。")
+        return out
+    first_col = _master_speed_first_excel_col_1based()
+    c0 = first_col - 1
+    if raw.shape[1] <= c0:
+        logging.info(
+            "master.xlsm speed: 列が足りません（データ開始列=%s）。",
+            first_col,
+        )
+        return out
+    conflicts: list[tuple[tuple[str, str], float, float]] = []
+    for j in range(c0, raw.shape[1]):
+        p_raw = raw.iat[0, j]
+        m_raw = raw.iat[1, j]
+        if p_raw is None or (isinstance(p_raw, float) and pd.isna(p_raw)):
+            p_str = ""
+        else:
+            p_str = str(p_raw).strip()
+        if m_raw is None or (isinstance(m_raw, float) and pd.isna(m_raw)):
+            m_str = ""
+        else:
+            m_str = str(m_raw).strip()
+        if not p_str and not m_str:
+            continue
+        p_norm = _normalize_process_name_for_rule_match(p_str)
+        m_norm = _normalize_equipment_match_key(m_str)
+        if not p_norm or not m_norm:
+            continue
+        bs_raw = raw.iat[3, j]
+        rr_raw = raw.iat[4, j]
+        base = parse_float_safe(bs_raw, 0.0)
+        ratio = parse_float_safe(rr_raw, 0.0)
+        if base <= 0 or ratio <= 0:
+            continue
+        spd = float(base * ratio)
+        if spd <= 0:
+            continue
+        key = (p_norm, m_norm)
+        if key in out:
+            if abs(out[key] - spd) > 1e-6:
+                conflicts.append((key, out[key], spd))
+            continue
+        out[key] = spd
+    if conflicts:
+        logging.warning(
+            "master.xlsm speed: 同一工程+機械キーに複数の速度列があり数値が異なります（先頭列を採用）。例: %s",
+            conflicts[:5],
+        )
+    if out:
+        logging.info(
+            "master.xlsm speed: シート %r から %s 件の (工程名, 機械名) 速度を読み込みました。",
+            sheet,
+            len(out),
+        )
+    else:
+        logging.info(
+            "master.xlsm speed: シート %r に有効な速度列がありませんでした。",
+            sheet,
+        )
+    return out
+
+
+def _apply_master_speed_sheet_to_plan_df(
+    df: "pd.DataFrame",
+    *,
+    log_prefix: str,
+) -> None:
+    """配台計画 DataFrame の「加工速度」を master.xlsm speed に一致する行だけ上書きする。"""
+    if df is None or df.empty:
+        return
+    if TASK_COL_SPEED not in df.columns:
+        return
+    if TASK_COL_MACHINE not in df.columns or TASK_COL_MACHINE_NAME not in df.columns:
+        return
+    lu = _load_master_speed_lookup_from_master_workbook()
+    if not lu:
+        return
+    n_hit = 0
+    n_miss = 0
+    for i, row in df.iterrows():
+        key = (
+            _normalize_process_name_for_rule_match(row.get(TASK_COL_MACHINE)),
+            _normalize_equipment_match_key(row.get(TASK_COL_MACHINE_NAME)),
+        )
+        spd = lu.get(key)
+        if spd is not None and spd > 0:
+            df.at[i, TASK_COL_SPEED] = spd
+            n_hit += 1
+        else:
+            n_miss += 1
+    logging.info(
+        "%s: master.xlsm「%s」の速度を %s 行に適用（マスタ未該当 %s 行は加工速度セルを変更しませんでした）。",
+        log_prefix,
+        MASTER_SHEET_SPEED,
+        n_hit,
+        n_miss,
+    )
 
 
 def _exclude_rules_sheet_header_map(ws) -> dict:
@@ -13146,6 +13489,7 @@ def run_stage1_extract():
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
+    _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
@@ -16437,18 +16781,42 @@ def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
         t["dispatch_trial_order"] = i
 
 
+def _reorder_task_queue_in_progress_front_stable(task_queue: list) -> None:
+    """
+    加工途中（in_progress）のタスクを試行順の前寄りにまとめる。
+    list.sort は安定なので、同一グループ内の相対順は直前の並びのまま維持される。
+    """
+    if len(task_queue) < 2:
+        return
+    task_queue.sort(key=lambda t: (0 if bool(t.get("in_progress")) else 1))
+
+
+def _finalize_dispatch_trial_pattern_queue_after_pattern_sort(
+    task_queue: list,
+) -> None:
+    """
+    配台試行順パターン一覧用: パターン用ソートまたはシャッフルのあとに適用する共通後処理。
+    §B-2/3 EC 隣接 → スリット→SEC 連続 → 加工途中を前へ（最後）→ 試行順 1..n。
+    """
+    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
+    _reorder_task_queue_slit_sec_consecutive(task_queue)
+    _reorder_task_queue_in_progress_front_stable(task_queue)
+    _assign_sequential_dispatch_trial_order(task_queue)
+
+
 def _dispatch_trial_pattern_random_count() -> int:
     """
-    ランダム並びパターン数。環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）。
+    ランダム並び（R*）パターン数。環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 0＝ランダムは出さない）。
+    方針として決定的な P1/P2 のみとし、旧挙動が必要なときだけ正の整数を設定する。
     マクロブック「設定_環境変数」シートの A 列同名・B 列の値でも指定可（各エントリで
     import planning_core より前に workbook_env_bootstrap.apply_from_task_input_workbook を呼ぶこと）。
     0～50 に丸める。
     """
-    raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_RANDOM_COUNT") or "3").strip()
+    raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_RANDOM_COUNT") or "0").strip()
     try:
         n = int(raw)
     except (TypeError, ValueError):
-        n = 3
+        n = 0
     return max(0, min(n, 50))
 
 
@@ -16498,15 +16866,382 @@ def _pattern_sort_key_machine_then_due(t: dict):
     )
 
 
+def _dispatch_pattern_p3_buffer_days() -> int:
+    """
+    P3 用: 納期基準日から減算する暦日数（0～14）。
+    環境変数 DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS（空なら 3）。
+    """
+    raw = (os.environ.get("DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS") or "3").strip()
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 3
+    return max(0, min(n, 14))
+
+
+def _pattern_sort_key_p3_buffered_due_priority(t: dict):
+    """
+    納期基準から N 日分前倒しした日付で昇順ソート（許容遅れを探索に効かせる決定論パターン）。
+    """
+    d0 = _due_basis_date_for_dispatch_pattern_sort(t)
+    if d0 == date.max:
+        return (
+            d0,
+            int(t.get("planning_sheet_row_seq") or 10**9),
+            _task_id_priority_key(str(t.get("task_id") or "")),
+        )
+    buf = _dispatch_pattern_p3_buffer_days()
+    eff = d0 if buf <= 0 else (d0 - timedelta(days=buf))
+    return (
+        eff,
+        int(t.get("planning_sheet_row_seq") or 10**9),
+        _task_id_priority_key(str(t.get("task_id") or "")),
+    )
+
+
+def _pattern_sort_key_machine_qty_desc_then_due(t: dict):
+    """
+    機械名グループ内で換算数量（m）の大きい順→納期→行（設備連続寄せの決定論パターン）。
+    """
+    qty_raw = t.get("total_qty_m")
+    try:
+        qf = float(qty_raw) if qty_raw is not None else 0.0
+        if not math.isfinite(qf):
+            qf = 0.0
+    except (TypeError, ValueError):
+        qf = 0.0
+    return (
+        _machine_name_primary_for_dispatch_pattern(t),
+        -qf,
+        _due_basis_date_for_dispatch_pattern_sort(t),
+        int(t.get("planning_sheet_row_seq") or 10**9),
+        _task_id_priority_key(str(t.get("task_id") or "")),
+    )
+
+
 def _apply_dispatch_trial_pattern_sort_pipeline(
     task_queue: list,
     sort_key,
 ) -> None:
-    """パターン用の先頭ソートのあと、段階2と同じ特別ルール（§B 隣接・スリット→SEC）と連番付与。"""
+    """パターン用の先頭ソートのあと、§B 隣接・スリット→SEC のあと最後に加工途中を前へ、連番付与。"""
     task_queue.sort(key=sort_key)
-    _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
-    _reorder_task_queue_slit_sec_consecutive(task_queue)
-    _assign_sequential_dispatch_trial_order(task_queue)
+    _finalize_dispatch_trial_pattern_queue_after_pattern_sort(task_queue)
+
+
+def _dispatch_trial_pattern_job_list_from_random_params(
+    rnd_n: int, rnd_seeds: list[int]
+) -> list[tuple[str, str, int | None, object]]:
+    jobs: list[tuple[str, str, int | None, object]] = [
+        ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
+        ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
+        ("P3", "納期(バッファ日前倒しキー)", None, _pattern_sort_key_p3_buffered_due_priority),
+        ("P4", "機械名+換算数量降順+納期", None, _pattern_sort_key_machine_qty_desc_then_due),
+    ]
+    for i, sd in enumerate(rnd_seeds):
+        jobs.append((f"R{i + 1}", f"ランダム{i + 1}", sd, None))
+    return jobs
+
+
+def _iter_dispatch_trial_pattern_variant_queues(
+    tq_template_frozen: list,
+    pattern_jobs: list[tuple[str, str, int | None, object]],
+):
+    """各パターンの確定 task_queue（ディープコピー）を順に返す。"""
+    for pid, pname, seed, sk in pattern_jobs:
+        tq = copy.deepcopy(tq_template_frozen)
+        if sk is not None:
+            _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
+        else:
+            rng = random.Random(int(seed) if seed is not None else 0)
+            rng.shuffle(tq)
+            _finalize_dispatch_trial_pattern_queue_after_pattern_sort(tq)
+        yield pid, pname, tq
+
+
+def _apply_pattern_dispatch_trial_orders_to_tasks_df(
+    tasks_df: "pd.DataFrame",
+    pattern_tq: list,
+) -> None:
+    """
+    パターン確定後の dispatch_trial_order を DataFrame の配台試行順番列へ書き戻す。
+    全行指定経路で段階2が同じ試行順を採用する（§B 隣接はパターン側で既に反映済み）。
+    """
+    col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if col not in tasks_df.columns:
+        tasks_df[col] = float("nan")
+    tasks_df[col] = float("nan")
+    ci = tasks_df.columns.get_loc(col)
+    for t in pattern_tq:
+        ii = t.get("planning_df_iloc")
+        dto = t.get("dispatch_trial_order")
+        if ii is None or dto is None:
+            continue
+        try:
+            ri = int(ii)
+            dv = int(dto)
+        except (TypeError, ValueError):
+            continue
+        if ri < 0 or ri >= len(tasks_df):
+            continue
+        tasks_df.iat[ri, ci] = dv
+
+
+def _score_dispatch_pattern_stage2_workbook(plan_xlsx: str) -> dict:
+    """
+    段階2の production_plan xlsx から簡易スコアを読み取る。
+    ①納期（配台済_回答指定16時まで の はい率）
+    ②メンバー（結果_メンバー別作業割合：日単位で配台実作業分が一度もない日は除外し、
+      メンバー単位で「0.0% (0/0分)」の枠も除外し、残りのセルの % を平坦化して平均）
+    ③設備（結果_設備毎の時間割 の日付列あたりの非空セル数合計＝稼働スロット量の参考）
+    """
+    out: dict = {
+        "納期_判定対象件数": 0,
+        "納期_遅れ件数": 0,
+        "納期_遵守率": None,
+        "メンバー_平均作業割合_pct": None,
+        "設備_稼働セル数": None,
+        "スコア備考": "",
+    }
+    if not plan_xlsx or not os.path.isfile(plan_xlsx):
+        out["スコア備考"] = "結果ブックが見つかりません。"
+        return out
+    try:
+        df_t = pd.read_excel(plan_xlsx, sheet_name=RESULT_TASK_SHEET_NAME)
+    except Exception as e:
+        out["スコア備考"] = f"結果_タスク一覧の読込失敗: {e}"
+        return out
+    df_t.columns = [str(c).strip() for c in df_t.columns]
+    col_late = RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16
+    col_tid = "タスクID"
+    if col_late not in df_t.columns:
+        out["スコア備考"] = f"列「{col_late}」がありません。"
+        return out
+    mask = df_t[col_tid].astype(str).str.strip().ne("") & df_t[col_tid].astype(str).str.lower().ne("nan")
+    sub = df_t.loc[mask, col_late].astype(str).str.strip()
+    sub = sub[sub.ne("")]
+    n = int(len(sub))
+    if n == 0:
+        out["スコア備考"] = "タスク行がありません。"
+        return out
+    late = int((sub.eq("いいえ") | sub.str.strip().str.upper().eq("いいえ")).sum())
+    out["納期_判定対象件数"] = n
+    out["納期_遅れ件数"] = late
+    out["納期_遵守率"] = round((n - late) / n * 100.0, 2) if n else None
+
+    df_u = None
+    for _util_sheet in (
+        RESULT_MEMBER_WORK_UTIL_SHEET_NAME,
+        "結果_メンバー別作業割引",
+    ):
+        try:
+            df_u = pd.read_excel(plan_xlsx, sheet_name=_util_sheet)
+            break
+        except Exception:
+            continue
+    pct_vals: list[float] = []
+    if df_u is not None and not df_u.empty:
+        _util_cell_re = re.compile(
+            r"^([\d.]+)\s*%\s*(?:\((\d+)/(\d+)分\))?\s*$",
+            re.ASCII,
+        )
+        for _, _row in df_u.iterrows():
+            _row_pcts: list[float] = []
+            _day_max_worked = 0
+            for _c in df_u.columns:
+                if str(_c).strip() in ("年月日", ""):
+                    continue
+                s = str(_row[_c]).strip()
+                m = _util_cell_re.match(s)
+                if not m:
+                    continue
+                try:
+                    _p = float(m.group(1))
+                except ValueError:
+                    continue
+                if m.group(2) is not None and m.group(3) is not None:
+                    try:
+                        _wk = int(m.group(2))
+                        _tot = int(m.group(3))
+                        if _tot > 0:
+                            _day_max_worked = max(_day_max_worked, _wk)
+                        else:
+                            # (0/0分) 等、配台母数に含めない枠は平均にも含めない
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+                _row_pcts.append(_p)
+            # その日いずれのメンバーも配台実作業 0 分なら、その日の行は平均の母数に含めない
+            if _day_max_worked <= 0:
+                continue
+            pct_vals.extend(_row_pcts)
+    if pct_vals:
+        out["メンバー_平均作業割合_pct"] = round(sum(pct_vals) / len(pct_vals), 2)
+
+    try:
+        df_e = pd.read_excel(plan_xlsx, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME)
+    except Exception:
+        df_e = None
+    if df_e is not None and not df_e.empty:
+        filled = 0
+        for _c in df_e.columns:
+            cs = str(_c).strip()
+            if "日時帯" in cs or cs == "日時帯":
+                continue
+            for _v in df_e[_c].tolist():
+                if _v is None or (isinstance(_v, float) and pd.isna(_v)):
+                    continue
+                s = str(_v).strip()
+                if s and s not in ("休", "—", "-"):
+                    filled += 1
+        out["設備_稼働セル数"] = filled
+
+    return out
+
+
+def _excel_hyperlink_formula_file(abs_path: str, display: str) -> str:
+    """ローカル .xlsx への HYPERLINK 数式（表示テキスト付き）。"""
+    p = os.path.abspath(abs_path).replace("\\", "/")
+    disp = (display or os.path.basename(abs_path)).replace('"', '""')
+    return f'=HYPERLINK("{p}","{disp}")'
+
+
+def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
+    wb,
+    summary_rows: list[dict],
+    *,
+    batch_root: str = "",
+) -> None:
+    """
+    マクロブックにパターン別段階2の結果リンク・スコア・採用用 UI を書く。
+    データ行は 6 行目から。B3=採用パターンID（プルダウン）。B2=バッチ出力ルート。
+    """
+    sheet_name = DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME
+    try:
+        ws = wb.sheets[sheet_name]
+    except Exception:
+        ws = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
+    try:
+        ur = ws.used_range
+        if ur:
+            ur.clear_contents()
+    except Exception:
+        pass
+    intro = (
+        "各パターンの配台試行順を「配台計画_タスク入力」に反映したうえで段階2のみ実行し、"
+        "output/dispatch_pattern_stage2 配下に別ブックを保存した結果です。リンクで開き、スコアと参考スコアを比較してください。"
+        " 最適と思う案のパターンIDを B3 に選び（プルダウン可）、ブックを保存してから"
+        "「試行順パターン採用を計画へ反映」マクロで配台計画シートの配台試行順番に書き戻します。"
+        f" シミュレーション件数上限は {_dispatch_pattern_stage2_max_patterns()} 件です。"
+    )
+    headers = [
+        "パターンID",
+        "パターン名",
+        "生産計画ブック",
+        "メンバー日程ブック",
+        "納期_判定対象件数",
+        "納期_遅れ件数",
+        "納期_遵守率(%)",
+        "メンバー_平均作業割合(%)",
+        "設備_稼働セル数(参考)",
+        "参考スコア(自動)",
+        "乱数シード",
+        "備考",
+    ]
+    mat: list[list] = [
+        [intro],
+        ["バッチ出力ルート", (batch_root or "").strip(), "", "", "", "", "", "", "", "", "", ""],
+        ["採用パターンID", "", "", "", "", "", "", "", "", "", "", ""],
+        [
+            "※ B3 に一覧のパターンIDを指定し保存後、Python「apply_dispatch_pattern_stage2_selection.py」"
+            " またはマクロで反映。",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+        headers,
+    ]
+    for r in summary_rows:
+        mat.append(
+            [
+                r.get("パターンID", ""),
+                r.get("パターン名", ""),
+                "",
+                "",
+                r.get("納期_判定対象件数", ""),
+                r.get("納期_遅れ件数", ""),
+                r.get("納期_遵守率", ""),
+                r.get("メンバー_平均作業割合_pct", ""),
+                r.get("設備_稼働セル数", ""),
+                r.get("参考スコア(自動)", ""),
+                r.get("乱数シード", ""),
+                r.get("備考", ""),
+            ]
+        )
+    n_cols = max((len(x) for x in mat), default=1)
+    pad = []
+    for row in mat:
+        rr = list(row)
+        if len(rr) < n_cols:
+            rr.extend([""] * (n_cols - len(rr)))
+        pad.append(rr)
+    n_rows = len(pad)
+    ws.range((1, 1)).resize(n_rows, n_cols).value = pad
+    data_start = 6
+    # C,D 列に数式を上書き（データ行のみ）
+    for i, r in enumerate(summary_rows, start=data_start):
+        try:
+            fp = r.get("_path_plan")
+            fm = r.get("_path_member")
+            if fp:
+                ws.range((i, 3)).formula = _excel_hyperlink_formula_file(
+                    fp, os.path.basename(fp)
+                )
+            if fm:
+                ws.range((i, 4)).formula = _excel_hyperlink_formula_file(
+                    fm, os.path.basename(fm)
+                )
+        except Exception:
+            logging.debug("パターン段階2サマリ: HYPERLINK 設定失敗（無視）", exc_info=True)
+    try:
+        ws.range((1, 1), (1, n_cols)).merge()
+        ws.range((1, 1)).api.WrapText = True
+        ws.range((5, 1), (5, n_cols)).api.Font.Bold = True
+    except Exception:
+        pass
+    n_pat = len(summary_rows)
+    if n_pat > 0:
+        try:
+            addr = ws.range((data_start, 1)).resize(n_pat, 1).get_address(
+                row_absolute=True,
+                column_absolute=True,
+                include_sheetname=True,
+            )
+            v = ws.range((3, 2)).api.Validation
+            try:
+                v.Delete()
+            except Exception:
+                pass
+            v.Add(3, 1, 1, Formula1=f"={addr}")
+        except Exception:
+            logging.debug("パターン段階2サマリ: B3 入力規則の設定に失敗（無視）", exc_info=True)
+    try:
+        ws.range((2, 1), (2, n_cols)).api.WrapText = True
+        ws.range((4, 1), (4, n_cols)).merge()
+        ws.range((4, 1)).api.WrapText = True
+    except Exception:
+        pass
+    try:
+        ws.used_range.columns.api.AutoFit()
+    except Exception:
+        pass
 
 
 def _build_dispatch_trial_pattern_list_matrix(
@@ -16558,46 +17293,34 @@ def _build_dispatch_trial_pattern_list_matrix(
         ]
 
     tq_template = copy.deepcopy(tq_template)
+    # 一覧シートは参照用のため P1/P2/R* を環境変数どおり全列挙する（段階2バッチの件数上限とは切り離す）。
     rnd_n = _dispatch_trial_pattern_random_count()
     rnd_seeds = _dispatch_trial_pattern_random_seeds(rnd_n)
-
-    pattern_jobs: list[tuple[str, str, int | None, object]] = [
-        ("P1", "納期最優先", None, _pattern_sort_key_due_priority),
-        ("P2", "機械名グループ+納期", None, _pattern_sort_key_machine_then_due),
-    ]
-    for i, sd in enumerate(rnd_seeds):
-        pattern_jobs.append(
-            (f"R{i + 1}", f"ランダム{i + 1}", sd, None),
-        )
-
+    pattern_jobs = _dispatch_trial_pattern_job_list_from_random_params(rnd_n, rnd_seeds)
     intro = (
         "各パターンは、パターン用の並べ（ランダムはシャッフル）のあと、"
-        "段階2と同様に §B-2/3 EC 隣接・スリット→SEC 連続・配台試行順 1..n 付与まで適用した結果です。"
-        f" ランダム件数={rnd_n}（DISPATCH_TRIAL_PATTERN_RANDOM_COUNT）。"
+        "§B-2/3 EC 隣接・スリット→SEC 連続のあと、最後に加工途中を前へ寄せ、配台試行順 1..n を付与した結果です。"
+        " 決定論: P1納期最優先、P2機械名+納期、P3納期(バッファ日前倒しキー・DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS)、"
+        "P4機械名+換算数量降順+納期。"
+        f" ランダム（R*）件数={rnd_n}（DISPATCH_TRIAL_PATTERN_RANDOM_COUNT、既定0）。"
+        " 「試行順パターン別段階2」バッチのみ DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で件数を抑えます。"
     )
     headers = [
         "パターンID",
         "パターン名",
-        "乱数シード",
         "配台試行順番",
         "依頼NO",
         "工程名",
         "機械名",
         TASK_COL_QTY,
+        TASK_COL_UNPROCESSED,
         "納期基準",
     ]
     rows: list[list] = [[intro], [], headers]
 
-    for pid, pname, seed, sk in pattern_jobs:
-        tq = copy.deepcopy(tq_template)
-        if sk is not None:
-            _apply_dispatch_trial_pattern_sort_pipeline(tq, sk)
-        else:
-            rng = random.Random(int(seed) if seed is not None else 0)
-            rng.shuffle(tq)
-            _reorder_task_queue_b2_ec_inspection_consecutive(tq)
-            _reorder_task_queue_slit_sec_consecutive(tq)
-            _assign_sequential_dispatch_trial_order(tq)
+    for pid, pname, tq in _iter_dispatch_trial_pattern_variant_queues(
+        tq_template, pattern_jobs
+    ):
         for t in sorted(tq, key=lambda x: int(x.get("dispatch_trial_order") or 10**9)):
             dto = int(t.get("dispatch_trial_order") or 0)
             tid = str(t.get("task_id") or "").strip()
@@ -16605,13 +17328,21 @@ def _build_dispatch_trial_pattern_list_matrix(
             mname = str(t.get("machine_name") or "").strip()
             db = t.get("due_basis_date")
             db_s = db.strftime("%Y/%m/%d") if isinstance(db, date) else ""
-            seed_s = "" if seed is None else str(int(seed))
             qty_m = t.get("total_qty_m")
             try:
                 qty_out = int(qty_m) if qty_m is not None else None
             except (TypeError, ValueError):
                 qty_out = None
-            rows.append([pid, pname, seed_s, dto, tid, proc, mname, qty_out, db_s])
+            unp_raw = t.get("unprocessed_baseline_m")
+            unp_out = None
+            if unp_raw is not None:
+                try:
+                    f = float(unp_raw)
+                    if math.isfinite(f):
+                        unp_out = int(f) if abs(f - int(f)) < 1e-9 else round(f, 6)
+                except (TypeError, ValueError):
+                    unp_out = None
+            rows.append([pid, pname, dto, tid, proc, mname, qty_out, unp_out, db_s])
     return rows
 
 
@@ -16806,6 +17537,448 @@ def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
     local = _plan_input_dispatch_trial_order_local_only_from_env()
     return write_dispatch_trial_pattern_list_via_xlwings(
+        p, apply_post_load_mutations=not local
+    )
+
+
+def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
+    workbook_path: str | None = None,
+    *,
+    apply_post_load_mutations: bool = True,
+) -> bool:
+    """
+    各試行順パターン（P1/P2/R*）ごとに段階2を実行し、
+    ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
+    マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("パターン別段階2: ブックパスは空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("パターン別段階2: xlwings はありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+    except Exception as e:
+        logging.error("パターン別段階2: シート接続に失敗: %s", e)
+        return False
+
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("パターン別段階2: データ行はありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "配台試行順パターン別段階2",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
+        )
+
+    data_extract_dt, _ = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("パターン別段階2: master 読込に失敗: %s", e)
+        return False
+
+    df0 = df.copy()
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col in df0.columns:
+        if pd.api.types.is_numeric_dtype(df0[dto_col]):
+            df0[dto_col] = float("nan")
+        else:
+            df0[dto_col] = ""
+
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(MASTER_FILE) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
+    gpo = analyze_global_priority_override_comment(
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+    )
+    ai_by_tid = analyze_task_special_remarks(df0, reference_year=run_date.year)
+    tq_template = build_task_queue_from_planning_df(
+        df0, run_date, req_map, ai_by_tid, gpo, equipment_list
+    )
+    if not tq_template:
+        logging.error("パターン別段階2: 配台対象タスクがありません。")
+        return False
+
+    tq_frozen = copy.deepcopy(tq_template)
+    pattern_jobs = _dispatch_pattern_stage2_capped_jobs()
+
+    batch_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    batch_root = os.path.join(output_dir, "dispatch_pattern_stage2", batch_stamp)
+    try:
+        os.makedirs(batch_root, exist_ok=True)
+    except OSError as e:
+        logging.error("パターン別段階2: バッチフォルダを作成できません: %s", e)
+        return False
+    logging.info("パターン別段階2: 出力ルート %s", batch_root)
+    _write_dispatch_pattern_stage2_jobs_meta(batch_root, pattern_jobs)
+
+    summary_rows: list[dict] = []
+    for pid, pname, tq in _iter_dispatch_trial_pattern_variant_queues(
+        tq_frozen, pattern_jobs
+    ):
+        job_seed = None
+        for _pj in pattern_jobs:
+            if _pj[0] == pid:
+                job_seed = _pj[2]
+                break
+        df_run = df0.copy()
+        _apply_pattern_dispatch_trial_orders_to_tasks_df(df_run, tq)
+        out_sub = os.path.join(batch_root, pid)
+        try:
+            os.makedirs(out_sub, exist_ok=True)
+        except OSError as e:
+            summary_rows.append(
+                {
+                    "パターンID": pid,
+                    "パターン名": pname,
+                    "備考": f"出力フォルダ作成失敗: {e}",
+                    "乱数シード": "" if job_seed is None else job_seed,
+                    "参考スコア(自動)": "",
+                }
+            )
+            continue
+
+        row: dict = {
+            "パターンID": pid,
+            "パターン名": pname,
+            "備考": "",
+            "乱数シード": "" if job_seed is None else job_seed,
+            "参考スコア(自動)": "",
+        }
+        paths = None
+        try:
+            paths = _generate_plan_impl(
+                tasks_df_override=df_run,
+                stage2_output_root=out_sub,
+                skip_remove_prior_stage2_workbooks=True,
+                return_output_paths=True,
+            )
+        except PlanningValidationError as e:
+            row["備考"] = f"検証エラー: {e}"[:500]
+            summary_rows.append(row)
+            continue
+        except Exception as e:
+            logging.exception("パターン別段階2: %s で例外", pid)
+            row["備考"] = f"エラー: {e}"[:500]
+            summary_rows.append(row)
+            continue
+
+        if not paths:
+            row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
+            summary_rows.append(row)
+            continue
+
+        row["_path_plan"] = paths.get("production_plan") or ""
+        row["_path_member"] = paths.get("member_schedule") or ""
+        sco = _score_dispatch_pattern_stage2_workbook(paths["production_plan"])
+        row["納期_判定対象件数"] = sco.get("納期_判定対象件数", "")
+        row["納期_遅れ件数"] = sco.get("納期_遅れ件数", "")
+        row["納期_遵守率"] = sco.get("納期_遵守率", "")
+        row["メンバー_平均作業割合_pct"] = sco.get("メンバー_平均作業割合_pct", "")
+        row["設備_稼働セル数"] = sco.get("設備_稼働セル数", "")
+        ref_s = _dispatch_pattern_reference_score_from_metrics(
+            row.get("納期_遵守率"),
+            row.get("メンバー_平均作業割合_pct"),
+            row.get("設備_稼働セル数"),
+        )
+        row["参考スコア(自動)"] = ref_s if ref_s is not None else ""
+        if sco.get("スコア備考"):
+            row["備考"] = str(sco["スコア備考"])[:500]
+        summary_rows.append(row)
+
+    try:
+        _xlwings_write_dispatch_pattern_stage2_summary_sheet(
+            wb, summary_rows, batch_root=os.path.abspath(batch_root)
+        )
+        wb.save()
+    except Exception as e:
+        logging.exception("パターン別段階2: サマリシートまたは保存に失敗: %s", e)
+        return False
+
+    logging.info(
+        "パターン別段階2: 完了（%s パターン）。サマリシート「%s」",
+        len(summary_rows),
+        DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME,
+    )
+    return True
+
+
+def refresh_dispatch_trial_pattern_stage2_batch_only() -> bool:
+    """各パターンで段階2を実行しサマリをマクロブックに書く（VBA / cmd 用）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    local = _plan_input_dispatch_trial_order_local_only_from_env()
+    return run_dispatch_trial_pattern_stage2_batch_via_xlwings(
+        p, apply_post_load_mutations=not local
+    )
+
+
+def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
+    workbook_path: str | None = None,
+    *,
+    apply_post_load_mutations: bool = True,
+    chosen_pattern_id: str | None = None,
+) -> bool:
+    """
+    サマリシート「配台試行順_パターン別段階2」の B3（採用パターンID）と B2（バッチ出力ルート）を読み、
+    当該バッチの ``pattern_jobs_meta.json`` に基づき選んだパターンの配台試行順を
+    「配台計画_タスク入力」に書き戻し、試行順昇順で行を並べ替える。
+
+    chosen_pattern_id を渡したときは B3 より優先（CLI 用）。
+    """
+    path = (workbook_path or "").strip() or os.environ.get(
+        "TASK_INPUT_WORKBOOK", ""
+    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    if not path:
+        logging.error("パターン採用反映: ブックパスは空です。")
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        logging.error("パターン採用反映: xlwings はありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+        ws_sum = wb.sheets[DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME]
+    except Exception as e:
+        logging.error("パターン採用反映: シート接続に失敗: %s", e)
+        return False
+
+    batch_root = str(ws_sum.range((2, 2)).value or "").strip()
+    if not batch_root or not os.path.isdir(batch_root):
+        logging.error(
+            "パターン採用反映: サマリ B2 のバッチ出力ルートが無効です（先にパターン別段階2を実行してください）。"
+        )
+        return False
+    meta_path = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
+    if not os.path.isfile(meta_path):
+        logging.error("パターン採用反映: メタファイルがありません: %s", meta_path)
+        return False
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+    except OSError as e:
+        logging.error("パターン採用反映: メタ JSON の読込に失敗: %s", e)
+        return False
+
+    chosen = (chosen_pattern_id or "").strip()
+    if not chosen:
+        try:
+            chosen = str(ws_sum.range((3, 2)).value or "").strip()
+        except Exception:
+            chosen = ""
+    if not chosen:
+        logging.error(
+            "パターン採用反映: 採用パターンIDが空です。サマリの B3 に一覧のいずれかを入力してください。"
+        )
+        return False
+
+    patterns = meta.get("patterns") or []
+    ent = None
+    chosen_key = chosen.strip().casefold()
+    for p in patterns:
+        pid = str(p.get("id") or "").strip()
+        if pid.casefold() == chosen_key:
+            ent = p
+            break
+    if ent is None:
+        logging.error(
+            "パターン採用反映: パターンID「%s」は当該バッチのメタにありません。",
+            chosen,
+        )
+        return False
+
+    job = _pattern_job_tuple_from_meta_entry(ent)
+    mat = _xlwings_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("パターン採用反映: データ行はありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
+
+    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "パターン採用反映",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
+        )
+
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col not in df.columns:
+        logging.error("パターン採用反映: 列「%s」はありません。", dto_col)
+        return False
+    _dto_loc = df.columns.get_loc(dto_col)
+    if isinstance(_dto_loc, slice):
+        logging.error("パターン採用反映: 列「%s」は複数あります。", dto_col)
+        return False
+    if pd.api.types.is_numeric_dtype(df[dto_col]):
+        df[dto_col] = float("nan")
+    else:
+        df[dto_col] = ""
+
+    data_extract_dt, _ = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("パターン採用反映: master 読込に失敗: %s", e)
+        return False
+
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(MASTER_FILE) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
+    gpo = analyze_global_priority_override_comment(
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+    )
+    ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
+    tq_template = build_task_queue_from_planning_df(
+        df, run_date, req_map, ai_by_tid, gpo, equipment_list
+    )
+    if not tq_template:
+        logging.error("パターン採用反映: 配台対象タスクがありません。")
+        return False
+
+    tq_frozen = copy.deepcopy(tq_template)
+    _pid_applied, _pname_applied, tq_sel = next(
+        _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job])
+    )
+    _apply_pattern_dispatch_trial_orders_to_tasks_df(df, tq_sel)
+    df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
+    orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
+    df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
+
+    header_row = mat[0] if mat else []
+    n_hdr = len(header_row)
+    if n_hdr == 0:
+        return False
+
+    def _pad_row(r, n):
+        r = list(r) if r is not None else []
+        if len(r) < n:
+            r = r + [None] * (n - len(r))
+        return r
+
+    new_mat = [_pad_row(header_row, n_hdr)]
+    for i in range(len(df_sorted)):
+        orig = orig_list[i]
+        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+        src_row = _pad_row(src_row, n_hdr)
+        out_row = []
+        for j in range(n_hdr):
+            h_cell = header_row[j]
+            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                hname = ""
+            else:
+                hname = str(h_cell).strip()
+            if hname and hname in df_sorted.columns:
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                if pd.isna(v):
+                    out_row.append(None)
+                else:
+                    out_row.append(v)
+            else:
+                out_row.append(src_row[j])
+        new_mat.append(out_row)
+
+    try:
+        n_r = len(new_mat)
+        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+    except Exception as e:
+        logging.exception("パターン採用反映: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("パターン採用反映: Save 警告: %s", e)
+
+    logging.info(
+        "パターン採用反映: パターン「%s」を「%s」に書き込みました。",
+        chosen,
+        PLAN_INPUT_SHEET_NAME,
+    )
+    return True
+
+
+def refresh_dispatch_pattern_stage2_selection_to_plan_only() -> bool:
+    """サマリで選んだパターンの試行順を配台計画シートへ反映（VBA / cmd 用）。"""
+    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    local = _plan_input_dispatch_trial_order_local_only_from_env()
+    return apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
         p, apply_post_load_mutations=not local
     )
 
@@ -22665,7 +23838,12 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         return os.path.abspath(out_path)
 
 
-def _generate_plan_impl():
+def _generate_plan_impl(
+    tasks_df_override=None,
+    stage2_output_root=None,
+    skip_remove_prior_stage2_workbooks=False,
+    return_output_paths=False,
+):
     # 配台トレース（設定シート A3 以降のみ）は」メンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
@@ -22891,7 +24069,10 @@ def _generate_plan_impl():
 
     # タスク入力: ブック内「配台計画_タスク入力」（段階1で出力→取り込み後に編集）
     try:
-        tasks_df = load_planning_tasks_df()
+        if tasks_df_override is not None:
+            tasks_df = tasks_df_override.copy()
+        else:
+            tasks_df = load_planning_tasks_df()
     except PlanningValidationError:
         raise
     except Exception as e:
@@ -24579,14 +25760,23 @@ def _generate_plan_impl():
     # =========================================================
     # 4. Excel出力 (メイン計画)
     # =========================================================
-    _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_dir)
+    _stage2_out_root = stage2_output_root if stage2_output_root else output_dir
+    if stage2_output_root:
+        try:
+            os.makedirs(stage2_output_root, exist_ok=True)
+        except OSError as e:
+            logging.error("段階2: 出力先ディレクトリを作成できません: %s (%s)", stage2_output_root, e)
+            _try_write_main_sheet_gemini_usage_summary("段階2")
+            return
+    if not skip_remove_prior_stage2_workbooks:
+        _remove_prior_stage2_workbooks_and_prune_empty_dirs(_stage2_out_root)
     # ファイル名の主部はデータ抽出基準日時（シートメタと整合）。同一抽出データの再実行でも
     # パスがぶつからないよう、壁時計のサフィックスを付与（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
     _stage2_data_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
     _stage2_run_stamp = datetime.now().strftime("%H%M%S_%f")
     _stage2_out_stamp = f"{_stage2_data_stamp}_{_stage2_run_stamp}"
     output_filename = os.path.join(
-        output_dir, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
+        _stage2_out_root, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
     # タスクID → 結果_設備毎の時間割で当該タスクは最初に睾れるセル（例 B12）。結果_タスク一覧のリンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
@@ -24833,30 +26023,45 @@ def _generate_plan_impl():
                 if s:
                     member_worked_mins[s] += mins
         for m in members:
-            if m in attendance_data[d] and attendance_data[d][m]['is_working']:
-                default_start = datetime.combine(d, DEFAULT_START_TIME)
-                default_end = datetime.combine(d, DEFAULT_END_TIME)
-                
-                actual_start = attendance_data[d][m]['start_dt']
-                actual_end = attendance_data[d][m]['end_dt']
-                clip_start = max(actual_start, default_start)
-                clip_end = min(actual_end, default_end)
-                
-                if clip_start >= clip_end:
-                    total_avail_mins = 0
-                else:
-                    breaks_dt = attendance_data[d][m]['breaks_dt']
-                    total_avail_mins = get_actual_work_minutes(clip_start, clip_end, breaks_dt)
-                
-                if total_avail_mins <= 0:
-                    row_data[m] = "0.0%"
-                    continue
-                
-                worked_mins = member_worked_mins.get(m, 0)
-                ratio = (worked_mins / total_avail_mins) * 100
-                row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}分)"
-            else:
+            if m not in attendance_data[d]:
                 row_data[m] = "休"
+                continue
+            _ud_u = attendance_data[d][m]
+            _eligible_u = bool(
+                _ud_u.get(
+                    "eligible_for_assignment", _ud_u.get("is_working", False)
+                )
+            )
+            if not _eligible_u:
+                if _ud_u.get("is_working", False):
+                    # カレンダー「-」等: 勤務だが配台母数に含めない（分子・分母とも 0 表示）
+                    row_data[m] = "0.0% (0/0分)"
+                else:
+                    row_data[m] = "休"
+                continue
+            default_start = datetime.combine(d, DEFAULT_START_TIME)
+            default_end = datetime.combine(d, DEFAULT_END_TIME)
+
+            actual_start = _ud_u["start_dt"]
+            actual_end = _ud_u["end_dt"]
+            clip_start = max(actual_start, default_start)
+            clip_end = min(actual_end, default_end)
+
+            if clip_start >= clip_end:
+                total_avail_mins = 0
+            else:
+                breaks_dt = _ud_u["breaks_dt"]
+                total_avail_mins = get_actual_work_minutes(
+                    clip_start, clip_end, breaks_dt
+                )
+
+            if total_avail_mins <= 0:
+                row_data[m] = "0.0%"
+                continue
+
+            worked_mins = member_worked_mins.get(m, 0)
+            ratio = (worked_mins / total_avail_mins) * 100
+            row_data[m] = f"{ratio:.1f}% ({worked_mins}/{total_avail_mins}分)"
         utilization_data.append(row_data)
         
     df_utilization = pd.DataFrame(utilization_data)
@@ -24904,51 +26109,58 @@ def _generate_plan_impl():
     gantt_tl_day_blocks: list = []
     gantt_detail_tl_label_specs: list = []
     gantt_detail_tl_day_blocks: list = []
-    df_actual_detail = load_machining_actual_detail_df()
     detail_timeline_events: list = []
     sorted_dates_detail = list(sorted_dates)
     chart_title_actual_detail = "湖南工場 加工実績（明細）"
-    if df_actual_detail is not None and len(df_actual_detail) > 0:
-        sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
-            sorted_dates, df_actual_detail
+    # 試行順パターン別段階2（stage2_output_root あり）は同一処理を多数回走らせるため、
+    # 重い「加工実績明細」設備ガントの生成・明細DATA読込を省略する（計画側ガントは従来どおり）。
+    if stage2_output_root:
+        logging.info(
+            "段階2(試行順パターン別バッチ): 設備ガント（加工実績明細）の生成を省略します。"
         )
-        d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
-        d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
-        if d_from is not None or d_to is not None:
-            n_before = len(sorted_dates_detail)
-            filtered_detail_dates = _sorted_dates_filter_inclusive_range(
-                sorted_dates_detail, d_from, d_to
+    else:
+        df_actual_detail = load_machining_actual_detail_df()
+        if df_actual_detail is not None and len(df_actual_detail) > 0:
+            sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
+                sorted_dates, df_actual_detail
             )
-            if not filtered_detail_dates and sorted_dates_detail:
-                logging.warning(
-                    "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
-                    "（%s=%r, %s=%r）",
-                    ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
-                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
-                    ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
-                    os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+            d_from = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
+            d_to = _parse_env_optional_date(ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
+            if d_from is not None or d_to is not None:
+                n_before = len(sorted_dates_detail)
+                filtered_detail_dates = _sorted_dates_filter_inclusive_range(
+                    sorted_dates_detail, d_from, d_to
                 )
-            else:
-                sorted_dates_detail = filtered_detail_dates
-                logging.info(
-                    "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
-                    n_before,
-                    len(sorted_dates_detail),
-                    d_from.isoformat() if d_from else "（指定なし）",
-                    d_to.isoformat() if d_to else "（指定なし）",
-                )
-                rng_lo = d_from.isoformat() if d_from else "…"
-                rng_hi = d_to.isoformat() if d_to else "…"
-                chart_title_actual_detail = (
-                    f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
-                )
-        detail_timeline_events = build_actual_timeline_events(
-            df_actual_detail,
-            equipment_list,
-            sorted_dates_detail,
-            log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
-            roll_detail=True,
-        )
+                if not filtered_detail_dates and sorted_dates_detail:
+                    logging.warning(
+                        "実績明細ガント: 日付範囲フィルタで表示日が0件になったためフィルタを無視します。"
+                        "（%s=%r, %s=%r）",
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_FROM,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_FROM, ""),
+                        ENV_GANTT_ACTUAL_DETAIL_DATE_TO,
+                        os.environ.get(ENV_GANTT_ACTUAL_DETAIL_DATE_TO, ""),
+                    )
+                else:
+                    sorted_dates_detail = filtered_detail_dates
+                    logging.info(
+                        "実績明細ガント: 表示日を %s 日 → %s 日に絞りました（FROM=%s, TO=%s）。",
+                        n_before,
+                        len(sorted_dates_detail),
+                        d_from.isoformat() if d_from else "（指定なし）",
+                        d_to.isoformat() if d_to else "（指定なし）",
+                    )
+                    rng_lo = d_from.isoformat() if d_from else "…"
+                    rng_hi = d_to.isoformat() if d_to else "…"
+                    chart_title_actual_detail = (
+                        f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
+                    )
+            detail_timeline_events = build_actual_timeline_events(
+                df_actual_detail,
+                equipment_list,
+                sorted_dates_detail,
+                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                roll_detail=True,
+            )
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             df_eq_schedule.to_excel(
@@ -24958,7 +26170,9 @@ def _generate_plan_impl():
                 writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
             )
             pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
-            df_utilization.to_excel(writer, sheet_name='結果_メンバー別作業割引', index=False)
+            df_utilization.to_excel(
+                writer, sheet_name=RESULT_MEMBER_WORK_UTIL_SHEET_NAME, index=False
+            )
             df_tasks = pd.DataFrame(task_results)
             df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
                 df_tasks, max_history_len
@@ -25154,7 +26368,7 @@ def _generate_plan_impl():
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
     # =========================================================
     member_output_filename = os.path.join(
-        output_dir, f"member_schedule_{_stage2_out_stamp}.xlsx"
+        _stage2_out_root, f"member_schedule_{_stage2_out_stamp}.xlsx"
     )
     
     # 時間帯は全メンバー共通で1回の値生成（メンバー数分の重複計算を避ける）
@@ -25259,3 +26473,9 @@ def _generate_plan_impl():
 
     logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
     _try_write_main_sheet_gemini_usage_summary("段階2")
+    if return_output_paths:
+        return {
+            "production_plan": os.path.abspath(output_filename),
+            "member_schedule": os.path.abspath(member_output_filename),
+        }
+    return None

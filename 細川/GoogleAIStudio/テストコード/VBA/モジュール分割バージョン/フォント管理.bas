@@ -446,7 +446,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
              "echo." & vbCrLf & _
              "echo [column-layout] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
     Application.ScreenUpdating = prevScreen
 
     On Error Resume Next
@@ -506,7 +506,7 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
              "echo." & vbCrLf & _
              "echo [dedupe-column-config] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
@@ -563,7 +563,7 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
              "echo." & vbCrLf & _
              "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
@@ -617,7 +617,7 @@ Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
              "echo." & vbCrLf & _
              "echo [plan-dispatch-trial-float-keys] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
@@ -630,11 +630,11 @@ Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
 End Sub
 
 '==============================================================================
-' 配台試行順: 複数パターン（納期優先・機械名+納期・ランダム等）の一覧シートを Python（xlwings）で作成
+' 配台試行順: 複数パターン（P1～P4・ランダム等）の一覧シートを Python（xlwings）で作成
 ' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成」
 ' 図形の自動作成: 「配台計画_タスク入力_試行順パターン一覧ボタンを配置」
 ' ・出力シート名は planning_core の DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME（既定「配台試行順_パターン一覧」）
-' ・ランダム件数は環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）
+' ・ランダム（R*）件数は環境変数 DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 0＝ランダムなし、P1～P4 は常に出力）
 '==============================================================================
 Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
     Dim wsh As Object
@@ -673,7 +673,7 @@ Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
              "echo." & vbCrLf & _
              "echo [dispatch-trial-pattern-list] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
-    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat)
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
     Application.ScreenUpdating = prevScreen
 
     If exitCode <> 0 Then
@@ -681,6 +681,116 @@ Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
             & "log\execution_log.txt を確認してください。", vbExclamation, "試行順パターン一覧"
     Else
         MacroSplash_SetStep "シート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」を更新しました。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
+'==============================================================================
+' 配台試行順: 各パターン（P1～P4/R*）で段階2を実行し output に別ブック保存、サマリシートにリンクとスコア
+' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行」
+' 図形の自動作成: 「配台計画_タスク入力_試行順パターン別段階2ボタンを配置」
+' ・サマリシート名は planning_core の DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME（既定「配台試行順_パターン別段階2」）
+' ・python\apply_dispatch_trial_pattern_stage2_batch.py（所要時間大）
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順パターン別段階2をPythonで作成()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "パターン別段階2"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "パターン別段階2"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    MacroSplash_SetStep "配台試行順: 各パターンで段階2を実行しています（完了までお待ちください）…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_trial_pattern_stage2_batch.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [dispatch-trial-pattern-stage2-batch] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "パターン別段階2"
+    Else
+        MacroSplash_SetStep "シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」を更新しました（output\dispatch_pattern_stage2 に結果ブック）。"
+        m_animMacroSucceeded = True
+    End If
+End Sub
+
+'==============================================================================
+' 配台試行順: サマリで選んだパターンの試行順を「配台計画_タスク入力」へ反映（Python）
+' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン採用を実行」
+' ・python\apply_dispatch_pattern_stage2_selection.py
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
+    Dim wsh As Object
+    Dim runBat As String
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsPlan As Worksheet
+    Dim prevScreen As Boolean
+
+    targetDir = ThisWorkbook.path
+    If Len(targetDir) = 0 Then
+        MsgBox "先にこの Excel ファイルを保存してください。", vbExclamation, "パターン採用反映"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set wsPlan = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If wsPlan Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "パターン採用反映"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+
+    prevScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    MacroSplash_SetStep "配台試行順: サマリで選んだパターンを計画シートへ反映しています…"
+    runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_pattern_stage2_selection.py" & vbCrLf & _
+             "echo." & vbCrLf & _
+             "echo [dispatch-pattern-stage2-selection] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
+             "exit /b %ERRORLEVEL%"
+    exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, False, Stage12CmdHideWindowEffective())
+    Application.ScreenUpdating = prevScreen
+
+    If exitCode <> 0 Then
+        MsgBox "Python の終了コードが " & CStr(exitCode) & " です。" & vbCrLf _
+            & "log\execution_log.txt を確認してください。", vbExclamation, "パターン採用反映"
+    Else
+        MacroSplash_SetStep "配台試行順: 採用パターンを「" & SHEET_PLAN_INPUT_TASK & "」に反映しました。"
         m_animMacroSucceeded = True
     End If
 End Sub
@@ -909,6 +1019,143 @@ Public Sub 配台計画_タスク入力_試行順パターン一覧ボタンを配置()
     Exit Sub
 FailBtn3:
     MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "パターン一覧ボタン"
+End Sub
+
+'==============================================================================
+' 配台計画_タスク入力: 「試行順パターン別段階2」用グラデーション図形（試行順パターン一覧の下）
+' 開発タブ → マクロ → 「配台計画_タスク入力_試行順パターン別段階2ボタンを配置」
+'==============================================================================
+Public Sub 配台計画_タスク入力_試行順パターン別段階2ボタンを配置()
+    Dim ws As Worksheet
+    Dim ur As Range
+    Dim anchorCol As Long
+    Dim leftPt As Single
+    Dim topPt As Single
+    Dim sh As Shape
+    Dim wbQuoted As String
+    Dim macroAnim As String
+    Dim i As Long
+    Const BTN_H As Single = 48
+    Const BTN_GAP As Single = 6
+    On Error GoTo FailBtn4
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo FailBtn4
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "パターン別段階2ボタン"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        Set sh = ws.Shapes(i)
+        If StrComp(sh.Name, SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2, vbTextCompare) = 0 Then
+            sh.Delete
+        ElseIf StrComp(sh.Name, SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2_SELECT, vbTextCompare) = 0 Then
+            sh.Delete
+        End If
+    Next i
+    On Error GoTo FailBtn4
+    Set ur = Nothing
+    On Error Resume Next
+    Set ur = ws.UsedRange
+    On Error GoTo FailBtn4
+    anchorCol = 4
+    If Not ur Is Nothing Then
+        anchorCol = ur.Column + ur.Columns.Count + 1
+        If anchorCol < 4 Then anchorCol = 4
+        If anchorCol > 80 Then anchorCol = 80
+    End If
+    leftPt = ws.Cells(1, anchorCol).Left
+    topPt = ws.Rows(1).Top + 1.5 + 3 * (BTN_H + BTN_GAP)
+    wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン別段階2", macroAnim, leftPt, topPt, RGB(30, 110, 170), RGB(15, 55, 95), SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン採用を実行"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン採用を計画へ", macroAnim, leftPt, ws.Rows(1).Top + 1.5 + 4 * (BTN_H + BTN_GAP), RGB(20, 130, 90), RGB(10, 70, 50), SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2_SELECT
+    ws.Activate
+    On Error Resume Next
+    ws.Range("A1").Select
+    On Error GoTo 0
+    MsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf _
+        & "上: 各パターンの段階2 → シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」。" & vbCrLf _
+        & "下: サマリ B3 で選んだパターンの試行順を計画シートへ反映。", vbInformation, "パターン別段階2ボタン"
+    Exit Sub
+FailBtn4:
+    MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "パターン別段階2ボタン"
+End Sub
+
+'==============================================================================
+' シート「配台試行順_パターン一覧」に、一覧更新・段階2バッチ・採用反映のグラデ3ボタンを一括配置
+' 開発タブ → マクロ → 「配台試行順_パターン一覧シートに試行順操作ボタン3つを配置」
+' ・シートが無いときは先に「試行順パターン一覧」相当の処理でシートを作成するか、手動で同名シートを用意
+'==============================================================================
+Public Sub 配台試行順_パターン一覧シートに試行順操作ボタン3つを配置()
+    Dim ws As Worksheet
+    Dim wbQuoted As String
+    Dim macroAnim As String
+    Dim sh As Shape
+    Dim i As Long
+    Dim leftPt As Single
+    Dim topPt As Single
+    Dim cPlace As Long
+    Const BTN_H As Single = 48
+    Const BTN_GAP As Single = 6
+    On Error GoTo FailBtn5
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_DISPATCH_TRIAL_PATTERN_LIST)
+    On Error GoTo FailBtn5
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」がありません。" & vbCrLf _
+            & "先に「試行順パターン一覧」ボタン等で一覧を作成するか、同名シートを追加してください。", vbExclamation, "パターン一覧シート"
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        Set sh = ws.Shapes(i)
+        If StrComp(sh.Name, SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_LIST, vbTextCompare) = 0 Then
+            sh.Delete
+        ElseIf StrComp(sh.Name, SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_STAGE2, vbTextCompare) = 0 Then
+            sh.Delete
+        ElseIf StrComp(sh.Name, SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_APPLY, vbTextCompare) = 0 Then
+            sh.Delete
+        End If
+    Next i
+    On Error GoTo FailBtn5
+
+    cPlace = 2
+    On Error Resume Next
+    If Not ws.UsedRange Is Nothing Then
+        cPlace = ws.UsedRange.Column + ws.UsedRange.Columns.Count + 1
+    End If
+    On Error GoTo FailBtn5
+    If cPlace < 2 Then cPlace = 2
+    If cPlace > 40 Then cPlace = 40
+    leftPt = ws.Cells(1, cPlace).Left
+    topPt = ws.Rows(1).Top + 6
+
+    wbQuoted = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'"
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン一覧", macroAnim, leftPt, topPt, RGB(120, 90, 200), RGB(60, 40, 120), SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_LIST
+    topPt = topPt + (BTN_H + BTN_GAP)
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン別段階2", macroAnim, leftPt, topPt, RGB(30, 110, 170), RGB(15, 55, 95), SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_STAGE2
+    topPt = topPt + (BTN_H + BTN_GAP)
+    macroAnim = wbQuoted & "!アニメ付き_配台計画_タスク入力_試行順パターン採用を実行"
+    PlanInputSheet_AddGradientActionButton ws, "試行順パターン採用を計画へ", macroAnim, leftPt, topPt, RGB(20, 130, 90), RGB(10, 70, 50), SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_APPLY
+
+    ws.Activate
+    On Error Resume Next
+    ws.Range("A1").Select
+    On Error GoTo 0
+    MsgBox "シート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」にボタンを3つ配置しました。" & vbCrLf _
+        & "上から: 一覧更新 → パターン別段階2 → 採用を計画へ反映。", vbInformation, "パターン一覧シート"
+    Exit Sub
+FailBtn5:
+    MsgBox "ボタン配置でエラー: " & Err.Description, vbCritical, "パターン一覧シート"
 End Sub
 
 '==============================================================================

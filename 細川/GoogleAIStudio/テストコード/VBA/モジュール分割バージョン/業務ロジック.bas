@@ -262,6 +262,55 @@ Sub アニメ付き_メイン_PDFとCSVスナップショット_クールボタンを配置()
     メイン_PDFとCSVスナップショット_クールボタンを配置
 End Sub
 
+' メイン_ の L 列付近に「試行順パターン一覧作成→パターン別段階2」連続実行ボタンを配置（PDF・CSV ボタンの下あたり）。
+Public Sub メイン_試行順パターン一覧から段階2まで_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン一覧からパターン別段階2まで連続実行"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim leftPos As Single
+    Dim topPos As Single
+    Dim si As Long
+    
+    On Error Resume Next
+    Set ws = GetMainWorksheet()
+    On Error GoTo 0
+    If ws Is Nothing Then
+        AppMsgBox "シート「メイン_」が見つかりません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For si = ws.Shapes.Count To 1 Step -1
+        Set shp = ws.Shapes(si)
+        On Error Resume Next
+        If StrComp(shp.Name, SHAPE_MAIN_DISPATCH_TRIAL_PATTERN_LIST_THEN_STAGE2, vbBinaryCompare) = 0 Then
+            shp.Delete
+        Else
+            oa = shp.OnAction
+            If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+                shp.Delete
+            End If
+        End If
+        On Error GoTo 0
+    Next si
+    
+    leftPos = ws.Cells(2, 12).Left
+    topPos = ws.Cells(2, 12).Top + 2 + 58
+    
+    CreateCoolButtonWithPreset "試行順一覧→段階2", MACRO_ANIM, leftPos, topPos, 6, SHAPE_MAIN_DISPATCH_TRIAL_PATTERN_LIST_THEN_STAGE2
+    AppMsgBox "「メイン_」にボタンを配置しました。" & vbCrLf & _
+           "押すと「試行順パターン一覧」シート作成のあと「パターン別段階2」を続けて実行し、" & vbCrLf & _
+           "完了時はシート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」を表示します。", vbInformation, "ボタン配置"
+End Sub
+
+' 上記ボタンをシートに自動配置（初回・位置調整用）。本体は メイン_試行順パターン一覧から段階2まで_クールボタンを配置。
+Sub アニメ付き_メイン_試行順パターン一覧から段階2まで_クールボタンを配置()
+    Call AnimateButtonPush
+    メイン_試行順パターン一覧から段階2まで_クールボタンを配置
+End Sub
+
 Public Function GetMainWorksheet() As Worksheet
     ' 配台ブックのメイン UI はシート名「メイン_」固定（旧「メイン」「Main」や部分一致は使わない）
     On Error Resume Next
@@ -1593,12 +1642,41 @@ End Sub
 
 ' 配台試行順の複数パターン一覧シート作成（スプラッシュ付き）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成()
-    Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, False)
+    Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
 End Sub
 
 ' 各試行順パターンで段階2を実行し output に別ブック保存＋サマリシート（スプラッシュ付き・所要時間大）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行()
-    Call アニメ付き_スプラッシュ付きで実行("各試行順パターンで段階2を実行しています…（時間がかかります）", "配台計画_タスク入力_試行順パターン別段階2をPythonで作成", , , False, False)
+    Call アニメ付き_スプラッシュ付きで実行("各試行順パターンで段階2を実行しています…（時間がかかります）", "配台計画_タスク入力_試行順パターン別段階2をPythonで作成", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
+End Sub
+
+' 試行順パターン一覧作成のあとパターン別段階2を続けて実行し、成功時のみサマリシートをアクティブにする（メイン_ 等からの一括用）。
+Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧からパターン別段階2まで連続実行()
+    m_dispatchTrialChainSuppressIntermediateChime = True
+    On Error GoTo ChainDispatchTrialDone
+    Call アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成
+    If Not m_animMacroSucceeded Then GoTo ChainDispatchTrialDone
+    Call アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行
+ChainDispatchTrialDone:
+    m_dispatchTrialChainSuppressIntermediateChime = False
+    If m_animMacroSucceeded Then
+        On Error Resume Next
+        ThisWorkbook.Worksheets(SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY).Activate
+        On Error GoTo 0
+        m_splashAllowMacroSound = True
+        On Error Resume Next
+        MacroCompleteChime
+        On Error GoTo 0
+        m_splashAllowMacroSound = False
+    End If
+End Sub
+
+' サマリで選んだ試行順パターンを配台計画シートへ反映（スプラッシュ付き）
+Public Sub アニメ付き_配台計画_タスク入力_試行順パターン採用を実行()
+    Call アニメ付き_スプラッシュ付きで実行("サマリの採用パターンを計画シートへ反映しています…", "配台計画_タスク入力_試行順パターン採用をPythonで実行", , , False, False)
+    If m_animMacroSucceeded Then
+        アニメ付き_計画生成を実行
+    End If
 End Sub
 
 ' 「試行順パターン一覧」用かっこいいボタン（キー並べ替えボタンの下あたり）
@@ -1683,6 +1761,48 @@ Public Sub 配台計画_タスク入力_試行順パターン別段階2_クールボタンを配置()
     CreateCoolButtonWithPreset "パターン別段階2", MACRO_ANIM, leftPos, topPos, 7
     AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
            "押すと各パターンで段階2を実行し、シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」にリンクとスコアを書き込みます（所要時間大）。", vbInformation, "ボタン配置"
+End Sub
+
+' 「試行順パターン採用」用かっこいいボタン（パターン別段階2の下あたり）
+Public Sub 配台計画_タスク入力_試行順パターン採用_クールボタンを配置()
+    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン採用を実行"
+    Const HDR_TRIAL As String = "配台試行順番"
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim oa As String
+    Dim anchorCol As Long
+    Dim leftPos As Single
+    Dim topPos As Single
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
+        Exit Sub
+    End If
+    
+    ws.Activate
+    
+    For Each shp In ws.Shapes
+        On Error Resume Next
+        oa = shp.OnAction
+        On Error GoTo 0
+        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
+            On Error Resume Next
+            shp.Delete
+            On Error GoTo 0
+        End If
+    Next shp
+    
+    anchorCol = FindColHeader(ws, HDR_TRIAL)
+    If anchorCol <= 0 Then anchorCol = 1
+    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
+    topPos = ws.Cells(1, 1).Top + 4 + 4 * 58
+    
+    CreateCoolButtonWithPreset "パターン採用を計画へ", MACRO_ANIM, leftPos, topPos, 4
+    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
+           "サマリ「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」の B3 で選んだパターンの試行順を計画シートに反映します。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================

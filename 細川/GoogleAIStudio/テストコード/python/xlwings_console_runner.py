@@ -432,3 +432,89 @@ def run_dispatch_trial_pattern_list_for_xlwings() -> int:
         return rc
     finally:
         _write_stage_vba_exit_code(rc)
+
+
+def run_dispatch_trial_pattern_stage2_batch_for_xlwings() -> int:
+    """
+    試行順パターン別に段階2を実行しサマリシートを作成: ``refresh_dispatch_trial_pattern_stage2_batch_only``。
+    VBA: XwRunConsoleRunner "run_dispatch_trial_pattern_stage2_batch_for_xlwings"
+    """
+    rc = 1
+    try:
+        try:
+            _prepare_from_caller_book()
+        except Exception:
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            rc = 2
+            return rc
+        _apply_workbook_env_overrides()
+        _append_execution_log_line(
+            "INFO",
+            "配台試行順パターン別段階2: xlwings run_dispatch_trial_pattern_stage2_batch_for_xlwings 開始",
+        )
+        _purge_planning_core_modules()
+        try:
+            import planning_core as pc
+
+            ok = pc.refresh_dispatch_trial_pattern_stage2_batch_only()
+            rc = 0 if ok else 1
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                rc = 0
+            elif isinstance(c, int):
+                rc = 0 if c == 0 else c
+            else:
+                rc = 1
+        except Exception:
+            logging.exception("xlwings: パターン別段階2バッチで失敗しました。")
+            _append_execution_log_traceback(
+                "xlwings: パターン別段階2バッチで失敗しました。"
+            )
+            rc = 1
+        return rc
+    finally:
+        _write_stage_vba_exit_code(rc)
+
+
+def run_dispatch_pattern_stage2_selection_for_xlwings() -> int:
+    """
+    サマリで選んだパターンの試行順を配台計画へ反映: ``refresh_dispatch_pattern_stage2_selection_to_plan_only``。
+    VBA: XwRunConsoleRunner "run_dispatch_pattern_stage2_selection_for_xlwings"
+    """
+    rc = 1
+    try:
+        try:
+            _prepare_from_caller_book()
+        except Exception:
+            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            rc = 2
+            return rc
+        _apply_workbook_env_overrides()
+        _append_execution_log_line(
+            "INFO",
+            "配台試行順パターン採用反映: xlwings run_dispatch_pattern_stage2_selection_for_xlwings 開始",
+        )
+        _purge_planning_core_modules()
+        try:
+            import planning_core as pc
+
+            ok = pc.refresh_dispatch_pattern_stage2_selection_to_plan_only()
+            rc = 0 if ok else 1
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                rc = 0
+            elif isinstance(c, int):
+                rc = 0 if c == 0 else c
+            else:
+                rc = 1
+        except Exception:
+            logging.exception("xlwings: パターン採用反映で失敗しました。")
+            _append_execution_log_traceback(
+                "xlwings: パターン採用反映で失敗しました。"
+            )
+            rc = 1
+        return rc
+    finally:
+        _write_stage_vba_exit_code(rc)

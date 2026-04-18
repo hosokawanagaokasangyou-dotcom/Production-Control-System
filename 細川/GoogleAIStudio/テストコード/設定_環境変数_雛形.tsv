@@ -1,5 +1,8 @@
 変数名	値	説明（任意・ExcelではC列）
 TASK_PLAN_SHEET		配台計画シート名（空なら既定 配台計画_タスク入力）
+MASTER_USE_SPEED_SHEET	1	0=master.xlsm speed による加工速度上書きをしない
+MASTER_SPEED_SHEET_NAME		空なら既定シート名 speed
+MASTER_SPEED_FIRST_EXCEL_COL		空なら 4（D 列から設備列）
 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST	1	日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート
 STAGE2_SERIAL_DISPATCH_BY_TASK_ID	0	1=依頼NO直列
 STAGE12_CMD_HIDE_WINDOW	1	段階1/2: VBA の cmd 1=非表示 0=画面上部にコンソール表示
@@ -13,10 +16,16 @@ TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	0=計画シート必要人数も参照
 TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	0=組合せ表プリセットを使わない
 DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1=配台中の占有区間ミラーで二重検査（0 で無効）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピー（0 で無効）
-DISPATCH_TRIAL_PATTERN_RANDOM_COUNT	3	配台試行順_パターン一覧: ランダム並びのパターン数（0～50）。空または未設定時は 3
-DISPATCH_TRIAL_PATTERN_RANDOM_SEED		同: 整数を入れると R1,R2,… の乱数シードが連番で固定。空なら実行のたびに起点を乱数化
+DISPATCH_TRIAL_PATTERN_RANDOM_COUNT	0	配台試行順_パターン一覧・パターン別段階2: ランダム並び R* の件数（0～50）。既定 0＝ランダムなし。必要なときだけ正の整数
+DISPATCH_TRIAL_PATTERN_RANDOM_SEED		同: 整数を入れると R1,R2,… の乱数シードが連番で固定（一覧シートには列を出さない）。空なら実行のたびに起点を乱数化
+DISPATCH_TRIAL_PATTERN_P3_BUFFER_DAYS	3	P3「納期(バッファ日前倒しキー)」: 納期基準日から減算する暦日数（0～14）。許容スラックを探索に効かせる前倒しソート用
 DISPATCH_TRIAL_PATTERN_LIST_SHEET		同: 出力シート名（空なら既定 配台試行順_パターン一覧）
 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）
+DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET		パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）
+DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P4（＋R*）を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
+DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア(自動) の納期遵守率(%)の重み（空なら 3）
+DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合(%)の重み（空なら 1）
+DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）
 GANTT_COLOR_MODE		結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに
 GANTT_ACTUAL_DETAIL_DATE_FROM		結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1
 GANTT_ACTUAL_DETAIL_DATE_TO		結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効

@@ -347,8 +347,8 @@
 
     <h3>列名（代表）</h3>
     <ul>
-      <li><strong>加工計画DATA</strong>: 依頼NO、工程名、機械名、換算数量、未加工、受注数、加工速度、製品名、回答納期、指定納期、原反投入日、在庫場所（任意）、加工内容、加工完了区分、実加工数、実出来高、データ抽出日、抽出時間。</li>
-      <li><strong>配台計画_タスク入力</strong>: 配台試行順番、配台不要、上記ベース列＋配台使用残数量（未加工の直後）、ロール単位長さ（製品名の直後）、加工工程の決定プロセスの因子、（元）／本体の上書き列（加工速度_上書き、原反投入日_上書き、担当OP_指定、特別指定_備考）、AI特別指定_解析。</li>
+      <li><strong>加工計画DATA</strong>: 依頼NO、工程名、機械名、換算数量、未加工、受注数、加工速度（段階1では一旦取り込み）、製品名、回答納期、指定納期、原反投入日、在庫場所（任意）、加工内容、加工完了区分、実加工数、実出来高、データ抽出日、抽出時間。</li>
+      <li><strong>配台計画_タスク入力</strong>: 配台試行順番、配台不要、上記ベース列＋配台使用残数量（未加工の直後）、ロール単位長さ（製品名の直後）、加工工程の決定プロセスの因子、（元）／本体の上書き列（加工速度_上書き、原反投入日_上書き、担当OP_指定、特別指定_備考）、AI特別指定_解析。<strong>加工速度</strong>列への入力は <code>master.xlsm</code> の <code>speed</code>（1行目=工程名、2行目=機械名、4行目=基本速度、5行目=実稼働比率、設備列既定は D 列から）で工程名＋機械名が一致すると<strong>基本速度×実稼働比率</strong>（m/分）を書き込み（無効化: <code>MASTER_USE_SPEED_SHEET=0</code> 等）。<strong>実効速度の優先順</strong>: ①列 <strong>加工速度_上書き</strong> → ②列 <strong>加工速度</strong>。備考 AI の <code>speed_override</code> は速度計算に使わない。その後 <code>global_speed_rules</code> 等（<span class="file">python/planning_core/_core.py</span> の <code>build_task_queue_from_planning_df</code>）。</li>
       <li><strong>加工実績DATA</strong>: 依頼NO、工程名、担当者、開始日時、終了日時、実績開始、実績終了、日付、開始時刻、終了時刻。</li>
       <li><strong>結果_タスク一覧</strong>（既定骨格）: ステータス、タスクID、工程名、機械名、加工速度、優先度、配台試行順番、履歴1…（可変）、必須OP(上書)、タスク効率、加工途中、特別指定あり、担当OP指定、回答納期、指定納期、計画基準納期、原反投入日、納期緊急、加工開始日、配台済_加工開始／終了、配台済_回答指定16時まで、累計加工量、残加工量、完了率(実行時点)、特別指定_AI。</li>
     </ul>
@@ -490,7 +490,7 @@
       <li><strong>L5</strong>（SEC×SEC機　湖南）: 製品幅&lt;=680 のとき <strong>速度20m/分</strong>。</li>
       <li><strong>L6</strong>（SEC×SEC機　湖南）: 依頼NOに <code>JR</code> または <code>PN</code> を含む場合は <strong>速度20m/分</strong>。</li>
       <li><strong>L7</strong>（SEC×SEC機　湖南）: 依頼NOに <code>PN</code> を含む場合は <strong>2名でも配台可</strong>（最低人数を2まで緩和）。</li>
-      <li><strong>L8</strong>（接続×熱融着機　湖南）: <strong>製品長=105</strong> のとき <strong>速度20m/分</strong>（製品長は段階1算出列 <code>製品長</code> を参照）。</li>
+      <li><strong>L8</strong>（接続×熱融着機　湖南）: <strong>製品長=105m</strong> のとき <strong>速度20m/分</strong>（列 <code>製品長</code>。<strong>m</strong> なら値 <strong>105</strong>、<strong>mm</strong> 整数なら <strong>105000</strong> を同一条件として <span class="file">_core.py</span> で判定）。</li>
       <li><strong>L9</strong>（スライス×スライス機1　湖南）: 日内配台で、直前ロールの <strong>試行順±10</strong> かつ <strong>同厚み</strong>のスライスを優先。ただし開始日（<code>start_date_req</code>）や納期基準（<code>due_basis_date</code>）を満たさない場合は優先しない。</li>
       <li><strong>PN優先（SEC同日）</strong>: 日内配台で、同一試行順帯の中では <strong>PNを含む依頼NOのSEC</strong> を先に並べます（同日に配台する場合）。</li>
     </ul>

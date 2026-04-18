@@ -152,6 +152,12 @@ Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_LIST As String = "btn_PlanInput_D
 ' 各試行順パターンで段階2を実行した結果・リンク・スコア（planning_core の DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME と既定を一致）
 Public Const SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY As String = "配台試行順_パターン別段階2"
 Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2 As String = "btn_PlanInput_DispatchPatternStage2Batch"
+' サマリで選んだ試行順パターンを配台計画シートへ反映（Python / cmd）
+Public Const SHAPE_PLAN_INPUT_DISPATCH_PATTERN_STAGE2_SELECT As String = "btn_PlanInput_DispatchPatternStage2Select"
+' シート「配台試行順_パターン一覧」上の3操作ボタン（一覧シート一括配置マクロで使用）
+Public Const SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_LIST As String = "btn_DispatchTrialPatternListSheet_List"
+Public Const SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_STAGE2 As String = "btn_DispatchTrialPatternListSheet_Stage2"
+Public Const SHAPE_DISPATCH_TRIAL_PATTERN_LIST_SHEET_BTN_APPLY As String = "btn_DispatchTrialPatternListSheet_Apply"
 ' planning_core の ai_cache_path（json/ai_remarks_cache.json）と旧 output/ 退避先と一致
 Public Const AI_REMARKS_CACHE_FILE_NAME As String = "ai_remarks_cache.json"
 Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
@@ -159,6 +165,8 @@ Public Const AI_REMARKS_CACHE_JSON_SUBDIR As String = "json"
 Public Const SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR As String = "btn_Main_AI_RemarksCacheClear"
 ' メイン_ 上の「PDF・CSVスナップショット出力」（アニメ付き入口）図形名（再配置時に名前で削除）
 Public Const SHAPE_MAIN_PDF_CSV_SNAPSHOT_ANIM As String = "btn_Main_PdfCsvSnapshotAnim"
+' メイン_ 上の「試行順パターン一覧→パターン別段階2」連続実行（再配置時に名前で削除）
+Public Const SHAPE_MAIN_DISPATCH_TRIAL_PATTERN_LIST_THEN_STAGE2 As String = "btn_Main_DispatchTrialPatternListThenStage2"
 ' workbook_env_bootstrap.WORKBOOK_ENV_SHEET_NAME と一致（A=変数名・B=値・C=説明）
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' マクロブックと同じフォルダに置く（設定_環境変数_雛形TSVから同期 が読み込む）
@@ -231,6 +239,8 @@ Public m_macroSplashLockedExcel As Boolean
 Public m_animMacroSucceeded As Boolean
 ' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）
 Public m_splashAllowMacroSound As Boolean
+' True の間は「試行順パターン一覧→段階2」連鎖の途中で完了チャイムを鳴らさない（連鎖終了時に1回だけ MacroCompleteChime）
+Public m_dispatchTrialChainSuppressIntermediateChime As Boolean
 ' スプラッシュ用 BGM（Glass_Architecture.mp3）を MCI で開いているとき True
 Public m_macroStartBgmOpen As Boolean
 ' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）

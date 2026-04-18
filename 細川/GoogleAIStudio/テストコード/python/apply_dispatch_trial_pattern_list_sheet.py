@@ -3,12 +3,12 @@
 VBA / cmd から起動: マクロブック内に「配台試行順_パターン一覧」シートを作成・更新する。
 
 - 現在の「配台計画_タスク入力」を xlwings で読み（未保存分を反映）、
-  パターン P1（納期最優先）・P2（機械名グループ+納期）・R*（ランダム）の
-  確定配台試行順を一覧化する。
-- ランダム件数: DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 3）。OS 環境変数または
+  パターン P1（納期最優先）・P2（機械名+納期）・P3（納期バッファ日前倒しキー）・P4（機械名+換算数量降順+納期）を一覧化する（既定）。
+  R*（ランダム）は DISPATCH_TRIAL_PATTERN_RANDOM_COUNT>0 のときのみ追加する。
+- ランダム件数: DISPATCH_TRIAL_PATTERN_RANDOM_COUNT（既定 0＝ランダムなし）。OS 環境変数または
   マクロブック「設定_環境変数」シート（A=変数名・B=値）。import 前の workbook_env_bootstrap で反映
 - シート名: 環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET（既定 配台試行順_パターン一覧）
-- 見出し行を Excel の「表」にし、換算数量列（内部は total_qty_m）を含む。表を付けないときは DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE=1
+- 見出し行を Excel の「表」にし、換算数量（total_qty_m）・未加工（unprocessed_baseline_m）列を含む。表を付けないときは DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE=1
 
 環境変数 TASK_INPUT_WORKBOOK にマクロブックのフルパス（VBA が設定）。
 Excel で本ブックを開いたまま実行すること（xlwings が接続）。
