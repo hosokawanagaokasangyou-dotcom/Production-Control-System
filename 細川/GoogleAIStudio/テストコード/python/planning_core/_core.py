@@ -1196,12 +1196,8 @@ PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# マクロブック「設定_配台不要工程」: 既定では openpyxl save を試さず xlwings 同期→Save（Excel 占有時は openpyxl は実質失敗するため）。失敗時は TSV→VBA 反映。
-# コマンド等で openpyxl を試れ場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1。
+# マクロブック「設定_配台不要工程」: openpyxl の save は使わず xlwings 同期→Save のみ（Excel 占有で openpyxl save が失敗するため）。失敗時は TSV→VBA 反映。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
-EXCLUDE_RULES_SKIP_OPENPYXL_SAVE = os.environ.get(
-    "EXCLUDE_RULES_TRY_OPENPYXL_SAVE", ""
-).strip().lower() not in ("1", "true", "yes", "on")
 EXCLUDE_RULE_COL_PROCESS = "工程名"
 EXCLUDE_RULE_COL_MACHINE = "機械名"
 EXCLUDE_RULE_COL_FLAG = "配台不要"
@@ -9253,7 +9249,7 @@ def write_plan_sheet_global_comment_parse_block(
     """
     「配台計画_タスク入力」シートの坳端付近（AX:AY）に」グローバルコメントの解析結果を書き込む。
     メイン原文はここに転記しない（メイン欄との重複・誤解を避ける）。本列は再読込されう参照専用。
-    Excel でブックを開いたままてと保存に失敗することはある（他の openpyxl 書込と同様）。
+    マクロブックは **openpyxl で save せず** xlwings で AX〜AY を保存する（Excel 占有対策）。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -9290,9 +9286,26 @@ def write_plan_sheet_global_comment_parse_block(
         _plan_sheet_write_global_parse_block_to_ws(ws, gpo, when_str)
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-        wb.save(wb_path)
+        max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
+        ax_ay_data = [
+            [ws.cell(row=r, column=lc).value, ws.cell(row=r, column=vc).value]
+            for r in range(1, max_r + 1)
+        ]
+        try:
+            wb.close()
+        except Exception:
+            pass
+        wb = None
+        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
+            wb_path, sheet_name, ax_ay_data, None, log_prefix
+        ):
+            logging.warning(
+                "%s: グローバルコメント解析を xlwings で配台シートへ保存できませんでした。",
+                log_prefix,
+            )
+            return False
         logging.info(
-            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました。",
+            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました（xlwings）。",
             log_prefix,
             sheet_name,
             get_column_letter(lc),
@@ -9301,7 +9314,7 @@ def write_plan_sheet_global_comment_parse_block(
         return True
     except OSError as ex:
         logging.warning(
-            "%s: グローバルコメント解析を配台シートへ保存でしませんでした（Excel で開いたまま等）: %s",
+            "%s: グローバルコメント解析を配台シートへ保存でしませんでした: %s",
             log_prefix,
             ex,
         )
@@ -9855,6 +9868,167 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
             cell.font = conflict_font
 
 
+def _openpyxl_cell_fill_rgb_tuple(cell) -> tuple[int, int, int] | None:
+    """openpyxl のセル塗りから RGB を取り出す。塗り無しは None。"""
+    try:
+        f = cell.fill
+        if f is None or getattr(f, "fill_type", None) in (None, "none"):
+            return None
+        sc = getattr(f, "start_color", None)
+        if sc is None or sc.rgb is None:
+            return None
+        hx = str(sc.rgb).upper().replace("0X", "")
+        if len(hx) == 8:
+            hx = hx[2:]
+        if len(hx) != 6:
+            return None
+        return (int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16))
+    except Exception:
+        return None
+
+
+def _openpyxl_font_rgb_tuple(cell) -> tuple[int, int, int] | None:
+    """openpyxl のセルフォント色から RGB。未設定は None。"""
+    try:
+        fo = cell.font
+        if not fo or not fo.color:
+            return None
+        rgb = fo.color.rgb
+        if rgb is None:
+            return None
+        hx = str(rgb).upper().replace("0X", "")
+        if len(hx) == 8:
+            hx = hx[2:]
+        if len(hx) != 6:
+            return None
+        return (int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16))
+    except Exception:
+        return None
+
+
+def _snapshot_plan_sheet_conflict_style_cells(
+    ws, num_data_rows: int
+) -> list[tuple[int, int, tuple[int, int, int] | None, tuple[int, int, int] | None, bool]]:
+    """
+    _plan_sheet_apply_conflict_styles_to_ws 適用直後の、矛盾着色対象列の塗り・フォントを列挙する。
+    戻り値: (行, 列, fill_rgb|None, font_rgb|None, bold)。
+    """
+    header_map: dict[str, int] = {}
+    for col_idx in range(1, ws.max_column + 1):
+        v = ws.cell(1, col_idx).value
+        if v is not None:
+            header_map[str(v).strip()] = col_idx
+    last_row = max(2, 1 + int(num_data_rows))
+    out: list[tuple[int, int, tuple[int, int, int] | None, tuple[int, int, int] | None, bool]] = []
+    for r in range(2, last_row + 1):
+        for name in PLAN_CONFLICT_STYLABLE_COLS:
+            ci = header_map.get(name)
+            if not ci:
+                continue
+            cell = ws.cell(row=r, column=ci)
+            brgb = _openpyxl_cell_fill_rgb_tuple(cell)
+            frgb = _openpyxl_font_rgb_tuple(cell)
+            bold = bool(cell.font and cell.font.bold)
+            out.append((r, ci, brgb, frgb, bold))
+    return out
+
+
+def _xlwings_rgb_to_long_bgr(rgb: tuple[int, int, int]) -> int:
+    r, g, b = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+    return r + (g << 8) + (b << 16)
+
+
+def _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
+    wb_path: str,
+    sheet_name: str,
+    ax_ay_data: list | None,
+    style_snaps: (
+        list[
+            tuple[
+                int,
+                int,
+                tuple[int, int, int] | None,
+                tuple[int, int, int] | None,
+                bool,
+            ]
+        ]
+        | None
+    ),
+    log_prefix: str,
+) -> bool:
+    """
+    マクロブック（.xlsm）へ openpyxl の wb.save を使わず、xlwings で AX〜AY と矛盾着色セルを反映して Save する。
+    """
+    has_ax = ax_ay_data is not None and len(ax_ay_data) > 0
+    has_sn = style_snaps is not None and len(style_snaps) > 0
+    if not has_ax and not has_sn:
+        return False
+    attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
+    if attached is None:
+        return False
+    xw_book, info = attached
+    ok = False
+    try:
+        try:
+            xw_book.app.display_alerts = False
+        except Exception:
+            pass
+        sht = xw_book.sheets[sheet_name]
+        lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
+        vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
+        if ax_ay_data:
+            nrows = len(ax_ay_data)
+            sht.range((1, lc), (nrows, vc)).value = ax_ay_data
+        if style_snaps:
+            for r, c, brgb, frgb, bold in style_snaps:
+                rng = sht.range((r, c))
+                if brgb is None:
+                    try:
+                        rng.api.Interior.Pattern = -4142  # xlNone
+                    except Exception:
+                        try:
+                            rng.color = None
+                        except Exception:
+                            pass
+                else:
+                    rng.color = brgb
+                try:
+                    if frgb is not None:
+                        rng.api.Font.Color = _xlwings_rgb_to_long_bgr(frgb)
+                    rng.api.Font.Bold = bool(bold)
+                except Exception:
+                    pass
+        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
+        try:
+            xw_book.save()
+        finally:
+            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
+        ok = True
+        if ax_ay_data:
+            logging.info(
+                "%s: グローバル解析（列 %s〜%s）を xlwings で保存しました。",
+                log_prefix,
+                get_column_letter(lc),
+                get_column_letter(vc),
+            )
+        if style_snaps:
+            logging.info(
+                "%s: 矛盾着色対象列 %s セルを xlwings で反映しました。",
+                log_prefix,
+                len(style_snaps),
+            )
+        return True
+    except Exception as ex:
+        logging.warning(
+            "%s: xlwings による配台シート（グローバル解析・着色）の保存に失敗: %s",
+            log_prefix,
+            ex,
+        )
+        return False
+    finally:
+        _xlwings_release_book_after_mutation(xw_book, info, ok)
+
+
 def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     wb_path: str,
     sheet_name: str,
@@ -9866,8 +10040,9 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     log_prefix: str = "段階2",
 ) -> bool:
     """
-    段階2坑け: グローバルコメント解析ブロック（AX:AY）と矛盾ハイライトを **1回の load/save** で反映れる。
-    従来は別関数でブックを2回開いでいたため、.xlsm は大しい環境で坝数秒短縮の短縮になる。
+    段階2: グローバルコメント解析（AX:AY）と矛盾ハイライトを反映する。
+    マクロブックは Excel 占有で openpyxl の save が失敗しやすいため、**openpyxl はメモリ編集のみ**とし、
+    ディスク反映は **xlwings で 1 回の Save** に統一する。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -9904,18 +10079,28 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row or {})
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
+        max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
+        ax_ay_data = [
+            [ws.cell(row=r, column=lc).value, ws.cell(row=r, column=vc).value]
+            for r in range(1, max_r + 1)
+        ]
+        style_snaps = _snapshot_plan_sheet_conflict_style_cells(ws, num_data_rows)
+        write_planning_conflict_highlight_sidecar(
+            sheet_name, num_data_rows, conflicts_by_row or {}
+        )
         try:
-            wb.save(wb_path)
-        except OSError as e:
-            write_planning_conflict_highlight_sidecar(
-                sheet_name, num_data_rows, conflicts_by_row or {}
-            )
+            wb.close()
+        except Exception:
+            pass
+        wb = None
+        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
+            wb_path, sheet_name, ax_ay_data, style_snaps, log_prefix
+        ):
             logging.warning(
-                "%s: 配台シートへの一括保存に失敗（Excel で開いたまま等）。"
-                " 矛盾ハイライトは '%s' に書き出しました。グローバル解析は未保存の可能性はありした。 (%s)",
+                "%s: xlwings で配台シートへ保存できませんでした。"
+                " 矛盾ハイライトは '%s' に書き出済みです。マクロで反映してください。",
                 log_prefix,
                 _planning_conflict_sidecar_path(),
-                e,
             )
             return False
         _remove_planning_conflict_sidecar_safe()
@@ -9923,7 +10108,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         if _n_conf:
             logging.info(
                 "%s: 「%s」%s:%s 列にグローバル解析を保存し、"
-                "特別指定_備考と列の矛盾 %s 行を坌も保存でハイライトしました。",
+                "特別指定_備考と列の矛盾 %s 行を xlwings でハイライトしました。",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -9966,7 +10151,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
     配台計画_タスク入力シートのデータ行を」矛盾列のみ赤地・白太字にれる。
     事剝パスでは上書き入力列を段階1とともに薄黄色に戻し、フォントは変更しない（体裝維挝）。
     AI解析列は着色しない（段階1の仕様に合わせる）。
-    .xlsm は keep_vba=True で保存れる。
+    マクロブックは **openpyxl で save せず** xlwings でセル書式を保存する。
     """
     if not wb_path or not os.path.exists(wb_path):
         return
@@ -9977,32 +10162,45 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
         )
         return
     keep_vba = str(wb_path).lower().endswith(".xlsm")
-    wb = load_workbook(wb_path, keep_vba=keep_vba)
+    wb = None
     try:
+        wb = load_workbook(wb_path, keep_vba=keep_vba)
         if sheet_name not in wb.sheetnames:
             logging.warning(f"矛盾書式: シート '{sheet_name}' は見つかりません。")
             return
         ws = wb[sheet_name]
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row)
-
+        style_snaps = _snapshot_plan_sheet_conflict_style_cells(ws, num_data_rows)
+        write_planning_conflict_highlight_sidecar(
+            sheet_name, num_data_rows, conflicts_by_row
+        )
         try:
-            wb.save(wb_path)
-        except OSError as e:
-            write_planning_conflict_highlight_sidecar(sheet_name, num_data_rows, conflicts_by_row)
+            wb.close()
+        except Exception:
+            pass
+        wb = None
+        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
+            wb_path, sheet_name, None, style_snaps, "矛盾書式"
+        ):
             logging.warning(
-                "配台シートへの矛盾ハイライトをファイル保存でしませんでした（Excel でブックを開いたまま等）。"
-                " '%s' に指示を書き出しました。マクロはシート上に直接適用しした。 (%s)",
+                "配台シートへの矛盾ハイライトを xlwings で保存できませんでした。"
+                " '%s' に指示を書き出済みです。マクロで反映してください。",
                 _planning_conflict_sidecar_path(),
-                e,
             )
-        else:
-            _remove_planning_conflict_sidecar_safe()
-            if conflicts_by_row:
-                logging.info(
-                    f"特別指定_備考と列の矛盾: {len(conflicts_by_row)} 行を '{sheet_name}' でハイライトしました。"
-                )
+            return
+        _remove_planning_conflict_sidecar_safe()
+        if conflicts_by_row:
+            logging.info(
+                "特別指定_備考と列の矛盾: %s 行を '%s' でハイライトしました（xlwings）。",
+                len(conflicts_by_row),
+                sheet_name,
+            )
     finally:
-        wb.close()
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 
 def _ai_planning_target_due_date(ai_dict):
@@ -11903,85 +12101,23 @@ EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 
 def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> bool:
     """
-    設定シートのディスク反映。既定は xlwings で A:E 同期→Save（EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1 のときのみ openpyxl save を試行）。
-    保存でしないとしは log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映れる。
+    設定シートのディスク反映。マクロブックは **openpyxl の save を使わず** xlwings で A:E 同期→Save する。
+    失敗時は log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映れる。
 
-    _wb … 編集済み openpyxl ブック（openpyxl 経路時のみ save に使用）。
+    _wb … 編集済み openpyxl ワークシート ws の親（save には使用しない）。
     """
     global _exclude_rules_effective_read_path
 
-    def _openpyxl_persist_ok(which: str) -> bool:
-        try:
-            _wb.save(wb_path)
-        except Exception as ex:
-            _log_exclude_rules_sheet_debug(
-                "OPENPYXL_SAVE_FAIL",
-                log_prefix,
-                f"openpyxl での .xlsm 保存に失敗しました {which}（Excel で開しっりなし・ロックの可能性）。",
-                details=f"path={wb_path}",
-                exc=ex,
-            )
-            return False
-        _exclude_rules_effective_read_path = wb_path
-        _clear_exclude_rules_e_apply_files()
-        _log_exclude_rules_sheet_debug(
-            "OPENPYXL_SAVE_OK",
-            log_prefix,
-            "openpyxl で設定シートを含むブックを保存しました（A〜E）。",
-            details=f"path={wb_path} {which}",
-        )
-        logging.info(
-            "%s: 設定シートを openpyxl でマクロブックに保存しました。%s",
-            log_prefix,
-            which,
-        )
-        return True
-
-    saved_openpyxl = False
-    if EXCLUDE_RULES_SKIP_OPENPYXL_SAVE:
-        _log_exclude_rules_sheet_debug(
-            "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
-            log_prefix,
-            "設定_配台不要工程の保存では openpyxl save を試行しません（xlwings 同期を先行。再試行れる場合は EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1）。",
-            details=f"path={wb_path}",
-        )
-        logging.info(
-            "%s: 設定_配台不要工程は openpyxl を試さず xlwings 同期→Save を試みした（試行なら VBA 用行列 TSV）。",
-            log_prefix,
-        )
-    elif not _workbook_should_skip_openpyxl_io(wb_path):
-        logging.info(
-            "%s: 設定_配台不要工程は openpyxl で保存しした（試行のときは xlwings 同期→Save」しれも試行なら VBA 用行列 TSV）。",
-            log_prefix,
-        )
-        labels = ("(1/4)", "(2/4)", "(3/4)", "(4/4)")
-        for i, label in enumerate(labels):
-            if i:
-                _log_exclude_rules_sheet_debug(
-                    "OPENPYXL_RETRY_WAIT",
-                    log_prefix,
-                    f"openpyxl 再保存まで 2 秒待うした {label}。",
-                    details=f"path={wb_path}",
-                )
-                time_module.sleep(2.0)
-            if _openpyxl_persist_ok(label):
-                saved_openpyxl = True
-                break
-    else:
-        _log_exclude_rules_sheet_debug(
-            "OPENPYXL_SAVE_SKIPPED_INCOMPATIBLE_SHEET",
-            log_prefix,
-            f"ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため、openpyxl での保存を試みません。",
-            details=f"path={wb_path}",
-        )
-        logging.info(
-            "%s: ブックに「%s」があるため、openpyxl save をスキップし、xlwings または行列 TSV に切り替ごした。",
-            log_prefix,
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-        )
-
-    if saved_openpyxl:
-        return True
+    _log_exclude_rules_sheet_debug(
+        "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
+        log_prefix,
+        "設定_配台不要工程の保存では openpyxl save を試行しません（マクロブックは Excel 占有で失敗しやすいため）。xlwings 同期→Save を試みます。",
+        details=f"path={wb_path}",
+    )
+    logging.info(
+        "%s: 設定_配台不要工程は openpyxl save を使わず xlwings 同期→Save を試みます。",
+        log_prefix,
+    )
 
     if _xlwings_sync_exclude_rules_sheet_from_openpyxl(wb_path, ws, log_prefix):
         return True
@@ -11997,7 +12133,7 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     _log_exclude_rules_sheet_debug(
         "OPENPYXL_VBA_FALLBACK",
         log_prefix,
-        "openpyxl 保存に失敗したため、 VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映は必須な場合はありした）。",
+        "xlwings 保存に失敗したため、 VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映が必要な場合があります）。",
         details=f"path={wb_path}",
     )
     return False
@@ -12056,7 +12192,7 @@ def _write_exclude_rules_matrix_vba_tsv(
         _log_exclude_rules_sheet_debug(
             "MATRIX_TSV_WRITTEN",
             log_prefix,
-            "設定シート A〜E を VBA 反映用 TSV に書き出しました（openpyxl 保存試行時）。",
+            "設定シート A〜E を VBA 反映用 TSV に書き出しました（xlwings 保存失敗時のフォールバック）。",
             details=f"path={path} rows={max_r}",
         )
         return True
@@ -12308,7 +12444,7 @@ def run_exclude_rules_sheet_maintenance(
     compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（既定は xlwings で A〜E 同期→Save。``EXCLUDE_RULES_TRY_OPENPYXL_SAVE=1`` のとき openpyxl save を試行）。
+    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（マクロブックは **openpyxl save なし**、xlwings で A〜E 同期→Save）。
 
     ``compile_exclude_rules_d_to_e_with_ai=False`` のときは D 列→E 列（ロジック式 JSON）の
     Gemini 補完のみスキップする（行同期・空行詰め・退避 E の復元・保存は従来どおり）。
@@ -12638,8 +12774,8 @@ def run_exclude_rules_sheet_maintenance(
         persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         if not persisted:
             logging.warning(
-                "%s: 設定シートの openpyxl 保存に失敗しました。"
-                " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」」"
+                "%s: 設定シートの xlwings 保存に失敗しました。"
+                " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」"
                 "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
             )
