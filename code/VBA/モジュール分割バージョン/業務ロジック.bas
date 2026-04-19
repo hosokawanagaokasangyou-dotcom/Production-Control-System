@@ -1,5 +1,32 @@
 Option Explicit
 
+' #region agent log
+' debug セッション 1d7666: NDJSON 1 行をブックと同じフォルダの debug-1d7666.log へ追記（Excel 実行時の経路特定用）
+Public Sub AgentDebugNdjson_1d7666(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataNote As String = vbNullString)
+    Dim pth As String
+    Dim fn As Integer
+    Dim ln As String
+    Dim msgEsc As String
+    Dim dataEsc As String
+    On Error Resume Next
+    pth = Trim$(ThisWorkbook.path)
+    If Len(pth) = 0 Then Exit Sub
+    pth = pth & "\debug-1d7666.log"
+    msgEsc = Replace(Replace(Replace(message, "\", "/"), """", "'"), vbCrLf, " ")
+    dataEsc = Replace(Replace(Replace(CStr(dataNote), "\", "/"), """", "'"), vbCrLf, " ")
+    ln = "{""sessionId"":""1d7666"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & msgEsc & """"
+    If Len(dataEsc) > 0 Then
+        ln = ln & ",""dataNote"":""" & dataEsc & """"
+    End If
+    ln = ln & ",""timestamp"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
+    fn = FreeFile
+    Open pth For Append As #fn
+    Print #fn, ln
+    Close #fn
+    On Error GoTo 0
+End Sub
+' #endregion agent log
+
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
     Dim lines() As String
@@ -1425,12 +1452,18 @@ End Sub
 
 ' 試行順パターン一覧作成のあとパターン別段階2を続けて実行し、成功時のみサマリシートをアクティブにする（メイン_ 等からの一括用）。
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧からパターン別段階2まで連続実行()
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H0", "業務ロジック:連続実行:enter", "chain macro entered", "m_anim=" & CStr(m_animMacroSucceeded))
+    ' #endregion agent log
     m_dispatchTrialChainSuppressIntermediateChime = True
     On Error GoTo ChainDispatchTrialDone
     Call アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成
     If Not m_animMacroSucceeded Then GoTo ChainDispatchTrialDone
     Call アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行
 ChainDispatchTrialDone:
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H0", "業務ロジック:連続実行:done", "chain label reached", "m_anim=" & CStr(m_animMacroSucceeded))
+    ' #endregion agent log
     m_dispatchTrialChainSuppressIntermediateChime = False
     If m_animMacroSucceeded Then
         On Error Resume Next
@@ -1461,16 +1494,27 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     Dim targetDir As String
     Dim exitCode As Long
     Dim wsh As Object
+    Dim pqOk As Boolean
 
     m_animMacroSucceeded = False
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H1", "業務ロジック:DispatchTrialPattern:enter", "inner xlwings entry", "entryPoint=" & entryPoint)
+    ' #endregion agent log
     targetDir = Trim$(ThisWorkbook.path)
     If Len(targetDir) = 0 Then
+        ' #region agent log
+        Call AgentDebugNdjson_1d7666("H3", "業務ロジック:DispatchTrialPattern:path", "empty ThisWorkbook.path", dialogTitle)
+        ' #endregion agent log
         AppMsgBox "先にこのブックを保存してください。", vbExclamation, dialogTitle
         Exit Sub
     End If
 
     MacroSplash_SetStep "データ接続（Power Query 等）を更新しています…"
-    If Not TryRefreshWorkbookQueries() Then
+    pqOk = TryRefreshWorkbookQueries()
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H2", "業務ロジック:DispatchTrialPattern:afterPQ", "TryRefreshWorkbookQueries returned", "ok=" & CStr(pqOk))
+    ' #endregion agent log
+    If Not pqOk Then
         AppMsgBox "データ接続の更新に失敗しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, dialogTitle
         Exit Sub
     End If
@@ -1492,8 +1536,14 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
     If exitCode = &H7FFFFFFF Then exitCode = 1
     m_animMacroSucceeded = (exitCode = 0)
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H5", "業務ロジック:DispatchTrialPattern:afterXw", "XwRun finished", "exitCode=" & CStr(exitCode) & " m_anim=" & CStr(m_animMacroSucceeded))
+    ' #endregion agent log
     Exit Sub
 DispatchTrialPatternXwFail:
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H5", "業務ロジック:DispatchTrialPattern:XwFail", "XwRunConsoleRunner error", "Err=" & CStr(Err.Number) & " " & Err.Description)
+    ' #endregion agent log
     AppMsgBox "xlwings の起動に失敗しました: " & Err.Description, vbCritical, dialogTitle
     Err.Clear
 End Sub

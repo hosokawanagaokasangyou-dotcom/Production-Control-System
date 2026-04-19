@@ -487,6 +487,9 @@ Public Sub アニメ付き_スプラッシュ付きで実行(ByVal splashMessage As String, ByVa
     GoTo Finish
 EH:
     On Error Resume Next
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("H4", "スプラッシュ表示:アニメ付き_スプラッシュ付きで実行:EH", "Application.Run or MacroSplash failed", "Err=" & CStr(Err.Number) & " desc=" & Err.Description & " proc=" & procName)
+    ' #endregion agent log
 Finish:
     MacroStartBgm_FadeOutAndClose
     If m_animMacroSucceeded Then
