@@ -17905,10 +17905,12 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     summary_rows: list[dict],
     *,
     batch_root: str = "",
+    total_batch_seconds: float | None = None,
 ) -> None:
     """
     マクロブックにパターン別段階2の結果リンク・スコア・採用用 UI を書く。
     データ行は 6 行目から。B3=採用パターンID（プルダウン）。B2=バッチ出力ルート。
+    C2=合計処理時間のラベル、D2=合計秒（バッチ全体の壁時計）。
     """
     sheet_name = DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME
     try:
@@ -17939,16 +17941,37 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
         "メンバー_平均作業割合(%)",
         "設備_稼働セル数(参考)",
         "参考スコア(自動)",
+        "処理時間(秒)",
         "乱数シード",
         "備考",
     ]
+    total_cell = (
+        round(total_batch_seconds, 2)
+        if isinstance(total_batch_seconds, (int, float))
+        else ""
+    )
     mat: list[list] = [
         [intro],
-        ["バッチ出力ルート", (batch_root or "").strip(), "", "", "", "", "", "", "", "", "", ""],
-        ["採用パターンID", "", "", "", "", "", "", "", "", "", "", ""],
+        [
+            "バッチ出力ルート",
+            (batch_root or "").strip(),
+            "合計処理時間(秒)",
+            total_cell,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+        ["採用パターンID", "", "", "", "", "", "", "", "", "", "", "", ""],
         [
             "※ B3 に一覧のパターンIDを指定し保存後、Python「apply_dispatch_pattern_stage2_selection.py」"
             " またはマクロで反映。",
+            "",
             "",
             "",
             "",
@@ -17976,6 +17999,7 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
                 r.get("メンバー_平均作業割合_pct", ""),
                 r.get("設備_稼働セル数", ""),
                 r.get("参考スコア(自動)", ""),
+                r.get("処理時間(秒)", ""),
                 r.get("乱数シード", ""),
                 r.get("備考", ""),
             ]
@@ -18489,9 +18513,15 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         "p6_nested_probe_parent": os.path.join(batch_root, "_p6_nested_probes"),
     }
     summary_rows: list[dict] = []
-    for pid, pname, tq, df_p5_ov in _iter_dispatch_trial_pattern_variant_queues(
+    _pat_var_it = _iter_dispatch_trial_pattern_variant_queues(
         tq_frozen, pattern_jobs, p5_bundle=p5_bundle_batch
-    ):
+    )
+    while True:
+        t_pat_wall0 = time_module.perf_counter()
+        try:
+            pid, pname, tq, df_p5_ov = next(_pat_var_it)
+        except StopIteration:
+            break
         job_seed = None
         for _pj in pattern_jobs:
             if _pj[0] == pid:
@@ -18510,6 +18540,9 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
                     "備考": f"出力フォルダ作成失敗: {e}",
                     "乱数シード": "" if job_seed is None else job_seed,
                     "参考スコア(自動)": "",
+                    "処理時間(秒)": round(
+                        time_module.perf_counter() - t_pat_wall0, 2
+                    ),
                 }
             )
             continue
@@ -18533,16 +18566,25 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             )
         except PlanningValidationError as e:
             row["備考"] = f"検証エラー: {e}"[:500]
+            row["処理時間(秒)"] = round(
+                time_module.perf_counter() - t_pat_wall0, 2
+            )
             summary_rows.append(row)
             continue
         except Exception as e:
             logging.exception("パターン別段階2: %s で例外", pid)
             row["備考"] = f"エラー: {e}"[:500]
+            row["処理時間(秒)"] = round(
+                time_module.perf_counter() - t_pat_wall0, 2
+            )
             summary_rows.append(row)
             continue
 
         if not paths:
             row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
+            row["処理時間(秒)"] = round(
+                time_module.perf_counter() - t_pat_wall0, 2
+            )
             summary_rows.append(row)
             continue
 
@@ -18562,11 +18604,22 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         row["参考スコア(自動)"] = ref_s if ref_s is not None else ""
         if sco.get("スコア備考"):
             row["備考"] = str(sco["スコア備考"])[:500]
+        row["処理時間(秒)"] = round(
+            time_module.perf_counter() - t_pat_wall0, 2
+        )
         summary_rows.append(row)
 
+    _sum_pat_sec = 0.0
+    for _sr in summary_rows:
+        v = _sr.get("処理時間(秒)")
+        if isinstance(v, (int, float)):
+            _sum_pat_sec += float(v)
     try:
         _xlwings_write_dispatch_pattern_stage2_summary_sheet(
-            wb, summary_rows, batch_root=os.path.abspath(batch_root)
+            wb,
+            summary_rows,
+            batch_root=os.path.abspath(batch_root),
+            total_batch_seconds=_sum_pat_sec,
         )
         wb.save()
     except Exception as e:
@@ -18574,8 +18627,9 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         return False
 
     logging.info(
-        "パターン別段階2: 完了（%s パターン）。サマリシート「%s」",
+        "パターン別段階2: 完了（%s パターン・合計約 %.2f 秒）。サマリシート「%s」",
         len(summary_rows),
+        _sum_pat_sec,
         DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME,
     )
     return True
