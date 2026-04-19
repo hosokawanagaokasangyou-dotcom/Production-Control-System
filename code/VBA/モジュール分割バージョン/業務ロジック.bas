@@ -1484,6 +1484,9 @@ Public Sub アニメ付き_配台計画_タスク入力_試行順パターン採用を実行()
     If m_animMacroSucceeded Then
         アニメ付き_計画生成を実行
     End If
+    On Error Resume Next
+    メインシートA1を選択
+    On Error GoTo 0
 End Sub
 
 ' アニメ付き_スプラッシュ付きで実行 から ThisWorkbook 修飾で呼ぶ（他ブックの同名マクロに取られないようにする）
