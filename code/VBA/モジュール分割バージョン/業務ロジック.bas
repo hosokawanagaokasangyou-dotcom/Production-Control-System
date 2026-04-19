@@ -1452,6 +1452,79 @@ Public Sub アニメ付き_配台計画_タスク入力_試行順パターン採用を実行()
     End If
 End Sub
 
+' 試行順パターン系 xlwings 入口: 段階1 と同様に TryRefreshWorkbookQueries を Python より先に実行する。
+Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+    ByVal entryPoint As String, _
+    ByVal dialogTitle As String, _
+    ByVal splashStepAfterRefresh As String _
+)
+    Dim targetDir As String
+    Dim exitCode As Long
+    Dim wsh As Object
+
+    m_animMacroSucceeded = False
+    targetDir = Trim$(ThisWorkbook.path)
+    If Len(targetDir) = 0 Then
+        AppMsgBox "先にこのブックを保存してください。", vbExclamation, dialogTitle
+        Exit Sub
+    End If
+
+    MacroSplash_SetStep "データ接続（Power Query 等）を更新しています…"
+    If Not TryRefreshWorkbookQueries() Then
+        AppMsgBox "データ接続の更新に失敗しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, dialogTitle
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Kill targetDir & "\log\stage_vba_exitcode.txt"
+    On Error GoTo 0
+
+    Set wsh = CreateObject("WScript.Shell")
+    On Error Resume Next
+    wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
+    On Error GoTo 0
+
+    MacroSplash_SetStep splashStepAfterRefresh
+    On Error GoTo DispatchTrialPatternXwFail
+    XwRunConsoleRunner entryPoint
+    On Error GoTo 0
+
+    exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
+    If exitCode = &H7FFFFFFF Then exitCode = 1
+    m_animMacroSucceeded = (exitCode = 0)
+    Exit Sub
+DispatchTrialPatternXwFail:
+    AppMsgBox "xlwings の起動に失敗しました: " & Err.Description, vbCritical, dialogTitle
+    Err.Clear
+End Sub
+
+' アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成 から Application.Run される。
+Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_trial_pattern_list_for_xlwings", _
+        "配台試行順パターン一覧", _
+        "配台試行順の各パターン一覧を作成しています…" _
+    )
+End Sub
+
+' アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行 から Application.Run される。
+Public Sub 配台計画_タスク入力_試行順パターン別段階2をPythonで作成()
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_trial_pattern_stage2_batch_for_xlwings", _
+        "配台試行順パターン別段階2", _
+        "各試行順パターンで段階2を実行しています…（時間がかかります）" _
+    )
+End Sub
+
+' アニメ付き_配台計画_タスク入力_試行順パターン採用を実行 から Application.Run される。
+Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_pattern_stage2_selection_for_xlwings", _
+        "試行順パターン採用の反映", _
+        "サマリの採用パターンを計画シートへ反映しています…" _
+    )
+End Sub
+
 ' =========================================================
 ' ① Python本体と必要なコンポーネントをインストールするマクロ（修正版）
 ' ・Python 3.14 の検出は py -3.14（ランチャーで系列を明示。定数 PM_AI_SETUP_PY_MINOR）

@@ -18249,36 +18249,6 @@ def _xlwings_format_dispatch_trial_pattern_list_sheet(
         pass
 
 
-def _xlwings_try_refresh_workbook_queries(wb, *, context: str) -> bool:
-    """Power Query / データ接続の更新。ブック内 ``TryRefreshWorkbookQueries`` を優先（段階1・2と同じ）。"""
-    try:
-        ok = bool(wb.app.api.Run("TryRefreshWorkbookQueries"))
-        if not ok:
-            logging.error(
-                "%s: データ接続（Power Query 等）の更新が失敗しました（VBA TryRefreshWorkbookQueries=False）。",
-                context,
-            )
-        return ok
-    except Exception as e:
-        logging.warning(
-            "%s: TryRefreshWorkbookQueries を呼べません（%s）。RefreshAll で代替します。",
-            context,
-            e,
-        )
-        try:
-            prev = wb.app.display_alerts
-            wb.app.display_alerts = False
-            try:
-                wb.api.RefreshAll()
-                wb.app.api.CalculateUntilAsyncQueriesDone()
-            finally:
-                wb.app.display_alerts = prev
-            return True
-        except Exception as e2:
-            logging.exception("%s: RefreshAll 代替も失敗しました: %s", context, e2)
-            return False
-
-
 def write_dispatch_trial_pattern_list_via_xlwings(
     workbook_path: str | None = None,
     *,
@@ -18304,11 +18274,6 @@ def write_dispatch_trial_pattern_list_via_xlwings(
         ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
         logging.error("配台試行順パターン一覧: シート接続に失敗: %s", e)
-        return False
-
-    if not _xlwings_try_refresh_workbook_queries(
-        wb, context="配台試行順パターン一覧"
-    ):
         return False
 
     mat = _xlwings_sheet_to_matrix(ws)
@@ -18444,11 +18409,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
         logging.error("パターン別段階2: シート接続に失敗: %s", e)
-        return False
-
-    if not _xlwings_try_refresh_workbook_queries(
-        wb, context="配台試行順パターン別段階2（スコア化）"
-    ):
         return False
 
     mat = _xlwings_sheet_to_matrix(ws)

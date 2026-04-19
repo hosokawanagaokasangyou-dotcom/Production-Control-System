@@ -393,7 +393,7 @@ def run_stage2_for_xlwings() -> int:
 def run_dispatch_trial_pattern_list_for_xlwings() -> int:
     """
     配台試行順のパターン一覧シート: ``refresh_dispatch_trial_pattern_list_sheet_only`` を実行。
-    VBA: XwRunConsoleRunner "run_dispatch_trial_pattern_list_for_xlwings"
+    VBA: 先に ``TryRefreshWorkbookQueries``（段階1と同様）のあと ``XwRunConsoleRunner "run_dispatch_trial_pattern_list_for_xlwings"``
     終了コードは ``log/stage_vba_exitcode.txt`` にも書く。
     """
     rc = 1
@@ -437,7 +437,7 @@ def run_dispatch_trial_pattern_list_for_xlwings() -> int:
 def run_dispatch_trial_pattern_stage2_batch_for_xlwings() -> int:
     """
     試行順パターン別に段階2を実行しサマリシートを作成: ``refresh_dispatch_trial_pattern_stage2_batch_only``。
-    VBA: XwRunConsoleRunner "run_dispatch_trial_pattern_stage2_batch_for_xlwings"
+    VBA: 先に ``TryRefreshWorkbookQueries`` のあと ``XwRunConsoleRunner "run_dispatch_trial_pattern_stage2_batch_for_xlwings"``
     """
     rc = 1
     try:
@@ -480,7 +480,7 @@ def run_dispatch_trial_pattern_stage2_batch_for_xlwings() -> int:
 def run_dispatch_pattern_stage2_selection_for_xlwings() -> int:
     """
     サマリで選んだパターンの試行順を配台計画へ反映: ``refresh_dispatch_pattern_stage2_selection_to_plan_only``。
-    VBA: XwRunConsoleRunner "run_dispatch_pattern_stage2_selection_for_xlwings"
+    VBA: 先に ``TryRefreshWorkbookQueries`` のあと ``XwRunConsoleRunner "run_dispatch_pattern_stage2_selection_for_xlwings"``
     """
     rc = 1
     try:
