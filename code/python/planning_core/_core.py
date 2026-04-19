@@ -18370,6 +18370,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     """
     各試行順パターン（P1～P6）ごとに段階2を実行し、
     ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
+    バッチ時は計画側および加工実績明細の設備ガントシートを生成しない（スコア比較の負荷軽減）。
     マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
     """
     path = (workbook_path or "").strip() or os.environ.get(
@@ -26972,10 +26973,10 @@ def _generate_plan_impl(
     sorted_dates_detail = list(sorted_dates)
     chart_title_actual_detail = "湖南工場 加工実績（明細）"
     # 試行順パターン別段階2（stage2_output_root あり）は同一処理を多数回走らせるため、
-    # 重い「加工実績明細」設備ガントの生成・明細DATA読込を省略する（計画側ガントは従来どおり）。
+    # 重い設備ガント（計画・加工実績明細）の生成と明細 DATA 読込を省略する（スコア用の結果シートは従来どおり）。
     if stage2_output_root:
         logging.info(
-            "段階2(試行順パターン別バッチ): 設備ガント（加工実績明細）の生成を省略します。"
+            "段階2(試行順パターン別バッチ): 設備ガント（計画・加工実績明細）の生成を省略します。"
         )
     else:
         df_actual_detail = load_machining_actual_detail_df()
@@ -27067,19 +27068,20 @@ def _generate_plan_impl(
                 writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
             )
 
-            logging.info(
-                "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
-            )
-            gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
-                writer,
-                timeline_events,
-                equipment_list,
-                sorted_dates,
-                attendance_data,
-                data_extract_dt_str,
-                base_now_dt,
-                regular_shift_times=(_reg_shift_start, _reg_shift_end),
-            )
+            if not stage2_output_root:
+                logging.info(
+                    "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
+                )
+                gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
+                    writer,
+                    timeline_events,
+                    equipment_list,
+                    sorted_dates,
+                    attendance_data,
+                    data_extract_dt_str,
+                    base_now_dt,
+                    regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                )
 
             if detail_timeline_events:
                 logging.info(
