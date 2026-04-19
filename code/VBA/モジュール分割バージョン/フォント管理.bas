@@ -795,7 +795,7 @@ Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
     End If
 End Sub
 
-' グラデーション＋影付き図形（メインの「かっこいいボタン」と同趣旨）。shapeName で図形名を区別する。
+' グラデーション＋影付き図形。実装は業務ロジックの CreateCoolButton に集約。
 Private Sub PlanInputSheet_AddGradientActionButton( _
     ByVal ws As Worksheet, _
     ByVal btnText As String, _
@@ -805,43 +805,9 @@ Private Sub PlanInputSheet_AddGradientActionButton( _
     ByVal colorTop As Long, _
     ByVal colorBottom As Long, _
     ByVal shapeName As String)
-    Dim shp As Shape
     Const BTN_W As Single = 268
     Const BTN_H As Single = 48
-    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftPt, topPt, BTN_W, BTN_H)
-    shp.Name = shapeName
-    With shp
-        With .TextFrame2.TextRange
-            .text = btnText
-            .Font.Name = "メイリオ"
-            .Font.Size = 12
-            .Font.Bold = msoTrue
-            .Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
-        End With
-        .TextFrame2.VerticalAnchor = msoAnchorMiddle
-        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
-        With .Fill
-            .Visible = msoTrue
-            .TwoColorGradient Style:=msoGradientVertical, Variant:=1
-            .ForeColor.RGB = colorTop
-            .BackColor.RGB = colorBottom
-        End With
-        .line.Visible = msoFalse
-        With .ThreeD
-            .BevelTopType = msoBevelSoftRound
-            .BevelTopDepth = 6
-            .BevelTopInset = 6
-        End With
-        With .Shadow
-            .Type = msoShadow21
-            .Visible = msoTrue
-            .OffsetX = 3
-            .OffsetY = 3
-            .Transparency = 0.5
-            .Blur = 4
-        End With
-        .OnAction = onActionFull
-    End With
+    CreateCoolButton btnText, onActionFull, leftPt, topPt, colorTop, colorBottom, shapeName, BTN_W, BTN_H, 12!, ws
 End Sub
 
 '==============================================================================

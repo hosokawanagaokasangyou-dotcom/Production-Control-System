@@ -19,7 +19,7 @@ STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピ
 DISPATCH_TRIAL_PATTERN_LIST_SHEET		配台試行順_パターン一覧: 出力シート名（空なら既定 配台試行順_パターン一覧）
 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）
 DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET		パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）
-DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P5 を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
+DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P6 を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
 DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア(自動) の納期遵守率(%)の重み（空なら 3）
 DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合(%)の重み（空なら 1）
 DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）

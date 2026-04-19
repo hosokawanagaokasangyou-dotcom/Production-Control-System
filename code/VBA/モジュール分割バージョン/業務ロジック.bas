@@ -185,10 +185,10 @@ Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えボタンを配置()
     配台計画_タスク入力_試行順小数キー並べ替えボタンを配置
 End Sub
 
-' 小数キー並べ替えボタンを配置（かっこいいボタン版）。
+' 小数キー並べ替えボタンを配置（旧「クール」名の互換。本体はフォント管理の同名配置マクロ）。
 Sub アニメ付き_配台計画_タスク入力_試行順小数キー並べ替えクールボタンを配置()
     Call AnimateButtonPush
-    配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置
+    配台計画_タスク入力_試行順小数キー並べ替えボタンを配置
 End Sub
 
 ' 図形の「マクロの登録」用（引数なし）。中核は スナップショット出力 の スナップショット_pdfとcsvを出力。
@@ -1348,7 +1348,7 @@ Finish:
 End Sub
 
 ' =========================================================
-' かっこいいボタンを自動生成するマクロ
+' グラデーションボタン（CreateCoolButton・プリセット・対話配置）
 ' =========================================================
 ' グラデーション配色プリセット（CreateCoolButtonWithPreset の presetId）
 ' 1=ロイヤルブルー 2=ティール 3=オレンジ 4=フォレストグリーン 5=パープル
@@ -1385,50 +1385,8 @@ Public Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     End Select
 End Function
 
-Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional stableShapeName As String)
-    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), stableShapeName
-End Sub
-
-Sub かっこいいボタンを作成()
-    Dim y As Single
-    Const gap As Single = 70
-    
-    y = 50
-    CreateCoolButtonWithPreset "? シミュレーション実行", "アニメ付き_計画生成を実行", 50, y, 1
-    y = y + gap
-    CreateCoolButtonWithPreset "タスク抽出", "アニメ付き_タスク抽出を実行", 50, y, 3
-    y = y + gap
-    CreateCoolButtonWithPreset "段階1+2 連続", "アニメ付き_段階1と段階2を連続実行", 50, y, 5
-    y = y + gap
-    CreateCoolButtonWithPreset "環境構築 (初回のみ)", "アニメ付き_環境構築を実行", 50, y, 4
-    y = y + gap
-    CreateCoolButtonWithPreset "Gemini鍵を暗号化", "アニメ付き_Gemini認証を暗号化してB1に保存", 50, y, 6
-    
-    AppMsgBox "現在のシートにボタンを 5 つ作成しました！" & vbCrLf & _
-           "グラデーションはプリセット 1/3/5/4 を使用しています（全 10 色はコード先頭のコメント参照）。" & vbCrLf & _
-           "好きな場所にドラッグして配置してください。", vbInformation
-End Sub
-
-' 配色プリセット P1～P10 の見本を配置（マクロは割り当てず、見た目確認・色選び用）
-Sub かっこいいボタン_配色サンプル作成()
-    Dim i As Long
-    Dim x As Single
-    Dim y As Single
-    Const colW As Single = 232
-    Const rowH As Single = 62
-    Const left0 As Single = 40
-    Const top0 As Single = 40
-    
-    For i = 1 To 10
-        x = left0 + CSng((i - 1) Mod 5) * colW
-        y = top0 + CSng((i - 1) \ 5) * rowH
-        CreateCoolButton "P" & CStr(i), "かっこいいボタンを作成", x, y, CoolButtonGradientTop(i), CoolButtonGradientBottom(i)
-        On Error Resume Next
-        ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
-        On Error GoTo 0
-    Next i
-    AppMsgBox "配色プリセット P1～P10 の見本を配置しました。" & vbCrLf & _
-           "クリックしてもマクロは動きません。不要なら図形を削除してください。", vbInformation
+Public Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional stableShapeName As String = vbNullString, Optional ByVal btnW As Single = -1!, Optional ByVal btnH As Single = -1!, Optional ByVal fontPt As Single = 0!, Optional ByVal targetWs As Worksheet)
+    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), stableShapeName, btnW, btnH, fontPt, targetWs
 End Sub
 
 ' アクティブシート上に、グラデーション＋押下アニメ用のクールボタンを1つ配置（InputBox で文言・マクロ名・座標・配色を指定）
@@ -1501,16 +1459,32 @@ Private Function ParseTwoSingleCsv(ByVal s As String, ByRef outX As Single, ByRe
 End Function
 
 ' ボタン生成の共通ロジック（stableShapeName を渡すと図形名を固定。AnimateButtonPush は Application.Caller=図形名のためアニメ付きマクロ用ボタンでは推奨）
-Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional stableShapeName As String)
+' targetWs 省略時は ActiveSheet。btnW/btnH が負のときは 220x50。fontPt<=0 のときは 14pt。
+Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional stableShapeName As String = vbNullString, Optional ByVal btnW As Single = -1!, Optional ByVal btnH As Single = -1!, Optional ByVal fontPt As Single = 0!, Optional ByVal targetWs As Worksheet)
     Dim shp As Shape
+    Dim wsT As Worksheet
+    Dim wUse As Single
+    Dim hUse As Single
+    Dim fs As Single
     
-    Set shp = ActiveSheet.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, 220, 50)
+    If targetWs Is Nothing Then
+        Set wsT = ActiveSheet
+    Else
+        Set wsT = targetWs
+    End If
+    If wsT Is Nothing Then Exit Sub
+    
+    If btnW < 0! Then wUse = 220! Else wUse = btnW
+    If btnH < 0! Then hUse = 50! Else hUse = btnH
+    If fontPt <= 0! Then fs = 14! Else fs = fontPt
+    
+    Set shp = wsT.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, wUse, hUse)
     
     With shp
         With .TextFrame2.TextRange
             .text = btnText
             .Font.Name = "メイリオ"
-            .Font.Size = 14
+            .Font.Size = fs
             .Font.Bold = msoTrue
             .Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
         End With
@@ -1554,92 +1528,6 @@ Public Sub CreateCoolButton(btnText As String, macroName As String, posX As Sing
     End With
 End Sub
 
-' 「配台計画_タスク入力」1行目の右側付近に、試行順再計算用のクールボタンを1つ配置する（同一 OnAction の既存図形は削除してから作成）。
-Public Sub 配台計画_タスク入力_配台試行順番再計算ボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_配台試行順番を再計算"
-    Const HDR_TRIAL As String = "配台試行順番"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim lastCol As Long
-    Dim anchorCol As Long
-    Dim leftPos As Single
-    Dim topPos As Single
-    
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For Each shp In ws.Shapes
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next shp
-    
-    anchorCol = FindColHeader(ws, HDR_TRIAL)
-    If anchorCol <= 0 Then anchorCol = 1
-    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
-    topPos = ws.Cells(1, 1).Top + 4
-    
-    CreateCoolButtonWithPreset "試行順を更新", MACRO_ANIM, leftPos, topPos, 2
-    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
-           "「配台不要」の手動クリア後などに押すと、Python で試行順を再計算して行を並べ替えます。", vbInformation, "ボタン配置"
-End Sub
-
-' 「配台試行順番」を小数キーで並べ替え 1..n 用（かっこいいボタン版）。試行順更新ボタンの下あたりに配置（同一マクロ割当の既存図形は削除）。
-' グラデーション版は フォント管理 の「配台計画_タスク入力_試行順小数キー並べ替えボタンを配置」。
-Public Sub 配台計画_タスク入力_試行順小数キー並べ替え_クールボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順を小数キーで並べ替え"
-    Const HDR_TRIAL As String = "配台試行順番"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim anchorCol As Long
-    Dim leftPos As Single
-    Dim topPos As Single
-    
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For Each shp In ws.Shapes
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next shp
-    
-    anchorCol = FindColHeader(ws, HDR_TRIAL)
-    If anchorCol <= 0 Then anchorCol = 1
-    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
-    topPos = ws.Cells(1, 1).Top + 4 + 58
-    
-    CreateCoolButtonWithPreset "キー順に並べ替え", MACRO_ANIM, leftPos, topPos, 3
-    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
-           "配台試行順番に 1, 2, 1.5 などを入れたあと押すと、キー昇順に行を並べ 1 から振り直します。", vbInformation, "ボタン配置"
-End Sub
-
 ' 配台試行順の複数パターン一覧シート作成（スプラッシュ付き）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成()
     Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
@@ -1677,132 +1565,6 @@ Public Sub アニメ付き_配台計画_タスク入力_試行順パターン採用を実行()
     If m_animMacroSucceeded Then
         アニメ付き_計画生成を実行
     End If
-End Sub
-
-' 「試行順パターン一覧」用かっこいいボタン（キー並べ替えボタンの下あたり）
-Public Sub 配台計画_タスク入力_試行順パターン一覧_クールボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成"
-    Const HDR_TRIAL As String = "配台試行順番"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim anchorCol As Long
-    Dim leftPos As Single
-    Dim topPos As Single
-    
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For Each shp In ws.Shapes
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next shp
-    
-    anchorCol = FindColHeader(ws, HDR_TRIAL)
-    If anchorCol <= 0 Then anchorCol = 1
-    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
-    topPos = ws.Cells(1, 1).Top + 4 + 2 * 58
-    
-    CreateCoolButtonWithPreset "試行順パターン一覧", MACRO_ANIM, leftPos, topPos, 5
-    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
-           "押すとシート「" & SHEET_DISPATCH_TRIAL_PATTERN_LIST & "」に各パターンの試行順一覧を書き込みます。", vbInformation, "ボタン配置"
-End Sub
-
-' 「試行順パターン別段階2」用かっこいいボタン（試行順パターン一覧の下あたり）
-Public Sub 配台計画_タスク入力_試行順パターン別段階2_クールボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行"
-    Const HDR_TRIAL As String = "配台試行順番"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim anchorCol As Long
-    Dim leftPos As Single
-    Dim topPos As Single
-    
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For Each shp In ws.Shapes
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next shp
-    
-    anchorCol = FindColHeader(ws, HDR_TRIAL)
-    If anchorCol <= 0 Then anchorCol = 1
-    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
-    topPos = ws.Cells(1, 1).Top + 4 + 3 * 58
-    
-    CreateCoolButtonWithPreset "パターン別段階2", MACRO_ANIM, leftPos, topPos, 7
-    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
-           "押すと各パターンで段階2を実行し、シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」にリンクとスコアを書き込みます（所要時間大）。", vbInformation, "ボタン配置"
-End Sub
-
-' 「試行順パターン採用」用かっこいいボタン（パターン別段階2の下あたり）
-Public Sub 配台計画_タスク入力_試行順パターン採用_クールボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_配台計画_タスク入力_試行順パターン採用を実行"
-    Const HDR_TRIAL As String = "配台試行順番"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim anchorCol As Long
-    Dim leftPos As Single
-    Dim topPos As Single
-    
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        AppMsgBox "シート「" & SHEET_PLAN_INPUT_TASK & "」がありません。", vbExclamation, "ボタン配置"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For Each shp In ws.Shapes
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next shp
-    
-    anchorCol = FindColHeader(ws, HDR_TRIAL)
-    If anchorCol <= 0 Then anchorCol = 1
-    leftPos = ws.Cells(1, anchorCol).Left + ws.Cells(1, anchorCol).Width + 8
-    topPos = ws.Cells(1, 1).Top + 4 + 4 * 58
-    
-    CreateCoolButtonWithPreset "パターン採用を計画へ", MACRO_ANIM, leftPos, topPos, 4
-    AppMsgBox "「" & SHEET_PLAN_INPUT_TASK & "」にボタンを配置しました。" & vbCrLf & _
-           "サマリ「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」の B3 で選んだパターンの試行順を計画シートに反映します。", vbInformation, "ボタン配置"
 End Sub
 
 ' =========================================================
