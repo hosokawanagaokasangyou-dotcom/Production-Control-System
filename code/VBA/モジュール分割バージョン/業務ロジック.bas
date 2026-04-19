@@ -1577,6 +1577,12 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     ' #region agent log
     Call AgentDebugNdjson_1d7666("H5", "業務ロジック:DispatchTrialPattern:afterXw", "XwRun finished", "exitCode=" & CStr(exitCode) & " m_anim=" & CStr(m_animMacroSucceeded))
     ' #endregion agent log
+    If Not m_animMacroSucceeded Then
+        AppMsgBox "試行順パターンの反映に失敗しました（終了コード " & CStr(exitCode) & "）。" & vbCrLf & vbCrLf & _
+            "確認例: シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」の B2（バッチ出力フォルダが実在するか）・B3（採用パターンIDが一覧と一致するか）。" & vbCrLf & _
+            "採用が P5/P6 のときは反映処理内で段階2プローブが走り、完了まで時間がかかる／タイムアウトしたように見えることがあります。" & vbCrLf & vbCrLf & _
+            "詳細は log\execution_log.txt および LOG シートを参照してください。", vbExclamation, dialogTitle
+    End If
     Exit Sub
 DispatchTrialPatternXwFail:
     ' #region agent log
