@@ -1442,12 +1442,13 @@ End Sub
 
 ' 配台試行順の複数パターン一覧シート作成（スプラッシュ付き）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成()
-    Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "配台計画_タスク入力_試行順パターン一覧シートをPythonで作成", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
+    ' Application.Run は他に開いているブックの同名マクロに解決されうるため、ThisWorkbook 修飾＋一意名で呼ぶ
+    Call アニメ付き_スプラッシュ付きで実行("配台試行順の各パターン一覧を作成しています…", "'" & ThisWorkbook.Name & "'!PM_AI_AnimCore_DispatchTrialPatternList", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
 End Sub
 
 ' 各試行順パターンで段階2を実行し output に別ブック保存＋サマリシート（スプラッシュ付き・所要時間大）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行()
-    Call アニメ付き_スプラッシュ付きで実行("各試行順パターンで段階2を実行しています…（時間がかかります）", "配台計画_タスク入力_試行順パターン別段階2をPythonで作成", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
+    Call アニメ付き_スプラッシュ付きで実行("各試行順パターンで段階2を実行しています…（時間がかかります）", "'" & ThisWorkbook.Name & "'!PM_AI_AnimCore_DispatchTrialPatternStage2Batch", , , False, Not m_dispatchTrialChainSuppressIntermediateChime)
 End Sub
 
 ' 試行順パターン一覧作成のあとパターン別段階2を続けて実行し、成功時のみサマリシートをアクティブにする（メイン_ 等からの一括用）。
@@ -1479,10 +1480,44 @@ End Sub
 
 ' サマリで選んだ試行順パターンを配台計画シートへ反映（スプラッシュ付き）
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン採用を実行()
-    Call アニメ付き_スプラッシュ付きで実行("サマリの採用パターンを計画シートへ反映しています…", "配台計画_タスク入力_試行順パターン採用をPythonで実行", , , False, False)
+    Call アニメ付き_スプラッシュ付きで実行("サマリの採用パターンを計画シートへ反映しています…", "'" & ThisWorkbook.Name & "'!PM_AI_AnimCore_DispatchTrialPatternSelectionApply", , , False, False)
     If m_animMacroSucceeded Then
         アニメ付き_計画生成を実行
     End If
+End Sub
+
+' アニメ付き_スプラッシュ付きで実行 から ThisWorkbook 修飾で呼ぶ（他ブックの同名マクロに取られないようにする）
+Public Sub PM_AI_AnimCore_DispatchTrialPatternList()
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:list", "qualified core entry", "")
+    ' #endregion agent log
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_trial_pattern_list_for_xlwings", _
+        "配台試行順パターン一覧", _
+        "配台試行順の各パターン一覧を作成しています…" _
+    )
+End Sub
+
+Public Sub PM_AI_AnimCore_DispatchTrialPatternStage2Batch()
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:st2batch", "qualified core entry", "")
+    ' #endregion agent log
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_trial_pattern_stage2_batch_for_xlwings", _
+        "配台試行順パターン別段階2", _
+        "各試行順パターンで段階2を実行しています…（時間がかかります）" _
+    )
+End Sub
+
+Public Sub PM_AI_AnimCore_DispatchTrialPatternSelectionApply()
+    ' #region agent log
+    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:selection", "qualified core entry", "")
+    ' #endregion agent log
+    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
+        "run_dispatch_pattern_stage2_selection_for_xlwings", _
+        "試行順パターン採用の反映", _
+        "サマリの採用パターンを計画シートへ反映しています…" _
+    )
 End Sub
 
 ' 試行順パターン系 xlwings 入口: 段階1 と同様に TryRefreshWorkbookQueries を Python より先に実行する。
@@ -1548,31 +1583,17 @@ DispatchTrialPatternXwFail:
     Err.Clear
 End Sub
 
-' アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成 から Application.Run される。
+' 手動・図形の OnAction 等で日本語名のみ指定される場合の入口（実体は PM_AI_AnimCore_* 経由と同一）
 Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
-    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
-        "run_dispatch_trial_pattern_list_for_xlwings", _
-        "配台試行順パターン一覧", _
-        "配台試行順の各パターン一覧を作成しています…" _
-    )
+    Call PM_AI_AnimCore_DispatchTrialPatternList
 End Sub
 
-' アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行 から Application.Run される。
 Public Sub 配台計画_タスク入力_試行順パターン別段階2をPythonで作成()
-    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
-        "run_dispatch_trial_pattern_stage2_batch_for_xlwings", _
-        "配台試行順パターン別段階2", _
-        "各試行順パターンで段階2を実行しています…（時間がかかります）" _
-    )
+    Call PM_AI_AnimCore_DispatchTrialPatternStage2Batch
 End Sub
 
-' アニメ付き_配台計画_タスク入力_試行順パターン採用を実行 から Application.Run される。
 Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
-    Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
-        "run_dispatch_pattern_stage2_selection_for_xlwings", _
-        "試行順パターン採用の反映", _
-        "サマリの採用パターンを計画シートへ反映しています…" _
-    )
+    Call PM_AI_AnimCore_DispatchTrialPatternSelectionApply
 End Sub
 
 ' =========================================================
