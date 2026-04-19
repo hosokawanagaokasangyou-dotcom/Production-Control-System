@@ -17942,7 +17942,6 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
         "設備_稼働セル数(参考)",
         "参考スコア(自動)",
         "処理時間(秒)",
-        "乱数シード",
         "備考",
     ]
     total_cell = (
@@ -17965,13 +17964,11 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
             "",
             "",
             "",
-            "",
         ],
-        ["採用パターンID", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["採用パターンID", "", "", "", "", "", "", "", "", "", "", ""],
         [
             "※ B3 に一覧のパターンIDを指定し保存後、Python「apply_dispatch_pattern_stage2_selection.py」"
             " またはマクロで反映。",
-            "",
             "",
             "",
             "",
@@ -18000,7 +17997,6 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
                 r.get("設備_稼働セル数", ""),
                 r.get("参考スコア(自動)", ""),
                 r.get("処理時間(秒)", ""),
-                r.get("乱数シード", ""),
                 r.get("備考", ""),
             ]
         )
@@ -18522,11 +18518,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             pid, pname, tq, df_p5_ov = next(_pat_var_it)
         except StopIteration:
             break
-        job_seed = None
-        for _pj in pattern_jobs:
-            if _pj[0] == pid:
-                job_seed = _pj[2]
-                break
         df_run = df_p5_ov.copy() if df_p5_ov is not None else df0.copy()
         _apply_pattern_dispatch_trial_orders_to_tasks_df(df_run, tq)
         out_sub = os.path.join(batch_root, pid)
@@ -18538,7 +18529,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
                     "パターンID": pid,
                     "パターン名": pname,
                     "備考": f"出力フォルダ作成失敗: {e}",
-                    "乱数シード": "" if job_seed is None else job_seed,
                     "参考スコア(自動)": "",
                     "処理時間(秒)": round(
                         time_module.perf_counter() - t_pat_wall0, 2
@@ -18551,7 +18541,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             "パターンID": pid,
             "パターン名": pname,
             "備考": "",
-            "乱数シード": "" if job_seed is None else job_seed,
             "参考スコア(自動)": "",
         }
         paths = None
