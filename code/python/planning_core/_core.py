@@ -17436,41 +17436,6 @@ def _dataframe_shift_raw_input_dates_minus_one_day_for_task_ids(
                 and pd.api.types.is_datetime64_any_dtype(col_dtype)
                 else new_d
             )
-            # #region agent log
-            try:
-                import json as _json_dbg
-
-                _dbg_p = os.path.normpath(
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "..",
-                        "..",
-                        "debug-f04990.log",
-                    )
-                )
-                with open(_dbg_p, "a", encoding="utf-8") as _lf:
-                    _lf.write(
-                        _json_dbg.dumps(
-                            {
-                                "sessionId": "f04990",
-                                "hypothesisId": "H1",
-                                "location": "_dataframe_shift_raw_input_dates_minus_one_day_for_task_ids",
-                                "message": "raw_shift_cell_assign",
-                                "data": {
-                                    "col": col,
-                                    "dtype": str(col_dtype),
-                                    "assign_cls": type(_cell_val).__name__,
-                                },
-                                "timestamp": int(time_module.time() * 1000),
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             df.iat[ri, col_idx] = _cell_val
             n_changed += 1
     return n_changed
