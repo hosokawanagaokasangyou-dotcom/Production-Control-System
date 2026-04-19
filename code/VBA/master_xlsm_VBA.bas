@@ -1520,9 +1520,11 @@ Private Sub AnimateButtonPush()
 End Sub
 
 ' =========================================================
-' かっこいいボタン自動生成（master.xlsm 向け: 出勤簿生成が主ボタン）
+' グラデーションボタン: 対話配置（業務ロジック.bas の「アニメ付きマクロ用_クールボタンを対話配置」と同名・同仕様）
 ' =========================================================
-' プリセット: 1=青 2=ティール … 10=マゼンタ（CreateCoolButtonWithPreset の presetId）
+' 配色プリセット（CreateCoolButtonWithPreset の presetId）
+' 1=ロイヤルブルー 2=ティール 3=オレンジ 4=フォレストグリーン 5=パープル
+' 6=インディゴ 7=スレート 8=コーラル 9=アンバー 10=マゼンタ
 Private Function CoolButtonGradientTop(ByVal presetId As Long) As Long
     Select Case presetId
         Case 1: CoolButtonGradientTop = RGB(65, 105, 225)
@@ -1555,61 +1557,106 @@ Private Function CoolButtonGradientBottom(ByVal presetId As Long) As Long
     End Select
 End Function
 
-Private Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional ByVal fixedShapeName As String = vbNullString)
-    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), fixedShapeName
+Private Sub CreateCoolButtonWithPreset(btnText As String, macroName As String, posX As Single, posY As Single, ByVal presetId As Long, Optional stableShapeName As String = vbNullString, Optional ByVal btnW As Single = -1!, Optional ByVal btnH As Single = -1!, Optional ByVal fontPt As Single = 0!, Optional ByVal targetWs As Worksheet)
+    CreateCoolButton btnText, macroName, posX, posY, CoolButtonGradientTop(presetId), CoolButtonGradientBottom(presetId), stableShapeName, btnW, btnH, fontPt, targetWs
 End Sub
 
-' 現在のシートに「出勤簿を生成」ボタンを1つ配置（ティール系プリセット 2）
-Sub master_かっこいいボタンを作成()
-    Dim y As Single
-    Const gap As Single = 70
-    y = 50
-    CreateCoolButtonWithPreset "出勤簿を生成", "master_アニメ付き_カレンダーから出勤簿生成", 50, y, 2
-    y = y + gap
-    CreateCoolButtonWithPreset "機械カレンダー作成", "master_アニメ付き_機械カレンダーを作成", 50, y, 3
-    y = y + gap
-    On Error Resume Next
-    ActiveSheet.Shapes("Btn_ChangeoverTemplateStack").Delete
-    On Error GoTo 0
-    CreateCoolButtonWithPreset "依頼切替・日次始業シート", "master_アニメ付き_依頼切替日次始業シートを更新", 50, y, 4, "Btn_ChangeoverTemplateStack"
-    MsgBox "ボタンを作成しました。" & vbCrLf & _
-           "・出勤簿を生成 … カレンダーからメンバー出勤簿を再生成（定常はメイン A15/B15・空なら 8:45～17:00）" & vbCrLf & _
-           "・機械カレンダー作成 … A日時・B曜日・C～skills設備列・メインA12/B12の時台～（空なら6～22時）・日ストライプの「機械カレンダー」1枚（365日）" & vbCrLf & _
-           "・依頼切替・日次始業シート … skills から「設定_依頼切替前後時間」「設定_機械_日次始業準備」へ工程名・機械名を追補（押下時は押し込みアニメ）" & vbCrLf & _
-           "好きな位置へドラッグして配置してください。", vbInformation
-End Sub
-
-' 配色 P1～P10 の見本（クリックは無効化）
-Sub master_かっこいいボタン_配色サンプル作成()
-    Dim i As Long
+' アクティブシート上に、グラデーション＋押下アニメ用のクールボタンを1つ配置（InputBox で文言・マクロ名・座標・配色を指定）
+' 割り当て先は「master_アニメ付き_*」など、先頭で AnimateButtonPush を呼ぶマクロを推奨（図形に本体を直割り当てするとアニメは動きません）
+Public Sub アニメ付きマクロ用_クールボタンを対話配置()
+    Dim cap As String
+    Dim mac As String
+    Dim ps As String
+    Dim pr As Long
     Dim x As Single
     Dim y As Single
-    Const colW As Single = 232
-    Const rowH As Single = 62
-    Const left0 As Single = 40
-    Const top0 As Single = 40
+    Dim stable As String
     
-    For i = 1 To 10
-        x = left0 + CSng((i - 1) Mod 5) * colW
-        y = top0 + CSng((i - 1) \ 5) * rowH
-        CreateCoolButton "P" & CStr(i), "master_かっこいいボタンを作成", x, y, CoolButtonGradientTop(i), CoolButtonGradientBottom(i)
-        On Error Resume Next
-        ActiveSheet.Shapes(ActiveSheet.Shapes.Count).OnAction = ""
-        On Error GoTo 0
-    Next i
-    MsgBox "配色プリセット P1～P10 の見本を配置しました。不要なら削除してください。", vbInformation
+    cap = InputBox( _
+        "ボタンに表示する文字列を入力してください。", _
+        "アニメ付きクールボタン (1/4)", _
+        "実行")
+    If Len(Trim$(cap)) = 0 Then Exit Sub
+    
+    mac = InputBox( _
+        "割り当てるマクロ名を入力してください。" & vbCrLf & _
+        "例: master_アニメ付き_カレンダーから出勤簿生成（このブック内の Public Sub / Sub 名）", _
+        "アニメ付きクールボタン (2/4)", _
+        "master_アニメ付き_カレンダーから出勤簿生成")
+    If Len(Trim$(mac)) = 0 Then Exit Sub
+    
+    ps = InputBox( _
+        "左位置と上位置をカンマ区切りで入力（ポイント）。例: 50, 120" & vbCrLf & _
+        "空欄なら 50, 50 を使います。", _
+        "アニメ付きクールボタン (3/4)", _
+        "50, 50")
+    If Len(Trim$(ps)) = 0 Then ps = "50, 50"
+    If Not ParseTwoSingleCsv(ps, x, y) Then
+        MsgBox "位置の形式が不正です。例: 50, 120", vbExclamation, "アニメ付きクールボタン"
+        Exit Sub
+    End If
+    
+    ps = InputBox( _
+        "配色プリセット番号（1～10）を入力してください。" & vbCrLf & _
+        "1=ロイヤルブルー … 10=マゼンタ（CreateCoolButtonWithPreset と同じ）", _
+        "アニメ付きクールボタン (4/4)", _
+        "1")
+    pr = 1
+    If Len(Trim$(ps)) > 0 And IsNumeric(ps) Then pr = CLng(CDbl(ps))
+    If pr < 1 Or pr > 10 Then pr = 1
+    
+    Randomize
+    stable = "AnimCool_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
+    
+    CreateCoolButtonWithPreset Trim$(cap), Trim$(mac), x, y, pr, stable
+    MsgBox "クールボタンを配置しました。" & vbCrLf & _
+           "図形名: " & stable & vbCrLf & _
+           "OnAction: " & Trim$(mac), vbInformation, "アニメ付きクールボタン"
 End Sub
 
-Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional ByVal fixedShapeName As String = vbNullString)
+' カンマ区切りで2つの Single を読む（空白許容）
+Private Function ParseTwoSingleCsv(ByVal s As String, ByRef outX As Single, ByRef outY As Single) As Boolean
+    Dim p As Long
+    Dim a As String
+    Dim b As String
+    p = InStr(1, s, ",")
+    If p <= 0 Then Exit Function
+    a = Trim$(Left$(s, p - 1))
+    b = Trim$(Mid$(s, p + 1))
+    If Len(a) = 0 Or Len(b) = 0 Then Exit Function
+    If Not IsNumeric(a) Or Not IsNumeric(b) Then Exit Function
+    outX = CSng(CDbl(a))
+    outY = CSng(CDbl(b))
+    ParseTwoSingleCsv = True
+End Function
+
+' stableShapeName を渡すと図形名を固定（AnimateButtonPush は Application.Caller=図形名のため推奨）
+' targetWs 省略時は ActiveSheet。btnW/btnH が負のときは 220x50。fontPt<=0 のときは 14pt。
+Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Single, posY As Single, colorTop As Long, colorBottom As Long, Optional stableShapeName As String = vbNullString, Optional ByVal btnW As Single = -1!, Optional ByVal btnH As Single = -1!, Optional ByVal fontPt As Single = 0!, Optional ByVal targetWs As Worksheet)
     Dim shp As Shape
+    Dim wsT As Worksheet
+    Dim wUse As Single
+    Dim hUse As Single
+    Dim fs As Single
     
-    Set shp = ActiveSheet.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, 220, 50)
+    If targetWs Is Nothing Then
+        Set wsT = ActiveSheet
+    Else
+        Set wsT = targetWs
+    End If
+    If wsT Is Nothing Then Exit Sub
+    
+    If btnW < 0! Then wUse = 220! Else wUse = btnW
+    If btnH < 0! Then hUse = 50! Else hUse = btnH
+    If fontPt <= 0! Then fs = 14! Else fs = fontPt
+    
+    Set shp = wsT.Shapes.AddShape(msoShapeRoundedRectangle, posX, posY, wUse, hUse)
     
     With shp
         With .TextFrame2.TextRange
-            .Text = btnText
+            .text = btnText
             .Font.Name = "メイリオ"
-            .Font.Size = 14
+            .Font.Size = fs
             .Font.Bold = msoTrue
             .Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
         End With
@@ -1643,8 +1690,8 @@ Private Sub CreateCoolButton(btnText As String, macroName As String, posX As Sin
         .OnAction = macroName
         
         On Error Resume Next
-        If Len(Trim$(fixedShapeName)) > 0 Then
-            .Name = Trim$(fixedShapeName)
+        If Len(Trim$(stableShapeName)) > 0 Then
+            .Name = stableShapeName
         Else
             Randomize
             .Name = "CoolBtn_" & Format(Now, "yyyymmddhhnnss") & "_" & Format(Int(1000000 * Rnd), "000000")
@@ -3109,34 +3156,6 @@ Public Sub MasterEnsureMachineChangeoverTemplateSheets()
 
     Call MasterSyncChangeoverRowsFromSkills(wb)
     Call MasterSyncDailyStartupRowsFromSkills(wb)
-End Sub
-
-' メイン相当シートの H4 左上に、MasterEnsureMachineChangeoverTemplateSheets 用の「かっこいいボタン」を1つ配置する。
-' 図形名 Btn_ChangeoverTemplateMain（再実行で削除して作り直し）。OnAction = master_アニメ付き_依頼切替日次始業シートを更新（押し込みアニメ付き）。
-Public Sub master_依頼切替日次始業_アニメ付きボタンを作成()
-    Dim ws As Worksheet
-    Const shpName As String = "Btn_ChangeoverTemplateMain"
-    On Error Resume Next
-    Set ws = MasterGetMainWorksheet(ThisWorkbook)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        MsgBox "メインシートが見つかりません。アクティブシートに作成します。", vbExclamation, "依頼切替・日次始業"
-        Set ws = ActiveSheet
-    End If
-    If ws Is Nothing Then Exit Sub
-    On Error Resume Next
-    ws.Shapes(shpName).Delete
-    On Error GoTo 0
-    ws.Activate
-    Dim posX As Single
-    Dim posY As Single
-    posX = ws.Range("H4").Left
-    posY = ws.Range("H4").Top
-    CreateCoolButtonWithPreset "依頼切替・日次始業を更新", "master_アニメ付き_依頼切替日次始業シートを更新", posX, posY, 4, shpName
-    MsgBox "ボタンを配置しました。" & vbCrLf & _
-           "・マクロ: MasterEnsureMachineChangeoverTemplateSheets（見出し・skills からの追補）" & vbCrLf & _
-           "・図形名: " & shpName & "（再実行で置き直し）" & vbCrLf & _
-           "・押下時は他のかっこいいボタンと同様に押し込みアニメが付きます。", vbInformation, "依頼切替・日次始業"
 End Sub
 
 ' ブックを開いたときに Ctrl+Shift+テンキー - を登録（解除は ThisWorkbook の BeforeClose。全文は master_xlsm_ThisWorkbook_VBA.txt）

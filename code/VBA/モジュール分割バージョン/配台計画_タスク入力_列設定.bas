@@ -10,16 +10,6 @@ Option Explicit
 
 Private Const PLAN_INPUT_HEADER_ROW As Long = 1
 
-Public Sub 配台計画_タスク入力_列設定_アニメ付ボタンを配置()
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
-    On Error GoTo 0
-    If ws Is Nothing Then Exit Sub
-
-    Call EnsurePlanInputColConfigButtons(ws)
-End Sub
-
 Public Sub 配台計画_タスク入力_列設定_設定シート作成更新()
     Call RunWithShapeSpinner(SHAPE_PLAN_INPUT_COL_CONFIG_REFRESH, "列設定 取得中...", "配台計画_タスク入力_列設定__Core_RefreshColConfigSheet")
 End Sub
@@ -371,56 +361,8 @@ Private Function FindHeaderColumn(ByVal ws As Worksheet, ByVal headerRow As Long
 End Function
 
 ' =========================================================
-' Helpers: buttons / animation
+' Helpers: 図形ラベル更新しながら実行（図形が無い場合は処理のみ実行）
 ' =========================================================
-
-Private Sub EnsurePlanInputColConfigButtons(ByVal ws As Worksheet)
-    If ws Is Nothing Then Exit Sub
-
-    Call EnsureOneButtonShape(ws, SHAPE_PLAN_INPUT_COL_CONFIG_REFRESH, _
-                              "列設定シート作成/更新", _
-                              "配台計画_タスク入力_列設定_設定シート作成更新", _
-                              ws.Range("A2"))
-    Call EnsureOneButtonShape(ws, SHAPE_PLAN_INPUT_COL_CONFIG_APPLY, _
-                              "列設定 反映", _
-                              "配台計画_タスク入力_列設定_反映", _
-                              ws.Range("D2"))
-End Sub
-
-Private Sub EnsureOneButtonShape(ByVal ws As Worksheet, ByVal shapeName As String, ByVal caption As String, ByVal macroName As String, ByVal anchor As Range)
-    Dim shp As Shape
-    Dim leftPos As Double, topPos As Double, w As Double, h As Double
-
-    On Error Resume Next
-    Set shp = ws.Shapes(shapeName)
-    On Error GoTo 0
-
-    leftPos = anchor.Left
-    topPos = anchor.Top
-    w = 160
-    h = 28
-
-    If shp Is Nothing Then
-        Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftPos, topPos, w, h)
-        shp.Name = shapeName
-    Else
-        shp.Left = leftPos
-        shp.Top = topPos
-        shp.Width = w
-        shp.Height = h
-    End If
-
-    With shp
-        .OnAction = macroName
-        .TextFrame2.TextRange.Text = caption
-        .TextFrame2.VerticalAnchor = msoAnchorMiddle
-        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
-        .Fill.ForeColor.RGB = RGB(66, 133, 244)
-        .Line.ForeColor.RGB = RGB(66, 133, 244)
-        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
-        .TextFrame2.TextRange.Font.Size = 10
-    End With
-End Sub
 
 ' ラッパ（スピナー更新しながら実行）
 Private Sub RunWithShapeSpinner(ByVal shapeName As String, ByVal baseCaption As String, ByVal procName As String)

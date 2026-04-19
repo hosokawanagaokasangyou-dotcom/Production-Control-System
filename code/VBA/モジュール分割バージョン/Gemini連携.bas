@@ -230,20 +230,6 @@ Sub アニメ付き_メインシート_masterブックを開く()
     メインシート_masterブックを開く
 End Sub
 
-' 初回のみ推奨: メインシート上に「master.xlsm を開く」図形ボタンを1つ追加（重複したら不要分を削除）
-Public Sub メインシート_master開くボタンを配置()
-    Dim ws As Worksheet
-    
-    Set ws = GetMainWorksheet()
-    If ws Is Nothing Then
-        MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
-        Exit Sub
-    End If
-    ws.Activate
-    CreateCoolButtonWithPreset "master.xlsm を開く", "アニメ付き_メインシート_masterブックを開く", 380, 12, 2
-    MsgBox "メインシートにボタンを配置しました。位置はドラッグで調整できます。", vbInformation
-End Sub
-
 ' planning_core の json\ai_remarks_cache.json（および旧 output\ 同名）を削除。次回段階1/2 で TTL キャッシュが空の状態から再構築されます。
 Public Sub AI解析_Remarksキャッシュファイルを削除()
     Dim base As String
@@ -325,41 +311,6 @@ Public Sub アニメ付き_AI解析_Remarksキャッシュファイルを削除()
     Call AnimateButtonPush
     AI解析_Remarksキャッシュファイルを削除
 End Sub
-
-' メイン_ シートに「AI解析キャッシュ削除」クールボタンを1つ配置（master ボタンの直下付近）。再実行で同名・同一 OnAction の図形を置き換え
-Public Sub メインシート_AI解析キャッシュ削除ボタンを配置()
-    Const MACRO_ANIM As String = "アニメ付き_AI解析_Remarksキャッシュファイルを削除"
-    Dim ws As Worksheet
-    Dim shp As Shape
-    Dim oa As String
-    Dim si As Long
-    
-    Set ws = GetMainWorksheet()
-    If ws Is Nothing Then
-        MsgBox "シート「メイン_」がありません。", vbExclamation, "AI解析キャッシュボタン"
-        Exit Sub
-    End If
-    
-    ws.Activate
-    
-    For si = ws.Shapes.Count To 1 Step -1
-        Set shp = ws.Shapes(si)
-        On Error Resume Next
-        oa = shp.OnAction
-        On Error GoTo 0
-        If StrComp(shp.Name, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR, vbTextCompare) = 0 _
-            Or InStr(1, oa, MACRO_ANIM, vbBinaryCompare) > 0 Then
-            On Error Resume Next
-            shp.Delete
-            On Error GoTo 0
-        End If
-    Next si
-    
-    CreateCoolButtonWithPreset "AI解析キャッシュ削除", MACRO_ANIM, 380, 68, 8, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR
-    MsgBox "メインシートに「AI解析キャッシュ削除」ボタンを配置しました。" & vbCrLf & _
-           "（位置はドラッグで調整できます）", vbInformation, "AI解析キャッシュボタン"
-End Sub
-
 
 ' =========================================================
 ' メインシート A列上段：結果_* シートへのリンク
