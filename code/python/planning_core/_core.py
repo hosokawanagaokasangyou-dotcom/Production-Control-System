@@ -763,6 +763,10 @@ ACT_COL_TIME_END = "終了時刻"
 # 加工実績明細DATA 等で使われる日時列（開始日時/終了日時 の別名）
 ACT_COL_MACHINING_START_DT = "加工開始日時"
 ACT_COL_MACHINING_END_DT = "加工終了日時"
+# 加工実績明細DATA: 停機時間分(変換後) を加算した開始日時（実績ガント作成で優先して使用）
+ACT_COL_MACHINING_START_DT_WITH_STOP = "加工開始日時(停機時間加算後)"
+# 加工実績明細DATA: 停機時間（分）。Power Query 等で作成される想定
+ACT_COL_STOP_MIN_CONVERTED = "停機時間分(変換後)"
 # 加工実績明細DATA（Power Query 等）… ガント角丸シェイプの %% は「累積完了率」列をそのまま用いる（計算しない）
 ACT_COL_ACTUAL_QTY = "実加工数"
 ACT_COL_PLANNED_QTY = "加工予定数"
@@ -801,6 +805,7 @@ ACTUAL_HEADER_CANONICAL = (
 ACTUAL_DETAIL_SHEET_NAME = "加工実績明細DATA"
 ACT_DETAIL_COL_ROLL = "ロールNO"
 ACTUAL_DETAIL_HEADER_CANONICAL = ACTUAL_HEADER_CANONICAL + (
+    ACT_COL_MACHINING_START_DT_WITH_STOP,
     ACT_COL_ACTUAL_QTY,
     ACT_COL_PLANNED_QTY,
     ACT_COL_CONVERTED_QTY,
@@ -7830,6 +7835,14 @@ def _actual_row_time_bounds(row):
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
         return s_dt, e_dt
+    # 実績明細ガントは「加工開始日時(停機時間加算後)」を優先（無い場合は後段で従来列へフォールバック）
+    s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_START_DT_WITH_STOP))
+    e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_END_DT))
+    if s_dt and e_dt:
+        if e_dt < s_dt:
+            s_dt = e_dt - timedelta(minutes=5)
+        if s_dt < e_dt:
+            return s_dt, e_dt
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_START_DT))
     e_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_MACHINING_END_DT))
     if s_dt and e_dt and s_dt < e_dt:
@@ -7969,6 +7982,32 @@ def load_machining_actual_detail_df():
                 df = df.rename(columns={alias: ACT_DETAIL_COL_ROLL})
                 break
     df = _align_dataframe_headers_to_canonical(df, ACTUAL_DETAIL_HEADER_CANONICAL)
+    # 実績ガント用: 加工開始日時(停機時間加算後) を生成（停機時間分(変換後) が無ければ 0 分として扱う）
+    try:
+        if ACT_COL_MACHINING_START_DT in df.columns:
+            s0 = pd.to_datetime(df[ACT_COL_MACHINING_START_DT], errors="coerce")
+        else:
+            s0 = pd.Series([pd.NaT] * len(df))
+        if ACT_COL_STOP_MIN_CONVERTED in df.columns:
+            stop_min = pd.to_numeric(df[ACT_COL_STOP_MIN_CONVERTED], errors="coerce").fillna(0.0)
+        else:
+            stop_min = pd.Series([0.0] * len(df))
+        s1 = s0 + pd.to_timedelta(stop_min, unit="m")
+
+        if ACT_COL_MACHINING_END_DT in df.columns:
+            e0 = pd.to_datetime(df[ACT_COL_MACHINING_END_DT], errors="coerce")
+            # 「加工終了日時」<「加工開始日時(停機時間加算後)」のときは、開始を終了-5分に補正
+            mask = e0.notna() & s1.notna() & (e0 < s1)
+            if mask.any():
+                s1 = s1.where(~mask, e0 - pd.Timedelta(minutes=5))
+
+        df[ACT_COL_MACHINING_START_DT_WITH_STOP] = s1
+    except Exception as e:
+        logging.warning(
+            "加工実績明細: %s 列の生成に失敗したため従来列で続行します（%s）。",
+            ACT_COL_MACHINING_START_DT_WITH_STOP,
+            e,
+        )
     logging.info(
         f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
     )

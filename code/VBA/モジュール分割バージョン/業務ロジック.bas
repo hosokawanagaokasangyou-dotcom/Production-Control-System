@@ -3474,6 +3474,11 @@ Public Sub 実績設備ガント_のみ更新_実行()
         AppMsgBox "データ接続の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "実績ガント更新"
         Exit Sub
     End If
+
+    ' 実績明細DATA: 「加工開始日時(停機時間加算後)」列を更新（ガント参照列の安定化）
+    On Error Resume Next
+    Call 加工実績明細DATA_加工開始日時_停機時間加算後_列を更新(ThisWorkbook)
+    On Error GoTo EH
     
     prevScreenUpdating = Application.ScreenUpdating
     prevDisplayAlerts = Application.DisplayAlerts
@@ -3636,6 +3641,90 @@ EH:
     On Error GoTo 0
     AppMsgBox "VBAエラー: " & Err.Number & " / " & Err.Description, vbCritical, "実績ガント更新"
     Resume DoneProtect
+End Sub
+
+' =========================================================
+' 加工実績明細DATA: 加工開始日時(停機時間加算後) 列を作成/更新
+' =========================================================
+Private Sub 加工実績明細DATA_加工開始日時_停機時間加算後_列を更新(ByVal wb As Workbook)
+    Dim ws As Worksheet
+    Dim headerRow As Long
+    Dim lastCol As Long
+    Dim lastRow As Long
+    Dim cStart As Long
+    Dim cEnd As Long
+    Dim cStop As Long
+    Dim cNew As Long
+    Dim r As Long
+    Dim vStart As Variant
+    Dim vEnd As Variant
+    Dim vStop As Variant
+    Dim dt As Date
+    Dim stopMin As Double
+    Dim dtCalc As Date
+
+    If wb Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    Set ws = wb.Worksheets("加工実績明細DATA")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+
+    headerRow = 1
+    lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
+    If lastCol <= 1 Then Exit Sub
+
+    cStart = 0: cEnd = 0: cStop = 0: cNew = 0
+    Dim c As Long, h As String
+    For c = 1 To lastCol
+        h = Trim$(CStr(ws.Cells(headerRow, c).Value))
+        If h = "加工開始日時" Then cStart = c
+        If h = "加工終了日時" Then cEnd = c
+        If h = "停機時間分(変換後)" Then cStop = c
+        If h = "加工開始日時(停機時間加算後)" Then cNew = c
+    Next c
+    If cStart = 0 Then Exit Sub
+    If cEnd = 0 Then Exit Sub
+
+    ' 新列が無ければ「加工開始日時」の右に挿入
+    If cNew = 0 Then
+        ws.Columns(cStart + 1).Insert Shift:=xlToRight
+        cNew = cStart + 1
+        ws.Cells(headerRow, cNew).Value = "加工開始日時(停機時間加算後)"
+        ws.Cells(headerRow, cNew).EntireColumn.NumberFormatLocal = "yyyy/m/d h:mm"
+        ' 挿入で右側列がずれるため再探索（停機時間列が右側にあった場合の補正）
+        lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
+        cStop = 0
+        For c = 1 To lastCol
+            h = Trim$(CStr(ws.Cells(headerRow, c).Value))
+            If h = "停機時間分(変換後)" Then cStop = c
+        Next c
+    End If
+
+    lastRow = ws.Cells(ws.Rows.Count, cStart).End(xlUp).Row
+    If lastRow < 2 Then Exit Sub
+
+    For r = 2 To lastRow
+        vStart = ws.Cells(r, cStart).Value
+        vEnd = ws.Cells(r, cEnd).Value
+        If IsDate(vStart) Then
+            dt = CDate(vStart)
+            stopMin = 0#
+            If cStop > 0 Then
+                vStop = ws.Cells(r, cStop).Value
+                If IsNumeric(vStop) Then stopMin = CDbl(vStop)
+            End If
+            dtCalc = DateAdd("n", stopMin, dt)
+            If IsDate(vEnd) Then
+                If CDate(vEnd) < dtCalc Then
+                    dtCalc = DateAdd("n", -5, CDate(vEnd))
+                End If
+            End If
+            ws.Cells(r, cNew).Value = dtCalc
+        Else
+            ws.Cells(r, cNew).ClearContents
+        End If
+    Next r
 End Sub
 
 ' 互換・他モジュール用: 段階2のみ（エラー時 MsgBox。成功時はスプラッシュ＋チャイム）
