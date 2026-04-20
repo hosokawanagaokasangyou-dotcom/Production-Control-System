@@ -1314,8 +1314,8 @@ RESULT_TASK_COL_DISPATCH_TRIAL_ORDER = "配台試行順番"
 # 試行順パターン P5/P6 等で原反を前倒ししたとき、結果に「試行前の実効原反日」と注記を出す
 RESULT_TASK_COL_RAW_INPUT_DATE_PRE_PATTERN = "原反投入日_試行前"
 RESULT_TASK_COL_PATTERN_RAW_SHIFT_NOTE = "試行順パターン原反前倒し"
-# 配台済_加工終了は「回答納期+16:00」または「指定納期+16:00」（回答は空のとき）以降かを表示
-RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "配台済_回答指定16時まで"
+# 結果_タスク一覧: 配台済_加工終了が納期ルールを満たすか（はい／いいえ／未割当／納期なし）。旧列名「配台済_回答指定16時まで」
+RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16 = "納期を満たすか？"
 # マスタ skills の工程+機械列ととの OP/AS 割当参考順（優先度値・並び順）とフォーム採用ルールの説明
 RESULT_MEMBER_PRIORITY_SHEET_NAME = "結果_人員配台優先順"
 # 計画結果ブック: メンバー×日の作業時間に対する配台実績比（旧誤記「…作業割引」は読込のみフォールバック）
@@ -5245,28 +5245,54 @@ def _coerce_planning_date_for_deadline(d) -> date | None:
     return None
 
 
+def _result_task_due_met_column_in_df_columns(df_columns) -> str | None:
+    """結果_タスク一覧の「納期を満たすか？」列（新旧見出し）を DataFrame 列から解決。"""
+    colset = {str(c).strip() for c in df_columns}
+    for cand in (
+        RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
+        "配台済_回答指定16時まで",
+        "配台済_基準16時まで",
+        "配完_回答指定16時まで",
+        "配完_基準16時まで",
+    ):
+        if cand in colset:
+            return cand
+    return None
+
+
 def _result_task_plan_end_within_answer_or_spec_16_label(
-    plan_window: list | None, answer_due, specified_due
+    plan_window: list | None, answer_due, specified_due, task_id=None
 ) -> str:
     """
-    結果_タスク一覧用: 「配台済_加工終了」相当の最終終了は」
-    回答納期の日付 + PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）以下かを判定。
-    回答納期は無い行は指定納期の日付 + 16:00 で判定。
-    両方無い場合は「紝期なし、。
+    結果_タスク一覧用: 「配台済_加工終了」相当の最終終了が納期を満たすか。
+
+    - 回答納期に日付があるときはそれを納期日とし、無いときは指定納期を納期日とする（両方無ければ「納期なし」）。
+    - 依頼NO（task_id）先頭が「V」（前後空白除く・大文字小文字不問）のとき: 納期日の PLAN_DUE_DAY_COMPLETION_TIME（既定 16:00）までに終了すれば「はい」。
+    - 上記以外: 納期日の暦日開始より前に終了すれば「はい」（＝納期日の前日までに加工完了が必要）。
     """
     if not plan_window or len(plan_window) < 2:
         return "未割当"
     _pe = plan_window[1]
     if _pe is None:
         return "未割当"
-    dd = _coerce_planning_date_for_deadline(answer_due)
-    if dd is None:
-        dd = _coerce_planning_date_for_deadline(specified_due)
-    if dd is None:
-        return "紝期なし"
+    answer_dd = _coerce_planning_date_for_deadline(answer_due)
+    spec_dd = _coerce_planning_date_for_deadline(specified_due)
+    if answer_dd is not None:
+        due_day = answer_dd
+    elif spec_dd is not None:
+        due_day = spec_dd
+    else:
+        return "納期なし"
+    tid = str(task_id or "").strip()
+    is_v_prefix = bool(tid) and tid.lstrip().upper().startswith("V")
     try:
-        deadline_dt = datetime.combine(dd, PLAN_DUE_DAY_COMPLETION_TIME)
-        if _pe <= deadline_dt:
+        if is_v_prefix:
+            deadline_dt = datetime.combine(due_day, PLAN_DUE_DAY_COMPLETION_TIME)
+            if _pe <= deadline_dt:
+                return "はい"
+            return "いいえ"
+        start_of_due = datetime.combine(due_day, time.min)
+        if _pe < start_of_due:
             return "はい"
         return "いいえ"
     except Exception:
@@ -5319,11 +5345,16 @@ def _resolve_result_task_column_label(label, col_by_norm: dict):
     resolved = col_by_norm.get(nk)
     if resolved is not None:
         return resolved
-    # 旧列名（計画基準納期ベース）→ 配台済_回答指定16時まで
-    if nk == _nfkc_column_aliases("配台済_基準16時まで"):
-        return col_by_norm.get(
-            _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
-        )
+    # 旧列名 → 納期を満たすか？（列設定シートの見出し互換）
+    _due_met_key = _nfkc_column_aliases(RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16)
+    for _old in (
+        "配台済_基準16時まで",
+        "配台済_回答指定16時まで",
+        "配完_回答指定16時まで",
+        "配完_基準16時まで",
+    ):
+        if nk == _nfkc_column_aliases(_old):
+            return col_by_norm.get(_due_met_key)
     # 旧見出し「原板投入日」→ 結果 DataFrame の「原反投入日」
     if nk == _nfkc_column_aliases("原板投入日"):
         return col_by_norm.get(_nfkc_column_aliases(TASK_COL_RAW_INPUT_DATE))
@@ -6586,13 +6617,16 @@ def _apply_result_task_plan_end_answer_spec_16_no_highlight(
     worksheet, column_names: list
 ):
     """
-    列「配台済_回答指定16時まで」は「いいえ」のセルを赤背景・白文字・太字にれる。
-    列設定で旧坝「配台済_基準16時まで」のままの見出しにも対応。
+    列「納期を満たすか？」は「いいえ」のセルを赤背景・白文字・太字にれる。
+    列設定で旧名「配台済_回答指定16時まで」等の見出しにも対応。
     """
     target_names = frozenset(
         {
             RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16,
             "配台済_基準16時まで",
+            "配台済_回答指定16時まで",
+            "配完_回答指定16時まで",
+            "配完_基準16時まで",
         }
     )
     col_idx = None
@@ -17367,7 +17401,7 @@ def _dispatch_trial_pattern_job_list() -> list[tuple[str, str, int | None, objec
 
 def _late_task_ids_missed_answer_deadline_from_plan_xlsx(plan_xlsx: str) -> set[str]:
     """
-    結果_タスク一覧の「配台済_回答指定16時まで」が「いいえ」の行のタスクID（＝依頼NO）集合。
+    結果_タスク一覧の「納期を満たすか？」が「いいえ」の行のタスクID（＝依頼NO）集合。
     スコア集計と同趣旨（未割当・欠損は遅れに含めない）。
     """
     out: set[str] = set()
@@ -17378,9 +17412,9 @@ def _late_task_ids_missed_answer_deadline_from_plan_xlsx(plan_xlsx: str) -> set[
     except Exception:
         return out
     df_t.columns = [str(c).strip() for c in df_t.columns]
-    col_late = RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16
+    col_late = _result_task_due_met_column_in_df_columns(df_t.columns)
     col_tid = "タスクID"
-    if col_late not in df_t.columns or col_tid not in df_t.columns:
+    if col_late is None or col_tid not in df_t.columns:
         return out
     for _, row in df_t.iterrows():
         tid = str(row.get(col_tid, "") or "").strip()
@@ -17494,7 +17528,7 @@ def _build_dispatch_trial_pattern_p5_task_queue(
 ) -> tuple[list, "pd.DataFrame | None"]:
     """
     ① P2 並びで試行順を付与した planning_df のまま段階2を 1 回プローブし、
-    ② 納期遅れ（配台済_回答指定16時まで＝いいえ）の依頼NO について原反投入日（＋上書き）を 1 日前、
+    ② 納期遅れ（納期を満たすか？＝いいえ）の依頼NO について原反投入日（＋上書き）を 1 日前、
     ③ 変更後 DataFrame でキューを組み直し P2 並べ＋ finalize。
     遅れ依頼が無い・プローブ失敗時は (P2 の tq, None)。遅れありでシフトしたときは (tq, shifted_df)。
     """
@@ -17784,7 +17818,7 @@ def _apply_pattern_dispatch_trial_orders_to_tasks_df(
 def _score_dispatch_pattern_stage2_workbook(plan_xlsx: str) -> dict:
     """
     段階2の production_plan xlsx から簡易スコアを読み取る。
-    ①納期（配台済_回答指定16時まで の はい率）
+        ①納期（納期を満たすか？ の はい率）
     ②メンバー（結果_メンバー別作業割合：日単位で配台実作業分が一度もない日は除外し、
       メンバー単位で「0.0% (0/0分)」の枠も除外し、残りのセルの % を平坦化して平均）
     ③設備（結果_設備毎の時間割 の日付列あたりの非空セル数合計＝稼働スロット量の参考）
@@ -17806,10 +17840,12 @@ def _score_dispatch_pattern_stage2_workbook(plan_xlsx: str) -> dict:
         out["スコア備考"] = f"結果_タスク一覧の読込失敗: {e}"
         return out
     df_t.columns = [str(c).strip() for c in df_t.columns]
-    col_late = RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16
+    col_late = _result_task_due_met_column_in_df_columns(df_t.columns)
     col_tid = "タスクID"
-    if col_late not in df_t.columns:
-        out["スコア備考"] = f"列「{col_late}」がありません。"
+    if col_late is None:
+        out["スコア備考"] = (
+            f"列「{RESULT_TASK_COL_PLAN_END_BY_ANSWER_OR_SPEC_16}」（旧「配台済_回答指定16時まで」）がありません。"
+        )
         return out
     mask = df_t[col_tid].astype(str).str.strip().ne("") & df_t[col_tid].astype(str).str.lower().ne("nan")
     sub = df_t.loc[mask, col_late].astype(str).str.strip()
@@ -18119,7 +18155,7 @@ def _build_dispatch_trial_pattern_list_matrix(
         "P3は機械グループの(納期基準−原反投入日)暦日合計が小さい機械から並べグループ内は納期順、"
         "P4はタスクごとの(納期基準−原反投入日)暦日が小さい順。"
         " P5は一度 P2 で試行順を付けた計画を段階2でプローブし、"
-        "「配台済_回答指定16時まで」がいいえの依頼NOだけ原反投入日（と上書き列）を1暦日前にしてから P2 を再適用した試行順。"
+        "「納期を満たすか？」がいいえの依頼NOだけ原反投入日（と上書き列）を1暦日前にしてから P2 を再適用した試行順。"
         " P6はそのP5後の計画でもう一度プローブし、まだ遅れの依頼のみ原反をさらに1暦日前にしてからP2を再適用。"
         "（プローブは一覧生成時に output/dispatch_pattern_stage2 の p5_list_matrix_probe / p6_list_matrix_probe 配下へ一時出力）。"
         " 「試行順パターン別段階2」バッチのみ DISPATCH_PATTERN_STAGE2_MAX_PATTERNS で件数を抑えます。"
@@ -26866,7 +26902,7 @@ def _generate_plan_impl(
             plan_assign_end_s = ""
 
         _plan_end_ans_spec16 = _result_task_plan_end_within_answer_or_spec_16_label(
-            _pw, _ans_d, _spec_d
+            _pw, _ans_d, _spec_d, t.get("task_id")
         )
 
         row_tail = {
