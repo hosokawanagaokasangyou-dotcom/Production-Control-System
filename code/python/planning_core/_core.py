@@ -24702,11 +24702,29 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             out_path, RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME
         )
         cur_extract_display = (data_extract_dt_str or "").strip()
+        input_wb_mtime = None
+        out_mtime = None
+        try:
+            if TASKS_INPUT_WORKBOOK and os.path.exists(TASKS_INPUT_WORKBOOK):
+                input_wb_mtime = os.path.getmtime(TASKS_INPUT_WORKBOOK)
+        except Exception:
+            input_wb_mtime = None
+        try:
+            if out_path and os.path.exists(out_path):
+                out_mtime = os.path.getmtime(out_path)
+        except Exception:
+            out_mtime = None
+        mtime_ok = (
+            input_wb_mtime is None
+            or out_mtime is None
+            or (out_mtime >= input_wb_mtime - 1e-6)
+        )
         if (
             cur_extract_display
             and cur_extract_display not in ("—", "-")
             and prev_extract_display is not None
             and prev_extract_display.strip() == cur_extract_display
+            and mtime_ok
         ):
             logging.info(
                 "実績明細ガントのみ: データ抽出時間が前回出力と同一のためファイル更新をスキップしました（%s）。",
