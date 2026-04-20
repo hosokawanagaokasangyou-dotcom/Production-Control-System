@@ -2643,7 +2643,8 @@ def _write_results_equipment_gantt_sheet(
     fill_gantt_fallback = PatternFill(fill_type="solid", start_color=fb_gantt, end_color=fb_gantt)
 
     # タイトル＆日時（ページ上部）
-    create_ts = base_dt.strftime("%Y/%m/%d %H:%M:%S")
+    # base_dt は配台・表示レンジの基準に使うが、作成時刻は壁時計を表示する。
+    create_ts = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     master_path = os.path.join(os.getcwd(), MASTER_FILE) if MASTER_FILE else ""
 
     def _fmt_mtime(p):
@@ -24934,6 +24935,11 @@ def _generate_plan_impl(
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    # 表示・ファイル名・メタ用の「データ抽出」文字列は、正規化前の抽出時刻（加工計画DATA上の値）を維持する。
+    # base_now_dt は当日判定や探索下限の都合で正規化されうるため、用途を混ぜない。
+    data_extract_dt_display_str = (
+        data_extract_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
+    )
     # データ抽出時刻が「夕方」でも、同日の配台探索が終業前まで進むよう macro_now の時刻を正規化する（既定）。
     # 旧挙動が必要な場合のみ STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK=1。
     if (
@@ -24952,7 +24958,7 @@ def _generate_plan_impl(
             )
     run_date = base_now_dt.date()
     data_extract_dt_str = (
-        base_now_dt.strftime("%Y/%m/%d %H:%M:%S") if data_extract_dt is not None else "—"
+        data_extract_dt_display_str if data_extract_dt is not None else "—"
     )
     logging.info(
         "計画基準日時: %s（%s）",
@@ -25058,8 +25064,10 @@ def _generate_plan_impl(
             global_priority_override.get("interpretation_ja", ""),
         )
 
-    # 「当日」判定と最早開始時刻には基準日時（データ抽出時間→抽出時間→データ抽出日）を使う
-    macro_now_dt = base_now_dt
+    # 「当日」判定と最早開始時刻には基準日時（データ抽出時間→抽出時間→データ抽出日）を使う。
+    # base_now_dt は「同日を広く探索する」目的で時刻が工場開始へ正規化されうるが、
+    # 抽出時刻より前に配台しない制約（要件: 抽出時間を基準に遡らない）には正規化前を使う。
+    macro_now_dt = data_extract_dt if isinstance(data_extract_dt, datetime) else base_now_dt
     macro_run_date = macro_now_dt.date()
     ai_task_by_tid = analyze_task_special_remarks(
         tasks_df, reference_year=run_date.year,         ai_sheet_sink=ai_log_data
