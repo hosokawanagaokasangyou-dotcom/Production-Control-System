@@ -1664,7 +1664,7 @@ End Function
 ' ※ DisplayAlerts=False で接続／PQ 失敗時の Excel 標準ダイアログを抑止。VBA 側も MsgBox は出さず
 '    m_lastRefreshQueriesErrMsg に詳細を残す（段階1・2のエラーメッセージに連結）。
 ' ※ PQ_REFRESH_PING_HOST へ ping（PQ_REFRESH_PING_TIMEOUT_MS）で応答がなければ RefreshAll は行わず、
-'    成功として返す（既存データのまま段階1・2を継続）。
+'    MsgBox で失敗を通知したうえで成功として返す（既存データのまま段階1・2を継続）。
 ' =========================================================
 Public Function TryRefreshWorkbookQueries() As Boolean
     Dim prevSU As Boolean
@@ -1680,6 +1680,9 @@ Public Function TryRefreshWorkbookQueries() As Boolean
         DoEvents
         Application.StatusBar = False
     ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
+        MsgBox "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答がありません（タイムアウト " & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & " ms）。" & vbCrLf & _
+               "Power Query 等の一括更新をスキップし、キャッシュされたデータのまま処理を続行します。", _
+               vbExclamation, "データ接続の確認"
         Application.StatusBar = "接続先 " & PQ_REFRESH_PING_HOST & " に ping 応答なし（" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "ms）? Power Query 等の一括更新をスキップして処理を続行します"
         DoEvents
         Application.StatusBar = False
