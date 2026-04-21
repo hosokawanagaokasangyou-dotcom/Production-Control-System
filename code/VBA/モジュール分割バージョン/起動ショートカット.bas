@@ -15,11 +15,48 @@ Private Function VersionTxtFirstLineNormalized(ByVal fileUtf8Content As String) 
     VersionTxtFirstLineNormalized = Trim$(t)
 End Function
 
-' マクロブック直下の version.txt と共有 UNC の version.txt の 1 行目が異なるとき警告（同一 Excel セッションで 1 回のみ）
+' 設定シート B1: 共有側のフォルダ（UNC・末尾 \ 可）または version.txt までのフルパス。
+Private Function SharedVersionTxtResolvedPath(ByRef fullPath As String) As Boolean
+    Dim ws As Worksheet
+    Dim base As String
+    Dim lcBase As String
+    Dim suf As String
+    
+    SharedVersionTxtResolvedPath = False
+    fullPath = ""
+    On Error GoTo Fail
+    
+    Set ws = ThisWorkbook.Worksheets(SHEET_SETTINGS)
+    base = Trim$(CStr(ws.Range("B1").Value2))
+    If Len(base) = 0 Then Exit Function
+    
+    Do While Len(base) > 1 And Right$(base, 1) = "\"
+        base = Left$(base, Len(base) - 1)
+    Loop
+    
+    suf = VERSION_TXT_FILE_NAME
+    lcBase = LCase$(base)
+    If Len(lcBase) >= Len(suf) Then
+        If Right$(lcBase, Len(suf)) = LCase$(suf) Then
+            fullPath = base
+            SharedVersionTxtResolvedPath = True
+            Exit Function
+        End If
+    End If
+    
+    fullPath = base & "\" & VERSION_TXT_FILE_NAME
+    SharedVersionTxtResolvedPath = True
+    Exit Function
+Fail:
+    SharedVersionTxtResolvedPath = False
+End Function
+
+' マクロブック直下の version.txt と共有側 version.txt の 1 行目が異なるとき警告（同一 Excel セッションで 1 回のみ）
 Public Sub 配台AI_共有Version照合_起動時警告()
     Static done As Boolean
     Dim wbFolder As String
     Dim localPath As String
+    Dim sharePath As String
     Dim localVer As String
     Dim shareVer As String
     Dim msg As String
@@ -38,7 +75,12 @@ Public Sub 配台AI_共有Version照合_起動時警告()
         Exit Sub
     End If
     
-    shareVer = VersionTxtFirstLineNormalized(GeminiReadUtf8File(VERSION_TXT_SHARED_REFERENCE_PATH))
+    If Not SharedVersionTxtResolvedPath(sharePath) Then
+        done = True
+        Exit Sub
+    End If
+    
+    shareVer = VersionTxtFirstLineNormalized(GeminiReadUtf8File(sharePath))
     If Len(shareVer) = 0 Then
         done = True
         Exit Sub
@@ -51,8 +93,9 @@ Public Sub 配台AI_共有Version照合_起動時警告()
     
     done = True
     msg = "配台AIシステムのバージョンが共有フォルダの正と一致しません。" & vbCrLf & vbCrLf & _
+          "設定シート B1 の参照先: " & sharePath & vbCrLf & vbCrLf & _
           "このブックのフォルダ内 version.txt: " & localVer & vbCrLf & _
-          "共有の version.txt: " & shareVer & vbCrLf & vbCrLf & _
+          "共有の version.txt（先頭行）: " & shareVer & vbCrLf & vbCrLf & _
           "共有の一式を取得し、マクロブックと同じフォルダの version.txt を更新してください。"
     MsgBox msg, vbExclamation + vbOKOnly, "バージョン不一致"
 End Sub

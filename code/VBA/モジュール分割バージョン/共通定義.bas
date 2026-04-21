@@ -171,9 +171,9 @@ Public Const SHAPE_MAIN_DISPATCH_TRIAL_PATTERN_LIST_THEN_STAGE2 As String = "btn
 Public Const SHEET_WORKBOOK_ENV As String = "設定_環境変数"
 ' マクロブックと同じフォルダに置く（設定_環境変数_雛形TSVから同期 が読み込む）
 Public Const WORKBOOK_ENV_TEMPLATE_TSV_FILE As String = "設定_環境変数_雛形.tsv"
-' マクロブックと同じフォルダの version.txt（1 行目をバージョン文字列として扱う）と、共有側の正を照合する
+' マクロブックと同じフォルダの version.txt（1 行目をバージョン文字列として扱う）と、共有側の正を照合する。
+' 共有側のフォルダまたは version.txt のフルパスはシート「設定」の B1（値）で指定する。
 Public Const VERSION_TXT_FILE_NAME As String = "version.txt"
-Public Const VERSION_TXT_SHARED_REFERENCE_PATH As String = "\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●配台AIシステム\version.txt"
 ' シートのタブ表示と並び順を一覧・適用する（VBA のみ。Python 連携なし）
 Public Const SHEET_SHEET_VISIBILITY As String = "設定_シート表示"
 ' Ctrl+Shift+テンキー - → メインシートへ（Application.OnKey）。^=Ctrl、+=Shift、{109}=テンキー -（vbKeySubtract）。{SUBTRACT} は環境により OnKey が 1004 で失敗するため数値コードを使用
