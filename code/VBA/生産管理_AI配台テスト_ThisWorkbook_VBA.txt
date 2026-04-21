@@ -9,6 +9,7 @@ Option Explicit
 
 Private Sub Workbook_Open()
     On Error Resume Next
+    ”z‘äAI_‹¤—LVersionÆ‡_‹N“®Œx
     ShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
 End Sub

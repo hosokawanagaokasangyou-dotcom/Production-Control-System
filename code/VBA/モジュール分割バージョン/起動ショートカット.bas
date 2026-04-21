@@ -1,5 +1,62 @@
 Option Explicit
 
+' version.txt の先頭行（改行まで）をバージョン文字列として返す。UTF-8 想定（GeminiReadUtf8File 経由）
+Private Function VersionTxtFirstLineNormalized(ByVal fileUtf8Content As String) As String
+    Dim t As String
+    Dim p As Long
+    t = Trim$(fileUtf8Content)
+    If Len(t) = 0 Then VersionTxtFirstLineNormalized = "": Exit Function
+    p = InStr(1, t, vbCrLf, vbBinaryCompare)
+    If p > 0 Then t = Trim$(Left$(t, p - 1))
+    p = InStr(1, t, vbLf, vbBinaryCompare)
+    If p > 0 Then t = Trim$(Left$(t, p - 1))
+    p = InStr(1, t, vbCr, vbBinaryCompare)
+    If p > 0 Then t = Trim$(Left$(t, p - 1))
+    VersionTxtFirstLineNormalized = Trim$(t)
+End Function
+
+' マクロブック直下の version.txt と共有 UNC の version.txt の 1 行目が異なるとき警告（同一 Excel セッションで 1 回のみ）
+Public Sub 配台AI_共有Version照合_起動時警告()
+    Static done As Boolean
+    Dim wbFolder As String
+    Dim localPath As String
+    Dim localVer As String
+    Dim shareVer As String
+    Dim msg As String
+    
+    If done Then Exit Sub
+    
+    wbFolder = Trim$(ThisWorkbook.Path)
+    If Len(wbFolder) = 0 Then Exit Sub
+    
+    localPath = wbFolder & "\" & VERSION_TXT_FILE_NAME
+    If Len(Dir(localPath)) = 0 Then Exit Sub
+    
+    localVer = VersionTxtFirstLineNormalized(GeminiReadUtf8File(localPath))
+    If Len(localVer) = 0 Then
+        done = True
+        Exit Sub
+    End If
+    
+    shareVer = VersionTxtFirstLineNormalized(GeminiReadUtf8File(VERSION_TXT_SHARED_REFERENCE_PATH))
+    If Len(shareVer) = 0 Then
+        done = True
+        Exit Sub
+    End If
+    
+    If StrComp(localVer, shareVer, vbBinaryCompare) = 0 Then
+        done = True
+        Exit Sub
+    End If
+    
+    done = True
+    msg = "配台AIシステムのバージョンが共有フォルダの正と一致しません。" & vbCrLf & vbCrLf & _
+          "このブックのフォルダ内 version.txt: " & localVer & vbCrLf & _
+          "共有の version.txt: " & shareVer & vbCrLf & vbCrLf & _
+          "共有の一式を取得し、マクロブックと同じフォルダの version.txt を更新してください。"
+    MsgBox msg, vbExclamation + vbOKOnly, "バージョン不一致"
+End Sub
+
 Public Sub ShortcutMainSheet_CtrlShift0()
     On Error Resume Next
     If Not ActiveWorkbook Is ThisWorkbook Then Exit Sub
@@ -50,6 +107,9 @@ Public Sub ShortcutMainSheet_OnKeyUnregister()
 End Sub
 
 Sub Auto_Open()
+    On Error Resume Next
+    配台AI_共有Version照合_起動時警告
+    On Error GoTo 0
     ShortcutMainSheet_OnKeyRegister
 End Sub
 
