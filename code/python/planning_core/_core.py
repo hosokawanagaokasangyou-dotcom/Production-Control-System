@@ -18011,13 +18011,6 @@ def _excel_hyperlink_formula_file(abs_path: str, display: str) -> str:
     return f'=HYPERLINK("{p}","{disp}")'
 
 
-def _excel_hyperlink_formula_literal(link_target: str, display: str) -> str:
-    """HYPERLINK 数式（相対パス・UNC 等、link_target をそのまま埋め込む）。"""
-    lt = (link_target or "").replace('"', '""')
-    disp = (display or "").replace('"', '""')
-    return f'=HYPERLINK("{lt}","{disp}")'
-
-
 def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     wb,
     summary_rows: list[dict],
@@ -18043,10 +18036,9 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
         pass
     intro = (
         "各パターンの配台試行順を「配台計画_タスク入力」に反映したうえで段階2のみ実行し、"
-        "output/dispatch_pattern_stage2 配下に別ブックを保存した結果です。"
-        " 配台計画ガンチャート列・タスク一覧列は、マクロブック直下の pdf\\<バッチ実行時刻>_<パターンID>\\ 内の"
-        " 結果_設備ガント.pdf / 結果_タスク一覧.csv への相対リンク（.\\pdf\\…）です。"
-        " スコアと参考スコアを比較してください。"
+        "output/dispatch_pattern_stage2/<実行時刻>/<パターンID>/ に "
+        "production_plan_multi_day_*.xlsx / member_schedule_*.xlsx を保存した結果です。"
+        " 生産計画ブック・メンバー日程ブック列のリンクは当該ファイルの絶対パスです。スコアと参考スコアを比較してください。"
         " 最適と思う案のパターンIDを B3 に選び（プルダウン可）、ブックを保存してから"
         "「試行順パターン採用を計画へ反映」マクロで配台計画シートの配台試行順番に書き戻します。"
         f" シミュレーション件数上限は {_dispatch_pattern_stage2_max_patterns()} 件です。"
@@ -18054,8 +18046,8 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     headers = [
         "パターンID",
         "パターン名",
-        "配台計画ガンチャート",
-        "タスク一覧",
+        "生産計画ブック",
+        "メンバー日程ブック",
         "納期_判定対象件数",
         "納期_遅れ件数",
         "納期_遵守率(%)",
@@ -18131,20 +18123,18 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     n_rows = len(pad)
     ws.range((1, 1)).resize(n_rows, n_cols).value = pad
     data_start = 6
-    batch_basename = os.path.basename((batch_root or "").strip().rstrip("/\\"))
-    # C,D 列に数式を上書き（データ行のみ）… マクロブック相対 .\pdf\<バッチ時刻>_<パターンID>\
+    # C,D 列に数式を上書き（データ行のみ）… output/dispatch_pattern_stage2/<日付>/<パターンID>/ の xlsx 絶対パス
     for i, r in enumerate(summary_rows, start=data_start):
         try:
-            pid = str(r.get("パターンID", "") or "").strip()
-            if batch_basename and pid:
-                stamp_dir = f"{batch_basename}_{pid}"
-                gantt = f".\\pdf\\{stamp_dir}\\結果_設備ガント.pdf"
-                task_csv = f".\\pdf\\{stamp_dir}\\結果_タスク一覧.csv"
-                ws.range((i, 3)).formula = _excel_hyperlink_formula_literal(
-                    gantt, "結果_設備ガント.pdf"
+            fp = r.get("_path_plan")
+            fm = r.get("_path_member")
+            if fp:
+                ws.range((i, 3)).formula = _excel_hyperlink_formula_file(
+                    fp, os.path.basename(fp)
                 )
-                ws.range((i, 4)).formula = _excel_hyperlink_formula_literal(
-                    task_csv, "結果_タスク一覧.csv"
+            if fm:
+                ws.range((i, 4)).formula = _excel_hyperlink_formula_file(
+                    fm, os.path.basename(fm)
                 )
         except Exception:
             logging.debug("パターン段階2サマリ: HYPERLINK 設定失敗（無視）", exc_info=True)
@@ -18702,6 +18692,8 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             summary_rows.append(row)
             continue
 
+        row["_path_plan"] = paths.get("production_plan") or ""
+        row["_path_member"] = paths.get("member_schedule") or ""
         sco = _score_dispatch_pattern_stage2_workbook(paths["production_plan"])
         row["納期_判定対象件数"] = sco.get("納期_判定対象件数", "")
         row["納期_遅れ件数"] = sco.get("納期_遅れ件数", "")
