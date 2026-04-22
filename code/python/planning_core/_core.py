@@ -2712,7 +2712,8 @@ def _write_results_equipment_gantt_sheet(
     無効時は ([], []) を返す。
     gantt_compare_shape_styling が True のとき、計画行の角丸枠は点線、実績行は太線（比較ガント用）。
     compare_aladdin_qty_by_machine_date が dict のとき（通常 None）、比較ガントで機械×日ごとに
-    3 段目「アラジン入力数量」を描画する（キーは (_normalize_equipment_match_key(機械名), date)、値は (タスク概覝＝依頼NOのみ, タイムライン中央＝依頼NO(数量) をスペース区切り)）。
+    3 段目「アラジン入力数量」を描画する（キーは (_normalize_equipment_match_key(機械名), date)。
+    値は (タスク概覧, タイムライン中央表示, 実績不一致時の注記) の 3 要素または従来互換の 2 要素タプル）。
     """
     sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
     if not plan_rows:
@@ -2803,6 +2804,11 @@ def _write_results_equipment_gantt_sheet(
     grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     aladdin_tl_fill = PatternFill(
         fill_type="solid", start_color="FFFDE7", end_color="FFFDE7"
+    )
+    aladdin_tl_fill_mismatch = PatternFill(
+        fill_type="solid",
+        start_color=("FFCDD2" if _g_cf else "FFD6D6"),
+        end_color=("FFCDD2" if _g_cf else "FFD6D6"),
     )
     idle_fill = PatternFill(fill_type="solid", start_color="FFFFFF", end_color="FFFFFF")
     break_fill = PatternFill(
@@ -3209,20 +3215,29 @@ def _write_results_equipment_gantt_sheet(
             if _show_aladdin:
                 _amk = _normalize_equipment_match_key(mach_nm or "")
                 _pair = ("—", "—")
+                _ala_mm = ""
                 if compare_aladdin_qty_by_machine_date:
                     _got = compare_aladdin_qty_by_machine_date.get((_amk, d))
                     if _got is not None:
-                        _pair = _got
+                        _pair = (_got[0], _got[1])
+                        if isinstance(_got, tuple) and len(_got) >= 3:
+                            _ala_mm = str(_got[2] or "").strip()
                 _ala_sum, _ala_center = _pair
                 if isinstance(_ala_sum, str) and len(_ala_sum) > 32000:
                     _ala_sum = _ala_sum[:31997] + "..."
+                _ala_center_show = (_ala_center or "—") + (
+                    ("\n" + _ala_mm) if _ala_mm else ""
+                )
+                _ala_sum_show = (_ala_sum or "—") + (
+                    ("\n" + _ala_mm) if _ala_mm else ""
+                )
                 _lbl_m = (
                     f"{mach_nm}（アラジン入力数量）"
                     if mach_nm
                     else "（アラジン入力数量）"
                 )
                 _ac1 = ws.cell(row=row, column=2, value=_lbl_m)
-                _ac3 = ws.cell(row=row, column=3, value=_ala_sum or "—")
+                _ac3 = ws.cell(row=row, column=3, value=_ala_sum_show or "—")
                 for _cx in (_ac1, _ac3):
                     _cx.font = _result_font(size=11, color="000000")
                     _cx.fill = lab_fill
@@ -3244,10 +3259,12 @@ def _write_results_equipment_gantt_sheet(
                     _atl = ws.cell(
                         row=row,
                         column=n_fixed + 1,
-                        value=_ala_center or "—",
+                        value=_ala_center_show or "—",
                     )
                     _atl.font = _result_font(size=11, bold=False, color="333333")
-                    _atl.fill = aladdin_tl_fill
+                    _atl.fill = (
+                        aladdin_tl_fill_mismatch if _ala_mm else aladdin_tl_fill
+                    )
                     _atl.border = grid_border
                     _atl.alignment = Alignment(
                         horizontal="center",
@@ -25533,22 +25550,115 @@ def _format_qty_short(q: float) -> str:
     return s if s else "0"
 
 
+def _aggregate_actual_qty_by_machine_date_base_tid(
+    actual_timeline_events: list | None,
+) -> dict[tuple[str, date], dict[str, float]]:
+    """
+    実績タイムラインイベントを (機械キー, 日付) × 依頼NO（ロール無し）ごとに集計する。
+    比較ガントのアラジン「日次_加工数量」と突き合わせる際の実績側数量に用いる。
+    """
+    tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
+    if not actual_timeline_events:
+        return {}
+    for ev in actual_timeline_events:
+        d = ev.get("date")
+        mach = ev.get("machine")
+        if not isinstance(d, date) or mach is None:
+            continue
+        mk = _normalize_equipment_match_key(str(mach).strip())
+        if not mk:
+            continue
+        tid_raw = str(ev.get("task_id") or "").strip()
+        if not tid_raw:
+            continue
+        base_part = tid_raw.split("/", 1)[0].strip()
+        btid = planning_task_id_str_from_scalar(base_part) or base_part
+        if not btid:
+            continue
+        lm = ev.get("label_len_m")
+        try:
+            qty = float(lm) if lm is not None else 0.0
+        except (TypeError, ValueError):
+            qty = 0.0
+        if qty <= 1e-12:
+            continue
+        tmp[mk, d][btid] += qty
+    return {k: dict(v) for k, v in tmp.items()}
+
+
+def _compare_aladdin_plan_buckets_vs_actual(
+    buckets: dict[tuple[str, date], list[tuple[str, float]]],
+    actual_agg: dict[tuple[str, date], dict[str, float]],
+) -> dict[tuple[str, date], str]:
+    """
+    アラジン計画（バケツ内の依頼NOごとの数量）と実績集計を比較し、
+    機械×日ごとの不一致説明文（空なら一致）を返す。
+    """
+    notes: dict[tuple[str, date], str] = {}
+    for key, parts in buckets.items():
+        plan_by_tid: dict[str, float] = defaultdict(float)
+        for t, q in parts:
+            tid = planning_task_id_str_from_scalar(t) or (
+                str(t).strip() if t else ""
+            )
+            tid = tid or "—"
+            plan_by_tid[tid] += float(q)
+        act_map = actual_agg.get(key) or {}
+        pieces: list[str] = []
+        for tid in sorted(plan_by_tid.keys()):
+            pq = float(plan_by_tid[tid])
+            aq = float(act_map.get(tid, 0.0))
+            if not math.isclose(pq, aq, rel_tol=1e-9, abs_tol=1e-2):
+                pieces.append(
+                    f"{tid} 計画{_format_qty_short(pq)}≠実績{_format_qty_short(aq)}"
+                )
+        if pieces:
+            notes[key] = "【実績不一致】" + " ".join(pieces)
+    nm = len(notes)
+    if nm:
+        logging.info(
+            "計画実績比較ガント: アラジン計画と実績数量が異なる機械×日が %s 件あります。",
+            nm,
+        )
+    return notes
+
+
+def _merge_aladdin_lookup_with_actual_mismatch_annotations(
+    lookup: dict[tuple[str, date], tuple[str, str]],
+    buckets: dict[tuple[str, date], list[tuple[str, float]]],
+    actual_agg: dict[tuple[str, date], dict[str, float]],
+) -> dict[tuple[str, date], tuple[str, str, str]]:
+    """表示用 lookup に第3要素（不一致時の注記、一致時は空文字）を付与する。"""
+    mismatch_by_key = _compare_aladdin_plan_buckets_vs_actual(buckets, actual_agg)
+    out: dict[tuple[str, date], tuple[str, str, str]] = {}
+    for k, pair in lookup.items():
+        note = (mismatch_by_key.get(k) or "").strip()
+        out[k] = (pair[0], pair[1], note)
+    return out
+
+
 def _build_compare_gantt_aladdin_qty_lookup(
     df: pd.DataFrame | None, dates_set: set
-) -> dict[tuple[str, date], tuple[str, str]]:
+) -> tuple[
+    dict[tuple[str, date], tuple[str, str]],
+    dict[tuple[str, date], list[tuple[str, float]]],
+]:
     """
     加工計画DATA の「YYYY/MM/DD_加工数量」列から、(機械名キー, 日付) ごとの
     （タスク概覝＝依頼NOのみ, タイムライン中央＝「依頼NO(数量)」をスペース区切り）を構築する。
+    併せて同一キーの生バケツ（依頼NO別数量の比較用）も返す。
     """
     out: dict[tuple[str, date], tuple[str, str]] = {}
     if df is None or len(df) == 0:
-        return out
+        return out, {}
     if TASK_COL_MACHINE_NAME not in df.columns:
         logging.warning(
             "計画実績比較ガント: 列『%s』が無いためアラジン数量は結合できません。",
             TASK_COL_MACHINE_NAME,
         )
-        return out
+        return out, {}
 
     buckets: dict[tuple[str, date], list[tuple[str, float]]] = defaultdict(list)
     date_cols: list[tuple[str, date]] = []
@@ -25602,7 +25712,7 @@ def _build_compare_gantt_aladdin_qty_lookup(
             center += " …"
         out[key] = (detail, center)
 
-    return out
+    return out, dict(buckets)
 
 
 def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
@@ -25812,9 +25922,17 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             )
 
         _df_tasks_aladdin = _try_read_plan_tasks_sheet_for_compare_aladdin()
-        _aladdin_qty_lookup = _build_compare_gantt_aladdin_qty_lookup(
+        _aladdin_lookup, _aladdin_buckets = _build_compare_gantt_aladdin_qty_lookup(
             _df_tasks_aladdin,
             set(sorted_dates_show),
+        )
+        _actual_tid_qty_agg = _aggregate_actual_qty_by_machine_date_base_tid(
+            detail_timeline_events
+        )
+        _aladdin_qty_lookup = _merge_aladdin_lookup_with_actual_mismatch_annotations(
+            _aladdin_lookup,
+            _aladdin_buckets,
+            _actual_tid_qty_agg,
         )
 
         out_path = os.path.join(output_dir, COMPARE_GANTT_OUTPUT_FILENAME)
