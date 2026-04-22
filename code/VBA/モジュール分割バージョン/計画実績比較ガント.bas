@@ -5,6 +5,8 @@ Private Const ENV_COMPARE_GANTT_SNAPSHOT_DIR As String = "COMPARE_GANTT_SNAPSHOT
 ' スナップショットに同一機械の時間重なりがあっても比較ガントを生成する（Python 側で警告のみ）
 Private Const ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP As String = "COMPARE_GANTT_ALLOW_PLAN_OVERLAP"
 Private Const SHEET_PLAN_ACTUAL_COMPARE As String = "結果_設備ガント_計画実績比較"
+Private Const SHEET_SETTINGS As String = "設定"
+Private Const SETTINGS_EXTRA_SNAP_ROOT_ADDR As String = "B28"
 Private Const OUT_COMPARE_XLSX As String = "plan_actual_compare_gantt.xlsx"
 
 ' スナップショット出力（スナップショット出力.bas）と同じ相対フォルダ名
@@ -16,15 +18,18 @@ Private Const SHEET_COMPARE_PICK As String = "選択_計画実績比較"
 Private Const OLE_SNAP_LIST As String = "CompareGanttSnapListBox"
 ' 一覧はフォームのリストボックス（ActiveX よりデザインモード問題が出にくい）
 Private Const SHAPE_COMPARE_SNAP_LIST As String = "CompareGanttSnapListForm"
+' 設定シート B28 で指定したフォルダ配下の履歴用（pdf 配下とは別リスト・排他選択）
+Private Const SHAPE_COMPARE_SNAP_LIST_OPT As String = "CompareGanttSnapListFormOpt"
 ' 実行ボタンは OLE の OnAction が 1004 になる環境があるため、フォームコントロール（Shape）を使用
 Private Const SHAPE_COMPARE_RUN_BTN As String = "CompareGanttRunBtnForm"
 Private Const COMPARE_GANTT_DAY_ROW_MAP_START As Long = 500
 Private Const COMPARE_GANTT_DAY_ROW_MAP_DATE_COL As Long = 52   ' AZ
 Private Const COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL As Long = 53 ' BA
-' フォームリストと同じ並びで Z 列にフルパスを格納（1 行目＝リスト先頭）
+' フォームリストと同じ並びで Z 列・AA 列にフルパスを格納（1 行目＝リスト先頭）
 Private Const PICK_LIST_DATA_START_ROW As Long = 5
 Private Const PICK_SNAP_ROWS_MAX As Long = 500
-Private Const PICK_PATH_COL As Long = 26  ' 列 Z
+Private Const PICK_PATH_COL As Long = 26      ' 列 Z（pdf 配下リストと対応）
+Private Const PICK_PATH_COL_OPT As Long = 27 ' 列 AA（設定 B28 パス配下リストと対応）
 
 ' --- 公開入口 ---
 
@@ -123,8 +128,12 @@ Public Sub 計画実績比較ガント_リストから生成実行()
     Dim lo As OLEObject
     Dim lb As Object
     Dim shp As Shape
+    Dim shpPdf As Shape
+    Dim shpOpt As Shape
     Dim snap As String
     Dim li As Long
+    Dim cntPdf As Long
+    Dim cntOpt As Long
     
     On Error GoTo EH
     targetDir = ThisWorkbook.path
@@ -141,25 +150,56 @@ Public Sub 計画実績比較ガント_リストから生成実行()
         Exit Sub
     End If
     
-    Set shp = FindCompareSnapListShape(ws)
+    ' OnAction が効かない環境でも二重選択を避ける（一覧1を優先）
+    Set shpPdf = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST)
+    Set shpOpt = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST_OPT)
+    If Not shpPdf Is Nothing And Not shpOpt Is Nothing Then
+        On Error Resume Next
+        If shpPdf.ControlFormat.ListIndex >= 1 And shpOpt.ControlFormat.ListIndex >= 1 Then
+            shpOpt.ControlFormat.ListIndex = 0
+        End If
+        On Error GoTo EH
+    End If
+    
+    Set shp = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST)
     If Not shp Is Nothing Then
         With shp.ControlFormat
-            If .ListCount <= 0 Then
-                AppMsgBox "スナップショットがありません。pdf 配下に履歴フォルダがあるか確認してください。", vbExclamation, "計画実績比較ガント"
-                Exit Sub
-            End If
-            li = .ListIndex
-            If li < 1 Then
-                AppMsgBox "リストからスナップショットを選択してください。", vbExclamation, "計画実績比較ガント"
-                Exit Sub
+            If .ListIndex >= 1 Then
+                li = .ListIndex
+                snap = Trim$(CStr(ws.Cells(PICK_LIST_DATA_START_ROW + li - 1, PICK_PATH_COL).Value))
             End If
         End With
-        snap = Trim$(CStr(ws.Cells(PICK_LIST_DATA_START_ROW + li - 1, PICK_PATH_COL).Value))
-        If Len(snap) = 0 Then
-            AppMsgBox "選択のパスが空です。選択シートを再表示してください。", vbCritical, "計画実績比較ガント"
-            Exit Sub
+    End If
+    If Len(snap) = 0 Then
+        Set shp = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST_OPT)
+        If Not shp Is Nothing Then
+            With shp.ControlFormat
+                If .ListIndex >= 1 Then
+                    li = .ListIndex
+                    snap = Trim$(CStr(ws.Cells(PICK_LIST_DATA_START_ROW + li - 1, PICK_PATH_COL_OPT).Value))
+                End If
+            End With
         End If
+    End If
+    If Len(snap) > 0 Then
         RunCompareGanttPythonAndImport targetDir, snap
+        Exit Sub
+    End If
+    
+    ' どちらのリストも未選択またはパス空
+    Set shpPdf = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST)
+    Set shpOpt = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST_OPT)
+    cntPdf = 0: cntOpt = 0
+    If Not shpPdf Is Nothing Then cntPdf = shpPdf.ControlFormat.ListCount
+    If Not shpOpt Is Nothing Then cntOpt = shpOpt.ControlFormat.ListCount
+    If Not shpPdf Is Nothing Or Not shpOpt Is Nothing Then
+        If cntPdf <= 0 And cntOpt <= 0 Then
+            AppMsgBox "スナップショットがありません。" & vbCrLf & _
+                       "・このブックの pdf 配下に履歴フォルダがあるか" & vbCrLf & _
+                       "・設定シート " & SETTINGS_EXTRA_SNAP_ROOT_ADDR & " のパス配下を確認してください。", vbExclamation, "計画実績比較ガント"
+        Else
+            AppMsgBox "いずれかのリストからスナップショット（履歴フォルダ）を選択してください。", vbExclamation, "計画実績比較ガント"
+        End If
         Exit Sub
     End If
     
@@ -189,6 +229,36 @@ EH:
     AppMsgBox "エラー: " & Err.Number & " / " & Err.Description, vbCritical, "計画実績比較ガント"
 End Sub
 
+' フォームリスト2つを排他にする（各リストの OnAction から呼ぶ）。
+Public Sub 計画実績比較ガント_スナップリスト排他選択同期()
+    Dim ws As Worksheet
+    Dim callerName As String
+    Dim shpPdf As Shape
+    Dim shpOpt As Shape
+    On Error GoTo CleanExit
+    
+    If VarType(Application.Caller) <> vbString Then Exit Sub
+    callerName = CStr(Application.Caller)
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_COMPARE_PICK)
+    On Error GoTo CleanExit
+    If ws Is Nothing Then Exit Sub
+    
+    Set shpPdf = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST)
+    Set shpOpt = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST_OPT)
+    If shpPdf Is Nothing Or shpOpt Is Nothing Then Exit Sub
+    
+    On Error Resume Next
+    If StrComp(callerName, SHAPE_COMPARE_SNAP_LIST, vbTextCompare) = 0 Then
+        shpOpt.ControlFormat.ListIndex = 0
+    ElseIf StrComp(callerName, SHAPE_COMPARE_SNAP_LIST_OPT, vbTextCompare) = 0 Then
+        shpPdf.ControlFormat.ListIndex = 0
+    End If
+    On Error GoTo 0
+CleanExit:
+End Sub
+
 ' --- 内部 ---
 
 Private Function CompareGanttB1ValueAsIsoDate(ByVal v As Variant) As String
@@ -214,15 +284,34 @@ Private Function FindOleOnSheet(ByVal ws As Worksheet, ByVal wantName As String)
     Next o
 End Function
 
-Private Function FindCompareSnapListShape(ByVal ws As Worksheet) As Shape
+Private Function FindComparePickListShape(ByVal ws As Worksheet, ByVal wantName As String) As Shape
     Dim sh As Shape
-    Set FindCompareSnapListShape = Nothing
+    Set FindComparePickListShape = Nothing
     For Each sh In ws.Shapes
-        If StrComp(sh.Name, SHAPE_COMPARE_SNAP_LIST, vbTextCompare) = 0 Then
-            Set FindCompareSnapListShape = sh
+        If StrComp(sh.Name, wantName, vbTextCompare) = 0 Then
+            Set FindComparePickListShape = sh
             Exit Function
         End If
     Next sh
+End Function
+
+Private Function GetCompareGanttOptSnapshotRoot(ByVal wb As Workbook) As String
+    Dim wsCfg As Worksheet
+    Dim v As Variant
+    Dim s As String
+    GetCompareGanttOptSnapshotRoot = vbNullString
+    On Error Resume Next
+    Set wsCfg = wb.Worksheets(SHEET_SETTINGS)
+    On Error GoTo 0
+    If wsCfg Is Nothing Then Exit Function
+    v = wsCfg.Range(SETTINGS_EXTRA_SNAP_ROOT_ADDR).Value
+    If IsEmpty(v) Then Exit Function
+    s = Trim$(CStr(v))
+    If Len(s) = 0 Then Exit Function
+    Do While Len(s) > 0 And (Right$(s, 1) = "\" Or Right$(s, 1) = "/")
+        s = Left$(s, Len(s) - 1)
+    Loop
+    GetCompareGanttOptSnapshotRoot = s
 End Function
 
 Private Sub DeleteOleIfExists(ByVal ws As Worksheet, ByVal nm As String)
@@ -301,9 +390,9 @@ Private Sub RestorePlanActualCompareSheetAfterWorkbookProtect(ByVal wb As Workbo
     ProtectPlanActualCompareSheetForUi ws
 End Sub
 
-' pdf\<stamp>\ に 結果_タスク一覧.csv があるフォルダだけを降順で列挙しリストへ反映
-' フォームのリストボックスは表示名のみ。フルパスは ws の Z 列に同順で格納する。
-Private Sub RefreshCompareGanttSnapshotList(ByVal ws As Worksheet, ByVal listShp As Shape, ByVal pdfRoot As String)
+' \<stamp>\ に 結果_タスク一覧.csv があるフォルダだけを降順で列挙しリストへ反映
+' フォームのリストボックスは表示名のみ。フルパスは pathCol（Z または AA）に同順で格納する。
+Private Sub RefreshCompareGanttSnapshotList(ByVal ws As Worksheet, ByVal listShp As Shape, ByVal pdfRoot As String, ByVal pathCol As Long)
     Dim stamp As String
     Dim p As String
     Dim n As Long
@@ -318,14 +407,15 @@ Private Sub RefreshCompareGanttSnapshotList(ByVal ws As Worksheet, ByVal listShp
     Dim hasCsv As Boolean
     Dim cf As ControlFormat
     
-    ws.Range(ws.Cells(PICK_LIST_DATA_START_ROW, PICK_PATH_COL), _
-             ws.Cells(PICK_LIST_DATA_START_ROW + PICK_SNAP_ROWS_MAX - 1, PICK_PATH_COL)).ClearContents
+    ws.Range(ws.Cells(PICK_LIST_DATA_START_ROW, pathCol), _
+             ws.Cells(PICK_LIST_DATA_START_ROW + PICK_SNAP_ROWS_MAX - 1, pathCol)).ClearContents
     On Error Resume Next
     listShp.ControlFormat.RemoveAllItems
     On Error GoTo 0
     
     Set fso = CreateObject("Scripting.FileSystemObject")
     
+    If Len(Trim$(pdfRoot)) = 0 Then Exit Sub
     If Len(Dir(pdfRoot, vbDirectory)) = 0 Then Exit Sub
     
     n = 0
@@ -371,17 +461,20 @@ Private Sub RefreshCompareGanttSnapshotList(ByVal ws As Worksheet, ByVal listShp
     Set cf = listShp.ControlFormat
     For i = 1 To n
         cf.AddItem stamps(i)
-        ws.Cells(PICK_LIST_DATA_START_ROW + i - 1, PICK_PATH_COL).Value = paths(i)
+        ws.Cells(PICK_LIST_DATA_START_ROW + i - 1, pathCol).Value = paths(i)
     Next i
 End Sub
 
 Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As String)
     Dim ws As Worksheet
     Dim pdfRoot As String
+    Dim optRoot As String
     Dim shpList As Shape
-    Dim shpRun As Shape
+    Dim shpListOpt As Shape
+    Dim onAct As String
     
     pdfRoot = targetDir & "\" & PDF_SNAPSHOT_REL_FOLDER
+    optRoot = GetCompareGanttOptSnapshotRoot(wb)
     
     On Error Resume Next
     Set ws = wb.Worksheets(SHEET_COMPARE_PICK)
@@ -396,9 +489,11 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     TryUnprotectSheetAnyPassword ws
     
     ws.Cells.Clear
-    ws.Range("A1").Value = "過去配台スナップショット（pdf\日時フォルダ）から比較ガントを生成します。"
-    ws.Range("A2").Value = "① 下の一覧でフォルダを選択 ②「比較ガントを生成」をクリック。"
+    ws.Range("A1").Value = "過去配台スナップショット（履歴フォルダ）から比較ガントを生成します。"
+    ws.Range("A2").Value = "① 下のいずれか一方の一覧でフォルダを選択（2 つのリストは同時に選べません）②「比較ガントを生成」をクリック。"
     ws.Range("A3").Value = "※ シート保護でクリックできないときは、一時的に保護を解除してください。"
+    ws.Range("A4").Value = "【一覧1】このブックの pdf フォルダ配下（日時フォルダ）"
+    ws.Range("A5").Value = "【一覧2】設定シート " & SETTINGS_EXTRA_SNAP_ROOT_ADDR & " セルで指定したフォルダ配下（同じく日時フォルダ）"
     ws.Columns("A").ColumnWidth = 90
     
     DeleteOleIfExists ws, OLE_SNAP_LIST
@@ -407,19 +502,37 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     DeleteOleIfExists ws, "CompareGanttRunButton"
     On Error GoTo 0
     DeleteShapeIfExists ws, SHAPE_COMPARE_SNAP_LIST
+    DeleteShapeIfExists ws, SHAPE_COMPARE_SNAP_LIST_OPT
     DeleteShapeIfExists ws, SHAPE_COMPARE_RUN_BTN
     
+    onAct = "'" & wb.Name & "'!計画実績比較ガント_スナップリスト排他選択同期"
+    
     ' ActiveX の OLE ではなくフォームのリストボックス（デザインモード問題を避ける）
-    Set shpList = ws.Shapes.AddFormControl(xlListBox, 18, 72, 520, 260)
+    Set shpList = ws.Shapes.AddFormControl(xlListBox, 18, 78, 520, 150)
     shpList.Name = SHAPE_COMPARE_SNAP_LIST
     shpList.Placement = 1  ' xlMoveAndSize
     shpList.Locked = False
+    On Error Resume Next
+    shpList.OnAction = onAct
+    On Error GoTo 0
     
-    RefreshCompareGanttSnapshotList ws, shpList, pdfRoot
+    RefreshCompareGanttSnapshotList ws, shpList, pdfRoot, PICK_PATH_COL
+    
+    Set shpListOpt = ws.Shapes.AddFormControl(xlListBox, 18, 248, 520, 150)
+    shpListOpt.Name = SHAPE_COMPARE_SNAP_LIST_OPT
+    shpListOpt.Placement = 1  ' xlMoveAndSize
+    shpListOpt.Locked = False
+    On Error Resume Next
+    shpListOpt.OnAction = onAct
+    On Error GoTo 0
+    
+    RefreshCompareGanttSnapshotList ws, shpListOpt, optRoot, PICK_PATH_COL_OPT
+    
     ws.Columns(PICK_PATH_COL).Hidden = True
+    ws.Columns(PICK_PATH_COL_OPT).Hidden = True
     
     On Error Resume Next
-    ws.Range("A1:A3").Font.Name = BIZ_UDP_GOTHIC_FONT_NAME
+    ws.Range("A1:A5").Font.Name = BIZ_UDP_GOTHIC_FONT_NAME
     On Error GoTo 0
     
     ' フォームコントロールのボタン（OLE の CommandButton では OnAction が 1004 になることがある）
