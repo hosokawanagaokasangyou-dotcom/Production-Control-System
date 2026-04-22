@@ -29,12 +29,17 @@ Private Const PICK_PATH_COL As Long = 26  ' 列 Z
 ' --- 公開入口 ---
 
 ' 選択用シートを作成／更新し、一覧を再取得してアクティブにする。
+' Power Query / データ接続は業務ロジックと同様 TryRefreshWorkbookQueries で一括更新してから表示する。
 Public Sub 計画実績比較ガント_選択シートを表示()
     Dim targetDir As String
     On Error GoTo EH
     targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
         AppMsgBox "先にこのブックを保存してください。", vbExclamation, "計画実績比較ガント"
+        Exit Sub
+    End If
+    If Not TryRefreshWorkbookQueries() Then
+        AppMsgBox "データ接続の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "計画実績比較ガント"
         Exit Sub
     End If
     EnsureCompareGanttPickSheet ThisWorkbook, targetDir
@@ -405,12 +410,12 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     On Error GoTo 0
     
     ' フォームコントロールのボタン（OLE の CommandButton では OnAction が 1004 になることがある）
-    Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, 18, 345, 180, 30)
-    shpRun.Name = SHAPE_COMPARE_RUN_BTN
-    shpRun.Locked = False
-    shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
-    shpRun.TextFrame.Characters.Text = "比較ガントを生成"
-    shpRun.Placement = 1  ' xlMoveAndSize
+    'Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, 18, 345, 180, 30)
+    'shpRun.Name = SHAPE_COMPARE_RUN_BTN
+    'shpRun.Locked = False
+    'shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
+    'shpRun.TextFrame.Characters.Text = "比較ガントを生成"
+    'shpRun.Placement = 1  ' xlMoveAndSize
     
     ProtectComparePickSheetForUi ws
     
