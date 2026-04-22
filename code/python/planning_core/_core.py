@@ -825,12 +825,19 @@ ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 RESULT_SHEET_GANTT_COMPARE_NAME = "結果_設備ガント_計画実績比較"
 COMPARE_GANTT_OUTPUT_FILENAME = "plan_actual_compare_gantt.xlsx"
 ENV_COMPARE_GANTT_SNAPSHOT_DIR = "COMPARE_GANTT_SNAPSHOT_DIR"
+# 1/true/yes/on のとき、計画(CSV)の同一機械・同一日の区間重なりを例外にせず警告のみ（比較ガント生成は続行）
+ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP = "COMPARE_GANTT_ALLOW_PLAN_OVERLAP"
 try:
     COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT = float(
         (os.environ.get("COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT", "2.5") or "2.5").strip()
     )
 except (TypeError, ValueError):
     COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT = 2.5
+# 計画実績比較ガント UI（共通定義.bas の BIZ_UDP_GOTHIC_FONT_NAME と一致）
+COMPARE_GANTT_UI_FONT_NAME = "BIZ UDPゴシック"
+# 計画実績比較ガント: VBA「該当日へジャンプ」が参照する日付→日ブロック先頭行（非表示・候補日と同じ開始行に並べる）
+COMPARE_GANTT_DAY_ROW_MAP_DATE_COL = 52  # AZ
+COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
@@ -2542,6 +2549,53 @@ def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternF
     return out
 
 
+def _apply_compare_gantt_typography(ws, hdr_row: int) -> None:
+    """計画実績比較シートのフォントを BIZ UDPゴシックに統一し、表示日・説明・左表のサイズを調整する。"""
+    fn = COMPARE_GANTT_UI_FONT_NAME
+    mr = int(ws.max_row or 1)
+    mc = int(ws.max_column or 1)
+
+    def _repl(old, **kw):
+        sz = kw.pop("size", None)
+        bd = kw.pop("bold", None)
+        it = kw.pop("italic", None)
+        col = kw.pop("color", None)
+        if old is not None:
+            if sz is None and old.size:
+                sz = old.size
+            if bd is None and old.bold is not None:
+                bd = old.bold
+            if it is None and old.italic is not None:
+                it = old.italic
+            if col is None and old.color:
+                col = old.color
+        sz = float(sz) if sz is not None else 11.0
+        bd = False if bd is None else bool(bd)
+        it = False if it is None else bool(it)
+        args: dict = {"name": fn, "size": sz, "bold": bd, "italic": it}
+        if col is not None:
+            args["color"] = col
+        args.update(kw)
+        return Font(**args)
+
+    for r in range(1, mr + 1):
+        for c in range(1, mc + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.font = _repl(cell.font)
+    ws["B1"].font = _repl(ws["B1"].font, size=22, bold=False)
+    ws["A1"].font = _repl(ws["A1"].font, size=11, bold=True)
+    ws["A2"].font = _repl(ws["A2"].font, size=14, bold=False)
+    ws["D2"].font = _repl(ws["D2"].font, size=14, bold=False)
+    for r in range(hdr_row, mr + 1):
+        for c in (2, 3):
+            cell = ws.cell(row=r, column=c)
+            cell.font = _repl(cell.font, size=14)
+
+    ws.row_dimensions[1].height = 44
+    ws.row_dimensions[2].height = 44
+    ws.row_dimensions[hdr_row].height = 44
+
+
 def _write_results_equipment_gantt_sheet(
     writer,
     timeline_events,
@@ -2680,7 +2734,8 @@ def _write_results_equipment_gantt_sheet(
         t0 += timedelta(minutes=slot_mins)
 
     n_slots = len(slot_times)
-    n_fixed = 4  # A=日付（日ブロック内で縦結合）/ B〜D=機械名・工程名・タスク概覝
+    # 計画実績比較ガントは工程名列が冗長なため 3 列（日付・機械名・タスク概覝）に縮小
+    n_fixed = 3 if _cmp_shape else 4
     last_col = n_fixed + n_slots
     gantt_shape_label_specs: list[dict] = []
     gantt_timeline_day_blocks: list[dict] = []
@@ -2704,7 +2759,7 @@ def _write_results_equipment_gantt_sheet(
 
     master_mtime = _fmt_mtime(master_path)
 
-    # 行1の A〜B はコンボ、C は更新ボタン（マクロ）。タイトル・メタ行は D 列から全幅結合。
+    # タイトル・メタは常に D 列（4）から右へ結合。左の A〜C は比較時プルダウン、通常時は空欄のまま。
     title_start_col = 4
     row = 1
     ws.merge_cells(
@@ -2766,12 +2821,50 @@ def _write_results_equipment_gantt_sheet(
             continue
         dates_to_show.append(d0)
 
+    # 比較ガント: 表示日プルダウン（データ検証）。候補は非表示列の退避行に格納（行の絞り込みは未実装・参照用）。
+    _cmp_date_pick_row0 = 500
+    if _cmp_shape and dates_to_show:
+        pick_col = last_col + 1
+        pz = get_column_letter(pick_col)
+        for i, d0 in enumerate(dates_to_show):
+            ws.cell(row=_cmp_date_pick_row0 + i, column=pick_col, value=d0.isoformat())
+        try:
+            ws.column_dimensions[pz].hidden = True
+        except Exception:
+            pass
+        n_pick = len(dates_to_show)
+        f1 = f"${pz}${_cmp_date_pick_row0}:${pz}${_cmp_date_pick_row0 + n_pick - 1}"
+        dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+        ws.add_data_validation(dv)
+        a1 = ws.cell(row=1, column=1, value="表示日")
+        a1.font = _result_font(size=11, bold=True, color="1A1A1A")
+        a1.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        b1 = ws.cell(row=1, column=2, value=dates_to_show[0].isoformat())
+        b1.font = _result_font(size=11, color="000000")
+        b1.alignment = Alignment(horizontal="left", vertical="center", indent=0)
+        dv.add(b1)
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=n_fixed)
+        hint = ws.cell(
+            row=2,
+            column=1,
+            value="B1 で日付を選び、「該当日へジャンプ」でその日のブロック先頭へ移動します（自動スクロールは ThisWorkbook.SheetChange へ計画実績比較ガント_ThisWorkbook貼付_SheetChange.txt を追記）。",
+        )
+        hint.font = _result_font(size=9, color="555555")
+        hint.alignment = Alignment(
+            horizontal="left", vertical="center", wrap_text=True, indent=1
+        )
+
     hdr_row = row
-    fixed_hdr = ["日付", "機械名", "工程名", "タスク概覝"]
+    fixed_hdr = (
+        ["日付", "機械名", "タスク概覝"]
+        if _cmp_shape
+        else ["日付", "機械名", "工程名", "タスク概覝"]
+    )
     for ci, h in enumerate(fixed_hdr, 1):
         c = ws.cell(row=hdr_row, column=ci, value=h)
         c.font = hdr_font
         c.fill = hdr_fill
+        c.border = grid_border
         c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
     slots_hdr = [datetime.combine(dummy_d, tm) for tm in slot_times]
     for si, st in enumerate(slots_hdr):
@@ -2783,9 +2876,10 @@ def _write_results_equipment_gantt_sheet(
             if not _time_intervals_overlap_half_open(st.time(), slot_end_t, rs, re_):
                 hdr_use = hdr_fill_outside_regular
         c.fill = hdr_use
+        c.border = grid_border
         c.alignment = Alignment(horizontal="center", vertical="bottom", textRotation=90)
     ws.row_dimensions[hdr_row].height = float(GANTT_HDR_ROW_HEIGHT_PT)
-    # 先頭データ行の左上＝時刻列先頭（E4）で窓枠固定（行1〜3・列A〜Dを固定）
+    # 先頭データ行の左上＝時刻列先頭で窓枠固定（行1〜ヘッダー行・左固定列まで）
     ws.freeze_panes = f"{get_column_letter(n_fixed + 1)}{hdr_row + 1}"
     row = hdr_row + 1
 
@@ -2842,16 +2936,36 @@ def _write_results_equipment_gantt_sheet(
                     task_sum = "—"
 
                 c1 = ws.cell(row=row, column=2, value=mach_nm if mach_nm else "—")
-                c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-                c3 = ws.cell(row=row, column=4, value=task_sum)
-                for c in (c1, c2, c3):
-                    c.font = _result_font(size=12, color="000000")
-                    c.fill = lab_fill
-                    c.border = grid_border
-                c1.font = _result_font(size=12, bold=True, color="000000")
-                c1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-                c2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-                c3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                if _cmp_shape:
+                    c3 = ws.cell(row=row, column=3, value=task_sum)
+                    for c in (c1, c3):
+                        c.font = _result_font(size=12, color="000000")
+                        c.fill = lab_fill
+                        c.border = grid_border
+                    c1.font = _result_font(size=12, bold=True, color="000000")
+                    c1.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
+                    c3.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
+                else:
+                    c2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                    c3 = ws.cell(row=row, column=4, value=task_sum)
+                    for c in (c1, c2, c3):
+                        c.font = _result_font(size=12, color="000000")
+                        c.fill = lab_fill
+                        c.border = grid_border
+                    c1.font = _result_font(size=12, bold=True, color="000000")
+                    c1.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=False
+                    )
+                    c2.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=False
+                    )
+                    c3.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
 
                 _paint_gantt_timeline_row_merged(
                     ws,
@@ -2931,16 +3045,40 @@ def _write_results_equipment_gantt_sheet(
                 else:
                     act_mach = "—"
                 ca1 = ws.cell(row=row, column=2, value=act_mach)
-                ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
-                ca3 = ws.cell(row=row, column=4, value=task_sum_a)
-                for c in (ca1, ca2, ca3):
-                    c.font = _result_font(size=12, color="000000")
-                    c.fill = lab_fill_a
-                    c.border = grid_border
-                ca1.font = _result_font(size=12, bold=True, color="000000", italic=True)
-                ca1.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-                ca2.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
-                ca3.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                if _cmp_shape:
+                    ca3 = ws.cell(row=row, column=3, value=task_sum_a)
+                    for c in (ca1, ca3):
+                        c.font = _result_font(size=12, color="000000")
+                        c.fill = lab_fill_a
+                        c.border = grid_border
+                    ca1.font = _result_font(
+                        size=12, bold=True, color="000000", italic=True
+                    )
+                    ca1.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
+                    ca3.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
+                else:
+                    ca2 = ws.cell(row=row, column=3, value=proc_nm if proc_nm else "—")
+                    ca3 = ws.cell(row=row, column=4, value=task_sum_a)
+                    for c in (ca1, ca2, ca3):
+                        c.font = _result_font(size=12, color="000000")
+                        c.fill = lab_fill_a
+                        c.border = grid_border
+                    ca1.font = _result_font(
+                        size=12, bold=True, color="000000", italic=True
+                    )
+                    ca1.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=False
+                    )
+                    ca2.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=False
+                    )
+                    ca3.alignment = Alignment(
+                        horizontal="left", vertical="center", wrap_text=True
+                    )
 
                 _paint_gantt_timeline_row_merged(
                     ws,
@@ -3006,6 +3144,24 @@ def _write_results_equipment_gantt_sheet(
             ws.row_dimensions[row].height = 3
             row += 1
 
+    if (
+        _cmp_shape
+        and dates_to_show
+        and len(gantt_day_first_rows) == len(dates_to_show)
+    ):
+        _map_sr = int(_cmp_date_pick_row0)
+        _mdc = COMPARE_GANTT_DAY_ROW_MAP_DATE_COL
+        _mfc = COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL
+        for _mi, _md in enumerate(dates_to_show):
+            _mr = _map_sr + _mi
+            ws.cell(row=_mr, column=_mdc, value=_md.isoformat())
+            ws.cell(row=_mr, column=_mfc, value=int(gantt_day_first_rows[_mi]))
+        for _mcol in (_mdc, _mfc):
+            try:
+                ws.column_dimensions[get_column_letter(_mcol)].hidden = True
+            except Exception:
+                pass
+
     # 凡例は高さ確保のため省略（モノクロ印刷は色の濃淡/セルの枠で識別）
     # 時刻列（E〜）の列幅。マクロ取り込み時は VBA 結果_設備ガント_列幅を設定 と同値に揃える。
     if n_slots > 0:
@@ -3014,6 +3170,13 @@ def _write_results_equipment_gantt_sheet(
             dim = ws.column_dimensions[get_column_letter(ci)]
             dim.width = gw
             # openpyxl 3.1+ では customWidth は width 有無から導出される読み取り専用のため代入しない
+    if _cmp_shape:
+        try:
+            ws.column_dimensions["A"].width = 6.5
+        except Exception:
+            pass
+        ws.column_dimensions["B"].width = 34
+        ws.column_dimensions["C"].width = 40
 
     _gantt_scale_override_raw = (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
     try:
@@ -3047,9 +3210,17 @@ def _write_results_equipment_gantt_sheet(
         # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
-        ws.print_options.gridLines = False
+        # 比較ガントは結合セルが多いため、印刷時もグリッドを出して区切りを補助
+        ws.print_options.gridLines = bool(_cmp_shape)
     except Exception:
         pass
+
+    if _cmp_shape:
+        try:
+            if ws.views.sheetView:
+                ws.views.sheetView[0].showGridLines = True
+        except Exception:
+            pass
 
     # 1 日 1 ページ相当: 2 日目以降の各日ブロック先頭の直前に手動の横改ページ（上記ページ設定の後）
     try:
@@ -3058,6 +3229,9 @@ def _write_results_equipment_gantt_sheet(
                 ws.row_breaks.append(Break(id=gantt_day_first_rows[i], man=True))
     except Exception:
         pass
+
+    if _cmp_shape:
+        _apply_compare_gantt_typography(ws, hdr_row)
 
     if _use_gantt_shape_labels:
         return gantt_shape_label_specs, gantt_timeline_day_blocks
@@ -24963,12 +25137,12 @@ def _compare_gantt_unique_machine_row_order(
     return out
 
 
-def _compare_gantt_assert_no_overlap(events: list | None, log_label: str) -> None:
-    """同一機械・同一暦日で半開区間が重なる組があるとき例外（配台不整合の検知）。"""
+def _compare_gantt_find_first_plan_overlap_message(
+    events: list | None, log_label: str
+) -> str | None:
+    """同一機械・同一暦日で半開区間が重なる最初の組のメッセージを返す。なければ None。"""
     if not events:
-        return
-    from collections import defaultdict
-
+        return None
     buck: dict[tuple[str, date], list[tuple[datetime, datetime, str]]] = defaultdict(list)
     for ev in events:
         if not _is_machining_timeline_event(ev):
@@ -24992,11 +25166,34 @@ def _compare_gantt_assert_no_overlap(events: list | None, log_label: str) -> Non
             for j in range(i + 1, len(segs)):
                 b0, b1, tb = segs[j]
                 if max(a0, b0) < min(a1, b1):
-                    raise PlanningValidationError(
+                    return (
                         f"{log_label}: 同一設備のタイムライン区間が重なります。"
                         f" 機械={m} 日={d0.isoformat()} 依頼NO={ta!r} vs {tb!r} "
                         f"[{a0}..{a1}) [{b0}..{b1})"
                     )
+    return None
+
+
+def _compare_gantt_assert_no_overlap(events: list | None, log_label: str) -> None:
+    """同一機械・同一暦日で半開区間が重なる組があるとき例外（配台不整合の検知）。
+
+    環境変数 ``COMPARE_GANTT_ALLOW_PLAN_OVERLAP`` が 1/true/yes/on のときは
+    ``PlanningValidationError`` にせず ``logging.warning`` のみ（比較ガントは続行）。
+    """
+    msg = _compare_gantt_find_first_plan_overlap_message(events, log_label)
+    if not msg:
+        return
+    allow = os.environ.get(ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP, "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if allow:
+        logging.warning("%s が有効のため続行します: %s", ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP, msg)
+        print(msg, file=sys.stderr)
+        return
+    raise PlanningValidationError(msg)
 
 
 def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> list:
