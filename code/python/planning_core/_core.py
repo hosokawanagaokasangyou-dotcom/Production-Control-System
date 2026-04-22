@@ -25583,7 +25583,7 @@ def _format_qty_short(q: float) -> str:
 
 
 # アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
-_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3"})
+_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3", "W4-12"})
 
 
 def _compare_gantt_trace_should_log_btid(btid: str) -> bool:
@@ -25605,8 +25605,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     量の按分は build_actual_timeline_events と同様、実加工数を優先し無いとき累積を時間比按分する。
     機械キーは ``_timeline_events_force_machine_display_name`` と同様に
     設備列の「+」より右（機械名のみ）へ寄せ、アラジン側の TASK_COL_MACHINE_NAME キーと一致させる。
-    同一機械×日×依頼NOに **多数の同一按分値** が付くエクスポート二重（ログで 20 件×同一値）のときは
-    1 件分に畳む（ロール等で少数行が同額のときは閾値で誤畳みを避ける）。
+    同一機械×日×依頼NOに **多数の同一按分値** が付くエクスポート二重（例: 同一値が6件以上）のときは
+    1 件分に畳む（ロール等で少数行のみ同額のときは閾値で誤畳みを避ける）。
     """
     if df is None or len(df) == 0:
         return {}
@@ -25625,7 +25625,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         except (TypeError, ValueError):
             return "__na__"
 
-    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 12
+    # W4-11 は同一値が約20件、W4-12 は同一1800が6件→10800 となっていたため 6 以上で畳む
+    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 6
 
     for _, row in df.iterrows():
         tid = row.get(ACT_COL_TASK_ID)
