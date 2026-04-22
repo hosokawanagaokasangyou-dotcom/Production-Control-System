@@ -1,9 +1,12 @@
 ' ============================================================
-' 貼り付け先: 「生産管理_AI配台テスト.xlsm」の ThisWorkbook（プロジェクト内の ThisWorkbook をダブルクリック）
+' 貼り付け先: 配台マクロ実行ブックの ThisWorkbook（例: 生産管理_AI配台(RC1).xlsm）
 ' 標準モジュール側: 生産管理_AI配台テスト_xlsm_VBA.txt の Auto_Open / ShortcutMainSheet_* と対
-' 目的: ブックを閉じたあとも OnKey（メイン＝Ctrl+Shift+テンキー -、段階1+2/1/2＝テンキー 0/1/2）の割当が Excel に残らないよう BeforeClose で解除する
-' Workbook_Activate: Application.OnKey は Excel 全体で1キー1割当のため、他ブック（master.xlsm）が Open で上書きしたあと、当ブックをアクティブにしたとき付け直す
-' SheetSelectionChange: 結果_設備ガントでデータ行選択時に行枠を太線で強調（標準モジュールの 結果_設備ガント_行ハイライト_OnSelection）
+' 計画実績比較ガント: モジュール「計画実績比較ガント.bas」の WorkbookSheetChange 入口を呼ぶ
+'
+' 目的:
+' - OnKey をブック外に残さない（BeforeClose で解除、Activate で付け直し）
+' - 結果_設備ガント: データ行選択時の行枠強調（結果_設備ガント_行ハイライト_OnSelection）
+' - 結果_設備ガント_計画実績比較: B1（表示日）変更で該当日ブロック先頭へスクロール
 ' ============================================================
 Option Explicit
 
@@ -26,9 +29,14 @@ Private Sub Workbook_SheetSelectionChange(ByVal sh As Object, ByVal Target As Ra
     On Error GoTo 0
 End Sub
 
+Private Sub Workbook_SheetChange(ByVal sh As Object, ByVal Target As Range)
+    On Error Resume Next
+    Call 計画実績比較ガント_WorkbookSheetChange入口(sh, Target)
+    On Error GoTo 0
+End Sub
+
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error Resume Next
     ShortcutMainSheet_OnKeyUnregister
     On Error GoTo 0
 End Sub
-

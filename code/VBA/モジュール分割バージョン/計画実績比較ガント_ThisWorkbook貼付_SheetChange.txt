@@ -1,20 +1,9 @@
 ' ============================================================
-' 貼り付け先: 配台ブックの ThisWorkbook モジュール
-' 目的: 「結果_設備ガント_計画実績比較」で B1（表示日）を変更した直後に、
-'       該当日ブロックの先頭行へ自動スクロールする。
-' 手順: 既存の Workbook_SheetChange があればその先頭に On Error 行の直後へ
-'       次の 1 行を追加。無ければ新規 Private Sub Workbook_SheetChange を作成。
-' ============================================================
-'    On Error Resume Next
-'    Call 計画実績比較ガント_WorkbookSheetChange入口(Sh, Target)
-'    On Error GoTo 0
-' ============================================================
-' 統合例（他処理と併用する場合）:
+' 【統合済み】計画実績比較ガント用の Workbook_SheetChange は、配台ブックの ThisWorkbook に
+' 次の 1 ファイルへまとめてあります。こちらをコピー＆貼り付けしてください。
 '
-' Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
-'     On Error Resume Next
-'     Call 計画実績比較ガント_WorkbookSheetChange入口(Sh, Target)
-'     ' …既存の SheetChange 処理…
-'     On Error GoTo 0
-' End Sub
+'   code/VBA/生産管理_AI配台テスト_ThisWorkbook_VBA.txt
+'
+' 中身: Workbook_Open / Activate / SheetSelectionChange / SheetChange / BeforeClose
+' SheetChange 内で 計画実績比較ガント_WorkbookSheetChange入口 を呼びます。
 ' ============================================================
