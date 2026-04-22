@@ -1,4 +1,3 @@
-Attribute VB_Name = "modCompareGantt"
 Option Explicit
 
 ' Python planning_core.ENV_COMPARE_GANTT_SNAPSHOT_DIR と同じキー
@@ -9,10 +8,11 @@ Private Const OUT_COMPARE_XLSX As String = "plan_actual_compare_gantt.xlsx"
 ' スナップショット出力（スナップショット出力.bas）と同じ相対フォルダ名
 Private Const PDF_SNAPSHOT_REL_FOLDER As String = "pdf"
 
-' 選択 UI 用シート・OLE 名（同一ブック内で一意）
+' 選択 UI 用シート・コントロール名（同一ブック内で一意）
 Private Const SHEET_COMPARE_PICK As String = "選択_計画実績比較"
 Private Const OLE_SNAP_LIST As String = "CompareGanttSnapListBox"
-Private Const OLE_RUN_BTN As String = "CompareGanttRunButton"
+' 実行ボタンは OLE の OnAction が 1004 になる環境があるため、フォームコントロール（Shape）を使用
+Private Const SHAPE_COMPARE_RUN_BTN As String = "CompareGanttRunBtnForm"
 
 ' --- 公開入口 ---
 
@@ -110,6 +110,16 @@ Private Sub DeleteOleIfExists(ByVal ws As Worksheet, ByVal nm As String)
     On Error GoTo 0
 End Sub
 
+Private Sub DeleteShapeIfExists(ByVal ws As Worksheet, ByVal nm As String)
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If StrComp(shp.Name, nm, vbTextCompare) = 0 Then
+            shp.Delete
+            Exit Sub
+        End If
+    Next shp
+End Sub
+
 ' pdf\<stamp>\ に 結果_タスク一覧.csv があるフォルダだけを降順で列挙しリストへ反映
 Private Sub RefreshCompareGanttSnapshotList(ByVal pdfRoot As String, ByVal lb As Object)
     Dim stamp As String
@@ -181,10 +191,8 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     Dim ws As Worksheet
     Dim pdfRoot As String
     Dim lo As OLEObject
-    Dim bo As OLEObject
     Dim lb As Object
-    Dim btn As Object
-    Dim onAct As String
+    Dim shpRun As Shape
     
     pdfRoot = targetDir & "\" & PDF_SNAPSHOT_REL_FOLDER
     
@@ -205,7 +213,11 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     ws.Columns("A").ColumnWidth = 90
     
     DeleteOleIfExists ws, OLE_SNAP_LIST
-    DeleteOleIfExists ws, OLE_RUN_BTN
+    ' 旧版 OLE ボタン名が残っている場合の掃除
+    On Error Resume Next
+    DeleteOleIfExists ws, "CompareGanttRunButton"
+    On Error GoTo 0
+    DeleteShapeIfExists ws, SHAPE_COMPARE_RUN_BTN
     
     Set lo = ws.OLEObjects.Add(ClassType:="Forms.ListBox.1", Left:=18, Top:=72, Width:=520, Height:=260)
     lo.Name = OLE_SNAP_LIST
@@ -215,13 +227,12 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     
     RefreshCompareGanttSnapshotList pdfRoot, lb
     
-    Set bo = ws.OLEObjects.Add(ClassType:="Forms.CommandButton.1", Left:=18, Top:=345, Width:=180, Height:=30)
-    bo.Name = OLE_RUN_BTN
-    bo.Placement = 1  ' xlMoveAndSize
-    Set btn = bo.Object
-    btn.Caption = "比較ガントを生成"
-    onAct = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
-    bo.OnAction = onAct
+    ' フォームコントロールのボタン（OLE の CommandButton では OnAction が 1004 になることがある）
+    Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, 18, 345, 180, 30)
+    shpRun.Name = SHAPE_COMPARE_RUN_BTN
+    shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
+    shpRun.TextFrame.Characters.Text = "比較ガントを生成"
+    shpRun.Placement = 1  ' xlMoveAndSize
     
     Exit Sub
 SheetNameFail:
