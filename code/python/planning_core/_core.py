@@ -3228,16 +3228,15 @@ def _write_results_equipment_gantt_sheet(
                 _ala_center_show = (_ala_center or "—") + (
                     ("\n" + _ala_mm) if _ala_mm else ""
                 )
-                _ala_sum_show = (_ala_sum or "—") + (
-                    ("\n" + _ala_mm) if _ala_mm else ""
-                )
+                # タスク概要列（列3）は依頼NOのみ。不一致注記はタイムライン結合セルのみ。
+                _ala_sum_only = _ala_sum or "—"
                 _lbl_m = (
                     f"{mach_nm}（アラジン入力数量）"
                     if mach_nm
                     else "（アラジン入力数量）"
                 )
                 _ac1 = ws.cell(row=row, column=2, value=_lbl_m)
-                _ac3 = ws.cell(row=row, column=3, value=_ala_sum_show or "—")
+                _ac3 = ws.cell(row=row, column=3, value=_ala_sum_only)
                 for _cx in (_ac1, _ac3):
                     _cx.font = _result_font(size=11, color="000000")
                     _cx.fill = lab_fill
@@ -8502,6 +8501,8 @@ def build_actual_timeline_events(
     ガントの op/sub（タイムライン氏名チップ・D列要約）へ反映する。
     roll_detail=True のとき「累積完了率」列があればその値を解釈し、
     タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す（計算はしない）。
+    計画実績比較ガント用に、各日セグメントへ ``compare_daily_m``（実加工数の時間比按分を優先、
+    無ければ累積実績の時間比按分）を付与する。``label_len_m`` に累積を載せても日別比較で二重計上しない。
     """
     if df is None or len(df) == 0:
         return []
@@ -8597,6 +8598,7 @@ def build_actual_timeline_events(
             }
             if pct_macro is not None:
                 ev_row["pct_macro"] = pct_macro
+            seg_seconds = float((e_clip - s_clip).total_seconds())
             # 依頼NOシェイプ横の表示は「累積実績(m)」を優先する。
             # 「累積実績」が無い/不正のときのみ、従来どおり「実加工数」を採用（クリップ時は時間比で按分）。
             try:
@@ -8614,11 +8616,41 @@ def build_actual_timeline_events(
                     and total_seconds
                     and float(total_seconds) > 1e-9
                 ):
-                    seg_seconds = float((e_clip - s_clip).total_seconds())
                     if seg_seconds > 0:
                         ev_row["label_len_m"] = float(actual_done_m) * (
                             seg_seconds / float(total_seconds)
                         )
+            except Exception:
+                pass
+            # 計画実績比較ガントのアラジン日次数量との突き合わせ用。
+            # 累積ラベルは全日セグメントに同一値が載るため label_len_m を日別に足すと過大になる。
+            # 実加工数を優先して日×セグメントに按分し、無いときのみ累積を同一比率で按分する。
+            try:
+                cmp_m = None
+                if (
+                    actual_done_m is not None
+                    and isinstance(actual_done_m, (int, float))
+                    and float(actual_done_m) > 1e-12
+                    and total_seconds
+                    and float(total_seconds) > 1e-9
+                    and seg_seconds > 1e-9
+                ):
+                    cmp_m = float(actual_done_m) * (
+                        seg_seconds / float(total_seconds)
+                    )
+                elif (
+                    cumulative_actual_m is not None
+                    and isinstance(cumulative_actual_m, (int, float))
+                    and float(cumulative_actual_m) > 1e-12
+                    and total_seconds
+                    and float(total_seconds) > 1e-9
+                    and seg_seconds > 1e-9
+                ):
+                    cmp_m = float(cumulative_actual_m) * (
+                        seg_seconds / float(total_seconds)
+                    )
+                if cmp_m is not None and cmp_m > 1e-12:
+                    ev_row["compare_daily_m"] = cmp_m
             except Exception:
                 pass
             events.append(ev_row)
@@ -25556,6 +25588,8 @@ def _aggregate_actual_qty_by_machine_date_base_tid(
     """
     実績タイムラインイベントを (機械キー, 日付) × 依頼NO（ロール無し）ごとに集計する。
     比較ガントのアラジン「日次_加工数量」と突き合わせる際の実績側数量に用いる。
+    ``compare_daily_m``（build_actual_timeline_events が付与する日次按分 m）を優先し、
+    無い場合のみ非累積の ``label_len_m`` を用いる（累積ラベルは日別合算に使わない）。
     """
     tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
         lambda: defaultdict(float)
@@ -25577,11 +25611,21 @@ def _aggregate_actual_qty_by_machine_date_base_tid(
         btid = planning_task_id_str_from_scalar(base_part) or base_part
         if not btid:
             continue
-        lm = ev.get("label_len_m")
+        qty = None
         try:
-            qty = float(lm) if lm is not None else 0.0
+            cd = ev.get("compare_daily_m")
+            if cd is not None:
+                qty = float(cd)
         except (TypeError, ValueError):
-            qty = 0.0
+            qty = None
+        if qty is None or qty <= 1e-12:
+            if ev.get("label_len_m_is_cumulative"):
+                continue
+            lm = ev.get("label_len_m")
+            try:
+                qty = float(lm) if lm is not None else 0.0
+            except (TypeError, ValueError):
+                qty = 0.0
         if qty <= 1e-12:
             continue
         tmp[mk, d][btid] += qty
