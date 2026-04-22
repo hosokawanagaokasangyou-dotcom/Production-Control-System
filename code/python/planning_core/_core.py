@@ -25605,7 +25605,7 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     量の按分は build_actual_timeline_events と同様、実加工数を優先し無いとき累積を時間比按分する。
     機械キーは ``_timeline_events_force_machine_display_name`` と同様に
     設備列の「+」より右（機械名のみ）へ寄せ、アラジン側の TASK_COL_MACHINE_NAME キーと一致させる。
-    同一機械×日×依頼NOに **多数の同一按分値** が付くエクスポート二重（例: 同一値が6件以上）のときは
+    同一機械×日×依頼NOに **多数のほぼ同一按分** が付くエクスポート二重（件数と按分のばらつ閾値）のときは
     1 件分に畳む（ロール等で少数行のみ同額のときは閾値で誤畳みを避ける）。
     """
     if df is None or len(df) == 0:
@@ -25625,8 +25625,10 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         except (TypeError, ValueError):
             return "__na__"
 
-    # W4-11 は同一値が約20件、W4-12 は同一1800が6件→10800 となっていたため 6 以上で畳む
-    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 6
+    # 同一機械×日×依頼NOに「ほぼ同じ按分」が複数行付く重複エクスポート対策。
+    # W4-11 は約20件、W4-12 は 6×1800=10800 のように件数が少ない／浮動小数で min-max が 1e-3 を超えることがある。
+    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 5
+    _ALADDIN_DUP_SPREAD_TOL_M = 0.05  # 同一按分とみなす m 幅（表示単位の揺れ吸収）
 
     for _, row in df.iterrows():
         tid = row.get(ACT_COL_TASK_ID)
@@ -25734,9 +25736,10 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     for (_mk, _d, _tid), _vals in _per_mdt.items():
         if not _vals:
             continue
+        _spread = max(_vals) - min(_vals)
         if (
             len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-            and max(_vals) - min(_vals) < 1e-3
+            and _spread <= _ALADDIN_DUP_SPREAD_TOL_M
         ):
             merged = float(max(_vals))
         else:
@@ -25752,18 +25755,21 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         _n = len(_tvals)
         _collapsed = (
             _n >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-            and max(_tvals) - min(_tvals) < 1e-3
+            and max(_tvals) - min(_tvals) <= _ALADDIN_DUP_SPREAD_TOL_M
         )
         _preview = _tvals[:15]
         _suffix = " …" if _n > 15 else ""
         logging.info(
             "計画実績比較ガント[トレース] 明細→日次按分 依頼NO=%s 日=%s 機械キー=%r "
-            "按分値件数=%s 畳み込み適用=%s 按分値先頭=%s%s 最終実績(m)=%s",
+            "按分値件数=%s 畳み込み適用=%s minmax差(m)=%s 閾値(件>=%s 幅<=%s) 按分値先頭=%s%s 最終実績(m)=%s",
             _ttid,
             _td.isoformat() if isinstance(_td, date) else str(_td),
             _tmk,
             _n,
             _collapsed,
+            (max(_tvals) - min(_tvals)) if _tvals else 0.0,
+            _ALADDIN_DUP_COLLAPSE_MIN_SAME,
+            _ALADDIN_DUP_SPREAD_TOL_M,
             _preview,
             _suffix,
             _merged,
