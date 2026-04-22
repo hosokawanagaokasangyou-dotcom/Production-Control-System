@@ -25583,9 +25583,7 @@ def _format_qty_short(q: float) -> str:
 
 
 # アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
-_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset(
-    {"W3-12", "A4-3", "W4-12", "W4-14", "Y4-44", "JR260403"}
-)
+_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3", "W4-12"})
 
 
 def _compare_gantt_trace_should_log_btid(btid: str) -> bool:
@@ -25613,45 +25611,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     if df is None or len(df) == 0:
         return {}
 
-    # region agent log
-    def _agent_dbg_ndjson(payload: dict) -> None:
-        try:
-            import json as _json
-
-            roots = (
-                os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")),
-                os.path.abspath(os.getcwd()),
-            )
-            payload = {
-                **payload,
-                "sessionId": "76d9de",
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            for _root in roots:
-                _p = os.path.join(_root, "debug-76d9de.log")
-                try:
-                    with open(_p, "a", encoding="utf-8") as _fp:
-                        _fp.write(_json.dumps(payload, ensure_ascii=False) + "\n")
-                    return
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    _agent_dbg_ndjson(
-        {
-            "hypothesisId": "H0",
-            "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:entry",
-            "message": "detail_df aggregate entry",
-            "data": {
-                "n_rows": int(len(df)),
-                "file": os.path.abspath(__file__),
-                "cwd": os.path.abspath(os.getcwd()),
-            },
-        }
-    )
-    # endregion
-
     equip_lookup = _equipment_lookup_normalized_to_canonical(equipment_list)
     date_ok = set(sorted_dates)
     # (機械キー, 日, 依頼NO) → 行ごとの按分値のリスト（後で同一値大量時に畳む）
@@ -25668,7 +25627,7 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             return "__na__"
 
     # 同一機械×日×依頼NOに「ほぼ同じ按分」が複数行付く重複エクスポート対策。
-    # W4-14 は同一按分が 3 件のみの日がある（debug-76d9de.log: n_vals=3 spread=0 で collapsed=false→合算過大）。
+    # 同一按分が 3 件のみの日もあり、閾値を下げないと sum のまま過大になることがある。
     # 閾値 3 は「同一日・同依頼で等分割された正規の 3 セグメント」が偶然同じ m に揃うと誤畳みのリスクあり（稀）。
     _ALADDIN_DUP_COLLAPSE_MIN_SAME = 3
     _ALADDIN_DUP_SPREAD_TOL_M = 0.05  # 同一按分とみなす m 幅（表示単位の揺れ吸収）
@@ -25799,29 +25758,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         else:
             merged = float(sum(_vals_f))
         tmp[_mk, _d][_tid] = merged
-        # region agent log
-        if _compare_gantt_trace_should_log_btid(_tid):
-            _agent_dbg_ndjson(
-                {
-                    "hypothesisId": "H1",
-                    "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:merge",
-                    "message": "per (machine,date,tid) merge",
-                    "data": {
-                        "tid": str(_tid),
-                        "mach_k": _mk,
-                        "date": _d.isoformat() if isinstance(_d, date) else str(_d),
-                        "n_vals": len(_vals),
-                        "spread_raw_m": round(_spread_raw, 6),
-                        "spread_round4_m": round(_spread_r, 6),
-                        "sum_vals": round(float(sum(_vals_f)), 4),
-                        "merged": round(merged, 4),
-                        "collapsed": len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-                        and _spread <= _ALADDIN_DUP_SPREAD_TOL_M,
-                        "vals_head": [round(float(x), 4) for x in _vals_f[:30]],
-                    },
-                }
-            )
-        # endregion
 
     for _tk, _tvals in sorted(
         _trace_per_mdt.items(),
