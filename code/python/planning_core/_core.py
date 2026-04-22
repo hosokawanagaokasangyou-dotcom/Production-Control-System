@@ -25384,6 +25384,15 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
             "配完_加工終了",
         ),
     )
+    col_qty_len = _compare_csv_pick_column(
+        df,
+        (
+            "残加工量",
+            "残り加工量",
+            TASK_COL_QTY,
+            "換算数量",
+        ),
+    )
     if not col_tid or not col_mach or not col_s or not col_e:
         raise PlanningValidationError(
             "計画実績比較ガント: 結果_タスク一覧.csv に必要列"
@@ -25434,6 +25443,20 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
         e_clip = min(e_dt, day_end)
         if s_clip >= e_clip:
             continue
+        _lm_snap = None
+        if col_qty_len:
+            try:
+                _qv = row.get(col_qty_len)
+                if _qv is not None and not (isinstance(_qv, float) and pd.isna(_qv)):
+                    _lm_snap = float(_qv)
+                    if (
+                        math.isnan(_lm_snap)
+                        or math.isinf(_lm_snap)
+                        or abs(_lm_snap) < 1e-12
+                    ):
+                        _lm_snap = None
+            except (TypeError, ValueError):
+                _lm_snap = None
         events.append(
             {
                 "date": d0,
@@ -25449,6 +25472,8 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
                 "total_units": 0,
                 "eff_time_per_unit": 0.0,
                 "unit_m": 0.0,
+                # スナップショット CSV に長さ(m)列があればシェイプラベル「依頼NO ○○m」に反映する
+                "label_len_m": _lm_snap,
                 "event_kind": TIMELINE_EVENT_MACHINING,
             }
         )
