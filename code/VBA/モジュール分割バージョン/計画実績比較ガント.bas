@@ -30,23 +30,36 @@ Private Const PICK_PATH_COL As Long = 26  ' 列 Z
 
 ' 選択用シートを作成／更新し、一覧を再取得してアクティブにする。
 ' Power Query / データ接続は業務ロジックと同様 TryRefreshWorkbookQueries で一括更新してから表示する。
+' 試行順パターン系と同様、接続更新中は MacroSplash で進捗を表示する。
 Public Sub 計画実績比較ガント_選択シートを表示()
     Dim targetDir As String
+    Dim errNum As Long
+    Dim errDesc As String
     On Error GoTo EH
     targetDir = ThisWorkbook.path
     If Len(targetDir) = 0 Then
         AppMsgBox "先にこのブックを保存してください。", vbExclamation, "計画実績比較ガント"
         Exit Sub
     End If
+    MacroSplash_Show "計画実績比較ガント: 選択シートを表示しています…", False
+    MacroSplash_SetStep "データ接続（Power Query 等）を更新しています…"
     If Not TryRefreshWorkbookQueries() Then
+        MacroSplash_Hide
         AppMsgBox "データ接続の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "計画実績比較ガント"
         Exit Sub
     End If
+    MacroSplash_SetStep "選択用シートを作成・更新しています…"
     EnsureCompareGanttPickSheet ThisWorkbook, targetDir
     ThisWorkbook.Worksheets(SHEET_COMPARE_PICK).Activate
+    MacroSplash_Hide
     Exit Sub
 EH:
-    AppMsgBox "エラー: " & Err.Number & " / " & Err.Description, vbCritical, "計画実績比較ガント"
+    errNum = Err.Number
+    errDesc = Err.Description
+    On Error Resume Next
+    If m_macroSplashShown Then MacroSplash_Hide
+    On Error GoTo 0
+    AppMsgBox "エラー: " & CStr(errNum) & " / " & errDesc, vbCritical, "計画実績比較ガント"
 End Sub
 
 ' 互換: 従来名は選択シート表示へ誘導する。
