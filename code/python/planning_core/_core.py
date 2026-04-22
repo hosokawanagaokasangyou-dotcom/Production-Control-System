@@ -11585,6 +11585,11 @@ def _merge_plan_sheet_user_overrides(out_df):
     ブック内の「配台計画_タスク入力」にユーザーは入力した上書き列を」
     段階1の抽出結果へ (依頼NO, 工程名) 短縮で引き継ぎ。
     空のセルはマージしない（新規抽出坴の空のまま）。
+
+    工程「分割」で同一依頼NO内に同一機械名の複数行がないとき、過去に誤って付いた
+    「配台不要」=オン相当の値はマージしない（``apply_exclude_rules_config_to_plan_df`` の
+    分割ガードと同じ重複条件）。手入力で分割かつ配台不要オンを単独行に付けたい場合は稀とし、
+    シート上で再入力すれば引き継がれる。
     """
     if out_df is None or out_df.empty:
         return out_df
@@ -11628,6 +11633,13 @@ def _merge_plan_sheet_user_overrides(out_df):
     if not lookup:
         return out_df
 
+    by_tid_idx: dict[str, list] = defaultdict(list)
+    if TASK_COL_TASK_ID in out_df.columns:
+        for j in out_df.index:
+            tj = _normalize_task_id_for_dup_grouping(out_df.at[j, TASK_COL_TASK_ID])
+            if tj:
+                by_tid_idx[tj].append(j)
+
     merged_rows = 0
     for i, row in out_df.iterrows():
         tid = planning_task_id_str_from_plan_row(row)
@@ -11638,6 +11650,22 @@ def _merge_plan_sheet_user_overrides(out_df):
         merged_rows += 1
         for c, v in bucket.items():
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
+                tp_m = str(row.get(TASK_COL_MACHINE, "") or "").strip()
+                if _process_name_is_bunkatsu_for_auto_exclude(tp_m):
+                    tid_m = _normalize_task_id_for_dup_grouping(
+                        out_df.at[i, TASK_COL_TASK_ID]
+                    )
+                    dup_m = False
+                    if tid_m:
+                        dup_m, _ = _same_tid_nonempty_machine_dup_ge2(
+                            out_df, by_tid_idx.get(tid_m, [])
+                        )
+                    if not dup_m:
+                        coerced_ex = _coerce_plan_exclude_column_value_for_storage(v)
+                        if _plan_row_exclude_from_assignment(
+                            {PLAN_COL_EXCLUDE_FROM_ASSIGNMENT: coerced_ex}
+                        ):
+                            continue
                 v = _coerce_plan_exclude_column_value_for_storage(v)
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
