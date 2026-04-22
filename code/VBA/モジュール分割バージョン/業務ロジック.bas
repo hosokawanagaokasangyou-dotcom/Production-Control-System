@@ -364,6 +364,37 @@ Public Sub メインシート_指定範囲のハイパーリンクを削除(ByVal wsMain As Worksheet
     On Error GoTo 0
 End Sub
 
+' 罫線：表全体は細線、外枠だけ太線
+Public Sub メインシート_リンク表_罫線を設定(ByVal wsMain As Worksheet, ByVal Target As Range)
+    If wsMain Is Nothing Or Target Is Nothing Then Exit Sub
+    
+    On Error Resume Next
+    With Target.Borders
+        .LineStyle = xlContinuous
+        .ColorIndex = xlColorIndexAutomatic
+        .TintAndShade = 0
+        .Weight = xlThin
+    End With
+    
+    With Target.Borders(xlEdgeLeft)
+        .LineStyle = xlContinuous
+        .Weight = xlThick
+    End With
+    With Target.Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThick
+    End With
+    With Target.Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlThick
+    End With
+    With Target.Borders(xlEdgeRight)
+        .LineStyle = xlContinuous
+        .Weight = xlThick
+    End With
+    On Error GoTo 0
+End Sub
+
 ' メインシート（通常「メイン_」）を取得。名前が変わっても図形名から推定する。
 Public Function メインシートを取得(ByVal wb As Workbook) As Worksheet
     Dim ws As Worksheet
@@ -434,6 +465,7 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
     Dim hdr As Range
     Dim hdrPat As Variant, hdrCol As Variant, hdrTint As Variant
     Dim relHeaderRow As Long
+    Dim lastTableRow As Long
     
     ' クリア前に A 列リンクの見本フォントを記憶（無ければ日付見出し C7）
     Set srcA = wsMain.Cells(2, 1)
@@ -533,6 +565,11 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
             r = r + 1
         Next i
     End If
+    
+    ' 罫線（外枠太線）。関連見出しは A13 固定なので、最低でも 13 行目までを含める
+    lastTableRow = r - 1
+    If lastTableRow < relHeaderRow Then lastTableRow = relHeaderRow
+    メインシート_リンク表_罫線を設定 wsMain, wsMain.Range("A1:A" & CStr(lastTableRow))
 End Sub
 
 ' 結果_*（設備ガント以外）・個人_*: 実験コードと同じ手順で列オートフィット
