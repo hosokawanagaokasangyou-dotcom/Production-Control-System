@@ -2164,6 +2164,7 @@ def _paint_gantt_timeline_row_merged(
     （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
     shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（xlwings）で
     角丸シェイプとして追加するための座標・文言を蓄積する。
+    そのモードでは複数スロットの横結合を避け、スロット列ごとに罫線を引いてタイムラインの格子を揃える。
     shape_day_key に ISO 日付文字列等を渡すと、後段で日単位の画像化（フラット化）に利用する。
     shape_line_dash / shape_line_weight_override は角丸ラベルシェイプの枠線（xlwings 段階）向け。
     """
@@ -2194,32 +2195,135 @@ def _paint_gantt_timeline_row_merged(
         col_s = tcol0 + i
         col_e = tcol0 + j - 1
         single_slot_segment = col_s == col_e
-        # 同一スタイルの連続列は結合し先頭セルのみ openpyxl へ書く（セル単位ループが H2 ボトルネック）
-        if col_e > col_s:
-            ws.merge_cells(
-                start_row=row, start_column=col_s, end_row=row, end_column=col_e
-            )
+        # 角丸シェイプで依頼NO を載せるモードでは、横結合だとスロット境界の縦罫線が欠けて見栄えが悪い。
+        # 同一セグメント内はスロット列ごとにセルを分け、各セルに grid_border を付ける（シェイプ幅は col_s:col_e のまま）。
+        _shape_slot_grid = shape_label_specs is not None and col_e > col_s
+        if not _shape_slot_grid:
+            # 同一スタイルの連続列は結合し先頭セルのみ openpyxl へ書く（セル単位ループが H2 ボトルネック）
+            if col_e > col_s:
+                ws.merge_cells(
+                    start_row=row, start_column=col_s, end_row=row, end_column=col_e
+                )
         c = ws.cell(row=row, column=col_s)
-        c.border = grid_border
-        c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
-        if st0[0] == "idle":
-            c.fill = idle_fill
-            c.value = None
-        elif st0[0] == "break":
-            c.fill = break_fill
-            c.value = None
-        elif st0[0] == "daily_startup":
-            _, gh_ds = st0
-            c.fill = _gantt_cached_pattern_fill(gh_ds)
-            _ds_txt = "日次始業準備"
-            if shape_label_specs is not None:
+        if _shape_slot_grid:
+            for _col_k in range(col_s, col_e + 1):
+                _ck = ws.cell(row=row, column=_col_k)
+                _ck.border = grid_border
+                _ck.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+                if st0[0] == "idle":
+                    _ck.fill = idle_fill
+                    _ck.value = None
+                elif st0[0] == "break":
+                    _ck.fill = break_fill
+                    _ck.value = None
+                elif st0[0] == "daily_startup":
+                    _, _gh_ds = st0
+                    _ck.fill = _gantt_cached_pattern_fill(_gh_ds)
+                    _ck.value = None
+                else:
+                    _, _tid, _gh, _sl0, _pc0 = st0
+                    _ck.fill = _gantt_cached_pattern_fill(_gh)
+                    _ck.value = None
+        else:
+            c.border = grid_border
+            c.alignment = _GANTT_TIMELINE_CELL_ALIGNMENT
+            if st0[0] == "idle":
+                c.fill = idle_fill
+                c.value = None
+            elif st0[0] == "break":
+                c.fill = break_fill
+                c.value = None
+            elif st0[0] == "daily_startup":
+                _, gh_ds = st0
+                c.fill = _gantt_cached_pattern_fill(gh_ds)
+                _ds_txt = "日次始業準備"
+                if shape_label_specs is not None:
+                    _seg_lo = slots[i]
+                    _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                    _mem_ds = _gantt_member_labels_for_startup_in_range(
+                        evlist, _seg_lo, _seg_hi
+                    )
+                    _shape_text = _ds_txt
+                    _mem1l: list[str] = []
+                    if _mem_ds:
+                        for _x in _mem_ds[:8]:
+                            _t = (
+                                str(_x)
+                                .replace("\r", "")
+                                .replace("\n", "")
+                                .strip()
+                            )
+                            if _t:
+                                _mem1l.append(_t)
+                    shape_label_specs.append(
+                        {
+                            "row": row,
+                            "col_s": col_s,
+                            "col_e": col_e,
+                            "text": _shape_text,
+                            "italic": bool(label_italic),
+                            "fill_hex": str(gh_ds),
+                            "member_labels": list(_mem1l),
+                            "member_chip_below": bool(_mem1l),
+                            "day_key": shape_day_key or "",
+                            **_shape_line_opt,
+                        }
+                    )
+                    c.value = None
+                else:
+                    c.value = _ds_txt
+                    c.font = bar_label_font
+                    c.alignment = _gantt_timeline_label_alignment(
+                        single_slot=single_slot_segment
+                    )
+            else:
+                _, tid, gh, _slot_len_m0, _pct0 = st0
+                c.fill = _gantt_cached_pattern_fill(gh)
+                tid_s = str(tid or "").strip()
+                _seg_lo = slots[i]
+                _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
+                    evlist, tid_s, _seg_lo, _seg_hi
+                )
+                _len_s = _gantt_format_length_m(_tot_len)
+                _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
+                if show_completion_pct_in_label and _pct_seg is not None and tid_s:
+                    _lbl = f"{_lbl} {_pct_seg}%"
+                if shape_label_specs is not None:
+                    if tid_s:
+                        shape_label_specs.append(
+                            {
+                                "row": row,
+                                "col_s": col_s,
+                                "col_e": col_e,
+                                "text": _lbl,
+                                "italic": bool(label_italic),
+                                "fill_hex": str(gh),
+                                "member_labels": _gantt_member_labels_for_task(
+                                    evlist, tid_s
+                                ),
+                                "day_key": shape_day_key or "",
+                                **_shape_line_opt,
+                            }
+                        )
+                    c.value = None
+                else:
+                    c.value = _lbl
+                    c.font = bar_label_font
+                    c.alignment = _gantt_timeline_label_alignment(
+                        single_slot=single_slot_segment
+                    )
+        if _shape_slot_grid:
+            if st0[0] == "daily_startup":
+                _, gh_ds = st0
+                _ds_txt = "日次始業準備"
                 _seg_lo = slots[i]
                 _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
                 _mem_ds = _gantt_member_labels_for_startup_in_range(
                     evlist, _seg_lo, _seg_hi
                 )
                 _shape_text = _ds_txt
-                _mem1l: list[str] = []
+                _mem1l2: list[str] = []
                 if _mem_ds:
                     for _x in _mem_ds[:8]:
                         _t = (
@@ -2229,7 +2333,7 @@ def _paint_gantt_timeline_row_merged(
                             .strip()
                         )
                         if _t:
-                            _mem1l.append(_t)
+                            _mem1l2.append(_t)
                 shape_label_specs.append(
                     {
                         "row": row,
@@ -2238,33 +2342,24 @@ def _paint_gantt_timeline_row_merged(
                         "text": _shape_text,
                         "italic": bool(label_italic),
                         "fill_hex": str(gh_ds),
-                        "member_labels": list(_mem1l),
-                        "member_chip_below": bool(_mem1l),
+                        "member_labels": list(_mem1l2),
+                        "member_chip_below": bool(_mem1l2),
                         "day_key": shape_day_key or "",
                         **_shape_line_opt,
                     }
                 )
-                c.value = None
-            else:
-                c.value = _ds_txt
-                c.font = bar_label_font
-                c.alignment = _gantt_timeline_label_alignment(
-                    single_slot=single_slot_segment
+            elif st0[0] not in ("idle", "break"):
+                _, tid, gh, _slot_len_m0, _pct0 = st0
+                tid_s = str(tid or "").strip()
+                _seg_lo = slots[i]
+                _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
+                _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
+                    evlist, tid_s, _seg_lo, _seg_hi
                 )
-        else:
-            _, tid, gh, _slot_len_m0, _pct0 = st0
-            c.fill = _gantt_cached_pattern_fill(gh)
-            tid_s = str(tid or "").strip()
-            _seg_lo = slots[i]
-            _seg_hi = slots[j - 1] + timedelta(minutes=float(slot_mins))
-            _tot_len, _n_ev, _pct_seg = _gantt_segment_total_length_m(
-                evlist, tid_s, _seg_lo, _seg_hi
-            )
-            _len_s = _gantt_format_length_m(_tot_len)
-            _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
-            if show_completion_pct_in_label and _pct_seg is not None and tid_s:
-                _lbl = f"{_lbl} {_pct_seg}%"
-            if shape_label_specs is not None:
+                _len_s = _gantt_format_length_m(_tot_len)
+                _lbl = f"{tid_s} {_len_s}m" if (_len_s and tid_s) else tid_s
+                if show_completion_pct_in_label and _pct_seg is not None and tid_s:
+                    _lbl = f"{_lbl} {_pct_seg}%"
                 if tid_s:
                     shape_label_specs.append(
                         {
@@ -2281,13 +2376,6 @@ def _paint_gantt_timeline_row_merged(
                             **_shape_line_opt,
                         }
                     )
-                c.value = None
-            else:
-                c.value = _lbl
-                c.font = bar_label_font
-                c.alignment = _gantt_timeline_label_alignment(
-                    single_slot=single_slot_segment
-                )
         i = j
 
 
