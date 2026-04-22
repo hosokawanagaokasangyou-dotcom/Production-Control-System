@@ -431,12 +431,24 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
     Dim afn As String, afs As Double, afc As Variant
     Dim aBold As Boolean, aIt As Boolean, aUl As Long
     Dim srcA As Range
+    Dim hdr As Range
+    Dim hdrPat As Variant, hdrCol As Variant, hdrTint As Variant
+    Dim relHeaderRow As Long
     
     ' クリア前に A 列リンクの見本フォントを記憶（無ければ日付見出し C7）
     Set srcA = wsMain.Cells(2, 1)
     If Len(Trim$(CStr(srcA.Value))) = 0 Then Set srcA = wsMain.Cells(1, 1)
     If Len(Trim$(CStr(srcA.Value))) = 0 Then Set srcA = wsMain.Cells(7, 3)
     メインシート_フォント属性を取得 srcA, afn, afs, afc, aBold, aIt, aUl
+    
+    ' 見出しの塗りつぶしをテンプレとして記憶（既定は A1）
+    Set hdr = wsMain.Cells(1, 1)
+    hdrPat = Empty: hdrCol = Empty: hdrTint = Empty
+    On Error Resume Next
+    hdrPat = hdr.Interior.Pattern
+    hdrCol = hdr.Interior.Color
+    hdrTint = hdr.Interior.TintAndShade
+    On Error GoTo 0
     
     Set wb = wsMain.Parent
     Set coll = New Collection
@@ -470,6 +482,11 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
     
     wsMain.Cells(1, 1).Value = "計画結果（シートへ）"
     メインシート_フォント属性を適用 wsMain.Cells(1, 1), afn, afs, afc, True, aIt, aUl
+    On Error Resume Next
+    If Not IsEmpty(hdrPat) Then wsMain.Cells(1, 1).Interior.Pattern = hdrPat
+    If Not IsEmpty(hdrCol) Then wsMain.Cells(1, 1).Interior.Color = hdrCol
+    If Not IsEmpty(hdrTint) Then wsMain.Cells(1, 1).Interior.TintAndShade = hdrTint
+    On Error GoTo 0
     r = 2
     For i = 1 To n
         sn = arr(i)
@@ -496,9 +513,18 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
     Next k
     
     If collFixed.Count > 0 Then
-        r = r + 1
+        ' 画像イメージに合わせ、関連ブロックの見出し開始行を 13 行目（A13）へ寄せる
+        relHeaderRow = 13
+        If r < relHeaderRow Then r = relHeaderRow Else r = r + 1
+        
         wsMain.Cells(r, 1).Value = "関連シート（ツール）"
         メインシート_フォント属性を適用 wsMain.Cells(r, 1), afn, afs, afc, True, aIt, aUl
+        On Error Resume Next
+        If Not IsEmpty(hdrPat) Then wsMain.Cells(r, 1).Interior.Pattern = hdrPat
+        If Not IsEmpty(hdrCol) Then wsMain.Cells(r, 1).Interior.Color = hdrCol
+        If Not IsEmpty(hdrTint) Then wsMain.Cells(r, 1).Interior.TintAndShade = hdrTint
+        On Error GoTo 0
+        
         r = r + 1
         For i = 1 To collFixed.Count
             sn = CStr(collFixed(i))
