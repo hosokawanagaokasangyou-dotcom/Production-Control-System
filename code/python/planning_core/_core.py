@@ -25668,8 +25668,9 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             return "__na__"
 
     # 同一機械×日×依頼NOに「ほぼ同じ按分」が複数行付く重複エクスポート対策。
-    # W4-11 は約20件、W4-12 は 6 件、W4-14 等は同一按分が 4 件のみのことがある（閾値 5 だと畳めず合算が過大になる）。
-    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 4
+    # W4-14 は同一按分が 3 件のみの日がある（debug-76d9de.log: n_vals=3 spread=0 で collapsed=false→合算過大）。
+    # 閾値 3 は「同一日・同依頼で等分割された正規の 3 セグメント」が偶然同じ m に揃うと誤畳みのリスクあり（稀）。
+    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 3
     _ALADDIN_DUP_SPREAD_TOL_M = 0.05  # 同一按分とみなす m 幅（表示単位の揺れ吸収）
 
     def _sig_time_minute(dt: datetime) -> str:
