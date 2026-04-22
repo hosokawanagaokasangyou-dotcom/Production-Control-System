@@ -561,13 +561,13 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     On Error GoTo 0
     
     ' フォームコントロールのボタン（OLE の CommandButton では OnAction が 1004 になることがある）
-    topBtn = top2 + listH + gapPts
-    Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, left1, topBtn, 220, 30)
-    shpRun.Name = SHAPE_COMPARE_RUN_BTN
-    shpRun.Locked = False
-    shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
-    shpRun.TextFrame.Characters.Text = "比較ガントを生成"
-    shpRun.Placement = 1  ' xlMoveAndSize
+    'topBtn = top2 + listH + gapPts
+    'Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, left1, topBtn, 220, 30)
+    'shpRun.Name = SHAPE_COMPARE_RUN_BTN
+    'shpRun.Locked = False
+    'shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
+    'shpRun.TextFrame.Characters.Text = "比較ガントを生成"
+    'shpRun.Placement = 1  ' xlMoveAndSize
     
     ProtectComparePickSheetForUi ws
     

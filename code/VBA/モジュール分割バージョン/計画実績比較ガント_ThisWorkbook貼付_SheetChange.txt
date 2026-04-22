@@ -1,9 +1,0 @@
-' ============================================================
-' 【統合済み】計画実績比較ガント用の Workbook_SheetChange は、配台ブックの ThisWorkbook に
-' 次の 1 ファイルへまとめてあります。こちらをコピー＆貼り付けしてください。
-'
-'   code/VBA/生産管理_AI配台テスト_ThisWorkbook_VBA.txt
-'
-' 中身: Workbook_Open / Activate / SheetSelectionChange / SheetChange / BeforeClose
-' SheetChange 内で 計画実績比較ガント_WorkbookSheetChange入口 を呼びます。
-' ============================================================

@@ -269,6 +269,9 @@ def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
 # Gemini 証明書 JSON はマクロ実行ブックと同一フォルダの固定ファイル名のみ参照（設定シート B1 は使わない）。
 GEMINI_CREDENTIALS_ENCRYPTED_FILENAME = "gemini_credentials.encrypted.json"
 APP_CONFIG_SHEET_NAME = "設定"
+# 「設定」シート A/B 列: 配台トレース（A）・デバッグ配台（B）で読む依頼NOの行範囲（両端を含む）。
+CONFIG_SHEET_TASK_IDS_FIRST_ROW = 3
+CONFIG_SHEET_TASK_IDS_LAST_ROW = 26
 # 「設定」シート D3 以降: Gemini 試行モデル ID（Google の model code）。E 列が真の行だけを上から順に試行する。
 # （A/B 列は配台トレース・デバッグ依頼NO用のため、モデル一覧は D/E に配置）
 GEMINI_MODEL_SHEET_COL_MODEL = 4  # D
@@ -351,8 +354,8 @@ def _read_task_ids_from_config_sheet_column(
     openpyxl_skip_hint: str | None = None,
 ) -> list[str]:
     """
-    マクロブック「設定」シートの指定列（1=A, 2=B）3 行目以降から依頼NOを読む。
-    空セルはスキップ。連続 30 セル空で打ち切り。最大 500 行。カンマ区切りで複数坯。
+    マクロブック「設定」シートの指定列（1=A, 2=B）3〜26 行目から依頼NOを読む。
+    空セルはスキップ。連続 30 セル空で打ち切り。カンマ区切りで複数件。
     """
     out: list[str] = []
     if not wb_path or not os.path.isfile(wb_path):
@@ -360,7 +363,8 @@ def _read_task_ids_from_config_sheet_column(
     if _workbook_should_skip_openpyxl_io(wb_path):
         msg = (
             f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため、"
-            f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}3 以降は openpyxl で読めません。"
+            f"「{APP_CONFIG_SHEET_NAME}」!{column_letter_desc}{CONFIG_SHEET_TASK_IDS_FIRST_ROW}:"
+            f"{column_letter_desc}{CONFIG_SHEET_TASK_IDS_LAST_ROW} は openpyxl で読めません。"
         )
         if openpyxl_skip_hint:
             msg += " " + openpyxl_skip_hint.strip()
@@ -376,7 +380,10 @@ def _read_task_ids_from_config_sheet_column(
                 return out
             ws = wb[APP_CONFIG_SHEET_NAME]
             consecutive_empty = 0
-            for r in range(3, 3 + 500):
+            for r in range(
+                CONFIG_SHEET_TASK_IDS_FIRST_ROW,
+                CONFIG_SHEET_TASK_IDS_LAST_ROW + 1,
+            ):
                 t = _config_cell_text(ws.cell(row=r, column=column_index).value)
                 if not t:
                     consecutive_empty += 1
@@ -395,10 +402,13 @@ def _read_task_ids_from_config_sheet_column(
             wb.close()
     except Exception as ex:
         logging.warning(
-            "%s: 「%s」!%s3 以降の依頼NOを読めません（無視）: %s",
+            "%s: 「%s」!%s%d:%s%d の依頼NOを読めません（無視）: %s",
             log_label,
             APP_CONFIG_SHEET_NAME,
             column_letter_desc,
+            CONFIG_SHEET_TASK_IDS_FIRST_ROW,
+            column_letter_desc,
+            CONFIG_SHEET_TASK_IDS_LAST_ROW,
             ex,
         )
         return []
@@ -407,8 +417,8 @@ def _read_task_ids_from_config_sheet_column(
 
 def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    マクロブック「設定」シート A 列の 3 行目以降を」配台トレース対象の依頼NOとして読む。
-    空セルはスキップ。連続 30 セル空なら打ち切り。最大 500 行まで走査。
+    マクロブック「設定」シート A 列の 3〜26 行目を配台トレース対象の依頼NOとして読む。
+    空セルはスキップ。連続 30 セル空なら打ち切り。
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
@@ -421,8 +431,8 @@ def _read_trace_schedule_task_ids_from_config_sheet(wb_path: str) -> list[str]:
 
 def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
     """
-    マクロブック「設定」シート B 列の 3 行目以降を」段階2デバッグ配台の対象依頼NOとして読む。
-    1 件も無い場合は段階2は通常モード（全件配台）。空セル・打ち切り等は A 列トレースとともに。
+    マクロブック「設定」シート B 列の 3〜26 行目を段階2デバッグ配台の対象依頼NOとして読む。
+    1 件も無い場合は段階2は通常モード（全件配台）。空セル・打ち切り等は A 列トレースと同様。
     """
     return _read_task_ids_from_config_sheet_column(
         wb_path,
@@ -512,7 +522,7 @@ def _read_gemini_model_try_chain_from_settings_sheet(wb_path: str) -> tuple[str,
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
-    """設定シート B3 以降が空でないことが前提。Windows では MessageBox。それ以外は WARNING ログ。"""
+    """設定シート B3:B26 が空でないことが前提。Windows では MessageBox。それ以外は WARNING ログ。"""
     if not task_ids_sorted:
         return
     preview_lines = task_ids_sorted[:30]
@@ -521,7 +531,7 @@ def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
         preview += "\n…"
     body = (
         "デバッグモードで実行した。\n\n"
-        "「設定」シート B3以降に入力した依頼NOのみを配台対象とした。\n\n"
+        "「設定」シート B3:B26 に入力した依頼NOのみを配台対象とした。\n\n"
         "対象依頼NO:\n"
         + preview
     )
@@ -1072,9 +1082,9 @@ INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M = 100.0
 DEBUG_TASK_ID = os.environ.get("DEBUG_TASK_ID", "Y3-26").strip()
 # 例: set TRACE_TEAM_ASSIGN_TASK_ID=W3-14 … 配台ループで「人数別の最良候補」と採用理由を INFO ログに出す
 TRACE_TEAM_ASSIGN_TASK_ID = os.environ.get("TRACE_TEAM_ASSIGN_TASK_ID", "").strip()
-# 配台トレース対象はマクロブック「設定」シート A 列 3 行目以降のみ（generate_plan 冒頭で確定）。環境変数は使えない。
+# 配台トレース対象はマクロブック「設定」シート A 列 3〜26 行目のみ（generate_plan 冒頭で確定）。環境変数は使えない。
 TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
-# 段階2デバッグ配台: 「設定」B 列 3 行目以降に依頼NOはあるとしのみ」しの依頼の行の値配台（generate_plan 冒頭で確定）。空なら全件。
+# 段階2デバッグ配台: 「設定」B 列 3〜26 行目に依頼NOがあるときのみその依頼の行だけ配台（generate_plan 冒頭で確定）。空なら全件。
 DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 紝期超靎リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
@@ -4724,6 +4734,7 @@ def load_planning_tasks_df():
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
+    df = _coalesce_plan_plain_remark_into_special(df)
     _apply_planning_sheet_post_load_mutations(
         df,
         TASKS_INPUT_WORKBOOK,
@@ -8772,6 +8783,52 @@ def _cell_text_task_special_remark(val):
     return s
 
 
+def _coalesce_plan_plain_remark_into_special(df):
+    """
+    シートに単独の「備考」列だけあり「特別指定_備考」が空／欠落のとき、AI 入力列へ繰り寄せる。
+    NFKC で「備考」と一致する最初の列名を対象とする。
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    plain_col = None
+    for c in df.columns:
+        if _nfkc_column_aliases(str(c).strip()) == _nfkc_column_aliases("備考"):
+            plain_col = str(c).strip()
+            break
+    if plain_col is None:
+        return df
+    spec = PLAN_COL_SPECIAL_REMARK
+    if spec not in df.columns:
+        return df.rename(columns={plain_col: spec})
+    merged = 0
+    conflict = False
+    for i in df.index:
+        sp = df.at[i, spec]
+        pl = df.at[i, plain_col]
+        sp_txt = _cell_text_task_special_remark(sp)
+        pl_txt = _cell_text_task_special_remark(pl)
+        if sp_txt:
+            if pl_txt and sp_txt != pl_txt:
+                conflict = True
+            continue
+        if pl_txt:
+            df.at[i, spec] = pl
+            merged += 1
+    if conflict:
+        logging.warning(
+            "計画タスク入力: 「備考」と「特別指定_備考」の両方に異なる値がある行があります。"
+            "AI 適用は「特別指定_備考」を優先します。「備考」列は削除しません。"
+        )
+        return df
+    df = df.drop(columns=[plain_col])
+    if merged > 0:
+        logging.info(
+            "計画タスク入力: 「備考」→「特別指定_備考」へ %s セルを転記しました（単独備考列の互換）。",
+            merged,
+        )
+    return df
+
+
 def _task_special_prompt_lines(tasks_df):
     """プロンプトに載せる行リスト（ソート剝）。正規化は上記ヘルパーに統一。"""
     lines = []
@@ -11533,6 +11590,7 @@ def _merge_plan_sheet_user_overrides(out_df):
         df_old,
         plan_input_sheet_column_order(),
     )
+    df_old = _coalesce_plan_plain_remark_into_special(df_old)
     if TASK_COL_TASK_ID not in df_old.columns or TASK_COL_MACHINE not in df_old.columns:
         return out_df
 
@@ -26204,7 +26262,7 @@ def _generate_plan_impl(
     tasks_df_raw_input_baseline=None,
     result_pattern_shift_label=None,
 ):
-    # 配台トレース（設定シート A3 以降のみ）は」メンバー0人等で早期 return しても
+    # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
     _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
@@ -26216,7 +26274,7 @@ def _generate_plan_impl(
         _preview = _ids_from_sheet[:25]
         _suffix = " …" if len(_ids_from_sheet) > 25 else ""
         logging.info(
-            "設定シート「%s」A3 以降: トレース用依頼NOを %s 件読み込み（%s%s）",
+            "設定シート「%s」A3:A26: トレース用依頼NOを %s 件読み込み（%s%s）",
             APP_CONFIG_SHEET_NAME,
             len(_ids_from_sheet),
             ", ".join(_preview),
@@ -26224,12 +26282,12 @@ def _generate_plan_impl(
         )
     else:
         logging.info(
-            "設定シート「%s」A3 以降: トレース用依頼NOは無し（空またはシート無し）",
+            "設定シート「%s」A3:A26: トレース用依頼NOは無し（空またはシート無し）",
             APP_CONFIG_SHEET_NAME,
         )
     if TRACE_SCHEDULE_TASK_IDS:
         logging.info(
-            "配台トレース: 有効 task_id = %s（設定シート A3 以降）",
+            "配台トレース: 有効 task_id = %s（設定シート A3:A26）",
             ", ".join(sorted(TRACE_SCHEDULE_TASK_IDS)),
         )
     else:
@@ -26245,7 +26303,7 @@ def _generate_plan_impl(
     DEBUG_DISPATCH_ONLY_TASK_IDS = frozenset(_dbg_norm)
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
         logging.warning(
-            "デバッグ配台: 「%s」B3以降により配台対象を %s 件の依頼NOに陝定しした: %s",
+            "デバッグ配台: 「%s」B3:B26 により配台対象を %s 件の依頼NOに限定しました: %s",
             APP_CONFIG_SHEET_NAME,
             len(DEBUG_DISPATCH_ONLY_TASK_IDS),
             ", ".join(sorted(DEBUG_DISPATCH_ONLY_TASK_IDS)),
@@ -26462,7 +26520,7 @@ def _generate_plan_impl(
         )
         if _n_tasks_after == 0:
             logging.error(
-                "デバッグ配台: B3以降の依頼NOに一致する行はありません。段階2を中断しした。"
+                "デバッグ配台: B3:B26 の依頼NOに一致する行はありません。段階2を中断しました。"
             )
             _try_write_main_sheet_gemini_usage_summary("段階2")
             return
