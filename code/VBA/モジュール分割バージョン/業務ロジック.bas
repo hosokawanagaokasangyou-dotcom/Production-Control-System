@@ -364,16 +364,70 @@ Public Sub メインシート_指定範囲のハイパーリンクを削除(ByVal wsMain As Worksheet
     On Error GoTo 0
 End Sub
 
+' メインシート（通常「メイン_」）を取得。名前が変わっても図形名から推定する。
+Public Function メインシートを取得(ByVal wb As Workbook) As Worksheet
+    Dim ws As Worksheet
+    Dim shp As Shape
+    If wb Is Nothing Then Exit Function
+    
+    On Error Resume Next
+    Set メインシートを取得 = wb.Worksheets("メイン_")
+    On Error GoTo 0
+    If Not メインシートを取得 Is Nothing Then Exit Function
+    
+    On Error Resume Next
+    Set メインシートを取得 = wb.Worksheets("メイン")
+    On Error GoTo 0
+    If Not メインシートを取得 Is Nothing Then Exit Function
+    
+    ' 図形名から推定（共通定義.bas の定数がある環境を想定）
+    For Each ws In wb.Worksheets
+        On Error Resume Next
+        For Each shp In ws.Shapes
+            If StrComp(shp.Name, SHAPE_MAIN_AI_REMARKS_CACHE_CLEAR, vbTextCompare) = 0 Then
+                Set メインシートを取得 = ws
+                Exit Function
+            End If
+            If StrComp(shp.Name, SHAPE_MAIN_PDF_CSV_SNAPSHOT_ANIM, vbTextCompare) = 0 Then
+                Set メインシートを取得 = ws
+                Exit Function
+            End If
+            If StrComp(shp.Name, SHAPE_MAIN_DISPATCH_TRIAL_PATTERN_LIST_THEN_STAGE2, vbTextCompare) = 0 Then
+                Set メインシートを取得 = ws
+                Exit Function
+            End If
+        Next shp
+        On Error GoTo 0
+    Next ws
+    
+    On Error Resume Next
+    Set メインシートを取得 = wb.Worksheets(1)
+    On Error GoTo 0
+End Function
+
+' 段階1の完了時に、メインシートのリンクブロックを最新化する。
+Public Sub メインシート_段階1実行後_リンク更新()
+    Dim wsMain As Worksheet
+    On Error Resume Next
+    Set wsMain = メインシートを取得(ThisWorkbook)
+    On Error GoTo 0
+    If wsMain Is Nothing Then Exit Sub
+    メインシート_結果シートリンクを更新 wsMain
+End Sub
+
 ' メインシート A1～：ブック内で名前が「結果_」で始まるシートへのジャンプリンクを並べる
 Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
     Dim wb As Workbook
     Dim ws As Worksheet
     Dim coll As Collection
+    Dim collFixed As Collection
     Dim arr() As String
     Dim i As Long, j As Long, r As Long
     Dim n As Long
     Dim temp As String
     Dim sn As String
+    Dim fixed As Variant
+    Dim k As Long
     Dim afn As String, afs As Double, afc As Variant
     Dim aBold As Boolean, aIt As Boolean, aUl As Long
     Dim srcA As Range
@@ -423,6 +477,36 @@ Public Sub メインシート_結果シートリンクを更新(ByVal wsMain As Worksheet)
         メインシート_フォント属性を適用 wsMain.Cells(r, 1), afn, afs, afc, False, aIt, aUl
         r = r + 1
     Next i
+    
+    ' 追加: 段階1/比較操作で使う関連シートへのリンク（存在するものだけ）
+    fixed = Split("選択_計画実績比較|結果_設備ガント_計画実績比較|配台試行順_パターン一覧|配台試行順_パターン別段階2", "|")
+    Set collFixed = New Collection
+    For k = LBound(fixed) To UBound(fixed)
+        sn = CStr(fixed(k))
+        On Error Resume Next
+        Set ws = wb.Worksheets(sn)
+        On Error GoTo 0
+        If Not ws Is Nothing Then
+            ' 結果_* は上段ですでに入っている可能性があるため、固定側では重複を避ける
+            If Left$(sn, 3) <> "結果_" Then
+                collFixed.Add sn
+            End If
+        End If
+        Set ws = Nothing
+    Next k
+    
+    If collFixed.Count > 0 Then
+        r = r + 1
+        wsMain.Cells(r, 1).Value = "関連シート（ツール）"
+        メインシート_フォント属性を適用 wsMain.Cells(r, 1), afn, afs, afc, True, aIt, aUl
+        r = r + 1
+        For i = 1 To collFixed.Count
+            sn = CStr(collFixed(i))
+            wsMain.Hyperlinks.Add anchor:=wsMain.Cells(r, 1), Address:="", SubAddress:="'" & Replace(sn, "'", "''") & "'!A1", TextToDisplay:=sn
+            メインシート_フォント属性を適用 wsMain.Cells(r, 1), afn, afs, afc, False, aIt, aUl
+            r = r + 1
+        Next i
+    End If
 End Sub
 
 ' 結果_*（設備ガント以外）・個人_*: 実験コードと同じ手順で列オートフィット

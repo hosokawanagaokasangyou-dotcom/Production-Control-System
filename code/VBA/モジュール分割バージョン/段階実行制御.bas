@@ -399,6 +399,11 @@ Public Sub RunPythonStage1()
         End If
         Exit Sub
     End If
+    
+    ' 段階1で作成・更新される関連シートへのリンクをメインシートへ反映
+    On Error Resume Next
+    メインシート_段階1実行後_リンク更新
+    On Error GoTo 0
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     m_animMacroSucceeded = True
 End Sub
