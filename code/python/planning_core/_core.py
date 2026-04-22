@@ -2712,7 +2712,7 @@ def _write_results_equipment_gantt_sheet(
     無効時は ([], []) を返す。
     gantt_compare_shape_styling が True のとき、計画行の角丸枠は点線、実績行は太線（比較ガント用）。
     compare_aladdin_qty_by_machine_date が dict のとき（通常 None）、比較ガントで機械×日ごとに
-    3 段目「アラジン確定」を描画する（キーは (_normalize_equipment_match_key(機械名), date)、値は (タスク概覝文, タイムライン中央文)）。
+    3 段目「アラジン入力数量」を描画する（キーは (_normalize_equipment_match_key(機械名), date)、値は (タスク概覝＝依頼NOのみ, タイムライン中央＝依頼NO(数量) をスペース区切り)）。
     """
     sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
     if not plan_rows:
@@ -3217,9 +3217,9 @@ def _write_results_equipment_gantt_sheet(
                 if isinstance(_ala_sum, str) and len(_ala_sum) > 32000:
                     _ala_sum = _ala_sum[:31997] + "..."
                 _lbl_m = (
-                    f"{mach_nm}（アラジン確定）"
+                    f"{mach_nm}（アラジン入力数量）"
                     if mach_nm
-                    else "（アラジン確定）"
+                    else "（アラジン入力数量）"
                 )
                 _ac1 = ws.cell(row=row, column=2, value=_lbl_m)
                 _ac3 = ws.cell(row=row, column=3, value=_ala_sum or "—")
@@ -25471,7 +25471,7 @@ def _try_read_plan_tasks_sheet_for_compare_aladdin():
     )
     if not wb or not os.path.isfile(wb):
         logging.warning(
-            "計画実績比較ガント: TASK_INPUT_WORKBOOK が無いためアラジン確定量の行は空表示になります。"
+            "計画実績比較ガント: TASK_INPUT_WORKBOOK が無いためアラジン入力数量の行は空表示になります。"
         )
         return None
     try:
@@ -25513,7 +25513,7 @@ def _build_compare_gantt_aladdin_qty_lookup(
 ) -> dict[tuple[str, date], tuple[str, str]]:
     """
     加工計画DATA の「YYYY/MM/DD_加工数量」列から、(機械名キー, 日付) ごとの
-    （タスク概覝列用テキスト, タイムライン中央の要約）を構築する。
+    （タスク概覝＝依頼NOのみ, タイムライン中央＝「依頼NO(数量)」をスペース区切り）を構築する。
     """
     out: dict[tuple[str, date], tuple[str, str]] = {}
     if df is None or len(df) == 0:
@@ -25559,14 +25559,22 @@ def _build_compare_gantt_aladdin_qty_lookup(
             buckets[mach_k, dk].append((tid or "—", qty))
 
     for key, parts in buckets.items():
-        total = sum(p[1] for p in parts)
         parts_show = parts[:15]
-        detail = " ".join(
-            f"{t}×{_format_qty_short(q)}" for t, q in parts_show
+        _seen_tid: set[str] = set()
+        _uids: list[str] = []
+        for t, _q in parts:
+            tt = (t or "—").strip() or "—"
+            if tt not in _seen_tid:
+                _seen_tid.add(tt)
+                _uids.append(tt)
+        detail = " ".join(_uids[:15])
+        if len(parts) > 15 or len(_uids) > 15:
+            detail += " …"
+        center = " ".join(
+            f"{(t or '—')}({_format_qty_short(q)})" for t, q in parts_show
         )
         if len(parts) > 15:
-            detail += " …"
-        center = f"確定合計 {_format_qty_short(total)}"
+            center += " …"
         out[key] = (detail, center)
 
     return out
@@ -25575,7 +25583,7 @@ def _build_compare_gantt_aladdin_qty_lookup(
 def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
     """
     過去スナップショット（``結果_タスク一覧.csv``）の計画と、現在マスタの加工実績明細を
-    同一シートで比較する設備ガント（計画／実績／アラジン確定数量の3段）を
+    同一シートで比較する設備ガント（計画／実績／アラジン入力数量の3段）を
     ``output_dir`` / ``COMPARE_GANTT_OUTPUT_FILENAME`` に出力する。
 
     Args:
@@ -25820,7 +25828,7 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             sheet_name=RESULT_SHEET_GANTT_COMPARE_NAME,
         )
         logging.info(
-            "計画実績比較ガント: %s を出力しました（アラジン確定行の参照元＝加工計画DATA の日付_加工数量列）。",
+            "計画実績比較ガント: %s を出力しました（アラジン入力数量行の参照元＝加工計画DATA の日付_加工数量列）。",
             os.path.basename(out_path),
         )
         return os.path.abspath(out_path)
