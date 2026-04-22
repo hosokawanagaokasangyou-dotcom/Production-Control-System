@@ -25582,22 +25582,6 @@ def _format_qty_short(q: float) -> str:
     return s if s else "0"
 
 
-def _compare_gantt_debug_ndjson(payload: dict) -> None:
-    # region agent log
-    try:
-        import json as _json
-
-        _repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        _path = os.path.join(_repo, "debug-76d9de.log")
-        payload.setdefault("timestamp", int(time_module.time() * 1000))
-        payload.setdefault("sessionId", "76d9de")
-        with open(_path, "a", encoding="utf-8") as _fp:
-            _fp.write(_json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # endregion
-
-
 def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     df: pd.DataFrame | None,
     equipment_list,
@@ -25620,8 +25604,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     # (機械キー, 日, 依頼NO) → 行ごとの按分値のリスト（後で同一値大量時に畳む）
     _per_mdt: dict[tuple[str, date, str], list[float]] = defaultdict(list)
     seen_sig: set[tuple] = set()
-    skipped_dup_rows = 0
-    _collapse_groups = 0
 
     def _scalar_for_dedupe(v) -> float | str:
         if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -25682,7 +25664,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             _scalar_for_dedupe(cumulative_actual_m),
         )
         if sig in seen_sig:
-            skipped_dup_rows += 1
             continue
         seen_sig.add(sig)
 
@@ -25743,149 +25724,11 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             and max(_vals) - min(_vals) < 1e-3
         ):
             merged = float(max(_vals))
-            _collapse_groups += 1
         else:
             merged = float(sum(_vals))
         tmp[_mk, _d][_tid] = merged
 
-    _out = {k: dict(v) for k, v in tmp.items()}
-    _agg_watch: dict[str, float] = {}
-
-    def _tid_watch(t: str) -> bool:
-        tl = (t or "").lower()
-        return ("w4-11" in tl) or ("v4-11" in tl) or ("4-11" in tl)
-
-    for _k, _vd in _out.items():
-        _mk_g, _dt_g = _k
-        _ds = _dt_g.isoformat() if isinstance(_dt_g, date) else str(_dt_g)
-        for _tid, _q in _vd.items():
-            if _tid_watch(_tid):
-                _agg_watch[f"{_mk_g}|{_ds}|{_tid}"] = float(_q)
-
-    _compare_gantt_debug_ndjson(
-        {
-            "hypothesisId": "H5",
-            "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df",
-            "message": "df_dedupe_aggregation_summary",
-            "runId": "post-fix",
-            "data": {
-                "skipped_duplicate_rows": skipped_dup_rows,
-                "seen_unique_sigs": len(seen_sig),
-                "collapse_identical_qty_groups": _collapse_groups,
-                "agg_totals_tid_watch": _agg_watch,
-            },
-        }
-    )
-    return _out
-
-
-def _aggregate_actual_qty_by_machine_date_base_tid(
-    actual_timeline_events: list | None,
-) -> dict[tuple[str, date], dict[str, float]]:
-    """
-    実績タイムラインイベントを (機械キー, 日付) × 依頼NO（ロール無し）ごとに集計する。
-    比較ガントのアラジン「日次_加工数量」と突き合わせる際の実績側数量に用いる。
-    ``compare_daily_m``（build_actual_timeline_events が付与する日次按分 m）を優先し、
-    無い場合のみ非累積の ``label_len_m`` を用いる（累積ラベルは日別合算に使わない）。
-    """
-    tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
-        lambda: defaultdict(float)
-    )
-    if not actual_timeline_events:
-        _compare_gantt_debug_ndjson(
-            {
-                "hypothesisId": "H1",
-                "location": "_aggregate_actual_qty_by_machine_date_base_tid",
-                "message": "empty_events",
-                "data": {},
-            }
-        )
-        return {}
-    _src_counts = {"compare_daily_m": 0, "label_len_fallback": 0, "skipped_cumulative": 0}
-    _tid_samples: list = []
-
-    def _tid_watch(t: str) -> bool:
-        tl = (t or "").lower()
-        return ("w4-11" in tl) or ("v4-11" in tl) or ("4-11" in tl)
-
-    for ev in actual_timeline_events:
-        d = ev.get("date")
-        mach = ev.get("machine")
-        if not isinstance(d, date) or mach is None:
-            continue
-        mk = _normalize_equipment_match_key(str(mach).strip())
-        if not mk:
-            continue
-        tid_raw = str(ev.get("task_id") or "").strip()
-        if not tid_raw:
-            continue
-        base_part = tid_raw.split("/", 1)[0].strip()
-        btid = planning_task_id_str_from_scalar(base_part) or base_part
-        if not btid:
-            continue
-        qty = None
-        qty_src = None
-        try:
-            cd = ev.get("compare_daily_m")
-            if cd is not None:
-                qty = float(cd)
-                qty_src = "compare_daily_m"
-        except (TypeError, ValueError):
-            qty = None
-        if qty is None or qty <= 1e-12:
-            if ev.get("label_len_m_is_cumulative"):
-                _src_counts["skipped_cumulative"] += 1
-                continue
-            lm = ev.get("label_len_m")
-            try:
-                qty = float(lm) if lm is not None else 0.0
-            except (TypeError, ValueError):
-                qty = 0.0
-            qty_src = "label_len_m"
-        if qty <= 1e-12:
-            continue
-        if qty_src == "compare_daily_m":
-            _src_counts["compare_daily_m"] += 1
-        elif qty_src == "label_len_m":
-            _src_counts["label_len_fallback"] += 1
-        tmp[mk, d][btid] += qty
-        if _tid_watch(btid) and len(_tid_samples) < 24:
-            _tid_samples.append(
-                {
-                    "mk": mk,
-                    "date": d.isoformat(),
-                    "tid": btid,
-                    "qty_add": qty,
-                    "qty_src": qty_src,
-                    "task_id_raw": tid_raw[:80],
-                    "cumul_lbl": bool(ev.get("label_len_m_is_cumulative")),
-                    "lbl_m": ev.get("label_len_m"),
-                    "cmp_d": ev.get("compare_daily_m"),
-                }
-            )
-    _out = {k: dict(v) for k, v in tmp.items()}
-    _agg_watch: dict[str, float] = {}
-    for _k, _vd in _out.items():
-        _mk_g, _dt_g = _k
-        _ds = _dt_g.isoformat() if isinstance(_dt_g, date) else str(_dt_g)
-        for _tid, _q in _vd.items():
-            if _tid_watch(_tid):
-                _agg_watch[f"{_mk_g}|{_ds}|{_tid}"] = float(_q)
-
-    _compare_gantt_debug_ndjson(
-        {
-            "hypothesisId": "H1",
-            "location": "_aggregate_actual_qty_by_machine_date_base_tid",
-            "message": "aggregation_summary",
-            "data": {
-                "n_events_in": len(actual_timeline_events),
-                "src_counts": _src_counts,
-                "tid_trace_samples": _tid_samples,
-                "agg_totals_tid_watch": _agg_watch,
-            },
-        }
-    )
-    return _out
+    return {k: dict(v) for k, v in tmp.items()}
 
 
 def _compare_aladdin_plan_buckets_vs_actual(
@@ -25897,7 +25740,6 @@ def _compare_aladdin_plan_buckets_vs_actual(
     機械×日ごとの不一致説明文（空なら一致）を返す。
     """
     notes: dict[tuple[str, date], str] = {}
-    _mismatch_items: list = []
     for key, parts in buckets.items():
         plan_by_tid: dict[str, float] = defaultdict(float)
         for t, q in parts:
@@ -25907,9 +25749,6 @@ def _compare_aladdin_plan_buckets_vs_actual(
             tid = tid or "—"
             plan_by_tid[tid] += float(q)
         act_map = actual_agg.get(key) or {}
-        _k_mk, _k_dt = key
-        _kds = _k_dt.isoformat() if isinstance(_k_dt, date) else str(_k_dt)
-        _in_act = key in actual_agg
         pieces: list[str] = []
         for tid in sorted(plan_by_tid.keys()):
             pq = float(plan_by_tid[tid])
@@ -25918,31 +25757,8 @@ def _compare_aladdin_plan_buckets_vs_actual(
                 pieces.append(
                     f"{tid} 計画{_format_qty_short(pq)}≠実績{_format_qty_short(aq)}"
                 )
-                if len(_mismatch_items) < 24:
-                    _mismatch_items.append(
-                        {
-                            "mach_k": _k_mk,
-                            "date": _kds,
-                            "tid": tid,
-                            "plan_qty": pq,
-                            "actual_qty": aq,
-                            "key_in_actual_agg": _in_act,
-                            "act_map_keys_sample": sorted(act_map.keys())[:12],
-                        }
-                    )
         if pieces:
             notes[key] = "【実績不一致】" + " ".join(pieces)
-    _compare_gantt_debug_ndjson(
-        {
-            "hypothesisId": "H4",
-            "location": "_compare_aladdin_plan_buckets_vs_actual",
-            "message": "plan_vs_actual_mismatches",
-            "data": {
-                "n_mismatch_keys": len(notes),
-                "items": _mismatch_items,
-            },
-        }
-    )
     nm = len(notes)
     if nm:
         logging.info(
@@ -26212,25 +26028,6 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             raise PlanningValidationError(
                 "計画実績比較ガント: 実績明細からタイムラインイベントを生成できません。"
             )
-        _n_ev = len(detail_timeline_events)
-        _n_cd = sum(
-            1 for _e in detail_timeline_events if _e.get("compare_daily_m") is not None
-        )
-        _n_lcum = sum(
-            1 for _e in detail_timeline_events if _e.get("label_len_m_is_cumulative")
-        )
-        _compare_gantt_debug_ndjson(
-            {
-                "hypothesisId": "H3",
-                "location": "write_plan_actual_compare_gantt_from_snapshot_dir",
-                "message": "after_build_actual_timeline_events",
-                "data": {
-                    "n_events": _n_ev,
-                    "with_compare_daily_m": _n_cd,
-                    "with_label_len_cumulative": _n_lcum,
-                },
-            }
-        )
         _compare_gantt_assert_no_overlap(detail_timeline_events, "実績(マスタ)")
         _timeline_events_force_machine_display_name(detail_timeline_events)
 
