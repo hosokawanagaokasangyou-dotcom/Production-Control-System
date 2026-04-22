@@ -132,6 +132,8 @@ Public Const SHEET_RESULT_CALENDAR_ATTEND As String = "結果_カレンダー(出勤簿)"
 Public Const SHEET_RESULT_EQUIP_GANTT As String = "結果_設備ガント"
 ' planning_core.RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME と一致（段階2 xlsx → マクロブック取込）
 Public Const SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL As String = "結果_設備ガント_実績明細"
+' planning_core.RESULT_SHEET_GANTT_COMPARE_NAME と一致（計画実績比較ガントの取込シート名）
+Public Const SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE As String = "結果_設備ガント_計画実績比較"
 Public Const SHEET_SETTINGS As String = "設定"
 ' planning_core.EXCLUDE_RULES_SHEET_NAME / EXCLUDE_RULE_COL_* と見出しを一致させる（シート作成は VBA、行同期は Python）
 Public Const SHEET_EXCLUDE_ASSIGNMENT As String = "設定_配台不要工程"

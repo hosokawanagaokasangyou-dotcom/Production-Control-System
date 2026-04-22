@@ -24,6 +24,7 @@ DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア(自動) の納期遵守率(%
 DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合(%)の重み（空なら 1）
 DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）
 GANTT_COLOR_MODE		結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに
+GANTT_PRINT_ONE_PAGE_PER_DAY		設備ガント系の印刷: 1/true/yes/on/y で縦を「表示した暦日の数」ページに合わせる（横1ページ・日境界の手動改ページと併用。機械が多いと縮小が強い）。GANTT_PRINT_SCALE_PERCENT 指定時は Python 側では無効
 GANTT_ACTUAL_DETAIL_DATE_FROM		結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1
 GANTT_ACTUAL_DETAIL_DATE_TO		結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効
 EXCLUDE_RULES_TRY_OPENPYXL_SAVE		（互換用・Python では未使用。配台不要シートの保存は xlwings のみ）

@@ -887,21 +887,49 @@ Public Sub 結果_設備ガント_タイトルA1を左寄せに固定(ByVal ws As Worksheet)
     End If
 End Sub
 
+' 環境変数 GANTT_PRINT_ONE_PAGE_PER_DAY=1/true/yes/on/y のとき、縦を「暦日ブロック数」ページに合わせる（概ね 1 日 1 枚）。
+Private Function 結果_設備ガント_印刷_1日1ページ環境有効か() As Boolean
+    Dim v As String
+    v = LCase$(Trim$(Environ$("GANTT_PRINT_ONE_PAGE_PER_DAY")))
+    結果_設備ガント_印刷_1日1ページ環境有効か = (v = "1" Or v = "true" Or v = "yes" Or v = "on" Or v = "y")
+End Function
+
 ' 結果_設備ガント：印刷のページ設定。Excel では適用順を変えるとプレビューがずれるため、
-' ? 印刷タイトル 1～3 行 → ① A3 横向き → ② 余白「狭い」→ ③ 横 1 ページに合わせる → ④ 1 日ごとの手動改ページ、の順で固定する。
+' ? 印刷タイトル 1～3 行 → ① A3 横向き → ② 余白「狭い」→ ③ 横 1 ページ → ④ 1 日ごとの手動改ページ、の順で固定する。
+' ④ の前に区切り行を走査し、GANTT_PRINT_ONE_PAGE_PER_DAY 時は ③ で縦ページ数＝暦日数を指定する。
 Public Sub 結果_設備ガント_印刷ページ設定を適用(ByVal ws As Worksheet)
     Dim prevPrintComm As Boolean
     Dim lr As Long
     Dim r As Long
     Dim dayStarts As Collection
     Dim i As Long
+    Dim oneDayOne As Boolean
     
     If ws Is Nothing Then Exit Sub
-    If Not 結果_設備ガント系シート名か(ws.Name) Then Exit Sub
+    If Not 結果_設備ガント系シート名か(ws.Name) Then
+        If StrComp(Trim$(ws.Name), SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE, vbBinaryCompare) <> 0 Then Exit Sub
+    End If
     
     On Error Resume Next
     prevPrintComm = Application.PrintCommunication
     Application.PrintCommunication = True
+    
+    oneDayOne = 結果_設備ガント_印刷_1日1ページ環境有効か()
+    
+    ' ④ 用: 日付ブロック先頭行（先頭日はデータ開始行 4 想定）を列挙してから PageSetup を適用
+    ws.ResetAllPageBreaks
+    Set dayStarts = New Collection
+    lr = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    If lr >= 4 Then
+        dayStarts.Add 4&
+        r = 5
+        Do While r <= lr
+            If 結果_設備ガント_行は区切り行か(ws, r) Then
+                If r + 1 <= lr Then dayStarts.Add CLng(r + 1)
+            End If
+            r = r + 1
+        Loop
+    End If
     
     With ws.PageSetup
         ' ?
@@ -916,25 +944,17 @@ Public Sub 結果_設備ガント_印刷ページ設定を適用(ByVal ws As Worksheet)
         .BottomMargin = Application.InchesToPoints(0.75)
         .HeaderMargin = Application.InchesToPoints(0.3)
         .FooterMargin = Application.InchesToPoints(0.3)
-        ' ③ 横 1 ページ（縦は自動）
+        ' ③ 横 1 ページ。縦は既定で自動。GANTT_PRINT_ONE_PAGE_PER_DAY で縦＝暦日数ページ（機械多いと縮小が強い）
         .Zoom = False
         .FitToPagesWide = 1
-        .FitToPagesTall = False
+        If oneDayOne And dayStarts.Count > 0 Then
+            .FitToPagesTall = dayStarts.Count
+        Else
+            .FitToPagesTall = False
+        End If
     End With
     
-    ' ④ 1 日＝1 ページ縦ブロック（日付ブロック間の薄い区切り行の次行が翌日先頭）
-    ws.ResetAllPageBreaks
-    Set dayStarts = New Collection
-    lr = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
     If lr >= 4 Then
-        dayStarts.Add 4&
-        r = 5
-        Do While r <= lr
-            If 結果_設備ガント_行は区切り行か(ws, r) Then
-                If r + 1 <= lr Then dayStarts.Add CLng(r + 1)
-            End If
-            r = r + 1
-        Loop
         For i = 2 To dayStarts.Count
             ws.HPageBreaks.Add Before:=ws.Rows(CLng(dayStarts(i)))
         Next i

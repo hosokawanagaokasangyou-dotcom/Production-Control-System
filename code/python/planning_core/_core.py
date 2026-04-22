@@ -723,6 +723,8 @@ GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "3
 GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "60")))
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
+# 縦を「表示した暦日の数」ページに合わせる（概ね 1 日 1 枚）: GANTT_PRINT_ONE_PAGE_PER_DAY=1/true 等。
+# 手動の日付境界改ページと併用。機械が多い日は縮小が強くなる。GANTT_PRINT_SCALE_PERCENT 指定時は無効。
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
@@ -3357,10 +3359,15 @@ def _write_results_equipment_gantt_sheet(
         ws.column_dimensions["C"].width = 40
 
     _gantt_scale_override_raw = (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
+    _gantt_print_one_page_per_day = (
+        (os.environ.get("GANTT_PRINT_ONE_PAGE_PER_DAY", "") or "").strip().lower()
+        in ("1", "true", "yes", "y", "on")
+    )
     try:
         # 印刷ページ設定（ガンチャート作成完了時点で付与）
         # 適用順: ⓪タイトル行 → ①用紙・向き → ②余白 → ③横1ページ → ④改ページは try の外で付与（順を変えるとずれやすい）
         # 既定: 横1ページに収める（タイムラインが読める）。縦は自動（日内改ページは行高で緩和）。
+        # GANTT_PRINT_ONE_PAGE_PER_DAY: 縦を「暦日ブロック数」ページに合わせる（概ね 1 日 1 枚）。
         # GANTT_PRINT_SCALE_PERCENT を指定したときのみ固定%（横幅が細くなりやすい）。
         # ⓪ 全ページに繰り返すタイトル行（レポート 1〜3 行目）
         ws.print_title_rows = "1:3"
@@ -3384,7 +3391,10 @@ def _write_results_equipment_gantt_sheet(
         else:
             ws.page_setup.fitToPage = True
             ws.page_setup.fitToWidth = 1
-            ws.page_setup.fitToHeight = 0
+            if _gantt_print_one_page_per_day and gantt_day_first_rows:
+                ws.page_setup.fitToHeight = max(1, len(gantt_day_first_rows))
+            else:
+                ws.page_setup.fitToHeight = 0
         # タイトル・表をページ左基準に（レポート風）
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False

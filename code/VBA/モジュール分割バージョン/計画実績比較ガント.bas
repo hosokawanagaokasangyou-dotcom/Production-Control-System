@@ -4,7 +4,6 @@ Option Explicit
 Private Const ENV_COMPARE_GANTT_SNAPSHOT_DIR As String = "COMPARE_GANTT_SNAPSHOT_DIR"
 ' スナップショットに同一機械の時間重なりがあっても比較ガントを生成する（Python 側で警告のみ）
 Private Const ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP As String = "COMPARE_GANTT_ALLOW_PLAN_OVERLAP"
-Private Const SHEET_PLAN_ACTUAL_COMPARE As String = "結果_設備ガント_計画実績比較"
 Private Const SHEET_SETTINGS As String = "設定"
 Private Const SETTINGS_EXTRA_SNAP_ROOT_ADDR As String = "B28"
 Private Const OUT_COMPARE_XLSX As String = "plan_actual_compare_gantt.xlsx"
@@ -80,7 +79,7 @@ Public Sub 計画実績比較ガント_表示日へジャンプ()
     Dim cellD As Variant
     Dim jumpR As Variant
     On Error GoTo EH
-    Set ws = ThisWorkbook.Worksheets(SHEET_PLAN_ACTUAL_COMPARE)
+    Set ws = ThisWorkbook.Worksheets(SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE)
     want = CompareGanttB1ValueAsIsoDate(ws.Range("B1").Value)
     If Len(want) = 0 Then Exit Sub
     For i = 0 To 399
@@ -107,7 +106,7 @@ Public Sub 計画実績比較ガント_WorkbookSheetChange入口(ByVal Sh As Obj
     Dim prevEv As Boolean
     On Error GoTo EH
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
-    If StrComp(Sh.Name, SHEET_PLAN_ACTUAL_COMPARE, vbTextCompare) <> 0 Then Exit Sub
+    If StrComp(Sh.Name, SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE, vbTextCompare) <> 0 Then Exit Sub
     If Target Is Nothing Then Exit Sub
     If Intersect(Target, Sh.Range("B1")) Is Nothing Then Exit Sub
     prevEv = Application.EnableEvents
@@ -383,7 +382,7 @@ End Sub
 Private Sub RestorePlanActualCompareSheetAfterWorkbookProtect(ByVal wb As Workbook)
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = wb.Worksheets(SHEET_PLAN_ACTUAL_COMPARE)
+    Set ws = wb.Worksheets(SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE)
     On Error GoTo 0
     If ws Is Nothing Then Exit Sub
     TryUnprotectSheetAnyPassword ws
@@ -651,17 +650,17 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
     End If
     
     Set targetWb = ThisWorkbook
-    マクロブックから計画取込シート同源名シートを削除 targetWb, SHEET_PLAN_ACTUAL_COMPARE
+    マクロブックから計画取込シート同源名シートを削除 targetWb, SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE
     
     Set sourceWb = Workbooks.Open(refreshPath)
     sourceWb.Windows(1).Visible = False
     Set sourceWs = Nothing
     On Error Resume Next
-    Set sourceWs = sourceWb.Worksheets(SHEET_PLAN_ACTUAL_COMPARE)
+    Set sourceWs = sourceWb.Worksheets(SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE)
     On Error GoTo RunEH
     If sourceWs Is Nothing Then
         sourceWb.Close SaveChanges:=False
-        AppMsgBox "取込元ブックに「" & SHEET_PLAN_ACTUAL_COMPARE & "」シートがありません。", vbCritical, "計画実績比較ガント"
+        AppMsgBox "取込元ブックに「" & SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE & "」シートがありません。", vbCritical, "計画実績比較ガント"
         GoTo DoneProtect
     End If
     
@@ -676,9 +675,14 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
         GoTo DoneProtect
     End If
     
+    On Error Resume Next
+    結果_設備ガント_印刷ページ設定を適用 ws
+    Err.Clear
+    On Error GoTo RunEH
+    
     ProtectPlanActualCompareSheetForUi ws
     
-    AppMsgBox "「" & SHEET_PLAN_ACTUAL_COMPARE & "」を取り込みました。", vbInformation, "計画実績比較ガント"
+    AppMsgBox "「" & SHEET_RESULT_EQUIP_GANTT_PLAN_ACTUAL_COMPARE & "」を取り込みました。", vbInformation, "計画実績比較ガント"
     GoTo DoneProtect
     
 RunEH:
