@@ -471,7 +471,17 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     Dim optRoot As String
     Dim shpList As Shape
     Dim shpListOpt As Shape
+    Dim shpRun As Shape
     Dim onAct As String
+    Dim left1 As Double
+    Dim top1 As Double
+    Dim top2 As Double
+    Dim topBtn As Double
+    Dim listH As Double
+    Dim listW As Double
+    Dim gapPts As Double
+    Dim bottom1 As Double
+    Dim r As Long
     
     pdfRoot = targetDir & "\" & PDF_SNAPSHOT_REL_FOLDER
     optRoot = GetCompareGanttOptSnapshotRoot(wb)
@@ -493,8 +503,16 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     ws.Range("A2").Value = "① 下のいずれか一方の一覧でフォルダを選択（2 つのリストは同時に選べません）②「比較ガントを生成」をクリック。"
     ws.Range("A3").Value = "※ シート保護でクリックできないときは、一時的に保護を解除してください。"
     ws.Range("A4").Value = "【一覧1】このブックの pdf フォルダ配下（日時フォルダ）"
-    ws.Range("A5").Value = "【一覧2】設定シート " & SETTINGS_EXTRA_SNAP_ROOT_ADDR & " セルで指定したフォルダ配下（同じく日時フォルダ）"
+    ws.Range("A5:A6").ClearContents
     ws.Columns("A").ColumnWidth = 90
+    
+    ' 図形の Top はポイント固定だと行ラベルと重なるため、行位置から決める
+    listH = 132
+    listW = 480
+    gapPts = 14
+    left1 = ws.Columns(1).Left + 4
+    top1 = ws.Rows(7).Top + 4
+    bottom1 = top1 + listH
     
     DeleteOleIfExists ws, OLE_SNAP_LIST
     ' 旧版 OLE ボタン名が残っている場合の掃除
@@ -508,7 +526,7 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     onAct = "'" & wb.Name & "'!計画実績比較ガント_スナップリスト排他選択同期"
     
     ' ActiveX の OLE ではなくフォームのリストボックス（デザインモード問題を避ける）
-    Set shpList = ws.Shapes.AddFormControl(xlListBox, 18, 78, 520, 150)
+    Set shpList = ws.Shapes.AddFormControl(xlListBox, left1, top1, listW, listH)
     shpList.Name = SHAPE_COMPARE_SNAP_LIST
     shpList.Placement = 1  ' xlMoveAndSize
     shpList.Locked = False
@@ -518,7 +536,14 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     
     RefreshCompareGanttSnapshotList ws, shpList, pdfRoot, PICK_PATH_COL
     
-    Set shpListOpt = ws.Shapes.AddFormControl(xlListBox, 18, 248, 520, 150)
+    r = 7
+    Do While ws.Rows(r).Top < bottom1 + gapPts And r < 300
+        r = r + 1
+    Loop
+    ws.Cells(r, 1).Value = "【一覧2】設定シート " & SETTINGS_EXTRA_SNAP_ROOT_ADDR & " セルで指定したフォルダ配下（同じく日時フォルダ）"
+    top2 = ws.Rows(r + 1).Top + 4
+    
+    Set shpListOpt = ws.Shapes.AddFormControl(xlListBox, left1, top2, listW, listH)
     shpListOpt.Name = SHAPE_COMPARE_SNAP_LIST_OPT
     shpListOpt.Placement = 1  ' xlMoveAndSize
     shpListOpt.Locked = False
@@ -532,16 +557,17 @@ Private Sub EnsureCompareGanttPickSheet(ByVal wb As Workbook, ByVal targetDir As
     ws.Columns(PICK_PATH_COL_OPT).Hidden = True
     
     On Error Resume Next
-    ws.Range("A1:A5").Font.Name = BIZ_UDP_GOTHIC_FONT_NAME
+    ws.Range("A1:A" & CStr(Application.WorksheetFunction.Min(r + 5, 60))).Font.Name = BIZ_UDP_GOTHIC_FONT_NAME
     On Error GoTo 0
     
     ' フォームコントロールのボタン（OLE の CommandButton では OnAction が 1004 になることがある）
-    'Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, 18, 345, 180, 30)
-    'shpRun.Name = SHAPE_COMPARE_RUN_BTN
-    'shpRun.Locked = False
-    'shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
-    'shpRun.TextFrame.Characters.Text = "比較ガントを生成"
-    'shpRun.Placement = 1  ' xlMoveAndSize
+    topBtn = top2 + listH + gapPts
+    Set shpRun = ws.Shapes.AddFormControl(xlButtonControl, left1, topBtn, 220, 30)
+    shpRun.Name = SHAPE_COMPARE_RUN_BTN
+    shpRun.Locked = False
+    shpRun.OnAction = "'" & wb.Name & "'!計画実績比較ガント_リストから生成実行"
+    shpRun.TextFrame.Characters.Text = "比較ガントを生成"
+    shpRun.Placement = 1  ' xlMoveAndSize
     
     ProtectComparePickSheetForUi ws
     
