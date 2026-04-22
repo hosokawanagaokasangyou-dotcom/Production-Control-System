@@ -2699,6 +2699,7 @@ def _write_results_equipment_gantt_sheet(
     chart_title: str | None = None,
     sheet_name_override: str | None = None,
     gantt_compare_shape_styling: bool = False,
+    compare_aladdin_qty_by_machine_date: dict | None = None,
 ):
     """
     結果_設備毎の時間割と同一データ源（timeline_events）に基づき、
@@ -2710,6 +2711,8 @@ def _write_results_equipment_gantt_sheet(
     角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に xlwings で描画・画像化）。
     無効時は ([], []) を返す。
     gantt_compare_shape_styling が True のとき、計画行の角丸枠は点線、実績行は太線（比較ガント用）。
+    compare_aladdin_qty_by_machine_date が dict のとき（通常 None）、比較ガントで機械×日ごとに
+    3 段目「アラジン確定」を描画する（キーは (_normalize_equipment_match_key(機械名), date)、値は (タスク概覝文, タイムライン中央文)）。
     """
     sheet_nm = sheet_name_override or RESULT_SHEET_GANTT_NAME
     if not plan_rows:
@@ -2760,6 +2763,12 @@ def _write_results_equipment_gantt_sheet(
         if _cmp_shape and show_actual_rows
         else None
     )
+    _show_aladdin = bool(
+        _cmp_shape
+        and plan_rows
+        and show_actual_rows
+        and compare_aladdin_qty_by_machine_date is not None
+    )
 
     slot_mins = GANTT_TIMELINE_SLOT_MINUTES
     _g_cf = _gantt_color_mode_full()
@@ -2792,6 +2801,9 @@ def _write_results_equipment_gantt_sheet(
     banner_sep = Side(style="thin", color="7A7A7A")
     thin = Side(style="thin", color=("5C6BC0" if _g_cf else "666666"))
     grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    aladdin_tl_fill = PatternFill(
+        fill_type="solid", start_color="FFFDE7", end_color="FFFDE7"
+    )
     idle_fill = PatternFill(fill_type="solid", start_color="FFFFFF", end_color="FFFFFF")
     break_fill = PatternFill(
         fill_type="solid",
@@ -3190,6 +3202,58 @@ def _write_results_equipment_gantt_sheet(
                     shape_line_dash=_act_line_dash,
                     shape_line_weight_override=_act_line_wt,
                 )
+
+                ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
+                row += 1
+
+            if _show_aladdin:
+                _amk = _normalize_equipment_match_key(mach_nm or "")
+                _pair = ("—", "—")
+                if compare_aladdin_qty_by_machine_date:
+                    _got = compare_aladdin_qty_by_machine_date.get((_amk, d))
+                    if _got is not None:
+                        _pair = _got
+                _ala_sum, _ala_center = _pair
+                if isinstance(_ala_sum, str) and len(_ala_sum) > 32000:
+                    _ala_sum = _ala_sum[:31997] + "..."
+                _lbl_m = (
+                    f"{mach_nm}（アラジン確定）"
+                    if mach_nm
+                    else "（アラジン確定）"
+                )
+                _ac1 = ws.cell(row=row, column=2, value=_lbl_m)
+                _ac3 = ws.cell(row=row, column=3, value=_ala_sum or "—")
+                for _cx in (_ac1, _ac3):
+                    _cx.font = _result_font(size=11, color="000000")
+                    _cx.fill = lab_fill
+                    _cx.border = grid_border
+                _ac1.font = _result_font(size=11, bold=True, color="000000")
+                _ac1.alignment = Alignment(
+                    horizontal="left", vertical="center", wrap_text=True
+                )
+                _ac3.alignment = Alignment(
+                    horizontal="left", vertical="center", wrap_text=True
+                )
+                if n_slots > 0 and last_col >= n_fixed + 1:
+                    ws.merge_cells(
+                        start_row=row,
+                        start_column=n_fixed + 1,
+                        end_row=row,
+                        end_column=last_col,
+                    )
+                    _atl = ws.cell(
+                        row=row,
+                        column=n_fixed + 1,
+                        value=_ala_center or "—",
+                    )
+                    _atl.font = _result_font(size=11, bold=False, color="333333")
+                    _atl.fill = aladdin_tl_fill
+                    _atl.border = grid_border
+                    _atl.alignment = Alignment(
+                        horizontal="center",
+                        vertical="center",
+                        wrap_text=True,
+                    )
 
                 ws.row_dimensions[row].height = float(GANTT_MACHINE_ROW_HEIGHT_PT)
                 row += 1
@@ -25395,10 +25459,123 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
     return events
 
 
+_COMPARE_GANTT_ALADDIN_QTY_COL_RE = re.compile(
+    r"^\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})_加工数量\s*$"
+)
+
+
+def _try_read_plan_tasks_sheet_for_compare_aladdin():
+    """TASK_INPUT_WORKBOOK の「加工計画DATA」を読む（アラジン日次数量列用）。失敗時 None。"""
+    wb = (os.environ.get("TASK_INPUT_WORKBOOK", "") or "").strip() or (
+        TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
+    )
+    if not wb or not os.path.isfile(wb):
+        logging.warning(
+            "計画実績比較ガント: TASK_INPUT_WORKBOOK が無いためアラジン確定量の行は空表示になります。"
+        )
+        return None
+    try:
+        df = pd.read_excel(wb, sheet_name=TASKS_SHEET_NAME)
+        df.columns = df.columns.astype(str).str.strip()
+        df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
+        logging.info(
+            "計画実績比較ガント: アラジン参照用に '%s' の『%s』を読み込みました。",
+            os.path.basename(wb),
+            TASKS_SHEET_NAME,
+        )
+        return df
+    except Exception as e:
+        logging.warning(
+            "計画実績比較ガント: 加工計画DATA の読込に失敗したためアラジン行は空です（%s）。",
+            e,
+        )
+        return None
+
+
+def _parse_optional_float_non_nan(val):
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_qty_short(q: float) -> str:
+    if abs(q - round(q)) < 1e-9:
+        return str(int(round(q)))
+    s = f"{q:.4f}".rstrip("0").rstrip(".")
+    return s if s else "0"
+
+
+def _build_compare_gantt_aladdin_qty_lookup(
+    df: pd.DataFrame | None, dates_set: set
+) -> dict[tuple[str, date], tuple[str, str]]:
+    """
+    加工計画DATA の「YYYY/MM/DD_加工数量」列から、(機械名キー, 日付) ごとの
+    （タスク概覝列用テキスト, タイムライン中央の要約）を構築する。
+    """
+    out: dict[tuple[str, date], tuple[str, str]] = {}
+    if df is None or len(df) == 0:
+        return out
+    if TASK_COL_MACHINE_NAME not in df.columns:
+        logging.warning(
+            "計画実績比較ガント: 列『%s』が無いためアラジン数量は結合できません。",
+            TASK_COL_MACHINE_NAME,
+        )
+        return out
+
+    buckets: dict[tuple[str, date], list[tuple[str, float]]] = defaultdict(list)
+    date_cols: list[tuple[str, date]] = []
+    for col in df.columns:
+        m = _COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col))
+        if not m:
+            continue
+        try:
+            y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            dk = date(y, mo, dd)
+        except ValueError:
+            continue
+        date_cols.append((str(col).strip(), dk))
+
+    if not date_cols:
+        logging.info(
+            "計画実績比較ガント: 「日付_加工数量」形式の列がありません（アラジン行は空または予約のみ）。"
+        )
+
+    for col_name, dk in date_cols:
+        if dk not in dates_set:
+            continue
+        if col_name not in df.columns:
+            continue
+        for _, row in df.iterrows():
+            mach_k = _normalize_equipment_match_key(row.get(TASK_COL_MACHINE_NAME))
+            if not mach_k:
+                continue
+            qty = _parse_optional_float_non_nan(row.get(col_name))
+            if qty is None or abs(qty) < 1e-12:
+                continue
+            tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+            buckets[mach_k, dk].append((tid or "—", qty))
+
+    for key, parts in buckets.items():
+        total = sum(p[1] for p in parts)
+        parts_show = parts[:15]
+        detail = " ".join(
+            f"{t}×{_format_qty_short(q)}" for t, q in parts_show
+        )
+        if len(parts) > 15:
+            detail += " …"
+        center = f"確定合計 {_format_qty_short(total)}"
+        out[key] = (detail, center)
+
+    return out
+
+
 def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
     """
     過去スナップショット（``結果_タスク一覧.csv``）の計画と、現在マスタの加工実績明細を
-    同一シートで比較する設備ガント（機械名1行・計画上段/実績下段）を
+    同一シートで比較する設備ガント（計画／実績／アラジン確定数量の3段）を
     ``output_dir`` / ``COMPARE_GANTT_OUTPUT_FILENAME`` に出力する。
 
     Args:
@@ -25601,6 +25778,12 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
                 "計画実績比較ガント: 勤怠と交差する表示日がありません。"
             )
 
+        _df_tasks_aladdin = _try_read_plan_tasks_sheet_for_compare_aladdin()
+        _aladdin_qty_lookup = _build_compare_gantt_aladdin_qty_lookup(
+            _df_tasks_aladdin,
+            set(sorted_dates_show),
+        )
+
         out_path = os.path.join(output_dir, COMPARE_GANTT_OUTPUT_FILENAME)
         _try_remove_path_with_retries(out_path)
         chart_title = (
@@ -25623,6 +25806,7 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
                 chart_title=chart_title,
                 sheet_name_override=RESULT_SHEET_GANTT_COMPARE_NAME,
                 gantt_compare_shape_styling=True,
+                compare_aladdin_qty_by_machine_date=_aladdin_qty_lookup,
             )
             wb = writer.book
             for _sn in list(wb.sheetnames):
@@ -25636,7 +25820,7 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             sheet_name=RESULT_SHEET_GANTT_COMPARE_NAME,
         )
         logging.info(
-            "計画実績比較ガント: %s を出力しました。",
+            "計画実績比較ガント: %s を出力しました（アラジン確定行の参照元＝加工計画DATA の日付_加工数量列）。",
             os.path.basename(out_path),
         )
         return os.path.abspath(out_path)
