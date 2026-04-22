@@ -25583,7 +25583,9 @@ def _format_qty_short(q: float) -> str:
 
 
 # アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
-_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3", "W4-12"})
+_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset(
+    {"W3-12", "A4-3", "W4-12", "W4-14", "Y4-44", "JR260403"}
+)
 
 
 def _compare_gantt_trace_should_log_btid(btid: str) -> bool:
@@ -25666,8 +25668,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             return "__na__"
 
     # 同一機械×日×依頼NOに「ほぼ同じ按分」が複数行付く重複エクスポート対策。
-    # W4-11 は約20件、W4-12 は 6×1800=10800 のように件数が少ない／浮動小数で min-max が 1e-3 を超えることがある。
-    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 5
+    # W4-11 は約20件、W4-12 は 6 件、W4-14 等は同一按分が 4 件のみのことがある（閾値 5 だと畳めず合算が過大になる）。
+    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 4
     _ALADDIN_DUP_SPREAD_TOL_M = 0.05  # 同一按分とみなす m 幅（表示単位の揺れ吸収）
 
     def _sig_time_minute(dt: datetime) -> str:
