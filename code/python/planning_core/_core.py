@@ -835,7 +835,7 @@ except (TypeError, ValueError):
     COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT = 2.5
 # 計画実績比較ガント UI（共通定義.bas の BIZ_UDP_GOTHIC_FONT_NAME と一致）
 COMPARE_GANTT_UI_FONT_NAME = "BIZ UDPゴシック"
-# 計画実績比較ガント: VBA「該当日へジャンプ」が参照する日付→日ブロック先頭行（非表示・候補日と同じ開始行に並べる）
+# 計画実績比較ガント: VBA（SheetChange 等）が参照する日付→日ブロック先頭行（非表示・候補日と同じ開始行に並べる）
 COMPARE_GANTT_DAY_ROW_MAP_DATE_COL = 52  # AZ
 COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
 
@@ -2672,7 +2672,7 @@ def _apply_compare_gantt_typography(ws, hdr_row: int) -> None:
             cell.font = _repl(cell.font)
     ws["B1"].font = _repl(ws["B1"].font, size=22, bold=False)
     ws["A1"].font = _repl(ws["A1"].font, size=11, bold=True)
-    ws["A2"].font = _repl(ws["A2"].font, size=14, bold=False)
+    ws["A2"].font = _repl(ws["A2"].font, size=12, bold=False)
     ws["D2"].font = _repl(ws["D2"].font, size=14, bold=False)
     for r in range(hdr_row, mr + 1):
         for c in (2, 3):
@@ -2935,7 +2935,7 @@ def _write_results_equipment_gantt_sheet(
         hint = ws.cell(
             row=2,
             column=1,
-            value="B1 で日付を選び、「該当日へジャンプ」でその日のブロック先頭へ移動します（自動スクロールは ThisWorkbook.SheetChange へ計画実績比較ガント_ThisWorkbook貼付_SheetChange.txt を追記）。",
+            value="B1 で表示日を選ぶと、その日のブロック先頭へ自動でスクロールします（ThisWorkbook の SheetChange は 生産管理_AI配台テスト_ThisWorkbook_VBA.txt を参照）。",
         )
         hint.font = _result_font(size=9, color="555555")
         hint.alignment = Alignment(

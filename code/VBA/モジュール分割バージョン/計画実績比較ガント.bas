@@ -18,8 +18,6 @@ Private Const OLE_SNAP_LIST As String = "CompareGanttSnapListBox"
 Private Const SHAPE_COMPARE_SNAP_LIST As String = "CompareGanttSnapListForm"
 ' 実行ボタンは OLE の OnAction が 1004 になる環境があるため、フォームコントロール（Shape）を使用
 Private Const SHAPE_COMPARE_RUN_BTN As String = "CompareGanttRunBtnForm"
-' 比較シート B1 右の「該当日へジャンプ」（Python が AZ/BA 行 500〜に書くマップと対応）
-Private Const SHAPE_COMPARE_JUMP_BTN As String = "CompareGanttJumpToDateBtnForm"
 Private Const COMPARE_GANTT_DAY_ROW_MAP_START As Long = 500
 Private Const COMPARE_GANTT_DAY_ROW_MAP_DATE_COL As Long = 52   ' AZ
 Private Const COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL As Long = 53 ' BA
@@ -187,24 +185,6 @@ Private Function CompareGanttB1ValueAsIsoDate(ByVal v As Variant) As String
     On Error GoTo 0
 End Function
 
-Private Sub EnsureCompareGanttJumpButton(ByVal ws As Worksheet)
-    Dim shp As Shape
-    Dim L As Double, T As Double
-    Const W As Double = 118
-    Const H As Double = 22
-    On Error Resume Next
-    DeleteShapeIfExists ws, SHAPE_COMPARE_JUMP_BTN
-    L = ws.Range("B1").Left + ws.Range("B1").Width + 6
-    T = ws.Range("B1").Top
-    Set shp = ws.Shapes.AddFormControl(xlButtonControl, L, T, W, H)
-    shp.Name = SHAPE_COMPARE_JUMP_BTN
-    shp.OnAction = "'" & ThisWorkbook.Name & "'!計画実績比較ガント_表示日へジャンプ"
-    shp.TextFrame.Characters.Text = "該当日へジャンプ"
-    shp.Placement = 1
-    shp.Locked = False
-    On Error GoTo 0
-End Sub
-
 Private Function FindOleOnSheet(ByVal ws As Worksheet, ByVal wantName As String) As OLEObject
     Dim o As OLEObject
     Set FindOleOnSheet = Nothing
@@ -287,7 +267,10 @@ Private Sub ProtectPlanActualCompareSheetForUi(ByVal ws As Worksheet)
     ws.Range("A1:C3").Locked = False
     ws.Protect Password:=pwd, DrawingObjects:=False, Contents:=True, UserInterfaceOnly:=True
     On Error GoTo 0
-    EnsureCompareGanttJumpButton ws
+    ' 旧版で置いていた「該当日へジャンプ」フォームボタン（B1 変更は Workbook_SheetChange で処理）
+    On Error Resume Next
+    DeleteShapeIfExists ws, "CompareGanttJumpToDateBtnForm"
+    On Error GoTo 0
 End Sub
 
 Private Sub RestorePlanActualCompareSheetAfterWorkbookProtect(ByVal wb As Workbook)
