@@ -25582,6 +25582,17 @@ def _format_qty_short(q: float) -> str:
     return s if s else "0"
 
 
+# アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
+_COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3"})
+
+
+def _compare_gantt_trace_should_log_btid(btid: str) -> bool:
+    n = planning_task_id_str_from_scalar(btid) or (btid or "").strip()
+    if not n:
+        return False
+    return n.upper() in {x.upper() for x in _COMPARE_GANTT_TRACE_BASE_TIDS}
+
+
 def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     df: pd.DataFrame | None,
     equipment_list,
@@ -25603,6 +25614,7 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     date_ok = set(sorted_dates)
     # (機械キー, 日, 依頼NO) → 行ごとの按分値のリスト（後で同一値大量時に畳む）
     _per_mdt: dict[tuple[str, date, str], list[float]] = defaultdict(list)
+    _trace_per_mdt: dict[tuple[str, date, str], list[float]] = defaultdict(list)
     seen_sig: set[tuple] = set()
 
     def _scalar_for_dedupe(v) -> float | str:
@@ -25712,6 +25724,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
                 qty = None
             if qty is not None and qty > 1e-12:
                 _per_mdt[(mk, d, btid)].append(float(qty))
+                if _compare_gantt_trace_should_log_btid(btid):
+                    _trace_per_mdt[(mk, d, btid)].append(float(qty))
 
     tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
         lambda: defaultdict(float)
@@ -25727,6 +25741,32 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         else:
             merged = float(sum(_vals))
         tmp[_mk, _d][_tid] = merged
+
+    for _tk, _tvals in sorted(
+        _trace_per_mdt.items(),
+        key=lambda kv: (kv[0][1], kv[0][0], kv[0][2]),
+    ):
+        _tmk, _td, _ttid = _tk
+        _merged = tmp.get((_tmk, _td), {}).get(_ttid)
+        _n = len(_tvals)
+        _collapsed = (
+            _n >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
+            and max(_tvals) - min(_tvals) < 1e-3
+        )
+        _preview = _tvals[:15]
+        _suffix = " …" if _n > 15 else ""
+        logging.info(
+            "計画実績比較ガント[トレース] 明細→日次按分 依頼NO=%s 日=%s 機械キー=%r "
+            "按分値件数=%s 畳み込み適用=%s 按分値先頭=%s%s 最終実績(m)=%s",
+            _ttid,
+            _td.isoformat() if isinstance(_td, date) else str(_td),
+            _tmk,
+            _n,
+            _collapsed,
+            _preview,
+            _suffix,
+            _merged,
+        )
 
     return {k: dict(v) for k, v in tmp.items()}
 
@@ -25753,6 +25793,18 @@ def _compare_aladdin_plan_buckets_vs_actual(
         for tid in sorted(plan_by_tid.keys()):
             pq = float(plan_by_tid[tid])
             aq = float(act_map.get(tid, 0.0))
+            if _compare_gantt_trace_should_log_btid(tid):
+                _k_mk, _k_dt = key
+                logging.info(
+                    "計画実績比較ガント[トレース] アラジン比較 機械キー=%r 日=%s 依頼NO=%s "
+                    "計画(m)=%s 実績(m)=%s isclose=%s",
+                    _k_mk,
+                    _k_dt.isoformat() if isinstance(_k_dt, date) else str(_k_dt),
+                    tid,
+                    _format_qty_short(pq),
+                    _format_qty_short(aq),
+                    math.isclose(pq, aq, rel_tol=1e-9, abs_tol=1e-2),
+                )
             if not math.isclose(pq, aq, rel_tol=1e-9, abs_tol=1e-2):
                 pieces.append(
                     f"{tid} 計画{_format_qty_short(pq)}≠実績{_format_qty_short(aq)}"
