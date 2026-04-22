@@ -25610,6 +25610,46 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     """
     if df is None or len(df) == 0:
         return {}
+
+    # region agent log
+    def _agent_dbg_ndjson(payload: dict) -> None:
+        try:
+            import json as _json
+
+            roots = (
+                os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")),
+                os.path.abspath(os.getcwd()),
+            )
+            payload = {
+                **payload,
+                "sessionId": "76d9de",
+                "timestamp": int(datetime.now().timestamp() * 1000),
+            }
+            for _root in roots:
+                _p = os.path.join(_root, "debug-76d9de.log")
+                try:
+                    with open(_p, "a", encoding="utf-8") as _fp:
+                        _fp.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+                    return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    _agent_dbg_ndjson(
+        {
+            "hypothesisId": "H0",
+            "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:entry",
+            "message": "detail_df aggregate entry",
+            "data": {
+                "n_rows": int(len(df)),
+                "file": os.path.abspath(__file__),
+                "cwd": os.path.abspath(os.getcwd()),
+            },
+        }
+    )
+    # endregion
+
     equip_lookup = _equipment_lookup_normalized_to_canonical(equipment_list)
     date_ok = set(sorted_dates)
     # (機械キー, 日, 依頼NO) → 行ごとの按分値のリスト（後で同一値大量時に畳む）
@@ -25742,46 +25782,42 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     for (_mk, _d, _tid), _vals in _per_mdt.items():
         if not _vals:
             continue
-        _spread = max(_vals) - min(_vals)
+        _vals_f = [float(x) for x in _vals]
+        _vals_r = [round(x, 4) for x in _vals_f]
+        _spread_raw = max(_vals_f) - min(_vals_f)
+        _spread_r = (max(_vals_r) - min(_vals_r)) if _vals_r else 0.0
+        # 按分の浮動小数ノイズで spread が閾値をわずかに超えて畳み込み失敗するのを防ぐ（dedupe と同じ 4 桁）
+        _spread = float(_spread_r)
         if (
             len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
             and _spread <= _ALADDIN_DUP_SPREAD_TOL_M
         ):
-            merged = float(max(_vals))
+            merged = float(max(_vals_r))
         else:
-            merged = float(sum(_vals))
+            merged = float(sum(_vals_f))
         tmp[_mk, _d][_tid] = merged
         # region agent log
-        if str(_tid).strip().upper() == "W4-12":
-            try:
-                import json as _json
-
-                _dbg = os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-76d9de.log")
-                )
-                with open(_dbg, "a", encoding="utf-8") as _dfp:
-                    _dfp.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "76d9de",
-                                "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:merge",
-                                "tid": "W4-12",
-                                "mach_k": _mk,
-                                "date": _d.isoformat() if isinstance(_d, date) else str(_d),
-                                "n_vals": len(_vals),
-                                "spread_m": round(_spread, 6),
-                                "sum_vals": round(float(sum(_vals)), 4),
-                                "merged": round(merged, 4),
-                                "collapsed": len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-                                and _spread <= _ALADDIN_DUP_SPREAD_TOL_M,
-                                "vals_head": [round(float(x), 4) for x in _vals[:30]],
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
+        if _compare_gantt_trace_should_log_btid(_tid):
+            _agent_dbg_ndjson(
+                {
+                    "hypothesisId": "H1",
+                    "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:merge",
+                    "message": "per (machine,date,tid) merge",
+                    "data": {
+                        "tid": str(_tid),
+                        "mach_k": _mk,
+                        "date": _d.isoformat() if isinstance(_d, date) else str(_d),
+                        "n_vals": len(_vals),
+                        "spread_raw_m": round(_spread_raw, 6),
+                        "spread_round4_m": round(_spread_r, 6),
+                        "sum_vals": round(float(sum(_vals_f)), 4),
+                        "merged": round(merged, 4),
+                        "collapsed": len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
+                        and _spread <= _ALADDIN_DUP_SPREAD_TOL_M,
+                        "vals_head": [round(float(x), 4) for x in _vals_f[:30]],
+                    },
+                }
+            )
         # endregion
 
     for _tk, _tvals in sorted(
@@ -25791,21 +25827,23 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         _tmk, _td, _ttid = _tk
         _merged = tmp.get((_tmk, _td), {}).get(_ttid)
         _n = len(_tvals)
+        _tf = [float(x) for x in _tvals]
+        _tr = [round(x, 4) for x in _tf]
+        _mm_r = (max(_tr) - min(_tr)) if _tr else 0.0
         _collapsed = (
-            _n >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-            and max(_tvals) - min(_tvals) <= _ALADDIN_DUP_SPREAD_TOL_M
+            _n >= _ALADDIN_DUP_COLLAPSE_MIN_SAME and _mm_r <= _ALADDIN_DUP_SPREAD_TOL_M
         )
         _preview = _tvals[:15]
         _suffix = " …" if _n > 15 else ""
         logging.info(
             "計画実績比較ガント[トレース] 明細→日次按分 依頼NO=%s 日=%s 機械キー=%r "
-            "按分値件数=%s 畳み込み適用=%s minmax差(m)=%s 閾値(件>=%s 幅<=%s) 按分値先頭=%s%s 最終実績(m)=%s",
+            "按分値件数=%s 畳み込み適用=%s minmax差(m,4桁丸め)=%s 閾値(件>=%s 幅<=%s) 按分値先頭=%s%s 最終実績(m)=%s",
             _ttid,
             _td.isoformat() if isinstance(_td, date) else str(_td),
             _tmk,
             _n,
             _collapsed,
-            (max(_tvals) - min(_tvals)) if _tvals else 0.0,
+            _mm_r,
             _ALADDIN_DUP_COLLAPSE_MIN_SAME,
             _ALADDIN_DUP_SPREAD_TOL_M,
             _preview,
