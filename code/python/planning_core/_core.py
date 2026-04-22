@@ -25608,16 +25608,20 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     タイムラインイベントを足し上げない（同一内容の複数行で二重計上しないよう、
     依頼NO基底・工程・開始終了・実加工/累積が一致する行は先に1行分として扱う）。
     量の按分は build_actual_timeline_events と同様、実加工数を優先し無いとき累積を時間比按分する。
+    機械キーは ``_timeline_events_force_machine_display_name`` と同様に
+    設備列の「+」より右（機械名のみ）へ寄せ、アラジン側の TASK_COL_MACHINE_NAME キーと一致させる。
+    同一機械×日×依頼NOに **多数の同一按分値** が付くエクスポート二重（ログで 20 件×同一値）のときは
+    1 件分に畳む（ロール等で少数行が同額のときは閾値で誤畳みを避ける）。
     """
     if df is None or len(df) == 0:
         return {}
     equip_lookup = _equipment_lookup_normalized_to_canonical(equipment_list)
     date_ok = set(sorted_dates)
-    tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
-        lambda: defaultdict(float)
-    )
+    # (機械キー, 日, 依頼NO) → 行ごとの按分値のリスト（後で同一値大量時に畳む）
+    _per_mdt: dict[tuple[str, date, str], list[float]] = defaultdict(list)
     seen_sig: set[tuple] = set()
     skipped_dup_rows = 0
+    _collapse_groups = 0
 
     def _scalar_for_dedupe(v) -> float | str:
         if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -25626,6 +25630,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             return round(float(v), 4)
         except (TypeError, ValueError):
             return "__na__"
+
+    _ALADDIN_DUP_COLLAPSE_MIN_SAME = 12
 
     for _, row in df.iterrows():
         tid = row.get(ACT_COL_TASK_ID)
@@ -25643,6 +25649,12 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         proc_key = _normalize_equipment_match_key(proc)
         mach = equip_lookup.get(proc_key)
         if not mach:
+            continue
+        mach_raw = str(mach or "").strip()
+        _, mn_part = _split_equipment_line_process_machine(mach_raw)
+        mach_display = (mn_part or mach_raw).strip()
+        mk = _normalize_equipment_match_key(mach_display)
+        if not mk:
             continue
         start_dt, end_dt = _actual_row_time_bounds(row)
         if not start_dt or not end_dt or start_dt >= end_dt:
@@ -25673,10 +25685,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             skipped_dup_rows += 1
             continue
         seen_sig.add(sig)
-
-        mk = _normalize_equipment_match_key(str(mach).strip())
-        if not mk:
-            continue
 
         for d in sorted_dates:
             if d not in date_ok:
@@ -25722,7 +25730,23 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             except Exception:
                 qty = None
             if qty is not None and qty > 1e-12:
-                tmp[mk, d][btid] += qty
+                _per_mdt[(mk, d, btid)].append(float(qty))
+
+    tmp: dict[tuple[str, date], dict[str, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
+    for (_mk, _d, _tid), _vals in _per_mdt.items():
+        if not _vals:
+            continue
+        if (
+            len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
+            and max(_vals) - min(_vals) < 1e-3
+        ):
+            merged = float(max(_vals))
+            _collapse_groups += 1
+        else:
+            merged = float(sum(_vals))
+        tmp[_mk, _d][_tid] = merged
 
     _out = {k: dict(v) for k, v in tmp.items()}
     _agg_watch: dict[str, float] = {}
@@ -25747,6 +25771,7 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
             "data": {
                 "skipped_duplicate_rows": skipped_dup_rows,
                 "seen_unique_sigs": len(seen_sig),
+                "collapse_identical_qty_groups": _collapse_groups,
                 "agg_totals_tid_watch": _agg_watch,
             },
         }
