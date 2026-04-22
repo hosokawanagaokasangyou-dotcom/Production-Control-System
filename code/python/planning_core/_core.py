@@ -25601,7 +25601,7 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     """
     アラジン「日付_加工数量」と突き合わせる実績数量（m）を、加工実績明細DFから集計する。
     タイムラインイベントを足し上げない（同一内容の複数行で二重計上しないよう、
-    依頼NO基底・工程・開始終了・実加工/累積が一致する行は先に1行分として扱う）。
+    依頼NO基底・工程・開始終了（分単位に丸め）・実加工/累積が一致する行は先に1行分として扱う）。
     量の按分は build_actual_timeline_events と同様、実加工数を優先し無いとき累積を時間比按分する。
     機械キーは ``_timeline_events_force_machine_display_name`` と同様に
     設備列の「+」より右（機械名のみ）へ寄せ、アラジン側の TASK_COL_MACHINE_NAME キーと一致させる。
@@ -25629,6 +25629,12 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
     # W4-11 は約20件、W4-12 は 6×1800=10800 のように件数が少ない／浮動小数で min-max が 1e-3 を超えることがある。
     _ALADDIN_DUP_COLLAPSE_MIN_SAME = 5
     _ALADDIN_DUP_SPREAD_TOL_M = 0.05  # 同一按分とみなす m 幅（表示単位の揺れ吸収）
+
+    def _sig_time_minute(dt: datetime) -> str:
+        """重複エクスポートで秒以下だけ異なる行を同一シグネチャに寄せる。"""
+        if not isinstance(dt, datetime):
+            return ""
+        return dt.replace(second=0, microsecond=0).strftime("%Y-%m-%d %H:%M")
 
     for _, row in df.iterrows():
         tid = row.get(ACT_COL_TASK_ID)
@@ -25673,8 +25679,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         sig = (
             btid,
             proc_key,
-            start_dt.isoformat(sep=" ", timespec="seconds"),
-            end_dt.isoformat(sep=" ", timespec="seconds"),
+            _sig_time_minute(start_dt),
+            _sig_time_minute(end_dt),
             _scalar_for_dedupe(actual_done_m),
             _scalar_for_dedupe(cumulative_actual_m),
         )
@@ -25745,6 +25751,38 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         else:
             merged = float(sum(_vals))
         tmp[_mk, _d][_tid] = merged
+        # region agent log
+        if str(_tid).strip().upper() == "W4-12":
+            try:
+                import json as _json
+
+                _dbg = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-76d9de.log")
+                )
+                with open(_dbg, "a", encoding="utf-8") as _dfp:
+                    _dfp.write(
+                        _json.dumps(
+                            {
+                                "sessionId": "76d9de",
+                                "location": "_aggregate_actual_qty_for_aladdin_compare_from_detail_df:merge",
+                                "tid": "W4-12",
+                                "mach_k": _mk,
+                                "date": _d.isoformat() if isinstance(_d, date) else str(_d),
+                                "n_vals": len(_vals),
+                                "spread_m": round(_spread, 6),
+                                "sum_vals": round(float(sum(_vals)), 4),
+                                "merged": round(merged, 4),
+                                "collapsed": len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
+                                and _spread <= _ALADDIN_DUP_SPREAD_TOL_M,
+                                "vals_head": [round(float(x), 4) for x in _vals[:30]],
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+        # endregion
 
     for _tk, _tvals in sorted(
         _trace_per_mdt.items(),
