@@ -15,10 +15,39 @@ Public Function Py3VersionOutput(wsh As Object) As String
 CleanExit:
 End Function
 
+' Excel プロセスが古い PATH（起動直後）のままのとき、インストール直後の py が見えない。レジストリ上の
+' Machine+User から $env:Path を再合成してから py を実行（RunPipInstallWithRefreshedPath と同方針）。
+Public Function Py3VersionOutputFromRegistryPath(wsh As Object) As String
+    Dim execObj As Object
+    Dim s As String
+    Dim psLine As String
+    Py3VersionOutputFromRegistryPath = ""
+    On Error GoTo CleanExit
+    ' PowerShell: レジストリ上の Path を使い cmd 経由で子が更新済み PATH を継承
+    psLine = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command " & Chr(34) & _
+        "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + " & _
+        "[System.Environment]::GetEnvironmentVariable('Path','User'); " & _
+        "(cmd.exe /c " & Chr(34) & "py -" & PM_AI_SETUP_PY_MINOR & " --version" & Chr(34) & " 2>&1) | Out-String" & _
+        Chr(34)
+    Set execObj = wsh.Exec(psLine)
+    Do While execObj.Status = 0
+        Sleep 50
+    Loop
+    s = execObj.StdOut.ReadAll()
+    If Len(Trim$(s)) = 0 Then s = execObj.StdErr.ReadAll()
+    Py3VersionOutputFromRegistryPath = s
+CleanExit:
+End Function
+
 Public Function IsPython3Available(wsh As Object) As Boolean
     Dim s As String
     s = Py3VersionOutput(wsh)
-    IsPython3Available = (InStr(1, s, "Python " & PM_AI_SETUP_PY_MINOR, vbTextCompare) > 0)
+    If InStr(1, s, "Python " & PM_AI_SETUP_PY_MINOR, vbTextCompare) > 0 Then
+        IsPython3Available = True
+    Else
+        s = Py3VersionOutputFromRegistryPath(wsh)
+        IsPython3Available = (InStr(1, s, "Python " & PM_AI_SETUP_PY_MINOR, vbTextCompare) > 0)
+    End If
 End Function
 
 Public Function TryInstallPythonViaWinget(wsh As Object) As Boolean
@@ -62,6 +91,7 @@ Private Function BuildPmAiPrependPathScriptBody(ByVal pyMinor As String) As Stri
         "  [string] $Scope" & vbCrLf & _
         ")" & vbCrLf & _
         "$ErrorActionPreference = 'Stop'" & vbCrLf & _
+        "$env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')" & vbCrLf & _
         "$pyRoot = (& py -" & pyMinor & " -c 'import os,sys; print(os.path.dirname(sys.executable))').Trim()" & vbCrLf & _
         "if (-not $pyRoot) { exit 2 }" & vbCrLf & _
         "$scripts = [System.IO.Path]::Combine($pyRoot, 'Scripts')" & vbCrLf & _
