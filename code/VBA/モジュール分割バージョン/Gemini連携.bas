@@ -1256,7 +1256,7 @@ ErrHandler:
 End Sub
 
 ' =========================================================
-' 設定_環境変数: A:C 列幅を AutoFit、C 列は折り返し、1 行目?最終行の行高さを 50pt
+' 設定_環境変数: A・B 列は AutoFit、C 列幅は 73、C 列は折り返し、1 行目から最終行の行高さ 50pt
 ' （設定_環境変数_シートを確保 / 設定_環境変数_雛形TSVから同期 の末尾で共通利用）
 ' =========================================================
 Private Sub 設定_環境変数_列幅とC列の行表示を整える(ByVal ws As Worksheet)
@@ -1269,7 +1269,8 @@ Private Sub 設定_環境変数_列幅とC列の行表示を整える(ByVal ws As Worksheet)
     If cLast > lr Then lr = cLast
     If lr < 1 Then lr = 1
 
-    ws.Columns("A:C").AutoFit
+    ws.Columns("A:B").AutoFit
+    ws.Columns(3).ColumnWidth = 73
     ws.Range(ws.Cells(1, 3), ws.Cells(lr, 3)).WrapText = True
 
     For r = 1 To lr
