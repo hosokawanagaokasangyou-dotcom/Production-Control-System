@@ -32,7 +32,7 @@ ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS	5	終業直前: このロール数以上は
 ASSIGN_END_OF_DAY_DEFER_MINUTES	45	終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効	
 DEBUG_TASK_ID		デバッグ用依頼NO
 TRACE_TEAM_ASSIGN_TASK_ID		チーム割付トレース対象
-GEMINI_PRICE_USD_IN_PER_M	0.075	
+GEMINI_PRICE_USD_IN_PER_M	0.075	Gemini 入力（prompt）側の料金（USD / 100万トークン）。コスト試算に使用
 GEMINI_PRICE_USD_OUT_PER_M	0.30	
 GEMINI_JPY_PER_USD	150	
 GEMINI_MODEL		単一モデルに固定（空なら planning_core の精度順フォールバック列を使用）
