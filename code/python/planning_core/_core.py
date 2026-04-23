@@ -1951,6 +1951,9 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
 
     - 計画帯: units_done×unit_m
     - 実績明細帯: label_len_m（=加工実績明細DATA由来）を優先
+    - 実績明細の日次正規化で各イベントに ``_detail_daily_qty_total_m`` があり、
+      当該区間に重なるイベントがすべて同じ日次総量を持つ場合は、按分ラベルの合計ではなく
+      その日次総量 1 本を返す（同一日の断続区間の帯に手動集計の m が出るようにする）。
     """
     if not tid_s or not evlist or seg_lo is None or seg_hi is None:
         return None, 0, None
@@ -1958,6 +1961,8 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
     n = 0
     cum_max = None
     pct_pick = None
+    detail_unified_m = None
+    detail_meta_broken = False
     seen: set[tuple] = set()
     for ev in evlist:
         try:
@@ -1980,6 +1985,17 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
             if k in seen:
                 continue
             seen.add(k)
+            dv_meta = ev.get("_detail_daily_qty_total_m")
+            if dv_meta is None:
+                detail_meta_broken = True
+            elif not detail_meta_broken:
+                fdv = parse_float_safe(dv_meta, None)
+                if fdv is None or math.isnan(float(fdv)):
+                    detail_meta_broken = True
+                elif detail_unified_m is None:
+                    detail_unified_m = float(fdv)
+                elif abs(detail_unified_m - float(fdv)) > 1e-6 * max(1.0, abs(detail_unified_m)):
+                    detail_meta_broken = True
             lm = None
             if ev.get("label_len_m") is not None:
                 lm = parse_float_safe(ev.get("label_len_m"), None)
@@ -2011,6 +2027,14 @@ def _gantt_segment_total_length_m(evlist, tid_s: str, seg_lo: datetime, seg_hi: 
         return None, 0, pct_pick
     if cum_max is not None:
         return float(cum_max), n, pct_pick
+    if (
+        n > 0
+        and not detail_meta_broken
+        and detail_unified_m is not None
+        and float(detail_unified_m) > 1e-12
+    ):
+        # 実績明細の日次正規化: 結合セグメントに含まれる按分ラベルの合計ではなく、手動集計と一致する日次総量を表示する
+        return float(detail_unified_m), n, pct_pick
     return total, n, pct_pick
 
 
@@ -8504,6 +8528,95 @@ def _actual_row_detail_assignee_op_sub(row) -> tuple[str, str]:
     return names[0], ", ".join(names[1:])
 
 
+def _actual_detail_prefer_actual_for_shape_label(
+    roll_detail: bool,
+    cumulative_actual_m,
+    actual_done_m,
+) -> bool:
+    """
+    加工実績明細（roll_detail）で、「累積実績」が当行の「実加工数」を明確に上回るときは、
+    累積を依頼全体の走り・実加工数を当区間（日次・セグメント）の量と解釈し、
+    ガント角丸シェイプの m 表示（label_len_m）は実加工数の時間按分を優先する。
+    """
+    if not roll_detail:
+        return False
+    try:
+        af = float(actual_done_m) if actual_done_m is not None else 0.0
+        cf = float(cumulative_actual_m) if cumulative_actual_m is not None else 0.0
+        return af > 1e-12 and cf > af * 1.000001
+    except (TypeError, ValueError):
+        return False
+
+
+def _normalize_roll_detail_daily_actual_qty_duplicate(events: list) -> None:
+    """
+    加工実績明細では、複数明細行に同一暦日のトータル「実加工数」が繰り返して入っていることがある。
+    その場合、行単位で compare_daily_m / label_len_m を時間按分すると日次・依頼単位で合計が過大になるため、
+    （依頼NO(task_id)×暦日×機械）ごとに「ソース実加工数」がすべて同一のグループだけ、
+    その値をその日その依頼の総量として 1 回だけ数え、イベント区間長で再按分する。
+    """
+    if not events:
+        return
+    from collections import defaultdict
+
+    groups: dict[tuple, list[int]] = defaultdict(list)
+    for i, ev in enumerate(events):
+        if ev.get("_detail_source_actual_m") is None:
+            continue
+        tid = str(ev.get("task_id") or "").strip()
+        mach = str(ev.get("machine") or "").strip()
+        dd = ev.get("date")
+        try:
+            dk = dd.isoformat() if hasattr(dd, "isoformat") else str(dd)
+        except Exception:
+            dk = ""
+        groups[(tid, dk, mach)].append(i)
+
+    tol = lambda a, b, ref: abs(float(a) - float(b)) <= 1e-6 * max(1e-12, abs(float(ref)))
+
+    for _key, idxs in groups.items():
+        if len(idxs) < 2:
+            continue
+        qs = []
+        for ii in idxs:
+            q = events[ii].get("_detail_source_actual_m")
+            try:
+                qs.append(float(q))
+            except (TypeError, ValueError):
+                qs = []
+                break
+        if len(qs) != len(idxs):
+            continue
+        ref_q = qs[0]
+        if ref_q <= 1e-12:
+            continue
+        if not all(tol(q, ref_q, ref_q) for q in qs):
+            continue
+        V_daily = ref_q
+        secs: list[float] = []
+        tot_sec = 0.0
+        for ii in idxs:
+            ev = events[ii]
+            st, ed = ev.get("start_dt"), ev.get("end_dt")
+            if isinstance(st, datetime) and isinstance(ed, datetime) and st < ed:
+                sec = float((ed - st).total_seconds())
+            else:
+                sec = 0.0
+            secs.append(sec)
+            tot_sec += sec
+        if tot_sec < 1e-9:
+            continue
+        for ii, sec in zip(idxs, secs):
+            portion = float(V_daily) * (sec / tot_sec)
+            events[ii]["compare_daily_m"] = portion
+            events[ii]["label_len_m"] = portion
+            events[ii]["_detail_daily_qty_total_m"] = float(V_daily)
+            events[ii].pop("label_len_m_is_cumulative", None)
+
+    for ev in events:
+        ev.pop("_detail_source_actual_m", None)
+
+
 def build_actual_timeline_events(
     df,
     equipment_list,
@@ -8524,6 +8637,12 @@ def build_actual_timeline_events(
     タイムライン角丸シェイプのラベル（依頼NO の横の %%）に ``pct_macro`` として渡す（計算はしない）。
     計画実績比較ガント用に、各日セグメントへ ``compare_daily_m``（実加工数の時間比按分を優先、
     無ければ累積実績の時間比按分）を付与する。``label_len_m`` に累積を載せても日別比較で二重計上しない。
+    roll_detail=True のとき、累積実績が当行の実加工数を明確に上回る場合は ``label_len_m`` も
+    実加工数の時間按分を優先する（累積のみ依頼全体・実加工数が日次・区間のトータルなデータ向け）。
+    同一依頼NO×暦日×機械でソース実加工数がすべて同一の複数イベントは、日次トータルを二重計上しないよう
+    生成後に ``compare_daily_m`` および ``label_len_m`` を区間長で再按分し、
+    当該イベントの ``label_len_m_is_cumulative`` は解除する。
+    ガントシェイプ文言は ``_detail_daily_qty_total_m`` に日次総量を載せ、結合セグメントでは按分値の合計ではなく総量表示に使う。
     """
     if df is None or len(df) == 0:
         return []
@@ -8591,6 +8710,9 @@ def build_actual_timeline_events(
             total_seconds = max(0.0, float((end_dt - start_dt).total_seconds()))
         except Exception:
             total_seconds = None
+        prefer_actual_label = _actual_detail_prefer_actual_for_shape_label(
+            roll_detail, cumulative_actual_m, actual_done_m
+        )
         for d in sorted_dates:
             if d not in date_ok:
                 continue
@@ -8620,10 +8742,23 @@ def build_actual_timeline_events(
             if pct_macro is not None:
                 ev_row["pct_macro"] = pct_macro
             seg_seconds = float((e_clip - s_clip).total_seconds())
-            # 依頼NOシェイプ横の表示は「累積実績(m)」を優先する。
-            # 「累積実績」が無い/不正のときのみ、従来どおり「実加工数」を採用（クリップ時は時間比で按分）。
+            # 依頼NOシェイプ横の表示: 既定は「累積実績(m)」優先。
+            # 加工実績明細で累積が当行の実加工数を大きく上回るときは、実加工数を区間・日次の量とみなし先に按分する。
+            # それ以外で累積が無い/不正なときは「実加工数」を時間比で按分。
             try:
-                if (
+                if prefer_actual_label:
+                    if (
+                        actual_done_m is not None
+                        and isinstance(actual_done_m, (int, float))
+                        and float(actual_done_m) > 1e-12
+                        and total_seconds
+                        and float(total_seconds) > 1e-9
+                        and seg_seconds > 0
+                    ):
+                        ev_row["label_len_m"] = float(actual_done_m) * (
+                            seg_seconds / float(total_seconds)
+                        )
+                elif (
                     cumulative_actual_m is not None
                     and isinstance(cumulative_actual_m, (int, float))
                     and float(cumulative_actual_m) > 1e-12
@@ -8674,6 +8809,16 @@ def build_actual_timeline_events(
                     ev_row["compare_daily_m"] = cmp_m
             except Exception:
                 pass
+            if roll_detail:
+                try:
+                    if (
+                        actual_done_m is not None
+                        and isinstance(actual_done_m, (int, float))
+                        and float(actual_done_m) > 1e-12
+                    ):
+                        ev_row["_detail_source_actual_m"] = float(actual_done_m)
+                except Exception:
+                    pass
             events.append(ev_row)
         if len(events) == before:
             no_plan_overlap += 1
@@ -8700,6 +8845,8 @@ def build_actual_timeline_events(
             f"{log_sheet_name}: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。"
         )
     logging.info(f"{log_sheet_name} からガント用セグメント {len(events)} 件を生成しました。")
+    if roll_detail:
+        _normalize_roll_detail_daily_actual_qty_duplicate(events)
     return events
 
 
