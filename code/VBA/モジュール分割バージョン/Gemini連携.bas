@@ -1256,6 +1256,28 @@ ErrHandler:
 End Sub
 
 ' =========================================================
+' 設定_環境変数: A:C 列幅を AutoFit、C 列は折り返し、1 行目?最終行の行高さを 50pt
+' （設定_環境変数_シートを確保 / 設定_環境変数_雛形TSVから同期 の末尾で共通利用）
+' =========================================================
+Private Sub 設定_環境変数_列幅とC列の行表示を整える(ByVal ws As Worksheet)
+    Dim lr As Long
+    Dim cLast As Long
+    Dim r As Long
+
+    lr = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    cLast = ws.Cells(ws.Rows.Count, 3).End(xlUp).Row
+    If cLast > lr Then lr = cLast
+    If lr < 1 Then lr = 1
+
+    ws.Columns("A:C").AutoFit
+    ws.Range(ws.Cells(1, 3), ws.Cells(lr, 3)).WrapText = True
+
+    For r = 1 To lr
+        ws.Rows(r).RowHeight = 50
+    Next r
+End Sub
+
+' =========================================================
 ' 設定_環境変数: シートの新規作成・見出し行・テンプレにあってシートに無い変数名行のみ追記
 ' （python/workbook_env_bootstrap.py・設定_環境変数_雛形.tsv と整合）
 ' =========================================================
@@ -1376,9 +1398,7 @@ Public Sub 設定_環境変数_シートを確保()
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "EXCLUDE_RULES_TEST_E1234_ROW", "9", "")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "#TASK_INPUT_WORKBOOK", "", "通常はVBAが設定（シートに書くと上書き）。先頭#行は Python 側でコメント扱い")
 
-    ws.Columns(1).ColumnWidth = 28
-    ws.Columns(2).ColumnWidth = 14
-    ws.Columns(3).ColumnWidth = 52
+    Call 設定_環境変数_列幅とC列の行表示を整える(ws)
 
     Application.DisplayAlerts = prevDA
     Exit Sub
@@ -1619,8 +1639,7 @@ NextLine:
         ws.Range(ws.Cells(outRow, 1), ws.Cells(lastOld, 3)).ClearContents
     End If
 
-    ws.Columns("A:C").AutoFit
-    ws.Columns(2).ColumnWidth = 27
+    Call 設定_環境変数_列幅とC列の行表示を整える(ws)
 
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevScreen
