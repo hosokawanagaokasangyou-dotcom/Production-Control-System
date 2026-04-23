@@ -1106,10 +1106,10 @@ def _agent_debug_ndjson(
     import time
 
     _tid = str(data.get("task_id") or data.get("tid") or "").strip()
-    if _tid not in _AGENT_DEBUG_WATCH_TIDS:
+    if not data.get("_no_tid_filter") and _tid not in _AGENT_DEBUG_WATCH_TIDS:
         return
     try:
-        body = {k: v for k, v in data.items() if k != "runId"}
+        body = {k: v for k, v in data.items() if k not in ("runId", "_no_tid_filter")}
         rec = {
             "sessionId": _AGENT_DEBUG_SESSION,
             "runId": str(data.get("runId") or "pre-fix"),
@@ -8638,6 +8638,8 @@ def _normalize_roll_detail_daily_actual_qty_duplicate(events: list) -> None:
                     "_core.py:_normalize_roll_detail_daily_actual_qty_duplicate",
                     "roll_detail duplicate group (same source actual_m)",
                     {
+                        "task_id": _tid0,
+                        "_no_tid_filter": True,
                         "group_key": [str(x) for x in _key],
                         "n_events": len(idxs),
                         "ref_source_actual_m": ref_q,
@@ -11705,6 +11707,36 @@ def _task_id_priority_key(task_id):
         if re.match(r"^\d+$", tail):
             return (head, int(tail), s)
     return (s, 10**9, s)
+
+
+def _wip_l11_bucket_key_for_task_id(task_id: str) -> str:
+    """L11 の task_id_head 集計キー（_task_id_priority_key の頭部と同一規則）。"""
+    _k = _task_id_priority_key(str(task_id or "").strip())
+    return str(_k[0] or _k[2] or "").strip()
+
+
+def _wip_ec_before_insp_roll_count(task_queue: list, *, bucket_for: str | None) -> float:
+    """
+    EC 完了ロール − 後続（検査＋巻返し）完了ロール（負は 0 にクリップ）。
+    bucket_for が None のとき全行、非 None のとき当該キーの行のみ（同一依頼グループ単位）。
+    """
+    ec_done_total = 0.0
+    follower_done_total = 0.0
+    for _t in task_queue:
+        if bucket_for is not None:
+            _bk = _wip_l11_bucket_key_for_task_id(str(_t.get("task_id") or ""))
+            if _bk != bucket_for:
+                continue
+        init = float(_t.get("initial_remaining_units") or 0)
+        rem = float(_t.get("remaining_units") or 0)
+        done = max(0.0, init - rem)
+        if done <= 1e-12:
+            continue
+        if _t.get("roll_pipeline_ec"):
+            ec_done_total += done
+        elif _t.get("roll_pipeline_inspection") or _t.get("roll_pipeline_rewind"):
+            follower_done_total += done
+    return max(0.0, ec_done_total - follower_done_total)
 
 
 def _serial_dispatch_order_task_ids(task_queue) -> list:
@@ -17152,7 +17184,7 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 # ---------------------------------------------------------------------------
-# 特別ルール（工程間WIP上限）: 依頼NO・加工日をまたいだ総ロール数の作業スペース制約
+# 特別ルール（工程間WIP上限）: EC 前〜検査／巻返しのロール滞留（L11・既定は依頼NO接頭辞グループ単位）
 # ---------------------------------------------------------------------------
 # 0 以下で無効（上限制約なし）
 WIP_LIMIT_EC_BEFORE_INSP_ROLLS = os.environ.get(
@@ -17162,6 +17194,17 @@ try:
     WIP_LIMIT_EC_BEFORE_INSP_ROLLS = int(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
 except (TypeError, ValueError):
     WIP_LIMIT_EC_BEFORE_INSP_ROLLS = 15
+
+# L11 集計: global=全依頼合算（従来）。task_id_head=依頼NO接頭辞単位（_task_id_priority_key の頭部）。
+# 他依頼の検査滞留で無関係な EC が永久に候補外になるのを避けるため既定は task_id_head。
+WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE = os.environ.get(
+    "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE", "task_id_head"
+).strip().lower()
+
+
+def _wip_ec_l11_aggregate_is_global() -> bool:
+    return WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE in ("global", "all", "factory")
+
 
 WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = os.environ.get(
     "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS", "20"
@@ -22834,25 +22877,15 @@ def _trial_order_flow_eligible_tasks(
     min_dispatch_effective: int | None = None,
     assign_probe_ctx: dict | None = None,
 ) -> list:
-    # 特別ルール（工程間WIP上限）: 依頼NO・加工日をまたいだ「総ロール数」の仕掛制約。
-    # - L11: EC→（検査＋巻返し）の前段WIPが上限以上なら EC を配台しない
+    # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
+    # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE（既定 task_id_head＝依頼グループ、global＝全依頼合算）。
     # - L10: スリット→SEC の前段WIPが上限以上なら スリット を配台しない（SECは優先して進める）
     # remaining_units はロール本数（1ロール完了で 1 減）である前提。
-    wip_ec_before_insp = None
+    _wip_l11_global_val: float | None = None
+    _wip_l11_by_bucket: dict[str, float] = {}
     if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
-        ec_done_total = 0.0
-        follower_done_total = 0.0
-        for _t in task_queue:
-            init = float(_t.get("initial_remaining_units") or 0)
-            rem = float(_t.get("remaining_units") or 0)
-            done = max(0.0, init - rem)
-            if done <= 1e-12:
-                continue
-            if _t.get("roll_pipeline_ec"):
-                ec_done_total += done
-            elif _t.get("roll_pipeline_inspection") or _t.get("roll_pipeline_rewind"):
-                follower_done_total += done
-        wip_ec_before_insp = max(0.0, ec_done_total - follower_done_total)
+        if _wip_ec_l11_aggregate_is_global():
+            _wip_l11_global_val = _wip_ec_before_insp_roll_count(task_queue, bucket_for=None)
 
     wip_slit_before_sec = None
     if (
@@ -22885,28 +22918,45 @@ def _trial_order_flow_eligible_tasks(
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
-        # L11: 検査前WIPが限界以上ならECをブロック（依頼NO・加工日を跨いだ総ロール数）
-        if (
-            wip_ec_before_insp is not None
-            and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
-            and task.get("roll_pipeline_ec")
-        ):
-            # region agent log
-            _tid_dbg = str(task.get("task_id") or "").strip()
-            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                _agent_debug_ndjson(
-                    "H1_L11_WIP_EC",
-                    "_trial_order_flow_eligible_tasks:L11",
-                    "eligible_skip_ec_wip_limit",
-                    {
-                        "task_id": _tid_dbg,
-                        "day": str(current_date),
-                        "wip_ec_before_insp": wip_ec_before_insp,
-                        "wip_limit": WIP_LIMIT_EC_BEFORE_INSP_ROLLS,
-                    },
-                )
-            # endregion
-            continue
+        # L11: 検査前WIPが限界以上なら EC をブロック（既定は依頼グループ単位・global で全依頼合算）
+        if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+            if task.get("roll_pipeline_ec"):
+                if _wip_ec_l11_aggregate_is_global():
+                    _wip_use = _wip_l11_global_val
+                    _wip_bk = ""
+                else:
+                    _wip_bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
+                    if _wip_bk not in _wip_l11_by_bucket:
+                        _wip_l11_by_bucket[_wip_bk] = _wip_ec_before_insp_roll_count(
+                            task_queue, bucket_for=_wip_bk
+                        )
+                    _wip_use = _wip_l11_by_bucket[_wip_bk]
+                if (
+                    _wip_use is not None
+                    and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+                ):
+                    # region agent log
+                    _tid_dbg = str(task.get("task_id") or "").strip()
+                    if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                        _agent_debug_ndjson(
+                            "H1_L11_WIP_EC",
+                            "_trial_order_flow_eligible_tasks:L11",
+                            "eligible_skip_ec_wip_limit",
+                            {
+                                "task_id": _tid_dbg,
+                                "day": str(current_date),
+                                "wip_ec_before_insp": _wip_use,
+                                "wip_limit": WIP_LIMIT_EC_BEFORE_INSP_ROLLS,
+                                "l11_aggregate": (
+                                    "global"
+                                    if _wip_ec_l11_aggregate_is_global()
+                                    else "task_id_head"
+                                ),
+                                "wip_bucket": _wip_bk,
+                            },
+                        )
+                    # endregion
+                    continue
         # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
         if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
             WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
@@ -24103,19 +24153,11 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
         return True
     wip_ec_before_insp = None
     if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
-        ec_done_total = 0.0
-        follower_done_total = 0.0
-        for _t in task_queue:
-            init = float(_t.get("initial_remaining_units") or 0)
-            rem = float(_t.get("remaining_units") or 0)
-            done = max(0.0, init - rem)
-            if done <= 1e-12:
-                continue
-            if _t.get("roll_pipeline_ec"):
-                ec_done_total += done
-            elif _t.get("roll_pipeline_inspection") or _t.get("roll_pipeline_rewind"):
-                follower_done_total += done
-        wip_ec_before_insp = max(0.0, ec_done_total - follower_done_total)
+        if _wip_ec_l11_aggregate_is_global():
+            wip_ec_before_insp = _wip_ec_before_insp_roll_count(task_queue, bucket_for=None)
+        else:
+            _bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
+            wip_ec_before_insp = _wip_ec_before_insp_roll_count(task_queue, bucket_for=_bk)
 
     wip_slit_before_sec = None
     if (
@@ -25963,33 +26005,6 @@ def _format_qty_short(q: float) -> str:
     return s if s else "0"
 
 
-# #region agent log
-_AGENT_DEBUG_LOG = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-950d75.log")
-)
-
-
-def _agent_debug_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        payload = {
-            "sessionId": "950d75",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 # アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
 _COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3", "W4-12"})
 
@@ -26174,6 +26189,8 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
                     "_core.py:_aggregate_actual_qty_for_aladdin_compare_from_detail_df",
                     "aladdin_compare per (machine,day,tid) bucket",
                     {
+                        "task_id": str(_tid).strip(),
+                        "_no_tid_filter": True,
                         "machine_key": _mk,
                         "day": _d.isoformat() if hasattr(_d, "isoformat") else str(_d),
                         "tid": _tid,
@@ -26275,6 +26292,8 @@ def _compare_aladdin_plan_buckets_vs_actual(
                         "_core.py:_compare_aladdin_plan_buckets_vs_actual",
                         "plan vs actual_agg for tid",
                         {
+                            "task_id": str(tid).strip(),
+                            "_no_tid_filter": True,
                             "machine_key": _k_mk,
                             "day": _k_dt.isoformat()
                             if hasattr(_k_dt, "isoformat")

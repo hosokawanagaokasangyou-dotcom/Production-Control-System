@@ -453,7 +453,7 @@
       <li><strong>担当者の排他（同一依頼NO）</strong>: 既定では EC 行と検査行で <strong>履歴に出たメンバーは他側の候補から除外</strong>（<code>_filter_capable_members_b2_disjoint_teams</code>・NFKC 突合）。<code>PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS</code> でオフにすると除外しません。配台トレース対象依頼NOでは、除外が発生した時点で <code>ブロック判定: B-2担当者分離 ...</code> を出力。さらに候補試行時に <code>候補固定: 担当OP指名=...</code>・<code>候補却下: ...</code>（OP不在/実働不足など）も出力。</li>
       <li><strong>工程間WIP上限（総ロール数）</strong>: 依頼NO・加工日をまたいだ総ロール数として、<strong>検査前WIP</strong> を次で定義し、上限以上のときは <strong>EC（隣接するEC工程）を新たに配台しません</strong>。<br />
         <code>WIP = max(0, EC_DONE_TOTAL - FOLLOW_DONE_TOTAL)</code>（FOLLOW は <strong>検査＋巻返し</strong>を合算）<br />
-        上限は環境変数 <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code>（既定 15、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code> 冒頭で算出し候補から除外します（配台ルール.md B-2.8）。</li>
+        上限は <code>WIP_LIMIT_EC_BEFORE_INSP_ROLLS</code>（既定 15、<code>0</code> 以下で無効）。集計単位は <code>WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE</code>（既定 <code>task_id_head</code>＝依頼NO接頭辞グループ、<code>global</code>＝全依頼合算）。実装は <code>_trial_order_flow_eligible_tasks</code> および <code>_trial_order_hard_precheck_blocks_assign_probe</code>（配台ルール.md B-2.8）。</li>
       <li><strong>変更方法</strong>: <span class="file">planning_core/_core.py</span> の <code>ROLL_PIPELINE_EC_PROCESS</code> 等を編集してください。</li>
     </ul>
     <h3>B-3 — EC → 巻返し（ロール単位パイプライン・B-2 同趣旨）</h3>

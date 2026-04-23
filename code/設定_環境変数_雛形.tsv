@@ -19,6 +19,7 @@ STAGE12_CMD_HIDE_WINDOW	1	段階1/2 の cmd 表示（VBA）。1/true/yes/はい=
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE	1	B-2/B-3 系: 熱融着検査の設備占有（同一設備で検査中は他依頼の検査を試さない）。0 等で無効。
 PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS	1	B-2/B-3: 同一依頼で EC と後続（検査・巻返し等）の担当者集合を分離。0 等で無効。
 WIP_LIMIT_EC_BEFORE_INSP_ROLLS	15	工程間 WIP: EC 前〜検査までのロール上限（0 以下で無効）
+WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE	task_id_head	L11 集計単位: task_id_head=依頼NO接頭辞グループ（既定） global=全依頼合算（従来）
 WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS	20	同上: スリット〜SEC 間のロール上限（0 以下で無効）
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF	0	1/true 等=従来の「人数最優先」タプル順。0/false 等（既定）=スラック分と組み合わせた割付。
 TEAM_ASSIGN_START_SLACK_WAIT_MINUTES	60	上記が 0 のとき: 最早開始からこの分以内の遅れなら人数より開始を優先。0 で無効。
