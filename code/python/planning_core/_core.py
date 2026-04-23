@@ -1091,6 +1091,42 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 紝期超靎リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
+# region agent log
+_AGENT_DEBUG_SESSION = "6ee520"
+_AGENT_DEBUG_WATCH_TIDS = frozenset({"W4-2", "W4-3", "W4-4", "W5-2", "W5-3", "W5-4"})
+_AGENT_DEBUG_LOG_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-6ee520.log")
+)
+
+
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    import json
+    import time
+
+    _tid = str(data.get("task_id") or data.get("tid") or "").strip()
+    if _tid not in _AGENT_DEBUG_WATCH_TIDS:
+        return
+    try:
+        body = {k: v for k, v in data.items() if k != "runId"}
+        rec = {
+            "sessionId": _AGENT_DEBUG_SESSION,
+            "runId": str(data.get("runId") or "pre-fix"),
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": body,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
+
 
 def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -8593,6 +8629,24 @@ def _normalize_roll_detail_daily_actual_qty_duplicate(events: list) -> None:
         if not all(tol(q, ref_q, ref_q) for q in qs):
             continue
         V_daily = ref_q
+        # #region agent log
+        try:
+            _tid0 = str(_key[0] or "").split("/")[0].strip().upper()
+            if _tid0 == "Y4-56":
+                _agent_debug_ndjson(
+                    "H3",
+                    "_core.py:_normalize_roll_detail_daily_actual_qty_duplicate",
+                    "roll_detail duplicate group (same source actual_m)",
+                    {
+                        "group_key": [str(x) for x in _key],
+                        "n_events": len(idxs),
+                        "ref_source_actual_m": ref_q,
+                        "qs": qs,
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
         secs: list[float] = []
         tot_sec = 0.0
         for ii in idxs:
@@ -22837,6 +22891,21 @@ def _trial_order_flow_eligible_tasks(
             and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
             and task.get("roll_pipeline_ec")
         ):
+            # region agent log
+            _tid_dbg = str(task.get("task_id") or "").strip()
+            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                _agent_debug_ndjson(
+                    "H1_L11_WIP_EC",
+                    "_trial_order_flow_eligible_tasks:L11",
+                    "eligible_skip_ec_wip_limit",
+                    {
+                        "task_id": _tid_dbg,
+                        "day": str(current_date),
+                        "wip_ec_before_insp": wip_ec_before_insp,
+                        "wip_limit": WIP_LIMIT_EC_BEFORE_INSP_ROLLS,
+                    },
+                )
+            # endregion
             continue
         # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
         if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
@@ -22870,6 +22939,16 @@ def _trial_order_flow_eligible_tasks(
                 ):
                     continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
+            # region agent log
+            _tid_dbg = str(task.get("task_id") or "").strip()
+            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                _agent_debug_ndjson(
+                    "H5_SAME_REQ_DEP",
+                    "_trial_order_flow_eligible_tasks",
+                    "eligible_skip_same_request_dependency",
+                    {"task_id": _tid_dbg, "day": str(current_date)},
+                )
+            # endregion
             continue
         if _task_blocked_by_global_dispatch_trial_order(
             task,
@@ -22885,6 +22964,20 @@ def _trial_order_flow_eligible_tasks(
             dispatch_interval_mirror=dispatch_interval_mirror,
             min_dispatch_effective=min_dispatch_effective,
         ):
+            # region agent log
+            _tid_dbg = str(task.get("task_id") or "").strip()
+            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                _agent_debug_ndjson(
+                    "H5_GLOBAL_DTO",
+                    "_trial_order_flow_eligible_tasks",
+                    "eligible_skip_global_dispatch_trial_order",
+                    {
+                        "task_id": _tid_dbg,
+                        "day": str(current_date),
+                        "my_order": task.get("dispatch_trial_order"),
+                    },
+                )
+            # endregion
             continue
         # min_dto から全日カレンダー占有は除外済みでも」同日試行順の「ブロック」は my_o>m のみのため、
         # 試行順=min の占有行は残り」他試行順は永久坜止し得る。当日スロットゼロの行は候補外にれる。
@@ -22946,6 +23039,21 @@ def _trial_order_flow_eligible_tasks(
             dispatch_interval_mirror=dispatch_interval_mirror,
             assign_probe_ctx=assign_probe_ctx,
         ):
+            # region agent log
+            _tid_dbg = str(task.get("task_id") or "").strip()
+            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                _agent_debug_ndjson(
+                    "H4_EQ_LOWER_DTO_PENDING",
+                    "_trial_order_flow_eligible_tasks",
+                    "eligible_skip_equipment_lower_dispatch_order",
+                    {
+                        "task_id": _tid_dbg,
+                        "day": str(current_date),
+                        "mocc": str(_mocc_trial or ""),
+                        "my_order": _my_dispatch_ord,
+                    },
+                )
+            # endregion
             continue
         out.append(task)
     return out
@@ -23482,6 +23590,20 @@ def _assign_one_roll_trial_order_flow(
         avail_dt=avail_dt,
     )
     if _co_abort:
+        # region agent log
+        _tid_co = str(task.get("task_id") or "").strip()
+        if _tid_co in _AGENT_DEBUG_WATCH_TIDS:
+            _agent_debug_ndjson(
+                "H3_CO_ABORT",
+                "_assign_one_roll_trial_order_flow",
+                "changeover_resolve_abort",
+                {
+                    "task_id": _tid_co,
+                    "day": str(current_date),
+                    "machine_occ_key": str(machine_occ_key or ""),
+                },
+            )
+        # endregion
         return None
 
     def _one_roll_from_team(
@@ -24435,6 +24557,22 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
+                # region agent log
+                _tid_dbg = str(task.get("task_id") or "").strip()
+                if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
+                    _agent_debug_ndjson(
+                        "H2_ASSIGN_ROLL_NONE",
+                        "_drain_rolls_for_task",
+                        "assign_one_roll_returned_none",
+                        {
+                            "task_id": _tid_dbg,
+                            "day": str(current_date),
+                            "rem_u": float(task.get("remaining_units") or 0),
+                            "machine": str(task.get("machine") or ""),
+                            "machine_name": str(task.get("machine_name") or ""),
+                        },
+                    )
+                # endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -25825,6 +25963,33 @@ def _format_qty_short(q: float) -> str:
     return s if s else "0"
 
 
+# #region agent log
+_AGENT_DEBUG_LOG = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-950d75.log")
+)
+
+
+def _agent_debug_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        payload = {
+            "sessionId": "950d75",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 # アラジン対実績の集計・比較で execution_log に詳細を出す依頼NO（基底・正規化後一致）
 _COMPARE_GANTT_TRACE_BASE_TIDS = frozenset({"W3-12", "A4-3", "W4-12"})
 
@@ -26001,6 +26166,33 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         else:
             merged = float(sum(_vals_f))
         tmp[_mk, _d][_tid] = merged
+        # #region agent log
+        try:
+            if str(_tid).strip().upper() == "Y4-56":
+                _agent_debug_ndjson(
+                    "H1",
+                    "_core.py:_aggregate_actual_qty_for_aladdin_compare_from_detail_df",
+                    "aladdin_compare per (machine,day,tid) bucket",
+                    {
+                        "machine_key": _mk,
+                        "day": _d.isoformat() if hasattr(_d, "isoformat") else str(_d),
+                        "tid": _tid,
+                        "n_split_vals": len(_vals),
+                        "vals_preview": _vals_f[:20],
+                        "spread_m": _spread,
+                        "collapse_min_same": _ALADDIN_DUP_COLLAPSE_MIN_SAME,
+                        "spread_tol_m": _ALADDIN_DUP_SPREAD_TOL_M,
+                        "used_collapse_max": bool(
+                            len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
+                            and _spread <= _ALADDIN_DUP_SPREAD_TOL_M
+                        ),
+                        "merged_m": merged,
+                        "sum_m": float(sum(_vals_f)),
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
 
     for _tk, _tvals in sorted(
         _trace_per_mdt.items(),
@@ -26074,6 +26266,30 @@ def _compare_aladdin_plan_buckets_vs_actual(
                 pieces.append(
                     f"{tid} 計画{_format_qty_short(pq)}≠実績{_format_qty_short(aq)}"
                 )
+            # #region agent log
+            try:
+                if str(tid).strip().upper() == "Y4-56":
+                    _k_mk, _k_dt = key
+                    _agent_debug_ndjson(
+                        "H2",
+                        "_core.py:_compare_aladdin_plan_buckets_vs_actual",
+                        "plan vs actual_agg for tid",
+                        {
+                            "machine_key": _k_mk,
+                            "day": _k_dt.isoformat()
+                            if hasattr(_k_dt, "isoformat")
+                            else str(_k_dt),
+                            "tid": tid,
+                            "plan_m": pq,
+                            "actual_agg_m": aq,
+                            "isclose": math.isclose(
+                                pq, aq, rel_tol=1e-9, abs_tol=1e-2
+                            ),
+                        },
+                    )
+            except Exception:
+                pass
+            # #endregion
         if pieces:
             notes[key] = "【実績不一致】" + " ".join(pieces)
     nm = len(notes)
@@ -28478,7 +28694,26 @@ def _generate_plan_impl(
             and "納期見直し必須" not in status
         ):
             status = f"{status}（納期見直し必須）"
-        
+        # region agent log
+        if _tid_res in _AGENT_DEBUG_WATCH_TIDS:
+            _agent_debug_ndjson(
+                "H0_RESULT_ROW",
+                "_generate_plan_impl:task_results",
+                "final_task_result_status",
+                {
+                    "task_id": _tid_res,
+                    "status": status,
+                    "rem_u": rem_u,
+                    "had_assigned_history": hist,
+                    "machine": t.get("machine"),
+                    "machine_name": t.get("machine_name"),
+                    "roll_pipeline_ec": bool(t.get("roll_pipeline_ec")),
+                    "dispatch_trial_order": t.get("dispatch_trial_order"),
+                    "start_date_req": str(t.get("start_date_req") or ""),
+                },
+            )
+        # endregion
+
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
 
         _line_key = (str(t.get("task_id", "") or "").strip(), str(t.get("machine", "") or "").strip())
