@@ -405,6 +405,10 @@ Public Sub RunPythonStage1()
     メインシート_段階1実行後_リンク更新
     On Error GoTo 0
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
+    ' メイン反映の直後はメインがアクティブになるため、タスク抽出完了時は配台計画シートへ戻す
+    On Error Resume Next
+    配台計画_タスク入力_A1を選択
+    On Error GoTo 0
     m_animMacroSucceeded = True
 End Sub
 
