@@ -1,47 +1,71 @@
 変数名	値	説明（任意・ExcelではC列）
-TASK_PLAN_SHEET		配台計画シート名（空なら既定 配台計画_タスク入力）
-MASTER_USE_SPEED_SHEET	1	0=master.xlsm speed による加工速度上書きをしない
-MASTER_SPEED_SHEET_NAME		空なら既定シート名 speed
-MASTER_SPEED_FIRST_EXCEL_COL		空なら 4（D 列から設備列）
-STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST	1	日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート
-STAGE2_SERIAL_DISPATCH_BY_TASK_ID	0	1=依頼NO直列
-STAGE12_CMD_HIDE_WINDOW	1	段階1/2: VBA の cmd 1=非表示 0=画面上部にコンソール表示
-PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE	1	§B-2/§B-3 設備占有（0 で無効）
-PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS	1	B-2/3 ECと後続の担当者分離（0 で無効）
-TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF	0	1=人数最優先（従来）
-TEAM_ASSIGN_START_SLACK_WAIT_MINUTES	60	スラック分（0 で開始のみ）
-TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW	0	1=need追加人数行を無視
-TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS		1=メインで req+追加上限まで探索
-TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	0=計画シート必要人数も参照
-TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	0=組合せ表プリセットを使わない
-DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1=配台中の占有区間ミラーで二重検査（0 で無効）
-STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後の列設定図形コピー（0 で無効）
-DISPATCH_TRIAL_PATTERN_LIST_SHEET		配台試行順_パターン一覧: 出力シート名（空なら既定 配台試行順_パターン一覧）
-DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）
-DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET		パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）
-DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2バッチのみ: P1～P7 を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない
-DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア(自動) の納期遵守率(%)の重み（空なら 3）
-DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合(%)の重み（空なら 1）
-DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）
-GANTT_COLOR_MODE		結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに
-GANTT_PRINT_ONE_PAGE_PER_DAY		設備ガント系の印刷: 1/true/yes/on/y で縦を「表示した暦日の数」ページに合わせる（横1ページ・日境界の手動改ページと併用。機械が多いと縮小が強い）。GANTT_PRINT_SCALE_PERCENT 指定時は Python 側では無効
-GANTT_ACTUAL_DETAIL_DATE_FROM		結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1
-GANTT_ACTUAL_DETAIL_DATE_TO		結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効
-EXCLUDE_RULES_TRY_OPENPYXL_SAVE		（互換用・Python では未使用。配台不要シートの保存は xlwings のみ）
-ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS	5	終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時
-ASSIGN_END_OF_DAY_DEFER_MINUTES	45	終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効	
-DEBUG_TASK_ID		デバッグ用依頼NO
-TRACE_TEAM_ASSIGN_TASK_ID		チーム割付トレース対象
-GEMINI_PRICE_USD_IN_PER_M	0.075	Gemini 入力（prompt）側の料金（USD / 100万トークン）。コスト試算に使用
-GEMINI_PRICE_USD_OUT_PER_M	0.30	
-GEMINI_JPY_PER_USD	150	
-GEMINI_MODEL		単一モデルに固定（空なら planning_core の精度順フォールバック列を使用）
-GEMINI_MODEL_TRY_ORDER		カンマ区切りで試行順を上書き（例: gemini-2.5-pro,gemini-2.5-flash）。上級者向け。マクロブック「設定」D/E で有効行がある場合はシート優先
-GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	Gemini 応答待ちのハートビートログ間隔（秒）。0 で無効
-GEMINI_RETRY_MAX_ATTEMPTS	3	同一モデルあたりの最大試行回数（既定 3）。使い切ったら次モデルへ
-GEMINI_REQUEST_TIMEOUT_SEC	60	Gemini generate_content の HTTP タイムアウト（秒）。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）
-EXCLUDE_RULES_TEST_E1234		テスト用（通常空）
-EXCLUDE_RULES_TEST_E1234_ROW	9	
-PM_AI_CMD_PAUSE_ON_ERROR	1	環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効
-PM_AI_SETUP_COMPLETION_MSGBOX	1	環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効
-#TASK_INPUT_WORKBOOK		通常はVBAが設定（シートに書くと上書き）
+#		マクロブックにシート「設定_環境変数」を置くと、workbook_env_bootstrap が import planning_core より前に os.environ に反映。A=変数名・B=値。A が空または # で始まる行は無視。TASK_INPUT_WORKBOOK の B は相対パス可（ブック所在フォルダ基準）。
+TASK_INPUT_WORKBOOK		VBA が xlwings 実行前に設定するマクロブックのフルパス（手運用時は絶対パス）。Python の列設定・配台試行順ツール等の前提。シートで空の行は反映しない。
+TASK_PLAN_SHEET		配台計画シート名（空なら既定「配台計画_タスク入力」）
+PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY		1/true/yes/on/y のとき配台試行順更新で post_load（計画シートの事後変形）をスキップする用途。
+MASTER_USE_SPEED_SHEET	1	master.xlsm の speed シートによる加工速度上書き。B が空でも既定は有効。0/false/no/off で無効。
+MASTER_SPEED_SHEET_NAME		speed シート名（空なら「speed」）
+MASTER_SPEED_FIRST_EXCEL_COL		speed シートで設備列が始まる Excel 列番号（空なら 4＝D 列）
+RAW_FABRIC_WIDTH_TABLE_PATH		原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索）
+PRODUCT_WIDTH_TABLE_PATH		製品幅 CSV のフルパス（同上）
+PRODUCT_LENGTH_TABLE_PATH		製品長 CSV のフルパス（同上）
+PRODUCT_THICKNESS_TABLE_PATH		製品厚み CSV のフルパス（同上）
+STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST	1	日内配台フロー: 1=試行順優先マルチパス（既定）。0/false/no/off/いいえ/無効=従来ソート。
+STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT	1	1（既定）=配台試行順の「枠」より大きい順は割り込まない。0 等で緩和。
+STAGE2_SERIAL_DISPATCH_BY_TASK_ID	0	1=計画シート上の依頼NO出現順で直列（他依頼は当日進まない）。既定 0。
+STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK	0	段階2の「当日」に macro_now: 既定 0=日付のみ（時刻は始業に正規化）。1=データ抽出時刻の時分まで反映する旧挙動。
+STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後、列設定シートの図形を xlwings で複製。0/false で無効。
+STAGE12_CMD_HIDE_WINDOW	1	段階1/2 の cmd 表示（VBA）。1/true/yes/はい=非表示（既定）。0/false=コンソール表示。優先: シート B 非空 → OS 環境変数 → VBA 定数。
+PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE	1	B-2/B-3 系: 熱融着検査の設備占有（同一設備で検査中は他依頼の検査を試さない）。0 等で無効。
+PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS	1	B-2/B-3: 同一依頼で EC と後続（検査・巻返し等）の担当者集合を分離。0 等で無効。
+WIP_LIMIT_EC_BEFORE_INSP_ROLLS	15	工程間 WIP: EC 前〜検査までのロール上限（0 以下で無効）
+WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS	20	同上: スリット〜SEC 間のロール上限（0 以下で無効）
+TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF	0	1/true 等=従来の「人数最優先」タプル順。0/false 等（既定）=スラック分と組み合わせた割付。
+TEAM_ASSIGN_START_SLACK_WAIT_MINUTES	60	上記が 0 のとき: 最早開始からこの分以内の遅れなら人数より開始を優先。0 で無効。
+TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW	0	1=need の「配台時追加人数」行を無視（必須人数のみ試行）。
+TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS		1/true=メイン探索で req〜追加上限まで試す（従来）。空または 0=メインは req のみ、追加分は後段。
+TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY	1	1（既定）=必須人数は need（基本＋特別指定）のみ。0=特別指定備考 AI の required_op を計画から参照し得る（列「必須人数」は廃止済み）。
+TEAM_ASSIGN_USE_MASTER_COMBO_SHEET	1	1（既定）=master「組み合わせ表」を使用。0=組み合わせ表プリセットを使わない。
+DISPATCH_INTERVAL_MIRROR_ENFORCE	1	1（既定）=設備・人の占有区間をミラーして二重検査。0 等=avail のみの従来挙動。
+DISPATCH_TRIAL_PATTERN_LIST_SHEET		「配台試行順_パターン一覧」相当の出力シート名（空なら既定名）
+DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE		1/true 等で ListObject を付けない（結合・太字は実施）
+DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET		パターン別段階2バッチ用サマリシート名（空なら既定）
+DISPATCH_PATTERN_STAGE2_MAX_PATTERNS	20	パターン別段階2のみ: シミュレーション最大件数（1〜50、既定 20）。一覧列挙件数とは別。
+DISPATCH_PATTERN_SCORE_WEIGHT_DUE	3	参考スコア: 納期遵守率の重み（空なら 3）
+DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER	1	参考スコア: メンバー平均作業割合の重み（空なら 1）
+DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP	0.0001	参考スコア: 設備稼働セル数の重み（値が大きいので小さめ推奨。空なら 0.0001）
+GANTT_COLOR_MODE		結果_設備ガント配色。空または monotone=淡色従来。full=依頼NO単位の帯色を鮮やかに。
+GANTT_PRINT_ONE_PAGE_PER_DAY		1/true/yes/on: 印刷の縦を表示暦日数ページに合わせる（横1ページ想定）。GANTT_PRINT_SCALE_PERCENT 指定時は縦合わせは行わず固定スケール優先。
+GANTT_PRINT_SCALE_PERCENT		10〜400 の整数で印刷スケール%を固定（任意）。指定時は上記「1日1ページ」調整より優先。
+GANTT_HDR_ROW_HEIGHT_PT	38	設備ガント系のヘッダ行の高さ（ポイント）
+GANTT_MACHINE_ROW_HEIGHT_PT	60	設備ガント系の機械行の高さ（ポイント）
+GANTT_TIMELINE_SHAPE_LABELS	1	タイムライン上の依頼NO等を角丸シェイプで描画（xlwings）。0 でセルのみ。
+GANTT_TIMELINE_LABELS_DAY_FLATTEN	1	1（既定）=日ブロック単位で画像に集約して負荷低減。0=従来の大量シェイプ。
+GANTT_DAY_IMAGE_CHROMA_TRANSPARENT	0	1=日別画像にクロマキー敷き色で透明化を試す（上級）
+GANTT_DAY_IMAGE_CHROMA_HEX	FF00FF	上記の敷き色（RRGGBB、既定マゼンタ）
+GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT		CopyPicture 形式: picture または bitmap（空なら既定 EMF 系）
+GANTT_ACTUAL_DETAIL_DATE_FROM		結果_設備ガント_実績明細の表示開始日（空=下限なし）。例 2026-04-01
+GANTT_ACTUAL_DETAIL_DATE_TO		同上の表示終了日（空=上限なし）。段階2の xlsx 生成時に有効。
+COMPARE_GANTT_SNAPSHOT_DIR		plan_compare_gantt_from_snapshot.py: スナップショットフォルダ（未指定時の既定）
+COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT	2.5	比較用ガントの実績ライン太さ（ポイント）
+ASSIGN_END_OF_DAY_DEFER_MINUTES	45	終業直前デファー: 終業上限までの残りがこの分数以下のときのみ下記ロール条件を評価。0 で無効。
+ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS	5	上記が有効なとき、終業までに収容できるロール数がこの値未満なら新規加工開始を却下（同一依頼の設備連続は免除あり）。大きな値にすると実質「残量に依らず終業直前は不可」に近づく。
+DEBUG_TASK_ID	Y3-26	デバッグ用の既定依頼NO（本番では通常上書きまたは未使用）
+TRACE_TEAM_ASSIGN_TASK_ID		指定した依頼NOについてチーム割付の候補・採用理由を INFO ログへ。
+EXCLUDE_RULES_TEST_E1234		1/true で「設定_配台不要工程」シートの E 列にテスト値 1234 を書く（保存経路確認用。通常空）
+EXCLUDE_RULES_TEST_E1234_ROW	9	上記の対象行（2 未満は 9 に丸め）
+GEMINI_API_KEY		移行用: マクロブック「設定」B1 の JSON にキーが無い場合のみ参照（通常は JSON 推奨）
+GEMINI_PRICE_USD_IN_PER_M	0.075	Gemini 入力トークン単価（USD / 100 万トークン）。コスト試算用。
+GEMINI_PRICE_USD_OUT_PER_M	0.30	Gemini 出力トークン単価（USD / 100 万トークン）。コスト試算用。
+GEMINI_JPY_PER_USD	150	試算の円換算レート
+GEMINI_MODEL		単一モデルに固定（空なら精度順フォールバック列を使用）
+GEMINI_MODEL_TRY_ORDER		カンマ区切りで試行順を上書き。マクロ「設定」D/E に有効行がある場合はシート優先。
+GEMINI_PRE_REQUEST_JITTER_MAX_SEC	0.75	503/429 等対策: 呼び出し直前の最大ジッター秒。0 で無効。
+GEMINI_RETRY_BACKOFF_BASE_SEC	2.0	再試行の指数バックオフ基底（秒）
+GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	応答待ちハートビートログ間隔（秒）。0 で無効。
+GEMINI_RETRY_MAX_ATTEMPTS	3	同一モデルあたりの最大試行。使い切ったら次モデルへ。
+GEMINI_REQUEST_TIMEOUT_SEC	60	generate_content の HTTP タイムアウト（秒）。0 で SDK 既定（非推奨）。
+PM_AI_CMD_PAUSE_ON_ERROR	1	setup_environment 等: 成功・失敗とも終了時に pause。0/false/no/off で無効。pip 失敗直後は OS のみ有効の場合あり。
+PM_AI_SETUP_COMPLETION_MSGBOX	1	setup_environment: Windows で成功時に MessageBox。0/false/no/off で無効。
+PM_AI_SPLASH_XLWINGS		1/true 等で xlwings 経由のスプラッシュログ追記を有効（段階実行で利用する場合）
+PM_AI_XLWINGS_SPLASH_MACRO	スプラッシュ表示.SplashLog_AppendChunk	PM_AI_SPLASH_XLWINGS 有効時に呼ぶ VBA マクロの修飾名
