@@ -7,6 +7,8 @@
 さらに未設定で TASK_INPUT_WORKBOOK があれば、マクロ実行ブックと同一フォルダの pdf 配下から
 結果_タスク一覧.csv がある最新の履歴フォルダを選ぶ（VBA の一覧1と同じ並びの先頭相当）。
 workbook_env_bootstrap で TASK_INPUT_WORKBOOK を反映する想定。
+マクロ「計画実績比較ガント_リストから生成実行」経由では COMPARE_GANTT_PLAN_TASKS_SHEET で
+アラジン参照シートを「加工計画DATA_実績比較用」に切替（未設定時は加工計画DATA。段階1は従来どおり）。
 """
 import os
 import sys

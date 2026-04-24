@@ -218,6 +218,8 @@ SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
 # タスクは tasks.xlsx を使うので、VBA から渡される TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
 TASKS_SHEET_NAME = "加工計画DATA"
+# 段階2の実績系設備ガント（結果_設備ガント_実績明細等）で、計画ブックから抽出日時を読むときに優先するシート
+TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN = "加工計画DATA_実績比較用"
 
 # このシート名を含むブックは openpyxl は読み書きに失敗することがあるため、load_workbook を試行する
 OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "配台_配台不要工程"
@@ -837,6 +839,8 @@ ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
 RESULT_SHEET_GANTT_COMPARE_NAME = "結果_設備ガント_計画実績比較"
 COMPARE_GANTT_OUTPUT_FILENAME = "plan_actual_compare_gantt.xlsx"
 ENV_COMPARE_GANTT_SNAPSHOT_DIR = "COMPARE_GANTT_SNAPSHOT_DIR"
+# 空でないとき、計画実績比較ガントのアラジン参照のみ当該シートを読む（未設定時は TASKS_SHEET_NAME＝加工計画DATA）
+ENV_COMPARE_GANTT_PLAN_TASKS_SHEET = "COMPARE_GANTT_PLAN_TASKS_SHEET"
 # 1/true/yes/on のとき、計画(CSV)の同一機械・同一日の区間重なりを例外にせず警告のみ（比較ガント生成は続行）
 ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP = "COMPARE_GANTT_ALLOW_PLAN_OVERLAP"
 try:
@@ -1090,42 +1094,6 @@ TRACE_SCHEDULE_TASK_IDS: frozenset[str] = frozenset()
 DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 紝期超靎リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
-
-# region agent log
-_AGENT_DEBUG_SESSION = "6ee520"
-_AGENT_DEBUG_WATCH_TIDS = frozenset({"W4-2", "W4-3", "W4-4", "W5-2", "W5-3", "W5-4"})
-_AGENT_DEBUG_LOG_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-6ee520.log")
-)
-
-
-def _agent_debug_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    import json
-    import time
-
-    _tid = str(data.get("task_id") or data.get("tid") or "").strip()
-    if not data.get("_no_tid_filter") and _tid not in _AGENT_DEBUG_WATCH_TIDS:
-        return
-    try:
-        body = {k: v for k, v in data.items() if k not in ("runId", "_no_tid_filter")}
-        rec = {
-            "sessionId": _AGENT_DEBUG_SESSION,
-            "runId": str(data.get("runId") or "pre-fix"),
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": body,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
 
 
 def _trace_schedule_task_enabled(task_id) -> bool:
@@ -1734,10 +1702,13 @@ def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=N
         wb.close()
 
 
-def _extract_data_extraction_datetime():
+def _extract_data_extraction_datetime(sheet_name: str | None = None):
     """
-    `加工計画DATA` シートから配台基準日時を取得する。
+    マクロブックの計画タスクシート（既定は ``TASKS_SHEET_NAME``＝加工計画DATA）から配台基準日時を取得する。
     列「データ抽出時間」の先頭非空値を最優先。次に列「抽出時間」。列が無い・有効値が無いときは「データ抽出日」を試す。
+
+    Args:
+        sheet_name: 読むシート名。None または空のとき ``TASKS_SHEET_NAME``。
 
     Returns:
         tuple[datetime | None, str | None]: (日時, 採用した列名)。両方 None のときは現在時刻フォールバック。
@@ -1762,7 +1733,8 @@ def _extract_data_extraction_datetime():
     try:
         if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
             return None, None
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
+        sn = (sheet_name or "").strip() or TASKS_SHEET_NAME
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=sn)
         df.columns = df.columns.str.strip()
         for col_name in (
             TASK_COL_DATA_EXTRACTION_TIME,
@@ -1777,6 +1749,19 @@ def _extract_data_extraction_datetime():
         return None, None
     except Exception:
         return None, None
+
+
+def _extract_data_extraction_datetime_for_actual_related_gantt():
+    """
+    実績系設備ガント用。``TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN`` を先に読み、
+    日時が得られなければ ``TASKS_SHEET_NAME``（加工計画DATA）へフォールバックする。
+    """
+    dt, col = _extract_data_extraction_datetime(
+        sheet_name=TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN
+    )
+    if dt is not None:
+        return dt, col
+    return _extract_data_extraction_datetime()
 
 
 def _extract_data_extraction_datetime_str():
@@ -8629,26 +8614,6 @@ def _normalize_roll_detail_daily_actual_qty_duplicate(events: list) -> None:
         if not all(tol(q, ref_q, ref_q) for q in qs):
             continue
         V_daily = ref_q
-        # #region agent log
-        try:
-            _tid0 = str(_key[0] or "").split("/")[0].strip().upper()
-            if _tid0 == "Y4-56":
-                _agent_debug_ndjson(
-                    "H3",
-                    "_core.py:_normalize_roll_detail_daily_actual_qty_duplicate",
-                    "roll_detail duplicate group (same source actual_m)",
-                    {
-                        "task_id": _tid0,
-                        "_no_tid_filter": True,
-                        "group_key": [str(x) for x in _key],
-                        "n_events": len(idxs),
-                        "ref_source_actual_m": ref_q,
-                        "qs": qs,
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         secs: list[float] = []
         tot_sec = 0.0
         for ii in idxs:
@@ -11715,17 +11680,29 @@ def _wip_l11_bucket_key_for_task_id(task_id: str) -> str:
     return str(_k[0] or _k[2] or "").strip()
 
 
-def _wip_ec_before_insp_roll_count(task_queue: list, *, bucket_for: str | None) -> float:
+def _wip_ec_before_insp_roll_count(
+    task_queue: list,
+    *,
+    task_id_exact: str | None = None,
+    task_id_head: str | None = None,
+) -> float:
     """
     EC 完了ロール − 後続（検査＋巻返し）完了ロール（負は 0 にクリップ）。
-    bucket_for が None のとき全行、非 None のとき当該キーの行のみ（同一依頼グループ単位）。
+    - 両方 None: 全行（global）
+    - task_id_exact: 当該依頼NO行のみ（同一文字列の task_id）
+    - task_id_head: 接頭辞グループ（_wip_l11_bucket_key_for_task_id と一致する行）
     """
+    if task_id_exact is not None and task_id_head is not None:
+        raise ValueError("task_id_exact と task_id_head は同時に指定しない")
     ec_done_total = 0.0
     follower_done_total = 0.0
     for _t in task_queue:
-        if bucket_for is not None:
-            _bk = _wip_l11_bucket_key_for_task_id(str(_t.get("task_id") or ""))
-            if _bk != bucket_for:
+        _tid = str(_t.get("task_id") or "").strip()
+        if task_id_exact is not None:
+            if _tid != task_id_exact:
+                continue
+        elif task_id_head is not None:
+            if _wip_l11_bucket_key_for_task_id(_tid) != task_id_head:
                 continue
         init = float(_t.get("initial_remaining_units") or 0)
         rem = float(_t.get("remaining_units") or 0)
@@ -14775,8 +14752,9 @@ DEFAULT_BREAKS = [
 ]
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
-# 同じウィンドウで「ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない」（収容が閾値未満）ときは
+# 同じウィンドウで「必要収容ロール数ロール分以上は回せない」（収容が閾値未満）ときは
 # 新規に加工を始めない（_eod_reject_capacity_units_below_threshold）。
+# 必要収容ロール数 = min(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS, ceil(remaining_units))（残が閾値未満なら残に合わせる）。
 # 占有キー上の直前加工が同一依頼NO（machine_handoff last_tid）のときは上記2点をスキップ（_eod_same_request_continuation_exempt）。
 # ASSIGN_END_OF_DAY_DEFER_MINUTES 既定 45（分）。0 を明示すると無効（従来どおり）。
 # ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 既定 5。十分大きな値（例: 999999）にすると実質「残ロールに依らず終業直前は不可」。
@@ -14830,10 +14808,13 @@ def _eod_reject_capacity_units_below_threshold(
     team_end_limit: datetime,
     *,
     eod_same_request_continuation_exempt: bool = False,
+    remaining_units_ceil: int | None = None,
 ) -> bool:
     """
     終業まであと ASSIGN_END_OF_DAY_DEFER_MINUTES 分以内のウィンドウ内で、
-    ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
+    必要収容ロール数ロール分以上は回せない（収容ロール数が閾値未満）とき True（新規加工を始めない＝候補却下）。
+    必要収容ロール数 = min(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS, remaining_units_ceil)
+    （remaining_units_ceil が正のとき。未指定時は従来どおり ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS のみ。）
     eod_same_request_continuation_exempt が True のときは常に False（同一依頼の連続ロール）。
     """
     if eod_same_request_continuation_exempt:
@@ -14843,7 +14824,10 @@ def _eod_reject_capacity_units_below_threshold(
         return False
     if not _eod_minutes_window_covers_start(team_start, team_end_limit):
         return False
-    return int(units_fit_until_close) < int(th)
+    eff_th = int(th)
+    if remaining_units_ceil is not None and int(remaining_units_ceil) > 0:
+        eff_th = min(eff_th, int(remaining_units_ceil))
+    return int(units_fit_until_close) < int(eff_th)
 
 
 # =========================================================
@@ -17184,7 +17168,7 @@ ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 
 # ---------------------------------------------------------------------------
-# 特別ルール（工程間WIP上限）: EC 前〜検査／巻返しのロール滞留（L11・既定は依頼NO接頭辞グループ単位）
+# 特別ルール（工程間WIP上限）: EC 前〜検査／巻返しのロール滞留（L11）
 # ---------------------------------------------------------------------------
 # 0 以下で無効（上限制約なし）
 WIP_LIMIT_EC_BEFORE_INSP_ROLLS = os.environ.get(
@@ -17195,15 +17179,22 @@ try:
 except (TypeError, ValueError):
     WIP_LIMIT_EC_BEFORE_INSP_ROLLS = 15
 
-# L11 集計: global=全依頼合算（従来）。task_id_head=依頼NO接頭辞単位（_task_id_priority_key の頭部）。
-# 他依頼の検査滞留で無関係な EC が永久に候補外になるのを避けるため既定は task_id_head。
-WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE = os.environ.get(
-    "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE", "task_id_head"
+# L11 集計: global=全依頼合算。task_id_head=依頼NO接頭辞。task_id=当該行の依頼NOのみ（既定）。
+_wip_l11_agg_raw = os.environ.get(
+    "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE", "task_id"
 ).strip().lower()
+if _wip_l11_agg_raw in ("global", "all", "factory"):
+    WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE = "global"
+elif _wip_l11_agg_raw in ("task_id", "line", "row"):
+    WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE = "task_id"
+elif _wip_l11_agg_raw in ("task_id_head", "head", "prefix"):
+    WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE = "task_id_head"
+else:
+    WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE = "task_id"
 
 
 def _wip_ec_l11_aggregate_is_global() -> bool:
-    return WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE in ("global", "all", "factory")
+    return WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE == "global"
 
 
 WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = os.environ.get(
@@ -17214,12 +17205,23 @@ try:
 except (TypeError, ValueError):
     WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = 20
 
+# L10 B-4.1: 加工内容がスリット→SEC の依頼で、同一依頼内スリット完了−SEC完了がこの値未満の間は SEC を候補から除外。
+# 0 以下で無効（ゲートなし）。既定 5。
+SLIT_BEFORE_SEC_MIN_SLIT_ROLLS = os.environ.get(
+    "SLIT_BEFORE_SEC_MIN_SLIT_ROLLS", "5"
+).strip()
+try:
+    SLIT_BEFORE_SEC_MIN_SLIT_ROLLS = int(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS)
+except (TypeError, ValueError):
+    SLIT_BEFORE_SEC_MIN_SLIT_ROLLS = 5
+
 SPECIAL_WIP_SLIT_PROCESS = "スリット"
 SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
-# L10「スリットが5ロール以上終わるまで SEC を開始しない」用: **同一依頼NO** のスリット完了 − SEC 完了。
+# L10 B-4.1「スリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない」用:
+# **同一依頼NO** のスリット完了 − SEC 完了。
 # 工場全体の wip_slit_before_sec を使うと、他依頼の SEC が進むと差が sleみ、当依頼のスリットを完走しても
 # SEC 行が候補外のまま残る（配台不可）ため、依頼単位の差のみを見る。
 def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) -> float:
@@ -17249,6 +17251,87 @@ def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) ->
         elif proc == _sec_proc and mach == _sec_mach:
             sec_done += done
     return max(0.0, slit_done - sec_done)
+
+
+def _l10_sec_start_floor_from_slit_timeline(
+    task: dict,
+    timeline_events: list | None,
+    task_queue: list,
+) -> datetime | None:
+    """
+    L10 B-4.1 のカレンダー側下限: スリット→SEC の SEC 行は、タイムライン上で
+    SLIT_BEFORE_SEC_MIN_SLIT_ROLLS 本目のスリット加工終了後まで加工開始しない。
+    （候補除外はロール差のみ。別設備のため machine_avail が同日 13:00 のままだと
+    SEC がスリットと壁時計上重なるのを防ぐ。）
+    """
+    if SLIT_BEFORE_SEC_MIN_SLIT_ROLLS <= 0:
+        return None
+    if not timeline_events:
+        return None
+    machine_proc = str(task.get("machine") or "").strip()
+    machine_name = str(task.get("machine_name", "") or "").strip()
+    proc = _normalize_process_name_for_rule_match(machine_proc)
+    mach = _normalize_equipment_match_key(machine_name)
+    if proc != _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS):
+        return None
+    if mach != _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE):
+        return None
+    toks = task.get("process_content_tokens") or []
+    _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+    _sp = _normalize_process_name_for_rule_match("スリット")
+    _sc = _normalize_process_name_for_rule_match("SEC")
+    if not (_sp in _norm and _sc in _norm and _norm.index(_sp) < _norm.index(_sc)):
+        return None
+    tid = str(task.get("task_id") or "").strip()
+    if not tid:
+        return None
+    slit_row: dict | None = None
+    slit_eq: str = ""
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        p = _normalize_process_name_for_rule_match(t.get("machine"))
+        m = _normalize_equipment_match_key(t.get("machine_name"))
+        if (
+            p == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+            and m == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+        ):
+            slit_row = t
+            slit_eq = (
+                str(t.get("equipment_line_key") or t.get("machine") or "")
+                .strip()
+                or str(t.get("machine") or "").strip()
+            )
+            break
+    if not slit_row or not slit_eq:
+        return None
+    occ_slit = str(_machine_occupancy_key_resolve(slit_row, slit_eq) or "").strip()
+    n_need = int(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS)
+    # タイムラインの machine は eq_line（例: スリット+スリット機1　湖南）。厳密一致で落ちる場合があるため
+    # machine / machine_occupancy_key を正規化してスリット行と照合する。
+    k_eq = _normalize_equipment_match_key(slit_eq)
+    k_m = _normalize_equipment_match_key(str(slit_row.get("machine") or ""))
+    k_occ = _normalize_equipment_match_key(occ_slit)
+    hits: list[dict] = []
+    for e in timeline_events:
+        if not _is_machining_timeline_event(e):
+            continue
+        if str(e.get("task_id") or "").strip() != tid:
+            continue
+        em = _normalize_equipment_match_key(str(e.get("machine") or ""))
+        eocc = _normalize_equipment_match_key(str(e.get("machine_occupancy_key") or ""))
+        if em not in (k_eq, k_m) and eocc != k_occ:
+            continue
+        sd = e.get("start_dt")
+        ed = e.get("end_dt")
+        if not isinstance(sd, datetime) or not isinstance(ed, datetime):
+            continue
+        hits.append(e)
+    hits.sort(key=lambda x: x["start_dt"])
+    if len(hits) >= n_need:
+        nth = hits[n_need - 1].get("end_dt")
+        return nth if isinstance(nth, datetime) else None
+    return None
 
 
 # 段階2の「当日」判定に使う macro_now_dt（データ抽出時刻由来）について:
@@ -20103,6 +20186,26 @@ def _eq_grid_timeline_event_use_progress_bar(ev: dict) -> bool:
     )
 
 
+def _eq_grid_rolls_done_within_ev_segment_at(ev: dict, t_dt) -> int:
+    """加工イベントセグメントの先頭から t_dt までに完了したロール数（0 .. units_done）。"""
+    if not isinstance(t_dt, datetime):
+        return 0
+    st0 = ev.get("start_dt")
+    ed0 = ev.get("end_dt")
+    if not isinstance(st0, datetime) or not isinstance(ed0, datetime):
+        return 0
+    if t_dt <= st0:
+        return 0
+    eff_v = float(ev.get("eff_time_per_unit") or 0)
+    if eff_v <= 0:
+        return 0
+    u_cap = int(float(ev.get("units_done") or 0))
+    wm = get_actual_work_minutes(
+        st0, min(t_dt, ed0), ev.get("breaks") or []
+    )
+    return min(u_cap, int(wm / eff_v))
+
+
 def _build_equipment_schedule_dataframe(
     sorted_dates: list,
     equipment_list: list,
@@ -20207,23 +20310,38 @@ def _build_equipment_schedule_dataframe(
                     else:
                         _slice_a = max(curr_grid, active_ev["start_dt"])
                         _slice_b = min(next_grid, active_ev["end_dt"])
-                        elapsed = get_actual_work_minutes(
-                            _slice_a,
-                            _slice_b,
-                            active_ev["breaks"],
+                        total_u = int(float(active_ev.get("total_units") or 0))
+                        _base_done = int(
+                            float(active_ev.get("already_done_units") or 0)
                         )
-                        block_done_now = min(
-                            int(elapsed / active_ev["eff_time_per_unit"]),
-                            active_ev["units_done"],
-                        )
-
-                        cumulative_done = active_ev["already_done_units"] + block_done_now
-                        total_u = active_ev["total_units"]
+                        if total_u <= 0:
+                            progress_text = ""
+                        elif (
+                            _slice_a < _slice_b
+                            and isinstance(active_ev.get("start_dt"), datetime)
+                            and isinstance(active_ev.get("end_dt"), datetime)
+                        ):
+                            _rd_lo = _eq_grid_rolls_done_within_ev_segment_at(
+                                active_ev, _slice_a
+                            )
+                            _rd_hi = _eq_grid_rolls_done_within_ev_segment_at(
+                                active_ev, _slice_b
+                            )
+                            _cum_lo = int(min(total_u, _base_done + _rd_lo))
+                            _cum_hi = int(min(total_u, _base_done + _rd_hi))
+                            if _cum_hi > _cum_lo:
+                                progress_text = "・".join(
+                                    f"{k}/{total_u}R"
+                                    for k in range(_cum_lo + 1, _cum_hi + 1)
+                                )
+                            else:
+                                progress_text = f"{_cum_hi}/{total_u}R"
+                        else:
+                            progress_text = ""
 
                         _sub_s = _eq_cell_display_sub(active_ev, d)
                         sub_text = f" 補:{_sub_s}" if _sub_s else ""
                         eq_text = f"[{active_ev['task_id']}] 主:{active_ev['op']}{sub_text}"
-                        progress_text = f"{cumulative_done}/{total_u}R"
 
                 # 表示は「枠内で最も早く始まるイベント」1件だが、準備・セットアップが先にあると
                 # 加工が active_ev にならずタスクID→時間割リンクが欠ける。重なる加工イベントを別途走査する。
@@ -22878,14 +22996,14 @@ def _trial_order_flow_eligible_tasks(
     assign_probe_ctx: dict | None = None,
 ) -> list:
     # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
-    # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE（既定 task_id_head＝依頼グループ、global＝全依頼合算）。
+    # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE（既定 task_id＝当該依頼NO行、head＝接頭辞、global）。
     # - L10: スリット→SEC の前段WIPが上限以上なら スリット を配台しない（SECは優先して進める）
     # remaining_units はロール本数（1ロール完了で 1 減）である前提。
     _wip_l11_global_val: float | None = None
     _wip_l11_by_bucket: dict[str, float] = {}
     if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
         if _wip_ec_l11_aggregate_is_global():
-            _wip_l11_global_val = _wip_ec_before_insp_roll_count(task_queue, bucket_for=None)
+            _wip_l11_global_val = _wip_ec_before_insp_roll_count(task_queue)
 
     wip_slit_before_sec = None
     if (
@@ -22918,44 +23036,33 @@ def _trial_order_flow_eligible_tasks(
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
-        # L11: 検査前WIPが限界以上なら EC をブロック（既定は依頼グループ単位・global で全依頼合算）
+        # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
         if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
             if task.get("roll_pipeline_ec"):
                 if _wip_ec_l11_aggregate_is_global():
                     _wip_use = _wip_l11_global_val
-                    _wip_bk = ""
+                    _wip_cache_key = "global"
                 else:
-                    _wip_bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
-                    if _wip_bk not in _wip_l11_by_bucket:
-                        _wip_l11_by_bucket[_wip_bk] = _wip_ec_before_insp_roll_count(
-                            task_queue, bucket_for=_wip_bk
-                        )
-                    _wip_use = _wip_l11_by_bucket[_wip_bk]
+                    _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
+                    if _m == "task_id":
+                        _wip_bk = str(task.get("task_id") or "").strip()
+                    else:
+                        _wip_bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
+                    _wip_cache_key = f"{_m}:{_wip_bk}"
+                    if _wip_cache_key not in _wip_l11_by_bucket:
+                        if _m == "task_id":
+                            _wip_l11_by_bucket[_wip_cache_key] = _wip_ec_before_insp_roll_count(
+                                task_queue, task_id_exact=_wip_bk
+                            )
+                        else:
+                            _wip_l11_by_bucket[_wip_cache_key] = _wip_ec_before_insp_roll_count(
+                                task_queue, task_id_head=_wip_bk
+                            )
+                    _wip_use = _wip_l11_by_bucket[_wip_cache_key]
                 if (
                     _wip_use is not None
                     and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
                 ):
-                    # region agent log
-                    _tid_dbg = str(task.get("task_id") or "").strip()
-                    if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                        _agent_debug_ndjson(
-                            "H1_L11_WIP_EC",
-                            "_trial_order_flow_eligible_tasks:L11",
-                            "eligible_skip_ec_wip_limit",
-                            {
-                                "task_id": _tid_dbg,
-                                "day": str(current_date),
-                                "wip_ec_before_insp": _wip_use,
-                                "wip_limit": WIP_LIMIT_EC_BEFORE_INSP_ROLLS,
-                                "l11_aggregate": (
-                                    "global"
-                                    if _wip_ec_l11_aggregate_is_global()
-                                    else "task_id_head"
-                                ),
-                                "wip_bucket": _wip_bk,
-                            },
-                        )
-                    # endregion
                     continue
         # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
         if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
@@ -22969,10 +23076,12 @@ def _trial_order_flow_eligible_tasks(
             ):
                 continue
 
-        # L10: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが 5 ロール以上終わるまで SEC を開始しない
+        # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
         _l10_tid = str(task.get("task_id") or "").strip()
         _l10_pair_gap = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid)
-        if _l10_pair_gap < 5.0 - 1e-9:
+        if SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0 and _l10_pair_gap < float(
+            SLIT_BEFORE_SEC_MIN_SLIT_ROLLS
+        ) - 1e-9:
             proc = _normalize_process_name_for_rule_match(task.get("machine"))
             mach = _normalize_equipment_match_key(task.get("machine_name"))
             if (
@@ -22989,16 +23098,6 @@ def _trial_order_flow_eligible_tasks(
                 ):
                     continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
-            # region agent log
-            _tid_dbg = str(task.get("task_id") or "").strip()
-            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                _agent_debug_ndjson(
-                    "H5_SAME_REQ_DEP",
-                    "_trial_order_flow_eligible_tasks",
-                    "eligible_skip_same_request_dependency",
-                    {"task_id": _tid_dbg, "day": str(current_date)},
-                )
-            # endregion
             continue
         if _task_blocked_by_global_dispatch_trial_order(
             task,
@@ -23014,20 +23113,6 @@ def _trial_order_flow_eligible_tasks(
             dispatch_interval_mirror=dispatch_interval_mirror,
             min_dispatch_effective=min_dispatch_effective,
         ):
-            # region agent log
-            _tid_dbg = str(task.get("task_id") or "").strip()
-            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                _agent_debug_ndjson(
-                    "H5_GLOBAL_DTO",
-                    "_trial_order_flow_eligible_tasks",
-                    "eligible_skip_global_dispatch_trial_order",
-                    {
-                        "task_id": _tid_dbg,
-                        "day": str(current_date),
-                        "my_order": task.get("dispatch_trial_order"),
-                    },
-                )
-            # endregion
             continue
         # min_dto から全日カレンダー占有は除外済みでも」同日試行順の「ブロック」は my_o>m のみのため、
         # 試行順=min の占有行は残り」他試行順は永久坜止し得る。当日スロットゼロの行は候補外にれる。
@@ -23089,21 +23174,6 @@ def _trial_order_flow_eligible_tasks(
             dispatch_interval_mirror=dispatch_interval_mirror,
             assign_probe_ctx=assign_probe_ctx,
         ):
-            # region agent log
-            _tid_dbg = str(task.get("task_id") or "").strip()
-            if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                _agent_debug_ndjson(
-                    "H4_EQ_LOWER_DTO_PENDING",
-                    "_trial_order_flow_eligible_tasks",
-                    "eligible_skip_equipment_lower_dispatch_order",
-                    {
-                        "task_id": _tid_dbg,
-                        "day": str(current_date),
-                        "mocc": str(_mocc_trial or ""),
-                        "my_order": _my_dispatch_ord,
-                    },
-                )
-            # endregion
             continue
         out.append(task)
     return out
@@ -23305,6 +23375,7 @@ def _append_legacy_dispatch_candidate_for_team(
         team_start,
         team_end_limit,
         eod_same_request_continuation_exempt=_eod_cont_exempt,
+        remaining_units_ceil=math.ceil(float(task.get("remaining_units") or 0)),
     ):
         return False
     work_mins_needed = int(units_today * eff_time_per_unit)
@@ -23640,21 +23711,11 @@ def _assign_one_roll_trial_order_flow(
         avail_dt=avail_dt,
     )
     if _co_abort:
-        # region agent log
-        _tid_co = str(task.get("task_id") or "").strip()
-        if _tid_co in _AGENT_DEBUG_WATCH_TIDS:
-            _agent_debug_ndjson(
-                "H3_CO_ABORT",
-                "_assign_one_roll_trial_order_flow",
-                "changeover_resolve_abort",
-                {
-                    "task_id": _tid_co,
-                    "day": str(current_date),
-                    "machine_occ_key": str(machine_occ_key or ""),
-                },
-            )
-        # endregion
         return None
+
+    _l10_slit_nth_end_floor_dt = _l10_sec_start_floor_from_slit_timeline(
+        task, timeline_events, task_queue
+    )
 
     def _one_roll_from_team(
         team: tuple,
@@ -23694,6 +23755,11 @@ def _assign_one_roll_trial_order_flow(
                 team_start = day_floor
         if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
             team_start = b2_insp_ec_floor
+        if (
+            _l10_slit_nth_end_floor_dt is not None
+            and team_start < _l10_slit_nth_end_floor_dt
+        ):
+            team_start = _l10_slit_nth_end_floor_dt
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         if team_start >= team_end_limit:
             _trace_assign(
@@ -23732,6 +23798,11 @@ def _assign_one_roll_trial_order_flow(
                     ts = day_floor
             if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
                 ts = b2_insp_ec_floor
+            if (
+                _l10_slit_nth_end_floor_dt is not None
+                and ts < _l10_slit_nth_end_floor_dt
+            ):
+                ts = _l10_slit_nth_end_floor_dt
             return ts
 
         _ts_before_defer = team_start
@@ -23764,7 +23835,10 @@ def _assign_one_roll_trial_order_flow(
         _, avail_mins, _ = calculate_end_time(
             team_start, 9999, team_breaks, team_end_limit
         )
-        _trial_units_cap = int(avail_mins / eff_time_per_unit)
+        # calculate_end_time への 1 ロール実分は int(eff_time_per_unit)（少なくとも 1 分）と一致させる。
+        # float のまま割ると avail≈need の端数で cap=0 になり却下する（ログ: avail_mins=7, eff=7.797）。
+        work_mins_needed = max(1, int(eff_time_per_unit))
+        _trial_units_cap = int(avail_mins / work_mins_needed)
         if _trial_units_cap < 1:
             _trace_assign(
                 "候補坴下: 実僝丝足 team=%s start=%s avail_mins=%s need_mins=%.2f",
@@ -23774,21 +23848,27 @@ def _assign_one_roll_trial_order_flow(
                 eff_time_per_unit,
             )
             return None
+        _rem_eod_ceil = math.ceil(float(task.get("remaining_units") or 0))
+        _eod_eff_th = (
+            min(int(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS), int(_rem_eod_ceil))
+            if _rem_eod_ceil > 0
+            else int(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS)
+        )
         if _eod_reject_capacity_units_below_threshold(
             _trial_units_cap,
             team_start,
             team_end_limit,
             eod_same_request_continuation_exempt=_eod_cont_exempt,
+            remaining_units_ceil=_rem_eod_ceil,
         ):
             _trace_assign(
                 "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
                 ",".join(str(x) for x in team),
                 _trial_units_cap,
-                ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS,
+                _eod_eff_th,
                 team_start,
             )
             return None
-        work_mins_needed = int(eff_time_per_unit)
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
             team_start, team_breaks, team_end_limit
         )
@@ -24153,11 +24233,19 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
         return True
     wip_ec_before_insp = None
     if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+        _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
         if _wip_ec_l11_aggregate_is_global():
-            wip_ec_before_insp = _wip_ec_before_insp_roll_count(task_queue, bucket_for=None)
+            wip_ec_before_insp = _wip_ec_before_insp_roll_count(task_queue)
+        elif _m == "task_id":
+            _tid = str(task.get("task_id") or "").strip()
+            wip_ec_before_insp = _wip_ec_before_insp_roll_count(
+                task_queue, task_id_exact=_tid
+            )
         else:
             _bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
-            wip_ec_before_insp = _wip_ec_before_insp_roll_count(task_queue, bucket_for=_bk)
+            wip_ec_before_insp = _wip_ec_before_insp_roll_count(
+                task_queue, task_id_head=_bk
+            )
 
     wip_slit_before_sec = None
     if (
@@ -24204,7 +24292,9 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
             return True
     _l10_tid_p = str(task.get("task_id") or "").strip()
     _l10_gap_p = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid_p)
-    if _l10_gap_p < 5.0 - 1e-9:
+    if SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0 and _l10_gap_p < float(
+        SLIT_BEFORE_SEC_MIN_SLIT_ROLLS
+    ) - 1e-9:
         proc = _normalize_process_name_for_rule_match(task.get("machine"))
         mach = _normalize_equipment_match_key(task.get("machine_name"))
         if (
@@ -24599,22 +24689,6 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
-                # region agent log
-                _tid_dbg = str(task.get("task_id") or "").strip()
-                if _tid_dbg in _AGENT_DEBUG_WATCH_TIDS:
-                    _agent_debug_ndjson(
-                        "H2_ASSIGN_ROLL_NONE",
-                        "_drain_rolls_for_task",
-                        "assign_one_roll_returned_none",
-                        {
-                            "task_id": _tid_dbg,
-                            "day": str(current_date),
-                            "rem_u": float(task.get("remaining_units") or 0),
-                            "machine": str(task.get("machine") or ""),
-                            "machine_name": str(task.get("machine_name") or ""),
-                        },
-                    )
-                # endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -25447,7 +25521,8 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
     段階2と同様に読み、実績タイムラインのみ描画する。
 
     既存の出力ファイルがあり、メタ行の「データ抽出」表示が今回採用した
-    ``データ抽出時間``（加工実績明細DATA 優先、無ければ加工計画DATA）の表示と
+    ``データ抽出時間``（加工実績明細DATA 優先、無ければ計画ブックの
+    「加工計画DATA_実績比較用」→「加工計画DATA」）の表示と
     一致する場合は、再生成をスキップしてそのファイルパスを返す。
 
     Returns:
@@ -25513,9 +25588,12 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             )
             _STAGE2_REGULAR_SHIFT_START = None
 
-        # 実績明細ガントの「データ抽出」は、加工計画DATAではなく「加工実績明細DATA」のデータ抽出時間を優先する。
-        # ただし勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
-        data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+        # 実績明細ガントの「データ抽出」は、加工実績明細DATAのデータ抽出時間を最優先する。
+        # 無いときの計画ブック側は「加工計画DATA_実績比較用」を優先し、得られなければ加工計画DATA。
+        # 勤怠の当日判定などの実行基準もこの抽出時刻と揃える。
+        data_extract_dt, plan_base_dt_column = (
+            _extract_data_extraction_datetime_for_actual_related_gantt()
+        )
         _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
         base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
         run_date = base_now_dt.date()
@@ -25570,7 +25648,7 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
                 return None
             return None
 
-        # 加工実績明細DATA の「データ抽出時間」を最優先（無い/空なら従来どおり加工計画DATA基準）
+        # 加工実績明細DATA の「データ抽出時間」を最優先（無い/空なら計画ブックは実績比較用→加工計画DATA）
         detail_extract_dt = _first_valid_dt_from_df_col(
             df_actual_detail, TASK_COL_DATA_EXTRACTION_TIME
         )
@@ -25962,7 +26040,11 @@ _COMPARE_GANTT_ALADDIN_QTY_COL_RE = re.compile(
 
 
 def _try_read_plan_tasks_sheet_for_compare_aladdin():
-    """TASK_INPUT_WORKBOOK の「加工計画DATA」を読む（アラジン日次数量列用）。失敗時 None。"""
+    """TASK_INPUT_WORKBOOK の計画タスクシートを読む（アラジン日次数量列用）。失敗時 None。
+
+    ``ENV_COMPARE_GANTT_PLAN_TASKS_SHEET`` が空でないときはそのシート名、空のときは
+    ``TASKS_SHEET_NAME``（加工計画DATA）。配台基準日時の取得は別経路のまま。
+    """
     wb = (os.environ.get("TASK_INPUT_WORKBOOK", "") or "").strip() or (
         TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     )
@@ -25971,19 +26053,23 @@ def _try_read_plan_tasks_sheet_for_compare_aladdin():
             "計画実績比較ガント: TASK_INPUT_WORKBOOK が無いためアラジン入力数量の行は空表示になります。"
         )
         return None
+    sheet_name = (os.environ.get(ENV_COMPARE_GANTT_PLAN_TASKS_SHEET, "") or "").strip()
+    if not sheet_name:
+        sheet_name = TASKS_SHEET_NAME
     try:
-        df = pd.read_excel(wb, sheet_name=TASKS_SHEET_NAME)
+        df = pd.read_excel(wb, sheet_name=sheet_name)
         df.columns = df.columns.astype(str).str.strip()
         df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
         logging.info(
             "計画実績比較ガント: アラジン参照用に '%s' の『%s』を読み込みました。",
             os.path.basename(wb),
-            TASKS_SHEET_NAME,
+            sheet_name,
         )
         return df
     except Exception as e:
         logging.warning(
-            "計画実績比較ガント: 加工計画DATA の読込に失敗したためアラジン行は空です（%s）。",
+            "計画実績比較ガント: シート『%s』の読込に失敗したためアラジン行は空です（%s）。",
+            sheet_name,
             e,
         )
         return None
@@ -26181,35 +26267,6 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         else:
             merged = float(sum(_vals_f))
         tmp[_mk, _d][_tid] = merged
-        # #region agent log
-        try:
-            if str(_tid).strip().upper() == "Y4-56":
-                _agent_debug_ndjson(
-                    "H1",
-                    "_core.py:_aggregate_actual_qty_for_aladdin_compare_from_detail_df",
-                    "aladdin_compare per (machine,day,tid) bucket",
-                    {
-                        "task_id": str(_tid).strip(),
-                        "_no_tid_filter": True,
-                        "machine_key": _mk,
-                        "day": _d.isoformat() if hasattr(_d, "isoformat") else str(_d),
-                        "tid": _tid,
-                        "n_split_vals": len(_vals),
-                        "vals_preview": _vals_f[:20],
-                        "spread_m": _spread,
-                        "collapse_min_same": _ALADDIN_DUP_COLLAPSE_MIN_SAME,
-                        "spread_tol_m": _ALADDIN_DUP_SPREAD_TOL_M,
-                        "used_collapse_max": bool(
-                            len(_vals) >= _ALADDIN_DUP_COLLAPSE_MIN_SAME
-                            and _spread <= _ALADDIN_DUP_SPREAD_TOL_M
-                        ),
-                        "merged_m": merged,
-                        "sum_m": float(sum(_vals_f)),
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
 
     for _tk, _tvals in sorted(
         _trace_per_mdt.items(),
@@ -26283,32 +26340,6 @@ def _compare_aladdin_plan_buckets_vs_actual(
                 pieces.append(
                     f"{tid} 計画{_format_qty_short(pq)}≠実績{_format_qty_short(aq)}"
                 )
-            # #region agent log
-            try:
-                if str(tid).strip().upper() == "Y4-56":
-                    _k_mk, _k_dt = key
-                    _agent_debug_ndjson(
-                        "H2",
-                        "_core.py:_compare_aladdin_plan_buckets_vs_actual",
-                        "plan vs actual_agg for tid",
-                        {
-                            "task_id": str(tid).strip(),
-                            "_no_tid_filter": True,
-                            "machine_key": _k_mk,
-                            "day": _k_dt.isoformat()
-                            if hasattr(_k_dt, "isoformat")
-                            else str(_k_dt),
-                            "tid": tid,
-                            "plan_m": pq,
-                            "actual_agg_m": aq,
-                            "isclose": math.isclose(
-                                pq, aq, rel_tol=1e-9, abs_tol=1e-2
-                            ),
-                        },
-                    )
-            except Exception:
-                pass
-            # #endregion
         if pieces:
             notes[key] = "【実績不一致】" + " ".join(pieces)
     nm = len(notes)
@@ -26667,9 +26698,13 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             gantt_tl_day_blocks,
             sheet_name=RESULT_SHEET_GANTT_COMPARE_NAME,
         )
+        _cmp_plan_sheet = (os.environ.get(ENV_COMPARE_GANTT_PLAN_TASKS_SHEET, "") or "").strip()
+        if not _cmp_plan_sheet:
+            _cmp_plan_sheet = TASKS_SHEET_NAME
         logging.info(
-            "計画実績比較ガント: %s を出力しました（アラジン入力数量行の参照元＝加工計画DATA の日付_加工数量列）。",
+            "計画実績比較ガント: %s を出力しました（アラジン入力数量行の参照元＝%s の日付_加工数量列）。",
             os.path.basename(out_path),
+            _cmp_plan_sheet,
         )
         return os.path.abspath(out_path)
 
@@ -27921,6 +27956,9 @@ def _generate_plan_impl(
                                     team_start,
                                     team_end_limit,
                                     eod_same_request_continuation_exempt=_eod_cont_exempt_il,
+                                    remaining_units_ceil=math.ceil(
+                                        float(task.get("remaining_units") or 0)
+                                    ),
                                 ):
                                     continue
                                 work_mins_needed = int(units_today * eff_time_per_unit)
@@ -28658,6 +28696,31 @@ def _generate_plan_impl(
             if ed > w[1]:
                 w[1] = ed
 
+    # 結果_タスク一覧の工程行ごとの窓（timeline の machine＝eq_line 単位）。依頼NOのみ集約した plan_window_by_task_id とは別。
+    plan_window_by_task_line: dict[tuple[str, str], list] = {}
+    for _ev in timeline_events:
+        if not _is_machining_timeline_event(_ev):
+            continue
+        _tid_ev = str(_ev.get("task_id") or "").strip()
+        if not _tid_ev:
+            continue
+        _mch_ev = str(_ev.get("machine") or "").strip()
+        if not _mch_ev:
+            continue
+        sd = _ev.get("start_dt")
+        ed = _ev.get("end_dt")
+        if sd is None or ed is None:
+            continue
+        _k2 = (_tid_ev, _mch_ev)
+        if _k2 not in plan_window_by_task_line:
+            plan_window_by_task_line[_k2] = [sd, ed]
+        else:
+            w2 = plan_window_by_task_line[_k2]
+            if sd < w2[0]:
+                w2[0] = sd
+            if ed > w2[1]:
+                w2[1] = ed
+
     # 結果_タスク一覧の「回答納期」「指定納期」は配台計画_タスク入力の当該行セルのみ。
     # 「原反投入日」は上書き列に日付があるときはその値、ないときは列「原反投入日」（計画基準納期と混同しない）
     _result_sheet_answer_spec_by_line = {}
@@ -28713,25 +28776,6 @@ def _generate_plan_impl(
             and "納期見直し必須" not in status
         ):
             status = f"{status}（納期見直し必須）"
-        # region agent log
-        if _tid_res in _AGENT_DEBUG_WATCH_TIDS:
-            _agent_debug_ndjson(
-                "H0_RESULT_ROW",
-                "_generate_plan_impl:task_results",
-                "final_task_result_status",
-                {
-                    "task_id": _tid_res,
-                    "status": status,
-                    "rem_u": rem_u,
-                    "had_assigned_history": hist,
-                    "machine": t.get("machine"),
-                    "machine_name": t.get("machine_name"),
-                    "roll_pipeline_ec": bool(t.get("roll_pipeline_ec")),
-                    "dispatch_trial_order": t.get("dispatch_trial_order"),
-                    "start_date_req": str(t.get("start_date_req") or ""),
-                },
-            )
-        # endregion
 
         total_r = int(t['total_qty_m'] / t['unit_m']) if t['unit_m'] else 0
 
@@ -28824,9 +28868,22 @@ def _generate_plan_impl(
         else:
             _rem_qty_out = max(0.0, float(rem_u) * float(t.get("unit_m") or 0))
 
-        _pw = plan_window_by_task_id.get(t["task_id"])
-        if _pw:
-            _ps, _pe = _pw[0], _pw[1]
+        # 配台済_加工開始/終了: 設備時間割と同じく工程（eq_line）単位。納期判定は依頼全体の最終終了（従来の task_id 集約）。
+        _eq_line_key = (
+            str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+            or str(t.get("machine") or "").strip()
+        )
+        _pw_line = (
+            plan_window_by_task_line.get((_tid_res, _eq_line_key))
+            if _eq_line_key
+            else None
+        )
+        _pw_agg = plan_window_by_task_id.get(t.get("task_id"))
+        if _pw_agg is None and _tid_res:
+            _pw_agg = plan_window_by_task_id.get(_tid_res)
+        _pw_disp = _pw_line or _pw_agg
+        if _pw_disp:
+            _ps, _pe = _pw_disp[0], _pw_disp[1]
             plan_assign_start_s = (
                 _ps.strftime("%Y/%m/%d %H:%M") if hasattr(_ps, "strftime") else ""
             )
@@ -28838,7 +28895,7 @@ def _generate_plan_impl(
             plan_assign_end_s = ""
 
         _plan_end_ans_spec16 = _result_task_plan_end_within_answer_or_spec_16_label(
-            _pw, _ans_d, _spec_d, t.get("task_id")
+            _pw_agg, _ans_d, _spec_d, t.get("task_id")
         )
 
         row_tail = {
@@ -28865,7 +28922,7 @@ def _generate_plan_impl(
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
         task_results.append(row_data)
-        
+
     cal_rows = []
     for d in sorted_dates:
         for m in members:
@@ -28994,6 +29051,22 @@ def _generate_plan_impl(
             "段階2(試行順パターン別バッチ): 設備ガント（計画・加工実績明細）の生成を省略します。"
         )
     else:
+        # 実績明細ガントのメタ・時間軸: 計画ブックは「加工計画DATA_実績比較用」を優先（無ければ段階2本体と同じ基準）
+        base_now_dt_act_gantt = base_now_dt
+        data_extract_dt_str_act_gantt = data_extract_dt_str
+        _dt_act_plan, _ = _extract_data_extraction_datetime_for_actual_related_gantt()
+        if _dt_act_plan is not None:
+            _orig_act = _dt_act_plan
+            base_now_dt_act_gantt = _dt_act_plan
+            if (
+                not STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK
+                and isinstance(base_now_dt_act_gantt, datetime)
+            ):
+                base_now_dt_act_gantt = datetime.combine(
+                    base_now_dt_act_gantt.date(), DEFAULT_START_TIME
+                )
+            data_extract_dt_str_act_gantt = _orig_act.strftime("%Y/%m/%d %H:%M:%S")
+
         df_actual_detail = load_machining_actual_detail_df()
         if df_actual_detail is not None and len(df_actual_detail) > 0:
             sorted_dates_detail = _sorted_dates_union_actual_bounds_df(
@@ -29029,6 +29102,33 @@ def _generate_plan_impl(
                     chart_title_actual_detail = (
                         f"{chart_title_actual_detail}（表示 {rng_lo}～{rng_hi}）"
                     )
+
+            def _first_valid_dt_from_df_col_stage2_act(_df, _col) -> datetime | None:
+                try:
+                    if _df is None or _col not in _df.columns:
+                        return None
+                    for _v in _df[_col].tolist():
+                        if _v is None or (isinstance(_v, float) and pd.isna(_v)):
+                            continue
+                        _dt = pd.to_datetime(_v, errors="coerce")
+                        if pd.isna(_dt):
+                            continue
+                        if isinstance(_dt, pd.Timestamp):
+                            return _dt.to_pydatetime()
+                        return _dt if isinstance(_dt, datetime) else None
+                except Exception:
+                    return None
+                return None
+
+            detail_extract_dt = _first_valid_dt_from_df_col_stage2_act(
+                df_actual_detail, TASK_COL_DATA_EXTRACTION_TIME
+            )
+            if detail_extract_dt is not None:
+                base_now_dt_act_gantt = detail_extract_dt
+                data_extract_dt_str_act_gantt = detail_extract_dt.strftime(
+                    "%Y/%m/%d %H:%M:%S"
+                )
+
             detail_timeline_events = build_actual_timeline_events(
                 df_actual_detail,
                 equipment_list,
@@ -29111,8 +29211,8 @@ def _generate_plan_impl(
                     equipment_list,
                     sorted_dates_detail,
                     attendance_data,
-                    data_extract_dt_str,
-                    base_now_dt,
+                    data_extract_dt_str_act_gantt,
+                    base_now_dt_act_gantt,
                     actual_timeline_events=detail_timeline_events,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
                     plan_rows=False,

@@ -2,6 +2,9 @@ Option Explicit
 
 ' Python planning_core.ENV_COMPARE_GANTT_SNAPSHOT_DIR と同じキー
 Private Const ENV_COMPARE_GANTT_SNAPSHOT_DIR As String = "COMPARE_GANTT_SNAPSHOT_DIR"
+' 計画実績比較ガントのアラジン参照のみ TASKS_SHEET 相当を上書き（段階1の加工計画DATAは変更しない）
+Private Const ENV_COMPARE_GANTT_PLAN_TASKS_SHEET As String = "COMPARE_GANTT_PLAN_TASKS_SHEET"
+Private Const SHEET_PLAN_DATA_FOR_COMPARE_GANTT As String = "加工計画DATA_実績比較用"
 ' スナップショットに同一機械の時間重なりがあっても比較ガントを生成する（Python 側で警告のみ）
 Private Const ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP As String = "COMPARE_GANTT_ALLOW_PLAN_OVERLAP"
 Private Const SHEET_SETTINGS As String = "設定"
@@ -611,6 +614,7 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
     Set wsh = CreateObject("WScript.Shell")
     wsh.Environment("Process")("TASK_INPUT_WORKBOOK") = ThisWorkbook.FullName
     wsh.Environment("Process")(ENV_COMPARE_GANTT_SNAPSHOT_DIR) = snap
+    wsh.Environment("Process")(ENV_COMPARE_GANTT_PLAN_TASKS_SHEET) = SHEET_PLAN_DATA_FOR_COMPARE_GANTT
     wsh.Environment("Process")(ENV_COMPARE_GANTT_ALLOW_PLAN_OVERLAP) = "1"
     
     On Error Resume Next
@@ -689,6 +693,11 @@ RunEH:
     AppMsgBox "エラー: " & Err.Number & " / " & Err.Description, vbCritical, "計画実績比較ガント"
     Resume DoneProtect
 DoneProtect:
+    On Error Resume Next
+    If Not wsh Is Nothing Then
+        wsh.Environment("Process").Remove ENV_COMPARE_GANTT_PLAN_TASKS_SHEET
+    End If
+    On Error GoTo 0
     On Error Resume Next
     If stUnlock Then
         配台マクロ_対象シートを条件どおりに保護 targetDir
