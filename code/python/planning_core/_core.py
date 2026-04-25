@@ -21982,7 +21982,12 @@ def build_result_dispatch_table_dataframe(
 
 
 def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> None:
-    """結果_配台表シートに ListObject 相当の Table を付与する。"""
+    """
+    結果_配台表シートの Excel テーブルを更新する。
+
+    重要: 参照シートがテーブル名を参照しているため、**新規作成はしない**。
+    既存テーブル（displayName一致）を見つけた場合のみ ref を更新する。
+    """
     try:
         from openpyxl.worksheet.table import Table, TableStyleInfo
     except Exception:
@@ -21996,21 +22001,43 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
     end_l = get_column_letter(ncols)
     ref = f"A1:{end_l}{nrows}"
     try:
-        ws.tables.clear()
-    except Exception:
-        pass
-    try:
-        tab = Table(displayName=str(table_display_name), ref=ref)
-        tab.tableStyleInfo = TableStyleInfo(
-            name="TableStyleMedium9",
-            showFirstColumn=False,
-            showLastColumn=False,
-            showRowStripes=True,
-            showColumnStripes=False,
+        existing = None
+        # openpyxl TableList: dict-like
+        if hasattr(ws, "tables") and ws.tables:
+            existing = ws.tables.get(str(table_display_name))
+        _dbg_ac7f20_log(
+            hypothesis_id="H5",
+            location="_core.py:_apply_result_dispatch_table_excel_table",
+            message="結果_配台表: 既存テーブル有無を確認",
+            data={
+                "sheet": getattr(ws, "title", ""),
+                "want_name": str(table_display_name),
+                "table_keys": list(ws.tables.keys()) if hasattr(ws, "tables") else [],
+                "found": bool(existing),
+                "new_ref": ref,
+            },
         )
-        ws.add_table(tab)
+        if not existing:
+            # 新規作成しない（#REF 回避）
+            logging.warning(
+                "結果_配台表: テーブル '%s' が見つからないため新規作成は行いません（参照維持のため）。",
+                table_display_name,
+            )
+            return
+        # 既存テーブルの範囲だけ更新
+        try:
+            existing.ref = ref
+        except Exception:
+            # TableList の値が Table でない/互換性問題の保険
+            ws.tables[str(table_display_name)].ref = ref
+        _dbg_ac7f20_log(
+            hypothesis_id="H5",
+            location="_core.py:_apply_result_dispatch_table_excel_table",
+            message="結果_配台表: 既存テーブルのrefを更新",
+            data={"name": str(table_display_name), "ref": ref},
+        )
     except Exception as e:
-        logging.warning("結果_配台表: Excel テーブル付与をスキップしました: %s", e)
+        logging.warning("結果_配台表: Excel テーブル更新をスキップしました: %s", e)
 
 
 # #region agent log (debug-ac7f20)
