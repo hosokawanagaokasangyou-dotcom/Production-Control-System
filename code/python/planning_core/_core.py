@@ -21695,33 +21695,21 @@ def _build_plan_input_row_lookup_for_dispatch_table(tasks_df) -> dict[tuple[str,
     return out
 
 
-def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, str], object]:
-    """(依頼NO, 工程名, 受注日) → 加工計画DATA DataFrame の行（Series）。受注日が取れない行は空キーに入る。"""
-    out: dict[tuple[str, str, str], object] = {}
+def _build_source_task_row_lookups_for_dispatch_table(df_src):
+    """
+    加工計画DATA の索引を2系統作る。
+    - idx3: (依頼NO, 工程名, 受注日) → row（最優先）
+    - idx2: (依頼NO, 工程名) → row または list[row]（受注日が tasks_df に無い場合のフォールバック）
+    """
+    idx3: dict[tuple[str, str, str], object] = {}
+    idx2: dict[tuple[str, str], object] = {}
     if df_src is None or getattr(df_src, "empty", True):
-        return out
-    dup = 0
+        return idx3, idx2
+    dup3 = 0
     miss_order_date = 0
 
     def _norm_order_date(v) -> str:
-        if v is None or (isinstance(v, float) and pd.isna(v)):
-            return ""
-        if isinstance(v, datetime):
-            return v.date().strftime("%Y/%m/%d")
-        if isinstance(v, date):
-            return v.strftime("%Y/%m/%d")
-        s = str(v).strip()
-        if not s:
-            return ""
-        try:
-            ts = pd.to_datetime(s, errors="coerce")
-            if pd.isna(ts):
-                return s
-            if isinstance(ts, pd.Timestamp):
-                return ts.to_pydatetime().date().strftime("%Y/%m/%d")
-        except Exception:
-            pass
-        return s
+        return _norm_ymd(v)
 
     try:
         for _, row in df_src.iterrows():
@@ -21737,14 +21725,42 @@ def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, 
                 od = ""
             if not od:
                 miss_order_date += 1
-            k = (tid, mach, od)
-            if k in out:
-                dup += 1
-                continue
-            out[k] = row
+            k3 = (tid, mach, od)
+            if k3 in idx3:
+                dup3 += 1
+            else:
+                idx3[k3] = row
+
+            k2 = (tid, mach)
+            if k2 not in idx2:
+                idx2[k2] = row
+            else:
+                cur = idx2[k2]
+                if isinstance(cur, list):
+                    cur.append(row)
+                else:
+                    idx2[k2] = [cur, row]
     except Exception:
-        return out
-    return out
+        return idx3, idx2
+
+    try:
+        multi2 = sum(1 for v in idx2.values() if isinstance(v, list))
+        _dbg_ac7f20_log(
+            "H1",
+            "_core.py:_build_source_task_row_lookups_for_dispatch_table",
+            "加工計画DATA索引の統計",
+            {
+                "rows": int(len(df_src)),
+                "idx3_keys": len(idx3),
+                "idx2_keys": len(idx2),
+                "idx2_multi_keys": int(multi2),
+                "idx3_dup_count": int(dup3),
+                "src_missing_order_date_rows": int(miss_order_date),
+            },
+        )
+    except Exception:
+        pass
+    return idx3, idx2
 
 
 def _dispatch_table_cell_from_sources(
@@ -21860,7 +21876,7 @@ def build_result_dispatch_table_dataframe(
     if not agg:
         return pd.DataFrame(columns=cols)
     plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
-    src_lookup = _build_source_task_row_lookup_for_dispatch_table(df_src)
+    src_lookup3, src_lookup2 = _build_source_task_row_lookups_for_dispatch_table(df_src)
     rows: list[dict] = []
     for (tid_k, eq_k, day_k), qty_sum in sorted(agg.items()):
         t = _resolve_task_dict_for_timeline_line(tid_k, eq_k, sorted_tasks_for_result)
@@ -21882,13 +21898,44 @@ def build_result_dispatch_table_dataframe(
                     od_key = ts.to_pydatetime().date().strftime("%Y/%m/%d")
             except Exception:
                 pass
-        src_row = (
-            src_lookup.get((tid_k, proc, od_key))
-            if (tid_k and proc)
-            else None
-        )
-        if src_row is None and tid_k and proc:
-            src_row = src_lookup.get((tid_k, proc, ""))
+        src_row = None
+        if tid_k and proc:
+            if od_key:
+                src_row = src_lookup3.get((tid_k, proc, od_key))
+            if src_row is None:
+                cand = src_lookup2.get((tid_k, proc))
+                if isinstance(cand, list):
+                    # 複数候補: 受注日が最小（古い）を暫定採用（必要なら別基準へ）
+                    best = None
+                    best_od = ""
+                    for r0 in cand:
+                        od0 = ""
+                        try:
+                            if hasattr(r0, "index") and "受注日" in r0.index:
+                                od0 = _norm_ymd(_planning_df_cell_scalar(r0, "受注日"))
+                        except Exception:
+                            od0 = ""
+                        if best is None:
+                            best, best_od = r0, od0
+                        else:
+                            if od0 and (not best_od or od0 < best_od):
+                                best, best_od = r0, od0
+                    src_row = best
+                    _dbg_ac7f20_log(
+                        "H1",
+                        "_core.py:build_result_dispatch_table_dataframe",
+                        "加工計画DATAフォールバック: (依頼NO,工程名)で複数候補→暫定採用",
+                        {"task_id": tid_k, "process": proc, "candidates": len(cand), "picked_order_date": best_od},
+                    )
+                else:
+                    src_row = cand
+                    if od_key:
+                        _dbg_ac7f20_log(
+                            "H1",
+                            "_core.py:build_result_dispatch_table_dataframe",
+                            "加工計画DATAフォールバック: 受注日キー不一致→(依頼NO,工程名)へ",
+                            {"task_id": tid_k, "process": proc, "order_date_key": od_key},
+                        )
         r: dict = {}
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
             r[h] = _dispatch_table_cell_from_sources(
