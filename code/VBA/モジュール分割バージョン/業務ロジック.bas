@@ -8,7 +8,7 @@ Option Explicit
 Private Const SHEET_RESULT_DISPATCH_TABLE As String = "結果_配台表"
 Private Const TABLE_RESULT_DISPATCH_TABLE As String = "_t結果_配台表"
 
-Private Function _LastUsedCellRect(ByVal ws As Worksheet) As Range
+Private Function LastUsedCellRect(ByVal ws As Worksheet) As Range
     Dim lastCell As Range
     If ws Is Nothing Then Exit Function
     On Error Resume Next
@@ -16,7 +16,7 @@ Private Function _LastUsedCellRect(ByVal ws As Worksheet) As Range
                                  SearchOrder:=xlByRows, SearchDirection:=xlPrevious, MatchCase:=False)
     On Error GoTo 0
     If lastCell Is Nothing Then Exit Function
-    Set _LastUsedCellRect = ws.Range(ws.Cells(1, 1), lastCell)
+    Set LastUsedCellRect = ws.Range(ws.Cells(1, 1), lastCell)
 End Function
 
 Private Sub ImportResultDispatchTable_OverwriteExistingTable(ByVal sourceWs As Worksheet, ByVal targetWb As Workbook)
@@ -32,7 +32,7 @@ Private Sub ImportResultDispatchTable_OverwriteExistingTable(ByVal sourceWs As W
     If sourceWs Is Nothing Then Exit Sub
     If targetWb Is Nothing Then Exit Sub
     
-    Set srcRect = _LastUsedCellRect(sourceWs)
+    Set srcRect = LastUsedCellRect(sourceWs)
     If srcRect Is Nothing Then Exit Sub
     srcRows = srcRect.Rows.Count
     srcCols = srcRect.Columns.Count
