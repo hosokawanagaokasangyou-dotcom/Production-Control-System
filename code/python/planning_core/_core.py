@@ -1323,6 +1323,34 @@ RESULT_TASK_SHEET_NAME = "結果_タスク一覧"
 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME = "結果_設備毎の時間割"
 # 工程名+機械の複合列ではなく、機械名単位で各枠の依頼NOを把握しやすくする
 RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名毎"
+# 日別の配台数量（加工計画DATA 由来列＋配台日・当日配台数量）。Excel テーブル名は RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME。
+RESULT_DISPATCH_TABLE_SHEET_NAME = "結果_配台表"
+RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME = "_t結果_配台表"
+# 結果_配台表の左側列（加工計画DATA に対応する想定の見出し。無い列は空）。工程名の次に機械名を置く。
+RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
+    "工程名",
+    "機械名",
+    "受注日",
+    "受注NO",
+    "依頼NO",
+    "品名(原反)",
+    "使用原反",
+    "原反数",
+    "品名(製品)",
+    "製品名",
+    "換算数量",
+    "実加工数",
+    "加工内容",
+    "在庫場所",
+    "原反投入日",
+    "指定納期",
+    "回答納期",
+    "加工完了日",
+    "加工完了区分",
+    "実出来高",
+    "計画合計",
+    "原反投入場所",
+)
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
@@ -21584,6 +21612,232 @@ def _is_machining_timeline_event(ev: dict) -> bool:
     return _timeline_event_kind(ev) == TIMELINE_EVENT_MACHINING
 
 
+def _timeline_event_calendar_date(ev: dict) -> date | None:
+    """加工タイムラインイベントの暦日（配台表の行キー）。"""
+    d = ev.get("date")
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, date):
+        return d
+    st = ev.get("start_dt")
+    if isinstance(st, datetime):
+        return st.date()
+    if isinstance(st, date):
+        return st
+    return None
+
+
+def _dispatch_table_event_qty_m(ev: dict) -> float:
+    """イベント当たりの配台量（メートル）。unit_m が無いときは units_done のみ。"""
+    try:
+        ud = float(parse_float_safe(ev.get("units_done"), 0.0) or 0.0)
+        um = float(parse_float_safe(ev.get("unit_m"), 0.0) or 0.0)
+    except Exception:
+        return 0.0
+    if um > 1e-18:
+        return float(ud * um)
+    return float(ud)
+
+
+def _resolve_task_dict_for_timeline_line(
+    tid: str, ev_machine_line: str, sorted_tasks_for_result: list | None
+) -> dict | None:
+    """timeline の machine（設備ライン）から task_queue 行を解決する。"""
+    tid_s = str(tid or "").strip()
+    em = str(ev_machine_line or "").strip()
+    if not tid_s or not em or not sorted_tasks_for_result:
+        return None
+    cands: list[dict] = []
+    for t in sorted_tasks_for_result:
+        if str(t.get("task_id") or "").strip() != tid_s:
+            continue
+        ek = str(t.get("equipment_line_key") or "").strip()
+        if ek and ek == em:
+            cands.append(t)
+    if len(cands) == 1:
+        return cands[0]
+    if len(cands) > 1:
+        return cands[0]
+    for t in sorted_tasks_for_result:
+        if str(t.get("task_id") or "").strip() != tid_s:
+            continue
+        m_proc = str(t.get("machine") or "").strip()
+        m_name = str(t.get("machine_name") or "").strip()
+        if m_proc and m_proc in em and (not m_name or m_name in em):
+            return t
+    for t in sorted_tasks_for_result:
+        if str(t.get("task_id") or "").strip() != tid_s:
+            continue
+        ek = str(t.get("equipment_line_key") or "").strip() or str(t.get("machine") or "").strip()
+        if ek == em:
+            return t
+    return None
+
+
+def _build_plan_input_row_lookup_for_dispatch_table(tasks_df) -> dict[tuple[str, str], object]:
+    """(依頼NO, 工程名) → 計画入力 DataFrame の行（Series）。"""
+    out: dict[tuple[str, str], object] = {}
+    if tasks_df is None or getattr(tasks_df, "empty", True):
+        return out
+    try:
+        for _, row in tasks_df.iterrows():
+            try:
+                if _plan_row_exclude_from_assignment(row):
+                    continue
+            except Exception:
+                continue
+            tid = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
+            mach = str(_planning_df_cell_scalar(row, TASK_COL_MACHINE) or "").strip()
+            if tid and mach:
+                out[(tid, mach)] = row
+    except Exception:
+        return out
+    return out
+
+
+def _dispatch_table_cell_from_plan_or_task(plan_row, task_dict: dict | None, col_name: str):
+    """結果_配台表の静的列: 計画入力行を優先し、無ければ task_queue 由来で補完。"""
+    if plan_row is not None:
+        try:
+            if hasattr(plan_row, "index") and col_name in plan_row.index:
+                v = _planning_df_cell_scalar(plan_row, col_name)
+                if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    if str(v).strip() != "":
+                        return v
+        except Exception:
+            pass
+    t = task_dict
+    if not t:
+        return ""
+    if col_name == TASK_COL_TASK_ID:
+        return t.get("task_id") or ""
+    if col_name == TASK_COL_MACHINE:
+        return t.get("machine") or ""
+    if col_name == TASK_COL_MACHINE_NAME:
+        return t.get("machine_name") or ""
+    if col_name == TASK_COL_QTY:
+        um = float(t.get("unit_m") or 0)
+        tqm = t.get("total_qty_m")
+        if um > 1e-18 and tqm is not None:
+            try:
+                return float(tqm) / um
+            except Exception:
+                pass
+        return t.get(TASK_COL_QTY) or ""
+    if col_name == TASK_COL_USED_RAW:
+        return t.get(TASK_COL_USED_RAW) or ""
+    if col_name == TASK_COL_PRODUCT:
+        return t.get(TASK_COL_PRODUCT) or ""
+    if col_name == TASK_COL_PROCESS_CONTENT:
+        return t.get(TASK_COL_PROCESS_CONTENT) or ""
+    if col_name == TASK_COL_STOCK_LOCATION:
+        return t.get(TASK_COL_STOCK_LOCATION) or ""
+    if col_name == TASK_COL_RAW_INPUT_DATE:
+        rid = t.get("raw_input_date")
+        if rid is not None and hasattr(rid, "strftime"):
+            return rid.strftime("%Y/%m/%d")
+        return rid or ""
+    if col_name == TASK_COL_ANSWER_DUE:
+        ad = t.get("answer_due_date")
+        if ad is not None and hasattr(ad, "strftime"):
+            return ad.strftime("%Y/%m/%d")
+        return ad or ""
+    if col_name == TASK_COL_SPECIFIED_DUE:
+        sd = t.get("specified_due_date")
+        if sd is not None and hasattr(sd, "strftime"):
+            return sd.strftime("%Y/%m/%d")
+        return sd or ""
+    if col_name == TASK_COL_COMPLETION_FLAG:
+        return t.get(TASK_COL_COMPLETION_FLAG) or ""
+    if col_name == TASK_COL_ACTUAL_DONE:
+        return t.get(TASK_COL_ACTUAL_DONE) or ""
+    if col_name == TASK_COL_ACTUAL_OUTPUT:
+        return t.get(TASK_COL_ACTUAL_OUTPUT) or ""
+    return ""
+
+
+def build_result_dispatch_table_dataframe(
+    timeline_events: list | None,
+    sorted_tasks_for_result: list | None,
+    tasks_df,
+) -> pd.DataFrame:
+    """
+    結果_配台表用 DataFrame（1行＝1タスク行×1暦日の配台、当日の数量はメートル合計）。
+
+    timeline_events の加工イベントを (依頼NO, 設備ライン, 暦日) で集約し、
+    計画入力 tasks_df の同一 (依頼NO, 工程名) 行から静的列を埋める。
+    """
+    cols = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"]
+    if not timeline_events:
+        return pd.DataFrame(columns=cols)
+    agg: dict[tuple[str, str, date], float] = defaultdict(float)
+    for ev in timeline_events:
+        if not _is_machining_timeline_event(ev):
+            continue
+        tid = str(ev.get("task_id") or "").strip()
+        if not tid:
+            continue
+        eq = str(ev.get("machine") or "").strip()
+        if not eq:
+            continue
+        cd = _timeline_event_calendar_date(ev)
+        if cd is None:
+            continue
+        qty = _dispatch_table_event_qty_m(ev)
+        if qty <= 1e-18:
+            continue
+        agg[(tid, eq, cd)] += float(qty)
+    if not agg:
+        return pd.DataFrame(columns=cols)
+    plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
+    rows: list[dict] = []
+    for (tid_k, eq_k, day_k), qty_sum in sorted(agg.items()):
+        t = _resolve_task_dict_for_timeline_line(tid_k, eq_k, sorted_tasks_for_result)
+        proc = str(t.get("machine") or "").strip() if t else ""
+        plan_row = plan_lookup.get((tid_k, proc)) if (tid_k and proc) else None
+        r: dict = {}
+        for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
+            r[h] = _dispatch_table_cell_from_plan_or_task(plan_row, t, h)
+        if not str(r.get(TASK_COL_TASK_ID) or "").strip():
+            r[TASK_COL_TASK_ID] = tid_k
+        r["配台日"] = day_k
+        r["当日配台数量"] = float(qty_sum)
+        rows.append(r)
+    return pd.DataFrame(rows, columns=cols)
+
+
+def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> None:
+    """結果_配台表シートに ListObject 相当の Table を付与する。"""
+    try:
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+    except Exception:
+        return
+    if ws is None:
+        return
+    nrows = int(ws.max_row or 0)
+    ncols = int(ws.max_column or 0)
+    if nrows < 2 or ncols < 1:
+        return
+    end_l = get_column_letter(ncols)
+    ref = f"A1:{end_l}{nrows}"
+    try:
+        ws.tables.clear()
+    except Exception:
+        pass
+    try:
+        tab = Table(displayName=str(table_display_name), ref=ref)
+        tab.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium9",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        ws.add_table(tab)
+    except Exception as e:
+        logging.warning("結果_配台表: Excel テーブル付与をスキップしました: %s", e)
+
+
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
     if not isinstance(dt, datetime) or not breaks_merged:
@@ -29174,6 +29428,14 @@ def _generate_plan_impl(
                 }
             ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
             df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
+            df_dispatch = build_result_dispatch_table_dataframe(
+                timeline_events,
+                sorted_tasks_for_result,
+                tasks_df,
+            )
+            df_dispatch.to_excel(
+                writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
+            )
             pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
@@ -29305,6 +29567,12 @@ def _generate_plan_impl(
                 first_eq_schedule_cell_by_task_id,
                 RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
             )
+
+            if RESULT_DISPATCH_TABLE_SHEET_NAME in writer.sheets and len(df_dispatch) > 0:
+                _apply_result_dispatch_table_excel_table(
+                    writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME],
+                    table_display_name=RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME,
+                )
 
     except OSError as e:
         logging.error(
