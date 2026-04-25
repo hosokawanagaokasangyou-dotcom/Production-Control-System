@@ -21695,8 +21695,41 @@ def _build_plan_input_row_lookup_for_dispatch_table(tasks_df) -> dict[tuple[str,
     return out
 
 
-def _dispatch_table_cell_from_plan_or_task(plan_row, task_dict: dict | None, col_name: str):
-    """結果_配台表の静的列: 計画入力行を優先し、無ければ task_queue 由来で補完。"""
+def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, str], object]:
+    """(依頼NO, 工程名) → 加工計画DATA DataFrame の行（Series）。"""
+    out: dict[tuple[str, str], object] = {}
+    if df_src is None or getattr(df_src, "empty", True):
+        return out
+    try:
+        for _, row in df_src.iterrows():
+            tid = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
+            mach = str(_planning_df_cell_scalar(row, TASK_COL_MACHINE) or "").strip()
+            if tid and mach and (tid, mach) not in out:
+                out[(tid, mach)] = row
+    except Exception:
+        return out
+    return out
+
+
+def _dispatch_table_cell_from_sources(
+    *,
+    src_row,
+    plan_row,
+    task_dict: dict | None,
+    col_name: str,
+):
+    """結果_配台表の静的列: 加工計画DATA→計画入力→task_queue の順に補完。"""
+    # 1) 加工計画DATA
+    if src_row is not None:
+        try:
+            if hasattr(src_row, "index") and col_name in src_row.index:
+                v = _planning_df_cell_scalar(src_row, col_name)
+                if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    if str(v).strip() != "":
+                        return v
+        except Exception:
+            pass
+    # 2) 配台計画入力
     if plan_row is not None:
         try:
             if hasattr(plan_row, "index") and col_name in plan_row.index:
@@ -21760,6 +21793,7 @@ def build_result_dispatch_table_dataframe(
     timeline_events: list | None,
     sorted_tasks_for_result: list | None,
     tasks_df,
+    df_src,
 ) -> pd.DataFrame:
     """
     結果_配台表用 DataFrame（1行＝1タスク行×1暦日の配台、当日の数量はメートル合計）。
@@ -21790,16 +21824,25 @@ def build_result_dispatch_table_dataframe(
     if not agg:
         return pd.DataFrame(columns=cols)
     plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
+    src_lookup = _build_source_task_row_lookup_for_dispatch_table(df_src)
     rows: list[dict] = []
     for (tid_k, eq_k, day_k), qty_sum in sorted(agg.items()):
         t = _resolve_task_dict_for_timeline_line(tid_k, eq_k, sorted_tasks_for_result)
         proc = str(t.get("machine") or "").strip() if t else ""
         plan_row = plan_lookup.get((tid_k, proc)) if (tid_k and proc) else None
+        src_row = src_lookup.get((tid_k, proc)) if (tid_k and proc) else None
         r: dict = {}
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
-            r[h] = _dispatch_table_cell_from_plan_or_task(plan_row, t, h)
+            r[h] = _dispatch_table_cell_from_sources(
+                src_row=src_row, plan_row=plan_row, task_dict=t, col_name=h
+            )
         if not str(r.get(TASK_COL_TASK_ID) or "").strip():
             r[TASK_COL_TASK_ID] = tid_k
+        # 工程名・機械名は timeline/task_queue 由来が最も確実なので最後に補完
+        if not str(r.get(TASK_COL_MACHINE) or "").strip() and proc:
+            r[TASK_COL_MACHINE] = proc
+        if not str(r.get(TASK_COL_MACHINE_NAME) or "").strip():
+            r[TASK_COL_MACHINE_NAME] = (t.get("machine_name") if t else "") or ""
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
         rows.append(r)
@@ -29428,10 +29471,17 @@ def _generate_plan_impl(
                 }
             ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
             df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
+            # 結果_配台表: 空欄補完のため加工計画DATA（元データ）も参照する
+            try:
+                df_src_for_dispatch = load_tasks_df()
+            except Exception as e:
+                logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
+                df_src_for_dispatch = None
             df_dispatch = build_result_dispatch_table_dataframe(
                 timeline_events,
                 sorted_tasks_for_result,
                 tasks_df,
+                df_src_for_dispatch,
             )
             df_dispatch.to_excel(
                 writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
