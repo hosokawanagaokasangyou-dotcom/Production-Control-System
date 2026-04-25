@@ -21948,6 +21948,56 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
         logging.warning("結果_配台表: Excel テーブル更新をスキップしました: %s", e)
 
 
+def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir: str) -> str | None:
+    """
+    マクロ実行ブックと同一フォルダに「結果_配台表.xlsx」を出力する（PowerQuery 参照用）。
+    - シート名: 結果_配台表
+    - テーブル名: _t結果_配台表（新規作成で OK。参照元は別ブックを読むため #REF にならない）
+    """
+    try:
+        if df_dispatch is None or getattr(df_dispatch, "empty", True):
+            return None
+        if not target_dir or not os.path.isdir(target_dir):
+            return None
+        out_path = os.path.join(target_dir, "結果_配台表.xlsx")
+        # 既存ファイルを上書き（開いていると失敗する）
+        try:
+            if os.path.isfile(out_path):
+                os.remove(out_path)
+        except Exception:
+            pass
+        with pd.ExcelWriter(out_path, engine="openpyxl") as w:
+            df_dispatch.to_excel(w, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False)
+            ws = w.sheets.get(RESULT_DISPATCH_TABLE_SHEET_NAME)
+            if ws is not None:
+                # 別ブックなので新規テーブル作成で問題なし
+                try:
+                    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+                    nrows = int(ws.max_row or 0)
+                    ncols = int(ws.max_column or 0)
+                    if nrows >= 2 and ncols >= 1:
+                        end_l = get_column_letter(ncols)
+                        ref = f"A1:{end_l}{nrows}"
+                        tab = Table(
+                            displayName=str(RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME), ref=ref
+                        )
+                        tab.tableStyleInfo = TableStyleInfo(
+                            name="TableStyleMedium9",
+                            showFirstColumn=False,
+                            showLastColumn=False,
+                            showRowStripes=True,
+                            showColumnStripes=False,
+                        )
+                        ws.add_table(tab)
+                except Exception as e:
+                    logging.warning("結果_配台表.xlsx: テーブル付与をスキップしました: %s", e)
+        return out_path
+    except Exception as e:
+        logging.warning("結果_配台表.xlsx: 出力に失敗しました: %s", e)
+        return None
+
+
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
     if not isinstance(dt, datetime) or not breaks_merged:
@@ -29724,6 +29774,18 @@ def _generate_plan_impl(
         )
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
+
+    # ---------------------------------------------------------
+    # 追加出力: PowerQuery 参照用の「結果_配台表.xlsx」（マクロ実行ブックと同一フォルダへ固定名）
+    # ---------------------------------------------------------
+    try:
+        _wb_path = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
+        _out_dir = os.path.dirname(_wb_path) if _wb_path else ""
+        _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)
+        if _wrote:
+            logging.info("段階2: PowerQuery 用に '%s' を出力しました。", _wrote)
+    except Exception as e:
+        logging.warning("段階2: 結果_配台表.xlsx の出力をスキップしました: %s", e)
 
     # =========================================================
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
