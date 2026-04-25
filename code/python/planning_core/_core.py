@@ -14755,6 +14755,31 @@ def run_stage1_extract():
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
     """
+    # region agent log (perf)
+    def _agent_dbg_log(hypothesis_id: str, message: str, data: dict | None = None) -> None:
+        # NDJSON append. Keep tiny; never raise.
+        try:
+            import json
+            import time as _time
+            p = os.path.join(os.path.dirname(__file__), "..", "..", "debug-e69e6f.log")
+            payload = {
+                "sessionId": "e69e6f",
+                "runId": "stage1-pre",
+                "hypothesisId": hypothesis_id,
+                "location": "planning_core/_core.py:run_stage1_extract",
+                "message": message,
+                "data": data or {},
+                "timestamp": int(_time.time() * 1000),
+            }
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except Exception:
+            return
+
+    import time as _time
+    _t0 = _time.perf_counter()
+    _agent_dbg_log("H0", "stage1_enter", {"tasks_input_workbook": str(TASKS_INPUT_WORKBOOK or "")})
+    # endregion agent log (perf)
     if not TASKS_INPUT_WORKBOOK:
         logging.error("TASK_INPUT_WORKBOOK は未設定です。")
         return False
@@ -14762,22 +14787,40 @@ def run_stage1_extract():
         logging.error(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
         return False
     reset_gemini_usage_tracker()
+    # region agent log (perf)
+    _t = _time.perf_counter()
     df_src = load_tasks_df()
+    _agent_dbg_log("H1", "load_tasks_df_done", {"ms": int((_time.perf_counter() - _t) * 1000), "rows": int(getattr(df_src, "shape", [0])[0] or 0)})
+    _t = _time.perf_counter()
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()
     pl_table = _load_product_length_mm_table()
     pt_table = _load_product_thickness_mm_table()
+    _agent_dbg_log("H2", "mm_tables_loaded", {"ms": int((_time.perf_counter() - _t) * 1000), "rw": len(rw_table or {}), "pw": len(pw_table or {}), "pl": len(pl_table or {}), "pt": len(pt_table or {})})
+    # endregion agent log (perf)
     records = []
+    # region agent log (perf)
+    _t_loop = _time.perf_counter()
+    _iter_total = 0
+    _iter_kept = 0
+    _iter_skipped_qty = 0
+    _iter_skipped_keyword = 0
+    _iter_skipped_completed_rule = 0
+    # endregion agent log (perf)
     for _, row in df_src.iterrows():
+        _iter_total += 1
         if row_has_completion_keyword(row):
+            _iter_skipped_keyword += 1
             continue
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
+            _iter_skipped_completed_rule += 1
             continue
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "")).strip()
         qty, _, _, _ = _plan_row_dispatch_qty_metrics(row)
         if qty <= 0 or not machine or not task_id:
+            _iter_skipped_qty += 1
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
@@ -14812,6 +14855,21 @@ def run_stage1_extract():
         rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
         rec[PLAN_COL_AI_PARSE] = ""
         records.append(rec)
+        _iter_kept += 1
+    # region agent log (perf)
+    _agent_dbg_log(
+        "H3",
+        "iterrows_done",
+        {
+            "ms": int((_time.perf_counter() - _t_loop) * 1000),
+            "iter_total": _iter_total,
+            "kept": _iter_kept,
+            "skipped_keyword": _iter_skipped_keyword,
+            "skipped_completed_rule": _iter_skipped_completed_rule,
+            "skipped_qty_or_missing": _iter_skipped_qty,
+        },
+    )
+    # endregion agent log (perf)
     if not records:
         logging.warning("段階1: 抽出対象タスクはありません。")
     order = plan_input_sheet_column_order()
@@ -14830,6 +14888,9 @@ def run_stage1_extract():
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
         ].astype(object)
     try:
+        # region agent log (perf)
+        _t = _time.perf_counter()
+        # endregion agent log (perf)
         (
             _skills_d_stage1,
             _members_stage1,
@@ -14839,6 +14900,18 @@ def run_stage1_extract():
             _surplus_map_stage1,
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
+        # region agent log (perf)
+        _agent_dbg_log(
+            "H4",
+            "load_skills_and_needs_done",
+            {
+                "ms": int((_time.perf_counter() - _t) * 1000),
+                "equipment": len(equipment_list_stage1 or []),
+                "need_rules": len(need_rules or []),
+                "req_map": len(req_map or {}),
+            },
+        )
+        # endregion agent log (perf)
     except PlanningValidationError:
         logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
@@ -14847,6 +14920,12 @@ def run_stage1_extract():
         req_map, need_rules = {}, []
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
+        # region agent log (perf)
+        _agent_dbg_log("H4", "load_skills_and_needs_fallback", {"error": str(e)[:200]})
+        # endregion agent log (perf)
+    # region agent log (perf)
+    _t = _time.perf_counter()
+    # endregion agent log (perf)
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
@@ -14854,23 +14933,41 @@ def run_stage1_extract():
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
+    # region agent log (perf)
+    _agent_dbg_log("H5", "merge_speed_heal_refresh_done", {"ms": int((_time.perf_counter() - _t) * 1000), "out_rows": int(getattr(out_df, "shape", [0])[0] or 0)})
+    # endregion agent log (perf)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
     # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
     try:
+        # region agent log (perf)
+        _t = _time.perf_counter()
+        # endregion agent log (perf)
         _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
         run_exclude_rules_sheet_maintenance(
             TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
         )
+        # region agent log (perf)
+        _agent_dbg_log("H6", "exclude_rules_sheet_maintenance_done", {"ms": int((_time.perf_counter() - _t) * 1000), "pairs": len(_pm_pairs_s1 or [])})
+        # endregion agent log (perf)
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     try:
+        # region agent log (perf)
+        _t = _time.perf_counter()
+        # endregion agent log (perf)
         out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
+        # region agent log (perf)
+        _agent_dbg_log("H7", "apply_exclude_rules_config_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
+        # endregion agent log (perf)
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台試行適用で例外（続行）: %s", ex)
     try:
+        # region agent log (perf)
+        _t = _time.perf_counter()
+        # endregion agent log (perf)
         _ext_dt_s1, _ = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
         fill_plan_dispatch_trial_order_column_stage1(
@@ -14881,14 +14978,24 @@ def run_stage1_extract():
             need_combo_col_index_stage1,
             equipment_list_stage1,
         )
+        # region agent log (perf)
+        _agent_dbg_log("H8", "fill_trial_order_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
+        # endregion agent log (perf)
     except Exception as ex:
         logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     _fill_plan_dispatch_remaining_qty_column(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
+    # region agent log (perf)
+    _t = _time.perf_counter()
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
+    _agent_dbg_log("H9", "to_excel_done", {"ms": int((_time.perf_counter() - _t) * 1000), "out_path": out_path})
+    _t = _time.perf_counter()
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
     _apply_plan_input_visual_format(out_path, "タスク一覧")
+    _agent_dbg_log("H9", "excel_post_format_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
+    _agent_dbg_log("H0", "stage1_exit", {"ms_total": int((_time.perf_counter() - _t0) * 1000)})
+    # endregion agent log (perf)
     logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に坖り込んでしてさい。")
     _try_write_main_sheet_gemini_usage_summary("段階1")
     return True
