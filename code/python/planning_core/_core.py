@@ -21700,14 +21700,27 @@ def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, 
     out: dict[tuple[str, str], object] = {}
     if df_src is None or getattr(df_src, "empty", True):
         return out
+    dup = 0
     try:
         for _, row in df_src.iterrows():
             tid = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
             mach = str(_planning_df_cell_scalar(row, TASK_COL_MACHINE) or "").strip()
-            if tid and mach and (tid, mach) not in out:
-                out[(tid, mach)] = row
+            if not tid or not mach:
+                continue
+            k = (tid, mach)
+            if k in out:
+                dup += 1
+                continue
+            out[k] = row
     except Exception:
         return out
+    if dup:
+        _dbg_ac7f20_log(
+            hypothesis_id="H1",
+            location="_core.py:_build_source_task_row_lookup_for_dispatch_table",
+            message="加工計画DATAの(依頼NO,工程名)キー重複を検出",
+            data={"duplicate_count": dup, "unique_keys": len(out), "rows": int(len(df_src))},
+        )
     return out
 
 
@@ -21804,6 +21817,17 @@ def build_result_dispatch_table_dataframe(
     cols = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"]
     if not timeline_events:
         return pd.DataFrame(columns=cols)
+    _dbg_ac7f20_log(
+        hypothesis_id="H3",
+        location="_core.py:build_result_dispatch_table_dataframe",
+        message="結果_配台表 生成開始",
+        data={
+            "timeline_events": len(timeline_events) if timeline_events is not None else 0,
+            "tasks_df_rows": 0 if tasks_df is None or getattr(tasks_df, "empty", True) else int(len(tasks_df)),
+            "src_rows": 0 if df_src is None or getattr(df_src, "empty", True) else int(len(df_src)),
+            "sorted_tasks_for_result": 0 if not sorted_tasks_for_result else int(len(sorted_tasks_for_result)),
+        },
+    )
     agg: dict[tuple[str, str, date], float] = defaultdict(float)
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
@@ -21823,6 +21847,12 @@ def build_result_dispatch_table_dataframe(
         agg[(tid, eq, cd)] += float(qty)
     if not agg:
         return pd.DataFrame(columns=cols)
+    _dbg_ac7f20_log(
+        hypothesis_id="H3",
+        location="_core.py:build_result_dispatch_table_dataframe",
+        message="結果_配台表 集約キー数",
+        data={"agg_keys": len(agg)},
+    )
     plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
     src_lookup = _build_source_task_row_lookup_for_dispatch_table(df_src)
     rows: list[dict] = []
@@ -21831,6 +21861,36 @@ def build_result_dispatch_table_dataframe(
         proc = str(t.get("machine") or "").strip() if t else ""
         plan_row = plan_lookup.get((tid_k, proc)) if (tid_k and proc) else None
         src_row = src_lookup.get((tid_k, proc)) if (tid_k and proc) else None
+        if tid_k and proc:
+            # 実加工数の誤紐づけ調査（キーが取れている行だけ）
+            try:
+                src_act = (
+                    _planning_df_cell_scalar(src_row, TASK_COL_ACTUAL_DONE)
+                    if src_row is not None
+                    else None
+                )
+                plan_act = (
+                    _planning_df_cell_scalar(plan_row, TASK_COL_ACTUAL_DONE)
+                    if plan_row is not None
+                    else None
+                )
+            except Exception:
+                src_act = None
+                plan_act = None
+            if src_act is not None or plan_act is not None:
+                _dbg_ac7f20_log(
+                    hypothesis_id="H2",
+                    location="_core.py:build_result_dispatch_table_dataframe",
+                    message="実加工数候補(加工計画DATA/配台計画入力)を比較",
+                    data={
+                        "task_id": tid_k,
+                        "process": proc,
+                        "eq_line": eq_k,
+                        "day": day_k.isoformat() if hasattr(day_k, "isoformat") else str(day_k),
+                        "src_actual_done": src_act,
+                        "plan_actual_done": plan_act,
+                    },
+                )
         r: dict = {}
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
             r[h] = _dispatch_table_cell_from_sources(
@@ -21879,6 +21939,29 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
         ws.add_table(tab)
     except Exception as e:
         logging.warning("結果_配台表: Excel テーブル付与をスキップしました: %s", e)
+
+
+# #region agent log (debug-ac7f20)
+def _dbg_ac7f20_log(*, hypothesis_id: str, location: str, message: str, data: dict | None = None, run_id: str = "pre-fix"):
+    """DEBUG MODE: write NDJSON to debug-ac7f20.log (no secrets)."""
+    try:
+        payload = {
+            "sessionId": "ac7f20",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        p = os.path.join(os.getcwd(), "debug-ac7f20.log")
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
 
 
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
