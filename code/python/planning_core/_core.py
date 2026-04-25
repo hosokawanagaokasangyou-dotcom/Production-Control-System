@@ -4155,6 +4155,128 @@ def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     return t
 
 
+ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,ロール単位の長さ.txt"
+ROLL_UNIT_LENGTH_TABLE_PATH_ENV = "ROLL_UNIT_LENGTH_TABLE_PATH"
+_ROLL_UNIT_LENGTH_TABLE_CACHE: dict[str, float] | None = None
+_ROLL_UNIT_LENGTH_TABLE_PATH_USED: str | None = None
+
+
+def _normalize_roll_unit_length_table_key(val) -> str:
+    """
+    ロール単位長さテーブルの照会キーを正規化する。
+    文字の互換（全角等）を寄せつつ、空白連続は 1 個に潰す（Excel 由来の表記ゆれ対策）。
+    """
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    s = unicodedata.normalize("NFKC", str(val).strip())
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+def _roll_unit_length_table_search_paths() -> list[str]:
+    """ロール単位長さテーブル CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(ROLL_UNIT_LENGTH_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME,
+            )
+        )
+    paths.append(os.path.join(os.getcwd(), ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME))
+    paths.append(os.path.join(os.getcwd(), "code", ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _load_roll_unit_length_m_table_optional() -> dict[str, float]:
+    """
+    ロール単位長さテーブル（製品名→ロール単位の長さ(m)）を読み込む。
+    テーブルが見つからない場合は空 dict を返し、従来の製品名推定へフォールバックする。
+    """
+    global _ROLL_UNIT_LENGTH_TABLE_PATH_USED
+    path_found = ""
+    for p in _roll_unit_length_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        return {}
+    out: dict[str, float] = {}
+    try:
+        with open(path_found, encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.reader(f))
+    except OSError:
+        return {}
+    if not rows:
+        return {}
+    hdr = [_normalize_roll_unit_length_table_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_roll_unit_length_table_key("製品名"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_m = hdr.index(_normalize_roll_unit_length_table_key("ロール単位の長さ"))
+    except ValueError:
+        i_m = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_m):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_m = parts[i_m]
+        key = _normalize_roll_unit_length_table_key(raw_k)
+        if not key:
+            continue
+        m = parse_float_safe(raw_m, 0.0)
+        if m <= 0:
+            continue
+        if key in out and abs(out[key] - float(m)) > 1e-9:
+            # テーブルが矛盾していても段階1を止めない（推定ロジックへフォールバックできるよう警告に留める）
+            logging.warning(
+                "ロール単位長さテーブルで同一キーに矛盾する値があります: %r → %s と %s (%s)",
+                key,
+                out[key],
+                m,
+                path_found,
+            )
+            continue
+        out[key] = float(m)
+    _ROLL_UNIT_LENGTH_TABLE_PATH_USED = path_found
+    if out:
+        logging.info(
+            "ロール単位長さテーブルを読み込みました: %s (%s 件)",
+            path_found,
+            len(out),
+        )
+    return out
+
+
+def _lookup_roll_unit_length_m_from_table(product_name) -> float | None:
+    """製品名の完全一致（正規化後）でロール単位長さ(m)を返す。未登録なら None。"""
+    global _ROLL_UNIT_LENGTH_TABLE_CACHE
+    if _ROLL_UNIT_LENGTH_TABLE_CACHE is None:
+        _ROLL_UNIT_LENGTH_TABLE_CACHE = _load_roll_unit_length_m_table_optional()
+    if not _ROLL_UNIT_LENGTH_TABLE_CACHE:
+        return None
+    k = _normalize_roll_unit_length_table_key(product_name)
+    if not k:
+        return None
+    v = _ROLL_UNIT_LENGTH_TABLE_CACHE.get(k)
+    return float(v) if (v is not None and v > 0) else None
+
+
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     製品名文字列から 1 ロールあたりの長さ(m)を推定する。
@@ -4171,6 +4293,9 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
+    from_table = _lookup_roll_unit_length_m_from_table(product_name)
+    if from_table is not None and from_table > 0:
+        return from_table
     s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
     # 「NNNX MM」形式: 最後のペアの **右側（X 後）**をロール長候補とする（製品名,ロール単位の長さ.txt 準拠）
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
