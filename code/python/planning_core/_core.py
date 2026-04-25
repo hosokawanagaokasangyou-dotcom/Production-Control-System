@@ -21696,18 +21696,48 @@ def _build_plan_input_row_lookup_for_dispatch_table(tasks_df) -> dict[tuple[str,
 
 
 def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, str], object]:
-    """(依頼NO, 工程名) → 加工計画DATA DataFrame の行（Series）。"""
-    out: dict[tuple[str, str], object] = {}
+    """(依頼NO, 工程名, 受注日) → 加工計画DATA DataFrame の行（Series）。受注日が取れない行は空キーに入る。"""
+    out: dict[tuple[str, str, str], object] = {}
     if df_src is None or getattr(df_src, "empty", True):
         return out
     dup = 0
+    miss_order_date = 0
+
+    def _norm_order_date(v) -> str:
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        if isinstance(v, datetime):
+            return v.date().strftime("%Y/%m/%d")
+        if isinstance(v, date):
+            return v.strftime("%Y/%m/%d")
+        s = str(v).strip()
+        if not s:
+            return ""
+        try:
+            ts = pd.to_datetime(s, errors="coerce")
+            if pd.isna(ts):
+                return s
+            if isinstance(ts, pd.Timestamp):
+                return ts.to_pydatetime().date().strftime("%Y/%m/%d")
+        except Exception:
+            pass
+        return s
+
     try:
         for _, row in df_src.iterrows():
             tid = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
             mach = str(_planning_df_cell_scalar(row, TASK_COL_MACHINE) or "").strip()
             if not tid or not mach:
                 continue
-            k = (tid, mach)
+            od = ""
+            try:
+                if hasattr(row, "index") and "受注日" in row.index:
+                    od = _norm_order_date(_planning_df_cell_scalar(row, "受注日"))
+            except Exception:
+                od = ""
+            if not od:
+                miss_order_date += 1
+            k = (tid, mach, od)
             if k in out:
                 dup += 1
                 continue
@@ -21718,8 +21748,20 @@ def _build_source_task_row_lookup_for_dispatch_table(df_src) -> dict[tuple[str, 
         _dbg_ac7f20_log(
             hypothesis_id="H1",
             location="_core.py:_build_source_task_row_lookup_for_dispatch_table",
-            message="加工計画DATAの(依頼NO,工程名)キー重複を検出",
-            data={"duplicate_count": dup, "unique_keys": len(out), "rows": int(len(df_src))},
+            message="加工計画DATAの(依頼NO,工程名,受注日)キー重複を検出",
+            data={
+                "duplicate_count": dup,
+                "missing_order_date_rows": miss_order_date,
+                "unique_keys": len(out),
+                "rows": int(len(df_src)),
+            },
+        )
+    if miss_order_date:
+        _dbg_ac7f20_log(
+            hypothesis_id="H4",
+            location="_core.py:_build_source_task_row_lookup_for_dispatch_table",
+            message="加工計画DATAの受注日が空/解釈不能の行を検出",
+            data={"missing_order_date_rows": miss_order_date, "rows": int(len(df_src))},
         )
     return out
 
@@ -21860,7 +21902,36 @@ def build_result_dispatch_table_dataframe(
         t = _resolve_task_dict_for_timeline_line(tid_k, eq_k, sorted_tasks_for_result)
         proc = str(t.get("machine") or "").strip() if t else ""
         plan_row = plan_lookup.get((tid_k, proc)) if (tid_k and proc) else None
-        src_row = src_lookup.get((tid_k, proc)) if (tid_k and proc) else None
+        # 受注日もキーに含めて加工計画DATA行を選ぶ（取れない場合は空キーにフォールバック）
+        od_key = ""
+        try:
+            if plan_row is not None and hasattr(plan_row, "index") and "受注日" in plan_row.index:
+                _v = _planning_df_cell_scalar(plan_row, "受注日")
+                if _v is not None and not (isinstance(_v, float) and pd.isna(_v)):
+                    od_key = str(_v).strip()
+        except Exception:
+            od_key = ""
+        if od_key:
+            try:
+                ts = pd.to_datetime(od_key, errors="coerce")
+                if not pd.isna(ts) and isinstance(ts, pd.Timestamp):
+                    od_key = ts.to_pydatetime().date().strftime("%Y/%m/%d")
+            except Exception:
+                pass
+        src_row = (
+            src_lookup.get((tid_k, proc, od_key))
+            if (tid_k and proc)
+            else None
+        )
+        if src_row is None and tid_k and proc:
+            src_row = src_lookup.get((tid_k, proc, ""))
+            if od_key:
+                _dbg_ac7f20_log(
+                    hypothesis_id="H4",
+                    location="_core.py:build_result_dispatch_table_dataframe",
+                    message="受注日キーで加工計画DATAが見つからず空キーへフォールバック",
+                    data={"task_id": tid_k, "process": proc, "order_date_key": od_key, "eq_line": eq_k},
+                )
         if tid_k and proc:
             # 実加工数の誤紐づけ調査（キーが取れている行だけ）
             try:
@@ -21887,6 +21958,7 @@ def build_result_dispatch_table_dataframe(
                         "process": proc,
                         "eq_line": eq_k,
                         "day": day_k.isoformat() if hasattr(day_k, "isoformat") else str(day_k),
+                        "order_date_key": od_key,
                         "src_actual_done": src_act,
                         "plan_actual_done": plan_act,
                     },
