@@ -21998,6 +21998,150 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
         return None
 
 
+# #region agent log (debug-ac7f20)
+def _dbg_ac7f20_log(hypothesis_id: str, location: str, message: str, data: dict | None = None, run_id: str = "pre-fix"):
+    """DEBUG MODE: write NDJSON to repo-root debug-ac7f20.log (no secrets)."""
+    try:
+        payload = {
+            "sessionId": "ac7f20",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _repo_root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
+        p = os.path.join(_repo_root, "debug-ac7f20.log")
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _norm_ymd(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    if isinstance(v, datetime):
+        return v.date().strftime("%Y/%m/%d")
+    if isinstance(v, date):
+        return v.strftime("%Y/%m/%d")
+    s = str(v).strip()
+    if not s:
+        return ""
+    try:
+        ts = pd.to_datetime(s, errors="coerce")
+        if pd.isna(ts):
+            return s
+        if isinstance(ts, pd.Timestamp):
+            return ts.to_pydatetime().date().strftime("%Y/%m/%d")
+    except Exception:
+        pass
+    return s
+
+
+def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src: pd.DataFrame | None) -> None:
+    """
+    H1: キー不一致（受注日/工程名の揺れ等）で空欄・誤紐づけ
+    H2: 実加工数など数値列が別行から入っている
+    H3: df_dispatch 側の静的列が欠落（元/計画のどちらにも無い）
+    """
+    try:
+        if df_dispatch is None or getattr(df_dispatch, "empty", True):
+            _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_dispatch is empty", {})
+            return
+        static_cols = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS)
+        blank_counts = {}
+        for c in static_cols:
+            if c not in df_dispatch.columns:
+                continue
+            ser = df_dispatch[c]
+            blank_counts[c] = int(((ser.isna()) | (ser.astype(str).str.strip() == "")).sum())
+        _dbg_ac7f20_log(
+            "H3",
+            "_core.py:_debug_dispatch_table_compare_with_source",
+            "空欄カウント(静的列)",
+            {"rows": int(len(df_dispatch)), "blank_counts": blank_counts},
+        )
+        if df_src is None or getattr(df_src, "empty", True):
+            _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_src is empty", {})
+            return
+        # join keys
+        for d in (df_dispatch, df_src):
+            if "受注日" in d.columns:
+                d["__受注日_norm"] = d["受注日"].map(_norm_ymd)
+            else:
+                d["__受注日_norm"] = ""
+        df_dispatch["__工程名_norm"] = df_dispatch.get("工程名", "").astype(str).str.strip()
+        df_dispatch["__依頼NO_norm"] = df_dispatch.get("依頼NO", "").astype(str).str.strip()
+        df_src["__工程名_norm"] = df_src.get("工程名", "").astype(str).str.strip()
+        df_src["__依頼NO_norm"] = df_src.get("依頼NO", "").astype(str).str.strip()
+
+        left = df_dispatch[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]].copy()
+        left["__rowid"] = range(len(left))
+        right = df_src[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]].copy()
+        right["__src_rowid"] = range(len(right))
+        merged = left.merge(
+            right,
+            on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
+            how="left",
+            indicator=True,
+        )
+        miss = int((merged["_merge"] != "both").sum())
+        _dbg_ac7f20_log(
+            "H1",
+            "_core.py:_debug_dispatch_table_compare_with_source",
+            "キー突合結果(依頼NO,工程名,受注日)",
+            {"dispatch_rows": int(len(left)), "source_rows": int(len(right)), "miss_rows": miss},
+        )
+        # sample mismatches of actual_done if possible
+        if "実加工数" in df_dispatch.columns and "実加工数" in df_src.columns:
+            # add src actual by join
+            src_act = df_src[["__依頼NO_norm", "__工程名_norm", "__受注日_norm", "実加工数"]].copy()
+            src_act = src_act.drop_duplicates(subset=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"])
+            cmp = df_dispatch.merge(
+                src_act,
+                left_on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
+                right_on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
+                how="left",
+                suffixes=("", "__src"),
+            )
+            def _to_num(x):
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return None
+                    return float(x)
+                except Exception:
+                    return None
+            cmp["__act"] = cmp["実加工数"].map(_to_num)
+            cmp["__act_src"] = cmp["実加工数__src"].map(_to_num)
+            bad = cmp[(cmp["__act"].notna()) & (cmp["__act_src"].notna()) & (abs(cmp["__act"] - cmp["__act_src"]) > 1e-9)]
+            n_bad = int(len(bad))
+            sample = []
+            for _, r in bad.head(5).iterrows():
+                sample.append(
+                    {
+                        "依頼NO": r.get("依頼NO", ""),
+                        "工程名": r.get("工程名", ""),
+                        "受注日": r.get("受注日", ""),
+                        "act_dispatch": r.get("実加工数", ""),
+                        "act_source": r.get("実加工数__src", ""),
+                    }
+                )
+            _dbg_ac7f20_log(
+                "H2",
+                "_core.py:_debug_dispatch_table_compare_with_source",
+                "実加工数 不一致サンプル",
+                {"n_bad": n_bad, "sample": sample},
+            )
+    except Exception as e:
+        _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "debug compare failed", {"err": str(e)[:300]})
+
+
+# #endregion
+
+
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
     if not isinstance(dt, datetime) or not breaks_merged:
@@ -29603,6 +29747,8 @@ def _generate_plan_impl(
             df_dispatch.to_excel(
                 writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
             )
+            # DEBUG: 元データ（加工計画DATA）とのキー突合・空欄・実加工数不一致を可視化
+            _debug_dispatch_table_compare_with_source(df_dispatch, df_src_for_dispatch)
             pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
