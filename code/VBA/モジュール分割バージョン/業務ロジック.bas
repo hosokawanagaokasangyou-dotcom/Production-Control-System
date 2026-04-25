@@ -1,5 +1,63 @@
 Option Explicit
 
+' =========================================================
+' 結果_配台表: 参照シートが _t結果_配台表 を構造化参照しているため、
+' シート/テーブルを削除・作り直すと参照式が #REF! に確定する。
+' よって、段階2 取り込み時は「既存テーブルを残したまま範囲と値だけ更新」する。
+' =========================================================
+Private Const SHEET_RESULT_DISPATCH_TABLE As String = "結果_配台表"
+Private Const TABLE_RESULT_DISPATCH_TABLE As String = "_t結果_配台表"
+
+Private Function _LastUsedCellRect(ByVal ws As Worksheet) As Range
+    Dim lastCell As Range
+    If ws Is Nothing Then Exit Function
+    On Error Resume Next
+    Set lastCell = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
+                                 SearchOrder:=xlByRows, SearchDirection:=xlPrevious, MatchCase:=False)
+    On Error GoTo 0
+    If lastCell Is Nothing Then Exit Function
+    Set _LastUsedCellRect = ws.Range(ws.Cells(1, 1), lastCell)
+End Function
+
+Private Sub ImportResultDispatchTable_OverwriteExistingTable(ByVal sourceWs As Worksheet, ByVal targetWb As Workbook)
+    Dim wsDest As Worksheet
+    Dim lo As ListObject
+    Dim srcRect As Range
+    Dim srcArr As Variant
+    Dim destTopLeft As Range
+    Dim destRect As Range
+    Dim srcRows As Long, srcCols As Long
+    
+    On Error GoTo EH
+    If sourceWs Is Nothing Then Exit Sub
+    If targetWb Is Nothing Then Exit Sub
+    
+    Set srcRect = _LastUsedCellRect(sourceWs)
+    If srcRect Is Nothing Then Exit Sub
+    srcRows = srcRect.Rows.Count
+    srcCols = srcRect.Columns.Count
+    If srcRows < 1 Or srcCols < 1 Then Exit Sub
+    srcArr = srcRect.Value
+    
+    Set wsDest = targetWb.Worksheets(SHEET_RESULT_DISPATCH_TABLE)
+    Set lo = wsDest.ListObjects(TABLE_RESULT_DISPATCH_TABLE)
+    Set destTopLeft = lo.Range.Cells(1, 1)
+    
+    ' テーブルを削除せず、サイズだけ更新（ヘッダー含む）
+    Set destRect = destTopLeft.Resize(srcRows, srcCols)
+    lo.Resize destRect
+    
+    ' 値を上書き（ヘッダー含む）
+    lo.Range.Value = srcArr
+    Exit Sub
+EH:
+    ' 失敗しても段階2全体は継続（他の結果取り込みを止めない）
+    On Error Resume Next
+    AppMsgBox "結果_配台表の取り込みでエラー: " & Err.Description, vbExclamation, "段階2 取り込み"
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
 ' #region agent log
 ' debug セッション 1d7666: NDJSON 1 行をブックと同じフォルダの debug-1d7666.log へ追記（Excel 実行時の経路特定用）
 Public Sub AgentDebugNdjson_1d7666(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataNote As String = vbNullString)
@@ -3360,6 +3418,12 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         For Each sourceWs In sourceWb.Sheets
             sheetName = Trim$(sourceWs.Name)
             
+            ' 結果_配台表は「作り直し禁止」（納期管理(結果_配台表) が _t結果_配台表 を参照）
+            If StrComp(sheetName, SHEET_RESULT_DISPATCH_TABLE, vbBinaryCompare) = 0 Then
+                ImportResultDispatchTable_OverwriteExistingTable sourceWs, targetWb
+                GoTo NextSourceWs
+            End If
+            
             ' Python 出力と同名のシートがマクロブックに残っていると、Copy 時に Excel が (2) を付けて複製する。
             ' 従来は「結果_*」と列設定のみ事前削除していたため、TEMP_設備毎の時間割・ブロックテーブル等が重複した。
             ' 既に残っている「名前 (2)」だけの場合もあるため、同源名（正確一致 + 「名前 (」で始まる複製）をまとめて削除する。
@@ -3418,6 +3482,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
             ' (5) 結果_* の保護は段階2 終了時（Finish）の 配台マクロ_対象シートを条件どおりに保護 でまとめて適用（処理中は全シート解除済み）
             
+NextSourceWs:
         Next sourceWs
         
         ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（UserInterfaceOnly 保護後もマクロから可。依頼NO薄緑は機械名毎のみ追加）
