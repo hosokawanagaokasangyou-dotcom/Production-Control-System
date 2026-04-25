@@ -1877,6 +1877,79 @@ EH:
     TryRefreshWorkbookQueries = False
 End Function
 
+' =========================================================
+' agent debug log: NDJSON to debug-3f67b3.log (this repo root)
+' - DO NOT log secrets/paths beyond workbook name/connection name
+' =========================================================
+Private Sub AgentDebugLogNDJSON(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal dataJson As String)
+    On Error Resume Next
+    Dim f As Integer
+    f = FreeFile
+    Open ThisWorkbook.path & "\..\debug-3f67b3.log" For Append As #f
+    Print #f, "{""sessionId"":""3f67b3"",""runId"":""pre-fix"",""hypothesisId"":""" & Replace(hypothesisId, """", "'") & """,""location"":""" & Replace(location, """", "'") & """,""message"":""" & Replace(message, """", "'") & """,""data"":" & dataJson & ",""timestamp"":" & CLng(Timer * 1000) & "}"
+    Close #f
+    On Error GoTo 0
+End Sub
+
+Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As String) As Boolean
+    Dim prevSU As Boolean
+    Dim prevDA As Boolean
+    Dim cn As WorkbookConnection
+    Dim found As Boolean
+    Dim refreshedCount As Long
+    On Error GoTo EH
+
+    m_lastRefreshQueriesErrMsg = vbNullString
+    prevSU = Application.ScreenUpdating
+    prevDA = Application.DisplayAlerts
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    AgentDebugLogNDJSON "H1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "enter", "{""namePart"":""" & Replace(namePart, """", "'") & """}"
+
+    If SKIP_WORKBOOK_REFRESH_ALL Then
+        AgentDebugLogNDJSON "H2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (SKIP_WORKBOOK_REFRESH_ALL)", "{""reason"":""SKIP_WORKBOOK_REFRESH_ALL""}"
+    ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
+        AgentDebugLogNDJSON "H3", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (ping fail)", "{""host"":""" & Replace(PQ_REFRESH_PING_HOST, """", "'") & """,""timeoutMs"":" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "}"
+    Else
+        Call DisableBackgroundDataRefreshAll
+        found = False
+        refreshedCount = 0
+
+        For Each cn In ThisWorkbook.Connections
+            If InStr(1, cn.Name, namePart, vbTextCompare) > 0 Then
+                found = True
+                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh connection", "{""connectionName"":""" & Replace(cn.Name, """", "'") & """}"
+                cn.Refresh
+                refreshedCount = refreshedCount + 1
+            End If
+        Next cn
+
+        Application.CalculateUntilAsyncQueriesDone
+        AgentDebugLogNDJSON "H5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "{""found"":" & LCase$(CStr(found)) & ",""refreshedCount"":" & CStr(refreshedCount) & "}"
+
+        If Not found Then
+            m_lastRefreshQueriesErrMsg = "接続名に '" & namePart & "' を含む接続が見つかりませんでした。"
+            TryRefreshWorkbookQueriesByConnectionNamePart = False
+            GoTo FIN
+        End If
+    End If
+
+    TryRefreshWorkbookQueriesByConnectionNamePart = True
+FIN:
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+    Exit Function
+EH:
+    On Error Resume Next
+    Application.DisplayAlerts = prevDA
+    Application.ScreenUpdating = prevSU
+    On Error GoTo 0
+    m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & Err.Description
+    AgentDebugLogNDJSON "H6", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "{""err"":""" & Replace(Err.Description, """", "'") & """}"
+    TryRefreshWorkbookQueriesByConnectionNamePart = False
+End Function
+
 ' Python の execution_log は UTF-8(BOM 付き)。cmd の 2>&1 リダイレクトは環境で Shift_JIS になりがちなので BOM で切り替える。
 Public Function ValidateMasterSkillsOpAsPriorityUnique(ByVal targetDir As String, ByRef errOut As String) As Boolean
     Dim wbPath As String
@@ -2380,7 +2453,7 @@ Public Sub 段階1_コア実行()
     設定_シート表示_シートを確保
     MacroSplash_SetStep "段階1: データ接続（Power Query 等）を更新しています…"
 
-    If Not TryRefreshWorkbookQueries() Then
+    If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工計画DATA") Then
         m_lastStage1ErrMsg = "データ接続の更新に失敗したため段階1を中断しました。（「設定_配台不要工程」シートは作成済みの可能性があります）"
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
             m_lastStage1ErrMsg = m_lastStage1ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
