@@ -47,33 +47,6 @@ from .bootstrap import (
     output_dir,
 )
 
-# #region agent debug log
-_AGENT_DEBUG_LOG_PATH = "debug-e63885.log"
-_AGENT_DEBUG_SESSION_ID = "e63885"
-
-
-def _agent_debug_log(
-    *, run_id: str, hypothesis_id: str, location: str, message: str, data: dict
-):
-    """NDJSON ログ（debug mode 用）。機密は入れない。"""
-    try:
-        payload = {
-            "sessionId": _AGENT_DEBUG_SESSION_ID,
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -4448,38 +4421,6 @@ def load_tasks_df():
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{TASKS_SHEET_NAME}」"
     )
-    # #region agent log
-    try:
-        _tid_dbg = "Y4-7"
-        _rows = []
-        if TASK_COL_TASK_ID in df.columns:
-            _m = df[TASK_COL_TASK_ID].astype(str).str.strip().eq(_tid_dbg)
-            if bool(_m.any()):
-                for _, r in df.loc[_m].iterrows():
-                    _rows.append(
-                        {
-                            "task_id": planning_task_id_str_from_scalar(r.get(TASK_COL_TASK_ID)),
-                            "process": str(r.get(TASK_COL_MACHINE, "") or "").strip(),
-                            "machine_name": str(r.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                            "qty": r.get(TASK_COL_QTY),
-                            "actual_done": r.get(TASK_COL_ACTUAL_DONE),
-                            "unprocessed": r.get(TASK_COL_UNPROCESSED),
-                        }
-                    )
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H1",
-            location="_core.py:load_tasks_df",
-            message="加工計画DATAのY4-7行(実加工数/未加工)を取得",
-            data={
-                "workbook": str(TASKS_INPUT_WORKBOOK or ""),
-                "sheet": TASKS_SHEET_NAME,
-                "rows": _rows,
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     # 加工計画DATA の主列は「換算数量」（TASK_COL_QTY）。無いブックは未加工→旧「残作数値」の順で補完。
     if TASK_COL_QTY not in df.columns:
         for _alt_qty in ("未加工", "残作数値"):
@@ -4873,38 +4814,6 @@ def load_planning_tasks_df():
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{PLAN_INPUT_SHEET_NAME}」"
     )
-    # #region agent log
-    try:
-        _tid_dbg = "Y4-7"
-        _rows = []
-        if TASK_COL_TASK_ID in df.columns:
-            _m = df[TASK_COL_TASK_ID].astype(str).str.strip().eq(_tid_dbg)
-            if bool(_m.any()):
-                for _, r in df.loc[_m].iterrows():
-                    _rows.append(
-                        {
-                            "task_id": planning_task_id_str_from_scalar(r.get(TASK_COL_TASK_ID)),
-                            "process": str(r.get(TASK_COL_MACHINE, "") or "").strip(),
-                            "machine_name": str(r.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                            "qty": r.get(TASK_COL_QTY),
-                            "actual_done": r.get(TASK_COL_ACTUAL_DONE),
-                            "unprocessed": r.get(TASK_COL_UNPROCESSED),
-                        }
-                    )
-        _agent_debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H2",
-            location="_core.py:load_planning_tasks_df",
-            message="配台計画_タスク入力のY4-7行(実加工数/未加工)を取得",
-            data={
-                "workbook": str(TASKS_INPUT_WORKBOOK or ""),
-                "sheet": PLAN_INPUT_SHEET_NAME,
-                "rows": _rows,
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     for c in plan_input_sheet_column_order():
         if c not in df.columns:
             df[c] = ""
