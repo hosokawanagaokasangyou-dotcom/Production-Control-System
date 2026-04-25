@@ -1921,7 +1921,8 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
         For Each cn In ThisWorkbook.Connections
             nm = cn.Name
             nmNorm = nm
-            If Left$(nmNorm, 5) = "クエリ - " Then nmNorm = Mid$(nmNorm, 6)
+            ' "クエリ - " は 6 文字（「ク」「エ」「リ」「 」「-」「 」）なので Left$/Mid$ の桁を合わせる
+            If Left$(nmNorm, 6) = "クエリ - " Then nmNorm = Mid$(nmNorm, 7)
             If Left$(nmNorm, 8) = "Query - " Then nmNorm = Mid$(nmNorm, 9)
 
             ' 段階1は「_q加工計画DATA」だけ更新したい（実績比較用などの派生は更新しない）
