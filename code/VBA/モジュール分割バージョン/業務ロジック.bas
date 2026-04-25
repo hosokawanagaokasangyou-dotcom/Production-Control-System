@@ -1897,6 +1897,8 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Dim cn As WorkbookConnection
     Dim found As Boolean
     Dim refreshedCount As Long
+    Dim nm As String
+    Dim nmNorm As String
     On Error GoTo EH
 
     m_lastRefreshQueriesErrMsg = vbNullString
@@ -1917,11 +1919,19 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
         refreshedCount = 0
 
         For Each cn In ThisWorkbook.Connections
-            If InStr(1, cn.Name, namePart, vbTextCompare) > 0 Then
+            nm = cn.Name
+            nmNorm = nm
+            If Left$(nmNorm, 5) = "クエリ - " Then nmNorm = Mid$(nmNorm, 6)
+            If Left$(nmNorm, 8) = "Query - " Then nmNorm = Mid$(nmNorm, 9)
+
+            ' 段階1は「_q加工計画DATA」だけ更新したい（実績比較用などの派生は更新しない）
+            If StrComp(nmNorm, namePart, vbTextCompare) = 0 Then
                 found = True
-                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh connection", "{""connectionName"":""" & Replace(cn.Name, """", "'") & """}"
+                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
                 cn.Refresh
                 refreshedCount = refreshedCount + 1
+            ElseIf InStr(1, nmNorm, namePart, vbTextCompare) > 0 Then
+                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "ignore derived connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
             End If
         Next cn
 
