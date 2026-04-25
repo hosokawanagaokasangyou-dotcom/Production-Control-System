@@ -151,6 +151,16 @@ Public Sub 計画実績比較ガント_リストから生成実行()
         AppMsgBox "先に「計画実績比較ガント_選択シートを表示」を実行してください。", vbExclamation, "計画実績比較ガント"
         Exit Sub
     End If
+
+    ' 実績比較用の参照シート（加工計画DATA_実績比較用）の元データだけ更新（他クエリは更新しない）
+    MacroSplash_Show "計画実績比較ガント: データ接続を更新しています…", False
+    MacroSplash_SetStep "データ接続（_q加工計画DATA_実績比較用）を更新しています…"
+    If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工計画DATA_実績比較用") Then
+        MacroSplash_Hide
+        AppMsgBox "データ接続（_q加工計画DATA_実績比較用）の更新に失敗したため中断しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, "計画実績比較ガント"
+        Exit Sub
+    End If
+    MacroSplash_Hide
     
     ' OnAction が効かない環境でも二重選択を避ける（一覧1を優先）
     Set shpPdf = FindComparePickListShape(ws, SHAPE_COMPARE_SNAP_LIST)
