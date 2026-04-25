@@ -1,45 +1,9 @@
-VBA.txt は **生産管理_AI配台テスト.xlsm** に貼り付ける VBA のテキストバックアップ（Python 起動・LOG・結果_* / 個人_* 取り込み・フォント・ボタン等）。
-
-出勤簿.txt は **master.xlsm** に貼り付ける VBA のテキストバックアップ（〇月カレンダー→メンバー出勤簿・条件付き書式の実体化・かっこいいボタン等）。
-
-**データの役割**: `planning_core.MASTER_FILE` は `master.xlsm`（skills / need / メンバー別勤怠）。段階2で VBA が `TASK_INPUT_WORKBOOK` に **配台ブック（ThisWorkbook）** を渡し、その中の「加工計画DATA」等を読む。Python のカレントは `main.py` 所在フォルダ（通常は `master.xlsm` と同じディレクトリ想定）。
-
-**VBA.txt・結果シート取り込み（次回以降の修正の前提）**
-- `Set ws = ThisWorkbook.Sheets(Sheets.Count)` だけだと、末尾が VeryHidden の **`_FontPick`（SCRATCH_SHEET_FONT）** 等の固定シートのとき **コピー直後の「結果_*」ではなく誤参照**する。`結果シート_列幅_AutoFit安定` の `targetWs.Name` が `_FontPick` になる現象の原因になり得る。
-- 対策: **`取込ブック内のコピー先シートを取得(wb, expectedSheetName)`** — ① `wb.Sheets(取り込み元と同名)` を優先 ② だめなら `Sheets(Count)`（末尾が `_FontPick` でなければ採用）③ 末尾が `_FontPick` なら同名シートを総当たり。7a production_plan 取り込み・7b 個人シート新規コピーで `Sheets(Count)` の代わりに使用。
-- **列オートフィット** `結果シート_列幅_AutoFit安定`: 引数は **`targetWs`**（呼び出し元 `ws` とデバッガで混同しない）。**`targetWs` が `_FontPick` なら Exit Sub**。処理は一時 **`Application.ScreenUpdating = True`** のうえ **`targetWs.Activate` → `DoEvents` → `Cells.Select` → `DoEvents` → `Cells.EntireColumn.AutoFit`**、最後に元の ScreenUpdating を復帰（取り込み中 False のままだと Select が確定前に AutoFit が走る問題の対策）。
-- 計画結果の **列幅は Python（openpyxl）では設定せず**、取り込み時の上記 VBA に任せる方針。
-
 あなたはエクセルVBAの専門家です
-
+エクセルは2021を使用しています
 ---
-
-## VBA: 変更後のコンパイル確認
-
-正本: リポジトリ直下 **`.cursor/rules/vba-compile-verify.mdc`**（`alwaysApply: true`）。
-
-**VBA を変更したターンは毎回、VBE の「VBAProject のコンパイル」でエラーがないことを検証する**
-
----
-
 ## Git（コミット運用・メッセージ）
-
 正本: **`.cursor/rules/pre-edit-git-commit-push.mdc`**（変更前ローカルコミット、**先頭固定文言 `(下記、変更を加える前の直前コミットです）` ＋チャット先頭 300 文字**、**Generate 等の AI コミットメッセージは日本語**、**変更前コミット成功後は `git push`**）。
-
 **作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。
-
 要点（Generate 用）: **日本語のみ**（英語だけの件名は出さない）。1 行目は短い要約。必要なら `feat:` / `fix:` 等＋日本語説明。
 
----
 
-## 配台ロジック変更時
-
-配台ロジックをソースで変えたときは、**`細川/GoogleAIStudio/テストコード/要件定義/配台ルール.md`**（および同名 **`.html`**）を実装と同期させる。Markdown を編集したターンでの HTML ペアは **`.cursor/rules/md-paired-html-sync.mdc`**。
-
----
-
-## Markdown / HTML の編集（トークン節約）
-
-**`*.md` / `*.html` は、ユーザーがパスで明示するか、ドキュメント更新を依頼したときのみ編集する**（推測での修正や先回り同期はしない）。
-
-正本: **`.cursor/rules/markdown-html-edit-only-when-requested.mdc`**（`alwaysApply: true`）。ペア同期の例外条件は **`.cursor/rules/md-paired-html-sync.mdc`** 冒頭を参照。
