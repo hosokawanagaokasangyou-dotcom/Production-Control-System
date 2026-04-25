@@ -22041,7 +22041,11 @@ def _norm_ymd(v) -> str:
     return s
 
 
-def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src: pd.DataFrame | None) -> None:
+def _debug_dispatch_table_compare_with_source(
+    df_dispatch: pd.DataFrame,
+    df_src: pd.DataFrame | None,
+    tasks_df_for_debug: pd.DataFrame | None = None,
+) -> None:
     """
     H1: キー不一致（受注日/工程名の揺れ等）で空欄・誤紐づけ
     H2: 実加工数など数値列が別行から入っている
@@ -22104,6 +22108,37 @@ def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src:
                 "src_cols_n": int(len(df_src.columns)),
             },
         )
+
+        # H4: tasks_df（配台計画入力）と加工計画DATAで、識別子列が入れ替わっていないか確認
+        if tasks_df_for_debug is not None and not getattr(tasks_df_for_debug, "empty", True):
+            def _sample_vals(df, col):
+                if col not in df.columns:
+                    return None
+                vals = []
+                for v in df[col].head(5).tolist():
+                    s = str(v).strip() if v is not None else ""
+                    vals.append(s)
+                return vals
+
+            _dbg_ac7f20_log(
+                "H4",
+                "_core.py:_debug_dispatch_table_compare_with_source",
+                "ID列サンプル比較（配台計画入力 vs 加工計画DATA）",
+                {
+                    "tasks_cols_has": {
+                        "依頼NO": ("依頼NO" in tasks_df_for_debug.columns),
+                        "受注NO": ("受注NO" in tasks_df_for_debug.columns),
+                    },
+                    "src_cols_has": {
+                        "依頼NO": ("依頼NO" in df_src.columns),
+                        "受注NO": ("受注NO" in df_src.columns),
+                    },
+                    "tasks_sample_依頼NO": _sample_vals(tasks_df_for_debug, "依頼NO"),
+                    "tasks_sample_受注NO": _sample_vals(tasks_df_for_debug, "受注NO"),
+                    "src_sample_依頼NO": _sample_vals(df_src, "依頼NO"),
+                    "src_sample_受注NO": _sample_vals(df_src, "受注NO"),
+                },
+            )
         # join keys
         for d in (df_dispatch, df_src):
             if "受注日" in d.columns:
@@ -29802,7 +29837,7 @@ def _generate_plan_impl(
                 writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
             )
             # DEBUG: 元データ（加工計画DATA）とのキー突合・空欄・実加工数不一致を可視化
-            _debug_dispatch_table_compare_with_source(df_dispatch, df_src_for_dispatch)
+            _debug_dispatch_table_compare_with_source(df_dispatch, df_src_for_dispatch, tasks_df_for_debug=tasks_df)
             pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
