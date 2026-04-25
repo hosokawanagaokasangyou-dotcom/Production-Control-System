@@ -21743,23 +21743,6 @@ def _build_source_task_row_lookups_for_dispatch_table(df_src):
     except Exception:
         return idx3, idx2
 
-    try:
-        multi2 = sum(1 for v in idx2.values() if isinstance(v, list))
-        _dbg_ac7f20_log(
-            "H1",
-            "_core.py:_build_source_task_row_lookups_for_dispatch_table",
-            "加工計画DATA索引の統計",
-            {
-                "rows": int(len(df_src)),
-                "idx3_keys": len(idx3),
-                "idx2_keys": len(idx2),
-                "idx2_multi_keys": int(multi2),
-                "idx3_dup_count": int(dup3),
-                "src_missing_order_date_rows": int(miss_order_date),
-            },
-        )
-    except Exception:
-        pass
     return idx3, idx2
 
 
@@ -21921,21 +21904,8 @@ def build_result_dispatch_table_dataframe(
                             if od0 and (not best_od or od0 < best_od):
                                 best, best_od = r0, od0
                     src_row = best
-                    _dbg_ac7f20_log(
-                        "H1",
-                        "_core.py:build_result_dispatch_table_dataframe",
-                        "加工計画DATAフォールバック: (依頼NO,工程名)で複数候補→暫定採用",
-                        {"task_id": tid_k, "process": proc, "candidates": len(cand), "picked_order_date": best_od},
-                    )
                 else:
                     src_row = cand
-                    if od_key:
-                        _dbg_ac7f20_log(
-                            "H1",
-                            "_core.py:build_result_dispatch_table_dataframe",
-                            "加工計画DATAフォールバック: 受注日キー不一致→(依頼NO,工程名)へ",
-                            {"task_id": tid_k, "process": proc, "order_date_key": od_key},
-                        )
         r: dict = {}
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
             r[h] = _dispatch_table_cell_from_sources(
@@ -22045,28 +22015,6 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
         return None
 
 
-# #region agent log (debug-ac7f20)
-def _dbg_ac7f20_log(hypothesis_id: str, location: str, message: str, data: dict | None = None, run_id: str = "pre-fix"):
-    """DEBUG MODE: write NDJSON to repo-root debug-ac7f20.log (no secrets)."""
-    try:
-        payload = {
-            "sessionId": "ac7f20",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        _here = os.path.dirname(os.path.abspath(__file__))
-        _repo_root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
-        p = os.path.join(_repo_root, "debug-ac7f20.log")
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 def _norm_ymd(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
@@ -22086,193 +22034,6 @@ def _norm_ymd(v) -> str:
     except Exception:
         pass
     return s
-
-
-def _debug_dispatch_table_compare_with_source(
-    df_dispatch: pd.DataFrame,
-    df_src: pd.DataFrame | None,
-    tasks_df_for_debug: pd.DataFrame | None = None,
-) -> None:
-    """
-    H1: キー不一致（受注日/工程名の揺れ等）で空欄・誤紐づけ
-    H2: 実加工数など数値列が別行から入っている
-    H3: df_dispatch 側の静的列が欠落（元/計画のどちらにも無い）
-    """
-    try:
-        if df_dispatch is None or getattr(df_dispatch, "empty", True):
-            _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_dispatch is empty", {})
-            return
-        _dbg_ac7f20_log(
-            "H3",
-            "_core.py:_debug_dispatch_table_compare_with_source",
-            "列存在確認",
-            {
-                "dispatch_cols_has": {
-                    "受注日": ("受注日" in df_dispatch.columns),
-                    "受注NO": ("受注NO" in df_dispatch.columns),
-                    "品名(原反)": ("品名(原反)" in df_dispatch.columns),
-                    "原反数": ("原反数" in df_dispatch.columns),
-                    "計画合計": ("計画合計" in df_dispatch.columns),
-                    "原反投入場所": ("原反投入場所" in df_dispatch.columns),
-                },
-                "dispatch_cols_n": int(len(df_dispatch.columns)),
-            },
-        )
-        static_cols = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS)
-        blank_counts = {}
-        for c in static_cols:
-            if c not in df_dispatch.columns:
-                continue
-            ser = df_dispatch[c]
-            blank_counts[c] = int(((ser.isna()) | (ser.astype(str).str.strip() == "")).sum())
-        _dbg_ac7f20_log(
-            "H3",
-            "_core.py:_debug_dispatch_table_compare_with_source",
-            "空欄カウント(静的列)",
-            {"rows": int(len(df_dispatch)), "blank_counts": blank_counts},
-        )
-        if df_src is None or getattr(df_src, "empty", True):
-            _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_src is empty", {})
-            return
-        _dbg_ac7f20_log(
-            "H1",
-            "_core.py:_debug_dispatch_table_compare_with_source",
-            "加工計画DATA側の列存在確認",
-            {
-                "src_cols_has": {
-                    "依頼NO": ("依頼NO" in df_src.columns),
-                    "工程名": ("工程名" in df_src.columns),
-                    "受注日": ("受注日" in df_src.columns),
-                    "受注NO": ("受注NO" in df_src.columns),
-                    "品名(原反)": ("品名(原反)" in df_src.columns),
-                    "原反数": ("原反数" in df_src.columns),
-                    "計画合計": ("計画合計" in df_src.columns),
-                    "原反投入場所": ("原反投入場所" in df_src.columns),
-                    # planning_core の既知列
-                    "換算数量": ("換算数量" in df_src.columns),
-                    "実加工数": ("実加工数" in df_src.columns),
-                },
-                "src_cols_n": int(len(df_src.columns)),
-            },
-        )
-
-        # H4: tasks_df（配台計画入力）と加工計画DATAで、識別子列が入れ替わっていないか確認
-        if tasks_df_for_debug is not None and not getattr(tasks_df_for_debug, "empty", True):
-            def _sample_vals(df, col):
-                if col not in df.columns:
-                    return None
-                vals = []
-                for v in df[col].head(5).tolist():
-                    s = str(v).strip() if v is not None else ""
-                    vals.append(s)
-                return vals
-
-            _dbg_ac7f20_log(
-                "H4",
-                "_core.py:_debug_dispatch_table_compare_with_source",
-                "ID列サンプル比較（配台計画入力 vs 加工計画DATA）",
-                {
-                    "tasks_cols_has": {
-                        "依頼NO": ("依頼NO" in tasks_df_for_debug.columns),
-                        "受注NO": ("受注NO" in tasks_df_for_debug.columns),
-                    },
-                    "src_cols_has": {
-                        "依頼NO": ("依頼NO" in df_src.columns),
-                        "受注NO": ("受注NO" in df_src.columns),
-                    },
-                    "tasks_sample_依頼NO": _sample_vals(tasks_df_for_debug, "依頼NO"),
-                    "tasks_sample_受注NO": _sample_vals(tasks_df_for_debug, "受注NO"),
-                    "src_sample_依頼NO": _sample_vals(df_src, "依頼NO"),
-                    "src_sample_受注NO": _sample_vals(df_src, "受注NO"),
-                },
-            )
-        # join keys
-        for d in (df_dispatch, df_src):
-            if "受注日" in d.columns:
-                d["__受注日_norm"] = d["受注日"].map(_norm_ymd)
-            else:
-                d["__受注日_norm"] = ""
-        df_dispatch["__工程名_norm"] = df_dispatch.get("工程名", "").astype(str).str.strip()
-        df_dispatch["__依頼NO_norm"] = df_dispatch.get("依頼NO", "").astype(str).str.strip()
-        df_src["__工程名_norm"] = df_src.get("工程名", "").astype(str).str.strip()
-        df_src["__依頼NO_norm"] = df_src.get("依頼NO", "").astype(str).str.strip()
-
-        left = df_dispatch[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]].copy()
-        left["__rowid"] = range(len(left))
-        right = df_src[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]].copy()
-        right["__src_rowid"] = range(len(right))
-        merged = left.merge(
-            right,
-            on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
-            how="left",
-            indicator=True,
-        )
-        miss = int((merged["_merge"] != "both").sum())
-        # サンプルキー（先頭5件ずつ）
-        l_samp = (
-            left[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]]
-            .head(5)
-            .to_dict(orient="records")
-        )
-        r_samp = (
-            right[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]]
-            .head(5)
-            .to_dict(orient="records")
-        )
-        _dbg_ac7f20_log(
-            "H1",
-            "_core.py:_debug_dispatch_table_compare_with_source",
-            "キー突合結果(依頼NO,工程名,受注日)",
-            {
-                "dispatch_rows": int(len(left)),
-                "source_rows": int(len(right)),
-                "miss_rows": miss,
-                "dispatch_key_sample": l_samp,
-                "source_key_sample": r_samp,
-            },
-        )
-        # sample mismatches of actual_done if possible
-        if "実加工数" in df_dispatch.columns and "実加工数" in df_src.columns:
-            # add src actual by join
-            src_act = df_src[["__依頼NO_norm", "__工程名_norm", "__受注日_norm", "実加工数"]].copy()
-            src_act = src_act.drop_duplicates(subset=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"])
-            cmp = df_dispatch.merge(
-                src_act,
-                left_on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
-                right_on=["__依頼NO_norm", "__工程名_norm", "__受注日_norm"],
-                how="left",
-                suffixes=("", "__src"),
-            )
-            def _to_num(x):
-                try:
-                    if x is None or (isinstance(x, float) and pd.isna(x)):
-                        return None
-                    return float(x)
-                except Exception:
-                    return None
-            cmp["__act"] = cmp["実加工数"].map(_to_num)
-            cmp["__act_src"] = cmp["実加工数__src"].map(_to_num)
-            bad = cmp[(cmp["__act"].notna()) & (cmp["__act_src"].notna()) & (abs(cmp["__act"] - cmp["__act_src"]) > 1e-9)]
-            n_bad = int(len(bad))
-            sample = []
-            for _, r in bad.head(5).iterrows():
-                sample.append(
-                    {
-                        "依頼NO": r.get("依頼NO", ""),
-                        "工程名": r.get("工程名", ""),
-                        "受注日": r.get("受注日", ""),
-                        "act_dispatch": r.get("実加工数", ""),
-                        "act_source": r.get("実加工数__src", ""),
-                    }
-                )
-            _dbg_ac7f20_log(
-                "H2",
-                "_core.py:_debug_dispatch_table_compare_with_source",
-                "実加工数 不一致サンプル",
-                {"n_bad": n_bad, "sample": sample},
-            )
-    except Exception as e:
-        _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "debug compare failed", {"err": str(e)[:300]})
 
 
 # #endregion
@@ -29883,8 +29644,6 @@ def _generate_plan_impl(
             df_dispatch.to_excel(
                 writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
             )
-            # DEBUG: 元データ（加工計画DATA）とのキー突合・空欄・実加工数不一致を可視化
-            _debug_dispatch_table_compare_with_source(df_dispatch, df_src_for_dispatch, tasks_df_for_debug=tasks_df)
             pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
