@@ -22026,7 +22026,10 @@ def _dbg_ac7f20_log(*, hypothesis_id: str, location: str, message: str, data: di
             "data": data or {},
             "timestamp": int(time_module.time() * 1000),
         }
-        p = os.path.join(os.getcwd(), "debug-ac7f20.log")
+        # 常にリポジトリ直下へ出す（実行時 cwd がブレても追跡できるようにする）
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _repo_root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
+        p = os.path.join(_repo_root, "debug-ac7f20.log")
         with open(p, "a", encoding="utf-8") as f:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
