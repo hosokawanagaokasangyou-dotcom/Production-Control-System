@@ -22051,6 +22051,22 @@ def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src:
         if df_dispatch is None or getattr(df_dispatch, "empty", True):
             _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_dispatch is empty", {})
             return
+        _dbg_ac7f20_log(
+            "H3",
+            "_core.py:_debug_dispatch_table_compare_with_source",
+            "列存在確認",
+            {
+                "dispatch_cols_has": {
+                    "受注日": ("受注日" in df_dispatch.columns),
+                    "受注NO": ("受注NO" in df_dispatch.columns),
+                    "品名(原反)": ("品名(原反)" in df_dispatch.columns),
+                    "原反数": ("原反数" in df_dispatch.columns),
+                    "計画合計": ("計画合計" in df_dispatch.columns),
+                    "原反投入場所": ("原反投入場所" in df_dispatch.columns),
+                },
+                "dispatch_cols_n": int(len(df_dispatch.columns)),
+            },
+        )
         static_cols = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS)
         blank_counts = {}
         for c in static_cols:
@@ -22067,6 +22083,27 @@ def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src:
         if df_src is None or getattr(df_src, "empty", True):
             _dbg_ac7f20_log("H0", "_core.py:_debug_dispatch_table_compare_with_source", "df_src is empty", {})
             return
+        _dbg_ac7f20_log(
+            "H1",
+            "_core.py:_debug_dispatch_table_compare_with_source",
+            "加工計画DATA側の列存在確認",
+            {
+                "src_cols_has": {
+                    "依頼NO": ("依頼NO" in df_src.columns),
+                    "工程名": ("工程名" in df_src.columns),
+                    "受注日": ("受注日" in df_src.columns),
+                    "受注NO": ("受注NO" in df_src.columns),
+                    "品名(原反)": ("品名(原反)" in df_src.columns),
+                    "原反数": ("原反数" in df_src.columns),
+                    "計画合計": ("計画合計" in df_src.columns),
+                    "原反投入場所": ("原反投入場所" in df_src.columns),
+                    # planning_core の既知列
+                    "換算数量": ("換算数量" in df_src.columns),
+                    "実加工数": ("実加工数" in df_src.columns),
+                },
+                "src_cols_n": int(len(df_src.columns)),
+            },
+        )
         # join keys
         for d in (df_dispatch, df_src):
             if "受注日" in d.columns:
@@ -22089,11 +22126,28 @@ def _debug_dispatch_table_compare_with_source(df_dispatch: pd.DataFrame, df_src:
             indicator=True,
         )
         miss = int((merged["_merge"] != "both").sum())
+        # サンプルキー（先頭5件ずつ）
+        l_samp = (
+            left[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]]
+            .head(5)
+            .to_dict(orient="records")
+        )
+        r_samp = (
+            right[["__依頼NO_norm", "__工程名_norm", "__受注日_norm"]]
+            .head(5)
+            .to_dict(orient="records")
+        )
         _dbg_ac7f20_log(
             "H1",
             "_core.py:_debug_dispatch_table_compare_with_source",
             "キー突合結果(依頼NO,工程名,受注日)",
-            {"dispatch_rows": int(len(left)), "source_rows": int(len(right)), "miss_rows": miss},
+            {
+                "dispatch_rows": int(len(left)),
+                "source_rows": int(len(right)),
+                "miss_rows": miss,
+                "dispatch_key_sample": l_samp,
+                "source_key_sample": r_samp,
+            },
         )
         # sample mismatches of actual_done if possible
         if "実加工数" in df_dispatch.columns and "実加工数" in df_src.columns:
