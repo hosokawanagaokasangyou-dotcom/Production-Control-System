@@ -3200,10 +3200,10 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     設定_配台不要工程_シートを確保
     設定_環境変数_シートを確保
     設定_シート表示_シートを確保
-    MacroSplash_SetStep "段階2: データ接続（Power Query 等）を更新しています…"
+    MacroSplash_SetStep "段階2: データ接続（_q加工実績明細DATA）を更新しています…"
 
-    If Not TryRefreshWorkbookQueries() Then
-        m_lastStage2ErrMsg = "データ接続の更新に失敗したため段階2を中断しました。"
+    If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工実績明細DATA") Then
+        m_lastStage2ErrMsg = "データ接続（_q加工実績明細DATA）の更新に失敗したため段階2を中断しました。"
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
             m_lastStage2ErrMsg = m_lastStage2ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
         End If
@@ -3686,6 +3686,23 @@ Finish:
     メインシートA1を選択
     On Error GoTo 0
     
+    ' 終了直前: 結果_配台表の表示用クエリを更新（段階2結果の反映直後に追従させる）
+    MacroSplash_SetStep "段階2: データ接続（_q結果_配台表）を更新しています…"
+    If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q結果_配台表") Then
+        ' 終了処理は続行（結果取り込みは完了している想定）。失敗は LOG 先頭行へ残す。
+        If Len(m_lastStage2ErrMsg) = 0 Then
+            m_lastStage2ErrMsg = "データ接続（_q結果_配台表）の更新に失敗しました。"
+        Else
+            m_lastStage2ErrMsg = m_lastStage2ErrMsg & vbCrLf & "データ接続（_q結果_配台表）の更新に失敗しました。"
+        End If
+        If Len(m_lastRefreshQueriesErrMsg) > 0 Then
+            m_lastStage2ErrMsg = m_lastStage2ErrMsg & vbCrLf & m_lastRefreshQueriesErrMsg
+        End If
+        On Error Resume Next
+        If Not wsLog Is Nothing Then wsLog.Cells(1, 1).Value = m_lastStage2ErrMsg
+        On Error GoTo 0
+    End If
+
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo 0
