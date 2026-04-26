@@ -3759,8 +3759,16 @@ NextSourceWs:
     
     MacroSplash_SetStep "段階2: 個人別スケジュール（member_schedule）を取り込んでいます…"
     ' 7b. member_schedule_*.xlsx（メンバー名シート → 個人_プレフィックスで取り込み）
-    memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
-    If Len(memberPath) > 0 Then
+    Dim st2SkipMemberScheduleImport As Boolean
+    st2SkipMemberScheduleImport = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT", False)
+    If st2SkipMemberScheduleImport Then
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import member_schedule skipped", "env=STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT"
+        ' #endregion agent log (debug-30e24e)
+    Else
+        memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
+    End If
+    If Not st2SkipMemberScheduleImport And Len(memberPath) > 0 Then
         Application.ScreenUpdating = False
         Application.DisplayAlerts = False
         
