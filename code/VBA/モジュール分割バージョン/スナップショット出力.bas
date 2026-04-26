@@ -79,6 +79,35 @@ Private Function PingHostFast500msCached(ByVal host As String) As Boolean
     PingHostFast500msCached = cachedOk
 End Function
 
+Private Function SharedPdfRootFromSetting(ByVal shareRoot As String, ByVal relPdfFolder As String) As String
+    Dim s As String
+    Dim seg As String
+    Dim k As Long
+    
+    s = Trim$(shareRoot)
+    SharedPdfRootFromSetting = ""
+    If Len(s) = 0 Then Exit Function
+    
+    ' 末尾 \ を除去（\\server\share\ のようなUNCでも最後の\だけ落とす）
+    Do While Right$(s, 1) = "\" Or Right$(s, 1) = "/"
+        s = Left$(s, Len(s) - 1)
+        If Len(s) = 0 Then Exit Function
+    Loop
+    
+    ' E10 が既に ...\pdf を指している場合は、その直下をコピー先ルートとする（pdf\pdf を作らない）
+    k = InStrRev(s, "\")
+    If k > 0 And k < Len(s) Then
+        seg = LCase$(Mid$(s, k + 1))
+        If seg = LCase$(relPdfFolder) Then
+            SharedPdfRootFromSetting = s
+            Exit Function
+        End If
+    End If
+    
+    ' それ以外は親フォルダとみなし、pdf を付与
+    SharedPdfRootFromSetting = s & "\" & relPdfFolder
+End Function
+
 Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfFolder As String, ByVal stamp As String, ByVal fileName As String, ByVal snapPath As String)
     Dim wsSet As Worksheet
     Dim shareRoot As String
@@ -100,18 +129,14 @@ Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfF
     
     shareRoot = Trim$(CStr(wsSet.Range("E10").Value))
     If Len(shareRoot) = 0 Then Exit Sub
-    
-    ' 末尾 \ を除去（\\server\share\ のようなUNCでも最後の\だけ落とす）
-    Do While Right$(shareRoot, 1) = "\" Or Right$(shareRoot, 1) = "/"
-        shareRoot = Left$(shareRoot, Len(shareRoot) - 1)
-        If Len(shareRoot) = 0 Then Exit Sub
-    Loop
+
+    sharePdfRoot = SharedPdfRootFromSetting(shareRoot, relPdfFolder)
+    If Len(sharePdfRoot) = 0 Then Exit Sub
     
     host = Trim$(SNAPSHOT_SHARE_PING_HOST_OVERRIDE)
-    If Len(host) = 0 Then host = TryExtractUncHost(shareRoot)
+    If Len(host) = 0 Then host = TryExtractUncHost(sharePdfRoot)
     If Len(host) > 0 Then If Not PingHostFast500msCached(host) Then Exit Sub
     
-    sharePdfRoot = shareRoot & "\" & relPdfFolder
     EnsureFolder sharePdfRoot
     shareSnapDir = sharePdfRoot & "\" & stamp
     EnsureFolder shareSnapDir
