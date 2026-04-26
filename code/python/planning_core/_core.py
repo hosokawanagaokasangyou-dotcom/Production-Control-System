@@ -764,7 +764,7 @@ TASK_COL_DATA_EXTRACTION_DT = "データ抽出日"
 TASK_COL_DATA_EXTRACTION_TIME = "データ抽出時間"
 # 配台基準日時の旧列（加工計画DATA）。無い・空のときは TASK_COL_DATA_EXTRACTION_DT を参照。
 TASK_COL_EXTRACTION_TIME = "抽出時間"
-AI_CACHE_TTL_SECONDS = 6 * 60 * 60  # 6時間
+AI_CACHE_TTL_SECONDS = 96 * 60 * 60  # 96時間
 # json/ai_remarks_cache.json 内のキー接頭辞（設定_配台不要工程・配台不要ロジック D→E）
 AI_CACHE_KEY_PREFIX_EXCLUDE_RULE_DE = "exclude_rule_de_v1"
 
@@ -3767,7 +3767,7 @@ def load_ai_cache():
             with open(ai_cache_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    # 期陝切れエントリを除去（6時間）
+                    # 期陝切れエントリを除去（96時間）
                     now_ts = time_module.time()
                     cleaned = {}
                     expired_count = 0
