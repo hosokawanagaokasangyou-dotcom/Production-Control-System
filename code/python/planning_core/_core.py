@@ -4313,20 +4313,6 @@ def _load_roll_unit_length_m_by_used_raw_table_optional() -> dict[str, float]:
             path_found,
             len(out),
         )
-    # region agent log
-    _ref401 = _normalize_mm_table_lookup_key("40100-AG00-1080X105F-A")
-    _debug_ndjson_096ced(
-        "H_table",
-        "_core.py:_load_roll_unit_length_m_by_used_raw_table_optional",
-        "used_raw_roll_table_loaded",
-        {
-            "path": path_found or "",
-            "entry_count": len(out),
-            "ref40100_key": _ref401,
-            "ref40100_value_m": out.get(_ref401),
-        },
-    )
-    # endregion agent log
     return out
 
 
@@ -4341,19 +4327,6 @@ def _lookup_roll_unit_length_m_from_used_raw(used_raw) -> float | None:
     if not k:
         return None
     v = _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE.get(k)
-    # region agent log
-    if "40100" in k:
-        _debug_ndjson_096ced(
-            "H_lookup",
-            "_core.py:_lookup_roll_unit_length_m_from_used_raw",
-            "lookup_used_raw",
-            {
-                "normalized_key": k,
-                "hit_value_m": float(v) if (v is not None and v > 0) else None,
-                "cache_size": len(_ROLL_UNIT_BY_USED_RAW_TABLE_CACHE or {}),
-            },
-        )
-    # endregion agent log
     return float(v) if (v is not None and v > 0) else None
 
 
@@ -4470,41 +4443,12 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
     配台用: 使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
     未登録なら製品名の寸法（X の右側等）から推定する。
     """
-    _ku_dbg = _normalize_mm_table_lookup_key(used_raw)
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
-        # region agent log
-        if "40100" in _ku_dbg:
-            _debug_ndjson_096ced(
-                "H_infer",
-                "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-                "used_table_hit",
-                {
-                    "used_key": _ku_dbg,
-                    "table_roll_m": float(v),
-                    "product_snip": str(product_name or "")[:120],
-                },
-            )
-        # endregion agent log
         return float(v)
-    _fb = _infer_roll_unit_m_from_product_name_dimensions_only(
+    return _infer_roll_unit_m_from_product_name_dimensions_only(
         product_name, fallback_unit
     )
-    # region agent log
-    if "40100" in _ku_dbg:
-        _debug_ndjson_096ced(
-            "H_infer",
-            "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-            "dim_fallback",
-            {
-                "used_key": _ku_dbg,
-                "table_roll_m": None,
-                "fallback_roll_m": float(_fb) if _fb is not None else None,
-                "product_snip": str(product_name or "")[:120],
-            },
-        )
-    # endregion agent log
-    return _fb
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
@@ -4638,24 +4582,7 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-    _rolled = float(_ceil_roll_unit_length_m_to_next_step(_roll_len))
-    # region agent log
-    _kur = _normalize_mm_table_lookup_key(_used_raw_s1)
-    if "40100" in _kur:
-        _debug_ndjson_096ced(
-            "H_stage1",
-            "_core.py:_stage1_roll_length_for_planning_row",
-            "stage1_roll_before_after_ceil",
-            {
-                "used_key": _kur,
-                "after_coerce_m": float(_roll_len),
-                "after_ceil_m": _rolled,
-                "qty_total_m": float(_qty_total_s1),
-                "product_snip": str(_pn_stage1 or "")[:120],
-            },
-        )
-    # endregion agent log
-    return _rolled
+    return float(_ceil_roll_unit_length_m_to_next_step(_roll_len))
 
 
 def _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df: "pd.DataFrame") -> None:
@@ -12289,21 +12216,6 @@ def _merge_plan_sheet_user_overrides(out_df):
             ):
                 _ur_m = out_df.at[i, TASK_COL_USED_RAW]
                 if _lookup_roll_unit_length_m_from_used_raw(_ur_m) is not None:
-                    # region agent log
-                    _kur_sk = _normalize_mm_table_lookup_key(_ur_m)
-                    if "40100" in _kur_sk:
-                        _debug_ndjson_096ced(
-                            "H_merge",
-                            "_core.py:_merge_plan_sheet_user_overrides",
-                            "skip_roll_merge_used_raw_table_hit",
-                            {
-                                "tid": tid,
-                                "machine": mach,
-                                "used_key": _kur_sk,
-                                "sheet_would_apply_m": parse_float_safe(v, None),
-                            },
-                        )
-                    # endregion agent log
                     continue
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 tp_m = str(row.get(TASK_COL_MACHINE, "") or "").strip()
@@ -12325,37 +12237,6 @@ def _merge_plan_sheet_user_overrides(out_df):
                 v = _coerce_plan_exclude_column_value_for_storage(v)
             elif c in out_df.columns and pd.api.types.is_string_dtype(out_df[c].dtype):
                 v = _excel_scalar_to_plan_string_cell(v)
-            # region agent log
-            if (
-                c == PLAN_COL_ROLL_UNIT_LENGTH
-                and TASK_COL_USED_RAW in out_df.columns
-            ):
-                _kur_m = _normalize_mm_table_lookup_key(
-                    out_df.at[i, TASK_COL_USED_RAW]
-                )
-                if "40100" in _kur_m:
-                    _pre_m = out_df.at[i, c]
-                    _debug_ndjson_096ced(
-                        "H_merge",
-                        "_core.py:_merge_plan_sheet_user_overrides",
-                        "applying_sheet_roll_override",
-                        {
-                            "tid": tid,
-                            "machine": mach,
-                            "used_key": _kur_m,
-                            "pre_merge_roll_m": float(_pre_m)
-                            if _pre_m is not None
-                            and str(_pre_m).strip() != ""
-                            and not (isinstance(_pre_m, float) and pd.isna(_pre_m))
-                            else None,
-                            "sheet_override_roll_m": float(v)
-                            if v is not None
-                            and str(v).strip() != ""
-                            and not (isinstance(v, float) and pd.isna(v))
-                            else None,
-                        },
-                    )
-            # endregion agent log
             out_df.at[i, c] = v
 
     if merged_rows:
@@ -13824,30 +13705,6 @@ def _agent_debug_log_e69e6f(
             logging.debug("debug log write failed: %s", last_err)
     except Exception:
         return
-
-
-def _debug_ndjson_096ced(
-    hypothesis_id: str, location: str, message: str, data: dict | None = None
-) -> None:
-    # region agent log
-    """debug-096ced.log へ NDJSON（セッション 096ced）。使用原反 40100 系の切り分け用。"""
-    try:
-        _here = os.path.dirname(__file__)
-        _root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
-        _path = os.path.join(_root, "debug-096ced.log")
-        payload = {
-            "sessionId": "096ced",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # endregion agent log
 
 
 def _exclude_rules_e_sidecar_path() -> str:
