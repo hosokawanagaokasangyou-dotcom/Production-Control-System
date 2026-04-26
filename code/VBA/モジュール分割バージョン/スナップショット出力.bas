@@ -4,6 +4,8 @@ Option Explicit
 ' pdf\yyyymmdd_hhnnss\ … 履歴（削除しない）。中身は直下と同じファイル名
 
 Private Const FMT_CSV_UTF8 As Long = 62 ' xlCSVUTF8（Excel 2019 以降）
+' 共有フォルダ（社内サーバー）の到達性確認: 0.5 秒 ping の宛先（IP推奨）。空なら UNC のホスト名/アドレスを使用。
+Private Const SNAPSHOT_SHARE_PING_HOST_OVERRIDE As String = "192.168.0.101"
 
 Private Sub EnsureFolder(ByVal folderPath As String)
     If Len(Dir(folderPath, vbDirectory)) > 0 Then Exit Sub
@@ -105,10 +107,9 @@ Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfF
         If Len(shareRoot) = 0 Then Exit Sub
     Loop
     
-    host = TryExtractUncHost(shareRoot)
-    If Len(host) > 0 Then
-        If Not PingHostFast500msCached(host) Then Exit Sub
-    End If
+    host = Trim$(SNAPSHOT_SHARE_PING_HOST_OVERRIDE)
+    If Len(host) = 0 Then host = TryExtractUncHost(shareRoot)
+    If Len(host) > 0 Then If Not PingHostFast500msCached(host) Then Exit Sub
     
     sharePdfRoot = shareRoot & "\" & relPdfFolder
     EnsureFolder sharePdfRoot
