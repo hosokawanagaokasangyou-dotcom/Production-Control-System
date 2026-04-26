@@ -9995,21 +9995,36 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             except Exception:
                 pass
             # endregion
-            xw_book.save()
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_save",
-                    hypothesis_id="H5",
-                    message="Returned from xw_book.save() for main sheet gemini usage",
-                    data={},
-                )
-            except Exception:
-                pass
-            # endregion
+            if bool(info.get("opened_wb_here")):
+                xw_book.save()
+                # region agent log
+                try:
+                    _agent_debug_log_c92553(
+                        location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_save",
+                        hypothesis_id="H5",
+                        message="Returned from xw_book.save() for main sheet gemini usage",
+                        data={},
+                    )
+                except Exception:
+                    pass
+                # endregion
+            else:
+                # 起動中の Excel（ユーザー操作）でブックを再利用した場合、save() は保存ダイアログを出し得るため自動保存しない。
+                # 変更はブック上に反映済みなので、必要ならユーザーが任意のタイミングで保存する。
+                # region agent log
+                try:
+                    _agent_debug_log_c92553(
+                        location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:save_skipped",
+                        hypothesis_id="H5",
+                        message="Skipped xw_book.save() to avoid save dialog on reused workbook",
+                        data={"opened_wb_here": False, "mode": info.get("mode")},
+                    )
+                except Exception:
+                    pass
+                # endregion
             ok = True
             logging.info(
-                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で保存しました。",
+                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で更新しました。",
                 log_prefix,
                 start_r,
             )
