@@ -2462,6 +2462,12 @@ Public Sub 段階1_コア実行()
     m_lastStage1ExitCode = -1
     m_lastStage1ErrMsg = ""
 
+    ' 段階1開始時点で自動再計算を必ず ON（手動計算だと PQ 更新・貼り付け後の整合が崩れやすい）
+    On Error Resume Next
+    Application.Calculation = xlCalculationAutomatic
+    Application.CalculateBeforeSave = True
+    On Error GoTo ErrStage1
+
     prevScreenUpdating = Application.ScreenUpdating
     prevDisplayAlerts = Application.DisplayAlerts
     targetDir = ThisWorkbook.path
@@ -3208,6 +3214,12 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     Dim nLogLines As Long
     ' #endregion agent log (debug-30e24e)
     
+    On Error GoTo ErrHandler
+
+    ' 段階2開始時点で自動再計算を必ず ON（手動計算だと結果反映後の数式・表示が更新されないことがある）
+    On Error Resume Next
+    Application.Calculation = xlCalculationAutomatic
+    Application.CalculateBeforeSave = True
     On Error GoTo ErrHandler
     
     ' #region agent log (debug-30e24e)
