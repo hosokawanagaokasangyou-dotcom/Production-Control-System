@@ -401,15 +401,55 @@ Public Sub RunPythonStage1()
     End If
     
     ' 段階1で作成・更新される関連シートへのリンクをメインシートへ反映
-    On Error Resume Next
-    メインシート_段階1実行後_リンク更新
-    On Error GoTo 0
+    Dim skipPost As Boolean
+    Dim t0 As Double
+    skipPost = Stage1SkipMainSheetLinkUpdateEffective()
+    If skipPost Then
+        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新（表示/非表示・並べ替え等）はスキップします（手動実行）。"
+    Else
+        t0 = Timer
+        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新を開始（表示/非表示・並べ替え等）。"
+        On Error Resume Next
+        メインシート_段階1実行後_リンク更新
+        On Error GoTo 0
+        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新が完了。sec=" & Format$(Timer - t0, "0.000")
+    End If
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     ' メイン反映の直後はメインがアクティブになるため、タスク抽出完了時は配台計画シートへ戻す
     On Error Resume Next
     配台計画_タスク入力_A1を選択
     On Error GoTo 0
     m_animMacroSucceeded = True
+End Sub
+
+' 段階1: 終了後の「メインシート反映（表示/非表示・並べ替え等）」を省略するか。
+' 既定は True（ユーザー要望: 手動でメソッドを実行するため段階1では省略）。
+Public Function Stage1SkipMainSheetLinkUpdateEffective() As Boolean
+    Dim v As String
+    v = Trim$(Environ$("STAGE1_SKIP_MAIN_LINK_UPDATE"))
+    If Len(v) > 0 Then
+        v = LCase$(v)
+        Stage1SkipMainSheetLinkUpdateEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
+        Exit Function
+    End If
+    Stage1SkipMainSheetLinkUpdateEffective = True
+End Function
+
+' 段階1: log\execution_log.txt へ追記（失敗しても落とさない）
+Public Sub Stage1AppendExecutionLogLine(ByVal level As String, ByVal msg As String)
+    On Error Resume Next
+    Dim p As String
+    Dim fh As Integer
+    Dim ts As String
+    Dim line As String
+    p = ThisWorkbook.path & "\log\execution_log.txt"
+    ts = Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    line = ts & " - " & level & " - " & msg & vbCrLf
+    fh = FreeFile
+    Open p For Append As #fh
+    Print #fh, Replace(Replace(line, vbCrLf, vbLf), vbLf, vbCrLf);
+    Close #fh
+    On Error GoTo 0
 End Sub
 
 ' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
