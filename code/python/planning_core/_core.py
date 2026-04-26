@@ -26775,9 +26775,28 @@ def generate_plan():
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
     """
+    # region agent log (debug-30e24e)
+    _t0 = time_module.perf_counter()
+    _agent_dbglog(
+        "P0",
+        "stage2: generate_plan enter",
+        data={"cwd": os.getcwd()},
+        location="_core.py:generate_plan:enter",
+    )
+    # endregion agent log (debug-30e24e)
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
-    with _override_default_factory_hours_from_master(master_abs):
-        _generate_plan_impl()
+    try:
+        with _override_default_factory_hours_from_master(master_abs):
+            _generate_plan_impl()
+    finally:
+        # region agent log (debug-30e24e)
+        _agent_dbglog(
+            "P0",
+            "stage2: generate_plan exit",
+            data={"t_sec": round(time_module.perf_counter() - _t0, 4)},
+            location="_core.py:generate_plan:exit",
+        )
+        # endregion agent log (debug-30e24e)
 
 
 def refresh_equipment_gantt_actual_detail_only() -> str:
