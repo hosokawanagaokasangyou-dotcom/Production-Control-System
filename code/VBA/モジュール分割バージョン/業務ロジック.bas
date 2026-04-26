@@ -2,60 +2,6 @@ Option Explicit
 
 Private Const SHEET_RESULT_DISPATCH_TABLE As String = "結果_配台表"
 
-' #region agent log
-' debug セッション 1d7666: NDJSON 1 行をブックと同じフォルダの debug-1d7666.log へ追記（Excel 実行時の経路特定用）
-Public Sub AgentDebugNdjson_1d7666(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataNote As String = vbNullString)
-    Dim pth As String
-    Dim fn As Integer
-    Dim ln As String
-    Dim msgEsc As String
-    Dim dataEsc As String
-    On Error Resume Next
-    pth = Trim$(ThisWorkbook.path)
-    If Len(pth) = 0 Then Exit Sub
-    pth = pth & "\debug-1d7666.log"
-    msgEsc = Replace(Replace(Replace(message, "\", "/"), """", "'"), vbCrLf, " ")
-    dataEsc = Replace(Replace(Replace(CStr(dataNote), "\", "/"), """", "'"), vbCrLf, " ")
-    ln = "{""sessionId"":""1d7666"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & msgEsc & """"
-    If Len(dataEsc) > 0 Then
-        ln = ln & ",""dataNote"":""" & dataEsc & """"
-    End If
-    ln = ln & ",""timestamp"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
-    fn = FreeFile
-    Open pth For Append As #fn
-    Print #fn, ln
-    Close #fn
-    On Error GoTo 0
-End Sub
-' #endregion agent log
-
-' #region agent log (debug-30e24e)
-' NDJSON 1 行をリポジトリ直下の debug-30e24e.log へ追記（VBA 側の遅延区間を計測）
-Public Sub AgentDebugNdjson_30e24e(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataNote As String = vbNullString)
-    Dim pth As String
-    Dim fn As Integer
-    Dim ln As String
-    Dim msgEsc As String
-    Dim dataEsc As String
-    On Error Resume Next
-    pth = Trim$(ThisWorkbook.path)
-    If Len(pth) = 0 Then Exit Sub
-    ' ThisWorkbook.path は ...\code の想定 → リポジトリ直下へ
-    pth = pth & "\..\debug-30e24e.log"
-    msgEsc = Replace(Replace(Replace(message, "\", "/"), """", "'"), vbCrLf, " ")
-    dataEsc = Replace(Replace(Replace(CStr(dataNote), "\", "/"), """", "'"), vbCrLf, " ")
-    ln = "{""sessionId"":""30e24e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & msgEsc & """"
-    If Len(dataEsc) > 0 Then ln = ln & ",""dataNote"":""" & dataEsc & """"
-    ln = ln & ",""timestamp"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
-    fn = FreeFile
-    Open pth For Append As #fn
-    Print #fn, ln
-    Close #fn
-    On Error GoTo 0
-End Sub
-' #endregion agent log (debug-30e24e)
-
-' #region agent log (debug-30e24e)
 ' 1列分の文字列配列を、セルへ高速に一括書き込みする（遅い Cells(r,c)=... ループの置換用）
 Public Sub AgentBulkWriteLinesToSheetColumn(ByVal ws As Worksheet, ByVal startRow As Long, ByVal col As Long, ByRef lines() As String, ByRef outWritten As Long)
     Dim i As Long
@@ -74,9 +20,7 @@ Public Sub AgentBulkWriteLinesToSheetColumn(ByVal ws As Worksheet, ByVal startRo
     ws.Cells(startRow, col).Resize(n, 1).Value = arr
     outWritten = n
 End Sub
-' #endregion agent log (debug-30e24e)
 
-' #region agent log (debug-30e24e)
 ' 段階2スキップ設定: 「設定_環境変数」シート(=SHEET_WORKBOOK_ENV) → OS 環境変数の順で取得
 Private Function AgentParseBool_30e24e(ByVal raw As String, ByVal defaultValue As Boolean) As Boolean
     Dim v As String
@@ -103,14 +47,8 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
     On Error GoTo 0
-    ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "lookup start", "key=" & keyName & " default=" & CStr(defaultValue) & " ws=" & IIf(ws Is Nothing, "(nil)", ws.Name)
-    ' #endregion agent log (debug-30e24e)
     If Not ws Is Nothing Then
         lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-        ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet shape", "lastRow=" & CStr(lastRow) & " A1=" & CStr(ws.Cells(1, 1).Value) & " B1=" & CStr(ws.Cells(1, 2).Value) & " C1=" & CStr(ws.Cells(1, 3).Value)
-        ' #endregion agent log (debug-30e24e)
         If lastRow >= 2 Then
             For r = 2 To lastRow
                 cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
@@ -124,37 +62,18 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
                     If StrComp(cellKey, keyName, vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
-                            ' #region agent log (debug-30e24e)
-                            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "found in sheet", "key=" & keyName & " raw=" & v
-                            ' #endregion agent log (debug-30e24e)
                             Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
                             Exit Function
                         End If
-                        ' #region agent log (debug-30e24e)
-                        AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "found in sheet but empty", "key=" & keyName
-                        ' #endregion agent log (debug-30e24e)
                         Exit For
                     End If
                 End If
             Next r
         End If
-        If sampleN > 0 Then
-            ' #region agent log (debug-30e24e)
-            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet sample keys", sample
-            ' #endregion agent log (debug-30e24e)
-        Else
-            ' #region agent log (debug-30e24e)
-            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet sample keys", "(none matched STAGE2/SKIP in colA)"
-            ' #endregion agent log (debug-30e24e)
-        End If
     End If
     v = Trim$(Environ$(keyName))
-    ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "fallback to OS env", "key=" & keyName & " raw=" & v
-    ' #endregion agent log (debug-30e24e)
     Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
 End Function
-' #endregion agent log (debug-30e24e)
 
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
@@ -723,7 +642,7 @@ Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     targetWs.Range("A1").Select
     Application.ScreenUpdating = su
     On Error GoTo 0
-    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果シート_列幅_AutoFit安定", "AutoFit done", "sec=" & Format$(Timer - t0, "0.000") & " sheet=" & targetWs.Name
+    
 End Sub
 
 ' 結果_タスク一覧 専用: 非表示列に EntireColumn.AutoFit をかけると列が再表示されるため、表示列のみ AutoFit する。
@@ -757,7 +676,7 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     targetWs.Range("A1").Select
     Application.ScreenUpdating = su
     On Error GoTo 0
-    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果シート_列幅_AutoFit非表示を維持", "AutoFit visible cols done", "sec=" & Format$(Timer - t0, "0.000") & " sheet=" & targetWs.Name & " lastCol=" & CStr(lastCol)
+    
 End Sub
 
 ' 結果_タスク一覧: 列「配完_回答指定16時まで」（旧名「配完_基準16時まで」）が「いいえ」のセルを赤背景・白文字・太字にする。
@@ -921,7 +840,7 @@ Public Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal 
     Next ws
     On Error GoTo 0
     Application.ScreenUpdating = prevScr
-    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果プレフィックスシートの表示倍率を設定", "Zoom loop done", "sec=" & Format$(Timer - t0, "0.000") & " n=" & CStr(n) & " zoom=" & CStr(zoomPercent)
+    
 End Sub
 
 ' 結果_設備ガント／実績明細は同一ガントレイアウトのため同一扱い（列幅・印刷・Zoom 等）
@@ -2016,20 +1935,6 @@ EH:
     TryRefreshWorkbookQueries = False
 End Function
 
-' =========================================================
-' agent debug log: NDJSON to debug-3f67b3.log (this repo root)
-' - DO NOT log secrets/paths beyond workbook name/connection name
-' =========================================================
-Private Sub AgentDebugLogNDJSON(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, ByVal dataJson As String)
-    On Error Resume Next
-    Dim f As Integer
-    f = FreeFile
-    Open ThisWorkbook.path & "\..\debug-3f67b3.log" For Append As #f
-    Print #f, "{""sessionId"":""3f67b3"",""runId"":""pre-fix"",""hypothesisId"":""" & Replace(hypothesisId, """", "'") & """,""location"":""" & Replace(location, """", "'") & """,""message"":""" & Replace(message, """", "'") & """,""data"":" & dataJson & ",""timestamp"":" & CLng(Timer * 1000) & "}"
-    Close #f
-    On Error GoTo 0
-End Sub
-
 Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As String) As Boolean
     Dim prevSU As Boolean
     Dim prevDA As Boolean
@@ -2048,21 +1953,8 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
-    AgentDebugLogNDJSON "H1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "enter", "{""namePart"":""" & Replace(namePart, """", "'") & """}"
-    ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "enter", "namePart=" & namePart
-    ' #endregion agent log (debug-30e24e)
-
     If SKIP_WORKBOOK_REFRESH_ALL Then
-        AgentDebugLogNDJSON "H2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (SKIP_WORKBOOK_REFRESH_ALL)", "{""reason"":""SKIP_WORKBOOK_REFRESH_ALL""}"
-        ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip", "reason=SKIP_WORKBOOK_REFRESH_ALL"
-        ' #endregion agent log (debug-30e24e)
     ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
-        AgentDebugLogNDJSON "H3", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (ping fail)", "{""host"":""" & Replace(PQ_REFRESH_PING_HOST, """", "'") & """,""timeoutMs"":" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "}"
-        ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip", "reason=ping fail host=" & PQ_REFRESH_PING_HOST & " timeoutMs=" & CStr(PQ_REFRESH_PING_TIMEOUT_MS)
-        ' #endregion agent log (debug-30e24e)
     Else
         Call DisableBackgroundDataRefreshAll
         found = False
@@ -2080,34 +1972,19 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
             ' 段階1は「_q加工計画DATA」だけ更新したい（実績比較用などの派生は更新しない）
             If StrComp(nmNorm, namePart, vbTextCompare) = 0 Then
                 found = True
-                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
                 lastRefreshing = nm
-                ' #region agent log (debug-30e24e)
-                AgentDebugNdjson_30e24e "PQ2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh begin", "connection=" & nm
-                ' #endregion agent log (debug-30e24e)
                 phase = "cn.Refresh"
                 cn.Refresh
                 refreshedCount = refreshedCount + 1
-                ' #region agent log (debug-30e24e)
-                AgentDebugNdjson_30e24e "PQ2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh ok", "connection=" & nm
-                ' #endregion agent log (debug-30e24e)
             ElseIf InStr(1, nmNorm, namePart, vbTextCompare) > 0 Then
-                AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "ignore derived connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
             End If
         Next cn
 
         phase = "CalculateUntilAsyncQueriesDone"
         Application.CalculateUntilAsyncQueriesDone
-        AgentDebugLogNDJSON "H5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "{""found"":" & LCase$(CStr(found)) & ",""refreshedCount"":" & CStr(refreshedCount) & "}"
-        ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "PQ3", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "found=" & CStr(found) & " refreshedCount=" & CStr(refreshedCount)
-        ' #endregion agent log (debug-30e24e)
 
         If Not found Then
             m_lastRefreshQueriesErrMsg = "接続名に '" & namePart & "' を含む接続が見つかりませんでした。"
-            ' #region agent log (debug-30e24e)
-            AgentDebugNdjson_30e24e "PQ4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "not found", "namePart=" & namePart
-            ' #endregion agent log (debug-30e24e)
             TryRefreshWorkbookQueriesByConnectionNamePart = False
             GoTo FIN
         End If
@@ -2128,10 +2005,6 @@ EH:
     Application.ScreenUpdating = prevSU
     On Error GoTo 0
     m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & errDescCapture
-    AgentDebugLogNDJSON "H6", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "{""errNum"":" & CStr(errNumCapture) & ",""err"":""" & Replace(errDescCapture, """", "'") & """,""phase"":""" & Replace(phase, """", "'") & """,""lastRefreshing"":""" & Replace(lastRefreshing, """", "'") & """}"
-    ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "PQ5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "errNum=" & CStr(errNumCapture) & " err=" & errDescCapture & " phase=" & phase & " lastRefreshing=" & lastRefreshing
-    ' #endregion agent log (debug-30e24e)
     TryRefreshWorkbookQueriesByConnectionNamePart = False
 End Function
 
@@ -3369,7 +3242,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     
     ' #region agent log (debug-30e24e)
     t0All = Timer
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "enter", ""
+    
     ' #endregion agent log (debug-30e24e)
     
     m_lastStage2ErrMsg = ""
@@ -3407,9 +3280,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     設定_シート表示_シートを確保
     MacroSplash_SetStep "段階2: データ接続（_q加工実績明細DATA）を更新しています…"
 
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工実績明細DATA") Then
         m_lastStage2ErrMsg = "データ接続（_q加工実績明細DATA）の更新に失敗したため段階2を中断しました。"
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
@@ -3418,7 +3289,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         Exit Sub
     End If
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "_q加工実績明細DATA refresh done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     
     MacroSplash_SetStep "段階2: LOG シートを準備しています（段階1ログの連結含む）…"
@@ -3476,12 +3347,10 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     ThisWorkbook.Save
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "ThisWorkbook.Save done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     Application.StatusBar = False
     
@@ -3518,7 +3387,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         End If
         On Error GoTo ErrHandler
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "xlwings stage2 runner returned", "sec=" & Format$(Timer - t0, "0.000")
+        
         ' #endregion agent log (debug-30e24e)
         exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
         If exitCode = &H7FFFFFFF Then exitCode = 1
@@ -3556,7 +3425,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         ' #endregion agent log (debug-30e24e)
         exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideStage12CmdSt2, hideStage12CmdSt2)
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "cmd stage2 finished", "sec=" & Format$(Timer - t0, "0.000") & " exit=" & CStr(exitCode)
+        
         ' #endregion agent log (debug-30e24e)
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
@@ -3621,7 +3490,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     logWriteRow = logWriteRow + nLogLines
     Application.ScreenUpdating = prevScreenUpdating
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "write execution_log to LOG done", "sec=" & Format$(Timer - t0, "0.000") & " lines=" & CStr(nLogLines)
+    
     ' #endregion agent log (debug-30e24e)
     
     If exitCode <> 0 Then
@@ -3752,7 +3621,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
 NextSourceWs:
         Next sourceWs
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import production_plan sheets done", "sec=" & Format$(Timer - t0, "0.000") & " sheets=" & CStr(nSheets)
+        
         ' #endregion agent log (debug-30e24e)
         
         ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（UserInterfaceOnly 保護後もマクロから可。依頼NO薄緑は機械名毎のみ追加）
@@ -3798,7 +3667,7 @@ NextSourceWs:
     st2SkipMemberScheduleImport = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT", False)
     If st2SkipMemberScheduleImport Then
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import member_schedule skipped", "env=STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT"
+        
         ' #endregion agent log (debug-30e24e)
     Else
         memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
@@ -3849,7 +3718,7 @@ NextSourceWs:
             nSheets = nSheets + 1
         Next sourceWs
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import member_schedule sheets done", "sec=" & Format$(Timer - t0, "0.000") & " sheets=" & CStr(nSheets)
+        
         ' #endregion agent log (debug-30e24e)
         
         memberWb.Close SaveChanges:=False
@@ -3863,20 +3732,16 @@ NextSourceWs:
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     メインシート_メンバー一覧と出勤表示 True
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "メインシート_メンバー一覧と出勤表示 done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     ' 個人_* シートをブック末尾へ（失敗しても継続）
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     個人シートを末尾へ並べ替え
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "個人シートを末尾へ並べ替え done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
@@ -3885,15 +3750,13 @@ NextSourceWs:
 
     MacroSplash_SetStep "段階2: 「設定_シート表示」を一覧更新しブックへ適用しています…"
     On Error Resume Next
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     ' 重い場合があるため、環境変数でスキップ可能（既定は実行）
     Dim st2SkipSheetVis As Boolean
     st2SkipSheetVis = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SHEET_VISIBILITY_APPLY", False)
     If st2SkipSheetVis Then
         Err.Clear
-        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply skipped", "env=STAGE2_SKIP_SHEET_VISIBILITY_APPLY"
+        
     Else
         設定_シート表示_一覧をブックから再取得
         Err.Clear
@@ -3901,7 +3764,7 @@ NextSourceWs:
         Err.Clear
     End If
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     On Error GoTo ErrHandler
     
@@ -3916,12 +3779,10 @@ NextSourceWs:
     m_stage2MemberImported = memberImported
 
     On Error Resume Next
-    ' #region agent log (debug-30e24e)
     t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     配台_全シートフォントBIZ_UDP_自動適用
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "配台_全シートフォントBIZ_UDP_自動適用 done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     On Error GoTo 0
 
@@ -3952,7 +3813,7 @@ Finish:
         ' #endregion agent log (debug-30e24e)
         結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "結果_設備ガント系_日付ジャンプコンボ done", "sec=" & Format$(Timer - t0, "0.000")
+        
         ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
@@ -3967,12 +3828,12 @@ Finish:
         st2SkipSnap = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SNAPSHOT_EXPORT", False)
         If st2SkipSnap Then
             Err.Clear
-            AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット export skipped", "env=STAGE2_SKIP_SNAPSHOT_EXPORT"
+            
         Else
             Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
         End If
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット_pdfとcsvを出力 done", "sec=" & Format$(Timer - t0, "0.000")
+        
         ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
@@ -3985,7 +3846,7 @@ Finish:
         ' #endregion agent log (debug-30e24e)
         配台マクロ_対象シートを条件どおりに保護 targetDir
         ' #region agent log (debug-30e24e)
-        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "配台マクロ_対象シートを条件どおりに保護 done", "sec=" & Format$(Timer - t0, "0.000")
+        
         ' #endregion agent log (debug-30e24e)
         On Error GoTo 0
     End If
@@ -4021,11 +3882,11 @@ Finish:
         On Error GoTo 0
     End If
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "_q結果_配台表 refresh done", "sec=" & Format$(Timer - t0, "0.000")
+    
     ' #endregion agent log (debug-30e24e)
     
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "exit", "sec=" & Format$(Timer - t0All, "0.000") & " exit=" & CStr(m_lastStage2ExitCode)
+    
     ' #endregion agent log (debug-30e24e)
 
     On Error Resume Next

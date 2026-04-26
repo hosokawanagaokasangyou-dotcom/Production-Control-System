@@ -48,10 +48,10 @@ from .bootstrap import (
     output_dir,
 )
 
-# region agent log (debug-30e24e) - cache helpers
+# region stage2 cache helpers
 _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
 _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
-# endregion agent log (debug-30e24e) - cache helpers
+# endregion stage2 cache helpers
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
@@ -4988,7 +4988,7 @@ def load_main_sheet_global_priority_override_text() -> str:
     wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
-    # region agent log (debug-30e24e)
+    # region stage2 cache
     # VBA から起動されると段階2が複数回（パターン別）実行されうるため、
     # openpyxl でのブックオープンを毎回やらない（mtime 変化時のみ更新）。
     global _STAGE2_GLOBAL_COMMENT_CACHE
@@ -5002,7 +5002,7 @@ def load_main_sheet_global_priority_override_text() -> str:
             return str(_STAGE2_GLOBAL_COMMENT_CACHE.get("value") or "")
     except Exception:
         pass
-    # endregion agent log (debug-30e24e)
+    # endregion stage2 cache
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
             "メイン再優先特記: ブックに「%s」があるため、openpyxl でグローバルコメントを読みません。",
@@ -5040,20 +5040,20 @@ def load_main_sheet_global_priority_override_text() -> str:
                 below = ws.cell(row=r + 1, column=c).value
                 if below is None or (isinstance(below, float) and pd.isna(below)):
                     out = ""
-                    # region agent log (debug-30e24e)
+                    # region stage2 cache
                     try:
                         _STAGE2_GLOBAL_COMMENT_CACHE = {"sig": sig, "value": out}
                     except Exception:
                         pass
-                    # endregion agent log (debug-30e24e)
+                    # endregion stage2 cache
                     return out
                 out = str(below).strip()
-                # region agent log (debug-30e24e)
+                # region stage2 cache
                 try:
                     _STAGE2_GLOBAL_COMMENT_CACHE = {"sig": sig, "value": out}
                 except Exception:
                     pass
-                # endregion agent log (debug-30e24e)
+                # endregion stage2 cache
                 return out
         return ""
     finally:
@@ -19988,36 +19988,6 @@ def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     )
 
 
-# region agent log (debug-30e24e)
-def _agent_dbglog(
-    hypothesisId: str,
-    message: str,
-    *,
-    data: dict | None = None,
-    runId: str = "pre",
-    location: str = "_core.py",
-):
-    try:
-        _repo_root = pathlib.Path(__file__).resolve().parents[3]
-        _log_path = _repo_root / "debug-30e24e.log"
-        payload = {
-            "sessionId": "30e24e",
-            "runId": runId,
-            "hypothesisId": hypothesisId,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion agent log (debug-30e24e)
-
-
 def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     workbook_path: str | None = None,
     *,
@@ -20053,13 +20023,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     if df is None or df.empty:
         logging.warning("パターン別段階2: データ行はありません。")
         return False
-    _agent_dbglog(
-        "D",
-        "stage2(pattern-batch): loaded planning sheet",
-        data={"rows": int(df.shape[0]), "cols": int(df.shape[1]), "t_sec": round(time_module.perf_counter() - _t0, 4)},
-        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:after_sheet_load",
-    )
-
     df = df.copy()
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
@@ -20076,13 +20039,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             apply_exclude_rules_from_config=False,
             compile_exclude_rules_d_to_e_with_ai=False,
         )
-        _agent_dbglog(
-            "B",
-            "stage2(pattern-batch): post_load_mutations done",
-            data={"t_sec": round(time_module.perf_counter() - _t_mut0, 4)},
-            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:post_load_mutations",
-        )
-
     data_extract_dt, _ = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
@@ -20098,16 +20054,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             _sm,
             need_combo_col_index,
         ) = load_skills_and_needs()
-        _agent_dbglog(
-            "A",
-            "stage2(pattern-batch): load_skills_and_needs done",
-            data={
-                "equipment_n": int(len(equipment_list or [])),
-                "need_combo_col_index": int(need_combo_col_index or 0),
-                "t_sec": round(time_module.perf_counter() - _t_master0, 4),
-            },
-            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:load_skills_and_needs",
-        )
     except Exception as e:
         logging.exception("パターン別段階2: master 読込に失敗: %s", e)
         return False
@@ -20142,29 +20088,12 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     tq_template = build_task_queue_from_planning_df(
         df0, run_date, req_map, ai_by_tid, gpo, equipment_list
     )
-    _agent_dbglog(
-        "B",
-        "stage2(pattern-batch): build task queue done",
-        data={
-            "tasks_n": int(len(tq_template or [])),
-            "ai_by_tid_n": int(len(ai_by_tid or {})),
-            "t_sec": round(time_module.perf_counter() - _t_build0, 4),
-        },
-        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:build_task_queue",
-    )
     if not tq_template:
         logging.error("パターン別段階2: 配台対象タスクがありません。")
         return False
 
     tq_frozen = copy.deepcopy(tq_template)
     pattern_jobs = _dispatch_pattern_stage2_capped_jobs()
-    _agent_dbglog(
-        "C",
-        "stage2(pattern-batch): start pattern loop",
-        data={"patterns_n": int(len(pattern_jobs or [])), "tasks_n": int(len(tq_template or []))},
-        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:start_loop",
-    )
-
     batch_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     batch_root = os.path.join(output_dir, "dispatch_pattern_stage2", batch_stamp)
     try:
@@ -20246,17 +20175,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             )
             summary_rows.append(row)
             continue
-
-        _agent_dbglog(
-            "C",
-            "stage2(pattern-batch): pattern finished",
-            data={
-                "pid": str(pid),
-                "has_paths": bool(paths),
-                "t_sec": round(time_module.perf_counter() - t_pat_wall0, 4),
-            },
-            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:after_generate_plan",
-        )
 
         if not paths:
             row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
@@ -21779,7 +21697,7 @@ def load_machine_calendar_occupancy_blocks(
     """
     if not master_path or not os.path.isfile(master_path):
         return {}
-    # region agent log (debug-30e24e)
+    # region stage2 cache
     global _STAGE2_MACHINE_CALENDAR_CACHE
     sig = None
     try:
@@ -21800,40 +21718,40 @@ def load_machine_calendar_occupancy_blocks(
             return _STAGE2_MACHINE_CALENDAR_CACHE.get("value") or {}
     except Exception:
         sig = None
-    # endregion agent log (debug-30e24e)
+    # endregion stage2 cache
     try:
         xls = pd.ExcelFile(master_path)
         if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
             out0 = {}
-            # region agent log (debug-30e24e)
+            # region stage2 cache
             try:
                 if sig is not None:
                     _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
             except Exception:
                 pass
-            # endregion agent log (debug-30e24e)
+            # endregion stage2 cache
             return out0
         raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
         logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
         out0 = {}
-        # region agent log (debug-30e24e)
+        # region stage2 cache
         try:
             if sig is not None:
                 _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
         except Exception:
             pass
-        # endregion agent log (debug-30e24e)
+        # endregion stage2 cache
         return out0
     if raw.shape[0] < 3 or raw.shape[1] < 3:
         out0 = {}
-        # region agent log (debug-30e24e)
+        # region stage2 cache
         try:
             if sig is not None:
                 _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
         except Exception:
             pass
-        # endregion agent log (debug-30e24e)
+        # endregion stage2 cache
         return out0
 
     ncols = raw.shape[1]
@@ -21877,13 +21795,13 @@ def load_machine_calendar_occupancy_blocks(
 
     if not col_to_eq:
         out0 = {}
-        # region agent log (debug-30e24e)
+        # region stage2 cache
         try:
             if sig is not None:
                 _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
         except Exception:
             pass
-        # endregion agent log (debug-30e24e)
+        # endregion stage2 cache
         return out0
 
     acc: dict[date, dict[str, list[tuple[datetime, datetime]]]] = defaultdict(
@@ -21929,13 +21847,13 @@ def load_machine_calendar_occupancy_blocks(
         for pk, iv in phys_accum.items():
             merged_all[pk] = _merge_machine_calendar_intervals(iv)
         out[d] = merged_all
-    # region agent log (debug-30e24e)
+    # region stage2 cache
     try:
         if sig is not None:
             _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out}
     except Exception:
         pass
-    # endregion agent log (debug-30e24e)
+    # endregion stage2 cache
     return out
 
 
@@ -26775,29 +26693,12 @@ def generate_plan():
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
     """
-    # region agent log (debug-30e24e)
-    _t0 = time_module.perf_counter()
-    _agent_dbglog(
-        "P0",
-        "stage2: generate_plan enter",
-        data={"cwd": os.getcwd()},
-        location="_core.py:generate_plan:enter",
-    )
-    # endregion agent log (debug-30e24e)
     master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     try:
         with _override_default_factory_hours_from_master(master_abs):
             _generate_plan_impl()
     finally:
-        # region agent log (debug-30e24e)
-        _agent_dbglog(
-            "P0",
-            "stage2: generate_plan exit",
-            data={"t_sec": round(time_module.perf_counter() - _t0, 4)},
-            location="_core.py:generate_plan:exit",
-        )
-        # endregion agent log (debug-30e24e)
-
+        pass
 
 def refresh_equipment_gantt_actual_detail_only() -> str:
     """
@@ -28069,27 +27970,8 @@ def _generate_plan_impl(
         surplus_map,
         need_combo_col_index,
     ) = load_skills_and_needs()
-    _agent_dbglog(
-        "A",
-        "stage2: load_skills_and_needs done",
-        data={
-            "members_n": int(len(members or [])),
-            "equipment_n": int(len(equipment_list or [])),
-            "t_sec": round(time_module.perf_counter() - _t_s2_entry, 4),
-        },
-        location="_core.py:_generate_plan_impl:load_skills_and_needs",
-    )
     _t_combo0 = time_module.perf_counter()
     team_combo_presets = load_team_combination_presets_from_master()
-    _agent_dbglog(
-        "A",
-        "stage2: load_team_combination_presets_from_master done",
-        data={
-            "keys_n": int(len(team_combo_presets or {})),
-            "t_sec": round(time_module.perf_counter() - _t_combo0, 4),
-        },
-        location="_core.py:_generate_plan_impl:team_combo_presets",
-    )
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
         logging.info(
@@ -28123,15 +28005,6 @@ def _generate_plan_impl(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
             equipment_list,
         )
-        _agent_dbglog(
-            "A",
-            "stage2: load_machine_calendar_occupancy_blocks done",
-            data={
-                "days_n": int(len(_MACHINE_CALENDAR_BLOCKS_BY_DATE or {})),
-                "t_sec": round(time_module.perf_counter() - _t_cal0, 4),
-            },
-            location="_core.py:_generate_plan_impl:machine_calendar",
-        )
     except Exception as e:
         logging.warning(
             "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
@@ -28144,16 +28017,6 @@ def _generate_plan_impl(
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
         ) = load_machine_daily_startup_settings(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
-        )
-        _agent_dbglog(
-            "A",
-            "stage2: load_machine_daily_startup_settings done",
-            data={
-                "min_n": int(len(_STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE or {})),
-                "req_n": int(len(_STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE or {})),
-                "t_sec": round(time_module.perf_counter() - _t_ds0, 4),
-            },
-            location="_core.py:_generate_plan_impl:machine_daily_startup",
         )
     except Exception as e:
         logging.warning(
@@ -28207,15 +28070,6 @@ def _generate_plan_impl(
     # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
     _t_dt0 = time_module.perf_counter()
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
-    _agent_dbglog(
-        "A",
-        "stage2: _extract_data_extraction_datetime done",
-        data={
-            "has_dt": bool(data_extract_dt),
-            "t_sec": round(time_module.perf_counter() - _t_dt0, 4),
-        },
-        location="_core.py:_generate_plan_impl:data_extract_dt",
-    )
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     # 表示・ファイル名・メタ用の「データ抽出」文字列は、正規化前の抽出時刻（加工計画DATA上の値）を維持する。
@@ -28251,16 +28105,6 @@ def _generate_plan_impl(
 
     _t_att0 = time_module.perf_counter()
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
-    _agent_dbglog(
-        "A",
-        "stage2: load_attendance_and_analyze done",
-        data={
-            "attendance_n": int(len(attendance_data or {})),
-            "ai_log_n": int(len(ai_log_data or {})),
-            "t_sec": round(time_module.perf_counter() - _t_att0, 4),
-        },
-        location="_core.py:_generate_plan_impl:attendance",
-    )
     _t_gpo0 = time_module.perf_counter()
     global_priority_raw = load_main_sheet_global_priority_override_text()
     global_priority_override = analyze_global_priority_override_comment(
@@ -28268,16 +28112,6 @@ def _generate_plan_impl(
         members,
         run_date.year,
         ai_sheet_sink=ai_log_data,
-    )
-    _agent_dbglog(
-        "A",
-        "stage2: global priority override analyzed",
-        data={
-            "raw_len": int(len(str(global_priority_raw or ""))),
-            "override_keys_n": int(len(global_priority_override or {})),
-            "t_sec": round(time_module.perf_counter() - _t_gpo0, 4),
-        },
-        location="_core.py:_generate_plan_impl:global_priority_override",
     )
     _factory_closure_dates: set[date] = set()
     for _iso in global_priority_override.get("factory_closure_dates") or []:
