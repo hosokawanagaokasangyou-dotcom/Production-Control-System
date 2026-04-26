@@ -2686,17 +2686,20 @@ Public Sub 段階1_コア実行()
     If st1SkipSheetVis Then
         On Error Resume Next
         Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（設定_シート表示の一覧更新・ブック適用）はスキップします（手動実行）。"
+        AgentDebugE69e6f_Log "VBA/業務ロジック.bas:Stage1SheetVisApply", "SKIP 設定_シート表示 apply", "{""hypothesisId"":""VIS_SKIP"",""runId"":""pre-fix"",""skip"":true}"
         On Error GoTo 0
     Else
         MacroSplash_SetStep "段階1: 「設定_シート表示」を一覧更新しブックへ適用しています…"
         st1T0SheetVis = Timer
         On Error Resume Next
         Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（設定_シート表示の一覧更新・ブック適用）を開始。"
+        AgentDebugE69e6f_Log "VBA/業務ロジック.bas:Stage1SheetVisApply", "START 設定_シート表示 apply", "{""hypothesisId"":""VIS_SKIP"",""runId"":""pre-fix"",""skip"":false}"
         設定_シート表示_一覧をブックから再取得
         Err.Clear
         設定_シート表示_ブックへ適用
         Err.Clear
         Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（設定_シート表示の一覧更新・ブック適用）が完了。sec=" & Format$(Timer - st1T0SheetVis, "0.000")
+        AgentDebugE69e6f_Log "VBA/業務ロジック.bas:Stage1SheetVisApply", "DONE 設定_シート表示 apply", "{""hypothesisId"":""VIS_SKIP"",""runId"":""pre-fix"",""skip"":false,""sec"":" & Format$(Timer - st1T0SheetVis, "0.000") & "}"
         On Error GoTo 0
     End If
 
