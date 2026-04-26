@@ -13254,6 +13254,8 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
                 hypothesis_id="H2",
                 message="Reusing running Excel book",
                 data={
+                    "py_file": __file__,
+                    "cwd": os.getcwd(),
                     "abs_path": abs_path,
                     "book_fullname": _xlwings_book_path_str(book_existing),
                     "app_pid": getattr(getattr(book_existing, "app", None), "pid", None),
@@ -13390,6 +13392,17 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     xw_book, info = attached
     ok = False
     try:
+        # region agent log
+        try:
+            _agent_debug_log_c92553(
+                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:entered",
+                hypothesis_id="H0",
+                message="Entered _xlwings_sync_exclude_rules_sheet_from_openpyxl",
+                data={"py_file": __file__, "cwd": os.getcwd(), "wb_path": os.path.abspath(wb_path)},
+            )
+        except Exception:
+            pass
+        # endregion
         try:
             xw_book.app.display_alerts = False
         except Exception:
