@@ -19,6 +19,7 @@ STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT	1	段階2後、列設定シートの
 STAGE2_SKIP_SHEET_VISIBILITY_APPLY	0	1/true/yes/on=段階2の「設定_シート表示（一覧更新＋ブックへ適用）」をスキップ（高速化用）。既定 0。
 STAGE2_SKIP_SNAPSHOT_EXPORT	0	1/true/yes/on=段階2のスナップショット（pdf/csv 出力）をスキップ（高速化用）。既定 0。
 STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT	0	1/true/yes/on=段階2の個人別スケジュール（member_schedule_*.xlsx の取り込み）をスキップ（高速化用）。既定 0。
+XLWINGS_SUSPEND_AUTO_CALCULATION	1	xlwings が Excel へ一括書き込み・保存する前後で自動計算を手動（完了時に復帰）。1/true/yes/on（既定）。0/false/no/off/無効 で無効（Calculation は変更しない）。
 STAGE12_CMD_HIDE_WINDOW	1	段階1/2 の cmd 表示（VBA）。1/true/yes/はい=非表示（既定）。0/false=コンソール表示。優先: シート B 非空 → OS 環境変数 → VBA 定数。
 PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE	1	B-2/B-3 系: 熱融着検査の設備占有（同一設備で検査中は他依頼の検査を試さない）。0 等で無効。
 PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS	1	B-2/B-3: 同一依頼で EC と後続（検査・巻返し等）の担当者集合を分離。0 等で無効。

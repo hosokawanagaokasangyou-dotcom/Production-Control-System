@@ -7566,7 +7566,9 @@ def _stage2_try_copy_column_config_shapes_from_input(
         logging.info(
             "列設定シート図形コピー: 起動中の Excel を再利用し、同一プロセスで処理します。"
         )
+    _perf_snap = None
     try:
+        _perf_snap = _xlwings_app_save_perf_state_push(app)
         try:
             ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
         except Exception:
@@ -7656,6 +7658,11 @@ def _stage2_try_copy_column_config_shapes_from_input(
             e,
         )
     finally:
+        if _perf_snap is not None:
+            try:
+                _xlwings_app_save_perf_state_pop(app, _perf_snap)
+            except Exception:
+                pass
         if owns_app:
             for _wb in (wb_in, wb_out):
                 if _wb is not None:
@@ -8049,6 +8056,7 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         return False
     app = None
     wb = None
+    _perf_snap = None
     try:
         n_specs = len(specs)
         shn = sheet_name or RESULT_SHEET_GANTT_NAME
@@ -8060,14 +8068,8 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         )
         app = xw.App(visible=False)
         app.display_alerts = False
-        try:
-            app.screen_updating = False
-        except Exception:
-            try:
-                app.api.ScreenUpdating = False
-            except Exception:
-                pass
         wb = app.books.open(os.path.abspath(rp), update_links=False)
+        _perf_snap = _xlwings_app_save_perf_state_push(app)
         try:
             sht = wb.sheets[shn]
         except Exception:
@@ -8559,14 +8561,11 @@ def _gantt_add_timeline_rounded_rect_labels_xlwings(
         )
         return False
     finally:
-        if app is not None:
+        if _perf_snap is not None:
             try:
-                app.screen_updating = True
+                _xlwings_app_save_perf_state_pop(app, _perf_snap)
             except Exception:
-                try:
-                    app.api.ScreenUpdating = True
-                except Exception:
-                    pass
+                pass
         if wb is not None:
             try:
                 wb.close()
@@ -11196,51 +11195,51 @@ def _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
             xw_book.app.display_alerts = False
         except Exception:
             pass
-        sht = xw_book.sheets[sheet_name]
-        lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
-        vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-        if ax_ay_data:
-            nrows = len(ax_ay_data)
-            sht.range((1, lc), (nrows, vc)).value = ax_ay_data
-        if style_snaps:
-            for r, c, brgb, frgb, bold in style_snaps:
-                rng = sht.range((r, c))
-                if brgb is None:
-                    try:
-                        rng.api.Interior.Pattern = -4142  # xlNone
-                    except Exception:
-                        try:
-                            rng.color = None
-                        except Exception:
-                            pass
-                else:
-                    rng.color = brgb
-                try:
-                    if frgb is not None:
-                        rng.api.Font.Color = _xlwings_rgb_to_long_bgr(frgb)
-                    rng.api.Font.Bold = bool(bold)
-                except Exception:
-                    pass
         _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
         try:
+            sht = xw_book.sheets[sheet_name]
+            lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
+            vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
+            if ax_ay_data:
+                nrows = len(ax_ay_data)
+                sht.range((1, lc), (nrows, vc)).value = ax_ay_data
+            if style_snaps:
+                for r, c, brgb, frgb, bold in style_snaps:
+                    rng = sht.range((r, c))
+                    if brgb is None:
+                        try:
+                            rng.api.Interior.Pattern = -4142  # xlNone
+                        except Exception:
+                            try:
+                                rng.color = None
+                            except Exception:
+                                pass
+                    else:
+                        rng.color = brgb
+                    try:
+                        if frgb is not None:
+                            rng.api.Font.Color = _xlwings_rgb_to_long_bgr(frgb)
+                        rng.api.Font.Bold = bool(bold)
+                    except Exception:
+                        pass
             xw_book.save()
+            ok = True
+            if ax_ay_data:
+                logging.info(
+                    "%s: グローバル解析（列 %s〜%s）を xlwings で保存しました。",
+                    log_prefix,
+                    get_column_letter(lc),
+                    get_column_letter(vc),
+                )
+            if style_snaps:
+                logging.info(
+                    "%s: 矛盾着色対象列 %s セルを xlwings で反映しました。",
+                    log_prefix,
+                    len(style_snaps),
+                )
+            return True
         finally:
             _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
-        ok = True
-        if ax_ay_data:
-            logging.info(
-                "%s: グローバル解析（列 %s〜%s）を xlwings で保存しました。",
-                log_prefix,
-                get_column_letter(lc),
-                get_column_letter(vc),
-            )
-        if style_snaps:
-            logging.info(
-                "%s: 矛盾着色対象列 %s セルを xlwings で反映しました。",
-                log_prefix,
-                len(style_snaps),
-            )
-        return True
     except Exception as ex:
         logging.warning(
             "%s: xlwings による配台シート（グローバル解析・着色）の保存に失敗: %s",
@@ -13429,25 +13428,47 @@ def _xlwings_attach_workbook_for_tests(
         return None
 
 
+def _env_xlw_suspend_auto_calculation() -> bool:
+    """環境変数 XLWINGS_SUSPEND_AUTO_CALCULATION（既定 1）が off のとき、Calculation は変更しない。"""
+    raw = (os.environ.get("XLWINGS_SUSPEND_AUTO_CALCULATION", "1") or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off", "n", "いいえ", "無効", "×")
+
+
 def _xlwings_app_save_perf_state_push(app):
-    """VBA 坴のスプラッシュポーリングと競坈しにししれるため、同期・保存の短時間の値 Excel を静かにれる。"""
-    snap = {}
-    for attr in ("screen_updating", "calculation", "enable_events"):
+    """VBA スプラッシュポーリングと競合しやすいため、同期・保存の短時間 Excel を静かにする。
+    自動計算は手動（xlCalculationManual）へ切り替え、終了時に _xlwings_app_save_perf_state_pop で復帰する。
+    XLWINGS_SUSPEND_AUTO_CALCULATION=0 等のときは Calculation の取得・変更を行わない。
+    """
+    suspend_calc = _env_xlw_suspend_auto_calculation()
+    snap: dict = {"suspend_auto_calculation": suspend_calc}
+    for attr in ("screen_updating", "enable_events"):
         try:
             snap[attr] = getattr(app, attr)
         except Exception:
             snap[attr] = None
+    if suspend_calc:
+        try:
+            snap["calculation"] = getattr(app, "calculation")
+        except Exception:
+            snap["calculation"] = None
+            try:
+                snap["calculation"] = app.api.Calculation
+            except Exception:
+                pass
+    else:
+        snap["calculation"] = None
     try:
         app.screen_updating = False
     except Exception:
         pass
-    try:
-        app.calculation = "manual"
-    except Exception:
+    if suspend_calc:
         try:
-            app.api.Calculation = -4135  # xlCalculationManual
+            app.calculation = "manual"
         except Exception:
-            pass
+            try:
+                app.api.Calculation = -4135  # xlCalculationManual
+            except Exception:
+                pass
     try:
         app.enable_events = False
     except Exception:
@@ -13458,14 +13479,28 @@ def _xlwings_app_save_perf_state_push(app):
 def _xlwings_app_save_perf_state_pop(app, snap):
     if not snap:
         return
-    for attr in ("enable_events", "calculation", "screen_updating"):
-        prev = snap.get(attr)
-        if prev is None:
-            continue
-        try:
-            setattr(app, attr, prev)
-        except Exception:
-            pass
+    try:
+        prev_ev = snap.get("enable_events")
+        if prev_ev is not None:
+            setattr(app, "enable_events", prev_ev)
+    except Exception:
+        pass
+    if snap.get("suspend_auto_calculation"):
+        prev_calc = snap.get("calculation")
+        if prev_calc is not None:
+            try:
+                setattr(app, "calculation", prev_calc)
+            except Exception:
+                try:
+                    app.api.Calculation = prev_calc
+                except Exception:
+                    pass
+    try:
+        prev_su = snap.get("screen_updating")
+        if prev_su is not None:
+            setattr(app, "screen_updating", prev_su)
+    except Exception:
+        pass
 
 
 def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
