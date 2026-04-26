@@ -3649,7 +3649,7 @@ def _agent_debug_dispatch_ndjson(
     message: str,
     data: dict,
     hypothesis_id: str,
-    run_id: str = "pre-fix",
+    run_id: str = "post-fix",
 ) -> None:
     if str(data.get("task_id") or "").strip() != "A5-2":
         return
@@ -3689,11 +3689,12 @@ def _plan_row_dispatch_qty_metrics(row):
     未加工に有効数値があるとき:
       ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
       ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それがロール単位長さ未満ならロール長を採用（最小加工単位=1ロール）。済相当m = 0。
-      換算数量の100m切上は total_qty_m 用に第三要素で返す。
+      換算数量がロール単位長さの整数倍に一致するときは、100m 切上げだけが残量を膨らませるのを避けるため raw を基準とする。
+      第三要素は配台総量(m)用: ①では 100m 切上げ値、②では残りm と一致（ロール数整合）。
 
     Returns:
         tuple[float, float, float, bool]:
-            (remaining_m, done_m, qty_total_ceiled, used_unprocessed)
+            (remaining_m, done_m, qty_total_for_dispatch_m, used_unprocessed)
     """
     _tid_dbg = ""
     try:
@@ -3724,14 +3725,24 @@ def _plan_row_dispatch_qty_metrics(row):
                 "H1",
             )
             # endregion
+            return remaining_m, done_m, qty_total_ceiled, True
         else:
             # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、ロール単位長さ未満は 1 ロール分に引き上げ
             roll_m = _roll_unit_m_estimate_from_plan_row(
                 row, qty_total_ceiled or qty_conv_raw or 1.0
             )
+            try:
+                roll_m_f = float(roll_m)
+            except (TypeError, ValueError):
+                roll_m_f = 0.0
             base_m = max(0.0, qty_total_ceiled)
-            remaining_m = max(base_m, roll_m) if roll_m > 0 else base_m
+            if roll_m_f > 1e-12 and qty_conv_raw > 1e-12:
+                n_rolls_raw = qty_conv_raw / roll_m_f
+                if abs(n_rolls_raw - round(n_rolls_raw)) <= 1e-9:
+                    base_m = max(0.0, qty_conv_raw)
+            remaining_m = max(base_m, roll_m_f) if roll_m_f > 0 else base_m
             done_m = 0.0
+            qty_total_for_dispatch_m = remaining_m
             # region agent log
             _agent_debug_dispatch_ndjson(
                 "_plan_row_dispatch_qty_metrics:branch_unp_zero",
@@ -3740,16 +3751,17 @@ def _plan_row_dispatch_qty_metrics(row):
                     "task_id": _tid_dbg,
                     "qty_conv_raw": qty_conv_raw,
                     "unp_raw": unp,
-                    "roll_m": roll_m,
+                    "roll_m": roll_m_f,
                     "base_m": base_m,
                     "remaining_m": remaining_m,
                     "done_m": done_m,
                     "qty_total_ceiled": qty_total_ceiled,
+                    "qty_total_for_dispatch_m": qty_total_for_dispatch_m,
                 },
                 "H5",
             )
             # endregion
-        return remaining_m, done_m, qty_total_ceiled, True
+            return remaining_m, done_m, qty_total_for_dispatch_m, True
     raise PlanningValidationError(
         f"「{TASK_COL_UNPROCESSED}」が数値として読めません（セルが空または不正）、"
         "または列がありません。配台残量は未加工列のみで算定するため、配台処理を中止します。"
