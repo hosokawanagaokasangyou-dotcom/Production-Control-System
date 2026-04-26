@@ -18632,6 +18632,7 @@ def _pipeline_ec_fully_done_for_tid(task_queue, task_id: str) -> bool:
 
 def _roll_pipeline_inspection_assign_room(task_queue, task_id: str) -> float:
     tid = str(task_id or "").strip()
+    # EC 行がキューに無い＝完走後欠落時は枠ゼロにしない（§B-2/§B-3 後続の配台不可防止）。
     if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
         return float(ROLL_PIPELINE_INSP_UNCAPPED_ROOM)
     ec_done = _pipeline_ec_roll_done_units(task_queue, task_id)
