@@ -2039,6 +2039,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Dim nm As String
     Dim nmNorm As String
     Dim lastRefreshing As String
+    Dim phase As String
     On Error GoTo EH
 
     m_lastRefreshQueriesErrMsg = vbNullString
@@ -2067,6 +2068,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
         found = False
         refreshedCount = 0
         lastRefreshing = ""
+        phase = "loop"
 
         For Each cn In ThisWorkbook.Connections
             nm = cn.Name
@@ -2083,6 +2085,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
                 ' #region agent log (debug-30e24e)
                 AgentDebugNdjson_30e24e "PQ2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh begin", "connection=" & nm
                 ' #endregion agent log (debug-30e24e)
+                phase = "cn.Refresh"
                 cn.Refresh
                 refreshedCount = refreshedCount + 1
                 ' #region agent log (debug-30e24e)
@@ -2093,6 +2096,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
             End If
         Next cn
 
+        phase = "CalculateUntilAsyncQueriesDone"
         Application.CalculateUntilAsyncQueriesDone
         AgentDebugLogNDJSON "H5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "{""found"":" & LCase$(CStr(found)) & ",""refreshedCount"":" & CStr(refreshedCount) & "}"
         ' #region agent log (debug-30e24e)
@@ -2115,14 +2119,18 @@ FIN:
     Application.ScreenUpdating = prevSU
     Exit Function
 EH:
+    Dim errNumCapture As Long
+    Dim errDescCapture As String
+    errNumCapture = Err.Number
+    errDescCapture = Err.Description
     On Error Resume Next
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
     On Error GoTo 0
-    m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & Err.Description
-    AgentDebugLogNDJSON "H6", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "{""err"":""" & Replace(Err.Description, """", "'") & """}"
+    m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & errDescCapture
+    AgentDebugLogNDJSON "H6", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "{""errNum"":" & CStr(errNumCapture) & ",""err"":""" & Replace(errDescCapture, """", "'") & """,""phase"":""" & Replace(phase, """", "'") & """,""lastRefreshing"":""" & Replace(lastRefreshing, """", "'") & """}"
     ' #region agent log (debug-30e24e)
-    AgentDebugNdjson_30e24e "PQ5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "errNum=" & CStr(Err.Number) & " err=" & Err.Description & " lastRefreshing=" & lastRefreshing
+    AgentDebugNdjson_30e24e "PQ5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "errNum=" & CStr(errNumCapture) & " err=" & errDescCapture & " phase=" & phase & " lastRefreshing=" & lastRefreshing
     ' #endregion agent log (debug-30e24e)
     TryRefreshWorkbookQueriesByConnectionNamePart = False
 End Function
