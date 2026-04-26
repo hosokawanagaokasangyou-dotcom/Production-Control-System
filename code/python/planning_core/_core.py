@@ -18093,6 +18093,24 @@ SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
+
+# region agent log
+def _agent_debug_ndjson_69d703(payload: dict) -> None:
+    try:
+        _rp = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-69d703.log")
+        )
+        payload = dict(payload)
+        payload.setdefault("sessionId", "69d703")
+        payload.setdefault("timestamp", int(time_module.time() * 1000))
+        with open(_rp, "a", encoding="utf-8") as _af:
+            _af.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log
+
 # L10 B-4.1「スリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない」用:
 # **同一依頼NO** のスリット完了 − SEC 完了。
 # 工場全体の wip_slit_before_sec を使うと、他依頼の SEC が進むと差が sleみ、当依頼のスリットを完走しても
@@ -18177,6 +18195,23 @@ def _l10_sec_start_floor_from_slit_timeline(
             )
             break
     if not slit_row or not slit_eq:
+        # #region agent log
+        _miss_n = getattr(_l10_sec_start_floor_from_slit_timeline, "_dbg_miss", 0)
+        if _miss_n < 120:
+            setattr(_l10_sec_start_floor_from_slit_timeline, "_dbg_miss", _miss_n + 1)
+            _agent_debug_ndjson_69d703(
+                {
+                    "hypothesisId": "H_SLIT_ROW_MISSING",
+                    "runId": "pre-fix",
+                    "location": "_l10_sec_start_floor_from_slit_timeline:no_slit_row",
+                    "message": "SEC_slit_timeline_no_slit_row_in_queue",
+                    "data": {
+                        "task_id": tid,
+                        "hits_cap": int(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS),
+                    },
+                }
+            )
+        # #endregion
         return None
     occ_slit = str(_machine_occupancy_key_resolve(slit_row, slit_eq) or "").strip()
     n_need = int(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS)
@@ -18484,6 +18519,29 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
                 and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
             ):
                 continue
+            # #region agent log
+            _dep_n = getattr(_task_blocked_by_same_request_dependency, "_dbg_dep", 0)
+            if _dep_n < 100 or "Y4-51" in tid:
+                setattr(_task_blocked_by_same_request_dependency, "_dbg_dep", _dep_n + 1)
+                _agent_debug_ndjson_69d703(
+                    {
+                        "hypothesisId": "H_DEP",
+                        "runId": "pre-fix",
+                        "location": "_task_blocked_by_same_request_dependency:blocked",
+                        "message": "same_request_dependency_true",
+                        "data": {
+                            "task_id": tid,
+                            "my_seq": my_seq,
+                            "my_rank": my_r,
+                            "pred_machine": str(t2.get("machine") or ""),
+                            "pred_machine_name": str(t2.get("machine_name") or ""),
+                            "pred_rem": float(t2.get("remaining_units") or 0),
+                            "pred_seq": s2,
+                            "pred_rank": r2,
+                        },
+                    }
+                )
+            # #endregion
             return True
     return False
 
@@ -24514,6 +24572,38 @@ def _trial_order_flow_eligible_tasks(
                     and _norm.index(_normalize_process_name_for_rule_match("スリット"))
                     < _norm.index(_normalize_process_name_for_rule_match("SEC"))
                 ):
+                    # #region agent log
+                    _rows_dbg = []
+                    for _t in task_queue:
+                        if str(_t.get("task_id") or "").strip() != _l10_tid:
+                            continue
+                        _ip = float(_t.get("initial_remaining_units") or 0)
+                        _rp = float(_t.get("remaining_units") or 0)
+                        _rows_dbg.append(
+                            {
+                                "machine": str(_t.get("machine") or ""),
+                                "machine_name": str(_t.get("machine_name") or ""),
+                                "init": _ip,
+                                "rem": _rp,
+                                "done": max(0.0, _ip - _rp),
+                            }
+                        )
+                    _agent_debug_ndjson_69d703(
+                        {
+                            "hypothesisId": "H_B41",
+                            "runId": "pre-fix",
+                            "location": "_trial_order_flow_eligible_tasks:L10_B41",
+                            "message": "SEC_excluded_slit_sec_min_rolls",
+                            "data": {
+                                "task_id": _l10_tid,
+                                "pair_gap": _l10_pair_gap,
+                                "min_slit_rolls": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
+                                "wip_slit_before_sec": wip_slit_before_sec,
+                                "queue_rows_same_tid": _rows_dbg,
+                            },
+                        }
+                    )
+                    # #endregion
                     continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
