@@ -24384,12 +24384,13 @@ def _trial_order_flow_day_start_floor(
     # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるため、
     # 原板投入日（=同日13:00以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
     # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を得る。
+    # EC 行がキューに無い（完走後に行欠落）場合も後続フラグが付いていれば B2 後続として扱い、
+    # 原板同日の 13:00 下限を付けない（EC 行が残っている完走ケースと整合。L10 スリット欠落と同趣旨）。
     _tid_floor = str(task.get("task_id", "") or "").strip()
     is_b2_follower_delayed = bool(
         (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
         and _tid_floor
         and task_queue is not None
-        and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid_floor)
     )
     rid = task.get("raw_input_date")
     if not is_b2_follower_delayed and isinstance(rid, date) and rid == current_date:
@@ -26319,13 +26320,9 @@ def _trial_order_first_schedule_pass(
         return made_local
 
     def _is_b2_follower_phase2_row(t: dict) -> bool:
-        _tid = str(t.get("task_id") or "").strip()
+        """§B-2/§B-3 後続行。EC 行がキューから落ちていてもマージ・二相割付の対象に含める。"""
         return bool(
-            (
-                t.get("roll_pipeline_inspection")
-                or t.get("roll_pipeline_rewind")
-            )
-            and _task_queue_has_roll_pipeline_ec_for_tid(task_queue, _tid)
+            t.get("roll_pipeline_inspection") or t.get("roll_pipeline_rewind")
         )
 
     phase1_tasks = [t for t in eligible_sorted if not _is_b2_follower_phase2_row(t)]
@@ -26434,7 +26431,10 @@ def _run_b2_inspection_rewind_pass(
         tid = str(t.get("task_id", "") or "").strip()
         if not tid:
             continue
+        # EC 行がキューに無い＝完走後に欠落した依頼は、EC 済みとみなして後続専用パスへ含める
+        # （L10 B-4.1 のスリット行欠落と同趣旨。assign_room は既に UNCAPPED）。
         if not _task_queue_has_roll_pipeline_ec_for_tid(task_queue, tid):
+            target_tids.add(tid)
             continue
         if not _pipeline_ec_fully_done_for_tid(task_queue, tid):
             continue
