@@ -31,6 +31,48 @@ Private Sub CopySnapshotToRoot(ByVal snapPath As String, ByVal rootPath As Strin
     On Error GoTo 0
 End Sub
 
+Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfFolder As String, ByVal stamp As String, ByVal fileName As String, ByVal snapPath As String)
+    Dim wsSet As Worksheet
+    Dim shareRoot As String
+    Dim sharePdfRoot As String
+    Dim shareSnapDir As String
+    Dim shareLatestPath As String
+    Dim shareStampPath As String
+    
+    If wb Is Nothing Then Exit Sub
+    If Len(fileName) = 0 Then Exit Sub
+    If Len(snapPath) = 0 Then Exit Sub
+    If Len(Dir(snapPath)) = 0 Then Exit Sub
+    
+    On Error Resume Next
+    Set wsSet = wb.Worksheets(SHEET_SETTINGS)
+    On Error GoTo 0
+    If wsSet Is Nothing Then Exit Sub
+    
+    shareRoot = Trim$(CStr(wsSet.Range("E10").Value))
+    If Len(shareRoot) = 0 Then Exit Sub
+    
+    ' 末尾 \ を除去（\\server\share\ のようなUNCでも最後の\だけ落とす）
+    Do While Right$(shareRoot, 1) = "\" Or Right$(shareRoot, 1) = "/"
+        shareRoot = Left$(shareRoot, Len(shareRoot) - 1)
+        If Len(shareRoot) = 0 Then Exit Sub
+    Loop
+    
+    sharePdfRoot = shareRoot & "\" & relPdfFolder
+    EnsureFolder sharePdfRoot
+    shareSnapDir = sharePdfRoot & "\" & stamp
+    EnsureFolder shareSnapDir
+    
+    shareLatestPath = sharePdfRoot & "\" & fileName
+    shareStampPath = shareSnapDir & "\" & fileName
+    
+    On Error Resume Next
+    TryDeleteFile shareLatestPath
+    FileCopy snapPath, shareStampPath
+    FileCopy snapPath, shareLatestPath
+    On Error GoTo 0
+End Sub
+
 Private Function WorksheetExists(ByVal wb As Workbook, ByVal sheetName As String) As Boolean
     Dim ws As Worksheet
     On Error Resume Next
@@ -106,27 +148,33 @@ Public Sub スナップショット_pdfとcsvを出力(ByVal targetDir As String
     f = SHEET_RESULT_EQUIP_GANTT & ".pdf"
     ExportSheetPdfIfExists wb, SHEET_RESULT_EQUIP_GANTT, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
     
     f = SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL & ".pdf"
     ExportSheetPdfIfExists wb, SHEET_RESULT_EQUIP_GANTT_ACTUAL_DETAIL, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
     
     ' --- CSV ---
     f = SHEET_RESULT_TASK_LIST & ".csv"
     ExportSheetCsvIfExists wb, SHEET_RESULT_TASK_LIST, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
     
     f = SHEET_PLAN_INPUT_TASK & ".csv"
     ExportSheetCsvIfExists wb, SHEET_PLAN_INPUT_TASK, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
     
     f = SHEET_TASKS_RAW_PLAN_DATA & ".csv"
     ExportSheetCsvIfExists wb, SHEET_TASKS_RAW_PLAN_DATA, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
     
     f = SHEET_ACTUAL_DETAIL_DATA & ".csv"
     ExportSheetCsvIfExists wb, SHEET_ACTUAL_DETAIL_DATA, snapDir & "\" & f
     CopySnapshotToRoot snapDir & "\" & f, pdfRoot & "\" & f
+    CopySnapshotToSharedIfConfigured wb, PDF_SNAPSHOT_REL_FOLDER, stamp, f, snapDir & "\" & f
 End Sub
 
 ' 手動用の無引数エントリは 業務ロジック の「スナップショット_手動でpdfとcsv出力」（図形 OnAction・他モジュールから常に解決できるよう同じブックの標準モジュール側に置く）。
