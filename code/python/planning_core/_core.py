@@ -13355,12 +13355,12 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         except Exception:
             pass
         # region agent log
+        # NOTE: Avoid COM-heavy properties (xw_book.api.*) here; they can block when Excel shows dialogs.
         try:
-            api = getattr(xw_book, "api", None)
             _agent_debug_log_c92553(
                 location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:entry",
                 hypothesis_id="H1",
-                message="Before writing exclude rules sheet",
+                message="Entered exclude rules xlwings sync",
                 data={
                     "wb_path": os.path.abspath(wb_path),
                     "book_fullname": _xlwings_book_path_str(xw_book),
@@ -13369,10 +13369,6 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                     "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
                     "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
                     "app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None),
-                    "api_saved": getattr(api, "Saved", None) if api is not None else None,
-                    "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
-                    "api_path": getattr(api, "Path", None) if api is not None else None,
-                    "api_fullname": getattr(api, "FullName", None) if api is not None else None,
                 },
             )
         except Exception:
@@ -13412,18 +13408,11 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 rng.value = data
             # region agent log
             try:
-                api = getattr(xw_book, "api", None)
                 _agent_debug_log_c92553(
                     location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:before_save",
                     hypothesis_id="H1",
-                    message="About to save macro workbook via xlwings",
-                    data={
-                        "book_fullname": _xlwings_book_path_str(xw_book),
-                        "api_saved": getattr(api, "Saved", None) if api is not None else None,
-                        "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
-                        "api_path": getattr(api, "Path", None) if api is not None else None,
-                        "api_fullname": getattr(api, "FullName", None) if api is not None else None,
-                    },
+                    message="About to call xw_book.save()",
+                    data={"book_fullname": _xlwings_book_path_str(xw_book)},
                 )
             except Exception:
                 pass
@@ -13431,16 +13420,12 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             xw_book.save()
             # region agent log
             try:
-                api = getattr(xw_book, "api", None)
                 _agent_debug_log_c92553(
                     location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_save",
                     hypothesis_id="H1",
                     message="After save() returned",
                     data={
-                        "api_saved": getattr(api, "Saved", None) if api is not None else None,
-                        "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
-                        "api_path": getattr(api, "Path", None) if api is not None else None,
-                        "api_fullname": getattr(api, "FullName", None) if api is not None else None,
+                        "book_fullname": _xlwings_book_path_str(xw_book),
                     },
                 )
             except Exception:
@@ -13582,13 +13567,18 @@ def _agent_debug_log_e69e6f(
 def _agent_debug_log_c92553(
     location: str, hypothesis_id: str, message: str, data: dict | None = None, *, run_id: str = "pre-fix"
 ) -> None:
-    """Debug-mode NDJSON logger (session c92553). Writes to <repo>/debug-c92553.log."""
+    """Debug-mode NDJSON logger (session c92553). Writes to <repo>/debug-c92553.log (preferred)."""
     try:
         import json
         import time as _time
 
         here = os.path.dirname(__file__)
-        path = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-c92553.log"))
+        # __file__ = <repo>/code/python/planning_core/_core.py
+        # Prefer: <repo>/debug-c92553.log (3 levels up from planning_core)
+        # Fallbacks: <repo>/code/debug-c92553.log, previous (1 level above repo) for compatibility
+        path_repo = os.path.abspath(os.path.join(here, "..", "..", "..", "debug-c92553.log"))
+        path_code = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "code", "debug-c92553.log"))
+        path_prev = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-c92553.log"))
         payload = {
             "sessionId": "c92553",
             "runId": run_id,
@@ -13599,12 +13589,23 @@ def _agent_debug_log_c92553(
             "timestamp": int(_time.time() * 1000),
         }
         line = json.dumps(payload, ensure_ascii=False) + "\n"
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-        except Exception:
-            pass
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(line)
+        last_err = None
+        for path in (path_repo, path_code, path_prev):
+            try:
+                d = os.path.dirname(path)
+                if d:
+                    os.makedirs(d, exist_ok=True)
+            except Exception:
+                pass
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(line)
+                return
+            except Exception as ex:
+                last_err = ex
+                continue
+        if last_err is not None:
+            logging.debug("debug log write failed: %s", last_err)
     except Exception:
         return
 
