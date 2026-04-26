@@ -2038,6 +2038,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Dim refreshedCount As Long
     Dim nm As String
     Dim nmNorm As String
+    Dim lastRefreshing As String
     On Error GoTo EH
 
     m_lastRefreshQueriesErrMsg = vbNullString
@@ -2047,15 +2048,25 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Application.DisplayAlerts = False
 
     AgentDebugLogNDJSON "H1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "enter", "{""namePart"":""" & Replace(namePart, """", "'") & """}"
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "enter", "namePart=" & namePart
+    ' #endregion agent log (debug-30e24e)
 
     If SKIP_WORKBOOK_REFRESH_ALL Then
         AgentDebugLogNDJSON "H2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (SKIP_WORKBOOK_REFRESH_ALL)", "{""reason"":""SKIP_WORKBOOK_REFRESH_ALL""}"
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip", "reason=SKIP_WORKBOOK_REFRESH_ALL"
+        ' #endregion agent log (debug-30e24e)
     ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
         AgentDebugLogNDJSON "H3", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip (ping fail)", "{""host"":""" & Replace(PQ_REFRESH_PING_HOST, """", "'") & """,""timeoutMs"":" & CStr(PQ_REFRESH_PING_TIMEOUT_MS) & "}"
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "PQ1", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "skip", "reason=ping fail host=" & PQ_REFRESH_PING_HOST & " timeoutMs=" & CStr(PQ_REFRESH_PING_TIMEOUT_MS)
+        ' #endregion agent log (debug-30e24e)
     Else
         Call DisableBackgroundDataRefreshAll
         found = False
         refreshedCount = 0
+        lastRefreshing = ""
 
         For Each cn In ThisWorkbook.Connections
             nm = cn.Name
@@ -2068,8 +2079,15 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
             If StrComp(nmNorm, namePart, vbTextCompare) = 0 Then
                 found = True
                 AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
+                lastRefreshing = nm
+                ' #region agent log (debug-30e24e)
+                AgentDebugNdjson_30e24e "PQ2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh begin", "connection=" & nm
+                ' #endregion agent log (debug-30e24e)
                 cn.Refresh
                 refreshedCount = refreshedCount + 1
+                ' #region agent log (debug-30e24e)
+                AgentDebugNdjson_30e24e "PQ2", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "refresh ok", "connection=" & nm
+                ' #endregion agent log (debug-30e24e)
             ElseIf InStr(1, nmNorm, namePart, vbTextCompare) > 0 Then
                 AgentDebugLogNDJSON "H4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "ignore derived connection", "{""connectionName"":""" & Replace(nm, """", "'") & """,""normalized"":""" & Replace(nmNorm, """", "'") & """}"
             End If
@@ -2077,9 +2095,15 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
 
         Application.CalculateUntilAsyncQueriesDone
         AgentDebugLogNDJSON "H5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "{""found"":" & LCase$(CStr(found)) & ",""refreshedCount"":" & CStr(refreshedCount) & "}"
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "PQ3", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "exit", "found=" & CStr(found) & " refreshedCount=" & CStr(refreshedCount)
+        ' #endregion agent log (debug-30e24e)
 
         If Not found Then
             m_lastRefreshQueriesErrMsg = "接続名に '" & namePart & "' を含む接続が見つかりませんでした。"
+            ' #region agent log (debug-30e24e)
+            AgentDebugNdjson_30e24e "PQ4", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "not found", "namePart=" & namePart
+            ' #endregion agent log (debug-30e24e)
             TryRefreshWorkbookQueriesByConnectionNamePart = False
             GoTo FIN
         End If
@@ -2097,6 +2121,9 @@ EH:
     On Error GoTo 0
     m_lastRefreshQueriesErrMsg = "データの更新（Power Query / 接続）: " & Err.Description
     AgentDebugLogNDJSON "H6", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "{""err"":""" & Replace(Err.Description, """", "'") & """}"
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "PQ5", "業務ロジック.bas:TryRefreshWorkbookQueriesByConnectionNamePart", "error", "errNum=" & CStr(Err.Number) & " err=" & Err.Description & " lastRefreshing=" & lastRefreshing
+    ' #endregion agent log (debug-30e24e)
     TryRefreshWorkbookQueriesByConnectionNamePart = False
 End Function
 
