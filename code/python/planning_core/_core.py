@@ -27,6 +27,7 @@ import shutil
 import sys
 import threading
 import ctypes
+import pathlib
 from contextlib import contextmanager
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -19962,6 +19963,8 @@ def _agent_dbglog(
     location: str = "_core.py",
 ):
     try:
+        _repo_root = pathlib.Path(__file__).resolve().parents[3]
+        _log_path = _repo_root / "debug-30e24e.log"
         payload = {
             "sessionId": "30e24e",
             "runId": runId,
@@ -19971,7 +19974,7 @@ def _agent_dbglog(
             "data": data or {},
             "timestamp": int(time_module.time() * 1000),
         }
-        with open("debug-30e24e.log", "a", encoding="utf-8") as f:
+        with open(_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
         pass
