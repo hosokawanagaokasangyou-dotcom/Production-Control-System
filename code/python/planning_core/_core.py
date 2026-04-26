@@ -48,6 +48,11 @@ from .bootstrap import (
     output_dir,
 )
 
+# region agent log (debug-30e24e) - cache helpers
+_STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
+_STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
+# endregion agent log (debug-30e24e) - cache helpers
+
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -4983,6 +4988,21 @@ def load_main_sheet_global_priority_override_text() -> str:
     wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
+    # region agent log (debug-30e24e)
+    # VBA から起動されると段階2が複数回（パターン別）実行されうるため、
+    # openpyxl でのブックオープンを毎回やらない（mtime 変化時のみ更新）。
+    global _STAGE2_GLOBAL_COMMENT_CACHE
+    try:
+        st = os.stat(wb_path)
+        sig = (os.path.abspath(wb_path), int(st.st_mtime), int(st.st_size))
+        if (
+            isinstance(_STAGE2_GLOBAL_COMMENT_CACHE, dict)
+            and _STAGE2_GLOBAL_COMMENT_CACHE.get("sig") == sig
+        ):
+            return str(_STAGE2_GLOBAL_COMMENT_CACHE.get("value") or "")
+    except Exception:
+        pass
+    # endregion agent log (debug-30e24e)
     if _workbook_should_skip_openpyxl_io(wb_path):
         logging.info(
             "メイン再優先特記: ブックに「%s」があるため、openpyxl でグローバルコメントを読みません。",
@@ -4990,7 +5010,8 @@ def load_main_sheet_global_priority_override_text() -> str:
         )
         return ""
     try:
-        wb = load_workbook(wb_path, data_only=True, read_only=False)
+        # read_only=True でオープン高速化（読み取りのみ）
+        wb = load_workbook(wb_path, data_only=True, read_only=True)
     except Exception as e:
         logging.warning("メイン再優先特記: ブックを開きませんでした: %s", e)
         return ""
@@ -5018,8 +5039,22 @@ def load_main_sheet_global_priority_override_text() -> str:
                     continue
                 below = ws.cell(row=r + 1, column=c).value
                 if below is None or (isinstance(below, float) and pd.isna(below)):
-                    return ""
-                return str(below).strip()
+                    out = ""
+                    # region agent log (debug-30e24e)
+                    try:
+                        _STAGE2_GLOBAL_COMMENT_CACHE = {"sig": sig, "value": out}
+                    except Exception:
+                        pass
+                    # endregion agent log (debug-30e24e)
+                    return out
+                out = str(below).strip()
+                # region agent log (debug-30e24e)
+                try:
+                    _STAGE2_GLOBAL_COMMENT_CACHE = {"sig": sig, "value": out}
+                except Exception:
+                    pass
+                # endregion agent log (debug-30e24e)
+                return out
         return ""
     finally:
         pass
@@ -21744,16 +21779,62 @@ def load_machine_calendar_occupancy_blocks(
     """
     if not master_path or not os.path.isfile(master_path):
         return {}
+    # region agent log (debug-30e24e)
+    global _STAGE2_MACHINE_CALENDAR_CACHE
+    sig = None
+    try:
+        st = os.stat(master_path)
+        eq_sig = ",".join(
+            sorted(str(x).strip() for x in (equipment_list or []) if str(x).strip())
+        )
+        sig = (
+            os.path.abspath(master_path),
+            int(st.st_mtime),
+            int(st.st_size),
+            hashlib.sha256(eq_sig.encode("utf-8")).hexdigest(),
+        )
+        if (
+            isinstance(_STAGE2_MACHINE_CALENDAR_CACHE, dict)
+            and _STAGE2_MACHINE_CALENDAR_CACHE.get("sig") == sig
+        ):
+            return _STAGE2_MACHINE_CALENDAR_CACHE.get("value") or {}
+    except Exception:
+        sig = None
+    # endregion agent log (debug-30e24e)
     try:
         xls = pd.ExcelFile(master_path)
         if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
-            return {}
+            out0 = {}
+            # region agent log (debug-30e24e)
+            try:
+                if sig is not None:
+                    _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+            except Exception:
+                pass
+            # endregion agent log (debug-30e24e)
+            return out0
         raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
         logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
-        return {}
+        out0 = {}
+        # region agent log (debug-30e24e)
+        try:
+            if sig is not None:
+                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+        except Exception:
+            pass
+        # endregion agent log (debug-30e24e)
+        return out0
     if raw.shape[0] < 3 or raw.shape[1] < 3:
-        return {}
+        out0 = {}
+        # region agent log (debug-30e24e)
+        try:
+            if sig is not None:
+                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+        except Exception:
+            pass
+        # endregion agent log (debug-30e24e)
+        return out0
 
     ncols = raw.shape[1]
     non_empty_pm = 0
@@ -21795,7 +21876,15 @@ def load_machine_calendar_occupancy_blocks(
             col_to_eq[c] = canon
 
     if not col_to_eq:
-        return {}
+        out0 = {}
+        # region agent log (debug-30e24e)
+        try:
+            if sig is not None:
+                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+        except Exception:
+            pass
+        # endregion agent log (debug-30e24e)
+        return out0
 
     acc: dict[date, dict[str, list[tuple[datetime, datetime]]]] = defaultdict(
         lambda: defaultdict(list)
@@ -21840,6 +21929,13 @@ def load_machine_calendar_occupancy_blocks(
         for pk, iv in phys_accum.items():
             merged_all[pk] = _merge_machine_calendar_intervals(iv)
         out[d] = merged_all
+    # region agent log (debug-30e24e)
+    try:
+        if sig is not None:
+            _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out}
+    except Exception:
+        pass
+    # endregion agent log (debug-30e24e)
     return out
 
 
