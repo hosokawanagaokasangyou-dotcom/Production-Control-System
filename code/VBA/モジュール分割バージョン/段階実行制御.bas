@@ -400,19 +400,19 @@ Public Sub RunPythonStage1()
         Exit Sub
     End If
     
-    ' 段階1で作成・更新される関連シートへのリンクをメインシートへ反映
+    ' 段階1: Python 実行後の後処理（メイン反映）を実行するか
     Dim skipPost As Boolean
     Dim t0 As Double
-    skipPost = Stage1SkipMainSheetLinkUpdateEffective()
+    skipPost = Stage1SkipMainSheetPostProcessEffective()
     If skipPost Then
-        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新（表示/非表示・並べ替え等）はスキップします（手動実行）。"
+        Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（シートの表示/非表示・並べ替え等）はスキップします（手動実行）。"
     Else
         t0 = Timer
-        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新を開始（表示/非表示・並べ替え等）。"
+        Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（シートの表示/非表示・並べ替え等）を開始。"
         On Error Resume Next
         メインシート_段階1実行後_リンク更新
         On Error GoTo 0
-        Stage1AppendExecutionLogLine "INFO", "段階1: メインシートへのリンク更新が完了。sec=" & Format$(Timer - t0, "0.000")
+        Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（シートの表示/非表示・並べ替え等）が完了。sec=" & Format$(Timer - t0, "0.000")
     End If
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     ' メイン反映の直後はメインがアクティブになるため、タスク抽出完了時は配台計画シートへ戻す
@@ -422,17 +422,22 @@ Public Sub RunPythonStage1()
     m_animMacroSucceeded = True
 End Sub
 
-' 段階1: 終了後の「メインシート反映（表示/非表示・並べ替え等）」を省略するか。
-' 既定は True（ユーザー要望: 手動でメソッドを実行するため段階1では省略）。
-Public Function Stage1SkipMainSheetLinkUpdateEffective() As Boolean
+' 段階1: 終了後の後処理（シートの表示/非表示・並べ替え等）を省略するか。
+' 既定は True（ユーザー要望: 手動で実行するため段階1では省略）。
+'
+' 環境変数:
+' - STAGE1_SKIP_MAIN_POST_PROCESS: 1/true/yes/on でスキップ、0/false/no/off で実行
+' - 互換: STAGE1_SKIP_MAIN_LINK_UPDATE（旧名）
+Public Function Stage1SkipMainSheetPostProcessEffective() As Boolean
     Dim v As String
-    v = Trim$(Environ$("STAGE1_SKIP_MAIN_LINK_UPDATE"))
+    v = Trim$(Environ$("STAGE1_SKIP_MAIN_POST_PROCESS"))
+    If Len(v) = 0 Then v = Trim$(Environ$("STAGE1_SKIP_MAIN_LINK_UPDATE"))
     If Len(v) > 0 Then
         v = LCase$(v)
-        Stage1SkipMainSheetLinkUpdateEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
+        Stage1SkipMainSheetPostProcessEffective = (v = "1" Or v = "true" Or v = "yes" Or v = "on")
         Exit Function
     End If
-    Stage1SkipMainSheetLinkUpdateEffective = True
+    Stage1SkipMainSheetPostProcessEffective = True
 End Function
 
 ' 段階1: log\execution_log.txt へ追記（失敗しても落とさない）
