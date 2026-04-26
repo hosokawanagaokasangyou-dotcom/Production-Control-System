@@ -4170,13 +4170,14 @@ _ROLL_UNIT_LENGTH_TABLE_PATH_USED: str | None = None
 def _normalize_roll_unit_length_table_key(val) -> str:
     """
     ロール単位長さテーブルの照会キーを正規化する。
-    文字の互換（全角等）を寄せつつ、空白連続は 1 個に潰す（Excel 由来の表記ゆれ対策）。
+    先に NFKC で全角英数字・互換記号などを半角へ寄せたうえで、
+    半角・全角などあらゆる空白類（isspace）を除去してから照合する
+    （Excel 由来の U+3000 や NBSP、連続スペースの差で一致しないのを防ぐ）。
     """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
     s = unicodedata.normalize("NFKC", str(val).strip())
-    s = re.sub(r"\s+", " ", s)
-    return s.strip()
+    return "".join(ch for ch in s if not ch.isspace())
 
 
 def _roll_unit_length_table_search_paths() -> list[str]:
