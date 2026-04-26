@@ -55,6 +55,27 @@ Public Sub AgentDebugNdjson_30e24e(ByVal hypothesisId As String, ByVal location 
 End Sub
 ' #endregion agent log (debug-30e24e)
 
+' #region agent log (debug-30e24e)
+' 1列分の文字列配列を、セルへ高速に一括書き込みする（遅い Cells(r,c)=... ループの置換用）
+Public Sub AgentBulkWriteLinesToSheetColumn(ByVal ws As Worksheet, ByVal startRow As Long, ByVal col As Long, ByRef lines() As String, ByRef outWritten As Long)
+    Dim i As Long
+    Dim n As Long
+    Dim arr() As Variant
+    outWritten = 0
+    If ws Is Nothing Then Exit Sub
+    On Error Resume Next
+    n = UBound(lines) - LBound(lines) + 1
+    On Error GoTo 0
+    If n <= 0 Then Exit Sub
+    ReDim arr(1 To n, 1 To 1)
+    For i = 1 To n
+        arr(i, 1) = lines(LBound(lines) + i - 1)
+    Next i
+    ws.Cells(startRow, col).Resize(n, 1).Value = arr
+    outWritten = n
+End Sub
+' #endregion agent log (debug-30e24e)
+
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
     Dim lines() As String
@@ -3481,11 +3502,8 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     t0 = Timer
     nLogLines = 0
     ' #endregion agent log (debug-30e24e)
-    For i = LBound(logLines) To UBound(logLines)
-        wsLog.Cells(logWriteRow, 1).Value = logLines(i)
-        logWriteRow = logWriteRow + 1
-        nLogLines = nLogLines + 1
-    Next i
+    AgentBulkWriteLinesToSheetColumn wsLog, logWriteRow, 1, logLines, nLogLines
+    logWriteRow = logWriteRow + nLogLines
     Application.ScreenUpdating = prevScreenUpdating
     ' #region agent log (debug-30e24e)
     AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "write execution_log to LOG done", "sec=" & Format$(Timer - t0, "0.000") & " lines=" & CStr(nLogLines)
@@ -3507,9 +3525,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         cmdLines = Split(cmdText, vbLf)
         baseRow = wsLog.Cells(wsLog.Rows.Count, 1).End(xlUp).Row + 2
         wsLog.Cells(baseRow, 1).Value = "---- cmd.exe stdout/stderr ----"
-        For i = LBound(cmdLines) To UBound(cmdLines)
-            wsLog.Cells(baseRow + 1 + i, 1).Value = cmdLines(i)
-        Next i
+        Dim nCmd As Long
+        nCmd = 0
+        AgentBulkWriteLinesToSheetColumn wsLog, baseRow + 1, 1, cmdLines, nCmd
     End If
 
     ' 計画検証エラー等で m_lastStage2ErrMsg が設定されたときは結果ブック取り込みをスキップ（誤って前回出力を取り込まない）
