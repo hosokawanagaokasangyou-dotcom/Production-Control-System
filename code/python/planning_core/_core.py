@@ -4545,16 +4545,31 @@ def _ceil_roll_unit_length_plan_sheet_cell(val):
 
 
 def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
-    """段階1 DataFrame の ロール単位長さ 列を、マージ後も含めて切り上げ正規化する。"""
+    """
+    段階1 DataFrame の ロール単位長さ 列を、マージ後も含めて切り上げ正規化する。
+
+    「使用原反,ロール単位の長さ.txt」に登録がある行は、CSV の m を正として
+    ``ROLL_UNIT_LENGTH_CEIL_STEP_M`` の切上げを行わない（例: 250→300 にしない）。
+    """
     col = PLAN_COL_ROLL_UNIT_LENGTH
     if df is None or df.empty or col not in df.columns:
         return
     for i in df.index:
+        if TASK_COL_USED_RAW in df.columns:
+            _ur_c = df.at[i, TASK_COL_USED_RAW]
+            if _lookup_roll_unit_length_m_from_used_raw(_ur_c) is not None:
+                continue
         df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
 
 
 def _stage1_roll_length_for_planning_row(row) -> float:
-    """段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。"""
+    """
+    段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。
+
+    使用原反が「使用原反,ロール単位の長さ.txt」に登録されているときは、
+    推定・換算救済（``_coerce_roll_unit_m_when_converted_qty_below_roll``）後の値を
+    ``ROLL_UNIT_LENGTH_CEIL_STEP_M`` へ切上げせずそのまま返す。
+    """
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
     _used_raw_s1 = row.get(TASK_COL_USED_RAW, None)
     qty, _done_m, _qtceiled, _from_unp = _plan_row_dispatch_qty_metrics(row)
@@ -4582,6 +4597,9 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    _tbl_roll = _lookup_roll_unit_length_m_from_used_raw(_used_raw_s1)
+    if _tbl_roll is not None and float(_tbl_roll) > 0:
+        return float(_roll_len)
     return float(_ceil_roll_unit_length_m_to_next_step(_roll_len))
 
 
