@@ -9910,11 +9910,11 @@ def _write_main_sheet_gemini_usage_via_xlwings(
         # region agent log
         try:
             _agent_debug_log_c92553(
-                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_attach",
-                hypothesis_id="H1",
-                message="Attached macro workbook; about to set app flags",
+                location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_attach",
+                hypothesis_id="H5",
+                message="Attached macro workbook for main sheet gemini usage",
                 data={
-                    "wb_path": os.path.abspath(wb_path),
+                    "wb_path": os.path.abspath(macro_wb_path),
                     "book_fullname": _xlwings_book_path_str(xw_book),
                     "opened_wb_here": bool(info.get("opened_wb_here")),
                     "mode": info.get("mode"),
@@ -9977,7 +9977,36 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             _apply_main_sheet_gemini_usage_chart_xlwings(
                 ws_main, _load_gemini_cumulative_payload()
             )
+            # region agent log
+            try:
+                _agent_debug_log_c92553(
+                    location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:before_save",
+                    hypothesis_id="H5",
+                    message="About to call xw_book.save() for main sheet gemini usage",
+                    data={
+                        "book_fullname": _xlwings_book_path_str(xw_book),
+                        "opened_wb_here": bool(info.get("opened_wb_here")),
+                        "mode": info.get("mode"),
+                        "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
+                        "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
+                        "app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None),
+                    },
+                )
+            except Exception:
+                pass
+            # endregion
             xw_book.save()
+            # region agent log
+            try:
+                _agent_debug_log_c92553(
+                    location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_save",
+                    hypothesis_id="H5",
+                    message="Returned from xw_book.save() for main sheet gemini usage",
+                    data={},
+                )
+            except Exception:
+                pass
+            # endregion
             ok = True
             logging.info(
                 "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で保存しました。",
