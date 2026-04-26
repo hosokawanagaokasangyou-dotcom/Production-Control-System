@@ -18144,6 +18144,27 @@ def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) ->
     return max(0.0, slit_done - sec_done)
 
 
+def _l10_task_queue_has_special_slit_row_for_tid(task_queue: list, task_id: str) -> bool:
+    """同一依頼に L10 対象（スリット機1　湖南）の行が task_queue に存在するか。
+
+    スリット完走後に行がキューから落ちると slit_done が集計されず pair_gap=0 のままになる。
+    そのとき B-4.1 で SEC を永久除外しないため、スリット行が無い場合はゲートを掛けない。
+    """
+    tid = (task_id or "").strip()
+    if not tid:
+        return False
+    _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _slit_proc and mach == _slit_mach:
+            return True
+    return False
+
+
 def _l10_sec_start_floor_from_slit_timeline(
     task: dict,
     timeline_events: list | None,
@@ -24572,39 +24593,59 @@ def _trial_order_flow_eligible_tasks(
                     and _norm.index(_normalize_process_name_for_rule_match("スリット"))
                     < _norm.index(_normalize_process_name_for_rule_match("SEC"))
                 ):
-                    # #region agent log
-                    _rows_dbg = []
-                    for _t in task_queue:
-                        if str(_t.get("task_id") or "").strip() != _l10_tid:
-                            continue
-                        _ip = float(_t.get("initial_remaining_units") or 0)
-                        _rp = float(_t.get("remaining_units") or 0)
-                        _rows_dbg.append(
+                    if not _l10_task_queue_has_special_slit_row_for_tid(
+                        task_queue, _l10_tid
+                    ):
+                        # #region agent log
+                        _agent_debug_ndjson_69d703(
                             {
-                                "machine": str(_t.get("machine") or ""),
-                                "machine_name": str(_t.get("machine_name") or ""),
-                                "init": _ip,
-                                "rem": _rp,
-                                "done": max(0.0, _ip - _rp),
+                                "hypothesisId": "H_B41_BYPASS",
+                                "runId": "post-fix",
+                                "location": "_trial_order_flow_eligible_tasks:L10_B41",
+                                "message": "SEC_allowed_no_slit_row_in_queue",
+                                "data": {
+                                    "task_id": _l10_tid,
+                                    "pair_gap": _l10_pair_gap,
+                                    "min_slit_rolls": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
+                                },
                             }
                         )
-                    _agent_debug_ndjson_69d703(
-                        {
-                            "hypothesisId": "H_B41",
-                            "runId": "pre-fix",
-                            "location": "_trial_order_flow_eligible_tasks:L10_B41",
-                            "message": "SEC_excluded_slit_sec_min_rolls",
-                            "data": {
-                                "task_id": _l10_tid,
-                                "pair_gap": _l10_pair_gap,
-                                "min_slit_rolls": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
-                                "wip_slit_before_sec": wip_slit_before_sec,
-                                "queue_rows_same_tid": _rows_dbg,
-                            },
-                        }
-                    )
-                    # #endregion
-                    continue
+                        # #endregion
+                        pass
+                    else:
+                        # #region agent log
+                        _rows_dbg = []
+                        for _t in task_queue:
+                            if str(_t.get("task_id") or "").strip() != _l10_tid:
+                                continue
+                            _ip = float(_t.get("initial_remaining_units") or 0)
+                            _rp = float(_t.get("remaining_units") or 0)
+                            _rows_dbg.append(
+                                {
+                                    "machine": str(_t.get("machine") or ""),
+                                    "machine_name": str(_t.get("machine_name") or ""),
+                                    "init": _ip,
+                                    "rem": _rp,
+                                    "done": max(0.0, _ip - _rp),
+                                }
+                            )
+                        _agent_debug_ndjson_69d703(
+                            {
+                                "hypothesisId": "H_B41",
+                                "runId": "pre-fix",
+                                "location": "_trial_order_flow_eligible_tasks:L10_B41",
+                                "message": "SEC_excluded_slit_sec_min_rolls",
+                                "data": {
+                                    "task_id": _l10_tid,
+                                    "pair_gap": _l10_pair_gap,
+                                    "min_slit_rolls": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
+                                    "wip_slit_before_sec": wip_slit_before_sec,
+                                    "queue_rows_same_tid": _rows_dbg,
+                                },
+                            }
+                        )
+                        # #endregion
+                        continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
         if _task_blocked_by_global_dispatch_trial_order(
