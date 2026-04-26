@@ -12,6 +12,7 @@ Option Explicit
 
 Private Sub Workbook_Open()
     On Error Resume Next
+    Application.Calculation = xlCalculationAutomatic
     ??AI_??Version??_?????
     ShortcutMainSheet_OnKeyRegister
     On Error GoTo 0
