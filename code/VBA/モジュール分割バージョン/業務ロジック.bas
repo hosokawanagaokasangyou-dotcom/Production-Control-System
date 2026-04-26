@@ -1680,18 +1680,12 @@ End Sub
 
 ' 試行順パターン一覧作成のあとパターン別段階2を続けて実行し、成功時のみサマリシートをアクティブにする（メイン_ 等からの一括用）。
 Public Sub アニメ付き_配台計画_タスク入力_試行順パターン一覧からパターン別段階2まで連続実行()
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H0", "業務ロジック:連続実行:enter", "chain macro entered", "m_anim=" & CStr(m_animMacroSucceeded))
-    ' #endregion agent log
     m_dispatchTrialChainSuppressIntermediateChime = True
     On Error GoTo ChainDispatchTrialDone
     Call アニメ付き_配台計画_タスク入力_試行順パターン一覧シートを作成
     If Not m_animMacroSucceeded Then GoTo ChainDispatchTrialDone
     Call アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行
 ChainDispatchTrialDone:
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H0", "業務ロジック:連続実行:done", "chain label reached", "m_anim=" & CStr(m_animMacroSucceeded))
-    ' #endregion agent log
     m_dispatchTrialChainSuppressIntermediateChime = False
     If m_animMacroSucceeded Then
         On Error Resume Next
@@ -1718,9 +1712,6 @@ End Sub
 
 ' アニメ付き_スプラッシュ付きで実行 から ThisWorkbook 修飾で呼ぶ（他ブックの同名マクロに取られないようにする）
 Public Sub PM_AI_AnimCore_DispatchTrialPatternList()
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:list", "qualified core entry", "")
-    ' #endregion agent log
     Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
         "run_dispatch_trial_pattern_list_for_xlwings", _
         "配台試行順パターン一覧", _
@@ -1729,9 +1720,6 @@ Public Sub PM_AI_AnimCore_DispatchTrialPatternList()
 End Sub
 
 Public Sub PM_AI_AnimCore_DispatchTrialPatternStage2Batch()
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:st2batch", "qualified core entry", "")
-    ' #endregion agent log
     Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
         "run_dispatch_trial_pattern_stage2_batch_for_xlwings", _
         "配台試行順パターン別段階2", _
@@ -1740,9 +1728,6 @@ Public Sub PM_AI_AnimCore_DispatchTrialPatternStage2Batch()
 End Sub
 
 Public Sub PM_AI_AnimCore_DispatchTrialPatternSelectionApply()
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("FIX", "業務ロジック:PM_AI_AnimCore:selection", "qualified core entry", "")
-    ' #endregion agent log
     Call DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
         "run_dispatch_pattern_stage2_selection_for_xlwings", _
         "試行順パターン採用の反映", _
@@ -1762,23 +1747,14 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     Dim pqOk As Boolean
 
     m_animMacroSucceeded = False
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H1", "業務ロジック:DispatchTrialPattern:enter", "inner xlwings entry", "entryPoint=" & entryPoint)
-    ' #endregion agent log
     targetDir = Trim$(ThisWorkbook.path)
     If Len(targetDir) = 0 Then
-        ' #region agent log
-        Call AgentDebugNdjson_1d7666("H3", "業務ロジック:DispatchTrialPattern:path", "empty ThisWorkbook.path", dialogTitle)
-        ' #endregion agent log
         AppMsgBox "先にこのブックを保存してください。", vbExclamation, dialogTitle
         Exit Sub
     End If
 
     MacroSplash_SetStep "データ接続（Power Query 等）を更新しています…"
     pqOk = TryRefreshWorkbookQueries()
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H2", "業務ロジック:DispatchTrialPattern:afterPQ", "TryRefreshWorkbookQueries returned", "ok=" & CStr(pqOk))
-    ' #endregion agent log
     If Not pqOk Then
         AppMsgBox "データ接続の更新に失敗しました。" & vbCrLf & m_lastRefreshQueriesErrMsg, vbExclamation, dialogTitle
         Exit Sub
@@ -1801,9 +1777,6 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
     If exitCode = &H7FFFFFFF Then exitCode = 1
     m_animMacroSucceeded = (exitCode = 0)
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H5", "業務ロジック:DispatchTrialPattern:afterXw", "XwRun finished", "exitCode=" & CStr(exitCode) & " m_anim=" & CStr(m_animMacroSucceeded))
-    ' #endregion agent log
     If Not m_animMacroSucceeded Then
         AppMsgBox "試行順パターンの反映に失敗しました（終了コード " & CStr(exitCode) & "）。" & vbCrLf & vbCrLf & _
             "確認例: シート「" & SHEET_DISPATCH_PATTERN_STAGE2_SUMMARY & "」の B2（バッチ出力フォルダが実在するか）・B3（採用パターンIDが一覧と一致するか）。" & vbCrLf & _
@@ -1812,9 +1785,6 @@ Private Sub DispatchTrialPattern_RunXlwingsAfterQueryRefresh( _
     End If
     Exit Sub
 DispatchTrialPatternXwFail:
-    ' #region agent log
-    Call AgentDebugNdjson_1d7666("H5", "業務ロジック:DispatchTrialPattern:XwFail", "XwRunConsoleRunner error", "Err=" & CStr(Err.Number) & " " & Err.Description)
-    ' #endregion agent log
     AppMsgBox "xlwings の起動に失敗しました: " & Err.Description, vbCritical, dialogTitle
     Err.Clear
 End Sub
