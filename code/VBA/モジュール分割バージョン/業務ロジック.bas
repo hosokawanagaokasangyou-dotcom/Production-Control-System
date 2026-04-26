@@ -3222,8 +3222,19 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     Dim st2XwDesc As String
     Dim missSt2 As String
     Dim st2DidUnlock As Boolean
+    ' #region agent log (debug-30e24e)
+    Dim t0All As Double
+    Dim t0 As Double
+    Dim nSheets As Long
+    Dim nLogLines As Long
+    ' #endregion agent log (debug-30e24e)
     
     On Error GoTo ErrHandler
+    
+    ' #region agent log (debug-30e24e)
+    t0All = Timer
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "enter", ""
+    ' #endregion agent log (debug-30e24e)
     
     m_lastStage2ErrMsg = ""
     m_lastStage2ExitCode = -1
@@ -3260,6 +3271,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     設定_シート表示_シートを確保
     MacroSplash_SetStep "段階2: データ接続（_q加工実績明細DATA）を更新しています…"
 
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工実績明細DATA") Then
         m_lastStage2ErrMsg = "データ接続（_q加工実績明細DATA）の更新に失敗したため段階2を中断しました。"
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
@@ -3267,6 +3281,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         End If
         Exit Sub
     End If
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "_q加工実績明細DATA refresh done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     
     MacroSplash_SetStep "段階2: LOG シートを準備しています（段階1ログの連結含む）…"
     Set preserved = New Collection
@@ -3323,7 +3340,13 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     ThisWorkbook.Save
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "ThisWorkbook.Save done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     Application.StatusBar = False
     
     st2DidUnlock = False
@@ -3342,6 +3365,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         MacroSplash_ClearExecutionLogPane
         On Error Resume Next
         Err.Clear
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        ' #endregion agent log (debug-30e24e)
         XwRunConsoleRunner "run_stage2_for_xlwings"
         If Err.Number <> 0 Then
             st2XwErr = Err.Number
@@ -3355,6 +3381,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             GoTo Finish
         End If
         On Error GoTo ErrHandler
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "xlwings stage2 runner returned", "sec=" & Format$(Timer - t0, "0.000")
+        ' #endregion agent log (debug-30e24e)
         exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
         If exitCode = &H7FFFFFFF Then exitCode = 1
         m_splashExecutionLogPath = ""
@@ -3386,7 +3415,13 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        ' #endregion agent log (debug-30e24e)
         exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideStage12CmdSt2, hideStage12CmdSt2)
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "cmd stage2 finished", "sec=" & Format$(Timer - t0, "0.000") & " exit=" & CStr(exitCode)
+        ' #endregion agent log (debug-30e24e)
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage2ExitCode = exitCode
@@ -3442,11 +3477,19 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' 6. LOGシートに一行ずつ書き出す（段階1退避があるときは logStartRow から）
     Application.ScreenUpdating = False
     logWriteRow = logStartRow
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    nLogLines = 0
+    ' #endregion agent log (debug-30e24e)
     For i = LBound(logLines) To UBound(logLines)
         wsLog.Cells(logWriteRow, 1).Value = logLines(i)
         logWriteRow = logWriteRow + 1
+        nLogLines = nLogLines + 1
     Next i
     Application.ScreenUpdating = prevScreenUpdating
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "write execution_log to LOG done", "sec=" & Format$(Timer - t0, "0.000") & " lines=" & CStr(nLogLines)
+    ' #endregion agent log (debug-30e24e)
     
     If exitCode <> 0 Then
         warnRow2 = logWriteRow
@@ -3501,6 +3544,10 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         ' 取り込み元ブックのウィンドウのみ非表示（Excel 本体は表示のまま。Copy 中に前面へ出さない）
         sourceWb.Windows(1).Visible = False
         
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        nSheets = 0
+        ' #endregion agent log (debug-30e24e)
         For Each sourceWs In sourceWb.Sheets
             sheetName = Trim$(sourceWs.Name)
             
@@ -3518,6 +3565,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
             ' シートをコピー（ターゲットブックの末尾に）
             sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
+            nSheets = nSheets + 1
             
             ' コピーしたシートの書式設定（列幅、罫線、見出し）
             ' ※ Sheets(Count) だけだと末尾が _FontPick のとき誤参照するため、取り込み元と同名で引き直す
@@ -3570,6 +3618,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
 NextSourceWs:
         Next sourceWs
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import production_plan sheets done", "sec=" & Format$(Timer - t0, "0.000") & " sheets=" & CStr(nSheets)
+        ' #endregion agent log (debug-30e24e)
         
         ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（UserInterfaceOnly 保護後もマクロから可。依頼NO薄緑は機械名毎のみ追加）
         On Error Resume Next
@@ -3619,6 +3670,10 @@ NextSourceWs:
         ' 取り込み元ブックのウィンドウのみ非表示（同上）
         memberWb.Windows(1).Visible = False
         
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        nSheets = 0
+        ' #endregion agent log (debug-30e24e)
         For Each sourceWs In memberWb.Sheets
             sheetName = sourceWs.Name
             newSheetName = SafePersonalSheetName(sheetName)
@@ -3650,7 +3705,11 @@ NextSourceWs:
                 .Font.Bold = True
                 .Interior.Color = RGB(226, 239, 218)
             End With
+            nSheets = nSheets + 1
         Next sourceWs
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "import member_schedule sheets done", "sec=" & Format$(Timer - t0, "0.000") & " sheets=" & CStr(nSheets)
+        ' #endregion agent log (debug-30e24e)
         
         memberWb.Close SaveChanges:=False
         Set memberWb = Nothing
@@ -3746,6 +3805,9 @@ Finish:
     
     ' 終了直前: 結果_配台表の表示用クエリを更新（段階2結果の反映直後に追従させる）
     MacroSplash_SetStep "段階2: データ接続（_q結果_配台表）を更新しています…"
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q結果_配台表") Then
         ' 終了処理は続行（結果取り込みは完了している想定）。失敗は LOG 先頭行へ残す。
         If Len(m_lastStage2ErrMsg) = 0 Then
@@ -3760,6 +3822,13 @@ Finish:
         If Not wsLog Is Nothing Then wsLog.Cells(1, 1).Value = m_lastStage2ErrMsg
         On Error GoTo 0
     End If
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "_q結果_配台表 refresh done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
+    
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V4", "業務ロジック.bas:段階2_コア実行", "exit", "sec=" & Format$(Timer - t0All, "0.000") & " exit=" & CStr(m_lastStage2ExitCode)
+    ' #endregion agent log (debug-30e24e)
 
     On Error Resume Next
     ThisWorkbook.Save
