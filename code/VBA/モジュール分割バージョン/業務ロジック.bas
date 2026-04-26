@@ -29,6 +29,32 @@ Public Sub AgentDebugNdjson_1d7666(ByVal hypothesisId As String, ByVal location 
 End Sub
 ' #endregion agent log
 
+' #region agent log (debug-30e24e)
+' NDJSON 1 行をリポジトリ直下の debug-30e24e.log へ追記（VBA 側の遅延区間を計測）
+Public Sub AgentDebugNdjson_30e24e(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataNote As String = vbNullString)
+    Dim pth As String
+    Dim fn As Integer
+    Dim ln As String
+    Dim msgEsc As String
+    Dim dataEsc As String
+    On Error Resume Next
+    pth = Trim$(ThisWorkbook.path)
+    If Len(pth) = 0 Then Exit Sub
+    ' ThisWorkbook.path は ...\code の想定 → リポジトリ直下へ
+    pth = pth & "\..\debug-30e24e.log"
+    msgEsc = Replace(Replace(Replace(message, "\", "/"), """", "'"), vbCrLf, " ")
+    dataEsc = Replace(Replace(Replace(CStr(dataNote), "\", "/"), """", "'"), vbCrLf, " ")
+    ln = "{""sessionId"":""30e24e"",""runId"":""pre"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & location & """,""message"":""" & msgEsc & """"
+    If Len(dataEsc) > 0 Then ln = ln & ",""dataNote"":""" & dataEsc & """"
+    ln = ln & ",""timestamp"":""" & Format$(Now, "yyyymmddhhnnss") & """}"
+    fn = FreeFile
+    Open pth For Append As #fn
+    Print #fn, ln
+    Close #fn
+    On Error GoTo 0
+End Sub
+' #endregion agent log (debug-30e24e)
+
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
     Dim lines() As String
@@ -580,10 +606,12 @@ End Sub
 ' ・引数名は targetWs（RunPython 等の呼び出し側にも「ws」があり、ウォッチで親フレームの ws と混同しやすいため）
 Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
+    Dim t0 As Double
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
     ' 結果_設備ガント／実績明細は専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
     If 結果_設備ガント系シート名か(targetWs.Name) Then Exit Sub
     su = Application.ScreenUpdating
+    t0 = Timer
     On Error Resume Next
     Application.ScreenUpdating = True
     targetWs.Activate
@@ -594,6 +622,7 @@ Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     targetWs.Range("A1").Select
     Application.ScreenUpdating = su
     On Error GoTo 0
+    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果シート_列幅_AutoFit安定", "AutoFit done", "sec=" & Format$(Timer - t0, "0.000") & " sheet=" & targetWs.Name
 End Sub
 
 ' 結果_タスク一覧 専用: 非表示列に EntireColumn.AutoFit をかけると列が再表示されるため、表示列のみ AutoFit する。
@@ -601,6 +630,7 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     Dim su As Boolean
     Dim lastCol As Long
     Dim c As Long
+    Dim t0 As Double
     
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
     
@@ -612,6 +642,7 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     
     su = Application.ScreenUpdating
     Application.ScreenUpdating = True
+    t0 = Timer
     On Error Resume Next
     targetWs.Activate
     DoEvents
@@ -625,6 +656,7 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     targetWs.Range("A1").Select
     Application.ScreenUpdating = su
     On Error GoTo 0
+    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果シート_列幅_AutoFit非表示を維持", "AutoFit visible cols done", "sec=" & Format$(Timer - t0, "0.000") & " sheet=" & targetWs.Name & " lastCol=" & CStr(lastCol)
 End Sub
 
 ' 結果_タスク一覧: 列「配完_回答指定16時まで」（旧名「配完_基準16時まで」）が「いいえ」のセルを赤背景・白文字・太字にする。
@@ -772,17 +804,23 @@ End Function
 Public Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
     Dim ws As Worksheet
     Dim prevScr As Boolean
+    Dim t0 As Double
+    Dim n As Long
     prevScr = Application.ScreenUpdating
     On Error Resume Next
     Application.ScreenUpdating = False
+    t0 = Timer
+    n = 0
     For Each ws In wb.Worksheets
         If Left$(ws.Name, 3) = "結果_" Then
+            n = n + 1
             ws.Activate
             ActiveWindow.Zoom = zoomPercent
         End If
     Next ws
     On Error GoTo 0
     Application.ScreenUpdating = prevScr
+    AgentDebugNdjson_30e24e "V3", "業務ロジック.bas:結果プレフィックスシートの表示倍率を設定", "Zoom loop done", "sec=" & Format$(Timer - t0, "0.000") & " n=" & CStr(n) & " zoom=" & CStr(zoomPercent)
 End Sub
 
 ' 結果_設備ガント／実績明細は同一ガントレイアウトのため同一扱い（列幅・印刷・Zoom 等）

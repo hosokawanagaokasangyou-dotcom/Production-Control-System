@@ -459,6 +459,11 @@ End Sub
 
 ' 互換: 段階1→段階2（完了通知はスプラッシュ＋チャイム。エラー時のみ MsgBox）
 Public Sub RunPythonStage1ThenStage2()
+    Dim t0 As Double
+    t0 = Timer
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V1", "段階実行制御.bas:RunPythonStage1ThenStage2", "enter", ""
+    On Error GoTo 0
     段階1_コア実行
     On Error Resume Next
     配台計画_タスク入力_A1を選択
@@ -477,7 +482,13 @@ Public Sub RunPythonStage1ThenStage2()
         End If
         Exit Sub
     End If
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V1", "段階実行制御.bas:RunPythonStage1ThenStage2", "before 段階2_コア実行", ""
+    On Error GoTo 0
     段階2_コア実行 True
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V1", "段階実行制御.bas:RunPythonStage1ThenStage2", "after 段階2_コア実行", "sec=" & Format$(Timer - t0, "0.000") & " exit=" & CStr(m_lastStage2ExitCode)
+    On Error GoTo 0
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
             MsgBox m_lastStage2ErrMsg, vbCritical, "段階1+2"
@@ -486,7 +497,14 @@ Public Sub RunPythonStage1ThenStage2()
         End If
         Exit Sub
     End If
+    t0 = Timer
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V2", "段階実行制御.bas:RunPythonStage1ThenStage2", "before 段階2_取り込み結果を報告", ""
+    On Error GoTo 0
     段階2_取り込み結果を報告
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V2", "段階実行制御.bas:RunPythonStage1ThenStage2", "after 段階2_取り込み結果を報告", "sec=" & Format$(Timer - t0, "0.000")
+    On Error GoTo 0
     If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
@@ -549,7 +567,15 @@ Public Sub 配台計画_タスク入力_UsedRangeにフォント名とサイズを適用( _
 End Sub
 
 Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = False)
+    Dim t0 As Double
+    t0 = Timer
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V1", "段階実行制御.bas:RunPython", "before 段階2_コア実行", ""
+    On Error GoTo 0
     段階2_コア実行 preserveStage1LogOnLogSheet
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V1", "段階実行制御.bas:RunPython", "after 段階2_コア実行", "sec=" & Format$(Timer - t0, "0.000") & " exit=" & CStr(m_lastStage2ExitCode)
+    On Error GoTo 0
     If m_lastStage2ExitCode <> 0 Or Len(m_lastStage2ErrMsg) > 0 Then
         If Len(m_lastStage2ErrMsg) > 0 Then
             MsgBox m_lastStage2ErrMsg, vbCritical, "計画生成"
@@ -558,7 +584,14 @@ Public Sub RunPython(Optional ByVal preserveStage1LogOnLogSheet As Boolean = Fal
         End If
         Exit Sub
     End If
+    t0 = Timer
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V2", "段階実行制御.bas:RunPython", "before 段階2_取り込み結果を報告", ""
+    On Error GoTo 0
     段階2_取り込み結果を報告
+    On Error Resume Next
+    AgentDebugNdjson_30e24e "V2", "段階実行制御.bas:RunPython", "after 段階2_取り込み結果を報告", "sec=" & Format$(Timer - t0, "0.000")
+    On Error GoTo 0
     If m_stage2PlanImported Or m_stage2MemberImported Then m_animMacroSucceeded = True
 End Sub
 
