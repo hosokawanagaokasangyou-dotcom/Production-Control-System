@@ -14,3 +14,6 @@ log/
 python/log/
 # Cursor / エージェント用 NDJSON デバッグログ（ワークブックと同フォルダに生成されうる）
 debug-*.log
+
+# 段階1: 設定_配台不要工程メンテのキャッシュ（実行ごとに変わるためローカルのみ）
+json/exclude_rules_maintenance_cache.json
