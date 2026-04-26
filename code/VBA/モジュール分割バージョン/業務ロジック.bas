@@ -3765,10 +3765,25 @@ NextSourceWs:
     ' #region agent log (debug-30e24e)
     t0 = Timer
     ' #endregion agent log (debug-30e24e)
-    設定_シート表示_一覧をブックから再取得
-    Err.Clear
-    設定_シート表示_ブックへ適用
-    Err.Clear
+    ' 重い場合があるため、環境変数でスキップ可能（既定は実行）
+    Dim st2SkipSheetVis As Boolean
+    Dim st2SkipSheetVisRaw As String
+    st2SkipSheetVisRaw = Trim$(Environ$("STAGE2_SKIP_SHEET_VISIBILITY_APPLY"))
+    If Len(st2SkipSheetVisRaw) > 0 Then
+        st2SkipSheetVisRaw = LCase$(st2SkipSheetVisRaw)
+        st2SkipSheetVis = (st2SkipSheetVisRaw = "1" Or st2SkipSheetVisRaw = "true" Or st2SkipSheetVisRaw = "yes" Or st2SkipSheetVisRaw = "on")
+    Else
+        st2SkipSheetVis = False
+    End If
+    If st2SkipSheetVis Then
+        Err.Clear
+        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply skipped", "env=STAGE2_SKIP_SHEET_VISIBILITY_APPLY"
+    Else
+        設定_シート表示_一覧をブックから再取得
+        Err.Clear
+        設定_シート表示_ブックへ適用
+        Err.Clear
+    End If
     ' #region agent log (debug-30e24e)
     AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply done", "sec=" & Format$(Timer - t0, "0.000")
     ' #endregion agent log (debug-30e24e)
@@ -3832,7 +3847,21 @@ Finish:
         ' #region agent log (debug-30e24e)
         t0 = Timer
         ' #endregion agent log (debug-30e24e)
-        Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
+        Dim st2SkipSnap As Boolean
+        Dim st2SkipSnapRaw As String
+        st2SkipSnapRaw = Trim$(Environ$("STAGE2_SKIP_SNAPSHOT_EXPORT"))
+        If Len(st2SkipSnapRaw) > 0 Then
+            st2SkipSnapRaw = LCase$(st2SkipSnapRaw)
+            st2SkipSnap = (st2SkipSnapRaw = "1" Or st2SkipSnapRaw = "true" Or st2SkipSnapRaw = "yes" Or st2SkipSnapRaw = "on")
+        Else
+            st2SkipSnap = False
+        End If
+        If st2SkipSnap Then
+            Err.Clear
+            AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット export skipped", "env=STAGE2_SKIP_SNAPSHOT_EXPORT"
+        Else
+            Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
+        End If
         ' #region agent log (debug-30e24e)
         AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット_pdfとcsvを出力 done", "sec=" & Format$(Timer - t0, "0.000")
         ' #endregion agent log (debug-30e24e)
