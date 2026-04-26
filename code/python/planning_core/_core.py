@@ -13383,6 +13383,7 @@ def _agent_debug_log_e69e6f(
         candidates = [
             os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-e69e6f.log")),
             os.path.abspath(os.path.join(here, "..", "..", "debug-e69e6f.log")),
+            os.path.join(log_dir, "debug-e69e6f.log"),
             os.path.join(tempfile.gettempdir(), "debug-e69e6f.log"),
         ]
         payload = {
