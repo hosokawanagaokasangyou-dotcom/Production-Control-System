@@ -76,6 +76,54 @@ Public Sub AgentBulkWriteLinesToSheetColumn(ByVal ws As Worksheet, ByVal startRo
 End Sub
 ' #endregion agent log (debug-30e24e)
 
+' #region agent log (debug-30e24e)
+' 段階2スキップ設定: 「設定_環境変数」シート(=SHEET_WORKBOOK_ENV) → OS 環境変数の順で取得
+Private Function AgentParseBool_30e24e(ByVal raw As String, ByVal defaultValue As Boolean) As Boolean
+    Dim v As String
+    v = LCase$(Trim$(raw))
+    If Len(v) = 0 Then
+        AgentParseBool_30e24e = defaultValue
+    ElseIf (v = "1" Or v = "true" Or v = "yes" Or v = "on") Then
+        AgentParseBool_30e24e = True
+    ElseIf (v = "0" Or v = "false" Or v = "no" Or v = "off") Then
+        AgentParseBool_30e24e = False
+    Else
+        AgentParseBool_30e24e = defaultValue
+    End If
+End Function
+
+Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal defaultValue As Boolean) As Boolean
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim lastRow As Long
+    Dim cellKey As String
+    Dim v As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastRow >= 2 Then
+            For r = 2 To lastRow
+                cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
+                If Len(cellKey) > 0 And Left$(cellKey, 1) <> "#" Then
+                    If StrComp(cellKey, keyName, vbTextCompare) = 0 Then
+                        v = Trim$(CStr(ws.Cells(r, 2).Value))
+                        If Len(v) > 0 Then
+                            Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
+                            Exit Function
+                        End If
+                        Exit For
+                    End If
+                End If
+            Next r
+        End If
+    End If
+    v = Trim$(Environ$(keyName))
+    Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
+End Function
+' #endregion agent log (debug-30e24e)
+
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
     Dim t As String
     Dim lines() As String
@@ -3767,14 +3815,7 @@ NextSourceWs:
     ' #endregion agent log (debug-30e24e)
     ' 重い場合があるため、環境変数でスキップ可能（既定は実行）
     Dim st2SkipSheetVis As Boolean
-    Dim st2SkipSheetVisRaw As String
-    st2SkipSheetVisRaw = Trim$(Environ$("STAGE2_SKIP_SHEET_VISIBILITY_APPLY"))
-    If Len(st2SkipSheetVisRaw) > 0 Then
-        st2SkipSheetVisRaw = LCase$(st2SkipSheetVisRaw)
-        st2SkipSheetVis = (st2SkipSheetVisRaw = "1" Or st2SkipSheetVisRaw = "true" Or st2SkipSheetVisRaw = "yes" Or st2SkipSheetVisRaw = "on")
-    Else
-        st2SkipSheetVis = False
-    End If
+    st2SkipSheetVis = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SHEET_VISIBILITY_APPLY", False)
     If st2SkipSheetVis Then
         Err.Clear
         AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply skipped", "env=STAGE2_SKIP_SHEET_VISIBILITY_APPLY"
@@ -3848,14 +3889,7 @@ Finish:
         t0 = Timer
         ' #endregion agent log (debug-30e24e)
         Dim st2SkipSnap As Boolean
-        Dim st2SkipSnapRaw As String
-        st2SkipSnapRaw = Trim$(Environ$("STAGE2_SKIP_SNAPSHOT_EXPORT"))
-        If Len(st2SkipSnapRaw) > 0 Then
-            st2SkipSnapRaw = LCase$(st2SkipSnapRaw)
-            st2SkipSnap = (st2SkipSnapRaw = "1" Or st2SkipSnapRaw = "true" Or st2SkipSnapRaw = "yes" Or st2SkipSnapRaw = "on")
-        Else
-            st2SkipSnap = False
-        End If
+        st2SkipSnap = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SNAPSHOT_EXPORT", False)
         If st2SkipSnap Then
             Err.Clear
             AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット export skipped", "env=STAGE2_SKIP_SNAPSHOT_EXPORT"
