@@ -67,6 +67,58 @@ def _append_execution_log_line(level: str, msg: str) -> None:
     print(f"log/execution_log.txt へ書けません: {last_err}", file=sys.stderr)
 
 
+def _debug_ndjson_paths_stage1() -> list[str]:
+    """デバッグNDJSON（debug-e69e6f.log）の出力先候補。execution_log と同じ優先順。"""
+    paths: list[str] = []
+    wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(os.path.dirname(os.path.abspath(wb)), "log", "debug-e69e6f.log")
+        )
+    paths.append(os.path.join(_repo_root_for_stage1(), "log", "debug-e69e6f.log"))
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _append_debug_ndjson(hypothesis_id: str, message: str, data: dict | None = None) -> None:
+    """debug-e69e6f.log へ 1 行 NDJSON を追記（失敗しても落とさない）。"""
+    try:
+        import json
+        import time as _time
+
+        payload = {
+            "sessionId": "e69e6f",
+            "runId": "stage1-pre",
+            "hypothesisId": hypothesis_id,
+            "location": "task_extract_stage1.py",
+            "message": message,
+            "data": data or {},
+            "timestamp": int(_time.time() * 1000),
+        }
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+    except Exception:
+        return
+    for path in _debug_ndjson_paths_stage1():
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8", newline="\n") as f:
+                f.write(line)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            return
+        except OSError:
+            continue
+
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 try:
@@ -89,13 +141,30 @@ except OSError as ex:
     print(f"log/execution_log.txt を開けません: {ex}", file=sys.stderr)
 
 try:
+    _append_debug_ndjson(
+        "H0",
+        "stage1_script_enter",
+        {
+            "cwd": os.getcwd(),
+            "task_input_workbook": str(os.environ.get("TASK_INPUT_WORKBOOK", "")),
+        },
+    )
     import planning_core as pc
+    _append_debug_ndjson(
+        "H0",
+        "import_planning_core",
+        {
+            "planning_core_file": getattr(pc, "__file__", ""),
+            "planning_core_cwd": os.getcwd(),
+        },
+    )
 except Exception:
     _err_head = (
         f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ERROR - "
         "planning_core の import に失敗しました\n"
     )
     _tb = traceback.format_exc()
+    _append_debug_ndjson("H0", "import_planning_core_failed", {})
     for path in _execution_log_paths_stage1():
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
