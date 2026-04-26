@@ -13737,10 +13737,57 @@ def run_exclude_rules_sheet_maintenance(
     シートの新規作成と 1 行目見出しは VBA「設定_配台不要工程_シートを確保」。
     """
     import time as _time
+    import hashlib
 
     # region agent log (perf)
     _t0 = _time.perf_counter()
     needs_disk_sync = False
+    _st_added = 0
+    _st_removed_empty = 0
+    _st_pending_rows = 0
+    _st_ai_filled = 0
+    _st_header_changed = False
+    _st_sidecar_applied = 0
+
+    # 直前と同じ入力・同じブック状態なら、openpyxl でブックを開く前に保守全体をスキップできる場合がある。
+    # （book open が重いため。スキップ条件は「前回は変更なし」で、今回もブックの mtime/size と pairs が同一、かつ sidecar 無し）
+    try:
+        _wb_abs = os.path.abspath(wb_path) if wb_path else ""
+        _st = os.stat(_wb_abs) if _wb_abs and os.path.exists(_wb_abs) else None
+        _sig = {
+            "wb": os.path.normcase(_wb_abs),
+            "mtime_ns": int(getattr(_st, "st_mtime_ns", 0) or 0) if _st else 0,
+            "size": int(getattr(_st, "st_size", 0) or 0) if _st else 0,
+            "ai": bool(compile_exclude_rules_d_to_e_with_ai),
+            "pairs_hash": hashlib.sha256(
+                ("\n".join(f"{p}\t{m}" for p, m in (pairs or []))).encode("utf-8", "ignore")
+            ).hexdigest(),
+        }
+        _cache_path = os.path.join(json_data_dir, "exclude_rules_maintenance_cache.json")
+        _have_sidecar = os.path.isfile(_exclude_rules_e_sidecar_path())
+        if os.path.isfile(_cache_path) and (not _have_sidecar):
+            try:
+                with open(_cache_path, "r", encoding="utf-8") as f:
+                    _cache = json.load(f)
+            except Exception:
+                _cache = None
+            if isinstance(_cache, dict) and _cache.get("sig") == _sig and _cache.get("can_skip") is True:
+                _log_exclude_rules_sheet_debug(
+                    "SKIP_CACHE_NO_CHANGES",
+                    log_prefix,
+                    "前回と同一シグネチャかつ変更無しだったため、設定シート保守（openpyxl open 含む）をスキップしました。",
+                    details=f"path={wb_path} pairs={len(pairs)} ai_d_to_e={compile_exclude_rules_d_to_e_with_ai}",
+                )
+                _agent_debug_log_e69e6f(
+                    "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
+                    "H6",
+                    "exclude_maint_skipped_cache",
+                    {"pairs": len(pairs or []), "ai_d_to_e": bool(compile_exclude_rules_d_to_e_with_ai)},
+                )
+                return
+    except Exception:
+        pass
+
     _agent_debug_log_e69e6f(
         "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
         "H6",
@@ -13887,6 +13934,7 @@ def run_exclude_rules_sheet_maintenance(
             EXCLUDE_RULE_COL_LOGIC_JA,
             EXCLUDE_RULE_COL_LOGIC_JSON,
         ))
+        _st_header_changed = bool(header_changed)
         # region agent log (perf)
         _agent_debug_log_e69e6f(
             "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
@@ -13910,6 +13958,7 @@ def run_exclude_rules_sheet_maintenance(
 
         # 剝回ブック保存に失敗したとし退避した E 列を」先にワークシートへ戻れ（続し保存でディスクへ載る）
         n_e_sidecar = int(_try_apply_pending_exclude_rules_e_column(wb_path, ws, c_e, log_prefix) or 0)
+        _st_sidecar_applied = n_e_sidecar
         if n_e_sidecar > 0:
             needs_disk_sync = True
 
@@ -13948,6 +13997,7 @@ def run_exclude_rules_sheet_maintenance(
             ws.append([p, m, None, None, None])
             existing_keys.add(key)
             added += 1
+        _st_added = int(added)
         # region agent log (perf)
         _agent_debug_log_e69e6f(
             "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
@@ -13995,6 +14045,7 @@ def run_exclude_rules_sheet_maintenance(
         n_kept, n_removed_empty = _compact_exclude_rules_data_rows(
             ws, c_proc, c_mach, c_flag, c_d, c_e, log_prefix
         )
+        _st_removed_empty = int(n_removed_empty or 0)
         # region agent log (perf)
         _agent_debug_log_e69e6f(
             "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
@@ -14027,6 +14078,7 @@ def run_exclude_rules_sheet_maintenance(
                 if not _cell_is_blank_for_rule(ev):
                     continue
                 pending_rows.append(r)
+            _st_pending_rows = int(len(pending_rows))
             # region agent log (perf)
             _agent_debug_log_e69e6f(
                 "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
@@ -14113,6 +14165,7 @@ def run_exclude_rules_sheet_maintenance(
                         preview,
                     )
                     ai_filled += 1
+            _st_ai_filled = int(ai_filled or 0)
             # region agent log (perf)
             _agent_debug_log_e69e6f(
                 "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
@@ -14214,6 +14267,46 @@ def run_exclude_rules_sheet_maintenance(
                 "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
             )
+
+        # 次回スキップ用キャッシュ（「変更なし」で成功した場合のみ can_skip=True）
+        try:
+            _wb_abs = os.path.abspath(wb_path) if wb_path else ""
+            _st = os.stat(_wb_abs) if _wb_abs and os.path.exists(_wb_abs) else None
+            _sig2 = {
+                "wb": os.path.normcase(_wb_abs),
+                "mtime_ns": int(getattr(_st, "st_mtime_ns", 0) or 0) if _st else 0,
+                "size": int(getattr(_st, "st_size", 0) or 0) if _st else 0,
+                "ai": bool(compile_exclude_rules_d_to_e_with_ai),
+                "pairs_hash": hashlib.sha256(
+                    ("\n".join(f"{p}\t{m}" for p, m in (pairs or []))).encode("utf-8", "ignore")
+                ).hexdigest(),
+            }
+            os.makedirs(json_data_dir, exist_ok=True)
+            with open(
+                os.path.join(json_data_dir, "exclude_rules_maintenance_cache.json"),
+                "w",
+                encoding="utf-8",
+                newline="\n",
+            ) as f:
+                json.dump(
+                    {
+                        "sig": _sig2,
+                        "can_skip": (not needs_disk_sync),
+                        "stats": {
+                            "added": _st_added,
+                            "removed_empty": _st_removed_empty,
+                            "pending_rows": _st_pending_rows,
+                            "ai_filled": _st_ai_filled,
+                            "header_changed": bool(_st_header_changed),
+                            "sidecar_applied": _st_sidecar_applied,
+                        },
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+        except Exception:
+            pass
     except Exception as ex:
         _log_exclude_rules_sheet_debug(
             "FATAL",
