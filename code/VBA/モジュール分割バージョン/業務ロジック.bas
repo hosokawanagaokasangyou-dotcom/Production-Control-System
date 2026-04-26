@@ -101,6 +101,9 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
     On Error GoTo 0
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "lookup start", "key=" & keyName & " default=" & CStr(defaultValue) & " ws=" & IIf(ws Is Nothing, "(nil)", ws.Name)
+    ' #endregion agent log (debug-30e24e)
     If Not ws Is Nothing Then
         lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
         If lastRow >= 2 Then
@@ -110,9 +113,15 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
                     If StrComp(cellKey, keyName, vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
+                            ' #region agent log (debug-30e24e)
+                            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "found in sheet", "key=" & keyName & " raw=" & v
+                            ' #endregion agent log (debug-30e24e)
                             Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
                             Exit Function
                         End If
+                        ' #region agent log (debug-30e24e)
+                        AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "found in sheet but empty", "key=" & keyName
+                        ' #endregion agent log (debug-30e24e)
                         Exit For
                     End If
                 End If
@@ -120,6 +129,9 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
         End If
     End If
     v = Trim$(Environ$(keyName))
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "fallback to OS env", "key=" & keyName & " raw=" & v
+    ' #endregion agent log (debug-30e24e)
     Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
 End Function
 ' #endregion agent log (debug-30e24e)
