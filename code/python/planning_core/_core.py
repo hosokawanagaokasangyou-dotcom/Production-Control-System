@@ -3643,41 +3643,6 @@ def _ensure_dataframe_has_unprocessed_column(
         )
 
 
-# region agent log
-def _agent_debug_dispatch_ndjson(
-    location: str,
-    message: str,
-    data: dict,
-    hypothesis_id: str,
-    run_id: str = "post-fix",
-) -> None:
-    if str(data.get("task_id") or "").strip() != "A5-2":
-        return
-    try:
-        import json as _json
-        import time as _time
-
-        _p = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-6b926a.log")
-        )
-        _payload = {
-            "sessionId": "6b926a",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(_time.time() * 1000),
-        }
-        with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(_json.dumps(_payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# endregion
-
-
 def _plan_row_dispatch_qty_metrics(row):
     """
     1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
@@ -3696,11 +3661,6 @@ def _plan_row_dispatch_qty_metrics(row):
         tuple[float, float, float, bool]:
             (remaining_m, done_m, qty_total_for_dispatch_m, used_unprocessed)
     """
-    _tid_dbg = ""
-    try:
-        _tid_dbg = str(_planning_df_cell_scalar(row, TASK_COL_TASK_ID) or "").strip()
-    except Exception:
-        _tid_dbg = ""
     qty_conv_raw = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
     unp = _optional_unprocessed_m_from_plan_row(row)
@@ -3709,22 +3669,6 @@ def _plan_row_dispatch_qty_metrics(row):
         if fu > 1e-12:
             remaining_m = max(0.0, fu)
             done_m = max(0.0, qty_conv_raw - fu)
-            # region agent log
-            _agent_debug_dispatch_ndjson(
-                "_plan_row_dispatch_qty_metrics:branch_unp_pos",
-                "metrics_unp_positive",
-                {
-                    "task_id": _tid_dbg,
-                    "qty_conv_raw": qty_conv_raw,
-                    "unp_raw": unp,
-                    "fu": fu,
-                    "remaining_m": remaining_m,
-                    "done_m": done_m,
-                    "qty_total_ceiled": qty_total_ceiled,
-                },
-                "H1",
-            )
-            # endregion
             return remaining_m, done_m, qty_total_ceiled, True
         else:
             # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、ロール単位長さ未満は 1 ロール分に引き上げ
@@ -3743,24 +3687,6 @@ def _plan_row_dispatch_qty_metrics(row):
             remaining_m = max(base_m, roll_m_f) if roll_m_f > 0 else base_m
             done_m = 0.0
             qty_total_for_dispatch_m = remaining_m
-            # region agent log
-            _agent_debug_dispatch_ndjson(
-                "_plan_row_dispatch_qty_metrics:branch_unp_zero",
-                "metrics_unp_zero_roll_bump",
-                {
-                    "task_id": _tid_dbg,
-                    "qty_conv_raw": qty_conv_raw,
-                    "unp_raw": unp,
-                    "roll_m": roll_m_f,
-                    "base_m": base_m,
-                    "remaining_m": remaining_m,
-                    "done_m": done_m,
-                    "qty_total_ceiled": qty_total_ceiled,
-                    "qty_total_for_dispatch_m": qty_total_for_dispatch_m,
-                },
-                "H5",
-            )
-            # endregion
             return remaining_m, done_m, qty_total_for_dispatch_m, True
     raise PlanningValidationError(
         f"「{TASK_COL_UNPROCESSED}」が数値として読めません（セルが空または不正）、"
@@ -11820,7 +11746,6 @@ def build_task_queue_from_planning_df(
         qty, done_qty, qty_total, from_unprocessed_qty = _plan_row_dispatch_qty_metrics(
             row
         )
-        qty_metrics_rem = float(qty)
         # 加工速度: ②列「加工速度」（master.xlsm speed で基本速度×実稼働比率を反映）→
         # speed_ov は列「加工速度_上書き」のみ（①があれば上書き）。
         speed_raw = row.get(TASK_COL_SPEED, 1)
@@ -11855,21 +11780,6 @@ def build_task_queue_from_planning_df(
             )
 
         qty = max(0.0, qty_total - done_qty)
-        # region agent log
-        _agent_debug_dispatch_ndjson(
-            "build_task_queue_from_planning_df:qty_overwrite",
-            "after_qty_total_minus_done",
-            {
-                "task_id": task_id,
-                "qty_metrics_rem": qty_metrics_rem,
-                "qty_after_overwrite": float(qty),
-                "done_qty": float(done_qty),
-                "qty_total_ceiled": float(qty_total),
-                "from_unprocessed_qty": bool(from_unprocessed_qty),
-            },
-            "H1",
-        )
-        # endregion
         speed = parse_float_safe(speed_raw, 1.0)
         if speed <= 0:
             speed = 1.0
@@ -12031,21 +11941,6 @@ def build_task_queue_from_planning_df(
             _init_rem = float(math.ceil(max(0.0, qty) / float(unit)))
         else:
             _init_rem = float(qty / unit if unit else 0.0)
-        # region agent log
-        _agent_debug_dispatch_ndjson(
-            "build_task_queue_from_planning_df:rolls_init",
-            "unit_and_remaining_units",
-            {
-                "task_id": task_id,
-                "qty_m_for_schedule": float(qty),
-                "unit_m": float(unit),
-                "qty_total_ceiled": float(qty_total),
-                "remaining_units_init": float(_init_rem),
-                "from_unprocessed_qty": bool(from_unprocessed_qty),
-            },
-            "H2",
-        )
-        # endregion
         _process_content_mismatch = bool(_order_list) and not _process_name_matches_kakou_content_tokens(
             machine, _order_list
         )
@@ -22956,21 +22851,6 @@ def build_result_dispatch_table_dataframe(
         qty = _dispatch_table_event_qty_m(ev)
         if qty <= 1e-18:
             continue
-        # region agent log
-        _agent_debug_dispatch_ndjson(
-            "build_result_dispatch_table_dataframe:agg_input_ev",
-            "per_timeline_event_qty",
-            {
-                "task_id": tid,
-                "eq": eq,
-                "calendar": str(cd),
-                "qty_m": float(qty),
-                "units_done": float(parse_float_safe(ev.get("units_done"), 0.0)),
-                "unit_m": float(parse_float_safe(ev.get("unit_m"), 0.0)),
-            },
-            "H4",
-        )
-        # endregion
         agg[(tid, eq, cd)] += float(qty)
     if not agg:
         return pd.DataFrame(columns=cols)
@@ -26362,25 +26242,6 @@ def _trial_order_first_schedule_pass(
                 0.0,
                 float(task.get("remaining_units") or 0) - float(done_units),
             )
-            # region agent log
-            _agent_debug_dispatch_ndjson(
-                "_drain_rolls_for_task:after_roll",
-                "timeline_roll_step",
-                {
-                    "task_id": str(task.get("task_id") or ""),
-                    "date": str(current_date),
-                    "eq_line": str(eq_line),
-                    "done_units": float(done_units),
-                    "unit_m": float(task.get("unit_m") or 0),
-                    "event_qty_m": float(done_units) * float(task.get("unit_m") or 0),
-                    "total_qty_m": float(task.get("total_qty_m") or 0),
-                    "rem_u_before": float(rem_u_before),
-                    "total_u": float(total_u),
-                    "remaining_units_after": float(task.get("remaining_units") or 0),
-                },
-                "H3",
-            )
-            # endregion
             op_main = (lead_op or "").strip()
             subs_part = ",".join(
                 s.strip() for s in sub_members if s and str(s).strip()
