@@ -602,6 +602,7 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
     Dim prevScreenUpdating As Boolean
     Dim prevDisplayAlerts As Boolean
     Dim stUnlock As Boolean
+    Dim calcSnap As TAppCalculationSnap
     
     On Error GoTo RunEH
     
@@ -612,6 +613,7 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
     
     prevScreenUpdating = Application.ScreenUpdating
     prevDisplayAlerts = Application.DisplayAlerts
+    AppCalculation_ManualBegin calcSnap
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     
@@ -717,5 +719,6 @@ DoneProtect:
     On Error GoTo 0
     Application.DisplayAlerts = prevDisplayAlerts
     Application.ScreenUpdating = prevScreenUpdating
+    AppCalculation_ManualEnd calcSnap
     Exit Sub
 End Sub

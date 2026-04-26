@@ -1,5 +1,61 @@
 Option Explicit
 
+' 段階1/2 cmd 非表示などと同様の真偽値解釈（設定_環境変数・OS 環境変数の B 列用）
+Public Function ParseStage12CmdHideWindowBool(ByVal v As String, ByVal defaultVal As Boolean) As Boolean
+    Dim t As String
+    t = LCase$(Trim$(v))
+    If Len(t) = 0 Then
+        ParseStage12CmdHideWindowBool = defaultVal
+        Exit Function
+    End If
+    If t = "1" Or t = "true" Or t = "yes" Or t = "on" Or t = "y" Or t = "はい" Or t = "有効" Or t = "○" Or t = "〇" Then
+        ParseStage12CmdHideWindowBool = True
+        Exit Function
+    End If
+    If t = "0" Or t = "false" Or t = "no" Or t = "off" Or t = "n" Or t = "いいえ" Or t = "無効" Or t = "×" Then
+        ParseStage12CmdHideWindowBool = False
+        Exit Function
+    End If
+    ParseStage12CmdHideWindowBool = defaultVal
+End Function
+
+' planning_core の XLWINGS_SUSPEND_AUTO_CALCULATION と同名。VBA の一括セル操作前に自動計算を手動にするか。
+' シート「設定_環境変数」A 列一致かつ B 非空 → その値。未設定なら Environ。どちらも空なら既定 True（手動化する）。
+Public Function XlWingsSuspendAutoCalculationEffective() As Boolean
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim lastRow As Long
+    Dim cellKey As String
+    Dim v As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
+    On Error GoTo 0
+    If Not ws Is Nothing Then
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastRow >= 2 Then
+            For r = 2 To lastRow
+                cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
+                If Len(cellKey) > 0 And Left$(cellKey, 1) <> "#" Then
+                    If StrComp(cellKey, "XLWINGS_SUSPEND_AUTO_CALCULATION", vbTextCompare) = 0 Then
+                        v = Trim$(CStr(ws.Cells(r, 2).Value))
+                        If Len(v) > 0 Then
+                            XlWingsSuspendAutoCalculationEffective = ParseStage12CmdHideWindowBool(v, True)
+                            Exit Function
+                        End If
+                        Exit For
+                    End If
+                End If
+            Next r
+        End If
+    End If
+    v = Trim$(Environ("XLWINGS_SUSPEND_AUTO_CALCULATION"))
+    If Len(v) > 0 Then
+        XlWingsSuspendAutoCalculationEffective = ParseStage12CmdHideWindowBool(v, True)
+        Exit Function
+    End If
+    XlWingsSuspendAutoCalculationEffective = True
+End Function
+
 Public Function Stage12CmdHideWindowEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long

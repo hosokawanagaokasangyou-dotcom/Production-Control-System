@@ -293,6 +293,7 @@ Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal targetDir As String)
     Dim i As Long
     Dim r As Long
     Dim lastClearRow As Long
+    Dim calcSnap As TAppCalculationSnap
     
     Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then Exit Sub
@@ -318,6 +319,7 @@ Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal targetDir As String)
     
     logLines = Split(outputText, vbLf)
     
+    AppCalculation_ManualBegin calcSnap
     Application.ScreenUpdating = False
     For i = LBound(logLines) To UBound(logLines)
         r = START_ROW + i
@@ -329,10 +331,12 @@ Public Sub メインシート_Gemini利用サマリをP列に反映(ByVal targetDir As String)
         End With
     Next i
     Application.ScreenUpdating = True
+    AppCalculation_ManualEnd calcSnap
     Exit Sub
     
 GeminiUsageP_Fail:
     On Error Resume Next
+    AppCalculation_ManualEnd calcSnap
     If Not adoStream Is Nothing Then
         adoStream.Close
         Set adoStream = Nothing

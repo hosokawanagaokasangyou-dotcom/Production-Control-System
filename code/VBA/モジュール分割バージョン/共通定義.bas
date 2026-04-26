@@ -274,4 +274,30 @@ Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
 
+' 一括処理中の自動計算: キー名は planning_core / 設定_環境変数_雛形.tsv の XLWINGS_SUSPEND_AUTO_CALCULATION と同一（段階実行制御.XlWingsSuspendAutoCalculationEffective）。
+Public Type TAppCalculationSnap
+    PrevMode As Long
+    Suspended As Boolean
+End Type
+
+' 有効時のみ Application.Calculation を xlCalculationManual にし、End で復帰する。
+Public Sub AppCalculation_ManualBegin(ByRef snap As TAppCalculationSnap)
+    snap.Suspended = False
+    On Error GoTo AppCalcBeginDone
+    If Not XlWingsSuspendAutoCalculationEffective() Then GoTo AppCalcBeginDone
+    snap.PrevMode = CLng(Application.Calculation)
+    Application.Calculation = xlCalculationManual
+    snap.Suspended = True
+AppCalcBeginDone:
+    On Error GoTo 0
+End Sub
+
+Public Sub AppCalculation_ManualEnd(ByRef snap As TAppCalculationSnap)
+    If Not snap.Suspended Then Exit Sub
+    On Error Resume Next
+    Application.Calculation = snap.PrevMode
+    snap.Suspended = False
+    On Error GoTo 0
+End Sub
+
 

@@ -324,6 +324,7 @@ Public Sub 列設定_結果_タスク一覧_結果シート見出しから再構成()
     Dim prevScr As Boolean
     Dim oldLR As Long
     Dim seen As Object
+    Dim calcSnap As TAppCalculationSnap
 
     prevScr = Application.ScreenUpdating
     On Error GoTo FailRebuild
@@ -355,6 +356,7 @@ Public Sub 列設定_結果_タスク一覧_結果シート見出しから再構成()
     seen.CompareMode = vbTextCompare
     On Error GoTo FailRebuild
 
+    AppCalculation_ManualBegin calcSnap
     Application.ScreenUpdating = False
 
     wsCfg.Cells(1, 1).Value = "列名"
@@ -374,6 +376,7 @@ NextHdrCol:
 
     If r < 2 Then
         Application.ScreenUpdating = prevScr
+        AppCalculation_ManualEnd calcSnap
         MsgBox "有効な列見出しが見つかりませんでした。", vbExclamation, "列設定の再構成"
         Exit Sub
     End If
@@ -383,6 +386,7 @@ NextHdrCol:
     End If
 
     Application.ScreenUpdating = prevScr
+    AppCalculation_ManualEnd calcSnap
     m_animMacroSucceeded = True
     MsgBox "「" & SHEET_COL_CONFIG_RESULT_TASK & "」を " & CStr(r - 1) & " 列で更新しました。" & vbCrLf & _
            "チェックボックスを使っている場合は「列設定_結果_タスク一覧_チェックボックスを配置」を再実行してください。", vbInformation
@@ -391,6 +395,7 @@ NextHdrCol:
 FailRebuild:
     On Error Resume Next
     Application.ScreenUpdating = prevScr
+    AppCalculation_ManualEnd calcSnap
     On Error GoTo 0
     MsgBox "列設定の再構成でエラー: " & Err.Description, vbCritical
 End Sub
