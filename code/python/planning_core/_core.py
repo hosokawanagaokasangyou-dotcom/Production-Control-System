@@ -9907,48 +9907,8 @@ def _write_main_sheet_gemini_usage_via_xlwings(
     xw_book, info = attached
     ok = False
     try:
-        # region agent log
         try:
-            _agent_debug_log_c92553(
-                location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_attach",
-                hypothesis_id="H5",
-                message="Attached macro workbook for main sheet gemini usage",
-                data={
-                    "wb_path": os.path.abspath(macro_wb_path),
-                    "book_fullname": _xlwings_book_path_str(xw_book),
-                    "opened_wb_here": bool(info.get("opened_wb_here")),
-                    "mode": info.get("mode"),
-                    "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
-                    "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
-                },
-            )
-        except Exception:
-            pass
-        # endregion
-        try:
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:before_display_alerts",
-                    hypothesis_id="H4",
-                    message="Setting xw_book.app.display_alerts = False",
-                    data={},
-                )
-            except Exception:
-                pass
-            # endregion
             xw_book.app.display_alerts = False
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_display_alerts",
-                    hypothesis_id="H4",
-                    message="display_alerts set completed",
-                    data={"app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None)},
-                )
-            except Exception:
-                pass
-            # endregion
         except Exception:
             pass
         ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
@@ -9977,51 +9937,12 @@ def _write_main_sheet_gemini_usage_via_xlwings(
             _apply_main_sheet_gemini_usage_chart_xlwings(
                 ws_main, _load_gemini_cumulative_payload()
             )
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:before_save",
-                    hypothesis_id="H5",
-                    message="About to call xw_book.save() for main sheet gemini usage",
-                    data={
-                        "book_fullname": _xlwings_book_path_str(xw_book),
-                        "opened_wb_here": bool(info.get("opened_wb_here")),
-                        "mode": info.get("mode"),
-                        "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
-                        "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
-                        "app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None),
-                    },
-                )
-            except Exception:
-                pass
-            # endregion
             if bool(info.get("opened_wb_here")):
                 xw_book.save()
-                # region agent log
-                try:
-                    _agent_debug_log_c92553(
-                        location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:after_save",
-                        hypothesis_id="H5",
-                        message="Returned from xw_book.save() for main sheet gemini usage",
-                        data={},
-                    )
-                except Exception:
-                    pass
-                # endregion
             else:
                 # 起動中の Excel（ユーザー操作）でブックを再利用した場合、save() は保存ダイアログを出し得るため自動保存しない。
                 # 変更はブック上に反映済みなので、必要ならユーザーが任意のタイミングで保存する。
-                # region agent log
-                try:
-                    _agent_debug_log_c92553(
-                        location="_core.py:_write_main_sheet_gemini_usage_via_xlwings:save_skipped",
-                        hypothesis_id="H5",
-                        message="Skipped xw_book.save() to avoid save dialog on reused workbook",
-                        data={"opened_wb_here": False, "mode": info.get("mode")},
-                    )
-                except Exception:
-                    pass
-                # endregion
+                pass
             ok = True
             logging.info(
                 "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で更新しました。",
@@ -13291,25 +13212,6 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     book_existing = _xlwings_find_book_on_running_instances(abs_path)
     if book_existing is not None:
-        # region agent log
-        try:
-            _agent_debug_log_c92553(
-                location="_core.py:_xlwings_attach_open_macro_workbook",
-                hypothesis_id="H2",
-                message="Reusing running Excel book",
-                data={
-                    "py_file": __file__,
-                    "cwd": os.getcwd(),
-                    "abs_path": abs_path,
-                    "book_fullname": _xlwings_book_path_str(book_existing),
-                    "app_pid": getattr(getattr(book_existing, "app", None), "pid", None),
-                    "app_visible": getattr(getattr(book_existing, "app", None), "visible", None),
-                    "app_display_alerts": getattr(getattr(book_existing, "app", None), "display_alerts", None),
-                },
-            )
-        except Exception:
-            pass
-        # endregion
         _log_exclude_rules_sheet_debug(
             "XLWINGS_BOOK_REUSED",
             log_prefix,
@@ -13436,41 +13338,10 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
     xw_book, info = attached
     ok = False
     try:
-        # region agent log
-        try:
-            _agent_debug_log_c92553(
-                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:entered",
-                hypothesis_id="H0",
-                message="Entered _xlwings_sync_exclude_rules_sheet_from_openpyxl",
-                data={"py_file": __file__, "cwd": os.getcwd(), "wb_path": os.path.abspath(wb_path)},
-            )
-        except Exception:
-            pass
-        # endregion
         try:
             xw_book.app.display_alerts = False
         except Exception:
             pass
-        # region agent log
-        # NOTE: Avoid COM-heavy properties (xw_book.api.*) here; they can block when Excel shows dialogs.
-        try:
-            _agent_debug_log_c92553(
-                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:entry",
-                hypothesis_id="H1",
-                message="Entered exclude rules xlwings sync",
-                data={
-                    "wb_path": os.path.abspath(wb_path),
-                    "book_fullname": _xlwings_book_path_str(xw_book),
-                    "opened_wb_here": bool(info.get("opened_wb_here")),
-                    "mode": info.get("mode"),
-                    "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
-                    "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
-                    "app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None),
-                },
-            )
-        except Exception:
-            pass
-        # endregion
         # 全シート名を列挙れるとシート数分の COM 往復になり」D3=true 時は VBA ポーリングと競坈して
         # 1 シート数秒〜坝数秒かかることはある（計測で 40 シート≈213s）。坝剝で直接解決れる。
         try:
@@ -13503,31 +13374,7 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 rng.api.Value2 = data
             except Exception:
                 rng.value = data
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:before_save",
-                    hypothesis_id="H1",
-                    message="About to call xw_book.save()",
-                    data={"book_fullname": _xlwings_book_path_str(xw_book)},
-                )
-            except Exception:
-                pass
-            # endregion
             xw_book.save()
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_save",
-                    hypothesis_id="H1",
-                    message="After save() returned",
-                    data={
-                        "book_fullname": _xlwings_book_path_str(xw_book),
-                    },
-                )
-            except Exception:
-                pass
-            # endregion
         finally:
             if hid_sheet_for_write:
                 try:
@@ -13650,52 +13497,6 @@ def _agent_debug_log_e69e6f(
                 pass
             try:
                 with open(p, "a", encoding="utf-8") as f:
-                    f.write(line)
-                return
-            except Exception as ex:
-                last_err = ex
-                continue
-        if last_err is not None:
-            logging.debug("debug log write failed: %s", last_err)
-    except Exception:
-        return
-
-
-def _agent_debug_log_c92553(
-    location: str, hypothesis_id: str, message: str, data: dict | None = None, *, run_id: str = "pre-fix"
-) -> None:
-    """Debug-mode NDJSON logger (session c92553). Writes to <repo>/debug-c92553.log (preferred)."""
-    try:
-        import json
-        import time as _time
-
-        here = os.path.dirname(__file__)
-        # __file__ = <repo>/code/python/planning_core/_core.py
-        # Prefer: <repo>/debug-c92553.log (3 levels up from planning_core)
-        # Fallbacks: <repo>/code/debug-c92553.log, previous (1 level above repo) for compatibility
-        path_repo = os.path.abspath(os.path.join(here, "..", "..", "..", "debug-c92553.log"))
-        path_code = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "code", "debug-c92553.log"))
-        path_prev = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-c92553.log"))
-        payload = {
-            "sessionId": "c92553",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(_time.time() * 1000),
-        }
-        line = json.dumps(payload, ensure_ascii=False) + "\n"
-        last_err = None
-        for path in (path_repo, path_code, path_prev):
-            try:
-                d = os.path.dirname(path)
-                if d:
-                    os.makedirs(d, exist_ok=True)
-            except Exception:
-                pass
-            try:
-                with open(path, "a", encoding="utf-8") as f:
                     f.write(line)
                 return
             except Exception as ex:
@@ -14517,17 +14318,6 @@ def run_exclude_rules_sheet_maintenance(
         _t = _time.perf_counter()
         # endregion agent log (perf)
         if needs_disk_sync:
-            # region agent log
-            try:
-                _agent_debug_log_c92553(
-                    location="_core.py:run_exclude_rules_sheet_maintenance:before_persist",
-                    hypothesis_id="H3",
-                    message="About to persist exclude rules workbook",
-                    data={"needs_disk_sync": True},
-                )
-            except Exception:
-                pass
-            # endregion
             persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         else:
             persisted = True
