@@ -9907,8 +9907,48 @@ def _write_main_sheet_gemini_usage_via_xlwings(
     xw_book, info = attached
     ok = False
     try:
+        # region agent log
         try:
+            _agent_debug_log_c92553(
+                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_attach",
+                hypothesis_id="H1",
+                message="Attached macro workbook; about to set app flags",
+                data={
+                    "wb_path": os.path.abspath(wb_path),
+                    "book_fullname": _xlwings_book_path_str(xw_book),
+                    "opened_wb_here": bool(info.get("opened_wb_here")),
+                    "mode": info.get("mode"),
+                    "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
+                    "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
+                },
+            )
+        except Exception:
+            pass
+        # endregion
+        try:
+            # region agent log
+            try:
+                _agent_debug_log_c92553(
+                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:before_display_alerts",
+                    hypothesis_id="H4",
+                    message="Setting xw_book.app.display_alerts = False",
+                    data={},
+                )
+            except Exception:
+                pass
+            # endregion
             xw_book.app.display_alerts = False
+            # region agent log
+            try:
+                _agent_debug_log_c92553(
+                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_display_alerts",
+                    hypothesis_id="H4",
+                    message="display_alerts set completed",
+                    data={"app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None)},
+                )
+            except Exception:
+                pass
+            # endregion
         except Exception:
             pass
         ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
@@ -14420,6 +14460,17 @@ def run_exclude_rules_sheet_maintenance(
         _t = _time.perf_counter()
         # endregion agent log (perf)
         if needs_disk_sync:
+            # region agent log
+            try:
+                _agent_debug_log_c92553(
+                    location="_core.py:run_exclude_rules_sheet_maintenance:before_persist",
+                    hypothesis_id="H3",
+                    message="About to persist exclude rules workbook",
+                    data={"needs_disk_sync": True},
+                )
+            except Exception:
+                pass
+            # endregion
             persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         else:
             persisted = True
