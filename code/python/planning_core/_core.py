@@ -3745,13 +3745,20 @@ def _planning_df_cell_scalar(row, col_name):
 def _roll_unit_m_estimate_from_plan_row(row, fallback_m: float) -> float:
     """
     配台計画1行から 1 ロールあたりの長さ(m)。シートのロール単位長さを優先し、
-    空・0 のときは build_task_queue と同趣旨で製品名から推定する。
+    空・0 のときは使用原反テーブル→製品名寸法の順で推定する（build_task_queue と同趣旨）。
     """
     product_name = row.get(TASK_COL_PRODUCT, None) if hasattr(row, "get") else None
+    used_raw = (
+        _planning_df_cell_scalar(row, TASK_COL_USED_RAW)
+        if hasattr(row, "get")
+        else None
+    )
     unit = parse_float_safe(_planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
     fb = max(1e-9, float(parse_float_safe(fallback_m, 0.0)))
     if unit <= 0:
-        unit = infer_unit_m_from_product_name(product_name, fallback_unit=fb)
+        unit = infer_roll_unit_m_from_used_raw_then_product_dims(
+            product_name, used_raw, fallback_unit=fb
+        )
     try:
         unit = float(unit)
     except (TypeError, ValueError):
@@ -4168,6 +4175,13 @@ ROLL_UNIT_LENGTH_TABLE_PATH_ENV = "ROLL_UNIT_LENGTH_TABLE_PATH"
 _ROLL_UNIT_LENGTH_TABLE_CACHE: dict[str, float] | None = None
 _ROLL_UNIT_LENGTH_TABLE_PATH_USED: str | None = None
 
+# 使用原反→ロール単位の長さ(m)。配台のロール単位長さの主ソース（未登録時は製品名の寸法から推定）。
+ROLL_UNIT_BY_USED_RAW_TABLE_DEFAULT_FILENAME = "使用原反,ロール単位の長さ.txt"
+ROLL_UNIT_BY_USED_RAW_TABLE_ALT_FILENAME = "使用原反, ロール単位の長さ.txt"
+ROLL_UNIT_BY_USED_RAW_TABLE_PATH_ENV = "ROLL_UNIT_BY_USED_RAW_TABLE_PATH"
+_ROLL_UNIT_BY_USED_RAW_TABLE_CACHE: dict[str, float] | None = None
+_ROLL_UNIT_BY_USED_RAW_TABLE_PATH_USED: str | None = None
+
 
 def _normalize_roll_unit_length_table_key(val) -> str:
     """
@@ -4206,6 +4220,114 @@ def _roll_unit_length_table_search_paths() -> list[str]:
             seen.add(key)
             out.append(p)
     return out
+
+
+def _roll_unit_by_used_raw_table_search_paths() -> list[str]:
+    """使用原反→ロール単位長さ CSV の探索順（先に見つかったパスを採用）。"""
+    paths: list[str] = []
+    env = (os.environ.get(ROLL_UNIT_BY_USED_RAW_TABLE_PATH_ENV) or "").strip()
+    if env:
+        paths.append(env)
+    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    if wb:
+        bd = os.path.dirname(os.path.abspath(wb))
+        for fn in (
+            ROLL_UNIT_BY_USED_RAW_TABLE_DEFAULT_FILENAME,
+            ROLL_UNIT_BY_USED_RAW_TABLE_ALT_FILENAME,
+        ):
+            paths.append(os.path.join(bd, fn))
+    for cwd in (os.getcwd(), os.path.join(os.getcwd(), "code")):
+        for fn in (
+            ROLL_UNIT_BY_USED_RAW_TABLE_DEFAULT_FILENAME,
+            ROLL_UNIT_BY_USED_RAW_TABLE_ALT_FILENAME,
+        ):
+            paths.append(os.path.join(cwd, fn))
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _load_roll_unit_length_m_by_used_raw_table_optional() -> dict[str, float]:
+    """
+    使用原反→ロール単位の長さ(m) テーブルを読み込む。
+    ファイルが無い場合は空 dict（製品名寸法推定へフォールバック）。
+    キーは原反幅テーブルと同じ _normalize_mm_table_lookup_key。
+    """
+    global _ROLL_UNIT_BY_USED_RAW_TABLE_PATH_USED
+    path_found = ""
+    for p in _roll_unit_by_used_raw_table_search_paths():
+        if os.path.isfile(p):
+            path_found = p
+            break
+    if not path_found:
+        return {}
+    out: dict[str, float] = {}
+    try:
+        with open(path_found, encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.reader(f))
+    except OSError:
+        return {}
+    if not rows:
+        return {}
+    hdr = [_normalize_mm_table_lookup_key(x) for x in rows[0]]
+    try:
+        i_key = hdr.index(_normalize_mm_table_lookup_key("使用原反"))
+    except ValueError:
+        i_key = 0
+    try:
+        i_m = hdr.index(_normalize_mm_table_lookup_key("ロール単位の長さ"))
+    except ValueError:
+        i_m = 1 if len(hdr) > 1 else 0
+    for parts in rows[1:]:
+        if not parts or all(not str(x).strip() for x in parts):
+            continue
+        while len(parts) <= max(i_key, i_m):
+            parts.append("")
+        raw_k = parts[i_key]
+        raw_m = parts[i_m]
+        key = _normalize_mm_table_lookup_key(raw_k)
+        if not key:
+            continue
+        m = parse_float_safe(raw_m, 0.0)
+        if m <= 0:
+            continue
+        if key in out and abs(out[key] - float(m)) > 1e-9:
+            logging.warning(
+                "使用原反ロール単位長さテーブルで同一キーに矛盾する値があります: %r → %s と %s (%s)",
+                key,
+                out[key],
+                m,
+                path_found,
+            )
+            continue
+        out[key] = float(m)
+    _ROLL_UNIT_BY_USED_RAW_TABLE_PATH_USED = path_found
+    if out:
+        logging.info(
+            "使用原反ロール単位長さテーブルを読み込みました: %s (%s 件)",
+            path_found,
+            len(out),
+        )
+    return out
+
+
+def _lookup_roll_unit_length_m_from_used_raw(used_raw) -> float | None:
+    """使用原反の完全一致（正規化後）でロール単位長さ(m)を返す。未登録なら None。"""
+    global _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE
+    if _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE is None:
+        _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE = _load_roll_unit_length_m_by_used_raw_table_optional()
+    if not _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE:
+        return None
+    k = _normalize_mm_table_lookup_key(used_raw)
+    if not k:
+        return None
+    v = _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE.get(k)
+    return float(v) if (v is not None and v > 0) else None
 
 
 def _load_roll_unit_length_m_table_optional() -> dict[str, float]:
@@ -4286,27 +4408,14 @@ def _lookup_roll_unit_length_m_from_table(product_name) -> float | None:
     return float(v) if (v is not None and v > 0) else None
 
 
-def infer_unit_m_from_product_name(product_name, fallback_unit):
+def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_unit):
     """
-    製品名文字列から 1 ロールあたりの長さ(m)を推定する。
-
-    実データ（テストコード直下「製品名,ロール単位の長さ.txt」）に合わせ、
-    **最後に現れる「左数 x 右数」（2〜6 桁同士）ペアの右側**をロール長の候補とする。
-    例: 870x200→200、1440x300→300、1550x40→40、770x300→300。
-    寸法区切りは半角 x/X のほか ×（U+00D7）・全角Ｘｘ 等を正規化してから判定する。
-
-    上記ペアが無いときは、従来どおり最後の「X の直後の 2〜6 桁」を拾う。
-    いずれもマッチしない場合（寸法なし、または X 後が 2〜6 桁で解釈不能）は
-    ``INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M``（100）を返す。製品名が欠損のときのみ
-    ``fallback_unit`` を返す。
+    製品名の寸法だけから 1 ロールあたりの長さ(m)を推定する（製品名 CSV テーブルは使わない）。
+    最後の NNNxMM ペアの右側、なければ最後の X 直後の 2〜6 桁。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
-    from_table = _lookup_roll_unit_length_m_from_table(product_name)
-    if from_table is not None and from_table > 0:
-        return from_table
     s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
-    # 「NNNX MM」形式: 最後のペアの **右側（X 後）**をロール長候補とする（製品名,ロール単位の長さ.txt 準拠）
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
     if dim_pairs:
         try:
@@ -4316,7 +4425,6 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
                 return b
         except ValueError:
             pass
-    # "770X300..." のようなパターンから X の後の数値を拾う（最後に見つかったXを優先）
     matches = re.findall(r"[xX]\s*(\d{2,6})", s)
     if matches:
         try:
@@ -4328,13 +4436,48 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     return float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M)
 
 
+def infer_roll_unit_m_from_used_raw_then_product_dims(
+    product_name, used_raw, fallback_unit
+):
+    """
+    配台用: 使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
+    未登録なら製品名の寸法（X の右側等）から推定する。
+    """
+    v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
+    if v is not None and v > 0:
+        return float(v)
+    return _infer_roll_unit_m_from_product_name_dimensions_only(
+        product_name, fallback_unit
+    )
+
+
+def infer_unit_m_from_product_name(product_name, fallback_unit):
+    """
+    製品名文字列から 1 ロールあたりの長さ(m)を推定する（検証・旧互換用）。
+
+    まず「製品名,ロール単位の長さ.txt」の完全一致があれば採用し、
+    無ければ寸法（``_infer_roll_unit_m_from_product_name_dimensions_only`` と同じ）へフォールバックする。
+
+    **配台本線**（段階1のロール単位長さ列・段階2の unit_m 補完等）は
+    ``infer_roll_unit_m_from_used_raw_then_product_dims`` を用い、使用原反テーブルを優先する。
+    """
+    if product_name is None or pd.isna(product_name):
+        return fallback_unit
+    from_table = _lookup_roll_unit_length_m_from_table(product_name)
+    if from_table is not None and from_table > 0:
+        return from_table
+    return _infer_roll_unit_m_from_product_name_dimensions_only(
+        product_name, fallback_unit
+    )
+
+
 def _coerce_roll_unit_m_when_converted_qty_below_roll(
-    product_name, unit_m: float, qty_total: float
+    product_name, unit_m: float, qty_total: float, used_raw=None
 ) -> float:
     """
     加工長さ（1ロールあたりの m）の解釈。
 
-    換算数量（qty_total）が、製品名から推定したロール単位長さより小さいときは、
+    換算数量（qty_total）が、推定ロール単位長さより小さいときは、
     ロール単位長さを採用する（シート等で unit_m が換算数量未満に誤っている場合の救済）。
     シート・手入力で unit_m が推定より大きい場合は上書きしない。
     """
@@ -4342,7 +4485,9 @@ def _coerce_roll_unit_m_when_converted_qty_below_roll(
         u = float(unit_m)
     except (TypeError, ValueError):
         u = 0.0
-    roll_infer = infer_unit_m_from_product_name(product_name, fallback_unit=0.0)
+    roll_infer = infer_roll_unit_m_from_used_raw_then_product_dims(
+        product_name, used_raw, fallback_unit=0.0
+    )
     try:
         roll_infer = float(roll_infer)
     except (TypeError, ValueError):
@@ -4411,13 +4556,16 @@ def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
 def _stage1_roll_length_for_planning_row(row) -> float:
     """段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。"""
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
+    _used_raw_s1 = row.get(TASK_COL_USED_RAW, None)
     qty, _done_m, _qtceiled, _from_unp = _plan_row_dispatch_qty_metrics(row)
     _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     _qty_total_s1 = _floor_positive_m_to_planning_minimum(
         _qty_total_s1, PLANNING_MIN_QTY_M
     )
-    _roll_len = infer_unit_m_from_product_name(
-        _pn_stage1, fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty
+    _roll_len = infer_roll_unit_m_from_used_raw_then_product_dims(
+        _pn_stage1,
+        _used_raw_s1,
+        fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty,
     )
     try:
         _roll_len = float(_roll_len)
@@ -4426,7 +4574,7 @@ def _stage1_roll_length_for_planning_row(row) -> float:
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
-        _pn_stage1, _roll_len, _qty_total_s1
+        _pn_stage1, _roll_len, _qty_total_s1, used_raw=_used_raw_s1
     )
     try:
         _roll_len = float(_roll_len)
@@ -4480,7 +4628,7 @@ def _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df: "pd.DataFrame
         healed += 1
     if healed:
         logging.info(
-            "段階1: ロール単位長さが寸法左側の100m切上と誤一致していた行を %s 件、製品名ベースで矯正しました。",
+            "段階1: ロール単位長さが寸法左側の100m切上と誤一致していた行を %s 件、使用原反テーブル／製品名寸法で矯正しました。",
             healed,
         )
 
@@ -11695,12 +11843,15 @@ def build_task_queue_from_planning_df(
         except (TypeError, ValueError):
             _prod_w_i = None
 
+        _used_raw_plan = _planning_df_cell_scalar(row, TASK_COL_USED_RAW)
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
         if unit <= 0:
-            unit = infer_unit_m_from_product_name(
-                product_name, fallback_unit=qty_total if qty_total > 0 else qty
+            unit = infer_roll_unit_m_from_used_raw_then_product_dims(
+                product_name,
+                _used_raw_plan,
+                fallback_unit=qty_total if qty_total > 0 else qty,
             )
         try:
             unit = float(unit)

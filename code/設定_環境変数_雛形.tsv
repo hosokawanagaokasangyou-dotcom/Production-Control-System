@@ -7,6 +7,7 @@ MASTER_USE_SPEED_SHEET	1	master.xlsm の speed シートによる加工速度上
 MASTER_SPEED_SHEET_NAME		speed シート名（空なら「speed」）
 MASTER_SPEED_FIRST_EXCEL_COL		speed シートで設備列が始まる Excel 列番号（空なら 4＝D 列）
 RAW_FABRIC_WIDTH_TABLE_PATH		原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索）
+ROLL_UNIT_BY_USED_RAW_TABLE_PATH		使用原反→ロール単位長さ(m) CSV のフルパス（空なら「使用原反,ロール単位の長さ.txt」をマクロブック同フォルダ・カレント・code で探索）
 PRODUCT_WIDTH_TABLE_PATH		製品幅 CSV のフルパス（同上）
 PRODUCT_LENGTH_TABLE_PATH		製品長 CSV のフルパス（同上）
 PRODUCT_THICKNESS_TABLE_PATH		製品厚み CSV のフルパス（同上）
