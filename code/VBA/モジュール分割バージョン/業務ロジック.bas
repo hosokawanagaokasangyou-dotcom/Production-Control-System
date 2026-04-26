@@ -3740,9 +3740,21 @@ NextSourceWs:
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     メインシート_メンバー一覧と出勤表示 True
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "メインシート_メンバー一覧と出勤表示 done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     ' 個人_* シートをブック末尾へ（失敗しても継続）
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     個人シートを末尾へ並べ替え
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "個人シートを末尾へ並べ替え done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
@@ -3750,10 +3762,16 @@ NextSourceWs:
 
     MacroSplash_SetStep "段階2: 「設定_シート表示」を一覧更新しブックへ適用しています…"
     On Error Resume Next
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     設定_シート表示_一覧をブックから再取得
     Err.Clear
     設定_シート表示_ブックへ適用
     Err.Clear
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "設定_シート表示 apply done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     On Error GoTo ErrHandler
     
     ' 完了ダイアログ直前はメインシートを表示（A1）
@@ -3767,7 +3785,13 @@ NextSourceWs:
     m_stage2MemberImported = memberImported
 
     On Error Resume Next
+    ' #region agent log (debug-30e24e)
+    t0 = Timer
+    ' #endregion agent log (debug-30e24e)
     配台_全シートフォントBIZ_UDP_自動適用
+    ' #region agent log (debug-30e24e)
+    AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "配台_全シートフォントBIZ_UDP_自動適用 done", "sec=" & Format$(Timer - t0, "0.000")
+    ' #endregion agent log (debug-30e24e)
     On Error GoTo 0
 
 Finish:
@@ -3792,21 +3816,39 @@ Finish:
     ' 設備ガント系シートは openpyxl 再出力で OLE が消えるため、保護の前に日付ジャンプ用コンボを再配置する
     On Error Resume Next
     If planImported Then
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        ' #endregion agent log (debug-30e24e)
         結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "結果_設備ガント系_日付ジャンプコンボ done", "sec=" & Format$(Timer - t0, "0.000")
+        ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
     On Error GoTo 0
     
     On Error Resume Next
     If planImported And exitCode = 0 Then
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        ' #endregion agent log (debug-30e24e)
         Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "スナップショット_pdfとcsvを出力 done", "sec=" & Format$(Timer - t0, "0.000")
+        ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
     On Error GoTo 0
     
     If st2DidUnlock Then
         On Error Resume Next
+        ' #region agent log (debug-30e24e)
+        t0 = Timer
+        ' #endregion agent log (debug-30e24e)
         配台マクロ_対象シートを条件どおりに保護 targetDir
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V5", "業務ロジック.bas:段階2_コア実行", "配台マクロ_対象シートを条件どおりに保護 done", "sec=" & Format$(Timer - t0, "0.000")
+        ' #endregion agent log (debug-30e24e)
         On Error GoTo 0
     End If
     
