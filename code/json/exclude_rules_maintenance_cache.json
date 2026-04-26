@@ -1,15 +1,15 @@
 {
   "sig": {
     "wb": "c:\\工程管理aiプロジェクト\\----ai-------1\\code\\生産管理_ai配台(rc1).xlsm",
-    "mtime_ns": 1777164313205961300,
-    "size": 7263126,
+    "mtime_ns": 1777164746938889700,
+    "size": 7263189,
     "ai": true,
     "pairs_hash": "b4d3b15d9344e99b141c1ba8c2b6277b60ca4552338a01bf5cd7b6e28820fd1e"
   },
   "can_skip": false,
   "stats": {
     "added": 0,
-    "removed_empty": 2,
+    "removed_empty": 0,
     "pending_rows": 0,
     "ai_filled": 0,
     "header_changed": true,

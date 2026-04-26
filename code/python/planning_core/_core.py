@@ -12352,6 +12352,21 @@ def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tupl
     )
     if all(hm.get(x) for x in want):
         return tuple(hm[x] for x in want)
+
+    # 見出し文字列が文字化け・表記ゆれ等で一致しない場合でも、
+    # 設定_配台不要工程は A～E 列固定で扱うため、A1:E1 のいずれかが非空なら列位置は確定とみなし、
+    # 毎回の HEADER_FIX（=ブック変更→保存→段階1遅延）を避ける。
+    try:
+        a1e1 = [ws.cell(1, c).value for c in range(1, 6)]
+        if any(v is not None and str(v).strip() for v in a1e1):
+            logging.info(
+                "%s: 「%s」の見出しは標準と一致しませんが、A1:E1 が非空のため列位置(1..5)をそのまま使用します。",
+                log_prefix,
+                EXCLUDE_RULES_SHEET_NAME,
+            )
+            return (1, 2, 3, 4, 5)
+    except Exception:
+        pass
     for i, name in enumerate(headers, start=1):
         ws.cell(row=1, column=i, value=name)
     logging.info(
