@@ -14592,11 +14592,15 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
 
 
 def _normalize_mm_table_lookup_key(val) -> str:
+    """
+    製品長・製品幅・製品厚み・原反幅など mm 系 CSV の照会キーを正規化する。
+    NFKC で全角英数字等を寄せたうえで、半角・全角などあらゆる空白類（isspace）を除去する
+    （ロール単位長さテーブルの `_normalize_roll_unit_length_table_key` と同趣旨）。
+    """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
     s = unicodedata.normalize("NFKC", str(val).strip())
-    s = re.sub(r"\s+", " ", s)
-    return s.strip()
+    return "".join(ch for ch in s if not ch.isspace())
 
 
 def _parse_int_mm_width_table_cell(val) -> int:
