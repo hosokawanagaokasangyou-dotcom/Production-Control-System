@@ -31,6 +31,52 @@ Private Sub CopySnapshotToRoot(ByVal snapPath As String, ByVal rootPath As Strin
     On Error GoTo 0
 End Sub
 
+Private Function TryExtractUncHost(ByVal p As String) As String
+    Dim s As String
+    Dim k As Long
+    s = Trim$(p)
+    TryExtractUncHost = ""
+    If Len(s) < 3 Then Exit Function
+    If Left$(s, 2) <> "\\" Then Exit Function
+    s = Mid$(s, 3)
+    k = InStr(1, s, "\", vbBinaryCompare)
+    If k <= 1 Then Exit Function
+    TryExtractUncHost = Left$(s, k - 1)
+End Function
+
+Private Function PingHostFast500msCached(ByVal host As String) As Boolean
+    Static cachedHost As String
+    Static cachedOk As Boolean
+    Static cachedAt As Single
+    Dim nowT As Single
+    Dim rc As Long
+    Dim cmd As String
+    
+    PingHostFast500msCached = True
+    host = Trim$(host)
+    If Len(host) = 0 Then Exit Function
+    
+    nowT = Timer
+    If StrComp(cachedHost, host, vbTextCompare) = 0 Then
+        ' 同一実行内での多重コピーを想定し、直近 30 秒は再 ping しない
+        If nowT >= cachedAt And (nowT - cachedAt) < 30# Then
+            PingHostFast500msCached = cachedOk
+            Exit Function
+        End If
+    End If
+    
+    ' ping -n 1: 1回だけ / -w 500: タイムアウト 500ms
+    cmd = "cmd /c ping -n 1 -w 500 " & host & " >nul"
+    On Error Resume Next
+    rc = CreateObject("WScript.Shell").Run(cmd, 0, True)
+    On Error GoTo 0
+    
+    cachedHost = host
+    cachedAt = nowT
+    cachedOk = (rc = 0)
+    PingHostFast500msCached = cachedOk
+End Function
+
 Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfFolder As String, ByVal stamp As String, ByVal fileName As String, ByVal snapPath As String)
     Dim wsSet As Worksheet
     Dim shareRoot As String
@@ -38,6 +84,7 @@ Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfF
     Dim shareSnapDir As String
     Dim shareLatestPath As String
     Dim shareStampPath As String
+    Dim host As String
     
     If wb Is Nothing Then Exit Sub
     If Len(fileName) = 0 Then Exit Sub
@@ -57,6 +104,11 @@ Private Sub CopySnapshotToSharedIfConfigured(ByVal wb As Workbook, ByVal relPdfF
         shareRoot = Left$(shareRoot, Len(shareRoot) - 1)
         If Len(shareRoot) = 0 Then Exit Sub
     Loop
+    
+    host = TryExtractUncHost(shareRoot)
+    If Len(host) > 0 Then
+        If Not PingHostFast500msCached(host) Then Exit Sub
+    End If
     
     sharePdfRoot = shareRoot & "\" & relPdfFolder
     EnsureFolder sharePdfRoot
