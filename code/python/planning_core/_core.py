@@ -13207,6 +13207,23 @@ def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
 
     book_existing = _xlwings_find_book_on_running_instances(abs_path)
     if book_existing is not None:
+        # region agent log
+        try:
+            _agent_debug_log_c92553(
+                location="_core.py:_xlwings_attach_open_macro_workbook",
+                hypothesis_id="H2",
+                message="Reusing running Excel book",
+                data={
+                    "abs_path": abs_path,
+                    "book_fullname": _xlwings_book_path_str(book_existing),
+                    "app_pid": getattr(getattr(book_existing, "app", None), "pid", None),
+                    "app_visible": getattr(getattr(book_existing, "app", None), "visible", None),
+                    "app_display_alerts": getattr(getattr(book_existing, "app", None), "display_alerts", None),
+                },
+            )
+        except Exception:
+            pass
+        # endregion
         _log_exclude_rules_sheet_debug(
             "XLWINGS_BOOK_REUSED",
             log_prefix,
@@ -13337,6 +13354,30 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
             xw_book.app.display_alerts = False
         except Exception:
             pass
+        # region agent log
+        try:
+            api = getattr(xw_book, "api", None)
+            _agent_debug_log_c92553(
+                location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:entry",
+                hypothesis_id="H1",
+                message="Before writing exclude rules sheet",
+                data={
+                    "wb_path": os.path.abspath(wb_path),
+                    "book_fullname": _xlwings_book_path_str(xw_book),
+                    "opened_wb_here": bool(info.get("opened_wb_here")),
+                    "mode": info.get("mode"),
+                    "app_pid": getattr(getattr(xw_book, "app", None), "pid", None),
+                    "app_visible": getattr(getattr(xw_book, "app", None), "visible", None),
+                    "app_display_alerts": getattr(getattr(xw_book, "app", None), "display_alerts", None),
+                    "api_saved": getattr(api, "Saved", None) if api is not None else None,
+                    "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
+                    "api_path": getattr(api, "Path", None) if api is not None else None,
+                    "api_fullname": getattr(api, "FullName", None) if api is not None else None,
+                },
+            )
+        except Exception:
+            pass
+        # endregion
         # 全シート名を列挙れるとシート数分の COM 往復になり」D3=true 時は VBA ポーリングと競坈して
         # 1 シート数秒〜坝数秒かかることはある（計測で 40 シート≈213s）。坝剝で直接解決れる。
         try:
@@ -13369,7 +13410,42 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
                 rng.api.Value2 = data
             except Exception:
                 rng.value = data
+            # region agent log
+            try:
+                api = getattr(xw_book, "api", None)
+                _agent_debug_log_c92553(
+                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:before_save",
+                    hypothesis_id="H1",
+                    message="About to save macro workbook via xlwings",
+                    data={
+                        "book_fullname": _xlwings_book_path_str(xw_book),
+                        "api_saved": getattr(api, "Saved", None) if api is not None else None,
+                        "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
+                        "api_path": getattr(api, "Path", None) if api is not None else None,
+                        "api_fullname": getattr(api, "FullName", None) if api is not None else None,
+                    },
+                )
+            except Exception:
+                pass
+            # endregion
             xw_book.save()
+            # region agent log
+            try:
+                api = getattr(xw_book, "api", None)
+                _agent_debug_log_c92553(
+                    location="_core.py:_xlwings_sync_exclude_rules_sheet_from_openpyxl:after_save",
+                    hypothesis_id="H1",
+                    message="After save() returned",
+                    data={
+                        "api_saved": getattr(api, "Saved", None) if api is not None else None,
+                        "api_readonly": getattr(api, "ReadOnly", None) if api is not None else None,
+                        "api_path": getattr(api, "Path", None) if api is not None else None,
+                        "api_fullname": getattr(api, "FullName", None) if api is not None else None,
+                    },
+                )
+            except Exception:
+                pass
+            # endregion
         finally:
             if hid_sheet_for_write:
                 try:
@@ -13499,6 +13575,36 @@ def _agent_debug_log_e69e6f(
                 continue
         if last_err is not None:
             logging.debug("debug log write failed: %s", last_err)
+    except Exception:
+        return
+
+
+def _agent_debug_log_c92553(
+    location: str, hypothesis_id: str, message: str, data: dict | None = None, *, run_id: str = "pre-fix"
+) -> None:
+    """Debug-mode NDJSON logger (session c92553). Writes to <repo>/debug-c92553.log."""
+    try:
+        import json
+        import time as _time
+
+        here = os.path.dirname(__file__)
+        path = os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-c92553.log"))
+        payload = {
+            "sessionId": "c92553",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(_time.time() * 1000),
+        }
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        except Exception:
+            pass
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
     except Exception:
         return
 
