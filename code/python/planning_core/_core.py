@@ -1067,8 +1067,9 @@ PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 # 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
+# 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
-# マクロブックと同じフォルダ（またはカレント）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
+# マクロブックと同じフォルダ（またはカレント・code/）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
 RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 # 製品幅（mm 想定）。段階1のみ算出。テーブル「製品名, 製品幅.txt」優先、未登録時は最後の NNNxMM の左辺。いずれも不可なら PlanningValidationError。
@@ -14582,6 +14583,7 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
             )
         )
     paths.append(os.path.join(os.getcwd(), RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME))
+    paths.append(os.path.join(os.getcwd(), "code", RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME))
     out: list[str] = []
     seen: set[str] = set()
     for p in paths:
@@ -14594,7 +14596,7 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
 
 def _normalize_mm_table_lookup_key(val) -> str:
     """
-    製品長・製品幅（製品名, 製品幅.txt）・製品厚み（製品名,製品厚み.txt）・原反幅など mm 系 CSV の照会キーを正規化する。
+    製品長・製品幅（製品名, 製品幅.txt）・製品厚み（製品名,製品厚み.txt）・原反幅（使用原反, 加工幅.txt）など mm 系 CSV の照会キーを正規化する。
     NFKC で全角英数字等を寄せたうえで、半角・全角などあらゆる空白類（isspace）を除去する
     （ロール単位長さテーブルの `_normalize_roll_unit_length_table_key` と同趣旨）。
     """
@@ -14660,6 +14662,7 @@ def _infer_length_mm_from_last_dim_pair_right(text: str) -> int | None:
 def _load_raw_fabric_width_mm_table() -> dict[str, int]:
     """
     原反幅テーブル（使用原反→原反幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    使用原反キーは _normalize_mm_table_lookup_key で正規化（NFKC・空白除去）して dict に格納する。
     """
     path_found = ""
     for p in _raw_fabric_width_table_search_paths():
