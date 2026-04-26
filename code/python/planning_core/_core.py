@@ -20008,16 +20008,15 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     run_date = base_now_dt.date()
 
     try:
-        skills_and_needs = load_skills_and_needs()
         (
             _sd,
-            members,
+            _mem,
             equipment_list,
             req_map,
             need_rules,
             _sm,
             need_combo_col_index,
-        ) = skills_and_needs
+        ) = load_skills_and_needs()
     except Exception as e:
         logging.exception("パターン別段階2: master 読込に失敗: %s", e)
         return False
@@ -20031,8 +20030,21 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             df0[dto_col] = ""
 
     global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(MASTER_FILE) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
     gpo = analyze_global_priority_override_comment(
-        global_priority_raw, members, run_date.year, ai_sheet_sink={}
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
     )
     ai_by_tid = analyze_task_special_remarks(df0, reference_year=run_date.year)
     tq_template = build_task_queue_from_planning_df(
@@ -20054,41 +20066,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         return False
     logging.info("パターン別段階2: 出力ルート %s", batch_root)
     _write_dispatch_pattern_stage2_jobs_meta(batch_root, pattern_jobs)
-
-    # パターンごとに _generate_plan_impl を回す際、重い I/O（master/勤怠/カレンダー/グローバルコメント等）を使い回す。
-    team_combo_presets = load_team_combination_presets_from_master()
-    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
-    try:
-        machine_calendar_blocks_by_date = load_machine_calendar_occupancy_blocks(
-            master_abs, equipment_list
-        )
-    except Exception as e:
-        logging.warning(
-            "パターン別段階2: 機械カレンダー読込例外のため占有なしとして続行します (%s)", e
-        )
-        machine_calendar_blocks_by_date = {}
-    try:
-        machine_daily_startup_settings = load_machine_daily_startup_settings(master_abs)
-    except Exception as e:
-        logging.warning(
-            "パターン別段階2: 機械日次始業準備設定の読込例外のため無視します (%s)", e
-        )
-        machine_daily_startup_settings = ({}, {})
-    try:
-        regular_shift_start, _ = _read_master_main_regular_shift_times(master_abs)
-    except Exception:
-        regular_shift_start = None
-    attendance_tpl, ai_log_tpl = load_attendance_and_analyze(members)
-    preloaded_stage2_context = {
-        "skills_and_needs": skills_and_needs,
-        "team_combo_presets": team_combo_presets,
-        "machine_calendar_blocks_by_date": machine_calendar_blocks_by_date,
-        "machine_daily_startup_settings": machine_daily_startup_settings,
-        "regular_shift_start": regular_shift_start,
-        "data_extract_dt_and_source": (data_extract_dt, "加工計画DATA系(パターン別段階2:事前取得)"),
-        "attendance_and_ai_log": (attendance_tpl, ai_log_tpl),
-        "global_priority_raw_and_override": (global_priority_raw, gpo),
-    }
 
     p5_bundle_batch = {
         "planning_df": df0,
@@ -20145,7 +20122,6 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
                 return_output_paths=True,
                 tasks_df_raw_input_baseline=(df0 if df_p5_ov is not None else None),
                 result_pattern_shift_label=(pid if df_p5_ov is not None else None),
-                preloaded_stage2_context=preloaded_stage2_context,
             )
         except PlanningValidationError as e:
             row["備考"] = f"検証エラー: {e}"[:500]
@@ -27828,7 +27804,6 @@ def _generate_plan_impl(
     return_output_paths=False,
     tasks_df_raw_input_baseline=None,
     result_pattern_shift_label=None,
-    preloaded_stage2_context: dict | None = None,
 ):
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -27885,39 +27860,16 @@ def _generate_plan_impl(
 
     _reset_dispatch_trace_per_task_logfiles()
 
-    skills_dict = None
-    members = None
-    equipment_list = None
-    req_map = None
-    need_rules = None
-    surplus_map = None
-    need_combo_col_index = None
-    team_combo_presets = None
-
-    if preloaded_stage2_context and preloaded_stage2_context.get("skills_and_needs") is not None:
-        (
-            skills_dict,
-            members,
-            equipment_list,
-            req_map,
-            need_rules,
-            surplus_map,
-            need_combo_col_index,
-        ) = preloaded_stage2_context["skills_and_needs"]
-        team_combo_presets = preloaded_stage2_context.get("team_combo_presets")
-        if team_combo_presets is None:
-            team_combo_presets = load_team_combination_presets_from_master()
-    else:
-        (
-            skills_dict,
-            members,
-            equipment_list,
-            req_map,
-            need_rules,
-            surplus_map,
-            need_combo_col_index,
-        ) = load_skills_and_needs()
-        team_combo_presets = load_team_combination_presets_from_master()
+    (
+        skills_dict,
+        members,
+        equipment_list,
+        req_map,
+        need_rules,
+        surplus_map,
+        need_combo_col_index,
+    ) = load_skills_and_needs()
+    team_combo_presets = load_team_combination_presets_from_master()
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
         logging.info(
@@ -27945,45 +27897,29 @@ def _generate_plan_impl(
     global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
-    if preloaded_stage2_context and preloaded_stage2_context.get("machine_calendar_blocks_by_date") is not None:
-        _MACHINE_CALENDAR_BLOCKS_BY_DATE = preloaded_stage2_context["machine_calendar_blocks_by_date"] or {}
-    else:
-        try:
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
-                os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
-                equipment_list,
-            )
-        except Exception as e:
-            logging.warning(
-                "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
-            )
-            _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
-
-    if preloaded_stage2_context and preloaded_stage2_context.get("machine_daily_startup_settings") is not None:
+    try:
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
+            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
+            equipment_list,
+        )
+    except Exception as e:
+        logging.warning(
+            "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
+        )
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+    try:
         (
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
-        ) = preloaded_stage2_context["machine_daily_startup_settings"]
-        _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = (
-            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE or {}
+        ) = load_machine_daily_startup_settings(
+            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
         )
-        _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = (
-            _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE or {}
+    except Exception as e:
+        logging.warning(
+            "機械日次始業準備設定: 読込例外のため、無視しした (%s)", e
         )
-    else:
-        try:
-            (
-                _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
-                _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
-            ) = load_machine_daily_startup_settings(
-                os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
-            )
-        except Exception as e:
-            logging.warning(
-                "機械日次始業準備設定: 読込例外のため、無視しした (%s)", e
-            )
-            _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
-            _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
+        _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
+        _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
     _master_path_stage2 = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
     if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
         _a12s_chk, _a12e_chk = _read_master_main_factory_operating_times(_master_path_stage2)
@@ -27993,25 +27929,17 @@ def _generate_plan_impl(
                 "master.xlsm メインの A12（工場稼働開始）・B12（工場稼働終了）を正しく設定してください。"
                 "（欠損・開始>=終了・読込不可のときは配台を中止します）"
             )
-    if preloaded_stage2_context and "regular_shift_start" in preloaded_stage2_context:
-        _STAGE2_REGULAR_SHIFT_START = preloaded_stage2_context.get("regular_shift_start")
-        if _STAGE2_REGULAR_SHIFT_START is not None:
+    try:
+        _rs_a15, _ = _read_master_main_regular_shift_times(_master_path_stage2)
+        _STAGE2_REGULAR_SHIFT_START = _rs_a15
+        if _rs_a15 is not None:
             logging.info(
                 "定常枠: master メイン A15=%s（結果シートの定常外着色・出勤簿生成の参照）",
-                _STAGE2_REGULAR_SHIFT_START.strftime("%H:%M"),
+                _rs_a15.strftime("%H:%M"),
             )
-    else:
-        try:
-            _rs_a15, _ = _read_master_main_regular_shift_times(_master_path_stage2)
-            _STAGE2_REGULAR_SHIFT_START = _rs_a15
-            if _rs_a15 is not None:
-                logging.info(
-                    "定常枠: master メイン A15=%s（結果シートの定常外着色・出勤簿生成の参照）",
-                    _rs_a15.strftime("%H:%M"),
-                )
-        except Exception as e:
-            logging.warning("定常開始(A15) 読込失敗: 結果の定常外着色等で参照しません (%s)", e)
-            _STAGE2_REGULAR_SHIFT_START = None
+    except Exception as e:
+        logging.warning("定常開始(A15) 読込失敗: 結果の定常外着色等で参照しません (%s)", e)
+        _STAGE2_REGULAR_SHIFT_START = None
     if _MACHINE_CALENDAR_BLOCKS_BY_DATE:
         _n_iv = sum(
             len(ivs)
@@ -28036,10 +27964,7 @@ def _generate_plan_impl(
         )
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
-    if preloaded_stage2_context and preloaded_stage2_context.get("data_extract_dt_and_source") is not None:
-        data_extract_dt, plan_base_dt_column = preloaded_stage2_context["data_extract_dt_and_source"]
-    else:
-        data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+    data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     # 表示・ファイル名・メタ用の「データ抽出」文字列は、正規化前の抽出時刻（加工計画DATA上の値）を維持する。
@@ -28073,27 +27998,11 @@ def _generate_plan_impl(
         plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
-    if preloaded_stage2_context and preloaded_stage2_context.get("attendance_and_ai_log") is not None:
-        _att_tpl, _ai_tpl = preloaded_stage2_context["attendance_and_ai_log"]
-        attendance_data = copy.deepcopy(_att_tpl) if _att_tpl is not None else {}
-        ai_log_data = dict(_ai_tpl) if isinstance(_ai_tpl, dict) else {}
-    else:
-        attendance_data, ai_log_data = load_attendance_and_analyze(members)
-
-    if preloaded_stage2_context and preloaded_stage2_context.get("global_priority_raw_and_override") is not None:
-        global_priority_raw, global_priority_override = preloaded_stage2_context[
-            "global_priority_raw_and_override"
-        ]
-        global_priority_raw = str(global_priority_raw or "")
-        global_priority_override = global_priority_override or {}
-    else:
-        global_priority_raw = load_main_sheet_global_priority_override_text()
-        global_priority_override = analyze_global_priority_override_comment(
-            global_priority_raw,
-            members,
-            run_date.year,
-            ai_sheet_sink=ai_log_data,
-        )
+    attendance_data, ai_log_data = load_attendance_and_analyze(members)
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    global_priority_override = analyze_global_priority_override_comment(
+        global_priority_raw, members, run_date.year,         ai_sheet_sink=ai_log_data
+    )
     _factory_closure_dates: set[date] = set()
     for _iso in global_priority_override.get("factory_closure_dates") or []:
         _d = parse_optional_date(_iso)
