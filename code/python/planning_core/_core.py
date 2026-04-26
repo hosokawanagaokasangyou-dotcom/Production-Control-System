@@ -12217,6 +12217,9 @@ def _merge_plan_sheet_user_overrides(out_df):
     段階1の抽出結果へ (依頼NO, 工程名) 短縮で引き継ぎ。
     空のセルはマージしない（新規抽出坴の空のまま）。
 
+    「ロール単位長さ」は、使用原反が「使用原反,ロール単位の長さ.txt」に登録されている行では
+    シート上の旧値で上書きしない（テーブル＋段階1の再計算を優先し、誤った過去値の混入を防ぐ）。
+
     工程「分割」で同一依頼NO内に同一機械名の複数行がないとき、過去に誤って付いた
     「配台不要」=オン相当の値はマージしない（``apply_exclude_rules_config_to_plan_df`` の
     分割ガードと同じ重複条件）。手入力で分割かつ配台不要オンを単独行に付けたい場合は稀とし、
@@ -12280,6 +12283,28 @@ def _merge_plan_sheet_user_overrides(out_df):
             continue
         merged_rows += 1
         for c, v in bucket.items():
+            if (
+                c == PLAN_COL_ROLL_UNIT_LENGTH
+                and TASK_COL_USED_RAW in out_df.columns
+            ):
+                _ur_m = out_df.at[i, TASK_COL_USED_RAW]
+                if _lookup_roll_unit_length_m_from_used_raw(_ur_m) is not None:
+                    # region agent log
+                    _kur_sk = _normalize_mm_table_lookup_key(_ur_m)
+                    if "40100" in _kur_sk:
+                        _debug_ndjson_096ced(
+                            "H_merge",
+                            "_core.py:_merge_plan_sheet_user_overrides",
+                            "skip_roll_merge_used_raw_table_hit",
+                            {
+                                "tid": tid,
+                                "machine": mach,
+                                "used_key": _kur_sk,
+                                "sheet_would_apply_m": parse_float_safe(v, None),
+                            },
+                        )
+                    # endregion agent log
+                    continue
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 tp_m = str(row.get(TASK_COL_MACHINE, "") or "").strip()
                 if _process_name_is_bunkatsu_for_auto_exclude(tp_m):
