@@ -12315,12 +12315,21 @@ def _exclude_rules_sheet_header_map(ws) -> dict:
     openpyxl は新規シート直後に max_column は 0 のままのことはあり」見出しは読ゝう保存剝に return してしまご。
     しのため、最低 A～E 列は必う走査れる。
     """
+    def _norm_hdr(x) -> str:
+        if x is None:
+            return ""
+        s = unicodedata.normalize("NFKC", str(x))
+        s = s.replace("\u3000", " ").replace("\xa0", " ").replace("\t", " ")
+        s = " ".join(s.split())
+        return s.strip()
+
     h = {}
     last_col = max(5, int(ws.max_column or 0))
     for col in range(1, last_col + 1):
         v = ws.cell(1, col).value
-        if v is not None:
-            h[str(v).strip()] = col
+        k = _norm_hdr(v)
+        if k:
+            h[k] = col
     return h
 
 
@@ -12337,8 +12346,12 @@ def _ensure_exclude_rules_sheet_headers_and_columns(ws, log_prefix: str) -> tupl
         EXCLUDE_RULE_COL_LOGIC_JSON,
     )
     hm = _exclude_rules_sheet_header_map(ws)
-    if all(hm.get(x) for x in headers):
-        return tuple(hm[x] for x in headers)
+    want = tuple(
+        unicodedata.normalize("NFKC", str(x)).replace("\u3000", " ").strip()
+        for x in headers
+    )
+    if all(hm.get(x) for x in want):
+        return tuple(hm[x] for x in want)
     for i, name in enumerate(headers, start=1):
         ws.cell(row=1, column=i, value=name)
     logging.info(
@@ -12363,9 +12376,28 @@ def _compact_exclude_rules_data_rows(
     空行: 工程名は空」または A～E 相当の5セルはまとめて空白相当。
     Returns (残したデータ行数, 削除した行数).
     """
-    max_r = int(ws.max_row or 1)
+    max_r0 = int(ws.max_row or 1)
+    max_r = max_r0
     if max_r < 2:
         return 0, 0
+
+    # openpyxl の max_row は「書式だけ残っている末尾空行」を含み得る。
+    # 末尾の空行を毎回 delete_rows で詰め直すと、段階1が遅くなるため無視する。
+    try:
+        last_data_r = 1
+        for r in range(max_r0, 1, -1):
+            pv = ws.cell(row=r, column=c_proc).value
+            p = (
+                ""
+                if pv is None or (isinstance(pv, float) and pd.isna(pv))
+                else str(pv).strip()
+            )
+            if p:
+                last_data_r = r
+                break
+        max_r = max(2, int(last_data_r))
+    except Exception:
+        max_r = max_r0
 
     old_body = max_r - 1
     cols = (c_proc, c_mach, c_flag, c_d, c_e)
@@ -12388,7 +12420,7 @@ def _compact_exclude_rules_data_rows(
     n_skip = old_body - len(rows)
 
     if not rows:
-        ws.delete_rows(2, old_body)
+        # 末尾の空行のみは無視済み。ここで delete_rows すると毎回変更扱いになるため、空行削除はしない。
         if old_body > 0:
             logging.info(
                 "%s: 「%s」は有効なデータ行はなかったため、データ行 %s 行を削除しました。",
@@ -12396,7 +12428,10 @@ def _compact_exclude_rules_data_rows(
                 EXCLUDE_RULES_SHEET_NAME,
                 old_body,
             )
-        return 0, n_skip
+        return 0, 0
+
+    if n_skip <= 0:
+        return len(rows), 0
 
     ws.delete_rows(2, old_body)
     for i, (p, m, cv, dv, ev) in enumerate(rows, start=2):
