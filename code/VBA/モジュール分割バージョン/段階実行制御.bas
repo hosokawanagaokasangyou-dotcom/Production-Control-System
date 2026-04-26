@@ -566,45 +566,4 @@ End Sub
 ' 【補助】個人別スケジュール用シート名（個人_プレフィックス・禁則文字除去・31文字以内）
 ' =========================================================
 
-' #region agent log (debug-e69e6f)
-Public Sub AgentDebugE69e6f_Log(ByVal location As String, ByVal message As String, Optional ByVal dataJson As String = "")
-    On Error Resume Next
-    Dim fso As Object
-    Dim repoRoot As String
-    Dim p As String
-    Dim tsMs As Double
-    Dim line As String
-    
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    repoRoot = fso.GetParentFolderName(ThisWorkbook.Path)
-    p = repoRoot & "\debug-e69e6f.log"
-    
-    tsMs = (CDbl(Now) - CDbl(#1/1/1970#)) * 86400000#
-    
-    If Len(dataJson) = 0 Then
-        line = "{""sessionId"":""e69e6f"",""timestamp"":" & Format$(tsMs, "0") & ",""location"":""" & JsonEscape(location) & """,""message"":""" & JsonEscape(message) & """}"
-    Else
-        line = "{""sessionId"":""e69e6f"",""timestamp"":" & Format$(tsMs, "0") & ",""location"":""" & JsonEscape(location) & """,""message"":""" & JsonEscape(message) & """,""data"":" & dataJson & "}"
-    End If
-    
-    Dim ff As Integer
-    ff = FreeFile
-    Open p For Append As #ff
-    Print #ff, line
-    Close #ff
-    On Error GoTo 0
-End Sub
-
-Private Function JsonEscape(ByVal s As String) As String
-    Dim t As String
-    t = s
-    t = Replace(t, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCrLf, "\n")
-    t = Replace(t, vbCr, "\n")
-    t = Replace(t, vbLf, "\n")
-    JsonEscape = t
-End Function
-' #endregion
-
-
+ 
