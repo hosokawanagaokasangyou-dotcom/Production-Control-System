@@ -43,6 +43,7 @@ from datetime import datetime
 
 STAGE_VBA_EXIT_CODE_FILE = "stage_vba_exitcode.txt"
 STAGE_ACTUAL_GANTT_REFRESH_EXIT_CODE_FILE = "stage_actual_gantt_refresh_exitcode.txt"
+DEBUG_E69E6F_FILE = "debug-e69e6f.log"
 
 
 def _ensure_this_python_dir_on_syspath() -> None:
@@ -173,6 +174,35 @@ def _append_execution_log_traceback(title: str) -> None:
         pass
 
 
+def _append_debug_e69e6f_ndjson(
+    location: str, hypothesis_id: str, message: str, data: dict | None = None
+) -> None:
+    """
+    Debug-mode NDJSON logger for session e69e6f.
+    Writes to workbook folder's log/debug-e69e6f.log (same base as execution_log.txt).
+    """
+    try:
+        import json
+        import time as _time
+
+        logd = os.path.join(os.getcwd(), "log")
+        os.makedirs(logd, exist_ok=True)
+        p = os.path.join(logd, DEBUG_E69E6F_FILE)
+        payload = {
+            "sessionId": "e69e6f",
+            "runId": "stage1-pre",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(_time.time() * 1000),
+        }
+        with open(p, "a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        return
+
+
 def run_stage1_for_xlwings() -> int:
     """
     段階1: ``run_stage1_extract`` を実行。戻り値: 0=成功, 1=失敗, 2=caller 取得失敗。
@@ -194,10 +224,22 @@ def run_stage1_for_xlwings() -> int:
             "INFO",
             "段階1: xlwings run_stage1_for_xlwings から planning_core を実行します。",
         )
+        _append_debug_e69e6f_ndjson(
+            "xlwings_console_runner.py:run_stage1_for_xlwings",
+            "H0",
+            "runner_enter",
+            {"cwd": os.getcwd(), "task_input_workbook": str(os.environ.get("TASK_INPUT_WORKBOOK", ""))},
+        )
         _purge_planning_core_modules()
         try:
             import planning_core as pc
 
+            _append_debug_e69e6f_ndjson(
+                "xlwings_console_runner.py:run_stage1_for_xlwings",
+                "H0",
+                "import_planning_core",
+                {"planning_core_file": getattr(pc, "__file__", "")},
+            )
             ok = pc.run_stage1_extract()
             rc = 0 if ok else 1
         except SystemExit as e:
@@ -211,6 +253,12 @@ def run_stage1_for_xlwings() -> int:
         except Exception:
             logging.exception("xlwings: 段階1の実行で例外が発生しました。")
             _append_execution_log_traceback("xlwings: 段階1の実行で例外が発生しました。")
+            _append_debug_e69e6f_ndjson(
+                "xlwings_console_runner.py:run_stage1_for_xlwings",
+                "H0",
+                "runner_exception",
+                {},
+            )
             rc = 1
         return rc
     finally:
