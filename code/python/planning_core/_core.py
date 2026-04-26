@@ -19952,6 +19952,34 @@ def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     )
 
 
+# region agent log (debug-30e24e)
+def _agent_dbglog(
+    hypothesisId: str,
+    message: str,
+    *,
+    data: dict | None = None,
+    runId: str = "pre",
+    location: str = "_core.py",
+):
+    try:
+        payload = {
+            "sessionId": "30e24e",
+            "runId": runId,
+            "hypothesisId": hypothesisId,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        with open("debug-30e24e.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion agent log (debug-30e24e)
+
+
 def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     workbook_path: str | None = None,
     *,
@@ -19981,11 +20009,18 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         logging.error("パターン別段階2: シート接続に失敗: %s", e)
         return False
 
+    _t0 = time_module.perf_counter()
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
         logging.warning("パターン別段階2: データ行はありません。")
         return False
+    _agent_dbglog(
+        "D",
+        "stage2(pattern-batch): loaded planning sheet",
+        data={"rows": int(df.shape[0]), "cols": int(df.shape[1]), "t_sec": round(time_module.perf_counter() - _t0, 4)},
+        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:after_sheet_load",
+    )
 
     df = df.copy()
     df.columns = df.columns.str.strip()
@@ -19995,6 +20030,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             df[c] = ""
 
     if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _t_mut0 = time_module.perf_counter()
         _apply_planning_sheet_post_load_mutations(
             df,
             path,
@@ -20002,12 +20038,19 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             apply_exclude_rules_from_config=False,
             compile_exclude_rules_d_to_e_with_ai=False,
         )
+        _agent_dbglog(
+            "B",
+            "stage2(pattern-batch): post_load_mutations done",
+            data={"t_sec": round(time_module.perf_counter() - _t_mut0, 4)},
+            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:post_load_mutations",
+        )
 
     data_extract_dt, _ = _extract_data_extraction_datetime()
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     run_date = base_now_dt.date()
 
     try:
+        _t_master0 = time_module.perf_counter()
         (
             _sd,
             _mem,
@@ -20017,6 +20060,16 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             _sm,
             need_combo_col_index,
         ) = load_skills_and_needs()
+        _agent_dbglog(
+            "A",
+            "stage2(pattern-batch): load_skills_and_needs done",
+            data={
+                "equipment_n": int(len(equipment_list or [])),
+                "need_combo_col_index": int(need_combo_col_index or 0),
+                "t_sec": round(time_module.perf_counter() - _t_master0, 4),
+            },
+            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:load_skills_and_needs",
+        )
     except Exception as e:
         logging.exception("パターン別段階2: master 読込に失敗: %s", e)
         return False
@@ -20043,6 +20096,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
                 members_for_gpo.append(name)
     except Exception:
         members_for_gpo = []
+    _t_build0 = time_module.perf_counter()
     gpo = analyze_global_priority_override_comment(
         global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
     )
@@ -20050,12 +20104,28 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     tq_template = build_task_queue_from_planning_df(
         df0, run_date, req_map, ai_by_tid, gpo, equipment_list
     )
+    _agent_dbglog(
+        "B",
+        "stage2(pattern-batch): build task queue done",
+        data={
+            "tasks_n": int(len(tq_template or [])),
+            "ai_by_tid_n": int(len(ai_by_tid or {})),
+            "t_sec": round(time_module.perf_counter() - _t_build0, 4),
+        },
+        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:build_task_queue",
+    )
     if not tq_template:
         logging.error("パターン別段階2: 配台対象タスクがありません。")
         return False
 
     tq_frozen = copy.deepcopy(tq_template)
     pattern_jobs = _dispatch_pattern_stage2_capped_jobs()
+    _agent_dbglog(
+        "C",
+        "stage2(pattern-batch): start pattern loop",
+        data={"patterns_n": int(len(pattern_jobs or [])), "tasks_n": int(len(tq_template or []))},
+        location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:start_loop",
+    )
 
     batch_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     batch_root = os.path.join(output_dir, "dispatch_pattern_stage2", batch_stamp)
@@ -20138,6 +20208,17 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
             )
             summary_rows.append(row)
             continue
+
+        _agent_dbglog(
+            "C",
+            "stage2(pattern-batch): pattern finished",
+            data={
+                "pid": str(pid),
+                "has_paths": bool(paths),
+                "t_sec": round(time_module.perf_counter() - t_pat_wall0, 4),
+            },
+            location="_core.py:run_dispatch_trial_pattern_stage2_batch_via_xlwings:after_generate_plan",
+        )
 
         if not paths:
             row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
@@ -27860,6 +27941,7 @@ def _generate_plan_impl(
 
     _reset_dispatch_trace_per_task_logfiles()
 
+    _t_s2_entry = time_module.perf_counter()
     (
         skills_dict,
         members,
@@ -27869,7 +27951,27 @@ def _generate_plan_impl(
         surplus_map,
         need_combo_col_index,
     ) = load_skills_and_needs()
+    _agent_dbglog(
+        "A",
+        "stage2: load_skills_and_needs done",
+        data={
+            "members_n": int(len(members or [])),
+            "equipment_n": int(len(equipment_list or [])),
+            "t_sec": round(time_module.perf_counter() - _t_s2_entry, 4),
+        },
+        location="_core.py:_generate_plan_impl:load_skills_and_needs",
+    )
+    _t_combo0 = time_module.perf_counter()
     team_combo_presets = load_team_combination_presets_from_master()
+    _agent_dbglog(
+        "A",
+        "stage2: load_team_combination_presets_from_master done",
+        data={
+            "keys_n": int(len(team_combo_presets or {})),
+            "t_sec": round(time_module.perf_counter() - _t_combo0, 4),
+        },
+        location="_core.py:_generate_plan_impl:team_combo_presets",
+    )
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
         logging.info(
@@ -27898,9 +28000,19 @@ def _generate_plan_impl(
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
     try:
+        _t_cal0 = time_module.perf_counter()
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
             equipment_list,
+        )
+        _agent_dbglog(
+            "A",
+            "stage2: load_machine_calendar_occupancy_blocks done",
+            data={
+                "days_n": int(len(_MACHINE_CALENDAR_BLOCKS_BY_DATE or {})),
+                "t_sec": round(time_module.perf_counter() - _t_cal0, 4),
+            },
+            location="_core.py:_generate_plan_impl:machine_calendar",
         )
     except Exception as e:
         logging.warning(
@@ -27908,11 +28020,22 @@ def _generate_plan_impl(
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
     try:
+        _t_ds0 = time_module.perf_counter()
         (
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
         ) = load_machine_daily_startup_settings(
             os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+        )
+        _agent_dbglog(
+            "A",
+            "stage2: load_machine_daily_startup_settings done",
+            data={
+                "min_n": int(len(_STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE or {})),
+                "req_n": int(len(_STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE or {})),
+                "t_sec": round(time_module.perf_counter() - _t_ds0, 4),
+            },
+            location="_core.py:_generate_plan_impl:machine_daily_startup",
         )
     except Exception as e:
         logging.warning(
@@ -27964,7 +28087,17 @@ def _generate_plan_impl(
         )
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
+    _t_dt0 = time_module.perf_counter()
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
+    _agent_dbglog(
+        "A",
+        "stage2: _extract_data_extraction_datetime done",
+        data={
+            "has_dt": bool(data_extract_dt),
+            "t_sec": round(time_module.perf_counter() - _t_dt0, 4),
+        },
+        location="_core.py:_generate_plan_impl:data_extract_dt",
+    )
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
     # 表示・ファイル名・メタ用の「データ抽出」文字列は、正規化前の抽出時刻（加工計画DATA上の値）を維持する。
@@ -27998,10 +28131,35 @@ def _generate_plan_impl(
         plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
+    _t_att0 = time_module.perf_counter()
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
+    _agent_dbglog(
+        "A",
+        "stage2: load_attendance_and_analyze done",
+        data={
+            "attendance_n": int(len(attendance_data or {})),
+            "ai_log_n": int(len(ai_log_data or {})),
+            "t_sec": round(time_module.perf_counter() - _t_att0, 4),
+        },
+        location="_core.py:_generate_plan_impl:attendance",
+    )
+    _t_gpo0 = time_module.perf_counter()
     global_priority_raw = load_main_sheet_global_priority_override_text()
     global_priority_override = analyze_global_priority_override_comment(
-        global_priority_raw, members, run_date.year,         ai_sheet_sink=ai_log_data
+        global_priority_raw,
+        members,
+        run_date.year,
+        ai_sheet_sink=ai_log_data,
+    )
+    _agent_dbglog(
+        "A",
+        "stage2: global priority override analyzed",
+        data={
+            "raw_len": int(len(str(global_priority_raw or ""))),
+            "override_keys_n": int(len(global_priority_override or {})),
+            "t_sec": round(time_module.perf_counter() - _t_gpo0, 4),
+        },
+        location="_core.py:_generate_plan_impl:global_priority_override",
     )
     _factory_closure_dates: set[date] = set()
     for _iso in global_priority_override.get("factory_closure_dates") or []:
