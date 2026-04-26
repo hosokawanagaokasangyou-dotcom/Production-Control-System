@@ -1072,6 +1072,7 @@ PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
 RAW_FABRIC_WIDTH_TABLE_PATH_ENV = "RAW_FABRIC_WIDTH_TABLE_PATH"
 # 製品幅（mm 想定）。段階1のみ算出。テーブル「製品名, 製品幅.txt」優先、未登録時は最後の NNNxMM の左辺。いずれも不可なら PlanningValidationError。
+# CSV の製品名キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の製品名と突き合わせる。
 PLAN_COL_PRODUCT_WIDTH = "製品幅"
 PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME = "製品名, 製品幅.txt"
 PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
@@ -1081,7 +1082,7 @@ PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
 PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
 # 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」必須。
 # 英字開始でないときは「製品名の先頭5文字」の末尾3桁を厚みコードとして code/10 を採用（例: 040→4.0, 100→10.0）。
-# いずれも不可なら PlanningValidationError（段階1中断）。
+# いずれも不可なら PlanningValidationError（段階1中断）。テーブル照合の製品名キーは _normalize_mm_table_lookup_key（NFKC＋空白除去）。
 PLAN_COL_PRODUCT_THICKNESS = "製品厚み"
 PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME = "製品名,製品厚み.txt"
 PRODUCT_THICKNESS_TABLE_PATH_ENV = "PRODUCT_THICKNESS_TABLE_PATH"
@@ -14593,7 +14594,7 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
 
 def _normalize_mm_table_lookup_key(val) -> str:
     """
-    製品長・製品幅・製品厚み・原反幅など mm 系 CSV の照会キーを正規化する。
+    製品長・製品幅（製品名, 製品幅.txt）・製品厚み（製品名,製品厚み.txt）・原反幅など mm 系 CSV の照会キーを正規化する。
     NFKC で全角英数字等を寄せたうえで、半角・全角などあらゆる空白類（isspace）を除去する
     （ロール単位長さテーブルの `_normalize_roll_unit_length_table_key` と同趣旨）。
     """
@@ -14764,6 +14765,7 @@ def _product_width_table_search_paths() -> list[str]:
             )
         )
     paths.append(os.path.join(os.getcwd(), PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME))
+    paths.append(os.path.join(os.getcwd(), "code", PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME))
     out: list[str] = []
     seen: set[str] = set()
     for p in paths:
@@ -14777,6 +14779,7 @@ def _product_width_table_search_paths() -> list[str]:
 def _load_product_width_mm_table() -> dict[str, int]:
     """
     製品幅テーブル（製品名→製品幅）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    製品名キーは _normalize_mm_table_lookup_key で正規化（NFKC・空白除去）して dict に格納する。
     """
     path_found = ""
     for p in _product_width_table_search_paths():
@@ -14998,6 +15001,7 @@ def _product_thickness_table_search_paths() -> list[str]:
             )
         )
     paths.append(os.path.join(os.getcwd(), PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
+    paths.append(os.path.join(os.getcwd(), "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
     # リポジトリ同梱（細川/GoogleAIStudio/配下）を直接参照したいケース向け
     try:
         _ga_dir = os.path.dirname(
@@ -15039,6 +15043,7 @@ def _parse_float_mm_thickness_cell(val) -> float:
 def _load_product_thickness_mm_table() -> dict[str, float]:
     """
     製品厚みテーブル（製品名→製品厚み）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
+    製品名キーは _normalize_mm_table_lookup_key で正規化（NFKC・空白除去）して dict に格納する。
     """
     path_found = ""
     for p in _product_thickness_table_search_paths():
