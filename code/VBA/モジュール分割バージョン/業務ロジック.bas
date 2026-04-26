@@ -98,6 +98,8 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
     Dim lastRow As Long
     Dim cellKey As String
     Dim v As String
+    Dim sample As String
+    Dim sampleN As Long
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
     On Error GoTo 0
@@ -106,10 +108,19 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
     ' #endregion agent log (debug-30e24e)
     If Not ws Is Nothing Then
         lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        ' #region agent log (debug-30e24e)
+        AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet shape", "lastRow=" & CStr(lastRow) & " A1=" & CStr(ws.Cells(1, 1).Value) & " B1=" & CStr(ws.Cells(1, 2).Value) & " C1=" & CStr(ws.Cells(1, 3).Value)
+        ' #endregion agent log (debug-30e24e)
         If lastRow >= 2 Then
             For r = 2 To lastRow
                 cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
                 If Len(cellKey) > 0 And Left$(cellKey, 1) <> "#" Then
+                    If sampleN < 10 Then
+                        If InStr(1, cellKey, "STAGE2", vbTextCompare) > 0 Or InStr(1, cellKey, "SKIP", vbTextCompare) > 0 Then
+                            sample = sample & IIf(sampleN = 0, "", " | ") & "A" & CStr(r) & "=" & cellKey
+                            sampleN = sampleN + 1
+                        End If
+                    End If
                     If StrComp(cellKey, keyName, vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
@@ -126,6 +137,15 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
                     End If
                 End If
             Next r
+        End If
+        If sampleN > 0 Then
+            ' #region agent log (debug-30e24e)
+            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet sample keys", sample
+            ' #endregion agent log (debug-30e24e)
+        Else
+            ' #region agent log (debug-30e24e)
+            AgentDebugNdjson_30e24e "V6", "業務ロジック.bas:Stage2EnvBoolEffective_30e24e", "sheet sample keys", "(none matched STAGE2/SKIP in colA)"
+            ' #endregion agent log (debug-30e24e)
         End If
     End If
     v = Trim$(Environ$(keyName))
