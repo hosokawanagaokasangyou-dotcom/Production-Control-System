@@ -6975,6 +6975,42 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             },
             "H1",
         )
+
+        # 可視行・隠し行の概況（フィルター適用時の「見えている範囲」差分を検知）
+        _agent__xlCellTypeVisible = 12
+        _agent__used_addr = getattr(ws.used_range, "address", None)
+        _agent__visible_rows = None
+        try:
+            if _agent__used_addr:
+                _agent__vis = ws.api.Range(_agent__used_addr).SpecialCells(
+                    _agent__xlCellTypeVisible
+                )
+                _agent__visible_rows = int(_agent__vis.Rows.Count)
+        except Exception:
+            _agent__visible_rows = None
+        _agent__hidden_rows = None
+        try:
+            _agent__ur_rows = getattr(ws.used_range, "rows", None).count
+            if _agent__ur_rows:
+                # UsedRange の 1..N のうち Hidden=True の数（Nは小さい想定）
+                _agent__hidden_rows = int(
+                    sum(
+                        1
+                        for _ri in range(1, int(_agent__ur_rows) + 1)
+                        if bool(getattr(ws.api.Rows(_ri), "Hidden", False))
+                    )
+                )
+        except Exception:
+            _agent__hidden_rows = None
+        _agent__ndjson(
+            "開始: 可視/隠し行の概況",
+            {
+                "used_range_address": _agent__used_addr,
+                "visible_rows_in_used_range": _agent__visible_rows,
+                "hidden_rows_in_1_to_used_rows": _agent__hidden_rows,
+            },
+            "H4",
+        )
     except Exception:
         pass
     # endregion agent log (debug-09fb2a)
