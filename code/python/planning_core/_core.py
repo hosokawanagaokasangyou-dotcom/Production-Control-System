@@ -6931,136 +6931,40 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
         return False
 
-    # region agent log (debug-09fb2a)
-    try:
-        import json as _agent__json
-        import time as _agent__time
-
-        _agent__repo_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..")
-        )
-        _agent__log_path = os.path.join(_agent__repo_root, "debug-09fb2a.log")
-
-        def _agent__ndjson(message: str, data: dict, hypothesisId: str) -> None:
-            payload = {
-                "sessionId": "09fb2a",
-                "runId": os.environ.get("AGENT_DEBUG_RUN_ID") or "pre-fix",
-                "hypothesisId": hypothesisId,
-                "location": "planning_core/_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings",
-                "message": message,
-                "data": data,
-                "timestamp": int(_agent__time.time() * 1000),
-            }
-            try:
-                with open(_agent__log_path, "a", encoding="utf-8") as f:
-                    f.write(_agent__json.dumps(payload, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
-
-        _agent__ndjson(
-            "開始: シート状態",
-            {
-                "workbook_path": path,
-                "sheet_name": PLAN_INPUT_SHEET_NAME,
-                "used_range_address": getattr(ws.used_range, "address", None),
-                "used_range_rows": getattr(ws.used_range, "rows", None).count
-                if getattr(ws.used_range, "rows", None) is not None
-                else None,
-                "used_range_cols": getattr(ws.used_range, "columns", None).count
-                if getattr(ws.used_range, "columns", None) is not None
-                else None,
-                "AutoFilterMode": bool(getattr(ws.api, "AutoFilterMode", False)),
-                "FilterMode": bool(getattr(ws.api, "FilterMode", False)),
-                "has_AutoFilter_obj": getattr(ws.api, "AutoFilter", None) is not None,
-            },
-            "H1",
-        )
-
-        # 可視行・隠し行の概況（フィルター適用時の「見えている範囲」差分を検知）
-        _agent__xlCellTypeVisible = 12
-        _agent__used_addr = getattr(ws.used_range, "address", None)
-        _agent__visible_rows = None
-        try:
-            if _agent__used_addr:
-                _agent__vis = ws.api.Range(_agent__used_addr).SpecialCells(
-                    _agent__xlCellTypeVisible
-                )
-                _agent__visible_rows = int(_agent__vis.Rows.Count)
-        except Exception:
-            _agent__visible_rows = None
-        _agent__hidden_rows = None
-        try:
-            _agent__ur_rows = getattr(ws.used_range, "rows", None).count
-            if _agent__ur_rows:
-                # UsedRange の 1..N のうち Hidden=True の数（Nは小さい想定）
-                _agent__hidden_rows = int(
-                    sum(
-                        1
-                        for _ri in range(1, int(_agent__ur_rows) + 1)
-                        if bool(getattr(ws.api.Rows(_ri), "Hidden", False))
-                    )
-                )
-        except Exception:
-            _agent__hidden_rows = None
-        _agent__ndjson(
-            "開始: 可視/隠し行の概況",
-            {
-                "used_range_address": _agent__used_addr,
-                "visible_rows_in_used_range": _agent__visible_rows,
-                "hidden_rows_in_1_to_used_rows": _agent__hidden_rows,
-            },
-            "H4",
-        )
-    except Exception:
-        pass
-    # endregion agent log (debug-09fb2a)
-
     # フィルター適用中は「見えている行だけが並べ替わらない」ように見えるため、
     # 条件を退避して一旦解除→処理→復元する。
-    # region agent log (debug-09fb2a)
-    _agent__filter_restore = None
+    filter_restore = None
     try:
         if bool(getattr(ws.api, "FilterMode", False)) and getattr(ws.api, "AutoFilter", None) is not None:
-            _agent__af = ws.api.AutoFilter
-            _agent__filters = getattr(_agent__af, "Filters", None)
-            _agent__count = int(getattr(_agent__filters, "Count", 0) or 0)
-            _agent__filter_restore = []
-            for _field in range(1, _agent__count + 1):
+            af = ws.api.AutoFilter
+            filters = getattr(af, "Filters", None)
+            count = int(getattr(filters, "Count", 0) or 0)
+            filter_restore = []
+            for field in range(1, count + 1):
                 try:
-                    _f = _agent__filters.Item(_field)
-                    _on = bool(getattr(_f, "On", False))
-                    if not _on:
-                        _agent__filter_restore.append({"field": _field, "on": False})
+                    f = filters.Item(field)
+                    on = bool(getattr(f, "On", False))
+                    if not on:
+                        filter_restore.append({"field": field, "on": False})
                         continue
-                    _agent__filter_restore.append(
+                    filter_restore.append(
                         {
-                            "field": _field,
+                            "field": field,
                             "on": True,
-                            "Criteria1": getattr(_f, "Criteria1", None),
-                            "Operator": getattr(_f, "Operator", None),
-                            "Criteria2": getattr(_f, "Criteria2", None),
+                            "Criteria1": getattr(f, "Criteria1", None),
+                            "Operator": getattr(f, "Operator", None),
+                            "Criteria2": getattr(f, "Criteria2", None),
                         }
                     )
                 except Exception:
-                    _agent__filter_restore.append({"field": _field, "on": None})
+                    filter_restore.append({"field": field, "on": None})
 
             try:
                 ws.api.ShowAllData()
-                _agent__ndjson(
-                    "フィルター解除: ShowAllData 実行",
-                    {"filter_fields": _agent__count, "restore_items": len(_agent__filter_restore)},
-                    "H5",
-                )
-            except Exception as _e:
-                _agent__ndjson(
-                    "フィルター解除: ShowAllData 失敗",
-                    {"error": str(_e), "filter_fields": _agent__count},
-                    "H5",
-                )
-                _agent__filter_restore = None
+            except Exception:
+                filter_restore = None
     except Exception:
-        _agent__filter_restore = None
-    # endregion agent log (debug-09fb2a)
+        filter_restore = None
 
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
@@ -7142,26 +7046,6 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             n_invalid_key,
         )
 
-    # region agent log (debug-09fb2a)
-    try:
-        _agent__ndjson(
-            "読取→解析: 行数など",
-            {
-                "mat_rows": len(mat) if isinstance(mat, list) else None,
-                "mat_cols": (len(mat[0]) if mat and isinstance(mat[0], list) else None),
-                "df_rows": int(len(df)),
-                "df_cols": int(len(df.columns)),
-                "active_count": int(len(active)),
-                "first_active_row_1based": int(first + 2),
-                "last_active_row_1based": int(last + 2),
-                "n_invalid_key": int(n_invalid_key),
-            },
-            "H2",
-        )
-    except Exception:
-        pass
-    # endregion agent log (debug-09fb2a)
-
     sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
     df_mut = df.copy()
     for rank, i in enumerate(sorted_active, start=1):
@@ -7220,61 +7104,20 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         logging.exception("配台試行順番（小数キー並べ）: シート書込に失敗: %s", e)
         return False
 
-    # region agent log (debug-09fb2a)
     try:
-        _agent__ndjson(
-            "書込後: シート状態",
-            {
-                "written_rows": int(n_r),
-                "written_cols": int(n_hdr),
-                "AutoFilterMode": bool(getattr(ws.api, "AutoFilterMode", False)),
-                "FilterMode": bool(getattr(ws.api, "FilterMode", False)),
-            },
-            "H3",
-        )
-    except Exception:
-        pass
-    # endregion agent log (debug-09fb2a)
-
-    # region agent log (debug-09fb2a)
-    try:
-        if _agent__filter_restore:
-            _agent__applied = 0
-            _agent__failed = 0
-            _agent__rng = None
-            try:
-                _agent__rng = ws.api.Range(getattr(ws.used_range, "address", None))
-            except Exception:
-                _agent__rng = None
-            for _it in _agent__filter_restore:
-                if not isinstance(_it, dict) or not _it.get("on"):
+        if filter_restore:
+            rng = ws.api.Range(getattr(ws.used_range, "address", None))
+            for it in filter_restore:
+                if not isinstance(it, dict) or not it.get("on"):
                     continue
-                try:
-                    if _agent__rng is None:
-                        _agent__failed += 1
-                        continue
-                    _agent__rng.AutoFilter(
-                        Field=int(_it["field"]),
-                        Criteria1=_it.get("Criteria1"),
-                        Operator=_it.get("Operator"),
-                        Criteria2=_it.get("Criteria2"),
-                    )
-                    _agent__applied += 1
-                except Exception:
-                    _agent__failed += 1
-            _agent__ndjson(
-                "フィルター復元: AutoFilter 再適用",
-                {
-                    "applied": int(_agent__applied),
-                    "failed": int(_agent__failed),
-                    "FilterMode_after": bool(getattr(ws.api, "FilterMode", False)),
-                    "AutoFilterMode_after": bool(getattr(ws.api, "AutoFilterMode", False)),
-                },
-                "H6",
-            )
+                rng.AutoFilter(
+                    Field=int(it["field"]),
+                    Criteria1=it.get("Criteria1"),
+                    Operator=it.get("Operator"),
+                    Criteria2=it.get("Criteria2"),
+                )
     except Exception:
         pass
-    # endregion agent log (debug-09fb2a)
 
     try:
         wb.save()
