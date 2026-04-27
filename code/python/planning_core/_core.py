@@ -6931,6 +6931,54 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
         return False
 
+    # region agent log (debug-09fb2a)
+    try:
+        import json as _agent__json
+        import time as _agent__time
+
+        _agent__repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
+        _agent__log_path = os.path.join(_agent__repo_root, "debug-09fb2a.log")
+
+        def _agent__ndjson(message: str, data: dict, hypothesisId: str) -> None:
+            payload = {
+                "sessionId": "09fb2a",
+                "runId": os.environ.get("AGENT_DEBUG_RUN_ID") or "pre-fix",
+                "hypothesisId": hypothesisId,
+                "location": "planning_core/_core.py:sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings",
+                "message": message,
+                "data": data,
+                "timestamp": int(_agent__time.time() * 1000),
+            }
+            try:
+                with open(_agent__log_path, "a", encoding="utf-8") as f:
+                    f.write(_agent__json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        _agent__ndjson(
+            "開始: シート状態",
+            {
+                "workbook_path": path,
+                "sheet_name": PLAN_INPUT_SHEET_NAME,
+                "used_range_address": getattr(ws.used_range, "address", None),
+                "used_range_rows": getattr(ws.used_range, "rows", None).count
+                if getattr(ws.used_range, "rows", None) is not None
+                else None,
+                "used_range_cols": getattr(ws.used_range, "columns", None).count
+                if getattr(ws.used_range, "columns", None) is not None
+                else None,
+                "AutoFilterMode": bool(getattr(ws.api, "AutoFilterMode", False)),
+                "FilterMode": bool(getattr(ws.api, "FilterMode", False)),
+                "has_AutoFilter_obj": getattr(ws.api, "AutoFilter", None) is not None,
+            },
+            "H1",
+        )
+    except Exception:
+        pass
+    # endregion agent log (debug-09fb2a)
+
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
@@ -7011,6 +7059,26 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             n_invalid_key,
         )
 
+    # region agent log (debug-09fb2a)
+    try:
+        _agent__ndjson(
+            "読取→解析: 行数など",
+            {
+                "mat_rows": len(mat) if isinstance(mat, list) else None,
+                "mat_cols": (len(mat[0]) if mat and isinstance(mat[0], list) else None),
+                "df_rows": int(len(df)),
+                "df_cols": int(len(df.columns)),
+                "active_count": int(len(active)),
+                "first_active_row_1based": int(first + 2),
+                "last_active_row_1based": int(last + 2),
+                "n_invalid_key": int(n_invalid_key),
+            },
+            "H2",
+        )
+    except Exception:
+        pass
+    # endregion agent log (debug-09fb2a)
+
     sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
     df_mut = df.copy()
     for rank, i in enumerate(sorted_active, start=1):
@@ -7068,6 +7136,22 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     except Exception as e:
         logging.exception("配台試行順番（小数キー並べ）: シート書込に失敗: %s", e)
         return False
+
+    # region agent log (debug-09fb2a)
+    try:
+        _agent__ndjson(
+            "書込後: シート状態",
+            {
+                "written_rows": int(n_r),
+                "written_cols": int(n_hdr),
+                "AutoFilterMode": bool(getattr(ws.api, "AutoFilterMode", False)),
+                "FilterMode": bool(getattr(ws.api, "FilterMode", False)),
+            },
+            "H3",
+        )
+    except Exception:
+        pass
+    # endregion agent log (debug-09fb2a)
 
     try:
         wb.save()
