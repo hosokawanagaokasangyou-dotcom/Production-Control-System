@@ -7015,6 +7015,53 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
         pass
     # endregion agent log (debug-09fb2a)
 
+    # フィルター適用中は「見えている行だけが並べ替わらない」ように見えるため、
+    # 条件を退避して一旦解除→処理→復元する。
+    # region agent log (debug-09fb2a)
+    _agent__filter_restore = None
+    try:
+        if bool(getattr(ws.api, "FilterMode", False)) and getattr(ws.api, "AutoFilter", None) is not None:
+            _agent__af = ws.api.AutoFilter
+            _agent__filters = getattr(_agent__af, "Filters", None)
+            _agent__count = int(getattr(_agent__filters, "Count", 0) or 0)
+            _agent__filter_restore = []
+            for _field in range(1, _agent__count + 1):
+                try:
+                    _f = _agent__filters.Item(_field)
+                    _on = bool(getattr(_f, "On", False))
+                    if not _on:
+                        _agent__filter_restore.append({"field": _field, "on": False})
+                        continue
+                    _agent__filter_restore.append(
+                        {
+                            "field": _field,
+                            "on": True,
+                            "Criteria1": getattr(_f, "Criteria1", None),
+                            "Operator": getattr(_f, "Operator", None),
+                            "Criteria2": getattr(_f, "Criteria2", None),
+                        }
+                    )
+                except Exception:
+                    _agent__filter_restore.append({"field": _field, "on": None})
+
+            try:
+                ws.api.ShowAllData()
+                _agent__ndjson(
+                    "フィルター解除: ShowAllData 実行",
+                    {"filter_fields": _agent__count, "restore_items": len(_agent__filter_restore)},
+                    "H5",
+                )
+            except Exception as _e:
+                _agent__ndjson(
+                    "フィルター解除: ShowAllData 失敗",
+                    {"error": str(_e), "filter_fields": _agent__count},
+                    "H5",
+                )
+                _agent__filter_restore = None
+    except Exception:
+        _agent__filter_restore = None
+    # endregion agent log (debug-09fb2a)
+
     mat = _xlwings_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
@@ -7185,6 +7232,46 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
             },
             "H3",
         )
+    except Exception:
+        pass
+    # endregion agent log (debug-09fb2a)
+
+    # region agent log (debug-09fb2a)
+    try:
+        if _agent__filter_restore:
+            _agent__applied = 0
+            _agent__failed = 0
+            _agent__rng = None
+            try:
+                _agent__rng = ws.api.Range(getattr(ws.used_range, "address", None))
+            except Exception:
+                _agent__rng = None
+            for _it in _agent__filter_restore:
+                if not isinstance(_it, dict) or not _it.get("on"):
+                    continue
+                try:
+                    if _agent__rng is None:
+                        _agent__failed += 1
+                        continue
+                    _agent__rng.AutoFilter(
+                        Field=int(_it["field"]),
+                        Criteria1=_it.get("Criteria1"),
+                        Operator=_it.get("Operator"),
+                        Criteria2=_it.get("Criteria2"),
+                    )
+                    _agent__applied += 1
+                except Exception:
+                    _agent__failed += 1
+            _agent__ndjson(
+                "フィルター復元: AutoFilter 再適用",
+                {
+                    "applied": int(_agent__applied),
+                    "failed": int(_agent__failed),
+                    "FilterMode_after": bool(getattr(ws.api, "FilterMode", False)),
+                    "AutoFilterMode_after": bool(getattr(ws.api, "AutoFilterMode", False)),
+                },
+                "H6",
+            )
     except Exception:
         pass
     # endregion agent log (debug-09fb2a)
