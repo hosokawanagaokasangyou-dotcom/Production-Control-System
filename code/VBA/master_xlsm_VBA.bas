@@ -506,10 +506,14 @@ Sub master_カレンダーからメンバー出勤簿を生成()
     Dim key As Variant
     Dim regSt As Date, regEn As Date
     Dim regFromMain As Boolean
+    Dim prevCalc As XlCalculation
     
     On Error GoTo EH
     Set wb = ThisWorkbook
     Set recMap = CreateObject("Scripting.Dictionary")
+    
+    prevCalc = Application.Calculation
+    Application.Calculation = xlCalculationManual
     Application.ScreenUpdating = False
     
     regFromMain = MasterMainReadRegularShiftTimes(wb, regSt, regEn)
@@ -548,9 +552,11 @@ Sub master_カレンダーからメンバー出勤簿を生成()
     
 CleanExit:
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     Exit Sub
 EH:
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     MsgBox "出勤簿生成エラー: " & Err.Description, vbCritical
 End Sub
 
@@ -967,6 +973,7 @@ Public Sub master_機械カレンダーを作成()
     Dim outCol As Long
     Dim lastOutCol As Long
     Dim hFirst As Long, hLast As Long, slotsPer As Long
+    Dim prevCalc As XlCalculation
     
     On Error GoTo EH
     Set wb = ThisWorkbook
@@ -995,6 +1002,8 @@ Public Sub master_機械カレンダーを作成()
     
     Call MasterMachineCalReadSlotHours(wb, hFirst, hLast, slotsPer)
     
+    prevCalc = Application.Calculation
+    Application.Calculation = xlCalculationManual
     Application.ScreenUpdating = False
     
     wsOut.Cells.UnMerge
@@ -1062,6 +1071,7 @@ NextCell:
     Call FormatMachineCalendarGridLayout(wsOut, lastRow, lastOutCol, slotsPer, wb)
     
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     Call AutoFitAllWorksheetColumns
     Call TryAutoSaveMasterWorkbook
     
@@ -1075,6 +1085,7 @@ NextCell:
     
 EH:
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     MsgBox "機械カレンダー作成エラー: " & Err.Description, vbCritical, "機械カレンダー"
 End Sub
 
@@ -2109,6 +2120,7 @@ Public Sub master_組み合わせ表を更新()
     Dim r As Long
     Dim rk As String
     Dim msgDetail As String
+    Dim prevCalc As XlCalculation
     
     On Error GoTo EH
     
@@ -2157,6 +2169,8 @@ Public Sub master_組み合わせ表を更新()
     If maxReq < 1 Then maxReq = 1
     If maxReq > 12 Then maxReq = 12
     
+    prevCalc = Application.Calculation
+    Application.Calculation = xlCalculationManual
     Application.ScreenUpdating = False
     
     If fullRebuild Then
@@ -2213,6 +2227,7 @@ NextInc0:
     Call ApplySkillCombinationSheetFormat(wsOut, maxReq)
     Call FreezeTopRowSafe(wsOut)
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     
     Call TryAutoSaveMasterWorkbook
     
@@ -2223,6 +2238,7 @@ NextInc0:
     
 EH:
     Application.ScreenUpdating = True
+    Application.Calculation = prevCalc
     MsgBox "組み合わせ表の更新でエラー: " & Err.Description, vbCritical, "組み合わせ表"
 End Sub
 
