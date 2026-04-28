@@ -56,6 +56,32 @@ Public Function XlWingsSuspendAutoCalculationEffective() As Boolean
     XlWingsSuspendAutoCalculationEffective = True
 End Function
 
+' 一括処理中の自動計算: キー名は planning_core / 設定_環境変数_雛形.tsv の XLWINGS_SUSPEND_AUTO_CALCULATION と同一（上記 XlWingsSuspendAutoCalculationEffective）。
+Public Type TAppCalculationSnap
+    PrevMode As Long
+    Suspended As Boolean
+End Type
+
+' 有効時のみ Application.Calculation を xlCalculationManual にし、End で復帰する。
+Public Sub AppCalculation_ManualBegin(ByRef snap As TAppCalculationSnap)
+    snap.Suspended = False
+    On Error GoTo AppCalcBeginDone
+    If Not XlWingsSuspendAutoCalculationEffective() Then GoTo AppCalcBeginDone
+    snap.PrevMode = CLng(Application.Calculation)
+    Application.Calculation = xlCalculationManual
+    snap.Suspended = True
+AppCalcBeginDone:
+    On Error GoTo 0
+End Sub
+
+Public Sub AppCalculation_ManualEnd(ByRef snap As TAppCalculationSnap)
+    If Not snap.Suspended Then Exit Sub
+    On Error Resume Next
+    Application.Calculation = snap.PrevMode
+    On Error GoTo 0
+    snap.Suspended = False
+End Sub
+
 Public Function Stage12CmdHideWindowEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long
