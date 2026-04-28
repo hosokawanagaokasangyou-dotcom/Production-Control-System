@@ -190,6 +190,70 @@ Public Const SHORTCUT_STAGE2_ONKEY As String = "^+{98}"
 Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
 
+' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（3.14 のパッチ版に合わせて更新）
+Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
+' 環境構築（環境セットアップ.bas）で使う Python 3.14: py ランチャー・winget パッケージ ID
+Public Const PM_AI_SETUP_PY_MINOR As String = "3.14"
+Public Const PM_AI_SETUP_WINGET_PYTHON_ID As String = "Python.Python.3.14"
+
+' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
+Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
+' Power Query 更新前の到達確認（接続先と同一想定の IP）。応答なしなら RefreshAll を行わず処理は継続する。
+' 接続先の IP アドレスを指定（Power Query のデータソースと揃える）
+Public Const PQ_REFRESH_PING_HOST As String = "192.168.0.101"
+' ping -w に渡すタイムアウト（ミリ秒）。合計待ちはあともう数百 ms 程度のことがある。
+Public Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
+
+' 段階1コアの最終 Python exitCode（0=成功）。VBAエラー・事前失敗は -1。
+Public m_lastStage1ExitCode As Long
+Public m_lastStage1ErrMsg As String
+' 段階2コア用（ダイアログは呼び出し元で出す）
+Public m_lastStage2ErrMsg As String
+Public m_lastStage2ExitCode As Long
+Public m_stage2PlanImported As Boolean
+Public m_stage2MemberImported As Boolean
+' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
+Public m_lastRefreshQueriesErrMsg As String
+' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
+' 業務ロジック・スプラッシュ表示 等の標準モジュールから参照するため Public
+Public m_macroSplashShown As Boolean
+' 旧版: MacroSplash_Show が Interactive=False を立てたとき True。現在は常に False（互換のため変数は残す）
+Public m_macroSplashLockedExcel As Boolean
+' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
+Public m_animMacroSucceeded As Boolean
+' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）
+Public m_splashAllowMacroSound As Boolean
+' True の間は「試行順パターン一覧→段階2」連鎖の途中で完了チャイムを鳴らさない（連鎖終了時に1回だけ MacroCompleteChime）
+Public m_dispatchTrialChainSuppressIntermediateChime As Boolean
+' スプラッシュ用 BGM（Glass_Architecture.mp3）を MCI で開いているとき True
+Public m_macroStartBgmOpen As Boolean
+' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）
+Public m_splashExecutionLogPath As String
+' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
+Public m_stageVbaExitCodeLogDir As String
+Public Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
+' UserForm 前面化用（Caption を一意にし FindWindow で HWND を得る。フォームの Caption プロパティも同じ文字列にするとよい）
+Public Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
+' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
+' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（処理中は約 1 秒間隔を既定とする）
+Public Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1000
+' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
+Public m_splashPollLastFileLen As Long
+Public m_splashPollHaveCachedFileLen As Boolean
+' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
+Public m_splashReadErrShown As Boolean
+' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
+Public m_splashLastLogSnapshot As String
+' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
+Public m_splashConsoleOverlayActive As Boolean
+' 結果_設備ガント：選択中データ行の太枠（Interior は触らない）
+Public mGanttHL_SheetName As String
+Public mGanttHL_Row As Long
+Public mGanttHL_LastCol As Long
+
+' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
+' AppCalculation_ManualBegin / End は段階実行制御.bas（引数は Long / Boolean の ByRef。UDT 不使用）。
+
 ' マスタブックの実ファイル名: シート「設定_環境変数」の MASTER_WORKBOOK_FILE（B 空なら次へ）→ OS の MASTER_WORKBOOK_FILE → 上記定数
 Public Function EffectiveMasterWorkbookFileName() As String
     Dim ws As Worksheet
@@ -265,68 +329,4 @@ End Function
 '       xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['run_stage1_for_xlwings']()"
 '   ・本番は SPLASH_LOG=False かつ RUNPYTHON=True のときだけ XwRunConsoleRunner。SPLASH_LOG=True のときは cmd（進捗優先）。
 '   ・補助: 同フォルダ xlwings.conf.json（PYTHONPATH=python）。runner は log\stage_vba_exitcode.txt に終了コードを書く。
-
-' InstallComponents: winget 失敗時に使う公式 amd64 インストーラ URL（3.14 のパッチ版に合わせて更新）
-Public Const PY_OFFICIAL_INSTALLER_URL As String = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
-' 環境構築（環境セットアップ.bas）で使う Python 3.14: py ランチャー・winget パッケージ ID
-Public Const PM_AI_SETUP_PY_MINOR As String = "3.14"
-Public Const PM_AI_SETUP_WINGET_PYTHON_ID As String = "Python.Python.3.14"
-
-' True ならマクロ先頭の ThisWorkbook.RefreshAll をスキップ（接続更新で固まる場合の緊急回避）
-Public Const SKIP_WORKBOOK_REFRESH_ALL As Boolean = False
-' Power Query 更新前の到達確認（接続先と同一想定の IP）。応答なしなら RefreshAll を行わず処理は継続する。
-' 接続先の IP アドレスを指定（Power Query のデータソースと揃える）
-Public Const PQ_REFRESH_PING_HOST As String = "192.168.0.101"
-' ping -w に渡すタイムアウト（ミリ秒）。合計待ちはあともう数百 ms 程度のことがある。
-Public Const PQ_REFRESH_PING_TIMEOUT_MS As Long = 2000
-
-' 段階1コアの最終 Python exitCode（0=成功）。VBAエラー・事前失敗は -1。
-Public m_lastStage1ExitCode As Long
-Public m_lastStage1ErrMsg As String
-' 段階2コア用（ダイアログは呼び出し元で出す）
-Public m_lastStage2ErrMsg As String
-Public m_lastStage2ExitCode As Long
-Public m_stage2PlanImported As Boolean
-Public m_stage2MemberImported As Boolean
-' TryRefreshWorkbookQueries 失敗時の詳細（MsgBox なし。段階1・2の ErrMsg に連結）
-Public m_lastRefreshQueriesErrMsg As String
-' スプラッシュ表示中（UserForm「frmMacroSplash」。未インポート時は何も出ずエラーも抑止）
-' 業務ロジック・スプラッシュ表示 等の標準モジュールから参照するため Public
-Public m_macroSplashShown As Boolean
-' 旧版: MacroSplash_Show が Interactive=False を立てたとき True。現在は常に False（互換のため変数は残す）
-Public m_macroSplashLockedExcel As Boolean
-' アニメ付き_スプラッシュ付きで実行 の成功終了時のみチャイム（各処理が True に設定）
-Public m_animMacroSucceeded As Boolean
-' True のときのみ BGM・完了チャイムを許可（段階1／段階2のスプラッシュ起動マクロが立てる）
-Public m_splashAllowMacroSound As Boolean
-' True の間は「試行順パターン一覧→段階2」連鎖の途中で完了チャイムを鳴らさない（連鎖終了時に1回だけ MacroCompleteChime）
-Public m_dispatchTrialChainSuppressIntermediateChime As Boolean
-' スプラッシュ用 BGM（Glass_Architecture.mp3）を MCI で開いているとき True
-Public m_macroStartBgmOpen As Boolean
-' 段階1/2 中のみ: execution_log.txt のフルパス（スプラッシュ txtExecutionLog ポーリング用。xlwings 時は空）
-Public m_splashExecutionLogPath As String
-' xlwings 有効で上記が空のとき、stage_vba_exitcode.txt の所在（log フォルダ）だけ渡す
-Public m_stageVbaExitCodeLogDir As String
-Public Const SPLASH_LOG_MAX_DISPLAY_CHARS As Long = 120000
-' UserForm 前面化用（Caption を一意にし FindWindow で HWND を得る。フォームの Caption プロパティも同じ文字列にするとよい）
-Public Const SPLASH_FORM_WINDOW_TITLE As String = "PM_AI_MACRO_SPLASH"
-' D3=true 時の Exec 待機ループの間隔（ms）。短すぎると xlwings COM と Excel 主スレッドが奪い合いやすい
-' xlwings が同一 Excel で COM 同期する間、短い間隔だと主スレッド奪い合いで極端に遅くなることがある（処理中は約 1 秒間隔を既定とする）
-Public Const SPLASH_LOG_POLL_INTERVAL_MS As Long = 1000
-' execution_log の直近成功読み取り時の FileLen。サイズ不変なら UTF-8 全文読みをスキップ（負荷・COM 競合軽減）
-Public m_splashPollLastFileLen As Long
-Public m_splashPollHaveCachedFileLen As Boolean
-' execution_log ポーリングで「ファイルはあるが読めない」と判定したとき txtExecutionLog 先頭に1回だけ付与
-Public m_splashReadErrShown As Boolean
-' 直前に表示したログ全文と同じなら Text 再代入しない（ちらつき防止）
-Public m_splashLastLogSnapshot As String
-' D3=false オーバーレイ中に txtExecutionLog を非表示にしているとき True（必ず End で戻す）
-Public m_splashConsoleOverlayActive As Boolean
-' 結果_設備ガント：選択中データ行の太枠（Interior は触らない）
-Public mGanttHL_SheetName As String
-Public mGanttHL_Row As Long
-Public mGanttHL_LastCol As Long
-
-' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
-' AppCalculation_ManualBegin / End は段階実行制御.bas（引数は Long / Boolean の ByRef。UDT 不使用）。
 
