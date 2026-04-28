@@ -1882,14 +1882,17 @@ Public Function TryRefreshWorkbookQueries() As Boolean
     Dim prevSU As Boolean
     Dim prevDA As Boolean
     Dim prevEv As Boolean
+    Dim prevCalc As XlCalculation
     On Error GoTo EH
     m_lastRefreshQueriesErrMsg = vbNullString
     prevSU = Application.ScreenUpdating
     prevDA = Application.DisplayAlerts
     prevEv = Application.EnableEvents
+    prevCalc = Application.Calculation
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
     If SKIP_WORKBOOK_REFRESH_ALL Then
         Application.StatusBar = "（SKIP_WORKBOOK_REFRESH_ALL）接続の一括更新を省略しました"
         DoEvents
@@ -1911,6 +1914,7 @@ Public Function TryRefreshWorkbookQueries() As Boolean
         Application.CalculateUntilAsyncQueriesDone
         Application.StatusBar = False
     End If
+    Application.Calculation = prevCalc
     Application.EnableEvents = prevEv
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
@@ -1919,6 +1923,7 @@ Public Function TryRefreshWorkbookQueries() As Boolean
 EH:
     Application.StatusBar = False
     On Error Resume Next
+    Application.Calculation = prevCalc
     Application.EnableEvents = prevEv
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
@@ -1931,6 +1936,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     Dim prevSU As Boolean
     Dim prevDA As Boolean
     Dim prevEv As Boolean
+    Dim prevCalc As XlCalculation
     Dim cn As WorkbookConnection
     Dim found As Boolean
     Dim refreshedCount As Long
@@ -1944,9 +1950,11 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
     prevSU = Application.ScreenUpdating
     prevDA = Application.DisplayAlerts
     prevEv = Application.EnableEvents
+    prevCalc = Application.Calculation
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
 
     If SKIP_WORKBOOK_REFRESH_ALL Then
     ElseIf Not PingHostOnceBeforeQueryRefresh(PQ_REFRESH_PING_HOST, PQ_REFRESH_PING_TIMEOUT_MS) Then
@@ -1993,6 +2001,7 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
 
     TryRefreshWorkbookQueriesByConnectionNamePart = True
 FIN:
+    Application.Calculation = prevCalc
     Application.EnableEvents = prevEv
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
@@ -2003,6 +2012,7 @@ EH:
     errNumCapture = Err.Number
     errDescCapture = Err.Description
     On Error Resume Next
+    Application.Calculation = prevCalc
     Application.EnableEvents = prevEv
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
