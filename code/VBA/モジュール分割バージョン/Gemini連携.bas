@@ -942,7 +942,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     Dim bMemBold As Boolean, bMemIt As Boolean, bMemUl As Long
     Dim lastMemberRow As Long
     Dim stdDispCached As String
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
     
     lastMemberRow = 0
     On Error GoTo EH
@@ -954,7 +954,7 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
         Exit Sub
     End If
     
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     Application.ScreenUpdating = False
     
     ' クリア前に B 列・見出しの見本フォントを記憶（無ければ日付列 C から）
@@ -1074,7 +1074,7 @@ CleanExit:
     メインシート_結果シートリンクを更新 wsMain
     メインシート_AからK列_AutoFitOnSheet wsMain
     Application.ScreenUpdating = True
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Exit Sub
 EH:
     If Not Silent Then MsgBox "メインシート更新エラー: " & Err.Description, vbCritical
@@ -1506,7 +1506,7 @@ Public Sub 設定_環境変数_雛形TSVから同期()
     Dim nOldData As Long
     Dim nAfter As Long
     Dim msg As String
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
 
     On Error GoTo ErrHandler
     prevDA = Application.DisplayAlerts
@@ -1560,7 +1560,7 @@ NextLine:
         Exit Sub
     End If
 
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     Application.DisplayAlerts = False
     Application.ScreenUpdating = False
 
@@ -1595,7 +1595,7 @@ NextLine:
         dataStart = 2
     Else
         ' 見出し無しでデータが 1 行目からの構成は、同期で見出しを付けずに上書きしない（手動構成を壊さない）
-        AppCalculation_ManualEnd calcSnap
+        AppCalculation_ManualEnd acPrev, acSus
         Application.DisplayAlerts = prevDA
         Application.ScreenUpdating = prevScreen
         MsgBox "「" & SHEET_WORKBOOK_ENV & "」の 1 行目が見出し（変数名）ではありません。" & vbCrLf & _
@@ -1649,7 +1649,7 @@ NextLine:
 
     Call 設定_環境変数_列幅とC列の行表示を整える(ws)
 
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevScreen
 
@@ -1663,7 +1663,7 @@ NextLine:
 
 ErrHandler:
     On Error Resume Next
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevScreen
     On Error GoTo 0
@@ -1827,7 +1827,7 @@ Public Sub 設定_シート表示_一覧をブックから再取得()
     Dim tmpN As String
     Dim tmpV As String
     Dim tmpO As Long
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
 
     Call 設定_シート表示_シートを確保
     Set wb = ThisWorkbook
@@ -1861,7 +1861,7 @@ Public Sub 設定_シート表示_一覧をブックから再取得()
 
     prevSU = Application.ScreenUpdating
     prevDA = Application.DisplayAlerts
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
@@ -1913,7 +1913,7 @@ Public Sub 設定_シート表示_一覧をブックから再取得()
     Call 設定_シート表示_ドロップダウン候補セルを書く(wsCfg)
     Call 設定_シート表示_C列入力規則を付与(wsCfg)
 
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
 End Sub
@@ -1943,7 +1943,7 @@ Public Sub 設定_シート表示_ブックへ適用()
     Dim prevSU As Boolean
     Dim prevDA As Boolean
     Dim testWs As Worksheet
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
 
     On Error GoTo ErrHandler
     Call 設定_シート表示_シートを確保
@@ -2030,7 +2030,7 @@ Public Sub 設定_シート表示_ブックへ適用()
 
     prevSU = Application.ScreenUpdating
     prevDA = Application.DisplayAlerts
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
@@ -2058,7 +2058,7 @@ Public Sub 設定_シート表示_ブックへ適用()
     Next wi
 
     If nFull <> wb.Worksheets.Count Then
-        AppCalculation_ManualEnd calcSnap
+        AppCalculation_ManualEnd acPrev, acSus
         Application.DisplayAlerts = prevDA
         Application.ScreenUpdating = prevSU
         Err.Raise vbObjectError + 532, , "内部エラー: シート数と並びリストが一致しません。"
@@ -2071,7 +2071,7 @@ Public Sub 設定_シート表示_ブックへ適用()
         On Error GoTo ErrHandler
     Next i
 
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
 
@@ -2083,7 +2083,7 @@ Public Sub 設定_シート表示_ブックへ適用()
 
     Exit Sub
 ErrHandler:
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     Application.DisplayAlerts = prevDA
     Application.ScreenUpdating = prevSU
     Err.Raise Err.Number, Err.Source, Err.Description

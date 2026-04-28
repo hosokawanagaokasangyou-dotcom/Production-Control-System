@@ -33,7 +33,7 @@ Public Sub 配台計画_タスク入力_列設定__Core_RefreshColConfigSheet()
     Dim keys As Variant
     Dim oldOrd As Double
     Dim oldVis As Boolean
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
 
     On Error Resume Next
     Set wsTask = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
@@ -51,7 +51,7 @@ Public Sub 配台計画_タスク入力_列設定__Core_RefreshColConfigSheet()
     lastCol = LastUsedColumnInRow(wsTask, PLAN_INPUT_HEADER_ROW)
     If lastCol <= 0 Then Exit Sub
 
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     wsCfg.Range("A2:C" & wsCfg.Rows.Count).ClearContents
 
     writeRow = 2
@@ -86,7 +86,7 @@ NextHeader:
     On Error Resume Next
     wsCfg.Visible = xlSheetVisible
     On Error GoTo 0
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
 End Sub
 
 ' ----------------------------
@@ -102,7 +102,7 @@ Public Sub 配台計画_タスク入力_列設定__Core_ApplyColConfigToTaskShee
     Dim vis As Boolean
     Dim colIndex As Long
     Dim lastColAfter As Long
-    Dim calcSnap As TAppCalculationSnap
+    Dim acPrev As Long, acSus As Boolean
 
     On Error Resume Next
     Set wsTask = ThisWorkbook.Worksheets(SHEET_PLAN_INPUT_TASK)
@@ -122,7 +122,7 @@ Public Sub 配台計画_タスク入力_列設定__Core_ApplyColConfigToTaskShee
     If entries Is Nothing Or entries.Count = 0 Then Exit Sub
 
     On Error GoTo CleanExit
-    AppCalculation_ManualBegin calcSnap
+    AppCalculation_ManualBegin acPrev, acSus
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     Application.CutCopyMode = False
@@ -164,7 +164,7 @@ CleanExit:
     Application.CutCopyMode = False
     Application.EnableEvents = True
     Application.ScreenUpdating = True
-    AppCalculation_ManualEnd calcSnap
+    AppCalculation_ManualEnd acPrev, acSus
     On Error GoTo 0
 End Sub
 

@@ -328,5 +328,5 @@ Public mGanttHL_Row As Long
 Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
-' TAppCalculationSnap および AppCalculation_ManualBegin / End は段階実行制御.bas にのみ定義（本モジュールへ複製しないこと）。
+' AppCalculation_ManualBegin / End は段階実行制御.bas（引数は Long / Boolean の ByRef。UDT 不使用）。
 
