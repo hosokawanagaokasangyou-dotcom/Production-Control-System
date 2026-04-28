@@ -920,6 +920,11 @@ Public Sub メインシート_メンバー勤怠ブロックに罫線を設定(ByVal wsMain As Workshe
 End Sub
 
 Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean = False)
+    ' #region agent log (debug-15a7ac)
+    On Error Resume Next
+    AgentDebugLog15a7ac "H3", "Gemini連携.bas:メインシート_メンバー一覧と出勤表示", "entry", """silent"":" & LCase$(CStr(Silent))
+    On Error GoTo 0
+    ' #endregion agent log (debug-15a7ac)
     Dim wb As Workbook
     Dim wsMain As Worksheet
     Dim wsCal As Worksheet
@@ -953,6 +958,11 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
     Set wb = ThisWorkbook
     Set wsMain = GetMainWorksheet()
     If wsMain Is Nothing Then
+        ' #region agent log (debug-15a7ac)
+        On Error Resume Next
+        AgentDebugLog15a7ac "H5", "Gemini連携.bas:メインシート_メンバー一覧と出勤表示", "GetMainWorksheet returned Nothing", ""
+        On Error GoTo 0
+        ' #endregion agent log (debug-15a7ac)
         If Not Silent Then MsgBox "「メイン」「Main」、または名前に「メイン」を含むシートが見つかりません。", vbExclamation
         Exit Sub
     End If
