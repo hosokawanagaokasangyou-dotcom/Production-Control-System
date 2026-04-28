@@ -187,10 +187,12 @@ Sub メインシート_メンバー一覧と出勤表示_手動()
     メインシート_メンバー一覧と出勤表示 False
 End Sub
 
-' 同じフォルダの master.xlsm を開く（既に開いていればアクティブ化）
+' 同じフォルダのマスタブックを開く（既に開いていればアクティブ化）
+' MASTER_WORKBOOK_FILE 定数だけでなく、設定_環境変数・OS 環境変数の上書きは EffectiveMasterWorkbookFileName と揃える。
 Public Sub メインシート_masterブックを開く()
     Dim path As String
     Dim folder As String
+    Dim masterFile As String
     Dim wb As Workbook
     Dim wbMaster As Workbook
     
@@ -199,7 +201,8 @@ Public Sub メインシート_masterブックを開く()
         MsgBox "ブックを一度保存してから実行してください。", vbExclamation
         Exit Sub
     End If
-    path = folder & "\" & MASTER_WORKBOOK_FILE
+    masterFile = EffectiveMasterWorkbookFileName()
+    path = folder & "\" & masterFile
     If Len(Dir(path)) = 0 Then
         MsgBox "次のファイルが見つかりません。" & vbCrLf & path, vbExclamation
         Exit Sub
@@ -208,21 +211,21 @@ Public Sub メインシート_masterブックを開く()
     For Each wb In Application.Workbooks
         If StrComp(wb.FullName, path, vbTextCompare) = 0 Then
             wb.Activate
-            MacroSplash_SetStep "master.xlsm は既に開いています（アクティブにしました）。"
+            MacroSplash_SetStep masterFile & " は既に開いています（アクティブにしました）。"
             m_animMacroSucceeded = True
             Exit Sub
         End If
     Next wb
     
     On Error GoTo OpenFail
-    MacroSplash_SetStep "master.xlsm を開いています…"
+    MacroSplash_SetStep masterFile & " を開いています…"
     Set wbMaster = Application.Workbooks.Open(Filename:=path)
     wbMaster.Activate
-    MacroSplash_SetStep "master.xlsm を開きました。"
+    MacroSplash_SetStep masterFile & " を開きました。"
     m_animMacroSucceeded = True
     Exit Sub
 OpenFail:
-    MsgBox "master.xlsm を開けませんでした: " & Err.Description, vbCritical
+    MsgBox masterFile & " を開けませんでした: " & Err.Description, vbCritical
 End Sub
 
 Sub アニメ付き_メインシート_masterブックを開く()
