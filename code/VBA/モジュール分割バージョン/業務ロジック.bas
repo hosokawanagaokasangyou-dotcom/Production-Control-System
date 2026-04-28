@@ -2004,19 +2004,21 @@ Public Function ValidateMasterSkillsOpAsPriorityUnique(ByVal targetDir As String
     Dim dict As Object
     Dim headerRow As Long
     Dim memCol As Long
+    Dim masterBook As String
     
     errOut = ""
     ValidateMasterSkillsOpAsPriorityUnique = False
-    wbPath = targetDir & "\master.xlsm"
+    masterBook = EffectiveMasterWorkbookFileName()
+    wbPath = targetDir & "\" & masterBook
     If Len(Dir(wbPath)) = 0 Then
-        errOut = "master.xlsm が見つかりません: " & wbPath
+        errOut = masterBook & " が見つかりません: " & wbPath
         Exit Function
     End If
     
     openedHere = False
     Set wb = Nothing
     On Error Resume Next
-    Set wb = Workbooks("master.xlsm")
+    Set wb = Workbooks(masterBook)
     On Error GoTo 0
     If wb Is Nothing Then
         On Error GoTo OpenFailSkills
@@ -2029,7 +2031,7 @@ Public Function ValidateMasterSkillsOpAsPriorityUnique(ByVal targetDir As String
     Set ws = wb.Worksheets("skills")
     On Error GoTo 0
     If ws Is Nothing Then
-        errOut = "master.xlsm に「skills」シートがありません。"
+        errOut = masterBook & " に「skills」シートがありません。"
         If openedHere Then
             On Error Resume Next
             wb.Close SaveChanges:=False
@@ -2072,7 +2074,7 @@ Public Function ValidateMasterSkillsOpAsPriorityUnique(ByVal targetDir As String
                 Else
                     errOut = "マスタ skills の優先度の数値が重複しています。" & vbCrLf & _
                         "列「" & combo & "」: 優先度 " & CStr(prVal) & " が重複（" & dict(CStr(prVal)) & " と " & mem & "(" & roleCh & ")）" & vbCrLf & _
-                        "master.xlsm を修正してから再実行してください。"
+                        masterBook & " を修正してから再実行してください。"
                     Set dict = Nothing
                     GoTo CloseFailSkills
                 End If
@@ -2099,7 +2101,7 @@ NextColTwo:
                 Else
                     errOut = "マスタ skills の優先度の数値が重複しています。" & vbCrLf & _
                         "列「" & combo & "」: 優先度 " & CStr(prVal) & " が重複（" & dict(CStr(prVal)) & " と " & mem & "(" & roleCh & ")）" & vbCrLf & _
-                        "master.xlsm を修正してから再実行してください。"
+                        masterBook & " を修正してから再実行してください。"
                     Set dict = Nothing
                     GoTo CloseFailSkills
                 End If
@@ -2128,7 +2130,7 @@ CloseFailSkills:
     Exit Function
 
 OpenFailSkills:
-    errOut = "master.xlsm を開けませんでした: " & wbPath
+    errOut = masterBook & " を開けませんでした: " & wbPath
 End Function
 
 ' =========================================================

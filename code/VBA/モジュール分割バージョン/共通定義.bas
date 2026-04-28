@@ -186,9 +186,64 @@ Public Const SHORTCUT_STAGE1_THEN_STAGE2_ONKEY As String = "^+{96}"
 Public Const SHORTCUT_STAGE1_ONKEY As String = "^+{97}"
 Public Const SHORTCUT_STAGE2_ONKEY As String = "^+{98}"
 ' Gemini: 暗号化時のパスフレーズはマクロで入力（社内手順の値）。復号は planning_core のソース内定数のみ（当ファイル・シートにパスフレーズを書かない）。
-' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致
+' planning_core.MASTER_FILE / SHEET_MACHINE_CALENDAR と一致（既定名。実効名は EffectiveMasterWorkbookFileName）
 Public Const MASTER_WORKBOOK_FILE As String = "master.xlsm"
 Public Const SHEET_MACHINE_CALENDAR As String = "機械カレンダー"
+
+' マスタブックの実ファイル名: シート「設定_環境変数」の MASTER_WORKBOOK_FILE（B 空なら次へ）→ OS の MASTER_WORKBOOK_FILE → 上記定数
+Public Function EffectiveMasterWorkbookFileName() As String
+    Dim ws As Worksheet
+    Dim sh As Worksheet
+    Dim dataStart As Long
+    Dim lastRow As Long
+    Dim r As Long
+    Dim k As String
+    Dim v As String
+    Dim hdr As String
+
+    On Error GoTo UseConst
+
+    Set ws = Nothing
+    For Each sh In ThisWorkbook.Worksheets
+        If StrComp(sh.Name, SHEET_WORKBOOK_ENV, vbBinaryCompare) = 0 Then
+            Set ws = sh
+            Exit For
+        End If
+    Next sh
+
+    If Not ws Is Nothing Then
+        hdr = LCase$(Trim$(CStr(ws.Cells(1, 1).Value)))
+        If hdr = "変数名" Or hdr = "環境変数" Or hdr = "name" Or hdr = "key" Or hdr = "env" Then
+            dataStart = 2
+        Else
+            dataStart = 1
+        End If
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        For r = dataStart To lastRow
+            k = Trim$(CStr(ws.Cells(r, 1).Value))
+            If Len(k) = 0 Then GoTo NextEnvRow
+            If Left$(Trim$(k), 1) = "#" Then GoTo NextEnvRow
+            If StrComp(k, "MASTER_WORKBOOK_FILE", vbTextCompare) = 0 Then
+                v = Trim$(CStr(ws.Cells(r, 2).Value))
+                If Len(v) > 0 Then
+                    EffectiveMasterWorkbookFileName = v
+                    Exit Function
+                End If
+                Exit For
+            End If
+NextEnvRow:
+        Next r
+    End If
+
+    v = Trim$(Environ$("MASTER_WORKBOOK_FILE"))
+    If Len(v) > 0 Then
+        EffectiveMasterWorkbookFileName = v
+        Exit Function
+    End If
+
+UseConst:
+    EffectiveMasterWorkbookFileName = MASTER_WORKBOOK_FILE
+End Function
 
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。AI 備考等の TTL キャッシュは json\ai_remarks_cache.json（手動削除は Gemini連携 の AI解析_Remarksキャッシュファイルを削除）。

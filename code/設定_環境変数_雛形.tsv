@@ -1,6 +1,7 @@
 変数名	値	説明（任意・ExcelではC列）
 #		マクロブックにシート「設定_環境変数」を置くと、workbook_env_bootstrap が import planning_core より前に os.environ に反映。A=変数名・B=値。A が空または # で始まる行は無視。TASK_INPUT_WORKBOOK の B は相対パス可（ブック所在フォルダ基準）。
 TASK_INPUT_WORKBOOK		VBA が xlwings 実行前に設定するマクロブックのフルパス（手運用時は絶対パス）。Python の列設定・配台試行順ツール等の前提。シートで空の行は反映しない。
+MASTER_WORKBOOK_FILE		マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。
 TASK_PLAN_SHEET		配台計画シート名（空なら既定「配台計画_タスク入力」）
 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY		1/true/yes/on/y のとき配台試行順更新で post_load（計画シートの事後変形）をスキップする用途。
 MASTER_USE_SPEED_SHEET	1	master.xlsm の speed シートによる加工速度上書き。B が空でも既定は有効。0/false/no/off で無効。

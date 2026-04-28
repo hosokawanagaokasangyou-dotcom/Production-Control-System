@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 マクロブック内「設定_環境変数」シートを読み、planning_core 取り込み前に os.environ を上書きする。
+（例: ``MASTER_WORKBOOK_FILE`` でマスタブックのファイル名を既定 ``master.xlsm`` から変更可）
 
 VBA が設定する TASK_INPUT_WORKBOOK のあと、段階1/2・列レイアウト等の各エントリで本モジュールを
 import planning_core より前に呼ぶ。シートの変数名は planning_core が参照する環境変数名と同一（大文字小文字区別）。

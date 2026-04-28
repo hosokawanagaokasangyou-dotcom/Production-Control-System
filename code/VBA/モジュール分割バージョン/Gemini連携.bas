@@ -1377,6 +1377,7 @@ Public Sub 設定_環境変数_シートを確保()
     Next r
 
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "TASK_PLAN_SHEET", "", "配台計画シート名（空なら既定 配台計画_タスク入力）")
+    Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "MASTER_WORKBOOK_FILE", "", "マスタブックファイル名（空なら master.xlsm。相対可）")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST", "1", "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE2_SERIAL_DISPATCH_BY_TASK_ID", "0", "1=依頼NO直列")
     Call 設定_環境変数_欠損行を試し追記(dict, ws, lastRow, "STAGE12_CMD_HIDE_WINDOW", "1", "段階1/2: cmd 1=非表示(既定) 0=画面上部にコンソール")

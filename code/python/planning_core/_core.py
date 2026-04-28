@@ -175,7 +175,19 @@ def _gemini_client(api_key: str) -> genai.Client:
 # 列名を変える場合は VBA・マクロ付きシートと同時に直すこと。
 # ---------------------------------------------------------------------------
 
-MASTER_FILE = "master.xlsm"  # skills と attendance（tasks）を統合したファイル
+def master_workbook_filename() -> str:
+    """マスタブックのファイル名（通常は basename。カレントは bootstrap でマクロブック所在に寄せられる）。
+
+    環境変数 ``MASTER_WORKBOOK_FILE``（VBA ``MASTER_WORKBOOK_FILE`` / シート「設定_環境変数」と同名。
+    ``workbook_env_bootstrap`` が ``import planning_core`` より前に反映）が空でなければ採用。
+    空なら ``master.xlsm``。
+    """
+    v = (os.environ.get("MASTER_WORKBOOK_FILE") or "").strip()
+    return v if v else "master.xlsm"
+
+
+# import 時点で解決（bootstrap 済みの後で本モジュールが読まれる想定）。公開名は従来どおり。
+MASTER_FILE = master_workbook_filename()
 # VBA「master_機械カレンダーを作成」シート（30分スロット占有を段階2の machine_avail_dt に反映）
 SHEET_MACHINE_CALENDAR = "機械カレンダー"
 # master.xlsm「機械カレンダー」の1行=何分スロットとして解釈するか（VBA 出力仕様に合わせる）
@@ -2988,7 +3000,7 @@ def _write_results_equipment_gantt_sheet(
     meta_line = (
         f"作成　{create_ts}"
         f"　・　データ抽出　{data_extract_dt_str or '—'}"
-        f"　・　マスタ（master.xlsm）　{master_mtime}"
+        f"　・　マスタ（{master_workbook_filename()}）　{master_mtime}"
     )
     mtop = ws.cell(row=row, column=title_start_col, value=meta_line)
     mtop.font = meta_font
