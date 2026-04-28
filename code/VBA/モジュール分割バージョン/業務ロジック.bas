@@ -1846,6 +1846,7 @@ Public Sub DisableBackgroundDataRefreshAll()
         For Each pt In ws.PivotTables
             pt.PivotCache.BackgroundQuery = False
         Next pt
+        DoEvents
     Next ws
     On Error GoTo 0
 End Sub
@@ -1904,7 +1905,9 @@ Public Function TryRefreshWorkbookQueries() As Boolean
         Application.StatusBar = "データ接続を更新しています（完了までお待ちください）..."
         DoEvents
         Call DisableBackgroundDataRefreshAll
+        DoEvents
         ThisWorkbook.RefreshAll
+        DoEvents
         Application.CalculateUntilAsyncQueriesDone
         Application.StatusBar = False
     End If
@@ -1966,14 +1969,20 @@ Public Function TryRefreshWorkbookQueriesByConnectionNamePart(ByVal namePart As 
                 found = True
                 lastRefreshing = nm
                 phase = "cn.Refresh"
+                Application.StatusBar = "データ接続を更新中... " & nm
+                DoEvents
                 cn.Refresh
+                DoEvents
                 refreshedCount = refreshedCount + 1
             ElseIf InStr(1, nmNorm, namePart, vbTextCompare) > 0 Then
             End If
         Next cn
 
         phase = "CalculateUntilAsyncQueriesDone"
+        Application.StatusBar = "データ接続の更新を完了待ち...（非同期クエリ待機）"
+        DoEvents
         Application.CalculateUntilAsyncQueriesDone
+        DoEvents
 
         If Not found Then
             m_lastRefreshQueriesErrMsg = "接続名に '" & namePart & "' を含む接続が見つかりませんでした。"
