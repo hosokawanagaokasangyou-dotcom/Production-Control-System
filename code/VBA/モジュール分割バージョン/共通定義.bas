@@ -309,6 +309,45 @@ UseConst:
     EffectiveMasterWorkbookFileName = MASTER_WORKBOOK_FILE
 End Function
 
+' EffectiveMasterWorkbookFileName が指すファイルが、このマクロブックと同一フォルダ直下（または絶対パス指定時はそのパス）に存在するか。
+' 段階1・段階2 実行前にチェックする。False のとき errMsg にユーザー向け文言を返す。
+Public Function EffectiveMasterWorkbookExists(ByRef errMsg As String) As Boolean
+    Dim folder As String
+    Dim fp As String
+    Dim mf As String
+    
+    EffectiveMasterWorkbookExists = False
+    errMsg = ""
+    
+    folder = Trim$(ThisWorkbook.Path)
+    If Len(folder) = 0 Then
+        errMsg = "マクロブックを一度保存してから実行してください（パスが取得できません）。"
+        Exit Function
+    End If
+    
+    mf = EffectiveMasterWorkbookFileName()
+    If Len(mf) = 0 Then
+        errMsg = "マスタブックのファイル名が空です（MASTER_WORKBOOK_FILE を確認してください）。"
+        Exit Function
+    End If
+    
+    If InStr(mf, ":") > 0 Or Left$(mf, 2) = "\\" Then
+        fp = mf
+    Else
+        fp = folder & "\" & mf
+    End If
+    
+    If Len(Dir(fp)) = 0 Then
+        errMsg = "マスタブックが見つかりません。" & vbCrLf & vbCrLf & _
+                 "参照名（設定_環境変数または OS の MASTER_WORKBOOK_FILE）: " & mf & vbCrLf & _
+                 "確認パス: " & fp & vbCrLf & vbCrLf & _
+                 "ファイルを配置するか、設定を見直してください。"
+        Exit Function
+    End If
+    
+    EffectiveMasterWorkbookExists = True
+End Function
+
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。AI 備考等の TTL キャッシュは json\ai_remarks_cache.json（手動削除は Gemini連携 の AI解析_Remarksキャッシュファイルを削除）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。

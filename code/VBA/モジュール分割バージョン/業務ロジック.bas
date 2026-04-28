@@ -149,12 +149,22 @@ End Function
 ' 段階2 Finish: 取り込み成功時は「結果_」で始まる全シートの表示倍率を 100% にし、その後 結果_設備ガント のみ 85% に戻す。結果_設備毎の時間割(B2)・結果_タスク一覧(F2)・結果_カレンダー(出勤簿)(A2) で窓枠固定を付与したうえで、最後にメインシート A1 をアクティブにして終了する
 ' =========================================================
 Sub アニメ付き_計画生成を実行()
+    Dim masterChk As String
+    If Not EffectiveMasterWorkbookExists(masterChk) Then
+        MsgBox masterChk, vbCritical, "マスタブックなし"
+        Exit Sub
+    End If
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "シミュレーション（計画生成）を実行しています…", "RunPython", False, , True, True
 End Sub
 
 ' 段階1: 加工計画DATA からタスク抽出 → output に xlsx 出力し「配台計画_タスク入力」へ取り込み
 Sub アニメ付き_タスク抽出を実行()
+    Dim masterChk As String
+    If Not EffectiveMasterWorkbookExists(masterChk) Then
+        MsgBox masterChk, vbCritical, "マスタブックなし"
+        Exit Sub
+    End If
     Call AnimateButtonPush
     アニメ付き_スプラッシュ付きで実行 "タスク抽出（段階1）を実行しています…", "RunPythonStage1", , , True, True
 End Sub
