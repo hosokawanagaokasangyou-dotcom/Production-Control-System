@@ -57,11 +57,7 @@ Public Function XlWingsSuspendAutoCalculationEffective() As Boolean
 End Function
 
 ' 一括処理中の自動計算: キー名は planning_core / 設定_環境変数_雛形.tsv の XLWINGS_SUSPEND_AUTO_CALCULATION と同一（上記 XlWingsSuspendAutoCalculationEffective）。
-' ※ TAppCalculationSnap / AppCalculation_* は本モジュールにのみ定義（共通定義へ複製しないこと）。
-Public Type TAppCalculationSnap
-    PrevMode As Long
-    Suspended As Boolean
-End Type
+' TAppCalculationSnap 型は共通定義.bas のみ。本モジュールには Sub のみ（型を他標準モジュールへ複製しないこと）。
 
 ' 有効時のみ Application.Calculation を xlCalculationManual にし、End で復帰する。
 Public Sub AppCalculation_ManualBegin(ByRef snap As TAppCalculationSnap)

@@ -328,5 +328,10 @@ Public mGanttHL_Row As Long
 Public mGanttHL_LastCol As Long
 
 ' 段階1/2 cmd 非表示: シート「設定_環境変数」A 列=STAGE12_CMD_HIDE_WINDOW かつ B 非空 → その値。未設定なら Environ("STAGE12_CMD_HIDE_WINDOW")。どちらも空なら STAGE12_CMD_HIDE_WINDOW 定数。
-' 一括処理中の自動計算（TAppCalculationSnap / AppCalculation_ManualBegin・End）は段階実行制御.bas にのみ定義（二重定義を避ける）。
+' 一括処理中の自動計算: 型のみ本モジュール（プロジェクトで1か所）。AppCalculation_ManualBegin / End は段階実行制御.bas（XlWingsSuspendAutoCalculationEffective と同モジュール）。
+
+Public Type TAppCalculationSnap
+    PrevMode As Long
+    Suspended As Boolean
+End Type
 
