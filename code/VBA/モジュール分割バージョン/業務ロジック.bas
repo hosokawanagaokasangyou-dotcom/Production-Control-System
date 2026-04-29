@@ -22,28 +22,26 @@ Public Sub AgentBulkWriteLinesToSheetColumn(ByVal ws As Worksheet, ByVal startRo
 End Sub
 
 ' 段階2スキップ設定: 「設定_環境変数」シート(=SHEET_WORKBOOK_ENV) → OS 環境変数の順で取得
-Private Function AgentParseBool_30e24e(ByVal raw As String, ByVal defaultValue As Boolean) As Boolean
+Private Function Stage2EnvParseBool(ByVal raw As String, ByVal defaultValue As Boolean) As Boolean
     Dim v As String
     v = LCase$(Trim$(raw))
     If Len(v) = 0 Then
-        AgentParseBool_30e24e = defaultValue
+        Stage2EnvParseBool = defaultValue
     ElseIf (v = "1" Or v = "true" Or v = "yes" Or v = "on") Then
-        AgentParseBool_30e24e = True
+        Stage2EnvParseBool = True
     ElseIf (v = "0" Or v = "false" Or v = "no" Or v = "off") Then
-        AgentParseBool_30e24e = False
+        Stage2EnvParseBool = False
     Else
-        AgentParseBool_30e24e = defaultValue
+        Stage2EnvParseBool = defaultValue
     End If
 End Function
 
-Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal defaultValue As Boolean) As Boolean
+Private Function Stage2EnvBoolEffective(ByVal keyName As String, ByVal defaultValue As Boolean) As Boolean
     Dim ws As Worksheet
     Dim r As Long
     Dim lastRow As Long
     Dim cellKey As String
     Dim v As String
-    Dim sample As String
-    Dim sampleN As Long
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_WORKBOOK_ENV)
     On Error GoTo 0
@@ -53,16 +51,10 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
             For r = 2 To lastRow
                 cellKey = Trim$(CStr(ws.Cells(r, 1).Value))
                 If Len(cellKey) > 0 And Left$(cellKey, 1) <> "#" Then
-                    If sampleN < 10 Then
-                        If InStr(1, cellKey, "STAGE2", vbTextCompare) > 0 Or InStr(1, cellKey, "SKIP", vbTextCompare) > 0 Then
-                            sample = sample & IIf(sampleN = 0, "", " | ") & "A" & CStr(r) & "=" & cellKey
-                            sampleN = sampleN + 1
-                        End If
-                    End If
                     If StrComp(cellKey, keyName, vbTextCompare) = 0 Then
                         v = Trim$(CStr(ws.Cells(r, 2).Value))
                         If Len(v) > 0 Then
-                            Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
+                            Stage2EnvBoolEffective = Stage2EnvParseBool(v, defaultValue)
                             Exit Function
                         End If
                         Exit For
@@ -72,7 +64,7 @@ Private Function Stage2EnvBoolEffective_30e24e(ByVal keyName As String, ByVal de
         End If
     End If
     v = Trim$(Environ$(keyName))
-    Stage2EnvBoolEffective_30e24e = AgentParseBool_30e24e(v, defaultValue)
+    Stage2EnvBoolEffective = Stage2EnvParseBool(v, defaultValue)
 End Function
 
 Public Function EnsureStageBatchStdoutRedirect(ByVal body As String) As String
@@ -640,12 +632,10 @@ End Sub
 ' ・引数名は targetWs（RunPython 等の呼び出し側にも「ws」があり、ウォッチで親フレームの ws と混同しやすいため）
 Public Sub 結果シート_列幅_AutoFit安定(ByVal targetWs As Worksheet)
     Dim su As Boolean
-    Dim t0 As Double
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
     ' 結果_設備ガント／実績明細は専用列幅（時刻グリッド）のため絶対に EntireColumn.AutoFit しない
     If 結果_設備ガント系シート名か(targetWs.Name) Then Exit Sub
     su = Application.ScreenUpdating
-    t0 = Timer
     On Error Resume Next
     Application.ScreenUpdating = True
     targetWs.Activate
@@ -664,7 +654,6 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     Dim su As Boolean
     Dim lastCol As Long
     Dim c As Long
-    Dim t0 As Double
     
     If StrComp(targetWs.Name, SCRATCH_SHEET_FONT, vbBinaryCompare) = 0 Then Exit Sub
     
@@ -676,7 +665,6 @@ Public Sub 結果シート_列幅_AutoFit非表示を維持(ByVal targetWs As Worksheet)
     
     su = Application.ScreenUpdating
     Application.ScreenUpdating = True
-    t0 = Timer
     On Error Resume Next
     targetWs.Activate
     DoEvents
@@ -838,16 +826,11 @@ End Function
 Public Sub 結果プレフィックスシートの表示倍率を設定(ByVal wb As Workbook, ByVal zoomPercent As Long)
     Dim ws As Worksheet
     Dim prevScr As Boolean
-    Dim t0 As Double
-    Dim n As Long
     prevScr = Application.ScreenUpdating
     On Error Resume Next
     Application.ScreenUpdating = False
-    t0 = Timer
-    n = 0
     For Each ws In wb.Worksheets
         If Left$(ws.Name, 3) = "結果_" Then
-            n = n + 1
             ws.Activate
             ActiveWindow.Zoom = zoomPercent
         End If
@@ -3252,12 +3235,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     Dim st2XwDesc As String
     Dim missSt2 As String
     Dim st2DidUnlock As Boolean
-    ' #region agent log (debug-30e24e)
-    Dim t0All As Double
-    Dim t0 As Double
-    Dim nSheets As Long
     Dim nLogLines As Long
-    ' #endregion agent log (debug-30e24e)
     
     On Error GoTo ErrHandler
 
@@ -3267,10 +3245,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     Application.CalculateBeforeSave = True
     On Error GoTo ErrHandler
     
-    ' #region agent log (debug-30e24e)
-    t0All = Timer
-    
-    ' #endregion agent log (debug-30e24e)
     
     m_lastStage2ErrMsg = ""
     m_lastStage2ExitCode = -1
@@ -3307,7 +3281,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     設定_シート表示_シートを確保
     MacroSplash_SetStep "段階2: データ接続（_q加工実績明細DATA）を更新しています…"
 
-    t0 = Timer
     If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q加工実績明細DATA") Then
         m_lastStage2ErrMsg = "データ接続（_q加工実績明細DATA）の更新に失敗したため段階2を中断しました。"
         If Len(m_lastRefreshQueriesErrMsg) > 0 Then
@@ -3315,9 +3288,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         End If
         Exit Sub
     End If
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     
     MacroSplash_SetStep "段階2: LOG シートを準備しています（段階1ログの連結含む）…"
     Set preserved = New Collection
@@ -3374,11 +3344,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     MacroSplash_SetStep "段階2: ブックを保存しています…"
     Application.StatusBar = "ブックを保存しています..."
     DoEvents
-    t0 = Timer
     ThisWorkbook.Save
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     Application.StatusBar = False
     
     st2DidUnlock = False
@@ -3397,9 +3363,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         MacroSplash_ClearExecutionLogPane
         On Error Resume Next
         Err.Clear
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        ' #endregion agent log (debug-30e24e)
         XwRunConsoleRunner "run_stage2_for_xlwings"
         If Err.Number <> 0 Then
             st2XwErr = Err.Number
@@ -3413,9 +3376,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             GoTo Finish
         End If
         On Error GoTo ErrHandler
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
         exitCode = ReadStageVbaExitCodeFromFile(targetDir & "\log\stage_vba_exitcode.txt")
         If exitCode = &H7FFFFFFF Then exitCode = 1
         m_splashExecutionLogPath = ""
@@ -3447,13 +3407,7 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         m_splashExecutionLogPath = targetDir & "\log\execution_log.txt"
         m_stageVbaExitCodeLogDir = ""
         MacroSplash_ClearExecutionLogPane
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        ' #endregion agent log (debug-30e24e)
         exitCode = RunTempCmdWithConsoleLayout(wsh, runBat, Not hideStage12CmdSt2, hideStage12CmdSt2)
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
         m_splashExecutionLogPath = ""
         m_stageVbaExitCodeLogDir = ""
         m_lastStage2ExitCode = exitCode
@@ -3509,16 +3463,9 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     ' 6. LOGシートに一行ずつ書き出す（段階1退避があるときは logStartRow から）
     Application.ScreenUpdating = False
     logWriteRow = logStartRow
-    ' #region agent log (debug-30e24e)
-    t0 = Timer
-    nLogLines = 0
-    ' #endregion agent log (debug-30e24e)
     AgentBulkWriteLinesToSheetColumn wsLog, logWriteRow, 1, logLines, nLogLines
     logWriteRow = logWriteRow + nLogLines
     Application.ScreenUpdating = prevScreenUpdating
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     
     If exitCode <> 0 Then
         warnRow2 = logWriteRow
@@ -3573,10 +3520,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
         ' 取り込み元ブックのウィンドウのみ非表示（Excel 本体は表示のまま。Copy 中に前面へ出さない）
         sourceWb.Windows(1).Visible = False
         
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        nSheets = 0
-        ' #endregion agent log (debug-30e24e)
         For Each sourceWs In sourceWb.Sheets
             sheetName = Trim$(sourceWs.Name)
             
@@ -3594,7 +3537,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
             ' シートをコピー（ターゲットブックの末尾に）
             sourceWs.Copy After:=targetWb.Sheets(targetWb.Sheets.Count)
-            nSheets = nSheets + 1
             
             ' コピーしたシートの書式設定（列幅、罫線、見出し）
             ' ※ Sheets(Count) だけだと末尾が _FontPick のとき誤参照するため、取り込み元と同名で引き直す
@@ -3647,9 +3589,6 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
             
 NextSourceWs:
         Next sourceWs
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
         
         ' (6) master.xlsm メインの工場稼働(A12/B12)・定常(A15/B15)を結果_設備毎の時間割・結果_設備毎の時間割_機械名毎・結果_設備ガントに反映（UserInterfaceOnly 保護後もマクロから可。依頼NO薄緑は機械名毎のみ追加）
         On Error Resume Next
@@ -3691,12 +3630,8 @@ NextSourceWs:
     MacroSplash_SetStep "段階2: 個人別スケジュール（member_schedule）を取り込んでいます…"
     ' 7b. member_schedule_*.xlsx（メンバー名シート → 個人_プレフィックスで取り込み）
     Dim st2SkipMemberScheduleImport As Boolean
-    st2SkipMemberScheduleImport = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT", False)
-    If st2SkipMemberScheduleImport Then
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
-    Else
+    st2SkipMemberScheduleImport = Stage2EnvBoolEffective("STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT", False)
+    If Not st2SkipMemberScheduleImport Then
         memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
     End If
     If Not st2SkipMemberScheduleImport And Len(memberPath) > 0 Then
@@ -3707,10 +3642,6 @@ NextSourceWs:
         ' 取り込み元ブックのウィンドウのみ非表示（同上）
         memberWb.Windows(1).Visible = False
         
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        nSheets = 0
-        ' #endregion agent log (debug-30e24e)
         For Each sourceWs In memberWb.Sheets
             sheetName = sourceWs.Name
             newSheetName = SafePersonalSheetName(sheetName)
@@ -3742,11 +3673,7 @@ NextSourceWs:
                 .Font.Bold = True
                 .Interior.Color = RGB(226, 239, 218)
             End With
-            nSheets = nSheets + 1
         Next sourceWs
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
         
         memberWb.Close SaveChanges:=False
         Set memberWb = Nothing
@@ -3759,17 +3686,9 @@ NextSourceWs:
     MacroSplash_SetStep "段階2: メインシート・シート順・フォント後処理を実行しています…"
     ' メインシート：メンバーへのリンク ＋ 前日から12日間の出退勤（失敗しても本処理は継続）
     On Error Resume Next
-    t0 = Timer
     メインシート_メンバー一覧と出勤表示 True
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     ' 個人_* シートをブック末尾へ（失敗しても継続）
-    t0 = Timer
     個人シートを末尾へ並べ替え
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     ' 「設定」の一つ前に列設定シートを置く（取り込みでは末尾に付くため）
     On Error Resume Next
     列設定_結果_タスク一覧を設定の直前へ移動 ThisWorkbook
@@ -3777,10 +3696,9 @@ NextSourceWs:
 
     MacroSplash_SetStep "段階2: 「設定_シート表示」を一覧更新しブックへ適用しています…"
     On Error Resume Next
-    t0 = Timer
     ' 重い場合があるため、環境変数でスキップ可能（既定は実行）
     Dim st2SkipSheetVis As Boolean
-    st2SkipSheetVis = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SHEET_VISIBILITY_APPLY", False)
+    st2SkipSheetVis = Stage2EnvBoolEffective("STAGE2_SKIP_SHEET_VISIBILITY_APPLY", False)
     If st2SkipSheetVis Then
         Err.Clear
         
@@ -3790,9 +3708,6 @@ NextSourceWs:
         設定_シート表示_ブックへ適用
         Err.Clear
     End If
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     On Error GoTo ErrHandler
     
     ' 完了ダイアログ直前はメインシートを表示（A1）
@@ -3806,11 +3721,7 @@ NextSourceWs:
     m_stage2MemberImported = memberImported
 
     On Error Resume Next
-    t0 = Timer
     配台_全シートフォントBIZ_UDP_自動適用
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
     On Error GoTo 0
 
 Finish:
@@ -3835,46 +3746,28 @@ Finish:
     ' 設備ガント系シートは openpyxl 再出力で OLE が消えるため、保護の前に日付ジャンプ用コンボを再配置する
     On Error Resume Next
     If planImported Then
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        ' #endregion agent log (debug-30e24e)
         結果_設備ガント系_日付ジャンプコンボを両シートで確保 ThisWorkbook
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
     On Error GoTo 0
     
     On Error Resume Next
     If planImported And exitCode = 0 Then
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        ' #endregion agent log (debug-30e24e)
         Dim st2SkipSnap As Boolean
-        st2SkipSnap = Stage2EnvBoolEffective_30e24e("STAGE2_SKIP_SNAPSHOT_EXPORT", False)
+        st2SkipSnap = Stage2EnvBoolEffective("STAGE2_SKIP_SNAPSHOT_EXPORT", False)
         If st2SkipSnap Then
             Err.Clear
             
         Else
             Call スナップショット_pdfとcsvを出力(targetDir, ThisWorkbook)
         End If
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
     End If
     Err.Clear
     On Error GoTo 0
     
     If st2DidUnlock Then
         On Error Resume Next
-        ' #region agent log (debug-30e24e)
-        t0 = Timer
-        ' #endregion agent log (debug-30e24e)
         配台マクロ_対象シートを条件どおりに保護 targetDir
-        ' #region agent log (debug-30e24e)
-        
-        ' #endregion agent log (debug-30e24e)
         On Error GoTo 0
     End If
     
@@ -3891,9 +3784,6 @@ Finish:
     
     ' 終了直前: 結果_配台表の表示用クエリを更新（段階2結果の反映直後に追従させる）
     MacroSplash_SetStep "段階2: データ接続（_q結果_配台表）を更新しています…"
-    ' #region agent log (debug-30e24e)
-    t0 = Timer
-    ' #endregion agent log (debug-30e24e)
     If Not TryRefreshWorkbookQueriesByConnectionNamePart("_q結果_配台表") Then
         ' 終了処理は続行（結果取り込みは完了している想定）。失敗は LOG 先頭行へ残す。
         If Len(m_lastStage2ErrMsg) = 0 Then
@@ -3908,13 +3798,7 @@ Finish:
         If Not wsLog Is Nothing Then wsLog.Cells(1, 1).Value = m_lastStage2ErrMsg
         On Error GoTo 0
     End If
-    ' #region agent log (debug-30e24e)
     
-    ' #endregion agent log (debug-30e24e)
-    
-    ' #region agent log (debug-30e24e)
-    
-    ' #endregion agent log (debug-30e24e)
 
     On Error Resume Next
     ThisWorkbook.Save
