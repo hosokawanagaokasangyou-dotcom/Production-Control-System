@@ -2232,17 +2232,7 @@ Public Function 段階1_マスタ勤怠と機械カレンダーを同期し保護(ByVal targetDir As 
     Dim parts As String
     
     段階1_マスタ勤怠と機械カレンダーを同期し保護 = ""
-    ' #region agent log (debug-c43aa6)
-    PM_AgentLog "業務ロジック.bas:段階1_マスタ勤怠と機械カレンダーを同期し保護", _
-        "start targetDir=" & targetDir & " const(MASTER_WORKBOOK_FILE)=" & MASTER_WORKBOOK_FILE & " effective=" & EffectiveMasterWorkbookFileName(), _
-        "H1"
-    ' #endregion
     wbPath = targetDir & "\" & MASTER_WORKBOOK_FILE
-    ' #region agent log (debug-c43aa6)
-    PM_AgentLog "業務ロジック.bas:段階1_マスタ勤怠と機械カレンダーを同期し保護", _
-        "path wbPath=" & wbPath & " exists=" & CStr(Len(Dir(wbPath)) > 0), _
-        "H1"
-    ' #endregion
     If Len(Dir(wbPath)) = 0 Then Exit Function
     
     openedHere = False
@@ -2256,17 +2246,6 @@ Public Function 段階1_マスタ勤怠と機械カレンダーを同期し保護(ByVal targetDir As 
         openedHere = Not (wb Is Nothing)
         On Error GoTo 0
     End If
-    ' #region agent log (debug-c43aa6)
-    If wb Is Nothing Then
-        PM_AgentLog "業務ロジック.bas:段階1_マスタ勤怠と機械カレンダーを同期し保護", _
-            "open result wb=Nothing", _
-            "H2"
-    Else
-        PM_AgentLog "業務ロジック.bas:段階1_マスタ勤怠と機械カレンダーを同期し保護", _
-            "open result wb.Name=" & wb.Name & " openedHere=" & CStr(openedHere), _
-            "H2"
-    End If
-    ' #endregion
     If wb Is Nothing Then
         段階1_マスタ勤怠と機械カレンダーを同期し保護 = "マスタ同期: ブックを開けませんでした"
         Exit Function
@@ -2341,11 +2320,6 @@ CloseMasterWbSt1:
     End If
     parts = parts & "）※シート保護はマクロ終了時にまとめて適用"
     段階1_マスタ勤怠と機械カレンダーを同期し保護 = parts
-    ' #region agent log (debug-c43aa6)
-    PM_AgentLog "業務ロジック.bas:段階1_マスタ勤怠と機械カレンダーを同期し保護", _
-        "done nOk=" & CStr(nOk) & " nSkip=" & CStr(nSkip) & " lastRow=" & CStr(lastRow) & " startRow=" & CStr(startRow), _
-        "H3"
-    ' #endregion
 End Function
 
 ' =========================================================
