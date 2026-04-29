@@ -1009,9 +1009,13 @@ Public Sub メインシート_メンバー一覧と出勤表示(Optional ByVal Silent As Boolean 
         If colDate > 0 And colMem > 0 And colIn > 0 And colOut > 0 Then
             lastR = wsCal.Cells(wsCal.Rows.Count, colDate).End(xlUp).Row
             For r = 2 To lastR
+                mn = Trim$(CStr(wsCal.Cells(r, colMem).Value))
+                ' 個人_* がまだ無くても、出勤簿にいるメンバーはメインに並べる（行数が個人シート数だけに偏らないようにする）
+                If Len(mn) > 0 Then
+                    If Not members.Exists(mn) Then members.Add mn, mn
+                End If
                 If IsDate(wsCal.Cells(r, colDate).Value) Then
                     d = CDate(wsCal.Cells(r, colDate).Value)
-                    mn = Trim$(CStr(wsCal.Cells(r, colMem).Value))
                     If Len(mn) > 0 Then
                         k = mn & "|" & Format$(d, "yyyy-mm-dd")
                         dict(k) = Trim$(CStr(wsCal.Cells(r, colIn).Value)) & " / " & Trim$(CStr(wsCal.Cells(r, colOut).Value))
