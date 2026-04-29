@@ -54,6 +54,7 @@ Public Sub ImportVBAFiles(Optional ByVal folderPath As String = vbNullString)
         If extension = "bas" Or extension = "cls" Or extension = "frm" Then
             importCount = importCount + ImportOneVBFile(wb, fileItem.Path, fileItem.Name, fso)
         End If
+        DoEvents
     Next fileItem
 
     If importCount > 0 Then
@@ -113,7 +114,19 @@ Private Function ImportOneVBFile( _
     If Not DoImport(vbp, filePath, comp) Then Exit Function
 
     If Not TryRenameComponent(comp, desired) Then
-        Debug.Print fileNameOnly & " のリネームに失敗しました。"
+        ' リネーム失敗のまま残すと ModuleN が増殖して参照が不安定になるため、
+        ' 既存の同名が残っている可能性を除去して再試行し、ダメならインポート自体を取り消す。
+        Debug.Print fileNameOnly & " のリネームに失敗しました（暫定名: " & comp.Name & " → 目標: " & desired & "）。再試行します。"
+        If VBComponentExists(vbp, desired) Then
+            Call SafeRemoveComponent(vbp, desired)
+        End If
+        If Not TryRenameComponent(comp, desired) Then
+            Debug.Print fileNameOnly & " のリネームに再度失敗しました。重複回避のため取り込みを取り消します（残名: " & comp.Name & "）。"
+            On Error Resume Next
+            vbp.VBComponents.Remove comp
+            On Error GoTo 0
+            Exit Function
+        End If
     End If
 
     Debug.Print fileNameOnly & " をインポートしました（モジュール名: " & comp.Name & "）。"

@@ -348,6 +348,96 @@ Public Function EffectiveMasterWorkbookExists(ByRef errMsg As String) As Boolean
     EffectiveMasterWorkbookExists = True
 End Function
 
+' #region agent log (debug-c43aa6)
+Private Function Dbg_RepoRootPath() As String
+    Dim p As String
+    Dim i As Long
+    p = Trim$(ThisWorkbook.path)
+    If Len(p) = 0 Then
+        Dbg_RepoRootPath = ""
+        Exit Function
+    End If
+    i = InStrRev(p, "\")
+    If i <= 0 Then
+        Dbg_RepoRootPath = p
+    Else
+        Dbg_RepoRootPath = Left$(p, i - 1)
+    End If
+End Function
+
+Private Function Dbg_JsonEscape(ByVal s As String) As String
+    s = Replace(s, "\", "\\")
+    s = Replace(s, """", "\""")
+    s = Replace(s, vbCr, "\r")
+    s = Replace(s, vbLf, "\n")
+    Dbg_JsonEscape = s
+End Function
+
+Public Sub PM_AgentLog(ByVal location As String, ByVal message As String, ByVal hypothesisId As String, Optional ByVal dataJson As String = "null", Optional ByVal runId As String = "pre-fix")
+    Dim fp As String
+    Dim fp2 As String
+    Dim fpTemp As String
+    Dim ts As Double
+    Dim line As String
+    Dim fso As Object
+    Dim tsw As Object
+    
+    On Error GoTo CleanExit
+    ' ブック隣 → TEMP → ワークスペース固定 の順で試す
+    fp = "C:\工程管理AIプロジェクト\----AI-------1\debug-c43aa6.log"
+    fp2 = Trim$(ThisWorkbook.path) & "\debug-c43aa6.log"
+    fpTemp = Trim$(Environ$("TEMP")) & "\debug-c43aa6.log"
+    
+    ts = CDbl(Now) * 86400000#
+    line = "{""sessionId"":""c43aa6"",""runId"":""" & Dbg_JsonEscape(runId) & """,""hypothesisId"":""" & Dbg_JsonEscape(hypothesisId) & """,""location"":""" & Dbg_JsonEscape(location) & """,""message"":""" & Dbg_JsonEscape(message) & """,""data"":" & dataJson & ",""timestamp"":" & Format$(ts, "0") & "}"
+    
+    ' Open ... For Append は Unicode パスで失敗することがあるため FSO を使用
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    On Error Resume Next
+    Set tsw = fso.OpenTextFile(fp2, 8, True, -1) ' ForAppending=8, Create=True, TristateTrue=-1(Unicode)
+    If Err.Number = 0 And Not tsw Is Nothing Then
+        tsw.WriteLine line
+        tsw.Close
+        Set tsw = Nothing
+        Set fso = Nothing
+        On Error GoTo 0
+        Exit Sub
+    End If
+    Err.Clear
+    If Not tsw Is Nothing Then tsw.Close
+    Set tsw = Nothing
+    
+    ' fallback: TEMP
+    Set tsw = fso.OpenTextFile(fpTemp, 8, True, -1)
+    If Err.Number = 0 And Not tsw Is Nothing Then
+        tsw.WriteLine line
+        tsw.Close
+        Set tsw = Nothing
+        Set fso = Nothing
+        On Error GoTo 0
+        Exit Sub
+    End If
+    Err.Clear
+    If Not tsw Is Nothing Then tsw.Close
+    Set tsw = Nothing
+    
+    ' fallback: ワークスペース固定
+    Set tsw = fso.OpenTextFile(fp, 8, True, -1)
+    If Err.Number = 0 And Not tsw Is Nothing Then
+        tsw.WriteLine line
+        tsw.Close
+    End If
+    Set tsw = Nothing
+    Set fso = Nothing
+    On Error GoTo 0
+CleanExit:
+    On Error Resume Next
+    If Not tsw Is Nothing Then tsw.Close
+    On Error GoTo 0
+End Sub
+' #endregion
+
 ' ★ 本ファイルは「生産管理_AI配台テスト.xlsm」の標準モジュール用テキストバックアップ（master.xlsm 用は master_xlsm_VBA.txt）
 ' ★ planning_core は同フォルダの master.xlsm を MASTER として読む。上書き用アプリ JSON は json\（API 料金累計は API_Payment\）。AI 備考等の TTL キャッシュは json\ai_remarks_cache.json（手動削除は Gemini連携 の AI解析_Remarksキャッシュファイルを削除）。
 ' ★「設定」D3=スプラッシュの txtExecutionLog へ execution_log を反映するか（true/空=する・false=しない）。false のときポーリング無し。D3=false 時の cmd は既定で同期 Run。STAGE12_D3FALSE_SPLASH_CONSOLE_LAYOUT=True はログ枠重ね（実験用）だが xlwings 同期と併用で固まりやすいので False 推奨。
