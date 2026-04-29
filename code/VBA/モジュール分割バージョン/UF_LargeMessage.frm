@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_LargeMessage 
-   Caption         =   "お知らせ"
-   ClientHeight    =   3040
+   Caption         =   "縺顔衍繧峨○"
+   ClientHeight    =   6710
    ClientLeft      =   110
    ClientTop       =   450
-   ClientWidth     =   4580
+   ClientWidth     =   11210
    OleObjectBlob   =   "UF_LargeMessage.frx":0000
    StartUpPosition =   1  'オーナー フォームの中央
 End
@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 Public DialogResult As VbMsgBoxResult
@@ -42,10 +43,10 @@ Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
     cmdCancel.Visible = False
     cmdYes.Visible = False
     cmdNo.Visible = False
-    cmdOK.Caption = "OK"
-    cmdCancel.Caption = "キャンセル"
-    cmdYes.Caption = "はい"
-    cmdNo.Caption = "いいえ"
+    cmdOK.caption = "OK"
+    cmdCancel.caption = "キャンセル"
+    cmdYes.caption = "はい"
+    cmdNo.caption = "いいえ"
     Select Case grp
         Case 0
             cmdOK.Visible = True
@@ -67,11 +68,11 @@ Private Sub LayoutButtons(ByVal buttons As VbMsgBoxStyle)
 End Sub
 
 Public Sub ApplySetup(ByVal prompt As String, ByVal buttons As VbMsgBoxStyle, ByVal title As String)
-    txtBody.Text = prompt
+    txtBody.text = prompt
     If Len(title) > 0 Then
-        Me.Caption = title
+        Me.caption = title
     Else
-        Me.Caption = "お知らせ"
+        Me.caption = "お知らせ"
     End If
     SetupStripeColor buttons
     LayoutButtons buttons
@@ -108,3 +109,4 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
         DialogResult = vbOK
     End If
 End Sub
+
