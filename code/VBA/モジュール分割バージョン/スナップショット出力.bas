@@ -3,7 +3,8 @@ Option Explicit
 ' pdf\ 直下 … 常に参照する最新版（上書き）
 ' pdf\yyyymmdd_hhnnss\ … 履歴（削除しない）。中身は直下と同じファイル名
 
-Private Const FMT_CSV_UTF8 As Long = 62 ' xlCSVUTF8（Excel 2019 以降）
+Private Const FMT_CSV_SHIFTJIS As Long = 6  ' xlCSV（日本語Windowsでは ANSI／Shift-JIS CP932）
+Private Const FMT_CSV_UTF8 As Long = 62     ' xlCSVUTF8、SaveAs 失敗時のフォールバック用
 ' 共有フォルダ（社内サーバー）の到達性確認: 0.5 秒 ping の宛先（IP推奨）。空なら UNC のホスト名/アドレスを使用。
 Private Const SNAPSHOT_SHARE_PING_HOST_OVERRIDE As String = "192.168.0.101"
 
@@ -187,10 +188,10 @@ Private Sub ExportSheetCsvIfExists(ByVal wb As Workbook, ByVal sheetName As Stri
     Set tmpWb = ActiveWorkbook
     If tmpWb Is Nothing Then GoTo CsvCleanup
     On Error Resume Next
-    tmpWb.SaveAs Filename:=csvPath, FileFormat:=FMT_CSV_UTF8, Local:=True
+    tmpWb.SaveAs Filename:=csvPath, FileFormat:=FMT_CSV_SHIFTJIS, Local:=True
     If Err.Number <> 0 Then
         Err.Clear
-        tmpWb.SaveAs Filename:=csvPath, FileFormat:=xlCSV, Local:=True
+        tmpWb.SaveAs Filename:=csvPath, FileFormat:=FMT_CSV_UTF8, Local:=True
     End If
 CsvCleanup:
     On Error Resume Next
