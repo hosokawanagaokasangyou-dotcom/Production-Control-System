@@ -7,7 +7,14 @@ Option Explicit
 ' 「マクロの設定」→「VBA プロジェクト オブジェクト モデルへのアクセスを信頼する」が必要。
 ' =========================================================
 
-' folderPath を空にすると GetSplitModulesFolderPath の結果を使う。
+' Excel の「マクロ」(Alt+F8)・クイックアクセス・シート上のボタンから実行するときは
+' 引数を取らない Sub だけが選べる。既定フォルダ取り込みは ImportVBAFiles_Default を使う。
+' VBE 上で F5 する場合も、こちらにカーソルを置いて実行すると確実。
+Public Sub ImportVBAFiles_Default()
+    ImportVBAFiles
+End Sub
+
+' folderPath を空にすると GetSplitModulesFolderPath の結果を使う（コードや「イミディエイト」から呼ぶ用）。
 Public Sub ImportVBAFiles(Optional ByVal folderPath As String = vbNullString)
     Dim fso As Object
     Dim targetFolder As Object
