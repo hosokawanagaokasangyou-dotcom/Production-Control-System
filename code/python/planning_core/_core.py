@@ -1093,9 +1093,9 @@ PRODUCT_WIDTH_TABLE_PATH_ENV = "PRODUCT_WIDTH_TABLE_PATH"
 PLAN_COL_PRODUCT_LENGTH = "製品長"
 PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
 PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
-# 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」必須。
+# 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」から取得。
 # 英字開始でないときは「製品名の先頭5文字」の末尾3桁を厚みコードとして code/10 を採用（例: 040→4.0, 100→10.0）。
-# いずれも不可なら PlanningValidationError（段階1中断）。テーブル照合の製品名キーは _normalize_mm_table_lookup_key（NFKC＋空白除去）。
+# テーブルにも無く解析もできない行は段階1でスキップ（警告ログ）。テーブル照合キーは _normalize_mm_table_lookup_key（NFKC＋空白除去）。
 PLAN_COL_PRODUCT_THICKNESS = "製品厚み"
 PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME = "製品名,製品厚み.txt"
 PRODUCT_THICKNESS_TABLE_PATH_ENV = "PRODUCT_THICKNESS_TABLE_PATH"
@@ -15413,9 +15413,10 @@ def _infer_product_thickness_mm_from_product_name_prefix(product_name) -> float 
 
 def _resolve_product_thickness_mm_for_stage1_row(
     row: "pd.Series", table: dict[str, float]
-) -> float:
+) -> float | None:
     """
-    英字開始の製品名はテーブル必須。それ以外は先頭5文字パターンを優先し、失敗時はテーブル→失敗なら中断。
+    英字開始の製品名はテーブル必須。それ以外は先頭5文字パターンを優先し、失敗時はテーブル。
+    テーブルにも無く先頭5文字からも解析できない場合は None（段階1では当該行をスキップ）。
     """
     tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
     pn_raw = row.get(TASK_COL_PRODUCT)
@@ -15423,19 +15424,23 @@ def _resolve_product_thickness_mm_for_stage1_row(
     if pn and pn[0].isalpha():
         if pn in table:
             return float(table[pn])
-        raise PlanningValidationError(
-            f"製品厚みを決定できません（英字開始のためテーブル必須）。依頼NO={tid} 製品名={pn!r}。"
-            "製品厚みテーブルに追加してください。"
+        logging.warning(
+            "製品厚みを決定できずスキップ（英字開始・テーブル未登録）。依頼NO=%s 製品名=%r",
+            tid,
+            pn,
         )
+        return None
     inferred = _infer_product_thickness_mm_from_product_name_prefix(pn)
     if inferred is not None and inferred > 0:
         return float(inferred)
     if pn and pn in table:
         return float(table[pn])
-    raise PlanningValidationError(
-        "製品厚みを決定できません（先頭5文字パターン不一致、かつテーブル未登録）。"
-        f"依頼NO={tid} 製品名={pn!r}。製品厚みテーブルに追加するか、製品名の先頭5文字が厚みコードを含む形式であることを確認してください。"
+    logging.warning(
+        "製品厚みを決定できずスキップ（先頭5文字から解析不可・テーブル未登録）。依頼NO=%s 製品名=%r",
+        tid,
+        pn,
     )
+    return None
 
 
 # =============================================================================
@@ -15490,6 +15495,7 @@ def run_stage1_extract():
     _iter_skipped_qty = 0
     _iter_skipped_keyword = 0
     _iter_skipped_completed_rule = 0
+    _iter_skipped_product_thickness = 0
     # endregion agent log (perf)
     for _, row in df_src.iterrows():
         _iter_total += 1
@@ -15521,9 +15527,11 @@ def run_stage1_extract():
         rec[PLAN_COL_PRODUCT_LENGTH] = _resolve_product_length_mm_for_stage1_row(
             row, pl_table
         )
-        rec[PLAN_COL_PRODUCT_THICKNESS] = _resolve_product_thickness_mm_for_stage1_row(
-            row, pt_table
-        )
+        _th_mm = _resolve_product_thickness_mm_for_stage1_row(row, pt_table)
+        if _th_mm is None:
+            _iter_skipped_product_thickness += 1
+            continue
+        rec[PLAN_COL_PRODUCT_THICKNESS] = _th_mm
         rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
             row, rw_table
         )
@@ -15551,6 +15559,7 @@ def run_stage1_extract():
             "skipped_keyword": _iter_skipped_keyword,
             "skipped_completed_rule": _iter_skipped_completed_rule,
             "skipped_qty_or_missing": _iter_skipped_qty,
+            "skipped_product_thickness": _iter_skipped_product_thickness,
         },
     )
     # endregion agent log (perf)
