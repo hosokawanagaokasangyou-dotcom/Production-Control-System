@@ -79,52 +79,6 @@ Public Sub AppCalculation_ManualEnd(ByRef prevCalcMode As Long, ByRef suspended 
     suspended = False
 End Sub
 
-' #region agent log (debug-15a7ac)
-' Workspace NDJSON: debug-15a7ac.log（ブックが code 配下なら1つ上のフォルダへ）
-Public Sub AgentDebugLog15a7ac(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataJsonInner As String = "", Optional ByVal dbgRunId As String = "pre")
-    On Error Resume Next
-    Dim p As String, fold As String, pos As Long
-    Dim js As String
-    Dim escLoc As String
-    Dim escMsg As String
-    p = ThisWorkbook.path
-    If Len(p) = 0 Then Exit Sub
-    pos = InStrRev(p, "\")
-    If pos > 0 Then
-        fold = Mid$(p, pos + 1)
-    Else
-        fold = p
-    End If
-    If StrComp(fold, "code", vbTextCompare) = 0 Then p = p & "\.."
-    p = p & "\debug-15a7ac.log"
-    escLoc = AgentDebugJsonEscape15a7ac(location)
-    escMsg = AgentDebugJsonEscape15a7ac(message)
-    js = "{""sessionId"":""15a7ac"",""hypothesisId"":""" & hypothesisId & """,""location"":""" & escLoc & """,""message"":""" & escMsg & """"
-    If Len(dataJsonInner) > 0 Then
-        js = js & ",""data"":{" & dataJsonInner & "}"
-    End If
-    js = js & ",""runId"":""" & AgentDebugJsonEscape15a7ac(dbgRunId) & """,""timestampMs"":" & CStr(CLng(Timer * 1000)) & "}" & vbLf
-    Dim fso As Object, stm As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    Set stm = fso.OpenTextFile(p, 8, True, 0)
-    stm.Write js
-    stm.Close
-    Set stm = Nothing
-    Set fso = Nothing
-    On Error GoTo 0
-End Sub
-
-Private Function AgentDebugJsonEscape15a7ac(ByVal s As String) As String
-    Dim t As String
-    t = Replace(s, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCrLf, " ")
-    t = Replace(t, vbLf, " ")
-    t = Replace(t, vbCr, " ")
-    AgentDebugJsonEscape15a7ac = t
-End Function
-' #endregion agent log (debug-15a7ac)
-
 Public Function Stage12CmdHideWindowEffective() As Boolean
     Dim ws As Worksheet
     Dim r As Long
@@ -506,27 +460,15 @@ Public Function RunCmdFileWithConsoleLayout(ByVal wsh As Object, ByVal cmdFilePa
 End Function
 
 Public Sub RunPythonStage1()
-    ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H4", "段階実行制御.bas:RunPythonStage1", "entry", """workbookPath"":""" & AgentDebugJsonEscape15a7ac(ThisWorkbook.path) & """"
-    ' #endregion agent log (debug-15a7ac)
     段階1_コア実行
-    ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H4", "段階実行制御.bas:RunPythonStage1", "after 段階1_コア実行", """exitCode"":" & CStr(m_lastStage1ExitCode) & ",""errLen"":" & CStr(Len(m_lastStage1ErrMsg))
-    ' #endregion agent log (debug-15a7ac)
     On Error Resume Next
     配台計画_タスク入力_A1を選択
     On Error GoTo 0
     If m_lastStage1ExitCode < 0 Then
-        ' #region agent log (debug-15a7ac)
-        AgentDebugLog15a7ac "H4", "段階実行制御.bas:RunPythonStage1", "early exit negative exit code", """err"":""" & AgentDebugJsonEscape15a7ac(Left$(m_lastStage1ErrMsg, 200)) & """"
-        ' #endregion agent log (debug-15a7ac)
         If Len(m_lastStage1ErrMsg) > 0 Then MsgBox m_lastStage1ErrMsg, vbExclamation, "段階1"
         Exit Sub
     End If
     If m_lastStage1ExitCode <> 0 Then
-        ' #region agent log (debug-15a7ac)
-        AgentDebugLog15a7ac "H4", "段階実行制御.bas:RunPythonStage1", "early exit nonzero python", """exitCode"":" & CStr(m_lastStage1ExitCode)
-        ' #endregion agent log (debug-15a7ac)
         Dim st1Block As String
         st1Block = Trim$(GeminiReadUtf8File(ThisWorkbook.path & "\log\stage2_blocking_message.txt"))
         If m_lastStage1ExitCode = 3 And Len(st1Block) > 0 Then
@@ -541,12 +483,6 @@ Public Sub RunPythonStage1()
     Dim skipPost As Boolean
     Dim t0 As Double
     skipPost = Stage1SkipMainSheetPostProcessEffective()
-    ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H1", "段階実行制御.bas:RunPythonStage1", "postprocess flags (link block only)", """skipPost"":" & LCase$(CStr(skipPost))
-    ' #endregion agent log (debug-15a7ac)
-    ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H2", "段階実行制御.bas:RunPythonStage1", "STAGE1_SKIP_MAIN_POST effective", """skipPost"":" & LCase$(CStr(skipPost))
-    ' #endregion agent log (debug-15a7ac)
     If skipPost Then
         Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（シートの表示/非表示・並べ替え等）はスキップします（手動実行）。"
     Else
@@ -561,9 +497,6 @@ Public Sub RunPythonStage1()
     On Error Resume Next
     メインシート_メンバー一覧と出勤表示 True
     On Error GoTo 0
-    ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H1", "段階実行制御.bas:RunPythonStage1", "after メインシート_メンバー一覧と出勤表示", """attendanceRefreshInvoked"":true", "post-fix"
-    ' #endregion agent log (debug-15a7ac)
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     ' メイン反映の直後はメインがアクティブになるため、タスク抽出完了時は配台計画シートへ戻す
     On Error Resume Next
