@@ -81,7 +81,7 @@ End Sub
 
 ' #region agent log (debug-15a7ac)
 ' Workspace NDJSON: debug-15a7ac.log（ブックが code 配下なら1つ上のフォルダへ）
-Public Sub AgentDebugLog15a7ac(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataJsonInner As String = "")
+Public Sub AgentDebugLog15a7ac(ByVal hypothesisId As String, ByVal location As String, ByVal message As String, Optional ByVal dataJsonInner As String = "", Optional ByVal dbgRunId As String = "pre")
     On Error Resume Next
     Dim p As String, fold As String, pos As Long
     Dim js As String
@@ -103,7 +103,7 @@ Public Sub AgentDebugLog15a7ac(ByVal hypothesisId As String, ByVal location As S
     If Len(dataJsonInner) > 0 Then
         js = js & ",""data"":{" & dataJsonInner & "}"
     End If
-    js = js & ",""runId"":""pre"",""timestampMs"":" & CStr(CLng(Timer * 1000)) & "}" & vbLf
+    js = js & ",""runId"":""" & AgentDebugJsonEscape15a7ac(dbgRunId) & """,""timestampMs"":" & CStr(CLng(Timer * 1000)) & "}" & vbLf
     Dim fso As Object, stm As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
     Set stm = fso.OpenTextFile(p, 8, True, 0)
@@ -542,7 +542,7 @@ Public Sub RunPythonStage1()
     Dim t0 As Double
     skipPost = Stage1SkipMainSheetPostProcessEffective()
     ' #region agent log (debug-15a7ac)
-    AgentDebugLog15a7ac "H1", "段階実行制御.bas:RunPythonStage1", "postprocess flags", """skipPost"":" & LCase$(CStr(skipPost)) & ",""mainAttendanceRefreshCalled"":false"
+    AgentDebugLog15a7ac "H1", "段階実行制御.bas:RunPythonStage1", "postprocess flags (link block only)", """skipPost"":" & LCase$(CStr(skipPost))
     ' #endregion agent log (debug-15a7ac)
     ' #region agent log (debug-15a7ac)
     AgentDebugLog15a7ac "H2", "段階実行制御.bas:RunPythonStage1", "STAGE1_SKIP_MAIN_POST effective", """skipPost"":" & LCase$(CStr(skipPost))
@@ -557,6 +557,13 @@ Public Sub RunPythonStage1()
         On Error GoTo 0
         Stage1AppendExecutionLogLine "INFO", "段階1: 後処理（シートの表示/非表示・並べ替え等）が完了。sec=" & Format$(Timer - t0, "0.000")
     End If
+    ' タスク抽出のみでもメインのメンバー勤怠を最新化（結果_カレンダー(出勤簿)・個人_*・マスタ同期後の状態を反映。段階2と同じサブ）
+    On Error Resume Next
+    メインシート_メンバー一覧と出勤表示 True
+    On Error GoTo 0
+    ' #region agent log (debug-15a7ac)
+    AgentDebugLog15a7ac "H1", "段階実行制御.bas:RunPythonStage1", "after メインシート_メンバー一覧と出勤表示", """attendanceRefreshInvoked"":true", "post-fix"
+    ' #endregion agent log (debug-15a7ac)
     MacroSplash_SetStep "段階1が完了しました。配台計画シートを確認のうえ、必要なら段階2（計画生成）を実行してください。"
     ' メイン反映の直後はメインがアクティブになるため、タスク抽出完了時は配台計画シートへ戻す
     On Error Resume Next
