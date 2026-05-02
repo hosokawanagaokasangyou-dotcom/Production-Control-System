@@ -84,6 +84,12 @@
           <version>${javafx.version}</version>
           <classifier>linux</classifier>
         </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-fxml</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>linux</classifier>
+        </dependency>
       </dependencies>
     </profile>
     <profile>
@@ -118,6 +124,12 @@
           <version>${javafx.version}</version>
           <classifier>win</classifier>
         </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-fxml</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>win</classifier>
+        </dependency>
       </dependencies>
     </profile>
     <profile>
@@ -149,6 +161,12 @@
         <dependency>
           <groupId>org.openjfx</groupId>
           <artifactId>javafx-base</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>mac</classifier>
+        </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-fxml</artifactId>
           <version>${javafx.version}</version>
           <classifier>mac</classifier>
         </dependency>

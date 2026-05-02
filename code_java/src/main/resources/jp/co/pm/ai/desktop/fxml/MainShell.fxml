@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.BorderPane?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.MainShellController">
+    <center>
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE">
+            <tabs>
+                <Tab closable="false" text="実行・ログ">
+                    <content>
+                        <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="環境変数">
+                    <content>
+                        <fx:include fx:id="envTab" source="EnvTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="グラフ (JFreeChart)">
+                    <content>
+                        <fx:include fx:id="chartTab" source="ChartTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="配台計画_タスク入力">
+                    <content>
+                        <BorderPane fx:id="planInputHost"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="段階1 成形結果">
+                    <content>
+                        <BorderPane fx:id="stage1Host"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="配台不要ルール (JSON)">
+                    <content>
+                        <BorderPane fx:id="excludeRulesHost"/>
+                    </content>
+                </Tab>
+                <Tab closable="false" text="実績DATA・明細の取得状態">
+                    <content>
+                        <BorderPane fx:id="actualsHost"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>
