@@ -11,6 +11,8 @@
 
 JavaFX 移行プランの「Power Query 正本」と併せて参照してください。
 
+**ETL 実装時**: 共有フォルダからの「最新」選定ユーティリティは **§実装前に固める取り決め（L0〜L8）の L4**（本リポジトリでは [excelからjavafxへUI移行.plan.md](excelからjavafxへUI移行.plan.md)）およびプラン正本の **「本ドキュメントの保守手順」手順 5** と整合させる。
+
 ## JavaFX 移行プラン（全文）
 
 - **[excelからjavafxへUI移行.plan.md](excelからjavafxへUI移行.plan.md)** … **リポジトリ上の正本**（Git で共有）。プロジェクトルートの **[`.cursor/plans/excelからjavafxへui移行_e2f0b739.plan.md`](../../.cursor/plans/excelからjavafxへui移行_e2f0b739.plan.md)** に **同期（マージ）**し、Cursor のプラン UI と整合させる。
