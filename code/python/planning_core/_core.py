@@ -268,6 +268,9 @@ SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
 # タスクは tasks.xlsx を使うので、VBA から渡される TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
 TASKS_SHEET_NAME = "加工計画DATA"
+# PM_AI_PROCESSING_PLAN_PATH が xlsx のときの既定シート（PM_AI_PROCESSING_PLAN_SHEET 未設定時）。
+# 共有出力「工程別生産計画問合せ問合せ*.xlsx」等。マクロブックの加工計画DATAとは別。
+PROCESSING_PLAN_PATH_DEFAULT_SHEET = "\u5de5\u7a0b\u5225\u751f\u7523\u8a08\u753b\u554f\u5408\u305b\u554f\u5408\u305b"
 # 段階2の実績系設備ガント（結果_設備ガント_実績明細等）で、計画ブックから抽出日時を読むときに優先するシート
 TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN = "加工計画DATA_実績比較用"
 
@@ -4798,16 +4801,22 @@ def load_tasks_df():
     PM_AI_PROCESSING_PLAN_PATH に CSV / Parquet / xlsx の実在パス（未指定・無効時は
     PM_AI_TASK_INPUT_SOURCE_DIR 内の最新表ファイルへ resolve_processing_plan_path_from_env）。
     TASK_INPUT_WORKBOOK（マクロブック）は読み込みに使わない。
-    xlsx のシート名は PM_AI_PROCESSING_PLAN_SHEET で上書き可（省略時は「加工計画DATA」）。
+    xlsx のシート名は PM_AI_PROCESSING_PLAN_SHEET で上書き可（省略時は PROCESSING_PLAN_PATH_DEFAULT_SHEET。
+    マクロブックの「加工計画DATA」を読む場合は PM_AI_PROCESSING_PLAN_SHEET に明示する）。
     """
     resolve_processing_plan_path_from_env()
     _alt = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+    _sheet_label_for_context = TASKS_SHEET_NAME
     if _alt and os.path.isfile(_alt):
         _low = _alt.lower()
         if _low.endswith((".csv", ".parquet", ".pq")):
             df = read_tabular_dataframe(_alt)
         else:
-            _sn = (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip() or TASKS_SHEET_NAME
+            _sn = (
+                (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip()
+                or PROCESSING_PLAN_PATH_DEFAULT_SHEET
+            )
+            _sheet_label_for_context = str(_sn)
             df = read_tabular_dataframe(_alt, sheet_name=_sn)
         df.columns = df.columns.str.strip()
     else:
@@ -4818,7 +4827,7 @@ def load_tasks_df():
         )
     df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
     _ensure_dataframe_has_unprocessed_column(
-        df, context_label=f"シート「{TASKS_SHEET_NAME}」"
+        df, context_label=f"シート「{_sheet_label_for_context}」"
     )
     # 加工計画DATA の主列は「換算数量」（TASK_COL_QTY）。無いブックは未加工→旧「残作数値」の順で補完。
     if TASK_COL_QTY not in df.columns:

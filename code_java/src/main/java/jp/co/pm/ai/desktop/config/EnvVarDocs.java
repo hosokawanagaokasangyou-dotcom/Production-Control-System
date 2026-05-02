@@ -50,7 +50,9 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_PROCESSING_PLAN_SHEET",
                 "PM_AI_PROCESSING_PLAN_PATH \u304c xlsx \u306e\u3068\u304d\u306e\u30b7\u30fc\u30c8\u540d\uff08\u7a7a\u3067"
-                        + "\u300c\u52a0\u5de5\u8a08\u753bDATA\u300d\uff09\u3002");
+                        + "\u300c\u5de5\u7a0b\u5225\u751f\u7523\u8a08\u753b\u554f\u5408\u305b\u554f\u5408\u305b\u300d"
+                        + "\u5171\u6709\u51fa\u529b\u306e\u8868\u3092\u60f3\u5b9a\u3002\u30de\u30af\u30ed\u30d6\u30c3\u30af\u306e"
+                        + "\u300c\u52a0\u5de5\u8a08\u753bDATA\u300d\u3092\u8aad\u3080\u3068\u304d\u306f\u3053\u3053\u306b\u660e\u8a18\uff09\u3002");
         put(
                 "PM_AI_TABULAR_CSV_ENCODING",
                 "PM_AI_PROCESSING_PLAN_PATH \u7b49 CSV \u306e\u6587\u5b57\u30b3\u30fc\u30c9\uff08\u7a7a\u3067 utf-8-sig\uff09\u3002");
