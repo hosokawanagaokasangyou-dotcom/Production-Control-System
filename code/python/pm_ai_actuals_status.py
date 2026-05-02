@@ -14,6 +14,8 @@ from typing import Any
 ENV_ACTUALS_DATA_WORKBOOK = "PM_AI_ACTUALS_DATA_WORKBOOK"
 ENV_ACTUAL_DETAIL_WORKBOOK = "PM_AI_ACTUAL_DETAIL_WORKBOOK"
 ENV_ACTUAL_DETAIL_SOURCE_DIR = "PM_AI_ACTUAL_DETAIL_SOURCE_DIR"
+ENV_ACTUALS_DATA_SHEET = "PM_AI_ACTUALS_DATA_SHEET"
+ENV_ACTUAL_DETAIL_SHEET = "PM_AI_ACTUAL_DETAIL_SHEET"
 
 DEFAULT_ACTUAL_DETAIL_SOURCE_DIR = (
     "\\\\192.168.0.101\\"
@@ -30,6 +32,21 @@ ACTUALS_SHEET_NAME = "\u52a0\u5de5\u5b9f\u7e3eDATA"
 ACTUAL_DETAIL_SHEET_NAME = "\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30DATA"
 
 _MAX_ROWS_SCAN = 500_000
+
+
+def _excel_sheet_arg_from_env(env_key: str) -> str | int:
+    _raw = (os.environ.get(env_key) or "").strip()
+    if not _raw:
+        return 0
+    if _raw.isdigit():
+        return int(_raw)
+    return _raw
+
+
+def _excel_sheet_label_for_log(sheet_arg: str | int, legacy: str) -> str:
+    if isinstance(sheet_arg, int):
+        return "\u5148\u982d\u30b7\u30fc\u30c8" if sheet_arg == 0 else f"index {sheet_arg}"
+    return str(sheet_arg) if sheet_arg else legacy
 
 
 def pick_newest_excel_in_dir(dir_path: str) -> str | None:
@@ -138,7 +155,7 @@ def _file_meta(path: str) -> dict[str, Any]:
         return {"file_exists": False, "size_bytes": None, "mtime_iso": None}
 
 
-def _sheet_row_scan(path: str, sheet_name: str) -> dict[str, Any]:
+def _sheet_row_scan(path: str, sheet_name: str | int) -> dict[str, Any]:
     out: dict[str, Any] = {"sheet_found": False, "data_rows": None, "scan_truncated": False, "error": None}
     if not path or not os.path.isfile(path):
         return out
@@ -150,10 +167,16 @@ def _sheet_row_scan(path: str, sheet_name: str) -> dict[str, Any]:
     wb = None
     try:
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        if sheet_name not in wb.sheetnames:
+        if isinstance(sheet_name, int):
+            if sheet_name < 0 or sheet_name >= len(wb.worksheets):
+                return out
+            out["sheet_found"] = True
+            ws = wb.worksheets[sheet_name]
+        elif sheet_name not in wb.sheetnames:
             return out
-        out["sheet_found"] = True
-        ws = wb[sheet_name]
+        else:
+            out["sheet_found"] = True
+            ws = wb[sheet_name]
         n = 0
         for _ in ws.iter_rows():
             n += 1
@@ -183,8 +206,12 @@ def build_status() -> dict[str, Any]:
 
     a_meta = _file_meta(actuals_path)
     d_meta = _file_meta(detail_path)
-    a_scan = _sheet_row_scan(actuals_path, ACTUALS_SHEET_NAME) if a_meta.get("file_exists") else {}
-    d_scan = _sheet_row_scan(detail_path, ACTUAL_DETAIL_SHEET_NAME) if d_meta.get("file_exists") else {}
+    a_arg = _excel_sheet_arg_from_env(ENV_ACTUALS_DATA_SHEET)
+    d_arg = _excel_sheet_arg_from_env(ENV_ACTUAL_DETAIL_SHEET)
+    a_scan = _sheet_row_scan(actuals_path, a_arg) if a_meta.get("file_exists") else {}
+    d_scan = _sheet_row_scan(detail_path, d_arg) if d_meta.get("file_exists") else {}
+    a_lbl = _excel_sheet_label_for_log(a_arg, ACTUALS_SHEET_NAME)
+    d_lbl = _excel_sheet_label_for_log(d_arg, ACTUAL_DETAIL_SHEET_NAME)
 
     return {
         "task_input_workbook": task_wb,
@@ -193,8 +220,9 @@ def build_status() -> dict[str, Any]:
         "entries": [
             {
                 "id": "machining_actuals",
-                "label": ACTUALS_SHEET_NAME,
-                "sheet_name": ACTUALS_SHEET_NAME,
+                "label": a_lbl,
+                "sheet_arg": a_arg,
+                "sheet_name": a_lbl,
                 "resolved_path": actuals_path,
                 "resolution": actuals_reason,
                 **a_meta,
@@ -202,8 +230,9 @@ def build_status() -> dict[str, Any]:
             },
             {
                 "id": "machining_actual_detail",
-                "label": ACTUAL_DETAIL_SHEET_NAME,
-                "sheet_name": ACTUAL_DETAIL_SHEET_NAME,
+                "label": d_lbl,
+                "sheet_arg": d_arg,
+                "sheet_name": d_lbl,
                 "resolved_path": detail_path,
                 "resolution": detail_reason,
                 **d_meta,

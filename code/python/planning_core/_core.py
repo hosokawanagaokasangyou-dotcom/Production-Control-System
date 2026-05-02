@@ -915,6 +915,10 @@ ENV_GANTT_ACTUAL_DETAIL_DATE_FROM = "GANTT_ACTUAL_DETAIL_DATE_FROM"
 ENV_GANTT_ACTUAL_DETAIL_DATE_TO = "GANTT_ACTUAL_DETAIL_DATE_TO"
 # 段階2を回さず実績明細ガントのみ再生成するときの単一シート xlsx（マクロが取り込み）
 ACTUAL_DETAIL_GANTT_REFRESH_FILENAME = "actual_detail_gantt_refresh.xlsx"
+# xlsx シート指定（未設定＝先頭シート index 0。単一シートなら名前不要。数値のみは 0 始まり索引）
+ENV_PM_AI_PROCESSING_PLAN_SHEET = "PM_AI_PROCESSING_PLAN_SHEET"
+ENV_PM_AI_ACTUALS_DATA_SHEET = "PM_AI_ACTUALS_DATA_SHEET"
+ENV_PM_AI_ACTUAL_DETAIL_SHEET = "PM_AI_ACTUAL_DETAIL_SHEET"
 # 過去スナップショット（例: pdf\<stamp>\結果_タスク一覧.csv）と現在マスタ実績の比較ガント（機械名1行）
 RESULT_SHEET_GANTT_COMPARE_NAME = "結果_設備ガント_計画実績比較"
 COMPARE_GANTT_OUTPUT_FILENAME = "plan_actual_compare_gantt.xlsx"
@@ -4791,6 +4795,32 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
         )
 
 
+def _excel_sheet_arg_from_env(env_key: str) -> str | int:
+    _raw = (os.environ.get(env_key) or "").strip()
+    if not _raw:
+        return 0
+    if _raw.isdigit():
+        return int(_raw)
+    return _raw
+
+
+def _excel_sheet_label_for_log(sheet_arg: str | int, legacy_sheet_title: str) -> str:
+    if isinstance(sheet_arg, int):
+        return "\u5148\u982d\u30b7\u30fc\u30c8" if sheet_arg == 0 else f"index {sheet_arg}"
+    return str(sheet_arg) if sheet_arg else legacy_sheet_title
+
+
+def _processing_plan_sheet_label_for_context(sheet_arg: str | int) -> str:
+    return _excel_sheet_label_for_log(sheet_arg, TASKS_SHEET_NAME)
+
+
+def _actual_detail_sheet_log_label() -> str:
+    return _excel_sheet_label_for_log(
+        _excel_sheet_arg_from_env(ENV_PM_AI_ACTUAL_DETAIL_SHEET),
+        ACTUAL_DETAIL_SHEET_NAME,
+    )
+
+
 def load_tasks_df():
     """
     タスク入力を取得れる（tasks.xlsx は使用しない）。
@@ -4809,16 +4839,8 @@ def load_tasks_df():
         if _low.endswith((".csv", ".parquet", ".pq")):
             df = read_tabular_dataframe(_alt)
         else:
-            _raw = (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip()
-            if not _raw:
-                _sn: str | int = 0
-                _sheet_label_for_context = "\u5148\u982d\u30b7\u30fc\u30c8"
-            elif _raw.isdigit():
-                _sn = int(_raw)
-                _sheet_label_for_context = f"index {_sn}"
-            else:
-                _sn = _raw
-                _sheet_label_for_context = _raw
+            _sn = _excel_sheet_arg_from_env(ENV_PM_AI_PROCESSING_PLAN_SHEET)
+            _sheet_label_for_context = _processing_plan_sheet_label_for_context(_sn)
             df = read_tabular_dataframe(_alt, sheet_name=_sn)
         df.columns = df.columns.str.strip()
     else:
@@ -8970,21 +8992,24 @@ def load_machining_actuals_df():
     優先: PM_AI_ACTUALS_DATA_WORKBOOK。
     未指定時は実績明細と同じ既定探索（PM_AI_ACTUAL_DETAIL_WORKBOOK、
     PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm、TASK_INPUT_WORKBOOK）。
-    Power Query 等で用意したシートを想定。
+    シートは PM_AI_ACTUALS_DATA_SHEET（省略時は先頭シート index 0。単一シートなら名前不要）。
     """
     _src = resolve_actuals_workbook_path(TASKS_INPUT_WORKBOOK)
     if not _src or not os.path.exists(_src):
         return pd.DataFrame()
+    _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUALS_DATA_SHEET)
+    _lbl = _excel_sheet_label_for_log(_sn, ACTUALS_SHEET_NAME)
     try:
-        df = pd.read_excel(_src, sheet_name=ACTUALS_SHEET_NAME)
+        df = pd.read_excel(_src, sheet_name=_sn)
     except ValueError:
         logging.info(
-            f"シート「{ACTUALS_SHEET_NAME}」は無いため、ガントの実績行は出力しません。"
+            "シート「%s」は無いため、ガントの実績行は出力しません。",
+            _lbl,
         )
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, ACTUAL_HEADER_CANONICAL)
-    logging.info("加工実績: '%s' の '%s' を %s 行読み込み。", _src, ACTUALS_SHEET_NAME, len(df))
+    logging.info("加工実績: '%s' の '%s' を %s 行読み込み。", _src, _lbl, len(df))
     return df
 
 
@@ -9047,16 +9072,20 @@ def load_machining_actual_detail_df():
 
     優先: PM_AI_ACTUAL_DETAIL_WORKBOOK（単一ファイル）、PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm
     （既定 UNC は plan/02 と同系）、最後に TASK_INPUT_WORKBOOK 内シート。
+    シートは PM_AI_ACTUAL_DETAIL_SHEET（省略時は先頭シート index 0。単一シートなら名前不要）。
     列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
     """
     _src_wb = resolve_actual_detail_workbook_path(TASKS_INPUT_WORKBOOK)
     if not _src_wb:
         return pd.DataFrame()
+    _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUAL_DETAIL_SHEET)
+    _lbl = _excel_sheet_label_for_log(_sn, ACTUAL_DETAIL_SHEET_NAME)
     try:
-        df = pd.read_excel(_src_wb, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
+        df = pd.read_excel(_src_wb, sheet_name=_sn)
     except ValueError:
         logging.info(
-            f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
+            "シート「%s」は無いため、実績明細ガントは出力しません。",
+            _lbl,
         )
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
@@ -9095,7 +9124,7 @@ def load_machining_actual_detail_df():
     logging.info(
         "加工実績明細: '%s' の '%s' を %s 行読み込み。",
         _src_wb,
-        ACTUAL_DETAIL_SHEET_NAME,
+        _lbl,
         len(df),
     )
     return df
@@ -27572,7 +27601,9 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             base_now_dt = detail_extract_dt
             run_date = base_now_dt.date()
             data_extract_dt_str = base_now_dt.strftime("%Y/%m/%d %H:%M:%S")
-            plan_base_dt_column = f"{ACTUAL_DETAIL_SHEET_NAME}:{TASK_COL_DATA_EXTRACTION_TIME}"
+            plan_base_dt_column = (
+                f"{_actual_detail_sheet_log_label()}:{TASK_COL_DATA_EXTRACTION_TIME}"
+            )
 
         logging.info(
             "実績明細ガントのみ: 抽出基準日時 %s（%s）",
@@ -27656,7 +27687,7 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
                 df_actual_detail,
                 equipment_list,
                 sorted_dates_detail,
-                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                log_sheet_name=_actual_detail_sheet_log_label(),
                 roll_detail=True,
             )
 
@@ -28520,7 +28551,7 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
                 df_actual_detail,
                 equipment_list,
                 sorted_dates_detail,
-                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                log_sheet_name=_actual_detail_sheet_log_label(),
                 roll_detail=True,
             )
         if not detail_timeline_events:
@@ -31059,7 +31090,7 @@ def _generate_plan_impl(
                 df_actual_detail,
                 equipment_list,
                 sorted_dates_detail,
-                log_sheet_name=ACTUAL_DETAIL_SHEET_NAME,
+                log_sheet_name=_actual_detail_sheet_log_label(),
                 roll_detail=True,
             )
     try:

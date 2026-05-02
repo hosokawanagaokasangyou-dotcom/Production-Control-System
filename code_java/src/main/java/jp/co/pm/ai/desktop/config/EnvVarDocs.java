@@ -83,6 +83,16 @@ public final class EnvVarDocs {
                         + " \u2192 TASK_INPUT_WORKBOOK"
                         + " \u3068\u5b9f\u7e3e\u660e\u7d30\u3068\u540c\u3058\u65e2\u5b9a\u63a2\u7d22\uff08input_resolution\uff09\u3002");
         put(
+                "PM_AI_ACTUALS_DATA_SHEET",
+                "PM_AI_ACTUALS_DATA_WORKBOOK \u5185\u306e\u30b7\u30fc\u30c8\u6307\u5b9a\u3002\u7a7a\u3067"
+                        + "\u5148\u982d\u30b7\u30fc\u30c8\uff080\u756a\uff09\u3002\u5358\u4e00\u30b7\u30fc\u30c8\u306a\u3089\u540d\u524d\u4e0d\u8981\u3002"
+                        + "\u6570\u5024\u306e\u307f\u306f 0\u59cb\u307e\u308a\u306e\u30a4\u30f3\u30c7\u30c3\u30af\u30b9\u3002");
+        put(
+                "PM_AI_ACTUAL_DETAIL_SHEET",
+                "PM_AI_ACTUAL_DETAIL_WORKBOOK \u7b49\u3067\u8aad\u3080\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30\u306e\u30b7\u30fc\u30c8\u6307\u5b9a\u3002\u7a7a\u3067"
+                        + "\u5148\u982d\u30b7\u30fc\u30c8\uff080\u756a\uff09\u3002\u5358\u4e00\u30b7\u30fc\u30c8\u306a\u3089\u540d\u524d\u4e0d\u8981\u3002"
+                        + "\u6570\u5024\u306e\u307f\u306f 0\u59cb\u307e\u308a\u306e\u30a4\u30f3\u30c7\u30c3\u30af\u30b9\u3002");
+        put(
                 "PM_AI_TASK_INPUT_SOURCE_DIR",
                 "PQ-A \u52a0\u5de5\u8a08\u753bDATA\u53d6\u5f97\u5143\uff08plan/01_*.m \u306e Folder.Files \u3068\u540c\u7cfb\uff09\u3002"
                         + "\u672a\u8a2d\u5b9a\u6642\u306f \\\\192.168.0.101\\\u5171\u6709...\u25cfDATA\\\u751f\u7523\u8a08\u753b\u554f\u5408\u305b\u3002"
