@@ -3708,6 +3708,38 @@ def _optional_unprocessed_m_from_plan_row(row) -> float | None:
     return _optional_float_unprocessed_column(row.get(TASK_COL_UNPROCESSED))
 
 
+def _supplement_task_input_unprocessed_column_if_missing(df: pd.DataFrame) -> None:
+    """
+    PQ 出力などで「未加工」列が無い場合に補う。
+    換算数量と実加工数があれば 未加工 = max(0, 換算数量 − 実加工数)。
+    実加工数も無ければ 未加工 = 換算数量（全量が残作とみなす）。
+    """
+    if df is None or getattr(df, "empty", True):
+        return
+    if TASK_COL_UNPROCESSED in df.columns:
+        return
+    if TASK_COL_QTY not in df.columns:
+        return
+    qv = pd.to_numeric(df[TASK_COL_QTY], errors="coerce").fillna(0.0)
+    if TASK_COL_ACTUAL_DONE in df.columns:
+        av = pd.to_numeric(df[TASK_COL_ACTUAL_DONE], errors="coerce").fillna(0.0)
+        df[TASK_COL_UNPROCESSED] = (qv - av).clip(lower=0.0)
+        logging.info(
+            "タスク入力: 列「%s」が無いため「%s」−「%s」で補完しました。",
+            TASK_COL_UNPROCESSED,
+            TASK_COL_QTY,
+            TASK_COL_ACTUAL_DONE,
+        )
+        return
+    df[TASK_COL_UNPROCESSED] = qv
+    logging.info(
+        "タスク入力: 列「%s」及び「%s」が無いため「%s」を未加工にコピーしました（残量＝換算数量とみなします）。",
+        TASK_COL_UNPROCESSED,
+        TASK_COL_ACTUAL_DONE,
+        TASK_COL_QTY,
+    )
+
+
 def _ensure_dataframe_has_unprocessed_column(
     df: pd.DataFrame, *, context_label: str
 ) -> None:
@@ -4850,10 +4882,7 @@ def load_tasks_df():
             "その中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。"
         )
     df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
-    _ensure_dataframe_has_unprocessed_column(
-        df, context_label=f"シート「{_sheet_label_for_context}」"
-    )
-    # 加工計画DATA の主列は「換算数量」（TASK_COL_QTY）。無いブックは未加工→旧「残作数値」の順で補完。
+    # 換算数量を先に確定（未加工の式補完に必要）。無いブックは未加工→旧「残作数値」の順で補完。
     if TASK_COL_QTY not in df.columns:
         for _alt_qty in ("未加工", "残作数値"):
             if _alt_qty in df.columns:
@@ -4864,6 +4893,10 @@ def load_tasks_df():
                     _alt_qty,
                 )
                 break
+    _supplement_task_input_unprocessed_column_if_missing(df)
+    _ensure_dataframe_has_unprocessed_column(
+        df, context_label=f"シート「{_sheet_label_for_context}」"
+    )
     # 「受注数」列名の表記ゆれを「受注数」（TASK_COL_ORDER_QTY）へ寄せる補完
     if TASK_COL_ORDER_QTY not in df.columns and "受注数" in df.columns:
         df[TASK_COL_ORDER_QTY] = df["受注数"]
