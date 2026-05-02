@@ -14080,60 +14080,6 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     return False
 
 
-def _agent_debug_log_e69e6f(
-    location: str, hypothesis_id: str, message: str, data: dict | None = None
-) -> None:
-    """
-    Debug-mode NDJSON logger (session e69e6f).
-
-    Writes to the first writable path among:
-    - repo root: <repo>/debug-e69e6f.log
-    - code dir:  <repo>/code/debug-e69e6f.log
-    - temp:      %TEMP%/debug-e69e6f.log
-    """
-    try:
-        import json
-        import tempfile
-        import time as _time
-
-        here = os.path.dirname(__file__)
-        candidates = [
-            os.path.abspath(os.path.join(here, "..", "..", "..", "..", "debug-e69e6f.log")),
-            os.path.abspath(os.path.join(here, "..", "..", "debug-e69e6f.log")),
-            os.path.join(log_dir, "debug-e69e6f.log"),
-            os.path.join(tempfile.gettempdir(), "debug-e69e6f.log"),
-        ]
-        payload = {
-            "sessionId": "e69e6f",
-            "runId": "stage1-pre",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(_time.time() * 1000),
-        }
-        line = json.dumps(payload, ensure_ascii=False) + "\n"
-        last_err = None
-        for p in candidates:
-            try:
-                d = os.path.dirname(p)
-                if d:
-                    os.makedirs(d, exist_ok=True)
-            except Exception:
-                pass
-            try:
-                with open(p, "a", encoding="utf-8") as f:
-                    f.write(line)
-                return
-            except Exception as ex:
-                last_err = ex
-                continue
-        if last_err is not None:
-            logging.debug("debug log write failed: %s", last_err)
-    except Exception:
-        return
-
-
 def _exclude_rules_e_sidecar_path() -> str:
     path = os.path.join(json_data_dir, EXCLUDE_RULES_E_SIDECAR_FILENAME)
     legacy = os.path.join(log_dir, EXCLUDE_RULES_E_SIDECAR_FILENAME)
@@ -14453,11 +14399,8 @@ def run_exclude_rules_sheet_maintenance(
     ``json/exclude_rules_e_column_pending.json`` は Python 次回起動時の E 列復元用。
     シートの新規作成と 1 行目見出しは VBA「設定_配台不要工程_シートを確保」。
     """
-    import time as _time
     import hashlib
 
-    # region agent log (perf)
-    _t0 = _time.perf_counter()
     needs_disk_sync = False
     _st_added = 0
     _st_removed_empty = 0
@@ -14495,23 +14438,10 @@ def run_exclude_rules_sheet_maintenance(
                     "前回と同一シグネチャかつ変更無しだったため、設定シート保守（openpyxl open 含む）をスキップしました。",
                     details=f"path={wb_path} pairs={len(pairs)} ai_d_to_e={compile_exclude_rules_d_to_e_with_ai}",
                 )
-                _agent_debug_log_e69e6f(
-                    "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                    "H6",
-                    "exclude_maint_skipped_cache",
-                    {"pairs": len(pairs or []), "ai_d_to_e": bool(compile_exclude_rules_d_to_e_with_ai)},
-                )
                 return
     except Exception:
         pass
 
-    _agent_debug_log_e69e6f(
-        "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-        "H6",
-        "exclude_maint_enter",
-        {"pairs": len(pairs or []), "ai_d_to_e": bool(compile_exclude_rules_d_to_e_with_ai)},
-    )
-    # endregion agent log (perf)
     if not wb_path:
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_PATH",
@@ -14555,18 +14485,7 @@ def run_exclude_rules_sheet_maintenance(
     keep_vba = str(wb_path).lower().endswith(".xlsm")
     wb = None
     try:
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         wb = load_workbook(wb_path, keep_vba=keep_vba, read_only=False, data_only=False)
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_openpyxl_open_ok",
-            {"ms": int((_time.perf_counter() - _t) * 1000), "keep_vba": bool(keep_vba)},
-        )
-        # endregion agent log (perf)
     except Exception as e1:
         if keep_vba:
             _log_exclude_rules_sheet_debug(
@@ -14576,18 +14495,7 @@ def run_exclude_rules_sheet_maintenance(
                 exc=e1,
             )
             try:
-                # region agent log (perf)
-                _t = _time.perf_counter()
-                # endregion agent log (perf)
                 wb = load_workbook(wb_path, keep_vba=False, read_only=False, data_only=False)
-                # region agent log (perf)
-                _agent_debug_log_e69e6f(
-                    "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                    "H6",
-                    "exclude_openpyxl_open_ok_retry_keep_vba_false",
-                    {"ms": int((_time.perf_counter() - _t) * 1000)},
-                )
-                # endregion agent log (perf)
             except Exception as e2:
                 _log_exclude_rules_sheet_debug(
                     "OPEN_FAIL",
@@ -14630,9 +14538,6 @@ def run_exclude_rules_sheet_maintenance(
             return
 
         ws = wb[EXCLUDE_RULES_SHEET_NAME]
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         hm_before = _exclude_rules_sheet_header_map(ws)
         c_proc, c_mach, c_flag, c_d, c_e = _ensure_exclude_rules_sheet_headers_and_columns(
             ws, log_prefix
@@ -14652,18 +14557,6 @@ def run_exclude_rules_sheet_maintenance(
             EXCLUDE_RULE_COL_LOGIC_JSON,
         ))
         _st_header_changed = bool(header_changed)
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_headers_ensured",
-            {
-                "ms": int((_time.perf_counter() - _t) * 1000),
-                "cols": [c_proc, c_mach, c_flag, c_d, c_e],
-                "header_changed": bool(header_changed),
-            },
-        )
-        # endregion agent log (perf)
         if header_changed:
             needs_disk_sync = True
             _log_exclude_rules_sheet_debug(
@@ -14681,9 +14574,6 @@ def run_exclude_rules_sheet_maintenance(
 
         existing_keys: set[tuple[str, str]] = set()
         max_r = max(2, int(ws.max_row or 2))
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         for r in range(2, max_r + 1):
             pv = ws.cell(row=r, column=c_proc).value
             mv = ws.cell(row=r, column=c_mach).value
@@ -14694,19 +14584,8 @@ def run_exclude_rules_sheet_maintenance(
             existing_keys.add(
                 (_normalize_process_name_for_rule_match(p), _normalize_equipment_match_key(m))
             )
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_existing_keys_scanned",
-            {"ms": int((_time.perf_counter() - _t) * 1000), "existing": len(existing_keys), "max_row": max_r},
-        )
-        # endregion agent log (perf)
 
         added = 0
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         for p, m in pairs:
             key = (_normalize_process_name_for_rule_match(p), _normalize_equipment_match_key(m))
             if key in existing_keys:
@@ -14715,14 +14594,6 @@ def run_exclude_rules_sheet_maintenance(
             existing_keys.add(key)
             added += 1
         _st_added = int(added)
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_pairs_synced",
-            {"ms": int((_time.perf_counter() - _t) * 1000), "added": added},
-        )
-        # endregion agent log (perf)
         if added:
             needs_disk_sync = True
             _log_exclude_rules_sheet_debug(
@@ -14756,21 +14627,10 @@ def run_exclude_rules_sheet_maintenance(
             )
 
         # 空行詰ゝは AI より先に行ご（後から詰ゝると」書き込んて行番坷と画面上の行はうれる）
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         n_kept, n_removed_empty = _compact_exclude_rules_data_rows(
             ws, c_proc, c_mach, c_flag, c_d, c_e, log_prefix
         )
         _st_removed_empty = int(n_removed_empty or 0)
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_compact_done",
-            {"ms": int((_time.perf_counter() - _t) * 1000), "kept": n_kept, "removed_empty": n_removed_empty},
-        )
-        # endregion agent log (perf)
         if n_removed_empty:
             needs_disk_sync = True
             _log_exclude_rules_sheet_debug(
@@ -14783,9 +14643,6 @@ def run_exclude_rules_sheet_maintenance(
         if compile_exclude_rules_d_to_e_with_ai:
             max_r = int(ws.max_row or 1)
             pending_rows: list[int] = []
-            # region agent log (perf)
-            _t = _time.perf_counter()
-            # endregion agent log (perf)
             for r in range(2, max_r + 1):
                 dv = ws.cell(row=r, column=c_d).value
                 ev = ws.cell(row=r, column=c_e).value
@@ -14796,14 +14653,6 @@ def run_exclude_rules_sheet_maintenance(
                     continue
                 pending_rows.append(r)
             _st_pending_rows = int(len(pending_rows))
-            # region agent log (perf)
-            _agent_debug_log_e69e6f(
-                "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                "H6",
-                "exclude_ai_pending_rows_scanned",
-                {"ms": int((_time.perf_counter() - _t) * 1000), "pending_rows": len(pending_rows), "max_row": max_r},
-            )
-            # endregion agent log (perf)
 
             # D が数式のときは通常読込では '=...' だけ取れる。data_only でキャッシュ表示値を補う。
             formula_rows = [
@@ -14847,18 +14696,7 @@ def run_exclude_rules_sheet_maintenance(
             ai_filled = 0
             ai_e_cell_addrs: list[str] = []
             if pending_texts:
-                # region agent log (perf)
-                _t = _time.perf_counter()
-                # endregion agent log (perf)
                 parsed_list = _ai_compile_exclude_rule_logics_batch(pending_texts)
-                # region agent log (perf)
-                _agent_debug_log_e69e6f(
-                    "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                    "H6",
-                    "exclude_ai_compile_batch_done",
-                    {"ms": int((_time.perf_counter() - _t) * 1000), "pending_texts": len(pending_texts)},
-                )
-                # endregion agent log (perf)
                 for r, parsed in zip(pending_rows, parsed_list):
                     if not parsed:
                         logging.warning(
@@ -14883,14 +14721,6 @@ def run_exclude_rules_sheet_maintenance(
                     )
                     ai_filled += 1
             _st_ai_filled = int(ai_filled or 0)
-            # region agent log (perf)
-            _agent_debug_log_e69e6f(
-                "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                "H6",
-                "exclude_ai_filled_done",
-                {"filled": ai_filled},
-            )
-            # endregion agent log (perf)
             if ai_filled:
                 needs_disk_sync = True
                 _log_exclude_rules_sheet_debug(
@@ -14940,9 +14770,6 @@ def run_exclude_rules_sheet_maintenance(
             wb_path, ws, c_proc, c_mach, c_flag, c_e
         )
         _write_exclude_rules_e_apply_artifacts(wb_path, ws, c_e, log_prefix)
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         if needs_disk_sync:
             persisted = _persist_exclude_rules_workbook(wb, wb_path, ws, log_prefix)
         else:
@@ -14953,30 +14780,6 @@ def run_exclude_rules_sheet_maintenance(
                 "設定シート（openpyxl側）に変更が無いため、xlwings 同期→Save をスキップしました。",
                 details=f"path={wb_path}",
             )
-            _agent_debug_log_e69e6f(
-                "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-                "H6",
-                "exclude_persist_skipped_no_changes",
-                {"skipped": True},
-            )
-        # region agent log (perf)
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_persist_done",
-            {
-                "ms": int((_time.perf_counter() - _t) * 1000),
-                "persisted": bool(persisted),
-                "needs_disk_sync": bool(needs_disk_sync),
-            },
-        )
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_exclude_rules_sheet_maintenance",
-            "H6",
-            "exclude_maint_exit",
-            {"ms_total": int((_time.perf_counter() - _t0) * 1000)},
-        )
-        # endregion agent log (perf)
         if needs_disk_sync and (not persisted):
             logging.warning(
                 "%s: 設定シートの xlwings 保存に失敗しました。"
@@ -15913,30 +15716,9 @@ def run_stage1_extract():
     省略時は Excel 設定シート保守は行わず、``PM_AI_EXCLUDE_RULES_JSON`` でルールを渡すか、
     配台不要ルールなしで続行する。
     """
-    # region agent log (perf)
-    def _agent_dbg_log(hypothesis_id: str, message: str, data: dict | None = None) -> None:
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:run_stage1_extract",
-            hypothesis_id,
-            message,
-            data,
-        )
-
-    import time as _time
-    _t0 = _time.perf_counter()
     resolve_processing_plan_path_from_env()
     _proc_plan = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
     _has_processing_plan = bool(_proc_plan and os.path.isfile(_proc_plan))
-    _agent_dbg_log(
-        "H0",
-        "stage1_enter",
-        {
-            "tasks_input_workbook": str(TASKS_INPUT_WORKBOOK or ""),
-            ENV_PROCESSING_PLAN_PATH: _proc_plan,
-            "processing_plan_resolved": bool(_has_processing_plan),
-        },
-    )
-    # endregion agent log (perf)
     if not _has_processing_plan:
         if not TASKS_INPUT_WORKBOOK:
             logging.error(
@@ -15962,45 +15744,26 @@ def run_stage1_extract():
                 % (ENV_PROCESSING_PLAN_PATH, _proc_plan)
             )
     reset_gemini_usage_tracker()
-    # region agent log (perf)
-    _t = _time.perf_counter()
     df_src = load_tasks_df()
-    _agent_dbg_log("H1", "load_tasks_df_done", {"ms": int((_time.perf_counter() - _t) * 1000), "rows": int(getattr(df_src, "shape", [0])[0] or 0)})
     try:
         _write_stage1_task_input_preview_xlsx(df_src, output_dir)
     except Exception as ex:
         logging.warning("段階1: タスク入力整形プレビューの出力をスキップ: %s", ex)
-    _t = _time.perf_counter()
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()
     pl_table = _load_product_length_mm_table()
     pt_table = _load_product_thickness_mm_table()
-    _agent_dbg_log("H2", "mm_tables_loaded", {"ms": int((_time.perf_counter() - _t) * 1000), "rw": len(rw_table or {}), "pw": len(pw_table or {}), "pl": len(pl_table or {}), "pt": len(pt_table or {})})
-    # endregion agent log (perf)
     records = []
-    # region agent log (perf)
-    _t_loop = _time.perf_counter()
-    _iter_total = 0
-    _iter_kept = 0
-    _iter_skipped_qty = 0
-    _iter_skipped_keyword = 0
-    _iter_skipped_completed_rule = 0
-    _iter_skipped_product_thickness = 0
-    # endregion agent log (perf)
     for _, row in df_src.iterrows():
-        _iter_total += 1
         if row_has_completion_keyword(row):
-            _iter_skipped_keyword += 1
             continue
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
-            _iter_skipped_completed_rule += 1
             continue
         task_id = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "")).strip()
         qty, _, _, _ = _plan_row_dispatch_qty_metrics(row)
         if qty <= 0 or not machine or not task_id:
-            _iter_skipped_qty += 1
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
@@ -16019,7 +15782,6 @@ def run_stage1_extract():
         )
         _th_mm = _resolve_product_thickness_mm_for_stage1_row(row, pt_table)
         if _th_mm is None:
-            _iter_skipped_product_thickness += 1
             continue
         rec[PLAN_COL_PRODUCT_THICKNESS] = _th_mm
         rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
@@ -16037,22 +15799,6 @@ def run_stage1_extract():
         rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
         rec[PLAN_COL_AI_PARSE] = ""
         records.append(rec)
-        _iter_kept += 1
-    # region agent log (perf)
-    _agent_dbg_log(
-        "H3",
-        "iterrows_done",
-        {
-            "ms": int((_time.perf_counter() - _t_loop) * 1000),
-            "iter_total": _iter_total,
-            "kept": _iter_kept,
-            "skipped_keyword": _iter_skipped_keyword,
-            "skipped_completed_rule": _iter_skipped_completed_rule,
-            "skipped_qty_or_missing": _iter_skipped_qty,
-            "skipped_product_thickness": _iter_skipped_product_thickness,
-        },
-    )
-    # endregion agent log (perf)
     if not records:
         logging.warning("段階1: 抽出対象タスクはありません。")
     order = plan_input_sheet_column_order()
@@ -16072,9 +15818,6 @@ def run_stage1_extract():
         ].astype(object)
     _members_stage1: list = []
     try:
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         (
             _skills_d_stage1,
             _members_stage1,
@@ -16084,18 +15827,6 @@ def run_stage1_extract():
             _surplus_map_stage1,
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
-        # region agent log (perf)
-        _agent_dbg_log(
-            "H4",
-            "load_skills_and_needs_done",
-            {
-                "ms": int((_time.perf_counter() - _t) * 1000),
-                "equipment": len(equipment_list_stage1 or []),
-                "need_rules": len(need_rules or []),
-                "req_map": len(req_map or {}),
-            },
-        )
-        # endregion agent log (perf)
     except PlanningValidationError:
         logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
@@ -16104,12 +15835,6 @@ def run_stage1_extract():
         req_map, need_rules = {}, []
         equipment_list_stage1 = []
         need_combo_col_index_stage1 = {}
-        # region agent log (perf)
-        _agent_dbg_log("H4", "load_skills_and_needs_fallback", {"error": str(e)[:200]})
-        # endregion agent log (perf)
-    # region agent log (perf)
-    _t = _time.perf_counter()
-    # endregion agent log (perf)
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
@@ -16117,69 +15842,35 @@ def run_stage1_extract():
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
-    # region agent log (perf)
-    _agent_dbg_log("H5", "merge_speed_heal_refresh_done", {"ms": int((_time.perf_counter() - _t) * 1000), "out_rows": int(getattr(out_df, "shape", [0])[0] or 0)})
-    # endregion agent log (perf)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
     # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
     try:
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         if _exclude_rules_json_env_supersedes_excel_sheet():
             logging.info(
                 "段階1: 設定シート「%s」の Excel 保守をスキップ（%s が有効）。",
                 EXCLUDE_RULES_SHEET_NAME,
                 ENV_EXCLUDE_RULES_JSON,
             )
-            _agent_dbg_log(
-                "H6",
-                "exclude_rules_sheet_maintenance_skipped_json",
-                {"skipped": True},
-            )
         elif not TASKS_INPUT_WORKBOOK or not os.path.isfile(TASKS_INPUT_WORKBOOK):
             logging.info(
                 "段階1: 設定シート「%s」の Excel 保守をスキップ（TASK_INPUT_WORKBOOK が無いか無効）。",
                 EXCLUDE_RULES_SHEET_NAME,
-            )
-            _agent_dbg_log(
-                "H6",
-                "exclude_rules_sheet_maintenance_skipped_no_workbook",
-                {"skipped": True},
             )
         else:
             _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
             run_exclude_rules_sheet_maintenance(
                 TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
             )
-            _agent_dbg_log(
-                "H6",
-                "exclude_rules_sheet_maintenance_done",
-                {
-                    "ms": int((_time.perf_counter() - _t) * 1000),
-                    "pairs": len(_pm_pairs_s1 or []),
-                },
-            )
-        # endregion agent log (perf)
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
     try:
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
-        # region agent log (perf)
-        _agent_dbg_log("H7", "apply_exclude_rules_config_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
-        # endregion agent log (perf)
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台試行適用で例外（続行）: %s", ex)
     try:
-        # region agent log (perf)
-        _t = _time.perf_counter()
-        # endregion agent log (perf)
         _ext_dt_s1, _ = _extract_data_extraction_datetime()
         _run_d_s1 = _ext_dt_s1.date() if _ext_dt_s1 is not None else datetime.now().date()
         fill_plan_dispatch_trial_order_column_stage1(
@@ -16191,24 +15882,14 @@ def run_stage1_extract():
             equipment_list_stage1,
             members_for_gpo=_members_stage1,
         )
-        # region agent log (perf)
-        _agent_dbg_log("H8", "fill_trial_order_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
-        # endregion agent log (perf)
     except Exception as ex:
         logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     _fill_plan_dispatch_remaining_qty_column(out_df)
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
-    # region agent log (perf)
-    _t = _time.perf_counter()
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
-    _agent_dbg_log("H9", "to_excel_done", {"ms": int((_time.perf_counter() - _t) * 1000), "out_path": out_path})
-    _t = _time.perf_counter()
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
     _apply_plan_input_visual_format(out_path, "タスク一覧")
-    _agent_dbg_log("H9", "excel_post_format_done", {"ms": int((_time.perf_counter() - _t) * 1000)})
-    _agent_dbg_log("H0", "stage1_exit", {"ms_total": int((_time.perf_counter() - _t0) * 1000)})
-    # endregion agent log (perf)
     logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に坖り込んでしてさい。")
     _try_write_main_sheet_gemini_usage_summary("段階1")
     return True
@@ -21495,42 +21176,14 @@ def fill_plan_dispatch_trial_order_column_stage1(
     if RESULT_TASK_COL_DISPATCH_TRIAL_ORDER not in plan_df.columns:
         return
     col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-    # region agent log (perf)
-    def _agent_dbg_log(hypothesis_id: str, message: str, data: dict | None = None) -> None:
-        _agent_debug_log_e69e6f(
-            "planning_core/_core.py:fill_plan_dispatch_trial_order_column_stage1",
-            hypothesis_id,
-            message,
-            data,
-        )
-
-    import time as _time
-    _t0 = _time.perf_counter()
-    _agent_dbg_log("H8", "trial_order_enter", {"rows": int(getattr(plan_df, "shape", [0])[0] or 0)})
-    # endregion agent log (perf)
     global_priority_raw = load_main_sheet_global_priority_override_text()
     members_for_gpo_eff: list = []
     if members_for_gpo is not None:
         members_for_gpo_eff = list(members_for_gpo or [])
-        _agent_dbg_log(
-            "H8",
-            "trial_order_master_skills_read_skipped",
-            {"ms": 0, "members": len(members_for_gpo_eff)},
-        )
     else:
         try:
-            # region agent log (perf)
-            _t = _time.perf_counter()
-            # endregion agent log (perf)
             with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
                 _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
-            # region agent log (perf)
-            _agent_dbg_log(
-                "H8",
-                "trial_order_master_skills_read_done",
-                {"ms": int((_time.perf_counter() - _t) * 1000), "rows": int(getattr(_skills, "shape", [0])[0] or 0)},
-            )
-            # endregion agent log (perf)
             for r in range(2, _skills.shape[0]):
                 cell = _skills.iat[r, 0]
                 if pd.isna(cell):
@@ -21540,19 +21193,9 @@ def fill_plan_dispatch_trial_order_column_stage1(
                     members_for_gpo_eff.append(name)
         except Exception:
             members_for_gpo_eff = []
-            # region agent log (perf)
-            _agent_dbg_log("H8", "trial_order_master_skills_read_failed", {})
-            # endregion agent log (perf)
-    # region agent log (perf)
-    _t = _time.perf_counter()
-    # endregion agent log (perf)
     gpo = analyze_global_priority_override_comment(
         global_priority_raw, members_for_gpo_eff, run_date.year, ai_sheet_sink={}
     )
-    # region agent log (perf)
-    _agent_dbg_log("H8", "trial_order_gpo_analyzed", {"ms": int((_time.perf_counter() - _t) * 1000)})
-    _t = _time.perf_counter()
-    # endregion agent log (perf)
     tq = build_task_queue_from_planning_df(
         plan_df,
         run_date,
@@ -21561,16 +21204,9 @@ def fill_plan_dispatch_trial_order_column_stage1(
         gpo,
         equipment_list,
     )
-    # region agent log (perf)
-    _agent_dbg_log("H8", "trial_order_task_queue_built", {"ms": int((_time.perf_counter() - _t) * 1000), "tasks": len(tq or [])})
-    _t = _time.perf_counter()
-    # endregion agent log (perf)
     _apply_dispatch_trial_order_for_generate_plan(
         tq, req_map, need_rules, need_combo_col_index
     )
-    # region agent log (perf)
-    _agent_dbg_log("H8", "trial_order_applied", {"ms": int((_time.perf_counter() - _t) * 1000)})
-    # endregion agent log (perf)
     try:
         col_idx = plan_df.columns.get_loc(col)
     except Exception:
@@ -21592,9 +21228,6 @@ def fill_plan_dispatch_trial_order_column_stage1(
                 plan_df.iat[iloc, col_idx] = float("nan")
             else:
                 plan_df.iat[iloc, col_idx] = ""
-    # region agent log (perf)
-    _agent_dbg_log("H8", "trial_order_exit", {"ms_total": int((_time.perf_counter() - _t0) * 1000)})
-    # endregion agent log (perf)
 
 
 def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> dict:
