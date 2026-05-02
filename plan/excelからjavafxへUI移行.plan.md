@@ -1,12 +1,12 @@
 ---
 name: ExcelからJavaFXへUI移行
-overview: **主目的は UI を JavaFX に移すこと**であり、Python をすべて Java に書き換えることは求めない。**配台コア等の重い処理**については、運用後に計測し、ボトルネックのみ **Java への部分実装（JNI／サブプロセスからの置換／同一 JVM 内ライブラリ）**を検討する余地を残す。当面は Python（planning_core）を呼び出す構成が既定。Power Query のデータの流れはプラン **「Power Query 正本」**に集約する。リポジトリ内に Java 資産はまだないため、新規 JavaFX モジュール追加と Python 連携が当面の中心になる。
+overview: **主目的は UI を JavaFX に移すこと**であり、Python をすべて Java に書き換えることは求めない。**配台コア等の重い処理**については、運用後に計測し、ボトルネックのみ **Java への部分実装（JNI／サブプロセスからの置換／同一 JVM 内ライブラリ）**を検討する余地を残す。当面は Python（planning_core）を呼び出す構成が既定。新規に生成・追加する Java／JavaFX コードは **`code_java/`** に置き、既存の Excel・VBA・Python ラインが **`code/`** に残るよう **ツリーを分離**する。Power Query のデータの流れはプラン **「Power Query 正本」**に集約する。
 todos:
   - id: inventory-vba-python
     content: VBA エントリと cmd/xlwings 可否をマトリクス化（xlwings_console_runner・各 *.py から一覧）
     status: pending
   - id: bootstrap-javafx
-    content: Gradle/Maven・JavaFX モジュール・Windows 配布方針で空のアプリを追加
+    content: リポジトリ直下の code_java に Gradle/Maven・JavaFX・Windows 配布方針でプロジェクトを追加（既存 code/ と分離）
     status: pending
   - id: mvp-python-bridge
     content: ProcessBuilder で TASK_INPUT_WORKBOOK 付与・段階1/2 実行・ログ表示の MVP
@@ -43,12 +43,22 @@ isProject: false
 - **既定の計算・入出力**: **`planning_core`（Python）をそのまま利用**する（子プロセス起動、環境変数、出力ファイル読込など）。**全面 Java 書き換えは対象外**とする（`_core.py` 規模・検証コストのため）。
 - **オプション（第 2 段階以降）**: **プロファイルで時間・メモリが支配的な処理**（例: 日次ループ割付、巨大 DataFrame 変換、PQ 相当 ETL のうち頻繁に走る部分など）を特定し、**Java で高速化したモジュールに差し替える**ことを **視野に入れる**。その際は **入出力形式を変えず**、同一データで **Python 版と結果一致（許容誤差を定義）**を確認してから切り替える。
 - **選ばないと決めるまで Java 化しない**: 「Java の方が速いから」だけでは移植しない。**計測根拠**と **保守コスト（ロジック二重管理）**のトレードオフを記録してから着手する。
+- **生成コードの配置**: Java／JavaFX で新規に追加するソース・ビルドスクリプト・モジュール定義は **`code_java/`** を既定ルートとする。**`code/` は既存の Excel・VBA・Python（planning_core）ライン**のままとし、同一ツリーへの混在やパス衝突を避ける。
 
 ## 現状の把握（リポジトリ上の事実）
 
 - **Java / JavaFX のコードベースは未存在**（`pom.xml` / `build.gradle` / `*.java` なし）。プロジェクト名は「JAVA」だが、実装の正は **Python**（[code/python/planning_core](code/python/planning_core)）と **Excel ブック**に集約されている。
 - **配台ロジック**は `planning_core`（特に巨大な [code/python/planning_core/_core.py](code/python/planning_core/_core.py)）にあり、**VBA は主に起動・環境変数・xlwings／cmd 経由の子プロセス制御**を担う（例: [code/python/xlwings_console_runner.py](code/python/xlwings_console_runner.py) の `run_stage1_for_xlwings` / `run_stage2_for_xlwings` 等）。
 - **データの入出力**は `TASK_INPUT_WORKBOOK` 環境変数で指す **マクロブック（.xlsm）**と **マスタ（例: `master.xlsm`）**のシート列と強く結合している（[code/python/planning_core/__init__.py](code/python/planning_core/__init__.py) 冒頭のパッケージ doc、[`workbook_env_bootstrap`](code/python/workbook_env_bootstrap.py) の「設定_環境変数」シート）。
+
+### リポジトリ配置（`code` と `code_java` の役割分担）
+
+| パス | 役割 |
+|------|------|
+| **`code/`** | **既存 Excel 版ライン**。VBA、`code/python`（planning_core）、要件定義ドキュメント等。従来どおりここを既存資産の正とする。 |
+| **`code_java/`** | **JavaFX／Java で新規生成・追加するコード**の既定ルート（アプリ本体・Gradle/Maven・将来の選択的 Java モジュール）。**`code/` との混在・衝突を避ける。** |
+
+CI・IDE のワークスペース設定でも **両ツリーを明示的に分ける**（例: Java プロジェクトのルートは `code_java` のみ）。
 
 要件定義 HTML でも「Excel を前面の操作画面にしない」移行先の例として **JavaFX** が言及されている（[code/要件定義/工程管理AI配台システム_経営層向け説明.html](code/要件定義/工程管理AI配台システム_経営層向け説明.html) 付近）。
 
@@ -363,7 +373,7 @@ flowchart LR
 
 ### フェーズ 1: JavaFX プロジェクト基盤（新規）
 
-- リポジトリ直下または `code/javafx-app/` などに **Gradle（または Maven）＋ JavaFX SDK（モジュールパスまたは依存）**を追加。
+- **`code_java/`** を Java プロジェクトのルートとし、**Gradle（または Maven）＋ JavaFX SDK（モジュールパスまたは依存）**を追加する（**`code/` 配下には Java プロジェクトを置かない**）。
 - パッケージング方針: `jlink` / `jpackage`（Windows 向け .exe 配布を想定する場合）。
 
 ### フェーズ 2: 「シェルアプリ」— 計算は Python、そのまま（MVP）
@@ -392,7 +402,7 @@ flowchart LR
 ### フェーズ 6（任意）: 重い処理の Java 化検討
 
 - **前提**: フェーズ 2〜4 が運用可能で、**実データでのボトルネックが判明**していること。
-- **手順**: JVM と Python 双方で **同じ入力**に対する **時間・メモリの計測** → ホットスポットを **関数／モジュール粒度**でリスト化 → **Java 実装の設計**（JNI、プロセス間通信、または CSV バイナリ経由のパイプなど）→ **ゴールデン一致テスト** → フラグで切替。
+- **手順**: JVM と Python 双方で **同じ入力**に対する **時間・メモリの計測** → ホットスポットを **関数／モジュール粒度**でリスト化 → **`code_java/` 配下に Java モジュール**として実装（JNI、プロセス間通信、または CSV バイナリ経由のパイプなど）→ **ゴールデン一致テスト** → フラグで切替。
 - **スコープ管理**: 「全部 Java」ではなく **検証可能な単位**まで。**配台ルールの文章の正**（[配台ルール.md](配台ルール.md)）と実装の両方を更新する必要がある変更は、Python/Java のどちらを正にするか事前に決める。
 
 ## ドキュメント・ルールとの関係
@@ -405,6 +415,7 @@ flowchart LR
 | 論点 | 選択肢のイメージ |
 |------|------------------|
 | 計算コア | **既定: Python 継続**。重い部分のみ **計測後に Java 部分移植（ハイブリッド）**。**全面 Java 移植はスコープ外**として扱う |
+| **Java ソースのルート** | **`code_java/`** に統一。**`code/` は既存 Excel／Python ラインのまま**とし衝突を避ける |
 | 保存形式 | 当面 **xlsm 互換** vs 早めに **DB/JSON＋エクスポート** |
 | xlwings 代替 | **Python をファイル中心に寄せる（推奨）** vs Excel 常駐 |
 | **加工計画DATA 供給** | **Python ETL で PQ 同等（推奨して検証）** vs バッチ vs Excel 自動化のみ |
@@ -414,4 +425,4 @@ flowchart LR
 
 ---
 
-**まとめ**: **主目的は JavaFX UI**。Python は当面そのまま呼び出し、**全コードの Java 書き換えは求めない**。必要になれば **計測に基づき重い処理だけ Java 化**するオプションを残す。リポジトリは「Excel が設定・入力シート兼オーケストレーション」に近く、**複数 Power Query 由来データ**や **xlwings／PQ 代替**が技術的な主な負荷であり、**UI 移行とデータパイプライン整理が先行**、高速化はその後の選択となる。
+**まとめ**: **主目的は JavaFX UI**。新規 Java／JavaFX は **`code_java/`**、既存資産は **`code/`** と **ツリー分離**して衝突を避ける。Python は当面そのまま呼び出し、**全コードの Java 書き換えは求めない**。必要になれば **計測に基づき重い処理だけ Java 化**するオプションを残す。**複数 Power Query 由来データ**や **xlwings／PQ 代替**が技術的な主な負荷であり、**UI 移行とデータパイプライン整理が先行**、高速化はその後の選択となる。
