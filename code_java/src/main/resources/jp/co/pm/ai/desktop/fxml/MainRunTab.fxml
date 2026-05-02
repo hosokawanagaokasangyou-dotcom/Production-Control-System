@@ -10,6 +10,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
+<!-- Labels/buttons: numeric char refs (ASCII-safe source file). -->
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
     <padding>
@@ -22,18 +23,23 @@
                     <Insets bottom="0.0" left="12.0" right="0.0" top="12.0"/>
                 </padding>
                 <children>
-                    <Label text="?}?N?????s?u?b?N?i?C??j" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                    <Label text="&#x30de;&#x30af;&#x30ed;&#x5b9f;&#x884c;&#x30d6;&#x30c3;&#x30af;&#xff08;&#x4efb;&#x610f;&#xff09;"
+                           GridPane.columnIndex="0" GridPane.rowIndex="0"/>
                     <TextField fx:id="workbookField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
                     <HBox spacing="4.0" GridPane.columnIndex="2" GridPane.rowIndex="0">
-                        <Button fx:id="browseWbButton" mnemonicParsing="false" text="?Q??c"/>
-                        <Button fx:id="detectWbButton" mnemonicParsing="false" text="???????o"/>
+                        <Button fx:id="browseWbButton" mnemonicParsing="false"
+                                text="&#x53c2;&#x7167;&#x2026;"/>
+                        <Button fx:id="detectWbButton" mnemonicParsing="false"
+                                text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"/>
                     </HBox>
                     <Label text="Python" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
                     <TextField fx:id="pythonExeField" GridPane.columnIndex="1" GridPane.columnSpan="2"
                                GridPane.rowIndex="1"/>
-                    <Label text="?X?N???v?g?f?B???N?g??" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                    <Label text="&#x30b9;&#x30af;&#x30ea;&#x30d7;&#x30c8;&#x30c7;&#x30a3;&#x30ec;&#x30af;&#x30c8;&#x30ea;"
+                           GridPane.columnIndex="0" GridPane.rowIndex="2"/>
                     <TextField fx:id="scriptDirField" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
-                    <Button fx:id="refreshDirButton" mnemonicParsing="false" text="???????o"
+                    <Button fx:id="refreshDirButton" mnemonicParsing="false"
+                            text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"
                             GridPane.columnIndex="2" GridPane.rowIndex="2"/>
                     <HBox fx:id="stageActionsBox" spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
                           GridPane.rowIndex="3"/>
@@ -47,7 +53,7 @@
     </center>
     <bottom>
         <Label fx:id="statusLabel"
-               text="exit: n/a ? 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel">
+               text="exit: n/a &#x2014; 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel">
             <BorderPane.margin>
                 <Insets top="8.0"/>
             </BorderPane.margin>

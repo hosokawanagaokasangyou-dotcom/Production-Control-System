@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -26,8 +27,24 @@ import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
-/** Environment variables tab; columns and cell factories in code (FXML is layout only). */
+/**
+ * Environment variables tab; columns/cell factories in code (FXML layout only). All Japanese UI strings use
+ * \\u escapes so source stays portable across editors/OS encodings.
+ */
 public final class EnvTabController {
+
+    private static final String ENV_HINT_TEXT =
+            "OS \u74b0\u5883\u5909\u6570\u306f\u53c2\u7167\u3057\u307e\u305b\u3093\u3002\u3053\u306e\u30bf\u30d6\u3067\u96c6\u7d04\u3002"
+                    + " \u521d\u671f\u5024: ui_ref_env_defaults.json + \u30ed\u30b8\u30c3\u30af\u8aac\u660e\u3002"
+                    + " \u5b50\u30d7\u30ed\u30bb\u30b9: \u3053\u306e\u8868 + \u30e9\u30f3\u30c1\u30e3\u30fc\u306e TASK_INPUT_WORKBOOK"
+                    + "\uff08\u30de\u30af\u30ed\u30d6\u30c3\u30af\u306f\u4efb\u610f\uff09\u2192 PYTHONUTF8 \u6700\u7d42\u56fa\u5b9a\u3002"
+                    + " PM_AI_SKIP_WORKBOOK_ENV_SHEET \u304c\u7a7a\u306e\u3068\u304d\u306f 1 \u3068\u3057\u3066"
+                    + "\u30de\u30af\u30ed\u300c\u8a2d\u5b9a_\u74b0\u5883\u5909\u6570\u300d\u30b7\u30fc\u30c8\u3092\u8aad\u307e\u306a\u3044\u3002"
+                    + " \u30d5\u30a9\u30eb\u30c0\u578b\u306f\u300c\u30d5\u30a9\u30eb\u30c0...\u300d\u3001\u5404\u30d5\u30a1\u30a4\u30eb\u578b\u306f"
+                    + "\u5909\u6570\u540d\u306b\u5fdc\u3058\u3066 JSON / Excel / CSV \u306e\u62e1\u5f35\u5b50\u3092\u8868\u793a\u3002";
+
+    @FXML
+    private Label hintLabel;
 
     @FXML
     private HBox columnStripHost;
@@ -47,6 +64,9 @@ public final class EnvTabController {
     void bindShell(MainShellController shell) {
         this.ownerStage = shell.getPrimaryStage();
         this.envRows = shell.getEnvRows();
+        hintLabel.setText(ENV_HINT_TEXT);
+        addRowButton.setText("\u884c\u3092\u8ffd\u52a0");
+        delRowButton.setText("\u884c\u3092\u524a\u9664");
         wireTable();
         addRowButton.setOnAction(
                 e -> {
@@ -74,7 +94,7 @@ public final class EnvTabController {
         envTable.setEditable(true);
         envTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 
-        TableColumn<EnvVarRow, String> nameCol = new TableColumn<>("?????");
+        TableColumn<EnvVarRow, String> nameCol = new TableColumn<>("\u5909\u6570\u540d");
         nameCol.setCellValueFactory(cdf -> cdf.getValue().nameProperty());
         nameCol.setCellFactory(TextFieldTableCell.forTableColumn());
         nameCol.setOnEditCommit(
@@ -84,7 +104,7 @@ public final class EnvTabController {
                 });
         nameCol.setPrefWidth(220);
 
-        TableColumn<EnvVarRow, String> valueCol = new TableColumn<>("?l");
+        TableColumn<EnvVarRow, String> valueCol = new TableColumn<>("\u5024");
         valueCol.setCellValueFactory(cdf -> cdf.getValue().valueProperty());
         valueCol.setCellFactory(TextFieldTableCell.forTableColumn());
         valueCol.setOnEditCommit(
@@ -93,14 +113,16 @@ public final class EnvTabController {
                     envTable.refresh();
                 });
 
-        TableColumn<EnvVarRow, Void> folderCol = new TableColumn<>("?I??");
+        TableColumn<EnvVarRow, Void> folderCol = new TableColumn<>("\u9078\u629e");
         folderCol.setPrefWidth(120);
         folderCol.setSortable(false);
         folderCol.setCellFactory(
                 col ->
                         new TableCell<>() {
-                            private final Button pickFolder = new Button("?t?H???_...");
-                            private final Button pickFile = new Button("?t?@?C??...");
+                            private final Button pickFolder =
+                                    new Button("\u30d5\u30a9\u30eb\u30c0...");
+                            private final Button pickFile =
+                                    new Button("\u30d5\u30a1\u30a4\u30eb...");
 
                             {
                                 pickFolder.setOnAction(
@@ -111,7 +133,9 @@ public final class EnvTabController {
                                                 return;
                                             }
                                             DirectoryChooser dc = new DirectoryChooser();
-                                            dc.setTitle("?t?H???_??I??: " + row.getName());
+                                            dc.setTitle(
+                                                    "\u30d5\u30a9\u30eb\u30c0\u3092\u9078\u629e: "
+                                                            + row.getName());
                                             String cur = row.getValue();
                                             if (cur != null && !cur.isBlank()) {
                                                 try {
@@ -142,7 +166,9 @@ public final class EnvTabController {
                                                 return;
                                             }
                                             FileChooser fc = new FileChooser();
-                                            fc.setTitle("?t?@?C????I??: " + row.getName());
+                                            fc.setTitle(
+                                                    "\u30d5\u30a1\u30a4\u30eb\u3092\u9078\u629e: "
+                                                            + row.getName());
                                             FileChooserForEnvKey.apply(fc, row.getName());
                                             String cur = row.getValue();
                                             if (cur != null && !cur.isBlank()) {
@@ -200,7 +226,9 @@ public final class EnvTabController {
                             }
                         });
 
-        TableColumn<EnvVarRow, String> descCol = new TableColumn<>("?????i?V?[?g+???W?b?N?j");
+        TableColumn<EnvVarRow, String> descCol =
+                new TableColumn<>(
+                        "\u8aac\u660e\uff08\u30b7\u30fc\u30c8+\u30ed\u30b8\u30c3\u30af\uff09");
         descCol.setCellValueFactory(cdf -> cdf.getValue().descriptionProperty());
         descCol.setPrefWidth(420);
         descCol.setCellFactory(
@@ -225,7 +253,8 @@ public final class EnvTabController {
                         });
 
         envTable.getColumns().setAll(nameCol, valueCol, folderCol, descCol);
-        var envLayout = TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.ENV_VARS);
+        var envLayout =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.ENV_VARS);
         if (!envLayout.isEmpty()) {
             TableColumnOrderPersistence.applyOrderToTableColumns(
                     envTable,

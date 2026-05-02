@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.awt.GraphicsEnvironment;
+import java.nio.charset.StandardCharsets;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -22,6 +23,7 @@ public class PmAiFxApp extends Application {
             FXMLLoader loader =
                     new FXMLLoader(
                             PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/fxml/MainShell.fxml"));
+            loader.setCharset(StandardCharsets.UTF_8);
             loader.setControllerFactory(
                     clazz -> {
                         if (clazz == MainShellController.class) {
