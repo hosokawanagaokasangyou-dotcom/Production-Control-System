@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -18,7 +20,6 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -29,13 +30,13 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 
 /**
- * Read-only preview of stage-1 shaped output: {@code output/plan_input_tasks.xlsx}, sheet
- * {@code \u30bf\u30b9\u30af\u4e00\u89a7} (same as {@code planning_core.run_stage1_extract}).
+ * Read-only preview of the task-input table after {@code load_tasks_df} (header row, column alignment,
+ * ???NO filter) ? {@code output/stage1_task_input_table.xlsx}, sheet {@link AppPaths#STAGE1_TASK_INPUT_PREVIEW_SHEET}.
  */
 public final class Stage1ShapedOutputPreviewPane {
 
-    /** Sheet name written by {@code run_stage1_extract} ({@code to_excel(..., sheet_name="..." )}). */
-    public static final String DEFAULT_STAGE1_OUTPUT_SHEET = "\u30bf\u30b9\u30af\u4e00\u89a7";
+    /** Default sheet in {@link AppPaths#STAGE1_TASK_INPUT_PREVIEW_FILENAME}. */
+    public static final String DEFAULT_STAGE1_PREVIEW_SHEET = AppPaths.STAGE1_TASK_INPUT_PREVIEW_SHEET;
 
     private Stage1ShapedOutputPreviewPane() {}
 
@@ -43,17 +44,30 @@ public final class Stage1ShapedOutputPreviewPane {
             Stage owner,
             Supplier<Map<String, String>> envSupplier,
             Consumer<String> log) {
+        return create(owner, envSupplier, log, null);
+    }
+
+    /**
+     * @param registerReloadAfterStage1Success if non-null, receives a runnable to reload the preview
+     *     xlsx when stage-1 Python exits 0.
+     */
+    public static Parent create(
+            Stage owner,
+            Supplier<Map<String, String>> envSupplier,
+            Consumer<String> log,
+            Consumer<Runnable> registerReloadAfterStage1Success) {
 
         TextField pathField = new TextField();
         pathField.setPromptText(
                 "output/"
-                        + AppPaths.STAGE1_PLAN_TASKS_FILENAME
-                        + " (\u6bb5\u968e1\u5b8c\u4e86\u5f8c)");
+                        + AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME
+                        + " (\u554f\u5408\u305b\u53d6\u8fbc\u5f8c\u30fb\u30bf\u30b9\u30af\u4e00\u89a7\u5316\u524d)");
 
-        TextField sheetField = new TextField(DEFAULT_STAGE1_OUTPUT_SHEET);
+        TextField sheetField = new TextField(DEFAULT_STAGE1_PREVIEW_SHEET);
         sheetField.setPromptText("Excel sheet name");
 
         TableView<ObservableList<String>> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setEditable(false);
         table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
@@ -64,6 +78,9 @@ public final class Stage1ShapedOutputPreviewPane {
         colWidthField.setPromptText("112");
 
         List<String> headersRef = new ArrayList<>();
+        AtomicBoolean suppressColumnOrderPersistence = new AtomicBoolean(false);
+        AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
+                new AtomicReference<>(List.of());
 
         Runnable applyDynamicColumnWidths =
                 () -> {
@@ -79,32 +96,41 @@ public final class Stage1ShapedOutputPreviewPane {
 
         Runnable rebuildColumns =
                 () -> {
-                    double colW = 112;
+                    suppressColumnOrderPersistence.set(true);
                     try {
-                        colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
-                    } catch (NumberFormatException ignored) {
-                    }
-                    table.getColumns().clear();
-                    for (int i = 0; i < headersRef.size(); i++) {
-                        final int idx = i;
-                        String title =
-                                !headersRef.get(i).isBlank()
-                                        ? headersRef.get(i)
-                                        : ("\u5217" + (i + 1));
-                        TableColumn<ObservableList<String>, String> col = new TableColumn<>(title);
-                        col.setEditable(false);
-                        col.setCellValueFactory(
-                                cd -> {
-                                    ObservableList<String> row = cd.getValue();
-                                    String v =
-                                            row != null && idx < row.size()
-                                                    ? row.get(idx)
-                                                    : "";
-                                    return new javafx.beans.property.SimpleStringProperty(v);
-                                });
-                        col.setCellFactory(TextFieldTableCell.forTableColumn());
-                        col.setPrefWidth(colW);
-                        table.getColumns().add(col);
+                        double colW = 112;
+                        try {
+                            colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
+                        } catch (NumberFormatException ignored) {
+                        }
+                        List<Double> widths =
+                                TableColumnOrderPersistence.resolveWidthsForHeaders(
+                                        headersRef, persistedLayout.get(), colW);
+                        table.getColumns().clear();
+                        for (int i = 0; i < headersRef.size(); i++) {
+                            final int idx = i;
+                            double prefW = i < widths.size() ? widths.get(i) : colW;
+                            String title =
+                                    !headersRef.get(i).isBlank()
+                                            ? headersRef.get(i)
+                                            : ("\u5217" + (i + 1));
+                            TableColumn<ObservableList<String>, String> col = new TableColumn<>(title);
+                            col.setEditable(false);
+                            col.setCellValueFactory(
+                                    cd -> {
+                                        ObservableList<String> row = cd.getValue();
+                                        String v =
+                                                row != null && idx < row.size()
+                                                        ? row.get(idx)
+                                                        : "";
+                                        return new javafx.beans.property.SimpleStringProperty(v);
+                                    });
+                            col.setCellFactory(TextFieldTableCell.forTableColumn());
+                            col.setPrefWidth(prefW);
+                            table.getColumns().add(col);
+                        }
+                    } finally {
+                        suppressColumnOrderPersistence.set(false);
                     }
                 };
 
@@ -120,7 +146,7 @@ public final class Stage1ShapedOutputPreviewPane {
                     if (env == null) {
                         return;
                     }
-                    pathField.setText(AppPaths.defaultStage1PlanTasksPath(env).toString());
+                    pathField.setText(AppPaths.defaultStage1TaskInputPreviewPath(env).toString());
                 };
 
         Button fromEnv = new Button("\u74b0\u5883\u3088\u308a\u30d1\u30b9");
@@ -130,7 +156,7 @@ public final class Stage1ShapedOutputPreviewPane {
         browse.setOnAction(
                 e -> {
                     FileChooser ch = new FileChooser();
-                    ch.setTitle("plan_input_tasks.xlsx");
+                    ch.setTitle(AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME);
                     ch.getExtensionFilters()
                             .addAll(
                                     new FileChooser.ExtensionFilter("Excel", "*.xlsx", "*.xlsm"),
@@ -164,7 +190,7 @@ public final class Stage1ShapedOutputPreviewPane {
                     }
                     String sheet = sheetField.getText().trim();
                     if (sheet.isEmpty()) {
-                        sheet = DEFAULT_STAGE1_OUTPUT_SHEET;
+                        sheet = DEFAULT_STAGE1_PREVIEW_SHEET;
                     }
                     try {
                         PlanInputTabularIo.TabularSheet sh = PlanInputTabularIo.read(path, sheet);
@@ -181,6 +207,14 @@ public final class Stage1ShapedOutputPreviewPane {
                             }
                             rows.add(r);
                         }
+                        List<TableColumnOrderPersistence.ColumnSpec> lay =
+                                TableColumnOrderPersistence.loadLayout(
+                                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW);
+                        persistedLayout.set(lay);
+                        TableColumnOrderPersistence.applyLogicalColumnOrder(
+                                headersRef,
+                                rows,
+                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
                         applyLoaded.run();
                         log.accept(
                                 "[stage1-preview] loaded rows="
@@ -196,17 +230,14 @@ public final class Stage1ShapedOutputPreviewPane {
 
         Label hint =
                 new Label(
-                        "\u6bb5\u968e1 (run_stage1_extract) \u5f8c\u306e\u6210\u5f62\u7d50\u679c"
-                                + " \u2014 \u901a\u5e38"
-                                + " code/python/output/plan_input_tasks.xlsx"
-                                + " \u306e\u30b7\u30fc\u30c8"
-                                + " \u300c"
-                                + DEFAULT_STAGE1_OUTPUT_SHEET
-                                + "\u300d"
-                                + "\u3002"
-                                + " \u9664\u5916\u30eb\u30fc\u30eb\u900f\u904e\u30fb\u914d\u53f0\u8a66\u884c\u9806"
-                                + "\u306a\u3069\u6e21\u3057\u5f8c\u306e\u30c6\u30fc\u30d6\u30eb\u3067\u3059\uff08"
-                                + "\u8aad\u307f\u53d6\u308a\u5c02\u7528\uff09\u3002");
+                        "\u554f\u5408\u305b xlsx \u3092\u8aad\u307f\u8fbc\u307f\u3001\u30d8\u30c3\u30c0\u30fc\u884c\u3068"
+                                + "\u5217\u540d\u3092\u6574\u3048\u305f\u76f4\u5f8c\uff08\u4f9d\u983cNO"
+                                + "\u304c\u3042\u308b\u884c\u306e\u307f\uff09\u3002"
+                                + " \u30de\u30b9\u30bf\u30fb\u914d\u53f0\u8a66\u884c\u9806\u4ed8\u4e0e\u524d\u306e"
+                                + " stage1_task_input_table.xlsx"
+                                + " \u30b7\u30fc\u30c8\u300c"
+                                + DEFAULT_STAGE1_PREVIEW_SHEET
+                                + "\u300d\u3092\u8868\u793a\u3057\u307e\u3059\u3002");
         hint.setWrapText(true);
 
         HBox pathRow = new HBox(8, new Label("\u30d5\u30a1\u30a4\u30eb"), pathField, fromEnv, browse);
@@ -217,7 +248,7 @@ public final class Stage1ShapedOutputPreviewPane {
         HBox colStrip =
                 new HBox(
                         8,
-                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, true),
+                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, false),
                         new Label("\u5217\u5e45(px)"),
                         colWidthField);
         colStrip.setStyle("-fx-alignment: CENTER_LEFT;");
@@ -225,11 +256,25 @@ public final class Stage1ShapedOutputPreviewPane {
         VBox top = new VBox(8, hint, pathRow, sheetRow, actions, colStrip);
         top.setPadding(new Insets(8));
 
-        BorderPane root = new BorderPane(table);
-        root.setTop(top);
-        BorderPane.setMargin(table, new Insets(0, 8, 8, 8));
-        table.setMinHeight(240);
+        VBox root = new VBox(8, top, table);
+        root.setFillWidth(true);
         VBox.setVgrow(table, Priority.ALWAYS);
+        VBox.setMargin(table, new Insets(0, 8, 8, 8));
+        table.setMinHeight(240);
+
+        if (registerReloadAfterStage1Success != null) {
+            registerReloadAfterStage1Success.accept(
+                    () -> {
+                        fillPathFromEnv.run();
+                        sheetField.setText(DEFAULT_STAGE1_PREVIEW_SHEET);
+                        load.fire();
+                    });
+        }
+
+        TableColumnOrderPersistence.installColumnLayoutWatcher(
+                table,
+                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                suppressColumnOrderPersistence::get);
 
         javafx.application.Platform.runLater(
                 () -> {

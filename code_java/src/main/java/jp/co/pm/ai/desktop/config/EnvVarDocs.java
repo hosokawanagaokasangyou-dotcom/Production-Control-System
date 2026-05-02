@@ -42,7 +42,14 @@ public final class EnvVarDocs {
                         + "\u89e3\u6c7a\u306e\u5b9f\u5728\u30d5\u30a1\u30a4\u30eb\uff09\u304c\u3042\u308c\u3070"
                         + " TASK_INPUT_WORKBOOK \u3092\u7701\u7565\u53ef\uff08Excel \u8a2d\u5b9a\u30b7\u30fc\u30c8\u4fdd\u5b88\u306f"
                         + "\u30b9\u30ad\u30c3\u30d7\u3001\u9664\u5916\u30eb\u30fc\u30eb\u306f PM_AI_EXCLUDE_RULES_JSON"
-                        + "\u306a\u3069\uff09\u3002");
+                        + "\u306a\u3069\uff09\u3002"
+                        + " \u6b63\u5f0f\u306a\u5217\u69cb\u6210\u306f plan/01_\u52a0\u5de5\u8a08\u753bDATA_\u5358\u4e00\u30d5\u30a1\u30a4\u30eb.m"
+                        + " \u3068\u540c\u7b49\u306e Power Query \u6210\u5f62\u5f8c\u306e\u52a0\u5de5\u8a08\u753bDATA\u76f8\u5f53\u3002"
+                        + "\u751f\u306e\u554f\u5408\u305b xlsx \u3092\u76f4\u63a5\u6307\u5b9a\u3059\u308b\u5834\u5408\u306f Python"
+                        + " \u5074\u3067\u30d8\u30c3\u30c0\u30fc\u884c\u30fb\u5217\u540d\u306e\u6551\u6e08\u306e\u307f\uff08PQ"
+                        + " \u306e\u8907\u5408\u898b\u51fa\u3057\u3084\u65e5\u4ed8\u5217\u540d\u306e\u5c55\u958b\u306f\u518d\u73fe\u3057\u306a\u3044\uff09\u3002"
+                        + "\u78ba\u5b9f\u306b\u5408\u308f\u305b\u308b\u3068\u304d\u306f\u30af\u30a8\u30ea\u66f4\u65b0\u5f8c\u306e CSV"
+                        + " \u7b49\u306e\u30d1\u30b9\u3092\u6307\u5b9a\u3059\u308b\u3053\u3068\u3002");
         put(
                 "PM_AI_PLAN_INPUT_PATH",
                 "\u6bb5\u968e2\u7528\uff1a\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\u76f8\u5f53\u306e\u8868\u3002"
@@ -54,6 +61,35 @@ public final class EnvVarDocs {
                         + "\u540d\u524d\u4e0d\u8981\u3002\u8907\u6570\u30b7\u30fc\u30c8\u3067\u540d\u524d\u3092\u6307\u3059\u5834\u5408\u306f"
                         + "\u6587\u5b57\u5217\u3002\u6570\u5024\u306e\u307f\uff08\u4f8b: 1\uff09\u306f 0\u59cb\u307e\u308a\u306e"
                         + "\u30a4\u30f3\u30c7\u30c3\u30af\u30b9\u3002");
+        put(
+                "PM_AI_PROCESSING_PLAN_HEADER_ROW",
+                "xlsx \u8aad\u8fbc\u307f\u6642\u306e\u5217\u540d\u884c\uff08Excel \u306e 1 \u59cb\u307e\u308a\u306e"
+                        + "\u884c\u756a\u53f7\uff09\u3002\u7a7a\u3067\u3001\u540c\u4e00\u884c\u306b\u300c\u4f9d\u983cNO\u300d"
+                        + "\u3068\u300c\u5de5\u7a0b\u540d\u300d\u3042\u308b\u6700\u4e0a\u4f4d\u306e\u884c\u3092"
+                        + "\u81ea\u52d5\u63a2\u77e5\uff08\u5de5\u7a0b\u5225\u751f\u7523\u8a08\u753b\u554f\u5408\u305b"
+                        + "\u306a\u3069\u5148\u982d\u306b\u30e1\u30bf\u884c\u304c\u3042\u308b\u30d6\u30c3\u30af\u306f"
+                        + "\u901a\u5e38 6 \u884c\u76ee\uff09\u3002");
+        put(
+                "PM_AI_KOUBAI_INQUIRY_SHAPING",
+                "\u5de5\u7a0b\u5225\u554f\u5408\u305b"
+                        + " xlsx: "
+                        + "6+5"
+                        + "\u884c"
+                        + "\u8907\u5408\u898b\u51fa\u3057"
+                        + "\u3001"
+                        + "\u52a0\u5de5\u6642\u9593"
+                        + "/"
+                        + "\u52a0\u5de5\u901f\u5ea6"
+                        + "\u5217\u524a\u9664"
+                        + "\u3001"
+                        + "\u52a0\u5de5\u6570\u91cf"
+                        + "\u306e\u90e8\u5206\u9664\u53bb"
+                        + "\uff08\u898b\u51fa\u3057\u304c\u300c\u52a0\u5de5\u6570\u91cf\u300d\u306e\u307f\u306e\u5217\u306f\u5217\u540d\u7dad\u6301\uff09"
+                        + "\u3001"
+                        + "YYYY/MM/DD"
+                        + "\u3002"
+                        + "\u7a7a"
+                        + "=auto, 0=off, 1=force.");
         put(
                 "PM_AI_TABULAR_CSV_ENCODING",
                 "PM_AI_PROCESSING_PLAN_PATH \u7b49 CSV \u306e\u6587\u5b57\u30b3\u30fc\u30c9\uff08\u7a7a\u3067 utf-8-sig\uff09\u3002");

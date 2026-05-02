@@ -35,6 +35,7 @@ import jp.co.pm.ai.desktop.ui.ExcludeRulesEditorPane;
 import jp.co.pm.ai.desktop.ui.Stage1ShapedOutputPreviewPane;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.PlanInputEditorPane;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
 import javafx.application.Application;
@@ -101,6 +102,12 @@ public class PmAiFxApp extends Application {
     private Label statusLabel;
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
+
+    /** Set by {@link jp.co.pm.ai.desktop.ui.Stage1ShapedOutputPreviewPane#create}; runs after stage 1 exits 0. */
+    private Runnable reloadAfterStage1Preview;
+
+    /** Set by {@link jp.co.pm.ai.desktop.ui.PlanInputEditorPane#create}; loads {@code plan_input_tasks.xlsx}. */
+    private Runnable reloadAfterStage1PlanInput;
 
     @Override
     public void start(Stage primaryStage) {
@@ -192,14 +199,20 @@ public class PmAiFxApp extends Application {
                 new Tab(
                         "\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b",
                         PlanInputEditorPane.create(
-                                primaryStage, this::collectUiEnv, this::appendLog));
+                                primaryStage,
+                                this::collectUiEnv,
+                                this::appendLog,
+                                rr -> reloadAfterStage1PlanInput = rr));
         tabPlanInput.setClosable(false);
 
         Tab tabStage1Preview =
                 new Tab(
                         "\u6bb5\u968e1 \u6210\u5f62\u7d50\u679c",
                         Stage1ShapedOutputPreviewPane.create(
-                                primaryStage, this::collectUiEnv, this::appendLog));
+                                primaryStage,
+                                this::collectUiEnv,
+                                this::appendLog,
+                                rr -> reloadAfterStage1Preview = rr));
         tabStage1Preview.setClosable(false);
 
         Tab tabExcludeRules =
@@ -257,7 +270,7 @@ public class PmAiFxApp extends Application {
         table.setEditable(true);
         table.setMinHeight(180);
         table.setPrefHeight(260);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 
         TableColumn<EnvVarRow, String> nameCol = new TableColumn<>("\u5909\u6570\u540d");
         nameCol.setCellValueFactory(cdf -> cdf.getValue().nameProperty());
@@ -410,6 +423,18 @@ public class PmAiFxApp extends Application {
                 });
 
         table.getColumns().setAll(nameCol, valueCol, folderCol, descCol);
+        List<TableColumnOrderPersistence.ColumnSpec> envLayout =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.ENV_VARS);
+        if (!envLayout.isEmpty()) {
+            TableColumnOrderPersistence.applyOrderToTableColumns(
+                    table,
+                    envLayout.stream()
+                            .map(TableColumnOrderPersistence.ColumnSpec::title)
+                            .toList());
+            TableColumnOrderPersistence.applyWidthsToTableColumns(table, envLayout, 112);
+        }
+        TableColumnOrderPersistence.installColumnLayoutWatcher(
+                table, TableColumnOrderPersistence.TableId.ENV_VARS, () -> false);
 
         Runnable resetEnvColumns =
                 () -> {
@@ -419,7 +444,7 @@ public class PmAiFxApp extends Application {
                     descCol.setPrefWidth(420);
                 };
 
-        HBox envColStrip = TableViewColumnSettingsStrip.create(table, resetEnvColumns, true);
+        HBox envColStrip = TableViewColumnSettingsStrip.create(table, resetEnvColumns, false);
 
         Button addRow = new Button("\u884c\u3092\u8ffd\u52a0");
         addRow.setOnAction(
@@ -551,6 +576,14 @@ public class PmAiFxApp extends Application {
                             int c = code != null ? code : -1;
                             statusLabel.setText(exitCodeLegend(c));
                             appendLog("[end] exitCode=" + c + " " + exitHint(c));
+                            if (STAGE1.equals(script) && c == 0) {
+                                if (reloadAfterStage1Preview != null) {
+                                    reloadAfterStage1Preview.run();
+                                }
+                                if (reloadAfterStage1PlanInput != null) {
+                                    reloadAfterStage1PlanInput.run();
+                                }
+                            }
                         }
                     });
                 });

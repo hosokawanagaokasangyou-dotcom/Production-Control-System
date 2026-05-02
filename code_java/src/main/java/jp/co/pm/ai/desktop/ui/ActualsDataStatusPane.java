@@ -19,7 +19,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -128,7 +127,7 @@ public final class ActualsDataStatusPane {
     public static Parent create(Supplier<RunRequest> requestFactory, Consumer<String> appendLog) {
         ObservableList<Row> rows = FXCollections.observableArrayList();
         TableView<Row> table = new TableView<>(rows);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 
         List<ColDef> defs =
                 Arrays.asList(
@@ -150,6 +149,18 @@ public final class ActualsDataStatusPane {
             columns.add(col);
         }
         table.getColumns().setAll(columns);
+        List<TableColumnOrderPersistence.ColumnSpec> actualsLayout =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.ACTUALS_STATUS);
+        if (!actualsLayout.isEmpty()) {
+            TableColumnOrderPersistence.applyOrderToTableColumns(
+                    table,
+                    actualsLayout.stream()
+                            .map(TableColumnOrderPersistence.ColumnSpec::title)
+                            .toList());
+            TableColumnOrderPersistence.applyWidthsToTableColumns(table, actualsLayout, 112);
+        }
+        TableColumnOrderPersistence.installColumnLayoutWatcher(
+                table, TableColumnOrderPersistence.TableId.ACTUALS_STATUS, () -> false);
 
         Runnable resetActualsColumns =
                 () -> {
@@ -159,7 +170,7 @@ public final class ActualsDataStatusPane {
                         columns.get(i).setPrefWidth(w);
                     }
                 };
-        HBox actualsColStrip = TableViewColumnSettingsStrip.create(table, resetActualsColumns, true);
+        HBox actualsColStrip = TableViewColumnSettingsStrip.create(table, resetActualsColumns, false);
 
         Text footLong = new Text();
         footLong.setWrappingWidth(880);
@@ -212,14 +223,12 @@ public final class ActualsDataStatusPane {
         hint.setWrapText(true);
 
         VBox top = new VBox(8, bar, hint, actualsColStrip);
-        BorderPane root = new BorderPane();
-        root.setTop(top);
-        root.setCenter(table);
         VBox bottom = new VBox(4, new Label("\u8aac\u660e"), footLong);
-        root.setBottom(bottom);
-        BorderPane.setMargin(bottom, new Insets(8, 0, 0, 0));
-        root.setPadding(new Insets(12));
+        VBox root = new VBox(8, top, table, bottom);
+        root.setFillWidth(true);
         VBox.setVgrow(table, Priority.ALWAYS);
+        VBox.setMargin(bottom, new Insets(8, 0, 0, 0));
+        root.setPadding(new Insets(12));
         return root;
     }
 

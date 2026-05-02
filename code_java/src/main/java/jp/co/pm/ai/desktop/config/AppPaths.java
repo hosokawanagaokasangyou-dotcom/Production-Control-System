@@ -1,8 +1,10 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
@@ -92,6 +94,44 @@ public final class AppPaths {
 
     private AppPaths() {}
 
+    // #region agent log
+    private static final Path AGENT_DEBUG_LOG =
+            Path.of("/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-e6e382.log");
+
+    private static String agentJsonEsc(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static void agentLog(String hypothesisId, String location, String message, String dataJson) {
+        try {
+            long ts = System.currentTimeMillis();
+            String line =
+                    "{\"sessionId\":\"e6e382\",\"hypothesisId\":\""
+                            + hypothesisId
+                            + "\",\"location\":\""
+                            + agentJsonEsc(location)
+                            + "\",\"message\":\""
+                            + agentJsonEsc(message)
+                            + "\",\"timestamp\":"
+                            + ts
+                            + ",\"runId\":\"post-fix\",\"data\":"
+                            + (dataJson != null ? dataJson : "{}")
+                            + "}\n";
+            Files.writeString(
+                    AGENT_DEBUG_LOG,
+                    line,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+        }
+    }
+
+    // #endregion
+
     /** Whether {@code key} refers to a folder path (not a single file). */
     public static boolean isFolderPathEnvKey(String key) {
         return key != null && FOLDER_PATH_ENV_KEYS.contains(key.trim());
@@ -158,9 +198,40 @@ public final class AppPaths {
         }
         String repo = trim(u.get(KEY_PM_AI_REPO_ROOT));
         if (!repo.isEmpty()) {
-            Path p = Path.of(repo, "Production-Control-System", "code", "python");
-            if (Files.isDirectory(p)) {
-                return p.toAbsolutePath().normalize();
+            Path base = Path.of(repo).toAbsolutePath().normalize();
+            Path underRepo = base.resolve("code").resolve("python");
+            Path underNested = base.resolve("Production-Control-System").resolve("code").resolve("python");
+            for (Path p : new Path[] {underRepo, underNested}) {
+                if (Files.isDirectory(p) && Files.isRegularFile(p.resolve("task_extract_stage1.py"))) {
+                    agentLog(
+                            "H1",
+                            "AppPaths.resolvePythonScriptDir",
+                            "chosen with task_extract_stage1.py",
+                            "{\"chosen\":\""
+                                    + agentJsonEsc(p.toString())
+                                    + "\",\"underRepo\":\""
+                                    + agentJsonEsc(underRepo.toString())
+                                    + "\",\"underNested\":\""
+                                    + agentJsonEsc(underNested.toString())
+                                    + "\"}");
+                    return p;
+                }
+            }
+            for (Path p : new Path[] {underRepo, underNested}) {
+                if (Files.isDirectory(p)) {
+                    agentLog(
+                            "H1",
+                            "AppPaths.resolvePythonScriptDir",
+                            "chosen directory only",
+                            "{\"chosen\":\""
+                                    + agentJsonEsc(p.toString())
+                                    + "\",\"underRepo\":\""
+                                    + agentJsonEsc(underRepo.toString())
+                                    + "\",\"underNested\":\""
+                                    + agentJsonEsc(underNested.toString())
+                                    + "\"}");
+                    return p;
+                }
             }
         }
         Path start = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
@@ -232,16 +303,38 @@ public final class AppPaths {
     /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */
     public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
 
+    /** Sheet name in {@link #STAGE1_PLAN_TASKS_FILENAME} ({@code planning_core.run_stage1_extract} / {@code to_excel}). */
+    public static final String STAGE1_PLAN_OUTPUT_SHEET = "\u30bf\u30b9\u30af\u4e00\u89a7";
+
     /**
-     * Default path to stage-1 Excel output (same cwd semantics as Python: {@code output/} under
-     * {@link #resolvePythonScriptDir(Map)}).
+     * Preview workbook written right after {@code load_tasks_df} ({@code planning_core.STAGE1_TASK_INPUT_PREVIEW_FILENAME}).
+     */
+    public static final String STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx";
+
+    /** Sheet name inside {@link #STAGE1_TASK_INPUT_PREVIEW_FILENAME}. */
+    public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "\u30bf\u30b9\u30af\u5165\u529b\u6574\u5f62";
+
+    /**
+     * Default path to stage-1 Excel output.
+     *
+     * <p>{@code planning_core.bootstrap} sets {@code cwd} to the parent of {@code code/python} (or
+     * {@code PM_AI_WORKSPACE}), so Python writes to {@code <that cwd>/output/plan_input_tasks.xlsx}
+     * i.e. typically {@code Production-Control-System/code/output/}, not {@code code/python/output/}.
      */
     public static Path defaultStage1PlanTasksPath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path pyDir = resolvePythonScriptDir(u);
-        Path primary = pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
-        if (Files.isRegularFile(primary)) {
-            return primary.toAbsolutePath().normalize();
+        Path parent = pyDir.getParent();
+        Path underCodeOutput =
+                parent != null
+                        ? parent.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME)
+                        : pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+        Path underPyOutput = pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+        if (Files.isRegularFile(underCodeOutput)) {
+            return underCodeOutput.toAbsolutePath().normalize();
+        }
+        if (Files.isRegularFile(underPyOutput)) {
+            return underPyOutput.toAbsolutePath().normalize();
         }
         Path repo = resolveRepoRoot(u);
         Path underCodePython =
@@ -256,7 +349,41 @@ public final class AppPaths {
                 return w.toAbsolutePath().normalize();
             }
         }
-        return primary.toAbsolutePath().normalize();
+        return underCodeOutput.toAbsolutePath().normalize();
+    }
+
+    /**
+     * Default path to the stage-1 task-input preview xlsx (tabular state after header cleanup, before plan_input_tasks).
+     */
+    public static Path defaultStage1TaskInputPreviewPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path pyDir = resolvePythonScriptDir(u);
+        Path parent = pyDir.getParent();
+        Path underCodeOutput =
+                parent != null
+                        ? parent.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME)
+                        : pyDir.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+        Path underPyOutput = pyDir.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+        if (Files.isRegularFile(underCodeOutput)) {
+            return underCodeOutput.toAbsolutePath().normalize();
+        }
+        if (Files.isRegularFile(underPyOutput)) {
+            return underPyOutput.toAbsolutePath().normalize();
+        }
+        Path repo = resolveRepoRoot(u);
+        Path underCodePython =
+                repo.resolve("code").resolve("python").resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+        if (Files.isRegularFile(underCodePython)) {
+            return underCodePython.toAbsolutePath().normalize();
+        }
+        String ws = trim(u.get(KEY_PM_AI_WORKSPACE));
+        if (!ws.isEmpty()) {
+            Path w = Path.of(ws).resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+            if (Files.isRegularFile(w)) {
+                return w.toAbsolutePath().normalize();
+            }
+        }
+        return underCodeOutput.toAbsolutePath().normalize();
     }
 
     /** Repository root containing {@code code/python}. */

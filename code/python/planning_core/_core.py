@@ -941,6 +941,9 @@ COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
+# load_tasks_df 直後のスナップショット（タスク一覧シート化・マスタマージ前）。JavaFX「段階1 成形結果」プレビュー用。
+STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx"
+STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形"
 # 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「配台計画_」は誤字（UTF-8 保存時の破損）で一致しない。
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
 # 配台試行順の比較用パターン一覧（xlwings でマクロブックに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
@@ -3710,34 +3713,62 @@ def _optional_unprocessed_m_from_plan_row(row) -> float | None:
 
 def _supplement_task_input_unprocessed_column_if_missing(df: pd.DataFrame) -> None:
     """
-    PQ 出力などで「未加工」列が無い場合に補う。
+    PQ 出力などで「未加工」列が無い、またはセルが空・非数値の行がある場合に補う。
     換算数量と実加工数があれば 未加工 = max(0, 換算数量 − 実加工数)。
-    実加工数も無ければ 未加工 = 換算数量（全量が残作とみなす）。
+    実加工数も無ければ未加工に換算数量を入れる（全量が残作とみなす）。
+
+    工程別問合せ xlsx では「未加工」列が存在しても未入力の行があり得るため、
+    列がある場合も欠損セルのみ上書きする。
     """
     if df is None or getattr(df, "empty", True):
-        return
-    if TASK_COL_UNPROCESSED in df.columns:
         return
     if TASK_COL_QTY not in df.columns:
         return
     qv = pd.to_numeric(df[TASK_COL_QTY], errors="coerce").fillna(0.0)
     if TASK_COL_ACTUAL_DONE in df.columns:
         av = pd.to_numeric(df[TASK_COL_ACTUAL_DONE], errors="coerce").fillna(0.0)
-        df[TASK_COL_UNPROCESSED] = (qv - av).clip(lower=0.0)
+        computed = (qv - av).clip(lower=0.0)
+    else:
+        computed = qv
+
+    if TASK_COL_UNPROCESSED not in df.columns:
+        df[TASK_COL_UNPROCESSED] = computed
+        if TASK_COL_ACTUAL_DONE in df.columns:
+            logging.info(
+                "タスク入力: 列「%s」が無いため「%s」−「%s」で補完しました。",
+                TASK_COL_UNPROCESSED,
+                TASK_COL_QTY,
+                TASK_COL_ACTUAL_DONE,
+            )
+        else:
+            logging.info(
+                "タスク入力: 列「%s」及び「%s」が無いため「%s」を未加工にコピーしました（残量＝換算数量とみなします）。",
+                TASK_COL_UNPROCESSED,
+                TASK_COL_ACTUAL_DONE,
+                TASK_COL_QTY,
+            )
+        return
+
+    cur = pd.to_numeric(df[TASK_COL_UNPROCESSED], errors="coerce")
+    need = cur.isna()
+    if not need.any():
+        return
+    df.loc[need, TASK_COL_UNPROCESSED] = computed[need]
+    if TASK_COL_ACTUAL_DONE in df.columns:
         logging.info(
-            "タスク入力: 列「%s」が無いため「%s」−「%s」で補完しました。",
+            "タスク入力: 列「%s」の欠損セル %s 件を「%s」−「%s」で補完しました。",
             TASK_COL_UNPROCESSED,
+            int(need.sum()),
             TASK_COL_QTY,
             TASK_COL_ACTUAL_DONE,
         )
-        return
-    df[TASK_COL_UNPROCESSED] = qv
-    logging.info(
-        "タスク入力: 列「%s」及び「%s」が無いため「%s」を未加工にコピーしました（残量＝換算数量とみなします）。",
-        TASK_COL_UNPROCESSED,
-        TASK_COL_ACTUAL_DONE,
-        TASK_COL_QTY,
-    )
+    else:
+        logging.info(
+            "タスク入力: 列「%s」の欠損セル %s 件を「%s」で補完しました。",
+            TASK_COL_UNPROCESSED,
+            int(need.sum()),
+            TASK_COL_QTY,
+        )
 
 
 def _ensure_dataframe_has_unprocessed_column(
@@ -4882,18 +4913,56 @@ def load_tasks_df():
             "その中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。"
         )
     df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
-    # 換算数量を先に確定（未加工の式補完に必要）。無いブックは未加工→旧「残作数値」の順で補完。
+    # 換算数量を先に確定（未加工の式補完に必要）。無いブックは NFKC で別名列から補完。
     if TASK_COL_QTY not in df.columns:
-        for _alt_qty in ("未加工", "残作数値"):
-            if _alt_qty in df.columns:
-                df[TASK_COL_QTY] = df[_alt_qty]
-                logging.info(
-                    "タスク入力: 列「%s」が無いため「%s」をコピーして補完しました。",
-                    TASK_COL_QTY,
-                    _alt_qty,
-                )
-                break
+        _qty_src = _first_dataframe_column_matching_nfkc_labels(
+            df,
+            (
+                "未加工",
+                "残作数値",
+                "加工予定数",
+                "計画数量",
+                "換算m数",
+                "換算ｍ数",
+            ),
+        )
+        if _qty_src is not None:
+            df[TASK_COL_QTY] = df[_qty_src]
+            logging.info(
+                "タスク入力: 列「%s」が無いため「%s」をコピーして補完しました。",
+                TASK_COL_QTY,
+                _qty_src,
+            )
     _supplement_task_input_unprocessed_column_if_missing(df)
+    # #region agent log
+    try:
+        _ld = pathlib.Path(__file__).resolve().parents[4] / ".cursor" / "debug-e6e382.log"
+        _ld.parent.mkdir(parents=True, exist_ok=True)
+        with open(_ld, "a", encoding="utf-8") as _lf:
+            _lf.write(
+                json.dumps(
+                    {
+                        "sessionId": "e6e382",
+                        "hypothesisId": "H2",
+                        "location": "load_tasks_df:before_ensure_unprocessed",
+                        "message": "task input columns before unprocessed check",
+                        "timestamp": int(time_module.time() * 1000),
+                        "runId": "post-fix",
+                        "data": {
+                            "has_qty": TASK_COL_QTY in df.columns,
+                            "has_unprocessed": TASK_COL_UNPROCESSED in df.columns,
+                            "nfkc_cols": [
+                                _nfkc_column_aliases(str(c)) for c in list(df.columns)[:50]
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{_sheet_label_for_context}」"
     )
@@ -4913,6 +4982,24 @@ def load_tasks_df():
 def _nfkc_column_aliases(canonical_name):
     """見出しの表記ゆれ（全角記坷・互換文字）を坸坎れるための比較キー。"""
     return unicodedata.normalize("NFKC", str(canonical_name).strip())
+
+
+def _first_dataframe_column_matching_nfkc_labels(df: pd.DataFrame, labels: tuple[str, ...]):
+    """
+    labels を先頭優先で試し、df の列名と NFKC 一致する最初の実列名を返す。
+    換算数量の別名（加工予定数・換算m数 等）を残作数値より後ろで試すためのヘルパ。
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    keys_present = {}
+    for c in df.columns:
+        k = _nfkc_column_aliases(str(c))
+        keys_present.setdefault(k, str(c))
+    for lab in labels:
+        k = _nfkc_column_aliases(lab)
+        if k in keys_present:
+            return keys_present[k]
+    return None
 
 
 def _align_dataframe_headers_to_canonical(df, canonical_names):
@@ -15779,6 +15866,35 @@ def _resolve_product_thickness_mm_for_stage1_row(
     return None
 
 
+def _write_stage1_task_input_preview_xlsx(df: pd.DataFrame, out_dir: str) -> str | None:
+    """
+    タスク一覧（plan_input_tasks）化の手前: ヘッダー行・列補完まで済んだ `load_tasks_df` の内容を保存する。
+    Power Query の「依頼NO が空でない行」のフィルタに揃え、メタ行除去後の表を確認する用途。
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+    except OSError:
+        pass
+    out_path = os.path.join(out_dir, STAGE1_TASK_INPUT_PREVIEW_FILENAME)
+    if TASK_COL_TASK_ID in df.columns:
+        _mask = df[TASK_COL_TASK_ID].map(
+            lambda v: bool(planning_task_id_str_from_scalar(v))
+        )
+        df_out = df.loc[_mask].copy()
+    else:
+        df_out = df.copy()
+    df_out.to_excel(out_path, sheet_name=STAGE1_TASK_INPUT_PREVIEW_SHEET, index=False)
+    logging.info(
+        "段階1: タスク入力整形プレビュー '%s'（シート「%s」%s 行）を出力しました。",
+        out_path,
+        STAGE1_TASK_INPUT_PREVIEW_SHEET,
+        len(df_out),
+    )
+    return out_path
+
+
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
 #   加工計画DATA 読取 → 計画 DataFrame 確定（マージ・分割の配台不要）→
@@ -15850,6 +15966,10 @@ def run_stage1_extract():
     _t = _time.perf_counter()
     df_src = load_tasks_df()
     _agent_dbg_log("H1", "load_tasks_df_done", {"ms": int((_time.perf_counter() - _t) * 1000), "rows": int(getattr(df_src, "shape", [0])[0] or 0)})
+    try:
+        _write_stage1_task_input_preview_xlsx(df_src, output_dir)
+    except Exception as ex:
+        logging.warning("段階1: タスク入力整形プレビューの出力をスキップ: %s", ex)
     _t = _time.perf_counter()
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()

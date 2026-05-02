@@ -5,6 +5,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -19,13 +21,13 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 
 /**
@@ -46,6 +48,19 @@ public final class PlanInputEditorPane {
             Stage owner,
             Supplier<Map<String, String>> envSupplier,
             Consumer<String> log) {
+        return create(owner, envSupplier, log, null);
+    }
+
+    /**
+     * @param registerReloadAfterStage1Success if non-null, receives a runnable to reload
+     *     {@link AppPaths#defaultStage1PlanTasksPath} sheet {@link AppPaths#STAGE1_PLAN_OUTPUT_SHEET}
+     *     when stage-1 Python exits 0.
+     */
+    public static Parent create(
+            Stage owner,
+            Supplier<Map<String, String>> envSupplier,
+            Consumer<String> log,
+            Consumer<Runnable> registerReloadAfterStage1Success) {
 
         TextField pathField = new TextField();
         pathField.setPromptText("PM_AI_PLAN_INPUT_PATH ? .csv / .xlsx / .xlsm");
@@ -54,6 +69,7 @@ public final class PlanInputEditorPane {
         sheetField.setPromptText("Excel sheet name (TASK_PLAN_SHEET / TASK_PLAN_SHEET)");
 
         TableView<ObservableList<String>> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setEditable(true);
         table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
@@ -64,6 +80,9 @@ public final class PlanInputEditorPane {
         colWidthField.setPromptText("112");
 
         List<String> headersRef = new ArrayList<>();
+        AtomicBoolean suppressColumnOrderPersistence = new AtomicBoolean(false);
+        AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
+                new AtomicReference<>(List.of());
 
         Runnable applyDynamicColumnWidths =
                 () -> {
@@ -79,45 +98,54 @@ public final class PlanInputEditorPane {
 
         Runnable rebuildColumns =
                 () -> {
-                    double colW = 112;
+                    suppressColumnOrderPersistence.set(true);
                     try {
-                        colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
-                    } catch (NumberFormatException ignored) {
-                    }
-                    table.getColumns().clear();
-                    for (int i = 0; i < headersRef.size(); i++) {
-                        final int idx = i;
-                        String title =
-                                !headersRef.get(i).isBlank()
-                                        ? headersRef.get(i)
-                                        : ("\u5217" + (i + 1));
-                        TableColumn<ObservableList<String>, String> col = new TableColumn<>(title);
-                        col.setCellValueFactory(
-                                cd -> {
-                                    ObservableList<String> row = cd.getValue();
-                                    String v =
-                                            row != null && idx < row.size()
-                                                    ? row.get(idx)
-                                                    : "";
-                                    return new javafx.beans.property.SimpleStringProperty(v);
-                                });
-                        col.setCellFactory(TextFieldTableCell.forTableColumn());
-                        col.setOnEditCommit(
-                                ev -> {
-                                    ObservableList<String> row = ev.getRowValue();
-                                    if (row == null) {
-                                        return;
-                                    }
-                                    while (row.size() <= idx) {
-                                        row.add("");
-                                    }
-                                    row.set(
-                                            idx,
-                                            ev.getNewValue() != null ? ev.getNewValue() : "");
-                                    table.refresh();
-                                });
-                        col.setPrefWidth(colW);
-                        table.getColumns().add(col);
+                        double colW = 112;
+                        try {
+                            colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
+                        } catch (NumberFormatException ignored) {
+                        }
+                        List<Double> widths =
+                                TableColumnOrderPersistence.resolveWidthsForHeaders(
+                                        headersRef, persistedLayout.get(), colW);
+                        table.getColumns().clear();
+                        for (int i = 0; i < headersRef.size(); i++) {
+                            final int idx = i;
+                            double prefW = i < widths.size() ? widths.get(i) : colW;
+                            String title =
+                                    !headersRef.get(i).isBlank()
+                                            ? headersRef.get(i)
+                                            : ("\u5217" + (i + 1));
+                            TableColumn<ObservableList<String>, String> col = new TableColumn<>(title);
+                            col.setCellValueFactory(
+                                    cd -> {
+                                        ObservableList<String> row = cd.getValue();
+                                        String v =
+                                                row != null && idx < row.size()
+                                                        ? row.get(idx)
+                                                        : "";
+                                        return new javafx.beans.property.SimpleStringProperty(v);
+                                    });
+                            col.setCellFactory(TextFieldTableCell.forTableColumn());
+                            col.setOnEditCommit(
+                                    ev -> {
+                                        ObservableList<String> row = ev.getRowValue();
+                                        if (row == null) {
+                                            return;
+                                        }
+                                        while (row.size() <= idx) {
+                                            row.add("");
+                                        }
+                                        row.set(
+                                                idx,
+                                                ev.getNewValue() != null ? ev.getNewValue() : "");
+                                        table.refresh();
+                                    });
+                            col.setPrefWidth(prefW);
+                            table.getColumns().add(col);
+                        }
+                    } finally {
+                        suppressColumnOrderPersistence.set(false);
                     }
                 };
 
@@ -159,19 +187,19 @@ public final class PlanInputEditorPane {
                     }
                 });
 
-        Button load =
-                new Button("\u8aad\u8fbc");
-        load.setOnAction(
-                e -> {
-                    syncFromEnv.run();
+        Runnable readCurrentPathIntoTable =
+                () -> {
                     Path path = Path.of(pathField.getText().trim());
                     if (!java.nio.file.Files.isRegularFile(path)) {
                         log.accept("[plan-input] file not found: " + path);
                         return;
                     }
+                    String sheetName = sheetField.getText().trim();
+                    if (sheetName.isEmpty()) {
+                        sheetName = DEFAULT_PLAN_INPUT_SHEET_NAME;
+                    }
                     try {
-                        PlanInputTabularIo.TabularSheet sheet =
-                                PlanInputTabularIo.read(path, sheetField.getText().trim());
+                        PlanInputTabularIo.TabularSheet sheet = PlanInputTabularIo.read(path, sheetName);
                         headersRef.clear();
                         headersRef.addAll(sheet.headers());
                         rows.clear();
@@ -185,6 +213,14 @@ public final class PlanInputEditorPane {
                             }
                             rows.add(r);
                         }
+                        List<TableColumnOrderPersistence.ColumnSpec> lay =
+                                TableColumnOrderPersistence.loadLayout(
+                                        TableColumnOrderPersistence.TableId.PLAN_INPUT);
+                        persistedLayout.set(lay);
+                        TableColumnOrderPersistence.applyLogicalColumnOrder(
+                                headersRef,
+                                rows,
+                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
                         applyLoaded.run();
                         log.accept(
                                 "[plan-input] loaded rows="
@@ -196,6 +232,14 @@ public final class PlanInputEditorPane {
                     } catch (Exception ex) {
                         log.accept("[plan-input] load error: " + ex.getMessage());
                     }
+                };
+
+        Button load =
+                new Button("\u8aad\u8fbc");
+        load.setOnAction(
+                e -> {
+                    syncFromEnv.run();
+                    readCurrentPathIntoTable.run();
                 });
 
         Button save =
@@ -275,7 +319,7 @@ public final class PlanInputEditorPane {
         HBox planColStrip =
                 new HBox(
                         8,
-                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, true),
+                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, false),
                         new Label("\u65e2\u5b9a\u5217\u5e45(px)"),
                         colWidthField);
         planColStrip.setStyle("-fx-alignment: CENTER_LEFT;");
@@ -283,16 +327,34 @@ public final class PlanInputEditorPane {
         VBox top = new VBox(8, gp.node(), actions, planColStrip, hint);
         top.setPadding(new Insets(8));
 
-        BorderPane root = new BorderPane(table);
-        root.setTop(top);
-        BorderPane.setMargin(table, new Insets(0, 8, 8, 8));
+        VBox root = new VBox(8, top, table);
+        root.setFillWidth(true);
+        VBox.setVgrow(table, Priority.ALWAYS);
+        VBox.setMargin(table, new Insets(0, 8, 8, 8));
         table.setMinHeight(240);
+
+        if (registerReloadAfterStage1Success != null) {
+            registerReloadAfterStage1Success.accept(
+                    () -> {
+                        Map<String, String> env = envSupplier.get();
+                        if (env != null) {
+                            pathField.setText(AppPaths.defaultStage1PlanTasksPath(env).toString());
+                        }
+                        sheetField.setText(AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
+                        readCurrentPathIntoTable.run();
+                    });
+        }
+
+        TableColumnOrderPersistence.installColumnLayoutWatcher(
+                table,
+                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                suppressColumnOrderPersistence::get);
 
         javafx.application.Platform.runLater(
                 () -> {
                     syncFromEnv.run();
                     if (!pathField.getText().isBlank()) {
-                        load.fire();
+                        readCurrentPathIntoTable.run();
                     }
                 });
 
