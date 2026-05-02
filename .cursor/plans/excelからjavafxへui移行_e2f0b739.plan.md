@@ -49,7 +49,7 @@ todos:
     status: pending
   - id: ipc-json-schema-files
     content: code_java の resources/schema に ipc-line.schema.json（stdout NDJSON 1 行）・columns.schema.json（schema.json 検証）を配置し、プランのドラフトと同期
-    status: pending
+    status: completed
   - id: decision-3-etl-python-parity
     content: 3. PQ-A〜D の Python ETL 実装（fetch_latest_files 共通化、tests/fixtures ゴールデン、PQ-B は抽出時間最新で Drop Duplicates、ファイルの変換 (2)/(3) は M 抽出後に実装）
     status: pending
@@ -498,7 +498,7 @@ flowchart LR
 
 #### IPC テンプレート（ドラフト・AI 生成コードの固定用）
 
-本項は **フィールド名・構造を実装前に固定するためのドラフト**である。リポジトリに **`ipc-line.schema.json`**（stdout 1 行分の JSON Schema）および **`columns.schema.json`**（`schema.json` インスタンス用）を配置する場合は、本節を **正本**として同期する。
+本項は **フィールド名・構造を実装前に固定するためのドラフト**である。リポジトリに **`ipc-line.schema.json`**（stdout 1 行分の JSON Schema）および **`columns.schema.json`**（`schema.json` インスタンス用）を配置する場合は、本節を **正本**として同期する。**実装済み**: [code_java/src/main/resources/schema/ipc-line.schema.json](code_java/src/main/resources/schema/ipc-line.schema.json)、[code_java/src/main/resources/schema/columns.schema.json](code_java/src/main/resources/schema/columns.schema.json)、検証用インスタンス例 [code_java/src/main/resources/schema/example-column-manifest.json](code_java/src/main/resources/schema/example-column-manifest.json)。スキーマ本文の `description` は UTF-8 互換のため英語のみ。
 
 **規約（stdout）**
 
