@@ -36,6 +36,22 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.pagebreak import Break
 
+from .dispatch_workspace import (
+    ENV_PROCESSING_PLAN_PATH,
+    read_tabular_dataframe,
+    resolve_actual_detail_workbook_path,
+    resolve_processing_plan_path_from_env,
+    resolve_result_dispatch_table_output_dir,
+)
+from .input_resolution import (
+    ENV_EXCLUDE_RULES_JSON,
+    ENV_GLOBAL_PRIORITY_OVERRIDE_PATH,
+    ENV_RESULT_TASK_COLUMN_CONFIG_CSV,
+    resolve_actuals_workbook_path,
+    resolve_column_config_workbook_path,
+    resolve_data_extraction_workbook_path,
+)
+from .plan_workbook_sidecar import read_result_task_dataframe, write_result_task_json_sidecar
 from .bootstrap import (
     PlanningValidationError,
     _clear_stage2_blocking_message_file,
@@ -188,6 +204,21 @@ def master_workbook_filename() -> str:
 
 # import 時点で解決（bootstrap 済みの後で本モジュールが読まれる想定）。公開名は従来どおり。
 MASTER_FILE = master_workbook_filename()
+
+
+def _master_workbook_path_resolved() -> str:
+    """MASTER_WORKBOOK_FILE / cwd に加え、PM_AI_MASTER_WORKBOOK でフルパスを上書き可。"""
+    alt = (os.environ.get("PM_AI_MASTER_WORKBOOK") or "").strip()
+    if alt and os.path.isfile(alt):
+        return os.path.normpath(os.path.abspath(alt))
+    mf = MASTER_FILE
+    if not mf:
+        return os.path.normpath(os.path.join(os.getcwd(), "master.xlsm"))
+    if os.path.isabs(mf):
+        return os.path.normpath(mf)
+    if mf.startswith("\\\\"):
+        return mf
+    return os.path.normpath(os.path.join(os.getcwd(), mf))
 # VBA「master_機械カレンダーを作成」シート（30分スロット占有を段階2の machine_avail_dt に反映）
 SHEET_MACHINE_CALENDAR = "機械カレンダー"
 # master.xlsm「機械カレンダー」の1行=何分スロットとして解釈するか（VBA 出力仕様に合わせる）
@@ -363,6 +394,33 @@ def _gemini_credentials_json_path_next_to_workbook(wb_path: str) -> str | None:
             GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
         )
     )
+
+
+def _resolve_gemini_credentials_json_path() -> str | None:
+    """
+    Gemini 証明書 JSON の候補パス。
+
+    1) GEMINI_CREDENTIALS_JSON … 暗号化/平文の証明書ファイルへの絶対または相対パス（最優先）。
+    2) TASK_INPUT_WORKBOOK 同階層の GEMINI_CREDENTIALS_ENCRYPTED_FILENAME
+    3) PM_AI_WORKSPACE 直下の同ファイル名（JavaFX ランチャー向け）
+    """
+    explicit = (os.environ.get("GEMINI_CREDENTIALS_JSON") or "").strip()
+    if explicit:
+        return os.path.normpath(os.path.abspath(explicit))
+    wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+    if wb and os.path.isfile(wb):
+        return os.path.normpath(
+            os.path.join(
+                os.path.dirname(os.path.abspath(wb)),
+                GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
+            )
+        )
+    ws = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
+    if ws and os.path.isdir(ws):
+        return os.path.normpath(
+            os.path.join(os.path.abspath(ws), GEMINI_CREDENTIALS_ENCRYPTED_FILENAME)
+        )
+    return None
 
 
 def _read_task_ids_from_config_sheet_column(
@@ -688,11 +746,13 @@ def _load_gemini_api_key_from_credentials_json(
 
 
 API_KEY = None
-_cred_path = _gemini_credentials_json_path_next_to_workbook(TASKS_INPUT_WORKBOOK)
+_cred_path = _resolve_gemini_credentials_json_path()
 _used_encrypted_credentials = False
 if _cred_path and os.path.isfile(_cred_path):
     API_KEY, _used_encrypted_credentials = _load_gemini_api_key_from_credentials_json(
-        _cred_path, workbook_path=TASKS_INPUT_WORKBOOK
+        _cred_path,
+        workbook_path=TASKS_INPUT_WORKBOOK
+        or (os.environ.get("PM_AI_WORKSPACE") or "").strip(),
     )
     if API_KEY:
         if _used_encrypted_credentials:
@@ -724,7 +784,8 @@ if _encrypted_json_missing_key:
 
 if not API_KEY:
     logging.warning(
-        "Gemini API キーは未設定です。マクロ実行ブックと同一フォルダに「%s」を配置してください。"
+        "Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、"
+        "マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「%s」を配置してください。"
         " 備考の AI 解析等はスキップされした。"
         " 参考型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。",
         GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
@@ -1346,6 +1407,8 @@ RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME = "結果_設備毎の時間割_機械名
 # 日別の配台数量（加工計画DATA 由来列＋配台日・当日配台数量）。Excel テーブル名は RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME。
 RESULT_DISPATCH_TABLE_SHEET_NAME = "結果_配台表"
 RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME = "_t結果_配台表"
+# xlsx と同階層に同名 stem の JSON（非 Excel 連携・API 向け）
+RESULT_DISPATCH_TABLE_JSON_FILENAME = "結果_配台表.json"
 # 結果_配台表の左側列（加工計画DATA に対応する想定の見出し。無い列は空）。工程名の次に機械名を置く。
 RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
     "工程名",
@@ -1779,10 +1842,11 @@ def _extract_data_extraction_datetime(sheet_name: str | None = None):
         return dt if isinstance(dt, datetime) else None
 
     try:
-        if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+        _xwb = resolve_data_extraction_workbook_path(TASKS_INPUT_WORKBOOK)
+        if not _xwb or not os.path.exists(_xwb):
             return None, None
         sn = (sheet_name or "").strip() or TASKS_SHEET_NAME
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=sn)
+        df = pd.read_excel(_xwb, sheet_name=sn)
         df.columns = df.columns.str.strip()
         for col_name in (
             TASK_COL_DATA_EXTRACTION_TIME,
@@ -2958,7 +3022,7 @@ def _write_results_equipment_gantt_sheet(
     # タイトル＆日時（ページ上部）
     # base_dt は配台・表示レンジの基準に使うが、作成時刻は壁時計を表示する。
     create_ts = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-    master_path = os.path.join(os.getcwd(), MASTER_FILE) if MASTER_FILE else ""
+    master_path = _master_workbook_path_resolved()
 
     def _fmt_mtime(p):
         try:
@@ -4729,17 +4793,28 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
 def load_tasks_df():
     """
     タスク入力を取得れる（tasks.xlsx は使用しない）。
-    必須: 環境変数 TASK_INPUT_WORKBOOK にマクロ実行ブックのフルパス（VBA は設定）
-         シート「加工計画DATA」を読み込む（投入目安は「回答納期」。未入力時は「指定納期」）。
+
+    PM_AI_PROCESSING_PLAN_PATH に CSV / Parquet / xlsx の実在パス（未指定・無効時は
+    PM_AI_TASK_INPUT_SOURCE_DIR 内の最新表ファイルへ resolve_processing_plan_path_from_env）。
+    TASK_INPUT_WORKBOOK（マクロブック）は読み込みに使わない。
+    xlsx のシート名は PM_AI_PROCESSING_PLAN_SHEET で上書き可（省略時は「加工計画DATA」）。
     """
-    if not TASKS_INPUT_WORKBOOK:
+    resolve_processing_plan_path_from_env()
+    _alt = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+    if _alt and os.path.isfile(_alt):
+        _low = _alt.lower()
+        if _low.endswith((".csv", ".parquet", ".pq")):
+            df = read_tabular_dataframe(_alt)
+        else:
+            _sn = (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip() or TASKS_SHEET_NAME
+            df = read_tabular_dataframe(_alt, sheet_name=_sn)
+        df.columns = df.columns.str.strip()
+    else:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
+            "タスク入力が必要です。PM_AI_PROCESSING_PLAN_PATH に表形式ファイル（CSV/Parquet/xlsx）の"
+            "実在パスを設定するか、PM_AI_TASK_INPUT_SOURCE_DIR にフォルダを指定して"
+            "その中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。"
         )
-    if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
-    df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=TASKS_SHEET_NAME)
-    df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, list(SOURCE_BASE_COLUMNS))
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{TASKS_SHEET_NAME}」"
@@ -4762,7 +4837,9 @@ def load_tasks_df():
             "タスク入力: 列「%s」が無いため「受注数」をコピーして補完しました。",
             TASK_COL_ORDER_QTY,
         )
-    logging.info(f"タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{TASKS_SHEET_NAME}' を読み込みました。")
+    _src_pp = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+    if _src_pp and os.path.isfile(_src_pp):
+        logging.info("タスク入力: PM_AI_PROCESSING_PLAN_PATH='%s' を読み込みました。", _src_pp)
     return df
 
 
@@ -5070,27 +5147,35 @@ def _apply_planning_sheet_post_load_mutations(
     試行順のみ再計算する xlwings 経路でも同様）。
     """
     try:
-        _pairs_lr = []
-        _seen_lr = set()
-        for _, _row_lr in df.iterrows():
-            _p = str(_row_lr.get(TASK_COL_MACHINE, "") or "").strip()
-            _m = str(_row_lr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-            if not _p:
-                continue
-            _k = (
-                _normalize_process_name_for_rule_match(_p),
-                _normalize_equipment_match_key(_m),
+        if _exclude_rules_json_env_supersedes_excel_sheet():
+            logging.info(
+                "%s: 設定シート「%s」の Excel 保守をスキップ（%s が有効）。",
+                log_prefix,
+                EXCLUDE_RULES_SHEET_NAME,
+                ENV_EXCLUDE_RULES_JSON,
             )
-            if _k in _seen_lr:
-                continue
-            _seen_lr.add(_k)
-            _pairs_lr.append((_p, _m))
-        run_exclude_rules_sheet_maintenance(
-            wb_path,
-            _pairs_lr,
-            log_prefix,
-            compile_exclude_rules_d_to_e_with_ai=compile_exclude_rules_d_to_e_with_ai,
-        )
+        else:
+            _pairs_lr = []
+            _seen_lr = set()
+            for _, _row_lr in df.iterrows():
+                _p = str(_row_lr.get(TASK_COL_MACHINE, "") or "").strip()
+                _m = str(_row_lr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
+                if not _p:
+                    continue
+                _k = (
+                    _normalize_process_name_for_rule_match(_p),
+                    _normalize_equipment_match_key(_m),
+                )
+                if _k in _seen_lr:
+                    continue
+                _seen_lr.add(_k)
+                _pairs_lr.append((_p, _m))
+            run_exclude_rules_sheet_maintenance(
+                wb_path,
+                _pairs_lr,
+                log_prefix,
+                compile_exclude_rules_d_to_e_with_ai=compile_exclude_rules_d_to_e_with_ai,
+            )
     except Exception:
         logging.exception("%s: 設定_配台不要工程の保守で例外（続行）", log_prefix)
     try:
@@ -5122,15 +5207,30 @@ def load_planning_tasks_df():
     「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は行うが、
     D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
     （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
+
+    優先: PM_AI_PLAN_INPUT_PATH に CSV / Parquet / xlsx がある場合は表から読む（ブック主入力でない経路）。
+    「設定_配台不要工程」の xlwings/openpyxl 保守は、TASK_INPUT_WORKBOOK が実在ファイルのときのみ実施。
     """
-    if not TASKS_INPUT_WORKBOOK:
+    _plan_alt = (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip()
+    _wb_for_maint = (
+        TASKS_INPUT_WORKBOOK if TASKS_INPUT_WORKBOOK and os.path.isfile(TASKS_INPUT_WORKBOOK) else ""
+    )
+    if _plan_alt and os.path.isfile(_plan_alt):
+        if _plan_alt.lower().endswith((".csv", ".parquet", ".pq")):
+            df = read_tabular_dataframe(_plan_alt)
+        else:
+            df = read_tabular_dataframe(_plan_alt, sheet_name=PLAN_INPUT_SHEET_NAME)
+        df.columns = df.columns.str.strip()
+    elif not TASKS_INPUT_WORKBOOK:
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK は未設定です。VBA の RunPython でマクロ実行ブックのパスを渡してください。"
+            "計画タスク入力が必要です。PM_AI_PLAN_INPUT_PATH（表形式）を設定するか、"
+            "TASK_INPUT_WORKBOOK にマクロ実行ブックを指定してください。"
         )
-    if not os.path.exists(TASKS_INPUT_WORKBOOK):
+    elif not os.path.exists(TASKS_INPUT_WORKBOOK):
         raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
-    df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
-    df.columns = df.columns.str.strip()
+    else:
+        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
+        df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
     )
@@ -5143,15 +5243,18 @@ def load_planning_tasks_df():
     df = _coalesce_plan_plain_remark_into_special(df)
     _apply_planning_sheet_post_load_mutations(
         df,
-        TASKS_INPUT_WORKBOOK,
+        _wb_for_maint,
         "配台シート読込",
         apply_exclude_rules_from_config=False,
         compile_exclude_rules_d_to_e_with_ai=False,
     )
     _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
-    logging.info(
-        f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
-    )
+    if _plan_alt and os.path.isfile(_plan_alt):
+        logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
+    else:
+        logging.info(
+            f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
+        )
     return df
 
 
@@ -5171,19 +5274,42 @@ def _main_sheet_cell_is_global_comment_label(val) -> bool:
 
 def load_main_sheet_global_priority_override_text() -> str:
     """
-    TASK_INPUT_WORKBOOK のメインシートで「グローバルコメント」と書かれたセルの **直下** を読む。
-    シート名: 「メイン」「メイン_」「Main」のいうれか」または坝剝に「メイン」を含む（VBA GetMainWorksheet と同じ趣旨）。
+    優先: 環境変数 PM_AI_GLOBAL_PRIORITY_OVERRIDE_PATH の UTF-8 テキスト（1 ファイル＝コメント本文）。
 
-    内容は **Gemini で一括解釈**（`analyze_global_priority_override_comment`）。工場休業日・再優先フラグ・未実装指示のメモを JSON 化れる。
-    API キーは無い場合のみ」工場休業日はルールベースの `parse_factory_closure_dates_from_global_comment` で補完れる。
+    従来: TASK_INPUT_WORKBOOK のメインシートで「グローバルコメント」見出しセルの **直下**。
+    シート名: 「メイン」「メイン_」「Main」等（VBA GetMainWorksheet と同趣旨）。
+
+    内容は **Gemini で一括解釈**（`analyze_global_priority_override_comment`）。工場休業日等は
+    `parse_factory_closure_dates_from_global_comment` で補完しうる。
     """
+    global _STAGE2_GLOBAL_COMMENT_CACHE
+    _txt = (os.environ.get(ENV_GLOBAL_PRIORITY_OVERRIDE_PATH) or "").strip()
+    if _txt and os.path.isfile(_txt):
+        try:
+            st = os.stat(_txt)
+            sig = (os.path.abspath(_txt), int(st.st_mtime), int(st.st_size))
+            if (
+                isinstance(_STAGE2_GLOBAL_COMMENT_CACHE, dict)
+                and _STAGE2_GLOBAL_COMMENT_CACHE.get("sig") == sig
+            ):
+                return str(_STAGE2_GLOBAL_COMMENT_CACHE.get("value") or "")
+            with open(_txt, encoding="utf-8-sig") as f:
+                out = f.read().strip()
+            _STAGE2_GLOBAL_COMMENT_CACHE = {"sig": sig, "value": out}
+            return out
+        except OSError as e:
+            logging.warning("メイン再優先特記: テキストを読めません: %s", e)
+            return ""
+        except Exception as e:
+            logging.warning("メイン再優先特記: テキスト処理で例外: %s", e)
+            return ""
+
     wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
     # region stage2 cache
     # VBA から起動されると段階2が複数回（パターン別）実行されうるため、
     # openpyxl でのブックオープンを毎回やらない（mtime 変化時のみ更新）。
-    global _STAGE2_GLOBAL_COMMENT_CACHE
     try:
         st = os.stat(wb_path)
         sig = (os.path.abspath(wb_path), int(st.st_mtime), int(st.st_size))
@@ -6304,9 +6430,24 @@ def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]
 
 def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> list | None:
     """
-    TASK_INPUT_WORKBOOK の「列設定_結果_タスク一覧」シートから (列ラベル, 表示) を上から読む。
+    優先: PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV（UTF-8）。列「列名」「表示」（無ければ先頭2列）。
+
+    次: PM_AI_COLUMN_CONFIG_WORKBOOK があればそのブックの「列設定_結果_タスク一覧」。
+
+    従来: TASK_INPUT_WORKBOOK の同シート。
     """
-    wb = TASKS_INPUT_WORKBOOK
+    csvp = (os.environ.get(ENV_RESULT_TASK_COLUMN_CONFIG_CSV) or "").strip()
+    if csvp and os.path.isfile(csvp):
+        try:
+            df_cfg = pd.read_csv(csvp, encoding="utf-8-sig")
+            return parse_result_task_column_config_dataframe(df_cfg, max_history_len)
+        except Exception as e:
+            logging.warning(
+                "列設定 CSV「%s」: 読めませんでした（%s）。ブックを試みます。",
+                csvp,
+                e,
+            )
+    wb = resolve_column_config_workbook_path(TASKS_INPUT_WORKBOOK)
     if not wb or not os.path.exists(wb):
         return None
     if _workbook_should_skip_openpyxl_io(wb):
@@ -7614,6 +7755,12 @@ def _stage2_try_copy_column_config_shapes_from_input(
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
+    _xlw_off = (os.environ.get("PM_AI_XLWINGS_STAGE2_DISABLED") or "").strip().lower()
+    if _xlw_off in ("1", "true", "yes", "on"):
+        logging.info(
+            "列設定シート図形コピー: PM_AI_XLWINGS_STAGE2_DISABLED によりスキップしました。"
+        )
+        return
     rp = (result_path or "").strip()
     ip = (input_path or "").strip()
     if not rp or not os.path.isfile(rp):
@@ -8788,13 +8935,18 @@ def _actual_row_time_bounds(row):
 
 def load_machining_actuals_df():
     """
-    マクロブックの「加工実績DATA」を読む（無ければ空 DataFrame）。
+    「加工実績DATA」を読む（無ければ空 DataFrame）。
+
+    優先: PM_AI_ACTUALS_DATA_WORKBOOK。
+    未指定時は実績明細と同じ既定探索（PM_AI_ACTUAL_DETAIL_WORKBOOK、
+    PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm、TASK_INPUT_WORKBOOK）。
     Power Query 等で用意したシートを想定。
     """
-    if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+    _src = resolve_actuals_workbook_path(TASKS_INPUT_WORKBOOK)
+    if not _src or not os.path.exists(_src):
         return pd.DataFrame()
     try:
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUALS_SHEET_NAME)
+        df = pd.read_excel(_src, sheet_name=ACTUALS_SHEET_NAME)
     except ValueError:
         logging.info(
             f"シート「{ACTUALS_SHEET_NAME}」は無いため、ガントの実績行は出力しません。"
@@ -8802,9 +8954,7 @@ def load_machining_actuals_df():
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(df, ACTUAL_HEADER_CANONICAL)
-    logging.info(
-        f"加工実績: '{TASKS_INPUT_WORKBOOK}' の '{ACTUALS_SHEET_NAME}' を {len(df)} 行読み込み。"
-    )
+    logging.info("加工実績: '%s' の '%s' を %s 行読み込み。", _src, ACTUALS_SHEET_NAME, len(df))
     return df
 
 
@@ -8863,13 +9013,17 @@ def _sorted_dates_filter_inclusive_range(
 
 def load_machining_actual_detail_df():
     """
-    マクロブックの「加工実績明細DATA」を読む（無ければ空 DataFrame）。
+    「加工実績明細DATA」を読む（無ければ空 DataFrame）。
+
+    優先: PM_AI_ACTUAL_DETAIL_WORKBOOK（単一ファイル）、PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm
+    （既定 UNC は plan/02 と同系）、最後に TASK_INPUT_WORKBOOK 内シート。
     列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
     """
-    if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+    _src_wb = resolve_actual_detail_workbook_path(TASKS_INPUT_WORKBOOK)
+    if not _src_wb:
         return pd.DataFrame()
     try:
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
+        df = pd.read_excel(_src_wb, sheet_name=ACTUAL_DETAIL_SHEET_NAME)
     except ValueError:
         logging.info(
             f"シート「{ACTUAL_DETAIL_SHEET_NAME}」は無いため、実績明細ガントは出力しません。"
@@ -8909,7 +9063,10 @@ def load_machining_actual_detail_df():
             e,
         )
     logging.info(
-        f"加工実績明細: '{TASKS_INPUT_WORKBOOK}' の '{ACTUAL_DETAIL_SHEET_NAME}' を {len(df)} 行読み込み。"
+        "加工実績明細: '%s' の '%s' を %s 行読み込み。",
+        _src_wb,
+        ACTUAL_DETAIL_SHEET_NAME,
+        len(df),
     )
     return df
 
@@ -12488,7 +12645,7 @@ def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], fl
     if not _master_speed_sheet_apply_enabled():
         logging.info("master.xlsm speed シートによる加工速度の上書きは無効です（MASTER_USE_SPEED_SHEET）。")
         return out
-    path = MASTER_FILE
+    path = _master_workbook_path_resolved()
     if not path or not os.path.isfile(path):
         logging.info(
             "master.xlsm speed: マスタファイルがありません (%r)。加工計画DATA／シート上の加工速度をそのまま使います。",
@@ -14710,6 +14867,89 @@ def _resolve_exclude_rules_workbook_path_for_read(wb_path: str) -> str:
     return wb_path
 
 
+_EXCLUDE_RULES_JSON_ENV_MEMO_UNSET = object()
+_exclude_rules_json_env_memo: object = _EXCLUDE_RULES_JSON_ENV_MEMO_UNSET
+
+
+def _get_exclude_rules_from_json_env() -> list[dict] | None:
+    """PM_AI_EXCLUDE_RULES_JSON が実在し形式が有効なら rules のリスト、無効時は None（Excel にフォールバック）。
+
+    同一プロセス内は結果をメモ化する（段階1の保守スキップ判定と適用で二重読込しない）。
+    """
+    global _exclude_rules_json_env_memo
+    if _exclude_rules_json_env_memo is not _EXCLUDE_RULES_JSON_ENV_MEMO_UNSET:
+        return _exclude_rules_json_env_memo  # type: ignore[return-value]
+    json_env = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
+    if not json_env or not os.path.isfile(json_env):
+        _exclude_rules_json_env_memo = None
+        return None
+    try:
+        with open(json_env, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.warning(
+            "配台試行ルール: %s の JSON 読込に失敗しました（%s）。ブックのシート読込にフォールバックします。",
+            json_env,
+            e,
+        )
+        _exclude_rules_json_env_memo = None
+        return None
+    rows = data.get("rules") if isinstance(data, dict) and "rules" in data else data
+    if not isinstance(rows, list):
+        logging.warning(
+            "配台試行ルール: %s は list または {\"rules\": [...]} ではありません。フォールバックします。",
+            json_env,
+        )
+        _exclude_rules_json_env_memo = None
+        return None
+    rules: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        proc = str(
+            row.get(EXCLUDE_RULE_COL_PROCESS)
+            or row.get("process")
+            or row.get("Process")
+            or ""
+        ).strip()
+        mach = str(
+            row.get(EXCLUDE_RULE_COL_MACHINE)
+            or row.get("machine")
+            or row.get("Machine")
+            or ""
+        ).strip()
+        if not proc:
+            continue
+        c_val = row.get(EXCLUDE_RULE_COL_FLAG)
+        if c_val is None:
+            c_val = row.get("exclude_flag") or row.get("配台不要")
+        e_raw = row.get(EXCLUDE_RULE_COL_LOGIC_JSON)
+        if e_raw is None:
+            e_raw = row.get("logic_json") or row.get("logic")
+        parsed = _parse_exclude_rule_json_cell(e_raw)
+        rules.append(
+            {
+                "proc": proc,
+                "mach": mach,
+                "c_val": c_val,
+                "parsed": parsed,
+            }
+        )
+    logging.info(
+        "配台試行ルール: JSON '%s' から %s 件（Excel の「%s」read_excel はスキップ）。",
+        json_env,
+        len(rules),
+        EXCLUDE_RULES_SHEET_NAME,
+    )
+    _exclude_rules_json_env_memo = rules
+    return rules
+
+
+def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
+    """True のとき「設定_配台不要工程」の openpyxl/xlwings 保守を省略し、ルールは JSON のみとする。"""
+    return _get_exclude_rules_from_json_env() is not None
+
+
 def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
     """シートからルール行を読み」評価用リストを返す。"""
     if not wb_path:
@@ -14724,6 +14964,9 @@ def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
         _exclude_rules_rules_snapshot = None
         _exclude_rules_snapshot_wb = None
         return snap
+    json_rules = _get_exclude_rules_from_json_env()
+    if json_rules is not None:
+        return json_rules
     path = _resolve_exclude_rules_workbook_path_for_read(wb_path)
     if not os.path.exists(path):
         return []
@@ -14772,7 +15015,8 @@ def apply_exclude_rules_config_to_plan_df(
     （``_apply_auto_exclude_bunkatsu_duplicate_machine`` と同じ重複条件）、C/E を適用する。
     EC と分割で機械が異なる依頼では、設定行が残っていても当該分割行は配台対象のままとする。
 
-    運用上は **段階1**（``run_stage1_extract``）から呼ぶ。段階2の ``load_planning_tasks_df`` では
+    運用上は **段階1**（``run_stage1_extract``）から呼ぶ。``PM_AI_EXCLUDE_RULES_JSON`` が有効なときは
+    ルール元は JSON のみ（Excel シートは読まない）。段階2の ``load_planning_tasks_df`` では
     ``_apply_planning_sheet_post_load_mutations(..., apply_exclude_rules_from_config=False,
     compile_exclude_rules_d_to_e_with_ai=False)`` とし、本関数でシートの C/E を計画 DataFrame に
     再適用しない（設定シートの D→E AI も段階2では行わない）。
@@ -15455,6 +15699,11 @@ def run_stage1_extract():
     マクロブックの「設定_配台不要工程」で工程+機械ごとの配台不要・条件式（AI）を管理する（シート作成は VBA）。
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
+
+    **TASK_INPUT_WORKBOOK** は、``PM_AI_PROCESSING_PLAN_PATH``（または
+    ``PM_AI_TASK_INPUT_SOURCE_DIR`` から解決した表ファイル）が実在するときは省略可。
+    省略時は Excel 設定シート保守は行わず、``PM_AI_EXCLUDE_RULES_JSON`` でルールを渡すか、
+    配台不要ルールなしで続行する。
     """
     # region agent log (perf)
     def _agent_dbg_log(hypothesis_id: str, message: str, data: dict | None = None) -> None:
@@ -15467,14 +15716,43 @@ def run_stage1_extract():
 
     import time as _time
     _t0 = _time.perf_counter()
-    _agent_dbg_log("H0", "stage1_enter", {"tasks_input_workbook": str(TASKS_INPUT_WORKBOOK or "")})
+    resolve_processing_plan_path_from_env()
+    _proc_plan = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
+    _has_processing_plan = bool(_proc_plan and os.path.isfile(_proc_plan))
+    _agent_dbg_log(
+        "H0",
+        "stage1_enter",
+        {
+            "tasks_input_workbook": str(TASKS_INPUT_WORKBOOK or ""),
+            ENV_PROCESSING_PLAN_PATH: _proc_plan,
+            "processing_plan_resolved": bool(_has_processing_plan),
+        },
+    )
     # endregion agent log (perf)
-    if not TASKS_INPUT_WORKBOOK:
-        logging.error("TASK_INPUT_WORKBOOK は未設定です。")
-        return False
-    if not os.path.exists(TASKS_INPUT_WORKBOOK):
-        logging.error(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
-        return False
+    if not _has_processing_plan:
+        if not TASKS_INPUT_WORKBOOK:
+            logging.error(
+                "段階1: タスク入力が解決できません。%s（または %s 下の表ファイル）を実在パスにするか、"
+                "TASK_INPUT_WORKBOOK にマクロブックを指定してください。"
+                % (ENV_PROCESSING_PLAN_PATH, "PM_AI_TASK_INPUT_SOURCE_DIR")
+            )
+            return False
+        if not os.path.exists(TASKS_INPUT_WORKBOOK):
+            logging.error(
+                "TASK_INPUT_WORKBOOK は存在しません: %s" % (TASKS_INPUT_WORKBOOK,)
+            )
+            return False
+    else:
+        if TASKS_INPUT_WORKBOOK and not os.path.exists(TASKS_INPUT_WORKBOOK):
+            logging.error(
+                "TASK_INPUT_WORKBOOK は存在しません: %s" % (TASKS_INPUT_WORKBOOK,)
+            )
+            return False
+        if not TASKS_INPUT_WORKBOOK:
+            logging.info(
+                "段階1: TASK_INPUT_WORKBOOK は省略（%s が解決済み: %s）。"
+                % (ENV_PROCESSING_PLAN_PATH, _proc_plan)
+            )
     reset_gemini_usage_tracker()
     # region agent log (perf)
     _t = _time.perf_counter()
@@ -15639,12 +15917,40 @@ def run_stage1_extract():
         # region agent log (perf)
         _t = _time.perf_counter()
         # endregion agent log (perf)
-        _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
-        run_exclude_rules_sheet_maintenance(
-            TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
-        )
-        # region agent log (perf)
-        _agent_dbg_log("H6", "exclude_rules_sheet_maintenance_done", {"ms": int((_time.perf_counter() - _t) * 1000), "pairs": len(_pm_pairs_s1 or [])})
+        if _exclude_rules_json_env_supersedes_excel_sheet():
+            logging.info(
+                "段階1: 設定シート「%s」の Excel 保守をスキップ（%s が有効）。",
+                EXCLUDE_RULES_SHEET_NAME,
+                ENV_EXCLUDE_RULES_JSON,
+            )
+            _agent_dbg_log(
+                "H6",
+                "exclude_rules_sheet_maintenance_skipped_json",
+                {"skipped": True},
+            )
+        elif not TASKS_INPUT_WORKBOOK or not os.path.isfile(TASKS_INPUT_WORKBOOK):
+            logging.info(
+                "段階1: 設定シート「%s」の Excel 保守をスキップ（TASK_INPUT_WORKBOOK が無いか無効）。",
+                EXCLUDE_RULES_SHEET_NAME,
+            )
+            _agent_dbg_log(
+                "H6",
+                "exclude_rules_sheet_maintenance_skipped_no_workbook",
+                {"skipped": True},
+            )
+        else:
+            _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
+            run_exclude_rules_sheet_maintenance(
+                TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
+            )
+            _agent_dbg_log(
+                "H6",
+                "exclude_rules_sheet_maintenance_done",
+                {
+                    "ms": int((_time.perf_counter() - _t) * 1000),
+                    "pairs": len(_pm_pairs_s1 or []),
+                },
+            )
         # endregion agent log (perf)
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
@@ -16921,7 +17227,7 @@ def load_skills_and_needs():
     """
     try:
         # 同一ブックを pd.read_excel で都度開しと I/O は重いめ、ExcelFile を1回の値開いでシートを parse れる。
-        with pd.ExcelFile(MASTER_FILE) as _master_xls:
+        with pd.ExcelFile(_master_workbook_path_resolved()) as _master_xls:
             # skills は新仕様:
             #   1行目: 工程名
             #   2行目: 機械名
@@ -17168,7 +17474,7 @@ def load_skills_and_needs():
 
         logging.info(
             "need人数マスタ: %s の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。",
-            os.path.abspath(MASTER_FILE),
+            _master_workbook_path_resolved(),
         )
         for _ci, _ps, _ms in pm_cols:
             _ck = f"{_ps}+{_ms}"
@@ -17246,7 +17552,7 @@ def load_team_combination_presets_from_master() -> dict[
     """
     if not TEAM_ASSIGN_USE_MASTER_COMBO_SHEET:
         return {}
-    path = MASTER_FILE
+    path = _master_workbook_path_resolved()
     if not os.path.isfile(path):
         return {}
     try:
@@ -17830,7 +18136,7 @@ def load_attendance_and_analyze(members):
     # 1. メンバー別シートからの読み込み
     all_records = []
     try:
-        xls = pd.ExcelFile(MASTER_FILE)
+        xls = pd.ExcelFile(_master_workbook_path_resolved())
         for sheet_name in xls.sheet_names:
             if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
                 continue 
@@ -19301,6 +19607,19 @@ def _dispatch_trial_pattern_job_list() -> list[tuple[str, str, int | None, objec
     ]
 
 
+def _read_result_task_sheet_for_stage2_io(plan_xlsx: str) -> pd.DataFrame | None:
+    """結果_タスク一覧: PM_AI_PLAN_RESULT_TASK_JSON サイドカー優先、空・無効時は xlsx シート。"""
+    if not plan_xlsx or not os.path.isfile(plan_xlsx):
+        return None
+    df_t = read_result_task_dataframe(plan_xlsx)
+    if df_t is not None and not getattr(df_t, "empty", True):
+        return df_t
+    try:
+        return pd.read_excel(plan_xlsx, sheet_name=RESULT_TASK_SHEET_NAME)
+    except Exception:
+        return None
+
+
 def _late_task_ids_missed_answer_deadline_from_plan_xlsx(plan_xlsx: str) -> set[str]:
     """
     結果_タスク一覧の「納期を満たすか？」が「いいえ」の行のタスクID（＝依頼NO）集合。
@@ -19309,9 +19628,8 @@ def _late_task_ids_missed_answer_deadline_from_plan_xlsx(plan_xlsx: str) -> set[
     out: set[str] = set()
     if not plan_xlsx or not os.path.isfile(plan_xlsx):
         return out
-    try:
-        df_t = pd.read_excel(plan_xlsx, sheet_name=RESULT_TASK_SHEET_NAME)
-    except Exception:
+    df_t = _read_result_task_sheet_for_stage2_io(plan_xlsx)
+    if df_t is None or getattr(df_t, "empty", True):
         return out
     df_t.columns = [str(c).strip() for c in df_t.columns]
     col_late = _result_task_due_met_column_in_df_columns(df_t.columns)
@@ -19736,10 +20054,9 @@ def _score_dispatch_pattern_stage2_workbook(plan_xlsx: str) -> dict:
     if not plan_xlsx or not os.path.isfile(plan_xlsx):
         out["スコア備考"] = "結果ブックが見つかりません。"
         return out
-    try:
-        df_t = pd.read_excel(plan_xlsx, sheet_name=RESULT_TASK_SHEET_NAME)
-    except Exception as e:
-        out["スコア備考"] = f"結果_タスク一覧の読込失敗: {e}"
+    df_t = _read_result_task_sheet_for_stage2_io(plan_xlsx)
+    if df_t is None:
+        out["スコア備考"] = "結果_タスク一覧の読込失敗（サイドカー・xlsx）。"
         return out
     df_t.columns = [str(c).strip() for c in df_t.columns]
     col_late = _result_task_due_met_column_in_df_columns(df_t.columns)
@@ -20025,7 +20342,7 @@ def _build_dispatch_trial_pattern_list_matrix(
     global_priority_raw = load_main_sheet_global_priority_override_text()
     members_for_gpo: list = []
     try:
-        with pd.ExcelFile(MASTER_FILE) as _xf:
+        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
             _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
         for r in range(2, _skills.shape[0]):
             cell = _skills.iat[r, 0]
@@ -20405,7 +20722,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     global_priority_raw = load_main_sheet_global_priority_override_text()
     members_for_gpo: list = []
     try:
-        with pd.ExcelFile(MASTER_FILE) as _xf:
+        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
             _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
         for r in range(2, _skills.shape[0]):
             cell = _skills.iat[r, 0]
@@ -20711,7 +21028,7 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
     global_priority_raw = load_main_sheet_global_priority_override_text()
     members_for_gpo: list = []
     try:
-        with pd.ExcelFile(MASTER_FILE) as _xf:
+        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
             _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
         for r in range(2, _skills.shape[0]):
             cell = _skills.iat[r, 0]
@@ -20993,7 +21310,7 @@ def fill_plan_dispatch_trial_order_column_stage1(
             # region agent log (perf)
             _t = _time.perf_counter()
             # endregion agent log (perf)
-            with pd.ExcelFile(MASTER_FILE) as _xf:
+            with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
                 _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
             # region agent log (perf)
             _agent_dbg_log(
@@ -23034,9 +23351,12 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
 
 def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir: str) -> str | None:
     """
-    マクロ実行ブックと同一フォルダに「結果_配台表.xlsx」を出力する（PowerQuery 参照用）。
+    「結果_配台表.xlsx」を target_dir に出力する（Power Query _q結果_配台表 / フォルダパス + 固定名）。
+
+    target_dir は resolve_result_dispatch_table_output_dir が決める（PM_AI_RESULT_DISPATCH_TABLE_DIR、
+    無ければマクロブック親、無ければ PM_AI_REPO_ROOT/code）。
     - シート名: 結果_配台表
-    - テーブル名: _t結果_配台表（新規作成で OK。参照元は別ブックを読むため #REF にならない）
+    - テーブル名: _t結果_配台表
     """
     try:
         if df_dispatch is None or getattr(df_dispatch, "empty", True):
@@ -23079,6 +23399,45 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
         return out_path
     except Exception as e:
         logging.warning("結果_配台表.xlsx: 出力に失敗しました: %s", e)
+        return None
+
+
+def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir: str) -> str | None:
+    """
+    結果_配台表と同一内容を UTF-8 JSON に書く（xlsx 動的生成と同データソース）。
+    PM_AI_RESULT_DISPATCH_TABLE_JSON=0/false/no で無効化可能。
+    """
+    try:
+        off = (os.environ.get("PM_AI_RESULT_DISPATCH_TABLE_JSON") or "").strip().lower()
+        if off in ("0", "false", "no", "off", "none"):
+            return None
+        if df_dispatch is None or getattr(df_dispatch, "empty", True):
+            return None
+        if not target_dir or not os.path.isdir(target_dir):
+            return None
+        out_path = os.path.join(target_dir, RESULT_DISPATCH_TABLE_JSON_FILENAME)
+        try:
+            if os.path.isfile(out_path):
+                os.remove(out_path)
+        except Exception:
+            pass
+        rows = json.loads(
+            df_dispatch.to_json(orient="records", date_format="iso", double_precision=15)
+        )
+        payload = {
+            "format_version": 1,
+            "sheet_name": RESULT_DISPATCH_TABLE_SHEET_NAME,
+            "excel_table_name": RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME,
+            "columns": list(df_dispatch.columns),
+            "row_count": int(len(df_dispatch)),
+            "rows": rows,
+        }
+        with open(out_path, encoding="utf-8", newline="\n") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        return out_path
+    except Exception as e:
+        logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
         return None
 
 
@@ -27032,7 +27391,7 @@ def generate_plan():
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
     """
-    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    master_abs = _master_workbook_path_resolved()
     try:
         with _override_default_factory_hours_from_master(master_abs):
             _generate_plan_impl()
@@ -27058,7 +27417,7 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
     Raises:
         PlanningValidationError: メンバー0人・表示対象日なし・実績イベント空など。
     """
-    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    master_abs = _master_workbook_path_resolved()
     with _override_default_factory_hours_from_master(master_abs):
         global _MACHINE_CALENDAR_BLOCKS_BY_DATE
         global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
@@ -27989,7 +28348,7 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
     plan_events = _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path)
     _compare_gantt_assert_no_overlap(plan_events, "計画(CSV)")
 
-    master_abs = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    master_abs = _master_workbook_path_resolved()
     with _override_default_factory_hours_from_master(master_abs):
         global _MACHINE_CALENDAR_BLOCKS_BY_DATE
         global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
@@ -28323,7 +28682,7 @@ def _generate_plan_impl(
             "組み合わせ表: プリセット無し（シート欠如・空・または読込失敗）。従来のフォーム探索のみ。"
         )
     if not members:
-        master_abs = os.path.abspath(MASTER_FILE)
+        master_abs = _master_workbook_path_resolved()
         logging.error(
             "段階2を中断しました: メンバーは0人です（マスタの skills は空」または読み込み失敗）。"
             " 期待パス: %s （カレント: %s）。テストコード直下に master.xlsm を置し」"
@@ -28341,7 +28700,7 @@ def _generate_plan_impl(
     try:
         _t_cal0 = time_module.perf_counter()
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
-            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE)),
+            _master_workbook_path_resolved(),
             equipment_list,
         )
     except Exception as e:
@@ -28355,7 +28714,7 @@ def _generate_plan_impl(
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
         ) = load_machine_daily_startup_settings(
-            os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+            _master_workbook_path_resolved()
         )
     except Exception as e:
         logging.warning(
@@ -28363,7 +28722,7 @@ def _generate_plan_impl(
         )
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
         _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
-    _master_path_stage2 = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    _master_path_stage2 = _master_workbook_path_resolved()
     if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
         _a12s_chk, _a12e_chk = _read_master_main_factory_operating_times(_master_path_stage2)
         if _a12s_chk is None or _a12e_chk is None:
@@ -30559,7 +30918,7 @@ def _generate_plan_impl(
     if _usage_txt:
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
 
-    _master_abs_for_result_fmt = os.path.abspath(os.path.join(os.getcwd(), MASTER_FILE))
+    _master_abs_for_result_fmt = _master_workbook_path_resolved()
     _reg_shift_start, _reg_shift_end = _read_master_main_regular_shift_times(
         _master_abs_for_result_fmt
     )
@@ -30874,6 +31233,18 @@ def _generate_plan_impl(
         raise
 
     try:
+        _sj = write_result_task_json_sidecar(
+            output_filename, df_tasks, sheet_name=RESULT_TASK_SHEET_NAME
+        )
+        if _sj:
+            logging.info(
+                "段階2: 結果_タスク一覧 JSON サイドカーを '%s' に出力しました。",
+                _sj,
+            )
+    except Exception as e:
+        logging.warning("段階2: 結果_タスク一覧 JSON サイドカー出力をスキップ: %s", e)
+
+    try:
         _apply_excel_date_columns_date_only_display(
             output_filename, "結果_カレンダー(出勤簿)", frozenset({"日付"})
         )
@@ -30899,16 +31270,19 @@ def _generate_plan_impl(
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
     # ---------------------------------------------------------
-    # 追加出力: PowerQuery 参照用の「結果_配台表.xlsx」（マクロ実行ブックと同一フォルダへ固定名）
+    # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code など）
     # ---------------------------------------------------------
     try:
         _wb_path = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
-        _out_dir = os.path.dirname(_wb_path) if _wb_path else ""
+        _out_dir = resolve_result_dispatch_table_output_dir(_wb_path)
         _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)
         if _wrote:
             logging.info("段階2: PowerQuery 用に '%s' を出力しました。", _wrote)
+        _jwrote = _write_dispatch_table_standalone_json(df_dispatch, _out_dir)
+        if _jwrote:
+            logging.info("段階2: 結果_配台表 JSON を '%s' に出力しました。", _jwrote)
     except Exception as e:
-        logging.warning("段階2: 結果_配台表.xlsx の出力をスキップしました: %s", e)
+        logging.warning("段階2: 結果_配台表.xlsx / .json の出力をスキップしました: %s", e)
 
     # =========================================================
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力

@@ -26,14 +26,20 @@ import shutil
 import time as time_module
 
 # =========================================================
-# 【重要】カレントをマクロブック（TASK_INPUT_WORKBOOK）と同じフォルダに設定する。
-# log/execution_log.txt・output/ を VBA の ThisWorkbook.Path 基準と一致させる。
-# 環境変数が無い・chdir 不可のときは従来どおり「python の親」またはパッケージの親階層へ。
-# （VBA は …\output\plan_input_tasks.xlsx を参照するため output はブックと同じ階層が前提）
+# 【重要】カレントは (1) PM_AI_WORKSPACE（JavaFX 等）が有効なら最優先、(2) 従来どおり
+# マクロブック（TASK_INPUT_WORKBOOK）と同じフォルダ、(3) それ以外は python 階層。
+# log/execution_log.txt・output/ を作業フォルダ基準と一致させる。
 # =========================================================
-_env_wb_for_cwd = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+_pm_ai_ws = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
 _cwd_from_workbook = False
-if _env_wb_for_cwd:
+if _pm_ai_ws and os.path.isdir(_pm_ai_ws):
+    try:
+        os.chdir(os.path.abspath(_pm_ai_ws))
+        _cwd_from_workbook = True
+    except OSError:
+        _cwd_from_workbook = False
+_env_wb_for_cwd = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+if not _cwd_from_workbook and _env_wb_for_cwd:
     try:
         os.chdir(os.path.dirname(os.path.abspath(_env_wb_for_cwd)))
         _cwd_from_workbook = True

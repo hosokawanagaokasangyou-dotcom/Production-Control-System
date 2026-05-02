@@ -20,8 +20,11 @@ def _repo_root_for_stage1() -> str:
 
 
 def _execution_log_paths_stage1() -> list[str]:
-    """VBA が読む log と同じ候補（マクロブックのフォルダを最優先）。"""
+    """VBA が読む log と同じ候補（PM_AI_WORKSPACE を最優先、次にマクロブックのフォルダ）。"""
     paths: list[str] = []
+    ws_dir = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
+    if ws_dir:
+        paths.append(os.path.join(os.path.abspath(ws_dir), "log", "execution_log.txt"))
     wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
     if wb:
         paths.append(
@@ -70,6 +73,9 @@ def _append_execution_log_line(level: str, msg: str) -> None:
 def _debug_ndjson_paths_stage1() -> list[str]:
     """デバッグNDJSON（debug-e69e6f.log）の出力先候補。execution_log と同じ優先順。"""
     paths: list[str] = []
+    ws_dir = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
+    if ws_dir:
+        paths.append(os.path.join(os.path.abspath(ws_dir), "log", "debug-e69e6f.log"))
     wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
     if wb:
         paths.append(
@@ -190,8 +196,16 @@ except Exception:
 
 
 def main():
-    if not pc.TASKS_INPUT_WORKBOOK:
-        print("TASK_INPUT_WORKBOOK が未設定です。VBA からマクロ実行してください。", file=sys.stderr)
+    from planning_core.dispatch_workspace import resolve_processing_plan_path_from_env
+
+    resolve_processing_plan_path_from_env()
+    _proc = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+    if not _proc or not os.path.isfile(_proc):
+        print(
+            "タスク入力ファイルが解決できません。PM_AI_PROCESSING_PLAN_PATH を実在する表形式ファイルにするか、"
+            "PM_AI_TASK_INPUT_SOURCE_DIR を指定してください（TASK_INPUT_WORKBOOK は段階1で使用しません）。",
+            file=sys.stderr,
+        )
         sys.exit(2)
     try:
         ok = pc.run_stage1_extract()

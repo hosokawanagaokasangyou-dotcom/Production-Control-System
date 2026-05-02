@@ -1,1 +1,3 @@
 .venv/
+# Excel creates lock files while a workbook is open
+**/~$*

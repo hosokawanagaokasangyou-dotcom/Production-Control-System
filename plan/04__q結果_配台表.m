@@ -2,6 +2,8 @@
 // PQ: _q結果_配台表
 
 let
+    // フォルダパス: Python 段階2 が出力する「結果_配台表.xlsx」「結果_配台表.json」（同一データ）と同じフォルダに合わせること。
+    // JavaFX 既定は PM_AI_REPO_ROOT の直下 code（例: .../Production-Control-System/code）。環境変数 PM_AI_RESULT_DISPATCH_TABLE_DIR で上書き可。
     // 1. Excelで定義した名前「フォルダパス」からパスを取得
     現在のパス = Excel.CurrentWorkbook(){[Name="フォルダパス"]}[Content]{0}[Column1],
     

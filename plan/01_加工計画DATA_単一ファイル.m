@@ -1,5 +1,6 @@
 // 出典: Cursor チャットでユーザーが貼付した Power Query (M)
 // PQ: 加工計画DATA（単一ファイル・Folder.Files 先頭1件）
+// タスク取得のソースフォルダ = 下記「パス」（環境変数 PM_AI_TASK_INPUT_SOURCE_DIR の既定と揃える / Java AppPaths.resolveTaskInputSourceDir）
 
 let
     // 1. フォルダから最新の1ファイルのみを特定

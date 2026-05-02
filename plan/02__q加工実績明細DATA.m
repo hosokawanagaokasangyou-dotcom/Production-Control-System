@@ -2,7 +2,7 @@
 // PQ: _q加工実績明細DATA
 
 let
-    // ご指定いただいたデータソースのパス
+    // データソース（環境変数 PM_AI_ACTUAL_DETAIL_SOURCE_DIR の既定と揃える。Python planning_core も同 UNC を既定にフォールバック）
     ソース = Folder.Files("\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●検査表作成\加工実績明細DATA"),
     並べ替えられた行 = Table.Sort(ソース,{{"Date accessed", Order.Descending}}),
     保存された先頭行 = Table.FirstN(並べ替えられた行,1),
