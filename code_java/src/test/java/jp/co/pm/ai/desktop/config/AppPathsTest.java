@@ -27,6 +27,24 @@ class AppPathsTest {
     }
 
     @Test
+    void masterAndRelatedPaths_useFilePickerKinds() {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
+        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
+        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK));
+        assertTrue(AppPaths.isCsvFilePathEnvKey(AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV));
+        assertFalse(AppPaths.isJsonFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
+    }
+
+    @Test
+    void resolveMasterWorkbookCandidate_prefersPlanMaster(@TempDir Path fakeRepo) throws Exception {
+        Path planMaster = fakeRepo.resolve("plan").resolve("master.xlsm");
+        Files.createDirectories(planMaster.getParent());
+        Files.createFile(planMaster);
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        assertEquals(planMaster.toAbsolutePath().normalize(), AppPaths.resolveMasterWorkbookCandidate(ui).get());
+    }
+
+    @Test
     void taskInputSourceDir_defaultMatchesPqAUncSuffix() {
         Path p = AppPaths.resolveTaskInputSourceDir(Map.of());
         String s = p.toString().replace('\\', '/');

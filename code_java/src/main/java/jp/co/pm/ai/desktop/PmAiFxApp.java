@@ -31,6 +31,8 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.io.ExcelSheetTitlesProbe;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 import jp.co.pm.ai.desktop.ui.ActualsDataStatusPane;
+import jp.co.pm.ai.desktop.ui.ExcludeRulesEditorPane;
+import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.PlanInputEditorPane;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
@@ -82,6 +84,11 @@ public class PmAiFxApp extends Application {
             AppPaths.KEY_PM_AI_WORKSPACE,
             AppPaths.KEY_GEMINI_CREDENTIALS_JSON,
             AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+            AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+            AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
+            AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
+            AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV,
+            AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET,
             AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
             AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
             AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR);
@@ -104,7 +111,8 @@ public class PmAiFxApp extends Application {
 
         workbookField = new TextField();
         workbookField.setPromptText(
-                ".xlsm/.xlsx \u2014 Python \u3078\u306f ProcessBuilder \u304c TASK_INPUT_WORKBOOK \u3092\u4ed8\u4e0e");
+                "\u4efb\u610f \u2014 \u7a7a\u3067\u3088\u3044\uff08\u6bb5\u968e1\u306f PM_AI_PROCESSING_PLAN_PATH \u306a\u3069\u3067\u53ef\uff09\u3002"
+                        + " \u6307\u5b9a\u6642\u306f ProcessBuilder \u304c TASK_INPUT_WORKBOOK \u3092\u4ed8\u4e0e");
         workbookField.setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
 
         Button browseWb = new Button("\u53c2\u7167\u2026");
@@ -135,7 +143,7 @@ public class PmAiFxApp extends Application {
         grid.setVgap(8);
         grid.setPadding(new Insets(12));
         int r = 0;
-        grid.add(new Label("\u30de\u30af\u30ed\u5b9f\u884c\u30d6\u30c3\u30af"), 0, r);
+        grid.add(new Label("\u30de\u30af\u30ed\u5b9f\u884c\u30d6\u30c3\u30af\uff08\u4efb\u610f\uff09"), 0, r);
         grid.add(workbookField, 1, r);
         grid.add(new HBox(4, browseWb, detectWb), 2, r);
         r++;
@@ -186,6 +194,12 @@ public class PmAiFxApp extends Application {
                                 primaryStage, this::collectUiEnv, this::appendLog));
         tabPlanInput.setClosable(false);
 
+        Tab tabExcludeRules =
+                new Tab(
+                        "\u914d\u53f0\u4e0d\u8981\u30eb\u30fc\u30eb (JSON)",
+                        ExcludeRulesEditorPane.create(primaryStage, this::collectUiEnv, this::appendLog));
+        tabExcludeRules.setClosable(false);
+
         Tab tabEnv = new Tab("\u74b0\u5883\u5909\u6570", buildEnvPane(primaryStage));
         tabEnv.setClosable(false);
 
@@ -195,7 +209,8 @@ public class PmAiFxApp extends Application {
                         ActualsDataStatusPane.create(this::buildActualsStatusRequest, this::appendLog));
         tabActuals.setClosable(false);
 
-        TabPane tabs = new TabPane(tabMain, tabEnv, tabChart, tabPlanInput, tabActuals);
+        TabPane tabs =
+                new TabPane(tabMain, tabEnv, tabChart, tabPlanInput, tabExcludeRules, tabActuals);
         BorderPane root = new BorderPane(tabs);
         Scene scene = new Scene(root, 960, 640);
         primaryStage.setScene(scene);
@@ -214,10 +229,12 @@ public class PmAiFxApp extends Application {
         Label hint = new Label(
                 "OS \u74b0\u5883\u5909\u6570\u306f\u53c2\u7167\u3057\u307e\u305b\u3093\u3002\u3053\u306e\u30bf\u30d6\u3067\u96c6\u7d04\u3002"
                         + " \u521d\u671f\u5024: ui_ref_env_defaults.json + \u30ed\u30b8\u30c3\u30af\u8aac\u660e\u3002"
-                        + " \u5b50\u30d7\u30ed\u30bb\u30b9: \u8868+\u30e1\u30a4\u30f3\u30de\u30af\u30ed\u30d6\u30c3\u30af\u2192TASK_INPUT_WORKBOOK\u2192PYTHONUTF8\u6700\u7d42\u56fa\u5b9a\u3002"
-                        + " \u30d5\u30a9\u30eb\u30c0\u578b\u306f\u300c\u30d5\u30a9\u30eb\u30c0...\u300d\u3001"
-                        + "GEMINI_CREDENTIALS_JSON / PM_AI_EXCLUDE_RULES_JSON \u306f"
-                        + "\u300c\u30d5\u30a1\u30a4\u30eb...\u300d\uff08\u5404 *.json\uff09\u3002");
+                        + " \u5b50\u30d7\u30ed\u30bb\u30b9: \u3053\u306e\u8868 + \u30e9\u30f3\u30c1\u30e3\u30fc\u306e TASK_INPUT_WORKBOOK"
+                        + "\uff08\u30de\u30af\u30ed\u30d6\u30c3\u30af\u306f\u4efb\u610f\uff09\u2192 PYTHONUTF8 \u6700\u7d42\u56fa\u5b9a\u3002"
+                        + " PM_AI_SKIP_WORKBOOK_ENV_SHEET \u304c\u7a7a\u306e\u3068\u304d\u306f 1 \u3068\u3057\u3066"
+                        + "\u30de\u30af\u30ed\u300c\u8a2d\u5b9a_\u74b0\u5883\u5909\u6570\u300d\u30b7\u30fc\u30c8\u3092\u8aad\u307e\u306a\u3044\u3002"
+                        + " \u30d5\u30a9\u30eb\u30c0\u578b\u306f\u300c\u30d5\u30a9\u30eb\u30c0...\u300d\u3001\u5404\u30d5\u30a1\u30a4\u30eb\u578b\u306f"
+                        + "\u5909\u6570\u540d\u306b\u5fdc\u3058\u3066 JSON / Excel / CSV \u306e\u62e1\u5f35\u5b50\u3092\u8868\u793a\u3002");
         hint.setWrapText(true);
 
         TableView<EnvVarRow> table = new TableView<>(envRows);
@@ -297,10 +314,7 @@ public class PmAiFxApp extends Application {
                                     fc.setTitle(
                                             "\u30d5\u30a1\u30a4\u30eb\u3092\u9078\u629e: "
                                                     + row.getName());
-                                    fc.getExtensionFilters()
-                                            .addAll(
-                                                    new FileChooser.ExtensionFilter("JSON", "*.json"),
-                                                    new FileChooser.ExtensionFilter("All", "*.*"));
+                                    FileChooserForEnvKey.apply(fc, row.getName());
                                     String cur = row.getValue();
                                     if (cur != null && !cur.isBlank()) {
                                         try {
@@ -467,7 +481,9 @@ public class PmAiFxApp extends Application {
     private void peekSheetsAction() {
         String p = effectiveTaskInputWorkbookPath();
         if (p.isEmpty()) {
-            appendLog("[POI] \u30de\u30af\u30ed\u5b9f\u884c\u30d6\u30c3\u30af\u304c\u7a7a\u3067\u3059\uff08\u53c2\u7167\u307e\u305f\u306f\u81ea\u52d5\u691c\u51fa\uff09\u3002");
+            appendLog(
+                    "[POI] \u30de\u30af\u30ed\u5b9f\u884c\u30d6\u30c3\u30af\u304c\u7a7a\uff08\u4efb\u610f\uff09\u3002"
+                            + " \u30b7\u30fc\u30c8\u4e00\u89a7\u306b\u306f\u30d1\u30b9\u304c\u5fc5\u8981\u3067\u3059\u3002");
             return;
         }
         try {
@@ -578,6 +594,10 @@ public class PmAiFxApp extends Application {
         Map<String, String> m = new HashMap<>(ui);
         m.remove("TASK_INPUT_WORKBOOK");
         m.remove("PM_AI_TASK_INPUT_WORKBOOK");
+        String skip = m.get(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET);
+        if (skip == null || skip.isBlank()) {
+            m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
+        }
         return m;
     }
 
@@ -676,6 +696,10 @@ public class PmAiFxApp extends Application {
                     r.setValue(cand.toAbsolutePath().normalize().toString());
                 }
             }
+            case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
+                    AppPaths.resolveMasterWorkbookCandidate(ui)
+                            .ifPresent(p -> r.setValue(p.toString()));
+            case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
             default -> {
                 /* PM_AI_WORKSPACE stays empty */
             }
@@ -715,6 +739,15 @@ public class PmAiFxApp extends Application {
                                 ? cand.toAbsolutePath().normalize().toString()
                                 : "");
             }
+            case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
+                    r.setValue(
+                            AppPaths.resolveMasterWorkbookCandidate(ui)
+                                    .map(Path::toString)
+                                    .orElse(""));
+            case AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
+                    AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
+                    AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV -> r.setValue("");
+            case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
             default -> r.setValue("");
         }
         return r;

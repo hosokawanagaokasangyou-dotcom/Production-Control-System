@@ -10,6 +10,26 @@
     "value" : "",
     "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。code/exclude_rules.json があれば初期値に使われる。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。"
   }, {
+    "key" : "PM_AI_MASTER_WORKBOOK",
+    "value" : "",
+    "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。"
+  }, {
+    "key" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
+    "value" : "",
+    "description" : "列設定_結果_タスク一覧 を含むブック（TASK_INPUT_WORKBOOK と別ファイルのとき）。空なら TASK_INPUT_WORKBOOK を参照。"
+  }, {
+    "key" : "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK",
+    "value" : "",
+    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら TASK_INPUT_WORKBOOK）。"
+  }, {
+    "key" : "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV",
+    "value" : "",
+    "description" : "結果_タスク一覧の列表示設定 CSV のフルパス。実在時は列設定シート読みをスキップ可。"
+  }, {
+    "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
+    "value" : "1",
+    "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。"
+  }, {
     "key" : "MASTER_WORKBOOK_FILE",
     "value" : "",
     "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。"

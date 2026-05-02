@@ -123,6 +123,13 @@ public final class EnvVarDocs {
                         + " MASTER_WORKBOOK_FILE \u3088\u308a\u512a\u5148\u3002planning_core \u306e"
                         + " \u30de\u30b9\u30bf\u8aad\u8fbc\u30fb\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc\u7b49\u306b\u4f7f\u7528\u3002");
         put(
+                "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
+                "1/true \u7b49\u3067 workbook_env_bootstrap \u304c\u30de\u30af\u30ed\u30d6\u30c3\u30af\u306e"
+                        + "\u300c\u8a2d\u5b9a_\u74b0\u5883\u5909\u6570\u300d\u30b7\u30fc\u30c8\u3092\u8aad\u307e\u306a\u3044\u3002"
+                        + "JavaFX \u74b0\u5883\u5909\u6570\u30bf\u30d6\u304c\u5b50\u30d7\u30ed\u30bb\u30b9\u306e\u6e90\u3002"
+                        + " \u7a7a\u306e\u3068\u304d\u30e9\u30f3\u30c1\u30e3\u30fc\u306f 1 \u3092\u4ed8\u4e0e\u3002"
+                        + " OS \u74b0\u5883\u5909\u6570\u3078\u306f\u66f8\u304d\u8fbc\u307e\u306a\u3044\u904b\u7528\u3092\u524d\u63d0\u3002");
+        put(
                 "PM_AI_EXCLUDE_RULES_JSON",
                 "\u6bb5\u968e1\u306a\u3069 \u914d\u53f0\u4e0d\u8981\u30eb\u30fc\u30eb\u3092 UTF-8 JSON\uff08list \u307e\u305f\u306f"
                         + " {\"rules\":[...]}\u3001\u5217\u306f\u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b\u3068\u540c\u69cb\u9020"

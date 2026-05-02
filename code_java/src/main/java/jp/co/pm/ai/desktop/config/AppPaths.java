@@ -42,8 +42,32 @@ public final class AppPaths {
      */
     public static final String KEY_GEMINI_CREDENTIALS_JSON = "GEMINI_CREDENTIALS_JSON";
 
-    /** UTF-8 JSON for exclude rules (?i?K1??u???_?z??s?v?H???v????); optional alternative to Excel sheet. */
+    /**
+     * UTF-8 JSON for exclude rules; optional alternative to Excel
+     * {@code \u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b}.
+     */
     public static final String KEY_PM_AI_EXCLUDE_RULES_JSON = "PM_AI_EXCLUDE_RULES_JSON";
+
+    /** Absolute path to master workbook ({@code master.xlsm}); overrides basename-only {@code MASTER_WORKBOOK_FILE}. */
+    public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
+
+    /**
+     * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override from
+     * TASK_INPUT_WORKBOOK).
+     */
+    public static final String KEY_PM_AI_COLUMN_CONFIG_WORKBOOK = "PM_AI_COLUMN_CONFIG_WORKBOOK";
+
+    /** Workbook for plan-sheet data-extraction timestamp columns (optional). */
+    public static final String KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK = "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK";
+
+    /** CSV for result-task column visibility/order ({@code PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV}). */
+    public static final String KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV = "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV";
+
+    /**
+     * When truthy, {@code workbook_env_bootstrap} skips reading the macro book
+     * {@code \u8a2d\u5b9a_\u74b0\u5883\u5909\u6570} sheet (JavaFX tab is source of truth for the child process).
+     */
+    public static final String KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET = "PM_AI_SKIP_WORKBOOK_ENV_SHEET";
 
     /**
      * Env keys whose value is a directory (folder picker in the UI).
@@ -59,7 +83,12 @@ public final class AppPaths {
 
     /** Env keys whose value is a single file path (file chooser in the UI). */
     private static final Set<String> FILE_PATH_ENV_KEYS = Set.of(
-            KEY_GEMINI_CREDENTIALS_JSON, KEY_PM_AI_EXCLUDE_RULES_JSON);
+            KEY_GEMINI_CREDENTIALS_JSON,
+            KEY_PM_AI_EXCLUDE_RULES_JSON,
+            KEY_PM_AI_MASTER_WORKBOOK,
+            KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
+            KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
+            KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
 
     private AppPaths() {}
 
@@ -71,6 +100,25 @@ public final class AppPaths {
     /** Whether {@code key} refers to a file path (encrypted JSON etc.). */
     public static boolean isFilePathEnvKey(String key) {
         return key != null && FILE_PATH_ENV_KEYS.contains(key.trim());
+    }
+
+    /** JSON credentials or exclude-rules file ({@code *.json}). */
+    public static boolean isJsonFilePathEnvKey(String key) {
+        String k = key != null ? key.trim() : "";
+        return KEY_GEMINI_CREDENTIALS_JSON.equals(k) || KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k);
+    }
+
+    /** Master / column-config / data-extraction workbooks ({@code *.xlsm}, {@code *.xlsx}). */
+    public static boolean isExcelWorkbookPathEnvKey(String key) {
+        String k = key != null ? key.trim() : "";
+        return KEY_PM_AI_MASTER_WORKBOOK.equals(k)
+                || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
+                || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k);
+    }
+
+    /** Result-task column config CSV. */
+    public static boolean isCsvFilePathEnvKey(String key) {
+        return key != null && KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV.equals(key.trim());
     }
 
     /**
@@ -158,6 +206,27 @@ public final class AppPaths {
             return Path.of(override).toAbsolutePath().normalize();
         }
         return resolveRepoRoot(u).resolve("code").toAbsolutePath().normalize();
+    }
+
+    /**
+     * First existing {@code master.xlsm} / {@code master.xlsx} under {@link #resolveRepoRoot(Map)} ({@code plan/},
+     * {@code code/}, or repo root). Used for JavaFX bootstrap hints only.
+     */
+    public static Optional<Path> resolveMasterWorkbookCandidate(Map<String, String> ui) {
+        Path root = resolveRepoRoot(ui != null ? ui : Map.of());
+        Path[] candidates =
+                new Path[] {
+                    root.resolve("plan").resolve("master.xlsm"),
+                    root.resolve("plan").resolve("master.xlsx"),
+                    root.resolve("code").resolve("master.xlsm"),
+                    root.resolve("master.xlsm"),
+                };
+        for (Path c : candidates) {
+            if (Files.isRegularFile(c)) {
+                return Optional.of(c.toAbsolutePath().normalize());
+            }
+        }
+        return Optional.empty();
     }
 
     /** Repository root containing {@code code/python}. */

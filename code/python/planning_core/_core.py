@@ -37,6 +37,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.pagebreak import Break
 
 from .dispatch_workspace import (
+    ENV_PLAN_INPUT_PATH,
     ENV_PROCESSING_PLAN_PATH,
     read_tabular_dataframe,
     resolve_actual_detail_workbook_path,
@@ -5196,6 +5197,19 @@ def _apply_planning_sheet_post_load_mutations(
                 ex,
             )
 
+
+def _stage2_plan_input_source_missing_message() -> str:
+    """段階2で PM_AI_PLAN_INPUT_PATH も TASK_INPUT_WORKBOOK も使えないときの統一エラー文。"""
+    return (
+        "段階2: 計画タスク入力が解決できません。次のいずれかを設定してください。"
+        f" (1) {ENV_PLAN_INPUT_PATH} に実在する CSV / Parquet / xlsx のパス。"
+        " (2) 実在するマクロ実行ブックを TASK_INPUT_WORKBOOK に指定し、"
+        f"シート「{PLAN_INPUT_SHEET_NAME}」を読み込めるようにする。"
+        f" 表ファイルは {ENV_PLAN_INPUT_PATH} 未設定時に PM_AI_TASK_INPUT_SOURCE_DIR"
+        " の最新ファイルへ自動設定される場合があります（dispatch_workspace）。"
+    )
+
+
 def load_planning_tasks_df():
     """
     2段階目用: マクロブック上の「配台計画_タスク入力」シートを読み込む。
@@ -5221,13 +5235,18 @@ def load_planning_tasks_df():
         else:
             df = read_tabular_dataframe(_plan_alt, sheet_name=PLAN_INPUT_SHEET_NAME)
         df.columns = df.columns.str.strip()
-    elif not TASKS_INPUT_WORKBOOK:
+    elif _plan_alt:
         raise FileNotFoundError(
-            "計画タスク入力が必要です。PM_AI_PLAN_INPUT_PATH（表形式）を設定するか、"
-            "TASK_INPUT_WORKBOOK にマクロ実行ブックを指定してください。"
+            "%s が実在しません: %r。%s"
+            % (ENV_PLAN_INPUT_PATH, _plan_alt, _stage2_plan_input_source_missing_message())
         )
+    elif not TASKS_INPUT_WORKBOOK:
+        raise FileNotFoundError(_stage2_plan_input_source_missing_message())
     elif not os.path.exists(TASKS_INPUT_WORKBOOK):
-        raise FileNotFoundError(f"TASK_INPUT_WORKBOOK は存在しません: {TASKS_INPUT_WORKBOOK}")
+        raise FileNotFoundError(
+            "TASK_INPUT_WORKBOOK は存在しません: %s。%s"
+            % (TASKS_INPUT_WORKBOOK, _stage2_plan_input_source_missing_message())
+        )
     else:
         df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
         df.columns = df.columns.str.strip()

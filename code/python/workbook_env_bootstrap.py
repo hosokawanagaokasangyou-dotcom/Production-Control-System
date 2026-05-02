@@ -3,6 +3,9 @@
 マクロブック内「設定_環境変数」シートを読み、planning_core 取り込み前に os.environ を上書きする。
 （例: ``MASTER_WORKBOOK_FILE`` でマスタブックのファイル名を既定 ``master.xlsm`` から変更可）
 
+**JavaFX ランチャー**: 子プロセスに ``PM_AI_SKIP_WORKBOOK_ENV_SHEET=1`` を付けると本シートは読まず、
+環境変数は **JavaFX のタブのみ**（OS の恒久環境変数は変更しない方針）。VBA／CLI 単体実行では未設定のとき従来どおりシートを読む。
+
 VBA が設定する TASK_INPUT_WORKBOOK のあと、段階1/2・列レイアウト等の各エントリで本モジュールを
 import planning_core より前に呼ぶ。シートの変数名は planning_core が参照する環境変数名と同一（大文字小文字区別）。
 """
@@ -133,8 +136,16 @@ def apply_workbook_environment_sheet(workbook_path: str) -> int:
             pass
 
 
+def _skip_workbook_env_sheet_from_env() -> bool:
+    """PM_AI_SKIP_WORKBOOK_ENV_SHEET が truthy のとき True（JavaFX 子プロセス向け）。"""
+    v = (os.environ.get("PM_AI_SKIP_WORKBOOK_ENV_SHEET") or "").strip().lower()
+    return v in ("1", "true", "yes", "on", "y")
+
+
 def apply_from_task_input_workbook() -> int:
     """TASK_INPUT_WORKBOOK が有効なパスならシートを読み込む。"""
+    if _skip_workbook_env_sheet_from_env():
+        return 0
     p = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
     if not p or not os.path.isfile(p):
         return 0
