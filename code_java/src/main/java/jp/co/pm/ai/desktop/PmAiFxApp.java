@@ -32,6 +32,7 @@ import jp.co.pm.ai.desktop.io.ExcelSheetTitlesProbe;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 import jp.co.pm.ai.desktop.ui.ActualsDataStatusPane;
 import jp.co.pm.ai.desktop.ui.ExcludeRulesEditorPane;
+import jp.co.pm.ai.desktop.ui.Stage1ShapedOutputPreviewPane;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.PlanInputEditorPane;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
@@ -194,6 +195,13 @@ public class PmAiFxApp extends Application {
                                 primaryStage, this::collectUiEnv, this::appendLog));
         tabPlanInput.setClosable(false);
 
+        Tab tabStage1Preview =
+                new Tab(
+                        "\u6bb5\u968e1 \u6210\u5f62\u7d50\u679c",
+                        Stage1ShapedOutputPreviewPane.create(
+                                primaryStage, this::collectUiEnv, this::appendLog));
+        tabStage1Preview.setClosable(false);
+
         Tab tabExcludeRules =
                 new Tab(
                         "\u914d\u53f0\u4e0d\u8981\u30eb\u30fc\u30eb (JSON)",
@@ -210,7 +218,14 @@ public class PmAiFxApp extends Application {
         tabActuals.setClosable(false);
 
         TabPane tabs =
-                new TabPane(tabMain, tabEnv, tabChart, tabPlanInput, tabExcludeRules, tabActuals);
+                new TabPane(
+                        tabMain,
+                        tabEnv,
+                        tabChart,
+                        tabPlanInput,
+                        tabStage1Preview,
+                        tabExcludeRules,
+                        tabActuals);
         BorderPane root = new BorderPane(tabs);
         Scene scene = new Scene(root, 960, 640);
         primaryStage.setScene(scene);

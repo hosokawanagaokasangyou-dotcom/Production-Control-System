@@ -229,6 +229,36 @@ public final class AppPaths {
         return Optional.empty();
     }
 
+    /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */
+    public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
+
+    /**
+     * Default path to stage-1 Excel output (same cwd semantics as Python: {@code output/} under
+     * {@link #resolvePythonScriptDir(Map)}).
+     */
+    public static Path defaultStage1PlanTasksPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path pyDir = resolvePythonScriptDir(u);
+        Path primary = pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+        if (Files.isRegularFile(primary)) {
+            return primary.toAbsolutePath().normalize();
+        }
+        Path repo = resolveRepoRoot(u);
+        Path underCodePython =
+                repo.resolve("code").resolve("python").resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+        if (Files.isRegularFile(underCodePython)) {
+            return underCodePython.toAbsolutePath().normalize();
+        }
+        String ws = trim(u.get(KEY_PM_AI_WORKSPACE));
+        if (!ws.isEmpty()) {
+            Path w = Path.of(ws).resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+            if (Files.isRegularFile(w)) {
+                return w.toAbsolutePath().normalize();
+            }
+        }
+        return primary.toAbsolutePath().normalize();
+    }
+
     /** Repository root containing {@code code/python}. */
     public static Path resolveRepoRoot(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
