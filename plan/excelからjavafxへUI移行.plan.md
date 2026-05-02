@@ -1,6 +1,6 @@
 ---
 name: ExcelからJavaFXへUI移行
-overview: **主目的は UI を JavaFX に移すこと**であり、Python をすべて Java に書き換えることは求めない。**UI は Java と親和性の高いオープンソース・コンポーネント（例: ControlsFX 等）を積極利用し、Excel のシート・セル操作に近いフォーマット／UX を優先する。** **取り込む OSS は、当プロジェクトの利用・配布において永続的に無償で続けられる条件のものに限定する（下記「OSS の永続無料」）。** **グラフ・可視化も視野に入れ、チャートは既定で JFreeChart を優先し、状況に応じて JavaFX Chart（`javafx.scene.chart`）を選択的に併用する。** **配台コア等の重い処理**については、運用後に計測し、ボトルネックのみ **Java への部分実装（JNI／サブプロセスからの置換／同一 JVM 内ライブラリ）**を検討する余地を残す。当面は Python（planning_core）を呼び出す構成が既定。新規に生成・追加する Java／JavaFX コードは **`code_java/`** に置き、既存の Excel・VBA・Python ラインが **`code/`** に残るよう **ツリーを分離**する。Power Query のデータの流れはプラン **「Power Query 正本」**に集約する。
+overview: **主目的は UI を JavaFX に移すこと**であり、Python をすべて Java に書き換えることは求めない。**UI は Java と親和性の高いオープンソース・コンポーネント（例: ControlsFX 等）を積極利用し、Excel のシート・セル操作に近いフォーマット／UX を優先する。** **取り込む OSS は、当プロジェクトの利用・配布において永続的に無償で続けられる条件のものに限定する（下記「OSS の永続無料」）。** **グラフ・可視化も視野に入れ、チャートは既定で JFreeChart を優先し、状況に応じて JavaFX Chart（`javafx.scene.chart`）を選択的に併用する。** **配台コア等の重い処理**については、運用後に計測し、ボトルネックのみ **Java への部分実装（JNI／サブプロセスからの置換／同一 JVM 内ライブラリ）**を検討する余地を残す。当面は Python（planning_core）を呼び出す構成が既定。新規に生成・追加する Java／JavaFX コードは **`code_java/`** に置き、既存の Excel・VBA・Python ラインが **`code/`** に残るよう **ツリーを分離**する。Power Query のデータの流れはプラン **「Power Query 正本」**に集約する。**実装着手前に固める各種取り決め（基盤・IPC・データ契約・ETL・画面・配布・QA・ドキュメント・運用）は §「実装前に固める取り決め（決定値）」を正とする。**
 todos:
   - id: inventory-vba-python
     content: VBA エントリと cmd/xlwings 可否をマトリクス化（xlwings_console_runner・各 *.py から一覧）
@@ -9,7 +9,7 @@ todos:
     content: リポジトリ直下の code_java に Gradle/Maven・JavaFX・ControlsFX・POI（必要時）・JFreeChart・Windows 配布方針でプロジェクトを追加（依存は永続無料方針で選定・固定、既存 code/ と分離）
     status: pending
   - id: oss-perpetual-free-audit
-    content: 全依存の LICENSE／利用条件を確認し永続無料であることを記録（SBOM または依存表）。オープンコアの有償限定・サブスク必須・二重ライセンスで有償が必要な解釈は採用しない／法務確認
+    content: 全依存の LICENSE／利用条件を確認し永続無料であることを記録（記録先は plan/oss_licenses.md の Markdown 表形式：コンポーネント名／バージョン／ライセンス種別／利用可否）。オープンコアの有償限定・サブスク必須・二重ライセンスで有償が必要な解釈は採用しない／法務確認
     status: pending
   - id: charts-jfreechart-javafx
     content: グラフ要件を棚卸しし JFreeChart を既定・JavaFX Chart を選択利用。SwingNode 埋め込み・画像エクスポート等は POC で決定（ライセンス・見た目）
@@ -37,6 +37,33 @@ todos:
     status: pending
   - id: hotspot-java-eval
     content: JavaFX＋Python 安定稼働後、プロファイルで重い処理を特定し、ROI が見える単位だけ Java モジュール化（ゴールデンデータ一致を前提）を検討
+    status: pending
+  - id: decision-l0-toolchain-finalize
+    content: L0 ツールチェーンの最終固定（Windows 11 限定／JDK・JavaFX 最新 LTS のバージョン番号／Maven／code_java/ の pom.xml とサブモジュール構成）
+    status: pending
+  - id: decision-1-python-bridge-spec
+    content: 1. Python↔JavaFX IPC 仕様書化と両側スタブ（NDJSON 進捗・stdout/stderr 役割・終了コード 0/1/3/9・.cancel フラグ・UI 単一実行）
+    status: pending
+  - id: decision-2-data-contract
+    content: 2. データコントラクト整備（schema.json／settings.json／POI による .xlsm 完結／output 命名規則／LocalDateTime 境界変換）
+    status: pending
+  - id: decision-3-etl-python-parity
+    content: 3. PQ-A〜D の Python ETL 実装（fetch_latest_files 共通化、tests/fixtures ゴールデン、PQ-B は抽出時間最新で Drop Duplicates、ファイルの変換 (2)/(3) は M 抽出後に実装）
+    status: pending
+  - id: decision-4-screens-ia
+    content: 4. 4 主要画面（設定／実績データ取込／計画データ編集（SpreadsheetView）／結果設備ガント）の単方向状態サイクル設計とワイヤー
+    status: pending
+  - id: decision-5-distribution
+    content: 5. ZIP 配布＋run.bat（初回 pip install）／日付バージョニング v2026.MM.DD／資格情報は配布外（OS 環境変数または .env）／UNC 即時エラー／logs 14 日ローテ
+    status: pending
+  - id: decision-6-qa-test-bat
+    content: 6. test.bat（Maven test＋pytest 一括）と許容誤差ルール（日付・文字列・整数は完全一致／小数は第2位丸め一致）。UI は手動 QA、TestFX 不採用
+    status: pending
+  - id: decision-7-docs-licenses
+    content: 7. plan/oss_licenses.md（Markdown 表形式）と NOTICE.txt（配布同梱）。プラン同期は手作業（.cursor/plans → plan/ を上書きコミット）
+    status: pending
+  - id: decision-8-dual-running
+    content: 8. 二重運用ポリシー（1 ヶ月は Excel UI を正・JavaFX は参照／検証）。マスタブックは Excel 直編集を継続正。撤退手順（JavaFX 出力を旧 Excel 入力シートへ値貼付＋VBA 実行）。配台パターンサマリは簡易フォーム→Python 引数
     status: pending
 isProject: false
 ---
@@ -430,7 +457,104 @@ flowchart LR
 - **配台ロジックを変える場合**は [配台ルール.md](配台ルール.md)（リポジトリ内の業務文章の正）との整合が必要（`.cursor/rules/dispatch-docs-sync.mdc` の趣旨）。
 - **巨大ファイル** `_core.py` の読み方は [code/python/planning_core/_core_FILE_MAP.txt](code/python/planning_core/_core_FILE_MAP.txt) を前提に局所調査する（`.cursor/rules/planning-core-huge-file.mdc`）。
 
+## 実装前に固める取り決め（決定値）
+
+本節は **「§ 意思決定が必要な論点」の決定結果**を確定値として記録する。**未決事項は明示的に「保留」と書き、推測で埋めない**。記載が下表の「§ 意思決定が必要な論点」と重複するときは **本節を正**として扱う。
+
+### L0. 基盤・ツールチェーン（決定）
+
+- **OS**: **Windows 11 限定**（Windows 10 は対象外）。
+- **JDK / JavaFX**: **最新 LTS** を採用（Temurin 系 / OpenJFX 系の同 LTS 系列。**具体バージョン番号は `decision-l0-toolchain-finalize` で固定**）。
+- **ビルドツール**: **Maven**（`code_java/` 直下に `pom.xml`、必要に応じてマルチモジュール）。
+- **配置**: **`code_java/`** に集約（既存 `code/` には Java ソース・ビルド成果物を置かない）。
+- **JVM 既定**: `-Dfile.encoding=UTF-8`、`Locale.JAPAN`、`ZoneId.of("Asia/Tokyo")`。
+
+### 1. Python ↔ JavaFX の連携契約
+
+| 項目 | 決定 |
+|------|------|
+| **1.1 Python 実行系** | システムの `py -3.x` を使用。`code_java`（または展開先）配下に **専用 venv** を **初回起動バッチで構築**（環境汚染防止＋手軽さの両立）。 |
+| **1.2 パッケージ更新方針** | **`requirements.txt` で完全固定**（`pip freeze` 相当）。再現性を最優先。 |
+| **1.3 IPC プロトコル** | **引数 ＋ 環境変数 ＋ stdout への NDJSON**。進捗イベントは構造化し、JavaFX 側で ProgressBar 等にバインド可能にする。 |
+| **1.4 進捗・ログのストリーム** | **stdout = 進捗（NDJSON）**／**stderr = ログ**。JavaFX 側でキャプチャし、UI 更新と `logs/` への追記を両立。 |
+| **1.5 キャンセル／中断** | **フラグファイル方式**（`.cancel` ファイル生成）。Python 側ループ境界で存在チェックし安全終了。**強制 kill はしない**（ブック破損回避）。 |
+| **1.6 終了コード体系** | `0`=正常／`1`=予期せぬエラー／`3`=`PlanningValidationError`（既存・データ検証）／`9`=ユーザー中断。 |
+| **1.7 エラー伝播・例外の翻訳** | 既知エラー（特に `3`）は Python 側で **stderr に理由文**を出力 → JavaFX 側で **ユーザー向け日本語ダイアログ**化。それ以外は「予期せぬエラー」として汎用ダイアログ。 |
+| **1.8 同時実行ポリシー** | **UI レベルで完全な単一実行**。実行中は実行ボタンを無効化し、多重起動による書き込み競合を防ぐ。 |
+
+### 2. データコントラクト（列定義／ファイル）
+
+| 項目 | 決定 |
+|------|------|
+| **2.1 列定義マニフェスト** | **`schema.json` を正**として `code_java/` 等の共通領域に配置。**Python と JavaFX の双方が起動時に読み込んで列構成を認識**する。 |
+| **2.2 「設定_環境変数」シートの後継** | アプリ実行ディレクトリ直下の **`settings.json`**。UI に設定画面を設け、更新時に上書き保存。 |
+| **2.3 マクロブック（.xlsm）の取り扱い** | UI 置換後は **POI で読み書きを完結**。**xlwings／Excel 自動操作は撤廃または最小化**（出力結果の参照のみ）。 |
+| **2.4 入出力ファイルの命名・配置** | 例: `output/production_plan_yyyyMMdd_HHmmss.xlsx`。**出力先フォルダ固定 ＋ 日時サフィックス**を必須化。 |
+| **2.5 結果_配台表 出力ルート** | `settings.json` に **`RESULT_OUTPUT_DIR`** キーを設ける。**既定は相対 `./output`**、絶対パスへ変更可能。**旧 PQ の名前定義「フォルダパス」は廃止**。 |
+| **2.6 タイムゾーン／日付シリアル変換** | JavaFX 内部はすべて **`LocalDate` / `LocalDateTime` で統一**。**変換は POI 入出力境界のみ**で行う（Excel シリアル値・書式は境界で吸収）。 |
+
+### 3. PQ 代替 ETL（PQ-A〜D の Python 同等実装）
+
+| 項目 | 決定 |
+|------|------|
+| **3.1 採用方針** | **「Python ETL」で確定**。JavaFX の取得実行ボタン → Python スクリプトを呼び出してデータ生成。 |
+| **3.2 共通ユーティリティ API** | **`fetch_latest_files(unc_path, date_kind='created', top_n=1)`** を共通関数として定義し、PQ 代替処理で再利用。 |
+| **3.3 出力フォーマット** | 当面は **xlsx**（後段 `planning_core` の互換維持）。将来的な高速化が必要になれば Parquet 等を検討。 |
+| **3.4 ゴールデンデータ** | 匿名化したテスト用 xlsx を **`tests/fixtures/`** に保管し、回帰テスト（pytest）の正本とする。 |
+| **3.5 PQ-B の Upsert 挙動** | **同一キー（依頼NO 等）が複数あれば、`抽出時間` 最新の行を残す（Drop Duplicates）**仕様で実装する。 |
+| **3.6 `ファイルの変換 (2)/(3)` の実体** | **UI 参照ブックから抽出した M を一次資料**に、pandas の型変換・列選択ロジックとして実装に落とし込む（TODO: `pq-m-export-from-workbook`）。 |
+
+### 4. 画面（IA・遷移・状態管理）
+
+| 項目 | 決定 |
+|------|------|
+| **4.1 トップレベル IA** | **左サイドバー（機能メニュー）＋ メインエリア（タブ切替）**のモダン構成。 |
+| **4.2 主要画面（暫定）** | **「設定」／「実績データ取込」／「計画データ編集（SpreadsheetView）」／「結果設備ガント」**の **4 主要画面**に整理。 |
+| **4.3 ワークスペース概念** | **導入しない**。常に **`settings.json` で指定した「最新の入力ファイル」のパス**を直接読み書きする **単一運用**。 |
+| **4.4 状態遷移** | **編集（未保存 `*` マーク）→ 保存（必須）→ 実行ボタン有効化 → 実行中（プログレス表示）→ 完了（結果画面へ自動遷移・再読込）**の **単方向サイクル**。 |
+| **4.5 キーボード操作・IME・コピペ** | ControlsFX `SpreadsheetView` の標準機能を採用。**Excel ↔ JavaFX のクリップボード往復**で不足する部分のみ API 実装で補う。 |
+
+### 5. 配布・運用・セキュリティ
+
+| 項目 | 決定 |
+|------|------|
+| **5.1 インストーラ／配布形式** | **社内配布用 ZIP**（解凍 → `run.bat` で起動）。インストーラの権限問題を回避し、デプロイの手軽さを優先。 |
+| **5.2 Python ランタイムの同梱／更新** | アプリ更新と分離。**初回起動バッチで `pip install -r requirements.txt`** を実行して環境を揃える。 |
+| **5.3 自動更新／バージョニング** | **日付ベース**（例: `v2026.05.02`）。共有フォルダに最新 ZIP を置き、**手動で差し替える運用**。**後方互換は原則 1 世代前まで**担保。 |
+| **5.4 資格情報（API キー等）の管理** | **配布対象 ZIP・設定には含めない**。OS の **ユーザー環境変数**または **配布対象外のローカル `.env`** ファイルで個別に管理する。 |
+| **5.5 UNC 共有フォルダ障害時の挙動** | 読込・書込の直前に **`Path.exists` 等でアクセスチェック**。失敗時は **即「ネットワークエラー」ダイアログ**を表示（**自動リトライは無限ループ回避のため行わない**）。 |
+| **5.6 ログの場所と保持期間** | アプリフォルダ直下 `logs/` に **日別ローテーション**で出力。**保持期間 14 日**。**機微情報はマスキング**して出力。 |
+
+### 6. 品質保証・テスト戦略
+
+| 項目 | 決定 |
+|------|------|
+| **6.1 テスト方針** | **UI = 手動 QA**、**ETL／配台コア = pytest によるゴールデン比較**。 |
+| **6.2 ゴールデン許容誤差** | **日付・文字列・整数（数量等）は完全一致**。**浮動小数（完了率等）は小数第 2 位までの丸め一致**を許容条件とする。 |
+| **6.3 CI／自動化** | 当面ローカル環境想定。**`test.bat`（Maven test ＋ pytest の一括走行）**を CI 代替とする。 |
+| **6.4 TestFX** | UI が手動 QA のため **依存に含めない**（OSS 永続無料監査の対象外）。 |
+
+### 7. ドキュメント・正本管理
+
+| 項目 | 決定 |
+|------|------|
+| **7.1 プランファイルの同期手順** | Cursor の `.cursor/plans` のファイルを **手作業で**リポジトリ `plan/` フォルダへ上書きコミット（**フック自動化はしない**＝仕組みの複雑化を避ける）。 |
+| **7.2 配台ルール.md の正の決め** | ロジックの正は引き続き **Python（`_core.py`）と `配台ルール.md`** に置く。**JavaFX は「データの受け渡しと表示の器」**に限定。 |
+| **7.3 OSS 永続無料台帳のフォーマット** | **`plan/oss_licenses.md`**（Markdown 表形式：**コンポーネント名／バージョン／ライセンス種別／利用可否**）で管理する。 |
+| **7.4 ライセンス通知（NOTICE）** | プロジェクトルートに **`NOTICE.txt`** を作成し、**配布用 ZIP にも同梱**する。 |
+
+### 8. 失われやすい運用論点
+
+| 項目 | 決定 |
+|------|------|
+| **8.1 二重運用期間** | **最初の 1 ヶ月（フェーズ 5 まで）は「Excel UI が正」**。JavaFX 側はあくまで **参照・検証用**として並行稼働させ、書き戻しの衝突を回避する。 |
+| **8.2 マスタブック（`master.xlsm`）の更新** | 引き続き **Excel での直接編集を正**とする（JavaFX にマスタメンテ UI を作ると工数が膨大なため、**当面スコープ外**）。 |
+| **8.3 撤退（フォールバック）方針** | JavaFX で障害が起きた場合は、**JavaFX が出力した「計画データ」を旧 Excel の入力シートに値貼り付け** → **旧 VBA マクロを叩いて実行できる状態**を担保する。 |
+| **8.4 配台パターンサマリの UI 仕様** | JavaFX 画面上に **チェックボックス／ラジオボタン等の簡易フォーム**を設け、**選択値を Python のプロセス実行引数へ直接渡す**仕様とする。 |
+
 ## 意思決定が必要な論点（実装前に固めると安全）
+
+> **更新**: L0 と 1〜8 の決定値は **§ 実装前に固める取り決め（決定値）** に確定済み。下表は **論点の歴史記録**として残す。最新の正は上記節を参照。
 
 | 論点 | 選択肢のイメージ |
 |------|------------------|
@@ -448,4 +572,4 @@ flowchart LR
 
 ---
 
-**まとめ**: **主目的は JavaFX UI**。**Java と親和性の高い OSS を積極利用**し、採用 OSS は **永続無料で利用できる条件のものに限定**する。**Excel に近いグリッド UX**（既定案は ControlsFX SpreadsheetView 起点の POC）と **グラフ・可視化**（**JFreeChart 優先**、**JavaFX Chart は選択的**）を目指す。新規 Java／JavaFX は **`code_java/`**、既存資産は **`code/`** と **ツリー分離**して衝突を避ける。Python は当面そのまま呼び出し、**全コードの Java 書き換えは求めない**。必要になれば **計測に基づき重い処理だけ Java 化**するオプションを残す。**複数 Power Query 由来データ**や **xlwings／PQ 代替**が技術的な主な負荷であり、**UI 移行とデータパイプライン整理が先行**、高速化はその後の選択となる。
+**まとめ**: **主目的は JavaFX UI**。**Java と親和性の高い OSS を積極利用**し、採用 OSS は **永続無料で利用できる条件のものに限定**する。**Excel に近いグリッド UX**（既定案は ControlsFX SpreadsheetView 起点の POC）と **グラフ・可視化**（**JFreeChart 優先**、**JavaFX Chart は選択的**）を目指す。新規 Java／JavaFX は **`code_java/`**、既存資産は **`code/`** と **ツリー分離**して衝突を避ける。Python は当面そのまま呼び出し、**全コードの Java 書き換えは求めない**。必要になれば **計測に基づき重い処理だけ Java 化**するオプションを残す。**複数 Power Query 由来データ**や **xlwings／PQ 代替**が技術的な主な負荷であり、**UI 移行とデータパイプライン整理が先行**、高速化はその後の選択となる。**実装着手前に固める基盤・IPC・データ契約・ETL・画面・配布・QA・ドキュメント・運用の各取り決めは §「実装前に固める取り決め（決定値）」を正**とし、ブレずに進める。
