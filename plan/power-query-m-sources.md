@@ -10,3 +10,7 @@
 | [04__q結果_配台表.m](04__q結果_配台表.m) | 名前「フォルダパス」+ `結果_配台表.xlsx`・`_t結果_配台表` |
 
 JavaFX 移行プランの「Power Query 正本」と併せて参照してください。
+
+## JavaFX 移行プラン（全文）
+
+- **[excelからjavafxへUI移行.plan.md](excelからjavafxへUI移行.plan.md)** … Cursor の `.cursor/plans/excelからjavafxへui移行_e2f0b739.plan.md` からコピーしたリポジトリ版（共有・レビュー・履歴用）。Cursor のプラン UI でのみ編集した場合は **内容が不一致になりうる**ため、運用方針としてどちらを正とするか決めること。
