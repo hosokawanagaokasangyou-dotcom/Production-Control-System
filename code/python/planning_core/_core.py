@@ -268,9 +268,6 @@ SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
 # タスクは tasks.xlsx を使うので、VBA から渡される TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
 TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
 TASKS_SHEET_NAME = "加工計画DATA"
-# PM_AI_PROCESSING_PLAN_PATH が xlsx のときの既定シート（PM_AI_PROCESSING_PLAN_SHEET 未設定時）。
-# 共有出力「工程別生産計画問合せ問合せ*.xlsx」等。マクロブックの加工計画DATAとは別。
-PROCESSING_PLAN_PATH_DEFAULT_SHEET = "\u5de5\u7a0b\u5225\u751f\u7523\u8a08\u753b\u554f\u5408\u305b\u554f\u5408\u305b"
 # 段階2の実績系設備ガント（結果_設備ガント_実績明細等）で、計画ブックから抽出日時を読むときに優先するシート
 TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN = "加工計画DATA_実績比較用"
 
@@ -4801,8 +4798,8 @@ def load_tasks_df():
     PM_AI_PROCESSING_PLAN_PATH に CSV / Parquet / xlsx の実在パス（未指定・無効時は
     PM_AI_TASK_INPUT_SOURCE_DIR 内の最新表ファイルへ resolve_processing_plan_path_from_env）。
     TASK_INPUT_WORKBOOK（マクロブック）は読み込みに使わない。
-    xlsx のシート名は PM_AI_PROCESSING_PLAN_SHEET で上書き可（省略時は PROCESSING_PLAN_PATH_DEFAULT_SHEET。
-    マクロブックの「加工計画DATA」を読む場合は PM_AI_PROCESSING_PLAN_SHEET に明示する）。
+    xlsx は PM_AI_PROCESSING_PLAN_SHEET でシート指定（省略時は先頭シート index 0。
+    単一シートのブックでは名前不要。複数シートで名前指定する場合は文字列、数値のみなら 0 始まり索引）。
     """
     resolve_processing_plan_path_from_env()
     _alt = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
@@ -4812,11 +4809,16 @@ def load_tasks_df():
         if _low.endswith((".csv", ".parquet", ".pq")):
             df = read_tabular_dataframe(_alt)
         else:
-            _sn = (
-                (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip()
-                or PROCESSING_PLAN_PATH_DEFAULT_SHEET
-            )
-            _sheet_label_for_context = str(_sn)
+            _raw = (os.environ.get("PM_AI_PROCESSING_PLAN_SHEET") or "").strip()
+            if not _raw:
+                _sn: str | int = 0
+                _sheet_label_for_context = "\u5148\u982d\u30b7\u30fc\u30c8"
+            elif _raw.isdigit():
+                _sn = int(_raw)
+                _sheet_label_for_context = f"index {_sn}"
+            else:
+                _sn = _raw
+                _sheet_label_for_context = _raw
             df = read_tabular_dataframe(_alt, sheet_name=_sn)
         df.columns = df.columns.str.strip()
     else:
