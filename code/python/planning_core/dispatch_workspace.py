@@ -208,6 +208,30 @@ def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
     return ""
 
 
+def _read_excel_pandas_openpyxl(path: str, sheet_name: str | int) -> pd.DataFrame:
+    """
+    Load one sheet with pandas/openpyxl.
+
+    Some third-party .xlsx files carry inconsistent style XML; full parse then fails inside
+    openpyxl (e.g. IndexError in stylesheet._merge_named_styles). Retrying with
+    openpyxl read_only=True avoids loading full styles and usually succeeds for cell values.
+    """
+    try:
+        return pd.read_excel(path, sheet_name=sheet_name)
+    except IndexError as err:
+        _LOG.warning(
+            "pd.read_excel failed (openpyxl stylesheet); retry read_only: path=%r sheet=%r err=%s",
+            path,
+            sheet_name,
+            err,
+        )
+        return pd.read_excel(
+            path,
+            sheet_name=sheet_name,
+            engine_kwargs={"read_only": True},
+        )
+
+
 def read_tabular_dataframe(
     path: str,
     *,
@@ -223,6 +247,5 @@ def read_tabular_dataframe(
         return pd.read_csv(path, encoding=enc)
     if low.endswith((".parquet", ".pq")):
         return pd.read_parquet(path)
-    if sheet_name:
-        return pd.read_excel(path, sheet_name=sheet_name)
-    return pd.read_excel(path, sheet_name=0)
+    sn: str | int = sheet_name if sheet_name else 0
+    return _read_excel_pandas_openpyxl(path, sn)
