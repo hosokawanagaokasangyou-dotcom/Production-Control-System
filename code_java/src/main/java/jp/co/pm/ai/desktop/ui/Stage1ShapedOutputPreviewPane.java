@@ -19,7 +19,6 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
-import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -125,7 +124,7 @@ public final class Stage1ShapedOutputPreviewPane {
                                                         : "";
                                         return new javafx.beans.property.SimpleStringProperty(v);
                                     });
-                            col.setCellFactory(TextFieldTableCell.forTableColumn());
+                            col.setCellFactory(TabularCellHighlight.stage1DateHighlightCellFactory(title));
                             col.setPrefWidth(prefW);
                             table.getColumns().add(col);
                         }
