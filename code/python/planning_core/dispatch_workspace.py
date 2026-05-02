@@ -210,24 +210,34 @@ def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
 
 def _read_excel_pandas_openpyxl(path: str, sheet_name: str | int) -> pd.DataFrame:
     """
-    Fallback: pandas/openpyxl. Some workbooks break openpyxl stylesheet parsing; then retry
-    read_only=True (skips most styles, cell values only).
+    Fallback when calamine is unavailable or fails. Prefer openpyxl read_only first: it skips
+    full stylesheet parse and avoids openpyxl IndexError on corrupt style XML. Full workbook
+    parse is only a last resort (e.g. read_only limitations on some sheets).
     """
     try:
-        return pd.read_excel(path, sheet_name=sheet_name, engine="openpyxl")
-    except IndexError as err:
-        _LOG.warning(
-            "pd.read_excel(openpyxl) failed (stylesheet); retry read_only: path=%r sheet=%r err=%s",
-            path,
-            sheet_name,
-            err,
-        )
         return pd.read_excel(
             path,
             sheet_name=sheet_name,
             engine="openpyxl",
             engine_kwargs={"read_only": True},
         )
+    except Exception as err_ro:
+        _LOG.warning(
+            "pd.read_excel(openpyxl read_only) failed; retry full parse: path=%r sheet=%r err=%s",
+            path,
+            sheet_name,
+            err_ro,
+        )
+        try:
+            return pd.read_excel(path, sheet_name=sheet_name, engine="openpyxl")
+        except Exception as err_full:
+            _LOG.error(
+                "pd.read_excel(openpyxl full) also failed: path=%r sheet=%r err=%s",
+                path,
+                sheet_name,
+                err_full,
+            )
+            raise
 
 
 def _read_excel_tabular(path: str, sheet_name: str | int) -> pd.DataFrame:
