@@ -6,17 +6,11 @@ See EnvVarDocs: PM_AI_TASK_INPUT_SOURCE_DIR, PM_AI_ACTUAL_DETAIL_SOURCE_DIR, PM_
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import time
 import unicodedata
 
 import pandas as pd
-
-# Repo root: planning_core/ -> code/python -> code -> Production-Control-System
-_REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-_DEBUG_LOG_PATH = os.path.join(_REPO_ROOT, ".cursor", "debug-e6e382.log")
 
 ENV_PM_AI_WORKSPACE = "PM_AI_WORKSPACE"
 ENV_PROCESSING_PLAN_PATH = "PM_AI_PROCESSING_PLAN_PATH"
@@ -215,28 +209,6 @@ def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
     return ""
 
 
-# region agent log
-def _agent_debug_log(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        payload = {
-            "sessionId": "e6e382",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
-
-
-# endregion
-
-
 def _norm_sheet_key(name: str) -> str:
     return unicodedata.normalize("NFKC", (name or "").strip())
 
@@ -254,21 +226,10 @@ def _resolve_tabular_sheet_name_calamine(path: str, sheet_name: str | int) -> st
     try:
         xf = pd.ExcelFile(path, engine="calamine")
     except Exception as ex:  # noqa: BLE001 — probe only
-        _agent_debug_log(
-            "H1",
-            "dispatch_workspace._resolve_tabular_sheet_name_calamine",
-            "ExcelFile(calamine) probe failed",
-            {"err": str(ex)[:200]},
-        )
+        _LOG.debug("ExcelFile(calamine) probe failed: %s", ex)
         return sheet_name
     names = list(xf.sheet_names)
     if req in names:
-        _agent_debug_log(
-            "H1",
-            "dispatch_workspace._resolve_tabular_sheet_name_calamine",
-            "exact sheet match",
-            {"requested": req, "n_sheets": len(names)},
-        )
         return req
     nreq = _norm_sheet_key(req)
     n_matches = [n for n in names if _norm_sheet_key(n) == nreq]
@@ -279,12 +240,6 @@ def _resolve_tabular_sheet_name_calamine(path: str, sheet_name: str | int) -> st
                 req,
                 n_matches[0],
             )
-        _agent_debug_log(
-            "H1",
-            "dispatch_workspace._resolve_tabular_sheet_name_calamine",
-            "NFKC match",
-            {"requested": req, "resolved": n_matches[0]},
-        )
         return n_matches[0]
     if len(n_matches) > 1:
         _LOG.warning(
@@ -300,19 +255,7 @@ def _resolve_tabular_sheet_name_calamine(path: str, sheet_name: str | int) -> st
             req,
             names[0],
         )
-        _agent_debug_log(
-            "H1",
-            "dispatch_workspace._resolve_tabular_sheet_name_calamine",
-            "single sheet fallback",
-            {"requested": req, "resolved": names[0]},
-        )
         return names[0]
-    _agent_debug_log(
-        "H1",
-        "dispatch_workspace._resolve_tabular_sheet_name_calamine",
-        "no match",
-        {"requested": req, "available": names[:30], "n": len(names)},
-    )
     return sheet_name
 
 
@@ -356,14 +299,7 @@ def _read_excel_tabular(path: str, sheet_name: str | int) -> pd.DataFrame:
     """
     resolved = _resolve_tabular_sheet_name_calamine(path, sheet_name)
     try:
-        df = pd.read_excel(path, sheet_name=resolved, engine="calamine")
-        _agent_debug_log(
-            "H2",
-            "dispatch_workspace._read_excel_tabular",
-            "calamine read ok",
-            {"resolved_is_int": isinstance(resolved, int)},
-        )
-        return df
+        return pd.read_excel(path, sheet_name=resolved, engine="calamine")
     except ImportError as err:
         _LOG.warning(
             "pd.read_excel(calamine) unavailable (%s); install python-calamine. Using openpyxl.",
@@ -371,12 +307,6 @@ def _read_excel_tabular(path: str, sheet_name: str | int) -> pd.DataFrame:
         )
         return _read_excel_pandas_openpyxl(path, resolved)
     except Exception as err:
-        _agent_debug_log(
-            "H2",
-            "dispatch_workspace._read_excel_tabular",
-            "calamine read exception -> openpyxl",
-            {"err_type": type(err).__name__, "err": str(err)[:300]},
-        )
         _LOG.warning(
             "pd.read_excel(calamine) failed; fallback openpyxl: path=%r sheet=%r err=%s",
             path,
