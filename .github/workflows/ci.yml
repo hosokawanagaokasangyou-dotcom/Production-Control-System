@@ -1,4 +1,4 @@
-# プラン「Maven test + pytest 一括」を CI で再現（本リポジトリ = Production-Control-System ルート想定）
+# Maven Wrapper + pytest (same as test.bat / test.sh)
 name: CI
 
 on:
@@ -18,8 +18,11 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Maven test
-        run: mvn -f code_java/pom.xml -B test
+      - name: Maven test (wrapper)
+        working-directory: code_java
+        run: |
+          chmod +x mvnw
+          ./mvnw -B test
 
   python:
     name: Python (code/python)

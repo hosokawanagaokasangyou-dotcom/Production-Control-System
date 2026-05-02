@@ -1,11 +1,14 @@
 @echo off
-REM Production-Control-System 直下で実行: Maven test + pytest（プランの test.bat 相当）
+REM Run from Production-Control-System root: Maven Wrapper (mvnw) + pytest
 setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo == [1/2] Maven test (code_java) ==
-call mvn -f code_java\pom.xml test
-if errorlevel 1 exit /b 1
+pushd code_java
+call mvnw.cmd test
+set ERR=%ERRORLEVEL%
+popd
+if not %ERR%==0 exit /b %ERR%
 
 echo == [2/2] pytest (code/python/tests) ==
 cd code\python
