@@ -210,17 +210,14 @@ def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
 
 def _read_excel_pandas_openpyxl(path: str, sheet_name: str | int) -> pd.DataFrame:
     """
-    Load one sheet with pandas/openpyxl.
-
-    Some third-party .xlsx files carry inconsistent style XML; full parse then fails inside
-    openpyxl (e.g. IndexError in stylesheet._merge_named_styles). Retrying with
-    openpyxl read_only=True avoids loading full styles and usually succeeds for cell values.
+    Fallback: pandas/openpyxl. Some workbooks break openpyxl stylesheet parsing; then retry
+    read_only=True (skips most styles, cell values only).
     """
     try:
-        return pd.read_excel(path, sheet_name=sheet_name)
+        return pd.read_excel(path, sheet_name=sheet_name, engine="openpyxl")
     except IndexError as err:
         _LOG.warning(
-            "pd.read_excel failed (openpyxl stylesheet); retry read_only: path=%r sheet=%r err=%s",
+            "pd.read_excel(openpyxl) failed (stylesheet); retry read_only: path=%r sheet=%r err=%s",
             path,
             sheet_name,
             err,
@@ -228,8 +225,32 @@ def _read_excel_pandas_openpyxl(path: str, sheet_name: str | int) -> pd.DataFram
         return pd.read_excel(
             path,
             sheet_name=sheet_name,
+            engine="openpyxl",
             engine_kwargs={"read_only": True},
         )
+
+
+def _read_excel_tabular(path: str, sheet_name: str | int) -> pd.DataFrame:
+    """
+    Prefer calamine (Rust; ignores broken Excel styles, fast). Requires python-calamine
+    and pandas >= 2.2. On ImportError or read failure, fall back to openpyxl.
+    """
+    try:
+        return pd.read_excel(path, sheet_name=sheet_name, engine="calamine")
+    except ImportError as err:
+        _LOG.warning(
+            "pd.read_excel(calamine) unavailable (%s); install python-calamine. Using openpyxl.",
+            err,
+        )
+        return _read_excel_pandas_openpyxl(path, sheet_name)
+    except Exception as err:
+        _LOG.warning(
+            "pd.read_excel(calamine) failed; fallback openpyxl: path=%r sheet=%r err=%s",
+            path,
+            sheet_name,
+            err,
+        )
+        return _read_excel_pandas_openpyxl(path, sheet_name)
 
 
 def read_tabular_dataframe(
@@ -248,4 +269,4 @@ def read_tabular_dataframe(
     if low.endswith((".parquet", ".pq")):
         return pd.read_parquet(path)
     sn: str | int = sheet_name if sheet_name else 0
-    return _read_excel_pandas_openpyxl(path, sn)
+    return _read_excel_tabular(path, sn)
