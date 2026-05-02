@@ -42,10 +42,13 @@ todos:
     content: L0 ツールチェーンの最終固定（Windows 11 限定／JDK・JavaFX 最新 LTS のバージョン番号／Maven／code_java/ の pom.xml とサブモジュール構成）
     status: pending
   - id: decision-1-python-bridge-spec
-    content: 1. Python↔JavaFX IPC 仕様書化と両側スタブ（NDJSON 進捗・stdout/stderr 役割・終了コード 0/1/2/3/9・致命的時は原因・推奨対処を必須・.cancel フラグ・UI 単一実行）
+    content: 1. Python↔JavaFX IPC 仕様書化と両側スタブ（§IPC テンプレートの type／フィールド名に準拠・ipc-line.schema.json 化・stdout/stderr 役割・終了コード 0/1/2/3/9・致命的時は原因・推奨対処を必須・.cancel フラグ・UI 単一実行）
     status: pending
   - id: decision-2-data-contract
-    content: 2. データコントラクト整備（schema.json／settings.json／POI による .xlsm 完結／output 命名規則／LocalDateTime 境界変換）
+    content: 2. データコントラクト整備（schema.json／settings.json／POI による .xlsm 完結／output 命名規則／LocalDateTime 境界変換。§IPC テンプレートの manifest 例と JSON Schema ファイルを一致させる）
+    status: pending
+  - id: ipc-json-schema-files
+    content: code_java の resources/schema に ipc-line.schema.json（stdout NDJSON 1 行）・columns.schema.json（schema.json 検証）を配置し、プランのドラフトと同期
     status: pending
   - id: decision-3-etl-python-parity
     content: 3. PQ-A〜D の Python ETL 実装（fetch_latest_files 共通化、tests/fixtures ゴールデン、PQ-B は抽出時間最新で Drop Duplicates、ファイルの変換 (2)/(3) は M 抽出後に実装）
@@ -493,11 +496,97 @@ flowchart LR
 | **1.7 エラー伝播・例外の翻訳** | **`3` および `2`**: Python 側で **stderr または NDJSON** に **理由・推奨対処法**を構造化して出力 → JavaFX で **日本語ダイアログ**に落とし込む。**`1`**: 可能な範囲でスタック要約とログ参照先を表示。**「不明なエラー」だけで終わらせない**ことを原則とする。 |
 | **1.8 同時実行ポリシー** | **UI レベルで完全な単一実行**。実行中は実行ボタンを無効化し、多重起動による書き込み競合を防ぐ。 |
 
+#### IPC テンプレート（ドラフト・AI 生成コードの固定用）
+
+本項は **フィールド名・構造を実装前に固定するためのドラフト**である。リポジトリに **`ipc-line.schema.json`**（stdout 1 行分の JSON Schema）および **`columns.schema.json`**（`schema.json` インスタンス用）を配置する場合は、本節を **正本**として同期する。
+
+**規約（stdout）**
+
+- **1 行 1 JSON**（NDJSON）。改行は `\n` のみ。ストリーム途中で **途中分割された JSON は書かない**（バッファリングしてから 1 行書き出す）。
+- **文字コード UTF-8**。先頭 BOM は付けない。
+- **必須共通フィールド**（全 `type`）: `schemaVersion`（文字列、当面 `"1.0"`）、`type`（列挙）、`ts`（ISO-8601、タイムゾーン付き推奨、例 `2026-05-02T13:00:00+09:00`）。
+
+**`type` 別フィールド（ドラフト）**
+
+| `type` | 用途 | 追加フィールド（推奨名・型） |
+|--------|------|------------------------------|
+| `progress` | 進捗・ProgressBar | `step`（string）、`label`（string・画面表示用）、`current`（int）、`total`（int・省略可）、`percent`（number 0〜100・省略可） |
+| `log` | 構造化ログ（UI のログペインへも） | `level`（`DEBUG` \| `INFO` \| `WARN` \| `ERROR`）、`message`（string）、`logger`（string・省略可） |
+| `validation_error` | データ検証・業務エラー（終了コード **3** 想定） | `exitCode`（固定 **3**）、`code`（string・機械可読）、`message`（string・ユーザー向け要約）、`remediation`（string の配列・推奨対処を順に）、`detail`（object・省略可） |
+| `fatal_error` | 致命的エラー・継続不能（終了コード **2** 想定） | `exitCode`（固定 **2**）、`code`、`message`、`remediation`（配列）、`cause`（string・技術的理由・省略可）、`detail`（object・省略可） |
+| `done` | 正常終了直前（終了コード **0** とセット） | `exitCode`（固定 **0**）、`outputPaths`（string の配列・生成した成果物パス）、`summary`（string・省略可） |
+| `ping` | 長時間処理の生存確認（省略可） | `label`（string・省略可） |
+
+**規約（stderr）**
+
+- **人間可読・ライブラリ既定ログ**を想定し、**プレーンテキスト行**を許容する（構造化パースは **必須としない**）。
+- **ユーザー向けの原因・推奨対処は stdout の `validation_error` / `fatal_error` に必ず出す**（stderr のみに頼らない）。
+- 例外スタックトレースは stderr にそのまま出してよいが、JavaFX は **`fatal_error` NDJSON を優先**してダイアログ文言を組み立てる。
+
+**stdout の最低限サンプル（NDJSON・抜粋）**
+
+```json
+{"schemaVersion":"1.0","type":"progress","ts":"2026-05-02T13:00:01+09:00","step":"stage1","label":"段階1 抽出","current":1,"total":4,"percent":25}
+{"schemaVersion":"1.0","type":"log","ts":"2026-05-02T13:00:02+09:00","level":"INFO","message":"入力ブックを読み込みました","logger":"planning_core"}
+{"schemaVersion":"1.0","type":"validation_error","ts":"2026-05-02T13:00:10+09:00","exitCode":3,"code":"MISSING_COLUMN","message":"必須列が不足しています","remediation":["schema.json と入力ファイルの列名を照合してください","加工計画DATA の取込をやり直してください"],"detail":{"sheet":"加工計画DATA","column":"依頼NO"}}
+{"schemaVersion":"1.0","type":"fatal_error","ts":"2026-05-02T13:00:11+09:00","exitCode":2,"code":"UNC_NOT_REACHABLE","message":"共有フォルダに接続できません","remediation":["VPN／ネットワークを確認してください","settings.json のパス設定を確認してください"],"cause":"java.nio.file.FileSystemException: ..."}
+{"schemaVersion":"1.0","type":"done","ts":"2026-05-02T13:05:00+09:00","exitCode":0,"outputPaths":["output/production_plan_20260502_130500.xlsx"],"summary":"段階2 完了"}
+```
+
+**列定義マニフェスト `schema.json`（ドラフト・構造）**
+
+- **配置例**: `code_java/src/main/resources/schema/manifest.schema.json`（JSON Schema）と **`schema.json` 実体**（リポジトリ共通パスは `decision-2-data-contract` で最終決定）。
+- **目的**: シート単位で **列ヘッダー・型・Python 定数名・Java プロパティ名**を単一ソース化する。
+
+**インスタンス例（ドラフト・一部のみ）**
+
+```json
+{
+  "schemaVersion": "1.0",
+  "document": "dispatch-plan-column-manifest",
+  "sheets": [
+    {
+      "id": "machining_plan_data",
+      "excelSheetName": "加工計画DATA",
+      "columns": [
+        {
+          "headerKey": "依頼NO",
+          "pythonConstantHint": "TASK_COL_TASK_ID",
+          "javaProperty": "taskId",
+          "valueKind": "string",
+          "nullable": false
+        },
+        {
+          "headerKey": "換算数量",
+          "pythonConstantHint": "TASK_COL_QTY",
+          "javaProperty": "convertedQty",
+          "valueKind": "decimal",
+          "nullable": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+**フィールド説明（ドラフト）**
+
+| フィールド | 説明 |
+|------------|------|
+| `schemaVersion` | マニフェスト形式の版（`1.0` から開始）。 |
+| `sheets[].id` | 安定 ID（コード・設定から参照）。 |
+| `sheets[].excelSheetName` | Excel シート名（openpyxl／POI での一致用）。 |
+| `columns[].headerKey` | シート上の列見出し文字列（**Python `_core.py` の定数と一致**させる）。 |
+| `columns[].pythonConstantHint` | 対応する `PLAN_*` / `TASK_*` 名（ドキュメント・検証用、実装では `_core.py` が真）。 |
+| `columns[].javaProperty` | JavaFX／POI 側でのプロパティ名（キャメルケース推奨）。 |
+| `columns[].valueKind` | `string` \| `integer` \| `decimal` \| `date` \| `datetime` \| `boolean` 等（境界での変換ルールの前提）。 |
+| `columns[].nullable` | null 許容か。 |
+
 ### 2. データコントラクト（列定義／ファイル）
 
 | 項目 | 決定 |
 |------|------|
-| **2.1 列定義マニフェスト** | **`schema.json` を正**として `code_java/` 等の共通領域に配置。**Python と JavaFX の双方が起動時に読み込んで列構成を認識**する。 |
+| **2.1 列定義マニフェスト** | **`schema.json` を正**として `code_java/` 等の共通領域に配置。**Python と JavaFX の双方が起動時に読み込んで列構成を認識**する。**フィールド名・構造のドラフトは §「IPC テンプレート（ドラフト）」の `schema.json` 例を参照**。正式版は JSON Schema（`columns.schema.json`）で検証可能にする。 |
 | **2.2 「設定_環境変数」シートの後継** | アプリ実行ディレクトリ直下の **`settings.json`**。UI に設定画面を設け、更新時に上書き保存。 |
 | **2.3 マクロブック（.xlsm）の取り扱い** | UI 置換後は **POI／openpyxl 等のファイル API で読み書きを完結**。**xlwings／Excel 自動操作は撤廃**（ロジックが Excel ランタイムに依存しないことを検証する）。 |
 | **2.4 入出力ファイルの命名・配置** | 例: `output/production_plan_yyyyMMdd_HHmmss.xlsx`。**出力先フォルダ固定 ＋ 日時サフィックス**を必須化。 |
