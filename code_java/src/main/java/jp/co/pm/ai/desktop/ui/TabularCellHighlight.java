@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.util.regex.Pattern;
+
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -11,8 +13,16 @@ import javafx.util.Callback;
  */
 final class TabularCellHighlight {
 
-    /** Light green fill for cell inner background */
-    static final String LIGHT_GREEN_STYLE = "-fx-control-inner-background: #d4edd4;";
+    /**
+     * Light green: TableCell needs both background and inner (TextFieldTableCell paints over inner).
+     */
+    static final String LIGHT_GREEN_STYLE =
+            "-fx-background-color: #d4edd4; -fx-control-inner-background: #d4edd4;";
+
+    /** Column title is a calendar date only, e.g. {@code 2026/04/30} (?H??????????`????t??). */
+    private static final Pattern HEADER_YMD_SLASH = Pattern.compile("^\\d{4}/\\d{1,2}/\\d{1,2}$");
+
+    private static final Pattern HEADER_YMD_DASH = Pattern.compile("^\\d{4}-\\d{1,2}-\\d{1,2}$");
 
     private TabularCellHighlight() {}
 
@@ -64,6 +74,12 @@ final class TabularCellHighlight {
             return true;
         }
         if ("\u8a08\u753b\u57fa\u6e96\u7d0d\u671f".equals(h)) {
+            return true;
+        }
+        if (HEADER_YMD_SLASH.matcher(h).matches()) {
+            return true;
+        }
+        if (HEADER_YMD_DASH.matcher(h).matches()) {
             return true;
         }
         return false;
