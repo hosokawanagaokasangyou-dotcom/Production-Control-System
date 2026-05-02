@@ -24,11 +24,12 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.embed.swing.SwingNode;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import java.awt.GraphicsEnvironment;
 
 import javax.swing.SwingUtilities;
 
@@ -103,17 +104,25 @@ public class PmAiFxApp extends Application {
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setWrapText(true);
-        VBox.setVgrow(logArea, Priority.ALWAYS);
+        logArea.setMinHeight(160);
+        logArea.setPrefRowCount(12);
 
         statusLabel = new Label(
                 "exit: n/a \u2014 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel");
 
-        VBox mainVBox = new VBox(8, grid,
-                new Label("log (stdout+stderr merged)"), logArea, statusLabel);
-        VBox.setVgrow(logArea, Priority.ALWAYS);
-        mainVBox.setPadding(new Insets(0, 12, 12, 12));
+        Label logCaption = new Label("log (stdout+stderr merged)");
+        VBox topBox = new VBox(8, grid, logCaption);
+        topBox.setFillWidth(true);
 
-        Tab tabMain = new Tab("\u5b9f\u884c\u30fb\u30ed\u30b0", mainVBox);
+        BorderPane mainPane = new BorderPane();
+        mainPane.setTop(topBox);
+        BorderPane.setMargin(topBox, new Insets(0, 0, 8, 0));
+        mainPane.setCenter(logArea);
+        mainPane.setBottom(statusLabel);
+        BorderPane.setMargin(statusLabel, new Insets(8, 0, 0, 0));
+        mainPane.setPadding(new Insets(0, 12, 12, 12));
+
+        Tab tabMain = new Tab("\u5b9f\u884c\u30fb\u30ed\u30b0", mainPane);
         tabMain.setClosable(false);
 
         Tab tabChart = new Tab("\u30b0\u30e9\u30d5 (JFreeChart)", buildChartPane());
@@ -126,16 +135,15 @@ public class PmAiFxApp extends Application {
 
         TabPane tabs = new TabPane(tabMain, tabChart, tabGridNote);
         BorderPane root = new BorderPane(tabs);
-        root.setStyle("-fx-background-color: #ececec;");
         Scene scene = new Scene(root, 960, 640);
+        primaryStage.setScene(scene);
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
-        primaryStage.setScene(scene);
-        primaryStage.show();
-        javafx.application.Platform.runLater(() -> {
+        primaryStage.setOnShown(e -> {
             primaryStage.toFront();
-            primaryStage.requestFocus();
+            tabs.getSelectionModel().select(tabMain);
         });
+        primaryStage.show();
 
         appendLog("[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.");
     }
@@ -267,26 +275,13 @@ public class PmAiFxApp extends Application {
 
     public static void main(String[] args) {
         System.setProperty("file.encoding", "UTF-8");
-        warnIfGuiLikelyUnavailable();
-        launch(args);
-    }
-
-    /**
-     * Linux/WSL without DISPLAY: JavaFX window will not show; warn once on stderr.
-     */
-    private static void warnIfGuiLikelyUnavailable() {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (!os.contains("linux")) {
-            return;
-        }
-        if (System.getenv("DISPLAY") != null || System.getenv("WAYLAND_DISPLAY") != null) {
-            return;
-        }
-        if (System.getenv("WSL_DISTRO_NAME") != null || System.getenv("WSL_INTEROP") != null) {
+        if (GraphicsEnvironment.isHeadless()) {
             System.err.println(
-                    "[PmAiFxApp] DISPLAY/WAYLAND_DISPLAY not set (typical on WSL without WSLg)."
-                            + " JavaFX needs a display. Use WSLg, or set DISPLAY for an X server,"
-                            + " or run on Windows: code_java\\mvnw.cmd javafx:run");
+                    "[PmAiFxApp] No graphical display (headless). "
+                            + "Run on Windows desktop, or on WSL set DISPLAY for JavaFX (e.g. WSLg / VcXsrv). "
+                            + "Do not run javafx:run from SSH without X forwarding.");
+            System.exit(2);
         }
+        launch(args);
     }
 }
