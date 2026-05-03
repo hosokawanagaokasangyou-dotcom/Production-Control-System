@@ -53,6 +53,9 @@ public final class AppPaths {
     /** Absolute path to master workbook ({@code master.xlsm}); overrides basename-only {@code MASTER_WORKBOOK_FILE}. */
     public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
 
+    /** Basename or relative master workbook filename (same as {@code MASTER_WORKBOOK_FILE} / planning_core). */
+    public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
+
     /**
      * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override from
      * TASK_INPUT_WORKBOOK).
@@ -298,6 +301,64 @@ public final class AppPaths {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Approximates {@code planning_core} bootstrap {@code os.getcwd()} after import: {@code PM_AI_WORKSPACE}
+     * if set and a directory, else parent of {@code TASK_INPUT_WORKBOOK}, else parent of {@link
+     * #resolvePythonScriptDir(Map)} (the {@code code} folder next to {@code python}).
+     */
+    public static Path resolveEffectivePlanningCwd(Map<String, String> ui, String taskInputWorkbookPath) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String ws = trim(u.get(KEY_PM_AI_WORKSPACE));
+        if (!ws.isEmpty()) {
+            Path w = Path.of(ws).toAbsolutePath().normalize();
+            if (Files.isDirectory(w)) {
+                return w;
+            }
+        }
+        String tb = taskInputWorkbookPath != null ? taskInputWorkbookPath.trim() : "";
+        if (!tb.isEmpty()) {
+            Path p = Path.of(tb).toAbsolutePath().normalize();
+            Path parent = p.getParent();
+            if (parent != null && Files.isDirectory(parent)) {
+                return parent;
+            }
+        }
+        Path py = resolvePythonScriptDir(u);
+        Path codeDir = py.getParent();
+        if (codeDir != null && Files.isDirectory(codeDir)) {
+            return codeDir.toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Same resolution as {@code planning_core._core._master_workbook_path_resolved} for the given env and
+     * effective macro-book path.
+     */
+    public static Path resolveMasterWorkbookPathResolved(Map<String, String> ui, String taskInputWorkbookPath) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String alt = trim(u.get(KEY_PM_AI_MASTER_WORKBOOK));
+        if (!alt.isEmpty()) {
+            Path ap = Path.of(alt).toAbsolutePath().normalize();
+            if (Files.isRegularFile(ap)) {
+                return ap;
+            }
+        }
+        String mf = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
+        if (mf.isEmpty()) {
+            mf = "master.xlsm";
+        }
+        Path cwd = resolveEffectivePlanningCwd(u, taskInputWorkbookPath);
+        if (mf.startsWith("\\\\")) {
+            return Path.of(mf);
+        }
+        Path mfPath = Path.of(mf);
+        if (mfPath.isAbsolute()) {
+            return mfPath.normalize();
+        }
+        return cwd.resolve(mf).normalize().toAbsolutePath();
     }
 
     /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */

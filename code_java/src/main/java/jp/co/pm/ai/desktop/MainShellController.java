@@ -92,6 +92,9 @@ public final class MainShellController {
     @FXML
     private ActualsStatusTabController actualsStatusTabController;
 
+    @FXML
+    private MasterReadSummaryTabController masterReadSummaryTabController;
+
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
@@ -115,6 +118,7 @@ public final class MainShellController {
 
         mainRunTabController.bindShell(this);
         envTabController.bindShell(this);
+        masterReadSummaryTabController.bindShell(this);
 
         mainRunTabController
                 .getWorkbookField()
@@ -442,6 +446,33 @@ public final class MainShellController {
             return t;
         }
         return AppPaths.resolveTaskInputWorkbook(collectUiEnv()).map(Path::toString).orElse("");
+    }
+
+    /** Macro-book path for Python ({@code TASK_INPUT_WORKBOOK}); exposed for master summary tab. */
+    String effectiveTaskInputWorkbookPathForShell() {
+        return effectiveTaskInputWorkbookPath();
+    }
+
+    /** Probe script {@code master_read_summary.py}: same env merge as stage1/2. */
+    RunRequest buildMasterReadSummaryRequest() {
+        Map<String, String> uiRun = collectUiEnv();
+        Path py =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
+                                mainRunTabController.getPythonExeField().getText().trim()));
+        Path dir =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                mainRunTabController.getScriptDirField().getText().trim()));
+        String wb = effectiveTaskInputWorkbookPath();
+        return new RunRequest(
+                py,
+                dir,
+                MasterReadSummaryTabController.scriptName(),
+                wb,
+                childEnvForPython(uiRun));
     }
 
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */

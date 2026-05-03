@@ -89,4 +89,33 @@ class AppPathsTest {
         Files.createFile(preferred);
         assertEquals(Optional.of(preferred), AppPaths.pickMacroWorkbook(dir));
     }
+
+    @Test
+    void resolveMasterWorkbookPathResolved_usesPmAiMasterWhenFileExists(@TempDir Path tmp) throws Exception {
+        Path master = tmp.resolve("m.xlsm");
+        Files.createFile(master);
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, master.toString());
+        assertEquals(
+                master.toAbsolutePath().normalize(),
+                AppPaths.resolveMasterWorkbookPathResolved(ui, ""));
+    }
+
+    @Test
+    void resolveMasterWorkbookPathResolved_relativeUsesCodeFolder(@TempDir Path tmp) throws Exception {
+        Path code = tmp.resolve("code");
+        Path py = code.resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Path master = code.resolve("master.xlsm");
+        Files.createFile(master);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        "master.xlsm");
+        assertEquals(
+                master.toAbsolutePath().normalize(),
+                AppPaths.resolveMasterWorkbookPathResolved(ui, ""));
+    }
 }

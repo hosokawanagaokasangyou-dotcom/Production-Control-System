@@ -170,7 +170,8 @@ public final class EnvVarDocs {
                 "PM_AI_MASTER_WORKBOOK",
                 "master \u7cfb .xlsm \u306e\u7d76\u5bfe\u30d1\u30b9\uff08\u5b9f\u5728\u30d5\u30a1\u30a4\u30eb\u306e\u3068\u304d"
                         + " MASTER_WORKBOOK_FILE \u3088\u308a\u512a\u5148\u3002planning_core \u306e"
-                        + " \u30de\u30b9\u30bf\u8aad\u8fbc\u30fb\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc\u7b49\u306b\u4f7f\u7528\u3002");
+                        + " \u30de\u30b9\u30bf\u8aad\u8fbc\u30fb\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc\u7b49\u306b\u4f7f\u7528\u3002"
+                        + " JavaFX \u306e\u300c\u30de\u30b9\u30bf\u8aad\u8fbc\u30b5\u30de\u30ea\u300d\u30bf\u30d6\u3067\u5185\u5bb9\u3092\u78ba\u8a8d\u53ef\u3002");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true \u7b49\u3067 workbook_env_bootstrap \u304c\u30de\u30af\u30ed\u30d6\u30c3\u30af\u306e"
@@ -206,7 +207,9 @@ public final class EnvVarDocs {
         put(
                 "MASTER_WORKBOOK_FILE",
                 "master.xlsm \u306e\u30d5\u30a1\u30a4\u30eb\u540d\uff08\u7a7a\u3067 master.xlsm\uff09\u3002"
-                        + "\u30de\u30af\u30ed\u30d6\u30c3\u30af\u968e\u5c64\u304b\u3089\u306e\u76f8\u5bfe\u30d1\u30b9\u53ef\u3002");
+                        + "\u30de\u30af\u30ed\u30d6\u30c3\u30af\u968e\u5c64\u304b\u3089\u306e\u76f8\u5bfe\u30d1\u30b9\u53ef\u3002"
+                        + " PM_AI_MASTER_WORKBOOK \u672a\u6307\u5b9a\u6642\u306e\u89e3\u6c7a\u306b\u4f7f\u7528\u3002"
+                        + " \u300c\u30de\u30b9\u30bf\u8aad\u8fbc\u30b5\u30de\u30ea\u300d\u30bf\u30d6\u3068\u9023\u52d5\u3002");
         put(
                 "MASTER_USE_SPEED_SHEET",
                 "master \u5185 speed \u30b7\u30fc\u30c8\u306b\u3088\u308b\u52a0\u5de5\u901f\u5ea6\u4e0a\u66f8\u304d\u3092\u6709\u52b9\u5316\u3002");

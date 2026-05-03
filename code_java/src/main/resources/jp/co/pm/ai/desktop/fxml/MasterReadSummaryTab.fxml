@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.MasterReadSummaryTabController"
+      spacing="8.0">
+    <padding>
+        <Insets bottom="10.0" left="10.0" right="10.0" top="10.0"/>
+    </padding>
+    <children>
+        <ToolBar>
+            <items>
+                <Button fx:id="refreshButton" mnemonicParsing="false"
+                        text="&#x30b5;&#x30de;&#x30ea;&#x3092;&#x66f4;&#x65b0;"
+                        onAction="#onRefreshAction"/>
+                <Button fx:id="openExcelButton" mnemonicParsing="false"
+                        text="Excel&#x3067;&#x958b;&#x304f;"
+                        onAction="#onOpenExcelAction"/>
+                <Button fx:id="copyJsonButton" mnemonicParsing="false"
+                        text="&#x30af;&#x30ea;&#x30c3;&#x30d7;&#x30dc;&#x30fc;&#x30c9;&#xff08;JSON&#xff09;"
+                        onAction="#onCopyJsonAction"/>
+            </items>
+        </ToolBar>
+        <Label fx:id="statusLabel" styleClass="master-summary-status" text=""/>
+
+        <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS">
+            <VBox fx:id="contentBox" spacing="10.0">
+                <padding>
+                    <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                </padding>
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x30d5;&#x30a1;&#x30a4;&#x30eb;"/>
+                <TextField fx:id="resolvedPathField" editable="false"/>
+                <HBox spacing="16.0">
+                    <Label fx:id="fileExistsLabel" text=""/>
+                    <Label fx:id="cwdLabel" text=""/>
+                </HBox>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x74b0;&#x5883;&#x30fb;speed"/>
+                <GridPane fx:id="envGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x30e1;&#x30a4;&#x30f3;&#x30b7;&#x30fc;&#x30c8;&#xff08;&#x5de5;&#x5834;&#x67a2;&#x30fb;&#x5b9a;&#x5e38;&#xff09;"/>
+                <GridPane fx:id="mainGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x30b7;&#x30fc;&#x30c8;&#x78ba;&#x8a8d;"/>
+                <TableView fx:id="sheetTable" prefHeight="200.0" minHeight="120.0">
+                    <columns>
+                        <TableColumn fx:id="colCategory" text="&#x533a;&#x5206;" prefWidth="140.0"/>
+                        <TableColumn fx:id="colSheetName" text="&#x30b7;&#x30fc;&#x30c8;&#x540d;" prefWidth="200.0"/>
+                        <TableColumn fx:id="colPresent" text="&#x72b6;&#x614b;" prefWidth="72.0"/>
+                        <TableColumn fx:id="colNote" text="&#x5099;&#x8003;" prefWidth="120.0"/>
+                    </columns>
+                </TableView>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x52e4;&#x6020;&#xff08;&#x5019;&#x88dc;&#xff09;"/>
+                <GridPane fx:id="attendanceGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="&#x8b66;&#x544a;&#x30fb;&#x6ce8;&#x610f;"/>
+                <ListView fx:id="warningsList" prefHeight="120.0" minHeight="80.0"/>
+            </VBox>
+        </ScrollPane>
+    </children>
+</VBox>
