@@ -422,6 +422,40 @@ public final class MainShellController {
         return AppPaths.resolvePythonScriptDir(collectUiEnv()).toString();
     }
 
+    /**
+     * After stage 1 writes {@code json/stage1_exclude_rules.json}, mirror the path into the env tab so
+     * {@code PM_AI_EXCLUDE_RULES_JSON} matches the next child-process run.
+     */
+    private void applyStage1ExcludeRulesJsonToEnvTab() {
+        if (envRows == null) {
+            return;
+        }
+        try {
+            Path p = AppPaths.stage1ExcludeRulesJsonPath(collectUiEnv());
+            if (!Files.isRegularFile(p)) {
+                appendLog(
+                        "[env] PM_AI_EXCLUDE_RULES_JSON: "
+                                + p
+                                + " \u304c\u7121\u3044\u305f\u3081\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306f\u672a\u66f4\u65b0"
+                                + "\uff08TASK_INPUT_WORKBOOK \u7121\u3057\u306a\u3069\u3067 JSON \u5316\u3055\u308c\u306a\u3044\u5834\u5408\uff09\u3002");
+                return;
+            }
+            String pathStr = p.toString();
+            for (EnvVarRow row : envRows) {
+                String k = row.getName() != null ? row.getName().trim() : "";
+                if (AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)) {
+                    row.setValue(pathStr);
+                    appendLog("[env] PM_AI_EXCLUDE_RULES_JSON=" + pathStr);
+                    return;
+                }
+            }
+            appendLog(
+                    "[env] PM_AI_EXCLUDE_RULES_JSON \u884c\u304c\u898b\u3064\u304b\u3089\u306a\u3044\u305f\u3081\u672a\u66f4\u65b0\u3002");
+        } catch (Exception ex) {
+            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON \u66f4\u65b0\u5931\u6557: " + ex.getMessage());
+        }
+    }
+
     private void peekSheetsAction() {
         String p = effectiveTaskInputWorkbookPath();
         if (p.isEmpty()) {
@@ -485,6 +519,7 @@ public final class MainShellController {
                                             mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
                                             appendLog("[end] exitCode=" + c + " " + exitHint(c));
                                             if (STAGE1.equals(script) && c == 0) {
+                                                applyStage1ExcludeRulesJsonToEnvTab();
                                                 if (reloadAfterStage1Preview != null) {
                                                     reloadAfterStage1Preview.run();
                                                 }

@@ -376,6 +376,25 @@ public final class AppPaths {
     public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "\u30bf\u30b9\u30af\u5165\u529b\u6574\u5f62";
 
     /**
+     * Written by {@code run_stage1_extract} beside {@code json_data_dir} ({@code planning_core} /
+     * {@code STAGE1_EXCLUDE_RULES_JSON_FILENAME}).
+     */
+    public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
+
+    /**
+     * Path to the stage-1 exclude-rules sidecar JSON (same convention as Python {@code json_data_dir} under
+     * {@code code/python}).
+     */
+    public static Path stage1ExcludeRulesJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return resolvePythonScriptDir(u)
+                .resolve("json")
+                .resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
      * Default path to stage-1 Excel output.
      *
      * <p>{@code planning_core.bootstrap} sets {@code cwd} to the parent of {@code code/python} (or
