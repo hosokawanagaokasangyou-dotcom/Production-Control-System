@@ -30,6 +30,10 @@
     "value" : "",
     "description" : "結果_タスク一覧の列表示設定 CSV のフルパス。実在時は列設定シート読みをスキップ可。"
   }, {
+    "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
+    "value" : "",
+    "description" : "実行・ログタブの「開く」で開くサマリ用マクロブック（.xlsm）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsm。ファイル名のみのときは code/ からの相対として解決。"
+  }, {
     "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
     "value" : "1",
     "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。"

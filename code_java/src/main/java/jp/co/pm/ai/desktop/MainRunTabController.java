@@ -488,8 +488,10 @@ public final class MainRunTabController {
                     "[summary-ai-dispatch] file not found: "
                             + p
                             + " (set "
+                            + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
+                            + " to open another book, or "
                             + AppPaths.KEY_PM_AI_REPO_ROOT
-                            + " on the env tab if the repository root is wrong)");
+                            + " if the repository root is wrong)");
             return;
         }
         try {

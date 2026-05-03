@@ -35,8 +35,10 @@ class AppPathsTest {
     @Test
     void masterAndRelatedPaths_useFilePickerKinds() {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK));
+        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         assertTrue(AppPaths.isCsvFilePathEnvKey(AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV));
         assertFalse(AppPaths.isJsonFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
     }
@@ -145,6 +147,45 @@ class AppPathsTest {
         assertEquals(
                 master.toAbsolutePath().normalize(),
                 AppPaths.resolveMasterWorkbookPathResolved(ui, ""));
+    }
+
+    @Test
+    void summaryAiDispatchXlsmPath_defaultsUnderCode(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        Path expected =
+                fakeRepo.resolve("code")
+                        .resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSM)
+                        .normalize()
+                        .toAbsolutePath();
+        assertEquals(expected, AppPaths.summaryAiDispatchXlsmPath(ui));
+    }
+
+    @Test
+    void summaryAiDispatchXlsmPath_respectsOverrideAbsolute(@TempDir Path tmp) throws Exception {
+        Path custom = tmp.resolve("custom.xlsm");
+        Files.createFile(custom);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        assertEquals(custom.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsmPath(ui));
+    }
+
+    @Test
+    void summaryAiDispatchXlsmPath_respectsOverrideRelativeToCode(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code");
+        Files.createDirectories(code.resolve("python"));
+        Files.createFile(code.resolve("python").resolve("task_extract_stage1.py"));
+        Path alt = code.resolve("alt.xlsm");
+        Files.createFile(alt);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        "alt.xlsm");
+        assertEquals(alt.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsmPath(ui));
     }
 
     @Test

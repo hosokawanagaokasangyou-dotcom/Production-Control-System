@@ -66,6 +66,14 @@ public final class AppPaths {
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
+     * {@code \u5b9f\u884c\u30fb\u30ed\u30b0} \u30bf\u30d6\u306e\u300c\u958b\u304f\u300d\u304c\u958b\u304f\u30b5\u30de\u30ea\u7528\u30de\u30af\u30ed\u30d6\u30c3\u30af\uff08
+     * \u7d76\u5bfe\u30d1\u30b9\u3001\u307e\u305f\u306f {@code code/} \u304b\u3089\u306e\u76f8\u5bfe\uff09\u3002\u7a7a\u3067
+     * {@link #SUMMARY_AI_DISPATCH_XLSM}\u3002
+     */
+    public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
+            "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
+
+    /**
      * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override when
      * it differs from {@code PM_AI_PLAN_INPUT_PATH}).
      */
@@ -133,7 +141,8 @@ public final class AppPaths {
             KEY_PM_AI_MASTER_WORKBOOK,
             KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
             KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
-            KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
+            KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV,
+            KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
 
     private AppPaths() {}
 
@@ -158,7 +167,8 @@ public final class AppPaths {
         String k = key != null ? key.trim() : "";
         return KEY_PM_AI_MASTER_WORKBOOK.equals(k)
                 || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
-                || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k);
+                || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k)
+                || KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(k);
     }
 
     /** Result-task column config CSV. */
@@ -377,9 +387,19 @@ public final class AppPaths {
 
     /**
      * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSM} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
+     * {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} が非空のときはそのパス（絶対、または {@code code/} 基準の相対）を返す。
      */
     public static Path summaryAiDispatchXlsmPath(Map<String, String> ui) {
-        return resolveRepoRoot(ui != null ? ui : Map.of())
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+        if (!override.isEmpty()) {
+            Path p = Path.of(override);
+            if (!p.isAbsolute()) {
+                p = resolveRepoRoot(u).resolve("code").resolve(override);
+            }
+            return p.toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u)
                 .resolve("code")
                 .resolve(SUMMARY_AI_DISPATCH_XLSM)
                 .toAbsolutePath()
