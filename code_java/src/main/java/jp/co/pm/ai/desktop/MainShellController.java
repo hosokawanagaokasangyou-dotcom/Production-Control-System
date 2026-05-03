@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -22,6 +23,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -137,6 +139,9 @@ public final class MainShellController {
     private volatile String activeRunStageScript;
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
+    /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
+    private Runnable uiEnvPersistSchedule;
+    private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
 
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
 
@@ -454,17 +459,23 @@ public final class MainShellController {
                     }
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
+        this.uiEnvPersistSchedule = schedule;
         envRows.addListener(
                 (ListChangeListener<EnvVarRow>)
                         c -> {
                             while (c.next()) {
+                                if (envResetInProgress.get()) {
+                                    continue;
+                                }
                                 if (c.wasAdded()) {
                                     for (EnvVarRow row : c.getAddedSubList()) {
                                         hookEnvRowForAutoSave(row, schedule);
                                     }
                                 }
                             }
-                            schedule.run();
+                            if (!envResetInProgress.get()) {
+                                schedule.run();
+                            }
                         });
         for (EnvVarRow row : envRows) {
             hookEnvRowForAutoSave(row, schedule);
@@ -491,6 +502,62 @@ public final class MainShellController {
 
     ObservableList<EnvVarRow> getEnvRows() {
         return envRows;
+    }
+
+    /**
+     * Resets the env-var table to bundled defaults ({@link UiRefEnvDefaults}) and reapplies bootstrap fills.
+     * Shows a confirmation dialog first.
+     */
+    void confirmAndResetEnvRowsToDefaults() {
+        Alert alert = new Alert(AlertType.CONFIRMATION);
+        alert.initOwner(primaryStage);
+        alert.setTitle("\u74b0\u5883\u5909\u6570\u3092\u521d\u671f\u5316");
+        alert.setHeaderText(null);
+        alert.setContentText(
+                "ui_ref_env_defaults.json \u306b\u57fa\u3065\u304f\u521d\u671f\u884c\u306b\u623b\u3057\u307e\u3059\u3002"
+                        + "\u7de8\u96c6\u5185\u5bb9\u306f\u5931\u308f\u308c\u307e\u3059\u3002"
+                        + " Python/code.python \u306e\u8868\u793a\u3082\u518d\u8a08\u7b97\u3057\u307e\u3059\u3002"
+                        + "\u7d9a\u884c\u3057\u307e\u3059\u304b\uff1f");
+        Optional<ButtonType> ans = alert.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        resetEnvRowsToDefaults();
+    }
+
+    private void resetEnvRowsToDefaults() {
+        if (envRows == null) {
+            return;
+        }
+        suppressEnvSessionPersistence.set(true);
+        envResetInProgress.set(true);
+        try {
+            populateEnvRows(envRows);
+            Runnable sched = uiEnvPersistSchedule;
+            if (sched != null) {
+                for (EnvVarRow row : envRows) {
+                    hookEnvRowForAutoSave(row, sched);
+                }
+            }
+            Map<String, String> ui = collectUiEnv();
+            mainRunTabController
+                    .getPythonExeField()
+                    .setText(
+                            firstNonBlank(
+                                    ui.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
+            mainRunTabController
+                    .getScriptDirField()
+                    .setText(
+                            firstNonBlank(
+                                    ui.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                    AppPaths.resolvePythonScriptDir(ui).toString()));
+        } finally {
+            envResetInProgress.set(false);
+            suppressEnvSessionPersistence.set(false);
+        }
+        applyRepoFolderPathNormalization();
+        DesktopSessionStateStore.save(collectDesktopSession());
+        uiEnvSaveDebounce.stop();
     }
 
     void appendBootMessage() {
