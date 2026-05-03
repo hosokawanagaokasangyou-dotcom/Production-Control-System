@@ -481,6 +481,36 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenMasterWorkbookAction() {
+        if (shell == null) {
+            return;
+        }
+        Path p =
+                AppPaths.resolveMasterWorkbookPathResolved(
+                        shell.snapshotUiEnv(),
+                        shell.effectiveTaskInputWorkbookPathForShell());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[master-workbook] file not found: "
+                            + p
+                            + " (set "
+                            + AppPaths.KEY_PM_AI_MASTER_WORKBOOK
+                            + " / "
+                            + AppPaths.KEY_MASTER_WORKBOOK_FILE
+                            + ", or check "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + ")");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[master-workbook] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[master-workbook] open failed: " + e.getMessage());
+        }
+    }
+
+    @FXML
     private void onOpenSummaryAiDispatchAction() {
         if (shell == null) {
             return;
