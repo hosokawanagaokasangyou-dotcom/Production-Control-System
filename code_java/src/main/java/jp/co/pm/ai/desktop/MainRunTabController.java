@@ -22,6 +22,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
 import javafx.scene.input.Clipboard;
@@ -37,6 +38,8 @@ import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
 public final class MainRunTabController {
+
+    private static final int MAX_PERSISTED_LOG_LINES = 2000;
 
     private static final String DEFAULT_FONT_FAMILY_LABEL = "\u30b7\u30b9\u30c6\u30e0\u65e2\u5b9a";
 
@@ -95,6 +98,10 @@ public final class MainRunTabController {
 
     private final AtomicBoolean suppressLogFontEvents = new AtomicBoolean(false);
 
+    private final AtomicBoolean suppressRunLogSessionPersistence = new AtomicBoolean(false);
+
+    private double pendingSessionLogScroll = Double.NaN;
+
     @FXML
     private void initialize() {
         logFilterCombo.getItems().setAll(LogViewFilter.values());
@@ -125,6 +132,10 @@ public final class MainRunTabController {
                         (o, a, b) -> {
                             if (b != null) {
                                 logLinesVisible.setPredicate(b::test);
+                            }
+                            if (shell != null
+                                    && !suppressRunLogSessionPersistence.get()) {
+                                shell.scheduleDesktopSessionSave();
                             }
                         });
 
@@ -424,6 +435,9 @@ public final class MainRunTabController {
     @FXML
     private void onClearLogButtonAction() {
         logLinesAll.clear();
+        if (shell != null) {
+            shell.scheduleDesktopSessionSave();
+        }
     }
 
     TextField getWorkbookField() {
@@ -460,18 +474,109 @@ public final class MainRunTabController {
     }
 
     void appendLog(String line) {
+        appendLog(line, true);
+    }
+
+    /**
+     * Appends one log line. When {@code scrollToEnd} is false, vertical scroll is unchanged (used for boot
+     * lines before restoring session scroll).
+     */
+    void appendLog(String line, boolean scrollToEnd) {
         Runnable add =
                 () -> {
                     logLinesAll.add(line);
-                    int n = logLinesVisible.size();
-                    if (n > 0) {
-                        logListView.scrollTo(n - 1);
+                    if (scrollToEnd) {
+                        int n = logLinesVisible.size();
+                        if (n > 0) {
+                            logListView.scrollTo(n - 1);
+                        }
                     }
                 };
         if (Platform.isFxApplicationThread()) {
             add.run();
         } else {
             Platform.runLater(add);
+        }
+    }
+
+    /**
+     * Restores log buffer, filter, and schedules scroll restore after layout (see {@link
+     * #flushPendingSessionLogScroll()}).
+     */
+    void restoreRunLogUiFromSession(
+            String filterName, List<String> lines, double scrollProportion) {
+        suppressRunLogSessionPersistence.set(true);
+        try {
+            if (lines != null && !lines.isEmpty()) {
+                logLinesAll.setAll(lines);
+            } else {
+                logLinesAll.clear();
+            }
+            logFilterCombo.setValue(LogViewFilter.fromStoredName(filterName));
+        } finally {
+            suppressRunLogSessionPersistence.set(false);
+        }
+        pendingSessionLogScroll = scrollProportion;
+    }
+
+    /** Applies {@link #pendingSessionLogScroll} once the log {@link ListView} is laid out. */
+    void flushPendingSessionLogScroll() {
+        double p = pendingSessionLogScroll;
+        pendingSessionLogScroll = Double.NaN;
+        if (!Double.isFinite(p)) {
+            return;
+        }
+        applyLogScrollProportion(p);
+        Platform.runLater(() -> applyLogScrollProportion(p));
+    }
+
+    String snapshotLogFilterName() {
+        LogViewFilter v = logFilterCombo != null ? logFilterCombo.getValue() : null;
+        return v != null ? v.name() : LogViewFilter.ALL.name();
+    }
+
+    List<String> snapshotPersistedLogLines() {
+        int n = logLinesAll.size();
+        if (n <= MAX_PERSISTED_LOG_LINES) {
+            return List.copyOf(logLinesAll);
+        }
+        return List.copyOf(logLinesAll.subList(n - MAX_PERSISTED_LOG_LINES, n));
+    }
+
+    double snapshotLogScrollProportion() {
+        return readVerticalScrollProportion(logListView);
+    }
+
+    private static double readVerticalScrollProportion(ListView<?> listView) {
+        if (listView == null) {
+            return Double.NaN;
+        }
+        ScrollBar sb = (ScrollBar) listView.lookup(".scroll-bar:vertical");
+        if (sb == null) {
+            return Double.NaN;
+        }
+        double min = sb.getMin();
+        double max = sb.getMax();
+        double v = sb.getValue();
+        if (max <= min) {
+            return 0d;
+        }
+        return (v - min) / (max - min);
+    }
+
+    private void applyLogScrollProportion(double proportion) {
+        if (logListView == null || !Double.isFinite(proportion)) {
+            return;
+        }
+        double p = Math.max(0d, Math.min(1d, proportion));
+        ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
+        if (sb == null) {
+            return;
+        }
+        double min = sb.getMin();
+        double max = sb.getMax();
+        if (max > min) {
+            sb.setValue(min + p * (max - min));
         }
     }
 

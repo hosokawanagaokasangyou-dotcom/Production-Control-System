@@ -49,6 +49,9 @@ public final class DesktopSessionStateStore {
                     text(root, "uiTheme"),
                     text(root, "logFontFamily"),
                     optionalDouble(root, "logFontSize", 0d),
+                    text(root, "mainRunLogFilter"),
+                    loadStringList(root, "mainRunLogLines"),
+                    optionalDouble(root, "mainRunLogScroll", Double.NaN),
                     loadUiEnvRows(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -70,6 +73,9 @@ public final class DesktopSessionStateStore {
             put(root, "uiTheme", state.uiTheme());
             put(root, "logFontFamily", state.logFontFamily());
             putLogFontSize(root, state.logFontSize());
+            put(root, "mainRunLogFilter", state.mainRunLogFilter());
+            putMainRunLogLines(root, state.mainRunLogLines());
+            putMainRunLogScroll(root, state.mainRunLogScroll());
             putUiEnvRows(root, state.uiEnvRows());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
@@ -102,6 +108,39 @@ public final class DesktopSessionStateStore {
     private static void putLogFontSize(ObjectNode root, double sizePoints) {
         if (Double.isFinite(sizePoints) && sizePoints > 0) {
             root.put("logFontSize", sizePoints);
+        }
+    }
+
+    private static List<String> loadStringList(JsonNode root, String key) {
+        JsonNode arr = root.get(key);
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonNode el : arr) {
+            if (el != null && el.isTextual()) {
+                out.add(el.asText(""));
+            } else if (el != null && el.isValueNode()) {
+                out.add(el.asText(""));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static void putMainRunLogLines(ObjectNode root, List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        ArrayNode arr = JSON.createArrayNode();
+        for (String s : lines) {
+            arr.add(s != null ? s : "");
+        }
+        root.set("mainRunLogLines", arr);
+    }
+
+    private static void putMainRunLogScroll(ObjectNode root, double scroll) {
+        if (Double.isFinite(scroll)) {
+            root.put("mainRunLogScroll", scroll);
         }
     }
 

@@ -20,6 +20,9 @@ import java.util.List;
  * @param uiTheme persisted UI theme id ({@link DesktopTheme#storedId()}, empty defaults to light)
  * @param logFontFamily run-tab log font family name; empty means default family
  * @param logFontSize run-tab log size in points; {@code 0} means default size
+ * @param mainRunLogFilter persisted run-tab log filter enum name ({@code ALL}, {@code ERRORS_ONLY}, ...); empty means ALL
+ * @param mainRunLogLines last run-tab log lines (capped when saving)
+ * @param mainRunLogScroll vertical scroll position as 0..1 proportion of the scroll bar; {@link Double#NaN} if unknown
  * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
  */
 public record DesktopSessionState(
@@ -38,6 +41,9 @@ public record DesktopSessionState(
         String uiTheme,
         String logFontFamily,
         double logFontSize,
+        String mainRunLogFilter,
+        List<String> mainRunLogLines,
+        double mainRunLogScroll,
         List<UiEnvRowSnapshot> uiEnvRows) {
 
     public static DesktopSessionState empty() {
@@ -57,6 +63,9 @@ public record DesktopSessionState(
                 "",
                 "",
                 0d,
+                "",
+                List.of(),
+                Double.NaN,
                 List.of());
     }
 }

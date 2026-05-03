@@ -189,8 +189,14 @@ public final class MainShellController {
                 .getSelectionModel()
                 .selectedIndexProperty()
                 .addListener(
-                        (obs, prev, idx) ->
-                                updateClearTabFiltersButton(idx != null ? idx.intValue() : -1));
+                        (obs, prev, idx) -> {
+                            int prevIdx = prev != null ? prev.intValue() : -1;
+                            int newIdx = idx != null ? idx.intValue() : -1;
+                            if (prevIdx == 0 && newIdx != 0) {
+                                DesktopSessionStateStore.save(collectDesktopSession());
+                            }
+                            updateClearTabFiltersButton(newIdx);
+                        });
         updateClearTabFiltersButton(tabPane.getSelectionModel().getSelectedIndex());
     }
 
@@ -282,6 +288,8 @@ public final class MainShellController {
             mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
         }
         mainRunTabController.applyLogFontFromSession(s.logFontFamily(), s.logFontSize());
+        mainRunTabController.restoreRunLogUiFromSession(
+                s.mainRunLogFilter(), s.mainRunLogLines(), s.mainRunLogScroll());
         applyWindowGeometry(s);
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
@@ -341,6 +349,9 @@ public final class MainShellController {
                         : DesktopTheme.LIGHT.storedId(),
                 mainRunTabController.snapshotLogFontFamily(),
                 mainRunTabController.snapshotLogFontSize(),
+                mainRunTabController.snapshotLogFilterName(),
+                mainRunTabController.snapshotPersistedLogLines(),
+                mainRunTabController.snapshotLogScrollProportion(),
                 snapshotUiEnvRows());
     }
 
@@ -443,7 +454,13 @@ public final class MainShellController {
     }
 
     void appendBootMessage() {
-        appendLog("[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.");
+        mainRunTabController.appendLog(
+                "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", false);
+        Platform.runLater(
+                () -> {
+                    mainRunTabController.flushPendingSessionLogScroll();
+                    Platform.runLater(mainRunTabController::flushPendingSessionLogScroll);
+                });
     }
 
     /**

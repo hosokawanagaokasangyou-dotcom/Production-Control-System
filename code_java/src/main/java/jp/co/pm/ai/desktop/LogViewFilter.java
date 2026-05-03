@@ -27,4 +27,16 @@ enum LogViewFilter {
     boolean test(String line) {
         return match.test(line);
     }
+
+    /** Restores filter from {@link #name()} stored in session; unknown or blank yields ALL. */
+    static LogViewFilter fromStoredName(String name) {
+        if (name == null || name.isBlank()) {
+            return ALL;
+        }
+        try {
+            return LogViewFilter.valueOf(name.trim());
+        } catch (IllegalArgumentException e) {
+            return ALL;
+        }
+    }
 }
