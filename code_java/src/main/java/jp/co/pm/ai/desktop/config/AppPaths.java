@@ -4,10 +4,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -92,6 +95,18 @@ public final class AppPaths {
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR);
+
+    /** {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。 */
+    private static final List<String> FOLDER_PATH_NORMALIZE_ORDER =
+            List.of(
+                    KEY_PM_AI_REPO_ROOT,
+                    KEY_PM_AI_CODE_PYTHON_DIR,
+                    KEY_PM_AI_WORKSPACE,
+                    KEY_PM_AI_OUTPUT_DIR,
+                    KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                    KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                    KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
+                    KEY_COMPARE_GANTT_SNAPSHOT_DIR);
 
     /** Env keys whose value is a single file path (file chooser in the UI). */
     private static final Set<String> FILE_PATH_ENV_KEYS = Set.of(
@@ -512,6 +527,116 @@ public final class AppPaths {
 
     private static String trim(String s) {
         return s != null ? s.trim() : "";
+    }
+
+    /**
+     * フォルダ系環境変数の値を、現在のリポジトリ根に対して補正できるときだけ置き換え文字列を返す。
+     *
+     * <ul>
+     *   <li>{@link #KEY_PM_AI_REPO_ROOT}: 相対パスは {@link Path#toAbsolutePath()} で絶対化</li>
+     *   <li>その他フォルダキー: リポジトリからの相対パスは {@link #resolveRepoRoot(Map)} に対して解決</li>
+     *   <li>絶対パスが現在のリポジトリ配下なら正規化のみ</li>
+     *   <li>別ルートにあった旧クローンの絶対パスは、パス内の {@link Path#getFileName() リポジトリ終端名}
+     *       と一致する区切り以降を現在のリポジトリ根に再接続（サブパスのみ）</li>
+     * </ul>
+     *
+     * リポジトリ外を意図した相対パス（解決結果がリポジトリ根の外）は変更しない。
+     */
+    public static Optional<String> normalizeFolderEnvValue(Map<String, String> ui, String key, String rawValue) {
+        String k = key != null ? key.trim() : "";
+        if (!isFolderPathEnvKey(k)) {
+            return Optional.empty();
+        }
+        String v = trim(rawValue);
+        if (v.isEmpty()) {
+            return Optional.empty();
+        }
+        Path Rn = resolveRepoRoot(ui != null ? ui : Map.of()).toAbsolutePath().normalize();
+
+        if (KEY_PM_AI_REPO_ROOT.equals(k)) {
+            Path p = Path.of(v);
+            Path out = p.isAbsolute() ? p.normalize() : p.toAbsolutePath().normalize();
+            return pathsEqualString(v, out) ? Optional.empty() : Optional.of(out.toString());
+        }
+
+        Path p = Path.of(v);
+        Path resolved;
+        if (p.isAbsolute()) {
+            Path pn = p.toAbsolutePath().normalize();
+            if (isStrictlyUnderOrEqualRepo(pn, Rn)) {
+                resolved = pn;
+            } else {
+                Path relocated = relocateUnderRepoByLeafName(pn, Rn);
+                if (relocated != null && isStrictlyUnderOrEqualRepo(relocated, Rn)) {
+                    resolved = relocated;
+                } else {
+                    return Optional.empty();
+                }
+            }
+        } else {
+            Path relResolved = Rn.resolve(p).normalize();
+            if (!isStrictlyUnderOrEqualRepo(relResolved, Rn)) {
+                return Optional.empty();
+            }
+            resolved = relResolved;
+        }
+        return pathsEqualString(v, resolved) ? Optional.empty() : Optional.of(resolved.toString());
+    }
+
+    /**
+     * {@code ui} のフォルダ系キーを {@link #FOLDER_PATH_NORMALIZE_ORDER} の順で更新した差分（キー→新値）。
+     * 途中で {@link #KEY_PM_AI_REPO_ROOT} が変わると後続キーの解決に反映される。
+     */
+    public static Map<String, String> normalizedFolderEnvOverrides(Map<String, String> ui) {
+        Map<String, String> work = new HashMap<>(ui != null ? ui : Map.of());
+        Map<String, String> overrides = new LinkedHashMap<>();
+        for (String fk : FOLDER_PATH_NORMALIZE_ORDER) {
+            String raw = trim(work.get(fk));
+            Optional<String> n = normalizeFolderEnvValue(work, fk, raw);
+            if (n.isPresent()) {
+                String nv = n.get();
+                overrides.put(fk, nv);
+                work.put(fk, nv);
+            }
+        }
+        return overrides;
+    }
+
+    private static boolean isStrictlyUnderOrEqualRepo(Path path, Path repoNorm) {
+        Path pn = path.toAbsolutePath().normalize();
+        Path rn = repoNorm.toAbsolutePath().normalize();
+        return pn.startsWith(rn);
+    }
+
+    /**
+     * {@code absoluteForeign} の祖先に {@code repoNorm.getFileName()} と同名の区切りがあれば、その直下を {@code repoNorm}
+     * に付け替えたパスを返す。
+     */
+    static Path relocateUnderRepoByLeafName(Path absoluteForeign, Path repoNorm) {
+        Path rn = repoNorm.toAbsolutePath().normalize();
+        Path leaf = rn.getFileName();
+        if (leaf == null) {
+            return null;
+        }
+        String marker = leaf.toString();
+        Path pn = absoluteForeign.toAbsolutePath().normalize();
+        int n = pn.getNameCount();
+        for (int i = 0; i < n; i++) {
+            if (marker.equals(pn.getName(i).toString())) {
+                if (i + 1 >= n) {
+                    return rn;
+                }
+                Path tail = pn.subpath(i + 1, n);
+                return rn.resolve(tail).normalize();
+            }
+        }
+        return null;
+    }
+
+    private static boolean pathsEqualString(String rawTrimmed, Path resolved) {
+        Path before = Path.of(rawTrimmed);
+        Path bNorm = before.isAbsolute() ? before.normalize() : before.toAbsolutePath().normalize();
+        return bNorm.equals(resolved.toAbsolutePath().normalize());
     }
 
     /**

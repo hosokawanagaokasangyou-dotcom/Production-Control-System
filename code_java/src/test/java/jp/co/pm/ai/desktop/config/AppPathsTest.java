@@ -161,4 +161,45 @@ class AppPathsTest {
                 master.toAbsolutePath().normalize(),
                 AppPaths.resolveMasterWorkbookPathResolved(ui, ""));
     }
+
+    @Test
+    void normalizeFolderEnvValue_relativeUnderRepo_becomesAbsolute(@TempDir Path repo) throws Exception {
+        Path py = repo.resolve("code").resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        Optional<String> n =
+                AppPaths.normalizeFolderEnvValue(ui, AppPaths.KEY_PM_AI_OUTPUT_DIR, "output");
+        assertTrue(n.isPresent());
+        assertEquals(repo.resolve("output").normalize().toString(), n.get());
+    }
+
+    @Test
+    void normalizedFolderEnv_relocatesOldAbsoluteClone(@TempDir Path tmp) throws Exception {
+        Path repoNew = tmp.resolve("PCS");
+        Files.createDirectories(repoNew.resolve("code").resolve("python"));
+        Path legacyAbs = tmp.resolve("somewhere").resolve("PCS").resolve("code").resolve("python");
+        Files.createDirectories(legacyAbs);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        repoNew.toString(),
+                        AppPaths.KEY_PM_AI_CODE_PYTHON_DIR,
+                        legacyAbs.toString());
+        Map<String, String> o = AppPaths.normalizedFolderEnvOverrides(ui);
+        assertEquals(
+                repoNew.resolve("code").resolve("python").normalize().toString(),
+                o.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR));
+    }
+
+    @Test
+    void normalizeFolderEnvValue_escapingRelativeUnchanged(@TempDir Path repo) throws Exception {
+        Path py = repo.resolve("code").resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        Optional<String> n =
+                AppPaths.normalizeFolderEnvValue(ui, AppPaths.KEY_PM_AI_OUTPUT_DIR, "../outside");
+        assertFalse(n.isPresent());
+    }
 }

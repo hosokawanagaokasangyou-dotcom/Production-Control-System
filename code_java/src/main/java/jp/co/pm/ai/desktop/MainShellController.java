@@ -178,6 +178,8 @@ public final class MainShellController {
 
         installUiEnvAutoSave();
 
+        applyRepoFolderPathNormalization();
+
         primaryStage.setOnCloseRequest(e -> DesktopSessionStateStore.save(collectDesktopSession()));
 
         primaryStage.setOnShown(
@@ -722,6 +724,38 @@ public final class MainShellController {
             m.put(k, row.getValue() != null ? row.getValue() : "");
         }
         return m;
+    }
+
+    /**
+     * When folder env values ({@code PM_AI_*}) can be read as under the current repo, rewrites them to
+     * canonical absolute paths and saves the session (also syncs main-run script dir for
+     * {@code PM_AI_CODE_PYTHON_DIR}).
+     */
+    private void applyRepoFolderPathNormalization() {
+        if (envRows == null) {
+            return;
+        }
+        suppressEnvSessionPersistence.set(true);
+        try {
+            Map<String, String> ui = collectUiEnv();
+            Map<String, String> overrides = AppPaths.normalizedFolderEnvOverrides(ui);
+            if (overrides.isEmpty()) {
+                return;
+            }
+            for (EnvVarRow row : envRows) {
+                String k = nz(row.getName());
+                if (overrides.containsKey(k)) {
+                    row.setValue(overrides.get(k));
+                }
+            }
+            String cp = overrides.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR);
+            if (cp != null && mainRunTabController != null) {
+                mainRunTabController.getScriptDirField().setText(cp);
+            }
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+        DesktopSessionStateStore.save(collectDesktopSession());
     }
 
     /** Same-package tab controllers append run-tab log lines here. */
