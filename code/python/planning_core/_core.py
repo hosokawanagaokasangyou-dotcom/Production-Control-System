@@ -1805,6 +1805,122 @@ def _apply_output_font_to_result_sheet(ws):
         cell.font = hdr
 
 
+def _stage2_plan_book_header_fill():
+    """段階2 計画ブック: 見出し行の背景（メンバー別スケジュールと揃えた薄緑）。"""
+    return PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+
+
+def _stage2_plan_book_thin_border():
+    s = Side(style="thin", color="B4B4B4")
+    return Border(left=s, right=s, top=s, bottom=s)
+
+
+def _apply_stage2_plan_sheet_header_fill(
+    ws, *, extra_header_rows: tuple[int, ...] | None = None
+):
+    """
+    見出し行（1 行目）にヘッダー背景を付与。結果_人員配台優先順のみ 2 つ目のヘッダー行も対象。
+    """
+    hdr_fill = _stage2_plan_book_header_fill()
+    for cell in ws[1]:
+        cell.fill = hdr_fill
+    if extra_header_rows:
+        mr = ws.max_row or 1
+        for r in extra_header_rows:
+            if r < 1 or r > mr:
+                continue
+            for cell in ws[r]:
+                cell.fill = hdr_fill
+
+
+def _apply_stage2_plan_sheet_grid_border(ws):
+    """使用範囲全体に薄い罫線（後続のセル着色と独立）。"""
+    b = _stage2_plan_book_thin_border()
+    mr, mc = ws.max_row or 1, ws.max_column or 1
+    for row in ws.iter_rows(min_row=1, max_row=mr, min_col=1, max_col=mc):
+        for cell in row:
+            cell.border = b
+
+
+def _apply_equipment_schedule_day_banner_row_style(ws):
+    """結果_設備毎の時間割: 日付区切り行（■ YYYY/MM/DD ■）を帯状に強調。"""
+    col_tb = None
+    for i, c in enumerate(ws[1], start=1):
+        if c.value is not None and str(c.value).strip() == "日時帯":
+            col_tb = i
+            break
+    if col_tb is None:
+        return
+    ban_fill = PatternFill(start_color="C5E1A5", end_color="C5E1A5", fill_type="solid")
+    ban_font = _result_font(bold=True, size=11, color="1A1A1A")
+    mr, mc = ws.max_row or 1, ws.max_column or 1
+    for r in range(2, mr + 1):
+        v = ws.cell(row=r, column=col_tb).value
+        if v is None:
+            continue
+        s = str(v).strip()
+        if "■" not in s or not re.search(r"\d{4}/\d", s):
+            continue
+        for col_i in range(1, mc + 1):
+            cell = ws.cell(row=r, column=col_i)
+            cell.fill = ban_fill
+            cell.font = ban_font
+        try:
+            cur_h = ws.row_dimensions[r].height
+            ws.row_dimensions[r].height = max(float(cur_h or 15), 20.0)
+        except Exception:
+            pass
+
+
+def _apply_equipment_schedule_auto_column_widths(ws):
+    """結果_設備毎の時間割: 見出し文字長に基づく列幅（上限付き）。"""
+    mc = ws.max_column or 1
+    for ci in range(1, mc + 1):
+        cell = ws.cell(row=1, column=ci)
+        h = cell.value
+        h_str = str(h).strip() if h is not None else ""
+        if not h_str:
+            wch = 10.0
+        else:
+            wch = float(min(max(len(h_str.replace("\n", "")) + 2, 9), 28))
+        if h_str.endswith("進度"):
+            wch = min(wch, 12.0)
+        if h_str == "日時帯":
+            wch = min(max(wch, 12.0), 16.0)
+        try:
+            ws.column_dimensions[get_column_letter(ci)].width = wch
+        except Exception:
+            pass
+
+
+def _apply_stage2_production_plan_workbook_polish(
+    writer_sheets: dict,
+    *,
+    member_priority_second_header_row: int | None = None,
+):
+    """
+    production_plan_multi_day*.xlsx 各シートの共通仕上げ（ガント以外）。
+    見出し背景・罫線・窓枠固定（先頭列＋行1）。
+    """
+    skip = frozenset(
+        {RESULT_SHEET_GANTT_NAME, RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME}
+    )
+    extra_mprio: tuple[int, ...] | None = None
+    if member_priority_second_header_row is not None and member_priority_second_header_row >= 1:
+        extra_mprio = (int(member_priority_second_header_row),)
+
+    for name, ws in writer_sheets.items():
+        if name in skip:
+            continue
+        ex = extra_mprio if name == RESULT_MEMBER_PRIORITY_SHEET_NAME else None
+        _apply_stage2_plan_sheet_header_fill(ws, extra_header_rows=ex)
+        _apply_stage2_plan_sheet_grid_border(ws)
+        try:
+            ws.freeze_panes = "B2"
+        except Exception:
+            pass
+
+
 def _apply_excel_date_columns_date_only_display(path, sheet_name, header_names=None):
     """openpyxl: 指定ヘッダー列を yyyy/mm/dd の日付表示にれる（時刻を表示しない）。"""
     from openpyxl import load_workbook
@@ -30923,9 +31039,16 @@ def _generate_plan_impl(
     chart_title_actual_detail = "湖南工場 加工実績（明細）"
     # 試行順パターン別段階2（stage2_output_root あり）は同一処理を多数回走らせるため、
     # 重い設備ガント（計画・加工実績明細）の生成と明細 DATA 読込を省略する（スコア用の結果シートは従来どおり）。
+    # JavaFX から PM_AI_STAGE2_WRITE_EXCEL=0 のときも xlsx/JSON 用の一時ブックにガントを書かないよう、
+    # 同様に明細 DATA 読込・実績タイムライン構築・設備ガント描画を省略する（JSON は必須シートのみ）。
     if stage2_output_root:
         logging.info(
             "段階2(試行順パターン別バッチ): 設備ガント（計画・加工実績明細）の生成を省略します。"
+        )
+    elif not _publish_plan_xlsx:
+        logging.info(
+            "段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、"
+            "設備ガント（計画・加工実績明細）の準備・生成を省略します。"
         )
     else:
         # 実績明細ガントのメタ・時間軸: 計画ブックは「加工計画DATA_実績比較用」を優先（無ければ段階2本体と同じ基準）
@@ -31071,11 +31194,12 @@ def _generate_plan_impl(
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
             df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
             _mprio_gap = len(df_mprio_legend) + 2
+            _mprio_second_header_row = _mprio_gap + 1
             df_mprio_tbl.to_excel(
                 writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
             )
 
-            if not stage2_output_root:
+            if not stage2_output_root and _publish_plan_xlsx:
                 logging.info(
                     "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
                 )
@@ -31203,6 +31327,23 @@ def _generate_plan_impl(
                     writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME],
                     table_display_name=RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME,
                 )
+
+            if RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME in writer.sheets:
+                _apply_equipment_schedule_day_banner_row_style(
+                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME]
+                )
+                _apply_equipment_schedule_auto_column_widths(
+                    writer.sheets[RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME]
+                )
+
+            _apply_stage2_production_plan_workbook_polish(
+                writer.sheets,
+                member_priority_second_header_row=(
+                    _mprio_second_header_row
+                    if RESULT_MEMBER_PRIORITY_SHEET_NAME in writer.sheets
+                    else None
+                ),
+            )
 
     except OSError as e:
         logging.error(
