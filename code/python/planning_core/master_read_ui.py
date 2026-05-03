@@ -10,6 +10,28 @@ from typing import Any
 _CALENDAR_IN_NAME = "\u30ab\u30ec\u30f3\u30c0\u30fc"  # "?J?????_?["
 
 
+def _reroute_root_console_log_to_stderr() -> None:
+    """Stdout must stay machine-readable for JavaFX (single JSON line); bootstrap logs to stderr."""
+    import logging
+    import sys
+
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        if isinstance(h, logging.StreamHandler):
+            stream = getattr(h, "stream", None)
+            if stream is sys.stdout:
+                if hasattr(h, "setStream"):
+                    h.setStream(sys.stderr)
+                else:
+                    nh = logging.StreamHandler(sys.stderr)
+                    nf = h.formatter
+                    if nf is not None:
+                        nh.setFormatter(nf)
+                    nh.setLevel(h.level)
+                    root.removeHandler(h)
+                    root.addHandler(nh)
+
+
 def _fmt_time(t) -> str | None:
     if t is None:
         return None
@@ -84,6 +106,8 @@ def _count_attendance_sheets(sheet_names: list[str], members: set[str]) -> int:
 
 def build_master_read_summary_dict() -> dict[str, Any]:
     import planning_core._core as c
+
+    _reroute_root_console_log_to_stderr()
 
     warnings: list[str] = []
     path = c._master_workbook_path_resolved()

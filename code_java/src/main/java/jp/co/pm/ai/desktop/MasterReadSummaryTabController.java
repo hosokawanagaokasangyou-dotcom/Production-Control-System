@@ -188,14 +188,15 @@ public final class MasterReadSummaryTabController {
 
     private void applyStdout(String stdout, int exitCode) {
         String trimmed = stdout != null ? stdout.trim() : "";
-        lastRawJson = trimmed;
-        if (trimmed.isEmpty()) {
+        String jsonPayload = extractJsonPayload(trimmed);
+        lastRawJson = jsonPayload;
+        if (jsonPayload.isEmpty()) {
             clearDisplay();
             statusLabel.setText("exit=" + exitCode + " (empty stdout)");
             return;
         }
         try {
-            JsonNode root = JSON.readTree(trimmed);
+            JsonNode root = JSON.readTree(jsonPayload);
             applyJson(root);
             statusLabel.setText(
                     "exit="
@@ -206,6 +207,24 @@ public final class MasterReadSummaryTabController {
             shell.appendLog("[master-summary] parse: " + e.getMessage());
             clearDisplay();
         }
+    }
+
+    /**
+     * planning_core may emit log lines to stdout before JSON; take the last line that looks like one JSON
+     * object (starts with "{", ends with "}").
+     */
+    static String extractJsonPayload(String stdout) {
+        if (stdout == null || stdout.isBlank()) {
+            return "";
+        }
+        String[] lines = stdout.split("\\R", -1);
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String t = lines[i].trim();
+            if (t.length() >= 2 && t.startsWith("{") && t.endsWith("}")) {
+                return t;
+            }
+        }
+        return stdout.trim();
     }
 
     private void applyJson(JsonNode root) {
