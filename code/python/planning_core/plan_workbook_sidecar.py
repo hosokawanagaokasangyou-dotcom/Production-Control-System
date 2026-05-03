@@ -6,7 +6,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
+import tempfile
 import time
+import unicodedata
 
 import pandas as pd
 
@@ -76,20 +79,60 @@ WORKBOOK_JSON_FORMAT_VERSION = 2
 
 
 def _normalized_json_sidecar_path(xlsx_path: str) -> str:
-    """xlsx と同名の .json パス（絶対・正規化）。Windows での open 失敗を減らす。"""
-    return os.path.splitext(os.path.abspath(os.path.normpath(xlsx_path)))[0] + ".json"
+    """xlsx と同名の .json パス（絶対・正規化・NFC）。和文パスで実体と表記揺れする場合の対策。"""
+    p = os.path.splitext(os.path.abspath(os.path.normpath(xlsx_path)))[0] + ".json"
+    try:
+        return unicodedata.normalize("NFC", p)
+    except Exception:
+        return p
 
 
-def _path_for_open_write(path: str) -> str:
-    """Windows では Unicode パスで open が errno 2 になる事例があるため \\\\?\\ を付与する（ドライブレター経路）。"""
-    if os.name != "nt":
-        return path
-    ap = os.path.abspath(os.path.normpath(path))
-    if ap.startswith("\\\\?\\"):
-        return ap.replace("/", "\\")
-    if len(ap) >= 3 and ap[1] == ":" and ap[2] in (os.sep, "/"):
-        return "\\\\?\\" + ap.replace("/", "\\")
-    return ap
+def _write_workbook_json_payload(out_path: str, payload: dict) -> tuple[str, str]:
+    """
+    一時ファイルへ書き、os.replace / shutil.move で最終名へ。同一フォルダで open(w) だけが errno 2 になる
+    環境（WSL/ドライブ併用・一部 Unicode 正規化差）に強い。戻り値: (out_path, temp_dir_used 説明文字列)
+    """
+    out_path = unicodedata.normalize("NFC", out_path)
+    parent = os.path.dirname(out_path)
+    try:
+        os.makedirs(parent, exist_ok=True)
+    except OSError:
+        pass
+    last_err: BaseException | None = None
+    for label, tmp_dir in (
+        ("same_dir_as_output", parent),
+        ("system_temp", tempfile.gettempdir()),
+    ):
+        tmp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                delete=False,
+                prefix="pm_ai_wb_json_",
+                suffix=".tmp",
+                dir=tmp_dir,
+            ) as tmp:
+                tmp_path = tmp.name
+                json.dump(payload, tmp, ensure_ascii=False, indent=2)
+                tmp.write("\n")
+            try:
+                os.replace(tmp_path, out_path)
+            except OSError:
+                shutil.move(tmp_path, out_path)
+            return out_path, label
+        except BaseException as e:
+            last_err = e
+            if tmp_path and os.path.isfile(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            continue
+    if last_err is not None:
+        raise last_err
+    raise OSError("JSON sidecar: could not write via temporary file")
 
 
 def _plan_result_task_json_disabled() -> bool:
@@ -213,23 +256,15 @@ def _dump_xlsx_all_sheets_to_json(
     if payload_extra:
         payload.update(payload_extra)
     try:
-        _parent_out = os.path.dirname(out_path)
-        try:
-            os.makedirs(_parent_out, exist_ok=True)
-        except OSError:
-            pass
-        _open_target = _path_for_open_write(out_path)
-        with open(_open_target, encoding="utf-8", newline="\n") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        _out_final, _tmp_strategy = _write_workbook_json_payload(out_path, payload)
         # #region agent log
         _agent_debug_log(
             "H4",
             "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
             "json_write_ok",
             {
-                "out_path": out_path,
-                "open_path_used": _open_target,
+                "out_path": _out_final,
+                "temp_write_strategy": _tmp_strategy,
                 "sheet_keys": list((sheets_in or {}).keys())[:20],
                 "n_sheets": len(sheets_in or {}),
             },
@@ -238,10 +273,11 @@ def _dump_xlsx_all_sheets_to_json(
         )
         # #endregion
         logging.info(
-            "plan_workbook_sidecar: 同名 JSON を出力しました path=%s",
-            out_path,
+            "plan_workbook_sidecar: 同名 JSON を出力しました path=%s (%s)",
+            _out_final,
+            _tmp_strategy,
         )
-        return out_path
+        return _out_final
     except Exception as e:
         # #region agent log
         _agent_debug_log(
@@ -250,7 +286,6 @@ def _dump_xlsx_all_sheets_to_json(
             "json_write_failed",
             {
                 "out_path": out_path,
-                "open_path_used": _path_for_open_write(out_path),
                 "exc_type": type(e).__name__,
                 "exc_msg": str(e)[:300],
             },
