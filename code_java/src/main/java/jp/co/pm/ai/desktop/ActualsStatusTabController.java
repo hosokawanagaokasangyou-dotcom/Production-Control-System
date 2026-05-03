@@ -1,10 +1,18 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -14,6 +22,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -22,15 +31,45 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 
+import org.controlsfx.control.table.TableFilter;
+
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.desktop.ui.TableHeaderColumnStyle;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
 /** Actuals DATA status probe UI; layout {@code ActualsStatusTab.fxml}. */
 public final class ActualsStatusTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    private static final Path AGENT_DEBUG_LOG =
+            Path.of("/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-e25361.log");
+
+    private static void agentLog(String hypothesisId, String message, Map<String, Object> data) {
+        // #region agent log
+        try {
+            Map<String, Object> root = new HashMap<>();
+            root.put("sessionId", "e25361");
+            root.put("runId", "actuals-tab");
+            root.put("hypothesisId", hypothesisId);
+            root.put("location", "ActualsStatusTabController");
+            root.put("message", message);
+            root.put("data", data);
+            root.put("timestamp", System.currentTimeMillis());
+            String line = JSON.writeValueAsString(root) + "\n";
+            Files.writeString(
+                    AGENT_DEBUG_LOG,
+                    line,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (Throwable ignored) {
+            // debug ingest only
+        }
+        // #endregion
+    }
 
     private static final String HINT_TEXT =
             "* \u30c7\u30fc\u30bf\u884c: \u6700\u5217\u76ee\u3092\u898b\u51fa\u3057\u9664\u304f\u7d2f\u8a08"
@@ -150,6 +189,10 @@ public final class ActualsStatusTabController {
 
     private Supplier<RunRequest> actualsStatusRequestFactory;
 
+    private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+
+    private TableFilter<Row> tableFilter;
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
@@ -177,11 +220,28 @@ public final class ActualsStatusTabController {
         for (ColDef d : defs) {
             TableColumn<Row, String> col = new TableColumn<>(d.title());
             col.setCellValueFactory(new PropertyValueFactory<>(d.prop()));
+            col.setCellFactory(
+                    tc ->
+                            new TableCell<Row, String>() {
+                                @Override
+                                protected void updateItem(String item, boolean empty) {
+                                    super.updateItem(item, empty);
+                                    if (empty || item == null) {
+                                        setText(null);
+                                    } else {
+                                        setText(item);
+                                    }
+                                    TableHeaderColumnStyle.applyBodyCellTint(
+                                            this, table, tc, headerColumnCount::get);
+                                }
+                            });
             col.setMinWidth(d.width());
             col.setPrefWidth(d.width());
+            col.setReorderable(true);
             columns.add(col);
         }
         table.getColumns().setAll(columns);
+        tableFilter = TableFilter.forTableView(table).apply();
         List<TableColumnOrderPersistence.ColumnSpec> actualsLayout =
                 TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.ACTUALS_STATUS);
         if (!actualsLayout.isEmpty()) {
@@ -203,7 +263,14 @@ public final class ActualsStatusTabController {
                         columns.get(i).setPrefWidth(w);
                     }
                 };
-        columnStripHost.getChildren().setAll(TableViewColumnSettingsStrip.create(table, resetActualsColumns, false));
+        columnStripHost.getChildren()
+                .setAll(
+                        TableViewColumnSettingsStrip.create(
+                                table,
+                                resetActualsColumns,
+                                false,
+                                TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                                headerColumnCount));
     }
 
     @FXML
@@ -227,6 +294,21 @@ public final class ActualsStatusTabController {
                                             return;
                                         }
                                         statusLabel.setText("exit=" + cap.exitCode());
+                                        // #region agent log
+                                        {
+                                            String out = cap.stdout();
+                                            Map<String, Object> d = new HashMap<>();
+                                            d.put("exitCode", cap.exitCode());
+                                            d.put("stdoutNull", out == null);
+                                            d.put("stdoutLength", out != null ? out.length() : 0);
+                                            d.put(
+                                                    "stdoutFirst200",
+                                                    out == null
+                                                            ? ""
+                                                            : out.substring(0, Math.min(200, out.length())));
+                                            agentLog("A", "after python capture (actuals status)", d);
+                                        }
+                                        // #endregion
                                         applyJson(cap.stdout(), rows, footLong, shell);
                                     });
                         });
@@ -235,13 +317,40 @@ public final class ActualsStatusTabController {
     private static void applyJson(String stdout, ObservableList<Row> rows, Text footLong, MainShellController shell) {
         rows.clear();
         String trimmed = stdout != null ? stdout.trim() : "";
+        // #region agent log
+        {
+            Map<String, Object> d = new HashMap<>();
+            d.put("trimmedEmpty", trimmed.isEmpty());
+            d.put("trimmedLength", trimmed.length());
+            d.put("lineCount", trimmed.isEmpty() ? 0 : trimmed.split("\n", -1).length);
+            d.put(
+                    "trimmedFirst120",
+                    trimmed.isEmpty() ? "" : trimmed.substring(0, Math.min(120, trimmed.length())));
+            agentLog("B", "applyJson input", d);
+        }
+        // #endregion
         if (trimmed.isEmpty()) {
             footLong.setText("");
             shell.appendLog("[actuals-status] empty stdout");
             return;
         }
         try {
-            JsonNode root = JSON.readTree(trimmed);
+            ParseAttempt pa = parseActualsPayloadRoot(trimmed);
+            JsonNode root = pa.root();
+            // #region agent log
+            {
+                JsonNode ent = root.get("entries");
+                Map<String, Object> d = new HashMap<>();
+                List<String> keys = new ArrayList<>();
+                root.fieldNames().forEachRemaining(keys::add);
+                d.put("rootKeys", keys);
+                d.put("entriesNull", ent == null || ent.isNull());
+                d.put("entriesIsArray", ent != null && ent.isArray());
+                d.put("entriesSize", ent != null && ent.isArray() ? ent.size() : -1);
+                d.put("parseStrategy", pa.strategy());
+                agentLog("C", "applyJson parsed root", d);
+            }
+            // #endregion
             if (root.has("note")) {
                 footLong.setText(root.get("note").asText(""));
             } else {
@@ -250,6 +359,12 @@ public final class ActualsStatusTabController {
             JsonNode entries = root.get("entries");
             if (entries == null || !entries.isArray()) {
                 shell.appendLog("[actuals-status] no entries in JSON");
+                // #region agent log
+                agentLog(
+                        "C",
+                        "applyJson missing or non-array entries",
+                        Map.of("hadEntriesKey", root.has("entries")));
+                // #endregion
                 return;
             }
             List<Row> list = new ArrayList<>();
@@ -291,14 +406,63 @@ public final class ActualsStatusTabController {
                 list.add(r);
             }
             rows.setAll(list);
+            // #region agent log
+            agentLog("E", "applyJson rows set", Map.of("rowCount", list.size()));
+            // #endregion
         } catch (Exception ex) {
             footLong.setText("");
             shell.appendLog("[actuals-status] JSON parse error: " + ex.getMessage());
+            // #region agent log
+            Map<String, Object> d = new HashMap<>();
+            d.put("exception", ex.getClass().getName());
+            d.put("message", ex.getMessage());
+            d.put(
+                    "trimmedFirst200",
+                    trimmed.isEmpty() ? "" : trimmed.substring(0, Math.min(200, trimmed.length())));
+            agentLog("A", "applyJson parse/IO exception", d);
+            // #endregion
+        }
+    }
+
+    /**
+     * Child stderr is merged into stdout; probe script prints one JSON line at the end. Parse
+     * object-shaped lines from bottom to top, then fall back to the full buffer.
+     */
+    private record ParseAttempt(JsonNode root, String strategy) {}
+
+    private static ParseAttempt parseActualsPayloadRoot(String trimmed) throws JsonProcessingException {
+        String[] lines = trimmed.split("\\R", -1);
+        JsonProcessingException lastLineFailure = null;
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String ln = lines[i].trim();
+            if (ln.isEmpty() || !ln.startsWith("{")) {
+                continue;
+            }
+            try {
+                return new ParseAttempt(JSON.readTree(ln), "lastJsonLine index=" + i);
+            } catch (JsonProcessingException e) {
+                lastLineFailure = e;
+            }
+        }
+        try {
+            return new ParseAttempt(JSON.readTree(trimmed), "fullBuffer");
+        } catch (JsonProcessingException e) {
+            if (lastLineFailure != null) {
+                throw lastLineFailure;
+            }
+            throw e;
         }
     }
 
     private static String textOr(JsonNode n, String field) {
         JsonNode x = n.get(field);
         return x == null || x.isNull() ? "" : x.asText("");
+    }
+
+    void clearColumnFiltersAndSort() {
+        if (tableFilter != null) {
+            tableFilter.resetAllFilters();
+        }
+        table.getSortOrder().clear();
     }
 }
