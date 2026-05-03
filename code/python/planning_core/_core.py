@@ -1455,6 +1455,7 @@ RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME = "_t結果_配台表"
 RESULT_DISPATCH_TABLE_JSON_FILENAME = "結果_配台表.json"
 # 結果_配台表の左側列（加工計画DATA に対応する想定の見出し。無い列は空）。工程名の次に機械名を置く。
 RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
+    "配台試行順番",
     "工程名",
     "機械名",
     "受注日",
@@ -23402,6 +23403,11 @@ def _dispatch_table_cell_from_sources(
         return t.get(TASK_COL_ACTUAL_DONE) or ""
     if col_name == TASK_COL_ACTUAL_OUTPUT:
         return t.get(TASK_COL_ACTUAL_OUTPUT) or ""
+    if col_name == RESULT_TASK_COL_DISPATCH_TRIAL_ORDER:
+        v = t.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
+        if v is None:
+            return ""
+        return str(v).strip()
     return ""
 
 
@@ -23563,6 +23569,8 @@ def _result_dispatch_table_column_width(header: str) -> float:
         return 24.0
     if h == "使用原反":
         return 22.0
+    if h == "配台試行順番":
+        return 11.0
     if h in ("換算数量", "実加工数", "当日配台数量", "実出来高", "計画合計"):
         return 12.0
     if h == "原反数":
@@ -23623,6 +23631,7 @@ def _apply_result_dispatch_table_sheet_layout_polish(ws) -> None:
         ):
             qty_cols.append(ci)
         if hn in (
+            "配台試行順番",
             "工程名",
             "機械名",
             "受注NO",
@@ -23724,7 +23733,7 @@ def _apply_result_dispatch_table_sheet_layout_polish(ws) -> None:
                 )
 
     try:
-        ws.freeze_panes = "F2"
+        ws.freeze_panes = "G2"
     except Exception:
         pass
 

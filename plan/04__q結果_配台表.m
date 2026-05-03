@@ -16,6 +16,7 @@ let
     _t結果_配台表_Table = ソース{[Item="_t結果_配台表",Kind="Table"]}[Data],
     
     変更された型 = Table.TransformColumnTypes(_t結果_配台表_Table,{
+        {"配台試行順番", Int64.Type}, 
         {"工程名", type text}, 
         {"機械名", type text}, 
         {"受注日", type any}, 

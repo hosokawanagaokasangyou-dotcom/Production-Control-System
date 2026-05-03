@@ -11,6 +11,8 @@ import javafx.collections.ObservableList;
 import javafx.scene.Node;
 import javafx.scene.control.TableView;
 
+import org.controlsfx.control.spreadsheet.SpreadsheetCell;
+
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
@@ -48,6 +50,21 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * Same as {@link #applyColumnFilters(SpreadsheetView)} but opens a modal dialog per column (\u9069\u7528 / OK /
+     * \u30ad\u30e3\u30f3\u30bb\u30eb) via {@link DialogExcelLikeSpreadsheetFilter}.
+     */
+    public static void applyColumnFiltersWithDialog(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        view.setFilteredRow(SPREADSHEET_FILTER_ROW);
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        for (int i = 0; i < cols.size(); i++) {
+            cols.get(i).setFilter(new DialogExcelLikeSpreadsheetFilter(view, i));
+        }
+    }
+
+    /**
      * Clears spreadsheet-wide row sort and per-column row filters (hidden rows), and resets filter menu sort labels.
      */
     public static void clearAllFiltersAndSort(SpreadsheetView view) {
@@ -57,9 +74,10 @@ public final class SpreadsheetTabularSupport {
         view.setComparator(null);
         view.setHiddenRows(new BitSet());
         ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
+        DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
     }
 
-    /** Applies leading column freeze from persisted \u898b\u51fa\u3057\u5217\u6570 (must run after {@link SpreadsheetView#setGrid}). */
+    /** Applies leading column freeze from persisted 見出し列数 (must run after {@link SpreadsheetView#setGrid}). */
     public static void applyFixedLeadingColumns(SpreadsheetView view, int headerColumnCount) {
         if (view == null) {
             return;
@@ -87,15 +105,29 @@ public final class SpreadsheetTabularSupport {
      * ControlsFX embeds an inner {@link TableView} whose default constrained resize policy can block or fight
      * interactive column resizing; unconstrained mode matches typical spreadsheet drag-to-resize expectations.
      */
+    /**
+     * ControlsFX {@link SpreadsheetView} の内側 {@link TableView}（行＝グリッドの1行）を返す。
+     */
+    @SuppressWarnings("unchecked")
+    public static TableView<ObservableList<SpreadsheetCell>> findInnerTableView(SpreadsheetView view) {
+        if (view == null) {
+            return null;
+        }
+        for (Node n : view.getChildrenUnmodifiable()) {
+            if (n instanceof TableView<?> tv) {
+                return (TableView<ObservableList<SpreadsheetCell>>) tv;
+            }
+        }
+        return null;
+    }
+
     public static void applyUnconstrainedColumnResizePolicy(SpreadsheetView view) {
         if (view == null) {
             return;
         }
-        for (Node n : view.getChildrenUnmodifiable()) {
-            if (n instanceof TableView<?> tv) {
-                tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-                break;
-            }
+        TableView<ObservableList<SpreadsheetCell>> tv = findInnerTableView(view);
+        if (tv != null) {
+            tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         }
         for (SpreadsheetColumn col : view.getColumns()) {
             col.setResizable(true);
@@ -181,7 +213,7 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * Read-only string grid with Excel-like column filters ({@link #applyColumnFilters}); no row highlighting.
-     * Used for JSON-backed viewers such as {@code \u7d50\u679c_\u914d\u53f0\u8868.json}.
+     * Used for JSON-backed viewers such as {@code 結果_配台表.json}.
      */
     public static GridBase buildReadOnlyPlainGrid(
             List<String> headersRef, ObservableList<ObservableList<String>> rows) {
@@ -223,9 +255,13 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * Read-only grid with timeline / Gantt-style cell coloring (see {@link GanttScheduleStyle}).
+     *
+     * @param kind 設備ガント Excel 風など表現の選択
      */
     public static GridBase buildReadOnlyGanttGrid(
-            List<String> headersRef, ObservableList<ObservableList<String>> rows) {
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            GanttSheetKind kind) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -251,7 +287,7 @@ public final class SpreadsheetTabularSupport {
             boolean sectionRow = false;
             if (!src.isEmpty() && src.get(0) != null) {
                 String head = src.get(0);
-                sectionRow = head.contains("\u25a0") || head.contains("\u25aa");
+                sectionRow = head.contains("■") || head.contains("▪");
             }
             ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
             for (int c = 0; c < cols; c++) {
@@ -259,7 +295,8 @@ public final class SpreadsheetTabularSupport {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(false);
-                GanttScheduleStyle.applyTimelineCell(cell, c, headersRef.get(c), raw, sectionRow);
+                GanttScheduleStyle.applyTimelineCell(
+                        cell, c, headersRef.get(c), raw, sectionRow, r, kind);
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);

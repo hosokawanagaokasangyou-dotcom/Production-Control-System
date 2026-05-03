@@ -111,6 +111,19 @@ public final class ResultDispatchPivot {
         return sum;
     }
 
+    /**
+     * Whether {@code row} (canonical long-format) matches {@code profile} on all static columns (date/qty excluded).
+     */
+    public static boolean matchesTaskProfile(
+            List<String> columns, Map<String, String> profile, Map<String, String> row) {
+        return profileMatches(
+                columns,
+                profile,
+                row,
+                ResultDispatchSchema.COL_DISPATCH_DATE,
+                ResultDispatchSchema.COL_DISPATCH_QTY);
+    }
+
     static boolean profileMatches(
             List<String> columns,
             Map<String, String> profile,

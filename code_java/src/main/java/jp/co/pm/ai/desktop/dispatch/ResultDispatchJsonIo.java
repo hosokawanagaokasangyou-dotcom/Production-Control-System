@@ -52,6 +52,7 @@ public final class ResultDispatchJsonIo {
                 rowMaps.add(row);
             }
         }
+        migrateTrialOrderColumn(headerOrder, rowMaps);
         ResultDispatchDocument doc = new ResultDispatchDocument(headerOrder, rowMaps);
         doc.setFormatVersion(formatVer);
         doc.setSheetName(sheetName);
@@ -85,6 +86,22 @@ public final class ResultDispatchJsonIo {
         Files.writeString(path, text, StandardCharsets.UTF_8);
     }
 
+    /** Legacy JSON without {@link ResultDispatchSchema#COL_DISPATCH_TRIAL_ORDER}: insert column at index 0. */
+    private static void migrateTrialOrderColumn(List<String> headerOrder, List<Map<String, String>> rowMaps) {
+        String trial = ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER;
+        if (headerOrder.contains(trial)) {
+            return;
+        }
+        headerOrder.add(0, trial);
+        for (Map<String, String> row : rowMaps) {
+            LinkedHashMap<String, String> copy = new LinkedHashMap<>();
+            copy.put(trial, "");
+            copy.putAll(row);
+            row.clear();
+            row.putAll(copy);
+        }
+    }
+
     private static void putCell(ObjectNode o, String key, String val) {
         if (val == null || val.isBlank()) {
             o.putNull(key);
@@ -93,6 +110,18 @@ public final class ResultDispatchJsonIo {
         String t = val.trim();
         if (ResultDispatchSchema.isDateColumn(key)) {
             o.put(key, t);
+            return;
+        }
+        if (ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER.equals(key)) {
+            try {
+                if (t.contains(".") || t.contains("e") || t.contains("E")) {
+                    o.put(key, Double.parseDouble(t.replace(",", "")));
+                } else {
+                    o.put(key, Long.parseLong(t.replace(",", "")));
+                }
+            } catch (NumberFormatException e) {
+                o.put(key, val);
+            }
             return;
         }
         if (ResultDispatchSchema.COL_DISPATCH_QTY.equals(key)) {

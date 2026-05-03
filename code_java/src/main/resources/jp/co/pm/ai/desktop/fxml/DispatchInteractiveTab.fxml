@@ -3,13 +3,16 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
-<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
+<?import org.controlsfx.control.spreadsheet.SpreadsheetView?>
 
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.DispatchInteractiveTabController"
@@ -22,8 +25,23 @@
                 onAction="#onLoadAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="&#x4fdd;&#x5b58; (JSON+xlsx)"
                 onAction="#onSaveAction"/>
-        <Button fx:id="reloadCalendarButton" mnemonicParsing="false" text="&#x6a5f;&#x68b0;&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc;&#x518d;&#x8aad;&#x307f;"
+        <Button fx:id="reloadCalendarButton" mnemonicParsing="false"
+                text="&#x6a5f;&#x68b0; JSON &#x518d;&#x8aad;&#x307f;"
                 onAction="#onReloadCalendarAction"/>
+        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="&#x914d;&#x53f0;&#x8a66;&#x884c;"
+                onAction="#onDispatchTrialAction"/>
+        <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="&#x2191;"
+                onAction="#onWideRowUpAction">
+            <tooltip>
+                <Tooltip text="&#x9078;&#x629e;&#x884c;&#x3092;&#x4e0a;&#x3078;&#xff08;&#x8a66;&#x884c;&#x9806;&#xff09;"/>
+            </tooltip>
+        </Button>
+        <Button fx:id="wideRowDownButton" mnemonicParsing="false" text="&#x2193;"
+                onAction="#onWideRowDownAction">
+            <tooltip>
+                <Tooltip text="&#x9078;&#x629e;&#x884c;&#x3092;&#x4e0b;&#x3078;&#xff08;&#x8a66;&#x884c;&#x9806;&#xff09;"/>
+            </tooltip>
+        </Button>
         <ToggleButton fx:id="staffCheckToggle" mnemonicParsing="false"
                       text="&#x4eba;&#x54e1;&#x30c1;&#x30a7;&#x30c3;&#x30af;">
             <tooltip>
@@ -31,18 +49,30 @@
             </tooltip>
         </ToggleButton>
         <Label fx:id="statusLabel"/>
+        <ProgressBar fx:id="reloadProgressBar" maxWidth="Infinity" prefWidth="220.0"
+                     visible="false" managed="false"/>
     </HBox>
     <Label fx:id="jsonPathLabel" wrapText="true"/>
     <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
         <tabs>
             <Tab closable="false" text="&#x30bf;&#x30b9;&#x30af;&#xd7;&#x65e5;&#x4ed8;">
                 <content>
-                    <TableView fx:id="wideTable" prefHeight="480.0"/>
+                    <BorderPane>
+                        <center>
+                            <StackPane fx:id="wideSpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
+                                       minHeight="200.0"/>
+                        </center>
+                    </BorderPane>
                 </content>
             </Tab>
             <Tab closable="false" text="&#x5de5;&#x7a0b;+&#x6a5f;&#x68b0;&#xd7;&#x65e5;">
                 <content>
-                    <TableView fx:id="byDayTable" prefHeight="480.0"/>
+                    <BorderPane>
+                        <center>
+                            <StackPane fx:id="byDaySpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
+                                       minHeight="200.0"/>
+                        </center>
+                    </BorderPane>
                 </content>
             </Tab>
         </tabs>

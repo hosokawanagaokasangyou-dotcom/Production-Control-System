@@ -9,6 +9,9 @@ import java.util.List;
  */
 public final class ResultDispatchSchema {
 
+    /** Same as Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} / ????_?z??\ ???? */
+    public static final String COL_DISPATCH_TRIAL_ORDER = "\u914d\u53f0\u8a66\u884c\u9806\u756a";
+
     public static final String COL_PROCESS = "\u5de5\u7a0b\u540d";
     public static final String COL_MACHINE = "\u6a5f\u68b0\u540d";
     public static final String COL_DISPATCH_DATE = "\u914d\u53f0\u65e5";
@@ -17,6 +20,7 @@ public final class ResultDispatchSchema {
     /** Static columns in pipeline order (excluding {@link #COL_DISPATCH_DATE} / {@link #COL_DISPATCH_QTY}). */
     public static final List<String> STATIC_HEADERS =
             List.of(
+                    COL_DISPATCH_TRIAL_ORDER,
                     COL_PROCESS,
                     COL_MACHINE,
                     "\u53d7\u6ce8\u65e5",
