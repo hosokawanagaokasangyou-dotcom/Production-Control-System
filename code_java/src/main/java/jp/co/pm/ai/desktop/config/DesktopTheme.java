@@ -9,8 +9,8 @@ import javafx.scene.Scene;
  * UI color themes: default Modena (light) or palette overlays under {@code /css/theme-*.css}.
  */
 public enum DesktopTheme {
-    /** Default Modena; no extra stylesheet. */
-    LIGHT("light", "\u30e9\u30a4\u30c8", null),
+    /** Default Modena + visible grid lines ({@code theme-light.css}). */
+    LIGHT("light", "\u30e9\u30a4\u30c8", "theme-light.css"),
     DARK("dark", "\u30c0\u30fc\u30af", "theme-dark.css"),
     /** Cool light blue-gray workspace. */
     BLUE("blue", "\u30d6\u30eb\u30fc", "theme-blue.css"),
@@ -18,6 +18,12 @@ public enum DesktopTheme {
     SEPIA("sepia", "\u30bb\u30d4\u30a2", "theme-sepia.css"),
     /** Dark teal / blue-green. */
     OCEAN("ocean", "\u30aa\u30fc\u30b7\u30e3\u30f3", "theme-ocean.css"),
+    /** Deep blue-black (high-contrast grid lines). */
+    MIDNIGHT("midnight", "\u30df\u30c3\u30c9\u30ca\u30a4\u30c8", "theme-midnight.css"),
+    /** Blue-gray dark (editor-style). */
+    SLATE("slate", "\u30b9\u30ec\u30fc\u30c8", "theme-slate.css"),
+    /** Warm dark with amber accent. */
+    EMBER("ember", "\u30a8\u30f3\u30d0\u30fc", "theme-ember.css"),
     /** High-contrast light (readability). */
     CONTRAST("contrast", "\u30b3\u30f3\u30c8\u30e9\u30b9\u30c8", "theme-contrast.css");
 
@@ -68,8 +74,8 @@ public enum DesktopTheme {
     }
 
     /**
-     * Replaces any bundled {@code theme-*.css} overlay, then adds this theme's sheet (except {@link #LIGHT})
-     * at index 0 so {@code pm-ai-desktop.css} can still override specifics.
+     * Replaces any bundled {@code theme-*.css} overlay, then adds this theme's sheet at index 0 so
+     * {@code pm-ai-desktop.css} can still override specifics.
      */
     public void applyTo(Scene scene) {
         if (scene == null) {
@@ -77,9 +83,6 @@ public enum DesktopTheme {
         }
         var sheets = scene.getStylesheets();
         sheets.removeIf(DesktopTheme::isBundledThemeOverlay);
-        if (overlayCssFile == null) {
-            return;
-        }
         var url =
                 Objects.requireNonNull(
                         DesktopTheme.class.getResource(CSS_DIR + overlayCssFile),

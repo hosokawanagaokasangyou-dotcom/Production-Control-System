@@ -13,7 +13,8 @@
 
 .spreadsheet-cell {
     -fx-background-color: -fx-table-cell-border-color, -fx-control-inner-background;
-    -fx-border-color: derive(-fx-base, 23%);
+    /* Match TableView grid; avoids low-contrast derive(-fx-base, Åc) on tinted themes */
+    -fx-border-color: -fx-table-cell-border-color;
     -fx-text-fill: -fx-text-inner-color;
 }
 

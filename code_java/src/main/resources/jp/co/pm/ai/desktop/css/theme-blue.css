@@ -29,7 +29,7 @@
 }
 
 .table-view {
-    -fx-table-cell-border-color: derive(-fx-base, -8%);
+    -fx-table-cell-border-color: #64748b;
 }
 
 .table-view .column-header-background {

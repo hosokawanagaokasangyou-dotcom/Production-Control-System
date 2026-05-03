@@ -1,0 +1,5 @@
+/* LIGHT ? Modena default colors; only strengthens table / spreadsheet grid visibility */
+
+.table-view {
+    -fx-table-cell-border-color: #9ca3af;
+}

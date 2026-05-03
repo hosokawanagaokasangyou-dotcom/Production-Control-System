@@ -1,0 +1,21 @@
+/* Header-column band (first n visual columns): tint when idle; defer to theme when row is selected */
+
+.table-view .table-cell.pm-header-body-cell {
+    -fx-background-color: derive(-fx-base, -5%);
+}
+
+.table-view .table-row-cell:selected .table-cell.pm-header-body-cell {
+    -fx-background-color: -fx-selection-bar;
+    -fx-background-insets: 0;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.table-view .table-row-cell:selected .table-cell.pm-header-body-cell TextField {
+    -fx-control-inner-background: -fx-selection-bar;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.table-view:focused .table-row-cell:filled:selected .table-cell.pm-header-body-cell:focused {
+    -fx-background-color: -fx-selection-bar;
+    -fx-text-fill: -fx-selection-bar-text;
+}

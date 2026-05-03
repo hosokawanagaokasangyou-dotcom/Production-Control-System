@@ -29,7 +29,8 @@
 }
 
 .table-view {
-    -fx-table-cell-border-color: derive(-fx-base, 15%);
+    /* Explicit mid-gray: derive() was too close to cell fill */
+    -fx-table-cell-border-color: #8b949e;
 }
 
 .table-view .column-header-background {
