@@ -19,6 +19,8 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TabPane;
@@ -556,13 +558,30 @@ public final class MainShellController {
                                                 if (reloadAfterStage1PlanInput != null) {
                                                     reloadAfterStage1PlanInput.run();
                                                 }
+                                                showStageCompletionDialog(
+                                                        "\u6bb5\u968e1 \u5b8c\u4e86",
+                                                        "\u6bb5\u968e1 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u306b"
+                                                                + "\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002");
                                             }
                                             if (STAGE2.equals(script) && c == 0) {
                                                 refreshStage2OutputArtifacts();
+                                                showStageCompletionDialog(
+                                                        "\u6bb5\u968e2 \u5b8c\u4e86",
+                                                        "\u6bb5\u968e2 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u306b"
+                                                                + "\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002");
                                             }
                                         }
                                     });
                         });
+    }
+
+    private void showStageCompletionDialog(String title, String contentText) {
+        Alert alert = new Alert(AlertType.INFORMATION);
+        alert.initOwner(primaryStage);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(contentText);
+        alert.showAndWait();
     }
 
     private static String exitCodeLegend(int code) {
