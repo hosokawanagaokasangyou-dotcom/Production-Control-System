@@ -4,9 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
@@ -43,7 +46,8 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "windowHeight", 0d),
                     optionalDouble(root, "windowX", Double.NaN),
                     optionalDouble(root, "windowY", Double.NaN),
-                    text(root, "uiTheme"));
+                    text(root, "uiTheme"),
+                    loadUiEnvRows(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -62,6 +66,7 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunPythonExe", state.mainRunPythonExe());
             put(root, "mainRunScriptDir", state.mainRunScriptDir());
             put(root, "uiTheme", state.uiTheme());
+            putUiEnvRows(root, state.uiEnvRows());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -88,6 +93,35 @@ public final class DesktopSessionStateStore {
         if (value != null && !value.isBlank()) {
             root.put(key, value.trim());
         }
+    }
+
+    private static List<UiEnvRowSnapshot> loadUiEnvRows(JsonNode root) {
+        JsonNode arr = root.get("uiEnvRows");
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<UiEnvRowSnapshot> out = new ArrayList<>();
+        for (JsonNode el : arr) {
+            if (el != null && el.isObject()) {
+                out.add(
+                        new UiEnvRowSnapshot(
+                                text(el, "name"), text(el, "value"), text(el, "description")));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static void putUiEnvRows(ObjectNode root, List<UiEnvRowSnapshot> rows) {
+        ArrayNode arr = JSON.createArrayNode();
+        if (rows != null) {
+            for (UiEnvRowSnapshot r : rows) {
+                ObjectNode o = arr.addObject();
+                o.put("name", r.name() != null ? r.name() : "");
+                o.put("value", r.value() != null ? r.value() : "");
+                o.put("description", r.description() != null ? r.description() : "");
+            }
+        }
+        root.set("uiEnvRows", arr);
     }
 
     private static void putWindowGeometry(ObjectNode root, DesktopSessionState state) {

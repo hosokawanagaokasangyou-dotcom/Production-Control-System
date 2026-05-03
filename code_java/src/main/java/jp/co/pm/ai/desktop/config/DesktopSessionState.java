@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
+import java.util.List;
+
 /**
  * Paths and fields restored on startup from {@link DesktopSessionStateStore}.
  *
@@ -16,6 +18,7 @@ package jp.co.pm.ai.desktop.config;
  * @param windowX last window X ({@link Double#NaN} if unknown / keep toolkit placement)
  * @param windowY last window Y ({@link Double#NaN} if unknown)
  * @param uiTheme persisted UI theme id ({@link DesktopTheme#storedId()}, empty defaults to light)
+ * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -30,10 +33,11 @@ public record DesktopSessionState(
         double windowHeight,
         double windowX,
         double windowY,
-        String uiTheme) {
+        String uiTheme,
+        List<UiEnvRowSnapshot> uiEnvRows) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
-                "", "", "", "", "", "", "", "", 0d, 0d, Double.NaN, Double.NaN, "");
+                "", "", "", "", "", "", "", "", 0d, 0d, Double.NaN, Double.NaN, "", List.of());
     }
 }

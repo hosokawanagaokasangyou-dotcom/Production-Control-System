@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Rectangle2D;
@@ -21,6 +23,7 @@ import javafx.scene.control.TabPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
@@ -30,6 +33,7 @@ import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
+import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.io.ExcelSheetTitlesProbe;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
@@ -97,6 +101,8 @@ public final class MainShellController {
 
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
+    private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
+    private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
 
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
 
@@ -112,13 +118,15 @@ public final class MainShellController {
 
     @FXML
     private void initialize() {
-        envRows = FXCollections.observableArrayList();
-        populateEnvRows(envRows);
-        Map<String, String> ui0 = collectUiEnv();
+        suppressEnvSessionPersistence.set(true);
+        try {
+            envRows = FXCollections.observableArrayList();
+            populateEnvRows(envRows);
+            Map<String, String> ui0 = collectUiEnv();
 
-        mainRunTabController.bindShell(this);
-        envTabController.bindShell(this);
-        masterReadSummaryTabController.bindShell(this);
+            mainRunTabController.bindShell(this);
+            envTabController.bindShell(this);
+            masterReadSummaryTabController.bindShell(this);
 
         mainRunTabController
                 .getWorkbookField()
@@ -152,7 +160,12 @@ public final class MainShellController {
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
 
-        applyDesktopSession(DesktopSessionStateStore.load());
+            applyDesktopSession(DesktopSessionStateStore.load());
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+
+        installUiEnvAutoSave();
 
         primaryStage.setOnCloseRequest(e -> DesktopSessionStateStore.save(collectDesktopSession()));
 
@@ -232,6 +245,7 @@ public final class MainShellController {
         if (s == null) {
             return;
         }
+        applyUiEnvRowsFromSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
         stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
         excludeRulesTabController.restoreDesktopSessionPath(s.excludeRulesPath());
@@ -300,7 +314,74 @@ public final class MainShellController {
                 primaryStage.getY(),
                 themeCombo != null && themeCombo.getValue() != null
                         ? themeCombo.getValue().storedId()
-                        : DesktopTheme.LIGHT.storedId());
+                        : DesktopTheme.LIGHT.storedId(),
+                snapshotUiEnvRows());
+    }
+
+    private List<UiEnvRowSnapshot> snapshotUiEnvRows() {
+        if (envRows == null) {
+            return List.of();
+        }
+        List<UiEnvRowSnapshot> out = new ArrayList<>(envRows.size());
+        for (EnvVarRow r : envRows) {
+            out.add(
+                    new UiEnvRowSnapshot(
+                            nz(r.getName()),
+                            r.getValue() != null ? r.getValue() : "",
+                            r.getDescription() != null ? r.getDescription() : ""));
+        }
+        return List.copyOf(out);
+    }
+
+    private void applyUiEnvRowsFromSession(DesktopSessionState s) {
+        if (s == null || s.uiEnvRows() == null || s.uiEnvRows().isEmpty() || envRows == null) {
+            return;
+        }
+        List<EnvVarRow> restored = new ArrayList<>(s.uiEnvRows().size());
+        for (UiEnvRowSnapshot snap : s.uiEnvRows()) {
+            EnvVarRow row = new EnvVarRow();
+            String name = snap.name() != null ? snap.name() : "";
+            row.setName(name);
+            row.setValue(snap.value() != null ? snap.value() : "");
+            String desc = snap.description() != null ? snap.description() : "";
+            if (desc.isBlank() && !name.trim().isEmpty()) {
+                desc = EnvVarDocs.mergeDescriptions("", name.trim());
+            }
+            row.setDescription(desc);
+            restored.add(row);
+        }
+        envRows.setAll(restored);
+    }
+
+    private void installUiEnvAutoSave() {
+        uiEnvSaveDebounce.setOnFinished(
+                e -> {
+                    if (!suppressEnvSessionPersistence.get()) {
+                        DesktopSessionStateStore.save(collectDesktopSession());
+                    }
+                });
+        Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
+        envRows.addListener(
+                (ListChangeListener<EnvVarRow>)
+                        c -> {
+                            while (c.next()) {
+                                if (c.wasAdded()) {
+                                    for (EnvVarRow row : c.getAddedSubList()) {
+                                        hookEnvRowForAutoSave(row, schedule);
+                                    }
+                                }
+                            }
+                            schedule.run();
+                        });
+        for (EnvVarRow row : envRows) {
+            hookEnvRowForAutoSave(row, schedule);
+        }
+    }
+
+    private static void hookEnvRowForAutoSave(EnvVarRow row, Runnable schedule) {
+        row.nameProperty().addListener((o, a, b) -> schedule.run());
+        row.valueProperty().addListener((o, a, b) -> schedule.run());
+        row.descriptionProperty().addListener((o, a, b) -> schedule.run());
     }
 
     private static boolean nonBlank(String v) {
