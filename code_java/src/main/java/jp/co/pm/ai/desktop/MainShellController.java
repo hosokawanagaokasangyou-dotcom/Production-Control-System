@@ -46,7 +46,7 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
 /**
- * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
+ * Main window controller????]???? {@link PmAiFxApp} ????????????????W???N????????????
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
@@ -129,6 +129,9 @@ public final class MainShellController {
     private ResultDispatchTableTabController resultDispatchTableTabController;
 
     @FXML
+    private DispatchInteractiveTabController dispatchInteractiveTabController;
+
+    @FXML
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
@@ -157,6 +160,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabResultDispatch;
+
+    @FXML
+    private Tab mainShellTabDispatchInteractive;
 
     @FXML
     private Tab mainShellTabPlanResultViewer;
@@ -205,8 +211,8 @@ public final class MainShellController {
         mainRunTabController
                 .getWorkbookField()
                 .setPromptText(
-                        "任意。空欄のときはステージ1/2実行時に、環境変数と既定のブートストラップでタスク入力ブックのパスが決まります。"
-                                + " PM_AI_* が通常運用の軸です（マスタ読込やパス指定の補助ヒント）。");
+                        "?C??B????????????X???[?W1/2???s????A????????????????u????g?X?g?????v??^?X?N????u???N??p?X???????????"
+                                + " PM_AI_* ?????^?p???????i????X?^??????p?X??????????q???g?j??");
         mainRunTabController
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
@@ -215,7 +221,7 @@ public final class MainShellController {
                 .setText(firstNonBlank(ui0.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
         mainRunTabController
                 .getPythonExeField()
-                .setPromptText("Python executable (未設定時は環境変数 PM_AI_PYTHON)");
+                .setPromptText("Python executable (?????????????? PM_AI_PYTHON)");
         mainRunTabController
                 .getScriptDirField()
                 .setText(
@@ -224,13 +230,14 @@ public final class MainShellController {
                                 AppPaths.resolvePythonScriptDir(ui0).toString()));
         mainRunTabController
                 .getScriptDirField()
-                .setPromptText("code/python (未設定時は環境変数 PM_AI_CODE_PYTHON_DIR)");
+                .setPromptText("code/python (?????????????? PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
         stage1PreviewTabController.bindShell(this);
         excludeRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
+        dispatchInteractiveTabController.bindShell(this);
 
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
@@ -478,6 +485,9 @@ public final class MainShellController {
         if (t == mainShellTabResultDispatch) {
             return MainShellTabId.RESULT_DISPATCH;
         }
+        if (t == mainShellTabDispatchInteractive) {
+            return MainShellTabId.DISPATCH_INTERACTIVE;
+        }
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
@@ -500,6 +510,7 @@ public final class MainShellController {
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
+            case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
         };
@@ -720,12 +731,12 @@ public final class MainShellController {
     void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         alert.initOwner(primaryStage);
-        alert.setTitle("環境変数を初期値に戻す");
+        alert.setTitle("???????????????l?????");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json の既定行に戻します。"
-                        + "未保存の編集と、セッションに保存していた各タブの値（Python パス等）も失われます。"
-                        + "続行しますか？");
+                "ui_ref_env_defaults.json ?????s?????????"
+                        + "??????????????A?Z???V?????????????????e?^?u????l???Python ?p?X???j???????????"
+                        + "???s??????????");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
@@ -799,8 +810,8 @@ public final class MainShellController {
                 appendLog(
                         "[env] PM_AI_EXCLUDE_RULES_JSON: "
                                 + p
-                                + " が無いため、環境変数タブの値は未更新のままです。"
-                                + " ステージ1が配台除外ルール JSON を生成しているか、cwd/json の場所が一致しているか確認してください。");
+                                + " ??????????A????????^?u????l????X?V????????"
+                                + " ?X???[?W1????????O???[?? JSON ????????????Acwd/json ???????v?????????m?F?????????????");
                 return;
             }
             String pathStr = p.toString();
@@ -813,9 +824,9 @@ public final class MainShellController {
                 }
             }
             appendLog(
-                    "[env] PM_AI_EXCLUDE_RULES_JSON 行が見つからないため未更新のままです。");
+                    "[env] PM_AI_EXCLUDE_RULES_JSON ?s??????????????????X?V????????");
         } catch (Exception ex) {
-            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON 更新に失敗: " + ex.getMessage());
+            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON ?X?V?????: " + ex.getMessage());
         }
     }
 
@@ -851,7 +862,7 @@ public final class MainShellController {
         String wb = effectiveTaskInputWorkbookPath();
         appendLog("--- start: " + script + " ---");
         RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
-        mainRunTabController.getStatusLabel().setText("実行中…");
+        mainRunTabController.getStatusLabel().setText("???s???c");
 
         PythonProcessRunner.runAsync(
                         req,
@@ -889,14 +900,14 @@ public final class MainShellController {
                                                     reloadAfterStage1PlanInput.run();
                                                 }
                                                 showStageCompletionDialog(
-                                                        "ステージ1 完了",
-                                                        "ステージ1 の処理が正常終了しました。");
+                                                        "?X???[?W1 ????",
+                                                        "?X???[?W1 ???????????I???????????");
                                             }
                                             if (STAGE2.equals(script) && c == 0) {
                                                 refreshStage2OutputArtifacts();
                                                 showStageCompletionDialog(
-                                                        "ステージ2 完了",
-                                                        "ステージ2 の処理が正常終了しました。");
+                                                        "?X???[?W2 ????",
+                                                        "?X???[?W2 ???????????I???????????");
                                             }
                                         }
                                     });
@@ -904,8 +915,8 @@ public final class MainShellController {
     }
 
     /**
-     * ステージ1実行中は環境変数タブと配台計画入力タブを無効化し、ステージ2に渡す前提が途中で崩れる操作を防ぐ。
-     * ステージ2実行中は環境変数タブとステージ1プレビュータブを無効化し、ステージ1の結果と食い違う操作を防ぐ。
+     * ?X???[?W1???s???????????^?u??z??v?????^?u????????A?X???[?W2??n???O??r???????????h????
+     * ?X???[?W2???s???????????^?u??X???[?W1?v???r???[?^?u????????A?X???[?W1??????H?????????h????
      */
     private void applyRunTabGating() {
         if (tabPane == null) {
@@ -946,7 +957,7 @@ public final class MainShellController {
     private static String exitCodeLegend(int code) {
         return "exit="
                 + code
-                + " （0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel）";
+                + " ???0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel???";
     }
 
     private static String exitHint(int code) {
@@ -1024,7 +1035,7 @@ public final class MainShellController {
     /**
      * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
-     * the 配台計画_タスク入力 tab are applied so that stage-2 uses the
+     * the ?z??v??_?^?X?N???? tab are applied so that stage-2 uses the
      * file the user is editing there.
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
@@ -1065,7 +1076,7 @@ public final class MainShellController {
     }
 
     /**
-     * Child-process env from the 環境変数 tab (same skip rules as workbook sheet: empty name, #).
+     * Child-process env from the ??????? tab (same skip rules as workbook sheet: empty name, #).
      */
     private Map<String, String> collectUiEnv() {
         Map<String, String> m = new HashMap<>();
@@ -1151,7 +1162,7 @@ public final class MainShellController {
                 mainRunTabController.setStage2ArtifactPaths("", "");
                 appendLog(
                         "[stage2-ui] "
-                                + "出力フォルダがありません: "
+                                + "?o??t?H???_??????????: "
                                 + dir);
                 return;
             }
@@ -1171,7 +1182,7 @@ public final class MainShellController {
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
-                                + "最新成果物: production_plan="
+                                + "??V?????: production_plan="
                                 + planStr
                                 + " | member_schedule="
                                 + memStr);
@@ -1179,7 +1190,7 @@ public final class MainShellController {
         } catch (Exception ex) {
             appendLog(
                     "[stage2-ui] "
-                            + "成果パス更新エラー: "
+                            + "????p?X?X?V?G???[: "
                             + ex.getMessage());
         }
     }

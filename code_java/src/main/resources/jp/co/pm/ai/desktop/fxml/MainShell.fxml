@@ -72,6 +72,12 @@
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
+                     text="&#x914d;&#x53f0;&#x7de8;&#x96c6;&#xff08;&#x7d0d;&#x671f;&#x98a8;&#xff09;">
+                    <content>
+                        <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
                      text="&#x8a08;&#x753b;&#x7d50;&#x679c;&#x30d3;&#x30e5;&#x30fc;&#x30a2; (JSON)">
                     <content>

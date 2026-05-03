@@ -13,7 +13,8 @@ public enum MainShellTabId {
     ACTUALS_STATUS("actualsStatus"),
     RESULT_DISPATCH("resultDispatch"),
     PLAN_RESULT_VIEWER("planResultViewer"),
-    OPERATOR_CARD("operatorCard");
+    OPERATOR_CARD("operatorCard"),
+    DISPATCH_INTERACTIVE("dispatchInteractive");
 
     private final String key;
 
