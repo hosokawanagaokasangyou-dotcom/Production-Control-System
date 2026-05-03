@@ -61,6 +61,10 @@
             </GridPane>
             <Label text="log (stdout+stderr merged)"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="&#x30d5;&#x30a3;&#x30eb;&#x30bf;"/>
+                <ComboBox fx:id="logFilterCombo" prefWidth="160.0"/>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="&#x30d5;&#x30a9;&#x30f3;&#x30c8;"/>
                 <ComboBox fx:id="logFontFamilyCombo" prefWidth="260.0"/>
                 <Label text="&#x30b5;&#x30a4;&#x30ba;"/>

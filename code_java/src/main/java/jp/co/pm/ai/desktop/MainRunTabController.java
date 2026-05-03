@@ -5,10 +5,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javafx.beans.binding.Bindings;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -52,6 +53,9 @@ public final class MainRunTabController {
     private ListView<String> logListView;
 
     @FXML
+    private ComboBox<LogViewFilter> logFilterCombo;
+
+    @FXML
     private ComboBox<String> logFontFamilyCombo;
 
     @FXML
@@ -84,13 +88,47 @@ public final class MainRunTabController {
     @FXML
     private Button clearLogButton;
 
-    private final ObservableList<String> logLines = FXCollections.observableArrayList();
+    private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
+    private final FilteredList<String> logLinesVisible =
+            new FilteredList<>(logLinesAll, s -> true);
+
     private Font appliedLogFont = Font.getDefault();
 
     private final AtomicBoolean suppressLogFontEvents = new AtomicBoolean(false);
 
     @FXML
     private void initialize() {
+        logFilterCombo.getItems().setAll(LogViewFilter.values());
+        logFilterCombo.setValue(LogViewFilter.ALL);
+        logFilterCombo.setConverter(
+                new StringConverter<>() {
+                    @Override
+                    public String toString(LogViewFilter f) {
+                        return f != null ? f.getLabel() : "";
+                    }
+
+                    @Override
+                    public LogViewFilter fromString(String string) {
+                        if (string == null || string.isBlank()) {
+                            return LogViewFilter.ALL;
+                        }
+                        for (LogViewFilter v : LogViewFilter.values()) {
+                            if (v.getLabel().equals(string)) {
+                                return v;
+                            }
+                        }
+                        return LogViewFilter.ALL;
+                    }
+                });
+        logFilterCombo
+                .valueProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            if (b != null) {
+                                logLinesVisible.setPredicate(b::test);
+                            }
+                        });
+
         List<String> families = new ArrayList<>();
         families.add(DEFAULT_FONT_FAMILY_LABEL);
         List<String> installed = new ArrayList<>(Font.getFamilies());
@@ -137,16 +175,16 @@ public final class MainRunTabController {
 
         setupLogListView();
         if (copyAllLogButton != null) {
-            copyAllLogButton.disableProperty().bind(Bindings.isEmpty(logLines));
+            copyAllLogButton.disableProperty().bind(Bindings.isEmpty(logLinesAll));
         }
         if (clearLogButton != null) {
-            clearLogButton.disableProperty().bind(Bindings.isEmpty(logLines));
+            clearLogButton.disableProperty().bind(Bindings.isEmpty(logLinesAll));
         }
         applyLogAreaFont();
     }
 
     private void setupLogListView() {
-        logListView.setItems(logLines);
+        logListView.setItems(logLinesVisible);
         logListView.setFixedCellSize(-1);
         logListView.setFocusTraversable(true);
         logListView.setCellFactory(
@@ -216,22 +254,41 @@ public final class MainRunTabController {
                 new MenuItem(
                         "\u9078\u629e\u3092\u30b3\u30d4\u30fc (Ctrl+C)");
         copySelectedItem.setOnAction(e -> copySelectedLogLinesToClipboard());
-        MenuItem copyAllItem = new MenuItem("\u3059\u3079\u3066\u30b3\u30d4\u30fc");
-        copyAllItem.setOnAction(e -> copyAllLogLinesToClipboard());
-        logListView.setContextMenu(new ContextMenu(copySelectedItem, copyAllItem));
+        MenuItem copyAllItem =
+                new MenuItem(
+                        "\u5168\u30ed\u30b0\u3092\u30b3\u30d4\u30fc\uFF08\u30d0\u30c3\u30d5\u30a1\u5168\u884c\uFF09");
+        copyAllItem.setOnAction(e -> copyAllBufferedLogToClipboard());
+        MenuItem copyVisibleItem =
+                new MenuItem(
+                        "\u8868\u793a\u4e2d\u306e\u30ed\u30b0\u3092\u30b3\u30d4\u30fc");
+        copyVisibleItem.setOnAction(e -> copyVisibleLogLinesToClipboard());
+        logListView.setContextMenu(
+                new ContextMenu(copySelectedItem, copyVisibleItem, copyAllItem));
     }
 
-    private void copyAllLogLinesToClipboard() {
-        if (logLines.isEmpty()) {
+    /** Full buffer (ignores filter); same as toolbar \u5168\u30ed\u30b0\u3092\u30b3\u30d4\u30fc. */
+    private void copyAllBufferedLogToClipboard() {
+        if (logLinesAll.isEmpty()) {
             return;
         }
-        String text = String.join("\n", logLines);
+        String text = String.join("\n", logLinesAll);
+        ClipboardContent cc = new ClipboardContent();
+        cc.putString(text);
+        Clipboard.getSystemClipboard().setContent(cc);
+    }
+
+    private void copyVisibleLogLinesToClipboard() {
+        if (logLinesVisible.isEmpty()) {
+            return;
+        }
+        String text = String.join("\n", logLinesVisible);
         ClipboardContent cc = new ClipboardContent();
         cc.putString(text);
         Clipboard.getSystemClipboard().setContent(cc);
     }
 
     private void copySelectedLogLinesToClipboard() {
+        ObservableList<String> visible = logListView.getItems();
         MultipleSelectionModel<String> sm = logListView.getSelectionModel();
         ArrayList<Integer> indices = new ArrayList<>(sm.getSelectedIndices());
         if (indices.isEmpty()) {
@@ -246,11 +303,11 @@ public final class MainRunTabController {
         Collections.sort(indices);
         StringBuilder sb = new StringBuilder();
         for (int i : indices) {
-            if (i >= 0 && i < logLines.size()) {
+            if (i >= 0 && i < visible.size()) {
                 if (sb.length() > 0) {
                     sb.append('\n');
                 }
-                sb.append(logLines.get(i));
+                sb.append(visible.get(i));
             }
         }
         if (sb.length() == 0) {
@@ -372,12 +429,12 @@ public final class MainRunTabController {
 
     @FXML
     private void onCopyAllLogButtonAction() {
-        copyAllLogLinesToClipboard();
+        copyAllBufferedLogToClipboard();
     }
 
     @FXML
     private void onClearLogButtonAction() {
-        logLines.clear();
+        logLinesAll.clear();
     }
 
     TextField getWorkbookField() {
@@ -403,9 +460,11 @@ public final class MainRunTabController {
     void appendLog(String line) {
         Runnable add =
                 () -> {
-                    logLines.add(line);
-                    int last = logLines.size() - 1;
-                    logListView.scrollTo(last);
+                    logLinesAll.add(line);
+                    int n = logLinesVisible.size();
+                    if (n > 0) {
+                        logListView.scrollTo(n - 1);
+                    }
                 };
         if (Platform.isFxApplicationThread()) {
             add.run();
