@@ -9,33 +9,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javafx.application.Platform;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
+import javafx.stage.Stage;
 
-import org.controlsfx.control.table.TableFilter;
+import org.controlsfx.control.spreadsheet.GridBase;
+import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
-import jp.co.pm.ai.desktop.ui.TableHeaderColumnStyle;
-import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
-/** Loads {@link AppPaths#RESULT_DISPATCH_TABLE_JSON_BASENAME} as a wide table. Layout {@code ResultDispatchTableTab.fxml}. */
+/**
+ * Loads {@link AppPaths#RESULT_DISPATCH_TABLE_JSON_BASENAME} into ControlsFX {@link SpreadsheetView}. Layout
+ * {@code ResultDispatchTableTab.fxml}.
+ */
 public final class ResultDispatchTableTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -43,9 +50,9 @@ public final class ResultDispatchTableTabController {
     private static final String HINT_TEXT =
             "PM_AI_RESULT_DISPATCH_TABLE_DIR \u307e\u305f\u306f\u30c7\u30d5\u30a9\u30eb\u30c8\u306e code/"
                     + " \u914d\u4e0b\u306e JSON \u3092\u8868\u793a\u3057\u307e\u3059\u3002\u518d\u8aad\u307f\u3067"
-                    + "\u6700\u65b0\u5316\u3057\u307e\u3059\u3002";
-
-    private record ColSpec(String key, double width) {}
+                    + "\u6700\u65b0\u5316\u3057\u307e\u3059\u3002"
+                    + " ControlsFX SpreadsheetView \uff08\u6bb5\u968e1\u6210\u5f62\u7d50\u679c\u3068\u540c\u3058"
+                    + "\u5217\u30d5\u30a3\u30eb\u30bf\uff09\u3002";
 
     @FXML
     private Button refreshButton;
@@ -63,39 +70,133 @@ public final class ResultDispatchTableTabController {
     private HBox columnStripHost;
 
     @FXML
-    private TableView<Map<String, String>> table;
+    private StackPane spreadsheetHost;
 
     @FXML
     private Text metaText;
 
-    private ObservableList<Map<String, String>> rows;
-
     private MainShellController shell;
 
-    private TableFilter<Map<String, String>> tableFilter;
+    private Stage ownerStage;
 
-    private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+    private final SpreadsheetView spreadsheetView = new SpreadsheetView();
+
+    private final List<String> headersRef = new ArrayList<>();
+
+    private ObservableList<ObservableList<String>> rows;
 
     private final AtomicBoolean suppressColumnPersistence = new AtomicBoolean(false);
 
-    private List<ColSpec> columnSpecs = List.of();
+    private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
+            new AtomicReference<>(List.of());
 
-    private boolean layoutWatcherInstalled;
-
-    private boolean columnStripInstalled;
+    private final AtomicInteger headerColumnCount = new AtomicInteger(0);
 
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
         rows = FXCollections.observableArrayList();
-        table.setItems(rows);
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        VBox.setVgrow(table, Priority.ALWAYS);
+
+        StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
+        spreadsheetHost.getChildren().add(spreadsheetView);
+        VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
+
+        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        SpreadsheetThemeBridge.install(spreadsheetView);
+
+        columnStripHost
+                .getChildren()
+                .setAll(
+                        SpreadsheetColumnSettingsStrip.create(
+                                this::applyDynamicColumnWidths,
+                                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
+                                headerColumnCount,
+                                this::onLeadingColumnCountCommitted,
+                                this::onReorderColumns));
     }
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        ownerStage = shell.getPrimaryStage();
+
+        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
+                spreadsheetView,
+                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
+                suppressColumnPersistence::get,
+                () -> new ArrayList<>(headersRef));
+
         Platform.runLater(this::reloadFromDisk);
+    }
+
+    private void onLeadingColumnCountCommitted(int n) {
+        headerColumnCount.set(n);
+        rebuildSpreadsheet();
+    }
+
+    private void onReorderColumns() {
+        if (headersRef.isEmpty()) {
+            shell.appendLog(
+                    "[result-dispatch-json] \u5217\u304c\u3042\u308a\u307e\u305b\u3093\uff08\u5148\u306b\u518d\u8aad\u307f\uff09");
+            return;
+        }
+        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+                .ifPresent(
+                        perm -> {
+                            List<String> oldHeaders = new ArrayList<>(headersRef);
+                            List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
+                            List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
+                            TableColumnOrderPersistence.applyLogicalColumnOrder(
+                                    headersRef, rows, titleOrder);
+                            List<Double> widths =
+                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
+                                            headersRef, lay, 112);
+                            List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
+                            for (int i = 0; i < headersRef.size(); i++) {
+                                newLay.add(
+                                        new TableColumnOrderPersistence.ColumnSpec(
+                                                headersRef.get(i), widths.get(i)));
+                            }
+                            persistedLayout.set(newLay);
+                            TableColumnOrderPersistence.saveLayout(
+                                    TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, newLay);
+                            rebuildSpreadsheet();
+                        });
+    }
+
+    private void applyDynamicColumnWidths() {
+        double w = 112;
+        for (var c : spreadsheetView.getColumns()) {
+            c.setPrefWidth(w);
+        }
+    }
+
+    private void rebuildSpreadsheet() {
+        if (headersRef.isEmpty()) {
+            spreadsheetView.setGrid(new GridBase(0, 0));
+            return;
+        }
+        suppressColumnPersistence.set(true);
+        try {
+            final List<Double> widths =
+                    TableColumnOrderPersistence.resolveWidthsForHeaders(
+                            headersRef, persistedLayout.get(), 112);
+            final double widthDefault = 112;
+
+            GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(headersRef, rows);
+            spreadsheetView.setGrid(grid);
+
+            Platform.runLater(
+                    () -> {
+                        SpreadsheetTabularSupport.applyColumnWidths(
+                                spreadsheetView, widths, widthDefault);
+                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
+                        SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                spreadsheetView, headerColumnCount.get());
+                        SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                    });
+        } finally {
+            suppressColumnPersistence.set(false);
+        }
     }
 
     @FXML
@@ -114,7 +215,7 @@ public final class ResultDispatchTableTabController {
         if (!Files.isRegularFile(path)) {
             statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057");
             metaText.setText("");
-            applyEmptyTable();
+            applyEmpty();
             refreshButton.setDisable(false);
             return;
         }
@@ -130,26 +231,26 @@ public final class ResultDispatchTableTabController {
             if (columnsNode == null || !columnsNode.isArray() || rowsNode == null || !rowsNode.isArray()) {
                 statusLabel.setText("JSON \u69cb\u9020\u304c\u4e0d\u6b63");
                 metaText.setText("");
-                applyEmptyTable();
+                applyEmpty();
                 refreshButton.setDisable(false);
                 return;
             }
-            List<String> headers = new ArrayList<>();
+            List<String> headerOrder = new ArrayList<>();
             for (JsonNode c : columnsNode) {
                 if (c != null && c.isTextual()) {
-                    headers.add(c.asText(""));
+                    headerOrder.add(c.asText(""));
                 }
             }
-            List<Map<String, String>> data = new ArrayList<>();
+            List<Map<String, String>> rowMaps = new ArrayList<>();
             for (JsonNode r : rowsNode) {
                 if (r == null || !r.isObject()) {
                     continue;
                 }
                 LinkedHashMap<String, String> row = new LinkedHashMap<>();
-                for (String h : headers) {
+                for (String h : headerOrder) {
                     row.put(h, formatCell(r.get(h)));
                 }
-                data.add(row);
+                rowMaps.add(row);
             }
             String meta =
                     "format_version="
@@ -161,136 +262,46 @@ public final class ResultDispatchTableTabController {
                             + ", row_count="
                             + rowCountMeta
                             + ", loaded_rows="
-                            + data.size();
+                            + rowMaps.size();
             metaText.setText(meta);
-            statusLabel.setText(data.size() + " \u884c");
-            rebuildTable(headers, data);
+            statusLabel.setText(rowMaps.size() + " \u884c");
+
+            headersRef.clear();
+            headersRef.addAll(headerOrder);
+            rows.clear();
+            for (Map<String, String> map : rowMaps) {
+                ObservableList<String> line = FXCollections.observableArrayList();
+                for (String h : headersRef) {
+                    line.add(map.getOrDefault(h, ""));
+                }
+                rows.add(line);
+            }
+
+            List<TableColumnOrderPersistence.ColumnSpec> lay =
+                    TableColumnOrderPersistence.loadLayout(
+                            TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE);
+            persistedLayout.set(lay);
+            TableColumnOrderPersistence.applyLogicalColumnOrder(
+                    headersRef,
+                    rows,
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+
+            rebuildSpreadsheet();
         } catch (Exception ex) {
             statusLabel.setText("error");
             metaText.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             shell.appendLog("[result-dispatch-json] " + ex.getMessage());
-            applyEmptyTable();
+            applyEmpty();
         } finally {
             refreshButton.setDisable(false);
         }
     }
 
-    private void applyEmptyTable() {
-        suppressColumnPersistence.set(true);
-        try {
-            rows.clear();
-            table.getColumns().clear();
-            if (tableFilter != null) {
-                tableFilter = null;
-            }
-            columnSpecs = List.of();
-        } finally {
-            suppressColumnPersistence.set(false);
-        }
-    }
-
-    private void rebuildTable(List<String> headers, List<Map<String, String>> data) {
-        suppressColumnPersistence.set(true);
-        try {
-            rows.clear();
-            table.getColumns().clear();
-            if (tableFilter != null) {
-                tableFilter = null;
-            }
-            if (headers.isEmpty()) {
-                columnSpecs = List.of();
-                return;
-            }
-            double baseW = 112.0;
-            List<TableColumn<Map<String, String>, String>> cols = new ArrayList<>();
-            List<ColSpec> specs = new ArrayList<>();
-            for (String h : headers) {
-                final String key = h;
-                double w = guessColumnWidth(key, baseW);
-                specs.add(new ColSpec(key, w));
-                TableColumn<Map<String, String>, String> col = new TableColumn<>(key);
-                col.setCellValueFactory(
-                        cd -> {
-                            Map<String, String> row = cd.getValue();
-                            String v = row != null ? row.getOrDefault(key, "") : "";
-                            return new SimpleStringProperty(v != null ? v : "");
-                        });
-                col.setCellFactory(
-                        tc ->
-                                new TableCell<Map<String, String>, String>() {
-                                    @Override
-                                    protected void updateItem(String item, boolean empty) {
-                                        super.updateItem(item, empty);
-                                        if (empty || item == null) {
-                                            setText(null);
-                                        } else {
-                                            setText(item);
-                                        }
-                                        TableHeaderColumnStyle.applyBodyCellTint(
-                                                this, table, tc, headerColumnCount::get);
-                                    }
-                                });
-                col.setMinWidth(w);
-                col.setPrefWidth(w);
-                col.setReorderable(true);
-                cols.add(col);
-            }
-            columnSpecs = List.copyOf(specs);
-            table.getColumns().addAll(cols);
-            rows.setAll(data);
-            tableFilter = TableFilter.forTableView(table).apply();
-            List<TableColumnOrderPersistence.ColumnSpec> saved =
-                    TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE);
-            if (!saved.isEmpty()) {
-                TableColumnOrderPersistence.applyOrderToTableColumns(
-                        table,
-                        saved.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
-                TableColumnOrderPersistence.applyWidthsToTableColumns(table, saved, baseW);
-            }
-            if (!columnStripInstalled) {
-                Runnable resetWidths =
-                        () -> {
-                            for (int i = 0; i < columnSpecs.size() && i < table.getColumns().size(); i++) {
-                                double w = columnSpecs.get(i).width();
-                                TableColumn<Map<String, String>, ?> c = table.getColumns().get(i);
-                                c.setMinWidth(w);
-                                c.setPrefWidth(w);
-                            }
-                        };
-                columnStripHost.getChildren()
-                        .setAll(
-                                TableViewColumnSettingsStrip.create(
-                                        table,
-                                        resetWidths,
-                                        false,
-                                        TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
-                                        headerColumnCount));
-                columnStripInstalled = true;
-            }
-            if (!layoutWatcherInstalled) {
-                TableColumnOrderPersistence.installColumnLayoutWatcher(
-                        table,
-                        TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
-                        suppressColumnPersistence::get);
-                layoutWatcherInstalled = true;
-            }
-        } finally {
-            suppressColumnPersistence.set(false);
-        }
-    }
-
-    private static double guessColumnWidth(String header, double base) {
-        if (header == null) {
-            return base;
-        }
-        int len = header.length();
-        if (len <= 4) {
-            return Math.min(220, base + 16);
-        }
-        if (len >= 12) {
-            return Math.min(280, base + 48);
-        }
-        return base;
+    private void applyEmpty() {
+        headersRef.clear();
+        rows.clear();
+        persistedLayout.set(List.of());
+        spreadsheetView.setGrid(new GridBase(0, 0));
     }
 
     private static String textOr(JsonNode n, String field) {
@@ -326,9 +337,6 @@ public final class ResultDispatchTableTabController {
     }
 
     void clearColumnFiltersAndSort() {
-        if (tableFilter != null) {
-            tableFilter.resetAllFilters();
-        }
-        table.getSortOrder().clear();
+        SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
     }
 }

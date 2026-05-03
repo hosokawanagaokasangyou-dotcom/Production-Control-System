@@ -179,6 +179,48 @@ public final class SpreadsheetTabularSupport {
         return grid;
     }
 
+    /**
+     * Read-only string grid with Excel-like column filters ({@link #applyColumnFilters}); no row highlighting.
+     * Used for JSON-backed viewers such as {@code \u7d50\u679c_\u914d\u53f0\u8868.json}.
+     */
+    public static GridBase buildReadOnlyPlainGrid(
+            List<String> headersRef, ObservableList<ObservableList<String>> rows) {
+        int cols = headersRef.size();
+        int rc = rows.size();
+        int gridRowsTotal = rc + 1;
+        GridBase grid = new GridBase(gridRowsTotal, cols);
+        grid.getColumnHeaders().clear();
+        grid.getColumnHeaders().addAll(headersRef);
+
+        List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(gridRowsTotal);
+
+        ObservableList<SpreadsheetCell> filterRow = FXCollections.observableArrayList();
+        for (int c = 0; c < cols; c++) {
+            SpreadsheetCell cell =
+                    SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
+            cell.setEditable(false);
+            filterRow.add(cell);
+        }
+        gridRows.add(filterRow);
+
+        int firstData = spreadsheetFirstDataRowIndex();
+        for (int r = 0; r < rc; r++) {
+            int gridRow = firstData + r;
+            ObservableList<String> src = rows.get(r);
+            ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
+            for (int c = 0; c < cols; c++) {
+                String raw = c < src.size() && src.get(c) != null ? src.get(c) : "";
+                SpreadsheetCell cell =
+                        SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
+                cell.setEditable(false);
+                rowCells.add(cell);
+            }
+            gridRows.add(rowCells);
+        }
+        grid.setRows(gridRows);
+        return grid;
+    }
+
     public static javafx.event.EventHandler<org.controlsfx.control.spreadsheet.GridChange> newRowsSyncHandler(
             ObservableList<ObservableList<String>> rows, List<String> headersRef, int firstDataGridRow) {
         return ev -> {
