@@ -369,6 +369,23 @@ public final class AppPaths {
         return resolveRepoRoot(u).resolve("output").toAbsolutePath().normalize();
     }
 
+    /**
+     * {@code code/} 配下のサマリ用マクロブック（{@code \u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm}）。実行・ログタブの「開く」から参照。
+     */
+    public static final String SUMMARY_AI_DISPATCH_XLSM =
+            "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm";
+
+    /**
+     * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSM} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
+     */
+    public static Path summaryAiDispatchXlsmPath(Map<String, String> ui) {
+        return resolveRepoRoot(ui != null ? ui : Map.of())
+                .resolve("code")
+                .resolve(SUMMARY_AI_DISPATCH_XLSM)
+                .toAbsolutePath()
+                .normalize();
+    }
+
     /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */
     public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
 

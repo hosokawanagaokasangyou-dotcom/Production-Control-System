@@ -59,6 +59,14 @@
                                 text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
                                 onAction="#onOpenStage2MemberScheduleAction"/>
                     </HBox>
+                    <Label text="&#x30b5;&#x30de;&#x30ea;_AI&#x914d;&#x53f0;.xlsm"
+                           GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
+                          GridPane.rowIndex="3">
+                        <Button mnemonicParsing="false"
+                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
+                                onAction="#onOpenSummaryAiDispatchAction"/>
+                    </HBox>
                 </children>
             </GridPane>
             <HBox visible="false" managed="false" spacing="0.0">

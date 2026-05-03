@@ -42,6 +42,7 @@ import javafx.scene.text.Font;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
@@ -474,6 +475,29 @@ public final class MainRunTabController {
     @FXML
     private void onOpenStage2MemberScheduleAction() {
         openExcelBesideField(stage2MemberScheduleField, "stage2-member-schedule");
+    }
+
+    @FXML
+    private void onOpenSummaryAiDispatchAction() {
+        if (shell == null) {
+            return;
+        }
+        Path p = AppPaths.summaryAiDispatchXlsmPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[summary-ai-dispatch] file not found: "
+                            + p
+                            + " (set "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + " on the env tab if the repository root is wrong)");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[summary-ai-dispatch] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[summary-ai-dispatch] open failed: " + e.getMessage());
+        }
     }
 
     @FXML
