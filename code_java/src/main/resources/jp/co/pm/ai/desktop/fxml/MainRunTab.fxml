@@ -2,6 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
@@ -35,6 +36,8 @@
                                 styleClass="pm-stage-run-button,pm-stage-run-2"
                                 text="&#x6bb5;&#x968e;2 &#x5b9f;&#x884c;"
                                 onAction="#onStage2RunButtonAction"/>
+                        <CheckBox fx:id="stage2WriteExcelCheckBox" mnemonicParsing="false" selected="true"
+                                  text="Excel&#xff08;.xlsx&#xff09;&#x3092;&#x51fa;&#x529b;"/>
                     </HBox>
                     <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
                            GridPane.columnIndex="0" GridPane.rowIndex="1"/>

@@ -215,6 +215,14 @@ public final class EnvVarDocs {
                         + "\uff08\u5b9f\u5728\u30d5\u30a1\u30a4\u30eb\u306e\u3068\u304d"
                         + " \u51fa\u529b xlsx \u6a2a\u306e\u30b5\u30a4\u30c9\u30ab\u30fc\u30d1\u30b9\u3088\u308a\u512a\u5148\uff09\u3002");
         put(
+                "PM_AI_STAGE2_WRITE_EXCEL",
+                "\u6bb5\u968e2 \u3067 production_plan / member_schedule \u306e xlsx \u3092\u51fa\u529b\u5148\u306b\u6b8b\u3059\u304b\u3002"
+                        + " 0/false/no/off/none \u3067 JSON \u306e\u307f\uff08\u5185\u90e8\u3067\u4e00\u6642 xlsx \u3092\u751f\u6210\u3057 JSON"
+                        + " \u51fa\u529b\u5f8c\u306b\u7834\u68c4\uff09\u3002"
+                        + " \u672a\u8a2d\u5b9a\u307e\u305f\u306f 1 \u3067\u5f93\u6765\u901a\u308a xlsx \u3082\u51fa\u529b\u3002"
+                        + " JavaFX \u306e\u300c\u5b9f\u884c\u30fb\u30ed\u30b0\u300d\u30bf\u30d6\u306e\u30c1\u30a7\u30c3\u30af\u304c\u6bb5\u968e2"
+                        + " \u8d77\u52d5\u6642\u306b\u672c\u5909\u6570\u3092\u4e0a\u66f8\u304d\u3059\u308b\u3002");
+        put(
                 "PM_AI_XLWINGS_STAGE2_DISABLED",
                 "1/true/yes/on \u3067\u6bb5\u968e2\u5f8c\u306e xlwings"
                         + "\uff08\u5217\u8a2d\u5b9a\u30b7\u30fc\u30c8\u56f3\u5f62\u8907\u88fd\u7b49\u3001Excel COM/\u30a2\u30c9\u30a4\u30f3\u9023\u643a\u7528\uff09"

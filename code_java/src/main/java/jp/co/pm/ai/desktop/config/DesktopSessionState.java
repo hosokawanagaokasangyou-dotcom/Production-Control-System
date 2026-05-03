@@ -25,6 +25,7 @@ import java.util.List;
  * @param mainRunLogScroll vertical scroll position as 0..1 proportion of the scroll bar; {@link Double#NaN} if unknown
  * @param mainRunStage2ProductionPlan last shown stage-2 production_plan xlsx path on run tab (empty if none)
  * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
+ * @param mainRunStage2WriteExcel whether stage-2 writes xlsx deliverables; when false only JSON (run tab)
  * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
  */
 public record DesktopSessionState(
@@ -48,6 +49,7 @@ public record DesktopSessionState(
         double mainRunLogScroll,
         String mainRunStage2ProductionPlan,
         String mainRunStage2MemberSchedule,
+        boolean mainRunStage2WriteExcel,
         List<UiEnvRowSnapshot> uiEnvRows) {
 
     public static DesktopSessionState empty() {
@@ -72,6 +74,7 @@ public record DesktopSessionState(
                 Double.NaN,
                 "",
                 "",
+                true,
                 List.of());
     }
 }

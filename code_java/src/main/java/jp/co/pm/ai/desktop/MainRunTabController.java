@@ -19,6 +19,7 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
@@ -90,6 +91,9 @@ public final class MainRunTabController {
 
     @FXML
     private Button stage2RunButton;
+
+    @FXML
+    private CheckBox stage2WriteExcelCheckBox;
 
     @FXML
     private Button copyAllLogButton;
@@ -200,6 +204,16 @@ public final class MainRunTabController {
         applyLogAreaFont();
         installStageRunButtonGlow(stage1RunButton, Color.rgb(0, 229, 255, 0.72));
         installStageRunButtonGlow(stage2RunButton, Color.rgb(255, 171, 64, 0.78));
+        if (stage2WriteExcelCheckBox != null) {
+            stage2WriteExcelCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
     }
 
     /**
@@ -523,6 +537,17 @@ public final class MainRunTabController {
             return "";
         }
         return stage2MemberScheduleField.getText().trim();
+    }
+
+    /** When {@code true}, stage-2 passes {@code PM_AI_STAGE2_WRITE_EXCEL=1}; unchecked writes JSON only. */
+    boolean snapshotStage2WriteExcel() {
+        return stage2WriteExcelCheckBox == null || stage2WriteExcelCheckBox.isSelected();
+    }
+
+    void applyStage2WriteExcelFromSession(boolean writeExcel) {
+        if (stage2WriteExcelCheckBox != null) {
+            stage2WriteExcelCheckBox.setSelected(writeExcel);
+        }
     }
 
     void appendLog(String line) {

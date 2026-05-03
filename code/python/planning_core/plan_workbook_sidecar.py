@@ -34,6 +34,11 @@ def _normalized_json_sidecar_path(xlsx_path: str) -> str:
         return p
 
 
+def normalized_workbook_json_path(xlsx_path: str) -> str:
+    """計画ブック・メンバー別スケジュールと同名ベースの .json 出力パス（xlsx が無くても論理名に使える）。"""
+    return _normalized_json_sidecar_path(xlsx_path)
+
+
 def _write_workbook_json_payload(out_path: str, payload: dict) -> tuple[str, str]:
     """
     一時ファイルへ書き、os.replace / shutil.move で最終名へ。同一フォルダで open(w) だけが errno 2 になる
@@ -98,10 +103,14 @@ def _member_schedule_json_disabled() -> bool:
 
 
 def _dump_xlsx_all_sheets_to_json(
-    xlsx_path: str, *, payload_extra: dict | None = None
+    xlsx_path: str,
+    *,
+    payload_extra: dict | None = None,
+    json_out_path: str | None = None,
 ) -> str | None:
     """
     xlsx を pandas で全シート読み、同名ベースの .json に書き出す内部共通処理。
+    json_out_path を指定したときはそのパスへ出力（一時 xlsx から最終 JSON 名へ出す用）。
     """
     if not xlsx_path or not os.path.isfile(xlsx_path):
         logging.warning(
@@ -109,7 +118,7 @@ def _dump_xlsx_all_sheets_to_json(
             xlsx_path,
         )
         return None
-    out_path = _normalized_json_sidecar_path(xlsx_path)
+    out_path = json_out_path if json_out_path else _normalized_json_sidecar_path(xlsx_path)
     try:
         try:
             if os.path.isfile(out_path):
@@ -231,7 +240,12 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
         return None
 
 
-def write_production_plan_workbook_json(plan_xlsx: str) -> str | None:
+def write_production_plan_workbook_json(
+    plan_xlsx: str,
+    *,
+    json_out_path: str | None = None,
+    metadata_extra: dict | None = None,
+) -> str | None:
     """
     ``production_plan_multi_day_*.xlsx`` と同名ベースの ``.json`` に、全シートを表形式で書き出す。
     図形・セル書式は含まず、セル値のみ（Excel 再読込と同様）。
@@ -243,10 +257,18 @@ def write_production_plan_workbook_json(plan_xlsx: str) -> str | None:
             (os.environ.get(ENV_PLAN_WORKBOOK_JSON) or "").strip(),
         )
         return None
-    return _dump_xlsx_all_sheets_to_json(plan_xlsx)
+    extra = dict(metadata_extra) if metadata_extra else None
+    return _dump_xlsx_all_sheets_to_json(
+        plan_xlsx, payload_extra=extra, json_out_path=json_out_path
+    )
 
 
-def write_member_schedule_workbook_json(member_xlsx: str) -> str | None:
+def write_member_schedule_workbook_json(
+    member_xlsx: str,
+    *,
+    json_out_path: str | None = None,
+    metadata_extra: dict | None = None,
+) -> str | None:
     """
     ``member_schedule_*.xlsx`` と同名ベースの ``.json`` に全シートを書き出す（計画ブック JSON と同形式。
     シート名はメンバー名）。
@@ -258,6 +280,9 @@ def write_member_schedule_workbook_json(member_xlsx: str) -> str | None:
             (os.environ.get(ENV_MEMBER_SCHEDULE_JSON) or "").strip(),
         )
         return None
+    extra: dict = {"workbook_kind": "member_schedule"}
+    if metadata_extra:
+        extra.update(metadata_extra)
     return _dump_xlsx_all_sheets_to_json(
-        member_xlsx, payload_extra={"workbook_kind": "member_schedule"}
+        member_xlsx, payload_extra=extra, json_out_path=json_out_path
     )

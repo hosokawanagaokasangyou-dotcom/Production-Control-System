@@ -328,6 +328,7 @@ public final class MainShellController {
                     nz(s.mainRunStage2ProductionPlan()),
                     nz(s.mainRunStage2MemberSchedule()));
         }
+        mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         applyWindowGeometry(s);
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
@@ -392,6 +393,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotLogScrollProportion(),
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
+                mainRunTabController.snapshotStage2WriteExcel(),
                 snapshotUiEnvRows());
     }
 
@@ -619,6 +621,11 @@ public final class MainShellController {
         activeRunStageScript = script;
         applyRunTabGating();
         Map<String, String> uiRun = collectUiEnv();
+        if (STAGE2.equals(script)) {
+            uiRun.put(
+                    AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
+                    mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+        }
         Path py =
                 Path.of(
                         firstNonBlank(
@@ -938,28 +945,13 @@ public final class MainShellController {
                                 + dir);
                 return;
             }
-            Path newestPlan = null;
-            long planTime = Long.MIN_VALUE;
-            Path newestMember = null;
-            long memberTime = Long.MIN_VALUE;
-            try (DirectoryStream<Path> stream =
-                    Files.newDirectoryStream(dir, "production_plan_multi_day_*.xlsx")) {
-                for (Path p : stream) {
-                    long t = Files.getLastModifiedTime(p).toMillis();
-                    if (t >= planTime) {
-                        planTime = t;
-                        newestPlan = p;
-                    }
-                }
+            Path newestPlan = newestInOutputDir(dir, "production_plan_multi_day_*.xlsx");
+            if (newestPlan == null) {
+                newestPlan = newestInOutputDir(dir, "production_plan_multi_day_*.json");
             }
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "member_schedule_*.xlsx")) {
-                for (Path p : stream) {
-                    long t = Files.getLastModifiedTime(p).toMillis();
-                    if (t >= memberTime) {
-                        memberTime = t;
-                        newestMember = p;
-                    }
-                }
+            Path newestMember = newestInOutputDir(dir, "member_schedule_*.xlsx");
+            if (newestMember == null) {
+                newestMember = newestInOutputDir(dir, "member_schedule_*.json");
             }
             String planStr = newestPlan != null ? newestPlan.toString() : "";
             String memStr = newestMember != null ? newestMember.toString() : "";
@@ -978,6 +970,21 @@ public final class MainShellController {
                             + "\u6210\u679c\u7269\u30d1\u30b9\u66f4\u65b0\u30a8\u30e9\u30fc: "
                             + ex.getMessage());
         }
+    }
+
+    private static Path newestInOutputDir(Path dir, String glob) throws java.io.IOException {
+        Path best = null;
+        long bestTime = Long.MIN_VALUE;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, glob)) {
+            for (Path p : stream) {
+                long t = Files.getLastModifiedTime(p).toMillis();
+                if (t >= bestTime) {
+                    bestTime = t;
+                    best = p;
+                }
+            }
+        }
+        return best;
     }
 
     private static String defaultOsPython() {

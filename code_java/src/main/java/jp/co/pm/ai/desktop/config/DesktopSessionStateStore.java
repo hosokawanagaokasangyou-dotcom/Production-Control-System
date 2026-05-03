@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,6 +55,7 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "mainRunLogScroll", Double.NaN),
                     text(root, "mainRunStage2ProductionPlan"),
                     text(root, "mainRunStage2MemberSchedule"),
+                    optionalBoolean(root, "mainRunStage2WriteExcel", true),
                     loadUiEnvRows(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -80,6 +82,7 @@ public final class DesktopSessionStateStore {
             putMainRunLogScroll(root, state.mainRunLogScroll());
             put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
             put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
+            root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
             putUiEnvRows(root, state.uiEnvRows());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
@@ -101,6 +104,21 @@ public final class DesktopSessionStateStore {
             return defaultValue;
         }
         return n.asDouble();
+    }
+
+    private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {
+        JsonNode n = root.get(key);
+        if (n == null || n.isNull()) {
+            return defaultValue;
+        }
+        if (n.isBoolean()) {
+            return n.booleanValue();
+        }
+        if (n.isTextual()) {
+            String t = n.asText("").trim().toLowerCase(Locale.ROOT);
+            return !List.of("0", "false", "no", "off", "none").contains(t);
+        }
+        return defaultValue;
     }
 
     private static void put(ObjectNode root, String key, String value) {

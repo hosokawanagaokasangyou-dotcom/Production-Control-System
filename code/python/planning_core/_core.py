@@ -54,6 +54,7 @@ from .input_resolution import (
     resolve_data_extraction_workbook_path,
 )
 from .plan_workbook_sidecar import (
+    normalized_workbook_json_path,
     read_result_task_dataframe,
     write_member_schedule_workbook_json,
     write_production_plan_workbook_json,
@@ -28553,6 +28554,18 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
         return os.path.abspath(out_path)
 
 
+def _stage2_publish_excel_enabled(stage2_output_root) -> bool:
+    """
+    既定では計画ブック・メンバー別スケジュールの xlsx を出力する。
+    JavaFX から ``PM_AI_STAGE2_WRITE_EXCEL=0`` のときは成果物フォルダに xlsx を残さず JSON のみとする。
+    試行順プローブ等（stage2_output_root あり）は従来どおり xlsx パスが必要なため常に出力する。
+    """
+    if stage2_output_root:
+        return True
+    v = (os.environ.get("PM_AI_STAGE2_WRITE_EXCEL") or "1").strip().lower()
+    return v not in ("0", "false", "no", "off", "none")
+
+
 def _generate_plan_impl(
     tasks_df_override=None,
     stage2_output_root=None,
@@ -30512,9 +30525,19 @@ def _generate_plan_impl(
     _stage2_data_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
     _stage2_run_stamp = datetime.now().strftime("%H%M%S_%f")
     _stage2_out_stamp = f"{_stage2_data_stamp}_{_stage2_run_stamp}"
-    output_filename = os.path.join(
+    plan_xlsx_final = os.path.join(
         _stage2_out_root, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
     )
+    _publish_plan_xlsx = _stage2_publish_excel_enabled(stage2_output_root)
+    if _publish_plan_xlsx:
+        output_filename = plan_xlsx_final
+    else:
+        import tempfile
+
+        _fd_plan_tmp, output_filename = tempfile.mkstemp(
+            suffix=".xlsx", prefix="_pm_stage2_plan_", dir=_stage2_out_root
+        )
+        os.close(_fd_plan_tmp)
     # タスクID → 結果_設備毎の時間割で当該タスクは最初に睾れるセル（例 B12）。結果_タスク一覧のリンク用。
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
     df_eq_schedule = _build_equipment_schedule_dataframe(
@@ -30889,7 +30912,7 @@ def _generate_plan_impl(
 
     logging.info(
         "段階2: 結果ブックを作成しした → %s",
-        os.path.basename(output_filename),
+        os.path.basename(plan_xlsx_final),
     )
     gantt_tl_label_specs: list = []
     gantt_tl_day_blocks: list = []
@@ -31192,7 +31215,7 @@ def _generate_plan_impl(
 
     try:
         _sj = write_result_task_json_sidecar(
-            output_filename, df_tasks, sheet_name=RESULT_TASK_SHEET_NAME
+            plan_xlsx_final, df_tasks, sheet_name=RESULT_TASK_SHEET_NAME
         )
         if _sj:
             logging.info(
@@ -31225,8 +31248,22 @@ def _generate_plan_impl(
             sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
         )
 
+    _plan_wb_json = None
     try:
-        _plan_wb_json = write_production_plan_workbook_json(output_filename)
+        _meta_wb = (
+            {"source_xlsx": os.path.basename(plan_xlsx_final)}
+            if not _publish_plan_xlsx
+            else None
+        )
+        _plan_wb_json = write_production_plan_workbook_json(
+            output_filename,
+            json_out_path=(
+                normalized_workbook_json_path(plan_xlsx_final)
+                if not _publish_plan_xlsx
+                else None
+            ),
+            metadata_extra=_meta_wb,
+        )
         if _plan_wb_json:
             logging.info(
                 "段階2: 計画ブック（全シート）の JSON を '%s' に出力しました。",
@@ -31235,7 +31272,24 @@ def _generate_plan_impl(
     except Exception as e:
         logging.warning("段階2: 計画ブック JSON（全シート）出力をスキップ: %s", e)
 
-    logging.info(f"完了: '{output_filename}' を生成しました。")
+    if not _publish_plan_xlsx:
+        try:
+            os.remove(output_filename)
+        except OSError as _rm_err:
+            logging.warning(
+                "段階2: 一時計画ブック xlsx の削除に失敗しました: %s (%s)",
+                output_filename,
+                _rm_err,
+            )
+
+    if _publish_plan_xlsx:
+        logging.info(f"完了: '{plan_xlsx_final}' を生成しました。")
+    else:
+        logging.info(
+            "段階2: 計画ブック xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。"
+            " JSON のみ: %s",
+            normalized_workbook_json_path(plan_xlsx_final),
+        )
 
     # ---------------------------------------------------------
     # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code/output など）
@@ -31243,7 +31297,9 @@ def _generate_plan_impl(
     try:
         _wb_path = _excel_plan_input_wb()
         _out_dir = resolve_result_dispatch_table_output_dir(_wb_path)
-        _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)
+        _wrote = None
+        if _publish_plan_xlsx:
+            _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)
         if _wrote:
             logging.info("段階2: PowerQuery 用に '%s' を出力しました。", _wrote)
         _jwrote = _write_dispatch_table_standalone_json(df_dispatch, _out_dir)
@@ -31255,10 +31311,19 @@ def _generate_plan_impl(
     # =========================================================
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
     # =========================================================
-    member_output_filename = os.path.join(
+    member_xlsx_final = os.path.join(
         _stage2_out_root, f"member_schedule_{_stage2_out_stamp}.xlsx"
     )
-    
+    if _publish_plan_xlsx:
+        member_output_filename = member_xlsx_final
+    else:
+        import tempfile
+
+        _fd_mem_tmp, member_output_filename = tempfile.mkstemp(
+            suffix=".xlsx", prefix="_pm_stage2_member_", dir=_stage2_out_root
+        )
+        os.close(_fd_mem_tmp)
+
     # 時間帯は全メンバー共通で1回の値生成（メンバー数分の重複計算を避ける）
     time_labels = []
     time_grids = []
@@ -31274,7 +31339,7 @@ def _generate_plan_impl(
     
     logging.info(
         "段階2: メンバー別スケジュールを作成しした → %s",
-        os.path.basename(member_output_filename),
+        os.path.basename(member_xlsx_final),
     )
     try:
         with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
@@ -31359,11 +31424,31 @@ def _generate_plan_impl(
         )
         raise
 
-    logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
+    if _publish_plan_xlsx:
+        logging.info(
+            f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。"
+        )
+    else:
+        logging.info(
+            "段階2: メンバー別スケジュール xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。"
+        )
 
     member_schedule_json_path = None
     try:
-        member_schedule_json_path = write_member_schedule_workbook_json(member_output_filename)
+        _meta_ms = (
+            {"source_xlsx": os.path.basename(member_xlsx_final)}
+            if not _publish_plan_xlsx
+            else None
+        )
+        member_schedule_json_path = write_member_schedule_workbook_json(
+            member_output_filename,
+            json_out_path=(
+                normalized_workbook_json_path(member_xlsx_final)
+                if not _publish_plan_xlsx
+                else None
+            ),
+            metadata_extra=_meta_ms,
+        )
         if member_schedule_json_path:
             logging.info(
                 "段階2: メンバー別スケジュール JSON を '%s' に出力しました。",
@@ -31372,11 +31457,29 @@ def _generate_plan_impl(
     except Exception as e:
         logging.warning("段階2: メンバー別スケジュール JSON 出力をスキップ: %s", e)
 
+    if not _publish_plan_xlsx:
+        try:
+            os.remove(member_output_filename)
+        except OSError as _rm_mem_err:
+            logging.warning(
+                "段階2: 一時メンバー別スケジュール xlsx の削除に失敗しました: %s (%s)",
+                member_output_filename,
+                _rm_mem_err,
+            )
+
     _try_write_main_sheet_gemini_usage_summary("段階2")
     if return_output_paths:
+        _pp_json = normalized_workbook_json_path(plan_xlsx_final)
+        _ms_json = normalized_workbook_json_path(member_xlsx_final)
         out_paths = {
-            "production_plan": os.path.abspath(output_filename),
-            "member_schedule": os.path.abspath(member_output_filename),
+            "production_plan": os.path.abspath(
+                plan_xlsx_final if _publish_plan_xlsx else (_plan_wb_json or _pp_json)
+            ),
+            "member_schedule": os.path.abspath(
+                member_xlsx_final
+                if _publish_plan_xlsx
+                else (member_schedule_json_path or _ms_json)
+            ),
         }
         if member_schedule_json_path:
             out_paths["member_schedule_json"] = os.path.abspath(member_schedule_json_path)

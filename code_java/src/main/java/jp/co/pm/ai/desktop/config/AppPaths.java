@@ -96,6 +96,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON";
 
     /**
+     * 段階2: {@code production_plan_multi_day_*.xlsx} / {@code member_schedule_*.xlsx} を成果物として残す。
+     * {@code 0} / {@code false} / {@code no} / {@code off} / {@code none} のときは JSON のみ（UI 実行・ログタブのチェックボックスから上書き可）。
+     */
+    public static final String KEY_PM_AI_STAGE2_WRITE_EXCEL = "PM_AI_STAGE2_WRITE_EXCEL";
+
+    /**
      * Env keys whose value is a directory (folder picker in the UI).
      */
     private static final Set<String> FOLDER_PATH_ENV_KEYS = Set.of(
