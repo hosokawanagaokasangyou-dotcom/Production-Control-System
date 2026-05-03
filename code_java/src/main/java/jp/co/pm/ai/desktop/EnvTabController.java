@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,6 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
@@ -157,7 +160,7 @@ public final class EnvTabController {
         valueCol.setReorderable(true);
 
         TableColumn<EnvVarRow, Void> folderCol = new TableColumn<>("\u9078\u629e");
-        folderCol.setPrefWidth(120);
+        folderCol.setPrefWidth(190);
         folderCol.setSortable(false);
         folderCol.setReorderable(false);
         folderCol.setCellFactory(
@@ -165,10 +168,26 @@ public final class EnvTabController {
                         new TableCell<>() {
                             private final Button pickFolder =
                                     new Button("\u30d5\u30a9\u30eb\u30c0...");
+                            private final Button openFolder =
+                                    new Button("\u958b\u304f");
                             private final Button pickFile =
                                     new Button("\u30d5\u30a1\u30a4\u30eb...");
+                            private final HBox folderActions = new HBox(6);
 
                             {
+                                folderActions.getChildren().addAll(pickFolder, openFolder);
+                                openFolder.setOnAction(
+                                        ev -> {
+                                            EnvVarRow row =
+                                                    getTableRow() != null ? getTableRow().getItem() : null;
+                                            if (row == null) {
+                                                int i = getIndex();
+                                                if (i >= 0 && i < getTableView().getItems().size()) {
+                                                    row = getTableView().getItems().get(i);
+                                                }
+                                            }
+                                            openFolderLocationForRow(row);
+                                        });
                                 pickFolder.setOnAction(
                                         ev -> {
                                             EnvVarRow row =
@@ -263,7 +282,7 @@ public final class EnvTabController {
                                 }
                                 String key = row != null && row.getName() != null ? row.getName() : "";
                                 if (row != null && AppPaths.isFolderPathEnvKey(key)) {
-                                    setGraphic(pickFolder);
+                                    setGraphic(folderActions);
                                 } else if (row != null && AppPaths.isFilePathEnvKey(key)) {
                                     setGraphic(pickFile);
                                 } else {
@@ -324,7 +343,7 @@ public final class EnvTabController {
                 () -> {
                     nameCol.setPrefWidth(220);
                     valueCol.setPrefWidth(280);
-                    folderCol.setPrefWidth(120);
+                    folderCol.setPrefWidth(190);
                     descCol.setPrefWidth(420);
                 };
 
@@ -345,5 +364,68 @@ public final class EnvTabController {
             envTableFilter.resetAllFilters();
         }
         envTable.getSortOrder().clear();
+    }
+
+    /**
+     * Opens the folder path from a folder-type env row (Explorer / Finder / xdg-open).
+     */
+    private void openFolderLocationForRow(EnvVarRow row) {
+        if (ownerStage == null) {
+            return;
+        }
+        String raw = row != null ? row.getValue() : null;
+        if (raw == null || raw.isBlank()) {
+            alertFolderOpen(ownerStage, AlertType.INFORMATION, "\u5024\u304c\u7a7a\u306e\u305f\u3081\u958b\u3051\u307e\u305b\u3093\u3002");
+            return;
+        }
+        Path p;
+        try {
+            p = Path.of(raw.trim()).toAbsolutePath().normalize();
+        } catch (Exception ex) {
+            alertFolderOpen(ownerStage, AlertType.WARNING, "\u30d1\u30b9\u304c\u7121\u52b9\u3067\u3059\u3002");
+            return;
+        }
+        try {
+            Path dir = null;
+            if (Files.isDirectory(p)) {
+                dir = p;
+            } else if (Files.isRegularFile(p)) {
+                dir = p.getParent();
+            } else if (!Files.exists(p)) {
+                Path par = p.getParent();
+                if (par != null && Files.isDirectory(par)) {
+                    dir = par;
+                }
+            }
+            if (dir == null || !Files.isDirectory(dir)) {
+                alertFolderOpen(
+                        ownerStage,
+                        AlertType.WARNING,
+                        "\u958b\u3051\u308b\u30d5\u30a9\u30eb\u30c0\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3002");
+                return;
+            }
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                alertFolderOpen(
+                        ownerStage,
+                        AlertType.WARNING,
+                        "\u3053\u306e\u74b0\u5883\u3067\u306f\u5916\u90e8\u30d5\u30a9\u30eb\u30c0\u958b\u304d\u306b\u5bfe\u5fdc\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
+                return;
+            }
+            Desktop.getDesktop().open(dir.toFile());
+        } catch (Exception ex) {
+            String msg =
+                    ex.getMessage() != null && !ex.getMessage().isBlank()
+                            ? ex.getMessage()
+                            : "\u958b\u3051\u307e\u305b\u3093\u3067\u3057\u305f\u3002";
+            alertFolderOpen(ownerStage, AlertType.WARNING, msg);
+        }
+    }
+
+    private static void alertFolderOpen(Stage owner, AlertType type, String message) {
+        Alert a = new Alert(type);
+        a.initOwner(owner);
+        a.setHeaderText(null);
+        a.setContentText(message);
+        a.show();
     }
 }
