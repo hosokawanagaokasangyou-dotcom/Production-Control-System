@@ -53,7 +53,11 @@ from .input_resolution import (
     resolve_column_config_workbook_path,
     resolve_data_extraction_workbook_path,
 )
-from .plan_workbook_sidecar import read_result_task_dataframe, write_result_task_json_sidecar
+from .plan_workbook_sidecar import (
+    read_result_task_dataframe,
+    write_production_plan_workbook_json,
+    write_result_task_json_sidecar,
+)
 from .bootstrap import (
     PlanningValidationError,
     _clear_stage2_blocking_message_file,
@@ -457,6 +461,12 @@ def _read_task_ids_from_config_sheet_column(
     out: list[str] = []
     if not wb_path or not os.path.isfile(wb_path):
         return out
+    try:
+        sn = _ooxml_workbook_sheet_names(wb_path)
+        if sn is not None and APP_CONFIG_SHEET_NAME not in sn:
+            return out
+    except Exception:
+        pass
     if _workbook_should_skip_openpyxl_io(wb_path):
         msg = (
             f"{log_label}: ブックに「{OPENPYXL_INCOMPATIBLE_SHEET_MARKER}」があるため、"
@@ -4952,35 +4962,6 @@ def load_tasks_df():
                 _qty_src,
             )
     _supplement_task_input_unprocessed_column_if_missing(df)
-    # #region agent log
-    try:
-        _ld = pathlib.Path(__file__).resolve().parents[4] / ".cursor" / "debug-e6e382.log"
-        _ld.parent.mkdir(parents=True, exist_ok=True)
-        with open(_ld, "a", encoding="utf-8") as _lf:
-            _lf.write(
-                json.dumps(
-                    {
-                        "sessionId": "e6e382",
-                        "hypothesisId": "H2",
-                        "location": "load_tasks_df:before_ensure_unprocessed",
-                        "message": "task input columns before unprocessed check",
-                        "timestamp": int(time_module.time() * 1000),
-                        "runId": "post-fix",
-                        "data": {
-                            "has_qty": TASK_COL_QTY in df.columns,
-                            "has_unprocessed": TASK_COL_UNPROCESSED in df.columns,
-                            "nfkc_cols": [
-                                _nfkc_column_aliases(str(c)) for c in list(df.columns)[:50]
-                            ],
-                        },
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     _ensure_dataframe_has_unprocessed_column(
         df, context_label=f"シート「{_sheet_label_for_context}」"
     )
@@ -5495,12 +5476,19 @@ def load_main_sheet_global_priority_override_text() -> str:
         )
         return ""
     try:
+        _sn = _ooxml_workbook_sheet_names(wb_path)
+        if _sn is not None:
+            _has_main = any(
+                n in ("メイン", "メイン_", "Main") or ("メイン" in str(n)) for n in _sn
+            )
+            if not _has_main:
+                return ""
+    except Exception:
+        pass
+    wb = None
+    try:
         # read_only=True でオープン高速化（読み取りのみ）
         wb = load_workbook(wb_path, data_only=True, read_only=True)
-    except Exception as e:
-        logging.warning("メイン再優先特記: ブックを開きませんでした: %s", e)
-        return ""
-    try:
         ws = None
         for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
@@ -5541,8 +5529,15 @@ def load_main_sheet_global_priority_override_text() -> str:
                 # endregion stage2 cache
                 return out
         return ""
+    except Exception as e:
+        logging.warning("メイン再優先特記: ブックを開きませんでした: %s", e)
+        return ""
     finally:
-        pass
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 
 def _global_comment_chunk_implies_factory_closure(chunk: str) -> bool:
@@ -6625,16 +6620,32 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
         )
         return None
     try:
+        sn = _ooxml_workbook_sheet_names(wb)
+        if sn is not None:
+            want = unicodedata.normalize("NFKC", COLUMN_CONFIG_SHEET_NAME)
+            if not any(unicodedata.normalize("NFKC", str(x)) == want for x in sn):
+                return None
+    except Exception:
+        pass
+    try:
         df_cfg = pd.read_excel(wb, sheet_name=COLUMN_CONFIG_SHEET_NAME, header=0)
     except ValueError:
         return None
     except Exception as e:
-        logging.warning(
-            "シート「%s」: 読み込みに失敗したため、既定の列順を使用した (%s)",
-            COLUMN_CONFIG_SHEET_NAME,
-            e,
-        )
-        return None
+        try:
+            df_cfg = pd.read_excel(
+                wb,
+                sheet_name=COLUMN_CONFIG_SHEET_NAME,
+                header=0,
+                engine="calamine",
+            )
+        except Exception:
+            logging.warning(
+                "シート「%s」: 読み込みに失敗したため、既定の列順を使用した (%s)",
+                COLUMN_CONFIG_SHEET_NAME,
+                e,
+            )
+            return None
     return parse_result_task_column_config_dataframe(df_cfg, max_history_len)
 
 
@@ -11704,6 +11715,21 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return False
+    low_pb = str(wb_path).lower()
+    if low_pb.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        try:
+            import zipfile
+
+            with zipfile.ZipFile(wb_path, "r") as zf:
+                if "xl/sharedStrings.xml" not in zf.namelist():
+                    logging.info(
+                        "%s: OOXML に sharedStrings.xml が無いブックのため、"
+                        "配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）",
+                        log_prefix,
+                    )
+                    return False
+        except Exception:
+            pass
     keep_vba = str(wb_path).lower().endswith(".xlsm")
     wb = None
     try:
@@ -18125,7 +18151,7 @@ def load_attendance_and_analyze(members):
                 df = df.rename(columns={ATT_COL_OT_END_LEGACY: ATT_COL_OT_END})
             df['日付'] = pd.to_datetime(df['日付'], errors='coerce').dt.date
             df = df.dropna(subset=['日付'])
-            logging.info(f"『{MASTER_FILE}」の坄メンバーの勤怠シートを読み込みました。")
+            logging.info(f"「{MASTER_FILE}」の各メンバーの勤怠シートを読み込みました。")
             _cols = {str(c).strip() for c in df.columns}
             if ATT_COL_REMARK in _cols and ATT_COL_LEAVE_TYPE in _cols:
                 logging.info(
@@ -18135,7 +18161,7 @@ def load_attendance_and_analyze(members):
                 )
             elif ATT_COL_REMARK not in _cols:
                 logging.warning(
-                    "勤怠データに「%s」列はありません。備考ベースの AI 解析は空扱いになりした。",
+                    "勤怠データに「%s」列はありません。備考ベースの AI 解析は空扱いになりました。",
                     ATT_COL_REMARK,
                 )
             if ATT_COL_OT_END in _cols:
@@ -23328,7 +23354,14 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
             return None
         if df_dispatch is None or getattr(df_dispatch, "empty", True):
             return None
-        if not target_dir or not os.path.isdir(target_dir):
+        if not target_dir:
+            return None
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as mk_e:
+            logging.warning("結果_配台表.json: 出力先フォルダを作成できません: %s (%s)", target_dir, mk_e)
+            return None
+        if not os.path.isdir(target_dir):
             return None
         out_path = os.path.join(target_dir, RESULT_DISPATCH_TABLE_JSON_FILENAME)
         try:
@@ -23347,10 +23380,11 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
             "row_count": int(len(df_dispatch)),
             "rows": rows,
         }
-        with open(out_path, encoding="utf-8", newline="\n") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        return out_path
+        p_out = pathlib.Path(target_dir) / RESULT_DISPATCH_TABLE_JSON_FILENAME
+        p_out.parent.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        p_out.write_text(text, encoding="utf-8", newline="\n")
+        return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
         return None
@@ -31182,6 +31216,16 @@ def _generate_plan_impl(
             gantt_detail_tl_day_blocks,
             sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
         )
+
+    try:
+        _plan_wb_json = write_production_plan_workbook_json(output_filename)
+        if _plan_wb_json:
+            logging.info(
+                "段階2: 計画ブック（全シート）の JSON を '%s' に出力しました。",
+                _plan_wb_json,
+            )
+    except Exception as e:
+        logging.warning("段階2: 計画ブック JSON（全シート）出力をスキップ: %s", e)
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 

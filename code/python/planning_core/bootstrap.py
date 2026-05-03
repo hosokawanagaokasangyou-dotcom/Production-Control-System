@@ -26,26 +26,19 @@ import shutil
 import time as time_module
 
 # =========================================================
-# 【重要】カレントは (1) PM_AI_WORKSPACE（JavaFX 等）が有効なら最優先、(2) 従来どおり
-# マクロブック（TASK_INPUT_WORKBOOK）と同じフォルダ、(3) それ以外は python 階層。
+# 【重要】カレントは (1) PM_AI_WORKSPACE（JavaFX 等）が有効なら最優先、
+# (2) それ以外は planning_core / python から code 階層へ。
 # log/execution_log.txt・output/ を作業フォルダ基準と一致させる。
 # =========================================================
 _pm_ai_ws = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
-_cwd_from_workbook = False
+_cwd_from_workspace = False
 if _pm_ai_ws and os.path.isdir(_pm_ai_ws):
     try:
         os.chdir(os.path.abspath(_pm_ai_ws))
-        _cwd_from_workbook = True
+        _cwd_from_workspace = True
     except OSError:
-        _cwd_from_workbook = False
-_env_wb_for_cwd = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
-if not _cwd_from_workbook and _env_wb_for_cwd:
-    try:
-        os.chdir(os.path.dirname(os.path.abspath(_env_wb_for_cwd)))
-        _cwd_from_workbook = True
-    except OSError:
-        _cwd_from_workbook = False
-if not _cwd_from_workbook:
+        _cwd_from_workspace = False
+if not _cwd_from_workspace:
     _here = os.path.dirname(os.path.abspath(__file__))
     _base = os.path.basename(_here).lower()
     if _base == "planning_core":
@@ -181,13 +174,17 @@ def _try_remove_path_with_retries(
 
 def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> None:
     """
-    ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx`` を output 配下からすべて削除し、
+    ``production_plan_multi_day_*.xlsx`` / ``*.json``（同名計画ブックのミラー） / ``member_schedule_*.xlsx`` を output 配下からすべて削除し、
     空になったサブフォルダを削除する（日付階層の旧出力を含む）。
     段階2の直前に呼び、常に最新1組の成果物だけを残す土台にする。
     """
     if not output_root or not os.path.isdir(output_root):
         return
-    patterns = ("production_plan_multi_day_*.xlsx", "member_schedule_*.xlsx")
+    patterns = (
+        "production_plan_multi_day_*.xlsx",
+        "production_plan_multi_day_*.json",
+        "member_schedule_*.xlsx",
+    )
     root_abs = os.path.normcase(os.path.abspath(output_root))
     removed = 0
     failed_paths: list[str] = []
@@ -219,7 +216,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
             pass
     if removed:
         logging.info(
-            "段階2出力の整理: production_plan_multi_day_*.xlsx / member_schedule_*.xlsx を %s 件削除しました。",
+            "段階2出力の整理: production_plan_multi_day_*（.xlsx/.json）/ member_schedule_*.xlsx を %s 件削除しました。",
             removed,
         )
     if failed_paths:
