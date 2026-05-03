@@ -9,28 +9,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.TabPane;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopSessionState;
+import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.io.ExcelSheetTitlesProbe;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
-import jp.co.pm.ai.desktop.ui.ActualsDataStatusPane;
-import jp.co.pm.ai.desktop.ui.ExcludeRulesEditorPane;
-import jp.co.pm.ai.desktop.ui.PlanInputEditorPane;
-import jp.co.pm.ai.desktop.ui.Stage1ShapedOutputPreviewPane;
 
 /**
  * Main window controller \u2014 business logic moved from legacy inline {@link PmAiFxApp}.
@@ -66,30 +69,38 @@ public final class MainShellController {
     private TabPane tabPane;
 
     @FXML
+    private Button clearTabFiltersButton;
+
+    @FXML
+    private ComboBox<DesktopTheme> themeCombo;
+
+    @FXML
     private MainRunTabController mainRunTabController;
 
     @FXML
     private EnvTabController envTabController;
 
     @FXML
-    private BorderPane planInputHost;
+    private PlanInputTabController planInputTabController;
 
     @FXML
-    private BorderPane stage1Host;
+    private Stage1PreviewTabController stage1PreviewTabController;
 
     @FXML
-    private BorderPane excludeRulesHost;
+    private ExcludeRulesTabController excludeRulesTabController;
 
     @FXML
-    private BorderPane actualsHost;
+    private ActualsStatusTabController actualsStatusTabController;
 
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
-    /** Set by {@link Stage1ShapedOutputPreviewPane#create}; runs after stage 1 exits 0. */
+    private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
+
+    /** Set by {@link Stage1PreviewTabController}; runs after stage 1 exits 0. */
     private Runnable reloadAfterStage1Preview;
 
-    /** Set by {@link PlanInputEditorPane#create}; loads {@code plan_input_tasks.xlsx}. */
+    /** Set by {@link PlanInputTabController}; loads {@code plan_input_tasks.xlsx}. */
     private Runnable reloadAfterStage1PlanInput;
 
     MainShellController(Stage primaryStage) {
@@ -129,30 +140,171 @@ public final class MainShellController {
                 .getScriptDirField()
                 .setPromptText("code/python (\u74b0\u5883\u5909\u6570 PM_AI_CODE_PYTHON_DIR)");
 
-        planInputHost.setCenter(
-                PlanInputEditorPane.create(
-                        primaryStage,
-                        this::collectUiEnv,
-                        this::appendLog,
-                        rr -> reloadAfterStage1PlanInput = rr));
-        stage1Host.setCenter(
-                Stage1ShapedOutputPreviewPane.create(
-                        primaryStage,
-                        this::collectUiEnv,
-                        this::appendLog,
-                        rr -> reloadAfterStage1Preview = rr));
-        excludeRulesHost.setCenter(
-                ExcludeRulesEditorPane.create(primaryStage, this::collectUiEnv, this::appendLog));
-        actualsHost.setCenter(
-                ActualsDataStatusPane.create(this::buildActualsStatusRequest, this::appendLog));
+        planInputTabController.bindShell(this);
+        stage1PreviewTabController.bindShell(this);
+        excludeRulesTabController.bindShell(this);
+        actualsStatusTabController.bindShell(this);
 
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
+
+        applyDesktopSession(DesktopSessionStateStore.load());
+
+        primaryStage.setOnCloseRequest(e -> DesktopSessionStateStore.save(collectDesktopSession()));
+
         primaryStage.setOnShown(
                 e -> {
                     primaryStage.toFront();
                     tabPane.getSelectionModel().selectFirst();
                 });
+
+        tabPane
+                .getSelectionModel()
+                .selectedIndexProperty()
+                .addListener(
+                        (obs, prev, idx) ->
+                                updateClearTabFiltersButton(idx != null ? idx.intValue() : -1));
+        updateClearTabFiltersButton(tabPane.getSelectionModel().getSelectedIndex());
+    }
+
+    /**
+     * Invoked from {@link PmAiFxApp} after {@link Scene} creation so theme stylesheets can target the scene.
+     */
+    public void finishStartup(Scene scene) {
+        if (themeCombo == null) {
+            return;
+        }
+        themeCombo.getItems().setAll(DesktopTheme.values());
+        themeCombo.setConverter(
+                new StringConverter<>() {
+                    @Override
+                    public String toString(DesktopTheme t) {
+                        return t != null ? t.displayLabel() : "";
+                    }
+
+                    @Override
+                    public DesktopTheme fromString(String s) {
+                        return DesktopTheme.fromDisplayLabel(s);
+                    }
+                });
+        DesktopTheme initial = pendingTheme != null ? pendingTheme : DesktopTheme.LIGHT;
+        initial.applyTo(scene);
+        themeCombo.setValue(initial);
+        themeCombo
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, newV) -> {
+                            if (newV != null) {
+                                newV.applyTo(scene);
+                            }
+                        });
+    }
+
+    private static boolean tabSupportsClearFilters(int idx) {
+        return idx == 1 || idx == 2 || idx == 3 || idx == 5;
+    }
+
+    private void updateClearTabFiltersButton(int idx) {
+        if (clearTabFiltersButton == null) {
+            return;
+        }
+        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(idx));
+    }
+
+    @FXML
+    private void onClearTabFiltersAction() {
+        switch (tabPane.getSelectionModel().getSelectedIndex()) {
+            case 1 -> envTabController.clearColumnFiltersAndSort();
+            case 2 -> planInputTabController.clearColumnFiltersAndSort();
+            case 3 -> stage1PreviewTabController.clearColumnFiltersAndSort();
+            case 5 -> actualsStatusTabController.clearColumnFiltersAndSort();
+            default -> {
+                /* tabs without TableFilter / Spreadsheet filter row */
+            }
+        }
+    }
+
+    private void applyDesktopSession(DesktopSessionState s) {
+        if (s == null) {
+            return;
+        }
+        planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
+        stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
+        excludeRulesTabController.restoreDesktopSessionPath(s.excludeRulesPath());
+        if (nonBlank(s.mainRunWorkbook())) {
+            mainRunTabController.getWorkbookField().setText(s.mainRunWorkbook());
+        }
+        if (nonBlank(s.mainRunPythonExe())) {
+            mainRunTabController.getPythonExeField().setText(s.mainRunPythonExe());
+        }
+        if (nonBlank(s.mainRunScriptDir())) {
+            mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
+        }
+        applyWindowGeometry(s);
+        pendingTheme = DesktopTheme.fromStored(s.uiTheme());
+        Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
+    }
+
+    private void applyWindowGeometry(DesktopSessionState s) {
+        if (s == null) {
+            return;
+        }
+        double w = s.windowWidth();
+        double h = s.windowHeight();
+        double minW = primaryStage.getMinWidth();
+        double minH = primaryStage.getMinHeight();
+        if (Double.isFinite(w)
+                && Double.isFinite(h)
+                && w >= minW
+                && h >= minH) {
+            primaryStage.setWidth(w);
+            primaryStage.setHeight(h);
+        }
+        double x = s.windowX();
+        double y = s.windowY();
+        if (Double.isFinite(x) && Double.isFinite(y)) {
+            Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+            double ww = primaryStage.getWidth();
+            double hh = primaryStage.getHeight();
+            double maxX = Math.max(screen.getMinX(), screen.getMaxX() - ww);
+            double maxY = Math.max(screen.getMinY(), screen.getMaxY() - hh);
+            primaryStage.setX(clamp(x, screen.getMinX(), maxX));
+            primaryStage.setY(clamp(y, screen.getMinY(), maxY));
+        }
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        if (hi < lo) {
+            return lo;
+        }
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    private DesktopSessionState collectDesktopSession() {
+        return new DesktopSessionState(
+                planInputTabController.snapshotPlanInputPath(),
+                planInputTabController.snapshotPlanInputSheet(),
+                stage1PreviewTabController.snapshotStage1PreviewPath(),
+                stage1PreviewTabController.snapshotStage1PreviewSheet(),
+                excludeRulesTabController.snapshotExcludeRulesPath(),
+                nz(mainRunTabController.getWorkbookField().getText()),
+                nz(mainRunTabController.getPythonExeField().getText()),
+                nz(mainRunTabController.getScriptDirField().getText()),
+                primaryStage.getWidth(),
+                primaryStage.getHeight(),
+                primaryStage.getX(),
+                primaryStage.getY(),
+                themeCombo != null && themeCombo.getValue() != null
+                        ? themeCombo.getValue().storedId()
+                        : DesktopTheme.LIGHT.storedId());
+    }
+
+    private static boolean nonBlank(String v) {
+        return v != null && !v.isBlank();
+    }
+
+    private static String nz(String s) {
+        return s != null ? s.trim() : "";
     }
 
     Stage getPrimaryStage() {
@@ -165,20 +317,6 @@ public final class MainShellController {
 
     void appendBootMessage() {
         appendLog("[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.");
-    }
-
-    void attachStageButtons(HBox box) {
-        box.getChildren()
-                .setAll(
-                        buttonStage(STAGE1, "\u6bb5\u968e1 \u5b9f\u884c"),
-                        buttonStage(STAGE2, "\u6bb5\u968e2 \u5b9f\u884c"),
-                        peekSheetsButton());
-    }
-
-    private Button peekSheetsButton() {
-        Button peekSheets = new Button("\u30b7\u30fc\u30c8\u4e00\u89a7 (POI)");
-        peekSheets.setOnAction(e -> peekSheetsAction());
-        return peekSheets;
     }
 
     void pickWorkbook() {
@@ -213,12 +351,6 @@ public final class MainShellController {
         } catch (Exception ex) {
             appendLog("[POI] error: " + ex.getMessage());
         }
-    }
-
-    private Button buttonStage(String script, String label) {
-        Button b = new Button(label);
-        b.setOnAction(e -> runStage(script));
-        return b;
     }
 
     private void runStage(String script) {
@@ -313,7 +445,7 @@ public final class MainShellController {
     }
 
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */
-    private RunRequest buildActualsStatusRequest() {
+    RunRequest buildActualsStatusRequest() {
         Map<String, String> uiRun = collectUiEnv();
         Path py =
                 Path.of(
@@ -361,8 +493,33 @@ public final class MainShellController {
         return m;
     }
 
-    private void appendLog(String line) {
+    /** Same-package tab controllers append run-tab log lines here. */
+    void appendLog(String line) {
         mainRunTabController.appendLog(line);
+    }
+
+    Map<String, String> snapshotUiEnv() {
+        return collectUiEnv();
+    }
+
+    void acceptReloadAfterStage1PlanInput(Runnable r) {
+        this.reloadAfterStage1PlanInput = r;
+    }
+
+    void acceptReloadAfterStage1Preview(Runnable r) {
+        this.reloadAfterStage1Preview = r;
+    }
+
+    void triggerStage1() {
+        runStage(STAGE1);
+    }
+
+    void triggerStage2() {
+        runStage(STAGE2);
+    }
+
+    void triggerPeekSheets() {
+        peekSheetsAction();
     }
 
     private static String defaultOsPython() {

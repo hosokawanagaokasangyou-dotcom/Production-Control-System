@@ -38,7 +38,13 @@ public class PmAiFxApp extends Application {
             Parent root = loader.load();
             MainShellController shell = loader.getController();
             Scene scene = new Scene(root, 960, 640);
+            scene.getStylesheets()
+                    .add(
+                            PmAiFxApp.class
+                                    .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
+                                    .toExternalForm());
             primaryStage.setScene(scene);
+            shell.finishStartup(scene);
             primaryStage.show();
             shell.appendBootMessage();
         } catch (Exception e) {
