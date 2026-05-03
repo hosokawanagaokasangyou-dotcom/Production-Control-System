@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- Operator dispatch A4 card tab {@link OperatorCardTabController} -->
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.OperatorCardTabController"
+      fillWidth="true" spacing="8.0" styleClass="pm-operator-card-tab">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="syncLatestButton" mnemonicParsing="false"
+                text="&#x6700;&#x65b0;JSON&#x3092;&#x691c;&#x7d22;"
+                onAction="#onSyncLatestButtonAction"/>
+        <Button fx:id="refreshPreviewButton" mnemonicParsing="false"
+                text="&#x30d7;&#x30ec;&#x30d3;&#x30e5;&#x30fc;&#x66f4;&#x65b0;"
+                onAction="#onRefreshPreviewButtonAction"/>
+        <Button fx:id="printButton" mnemonicParsing="false"
+                text="&#x5370;&#x5237;..."
+                onAction="#onPrintButtonAction"/>
+        <Label fx:id="statusLabel" wrapText="true"/>
+    </HBox>
+
+    <Separator/>
+
+    <Label text="member_schedule*.json"/>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <TextField fx:id="memberJsonField" maxWidth="Infinity" prefWidth="560.0"
+                   promptText="*.json" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="browseMemberButton" mnemonicParsing="false" text="&#x53c2;&#x7167;..."
+                onAction="#onBrowseMemberJsonAction"/>
+    </HBox>
+
+    <Label text="&#x7d50;&#x679c;_&#x914d;&#x53f0;&#x8868;.json"/>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <TextField fx:id="dispatchJsonField" maxWidth="Infinity" prefWidth="560.0"
+                   promptText="*.json" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="browseDispatchButton" mnemonicParsing="false" text="&#x53c2;&#x7167;..."
+                onAction="#onBrowseDispatchJsonAction"/>
+    </HBox>
+
+    <HBox alignment="CENTER_LEFT" spacing="16.0">
+        <Label text="&#x958b;&#x59cb;&#x65e5;&#xff08;3&#x65e5;&#x5206;&#xff09;"/>
+        <DatePicker fx:id="startDatePicker"/>
+        <Label text="&#x30aa;&#x30da;&#x30ec;&#x30fc;&#x30bf;&#x30fc;"/>
+        <ComboBox fx:id="operatorCombo" editable="false" prefWidth="220.0"/>
+        <CheckBox fx:id="printAllOperatorsCheckBox"
+                  mnemonicParsing="false"
+                  text="&#x5168;&#x54e1;&#x9023;&#x7d9a;&#x5370;&#x5237;"/>
+    </HBox>
+
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Label text="&#x30d5;&#x30a9;&#x30f3;&#x30c8;"/>
+        <ComboBox fx:id="fontCombo" editable="false" prefWidth="280.0"/>
+    </HBox>
+
+    <Label styleClass="pm-operator-card-hint"
+           text="&#x30d7;&#x30ec;&#x30d3;&#x30e5;&#x30fc;&#x306f;&#x9078;&#x629e;&#x30aa;&#x30da;&#x30ec;&#x30fc;&#x30bf;&#x30fc;&#x306e;1&#x679a;&#x3002;&#x5168;&#x54e1;&#x9023;&#x7d9a;&#x5370;&#x5237;&#x306f;&#x5370;&#x5237;&#x6642;&#x306e;&#x307f;&#x6709;&#x52b9;&#x3002;"
+           wrapText="true"/>
+
+    <StackPane fx:id="previewHost" alignment="TOP_CENTER" minHeight="320.0" VBox.vgrow="ALWAYS"/>
+</VBox>

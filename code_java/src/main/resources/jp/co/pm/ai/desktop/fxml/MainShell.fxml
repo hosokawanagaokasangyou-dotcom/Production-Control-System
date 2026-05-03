@@ -78,6 +78,12 @@
                         <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabOperatorCard" closable="false"
+                     text="&#x30aa;&#x30da;&#x30ec;&#x30fc;&#x30bf;&#x30fc;&#x30ab;&#x30fc;&#x30c9;">
+                    <content>
+                        <fx:include fx:id="operatorCardTab" source="OperatorCardTab.fxml"/>
+                    </content>
+                </Tab>
             </tabs>
         </TabPane>
     </center>

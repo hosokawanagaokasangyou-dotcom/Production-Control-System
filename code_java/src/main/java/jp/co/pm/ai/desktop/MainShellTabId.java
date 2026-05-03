@@ -12,7 +12,8 @@ public enum MainShellTabId {
     EXCLUDE_RULES("excludeRules"),
     ACTUALS_STATUS("actualsStatus"),
     RESULT_DISPATCH("resultDispatch"),
-    PLAN_RESULT_VIEWER("planResultViewer");
+    PLAN_RESULT_VIEWER("planResultViewer"),
+    OPERATOR_CARD("operatorCard");
 
     private final String key;
 

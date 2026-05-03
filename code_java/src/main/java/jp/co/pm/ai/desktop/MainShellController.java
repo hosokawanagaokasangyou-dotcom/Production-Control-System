@@ -132,6 +132,9 @@ public final class MainShellController {
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
+    private OperatorCardTabController operatorCardTabController;
+
+    @FXML
     private Tab mainShellTabRun;
 
     @FXML
@@ -157,6 +160,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabPlanResultViewer;
+
+    @FXML
+    private Tab mainShellTabOperatorCard;
 
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
@@ -193,6 +199,8 @@ public final class MainShellController {
             envTabController.bindShell(this);
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
+
+            operatorCardTabController.bindShell(this);
 
         mainRunTabController
                 .getWorkbookField()
@@ -471,6 +479,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
+        if (t == mainShellTabOperatorCard) {
+            return MainShellTabId.OPERATOR_CARD;
+        }
         return null;
     }
 
@@ -488,6 +499,7 @@ public final class MainShellController {
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
+            case OPERATOR_CARD -> mainShellTabOperatorCard;
         };
     }
 
@@ -1150,6 +1162,7 @@ public final class MainShellController {
             String memStr = newestMember != null ? newestMember.toString() : "";
             mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
             planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
+            operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
