@@ -833,9 +833,11 @@ GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS = 3
 GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "38")))
 # 結果_設備ガントの機械（計画／実績）行の RowDimension.height（ポイント）。
 GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "60")))
+# 段階2 結果ブック・各シートの既定フォント（Excel に「BIZ UDゴシック」をインストール済みであること）
+RESULT_BOOK_FONT_NAME = "BIZ UDゴシック"
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
-# 縦を「表示した暦日の数」ページに合わせる（概ね 1 日 1 枚）: GANTT_PRINT_ONE_PAGE_PER_DAY=1/true 等。
+# 縦を「表示した暦日の数」ページに合わせる（概ね 1 日 1 枚）を既定 ON。無効化は GANTT_PRINT_ONE_PAGE_PER_DAY=0/false 等。
 # 手動の日付境界改ページと併用。機械が多い日は縮小が強くなる。GANTT_PRINT_SCALE_PERCENT 指定時は無効。
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
@@ -963,8 +965,8 @@ try:
     )
 except (TypeError, ValueError):
     COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT = 2.5
-# 計画実績比較ガント UI（共通定義.bas の BIZ_UDP_GOTHIC_FONT_NAME と一致）
-COMPARE_GANTT_UI_FONT_NAME = "BIZ UDPゴシック"
+# 計画実績比較ガント UI（共通定義.bas の BIZ_UD_GOTHIC_FONT_NAME と一致）
+COMPARE_GANTT_UI_FONT_NAME = RESULT_BOOK_FONT_NAME
 # 計画実績比較ガント: VBA（SheetChange 等）が参照する日付→日ブロック先頭行（非表示・候補日と同じ開始行に並べる）
 COMPARE_GANTT_DAY_ROW_MAP_DATE_COL = 52  # AZ
 COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
@@ -1796,7 +1798,9 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """結果ブック用 Font（呼び出し坴は name/size 等を指定）。"""
+    """結果ブック用 Font（呼び出し側は size 等を指定。既定ファミリーは RESULT_BOOK_FONT_NAME）。"""
+    if "name" not in kwargs:
+        kwargs = {**kwargs, "name": RESULT_BOOK_FONT_NAME}
     return Font(**kwargs)
 
 
@@ -2976,7 +2980,7 @@ def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternF
 
 
 def _apply_compare_gantt_typography(ws, hdr_row: int) -> None:
-    """計画実績比較シートのフォントを BIZ UDPゴシックに統一し、表示日・説明・左表のサイズを調整する。"""
+    """計画実績比較シートのフォントを RESULT_BOOK_FONT_NAME に統一し、表示日・説明・左表のサイズを調整する。"""
     fn = COMPARE_GANTT_UI_FONT_NAME
     mr = int(ws.max_row or 1)
     mc = int(ws.max_column or 1)
@@ -3685,29 +3689,30 @@ def _write_results_equipment_gantt_sheet(
         ws.column_dimensions["C"].width = 40
 
     _gantt_scale_override_raw = (os.environ.get("GANTT_PRINT_SCALE_PERCENT", "") or "").strip()
-    _gantt_print_one_page_per_day = (
-        (os.environ.get("GANTT_PRINT_ONE_PAGE_PER_DAY", "") or "").strip().lower()
-        in ("1", "true", "yes", "y", "on")
+    _gantt_print_one_page_per_day_raw = (
+        os.environ.get("GANTT_PRINT_ONE_PAGE_PER_DAY", "1") or "1"
+    ).strip().lower()
+    _gantt_print_one_page_per_day = _gantt_print_one_page_per_day_raw not in (
+        "0",
+        "false",
+        "no",
+        "off",
+        "none",
     )
     try:
-        # 印刷ページ設定（ガンチャート作成完了時点で付与）
-        # 適用順: ⓪タイトル行 → ①用紙・向き → ②余白 → ③横1ページ → ④改ページは try の外で付与（順を変えるとずれやすい）
-        # 既定: 横1ページに収める（タイムラインが読める）。縦は自動（日内改ページは行高で緩和）。
-        # GANTT_PRINT_ONE_PAGE_PER_DAY: 縦を「暦日ブロック数」ページに合わせる（概ね 1 日 1 枚）。
-        # GANTT_PRINT_SCALE_PERCENT を指定したときのみ固定%（横幅が細くなりやすい）。
-        # ⓪ 全ページに繰り返すタイトル行（レポート 1〜3 行目）
-        ws.print_title_rows = "1:3"
-        # ① A3 横向き
+        # 印刷ページ設定（結果_設備ガント／実績明細ガント共通。作成完了時点で付与）
+        # ① 用紙 A3・横向き  ② 余白「狭い」  ③ 列見出しとして繰り返す行＝1〜3 行目
+        # ④ 横を 1 ページに収める  ⑤ 縦は自動（ページ当たり行は自動）／⑥ 1 暦日≒1 ページを既定 ON（環境変数で無効可）
+        # GANTT_PRINT_SCALE_PERCENT 指定時は①〜④を縮小率指定に切替（⑥ は無効）。
         ws.page_setup.orientation = "landscape"
         ws.page_setup.paperSize = 8
-        # ② 余白「狭い」≒ Excel の Narrow プリセット（単位: インチ）
         ws.page_margins.left = 0.25
         ws.page_margins.right = 0.25
-        ws.page_margins.top = 0.75
-        ws.page_margins.bottom = 0.75
+        ws.page_margins.top = 0.25
+        ws.page_margins.bottom = 0.25
         ws.page_margins.header = 0.3
         ws.page_margins.footer = 0.3
-        # ③ 横 1 ページに収める
+        ws.print_title_rows = "1:3"
         if _gantt_scale_override_raw:
             _pct = max(10, min(400, int(_gantt_scale_override_raw)))
             ws.page_setup.fitToPage = False
@@ -7959,8 +7964,8 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
     if not hist_cols:
         return
 
-    _plain_kw: dict = {}
-    _blue_kw: dict = {"color": Color(rgb="FF0070C0")}
+    _plain_kw: dict = {"name": RESULT_BOOK_FONT_NAME}
+    _blue_kw: dict = {"name": RESULT_BOOK_FONT_NAME, "color": Color(rgb="FF0070C0")}
     plain_if = InlineFont(**_plain_kw)
     blue_if = InlineFont(**_blue_kw)
     top = Alignment(wrap_text=False, vertical="top")
@@ -8126,8 +8131,8 @@ def _apply_result_task_id_hyperlinks_to_equipment_schedule(
         return
     esc = schedule_sheet_name.replace("'", "''")
     loc_prefix = f"#'{esc}'!"
-    font_link = Font(color="0563C1", underline="single")
-    font_link_on_red = Font(color="FFFFFF", underline="single")
+    font_link = _result_font(color="0563C1", underline="single")
+    font_link_on_red = _result_font(color="FFFFFF", underline="single")
     top = Alignment(wrap_text=False, vertical="top")
     n_tasks = len(sorted_tasks_for_row_order)
     for r in range(2, worksheet_tasks.max_row + 1):
@@ -11749,7 +11754,7 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
     clear_fill = PatternFill(fill_type=None)
     yellow_input_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
     conflict_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
-    conflict_font = Font(color="FFFFFF", bold=True)
+    conflict_font = _result_font(color="FFFFFF", bold=True)
 
     for r in range(2, last_row + 1):
         for name in PLAN_CONFLICT_STYLABLE_COLS:
