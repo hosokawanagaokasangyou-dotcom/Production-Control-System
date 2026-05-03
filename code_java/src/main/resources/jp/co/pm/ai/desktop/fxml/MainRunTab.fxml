@@ -25,12 +25,14 @@
                 </padding>
                 <children>
                     <!-- workbookField / pythonExeField / scriptDirField: session + env merge fallback (hidden; edit on &#x74b0;&#x5883;&#x5909;&#x6570; tab) -->
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="0">
+                    <HBox spacing="20.0" alignment="CENTER_LEFT" GridPane.columnIndex="1"
+                          GridPane.columnSpan="2" GridPane.rowIndex="0">
                         <Button fx:id="stage1RunButton" mnemonicParsing="false"
+                                styleClass="pm-stage-run-button,pm-stage-run-1"
                                 text="&#x6bb5;&#x968e;1 &#x5b9f;&#x884c;"
                                 onAction="#onStage1RunButtonAction"/>
                         <Button fx:id="stage2RunButton" mnemonicParsing="false"
+                                styleClass="pm-stage-run-button,pm-stage-run-2"
                                 text="&#x6bb5;&#x968e;2 &#x5b9f;&#x884c;"
                                 onAction="#onStage2RunButtonAction"/>
                     </HBox>

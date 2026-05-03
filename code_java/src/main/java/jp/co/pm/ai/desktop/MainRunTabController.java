@@ -8,6 +8,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -30,8 +34,11 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -191,6 +198,34 @@ public final class MainRunTabController {
             clearLogButton.disableProperty().bind(Bindings.isEmpty(logLinesAll));
         }
         applyLogAreaFont();
+        installStageRunButtonGlow(stage1RunButton, Color.rgb(0, 229, 255, 0.72));
+        installStageRunButtonGlow(stage2RunButton, Color.rgb(255, 171, 64, 0.78));
+    }
+
+    /**
+     * Soft pulsing outer glow (matches cyan / amber gradients in {@code pm-ai-desktop.css}).
+     */
+    private static void installStageRunButtonGlow(Button button, Color glowColor) {
+        if (button == null) {
+            return;
+        }
+        DropShadow glow = new DropShadow();
+        glow.setColor(glowColor);
+        glow.setRadius(20);
+        glow.setSpread(0.42);
+        button.setEffect(glow);
+
+        Timeline pulse =
+                new Timeline(
+                        new KeyFrame(
+                                Duration.ZERO,
+                                new KeyValue(glow.radiusProperty(), 14, Interpolator.EASE_BOTH)),
+                        new KeyFrame(
+                                Duration.millis(1600),
+                                new KeyValue(glow.radiusProperty(), 38, Interpolator.EASE_BOTH)));
+        pulse.setAutoReverse(true);
+        pulse.setCycleCount(Timeline.INDEFINITE);
+        pulse.play();
     }
 
     private void setupLogListView() {

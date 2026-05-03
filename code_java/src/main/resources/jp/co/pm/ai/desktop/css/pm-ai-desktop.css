@@ -69,3 +69,53 @@
     -fx-text-fill: #ffcc80;
     -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #805020 0%, #805020 48%, #504020 52%, #504020 100%);
 }
+
+/* Run tab: stage 1/2 ? large primary actions (glow animation from MainRunTabController) */
+
+.button.pm-stage-run-button {
+    -fx-cursor: hand;
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+    -fx-padding: 16 36 16 36;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-min-height: 56;
+    -fx-min-width: 220;
+    -fx-text-fill: white;
+}
+
+.button.pm-stage-run-button:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.button.pm-stage-run-button.pm-stage-run-1 {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #26c6da 0%, #00838f 55%, #006064 100%);
+    -fx-border-color: derive(#00acc1, 25%);
+}
+
+.button.pm-stage-run-button.pm-stage-run-1:hover {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #4dd0e1 0%, #0097a7 55%, #00838f 100%);
+}
+
+.button.pm-stage-run-button.pm-stage-run-1:pressed {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #00838f 0%, #006064 100%);
+}
+
+.button.pm-stage-run-button.pm-stage-run-2 {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #ffb74d 0%, #f57c00 55%, #e65100 100%);
+    -fx-border-color: derive(#ff9800, 15%);
+}
+
+.button.pm-stage-run-button.pm-stage-run-2:hover {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #ffcc80 0%, #fb8c00 55%, #ef6c00 100%);
+}
+
+.button.pm-stage-run-button.pm-stage-run-2:pressed {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #e65100 0%, #bf360c 100%);
+}
+
+.button.pm-stage-run-button:disabled {
+    -fx-opacity: 0.55;
+}
