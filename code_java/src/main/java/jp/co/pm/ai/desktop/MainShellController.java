@@ -60,6 +60,7 @@ public final class MainShellController {
             List.of(
                     AppPaths.KEY_PM_AI_PYTHON,
                     AppPaths.KEY_PM_AI_REPO_ROOT,
+                    AppPaths.KEY_PM_AI_OUTPUT_DIR,
                     AppPaths.KEY_PM_AI_CODE_PYTHON_DIR,
                     AppPaths.KEY_PM_AI_WORKSPACE,
                     AppPaths.KEY_GEMINI_CREDENTIALS_JSON,
@@ -875,6 +876,7 @@ public final class MainShellController {
                     r.setValue(AppPaths.resolveActualDetailSourceDir(ui).toString());
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
+            case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
             case AppPaths.KEY_GEMINI_CREDENTIALS_JSON -> {
                 Path cand =
                         AppPaths.resolveRepoRoot(ui)
@@ -915,6 +917,7 @@ public final class MainShellController {
                     r.setValue(AppPaths.resolveActualDetailSourceDir(ui).toString());
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
+            case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
             case AppPaths.KEY_GEMINI_CREDENTIALS_JSON -> {
                 Path cand =
                         AppPaths.resolveRepoRoot(ui)

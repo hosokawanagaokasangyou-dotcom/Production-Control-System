@@ -14,7 +14,8 @@ import java.util.stream.Stream;
 
 /**
  * Path resolution for the desktop UI. <strong>Does not read {@link System#getenv}</strong>; pass keys from
- * the environment-variable tab via {@code ui} (e.g. {@code PM_AI_CODE_PYTHON_DIR}, {@code PM_AI_REPO_ROOT}).
+ * the environment-variable tab via {@code ui} (e.g. {@code PM_AI_CODE_PYTHON_DIR}, {@code PM_AI_REPO_ROOT},
+ * {@link #KEY_PM_AI_OUTPUT_DIR}).
  */
 public final class AppPaths {
 
@@ -22,6 +23,13 @@ public final class AppPaths {
     public static final String KEY_PM_AI_CODE_PYTHON_DIR = "PM_AI_CODE_PYTHON_DIR";
     public static final String KEY_PM_AI_REPO_ROOT = "PM_AI_REPO_ROOT";
     public static final String KEY_PM_AI_WORKSPACE = "PM_AI_WORKSPACE";
+
+    /**
+     * Stage1/2 成果物フォルダ（従来の {@code code/output} に相当）。未設定時は {@link #resolveRepoRoot(Map)} の直下の
+     * {@code output/}。Python {@code planning_core.bootstrap} の {@code output_dir} と揃える。
+     */
+    public static final String KEY_PM_AI_OUTPUT_DIR = "PM_AI_OUTPUT_DIR";
+
     public static final String KEY_PM_AI_TASK_INPUT_SOURCE_DIR = "PM_AI_TASK_INPUT_SOURCE_DIR";
 
     /** Folder for machining actual-detail Excel exports (PQ plan/02 {@code Folder.Files}). */
@@ -81,6 +89,7 @@ public final class AppPaths {
             KEY_PM_AI_WORKSPACE,
             KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+            KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR);
 
@@ -314,6 +323,19 @@ public final class AppPaths {
         return cwd.resolve(mf).normalize().toAbsolutePath();
     }
 
+    /**
+     * Stage1/2 の既定出力ディレクトリ（{@link #KEY_PM_AI_OUTPUT_DIR} または {@link #resolveRepoRoot(Map)} の直下
+     * {@code output}）。
+     */
+    public static Path resolveDefaultOutputDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_OUTPUT_DIR));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u).resolve("output").toAbsolutePath().normalize();
+    }
+
     /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */
     public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
 
@@ -365,9 +387,9 @@ public final class AppPaths {
     /**
      * Default path to stage-1 Excel output.
      *
-     * <p>{@code planning_core.bootstrap} sets {@code cwd} to the parent of {@code code/python} (or
-     * {@code PM_AI_WORKSPACE}), so Python writes to {@code <that cwd>/output/plan_input_tasks.xlsx}
-     * i.e. typically {@code Production-Control-System/code/output/}, not {@code code/python/output/}.
+     * <p>{@code planning_core.bootstrap} resolves {@code output_dir} from {@code PM_AI_OUTPUT_DIR} or
+     * repository-root {@code output/} (see Python bootstrap). Legacy layouts under {@code code/output/} are still
+     * detected when present.
      */
     public static Path defaultStage1PlanTasksPath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -378,6 +400,10 @@ public final class AppPaths {
                         ? parent.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME)
                         : pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
         Path underPyOutput = pyDir.resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
+        Path primary = resolveDefaultOutputDir(u).resolve(STAGE1_PLAN_TASKS_FILENAME);
+        if (Files.isRegularFile(primary)) {
+            return primary.toAbsolutePath().normalize();
+        }
         if (Files.isRegularFile(underCodeOutput)) {
             return underCodeOutput.toAbsolutePath().normalize();
         }
@@ -397,7 +423,7 @@ public final class AppPaths {
                 return w.toAbsolutePath().normalize();
             }
         }
-        return underCodeOutput.toAbsolutePath().normalize();
+        return primary.toAbsolutePath().normalize();
     }
 
     /**
@@ -410,14 +436,7 @@ public final class AppPaths {
         if (parent != null) {
             return parent.toAbsolutePath().normalize();
         }
-        Map<String, String> u = ui != null ? ui : Map.of();
-        Path pyDir = resolvePythonScriptDir(u);
-        Path codeDir = pyDir.getParent();
-        Path fallback =
-                codeDir != null
-                        ? codeDir.resolve("output")
-                        : pyDir.resolve("output");
-        return fallback.toAbsolutePath().normalize();
+        return resolveDefaultOutputDir(ui != null ? ui : Map.of());
     }
 
     /**
@@ -432,6 +451,10 @@ public final class AppPaths {
                         ? parent.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME)
                         : pyDir.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
         Path underPyOutput = pyDir.resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+        Path primary = resolveDefaultOutputDir(u).resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
+        if (Files.isRegularFile(primary)) {
+            return primary.toAbsolutePath().normalize();
+        }
         if (Files.isRegularFile(underCodeOutput)) {
             return underCodeOutput.toAbsolutePath().normalize();
         }
@@ -451,7 +474,7 @@ public final class AppPaths {
                 return w.toAbsolutePath().normalize();
             }
         }
-        return underCodeOutput.toAbsolutePath().normalize();
+        return primary.toAbsolutePath().normalize();
     }
 
     /** Repository root containing {@code code/python}. */

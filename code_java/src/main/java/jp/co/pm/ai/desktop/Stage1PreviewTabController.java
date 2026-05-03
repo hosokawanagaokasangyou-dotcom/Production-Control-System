@@ -82,7 +82,7 @@ public final class Stage1PreviewTabController {
     @FXML
     private void initialize() {
         pathField.setPromptText(
-                "output/"
+                "PM_AI_OUTPUT_DIR \u307e\u305f\u306f\u30ea\u30dd\u6839\u76f4\u4e0b/output/"
                         + AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME
                         + " (\u554f\u5408\u305b\u53d6\u8fbc\u5f8c\u30fb\u30bf\u30b9\u30af\u4e00\u89a7\u5316\u524d)");
         sheetField.setText(DEFAULT_STAGE1_PREVIEW_SHEET);

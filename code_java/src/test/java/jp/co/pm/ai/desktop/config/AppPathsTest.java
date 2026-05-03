@@ -15,6 +15,12 @@ import org.junit.jupiter.api.io.TempDir;
 class AppPathsTest {
 
     @Test
+    void outputDir_isFolderPathKey() {
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_OUTPUT_DIR));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_OUTPUT_DIR));
+    }
+
+    @Test
     void geminiCredentialsJson_usesFilePickerNotFolder() {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_GEMINI_CREDENTIALS_JSON));
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_GEMINI_CREDENTIALS_JSON));
@@ -61,6 +67,31 @@ class AppPathsTest {
         assertTrue(
                 s.endsWith("\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30DATA"),
                 "suffix: " + p);
+    }
+
+    @Test
+    void resolveDefaultOutputDir_defaultsToRepoOutput(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        assertEquals(
+                fakeRepo.resolve("output").toAbsolutePath().normalize(),
+                AppPaths.resolveDefaultOutputDir(ui));
+    }
+
+    @Test
+    void resolveDefaultOutputDir_respectsOverride(@TempDir Path fakeRepo, @TempDir Path out) throws Exception {
+        Path code = fakeRepo.resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                        out.toString());
+        assertEquals(out.toAbsolutePath().normalize(), AppPaths.resolveDefaultOutputDir(ui));
     }
 
     @Test

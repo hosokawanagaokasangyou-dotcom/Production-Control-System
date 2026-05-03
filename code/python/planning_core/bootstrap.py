@@ -28,7 +28,8 @@ import time as time_module
 # =========================================================
 # 【重要】カレントは (1) PM_AI_WORKSPACE（JavaFX 等）が有効なら最優先、
 # (2) それ以外は planning_core / python から code 階層へ。
-# log/execution_log.txt・output/ を作業フォルダ基準と一致させる。
+# log/execution_log.txt は cwd 基準。成果物 output/ は PM_AI_OUTPUT_DIR または
+# PM_AI_REPO_ROOT/output（未設定かつ cwd が code ならリポジトリ直下 output）。JavaFX の PM_AI_* と一致。
 # =========================================================
 _pm_ai_ws = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
 _cwd_from_workspace = False
@@ -131,7 +132,21 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 # 2. 成果物用 output / 実行ログ用 log（いずれも常に最新1ファイルのみ上書き）
-output_dir = os.path.join(os.getcwd(), "output")
+def _resolve_output_dir() -> str:
+    """PM_AI_OUTPUT_DIR → PM_AI_REPO_ROOT/output → (cwd が code なら) 親/output → cwd/output。"""
+    override = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+    if override:
+        return os.path.abspath(override)
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo and os.path.isdir(repo):
+        return os.path.join(os.path.abspath(repo), "output")
+    cwd = os.getcwd()
+    if os.path.basename(cwd).lower() == "code":
+        return os.path.join(os.path.dirname(os.path.abspath(cwd)), "output")
+    return os.path.join(cwd, "output")
+
+
+output_dir = _resolve_output_dir()
 os.makedirs(output_dir, exist_ok=True)
 log_dir = os.path.join(os.getcwd(), "log")
 os.makedirs(log_dir, exist_ok=True)
