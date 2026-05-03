@@ -174,7 +174,7 @@ def _try_remove_path_with_retries(
 
 def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> None:
     """
-    ``production_plan_multi_day_*.xlsx`` / ``*.json``（同名計画ブックのミラー） / ``member_schedule_*.xlsx`` を output 配下からすべて削除し、
+    ``production_plan_multi_day_*.xlsx`` / ``*.json``（同名計画ブックのミラー） / ``member_schedule_*.xlsx`` / ``member_schedule_*.json`` を output 配下からすべて削除し、
     空になったサブフォルダを削除する（日付階層の旧出力を含む）。
     段階2の直前に呼び、常に最新1組の成果物だけを残す土台にする。
     """
@@ -184,6 +184,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
         "production_plan_multi_day_*.xlsx",
         "production_plan_multi_day_*.json",
         "member_schedule_*.xlsx",
+        "member_schedule_*.json",
     )
     root_abs = os.path.normcase(os.path.abspath(output_root))
     removed = 0
@@ -216,7 +217,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
             pass
     if removed:
         logging.info(
-            "段階2出力の整理: production_plan_multi_day_*（.xlsx/.json）/ member_schedule_*.xlsx を %s 件削除しました。",
+            "段階2出力の整理: production_plan_multi_day_*（.xlsx/.json）/ member_schedule_*（.xlsx/.json）を %s 件削除しました。",
             removed,
         )
     if failed_paths:

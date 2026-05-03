@@ -55,6 +55,7 @@ from .input_resolution import (
 )
 from .plan_workbook_sidecar import (
     read_result_task_dataframe,
+    write_member_schedule_workbook_json,
     write_production_plan_workbook_json,
     write_result_task_json_sidecar,
 )
@@ -31352,10 +31353,25 @@ def _generate_plan_impl(
         raise
 
     logging.info(f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。")
+
+    member_schedule_json_path = None
+    try:
+        member_schedule_json_path = write_member_schedule_workbook_json(member_output_filename)
+        if member_schedule_json_path:
+            logging.info(
+                "段階2: メンバー別スケジュール JSON を '%s' に出力しました。",
+                member_schedule_json_path,
+            )
+    except Exception as e:
+        logging.warning("段階2: メンバー別スケジュール JSON 出力をスキップ: %s", e)
+
     _try_write_main_sheet_gemini_usage_summary("段階2")
     if return_output_paths:
-        return {
+        out_paths = {
             "production_plan": os.path.abspath(output_filename),
             "member_schedule": os.path.abspath(member_output_filename),
         }
+        if member_schedule_json_path:
+            out_paths["member_schedule_json"] = os.path.abspath(member_schedule_json_path)
+        return out_paths
     return None
