@@ -23,6 +23,8 @@ import java.util.List;
  * @param mainRunLogFilter persisted run-tab log filter enum name ({@code ALL}, {@code ERRORS_ONLY}, ...); empty means ALL
  * @param mainRunLogLines last run-tab log lines (capped when saving)
  * @param mainRunLogScroll vertical scroll position as 0..1 proportion of the scroll bar; {@link Double#NaN} if unknown
+ * @param mainRunStage2ProductionPlan last shown stage-2 production_plan xlsx path on run tab (empty if none)
+ * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
  * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
  */
 public record DesktopSessionState(
@@ -44,6 +46,8 @@ public record DesktopSessionState(
         String mainRunLogFilter,
         List<String> mainRunLogLines,
         double mainRunLogScroll,
+        String mainRunStage2ProductionPlan,
+        String mainRunStage2MemberSchedule,
         List<UiEnvRowSnapshot> uiEnvRows) {
 
     public static DesktopSessionState empty() {
@@ -66,6 +70,8 @@ public record DesktopSessionState(
                 "",
                 List.of(),
                 Double.NaN,
+                "",
+                "",
                 List.of());
     }
 }

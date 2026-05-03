@@ -471,6 +471,23 @@ public final class MainRunTabController {
         if (stage2MemberScheduleField != null) {
             stage2MemberScheduleField.setText(memberSchedulePath != null ? memberSchedulePath : "");
         }
+        if (shell != null) {
+            shell.scheduleDesktopSessionSave();
+        }
+    }
+
+    String snapshotStage2ProductionPlanPath() {
+        if (stage2ProductionPlanField == null || stage2ProductionPlanField.getText() == null) {
+            return "";
+        }
+        return stage2ProductionPlanField.getText().trim();
+    }
+
+    String snapshotStage2MemberSchedulePath() {
+        if (stage2MemberScheduleField == null || stage2MemberScheduleField.getText() == null) {
+            return "";
+        }
+        return stage2MemberScheduleField.getText().trim();
     }
 
     void appendLog(String line) {

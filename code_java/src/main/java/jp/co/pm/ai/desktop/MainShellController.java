@@ -293,6 +293,12 @@ public final class MainShellController {
         mainRunTabController.applyLogFontFromSession(s.logFontFamily(), s.logFontSize());
         mainRunTabController.restoreRunLogUiFromSession(
                 s.mainRunLogFilter(), s.mainRunLogLines(), s.mainRunLogScroll());
+        if (nonBlank(s.mainRunStage2ProductionPlan())
+                || nonBlank(s.mainRunStage2MemberSchedule())) {
+            mainRunTabController.setStage2ArtifactPaths(
+                    nz(s.mainRunStage2ProductionPlan()),
+                    nz(s.mainRunStage2MemberSchedule()));
+        }
         applyWindowGeometry(s);
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
@@ -355,6 +361,8 @@ public final class MainShellController {
                 mainRunTabController.snapshotLogFilterName(),
                 mainRunTabController.snapshotPersistedLogLines(),
                 mainRunTabController.snapshotLogScrollProportion(),
+                mainRunTabController.snapshotStage2ProductionPlanPath(),
+                mainRunTabController.snapshotStage2MemberSchedulePath(),
                 snapshotUiEnvRows());
     }
 

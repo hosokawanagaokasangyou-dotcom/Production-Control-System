@@ -52,6 +52,8 @@ public final class DesktopSessionStateStore {
                     text(root, "mainRunLogFilter"),
                     loadStringList(root, "mainRunLogLines"),
                     optionalDouble(root, "mainRunLogScroll", Double.NaN),
+                    text(root, "mainRunStage2ProductionPlan"),
+                    text(root, "mainRunStage2MemberSchedule"),
                     loadUiEnvRows(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -76,6 +78,8 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunLogFilter", state.mainRunLogFilter());
             putMainRunLogLines(root, state.mainRunLogLines());
             putMainRunLogScroll(root, state.mainRunLogScroll());
+            put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
+            put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
             putUiEnvRows(root, state.uiEnvRows());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
