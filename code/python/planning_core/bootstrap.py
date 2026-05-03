@@ -172,6 +172,27 @@ for _legacy_name in (
         pass
 
 
+# #region agent log
+def _agent_debug_ndjson_bootstrap(payload: dict) -> None:
+    import json
+    import time
+
+    _p = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-22ebe2.log"
+    try:
+        line = {
+            "sessionId": "22ebe2",
+            "timestamp": int(time.time() * 1000),
+            **payload,
+        }
+        with open(_p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+# #endregion
+
+
 def _try_remove_path_with_retries(
     path: str, *, attempts: int = 5, delay_s: float = 0.35
 ) -> tuple[bool, OSError | None]:
@@ -189,18 +210,53 @@ def _try_remove_path_with_retries(
 
 def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> None:
     """
-    ``production_plan_multi_day_*.xlsx`` / ``*.json``（同名計画ブックのミラー） / ``member_schedule_*.xlsx`` / ``member_schedule_*.json`` を output 配下からすべて削除し、
+    ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx`` を output 配下から削除し、
+    同名の ``*.json`` ミラーは **書き出す設定のときだけ** 削除する（
+    ``PM_AI_PLAN_WORKBOOK_JSON`` / ``PM_AI_MEMBER_SCHEDULE_JSON`` が無効な実行では、
+    旧 JSON を消さず残す。段階2が xlsx のみ再生成され JSON が未出力のときに「JSON が消えた」状態を避ける）。
     空になったサブフォルダを削除する（日付階層の旧出力を含む）。
-    段階2の直前に呼び、常に最新1組の成果物だけを残す土台にする。
     """
     if not output_root or not os.path.isdir(output_root):
         return
-    patterns = (
-        "production_plan_multi_day_*.xlsx",
-        "production_plan_multi_day_*.json",
-        "member_schedule_*.xlsx",
-        "member_schedule_*.json",
+    from .plan_workbook_sidecar import (
+        _member_schedule_json_disabled,
+        _plan_workbook_json_disabled,
     )
+
+    _skip_plan_json = _plan_workbook_json_disabled()
+    _skip_member_json = _member_schedule_json_disabled()
+    # #region agent log
+    _agent_debug_ndjson_bootstrap(
+        {
+            "hypothesisId": "H1",
+            "location": "bootstrap._remove_prior_stage2_workbooks:entry",
+            "message": "stage2 cleanup starting",
+            "data": {
+                "output_root": output_root,
+                "PM_AI_PLAN_WORKBOOK_JSON": (os.environ.get("PM_AI_PLAN_WORKBOOK_JSON") or ""),
+                "PM_AI_MEMBER_SCHEDULE_JSON": (os.environ.get("PM_AI_MEMBER_SCHEDULE_JSON") or ""),
+                "PM_AI_OUTPUT_DIR": (os.environ.get("PM_AI_OUTPUT_DIR") or ""),
+                "skip_delete_plan_json": _skip_plan_json,
+                "skip_delete_member_json": _skip_member_json,
+            },
+        }
+    )
+    # #endregion
+    patterns: list[str] = [
+        "production_plan_multi_day_*.xlsx",
+        "member_schedule_*.xlsx",
+    ]
+    if not _skip_plan_json:
+        patterns.append("production_plan_multi_day_*.json")
+    if not _skip_member_json:
+        patterns.append("member_schedule_*.json")
+    if _skip_plan_json or _skip_member_json:
+        logging.info(
+            "段階2旧出力の整理: JSON ミラーは削除スキップ（plan_json=%s member_json=%s）。"
+            " 無効時は前回の *.json を残します。",
+            _skip_plan_json,
+            _skip_member_json,
+        )
     root_abs = os.path.normcase(os.path.abspath(output_root))
     removed = 0
     failed_paths: list[str] = []
@@ -214,6 +270,17 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
                     ok, last_ex = _try_remove_path_with_retries(fp)
                     if ok:
                         removed += 1
+                        # #region agent log
+                        if name.endswith(".json"):
+                            _agent_debug_ndjson_bootstrap(
+                                {
+                                    "hypothesisId": "H1",
+                                    "location": "bootstrap._remove_prior_stage2_workbooks:removed_json",
+                                    "message": "deleted stage2 json sidecar",
+                                    "data": {"path": fp, "pattern": pat},
+                                }
+                            )
+                        # #endregion
                     else:
                         failed_paths.append(fp)
                         logging.warning(
@@ -235,6 +302,19 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
             "段階2出力の整理: production_plan_multi_day_*（.xlsx/.json）/ member_schedule_*（.xlsx/.json）を %s 件削除しました。",
             removed,
         )
+    # #region agent log
+    _agent_debug_ndjson_bootstrap(
+        {
+            "hypothesisId": "H1",
+            "location": "bootstrap._remove_prior_stage2_workbooks:summary",
+            "message": "stage2 cleanup done",
+            "data": {
+                "removed_total": removed,
+                "failed_paths_count": len(failed_paths),
+            },
+        }
+    )
+    # #endregion
     if failed_paths:
         preview = "; ".join(failed_paths[:3])
         if len(failed_paths) > 3:
