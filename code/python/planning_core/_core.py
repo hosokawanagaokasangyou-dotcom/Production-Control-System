@@ -1472,6 +1472,17 @@ RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
     "計画合計",
     "原反投入場所",
 )
+# 結果_配台表: 日付列（yyyy/mm/dd 表示・列幅確保）
+RESULT_DISPATCH_TABLE_DATE_HEADERS = frozenset(
+    {
+        "受注日",
+        "原反投入日",
+        "指定納期",
+        "回答納期",
+        "加工完了日",
+        "配台日",
+    }
+)
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
@@ -1916,7 +1927,10 @@ def _apply_stage2_production_plan_workbook_polish(
         _apply_stage2_plan_sheet_header_fill(ws, extra_header_rows=ex)
         _apply_stage2_plan_sheet_grid_border(ws)
         try:
-            if name != RESULT_TASK_SHEET_NAME:
+            if name not in (
+                RESULT_TASK_SHEET_NAME,
+                RESULT_DISPATCH_TABLE_SHEET_NAME,
+            ):
                 ws.freeze_panes = "B2"
         except Exception:
             pass
@@ -23521,6 +23535,189 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
         logging.warning("結果_配台表: Excel テーブル更新をスキップしました: %s", e)
 
 
+def _result_dispatch_table_column_width(header: str) -> float:
+    """結果_配台表: 列見出しごとの標準幅（日付列は #### 回避のため広め）。"""
+    h = str(header).strip()
+    if not h:
+        return 11.0
+    if h in ("工程名",):
+        return 11.5
+    if h in ("機械名",):
+        return 19.0
+    if h in RESULT_DISPATCH_TABLE_DATE_HEADERS:
+        return 12.5
+    if h in ("受注NO", "依頼NO"):
+        return 11.5
+    if "品名" in h or h == "製品名":
+        return 24.0
+    if h == "使用原反":
+        return 22.0
+    if h in ("換算数量", "実加工数", "当日配台数量", "実出来高", "計画合計"):
+        return 12.0
+    if h == "原反数":
+        return 9.0
+    if h == "加工内容":
+        return 18.0
+    if h == "在庫場所":
+        return 12.0
+    if h == "加工完了区分":
+        return 11.0
+    if h == "原反投入場所":
+        return 16.0
+    return min(max(float(len(h)) + 3.0, 10.0), 28.0)
+
+
+def _apply_result_dispatch_table_sheet_layout_polish(ws) -> None:
+    """
+    結果_配台表: 列幅・日付/数量の表示形式・見出し行・左5列の窓枠固定。
+    共通仕上げ（罫線・ヘッダ背景）の後に呼ぶこと。
+    """
+    if ws is None:
+        return
+    mc = int(ws.max_column or 0)
+    mr = int(ws.max_row or 0)
+    if mc < 1:
+        return
+
+    headers: list[str] = []
+    for ci in range(1, mc + 1):
+        v = ws.cell(row=1, column=ci).value
+        headers.append(str(v).strip() if v is not None else "")
+
+    date_cols: list[int] = []
+    qty_cols: list[int] = []
+    center_cols: list[int] = []
+    for ci, hn in enumerate(headers, 1):
+        if not hn:
+            continue
+        letter = get_column_letter(ci)
+        try:
+            if getattr(ws.column_dimensions[letter], "hidden", False):
+                continue
+        except Exception:
+            pass
+        try:
+            ws.column_dimensions[letter].width = float(_result_dispatch_table_column_width(hn))
+        except Exception:
+            pass
+        if hn in RESULT_DISPATCH_TABLE_DATE_HEADERS:
+            date_cols.append(ci)
+        elif hn in (
+            "換算数量",
+            "実加工数",
+            "当日配台数量",
+            "実出来高",
+            "計画合計",
+            "原反数",
+        ):
+            qty_cols.append(ci)
+        if hn in (
+            "工程名",
+            "機械名",
+            "受注NO",
+            "依頼NO",
+            "加工完了区分",
+            "原反数",
+        ):
+            center_cols.append(ci)
+
+    date_fmt = "yyyy/mm/dd"
+    num_fmt = "#,##0.###"
+
+    for r in range(2, mr + 1):
+        for ci in date_cols:
+            c = ws.cell(row=r, column=ci)
+            v = c.value
+            if v is None or v == "":
+                continue
+            if isinstance(v, datetime):
+                try:
+                    c.value = v.date() if hasattr(v, "date") else v
+                except Exception:
+                    pass
+                c.number_format = date_fmt
+                continue
+            if isinstance(v, date):
+                c.number_format = date_fmt
+                continue
+            try:
+                if isinstance(v, pd.Timestamp):
+                    c.value = v.to_pydatetime().date()
+                    c.number_format = date_fmt
+                    continue
+            except Exception:
+                pass
+            try:
+                d0 = pd.to_datetime(v, errors="coerce")
+                if pd.isna(d0):
+                    continue
+                if isinstance(d0, pd.Timestamp):
+                    c.value = d0.to_pydatetime().date()
+                else:
+                    xd = d0.to_pydatetime().date() if hasattr(d0, "to_pydatetime") else d0
+                    c.value = xd
+                c.number_format = date_fmt
+            except Exception:
+                pass
+
+    for r in range(2, mr + 1):
+        for ci in qty_cols:
+            c = ws.cell(row=r, column=ci)
+            v = c.value
+            if v is None or v == "":
+                continue
+            try:
+                if isinstance(v, str):
+                    s = unicodedata.normalize("NFKC", v).strip().replace(",", "")
+                    if not s:
+                        continue
+                    c.value = float(s)
+                elif isinstance(v, (int, float)) and not isinstance(v, bool):
+                    c.value = float(v)
+                else:
+                    continue
+                c.number_format = num_fmt
+            except Exception:
+                pass
+
+    hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for ci in range(1, mc + 1):
+        ws.cell(row=1, column=ci).alignment = hdr_align
+    try:
+        ws.row_dimensions[1].height = 32.0
+    except Exception:
+        pass
+
+    for r in range(2, mr + 1):
+        for ci in range(1, mc + 1):
+            hn = headers[ci - 1] if ci <= len(headers) else ""
+            cell = ws.cell(row=r, column=ci)
+            if ci in date_cols or ci in qty_cols:
+                cell.alignment = Alignment(
+                    horizontal="center", vertical="top", wrap_text=False
+                )
+            elif ci in center_cols:
+                cell.alignment = Alignment(
+                    horizontal="center", vertical="top", wrap_text=False
+                )
+            elif any(
+                k in hn
+                for k in ("品名", "製品", "加工内容", "使用原反", "在庫", "場所")
+            ):
+                cell.alignment = Alignment(
+                    horizontal="left", vertical="top", wrap_text=True
+                )
+            else:
+                cell.alignment = Alignment(
+                    horizontal="left", vertical="top", wrap_text=False
+                )
+
+    try:
+        ws.freeze_panes = "F2"
+    except Exception:
+        pass
+
+
 def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir: str) -> str | None:
     """
     「結果_配台表.xlsx」を target_dir に出力する（Power Query _q結果_配台表 / フォルダパス + 固定名）。
@@ -23553,6 +23750,7 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
             df_dispatch.to_excel(w, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False)
             ws = w.sheets.get(RESULT_DISPATCH_TABLE_SHEET_NAME)
             if ws is not None:
+                _apply_output_font_to_result_sheet(ws)
                 # 別ブックなので新規テーブル作成で問題なし
                 try:
                     from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -23575,6 +23773,9 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
                         ws.add_table(tab)
                 except Exception as e:
                     logging.warning("結果_配台表.xlsx: テーブル付与をスキップしました: %s", e)
+                _apply_stage2_plan_sheet_header_fill(ws)
+                _apply_stage2_plan_sheet_grid_border(ws)
+                _apply_result_dispatch_table_sheet_layout_polish(ws)
         return out_path
     except Exception as e:
         logging.warning("結果_配台表.xlsx: 出力に失敗しました: %s", e)
@@ -31462,6 +31663,11 @@ def _generate_plan_impl(
                 _apply_result_task_sheet_layout_polish(
                     writer.sheets[RESULT_TASK_SHEET_NAME],
                     list(df_tasks.columns),
+                )
+
+            if RESULT_DISPATCH_TABLE_SHEET_NAME in writer.sheets:
+                _apply_result_dispatch_table_sheet_layout_polish(
+                    writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME]
                 )
 
     except OSError as e:
