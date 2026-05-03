@@ -4,9 +4,63 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 
 import pandas as pd
+
+# #region agent log
+_AGENT_DEBUG_LOG = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-a5a923.log"
+
+
+def _agent_debug_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+    *,
+    run_id: str = "pre-fix",
+    mirror_to_dir: str | None = None,
+) -> None:
+    line = (
+        json.dumps(
+            {
+                "sessionId": "a5a923",
+                "runId": run_id,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            },
+            ensure_ascii=False,
+        )
+        + "\n"
+    )
+    targets: list[str] = [_AGENT_DEBUG_LOG]
+    if mirror_to_dir:
+        try:
+            os.makedirs(mirror_to_dir, exist_ok=True)
+        except OSError:
+            pass
+        targets.append(os.path.join(mirror_to_dir, "debug-a5a923.log"))
+    out_dir = (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+    if out_dir:
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+        except OSError:
+            pass
+        targets.append(os.path.join(out_dir, "debug-a5a923.log"))
+    for path in dict.fromkeys(targets):
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            pass
+
+
+# #endregion
 
 # 0/false/no/off/none: do not read or write sidecar JSON
 ENV_PLAN_RESULT_TASK_JSON = "PM_AI_PLAN_RESULT_TASK_JSON"
@@ -42,7 +96,39 @@ def _dump_xlsx_all_sheets_to_json(
     """
     xlsx を pandas で全シート読み、同名ベースの .json に書き出す内部共通処理。
     """
+    _mirror_dir = (
+        os.path.dirname(os.path.abspath(xlsx_path)) if xlsx_path else None
+    )
+    # #region agent log
+    _parent = os.path.dirname(os.path.abspath(xlsx_path or "")) if xlsx_path else ""
+    _agent_debug_log(
+        "H5",
+        "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+        "enter",
+        {
+            "xlsx_path": xlsx_path,
+            "isfile": bool(xlsx_path and os.path.isfile(xlsx_path)),
+            "PM_AI_OUTPUT_DIR": (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip(),
+            "parent_dir": _parent,
+            "parent_isdir": bool(_parent and os.path.isdir(_parent)),
+        },
+        mirror_to_dir=_mirror_dir,
+    )
+    # #endregion
     if not xlsx_path or not os.path.isfile(xlsx_path):
+        # #region agent log
+        _agent_debug_log(
+            "H2",
+            "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+            "skip_missing_xlsx",
+            {"xlsx_path": xlsx_path},
+            mirror_to_dir=_mirror_dir,
+        )
+        # #endregion
+        logging.warning(
+            "plan_workbook_sidecar: 同名 JSON をスキップ（xlsx 不在） path=%s",
+            xlsx_path,
+        )
         return None
     out_path = os.path.splitext(xlsx_path)[0] + ".json"
     try:
@@ -52,16 +138,51 @@ def _dump_xlsx_all_sheets_to_json(
         except OSError:
             pass
         sheets_in = pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
-    except Exception:
+    except Exception as e:
+        # #region agent log
+        _agent_debug_log(
+            "H3",
+            "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+            "read_excel_failed",
+            {"exc_type": type(e).__name__, "exc_msg": str(e)[:300]},
+            mirror_to_dir=_mirror_dir,
+        )
+        # #endregion
+        logging.warning(
+            "plan_workbook_sidecar: read_excel に失敗したため同名 JSON を出せません: %s (%s)",
+            xlsx_path,
+            e,
+        )
         return None
     sheets_out: dict[str, dict] = {}
     for name, df in (sheets_in or {}).items():
         if df is None or getattr(df, "empty", True):
             sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
             continue
-        rows = json.loads(
-            df.to_json(orient="records", date_format="iso", double_precision=15)
-        )
+        try:
+            rows = json.loads(
+                df.to_json(orient="records", date_format="iso", double_precision=15)
+            )
+        except Exception as e:
+            # #region agent log
+            _agent_debug_log(
+                "H3",
+                "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+                "sheet_to_json_failed",
+                {
+                    "sheet": str(name)[:80],
+                    "exc_type": type(e).__name__,
+                    "exc_msg": str(e)[:300],
+                },
+                mirror_to_dir=_mirror_dir,
+            )
+            # #endregion
+            logging.warning(
+                "plan_workbook_sidecar: シート %r の行データ化に失敗し同名 JSON を中断: %s",
+                name,
+                e,
+            )
+            return None
         sheets_out[name] = {
             "columns": list(df.columns),
             "row_count": int(len(df)),
@@ -78,8 +199,39 @@ def _dump_xlsx_all_sheets_to_json(
         with open(out_path, encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
             f.write("\n")
+        # #region agent log
+        _agent_debug_log(
+            "H4",
+            "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+            "json_write_ok",
+            {
+                "out_path": out_path,
+                "sheet_keys": list((sheets_in or {}).keys())[:20],
+                "n_sheets": len(sheets_in or {}),
+            },
+            mirror_to_dir=_mirror_dir,
+        )
+        # #endregion
+        logging.info(
+            "plan_workbook_sidecar: 同名 JSON を出力しました path=%s",
+            out_path,
+        )
         return out_path
-    except Exception:
+    except Exception as e:
+        # #region agent log
+        _agent_debug_log(
+            "H4",
+            "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
+            "json_write_failed",
+            {"out_path": out_path, "exc_type": type(e).__name__, "exc_msg": str(e)[:300]},
+            mirror_to_dir=_mirror_dir,
+        )
+        # #endregion
+        logging.warning(
+            "plan_workbook_sidecar: JSON ファイル書き込みに失敗: %s (%s)",
+            out_path,
+            e,
+        )
         return None
 
 
@@ -150,7 +302,27 @@ def write_production_plan_workbook_json(plan_xlsx: str) -> str | None:
     ``production_plan_multi_day_*.xlsx`` と同名ベースの ``.json`` に、全シートを表形式で書き出す。
     図形・セル書式は含まず、セル値のみ（Excel 再読込と同様）。
     """
+    # #region agent log
+    _raw = (os.environ.get(ENV_PLAN_WORKBOOK_JSON) or "").strip()
+    _mir = os.path.dirname(os.path.abspath(plan_xlsx)) if plan_xlsx else None
+    _agent_debug_log(
+        "H1",
+        "plan_workbook_sidecar:write_production_plan_workbook_json",
+        "plan_workbook_json_gate",
+        {
+            "disabled": _plan_workbook_json_disabled(),
+            "ENV_PLAN_WORKBOOK_JSON_raw": _raw,
+            "plan_xlsx": plan_xlsx,
+        },
+        mirror_to_dir=_mir,
+    )
+    # #endregion
     if _plan_workbook_json_disabled():
+        logging.info(
+            "plan_workbook_sidecar: production_plan 同名 JSON は無効のためスキップします "
+            "(PM_AI_PLAN_WORKBOOK_JSON=%r)",
+            _raw,
+        )
         return None
     return _dump_xlsx_all_sheets_to_json(plan_xlsx)
 
@@ -160,7 +332,27 @@ def write_member_schedule_workbook_json(member_xlsx: str) -> str | None:
     ``member_schedule_*.xlsx`` と同名ベースの ``.json`` に全シートを書き出す（計画ブック JSON と同形式。
     シート名はメンバー名）。
     """
+    # #region agent log
+    _raw = (os.environ.get(ENV_MEMBER_SCHEDULE_JSON) or "").strip()
+    _mir = os.path.dirname(os.path.abspath(member_xlsx)) if member_xlsx else None
+    _agent_debug_log(
+        "H1",
+        "plan_workbook_sidecar:write_member_schedule_workbook_json",
+        "member_schedule_json_gate",
+        {
+            "disabled": _member_schedule_json_disabled(),
+            "ENV_MEMBER_SCHEDULE_JSON_raw": _raw,
+            "member_xlsx": member_xlsx,
+        },
+        mirror_to_dir=_mir,
+    )
+    # #endregion
     if _member_schedule_json_disabled():
+        logging.info(
+            "plan_workbook_sidecar: member_schedule 同名 JSON は無効のためスキップします "
+            "(PM_AI_MEMBER_SCHEDULE_JSON=%r)",
+            _raw,
+        )
         return None
     return _dump_xlsx_all_sheets_to_json(
         member_xlsx, payload_extra={"workbook_kind": "member_schedule"}

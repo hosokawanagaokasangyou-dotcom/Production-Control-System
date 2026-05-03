@@ -19,15 +19,21 @@ import java.util.function.Consumer;
 
 import javafx.application.Platform;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
  * Runs {@code task_extract_stage1.py} / {@code plan_simulation_stage2.py} with
- * {@link ProcessBuilder} (plan: L1, TASK_INPUT_WORKBOOK, UTF-8).
+ * {@link ProcessBuilder} (plan: UTF-8 child env from UI).
  *
  * <p>Environment merge: JVM inherits the OS process environment for PATH etc.; application-defined keys
- * come from the UI {@code extraEnv} (JavaFX does not pass {@code TASK_INPUT_WORKBOOK} from the env tab).
- * Then {@code TASK_INPUT_WORKBOOK} from the main macro-book field in the launcher, then
- * {@code PYTHONUTF8} and {@code PYTHONIOENCODING}. The Java app does not read {@code System#getenv} for
- * configuration.
+ * come from the UI {@code extraEnv}. Inherited {@link AppPaths#KEY_PM_AI_PLAN_WORKBOOK_JSON} /
+ * {@link AppPaths#KEY_PM_AI_MEMBER_SCHEDULE_JSON} are removed unless present in {@code extraEnv}, so OS-level
+ * {@code 0} does not suppress stage-2 same-name JSON mirrors when the user did not set those keys in the env tab.
+ * Then {@code PYTHONUTF8} and {@code PYTHONIOENCODING}. Use the env tab for {@code PM_AI_PLAN_INPUT_PATH} and other
+ * keys; legacy workbook env keys are stripped by the shell controller.
+ *
+ * <p>Stages 1/2 run as plain Python child processes (openpyxl / pandas, etc.). xlwings is used only on
+ * Excel-driven entry points (add-in or legacy macro workflows); it is not required for this JavaFX app.
  */
 public final class PythonProcessRunner {
 
@@ -39,6 +45,24 @@ public final class PythonProcessRunner {
 
     private PythonProcessRunner() {}
 
+    /**
+     * Stage-2 JSON mirrors default to on in Python when unset. Os.environ may still carry {@code 0} from the user or
+     * system profile; strip unless the JavaFX env tab explicitly passes the key.
+     */
+    private static void stripInheritedStage2JsonMirrorEnvUnlessInUi(
+            Map<String, String> env, Map<String, String> extraEnv) {
+        Map<String, String> ui = extraEnv != null ? extraEnv : Map.of();
+        if (!ui.containsKey(AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON)) {
+            env.remove(AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON);
+        }
+        if (!ui.containsKey(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON)) {
+            env.remove(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON);
+        }
+    }
+
+    /**
+     * @param taskInputWorkbook Reserved; not copied into the child environment.
+     */
     public record RunRequest(
             Path pythonExecutable,
             Path scriptDirectory,
@@ -72,6 +96,7 @@ public final class PythonProcessRunner {
                         pb.directory(req.scriptDirectory.toFile());
                         pb.redirectErrorStream(true);
                         Map<String, String> env = new HashMap<>(pb.environment());
+                        stripInheritedStage2JsonMirrorEnvUnlessInUi(env, req.extraEnv);
                         if (req.extraEnv != null) {
                             for (var e : req.extraEnv.entrySet()) {
                                 String k = e.getKey();
@@ -80,9 +105,6 @@ public final class PythonProcessRunner {
                                 }
                                 env.put(k.trim(), e.getValue() != null ? e.getValue() : "");
                             }
-                        }
-                        if (req.taskInputWorkbook != null && !req.taskInputWorkbook.isBlank()) {
-                            env.put("TASK_INPUT_WORKBOOK", req.taskInputWorkbook);
                         }
                         env.put("PYTHONUTF8", "1");
                         env.put("PYTHONIOENCODING", "utf-8");
@@ -132,6 +154,7 @@ public final class PythonProcessRunner {
         pb.directory(req.scriptDirectory.toFile());
         pb.redirectErrorStream(true);
         Map<String, String> env = new HashMap<>(pb.environment());
+        stripInheritedStage2JsonMirrorEnvUnlessInUi(env, req.extraEnv);
         if (req.extraEnv != null) {
             for (var e : req.extraEnv.entrySet()) {
                 String k = e.getKey();
@@ -140,9 +163,6 @@ public final class PythonProcessRunner {
                 }
                 env.put(k.trim(), e.getValue() != null ? e.getValue() : "");
             }
-        }
-        if (req.taskInputWorkbook != null && !req.taskInputWorkbook.isBlank()) {
-            env.put("TASK_INPUT_WORKBOOK", req.taskInputWorkbook);
         }
         env.put("PYTHONUTF8", "1");
         env.put("PYTHONIOENCODING", "utf-8");

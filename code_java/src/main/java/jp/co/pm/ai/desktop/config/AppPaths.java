@@ -84,6 +84,18 @@ public final class AppPaths {
     public static final String KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET = "PM_AI_SKIP_WORKBOOK_ENV_SHEET";
 
     /**
+     * Python planning_core: mirror {@code production_plan_multi_day_*.xlsx} to same-name {@code .json}. Values
+     * {@code 0}/{@code false}/{@code no}/{@code off}/{@code none} disable; unset defaults to enabled.
+     */
+    public static final String KEY_PM_AI_PLAN_WORKBOOK_JSON = "PM_AI_PLAN_WORKBOOK_JSON";
+
+    /**
+     * Python planning_core: mirror {@code member_schedule_*.xlsx} to same-name {@code .json}. Same disable tokens as
+     * {@link #KEY_PM_AI_PLAN_WORKBOOK_JSON}; unset defaults to enabled.
+     */
+    public static final String KEY_PM_AI_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON";
+
+    /**
      * Env keys whose value is a directory (folder picker in the UI).
      */
     private static final Set<String> FOLDER_PATH_ENV_KEYS = Set.of(
