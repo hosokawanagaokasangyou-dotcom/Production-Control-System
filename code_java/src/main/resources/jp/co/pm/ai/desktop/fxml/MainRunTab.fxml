@@ -14,13 +14,14 @@
 
 <!-- Labels/buttons: numeric char refs (ASCII-safe source file). -->
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            styleClass="pm-run-tab"
             fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
     <padding>
-        <Insets bottom="12.0" left="12.0" right="12.0"/>
+        <Insets bottom="16.0" left="16.0" right="16.0"/>
     </padding>
     <top>
-        <VBox fillWidth="true" spacing="8.0">
-            <GridPane hgap="8.0" vgap="8.0">
+        <VBox fillWidth="true" spacing="10.0">
+            <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>
                     <Insets bottom="0.0" left="12.0" right="0.0" top="12.0"/>
                 </padding>
@@ -74,7 +75,7 @@
                 <TextField fx:id="pythonExeField" prefWidth="1.0"/>
                 <TextField fx:id="scriptDirField" prefWidth="1.0"/>
             </HBox>
-            <Label text="log (stdout+stderr merged)"/>
+            <Label styleClass="pm-section-title" text="log (stdout+stderr merged)"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="&#x30d5;&#x30a3;&#x30eb;&#x30bf;"/>
                 <ComboBox fx:id="logFilterCombo" prefWidth="160.0"/>

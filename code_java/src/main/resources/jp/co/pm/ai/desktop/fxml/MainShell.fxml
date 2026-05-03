@@ -11,9 +11,10 @@
 
 <!-- Japanese tab titles as numeric refs so file stays valid UTF-8 ASCII (avoids mojibake on Windows tools). -->
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            styleClass="pm-shell"
             fx:controller="jp.co.pm.ai.desktop.MainShellController">
     <top>
-        <ToolBar>
+        <ToolBar styleClass="pm-app-toolbar">
             <Label text="&#x30c6;&#x30fc;&#x30de;"/>
             <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
             <Separator orientation="VERTICAL"/>

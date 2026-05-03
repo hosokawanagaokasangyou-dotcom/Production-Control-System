@@ -51,38 +51,81 @@
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-error {
-    -fx-text-fill: #b71c1c;
-    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #ffcdd2 0%, #ffcdd2 48%, #ffebee 52%, #ffebee 100%);
+    -fx-text-fill: #991b1b;
+    -fx-background-color: #fef2f2;
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-warn {
-    -fx-text-fill: #e65100;
-    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #ffe0b2 0%, #ffe0b2 48%, #fff8e1 52%, #fff8e1 100%);
+    -fx-text-fill: #b45309;
+    -fx-background-color: #fffbeb;
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-error.log-dark {
-    -fx-text-fill: #ff8a80;
-    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #802020 0%, #802020 48%, #502020 52%, #502020 100%);
+    -fx-text-fill: #fecaca;
+    -fx-background-color: #450a0a;
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-warn.log-dark {
-    -fx-text-fill: #ffcc80;
-    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #805020 0%, #805020 48%, #504020 52%, #504020 100%);
+    -fx-text-fill: #fde68a;
+    -fx-background-color: #451a03;
 }
 
-/* Run tab: stage 1/2 ? large primary actions (glow animation from MainRunTabController) */
+/* Run tab: ?i?K???s ? ?t???b?g?{?T?????R???g???X?g?i?r?W?l?X?????j */
+
+.border-pane.pm-run-tab {
+    -fx-background-color: transparent;
+}
+
+.pm-run-tab .label.pm-section-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 12 0 4 0;
+}
+
+.pm-run-tab .button:not(.pm-stage-run-button) {
+    -fx-cursor: hand;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: derive(-fx-text-box-border, -8%);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 14;
+    -fx-text-fill: -fx-dark-text-color;
+}
+
+.pm-run-tab .button:not(.pm-stage-run-button):hover {
+    -fx-background-color: derive(-fx-control-inner-background, -6%);
+    -fx-border-color: derive(-fx-text-box-border, -18%);
+}
+
+.pm-run-tab .button:not(.pm-stage-run-button):pressed {
+    -fx-background-color: derive(-fx-control-inner-background, -10%);
+}
+
+.pm-run-tab .text-field {
+    -fx-padding: 8 10;
+}
+
+.list-view.pm-log-view {
+    -fx-background-radius: 8;
+    -fx-border-color: derive(-fx-text-box-border, 12%);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-padding: 2;
+}
 
 .button.pm-stage-run-button {
     -fx-cursor: hand;
-    -fx-font-size: 19px;
+    -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-padding: 16 36 16 36;
-    -fx-background-radius: 12;
-    -fx-border-radius: 12;
+    -fx-padding: 14 28;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
     -fx-border-width: 1;
-    -fx-min-height: 56;
-    -fx-min-width: 220;
-    -fx-text-fill: white;
+    -fx-min-height: 48;
+    -fx-min-width: 200;
+    -fx-text-fill: #ffffff;
 }
 
 .button.pm-stage-run-button:focused {
@@ -91,31 +134,31 @@
 }
 
 .button.pm-stage-run-button.pm-stage-run-1 {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #26c6da 0%, #00838f 55%, #006064 100%);
-    -fx-border-color: derive(#00acc1, 25%);
+    -fx-background-color: #0e7490;
+    -fx-border-color: #155e75;
 }
 
 .button.pm-stage-run-button.pm-stage-run-1:hover {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #4dd0e1 0%, #0097a7 55%, #00838f 100%);
+    -fx-background-color: #155e75;
 }
 
 .button.pm-stage-run-button.pm-stage-run-1:pressed {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #00838f 0%, #006064 100%);
+    -fx-background-color: #164e63;
 }
 
 .button.pm-stage-run-button.pm-stage-run-2 {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #ffb74d 0%, #f57c00 55%, #e65100 100%);
-    -fx-border-color: derive(#ff9800, 15%);
+    -fx-background-color: #c2410c;
+    -fx-border-color: #9a3412;
 }
 
 .button.pm-stage-run-button.pm-stage-run-2:hover {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #ffcc80 0%, #fb8c00 55%, #ef6c00 100%);
+    -fx-background-color: #9a3412;
 }
 
 .button.pm-stage-run-button.pm-stage-run-2:pressed {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 100%, #e65100 0%, #bf360c 100%);
+    -fx-background-color: #7c2d12;
 }
 
 .button.pm-stage-run-button:disabled {
-    -fx-opacity: 0.55;
+    -fx-opacity: 0.5;
 }
