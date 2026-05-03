@@ -81,6 +81,9 @@ public final class MainRunTabController {
     @FXML
     private Button copyAllLogButton;
 
+    @FXML
+    private Button clearLogButton;
+
     private final ObservableList<String> logLines = FXCollections.observableArrayList();
     private Font appliedLogFont = Font.getDefault();
 
@@ -135,6 +138,9 @@ public final class MainRunTabController {
         setupLogListView();
         if (copyAllLogButton != null) {
             copyAllLogButton.disableProperty().bind(Bindings.isEmpty(logLines));
+        }
+        if (clearLogButton != null) {
+            clearLogButton.disableProperty().bind(Bindings.isEmpty(logLines));
         }
         applyLogAreaFont();
     }
@@ -367,6 +373,11 @@ public final class MainRunTabController {
     @FXML
     private void onCopyAllLogButtonAction() {
         copyAllLogLinesToClipboard();
+    }
+
+    @FXML
+    private void onClearLogButtonAction() {
+        logLines.clear();
     }
 
     TextField getWorkbookField() {

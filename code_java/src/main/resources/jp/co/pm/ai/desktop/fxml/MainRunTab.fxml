@@ -68,6 +68,9 @@
                 <Button fx:id="copyAllLogButton" mnemonicParsing="false"
                         text="&#x5168;&#x30ed;&#x30b0;&#x3092;&#x30b3;&#x30d4;&#x30fc;"
                         onAction="#onCopyAllLogButtonAction"/>
+                <Button fx:id="clearLogButton" mnemonicParsing="false"
+                        text="&#x30ed;&#x30b0;&#x3092;&#x30af;&#x30ea;&#x30a2;"
+                        onAction="#onClearLogButtonAction"/>
             </HBox>
         </VBox>
     </top>
