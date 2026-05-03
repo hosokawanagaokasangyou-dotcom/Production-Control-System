@@ -3,32 +3,47 @@ package jp.co.pm.ai.desktop;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import org.controlsfx.control.spreadsheet.GridBase;
+import org.controlsfx.control.spreadsheet.GridChange;
+import org.controlsfx.control.spreadsheet.SpreadsheetView;
+
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
-import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
-import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
 
 /**
  * \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab; layout {@code PlanInputTab.fxml}.
+ *
+ * <p>Uses ControlsFX {@link SpreadsheetView} for native fixed leading columns (\u898b\u51fa\u3057\u5217).
  */
 public final class PlanInputTabController {
 
@@ -79,13 +94,19 @@ public final class PlanInputTabController {
     private Label hintLabel;
 
     @FXML
-    private TableView<ObservableList<String>> table;
+    private StackPane spreadsheetHost;
+
+    private final SpreadsheetView spreadsheetView = new SpreadsheetView();
 
     private final List<String> headersRef = new ArrayList<>();
     private ObservableList<ObservableList<String>> rows;
     private final AtomicBoolean suppressColumnOrderPersistence = new AtomicBoolean(false);
     private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
             new AtomicReference<>(List.of());
+    private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+
+    private GridBase currentGrid;
+    private EventHandler<GridChange> gridChangeHandler;
 
     @FXML
     private void initialize() {
@@ -95,18 +116,28 @@ public final class PlanInputTabController {
         colWidthField.setText("112");
         hintLabel.setText(HINT_TEXT);
 
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.setEditable(true);
-        table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
+        spreadsheetHost.getChildren().add(spreadsheetView);
+        VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
+
         rows = FXCollections.observableArrayList();
-        table.setItems(rows);
+        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        SpreadsheetThemeBridge.install(spreadsheetView);
     }
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
         ownerStage = shell.getPrimaryStage();
 
-        columnStripHost.getChildren().setAll(TableViewColumnSettingsStrip.create(table, this::applyDynamicColumnWidths, false));
+        columnStripHost
+                .getChildren()
+                .setAll(
+                        SpreadsheetColumnSettingsStrip.create(
+                                this::applyDynamicColumnWidths,
+                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                headerColumnCount,
+                                this::onLeadingColumnCountCommitted,
+                                this::onReorderColumns));
 
         shell.acceptReloadAfterStage1PlanInput(
                 () -> {
@@ -118,10 +149,11 @@ public final class PlanInputTabController {
                     loadFromCurrentPath();
                 });
 
-        TableColumnOrderPersistence.installColumnLayoutWatcher(
-                table,
+        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
+                spreadsheetView,
                 TableColumnOrderPersistence.TableId.PLAN_INPUT,
-                suppressColumnOrderPersistence::get);
+                suppressColumnOrderPersistence::get,
+                () -> new ArrayList<>(headersRef));
 
         javafx.application.Platform.runLater(
                 () -> {
@@ -130,6 +162,48 @@ public final class PlanInputTabController {
                         loadFromCurrentPath();
                     }
                 });
+    }
+
+    private void onLeadingColumnCountCommitted(int n) {
+        headerColumnCount.set(n);
+        rebuildSpreadsheet();
+    }
+
+    private void onReorderColumns() {
+        if (headersRef.isEmpty()) {
+            shell.appendLog("[plan-input] \u5217\u304c\u3042\u308a\u307e\u305b\u3093\uff08\u5148\u306b\u8aad\u307f\u8fbc\u307f\uff09");
+            return;
+        }
+        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+                .ifPresent(
+                        perm -> {
+                            List<String> oldHeaders = new ArrayList<>(headersRef);
+                            List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
+                            List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
+                            TableColumnOrderPersistence.applyLogicalColumnOrder(
+                                    headersRef, rows, titleOrder);
+                            double colW = 112;
+                            try {
+                                colW =
+                                        Math.max(
+                                                40,
+                                                Double.parseDouble(colWidthField.getText().trim()));
+                            } catch (NumberFormatException ignored) {
+                            }
+                            List<Double> widths =
+                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
+                                            headersRef, lay, colW);
+                            List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
+                            for (int i = 0; i < headersRef.size(); i++) {
+                                newLay.add(
+                                        new TableColumnOrderPersistence.ColumnSpec(
+                                                headersRef.get(i), widths.get(i)));
+                            }
+                            persistedLayout.set(newLay);
+                            TableColumnOrderPersistence.saveLayout(
+                                    TableColumnOrderPersistence.TableId.PLAN_INPUT, newLay);
+                            rebuildSpreadsheet();
+                        });
     }
 
     @FXML
@@ -194,16 +268,31 @@ public final class PlanInputTabController {
             r.add("");
         }
         rows.add(r);
+        rebuildSpreadsheet();
     }
 
     @FXML
     private void onRemoveRowsButtonAction() {
-        var sel = table.getSelectionModel().getSelectedItems();
-        if (sel.isEmpty()) {
+        var cells = spreadsheetView.getSelectionModel().getSelectedCells();
+        if (cells.isEmpty()) {
             return;
         }
-        rows.removeAll(sel);
-        shell.appendLog("[plan-input] removed " + sel.size() + " row(s)");
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        List<Integer> sorted =
+                cells.stream()
+                        .map(TablePosition::getRow)
+                        .filter(gr -> gr >= firstData)
+                        .map(gr -> gr - firstData)
+                        .distinct()
+                        .sorted(Comparator.reverseOrder())
+                        .collect(Collectors.toList());
+        for (int r : sorted) {
+            if (r >= 0 && r < rows.size()) {
+                rows.remove(r);
+            }
+        }
+        shell.appendLog("[plan-input] removed " + sorted.size() + " row(s)");
+        rebuildSpreadsheet();
     }
 
     private void applyDynamicColumnWidths() {
@@ -212,66 +301,62 @@ public final class PlanInputTabController {
             w = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
         } catch (NumberFormatException ignored) {
         }
-        for (TableColumn<ObservableList<String>, ?> c : table.getColumns()) {
+        for (var c : spreadsheetView.getColumns()) {
             c.setPrefWidth(w);
         }
     }
 
-    private void rebuildColumns() {
+    private void rebuildSpreadsheet() {
+        if (headersRef.isEmpty()) {
+            detachGridHandler();
+            GridBase empty = new GridBase(0, 0);
+            spreadsheetView.setGrid(empty);
+            currentGrid = empty;
+            return;
+        }
         suppressColumnOrderPersistence.set(true);
         try {
+            detachGridHandler();
             double colW = 112;
             try {
                 colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
             } catch (NumberFormatException ignored) {
             }
-            List<Double> widths =
+            final List<Double> widths =
                     TableColumnOrderPersistence.resolveWidthsForHeaders(
                             headersRef, persistedLayout.get(), colW);
-            table.getColumns().clear();
-            for (int i = 0; i < headersRef.size(); i++) {
-                final int idx = i;
-                double prefW = i < widths.size() ? widths.get(i) : colW;
-                String title =
-                        !headersRef.get(i).isBlank()
-                                ? headersRef.get(i)
-                                : ("\u5217" + (i + 1));
-                TableColumn<ObservableList<String>, String> col = new TableColumn<>(title);
-                col.setCellValueFactory(
-                        cd -> {
-                            ObservableList<String> row = cd.getValue();
-                            String v =
-                                    row != null && idx < row.size()
-                                            ? row.get(idx)
-                                            : "";
-                            return new javafx.beans.property.SimpleStringProperty(v);
-                        });
-                col.setCellFactory(TabularCellHighlight.planInputUnprocessedHighlightCellFactory(title));
-                col.setOnEditCommit(
-                        ev -> {
-                            ObservableList<String> row = ev.getRowValue();
-                            if (row == null) {
-                                return;
-                            }
-                            while (row.size() <= idx) {
-                                row.add("");
-                            }
-                            row.set(
-                                    idx,
-                                    ev.getNewValue() != null ? ev.getNewValue() : "");
-                            table.refresh();
-                        });
-                col.setPrefWidth(prefW);
-                table.getColumns().add(col);
-            }
+            final double widthDefault = colW;
+
+            GridBase grid = SpreadsheetTabularSupport.buildPlanInputGrid(headersRef, rows, true);
+            gridChangeHandler =
+                    SpreadsheetTabularSupport.newRowsSyncHandler(
+                            rows, headersRef, SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex());
+            grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
+            currentGrid = grid;
+            spreadsheetView.setGrid(grid);
+
+            javafx.application.Platform.runLater(
+                    () -> {
+                        SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
+                        SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                spreadsheetView, headerColumnCount.get());
+                        SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                    });
         } finally {
             suppressColumnOrderPersistence.set(false);
         }
     }
 
+    private void detachGridHandler() {
+        if (currentGrid != null && gridChangeHandler != null) {
+            currentGrid.removeEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
+        }
+        gridChangeHandler = null;
+        currentGrid = null;
+    }
+
     private void applyLoaded() {
-        rebuildColumns();
-        table.refresh();
+        rebuildSpreadsheet();
     }
 
     private void syncFromEnv() {
@@ -282,7 +367,7 @@ public final class PlanInputTabController {
                 pathField.setText(p);
             }
             String sh = trim(env.get(ENV_TASK_PLAN_SHEET));
-            if (!sh.isEmpty()) {
+            if (!sh.isEmpty() && sheetField.getText().isBlank()) {
                 sheetField.setText(sh);
             }
         }
@@ -335,5 +420,26 @@ public final class PlanInputTabController {
 
     private static String trim(String s) {
         return s != null ? s.trim() : "";
+    }
+
+    String snapshotPlanInputPath() {
+        return pathField.getText() != null ? pathField.getText().trim() : "";
+    }
+
+    String snapshotPlanInputSheet() {
+        return sheetField.getText() != null ? sheetField.getText().trim() : "";
+    }
+
+    void restoreDesktopSessionPaths(String path, String sheet) {
+        if (path != null && !path.isBlank()) {
+            pathField.setText(path.trim());
+        }
+        if (sheet != null && !sheet.isBlank()) {
+            sheetField.setText(sheet.trim());
+        }
+    }
+
+    void clearColumnFiltersAndSort() {
+        SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
     }
 }
