@@ -47,6 +47,8 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "windowX", Double.NaN),
                     optionalDouble(root, "windowY", Double.NaN),
                     text(root, "uiTheme"),
+                    text(root, "logFontFamily"),
+                    optionalDouble(root, "logFontSize", 0d),
                     loadUiEnvRows(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -66,6 +68,8 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunPythonExe", state.mainRunPythonExe());
             put(root, "mainRunScriptDir", state.mainRunScriptDir());
             put(root, "uiTheme", state.uiTheme());
+            put(root, "logFontFamily", state.logFontFamily());
+            putLogFontSize(root, state.logFontSize());
             putUiEnvRows(root, state.uiEnvRows());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
@@ -92,6 +96,12 @@ public final class DesktopSessionStateStore {
     private static void put(ObjectNode root, String key, String value) {
         if (value != null && !value.isBlank()) {
             root.put(key, value.trim());
+        }
+    }
+
+    private static void putLogFontSize(ObjectNode root, double sizePoints) {
+        if (Double.isFinite(sizePoints) && sizePoints > 0) {
+            root.put("logFontSize", sizePoints);
         }
     }
 

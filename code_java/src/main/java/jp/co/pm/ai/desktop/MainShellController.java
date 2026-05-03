@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.animation.PauseTransition;
@@ -49,6 +50,10 @@ public final class MainShellController {
     private static final String STAGE2 = "plan_simulation_stage2.py";
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
+
+    /** Legacy keys removed from the env tab and never passed to Python children. */
+    private static final Set<String> REMOVED_ENV_VAR_KEYS =
+            Set.of("TASK_INPUT_WORKBOOK", "PM_AI_TASK_INPUT_WORKBOOK");
 
     private static final List<String> BOOTSTRAP_ORDER =
             List.of(
@@ -131,8 +136,8 @@ public final class MainShellController {
         mainRunTabController
                 .getWorkbookField()
                 .setPromptText(
-                        "\u4efb\u610f \u2014 \u7a7a\u3067\u3088\u3044\uff08\u6bb5\u968e1\u306f PM_AI_PROCESSING_PLAN_PATH \u306a\u3069\u3067\u53ef\uff09\u3002"
-                                + " \u6307\u5b9a\u6642\u306f ProcessBuilder \u304c TASK_INPUT_WORKBOOK \u3092\u4ed8\u4e0e");
+                        "\u4efb\u610f\u3002\u7a7a\u3067\u3088\u3044\uff08\u6bb5\u968e1/2\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306e PM_AI_* \u304c\u672c\u7dda\uff09\u3002"
+                                + "\u30de\u30b9\u30bf\u8aad\u8fbc\u30b5\u30de\u30ea\u7b49\u306eUI\u63a8\u5b9a\u7528\u3002");
         mainRunTabController
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
@@ -258,6 +263,7 @@ public final class MainShellController {
         if (nonBlank(s.mainRunScriptDir())) {
             mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
         }
+        mainRunTabController.applyLogFontFromSession(s.logFontFamily(), s.logFontSize());
         applyWindowGeometry(s);
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
@@ -315,6 +321,8 @@ public final class MainShellController {
                 themeCombo != null && themeCombo.getValue() != null
                         ? themeCombo.getValue().storedId()
                         : DesktopTheme.LIGHT.storedId(),
+                mainRunTabController.snapshotLogFontFamily(),
+                mainRunTabController.snapshotLogFontSize(),
                 snapshotUiEnvRows());
     }
 
@@ -324,9 +332,13 @@ public final class MainShellController {
         }
         List<UiEnvRowSnapshot> out = new ArrayList<>(envRows.size());
         for (EnvVarRow r : envRows) {
+            String key = nz(r.getName());
+            if (REMOVED_ENV_VAR_KEYS.contains(key)) {
+                continue;
+            }
             out.add(
                     new UiEnvRowSnapshot(
-                            nz(r.getName()),
+                            key,
                             r.getValue() != null ? r.getValue() : "",
                             r.getDescription() != null ? r.getDescription() : ""));
         }
@@ -339,6 +351,10 @@ public final class MainShellController {
         }
         List<EnvVarRow> restored = new ArrayList<>(s.uiEnvRows().size());
         for (UiEnvRowSnapshot snap : s.uiEnvRows()) {
+            String nm = snap.name() != null ? snap.name().trim() : "";
+            if (REMOVED_ENV_VAR_KEYS.contains(nm)) {
+                continue;
+            }
             EnvVarRow row = new EnvVarRow();
             String name = snap.name() != null ? snap.name() : "";
             row.setName(name);
@@ -351,6 +367,14 @@ public final class MainShellController {
             restored.add(row);
         }
         envRows.setAll(restored);
+        stripRemovedEnvVarRows(envRows);
+    }
+
+    /** Debounced session flush when run-tab log font changes. */
+    void scheduleDesktopSessionSave() {
+        if (!suppressEnvSessionPersistence.get()) {
+            uiEnvSaveDebounce.playFromStart();
+        }
     }
 
     private void installUiEnvAutoSave() {
@@ -431,13 +455,20 @@ public final class MainShellController {
             return;
         }
         try {
-            Path p = AppPaths.stage1ExcludeRulesJsonPath(collectUiEnv());
+            Map<String, String> ui = collectUiEnv();
+            Path p = AppPaths.stage1ExcludeRulesJsonPath(ui);
+            if (!Files.isRegularFile(p)) {
+                Path legacy = AppPaths.stage1ExcludeRulesJsonPathLegacyUnderPython(ui);
+                if (Files.isRegularFile(legacy)) {
+                    p = legacy;
+                }
+            }
             if (!Files.isRegularFile(p)) {
                 appendLog(
                         "[env] PM_AI_EXCLUDE_RULES_JSON: "
                                 + p
                                 + " \u304c\u7121\u3044\u305f\u3081\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306f\u672a\u66f4\u65b0"
-                                + "\uff08TASK_INPUT_WORKBOOK \u7121\u3057\u306a\u3069\u3067 JSON \u5316\u3055\u308c\u306a\u3044\u5834\u5408\uff09\u3002");
+                                + "\uff08\u914d\u53f0\u4e0d\u8981 JSON \u672a\u751f\u6210\u307e\u305f\u306f cwd/json \u3068\u4e00\u81f4\u3057\u306a\u3044\uff09\u3002");
                 return;
             }
             String pathStr = p.toString();
@@ -542,7 +573,7 @@ public final class MainShellController {
         return switch (code) {
             case 0 -> "(success)";
             case 1 -> "(general failure)";
-            case 2 -> "(fatal / missing TASK_INPUT / file)";
+            case 2 -> "(fatal / missing master or processing-plan file)";
             case 3 -> "(PlanningValidationError)";
             case 9 -> "(user cancel)";
             default -> "";
@@ -550,8 +581,10 @@ public final class MainShellController {
     }
 
     /**
-     * Main macro-book field, else {@link AppPaths#resolveTaskInputWorkbook(Map)} (workspace / repo .xlsm).
-     * Python still receives {@code TASK_INPUT_WORKBOOK} only via {@link PythonProcessRunner}, not the env tab.
+     * Optional macro-book path from the main-run tab (sheet probe, master path resolution in Java UI).
+     * Stage 1/2 child processes do not receive legacy {@link #REMOVED_ENV_VAR_KEYS}; use
+     * {@code PM_AI_PLAN_INPUT_PATH} and related keys from the env tab. {@link PythonProcessRunner} ignores the
+     * workbook component of {@link PythonProcessRunner.RunRequest} for environment injection.
      */
     private String effectiveTaskInputWorkbookPath() {
         String t =
@@ -564,7 +597,7 @@ public final class MainShellController {
         return AppPaths.resolveTaskInputWorkbook(collectUiEnv()).map(Path::toString).orElse("");
     }
 
-    /** Macro-book path for Python ({@code TASK_INPUT_WORKBOOK}); exposed for master summary tab. */
+    /** Same as {@link #effectiveTaskInputWorkbookPath()} for Java UI helpers (e.g. master workbook open); not Python env. */
     String effectiveTaskInputWorkbookPathForShell() {
         return effectiveTaskInputWorkbookPath();
     }
@@ -608,13 +641,12 @@ public final class MainShellController {
         return new RunRequest(py, dir, "pm_ai_actuals_status.py", wb, childEnvForPython(uiRun));
     }
 
-    /**
-     * Env tab keys passed to Python; omits VBA-era workbook keys (launcher sets {@code TASK_INPUT_WORKBOOK}).
-     */
+    /** Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}). */
     private static Map<String, String> childEnvForPython(Map<String, String> ui) {
         Map<String, String> m = new HashMap<>(ui);
-        m.remove("TASK_INPUT_WORKBOOK");
-        m.remove("PM_AI_TASK_INPUT_WORKBOOK");
+        for (String k : REMOVED_ENV_VAR_KEYS) {
+            m.remove(k);
+        }
         String skip = m.get(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET);
         if (skip == null || skip.isBlank()) {
             m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
@@ -632,7 +664,7 @@ public final class MainShellController {
         }
         for (EnvVarRow row : envRows) {
             String k = row.getName() != null ? row.getName().trim() : "";
-            if (k.isEmpty() || k.startsWith("#")) {
+            if (k.isEmpty() || k.startsWith("#") || REMOVED_ENV_VAR_KEYS.contains(k)) {
                 continue;
             }
             m.put(k, row.getValue() != null ? row.getValue() : "");
@@ -707,9 +739,21 @@ public final class MainShellController {
         }
         ordered.putAll(sheet);
         rows.setAll(new ArrayList<>(ordered.values()));
+        stripRemovedEnvVarRows(rows);
         if (rows.isEmpty()) {
             rows.add(new EnvVarRow());
         }
+    }
+
+    private static void stripRemovedEnvVarRows(ObservableList<EnvVarRow> rows) {
+        if (rows == null) {
+            return;
+        }
+        rows.removeIf(
+                r -> {
+                    String n = r.getName() != null ? r.getName().trim() : "";
+                    return REMOVED_ENV_VAR_KEYS.contains(n);
+                });
     }
 
     private static void maybeFillEmptyBootstrap(EnvVarRow r, String k, Map<String, String> ui) {

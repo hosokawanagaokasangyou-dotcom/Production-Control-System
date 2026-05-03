@@ -18,6 +18,8 @@ import java.util.List;
  * @param windowX last window X ({@link Double#NaN} if unknown / keep toolkit placement)
  * @param windowY last window Y ({@link Double#NaN} if unknown)
  * @param uiTheme persisted UI theme id ({@link DesktopTheme#storedId()}, empty defaults to light)
+ * @param logFontFamily run-tab log font family name; empty means default family
+ * @param logFontSize run-tab log size in points; {@code 0} means default size
  * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
  */
 public record DesktopSessionState(
@@ -34,10 +36,27 @@ public record DesktopSessionState(
         double windowX,
         double windowY,
         String uiTheme,
+        String logFontFamily,
+        double logFontSize,
         List<UiEnvRowSnapshot> uiEnvRows) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
-                "", "", "", "", "", "", "", "", 0d, 0d, Double.NaN, Double.NaN, "", List.of());
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                0d,
+                0d,
+                Double.NaN,
+                Double.NaN,
+                "",
+                "",
+                0d,
+                List.of());
     }
 }
