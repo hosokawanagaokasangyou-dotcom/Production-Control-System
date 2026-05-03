@@ -46,7 +46,7 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
 /**
- * Main window controller????]???? {@link PmAiFxApp} ????????????????W???N????????????
+ * Main window controller\uff08\u5f93\u6765\u306f {@link PmAiFxApp} \u5185\u8535\u3060\u3063\u305f\u696d\u52d9\u30ed\u30b8\u30c3\u30af\u3092\u5206\u96e2\uff09\u3002
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
@@ -129,6 +129,9 @@ public final class MainShellController {
     private ResultDispatchTableTabController resultDispatchTableTabController;
 
     @FXML
+    private MachineCalendarTabController machineCalendarTabController;
+
+    @FXML
     private DispatchInteractiveTabController dispatchInteractiveTabController;
 
     @FXML
@@ -160,6 +163,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabResultDispatch;
+
+    @FXML
+    private Tab mainShellTabMachineCalendarJson;
 
     @FXML
     private Tab mainShellTabDispatchInteractive;
@@ -211,8 +217,8 @@ public final class MainShellController {
         mainRunTabController
                 .getWorkbookField()
                 .setPromptText(
-                        "?C??B????????????X???[?W1/2???s????A????????????????u????g?X?g?????v??^?X?N????u???N??p?X???????????"
-                                + " PM_AI_* ?????^?p???????i????X?^??????p?X??????????q???g?j??");
+                        "\u4efb\u610f\u3002\u7a7a\u6b04\u306e\u3068\u304d\u306f\u6bb5\u968e1/2\u5b9f\u884c\u6642\u306b\u3001\u74b0\u5883\u5909\u6570\u3068\u65e2\u5b9a\u306e\u30d6\u30fc\u30c8\u30b9\u30c8\u30e9\u30c3\u30d7\u3067\u30bf\u30b9\u30af\u5165\u529b\u30d6\u30c3\u30af\u306e\u30d1\u30b9\u304c\u6c7a\u307e\u308a\u307e\u3059\u3002"
+                                + " PM_AI_* \u304c\u901a\u5e38\u904b\u7528\u306e\u8ef8\u3067\u3059\uff08\u30de\u30b9\u30bf\u8aad\u8fbc\u3084\u30d1\u30b9\u6307\u5b9a\u306e\u88dc\u52a9\u30d2\u30f3\u30c8\uff09\u3002");
         mainRunTabController
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
@@ -221,7 +227,7 @@ public final class MainShellController {
                 .setText(firstNonBlank(ui0.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
         mainRunTabController
                 .getPythonExeField()
-                .setPromptText("Python executable (?????????????? PM_AI_PYTHON)");
+                .setPromptText("Python executable (\u672a\u8a2d\u5b9a\u6642\u306f\u74b0\u5883\u5909\u6570 PM_AI_PYTHON)");
         mainRunTabController
                 .getScriptDirField()
                 .setText(
@@ -230,13 +236,14 @@ public final class MainShellController {
                                 AppPaths.resolvePythonScriptDir(ui0).toString()));
         mainRunTabController
                 .getScriptDirField()
-                .setPromptText("code/python (?????????????? PM_AI_CODE_PYTHON_DIR)");
+                .setPromptText("code/python (\u672a\u8a2d\u5b9a\u6642\u306f\u74b0\u5883\u5909\u6570 PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
         stage1PreviewTabController.bindShell(this);
         excludeRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
+        machineCalendarTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
 
         primaryStage.setMinWidth(640);
@@ -485,6 +492,9 @@ public final class MainShellController {
         if (t == mainShellTabResultDispatch) {
             return MainShellTabId.RESULT_DISPATCH;
         }
+        if (t == mainShellTabMachineCalendarJson) {
+            return MainShellTabId.MACHINE_CALENDAR_JSON;
+        }
         if (t == mainShellTabDispatchInteractive) {
             return MainShellTabId.DISPATCH_INTERACTIVE;
         }
@@ -510,6 +520,7 @@ public final class MainShellController {
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
+            case MACHINE_CALENDAR_JSON -> mainShellTabMachineCalendarJson;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
@@ -731,12 +742,12 @@ public final class MainShellController {
     void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         alert.initOwner(primaryStage);
-        alert.setTitle("???????????????l?????");
+        alert.setTitle("\u74b0\u5883\u5909\u6570\u3092\u521d\u671f\u5024\u306b\u623b\u3059");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json ?????s?????????"
-                        + "??????????????A?Z???V?????????????????e?^?u????l???Python ?p?X???j???????????"
-                        + "???s??????????");
+                "ui_ref_env_defaults.json \u306e\u65e2\u5b9a\u884c\u306b\u623b\u3057\u307e\u3059\u3002"
+                        + "\u672a\u4fdd\u5b58\u306e\u7de8\u96c6\u3068\u3001\u30bb\u30c3\u30b7\u30e7\u30f3\u306b\u4fdd\u5b58\u3057\u3066\u3044\u305f\u5404\u30bf\u30d6\u306e\u5024\uff08Python \u30d1\u30b9\u7b49\uff09\u3082\u5931\u308f\u308c\u307e\u3059\u3002"
+                        + "\u7d9a\u884c\u3057\u307e\u3059\u304b\uff1f");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
@@ -810,8 +821,8 @@ public final class MainShellController {
                 appendLog(
                         "[env] PM_AI_EXCLUDE_RULES_JSON: "
                                 + p
-                                + " ??????????A????????^?u????l????X?V????????"
-                                + " ?X???[?W1????????O???[?? JSON ????????????Acwd/json ???????v?????????m?F?????????????");
+                                + " \u304c\u7121\u3044\u305f\u3081\u3001\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306e\u5024\u306f\u672a\u66f4\u65b0\u306e\u307e\u307e\u3067\u3059\u3002"
+                                + " \u6bb5\u968e1\u304c\u914d\u53f0\u9664\u5916\u30eb\u30fc\u30eb JSON \u3092\u751f\u6210\u3057\u3066\u3044\u308b\u304b\u3001cwd/json \u306e\u5834\u6240\u304c\u4e00\u81f4\u3057\u3066\u3044\u308b\u304b\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
                 return;
             }
             String pathStr = p.toString();
@@ -824,9 +835,9 @@ public final class MainShellController {
                 }
             }
             appendLog(
-                    "[env] PM_AI_EXCLUDE_RULES_JSON ?s??????????????????X?V????????");
+                    "[env] PM_AI_EXCLUDE_RULES_JSON \u884c\u304c\u898b\u3064\u304b\u3089\u306a\u3044\u305f\u3081\u672a\u66f4\u65b0\u306e\u307e\u307e\u3067\u3059\u3002");
         } catch (Exception ex) {
-            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON ?X?V?????: " + ex.getMessage());
+            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON \u66f4\u65b0\u306b\u5931\u6557: " + ex.getMessage());
         }
     }
 
@@ -862,7 +873,7 @@ public final class MainShellController {
         String wb = effectiveTaskInputWorkbookPath();
         appendLog("--- start: " + script + " ---");
         RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
-        mainRunTabController.getStatusLabel().setText("???s???c");
+        mainRunTabController.getStatusLabel().setText("\u5b9f\u884c\u4e2d\u2026");
 
         PythonProcessRunner.runAsync(
                         req,
@@ -900,14 +911,14 @@ public final class MainShellController {
                                                     reloadAfterStage1PlanInput.run();
                                                 }
                                                 showStageCompletionDialog(
-                                                        "?i?K1 ????",
-                                                        "?i?K1??????I??????????B");
+                                                        "\u6bb5\u968e1 \u5b8c\u4e86",
+                                                        "\u6bb5\u968e1 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u7d42\u4e86\u3057\u307e\u3057\u305f\u3002");
                                             }
                                             if (STAGE2.equals(script) && c == 0) {
                                                 refreshStage2OutputArtifacts();
                                                 showStageCompletionDialog(
-                                                        "?i?K2 ????",
-                                                        "?i?K2??????I??????????B");
+                                                        "\u6bb5\u968e2 \u5b8c\u4e86",
+                                                        "\u6bb5\u968e2 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u7d42\u4e86\u3057\u307e\u3057\u305f\u3002");
                                             }
                                         }
                                     });
@@ -915,8 +926,8 @@ public final class MainShellController {
     }
 
     /**
-     * 段階1実行中は「環境設定」「計画入力」タブを無効化し、それらが選択中なら「実行・ログ」へ切り替える。
-     * 段階2実行中は「環境設定」「段階1プレビュー」タブを無効化し、それらが選択中なら「実行・ログ」へ切り替える。
+     * \u6bb5\u968e1\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u914d\u53f0\u8a08\u753b\u5165\u529b\u30bf\u30d6\u3092\u7121\u52b9\u5316\u3057\u3001\u6bb5\u968e2\u306b\u6e21\u3059\u524d\u63d0\u304c\u9014\u4e2d\u3067\u5d29\u308c\u308b\u64cd\u4f5c\u3092\u9632\u3050\u3002
+     * \u6bb5\u968e2\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u6bb5\u968e1\u30d7\u30ec\u30d3\u30e5\u30fc\u30bf\u30d6\u3092\u7121\u52b9\u5316\u3057\u3001\u6bb5\u968e1\u306e\u7d50\u679c\u3068\u98df\u3044\u9055\u3046\u64cd\u4f5c\u3092\u9632\u3050\u3002
      */
     private void applyRunTabGating() {
         if (tabPane == null) {
@@ -957,7 +968,7 @@ public final class MainShellController {
     private static String exitCodeLegend(int code) {
         return "exit="
                 + code
-                + " ???0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel???";
+                + " \uff080=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel\uff09";
     }
 
     private static String exitHint(int code) {
@@ -1035,7 +1046,7 @@ public final class MainShellController {
     /**
      * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
-     * the ?z??v??_?^?X?N???? tab are applied so that stage-2 uses the
+     * the \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab are applied so that stage-2 uses the
      * file the user is editing there.
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
@@ -1076,7 +1087,7 @@ public final class MainShellController {
     }
 
     /**
-     * Child-process env from the ??????? tab (same skip rules as workbook sheet: empty name, #).
+     * Child-process env from the \u74b0\u5883\u5909\u6570 tab (same skip rules as workbook sheet: empty name, #).
      */
     private Map<String, String> collectUiEnv() {
         Map<String, String> m = new HashMap<>();
@@ -1125,6 +1136,13 @@ public final class MainShellController {
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
+    /** After {@code machine_calendar_blocks.json} is (re)written, refresh interactive dispatch block overlay. */
+    public void notifyMachineCalendarJsonUpdated() {
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.refreshCalendarFromSharedJsonFile();
+        }
+    }
+
     /** Same-package tab controllers append run-tab log lines here. */
     void appendLog(String line) {
         mainRunTabController.appendLog(line);
@@ -1162,7 +1180,7 @@ public final class MainShellController {
                 mainRunTabController.setStage2ArtifactPaths("", "");
                 appendLog(
                         "[stage2-ui] "
-                                + "?o??t?H???_??????????: "
+                                + "\u51fa\u529b\u30d5\u30a9\u30eb\u30c0\u304c\u3042\u308a\u307e\u305b\u3093: "
                                 + dir);
                 return;
             }
@@ -1182,7 +1200,7 @@ public final class MainShellController {
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
-                                + "??V?????: production_plan="
+                                + "\u6700\u65b0\u6210\u679c\u7269: production_plan="
                                 + planStr
                                 + " | member_schedule="
                                 + memStr);
@@ -1190,7 +1208,7 @@ public final class MainShellController {
         } catch (Exception ex) {
             appendLog(
                     "[stage2-ui] "
-                            + "????p?X?X?V?G???[: "
+                            + "\u6210\u679c\u30d1\u30b9\u66f4\u65b0\u30a8\u30e9\u30fc: "
                             + ex.getMessage());
         }
     }

@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Read / write {@code ????_?z??\.json} compatible with {@link jp.co.pm.ai.desktop.ResultDispatchTableTabController}.
+ * Read / write {@code \u7d50\u679c_\u914d\u53f0\u8868.json} compatible with {@link jp.co.pm.ai.desktop.ResultDispatchTableTabController}.
  */
 public final class ResultDispatchJsonIo {
 
