@@ -16,11 +16,11 @@
   }, {
     "key" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
     "value" : "",
-    "description" : "列設定_結果_タスク一覧 を含むブック（TASK_INPUT_WORKBOOK と別ファイルのとき）。空なら TASK_INPUT_WORKBOOK を参照。"
+    "description" : "列設定_結果_タスク一覧 を含むブック。PM_AI_PLAN_INPUT_PATH と別ファイルのときに指定。空なら input_resolution の既定探索。"
   }, {
     "key" : "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK",
     "value" : "",
-    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら TASK_INPUT_WORKBOOK）。"
+    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら planning_core の input_resolution が PM_AI_PLAN_INPUT_PATH 等から解決）。"
   }, {
     "key" : "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV",
     "value" : "",
@@ -257,21 +257,6 @@
     "key" : "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS",
     "value" : "5",
     "description" : "終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時"
-  }, {
-    "key" : "DEBUG_TASK_ID",
-    "value" : "",
-    "description" : "デバッグ用依頼NO"
-  }, {
-    "key" : "TRACE_TEAM_ASSIGN_TASK_ID",
-    "value" : "",
-    "description" : "チーム割付トレース対象"
-  }, {
-    "key" : "EXCLUDE_RULES_TEST_E1234",
-    "value" : "",
-    "description" : "テスト用（通常空）"
-  }, {
-    "key" : "EXCLUDE_RULES_TEST_E1234_ROW",
-    "value" : "9"
   }, {
     "key" : "GEMINI_API_KEY",
     "value" : "",

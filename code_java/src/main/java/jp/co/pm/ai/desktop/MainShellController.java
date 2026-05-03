@@ -56,6 +56,17 @@ public final class MainShellController {
     private static final Set<String> REMOVED_ENV_VAR_KEYS =
             Set.of("TASK_INPUT_WORKBOOK", "PM_AI_TASK_INPUT_WORKBOOK");
 
+    /**
+     * Dropped from the env tab (defaults and session); not used in normal operation. Python still accepts
+     * these if set in the real OS environment.
+     */
+    private static final Set<String> DROPPED_ENV_TAB_ROW_KEYS =
+            Set.of(
+                    "DEBUG_TASK_ID",
+                    "TRACE_TEAM_ASSIGN_TASK_ID",
+                    "EXCLUDE_RULES_TEST_E1234",
+                    "EXCLUDE_RULES_TEST_E1234_ROW");
+
     private static final List<String> BOOTSTRAP_ORDER =
             List.of(
                     AppPaths.KEY_PM_AI_PYTHON,
@@ -366,6 +377,11 @@ public final class MainShellController {
                 snapshotUiEnvRows());
     }
 
+    private static boolean omitEnvRowKey(String name) {
+        String k = name != null ? name.trim() : "";
+        return REMOVED_ENV_VAR_KEYS.contains(k) || DROPPED_ENV_TAB_ROW_KEYS.contains(k);
+    }
+
     private List<UiEnvRowSnapshot> snapshotUiEnvRows() {
         if (envRows == null) {
             return List.of();
@@ -373,7 +389,7 @@ public final class MainShellController {
         List<UiEnvRowSnapshot> out = new ArrayList<>(envRows.size());
         for (EnvVarRow r : envRows) {
             String key = nz(r.getName());
-            if (REMOVED_ENV_VAR_KEYS.contains(key)) {
+            if (omitEnvRowKey(key)) {
                 continue;
             }
             out.add(
@@ -392,7 +408,7 @@ public final class MainShellController {
         List<EnvVarRow> restored = new ArrayList<>(s.uiEnvRows().size());
         for (UiEnvRowSnapshot snap : s.uiEnvRows()) {
             String nm = snap.name() != null ? snap.name().trim() : "";
-            if (REMOVED_ENV_VAR_KEYS.contains(nm)) {
+            if (omitEnvRowKey(nm)) {
                 continue;
             }
             EnvVarRow row = new EnvVarRow();
@@ -726,7 +742,7 @@ public final class MainShellController {
         }
         for (EnvVarRow row : envRows) {
             String k = row.getName() != null ? row.getName().trim() : "";
-            if (k.isEmpty() || k.startsWith("#") || REMOVED_ENV_VAR_KEYS.contains(k)) {
+            if (k.isEmpty() || k.startsWith("#") || omitEnvRowKey(k)) {
                 continue;
             }
             m.put(k, row.getValue() != null ? row.getValue() : "");
@@ -900,7 +916,7 @@ public final class MainShellController {
         rows.removeIf(
                 r -> {
                     String n = r.getName() != null ? r.getName().trim() : "";
-                    return REMOVED_ENV_VAR_KEYS.contains(n);
+                    return omitEnvRowKey(n);
                 });
     }
 

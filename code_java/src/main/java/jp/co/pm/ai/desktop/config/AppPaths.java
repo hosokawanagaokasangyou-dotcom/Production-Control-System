@@ -431,13 +431,6 @@ public final class AppPaths {
         if (Files.isRegularFile(underCodePython)) {
             return underCodePython.toAbsolutePath().normalize();
         }
-        String ws = trim(u.get(KEY_PM_AI_WORKSPACE));
-        if (!ws.isEmpty()) {
-            Path w = Path.of(ws).resolve("output").resolve(STAGE1_PLAN_TASKS_FILENAME);
-            if (Files.isRegularFile(w)) {
-                return w.toAbsolutePath().normalize();
-            }
-        }
         return primary.toAbsolutePath().normalize();
     }
 
@@ -481,13 +474,6 @@ public final class AppPaths {
                 repo.resolve("code").resolve("python").resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
         if (Files.isRegularFile(underCodePython)) {
             return underCodePython.toAbsolutePath().normalize();
-        }
-        String ws = trim(u.get(KEY_PM_AI_WORKSPACE));
-        if (!ws.isEmpty()) {
-            Path w = Path.of(ws).resolve("output").resolve(STAGE1_TASK_INPUT_PREVIEW_FILENAME);
-            if (Files.isRegularFile(w)) {
-                return w.toAbsolutePath().normalize();
-            }
         }
         return primary.toAbsolutePath().normalize();
     }
