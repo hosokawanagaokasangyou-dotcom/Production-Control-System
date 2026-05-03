@@ -5391,7 +5391,6 @@ def load_planning_tasks_df():
     （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
 
     優先: PM_AI_PLAN_INPUT_PATH に CSV / Parquet / xlsx がある場合は表から読む（ブック主入力でない経路）。
-    「設定_配台不要工程」の xlwings/openpyxl 保守は、TASK_INPUT_WORKBOOK が実在ファイルのときのみ実施。
     """
     _plan_alt = (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip()
     _wb_for_maint = (
@@ -15794,9 +15793,8 @@ def run_stage1_extract():
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
 
-    ``TASK_INPUT_WORKBOOK`` が実在するときは保守後に「設定_配台不要工程」を
-    ``json`` 直下の ``stage1_exclude_rules.json`` へ書き出し、
-    環境変数 ``PM_AI_EXCLUDE_RULES_JSON`` をその絶対パスに設定する（同一プロセス内の以降の読込と整合）。
+    保守実施時は「設定_配台不要工程」を ``json`` 直下の ``stage1_exclude_rules.json`` へ書き出し、
+    環境変数 ``PM_AI_EXCLUDE_RULES_JSON`` をその絶対パスに設定する（同一プロセス内）。
 
     **TASK_INPUT_WORKBOOK** は、``PM_AI_PROCESSING_PLAN_PATH``（または
     ``PM_AI_TASK_INPUT_SOURCE_DIR`` から解決した表ファイル）が実在するときは省略可。

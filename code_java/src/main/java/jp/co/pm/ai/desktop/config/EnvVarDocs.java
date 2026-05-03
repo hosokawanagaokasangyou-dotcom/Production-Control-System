@@ -181,8 +181,7 @@ public final class EnvVarDocs {
                         + " OS \u74b0\u5883\u5909\u6570\u3078\u306f\u66f8\u304d\u8fbc\u307e\u306a\u3044\u904b\u7528\u3092\u524d\u63d0\u3002");
         put(
                 "PM_AI_EXCLUDE_RULES_JSON",
-                "\u6bb5\u968e1\uff08run_stage1_extract\uff09\u3067 TASK_INPUT_WORKBOOK \u3042\u308a\u6642\u306f"
-                        + " \u300c\u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b\u300d\u4fdd\u5b88\u5f8c\u306b"
+                "\u6bb5\u968e1\uff08run_stage1_extract\uff09\u3067\u300c\u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b\u300d\u4fdd\u5b88\u5f8c\u306b"
                         + " json/stage1_exclude_rules.json \u3078\u66f8\u304d\u51fa\u3057\u3001\u672c\u5909\u6570\u3092"
                         + " \u305d\u306e\u7d76\u5bfe\u30d1\u30b9\u306b\u81ea\u52d5\u8a2d\u5b9a\uff08\u5b50\u30d7\u30ed\u30bb\u30b9\u5185\uff09\u3002"
                         + " \u624b\u52d5\u3067\u3082 UTF-8 JSON\uff08list \u307e\u305f\u306f {\"rules\":[...]}\u3001"
