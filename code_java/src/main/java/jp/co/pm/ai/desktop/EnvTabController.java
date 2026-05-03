@@ -68,24 +68,26 @@ public final class EnvTabController {
         addRowButton.setText("\u884c\u3092\u8ffd\u52a0");
         delRowButton.setText("\u884c\u3092\u524a\u9664");
         wireTable();
-        addRowButton.setOnAction(
-                e -> {
-                    EnvVarRow r = new EnvVarRow();
-                    r.setDescription("");
-                    envRows.add(r);
-                });
-        delRowButton.setOnAction(
-                e -> {
-                    var sel = envTable.getSelectionModel().getSelectedItems();
-                    if (!sel.isEmpty()) {
-                        envRows.removeAll(sel);
-                    } else if (!envRows.isEmpty()) {
-                        envRows.remove(envRows.size() - 1);
-                    }
-                    if (envRows.isEmpty()) {
-                        envRows.add(new EnvVarRow());
-                    }
-                });
+    }
+
+    @FXML
+    private void onAddRowButtonAction() {
+        EnvVarRow r = new EnvVarRow();
+        r.setDescription("");
+        envRows.add(r);
+    }
+
+    @FXML
+    private void onDelRowButtonAction() {
+        var sel = envTable.getSelectionModel().getSelectedItems();
+        if (!sel.isEmpty()) {
+            envRows.removeAll(sel);
+        } else if (!envRows.isEmpty()) {
+            envRows.remove(envRows.size() - 1);
+        }
+        if (envRows.isEmpty()) {
+            envRows.add(new EnvVarRow());
+        }
     }
 
     private void wireTable() {

@@ -28,9 +28,11 @@
                     <TextField fx:id="workbookField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
                     <HBox spacing="4.0" GridPane.columnIndex="2" GridPane.rowIndex="0">
                         <Button fx:id="browseWbButton" mnemonicParsing="false"
-                                text="&#x53c2;&#x7167;&#x2026;"/>
+                                text="&#x53c2;&#x7167;&#x2026;"
+                                onAction="#onBrowseWorkbookButtonAction"/>
                         <Button fx:id="detectWbButton" mnemonicParsing="false"
-                                text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"/>
+                                text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"
+                                onAction="#onDetectWorkbookButtonAction"/>
                     </HBox>
                     <Label text="Python" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
                     <TextField fx:id="pythonExeField" GridPane.columnIndex="1" GridPane.columnSpan="2"
@@ -40,9 +42,20 @@
                     <TextField fx:id="scriptDirField" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
                     <Button fx:id="refreshDirButton" mnemonicParsing="false"
                             text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"
+                            onAction="#onRefreshScriptDirButtonAction"
                             GridPane.columnIndex="2" GridPane.rowIndex="2"/>
-                    <HBox fx:id="stageActionsBox" spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="3"/>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
+                          GridPane.rowIndex="3">
+                        <Button fx:id="stage1RunButton" mnemonicParsing="false"
+                                text="&#x6bb5;&#x968e;1 &#x5b9f;&#x884c;"
+                                onAction="#onStage1RunButtonAction"/>
+                        <Button fx:id="stage2RunButton" mnemonicParsing="false"
+                                text="&#x6bb5;&#x968e;2 &#x5b9f;&#x884c;"
+                                onAction="#onStage2RunButtonAction"/>
+                        <Button fx:id="peekSheetsButton" mnemonicParsing="false"
+                                text="&#x30b7;&#x30fc;&#x30c8;&#x4e00;&#x89a7; (POI)"
+                                onAction="#onPeekSheetsButtonAction"/>
+                    </HBox>
                 </children>
             </GridPane>
             <Label text="log (stdout+stderr merged)"/>

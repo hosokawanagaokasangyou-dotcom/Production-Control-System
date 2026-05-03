@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Text?>
+
+<!-- Column definitions are built in {@link ActualsStatusTabController} (ordered widths). -->
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.ActualsStatusTabController" fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <padding>
+            <Insets bottom="8.0"/>
+        </padding>
+        <Button fx:id="refreshButton" mnemonicParsing="false" text="&#x66f4;&#x65b0;"
+                onAction="#onRefreshButtonAction"/>
+        <Label fx:id="statusLabel"/>
+    </HBox>
+    <Label fx:id="hintLabel" wrapText="true"/>
+    <HBox fx:id="columnStripHost" spacing="0.0"/>
+    <TableView fx:id="table" minHeight="200.0" VBox.vgrow="ALWAYS"/>
+    <VBox spacing="4.0">
+        <VBox.margin>
+            <Insets top="8.0"/>
+        </VBox.margin>
+        <Label text="&#x8aac;&#x660e;"/>
+        <Text fx:id="footLong" wrappingWidth="880.0"/>
+    </VBox>
+</VBox>

@@ -5,10 +5,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.HBox;
-
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
 public final class MainRunTabController {
+
+    private MainShellController shell;
 
     @FXML
     private TextField workbookField;
@@ -35,13 +35,46 @@ public final class MainRunTabController {
     private Button refreshDirButton;
 
     @FXML
-    private HBox stageActionsBox;
+    private Button stage1RunButton;
+
+    @FXML
+    private Button stage2RunButton;
+
+    @FXML
+    private Button peekSheetsButton;
 
     void bindShell(MainShellController shell) {
-        browseWbButton.setOnAction(e -> shell.pickWorkbook());
-        detectWbButton.setOnAction(e -> workbookField.setText(shell.resolveTaskInputWorkbookFromEnv()));
-        refreshDirButton.setOnAction(e -> scriptDirField.setText(shell.resolvePythonScriptDirFromEnv()));
-        shell.attachStageButtons(stageActionsBox);
+        this.shell = shell;
+    }
+
+    @FXML
+    private void onBrowseWorkbookButtonAction() {
+        shell.pickWorkbook();
+    }
+
+    @FXML
+    private void onDetectWorkbookButtonAction() {
+        workbookField.setText(shell.resolveTaskInputWorkbookFromEnv());
+    }
+
+    @FXML
+    private void onRefreshScriptDirButtonAction() {
+        scriptDirField.setText(shell.resolvePythonScriptDirFromEnv());
+    }
+
+    @FXML
+    private void onStage1RunButtonAction() {
+        shell.triggerStage1();
+    }
+
+    @FXML
+    private void onStage2RunButtonAction() {
+        shell.triggerStage2();
+    }
+
+    @FXML
+    private void onPeekSheetsButtonAction() {
+        shell.triggerPeekSheets();
     }
 
     TextField getWorkbookField() {
