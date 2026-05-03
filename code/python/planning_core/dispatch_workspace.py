@@ -80,6 +80,21 @@ def pm_ai_workspace_dir() -> str:
     return os.path.abspath(p) if p and os.path.isdir(p) else ""
 
 
+def plan_input_workbook_path_for_excel_ops() -> str:
+    """配台計画タスク入力を置く Excel ブック（専用 UI の ``PM_AI_PLAN_INPUT_PATH``）。
+
+    実在する ``.xlsx`` / ``.xlsm`` / テンプレ拡張子のときだけ絶対パスを返す。
+    CSV / Parquet のときは空（ブック I/O 対象外）。
+    """
+    p = (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
+    if not p or not os.path.isfile(p):
+        return ""
+    low = p.lower()
+    if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        return os.path.normpath(os.path.abspath(p))
+    return ""
+
+
 def pick_newest_excel_in_dir(dir_path: str) -> str | None:
     """Newest .xlsx/.xlsm by max(mtime, atime). Skips Excel lock files (~$)."""
     best: str | None = None
@@ -186,7 +201,7 @@ def resolve_actual_detail_workbook_path(task_input_workbook: str) -> str | None:
     PM_AI_ACTUALS_DATA_WORKBOOK is unset (input_resolution.resolve_actuals_workbook_path).
 
     Single-file override, then newest workbook under ACTUAL_DETAIL_SOURCE_DIR (or default UNC),
-    then TASK_INPUT_WORKBOOK (sheet in macro book).
+    then dirname(PM_AI_PLAN_INPUT_PATH) when that path is an Excel file.
     """
     wb_explicit = (os.environ.get(ENV_ACTUAL_DETAIL_WORKBOOK) or "").strip()
     if wb_explicit and os.path.isfile(wb_explicit):
@@ -207,19 +222,29 @@ def resolve_actual_detail_workbook_path(task_input_workbook: str) -> str | None:
 def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:
     """Output folder for standalone result dispatch table xlsx (fixed filename).
 
-    Priority: PM_AI_RESULT_DISPATCH_TABLE_DIR, dirname(TASK_INPUT_WORKBOOK), PM_AI_REPO_ROOT/code.
+    Priority: PM_AI_RESULT_DISPATCH_TABLE_DIR, dirname(PM_AI_PLAN_INPUT_PATH),
+    dirname(task_input_workbook argument), PM_AI_REPO_ROOT/code.
+
+    ``plan_input_workbook_path_for_excel_ops`` が空でも、環境変数の計画タスク入力パスがあれば
+    その親フォルダ（通常 ``.../output``）へ出す（専用 UI・Power Query 用ファイルの置き場所を揃える）。
+    リポジトリ既定は ``{repo}/code/output``（フォルダが無くてもパスを返し、書き込み側が作成する）。
     """
     o = (os.environ.get(ENV_RESULT_DISPATCH_TABLE_DIR) or "").strip()
     if o and os.path.isdir(o):
         return os.path.abspath(o)
+    pip = (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
+    if pip and os.path.isfile(pip):
+        low = pip.lower()
+        if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+            return os.path.dirname(os.path.abspath(pip))
     wb = (task_input_workbook or "").strip()
     if wb and os.path.isfile(wb):
         return os.path.dirname(os.path.abspath(wb))
     repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
     if repo:
-        cand = os.path.join(os.path.abspath(repo), "code")
-        if os.path.isdir(cand):
-            return cand
+        code_root = os.path.join(os.path.abspath(repo), "code")
+        if os.path.isdir(code_root):
+            return os.path.join(code_root, "output")
     return ""
 
 
@@ -301,37 +326,6 @@ def _infer_tabular_excel_header_row_0based(path: str, sheet_name: str | int) -> 
                     path,
                     sheet_name,
                 )
-                # #region agent log
-                try:
-                    _dbg = (
-                        pathlib.Path(__file__).resolve().parents[4]
-                        / ".cursor"
-                        / "debug-e6e382.log"
-                    )
-                    _dbg.parent.mkdir(parents=True, exist_ok=True)
-                    with open(_dbg, "a", encoding="utf-8") as _df:
-                        _df.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "e6e382",
-                                    "hypothesisId": "H3",
-                                    "location": "dispatch_workspace._infer_tabular_excel_header_row_0based",
-                                    "message": "auto header row",
-                                    "timestamp": int(time.time() * 1000),
-                                    "runId": "post-fix",
-                                    "data": {
-                                        "pandas_header": i,
-                                        "excel_row": i + 1,
-                                        "path_suffix": path[-80:] if path else "",
-                                    },
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
             return i
     return 0
 

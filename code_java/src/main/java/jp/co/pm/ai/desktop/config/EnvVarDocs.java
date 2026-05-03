@@ -170,7 +170,7 @@ public final class EnvVarDocs {
                         + " \u30d5\u30a9\u30eb\u30c0\u30d1\u30b9\u540d\u3092\u5408\u308f\u305b\u308b\u5834\u5408\uff09\u3002"
                         + "\u672a\u8a2d\u5b9a\u6642\u306f\u6bb5\u968e2\u306f PM_AI_WORKSPACE \u307e\u305f\u306f"
                         + " PM_AI_PLAN_INPUT_PATH \u89aa\u968e\u5c64\u306b\u5408\u308f\u305b\u308b\u5834\u5408\u304c\u3042\u308b\u3001"
-                        + "JavaFX \u521d\u671f\u5024\u306f PM_AI_REPO_ROOT \u4e0b\u306e code\uff08\u4f8b: Production-Control-System/code/"
+                        + "JavaFX \u521d\u671f\u5024\u306f PM_AI_REPO_ROOT \u4e0b\u306e code/output\uff08\u4f8b: Production-Control-System/code/output/"
                         + "\u7d50\u679c_\u914d\u53f0\u8868.xlsx \u540c\u968e\u5c64\u306b \u7d50\u679c_\u914d\u53f0\u8868.json \u3082\u51fa\u529b\uff09\u3002");
         put(
                 "PM_AI_RESULT_DISPATCH_TABLE_JSON",

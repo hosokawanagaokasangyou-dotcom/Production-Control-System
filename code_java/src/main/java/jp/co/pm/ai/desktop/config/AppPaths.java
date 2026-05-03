@@ -233,7 +233,7 @@ public final class AppPaths {
 
     /**
      * Directory for standalone result-dispatch xlsx; optional {@code PM_AI_RESULT_DISPATCH_TABLE_DIR} in
-     * {@code ui}. Default: {@code resolveRepoRoot(ui)}/{@code code} (e.g. Production-Control-System/code).
+     * {@code ui}. Default: {@code resolveRepoRoot(ui)}/{@code code/output} (stage-2 artifacts folder).
      */
     public static Path resolveResultDispatchTableDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -241,7 +241,7 @@ public final class AppPaths {
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return resolveRepoRoot(u).resolve("code").toAbsolutePath().normalize();
+        return resolveRepoRoot(u).resolve("code").resolve("output").toAbsolutePath().normalize();
     }
 
     /** Basename of the JSON export for the result dispatch table (next to the standalone xlsx). */

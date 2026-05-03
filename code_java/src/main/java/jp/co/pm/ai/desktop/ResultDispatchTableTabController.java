@@ -48,7 +48,7 @@ public final class ResultDispatchTableTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String HINT_TEXT =
-            "PM_AI_RESULT_DISPATCH_TABLE_DIR \u307e\u305f\u306f\u30c7\u30d5\u30a9\u30eb\u30c8\u306e code/"
+            "PM_AI_RESULT_DISPATCH_TABLE_DIR \u307e\u305f\u306f\u30c7\u30d5\u30a9\u30eb\u30c8\u306e code/output/"
                     + " \u914d\u4e0b\u306e JSON \u3092\u8868\u793a\u3057\u307e\u3059\u3002\u518d\u8aad\u307f\u3067"
                     + "\u6700\u65b0\u5316\u3057\u307e\u3059\u3002"
                     + " ControlsFX SpreadsheetView \uff08\u6bb5\u968e1\u6210\u5f62\u7d50\u679c\u3068\u540c\u3058"

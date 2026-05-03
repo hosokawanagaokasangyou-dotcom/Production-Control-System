@@ -102,7 +102,11 @@ class AppPathsTest {
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.resolve("Production-Control-System").toString());
         Path expected =
-                fakeRepo.resolve("Production-Control-System").resolve("code").toAbsolutePath().normalize();
+                fakeRepo.resolve("Production-Control-System")
+                        .resolve("code")
+                        .resolve("output")
+                        .toAbsolutePath()
+                        .normalize();
         assertEquals(expected, AppPaths.resolveResultDispatchTableDir(ui));
     }
 

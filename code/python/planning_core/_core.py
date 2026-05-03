@@ -23296,14 +23296,21 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
     「結果_配台表.xlsx」を target_dir に出力する（Power Query _q結果_配台表 / フォルダパス + 固定名）。
 
     target_dir は resolve_result_dispatch_table_output_dir が決める（PM_AI_RESULT_DISPATCH_TABLE_DIR、
-    無ければマクロブック親、無ければ PM_AI_REPO_ROOT/code）。
+    無ければマクロブック親、無ければ PM_AI_REPO_ROOT/code/output）。
     - シート名: 結果_配台表
     - テーブル名: _t結果_配台表
     """
     try:
         if df_dispatch is None or getattr(df_dispatch, "empty", True):
             return None
-        if not target_dir or not os.path.isdir(target_dir):
+        if not target_dir:
+            return None
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as mk_e:
+            logging.warning("結果_配台表.xlsx: 出力先フォルダを作成できません: %s (%s)", target_dir, mk_e)
+            return None
+        if not os.path.isdir(target_dir):
             return None
         out_path = os.path.join(target_dir, "結果_配台表.xlsx")
         # 既存ファイルを上書き（開いていると失敗する）
@@ -31231,7 +31238,7 @@ def _generate_plan_impl(
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
     # ---------------------------------------------------------
-    # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code など）
+    # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code/output など）
     # ---------------------------------------------------------
     try:
         _wb_path = _excel_plan_input_wb()
