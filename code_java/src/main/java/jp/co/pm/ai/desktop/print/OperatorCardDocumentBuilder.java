@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 
 /**
- * Builds {@link OperatorCardPage} from member_schedule sheets and ????_?z??\ rows.
+ * Builds {@link OperatorCardPage} from member_schedule sheets and \u7d50\u679c_\u914d\u53f0\u8868 rows.
  */
 public final class OperatorCardDocumentBuilder {
 
