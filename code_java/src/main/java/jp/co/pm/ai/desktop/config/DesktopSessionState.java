@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * Paths and fields restored on startup from {@link DesktopSessionStateStore}.
  *
- * @param planInputPath path field on ”z‘äŒv‰æ_????????????“ü?? tab
+ * @param planInputPath path field on é…å°è¨ˆç”»_ã‚¿ã‚¹ã‚¯å…¥åŠ› tab
  * @param planInputSheet sheet name on the same tab
  * @param stage1PreviewPath Stage1 preview file path
  * @param stage1PreviewSheet Stage1 preview sheet name
@@ -28,7 +28,7 @@ import java.util.List;
  * @param mainRunStage2WriteExcel whether stage-2 writes xlsx deliverables; when false only JSON (run tab)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
- * @param uiEnvRows persisted ?????????•Ï??? tab rows (empty uses bootstrap defaults only)
+ * @param uiEnvRows persisted ç’°å¢ƒå¤‰æ•° tab rows (empty uses bootstrap defaults only)
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order
  */

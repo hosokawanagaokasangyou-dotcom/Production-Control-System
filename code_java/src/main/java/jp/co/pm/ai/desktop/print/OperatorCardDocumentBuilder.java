@@ -24,6 +24,7 @@ public final class OperatorCardDocumentBuilder {
     private static final Set<String> NON_WORK_MARKERS =
             Set.of(
                     "\u4f11",
+                    "\u4f11\u606f",
                     "\u52e4\u52d9\u5916",
                     "\u5e74\u4f11");
 

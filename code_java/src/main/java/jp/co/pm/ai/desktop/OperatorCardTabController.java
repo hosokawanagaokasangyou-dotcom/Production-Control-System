@@ -41,7 +41,7 @@ import jp.co.pm.ai.desktop.print.OperatorCardPage;
 import jp.co.pm.ai.desktop.print.OperatorCardPreviewFactory;
 
 /**
- * Operator dispatch card (A4 preview / print) tab ? layout {@code OperatorCardTab.fxml}.
+ * Operator dispatch card (A4 preview / print) tab — layout {@code OperatorCardTab.fxml}.
  */
 public final class OperatorCardTabController {
 
@@ -424,7 +424,7 @@ public final class OperatorCardTabController {
             job.endJob();
         }
         statusLabel.setText(
-                "\u5370\u5237\u5b8c\u4e86: " + operators.size() + " \u679a\u8a18\u4e8b");
+                "印刷完了: " + operators.size() + " 名分");
     }
 
     private static Path newestMatching(Path dir, String glob) throws IOException {
