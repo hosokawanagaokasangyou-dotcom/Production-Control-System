@@ -1916,7 +1916,8 @@ def _apply_stage2_production_plan_workbook_polish(
         _apply_stage2_plan_sheet_header_fill(ws, extra_header_rows=ex)
         _apply_stage2_plan_sheet_grid_border(ws)
         try:
-            ws.freeze_panes = "B2"
+            if name != RESULT_TASK_SHEET_NAME:
+                ws.freeze_panes = "B2"
         except Exception:
             pass
 
@@ -7655,6 +7656,118 @@ def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vi
     for idx, col_name in enumerate(column_names, 1):
         if not vis_map.get(col_name, True):
             worksheet.column_dimensions[get_column_letter(idx)].hidden = True
+
+
+def _result_task_sheet_column_width_for_header(header: str) -> float:
+    """結果_タスク一覧: 列見出しに応じた標準幅（Excel 文字幅の目安）。"""
+    h = str(header).strip()
+    if not h:
+        return 10.0
+    if h == "ステータス":
+        return 11.0
+    if h in (TASK_COL_TASK_ID, "タスクID", "依頼NO"):
+        return 12.0
+    if h == TASK_COL_MACHINE or h == "工程名":
+        return 14.0
+    if h == TASK_COL_MACHINE_NAME or h == "機械名":
+        return 19.0
+    if "加工速度" in h:
+        return 10.0
+    if "優先度" in h:
+        return 8.5
+    if "配台試行" in h or (h.endswith("試行") and "配台" in h):
+        return 9.0
+    if h.startswith("履歴"):
+        return 38.0
+    if "必須" in h and "OP" in h:
+        return 10.0
+    if "タスク効率" in h or "タスク効" in h:
+        return 11.0
+    if "加工途中" in h:
+        return 11.0
+    if "特別指定" in h:
+        return 11.0
+    if "担当" in h and "OP" in h:
+        return 14.0
+    if "納期" in h or "回答" in h:
+        return 12.0
+    return float(min(max(len(h) + 2.5, 9.0), 36.0))
+
+
+def _apply_result_task_sheet_layout_polish(worksheet, column_names: list):
+    """
+    結果_タスク一覧の視認性向上: 列幅、見出し折返し、履歴列の折返し、左3列の窓枠固定。
+    （着色・リッチテキスト・ハイパーリンク適用後に呼ぶこと）
+    """
+    if worksheet is None or not column_names:
+        return
+    mr = int(worksheet.max_row or 1)
+    mc = int(worksheet.max_column or 0)
+    if mc < 1:
+        return
+
+    hist_cols: list[int] = []
+    center_data_cols: set[int] = set()
+    for idx, col_name in enumerate(column_names, 1):
+        cn = str(col_name).strip()
+        if cn.startswith("履歴"):
+            hist_cols.append(idx)
+        letter = get_column_letter(idx)
+        try:
+            dim = worksheet.column_dimensions[letter]
+            if getattr(dim, "hidden", False):
+                continue
+        except Exception:
+            pass
+        w = _result_task_sheet_column_width_for_header(cn)
+        try:
+            worksheet.column_dimensions[letter].width = w
+        except Exception:
+            pass
+        if cn in (
+            "ステータス",
+            "優先度",
+            TASK_COL_TASK_ID,
+            "タスクID",
+            "依頼NO",
+            TASK_COL_MACHINE,
+            TASK_COL_MACHINE_NAME,
+        ) or "加工速度" in cn or ("必須" in cn and "OP" in cn):
+            center_data_cols.add(idx)
+        if "配台試行" in cn or (cn.endswith("試行") and "配台" in cn):
+            center_data_cols.add(idx)
+
+    hdr_align = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=True,
+    )
+    for ci in range(1, mc + 1):
+        worksheet.cell(row=1, column=ci).alignment = hdr_align
+
+    wrap_top = Alignment(wrap_text=True, vertical="top")
+    center_top = Alignment(wrap_text=False, vertical="top", horizontal="center")
+    default_top = Alignment(wrap_text=False, vertical="top")
+
+    for r in range(2, mr + 1):
+        for ci in range(1, mc + 1):
+            cell = worksheet.cell(row=r, column=ci)
+            if ci in hist_cols:
+                cell.alignment = wrap_top
+            elif ci in center_data_cols:
+                cell.alignment = center_top
+            else:
+                cell.alignment = default_top
+
+    try:
+        worksheet.row_dimensions[1].height = 32.0
+    except Exception:
+        pass
+
+    try:
+        worksheet.freeze_panes = "D2"
+    except Exception:
+        pass
 
 
 def _norm_history_member_label(name: str) -> str:
@@ -31344,6 +31457,12 @@ def _generate_plan_impl(
                     else None
                 ),
             )
+
+            if RESULT_TASK_SHEET_NAME in writer.sheets:
+                _apply_result_task_sheet_layout_polish(
+                    writer.sheets[RESULT_TASK_SHEET_NAME],
+                    list(df_tasks.columns),
+                )
 
     except OSError as e:
         logging.error(
