@@ -9181,6 +9181,9 @@ def load_machining_actual_detail_df():
     """
     「加工実績明細DATA」を読む（無ければ空 DataFrame）。
 
+    読込は calamine（python-calamine）を優先し、未導入・その他失敗時は openpyxl。スタイル定義の不整合で
+    openpyxl だけが落ちる xlsx があるため（dispatch_workspace の Excel 先読と同趣旨）。
+
     優先: PM_AI_ACTUAL_DETAIL_WORKBOOK（単一ファイル）、PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm
     （既定 UNC は plan/02 と同系）、最後に TASK_INPUT_WORKBOOK 内シート。
     シートは PM_AI_ACTUAL_DETAIL_SHEET（省略時は先頭シート index 0。単一シートなら名前不要）。
@@ -9191,42 +9194,6 @@ def load_machining_actual_detail_df():
         return pd.DataFrame()
     _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUAL_DETAIL_SHEET)
     _lbl = _excel_sheet_label_for_log(_sn, ACTUAL_DETAIL_SHEET_NAME)
-    # #region agent log
-    _dbg_path = str(
-        pathlib.Path(__file__).resolve().parents[4] / ".cursor" / "debug-cdd9f7.log"
-    )
-    try:
-        _sz = os.path.getsize(_src_wb) if os.path.isfile(_src_wb) else -1
-        _line = (
-            json.dumps(
-                {
-                    "sessionId": "cdd9f7",
-                    "hypothesisId": "H2",
-                    "location": "_core.py:load_machining_actual_detail_df",
-                    "message": "pre_read_excel",
-                    "data": {
-                        "path": _src_wb,
-                        "sheet": _sn,
-                        "exists": os.path.isfile(_src_wb),
-                        "size": _sz,
-                        "env_actual_wb": (
-                            os.environ.get("PM_AI_ACTUAL_DETAIL_WORKBOOK") or ""
-                        )[:200],
-                        "openpyxl_ver": getattr(
-                            sys.modules.get("openpyxl"), "__version__", "?"
-                        ),
-                    },
-                    "timestamp": int(time_module.time() * 1000),
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-        with open(_dbg_path, "a", encoding="utf-8") as _df:
-            _df.write(_line)
-    except Exception:
-        pass
-    # #endregion
     try:
         try:
             df = pd.read_excel(_src_wb, sheet_name=_sn, engine="calamine")
@@ -9243,55 +9210,6 @@ def load_machining_actual_detail_df():
             _lbl,
         )
         return pd.DataFrame()
-    except Exception as _ex:
-        # #region agent log
-        try:
-            _line2 = (
-                json.dumps(
-                    {
-                        "sessionId": "cdd9f7",
-                        "runId": "post-fix",
-                        "hypothesisId": "H1",
-                        "location": "_core.py:load_machining_actual_detail_df",
-                        "message": "read_excel_failed",
-                        "data": {
-                            "exc_type": type(_ex).__name__,
-                            "exc_repr": repr(_ex)[:800],
-                        },
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            with open(_dbg_path, "a", encoding="utf-8") as _df2:
-                _df2.write(_line2)
-        except Exception:
-            pass
-        # #endregion
-        raise
-    # #region agent log
-    try:
-        _line3 = (
-            json.dumps(
-                {
-                    "sessionId": "cdd9f7",
-                    "runId": "post-fix",
-                    "hypothesisId": "H3",
-                    "location": "_core.py:load_machining_actual_detail_df",
-                    "message": "read_excel_ok",
-                    "data": {"rows": int(len(df)), "cols": int(df.shape[1])},
-                    "timestamp": int(time_module.time() * 1000),
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-        with open(_dbg_path, "a", encoding="utf-8") as _df3:
-            _df3.write(_line3)
-    except Exception:
-        pass
-    # #endregion
     df.columns = df.columns.str.strip()
     if ACT_DETAIL_COL_ROLL not in df.columns:
         for alias in ("ロール番号", "ロール", "巻番"):
