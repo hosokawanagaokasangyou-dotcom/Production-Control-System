@@ -11,10 +11,20 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
@@ -171,6 +181,71 @@ public final class MainRunTabController {
                                 logListView.refresh();
                             }
                         });
+        logListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        installLogClipboardSupport();
+    }
+
+    private void installLogClipboardSupport() {
+        var copyKeys = new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN);
+        var selectAllKeys = new KeyCodeCombination(KeyCode.A, KeyCombination.SHORTCUT_DOWN);
+        logListView.addEventFilter(
+                KeyEvent.KEY_PRESSED,
+                e -> {
+                    if (copyKeys.match(e)) {
+                        copySelectedLogLinesToClipboard();
+                        e.consume();
+                    } else if (selectAllKeys.match(e)) {
+                        logListView.getSelectionModel().selectAll();
+                        e.consume();
+                    }
+                });
+        MenuItem copySelectedItem =
+                new MenuItem(
+                        "\u9078\u629e\u3092\u30b3\u30d4\u30fc (Ctrl+C)");
+        copySelectedItem.setOnAction(e -> copySelectedLogLinesToClipboard());
+        MenuItem copyAllItem = new MenuItem("\u3059\u3079\u3066\u30b3\u30d4\u30fc");
+        copyAllItem.setOnAction(e -> copyAllLogLinesToClipboard());
+        logListView.setContextMenu(new ContextMenu(copySelectedItem, copyAllItem));
+    }
+
+    private void copyAllLogLinesToClipboard() {
+        if (logLines.isEmpty()) {
+            return;
+        }
+        String text = String.join("\n", logLines);
+        ClipboardContent cc = new ClipboardContent();
+        cc.putString(text);
+        Clipboard.getSystemClipboard().setContent(cc);
+    }
+
+    private void copySelectedLogLinesToClipboard() {
+        MultipleSelectionModel<String> sm = logListView.getSelectionModel();
+        ArrayList<Integer> indices = new ArrayList<>(sm.getSelectedIndices());
+        if (indices.isEmpty()) {
+            int fi = logListView.getFocusModel().getFocusedIndex();
+            if (fi >= 0) {
+                indices.add(fi);
+            }
+        }
+        if (indices.isEmpty()) {
+            return;
+        }
+        Collections.sort(indices);
+        StringBuilder sb = new StringBuilder();
+        for (int i : indices) {
+            if (i >= 0 && i < logLines.size()) {
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(logLines.get(i));
+            }
+        }
+        if (sb.length() == 0) {
+            return;
+        }
+        ClipboardContent cc = new ClipboardContent();
+        cc.putString(sb.toString());
+        Clipboard.getSystemClipboard().setContent(cc);
     }
 
     /** Reapply row styles when UI theme (dark/light) changes. */
