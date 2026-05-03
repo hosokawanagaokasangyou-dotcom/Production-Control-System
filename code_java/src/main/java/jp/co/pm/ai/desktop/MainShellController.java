@@ -651,8 +651,13 @@ public final class MainShellController {
         return new RunRequest(py, dir, "pm_ai_actuals_status.py", wb, childEnvForPython(uiRun));
     }
 
-    /** Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}). */
-    private static Map<String, String> childEnvForPython(Map<String, String> ui) {
+    /**
+     * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
+     * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
+     * the \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab are applied so \u6bb5\u968e2 matches the
+     * file the user is editing there.
+     */
+    private Map<String, String> childEnvForPython(Map<String, String> ui) {
         Map<String, String> m = new HashMap<>(ui);
         for (String k : REMOVED_ENV_VAR_KEYS) {
             m.remove(k);
@@ -661,7 +666,32 @@ public final class MainShellController {
         if (skip == null || skip.isBlank()) {
             m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
         }
+        overlayPlanInputTabPathsIfEnvBlank(m);
         return m;
+    }
+
+    /**
+     * Fills {@link PlanInputTabController#ENV_PM_AI_PLAN_INPUT_PATH} and {@link
+     * PlanInputTabController#ENV_TASK_PLAN_SHEET} from the dedicated plan-input tab when the env tab
+     * leaves them blank.
+     */
+    private void overlayPlanInputTabPathsIfEnvBlank(Map<String, String> m) {
+        String pipKey = PlanInputTabController.ENV_PM_AI_PLAN_INPUT_PATH;
+        String pip = m.get(pipKey);
+        if (pip == null || pip.isBlank()) {
+            String tab = planInputTabController.snapshotPlanInputPath();
+            if (tab != null && !tab.isBlank()) {
+                m.put(pipKey, tab.trim());
+            }
+        }
+        String tpsKey = PlanInputTabController.ENV_TASK_PLAN_SHEET;
+        String tps = m.get(tpsKey);
+        if (tps == null || tps.isBlank()) {
+            String tabSheet = planInputTabController.snapshotPlanInputSheet();
+            if (tabSheet != null && !tabSheet.isBlank()) {
+                m.put(tpsKey, tabSheet.trim());
+            }
+        }
     }
 
     /**
