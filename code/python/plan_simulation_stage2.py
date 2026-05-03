@@ -26,6 +26,9 @@ import planning_core as pc
 def main():
     try:
         pc.generate_plan()
+    except FileNotFoundError as e:
+        print(str(e).strip() or "マスタブックが見つかりません。", file=sys.stderr)
+        sys.exit(2)
     except pc.PlanningValidationError as e:
         msg = str(e).strip() or "配台計画の検証で中断しました。"
         if not os.path.isfile(pc.stage2_blocking_message_path):

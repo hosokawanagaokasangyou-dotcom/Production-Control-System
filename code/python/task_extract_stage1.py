@@ -137,6 +137,9 @@ def main():
         sys.exit(2)
     try:
         ok = pc.run_stage1_extract()
+    except FileNotFoundError as e:
+        print(str(e).strip() or "マスタブックが見つかりません。", file=sys.stderr)
+        sys.exit(2)
     except pc.PlanningValidationError as e:
         msg = str(e).strip() or "マスタ skills の検証で中断しました。"
         if not os.path.isfile(pc.stage2_blocking_message_path):

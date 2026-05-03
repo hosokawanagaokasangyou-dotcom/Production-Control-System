@@ -222,6 +222,19 @@ def _master_workbook_path_resolved() -> str:
     if mf.startswith("\\\\"):
         return mf
     return os.path.normpath(os.path.join(os.getcwd(), mf))
+
+
+def _require_master_workbook_path_exists() -> str:
+    """マスタブックが実在しないときはフォールバックせず ``FileNotFoundError`` で中止する。"""
+    p = _master_workbook_path_resolved()
+    if not p or not os.path.isfile(p):
+        raise FileNotFoundError(
+            "マスタブックが見つかりません（想定外のため中止します）。"
+            f" 解決パス: {p!r}（MASTER_WORKBOOK_FILE / PM_AI_MASTER_WORKBOOK / カレントを確認）"
+        )
+    return os.path.normpath(os.path.abspath(p))
+
+
 # VBA「master_機械カレンダーを作成」シート（30分スロット占有を段階2の machine_avail_dt に反映）
 SHEET_MACHINE_CALENDAR = "機械カレンダー"
 # master.xlsm「機械カレンダー」の1行=何分スロットとして解釈するか（VBA 出力仕様に合わせる）
@@ -12826,13 +12839,7 @@ def _load_master_speed_lookup_from_master_workbook() -> dict[tuple[str, str], fl
     if not _master_speed_sheet_apply_enabled():
         logging.info("master.xlsm speed シートによる加工速度の上書きは無効です（MASTER_USE_SPEED_SHEET）。")
         return out
-    path = _master_workbook_path_resolved()
-    if not path or not os.path.isfile(path):
-        logging.info(
-            "master.xlsm speed: マスタファイルがありません (%r)。加工計画DATA／シート上の加工速度をそのまま使います。",
-            path,
-        )
-        return out
+    path = _require_master_workbook_path_exists()
     sheet = MASTER_SHEET_SPEED
     try:
         raw = pd.read_excel(path, sheet_name=sheet, header=None, dtype=object)
@@ -15910,11 +15917,6 @@ def run_stage1_extract():
     except PlanningValidationError:
         logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
         raise
-    except Exception as e:
-        logging.info("段階1: マスタ need を読ゝう元列は need なしで埋ゝした (%s)", e)
-        req_map, need_rules = {}, []
-        equipment_list_stage1 = []
-        need_combo_col_index_stage1 = {}
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
@@ -17210,9 +17212,10 @@ def load_skills_and_needs():
     数字省略の OP/AS は優先度 1。
     同一列（同一工程×機械）では優先度の数値はメンバー間で重複試行（重複時は PlanningValidationError）。
     """
+    mp = _require_master_workbook_path_exists()
     try:
         # 同一ブックを pd.read_excel で都度開しと I/O は重いめ、ExcelFile を1回の値開いでシートを parse れる。
-        with pd.ExcelFile(_master_workbook_path_resolved()) as _master_xls:
+        with pd.ExcelFile(mp) as _master_xls:
             # skills は新仕様:
             #   1行目: 工程名
             #   2行目: 機械名
@@ -17459,7 +17462,7 @@ def load_skills_and_needs():
 
         logging.info(
             "need人数マスタ: %s の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。",
-            _master_workbook_path_resolved(),
+            mp,
         )
         for _ci, _ps, _ms in pm_cols:
             _ck = f"{_ps}+{_ms}"
@@ -17520,7 +17523,7 @@ def load_skills_and_needs():
         raise
     except Exception as e:
         logging.error(f"マスタファイル({MASTER_FILE})のスキル/need読み込みエラー: {e}")
-        return {}, [], [], {}, [], [], {}
+        raise
 
 
 def load_team_combination_presets_from_master() -> dict[
