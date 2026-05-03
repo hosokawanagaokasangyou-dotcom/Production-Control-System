@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.beans.binding.Bindings;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -77,6 +78,9 @@ public final class MainRunTabController {
     @FXML
     private Button peekSheetsButton;
 
+    @FXML
+    private Button copyAllLogButton;
+
     private final ObservableList<String> logLines = FXCollections.observableArrayList();
     private Font appliedLogFont = Font.getDefault();
 
@@ -129,6 +133,9 @@ public final class MainRunTabController {
         logFontSizeCombo.valueProperty().addListener((o, a, b) -> onFontUiChange.run());
 
         setupLogListView();
+        if (copyAllLogButton != null) {
+            copyAllLogButton.disableProperty().bind(Bindings.isEmpty(logLines));
+        }
         applyLogAreaFont();
     }
 
@@ -355,6 +362,11 @@ public final class MainRunTabController {
     @FXML
     private void onPeekSheetsButtonAction() {
         shell.triggerPeekSheets();
+    }
+
+    @FXML
+    private void onCopyAllLogButtonAction() {
+        copyAllLogLinesToClipboard();
     }
 
     TextField getWorkbookField() {
