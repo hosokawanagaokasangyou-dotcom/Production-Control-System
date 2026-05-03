@@ -22,6 +22,17 @@ public final class FileChooserForEnvKey {
                     .addAll(
                             new FileChooser.ExtensionFilter("CSV", "*.csv"),
                             new FileChooser.ExtensionFilter("All", "*.*"));
+        } else if (AppPaths.isTabularDataTablePathEnvKey(k)) {
+            fc.getExtensionFilters()
+                    .addAll(
+                            new FileChooser.ExtensionFilter("CSV / text", "*.csv", "*.txt"),
+                            new FileChooser.ExtensionFilter("All", "*.*"));
+        } else if (AppPaths.isPlanInputPathEnvKey(k)) {
+            fc.getExtensionFilters()
+                    .addAll(
+                            new FileChooser.ExtensionFilter(
+                                    "Tabular", "*.csv", "*.parquet", "*.xlsx", "*.xlsm"),
+                            new FileChooser.ExtensionFilter("All", "*.*"));
         } else if (AppPaths.isExcelWorkbookPathEnvKey(k)) {
             fc.getExtensionFilters()
                     .addAll(

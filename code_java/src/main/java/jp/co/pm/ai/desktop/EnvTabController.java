@@ -281,10 +281,10 @@ public final class EnvTabController {
                                     }
                                 }
                                 String key = row != null && row.getName() != null ? row.getName() : "";
-                                if (row != null && AppPaths.isFolderPathEnvKey(key)) {
-                                    setGraphic(folderActions);
-                                } else if (row != null && AppPaths.isFilePathEnvKey(key)) {
+                                if (row != null && AppPaths.isFilePathEnvKey(key)) {
                                     setGraphic(pickFile);
+                                } else if (row != null && AppPaths.isFolderPathEnvKey(key)) {
+                                    setGraphic(folderActions);
                                 } else {
                                     setGraphic(null);
                                 }

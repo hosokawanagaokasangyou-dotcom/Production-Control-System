@@ -47,7 +47,7 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  */
 public final class PlanInputTabController {
 
-    public static final String ENV_PM_AI_PLAN_INPUT_PATH = "PM_AI_PLAN_INPUT_PATH";
+    public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
 
     public static final String DEFAULT_PLAN_INPUT_SHEET_NAME =

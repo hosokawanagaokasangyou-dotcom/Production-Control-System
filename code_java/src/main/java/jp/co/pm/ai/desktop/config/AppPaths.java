@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -86,6 +87,33 @@ public final class AppPaths {
     public static final String KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV = "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV";
 
     /**
+     * Plan-input workbook path ({@code PM_AI_PLAN_INPUT_PATH}); CSV / Parquet / Excel. Align with
+     * {@link jp.co.pm.ai.desktop.PlanInputTabController}.
+     */
+    public static final String KEY_PM_AI_PLAN_INPUT_PATH = "PM_AI_PLAN_INPUT_PATH";
+
+    /**
+     * Single-file override for actual-detail workbook ({@code PM_AI_ACTUAL_DETAIL_WORKBOOK}); takes precedence over
+     * {@link #KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} when set.
+     */
+    public static final String KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK = "PM_AI_ACTUAL_DETAIL_WORKBOOK";
+
+    /** Optional absolute path to result-task JSON sidecar ({@code PM_AI_PLAN_RESULT_TASK_JSON_PATH}). */
+    public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH";
+
+    /**
+     * planning_core master-data table paths ({@code ui_ref_env_defaults.json}): each names a file (CSV / text), not a
+     * directory.
+     */
+    private static final Set<String> TABULAR_DATA_TABLE_PATH_KEYS =
+            Set.of(
+                    "RAW_FABRIC_WIDTH_TABLE_PATH",
+                    "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",
+                    "PRODUCT_WIDTH_TABLE_PATH",
+                    "PRODUCT_LENGTH_TABLE_PATH",
+                    "PRODUCT_THICKNESS_TABLE_PATH");
+
+    /**
      * When truthy, {@code workbook_env_bootstrap} skips reading the macro book
      * {@code \u8a2d\u5b9a_\u74b0\u5883\u5909\u6570} sheet (JavaFX tab is source of truth for the child process).
      */
@@ -135,20 +163,36 @@ public final class AppPaths {
                     KEY_COMPARE_GANTT_SNAPSHOT_DIR);
 
     /** Env keys whose value is a single file path (file chooser in the UI). */
-    private static final Set<String> FILE_PATH_ENV_KEYS = Set.of(
-            KEY_GEMINI_CREDENTIALS_JSON,
-            KEY_PM_AI_EXCLUDE_RULES_JSON,
-            KEY_PM_AI_MASTER_WORKBOOK,
-            KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
-            KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
-            KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV,
-            KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
+    private static final Set<String> FILE_PATH_ENV_KEYS = createFilePathEnvKeys();
+
+    private static Set<String> createFilePathEnvKeys() {
+        HashSet<String> s = new HashSet<>();
+        s.add(KEY_GEMINI_CREDENTIALS_JSON);
+        s.add(KEY_PM_AI_EXCLUDE_RULES_JSON);
+        s.add(KEY_PM_AI_MASTER_WORKBOOK);
+        s.add(KEY_PM_AI_COLUMN_CONFIG_WORKBOOK);
+        s.add(KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK);
+        s.add(KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
+        s.add(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
+        s.add(KEY_PM_AI_PLAN_INPUT_PATH);
+        s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
+        s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
+        s.addAll(TABULAR_DATA_TABLE_PATH_KEYS);
+        return Set.copyOf(s);
+    }
 
     private AppPaths() {}
 
     /** Whether {@code key} refers to a folder path (not a single file). */
     public static boolean isFolderPathEnvKey(String key) {
-        return key != null && FOLDER_PATH_ENV_KEYS.contains(key.trim());
+        if (key == null) {
+            return false;
+        }
+        String k = key.trim();
+        if (FILE_PATH_ENV_KEYS.contains(k)) {
+            return false;
+        }
+        return FOLDER_PATH_ENV_KEYS.contains(k);
     }
 
     /** Whether {@code key} refers to a file path (encrypted JSON etc.). */
@@ -159,7 +203,9 @@ public final class AppPaths {
     /** JSON credentials or exclude-rules file ({@code *.json}). */
     public static boolean isJsonFilePathEnvKey(String key) {
         String k = key != null ? key.trim() : "";
-        return KEY_GEMINI_CREDENTIALS_JSON.equals(k) || KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k);
+        return KEY_GEMINI_CREDENTIALS_JSON.equals(k)
+                || KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)
+                || KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH.equals(k);
     }
 
     /** Master / column-config / data-extraction workbooks ({@code *.xlsm}, {@code *.xlsx}). */
@@ -168,7 +214,18 @@ public final class AppPaths {
         return KEY_PM_AI_MASTER_WORKBOOK.equals(k)
                 || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
                 || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k)
-                || KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(k);
+                || KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(k)
+                || KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK.equals(k);
+    }
+
+    /** {@link #KEY_PM_AI_PLAN_INPUT_PATH} (CSV / Parquet / Excel plan input). */
+    public static boolean isPlanInputPathEnvKey(String key) {
+        return key != null && KEY_PM_AI_PLAN_INPUT_PATH.equals(key.trim());
+    }
+
+    /** Master-data CSV / text paths ({@link #TABULAR_DATA_TABLE_PATH_KEYS}). */
+    public static boolean isTabularDataTablePathEnvKey(String key) {
+        return key != null && TABULAR_DATA_TABLE_PATH_KEYS.contains(key.trim());
     }
 
     /** Result-task column config CSV. */

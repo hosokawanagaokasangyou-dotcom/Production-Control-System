@@ -39,8 +39,33 @@ class AppPathsTest {
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK));
         assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
         assertTrue(AppPaths.isCsvFilePathEnvKey(AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV));
         assertFalse(AppPaths.isJsonFilePathEnvKey(AppPaths.KEY_PM_AI_MASTER_WORKBOOK));
+    }
+
+    @Test
+    void planInputAndSidecarPaths_useFilePickerNotFolder() {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
+        assertTrue(AppPaths.isPlanInputPathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH));
+        assertTrue(AppPaths.isJsonFilePathEnvKey(AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH));
+    }
+
+    @Test
+    void actualDetailWorkbook_usesFilePickerNotFolder() {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR));
+    }
+
+    @Test
+    void tabularMasterTablePaths_useFilePickerNotFolder() {
+        assertTrue(AppPaths.isTabularDataTablePathEnvKey("RAW_FABRIC_WIDTH_TABLE_PATH"));
+        assertTrue(AppPaths.isFilePathEnvKey("PRODUCT_THICKNESS_TABLE_PATH"));
+        assertFalse(AppPaths.isFolderPathEnvKey("ROLL_UNIT_BY_USED_RAW_TABLE_PATH"));
     }
 
     @Test
