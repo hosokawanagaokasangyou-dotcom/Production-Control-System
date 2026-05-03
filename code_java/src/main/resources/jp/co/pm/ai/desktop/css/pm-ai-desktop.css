@@ -70,7 +70,7 @@
     -fx-background-color: #451a03;
 }
 
-/* Run tab（実行・ログ）: セクション見出し・ボタン・スクロールするログ表示 */
+/* Run tab??????s??????O???: ?Z?N?V???????????????{?^???E?X?N???[???????O?\?? */
 
 .border-pane.pm-run-tab {
     -fx-background-color: transparent;
@@ -204,7 +204,7 @@
     -fx-font-size: 11px;
 }
 
-/* Gantt viewer: Excel「結果_設備ガント」風の列見出し（機名列サブヘッダ帯のトーンに寄せる） */
+/* Gantt viewer: Excel?u????_????K???g?v???????????i?@????T?u????b?_????g???????????????? */
 
 .pm-gantt-equipment-xlsx HorizontalHeaderColumn > TableColumnHeader.column-header.table-column {
     -fx-background-color: -fx-box-border, #dee6f2;
@@ -240,13 +240,20 @@
 
 .pm-operator-card-th {
     -fx-font-weight: bold;
-    -fx-underline: true;
+    -fx-border-color: #c5ccd6;
+    -fx-border-width: 1;
+    -fx-padding: 5 7 5 7;
+    -fx-background-color: #f0f3f8;
 }
 
 .pm-operator-card-td,
 .pm-operator-card-td-time,
 .pm-operator-card-td-num {
     -fx-font-size: 11px;
+    -fx-border-color: #c5ccd6;
+    -fx-border-width: 1;
+    -fx-padding: 4 7 4 7;
+    -fx-background-color: white;
 }
 
 .pm-operator-card-td-num {
@@ -256,8 +263,29 @@
 .pm-operator-card-empty {
     -fx-text-fill: -fx-muted-text-color;
     -fx-font-style: italic;
+    -fx-border-color: #c5ccd6;
+    -fx-border-width: 1;
+    -fx-padding: 8 7 8 7;
+    -fx-background-color: white;
 }
 
 .root.pm-dark-theme .pm-operator-card-root {
+    -fx-background-color: #2d2d30;
+}
+
+.root.pm-dark-theme .pm-operator-card-th {
+    -fx-border-color: #555558;
+    -fx-background-color: #3e3e42;
+}
+
+.root.pm-dark-theme .pm-operator-card-td,
+.root.pm-dark-theme .pm-operator-card-td-time,
+.root.pm-dark-theme .pm-operator-card-td-num {
+    -fx-border-color: #555558;
+    -fx-background-color: #2d2d30;
+}
+
+.root.pm-dark-theme .pm-operator-card-empty {
+    -fx-border-color: #555558;
     -fx-background-color: #2d2d30;
 }

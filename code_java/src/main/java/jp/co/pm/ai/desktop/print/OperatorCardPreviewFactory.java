@@ -65,8 +65,8 @@ public final class OperatorCardPreviewFactory {
 
     static GridPane buildDayGrid(OperatorCardDaySection day) {
         GridPane grid = new GridPane();
-        grid.setHgap(6);
-        grid.setVgap(4);
+        grid.setHgap(0);
+        grid.setVgap(0);
         grid.setPadding(new Insets(4, 0, 12, 0));
 
         ColumnConstraints c0 = new ColumnConstraints(88, 88, 120);
@@ -113,7 +113,7 @@ public final class OperatorCardPreviewFactory {
         }
 
         if (day.rows().isEmpty()) {
-            Label empty = new Label("\uff08\u696d\u52d9\u306a\u3057\uff09");
+            Label empty = new Label("\u3053\u306e\u65e5\u306e\u4e88\u5b9a\u306f\u3042\u308a\u307e\u305b\u3093");
             empty.getStyleClass().add("pm-operator-card-empty");
             grid.add(empty, 0, 1, 7, 1);
             GridPane.setHalignment(empty, HPos.CENTER);

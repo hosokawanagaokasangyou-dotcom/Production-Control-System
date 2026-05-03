@@ -205,7 +205,9 @@ public final class OperatorCardDocumentBuilder {
             if (members.isEmpty()) {
                 members.add(selfOperator);
             }
-            String memberStr = String.join("\u3001", members);
+            members.remove(selfOperator);
+            String memberStr =
+                    members.isEmpty() ? "\u2014" : String.join("\u3001", members);
 
             String qtyD = "";
             String qtyC = "";
