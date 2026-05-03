@@ -1,5 +1,8 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,6 +32,8 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
+
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
 public final class MainRunTabController {
@@ -402,6 +407,16 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenStage2ProductionPlanAction() {
+        openExcelBesideField(stage2ProductionPlanField, "stage2-production-plan");
+    }
+
+    @FXML
+    private void onOpenStage2MemberScheduleAction() {
+        openExcelBesideField(stage2MemberScheduleField, "stage2-member-schedule");
+    }
+
+    @FXML
     private void onCopyAllLogButtonAction() {
         copyAllBufferedLogToClipboard();
     }
@@ -457,6 +472,25 @@ public final class MainRunTabController {
             add.run();
         } else {
             Platform.runLater(add);
+        }
+    }
+
+    private void openExcelBesideField(TextField field, String logTag) {
+        String raw = field != null && field.getText() != null ? field.getText().trim() : "";
+        if (raw.isEmpty()) {
+            appendLog("[" + logTag + "] path is empty");
+            return;
+        }
+        Path p = Paths.get(raw);
+        if (!Files.isRegularFile(p)) {
+            appendLog("[" + logTag + "] file not found: " + p);
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[" + logTag + "] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[" + logTag + "] open failed: " + e.getMessage());
         }
     }
 }

@@ -36,12 +36,24 @@
                     </HBox>
                     <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
                            GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                    <TextField fx:id="stage2ProductionPlanField" editable="false" GridPane.columnIndex="1"
-                               GridPane.columnSpan="2" GridPane.rowIndex="1"/>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
+                          GridPane.rowIndex="1">
+                        <TextField fx:id="stage2ProductionPlanField" editable="false"
+                                   maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                        <Button mnemonicParsing="false"
+                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
+                                onAction="#onOpenStage2ProductionPlanAction"/>
+                    </HBox>
                     <Label text="&#x6bb5;&#x968e;2 member_schedule&#xff08;&#x6700;&#x65b0;&#xff09;"
                            GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                    <TextField fx:id="stage2MemberScheduleField" editable="false" GridPane.columnIndex="1"
-                               GridPane.columnSpan="2" GridPane.rowIndex="2"/>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
+                          GridPane.rowIndex="2">
+                        <TextField fx:id="stage2MemberScheduleField" editable="false"
+                                   maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                        <Button mnemonicParsing="false"
+                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
+                                onAction="#onOpenStage2MemberScheduleAction"/>
+                    </HBox>
                 </children>
             </GridPane>
             <HBox visible="false" managed="false" spacing="0.0">
