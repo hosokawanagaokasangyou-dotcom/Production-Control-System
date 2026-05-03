@@ -75,6 +75,23 @@ SIDE_FORMAT_VERSION = 1
 WORKBOOK_JSON_FORMAT_VERSION = 2
 
 
+def _normalized_json_sidecar_path(xlsx_path: str) -> str:
+    """xlsx と同名の .json パス（絶対・正規化）。Windows での open 失敗を減らす。"""
+    return os.path.splitext(os.path.abspath(os.path.normpath(xlsx_path)))[0] + ".json"
+
+
+def _path_for_open_write(path: str) -> str:
+    """Windows では Unicode パスで open が errno 2 になる事例があるため \\\\?\\ を付与する（ドライブレター経路）。"""
+    if os.name != "nt":
+        return path
+    ap = os.path.abspath(os.path.normpath(path))
+    if ap.startswith("\\\\?\\"):
+        return ap.replace("/", "\\")
+    if len(ap) >= 3 and ap[1] == ":" and ap[2] in (os.sep, "/"):
+        return "\\\\?\\" + ap.replace("/", "\\")
+    return ap
+
+
 def _plan_result_task_json_disabled() -> bool:
     v = (os.environ.get(ENV_PLAN_RESULT_TASK_JSON) or "").strip().lower()
     return v in ("0", "false", "no", "off", "none")
@@ -130,7 +147,7 @@ def _dump_xlsx_all_sheets_to_json(
             xlsx_path,
         )
         return None
-    out_path = os.path.splitext(xlsx_path)[0] + ".json"
+    out_path = _normalized_json_sidecar_path(xlsx_path)
     try:
         try:
             if os.path.isfile(out_path):
@@ -196,7 +213,13 @@ def _dump_xlsx_all_sheets_to_json(
     if payload_extra:
         payload.update(payload_extra)
     try:
-        with open(out_path, encoding="utf-8", newline="\n") as f:
+        _parent_out = os.path.dirname(out_path)
+        try:
+            os.makedirs(_parent_out, exist_ok=True)
+        except OSError:
+            pass
+        _open_target = _path_for_open_write(out_path)
+        with open(_open_target, encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
             f.write("\n")
         # #region agent log
@@ -206,10 +229,12 @@ def _dump_xlsx_all_sheets_to_json(
             "json_write_ok",
             {
                 "out_path": out_path,
+                "open_path_used": _open_target,
                 "sheet_keys": list((sheets_in or {}).keys())[:20],
                 "n_sheets": len(sheets_in or {}),
             },
             mirror_to_dir=_mirror_dir,
+            run_id="post-fix",
         )
         # #endregion
         logging.info(
@@ -223,7 +248,12 @@ def _dump_xlsx_all_sheets_to_json(
             "H4",
             "plan_workbook_sidecar:_dump_xlsx_all_sheets_to_json",
             "json_write_failed",
-            {"out_path": out_path, "exc_type": type(e).__name__, "exc_msg": str(e)[:300]},
+            {
+                "out_path": out_path,
+                "open_path_used": _path_for_open_write(out_path),
+                "exc_type": type(e).__name__,
+                "exc_msg": str(e)[:300],
+            },
             mirror_to_dir=_mirror_dir,
         )
         # #endregion
