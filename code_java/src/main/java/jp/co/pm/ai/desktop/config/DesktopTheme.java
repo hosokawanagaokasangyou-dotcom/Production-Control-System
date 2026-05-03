@@ -48,6 +48,14 @@ public enum DesktopTheme {
         return displayLabel;
     }
 
+    /** Dark palettes where log-row backgrounds should use higher-contrast tints. */
+    public boolean isDarkUi() {
+        return switch (this) {
+            case DARK, MIDNIGHT, SLATE, EMBER, OCEAN -> true;
+            case LIGHT, BLUE, SEPIA, CONTRAST -> false;
+        };
+    }
+
     public static DesktopTheme fromStored(String s) {
         if (s == null || s.isBlank()) {
             return LIGHT;

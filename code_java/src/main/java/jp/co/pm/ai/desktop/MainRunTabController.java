@@ -5,11 +5,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
@@ -34,7 +38,7 @@ public final class MainRunTabController {
     private TextField scriptDirField;
 
     @FXML
-    private TextArea logArea;
+    private ListView<String> logListView;
 
     @FXML
     private ComboBox<String> logFontFamilyCombo;
@@ -62,6 +66,9 @@ public final class MainRunTabController {
 
     @FXML
     private Button peekSheetsButton;
+
+    private final ObservableList<String> logLines = FXCollections.observableArrayList();
+    private Font appliedLogFont = Font.getDefault();
 
     private final AtomicBoolean suppressLogFontEvents = new AtomicBoolean(false);
 
@@ -111,7 +118,66 @@ public final class MainRunTabController {
         logFontFamilyCombo.valueProperty().addListener((o, a, b) -> onFontUiChange.run());
         logFontSizeCombo.valueProperty().addListener((o, a, b) -> onFontUiChange.run());
 
+        setupLogListView();
         applyLogAreaFont();
+    }
+
+    private void setupLogListView() {
+        logListView.setItems(logLines);
+        logListView.setFixedCellSize(-1);
+        logListView.setFocusTraversable(true);
+        logListView.setCellFactory(
+                lv ->
+                        new ListCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                getStyleClass()
+                                        .removeAll(
+                                                "log-cell",
+                                                "log-kind-error",
+                                                "log-kind-warn",
+                                                "log-dark");
+                                if (empty || item == null) {
+                                    setText(null);
+                                    setGraphic(null);
+                                    return;
+                                }
+                                setText(item);
+                                setWrapText(true);
+                                setFont(appliedLogFont);
+                                double w = logListView.getWidth() - 28;
+                                if (w > 0) {
+                                    setMaxWidth(w);
+                                }
+                                getStyleClass().add("log-cell");
+                                if (shell != null && shell.currentDesktopTheme().isDarkUi()) {
+                                    getStyleClass().add("log-dark");
+                                }
+                                switch (LogLineKind.classify(item)) {
+                                    case ERROR -> getStyleClass().add("log-kind-error");
+                                    case WARN -> getStyleClass().add("log-kind-warn");
+                                    case NORMAL -> {
+                                        /* default row chrome only */
+                                    }
+                                }
+                            }
+                        });
+        logListView
+                .widthProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            if (logListView != null) {
+                                logListView.refresh();
+                            }
+                        });
+    }
+
+    /** Reapply row styles when UI theme (dark/light) changes. */
+    void refreshLogThemeCells() {
+        if (logListView != null) {
+            logListView.refresh();
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -167,7 +233,7 @@ public final class MainRunTabController {
     }
 
     private void applyLogAreaFont() {
-        if (logArea == null || logFontFamilyCombo == null || logFontSizeCombo == null) {
+        if (logFontFamilyCombo == null || logFontSizeCombo == null) {
             return;
         }
         String choice = logFontFamilyCombo.getValue();
@@ -177,9 +243,12 @@ public final class MainRunTabController {
                         ? szObj
                         : Font.getDefault().getSize();
         if (choice == null || choice.equals(DEFAULT_FONT_FAMILY_LABEL)) {
-            logArea.setFont(Font.font(size));
+            appliedLogFont = Font.font(size);
         } else {
-            logArea.setFont(Font.font(choice, size));
+            appliedLogFont = Font.font(choice, size);
+        }
+        if (logListView != null) {
+            logListView.refresh();
         }
     }
 
@@ -225,8 +294,8 @@ public final class MainRunTabController {
         return scriptDirField;
     }
 
-    TextArea getLogArea() {
-        return logArea;
+    ListView<String> getLogListView() {
+        return logListView;
     }
 
     Label getStatusLabel() {
@@ -234,6 +303,16 @@ public final class MainRunTabController {
     }
 
     void appendLog(String line) {
-        logArea.appendText(line + "\n");
+        Runnable add =
+                () -> {
+                    logLines.add(line);
+                    int last = logLines.size() - 1;
+                    logListView.scrollTo(last);
+                };
+        if (Platform.isFxApplicationThread()) {
+            add.run();
+        } else {
+            Platform.runLater(add);
+        }
     }
 }

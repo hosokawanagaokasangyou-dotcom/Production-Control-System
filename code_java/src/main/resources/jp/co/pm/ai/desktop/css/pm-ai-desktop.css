@@ -1,3 +1,17 @@
+/* Env tab: description column uses Label; theme text colors (Text node defaulted to black) */
+
+.table-view .table-cell .pm-env-var-description {
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.table-view .table-row-cell:selected .table-cell .pm-env-var-description {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.table-view:focused .table-row-cell:filled:selected .table-cell:focused .pm-env-var-description {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
 /* Header-column band (first n visual columns): tint when idle; defer to theme when row is selected */
 
 .table-view .table-cell.pm-header-body-cell {
@@ -18,4 +32,40 @@
 .table-view:focused .table-row-cell:filled:selected .table-cell.pm-header-body-cell:focused {
     -fx-background-color: -fx-selection-bar;
     -fx-text-fill: -fx-selection-bar-text;
+}
+
+/* Run tab log: severity tint + diagonal band (see LogLineKind, MainRunTabController) */
+
+.list-view.pm-log-view {
+    -fx-padding: 0;
+}
+
+.list-view.pm-log-view .list-cell {
+    -fx-padding: 2 6 2 6;
+    -fx-background-insets: 0;
+}
+
+.list-view.pm-log-view .list-cell.log-cell {
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-background-color: transparent;
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-error {
+    -fx-text-fill: #b71c1c;
+    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #ffcdd2 0%, #ffcdd2 48%, #ffebee 52%, #ffebee 100%);
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-warn {
+    -fx-text-fill: #e65100;
+    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #ffe0b2 0%, #ffe0b2 48%, #fff8e1 52%, #fff8e1 100%);
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-error.log-dark {
+    -fx-text-fill: #ff8a80;
+    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #802020 0%, #802020 48%, #502020 52%, #502020 100%);
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-warn.log-dark {
+    -fx-text-fill: #ffcc80;
+    -fx-background-color: linear-gradient(from 0px 0px to 7px 7px, #805020 0%, #805020 48%, #504020 52%, #504020 100%);
 }

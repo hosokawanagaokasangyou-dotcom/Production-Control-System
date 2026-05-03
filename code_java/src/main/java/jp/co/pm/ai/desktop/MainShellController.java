@@ -219,7 +219,17 @@ public final class MainShellController {
                             if (newV != null) {
                                 newV.applyTo(scene);
                             }
+                            mainRunTabController.refreshLogThemeCells();
                         });
+        Platform.runLater(mainRunTabController::refreshLogThemeCells);
+    }
+
+    /** Theme shown in toolbar (for components that need dark/light tint hints). */
+    DesktopTheme currentDesktopTheme() {
+        if (themeCombo != null && themeCombo.getValue() != null) {
+            return themeCombo.getValue();
+        }
+        return pendingTheme != null ? pendingTheme : DesktopTheme.LIGHT;
     }
 
     private static boolean tabSupportsClearFilters(int idx) {
