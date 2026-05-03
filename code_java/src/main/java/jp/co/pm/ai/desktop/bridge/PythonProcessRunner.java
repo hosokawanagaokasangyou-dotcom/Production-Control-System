@@ -9,9 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -19,18 +22,16 @@ import java.util.function.Consumer;
 
 import javafx.application.Platform;
 
-import jp.co.pm.ai.desktop.config.AppPaths;
-
 /**
  * Runs {@code task_extract_stage1.py} / {@code plan_simulation_stage2.py} with
  * {@link ProcessBuilder} (plan: UTF-8 child env from UI).
  *
- * <p>Environment merge: JVM inherits the OS process environment for PATH etc.; application-defined keys
- * come from the UI {@code extraEnv}. Inherited {@link AppPaths#KEY_PM_AI_PLAN_WORKBOOK_JSON} /
- * {@link AppPaths#KEY_PM_AI_MEMBER_SCHEDULE_JSON} are removed unless present in {@code extraEnv}, so OS-level
- * {@code 0} does not suppress stage-2 same-name JSON mirrors when the user did not set those keys in the env tab.
- * Then {@code PYTHONUTF8} and {@code PYTHONIOENCODING}. Use the env tab for {@code PM_AI_PLAN_INPUT_PATH} and other
- * keys; legacy workbook env keys are stripped by the shell controller.
+ * <p>Environment merge: JVM inherits the OS process environment for PATH etc. Keys whose names start with
+ * {@code PM_AI_} are <strong>not</strong> taken from the OS: any inherited {@code PM_AI_*} is removed unless the
+ * same key is present in {@code extraEnv} (JavaFX environment-variable tab + {@code childEnvForPython} overlays).
+ * Python therefore does not see OS-level {@code PM_AI_*} unless the user explicitly set them in the app. Then
+ * {@code PYTHONUTF8} and {@code PYTHONIOENCODING}. Legacy workbook env keys are stripped by the shell controller
+ * ({@code PM_AI_SKIP_WORKBOOK_ENV_SHEET}).
  *
  * <p>Stages 1/2 run as plain Python child processes (openpyxl / pandas, etc.). xlwings is used only on
  * Excel-driven entry points (add-in or legacy macro workflows); it is not required for this JavaFX app.
@@ -45,18 +46,31 @@ public final class PythonProcessRunner {
 
     private PythonProcessRunner() {}
 
+    private static boolean isPmAiEnvKey(String k) {
+        return k != null && k.length() >= 6 && k.regionMatches(true, 0, "PM_AI_", 0, 6);
+    }
+
     /**
-     * Stage-2 JSON mirrors default to on in Python when unset. Os.environ may still carry {@code 0} from the user or
-     * system profile; strip unless the JavaFX env tab explicitly passes the key.
+     * Do not let OS-inherited {@code PM_AI_*} affect Python: remove unless {@code extraEnv} explicitly sets that key
+     * (case-insensitive key match on Windows).
      */
-    private static void stripInheritedStage2JsonMirrorEnvUnlessInUi(
-            Map<String, String> env, Map<String, String> extraEnv) {
-        Map<String, String> ui = extraEnv != null ? extraEnv : Map.of();
-        if (!ui.containsKey(AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON)) {
-            env.remove(AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON);
+    private static void stripInheritedPmAiEnvUnlessInUi(Map<String, String> env, Map<String, String> extraEnv) {
+        Set<String> allowedLower = new HashSet<>();
+        if (extraEnv != null) {
+            for (String k : extraEnv.keySet()) {
+                if (k != null && !k.isBlank()) {
+                    allowedLower.add(k.trim().toLowerCase(Locale.ROOT));
+                }
+            }
         }
-        if (!ui.containsKey(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON)) {
-            env.remove(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON);
+        for (String k : new ArrayList<>(env.keySet())) {
+            if (!isPmAiEnvKey(k)) {
+                continue;
+            }
+            String kl = k.toLowerCase(Locale.ROOT);
+            if (!allowedLower.contains(kl)) {
+                env.remove(k);
+            }
         }
     }
 
@@ -96,7 +110,7 @@ public final class PythonProcessRunner {
                         pb.directory(req.scriptDirectory.toFile());
                         pb.redirectErrorStream(true);
                         Map<String, String> env = new HashMap<>(pb.environment());
-                        stripInheritedStage2JsonMirrorEnvUnlessInUi(env, req.extraEnv);
+                        stripInheritedPmAiEnvUnlessInUi(env, req.extraEnv);
                         if (req.extraEnv != null) {
                             for (var e : req.extraEnv.entrySet()) {
                                 String k = e.getKey();
@@ -154,7 +168,7 @@ public final class PythonProcessRunner {
         pb.directory(req.scriptDirectory.toFile());
         pb.redirectErrorStream(true);
         Map<String, String> env = new HashMap<>(pb.environment());
-        stripInheritedStage2JsonMirrorEnvUnlessInUi(env, req.extraEnv);
+        stripInheritedPmAiEnvUnlessInUi(env, req.extraEnv);
         if (req.extraEnv != null) {
             for (var e : req.extraEnv.entrySet()) {
                 String k = e.getKey();
