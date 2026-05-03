@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +97,9 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR);
+
+    /** Keys in {@link #BOOTSTRAP_ORDER} for quick membership checks. */
+    private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
 
     private final Stage primaryStage;
 
@@ -443,6 +447,59 @@ public final class MainShellController {
             restored.add(row);
         }
         envRows.setAll(restored);
+        stripRemovedEnvVarRows(envRows);
+        mergeMissingBootstrapEnvRows();
+    }
+
+    /**
+     * Session snapshots may omit rows that were added in a later app version. Rebuild env rows so
+     * {@link #BOOTSTRAP_ORDER} keys still appear (same order as {@link #populateEnvRows}).
+     */
+    private void mergeMissingBootstrapEnvRows() {
+        if (envRows == null) {
+            return;
+        }
+        Map<String, String> ui = collectUiEnv();
+        LinkedHashMap<String, EnvVarRow> byKey = new LinkedHashMap<>();
+        for (EnvVarRow r : envRows) {
+            String name = r.getName() != null ? r.getName().trim() : "";
+            if (name.isEmpty() || omitEnvRowKey(name)) {
+                continue;
+            }
+            byKey.putIfAbsent(name, r);
+        }
+        ArrayList<EnvVarRow> out = new ArrayList<>(envRows.size() + BOOTSTRAP_ORDER.size());
+        for (String k : BOOTSTRAP_ORDER) {
+            EnvVarRow row = byKey.get(k);
+            if (row != null) {
+                maybeFillEmptyBootstrap(row, k, ui);
+                out.add(row);
+            } else {
+                out.add(newBootstrapRow(k, ui));
+            }
+        }
+        HashSet<String> seen = new HashSet<>(BOOTSTRAP_KEY_SET);
+        List<EnvVarRow> trailingEmpty = new ArrayList<>();
+        for (EnvVarRow r : envRows) {
+            String name = r.getName() != null ? r.getName().trim() : "";
+            if (omitEnvRowKey(name)) {
+                continue;
+            }
+            if (name.isEmpty()) {
+                trailingEmpty.add(r);
+                continue;
+            }
+            if (BOOTSTRAP_KEY_SET.contains(name)) {
+                continue;
+            }
+            if (seen.contains(name)) {
+                continue;
+            }
+            out.add(r);
+            seen.add(name);
+        }
+        out.addAll(trailingEmpty);
+        envRows.setAll(out);
         stripRemovedEnvVarRows(envRows);
     }
 
