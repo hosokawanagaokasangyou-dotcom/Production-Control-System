@@ -70,7 +70,7 @@
     -fx-background-color: #451a03;
 }
 
-/* Run tab（実行・ログ）: セクション見出し・ボタン・スクロール可能なログ */
+/* Run tab（実行・ログ）: セクション見出し・ボタン・スクロールするログ表示 */
 
 .border-pane.pm-run-tab {
     -fx-background-color: transparent;

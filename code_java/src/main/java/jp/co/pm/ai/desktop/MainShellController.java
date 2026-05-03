@@ -205,8 +205,8 @@ public final class MainShellController {
         mainRunTabController
                 .getWorkbookField()
                 .setPromptText(
-                        "任意。未指定時はタスク入力ブックをステージ1/2の子プロセス起動時に、環境変数とブートストラップで解決します。"
-                                + " PM_AI_* が本アプリの主経路です。マスタ読み込み・パス解決のUI向けヒント。");
+                        "任意。空欄のときはステージ1/2実行時に、環境変数と既定のブートストラップでタスク入力ブックのパスが決まります。"
+                                + " PM_AI_* が通常運用の軸です（マスタ読込やパス指定の補助ヒント）。");
         mainRunTabController
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
@@ -723,9 +723,8 @@ public final class MainShellController {
         alert.setTitle("環境変数を初期値に戻す");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json に基づく既定の行に戻します。"
-                        + "現在の編集内容は失われます。"
-                        + " Python / code.python などの参照も含め、セッションに保存した内容は消えます。"
+                "ui_ref_env_defaults.json の既定行に戻します。"
+                        + "未保存の編集と、セッションに保存していた各タブの値（Python パス等）も失われます。"
                         + "続行しますか？");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
@@ -905,8 +904,8 @@ public final class MainShellController {
     }
 
     /**
-     * ステージ1実行中は環境変数タブと配台計画入力タブを無効化し、ステージ2前提の誤操作を防ぐ。
-     * ステージ2実行中は環境変数タブとステージ1プレビュータブを無効化し、ステージ1成果との競合を防ぐ。
+     * ステージ1実行中は環境変数タブと配台計画入力タブを無効化し、ステージ2に渡す前提が途中で崩れる操作を防ぐ。
+     * ステージ2実行中は環境変数タブとステージ1プレビュータブを無効化し、ステージ1の結果と食い違う操作を防ぐ。
      */
     private void applyRunTabGating() {
         if (tabPane == null) {
@@ -1025,7 +1024,7 @@ public final class MainShellController {
     /**
      * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
-     * the 配台計画_タスク入力 tab are applied so ステージ2 matches the
+     * the 配台計画_タスク入力 tab are applied so that stage-2 uses the
      * file the user is editing there.
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
