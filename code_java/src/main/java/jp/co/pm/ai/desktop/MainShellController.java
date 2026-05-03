@@ -23,6 +23,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -49,6 +50,15 @@ public final class MainShellController {
 
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
+
+    /** MainShell.fxml: index 1 = \u74b0\u5883\u5909\u6570. */
+    private static final int TAB_INDEX_ENV = 1;
+
+    /** MainShell.fxml: index 3 = \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\uff08\u6bb5\u968e2\u524d\u63d0\uff09. */
+    private static final int TAB_INDEX_PLAN_INPUT = 3;
+
+    /** MainShell.fxml: index 4 = \u6bb5\u968e1 \u6210\u5f62\u7d50\u679c. */
+    private static final int TAB_INDEX_STAGE1_PREVIEW = 4;
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
 
@@ -122,6 +132,9 @@ public final class MainShellController {
 
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
+
+    /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
+    private volatile String activeRunStageScript;
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
 
@@ -536,6 +549,8 @@ public final class MainShellController {
             appendLog("[busy] already running (single flight).");
             return;
         }
+        activeRunStageScript = script;
+        applyRunTabGating();
         Map<String, String> uiRun = collectUiEnv();
         Path py =
                 Path.of(
@@ -566,8 +581,10 @@ public final class MainShellController {
                 .whenComplete(
                         (code, err) -> {
                             runLock.set(false);
+                            activeRunStageScript = null;
                             javafx.application.Platform.runLater(
                                     () -> {
+                                        applyRunTabGating();
                                         if (err != null) {
                                             mainRunTabController
                                                     .getStatusLabel()
@@ -600,6 +617,37 @@ public final class MainShellController {
                                         }
                                     });
                         });
+    }
+
+    /**
+     * \u6bb5\u968e1\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\uff08\u6bb5\u968e2\u524d\u63d0\uff09\u3092\u9589\u3058\u308b\u3002
+     * \u6bb5\u968e2\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u6bb5\u968e1\u6210\u5f62\u7d50\u679c\u3092\u9589\u3058\u308b\u3002
+     */
+    private void applyRunTabGating() {
+        if (tabPane == null) {
+            return;
+        }
+        ObservableList<Tab> tabs = tabPane.getTabs();
+        if (tabs.isEmpty()) {
+            return;
+        }
+        String script = activeRunStageScript;
+        boolean stage1Running = STAGE1.equals(script);
+        boolean stage2Running = STAGE2.equals(script);
+        for (int i = 0; i < tabs.size(); i++) {
+            Tab t = tabs.get(i);
+            boolean disable =
+                    stage1Running && (i == TAB_INDEX_ENV || i == TAB_INDEX_PLAN_INPUT)
+                            || stage2Running
+                                    && (i == TAB_INDEX_ENV || i == TAB_INDEX_STAGE1_PREVIEW);
+            t.setDisable(disable);
+        }
+        int sel = tabPane.getSelectionModel().getSelectedIndex();
+        if (stage1Running && (sel == TAB_INDEX_ENV || sel == TAB_INDEX_PLAN_INPUT)) {
+            tabPane.getSelectionModel().select(0);
+        } else if (stage2Running && (sel == TAB_INDEX_ENV || sel == TAB_INDEX_STAGE1_PREVIEW)) {
+            tabPane.getSelectionModel().select(0);
+        }
     }
 
     private void showStageCompletionDialog(String title, String contentText) {
