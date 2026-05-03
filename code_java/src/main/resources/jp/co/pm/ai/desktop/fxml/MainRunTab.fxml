@@ -24,29 +24,9 @@
                     <Insets bottom="0.0" left="12.0" right="0.0" top="12.0"/>
                 </padding>
                 <children>
-                    <Label text="&#x30de;&#x30af;&#x30ed;&#x5b9f;&#x884c;&#x30d6;&#x30c3;&#x30af;&#xff08;&#x4efb;&#x610f;&#xff09;"
-                           GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                    <TextField fx:id="workbookField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-                    <HBox spacing="4.0" GridPane.columnIndex="2" GridPane.rowIndex="0">
-                        <Button fx:id="browseWbButton" mnemonicParsing="false"
-                                text="&#x53c2;&#x7167;&#x2026;"
-                                onAction="#onBrowseWorkbookButtonAction"/>
-                        <Button fx:id="detectWbButton" mnemonicParsing="false"
-                                text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"
-                                onAction="#onDetectWorkbookButtonAction"/>
-                    </HBox>
-                    <Label text="Python" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                    <TextField fx:id="pythonExeField" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                               GridPane.rowIndex="1"/>
-                    <Label text="&#x30b9;&#x30af;&#x30ea;&#x30d7;&#x30c8;&#x30c7;&#x30a3;&#x30ec;&#x30af;&#x30c8;&#x30ea;"
-                           GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                    <TextField fx:id="scriptDirField" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
-                    <Button fx:id="refreshDirButton" mnemonicParsing="false"
-                            text="&#x81ea;&#x52d5;&#x691c;&#x51fa;"
-                            onAction="#onRefreshScriptDirButtonAction"
-                            GridPane.columnIndex="2" GridPane.rowIndex="2"/>
+                    <!-- workbookField / pythonExeField / scriptDirField: session + env merge fallback (hidden; edit on &#x74b0;&#x5883;&#x5909;&#x6570; tab) -->
                     <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="3">
+                          GridPane.rowIndex="0">
                         <Button fx:id="stage1RunButton" mnemonicParsing="false"
                                 text="&#x6bb5;&#x968e;1 &#x5b9f;&#x884c;"
                                 onAction="#onStage1RunButtonAction"/>
@@ -57,8 +37,21 @@
                                 text="&#x30b7;&#x30fc;&#x30c8;&#x4e00;&#x89a7; (POI)"
                                 onAction="#onPeekSheetsButtonAction"/>
                     </HBox>
+                    <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
+                           GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                    <TextField fx:id="stage2ProductionPlanField" editable="false" GridPane.columnIndex="1"
+                               GridPane.columnSpan="2" GridPane.rowIndex="1"/>
+                    <Label text="&#x6bb5;&#x968e;2 member_schedule&#xff08;&#x6700;&#x65b0;&#xff09;"
+                           GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                    <TextField fx:id="stage2MemberScheduleField" editable="false" GridPane.columnIndex="1"
+                               GridPane.columnSpan="2" GridPane.rowIndex="2"/>
                 </children>
             </GridPane>
+            <HBox visible="false" managed="false" spacing="0.0">
+                <TextField fx:id="workbookField" prefWidth="1.0"/>
+                <TextField fx:id="pythonExeField" prefWidth="1.0"/>
+                <TextField fx:id="scriptDirField" prefWidth="1.0"/>
+            </HBox>
             <Label text="log (stdout+stderr merged)"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="&#x30d5;&#x30a3;&#x30eb;&#x30bf;"/>

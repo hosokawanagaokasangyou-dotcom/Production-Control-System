@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,7 +22,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TabPane;
-import javafx.stage.FileChooser;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -438,24 +438,6 @@ public final class MainShellController {
         appendLog("[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.");
     }
 
-    void pickWorkbook() {
-        FileChooser ch = new FileChooser();
-        ch.setTitle("\u30de\u30af\u30ed\u30d6\u30c3\u30af\u9078\u629e");
-        ch.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel", "*.xlsm", "*.xlsx"));
-        var f = ch.showOpenDialog(primaryStage);
-        if (f != null) {
-            mainRunTabController.getWorkbookField().setText(f.getAbsolutePath());
-        }
-    }
-
-    String resolveTaskInputWorkbookFromEnv() {
-        return AppPaths.resolveTaskInputWorkbook(collectUiEnv()).map(Path::toString).orElse("");
-    }
-
-    String resolvePythonScriptDirFromEnv() {
-        return AppPaths.resolvePythonScriptDir(collectUiEnv()).toString();
-    }
-
     /**
      * After stage 1 writes {@code json/stage1_exclude_rules.json}, mirror the path into the env tab so
      * {@code PM_AI_EXCLUDE_RULES_JSON} matches the next child-process run.
@@ -567,6 +549,9 @@ public final class MainShellController {
                                                 if (reloadAfterStage1PlanInput != null) {
                                                     reloadAfterStage1PlanInput.run();
                                                 }
+                                            }
+                                            if (STAGE2.equals(script) && c == 0) {
+                                                refreshStage2OutputArtifacts();
                                             }
                                         }
                                     });
@@ -735,6 +720,64 @@ public final class MainShellController {
 
     void triggerStage2() {
         runStage(STAGE2);
+    }
+
+    /**
+     * After stage-2 success, show newest {@code production_plan_multi_day_*.xlsx} and {@code member_schedule_*.xlsx}
+     * under {@link AppPaths#defaultPlanningOutputDir} in the run tab (same folder as plan-input export).
+     */
+    private void refreshStage2OutputArtifacts() {
+        try {
+            Map<String, String> ui = collectUiEnv();
+            Path dir = AppPaths.defaultPlanningOutputDir(ui);
+            if (!Files.isDirectory(dir)) {
+                mainRunTabController.setStage2ArtifactPaths("", "");
+                appendLog(
+                        "[stage2-ui] "
+                                + "\u51fa\u529b\u30d5\u30a9\u30eb\u30c0\u304c\u3042\u308a\u307e\u305b\u3093: "
+                                + dir);
+                return;
+            }
+            Path newestPlan = null;
+            long planTime = Long.MIN_VALUE;
+            Path newestMember = null;
+            long memberTime = Long.MIN_VALUE;
+            try (DirectoryStream<Path> stream =
+                    Files.newDirectoryStream(dir, "production_plan_multi_day_*.xlsx")) {
+                for (Path p : stream) {
+                    long t = Files.getLastModifiedTime(p).toMillis();
+                    if (t >= planTime) {
+                        planTime = t;
+                        newestPlan = p;
+                    }
+                }
+            }
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "member_schedule_*.xlsx")) {
+                for (Path p : stream) {
+                    long t = Files.getLastModifiedTime(p).toMillis();
+                    if (t >= memberTime) {
+                        memberTime = t;
+                        newestMember = p;
+                    }
+                }
+            }
+            String planStr = newestPlan != null ? newestPlan.toString() : "";
+            String memStr = newestMember != null ? newestMember.toString() : "";
+            mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
+            if (!planStr.isEmpty() || !memStr.isEmpty()) {
+                appendLog(
+                        "[stage2-ui] "
+                                + "\u6700\u65b0\u6210\u679c\u7269: production_plan="
+                                + planStr
+                                + " | member_schedule="
+                                + memStr);
+            }
+        } catch (Exception ex) {
+            appendLog(
+                    "[stage2-ui] "
+                            + "\u6210\u679c\u7269\u30d1\u30b9\u66f4\u65b0\u30a8\u30e9\u30fc: "
+                            + ex.getMessage());
+        }
     }
 
     void triggerPeekSheets() {

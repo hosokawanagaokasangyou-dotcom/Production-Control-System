@@ -65,13 +65,10 @@ public final class MainRunTabController {
     private Label statusLabel;
 
     @FXML
-    private Button browseWbButton;
+    private TextField stage2ProductionPlanField;
 
     @FXML
-    private Button detectWbButton;
-
-    @FXML
-    private Button refreshDirButton;
+    private TextField stage2MemberScheduleField;
 
     @FXML
     private Button stage1RunButton;
@@ -398,21 +395,6 @@ public final class MainRunTabController {
     }
 
     @FXML
-    private void onBrowseWorkbookButtonAction() {
-        shell.pickWorkbook();
-    }
-
-    @FXML
-    private void onDetectWorkbookButtonAction() {
-        workbookField.setText(shell.resolveTaskInputWorkbookFromEnv());
-    }
-
-    @FXML
-    private void onRefreshScriptDirButtonAction() {
-        scriptDirField.setText(shell.resolvePythonScriptDirFromEnv());
-    }
-
-    @FXML
     private void onStage1RunButtonAction() {
         shell.triggerStage1();
     }
@@ -455,6 +437,19 @@ public final class MainRunTabController {
 
     Label getStatusLabel() {
         return statusLabel;
+    }
+
+    /**
+     * Fills read-only paths after stage-2 success (newest files under {@link
+     * jp.co.pm.ai.desktop.config.AppPaths#defaultPlanningOutputDir}).
+     */
+    void setStage2ArtifactPaths(String productionPlanPath, String memberSchedulePath) {
+        if (stage2ProductionPlanField != null) {
+            stage2ProductionPlanField.setText(productionPlanPath != null ? productionPlanPath : "");
+        }
+        if (stage2MemberScheduleField != null) {
+            stage2MemberScheduleField.setText(memberSchedulePath != null ? memberSchedulePath : "");
+        }
     }
 
     void appendLog(String line) {
