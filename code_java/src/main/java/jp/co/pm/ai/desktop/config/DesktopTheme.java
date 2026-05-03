@@ -31,7 +31,7 @@ public enum DesktopTheme {
 
     private final String id;
     private final String displayLabel;
-    /** File name in {@link #CSS_DIR}, or {@code null} for {@link #LIGHT}. */
+    /** File name in {@link #CSS_DIR} (each theme includes grid-line contrast rules). */
     private final String overlayCssFile;
 
     DesktopTheme(String id, String displayLabel, String overlayCssFile) {
