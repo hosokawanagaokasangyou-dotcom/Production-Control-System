@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 import javafx.animation.PauseTransition;
 import javafx.collections.ListChangeListener;
@@ -21,8 +22,13 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.util.Duration;
 
+import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
+import org.controlsfx.control.spreadsheet.SpreadsheetView;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Persists TableView column order and widths under {@code ~/.pm-ai-desktop/table-column-order.json}.
@@ -38,13 +44,18 @@ public final class TableColumnOrderPersistence {
 
     private static final double MIN_WIDTH = 40.0;
 
+    private static String headerCountKey(TableId id) {
+        return id.jsonKey() + "_headerColumnCount";
+    }
+
     public record ColumnSpec(String title, double width) {}
 
     public enum TableId {
         PLAN_INPUT("planInput"),
         STAGE1_PREVIEW("stage1Preview"),
         ACTUALS_STATUS("actualsStatus"),
-        ENV_VARS("envVars");
+        ENV_VARS("envVars"),
+        RESULT_DISPATCH_TABLE("resultDispatchTable");
 
         private final String jsonKey;
 
@@ -146,6 +157,47 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /** Number of leading visual columns treated as header columns (0 = off). */
+    public static int loadHeaderColumnCount(TableId id) {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return 0;
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return 0;
+            }
+            JsonNode n = root.get(headerCountKey(id));
+            if (n == null || !n.isNumber()) {
+                return 0;
+            }
+            int v = n.intValue();
+            return Math.max(0, Math.min(v, 10_000));
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    public static void saveHeaderColumnCount(TableId id, int count) {
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            int v = Math.max(0, Math.min(count, 10_000));
+            root.put(headerCountKey(id), v);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     public static List<ColumnSpec> loadLayout(TableId id) {
         try {
             if (!Files.isRegularFile(STORE)) {
@@ -184,23 +236,25 @@ public final class TableColumnOrderPersistence {
     public static void saveLayout(TableId id, List<ColumnSpec> columns) {
         try {
             Files.createDirectories(STORE.getParent());
-            Map<String, List<ColumnSpec>> root = new HashMap<>();
+            ObjectNode root;
             if (Files.isRegularFile(STORE)) {
-                try {
-                    JsonNode tree = JSON.readTree(STORE.toFile());
-                    if (tree != null && tree.isObject()) {
-                        for (TableId tid : TableId.values()) {
-                            JsonNode n = tree.get(tid.jsonKey());
-                            List<ColumnSpec> parsed = parseLayoutArray(n, defaultWidthFallback());
-                            if (!parsed.isEmpty()) {
-                                root.put(tid.jsonKey(), new ArrayList<>(parsed));
-                            }
-                        }
-                    }
-                } catch (IOException ignored) {
-                }
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
             }
-            root.put(id.jsonKey(), new ArrayList<>(columns));
+            ArrayNode arr = JSON.createArrayNode();
+            double def = defaultWidthFallback();
+            for (ColumnSpec c : columns) {
+                ObjectNode o = JSON.createObjectNode();
+                o.put("title", c.title());
+                o.put("width", clampWidth(c.width(), def));
+                arr.add(o);
+            }
+            root.set(id.jsonKey(), arr);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
         }
@@ -212,6 +266,90 @@ public final class TableColumnOrderPersistence {
             out.add(new ColumnSpec(colTitle(c), effectiveWidth(c)));
         }
         return out;
+    }
+
+    /** Column widths for ControlsFX {@link SpreadsheetView} (titles from sheet header list). */
+    public static List<ColumnSpec> snapshotSpreadsheet(SpreadsheetView view, List<String> headerTitlesInOrder) {
+        List<ColumnSpec> out = new ArrayList<>();
+        if (view == null || headerTitlesInOrder == null) {
+            return out;
+        }
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        for (int i = 0; i < cols.size(); i++) {
+            String title = i < headerTitlesInOrder.size() ? headerTitlesInOrder.get(i) : "";
+            double w = cols.get(i).getWidth();
+            if (w <= 1 || Double.isNaN(w)) {
+                w = defaultWidthFallback();
+            }
+            out.add(new ColumnSpec(title, clampWidth(w, defaultWidthFallback())));
+        }
+        return out;
+    }
+
+    /**
+     * Saves spreadsheet column widths (order follows {@code headerTitlesSupplier} / grid columns).
+     */
+    public static void installSpreadsheetColumnLayoutWatcher(
+            SpreadsheetView view,
+            TableId id,
+            BooleanSupplier suppressSave,
+            Supplier<List<String>> headerTitlesSupplier) {
+        PauseTransition debounce = new PauseTransition(Duration.millis(400));
+        Runnable flushWidths =
+                () -> {
+                    if (suppressSave.getAsBoolean()) {
+                        return;
+                    }
+                    saveLayout(id, snapshotSpreadsheet(view, headerTitlesSupplier.get()));
+                };
+        debounce.setOnFinished(e -> flushWidths.run());
+
+        Runnable scheduleWidthSave =
+                () -> {
+                    if (suppressSave.getAsBoolean()) {
+                        return;
+                    }
+                    debounce.stop();
+                    debounce.playFromStart();
+                };
+
+        view.getColumns()
+                .addListener(
+                        (ListChangeListener<SpreadsheetColumn>)
+                                c -> {
+                                    if (suppressSave.getAsBoolean()) {
+                                        return;
+                                    }
+                                    while (c.next()) {
+                                        if (c.wasAdded()) {
+                                            for (SpreadsheetColumn col : c.getAddedSubList()) {
+                                                attachSpreadsheetWidthDebounced(
+                                                        col, scheduleWidthSave, suppressSave);
+                                            }
+                                        }
+                                        if (c.wasPermutated() || c.wasAdded() || c.wasRemoved()) {
+                                            debounce.stop();
+                                            flushWidths.run();
+                                            return;
+                                        }
+                                    }
+                                });
+
+        for (SpreadsheetColumn col : view.getColumns()) {
+            attachSpreadsheetWidthDebounced(col, scheduleWidthSave, suppressSave);
+        }
+    }
+
+    private static void attachSpreadsheetWidthDebounced(
+            SpreadsheetColumn col, Runnable scheduleWidthSave, BooleanSupplier suppressSave) {
+        col.widthProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            if (suppressSave.getAsBoolean()) {
+                                return;
+                            }
+                            scheduleWidthSave.run();
+                        });
     }
 
     /**

@@ -76,6 +76,18 @@ class AppPathsTest {
     }
 
     @Test
+    void resultDispatchTableJsonPath_joinsBasename(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("Production-Control-System").resolve("code").resolve("python");
+        Files.createDirectories(code);
+        Files.createFile(code.resolve("task_extract_stage1.py"));
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.resolve("Production-Control-System").toString());
+        Path dir = AppPaths.resolveResultDispatchTableDir(ui);
+        Path json = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        assertEquals(dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME), json);
+    }
+
+    @Test
     void pickMacroWorkbook_singleFile(@TempDir Path dir) throws Exception {
         Path wb = dir.resolve("only.xlsm");
         Files.createFile(wb);

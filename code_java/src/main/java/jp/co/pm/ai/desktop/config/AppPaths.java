@@ -1,10 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
@@ -57,8 +55,8 @@ public final class AppPaths {
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
-     * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override from
-     * TASK_INPUT_WORKBOOK).
+     * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override when
+     * it differs from {@code PM_AI_PLAN_INPUT_PATH}).
      */
     public static final String KEY_PM_AI_COLUMN_CONFIG_WORKBOOK = "PM_AI_COLUMN_CONFIG_WORKBOOK";
 
@@ -96,44 +94,6 @@ public final class AppPaths {
             KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
 
     private AppPaths() {}
-
-    // #region agent log
-    private static final Path AGENT_DEBUG_LOG =
-            Path.of("/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-e6e382.log");
-
-    private static String agentJsonEsc(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-
-    private static void agentLog(String hypothesisId, String location, String message, String dataJson) {
-        try {
-            long ts = System.currentTimeMillis();
-            String line =
-                    "{\"sessionId\":\"e6e382\",\"hypothesisId\":\""
-                            + hypothesisId
-                            + "\",\"location\":\""
-                            + agentJsonEsc(location)
-                            + "\",\"message\":\""
-                            + agentJsonEsc(message)
-                            + "\",\"timestamp\":"
-                            + ts
-                            + ",\"runId\":\"post-fix\",\"data\":"
-                            + (dataJson != null ? dataJson : "{}")
-                            + "}\n";
-            Files.writeString(
-                    AGENT_DEBUG_LOG,
-                    line,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-        }
-    }
-
-    // #endregion
 
     /** Whether {@code key} refers to a folder path (not a single file). */
     public static boolean isFolderPathEnvKey(String key) {
@@ -206,33 +166,11 @@ public final class AppPaths {
             Path underNested = base.resolve("Production-Control-System").resolve("code").resolve("python");
             for (Path p : new Path[] {underRepo, underNested}) {
                 if (Files.isDirectory(p) && Files.isRegularFile(p.resolve("task_extract_stage1.py"))) {
-                    agentLog(
-                            "H1",
-                            "AppPaths.resolvePythonScriptDir",
-                            "chosen with task_extract_stage1.py",
-                            "{\"chosen\":\""
-                                    + agentJsonEsc(p.toString())
-                                    + "\",\"underRepo\":\""
-                                    + agentJsonEsc(underRepo.toString())
-                                    + "\",\"underNested\":\""
-                                    + agentJsonEsc(underNested.toString())
-                                    + "\"}");
                     return p;
                 }
             }
             for (Path p : new Path[] {underRepo, underNested}) {
                 if (Files.isDirectory(p)) {
-                    agentLog(
-                            "H1",
-                            "AppPaths.resolvePythonScriptDir",
-                            "chosen directory only",
-                            "{\"chosen\":\""
-                                    + agentJsonEsc(p.toString())
-                                    + "\",\"underRepo\":\""
-                                    + agentJsonEsc(underRepo.toString())
-                                    + "\",\"underNested\":\""
-                                    + agentJsonEsc(underNested.toString())
-                                    + "\"}");
                     return p;
                 }
             }
@@ -282,6 +220,21 @@ public final class AppPaths {
         return resolveRepoRoot(u).resolve("code").toAbsolutePath().normalize();
     }
 
+    /** Basename of the JSON export for the result dispatch table (next to the standalone xlsx). */
+    public static final String RESULT_DISPATCH_TABLE_JSON_BASENAME =
+            "\u7d50\u679c_\u914d\u53f0\u8868.json";
+
+    /**
+     * {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME} under {@link #resolveResultDispatchTableDir(Map)} (override via
+     * {@link #KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR}).
+     */
+    public static Path resolveResultDispatchTableJsonPath(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
     /**
      * First existing {@code master.xlsm} / {@code master.xlsx} under {@link #resolveRepoRoot(Map)} ({@code plan/},
      * {@code code/}, or repo root). Used for JavaFX bootstrap hints only.
@@ -305,7 +258,7 @@ public final class AppPaths {
 
     /**
      * Approximates {@code planning_core} bootstrap {@code os.getcwd()} after import: {@code PM_AI_WORKSPACE}
-     * if set and a directory, else parent of {@code TASK_INPUT_WORKBOOK}, else parent of {@link
+     * if set and a directory, else parent of the main-run macro-book path when provided, else parent of {@link
      * #resolvePythonScriptDir(Map)} (the {@code code} folder next to {@code python}).
      */
     public static Path resolveEffectivePlanningCwd(Map<String, String> ui, String taskInputWorkbookPath) {
@@ -382,10 +335,25 @@ public final class AppPaths {
     public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
 
     /**
-     * Path to the stage-1 exclude-rules sidecar JSON (same convention as Python {@code json_data_dir} under
-     * {@code code/python}).
+     * Path to the stage-1 exclude-rules sidecar JSON (same as Python {@code planning_core.bootstrap}
+     * {@code json_data_dir}: {@code <effective cwd>/json/}, typically beside {@code output/} under {@code code/}).
      */
     public static Path stage1ExcludeRulesJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path pyDir = resolvePythonScriptDir(u);
+        Path codeDir = pyDir.getParent();
+        Path underCodeJson =
+                codeDir != null
+                        ? codeDir.resolve("json").resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                        : pyDir.resolve("json").resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME);
+        return underCodeJson.toAbsolutePath().normalize();
+    }
+
+    /**
+     * Legacy location used before aligning with Python {@code cwd/json}; checked if {@link #stage1ExcludeRulesJsonPath}
+     * is missing.
+     */
+    public static Path stage1ExcludeRulesJsonPathLegacyUnderPython(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         return resolvePythonScriptDir(u)
                 .resolve("json")
@@ -430,6 +398,26 @@ public final class AppPaths {
             }
         }
         return underCodeOutput.toAbsolutePath().normalize();
+    }
+
+    /**
+     * Directory where stage-2 writes {@code production_plan_multi_day_*.xlsx} and {@code member_schedule_*.xlsx}
+     * (same folder as {@link #defaultStage1PlanTasksPath} — typically {@code .../code/output/}).
+     */
+    public static Path defaultPlanningOutputDir(Map<String, String> ui) {
+        Path planTasks = defaultStage1PlanTasksPath(ui);
+        Path parent = planTasks.getParent();
+        if (parent != null) {
+            return parent.toAbsolutePath().normalize();
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path pyDir = resolvePythonScriptDir(u);
+        Path codeDir = pyDir.getParent();
+        Path fallback =
+                codeDir != null
+                        ? codeDir.resolve("output")
+                        : pyDir.resolve("output");
+        return fallback.toAbsolutePath().normalize();
     }
 
     /**
@@ -483,9 +471,8 @@ public final class AppPaths {
     }
 
     /**
-     * Discovers a macro {@code .xlsm} for auto-fill (JavaFX main field). Does not read {@code TASK_INPUT_WORKBOOK}
-     * from {@code ui} ? that env var is set only by the {@link jp.co.pm.ai.desktop.bridge.PythonProcessRunner}
-     * from the main workbook field. Uses {@code PM_AI_WORKSPACE} then {@link #resolveRepoRoot(Map)} scan.
+     * Discovers a macro {@code .xlsm} for auto-fill (JavaFX main-run tab field). Uses {@code PM_AI_WORKSPACE}
+     * then {@link #resolveRepoRoot(Map)} scan. Not tied to an env-tab variable.
      */
     public static Optional<Path> resolveTaskInputWorkbook(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();

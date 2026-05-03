@@ -62,6 +62,12 @@
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab closable="false"
+                     text="&#x7d50;&#x679c;_&#x914d;&#x53f0;&#x8868; (JSON)">
+                    <content>
+                        <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
+                    </content>
+                </Tab>
             </tabs>
         </TabPane>
     </center>

@@ -104,6 +104,9 @@ public final class MainShellController {
     @FXML
     private MasterReadSummaryTabController masterReadSummaryTabController;
 
+    @FXML
+    private ResultDispatchTableTabController resultDispatchTableTabController;
+
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
@@ -161,6 +164,7 @@ public final class MainShellController {
         stage1PreviewTabController.bindShell(this);
         excludeRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
+        resultDispatchTableTabController.bindShell(this);
 
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
@@ -233,7 +237,9 @@ public final class MainShellController {
     }
 
     private static boolean tabSupportsClearFilters(int idx) {
-        return idx == 1 || idx == 2 || idx == 3 || idx == 5;
+        /* MainShell.fxml order: 0 run, 1 env, 2 master summary, 3 plan input, 4 stage1, 5 exclude, 6 actuals,
+         * 7 result dispatch JSON */
+        return idx == 1 || idx == 3 || idx == 4 || idx == 6 || idx == 7;
     }
 
     private void updateClearTabFiltersButton(int idx) {
@@ -247,9 +253,10 @@ public final class MainShellController {
     private void onClearTabFiltersAction() {
         switch (tabPane.getSelectionModel().getSelectedIndex()) {
             case 1 -> envTabController.clearColumnFiltersAndSort();
-            case 2 -> planInputTabController.clearColumnFiltersAndSort();
-            case 3 -> stage1PreviewTabController.clearColumnFiltersAndSort();
-            case 5 -> actualsStatusTabController.clearColumnFiltersAndSort();
+            case 3 -> planInputTabController.clearColumnFiltersAndSort();
+            case 4 -> stage1PreviewTabController.clearColumnFiltersAndSort();
+            case 6 -> actualsStatusTabController.clearColumnFiltersAndSort();
+            case 7 -> resultDispatchTableTabController.clearColumnFiltersAndSort();
             default -> {
                 /* tabs without TableFilter / Spreadsheet filter row */
             }
