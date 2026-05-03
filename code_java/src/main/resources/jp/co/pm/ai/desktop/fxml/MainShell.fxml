@@ -24,52 +24,55 @@
         </ToolBar>
     </top>
     <center>
-        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE">
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE" tabDragPolicy="REORDER">
             <tabs>
-                <Tab closable="false" text="&#x5b9f;&#x884c;&#x30fb;&#x30ed;&#x30b0;">
+                <Tab fx:id="mainShellTabRun" closable="false" text="&#x5b9f;&#x884c;&#x30fb;&#x30ed;&#x30b0;">
                     <content>
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="&#x74b0;&#x5883;&#x5909;&#x6570;">
+                <Tab fx:id="mainShellTabEnv" closable="false" text="&#x74b0;&#x5883;&#x5909;&#x6570;">
                     <content>
                         <fx:include fx:id="envTab" source="EnvTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="&#x30de;&#x30b9;&#x30bf;&#x8aad;&#x8fbc;&#x30b5;&#x30de;&#x30ea;">
+                <Tab fx:id="mainShellTabMasterSummary" closable="false"
+                     text="&#x30de;&#x30b9;&#x30bf;&#x8aad;&#x8fbc;&#x30b5;&#x30de;&#x30ea;">
                     <content>
                         <fx:include fx:id="masterReadSummaryTab" source="MasterReadSummaryTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false"
+                <Tab fx:id="mainShellTabPlanInput" closable="false"
                      text="&#x914d;&#x53f0;&#x8a08;&#x753b;_&#x30bf;&#x30b9;&#x30af;&#x5165;&#x529b;">
                     <content>
                         <fx:include fx:id="planInputTab" source="PlanInputTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="&#x6bb5;&#x968e;1 &#x6210;&#x5f62;&#x7d50;&#x679c;">
+                <Tab fx:id="mainShellTabStage1Preview" closable="false"
+                     text="&#x6bb5;&#x968e;1 &#x6210;&#x5f62;&#x7d50;&#x679c;">
                     <content>
                         <fx:include fx:id="stage1PreviewTab" source="Stage1PreviewTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false" text="&#x914d;&#x53f0;&#x4e0d;&#x8981;&#x30eb;&#x30fc;&#x30eb; (JSON)">
+                <Tab fx:id="mainShellTabExcludeRules" closable="false"
+                     text="&#x914d;&#x53f0;&#x4e0d;&#x8981;&#x30eb;&#x30fc;&#x30eb; (JSON)">
                     <content>
                         <fx:include fx:id="excludeRulesTab" source="ExcludeRulesTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false"
+                <Tab fx:id="mainShellTabActualsStatus" closable="false"
                      text="&#x5b9f;&#x7e3e;DATA&#x30fb;&#x660e;&#x7d30;&#x306e;&#x53d6;&#x5f97;&#x72b6;&#x614b;">
                     <content>
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false"
+                <Tab fx:id="mainShellTabResultDispatch" closable="false"
                      text="&#x7d50;&#x679c;_&#x914d;&#x53f0;&#x8868; (JSON)">
                     <content>
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab closable="false"
+                <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
                      text="&#x8a08;&#x753b;&#x7d50;&#x679c;&#x30d3;&#x30e5;&#x30fc;&#x30a2; (JSON)">
                     <content>
                         <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>

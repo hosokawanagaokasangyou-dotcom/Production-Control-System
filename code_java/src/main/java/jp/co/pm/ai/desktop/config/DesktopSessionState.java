@@ -27,6 +27,8 @@ import java.util.List;
  * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
  * @param mainRunStage2WriteExcel whether stage-2 writes xlsx deliverables; when false only JSON (run tab)
  * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
+ * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
+ *     tab strip; empty restores default FXML order
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -50,7 +52,8 @@ public record DesktopSessionState(
         String mainRunStage2ProductionPlan,
         String mainRunStage2MemberSchedule,
         boolean mainRunStage2WriteExcel,
-        List<UiEnvRowSnapshot> uiEnvRows) {
+        List<UiEnvRowSnapshot> uiEnvRows,
+        List<String> mainShellTabOrder) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
@@ -75,6 +78,7 @@ public record DesktopSessionState(
                 "",
                 "",
                 true,
+                List.of(),
                 List.of());
     }
 }

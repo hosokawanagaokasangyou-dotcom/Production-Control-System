@@ -56,7 +56,8 @@ public final class DesktopSessionStateStore {
                     text(root, "mainRunStage2ProductionPlan"),
                     text(root, "mainRunStage2MemberSchedule"),
                     optionalBoolean(root, "mainRunStage2WriteExcel", true),
-                    loadUiEnvRows(root));
+                    loadUiEnvRows(root),
+                    loadStringList(root, "mainShellTabOrder"));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -84,6 +85,7 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
             root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
             putUiEnvRows(root, state.uiEnvRows());
+            putMainShellTabOrder(root, state.mainShellTabOrder());
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -193,6 +195,21 @@ public final class DesktopSessionStateStore {
             }
         }
         root.set("uiEnvRows", arr);
+    }
+
+    private static void putMainShellTabOrder(ObjectNode root, List<String> order) {
+        if (order == null || order.isEmpty()) {
+            return;
+        }
+        ArrayNode arr = JSON.createArrayNode();
+        for (String s : order) {
+            if (s != null && !s.isBlank()) {
+                arr.add(s.trim());
+            }
+        }
+        if (!arr.isEmpty()) {
+            root.set("mainShellTabOrder", arr);
+        }
     }
 
     private static void putWindowGeometry(ObjectNode root, DesktopSessionState state) {

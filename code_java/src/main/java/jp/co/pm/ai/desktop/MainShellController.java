@@ -54,14 +54,6 @@ public final class MainShellController {
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
 
-    /** MainShell.fxml: index 1 = \u74b0\u5883\u5909\u6570. */
-    private static final int TAB_INDEX_ENV = 1;
-
-    /** MainShell.fxml: index 3 = \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\uff08\u6bb5\u968e2\u524d\u63d0\uff09. */
-    private static final int TAB_INDEX_PLAN_INPUT = 3;
-
-    /** MainShell.fxml: index 4 = \u6bb5\u968e1 \u6210\u5f62\u7d50\u679c. */
-    private static final int TAB_INDEX_STAGE1_PREVIEW = 4;
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
 
@@ -138,6 +130,33 @@ public final class MainShellController {
 
     @FXML
     private PlanResultViewerTabController planResultViewerTabController;
+
+    @FXML
+    private Tab mainShellTabRun;
+
+    @FXML
+    private Tab mainShellTabEnv;
+
+    @FXML
+    private Tab mainShellTabMasterSummary;
+
+    @FXML
+    private Tab mainShellTabPlanInput;
+
+    @FXML
+    private Tab mainShellTabStage1Preview;
+
+    @FXML
+    private Tab mainShellTabExcludeRules;
+
+    @FXML
+    private Tab mainShellTabActualsStatus;
+
+    @FXML
+    private Tab mainShellTabResultDispatch;
+
+    @FXML
+    private Tab mainShellTabPlanResultViewer;
 
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
@@ -227,17 +246,24 @@ public final class MainShellController {
 
         tabPane
                 .getSelectionModel()
-                .selectedIndexProperty()
+                .selectedItemProperty()
                 .addListener(
-                        (obs, prev, idx) -> {
-                            int prevIdx = prev != null ? prev.intValue() : -1;
-                            int newIdx = idx != null ? idx.intValue() : -1;
-                            if (prevIdx == 0 && newIdx != 0) {
+                        (obs, prevTab, newTab) -> {
+                            if (prevTab == mainShellTabRun && newTab != mainShellTabRun) {
                                 DesktopSessionStateStore.save(collectDesktopSession());
                             }
-                            updateClearTabFiltersButton(newIdx);
+                            updateClearTabFiltersButton(newTab);
                         });
-        updateClearTabFiltersButton(tabPane.getSelectionModel().getSelectedIndex());
+        tabPane
+                .getTabs()
+                .addListener(
+                        (ListChangeListener<Tab>)
+                                c -> {
+                                    if (!suppressEnvSessionPersistence.get()) {
+                                        DesktopSessionStateStore.save(collectDesktopSession());
+                                    }
+                                });
+        updateClearTabFiltersButton(tabPane.getSelectionModel().getSelectedItem());
     }
 
     /**
@@ -283,31 +309,37 @@ public final class MainShellController {
         return pendingTheme != null ? pendingTheme : DesktopTheme.LIGHT;
     }
 
-    private static boolean tabSupportsClearFilters(int idx) {
-        /* MainShell.fxml order: 0 run, 1 env, 2 master summary, 3 plan input, 4 stage1, 5 exclude, 6 actuals,
-         * 7 result dispatch JSON, 8 plan result viewer JSON */
-        return idx == 1 || idx == 3 || idx == 4 || idx == 6 || idx == 7 || idx == 8;
+    private boolean tabSupportsClearFilters(Tab t) {
+        return t == mainShellTabEnv
+                || t == mainShellTabPlanInput
+                || t == mainShellTabStage1Preview
+                || t == mainShellTabActualsStatus
+                || t == mainShellTabResultDispatch
+                || t == mainShellTabPlanResultViewer;
     }
 
-    private void updateClearTabFiltersButton(int idx) {
+    private void updateClearTabFiltersButton(Tab selected) {
         if (clearTabFiltersButton == null) {
             return;
         }
-        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(idx));
+        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(selected));
     }
 
     @FXML
     private void onClearTabFiltersAction() {
-        switch (tabPane.getSelectionModel().getSelectedIndex()) {
-            case 1 -> envTabController.clearColumnFiltersAndSort();
-            case 3 -> planInputTabController.clearColumnFiltersAndSort();
-            case 4 -> stage1PreviewTabController.clearColumnFiltersAndSort();
-            case 6 -> actualsStatusTabController.clearColumnFiltersAndSort();
-            case 7 -> resultDispatchTableTabController.clearColumnFiltersAndSort();
-            case 8 -> planResultViewerTabController.clearColumnFiltersAndSort();
-            default -> {
-                /* tabs without TableFilter / Spreadsheet filter row */
-            }
+        Tab sel = tabPane.getSelectionModel().getSelectedItem();
+        if (sel == mainShellTabEnv) {
+            envTabController.clearColumnFiltersAndSort();
+        } else if (sel == mainShellTabPlanInput) {
+            planInputTabController.clearColumnFiltersAndSort();
+        } else if (sel == mainShellTabStage1Preview) {
+            stage1PreviewTabController.clearColumnFiltersAndSort();
+        } else if (sel == mainShellTabActualsStatus) {
+            actualsStatusTabController.clearColumnFiltersAndSort();
+        } else if (sel == mainShellTabResultDispatch) {
+            resultDispatchTableTabController.clearColumnFiltersAndSort();
+        } else if (sel == mainShellTabPlanResultViewer) {
+            planResultViewerTabController.clearColumnFiltersAndSort();
         }
     }
 
@@ -339,6 +371,7 @@ public final class MainShellController {
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         applyWindowGeometry(s);
+        applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
@@ -403,7 +436,105 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 mainRunTabController.snapshotStage2WriteExcel(),
-                snapshotUiEnvRows());
+                snapshotUiEnvRows(),
+                snapshotMainShellTabOrder());
+    }
+
+    private MainShellTabId mainShellTabId(Tab t) {
+        if (t == null) {
+            return null;
+        }
+        if (t == mainShellTabRun) {
+            return MainShellTabId.RUN;
+        }
+        if (t == mainShellTabEnv) {
+            return MainShellTabId.ENV;
+        }
+        if (t == mainShellTabMasterSummary) {
+            return MainShellTabId.MASTER_SUMMARY;
+        }
+        if (t == mainShellTabPlanInput) {
+            return MainShellTabId.PLAN_INPUT;
+        }
+        if (t == mainShellTabStage1Preview) {
+            return MainShellTabId.STAGE1_PREVIEW;
+        }
+        if (t == mainShellTabExcludeRules) {
+            return MainShellTabId.EXCLUDE_RULES;
+        }
+        if (t == mainShellTabActualsStatus) {
+            return MainShellTabId.ACTUALS_STATUS;
+        }
+        if (t == mainShellTabResultDispatch) {
+            return MainShellTabId.RESULT_DISPATCH;
+        }
+        if (t == mainShellTabPlanResultViewer) {
+            return MainShellTabId.PLAN_RESULT_VIEWER;
+        }
+        return null;
+    }
+
+    private Tab mainShellTabFor(MainShellTabId id) {
+        if (id == null) {
+            return null;
+        }
+        return switch (id) {
+            case RUN -> mainShellTabRun;
+            case ENV -> mainShellTabEnv;
+            case MASTER_SUMMARY -> mainShellTabMasterSummary;
+            case PLAN_INPUT -> mainShellTabPlanInput;
+            case STAGE1_PREVIEW -> mainShellTabStage1Preview;
+            case EXCLUDE_RULES -> mainShellTabExcludeRules;
+            case ACTUALS_STATUS -> mainShellTabActualsStatus;
+            case RESULT_DISPATCH -> mainShellTabResultDispatch;
+            case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
+        };
+    }
+
+    private List<String> snapshotMainShellTabOrder() {
+        if (tabPane == null) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Tab t : tabPane.getTabs()) {
+            MainShellTabId id = mainShellTabId(t);
+            if (id != null) {
+                out.add(id.key());
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private void applyMainShellTabOrder(List<String> orderKeys) {
+        if (tabPane == null || orderKeys == null || orderKeys.isEmpty()) {
+            return;
+        }
+        ObservableList<Tab> tabs = tabPane.getTabs();
+        if (tabs.isEmpty()) {
+            return;
+        }
+        ArrayList<Tab> newOrder = new ArrayList<>();
+        HashSet<Tab> seen = new HashSet<>();
+        for (String key : orderKeys) {
+            MainShellTabId id = MainShellTabId.fromKey(key);
+            if (id == null) {
+                continue;
+            }
+            Tab t = mainShellTabFor(id);
+            if (t != null && seen.add(t)) {
+                newOrder.add(t);
+            }
+        }
+        for (MainShellTabId id : MainShellTabId.values()) {
+            Tab t = mainShellTabFor(id);
+            if (t != null && seen.add(t)) {
+                newOrder.add(t);
+            }
+        }
+        if (newOrder.size() != tabs.size()) {
+            return;
+        }
+        tabs.setAll(newOrder);
     }
 
     private static boolean omitEnvRowKey(String name) {
@@ -770,19 +901,19 @@ public final class MainShellController {
         String script = activeRunStageScript;
         boolean stage1Running = STAGE1.equals(script);
         boolean stage2Running = STAGE2.equals(script);
-        for (int i = 0; i < tabs.size(); i++) {
-            Tab t = tabs.get(i);
+        for (Tab t : tabs) {
             boolean disable =
-                    stage1Running && (i == TAB_INDEX_ENV || i == TAB_INDEX_PLAN_INPUT)
+                    stage1Running
+                            && (t == mainShellTabEnv || t == mainShellTabPlanInput)
                             || stage2Running
-                                    && (i == TAB_INDEX_ENV || i == TAB_INDEX_STAGE1_PREVIEW);
+                                    && (t == mainShellTabEnv || t == mainShellTabStage1Preview);
             t.setDisable(disable);
         }
-        int sel = tabPane.getSelectionModel().getSelectedIndex();
-        if (stage1Running && (sel == TAB_INDEX_ENV || sel == TAB_INDEX_PLAN_INPUT)) {
-            tabPane.getSelectionModel().select(0);
-        } else if (stage2Running && (sel == TAB_INDEX_ENV || sel == TAB_INDEX_STAGE1_PREVIEW)) {
-            tabPane.getSelectionModel().select(0);
+        Tab sel = tabPane.getSelectionModel().getSelectedItem();
+        if (stage1Running && (sel == mainShellTabEnv || sel == mainShellTabPlanInput)) {
+            tabPane.getSelectionModel().select(mainShellTabRun);
+        } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
+            tabPane.getSelectionModel().select(mainShellTabRun);
         }
     }
 
