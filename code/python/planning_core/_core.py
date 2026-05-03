@@ -39,6 +39,7 @@ from openpyxl.worksheet.pagebreak import Break
 from .dispatch_workspace import (
     ENV_PLAN_INPUT_PATH,
     ENV_PROCESSING_PLAN_PATH,
+    plan_input_workbook_path_for_excel_ops,
     read_tabular_dataframe,
     resolve_actual_detail_workbook_path,
     resolve_processing_plan_path_from_env,
@@ -112,13 +113,12 @@ GEMINI_USAGE_CHART_CLEAR_ROWS = 36
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書き（保存経路の確認用）。
-# TASK_INPUT_WORKBOOK は「加工計画DATA」シート付しブック（例: 生産管理_AI配台テスト.xlsm）を指定すること。
 # 行は EXCLUDE_RULES_TEST_E1234_ROW（既定 9、2 未満は 9 に丸める）。
 
 # =========================================================
 # 【設定】APIキー / 基本ルール / ファイル名
 # =========================================================
-# Gemini API キーは TASK_INPUT_WORKBOOK 確定後、下記「設定」B1 の JSON から解決（平文または format_version 2 の暗号化）。
+# Gemini API キーは GEMINI_CREDENTIALS_JSON、または PM_AI_PLAN_INPUT_PATH がブックのときその同階層の暗号化 JSON から解決（他は workspace 等の既定解決）。
 # 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
@@ -280,14 +280,17 @@ NEED_COL_CONDITION = "依頼NO条件"
 NEED_COL_NOTE = "備考"
 # need「配台時追加人数」を満枠使っても、短縮あたり加工時間は短くなるのは最大でこの割引（例: 0.05 ≒ 5%）
 SURPLUS_TEAM_MAX_SPEEDUP_RATIO = 0.05
-# タスクは tasks.xlsx を使うので、VBA から渡される TASK_INPUT_WORKBOOK の「加工計画DATA」のみ
-TASKS_INPUT_WORKBOOK = os.environ.get("TASK_INPUT_WORKBOOK", "").strip()
 TASKS_SHEET_NAME = "加工計画DATA"
 # 段階2の実績系設備ガント（結果_設備ガント_実績明細等）で、計画ブックから抽出日時を読むときに優先するシート
 TASKS_SHEET_NAME_FOR_ACTUAL_GANTT_PLAN = "加工計画DATA_実績比較用"
 
 # このシート名を含むブックは openpyxl は読み書きに失敗することがあるため、load_workbook を試行する
 OPENPYXL_INCOMPATIBLE_SHEET_MARKER = "配台_配台不要工程"
+
+
+def _excel_plan_input_wb() -> str:
+    """専用 UI の ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのときの絶対パス（それ以外は空）。"""
+    return plan_input_workbook_path_for_excel_ops()
 
 
 def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
@@ -417,17 +420,17 @@ def _resolve_gemini_credentials_json_path() -> str | None:
     Gemini 証明書 JSON の候補パス。
 
     1) GEMINI_CREDENTIALS_JSON … 暗号化/平文の証明書ファイルへの絶対または相対パス（最優先）。
-    2) TASK_INPUT_WORKBOOK 同階層の GEMINI_CREDENTIALS_ENCRYPTED_FILENAME
+    2) PM_AI_PLAN_INPUT_PATH ブック（Excel）と同階層の GEMINI_CREDENTIALS_ENCRYPTED_FILENAME
     3) PM_AI_WORKSPACE 直下の同ファイル名（JavaFX ランチャー向け）
     """
     explicit = (os.environ.get("GEMINI_CREDENTIALS_JSON") or "").strip()
     if explicit:
         return os.path.normpath(os.path.abspath(explicit))
-    wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
-    if wb and os.path.isfile(wb):
+    plan_wb = plan_input_workbook_path_for_excel_ops()
+    if plan_wb:
         return os.path.normpath(
             os.path.join(
-                os.path.dirname(os.path.abspath(wb)),
+                os.path.dirname(os.path.abspath(plan_wb)),
                 GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
             )
         )
@@ -767,7 +770,7 @@ _used_encrypted_credentials = False
 if _cred_path and os.path.isfile(_cred_path):
     API_KEY, _used_encrypted_credentials = _load_gemini_api_key_from_credentials_json(
         _cred_path,
-        workbook_path=TASKS_INPUT_WORKBOOK
+        workbook_path=_excel_plan_input_wb()
         or (os.environ.get("PM_AI_WORKSPACE") or "").strip(),
     )
     if API_KEY:
@@ -1865,7 +1868,7 @@ def _extract_data_extraction_datetime(sheet_name: str | None = None):
         return dt if isinstance(dt, datetime) else None
 
     try:
-        _xwb = resolve_data_extraction_workbook_path(TASKS_INPUT_WORKBOOK)
+        _xwb = resolve_data_extraction_workbook_path(_excel_plan_input_wb())
         if not _xwb or not os.path.exists(_xwb):
             return None, None
         sn = (sheet_name or "").strip() or TASKS_SHEET_NAME
@@ -4093,7 +4096,7 @@ def _gemini_effective_model_chain(model: str | None) -> tuple[str, ...]:
     if pinned:
         return (pinned,)
     sheet_chain = _read_gemini_model_try_chain_from_settings_sheet(
-        (TASKS_INPUT_WORKBOOK or "").strip()
+        (_excel_plan_input_wb() or "").strip()
     )
     if sheet_chain:
         return sheet_chain
@@ -4372,7 +4375,7 @@ def _roll_unit_length_table_search_paths() -> list[str]:
     env = (os.environ.get(ROLL_UNIT_LENGTH_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
             os.path.join(
@@ -4398,7 +4401,7 @@ def _roll_unit_by_used_raw_table_search_paths() -> list[str]:
     env = (os.environ.get(ROLL_UNIT_BY_USED_RAW_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         bd = os.path.dirname(os.path.abspath(wb))
         for fn in (
@@ -5366,57 +5369,40 @@ def _apply_planning_sheet_post_load_mutations(
             )
 
 
-def _stage2_plan_input_source_missing_message() -> str:
-    """段階2で PM_AI_PLAN_INPUT_PATH も TASK_INPUT_WORKBOOK も使えないときの統一エラー文。"""
-    return (
-        "段階2: 計画タスク入力が解決できません。次のいずれかを設定してください。"
-        f" (1) {ENV_PLAN_INPUT_PATH} に実在する CSV / Parquet / xlsx のパス。"
-        " (2) 実在するマクロ実行ブックを TASK_INPUT_WORKBOOK に指定し、"
-        f"シート「{PLAN_INPUT_SHEET_NAME}」を読み込めるようにする。"
-        f" 表ファイルは {ENV_PLAN_INPUT_PATH} 未設定時に PM_AI_TASK_INPUT_SOURCE_DIR"
-        " の最新ファイルへ自動設定される場合があります（dispatch_workspace）。"
-    )
-
-
 def load_planning_tasks_df():
     """
-    2段階目用: マクロブック上の「配台計画_タスク入力」シートを読み込む。
+    2段階目用: 環境変数 ``PM_AI_PLAN_INPUT_PATH`` の表（CSV / Parquet / xlsx）を読み込む。
 
     「担当OP_指定」列または特別指定備考の AI 出力 preferred_operator で主担当 OP を指名できる（skills のメンバー名とあいまい一致）。
     メイン「再優先特別記載」の task_preferred_operators は generate_plan 側で最優先マージされる。
     「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
     読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
-    「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は行うが、
+    「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は、
+    ``PM_AI_PLAN_INPUT_PATH`` がブック（xlsx/xlsm）のときのみ対象ブックで行う。
     D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
     （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
 
-    優先: PM_AI_PLAN_INPUT_PATH に CSV / Parquet / xlsx がある場合は表から読む（ブック主入力でない経路）。
+    ``PM_AI_PLAN_INPUT_PATH`` は **必須**（未設定・不存在・TASK_INPUT_WORKBOOK へのフォールバックなし）。
     """
-    _plan_alt = (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip()
-    _wb_for_maint = (
-        TASKS_INPUT_WORKBOOK if TASKS_INPUT_WORKBOOK and os.path.isfile(TASKS_INPUT_WORKBOOK) else ""
-    )
-    if _plan_alt and os.path.isfile(_plan_alt):
-        if _plan_alt.lower().endswith((".csv", ".parquet", ".pq")):
-            df = read_tabular_dataframe(_plan_alt)
-        else:
-            df = read_tabular_dataframe(_plan_alt, sheet_name=PLAN_INPUT_SHEET_NAME)
-        df.columns = df.columns.str.strip()
-    elif _plan_alt:
+    _plan_alt = (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
+    if not _plan_alt:
         raise FileNotFoundError(
-            "%s が実在しません: %r。%s"
-            % (ENV_PLAN_INPUT_PATH, _plan_alt, _stage2_plan_input_source_missing_message())
+            "段階2: 計画タスク入力が解決できません。"
+            f" 環境変数 {ENV_PLAN_INPUT_PATH} に実在する CSV / Parquet / xlsx のパスを設定してください。"
         )
-    elif not TASKS_INPUT_WORKBOOK:
-        raise FileNotFoundError(_stage2_plan_input_source_missing_message())
-    elif not os.path.exists(TASKS_INPUT_WORKBOOK):
+    if not os.path.isfile(_plan_alt):
         raise FileNotFoundError(
-            "TASK_INPUT_WORKBOOK は存在しません: %s。%s"
-            % (TASKS_INPUT_WORKBOOK, _stage2_plan_input_source_missing_message())
+            f"段階2: {ENV_PLAN_INPUT_PATH} が実在しません: {_plan_alt!r}。"
         )
+    low = _plan_alt.lower()
+    _wb_for_maint = ""
+    if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        _wb_for_maint = os.path.normpath(os.path.abspath(_plan_alt))
+    if low.endswith((".csv", ".parquet", ".pq")):
+        df = read_tabular_dataframe(_plan_alt)
     else:
-        df = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
-        df.columns = df.columns.str.strip()
+        df = read_tabular_dataframe(_plan_alt, sheet_name=PLAN_INPUT_SHEET_NAME)
+    df.columns = df.columns.str.strip()
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
     )
@@ -5435,12 +5421,7 @@ def load_planning_tasks_df():
         compile_exclude_rules_d_to_e_with_ai=False,
     )
     _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
-    if _plan_alt and os.path.isfile(_plan_alt):
-        logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
-    else:
-        logging.info(
-            f"計画タスク入力: '{TASKS_INPUT_WORKBOOK}' の '{PLAN_INPUT_SHEET_NAME}' を読み込みました。"
-        )
+    logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
     return df
 
 
@@ -5490,7 +5471,7 @@ def load_main_sheet_global_priority_override_text() -> str:
             logging.warning("メイン再優先特記: テキスト処理で例外: %s", e)
             return ""
 
-    wb_path = TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
+    wb_path = _excel_plan_input_wb().strip() if _excel_plan_input_wb() else ""
     if not wb_path or not os.path.exists(wb_path):
         return ""
     # region stage2 cache
@@ -6633,7 +6614,7 @@ def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> li
                 csvp,
                 e,
             )
-    wb = resolve_column_config_workbook_path(TASKS_INPUT_WORKBOOK)
+    wb = resolve_column_config_workbook_path(_excel_plan_input_wb())
     if not wb or not os.path.exists(wb):
         return None
     if _workbook_should_skip_openpyxl_io(wb):
@@ -6833,7 +6814,7 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
     dedupe_result_task_column_config_sheet_via_xlwings / VBA「重複列名を整理」を使う。
     ブックは事剝に保存し、本処理中も Excel 上で開いたままにれること（xlwings は接続れる）。
     """
-    path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("結果_タスク一覧 列適用: ブックパスは空です（TASK_INPUT_WORKBOOK を設定してください）。")
         return False
@@ -6936,7 +6917,7 @@ def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None
 
 def apply_result_task_column_layout_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     return apply_result_task_column_layout_via_xlwings(p)
 
 _PLAN_INPUT_XLWINGS_ORIG_ROW = "__orig_sheet_row__"
@@ -6963,9 +6944,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     **「設定_配台不要工程」の C/E による計画シートへの配台不要の上書きは行わない**（段階1のみ。
     段階2の ``load_planning_tasks_df`` も同様に再適用しない）。シート上で消した「配台不要」は本経路では復活しない。
     """
-    path = (workbook_path or "").strip() or os.environ.get(
-        "TASK_INPUT_WORKBOOK", ""
-    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("配台試行順番更新: ブックパスは空です。")
         return False
@@ -7111,7 +7090,7 @@ def refresh_plan_input_dispatch_trial_order_only() -> bool:
     """TASK_INPUT_WORKBOOK に対れる配台試行順番再計算（VBA / cmd 経由のエントリ）。
     環境変数 PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY=1 等でシート上のセル値のみを入力とれる。
     """
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     local = _plan_input_dispatch_trial_order_local_only_from_env()
     return refresh_plan_input_dispatch_trial_order_via_xlwings(
         p, apply_post_load_mutations=not local
@@ -7252,9 +7231,7 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     - キーが空・解釈不能の対象行は、**すべての有効キー行の後ろ**に元の行順を保って並べ、
       連番 1..n はその並びで振り直す。
     """
-    path = (workbook_path or "").strip() or os.environ.get(
-        "TASK_INPUT_WORKBOOK", ""
-    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("配台試行順番（小数キー並べ）: ブックパスが空です。")
         return False
@@ -7473,7 +7450,7 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
 
 def sort_plan_input_dispatch_trial_order_by_float_keys_only() -> bool:
     """TASK_INPUT_WORKBOOK に対する「小数キーで並べ替え→1..n」（VBA / cmd 経由）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     return sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(p)
 
 
@@ -7492,7 +7469,7 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
     「列設定_結果_タスク一覧」の A:B の値を」重複列名を除いた一覧で書き直れ（先の行を優先）。
     「結果_タスク一覧」はあれみ履歴列数の解釈に使う。結果シートは変更しない。
     """
-    path = (workbook_path or "").strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("列設定 重複整睆: ブックパスは空です。")
         return False
@@ -7540,7 +7517,7 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
 
 def dedupe_result_task_column_config_sheet_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートの値重複整睆（VBA 用）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     return dedupe_result_task_column_config_sheet_via_xlwings(p)
 
 
@@ -9128,7 +9105,7 @@ def load_machining_actuals_df():
     PM_AI_ACTUAL_DETAIL_SOURCE_DIR 内の最新 xlsx/xlsm、TASK_INPUT_WORKBOOK）。
     シートは PM_AI_ACTUALS_DATA_SHEET（省略時は先頭シート index 0。単一シートなら名前不要）。
     """
-    _src = resolve_actuals_workbook_path(TASKS_INPUT_WORKBOOK)
+    _src = resolve_actuals_workbook_path(_excel_plan_input_wb())
     if not _src or not os.path.exists(_src):
         return pd.DataFrame()
     _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUALS_DATA_SHEET)
@@ -9209,19 +9186,112 @@ def load_machining_actual_detail_df():
     シートは PM_AI_ACTUAL_DETAIL_SHEET（省略時は先頭シート index 0。単一シートなら名前不要）。
     列は加工実績DATA に準じ、ロール識別は「ロールNO」「ロール番号」「ロール」「巻番」のいずれか可。
     """
-    _src_wb = resolve_actual_detail_workbook_path(TASKS_INPUT_WORKBOOK)
+    _src_wb = resolve_actual_detail_workbook_path(_excel_plan_input_wb())
     if not _src_wb:
         return pd.DataFrame()
     _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUAL_DETAIL_SHEET)
     _lbl = _excel_sheet_label_for_log(_sn, ACTUAL_DETAIL_SHEET_NAME)
+    # #region agent log
+    _dbg_path = str(
+        pathlib.Path(__file__).resolve().parents[4] / ".cursor" / "debug-cdd9f7.log"
+    )
     try:
-        df = pd.read_excel(_src_wb, sheet_name=_sn)
+        _sz = os.path.getsize(_src_wb) if os.path.isfile(_src_wb) else -1
+        _line = (
+            json.dumps(
+                {
+                    "sessionId": "cdd9f7",
+                    "hypothesisId": "H2",
+                    "location": "_core.py:load_machining_actual_detail_df",
+                    "message": "pre_read_excel",
+                    "data": {
+                        "path": _src_wb,
+                        "sheet": _sn,
+                        "exists": os.path.isfile(_src_wb),
+                        "size": _sz,
+                        "env_actual_wb": (
+                            os.environ.get("PM_AI_ACTUAL_DETAIL_WORKBOOK") or ""
+                        )[:200],
+                        "openpyxl_ver": getattr(
+                            sys.modules.get("openpyxl"), "__version__", "?"
+                        ),
+                    },
+                    "timestamp": int(time_module.time() * 1000),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        with open(_dbg_path, "a", encoding="utf-8") as _df:
+            _df.write(_line)
+    except Exception:
+        pass
+    # #endregion
+    try:
+        try:
+            df = pd.read_excel(_src_wb, sheet_name=_sn, engine="calamine")
+        except ImportError:
+            df = pd.read_excel(_src_wb, sheet_name=_sn)
+        except ValueError:
+            raise
+        except Exception:
+            # openpyxl が styles の不整合で落ちるブックがある（calamine はスタイルをほぼ無視して読める）
+            df = pd.read_excel(_src_wb, sheet_name=_sn)
     except ValueError:
         logging.info(
             "シート「%s」は無いため、実績明細ガントは出力しません。",
             _lbl,
         )
         return pd.DataFrame()
+    except Exception as _ex:
+        # #region agent log
+        try:
+            _line2 = (
+                json.dumps(
+                    {
+                        "sessionId": "cdd9f7",
+                        "runId": "post-fix",
+                        "hypothesisId": "H1",
+                        "location": "_core.py:load_machining_actual_detail_df",
+                        "message": "read_excel_failed",
+                        "data": {
+                            "exc_type": type(_ex).__name__,
+                            "exc_repr": repr(_ex)[:800],
+                        },
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+            with open(_dbg_path, "a", encoding="utf-8") as _df2:
+                _df2.write(_line2)
+        except Exception:
+            pass
+        # #endregion
+        raise
+    # #region agent log
+    try:
+        _line3 = (
+            json.dumps(
+                {
+                    "sessionId": "cdd9f7",
+                    "runId": "post-fix",
+                    "hypothesisId": "H3",
+                    "location": "_core.py:load_machining_actual_detail_df",
+                    "message": "read_excel_ok",
+                    "data": {"rows": int(len(df)), "cols": int(df.shape[1])},
+                    "timestamp": int(time_module.time() * 1000),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        with open(_dbg_path, "a", encoding="utf-8") as _df3:
+            _df3.write(_line3)
+    except Exception:
+        pass
+    # #endregion
     df.columns = df.columns.str.strip()
     if ACT_DETAIL_COL_ROLL not in df.columns:
         for alias in ("ロール番号", "ロール", "巻番"):
@@ -10814,7 +10884,7 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
 
 def _try_write_main_sheet_gemini_usage_summary(phase: str) -> None:
     try:
-        write_main_sheet_gemini_usage_summary(TASKS_INPUT_WORKBOOK, phase)
+        write_main_sheet_gemini_usage_summary(_excel_plan_input_wb(), phase)
     except Exception as ex:
         logging.warning(
             "%s: メインシートへの AI 利用サマリ書き込みで例外（続行）: %s", phase, ex
@@ -11001,7 +11071,7 @@ def _try_write_plan_sheet_global_comment_parse_block(
 ) -> None:
     try:
         write_plan_sheet_global_comment_parse_block(
-            TASKS_INPUT_WORKBOOK,
+            _excel_plan_input_wb(),
             PLAN_INPUT_SHEET_NAME,
             global_priority_override,
             when_str=when_str,
@@ -11022,7 +11092,7 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
 ) -> None:
     try:
         write_plan_sheet_global_parse_and_conflict_styles_one_io(
-            TASKS_INPUT_WORKBOOK,
+            _excel_plan_input_wb(),
             PLAN_INPUT_SHEET_NAME,
             global_priority_override,
             when_str=when_str,
@@ -12595,10 +12665,11 @@ def _merge_plan_sheet_user_overrides(out_df):
     """
     if out_df is None or out_df.empty:
         return out_df
-    if not TASKS_INPUT_WORKBOOK or not os.path.exists(TASKS_INPUT_WORKBOOK):
+    _wbm = _excel_plan_input_wb()
+    if not _wbm or not os.path.exists(_wbm):
         return out_df
     try:
-        df_old = pd.read_excel(TASKS_INPUT_WORKBOOK, sheet_name=PLAN_INPUT_SHEET_NAME)
+        df_old = pd.read_excel(_wbm, sheet_name=PLAN_INPUT_SHEET_NAME)
     except Exception as e:
         logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
         return out_df
@@ -14454,7 +14525,7 @@ def run_exclude_rules_sheet_maintenance(
         _log_exclude_rules_sheet_debug(
             "SKIP_NO_PATH",
             log_prefix,
-            "TASK_INPUT_WORKBOOK は空のため、設定シート処理をしません。",
+            "ブックパスが空のため、設定シート処理をしません。",
         )
         return
     if not os.path.exists(wb_path):
@@ -14955,13 +15026,25 @@ def _json_safe_cell_for_exclude_rules_export(value) -> object:
     return str(value)
 
 
-def _write_stage1_exclude_rules_json_sidecar(wb_path_arg: str, out_path: str) -> str | None:
+def _write_stage1_exclude_rules_json_sidecar(
+    wb_path_arg: str, out_path: str, *, use_effective_read_path: bool = True
+) -> str | None:
     """設定_配台不要工程を UTF-8 JSON（{\"rules\": [...]}）に書き、絶対パスを返す。失敗時 None。
 
-    段階1では保守直後の実効ブック（``_exclude_rules_effective_read_path``）を読む。
+    ``use_effective_read_path=True``（既定）のときは保守直後の実効パス
+    （``_exclude_rules_effective_read_path``）を優先する。
+
+    段階1の ``stage1_exclude_rules.json`` は **master.xlsm** を読み、``False`` で呼ぶ。
     """
     try:
-        path = _resolve_exclude_rules_workbook_path_for_read(wb_path_arg)
+        if use_effective_read_path:
+            path = _resolve_exclude_rules_workbook_path_for_read(wb_path_arg)
+        else:
+            path = (
+                os.path.normpath(os.path.abspath(wb_path_arg))
+                if wb_path_arg and os.path.isfile(wb_path_arg)
+                else ""
+            )
         if not path or not os.path.isfile(path):
             return None
         if _workbook_should_skip_openpyxl_io(path):
@@ -15169,7 +15252,7 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
     env = (os.environ.get(RAW_FABRIC_WIDTH_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
             os.path.join(
@@ -15354,7 +15437,7 @@ def _product_width_table_search_paths() -> list[str]:
     env = (os.environ.get(PRODUCT_WIDTH_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
             os.path.join(
@@ -15435,7 +15518,7 @@ def _product_length_table_search_paths() -> list[str]:
     env = (os.environ.get(PRODUCT_LENGTH_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
             os.path.join(
@@ -15590,7 +15673,7 @@ def _product_thickness_table_search_paths() -> list[str]:
     env = (os.environ.get(PRODUCT_THICKNESS_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
-    wb = (TASKS_INPUT_WORKBOOK or "").strip()
+    wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
             os.path.join(
@@ -15793,41 +15876,24 @@ def run_stage1_extract():
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
 
-    保守実施時は「設定_配台不要工程」を ``json`` 直下の ``stage1_exclude_rules.json`` へ書き出し、
-    環境変数 ``PM_AI_EXCLUDE_RULES_JSON`` をその絶対パスに設定する（同一プロセス内）。
+    「設定_配台不要工程」の読み取り・JSON 化は **master.xlsm** のみ。
 
-    **TASK_INPUT_WORKBOOK** は、``PM_AI_PROCESSING_PLAN_PATH``（または
-    ``PM_AI_TASK_INPUT_SOURCE_DIR`` から解決した表ファイル）が実在するときは省略可。
-    省略時は Excel 設定シート保守は行わず、既存の ``PM_AI_EXCLUDE_RULES_JSON`` を参照するか、
-    配台不要ルールなしで続行する。
+    ``json`` 直下の ``stage1_exclude_rules.json`` へ書き出し、環境変数 ``PM_AI_EXCLUDE_RULES_JSON``
+    をその絶対パスに設定する（同一プロセス内）。
+
+    ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのときのみ、そのブックへ
+    ``run_exclude_rules_sheet_maintenance``（行同期・D→E）を行う。
     """
     resolve_processing_plan_path_from_env()
     _proc_plan = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
     _has_processing_plan = bool(_proc_plan and os.path.isfile(_proc_plan))
     if not _has_processing_plan:
-        if not TASKS_INPUT_WORKBOOK:
-            logging.error(
-                "段階1: タスク入力が解決できません。%s（または %s 下の表ファイル）を実在パスにするか、"
-                "TASK_INPUT_WORKBOOK にマクロブックを指定してください。"
-                % (ENV_PROCESSING_PLAN_PATH, "PM_AI_TASK_INPUT_SOURCE_DIR")
-            )
-            return False
-        if not os.path.exists(TASKS_INPUT_WORKBOOK):
-            logging.error(
-                "TASK_INPUT_WORKBOOK は存在しません: %s" % (TASKS_INPUT_WORKBOOK,)
-            )
-            return False
-    else:
-        if TASKS_INPUT_WORKBOOK and not os.path.exists(TASKS_INPUT_WORKBOOK):
-            logging.error(
-                "TASK_INPUT_WORKBOOK は存在しません: %s" % (TASKS_INPUT_WORKBOOK,)
-            )
-            return False
-        if not TASKS_INPUT_WORKBOOK:
-            logging.info(
-                "段階1: TASK_INPUT_WORKBOOK は省略（%s が解決済み: %s）。"
-                % (ENV_PROCESSING_PLAN_PATH, _proc_plan)
-            )
+        logging.error(
+            "段階1: タスク入力が解決できません。%s を実在ファイルにするか、"
+            "%s から表ファイルを解決できるようにしてください。"
+            % (ENV_PROCESSING_PLAN_PATH, "PM_AI_TASK_INPUT_SOURCE_DIR")
+        )
+        return False
     reset_gemini_usage_tracker()
     df_src = load_tasks_df()
     try:
@@ -15928,38 +15994,37 @@ def run_stage1_extract():
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
     # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
     try:
-        if not TASKS_INPUT_WORKBOOK or not os.path.isfile(TASKS_INPUT_WORKBOOK):
+        _wb_maint_s1 = _excel_plan_input_wb()
+        if not _wb_maint_s1 or not os.path.isfile(_wb_maint_s1):
             logging.info(
-                "段階1: 設定シート「%s」の Excel 保守をスキップ（TASK_INPUT_WORKBOOK が無いか無効）。",
+                "段階1: 設定シート「%s」の Excel 保守をスキップ（%s がブック実ファイルでない）。",
                 EXCLUDE_RULES_SHEET_NAME,
+                ENV_PLAN_INPUT_PATH,
             )
         else:
             _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
-            run_exclude_rules_sheet_maintenance(
-                TASKS_INPUT_WORKBOOK, _pm_pairs_s1, "段階1"
-            )
+            run_exclude_rules_sheet_maintenance(_wb_maint_s1, _pm_pairs_s1, "段階1")
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
+    # 配台不要の読取・JSON 化は master.xlsm のみ
+    _master_er_wb = _require_master_workbook_path_exists()
     try:
-        if TASKS_INPUT_WORKBOOK and os.path.isfile(TASKS_INPUT_WORKBOOK):
-            _s1_er_json = os.path.join(
-                json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME
+        _s1_er_json = os.path.join(json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+        _written_er = _write_stage1_exclude_rules_json_sidecar(
+            _master_er_wb, _s1_er_json, use_effective_read_path=False
+        )
+        if _written_er:
+            os.environ[ENV_EXCLUDE_RULES_JSON] = _written_er
+            _reset_exclude_rules_json_env_memo()
+            logging.info(
+                "段階1: 配台不要ルール（master）を JSON に書き出し、%s=%s",
+                ENV_EXCLUDE_RULES_JSON,
+                _written_er,
             )
-            _written_er = _write_stage1_exclude_rules_json_sidecar(
-                TASKS_INPUT_WORKBOOK, _s1_er_json
-            )
-            if _written_er:
-                os.environ[ENV_EXCLUDE_RULES_JSON] = _written_er
-                _reset_exclude_rules_json_env_memo()
-                logging.info(
-                    "段階1: 配台不要ルールを JSON に書き出し、%s=%s",
-                    ENV_EXCLUDE_RULES_JSON,
-                    _written_er,
-                )
     except Exception:
         logging.exception("段階1: 配台不要ルールの JSON 書き出しで例外（続行）")
     try:
-        out_df = apply_exclude_rules_config_to_plan_df(out_df, TASKS_INPUT_WORKBOOK, "段階1")
+        out_df = apply_exclude_rules_config_to_plan_df(out_df, _master_er_wb, "段階1")
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台試行適用で例外（続行）: %s", ex)
     try:
@@ -20503,9 +20568,7 @@ def write_dispatch_trial_pattern_list_via_xlwings(
     マクロブックを xlwings で開き、「配台計画_タスク入力」を読み、
     試行順パターン一覧を DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME に書き込む。
     """
-    path = (workbook_path or "").strip() or os.environ.get(
-        "TASK_INPUT_WORKBOOK", ""
-    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("配台試行順パターン一覧: ブックパスは空です。")
         return False
@@ -20620,7 +20683,7 @@ def write_dispatch_trial_pattern_list_via_xlwings(
 
 def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     """TASK_INPUT_WORKBOOK に対する配台試行順パターン一覧シート作成（VBA / cmd 用）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     local = _plan_input_dispatch_trial_order_local_only_from_env()
     return write_dispatch_trial_pattern_list_via_xlwings(
         p, apply_post_load_mutations=not local
@@ -20638,9 +20701,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     バッチ時は計画側および加工実績明細の設備ガントシートを生成しない（スコア比較の負荷軽減）。
     マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
     """
-    path = (workbook_path or "").strip() or os.environ.get(
-        "TASK_INPUT_WORKBOOK", ""
-    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("パターン別段階2: ブックパスは空です。")
         return False
@@ -20872,7 +20933,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
 
 def refresh_dispatch_trial_pattern_stage2_batch_only() -> bool:
     """各パターンで段階2を実行しサマリをマクロブックに書く（VBA / cmd 用）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     local = _plan_input_dispatch_trial_order_local_only_from_env()
     return run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         p, apply_post_load_mutations=not local
@@ -20892,9 +20953,7 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
 
     chosen_pattern_id を渡したときは B3 より優先（CLI 用）。
     """
-    path = (workbook_path or "").strip() or os.environ.get(
-        "TASK_INPUT_WORKBOOK", ""
-    ).strip() or TASKS_INPUT_WORKBOOK.strip()
+    path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("パターン採用反映: ブックパスは空です。")
         return False
@@ -21112,7 +21171,7 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
 
 def refresh_dispatch_pattern_stage2_selection_to_plan_only() -> bool:
     """サマリで選んだパターンの試行順を配台計画シートへ反映（VBA / cmd 用）。"""
-    p = os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK
+    p = _excel_plan_input_wb()
     local = _plan_input_dispatch_trial_order_local_only_from_env()
     return apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
         p, apply_post_load_mutations=not local
@@ -27498,8 +27557,9 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         input_wb_mtime = None
         out_mtime = None
         try:
-            if TASKS_INPUT_WORKBOOK and os.path.exists(TASKS_INPUT_WORKBOOK):
-                input_wb_mtime = os.path.getmtime(TASKS_INPUT_WORKBOOK)
+            _pip_wb = _excel_plan_input_wb()
+            if _pip_wb and os.path.exists(_pip_wb):
+                input_wb_mtime = os.path.getmtime(_pip_wb)
         except Exception:
             input_wb_mtime = None
         try:
@@ -27866,17 +27926,15 @@ _COMPARE_GANTT_ALADDIN_QTY_COL_RE = re.compile(
 
 
 def _try_read_plan_tasks_sheet_for_compare_aladdin():
-    """TASK_INPUT_WORKBOOK の計画タスクシートを読む（アラジン日次数量列用）。失敗時 None。
+    """PM_AI_PLAN_INPUT_PATH の計画タスクシートを読む（アラジン日次数量列用）。失敗時 None。
 
     ``ENV_COMPARE_GANTT_PLAN_TASKS_SHEET`` が空でないときはそのシート名、空のときは
     ``TASKS_SHEET_NAME``（加工計画DATA）。配台基準日時の取得は別経路のまま。
     """
-    wb = (os.environ.get("TASK_INPUT_WORKBOOK", "") or "").strip() or (
-        TASKS_INPUT_WORKBOOK.strip() if TASKS_INPUT_WORKBOOK else ""
-    )
+    wb = _excel_plan_input_wb()
     if not wb or not os.path.isfile(wb):
         logging.warning(
-            "計画実績比較ガント: TASK_INPUT_WORKBOOK が無いためアラジン入力数量の行は空表示になります。"
+            "計画実績比較ガント: PM_AI_PLAN_INPUT_PATH がブック実ファイルでないため、アラジン入力数量の行は空表示になります。"
         )
         return None
     sheet_name = (os.environ.get(ENV_COMPARE_GANTT_PLAN_TASKS_SHEET, "") or "").strip()
@@ -28546,7 +28604,7 @@ def _generate_plan_impl(
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
-    _wb_trace = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
+    _wb_trace = _excel_plan_input_wb()
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
         str(x).strip() for x in _ids_from_sheet if str(x).strip()
@@ -31193,7 +31251,7 @@ def _generate_plan_impl(
 
     _stage2_try_copy_column_config_shapes_from_input(
         output_filename,
-        (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK),
+        _excel_plan_input_wb(),
     )
 
     _stage2_try_add_gantt_timeline_shape_labels(
@@ -31213,7 +31271,7 @@ def _generate_plan_impl(
     # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code など）
     # ---------------------------------------------------------
     try:
-        _wb_path = (os.environ.get("TASK_INPUT_WORKBOOK", "").strip() or TASKS_INPUT_WORKBOOK)
+        _wb_path = _excel_plan_input_wb()
         _out_dir = resolve_result_dispatch_table_output_dir(_wb_path)
         _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)
         if _wrote:
