@@ -31234,31 +31234,6 @@ def _generate_plan_impl(
             )
     except Exception as e:
         logging.warning("段階2: 計画ブック JSON（全シート）出力をスキップ: %s", e)
-        # #region agent log
-        try:
-            _p = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-22ebe2.log"
-            with open(_p, "a", encoding="utf-8") as _df:
-                _df.write(
-                    json.dumps(
-                        {
-                            "sessionId": "22ebe2",
-                            "timestamp": int(time_module.time() * 1000),
-                            "hypothesisId": "H3",
-                            "location": "_core:write_production_plan_workbook_json:except",
-                            "message": "plan workbook json exception",
-                            "data": {
-                                "exc_type": type(e).__name__,
-                                "exc": str(e)[:500],
-                                "output_filename": output_filename,
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except OSError:
-            pass
-        # #endregion
 
     logging.info(f"完了: '{output_filename}' を生成しました。")
 
