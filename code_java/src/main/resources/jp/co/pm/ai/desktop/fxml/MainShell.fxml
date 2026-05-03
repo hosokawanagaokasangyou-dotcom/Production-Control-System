@@ -69,6 +69,12 @@
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab closable="false"
+                     text="&#x8a08;&#x753b;&#x7d50;&#x679c;&#x30d3;&#x30e5;&#x30fc;&#x30a2; (JSON)">
+                    <content>
+                        <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>
+                    </content>
+                </Tab>
             </tabs>
         </TabPane>
     </center>

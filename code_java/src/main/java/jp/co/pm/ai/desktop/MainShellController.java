@@ -136,6 +136,9 @@ public final class MainShellController {
     @FXML
     private ResultDispatchTableTabController resultDispatchTableTabController;
 
+    @FXML
+    private PlanResultViewerTabController planResultViewerTabController;
+
     private ObservableList<EnvVarRow> envRows;
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
@@ -170,6 +173,7 @@ public final class MainShellController {
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);
             masterReadSummaryTabController.bindShell(this);
+            planResultViewerTabController.bindShell(this);
 
         mainRunTabController
                 .getWorkbookField()
@@ -281,8 +285,8 @@ public final class MainShellController {
 
     private static boolean tabSupportsClearFilters(int idx) {
         /* MainShell.fxml order: 0 run, 1 env, 2 master summary, 3 plan input, 4 stage1, 5 exclude, 6 actuals,
-         * 7 result dispatch JSON */
-        return idx == 1 || idx == 3 || idx == 4 || idx == 6 || idx == 7;
+         * 7 result dispatch JSON, 8 plan result viewer JSON */
+        return idx == 1 || idx == 3 || idx == 4 || idx == 6 || idx == 7 || idx == 8;
     }
 
     private void updateClearTabFiltersButton(int idx) {
@@ -300,6 +304,7 @@ public final class MainShellController {
             case 4 -> stage1PreviewTabController.clearColumnFiltersAndSort();
             case 6 -> actualsStatusTabController.clearColumnFiltersAndSort();
             case 7 -> resultDispatchTableTabController.clearColumnFiltersAndSort();
+            case 8 -> planResultViewerTabController.clearColumnFiltersAndSort();
             default -> {
                 /* tabs without TableFilter / Spreadsheet filter row */
             }
@@ -1013,6 +1018,7 @@ public final class MainShellController {
             String planStr = newestPlan != null ? newestPlan.toString() : "";
             String memStr = newestMember != null ? newestMember.toString() : "";
             mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
+            planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
