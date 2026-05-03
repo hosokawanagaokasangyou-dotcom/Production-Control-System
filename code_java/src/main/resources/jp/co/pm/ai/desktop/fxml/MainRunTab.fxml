@@ -33,9 +33,6 @@
                         <Button fx:id="stage2RunButton" mnemonicParsing="false"
                                 text="&#x6bb5;&#x968e;2 &#x5b9f;&#x884c;"
                                 onAction="#onStage2RunButtonAction"/>
-                        <Button fx:id="peekSheetsButton" mnemonicParsing="false"
-                                text="&#x30b7;&#x30fc;&#x30c8;&#x4e00;&#x89a7; (POI)"
-                                onAction="#onPeekSheetsButtonAction"/>
                     </HBox>
                     <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
                            GridPane.columnIndex="0" GridPane.rowIndex="1"/>

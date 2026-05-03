@@ -38,7 +38,6 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
-import jp.co.pm.ai.desktop.io.ExcelSheetTitlesProbe;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
@@ -488,22 +487,6 @@ public final class MainShellController {
         }
     }
 
-    private void peekSheetsAction() {
-        String p = effectiveTaskInputWorkbookPath();
-        if (p.isEmpty()) {
-            appendLog(
-                    "[POI] \u30de\u30af\u30ed\u5b9f\u884c\u30d6\u30c3\u30af\u304c\u7a7a\uff08\u4efb\u610f\uff09\u3002"
-                            + " \u30b7\u30fc\u30c8\u4e00\u89a7\u306b\u306f\u30d1\u30b9\u304c\u5fc5\u8981\u3067\u3059\u3002");
-            return;
-        }
-        try {
-            var names = ExcelSheetTitlesProbe.sheetNames(Path.of(p));
-            appendLog("[POI] sheets=" + names.size() + " " + String.join(", ", names));
-        } catch (Exception ex) {
-            appendLog("[POI] error: " + ex.getMessage());
-        }
-    }
-
     private void runStage(String script) {
         if (!runLock.compareAndSet(false, true)) {
             appendLog("[busy] already running (single flight).");
@@ -804,10 +787,6 @@ public final class MainShellController {
                             + "\u6210\u679c\u7269\u30d1\u30b9\u66f4\u65b0\u30a8\u30e9\u30fc: "
                             + ex.getMessage());
         }
-    }
-
-    void triggerPeekSheets() {
-        peekSheetsAction();
     }
 
     private static String defaultOsPython() {

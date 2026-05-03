@@ -77,9 +77,6 @@ public final class MainRunTabController {
     private Button stage2RunButton;
 
     @FXML
-    private Button peekSheetsButton;
-
-    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -402,11 +399,6 @@ public final class MainRunTabController {
     @FXML
     private void onStage2RunButtonAction() {
         shell.triggerStage2();
-    }
-
-    @FXML
-    private void onPeekSheetsButtonAction() {
-        shell.triggerPeekSheets();
     }
 
     @FXML
