@@ -1,5 +1,11 @@
 package jp.co.pm.ai.desktop.print;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -8,12 +14,24 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.VBox;
 
 /** Builds the printable / preview {@link Parent} for one {@link OperatorCardPage}. */
 public final class OperatorCardPreviewFactory {
+
+    private static final String[] JP_WEEKDAY_SHORT =
+            new String[] {
+                "\u6708",
+                "\u706b",
+                "\u6c34",
+                "\u6728",
+                "\u91d1",
+                "\u571f",
+                "\u65e5"
+            };
 
     /** Approximate A4 width at 96 dpi for layout pref widths (210 mm). */
     public static final double A4_PREF_WIDTH = 794;
@@ -35,20 +53,35 @@ public final class OperatorCardPreviewFactory {
         root.setStyle("-fx-font-family: " + ff + ";");
         root.getStyleClass().add("pm-operator-card-root");
 
+        Label docHeading =
+                new Label(
+                        "\u30aa\u30da\u30ec\u30fc\u30b7\u30e7\u30f3"
+                                + "\u30ab\u30fc\u30c9");
+        docHeading.getStyleClass().add("pm-operator-card-doc-title");
+        docHeading.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(docHeading, Priority.ALWAYS);
+
+        Label issuedAt = new Label(formatIssuedAt());
+        issuedAt.getStyleClass().add("pm-operator-card-issued-at");
+        issuedAt.setAlignment(Pos.CENTER_RIGHT);
+
+        HBox headingRow = new HBox();
+        headingRow.setAlignment(Pos.CENTER_LEFT);
+        headingRow.setSpacing(12);
+        headingRow.getChildren().addAll(docHeading, issuedAt);
+
         Label title = new Label(page.operatorName());
         title.getStyleClass().add("pm-operator-card-title");
         title.setMaxWidth(Double.MAX_VALUE);
         title.setAlignment(Pos.CENTER_LEFT);
 
+        root.getChildren().add(headingRow);
+        root.getChildren().add(new Separator());
         root.getChildren().add(title);
         root.getChildren().add(new Separator());
 
         for (OperatorCardDaySection day : page.days()) {
-            Label dayTitle =
-                    new Label(
-                            day.date().toString()
-                                    + "  "
-                                    + day.dateColumnHeader());
+            Label dayTitle = new Label(formatDaySectionTitle(day.date()));
             dayTitle.getStyleClass().add("pm-operator-card-day-title");
             dayTitle.setMaxWidth(Double.MAX_VALUE);
 
@@ -137,5 +170,26 @@ public final class OperatorCardPreviewFactory {
             return "\"" + f.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
         }
         return "'" + f + "'";
+    }
+
+    /** {@code uuuu-MM-dd  MM/dd\uff08\u6708\u706b...\uff09} */
+    static String formatDaySectionTitle(LocalDate date) {
+        String iso = date.toString();
+        String md = date.format(DateTimeFormatter.ofPattern("MM/dd"));
+        String wd = japaneseWeekdayShort(date.getDayOfWeek());
+        return iso + "  " + md + "\uff08" + wd + "\uff09";
+    }
+
+    static String japaneseWeekdayShort(DayOfWeek dow) {
+        return JP_WEEKDAY_SHORT[dow.getValue() - 1];
+    }
+
+    static String formatIssuedAt() {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter f =
+                DateTimeFormatter.ofPattern(
+                        "\u767a\u884c\u65e5\u6642\uff1a uuuu\u5e74M\u6708d\u65e5 HH:mm",
+                        Locale.JAPAN);
+        return now.format(f);
     }
 }

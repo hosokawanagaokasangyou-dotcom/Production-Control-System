@@ -41,4 +41,12 @@ class OperatorCardDocumentBuilderTest {
         assertNotNull(d);
         assertEquals(LocalDate.of(2026, 5, 8), d);
     }
+
+    @Test
+    void formatDaySectionTitle_weekday_is_japanese_short() {
+        LocalDate thu = LocalDate.of(2026, 5, 7);
+        assertEquals(
+                "2026-05-07  05/07\uff08\u6728\uff09",
+                OperatorCardPreviewFactory.formatDaySectionTitle(thu));
+    }
 }
