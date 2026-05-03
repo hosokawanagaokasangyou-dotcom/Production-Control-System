@@ -15,7 +15,7 @@
     <top>
         <ToolBar>
             <Label text="&#x30c6;&#x30fc;&#x30de;"/>
-            <ComboBox fx:id="themeCombo" prefWidth="120.0"/>
+            <ComboBox fx:id="themeCombo" prefWidth="168.0"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="clearTabFiltersButton"
                     text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"

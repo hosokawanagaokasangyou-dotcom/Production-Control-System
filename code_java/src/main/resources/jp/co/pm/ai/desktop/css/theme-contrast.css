@@ -1,0 +1,74 @@
+/* High-contrast light ? loaded before pm-ai-desktop.css */
+
+.root {
+    -fx-base: #f0f0f0;
+    -fx-background: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-text-box-border: #000000;
+    -fx-accent: #0000cc;
+    -fx-focus-color: #0000cc;
+    -fx-faint-focus-color: transparent;
+    -fx-default-button-base-color: #000080;
+    -fx-hover-base: derive(-fx-base, -6%);
+    -fx-pressed-base: derive(-fx-base, -12%);
+    -fx-dark-text-color: #000000;
+    -fx-mid-text-color: #000000;
+    -fx-light-text-color: #ffffff;
+    -fx-mark-color: #000000;
+    -fx-selection-bar: #000080;
+    -fx-selection-bar-non-focused: #404040;
+    -fx-selection-bar-text: #ffffff;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-background-color: #000080;
+    -fx-text-fill: white;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: #e0e0e0;
+    -fx-text-fill: black;
+}
+
+.table-view {
+    -fx-table-cell-border-color: #000000;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #d0d0d0;
+}
+
+.list-view .list-cell:selected,
+.tree-view .tree-cell:selected {
+    -fx-background-color: -fx-selection-bar;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.text-area,
+.list-view,
+.tree-view,
+.table-view {
+    -fx-background-color: -fx-control-inner-background;
+}
+
+.scroll-bar {
+    -fx-background-color: #e8e8e8;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: #606060;
+}
+
+.menu-bar {
+    -fx-background-color: #f0f0f0;
+}
+
+.tool-bar {
+    -fx-background-color: #f0f0f0;
+    -fx-border-color: #000000;
+    -fx-border-width: 0 0 2 0;
+}
+
+.titled-pane > .title {
+    -fx-background-color: #d8d8d8;
+}

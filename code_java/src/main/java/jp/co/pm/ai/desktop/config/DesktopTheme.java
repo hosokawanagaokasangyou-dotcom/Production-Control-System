@@ -1,22 +1,37 @@
 package jp.co.pm.ai.desktop.config;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import javafx.scene.Scene;
 
 /**
- * UI color theme (Modena light vs dark palette overlay).
+ * UI color themes: default Modena (light) or palette overlays under {@code /css/theme-*.css}.
  */
 public enum DesktopTheme {
-    LIGHT("light", "\u30e9\u30a4\u30c8"),
-    DARK("dark", "\u30c0\u30fc\u30af");
+    /** Default Modena; no extra stylesheet. */
+    LIGHT("light", "\u30e9\u30a4\u30c8", null),
+    DARK("dark", "\u30c0\u30fc\u30af", "theme-dark.css"),
+    /** Cool light blue-gray workspace. */
+    BLUE("blue", "\u30d6\u30eb\u30fc", "theme-blue.css"),
+    /** Warm paper / reduced blue light. */
+    SEPIA("sepia", "\u30bb\u30d4\u30a2", "theme-sepia.css"),
+    /** Dark teal / blue-green. */
+    OCEAN("ocean", "\u30aa\u30fc\u30b7\u30e3\u30f3", "theme-ocean.css"),
+    /** High-contrast light (readability). */
+    CONTRAST("contrast", "\u30b3\u30f3\u30c8\u30e9\u30b9\u30c8", "theme-contrast.css");
+
+    private static final String CSS_DIR = "/jp/co/pm/ai/desktop/css/";
 
     private final String id;
     private final String displayLabel;
+    /** File name in {@link #CSS_DIR}, or {@code null} for {@link #LIGHT}. */
+    private final String overlayCssFile;
 
-    DesktopTheme(String id, String displayLabel) {
+    DesktopTheme(String id, String displayLabel, String overlayCssFile) {
         this.id = id;
         this.displayLabel = displayLabel;
+        this.overlayCssFile = overlayCssFile;
     }
 
     public String storedId() {
@@ -31,8 +46,11 @@ public enum DesktopTheme {
         if (s == null || s.isBlank()) {
             return LIGHT;
         }
-        if ("dark".equalsIgnoreCase(s.trim())) {
-            return DARK;
+        String key = s.trim().toLowerCase(Locale.ROOT);
+        for (DesktopTheme t : values()) {
+            if (t.id.equals(key)) {
+                return t;
+            }
         }
         return LIGHT;
     }
@@ -50,24 +68,29 @@ public enum DesktopTheme {
     }
 
     /**
-     * Applies this theme to the scene stylesheet list. Keeps {@code pm-ai-desktop.css} and other app sheets;
-     * adds or removes only {@code theme-dark.css}.
+     * Replaces any bundled {@code theme-*.css} overlay, then adds this theme's sheet (except {@link #LIGHT})
+     * at index 0 so {@code pm-ai-desktop.css} can still override specifics.
      */
     public void applyTo(Scene scene) {
         if (scene == null) {
             return;
         }
         var sheets = scene.getStylesheets();
-        sheets.removeIf(DesktopTheme::isDarkThemeUrl);
-        if (this == DARK) {
-            var url = Objects.requireNonNull(
-                    DesktopTheme.class.getResource("/jp/co/pm/ai/desktop/css/theme-dark.css"),
-                    "theme-dark.css");
-            sheets.add(0, url.toExternalForm());
+        sheets.removeIf(DesktopTheme::isBundledThemeOverlay);
+        if (overlayCssFile == null) {
+            return;
         }
+        var url =
+                Objects.requireNonNull(
+                        DesktopTheme.class.getResource(CSS_DIR + overlayCssFile),
+                        overlayCssFile);
+        sheets.add(0, url.toExternalForm());
     }
 
-    private static boolean isDarkThemeUrl(String url) {
-        return url != null && (url.endsWith("theme-dark.css") || url.contains("/theme-dark.css"));
+    static boolean isBundledThemeOverlay(String url) {
+        if (url == null) {
+            return false;
+        }
+        return url.contains("/jp/co/pm/ai/desktop/css/theme-") && url.endsWith(".css");
     }
 }
