@@ -303,6 +303,7 @@ public final class Stage1PreviewTabController {
             javafx.application.Platform.runLater(
                     () -> {
                         SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
+                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);

@@ -55,8 +55,8 @@ public final class PlanInputTabController {
 
     private static final String HINT_TEXT =
             "PM_AI_PLAN_INPUT_PATH \u3068\u540c\u3058\u30d5\u30a1\u30a4\u30eb\u3092\u7de8\u96c6\u3057\u307e\u3059"
-                    + " (\u6bb5\u968e2 load_planning_tasks_df)\u3002Excel \u306f"
-                    + " \u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3002\u4fdd\u5b58\u6642"
+                    + " (\u6bb5\u968e2 load_planning_tasks_df: CSV/Parquet/xlsx \u7b49)\u3002"
+                    + "Excel \u306e\u3068\u304d\u306e\u307f\u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3002\u4fdd\u5b58\u6642"
                     + " .xlsx \u306f\u30c7\u30fc\u30bf\u306e\u307f\uff08\u30de\u30af\u30ed\u306f\u524a\u9664\u3055\u308c\u307e\u3059\uff09\u3002";
 
     private Stage ownerStage;
@@ -338,6 +338,7 @@ public final class PlanInputTabController {
             javafx.application.Platform.runLater(
                     () -> {
                         SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
+                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
