@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * Paths and fields restored on startup from {@link DesktopSessionStateStore}.
  *
- * @param planInputPath path field on \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab
+ * @param planInputPath path field on ”z‘äŒv‰æ_????????????“ü?? tab
  * @param planInputSheet sheet name on the same tab
  * @param stage1PreviewPath Stage1 preview file path
  * @param stage1PreviewSheet Stage1 preview sheet name
@@ -26,7 +26,9 @@ import java.util.List;
  * @param mainRunStage2ProductionPlan last shown stage-2 production_plan xlsx path on run tab (empty if none)
  * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
  * @param mainRunStage2WriteExcel whether stage-2 writes xlsx deliverables; when false only JSON (run tab)
- * @param uiEnvRows persisted \u74b0\u5883\u5909\u6570 tab rows (empty uses bootstrap defaults only)
+ * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
+ *     built-in default
+ * @param uiEnvRows persisted ?????????•Ï??? tab rows (empty uses bootstrap defaults only)
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order
  */
@@ -52,6 +54,7 @@ public record DesktopSessionState(
         String mainRunStage2ProductionPlan,
         String mainRunStage2MemberSchedule,
         boolean mainRunStage2WriteExcel,
+        String mainRunStage2ResultBookFont,
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder) {
 
@@ -78,6 +81,7 @@ public record DesktopSessionState(
                 "",
                 "",
                 true,
+                "",
                 List.of(),
                 List.of());
     }

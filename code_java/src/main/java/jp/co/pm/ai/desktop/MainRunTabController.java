@@ -45,7 +45,7 @@ public final class MainRunTabController {
 
     private static final int MAX_PERSISTED_LOG_LINES = 2000;
 
-    private static final String DEFAULT_FONT_FAMILY_LABEL = "\u30b7\u30b9\u30c6\u30e0\u65e2\u5b9a";
+    private static final String DEFAULT_FONT_FAMILY_LABEL = "システム既定";
 
     private static final List<Double> PRESET_FONT_SIZES =
             List.of(9d, 10d, 11d, 12d, 13d, 14d, 15d, 16d, 18d, 20d, 22d, 24d);
@@ -92,6 +92,9 @@ public final class MainRunTabController {
     private CheckBox stage2WriteExcelCheckBox;
 
     @FXML
+    private ComboBox<String> stage2ResultBookFontCombo;
+
+    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -104,6 +107,8 @@ public final class MainRunTabController {
     private Font appliedLogFont = Font.getDefault();
 
     private final AtomicBoolean suppressLogFontEvents = new AtomicBoolean(false);
+
+    private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressRunLogSessionPersistence = new AtomicBoolean(false);
 
@@ -210,6 +215,22 @@ public final class MainRunTabController {
                                 }
                             });
         }
+        if (stage2ResultBookFontCombo != null) {
+            List<String> stage2Families = new ArrayList<>();
+            stage2Families.add(DEFAULT_FONT_FAMILY_LABEL);
+            stage2Families.addAll(installed);
+            stage2ResultBookFontCombo.getItems().setAll(stage2Families);
+            stage2ResultBookFontCombo.getSelectionModel().selectFirst();
+            stage2ResultBookFontCombo
+                    .valueProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (!suppressStage2ResultFontEvents.get()
+                                        && shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
     }
 
     /** フラットボタン用のごく弱いドロップシャドウ（パルスなし）。 */
@@ -294,21 +315,21 @@ public final class MainRunTabController {
                 });
         MenuItem copySelectedItem =
                 new MenuItem(
-                        "\u9078\u629e\u3092\u30b3\u30d4\u30fc (Ctrl+C)");
+                        "選択をコピー (Ctrl+C)");
         copySelectedItem.setOnAction(e -> copySelectedLogLinesToClipboard());
         MenuItem copyAllItem =
                 new MenuItem(
-                        "\u5168\u30ed\u30b0\u3092\u30b3\u30d4\u30fc\uFF08\u30d0\u30c3\u30d5\u30a1\u5168\u884c\uFF09");
+                        "全ログをコピー（バッファ全行）");
         copyAllItem.setOnAction(e -> copyAllBufferedLogToClipboard());
         MenuItem copyVisibleItem =
                 new MenuItem(
-                        "\u8868\u793a\u4e2d\u306e\u30ed\u30b0\u3092\u30b3\u30d4\u30fc");
+                        "表示中のログをコピー");
         copyVisibleItem.setOnAction(e -> copyVisibleLogLinesToClipboard());
         logListView.setContextMenu(
                 new ContextMenu(copySelectedItem, copyVisibleItem, copyAllItem));
     }
 
-    /** Full buffer (ignores filter); same as toolbar \u5168\u30ed\u30b0\u3092\u30b3\u30d4\u30fc. */
+    /** Full buffer (ignores filter); same as toolbar 全ログをコピー. */
     private void copyAllBufferedLogToClipboard() {
         if (logLinesAll.isEmpty()) {
             return;
@@ -555,6 +576,38 @@ public final class MainRunTabController {
     void applyStage2WriteExcelFromSession(boolean writeExcel) {
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox.setSelected(writeExcel);
+        }
+    }
+
+    String snapshotStage2ResultBookFont() {
+        if (stage2ResultBookFontCombo == null) {
+            return "";
+        }
+        String v = stage2ResultBookFontCombo.getValue();
+        if (v == null
+                || v.isBlank()
+                || v.equals(DEFAULT_FONT_FAMILY_LABEL)) {
+            return "";
+        }
+        return v.trim();
+    }
+
+    void applyStage2ResultBookFontFromSession(String family) {
+        if (stage2ResultBookFontCombo == null) {
+            return;
+        }
+        suppressStage2ResultFontEvents.set(true);
+        try {
+            if (family != null && !family.isBlank()) {
+                if (!stage2ResultBookFontCombo.getItems().contains(family)) {
+                    stage2ResultBookFontCombo.getItems().add(1, family);
+                }
+                stage2ResultBookFontCombo.setValue(family);
+            } else {
+                stage2ResultBookFontCombo.getSelectionModel().selectFirst();
+            }
+        } finally {
+            suppressStage2ResultFontEvents.set(false);
         }
     }
 

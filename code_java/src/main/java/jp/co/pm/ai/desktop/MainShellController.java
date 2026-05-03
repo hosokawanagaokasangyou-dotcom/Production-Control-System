@@ -46,7 +46,7 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
 /**
- * Main window controller \u2014 business logic moved from legacy inline {@link PmAiFxApp}.
+ * Main window controller ???? business logic moved from legacy inline {@link PmAiFxApp}.
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
@@ -205,8 +205,8 @@ public final class MainShellController {
         mainRunTabController
                 .getWorkbookField()
                 .setPromptText(
-                        "\u4efb\u610f\u3002\u7a7a\u3067\u3088\u3044\uff08\u6bb5\u968e1/2\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306e PM_AI_* \u304c\u672c\u7dda\uff09\u3002"
-                                + "\u30de\u30b9\u30bf\u8aad\u8fbc\u30b5\u30de\u30ea\u7b49\u306eUI\u63a8\u5b9a\u7528\u3002");
+                        "任意。????????よ?????????????????1/2?????????????変数????ブ??????? PM_AI_* が本線?????????"
+                                + "マス????????込????マリ???????????UI推定用????");
         mainRunTabController
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
@@ -215,7 +215,7 @@ public final class MainShellController {
                 .setText(firstNonBlank(ui0.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
         mainRunTabController
                 .getPythonExeField()
-                .setPromptText("Python executable (\u74b0\u5883\u5909\u6570 PM_AI_PYTHON)");
+                .setPromptText("Python executable (?????????変??? PM_AI_PYTHON)");
         mainRunTabController
                 .getScriptDirField()
                 .setText(
@@ -224,7 +224,7 @@ public final class MainShellController {
                                 AppPaths.resolvePythonScriptDir(ui0).toString()));
         mainRunTabController
                 .getScriptDirField()
-                .setPromptText("code/python (\u74b0\u5883\u5909\u6570 PM_AI_CODE_PYTHON_DIR)");
+                .setPromptText("code/python (?????????変??? PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
         stage1PreviewTabController.bindShell(this);
@@ -378,6 +378,7 @@ public final class MainShellController {
                     nz(s.mainRunStage2MemberSchedule()));
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
+        mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -444,6 +445,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 mainRunTabController.snapshotStage2WriteExcel(),
+                mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder());
     }
@@ -718,13 +720,13 @@ public final class MainShellController {
     void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         alert.initOwner(primaryStage);
-        alert.setTitle("\u74b0\u5883\u5909\u6570\u3092\u521d\u671f\u5316");
+        alert.setTitle("?????????変数を??????????");
         alert.setHeaderText(null);
         alert.setContentText(
-                "ui_ref_env_defaults.json \u306b\u57fa\u3065\u304f\u521d\u671f\u884c\u306b\u623b\u3057\u307e\u3059\u3002"
-                        + "\u7de8\u96c6\u5185\u5bb9\u306f\u5931\u308f\u308c\u307e\u3059\u3002"
-                        + " Python/code.python \u306e\u8868\u793a\u3082\u518d\u8a08\u7b97\u3057\u307e\u3059\u3002"
-                        + "\u7d9a\u884c\u3057\u307e\u3059\u304b\uff1f");
+                "ui_ref_env_defaults.json ????基????く??????行????戻します????"
+                        + "????????????????????失われ????す????"
+                        + " Python/code.python ????????示???????計?????????????す????"
+                        + "続行???????すか?????????");
         Optional<ButtonType> ans = alert.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
@@ -798,8 +800,8 @@ public final class MainShellController {
                 appendLog(
                         "[env] PM_AI_EXCLUDE_RULES_JSON: "
                                 + p
-                                + " \u304c\u7121\u3044\u305f\u3081\u74b0\u5883\u5909\u6570\u30bf\u30d6\u306f\u672a\u66f4\u65b0"
-                                + "\uff08\u914d\u53f0\u4e0d\u8981 JSON \u672a\u751f\u6210\u307e\u305f\u306f cwd/json \u3068\u4e00\u81f4\u3057\u306a\u3044\uff09\u3002");
+                                + " が無????ため?????????変数????ブ???????未更?????"
+                                + "????????????台不???? JSON 未生???また????? cwd/json ????一????しな???????????????");
                 return;
             }
             String pathStr = p.toString();
@@ -812,9 +814,9 @@ public final class MainShellController {
                 }
             }
             appendLog(
-                    "[env] PM_AI_EXCLUDE_RULES_JSON \u884c\u304c\u898b\u3064\u304b\u3089\u306a\u3044\u305f\u3081\u672a\u66f4\u65b0\u3002");
+                    "[env] PM_AI_EXCLUDE_RULES_JSON 行が見つから????????ため未更?????????");
         } catch (Exception ex) {
-            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON \u66f4\u65b0\u5931\u6557: " + ex.getMessage());
+            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON 更?????失????: " + ex.getMessage());
         }
     }
 
@@ -830,6 +832,12 @@ public final class MainShellController {
             uiRun.put(
                     AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
                     mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+            String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
+            if (resultFont != null && !resultFont.isBlank()) {
+                uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
+            } else {
+                uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+            }
         }
         Path py =
                 Path.of(
@@ -844,7 +852,7 @@ public final class MainShellController {
         String wb = effectiveTaskInputWorkbookPath();
         appendLog("--- start: " + script + " ---");
         RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
-        mainRunTabController.getStatusLabel().setText("running\u2026");
+        mainRunTabController.getStatusLabel().setText("running????");
 
         PythonProcessRunner.runAsync(
                         req,
@@ -882,16 +890,16 @@ public final class MainShellController {
                                                     reloadAfterStage1PlanInput.run();
                                                 }
                                                 showStageCompletionDialog(
-                                                        "\u6bb5\u968e1 \u5b8c\u4e86",
-                                                        "\u6bb5\u968e1 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u306b"
-                                                                + "\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002");
+                                                        "????????1 完???????",
+                                                        "????????1 ??????????????が???????????????"
+                                                                + "完???????しまし???????");
                                             }
                                             if (STAGE2.equals(script) && c == 0) {
                                                 refreshStage2OutputArtifacts();
                                                 showStageCompletionDialog(
-                                                        "\u6bb5\u968e2 \u5b8c\u4e86",
-                                                        "\u6bb5\u968e2 \u306e\u51e6\u7406\u304c\u6b63\u5e38\u306b"
-                                                                + "\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002");
+                                                        "????????2 完???????",
+                                                        "????????2 ??????????????が???????????????"
+                                                                + "完???????しまし???????");
                                             }
                                         }
                                     });
@@ -899,8 +907,8 @@ public final class MainShellController {
     }
 
     /**
-     * \u6bb5\u968e1\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\uff08\u6bb5\u968e2\u524d\u63d0\uff09\u3092\u9589\u3058\u308b\u3002
-     * \u6bb5\u968e2\u5b9f\u884c\u4e2d\u306f\u74b0\u5883\u5909\u6570\u30bf\u30d6\u3068\u6bb5\u968e1\u6210\u5f62\u7d50\u679c\u3092\u9589\u3058\u308b\u3002
+     * ????????1実?????????????????????????変数????ブと配台計画_????????????入力?????????????2前提???????????閉じる????
+     * ????????2実?????????????????????????変数????ブと????????1成????結果を閉じ????????
      */
     private void applyRunTabGating() {
         if (tabPane == null) {
@@ -941,7 +949,7 @@ public final class MainShellController {
     private static String exitCodeLegend(int code) {
         return "exit="
                 + code
-                + " \u2014 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel";
+                + " ???? 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel";
     }
 
     private static String exitHint(int code) {
@@ -1019,7 +1027,7 @@ public final class MainShellController {
     /**
      * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
-     * the \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab are applied so \u6bb5\u968e2 matches the
+     * the 配台計画_????????????入?? tab are applied so ????????2 matches the
      * file the user is editing there.
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
@@ -1060,7 +1068,7 @@ public final class MainShellController {
     }
 
     /**
-     * Child-process env from the \u74b0\u5883\u5909\u6570 tab (same skip rules as workbook sheet: empty name, #).
+     * Child-process env from the ?????????変??? tab (same skip rules as workbook sheet: empty name, #).
      */
     private Map<String, String> collectUiEnv() {
         Map<String, String> m = new HashMap<>();
@@ -1146,7 +1154,7 @@ public final class MainShellController {
                 mainRunTabController.setStage2ArtifactPaths("", "");
                 appendLog(
                         "[stage2-ui] "
-                                + "\u51fa\u529b\u30d5\u30a9\u30eb\u30c0\u304c\u3042\u308a\u307e\u305b\u3093: "
+                                + "?????力フ????ルダがありませ???: "
                                 + dir);
                 return;
             }
@@ -1166,7 +1174,7 @@ public final class MainShellController {
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
-                                + "\u6700\u65b0\u6210\u679c\u7269: production_plan="
+                                + "最???????????物: production_plan="
                                 + planStr
                                 + " | member_schedule="
                                 + memStr);
@@ -1174,7 +1182,7 @@ public final class MainShellController {
         } catch (Exception ex) {
             appendLog(
                     "[stage2-ui] "
-                            + "\u6210\u679c\u7269\u30d1\u30b9\u66f4\u65b0\u30a8\u30e9\u30fc: "
+                            + "??????物パス更?????????ラー: "
                             + ex.getMessage());
         }
     }

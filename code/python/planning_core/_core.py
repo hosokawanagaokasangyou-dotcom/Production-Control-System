@@ -835,6 +835,12 @@ GANTT_HDR_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_HDR_ROW_HEIGHT_PT", "3
 GANTT_MACHINE_ROW_HEIGHT_PT = int(float(os.environ.get("GANTT_MACHINE_ROW_HEIGHT_PT", "60")))
 # 段階2 結果ブック・各シートの既定フォント（Excel に「BIZ UDゴシック」をインストール済みであること）
 RESULT_BOOK_FONT_NAME = "BIZ UDゴシック"
+
+
+def _effective_result_book_font_name() -> str:
+    """環境変数 PM_AI_RESULT_BOOK_FONT があれば優先（JavaFX 実行タブのフォント選択など）。"""
+    v = os.environ.get("PM_AI_RESULT_BOOK_FONT", "").strip()
+    return v if v else RESULT_BOOK_FONT_NAME
 # 既定の印刷は横1ページに合わせる（fitToWidth=1）。固定縮小率は横幅が潰れて読みにくいため既定では使わない。
 # どうしても固定%で出したいときだけ環境変数 GANTT_PRINT_SCALE_PERCENT（10〜400 の整数）を設定する。
 # 縦を「表示した暦日の数」ページに合わせる（概ね 1 日 1 枚）を既定 ON。無効化は GANTT_PRINT_ONE_PAGE_PER_DAY=0/false 等。
@@ -965,8 +971,6 @@ try:
     )
 except (TypeError, ValueError):
     COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT = 2.5
-# 計画実績比較ガント UI（共通定義.bas の BIZ_UD_GOTHIC_FONT_NAME と一致）
-COMPARE_GANTT_UI_FONT_NAME = RESULT_BOOK_FONT_NAME
 # 計画実績比較ガント: VBA（SheetChange 等）が参照する日付→日ブロック先頭行（非表示・候補日と同じ開始行に並べる）
 COMPARE_GANTT_DAY_ROW_MAP_DATE_COL = 52  # AZ
 COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
@@ -1798,9 +1802,9 @@ STAGE1_SHEET_DATEONLY_HEADERS = frozenset(
 
 
 def _result_font(**kwargs):
-    """結果ブック用 Font（呼び出し側は size 等を指定。既定ファミリーは RESULT_BOOK_FONT_NAME）。"""
+    """結果ブック用 Font（呼び出し側は size 等を指定。既定ファミリーは _effective_result_book_font_name()）。"""
     if "name" not in kwargs:
-        kwargs = {**kwargs, "name": RESULT_BOOK_FONT_NAME}
+        kwargs = {**kwargs, "name": _effective_result_book_font_name()}
     return Font(**kwargs)
 
 
@@ -2980,8 +2984,8 @@ def _equipment_gantt_fills_by_machine_name(equipment_list) -> dict[str, PatternF
 
 
 def _apply_compare_gantt_typography(ws, hdr_row: int) -> None:
-    """計画実績比較シートのフォントを RESULT_BOOK_FONT_NAME に統一し、表示日・説明・左表のサイズを調整する。"""
-    fn = COMPARE_GANTT_UI_FONT_NAME
+    """計画実績比較シートのフォントを結果ブック既定に統一し、表示日・説明・左表のサイズを調整する。"""
+    fn = _effective_result_book_font_name()
     mr = int(ws.max_row or 1)
     mc = int(ws.max_column or 1)
 
@@ -7964,8 +7968,10 @@ def _apply_result_task_history_rich_text(worksheet, column_names: list):
     if not hist_cols:
         return
 
-    _plain_kw: dict = {"name": RESULT_BOOK_FONT_NAME}
-    _blue_kw: dict = {"name": RESULT_BOOK_FONT_NAME, "color": Color(rgb="FF0070C0")}
+    _fn = _effective_result_book_font_name()
+    # openpyxl 3.1+ InlineFont は OOXML に合わせ rFont（Font オブジェクトの name とは別名）
+    _plain_kw: dict = {"rFont": _fn}
+    _blue_kw: dict = {"rFont": _fn, "color": Color(rgb="FF0070C0")}
     plain_if = InlineFont(**_plain_kw)
     blue_if = InlineFont(**_blue_kw)
     top = Alignment(wrap_text=False, vertical="top")

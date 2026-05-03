@@ -39,6 +39,8 @@
                                 onAction="#onStage2RunButtonAction"/>
                         <CheckBox fx:id="stage2WriteExcelCheckBox" mnemonicParsing="false" selected="true"
                                   text="Excel&#xff08;.xlsx&#xff09;&#x3092;&#x51fa;&#x529b;"/>
+                        <Label text="&#x6bb5;&#x968e;2&#x7d50;&#x679c; Excel &#x30d5;&#x30a9;&#x30f3;&#x30c8;"/>
+                        <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0"/>
                     </HBox>
                     <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
                            GridPane.columnIndex="0" GridPane.rowIndex="1"/>

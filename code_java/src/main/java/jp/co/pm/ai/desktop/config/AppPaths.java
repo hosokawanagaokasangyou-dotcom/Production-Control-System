@@ -56,7 +56,7 @@ public final class AppPaths {
 
     /**
      * UTF-8 JSON for exclude rules; optional alternative to Excel
-     * {@code \u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b}.
+     * {@code 設定_配台不要工程}.
      */
     public static final String KEY_PM_AI_EXCLUDE_RULES_JSON = "PM_AI_EXCLUDE_RULES_JSON";
 
@@ -67,15 +67,15 @@ public final class AppPaths {
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
-     * {@code \u5b9f\u884c\u30fb\u30ed\u30b0} \u30bf\u30d6\u306e\u300c\u958b\u304f\u300d\u304c\u958b\u304f\u30b5\u30de\u30ea\u7528\u30de\u30af\u30ed\u30d6\u30c3\u30af\uff08
-     * \u7d76\u5bfe\u30d1\u30b9\u3001\u307e\u305f\u306f {@code code/} \u304b\u3089\u306e\u76f8\u5bfe\uff09\u3002\u7a7a\u3067
-     * {@link #SUMMARY_AI_DISPATCH_XLSM}\u3002
+     * {@code 実行・ログ} タブの「開く」が開くサマリ用マクロブック（
+     * 絶対パス、または {@code code/} からの相対）。空で
+     * {@link #SUMMARY_AI_DISPATCH_XLSM}。
      */
     public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
             "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
 
     /**
-     * Workbook containing {@code \u5217\u8a2d\u5b9a_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7} (optional override when
+     * Workbook containing {@code 列設定_結果_タスク一覧} (optional override when
      * it differs from {@code PM_AI_PLAN_INPUT_PATH}).
      */
     public static final String KEY_PM_AI_COLUMN_CONFIG_WORKBOOK = "PM_AI_COLUMN_CONFIG_WORKBOOK";
@@ -115,7 +115,7 @@ public final class AppPaths {
 
     /**
      * When truthy, {@code workbook_env_bootstrap} skips reading the macro book
-     * {@code \u8a2d\u5b9a_\u74b0\u5883\u5909\u6570} sheet (JavaFX tab is source of truth for the child process).
+     * {@code 設定_環境変数} sheet (JavaFX tab is source of truth for the child process).
      */
     public static final String KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET = "PM_AI_SKIP_WORKBOOK_ENV_SHEET";
 
@@ -136,6 +136,12 @@ public final class AppPaths {
      * {@code 0} / {@code false} / {@code no} / {@code off} / {@code none} のときは JSON のみ（UI 実行・ログタブのチェックボックスから上書き可）。
      */
     public static final String KEY_PM_AI_STAGE2_WRITE_EXCEL = "PM_AI_STAGE2_WRITE_EXCEL";
+
+    /**
+     * 段階2の Excel 成果物（結果ブック）のフォントファミリ。空のときは planning_core の {@code RESULT_BOOK_FONT_NAME}（BIZ
+     * UDゴシック）相当。JavaFX 実行タブのコンボで上書き可。
+     */
+    public static final String KEY_PM_AI_RESULT_BOOK_FONT = "PM_AI_RESULT_BOOK_FONT";
 
     /**
      * Env keys whose value is a directory (folder picker in the UI).
@@ -234,27 +240,27 @@ public final class AppPaths {
     }
 
     /**
-     * Same UNC as {@code plan/01_*.m} {@code \u30d1\u30b9} (PQ-A / production plan inquiry folder).
+     * Same UNC as {@code plan/01_*.m} {@code パス} (PQ-A / production plan inquiry folder).
      */
     private static final String DEFAULT_PQ_A_SOURCE_UNC =
             "\\\\192.168.0.101\\"
-                    + "\u5171\u6709\u30d5\u30a9\u30eb\u30c0\\"
-                    + "\u6e56\u5357\u5de5\u5834\\"
-                    + "\u6e56\u5357\u5171\u6709\\"
-                    + "\u751f\u7523\u7ba1\u7406\u30b7\u30b9\u30c6\u30e0\\"
-                    + "\u7ba1\u7406\u30b7\u30b9\u30c6\u30e0\\"
-                    + "\u25cfDATA\\"
-                    + "\u751f\u7523\u8a08\u753b\u554f\u5408\u305b";
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "管理システム\\"
+                    + "●DATA\\"
+                    + "生産計画問合せ";
 
-    /** Same as {@code plan/02__q\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30DATA.m} {@code Folder.Files} path. */
+    /** Same as {@code plan/02__q加工実績明細DATA.m} {@code Folder.Files} path. */
     private static final String DEFAULT_ACTUAL_DETAIL_SOURCE_UNC =
             "\\\\192.168.0.101\\"
-                    + "\u5171\u6709\u30d5\u30a9\u30eb\u30c0\\"
-                    + "\u6e56\u5357\u5de5\u5834\\"
-                    + "\u6e56\u5357\u5171\u6709\\"
-                    + "002  \u52a0\u5de5G\\"
-                    + "\u25cf\u691c\u67fb\u8868\u4f5c\u6210\\"
-                    + "\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30DATA";
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "002  加工G\\"
+                    + "●検査表作成\\"
+                    + "加工実績明細DATA";
 
     /**
      * {@code ui} from the env tab; {@code null} or empty map uses directory walk only (no overrides).
@@ -331,7 +337,7 @@ public final class AppPaths {
 
     /** Basename of the JSON export for the result dispatch table (next to the standalone xlsx). */
     public static final String RESULT_DISPATCH_TABLE_JSON_BASENAME =
-            "\u7d50\u679c_\u914d\u53f0\u8868.json";
+            "結果_配台表.json";
 
     /**
      * {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME} under {@link #resolveResultDispatchTableDir(Map)} (override via
@@ -437,10 +443,10 @@ public final class AppPaths {
     }
 
     /**
-     * {@code code/} 配下のサマリ用マクロブック（{@code \u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm}）。実行・ログタブの「開く」から参照。
+     * {@code code/} 配下のサマリ用マクロブック（{@code サマリ_AI配台.xlsm}）。実行・ログタブの「開く」から参照。
      */
     public static final String SUMMARY_AI_DISPATCH_XLSM =
-            "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm";
+            "サマリ_AI配台.xlsm";
 
     /**
      * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSM} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
@@ -467,7 +473,7 @@ public final class AppPaths {
     public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
 
     /** Sheet name in {@link #STAGE1_PLAN_TASKS_FILENAME} ({@code planning_core.run_stage1_extract} / {@code to_excel}). */
-    public static final String STAGE1_PLAN_OUTPUT_SHEET = "\u30bf\u30b9\u30af\u4e00\u89a7";
+    public static final String STAGE1_PLAN_OUTPUT_SHEET = "タスク一覧";
 
     /**
      * Preview workbook written right after {@code load_tasks_df} ({@code planning_core.STAGE1_TASK_INPUT_PREVIEW_FILENAME}).
@@ -475,7 +481,7 @@ public final class AppPaths {
     public static final String STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx";
 
     /** Sheet name inside {@link #STAGE1_TASK_INPUT_PREVIEW_FILENAME}. */
-    public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "\u30bf\u30b9\u30af\u5165\u529b\u6574\u5f62";
+    public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形";
 
     /**
      * Written by {@code run_stage1_extract} beside {@code json_data_dir} ({@code planning_core} /
@@ -739,7 +745,7 @@ public final class AppPaths {
 
     /**
      * Lists {@code .xlsm} in a directory; if one file, returns it; if several, prefers a name
-     * containing {@code \u914d\u53f0}, else lexicographically first.
+     * containing {@code 配台}, else lexicographically first.
      */
     static Optional<Path> pickMacroWorkbook(Path directory) {
         if (directory == null || !Files.isDirectory(directory)) {
@@ -763,7 +769,7 @@ public final class AppPaths {
         if (xlsms.size() == 1) {
             return Optional.of(xlsms.get(0));
         }
-        String marker = "\u914d\u53f0";
+        String marker = "配台";
         Optional<Path> preferred = xlsms.stream()
                 .filter(p -> p.getFileName().toString().contains(marker))
                 .min(Comparator.comparing(p -> p.getFileName().toString()));

@@ -56,6 +56,7 @@ public final class DesktopSessionStateStore {
                     text(root, "mainRunStage2ProductionPlan"),
                     text(root, "mainRunStage2MemberSchedule"),
                     optionalBoolean(root, "mainRunStage2WriteExcel", true),
+                    text(root, "mainRunStage2ResultBookFont"),
                     loadUiEnvRows(root),
                     loadStringList(root, "mainShellTabOrder"));
         } catch (IOException e) {
@@ -84,6 +85,7 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
             put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
             root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
+            put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
             putUiEnvRows(root, state.uiEnvRows());
             putMainShellTabOrder(root, state.mainShellTabOrder());
             putWindowGeometry(root, state);
