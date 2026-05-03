@@ -36,28 +36,32 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputRowDragSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b tab; layout {@code PlanInputTab.fxml}.
+ * ?z??v??_?^?X?N???? tab; layout {@code PlanInputTab.fxml}.
  *
- * <p>Uses ControlsFX {@link SpreadsheetView} for native fixed leading columns (\u898b\u51fa\u3057\u5217).
+ * <p>Uses ControlsFX {@link SpreadsheetView} for native fixed leading columns (??????????).
  */
 public final class PlanInputTabController {
+
+    /** planning_core ?? {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} ?????i?i?K1?^?X?N???????s????j?B */
+    private static final String COL_DISPATCH_TRIAL_ORDER = "\u914d\u53f0\u8a66\u884c\u9806\u756a";
 
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
 
     public static final String DEFAULT_PLAN_INPUT_SHEET_NAME =
-            "\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b";
+            "?z??v??_?^?X?N????";
 
     private static final String HINT_TEXT =
-            "PM_AI_PLAN_INPUT_PATH \u3068\u540c\u3058\u30d5\u30a1\u30a4\u30eb\u3092\u7de8\u96c6\u3057\u307e\u3059"
-                    + " (\u6bb5\u968e2 load_planning_tasks_df: CSV/Parquet/xlsx \u7b49)\u3002"
-                    + "Excel \u306e\u3068\u304d\u306e\u307f\u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3002\u4fdd\u5b58\u6642"
-                    + " .xlsx \u306f\u30c7\u30fc\u30bf\u306e\u307f\uff08\u30de\u30af\u30ed\u306f\u524a\u9664\u3055\u308c\u307e\u3059\uff09\u3002";
+            "PM_AI_PLAN_INPUT_PATH ??????t?@?C?????????????"
+                    + " (?i??2 load_planning_tasks_df: CSV/Parquet/xlsx ??)??"
+                    + "Excel ?????????V?[?g?????w??B?????"
+                    + " .xlsx ?????[?^??????????N????????????j??";
 
     private Stage ownerStage;
 
@@ -123,6 +127,29 @@ public final class PlanInputTabController {
         rows = FXCollections.observableArrayList();
         spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
+        SpreadsheetPlanInputRowDragSupport.install(
+                spreadsheetView,
+                SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
+                rows,
+                () -> {
+                    renumberDispatchTrialOrderColumn();
+                    rebuildSpreadsheet();
+                });
+    }
+
+    /** 「配台試行順番」列があれば 1..n に振り直す（DnD 並べ替え後など）。 */
+    private void renumberDispatchTrialOrderColumn() {
+        int col = headersRef.indexOf(COL_DISPATCH_TRIAL_ORDER);
+        if (col < 0) {
+            return;
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> r = rows.get(i);
+            while (r.size() <= col) {
+                r.add("");
+            }
+            r.set(col, Integer.toString(i + 1));
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -171,7 +198,7 @@ public final class PlanInputTabController {
 
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
-            shell.appendLog("[plan-input] \u5217\u304c\u3042\u308a\u307e\u305b\u3093\uff08\u5148\u306b\u8aad\u307f\u8fbc\u307f\uff09");
+            shell.appendLog("[plan-input] ?????????????????????????");
             return;
         }
         SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
@@ -209,7 +236,7 @@ public final class PlanInputTabController {
     @FXML
     private void onBrowseButtonAction() {
         FileChooser ch = new FileChooser();
-        ch.setTitle("\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b ? \u30d5\u30a1\u30a4\u30eb");
+        ch.setTitle("?z??v??_?^?X?N???? ? ?t?@?C??");
         ch.getExtensionFilters()
                 .addAll(
                         new FileChooser.ExtensionFilter("Tabular", "*.csv", "*.xlsx", "*.xlsm"),
