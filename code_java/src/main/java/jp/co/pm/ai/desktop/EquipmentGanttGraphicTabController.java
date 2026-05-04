@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -37,8 +35,6 @@ import jp.co.pm.ai.desktop.ui.GanttSheetKind;
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
  */
 public final class EquipmentGanttGraphicTabController {
-
-    private static final String AGENT_DEBUG_SESSION = "70be15";
 
     private static final String DEFAULT_SHEET = "結果_設備ガント";
 
@@ -208,55 +204,8 @@ public final class EquipmentGanttGraphicTabController {
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             lastLoadedPlanPath = planPath.toString();
 
-            // #region agent log
-            {
-                Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-                List<String> keysSample =
-                        sheets.keySet().stream().limit(8).collect(Collectors.toList());
-                AgentDebugLog.appendStructured(
-                        ui,
-                        AGENT_DEBUG_SESSION,
-                        "H-A,H-B",
-                        "EquipmentGanttGraphicTabController.reloadFromFields:afterLoad",
-                        "loadWorkbookSheetsForGraphic 結果",
-                        Map.of(
-                                "planFile",
-                                String.valueOf(planPath.getFileName()),
-                                "loadDescription",
-                                loaded.description(),
-                                "sheetCount",
-                                sheets.size(),
-                                "sheetKeysSample",
-                                keysSample.toString()));
-            }
-            // #endregion
-
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             if (eligible.isEmpty()) {
-                // #region agent log
-                {
-                    Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-                    String kinds =
-                            sheets.entrySet().stream()
-                                    .limit(6)
-                                    .map(
-                                            e ->
-                                                    e.getKey()
-                                                            + "=>"
-                                                            + resolveEquipmentGraphicSheetKind(
-                                                                            e.getKey(),
-                                                                            e.getValue().columns())
-                                                                    .name())
-                                    .collect(Collectors.joining("; "));
-                    AgentDebugLog.appendStructured(
-                            ui,
-                            AGENT_DEBUG_SESSION,
-                            "H-A",
-                            "EquipmentGanttGraphicTabController.reloadFromFields:eligibleEmpty",
-                            "設備タイムライン判定で全シート除外",
-                            Map.of("kindsSample", kinds));
-                }
-                // #endregion
                 sheetCombo.getItems().clear();
                 contentPane.setCenter(
                         emptyPlaceholder(
@@ -296,22 +245,6 @@ public final class EquipmentGanttGraphicTabController {
                 sourceTitledPane.setExpanded(false);
             }
         } catch (Exception ex) {
-            // #region agent log
-            {
-                Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-                AgentDebugLog.appendStructured(
-                        ui,
-                        AGENT_DEBUG_SESSION,
-                        "H-D",
-                        "EquipmentGanttGraphicTabController.reloadFromFields:catch",
-                        "reloadFromFields 例外",
-                        Map.of(
-                                "exClass",
-                                ex.getClass().getSimpleName(),
-                                "exMsg",
-                                ex.getMessage() != null ? ex.getMessage() : ""));
-            }
-            // #endregion
             contentPane.setCenter(emptyPlaceholder("エラー"));
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             if (shell != null) {
@@ -346,38 +279,12 @@ public final class EquipmentGanttGraphicTabController {
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {
         String name = sheetCombo.getSelectionModel().getSelectedItem();
         if (name == null || name.isBlank()) {
-            // #region agent log
-            {
-                Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-                AgentDebugLog.appendStructured(
-                        ui,
-                        AGENT_DEBUG_SESSION,
-                        "H-E",
-                        "EquipmentGanttGraphicTabController.applySelectedSheetFromMap:noName",
-                        "選択シート名なしでスキップ",
-                        Map.of());
-            }
-            // #endregion
             return;
         }
         JsonTableIo.SheetTable st = eligible.get(name);
         if (st == null) {
-            // #region agent log
-            {
-                Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-                AgentDebugLog.appendStructured(
-                        ui,
-                        AGENT_DEBUG_SESSION,
-                        "H-E",
-                        "EquipmentGanttGraphicTabController.applySelectedSheetFromMap:nullTable",
-                        "eligible にシートなし",
-                        Map.of("name", name));
-            }
-            // #endregion
             return;
         }
-        EquipmentGraphicGanttPane.agentLogSheetLoad(
-                name, st.columns() != null ? st.columns().size() : 0);
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
         contentPane.setCenter(EquipmentGraphicGanttPane.build(st.columns(), rows));
     }

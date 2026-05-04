@@ -4,10 +4,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -30,8 +27,6 @@ import javafx.scene.text.Font;
  * タイムラインをグラフィカルに描画するビュー。計画結果ビューアの表／セル着色ガントより視認性を優先する。
  */
 public final class EquipmentGraphicGanttPane extends BorderPane {
-
-    private static final String AGENT_DEBUG_SESSION = "70be15";
 
     private static final Pattern TIME_SLOT_HEADER =
             Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$");
@@ -75,49 +70,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effCols = repaired.columns();
             effRows = repaired.rows();
         }
-        // #region agent log
-        {
-            int n = effCols != null ? effCols.size() : 0;
-            String h0 = n > 0 && effCols.get(0) != null ? effCols.get(0) : "";
-            String h1 = n > 1 && effCols.get(1) != null ? effCols.get(1) : "";
-            String h2 = n > 2 && effCols.get(2) != null ? effCols.get(2) : "";
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    AGENT_DEBUG_SESSION,
-                    "H-C",
-                    "EquipmentGraphicGanttPane.build:beforeParse",
-                    "列見出しサンプル（pandas 救済後）",
-                    Map.of(
-                            "colCount",
-                            n,
-                            "h0",
-                            h0.length() > 80 ? h0.substring(0, 80) : h0,
-                            "h1",
-                            h1.length() > 80 ? h1.substring(0, 80) : h1,
-                            "h2",
-                            h2.length() > 80 ? h2.substring(0, 80) : h2,
-                            "rowCount",
-                            effRows != null ? effRows.size() : -1,
-                            "repaired",
-                            Boolean.toString(repaired != null)));
-        }
-        // #endregion
         ParseResult parsed = parse(effCols, effRows);
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                Map.of(),
-                AGENT_DEBUG_SESSION,
-                "H-C",
-                "EquipmentGraphicGanttPane.build:afterParse",
-                "時刻列検出結果",
-                Map.of(
-                        "slotCols",
-                        parsed.slotColumnIndices.size(),
-                        "displayRows",
-                        parsed.displayRows.size(),
-                        "slotMinutes",
-                        parsed.slotMinutes));
-        // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
             Label msg =
                     new Label(
@@ -600,21 +553,4 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             this.rawRow = rawRow;
         }
     }
-
-    // #region agent log
-    /** デバッグ: グラフィックタブで選択シートを読み込んだとき */
-    public static void agentLogSheetLoad(String sheetName, int columnCount) {
-        AgentDebugLog.appendStructured(
-                Map.of(),
-                AGENT_DEBUG_SESSION,
-                "H-E",
-                "EquipmentGraphicGanttPane.agentLogSheetLoad",
-                "selected sheet for graphic gantt",
-                Map.of(
-                        "sheetName",
-                        sheetName != null ? sheetName : "",
-                        "columnCount",
-                        columnCount));
-    }
-    // #endregion
 }
