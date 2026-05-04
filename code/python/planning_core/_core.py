@@ -1928,7 +1928,9 @@ def _apply_stage2_production_plan_workbook_polish(
 ):
     """
     production_plan_multi_day*.xlsx 各シートの共通仕上げ（ガント以外）。
-    見出し背景・罫線・窓枠固定（先頭列＋行1）。
+
+    見出し背景・罫線・窓枠固定（先頭列＋行1）に限る。条件付き書式・ハイパーリンク・
+    配台表の Excel テーブル化・設備時間割の列幅調整は、呼び出し側の前段・後段で維持する。
     """
     skip = frozenset(
         {RESULT_SHEET_GANTT_NAME, RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME}
@@ -32235,6 +32237,14 @@ def _generate_plan_impl(
                 ):
                     continue
                 _apply_output_font_to_result_sheet(ws_out)
+
+            # 段階2 結果ブックの Excel 表現は以下を維持すること（簡略化・削除しない）。
+            # - 条件付き書式に相当する着色（設備時間割の定常外・準備・機械別の強調、タスク一覧の
+            #   未配台行・履歴 need/surplus・セル不一致・納期判定ハイライトなど）
+            # - ハイパーリンク（結果_タスク一覧の依頼NO → 結果_設備毎の時間割）
+            # - 列幅調整（結果_設備毎の時間割はヘッダー長基準のオートフィット相当）
+            # - Excel テーブル化（配台表シート）
+            # 共通の見出し背景・罫線・固定窓枠は末尾の _apply_stage2_production_plan_workbook_polish。
 
             if _reg_shift_start is not None and _reg_shift_end is not None:
                 for _eq_sched_sheet in (
