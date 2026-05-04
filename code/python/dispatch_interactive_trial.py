@@ -3,7 +3,7 @@
 インタラクティブ配台試行: 結果_配台表.json を tasks_df にマージし、段階2と同じ _generate_plan_impl を実行。
 
 - 段階2の配台ループは変更せず、試行専用の環境・カレンダー解釈・結果表上書きで差し替える。
-- 配台試行順・JSON の日別数量は入力を正とする（planning_core 内で results 表を上書き）。
+- 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日集約を基準とし、入力が依頼×機械あたり 1 行のときも潰さない（planning_core）。
 - 機械カレンダーは * / ＊ / ※ のセルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで延長可。
   加工が暦日をまたぐ場合は PlanningValidationError で中止。
 - 人員不足は interactive_trial_shortages_snapshot の op_shortage / as_shortage に記録。

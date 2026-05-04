@@ -79,7 +79,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 
 # JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
 # - 段階2の配台ループ本体は変更しない。試行はフラグ・読込・結果表の上書きで差し替える。
-# - 配台試行順・結果表の日別数量は入力 JSON を正とする。
+# - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日行を基準とし、入力が 1 行に潰れないようマージする。
 # - 機械カレンダーは * 系セルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 人不足は op_shortage / as_shortage に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
@@ -23659,6 +23659,38 @@ def _interactive_validate_dispatch_quantities(
         "yes",
         "on",
     )
+
+    def _sum_by_task_machine(
+        src: dict[tuple[str, str, date], float],
+    ) -> dict[tuple[str, str], float]:
+        acc: dict[tuple[str, str], float] = defaultdict(float)
+        for (tid, mach, _dd), v in src.items():
+            acc[(tid, mach)] += float(v)
+        return dict(acc)
+
+    if interactive_ui_trial:
+        # JSON が暦日別に分割されていない場合、期待値は 1 暦日キーに寄せられがち。
+        # 結果_配台表は timeline の暦日分割を正とするため、(依頼NO, 機械名) 単位の合計で照合する。
+        exp_tm = _sum_by_task_machine(expected)
+        act_tm = _sum_by_task_machine(actual)
+        all_tm = set(exp_tm) | set(act_tm)
+        for k in sorted(all_tm):
+            exp_v = float(exp_tm.get(k, 0.0))
+            act_v = float(act_tm.get(k, 0.0))
+            lim = max(eps, 1e-9 * max(abs(exp_v), abs(act_v), 1.0))
+            if abs(act_v - exp_v) <= lim:
+                continue
+            msg = (
+                "インタラクティブ配台試行: 数量不一致（依頼NO×機械名の合計） "
+                f"{k}: 期待={exp_v} 実際={act_v}"
+            )
+            logging.warning(msg)
+            try:
+                print(msg, file=sys.stderr, flush=True)
+            except Exception:
+                pass
+        return
+
     for k, exp_v in expected.items():
         act_v = actual.get(k, 0.0)
         if abs(act_v - exp_v) <= eps:
@@ -23667,14 +23699,7 @@ def _interactive_validate_dispatch_quantities(
             "インタラクティブ配台試行: 数量不一致 "
             f"{k}: 期待={exp_v} 実際={act_v}"
         )
-        if interactive_ui_trial:
-            logging.warning(msg)
-            try:
-                print(msg, file=sys.stderr, flush=True)
-            except Exception:
-                pass
-        else:
-            raise PlanningValidationError(msg)
+        raise PlanningValidationError(msg)
 
 
 def _interactive_validate_timeline_midnight_if_interactive(
@@ -24028,25 +24053,21 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def _interactive_dispatch_trial_use_editor_rows_for_result_table(
-    df_sim: pd.DataFrame,
-    json_rows: list | None,
+def _dataframe_from_interactive_dispatch_json_rows(
+    json_rows: list,
     json_columns: list | None,
+    *,
+    fallback_columns_from: pd.DataFrame | None,
 ) -> pd.DataFrame:
-    """
-    インタラクティブ配台試行: 保存済み「結果_配台表.json」の rows をシミュレーション結果より優先する（日別・数量を死守）。
-    通常の段階2（本関数を呼ばない経路）では従来どおり timeline から集約した表を使う。
-    """
-    if not json_rows or not isinstance(json_rows, list):
-        return df_sim
-    if not _interactive_dispatch_trial_env_active():
-        return df_sim
-    if df_sim is None:
-        df_sim = pd.DataFrame()
+    """結果_配台表 JSON の rows のみから DataFrame を組み立てる（timeline が空のときのフォールバック）。"""
     if json_columns and isinstance(json_columns, list) and len(json_columns) > 0:
         cols_order = [str(x) for x in json_columns]
-    elif df_sim is not None and not getattr(df_sim, "empty", True) and len(df_sim.columns) > 0:
-        cols_order = list(df_sim.columns)
+    elif (
+        fallback_columns_from is not None
+        and not getattr(fallback_columns_from, "empty", True)
+        and len(fallback_columns_from.columns) > 0
+    ):
+        cols_order = list(fallback_columns_from.columns)
     else:
         cols_order = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"]
     recs: list[dict] = []
@@ -24068,18 +24089,125 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
                 else:
                     d[c] = v
         recs.append(d)
-    if not recs:
-        return df_sim
     df_out = pd.DataFrame(recs)
     for c in cols_order:
         if c not in df_out.columns:
             df_out[c] = ""
     ordered = [c for c in cols_order if c in df_out.columns]
     extra = [c for c in df_out.columns if c not in ordered]
-    df_out = df_out.reindex(columns=ordered + extra)
+    return df_out.reindex(columns=ordered + extra)
+
+
+def _interactive_dispatch_trial_use_editor_rows_for_result_table(
+    df_sim: pd.DataFrame,
+    json_rows: list | None,
+    json_columns: list | None,
+) -> pd.DataFrame:
+    """
+    インタラクティブ配台試行: 原則 timeline 集約（df_sim）の「1 暦日 1 行」を正とする。
+
+    以前は入力 JSON の rows で df_sim を全面置換していたため、編集用 JSON が
+    (依頼NO×機械名) あたり 1 行・合計数量のみのときに暦日分割が 1 行に潰れる不具合があった。
+
+    JSON が複数暦日行と一致する場合のみ、同一配台日のセルを JSON で上書きする。
+    JSON が 1 行かつ数量合計が timeline 側と一致する場合は、JSON を合算行とみなし df_sim を採用する。
+    timeline が空のときのみ、従来どおり JSON だけで表を組む。
+    """
+    if not json_rows or not isinstance(json_rows, list):
+        return df_sim
+    if not _interactive_dispatch_trial_env_active():
+        return df_sim
+    if df_sim is None:
+        df_sim = pd.DataFrame()
+    if getattr(df_sim, "empty", True):
+        df_j = _dataframe_from_interactive_dispatch_json_rows(
+            json_rows, json_columns, fallback_columns_from=None
+        )
+        logging.info(
+            "インタラクティブ配台試行: timeline 集約が空のため、入力 JSON のみで結果_配台表を組み立てました（%s 行）。",
+            len(df_j),
+        )
+        return df_j
+
+    df_out = df_sim.copy()
+    sim_idx_by_group: dict[tuple[str, str], list] = defaultdict(list)
+    for i in df_out.index:
+        row = df_out.loc[i]
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        if tid and mach:
+            sim_idx_by_group[(tid, mach)].append(i)
+
+    json_by_group: dict[tuple[str, str], list] = defaultdict(list)
+    for r in json_rows:
+        if not isinstance(r, dict):
+            continue
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
+        if tid and mach:
+            json_by_group[(tid, mach)].append(r)
+
+    eps_qty = 1e-2
+    collapsed_groups: set[tuple[str, str]] = set()
+    for g, idxs in sim_idx_by_group.items():
+        if len(idxs) < 2:
+            continue
+        jrows = json_by_group.get(g, [])
+        if len(jrows) != 1:
+            continue
+        jr0 = jrows[0]
+        try:
+            qc = jr0.get("当日配台数量")
+            jqty = (
+                float(str(qc).replace(",", "").strip())
+                if qc not in (None, "")
+                else 0.0
+            )
+        except (TypeError, ValueError):
+            jqty = 0.0
+        smqty = 0.0
+        for ri in idxs:
+            try:
+                cell = df_out.at[ri, "当日配台数量"]
+                smqty += float(str(cell).replace(",", "").strip() or 0)
+            except (TypeError, ValueError):
+                pass
+        lim = max(eps_qty, 1e-9 * max(abs(jqty), abs(smqty), 1.0))
+        if abs(jqty - smqty) <= lim:
+            collapsed_groups.add(g)
+
+    for g, idxs in sim_idx_by_group.items():
+        if g in collapsed_groups:
+            continue
+        jrows = json_by_group.get(g, [])
+        if not jrows:
+            continue
+        jmap: dict[date, dict] = {}
+        for jr in jrows:
+            dd = _interactive_parse_dispatch_date_cell(jr.get("配台日"))
+            if dd is not None:
+                jmap[dd] = jr
+        for ri in idxs:
+            dd = _interactive_parse_dispatch_date_cell(df_out.at[ri, "配台日"])
+            if dd is None or dd not in jmap:
+                continue
+            jr = jmap[dd]
+            qraw = jr.get("当日配台数量")
+            try:
+                qv = (
+                    float(str(qraw).replace(",", "").strip())
+                    if qraw not in (None, "")
+                    else None
+                )
+            except (TypeError, ValueError):
+                qv = None
+            if qv is not None:
+                df_out.at[ri, "当日配台数量"] = qv
+
     logging.info(
-        "インタラクティブ配台試行: 結果_配台表は入力 JSON の rows を採用しました（%s 行・シミュレーション集約は上書き）。",
-        len(df_out),
+        "インタラクティブ配台試行: 結果_配台表は timeline 集約を基準にしました。"
+        " 入力 JSON を合算 1 行とみなして暦日分割を維持した (依頼NO, 機械名) グループ=%s 件。",
+        len(collapsed_groups),
     )
     return df_out
 
