@@ -14,11 +14,35 @@ import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 os.chdir(str(SCRIPT_DIR))
+
+
+# #region agent log
+def _agent_dbg(payload: dict) -> None:
+    payload.setdefault("sessionId", "471ee7")
+    payload.setdefault("timestamp", int(time.time() * 1000))
+    log_path = (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+    if not log_path:
+        try:
+            here = Path(__file__).resolve()
+            # code/python/... -> parents[3] = workspace root containing .cursor
+            log_path = str(here.parents[3] / ".cursor" / "debug-471ee7.log")
+        except Exception:
+            return
+    try:
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as fp:
+            fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
 
 try:
     import workbook_env_bootstrap as _wbe
@@ -87,6 +111,50 @@ def main() -> int:
         if isinstance(paths, dict):
             shortage_payload["production_plan"] = str(paths.get("production_plan") or "")
             shortage_payload["member_schedule"] = str(paths.get("member_schedule") or "")
+        # #region agent log
+        try:
+            from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
+            from planning_core.plan_workbook_sidecar import result_task_sidecar_path
+
+            _wb = (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip()
+            _out = resolve_result_dispatch_table_output_dir(_wb) or ""
+            _argv_dir = str(path.parent)
+            _same = bool(_out) and os.path.normpath(_out) == os.path.normpath(_argv_dir)
+            _pp = str(shortage_payload.get("production_plan") or "")
+            _rt_path = ""
+            _rt_rows = -1
+            if _pp and os.path.isfile(_pp):
+                _rt_path = result_task_sidecar_path(_pp)
+                if _rt_path and os.path.isfile(_rt_path):
+                    try:
+                        with open(_rt_path, encoding="utf-8") as _rf:
+                            _rj = json.load(_rf)
+                        if isinstance(_rj, dict):
+                            _rt_rows = int(_rj.get("row_count", -1))
+                    except Exception:
+                        pass
+            _agent_dbg(
+                {
+                    "location": "dispatch_interactive_trial.py:after generate_plan",
+                    "hypothesisId": "H2",
+                    "message": "argv json vs python result-dispatch out_dir",
+                    "data": {
+                        "argvJson": str(path),
+                        "pmAiPlanInputPath": _wb,
+                        "pythonOutDir": _out,
+                        "dirsMatchArgvParent": _same,
+                        "productionPlan": _pp,
+                        "resultTaskJson": _rt_path,
+                        "resultTaskRowCount": _rt_rows,
+                        "pmAiResultDispatchTableDir": (
+                            os.environ.get("PM_AI_RESULT_DISPATCH_TABLE_DIR") or ""
+                        ).strip(),
+                    },
+                }
+            )
+        except Exception:
+            pass
+        # #endregion
         shortage_path.write_text(
             json.dumps(shortage_payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
