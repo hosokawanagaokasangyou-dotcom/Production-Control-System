@@ -8,7 +8,6 @@ import logging
 import os
 import shutil
 import tempfile
-import time
 import unicodedata
 
 import pandas as pd
@@ -213,56 +212,16 @@ def read_result_task_dataframe(plan_xlsx: str) -> pd.DataFrame | None:
         return None
 
 
-def _append_agent_debug_ndjson(payload: dict) -> None:
-    """Cursor デバッグ用 NDJSON（session 471ee7）。PM_AI_REPO_ROOT が無い場合は何もしない。"""
-    try:
-        rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-        if not rr:
-            return
-        log_path = os.path.join(rr, ".cursor", "debug-471ee7.log")
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        line = {"sessionId": "471ee7", "timestamp": int(time.time() * 1000), **payload}
-        with open(log_path, "a", encoding="utf-8") as fp:
-            fp.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_name: str) -> str | None:
-    # #region agent log
-    _sidecar_out = result_task_sidecar_path(plan_xlsx) if plan_xlsx else ""
-    # #endregion
     if _plan_result_task_json_disabled():
-        # #region agent log
-        _append_agent_debug_ndjson(
-            {
-                "hypothesisId": "SC1",
-                "location": "plan_workbook_sidecar.write_result_task_json_sidecar",
-                "message": "sidecar disabled by PM_AI_PLAN_RESULT_TASK_JSON",
-                "data": {
-                    "planXlsx": plan_xlsx,
-                    "envPlanResultTaskJson": (os.environ.get(ENV_PLAN_RESULT_TASK_JSON) or "").strip(),
-                },
-            }
-        )
-        # #endregion
         logging.debug(
             "plan_workbook_sidecar: skip result-task JSON (%s disables)",
             ENV_PLAN_RESULT_TASK_JSON,
         )
         return None
+    _sidecar_out = result_task_sidecar_path(plan_xlsx) if plan_xlsx else ""
     try:
         if df is None or getattr(df, "empty", True):
-            # #region agent log
-            _append_agent_debug_ndjson(
-                {
-                    "hypothesisId": "SC1",
-                    "location": "plan_workbook_sidecar.write_result_task_json_sidecar",
-                    "message": "sidecar skip empty df_tasks",
-                    "data": {"planXlsx": plan_xlsx, "sidecarPath": _sidecar_out},
-                }
-            )
-            # #endregion
             logging.warning(
                 "plan_workbook_sidecar: 結果_タスク一覧 JSON をスキップ（DataFrame が空） plan_xlsx=%s",
                 plan_xlsx,
@@ -278,33 +237,9 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
             "rows": rows,
         }
         # 直 open(w) は同一フォルダで errno 2 になる環境があるため、全ブック JSON と同じ一時ファイル経路に統一
-        out, _wlabel = _write_workbook_json_payload(out, payload)
-        # #region agent log
-        _append_agent_debug_ndjson(
-            {
-                "hypothesisId": "SC1",
-                "location": "plan_workbook_sidecar.write_result_task_json_sidecar",
-                "message": "sidecar write ok",
-                "data": {"planXlsx": plan_xlsx, "sidecarPath": out, "rowCount": int(len(df))},
-            }
-        )
-        # #endregion
+        out, _ = _write_workbook_json_payload(out, payload)
         return out
     except Exception as e:
-        # #region agent log
-        _append_agent_debug_ndjson(
-            {
-                "hypothesisId": "SC1",
-                "location": "plan_workbook_sidecar.write_result_task_json_sidecar",
-                "message": "sidecar write exception",
-                "data": {
-                    "planXlsx": plan_xlsx,
-                    "sidecarPath": _sidecar_out,
-                    "error": str(e)[:500],
-                },
-            }
-        )
-        # #endregion
         logging.warning(
             "plan_workbook_sidecar: 結果_タスク一覧 JSON 書き出し失敗: %s plan_xlsx=%r out=%r",
             e,
