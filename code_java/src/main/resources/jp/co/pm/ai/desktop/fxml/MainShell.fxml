@@ -79,7 +79,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
-                     text="&#x914d;&#x53f0;&#x7de8;&#x96c6;&#xff08;&#x7d0d;&#x671f;&#x98a8;&#xff09;">
+                     text="&#x914d;&#x53f0;&#x8a08;&#x753b;&#x624b;&#x52d5;&#x4fee;&#x6b63;">
                     <content>
                         <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
                     </content>
