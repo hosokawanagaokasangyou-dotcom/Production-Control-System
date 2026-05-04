@@ -124,6 +124,26 @@ public final class ResultDispatchPivot {
                 ResultDispatchSchema.COL_DISPATCH_QTY);
     }
 
+    /**
+     * Same as {@link #matchesTaskProfile} but ignores {@link ResultDispatchSchema#COL_DISPATCH_TRIAL_ORDER} so callers
+     * can align rows that still hold a previous trial-order value with a profile that already carries the next value.
+     */
+    public static boolean matchesTaskProfileExceptTrialOrder(
+            List<String> columns, Map<String, String> profile, Map<String, String> row) {
+        String dateCol = ResultDispatchSchema.COL_DISPATCH_DATE;
+        String qtyCol = ResultDispatchSchema.COL_DISPATCH_QTY;
+        String trialCol = ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER;
+        for (String col : columns) {
+            if (col.equals(dateCol) || col.equals(qtyCol) || col.equals(trialCol)) {
+                continue;
+            }
+            if (!nz(profile.get(col)).equals(nz(row.get(col)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     static boolean profileMatches(
             List<String> columns,
             Map<String, String> profile,
@@ -252,6 +272,11 @@ public final class ResultDispatchPivot {
         return d != null ? d.toString() : nz(raw);
     }
 
+    /**
+     * Accepts {@code yyyy-MM-dd} (and common Excel/Japan display forms {@code yyyy/MM/dd}, {@code yyyy.MM.dd}).
+     * Python 側の {@code _norm_ymd} はスラッシュ区切りのため、配台試行後の JSON 再読込で日付軸と突合し損ねない
+     * よう揺れに耐える。
+     */
     public static LocalDate parseIsoDate(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -262,6 +287,20 @@ public final class ResultDispatchPivot {
                 return LocalDate.parse(t.substring(0, 10));
             } catch (DateTimeParseException e) {
                 return null;
+            }
+        }
+        if (t.length() >= 10) {
+            char s1 = t.charAt(4);
+            char s2 = t.charAt(7);
+            if (s1 == s2 && (s1 == '/' || s1 == '.')) {
+                try {
+                    int y = Integer.parseInt(t.substring(0, 4));
+                    int mo = Integer.parseInt(t.substring(5, 7));
+                    int d = Integer.parseInt(t.substring(8, 10));
+                    return LocalDate.of(y, mo, d);
+                } catch (Exception e) {
+                    return null;
+                }
             }
         }
         return null;

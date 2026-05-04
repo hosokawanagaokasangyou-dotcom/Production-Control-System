@@ -176,4 +176,12 @@ class ResultDispatchPivotTest {
         MachineCalendarBlockIndex idx = MachineCalendarBlockIndex.parseStdoutJson(payload);
         assertEquals(true, idx.isBlockedDay("P", "M1", LocalDate.of(2026, 5, 9)));
     }
+
+    @Test
+    void parseIsoDate_acceptsSlashAndDotYmd() {
+        LocalDate d = LocalDate.of(2026, 5, 4);
+        assertEquals(d, ResultDispatchPivot.parseIsoDate("2026-05-04"));
+        assertEquals(d, ResultDispatchPivot.parseIsoDate("2026/05/04"));
+        assertEquals(d, ResultDispatchPivot.parseIsoDate("2026.05.04"));
+    }
 }

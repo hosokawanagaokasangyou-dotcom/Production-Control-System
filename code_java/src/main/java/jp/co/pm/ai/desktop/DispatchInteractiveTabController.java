@@ -940,11 +940,13 @@ public final class DispatchInteractiveTabController {
                     // #region agent log
                     debugAgentNdjson(
                             "DispatchInteractiveTabController.java:reload onSucceeded",
-                            "H1",
+                            "H6",
                             "grids will rebuild",
                             Map.of(
                                     "rowCount",
                                     doc.rows().size(),
+                                    "distinctDateCount",
+                                    ResultDispatchPivot.distinctDates(doc.rows()).size(),
                                     "jsonPath",
                                     jsonPath.toString()));
                     // #endregion
