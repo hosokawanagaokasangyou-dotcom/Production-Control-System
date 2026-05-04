@@ -32354,6 +32354,7 @@ def _generate_plan_impl(
             sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
         )
 
+    # 計画ブック全シート JSON: セル値のみ。抽出ロジックは workbook_payload（設備ガント列見出しの reheader 込み）。
     _plan_wb_json = None
     try:
         _meta_wb = (

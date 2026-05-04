@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""JSON sidecars for stage-2 plan workbook (result task sheet) to limit Excel re-read."""
+"""
+段階2の成果ブック用 JSON サイドカー。
+
+全シート表形式ミラーの組み立ては ``workbook_payload.workbook_payload_from_final_xlsx_file`` に集約。
+値のみの xlsx を JSON から出力するには ``write_xlsx_from_workbook_payload_tabular`` を参照。
+"""
 
 from __future__ import annotations
 
@@ -7,12 +12,17 @@ import json
 import logging
 import os
 import re
-import time
 import shutil
 import tempfile
 import unicodedata
 
 import pandas as pd
+
+from .workbook_payload import (
+    WORKBOOK_JSON_FORMAT_VERSION,
+    workbook_payload_from_final_xlsx_file,
+    write_xlsx_from_workbook_payload_tabular,
+)
 
 # 0/false/no/off/none: do not read or write sidecar JSON
 ENV_PLAN_RESULT_TASK_JSON = "PM_AI_PLAN_RESULT_TASK_JSON"
@@ -24,32 +34,6 @@ ENV_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON"
 
 RESULT_TASK_JSON_SUFFIX = "_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7.json"
 SIDE_FORMAT_VERSION = 1
-WORKBOOK_JSON_FORMAT_VERSION = 2
-
-def _resolve_agent_debug_log_path() -> str:
-    """Workspace `.cursor/debug-b8c02d.log`（祖先に `.cursor` がある最初のディレクトリ）。"""
-    d = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(12):
-        cur = os.path.join(d, ".cursor", "debug-b8c02d.log")
-        if os.path.isdir(os.path.join(d, ".cursor")):
-            return cur
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.join(os.path.expanduser("~"), ".cursor", "debug-b8c02d.log")
-
-
-def _agent_debug_ndjson_line(payload: dict) -> None:
-    """Debug session b8c02d: append one NDJSON line (no secrets)."""
-    try:
-        payload.setdefault("sessionId", "b8c02d")
-        payload.setdefault("timestamp", int(time.time() * 1000))
-        with open(_resolve_agent_debug_log_path(), "a", encoding="utf-8") as _df:
-            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
 
 # pandas の read_excel(header=0) だと、結果_設備ガントのようにタイトル行のあとに列見出し行がある
 # シートでは列名が Unnamed: 0 になる。JSON 側で HH:MM 列を復元する。
@@ -193,7 +177,9 @@ def _dump_xlsx_all_sheets_to_json(
     json_out_path: str | None = None,
 ) -> str | None:
     """
-    xlsx を pandas で全シート読み、同名ベースの .json に書き出す内部共通処理。
+    保存済み xlsx を ``workbook_payload.workbook_payload_from_final_xlsx_file`` で表形式ペイロード化し、
+    同名ベースの .json に書き出す内部共通処理（ガント系の列見出し reheader 込み）。
+
     json_out_path を指定したときはそのパスへ出力（一時 xlsx から最終 JSON 名へ出す用）。
     """
     if not xlsx_path or not os.path.isfile(xlsx_path):
@@ -209,85 +195,18 @@ def _dump_xlsx_all_sheets_to_json(
                 os.remove(out_path)
         except OSError:
             pass
-        # #region agent log
-        try:
-            _sz = os.path.getsize(xlsx_path) if os.path.isfile(xlsx_path) else -1
-            _agent_debug_ndjson_line(
-                {
-                    "location": "plan_workbook_sidecar.py:_dump_xlsx_all_sheets_to_json",
-                    "message": "before read_excel",
-                    "hypothesisId": "H5",
-                    "runId": "pre-fix",
-                    "data": {
-                        "xlsx_abs": os.path.abspath(xlsx_path),
-                        "xlsx_basename": os.path.basename(xlsx_path),
-                        "size_bytes": _sz,
-                    },
-                }
-            )
-        except Exception:
-            pass
-        # #endregion
-        sheets_in = pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
+        payload = workbook_payload_from_final_xlsx_file(
+            xlsx_path,
+            source_xlsx_basename=os.path.basename(xlsx_path),
+            metadata_extra=payload_extra,
+        )
     except Exception as e:
         logging.warning(
-            "plan_workbook_sidecar: read_excel に失敗したため同名 JSON を出せません: %s (%s)",
+            "plan_workbook_sidecar: ブックのペイロード化に失敗したため同名 JSON を出せません: %s (%s)",
             xlsx_path,
             e,
         )
         return None
-    sheets_out: dict[str, dict] = {}
-    for name, df in (sheets_in or {}).items():
-        if df is None or getattr(df, "empty", True):
-            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
-            continue
-        try:
-            df = _reheader_dataframe_if_equipment_sheet_unnamed(name, df)
-            # #region agent log
-            try:
-                _nan = int(df.isna().sum().sum()) if df is not None else 0
-                _cells = int(len(df) * max(1, len(df.columns))) if df is not None else 0
-                _agent_debug_ndjson_line(
-                    {
-                        "location": "plan_workbook_sidecar.py:_dump_xlsx_all_sheets_to_json",
-                        "message": "sheet after reheader, before to_json",
-                        "hypothesisId": "H1",
-                        "runId": "pre-fix",
-                        "data": {
-                            "sheet": name,
-                            "rows": int(len(df)),
-                            "cols": len(list(df.columns)),
-                            "nan_total": _nan,
-                            "cell_slots": _cells,
-                            "nan_ratio": round(_nan / max(1, _cells), 6),
-                        },
-                    }
-                )
-            except Exception:
-                pass
-            # #endregion
-            rows = json.loads(
-                df.to_json(orient="records", date_format="iso", double_precision=15)
-            )
-        except Exception as e:
-            logging.warning(
-                "plan_workbook_sidecar: シート %r の行データ化に失敗し同名 JSON を中断: %s",
-                name,
-                e,
-            )
-            return None
-        sheets_out[name] = {
-            "columns": list(df.columns),
-            "row_count": int(len(df)),
-            "rows": rows,
-        }
-    payload = {
-        "format_version": WORKBOOK_JSON_FORMAT_VERSION,
-        "source_xlsx": os.path.basename(xlsx_path),
-        "sheets": sheets_out,
-    }
-    if payload_extra:
-        payload.update(payload_extra)
     try:
         _out_final, _tmp_strategy = _write_workbook_json_payload(out_path, payload)
         logging.info(
@@ -385,7 +304,10 @@ def write_production_plan_workbook_json(
 ) -> str | None:
     """
     ``production_plan_multi_day_*.xlsx`` と同名ベースの ``.json`` に、全シートを表形式で書き出す。
-    図形・セル書式は含まず、セル値のみ（Excel 再読込と同様）。
+    図形・セル書式は含まず、セル値のみ。
+
+    抽出ロジックは ``workbook_payload.workbook_payload_from_final_xlsx_file`` に集約。
+    値のみのブックを JSON から再生成するには ``write_xlsx_from_workbook_payload_tabular`` を参照。
     """
     if _plan_workbook_json_disabled():
         logging.info(

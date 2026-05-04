@@ -1,0 +1,144 @@
+# -*- coding: utf-8 -*-
+"""
+成果ブックの「表データ JSON」と Excel の対応。
+
+**現状（段階2）**
+計算結果を ``ExcelWriter`` で保存し、日付列整形・ガント後処理など **ファイル上の最終状態** を
+``pandas.read_excel`` ＋ ``_reheader_dataframe_if_equipment_sheet_unnamed`` でシートごとに表形式へ落とし、
+それを ``production_plan_multi_day_*.json`` に書く（セル値のみ。図形・書式は含めない）。
+
+設備ガント等は 1 行目が列見出しでないため、既存の reheader ロジックが必須。
+
+**JSON から Excel を再生成する**（値のみ・書式なし）は
+``write_xlsx_from_workbook_payload_tabular`` を参照（将来 CLI / 検証用）。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+import os
+from datetime import date, datetime, time
+from decimal import Decimal
+from typing import Any
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# plan_workbook_sidecar と同一（インポート循環回避のためローカル定義）
+WORKBOOK_JSON_FORMAT_VERSION = 2
+
+
+def json_serializable_cell_value(v: Any) -> Any:
+    """JSON 行レコード用にセル値を正規化。"""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, time):
+        return v.isoformat()
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, Decimal):
+        try:
+            return float(v)
+        except Exception:
+            return str(v)
+    if isinstance(v, int):
+        return int(v)
+    if isinstance(v, float):
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return float(v)
+    return str(v)
+
+
+def workbook_payload_from_final_xlsx_file(
+    xlsx_path: str,
+    *,
+    source_xlsx_basename: str | None = None,
+    format_version: int = WORKBOOK_JSON_FORMAT_VERSION,
+    metadata_extra: dict | None = None,
+) -> dict:
+    """
+    保存済み xlsx（段階2の後処理まで終えたファイル）から、計画結果ビューア用ペイロードを構築する。
+
+    ``plan_workbook_sidecar._dump_xlsx_all_sheets_to_json`` と同等の表抽出（ガント系の reheader 含む）。
+    """
+    from .plan_workbook_sidecar import _reheader_dataframe_if_equipment_sheet_unnamed
+
+    if not xlsx_path or not os.path.isfile(xlsx_path):
+        raise FileNotFoundError(xlsx_path)
+
+    base = source_xlsx_basename or os.path.basename(xlsx_path)
+    sheets_in = pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
+    sheets_out: dict[str, dict] = {}
+
+    for name, df in (sheets_in or {}).items():
+        if df is None or getattr(df, "empty", True):
+            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
+            continue
+        try:
+            df = _reheader_dataframe_if_equipment_sheet_unnamed(name, df)
+            rows = json.loads(
+                df.to_json(orient="records", date_format="iso", double_precision=15)
+            )
+        except Exception as e:
+            logger.warning(
+                "workbook_payload: シート %r の行データ化に失敗: %s",
+                name,
+                e,
+            )
+            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
+            continue
+        sheets_out[name] = {
+            "columns": list(df.columns),
+            "row_count": int(len(df)),
+            "rows": rows,
+        }
+
+    payload: dict = {
+        "format_version": format_version,
+        "source_xlsx": base,
+        "sheets": sheets_out,
+    }
+    if metadata_extra:
+        payload.update(metadata_extra)
+    return payload
+
+
+def sheet_payload_to_dataframe(sheet: dict) -> pd.DataFrame:
+    """単一シートのペイロードから DataFrame を復元する。"""
+    cols = sheet.get("columns") or []
+    rows = sheet.get("rows") or []
+    if not rows:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(rows, columns=cols)
+
+
+def write_xlsx_from_workbook_payload_tabular(
+    payload: dict,
+    xlsx_out_path: str,
+    *,
+    engine: str = "openpyxl",
+) -> None:
+    """
+    ペイロードの **表データのみ** を 1 ブックに書き出す（書式・図形・結合なし）。
+
+    設備ガントなど複雑レイアウトの完全再現は目的としない。検証・差分用。
+    """
+    sheets = payload.get("sheets") or {}
+    _parent = os.path.dirname(os.path.abspath(xlsx_out_path))
+    if _parent:
+        os.makedirs(_parent, exist_ok=True)
+    with pd.ExcelWriter(xlsx_out_path, engine=engine) as writer:
+        for sheet_name, sheet in sheets.items():
+            if not isinstance(sheet, dict):
+                continue
+            df = sheet_payload_to_dataframe(sheet)
+            safe_name = str(sheet_name)[:31]
+            df.to_excel(writer, sheet_name=safe_name, index=False)
