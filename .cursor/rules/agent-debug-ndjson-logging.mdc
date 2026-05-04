@@ -21,9 +21,9 @@ alwaysApply: true
 
 ## `ui` の渡し方（`debug-471ee7.log` と同じリポジトリ解決に揃える）
 
-- `MainShellController` があるときは **`shell.uiEnvForDebugLog()`** を渡す（`applyRunTabGating` の `AgentDebugLog` 呼び出しと同趣旨）
+- `MainShellController` 内では **`collectUiEnv()`** と同一キーの `Map<String,String>` を渡す（パッケージ内ならそのまま `collectUiEnv()` 可）
+- 子コントローラでは **`shell.snapshotUiEnv()`**（`collectUiEnv()` と同内容）を渡してよい
 - 無いときは **`Map.of()`**
-- 子コントローラから **`EquipmentGraphicGanttPane.build(..., uiForDebug)`** のように下へ伝播する
 
 ## `sessionId`
 
@@ -51,7 +51,6 @@ alwaysApply: true
 
 - 不具合修正がログで確証できたら **計測ブロックは削除**。`AgentDebugLog` と本ルールは残す。
 
-## 参照実装
+## 参照実装（計測ブロックは修正確証後に削除する前提）
 
-- `MainShellController.applyRunTabGating` — `collectUiEnv()` 経由で `appendStructured`
-- `EquipmentGanttGraphicTabController.applySelectedSheetFromMap` — `uiEnvForDebugLog()` をグラフィックガントへ渡す
+- `AgentDebugLog.appendStructured(collectUiEnv(), sessionId, …)` を `MainShellController` の該当フローに一時挿入するパターン
