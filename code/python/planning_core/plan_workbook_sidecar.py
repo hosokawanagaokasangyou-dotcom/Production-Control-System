@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import time
 import shutil
 import tempfile
 import unicodedata
@@ -24,6 +25,31 @@ ENV_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON"
 RESULT_TASK_JSON_SUFFIX = "_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7.json"
 SIDE_FORMAT_VERSION = 1
 WORKBOOK_JSON_FORMAT_VERSION = 2
+
+def _resolve_agent_debug_log_path() -> str:
+    """Workspace `.cursor/debug-b8c02d.log`（祖先に `.cursor` がある最初のディレクトリ）。"""
+    d = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(12):
+        cur = os.path.join(d, ".cursor", "debug-b8c02d.log")
+        if os.path.isdir(os.path.join(d, ".cursor")):
+            return cur
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.path.join(os.path.expanduser("~"), ".cursor", "debug-b8c02d.log")
+
+
+def _agent_debug_ndjson_line(payload: dict) -> None:
+    """Debug session b8c02d: append one NDJSON line (no secrets)."""
+    try:
+        payload.setdefault("sessionId", "b8c02d")
+        payload.setdefault("timestamp", int(time.time() * 1000))
+        with open(_resolve_agent_debug_log_path(), "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 # pandas の read_excel(header=0) だと、結果_設備ガントのようにタイトル行のあとに列見出し行がある
 # シートでは列名が Unnamed: 0 になる。JSON 側で HH:MM 列を復元する。
@@ -183,6 +209,25 @@ def _dump_xlsx_all_sheets_to_json(
                 os.remove(out_path)
         except OSError:
             pass
+        # #region agent log
+        try:
+            _sz = os.path.getsize(xlsx_path) if os.path.isfile(xlsx_path) else -1
+            _agent_debug_ndjson_line(
+                {
+                    "location": "plan_workbook_sidecar.py:_dump_xlsx_all_sheets_to_json",
+                    "message": "before read_excel",
+                    "hypothesisId": "H5",
+                    "runId": "pre-fix",
+                    "data": {
+                        "xlsx_abs": os.path.abspath(xlsx_path),
+                        "xlsx_basename": os.path.basename(xlsx_path),
+                        "size_bytes": _sz,
+                    },
+                }
+            )
+        except Exception:
+            pass
+        # #endregion
         sheets_in = pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
     except Exception as e:
         logging.warning(
@@ -198,6 +243,29 @@ def _dump_xlsx_all_sheets_to_json(
             continue
         try:
             df = _reheader_dataframe_if_equipment_sheet_unnamed(name, df)
+            # #region agent log
+            try:
+                _nan = int(df.isna().sum().sum()) if df is not None else 0
+                _cells = int(len(df) * max(1, len(df.columns))) if df is not None else 0
+                _agent_debug_ndjson_line(
+                    {
+                        "location": "plan_workbook_sidecar.py:_dump_xlsx_all_sheets_to_json",
+                        "message": "sheet after reheader, before to_json",
+                        "hypothesisId": "H1",
+                        "runId": "pre-fix",
+                        "data": {
+                            "sheet": name,
+                            "rows": int(len(df)),
+                            "cols": len(list(df.columns)),
+                            "nan_total": _nan,
+                            "cell_slots": _cells,
+                            "nan_ratio": round(_nan / max(1, _cells), 6),
+                        },
+                    }
+                )
+            except Exception:
+                pass
+            # #endregion
             rows = json.loads(
                 df.to_json(orient="records", date_format="iso", double_precision=15)
             )
