@@ -36,6 +36,7 @@ import javafx.util.StringConverter;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -177,6 +178,9 @@ public final class MainShellController {
     private Tab mainShellTabOperatorCard;
 
     private ObservableList<EnvVarRow> envRows;
+    /** Cursor debug session (env tab / run gating); see {@link AgentDebugLog}. */
+    private static final String DEBUG_SESSION_ENV_EDIT = "471ee7";
+
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
@@ -848,85 +852,106 @@ public final class MainShellController {
         }
         activeRunStageScript = script;
         applyRunTabGating();
-        Map<String, String> uiRun = collectUiEnv();
-        if (STAGE2.equals(script)) {
-            uiRun.put(
-                    AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
-                    mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
-            String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
-            if (resultFont != null && !resultFont.isBlank()) {
-                uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
-            } else {
-                uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+        try {
+            Map<String, String> uiRun = collectUiEnv();
+            if (STAGE2.equals(script)) {
+                uiRun.put(
+                        AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
+                        mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+                String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
+                if (resultFont != null && !resultFont.isBlank()) {
+                    uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
+                } else {
+                    uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+                }
             }
-        }
-        Path py =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
-                                mainRunTabController.getPythonExeField().getText().trim()));
-        Path dir =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
-                                mainRunTabController.getScriptDirField().getText().trim()));
-        String wb = effectiveTaskInputWorkbookPath();
-        appendLog("--- start: " + script + " ---");
-        RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
-        mainRunTabController.getStatusLabel().setText("実行中…");
+            Path py =
+                    Path.of(
+                            firstNonBlank(
+                                    uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
+                                    mainRunTabController.getPythonExeField().getText().trim()));
+            Path dir =
+                    Path.of(
+                            firstNonBlank(
+                                    uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                    mainRunTabController.getScriptDirField().getText().trim()));
+            String wb = effectiveTaskInputWorkbookPath();
+            appendLog("--- start: " + script + " ---");
+            RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
+            mainRunTabController.getStatusLabel().setText("実行中…");
 
-        PythonProcessRunner.runAsync(
-                        req,
-                        line -> {
-                            if (line.startsWith(NDJSON_START)) {
-                                String payload = line.substring(PREFIX_CHILD.length());
-                                IpcStdoutTap.handleLine(payload, this::appendLog);
-                            } else {
-                                appendLog(line);
-                            }
-                        },
-                        ex -> appendLog("[error] " + ex.getMessage()))
-                .whenComplete(
-                        (code, err) -> {
-                            runLock.set(false);
-                            activeRunStageScript = null;
-                            javafx.application.Platform.runLater(
-                                    () -> {
-                                        applyRunTabGating();
-                                        if (err != null) {
-                                            mainRunTabController
-                                                    .getStatusLabel()
-                                                    .setText("failed: " + err.getMessage());
-                                            appendLog("[end] exceptional exit");
-                                        } else {
-                                            int c = code != null ? code : -1;
-                                            mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
-                                            appendLog("[end] exitCode=" + c + " " + exitHint(c));
-                                            if (STAGE1.equals(script) && c == 0) {
-                                                applyStage1ExcludeRulesJsonToEnvTab();
-                                                if (reloadAfterStage1Preview != null) {
-                                                    reloadAfterStage1Preview.run();
+            PythonProcessRunner.runAsync(
+                            req,
+                            line -> {
+                                if (line.startsWith(NDJSON_START)) {
+                                    String payload = line.substring(PREFIX_CHILD.length());
+                                    IpcStdoutTap.handleLine(payload, this::appendLog);
+                                } else {
+                                    appendLog(line);
+                                }
+                            },
+                            ex -> appendLog("[error] " + ex.getMessage()))
+                    .whenComplete(
+                            (code, err) -> {
+                                runLock.set(false);
+                                activeRunStageScript = null;
+                                javafx.application.Platform.runLater(
+                                        () -> {
+                                            applyRunTabGating();
+                                            if (err != null) {
+                                                mainRunTabController
+                                                        .getStatusLabel()
+                                                        .setText("failed: " + err.getMessage());
+                                                appendLog("[end] exceptional exit");
+                                            } else {
+                                                int c = code != null ? code : -1;
+                                                mainRunTabController
+                                                        .getStatusLabel()
+                                                        .setText(exitCodeLegend(c));
+                                                appendLog("[end] exitCode=" + c + " " + exitHint(c));
+                                                if (STAGE1.equals(script) && c == 0) {
+                                                    applyStage1ExcludeRulesJsonToEnvTab();
+                                                    if (reloadAfterStage1Preview != null) {
+                                                        reloadAfterStage1Preview.run();
+                                                    }
+                                                    if (reloadAfterStage1PlanInput != null) {
+                                                        reloadAfterStage1PlanInput.run();
+                                                    }
+                                                    showStageCompletionDialog(
+                                                            "段階1 完了",
+                                                            "段階1 の処理が正常終了しました。");
                                                 }
-                                                if (reloadAfterStage1PlanInput != null) {
-                                                    reloadAfterStage1PlanInput.run();
+                                                if (STAGE2.equals(script) && c == 0) {
+                                                    refreshStage2OutputArtifacts();
+                                                    if (dispatchInteractiveTabController != null) {
+                                                        dispatchInteractiveTabController
+                                                                .reloadTableFromDiskAfterExternalUpdate();
+                                                    }
+                                                    showStageCompletionDialog(
+                                                            "段階2 完了",
+                                                            "段階2 の処理が正常終了しました。");
                                                 }
-                                                showStageCompletionDialog(
-                                                        "段階1 完了",
-                                                        "段階1 の処理が正常終了しました。");
                                             }
-                                            if (STAGE2.equals(script) && c == 0) {
-                                                refreshStage2OutputArtifacts();
-                                                if (dispatchInteractiveTabController != null) {
-                                                    dispatchInteractiveTabController
-                                                            .reloadTableFromDiskAfterExternalUpdate();
-                                                }
-                                                showStageCompletionDialog(
-                                                        "段階2 完了",
-                                                        "段階2 の処理が正常終了しました。");
-                                            }
-                                        }
-                                    });
-                        });
+                                        });
+                            });
+        } catch (Throwable t) {
+            // #region agent log
+            Map<String, String> exData = new LinkedHashMap<>();
+            exData.put("ex", t.getClass().getName());
+            exData.put("detail", t.getMessage() != null ? t.getMessage() : "");
+            AgentDebugLog.appendStructured(
+                    collectUiEnv(),
+                    DEBUG_SESSION_ENV_EDIT,
+                    "H1",
+                    "MainShellController.runStage:preAsync",
+                    "runStage failed before runAsync (lock would stick without catch)",
+                    exData);
+            // #endregion
+            runLock.set(false);
+            activeRunStageScript = null;
+            appendLog("[error] runStage: " + t.getMessage());
+            javafx.application.Platform.runLater(this::applyRunTabGating);
+        }
     }
 
     /**
@@ -958,6 +983,23 @@ public final class MainShellController {
         } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
             tabPane.getSelectionModel().select(mainShellTabRun);
         }
+        // #region agent log
+        {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("activeRunStageScript", script);
+            d.put("runLock", runLock.get());
+            d.put("envTabDisabled", mainShellTabEnv != null && mainShellTabEnv.isDisabled());
+            d.put("stage1Running", stage1Running);
+            d.put("stage2Running", stage2Running);
+            AgentDebugLog.appendStructured(
+                    collectUiEnv(),
+                    DEBUG_SESSION_ENV_EDIT,
+                    "H1",
+                    "MainShellController.applyRunTabGating",
+                    "gating snapshot",
+                    d);
+        }
+        // #endregion
     }
 
     private void showStageCompletionDialog(String title, String contentText) {
@@ -1092,6 +1134,13 @@ public final class MainShellController {
                 m.put(tpsKey, tabSheet.trim());
             }
         }
+    }
+
+    /**
+     * Snapshot for debug NDJSON path resolution ({@link AgentDebugLog}); same keys as {@link #collectUiEnv()}.
+     */
+    Map<String, String> uiEnvForDebugLog() {
+        return new HashMap<>(collectUiEnv());
     }
 
     /**
