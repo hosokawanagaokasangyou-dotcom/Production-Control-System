@@ -31880,26 +31880,6 @@ def _generate_plan_impl(
         
     df_utilization = pd.DataFrame(utilization_data)
 
-    df_mprio_legend, df_mprio_tbl = build_member_assignment_priority_reference(
-        skills_dict, members
-    )
-    if df_mprio_tbl.empty:
-        df_mprio_tbl = pd.DataFrame(
-            [
-                {
-                    "工程名": "",
-                    "機械名": "",
-                    "スキル列キー": "",
-                    "優先順佝": "",
-                    "メンバー": "",
-                    "ロール": "",
-                    "優先度値_尝さいろど先": "",
-                    "skillsセル値": "",
-                    "備考": "マスタ skills に「工程名+機械名」形式の列は見つからないか」データはありません。",
-                }
-            ]
-        )
-
     _usage_txt = build_gemini_usage_summary_text()
     if _usage_txt:
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
@@ -32138,14 +32118,6 @@ def _generate_plan_impl(
                 sheet_order=_stage2_tabular_sheet_order,
             )
 
-            _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
-            df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
-            _mprio_gap = len(df_mprio_legend) + 2
-            _mprio_second_header_row = _mprio_gap + 1
-            df_mprio_tbl.to_excel(
-                writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
-            )
-
             from planning_core.gantt_render_contract import (
                 make_gantt_render_contract,
                 render_gantt_sheet_from_contract,
@@ -32358,11 +32330,7 @@ def _generate_plan_impl(
 
             _apply_stage2_production_plan_workbook_polish(
                 writer.sheets,
-                member_priority_second_header_row=(
-                    _mprio_second_header_row
-                    if RESULT_MEMBER_PRIORITY_SHEET_NAME in writer.sheets
-                    else None
-                ),
+                member_priority_second_header_row=None,
             )
 
             if RESULT_TASK_SHEET_NAME in writer.sheets:
