@@ -23623,168 +23623,6 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
     return df, dict(targets)
 
 
-# 結果_タスク一覧履歴セル「・【MM/DD】：nR/1234m …」からメートル数を抽出（配台表の暦日分割フォールバック用）
-_RESULT_DISPATCH_HISTORY_SEG_M_RE = re.compile(
-    r"【\s*(\d{1,2})\s*/\s*(\d{1,2})\s*】\s*[:：]\s*\d+R/(\d+(?:\.\d+)?)\s*m",
-    re.IGNORECASE,
-)
-
-
-def _collect_result_task_history_column_text(tr) -> str:
-    """DataFrame 行から 履歴1… の非空文字列を連結する。"""
-    parts: list[str] = []
-    try:
-        for c in tr.index:
-            cs = str(c)
-            if not cs.startswith("履歴"):
-                continue
-            v = tr[c]
-            if v is None or (isinstance(v, float) and pd.isna(v)):
-                continue
-            s = str(v).strip()
-            if s:
-                parts.append(s)
-    except Exception:
-        return ""
-    return "\n".join(parts)
-
-
-def _parse_history_mmdd_meters_for_dispatch_expand(
-    text: str, anchor_year: int
-) -> list[tuple[date, float]]:
-    out: list[tuple[date, float]] = []
-    for m in _RESULT_DISPATCH_HISTORY_SEG_M_RE.finditer(text or ""):
-        try:
-            mo, d, meters = int(m.group(1)), int(m.group(2)), float(m.group(3))
-            out.append((date(anchor_year, mo, d), float(meters)))
-        except (ValueError, TypeError):
-            continue
-    return out
-
-
-def _find_df_tasks_row_by_task_and_machine(df_tasks: "pd.DataFrame", tid: str, mach: str):
-    tid_n = _interactive_norm_cell(tid)
-    mach_n = _interactive_norm_cell(mach)
-    try:
-        for _, tr in df_tasks.iterrows():
-            t1 = _interactive_norm_cell(
-                str(_planning_df_cell_scalar(tr, TASK_COL_TASK_ID) or "").strip()
-            )
-            m1 = _interactive_norm_cell(
-                str(_planning_df_cell_scalar(tr, TASK_COL_MACHINE_NAME) or "").strip()
-            )
-            if t1 == tid_n and m1 == mach_n:
-                return tr
-    except Exception:
-        return None
-    return None
-
-
-def _interactive_expand_dispatch_table_from_result_task_history(
-    df_dispatch: pd.DataFrame,
-    df_tasks: "pd.DataFrame | None",
-) -> pd.DataFrame:
-    """
-    インタラクティブ配台試行: timeline／JSON 経由で結果_配台表が (依頼NO×機械名) につき 1 行に潰れたが、
-    結果_タスク一覧の履歴に複数暦日がある場合に暦日別へ展開する。
-    """
-    if (
-        not _interactive_dispatch_trial_env_active()
-        or df_dispatch is None
-        or getattr(df_dispatch, "empty", True)
-        or df_tasks is None
-        or getattr(df_tasks, "empty", True)
-    ):
-        return df_dispatch
-
-    groups: dict[tuple[str, str], list] = defaultdict(list)
-    for i in df_dispatch.index:
-        row = df_dispatch.loc[i]
-        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
-        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
-        if tid and mach:
-            groups[(tid, mach)].append(i)
-
-    drop_idx: list = []
-    extra_rows: list[dict] = []
-
-    for g, idxs in groups.items():
-        if len(idxs) != 1:
-            continue
-        ri = idxs[0]
-        r0 = df_dispatch.loc[ri]
-        try:
-            q0 = float(str(r0.get("当日配台数量")).replace(",", "").strip() or 0)
-        except (TypeError, ValueError):
-            q0 = 0.0
-        if q0 <= 1e-9:
-            continue
-        tid, mach = g
-        tr = _find_df_tasks_row_by_task_and_machine(df_tasks, tid, mach)
-        if tr is None:
-            continue
-        htext = _collect_result_task_history_column_text(tr)
-        dd0 = _interactive_parse_dispatch_date_cell(r0.get("配台日"))
-        anchor_y = int(dd0.year) if dd0 is not None else int(date.today().year)
-        segs = _parse_history_mmdd_meters_for_dispatch_expand(htext, anchor_y)
-        if len(segs) < 2:
-            continue
-        segs.sort(key=lambda x: x[0])
-        total_p = sum(m for _d, m in segs)
-        lim = max(1e-2, 1e-9 * max(abs(q0), abs(total_p), 1.0))
-        if abs(total_p - q0) > lim:
-            logging.info(
-                "インタラクティブ配台試行: 履歴のメートル合計=%.4f と当日配台数量=%.4f が一致せず "
-                "履歴による暦日分割をスキップ（依頼NO=%s 機械=%s）",
-                total_p,
-                q0,
-                tid,
-                mach,
-            )
-            continue
-        try:
-            base = {str(k): r0[k] for k in r0.index}
-        except Exception:
-            base = r0.to_dict()
-        for day_d, meters in segs:
-            rr = dict(base)
-            rr["配台日"] = _norm_ymd(day_d)
-            rr["当日配台数量"] = float(meters)
-            extra_rows.append(rr)
-        drop_idx.append(ri)
-
-    if not extra_rows:
-        _append_debug_471ee7(
-            "H3",
-            "_interactive_expand_dispatch_table_from_result_task_history",
-            "no_expand",
-            {"rowsIn": int(len(df_dispatch))},
-        )
-        return df_dispatch
-
-    kept = df_dispatch.drop(index=drop_idx)
-    add_df = pd.DataFrame(extra_rows)
-    out = pd.concat([kept, add_df], ignore_index=True)
-    cols = list(df_dispatch.columns)
-    for c in cols:
-        if c not in out.columns:
-            out[c] = ""
-    out = out.reindex(columns=cols)
-    logging.info(
-        "インタラクティブ配台試行: 結果_タスク一覧の履歴から結果_配台表を暦日分割しました"
-        "（生成 %s 行・置換 %s 行）。",
-        len(extra_rows),
-        len(drop_idx),
-    )
-    _append_debug_471ee7(
-        "H3",
-        "_interactive_expand_dispatch_table_from_result_task_history",
-        "expanded",
-        {"replacedRows": int(len(drop_idx)), "newRows": int(len(extra_rows))},
-    )
-    return out
-
-
 def _interactive_aggregate_dispatch_targets_from_df(
     df_dispatch: pd.DataFrame,
 ) -> dict[tuple[str, str, date], float]:
@@ -24302,14 +24140,8 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     json_columns: list | None,
 ) -> pd.DataFrame:
     """
-    インタラクティブ配台試行: 原則 timeline 集約（df_sim）の「1 暦日 1 行」を正とする。
-
-    以前は入力 JSON の rows で df_sim を全面置換していたため、編集用 JSON が
-    (依頼NO×機械名) あたり 1 行・合計数量のみのときに暦日分割が 1 行に潰れる不具合があった。
-
-    JSON が複数暦日行と一致する場合のみ、同一配台日のセルを JSON で上書きする。
-    JSON が 1 行かつ数量合計が timeline 側と一致する場合は、JSON を合算行とみなし df_sim を採用する。
-    timeline が空のときのみ、従来どおり JSON だけで表を組む。
+    インタラクティブ配台試行: 編集タブの入力 JSON rows を結果_配台表の正とする。
+    ユーザーが暦日行を手動統合した場合でも、配台試行後に分割へ戻さない。
     """
     if not json_rows or not isinstance(json_rows, list):
         return df_sim
@@ -24324,111 +24156,21 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
             "simEmpty": bool(df_sim is None or getattr(df_sim, "empty", True)),
         },
     )
-    if df_sim is None:
-        df_sim = pd.DataFrame()
-    if getattr(df_sim, "empty", True):
-        df_j = _dataframe_from_interactive_dispatch_json_rows(
-            json_rows, json_columns, fallback_columns_from=None
-        )
-        logging.info(
-            "インタラクティブ配台試行: timeline 集約が空のため、入力 JSON のみで結果_配台表を組み立てました（%s 行）。",
-            len(df_j),
-        )
-        _append_debug_471ee7(
-            "H2",
-            "_interactive_dispatch_trial_use_editor_rows_for_result_table",
-            "fallback_json_only",
-            {"rowsOut": int(len(df_j))},
-        )
-        return df_j
-
-    df_out = df_sim.copy()
-    sim_idx_by_group: dict[tuple[str, str], list] = defaultdict(list)
-    for i in df_out.index:
-        row = df_out.loc[i]
-        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
-        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
-        if tid and mach:
-            sim_idx_by_group[(tid, mach)].append(i)
-
-    json_by_group: dict[tuple[str, str], list] = defaultdict(list)
-    for r in json_rows:
-        if not isinstance(r, dict):
-            continue
-        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID))
-        mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
-        if tid and mach:
-            json_by_group[(tid, mach)].append(r)
-
-    eps_qty = 1e-2
-    collapsed_groups: set[tuple[str, str]] = set()
-    for g, idxs in sim_idx_by_group.items():
-        if len(idxs) < 2:
-            continue
-        jrows = json_by_group.get(g, [])
-        if len(jrows) != 1:
-            continue
-        jr0 = jrows[0]
-        try:
-            qc = jr0.get("当日配台数量")
-            jqty = (
-                float(str(qc).replace(",", "").strip())
-                if qc not in (None, "")
-                else 0.0
-            )
-        except (TypeError, ValueError):
-            jqty = 0.0
-        smqty = 0.0
-        for ri in idxs:
-            try:
-                cell = df_out.at[ri, "当日配台数量"]
-                smqty += float(str(cell).replace(",", "").strip() or 0)
-            except (TypeError, ValueError):
-                pass
-        lim = max(eps_qty, 1e-9 * max(abs(jqty), abs(smqty), 1.0))
-        if abs(jqty - smqty) <= lim:
-            collapsed_groups.add(g)
-
-    for g, idxs in sim_idx_by_group.items():
-        if g in collapsed_groups:
-            continue
-        jrows = json_by_group.get(g, [])
-        if not jrows:
-            continue
-        jmap: dict[date, dict] = {}
-        for jr in jrows:
-            dd = _interactive_parse_dispatch_date_cell(jr.get("配台日"))
-            if dd is not None:
-                jmap[dd] = jr
-        for ri in idxs:
-            dd = _interactive_parse_dispatch_date_cell(df_out.at[ri, "配台日"])
-            if dd is None or dd not in jmap:
-                continue
-            jr = jmap[dd]
-            qraw = jr.get("当日配台数量")
-            try:
-                qv = (
-                    float(str(qraw).replace(",", "").strip())
-                    if qraw not in (None, "")
-                    else None
-                )
-            except (TypeError, ValueError):
-                qv = None
-            if qv is not None:
-                df_out.at[ri, "当日配台数量"] = qv
-
+    df_out = _dataframe_from_interactive_dispatch_json_rows(
+        json_rows,
+        json_columns,
+        fallback_columns_from=df_sim,
+    )
     logging.info(
-        "インタラクティブ配台試行: 結果_配台表は timeline 集約を基準にしました。"
-        " 入力 JSON を合算 1 行とみなして暦日分割を維持した (依頼NO, 機械名) グループ=%s 件。",
-        len(collapsed_groups),
+        "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
+        len(df_out),
     )
     _append_debug_471ee7(
         "H2",
         "_interactive_dispatch_trial_use_editor_rows_for_result_table",
-        "exit_timeline_base",
+        "exit_json_authoritative",
         {
             "rowsOut": int(len(df_out)),
-            "collapsedGroups": int(len(collapsed_groups)),
         },
     )
     return df_out
@@ -32210,10 +31952,6 @@ def _generate_plan_impl(
                 df_dispatch,
                 interactive_result_dispatch_json_rows,
                 interactive_result_dispatch_json_columns,
-            )
-            df_dispatch = _interactive_expand_dispatch_table_from_result_task_history(
-                df_dispatch,
-                df_tasks,
             )
             if interactive_dispatch_targets:
                 _interactive_validate_dispatch_quantities(
