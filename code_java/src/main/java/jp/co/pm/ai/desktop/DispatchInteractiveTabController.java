@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1235,6 +1236,8 @@ public final class DispatchInteractiveTabController {
 
     private void applyFullGridRebuild(FullGridRebuild bundle) {
         suppressDispatchGridDirty.set(true);
+        BitSet wideHiddenSnapshot = SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
+        BitSet byDayHiddenSnapshot = SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
         try {
             dateAxis.clear();
             dateAxis.addAll(bundle.axis());
@@ -1257,6 +1260,9 @@ public final class DispatchInteractiveTabController {
             SpreadsheetTabularSupport.applyColumnFiltersWithDialog(byDaySpreadsheet);
             SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
             scheduleByDayLayoutAfterColumnSync(b);
+
+            SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
+            SpreadsheetTabularSupport.restoreHiddenRows(byDaySpreadsheet, byDayHiddenSnapshot);
         } finally {
             Platform.runLater(() -> suppressDispatchGridDirty.set(false));
         }

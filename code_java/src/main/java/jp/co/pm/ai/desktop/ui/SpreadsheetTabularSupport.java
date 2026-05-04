@@ -18,6 +18,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
 
+import org.controlsfx.control.spreadsheet.Grid;
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
@@ -80,6 +81,39 @@ public final class SpreadsheetTabularSupport {
         view.setHiddenRows(new BitSet());
         ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
         DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
+    }
+
+    /**
+     * 現在の非表示行（列フィルタによる行の非表示）を複製する。{@link SpreadsheetView#setGrid} 後に {@link
+     * #restoreHiddenRows} で戻す用途。
+     */
+    public static BitSet snapshotHiddenRows(SpreadsheetView view) {
+        if (view == null) {
+            return new BitSet();
+        }
+        return (BitSet) view.getHiddenRows().clone();
+    }
+
+    /**
+     * {@link #snapshotHiddenRows} の結果を適用する。グリッド行数より大きいインデックスは無視し、行数が減った再構築でも破綻しないようにする。
+     */
+    public static void restoreHiddenRows(SpreadsheetView view, BitSet snapshot) {
+        if (view == null || snapshot == null) {
+            return;
+        }
+        Grid grid = view.getGrid();
+        int rowCount = grid != null && grid.getRows() != null ? grid.getRows().size() : 0;
+        if (rowCount <= 0) {
+            view.setHiddenRows(new BitSet());
+            return;
+        }
+        BitSet clamped = new BitSet();
+        for (int i = snapshot.nextSetBit(0); i >= 0; i = snapshot.nextSetBit(i + 1)) {
+            if (i < rowCount) {
+                clamped.set(i);
+            }
+        }
+        view.setHiddenRows(clamped);
     }
 
     /** Applies leading column freeze from persisted 見出し列数 (must run after {@link SpreadsheetView#setGrid}). */
