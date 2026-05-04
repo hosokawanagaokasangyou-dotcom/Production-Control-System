@@ -35,6 +35,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final Pattern TIME_SLOT_HEADER =
             Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$");
 
+    /**
+     * 「結果_設備ガント」日付列の「【2026/05/07】」「【2026-05-07】」等。先頭列の【による誤判定を避ける。
+     */
+    private static final Pattern BRACKETED_PLAIN_DATE_LABEL =
+            Pattern.compile("^\\s*【\\s*\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}\\s*】\\s*$");
+
     private static final double LABEL_MIN_WIDTH = 220;
     private static final double LABEL_MAX_WIDTH = 320;
     private static final double ROW_HEIGHT = 26;
@@ -113,7 +119,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     "EquipmentGraphicGanttPane.build:afterParse",
                     "equipment graphic parse summary",
                     String.format(
-                            "{\"hypothesisMap\":{\"H1_jsonCellsEmpty\":%s,\"H2_allSectionRows\":%s},"
+                            "{\"runId\":\"post-fix\","
+                                    + "\"hypothesisMap\":{\"H1_jsonCellsEmpty\":%s,\"H2_allSectionRows\":%s},"
                                     + "\"nonEmptySlotCells\":%d,\"timelineCanvasRows\":%d,\"sectionBannerRows\":%d,"
                                     + "\"inputRows\":%d,\"slotColumnCount\":%d,\"slotMinutes\":%d,"
                                     + "\"repairedUnnamed\":%b,\"firstCol0Preview\":\"%s\","
@@ -582,7 +589,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static boolean isSectionRow(ObservableList<String> row) {
         for (int i = 0; i < Math.min(4, row.size()); i++) {
             String s = row.get(i) != null ? row.get(i) : "";
-            if (s.contains("■") || s.contains("▪") || s.contains("【")) {
+            if (s.contains("■") || s.contains("▪")) {
+                return true;
+            }
+            if (s.contains("【")) {
+                if (BRACKETED_PLAIN_DATE_LABEL.matcher(s.strip()).matches()) {
+                    continue;
+                }
                 return true;
             }
         }
