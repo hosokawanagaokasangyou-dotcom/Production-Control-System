@@ -3,9 +3,7 @@ package jp.co.pm.ai.desktop.ui;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 import javafx.collections.FXCollections;
@@ -23,8 +21,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * 「結果_設備ガント」Excel と同一データ（JSON の columns / rows）から、横軸が時刻スロットの
@@ -64,42 +60,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
         RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
-        boolean didRepair = repaired != null;
-        if (didRepair) {
+        if (repaired != null) {
             effCols = repaired.columns();
             effRows = repaired.rows();
         }
         ParseResult parsed = parse(effCols, effRows);
-        // #region agent log
-        try {
-            int colonish = 0;
-            for (String h : effCols) {
-                if (h != null && (h.indexOf(':') >= 0 || h.indexOf('\uFF1A') >= 0)) {
-                    colonish++;
-                }
-            }
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("repairedUnnamedHeaderRow", didRepair);
-            d.put("slotCount", parsed.slotColumnIndices.size());
-            d.put("colCount", effCols != null ? effCols.size() : -1);
-            d.put("colonishHeaderCount", colonish);
-            d.put(
-                    "headersFirst30",
-                    effCols == null
-                            ? List.of()
-                            : (effCols.size() <= 30
-                                    ? new ArrayList<>(effCols)
-                                    : new ArrayList<>(effCols.subList(0, 30))));
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "b7cded",
-                    "H2",
-                    "EquipmentGraphicGanttPane.build",
-                    parsed.slotColumnIndices.isEmpty() ? "no time slots" : "parsed ok",
-                    d);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
             Label msg =
                     new Label(

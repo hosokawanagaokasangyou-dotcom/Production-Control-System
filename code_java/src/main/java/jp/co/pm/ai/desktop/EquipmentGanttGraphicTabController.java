@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +25,6 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
@@ -264,27 +262,6 @@ public final class EquipmentGanttGraphicTabController {
         if (st == null) {
             return;
         }
-        // #region agent log
-        try {
-            List<String> cs = st.columns();
-            List<String> head =
-                    cs.size() <= 30 ? new ArrayList<>(cs) : new ArrayList<>(cs.subList(0, 30));
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("sheet", name);
-            d.put("resolveKind", GanttScheduleStyle.resolveKind(name, cs).name());
-            d.put("colCount", cs.size());
-            d.put("rowCount", st.rows().size());
-            d.put("headersFirst30", head);
-            AgentDebugLog.appendStructured(
-                    shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    "b7cded",
-                    "H1",
-                    "EquipmentGanttGraphicTabController.applySelectedSheetFromMap",
-                    "sheet before build",
-                    d);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
         contentPane.setCenter(
                 EquipmentGraphicGanttPane.build(st.columns(), rows));
