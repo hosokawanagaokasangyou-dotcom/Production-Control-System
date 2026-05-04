@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,9 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
  *
  * <p>Excel シートと完全一致は目指さず、タイムラインイベントからスロットを充填する近似。
  * xlsx 不要でグラフィック表示に使える。
+ *
+ * <p>{@code sorted_dates} は計画ホライズン全体を含むことがあり、イベントがまだ無い暦日が先頭に並ぶ。
+ * その日はタイムラインがすべて空になるため、グラフィック用の暦日は {@code timeline_events} に現れる日付に限定する。
  */
 public final class EquipmentGanttContractSheetTableBuilder {
 
@@ -95,7 +99,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
 
         List<Map<String, String>> rows = new ArrayList<>();
 
-        for (LocalDate day : sortedDates) {
+        List<LocalDate> graphicDays = graphicCalendarDates(events, sortedDates);
+        for (LocalDate day : graphicDays) {
             Map<String, String> section = new LinkedHashMap<>();
             for (String col : columns) {
                 section.put(col, col.equals(COL_DATE) ? formatSectionBanner(day) : "");
@@ -118,7 +123,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     LocalDateTime winEnd = winStart.plusMinutes(SLOT_MINUTES);
                     String cell = "";
                     for (TimelineEvent ev : events) {
-                        if (!ev.date.equals(day)) {
+                        if (!eventTouchesCalendarDay(ev, day)) {
                             continue;
                         }
                         if (!equipLine.equals(ev.machine)) {
@@ -140,6 +145,41 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         return new JsonTableIo.SheetTable(columns, rows);
+    }
+
+    /**
+     * タイムラインにイベントが存在する暦日のみ（イベントの {@code date} および {@code start_dt} の日付）。
+     * イベントが 1 件も無いときだけフォールバックで {@code sorted_dates} をそのまま使う。
+     */
+    private static List<LocalDate> graphicCalendarDates(
+            List<TimelineEvent> events, List<LocalDate> sortedDatesFallback) {
+        TreeSet<LocalDate> days = new TreeSet<>();
+        for (TimelineEvent ev : events) {
+            if (ev.date != null) {
+                days.add(ev.date);
+            }
+            if (ev.start != null) {
+                days.add(ev.start.toLocalDate());
+            }
+        }
+        if (!days.isEmpty()) {
+            return new ArrayList<>(days);
+        }
+        return new ArrayList<>(sortedDatesFallback);
+    }
+
+    /** 契約の {@code date} または開始／終了時刻が、その暦日と関係するイベントを対象にする。 */
+    private static boolean eventTouchesCalendarDay(TimelineEvent ev, LocalDate day) {
+        if (ev.date != null && ev.date.equals(day)) {
+            return true;
+        }
+        if (ev.start != null && ev.start.toLocalDate().equals(day)) {
+            return true;
+        }
+        if (ev.end != null && ev.end.toLocalDate().equals(day)) {
+            return true;
+        }
+        return false;
     }
 
     /** "工程+機械…" を最初の '+' で分割（無ければ全体を機械名）。 */
