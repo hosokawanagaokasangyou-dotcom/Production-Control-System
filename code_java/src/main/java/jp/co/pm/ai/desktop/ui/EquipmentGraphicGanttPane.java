@@ -1,14 +1,13 @@
 package jp.co.pm.ai.desktop.ui;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -32,8 +31,16 @@ import javafx.scene.text.Font;
  */
 public final class EquipmentGraphicGanttPane extends BorderPane {
 
+    private static final String AGENT_DEBUG_SESSION = "70be15";
+
     private static final Pattern TIME_SLOT_HEADER =
             Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$");
+
+    /**
+     * 「結果_設備ガント」日付列の「【2026/05/07】」「【2026-05-07】」等。先頭列の【による誤判定を避ける。
+     */
+    private static final Pattern BRACKETED_PLAIN_DATE_LABEL =
+            Pattern.compile("^\\s*【\\s*\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}\\s*】\\s*$");
 
     private static final double LABEL_MIN_WIDTH = 220;
     private static final double LABEL_MAX_WIDTH = 320;
@@ -68,35 +75,48 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effCols = repaired.columns();
             effRows = repaired.rows();
         }
-        ParseResult parsed = parse(effCols, effRows);
         // #region agent log
         {
-            int nonEmptySlots = 0;
-            int dataDisplayRows = 0;
-            for (DisplayRow dr : parsed.displayRows) {
-                if (dr.sectionBanner != null) {
-                    continue;
-                }
-                dataDisplayRows++;
-                for (String c : dr.cellsInSlots) {
-                    if (c != null && !c.strip().isEmpty()) {
-                        nonEmptySlots++;
-                    }
-                }
-            }
-            agentDebugLog(
-                    "H1",
-                    "EquipmentGraphicGanttPane.build:afterParse",
-                    "equipment graphic parse",
-                    String.format(
-                            "{\"nonEmptySlotCells\":%d,\"dataDisplayRows\":%d,\"slotColumnCount\":%d,"
-                                    + "\"slotMinutes\":%d,\"repairedUnnamed\":%s}",
-                            nonEmptySlots,
-                            dataDisplayRows,
-                            parsed.slotColumnIndices.size(),
-                            parsed.slotMinutes,
-                            repaired != null));
+            int n = effCols != null ? effCols.size() : 0;
+            String h0 = n > 0 && effCols.get(0) != null ? effCols.get(0) : "";
+            String h1 = n > 1 && effCols.get(1) != null ? effCols.get(1) : "";
+            String h2 = n > 2 && effCols.get(2) != null ? effCols.get(2) : "";
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    AGENT_DEBUG_SESSION,
+                    "H-C",
+                    "EquipmentGraphicGanttPane.build:beforeParse",
+                    "列見出しサンプル（pandas 救済後）",
+                    Map.of(
+                            "colCount",
+                            n,
+                            "h0",
+                            h0.length() > 80 ? h0.substring(0, 80) : h0,
+                            "h1",
+                            h1.length() > 80 ? h1.substring(0, 80) : h1,
+                            "h2",
+                            h2.length() > 80 ? h2.substring(0, 80) : h2,
+                            "rowCount",
+                            effRows != null ? effRows.size() : -1,
+                            "repaired",
+                            Boolean.toString(repaired != null)));
         }
+        // #endregion
+        ParseResult parsed = parse(effCols, effRows);
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                AGENT_DEBUG_SESSION,
+                "H-C",
+                "EquipmentGraphicGanttPane.build:afterParse",
+                "時刻列検出結果",
+                Map.of(
+                        "slotCols",
+                        parsed.slotColumnIndices.size(),
+                        "displayRows",
+                        parsed.displayRows.size(),
+                        "slotMinutes",
+                        parsed.slotMinutes));
         // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
             Label msg =
@@ -409,75 +429,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return v != null ? v.strip() : "";
     }
 
-    // #region agent log
-    /**
-     * デバッグ NDJSON（セッション b8c02d）。Windows / WSL のいずれかに書ければよい。
-     */
-    private static void agentDebugLog(
-            String hypothesisId, String location, String message, String dataJsonObject) {
-        long ts = System.currentTimeMillis();
-        String line =
-                "{\"sessionId\":\"b8c02d\",\"timestamp\":"
-                        + ts
-                        + ",\"hypothesisId\":\""
-                        + hypothesisId
-                        + "\",\"location\":\""
-                        + jsonEscape(location)
-                        + "\",\"message\":\""
-                        + jsonEscape(message)
-                        + "\",\"data\":"
-                        + dataJsonObject
-                        + "}\n";
-        String env = System.getenv("PM_AI_DEBUG_LOG");
-        String[] candidates =
-                new String[] {
-                    env != null && !env.isBlank() ? env : "",
-                    "C:\\工程管理AIプロジェクト_JAVA\\.cursor\\debug-b8c02d.log",
-                    "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-b8c02d.log",
-                };
-        for (String p : candidates) {
-            if (p == null || p.isBlank()) {
-                continue;
-            }
-            try {
-                Path path = Path.of(p);
-                Path parent = path.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
-                Files.writeString(
-                        path,
-                        line,
-                        StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE,
-                        StandardOpenOption.APPEND);
-                break;
-            } catch (Exception ignored) {
-                // try next path
-            }
-        }
-    }
-
-    private static String jsonEscape(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-
-    /** デバッグ: グラフィックタブで選択シートを読み込んだとき */
-    public static void agentLogSheetLoad(String sheetName, int columnCount) {
-        agentDebugLog(
-                "H2",
-                "EquipmentGanttGraphicTabController.applySelectedSheetFromMap",
-                "selected sheet for graphic gantt",
-                String.format(
-                        "{\"sheetName\":\"%s\",\"columnCount\":%d}",
-                        jsonEscape(sheetName != null ? sheetName : ""),
-                        columnCount));
-    }
-    // #endregion
-
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
@@ -549,7 +500,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static boolean isSectionRow(ObservableList<String> row) {
         for (int i = 0; i < Math.min(4, row.size()); i++) {
             String s = row.get(i) != null ? row.get(i) : "";
-            if (s.contains("■") || s.contains("▪") || s.contains("【")) {
+            if (s.contains("■") || s.contains("▪")) {
+                return true;
+            }
+            if (s.contains("【")) {
+                if (BRACKETED_PLAIN_DATE_LABEL.matcher(s.strip()).matches()) {
+                    continue;
+                }
                 return true;
             }
         }
@@ -643,4 +600,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             this.rawRow = rawRow;
         }
     }
+
+    // #region agent log
+    /** デバッグ: グラフィックタブで選択シートを読み込んだとき */
+    public static void agentLogSheetLoad(String sheetName, int columnCount) {
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                AGENT_DEBUG_SESSION,
+                "H-E",
+                "EquipmentGraphicGanttPane.agentLogSheetLoad",
+                "selected sheet for graphic gantt",
+                Map.of(
+                        "sheetName",
+                        sheetName != null ? sheetName : "",
+                        "columnCount",
+                        columnCount));
+    }
+    // #endregion
 }
