@@ -83,13 +83,25 @@ public final class EquipmentGanttGraphicTabController {
 
     private String lastLoadedPlanPath = "";
 
+    /**
+     * {@link ComboBox#getItems()} の {@code setAll} や {@code select} の途中で onAction が発火し、
+     * 選択が一瞬 null になり {@link #applySelectedSheetFromMap} が何も描画しない状態になるのを防ぐ。
+     */
+    private boolean suppressSheetComboEvents;
+
     @FXML
     private void initialize() {
         if (hintLabel != null) {
             hintLabel.setText(HINT);
         }
         if (sheetCombo != null) {
-            sheetCombo.setOnAction(e -> applySelectedSheet());
+            sheetCombo.setOnAction(
+                    e -> {
+                        if (suppressSheetComboEvents) {
+                            return;
+                        }
+                        applySelectedSheet();
+                    });
         }
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
@@ -259,15 +271,20 @@ public final class EquipmentGanttGraphicTabController {
                     sheetCombo.getSelectionModel().getSelectedItem() != null
                             ? sheetCombo.getSelectionModel().getSelectedItem()
                             : "";
-            sheetCombo.getItems().setAll(names);
+            suppressSheetComboEvents = true;
+            try {
+                sheetCombo.getItems().setAll(names);
 
-            String pick = previous;
-            if (pick.isEmpty() || !eligible.containsKey(pick)) {
-                pick = eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
+                String pick = previous;
+                if (pick.isEmpty() || !eligible.containsKey(pick)) {
+                    pick = eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
+                }
+                sheetCombo.getSelectionModel().select(pick);
+
+                applySelectedSheetFromMap(eligible);
+            } finally {
+                suppressSheetComboEvents = false;
             }
-            sheetCombo.getSelectionModel().select(pick);
-
-            applySelectedSheetFromMap(eligible);
             statusLabel.setText(
                     "読み込み: "
                             + planPath.getFileName()
