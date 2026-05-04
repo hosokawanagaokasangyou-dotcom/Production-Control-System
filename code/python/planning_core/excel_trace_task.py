@@ -17,7 +17,7 @@ UI に無い ``PM_AI_*`` を子へ渡さない）。
 
 **NDJSON の目安**（同一依頼NO）:
 
-* **EX1** … 書き込み直前の ``df_tasks`` 行
+* **EX1** … 書き込み直前の ``df_tasks`` 行（列 **依頼NO** または **タスクID** で照合）
 * **EX4** … 同じ行を ``df.to_json`` したサイドカー ``*_結果_タスク一覧.json``
 * **EX5** … EX1 と EX4 のセル差分（矛盾があれば ``mismatches``）。全シート JSON
   （``write_production_plan_workbook_json``）とは別物。
@@ -31,10 +31,34 @@ import pathlib
 import time
 
 ENV_TRACE_TASK_ID = "PM_AI_EXCEL_TRACE_TASK_ID"
+# 結果_タスク一覧の依頼識別子: 段階2の表は「タスクID」列、上流 DataFrame では「依頼NO」のことがある。
 TASK_COL = "依頼NO"
+_TASK_ID_SOURCE_COLUMNS = ("依頼NO", "タスクID")
 
 # Set in log_df_tasks (EX1); consumed in log_sidecar_result_task_row for EX5 diff vs sidecar JSON.
 _last_df_tasks_row_snapshot: dict | None = None
+
+
+def _task_id_column_name(df) -> str | None:
+    if df is None or getattr(df, "empty", True):
+        return None
+    cols = getattr(df, "columns", None)
+    if cols is None:
+        return None
+    for c in _TASK_ID_SOURCE_COLUMNS:
+        if c in cols:
+            return c
+    return None
+
+
+def _sidecar_row_matches_task_id(r: dict, tid: str) -> bool:
+    t = (tid or "").strip()
+    if not t or not isinstance(r, dict):
+        return False
+    for k in _TASK_ID_SOURCE_COLUMNS:
+        if str(r.get(k) or "").strip() == t:
+            return True
+    return False
 
 
 def trace_task_id() -> str:
@@ -85,19 +109,20 @@ def log_df_tasks(df, stage: str, *, output_basename: str = "") -> None:
         _last_df_tasks_row_snapshot = None
         return
     _last_df_tasks_row_snapshot = None
-    if TASK_COL not in df.columns:
+    id_col = _task_id_column_name(df)
+    if not id_col:
         append(
             {
                 "stage": stage,
                 "hypothesisId": "EX1",
-                "message": "df_tasks missing 依頼NO column",
+                "message": "df_tasks missing task id column (need one of 依頼NO / タスクID)",
                 "outputBasename": output_basename,
                 "sampleColumns": list(df.columns)[:30],
             }
         )
         return
     t = trace_task_id()
-    sub = df[df[TASK_COL].astype(str).str.strip() == t]
+    sub = df[df[id_col].astype(str).str.strip() == t]
     if sub.empty:
         append(
             {
@@ -123,6 +148,7 @@ def log_df_tasks(df, stage: str, *, output_basename: str = "") -> None:
             "stage": stage,
             "hypothesisId": "EX1",
             "message": "df_tasks row for trace id",
+            "taskIdColumn": id_col,
             "outputBasename": output_basename,
             "matchRows": int(len(sub)),
             "row": row,
@@ -254,12 +280,15 @@ def log_sidecar_result_task_row(sidecar_path: str | None) -> None:
         return
     t = trace_task_id()
     if not sidecar_path or not os.path.isfile(sidecar_path):
+        _prj = (os.environ.get("PM_AI_PLAN_RESULT_TASK_JSON") or "").strip()
         append(
             {
                 "stage": "sidecar_after_write",
                 "hypothesisId": "EX4",
                 "message": "sidecar path missing",
                 "path": sidecar_path or "",
+                "envPlanResultTaskJson": _prj if _prj else "(unset)",
+                "hint": "PM_AI_PLAN_RESULT_TASK_JSON が 0/false/no のときサイドカーは無効（EX4/EX5 なし）。空なら有効。",
             }
         )
         return
@@ -290,7 +319,7 @@ def log_sidecar_result_task_row(sidecar_path: str | None) -> None:
         return
     found = None
     for r in rows:
-        if isinstance(r, dict) and str(r.get(TASK_COL) or "").strip() == t:
+        if _sidecar_row_matches_task_id(r, t):
             found = r
             break
     if not found:
