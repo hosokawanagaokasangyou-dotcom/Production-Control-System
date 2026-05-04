@@ -31812,6 +31812,16 @@ def _generate_plan_impl(
             df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
                 df_tasks, max_history_len
             )
+            try:
+                from planning_core.excel_trace_task import log_df_tasks as _excel_trace_df_tasks
+
+                _excel_trace_df_tasks(
+                    df_tasks,
+                    "after_apply_result_task_column_order",
+                    output_basename=os.path.basename(plan_xlsx_final),
+                )
+            except Exception:
+                pass
             # 列設定シートは「列名」「表示」のデータ行が必須。task_results が空だと
             # apply_result_task_sheet_column_order は ordered が空になり、見出しのみのシートになる。
             if not task_column_order:
@@ -31874,6 +31884,17 @@ def _generate_plan_impl(
                 logging.info(
                     "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
                 )
+                try:
+                    from planning_core.excel_trace_task import (
+                        log_gantt_label_specs as _excel_trace_gantt_specs,
+                        log_timeline_events as _excel_trace_timeline,
+                    )
+
+                    _excel_trace_timeline(
+                        timeline_events, "before_write_results_equipment_gantt_sheet"
+                    )
+                except Exception:
+                    pass
                 gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
                     writer,
                     timeline_events,
@@ -31884,6 +31905,31 @@ def _generate_plan_impl(
                     base_now_dt,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
                 )
+                try:
+                    from planning_core.excel_trace_task import (
+                        log_gantt_label_specs as _excel_trace_gantt_specs,
+                    )
+
+                    _excel_trace_gantt_specs(
+                        gantt_tl_label_specs, "after_write_results_equipment_gantt_sheet"
+                    )
+                except Exception:
+                    pass
+            else:
+                try:
+                    from planning_core.excel_trace_task import append as _excel_trace_append
+
+                    _excel_trace_append(
+                        {
+                            "stage": "equipment_gantt_branch",
+                            "hypothesisId": "EX3",
+                            "message": "設備ガントシート生成をスキップした分岐",
+                            "stage2_output_root": bool(stage2_output_root),
+                            "publish_plan_xlsx": bool(_publish_plan_xlsx),
+                        }
+                    )
+                except Exception:
+                    pass
 
             if detail_timeline_events:
                 logging.info(
@@ -32040,6 +32086,14 @@ def _generate_plan_impl(
         _sj = write_result_task_json_sidecar(
             plan_xlsx_final, df_tasks, sheet_name=RESULT_TASK_SHEET_NAME
         )
+        try:
+            from planning_core.excel_trace_task import (
+                log_sidecar_result_task_row as _excel_trace_sidecar,
+            )
+
+            _excel_trace_sidecar(_sj)
+        except Exception:
+            pass
         if _sj:
             logging.info(
                 "段階2: 結果_タスク一覧 JSON サイドカーを '%s' に出力しました。",
