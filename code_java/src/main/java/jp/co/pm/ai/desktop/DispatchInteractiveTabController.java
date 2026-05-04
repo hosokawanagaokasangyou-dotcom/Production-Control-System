@@ -14,10 +14,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.HashMap;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -74,7 +70,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
@@ -94,9 +89,6 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
-
-    private static final String DEBUG_SESSION = "471ee7";
-    private static final ObjectMapper DEBUG_JSON = new ObjectMapper();
 
     private record ReloadBundle(
             ResultDispatchDocument doc,
@@ -698,20 +690,6 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         String shortagesPath = task.getValue();
-                        // #region agent log
-                        debugAgentNdjson(
-                                "DispatchInteractiveTabController.java:onDispatchTrial succeeded",
-                                "H2",
-                                "trial subprocess OK, about to reload JSON",
-                                Map.of(
-                                        "shortagesPath",
-                                        shortagesPath != null ? shortagesPath : "",
-                                        "expectedJsonPath",
-                                        jsonPath.toString(),
-                                        "resultDispatchDir",
-                                        AppPaths.resolveResultDispatchTableDir(shell.snapshotUiEnv())
-                                                .toString()));
-                        // #endregion
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
@@ -809,38 +787,6 @@ public final class DispatchInteractiveTabController {
         focusWideProfileCellAfterReorder(i + 1, colIdx);
     }
 
-    // #region agent log
-    private void debugAgentNdjson(
-            String location, String hypothesisId, String message, Map<String, Object> data) {
-        if (shell == null) {
-            return;
-        }
-        debugAgentNdjsonWithUi(shell.snapshotUiEnv(), location, hypothesisId, message, data);
-    }
-
-    private void debugAgentNdjsonWithUi(
-            Map<String, String> uiEnv,
-            String location,
-            String hypothesisId,
-            String message,
-            Map<String, Object> data) {
-        try {
-            ObjectNode root = DEBUG_JSON.createObjectNode();
-            root.put("sessionId", DEBUG_SESSION);
-            root.put("timestamp", System.currentTimeMillis());
-            root.put("location", location);
-            root.put("hypothesisId", hypothesisId);
-            root.put("message", message);
-            root.set("data", DEBUG_JSON.valueToTree(data != null ? data : Map.of()));
-            AgentDebugLog.appendNdjsonLine(
-                    uiEnv != null ? uiEnv : Map.of(),
-                    DEBUG_SESSION,
-                    DEBUG_JSON.writeValueAsString(root));
-        } catch (Throwable ignored) {
-        }
-    }
-    // #endregion
-
     private void reloadFromDiskQuiet() {
         reloadFromDiskQuiet(null);
     }
@@ -856,18 +802,6 @@ public final class DispatchInteractiveTabController {
         Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         jsonPathLabel.setText(p.toString());
         if (!Files.isRegularFile(p)) {
-            // #region agent log
-            debugAgentNdjson(
-                    "DispatchInteractiveTabController.java:reload missing file",
-                    "H2",
-                    "jsonPath not a file -> empty table",
-                    Map.of(
-                            "jsonPath",
-                            p.toString(),
-                            "resultDispatchDir",
-                            AppPaths.resolveResultDispatchTableDir(shell.snapshotUiEnv())
-                                    .toString()));
-            // #endregion
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
             rebuildGrids();
@@ -881,41 +815,7 @@ public final class DispatchInteractiveTabController {
                 new Task<>() {
                     @Override
                     protected ReloadBundle call() throws Exception {
-                        // #region agent log
-                        long sz = -1L;
-                        try {
-                            if (Files.isRegularFile(jsonPath)) {
-                                sz = Files.size(jsonPath);
-                            }
-                        } catch (Throwable ignored) {
-                        }
-                        Map<String, Object> pre = new HashMap<>();
-                        pre.put("jsonPath", jsonPath.toString());
-                        pre.put("fileExists", Files.isRegularFile(jsonPath));
-                        pre.put("fileSize", sz);
-                        pre.put("resultDispatchDir", AppPaths.resolveResultDispatchTableDir(
-                                        shellRef.snapshotUiEnv())
-                                .toString());
-                        debugAgentNdjsonWithUi(
-                                shellRef.snapshotUiEnv(),
-                                "DispatchInteractiveTabController.java:reload call",
-                                "H1",
-                                "reloadFromDisk before read",
-                                pre);
-                        // #endregion
                         ResultDispatchDocument d = ResultDispatchJsonIo.read(jsonPath);
-                        // #region agent log
-                        Map<String, Object> ok = new HashMap<>();
-                        ok.put("jsonPath", jsonPath.toString());
-                        ok.put("rowCount", d.rows().size());
-                        ok.put("colCount", d.columns().size());
-                        debugAgentNdjsonWithUi(
-                                shellRef.snapshotUiEnv(),
-                                "DispatchInteractiveTabController.java:reload after read",
-                                "H1",
-                                "reloadFromDisk read OK",
-                                ok);
-                        // #endregion
                         MachineCalendarBlockIndex cal = MachineCalendarBlockIndex.empty();
                         String calErr = null;
                         String pyCalErr = null;
@@ -937,19 +837,6 @@ public final class DispatchInteractiveTabController {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
                     calendarBlocks = b.calendar();
-                    // #region agent log
-                    debugAgentNdjson(
-                            "DispatchInteractiveTabController.java:reload onSucceeded",
-                            "H6",
-                            "grids will rebuild",
-                            Map.of(
-                                    "rowCount",
-                                    doc.rows().size(),
-                                    "distinctDateCount",
-                                    ResultDispatchPivot.distinctDates(doc.rows()).size(),
-                                    "jsonPath",
-                                    jsonPath.toString()));
-                    // #endregion
                     statusLabel.setText(doc.rows().size() + " 行");
                     if (b.calendarLoadError() != null) {
                         shell.appendLog("[dispatch-editor] calendar load: " + b.calendarLoadError());
@@ -986,19 +873,6 @@ public final class DispatchInteractiveTabController {
                     calendarBlocks = MachineCalendarBlockIndex.empty();
                     statusLabel.setText("読込エラー");
                     Throwable ex = task.getException();
-                    // #region agent log
-                    debugAgentNdjson(
-                            "DispatchInteractiveTabController.java:reload onFailed",
-                            "H1",
-                            "reloadFromDisk failed -> empty doc",
-                            Map.of(
-                                    "jsonPath",
-                                    jsonPath.toString(),
-                                    "exception",
-                                    ex != null ? ex.getClass().getName() : "",
-                                    "message",
-                                    ex != null && ex.getMessage() != null ? ex.getMessage() : ""));
-                    // #endregion
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
                                     + (ex != null ? ex.getMessage() : ""));

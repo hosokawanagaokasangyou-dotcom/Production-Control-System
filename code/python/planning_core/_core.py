@@ -24125,40 +24125,6 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         p_out.write_text(text, encoding="utf-8", newline="\n")
-        # #region agent log
-        try:
-            import json as _json
-            import time as _time
-
-            _log = (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-            if not _log:
-                _rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-                if _rr:
-                    _log = str(
-                        pathlib.Path(_rr) / ".cursor" / "debug-471ee7.log"
-                    )
-            if _log:
-                _line = _json.dumps(
-                    {
-                        "sessionId": "471ee7",
-                        "timestamp": int(_time.time() * 1000),
-                        "location": "_core._write_dispatch_table_standalone_json",
-                        "hypothesisId": "H3",
-                        "message": "wrote 結果_配台表.json",
-                        "data": {
-                            "outPath": str(p_out),
-                            "rowCount": int(len(df_dispatch)),
-                            "targetDir": str(target_dir),
-                        },
-                    },
-                    ensure_ascii=False,
-                )
-                pathlib.Path(_log).parent.mkdir(parents=True, exist_ok=True)
-                with open(_log, "a", encoding="utf-8") as _fp:
-                    _fp.write(_line + "\n")
-        except Exception:
-            pass
-        # #endregion
         return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
