@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""JSON sidecars for stage-2 plan workbook (result task sheet) to limit Excel re-read."""
+"""
+段階2の成果ブック用 JSON サイドカー。
+
+全シート表形式ミラーの組み立ては ``workbook_payload.workbook_payload_from_final_xlsx_file`` に集約。
+値のみの xlsx を JSON から出力するには ``write_xlsx_from_workbook_payload_tabular`` を参照。
+"""
 
 from __future__ import annotations
 
@@ -13,6 +18,12 @@ import unicodedata
 
 import pandas as pd
 
+from .workbook_payload import (
+    WORKBOOK_JSON_FORMAT_VERSION,
+    workbook_payload_from_final_xlsx_file,
+    write_xlsx_from_workbook_payload_tabular,
+)
+
 # 0/false/no/off/none: do not read or write sidecar JSON
 ENV_PLAN_RESULT_TASK_JSON = "PM_AI_PLAN_RESULT_TASK_JSON"
 ENV_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH"
@@ -23,7 +34,6 @@ ENV_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON"
 
 RESULT_TASK_JSON_SUFFIX = "_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7.json"
 SIDE_FORMAT_VERSION = 1
-WORKBOOK_JSON_FORMAT_VERSION = 2
 
 # pandas の read_excel(header=0) だと、結果_設備ガントのようにタイトル行のあとに列見出し行がある
 # シートでは列名が Unnamed: 0 になる。JSON 側で HH:MM 列を復元する。
@@ -167,7 +177,9 @@ def _dump_xlsx_all_sheets_to_json(
     json_out_path: str | None = None,
 ) -> str | None:
     """
-    xlsx を pandas で全シート読み、同名ベースの .json に書き出す内部共通処理。
+    保存済み xlsx を ``workbook_payload.workbook_payload_from_final_xlsx_file`` で表形式ペイロード化し、
+    同名ベースの .json に書き出す内部共通処理（ガント系の列見出し reheader 込み）。
+
     json_out_path を指定したときはそのパスへ出力（一時 xlsx から最終 JSON 名へ出す用）。
     """
     if not xlsx_path or not os.path.isfile(xlsx_path):
@@ -183,43 +195,18 @@ def _dump_xlsx_all_sheets_to_json(
                 os.remove(out_path)
         except OSError:
             pass
-        sheets_in = pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
+        payload = workbook_payload_from_final_xlsx_file(
+            xlsx_path,
+            source_xlsx_basename=os.path.basename(xlsx_path),
+            metadata_extra=payload_extra,
+        )
     except Exception as e:
         logging.warning(
-            "plan_workbook_sidecar: read_excel に失敗したため同名 JSON を出せません: %s (%s)",
+            "plan_workbook_sidecar: ブックのペイロード化に失敗したため同名 JSON を出せません: %s (%s)",
             xlsx_path,
             e,
         )
         return None
-    sheets_out: dict[str, dict] = {}
-    for name, df in (sheets_in or {}).items():
-        if df is None or getattr(df, "empty", True):
-            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
-            continue
-        try:
-            df = _reheader_dataframe_if_equipment_sheet_unnamed(name, df)
-            rows = json.loads(
-                df.to_json(orient="records", date_format="iso", double_precision=15)
-            )
-        except Exception as e:
-            logging.warning(
-                "plan_workbook_sidecar: シート %r の行データ化に失敗し同名 JSON を中断: %s",
-                name,
-                e,
-            )
-            return None
-        sheets_out[name] = {
-            "columns": list(df.columns),
-            "row_count": int(len(df)),
-            "rows": rows,
-        }
-    payload = {
-        "format_version": WORKBOOK_JSON_FORMAT_VERSION,
-        "source_xlsx": os.path.basename(xlsx_path),
-        "sheets": sheets_out,
-    }
-    if payload_extra:
-        payload.update(payload_extra)
     try:
         _out_final, _tmp_strategy = _write_workbook_json_payload(out_path, payload)
         logging.info(
@@ -309,6 +296,76 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
         return None
 
 
+ENV_PLAN_LOGICAL_VIEW_JSON = "PM_AI_PLAN_LOGICAL_VIEW_JSON"
+
+
+def _plan_logical_view_json_disabled() -> bool:
+    v = (os.environ.get(ENV_PLAN_LOGICAL_VIEW_JSON) or "").strip().lower()
+    return v in ("0", "false", "no", "off", "none")
+
+
+def write_production_plan_logical_view_json(
+    plan_xlsx: str,
+    *,
+    json_out_path: str | None = None,
+) -> str | None:
+    """
+    結合セルを値で展開したうえで全シートを表形式化した **論理・ビュー用 JSON** を書き出す。
+
+    出力パス: 既定は ``<plan stem>_logical_view.json``（:func:`logical_workbook_view.logical_view_json_path`）。
+
+    無効化: 環境変数 ``PM_AI_PLAN_LOGICAL_VIEW_JSON=0`` 等。
+
+    通常の ``production_plan_multi_day*.json``（xlsx 直読みミラー）と併用し、
+    設備ガントの 10 分枠を UI で使う場合は本ファイルを正とする。
+
+    同ブックに「結果_タスク一覧」がある場合、
+    :mod:`planning_core.equipment_gantt_json_enrich` により設備ガント系シートの
+    ``[依頼NO]`` セルへ担当ヒントを追記する（無効化は環境変数
+    ``PM_AI_ENRICH_EQUIPMENT_GANTT_MEMBERS=0``）。
+    """
+    if _plan_logical_view_json_disabled():
+        logging.info(
+            "plan_workbook_sidecar: 論理ビュー JSON はスキップします "
+            "(%s=%r)",
+            ENV_PLAN_LOGICAL_VIEW_JSON,
+            (os.environ.get(ENV_PLAN_LOGICAL_VIEW_JSON) or "").strip(),
+        )
+        return None
+    if not plan_xlsx or not os.path.isfile(plan_xlsx):
+        logging.warning(
+            "plan_workbook_sidecar: 論理ビュー JSON（xlsx 不在） path=%s",
+            plan_xlsx,
+        )
+        return None
+    try:
+        from .logical_workbook_view import (
+            build_logical_view_workbook_payload,
+            logical_view_json_path,
+        )
+
+        payload = build_logical_view_workbook_payload(
+            plan_xlsx,
+            source_xlsx_basename=os.path.basename(plan_xlsx),
+        )
+        out_path = json_out_path or logical_view_json_path(plan_xlsx)
+        final, strategy = _write_workbook_json_payload(out_path, payload)
+        logging.info(
+            "plan_workbook_sidecar: 論理ビュー JSON を出力 path=%s (%s)",
+            final,
+            strategy,
+        )
+        return final
+    except Exception as e:
+        logging.warning(
+            "plan_workbook_sidecar: 論理ビュー JSON 書き出し失敗: %s (%s)",
+            plan_xlsx,
+            e,
+            exc_info=True,
+        )
+        return None
+
+
 def write_production_plan_workbook_json(
     plan_xlsx: str,
     *,
@@ -317,7 +374,10 @@ def write_production_plan_workbook_json(
 ) -> str | None:
     """
     ``production_plan_multi_day_*.xlsx`` と同名ベースの ``.json`` に、全シートを表形式で書き出す。
-    図形・セル書式は含まず、セル値のみ（Excel 再読込と同様）。
+    図形・セル書式は含まず、セル値のみ。
+
+    抽出ロジックは ``workbook_payload.workbook_payload_from_final_xlsx_file`` に集約。
+    値のみのブックを JSON から再生成するには ``write_xlsx_from_workbook_payload_tabular`` を参照。
     """
     if _plan_workbook_json_disabled():
         logging.info(
