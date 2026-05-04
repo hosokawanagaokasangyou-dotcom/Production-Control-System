@@ -58,6 +58,9 @@ public final class SpreadsheetPlanInputRowDragSupport {
                             e.getPickResult() != null
                                     ? e.getPickResult().getIntersectedNode()
                                     : null;
+                    if (isUnderColumnHeaderChrome(n)) {
+                        return;
+                    }
                     TableCell<?, ?> tc = findTableCell(n);
                     if (tc == null || !isUnderSpreadsheet(spreadsheetView, tc)) {
                         return;
@@ -159,6 +162,21 @@ public final class SpreadsheetPlanInputRowDragSupport {
                     e.setDropCompleted(success);
                     e.consume();
                 });
+    }
+
+    /** True when the hit target is under column-header chrome (resize handles), not body cells. */
+    private static boolean isUnderColumnHeaderChrome(Node n) {
+        while (n != null) {
+            String cn = n.getClass().getName();
+            if (cn.contains("org.controlsfx.spreadsheet.HorizontalHeader")) {
+                return true;
+            }
+            if (cn.contains("javafx.scene.control.TableColumnHeader")) {
+                return true;
+            }
+            n = n.getParent();
+        }
+        return false;
     }
 
     /** Resolves the hosting {@link TableCell} for spreadsheet hit-testing (plan-input edit dialog, row drag, etc.). */

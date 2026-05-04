@@ -2,13 +2,20 @@ package jp.co.pm.ai.desktop.ui;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
 
 import org.controlsfx.control.spreadsheet.GridBase;
@@ -123,13 +130,127 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
-        TableView<ObservableList<SpreadsheetCell>> tv = findInnerTableView(view);
-        if (tv != null) {
-            tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        }
+        /*
+         * SpreadsheetView may host more than one embedded TableView (e.g. fixed vs scrollable columns).
+         * Applying UNCONSTRAINED only to the first child left the other at the default CONSTRAINED policy,
+         * which blocks interactive column resize for part of the grid.
+         */
+        setUnconstrainedOnEmbeddedTableViews(view, 0);
         for (SpreadsheetColumn col : view.getColumns()) {
             col.setResizable(true);
         }
+    }
+
+    private static void setUnconstrainedOnEmbeddedTableViews(Node n, int depth) {
+        if (n == null || depth > 12) {
+            return;
+        }
+        if (n instanceof TableView<?> tv) {
+            tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+            return;
+        }
+        if (n instanceof Parent p) {
+            for (Node c : p.getChildrenUnmodifiable()) {
+                setUnconstrainedOnEmbeddedTableViews(c, depth + 1);
+            }
+        }
+    }
+
+    /**
+     * After any cell selection change, expands selection to full grid rows (all columns) for each data row that
+     * had at least one selected cell, so the active row is visually continuous. Skips the filter row at
+     * {@link #SPREADSHEET_FILTER_ROW}.
+     *
+     * <p>Requires {@link SpreadsheetView#getSelectionModel()}{@code .setSelectionMode(SelectionMode.MULTIPLE)}.
+     *
+     * @param skipFullRowExpansion when {@code true}, skips expanding selection (e.g. during plan-input row drag).
+     */
+    public static void installFullRowDataSelection(
+            SpreadsheetView view, BooleanSupplier skipFullRowExpansion) {
+        if (view == null) {
+            return;
+        }
+        final boolean[] guard = {false};
+        var sm = view.getSelectionModel();
+        // SpreadsheetView exposes ObservableList<TablePosition> (raw); listener must accept TablePosition.
+        sm.getSelectedCells()
+                .addListener(
+                        (ListChangeListener<? super TablePosition>)
+                                change -> {
+                                    if (guard[0]) {
+                                        return;
+                                    }
+                                    if (skipFullRowExpansion != null && skipFullRowExpansion.getAsBoolean()) {
+                                        return;
+                                    }
+                                    ObservableList<SpreadsheetColumn> cols = view.getColumns();
+                                    if (cols.isEmpty()) {
+                                        return;
+                                    }
+                                    ObservableList<? extends TablePosition> selected =
+                                            sm.getSelectedCells();
+                                    if (selected.isEmpty()) {
+                                        return;
+                                    }
+                                    int firstData = spreadsheetFirstDataRowIndex();
+                                    Set<Integer> rows = new HashSet<>();
+                                    for (TablePosition p : selected) {
+                                        int r = p.getRow();
+                                        if (r >= firstData) {
+                                            rows.add(r);
+                                        }
+                                    }
+                                    if (rows.isEmpty()) {
+                                        return;
+                                    }
+                                    int colCount = cols.size();
+                                    boolean allFull = true;
+                                    for (int r : rows) {
+                                        int cnt = 0;
+                                        for (TablePosition p : selected) {
+                                            if (p.getRow() == r) {
+                                                cnt++;
+                                            }
+                                        }
+                                        if (cnt < colCount) {
+                                            allFull = false;
+                                            break;
+                                        }
+                                    }
+                                    if (allFull) {
+                                        return;
+                                    }
+                                    TablePosition focus = sm.getFocusedCell();
+                                    int focusRow;
+                                    if (focus != null && focus.getRow() >= firstData) {
+                                        focusRow = focus.getRow();
+                                    } else {
+                                        focusRow = Collections.min(rows);
+                                    }
+                                    int focusCol =
+                                            focus != null && focus.getColumn() >= 0 ? focus.getColumn() : 0;
+
+                                    guard[0] = true;
+                                    try {
+                                        sm.clearSelection();
+                                        SpreadsheetColumn firstCol = cols.get(0);
+                                        SpreadsheetColumn lastCol = cols.get(cols.size() - 1);
+                                        ArrayList<Integer> sorted = new ArrayList<>(rows);
+                                        Collections.sort(sorted);
+                                        for (int r : sorted) {
+                                            sm.selectRange(r, firstCol, r, lastCol);
+                                        }
+                                        int fc = Math.min(Math.max(focusCol, 0), cols.size() - 1);
+                                        sm.focus(focusRow, cols.get(fc));
+                                    } finally {
+                                        guard[0] = false;
+                                    }
+                                });
+    }
+
+    /** @see #installFullRowDataSelection(SpreadsheetView, BooleanSupplier) */
+    public static void installFullRowDataSelection(SpreadsheetView view) {
+        installFullRowDataSelection(view, null);
     }
 
     public static GridBase buildPlanInputGrid(
