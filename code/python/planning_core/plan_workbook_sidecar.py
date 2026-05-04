@@ -296,6 +296,71 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
         return None
 
 
+ENV_PLAN_LOGICAL_VIEW_JSON = "PM_AI_PLAN_LOGICAL_VIEW_JSON"
+
+
+def _plan_logical_view_json_disabled() -> bool:
+    v = (os.environ.get(ENV_PLAN_LOGICAL_VIEW_JSON) or "").strip().lower()
+    return v in ("0", "false", "no", "off", "none")
+
+
+def write_production_plan_logical_view_json(
+    plan_xlsx: str,
+    *,
+    json_out_path: str | None = None,
+) -> str | None:
+    """
+    結合セルを値で展開したうえで全シートを表形式化した **論理・ビュー用 JSON** を書き出す。
+
+    出力パス: 既定は ``<plan stem>_logical_view.json``（:func:`logical_workbook_view.logical_view_json_path`）。
+
+    無効化: 環境変数 ``PM_AI_PLAN_LOGICAL_VIEW_JSON=0`` 等。
+
+    通常の ``production_plan_multi_day*.json``（xlsx 直読みミラー）と併用し、
+    設備ガントの 10 分枠を UI で使う場合は本ファイルを正とする。
+    """
+    if _plan_logical_view_json_disabled():
+        logging.info(
+            "plan_workbook_sidecar: 論理ビュー JSON はスキップします "
+            "(%s=%r)",
+            ENV_PLAN_LOGICAL_VIEW_JSON,
+            (os.environ.get(ENV_PLAN_LOGICAL_VIEW_JSON) or "").strip(),
+        )
+        return None
+    if not plan_xlsx or not os.path.isfile(plan_xlsx):
+        logging.warning(
+            "plan_workbook_sidecar: 論理ビュー JSON（xlsx 不在） path=%s",
+            plan_xlsx,
+        )
+        return None
+    try:
+        from .logical_workbook_view import (
+            build_logical_view_workbook_payload,
+            logical_view_json_path,
+        )
+
+        payload = build_logical_view_workbook_payload(
+            plan_xlsx,
+            source_xlsx_basename=os.path.basename(plan_xlsx),
+        )
+        out_path = json_out_path or logical_view_json_path(plan_xlsx)
+        final, strategy = _write_workbook_json_payload(out_path, payload)
+        logging.info(
+            "plan_workbook_sidecar: 論理ビュー JSON を出力 path=%s (%s)",
+            final,
+            strategy,
+        )
+        return final
+    except Exception as e:
+        logging.warning(
+            "plan_workbook_sidecar: 論理ビュー JSON 書き出し失敗: %s (%s)",
+            plan_xlsx,
+            e,
+            exc_info=True,
+        )
+        return None
+
+
 def write_production_plan_workbook_json(
     plan_xlsx: str,
     *,

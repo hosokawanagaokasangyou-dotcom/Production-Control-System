@@ -57,6 +57,7 @@ from .plan_workbook_sidecar import (
     normalized_workbook_json_path,
     read_result_task_dataframe,
     write_member_schedule_workbook_json,
+    write_production_plan_logical_view_json,
     write_production_plan_workbook_json,
     write_result_task_json_sidecar,
 )
@@ -32430,6 +32431,23 @@ def _generate_plan_impl(
             )
     except Exception as e:
         logging.warning("段階2: 計画ブック JSON（全シート）出力をスキップ: %s", e)
+
+    try:
+        from .logical_workbook_view import logical_view_json_path
+
+        _logical_view_out = (
+            logical_view_json_path(plan_xlsx_final) if not _publish_plan_xlsx else None
+        )
+        _plan_lv_json = write_production_plan_logical_view_json(
+            output_filename, json_out_path=_logical_view_out
+        )
+        if _plan_lv_json:
+            logging.info(
+                "段階2: 計画ブック 論理ビュー JSON（結合展開）を '%s' に出力しました。",
+                _plan_lv_json,
+            )
+    except Exception as e:
+        logging.warning("段階2: 論理ビュー JSON 出力をスキップ: %s", e)
 
     if not _publish_plan_xlsx:
         try:

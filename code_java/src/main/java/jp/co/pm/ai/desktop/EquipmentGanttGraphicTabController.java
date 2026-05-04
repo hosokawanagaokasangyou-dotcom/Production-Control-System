@@ -188,8 +188,11 @@ public final class EquipmentGanttGraphicTabController {
                 return;
             }
 
+            Path loadPath = resolvePlanJsonForGraphic(planPath);
+            boolean usingLogicalView = !loadPath.equals(planPath);
+
             Map<String, JsonTableIo.SheetTable> sheets =
-                    JsonTableIo.loadSheetsWorkbook(planPath);
+                    JsonTableIo.loadSheetsWorkbook(loadPath);
             lastLoadedPlanPath = planPath.toString();
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
@@ -217,7 +220,18 @@ public final class EquipmentGanttGraphicTabController {
             sheetCombo.getSelectionModel().select(pick);
 
             applySelectedSheetFromMap(eligible);
-            statusLabel.setText("読み込み: " + planPath.getFileName() + " / シート数(対象)=" + names.size());
+            if (usingLogicalView) {
+                statusLabel.setText(
+                        "読み込み: "
+                                + planPath.getFileName()
+                                + " → "
+                                + loadPath.getFileName()
+                                + " (論理ビュー) / シート数(対象)="
+                                + names.size());
+            } else {
+                statusLabel.setText(
+                        "読み込み: " + planPath.getFileName() + " / シート数(対象)=" + names.size());
+            }
             if (sourceTitledPane != null) {
                 sourceTitledPane.setExpanded(false);
             }
@@ -244,8 +258,9 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         try {
+            Path loadPath = resolvePlanJsonForGraphic(planPath);
             Map<String, JsonTableIo.SheetTable> sheets =
-                    JsonTableIo.loadSheetsWorkbook(planPath);
+                    JsonTableIo.loadSheetsWorkbook(loadPath);
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             applySelectedSheetFromMap(eligible);
         } catch (IOException ex) {
@@ -299,6 +314,33 @@ public final class EquipmentGanttGraphicTabController {
         StackPane p = new StackPane(new Label(msg));
         StackPane.setAlignment(p.getChildren().get(0), Pos.CENTER);
         return p;
+    }
+
+    /**
+     * 同フォルダに {@code <stem>_logical_view.json} があり、引数がミラー用 .json
+     * のときは結合展開済みの論理ビューを優先する（設備ガント グラフィック用）。
+     */
+    private static Path resolvePlanJsonForGraphic(Path planJsonFromField) {
+        if (planJsonFromField == null) {
+            return null;
+        }
+        Path fn = planJsonFromField.getFileName();
+        if (fn == null) {
+            return planJsonFromField;
+        }
+        String name = fn.toString();
+        if (!name.endsWith(".json")) {
+            return planJsonFromField;
+        }
+        String stem = name.substring(0, name.length() - 5);
+        if (stem.endsWith("_logical_view")) {
+            return planJsonFromField;
+        }
+        Path sibling = planJsonFromField.resolveSibling(stem + "_logical_view.json");
+        if (Files.isRegularFile(sibling)) {
+            return sibling;
+        }
+        return planJsonFromField;
     }
 
     private static Path siblingJson(Path workbookPath) {
