@@ -29416,6 +29416,7 @@ def _generate_plan_impl(
     global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
+    global DEFAULT_START_TIME, DEFAULT_END_TIME
     try:
         _t_cal0 = time_module.perf_counter()
         _trial_env = _interactive_dispatch_trial_env_active()
@@ -29475,7 +29476,6 @@ def _generate_plan_impl(
             _n_iv,
         )
     if interactive_relax_intraday:
-        global DEFAULT_START_TIME, DEFAULT_END_TIME
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
         DEFAULT_START_TIME = time(0, 0)
         DEFAULT_END_TIME = time(23, 59)
@@ -29485,7 +29485,6 @@ def _generate_plan_impl(
         )
     elif _interactive_dispatch_trial_env_active():
         # デスクトップ配台試行（dispatch_interactive_trial）既定: 全日緩和は使わず master 工場枠＋同日延長
-        global DEFAULT_START_TIME, DEFAULT_END_TIME
         _mp_cal = _master_path_stage2
         _ns, _ne = _read_master_main_factory_operating_times(_mp_cal)
         if _ns is not None and _ne is not None:
