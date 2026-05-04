@@ -42,6 +42,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
@@ -1059,6 +1060,10 @@ public final class MainShellController {
             m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
         }
         overlayPlanInputTabPathsIfEnvBlank(m);
+        String pauseOnErr = m.get(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR);
+        if (pauseOnErr == null || pauseOnErr.isBlank()) {
+            m.put(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR, "0");
+        }
         return m;
     }
 
@@ -1150,6 +1155,41 @@ public final class MainShellController {
 
     Map<String, String> snapshotUiEnv() {
         return collectUiEnv();
+    }
+
+    /**
+     * Environment for Python child processes (same as stage1/2): env tab + plan-input tab overlays,
+     * {@code PM_AI_*} inheritance rules, UTF-8 stdio.
+     */
+    public Map<String, String> snapshotPythonChildEnv() {
+        return childEnvForPython(collectUiEnv());
+    }
+
+    /**
+     * Environment for {@code dispatch_interactive_trial.py}: same {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL} and
+     * {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} overrides as running stage 2 from the run tab (unchecking Excel
+     * there suppresses xlsx deliverables in planning_core for the trial as well).
+     */
+    public Map<String, String> snapshotDispatchTrialPythonEnv() {
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        ui.put(
+                AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
+                mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+        String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
+        if (resultFont != null && !resultFont.isBlank()) {
+            ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
+        } else {
+            ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+        }
+        // #region agent log
+        // 子プロセス（配台試行）が NDJSON 追跡を同じセッションファイルに追記できるよう渡す
+        try {
+            java.nio.file.Path dbg = AgentDebugLog.resolveNdjsonPath(ui, "e6dc4e");
+            ui.put("CURSOR_DEBUG_LOG", dbg.toString());
+        } catch (Throwable ignored) {
+        }
+        // #endregion
+        return childEnvForPython(ui);
     }
 
     void acceptReloadAfterStage1PlanInput(Runnable r) {

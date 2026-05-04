@@ -68,6 +68,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
@@ -80,6 +82,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -89,6 +92,82 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
+
+    // #region agent log
+    private static final ObjectMapper AGENT_TRACE_JSON = new ObjectMapper();
+    private static final String AGENT_TRACE_SESSION = "e6dc4e";
+
+    /** Y5-14 × SEC の結果表行を NDJSON へ（DEBUG 追跡）。 */
+    private void agentTraceY514Sec(String hypothesisId, String stage, ResultDispatchDocument d) {
+        if (d == null) {
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        agentTraceY514Sec(hypothesisId, stage, d, ui);
+    }
+
+    private void agentTraceY514Sec(
+            String hypothesisId, String stage, ResultDispatchDocument d, Map<String, String> ui) {
+        if (d == null) {
+            return;
+        }
+        try {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("stage", stage);
+            data.put("summary", summarizeY514SecForTrace(d));
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("sessionId", AGENT_TRACE_SESSION);
+            line.put("timestamp", System.currentTimeMillis());
+            line.put("location", "DispatchInteractiveTabController");
+            line.put("hypothesisId", hypothesisId);
+            line.put("message", "Y5-14_SEC trace " + stage);
+            line.put("data", data);
+            AgentDebugLog.appendNdjsonLine(ui, AGENT_TRACE_SESSION, AGENT_TRACE_JSON.writeValueAsString(line));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static Map<String, Object> summarizeY514SecForTrace(ResultDispatchDocument d) {
+        List<Map<String, String>> hits = new ArrayList<>();
+        for (Map<String, String> row : d.rows()) {
+            if (row == null) {
+                continue;
+            }
+            String r = (row.get("依頼NO") != null ? row.get("依頼NO") : "").trim();
+            String p = (row.get(ResultDispatchSchema.COL_PROCESS) != null ? row.get(ResultDispatchSchema.COL_PROCESS) : "")
+                    .trim();
+            if (!"Y5-14".equals(r) || !"SEC".equals(p)) {
+                continue;
+            }
+            Map<String, String> one = new LinkedHashMap<>();
+            one.put("配台試行順番", nze(row.get(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER)));
+            one.put("機械名", nze(row.get(ResultDispatchSchema.COL_MACHINE)));
+            one.put("配台日", nze(row.get(ResultDispatchSchema.COL_DISPATCH_DATE)));
+            one.put("当日配台数量", nze(row.get(ResultDispatchSchema.COL_DISPATCH_QTY)));
+            hits.add(one);
+        }
+        double sumQty = 0.0;
+        for (Map<String, String> h : hits) {
+            try {
+                String q = h.get("当日配台数量");
+                if (q != null && !q.isBlank()) {
+                    sumQty += Double.parseDouble(q.replace(",", "").trim());
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("rowCount", hits.size());
+        out.put("sum当日配台数量", sumQty);
+        out.put("hits", hits);
+        return out;
+    }
+
+    private static String nze(String s) {
+        return s != null ? s : "";
+    }
+
+    // #endregion
 
     private record ReloadBundle(
             ResultDispatchDocument doc,
@@ -308,8 +387,12 @@ public final class DispatchInteractiveTabController {
         }
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         ResultDispatchDocument toWrite = doc.copy();
+        // #region agent log
+        agentTraceY514Sec("H1", "pre_save_toWrite", toWrite);
+        // #endregion
         Path pyExe = resolvePythonExe();
         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
+        final Map<String, String> uiForBgThread = shell.snapshotUiEnv();
 
         statusLabel.setText("保存中…");
         showReloadProgress();
@@ -319,6 +402,13 @@ public final class DispatchInteractiveTabController {
                     @Override
                     protected DispatchSaveOutcome call() throws Exception {
                         ResultDispatchJsonIo.write(jsonPath, toWrite);
+                        // #region agent log
+                        try {
+                            ResultDispatchDocument reread = ResultDispatchJsonIo.read(jsonPath);
+                            agentTraceY514Sec("H1", "post_write_readback", reread, uiForBgThread);
+                        } catch (Throwable ignored) {
+                        }
+                        // #endregion
                         String xlsxOut =
                                 ResultDispatchPythonExport.exportXlsxNearJson(jsonPath, pyExe, pyDir);
                         return new DispatchSaveOutcome(jsonPath, xlsxOut);
@@ -664,6 +754,9 @@ public final class DispatchInteractiveTabController {
         logStage.show();
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
+        // #region agent log
+        agentTraceY514Sec("H2", "trial_input_snapshot", trialInputSnapshot);
+        // #endregion
 
         Task<String> task =
                 new Task<>() {
@@ -698,6 +791,9 @@ public final class DispatchInteractiveTabController {
                         logList.scrollTo(logLines.size() - 1);
                         reloadFromDiskQuiet(
                                 () -> {
+                                    // #region agent log
+                                    agentTraceY514Sec("H2", "trial_post_reload_before_compare", doc);
+                                    // #endregion
                                     DispatchTrialConsistency.CheckResult cr =
                                             DispatchTrialConsistency.compareDocuments(
                                                     trialInputSnapshot, doc);
@@ -862,6 +958,9 @@ public final class DispatchInteractiveTabController {
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
+                    // #region agent log
+                    agentTraceY514Sec("H2", "after_json_reload", doc);
+                    // #endregion
                     if (afterSuccessOnFxThread != null) {
                         afterSuccessOnFxThread.run();
                     }
