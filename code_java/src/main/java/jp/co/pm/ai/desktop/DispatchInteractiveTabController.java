@@ -658,9 +658,14 @@ public final class DispatchInteractiveTabController {
         root.setBottom(bottom);
 
         Scene scene = new Scene(root, sceneW, sceneH);
+        shell.registerThemeTrackedScene(scene);
         logStage.setScene(scene);
         logStage.setOnShown(ev -> trialLogWindowReady.set(true));
-        logStage.setOnHidden(ev -> saveTrialLogUiSnapshot.run());
+        logStage.setOnHidden(
+                ev -> {
+                    shell.unregisterThemeTrackedScene(scene);
+                    saveTrialLogUiSnapshot.run();
+                });
         logStage.show();
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
