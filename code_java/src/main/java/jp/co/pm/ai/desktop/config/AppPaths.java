@@ -108,6 +108,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH";
 
     /**
+     * 結果_タスク一覧のサイドカー JSON（{@code PM_AI_PLAN_RESULT_TASK_JSON_PATH} と対）。{@code 0} / {@code false} /
+     * {@code no} / {@code off} / {@code none} で無効。未設定で有効（plan_workbook_sidecar）。
+     */
+    public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON = "PM_AI_PLAN_RESULT_TASK_JSON";
+
+    /**
      * planning_core master-data table paths ({@code ui_ref_env_defaults.json}): each names a file (CSV / text), not a
      * directory.
      */

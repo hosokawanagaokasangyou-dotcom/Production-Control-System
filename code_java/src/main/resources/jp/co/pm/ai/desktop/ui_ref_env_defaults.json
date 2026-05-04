@@ -14,6 +14,14 @@
     "value" : "Y5-14",
     "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。"
   }, {
+    "key" : "PM_AI_PLAN_RESULT_TASK_JSON",
+    "value" : "",
+    "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。"
+  }, {
+    "key" : "PM_AI_PLAN_RESULT_TASK_JSON_PATH",
+    "value" : "",
+    "description" : "結果_タスク一覧 JSON を読む絶対パス（実在時は xlsx 横のサイドカーより優先）。空なら未使用。"
+  }, {
     "key" : "PM_AI_OUTPUT_DIR",
     "value" : "",
     "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、production_plan_multi_day_*.xlsx、member_schedule_*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。"

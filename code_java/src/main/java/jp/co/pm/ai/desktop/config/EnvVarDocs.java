@@ -221,8 +221,8 @@ public final class EnvVarDocs {
                         + " JavaFX は「ファイル...」で選択可。");
         put(
                 "PM_AI_PLAN_RESULT_TASK_JSON",
-                "段階2 出力 production_plan_*.xlsx と同ジムの"
-                        + " 結果_タスク一覧.json 読み書き："
+                "段階2 出力 production_plan_*.xlsx と同名ベースの"
+                        + " 結果_タスク一覧.json（サイドカー）読み書き："
                         + "0/false/no/off/none で無効。有効時は再読込を"
                         + " JSON 優先にして Excel I/O を削減。");
         put(

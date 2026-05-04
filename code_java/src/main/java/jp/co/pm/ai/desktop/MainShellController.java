@@ -89,7 +89,9 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET,
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
-                    AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR);
+                    AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
+                    AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
+                    AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
 
     /** Keys in {@link #BOOTSTRAP_ORDER} for quick membership checks. */
     private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
