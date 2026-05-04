@@ -12,7 +12,9 @@ public enum MainShellTabId {
     EXCLUDE_RULES("excludeRules"),
     ACTUALS_STATUS("actualsStatus"),
     RESULT_DISPATCH("resultDispatch"),
+    MACHINE_CALENDAR_JSON("machineCalendarJson"),
     PLAN_RESULT_VIEWER("planResultViewer"),
+    EQUIPMENT_GANTT_GRAPHIC("equipmentGanttGraphic"),
     OPERATOR_CARD("operatorCard"),
     DISPATCH_INTERACTIVE("dispatchInteractive");
 

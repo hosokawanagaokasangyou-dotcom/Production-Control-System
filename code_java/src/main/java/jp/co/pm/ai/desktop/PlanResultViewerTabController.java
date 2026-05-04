@@ -34,7 +34,6 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -303,24 +302,14 @@ public final class PlanResultViewerTabController {
 
             StackPane tableHost = new StackPane(new Label("\u8aad\u307f\u8fbc\u307f\u4e2d..."));
             StackPane ganttHost = new StackPane(new Label("\u8aad\u307f\u8fbc\u307f\u4e2d..."));
-            StackPane graphicHost = new StackPane(new Label("\u8aad\u307f\u8fbc\u307f\u4e2d..."));
 
             Tab tTable = new Tab("\u4e00\u89a7\uff08\u8868\uff09", tableHost);
             Tab tGantt = new Tab("\u30ac\u30f3\u30c8", ganttHost);
             GanttSheetKind ganttKind =
                     GanttScheduleStyle.resolveKind(sheetName, model.columns());
-            boolean showEquipmentGraphic = ganttKind == GanttSheetKind.EQUIPMENT_TIMELINE;
-            Tab tGraphic = new Tab("\u30b0\u30e9\u30d5\u30a3\u30c3\u30af", graphicHost);
-            tGraphic.setTooltip(
-                    new Tooltip(
-                            "\u7d50\u679c_\u8a2d\u5099\u30ac\u30f3\u30c8\u540c\u7b49\u306e\u6642\u523b\u8ef8\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3\u3092Canvas\u3067\u8868\u793a"));
-            if (showEquipmentGraphic) {
-                modeTabs.getTabs().addAll(tTable, tGantt, tGraphic);
-            } else {
-                modeTabs.getTabs().addAll(tTable, tGantt);
-            }
+            modeTabs.getTabs().addAll(tTable, tGantt);
 
-            final boolean[] built = new boolean[showEquipmentGraphic ? 3 : 2];
+            final boolean[] built = new boolean[2];
             Runnable loadTable =
                     () -> {
                         if (built[0]) {
@@ -376,29 +365,7 @@ public final class PlanResultViewerTabController {
                                 });
                         registeredSpreadsheets.add(sv);
                     };
-            Runnable loadGraphic =
-                    () -> {
-                        if (!showEquipmentGraphic) {
-                            return;
-                        }
-                        if (built[2]) {
-                            return;
-                        }
-                        built[2] = true;
-                        ObservableList<ObservableList<String>> rows = model.copyRows();
-                        Platform.runLater(
-                                () ->
-                                        graphicHost
-                                                .getChildren()
-                                                .setAll(
-                                                        EquipmentGraphicGanttPane.build(
-                                                                model.columns(), rows)));
-                    };
-            if (showEquipmentGraphic) {
-                st.setUserData(new Runnable[] {loadTable, loadGantt, loadGraphic});
-            } else {
-                st.setUserData(new Runnable[] {loadTable, loadGantt});
-            }
+            st.setUserData(new Runnable[] {loadTable, loadGantt});
 
             modeTabs
                     .getSelectionModel()

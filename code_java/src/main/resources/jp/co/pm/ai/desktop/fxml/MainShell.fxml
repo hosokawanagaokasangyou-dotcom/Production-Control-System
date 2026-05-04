@@ -100,6 +100,12 @@
                         <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabEquipmentGanttGraphic" closable="false"
+                     text="設備ガント（グラフィック）">
+                    <content>
+                        <fx:include fx:id="equipmentGanttGraphicTab" source="EquipmentGanttGraphicTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabOperatorCard" closable="false"
                      text="オペレーターカード">
                     <content>

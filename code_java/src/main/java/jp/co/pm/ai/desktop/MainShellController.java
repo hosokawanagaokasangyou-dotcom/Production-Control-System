@@ -164,6 +164,9 @@ public final class MainShellController {
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
+    private EquipmentGanttGraphicTabController equipmentGanttGraphicTabController;
+
+    @FXML
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
@@ -198,6 +201,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabPlanResultViewer;
+
+    @FXML
+    private Tab mainShellTabEquipmentGanttGraphic;
 
     @FXML
     private Tab mainShellTabOperatorCard;
@@ -249,6 +255,7 @@ public final class MainShellController {
             envTabController.bindShell(this);
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
+            equipmentGanttGraphicTabController.bindShell(this);
 
             operatorCardTabController.bindShell(this);
 
@@ -572,6 +579,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
+        if (t == mainShellTabEquipmentGanttGraphic) {
+            return MainShellTabId.EQUIPMENT_GANTT_GRAPHIC;
+        }
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
@@ -594,6 +604,7 @@ public final class MainShellController {
             case MACHINE_CALENDAR_JSON -> mainShellTabMachineCalendarJson;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
+            case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
         };
     }
@@ -1493,6 +1504,7 @@ public final class MainShellController {
             String memStr = newestMember != null ? newestMember.toString() : "";
             mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
             planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
+            equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
