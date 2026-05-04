@@ -72,6 +72,12 @@
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabMachineCalendarJson" closable="false"
+                     text="&#x6a5f;&#x68b0;&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc; (JSON)">
+                    <content>
+                        <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
                      text="&#x914d;&#x53f0;&#x7de8;&#x96c6;&#xff08;&#x7d0d;&#x671f;&#x98a8;&#xff09;">
                     <content>
