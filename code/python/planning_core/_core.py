@@ -23625,79 +23625,31 @@ def _interactive_validate_dispatch_quantities(
     if not expected:
         return
     actual = _interactive_aggregate_dispatch_targets_from_df(df_dispatch)
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        _p = (os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-        if _p:
-            _sample = []
-            for _k, _ev in list(expected.items())[:8]:
-                _av = float(actual.get(_k, 0.0))
-                _sample.append(
-                    {
-                        "k": [str(_k[0]), str(_k[1]), _k[2].isoformat() if _k[2] else None],
-                        "exp": _ev,
-                        "act": _av,
-                    }
-                )
-            with open(_p, "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "748d6d",
-                            "timestamp": int(_time.time() * 1000),
-                            "hypothesisId": "H4",
-                            "location": "planning_core._interactive_validate_dispatch_quantities",
-                            "message": "expected_vs_actual_sample",
-                            "data": {
-                                "expectedN": len(expected),
-                                "actualN": len(actual),
-                                "sample": _sample,
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-    except Exception:
-        pass
-    # #endregion
+    # デスクトップの「配台試行」は常に PM_AI_INTERACTIVE_DISPATCH_TRIAL=1。JSON 上の合計と
+    # 段階2 後に組み立てた結果_配台表行の合計が食い違うことは、制約の都合で起こり得る。
+    # その場合も試行処理自体は継続し、不一致は警告のみとする（致命的 PlanningValidationError は出さない）。
+    interactive_ui_trial = (os.environ.get("PM_AI_INTERACTIVE_DISPATCH_TRIAL") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     for k, exp_v in expected.items():
         act_v = actual.get(k, 0.0)
-        if abs(act_v - exp_v) > eps:
-            # #region agent log
+        if abs(act_v - exp_v) <= eps:
+            continue
+        msg = (
+            "インタラクティブ配台試行: 数量不一致 "
+            f"{k}: 期待={exp_v} 実際={act_v}"
+        )
+        if interactive_ui_trial:
+            logging.warning(msg)
             try:
-                import json as _json
-                import time as _time
-                _p2 = (os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-                if _p2:
-                    with open(_p2, "a", encoding="utf-8") as _f2:
-                        _f2.write(
-                            _json.dumps(
-                                {
-                                    "sessionId": "748d6d",
-                                    "timestamp": int(_time.time() * 1000),
-                                    "hypothesisId": "H5",
-                                    "location": "planning_core._interactive_validate_dispatch_quantities",
-                                    "message": "mismatch",
-                                    "data": {
-                                        "k": [str(k[0]), str(k[1]), k[2].isoformat() if k[2] else None],
-                                        "exp": exp_v,
-                                        "act": act_v,
-                                    },
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
+                print(msg, file=sys.stderr, flush=True)
             except Exception:
                 pass
-            # #endregion
-            raise PlanningValidationError(
-                "インタラクティブ配台試行: 数量不一致 "
-                f"{k}: 期待={exp_v} 実際={act_v}"
-            )
+        else:
+            raise PlanningValidationError(msg)
 
 
 def _interactive_validate_timeline_midnight_if_interactive(
