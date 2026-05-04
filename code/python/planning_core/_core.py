@@ -24089,6 +24089,33 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
     結果_配台表と同一内容を UTF-8 JSON に書く（xlsx 動的生成と同データソース）。
     PM_AI_RESULT_DISPATCH_TABLE_JSON=0/false/no で無効化可能。
     """
+    # #region agent log
+    try:
+        import time as _t_agent
+
+        _lp = (
+            (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+            or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
+        )
+        _nr = 0 if df_dispatch is None or getattr(df_dispatch, "empty", True) else len(df_dispatch)
+        _rec = {
+            "sessionId": "7a6e73",
+            "timestamp": int(_t_agent.time() * 1000),
+            "location": "_write_dispatch_table_standalone_json:entry",
+            "message": "dispatch_json_entry",
+            "hypothesisId": "H3",
+            "data": {
+                "target_dir": (target_dir or "")[:500],
+                "df_rows": _nr,
+                "json_disabled": (os.environ.get("PM_AI_RESULT_DISPATCH_TABLE_JSON") or "").strip().lower()
+                in ("0", "false", "no", "off", "none"),
+            },
+        }
+        with open(_lp, "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
     try:
         off = (os.environ.get("PM_AI_RESULT_DISPATCH_TABLE_JSON") or "").strip().lower()
         if off in ("0", "false", "no", "off", "none"):
@@ -24125,6 +24152,30 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         p_out.write_text(text, encoding="utf-8", newline="\n")
+        # #region agent log
+        try:
+            import time as _t_agent2
+
+            _lp2 = (
+                (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+                or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
+            )
+            _rec2 = {
+                "sessionId": "7a6e73",
+                "timestamp": int(_t_agent2.time() * 1000),
+                "location": "_write_dispatch_table_standalone_json:ok",
+                "message": "wrote_result_dispatch_json",
+                "hypothesisId": "H3",
+                "data": {
+                    "out_path": os.path.abspath(str(p_out)),
+                    "row_count": int(len(df_dispatch)),
+                },
+            }
+            with open(_lp2, "a", encoding="utf-8") as _df2:
+                _df2.write(json.dumps(_rec2, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
@@ -32126,6 +32177,33 @@ def _generate_plan_impl(
                 "結果_配台表: 専用出力先が解決できなかったため、段階2成果物フォルダへ出します → %s",
                 _out_dir,
             )
+        # #region agent log
+        try:
+            import time as _t_od
+
+            _lp_od = (
+                (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+                or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
+            )
+            _rec_od = {
+                "sessionId": "7a6e73",
+                "timestamp": int(_t_od.time() * 1000),
+                "location": "_generate_plan_impl:result_dispatch_paths",
+                "message": "resolved_out_dir_for_dispatch_table",
+                "hypothesisId": "H1",
+                "data": {
+                    "_out_dir": os.path.abspath(_out_dir) if _out_dir else "",
+                    "_wb_path": (_wb_path or "")[:400],
+                    "_stage2_out_root": os.path.abspath(_stage2_out_root)
+                    if _stage2_out_root
+                    else "",
+                },
+            }
+            with open(_lp_od, "a", encoding="utf-8") as _f_od:
+                _f_od.write(json.dumps(_rec_od, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         _wrote = None
         if _publish_plan_xlsx:
             _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)

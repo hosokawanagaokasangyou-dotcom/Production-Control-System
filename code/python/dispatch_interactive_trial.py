@@ -91,6 +91,39 @@ def main() -> int:
             json.dumps(shortage_payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        # #region agent log
+        try:
+            import time as _t_y5
+
+            _lp_y5 = (
+                (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+                or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
+            )
+            _all_s = list(shortage_payload.get("op_shortage") or []) + list(
+                shortage_payload.get("as_shortage") or []
+            )
+            _y5 = [
+                x
+                for x in _all_s
+                if isinstance(x, dict) and str(x.get("task_id", "")).strip() == "Y5-14"
+            ]
+            _rec_y5 = {
+                "sessionId": "7a6e73",
+                "timestamp": int(_t_y5.time() * 1000),
+                "location": "dispatch_interactive_trial.main",
+                "message": "trial_shortage_y5_14",
+                "hypothesisId": "H_Y5",
+                "data": {
+                    "y5_14_entry_count": len(_y5),
+                    "production_plan": str(shortage_payload.get("production_plan") or "")[:400],
+                    "source_json": str(shortage_payload.get("source_json") or "")[:400],
+                },
+            }
+            with open(_lp_y5, "a", encoding="utf-8") as _f_y5:
+                _f_y5.write(json.dumps(_rec_y5, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
     except PlanningValidationError as e:
         msg = str(e).strip() or "PlanningValidationError"
