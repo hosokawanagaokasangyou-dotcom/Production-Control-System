@@ -13,8 +13,9 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
-    <!-- OpenJFX 24.x（JDK 23+ での実行を推奨。バイトコードは release 21 のまま） -->
+    <!-- ビルド・実行は JDK 26（Temurin 等）を推奨。mvn が古い JDK のときは JAVA_HOME を更新すること -->
+    <maven.compiler.release>26</maven.compiler.release>
+    <!-- OpenJFX 24.x（JDK とバイトコード release を合わせること） -->
     <javafx.version>24.0.2</javafx.version>
     <controlsfx.version>11.2.3</controlsfx.version>
     <poi.version>5.2.5</poi.version>
