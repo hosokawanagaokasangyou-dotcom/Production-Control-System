@@ -82,7 +82,7 @@ class AppPathsTest {
         Path p = AppPaths.resolveTaskInputSourceDir(Map.of());
         String s = p.toString().replace('\\', '/');
         assertTrue(s.contains("192.168.0.101"), "host: " + p);
-        assertTrue(s.endsWith("\u751f\u7523\u8a08\u753b\u554f\u5408\u305b"), "suffix: " + p);
+        assertTrue(s.endsWith("生産計画問合せ"), "suffix: " + p);
     }
 
     @Test
@@ -90,9 +90,9 @@ class AppPathsTest {
         Path p = AppPaths.resolveActualDetailSourceDir(Map.of());
         String s = p.toString().replace('\\', '/');
         assertTrue(s.contains("192.168.0.101"), "host: " + p);
-        assertTrue(s.contains("002"), "segment 002  \u52a0\u5de5G: " + p);
+        assertTrue(s.contains("002"), "segment 002  加工G: " + p);
         assertTrue(
-                s.endsWith("\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30DATA"),
+                s.endsWith("加工実績明細DATA"),
                 "suffix: " + p);
     }
 
@@ -138,6 +138,21 @@ class AppPathsTest {
     }
 
     @Test
+    void resultDispatchTableDir_usesPlanInputParentWhenExcel(@TempDir Path tmp) throws Exception {
+        Path out = tmp.resolve("output");
+        Files.createDirectories(out);
+        Path xlsm = out.resolve("task.xlsm");
+        Files.createFile(xlsm);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
+                        xlsm.toString());
+        assertEquals(out.toAbsolutePath().normalize(), AppPaths.resolveResultDispatchTableDir(ui));
+    }
+
+    @Test
     void resultDispatchTableJsonPath_joinsBasename(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("Production-Control-System").resolve("code").resolve("python");
         Files.createDirectories(code);
@@ -159,7 +174,7 @@ class AppPathsTest {
     @Test
     void pickMacroWorkbook_prefersNameContainingHaitai(@TempDir Path dir) throws Exception {
         Files.createFile(dir.resolve("other.xlsm"));
-        Path preferred = dir.resolve("\u751f\u7523\u7ba1\u7406_AI\u914d\u53f0_V2.xlsm");
+        Path preferred = dir.resolve("生産管理_AI配台_V2.xlsm");
         Files.createFile(preferred);
         assertEquals(Optional.of(preferred), AppPaths.pickMacroWorkbook(dir));
     }

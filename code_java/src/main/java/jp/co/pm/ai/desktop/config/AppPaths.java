@@ -29,6 +29,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_WORKSPACE = "PM_AI_WORKSPACE";
 
     /**
+     * Cursor デバッグ用 NDJSON ログファイルへの絶対パス（任意）。未設定時は {@link jp.co.pm.ai.desktop.debug.AgentDebugLog}
+     * が {@code リポジトリ親/.cursor/debug-&lt;session&gt;.log} などを試す。
+     */
+    public static final String KEY_PM_AI_CURSOR_DEBUG_LOG = "PM_AI_CURSOR_DEBUG_LOG";
+
+    /**
      * Stage1/2 成果物フォルダ（従来の {@code code/output} に相当）。未設定時は {@link #resolveRepoRoot(Map)} の直下の
      * {@code output/}。Python {@code planning_core.bootstrap} の {@code output_dir} と揃える。
      */
@@ -144,6 +150,13 @@ public final class AppPaths {
     public static final String KEY_PM_AI_RESULT_BOOK_FONT = "PM_AI_RESULT_BOOK_FONT";
 
     /**
+     * Windows CLI のエラー後 ``pause``／Enter 待ち（{@code workbook_env_bootstrap.pause_cmd_window_on_cli_error}）。JavaFX
+     * からパイプ接続で起動する子プロセスでは stdin が TTY でないため {@code pause} がブロックし得る。未設定時はシェル側で
+     * {@code 0} を付与して無効化する。
+     */
+    public static final String KEY_PM_AI_CMD_PAUSE_ON_ERROR = "PM_AI_CMD_PAUSE_ON_ERROR";
+
+    /**
      * Env keys whose value is a directory (folder picker in the UI).
      */
     private static final Set<String> FOLDER_PATH_ENV_KEYS = Set.of(
@@ -183,6 +196,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_PLAN_INPUT_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
+        s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.addAll(TABULAR_DATA_TABLE_PATH_KEYS);
         return Set.copyOf(s);
     }
@@ -324,13 +338,35 @@ public final class AppPaths {
 
     /**
      * Directory for standalone result-dispatch xlsx; optional {@code PM_AI_RESULT_DISPATCH_TABLE_DIR} in
-     * {@code ui}. Default: {@code resolveRepoRoot(ui)}/{@code code/output} (stage-2 artifacts folder).
+     * {@code ui}. Matches {@code planning_core.dispatch_workspace.resolve_result_dispatch_table_output_dir}:
+     * optional override, then parent of {@link #KEY_PM_AI_PLAN_INPUT_PATH} when it is an existing Excel workbook,
+     * else {@code resolveRepoRoot(ui)}/{@code code/output}.
      */
     public static Path resolveResultDispatchTableDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR));
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
+        }
+        String pip = trim(u.get(KEY_PM_AI_PLAN_INPUT_PATH));
+        if (!pip.isEmpty()) {
+            try {
+                Path planInput = Path.of(pip);
+                if (Files.isRegularFile(planInput)) {
+                    String pl = pip.toLowerCase(Locale.ROOT);
+                    if (pl.endsWith(".xlsx")
+                            || pl.endsWith(".xlsm")
+                            || pl.endsWith(".xltx")
+                            || pl.endsWith(".xltm")) {
+                        Path parent = planInput.toAbsolutePath().normalize().getParent();
+                        if (parent != null) {
+                            return parent;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // fall through to default (same drive / Unicode paths)
+            }
         }
         return resolveRepoRoot(u).resolve("code").resolve("output").toAbsolutePath().normalize();
     }
@@ -340,12 +376,28 @@ public final class AppPaths {
             "結果_配台表.json";
 
     /**
+     * Single canonical machine-calendar block index for Java desktop ({@code export_machine_calendar_blocks.py} output,
+     * pretty-printed). Lives next to {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}.
+     */
+    public static final String MACHINE_CALENDAR_BLOCKS_JSON_BASENAME = "machine_calendar_blocks.json";
+
+    /**
      * {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME} under {@link #resolveResultDispatchTableDir(Map)} (override via
      * {@link #KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR}).
      */
     public static Path resolveResultDispatchTableJsonPath(Map<String, String> ui) {
         return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
                 .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
+     * Shared machine-calendar JSON used by the interactive dispatch editor and the machine-calendar preview tab.
+     */
+    public static Path resolveMachineCalendarBlocksJsonPath(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(MACHINE_CALENDAR_BLOCKS_JSON_BASENAME)
                 .toAbsolutePath()
                 .normalize();
     }
