@@ -37,17 +37,17 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 /**
- * Column filter opening a modal stage with \u9069\u7528 / OK / \u30ad\u30e3\u30f3\u30bb\u30eb. Row-hide semantics match
- * {@link ExcelLikeSpreadsheetFilter}; \u30ad\u30e3\u30f3\u30bb\u30eb restores hidden rows from when the dialog opened.
+ * Column filter opening a modal stage with 適用 / OK / キャンセル. Row-hide semantics match
+ * {@link ExcelLikeSpreadsheetFilter}; キャンセル restores hidden rows from when the dialog opened.
  */
 public final class DialogExcelLikeSpreadsheetFilter implements Filter {
 
-    private static final String SORT_ASC = "\u6607\u9806\u3067\u4e26\u3079\u66ff\u3048";
-    private static final String SORT_DESC = "\u964d\u9806\u3067\u4e26\u3079\u66ff\u3048";
-    private static final String SORT_CLEAR = "\u4e26\u3079\u66ff\u3048\u3092\u89e3\u9664";
-    private static final String SEARCH_PROMPT = "\u5024\u3092\u691c\u7d22\u2026";
-    private static final String SELECT_ALL = "\u3059\u3079\u3066\u9078\u629e";
-    private static final String CLEAR_ALL = "\u3059\u3079\u3066\u89e3\u9664";
+    private static final String SORT_ASC = "昇順で並べ替え";
+    private static final String SORT_DESC = "降順で並べ替え";
+    private static final String SORT_CLEAR = "並べ替えを解除";
+    private static final String SEARCH_PROMPT = "値を検索…";
+    private static final String SELECT_ALL = "すべて選択";
+    private static final String CLEAR_ALL = "すべて解除";
 
     private final SpreadsheetView spv;
     private final int column;
@@ -188,7 +188,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
         sortItem = new MenuItem(SORT_ASC);
-        MenuButton sortMb = new MenuButton("\u4e26\u3079\u66ff\u3048");
+        MenuButton sortMb = new MenuButton("並べ替え");
         sortMb.getItems().add(sortItem);
         sortItem.setOnAction(this::onSortAction);
 
@@ -276,7 +276,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
                     spv.setHiddenRows(r);
                 };
 
-        Button applyBtn = new Button("\u9069\u7528");
+        Button applyBtn = new Button("適用");
         applyBtn.setOnAction(
                 e -> {
                     commit.run();
@@ -292,7 +292,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
                     e.consume();
                 });
 
-        Button cancelBtn = new Button("\u30ad\u30e3\u30f3\u30bb\u30eb");
+        Button cancelBtn = new Button("キャンセル");
         cancelBtn.setCancelButton(true);
         cancelBtn.setOnAction(
                 e -> {
@@ -308,7 +308,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         VBox root =
                 new VBox(
                         8,
-                        new Label("\u5217\u30d5\u30a3\u30eb\u30bf"),
+                        new Label("列フィルタ"),
                         sortMb,
                         searchField,
                         bulkRow,
@@ -320,7 +320,7 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         Stage stage = new Stage();
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);
-        stage.setTitle("\u5217\u30d5\u30a3\u30eb\u30bf");
+        stage.setTitle("列フィルタ");
         stage.setScene(new Scene(root, 420, 480));
         stage.showAndWait();
     }
