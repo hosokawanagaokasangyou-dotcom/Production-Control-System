@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Interactive dispatch trial: merge result-dispatch JSON into plan tasks_df and run stage2."""
+"""
+インタラクティブ配台試行: 結果_配台表.json を tasks_df にマージし、段階2と同じ _generate_plan_impl を実行。
+
+- 段階2の配台ループは変更せず、試行専用の環境・カレンダー解釈・結果表上書きで差し替える。
+- 配台試行順・JSON の日別数量は入力を正とする（planning_core 内で results 表を上書き）。
+- 機械カレンダーは * / ＊ / ※ のセルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで延長可。
+  加工が暦日をまたぐ場合は PlanningValidationError で中止。
+- 人員不足は interactive_trial_shortages_snapshot の op_shortage / as_shortage に記録。
+"""
 from __future__ import annotations
 
 import json
@@ -61,7 +69,7 @@ def main() -> int:
         paths = pc._generate_plan_impl(
             tasks_df_override=merged_df,
             return_output_paths=True,
-            interactive_relax_intraday=True,
+            interactive_relax_intraday=False,
             interactive_dispatch_targets=targets if targets else None,
             interactive_result_dispatch_json_rows=rows,
             interactive_result_dispatch_json_columns=json_columns

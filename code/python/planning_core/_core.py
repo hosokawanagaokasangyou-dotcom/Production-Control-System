@@ -78,7 +78,10 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # endregion stage2 cache helpers
 
 # JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
-# 試行時は入力 JSON の rows を結果_配台表（Excel/JSON）へ優先反映する（timeline 集約より上位）。
+# - 段階2の配台ループ本体は変更しない。試行はフラグ・読込・結果表の上書きで差し替える。
+# - 配台試行順・結果表の日別数量は入力 JSON を正とする。
+# - 機械カレンダーは * 系セルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
+# - 人不足は op_shortage / as_shortage に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 
@@ -22455,6 +22458,20 @@ def _machine_cal_cell_is_occupied(cell) -> bool:
     return True
 
 
+def _machine_cal_cell_is_asterisk_occupancy_only(cell) -> bool:
+    """
+    インタラクティブ配台試行: 機械カレンダーは「*」/「＊」のセルのみを占有とみなす（それ以外の非空は無視）。
+    """
+    if cell is None or (isinstance(cell, float) and pd.isna(cell)):
+        return False
+    s = str(cell).strip()
+    if not s:
+        return False
+    if s in ("*", "＊", "※"):
+        return True
+    return False
+
+
 def _clip_machine_calendar_slot_to_factory_window(
     day_d: date, slot_start: datetime, slot_end: datetime
 ) -> tuple[datetime, datetime] | None:
@@ -22546,10 +22563,15 @@ def _machine_cal_resolve_column_to_equipment_key(
 def load_machine_calendar_occupancy_blocks(
     master_path: str,
     equipment_list: list,
+    *,
+    interactive_only_asterisk_occupancy: bool = False,
 ) -> dict[date, dict[str, list[tuple[datetime, datetime]]]]:
     """
     master.xlsm「機械カレンダー」を読み」設備列の非空セル＝当該スロット占有とみなす。
     戻り: 日付 -> equipment_list のキー -> 半開区間 [start, end) のリスト（マージ済み）。
+
+    interactive_only_asterisk_occupancy:
+        True のとき（配台試行）非空セルのうち * / ＊ / ※ のみを占有とする。数値・他文字は無視。
     """
     if not master_path or not os.path.isfile(master_path):
         return {}
@@ -22675,7 +22697,10 @@ def load_machine_calendar_occupancy_blocks(
             if c >= raw.shape[1]:
                 continue
             cell = raw.iat[r, c]
-            if not _machine_cal_cell_is_occupied(cell):
+            if interactive_only_asterisk_occupancy:
+                if not _machine_cal_cell_is_asterisk_occupancy_only(cell):
+                    continue
+            elif not _machine_cal_cell_is_occupied(cell):
                 continue
             slot_start = slot0
             slot_end = slot_start + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
@@ -29393,9 +29418,11 @@ def _generate_plan_impl(
     global _STAGE2_DATA_EXTRACTION_DATETIME
     try:
         _t_cal0 = time_module.perf_counter()
+        _trial_env = _interactive_dispatch_trial_env_active()
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             _master_workbook_path_resolved(),
             equipment_list,
+            interactive_only_asterisk_occupancy=_trial_env,
         )
     except Exception as e:
         logging.warning(
@@ -29455,6 +29482,24 @@ def _generate_plan_impl(
         logging.warning(
             "インタラクティブ配台試行: 工場枠を全日(00:00-23:59)に拡大し、"
             "機械カレンダー占有を無視します（サブプロセス終了で既定値に戻ります）。"
+        )
+    elif _interactive_dispatch_trial_env_active():
+        # デスクトップ配台試行（dispatch_interactive_trial）既定: 全日緩和は使わず master 工場枠＋同日延長
+        global DEFAULT_START_TIME, DEFAULT_END_TIME
+        _mp_cal = _master_path_stage2
+        _ns, _ne = _read_master_main_factory_operating_times(_mp_cal)
+        if _ns is not None and _ne is not None:
+            DEFAULT_START_TIME = _ns
+            DEFAULT_END_TIME = _ne
+            logging.info(
+                "インタラクティブ配台試行: 工場稼働は master メイン A12/B12（%s～%s）。",
+                _ns.strftime("%H:%M"),
+                _ne.strftime("%H:%M"),
+            )
+        DEFAULT_END_TIME = time(23, 59)
+        logging.info(
+            "インタラクティブ配台試行: 同一暦日内の割付のため終業を 23:59 まで拡張（"
+            "開始は上記のまま。暦日をまたぐ加工はエラーで試行中止）。"
         )
     reset_gemini_usage_tracker()
     _clear_stage2_blocking_message_file()
