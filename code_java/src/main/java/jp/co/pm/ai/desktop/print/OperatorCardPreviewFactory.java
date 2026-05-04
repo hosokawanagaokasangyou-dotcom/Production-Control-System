@@ -24,13 +24,13 @@ public final class OperatorCardPreviewFactory {
 
     private static final String[] JP_WEEKDAY_SHORT =
             new String[] {
-                "\u6708",
-                "\u706b",
-                "\u6c34",
-                "\u6728",
-                "\u91d1",
-                "\u571f",
-                "\u65e5"
+                "月",
+                "火",
+                "水",
+                "木",
+                "金",
+                "土",
+                "日"
             };
 
     /** Approximate A4 width at 96 dpi for layout pref widths (210 mm). */
@@ -55,8 +55,8 @@ public final class OperatorCardPreviewFactory {
 
         Label docHeading =
                 new Label(
-                        "\u30aa\u30da\u30ec\u30fc\u30b7\u30e7\u30f3"
-                                + "\u30ab\u30fc\u30c9");
+                        "オペレーション"
+                                + "カード");
         docHeading.getStyleClass().add("pm-operator-card-doc-title");
         docHeading.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(docHeading, Priority.ALWAYS);
@@ -116,13 +116,13 @@ public final class OperatorCardPreviewFactory {
 
         String[] hdr =
                 new String[] {
-                    "\u6642\u9593\u5e2f",
-                    "\u5de5\u7a0b",
-                    "\u6a5f\u68b0",
-                    "\u4f9d\u983cNO",
-                    "\u5f53\u65e5\u914d\u53f0",
-                    "\u63db\u7b97",
-                    "\u30e1\u30f3\u30d0\u30fc"
+                    "時間帯",
+                    "工程",
+                    "機械",
+                    "依頼NO",
+                    "当日配台",
+                    "換算",
+                    "メンバー"
                 };
         for (int c = 0; c < hdr.length; c++) {
             Label h = new Label(hdr[c]);
@@ -146,7 +146,7 @@ public final class OperatorCardPreviewFactory {
         }
 
         if (day.rows().isEmpty()) {
-            Label empty = new Label("\u3053\u306e\u65e5\u306e\u4e88\u5b9a\u306f\u3042\u308a\u307e\u305b\u3093");
+            Label empty = new Label("この日の予定はありません");
             empty.getStyleClass().add("pm-operator-card-empty");
             grid.add(empty, 0, 1, 7, 1);
             GridPane.setHalignment(empty, HPos.CENTER);
@@ -172,12 +172,12 @@ public final class OperatorCardPreviewFactory {
         return "'" + f + "'";
     }
 
-    /** {@code uuuu-MM-dd  MM/dd\uff08\u6708\u706b...\uff09} */
+    /** {@code uuuu-MM-dd  MM/dd（月火...）} */
     static String formatDaySectionTitle(LocalDate date) {
         String iso = date.toString();
         String md = date.format(DateTimeFormatter.ofPattern("MM/dd"));
         String wd = japaneseWeekdayShort(date.getDayOfWeek());
-        return iso + "  " + md + "\uff08" + wd + "\uff09";
+        return iso + "  " + md + "（" + wd + "）";
     }
 
     static String japaneseWeekdayShort(DayOfWeek dow) {
@@ -188,7 +188,7 @@ public final class OperatorCardPreviewFactory {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter f =
                 DateTimeFormatter.ofPattern(
-                        "\u767a\u884c\u65e5\u6642\uff1a uuuu\u5e74M\u6708d\u65e5 HH:mm",
+                        "発行日時： uuuu年M月d日 HH:mm",
                         Locale.JAPAN);
         return now.format(f);
     }

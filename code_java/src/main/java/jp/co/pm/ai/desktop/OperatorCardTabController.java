@@ -99,8 +99,8 @@ public final class OperatorCardTabController {
             previewHost.setAlignment(Pos.TOP_CENTER);
             Label placeholder =
                     new Label(
-                            "member_schedule*.json \u3068\u7d50\u679c_\u914d\u53f0\u8868.json"
-                                    + " \u3092\u6307\u5b9a\u3057\u3001\u30d7\u30ec\u30d3\u30e5\u30fc\u66f4\u65b0\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
+                            "member_schedule*.json と結果_配台表.json"
+                                    + " を指定し、プレビュー更新を押してください。");
             previewHost.getChildren().setAll(placeholder);
         }
     }
@@ -142,9 +142,9 @@ public final class OperatorCardTabController {
         }
         List<String> prefer =
                 List.of(
-                        "BIZ UD\u30b4\u30b7\u30c3\u30af",
+                        "BIZ UDゴシック",
                         "BIZ UD Gothic",
-                        "BIZ UDP\u30b4\u30b7\u30c3\u30af",
+                        "BIZ UDPゴシック",
                         "BIZ UDPGothic");
         for (String p : prefer) {
             if (families.contains(p)) {
@@ -208,7 +208,7 @@ public final class OperatorCardTabController {
             }
             if (mem == null && !Files.isRegularFile(dispDirFile)) {
                 statusLabel.setText(
-                        "\u6700\u65b0 JSON \u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093: " + dir);
+                        "最新 JSON が見つかりません: " + dir);
                 return;
             }
             statusLabel.setText(
@@ -279,7 +279,7 @@ public final class OperatorCardTabController {
         }
         Path p = Path.of(mp);
         if (!Files.isRegularFile(p)) {
-            statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057: " + p);
+            statusLabel.setText("ファイルなし: " + p);
             return;
         }
         try {
@@ -295,7 +295,7 @@ public final class OperatorCardTabController {
                 }
             }
             statusLabel.setText(
-                    "\u8aad\u307f\u8fbc\u307f: \u30aa\u30da\u30ec\u30fc\u30bf\u30fc " + ops.size() + " \u540d");
+                    "読み込み: オペレーター " + ops.size() + " 名");
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             cachedMemberSheets = Map.of();
@@ -315,7 +315,7 @@ public final class OperatorCardTabController {
             sp.setPannable(true);
             previewHost.getChildren().setAll(sp);
             statusLabel.setText(
-                    "\u30d7\u30ec\u30d3\u30e5\u30fc: " + page.operatorName() + " / " + page.days().size() + " \u65e5\u5206");
+                    "プレビュー: " + page.operatorName() + " / " + page.days().size() + " 日分");
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             Label err = new Label(String.valueOf(ex.getMessage()));
@@ -360,7 +360,7 @@ public final class OperatorCardTabController {
         }
         reloadMemberCachesAndOperators();
         if (cachedMemberSheets.isEmpty()) {
-            statusLabel.setText("member_schedule JSON \u3092\u8aad\u307f\u8fbc\u3081\u307e\u305b\u3093");
+            statusLabel.setText("member_schedule JSON を読み込めません");
             return;
         }
         List<Map<String, String>> dispatchRows;
@@ -372,7 +372,7 @@ public final class OperatorCardTabController {
         }
         LocalDate start = startDatePicker != null ? startDatePicker.getValue() : LocalDate.now();
         if (start == null) {
-            statusLabel.setText("\u958b\u59cb\u65e5\u3092\u8a2d\u5b9a\u3057\u3066\u304f\u3060\u3055\u3044");
+            statusLabel.setText("開始日を設定してください");
             return;
         }
         List<String> operators = new ArrayList<>();
@@ -383,13 +383,13 @@ public final class OperatorCardTabController {
         } else {
             String op = operatorCombo != null ? operatorCombo.getValue() : null;
             if (op == null || op.isBlank()) {
-                statusLabel.setText("\u30aa\u30da\u30ec\u30fc\u30bf\u30fc\u3092\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044");
+                statusLabel.setText("オペレーターを選択してください");
                 return;
             }
             operators.add(op);
         }
         if (operators.isEmpty()) {
-            statusLabel.setText("\u5370\u5237\u5bfe\u8c61\u304c\u3042\u308a\u307e\u305b\u3093");
+            statusLabel.setText("印刷対象がありません");
             return;
         }
 

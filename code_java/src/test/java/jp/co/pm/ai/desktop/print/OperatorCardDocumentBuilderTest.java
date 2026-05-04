@@ -22,7 +22,7 @@ class OperatorCardDocumentBuilderTest {
     void resolveThreeDayColumns_finds_mm_dd_headers() {
         List<String> cols =
                 List.of(
-                        "\u6642\u9593\u5e2f",
+                        "時間帯",
                         "05/07 (Thu)",
                         "05/08 (Fri)",
                         "05/09 (Sat)");
@@ -46,7 +46,7 @@ class OperatorCardDocumentBuilderTest {
     void formatDaySectionTitle_weekday_is_japanese_short() {
         LocalDate thu = LocalDate.of(2026, 5, 7);
         assertEquals(
-                "2026-05-07  05/07\uff08\u6728\uff09",
+                "2026-05-07  05/07（木）",
                 OperatorCardPreviewFactory.formatDaySectionTitle(thu));
     }
 }

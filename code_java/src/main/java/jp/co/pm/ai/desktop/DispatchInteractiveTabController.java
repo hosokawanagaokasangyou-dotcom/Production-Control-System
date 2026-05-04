@@ -25,6 +25,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableCell;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
@@ -40,6 +41,7 @@ import javafx.stage.Window;
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
+import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -51,11 +53,12 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
 /**
- * Interactive pivot editor for result dispatch JSON (ControlsFX SpreadsheetView: task-by-day quarters +
+ * Interactive pivot editor for result dispatch JSON (ControlsFX SpreadsheetView: task-by-day columns +
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
@@ -75,17 +78,20 @@ public final class DispatchInteractiveTabController {
 
     private static final String DND_PREFIX = "pm-dispatch-dnd|wide|";
     private static final String DND_V2_MARKER = "v2|";
+    /** Drag payload for reordering wide-grid profile rows (leading columns only). */
+    private static final String DND_ROW_PREFIX = "pm-dispatch-dnd|wide|row|v2|";
 
-    private static final int QUARTERS_PER_DAY = 4;
+    /** One spreadsheet column per calendar day (wide grid date axis). */
+    private static final int DAY_SLOT_COLUMNS = 1;
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
                     ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER,
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
-                    "\u4f9d\u983cNO",
-                    "\u63db\u7b97\u6570\u91cf",
-                    "\u8a08\u753b\u5408\u8a08");
+                    "依頼NO",
+                    "換算数量",
+                    "計画合計");
 
     @FXML
     private Button loadButton;
@@ -157,6 +163,8 @@ public final class DispatchInteractiveTabController {
 
         wideSpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
         byDaySpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        SpreadsheetTabularSupport.installFullRowDataSelection(wideSpreadsheet);
+        SpreadsheetTabularSupport.installFullRowDataSelection(byDaySpreadsheet);
 
         staffCheckToggle
                 .selectedProperty()
@@ -190,7 +198,7 @@ public final class DispatchInteractiveTabController {
             Path pyExe = resolvePythonExe();
             Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
             String xlsxOut = ResultDispatchPythonExport.exportXlsxNearJson(jsonPath, pyExe, pyDir);
-            statusLabel.setText("\u4fdd\u5b58\u3057\u307e\u3057\u305f");
+            statusLabel.setText("保存しました");
             shell.appendLog("[dispatch-editor] saved json: " + jsonPath);
             if (xlsxOut != null && !xlsxOut.isEmpty()) {
                 shell.appendLog("[dispatch-editor] xlsx: " + xlsxOut);
@@ -198,7 +206,7 @@ public final class DispatchInteractiveTabController {
                 shell.appendLog("[dispatch-editor] xlsx export skipped or failed (Python)");
             }
         } catch (Exception e) {
-            statusLabel.setText("\u4fdd\u5b58\u30a8\u30e9\u30fc");
+            statusLabel.setText("保存エラー");
             shell.appendLog("[dispatch-editor] save failed: " + e.getMessage());
         }
     }
@@ -273,7 +281,7 @@ public final class DispatchInteractiveTabController {
         if (shell == null) {
             return;
         }
-        statusLabel.setText("\u914d\u53f0\u8a66\u884c\u4e2d...");
+        statusLabel.setText("配台試行中...");
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         Task<String> task =
                 new Task<>() {
@@ -287,14 +295,14 @@ public final class DispatchInteractiveTabController {
         task.setOnSucceeded(
                 e -> {
                     String shortagesPath = task.getValue();
-                    statusLabel.setText("\u914d\u53f0\u8a66\u884c\u5b8c\u4e86");
+                    statusLabel.setText("配台試行完了");
                     shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                     Alert a = new Alert(Alert.AlertType.INFORMATION);
                     a.initOwner(shell.getPrimaryStage());
-                    a.setTitle("\u914d\u53f0\u8a66\u884c");
+                    a.setTitle("配台試行");
                     a.setHeaderText(null);
                     a.setContentText(
-                            "\u7d50\u679c\u3092\u66f4\u65b0\u3057\u307e\u3057\u305f\u3002\n"
+                            "結果を更新しました。\n"
                                     + shortagesPath);
                     a.show();
                     reloadFromDiskQuiet();
@@ -302,7 +310,7 @@ public final class DispatchInteractiveTabController {
         task.setOnFailed(
                 e -> {
                     Throwable ex = task.getException();
-                    statusLabel.setText("\u914d\u53f0\u8a66\u884c\u30a8\u30e9\u30fc");
+                    statusLabel.setText("配台試行エラー");
                     shell.appendLog(
                             "[dispatch-editor] trial failed: "
                                     + (ex != null ? ex.getMessage() : ""));
@@ -316,7 +324,9 @@ public final class DispatchInteractiveTabController {
         if (i <= 0) {
             return;
         }
+        int colIdx = wideSpreadsheetFocusedColumnIndex();
         swapWideProfiles(i - 1, i);
+        focusWideProfileCellAfterReorder(i - 1, colIdx);
     }
 
     @FXML
@@ -325,7 +335,9 @@ public final class DispatchInteractiveTabController {
         if (i < 0 || i >= wideProfiles.size() - 1) {
             return;
         }
+        int colIdx = wideSpreadsheetFocusedColumnIndex();
         swapWideProfiles(i, i + 1);
+        focusWideProfileCellAfterReorder(i + 1, colIdx);
     }
 
     private void reloadFromDiskQuiet() {
@@ -335,7 +347,7 @@ public final class DispatchInteractiveTabController {
         Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         jsonPathLabel.setText(p.toString());
         if (!Files.isRegularFile(p)) {
-            statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057");
+            statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
             rebuildGrids();
             return;
@@ -369,7 +381,7 @@ public final class DispatchInteractiveTabController {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
                     calendarBlocks = b.calendar();
-                    statusLabel.setText(doc.rows().size() + " \u884c");
+                    statusLabel.setText(doc.rows().size() + " 行");
                     if (b.calendarLoadError() != null) {
                         shell.appendLog("[dispatch-editor] calendar load: " + b.calendarLoadError());
                     }
@@ -399,7 +411,7 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     doc = ResultDispatchDocument.empty();
                     calendarBlocks = MachineCalendarBlockIndex.empty();
-                    statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                    statusLabel.setText("読込エラー");
                     Throwable ex = task.getException();
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
@@ -472,9 +484,9 @@ public final class DispatchInteractiveTabController {
         }
         shell.appendLog(
                 "[dispatch-editor] machine calendar hint: empty blocks in JSON. Use "
-                        + "\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc"
+                        + "機械カレンダー"
                         + " (JSON) tab "
-                        + "\u300c\u30de\u30b9\u30bf\u304b\u3089 JSON \u51fa\u529b\u300d"
+                        + "「マスタから JSON 出力」"
                         + " or check master / occupancy.");
     }
 
@@ -566,7 +578,7 @@ public final class DispatchInteractiveTabController {
 
         int staticCols = WIDE_STATIC_HEADERS.size();
         int dayCount = dateAxis.size();
-        int slotCols = dayCount * QUARTERS_PER_DAY;
+        int slotCols = dayCount * DAY_SLOT_COLUMNS;
         int totalCols = staticCols + slotCols;
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         int gridRowsTotal = firstData + wideProfiles.size();
@@ -609,16 +621,13 @@ public final class DispatchInteractiveTabController {
             }
             for (int di = 0; di < dayCount; di++) {
                 double dayAmt = wr.getAmount(di);
-                double q = dayAmt / QUARTERS_PER_DAY;
-                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(q) : "";
-                for (int qn = 0; qn < QUARTERS_PER_DAY; qn++) {
-                    int col = staticCols + di * QUARTERS_PER_DAY + qn;
-                    SpreadsheetCell cell =
-                            SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
-                    cell.setEditable(false);
-                    applyWideCellStyle(pr, di, cell);
-                    line.add(cell);
-                }
+                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
+                int col = staticCols + di * DAY_SLOT_COLUMNS;
+                SpreadsheetCell cell =
+                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
+                cell.setEditable(false);
+                applyWideCellStyle(pr, di, cell);
+                line.add(cell);
             }
             gridRows.add(line);
         }
@@ -632,14 +641,10 @@ public final class DispatchInteractiveTabController {
     }
 
     private List<String> buildWideColumnLabels() {
-        List<String> headers = new ArrayList<>(WIDE_STATIC_HEADERS.size() + dateAxis.size() * QUARTERS_PER_DAY);
+        List<String> headers = new ArrayList<>(WIDE_STATIC_HEADERS.size() + dateAxis.size() * DAY_SLOT_COLUMNS);
         headers.addAll(WIDE_STATIC_HEADERS);
         for (LocalDate d : dateAxis) {
-            String ds = d.toString();
-            headers.add(ds + " Q1");
-            headers.add(ds + " Q2");
-            headers.add(ds + " Q3");
-            headers.add(ds + " Q4");
+            headers.add(d.toString());
         }
         return headers;
     }
@@ -681,7 +686,7 @@ public final class DispatchInteractiveTabController {
             Map<String, String> prof = wideProfiles.get(i);
             prof.put(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER, ord);
             for (Map<String, String> row : doc.rows()) {
-                if (ResultDispatchPivot.matchesTaskProfile(cols, prof, row)) {
+                if (ResultDispatchPivot.matchesTaskProfileExceptTrialOrder(cols, prof, row)) {
                     row.put(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER, ord);
                 }
             }
@@ -698,12 +703,64 @@ public final class DispatchInteractiveTabController {
         rebuildGrids();
     }
 
-    private int selectedWideProfileIndex() {
-        var cells = wideSpreadsheet.getSelectionModel().getSelectedCells();
-        if (cells == null || cells.isEmpty()) {
-            return -1;
+    /** Column index in {@link SpreadsheetView#getColumns()} for the focused / primary selected cell. */
+    private int wideSpreadsheetFocusedColumnIndex() {
+        var sm = wideSpreadsheet.getSelectionModel();
+        TablePosition<?, ?> pos = sm.getFocusedCell();
+        if (pos != null && pos.getColumn() >= 0) {
+            return pos.getColumn();
         }
-        int gridRow = cells.getFirst().getRow();
+        var cells = sm.getSelectedCells();
+        if (cells != null && !cells.isEmpty()) {
+            int c = cells.getFirst().getColumn();
+            if (c >= 0) {
+                return c;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * After row reorder, move selection and focus to the same logical profile row (by index) and column.
+     * Runs later so {@link #rebuildWide()} layout is applied before selecting.
+     */
+    private void focusWideProfileCellAfterReorder(int profileIndex, int columnIndex) {
+        if (profileIndex < 0 || profileIndex >= wideProfiles.size()) {
+            return;
+        }
+        var cols = wideSpreadsheet.getColumns();
+        if (cols.isEmpty()) {
+            return;
+        }
+        int c = Math.max(0, Math.min(columnIndex, cols.size() - 1));
+        SpreadsheetColumn scol = cols.get(c);
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        int modelGridRow = firstData + profileIndex;
+        Platform.runLater(
+                () -> {
+                    int viewRow = wideSpreadsheet.getViewRow(modelGridRow);
+                    if (viewRow < 0) {
+                        return;
+                    }
+                    var sm = wideSpreadsheet.getSelectionModel();
+                    sm.clearSelection();
+                    sm.clearAndSelect(viewRow, scol);
+                    sm.focus(viewRow, scol);
+                });
+    }
+
+    private int selectedWideProfileIndex() {
+        var sm = wideSpreadsheet.getSelectionModel();
+        TablePosition<?, ?> pos = sm.getFocusedCell();
+        if (pos == null || pos.getRow() < 0) {
+            var cells = sm.getSelectedCells();
+            if (cells == null || cells.isEmpty()) {
+                return -1;
+            }
+            pos = cells.getFirst();
+        }
+        int viewRow = pos.getRow();
+        int gridRow = wideSpreadsheet.getModelRow(viewRow);
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         int idx = gridRow - firstData;
         if (idx >= 0 && idx < wideProfiles.size()) {
@@ -712,12 +769,47 @@ public final class DispatchInteractiveTabController {
         return -1;
     }
 
+    /** Maps a SpreadsheetView table/view row index to a {@link #wideProfiles} index. */
+    private int wideProfileIndexFromViewRow(int viewRow) {
+        if (viewRow < 0) {
+            return -1;
+        }
+        int gridRow = wideSpreadsheet.getModelRow(viewRow);
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        int idx = gridRow - firstData;
+        if (idx >= 0 && idx < wideProfiles.size()) {
+            return idx;
+        }
+        return -1;
+    }
+
+    private int wideProfileIndexFromTableCell(TableCell<?, ?> tc) {
+        if (tc == null) {
+            return -1;
+        }
+        return wideProfileIndexFromViewRow(tc.getIndex());
+    }
+
+    /**
+     * Maps a {@link TableCell}'s column to model column index (accounts for hidden columns / ControlsFX mapping).
+     */
+    private int wideModelColumnFromTableCell(TableCell<?, ?> tc) {
+        if (tc == null || tc.getTableColumn() == null) {
+            return -1;
+        }
+        int viewCol = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
+        if (viewCol < 0) {
+            return -1;
+        }
+        return wideSpreadsheet.getModelColumn(viewCol);
+    }
+
     private void rebuildByDay() {
         List<String> cols = doc.columns();
         List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
         int staticCols = 2;
         int dayCount = dateAxis.size();
-        int slotCols = dayCount * QUARTERS_PER_DAY;
+        int slotCols = dayCount * DAY_SLOT_COLUMNS;
         int totalCols = staticCols + slotCols;
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         int gridRowsTotal = firstData + keys.size();
@@ -763,16 +855,13 @@ public final class DispatchInteractiveTabController {
             line.add(c1);
             for (int di = 0; di < dayCount; di++) {
                 double dayAmt = br.getAmount(di);
-                double q = dayAmt / QUARTERS_PER_DAY;
-                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(q) : "";
-                for (int qn = 0; qn < QUARTERS_PER_DAY; qn++) {
-                    int col = staticCols + di * QUARTERS_PER_DAY + qn;
-                    SpreadsheetCell cell =
-                            SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
-                    cell.setEditable(false);
-                    applyByDayCellStyle(br, di, cell);
-                    line.add(cell);
-                }
+                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
+                int col = staticCols + di * DAY_SLOT_COLUMNS;
+                SpreadsheetCell cell =
+                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
+                cell.setEditable(false);
+                applyByDayCellStyle(br, di, cell);
+                line.add(cell);
             }
             gridRows.add(line);
         }
@@ -786,15 +875,11 @@ public final class DispatchInteractiveTabController {
     }
 
     private List<String> buildByDayColumnLabels() {
-        List<String> headers = new ArrayList<>(2 + dateAxis.size() * QUARTERS_PER_DAY);
+        List<String> headers = new ArrayList<>(2 + dateAxis.size() * DAY_SLOT_COLUMNS);
         headers.add(ResultDispatchSchema.COL_PROCESS);
         headers.add(ResultDispatchSchema.COL_MACHINE);
         for (LocalDate d : dateAxis) {
-            String ds = d.toString();
-            headers.add(ds + " Q1");
-            headers.add(ds + " Q2");
-            headers.add(ds + " Q3");
-            headers.add(ds + " Q4");
+            headers.add(d.toString());
         }
         return headers;
     }
@@ -819,16 +904,36 @@ public final class DispatchInteractiveTabController {
                     if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
                         return;
                     }
-                    int col = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
+                    int modelCol = wideModelColumnFromTableCell(tc);
                     int staticCols = WIDE_STATIC_HEADERS.size();
-                    if (col < staticCols) {
+                    if (modelCol < 0) {
                         return;
                     }
-                    int slot = col - staticCols;
-                    int dateIdx = slot / QUARTERS_PER_DAY;
-                    int row = tc.getIndex();
-                    int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-                    int profIdx = row - firstData;
+
+                    // Row reorder: drag from leading (static) model columns ? start gesture from the TableCell node.
+                    if (modelCol < staticCols) {
+                        int profIdx = wideProfileIndexFromTableCell(tc);
+                        if (profIdx < 0 || profIdx >= wideProfiles.size()) {
+                            return;
+                        }
+                        List<String> cols = doc.columns();
+                        String gk = ResultDispatchNormalizer.staticGroupKey(cols, wideProfiles.get(profIdx));
+                        String b64 =
+                                Base64.getUrlEncoder()
+                                        .withoutPadding()
+                                        .encodeToString(gk.getBytes(StandardCharsets.UTF_8));
+                        Dragboard db = tc.startDragAndDrop(TransferMode.MOVE);
+                        ClipboardContent cc = new ClipboardContent();
+                        cc.putString(DND_ROW_PREFIX + b64);
+                        db.setContent(cc);
+                        SpreadsheetRowReorderDragGhost.apply(db, tc, e);
+                        e.consume();
+                        return;
+                    }
+
+                    int slot = modelCol - staticCols;
+                    int dateIdx = slot / DAY_SLOT_COLUMNS;
+                    int profIdx = wideProfileIndexFromTableCell(tc);
                     if (profIdx < 0 || profIdx >= wideRowItems.size() || dateIdx < 0 || dateIdx >= dateAxis.size()) {
                         return;
                     }
@@ -837,7 +942,7 @@ public final class DispatchInteractiveTabController {
                     if (qty <= 1e-9) {
                         return;
                     }
-                    Dragboard db = wideSpreadsheet.startDragAndDrop(TransferMode.MOVE);
+                    Dragboard db = tc.startDragAndDrop(TransferMode.MOVE);
                     ClipboardContent cc = new ClipboardContent();
                     List<String> cols = doc.columns();
                     String gk = ResultDispatchNormalizer.staticGroupKey(cols, wr.profileMap());
@@ -857,16 +962,27 @@ public final class DispatchInteractiveTabController {
                     if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
                         return;
                     }
-                    int col = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
+                    int modelCol = wideModelColumnFromTableCell(tc);
                     int staticCols = WIDE_STATIC_HEADERS.size();
-                    if (col < staticCols) {
+                    if (modelCol < 0) {
                         return;
                     }
-                    int slot = col - staticCols;
-                    int dateIdx = slot / QUARTERS_PER_DAY;
-                    int row = tc.getIndex();
-                    int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-                    int profIdx = row - firstData;
+
+                    if (modelCol < staticCols) {
+                        if (e.getDragboard().hasString()
+                                && e.getDragboard().getString().startsWith(DND_ROW_PREFIX)) {
+                            int profIdx = wideProfileIndexFromTableCell(tc);
+                            if (profIdx >= 0 && profIdx < wideProfiles.size()) {
+                                e.acceptTransferModes(TransferMode.MOVE);
+                            }
+                        }
+                        e.consume();
+                        return;
+                    }
+
+                    int slot = modelCol - staticCols;
+                    int dateIdx = slot / DAY_SLOT_COLUMNS;
+                    int profIdx = wideProfileIndexFromTableCell(tc);
                     if (profIdx < 0 || profIdx >= wideRowItems.size()) {
                         return;
                     }
@@ -891,16 +1007,27 @@ public final class DispatchInteractiveTabController {
                     if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
                         return;
                     }
-                    int col = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
+                    int modelCol = wideModelColumnFromTableCell(tc);
                     int staticCols = WIDE_STATIC_HEADERS.size();
-                    if (col < staticCols) {
+                    if (modelCol < 0) {
                         return;
                     }
-                    int slot = col - staticCols;
-                    int dateIdx = slot / QUARTERS_PER_DAY;
-                    int row = tc.getIndex();
-                    int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-                    int profIdx = row - firstData;
+
+                    if (modelCol < staticCols) {
+                        String payload = e.getDragboard().getString();
+                        if (payload != null && payload.startsWith(DND_ROW_PREFIX)) {
+                            boolean ok = handleWideRowReorderDrop(payload, tc);
+                            e.setDropCompleted(ok);
+                        } else {
+                            e.setDropCompleted(false);
+                        }
+                        e.consume();
+                        return;
+                    }
+
+                    int slot = modelCol - staticCols;
+                    int dateIdx = slot / DAY_SLOT_COLUMNS;
+                    int profIdx = wideProfileIndexFromTableCell(tc);
                     if (profIdx < 0 || profIdx >= wideRowItems.size()) {
                         return;
                     }
@@ -928,7 +1055,7 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
                     int slot = col - staticCols;
-                    int dateIdx = slot / QUARTERS_PER_DAY;
+                    int dateIdx = slot / DAY_SLOT_COLUMNS;
                     int row = tc.getIndex();
                     int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
                     int dataIdx = row - firstData;
@@ -943,7 +1070,7 @@ public final class DispatchInteractiveTabController {
                     TextInputDialog dialog =
                             new TextInputDialog(ResultDispatchNormalizer.formatQty(cur));
                     dialog.initOwner(shell != null ? shell.getPrimaryStage() : null);
-                    dialog.setTitle("\u65e5\u5225\u5408\u8a08");
+                    dialog.setTitle("日別合計");
                     dialog.setHeaderText(
                             en.getKey()
                                     + " / "
@@ -1005,6 +1132,33 @@ public final class DispatchInteractiveTabController {
         return -1;
     }
 
+    private boolean handleWideRowReorderDrop(String payload, TableCell<?, ?> targetCell) {
+        if (payload == null || !payload.startsWith(DND_ROW_PREFIX)) {
+            return false;
+        }
+        String b64 = payload.substring(DND_ROW_PREFIX.length());
+        final String gk;
+        try {
+            gk = new String(Base64.getUrlDecoder().decode(b64), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+        int fromIdx = indexOfProfileGroupKey(gk);
+        int toIdx = wideProfileIndexFromTableCell(targetCell);
+        if (fromIdx < 0 || toIdx < 0 || fromIdx >= wideProfiles.size() || toIdx >= wideProfiles.size()) {
+            return false;
+        }
+        if (fromIdx == toIdx) {
+            return false;
+        }
+        wideProfiles.add(toIdx, wideProfiles.remove(fromIdx));
+        assignSequentialTrialOrders();
+        ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
+        rebuildGrids();
+        statusLabel.setText("行を移動しました");
+        return true;
+    }
+
     private boolean handleWideDrop(String payload, WideRow targetRow, int targetDateIdx) {
         if (!payload.startsWith(DND_PREFIX)) {
             return false;
@@ -1053,7 +1207,7 @@ public final class DispatchInteractiveTabController {
 
         if (fromRow != toIdx) {
             statusLabel.setText(
-                    "\u7e26\u65b9\u5411\u3078\u306e\u79fb\u52d5\u306f\u3067\u304d\u307e\u305b\u3093\uff08\u6a2a\u306e\u307f\uff09");
+                    "縦方向への移動はできません（横のみ）");
             return false;
         }
         if (fromRow == toIdx && fromDateIdx == targetDateIdx) {
@@ -1106,7 +1260,7 @@ public final class DispatchInteractiveTabController {
     private void reportMachineCalendarBlockedMoveRejected(
             LocalDate day, String process, String machine) {
         String msg =
-                "\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc\u3067\u30d6\u30ed\u30c3\u30af\u306e\u305f\u3081\u79fb\u52d5\u3067\u304d\u307e\u305b\u3093: "
+                "機械カレンダーでブロックのため移動できません: "
                         + day
                         + " / "
                         + process

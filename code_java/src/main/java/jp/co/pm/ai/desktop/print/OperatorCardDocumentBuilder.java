@@ -16,29 +16,29 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 
 /**
- * Builds {@link OperatorCardPage} from member_schedule sheets and \u7d50\u679c_\u914d\u53f0\u8868 rows.
+ * Builds {@link OperatorCardPage} from member_schedule sheets and 結果_配台表 rows.
  */
 public final class OperatorCardDocumentBuilder {
 
-    private static final String COL_TIME = "\u6642\u9593\u5e2f";
+    private static final String COL_TIME = "時間帯";
     private static final Set<String> NON_WORK_MARKERS =
             Set.of(
-                    "\u4f11",
-                    "\u4f11\u606f",
-                    "\u52e4\u52d9\u5916",
-                    "\u5e74\u4f11");
+                    "休",
+                    "休憩",
+                    "勤務外",
+                    "年休");
 
     private static final Pattern MD_COL =
             Pattern.compile("(\\d{1,2})/(\\d{1,2})");
     private static final Pattern SLOT_RANGE =
             Pattern.compile("(\\d{2}:\\d{2})-(\\d{2}:\\d{2})");
 
-    private static final String REQ = "\u4f9d\u983cNO";
-    private static final String PROC = "\u5de5\u7a0b\u540d";
-    private static final String MACH = "\u6a5f\u68b0\u540d";
-    private static final String DAY = "\u914d\u53f0\u65e5";
-    private static final String QTY_DAY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf";
-    private static final String QTY_CONV = "\u63db\u7b97\u6570\u91cf";
+    private static final String REQ = "依頼NO";
+    private static final String PROC = "工程名";
+    private static final String MACH = "機械名";
+    private static final String DAY = "配台日";
+    private static final String QTY_DAY = "当日配台数量";
+    private static final String QTY_CONV = "換算数量";
 
     private OperatorCardDocumentBuilder() {}
 
@@ -207,7 +207,7 @@ public final class OperatorCardDocumentBuilder {
             }
             members.remove(selfOperator);
             String memberStr =
-                    members.isEmpty() ? "\u2014" : String.join("\u3001", members);
+                    members.isEmpty() ? "—" : String.join("、", members);
 
             String qtyD = "";
             String qtyC = "";
@@ -226,8 +226,8 @@ public final class OperatorCardDocumentBuilder {
                             nz(p.processName()),
                             nz(p.machineName()),
                             nz(p.requestNo()),
-                            qtyD.isEmpty() ? "\u2014" : qtyD,
-                            qtyC.isEmpty() ? "\u2014" : qtyC,
+                            qtyD.isEmpty() ? "—" : qtyD,
+                            qtyC.isEmpty() ? "—" : qtyC,
                             memberStr));
 
             i = j + 1;

@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Runs {@code dispatch_interactive_trial.py} (writes shortages JSON, updates {@code \u7d50\u679c_\u914d\u53f0\u8868.json}
+ * Runs {@code dispatch_interactive_trial.py} (writes shortages JSON, updates {@code 結果_配台表.json}
  * and exports xlsx).
  */
 public final class ResultDispatchTrialPython {

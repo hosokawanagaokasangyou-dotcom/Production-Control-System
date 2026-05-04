@@ -55,8 +55,8 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
-     * Same as {@link #applyColumnFilters(SpreadsheetView)} but opens a modal dialog per column (\u9069\u7528 / OK /
-     * \u30ad\u30e3\u30f3\u30bb\u30eb) via {@link DialogExcelLikeSpreadsheetFilter}.
+     * Same as {@link #applyColumnFilters(SpreadsheetView)} but opens a modal dialog per column (適用 / OK /
+     * キャンセル) via {@link DialogExcelLikeSpreadsheetFilter}.
      */
     public static void applyColumnFiltersWithDialog(SpreadsheetView view) {
         if (view == null) {

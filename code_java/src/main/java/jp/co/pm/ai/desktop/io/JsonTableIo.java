@@ -139,7 +139,7 @@ public final class JsonTableIo {
      * Distinct operator names from workbook sheet keys (excluding sheets without the time-slot column).
      */
     public static List<String> memberOperatorNames(Map<String, SheetTable> memberSheets) {
-        final String timeCol = "\u6642\u9593\u5e2f";
+        final String timeCol = "時間帯";
         Set<String> keepOrder = new LinkedHashSet<>();
         for (Map.Entry<String, SheetTable> e : memberSheets.entrySet()) {
             if (e.getValue().columns().contains(timeCol)) {

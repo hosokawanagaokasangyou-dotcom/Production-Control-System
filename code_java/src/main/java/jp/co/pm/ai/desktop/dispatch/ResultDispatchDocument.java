@@ -9,8 +9,8 @@ import java.util.Map;
 public final class ResultDispatchDocument {
 
     private int formatVersion = 1;
-    private String sheetName = "\u7d50\u679c_\u914d\u53f0\u8868";
-    private String excelTableName = "_t\u7d50\u679c_\u914d\u53f0\u8868";
+    private String sheetName = "結果_配台表";
+    private String excelTableName = "_t結果_配台表";
     private final List<String> columns;
     private final List<Map<String, String>> rows;
 

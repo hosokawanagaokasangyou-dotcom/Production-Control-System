@@ -39,7 +39,7 @@ public final class SpreadsheetPlanInputCellEditDialog {
         String title =
                 columnTitle != null && !columnTitle.isBlank()
                         ? columnTitle.strip()
-                        : "\u30bb\u30eb\u306e\u7de8\u96c6";
+                        : "セルの編集";
         dialog.setTitle(title);
         dialog.setHeaderText(null);
 
@@ -55,8 +55,8 @@ public final class SpreadsheetPlanInputCellEditDialog {
         Label hint =
                 new Label(
                         columnTitle != null && !columnTitle.isBlank()
-                                ? "\u5217: " + columnTitle.strip()
-                                : "\u30bb\u30eb\u5024\u3092\u7de8\u96c6\u3057\u3066\u304f\u3060\u3055\u3044");
+                                ? "列: " + columnTitle.strip()
+                                : "セル値を編集してください");
         hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 18%);");
 
         VBox box = new VBox(10, hint, area);

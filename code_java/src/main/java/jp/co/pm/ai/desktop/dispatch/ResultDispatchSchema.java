@@ -9,13 +9,13 @@ import java.util.List;
  */
 public final class ResultDispatchSchema {
 
-    /** Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} \u3068\u540c\u4e00\u306e\u5217\u540d\uff08\u914d\u53f0\u8a66\u884c\u9806\u756a\uff09\u3002 */
-    public static final String COL_DISPATCH_TRIAL_ORDER = "\u914d\u53f0\u8a66\u884c\u9806\u756a";
+    /** Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} と同じ列名（配台試行順番）。 */
+    public static final String COL_DISPATCH_TRIAL_ORDER = "配台試行順番";
 
-    public static final String COL_PROCESS = "\u5de5\u7a0b\u540d";
-    public static final String COL_MACHINE = "\u6a5f\u68b0\u540d";
-    public static final String COL_DISPATCH_DATE = "\u914d\u53f0\u65e5";
-    public static final String COL_DISPATCH_QTY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf";
+    public static final String COL_PROCESS = "工程名";
+    public static final String COL_MACHINE = "機械名";
+    public static final String COL_DISPATCH_DATE = "配台日";
+    public static final String COL_DISPATCH_QTY = "当日配台数量";
 
     /** Static columns in pipeline order (excluding {@link #COL_DISPATCH_DATE} / {@link #COL_DISPATCH_QTY}). */
     public static final List<String> STATIC_HEADERS =
@@ -23,26 +23,26 @@ public final class ResultDispatchSchema {
                     COL_DISPATCH_TRIAL_ORDER,
                     COL_PROCESS,
                     COL_MACHINE,
-                    "\u53d7\u6ce8\u65e5",
-                    "\u53d7\u6ce8NO",
-                    "\u4f9d\u983cNO",
-                    "\u54c1\u540d(\u539f\u53cd)",
-                    "\u4f7f\u7528\u539f\u53cd",
-                    "\u539f\u53cd\u6570",
-                    "\u54c1\u540d(\u88fd\u54c1)",
-                    "\u88fd\u54c1\u540d",
-                    "\u63db\u7b97\u6570\u91cf",
-                    "\u5b9f\u52a0\u5de5\u6570",
-                    "\u52a0\u5de5\u5185\u5bb9",
-                    "\u5728\u5eab\u5834\u6240",
-                    "\u539f\u53cd\u6295\u5165\u65e5",
-                    "\u6307\u5b9a\u7d0d\u671f",
-                    "\u56de\u7b54\u7d0d\u671f",
-                    "\u52a0\u5de5\u5b8c\u4e86\u65e5",
-                    "\u52a0\u5de5\u5b8c\u4e86\u533a\u5206",
-                    "\u5b9f\u51fa\u6765\u9ad8",
-                    "\u8a08\u753b\u5408\u8a08",
-                    "\u539f\u53cd\u6295\u5165\u5834\u6240");
+                    "受注日",
+                    "受注NO",
+                    "依頼NO",
+                    "品名(原反)",
+                    "使用原反",
+                    "原反数",
+                    "品名(製品)",
+                    "製品名",
+                    "換算数量",
+                    "実加工数",
+                    "加工内容",
+                    "在庫場所",
+                    "原反投入日",
+                    "指定納期",
+                    "回答納期",
+                    "加工完了日",
+                    "加工完了区分",
+                    "実出来高",
+                    "計画合計",
+                    "原反投入場所");
 
     private ResultDispatchSchema() {}
 
@@ -61,11 +61,11 @@ public final class ResultDispatchSchema {
             return false;
         }
         return switch (col) {
-            case "\u53d7\u6ce8\u65e5",
-                    "\u539f\u53cd\u6295\u5165\u65e5",
-                    "\u6307\u5b9a\u7d0d\u671f",
-                    "\u56de\u7b54\u7d0d\u671f",
-                    "\u52a0\u5de5\u5b8c\u4e86\u65e5",
+            case "受注日",
+                    "原反投入日",
+                    "指定納期",
+                    "回答納期",
+                    "加工完了日",
                     COL_DISPATCH_DATE -> true;
             default -> false;
         };
