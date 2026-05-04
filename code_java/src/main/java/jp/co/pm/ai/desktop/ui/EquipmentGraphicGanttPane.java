@@ -286,9 +286,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerScroll.setPannable(false);
-        headerScroll.setFitToHeight(true);
-        headerScroll.setMinViewportHeight(layout.headerHeight);
-        headerScroll.setMaxViewportHeight(layout.headerHeight);
+        headerScroll.setFitToHeight(false);
+        headerScroll.setPrefViewportHeight(layout.headerHeight);
+        headerScroll.setPrefHeight(layout.headerHeight);
+        headerScroll.setMinHeight(layout.headerHeight);
+        headerScroll.setMaxHeight(layout.headerHeight);
         headerScroll.setMinWidth(Region.USE_COMPUTED_SIZE);
 
         ScrollPane bodyScroll = new ScrollPane(scrollBody);

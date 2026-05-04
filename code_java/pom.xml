@@ -14,8 +14,9 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
-    <javafx.version>21.0.5</javafx.version>
-    <controlsfx.version>11.2.1</controlsfx.version>
+    <!-- OpenJFX 24.x（JDK 23+ での実行を推奨。バイトコードは release 21 のまま） -->
+    <javafx.version>24.0.2</javafx.version>
+    <controlsfx.version>11.2.3</controlsfx.version>
     <poi.version>5.2.5</poi.version>
     <jfreechart.version>1.5.4</jfreechart.version>
     <jackson.version>2.17.2</jackson.version>
