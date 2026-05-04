@@ -181,7 +181,8 @@ public final class EnvVarDocs {
                 "段階2（配台試行含む）の Excel 生成経路を 1 依頼で追跡するデバッグ用依頼NO（例: Y5-14）。"
                         + "本アプリの「環境変数」タブにのみ設定（子プロセスへ引き渡し）。"
                         + "OS の PM_AI_* は起動に使わない（空のまま推奨）。"
-                        + "有効時は .cursor/debug-excel-trace.log 等に NDJSON を追記。");
+                        + "有効時は .cursor/debug-excel-trace.log に NDJSON（EX1=df_tasks、EX4=サイドカー JSON、"
+                        + "EX5=両者のセル差分）。全ブック JSON（PM_AI_PLAN_WORKBOOK_JSON）とは別。");
         put(
                 "GEMINI_CREDENTIALS_JSON",
                 "Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）の"

@@ -11,8 +11,8 @@
     "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。code/exclude_rules.json があれば初期値に使われる。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。"
   }, {
     "key" : "PM_AI_EXCEL_TRACE_TASK_ID",
-    "value" : "",
-    "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。詳細は EnvVarDocs。"
+    "value" : "Y5-14",
+    "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。"
   }, {
     "key" : "PM_AI_OUTPUT_DIR",
     "value" : "",
