@@ -26,6 +26,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
@@ -188,7 +189,10 @@ public final class EquipmentGanttGraphicTabController {
                 return;
             }
 
-            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
+            SheetLoad loaded =
+                    loadWorkbookSheetsForGraphic(
+                            planPath,
+                            shell != null ? shell.snapshotUiEnv() : Map.of());
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             lastLoadedPlanPath = planPath.toString();
 
@@ -250,7 +254,10 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         try {
-            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
+            SheetLoad loaded =
+                    loadWorkbookSheetsForGraphic(
+                            planPath,
+                            shell != null ? shell.snapshotUiEnv() : Map.of());
             Map<String, JsonTableIo.SheetTable> eligible =
                     filterEquipmentTimelineSheets(loaded.sheets());
             applySelectedSheetFromMap(eligible);
@@ -324,11 +331,14 @@ public final class EquipmentGanttGraphicTabController {
     private record SheetLoad(Map<String, JsonTableIo.SheetTable> sheets, String description) {}
 
     /**
-     * 読み込み優先: {@code *_logical_view.json} → {@code *_equipment_gantt_contract.json}
-     * （契約から表を生成・xlsx 不要）→ 指定された plan JSON 本体。
+     * 読み込み優先: {@code *_logical_view.json}（時刻マスに実体があるとき）→ それ以外は sibling の
+     * {@code *_equipment_gantt_contract.json}（タイムライン契約から表生成）→ plan JSON 本体。
+     *
+     * <p>論理ビューは式キャッシュ欠落などで時刻列がすべて空になりうる。その場合は契約 JSON があれば
+     * グラフィック用にフォールバックする。
      */
-    private static SheetLoad loadWorkbookSheetsForGraphic(Path planJsonFromField)
-            throws IOException {
+    private static SheetLoad loadWorkbookSheetsForGraphic(
+            Path planJsonFromField, Map<String, String> ui) throws IOException {
         Path fn0 = planJsonFromField.getFileName();
         if (fn0 != null && fn0.toString().endsWith(".json")) {
             String stem0 = fn0.toString().substring(0, fn0.toString().length() - 5);
@@ -344,8 +354,36 @@ public final class EquipmentGanttGraphicTabController {
         }
         Path logical = resolveLogicalViewPath(planJsonFromField);
         if (logical != null) {
+            Map<String, JsonTableIo.SheetTable> logicalSheets =
+                    JsonTableIo.loadSheetsWorkbook(logical);
+            boolean slotsFilled =
+                    equipmentTimelineSheetsHaveNonEmptySlots(logicalSheets);
+            Path contract = resolveEquipmentContractSibling(planJsonFromField);
+            if (!slotsFilled && contract != null && Files.isRegularFile(contract)) {
+                // #region agent log
+                AgentDebugLog.appendStructured(
+                        ui != null ? ui : Map.of(),
+                        "gantt-nodisp",
+                        "H_fallback_contract",
+                        "EquipmentGanttGraphicTabController.loadWorkbookSheetsForGraphic",
+                        "logical_view had empty timeline slot cells; using equipment_gantt_contract",
+                        Map.of(
+                                "logicalPath",
+                                logical.toAbsolutePath().normalize().toString(),
+                                "contractPath",
+                                contract.toAbsolutePath().normalize().toString()));
+                // #endregion
+                JsonTableIo.SheetTable gantt =
+                        EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
+                Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
+                m.put(DEFAULT_SHEET, gantt);
+                return new SheetLoad(
+                        m,
+                        contract.getFileName().toString()
+                                + " (設備ガント契約・論理ビュー時刻セル空のため)");
+            }
             return new SheetLoad(
-                    JsonTableIo.loadSheetsWorkbook(logical),
+                    logicalSheets,
                     logical.getFileName().toString() + " (論理ビュー)");
         }
         Path contract = resolveEquipmentContractSibling(planJsonFromField);
@@ -360,6 +398,20 @@ public final class EquipmentGanttGraphicTabController {
         return new SheetLoad(
                 JsonTableIo.loadSheetsWorkbook(planJsonFromField),
                 planJsonFromField.getFileName().toString());
+    }
+
+    /**
+     * {@link #filterEquipmentTimelineSheets} 対象シートのうち、いずれかの時刻スロット列に非空セルがあるか。
+     */
+    private static boolean equipmentTimelineSheetsHaveNonEmptySlots(
+            Map<String, JsonTableIo.SheetTable> sheets) {
+        Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
+        for (JsonTableIo.SheetTable t : eligible.values()) {
+            if (EquipmentGraphicGanttPane.sheetHasAnyNonEmptySlotCell(t.columns(), t.rows())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */

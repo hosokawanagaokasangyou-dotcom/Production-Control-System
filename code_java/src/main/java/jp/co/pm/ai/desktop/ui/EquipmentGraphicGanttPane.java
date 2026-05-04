@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import javafx.collections.FXCollections;
@@ -60,6 +61,38 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param rows データ行（フィルタ行を含まない素データ）
      * @return 時刻列が検出できない場合は説明ラベルのみのペイン
      */
+    /**
+     * 時刻列（HH:MM 見出し）に 1 つでも非空セルがあるか。論理ビュー JSON の空振り検出用。
+     */
+    public static boolean sheetHasAnyNonEmptySlotCell(
+            List<String> columns, List<Map<String, String>> rowMaps) {
+        if (columns == null || rowMaps == null) {
+            return false;
+        }
+        List<Integer> slotCol = new ArrayList<>();
+        for (int c = 0; c < columns.size(); c++) {
+            if (parseTimeHeader(columns.get(c)) != null) {
+                slotCol.add(c);
+            }
+        }
+        if (slotCol.isEmpty()) {
+            return false;
+        }
+        for (Map<String, String> row : rowMaps) {
+            if (row == null) {
+                continue;
+            }
+            for (int c : slotCol) {
+                String key = columns.get(c);
+                String v = row.get(key);
+                if (v != null && !v.isBlank()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
         BorderPane root = new BorderPane();
