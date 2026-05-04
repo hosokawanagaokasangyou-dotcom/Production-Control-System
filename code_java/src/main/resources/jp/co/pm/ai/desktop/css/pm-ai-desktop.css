@@ -163,6 +163,31 @@
     -fx-opacity: 0.5;
 }
 
+/* 段階1／段階2 実行中：不定プログレス＋ラベル */
+
+.pm-run-tab .pm-stage-run-progress-box {
+    -fx-padding: 0 12 4 12;
+}
+
+.pm-run-tab .label.pm-stage-run-progress-text {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-dark-text-color;
+}
+
+.pm-run-tab .progress-bar.pm-stage-run-progress {
+    -fx-pref-height: 12;
+    -fx-min-height: 10;
+}
+
+.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-1 {
+    -fx-accent: #0e7490;
+}
+
+.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-2 {
+    -fx-accent: #c2410c;
+}
+
 /* Plan result viewer (JSON): accordion source strip + side tab panes for vertical space */
 
 .pm-plan-result-viewer .label.pm-plan-result-viewer-hint-inline {

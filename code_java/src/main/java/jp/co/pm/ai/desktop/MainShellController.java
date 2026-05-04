@@ -1115,6 +1115,9 @@ public final class MainShellController {
         } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
             tabPane.getSelectionModel().select(mainShellTabRun);
         }
+        if (mainRunTabController != null) {
+            mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+        }
         // #region agent log
         {
             Map<String, Object> d = new LinkedHashMap<>();

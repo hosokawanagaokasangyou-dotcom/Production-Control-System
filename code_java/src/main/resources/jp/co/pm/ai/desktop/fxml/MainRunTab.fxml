@@ -6,6 +6,7 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
@@ -22,6 +23,10 @@
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
+            <HBox fx:id="stageRunProgressBox" alignment="CENTER_LEFT" fillWidth="true" managed="false" spacing="12.0" styleClass="pm-stage-run-progress-box" visible="false">
+                <Label fx:id="stageRunProgressLabel" minWidth="140.0" styleClass="pm-stage-run-progress-text" text="" />
+                <ProgressBar fx:id="stageRunProgressBar" maxWidth="Infinity" prefHeight="10.0" styleClass="pm-stage-run-progress" HBox.hgrow="ALWAYS" />
+            </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>
                     <Insets bottom="0.0" left="12.0" right="0.0" top="12.0" />

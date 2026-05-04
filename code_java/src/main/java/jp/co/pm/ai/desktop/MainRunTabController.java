@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.animation.FadeTransition;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -25,6 +26,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -33,8 +35,10 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -95,6 +99,15 @@ public final class MainRunTabController {
     private ComboBox<String> stage2ResultBookFontCombo;
 
     @FXML
+    private HBox stageRunProgressBox;
+
+    @FXML
+    private Label stageRunProgressLabel;
+
+    @FXML
+    private ProgressBar stageRunProgressBar;
+
+    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -111,6 +124,8 @@ public final class MainRunTabController {
     private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressRunLogSessionPersistence = new AtomicBoolean(false);
+
+    private FadeTransition stageProgressLabelFade;
 
     private double pendingSessionLogScroll = Double.NaN;
 
@@ -566,6 +581,64 @@ public final class MainRunTabController {
 
     Label getStatusLabel() {
         return statusLabel;
+    }
+
+    /**
+     * 段階1／段階2 実行中は不定プログレスバーとラベルのフェードを表示し、重複実行を防ぐため実行ボタンを無効化する。
+     */
+    void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
+        if (stageRunProgressBox == null
+                || stageRunProgressLabel == null
+                || stageRunProgressBar == null) {
+            return;
+        }
+        boolean show = stage1Running || stage2Running;
+        stageRunProgressBox.setVisible(show);
+        stageRunProgressBox.setManaged(show);
+        if (stage1RunButton != null && stage2RunButton != null) {
+            stage1RunButton.setDisable(show);
+            stage2RunButton.setDisable(show);
+        }
+        if (show) {
+            stageRunProgressBar.getStyleClass().removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+            if (stage1Running) {
+                stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-1");
+                stageRunProgressLabel.setText("段階1 実行中…");
+            } else {
+                stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-2");
+                stageRunProgressLabel.setText("段階2 実行中…");
+            }
+            stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            startStageProgressLabelPulse();
+        } else {
+            stopStageProgressLabelPulse();
+            stageRunProgressBar.setProgress(0);
+            stageRunProgressLabel.setText("");
+            stageRunProgressBar.getStyleClass().removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+        }
+    }
+
+    private void startStageProgressLabelPulse() {
+        stopStageProgressLabelPulse();
+        if (stageRunProgressLabel == null) {
+            return;
+        }
+        stageProgressLabelFade = new FadeTransition(Duration.millis(750), stageRunProgressLabel);
+        stageProgressLabelFade.setFromValue(0.55);
+        stageProgressLabelFade.setToValue(1.0);
+        stageProgressLabelFade.setCycleCount(FadeTransition.INDEFINITE);
+        stageProgressLabelFade.setAutoReverse(true);
+        stageProgressLabelFade.play();
+    }
+
+    private void stopStageProgressLabelPulse() {
+        if (stageProgressLabelFade != null) {
+            stageProgressLabelFade.stop();
+            stageProgressLabelFade = null;
+        }
+        if (stageRunProgressLabel != null) {
+            stageRunProgressLabel.setOpacity(1.0);
+        }
     }
 
     /**
