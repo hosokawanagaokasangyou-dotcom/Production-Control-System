@@ -32146,6 +32146,12 @@ def _generate_plan_impl(
                 writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
             )
 
+            from planning_core.gantt_render_contract import (
+                make_gantt_render_contract,
+                render_gantt_sheet_from_contract,
+                write_gantt_contract_json,
+            )
+
             if not stage2_output_root and _publish_plan_xlsx:
                 logging.info(
                     "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
@@ -32161,15 +32167,32 @@ def _generate_plan_impl(
                     )
                 except Exception:
                     pass
-                gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
-                    writer,
-                    timeline_events,
-                    equipment_list,
-                    sorted_dates,
-                    attendance_data,
-                    data_extract_dt_str,
-                    base_now_dt,
+
+                _equipment_gantt_contract = make_gantt_render_contract(
+                    timeline_events=timeline_events,
+                    equipment_list=equipment_list,
+                    sorted_dates=sorted_dates,
+                    attendance_data=attendance_data,
+                    data_extract_dt_str=data_extract_dt_str,
+                    base_now_dt=base_now_dt,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=True,
+                    kind="equipment_gantt",
+                )
+                try:
+                    _eg_path, _eg_strat = write_gantt_contract_json(
+                        plan_xlsx_final, "equipment", _equipment_gantt_contract
+                    )
+                    if _eg_path:
+                        logging.info(
+                            "段階2: 設備ガント描画契約 JSON（再描画用）を '%s' に出力しました（%s）。",
+                            _eg_path,
+                            _eg_strat,
+                        )
+                except Exception as _e_egc:
+                    logging.warning("段階2: 設備ガント契約 JSON 出力をスキップ: %s", _e_egc)
+                gantt_tl_label_specs, gantt_tl_day_blocks = render_gantt_sheet_from_contract(
+                    writer, _equipment_gantt_contract
                 )
                 try:
                     from planning_core.excel_trace_task import (
@@ -32201,23 +32224,37 @@ def _generate_plan_impl(
                 logging.info(
                     "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
                 )
-                (
-                    gantt_detail_tl_label_specs,
-                    gantt_detail_tl_day_blocks,
-                ) = _write_results_equipment_gantt_sheet(
-                    writer,
-                    [],
-                    equipment_list,
-                    sorted_dates_detail,
-                    attendance_data,
-                    data_extract_dt_str_act_gantt,
-                    base_now_dt_act_gantt,
+
+                _actual_detail_gantt_contract = make_gantt_render_contract(
+                    timeline_events=[],
+                    equipment_list=equipment_list,
+                    sorted_dates=sorted_dates_detail,
+                    attendance_data=attendance_data,
+                    data_extract_dt_str=data_extract_dt_str_act_gantt,
+                    base_now_dt=base_now_dt_act_gantt,
                     actual_timeline_events=detail_timeline_events,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
                     plan_rows=False,
                     chart_title=chart_title_actual_detail,
                     sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                    kind="actual_detail_gantt",
                 )
+                try:
+                    _ad_path, _ad_strat = write_gantt_contract_json(
+                        plan_xlsx_final, "actual_detail", _actual_detail_gantt_contract
+                    )
+                    if _ad_path:
+                        logging.info(
+                            "段階2: 実績明細ガント描画契約 JSON（再描画用）を '%s' に出力しました（%s）。",
+                            _ad_path,
+                            _ad_strat,
+                        )
+                except Exception as _e_adgc:
+                    logging.warning("段階2: 実績明細ガント契約 JSON 出力をスキップ: %s", _e_adgc)
+                (
+                    gantt_detail_tl_label_specs,
+                    gantt_detail_tl_day_blocks,
+                ) = render_gantt_sheet_from_contract(writer, _actual_detail_gantt_contract)
 
             for sheet_name, ws_out in writer.sheets.items():
                 if sheet_name in (
