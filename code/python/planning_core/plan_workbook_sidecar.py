@@ -269,6 +269,10 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
             )
             return None
         out = result_task_sidecar_path(plan_xlsx)
+        # open(w) 前に親フォルダを必ず作成（xlsx 出力先と同階層でも、先に作られていないと Errno 2 になる）
+        _out_dir = os.path.dirname(out)
+        if _out_dir:
+            os.makedirs(_out_dir, exist_ok=True)
         try:
             if os.path.isfile(out):
                 os.remove(out)
