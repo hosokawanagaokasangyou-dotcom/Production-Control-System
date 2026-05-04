@@ -1091,6 +1091,12 @@ public final class MainShellController {
      * 段階2実行中は環境変数タブと段階1プレビュータブを無効化し、段階1の結果と食い違う操作を防ぐ。
      */
     private void applyRunTabGating() {
+        String script = activeRunStageScript;
+        boolean stage1Running = STAGE1.equals(script);
+        boolean stage2Running = STAGE2.equals(script);
+        if (mainRunTabController != null) {
+            mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+        }
         if (tabPane == null) {
             return;
         }
@@ -1098,9 +1104,6 @@ public final class MainShellController {
         if (tabs.isEmpty()) {
             return;
         }
-        String script = activeRunStageScript;
-        boolean stage1Running = STAGE1.equals(script);
-        boolean stage2Running = STAGE2.equals(script);
         for (Tab t : tabs) {
             boolean disable =
                     stage1Running
@@ -1114,9 +1117,6 @@ public final class MainShellController {
             tabPane.getSelectionModel().select(mainShellTabRun);
         } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
             tabPane.getSelectionModel().select(mainShellTabRun);
-        }
-        if (mainRunTabController != null) {
-            mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
         // #region agent log
         {
