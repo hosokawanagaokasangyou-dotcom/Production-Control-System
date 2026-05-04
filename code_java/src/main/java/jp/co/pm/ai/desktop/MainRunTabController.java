@@ -23,6 +23,8 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
@@ -33,6 +35,7 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
@@ -93,6 +96,18 @@ public final class MainRunTabController {
 
     @FXML
     private ComboBox<String> stage2ResultBookFontCombo;
+
+    @FXML
+    private HBox stageRunProgressBox;
+
+    @FXML
+    private Label stageRunProgressLabel;
+
+    @FXML
+    private ProgressBar stageRunProgressBar;
+
+    @FXML
+    private ProgressIndicator stageRunBusyIndicator;
 
     @FXML
     private Button copyAllLogButton;
@@ -566,6 +581,53 @@ public final class MainRunTabController {
 
     Label getStatusLabel() {
         return statusLabel;
+    }
+
+    /**
+     * 段階1/2 実行中の進捗表示（配台計画手動修正タブと同じ ProgressIndicator + ProgressBar 構成）。
+     */
+    void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
+        if (stageRunProgressBox == null) {
+            return;
+        }
+        boolean show = stage1Running || stage2Running;
+        if (stage1RunButton != null) {
+            stage1RunButton.setDisable(show);
+        }
+        if (stage2RunButton != null) {
+            stage2RunButton.setDisable(show);
+        }
+        if (show) {
+            stageRunProgressBox.setManaged(true);
+            stageRunProgressBox.setVisible(true);
+            if (stageRunProgressLabel != null) {
+                stageRunProgressLabel.setText(stage1Running ? "段階1 実行中…" : "段階2 実行中…");
+            }
+            if (stageRunBusyIndicator != null) {
+                stageRunBusyIndicator.setManaged(true);
+                stageRunBusyIndicator.setVisible(true);
+            }
+            if (stageRunProgressBar != null) {
+                stageRunProgressBar.setManaged(true);
+                stageRunProgressBar.setVisible(true);
+                stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            }
+        } else {
+            if (stageRunProgressLabel != null) {
+                stageRunProgressLabel.setText("");
+            }
+            if (stageRunBusyIndicator != null) {
+                stageRunBusyIndicator.setVisible(false);
+                stageRunBusyIndicator.setManaged(false);
+            }
+            if (stageRunProgressBar != null) {
+                stageRunProgressBar.setProgress(0);
+                stageRunProgressBar.setVisible(false);
+                stageRunProgressBar.setManaged(false);
+            }
+            stageRunProgressBox.setVisible(false);
+            stageRunProgressBox.setManaged(false);
+        }
     }
 
     /**

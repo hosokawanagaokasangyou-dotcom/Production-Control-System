@@ -9,8 +9,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.animation.PauseTransition;
@@ -195,6 +197,15 @@ public final class MainShellController {
 
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
 
+    private static final String PM_AI_DESKTOP_CSS =
+            Objects.requireNonNull(
+                            PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css"),
+                            "pm-ai-desktop.css")
+                    .toExternalForm();
+
+    /** Child windows (e.g. dispatch trial log) that mirror the toolbar {@link DesktopTheme}. */
+    private final List<Scene> themeTrackedSecondaryScenes = new CopyOnWriteArrayList<>();
+
     /** Set by {@link Stage1PreviewTabController}; runs after stage 1 exits 0. */
     private Runnable reloadAfterStage1Preview;
 
@@ -323,6 +334,7 @@ public final class MainShellController {
                         (obs, oldV, newV) -> {
                             if (newV != null) {
                                 newV.applyTo(scene);
+                                refreshThemeTrackedSecondaryScenes();
                             }
                             mainRunTabController.refreshLogThemeCells();
                         });
@@ -335,6 +347,34 @@ public final class MainShellController {
             return themeCombo.getValue();
         }
         return pendingTheme != null ? pendingTheme : DesktopTheme.LIGHT;
+    }
+
+    /**
+     * Loads {@code pm-ai-desktop.css} and the current theme overlay onto a secondary {@link Scene},
+     * and reapplies the palette when the user changes the theme until {@link #unregisterThemeTrackedScene}.
+     */
+    public void registerThemeTrackedScene(Scene scene) {
+        if (scene == null) {
+            return;
+        }
+        if (!scene.getStylesheets().contains(PM_AI_DESKTOP_CSS)) {
+            scene.getStylesheets().add(PM_AI_DESKTOP_CSS);
+        }
+        currentDesktopTheme().applyTo(scene);
+        if (!themeTrackedSecondaryScenes.contains(scene)) {
+            themeTrackedSecondaryScenes.add(scene);
+        }
+    }
+
+    public void unregisterThemeTrackedScene(Scene scene) {
+        themeTrackedSecondaryScenes.remove(scene);
+    }
+
+    private void refreshThemeTrackedSecondaryScenes() {
+        DesktopTheme t = currentDesktopTheme();
+        for (Scene s : themeTrackedSecondaryScenes) {
+            t.applyTo(s);
+        }
     }
 
     private boolean tabSupportsClearFilters(Tab t) {
@@ -1051,6 +1091,12 @@ public final class MainShellController {
      * 段階2実行中は環境変数タブと段階1プレビュータブを無効化し、段階1の結果と食い違う操作を防ぐ。
      */
     private void applyRunTabGating() {
+        String script = activeRunStageScript;
+        boolean stage1Running = STAGE1.equals(script);
+        boolean stage2Running = STAGE2.equals(script);
+        if (mainRunTabController != null) {
+            mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+        }
         if (tabPane == null) {
             return;
         }
@@ -1058,9 +1104,6 @@ public final class MainShellController {
         if (tabs.isEmpty()) {
             return;
         }
-        String script = activeRunStageScript;
-        boolean stage1Running = STAGE1.equals(script);
-        boolean stage2Running = STAGE2.equals(script);
         for (Tab t : tabs) {
             boolean disable =
                     stage1Running
