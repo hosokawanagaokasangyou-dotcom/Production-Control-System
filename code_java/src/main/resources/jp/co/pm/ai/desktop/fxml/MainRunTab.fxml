@@ -23,9 +23,9 @@
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
-            <HBox fx:id="stageRunProgressBox" alignment="CENTER_LEFT" fillWidth="true" managed="false" spacing="12.0" styleClass="pm-stage-run-progress-box" visible="false">
+            <HBox fx:id="stageRunProgressBox" alignment="CENTER_LEFT" managed="false" minHeight="40.0" spacing="12.0" styleClass="pm-stage-run-progress-box" visible="false">
                 <Label fx:id="stageRunProgressLabel" minWidth="140.0" styleClass="pm-stage-run-progress-text" text="" />
-                <ProgressBar fx:id="stageRunProgressBar" maxWidth="Infinity" prefHeight="10.0" styleClass="pm-stage-run-progress" HBox.hgrow="ALWAYS" />
+                <ProgressBar fx:id="stageRunProgressBar" maxWidth="Infinity" minWidth="220.0" prefHeight="16.0" styleClass="pm-stage-run-progress" HBox.hgrow="ALWAYS" />
             </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>

@@ -36,6 +36,7 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
@@ -245,6 +246,12 @@ public final class MainRunTabController {
                                     shell.scheduleDesktopSessionSave();
                                 }
                             });
+        }
+        if (stageRunProgressBar != null) {
+            HBox.setHgrow(stageRunProgressBar, Priority.ALWAYS);
+            stageRunProgressBar.setMinWidth(220);
+            stageRunProgressBar.setPrefHeight(16);
+            stageRunProgressBar.setMinHeight(12);
         }
     }
 
@@ -587,34 +594,62 @@ public final class MainRunTabController {
      * 段階1／段階2 実行中は不定プログレスバーとラベルのフェードを表示し、重複実行を防ぐため実行ボタンを無効化する。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        if (stageRunProgressBox == null
-                || stageRunProgressLabel == null
-                || stageRunProgressBar == null) {
-            return;
-        }
-        boolean show = stage1Running || stage2Running;
-        stageRunProgressBox.setVisible(show);
-        stageRunProgressBox.setManaged(show);
-        if (stage1RunButton != null && stage2RunButton != null) {
-            stage1RunButton.setDisable(show);
-            stage2RunButton.setDisable(show);
-        }
-        if (show) {
-            stageRunProgressBar.getStyleClass().removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
-            if (stage1Running) {
-                stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-1");
-                stageRunProgressLabel.setText("段階1 実行中…");
-            } else {
-                stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-2");
-                stageRunProgressLabel.setText("段階2 実行中…");
-            }
-            stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-            startStageProgressLabelPulse();
+        Runnable work =
+                () -> {
+                    if (stageRunProgressBox == null
+                            || stageRunProgressLabel == null
+                            || stageRunProgressBar == null) {
+                        return;
+                    }
+                    boolean show = stage1Running || stage2Running;
+                    stageRunProgressBox.setVisible(show);
+                    stageRunProgressBox.setManaged(show);
+                    if (stage1RunButton != null && stage2RunButton != null) {
+                        stage1RunButton.setDisable(show);
+                        stage2RunButton.setDisable(show);
+                    }
+                    if (show) {
+                        stageRunProgressBox
+                                .getStyleClass()
+                                .removeAll(
+                                        "pm-stage-run-progress-box-1",
+                                        "pm-stage-run-progress-box-2");
+                        stageRunProgressBar
+                                .getStyleClass()
+                                .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+                        if (stage1Running) {
+                            stageRunProgressBox.getStyleClass().add("pm-stage-run-progress-box-1");
+                            stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-1");
+                            stageRunProgressLabel.setText("段階1 実行中…");
+                        } else {
+                            stageRunProgressBox.getStyleClass().add("pm-stage-run-progress-box-2");
+                            stageRunProgressBar.getStyleClass().add("pm-stage-run-progress-2");
+                            stageRunProgressLabel.setText("段階2 実行中…");
+                        }
+                        stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+                        startStageProgressLabelPulse();
+                    } else {
+                        stopStageProgressLabelPulse();
+                        stageRunProgressBar.setProgress(0);
+                        stageRunProgressLabel.setText("");
+                        stageRunProgressBox
+                                .getStyleClass()
+                                .removeAll(
+                                        "pm-stage-run-progress-box-1",
+                                        "pm-stage-run-progress-box-2");
+                        stageRunProgressBar
+                                .getStyleClass()
+                                .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+                    }
+                    javafx.scene.Node n = stageRunProgressBox.getParent();
+                    if (n != null) {
+                        n.requestLayout();
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            work.run();
         } else {
-            stopStageProgressLabelPulse();
-            stageRunProgressBar.setProgress(0);
-            stageRunProgressLabel.setText("");
-            stageRunProgressBar.getStyleClass().removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+            Platform.runLater(work);
         }
     }
 
