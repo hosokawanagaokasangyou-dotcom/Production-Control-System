@@ -24053,6 +24053,25 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _interactive_trial_pair_dates_from_targets(
+    targets: dict | None,
+) -> dict[tuple[str, str], set[date]]:
+    """
+    結果_配台表 JSON 由来の targets に現れる (依頼NO, 機械名) ごとの配台日集合。
+    キーに含まれない行は暦日制限をかけない（従来どおり段階2に委ねる）。
+    """
+    out: dict[tuple[str, str], set[date]] = {}
+    if not targets:
+        return out
+    for (tid, mach, dd) in targets.keys():
+        k = (_interactive_norm_cell(tid), _interactive_norm_cell(mach))
+        if k not in out:
+            out[k] = set()
+        if isinstance(dd, date):
+            out[k].add(dd)
+    return out
+
+
 def _dataframe_from_interactive_dispatch_json_rows(
     json_rows: list,
     json_columns: list | None,
@@ -25605,6 +25624,7 @@ def _trial_order_flow_eligible_tasks(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     min_dispatch_effective: int | None = None,
     assign_probe_ctx: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
 ) -> list:
     # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
     # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE（既定 task_id＝当該依頼NO行、head＝接頭辞、global）。
@@ -25647,6 +25667,15 @@ def _trial_order_flow_eligible_tasks(
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
+        if (
+            _interactive_dispatch_trial_env_active()
+            and interactive_trial_pair_dates is not None
+        ):
+            tid_n = _interactive_norm_cell(str(task.get("task_id") or ""))
+            mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
+            _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
+            if _pd is not None and current_date not in _pd:
+                continue
         # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
         if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
             if task.get("roll_pipeline_ec"):
@@ -27013,12 +27042,22 @@ def _tasks_in_min_pending_dispatch_pool(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_trial_pair_dates: dict | None = None,
 ) -> list:
     """`_min_pending_dispatch_trial_order_for_date` と同一の安価フィルタを通靎したタスクのリスト。"""
     out: list = []
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
             continue
+        if (
+            _interactive_dispatch_trial_env_active()
+            and interactive_trial_pair_dates is not None
+        ):
+            tid_n = _interactive_norm_cell(str(t.get("task_id") or ""))
+            mach_n = _interactive_norm_cell(str(t.get("machine_name") or ""))
+            _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
+            if _pd is not None and current_date not in _pd:
+                continue
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
             continue
@@ -27102,6 +27141,9 @@ def _trial_order_first_schedule_pass(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_dispatch_targets: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
+    interactive_trial_meters_done: dict | None = None,
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並きる（1 パス分）。
@@ -27157,6 +27199,7 @@ def _trial_order_first_schedule_pass(
                 _gpo.get("abolish_all_scheduling_limits")
             ),
             dispatch_interval_mirror=dispatch_interval_mirror,
+            interactive_trial_pair_dates=interactive_trial_pair_dates,
         )
         _min_dispatch_eff = _effective_min_dispatch_trial_order_from_pool(
             _pool_min, current_date, daily_status, _assign_probe_ctx
@@ -27175,6 +27218,7 @@ def _trial_order_first_schedule_pass(
         dispatch_interval_mirror=dispatch_interval_mirror,
         min_dispatch_effective=_min_dispatch_eff,
         assign_probe_ctx=_assign_probe_ctx,
+        interactive_trial_pair_dates=interactive_trial_pair_dates,
     )
     if not eligible:
         return False
@@ -27288,6 +27332,31 @@ def _trial_order_first_schedule_pass(
         while float(task.get("remaining_units") or 0) > 1e-12:
             if max_rolls is not None and rolls_done >= max_rolls:
                 break
+            _iv_cap = (
+                _interactive_dispatch_trial_env_active()
+                and interactive_dispatch_targets is not None
+                and interactive_trial_meters_done is not None
+            )
+            _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
+            _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
+            _cap_key = (_tid_iv, _mach_iv, current_date)
+            if _iv_cap and _cap_key in interactive_dispatch_targets:
+                try:
+                    _cap_m = float(interactive_dispatch_targets[_cap_key])
+                    _done_m = float(interactive_trial_meters_done.get(_cap_key, 0.0))
+                except (TypeError, ValueError):
+                    _cap_m = 0.0
+                    _done_m = 0.0
+                if _done_m >= _cap_m - 1e-5:
+                    break
+                try:
+                    _um_lim = float(task.get("unit_m") or 0)
+                except (TypeError, ValueError):
+                    _um_lim = 0.0
+                if _um_lim > 1e-12:
+                    _rem_m = max(0.0, _cap_m - _done_m)
+                    if _rem_m + 1e-9 < _um_lim:
+                        break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -27405,6 +27474,19 @@ def _trial_order_first_schedule_pass(
             )
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
+            if (
+                _iv_cap
+                and interactive_dispatch_targets is not None
+                and interactive_trial_meters_done is not None
+                and _cap_key in interactive_dispatch_targets
+            ):
+                try:
+                    _um_iv_acc = float(task.get("unit_m") or 0)
+                except (TypeError, ValueError):
+                    _um_iv_acc = 0.0
+                interactive_trial_meters_done[_cap_key] = float(
+                    interactive_trial_meters_done.get(_cap_key, 0.0)
+                ) + float(done_units) * _um_iv_acc
             task["remaining_units"] = max(
                 0.0,
                 float(task.get("remaining_units") or 0) - float(done_units),
@@ -27596,6 +27678,9 @@ def _run_b2_inspection_rewind_pass(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_dispatch_targets: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
+    interactive_trial_meters_done: dict | None = None,
 ) -> bool:
     """
     §B-2 / §B-3: EC 坴を先に全日で進ゝた後」検査＝巻返し坴のみを日付先頭から再走査して配台れる。
@@ -27700,6 +27785,9 @@ def _run_b2_inspection_rewind_pass(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                interactive_dispatch_targets=interactive_dispatch_targets,
+                interactive_trial_pair_dates=interactive_trial_pair_dates,
+                interactive_trial_meters_done=interactive_trial_meters_done,
             )
             if not _made:
                 break
@@ -27736,6 +27824,42 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
         if str(t.get("task_id") or "").strip() == tid:
             return t
     return None
+
+
+def _interactive_trial_recompute_meters_done_from_timeline(
+    timeline_events: list,
+    task_queue: list,
+    targets: dict | None,
+) -> dict[tuple[str, str, date], float]:
+    """
+    インタラクティブ試行: timeline の加工イベントから (依頼NO, 機械名, 暦日) 別の換算mを再集計する。
+    納期シフト等で timeline からイベントが削除されたときに meters 追跡を整合させる。
+    """
+    acc: dict[tuple[str, str, date], float] = {}
+    if not targets:
+        return acc
+    want = set(targets.keys())
+    for ev in timeline_events:
+        if not _is_machining_timeline_event(ev):
+            continue
+        tid = _interactive_norm_cell(ev.get("task_id"))
+        tsk = _task_dict_for_timeline_event(ev, task_queue)
+        if tsk is None:
+            continue
+        mach_n = _interactive_norm_cell(tsk.get("machine_name"))
+        d = ev.get("date")
+        if not isinstance(d, date):
+            continue
+        k = (tid, mach_n, d)
+        if k not in want:
+            continue
+        try:
+            ud = float(ev.get("units_done") or 0)
+            um = float(tsk.get("unit_m") or 0)
+        except (TypeError, ValueError):
+            continue
+        acc[k] = acc.get(k, 0.0) + ud * um
+    return acc
 
 
 def _repair_timeline_daily_startup_snapped_to_first_machining(
@@ -29809,6 +29933,12 @@ def _generate_plan_impl(
     _due_shift_retry_count_by_request: dict[str, int] = {}
     _due_shift_exhausted_requests: set[str] = set()
     _due_shift_cap_warned_tids: set[str] = set()
+    _interactive_trial_pair_dates = None
+    _interactive_trial_meters_done: dict[tuple[str, str, date], float] = {}
+    if _interactive_dispatch_trial_env_active() and interactive_dispatch_targets:
+        _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
+            interactive_dispatch_targets
+        )
     _outer_retry_round = 0
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
@@ -29954,6 +30084,9 @@ def _generate_plan_impl(
                         _need_headcount_logged_orders,
                         team_combo_presets,
                         dispatch_interval_mirror=_dispatch_interval_mirror,
+                        interactive_dispatch_targets=interactive_dispatch_targets,
+                        interactive_trial_pair_dates=_interactive_trial_pair_dates,
+                        interactive_trial_meters_done=_interactive_trial_meters_done,
                     )
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     _mh_legacy_day = _machine_handoff_state_from_timeline(
@@ -30011,6 +30144,7 @@ def _generate_plan_impl(
                                 )
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
+                            interactive_trial_pair_dates=_interactive_trial_pair_dates,
                         )
                         _min_dispatch_eff_legacy = (
                             _effective_min_dispatch_trial_order_from_pool(
@@ -31159,6 +31293,18 @@ def _generate_plan_impl(
                                 _dispatch_interval_mirror.rebuild_from_timeline(
                                     timeline_events
                                 )
+                            if (
+                                _interactive_dispatch_trial_env_active()
+                                and interactive_dispatch_targets
+                            ):
+                                _interactive_trial_meters_done.clear()
+                                _interactive_trial_meters_done.update(
+                                    _interactive_trial_recompute_meters_done_from_timeline(
+                                        timeline_events,
+                                        task_queue,
+                                        interactive_dispatch_targets,
+                                    )
+                                )
                             for t in task_queue:
                                 if str(t.get("task_id", "") or "").strip() in shift_set:
                                     t["remaining_units"] = float(
@@ -31221,6 +31367,9 @@ def _generate_plan_impl(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=_dispatch_interval_mirror,
+                interactive_dispatch_targets=interactive_dispatch_targets,
+                interactive_trial_pair_dates=_interactive_trial_pair_dates,
+                interactive_trial_meters_done=_interactive_trial_meters_done,
             )
             if _rewind_made:
                 logging.info(
