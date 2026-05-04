@@ -28,9 +28,34 @@
 .spreadsheet-cell:filled:selected,
 .spreadsheet-cell:filled:focused:selected,
 .spreadsheet-cell:filled:focused:selected:hover {
-    -fx-background-color: -fx-selection-bar;
-    -fx-border-color: derive(-fx-accent, -8%);
-    -fx-border-width: 0.5px;
+    /* Slightly stronger than single-cell default so full-row selection reads clearly */
+    -fx-background-color: derive(-fx-selection-bar, -8%);
+    -fx-border-color: derive(-fx-accent, -12%);
+    -fx-border-width: 1px;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+/*
+ * Inline editor (ControlsFX CellView): spreadsheet.css sets a transparent TextField/TextArea
+ * background but not text fill, so the editor often stays default black ? unreadable on dark themes.
+ */
+CellView > .text-input.text-field {
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+CellView > .text-input.text-area {
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.spreadsheet-cell:filled:selected CellView > .text-input.text-field,
+.spreadsheet-cell:filled:focused:selected CellView > .text-input.text-field,
+.spreadsheet-cell:filled:focused:selected:hover CellView > .text-input.text-field {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.spreadsheet-cell:filled:selected CellView > .text-input.text-area,
+.spreadsheet-cell:filled:focused:selected CellView > .text-input.text-area,
+.spreadsheet-cell:filled:focused:selected:hover CellView > .text-input.text-area {
     -fx-text-fill: -fx-selection-bar-text;
 }
 
