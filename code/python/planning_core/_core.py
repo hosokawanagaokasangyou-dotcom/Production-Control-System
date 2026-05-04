@@ -23623,6 +23623,190 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
     return df, dict(targets)
 
 
+# 結果_タスク一覧履歴セル「・【MM/DD】：nR/1234m …」からメートル数を抽出（配台表の暦日分割フォールバック用）
+_RESULT_DISPATCH_HISTORY_SEG_M_RE = re.compile(
+    r"【\s*(\d{1,2})\s*/\s*(\d{1,2})\s*】\s*[:：]\s*\d+R/(\d+(?:\.\d+)?)\s*m",
+    re.IGNORECASE,
+)
+
+
+def _collect_result_task_history_column_text(tr) -> str:
+    """DataFrame 行から 履歴1… の非空文字列を連結する。"""
+    parts: list[str] = []
+    try:
+        for c in tr.index:
+            cs = str(c)
+            if not cs.startswith("履歴"):
+                continue
+            v = tr[c]
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                continue
+            s = str(v).strip()
+            if s:
+                parts.append(s)
+    except Exception:
+        return ""
+    return "\n".join(parts)
+
+
+def _parse_history_mmdd_meters_for_dispatch_expand(
+    text: str, anchor_year: int
+) -> list[tuple[date, float]]:
+    out: list[tuple[date, float]] = []
+    for m in _RESULT_DISPATCH_HISTORY_SEG_M_RE.finditer(text or ""):
+        try:
+            mo, d, meters = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            out.append((date(anchor_year, mo, d), float(meters)))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def _find_df_tasks_row_by_task_and_machine(df_tasks: "pd.DataFrame", tid: str, mach: str):
+    tid_n = _interactive_norm_cell(tid)
+    mach_n = _interactive_norm_cell(mach)
+    try:
+        for _, tr in df_tasks.iterrows():
+            t1 = _interactive_norm_cell(
+                str(_planning_df_cell_scalar(tr, TASK_COL_TASK_ID) or "").strip()
+            )
+            m1 = _interactive_norm_cell(
+                str(_planning_df_cell_scalar(tr, TASK_COL_MACHINE_NAME) or "").strip()
+            )
+            if t1 == tid_n and m1 == mach_n:
+                return tr
+    except Exception:
+        return None
+    return None
+
+
+def _interactive_expand_dispatch_table_from_result_task_history(
+    df_dispatch: pd.DataFrame,
+    df_tasks: "pd.DataFrame | None",
+) -> pd.DataFrame:
+    """
+    インタラクティブ配台試行: timeline／JSON 経由で結果_配台表が (依頼NO×機械名) につき 1 行に潰れたが、
+    結果_タスク一覧の履歴に複数暦日がある場合に暦日別へ展開する。
+    """
+    if (
+        not _interactive_dispatch_trial_env_active()
+        or df_dispatch is None
+        or getattr(df_dispatch, "empty", True)
+        or df_tasks is None
+        or getattr(df_tasks, "empty", True)
+    ):
+        return df_dispatch
+
+    groups: dict[tuple[str, str], list] = defaultdict(list)
+    for i in df_dispatch.index:
+        row = df_dispatch.loc[i]
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        if tid and mach:
+            groups[(tid, mach)].append(i)
+
+    drop_idx: list = []
+    extra_rows: list[dict] = []
+
+    for g, idxs in groups.items():
+        if len(idxs) != 1:
+            continue
+        ri = idxs[0]
+        r0 = df_dispatch.loc[ri]
+        try:
+            q0 = float(str(r0.get("当日配台数量")).replace(",", "").strip() or 0)
+        except (TypeError, ValueError):
+            q0 = 0.0
+        if q0 <= 1e-9:
+            continue
+        tid, mach = g
+        tr = _find_df_tasks_row_by_task_and_machine(df_tasks, tid, mach)
+        if tr is None:
+            continue
+        htext = _collect_result_task_history_column_text(tr)
+        dd0 = _interactive_parse_dispatch_date_cell(r0.get("配台日"))
+        anchor_y = int(dd0.year) if dd0 is not None else int(date.today().year)
+        segs = _parse_history_mmdd_meters_for_dispatch_expand(htext, anchor_y)
+        if len(segs) < 2:
+            continue
+        segs.sort(key=lambda x: x[0])
+        total_p = sum(m for _d, m in segs)
+        lim = max(1e-2, 1e-9 * max(abs(q0), abs(total_p), 1.0))
+        if abs(total_p - q0) > lim:
+            logging.info(
+                "インタラクティブ配台試行: 履歴のメートル合計=%.4f と当日配台数量=%.4f が一致せず "
+                "履歴による暦日分割をスキップ（依頼NO=%s 機械=%s）",
+                total_p,
+                q0,
+                tid,
+                mach,
+            )
+            continue
+        try:
+            base = {str(k): r0[k] for k in r0.index}
+        except Exception:
+            base = r0.to_dict()
+        for day_d, meters in segs:
+            rr = dict(base)
+            rr["配台日"] = _norm_ymd(day_d)
+            rr["当日配台数量"] = float(meters)
+            extra_rows.append(rr)
+        drop_idx.append(ri)
+
+    if not extra_rows:
+        return df_dispatch
+
+    kept = df_dispatch.drop(index=drop_idx)
+    add_df = pd.DataFrame(extra_rows)
+    out = pd.concat([kept, add_df], ignore_index=True)
+    cols = list(df_dispatch.columns)
+    for c in cols:
+        if c not in out.columns:
+            out[c] = ""
+    out = out.reindex(columns=cols)
+    logging.info(
+        "インタラクティブ配台試行: 結果_タスク一覧の履歴から結果_配台表を暦日分割しました"
+        "（生成 %s 行・置換 %s 行）。",
+        len(extra_rows),
+        len(drop_idx),
+    )
+    try:
+        _p = os.path.abspath(os.path.dirname(__file__))
+        _dbg_p = None
+        for _ in range(10):
+            _cand = os.path.join(_p, ".cursor", "debug-471ee7.log")
+            if os.path.isdir(os.path.join(_p, ".cursor")):
+                _dbg_p = _cand
+                break
+            _parent = os.path.dirname(_p)
+            if _parent == _p:
+                break
+            _p = _parent
+        if not _dbg_p:
+            raise OSError("no .cursor in parents")
+        with open(_dbg_p, "a", encoding="utf-8") as _df:
+            _df.write(
+                json.dumps(
+                    {
+                        "sessionId": "471ee7",
+                        "hypothesisId": "DT1",
+                        "location": "_interactive_expand_dispatch_table_from_result_task_history",
+                        "message": "expanded dispatch rows from task history",
+                        "data": {
+                            "replacedRows": len(drop_idx),
+                            "newRows": len(extra_rows),
+                        },
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    return out
+
+
 def _interactive_aggregate_dispatch_targets_from_df(
     df_dispatch: pd.DataFrame,
 ) -> dict[tuple[str, str, date], float]:
@@ -31988,6 +32172,10 @@ def _generate_plan_impl(
                 df_dispatch,
                 interactive_result_dispatch_json_rows,
                 interactive_result_dispatch_json_columns,
+            )
+            df_dispatch = _interactive_expand_dispatch_table_from_result_task_history(
+                df_dispatch,
+                df_tasks,
             )
             if interactive_dispatch_targets:
                 _interactive_validate_dispatch_quantities(
