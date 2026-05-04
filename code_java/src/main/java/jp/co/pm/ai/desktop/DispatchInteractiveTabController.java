@@ -10,22 +10,38 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
+import javafx.concurrent.Worker;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
+import javafx.scene.Scene;
+import javafx.scene.text.Font;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TablePosition;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
@@ -34,18 +50,29 @@ import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import org.controlsfx.control.spreadsheet.GridBase;
+import org.controlsfx.control.spreadsheet.GridChange;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
+import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
+import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -76,6 +103,8 @@ public final class DispatchInteractiveTabController {
             String pythonCalendarJsonError,
             String pythonCalendarDiagnosticsJson) {}
 
+    private record DispatchSaveOutcome(Path jsonPath, String xlsxStdoutLine) {}
+
     private static final String DND_PREFIX = "pm-dispatch-dnd|wide|";
     private static final String DND_V2_MARKER = "v2|";
     /** Drag payload for reordering wide-grid profile rows (leading columns only). */
@@ -83,6 +112,21 @@ public final class DispatchInteractiveTabController {
 
     /** One spreadsheet column per calendar day (wide grid date axis). */
     private static final int DAY_SLOT_COLUMNS = 1;
+
+    /**
+     * Width for date columns where every data cell is calendar-blocked (gray); keeps holiday bands from wasting
+     * horizontal space ({@code SpreadsheetView} uses pixels; value is converted from typographic points).
+     */
+    private static final double BLOCKED_DATE_COLUMN_PREF_PT = 5.0;
+
+    /**
+     * Minimum width for normal date columns so {@code YYYY-MM-DD} plus ControlsFX filter header stays readable
+     * (not truncated to "2026-...").
+     */
+    private static final double MIN_DATE_COLUMN_WIDTH_PX = 112.0;
+
+    /** Fully-blocked (holiday) date columns: stay narrow but wide enough for a short header glyph. */
+    private static final double MIN_BLOCKED_DATE_COLUMN_WIDTH_PX = 40.0;
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
@@ -92,6 +136,36 @@ public final class DispatchInteractiveTabController {
                     "依頼NO",
                     "換算数量",
                     "計画合計");
+
+    private record WideGridBundle(
+            GridBase grid,
+            List<Map<String, String>> profiles,
+            List<WideRow> rowItems,
+            boolean[] blockedCols,
+            int staticCols,
+            int dayCount) {}
+
+    private record ByDayGridBundle(GridBase grid, boolean[] blockedCols, int staticCols, int dayCount) {}
+
+    private record FullGridRebuild(List<LocalDate> axis, WideGridBundle wide, ByDayGridBundle byDay) {}
+
+    /** Invalidates in-flight async grid rebuilds (e.g. staff toggle) when a synchronous rebuild runs. */
+    private volatile int gridRebuildGeneration;
+
+    /**
+     * In-memory {@link #doc} differs from last successful「保存」to disk. Dispatch trial reads JSON from disk, so the
+     * button stays disabled until save (row order, cell edits, DnD moves, etc.).
+     */
+    private boolean dispatchDocDirtySinceSave;
+
+    /** True while load/rebuild progress UI disables the toolbar ({@link #setReloadInteractionDisabled}). */
+    private boolean reloadInteractionDisabled;
+
+    /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
+    private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
+
+    @FXML
+    private ProgressIndicator busyIndicator;
 
     @FXML
     private Button loadButton;
@@ -150,13 +224,19 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private void initialize() {
-        StackPane.setAlignment(wideSpreadsheet, Pos.CENTER_LEFT);
+        StackPane.setAlignment(wideSpreadsheet, Pos.TOP_LEFT);
         wideSpreadsheetHost.getChildren().setAll(wideSpreadsheet);
         VBox.setVgrow(wideSpreadsheetHost, javafx.scene.layout.Priority.ALWAYS);
+        wideSpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        wideSpreadsheet.prefWidthProperty().bind(wideSpreadsheetHost.widthProperty());
+        wideSpreadsheet.prefHeightProperty().bind(wideSpreadsheetHost.heightProperty());
 
-        StackPane.setAlignment(byDaySpreadsheet, Pos.CENTER_LEFT);
+        StackPane.setAlignment(byDaySpreadsheet, Pos.TOP_LEFT);
         byDaySpreadsheetHost.getChildren().setAll(byDaySpreadsheet);
         VBox.setVgrow(byDaySpreadsheetHost, javafx.scene.layout.Priority.ALWAYS);
+        byDaySpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        byDaySpreadsheet.prefWidthProperty().bind(byDaySpreadsheetHost.widthProperty());
+        byDaySpreadsheet.prefHeightProperty().bind(byDaySpreadsheetHost.heightProperty());
 
         SpreadsheetThemeBridge.install(wideSpreadsheet);
         SpreadsheetThemeBridge.install(byDaySpreadsheet);
@@ -170,7 +250,38 @@ public final class DispatchInteractiveTabController {
                 .selectedProperty()
                 .addListener(
                         (obs, o, n) -> {
-                            rebuildGrids();
+                            final int myGen = ++gridRebuildGeneration;
+                            statusLabel.setText("人員チェック反映中...");
+                            showReloadProgress();
+                            Task<FullGridRebuild> task =
+                                    new Task<>() {
+                                        @Override
+                                        protected FullGridRebuild call() {
+                                            return buildFullGridRebuild(Boolean.TRUE.equals(n));
+                                        }
+                                    };
+                            task.setOnSucceeded(
+                                    ev -> {
+                                        if (myGen != gridRebuildGeneration) {
+                                            hideReloadProgress();
+                                            return;
+                                        }
+                                        applyFullGridRebuild(task.getValue());
+                                        hideReloadProgress();
+                                        statusLabel.setText(doc.rows().size() + " 行");
+                                    });
+                            task.setOnFailed(
+                                    ev -> {
+                                        Throwable ex = task.getException();
+                                        if (shell != null && ex != null) {
+                                            shell.appendLog(
+                                                    "[dispatch-editor] staff-check rebuild: "
+                                                            + ex.getMessage());
+                                        }
+                                        hideReloadProgress();
+                                        statusLabel.setText("反映エラー");
+                                    });
+                            new Thread(task, "dispatch-editor-staff-grid").start();
                         });
 
         installWideDnDHandlers();
@@ -192,23 +303,91 @@ public final class DispatchInteractiveTabController {
         if (shell == null) {
             return;
         }
-        try {
-            Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-            ResultDispatchJsonIo.write(jsonPath, doc);
-            Path pyExe = resolvePythonExe();
-            Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-            String xlsxOut = ResultDispatchPythonExport.exportXlsxNearJson(jsonPath, pyExe, pyDir);
-            statusLabel.setText("保存しました");
-            shell.appendLog("[dispatch-editor] saved json: " + jsonPath);
-            if (xlsxOut != null && !xlsxOut.isEmpty()) {
-                shell.appendLog("[dispatch-editor] xlsx: " + xlsxOut);
-            } else {
-                shell.appendLog("[dispatch-editor] xlsx export skipped or failed (Python)");
-            }
-        } catch (Exception e) {
-            statusLabel.setText("保存エラー");
-            shell.appendLog("[dispatch-editor] save failed: " + e.getMessage());
+        if (reloadInteractionDisabled) {
+            return;
         }
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        ResultDispatchDocument toWrite = doc.copy();
+        Path pyExe = resolvePythonExe();
+        Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
+
+        statusLabel.setText("保存中…");
+        showReloadProgress();
+
+        Task<DispatchSaveOutcome> task =
+                new Task<>() {
+                    @Override
+                    protected DispatchSaveOutcome call() throws Exception {
+                        ResultDispatchJsonIo.write(jsonPath, toWrite);
+                        String xlsxOut =
+                                ResultDispatchPythonExport.exportXlsxNearJson(jsonPath, pyExe, pyDir);
+                        return new DispatchSaveOutcome(jsonPath, xlsxOut);
+                    }
+                };
+        task.setOnSucceeded(
+                e -> {
+                    try {
+                        DispatchSaveOutcome r = task.getValue();
+                        clearDispatchDocDirty();
+                        statusLabel.setText("保存しました");
+                        shell.appendLog("[dispatch-editor] saved json: " + r.jsonPath());
+                        if (r.xlsxStdoutLine() != null && !r.xlsxStdoutLine().isEmpty()) {
+                            shell.appendLog("[dispatch-editor] xlsx: " + r.xlsxStdoutLine());
+                        } else {
+                            shell.appendLog("[dispatch-editor] xlsx export skipped or failed (Python)");
+                        }
+                        showDispatchSaveFinishedDialog(r.jsonPath(), r.xlsxStdoutLine());
+                    } finally {
+                        hideReloadProgress();
+                    }
+                });
+        task.setOnFailed(
+                e -> {
+                    try {
+                        statusLabel.setText("保存エラー");
+                        Throwable ex = task.getException();
+                        String detail = ex != null ? ex.getMessage() : "";
+                        shell.appendLog(
+                                "[dispatch-editor] save failed: "
+                                        + (detail != null && !detail.isBlank() ? detail : "(不明)"));
+                        Alert err = new Alert(AlertType.ERROR);
+                        err.setTitle("保存エラー");
+                        err.setHeaderText("保存に失敗しました");
+                        err.setContentText(
+                                detail != null && !detail.isBlank()
+                                        ? detail
+                                        : (ex != null ? ex.getClass().getSimpleName() : "(不明)"));
+                        if (shell.getPrimaryStage() != null) {
+                            err.initOwner(shell.getPrimaryStage());
+                        }
+                        err.showAndWait();
+                    } finally {
+                        hideReloadProgress();
+                    }
+                });
+        new Thread(task, "dispatch-editor-save").start();
+    }
+
+    /** 保存ボタン後: JSON / xlsx の結果をダイアログで通知する。 */
+    private void showDispatchSaveFinishedDialog(Path jsonPath, String xlsxStdoutLine) {
+        boolean xlsxOk = xlsxStdoutLine != null && !xlsxStdoutLine.isBlank();
+        Alert alert = new Alert(xlsxOk ? AlertType.INFORMATION : AlertType.WARNING);
+        alert.setTitle("保存");
+        alert.setHeaderText(xlsxOk ? "保存が完了しました" : "JSON は保存しました（Excel に注意）");
+        StringBuilder text = new StringBuilder();
+        text.append("JSON を保存しました。\n").append(jsonPath);
+        if (xlsxOk) {
+            text.append("\n\n結果配台表の Excel (xlsx) を出力しました。\n").append(xlsxStdoutLine.trim());
+        } else {
+            text.append(
+                    "\n\nExcel (xlsx) は出力されませんでした（スクリプト未配置・タイムアウト・終了コード異常など）。"
+                            + " 実行・ログのメッセージも確認してください。");
+        }
+        alert.setContentText(text.toString());
+        if (shell != null && shell.getPrimaryStage() != null) {
+            alert.initOwner(shell.getPrimaryStage());
+        }
+        alert.showAndWait();
     }
 
     @FXML
@@ -282,38 +461,298 @@ public final class DispatchInteractiveTabController {
             return;
         }
         statusLabel.setText("配台試行中...");
+        showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+
+        Stage owner = shell.getPrimaryStage();
+        Stage logStage = new Stage();
+        logStage.initOwner(owner);
+        logStage.initModality(Modality.APPLICATION_MODAL);
+        logStage.setTitle("配台試行ログ");
+        logStage.setMinWidth(560);
+        logStage.setMinHeight(360);
+
+        DispatchTrialLogUiSnapshot savedUi = DispatchTrialLogUiStore.load();
+        Rectangle2D visual = Screen.getPrimary().getVisualBounds();
+        double sceneW = savedUi.width() > 0 ? savedUi.width() : 720;
+        double sceneH = savedUi.height() > 0 ? savedUi.height() : 480;
+        sceneW = Math.max(560, Math.min(sceneW, visual.getWidth()));
+        sceneH = Math.max(360, Math.min(sceneH, visual.getHeight()));
+
+        AtomicBoolean finished = new AtomicBoolean(false);
+        AtomicBoolean modalReleased = new AtomicBoolean(false);
+        AtomicBoolean trialLogWindowReady = new AtomicBoolean(false);
+
+        Button closeBtn = new Button("閉じる");
+        closeBtn.setDisable(true);
+        closeBtn.setOnAction(ev -> logStage.close());
+
+        Runnable releaseTrialModal =
+                () -> {
+                    if (!modalReleased.compareAndSet(false, true)) {
+                        return;
+                    }
+                    finished.set(true);
+                    closeBtn.setDisable(false);
+                    closeBtn.requestFocus();
+                    hideReloadProgress();
+                };
+
+        ObservableList<String> logLines = FXCollections.observableArrayList();
+        logLines.add("[配台試行] 処理を開始しました。");
+
+        ListView<String> logList = new ListView<>(logLines);
+        logList.setEditable(false);
+
+        ObservableList<String> fontFamilies = FXCollections.observableArrayList(Font.getFamilies());
+        ComboBox<String> fontFamilyCombo = new ComboBox<>(fontFamilies);
+        fontFamilyCombo.setPrefWidth(240);
+        fontFamilyCombo.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(fontFamilyCombo, Priority.ALWAYS);
+        String defaultLogFontFamily =
+                fontFamilies.stream()
+                        .filter(f -> "Consolas".equalsIgnoreCase(f))
+                        .findFirst()
+                        .orElseGet(
+                                () ->
+                                        fontFamilies.stream()
+                                                .filter(
+                                                        f ->
+                                                                f.contains("ゴシック")
+                                                                        || f.toLowerCase()
+                                                                                .contains("gothic"))
+                                                .findFirst()
+                                                .orElse(
+                                                        fontFamilies.isEmpty()
+                                                                ? Font.getDefault().getFamily()
+                                                                : fontFamilies.get(0)));
+        String savedFamily = savedUi.fontFamily();
+        if (savedFamily != null && !savedFamily.isBlank()) {
+            if (!fontFamilies.contains(savedFamily)) {
+                fontFamilies.add(0, savedFamily);
+            }
+            fontFamilyCombo.setValue(savedFamily);
+        } else {
+            fontFamilyCombo.setValue(defaultLogFontFamily);
+        }
+
+        double savedSizePt = savedUi.fontSize();
+        double initialSpinner =
+                (Double.isFinite(savedSizePt) && savedSizePt >= 6.0 && savedSizePt <= 48.0)
+                        ? savedSizePt
+                        : 12.0;
+        Spinner<Double> fontSizeSpinner =
+                new Spinner<>(
+                        new SpinnerValueFactory.DoubleSpinnerValueFactory(6.0, 48.0, initialSpinner, 1.0));
+        fontSizeSpinner.setEditable(true);
+        fontSizeSpinner.setPrefWidth(96);
+
+        ObjectProperty<Font> logFontProp = new SimpleObjectProperty<>(Font.getDefault());
+
+        Runnable syncLogFont =
+                () -> {
+                    String fam = fontFamilyCombo.getValue();
+                    if (fam == null || fam.isBlank()) {
+                        fam = Font.getDefault().getFamily();
+                    }
+                    Double sz = fontSizeSpinner.getValue();
+                    if (sz == null || sz < 4.0) {
+                        sz = 12.0;
+                    }
+                    logFontProp.set(Font.font(fam, sz));
+                };
+        Runnable saveTrialLogUiSnapshot =
+                () -> {
+                    double w = logStage.getWidth();
+                    double h = logStage.getHeight();
+                    if (!Double.isFinite(w) || w < 1.0) {
+                        w = 720;
+                    }
+                    if (!Double.isFinite(h) || h < 1.0) {
+                        h = 480;
+                    }
+                    String fam = fontFamilyCombo.getValue();
+                    if (fam == null) {
+                        fam = "";
+                    }
+                    Double szObj = fontSizeSpinner.getValue();
+                    double sz = (szObj != null && Double.isFinite(szObj)) ? szObj : 12.0;
+                    DispatchTrialLogUiStore.save(new DispatchTrialLogUiSnapshot(w, h, fam, sz));
+                };
+        Runnable persistDispatchTrialLogUi =
+                () -> {
+                    if (!trialLogWindowReady.get()) {
+                        return;
+                    }
+                    saveTrialLogUiSnapshot.run();
+                };
+        fontFamilyCombo
+                .valueProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            syncLogFont.run();
+                            persistDispatchTrialLogUi.run();
+                        });
+        fontSizeSpinner
+                .valueProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            syncLogFont.run();
+                            persistDispatchTrialLogUi.run();
+                        });
+        syncLogFont.run();
+
+        logList.setCellFactory(
+                lv ->
+                        new ListCell<>() {
+                            private final Label lineLabel = new Label();
+
+                            {
+                                lineLabel.setWrapText(true);
+                                lineLabel.fontProperty().bind(logFontProp);
+                                lineLabel
+                                        .prefWidthProperty()
+                                        .bind(logList.widthProperty().subtract(40));
+                            }
+
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setGraphic(null);
+                                    setText(null);
+                                } else {
+                                    lineLabel.setText(item);
+                                    setGraphic(lineLabel);
+                                }
+                            }
+                        });
+
+        logStage.setOnCloseRequest(
+                ev -> {
+                    if (!finished.get()) {
+                        ev.consume();
+                    }
+                });
+
+        Label fontCap = new Label("フォント");
+        Label sizeCap = new Label("サイズ");
+        HBox toolBar = new HBox(8, fontCap, fontFamilyCombo, sizeCap, fontSizeSpinner);
+        toolBar.setPadding(new Insets(8, 8, 0, 8));
+        toolBar.setAlignment(Pos.CENTER_LEFT);
+
+        BorderPane root = new BorderPane();
+        root.setTop(toolBar);
+        root.setCenter(logList);
+        HBox bottom = new HBox(8);
+        bottom.setPadding(new Insets(8));
+        bottom.setAlignment(Pos.CENTER_RIGHT);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        bottom.getChildren().addAll(spacer, closeBtn);
+        root.setBottom(bottom);
+
+        Scene scene = new Scene(root, sceneW, sceneH);
+        logStage.setScene(scene);
+        logStage.setOnShown(ev -> trialLogWindowReady.set(true));
+        logStage.setOnHidden(ev -> saveTrialLogUiSnapshot.run());
+        logStage.show();
+
+        final ResultDispatchDocument trialInputSnapshot = doc.copy();
+
         Task<String> task =
                 new Task<>() {
                     @Override
                     protected String call() throws Exception {
                         Path pyExe = resolvePythonExe();
                         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-                        return ResultDispatchTrialPython.runTrial(jsonPath, pyExe, pyDir);
+                        Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
+                        return ResultDispatchTrialPython.runTrial(
+                                jsonPath,
+                                pyExe,
+                                pyDir,
+                                pyEnv,
+                                line ->
+                                        Platform.runLater(
+                                                () -> {
+                                                    logLines.add(line);
+                                                    int last = logLines.size() - 1;
+                                                    logList.scrollTo(last);
+                                                }));
                     }
                 };
+        task.stateProperty()
+                .addListener(
+                        (obs, oldState, newState) -> {
+                            if (newState == Worker.State.FAILED
+                                    || newState == Worker.State.SUCCEEDED
+                                    || newState == Worker.State.CANCELLED) {
+                                Platform.runLater(releaseTrialModal);
+                            }
+                        });
         task.setOnSucceeded(
                 e -> {
-                    String shortagesPath = task.getValue();
-                    statusLabel.setText("配台試行完了");
-                    shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
-                    Alert a = new Alert(Alert.AlertType.INFORMATION);
-                    a.initOwner(shell.getPrimaryStage());
-                    a.setTitle("配台試行");
-                    a.setHeaderText(null);
-                    a.setContentText(
-                            "結果を更新しました。\n"
-                                    + shortagesPath);
-                    a.show();
-                    reloadFromDiskQuiet();
+                    try {
+                        String shortagesPath = task.getValue();
+                        statusLabel.setText("配台試行完了");
+                        shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
+                        logLines.add("");
+                        logLines.add("[配台試行] 正常終了しました。");
+                        logLines.add("不足情報JSON: " + shortagesPath);
+                        logList.scrollTo(logLines.size() - 1);
+                        reloadFromDiskQuiet(
+                                () -> {
+                                    DispatchTrialConsistency.CheckResult cr =
+                                            DispatchTrialConsistency.compareDocuments(
+                                                    trialInputSnapshot, doc);
+                                    if (cr.consistent()) {
+                                        logLines.add("");
+                                        logLines.add(
+                                                "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
+                                                        + "依頼NO×機械×配台日の当日配台数量および配台試行順番（工程別最小値）の観点で一致しました。");
+                                        shell.appendLog(
+                                                "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
+                                    } else {
+                                        logLines.add("");
+                                        logLines.add(
+                                                "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
+                                        for (String dl : cr.detailLines()) {
+                                            logLines.add(dl);
+                                        }
+                                        Alert warn = new Alert(AlertType.WARNING);
+                                        warn.setTitle("配台試行: 整合性確認");
+                                        warn.setHeaderText(
+                                                "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
+                                        warn.setContentText(String.join("\n", cr.detailLines()));
+                                        warn.show();
+                                        shell.appendLog(
+                                                "[dispatch-editor] trial: 整合性に差異あり（"
+                                                        + cr.detailLines().size()
+                                                        + " 件）— ログ・ダイアログ参照");
+                                    }
+                                    int last = logLines.size() - 1;
+                                    if (last >= 0) {
+                                        logList.scrollTo(last);
+                                    }
+                                });
+                    } finally {
+                        releaseTrialModal.run();
+                    }
                 });
         task.setOnFailed(
                 e -> {
-                    Throwable ex = task.getException();
-                    statusLabel.setText("配台試行エラー");
-                    shell.appendLog(
-                            "[dispatch-editor] trial failed: "
-                                    + (ex != null ? ex.getMessage() : ""));
+                    try {
+                        Throwable ex = task.getException();
+                        statusLabel.setText("配台試行エラー");
+                        String msg = ex != null ? ex.getMessage() : "(不明)";
+                        shell.appendLog("[dispatch-editor] trial failed: " + msg);
+                        logLines.add("");
+                        logLines.add("[配台試行] エラーで終了しました。");
+                        logLines.add(msg);
+                        logList.scrollTo(logLines.size() - 1);
+                    } finally {
+                        releaseTrialModal.run();
+                    }
                 });
         new Thread(task, "dispatch-trial").start();
     }
@@ -341,6 +780,14 @@ public final class DispatchInteractiveTabController {
     }
 
     private void reloadFromDiskQuiet() {
+        reloadFromDiskQuiet(null);
+    }
+
+    /**
+     * Reloads JSON from disk asynchronously; runs {@code afterSuccessOnFxThread} on the FX thread after grids are
+     * rebuilt (only when load succeeds).
+     */
+    private void reloadFromDiskQuiet(Runnable afterSuccessOnFxThread) {
         if (shell == null) {
             return;
         }
@@ -350,6 +797,7 @@ public final class DispatchInteractiveTabController {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
             rebuildGrids();
+            clearDispatchDocDirty();
             return;
         }
         showReloadProgress();
@@ -405,7 +853,11 @@ public final class DispatchInteractiveTabController {
                             b.pythonCalendarJsonError(),
                             b.pythonCalendarDiagnosticsJson());
                     rebuildGrids();
+                    clearDispatchDocDirty();
                     hideReloadProgress();
+                    if (afterSuccessOnFxThread != null) {
+                        afterSuccessOnFxThread.run();
+                    }
                 });
         task.setOnFailed(
                 ev -> {
@@ -417,6 +869,7 @@ public final class DispatchInteractiveTabController {
                             "[dispatch-editor] load failed: "
                                     + (ex != null ? ex.getMessage() : ""));
                     rebuildGrids();
+                    clearDispatchDocDirty();
                     hideReloadProgress();
                 });
         new Thread(task, "dispatch-editor-reload").start();
@@ -496,6 +949,10 @@ public final class DispatchInteractiveTabController {
             reloadProgressBar.setVisible(true);
             reloadProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
         }
+        if (busyIndicator != null) {
+            busyIndicator.setManaged(true);
+            busyIndicator.setVisible(true);
+        }
         setReloadInteractionDisabled(true);
     }
 
@@ -505,10 +962,15 @@ public final class DispatchInteractiveTabController {
             reloadProgressBar.setVisible(false);
             reloadProgressBar.setManaged(false);
         }
+        if (busyIndicator != null) {
+            busyIndicator.setVisible(false);
+            busyIndicator.setManaged(false);
+        }
         setReloadInteractionDisabled(false);
     }
 
     private void setReloadInteractionDisabled(boolean disabled) {
+        reloadInteractionDisabled = disabled;
         if (loadButton != null) {
             loadButton.setDisable(disabled);
         }
@@ -518,9 +980,7 @@ public final class DispatchInteractiveTabController {
         if (reloadCalendarButton != null) {
             reloadCalendarButton.setDisable(disabled);
         }
-        if (dispatchTrialButton != null) {
-            dispatchTrialButton.setDisable(disabled);
-        }
+        applyDispatchTrialButtonEnabledState();
         if (wideRowUpButton != null) {
             wideRowUpButton.setDisable(disabled);
         }
@@ -530,6 +990,69 @@ public final class DispatchInteractiveTabController {
         if (staffCheckToggle != null) {
             staffCheckToggle.setDisable(disabled);
         }
+    }
+
+    private void markDispatchDocDirty() {
+        dispatchDocDirtySinceSave = true;
+        applyDispatchTrialButtonEnabledState();
+    }
+
+    private void clearDispatchDocDirty() {
+        dispatchDocDirtySinceSave = false;
+        applyDispatchTrialButtonEnabledState();
+    }
+
+    /** Dispatch trial reads JSON from disk; disable until「保存」while the editor has unsaved changes. */
+    private void applyDispatchTrialButtonEnabledState() {
+        if (dispatchTrialButton == null) {
+            return;
+        }
+        boolean block = reloadInteractionDisabled || dispatchDocDirtySinceSave;
+        dispatchTrialButton.setDisable(block);
+        if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
+            dispatchTrialButton.setTooltip(
+                    new Tooltip("表の変更を配台試行に反映するには、先に「保存 (JSON+xlsx)」を押してください。"));
+        } else {
+            dispatchTrialButton.setTooltip(null);
+        }
+    }
+
+    /**
+     * Wide-grid static columns (editable) push into {@link #doc}; column 0 (試行順) is not edited here (reordered via
+     * DnD / buttons).
+     */
+    private void onWideGridChange(GridChange ev) {
+        if (suppressDispatchGridDirty.get()) {
+            return;
+        }
+        int r = ev.getRow();
+        int c = ev.getColumn();
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        if (r < firstData) {
+            return;
+        }
+        int staticCols = WIDE_STATIC_HEADERS.size();
+        if (c <= 0 || c >= staticCols) {
+            return;
+        }
+        int profileIdx = r - firstData;
+        if (profileIdx < 0 || profileIdx >= wideProfiles.size()) {
+            return;
+        }
+        Map<String, String> prof = wideProfiles.get(profileIdx);
+        Map<String, String> oldProf = new LinkedHashMap<>(prof);
+        String headerKey = WIDE_STATIC_HEADERS.get(c);
+        Object nv = ev.getNewValue();
+        String s = nv != null ? Objects.toString(nv, "") : "";
+        prof.put(headerKey, s);
+        List<String> cols = doc.columns();
+        for (Map<String, String> row : doc.rows()) {
+            if (ResultDispatchPivot.matchesTaskProfileExceptTrialOrder(cols, oldProf, row)) {
+                row.put(headerKey, s);
+            }
+        }
+        ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
+        markDispatchDocDirty();
     }
 
     private Path resolvePythonExeForShell(MainShellController shellRef) {
@@ -548,43 +1071,50 @@ public final class DispatchInteractiveTabController {
     }
 
     private void rebuildGrids() {
-        ensureDateAxis();
-        rebuildWide();
-        rebuildByDay();
+        gridRebuildGeneration++;
+        applyFullGridRebuild(buildFullGridRebuild(staffCheckToggle.isSelected()));
     }
 
-    private void ensureDateAxis() {
+    private List<LocalDate> computeDateAxisList() {
         List<LocalDate> distinct = ResultDispatchPivot.distinctDates(doc.rows());
         if (distinct.isEmpty()) {
-            dateAxis = new ArrayList<>();
+            List<LocalDate> ax = new ArrayList<>();
             LocalDate t = LocalDate.now();
             for (int i = 0; i < 14; i++) {
-                dateAxis.add(t.plusDays(i));
+                ax.add(t.plusDays(i));
             }
-        } else {
-            dateAxis = ResultDispatchPivot.dateRangeInclusive(distinct);
+            return ax;
         }
+        List<LocalDate> range = ResultDispatchPivot.dateRangeInclusive(distinct);
+        return range;
     }
 
-    private void rebuildWide() {
-        wideProfiles.clear();
-        wideRowItems.clear();
+    private FullGridRebuild buildFullGridRebuild(boolean staffHighlight) {
+        List<LocalDate> axis = computeDateAxisList();
+        WideGridBundle wide = buildWideGridModel(axis, staffHighlight);
+        ByDayGridBundle byDay = buildByDayGridModel(axis, staffHighlight);
+        return new FullGridRebuild(axis, wide, byDay);
+    }
+
+    private WideGridBundle buildWideGridModel(List<LocalDate> axis, boolean staffHighlight) {
+        List<Map<String, String>> profiles = new ArrayList<>();
+        List<WideRow> rowItems = new ArrayList<>();
         List<String> cols = doc.columns();
-        wideProfiles.addAll(ResultDispatchPivot.distinctTaskProfiles(cols, doc.rows()));
-        wideProfiles.sort(
+        profiles.addAll(ResultDispatchPivot.distinctTaskProfiles(cols, doc.rows()));
+        profiles.sort(
                 Comparator.comparing(DispatchInteractiveTabController::parseTrialOrderKey)
                         .thenComparing(p -> ResultDispatchNormalizer.staticGroupKey(cols, p)));
-        assignSequentialTrialOrders();
+        assignSequentialTrialOrdersForProfiles(profiles);
 
         int staticCols = WIDE_STATIC_HEADERS.size();
-        int dayCount = dateAxis.size();
+        int dayCount = axis.size();
         int slotCols = dayCount * DAY_SLOT_COLUMNS;
         int totalCols = staticCols + slotCols;
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-        int gridRowsTotal = firstData + wideProfiles.size();
+        int gridRowsTotal = firstData + profiles.size();
         GridBase grid = new GridBase(gridRowsTotal, totalCols);
         grid.getColumnHeaders().clear();
-        grid.getColumnHeaders().addAll(buildWideColumnLabels());
+        grid.getColumnHeaders().addAll(buildWideColumnLabelsForAxis(axis));
 
         List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(gridRowsTotal);
 
@@ -598,17 +1128,17 @@ public final class DispatchInteractiveTabController {
         }
         gridRows.add(filterRow);
 
-        for (int pr = 0; pr < wideProfiles.size(); pr++) {
-            Map<String, String> profile = wideProfiles.get(pr);
+        for (int pr = 0; pr < profiles.size(); pr++) {
+            Map<String, String> profile = profiles.get(pr);
             int gridRow = firstData + pr;
-            WideRow wr = new WideRow(profile, dateAxis.size());
-            for (int j = 0; j < dateAxis.size(); j++) {
+            WideRow wr = new WideRow(profile, axis.size());
+            for (int j = 0; j < axis.size(); j++) {
                 double v =
                         ResultDispatchPivot.sumQuantityForProfileAndDate(
-                                cols, doc.rows(), profile, dateAxis.get(j));
+                                cols, doc.rows(), profile, axis.get(j));
                 wr.setAmount(j, v);
             }
-            wideRowItems.add(wr);
+            rowItems.add(wr);
 
             ObservableList<SpreadsheetCell> line = FXCollections.observableArrayList();
             for (int c = 0; c < staticCols; c++) {
@@ -626,40 +1156,300 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
                 cell.setEditable(false);
-                applyWideCellStyle(pr, di, cell);
+                applyWideCellStyle(wr, di, cell, staffHighlight, axis);
                 line.add(cell);
             }
             gridRows.add(line);
         }
         grid.setRows(gridRows);
 
-        wideSpreadsheet.setGrid(grid);
-        wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(wideSpreadsheet);
-        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(wideSpreadsheet);
-        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+        boolean[] wideBlockedCols = computeWideFullyBlockedDateColumns(dayCount, profiles, axis);
+        return new WideGridBundle(grid, profiles, rowItems, wideBlockedCols, staticCols, dayCount);
     }
 
-    private List<String> buildWideColumnLabels() {
-        List<String> headers = new ArrayList<>(WIDE_STATIC_HEADERS.size() + dateAxis.size() * DAY_SLOT_COLUMNS);
+    private ByDayGridBundle buildByDayGridModel(List<LocalDate> axis, boolean staffHighlight) {
+        List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
+        int staticCols = 2;
+        int dayCount = axis.size();
+        int slotCols = dayCount * DAY_SLOT_COLUMNS;
+        int totalCols = staticCols + slotCols;
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        int gridRowsTotal = firstData + keys.size();
+        GridBase grid = new GridBase(gridRowsTotal, totalCols);
+        grid.getColumnHeaders().clear();
+        grid.getColumnHeaders().addAll(buildByDayColumnLabelsForAxis(axis));
+
+        List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(gridRowsTotal);
+
+        ObservableList<SpreadsheetCell> filterRow = FXCollections.observableArrayList();
+        for (int c = 0; c < totalCols; c++) {
+            SpreadsheetCell cell =
+                    SpreadsheetCellType.STRING.createCell(
+                            SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW, c, 1, 1, "");
+            cell.setEditable(false);
+            filterRow.add(cell);
+        }
+        gridRows.add(filterRow);
+
+        List<ByDayRow> byItems = new ArrayList<>();
+        for (Map.Entry<String, String> en : keys) {
+            ByDayRow br = new ByDayRow(en.getKey(), en.getValue(), axis.size());
+            for (int j = 0; j < axis.size(); j++) {
+                double v =
+                        ResultDispatchPivot.sumQuantityForProcessMachineDate(
+                                doc.rows(), en.getKey(), en.getValue(), axis.get(j));
+                br.setAmount(j, v);
+            }
+            byItems.add(br);
+        }
+
+        for (int ir = 0; ir < byItems.size(); ir++) {
+            ByDayRow br = byItems.get(ir);
+            int gridRow = firstData + ir;
+            ObservableList<SpreadsheetCell> line = FXCollections.observableArrayList();
+            SpreadsheetCell c0 =
+                    SpreadsheetCellType.STRING.createCell(gridRow, 0, 1, 1, br.process());
+            c0.setEditable(false);
+            line.add(c0);
+            SpreadsheetCell c1 =
+                    SpreadsheetCellType.STRING.createCell(gridRow, 1, 1, 1, br.machine());
+            c1.setEditable(false);
+            line.add(c1);
+            for (int di = 0; di < dayCount; di++) {
+                double dayAmt = br.getAmount(di);
+                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
+                int col = staticCols + di * DAY_SLOT_COLUMNS;
+                SpreadsheetCell cell =
+                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
+                cell.setEditable(false);
+                applyByDayCellStyle(br, di, cell, staffHighlight, axis);
+                line.add(cell);
+            }
+            gridRows.add(line);
+        }
+        grid.setRows(gridRows);
+
+        boolean[] byDayBlockedCols = computeByDayFullyBlockedDateColumns(dayCount, axis);
+        return new ByDayGridBundle(grid, byDayBlockedCols, staticCols, dayCount);
+    }
+
+    private void applyFullGridRebuild(FullGridRebuild bundle) {
+        suppressDispatchGridDirty.set(true);
+        try {
+            dateAxis.clear();
+            dateAxis.addAll(bundle.axis());
+            wideProfiles.clear();
+            wideProfiles.addAll(bundle.wide().profiles());
+            wideRowItems.clear();
+            wideRowItems.addAll(bundle.wide().rowItems());
+
+            WideGridBundle w = bundle.wide();
+            w.grid().addEventHandler(GridChange.GRID_CHANGE_EVENT, this::onWideGridChange);
+            wideSpreadsheet.setGrid(w.grid());
+            wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
+            SpreadsheetTabularSupport.applyColumnFiltersWithDialog(wideSpreadsheet);
+            SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(wideSpreadsheet);
+            scheduleWideLayoutAfterColumnSync(w);
+
+            ByDayGridBundle b = bundle.byDay();
+            byDaySpreadsheet.setGrid(b.grid());
+            byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
+            SpreadsheetTabularSupport.applyColumnFiltersWithDialog(byDaySpreadsheet);
+            SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
+            scheduleByDayLayoutAfterColumnSync(b);
+        } finally {
+            Platform.runLater(() -> suppressDispatchGridDirty.set(false));
+        }
+    }
+
+    /**
+     * After {@link SpreadsheetView#setGrid}, the inner {@link TableView} may add columns on the next layout pulse.
+     * Retrying avoids applying widths while {@link SpreadsheetView#getColumns()} is still shorter than the grid
+     * (which skipped date columns and looked like “no date columns”).
+     */
+    private void scheduleWideLayoutAfterColumnSync(WideGridBundle w) {
+        final int expectedCols = w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS;
+        final int[] attempts = {0};
+        final Runnable[] job = new Runnable[1];
+        job[0] =
+                () -> {
+                    attempts[0]++;
+                    int actual = wideSpreadsheet.getColumns().size();
+                    boolean retry = actual < expectedCols && attempts[0] < 48;
+                    if (retry) {
+                        Platform.runLater(job[0]);
+                        return;
+                    }
+                    SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                            wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                    applyDateColumnWidthsForBlockedDays(
+                            wideSpreadsheet,
+                            w.staticCols(),
+                            w.dayCount(),
+                            sanitizeFullyBlockedFlagsForColumnWidth(w.blockedCols()));
+                };
+        Platform.runLater(job[0]);
+    }
+
+    private void scheduleByDayLayoutAfterColumnSync(ByDayGridBundle b) {
+        final int expectedCols = b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS;
+        final int[] attempts = {0};
+        final Runnable[] job = new Runnable[1];
+        job[0] =
+                () -> {
+                    attempts[0]++;
+                    if (byDaySpreadsheet.getColumns().size() < expectedCols && attempts[0] < 48) {
+                        Platform.runLater(job[0]);
+                        return;
+                    }
+                    SpreadsheetTabularSupport.applyFixedLeadingColumns(byDaySpreadsheet, 2);
+                    applyDateColumnWidthsForBlockedDays(
+                            byDaySpreadsheet,
+                            b.staticCols(),
+                            b.dayCount(),
+                            sanitizeFullyBlockedFlagsForColumnWidth(b.blockedCols()));
+                };
+        Platform.runLater(job[0]);
+    }
+
+    /**
+     * When every date column is “fully blocked”, narrowing all of them to ~5pt makes the timeline disappear. Keep
+     * default widths in that case (still gray cells via styles).
+     */
+    private static boolean[] sanitizeFullyBlockedFlagsForColumnWidth(boolean[] fullyBlocked) {
+        if (fullyBlocked == null || fullyBlocked.length == 0) {
+            return fullyBlocked;
+        }
+        int trueCount = 0;
+        for (boolean b : fullyBlocked) {
+            if (b) {
+                trueCount++;
+            }
+        }
+        if (trueCount == fullyBlocked.length) {
+            return new boolean[fullyBlocked.length];
+        }
+        return fullyBlocked;
+    }
+
+    private List<String> buildWideColumnLabelsForAxis(List<LocalDate> axis) {
+        List<String> headers =
+                new ArrayList<>(WIDE_STATIC_HEADERS.size() + axis.size() * DAY_SLOT_COLUMNS);
         headers.addAll(WIDE_STATIC_HEADERS);
-        for (LocalDate d : dateAxis) {
+        for (LocalDate d : axis) {
             headers.add(d.toString());
         }
         return headers;
     }
 
-    private void applyWideCellStyle(int profileRow, int dateIdx, SpreadsheetCell cell) {
-        WideRow wr = wideRowItems.get(profileRow);
+    private List<String> buildByDayColumnLabelsForAxis(List<LocalDate> axis) {
+        List<String> headers = new ArrayList<>(2 + axis.size() * DAY_SLOT_COLUMNS);
+        headers.add(ResultDispatchSchema.COL_PROCESS);
+        headers.add(ResultDispatchSchema.COL_MACHINE);
+        for (LocalDate d : axis) {
+            headers.add(d.toString());
+        }
+        return headers;
+    }
+
+    private static double pointsToLocalPixels(double pt) {
+        Screen s = Screen.getPrimary();
+        if (s == null) {
+            return pt * 96.0 / 72.0;
+        }
+        return pt * s.getDpi() / 72.0;
+    }
+
+    /**
+     * Date columns where every profile row is blocked on that day get a narrow width; mixed columns stay default.
+     */
+    private boolean[] computeWideFullyBlockedDateColumns(
+            int dayCount, List<Map<String, String>> profiles, List<LocalDate> axis) {
+        boolean[] out = new boolean[dayCount];
+        if (profiles.isEmpty() || calendarBlocks.isEmpty()) {
+            return out;
+        }
+        for (int di = 0; di < dayCount; di++) {
+            LocalDate day = axis.get(di);
+            boolean all = true;
+            for (Map<String, String> profile : profiles) {
+                String proc = profile.get(ResultDispatchSchema.COL_PROCESS);
+                String mach = profile.get(ResultDispatchSchema.COL_MACHINE);
+                if (!calendarBlocks.isBlockedDay(
+                        proc != null ? proc : "", mach != null ? mach : "", day)) {
+                    all = false;
+                    break;
+                }
+            }
+            out[di] = all;
+        }
+        return out;
+    }
+
+    private boolean[] computeByDayFullyBlockedDateColumns(int dayCount, List<LocalDate> axis) {
+        boolean[] out = new boolean[dayCount];
+        List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
+        if (keys.isEmpty() || calendarBlocks.isEmpty()) {
+            return out;
+        }
+        for (int di = 0; di < dayCount; di++) {
+            LocalDate day = axis.get(di);
+            boolean all = true;
+            for (Map.Entry<String, String> en : keys) {
+                if (!calendarBlocks.isBlockedDay(en.getKey(), en.getValue(), day)) {
+                    all = false;
+                    break;
+                }
+            }
+            out[di] = all;
+        }
+        return out;
+    }
+
+    private static void applyDateColumnWidthsForBlockedDays(
+            SpreadsheetView view, int staticCols, int dayCount, boolean[] fullyBlocked) {
+        if (view == null || fullyBlocked == null || dayCount <= 0) {
+            return;
+        }
+        var cols = view.getColumns();
+        if (cols.isEmpty()) {
+            return;
+        }
+        double narrowPt = pointsToLocalPixels(BLOCKED_DATE_COLUMN_PREF_PT);
+        double narrow = Math.max(narrowPt, MIN_BLOCKED_DATE_COLUMN_WIDTH_PX);
+        for (int di = 0; di < dayCount; di++) {
+            int colIndex = staticCols + di * DAY_SLOT_COLUMNS;
+            if (colIndex >= cols.size()) {
+                continue;
+            }
+            SpreadsheetColumn sc = cols.get(colIndex);
+            if (fullyBlocked[di]) {
+                sc.setPrefWidth(narrow);
+                sc.setMinWidth(narrow);
+                sc.setMaxWidth(narrow);
+            } else {
+                sc.setMinWidth(MIN_DATE_COLUMN_WIDTH_PX);
+                sc.setPrefWidth(Region.USE_COMPUTED_SIZE);
+                sc.setMaxWidth(Double.MAX_VALUE);
+            }
+        }
+    }
+
+    private void applyWideCellStyle(
+            WideRow wr,
+            int dateIdx,
+            SpreadsheetCell cell,
+            boolean staffHighlight,
+            List<LocalDate> axis) {
         double q = wr.getAmount(dateIdx);
         String proc = wr.getStatic(ResultDispatchSchema.COL_PROCESS);
         String mach = wr.getStatic(ResultDispatchSchema.COL_MACHINE);
-        LocalDate day = dateAxis.get(dateIdx);
+        LocalDate day = axis.get(dateIdx);
         boolean block = calendarBlocks.isBlockedDay(proc, mach, day);
         if (block) {
             cell.getStyleClass().add("pm-dispatch-blocked-cell");
             cell.setStyle("-fx-background-color: #c8c8c8;");
-        } else if (staffCheckToggle.isSelected() && q > 1e-9) {
+        } else if (staffHighlight && q > 1e-9) {
             cell.setStyle("-fx-background-color: #ffe0e0;");
         } else {
             cell.setStyle("");
@@ -679,11 +1469,11 @@ public final class DispatchInteractiveTabController {
     }
 
     /** Ensures each profile row maps to sequential trial order and pushes into doc rows. */
-    private void assignSequentialTrialOrders() {
+    private void assignSequentialTrialOrdersForProfiles(List<Map<String, String>> profiles) {
         List<String> cols = doc.columns();
-        for (int i = 0; i < wideProfiles.size(); i++) {
+        for (int i = 0; i < profiles.size(); i++) {
             String ord = Integer.toString(i + 1);
-            Map<String, String> prof = wideProfiles.get(i);
+            Map<String, String> prof = profiles.get(i);
             prof.put(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER, ord);
             for (Map<String, String> row : doc.rows()) {
                 if (ResultDispatchPivot.matchesTaskProfileExceptTrialOrder(cols, prof, row)) {
@@ -698,9 +1488,10 @@ public final class DispatchInteractiveTabController {
         Map<String, String> pb = wideProfiles.get(b);
         wideProfiles.set(a, pb);
         wideProfiles.set(b, pa);
-        assignSequentialTrialOrders();
+        assignSequentialTrialOrdersForProfiles(wideProfiles);
         ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
         rebuildGrids();
+        markDispatchDocDirty();
     }
 
     /** Column index in {@link SpreadsheetView#getColumns()} for the focused / primary selected cell. */
@@ -722,7 +1513,7 @@ public final class DispatchInteractiveTabController {
 
     /**
      * After row reorder, move selection and focus to the same logical profile row (by index) and column.
-     * Runs later so {@link #rebuildWide()} layout is applied before selecting.
+     * Runs later so spreadsheet layout is applied before selecting.
      */
     private void focusWideProfileCellAfterReorder(int profileIndex, int columnIndex) {
         if (profileIndex < 0 || profileIndex >= wideProfiles.size()) {
@@ -804,92 +1595,13 @@ public final class DispatchInteractiveTabController {
         return wideSpreadsheet.getModelColumn(viewCol);
     }
 
-    private void rebuildByDay() {
-        List<String> cols = doc.columns();
-        List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
-        int staticCols = 2;
-        int dayCount = dateAxis.size();
-        int slotCols = dayCount * DAY_SLOT_COLUMNS;
-        int totalCols = staticCols + slotCols;
-        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-        int gridRowsTotal = firstData + keys.size();
-        GridBase grid = new GridBase(gridRowsTotal, totalCols);
-        grid.getColumnHeaders().clear();
-        grid.getColumnHeaders().addAll(buildByDayColumnLabels());
-
-        List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(gridRowsTotal);
-
-        ObservableList<SpreadsheetCell> filterRow = FXCollections.observableArrayList();
-        for (int c = 0; c < totalCols; c++) {
-            SpreadsheetCell cell =
-                    SpreadsheetCellType.STRING.createCell(
-                            SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW, c, 1, 1, "");
-            cell.setEditable(false);
-            filterRow.add(cell);
-        }
-        gridRows.add(filterRow);
-
-        List<ByDayRow> byItems = new ArrayList<>();
-        for (Map.Entry<String, String> en : keys) {
-            ByDayRow br = new ByDayRow(en.getKey(), en.getValue(), dateAxis.size());
-            for (int j = 0; j < dateAxis.size(); j++) {
-                double v =
-                        ResultDispatchPivot.sumQuantityForProcessMachineDate(
-                                doc.rows(), en.getKey(), en.getValue(), dateAxis.get(j));
-                br.setAmount(j, v);
-            }
-            byItems.add(br);
-        }
-
-        for (int ir = 0; ir < byItems.size(); ir++) {
-            ByDayRow br = byItems.get(ir);
-            int gridRow = firstData + ir;
-            ObservableList<SpreadsheetCell> line = FXCollections.observableArrayList();
-            SpreadsheetCell c0 =
-                    SpreadsheetCellType.STRING.createCell(gridRow, 0, 1, 1, br.process());
-            c0.setEditable(false);
-            line.add(c0);
-            SpreadsheetCell c1 =
-                    SpreadsheetCellType.STRING.createCell(gridRow, 1, 1, 1, br.machine());
-            c1.setEditable(false);
-            line.add(c1);
-            for (int di = 0; di < dayCount; di++) {
-                double dayAmt = br.getAmount(di);
-                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
-                int col = staticCols + di * DAY_SLOT_COLUMNS;
-                SpreadsheetCell cell =
-                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
-                cell.setEditable(false);
-                applyByDayCellStyle(br, di, cell);
-                line.add(cell);
-            }
-            gridRows.add(line);
-        }
-        grid.setRows(gridRows);
-
-        byDaySpreadsheet.setGrid(grid);
-        byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(byDaySpreadsheet);
-        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
-        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(byDaySpreadsheet, 2);
-    }
-
-    private List<String> buildByDayColumnLabels() {
-        List<String> headers = new ArrayList<>(2 + dateAxis.size() * DAY_SLOT_COLUMNS);
-        headers.add(ResultDispatchSchema.COL_PROCESS);
-        headers.add(ResultDispatchSchema.COL_MACHINE);
-        for (LocalDate d : dateAxis) {
-            headers.add(d.toString());
-        }
-        return headers;
-    }
-
-    private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {
+    private void applyByDayCellStyle(
+            ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight, List<LocalDate> axis) {
         double q = br.getAmount(dateIdx);
-        boolean block = calendarBlocks.isBlockedDay(br.process(), br.machine(), dateAxis.get(dateIdx));
+        boolean block = calendarBlocks.isBlockedDay(br.process(), br.machine(), axis.get(dateIdx));
         if (block) {
             cell.setStyle("-fx-background-color: #c8c8c8;");
-        } else if (staffCheckToggle.isSelected() && q > 1e-9) {
+        } else if (staffHighlight && q > 1e-9) {
             cell.setStyle("-fx-background-color: #ffe0e0;");
         } else {
             cell.setStyle("");
@@ -1091,6 +1803,7 @@ public final class DispatchInteractiveTabController {
                                                 newTotal);
                                         ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
                                         rebuildGrids();
+                                        markDispatchDocDirty();
                                     });
                 });
     }
@@ -1152,10 +1865,11 @@ public final class DispatchInteractiveTabController {
             return false;
         }
         wideProfiles.add(toIdx, wideProfiles.remove(fromIdx));
-        assignSequentialTrialOrders();
+        assignSequentialTrialOrdersForProfiles(wideProfiles);
         ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
         rebuildGrids();
         statusLabel.setText("行を移動しました");
+        markDispatchDocDirty();
         return true;
     }
 
@@ -1244,6 +1958,7 @@ public final class DispatchInteractiveTabController {
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
         statusLabel.setText("moved");
         rebuildGrids();
+        markDispatchDocDirty();
         return true;
     }
 
