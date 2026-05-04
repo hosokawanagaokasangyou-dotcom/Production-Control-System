@@ -341,8 +341,9 @@ public final class EquipmentGanttGraphicTabController {
     private record SheetLoad(Map<String, JsonTableIo.SheetTable> sheets, String description) {}
 
     /**
-     * 読み込み優先: {@code *_logical_view.json} → {@code *_equipment_gantt_contract.json}
-     * （契約から表を生成・xlsx 不要）→ 指定された plan JSON 本体。
+     * ブック JSON は論理ビューがあればそれを読む（他シートの結合セル展開用）。
+     * 「結果_設備ガント」のタイムセルは xlsx 由来 JSON では欠損しがち（シェイプ描画のため）なので、
+     * 兄弟の {@code *_equipment_gantt_contract.json} があればそのシートだけ契約から組み立てた表で上書きする。
      */
     private static SheetLoad loadWorkbookSheetsForGraphic(Path planJsonFromField)
             throws IOException {
@@ -360,23 +361,25 @@ public final class EquipmentGanttGraphicTabController {
             }
         }
         Path logical = resolveLogicalViewPath(planJsonFromField);
-        if (logical != null) {
-            return new SheetLoad(
-                    JsonTableIo.loadSheetsWorkbook(logical),
-                    logical.getFileName().toString() + " (論理ビュー)");
-        }
+        Path workbookJson =
+                logical != null && Files.isRegularFile(logical) ? logical : planJsonFromField;
+        Map<String, JsonTableIo.SheetTable> sheets =
+                new LinkedHashMap<>(JsonTableIo.loadSheetsWorkbook(workbookJson));
+
         Path contract = resolveEquipmentContractSibling(planJsonFromField);
+        String desc;
+        if (logical != null && workbookJson.equals(logical)) {
+            desc = logical.getFileName().toString() + " (論理ビュー)";
+        } else {
+            desc = planJsonFromField.getFileName().toString();
+        }
         if (contract != null && Files.isRegularFile(contract)) {
             JsonTableIo.SheetTable gantt =
                     EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
-            Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
-            m.put(DEFAULT_SHEET, gantt);
-            return new SheetLoad(
-                    m, contract.getFileName().toString() + " (設備ガント契約→表)");
+            sheets.put(DEFAULT_SHEET, gantt);
+            desc = desc + " / " + contract.getFileName() + " (設備ガント帯)";
         }
-        return new SheetLoad(
-                JsonTableIo.loadSheetsWorkbook(planJsonFromField),
-                planJsonFromField.getFileName().toString());
+        return new SheetLoad(sheets, desc);
     }
 
     /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */
@@ -402,6 +405,7 @@ public final class EquipmentGanttGraphicTabController {
 
     /**
      * {@code production_plan_multi_day_xxx.json} と並ぶ {@code …_equipment_gantt_contract.json}。
+     * {@code *_logical_view.json} を開いているときは stem から {@code _logical_view} を除いて兄弟を解決する。
      */
     private static Path resolveEquipmentContractSibling(Path planJsonFromField) {
         if (planJsonFromField == null) {
@@ -418,6 +422,9 @@ public final class EquipmentGanttGraphicTabController {
         String stem = name.substring(0, name.length() - 5);
         if (stem.endsWith("_equipment_gantt_contract")) {
             return null;
+        }
+        if (stem.endsWith("_logical_view")) {
+            stem = stem.substring(0, stem.length() - "_logical_view".length());
         }
         return planJsonFromField.resolveSibling(stem + "_equipment_gantt_contract.json");
     }
