@@ -366,6 +366,7 @@ public final class MainShellController {
                                 refreshThemeTrackedSecondaryScenes();
                             }
                             mainRunTabController.refreshLogThemeCells();
+                            equipmentGanttGraphicTabController.refreshGraphicForTheme();
                         });
         Platform.runLater(mainRunTabController::refreshLogThemeCells);
     }

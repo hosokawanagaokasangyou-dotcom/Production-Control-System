@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javafx.collections.FXCollections;
@@ -22,6 +23,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 
+import jp.co.pm.ai.desktop.config.DesktopTheme;
+
 /**
  * 「結果_設備ガント」Excel と同一データ（JSON の columns / rows）から、横軸が時刻スロットの
  * タイムラインをグラフィカルに描画するビュー。計画結果ビューアの表／セル着色ガントより視認性を優先する。
@@ -37,21 +40,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final Pattern BRACKETED_PLAIN_DATE_LABEL =
             Pattern.compile("^\\s*【\\s*\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}\\s*】\\s*$");
 
-    private static final double LABEL_MIN_WIDTH = 220;
-    private static final double LABEL_MAX_WIDTH = 320;
-    private static final double ROW_HEIGHT = 26;
-    private static final double SECTION_ROW_HEIGHT = 30;
-    private static final double HEADER_HEIGHT = 40;
-    /** 1 スロットあたりの幅（px）。Excel の 10 分スロットを想定 */
-    private static final double SLOT_WIDTH = 9;
+    private static final Pattern LOOSE_YMD =
+            Pattern.compile("(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})");
 
-    private static final Color EMPTY_LIGHT = Color.web("#ffffff");
-    private static final Color EMPTY_BAND = Color.web("#f2f2f2");
-    private static final Color BORDER_GRID = Color.web("#d9d9d9");
-    private static final Color BAR_DEFAULT = Color.web("#5b9bd5");
-    private static final Color BAR_BREAK = Color.web("#90CAF9");
-    private static final Color BAR_STARTUP = Color.web("#fed7aa");
-    private static final Color HEADER_AXIS = Color.web("#d9d9d9");
+    private static final double BASE_LABEL_MIN_WIDTH = 220;
+    private static final double BASE_LABEL_MAX_WIDTH = 360;
+    private static final double BASE_ROW_HEIGHT = 26;
+    private static final double BASE_SECTION_ROW_HEIGHT = 30;
+    private static final double BASE_HEADER_HEIGHT = 40;
+    /** 1 スロットあたりの幅（px、倍率1のとき）。Excel の 10 分スロットを想定 */
+    private static final double BASE_SLOT_WIDTH = 9;
 
     private EquipmentGraphicGanttPane() {}
 
@@ -62,6 +60,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
+        return build(columns, rows, DesktopTheme.LIGHT, 1.0);
+    }
+
+    /**
+     * @param theme アプリの {@link DesktopTheme}（Canvas 帯の配色に反映）
+     * @param zoom 表示倍率（0.5〜2.0 程度を想定。スロット幅・行高・フォントに連動）
+     */
+    public static BorderPane build(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            DesktopTheme theme,
+            double zoom) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -82,12 +92,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return root;
         }
 
-        VBox body = new VBox(0);
-        double timelineWidth = parsed.slotColumnIndices.size() * SLOT_WIDTH;
-        double labelWidth = Math.min(LABEL_MAX_WIDTH, Math.max(LABEL_MIN_WIDTH, 200));
+        LayoutMetrics layout = LayoutMetrics.fromZoom(zoom);
+        GanttPalette palette = GanttPalette.forTheme(theme);
 
-        Canvas headerCanvas = new Canvas(timelineWidth, HEADER_HEIGHT);
-        drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth);
+        VBox body = new VBox(0);
+        double timelineWidth = parsed.slotColumnIndices.size() * layout.slotWidth;
+        double labelWidth =
+                Math.min(layout.labelMaxWidth, Math.max(layout.labelMinWidth, 200 * layout.zoom));
+
+        Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
+        drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
 
         HBox headerRow = new HBox(0);
         Region spacer = new Region();
@@ -96,21 +110,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerRow.getChildren().addAll(spacer, headerCanvas);
         body.getChildren().add(headerRow);
 
+        int progCell = layout.progressCellWidth;
+        int gap = layout.progressGap;
         int progressTotal =
-                parsed.progressColumnIndices.size() * 56 + Math.max(0, parsed.progressColumnIndices.size() - 1) * 4;
+                parsed.progressColumnIndices.size() * progCell
+                        + Math.max(0, parsed.progressColumnIndices.size() - 1) * gap;
         int dataStripe = 0;
         for (int ri = 0; ri < parsed.displayRows.size(); ri++) {
             DisplayRow dr = parsed.displayRows.get(ri);
             if (dr.sectionBanner != null) {
                 Label ban = new Label(dr.sectionBanner);
-                ban.setPrefHeight(SECTION_ROW_HEIGHT);
-                ban.setMinHeight(SECTION_ROW_HEIGHT);
+                ban.setPrefHeight(layout.sectionRowHeight);
+                ban.setMinHeight(layout.sectionRowHeight);
                 ban.setMaxWidth(Double.MAX_VALUE);
                 ban.setAlignment(Pos.CENTER_LEFT);
-                ban.setPadding(new Insets(2, 8, 2, 8));
-                ban.setTextFill(Color.WHITE);
-                ban.setStyle(
-                        "-fx-background-color: #1f4e79; -fx-font-weight: bold; -fx-font-size: 12px;");
+                ban.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
+                ban.setStyle(palette.sectionBannerCss());
                 ban.setMinWidth(labelWidth + timelineWidth + progressTotal);
                 body.getChildren().add(ban);
                 continue;
@@ -122,14 +137,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             rowLabel.setMaxWidth(labelWidth);
             rowLabel.setWrapText(true);
             rowLabel.setAlignment(Pos.CENTER_LEFT);
-            rowLabel.setPadding(new Insets(2, 6, 2, 6));
-            rowLabel.setFont(Font.font(11));
-            rowLabel.setStyle(
-                    "-fx-background-color: #f1f5f9; -fx-border-color: #e2e8f0; -fx-border-width: 0 1 0 0;");
+            rowLabel.setPadding(new Insets(2 * layout.zoom, 6 * layout.zoom, 2 * layout.zoom, 6 * layout.zoom));
+            rowLabel.setFont(Font.font(layout.rowLabelFontSize));
+            rowLabel.setStyle(palette.rowLabelCss());
 
-            Canvas rowCanvas = new Canvas(timelineWidth, ROW_HEIGHT);
+            Canvas rowCanvas = new Canvas(timelineWidth, layout.rowHeight);
             drawTimelineRow(
-                    rowCanvas.getGraphicsContext2D(), dr.cellsInSlots, dataStripe++);
+                    rowCanvas.getGraphicsContext2D(), dr.cellsInSlots, dataStripe++, layout, palette);
 
             String tip =
                     dr.leftLabel.replace("\n", " ")
@@ -138,7 +152,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             + " 分・設備ガント JSON と同一データ）";
             Tooltip.install(rowCanvas, new Tooltip(tip));
 
-            HBox progBox = new HBox(4);
+            HBox progBox = new HBox(gap);
             progBox.setAlignment(Pos.CENTER_LEFT);
             for (int pc : parsed.progressColumnIndices) {
                 String pv =
@@ -146,16 +160,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 ? dr.rawRow.get(pc).strip()
                                 : "";
                 Label pl = new Label(pv);
-                pl.setMinWidth(52);
-                pl.setPrefWidth(52);
-                pl.setMaxWidth(52);
+                pl.setMinWidth(progCell);
+                pl.setPrefWidth(progCell);
+                pl.setMaxWidth(progCell);
                 pl.setWrapText(true);
                 pl.setAlignment(Pos.CENTER);
-                pl.setFont(Font.font(9));
-                pl.setStyle(
-                        pv.isEmpty()
-                                ? "-fx-background-color: #fffbf0; -fx-border-color: #f0e1b7;"
-                                : "-fx-background-color: #fff2cc; -fx-border-color: #d6b656;");
+                pl.setFont(Font.font(layout.progressFontSize));
+                pl.setStyle(pv.isEmpty() ? palette.progressEmptyCss() : palette.progressFilledCss());
                 progBox.getChildren().add(pl);
             }
 
@@ -178,49 +189,157 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         "ヒント: 横スクロールで時刻軸を追えます。ブロックは Excel と同じセル内容を連続結合した帯です。"
                                 + "（10 分スロット幅は生成側の設定と一致している必要があります）");
         hint.setWrapText(true);
-        hint.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
+        hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
         return root;
     }
 
+    private record LayoutMetrics(
+            double zoom,
+            double slotWidth,
+            double rowHeight,
+            double sectionRowHeight,
+            double headerHeight,
+            double labelMinWidth,
+            double labelMaxWidth,
+            double rowLabelFontSize,
+            double axisFontSize,
+            double barFontSize,
+            double progressFontSize,
+            int progressCellWidth,
+            int progressGap) {
+
+        static LayoutMetrics fromZoom(double zoomIn) {
+            double z = Math.clamp(zoomIn, 0.5, 2.0);
+            return new LayoutMetrics(
+                    z,
+                    BASE_SLOT_WIDTH * z,
+                    BASE_ROW_HEIGHT * z,
+                    BASE_SECTION_ROW_HEIGHT * z,
+                    BASE_HEADER_HEIGHT * z,
+                    BASE_LABEL_MIN_WIDTH * z,
+                    BASE_LABEL_MAX_WIDTH * z,
+                    11 * z,
+                    10 * z,
+                    Math.max(8, 9 * z),
+                    Math.max(8, 9 * z),
+                    (int) Math.round(52 * z),
+                    (int) Math.round(4 * z));
+        }
+    }
+
+    private record GanttPalette(
+            Color emptyLight,
+            Color emptyBand,
+            Color grid,
+            Color headerAxis,
+            Color axisLabel,
+            Color barDefault,
+            Color barBreak,
+            Color barStartup,
+            Color barDefaultText,
+            Color barBreakText,
+            Color barStartupText,
+            Color barStroke,
+            String rowLabelCss,
+            String sectionBannerCss,
+            String hintCss,
+            String progressEmptyCss,
+            String progressFilledCss) {
+
+        static GanttPalette forTheme(DesktopTheme theme) {
+            boolean dark = theme.isDarkUi();
+            if (dark) {
+                return new GanttPalette(
+                        Color.web("#1e293b"),
+                        Color.web("#0f172a"),
+                        Color.web("#475569"),
+                        Color.web("#334155"),
+                        Color.web("#e2e8f0"),
+                        Color.web("#2563eb"),
+                        Color.web("#38bdf8"),
+                        Color.web("#fb923c"),
+                        Color.web("#f8fafc"),
+                        Color.web("#0c1222"),
+                        Color.web("#0c1222"),
+                        Color.web("#93c5fd"),
+                        "-fx-background-color: #334155; -fx-text-fill: #f8fafc; "
+                                + "-fx-border-color: #64748b; -fx-border-width: 0 1 0 0;",
+                        "-fx-background-color: #0f172a; -fx-font-weight: bold; -fx-font-size: 12px; "
+                                + "-fx-text-fill: #f1f5f9;",
+                        "-fx-text-fill: #94a3b8; -fx-font-size: 11px;",
+                        "-fx-background-color: #1e293b; -fx-border-color: #475569; -fx-text-fill: #cbd5e1;",
+                        "-fx-background-color: #422006; -fx-border-color: #d97706; -fx-text-fill: #ffedd5;");
+            }
+            return new GanttPalette(
+                    Color.web("#ffffff"),
+                    Color.web("#f1f5f9"),
+                    Color.web("#cbd5e1"),
+                    Color.web("#e2e8f0"),
+                    Color.web("#0f172a"),
+                    Color.web("#2563eb"),
+                    Color.web("#7dd3fc"),
+                    Color.web("#fdba74"),
+                    Color.web("#ffffff"),
+                    Color.web("#0f172a"),
+                    Color.web("#9a3412"),
+                    Color.web("#1e40af"),
+                    "-fx-background-color: #e8eef7; -fx-text-fill: #0f172a; "
+                            + "-fx-border-color: #cbd5e1; -fx-border-width: 0 1 0 0;",
+                    "-fx-background-color: #1e3a5f; -fx-font-weight: bold; -fx-font-size: 12px; "
+                            + "-fx-text-fill: #f8fafc;",
+                    "-fx-text-fill: #64748b; -fx-font-size: 11px;",
+                    "-fx-background-color: #fffbf0; -fx-border-color: #f0e1b7; -fx-text-fill: #334155;",
+                    "-fx-background-color: #fff2cc; -fx-border-color: #d6b656; -fx-text-fill: #334155;");
+        }
+    }
+
     private static void drawTimeAxis(
-            GraphicsContext gc, ParseResult parsed, double timelineWidth) {
-        gc.setFill(HEADER_AXIS);
-        gc.fillRect(0, 0, timelineWidth, HEADER_HEIGHT);
-        gc.setStroke(BORDER_GRID);
+            GraphicsContext gc,
+            ParseResult parsed,
+            double timelineWidth,
+            LayoutMetrics layout,
+            GanttPalette palette) {
+        gc.setFill(palette.headerAxis());
+        gc.fillRect(0, 0, timelineWidth, layout.headerHeight);
+        gc.setStroke(palette.grid());
         gc.setLineWidth(0.5);
-        gc.strokeRect(0, 0, timelineWidth, HEADER_HEIGHT);
+        gc.strokeRect(0, 0, timelineWidth, layout.headerHeight);
 
         List<Integer> slotCols = parsed.slotColumnIndices;
         int n = slotCols.size();
         int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes));
 
-        gc.setFill(Color.BLACK);
-        gc.setFont(Font.font(10));
+        gc.setFill(palette.axisLabel());
+        gc.setFont(Font.font(layout.axisFontSize));
         LocalTime t0 = parsed.slotBaseTime;
         for (int i = 0; i < n; i += step) {
-            double x = i * SLOT_WIDTH;
+            double x = i * layout.slotWidth;
             LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes);
             String txt = tt.format(DateTimeFormatter.ofPattern("H:mm"));
-            gc.fillText(txt, x + 2, HEADER_HEIGHT - 8);
-            gc.strokeLine(x, 0, x, HEADER_HEIGHT);
+            gc.fillText(txt, x + 2, layout.headerHeight - 8 * layout.zoom);
+            gc.strokeLine(x, 0, x, layout.headerHeight);
         }
     }
 
     private static void drawTimelineRow(
-            GraphicsContext gc, List<String> slotTexts, int stripeIndex) {
+            GraphicsContext gc,
+            List<String> slotTexts,
+            int stripeIndex,
+            LayoutMetrics layout,
+            GanttPalette palette) {
         int n = slotTexts.size();
         boolean stripe = (stripeIndex & 1) == 0;
         for (int i = 0; i < n; i++) {
-            double x = i * SLOT_WIDTH;
-            gc.setFill(stripe ? EMPTY_LIGHT : EMPTY_BAND);
-            gc.fillRect(x, 0, SLOT_WIDTH, ROW_HEIGHT);
+            double x = i * layout.slotWidth;
+            gc.setFill(stripe ? palette.emptyLight() : palette.emptyBand());
+            gc.fillRect(x, 0, layout.slotWidth, layout.rowHeight);
         }
-        gc.setStroke(BORDER_GRID);
+        gc.setStroke(palette.grid());
         gc.setLineWidth(0.3);
         for (int i = 0; i <= n; i++) {
-            gc.strokeLine(i * SLOT_WIDTH, 0, i * SLOT_WIDTH, ROW_HEIGHT);
+            gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
         }
 
         int runStart = -1;
@@ -230,7 +349,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean empty = t.isEmpty();
             if (empty) {
                 if (runStart >= 0) {
-                    paintBar(gc, runStart, i - 1, runText);
+                    paintBar(gc, runStart, i - 1, runText, layout, palette);
                     runStart = -1;
                     runText = "";
                 }
@@ -240,50 +359,78 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 runStart = i;
                 runText = t;
             } else if (!t.equals(runText)) {
-                paintBar(gc, runStart, i - 1, runText);
+                paintBar(gc, runStart, i - 1, runText, layout, palette);
                 runStart = i;
                 runText = t;
             }
         }
         if (runStart >= 0) {
-            paintBar(gc, runStart, n - 1, runText);
+            paintBar(gc, runStart, n - 1, runText, layout, palette);
         }
     }
 
-    private static void paintBar(GraphicsContext gc, int fromSlot, int toSlot, String text) {
-        double x = fromSlot * SLOT_WIDTH;
-        double w = (toSlot - fromSlot + 1) * SLOT_WIDTH;
-        Color fill = barColorFor(text);
+    private static void paintBar(
+            GraphicsContext gc,
+            int fromSlot,
+            int toSlot,
+            String text,
+            LayoutMetrics layout,
+            GanttPalette palette) {
+        double x = fromSlot * layout.slotWidth;
+        double w = (toSlot - fromSlot + 1) * layout.slotWidth;
+        BarKind kind = classifyBar(text);
+        Color fill =
+                switch (kind) {
+                    case BREAK -> palette.barBreak();
+                    case STARTUP -> palette.barStartup();
+                    default -> palette.barDefault();
+                };
         gc.setFill(fill);
-        double arc = 3;
-        gc.fillRoundRect(x + 0.5, 3, w - 1, ROW_HEIGHT - 6, arc, arc);
-        gc.setStroke(Color.web("#2e5597"));
-        gc.setLineWidth(0.5);
-        gc.strokeRoundRect(x + 0.5, 3, w - 1, ROW_HEIGHT - 6, arc, arc);
+        double arc = Math.max(2, 3 * layout.zoom);
+        double inset = 0.5 * layout.zoom;
+        double barTop = 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * barTop;
+        gc.fillRoundRect(x + inset, barTop, w - 2 * inset, barH, arc, arc);
+        gc.setStroke(palette.barStroke());
+        gc.setLineWidth(0.5 * layout.zoom);
+        gc.strokeRoundRect(x + inset, barTop, w - 2 * inset, barH, arc, arc);
 
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font(9));
+        Color label =
+                switch (kind) {
+                    case BREAK -> palette.barBreakText();
+                    case STARTUP -> palette.barStartupText();
+                    default -> palette.barDefaultText();
+                };
+        gc.setFill(label);
+        gc.setFont(Font.font(layout.barFontSize));
         String shortTxt = text.replace('\n', ' ');
         if (shortTxt.length() > 80) {
             shortTxt = shortTxt.substring(0, 77) + "...";
         }
-        double maxChars = Math.max(4, (w - 6) / 5);
+        double charPx = Math.max(4.0, 5.0 * layout.zoom);
+        double maxChars = Math.max(4, (w - 6 * layout.zoom) / charPx);
         if (shortTxt.length() > maxChars) {
             shortTxt = shortTxt.substring(0, (int) maxChars - 2) + "..";
         }
-        if (w > 28 && !shortTxt.isEmpty()) {
-            gc.fillText(shortTxt, x + 4, ROW_HEIGHT / 2 + 3);
+        if (w > 28 * layout.zoom && !shortTxt.isEmpty()) {
+            gc.fillText(shortTxt, x + 4 * layout.zoom, layout.rowHeight / 2 + 3 * layout.zoom);
         }
     }
 
-    private static Color barColorFor(String t) {
+    private enum BarKind {
+        DEFAULT,
+        BREAK,
+        STARTUP
+    }
+
+    private static BarKind classifyBar(String t) {
         if (t.contains("休憩") || t.contains("（休憩）")) {
-            return BAR_BREAK;
+            return BarKind.BREAK;
         }
         if (t.contains("日次始業準備")) {
-            return BAR_STARTUP;
+            return BarKind.STARTUP;
         }
-        return BAR_DEFAULT;
+        return BarKind.DEFAULT;
     }
 
     private static LocalTime parseTimeHeader(String col) {
@@ -485,21 +632,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return -1;
     }
 
+    /**
+     * 左ラベルは機械名を先頭にし、日付は括弧を除いた短い形で続ける（幅が狭いときの視認性優先）。
+     */
     private static String buildLeftLabel(
             List<String> columns, ObservableList<String> row, String carriedDate) {
         String mach = cellAt(columns, row, "機械名");
         String proc = cellAt(columns, row, "工程名");
         String task = cellAt(columns, row, "タスク概覝");
         String tb = cellAt(columns, row, "日時帯");
+        String dateLine = compactDateLine(carriedDate);
         StringBuilder sb = new StringBuilder();
-        if (!carriedDate.isEmpty()) {
-            sb.append(carriedDate);
-        }
         if (!mach.isEmpty()) {
+            sb.append(mach);
+        }
+        if (!dateLine.isEmpty()) {
             if (sb.length() > 0) {
                 sb.append("\n");
             }
-            sb.append(mach);
+            sb.append(dateLine);
         }
         if (!proc.isEmpty() && !proc.equals("—")) {
             sb.append("\n").append(proc);
@@ -515,6 +666,28 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return "（行）";
         }
         return sb.toString();
+    }
+
+    /** 「【2026/05/07】」等を {@code 2026/05/07} 形式に正規化する。 */
+    private static String compactDateLine(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String s = raw.strip();
+        if (s.startsWith("【")) {
+            int end = s.indexOf('】');
+            if (end > 1) {
+                s = s.substring(1, end).strip();
+            }
+        }
+        Matcher m = LOOSE_YMD.matcher(s);
+        if (m.find()) {
+            int y = Integer.parseInt(m.group(1));
+            int mo = Integer.parseInt(m.group(2));
+            int d = Integer.parseInt(m.group(3));
+            return String.format("%d/%02d/%02d", y, mo, d);
+        }
+        return s;
     }
 
     private static String cellAt(List<String> columns, ObservableList<String> row, String colName) {

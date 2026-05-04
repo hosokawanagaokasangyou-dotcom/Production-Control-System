@@ -13,19 +13,23 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
@@ -79,6 +83,15 @@ public final class EquipmentGanttGraphicTabController {
 
     private String lastLoadedPlanPath = "";
 
+    /** 再描画用に保持する最新の選択シート（ズーム・テーマ変更時）。 */
+    private JsonTableIo.SheetTable lastGraphicSheet;
+
+    private BorderPane graphicRootWrapper;
+
+    private Slider graphicZoomSlider;
+
+    private Label graphicZoomPercentLabel;
+
     /**
      * {@link ComboBox#getItems()} の {@code setAll} や {@code select} の途中で onAction が発火し、
      * 選択が一瞬 null になり {@link #applySelectedSheetFromMap} が何も描画しない状態になるのを防ぐ。
@@ -106,6 +119,20 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
         }
+        graphicZoomSlider = new Slider(50, 200, 100);
+        graphicZoomSlider.setPrefWidth(220);
+        graphicZoomSlider.setShowTickLabels(true);
+        graphicZoomSlider.setShowTickMarks(true);
+        graphicZoomSlider.setMajorTickUnit(25);
+        graphicZoomSlider.setMinorTickCount(4);
+        graphicZoomPercentLabel = new Label("100%");
+        graphicZoomSlider
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, v) -> {
+                            graphicZoomPercentLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            rebuildGraphicView();
+                        });
     }
 
     void bindShell(MainShellController shell) {
@@ -194,7 +221,7 @@ public final class EquipmentGanttGraphicTabController {
             String ps = planJsonField != null ? planJsonField.getText().strip() : "";
             Path planPath = ps.isEmpty() ? null : Path.of(ps);
             if (planPath == null || !Files.isRegularFile(planPath)) {
-                contentPane.setCenter(emptyPlaceholder("ファイルが指定されていないか、見つかりません。"));
+                resetGraphicState("ファイルが指定されていないか、見つかりません。");
                 statusLabel.setText("読み込み対象なし");
                 sheetCombo.getItems().clear();
                 return;
@@ -207,9 +234,8 @@ public final class EquipmentGanttGraphicTabController {
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             if (eligible.isEmpty()) {
                 sheetCombo.getItems().clear();
-                contentPane.setCenter(
-                        emptyPlaceholder(
-                                "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。"));
+                resetGraphicState(
+                        "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。");
                 statusLabel.setText("対象シートなし: " + planPath.getFileName());
                 return;
             }
@@ -245,7 +271,7 @@ public final class EquipmentGanttGraphicTabController {
                 sourceTitledPane.setExpanded(false);
             }
         } catch (Exception ex) {
-            contentPane.setCenter(emptyPlaceholder("エラー"));
+            resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             if (shell != null) {
                 shell.appendLog("[equipment-gantt-graphic] " + ex.getMessage());
@@ -285,8 +311,54 @@ public final class EquipmentGanttGraphicTabController {
         if (st == null) {
             return;
         }
+        lastGraphicSheet = st;
+        applyGraphicCenter(st);
+    }
+
+    private void resetGraphicState(String placeholderMsg) {
+        lastGraphicSheet = null;
+        graphicRootWrapper = null;
+        if (contentPane != null) {
+            contentPane.setCenter(emptyPlaceholder(placeholderMsg));
+        }
+    }
+
+    private HBox buildGraphicToolbar() {
+        HBox bar = new HBox(8);
+        bar.setAlignment(Pos.CENTER_LEFT);
+        bar.setPadding(new Insets(0, 0, 8, 0));
+        Label z = new Label("表示倍率（タイムライン・行・フォント）");
+        bar.getChildren().addAll(z, graphicZoomSlider, graphicZoomPercentLabel);
+        return bar;
+    }
+
+    private void applyGraphicCenter(JsonTableIo.SheetTable st) {
+        if (contentPane == null || st == null) {
+            return;
+        }
+        double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
+        DesktopTheme theme =
+                shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        contentPane.setCenter(EquipmentGraphicGanttPane.build(st.columns(), rows));
+        BorderPane gantt = EquipmentGraphicGanttPane.build(st.columns(), rows, theme, zoom);
+        if (graphicRootWrapper == null) {
+            graphicRootWrapper = new BorderPane();
+            graphicRootWrapper.setTop(buildGraphicToolbar());
+            contentPane.setCenter(graphicRootWrapper);
+        }
+        graphicRootWrapper.setCenter(gantt);
+    }
+
+    private void rebuildGraphicView() {
+        if (lastGraphicSheet == null || contentPane == null) {
+            return;
+        }
+        applyGraphicCenter(lastGraphicSheet);
+    }
+
+    /** メインの {@link DesktopTheme} 変更時に Canvas 帯の配色を合わせて再描画する。 */
+    void refreshGraphicForTheme() {
+        rebuildGraphicView();
     }
 
     /**
