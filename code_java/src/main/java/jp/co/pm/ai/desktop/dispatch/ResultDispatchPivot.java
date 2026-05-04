@@ -274,8 +274,8 @@ public final class ResultDispatchPivot {
 
     /**
      * Accepts {@code yyyy-MM-dd} (and common Excel/Japan display forms {@code yyyy/MM/dd}, {@code yyyy.MM.dd}).
-     * Python 側の {@code _norm_ymd} はスラッシュ区切りのため、配台試行後の JSON 再読込で日付軸と突合し損ねない
-     * よう揺れに耐える。
+     * Python 側の {@code _norm_ymd} はスラッシュ区切りのため、配台試行後の JSON 再読込でも日付軸と突き合わせできるよう、
+     * 区切り文字の揺れ（{@code -} / {@code /} / {@code .}）に耐える。
      */
     public static LocalDate parseIsoDate(String raw) {
         if (raw == null || raw.isBlank()) {
