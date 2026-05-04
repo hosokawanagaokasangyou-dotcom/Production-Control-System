@@ -20,12 +20,16 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tooltip;
+import javafx.application.Platform;
+import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+
+import javafx.scene.layout.Region;
 
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 
@@ -147,7 +151,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double procW = clampProcessColumnWidth(processColWidth);
         double leftTotal = machW + procW;
 
-        VBox body = new VBox(0);
         double timelineWidth = parsed.slotColumnIndices.size() * layout.slotWidth;
 
         Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
@@ -163,6 +166,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         SplitPane headSplit = new SplitPane(wrapMach, wrapProc);
         headSplit.setMinWidth(leftTotal);
         headSplit.setPrefWidth(leftTotal);
+        headSplit.setMaxHeight(layout.headerHeight);
+        wrapMach.setMinHeight(layout.headerHeight);
+        wrapProc.setMinHeight(layout.headerHeight);
+        styleEquipmentHeadSplit(headSplit, theme);
         double divPos = leftTotal > 1 ? machW / leftTotal : 0.5;
         final boolean[] suppressDiv = {false};
         suppressDiv[0] = true;
@@ -198,9 +205,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 parsed.progressColumnIndices.size() * progCell
                         + Math.max(0, parsed.progressColumnIndices.size() - 1) * gap;
 
+        double contentMinWidth = leftTotal + timelineWidth + progressTotal;
+
         HBox headRow = new HBox(0, headSplit, headerCanvas);
-        HBox.setHgrow(headSplit, Priority.ALWAYS);
-        body.getChildren().add(headRow);
+        headRow.setMinWidth(contentMinWidth);
+        headSplit.setMinWidth(leftTotal);
+        HBox.setHgrow(headSplit, Priority.NEVER);
+
+        VBox scrollBody = new VBox(0);
+        scrollBody.setMinWidth(contentMinWidth);
 
         int dataStripe = 0;
         for (int ri = 0; ri < parsed.displayRows.size(); ri++) {
@@ -213,8 +226,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 ban.setAlignment(Pos.CENTER_LEFT);
                 ban.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
                 ban.setStyle(palette.sectionBannerCss());
-                ban.setMinWidth(leftTotal + timelineWidth + progressTotal);
-                body.getChildren().add(ban);
+                ban.setMinWidth(contentMinWidth);
+                scrollBody.getChildren().add(ban);
                 continue;
             }
 
@@ -261,29 +274,77 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
 
             HBox line = new HBox(0);
+            line.setMinWidth(contentMinWidth);
             line.getChildren().addAll(ml, pl, rowCanvas);
             if (!progBox.getChildren().isEmpty()) {
                 line.getChildren().add(progBox);
             }
-            body.getChildren().add(line);
+            scrollBody.getChildren().add(line);
         }
 
-        ScrollPane scroll = new ScrollPane(body);
-        scroll.setFitToHeight(true);
-        scroll.setPannable(true);
-        scroll.setPadding(new Insets(4));
-        root.setCenter(scroll);
+        ScrollPane headerScroll = new ScrollPane(headRow);
+        headerScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerScroll.setPannable(false);
+        headerScroll.setFitToHeight(true);
+        headerScroll.setMinViewportHeight(layout.headerHeight);
+        headerScroll.setMaxViewportHeight(layout.headerHeight);
+        headerScroll.setMinWidth(Region.USE_COMPUTED_SIZE);
+
+        ScrollPane bodyScroll = new ScrollPane(scrollBody);
+        bodyScroll.setFitToWidth(true);
+        bodyScroll.setPannable(true);
+        VBox.setVgrow(bodyScroll, Priority.ALWAYS);
+
+        headerScroll.hvalueProperty().bindBidirectional(bodyScroll.hvalueProperty());
+
+        VBox mainColumn = new VBox(0, headerScroll, bodyScroll);
+        VBox.setVgrow(bodyScroll, Priority.ALWAYS);
+        mainColumn.setPadding(new Insets(4));
+        root.setCenter(mainColumn);
+
+        attachSplitDividerGrip(headSplit, theme);
 
         Label hint =
                 new Label(
                         "ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。"
-                                + " ヘッダの機械名／工程名の境界をドラッグすると列幅を変更できます（自動保存）。"
+                                + " 機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。"
                                 + " ブロックは Excel と同じセル内容を連続結合した帯です。");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
         return root;
+    }
+
+    private static void styleEquipmentHeadSplit(SplitPane sp, DesktopTheme theme) {
+        boolean dark = theme.isDarkUi();
+        String line = dark ? "#94a3b8" : "#64748b";
+        sp.setStyle(
+                "-fx-background-color: transparent; -fx-box-border: "
+                        + line
+                        + "; -fx-background-insets: 0; -fx-padding: 0;");
+    }
+
+    /** テーマ適用後に境界線を太め・ハイコントラストにする（初期レイアウト後）。 */
+    private static void attachSplitDividerGrip(SplitPane sp, DesktopTheme theme) {
+        String bg = theme.isDarkUi() ? "rgba(148,163,184,0.98)" : "rgba(71,85,105,0.95)";
+        sp.sceneProperty()
+                .addListener(
+                        (obs, o, scene) -> {
+                            if (scene == null) {
+                                return;
+                            }
+                            Platform.runLater(
+                                    () -> {
+                                        for (Node n : sp.lookupAll(".split-pane-divider")) {
+                                            n.setStyle(
+                                                    "-fx-background-color: "
+                                                            + bg
+                                                            + "; -fx-padding: 0 5 0 5; -fx-cursor: h-resize;");
+                                        }
+                                    });
+                        });
     }
 
     private static void applySideHeaderStyle(
@@ -798,7 +859,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private record LeftParts(String machine, String process, String summary) {}
 
-    /** 機械名列・工程名列に分割し、ツールチップ用の要約文字列を返す。 */
+    /**
+     * 機械名列・工程名列に分割する。日付は工程名ではなく機械名側に表示する。
+     * ツールチップ用の要約文字列も返す。
+     */
     private static LeftParts buildLeftParts(
             List<String> columns, ObservableList<String> row, String carriedDate) {
         String mach = cellAt(columns, row, "機械名");
@@ -807,14 +871,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         String tb = cellAt(columns, row, "日時帯");
         String dateLine = compactDateLine(carriedDate);
 
-        StringBuilder procCol = new StringBuilder();
-        if (!dateLine.isEmpty()) {
-            procCol.append(dateLine);
+        StringBuilder machCol = new StringBuilder();
+        if (!mach.isEmpty()) {
+            machCol.append(mach);
         }
-        if (!proc.isEmpty() && !proc.equals("—")) {
-            if (procCol.length() > 0) {
-                procCol.append('\n');
+        if (!dateLine.isEmpty()) {
+            if (machCol.length() > 0) {
+                machCol.append('\n');
             }
+            machCol.append(dateLine);
+        }
+
+        StringBuilder procCol = new StringBuilder();
+        if (!proc.isEmpty() && !proc.equals("—")) {
             procCol.append(proc);
         }
         if (!task.isEmpty() && !task.equals("—")) {
@@ -824,14 +893,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             procCol.append(tk);
         }
-        if (!tb.isEmpty() && procCol.length() == 0 && mach.isEmpty()) {
+        if (!tb.isEmpty() && procCol.length() == 0 && machCol.length() == 0) {
             procCol.append(tb);
         }
 
+        String machStr = machCol.toString();
         String procStr = procCol.toString();
+
         StringBuilder sum = new StringBuilder();
-        if (!mach.isEmpty()) {
-            sum.append(mach);
+        if (!machStr.isEmpty()) {
+            sum.append(machStr);
         }
         if (!procStr.isEmpty()) {
             if (sum.length() > 0) {
@@ -843,7 +914,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (summary.isEmpty()) {
             return new LeftParts("", "", "（行）");
         }
-        return new LeftParts(mach, procStr, summary);
+        return new LeftParts(machStr, procStr, summary);
     }
 
     /** 「【2026/05/07】」等を {@code 2026/05/07} 形式に正規化する。 */
@@ -890,7 +961,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         final String sectionBanner;
         /** データ行: 機械名列のテキスト */
         final String machineLine;
-        /** データ行: 工程名列（日付・工程名・タスク等） */
+        /** データ行: 工程名列（工程名・タスク等。日付は機械名列側） */
         final String processBlock;
         /** データ行: ツールチップ用 */
         final String rowSummary;
