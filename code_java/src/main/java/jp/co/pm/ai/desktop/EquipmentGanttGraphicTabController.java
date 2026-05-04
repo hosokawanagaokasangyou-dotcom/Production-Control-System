@@ -9,12 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -27,8 +29,10 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
@@ -92,6 +96,16 @@ public final class EquipmentGanttGraphicTabController {
 
     private Label graphicZoomPercentLabel;
 
+    private double equipmentGraphicMachineColWidth =
+            EquipmentGraphicGanttPane.DEFAULT_MACHINE_COLUMN_WIDTH;
+    private double equipmentGraphicProcessColWidth =
+            EquipmentGraphicGanttPane.DEFAULT_PROCESS_COLUMN_WIDTH;
+
+    private PauseTransition equipmentGraphicPersistDelay;
+    private PauseTransition equipmentGraphicDividerRebuildDelay;
+
+    private boolean graphicWheelHookInstalled;
+
     /**
      * {@link ComboBox#getItems()} の {@code setAll} や {@code select} の途中で onAction が発火し、
      * 選択が一瞬 null になり {@link #applySelectedSheetFromMap} が何も描画しない状態になるのを防ぐ。
@@ -132,7 +146,66 @@ public final class EquipmentGanttGraphicTabController {
                         (obs, oldV, v) -> {
                             graphicZoomPercentLabel.setText(String.format("%.0f%%", v.doubleValue()));
                             rebuildGraphicView();
+                            scheduleEquipmentGraphicPersist();
                         });
+    }
+
+    void applyEquipmentGanttSession(DesktopSessionState s) {
+        if (s == null) {
+            return;
+        }
+        double z = s.equipmentGanttGraphicZoomPercent();
+        if (graphicZoomSlider != null && Double.isFinite(z) && z >= 50 && z <= 200) {
+            graphicZoomSlider.setValue(z);
+        }
+        double mw = s.equipmentGanttMachineColWidth();
+        if (Double.isFinite(mw) && mw > 0) {
+            equipmentGraphicMachineColWidth = EquipmentGraphicGanttPane.clampMachineColumnWidth(mw);
+        }
+        double pw = s.equipmentGanttProcessColWidth();
+        if (Double.isFinite(pw) && pw > 0) {
+            equipmentGraphicProcessColWidth = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
+        }
+    }
+
+    double snapshotEquipmentGanttZoomPercent() {
+        return graphicZoomSlider != null ? graphicZoomSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttMachineColWidth() {
+        return equipmentGraphicMachineColWidth;
+    }
+
+    double snapshotEquipmentGanttProcessColWidth() {
+        return equipmentGraphicProcessColWidth;
+    }
+
+    private void scheduleEquipmentGraphicPersist() {
+        if (equipmentGraphicPersistDelay == null) {
+            equipmentGraphicPersistDelay = new PauseTransition(Duration.millis(450));
+            equipmentGraphicPersistDelay.setOnFinished(
+                    e -> {
+                        if (shell != null) {
+                            shell.persistDesktopSessionNow();
+                        }
+                    });
+        }
+        equipmentGraphicPersistDelay.stop();
+        equipmentGraphicPersistDelay.playFromStart();
+    }
+
+    private void scheduleDividerFollowUpRebuild() {
+        if (equipmentGraphicDividerRebuildDelay == null) {
+            equipmentGraphicDividerRebuildDelay = new PauseTransition(Duration.millis(160));
+            equipmentGraphicDividerRebuildDelay.setOnFinished(
+                    e -> {
+                        if (lastGraphicSheet != null) {
+                            applyGraphicCenter(lastGraphicSheet);
+                        }
+                    });
+        }
+        equipmentGraphicDividerRebuildDelay.stop();
+        equipmentGraphicDividerRebuildDelay.playFromStart();
     }
 
     void bindShell(MainShellController shell) {
@@ -318,6 +391,7 @@ public final class EquipmentGanttGraphicTabController {
     private void resetGraphicState(String placeholderMsg) {
         lastGraphicSheet = null;
         graphicRootWrapper = null;
+        graphicWheelHookInstalled = false;
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
@@ -340,13 +414,55 @@ public final class EquipmentGanttGraphicTabController {
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        BorderPane gantt = EquipmentGraphicGanttPane.build(st.columns(), rows, theme, zoom);
+        BorderPane gantt =
+                EquipmentGraphicGanttPane.build(
+                        st.columns(),
+                        rows,
+                        theme,
+                        zoom,
+                        equipmentGraphicMachineColWidth,
+                        equipmentGraphicProcessColWidth,
+                        (mw, pw) -> {
+                            double cm = EquipmentGraphicGanttPane.clampMachineColumnWidth(mw);
+                            double cp = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
+                            if (Math.abs(cm - equipmentGraphicMachineColWidth) < 0.75
+                                    && Math.abs(cp - equipmentGraphicProcessColWidth) < 0.75) {
+                                return;
+                            }
+                            equipmentGraphicMachineColWidth = cm;
+                            equipmentGraphicProcessColWidth = cp;
+                            scheduleEquipmentGraphicPersist();
+                            scheduleDividerFollowUpRebuild();
+                        });
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             graphicRootWrapper.setTop(buildGraphicToolbar());
             contentPane.setCenter(graphicRootWrapper);
         }
         graphicRootWrapper.setCenter(gantt);
+        installGraphicWheelZoomIfNeeded();
+    }
+
+    private void installGraphicWheelZoomIfNeeded() {
+        if (graphicRootWrapper == null || graphicWheelHookInstalled) {
+            return;
+        }
+        graphicWheelHookInstalled = true;
+        graphicRootWrapper.addEventFilter(
+                ScrollEvent.SCROLL,
+                e -> {
+                    if (!e.isControlDown()) {
+                        return;
+                    }
+                    e.consume();
+                    if (graphicZoomSlider == null) {
+                        return;
+                    }
+                    double delta = e.getDeltaY() > 0 ? 5 : -5;
+                    double v = Math.clamp(graphicZoomSlider.getValue() + delta, 50, 200);
+                    graphicZoomSlider.setValue(v);
+                    scheduleEquipmentGraphicPersist();
+                });
     }
 
     private void rebuildGraphicView() {

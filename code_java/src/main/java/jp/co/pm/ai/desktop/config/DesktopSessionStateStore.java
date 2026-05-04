@@ -58,7 +58,10 @@ public final class DesktopSessionStateStore {
                     optionalBoolean(root, "mainRunStage2WriteExcel", true),
                     text(root, "mainRunStage2ResultBookFont"),
                     loadUiEnvRows(root),
-                    loadStringList(root, "mainShellTabOrder"));
+                    loadStringList(root, "mainShellTabOrder"),
+                    optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
+                    optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
+                    optionalDouble(root, "equipmentGanttProcessColWidth", 0d));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -88,6 +91,7 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
             putUiEnvRows(root, state.uiEnvRows());
             putMainShellTabOrder(root, state.mainShellTabOrder());
+            putEquipmentGanttGraphicPrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -211,6 +215,21 @@ public final class DesktopSessionStateStore {
         }
         if (!arr.isEmpty()) {
             root.set("mainShellTabOrder", arr);
+        }
+    }
+
+    private static void putEquipmentGanttGraphicPrefs(ObjectNode root, DesktopSessionState state) {
+        double z = state.equipmentGanttGraphicZoomPercent();
+        if (Double.isFinite(z) && z >= 50 && z <= 200) {
+            root.put("equipmentGanttGraphicZoomPercent", z);
+        }
+        double mw = state.equipmentGanttMachineColWidth();
+        if (Double.isFinite(mw) && mw > 0) {
+            root.put("equipmentGanttMachineColWidth", mw);
+        }
+        double pw = state.equipmentGanttProcessColWidth();
+        if (Double.isFinite(pw) && pw > 0) {
+            root.put("equipmentGanttProcessColWidth", pw);
         }
     }
 

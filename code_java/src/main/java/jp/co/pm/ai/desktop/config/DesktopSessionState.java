@@ -31,6 +31,9 @@ import java.util.List;
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order
+ * @param equipmentGanttGraphicZoomPercent 設備ガント・グラフィックタブの表示倍率（50〜200、0 は未保存として既定 100）
+ * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は未保存として既定幅を使用）
+ * @param equipmentGanttProcessColWidth 同タブ左・工程名列の幅（px、0 は未保存として既定幅を使用）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -56,7 +59,10 @@ public record DesktopSessionState(
         boolean mainRunStage2WriteExcel,
         String mainRunStage2ResultBookFont,
         List<UiEnvRowSnapshot> uiEnvRows,
-        List<String> mainShellTabOrder) {
+        List<String> mainShellTabOrder,
+        double equipmentGanttGraphicZoomPercent,
+        double equipmentGanttMachineColWidth,
+        double equipmentGanttProcessColWidth) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
@@ -83,6 +89,9 @@ public record DesktopSessionState(
                 true,
                 "",
                 List.of(),
-                List.of());
+                List.of(),
+                0d,
+                0d,
+                0d);
     }
 }

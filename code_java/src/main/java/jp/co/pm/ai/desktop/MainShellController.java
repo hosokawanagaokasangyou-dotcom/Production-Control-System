@@ -469,6 +469,7 @@ public final class MainShellController {
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
+        equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -537,7 +538,15 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2WriteExcel(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
-                snapshotMainShellTabOrder());
+                snapshotMainShellTabOrder(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth());
+    }
+
+    /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
+    public void persistDesktopSessionNow() {
+        DesktopSessionStateStore.save(collectDesktopSession());
     }
 
     private MainShellTabId mainShellTabId(Tab t) {
