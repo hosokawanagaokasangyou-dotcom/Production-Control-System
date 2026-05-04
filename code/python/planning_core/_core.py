@@ -77,6 +77,10 @@ _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
 _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # endregion stage2 cache helpers
 
+# JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）
+_INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
+_INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
+
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
 # AI 備考・配台不要ロジック D→E の TTL キャッシュ（旧 output/ から json/ へ移行）
@@ -23511,6 +23515,246 @@ def build_result_dispatch_table_dataframe(
     return pd.DataFrame(rows, columns=cols)
 
 
+def _interactive_norm_cell(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    return unicodedata.normalize("NFKC", str(v).strip())
+
+
+def _interactive_parse_dispatch_date_cell(val) -> date | None:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    ts = pd.to_datetime(val, errors="coerce")
+    if not pd.isna(ts) and hasattr(ts, "date"):
+        try:
+            return ts.date()
+        except Exception:
+            pass
+    return parse_optional_date(val)
+
+
+def merge_interactive_result_dispatch_json_into_tasks_df(
+    tasks_df: "pd.DataFrame", json_rows: list
+) -> tuple["pd.DataFrame", dict[tuple[str, str, date], float]]:
+    """
+    結果_配台表.json の rows から配台試行順番を tasks_df に反映し、
+    (依頼NO, 機械名, 配台日) ごとの目標数量を集約して返す。
+    """
+    if tasks_df is None or getattr(tasks_df, "empty", True):
+        return tasks_df, {}
+    df = tasks_df.copy()
+    _dto = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if _dto not in df.columns:
+        df[_dto] = ""
+    else:
+        # 計画入力（xlsx 等）では数値列 float64 になることがあり、文字列を代入すると pandas 2.x で失敗する
+        df[_dto] = df[_dto].astype(object)
+    order_map: dict[tuple[str, str, str], int] = {}
+    targets: dict[tuple[str, str, date], float] = defaultdict(float)
+    for r in json_rows or []:
+        if not isinstance(r, dict):
+            continue
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID))
+        proc = _interactive_norm_cell(r.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
+        dto_raw = r.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
+        try:
+            dto_v = (
+                int(float(str(dto_raw).replace(",", "").strip()))
+                if dto_raw not in (None, "")
+                else None
+            )
+        except (TypeError, ValueError):
+            dto_v = None
+        if dto_v is not None and tid:
+            k3 = (tid, proc, mach)
+            if k3 not in order_map or dto_v < order_map[k3]:
+                order_map[k3] = dto_v
+        dd = _interactive_parse_dispatch_date_cell(r.get("配台日"))
+        qty_cell = r.get("当日配台数量")
+        try:
+            qty_v = (
+                float(str(qty_cell).replace(",", "").strip())
+                if qty_cell not in (None, "")
+                else 0.0
+            )
+        except (TypeError, ValueError):
+            qty_v = 0.0
+        if dd is not None and tid and mach and qty_v > 1e-18:
+            targets[(tid, mach, dd)] += float(qty_v)
+    for idx in df.index:
+        row = df.loc[idx]
+        tid = _interactive_norm_cell(planning_task_id_str_from_plan_row(row))
+        proc = _interactive_norm_cell(_planning_df_cell_scalar(row, TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(_planning_df_cell_scalar(row, TASK_COL_MACHINE_NAME))
+        k = (tid, proc, mach)
+        if k in order_map:
+            df.at[idx, _dto] = str(order_map[k])
+    return df, dict(targets)
+
+
+def _interactive_aggregate_dispatch_targets_from_df(
+    df_dispatch: pd.DataFrame,
+) -> dict[tuple[str, str, date], float]:
+    out: dict[tuple[str, str, date], float] = defaultdict(float)
+    if df_dispatch is None or getattr(df_dispatch, "empty", True):
+        return dict(out)
+    for _, row in df_dispatch.iterrows():
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
+        try:
+            q = float(row.get("当日配台数量") or 0)
+        except (TypeError, ValueError):
+            q = 0.0
+        if tid and mach and dd is not None:
+            out[(tid, mach, dd)] += q
+    return dict(out)
+
+
+def _interactive_validate_dispatch_quantities(
+    df_dispatch: pd.DataFrame,
+    expected: dict[tuple[str, str, date], float],
+    *,
+    eps: float = 1e-3,
+) -> None:
+    if not expected:
+        return
+    actual = _interactive_aggregate_dispatch_targets_from_df(df_dispatch)
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        _p = (os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+        if _p:
+            _sample = []
+            for _k, _ev in list(expected.items())[:8]:
+                _av = float(actual.get(_k, 0.0))
+                _sample.append(
+                    {
+                        "k": [str(_k[0]), str(_k[1]), _k[2].isoformat() if _k[2] else None],
+                        "exp": _ev,
+                        "act": _av,
+                    }
+                )
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "748d6d",
+                            "timestamp": int(_time.time() * 1000),
+                            "hypothesisId": "H4",
+                            "location": "planning_core._interactive_validate_dispatch_quantities",
+                            "message": "expected_vs_actual_sample",
+                            "data": {
+                                "expectedN": len(expected),
+                                "actualN": len(actual),
+                                "sample": _sample,
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+    except Exception:
+        pass
+    # #endregion
+    for k, exp_v in expected.items():
+        act_v = actual.get(k, 0.0)
+        if abs(act_v - exp_v) > eps:
+            # #region agent log
+            try:
+                import json as _json
+                import time as _time
+                _p2 = (os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+                if _p2:
+                    with open(_p2, "a", encoding="utf-8") as _f2:
+                        _f2.write(
+                            _json.dumps(
+                                {
+                                    "sessionId": "748d6d",
+                                    "timestamp": int(_time.time() * 1000),
+                                    "hypothesisId": "H5",
+                                    "location": "planning_core._interactive_validate_dispatch_quantities",
+                                    "message": "mismatch",
+                                    "data": {
+                                        "k": [str(k[0]), str(k[1]), k[2].isoformat() if k[2] else None],
+                                        "exp": exp_v,
+                                        "act": act_v,
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+            except Exception:
+                pass
+            # #endregion
+            raise PlanningValidationError(
+                "インタラクティブ配台試行: 数量不一致 "
+                f"{k}: 期待={exp_v} 実際={act_v}"
+            )
+
+
+def _interactive_validate_timeline_midnight_if_interactive(
+    timeline_events: list | None,
+) -> None:
+    if not timeline_events:
+        return
+    for ev in timeline_events:
+        if not _is_machining_timeline_event(ev):
+            continue
+        st = ev.get("start_dt")
+        ed = ev.get("end_dt")
+        if isinstance(st, datetime) and isinstance(ed, datetime):
+            if st.date() != ed.date():
+                raise PlanningValidationError(
+                    "インタラクティブ配台試行: 加工が暦日をまたいでいます（"
+                    f"task={ev.get('task_id')} start={st} end={ed}）。"
+                )
+
+
+def _interactive_append_team_shortage_op_as(
+    task: dict,
+    current_date: date,
+    machine,
+    machine_name,
+    capable_members: list,
+    req_num: int,
+) -> None:
+    if (os.environ.get("PM_AI_INTERACTIVE_DISPATCH_TRIAL") or "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return
+    rec = {
+        "task_id": str(task.get("task_id") or ""),
+        "date": current_date.isoformat(),
+        "process": str(machine or ""),
+        "machine_name": str(machine_name or ""),
+        "reason": "フォーム候補0件",
+        "required_headcount": int(req_num),
+        "capable_headcount": len(capable_members or []),
+    }
+    if len(capable_members or []) < int(req_num):
+        _INTERACTIVE_TRIAL_OP_SHORTAGE.append(rec)
+    else:
+        _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
+
+
+def interactive_trial_shortages_snapshot() -> dict:
+    return {
+        "op_shortage": list(_INTERACTIVE_TRIAL_OP_SHORTAGE),
+        "as_shortage": list(_INTERACTIVE_TRIAL_AS_SHORTAGE),
+    }
+
+
 def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> None:
     """
     結果_配台表シートの Excel テーブルを更新する。
@@ -26460,6 +26704,14 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
+            _interactive_append_team_shortage_op_as(
+                task,
+                current_date,
+                machine,
+                machine_name,
+                capable_members,
+                int(req_num) if req_num is not None else 1,
+            )
             return None
     t_min = min(c["team_start"] for c in team_candidates)
 
@@ -29023,10 +29275,16 @@ def _generate_plan_impl(
     return_output_paths=False,
     tasks_df_raw_input_baseline=None,
     result_pattern_shift_label=None,
+    *,
+    interactive_relax_intraday: bool = False,
+    interactive_dispatch_targets: dict | None = None,
 ):
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
+    if interactive_relax_intraday or interactive_dispatch_targets is not None:
+        _INTERACTIVE_TRIAL_OP_SHORTAGE.clear()
+        _INTERACTIVE_TRIAL_AS_SHORTAGE.clear()
     _wb_trace = _excel_plan_input_wb()
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
@@ -29173,6 +29431,15 @@ def _generate_plan_impl(
             "機械カレンダー: %s 日分・設備占有ブロック合計 %s 件を配台に反映しました。",
             len(_MACHINE_CALENDAR_BLOCKS_BY_DATE),
             _n_iv,
+        )
+    if interactive_relax_intraday:
+        global DEFAULT_START_TIME, DEFAULT_END_TIME
+        _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        DEFAULT_START_TIME = time(0, 0)
+        DEFAULT_END_TIME = time(23, 59)
+        logging.warning(
+            "インタラクティブ配台試行: 工場枠を全日(00:00-23:59)に拡大し、"
+            "機械カレンダー占有を無視します（サブプロセス終了で既定値に戻ります）。"
         )
     reset_gemini_usage_tracker()
     _clear_stage2_blocking_message_file()
@@ -31520,6 +31787,12 @@ def _generate_plan_impl(
                 tasks_df,
                 df_src_for_dispatch,
             )
+            if interactive_dispatch_targets:
+                _interactive_validate_dispatch_quantities(
+                    df_dispatch, interactive_dispatch_targets
+                )
+            if interactive_relax_intraday or interactive_dispatch_targets is not None:
+                _interactive_validate_timeline_midnight_if_interactive(timeline_events)
             df_dispatch.to_excel(
                 writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
             )
