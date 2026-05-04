@@ -4,6 +4,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
@@ -17,6 +18,10 @@
     <center>
         <VBox fillWidth="true" spacing="8.0">
             <Label fx:id="hintLabel" wrapText="true"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label fx:id="envSearchLabel"/>
+                <TextField fx:id="envSearchField" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+            </HBox>
             <HBox fx:id="columnStripHost" spacing="0.0"/>
             <TableView fx:id="envTable" minHeight="180.0" prefHeight="260.0"/>
             <HBox spacing="8.0">

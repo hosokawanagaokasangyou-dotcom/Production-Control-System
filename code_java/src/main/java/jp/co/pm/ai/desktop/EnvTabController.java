@@ -4,11 +4,14 @@ import java.awt.Desktop;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -18,6 +21,7 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.geometry.Pos;
@@ -57,6 +61,12 @@ public final class EnvTabController {
     private Label hintLabel;
 
     @FXML
+    private Label envSearchLabel;
+
+    @FXML
+    private TextField envSearchField;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -82,11 +92,19 @@ public final class EnvTabController {
 
     private TableFilter<EnvVarRow> envTableFilter;
 
+    private FilteredList<EnvVarRow> envRowsFiltered;
+
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
         this.envRows = shell.getEnvRows();
         hintLabel.setText(ENV_HINT_TEXT);
+        if (envSearchLabel != null) {
+            envSearchLabel.setText("検索");
+        }
+        if (envSearchField != null) {
+            envSearchField.setPromptText("変数名・値・説明で絞り込み");
+        }
         addRowButton.setText("行を追加");
         delRowButton.setText("行を削除");
         addMissingEnvVarsButton.setText("不足している環境変数を追加");
@@ -129,7 +147,9 @@ public final class EnvTabController {
     }
 
     private void wireTable() {
-        envTable.setItems(envRows);
+        envRowsFiltered = new FilteredList<>(envRows);
+        envRowsFiltered.setPredicate(this::rowMatchesEnvSearch);
+        envTable.setItems(envRowsFiltered);
         envTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         envTable.setEditable(true);
         envTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
@@ -398,13 +418,86 @@ public final class EnvTabController {
         columnStripHost.getChildren().setAll(strip);
 
         VBox.setVgrow(envTable, Priority.ALWAYS);
+
+        for (EnvVarRow r : envRows) {
+            hookEnvRowForSearchFilter(r);
+        }
+        envRows.addListener(
+                (ListChangeListener<EnvVarRow>)
+                        c -> {
+                            while (c.next()) {
+                                if (c.wasAdded()) {
+                                    for (EnvVarRow r : c.getAddedSubList()) {
+                                        hookEnvRowForSearchFilter(r);
+                                    }
+                                }
+                            }
+                        });
+        if (envSearchField != null) {
+            envSearchField
+                    .textProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                applyEnvSearchPredicate();
+                            });
+        }
+        applyEnvSearchPredicate();
+    }
+
+    private void hookEnvRowForSearchFilter(EnvVarRow r) {
+        if (r == null) {
+            return;
+        }
+        Runnable ping = this::applyEnvSearchPredicate;
+        r.nameProperty().addListener((o, a, b) -> ping.run());
+        r.valueProperty().addListener((o, a, b) -> ping.run());
+        r.descriptionProperty().addListener((o, a, b) -> ping.run());
+    }
+
+    private void applyEnvSearchPredicate() {
+        if (envRowsFiltered == null) {
+            return;
+        }
+        envRowsFiltered.setPredicate(this::rowMatchesEnvSearch);
+    }
+
+    private String normalizedEnvSearchQuery() {
+        if (envSearchField == null) {
+            return "";
+        }
+        String t = envSearchField.getText();
+        return t != null ? t.trim().toLowerCase(Locale.ROOT) : "";
+    }
+
+    private boolean rowMatchesEnvSearch(EnvVarRow r) {
+        if (r == null) {
+            return false;
+        }
+        String q = normalizedEnvSearchQuery();
+        if (q.isEmpty()) {
+            return true;
+        }
+        return containsNormalized(r.getName(), q)
+                || containsNormalized(r.getValue(), q)
+                || containsNormalized(r.getDescription(), q);
+    }
+
+    private static boolean containsNormalized(String s, String qLower) {
+        if (s == null || s.isEmpty()) {
+            return false;
+        }
+        return s.toLowerCase(Locale.ROOT).contains(qLower);
     }
 
     void clearColumnFiltersAndSort() {
+        if (envSearchField != null) {
+            envSearchField.clear();
+        }
         if (envTableFilter != null) {
             envTableFilter.resetAllFilters();
         }
         envTable.getSortOrder().clear();
+        applyEnvSearchPredicate();
     }
 
     /**
