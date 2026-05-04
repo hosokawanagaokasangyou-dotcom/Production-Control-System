@@ -69,6 +69,9 @@ public final class EnvTabController {
     private Button delRowButton;
 
     @FXML
+    private Button addMissingEnvVarsButton;
+
+    @FXML
     private Button resetEnvDefaultsButton;
 
     private Stage ownerStage;
@@ -86,6 +89,7 @@ public final class EnvTabController {
         hintLabel.setText(ENV_HINT_TEXT);
         addRowButton.setText("行を追加");
         delRowButton.setText("行を削除");
+        addMissingEnvVarsButton.setText("不足している環境変数を追加");
         resetEnvDefaultsButton.setText("環境変数を初期化");
         wireTable();
     }
@@ -101,6 +105,13 @@ public final class EnvTabController {
     private void onResetEnvDefaultsButtonAction() {
         if (shell != null) {
             shell.confirmAndResetEnvRowsToDefaults();
+        }
+    }
+
+    @FXML
+    private void onAddMissingEnvVarsButtonAction() {
+        if (shell != null) {
+            shell.addMissingReferenceEnvRows();
         }
     }
 

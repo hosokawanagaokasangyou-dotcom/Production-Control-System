@@ -679,6 +679,96 @@ public final class MainShellController {
         stripRemovedEnvVarRows(envRows);
     }
 
+    /**
+     * ui_ref_env_defaults.json と {@link #BOOTSTRAP_ORDER} にあるが、表に行が無い変数を同じ並びで追加する（既存行の値は保持）。
+     */
+    void addMissingReferenceEnvRows() {
+        mergeMissingUiRefEnvRows();
+    }
+
+    /**
+     * Same key order as {@link #populateEnvRows(ObservableList)}; inserts only keys not yet present (non-empty name).
+     */
+    private void mergeMissingUiRefEnvRows() {
+        if (envRows == null) {
+            return;
+        }
+        LinkedHashMap<String, EnvVarRow> sheetTemplates = new LinkedHashMap<>();
+        for (WorkbookEnvSheetReader.RowEntry e : UiRefEnvDefaults.loadOrEmpty()) {
+            EnvVarRow row = new EnvVarRow();
+            row.setName(e.key());
+            row.setValue(e.value() != null ? e.value() : "");
+            row.setDescription(EnvVarDocs.mergeDescriptions(e.description(), e.key()));
+            sheetTemplates.put(e.key(), row);
+        }
+        Map<String, String> ui = collectUiEnv();
+        LinkedHashMap<String, EnvVarRow> byKey = new LinkedHashMap<>();
+        for (EnvVarRow r : envRows) {
+            String name = r.getName() != null ? r.getName().trim() : "";
+            if (name.isEmpty() || omitEnvRowKey(name)) {
+                continue;
+            }
+            byKey.putIfAbsent(name, r);
+        }
+        List<String> refOrder = new ArrayList<>(BOOTSTRAP_ORDER.size() + sheetTemplates.size());
+        for (String k : BOOTSTRAP_ORDER) {
+            refOrder.add(k);
+        }
+        for (String k : sheetTemplates.keySet()) {
+            if (!BOOTSTRAP_KEY_SET.contains(k)) {
+                refOrder.add(k);
+            }
+        }
+        ArrayList<EnvVarRow> out = new ArrayList<>(envRows.size() + refOrder.size());
+        HashSet<String> placed = new HashSet<>();
+        for (String k : refOrder) {
+            EnvVarRow existing = byKey.get(k);
+            if (existing != null) {
+                if (BOOTSTRAP_KEY_SET.contains(k)) {
+                    maybeFillEmptyBootstrap(existing, k, ui);
+                }
+                out.add(existing);
+                placed.add(k);
+            } else {
+                EnvVarRow fromSheet = sheetTemplates.get(k);
+                if (fromSheet != null) {
+                    EnvVarRow copy = new EnvVarRow();
+                    copy.setName(fromSheet.getName());
+                    copy.setValue(fromSheet.getValue() != null ? fromSheet.getValue() : "");
+                    copy.setDescription(fromSheet.getDescription());
+                    if (BOOTSTRAP_KEY_SET.contains(k)) {
+                        maybeFillEmptyBootstrap(copy, k, ui);
+                    }
+                    out.add(copy);
+                    placed.add(k);
+                } else if (BOOTSTRAP_KEY_SET.contains(k)) {
+                    out.add(newBootstrapRow(k, ui));
+                    placed.add(k);
+                }
+            }
+        }
+        HashSet<String> seen = new HashSet<>(placed);
+        List<EnvVarRow> trailingEmpty = new ArrayList<>();
+        for (EnvVarRow r : envRows) {
+            String name = r.getName() != null ? r.getName().trim() : "";
+            if (omitEnvRowKey(name)) {
+                continue;
+            }
+            if (name.isEmpty()) {
+                trailingEmpty.add(r);
+                continue;
+            }
+            if (seen.contains(name)) {
+                continue;
+            }
+            out.add(r);
+            seen.add(name);
+        }
+        out.addAll(trailingEmpty);
+        envRows.setAll(out);
+        stripRemovedEnvVarRows(envRows);
+    }
+
     /** Debounced session flush when run-tab log font changes. */
     void scheduleDesktopSessionSave() {
         if (!suppressEnvSessionPersistence.get()) {

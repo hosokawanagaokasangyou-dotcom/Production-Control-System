@@ -24,6 +24,8 @@
                         onAction="#onAddRowButtonAction"/>
                 <Button fx:id="delRowButton" mnemonicParsing="false"
                         onAction="#onDelRowButtonAction"/>
+                <Button fx:id="addMissingEnvVarsButton" mnemonicParsing="false"
+                        onAction="#onAddMissingEnvVarsButtonAction"/>
                 <Button fx:id="resetEnvDefaultsButton" mnemonicParsing="false"
                         onAction="#onResetEnvDefaultsButtonAction"/>
             </HBox>
