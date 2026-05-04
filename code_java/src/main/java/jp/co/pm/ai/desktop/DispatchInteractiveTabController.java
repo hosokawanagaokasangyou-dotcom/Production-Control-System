@@ -691,6 +691,7 @@ public final class DispatchInteractiveTabController {
                     try {
                         String shortagesPath = task.getValue();
                         statusLabel.setText("配台試行完了");
+                        shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         logLines.add("");
                         logLines.add("[配台試行] 正常終了しました。");
@@ -886,6 +887,13 @@ public final class DispatchInteractiveTabController {
             throws Exception {
         Path json = AppPaths.resolveMachineCalendarBlocksJsonPath(shellRef.snapshotUiEnv());
         return MachineCalendarBlockIndex.loadOutcomeFromJsonFile(json);
+    }
+
+    /**
+     * 実行・ログから段階2を実行して {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する。
+     */
+    void reloadTableFromDiskAfterExternalUpdate() {
+        reloadFromDiskQuiet();
     }
 
     void refreshCalendarFromSharedJsonFile() {

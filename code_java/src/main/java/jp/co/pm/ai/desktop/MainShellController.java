@@ -916,6 +916,10 @@ public final class MainShellController {
                                             }
                                             if (STAGE2.equals(script) && c == 0) {
                                                 refreshStage2OutputArtifacts();
+                                                if (dispatchInteractiveTabController != null) {
+                                                    dispatchInteractiveTabController
+                                                            .reloadTableFromDiskAfterExternalUpdate();
+                                                }
                                                 showStageCompletionDialog(
                                                         "段階2 完了",
                                                         "段階2 の処理が正常終了しました。");
@@ -1203,6 +1207,14 @@ public final class MainShellController {
      * After stage-2 success, show newest {@code production_plan_multi_day_*.xlsx} and {@code member_schedule_*.xlsx}
      * under {@link AppPaths#defaultPlanningOutputDir} in the run tab (same folder as plan-input export).
      */
+    /**
+     * 配台試行完了後など、出力フォルダに新しい段階2成果物があれば実行・ログタブのパス（production_plan /
+     * member_schedule）と関連タブの自動反映を更新する。{@link #refreshStage2OutputArtifacts} と同じ処理。
+     */
+    void refreshRunTabStage2ArtifactLinks() {
+        refreshStage2OutputArtifacts();
+    }
+
     private void refreshStage2OutputArtifacts() {
         try {
             Map<String, String> ui = collectUiEnv();
