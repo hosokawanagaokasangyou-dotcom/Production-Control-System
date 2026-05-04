@@ -28,8 +28,13 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -108,6 +113,18 @@ public final class MainShellController {
 
     @FXML
     private ComboBox<DesktopTheme> themeCombo;
+
+    @FXML
+    private HBox shellStageProgressBox;
+
+    @FXML
+    private Label shellStageProgressLabel;
+
+    @FXML
+    private ProgressBar shellStageProgressBar;
+
+    @FXML
+    private Region toolbarGrowSpacer;
 
     @FXML
     private MainRunTabController mainRunTabController;
@@ -269,6 +286,10 @@ public final class MainShellController {
             applyDesktopSession(DesktopSessionStateStore.load());
         } finally {
             suppressEnvSessionPersistence.set(false);
+        }
+
+        if (toolbarGrowSpacer != null) {
+            HBox.setHgrow(toolbarGrowSpacer, Priority.ALWAYS);
         }
 
         installUiEnvAutoSave();
@@ -1097,6 +1118,7 @@ public final class MainShellController {
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
+        updateShellStageProgressOverlay(stage1Running, stage2Running);
         if (tabPane == null) {
             return;
         }
@@ -1135,6 +1157,47 @@ public final class MainShellController {
                     d);
         }
         // #endregion
+    }
+
+    /**
+     * メインウィンドウ上部ツールバーに段階1/2 実行中を表示する。タブ内の帯に加え、常に視界に入る位置に置く。
+     */
+    private void updateShellStageProgressOverlay(boolean stage1Running, boolean stage2Running) {
+        if (shellStageProgressBox == null
+                || shellStageProgressLabel == null
+                || shellStageProgressBar == null) {
+            return;
+        }
+        boolean show = stage1Running || stage2Running;
+        shellStageProgressBox.setVisible(show);
+        shellStageProgressBox.setManaged(show);
+        if (show) {
+            shellStageProgressBox
+                    .getStyleClass()
+                    .removeAll("pm-shell-stage-progress-1", "pm-shell-stage-progress-2");
+            shellStageProgressBar
+                    .getStyleClass()
+                    .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+            if (stage1Running) {
+                shellStageProgressBox.getStyleClass().add("pm-shell-stage-progress-1");
+                shellStageProgressBar.getStyleClass().add("pm-stage-run-progress-1");
+                shellStageProgressLabel.setText("段階1 実行中…");
+            } else {
+                shellStageProgressBox.getStyleClass().add("pm-shell-stage-progress-2");
+                shellStageProgressBar.getStyleClass().add("pm-stage-run-progress-2");
+                shellStageProgressLabel.setText("段階2 実行中…");
+            }
+            shellStageProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        } else {
+            shellStageProgressBar.setProgress(0);
+            shellStageProgressLabel.setText("");
+            shellStageProgressBox
+                    .getStyleClass()
+                    .removeAll("pm-shell-stage-progress-1", "pm-shell-stage-progress-2");
+            shellStageProgressBar
+                    .getStyleClass()
+                    .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+        }
     }
 
     private void showStageCompletionDialog(String title, String contentText) {
