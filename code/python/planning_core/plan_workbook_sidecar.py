@@ -269,15 +269,6 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
             )
             return None
         out = result_task_sidecar_path(plan_xlsx)
-        # open(w) 前に親フォルダを必ず作成（xlsx 出力先と同階層でも、先に作られていないと Errno 2 になる）
-        _out_dir = os.path.dirname(out)
-        if _out_dir:
-            os.makedirs(_out_dir, exist_ok=True)
-        try:
-            if os.path.isfile(out):
-                os.remove(out)
-        except OSError:
-            pass
         rows = json.loads(df.to_json(orient="records", date_format="iso", double_precision=15))
         payload = {
             "format_version": SIDE_FORMAT_VERSION,
@@ -286,9 +277,8 @@ def write_result_task_json_sidecar(plan_xlsx: str, df: pd.DataFrame, *, sheet_na
             "row_count": int(len(df)),
             "rows": rows,
         }
-        with open(out, encoding="utf-8", newline="\n") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        # 直 open(w) は同一フォルダで errno 2 になる環境があるため、全ブック JSON と同じ一時ファイル経路に統一
+        out, _wlabel = _write_workbook_json_payload(out, payload)
         # #region agent log
         _append_agent_debug_ndjson(
             {
