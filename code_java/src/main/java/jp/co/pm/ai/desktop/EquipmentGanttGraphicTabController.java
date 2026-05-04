@@ -262,6 +262,8 @@ public final class EquipmentGanttGraphicTabController {
         if (st == null) {
             return;
         }
+        EquipmentGraphicGanttPane.agentLogSheetLoad(
+                name, st.columns() != null ? st.columns().size() : 0);
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
         contentPane.setCenter(
                 EquipmentGraphicGanttPane.build(st.columns(), rows));

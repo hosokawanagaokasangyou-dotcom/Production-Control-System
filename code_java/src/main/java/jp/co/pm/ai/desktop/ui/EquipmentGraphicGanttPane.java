@@ -1,5 +1,9 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -65,6 +69,35 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effRows = repaired.rows();
         }
         ParseResult parsed = parse(effCols, effRows);
+        // #region agent log
+        {
+            int nonEmptySlots = 0;
+            int dataDisplayRows = 0;
+            for (DisplayRow dr : parsed.displayRows) {
+                if (dr.sectionBanner != null) {
+                    continue;
+                }
+                dataDisplayRows++;
+                for (String c : dr.cellsInSlots) {
+                    if (c != null && !c.strip().isEmpty()) {
+                        nonEmptySlots++;
+                    }
+                }
+            }
+            agentDebugLog(
+                    "H1",
+                    "EquipmentGraphicGanttPane.build:afterParse",
+                    "equipment graphic parse",
+                    String.format(
+                            "{\"nonEmptySlotCells\":%d,\"dataDisplayRows\":%d,\"slotColumnCount\":%d,"
+                                    + "\"slotMinutes\":%d,\"repairedUnnamed\":%s}",
+                            nonEmptySlots,
+                            dataDisplayRows,
+                            parsed.slotColumnIndices.size(),
+                            parsed.slotMinutes,
+                            repaired != null));
+        }
+        // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
             Label msg =
                     new Label(
@@ -375,6 +408,75 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         String v = row.get(c);
         return v != null ? v.strip() : "";
     }
+
+    // #region agent log
+    /**
+     * デバッグ NDJSON（セッション b8c02d）。Windows / WSL のいずれかに書ければよい。
+     */
+    private static void agentDebugLog(
+            String hypothesisId, String location, String message, String dataJsonObject) {
+        long ts = System.currentTimeMillis();
+        String line =
+                "{\"sessionId\":\"b8c02d\",\"timestamp\":"
+                        + ts
+                        + ",\"hypothesisId\":\""
+                        + hypothesisId
+                        + "\",\"location\":\""
+                        + jsonEscape(location)
+                        + "\",\"message\":\""
+                        + jsonEscape(message)
+                        + "\",\"data\":"
+                        + dataJsonObject
+                        + "}\n";
+        String env = System.getenv("PM_AI_DEBUG_LOG");
+        String[] candidates =
+                new String[] {
+                    env != null && !env.isBlank() ? env : "",
+                    "C:\\工程管理AIプロジェクト_JAVA\\.cursor\\debug-b8c02d.log",
+                    "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-b8c02d.log",
+                };
+        for (String p : candidates) {
+            if (p == null || p.isBlank()) {
+                continue;
+            }
+            try {
+                Path path = Path.of(p);
+                Path parent = path.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.writeString(
+                        path,
+                        line,
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.APPEND);
+                break;
+            } catch (Exception ignored) {
+                // try next path
+            }
+        }
+    }
+
+    private static String jsonEscape(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** デバッグ: グラフィックタブで選択シートを読み込んだとき */
+    public static void agentLogSheetLoad(String sheetName, int columnCount) {
+        agentDebugLog(
+                "H2",
+                "EquipmentGanttGraphicTabController.applySelectedSheetFromMap",
+                "selected sheet for graphic gantt",
+                String.format(
+                        "{\"sheetName\":\"%s\",\"columnCount\":%d}",
+                        jsonEscape(sheetName != null ? sheetName : ""),
+                        columnCount));
+    }
+    // #endregion
 
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
