@@ -19,20 +19,20 @@
             </padding>
             <Label fx:id="hintLabel" wrapText="true"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label text="&#x30d1;&#x30b9;"/>
+                <Label text="パス"/>
                 <TextField fx:id="pathField" HBox.hgrow="ALWAYS"/>
                 <Button fx:id="fromEnvButton" mnemonicParsing="false"
-                        text="&#x74b0;&#x5883;&#x5909;&#x6570;&#x304b;&#x3089;&#x30d1;&#x30b9;"
+                        text="環境変数からパス"
                         onAction="#onFromEnvButtonAction"/>
-                <Button fx:id="pickButton" mnemonicParsing="false" text="&#x53c2;&#x7167;..."
+                <Button fx:id="pickButton" mnemonicParsing="false" text="参照..."
                         onAction="#onPickButtonAction"/>
             </HBox>
             <HBox spacing="8.0">
-                <Button fx:id="loadButton" mnemonicParsing="false" text="&#x8aad;&#x8fbc;"
+                <Button fx:id="loadButton" mnemonicParsing="false" text="読込"
                         onAction="#onLoadButtonAction"/>
-                <Button fx:id="saveButton" mnemonicParsing="false" text="&#x4fdd;&#x5b58;"
+                <Button fx:id="saveButton" mnemonicParsing="false" text="保存"
                         onAction="#onSaveButtonAction"/>
-                <Button fx:id="validateButton" mnemonicParsing="false" text="JSON &#x691c;&#x8a3c;"
+                <Button fx:id="validateButton" mnemonicParsing="false" text="JSON 検証"
                         onAction="#onValidateButtonAction"/>
             </HBox>
             <TextArea fx:id="bodyArea" prefRowCount="18" wrapText="false" VBox.vgrow="ALWAYS"/>

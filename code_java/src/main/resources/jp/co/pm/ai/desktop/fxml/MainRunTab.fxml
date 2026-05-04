@@ -8,111 +8,89 @@
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 
 <!-- Labels/buttons: numeric char refs (ASCII-safe source file). -->
-<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-            styleClass="pm-run-tab"
-            fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
+
+<BorderPane styleClass="pm-run-tab" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
     <padding>
-        <Insets bottom="16.0" left="16.0" right="16.0"/>
+        <Insets bottom="16.0" left="16.0" right="16.0" />
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>
-                    <Insets bottom="0.0" left="12.0" right="0.0" top="12.0"/>
+                    <Insets bottom="0.0" left="12.0" right="0.0" top="12.0" />
                 </padding>
                 <children>
-                    <!-- workbookField / pythonExeField / scriptDirField: session + env merge fallback (hidden; edit on &#x74b0;&#x5883;&#x5909;&#x6570; tab) -->
-                    <HBox spacing="20.0" alignment="CENTER_LEFT" GridPane.columnIndex="1"
-                          GridPane.columnSpan="2" GridPane.rowIndex="0">
-                        <Button fx:id="stage1RunButton" mnemonicParsing="false"
-                                styleClass="pm-stage-run-button,pm-stage-run-1"
-                                text="&#x6bb5;&#x968e;1 &#x5b9f;&#x884c;"
-                                onAction="#onStage1RunButtonAction"/>
-                        <Button fx:id="stage2RunButton" mnemonicParsing="false"
-                                styleClass="pm-stage-run-button,pm-stage-run-2"
-                                text="&#x6bb5;&#x968e;2 &#x5b9f;&#x884c;"
-                                onAction="#onStage2RunButtonAction"/>
-                        <CheckBox fx:id="stage2WriteExcelCheckBox" mnemonicParsing="false" selected="true"
-                                  text="Excel&#xff08;.xlsx&#xff09;&#x3092;&#x51fa;&#x529b;"/>
-                        <Label text="&#x6bb5;&#x968e;2&#x7d50;&#x679c; Excel &#x30d5;&#x30a9;&#x30f3;&#x30c8;"/>
-                        <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0"/>
+                    <!-- workbookField / pythonExeField / scriptDirField: session + env merge fallback (hidden; edit on 環境変数 tab) -->
+                    <HBox alignment="CENTER_LEFT" spacing="20.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="0">
+                        <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
+                        <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2 実行" />
+                        <CheckBox fx:id="stage2WriteExcelCheckBox" mnemonicParsing="false" selected="true" text="Excel（.xlsx）を出力" />
+                        <Label text="段階2結果 Excel フォント" />
+                        <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0" />
                     </HBox>
-                    <Label text="&#x6bb5;&#x968e;2 production_plan&#xff08;&#x6700;&#x65b0;&#xff09;"
-                           GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="1">
-                        <TextField fx:id="stage2ProductionPlanField" editable="false"
-                                   maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
-                        <Button mnemonicParsing="false"
-                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
-                                onAction="#onOpenStage2ProductionPlanAction"/>
+                    <Label text="段階2 production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="1">
+                        <TextField fx:id="stage2ProductionPlanField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
+                        <Button mnemonicParsing="false" onAction="#onOpenStage2ProductionPlanAction" text="エクセルを開く" />
                     </HBox>
-                    <Label text="&#x6bb5;&#x968e;2 member_schedule&#xff08;&#x6700;&#x65b0;&#xff09;"
-                           GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="2">
-                        <TextField fx:id="stage2MemberScheduleField" editable="false"
-                                   maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
-                        <Button mnemonicParsing="false"
-                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
-                                onAction="#onOpenStage2MemberScheduleAction"/>
+                    <Label text="段階2 member_schedule（最新）" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="2">
+                        <TextField fx:id="stage2MemberScheduleField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
+                        <Button mnemonicParsing="false" onAction="#onOpenStage2MemberScheduleAction" text="エクセルを開く" />
                     </HBox>
-                    <Label text="master.xlsm"
-                           GridPane.columnIndex="0" GridPane.rowIndex="3"/>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="3">
-                        <Button mnemonicParsing="false"
-                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
-                                onAction="#onOpenMasterWorkbookAction"/>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="3">
+                       <Label text="master.xlsm" />
+                        <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
+                       <Label text="サマリ_AI配台.xlsm" />
+                        <Button mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
                     </HBox>
-                    <Label text="&#x30b5;&#x30de;&#x30ea;_AI&#x914d;&#x53f0;.xlsm"
-                           GridPane.columnIndex="0" GridPane.rowIndex="4"/>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                          GridPane.rowIndex="4">
-                        <Button mnemonicParsing="false"
-                                text="&#x30a8;&#x30af;&#x30bb;&#x30eb;&#x3092;&#x958b;&#x304f;"
-                                onAction="#onOpenSummaryAiDispatchAction"/>
-                    </HBox>
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="4" />
                 </children>
+            <columnConstraints>
+               <ColumnConstraints />
+               <ColumnConstraints />
+               <ColumnConstraints />
+            </columnConstraints>
+            <rowConstraints>
+               <RowConstraints />
+               <RowConstraints />
+               <RowConstraints />
+               <RowConstraints />
+               <RowConstraints />
+            </rowConstraints>
             </GridPane>
-            <HBox visible="false" managed="false" spacing="0.0">
-                <TextField fx:id="workbookField" prefWidth="1.0"/>
-                <TextField fx:id="pythonExeField" prefWidth="1.0"/>
-                <TextField fx:id="scriptDirField" prefWidth="1.0"/>
-            </HBox>
-            <Label styleClass="pm-section-title" text="log (stdout+stderr merged)"/>
-            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label text="&#x30d5;&#x30a3;&#x30eb;&#x30bf;"/>
-                <ComboBox fx:id="logFilterCombo" prefWidth="160.0"/>
+            <HBox managed="false" spacing="0.0" visible="false">
+                <TextField fx:id="workbookField" prefWidth="1.0" />
+                <TextField fx:id="pythonExeField" prefWidth="1.0" />
+                <TextField fx:id="scriptDirField" prefWidth="1.0" />
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label text="&#x30d5;&#x30a9;&#x30f3;&#x30c8;"/>
-                <ComboBox fx:id="logFontFamilyCombo" prefWidth="260.0"/>
-                <Label text="&#x30b5;&#x30a4;&#x30ba;"/>
-                <ComboBox fx:id="logFontSizeCombo" prefWidth="88.0"/>
-                <Button fx:id="copyAllLogButton" mnemonicParsing="false"
-                        text="&#x5168;&#x30ed;&#x30b0;&#x3092;&#x30b3;&#x30d4;&#x30fc;"
-                        onAction="#onCopyAllLogButtonAction"/>
-                <Button fx:id="clearLogButton" mnemonicParsing="false"
-                        text="&#x30ed;&#x30b0;&#x3092;&#x30af;&#x30ea;&#x30a2;"
-                        onAction="#onClearLogButtonAction"/>
+                <Label text="フィルタ" />
+                <ComboBox fx:id="logFilterCombo" prefHeight="25.0" prefWidth="102.0" />
+                <Label text="フォント" />
+                <ComboBox fx:id="logFontFamilyCombo" prefHeight="25.0" prefWidth="108.0" />
+                <Label text="サイズ" />
+                <ComboBox fx:id="logFontSizeCombo" prefWidth="88.0" />
+                <Button fx:id="copyAllLogButton" mnemonicParsing="false" onAction="#onCopyAllLogButtonAction" text="全ログをコピー" />
+                <Button fx:id="clearLogButton" mnemonicParsing="false" onAction="#onClearLogButtonAction" text="ログをクリア" />
             </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0" />
         </VBox>
     </top>
     <center>
-        <ListView fx:id="logListView" minHeight="160.0" prefHeight="240.0"
-                  styleClass="pm-log-view"/>
+        <ListView fx:id="logListView" minHeight="160.0" prefHeight="240.0" styleClass="pm-log-view" />
     </center>
     <bottom>
-        <Label fx:id="statusLabel"
-               text="exit: n/a &#x2014; 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel">
+        <Label fx:id="statusLabel" text="exit: n/a — 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel">
             <BorderPane.margin>
-                <Insets top="8.0"/>
+                <Insets top="8.0" />
             </BorderPane.margin>
         </Label>
     </bottom>

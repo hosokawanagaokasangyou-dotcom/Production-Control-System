@@ -8,7 +8,7 @@
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Text?>
 
-<!-- &#x7d50;&#x679c;_&#x914d;&#x53f0;&#x8868;.json: ControlsFX SpreadsheetView in {@link ResultDispatchTableTabController}. -->
+<!-- 結果_配台表.json: ControlsFX SpreadsheetView in {@link ResultDispatchTableTabController}. -->
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.ResultDispatchTableTabController" fillWidth="true" spacing="8.0">
     <padding>
@@ -18,7 +18,7 @@
         <padding>
             <Insets bottom="4.0"/>
         </padding>
-        <Button fx:id="refreshButton" mnemonicParsing="false" text="&#x518d;&#x8aad;&#x307f;"
+        <Button fx:id="refreshButton" mnemonicParsing="false" text="再読み"
                 onAction="#onRefreshButtonAction"/>
         <Label fx:id="statusLabel"/>
     </HBox>
@@ -30,7 +30,7 @@
         <VBox.margin>
             <Insets top="8.0"/>
         </VBox.margin>
-        <Label text="&#x30e1;&#x30bf;&#x60c5;&#x5831;"/>
+        <Label text="メタ情報"/>
         <Text fx:id="metaText" wrappingWidth="880.0"/>
     </VBox>
 </VBox>

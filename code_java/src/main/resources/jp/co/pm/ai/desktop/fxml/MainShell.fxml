@@ -9,89 +9,89 @@
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.layout.BorderPane?>
 
-<!-- Japanese tab titles as numeric refs so file stays valid UTF-8 ASCII (avoids mojibake on Windows tools). -->
+<!-- UI 文言は UTF-8 の日本語リテラル（XML 宣言の encoding と一致）。 -->
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
             styleClass="pm-shell"
             fx:controller="jp.co.pm.ai.desktop.MainShellController">
     <top>
         <ToolBar styleClass="pm-app-toolbar">
-            <Label text="&#x30c6;&#x30fc;&#x30de;"/>
+            <Label text="テーマ"/>
             <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="clearTabFiltersButton"
-                    text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"
+                    text="列フィルタ・並べ替え解除"
                     onAction="#onClearTabFiltersAction"/>
         </ToolBar>
     </top>
     <center>
         <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE" tabDragPolicy="REORDER">
             <tabs>
-                <Tab fx:id="mainShellTabRun" closable="false" text="&#x5b9f;&#x884c;&#x30fb;&#x30ed;&#x30b0;">
+                <Tab fx:id="mainShellTabRun" closable="false" text="実行・ログ">
                     <content>
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabEnv" closable="false" text="&#x74b0;&#x5883;&#x5909;&#x6570;">
+                <Tab fx:id="mainShellTabEnv" closable="false" text="環境変数">
                     <content>
                         <fx:include fx:id="envTab" source="EnvTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
-                     text="&#x30de;&#x30b9;&#x30bf;&#x8aad;&#x8fbc;&#x30b5;&#x30de;&#x30ea;">
+                     text="マスタ読込サマリ">
                     <content>
                         <fx:include fx:id="masterReadSummaryTab" source="MasterReadSummaryTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabPlanInput" closable="false"
-                     text="&#x914d;&#x53f0;&#x8a08;&#x753b;_&#x30bf;&#x30b9;&#x30af;&#x5165;&#x529b;">
+                     text="配台計画_タスク入力">
                     <content>
                         <fx:include fx:id="planInputTab" source="PlanInputTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabStage1Preview" closable="false"
-                     text="&#x6bb5;&#x968e;1 &#x6210;&#x5f62;&#x7d50;&#x679c;">
+                     text="段階1 成形結果">
                     <content>
                         <fx:include fx:id="stage1PreviewTab" source="Stage1PreviewTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabExcludeRules" closable="false"
-                     text="&#x914d;&#x53f0;&#x4e0d;&#x8981;&#x30eb;&#x30fc;&#x30eb; (JSON)">
+                     text="配台不要ルール (JSON)">
                     <content>
                         <fx:include fx:id="excludeRulesTab" source="ExcludeRulesTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabActualsStatus" closable="false"
-                     text="&#x5b9f;&#x7e3e;DATA&#x30fb;&#x660e;&#x7d30;&#x306e;&#x53d6;&#x5f97;&#x72b6;&#x614b;">
+                     text="実績DATA・明細の取得状態">
                     <content>
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabResultDispatch" closable="false"
-                     text="&#x7d50;&#x679c;_&#x914d;&#x53f0;&#x8868; (JSON)">
+                     text="結果_配台表 (JSON)">
                     <content>
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabMachineCalendarJson" closable="false"
-                     text="&#x6a5f;&#x68b0;&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc; (JSON)">
+                     text="機械カレンダー (JSON)">
                     <content>
                         <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
-                     text="&#x914d;&#x53f0;&#x8a08;&#x753b;&#x624b;&#x52d5;&#x4fee;&#x6b63;">
+                     text="配台計画手動修正">
                     <content>
                         <fx:include fx:id="dispatchInteractiveTab" source="DispatchInteractiveTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabPlanResultViewer" closable="false"
-                     text="&#x8a08;&#x753b;&#x7d50;&#x679c;&#x30d3;&#x30e5;&#x30fc;&#x30a2; (JSON)">
+                     text="計画結果ビューア (JSON)">
                     <content>
                         <fx:include fx:id="planResultViewerTab" source="PlanResultViewerTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabOperatorCard" closable="false"
-                     text="&#x30aa;&#x30da;&#x30ec;&#x30fc;&#x30bf;&#x30fc;&#x30ab;&#x30fc;&#x30c9;">
+                     text="オペレーターカード">
                     <content>
                         <fx:include fx:id="operatorCardTab" source="OperatorCardTab.fxml"/>
                     </content>

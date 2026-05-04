@@ -18,7 +18,7 @@
         <padding>
             <Insets bottom="8.0"/>
         </padding>
-        <Button fx:id="refreshButton" mnemonicParsing="false" text="&#x66f4;&#x65b0;"
+        <Button fx:id="refreshButton" mnemonicParsing="false" text="更新"
                 onAction="#onRefreshButtonAction"/>
         <Label fx:id="statusLabel"/>
     </HBox>
@@ -29,7 +29,7 @@
         <VBox.margin>
             <Insets top="8.0"/>
         </VBox.margin>
-        <Label text="&#x8aac;&#x660e;"/>
+        <Label text="説明"/>
         <Text fx:id="footLong" wrappingWidth="880.0"/>
     </VBox>
 </VBox>

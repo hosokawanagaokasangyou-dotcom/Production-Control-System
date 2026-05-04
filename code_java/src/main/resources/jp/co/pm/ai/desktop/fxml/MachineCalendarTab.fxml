@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.MachineCalendarTabController"
+      fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="exportButton" mnemonicParsing="false"
+                text="マスタから JSON 出力"
+                onAction="#onExportFromMasterAction"/>
+        <Button fx:id="reloadButton" mnemonicParsing="false"
+                text="ディスクから再表示"
+                onAction="#onReloadFromDiskAction"/>
+        <Label fx:id="statusLabel"/>
+        <ProgressBar fx:id="progressBar" maxWidth="Infinity" prefWidth="220.0"
+                     visible="false" managed="false"/>
+    </HBox>
+    <Label fx:id="pathLabel" wrapText="true"/>
+    <TextArea fx:id="jsonArea" editable="false" wrapText="false" prefRowCount="32" VBox.vgrow="ALWAYS"
+              promptText="machine_calendar_blocks.json"/>
+</VBox>

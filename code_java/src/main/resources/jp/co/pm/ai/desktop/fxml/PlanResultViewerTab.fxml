@@ -1,40 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Accordion?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<!-- &#35336;&#30011;&#32080;&#26524; JSON &#12499;&#12517;&#12540;&#12450;&#65288;&#20837;&#12428;&#23376;&#12479;&#12502;&#65289; {@link PlanResultViewerTabController} -->
+<!-- 計画結果 JSON ビューア（入れ子タブ） {@link PlanResultViewerTabController} -->
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.PlanResultViewerTabController"
-      fillWidth="true" spacing="8.0" styleClass="pm-plan-result-viewer">
+      fillWidth="true" spacing="4.0" styleClass="pm-plan-result-viewer">
     <padding>
-        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+        <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
+    <!-- 常時表示（低高）：再読み・検索のみ -->
     <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="reloadButton" mnemonicParsing="false" text="&#x518d;&#x8aad;&#x307f;"
+        <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
                 onAction="#onReloadButtonAction"/>
         <Button fx:id="syncLatestButton" mnemonicParsing="false"
-                text="&#x6700;&#x65b0;JSON&#x3092;&#x691c;&#x7d22;"
+                text="最新JSONを検索"
                 onAction="#onSyncLatestButtonAction"/>
+        <Label styleClass="pm-plan-result-viewer-hint-inline"
+               text="パス指定・詳細は下のアコーディオンを展開"/>
     </HBox>
-    <Label text="production_plan_multi_day*.json"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <TextField fx:id="planJsonField" prefWidth="560.0" promptText="*.json"/>
-        <Button fx:id="browsePlanButton" mnemonicParsing="false" text="&#x53c2;&#x7167;..."
-                onAction="#onBrowsePlanJsonAction"/>
-    </HBox>
-    <Label text="member_schedule*.json"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <TextField fx:id="memberJsonField" prefWidth="560.0" promptText="*.json"/>
-        <Button fx:id="browseMemberButton" mnemonicParsing="false" text="&#x53c2;&#x7167;..."
-                onAction="#onBrowseMemberJsonAction"/>
-    </HBox>
+    <Accordion fx:id="sourceAccordion" maxWidth="Infinity" VBox.vgrow="NEVER">
+        <panes>
+            <TitledPane fx:id="sourceTitledPane" animated="true"
+                        text="JSONファイル・ヒント"
+                        expanded="false">
+                <content>
+                    <VBox fillWidth="true" spacing="6.0" styleClass="pm-plan-result-viewer-source-body">
+                        <padding>
+                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                        </padding>
+                        <Label text="production_plan_multi_day*.json"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"
+                                       promptText="*.json" HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="browsePlanButton" mnemonicParsing="false" text="参照..."
+                                    onAction="#onBrowsePlanJsonAction"/>
+                        </HBox>
+                        <Label text="member_schedule*.json"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <TextField fx:id="memberJsonField" maxWidth="Infinity" prefWidth="560.0"
+                                       promptText="*.json" HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="browseMemberButton" mnemonicParsing="false" text="参照..."
+                                    onAction="#onBrowseMemberJsonAction"/>
+                        </HBox>
+                        <Label fx:id="hintLabel" wrapText="true"/>
+                    </VBox>
+                </content>
+            </TitledPane>
+        </panes>
+    </Accordion>
     <Label fx:id="statusLabel" wrapText="true"/>
-    <Label fx:id="hintLabel" wrapText="true"/>
-    <BorderPane fx:id="contentPane" minHeight="320.0" VBox.vgrow="ALWAYS"/>
+    <BorderPane fx:id="contentPane" minHeight="400.0" VBox.vgrow="ALWAYS"/>
 </VBox>

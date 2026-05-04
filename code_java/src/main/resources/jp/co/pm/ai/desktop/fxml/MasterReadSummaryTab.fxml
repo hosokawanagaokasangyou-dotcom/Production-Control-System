@@ -25,13 +25,13 @@
         <ToolBar>
             <items>
                 <Button fx:id="refreshButton" mnemonicParsing="false"
-                        text="&#x30b5;&#x30de;&#x30ea;&#x3092;&#x66f4;&#x65b0;"
+                        text="サマリを更新"
                         onAction="#onRefreshAction"/>
                 <Button fx:id="openExcelButton" mnemonicParsing="false"
-                        text="Excel&#x3067;&#x958b;&#x304f;"
+                        text="Excelで開く"
                         onAction="#onOpenExcelAction"/>
                 <Button fx:id="copyJsonButton" mnemonicParsing="false"
-                        text="&#x30af;&#x30ea;&#x30c3;&#x30d7;&#x30dc;&#x30fc;&#x30c9;&#xff08;JSON&#xff09;"
+                        text="クリップボード（JSON）"
                         onAction="#onCopyJsonAction"/>
             </items>
         </ToolBar>
@@ -43,7 +43,7 @@
                     <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
                 </padding>
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x30d5;&#x30a1;&#x30a4;&#x30eb;"/>
+                       text="ファイル"/>
                 <TextField fx:id="resolvedPathField" editable="false"/>
                 <HBox spacing="16.0">
                     <Label fx:id="fileExistsLabel" text=""/>
@@ -53,38 +53,125 @@
                 <Separator/>
 
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x74b0;&#x5883;&#x30fb;speed"/>
+                       text="環境・speed"/>
                 <GridPane fx:id="envGrid" hgap="8.0" vgap="4.0"/>
 
                 <Separator/>
 
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x30e1;&#x30a4;&#x30f3;&#x30b7;&#x30fc;&#x30c8;&#xff08;&#x5de5;&#x5834;&#x67a2;&#x30fb;&#x5b9a;&#x5e38;&#xff09;"/>
+                       text="skills / need（実読み込み）"/>
+                <GridPane fx:id="skillsNeedGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="組み合わせ表（プリセット）"/>
+                <GridPane fx:id="teamComboGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="メインシート（工場枢・定常）"/>
                 <GridPane fx:id="mainGrid" hgap="8.0" vgap="4.0"/>
 
                 <Separator/>
 
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x30b7;&#x30fc;&#x30c8;&#x78ba;&#x8a8d;"/>
+                       text="シート確認"/>
                 <TableView fx:id="sheetTable" prefHeight="200.0" minHeight="120.0">
                     <columns>
-                        <TableColumn fx:id="colCategory" text="&#x533a;&#x5206;" prefWidth="140.0"/>
-                        <TableColumn fx:id="colSheetName" text="&#x30b7;&#x30fc;&#x30c8;&#x540d;" prefWidth="200.0"/>
-                        <TableColumn fx:id="colPresent" text="&#x72b6;&#x614b;" prefWidth="72.0"/>
-                        <TableColumn fx:id="colNote" text="&#x5099;&#x8003;" prefWidth="120.0"/>
+                        <TableColumn fx:id="colCategory" text="区分" prefWidth="140.0"/>
+                        <TableColumn fx:id="colSheetName" text="シート名" prefWidth="200.0"/>
+                        <TableColumn fx:id="colPresent" text="状態" prefWidth="72.0"/>
+                        <TableColumn fx:id="colNote" text="備考" prefWidth="120.0"/>
                     </columns>
                 </TableView>
 
                 <Separator/>
 
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x52e4;&#x6020;&#xff08;&#x5019;&#x88dc;&#xff09;"/>
-                <GridPane fx:id="attendanceGrid" hgap="8.0" vgap="4.0"/>
+                       text="設定シート（マスタ内・読み）"/>
+                <GridPane fx:id="appConfigGrid" hgap="8.0" vgap="4.0"/>
 
                 <Separator/>
 
                 <Label style="-fx-font-weight: bold;"
-                       text="&#x8b66;&#x544a;&#x30fb;&#x6ce8;&#x610f;"/>
+                       text="配台不要工程シート（スキャン）"/>
+                <GridPane fx:id="excludeRulesGrid" hgap="8.0" vgap="4.0"/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="配台不要工程（ルール行・マスタ読み JSON）"/>
+                <TableView fx:id="excludeRulesSampleTable" prefHeight="200.0" minHeight="120.0">
+                    <columns>
+                        <TableColumn fx:id="colExProcess" text="工程名" prefWidth="148.0"/>
+                        <TableColumn fx:id="colExMachine" text="機械名" prefWidth="148.0"/>
+                        <TableColumn fx:id="colExFlag" text="配台不要" prefWidth="88.0"/>
+                        <TableColumn fx:id="colExParsed" text="ロジック式（要約）" prefWidth="260.0"/>
+                    </columns>
+                </TableView>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="論理定数・範囲"/>
+                <GridPane fx:id="planningConstantsGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="詳細テーブル（speed / need / 占有日）"/>
+                <TableView fx:id="speedSampleTable" prefHeight="160.0" minHeight="100.0">
+                    <columns>
+                        <TableColumn fx:id="colSpeedProcess" text="工程（正規化）" prefWidth="160.0"/>
+                        <TableColumn fx:id="colSpeedMachine" text="機械（正規化）" prefWidth="160.0"/>
+                        <TableColumn fx:id="colSpeedMpm" text="m/分" prefWidth="88.0"/>
+                    </columns>
+                </TableView>
+                <TableView fx:id="needBaseTable" prefHeight="140.0" minHeight="80.0">
+                    <columns>
+                        <TableColumn fx:id="colNeedCombo" text="工程+機械" prefWidth="260.0"/>
+                        <TableColumn fx:id="colNeedReq" text="基本必需" prefWidth="96.0"/>
+                    </columns>
+                </TableView>
+                <TableView fx:id="needRulesTable" prefHeight="140.0" minHeight="80.0">
+                    <columns>
+                        <TableColumn fx:id="colRuleOrder" text="特別指定" prefWidth="88.0"/>
+                        <TableColumn fx:id="colRuleCond" text="条件（先頭）" prefWidth="280.0"/>
+                        <TableColumn fx:id="colRuleOv" text="上書き件数" prefWidth="96.0"/>
+                    </columns>
+                </TableView>
+                <TableView fx:id="calendarTopDatesTable" prefHeight="120.0" minHeight="72.0">
+                    <columns>
+                        <TableColumn fx:id="colCalDate" text="日付" prefWidth="120.0"/>
+                        <TableColumn fx:id="colCalIv" text="区間数" prefWidth="88.0"/>
+                    </columns>
+                </TableView>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="ブック内全シート名"/>
+                <ListView fx:id="allSheetsList" prefHeight="180.0" minHeight="100.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="機械カレンダー・日次始業等"/>
+                <GridPane fx:id="machineCalendarGrid" hgap="8.0" vgap="4.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="勤怠（候補）"/>
+                <GridPane fx:id="attendanceGrid" hgap="8.0" vgap="4.0"/>
+                <Label style="-fx-font-weight: bold;"
+                       text="勤怠候補シート名（メンバー一致）"/>
+                <ListView fx:id="attendanceSheetsList" prefHeight="140.0" minHeight="72.0"/>
+
+                <Separator/>
+
+                <Label style="-fx-font-weight: bold;"
+                       text="警告・注意"/>
                 <ListView fx:id="warningsList" prefHeight="120.0" minHeight="80.0"/>
             </VBox>
         </ScrollPane>

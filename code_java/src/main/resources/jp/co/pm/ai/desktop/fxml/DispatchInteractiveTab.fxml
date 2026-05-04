@@ -4,6 +4,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.ToggleButton?>
@@ -21,41 +22,43 @@
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
     <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="loadButton" mnemonicParsing="false" text="&#x518d;&#x8aad;&#x307f;"
+        <Button fx:id="loadButton" mnemonicParsing="false" text="再読み"
                 onAction="#onLoadAction"/>
-        <Button fx:id="saveButton" mnemonicParsing="false" text="&#x4fdd;&#x5b58; (JSON+xlsx)"
+        <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
         <Button fx:id="reloadCalendarButton" mnemonicParsing="false"
-                text="&#x6a5f;&#x68b0; JSON &#x518d;&#x8aad;&#x307f;"
+                text="機械 JSON 再読み"
                 onAction="#onReloadCalendarAction"/>
-        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="&#x914d;&#x53f0;&#x8a66;&#x884c;"
+        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="配台試行"
                 onAction="#onDispatchTrialAction"/>
-        <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="&#x2191;"
+        <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
                 onAction="#onWideRowUpAction">
             <tooltip>
-                <Tooltip text="&#x9078;&#x629e;&#x884c;&#x3092;&#x4e0a;&#x3078;&#xff08;&#x8a66;&#x884c;&#x9806;&#xff09;"/>
+                <Tooltip text="選択行を上へ（試行順）"/>
             </tooltip>
         </Button>
-        <Button fx:id="wideRowDownButton" mnemonicParsing="false" text="&#x2193;"
+        <Button fx:id="wideRowDownButton" mnemonicParsing="false" text="↓"
                 onAction="#onWideRowDownAction">
             <tooltip>
-                <Tooltip text="&#x9078;&#x629e;&#x884c;&#x3092;&#x4e0b;&#x3078;&#xff08;&#x8a66;&#x884c;&#x9806;&#xff09;"/>
+                <Tooltip text="選択行を下へ（試行順）"/>
             </tooltip>
         </Button>
         <ToggleButton fx:id="staffCheckToggle" mnemonicParsing="false"
-                      text="&#x4eba;&#x54e1;&#x30c1;&#x30a7;&#x30c3;&#x30af;">
+                      text="人員チェック">
             <tooltip>
-                <Tooltip text="&#x30de;&#x30b9;&#x30bf;&#x8aad;&#x8fbc;&#x30fb;&#x8a08;&#x753b;&#x7d50;&#x679c;&#x9023;&#x643a;&#x5f8c;&#x306b;OP/AS&#x4e0d;&#x8db3;&#x3092;&#x8868;&#x793a;&#x4e88;&#x5b9a;&#x3002;&#x73fe;&#x6642;&#x70b9;&#x306f;&#x30d2;&#x30f3;&#x30c8;&#x306e;&#x307f;&#x3002;"/>
+                <Tooltip text="マスタ読込・計画結果連携後にOP/AS不足を表示予定。現時点はヒントのみ。"/>
             </tooltip>
         </ToggleButton>
         <Label fx:id="statusLabel"/>
+        <ProgressIndicator fx:id="busyIndicator" prefHeight="22.0" prefWidth="22.0"
+                           visible="false" managed="false"/>
         <ProgressBar fx:id="reloadProgressBar" maxWidth="Infinity" prefWidth="220.0"
                      visible="false" managed="false"/>
     </HBox>
     <Label fx:id="jsonPathLabel" wrapText="true"/>
     <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
         <tabs>
-            <Tab closable="false" text="&#x30bf;&#x30b9;&#x30af;&#xd7;&#x65e5;&#x4ed8;">
+            <Tab closable="false" text="タスク×日付">
                 <content>
                     <BorderPane>
                         <center>
@@ -65,7 +68,7 @@
                     </BorderPane>
                 </content>
             </Tab>
-            <Tab closable="false" text="&#x5de5;&#x7a0b;+&#x6a5f;&#x68b0;&#xd7;&#x65e5;">
+            <Tab closable="false" text="工程+機械×日">
                 <content>
                     <BorderPane>
                         <center>
