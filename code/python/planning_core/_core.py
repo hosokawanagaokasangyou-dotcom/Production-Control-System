@@ -24053,42 +24053,6 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def _append_debug_471ee7(hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    # #region agent log
-    try:
-        _p = os.path.abspath(os.path.dirname(__file__))
-        _dbg_p = None
-        for _ in range(10):
-            _cand = os.path.join(_p, ".cursor", "debug-471ee7.log")
-            if os.path.isdir(os.path.join(_p, ".cursor")):
-                _dbg_p = _cand
-                break
-            _parent = os.path.dirname(_p)
-            if _parent == _p:
-                break
-            _p = _parent
-        if not _dbg_p:
-            return
-        with open(_dbg_p, "a", encoding="utf-8") as _df:
-            _df.write(
-                json.dumps(
-                    {
-                        "sessionId": "471ee7",
-                        "hypothesisId": str(hypothesis_id),
-                        "location": str(location),
-                        "message": str(message),
-                        "data": data if isinstance(data, dict) else {"value": str(data)},
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
-
-
 def _dataframe_from_interactive_dispatch_json_rows(
     json_rows: list,
     json_columns: list | None,
@@ -24147,15 +24111,6 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         return df_sim
     if not _interactive_dispatch_trial_env_active():
         return df_sim
-    _append_debug_471ee7(
-        "H2",
-        "_interactive_dispatch_trial_use_editor_rows_for_result_table",
-        "enter",
-        {
-            "jsonRows": len(json_rows) if isinstance(json_rows, list) else -1,
-            "simEmpty": bool(df_sim is None or getattr(df_sim, "empty", True)),
-        },
-    )
     df_out = _dataframe_from_interactive_dispatch_json_rows(
         json_rows,
         json_columns,
@@ -24164,14 +24119,6 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     logging.info(
         "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
-    )
-    _append_debug_471ee7(
-        "H2",
-        "_interactive_dispatch_trial_use_editor_rows_for_result_table",
-        "exit_json_authoritative",
-        {
-            "rowsOut": int(len(df_out)),
-        },
     )
     return df_out
 
@@ -31517,15 +31464,6 @@ def _generate_plan_impl(
         for _k, _vv in _tmp_hist.items():
             _vv.sort(key=lambda _h: str(_h.get("date") or ""))
             _interactive_hist_override[_k] = _vv
-        _append_debug_471ee7(
-            "H4",
-            "_generate_plan_impl.result_task_history_override",
-            "built_override_groups",
-            {
-                "groups": int(len(_interactive_hist_override)),
-                "rows": int(len(interactive_result_dispatch_json_rows)),
-            },
-        )
     max_history_len = max(
         [
             len(merge_assigned_history_contiguous_for_result_sheet(t.get("assigned_history")))
@@ -31635,16 +31573,6 @@ def _generate_plan_impl(
         _hk = (_tid_norm, _mach_norm)
         if _hk in _interactive_hist_override:
             _hist_for_sheet = _interactive_hist_override.get(_hk, [])
-            _append_debug_471ee7(
-                "H4",
-                "_generate_plan_impl.result_task_history_override",
-                "apply_override",
-                {
-                    "taskId": _tid_norm,
-                    "machineName": _mach_norm,
-                    "historyCount": int(len(_hist_for_sheet)),
-                },
-            )
         else:
             _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
                 t.get("assigned_history")
