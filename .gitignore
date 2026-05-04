@@ -1,3 +1,5 @@
 .venv/
+# Log files（ステージングしない）
+*.log
 # Excel creates lock files while a workbook is open
 **/~$*

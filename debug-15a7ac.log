@@ -1,6 +1,0 @@
-{"sessionId":"15a7ac","hypothesisId":"H4","location":"段階実行制御.bas:RunPythonStage1","message":"entry","data":{"workbookPath":"c:\\工程管理AIプロジェクト\\----AI-------1\\code"},"runId":"pre","timestampMs":33243145}
-{"sessionId":"15a7ac","hypothesisId":"H4","location":"段階実行制御.bas:RunPythonStage1","message":"after 段階1_コア実行","data":{"exitCode":0,"errLen":0},"runId":"pre","timestampMs":33445859}
-{"sessionId":"15a7ac","hypothesisId":"H1","location":"段階実行制御.bas:RunPythonStage1","message":"postprocess flags (link block only)","data":{"skipPost":true},"runId":"pre","timestampMs":33445867}
-{"sessionId":"15a7ac","hypothesisId":"H2","location":"段階実行制御.bas:RunPythonStage1","message":"STAGE1_SKIP_MAIN_POST effective","data":{"skipPost":true},"runId":"pre","timestampMs":33445871}
-{"sessionId":"15a7ac","hypothesisId":"H3","location":"Gemini連携.bas:メインシート_メンバー一覧と出勤表示","message":"entry","data":{"silent":true},"runId":"pre","timestampMs":33445879}
-{"sessionId":"15a7ac","hypothesisId":"H1","location":"段階実行制御.bas:RunPythonStage1","message":"after メインシート_メンバー一覧と出勤表示","data":{"attendanceRefreshInvoked":true},"runId":"post-fix","timestampMs":33446793}
