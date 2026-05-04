@@ -506,7 +506,6 @@ public final class DispatchInteractiveTabController {
         sceneH = Math.max(360, Math.min(sceneH, visual.getHeight()));
 
         AtomicBoolean finished = new AtomicBoolean(false);
-        AtomicBoolean modalReleased = new AtomicBoolean(false);
         AtomicBoolean trialLogWindowReady = new AtomicBoolean(false);
 
         Button closeBtn = new Button("閉じる");
@@ -517,47 +516,52 @@ public final class DispatchInteractiveTabController {
                 () -> {
                     // #region agent log
                     logDispatchTrialDebug(
-                            "H2",
+                            "FIX",
                             "DispatchInteractiveTabController:releaseTrialModal",
                             "entry",
                             Map.of(
                                     "thread",
                                     Thread.currentThread().getName(),
-                                    "modalReleased",
-                                    modalReleased.get(),
                                     "closeDisabled",
                                     closeBtn.isDisabled()));
                     // #endregion
-                    if (!modalReleased.compareAndSet(false, true)) {
+                    finished.set(true);
+                    try {
+                        closeBtn.setDisable(false);
+                    } catch (Throwable t) {
                         // #region agent log
                         logDispatchTrialDebug(
-                                "H2",
+                                "FIX",
                                 "DispatchInteractiveTabController:releaseTrialModal",
-                                "duplicateSkipped",
-                                Map.of("closeDisabled", closeBtn.isDisabled()));
-                        // #endregion
-                        return;
-                    }
-                    // #region agent log
-                    try {
-                        finished.set(true);
-                        closeBtn.setDisable(false);
-                        closeBtn.requestFocus();
-                        hideReloadProgress();
-                        logDispatchTrialDebug(
-                                "H2",
-                                "DispatchInteractiveTabController:releaseTrialModal",
-                                "afterEnable",
-                                Map.of("closeDisabled", closeBtn.isDisabled()));
-                    } catch (Throwable t) {
-                        logDispatchTrialDebug(
-                                "H1",
-                                "DispatchInteractiveTabController:releaseTrialModal",
-                                "exception",
+                                "setDisableFailed",
                                 Map.of(
                                         "error",
                                         t.getMessage() != null ? t.getMessage() : t.getClass().getName()));
+                        // #endregion
                     }
+                    try {
+                        closeBtn.requestFocus();
+                    } catch (Throwable ignored) {
+                    }
+                    try {
+                        hideReloadProgress();
+                    } catch (Throwable t) {
+                        // #region agent log
+                        logDispatchTrialDebug(
+                                "FIX",
+                                "DispatchInteractiveTabController:releaseTrialModal",
+                                "hideReloadFailed",
+                                Map.of(
+                                        "error",
+                                        t.getMessage() != null ? t.getMessage() : t.getClass().getName()));
+                        // #endregion
+                    }
+                    // #region agent log
+                    logDispatchTrialDebug(
+                            "FIX",
+                            "DispatchInteractiveTabController:releaseTrialModal",
+                            "afterEnable",
+                            Map.of("closeDisabled", closeBtn.isDisabled()));
                     // #endregion
                 };
 
@@ -767,11 +771,6 @@ public final class DispatchInteractiveTabController {
                                             "neu",
                                             String.valueOf(newState)));
                             // #endregion
-                            if (newState == Worker.State.FAILED
-                                    || newState == Worker.State.SUCCEEDED
-                                    || newState == Worker.State.CANCELLED) {
-                                Platform.runLater(releaseTrialModal);
-                            }
                         });
         task.setOnSucceeded(
                 e -> {
@@ -845,6 +844,17 @@ public final class DispatchInteractiveTabController {
                         logLines.add("");
                         logLines.add("[配台試行] エラーで終了しました。");
                         logLines.add(msg);
+                        logList.scrollTo(logLines.size() - 1);
+                    } finally {
+                        releaseTrialModal.run();
+                    }
+                });
+        task.setOnCancelled(
+                e -> {
+                    try {
+                        statusLabel.setText("配台試行キャンセル");
+                        logLines.add("");
+                        logLines.add("[配台試行] キャンセルされました。");
                         logList.scrollTo(logLines.size() - 1);
                     } finally {
                         releaseTrialModal.run();
