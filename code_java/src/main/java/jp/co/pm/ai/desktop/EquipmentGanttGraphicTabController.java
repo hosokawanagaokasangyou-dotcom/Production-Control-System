@@ -26,9 +26,9 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
-import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
 /**
@@ -188,11 +188,8 @@ public final class EquipmentGanttGraphicTabController {
                 return;
             }
 
-            Path loadPath = resolvePlanJsonForGraphic(planPath);
-            boolean usingLogicalView = !loadPath.equals(planPath);
-
-            Map<String, JsonTableIo.SheetTable> sheets =
-                    JsonTableIo.loadSheetsWorkbook(loadPath);
+            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
+            Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             lastLoadedPlanPath = planPath.toString();
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
@@ -220,18 +217,13 @@ public final class EquipmentGanttGraphicTabController {
             sheetCombo.getSelectionModel().select(pick);
 
             applySelectedSheetFromMap(eligible);
-            if (usingLogicalView) {
-                statusLabel.setText(
-                        "読み込み: "
-                                + planPath.getFileName()
-                                + " → "
-                                + loadPath.getFileName()
-                                + " (論理ビュー) / シート数(対象)="
-                                + names.size());
-            } else {
-                statusLabel.setText(
-                        "読み込み: " + planPath.getFileName() + " / シート数(対象)=" + names.size());
-            }
+            statusLabel.setText(
+                    "読み込み: "
+                            + planPath.getFileName()
+                            + " → "
+                            + loaded.description()
+                            + " / シート数(対象)="
+                            + names.size());
             if (sourceTitledPane != null) {
                 sourceTitledPane.setExpanded(false);
             }
@@ -258,10 +250,9 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         try {
-            Path loadPath = resolvePlanJsonForGraphic(planPath);
-            Map<String, JsonTableIo.SheetTable> sheets =
-                    JsonTableIo.loadSheetsWorkbook(loadPath);
-            Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
+            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
+            Map<String, JsonTableIo.SheetTable> eligible =
+                    filterEquipmentTimelineSheets(loaded.sheets());
             applySelectedSheetFromMap(eligible);
         } catch (IOException ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -284,12 +275,29 @@ public final class EquipmentGanttGraphicTabController {
                 EquipmentGraphicGanttPane.build(st.columns(), rows));
     }
 
+    /**
+     * {@link GanttScheduleStyle#resolveKind} と同趣旨（設備ガント・グラフィック専用タブのみで使用し、
+     * GanttScheduleStyle の Spreadsheet API 版とシグネチャ競合させない）。
+     */
+    private static GanttSheetKind resolveEquipmentGraphicSheetKind(
+            String sheetName, List<String> columns) {
+        if (columns != null && !columns.isEmpty() && "日時帯".equals(columns.get(0))) {
+            return GanttSheetKind.EQUIPMENT_TIMELINE;
+        }
+        if (sheetName != null) {
+            if (sheetName.contains("設備")
+                    && (sheetName.contains("ガント") || sheetName.contains("時間割"))) {
+                return GanttSheetKind.EQUIPMENT_TIMELINE;
+            }
+        }
+        return GanttSheetKind.DEFAULT;
+    }
+
     private static Map<String, JsonTableIo.SheetTable> filterEquipmentTimelineSheets(
             Map<String, JsonTableIo.SheetTable> sheets) {
         Map<String, JsonTableIo.SheetTable> out = new LinkedHashMap<>();
         for (Map.Entry<String, JsonTableIo.SheetTable> e : sheets.entrySet()) {
-            GanttSheetKind k =
-                    GanttScheduleStyle.resolveKind(e.getKey(), e.getValue().columns());
+            GanttSheetKind k = resolveEquipmentGraphicSheetKind(e.getKey(), e.getValue().columns());
             if (k == GanttSheetKind.EQUIPMENT_TIMELINE) {
                 out.put(e.getKey(), e.getValue());
             }
@@ -316,31 +324,88 @@ public final class EquipmentGanttGraphicTabController {
         return p;
     }
 
+    private record SheetLoad(Map<String, JsonTableIo.SheetTable> sheets, String description) {}
+
     /**
-     * 同フォルダに {@code <stem>_logical_view.json} があり、引数がミラー用 .json
-     * のときは結合展開済みの論理ビューを優先する（設備ガント グラフィック用）。
+     * 読み込み優先: {@code *_logical_view.json} → {@code *_equipment_gantt_contract.json}
+     * （契約から表を生成・xlsx 不要）→ 指定された plan JSON 本体。
      */
-    private static Path resolvePlanJsonForGraphic(Path planJsonFromField) {
-        if (planJsonFromField == null) {
+    private static SheetLoad loadWorkbookSheetsForGraphic(Path planJsonFromField)
+            throws IOException {
+        Path fn0 = planJsonFromField.getFileName();
+        if (fn0 != null && fn0.toString().endsWith(".json")) {
+            String stem0 = fn0.toString().substring(0, fn0.toString().length() - 5);
+            if (stem0.endsWith("_equipment_gantt_contract")) {
+                JsonTableIo.SheetTable ganttOnly =
+                        EquipmentGanttContractSheetTableBuilder.buildFromContractPath(
+                                planJsonFromField);
+                Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
+                m.put(DEFAULT_SHEET, ganttOnly);
+                return new SheetLoad(
+                        m, fn0.toString() + " (設備ガント契約・直接)");
+            }
+        }
+        Path logical = resolveLogicalViewPath(planJsonFromField);
+        if (logical != null) {
+            return new SheetLoad(
+                    JsonTableIo.loadSheetsWorkbook(logical),
+                    logical.getFileName().toString() + " (論理ビュー)");
+        }
+        Path contract = resolveEquipmentContractSibling(planJsonFromField);
+        if (contract != null && Files.isRegularFile(contract)) {
+            JsonTableIo.SheetTable gantt =
+                    EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
+            Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
+            m.put(DEFAULT_SHEET, gantt);
+            return new SheetLoad(
+                    m, contract.getFileName().toString() + " (設備ガント契約→表)");
+        }
+        return new SheetLoad(
+                JsonTableIo.loadSheetsWorkbook(planJsonFromField),
+                planJsonFromField.getFileName().toString());
+    }
+
+    /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */
+    private static Path resolveLogicalViewPath(Path planJsonFromField) {
+        if (planJsonFromField == null || !Files.isRegularFile(planJsonFromField)) {
             return null;
         }
         Path fn = planJsonFromField.getFileName();
         if (fn == null) {
-            return planJsonFromField;
+            return null;
         }
         String name = fn.toString();
         if (!name.endsWith(".json")) {
-            return planJsonFromField;
+            return null;
         }
         String stem = name.substring(0, name.length() - 5);
         if (stem.endsWith("_logical_view")) {
             return planJsonFromField;
         }
         Path sibling = planJsonFromField.resolveSibling(stem + "_logical_view.json");
-        if (Files.isRegularFile(sibling)) {
-            return sibling;
+        return Files.isRegularFile(sibling) ? sibling : null;
+    }
+
+    /**
+     * {@code production_plan_multi_day_xxx.json} と並ぶ {@code …_equipment_gantt_contract.json}。
+     */
+    private static Path resolveEquipmentContractSibling(Path planJsonFromField) {
+        if (planJsonFromField == null) {
+            return null;
         }
-        return planJsonFromField;
+        Path fn = planJsonFromField.getFileName();
+        if (fn == null) {
+            return null;
+        }
+        String name = fn.toString();
+        if (!name.endsWith(".json")) {
+            return null;
+        }
+        String stem = name.substring(0, name.length() - 5);
+        if (stem.endsWith("_equipment_gantt_contract")) {
+            return null;
+        }
+        return planJsonFromField.resolveSibling(stem + "_equipment_gantt_contract.json");
     }
 
     private static Path siblingJson(Path workbookPath) {
