@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
@@ -30,12 +31,14 @@ import javafx.stage.Stage;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.GridChange;
+import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputCellEditSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputRowDragSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -112,6 +115,8 @@ public final class PlanInputTabController {
     private GridBase currentGrid;
     private EventHandler<GridChange> gridChangeHandler;
 
+    private boolean planInputCellEditHooksInstalled;
+
     @FXML
     private void initialize() {
         pathField.setPromptText("PM_AI_PLAN_INPUT_PATH ? .csv / .xlsx / .xlsm");
@@ -126,6 +131,9 @@ public final class PlanInputTabController {
 
         rows = FXCollections.observableArrayList();
         spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        SpreadsheetTabularSupport.installFullRowDataSelection(
+                spreadsheetView,
+                SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
         SpreadsheetThemeBridge.install(spreadsheetView);
         SpreadsheetPlanInputRowDragSupport.install(
                 spreadsheetView,
@@ -137,7 +145,7 @@ public final class PlanInputTabController {
                 });
     }
 
-    /** 「配台試行順番」列があれば 1..n に振り直す（DnD 並べ替え後など）。 */
+    /** Renumbers dispatch-trial-order column to 1..n after row reorder (DnD, etc.). */
     private void renumberDispatchTrialOrderColumn() {
         int col = headersRef.indexOf(COL_DISPATCH_TRIAL_ORDER);
         if (col < 0) {
@@ -176,18 +184,127 @@ public final class PlanInputTabController {
                     loadFromCurrentPath();
                 });
 
+        if (!planInputCellEditHooksInstalled) {
+            SpreadsheetPlanInputCellEditSupport.install(
+                    spreadsheetView,
+                    ownerStage,
+                    SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
+                    headersRef,
+                    rows,
+                    this::rebuildSpreadsheet);
+            planInputCellEditHooksInstalled = true;
+        }
+
         TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
                 spreadsheetView,
                 TableColumnOrderPersistence.TableId.PLAN_INPUT,
                 suppressColumnOrderPersistence::get,
                 () -> new ArrayList<>(headersRef));
 
-        javafx.application.Platform.runLater(
+        Platform.runLater(
                 () -> {
                     syncFromEnv();
                     if (!pathField.getText().isBlank()) {
                         loadFromCurrentPath();
                     }
+                });
+    }
+
+    @FXML
+    private void onRowUpAction() {
+        int i = selectedPlanInputDataIndex();
+        if (i <= 0) {
+            return;
+        }
+        int colIdx = planInputFocusedColumnIndex();
+        swapPlanInputDataRows(i - 1, i);
+        focusPlanInputCellAfterReorder(i - 1, colIdx);
+    }
+
+    @FXML
+    private void onRowDownAction() {
+        int i = selectedPlanInputDataIndex();
+        if (i < 0 || i >= rows.size() - 1) {
+            return;
+        }
+        int colIdx = planInputFocusedColumnIndex();
+        swapPlanInputDataRows(i, i + 1);
+        focusPlanInputCellAfterReorder(i + 1, colIdx);
+    }
+
+    /** Selected data row index in {@link #rows}, or -1. Uses model row when filters/sort change view order. */
+    private int selectedPlanInputDataIndex() {
+        var sm = spreadsheetView.getSelectionModel();
+        TablePosition pos = sm.getFocusedCell();
+        if (pos == null || pos.getRow() < 0) {
+            var cells = sm.getSelectedCells();
+            if (cells.isEmpty()) {
+                return -1;
+            }
+            pos = cells.getFirst();
+        }
+        int viewRow = pos.getRow();
+        int gridRow = spreadsheetView.getModelRow(viewRow);
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        int idx = gridRow - firstData;
+        if (idx >= 0 && idx < rows.size()) {
+            return idx;
+        }
+        return -1;
+    }
+
+    private int planInputFocusedColumnIndex() {
+        var sm = spreadsheetView.getSelectionModel();
+        TablePosition pos = sm.getFocusedCell();
+        if (pos != null && pos.getColumn() >= 0) {
+            return pos.getColumn();
+        }
+        var cells = sm.getSelectedCells();
+        if (cells != null && !cells.isEmpty()) {
+            int c = cells.getFirst().getColumn();
+            if (c >= 0) {
+                return c;
+            }
+        }
+        return 0;
+    }
+
+    private void swapPlanInputDataRows(int a, int b) {
+        if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
+            return;
+        }
+        ObservableList<String> moved = rows.get(a);
+        rows.set(a, rows.get(b));
+        rows.set(b, moved);
+        renumberDispatchTrialOrderColumn();
+        rebuildSpreadsheet();
+    }
+
+    /**
+     * After reorder, keep selection on the same logical data row and column (handles filtered/sorted view rows).
+     */
+    private void focusPlanInputCellAfterReorder(int dataRowIndex, int columnIndex) {
+        if (dataRowIndex < 0 || dataRowIndex >= rows.size()) {
+            return;
+        }
+        var cols = spreadsheetView.getColumns();
+        if (cols.isEmpty()) {
+            return;
+        }
+        int c = Math.max(0, Math.min(columnIndex, cols.size() - 1));
+        SpreadsheetColumn scol = cols.get(c);
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        int modelGridRow = firstData + dataRowIndex;
+        Platform.runLater(
+                () -> {
+                    int viewRow = spreadsheetView.getViewRow(modelGridRow);
+                    if (viewRow < 0) {
+                        return;
+                    }
+                    var sm = spreadsheetView.getSelectionModel();
+                    sm.clearSelection();
+                    sm.clearAndSelect(viewRow, scol);
+                    sm.focus(viewRow, scol);
                 });
     }
 
@@ -354,7 +471,7 @@ public final class PlanInputTabController {
                             headersRef, persistedLayout.get(), colW);
             final double widthDefault = colW;
 
-            GridBase grid = SpreadsheetTabularSupport.buildPlanInputGrid(headersRef, rows, true);
+            GridBase grid = SpreadsheetTabularSupport.buildPlanInputGrid(headersRef, rows, false);
             gridChangeHandler =
                     SpreadsheetTabularSupport.newRowsSyncHandler(
                             rows, headersRef, SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex());
@@ -362,13 +479,13 @@ public final class PlanInputTabController {
             currentGrid = grid;
             spreadsheetView.setGrid(grid);
 
-            javafx.application.Platform.runLater(
+            Platform.runLater(
                     () -> {
                         SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
-                        SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
                     });
         } finally {
             suppressColumnOrderPersistence.set(false);
