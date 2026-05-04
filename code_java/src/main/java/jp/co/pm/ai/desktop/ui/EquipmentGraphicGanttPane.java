@@ -3,12 +3,8 @@ package jp.co.pm.ai.desktop.ui;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -57,9 +53,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final Color BAR_STARTUP = Color.web("#fed7aa");
     private static final Color HEADER_AXIS = Color.web("#d9d9d9");
 
-    /** Cursor デバッグ NDJSON セッション（{@link AgentDebugLog} と同じ解決規則）。 */
-    private static final String DEBUG_SESSION_EQUIPMENT_GANTT_GRAPHIC = "f0dedd";
-
     private EquipmentGraphicGanttPane() {}
 
     /**
@@ -69,17 +62,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
-        return build(columns, rows, null);
-    }
-
-    /**
-     * @param uiForDebug 環境タブ相当のマップ（{@link jp.co.pm.ai.desktop.MainShellController#uiEnvForDebugLog}）。
-     *     {@link AgentDebugLog} のログパス解決に使う。null 可。
-     */
-    public static BorderPane build(
-            List<String> columns,
-            ObservableList<ObservableList<String>> rows,
-            Map<String, String> uiForDebug) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -89,69 +71,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effRows = repaired.rows();
         }
         ParseResult parsed = parse(effCols, effRows);
-        // #region agent log
-        {
-            int nonEmptySlots = 0;
-            int dataDisplayRows = 0;
-            int sectionRows = 0;
-            for (DisplayRow dr : parsed.displayRows) {
-                if (dr.sectionBanner != null) {
-                    sectionRows++;
-                    continue;
-                }
-                dataDisplayRows++;
-                if (dr.cellsInSlots != null) {
-                    for (String c : dr.cellsInSlots) {
-                        if (c != null && !c.strip().isEmpty()) {
-                            nonEmptySlots++;
-                        }
-                    }
-                }
-            }
-            String col0preview = "";
-            if (effRows != null && !effRows.isEmpty()) {
-                ObservableList<String> r0 = effRows.get(0);
-                if (r0 != null && !r0.isEmpty()) {
-                    String s = r0.get(0);
-                    if (s != null) {
-                        col0preview = s.length() > 72 ? s.substring(0, 72) : s;
-                    }
-                }
-            }
-            StringBuilder hb = new StringBuilder();
-            int hlim = Math.min(10, effCols.size());
-            for (int hi = 0; hi < hlim; hi++) {
-                if (hi > 0) {
-                    hb.append('|');
-                }
-                String hx = effCols.get(hi);
-                hb.append(hx != null ? hx : "");
-            }
-            String headersPreview = hb.length() > 240 ? hb.substring(0, 240) : hb.toString();
-            Map<String, Object> hypothesisMap = new LinkedHashMap<>();
-            hypothesisMap.put("H1_jsonCellsEmpty", nonEmptySlots == 0);
-            hypothesisMap.put("H2_allSectionRows", sectionRows > 0 && dataDisplayRows == 0);
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("runId", "post-fix");
-            data.put("hypothesisMap", hypothesisMap);
-            data.put("nonEmptySlotCells", nonEmptySlots);
-            data.put("timelineCanvasRows", dataDisplayRows);
-            data.put("sectionBannerRows", sectionRows);
-            data.put("inputRows", effRows != null ? effRows.size() : 0);
-            data.put("slotColumnCount", parsed.slotColumnIndices.size());
-            data.put("slotMinutes", parsed.slotMinutes);
-            data.put("repairedUnnamed", repaired != null);
-            data.put("firstCol0Preview", col0preview);
-            data.put("headersPreview", headersPreview);
-            AgentDebugLog.appendStructured(
-                    uiForDebug,
-                    DEBUG_SESSION_EQUIPMENT_GANTT_GRAPHIC,
-                    "T1",
-                    "EquipmentGraphicGanttPane.build:afterParse",
-                    "equipment graphic parse summary",
-                    data);
-        }
-        // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
             Label msg =
                     new Label(
@@ -462,23 +381,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         String v = row.get(c);
         return v != null ? v.strip() : "";
     }
-
-    // #region agent log
-    /** デバッグ: グラフィックタブで選択シートを読み込んだとき（{@link AgentDebugLog} と同一経路）。 */
-    public static void agentLogSheetLoad(
-            String sheetName, int columnCount, Map<String, String> uiForDebug) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("sheetName", sheetName != null ? sheetName : "");
-        data.put("columnCount", columnCount);
-        AgentDebugLog.appendStructured(
-                uiForDebug,
-                DEBUG_SESSION_EQUIPMENT_GANTT_GRAPHIC,
-                "H2",
-                "EquipmentGanttGraphicTabController.applySelectedSheetFromMap",
-                "selected sheet for graphic gantt",
-                data);
-    }
-    // #endregion
 
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}

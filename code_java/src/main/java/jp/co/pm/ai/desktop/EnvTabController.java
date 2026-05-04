@@ -5,7 +5,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -37,7 +36,6 @@ import javafx.util.StringConverter;
 import org.controlsfx.control.table.TableFilter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableHeaderColumnStyle;
@@ -226,33 +224,6 @@ public final class EnvTabController {
                     }
                 });
         valueCol.setReorderable(true);
-
-        javafx.event.EventHandler<javafx.scene.control.TableColumn.CellEditEvent<EnvVarRow, String>>
-                editStartTracer =
-                        e -> {
-                            // #region agent log
-                            Map<String, Object> d = new LinkedHashMap<>();
-                            d.put("row", e.getTablePosition().getRow());
-                            d.put("col", e.getTablePosition().getColumn());
-                            d.put("tableEditable", envTable.isEditable());
-                            d.put(
-                                    "editingCol",
-                                    e.getTablePosition().getTableColumn() != null
-                                            ? e.getTablePosition()
-                                                    .getTableColumn()
-                                                    .getText()
-                                            : "");
-                            AgentDebugLog.appendStructured(
-                                    shell != null ? shell.uiEnvForDebugLog() : Map.of(),
-                                    "471ee7",
-                                    "H4",
-                                    "EnvTabController.wireTable",
-                                    "onEditStart",
-                                    d);
-                            // #endregion
-                        };
-        nameCol.setOnEditStart(editStartTracer);
-        valueCol.setOnEditStart(editStartTracer);
 
         TableColumn<EnvVarRow, Void> folderCol = new TableColumn<>("選択");
         folderCol.setPrefWidth(190);

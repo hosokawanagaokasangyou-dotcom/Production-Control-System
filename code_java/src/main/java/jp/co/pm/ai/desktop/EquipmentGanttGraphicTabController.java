@@ -268,12 +268,8 @@ public final class EquipmentGanttGraphicTabController {
         if (st == null) {
             return;
         }
-        Map<String, String> uiDbg =
-                shell != null ? shell.uiEnvForDebugLog() : Map.of();
-        EquipmentGraphicGanttPane.agentLogSheetLoad(
-                name, st.columns() != null ? st.columns().size() : 0, uiDbg);
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        contentPane.setCenter(EquipmentGraphicGanttPane.build(st.columns(), rows, uiDbg));
+        contentPane.setCenter(EquipmentGraphicGanttPane.build(st.columns(), rows));
     }
 
     /**

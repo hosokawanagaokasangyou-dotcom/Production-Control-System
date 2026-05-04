@@ -38,7 +38,6 @@ import javafx.util.StringConverter;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -143,6 +142,9 @@ public final class MainShellController {
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
+    private EquipmentGanttGraphicTabController equipmentGanttGraphicTabController;
+
+    @FXML
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
@@ -179,12 +181,12 @@ public final class MainShellController {
     private Tab mainShellTabPlanResultViewer;
 
     @FXML
+    private Tab mainShellTabEquipmentGanttGraphic;
+
+    @FXML
     private Tab mainShellTabOperatorCard;
 
     private ObservableList<EnvVarRow> envRows;
-    /** Cursor debug session (env tab / run gating); see {@link AgentDebugLog}. */
-    private static final String DEBUG_SESSION_ENV_EDIT = "471ee7";
-
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
@@ -228,6 +230,7 @@ public final class MainShellController {
             envTabController.bindShell(this);
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
+            equipmentGanttGraphicTabController.bindShell(this);
 
             operatorCardTabController.bindShell(this);
 
@@ -547,6 +550,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
+        if (t == mainShellTabEquipmentGanttGraphic) {
+            return MainShellTabId.EQUIPMENT_GANTT_GRAPHIC;
+        }
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
@@ -569,6 +575,7 @@ public final class MainShellController {
             case MACHINE_CALENDAR_JSON -> mainShellTabMachineCalendarJson;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
+            case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
         };
     }
@@ -1067,18 +1074,6 @@ public final class MainShellController {
                                         });
                             });
         } catch (Throwable t) {
-            // #region agent log
-            Map<String, String> exData = new LinkedHashMap<>();
-            exData.put("ex", t.getClass().getName());
-            exData.put("detail", t.getMessage() != null ? t.getMessage() : "");
-            AgentDebugLog.appendStructured(
-                    collectUiEnv(),
-                    DEBUG_SESSION_ENV_EDIT,
-                    "H1",
-                    "MainShellController.runStage:preAsync",
-                    "runStage failed before runAsync (lock would stick without catch)",
-                    exData);
-            // #endregion
             runLock.set(false);
             activeRunStageScript = null;
             appendLog("[error] runStage: " + t.getMessage());
@@ -1118,23 +1113,6 @@ public final class MainShellController {
         } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
             tabPane.getSelectionModel().select(mainShellTabRun);
         }
-        // #region agent log
-        {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("activeRunStageScript", script);
-            d.put("runLock", runLock.get());
-            d.put("envTabDisabled", mainShellTabEnv != null && mainShellTabEnv.isDisabled());
-            d.put("stage1Running", stage1Running);
-            d.put("stage2Running", stage2Running);
-            AgentDebugLog.appendStructured(
-                    collectUiEnv(),
-                    DEBUG_SESSION_ENV_EDIT,
-                    "H1",
-                    "MainShellController.applyRunTabGating",
-                    "gating snapshot",
-                    d);
-        }
-        // #endregion
     }
 
     private void showStageCompletionDialog(String title, String contentText) {
@@ -1269,13 +1247,6 @@ public final class MainShellController {
                 m.put(tpsKey, tabSheet.trim());
             }
         }
-    }
-
-    /**
-     * Snapshot for debug NDJSON path resolution ({@link AgentDebugLog}); same keys as {@link #collectUiEnv()}.
-     */
-    Map<String, String> uiEnvForDebugLog() {
-        return new HashMap<>(collectUiEnv());
     }
 
     /**
@@ -1423,6 +1394,7 @@ public final class MainShellController {
             String memStr = newestMember != null ? newestMember.toString() : "";
             mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
             planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
+            equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
