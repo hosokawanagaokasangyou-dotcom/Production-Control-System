@@ -1,0 +1,16 @@
+---
+description: AgentDebugLog（NDJSON）— 正本は親ワークスペース .cursor/rules と同一方針
+alwaysApply: true
+---
+
+# Agent debug NDJSON（本サブモジュール）
+
+モノレポで **`工程管理AIプロジェクト_JAVA`** をルートに開いている場合の**正本**は次です（内容は同一方針）。
+
+- **`工程管理AIプロジェクト_JAVA/.cursor/rules/agent-debug-ndjson-logging.mdc`**
+
+実装クラスは常に本リポジトリ内:
+
+- `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`
+
+追加・変更するときは **上記正本** と矛盾しないようにし、`AgentDebugLog` の Javadoc（パス解決順）と整合させる。
