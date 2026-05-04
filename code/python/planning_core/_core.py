@@ -24125,31 +24125,6 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         p_out.write_text(text, encoding="utf-8", newline="\n")
-        # #region agent log
-        try:
-            import time as _time_dbg
-
-            _logp = (
-                (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-                or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
-            )
-            _rec = {
-                "sessionId": "7a6e73",
-                "timestamp": int(_time_dbg.time() * 1000),
-                "location": "_write_dispatch_table_standalone_json",
-                "message": "wrote_result_dispatch_json",
-                "hypothesisId": "H1",
-                "data": {
-                    "out_path": os.path.abspath(str(p_out)),
-                    "target_dir": os.path.abspath(target_dir),
-                    "row_count": int(len(df_dispatch)),
-                },
-            }
-            with open(_logp, "a", encoding="utf-8") as _df:
-                _df.write(json.dumps(_rec, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
@@ -32145,6 +32120,12 @@ def _generate_plan_impl(
     try:
         _wb_path = _excel_plan_input_wb()
         _out_dir = resolve_result_dispatch_table_output_dir(_wb_path)
+        if not _out_dir:
+            _out_dir = _stage2_out_root or output_dir
+            logging.info(
+                "結果_配台表: 専用出力先が解決できなかったため、段階2成果物フォルダへ出します → %s",
+                _out_dir,
+            )
         _wrote = None
         if _publish_plan_xlsx:
             _wrote = _write_dispatch_table_standalone_xlsx(df_dispatch, _out_dir)

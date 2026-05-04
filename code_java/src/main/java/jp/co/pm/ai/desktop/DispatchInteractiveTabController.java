@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -70,7 +69,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
@@ -81,7 +79,6 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -804,26 +801,6 @@ public final class DispatchInteractiveTabController {
         }
         Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         jsonPathLabel.setText(p.toString());
-        // #region agent log
-        try {
-            Map<String, String> uiLog = shell != null ? shell.snapshotUiEnv() : Map.of();
-            long sz = Files.isRegularFile(p) ? Files.size(p) : -1L;
-            String esc = p.toString().replace("\\", "\\\\").replace("\"", "\\\"");
-            String line =
-                    "{\"sessionId\":\"7a6e73\",\"timestamp\":"
-                            + Instant.now().toEpochMilli()
-                            + ",\"location\":\"DispatchInteractiveTabController.reloadFromDiskQuiet\",\"message\":\"reload_json_probe\","
-                            + "\"hypothesisId\":\"H1\",\"data\":{\"jsonPath\":\""
-                            + esc
-                            + "\",\"exists\":"
-                            + Files.isRegularFile(p)
-                            + ",\"size\":"
-                            + sz
-                            + "}}\n";
-            AgentDebugLog.appendNdjsonLine(uiLog, "7a6e73", line.trim());
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         if (!Files.isRegularFile(p)) {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
@@ -860,25 +837,6 @@ public final class DispatchInteractiveTabController {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
                     calendarBlocks = b.calendar();
-                    // #region agent log
-                    try {
-                        Map<String, String> uiLog = shell.snapshotUiEnv();
-                        int n = doc.rows().size();
-                        int nc = doc.columns().size();
-                        String line =
-                                "{\"sessionId\":\"7a6e73\",\"timestamp\":"
-                                        + Instant.now().toEpochMilli()
-                                        + ",\"location\":\"DispatchInteractiveTabController.reloadFromDiskQuiet:ok\","
-                                        + "\"message\":\"reload_json_success\",\"hypothesisId\":\"H2\","
-                                        + "\"data\":{\"rows\":"
-                                        + n
-                                        + ",\"columns\":"
-                                        + nc
-                                        + "}}\n";
-                        AgentDebugLog.appendNdjsonLine(uiLog, "7a6e73", line.trim());
-                    } catch (Throwable ignored) {
-                    }
-                    // #endregion
                     statusLabel.setText(doc.rows().size() + " 行");
                     if (b.calendarLoadError() != null) {
                         shell.appendLog("[dispatch-editor] calendar load: " + b.calendarLoadError());
@@ -915,25 +873,6 @@ public final class DispatchInteractiveTabController {
                     calendarBlocks = MachineCalendarBlockIndex.empty();
                     statusLabel.setText("読込エラー");
                     Throwable ex = task.getException();
-                    // #region agent log
-                    try {
-                        Map<String, String> uiLog = shell.snapshotUiEnv();
-                        String msg = ex != null ? ex.getMessage() : "";
-                        if (msg != null) {
-                            msg = msg.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ");
-                        }
-                        String line =
-                                "{\"sessionId\":\"7a6e73\",\"timestamp\":"
-                                        + Instant.now().toEpochMilli()
-                                        + ",\"location\":\"DispatchInteractiveTabController.reloadFromDiskQuiet:fail\","
-                                        + "\"message\":\"reload_json_parse_fail\",\"hypothesisId\":\"H2\","
-                                        + "\"data\":{\"error\":\""
-                                        + (msg != null ? msg : "")
-                                        + "\"}}\n";
-                        AgentDebugLog.appendNdjsonLine(uiLog, "7a6e73", line.trim());
-                    } catch (Throwable ignored) {
-                    }
-                    // #endregion
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
                                     + (ex != null ? ex.getMessage() : ""));

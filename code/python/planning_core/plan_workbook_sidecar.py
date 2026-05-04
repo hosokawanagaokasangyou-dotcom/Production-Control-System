@@ -154,31 +154,6 @@ def _dump_xlsx_all_sheets_to_json(
             "row_count": int(len(df)),
             "rows": rows,
         }
-    # #region agent log
-    try:
-        import time as _time_dbg2
-
-        _logp2 = (
-            (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-            or "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-7a6e73.log"
-        )
-        _keys_dbg = ("結果_設備ガント", "結果_タスク一覧")
-        _rec2 = {
-            "sessionId": "7a6e73",
-            "timestamp": int(_time_dbg2.time() * 1000),
-            "location": "plan_workbook_sidecar._dump_xlsx_all_sheets_to_json",
-            "message": "workbook_json_sheet_counts",
-            "hypothesisId": "H4",
-            "data": {
-                "xlsx_path": os.path.abspath(xlsx_path),
-                **{k: sheets_out.get(k, {}).get("row_count") for k in _keys_dbg},
-            },
-        }
-        with open(_logp2, "a", encoding="utf-8") as _df2:
-            _df2.write(json.dumps(_rec2, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
     payload = {
         "format_version": WORKBOOK_JSON_FORMAT_VERSION,
         "source_xlsx": os.path.basename(xlsx_path),
