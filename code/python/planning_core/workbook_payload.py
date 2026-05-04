@@ -2,15 +2,16 @@
 """
 成果ブックの「表データ JSON」と Excel の対応。
 
-**現状（段階2）**
-計算結果を ``ExcelWriter`` で保存し、日付列整形・ガント後処理など **ファイル上の最終状態** を
-``pandas.read_excel`` ＋ ``_reheader_dataframe_if_equipment_sheet_unnamed`` でシートごとに表形式へ落とし、
-それを ``production_plan_multi_day_*.json`` に書く（セル値のみ。図形・書式は含めない）。
+**段階2・表シート（設備時間割・タスク一覧・配台表など）**
+計算で DataFrame を確定したあと、**先に** ``*_tabular_source.json``（正本）を書き、
+同じペイロードから ``ExcelWriter`` へ行を載せる（``build_workbook_payload_from_dataframes`` →
+``write_tabular_sheets_from_payload_to_excel_writer``）。
 
-設備ガント等は 1 行目が列見出しでないため、既存の reheader ロジックが必須。
+**最終ミラー JSON**（ビューア用 ``production_plan_multi_day_*.json``）
+日付列の表示整形・ガント後処理など **保存済み xlsx の最終セル値** を
+``workbook_payload_from_final_xlsx_file``（pandas + ガント系 reheader）で出力する。
 
-**JSON から Excel を再生成する**（値のみ・書式なし）は
-``write_xlsx_from_workbook_payload_tabular`` を参照（将来 CLI / 検証用）。
+**値のみのブックを JSON から再生成** … ``write_xlsx_from_workbook_payload_tabular``
 """
 
 from __future__ import annotations
@@ -118,6 +119,99 @@ def sheet_payload_to_dataframe(sheet: dict) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=cols)
     return pd.DataFrame(rows, columns=cols)
+
+
+def build_workbook_payload_from_dataframes(
+    sheets: dict[str, pd.DataFrame],
+    *,
+    source_xlsx_basename: str,
+    format_version: int = WORKBOOK_JSON_FORMAT_VERSION,
+    metadata_extra: dict | None = None,
+) -> dict:
+    """
+    メモリ上の DataFrame 群から、計画結果ビューアと同形の ``sheets`` ペイロードを構築する。
+    段階2の表シートを Excel より先に JSON 化する際に使う。
+    """
+    sheets_out: dict[str, dict] = {}
+    for name, df in sheets.items():
+        if df is None or getattr(df, "empty", True):
+            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
+            continue
+        try:
+            rows = json.loads(
+                df.to_json(orient="records", date_format="iso", double_precision=15)
+            )
+        except Exception as e:
+            logger.warning(
+                "workbook_payload: DataFrame→JSON 行に失敗 sheet=%r: %s",
+                name,
+                e,
+            )
+            sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
+            continue
+        sheets_out[name] = {
+            "columns": list(df.columns),
+            "row_count": int(len(df)),
+            "rows": rows,
+        }
+
+    payload: dict = {
+        "format_version": format_version,
+        "source_xlsx": source_xlsx_basename,
+        "sheets": sheets_out,
+    }
+    if metadata_extra:
+        payload.update(metadata_extra)
+    return payload
+
+
+def tabular_source_json_path(plan_xlsx_final: str) -> str:
+    """段階2計画ブックと並べて置く「表シート正本」JSON パス（拡張子手前にサフィックス）。"""
+    base, _ = os.path.splitext(os.path.abspath(plan_xlsx_final))
+    return base + "_tabular_source.json"
+
+
+def write_tabular_source_json_file(
+    plan_xlsx_final: str,
+    payload: dict,
+) -> tuple[str | None, str]:
+    """
+    表データ正本 JSON を **Excel ブックより先** に書き出す。
+    戻り値: (出力パス or None, 使用した一時書込戦略ラベル)
+    """
+    from .plan_workbook_sidecar import _write_workbook_json_payload
+
+    out = tabular_source_json_path(plan_xlsx_final)
+    try:
+        if os.path.isfile(out):
+            os.remove(out)
+    except OSError:
+        pass
+    final, strategy = _write_workbook_json_payload(out, payload)
+    return final, strategy
+
+
+def write_tabular_sheets_from_payload_to_excel_writer(
+    writer,
+    payload: dict,
+    *,
+    sheet_order: list[str],
+) -> None:
+    """
+    ペイロードの表シートだけを ``sheet_order`` の順で ``ExcelWriter`` に書く。
+    （人員配台優先の 2 段 ``startrow`` シート等は含めない）
+    """
+    sheets = payload.get("sheets") or {}
+    for sn in sheet_order:
+        if sn not in sheets:
+            logger.warning(
+                "workbook_payload: ペイロードにシート %r が無いためスキップします。",
+                sn,
+            )
+            continue
+        df = sheet_payload_to_dataframe(sheets[sn])
+        safe = str(sn)[:31]
+        df.to_excel(writer, sheet_name=safe, index=False)
 
 
 def write_xlsx_from_workbook_payload_tabular(

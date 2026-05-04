@@ -32025,81 +32025,118 @@ def _generate_plan_impl(
                 log_sheet_name=_actual_detail_sheet_log_label(),
                 roll_detail=True,
             )
+    # 表シート: DataFrame を先に確定 → JSON 正本 → 同一ペイロードから ExcelWriter へ（ガント・2 段シート除く）
+    df_tasks = pd.DataFrame(task_results)
+    df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
+        df_tasks, max_history_len
+    )
+    try:
+        from planning_core.excel_trace_task import log_df_tasks as _excel_trace_df_tasks
+
+        _excel_trace_df_tasks(
+            df_tasks,
+            "after_apply_result_task_column_order",
+            output_basename=os.path.basename(plan_xlsx_final),
+        )
+    except Exception:
+        pass
+    if not task_column_order:
+        task_column_order, vis_map = _result_task_column_config_fallback_from_existing(
+            df_tasks, max_history_len
+        )
+    seen_tc: set[str] = set()
+    task_column_order_dedup: list = []
+    vis_list_dedup: list = []
+    for c in task_column_order:
+        if c in seen_tc:
+            continue
+        seen_tc.add(c)
+        task_column_order_dedup.append(c)
+        vis_list_dedup.append(bool(vis_map.get(c, True)))
+    df_column_config = pd.DataFrame(
+        {
+            "列名": task_column_order_dedup,
+            "表示": vis_list_dedup,
+        }
+    )
+    try:
+        df_src_for_dispatch = load_tasks_df()
+    except Exception as e:
+        logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
+        df_src_for_dispatch = None
+    df_dispatch = build_result_dispatch_table_dataframe(
+        timeline_events,
+        sorted_tasks_for_result,
+        tasks_df,
+        df_src_for_dispatch,
+    )
+    df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
+        df_dispatch,
+        interactive_result_dispatch_json_rows,
+        interactive_result_dispatch_json_columns,
+    )
+    if interactive_dispatch_targets:
+        _interactive_validate_dispatch_quantities(
+            df_dispatch, interactive_dispatch_targets
+        )
+    if interactive_relax_intraday or interactive_dispatch_targets is not None:
+        _interactive_validate_timeline_midnight_if_interactive(timeline_events)
+    df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
+
+    from planning_core.workbook_payload import (
+        build_workbook_payload_from_dataframes,
+        write_tabular_source_json_file,
+        write_tabular_sheets_from_payload_to_excel_writer,
+    )
+
+    _stage2_tabular_sheet_order = [
+        RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
+        RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME,
+        "結果_カレンダー(出勤簿)",
+        RESULT_MEMBER_WORK_UTIL_SHEET_NAME,
+        COLUMN_CONFIG_SHEET_NAME,
+        RESULT_TASK_SHEET_NAME,
+        RESULT_DISPATCH_TABLE_SHEET_NAME,
+        "結果_AIログ",
+    ]
+    _stage2_tabular_dfs = {
+        RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME: df_eq_schedule,
+        RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME: df_equipment_by_machine_name,
+        "結果_カレンダー(出勤簿)": pd.DataFrame(cal_rows),
+        RESULT_MEMBER_WORK_UTIL_SHEET_NAME: df_utilization,
+        COLUMN_CONFIG_SHEET_NAME: df_column_config,
+        RESULT_TASK_SHEET_NAME: df_tasks,
+        RESULT_DISPATCH_TABLE_SHEET_NAME: df_dispatch,
+        "結果_AIログ": df_ai_log,
+    }
+    _stage2_tabular_payload = build_workbook_payload_from_dataframes(
+        _stage2_tabular_dfs,
+        source_xlsx_basename=os.path.basename(plan_xlsx_final),
+        metadata_extra={
+            "schema": "stage2_tabular_source_v1",
+            "excel_tabular_sheets_rendered_from_this_payload": True,
+        },
+    )
+    try:
+        _tabular_json_path, _tabular_json_strat = write_tabular_source_json_file(
+            plan_xlsx_final, _stage2_tabular_payload
+        )
+        if _tabular_json_path:
+            logging.info(
+                "段階2: 表シート正本 JSON（Excel より先）を '%s' に出力しました（%s）。",
+                _tabular_json_path,
+                _tabular_json_strat,
+            )
+    except Exception as e:
+        logging.warning("段階2: 表シート正本 JSON の出力に失敗しました: %s", e)
+
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
-            df_eq_schedule.to_excel(
-                writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
+            write_tabular_sheets_from_payload_to_excel_writer(
+                writer,
+                _stage2_tabular_payload,
+                sheet_order=_stage2_tabular_sheet_order,
             )
-            df_equipment_by_machine_name.to_excel(
-                writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
-            )
-            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
-            df_utilization.to_excel(
-                writer, sheet_name=RESULT_MEMBER_WORK_UTIL_SHEET_NAME, index=False
-            )
-            df_tasks = pd.DataFrame(task_results)
-            df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
-                df_tasks, max_history_len
-            )
-            try:
-                from planning_core.excel_trace_task import log_df_tasks as _excel_trace_df_tasks
-
-                _excel_trace_df_tasks(
-                    df_tasks,
-                    "after_apply_result_task_column_order",
-                    output_basename=os.path.basename(plan_xlsx_final),
-                )
-            except Exception:
-                pass
-            # 列設定シートは「列名」「表示」のデータ行が必須。task_results が空だと
-            # apply_result_task_sheet_column_order は ordered が空になり、見出しのみのシートになる。
-            if not task_column_order:
-                task_column_order, vis_map = _result_task_column_config_fallback_from_existing(
-                    df_tasks, max_history_len
-                )
-            seen_tc: set[str] = set()
-            task_column_order_dedup: list = []
-            vis_list_dedup: list = []
-            for c in task_column_order:
-                if c in seen_tc:
-                    continue
-                seen_tc.add(c)
-                task_column_order_dedup.append(c)
-                vis_list_dedup.append(bool(vis_map.get(c, True)))
-            pd.DataFrame(
-                {
-                    "列名": task_column_order_dedup,
-                    "表示": vis_list_dedup,
-                }
-            ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
-            df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
-            # 結果_配台表: 空欄補完のため加工計画DATA（元データ）も参照する
-            try:
-                df_src_for_dispatch = load_tasks_df()
-            except Exception as e:
-                logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
-                df_src_for_dispatch = None
-            df_dispatch = build_result_dispatch_table_dataframe(
-                timeline_events,
-                sorted_tasks_for_result,
-                tasks_df,
-                df_src_for_dispatch,
-            )
-            df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
-                df_dispatch,
-                interactive_result_dispatch_json_rows,
-                interactive_result_dispatch_json_columns,
-            )
-            if interactive_dispatch_targets:
-                _interactive_validate_dispatch_quantities(
-                    df_dispatch, interactive_dispatch_targets
-                )
-            if interactive_relax_intraday or interactive_dispatch_targets is not None:
-                _interactive_validate_timeline_midnight_if_interactive(timeline_events)
-            df_dispatch.to_excel(
-                writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
-            )
-            pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
 
             _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
             df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
