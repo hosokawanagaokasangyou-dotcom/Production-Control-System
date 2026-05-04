@@ -31488,6 +31488,44 @@ def _generate_plan_impl(
     # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
     # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
+    _interactive_hist_override: dict[tuple[str, str], list[dict]] = {}
+    if _interactive_dispatch_trial_env_active() and isinstance(interactive_result_dispatch_json_rows, list):
+        _tmp_hist: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        for _r in interactive_result_dispatch_json_rows:
+            if not isinstance(_r, dict):
+                continue
+            _tid = _interactive_norm_cell(_r.get(TASK_COL_TASK_ID))
+            _mach = _interactive_norm_cell(_r.get(TASK_COL_MACHINE_NAME))
+            _dd = _interactive_parse_dispatch_date_cell(_r.get("配台日"))
+            _qc = _r.get("当日配台数量")
+            try:
+                _qv = (
+                    float(str(_qc).replace(",", "").strip())
+                    if _qc not in (None, "")
+                    else 0.0
+                )
+            except (TypeError, ValueError):
+                _qv = 0.0
+            if not _tid or not _mach or _dd is None or _qv <= 1e-9:
+                continue
+            _tmp_hist[(_tid, _mach)].append(
+                {
+                    "date": _dd.strftime("%m/%d"),
+                    "done_m": float(_qv),
+                }
+            )
+        for _k, _vv in _tmp_hist.items():
+            _vv.sort(key=lambda _h: str(_h.get("date") or ""))
+            _interactive_hist_override[_k] = _vv
+        _append_debug_471ee7(
+            "H4",
+            "_generate_plan_impl.result_task_history_override",
+            "built_override_groups",
+            {
+                "groups": int(len(_interactive_hist_override)),
+                "rows": int(len(interactive_result_dispatch_json_rows)),
+            },
+        )
     max_history_len = max(
         [
             len(merge_assigned_history_contiguous_for_result_sheet(t.get("assigned_history")))
@@ -31495,6 +31533,12 @@ def _generate_plan_impl(
         ]
         + [0]
     )
+    if _interactive_hist_override:
+        try:
+            _ov_max = max((len(v) for v in _interactive_hist_override.values()), default=0)
+            max_history_len = max(int(max_history_len), int(_ov_max))
+        except Exception:
+            pass
     _baseline_raw_by_line = _build_result_sheet_effective_raw_input_date_by_line(
         tasks_df_raw_input_baseline
     )
@@ -31586,9 +31630,25 @@ def _generate_plan_impl(
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
         row_history = {}
-        _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
-            t.get("assigned_history")
-        )
+        _tid_norm = _interactive_norm_cell(t.get("task_id"))
+        _mach_norm = _interactive_norm_cell(t.get("machine_name"))
+        _hk = (_tid_norm, _mach_norm)
+        if _hk in _interactive_hist_override:
+            _hist_for_sheet = _interactive_hist_override.get(_hk, [])
+            _append_debug_471ee7(
+                "H4",
+                "_generate_plan_impl.result_task_history_override",
+                "apply_override",
+                {
+                    "taskId": _tid_norm,
+                    "machineName": _mach_norm,
+                    "historyCount": int(len(_hist_for_sheet)),
+                },
+            )
+        else:
+            _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
+                t.get("assigned_history")
+            )
         for i in range(max_history_len):
             if i < len(_hist_for_sheet):
                 h = _hist_for_sheet[i]
