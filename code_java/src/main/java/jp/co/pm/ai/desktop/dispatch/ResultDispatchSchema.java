@@ -9,7 +9,7 @@ import java.util.List;
  */
 public final class ResultDispatchSchema {
 
-    /** Same as Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} / ????_?z??\ ???? */
+    /** Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} \u3068\u540c\u4e00\u306e\u5217\u540d\uff08\u914d\u53f0\u8a66\u884c\u9806\u756a\uff09\u3002 */
     public static final String COL_DISPATCH_TRIAL_ORDER = "\u914d\u53f0\u8a66\u884c\u9806\u756a";
 
     public static final String COL_PROCESS = "\u5de5\u7a0b\u540d";

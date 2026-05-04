@@ -45,26 +45,26 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * ?z??v??_?^?X?N???? tab; layout {@code PlanInputTab.fxml}.
+ * \u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b\u30bf\u30d6\u3002\u30ec\u30a4\u30a2\u30a6\u30c8\u306f {@code PlanInputTab.fxml}\u3002
  *
- * <p>Uses ControlsFX {@link SpreadsheetView} for native fixed leading columns (??????????).
+ * <p>ControlsFX {@link SpreadsheetView} \u3067\u5148\u982d\u56fa\u5b9a\u5217\u3092\u30cd\u30a4\u30c6\u30a3\u30d6\u306b\u6271\u3046\u3002
  */
 public final class PlanInputTabController {
 
-    /** planning_core ?? {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} ?????i?i?K1?^?X?N???????s????j?B */
+    /** planning_core \u306e {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} \u76f8\u5f53\uff08\u6bb5\u968e1\u30bf\u30b9\u30af\u5165\u529b\u306e\u4e26\u3073\u9806\uff09\u3002 */
     private static final String COL_DISPATCH_TRIAL_ORDER = "\u914d\u53f0\u8a66\u884c\u9806\u756a";
 
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
 
     public static final String DEFAULT_PLAN_INPUT_SHEET_NAME =
-            "?z??v??_?^?X?N????";
+            "\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b";
 
     private static final String HINT_TEXT =
-            "PM_AI_PLAN_INPUT_PATH ??????t?@?C?????????????"
-                    + " (?i??2 load_planning_tasks_df: CSV/Parquet/xlsx ??)??"
-                    + "Excel ?????????V?[?g?????w??B?????"
-                    + " .xlsx ?????[?^??????????N????????????j??";
+            "PM_AI_PLAN_INPUT_PATH \u306b\u8aad\u307f\u8fbc\u3080\u8868\u30d5\u30a1\u30a4\u30eb\u306e\u30d1\u30b9\u3092\u6307\u5b9a\u3002"
+                    + "\uff08\u6bb5\u968e2 load_planning_tasks_df: CSV / Parquet / xlsx \u5bfe\u5fdc\uff09\u3002"
+                    + "Excel \u306e\u3068\u304d\u306f\u30b7\u30fc\u30c8\u540d\u3082\u6307\u5b9a\uff08TASK_PLAN_SHEET / \u3053\u306e\u6b04\uff09\u3002"
+                    + " .xlsx \u4fdd\u5b58\u306f\u30c7\u30fc\u30bf\u306e\u307f\uff08\u30de\u30af\u30ed\u306f\u542b\u307f\u307e\u305b\u3093\uff09\u3002";
 
     private Stage ownerStage;
 
@@ -119,7 +119,8 @@ public final class PlanInputTabController {
 
     @FXML
     private void initialize() {
-        pathField.setPromptText("PM_AI_PLAN_INPUT_PATH ? .csv / .xlsx / .xlsm");
+        pathField.setPromptText(
+                "PM_AI_PLAN_INPUT_PATH \uff08.csv / .xlsx / .xlsm\uff09");
         sheetField.setText(DEFAULT_PLAN_INPUT_SHEET_NAME);
         sheetField.setPromptText("Excel sheet name (TASK_PLAN_SHEET / TASK_PLAN_SHEET)");
         colWidthField.setText("112");
@@ -315,7 +316,10 @@ public final class PlanInputTabController {
 
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
-            shell.appendLog("[plan-input] ?????????????????????????");
+            shell.appendLog(
+                    "[plan-input] "
+                            + "\u30d8\u30c3\u30c0\u30fc\u304c\u7121\u3044\u305f\u3081\u5217\u3092"
+                            + "\u4e26\u3079\u66ff\u3048\u3089\u308c\u307e\u305b\u3093");
             return;
         }
         SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
@@ -353,7 +357,9 @@ public final class PlanInputTabController {
     @FXML
     private void onBrowseButtonAction() {
         FileChooser ch = new FileChooser();
-        ch.setTitle("?z??v??_?^?X?N???? ? ?t?@?C??");
+        ch.setTitle(
+                "\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b \u2014 "
+                        + "\u30d5\u30a1\u30a4\u30eb\u3092\u958b\u304f");
         ch.getExtensionFilters()
                 .addAll(
                         new FileChooser.ExtensionFilter("Tabular", "*.csv", "*.xlsx", "*.xlsm"),
