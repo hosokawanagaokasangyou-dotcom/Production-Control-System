@@ -2,11 +2,18 @@
 """
 段階2の Excel 生成経路を、1 件の依頼NOで NDJSON 追跡する（オプトイン）。
 
-設定: 環境変数 ``PM_AI_EXCEL_TRACE_TASK_ID`` に依頼NO（例: ``Y5-14``）を指定。
-ログ: ``CURSOR_DEBUG_LOG`` / ``PM_AI_DEBUG_LOG`` があればそのファイル、なければ
-``PM_AI_REPO_ROOT/.cursor/debug-excel-trace.log``（親ディレクトリは自動作成）。
+**設定（JavaFX 専用）**:
+子プロセスの環境に ``PM_AI_EXCEL_TRACE_TASK_ID``（例: ``Y5-14``）を入れるのは
+**本アプリの「環境変数」タブ**のみ。``workbook_env_bootstrap`` や OS の
+``PM_AI_*`` は本ランチャー経路では使わない想定（``PythonProcessRunner`` が
+UI に無い ``PM_AI_*`` を子へ渡さない）。
 
-※ 本番負荷・パス漏れ防止のため、未設定時は一切書き込まない。
+**ログファイル**:
+``CURSOR_DEBUG_LOG`` / ``PM_AI_DEBUG_LOG`` が子へ渡っていればそのパス。なければ
+``PM_AI_REPO_ROOT/.cursor/`` または本モジュール位置から解決したリポジトリ根の
+``.cursor/debug-excel-trace.log``（親は自動作成）。
+
+未設定（空）のときは一切書き込まない。
 """
 from __future__ import annotations
 

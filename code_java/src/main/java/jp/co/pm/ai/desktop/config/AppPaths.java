@@ -150,6 +150,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_RESULT_BOOK_FONT = "PM_AI_RESULT_BOOK_FONT";
 
     /**
+     * 段階2の Excel 生成デバッグ: 1 件の依頼NO（例 {@code Y5-14}）を追跡し NDJSON を planning_core から出力。JavaFX
+     * {@code 環境変数} タブに設定。空で無効。
+     */
+    public static final String KEY_PM_AI_EXCEL_TRACE_TASK_ID = "PM_AI_EXCEL_TRACE_TASK_ID";
+
+    /**
      * Windows CLI のエラー後 ``pause``／Enter 待ち（{@code workbook_env_bootstrap.pause_cmd_window_on_cli_error}）。JavaFX
      * からパイプ接続で起動する子プロセスでは stdin が TTY でないため {@code pause} がブロックし得る。未設定時はシェル側で
      * {@code 0} を付与して無効化する。
