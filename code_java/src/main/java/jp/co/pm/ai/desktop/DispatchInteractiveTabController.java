@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +21,6 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
-import javafx.concurrent.Worker;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -70,8 +68,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
@@ -81,7 +77,6 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
@@ -132,9 +127,6 @@ public final class DispatchInteractiveTabController {
 
     /** Fully-blocked (holiday) date columns: stay narrow but wide enough for a short header glyph. */
     private static final double MIN_BLOCKED_DATE_COLUMN_WIDTH_PX = 40.0;
-
-    private static final String AGENT_DEBUG_SESSION = "748d6d";
-    private static final ObjectMapper AGENT_DEBUG_JSON = new ObjectMapper();
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
@@ -463,24 +455,6 @@ public final class DispatchInteractiveTabController {
         new Thread(task, "dispatch-calendar-reload").start();
     }
 
-    private void logDispatchTrialDebug(String hypothesisId, String location, String message, Map<String, ?> data) {
-        // #region agent log
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("sessionId", AGENT_DEBUG_SESSION);
-            payload.put("timestamp", System.currentTimeMillis());
-            payload.put("hypothesisId", hypothesisId);
-            payload.put("location", location);
-            payload.put("message", message);
-            payload.put("data", data != null ? data : Map.of());
-            String line = AGENT_DEBUG_JSON.writeValueAsString(payload);
-            AgentDebugLog.appendNdjsonLine(
-                    shell != null ? shell.snapshotUiEnv() : Map.of(), AGENT_DEBUG_SESSION, line);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
-    }
-
     @FXML
     private void onDispatchTrialAction() {
         if (shell == null) {
@@ -514,30 +488,10 @@ public final class DispatchInteractiveTabController {
 
         Runnable releaseTrialModal =
                 () -> {
-                    // #region agent log
-                    logDispatchTrialDebug(
-                            "FIX",
-                            "DispatchInteractiveTabController:releaseTrialModal",
-                            "entry",
-                            Map.of(
-                                    "thread",
-                                    Thread.currentThread().getName(),
-                                    "closeDisabled",
-                                    closeBtn.isDisabled()));
-                    // #endregion
                     finished.set(true);
                     try {
                         closeBtn.setDisable(false);
-                    } catch (Throwable t) {
-                        // #region agent log
-                        logDispatchTrialDebug(
-                                "FIX",
-                                "DispatchInteractiveTabController:releaseTrialModal",
-                                "setDisableFailed",
-                                Map.of(
-                                        "error",
-                                        t.getMessage() != null ? t.getMessage() : t.getClass().getName()));
-                        // #endregion
+                    } catch (Throwable ignored) {
                     }
                     try {
                         closeBtn.requestFocus();
@@ -545,24 +499,8 @@ public final class DispatchInteractiveTabController {
                     }
                     try {
                         hideReloadProgress();
-                    } catch (Throwable t) {
-                        // #region agent log
-                        logDispatchTrialDebug(
-                                "FIX",
-                                "DispatchInteractiveTabController:releaseTrialModal",
-                                "hideReloadFailed",
-                                Map.of(
-                                        "error",
-                                        t.getMessage() != null ? t.getMessage() : t.getClass().getName()));
-                        // #endregion
+                    } catch (Throwable ignored) {
                     }
-                    // #region agent log
-                    logDispatchTrialDebug(
-                            "FIX",
-                            "DispatchInteractiveTabController:releaseTrialModal",
-                            "afterEnable",
-                            Map.of("closeDisabled", closeBtn.isDisabled()));
-                    // #endregion
                 };
 
         ObservableList<String> logLines = FXCollections.observableArrayList();
@@ -733,16 +671,7 @@ public final class DispatchInteractiveTabController {
                     protected String call() throws Exception {
                         Path pyExe = resolvePythonExe();
                         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-                        Map<String, String> pyEnv = new HashMap<>(shell.snapshotDispatchTrialPythonEnv());
-                        Path dbgLog = AgentDebugLog.resolveNdjsonPath(shell.snapshotUiEnv(), AGENT_DEBUG_SESSION);
-                        pyEnv.put("PM_AI_DEBUG_LOG", dbgLog.toString());
-                        // #region agent log
-                        logDispatchTrialDebug(
-                                "H4",
-                                "DispatchInteractiveTabController:runTrial",
-                                "pythonEnv",
-                                Map.of("PM_AI_DEBUG_LOG", dbgLog.toString()));
-                        // #endregion
+                        Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
                         return ResultDispatchTrialPython.runTrial(
                                 jsonPath,
                                 pyExe,
@@ -757,21 +686,6 @@ public final class DispatchInteractiveTabController {
                                                 }));
                     }
                 };
-        task.stateProperty()
-                .addListener(
-                        (obs, oldState, newState) -> {
-                            // #region agent log
-                            logDispatchTrialDebug(
-                                    "H3",
-                                    "DispatchInteractiveTabController:trialTaskState",
-                                    "changed",
-                                    Map.of(
-                                            "old",
-                                            String.valueOf(oldState),
-                                            "neu",
-                                            String.valueOf(newState)));
-                            // #endregion
-                        });
         task.setOnSucceeded(
                 e -> {
                     try {
@@ -825,19 +739,6 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         Throwable ex = task.getException();
-                        // #region agent log
-                        logDispatchTrialDebug(
-                                "H3",
-                                "DispatchInteractiveTabController:setOnFailed",
-                                "failed",
-                                Map.of(
-                                        "exClass",
-                                        ex != null ? ex.getClass().getName() : "null",
-                                        "exMessage",
-                                        ex != null && ex.getMessage() != null
-                                                ? ex.getMessage()
-                                                : ""));
-                        // #endregion
                         statusLabel.setText("配台試行エラー");
                         String msg = ex != null ? ex.getMessage() : "(不明)";
                         shell.appendLog("[dispatch-editor] trial failed: " + msg);
