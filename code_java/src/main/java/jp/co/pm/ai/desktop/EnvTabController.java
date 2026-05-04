@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -31,6 +32,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 import org.controlsfx.control.table.TableFilter;
 
@@ -46,6 +48,34 @@ import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
  * \\u escapes so source stays portable across editors/OS encodings.
  */
 public final class EnvTabController {
+
+    /**
+     * Avoids null {@code newValue} from the table cell converter (would clear the row as blank on commit).
+     */
+    private static final StringConverter<String> ENV_TABLE_STRING =
+            new StringConverter<>() {
+                @Override
+                public String toString(String object) {
+                    return object != null ? object : "";
+                }
+
+                @Override
+                public String fromString(String string) {
+                    return string != null ? string : "";
+                }
+            };
+
+    private static EnvVarRow rowForEditCommit(TableColumn.CellEditEvent<EnvVarRow, String> e) {
+        int row = e.getTablePosition().getRow();
+        var items = e.getTableView().getItems();
+        if (row >= 0 && row < items.size()) {
+            EnvVarRow at = items.get(row);
+            if (at != null) {
+                return at;
+            }
+        }
+        return e.getRowValue();
+    }
 
     private static final String ENV_HINT_TEXT =
             "OS 環境変数は参照しません。このタブで集約。"
@@ -158,7 +188,7 @@ public final class EnvTabController {
         nameCol.setCellValueFactory(cdf -> cdf.getValue().nameProperty());
         nameCol.setCellFactory(
                 col ->
-                        new TextFieldTableCell<EnvVarRow, String>() {
+                        new TextFieldTableCell<EnvVarRow, String>(ENV_TABLE_STRING) {
                             @Override
                             public void updateItem(String item, boolean empty) {
                                 super.updateItem(item, empty);
@@ -168,8 +198,10 @@ public final class EnvTabController {
                         });
         nameCol.setOnEditCommit(
                 e -> {
-                    e.getRowValue().setName(e.getNewValue());
-                    envTable.refresh();
+                    EnvVarRow row = rowForEditCommit(e);
+                    if (row != null) {
+                        row.setName(e.getNewValue());
+                    }
                 });
         nameCol.setPrefWidth(220);
         nameCol.setReorderable(true);
@@ -178,7 +210,7 @@ public final class EnvTabController {
         valueCol.setCellValueFactory(cdf -> cdf.getValue().valueProperty());
         valueCol.setCellFactory(
                 col ->
-                        new TextFieldTableCell<EnvVarRow, String>() {
+                        new TextFieldTableCell<EnvVarRow, String>(ENV_TABLE_STRING) {
                             @Override
                             public void updateItem(String item, boolean empty) {
                                 super.updateItem(item, empty);
@@ -188,8 +220,10 @@ public final class EnvTabController {
                         });
         valueCol.setOnEditCommit(
                 e -> {
-                    e.getRowValue().setValue(e.getNewValue());
-                    envTable.refresh();
+                    EnvVarRow row = rowForEditCommit(e);
+                    if (row != null) {
+                        row.setValue(e.getNewValue());
+                    }
                 });
         valueCol.setReorderable(true);
 
@@ -448,7 +482,8 @@ public final class EnvTabController {
         if (r == null) {
             return;
         }
-        Runnable ping = this::applyEnvSearchPredicate;
+        // Defer so FilteredList predicate does not run in the same pulse as table edit commit (avoids blank cells).
+        Runnable ping = () -> Platform.runLater(this::applyEnvSearchPredicate);
         r.nameProperty().addListener((o, a, b) -> ping.run());
         r.valueProperty().addListener((o, a, b) -> ping.run());
         r.descriptionProperty().addListener((o, a, b) -> ping.run());
