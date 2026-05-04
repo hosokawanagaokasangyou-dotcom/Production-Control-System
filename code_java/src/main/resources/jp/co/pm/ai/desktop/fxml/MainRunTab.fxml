@@ -7,6 +7,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
@@ -23,9 +24,10 @@
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
-            <HBox fx:id="stageRunProgressBox" alignment="CENTER_LEFT" managed="false" minHeight="40.0" spacing="12.0" styleClass="pm-stage-run-progress-box" visible="false">
-                <Label fx:id="stageRunProgressLabel" minWidth="140.0" styleClass="pm-stage-run-progress-text" text="" />
-                <ProgressBar fx:id="stageRunProgressBar" maxWidth="Infinity" minWidth="220.0" prefHeight="16.0" styleClass="pm-stage-run-progress" HBox.hgrow="ALWAYS" />
+            <HBox fx:id="stageRunProgressBox" alignment="CENTER_LEFT" managed="false" spacing="8.0" styleClass="pm-stage-run-progress-box" visible="false">
+                <Label fx:id="stageRunProgressLabel" minWidth="140.0" text="" />
+                <ProgressIndicator fx:id="stageRunBusyIndicator" managed="false" prefHeight="22.0" prefWidth="22.0" visible="false" />
+                <ProgressBar fx:id="stageRunProgressBar" managed="false" maxWidth="Infinity" prefWidth="220.0" visible="false" />
             </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>

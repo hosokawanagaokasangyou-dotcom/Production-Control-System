@@ -163,109 +163,17 @@
     -fx-opacity: 0.5;
 }
 
-/* 段階1／段階2 実行中：不定プログレス＋ラベル（帯背景＋不定バーの .bar 明示で視認性向上） */
+/* 段階1/2 進捗: 配台計画手動修正タブと同じ ProgressIndicator(22) + ProgressBar(prefWidth 220)・既定 Modena／テーマ色 */
 
 .pm-run-tab .pm-stage-run-progress-box {
-    -fx-padding: 0 12 4 12;
+    -fx-spacing: 8;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 0 0 8 0;
 }
-
-.pm-run-tab .pm-stage-run-progress-box.pm-stage-run-progress-box-1 {
-    -fx-background-color: rgba(14, 116, 144, 0.32);
-    -fx-background-radius: 8;
-    -fx-border-color: rgba(14, 116, 144, 0.9);
-    -fx-border-radius: 8;
-    -fx-border-width: 1;
-    -fx-padding: 8 12 8 12;
-}
-
-.pm-run-tab .pm-stage-run-progress-box.pm-stage-run-progress-box-2 {
-    -fx-background-color: rgba(194, 65, 12, 0.32);
-    -fx-background-radius: 8;
-    -fx-border-color: rgba(194, 65, 12, 0.9);
-    -fx-border-radius: 8;
-    -fx-border-width: 1;
-    -fx-padding: 8 12 8 12;
-}
-
-.pm-run-tab .label.pm-stage-run-progress-text {
-    -fx-font-size: 14px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -fx-dark-text-color;
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress {
-    -fx-pref-height: 16;
-    -fx-min-height: 12;
-    -fx-min-width: 220;
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress .track {
-    -fx-background-color: derive(-fx-control-inner-background, -14%);
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-1 {
-    -fx-accent: #0e7490;
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-2 {
-    -fx-accent: #c2410c;
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-1:indeterminate > .bar {
-    -fx-background-color: linear-gradient(to right, #0e7490, #38bdf8, #0e7490);
-}
-
-.pm-run-tab .progress-bar.pm-stage-run-progress.pm-stage-run-progress-2:indeterminate > .bar {
-    -fx-background-color: linear-gradient(to right, #c2410c, #fb923c, #c2410c);
-}
-
-/* メインウィンドウツールバー: 段階1/2 実行中（全タブで最上段に常時表示） */
 
 .pm-app-toolbar .pm-shell-stage-progress {
-    -fx-spacing: 10;
+    -fx-spacing: 8;
     -fx-alignment: CENTER_LEFT;
-}
-
-.pm-app-toolbar .label.pm-shell-stage-progress-label {
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -fx-dark-text-color;
-}
-
-.pm-app-toolbar .pm-shell-stage-progress.pm-shell-stage-progress-1 {
-    -fx-background-color: rgba(14, 116, 144, 0.42);
-    -fx-background-radius: 6;
-    -fx-border-color: rgba(56, 189, 248, 0.95);
-    -fx-border-radius: 6;
-    -fx-border-width: 1;
-    -fx-padding: 4 12 4 10;
-}
-
-.pm-app-toolbar .pm-shell-stage-progress.pm-shell-stage-progress-2 {
-    -fx-background-color: rgba(194, 65, 12, 0.42);
-    -fx-background-radius: 6;
-    -fx-border-color: rgba(251, 146, 60, 0.95);
-    -fx-border-radius: 6;
-    -fx-border-width: 1;
-    -fx-padding: 4 12 4 10;
-}
-
-.pm-app-toolbar .progress-bar.pm-shell-stage-progress-bar {
-    -fx-pref-height: 14;
-    -fx-min-height: 12;
-    -fx-min-width: 260;
-}
-
-.pm-app-toolbar .progress-bar.pm-stage-run-progress .track {
-    -fx-background-color: derive(-fx-control-inner-background, -14%);
-}
-
-.pm-app-toolbar .progress-bar.pm-stage-run-progress.pm-stage-run-progress-1:indeterminate > .bar {
-    -fx-background-color: linear-gradient(to right, #0e7490, #38bdf8, #0e7490);
-}
-
-.pm-app-toolbar .progress-bar.pm-stage-run-progress.pm-stage-run-progress-2:indeterminate > .bar {
-    -fx-background-color: linear-gradient(to right, #c2410c, #fb923c, #c2410c);
 }
 
 /* Plan result viewer (JSON): accordion source strip + side tab panes for vertical space */

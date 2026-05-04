@@ -30,6 +30,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.HBox;
@@ -122,6 +123,9 @@ public final class MainShellController {
 
     @FXML
     private ProgressBar shellStageProgressBar;
+
+    @FXML
+    private ProgressIndicator shellStageBusyIndicator;
 
     @FXML
     private Region toolbarGrowSpacer;
@@ -1160,43 +1164,46 @@ public final class MainShellController {
     }
 
     /**
-     * メインウィンドウ上部ツールバーに段階1/2 実行中を表示する。タブ内の帯に加え、常に視界に入る位置に置く。
+     * メインウィンドウ上部ツールバーに段階1/2 実行中を表示する。
+     * プログレスは {@link DispatchInteractiveTabController} の「機械 JSON 再読み」と同じ
+     * {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
      */
     private void updateShellStageProgressOverlay(boolean stage1Running, boolean stage2Running) {
-        if (shellStageProgressBox == null
-                || shellStageProgressLabel == null
-                || shellStageProgressBar == null) {
+        if (shellStageProgressBox == null) {
             return;
         }
         boolean show = stage1Running || stage2Running;
-        shellStageProgressBox.setVisible(show);
-        shellStageProgressBox.setManaged(show);
         if (show) {
-            shellStageProgressBox
-                    .getStyleClass()
-                    .removeAll("pm-shell-stage-progress-1", "pm-shell-stage-progress-2");
-            shellStageProgressBar
-                    .getStyleClass()
-                    .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
-            if (stage1Running) {
-                shellStageProgressBox.getStyleClass().add("pm-shell-stage-progress-1");
-                shellStageProgressBar.getStyleClass().add("pm-stage-run-progress-1");
-                shellStageProgressLabel.setText("段階1 実行中…");
-            } else {
-                shellStageProgressBox.getStyleClass().add("pm-shell-stage-progress-2");
-                shellStageProgressBar.getStyleClass().add("pm-stage-run-progress-2");
-                shellStageProgressLabel.setText("段階2 実行中…");
+            shellStageProgressBox.setManaged(true);
+            shellStageProgressBox.setVisible(true);
+            if (shellStageProgressBar != null) {
+                shellStageProgressBar.setManaged(true);
+                shellStageProgressBar.setVisible(true);
+                shellStageProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
             }
-            shellStageProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            if (shellStageBusyIndicator != null) {
+                shellStageBusyIndicator.setManaged(true);
+                shellStageBusyIndicator.setVisible(true);
+            }
+            if (shellStageProgressLabel != null) {
+                shellStageProgressLabel.setText(
+                        stage1Running ? "段階1 実行中…" : "段階2 実行中…");
+            }
         } else {
-            shellStageProgressBar.setProgress(0);
-            shellStageProgressLabel.setText("");
-            shellStageProgressBox
-                    .getStyleClass()
-                    .removeAll("pm-shell-stage-progress-1", "pm-shell-stage-progress-2");
-            shellStageProgressBar
-                    .getStyleClass()
-                    .removeAll("pm-stage-run-progress-1", "pm-stage-run-progress-2");
+            if (shellStageProgressBar != null) {
+                shellStageProgressBar.setProgress(0);
+                shellStageProgressBar.setVisible(false);
+                shellStageProgressBar.setManaged(false);
+            }
+            if (shellStageBusyIndicator != null) {
+                shellStageBusyIndicator.setVisible(false);
+                shellStageBusyIndicator.setManaged(false);
+            }
+            if (shellStageProgressLabel != null) {
+                shellStageProgressLabel.setText("");
+            }
+            shellStageProgressBox.setVisible(false);
+            shellStageProgressBox.setManaged(false);
         }
     }
 
