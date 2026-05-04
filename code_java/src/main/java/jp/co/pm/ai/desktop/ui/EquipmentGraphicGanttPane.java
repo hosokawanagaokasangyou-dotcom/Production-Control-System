@@ -73,29 +73,62 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         {
             int nonEmptySlots = 0;
             int dataDisplayRows = 0;
+            int sectionRows = 0;
             for (DisplayRow dr : parsed.displayRows) {
                 if (dr.sectionBanner != null) {
+                    sectionRows++;
                     continue;
                 }
                 dataDisplayRows++;
-                for (String c : dr.cellsInSlots) {
-                    if (c != null && !c.strip().isEmpty()) {
-                        nonEmptySlots++;
+                if (dr.cellsInSlots != null) {
+                    for (String c : dr.cellsInSlots) {
+                        if (c != null && !c.strip().isEmpty()) {
+                            nonEmptySlots++;
+                        }
                     }
                 }
             }
+            String col0preview = "";
+            if (effRows != null && !effRows.isEmpty()) {
+                ObservableList<String> r0 = effRows.get(0);
+                if (r0 != null && !r0.isEmpty()) {
+                    String s = r0.get(0);
+                    if (s != null) {
+                        col0preview = s.length() > 72 ? s.substring(0, 72) : s;
+                    }
+                }
+            }
+            StringBuilder hb = new StringBuilder();
+            int hlim = Math.min(10, effCols.size());
+            for (int hi = 0; hi < hlim; hi++) {
+                if (hi > 0) {
+                    hb.append('|');
+                }
+                String hx = effCols.get(hi);
+                hb.append(hx != null ? hx : "");
+            }
+            String headersPreview = hb.length() > 240 ? hb.substring(0, 240) : hb.toString();
             agentDebugLog(
-                    "H1",
+                    "T1",
                     "EquipmentGraphicGanttPane.build:afterParse",
-                    "equipment graphic parse",
+                    "equipment graphic parse summary",
                     String.format(
-                            "{\"nonEmptySlotCells\":%d,\"dataDisplayRows\":%d,\"slotColumnCount\":%d,"
-                                    + "\"slotMinutes\":%d,\"repairedUnnamed\":%s}",
+                            "{\"hypothesisMap\":{\"H1_jsonCellsEmpty\":%s,\"H2_allSectionRows\":%s},"
+                                    + "\"nonEmptySlotCells\":%d,\"timelineCanvasRows\":%d,\"sectionBannerRows\":%d,"
+                                    + "\"inputRows\":%d,\"slotColumnCount\":%d,\"slotMinutes\":%d,"
+                                    + "\"repairedUnnamed\":%b,\"firstCol0Preview\":\"%s\","
+                                    + "\"headersPreview\":\"%s\"}",
+                            nonEmptySlots == 0,
+                            sectionRows > 0 && dataDisplayRows == 0,
                             nonEmptySlots,
                             dataDisplayRows,
+                            sectionRows,
+                            effRows != null ? effRows.size() : 0,
                             parsed.slotColumnIndices.size(),
                             parsed.slotMinutes,
-                            repaired != null));
+                            repaired != null,
+                            jsonEscape(col0preview),
+                            jsonEscape(headersPreview)));
         }
         // #endregion
         if (parsed.slotColumnIndices.isEmpty()) {
@@ -411,13 +444,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     // #region agent log
     /**
-     * デバッグ NDJSON（セッション b8c02d）。Windows / WSL のいずれかに書ければよい。
+     * デバッグ NDJSON（セッション f0dedd）。Windows / WSL のいずれかに書ければよい。
      */
     private static void agentDebugLog(
             String hypothesisId, String location, String message, String dataJsonObject) {
         long ts = System.currentTimeMillis();
         String line =
-                "{\"sessionId\":\"b8c02d\",\"timestamp\":"
+                "{\"sessionId\":\"f0dedd\",\"timestamp\":"
                         + ts
                         + ",\"hypothesisId\":\""
                         + hypothesisId
@@ -432,8 +465,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         String[] candidates =
                 new String[] {
                     env != null && !env.isBlank() ? env : "",
-                    "C:\\工程管理AIプロジェクト_JAVA\\.cursor\\debug-b8c02d.log",
-                    "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-b8c02d.log",
+                    "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-f0dedd.log",
+                    "C:\\工程管理AIプロジェクト_JAVA\\.cursor\\debug-f0dedd.log",
                 };
         for (String p : candidates) {
             if (p == null || p.isBlank()) {
