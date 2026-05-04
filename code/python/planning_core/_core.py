@@ -23754,6 +23754,12 @@ def _interactive_expand_dispatch_table_from_result_task_history(
         drop_idx.append(ri)
 
     if not extra_rows:
+        _append_debug_471ee7(
+            "H3",
+            "_interactive_expand_dispatch_table_from_result_task_history",
+            "no_expand",
+            {"rowsIn": int(len(df_dispatch))},
+        )
         return df_dispatch
 
     kept = df_dispatch.drop(index=drop_idx)
@@ -23770,40 +23776,12 @@ def _interactive_expand_dispatch_table_from_result_task_history(
         len(extra_rows),
         len(drop_idx),
     )
-    try:
-        _p = os.path.abspath(os.path.dirname(__file__))
-        _dbg_p = None
-        for _ in range(10):
-            _cand = os.path.join(_p, ".cursor", "debug-471ee7.log")
-            if os.path.isdir(os.path.join(_p, ".cursor")):
-                _dbg_p = _cand
-                break
-            _parent = os.path.dirname(_p)
-            if _parent == _p:
-                break
-            _p = _parent
-        if not _dbg_p:
-            raise OSError("no .cursor in parents")
-        with open(_dbg_p, "a", encoding="utf-8") as _df:
-            _df.write(
-                json.dumps(
-                    {
-                        "sessionId": "471ee7",
-                        "hypothesisId": "DT1",
-                        "location": "_interactive_expand_dispatch_table_from_result_task_history",
-                        "message": "expanded dispatch rows from task history",
-                        "data": {
-                            "replacedRows": len(drop_idx),
-                            "newRows": len(extra_rows),
-                        },
-                        "timestamp": int(time_module.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
+    _append_debug_471ee7(
+        "H3",
+        "_interactive_expand_dispatch_table_from_result_task_history",
+        "expanded",
+        {"replacedRows": int(len(drop_idx)), "newRows": int(len(extra_rows))},
+    )
     return out
 
 
@@ -24237,6 +24215,42 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _append_debug_471ee7(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # #region agent log
+    try:
+        _p = os.path.abspath(os.path.dirname(__file__))
+        _dbg_p = None
+        for _ in range(10):
+            _cand = os.path.join(_p, ".cursor", "debug-471ee7.log")
+            if os.path.isdir(os.path.join(_p, ".cursor")):
+                _dbg_p = _cand
+                break
+            _parent = os.path.dirname(_p)
+            if _parent == _p:
+                break
+            _p = _parent
+        if not _dbg_p:
+            return
+        with open(_dbg_p, "a", encoding="utf-8") as _df:
+            _df.write(
+                json.dumps(
+                    {
+                        "sessionId": "471ee7",
+                        "hypothesisId": str(hypothesis_id),
+                        "location": str(location),
+                        "message": str(message),
+                        "data": data if isinstance(data, dict) else {"value": str(data)},
+                        "timestamp": int(time_module.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+
+
 def _dataframe_from_interactive_dispatch_json_rows(
     json_rows: list,
     json_columns: list | None,
@@ -24301,6 +24315,15 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         return df_sim
     if not _interactive_dispatch_trial_env_active():
         return df_sim
+    _append_debug_471ee7(
+        "H2",
+        "_interactive_dispatch_trial_use_editor_rows_for_result_table",
+        "enter",
+        {
+            "jsonRows": len(json_rows) if isinstance(json_rows, list) else -1,
+            "simEmpty": bool(df_sim is None or getattr(df_sim, "empty", True)),
+        },
+    )
     if df_sim is None:
         df_sim = pd.DataFrame()
     if getattr(df_sim, "empty", True):
@@ -24310,6 +24333,12 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         logging.info(
             "インタラクティブ配台試行: timeline 集約が空のため、入力 JSON のみで結果_配台表を組み立てました（%s 行）。",
             len(df_j),
+        )
+        _append_debug_471ee7(
+            "H2",
+            "_interactive_dispatch_trial_use_editor_rows_for_result_table",
+            "fallback_json_only",
+            {"rowsOut": int(len(df_j))},
         )
         return df_j
 
@@ -24392,6 +24421,15 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         "インタラクティブ配台試行: 結果_配台表は timeline 集約を基準にしました。"
         " 入力 JSON を合算 1 行とみなして暦日分割を維持した (依頼NO, 機械名) グループ=%s 件。",
         len(collapsed_groups),
+    )
+    _append_debug_471ee7(
+        "H2",
+        "_interactive_dispatch_trial_use_editor_rows_for_result_table",
+        "exit_timeline_base",
+        {
+            "rowsOut": int(len(df_out)),
+            "collapsedGroups": int(len(collapsed_groups)),
+        },
     )
     return df_out
 
