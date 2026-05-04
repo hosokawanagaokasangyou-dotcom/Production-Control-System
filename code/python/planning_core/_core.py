@@ -77,7 +77,8 @@ _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
 _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # endregion stage2 cache helpers
 
-# JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）
+# JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
+# 試行時は入力 JSON の rows を結果_配台表（Excel/JSON）へ優先反映する（timeline 集約より上位）。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 
@@ -23625,9 +23626,8 @@ def _interactive_validate_dispatch_quantities(
     if not expected:
         return
     actual = _interactive_aggregate_dispatch_targets_from_df(df_dispatch)
-    # デスクトップの「配台試行」は常に PM_AI_INTERACTIVE_DISPATCH_TRIAL=1。JSON 上の合計と
-    # 段階2 後に組み立てた結果_配台表行の合計が食い違うことは、制約の都合で起こり得る。
-    # その場合も試行処理自体は継続し、不一致は警告のみとする（致命的 PlanningValidationError は出さない）。
+    # デスクトップの「配台試行」は入力 JSON の rows を結果_配台表に反映した後ここに来る。
+    # 反映後も食い違う場合は旧実装と同様に警告のみ（致命的 PlanningValidationError は出さない）。
     interactive_ui_trial = (os.environ.get("PM_AI_INTERACTIVE_DISPATCH_TRIAL") or "").strip().lower() in (
         "1",
         "true",
@@ -23996,6 +23996,67 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
     except Exception as e:
         logging.warning("結果_配台表.xlsx: 出力に失敗しました: %s", e)
         return None
+
+
+def _interactive_dispatch_trial_env_active() -> bool:
+    v = (os.environ.get("PM_AI_INTERACTIVE_DISPATCH_TRIAL") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _interactive_dispatch_trial_use_editor_rows_for_result_table(
+    df_sim: pd.DataFrame,
+    json_rows: list | None,
+    json_columns: list | None,
+) -> pd.DataFrame:
+    """
+    インタラクティブ配台試行: 保存済み「結果_配台表.json」の rows をシミュレーション結果より優先する（日別・数量を死守）。
+    通常の段階2（本関数を呼ばない経路）では従来どおり timeline から集約した表を使う。
+    """
+    if not json_rows or not isinstance(json_rows, list):
+        return df_sim
+    if not _interactive_dispatch_trial_env_active():
+        return df_sim
+    if df_sim is None:
+        df_sim = pd.DataFrame()
+    if json_columns and isinstance(json_columns, list) and len(json_columns) > 0:
+        cols_order = [str(x) for x in json_columns]
+    elif df_sim is not None and not getattr(df_sim, "empty", True) and len(df_sim.columns) > 0:
+        cols_order = list(df_sim.columns)
+    else:
+        cols_order = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"]
+    recs: list[dict] = []
+    for r in json_rows:
+        if not isinstance(r, dict):
+            continue
+        d: dict = {}
+        for c in cols_order:
+            v = r.get(c)
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                d[c] = ""
+            elif c in RESULT_DISPATCH_TABLE_DATE_HEADERS:
+                d[c] = _norm_ymd(v)
+            else:
+                if isinstance(v, (dict, list)):
+                    d[c] = str(v)
+                elif isinstance(v, bool):
+                    d[c] = "はい" if v else "いいえ"
+                else:
+                    d[c] = v
+        recs.append(d)
+    if not recs:
+        return df_sim
+    df_out = pd.DataFrame(recs)
+    for c in cols_order:
+        if c not in df_out.columns:
+            df_out[c] = ""
+    ordered = [c for c in cols_order if c in df_out.columns]
+    extra = [c for c in df_out.columns if c not in ordered]
+    df_out = df_out.reindex(columns=ordered + extra)
+    logging.info(
+        "インタラクティブ配台試行: 結果_配台表は入力 JSON の rows を採用しました（%s 行・シミュレーション集約は上書き）。",
+        len(df_out),
+    )
+    return df_out
 
 
 def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir: str) -> str | None:
@@ -29230,6 +29291,8 @@ def _generate_plan_impl(
     *,
     interactive_relax_intraday: bool = False,
     interactive_dispatch_targets: dict | None = None,
+    interactive_result_dispatch_json_rows: list | None = None,
+    interactive_result_dispatch_json_columns: list | None = None,
 ):
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -31738,6 +31801,11 @@ def _generate_plan_impl(
                 sorted_tasks_for_result,
                 tasks_df,
                 df_src_for_dispatch,
+            )
+            df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
+                df_dispatch,
+                interactive_result_dispatch_json_rows,
+                interactive_result_dispatch_json_columns,
             )
             if interactive_dispatch_targets:
                 _interactive_validate_dispatch_quantities(

@@ -42,7 +42,6 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
@@ -1181,14 +1180,6 @@ public final class MainShellController {
         } else {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
-        // #region agent log
-        // 子プロセス（配台試行）が NDJSON 追跡を同じセッションファイルに追記できるよう渡す
-        try {
-            java.nio.file.Path dbg = AgentDebugLog.resolveNdjsonPath(ui, "e6dc4e");
-            ui.put("CURSOR_DEBUG_LOG", dbg.toString());
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         return childEnvForPython(ui);
     }
 

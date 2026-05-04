@@ -42,47 +42,7 @@ def main() -> int:
     if rows is None:
         print("missing rows array", file=sys.stderr)
         return 1
-
-    # #region agent log
-    def _agent_ndjson_append(payload: dict) -> None:
-        p = (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-        if not p:
-            return
-        try:
-            import time
-
-            payload.setdefault("sessionId", "e6dc4e")
-            payload.setdefault("timestamp", int(time.time() * 1000))
-            with open(p, "a", encoding="utf-8") as _af:
-                _af.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-
-    y514_rows = []
-    for _r in rows or []:
-        if not isinstance(_r, dict):
-            continue
-        if (
-            str(_r.get("依頼NO", "")).strip() == "Y5-14"
-            and str(_r.get("工程名", "")).strip() == "SEC"
-        ):
-            y514_rows.append(
-                {
-                    "配台試行順番": _r.get("配台試行順番"),
-                    "機械名": _r.get("機械名"),
-                    "配台日": _r.get("配台日"),
-                    "当日配台数量": _r.get("当日配台数量"),
-                }
-            )
-    _agent_ndjson_append(
-        {
-            "location": "dispatch_interactive_trial.py",
-            "hypothesisId": "H1",
-            "message": "argv_json_Y5-14_SEC_rows",
-            "data": {"count": len(y514_rows), "rows": y514_rows},
-        }
-    )
-    # #endregion
+    json_columns = raw.get("columns") if isinstance(raw, dict) else None
 
     os.environ["PM_AI_INTERACTIVE_DISPATCH_TRIAL"] = "1"
 
@@ -97,29 +57,16 @@ def main() -> int:
         merged_df, targets = pc.merge_interactive_result_dispatch_json_into_tasks_df(
             tasks_df, rows
         )
-        # #region agent log
-        y514_t = {}
-        for _k, _v in (targets or {}).items():
-            try:
-                if _k and len(_k) >= 1 and str(_k[0]).strip() == "Y5-14":
-                    y514_t[str(_k)] = float(_v)
-            except Exception:
-                pass
-        _agent_ndjson_append(
-            {
-                "location": "dispatch_interactive_trial.py",
-                "hypothesisId": "H4",
-                "message": "merged_targets_Y5-14_keys",
-                "data": y514_t,
-            }
-        )
-        # #endregion
         print("[dispatch trial] 段階2（配台計画）を実行中…（時間がかかる場合があります）", flush=True)
         paths = pc._generate_plan_impl(
             tasks_df_override=merged_df,
             return_output_paths=True,
             interactive_relax_intraday=True,
             interactive_dispatch_targets=targets if targets else None,
+            interactive_result_dispatch_json_rows=rows,
+            interactive_result_dispatch_json_columns=json_columns
+            if isinstance(json_columns, list)
+            else None,
         )
         snap = pc.interactive_trial_shortages_snapshot()
         shortage_payload: dict = {
