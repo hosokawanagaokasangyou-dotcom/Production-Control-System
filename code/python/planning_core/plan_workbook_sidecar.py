@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import unicodedata
@@ -23,6 +24,63 @@ ENV_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON"
 RESULT_TASK_JSON_SUFFIX = "_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7.json"
 SIDE_FORMAT_VERSION = 1
 WORKBOOK_JSON_FORMAT_VERSION = 2
+
+# pandas の read_excel(header=0) だと、結果_設備ガントのようにタイトル行のあとに列見出し行がある
+# シートでは列名が Unnamed: 0 になる。JSON 側で HH:MM 列を復元する。
+_GANTT_TIME_HEADER_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
+
+
+def _cell_str_df(v) -> str:
+    if v is None:
+        return ""
+    try:
+        if isinstance(v, float) and pd.isna(v):
+            return ""
+    except Exception:
+        pass
+    return str(v).strip()
+
+
+def _looks_like_hh_mm_header(s: str) -> bool:
+    return bool(s and _GANTT_TIME_HEADER_RE.match(s))
+
+
+def _reheader_dataframe_if_equipment_sheet_unnamed(name: str, df: pd.DataFrame) -> pd.DataFrame:
+    """
+    設備ガント系シートで pandas が Unnamed 列だけ返したとき、先頭数十行から
+    A 列が「日付」かつ HH:MM セルが複数ある行を列見出し行として採用する。
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    cols = [str(x) for x in df.columns]
+    if not cols or not str(cols[0]).startswith("Unnamed"):
+        return df
+    if name and ("設備" not in name and "時間割" not in name):
+        return df
+    ncols = len(df.columns)
+    max_scan = min(50, len(df))
+    for r in range(max_scan):
+        row = df.iloc[r]
+        if _cell_str_df(row.iloc[0] if len(row) > 0 else None) != "日付":
+            continue
+        vals = [_cell_str_df(row.iloc[i]) if i < len(row) else "" for i in range(ncols)]
+        first_t = -1
+        for c in range(1, len(vals)):
+            if _looks_like_hh_mm_header(vals[c]):
+                first_t = c
+                break
+        if first_t < 0:
+            continue
+        time_hits = sum(
+            1 for c in range(first_t, len(vals)) if _looks_like_hh_mm_header(vals[c])
+        )
+        if time_hits < 2:
+            continue
+        header = [_cell_str_df(row.iloc[i]) if i < len(row) else "" for i in range(ncols)]
+        out = df.iloc[r + 1 :].copy()
+        out.columns = header
+        return out.reset_index(drop=True)
+    return df
 
 
 def _normalized_json_sidecar_path(xlsx_path: str) -> str:
@@ -139,6 +197,7 @@ def _dump_xlsx_all_sheets_to_json(
             sheets_out[name] = {"columns": [], "row_count": 0, "rows": []}
             continue
         try:
+            df = _reheader_dataframe_if_equipment_sheet_unnamed(name, df)
             rows = json.loads(
                 df.to_json(orient="records", date_format="iso", double_precision=15)
             )

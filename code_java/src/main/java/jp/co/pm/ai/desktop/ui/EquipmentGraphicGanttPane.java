@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -60,26 +61,35 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
         BorderPane root = new BorderPane();
-        ParseResult parsed = parse(columns, rows);
+        List<String> effCols = columns;
+        ObservableList<ObservableList<String>> effRows = rows;
+        RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
+        boolean didRepair = repaired != null;
+        if (didRepair) {
+            effCols = repaired.columns();
+            effRows = repaired.rows();
+        }
+        ParseResult parsed = parse(effCols, effRows);
         // #region agent log
         try {
             int colonish = 0;
-            for (String h : columns) {
+            for (String h : effCols) {
                 if (h != null && (h.indexOf(':') >= 0 || h.indexOf('\uFF1A') >= 0)) {
                     colonish++;
                 }
             }
             Map<String, Object> d = new LinkedHashMap<>();
+            d.put("repairedUnnamedHeaderRow", didRepair);
             d.put("slotCount", parsed.slotColumnIndices.size());
-            d.put("colCount", columns != null ? columns.size() : -1);
+            d.put("colCount", effCols != null ? effCols.size() : -1);
             d.put("colonishHeaderCount", colonish);
             d.put(
                     "headersFirst30",
-                    columns == null
+                    effCols == null
                             ? List.of()
-                            : (columns.size() <= 30
-                                    ? new ArrayList<>(columns)
-                                    : new ArrayList<>(columns.subList(0, 30))));
+                            : (effCols.size() <= 30
+                                    ? new ArrayList<>(effCols)
+                                    : new ArrayList<>(effCols.subList(0, 30))));
             AgentDebugLog.appendStructured(
                     Map.of(),
                     "b7cded",
@@ -321,6 +331,88 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return null;
         }
     }
+
+    /**
+     * production_plan JSON が pandas 由来で列名が Unnamed:0 のみのとき、Excel 上の
+     * 「日付 / 機械名 / … / HH:MM …」行を列見出し行として採用する（read_excel header=0 ミスアラインの救済）。
+     */
+    private static RepairResult tryRepairPandasUnnamedEquipmentTimeline(
+            List<String> columns, ObservableList<ObservableList<String>> rows) {
+        if (columns == null
+                || columns.isEmpty()
+                || rows == null
+                || rows.isEmpty()
+                || !looksLikePandasUnnamedHeaderColumns(columns)) {
+            return null;
+        }
+        int width = columns.size();
+        for (int ri = 0; ri < Math.min(50, rows.size()); ri++) {
+            ObservableList<String> row = rows.get(ri);
+            if (row == null || row.isEmpty()) {
+                continue;
+            }
+            if (!"日付".equals(strAt(row, 0))) {
+                continue;
+            }
+            int firstTimeCol = -1;
+            for (int c = 1; c < row.size(); c++) {
+                if (parseTimeHeader(strAt(row, c)) != null) {
+                    firstTimeCol = c;
+                    break;
+                }
+            }
+            if (firstTimeCol < 1) {
+                continue;
+            }
+            int timeHits = 0;
+            for (int c = firstTimeCol; c < row.size(); c++) {
+                if (parseTimeHeader(strAt(row, c)) != null) {
+                    timeHits++;
+                }
+            }
+            if (timeHits < 2) {
+                continue;
+            }
+            int w = Math.max(width, row.size());
+            List<String> newCols = new ArrayList<>(w);
+            for (int c = 0; c < w; c++) {
+                String v = strAt(row, c);
+                if (v.isEmpty()) {
+                    newCols.add(c < columns.size() ? columns.get(c) : ("列" + c));
+                } else {
+                    newCols.add(v);
+                }
+            }
+            ObservableList<ObservableList<String>> newRows = FXCollections.observableArrayList();
+            for (int rj = ri + 1; rj < rows.size(); rj++) {
+                newRows.add(rows.get(rj));
+            }
+            return new RepairResult(newCols, newRows);
+        }
+        return null;
+    }
+
+    private static boolean looksLikePandasUnnamedHeaderColumns(List<String> columns) {
+        int n = Math.min(3, columns.size());
+        for (int i = 0; i < n; i++) {
+            String h = columns.get(i);
+            if (h == null || !h.startsWith("Unnamed")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String strAt(ObservableList<String> row, int c) {
+        if (row == null || c < 0 || c >= row.size()) {
+            return "";
+        }
+        String v = row.get(c);
+        return v != null ? v.strip() : "";
+    }
+
+    private record RepairResult(
+            List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
     private static ParseResult parse(List<String> columns, ObservableList<ObservableList<String>> rows) {
         ParseResult pr = new ParseResult();
