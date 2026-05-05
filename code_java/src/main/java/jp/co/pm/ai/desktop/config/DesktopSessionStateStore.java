@@ -87,7 +87,8 @@ public final class DesktopSessionStateStore {
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
                     text(root, "stage1NetworkCacheBadgeLabel"),
-                    loadStage1NetworkCacheBadgeStyle(root));
+                    loadStage1NetworkCacheBadgeStyle(root),
+                    loadPushButtonDesignPrefs(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -119,6 +120,7 @@ public final class DesktopSessionStateStore {
             putMainShellTabOrder(root, state.mainShellTabOrder());
             putEquipmentGanttGraphicPrefs(root, state);
             putStage1NetworkCacheBadgePrefs(root, state);
+            putPushButtonDesignPrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -429,6 +431,114 @@ public final class DesktopSessionStateStore {
         if (!bag.isEmpty()) {
             root.set(jsonKey, bag);
         }
+    }
+
+    private static PushButtonDesignPrefs loadPushButtonDesignPrefs(JsonNode root) {
+        JsonNode n = root.get("pushButtonDesignPrefs");
+        PushButtonDesignPrefs d = PushButtonDesignPrefs.inactiveDefaults();
+        if (n == null || !n.isObject()) {
+            return d;
+        }
+        boolean cg = optionalBoolean(n, "customizeGeneralRunTab", false);
+        boolean cs = optionalBoolean(n, "customizeStageRunButtons", false);
+        double gr = optionalDouble(n, "generalBorderRadius", d.generalBorderRadius());
+        double gpv = optionalDouble(n, "generalPaddingV", d.generalPaddingV());
+        double gph = optionalDouble(n, "generalPaddingH", d.generalPaddingH());
+        double gf = optionalDouble(n, "generalFontPx", d.generalFontPx());
+        String gbg = nzFallback(text(n, "generalBgHex"), d.generalBgHex());
+        String gb = nzFallback(text(n, "generalBorderHex"), d.generalBorderHex());
+        String gt = nzFallback(text(n, "generalTextHex"), d.generalTextHex());
+        String gh = nzFallback(text(n, "generalHoverBgHex"), d.generalHoverBgHex());
+        String gp = nzFallback(text(n, "generalPressedBgHex"), d.generalPressedBgHex());
+        double sf = optionalDouble(n, "stageFontPx", d.stageFontPx());
+        double smw = optionalDouble(n, "stageMinWidth", d.stageMinWidth());
+        double smh = optionalDouble(n, "stageMinHeight", d.stageMinHeight());
+        double spv = optionalDouble(n, "stagePaddingV", d.stagePaddingV());
+        double sph = optionalDouble(n, "stagePaddingH", d.stagePaddingH());
+        double sr = optionalDouble(n, "stageBorderRadius", d.stageBorderRadius());
+        String s1b = nzFallback(text(n, "stage1BgHex"), d.stage1BgHex());
+        String s1bo = nzFallback(text(n, "stage1BorderHex"), d.stage1BorderHex());
+        String s1h = nzFallback(text(n, "stage1HoverBgHex"), d.stage1HoverBgHex());
+        String s1p = nzFallback(text(n, "stage1PressedBgHex"), d.stage1PressedBgHex());
+        String s2b = nzFallback(text(n, "stage2BgHex"), d.stage2BgHex());
+        String s2bo = nzFallback(text(n, "stage2BorderHex"), d.stage2BorderHex());
+        String s2h = nzFallback(text(n, "stage2HoverBgHex"), d.stage2HoverBgHex());
+        String s2p = nzFallback(text(n, "stage2PressedBgHex"), d.stage2PressedBgHex());
+        String s3b = nzFallback(text(n, "stage3BgHex"), d.stage3BgHex());
+        String s3bo = nzFallback(text(n, "stage3BorderHex"), d.stage3BorderHex());
+        String s3h = nzFallback(text(n, "stage3HoverBgHex"), d.stage3HoverBgHex());
+        String s3p = nzFallback(text(n, "stage3PressedBgHex"), d.stage3PressedBgHex());
+        return new PushButtonDesignPrefs(
+                cg,
+                gr,
+                gpv,
+                gph,
+                gf,
+                gbg,
+                gb,
+                gt,
+                gh,
+                gp,
+                cs,
+                sf,
+                smw,
+                smh,
+                spv,
+                sph,
+                sr,
+                s1b,
+                s1bo,
+                s1h,
+                s1p,
+                s2b,
+                s2bo,
+                s2h,
+                s2p,
+                s3b,
+                s3bo,
+                s3h,
+                s3p);
+    }
+
+    private static String nzFallback(String s, String def) {
+        return s != null && !s.isBlank() ? s.strip() : def;
+    }
+
+    private static void putPushButtonDesignPrefs(ObjectNode root, DesktopSessionState state) {
+        PushButtonDesignPrefs p = state.pushButtonDesignPrefs();
+        if (p == null || p.equals(PushButtonDesignPrefs.inactiveDefaults())) {
+            return;
+        }
+        ObjectNode o = root.putObject("pushButtonDesignPrefs");
+        o.put("customizeGeneralRunTab", p.customizeGeneralRunTab());
+        o.put("customizeStageRunButtons", p.customizeStageRunButtons());
+        o.put("generalBorderRadius", p.generalBorderRadius());
+        o.put("generalPaddingV", p.generalPaddingV());
+        o.put("generalPaddingH", p.generalPaddingH());
+        o.put("generalFontPx", p.generalFontPx());
+        o.put("generalBgHex", p.generalBgHex());
+        o.put("generalBorderHex", p.generalBorderHex());
+        o.put("generalTextHex", p.generalTextHex());
+        o.put("generalHoverBgHex", p.generalHoverBgHex());
+        o.put("generalPressedBgHex", p.generalPressedBgHex());
+        o.put("stageFontPx", p.stageFontPx());
+        o.put("stageMinWidth", p.stageMinWidth());
+        o.put("stageMinHeight", p.stageMinHeight());
+        o.put("stagePaddingV", p.stagePaddingV());
+        o.put("stagePaddingH", p.stagePaddingH());
+        o.put("stageBorderRadius", p.stageBorderRadius());
+        o.put("stage1BgHex", p.stage1BgHex());
+        o.put("stage1BorderHex", p.stage1BorderHex());
+        o.put("stage1HoverBgHex", p.stage1HoverBgHex());
+        o.put("stage1PressedBgHex", p.stage1PressedBgHex());
+        o.put("stage2BgHex", p.stage2BgHex());
+        o.put("stage2BorderHex", p.stage2BorderHex());
+        o.put("stage2HoverBgHex", p.stage2HoverBgHex());
+        o.put("stage2PressedBgHex", p.stage2PressedBgHex());
+        o.put("stage3BgHex", p.stage3BgHex());
+        o.put("stage3BorderHex", p.stage3BorderHex());
+        o.put("stage3HoverBgHex", p.stage3HoverBgHex());
+        o.put("stage3PressedBgHex", p.stage3PressedBgHex());
     }
 
     private static void putWindowGeometry(ObjectNode root, DesktopSessionState state) {

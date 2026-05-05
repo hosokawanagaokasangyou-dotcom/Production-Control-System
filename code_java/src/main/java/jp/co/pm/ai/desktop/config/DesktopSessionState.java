@@ -58,6 +58,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
  * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
+ * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -109,7 +110,8 @@ public record DesktopSessionState(
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey,
         String stage1NetworkCacheBadgeLabel,
-        PersonBadgeStyle stage1NetworkCacheBadgeStyle) {
+        PersonBadgeStyle stage1NetworkCacheBadgeStyle,
+        PushButtonDesignPrefs pushButtonDesignPrefs) {
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -222,6 +224,7 @@ public record DesktopSessionState(
                 Map.of(),
                 Map.of(),
                 "",
-                PersonBadgeStyle.networkSourceCacheBadgeDefault());
+                PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                PushButtonDesignPrefs.inactiveDefaults());
     }
 }

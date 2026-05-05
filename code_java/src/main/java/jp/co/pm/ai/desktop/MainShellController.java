@@ -48,6 +48,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
+import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
@@ -181,6 +183,9 @@ public final class MainShellController {
     private UiBadgeDesignTabController uiBadgeDesignTabController;
 
     @FXML
+    private PushButtonDesignTabController pushButtonDesignTabController;
+
+    @FXML
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
@@ -188,6 +193,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabUiBadgeDesign;
+
+    @FXML
+    private Tab mainShellTabPushButtonDesign;
 
     @FXML
     private Tab mainShellTabEnv;
@@ -269,6 +277,9 @@ public final class MainShellController {
     /** Child windows (e.g. dispatch trial log) that mirror the toolbar {@link DesktopTheme}. */
     private final List<Scene> themeTrackedSecondaryScenes = new CopyOnWriteArrayList<>();
 
+    /** Primary shell scene (push-button overridesなどで参照)。 */
+    private Scene primaryScene;
+
     /** Set by {@link Stage1PreviewTabController}; runs after stage 1 exits 0. */
     private Runnable reloadAfterStage1Preview;
 
@@ -297,6 +308,9 @@ public final class MainShellController {
             }
             if (uiBadgeDesignTabController != null) {
                 uiBadgeDesignTabController.bindShell(this);
+            }
+            if (pushButtonDesignTabController != null) {
+                pushButtonDesignTabController.bindShell(this);
             }
 
             operatorCardTabController.bindShell(this);
@@ -386,7 +400,11 @@ public final class MainShellController {
      * Invoked from {@link PmAiFxApp} after {@link Scene} creation so theme stylesheets can target the scene.
      */
     public void finishStartup(Scene scene) {
+        this.primaryScene = scene;
         if (themeCombo == null) {
+            if (pushButtonDesignTabController != null) {
+                pushButtonDesignTabController.installStylesheetWhenSceneReady();
+            }
             return;
         }
         themeCombo.getItems().setAll(DesktopTheme.values());
@@ -415,8 +433,12 @@ public final class MainShellController {
                             }
                             mainRunTabController.refreshLogThemeCells();
                             equipmentGanttGraphicTabController.refreshGraphicForTheme();
+                            refreshPushButtonStylesheet();
                         });
         Platform.runLater(mainRunTabController::refreshLogThemeCells);
+        if (pushButtonDesignTabController != null) {
+            pushButtonDesignTabController.installStylesheetWhenSceneReady();
+        }
     }
 
     /** Theme shown in toolbar (for components that need dark/light tint hints). */
@@ -524,6 +546,9 @@ public final class MainShellController {
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.applyUiBadgeSession(s);
         }
+        if (pushButtonDesignTabController != null) {
+            pushButtonDesignTabController.applyPushButtonSession(s);
+        }
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -571,6 +596,9 @@ public final class MainShellController {
         }
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.flushEditsBeforeSnapshot();
+        }
+        if (pushButtonDesignTabController != null) {
+            pushButtonDesignTabController.flushEditsBeforeSnapshot();
         }
         return new DesktopSessionState(
                 planInputTabController.snapshotPlanInputPath(),
@@ -628,7 +656,10 @@ public final class MainShellController {
                         : "",
                 uiBadgeDesignTabController != null
                         ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
-                        : PersonBadgeStyle.networkSourceCacheBadgeDefault());
+                        : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                pushButtonDesignTabController != null
+                        ? pushButtonDesignTabController.snapshotPrefs()
+                        : PushButtonDesignPrefs.inactiveDefaults());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -752,6 +783,14 @@ public final class MainShellController {
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
+    /** プッシュボタンのユーザー CSS をメインシーンに適用し直す（テーマ変更後も最後尾で上書き）。 */
+    public void refreshPushButtonStylesheet() {
+        if (primaryScene == null || pushButtonDesignTabController == null) {
+            return;
+        }
+        PushButtonCssEmitter.applyToScene(primaryScene, pushButtonDesignTabController.snapshotPrefs());
+    }
+
     private MainShellTabId mainShellTabId(Tab t) {
         if (t == null) {
             return null;
@@ -761,6 +800,9 @@ public final class MainShellController {
         }
         if (t == mainShellTabUiBadgeDesign) {
             return MainShellTabId.UI_BADGE_DESIGN;
+        }
+        if (t == mainShellTabPushButtonDesign) {
+            return MainShellTabId.PUSH_BUTTON_DESIGN;
         }
         if (t == mainShellTabEnv) {
             return MainShellTabId.ENV;
@@ -814,6 +856,7 @@ public final class MainShellController {
         return switch (id) {
             case RUN -> mainShellTabRun;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
+            case PUSH_BUTTON_DESIGN -> mainShellTabPushButtonDesign;
             case ENV -> mainShellTabEnv;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;

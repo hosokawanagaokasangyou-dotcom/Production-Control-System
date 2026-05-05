@@ -47,6 +47,11 @@
                         <fx:include fx:id="uiBadgeDesignTab" source="UiBadgeDesignTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabPushButtonDesign" closable="false" text="プッシュボタン">
+                    <content>
+                        <fx:include fx:id="pushButtonDesignTab" source="PushButtonDesignTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabEnv" closable="false" text="環境変数">
                     <content>
                         <fx:include fx:id="envTab" source="EnvTab.fxml"/>
