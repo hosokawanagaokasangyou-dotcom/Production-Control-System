@@ -15,6 +15,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
@@ -27,8 +28,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -685,17 +686,20 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     /**
-     * 横幅が狭いと 1 行に複数スライダーを並べた {@link HBox} がオーバーし、右側が欠ける。
-     * 指標ごとに行を分け、必要なら縦スクロールで収める。
+     * 横幅が狭いと 1 行に詰めた {@link HBox} がオーバーして欠ける。
+     * {@link FlowPane} でコントロール単位を並べ、幅に応じて折り返す。狭い高さでは縦スクロールする。
      */
     private ScrollPane buildGraphicToolbar() {
-        VBox stack =
-                new VBox(
-                        6,
+        FlowPane flow = new FlowPane(Orientation.HORIZONTAL, 8, 6);
+        flow.setPadding(new Insets(0, 0, 4, 0));
+        flow.getChildren()
+                .addAll(
                         graphicToolbarRow("表示倍率", graphicZoomSlider, graphicZoomPercentLabel),
                         graphicToolbarRow("行の高さ", graphicRowHeightSlider, graphicRowHeightPctLabel),
                         graphicToolbarRow(
-                                "見出し行の高さ", graphicHeaderHeightSlider, graphicHeaderHeightPctLabel),
+                                "見出し行の高さ",
+                                graphicHeaderHeightSlider,
+                                graphicHeaderHeightPctLabel),
                         graphicToolbarRow("時刻列幅", graphicSlotWidthSlider, graphicSlotWidthPctLabel),
                         graphicToolbarRow(
                                 "Shift横スクロール",
@@ -707,10 +711,8 @@ public final class EquipmentGanttGraphicTabController {
                         graphicToolbarRow("バー文字フォント", equipmentGraphicBarFontCombo),
                         graphicToolbarRow(
                                 "バー文字サイズ", graphicBarFontPctSlider, graphicBarFontPctLabel));
-        stack.setPadding(new Insets(0, 0, 4, 0));
-        stack.setFillWidth(true);
 
-        ScrollPane sp = new ScrollPane(stack);
+        ScrollPane sp = new ScrollPane(flow);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -719,7 +721,7 @@ public final class EquipmentGanttGraphicTabController {
         return sp;
     }
 
-    /** 左ラベル幅をそろえ、長い日本語ラベルが途中で切れないようにする。 */
+    /** 左ラベル幅をそろえ、長い日本語ラベルが途中で切れないようにする（{@link FlowPane} の 1 セル）。 */
     private static HBox graphicToolbarRow(String leftText, Node... rest) {
         Label left = new Label(leftText);
         left.setPrefWidth(156);
@@ -728,11 +730,6 @@ public final class EquipmentGanttGraphicTabController {
         HBox row = new HBox(8, left);
         row.setAlignment(Pos.CENTER_LEFT);
         row.getChildren().addAll(rest);
-        for (Node n : rest) {
-            if (n instanceof Slider || n instanceof ComboBox) {
-                HBox.setHgrow(n, Priority.ALWAYS);
-            }
-        }
         return row;
     }
 
