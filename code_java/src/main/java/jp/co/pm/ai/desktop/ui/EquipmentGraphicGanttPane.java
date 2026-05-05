@@ -311,7 +311,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param dateColWidthOverridePx 日付列幅（px）。{@code <= 0} または非有限は自動計測を使用
      * @param machineColWidthOverridePx 機械名列幅（px）。同上
      * @param processColWidthOverridePx 工程名列幅（px）。同上
-     * @param shiftWheelHorizontalSensitivityPercent Shift+ホイール横スクロール感度（50〜400、100＝従来の速さ、{@code <=0}
+     * @param shiftWheelHorizontalSensitivityPercent Shift+ホイール横スクロール感度（50〜1000、100＝従来の速さ、{@code <=0}
      *     は既定 200）
      */
     public static BorderPane build(
@@ -689,13 +689,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /**
      * Shift+ホイール横スクロールの感度。{@code <= 0} または非有限は既定（速めにスクロール）。
      *
-     * @param percentFromUi ツールバー「％」（50〜400）。実効値は {@link Math#clamp(double, double, double)} で範囲内に収める
+     * @param percentFromUi ツールバー「％」（50〜1000）。実効値は {@link Math#clamp(double, double, double)} で範囲内に収める
      */
     private static double effectiveShiftWheelHorizontalSensitivity(double percentFromUi) {
         if (!Double.isFinite(percentFromUi) || percentFromUi <= 0) {
             return 200.0;
         }
-        return Math.clamp(percentFromUi, 50.0, 400.0);
+        return Math.clamp(percentFromUi, 50.0, 1000.0);
     }
 
     /** @param sensitivityPercent 100 で従来の {@code -delta/excess} と同等 */

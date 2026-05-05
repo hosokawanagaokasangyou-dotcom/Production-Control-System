@@ -81,7 +81,7 @@
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="Shift横スクロール"/>
                                 <Slider fx:id="graphicShiftWheelHSlider" blockIncrement="5.0"
-                                        max="400.0" min="50.0" prefWidth="96.0"
+                                        max="1000.0" min="50.0" prefWidth="96.0"
                                         showTickLabels="false" showTickMarks="false" value="200.0"/>
                                 <Label fx:id="graphicShiftWheelHLabel" text="200%"/>
                             </HBox>

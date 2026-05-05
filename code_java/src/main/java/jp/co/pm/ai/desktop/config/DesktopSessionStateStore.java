@@ -263,7 +263,7 @@ public final class DesktopSessionStateStore {
             root.put("equipmentGanttSlotWidthPercent", sw);
         }
         double sh = state.equipmentGanttShiftWheelHScrollPercent();
-        if (Double.isFinite(sh) && sh >= 50 && sh <= 400) {
+        if (Double.isFinite(sh) && sh >= 50 && sh <= 1000) {
             root.put("equipmentGanttShiftWheelHScrollPercent", sh);
         }
     }

@@ -156,7 +156,7 @@ public final class EquipmentGanttGraphicTabController {
     /** Shift+ホイール横スクロール感度（％）。100＝従来のステップ相当 */
     private static final double SHIFT_WHEEL_H_SCROLL_MIN = 50;
 
-    private static final double SHIFT_WHEEL_H_SCROLL_MAX = 400;
+    private static final double SHIFT_WHEEL_H_SCROLL_MAX = 1000;
 
     private PauseTransition equipmentGraphicPersistDelay;
 
