@@ -167,7 +167,8 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
-            sourceTitledPane.setExpanded(false);
+            /* ツールバー（列幅・Shift横スクロール等）を見つけやすくする */
+            sourceTitledPane.setExpanded(true);
         }
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
@@ -640,9 +641,6 @@ public final class EquipmentGanttGraphicTabController {
                             + sheetUsed
                             + " / 対象シート数="
                             + names.size());
-            if (sourceTitledPane != null) {
-                sourceTitledPane.setExpanded(false);
-            }
         } catch (Exception ex) {
             resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -683,10 +681,10 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
-    private HBox buildGraphicToolbar() {
-        HBox bar = new HBox(8);
-        bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setPadding(new Insets(0, 0, 8, 0));
+    /**
+     * 1 行の {@link HBox} に詰めると横幅不足で右側のコントロールが画面外に押し出されるため、複数行に分割する。
+     */
+    private VBox buildGraphicToolbar() {
         Label z = new Label("表示倍率");
         Label rhLab = new Label("行の高さ");
         Label hhLab = new Label("見出し行の高さ");
@@ -697,8 +695,10 @@ public final class EquipmentGanttGraphicTabController {
         Label procColLab = new Label("工程名列幅");
         Label fontHint = new Label("バー文字フォント");
         Label bfLab = new Label("バー文字サイズ");
-        bar.getChildren()
-                .addAll(
+
+        HBox rowMain =
+                new HBox(
+                        8,
                         z,
                         graphicZoomSlider,
                         graphicZoomPercentLabel,
@@ -710,7 +710,12 @@ public final class EquipmentGanttGraphicTabController {
                         graphicHeaderHeightPctLabel,
                         swLab,
                         graphicSlotWidthSlider,
-                        graphicSlotWidthPctLabel,
+                        graphicSlotWidthPctLabel);
+        rowMain.setAlignment(Pos.CENTER_LEFT);
+
+        HBox rowCols =
+                new HBox(
+                        8,
                         shiftHWLab,
                         graphicShiftWheelHSlider,
                         graphicShiftWheelHLabel,
@@ -722,13 +727,17 @@ public final class EquipmentGanttGraphicTabController {
                         graphicMachColWidthLabel,
                         procColLab,
                         graphicProcColSlider,
-                        graphicProcColWidthLabel,
-                        fontHint,
-                        equipmentGraphicBarFontCombo,
-                        bfLab,
-                        graphicBarFontPctSlider,
-                        graphicBarFontPctLabel);
-        return bar;
+                        graphicProcColWidthLabel);
+        rowCols.setAlignment(Pos.CENTER_LEFT);
+
+        HBox rowFont =
+                new HBox(8, fontHint, equipmentGraphicBarFontCombo, bfLab, graphicBarFontPctSlider, graphicBarFontPctLabel);
+        rowFont.setAlignment(Pos.CENTER_LEFT);
+
+        VBox stack = new VBox(6, rowMain, rowCols, rowFont);
+        stack.setPadding(new Insets(0, 0, 4, 0));
+        stack.setFillWidth(true);
+        return stack;
     }
 
     private void applyGraphicCenter(JsonTableIo.SheetTable st) {

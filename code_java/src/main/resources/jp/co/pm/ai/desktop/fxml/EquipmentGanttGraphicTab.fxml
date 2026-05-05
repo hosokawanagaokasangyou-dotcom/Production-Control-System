@@ -22,7 +22,7 @@
         <panes>
             <TitledPane fx:id="sourceTitledPane" animated="true"
                         text="ファイル・表示の調整"
-                        expanded="false">
+                        expanded="true">
                 <content>
                     <VBox fillWidth="true" spacing="8.0" styleClass="pm-plan-result-viewer-source-body">
                         <padding>
