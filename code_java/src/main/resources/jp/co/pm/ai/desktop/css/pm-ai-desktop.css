@@ -163,6 +163,19 @@
     -fx-background-color: #7c2d12;
 }
 
+.button.pm-stage-run-button.pm-stage-run-3 {
+    -fx-background-color: #15803d;
+    -fx-border-color: #166534;
+}
+
+.button.pm-stage-run-button.pm-stage-run-3:hover {
+    -fx-background-color: #16a34a;
+}
+
+.button.pm-stage-run-button.pm-stage-run-3:pressed {
+    -fx-background-color: #14532d;
+}
+
 .button.pm-stage-run-button:disabled {
     -fx-opacity: 0.5;
 }

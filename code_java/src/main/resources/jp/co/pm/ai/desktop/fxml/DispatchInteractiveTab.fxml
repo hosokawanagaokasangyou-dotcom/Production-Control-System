@@ -30,6 +30,7 @@
                 text="機械 JSON 再読み"
                 onAction="#onReloadCalendarAction"/>
         <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3へ"
+                styleClass="pm-stage-run-button,pm-stage-run-3"
                 onAction="#onDispatchTrialAction"/>
         <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
                 onAction="#onWideRowUpAction">
