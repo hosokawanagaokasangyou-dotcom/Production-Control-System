@@ -101,15 +101,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Font headerFont = Font.font(layout.rowLabelFontSize * 1.05);
         Font cellFont = Font.font(layout.rowLabelFontSize);
         double pad = 14 * layout.zoom;
-        double padDate = 6 * layout.zoom;
 
-        /* 日付列の幅は見出し「日付」の横書き幅のみ（データ行は回転表示のため幅に含めない） */
+        /* 日付列は見出しテキストなし。幅は縦書き日付（データ）のフォント＋左右パディング程度 */
+        double dateBodyFontPx = layout.rowLabelFontSize * 0.92;
         double dateCol =
                 Math.min(
                         MAX_SIDE_COL_WIDTH,
                         Math.max(
                                 MIN_SIDE_COL_WIDTH,
-                                measureTextWidth("日付", headerFont) + padDate));
+                                Math.ceil(dateBodyFontPx + 12 * layout.zoom)));
 
         double maxM = measureTextWidth("機械名", headerFont);
         double maxP = measureTextWidth("工程名", headerFont);
@@ -275,7 +275,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
         drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
 
-        Label hDate = new Label("日付");
+        Label hDate = new Label("");
         Label hMach = new Label("機械名");
         Label hProc = new Label("工程名");
         applySideHeaderStyle(hDate, dateW, layout, palette);
@@ -516,7 +516,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 new Label(
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
-                        左列は内容に応じ自動幅。日付データは反時計回り90°（列幅は見出し「日付」のみ）。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
+                        左列は内容に応じ自動幅。日付列は見出しなし・データは反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
