@@ -23841,46 +23841,6 @@ def _interactive_trial_relax_team_end_limit_to_eod(
     return cap if team_end_limit < cap else team_end_limit
 
 
-def _interactive_trial_unassigned_reason_label(
-    *,
-    has_actual_history: bool,
-    rem_u: float,
-    pw_line,
-    pw_agg,
-    hk: tuple[str, str],
-    interactive_override: dict | None,
-) -> str:
-    """
-    配台試行デバッグ用。ステータス「配台不可」の主因が機械カレンダー以外かを切り分ける短文。
-    """
-    if rem_u <= 1e-9:
-        return "残なし"
-    if has_actual_history:
-        return "assigned_historyあり（通常は配台不可にならない）"
-    ov = interactive_override or {}
-    if hk in ov and len(ov.get(hk, [])) > 0:
-        if pw_line is None:
-            return "手動修正JSONに配台数量があるがシミュレーションで当該工程にタイムライン無し"
-    if pw_agg is not None and pw_line is None:
-        return "同一依頼の別工程はタイムラインあり・この工程行のみ無し"
-    if pw_agg is None:
-        return "当該依頼で加工タイムライン無し（シミュレーション上ロール無し）"
-    return "タイムラインとassigned_historyの不整合（要詳細調査）"
-
-
-def _append_interactive_trial_unassigned_debug(record: dict) -> None:
-    """インタラクティブ配台試行時のみ output に NDJSON 1 行を追記する。"""
-    if not _interactive_dispatch_trial_env_active():
-        return
-    try:
-        path = os.path.join(output_dir, "dispatch_trial_unassigned_debug.ndjson")
-        payload = {"format": "dispatch_trial_unassigned_v1", **record}
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 def _interactive_trial_pair_dates_from_targets(
     targets: dict | None,
 ) -> dict[tuple[str, str], set[date]]:
@@ -31477,17 +31437,6 @@ def _generate_plan_impl(
         tasks_df_raw_input_baseline
     )
     _pat_label = (result_pattern_shift_label or "").strip()
-    if _interactive_dispatch_trial_env_active():
-        try:
-            _dbg_un_path = os.path.join(output_dir, "dispatch_trial_unassigned_debug.ndjson")
-            with open(_dbg_un_path, "w", encoding="utf-8") as _df:
-                _df.write("")
-            logging.info(
-                "インタラクティブ配台試行: 未割当デバッグ NDJSON を初期化しました → %s",
-                _dbg_un_path,
-            )
-        except Exception:
-            pass
     for t in sorted_tasks_for_result:
         rem_u = float(t.get("remaining_units") or 0)
         hist = bool(t.get("assigned_history"))
@@ -31661,37 +31610,6 @@ def _generate_plan_impl(
         }
         row_ai_last = {"特別指定_AI": (t.get("task_special_ai_note") or "")[:300]}
         row_data = {**row_status, **row_core, **row_history, **row_tail, **row_ai_last}
-        if _interactive_dispatch_trial_env_active() and status == "配台不可":
-            _has_ah = bool(t.get("assigned_history"))
-            _append_interactive_trial_unassigned_debug(
-                {
-                    "task_id": _tid_res,
-                    "process_name": str(t.get("machine") or ""),
-                    "machine_name": str(t.get("machine_name") or ""),
-                    "equipment_line_key": _eq_line_key,
-                    "remaining_units": float(rem_u),
-                    "dispatch_trial_order": _dto,
-                    "actual_assigned_history_len": len(t.get("assigned_history") or []),
-                    "editor_json_override_segments": len(
-                        _interactive_hist_override.get(_hk, [])
-                    )
-                    if _hk in _interactive_hist_override
-                    else 0,
-                    "has_timeline_window_this_line": _pw_line is not None,
-                    "has_timeline_window_any_line_same_task": _pw_agg is not None,
-                    "partial_retry_calendar_blocked": bool(
-                        t.get("_partial_retry_calendar_blocked")
-                    ),
-                    "reason_label": _interactive_trial_unassigned_reason_label(
-                        has_actual_history=_has_ah,
-                        rem_u=float(rem_u),
-                        pw_line=_pw_line,
-                        pw_agg=_pw_agg,
-                        hk=_hk,
-                        interactive_override=_interactive_hist_override,
-                    ),
-                }
-            )
         task_results.append(row_data)
 
     cal_rows = []
