@@ -67,8 +67,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     public static final double DEFAULT_MACHINE_COLUMN_WIDTH = 140;
     public static final double DEFAULT_PROCESS_COLUMN_WIDTH = 220;
-    /** 日付列の最小幅の目安（横書き・同一暦日は縦結合）。実幅は内容で自動 */
-    private static final double DEFAULT_DATE_COLUMN_WIDTH = 120;
+    /** 日付列は回転表示のため最小幅のみ床として使用（実幅はキャップ高＋パディング）。 */
+    private static final double DEFAULT_DATE_COLUMN_FLOOR = 20;
     private static final double MIN_SIDE_COL_WIDTH = 48;
     private static final double MAX_SIDE_COL_WIDTH = 800;
 
@@ -101,12 +101,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout) {
         Font headerFont = Font.font(layout.rowLabelFontSize * 1.05);
         Font cellFont = Font.font(layout.rowLabelFontSize);
+        Font dateBodyFont = Font.font(layout.rowLabelFontSize * 0.92);
+        Font dateHdrFont = Font.font(layout.rowLabelFontSize * 1.05);
         double pad = 14 * layout.zoom;
-        double floorDate = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_WIDTH * layout.zoom);
+        double padDate = 6 * layout.zoom;
+        double floorDate =
+                Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_FLOOR * layout.zoom);
         double floorMach = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_MACHINE_COLUMN_WIDTH * layout.zoom);
         double floorProc = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_PROCESS_COLUMN_WIDTH * layout.zoom);
 
-        double maxD = measureTextWidth("日付", headerFont);
+        double maxD = measureTextCapHeight("日付", dateHdrFont);
         double maxM = measureTextWidth("機械名", headerFont);
         double maxP = measureTextWidth("工程名", headerFont);
 
@@ -126,14 +130,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             String dc = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
             if (!dc.isEmpty()) {
-                maxD = Math.max(maxD, measureTextCapHeight(dc, cellFont));
+                maxD = Math.max(maxD, measureTextCapHeight(dc, dateBodyFont));
             }
         }
 
         return new MeasuredLeftWidths(
                 Math.min(
                         MAX_SIDE_COL_WIDTH,
-                        Math.max(floorDate, Math.min(MAX_SIDE_COL_WIDTH, maxD + pad))),
+                        Math.max(floorDate, Math.min(MAX_SIDE_COL_WIDTH, maxD + padDate))),
                 Math.min(
                         MAX_SIDE_COL_WIDTH,
                         Math.max(floorMach, Math.min(MAX_SIDE_COL_WIDTH, maxM + pad))),
@@ -249,14 +253,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         applySideHeaderStyle(hDate, dateW, layout, palette);
         applySideHeaderStyle(hMach, machW, layout, palette);
         applySideHeaderStyle(hProc, procW, layout, palette);
+        hDate.setRotate(-90);
 
-        VBox wrapDate = new VBox(hDate);
+        StackPane wrapDateHead = new StackPane(hDate);
+        wrapDateHead.setMinWidth(dateW);
+        wrapDateHead.setPrefWidth(dateW);
+        wrapDateHead.setMaxWidth(dateW);
+        wrapDateHead.setMinHeight(layout.headerHeight);
+        StackPane.setAlignment(hDate, Pos.CENTER);
+
+        VBox wrapDate = new VBox(wrapDateHead);
+        wrapDate.setAlignment(Pos.CENTER);
         wrapDate.setMinWidth(dateW);
         wrapDate.setPrefWidth(dateW);
         wrapDate.setMaxWidth(dateW);
         wrapDate.setMinHeight(layout.headerHeight);
         VBox wrapMach = new VBox(hMach);
         VBox wrapProc = new VBox(hProc);
+        wrapMach.setAlignment(Pos.CENTER);
+        wrapProc.setAlignment(Pos.CENTER);
         wrapMach.setMinHeight(layout.headerHeight);
         wrapProc.setMinHeight(layout.headerHeight);
         HBox leftHead = new HBox(0, wrapDate, wrapMach, wrapProc);
@@ -494,8 +509,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Label lb, double colW, LayoutMetrics layout, GanttPalette palette) {
         lb.setMinWidth(MIN_SIDE_COL_WIDTH);
         lb.setPrefWidth(colW);
-        lb.setMaxWidth(Double.MAX_VALUE);
-        lb.setAlignment(Pos.CENTER_LEFT);
+        lb.setMaxWidth(colW);
+        lb.setAlignment(Pos.CENTER);
         lb.setPadding(new Insets(4 * layout.zoom, 6 * layout.zoom, 4 * layout.zoom, 6 * layout.zoom));
         lb.setFont(Font.font(layout.rowLabelFontSize * 1.05));
         lb.setStyle(palette.rowLabelCss());

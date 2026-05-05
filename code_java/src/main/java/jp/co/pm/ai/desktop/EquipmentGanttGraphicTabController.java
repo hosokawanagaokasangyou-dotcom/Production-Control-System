@@ -484,6 +484,16 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
+    /** スライダー類を畳んで縦スペースを確保する */
+    private Accordion buildGraphicSettingsAccordion() {
+        Accordion acc = new Accordion();
+        TitledPane pane =
+                new TitledPane("グラフィック表示の調整", buildGraphicToolbar());
+        pane.setExpanded(false);
+        acc.getPanes().add(pane);
+        return acc;
+    }
+
     private HBox buildGraphicToolbar() {
         HBox bar = new HBox(8);
         bar.setAlignment(Pos.CENTER_LEFT);
@@ -536,7 +546,7 @@ public final class EquipmentGanttGraphicTabController {
                         barFp);
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
-            graphicRootWrapper.setTop(buildGraphicToolbar());
+            graphicRootWrapper.setTop(buildGraphicSettingsAccordion());
             contentPane.setCenter(graphicRootWrapper);
         }
         graphicRootWrapper.setCenter(gantt);
