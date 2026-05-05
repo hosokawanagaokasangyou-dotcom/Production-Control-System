@@ -42,7 +42,6 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
@@ -658,23 +657,6 @@ public final class EquipmentGanttGraphicTabController {
                             + sheetUsed
                             + " / 対象シート数="
                             + names.size());
-            // #region agent log
-            try {
-                Map<String, Object> dg = new LinkedHashMap<>();
-                dg.put("planPath", planPath.toString());
-                dg.put("sheetUsed", sheetUsed);
-                dg.put("eligibleSheetCount", names.size());
-                dg.put("loadedDescription", loaded.description());
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "327eec",
-                        "H6",
-                        "EquipmentGanttGraphicTabController:reloadFromFields",
-                        "equipment_gantt_graphic_loaded",
-                        dg);
-            } catch (Throwable ignored) {
-            }
-            // #endregion
         } catch (Exception ex) {
             resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
