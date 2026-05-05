@@ -12023,7 +12023,7 @@ def _apply_dispatch_speed_special_rules_enumerated_md(
     speed: float,
 ) -> float:
     """
-    ``細川/GoogleAIStudio/テストコード/特別ルール列挙.md`` のうち **加工速度を 20 m/分へ上書き** する条件
+    リポジトリ直下 ``特別ルール列挙.md`` のうち **加工速度を 20 m/分へ上書き** する条件
     （L4 / L5 / L6 / L8）を適用する。
 
     呼び出し元で **列「加工速度_上書き」「加工速度」** および **global_speed_rules** による速度を
