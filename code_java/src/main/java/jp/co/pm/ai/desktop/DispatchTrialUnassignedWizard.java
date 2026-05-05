@@ -10,6 +10,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.ToggleGroup;
@@ -53,14 +54,17 @@ public final class DispatchTrialUnassignedWizard {
                 new Thread(
                         () -> {
                             try {
-                                DispatchTrialShortages.Paths paths =
-                                        DispatchTrialShortages.read(shortageJsonPath);
+                                DispatchTrialShortages.FullBundle bundle =
+                                        DispatchTrialShortages.readFull(shortageJsonPath);
+                                DispatchTrialShortages.Paths paths = bundle.paths();
                                 if (paths.productionPlan() == null || paths.productionPlan().isBlank()) {
                                     return;
                                 }
                                 List<ResultTaskUnassignedLoader.UnassignedRow> rows =
                                         ResultTaskUnassignedLoader.loadUnassigned(
-                                                uiSnap, paths.productionPlan());
+                                                uiSnap,
+                                                paths.productionPlan(),
+                                                bundle.shortageHints());
                                 if (rows.isEmpty()) {
                                     return;
                                 }
@@ -111,9 +115,35 @@ public final class DispatchTrialUnassignedWizard {
                                     + "  |  "
                                     + r.processName()
                                     + "  |  "
-                                    + r.machineName());
+                                    + r.machineName()
+                                    + "\n理由: "
+                                    + r.situationMemo());
         }
-        list.setPrefHeight(Math.min(280, 36 + rows.size() * 26));
+        list.setPrefHeight(Math.min(360, 48 + rows.size() * 56));
+        list.setCellFactory(
+                lv ->
+                        new ListCell<>() {
+                            private final Label lineLabel = new Label();
+
+                            {
+                                lineLabel.setWrapText(true);
+                                lineLabel
+                                        .prefWidthProperty()
+                                        .bind(list.widthProperty().subtract(32));
+                            }
+
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setGraphic(null);
+                                    setText(null);
+                                } else {
+                                    lineLabel.setText(item);
+                                    setGraphic(lineLabel);
+                                }
+                            }
+                        });
         VBox.setVgrow(list, Priority.ALWAYS);
 
         VBox step1 = new VBox(10, intro, list);
@@ -209,7 +239,7 @@ public final class DispatchTrialUnassignedWizard {
         root.setCenter(center);
         root.setBottom(bottom);
 
-        Scene scene = new Scene(root, 640, 520);
+        Scene scene = new Scene(root, 720, 580);
         shell.registerThemeTrackedScene(scene);
         stage.setScene(scene);
         stage.setOnHidden(ev -> shell.unregisterThemeTrackedScene(scene));

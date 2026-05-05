@@ -6473,6 +6473,7 @@ def default_result_task_sheet_column_order(max_history_len: int) -> list:
     hist = [f"履歴{i+1}" for i in range(max_history_len)]
     return [
         "ステータス",
+        "配台状況メモ",
         "タスクID",
         "工程名",
         "機械名",
@@ -31387,6 +31388,24 @@ def _generate_plan_impl(
             _sd = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_SPECIFIED_DUE))
             _result_sheet_answer_spec_by_line[(_tid, _mach)] = (_ad, _sd)
 
+    def _result_task_dispatch_status_memo(status: str, rem_u: float, hist: bool) -> str:
+        """結果_タスク一覧「配台状況メモ」列用。配台不可系ステータスのときのみ短文で理由を返す。"""
+        st = str(status or "")
+        if not st.startswith("配台不可"):
+            return ""
+        parts: list[str] = []
+        if not hist:
+            parts.append("計画終了時点で割当履歴なし（設備タイムラインに載っていません）")
+        try:
+            if float(rem_u) > 1e-9:
+                parts.append(f"残ユニット約{float(rem_u):g}")
+        except Exception:
+            if rem_u > 1e-9:
+                parts.append("残あり")
+        if "納期見直し必須" in st:
+            parts.append("依頼単位で計画基準納期の再試行上限に達した可能性")
+        return "／".join(parts) if parts else "割当なし"
+
     task_results = []
     # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
     # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
@@ -31504,8 +31523,9 @@ def _generate_plan_impl(
         start_req = t["start_date_req"]
         start_req_s = start_req.strftime("%Y/%m/%d") if hasattr(start_req, "strftime") else str(start_req)
         rov = t.get("required_op")
-        # 列順: A=ステータス → タスクID/工程/機械/加工速度(配台実効)/優先度 → 履歴1..n → しの他 → 最後に特別指定_AI
-        row_status = {"ステータス": status}
+        # 列順: A=ステータス → 配台状況メモ → タスクID/工程/機械… → 履歴1..n → しの他 → 最後に特別指定_AI
+        _memo_dispatch = _result_task_dispatch_status_memo(status, rem_u, hist)
+        row_status = {"ステータス": status, "配台状況メモ": _memo_dispatch}
         _dto = t.get("dispatch_trial_order")
         _spd = t.get(TASK_COL_SPEED)
         if _spd is None or (isinstance(_spd, float) and pd.isna(_spd)):

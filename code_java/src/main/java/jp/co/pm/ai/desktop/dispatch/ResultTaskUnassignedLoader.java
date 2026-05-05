@@ -20,19 +20,32 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 public final class ResultTaskUnassignedLoader {
 
     private static final String COL_STATUS = "ステータス";
-    private static final String STATUS_UNASSIGNED = "配台不可";
+    /** 結果シートは {@code 配台不可} または {@code 配台不可（納期見直し必須）} 等 */
+    private static final String STATUS_UNASSIGNED_PREFIX = "配台不可";
     private static final String COL_TASK_ID = "タスクID";
     private static final String COL_PROCESS = "工程名";
     private static final String COL_MACHINE = "機械名";
+    private static final String COL_MEMO = "配台状況メモ";
 
     private ResultTaskUnassignedLoader() {}
 
-    public record UnassignedRow(String taskId, String processName, String machineName) {}
+    /**
+     * @param situationMemo 結果シート「配台状況メモ」と不足JSONヒントを統合した説明文
+     */
+    public record UnassignedRow(String taskId, String processName, String machineName, String situationMemo) {}
+
+    public static List<UnassignedRow> loadUnassigned(Map<String, String> uiEnv, String productionPlanPathStr)
+            throws IOException {
+        return loadUnassigned(uiEnv, productionPlanPathStr, List.of());
+    }
 
     /**
-     * @param productionPlanPathStr {@code production_plan} の xlsx または json のパス（試行成果のパス）
+     * @param shortageHints {@code dispatch_trial_shortages.json} の op/as 不足（タスクID一致で補足文に結合）
      */
-    public static List<UnassignedRow> loadUnassigned(Map<String, String> uiEnv, String productionPlanPathStr)
+    public static List<UnassignedRow> loadUnassigned(
+            Map<String, String> uiEnv,
+            String productionPlanPathStr,
+            List<DispatchTrialShortages.ShortageHint> shortageHints)
             throws IOException {
         String p = productionPlanPathStr != null ? productionPlanPathStr.trim() : "";
         if (p.isEmpty()) {
@@ -46,12 +59,18 @@ public final class ResultTaskUnassignedLoader {
         List<UnassignedRow> out = new ArrayList<>();
         for (Map<String, String> row : table.rows()) {
             String st = nz(row.get(COL_STATUS));
-            if (!STATUS_UNASSIGNED.equals(st)) {
+            if (!st.startsWith(STATUS_UNASSIGNED_PREFIX)) {
                 continue;
             }
-            out.add(
-                    new UnassignedRow(
-                            nz(row.get(COL_TASK_ID)), nz(row.get(COL_PROCESS)), nz(row.get(COL_MACHINE))));
+            String tid = nz(row.get(COL_TASK_ID));
+            String memo = nz(row.get(COL_MEMO));
+            if (memo.isEmpty() && shortageHints != null && !shortageHints.isEmpty()) {
+                memo = DispatchTrialShortages.mergeHintsForTask(shortageHints, tid);
+            }
+            if (memo.isEmpty()) {
+                memo = "（配台状況メモなし。計画上は割当履歴なし・残ありの組合せです）";
+            }
+            out.add(new UnassignedRow(tid, nz(row.get(COL_PROCESS)), nz(row.get(COL_MACHINE)), memo));
         }
         return List.copyOf(out);
     }
