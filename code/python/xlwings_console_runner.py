@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-xlwings の RunPython から段階1／段階2 等を呼ぶときのエントリ（cmd.exe 起動版の代替・補助）。
+マクロブックと同じフォルダの Python から段階1／段階2 等を呼ぶエントリ（TASK_INPUT_WORKBOOK 前提）。
 
 概要
 ----
@@ -106,12 +106,20 @@ def _purge_planning_core_modules() -> None:
 
 
 def _prepare_from_caller_book() -> str:
-    import xlwings as xw
-
-    wb = xw.Book.caller()
-    path = os.path.abspath(str(wb.fullname))
+    """xlwings Book.caller() は使わず、TASK_INPUT_WORKBOOK（および cwd）でブックを特定する。"""
+    p = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+    if not p:
+        raise RuntimeError(
+            "TASK_INPUT_WORKBOOK が未設定です。"
+            " workbook_env_bootstrap でマクロブックパスを環境に載せてから実行してください。"
+        )
+    path = os.path.abspath(p)
     root = os.path.dirname(path)
-    os.chdir(root)
+    if root:
+        try:
+            os.chdir(root)
+        except OSError:
+            pass
     os.environ["TASK_INPUT_WORKBOOK"] = path
     return path
 
@@ -184,8 +192,8 @@ def run_stage1_for_xlwings() -> int:
             _prepare_from_caller_book()
         except Exception:
             logging.exception(
-                "xlwings: Book.caller() の取得に失敗しました。"
-                " ブックが呼び出し元として開かれているか、RunPython の指定を確認してください。"
+                "TASK_INPUT_WORKBOOK が解決できません。"
+                " workbook_env_bootstrap と TASK_INPUT_WORKBOOK を確認してください。"
             )
             rc = 2
             return rc
@@ -227,7 +235,7 @@ def run_refresh_plan_input_dispatch_trial_order_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -268,7 +276,7 @@ def run_sort_plan_input_dispatch_trial_order_by_float_keys_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -310,7 +318,7 @@ def run_refresh_actual_detail_gantt_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -359,7 +367,7 @@ def run_stage2_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -401,7 +409,7 @@ def run_dispatch_trial_pattern_list_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -444,7 +452,7 @@ def run_dispatch_trial_pattern_stage2_batch_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()
@@ -487,7 +495,7 @@ def run_dispatch_pattern_stage2_selection_for_xlwings() -> int:
         try:
             _prepare_from_caller_book()
         except Exception:
-            logging.exception("xlwings: Book.caller() の取得に失敗しました。")
+            logging.exception("xlwings_console_runner: TASK_INPUT_WORKBOOK を解決できませんでした。")
             rc = 2
             return rc
         _apply_workbook_env_overrides()

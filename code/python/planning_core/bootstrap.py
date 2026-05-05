@@ -274,7 +274,7 @@ logger.addHandler(file_handler)
 
 
 def _maybe_register_xlwings_splash_logging() -> None:
-    """PM_AI_SPLASH_XLWINGS=1 のとき xlwings で UserForm txtExecutionLog にログ行を送る。"""
+    """互換: PM_AI_SPLASH_XLWINGS は xlwings_splash_log で処理（現在は常に無効）。"""
     try:
         import atexit
 
