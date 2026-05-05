@@ -32,6 +32,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.geometry.VPos;
+import javafx.scene.input.ScrollEvent;
 
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -508,6 +509,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         VBox.setVgrow(bodyScroll, Priority.ALWAYS);
 
         headerScroll.hvalueProperty().bindBidirectional(bodyScroll.hvalueProperty());
+        installShiftWheelHorizontalScroll(bodyScroll);
 
         VBox mainColumn = new VBox(0, headerScroll, bodyScroll);
         VBox.setVgrow(bodyScroll, Priority.ALWAYS);
@@ -517,7 +519,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Label hint =
                 new Label(
                         """
-                        ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
+                        ヒント: 横スクロールで時刻軸を追えます。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付データは反時計回り90°（列幅は見出し「日付」のみ）。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
@@ -525,6 +527,39 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
         return root;
+    }
+
+    private static void installShiftWheelHorizontalScroll(ScrollPane scrollPane) {
+        scrollPane.addEventFilter(
+                ScrollEvent.SCROLL,
+                e -> {
+                    if (!e.isShiftDown()) {
+                        return;
+                    }
+                    e.consume();
+                    double deltaY = e.getDeltaY();
+                    double deltaX = e.getDeltaX();
+                    double delta = Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+                    if (delta == 0.0) {
+                        return;
+                    }
+                    var content = scrollPane.getContent();
+                    if (content == null) {
+                        return;
+                    }
+                    var vp = scrollPane.getViewportBounds();
+                    double viewportW = vp != null ? vp.getWidth() : 0.0;
+                    if (!(viewportW > 0.0)) {
+                        return;
+                    }
+                    double contentW = content.getLayoutBounds().getWidth();
+                    double excess = contentW - viewportW;
+                    if (!(excess > 1.0) || !Double.isFinite(excess)) {
+                        return;
+                    }
+                    double deltaH = -delta / excess;
+                    scrollPane.setHvalue(Math.clamp(scrollPane.getHvalue() + deltaH, 0.0, 1.0));
+                });
     }
 
     private static void applySideHeaderStyle(
