@@ -19,14 +19,17 @@ import javafx.scene.control.Accordion;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ColorPicker;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
@@ -40,6 +43,8 @@ public final class GanttPersonBadgeDesignTabController {
 
     /** 表の先頭行：マスタに無いバッジ向けの全体既定。 */
     public static final String GLOBAL_EDIT_LABEL = "（既定・マスタ外のバッジ）";
+
+    private static final String FONT_COMBO_DEFAULT_LABEL = "(既定)";
 
     @FXML
     private Accordion designAccordion;
@@ -57,7 +62,7 @@ public final class GanttPersonBadgeDesignTabController {
     private HBox badgePreviewBox;
 
     @FXML
-    private TextField badgeFontField;
+    private ComboBox<String> badgeFontCombo;
 
     @FXML
     private Slider badgeFontPctSlider;
@@ -66,13 +71,13 @@ public final class GanttPersonBadgeDesignTabController {
     private Label badgeFontPctLabel;
 
     @FXML
-    private TextField badgeFillField;
+    private ColorPicker badgeFillPicker;
 
     @FXML
-    private TextField badgeTextField;
+    private ColorPicker badgeTextPicker;
 
     @FXML
-    private TextField badgeStrokeField;
+    private ColorPicker badgeStrokePicker;
 
     @FXML
     private Slider badgeStrokeSlider;
@@ -90,19 +95,19 @@ public final class GanttPersonBadgeDesignTabController {
     private CheckBox badgePillCheck;
 
     @FXML
-    private TextField badgeGlowColorField;
+    private ColorPicker badgeGlowColorPicker;
 
     @FXML
-    private Slider badgeGlowRadiusSlider;
+    private Slider badgeGlowRadiusPctSlider;
 
     @FXML
-    private Label badgeGlowRadiusLabel;
+    private Label badgeGlowRadiusPctLabel;
 
     @FXML
-    private Slider badgeGlowSpreadSlider;
+    private Slider badgeGlowSpreadPctSlider;
 
     @FXML
-    private Label badgeGlowSpreadLabel;
+    private Label badgeGlowSpreadPctLabel;
 
     @FXML
     private Button badgeResetDefaultsButton;
@@ -153,6 +158,8 @@ public final class GanttPersonBadgeDesignTabController {
         persistDelay.setOnFinished(e -> saveAndRefresh());
 
         setupMemberTable();
+
+        populateFontCombo();
 
         attachListeners();
         suppress = true;
@@ -537,20 +544,19 @@ public final class GanttPersonBadgeDesignTabController {
 
     private void pushStyleToUi(PersonBadgeStyle st) {
         PersonBadgeStyle x = st != null ? st : PersonBadgeStyle.defaultStyle();
-        if (badgeFontField != null) {
-            badgeFontField.setText(x.fontFamily() != null ? x.fontFamily() : "");
-        }
+        PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
+        applyFontFamilyToCombo(x.fontFamily());
         if (badgeFontPctSlider != null) {
             badgeFontPctSlider.setValue(Math.clamp(x.fontPercent(), 40, 160));
         }
-        if (badgeFillField != null) {
-            badgeFillField.setText(x.fillHex());
+        if (badgeFillPicker != null) {
+            badgeFillPicker.setValue(parseHexToColor(x.fillHex(), Color.web(d.fillHex())));
         }
-        if (badgeTextField != null) {
-            badgeTextField.setText(x.textHex());
+        if (badgeTextPicker != null) {
+            badgeTextPicker.setValue(parseHexToColor(x.textHex(), Color.web(d.textHex())));
         }
-        if (badgeStrokeField != null) {
-            badgeStrokeField.setText(x.strokeHex());
+        if (badgeStrokePicker != null) {
+            badgeStrokePicker.setValue(parseHexToColor(x.strokeHex(), Color.web(d.strokeHex())));
         }
         if (badgeStrokeSlider != null) {
             badgeStrokeSlider.setValue(Math.clamp(x.strokeWidth(), 0, 6));
@@ -561,42 +567,47 @@ public final class GanttPersonBadgeDesignTabController {
         if (badgePillCheck != null) {
             badgePillCheck.setSelected(x.pill());
         }
-        if (badgeGlowColorField != null) {
-            badgeGlowColorField.setText(x.glowColorHex());
+        if (badgeGlowColorPicker != null) {
+            badgeGlowColorPicker.setValue(parseHexToColor(x.glowColorHex(), Color.web(d.glowColorHex())));
         }
-        if (badgeGlowRadiusSlider != null) {
-            badgeGlowRadiusSlider.setValue(Math.clamp(x.glowRadius(), 0, 40));
+        double baseR = d.glowRadius();
+        double baseS = d.glowSpread();
+        if (badgeGlowRadiusPctSlider != null) {
+            double pct = baseR > 1e-9 ? (x.glowRadius() / baseR) * 100.0 : 0.0;
+            badgeGlowRadiusPctSlider.setValue(Math.clamp(pct, 0, 400));
         }
-        if (badgeGlowSpreadSlider != null) {
-            badgeGlowSpreadSlider.setValue(Math.clamp(x.glowSpread(), 0, 1));
+        if (badgeGlowSpreadPctSlider != null) {
+            double pct =
+                    baseS > 1e-12
+                            ? (x.glowSpread() / baseS) * 100.0
+                            : (x.glowSpread() <= 1e-12 ? 0.0 : 100.0);
+            badgeGlowSpreadPctSlider.setValue(Math.clamp(pct, 0, 400));
         }
     }
 
     private void attachListeners() {
         Runnable r = this::schedulePersist;
-        if (badgeFontField != null) {
-            badgeFontField.textProperty().addListener((o, a, b) -> r.run());
+        if (badgeFontCombo != null) {
+            badgeFontCombo.valueProperty().addListener((o, a, b) -> r.run());
         }
         wireSlider(badgeFontPctSlider, badgeFontPctLabel, "%.0f%%", r);
-        if (badgeFillField != null) {
-            badgeFillField.textProperty().addListener((o, a, b) -> r.run());
-        }
-        if (badgeTextField != null) {
-            badgeTextField.textProperty().addListener((o, a, b) -> r.run());
-        }
-        if (badgeStrokeField != null) {
-            badgeStrokeField.textProperty().addListener((o, a, b) -> r.run());
-        }
+        addColorPickerListener(badgeFillPicker, r);
+        addColorPickerListener(badgeTextPicker, r);
+        addColorPickerListener(badgeStrokePicker, r);
         wireSlider(badgeStrokeSlider, badgeStrokeLabel, "%.1f", r);
         wireSlider(badgeCornerSlider, badgeCornerLabel, "%.0f", r);
         if (badgePillCheck != null) {
             badgePillCheck.selectedProperty().addListener((o, a, b) -> r.run());
         }
-        if (badgeGlowColorField != null) {
-            badgeGlowColorField.textProperty().addListener((o, a, b) -> r.run());
+        addColorPickerListener(badgeGlowColorPicker, r);
+        wireSlider(badgeGlowRadiusPctSlider, badgeGlowRadiusPctLabel, "%.0f%%", r);
+        wireSlider(badgeGlowSpreadPctSlider, badgeGlowSpreadPctLabel, "%.0f%%", r);
+    }
+
+    private static void addColorPickerListener(ColorPicker cp, Runnable r) {
+        if (cp != null) {
+            cp.valueProperty().addListener((o, a, b) -> r.run());
         }
-        wireSlider(badgeGlowRadiusSlider, badgeGlowRadiusLabel, "%.0f", r);
-        wireSlider(badgeGlowSpreadSlider, badgeGlowSpreadLabel, "%.2f", r);
     }
 
     private static void wireSlider(Slider sl, Label lb, String fmt, Runnable onChange) {
@@ -623,11 +634,11 @@ public final class GanttPersonBadgeDesignTabController {
         if (badgeCornerSlider != null && badgeCornerLabel != null) {
             badgeCornerLabel.setText(String.format("%.0f", badgeCornerSlider.getValue()));
         }
-        if (badgeGlowRadiusSlider != null && badgeGlowRadiusLabel != null) {
-            badgeGlowRadiusLabel.setText(String.format("%.0f", badgeGlowRadiusSlider.getValue()));
+        if (badgeGlowRadiusPctSlider != null && badgeGlowRadiusPctLabel != null) {
+            badgeGlowRadiusPctLabel.setText(String.format("%.0f%%", badgeGlowRadiusPctSlider.getValue()));
         }
-        if (badgeGlowSpreadSlider != null && badgeGlowSpreadLabel != null) {
-            badgeGlowSpreadLabel.setText(String.format("%.2f", badgeGlowSpreadSlider.getValue()));
+        if (badgeGlowSpreadPctSlider != null && badgeGlowSpreadPctLabel != null) {
+            badgeGlowSpreadPctLabel.setText(String.format("%.0f%%", badgeGlowSpreadPctSlider.getValue()));
         }
     }
 
@@ -650,29 +661,86 @@ public final class GanttPersonBadgeDesignTabController {
         }
     }
 
-    private static String nz(TextField f) {
-        return f != null && f.getText() != null ? f.getText().strip() : "";
-    }
-
-    private static String nzOr(TextField f, String fallback) {
-        String s = nz(f);
-        return s.isEmpty() ? fallback : s;
-    }
-
     private PersonBadgeStyle buildStyleFromUiFields() {
         PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
+        String fontFam = "";
+        if (badgeFontCombo != null && badgeFontCombo.getValue() != null) {
+            String v = badgeFontCombo.getValue().strip();
+            if (!v.isEmpty() && !FONT_COMBO_DEFAULT_LABEL.equals(v)) {
+                fontFam = v;
+            }
+        }
+        double baseR = d.glowRadius();
+        double baseS = d.glowSpread();
+        double rPct = badgeGlowRadiusPctSlider != null ? badgeGlowRadiusPctSlider.getValue() : 100.0;
+        double sPct = badgeGlowSpreadPctSlider != null ? badgeGlowSpreadPctSlider.getValue() : 100.0;
+        double glowR = baseR * (rPct / 100.0);
+        double glowS = Math.min(1.0, Math.max(0.0, baseS * (sPct / 100.0)));
         return new PersonBadgeStyle(
-                nz(badgeFontField),
+                fontFam,
                 badgeFontPctSlider != null ? badgeFontPctSlider.getValue() : d.fontPercent(),
-                nzOr(badgeFillField, d.fillHex()),
-                nzOr(badgeTextField, d.textHex()),
-                nzOr(badgeStrokeField, d.strokeHex()),
+                colorToHex(badgeFillPicker, d.fillHex()),
+                colorToHex(badgeTextPicker, d.textHex()),
+                colorToHex(badgeStrokePicker, d.strokeHex()),
                 badgeStrokeSlider != null ? badgeStrokeSlider.getValue() : d.strokeWidth(),
                 badgeCornerSlider != null ? badgeCornerSlider.getValue() : d.cornerRadius(),
                 badgePillCheck != null && badgePillCheck.isSelected(),
-                nzOr(badgeGlowColorField, d.glowColorHex()),
-                badgeGlowRadiusSlider != null ? badgeGlowRadiusSlider.getValue() : d.glowRadius(),
-                badgeGlowSpreadSlider != null ? badgeGlowSpreadSlider.getValue() : d.glowSpread());
+                colorToHex(badgeGlowColorPicker, d.glowColorHex()),
+                glowR,
+                glowS);
+    }
+
+    private static String colorToHex(ColorPicker cp, String fallbackHex) {
+        if (cp == null || cp.getValue() == null) {
+            return fallbackHex;
+        }
+        return colorToHex(cp.getValue());
+    }
+
+    private static String colorToHex(Color c) {
+        int r = (int) Math.round(c.getRed() * 255.0);
+        int g = (int) Math.round(c.getGreen() * 255.0);
+        int b = (int) Math.round(c.getBlue() * 255.0);
+        return String.format("#%02x%02x%02x", r, g, b);
+    }
+
+    private static Color parseHexToColor(String hex, Color fallback) {
+        try {
+            String h = hex != null ? hex.strip() : "";
+            return h.isEmpty() ? fallback : Color.web(h);
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
+    }
+
+    private void populateFontCombo() {
+        if (badgeFontCombo == null) {
+            return;
+        }
+        ObservableList<String> items = FXCollections.observableArrayList(FONT_COMBO_DEFAULT_LABEL);
+        List<String> sorted = new ArrayList<>(Font.getFamilies());
+        sorted.sort(String.CASE_INSENSITIVE_ORDER);
+        items.addAll(sorted);
+        badgeFontCombo.setItems(items);
+    }
+
+    private void applyFontFamilyToCombo(String fontFamily) {
+        if (badgeFontCombo == null) {
+            return;
+        }
+        if (fontFamily == null || fontFamily.isBlank()) {
+            badgeFontCombo.getSelectionModel().select(0);
+            return;
+        }
+        ObservableList<String> items = badgeFontCombo.getItems();
+        for (int i = 0; i < items.size(); i++) {
+            if (fontFamily.equals(items.get(i))) {
+                badgeFontCombo.getSelectionModel().select(i);
+                return;
+            }
+        }
+        items.add(fontFamily);
+        badgeFontCombo.getSelectionModel().select(fontFamily);
     }
 
     @FXML
@@ -711,31 +779,28 @@ public final class GanttPersonBadgeDesignTabController {
             commitUiToTarget();
         }
         badgePreviewBox.getChildren().clear();
-        double zoom = 1.0;
-        double rowPx = 13;
-        List<String> samples = new ArrayList<>();
-        for (String raw : masterMemberNames) {
-            String b = PersonNameBadgeText.badgeTwoFromRawName(raw);
-            if (!b.isEmpty()) {
-                samples.add(b);
-            }
-            if (samples.size() >= 2) {
-                break;
-            }
+        BadgeDesignTableItem sel =
+                badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
+        String txt = previewBadgeText(sel);
+        PersonBadgeStyle st = buildStyleFromUiFields();
+        badgePreviewBox
+                .getChildren()
+                .add(PersonBadgeNodeFactory.createBadge(txt, st, 1.0, 13.0));
+    }
+
+    /** プレビューに載せる文字（選択行のメンバー名由来）。 */
+    private static String previewBadgeText(BadgeDesignTableItem sel) {
+        if (sel == null) {
+            return "?";
         }
-        while (samples.size() < 2) {
-            if (samples.isEmpty()) {
-                samples.add("山田");
-            } else if (samples.size() == 1 && !samples.contains("佐藤")) {
-                samples.add("佐藤");
-            } else {
-                samples.add("?");
-            }
+        if (sel.globalFallback) {
+            return "既定";
         }
-        for (int i = 0; i < 2; i++) {
-            String s = samples.get(i);
-            PersonBadgeStyle st = resolveStyleForBadgeLabelRaw(s);
-            badgePreviewBox.getChildren().add(PersonBadgeNodeFactory.createBadge(s, st, zoom, rowPx));
+        String b = PersonNameBadgeText.badgeTwoFromRawName(sel.memberDisplay);
+        if (!b.isEmpty()) {
+            return b;
         }
+        String t = PersonNameBadgeText.firstNCodePoints(sel.memberDisplay.strip(), 2);
+        return t.isEmpty() ? "?" : t;
     }
 }
