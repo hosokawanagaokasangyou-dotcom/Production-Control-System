@@ -133,6 +133,7 @@ public final class DispatchInteractiveTabController {
                     ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER,
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
+                    "加工内容",
                     "依頼NO",
                     "換算数量",
                     "計画合計");
