@@ -13,21 +13,47 @@ import javafx.stage.Stage;
 /**
  * JavaFX エントリ — UI レイアウトは FXML（{@code jp/co/pm/ai/desktop/fxml/MainShell.fxml}）、ロジックは
  * {@link MainShellController}。
+ *
+ * <p>Prism は通常、起動時に {@link GpuProbeLauncher} で Canvas＋GPU パイプラインを別 JVM が試し、合格時のみ本体 JVM で GPU
+ * を有効にする。強制や省略は {@code pm.ai.javafx.prism.*} を参照。
  */
 public class PmAiFxApp extends Application {
 
     /**
-     * Prism のパイプライン順（Toolkit 初期化前）。既定はソフトウェア描画（{@code sw}）。Canvas（{@code NGCanvas}）と GPU
-     * の組み合わせで {@code RTTexture} が null になり得るため。
+     * Toolkit 初期化前に呼ぶ。既定は別プロセスの GPU プローブに従い {@code prism.order} を決める。
      *
-     * <p>GPU を試す: JVM {@code -Dpm.ai.javafx.prism.gpu=true} または環境変数 {@code PM_AI_JAVAFX_PRISM_GPU=1}。そのときのみ
-     * OS 別の GPU 優先 {@code prism.order} を適用する。opt-in しない場合は既存の {@code prism.order} が無ければ {@code sw}。
+     * <ul>
+     *   <li>{@code -Dpm.ai.javafx.prism.skipGpuProbe=true} … プローブせず {@link #applyLegacyPrismConfiguration()}
+     *   <li>{@code -Dpm.ai.javafx.prism.gpu=true} または {@code PM_AI_JAVAFX_PRISM_GPU=1} … プローブ省略で GPU 優先
+     * </ul>
      */
-    private static void configurePrismOrderEarly() {
-        if (prismGpuOptIn()) {
-            applyPrismGpuPipelineOrder();
+    private static void configurePrismAfterProbe() {
+        if (Boolean.getBoolean("pm.ai.javafx.prism.skipGpuProbe")) {
+            applyLegacyPrismConfiguration();
             return;
         }
+        if (prismGpuOptIn()) {
+            applyPrismGpuPipelineOrder();
+            PrismGpuBootstrapStatus.recordGpuOptIn();
+            return;
+        }
+        boolean ok = GpuProbeLauncher.runGpuCanvasProbe();
+        if (ok) {
+            applyPrismGpuPipelineOrder();
+            PrismGpuBootstrapStatus.recordGpuAfterProbe();
+        } else {
+            System.setProperty("prism.order", "sw");
+        }
+    }
+
+    /** プローブ無効時の従来どおりの設定（opt-in GPU または JVM の prism.order / 既定 sw）。 */
+    private static void applyLegacyPrismConfiguration() {
+        if (prismGpuOptIn()) {
+            applyPrismGpuPipelineOrder();
+            PrismGpuBootstrapStatus.recordGpuOptIn();
+            return;
+        }
+        PrismGpuBootstrapStatus.recordLegacyNoProbe();
         if (System.getProperty("prism.order") != null) {
             return;
         }
@@ -91,7 +117,6 @@ public class PmAiFxApp extends Application {
     }
 
     public static void main(String[] args) {
-        configurePrismOrderEarly();
         System.setProperty("file.encoding", "UTF-8");
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println(
@@ -100,6 +125,7 @@ public class PmAiFxApp extends Application {
                             + "Do not run javafx:run from SSH without X forwarding.");
             System.exit(2);
         }
+        configurePrismAfterProbe();
         launch(args);
     }
 }

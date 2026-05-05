@@ -23,8 +23,6 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
-import javafx.scene.control.ProgressBar;
-import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
@@ -35,7 +33,6 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
@@ -98,22 +95,13 @@ public final class MainRunTabController {
     private ComboBox<String> stage2ResultBookFontCombo;
 
     @FXML
-    private HBox stageRunProgressBox;
-
-    @FXML
-    private Label stageRunProgressLabel;
-
-    @FXML
-    private ProgressBar stageRunProgressBar;
-
-    @FXML
-    private ProgressIndicator stageRunBusyIndicator;
-
-    @FXML
     private Button copyAllLogButton;
 
     @FXML
     private Button clearLogButton;
+
+    @FXML
+    private Label prismPipelineLabel;
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -220,6 +208,9 @@ public final class MainRunTabController {
         applyLogAreaFont();
         installStageRunButtonDepth(stage1RunButton, Color.rgb(14, 116, 144, 0.35));
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+        if (prismPipelineLabel != null) {
+            prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
+        }
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox
                     .selectedProperty()
@@ -584,49 +575,15 @@ public final class MainRunTabController {
     }
 
     /**
-     * 段階1/2 実行中の進捗表示（配台計画手動修正タブと同じ ProgressIndicator + ProgressBar 構成）。
+     * 段階1／段階2 実行中は段階ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        if (stageRunProgressBox == null) {
-            return;
-        }
-        boolean show = stage1Running || stage2Running;
+        boolean busy = stage1Running || stage2Running;
         if (stage1RunButton != null) {
-            stage1RunButton.setDisable(show);
+            stage1RunButton.setDisable(busy);
         }
         if (stage2RunButton != null) {
-            stage2RunButton.setDisable(show);
-        }
-        if (show) {
-            stageRunProgressBox.setManaged(true);
-            stageRunProgressBox.setVisible(true);
-            if (stageRunProgressLabel != null) {
-                stageRunProgressLabel.setText(stage1Running ? "段階1 実行中…" : "段階2 実行中…");
-            }
-            if (stageRunBusyIndicator != null) {
-                stageRunBusyIndicator.setManaged(true);
-                stageRunBusyIndicator.setVisible(true);
-            }
-            if (stageRunProgressBar != null) {
-                stageRunProgressBar.setManaged(true);
-                stageRunProgressBar.setVisible(true);
-                stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-            }
-        } else {
-            if (stageRunProgressLabel != null) {
-                stageRunProgressLabel.setText("");
-            }
-            if (stageRunBusyIndicator != null) {
-                stageRunBusyIndicator.setVisible(false);
-                stageRunBusyIndicator.setManaged(false);
-            }
-            if (stageRunProgressBar != null) {
-                stageRunProgressBar.setProgress(0);
-                stageRunProgressBar.setVisible(false);
-                stageRunProgressBar.setManaged(false);
-            }
-            stageRunProgressBox.setVisible(false);
-            stageRunProgressBox.setManaged(false);
+            stage2RunButton.setDisable(busy);
         }
     }
 

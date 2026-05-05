@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -28,8 +29,14 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -107,6 +114,24 @@ public final class MainShellController {
 
     @FXML
     private ComboBox<DesktopTheme> themeCombo;
+
+    @FXML
+    private HBox shellStageProgressBox;
+
+    @FXML
+    private Label shellStageProgressLabel;
+
+    @FXML
+    private ProgressBar shellStageProgressBar;
+
+    @FXML
+    private ProgressIndicator shellStageBusyIndicator;
+
+    @FXML
+    private Button shellStageCancelButton;
+
+    @FXML
+    private Region toolbarGrowSpacer;
 
     @FXML
     private MainRunTabController mainRunTabController;
@@ -187,10 +212,14 @@ public final class MainShellController {
     private Tab mainShellTabOperatorCard;
 
     private ObservableList<EnvVarRow> envRows;
+
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
+
+    /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
+    private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
@@ -274,6 +303,10 @@ public final class MainShellController {
             suppressEnvSessionPersistence.set(false);
         }
 
+        if (toolbarGrowSpacer != null) {
+            HBox.setHgrow(toolbarGrowSpacer, Priority.ALWAYS);
+        }
+
         installUiEnvAutoSave();
 
         applyRepoFolderPathNormalization();
@@ -340,6 +373,7 @@ public final class MainShellController {
                                 refreshThemeTrackedSecondaryScenes();
                             }
                             mainRunTabController.refreshLogThemeCells();
+                            equipmentGanttGraphicTabController.refreshGraphicForTheme();
                         });
         Platform.runLater(mainRunTabController::refreshLogThemeCells);
     }
@@ -442,6 +476,7 @@ public final class MainShellController {
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
+        equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -510,7 +545,22 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2WriteExcel(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
-                snapshotMainShellTabOrder());
+                snapshotMainShellTabOrder(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontFamily(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttRowHeightPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttHeaderHeightPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttSlotWidthPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttShiftWheelHScrollPercent());
+    }
+
+    /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
+    public void persistDesktopSessionNow() {
+        DesktopSessionStateStore.save(collectDesktopSession());
     }
 
     private MainShellTabId mainShellTabId(Tab t) {
@@ -935,6 +985,8 @@ public final class MainShellController {
 
     void appendBootMessage() {
         mainRunTabController.appendLog(
+                "[boot] " + PrismGpuBootstrapStatus.runTabSummary(), false);
+        mainRunTabController.appendLog(
                 "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", false);
         Platform.runLater(
                 () -> {
@@ -1029,11 +1081,13 @@ public final class MainShellController {
                                     appendLog(line);
                                 }
                             },
-                            ex -> appendLog("[error] " + ex.getMessage()))
+                            ex -> appendLog("[error] " + ex.getMessage()),
+                            activeStageChildProcess::set)
                     .whenComplete(
                             (code, err) -> {
                                 runLock.set(false);
                                 activeRunStageScript = null;
+                                activeStageChildProcess.set(null);
                                 javafx.application.Platform.runLater(
                                         () -> {
                                             applyRunTabGating();
@@ -1076,14 +1130,36 @@ public final class MainShellController {
         } catch (Throwable t) {
             runLock.set(false);
             activeRunStageScript = null;
+            activeStageChildProcess.set(null);
             appendLog("[error] runStage: " + t.getMessage());
             javafx.application.Platform.runLater(this::applyRunTabGating);
         }
     }
 
     /**
-     * 段階1実行中は環境変数タブと配台計画入力タブを無効化し、段階2に渡す前提が途中で崩れる操作を防ぐ。
-     * 段階2実行中は環境変数タブと段階1プレビュータブを無効化し、段階1の結果と食い違う操作を防ぐ。
+     * 段階1/2 実行中の Python 子プロセスを終了する（ツールバー・実行・ログの「中断」）。
+     */
+    void cancelActiveStageRun() {
+        Process child = activeStageChildProcess.get();
+        if (child != null && child.isAlive()) {
+            appendLog("[interrupt] 段階1/2 の子プロセスを終了します…");
+            try {
+                child.destroyForcibly();
+            } catch (Exception ex) {
+                appendLog("[interrupt] 子プロセス終了に失敗: " + ex.getMessage());
+            }
+        } else {
+            appendLog("[interrupt] 終了対象の子プロセスがありません。");
+        }
+    }
+
+    @FXML
+    private void onCancelStageRunAction() {
+        cancelActiveStageRun();
+    }
+
+    /**
+     * 段階1／段階2 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
      */
     private void applyRunTabGating() {
         String script = activeRunStageScript;
@@ -1092,6 +1168,7 @@ public final class MainShellController {
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
+        updateShellStageProgressOverlay(stage1Running, stage2Running);
         if (tabPane == null) {
             return;
         }
@@ -1099,19 +1176,67 @@ public final class MainShellController {
         if (tabs.isEmpty()) {
             return;
         }
+        boolean stageBusy = stage1Running || stage2Running;
         for (Tab t : tabs) {
-            boolean disable =
-                    stage1Running
-                            && (t == mainShellTabEnv || t == mainShellTabPlanInput)
-                            || stage2Running
-                                    && (t == mainShellTabEnv || t == mainShellTabStage1Preview);
-            t.setDisable(disable);
+            t.setDisable(stageBusy && t != mainShellTabRun);
         }
-        Tab sel = tabPane.getSelectionModel().getSelectedItem();
-        if (stage1Running && (sel == mainShellTabEnv || sel == mainShellTabPlanInput)) {
-            tabPane.getSelectionModel().select(mainShellTabRun);
-        } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
-            tabPane.getSelectionModel().select(mainShellTabRun);
+        if (stageBusy) {
+            Tab sel = tabPane.getSelectionModel().getSelectedItem();
+            if (sel != mainShellTabRun) {
+                tabPane.getSelectionModel().select(mainShellTabRun);
+            }
+        }
+    }
+
+    /**
+     * メインウィンドウ上部ツールバーに段階1/2 実行中を表示する。
+     * プログレスは {@link DispatchInteractiveTabController} の「機械 JSON 再読み」と同じ
+     * {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
+     */
+    private void updateShellStageProgressOverlay(boolean stage1Running, boolean stage2Running) {
+        if (shellStageProgressBox == null) {
+            return;
+        }
+        boolean show = stage1Running || stage2Running;
+        if (show) {
+            shellStageProgressBox.setManaged(true);
+            shellStageProgressBox.setVisible(true);
+            if (shellStageProgressBar != null) {
+                shellStageProgressBar.setManaged(true);
+                shellStageProgressBar.setVisible(true);
+                shellStageProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            }
+            if (shellStageBusyIndicator != null) {
+                shellStageBusyIndicator.setManaged(true);
+                shellStageBusyIndicator.setVisible(true);
+            }
+            if (shellStageProgressLabel != null) {
+                shellStageProgressLabel.setText(
+                        stage1Running ? "段階1 実行中…" : "段階2 実行中…");
+            }
+            if (shellStageCancelButton != null) {
+                shellStageCancelButton.setManaged(true);
+                shellStageCancelButton.setVisible(true);
+            }
+        } else {
+            if (shellStageProgressBar != null) {
+                shellStageProgressBar.setProgress(0);
+                shellStageProgressBar.setVisible(false);
+                shellStageProgressBar.setManaged(false);
+            }
+            if (shellStageBusyIndicator != null) {
+                shellStageBusyIndicator.setVisible(false);
+                shellStageBusyIndicator.setManaged(false);
+            }
+            if (shellStageProgressLabel != null) {
+                shellStageProgressLabel.setText("");
+            }
+            if (shellStageCancelButton != null) {
+                shellStageCancelButton.setVisible(false);
+                shellStageCancelButton.setManaged(false);
+            }
+            shellStageProgressBox.setVisible(false);
+            shellStageProgressBox.setManaged(false);
         }
     }
 
