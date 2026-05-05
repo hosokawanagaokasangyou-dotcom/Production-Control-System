@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -14,6 +15,23 @@ import javafx.stage.Stage;
  * {@link MainShellController}。
  */
 public class PmAiFxApp extends Application {
+
+    /**
+     * Toolkit 初期化前に指定すること。既に {@code prism.order} が JVM で与えられている場合は尊重する。
+     */
+    private static void ensurePrismGpuPreferred() {
+        if (System.getProperty("prism.order") != null) {
+            return;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("windows")) {
+            System.setProperty("prism.order", "d3d,es2,sw");
+        } else if (os.contains("mac")) {
+            System.setProperty("prism.order", "metal,es2,sw");
+        } else {
+            System.setProperty("prism.order", "es2,sw");
+        }
+    }
 
     @Override
     public void start(Stage primaryStage) {
@@ -53,6 +71,7 @@ public class PmAiFxApp extends Application {
     }
 
     public static void main(String[] args) {
+        ensurePrismGpuPreferred();
         System.setProperty("file.encoding", "UTF-8");
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println(

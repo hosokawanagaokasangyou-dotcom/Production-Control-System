@@ -21,6 +21,8 @@
     <jfreechart.version>1.5.4</jfreechart.version>
     <jackson.version>2.21.3</jackson.version>
     <junit.version>5.12.2</junit.version>
+    <!-- javafx-maven-plugin: OS プロファイルで上書き（GPU パイプライン優先、失敗時 sw） -->
+    <javafx.prism.order>es2,sw</javafx.prism.order>
   </properties>
 
   <dependencies>
@@ -92,6 +94,9 @@
           <classifier>linux</classifier>
         </dependency>
       </dependencies>
+      <properties>
+        <javafx.prism.order>es2,sw</javafx.prism.order>
+      </properties>
     </profile>
     <profile>
       <id>javafx-win</id>
@@ -132,6 +137,9 @@
           <classifier>win</classifier>
         </dependency>
       </dependencies>
+      <properties>
+        <javafx.prism.order>d3d,es2,sw</javafx.prism.order>
+      </properties>
     </profile>
     <profile>
       <id>javafx-mac</id>
@@ -172,6 +180,9 @@
           <classifier>mac</classifier>
         </dependency>
       </dependencies>
+      <properties>
+        <javafx.prism.order>metal,es2,sw</javafx.prism.order>
+      </properties>
     </profile>
   </profiles>
 
@@ -193,9 +204,9 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <!-- NGCanvas + Prism GPU で RTTexture が null になる環境の回避（IDE 実行時は VM オプションで同等指定可） -->
+          <!-- Prism: GPU パイプライン優先（不具合時は VM に -Dprism.order=sw） -->
           <options>
-            <option>-Dprism.order=sw</option>
+            <option>-Dprism.order=${javafx.prism.order}</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
             <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
             <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
