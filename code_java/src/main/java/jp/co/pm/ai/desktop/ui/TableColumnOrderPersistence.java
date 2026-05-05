@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javafx.animation.PauseTransition;
@@ -43,6 +44,20 @@ public final class TableColumnOrderPersistence {
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "table-column-order.json");
 
     private static final double MIN_WIDTH = 40.0;
+
+    /** {@link #planResultViewerSheetScopeKey} 用のルート JSON キー接尾辞（見出し固定列数）。 */
+    private static final String SCOPE_SUFFIX_HEADER_COLUMN_COUNT = "_headerColumnCount";
+
+    private static final String KEY_PLAN_RESULT_FONT_FAMILY = "planResultViewer_ui_fontFamily";
+
+    private static final String KEY_PLAN_RESULT_FONT_SIZE = "planResultViewer_ui_fontSize";
+
+    /** 計画結果 JSON ビューアの表フォント（空 family は既定フォント）。 */
+    public record PlanResultViewerFontPrefs(String family, double size) {
+        public static PlanResultViewerFontPrefs defaults() {
+            return new PlanResultViewerFontPrefs("", 12.0);
+        }
+    }
 
     private static String headerCountKey(TableId id) {
         return id.jsonKey() + "_headerColumnCount";
@@ -214,6 +229,169 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /**
+     * 計画結果ビューアのシート単位スコープキー（データセット種別 + シート名）。列順・列幅・見出し列数の保存に使う。
+     */
+    public static String planResultViewerSheetScopeKey(String datasetTag, String sheetName) {
+        return "prvSh_"
+                + sanitizeScopeFragment(datasetTag)
+                + "_"
+                + sanitizeScopeFragment(sheetName);
+    }
+
+    private static String sanitizeScopeFragment(String s) {
+        if (s == null) {
+            return "null";
+        }
+        String t = s.strip();
+        if (t.length() > 120) {
+            t = t.substring(0, 120);
+        }
+        StringBuilder sb = new StringBuilder(Math.max(8, t.length()));
+        for (int i = 0; i < t.length(); i++) {
+            char ch = t.charAt(i);
+            if (ch == '"' || ch == '\\') {
+                sb.append('_');
+            } else if (ch < 32) {
+                sb.append('_');
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "x";
+    }
+
+    /** {@link #planResultViewerSheetScopeKey} に対応する列レイアウト（順・幅）。 */
+    public static List<ColumnSpec> loadLayoutForScope(String scopeKey) {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return List.of();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return List.of();
+            }
+            JsonNode arr = root.get(scopeKey);
+            return parseLayoutArray(arr, defaultWidthFallback());
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** {@link #planResultViewerSheetScopeKey} に列レイアウトを保存する（他キーは維持）。 */
+    public static void saveLayoutForScope(String scopeKey, List<ColumnSpec> columns) {
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            ArrayNode arr = JSON.createArrayNode();
+            double def = defaultWidthFallback();
+            for (ColumnSpec c : columns) {
+                ObjectNode o = JSON.createObjectNode();
+                o.put("title", c.title());
+                o.put("width", clampWidth(c.width(), def));
+                arr.add(o);
+            }
+            root.set(scopeKey, arr);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    public static int loadHeaderColumnCountForScope(String sheetScopeKey) {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return 0;
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return 0;
+            }
+            JsonNode n = root.get(sheetScopeKey + SCOPE_SUFFIX_HEADER_COLUMN_COUNT);
+            if (n == null || !n.isNumber()) {
+                return 0;
+            }
+            int v = n.intValue();
+            return Math.max(0, Math.min(v, 10_000));
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    public static void saveHeaderColumnCountForScope(String sheetScopeKey, int count) {
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            int v = Math.max(0, Math.min(count, 10_000));
+            root.put(sheetScopeKey + SCOPE_SUFFIX_HEADER_COLUMN_COUNT, v);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    public static PlanResultViewerFontPrefs loadPlanResultViewerFontPrefs() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return PlanResultViewerFontPrefs.defaults();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return PlanResultViewerFontPrefs.defaults();
+            }
+            String fam = root.path(KEY_PLAN_RESULT_FONT_FAMILY).asText("");
+            double sz = root.path(KEY_PLAN_RESULT_FONT_SIZE).asDouble(12.0);
+            if (Double.isNaN(sz) || sz < 6) {
+                sz = 12.0;
+            }
+            if (sz > 96) {
+                sz = 96;
+            }
+            return new PlanResultViewerFontPrefs(fam != null ? fam : "", sz);
+        } catch (IOException e) {
+            return PlanResultViewerFontPrefs.defaults();
+        }
+    }
+
+    public static void savePlanResultViewerFontPrefs(PlanResultViewerFontPrefs prefs) {
+        if (prefs == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(KEY_PLAN_RESULT_FONT_FAMILY, prefs.family() != null ? prefs.family() : "");
+            root.put(KEY_PLAN_RESULT_FONT_SIZE, prefs.size());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     public static List<Double> resolveWidthsForHeaders(
             List<String> headersInOrder, List<ColumnSpec> layout, double defaultWidth) {
         double def = normalizeDefaultWidth(defaultWidth);
@@ -294,13 +472,40 @@ public final class TableColumnOrderPersistence {
             TableId id,
             BooleanSupplier suppressSave,
             Supplier<List<String>> headerTitlesSupplier) {
+        installSpreadsheetColumnLayoutWatcherImpl(
+                view,
+                suppressSave,
+                headerTitlesSupplier,
+                layout -> saveLayout(id, layout));
+    }
+
+    /**
+     * 任意ストレージキー（例: 計画結果ビューアのシート単位 {@link #planResultViewerSheetScopeKey}）へ列幅を保存する。
+     */
+    public static void installSpreadsheetColumnLayoutWatcherForScope(
+            SpreadsheetView view,
+            String scopeStorageKey,
+            BooleanSupplier suppressSave,
+            Supplier<List<String>> headerTitlesSupplier) {
+        installSpreadsheetColumnLayoutWatcherImpl(
+                view,
+                suppressSave,
+                headerTitlesSupplier,
+                layout -> saveLayoutForScope(scopeStorageKey, layout));
+    }
+
+    private static void installSpreadsheetColumnLayoutWatcherImpl(
+            SpreadsheetView view,
+            BooleanSupplier suppressSave,
+            Supplier<List<String>> headerTitlesSupplier,
+            Consumer<List<ColumnSpec>> layoutSaver) {
         PauseTransition debounce = new PauseTransition(Duration.millis(400));
         Runnable flushWidths =
                 () -> {
                     if (suppressSave.getAsBoolean()) {
                         return;
                     }
-                    saveLayout(id, snapshotSpreadsheet(view, headerTitlesSupplier.get()));
+                    layoutSaver.accept(snapshotSpreadsheet(view, headerTitlesSupplier.get()));
                 };
         debounce.setOnFinished(e -> flushWidths.run());
 

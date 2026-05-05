@@ -7,6 +7,10 @@ import java.util.Optional;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DataFormat;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
@@ -25,6 +29,9 @@ import javafx.stage.Window;
  * data (permutation of original column indices).
  */
 public final class SpreadsheetColumnReorderDialog {
+
+    private static final DataFormat ROW_INDEX =
+            new DataFormat("jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog.rowIndex");
 
     private SpreadsheetColumnReorderDialog() {}
 
@@ -55,6 +62,51 @@ public final class SpreadsheetColumnReorderDialog {
         list.setCellFactory(
                 lv ->
                         new ListCell<>() {
+                            {
+                                setOnDragDetected(
+                                        ev -> {
+                                            if (isEmpty()) {
+                                                return;
+                                            }
+                                            Dragboard db = startDragAndDrop(TransferMode.MOVE);
+                                            ClipboardContent cc = new ClipboardContent();
+                                            cc.put(ROW_INDEX, getIndex());
+                                            db.setContent(cc);
+                                            ev.consume();
+                                        });
+                                setOnDragOver(
+                                        ev -> {
+                                            if (ev.getGestureSource() != this
+                                                    && ev.getDragboard().hasContent(ROW_INDEX)) {
+                                                ev.acceptTransferModes(TransferMode.MOVE);
+                                            }
+                                            ev.consume();
+                                        });
+                                setOnDragDropped(
+                                        ev -> {
+                                            Dragboard db = ev.getDragboard();
+                                            Object raw = db.getContent(ROW_INDEX);
+                                            if (!(raw instanceof Integer fromIdx)) {
+                                                ev.setDropCompleted(false);
+                                                ev.consume();
+                                                return;
+                                            }
+                                            int toIdx = getIndex();
+                                            if (fromIdx >= 0
+                                                    && toIdx >= 0
+                                                    && fromIdx < perm.size()
+                                                    && toIdx < perm.size()
+                                                    && fromIdx != toIdx) {
+                                                Integer moved = perm.remove(fromIdx.intValue());
+                                                perm.add(toIdx, moved);
+                                                ev.setDropCompleted(true);
+                                            } else {
+                                                ev.setDropCompleted(false);
+                                            }
+                                            ev.consume();
+                                        });
+                            }
+
                             @Override
                             protected void updateItem(Integer oldIdx, boolean empty) {
                                 super.updateItem(oldIdx, empty);
@@ -99,7 +151,7 @@ public final class SpreadsheetColumnReorderDialog {
 
         Label hint =
                 new Label(
-                        "表示順は左から。↑↓で入れ替え。");
+                        "表示順は左から。↑↓または行のドラッグ＆ドロップで入れ替え。");
         hint.setWrapText(true);
 
         GridPane grid = new GridPane();

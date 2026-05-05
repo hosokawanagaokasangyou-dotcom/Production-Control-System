@@ -10,6 +10,9 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -21,15 +24,23 @@ import javafx.geometry.Pos;
 import javafx.geometry.Side;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.text.Font;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -39,8 +50,11 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
  * {@code production_plan_multi_day*.json} と {@code member_schedule*.json} を入れ子
@@ -81,6 +95,12 @@ public final class PlanResultViewerTabController {
     private Label hintLabel;
 
     @FXML
+    private ComboBox<String> planResultFontFamilyCombo;
+
+    @FXML
+    private Spinner<Integer> planResultFontSizeSpinner;
+
+    @FXML
     private Accordion sourceAccordion;
 
     @FXML
@@ -96,6 +116,9 @@ public final class PlanResultViewerTabController {
     /** Active spreadsheet views for 列フィルタ解除 */
     private final List<SpreadsheetView> registeredSpreadsheets = new ArrayList<>();
 
+    private final AtomicReference<TableColumnOrderPersistence.PlanResultViewerFontPrefs> planResultFontPrefs =
+            new AtomicReference<>(TableColumnOrderPersistence.loadPlanResultViewerFontPrefs());
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT);
@@ -103,6 +126,72 @@ public final class PlanResultViewerTabController {
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
             sourceTitledPane.setExpanded(false);
+        }
+        initPlanResultFontControls();
+    }
+
+    private void initPlanResultFontControls() {
+        if (planResultFontFamilyCombo == null || planResultFontSizeSpinner == null) {
+            return;
+        }
+        TableColumnOrderPersistence.PlanResultViewerFontPrefs fp = planResultFontPrefs.get();
+        ObservableList<String> families = FXCollections.observableArrayList(Font.getFamilies());
+        FXCollections.sort(families);
+        planResultFontFamilyCombo.setItems(families);
+        String fam = fp.family() != null ? fp.family().strip() : "";
+        if (!fam.isEmpty() && planResultFontFamilyCombo.getItems().contains(fam)) {
+            planResultFontFamilyCombo.getSelectionModel().select(fam);
+        } else {
+            planResultFontFamilyCombo.getSelectionModel().select(Font.getDefault().getFamily());
+        }
+        int sz = (int) Math.round(fp.size());
+        sz = Math.max(8, Math.min(48, sz <= 0 ? 12 : sz));
+        planResultFontSizeSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(8, 48, sz));
+        Runnable saveAndApply =
+                () -> {
+                    String selFam =
+                            planResultFontFamilyCombo.getSelectionModel().getSelectedItem();
+                    String effFam = selFam != null ? selFam.strip() : "";
+                    Integer spv = planResultFontSizeSpinner.getValue();
+                    double fs = spv != null ? spv.doubleValue() : 12.0;
+                    TableColumnOrderPersistence.PlanResultViewerFontPrefs next =
+                            new TableColumnOrderPersistence.PlanResultViewerFontPrefs(effFam, fs);
+                    planResultFontPrefs.set(next);
+                    TableColumnOrderPersistence.savePlanResultViewerFontPrefs(next);
+                    applyPlanResultFontToAllRegisteredSpreadsheets();
+                };
+        planResultFontFamilyCombo
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener((o, a, b) -> saveAndApply.run());
+        planResultFontSizeSpinner
+                .valueProperty()
+                .addListener((o, a, b) -> saveAndApply.run());
+    }
+
+    private void applyPlanResultFont(SpreadsheetView sv) {
+        if (sv == null) {
+            return;
+        }
+        TableColumnOrderPersistence.PlanResultViewerFontPrefs p = planResultFontPrefs.get();
+        double sz = p.size() >= 6 ? p.size() : 12.0;
+        sz = Math.min(96, sz);
+        String fam = p.family() != null ? p.family().strip() : "";
+        String esc = fam.replace("\\", "\\\\").replace("\"", "\\\"");
+        String style =
+                fam.isEmpty()
+                        ? ("-fx-font-size: " + (int) Math.round(sz) + "px;")
+                        : ("-fx-font-family: \""
+                                + esc
+                                + "\"; -fx-font-size: "
+                                + (int) Math.round(sz)
+                                + "px;");
+        sv.setStyle(style);
+    }
+
+    private void applyPlanResultFontToAllRegisteredSpreadsheets() {
+        for (SpreadsheetView v : registeredSpreadsheets) {
+            applyPlanResultFont(v);
         }
     }
 
@@ -263,7 +352,7 @@ public final class PlanResultViewerTabController {
             }
 
             TabPane outer = new TabPane();
-            outer.setSide(Side.LEFT);
+            outer.setSide(Side.TOP);
             outer.getStyleClass().add("pm-plan-result-tabpane-side");
             outer.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
@@ -271,14 +360,16 @@ public final class PlanResultViewerTabController {
             TabPane planInner =
                     buildDatasetTabs(
                             planSheets,
-                            planPath != null ? planPath.getFileName().toString() : "");
+                            planPath != null ? planPath.getFileName().toString() : "",
+                            "plan");
             tPlan.setContent(planInner);
 
             Tab tMem = new Tab("メンバー勤務");
             TabPane memInner =
                     buildDatasetTabs(
                             memberSheets,
-                            memberPath != null ? memberPath.getFileName().toString() : "");
+                            memberPath != null ? memberPath.getFileName().toString() : "",
+                            "member");
             tMem.setContent(memInner);
 
             outer.getTabs().add(tPlan);
@@ -313,9 +404,10 @@ public final class PlanResultViewerTabController {
         return p;
     }
 
-    private TabPane buildDatasetTabs(Map<String, SheetModel> sheets, String fileLabel) {
+    private TabPane buildDatasetTabs(
+            Map<String, SheetModel> sheets, String fileLabel, String datasetTag) {
         TabPane inner = new TabPane();
-        inner.setSide(Side.LEFT);
+        inner.setSide(Side.TOP);
         inner.getStyleClass().add("pm-plan-result-tabpane-side");
         inner.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         if (sheets.isEmpty()) {
@@ -334,6 +426,8 @@ public final class PlanResultViewerTabController {
             Tab st = new Tab(truncateTabTitle(sheetName));
             st.setTooltip(new Tooltip(sheetName + " — " + fileLabel));
 
+            SheetGridState gridState = SheetGridState.fromSheetModel(model, datasetTag, sheetName);
+
             TabPane modeTabs = new TabPane();
             modeTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
@@ -341,13 +435,145 @@ public final class PlanResultViewerTabController {
             StackPane ganttHost = new StackPane(new Label("読み込み中..."));
 
             GanttSheetKind ganttKind =
-                    GanttScheduleStyle.resolveKind(sheetName, model.columns());
+                    GanttScheduleStyle.resolveKind(sheetName, gridState.headersRef);
 
             Tab tTable = new Tab("一覧（表）", tableHost);
             Tab tGantt = new Tab("ガント", ganttHost);
             modeTabs.getTabs().addAll(tTable, tGantt);
 
+            AtomicReference<SpreadsheetView> tableSvRef = new AtomicReference<>();
+            AtomicReference<SpreadsheetView> ganttSvRef = new AtomicReference<>();
+            AtomicBoolean tableWatcherInstalled = new AtomicBoolean();
+            AtomicBoolean ganttWatcherInstalled = new AtomicBoolean();
             final boolean[] built = new boolean[2];
+
+            Runnable rebuildTable =
+                    () -> {
+                        SpreadsheetView sv = tableSvRef.get();
+                        if (sv == null) {
+                            return;
+                        }
+                        gridState.suppressPersistence.set(true);
+                        try {
+                            GridBase grid =
+                                    SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
+                                            gridState.headersRef, gridState.rows);
+                            sv.setGrid(grid);
+                            Platform.runLater(
+                                    () ->
+                                            finishPlanResultSpreadsheet(
+                                                    sv, gridState, tableWatcherInstalled));
+                        } finally {
+                            gridState.suppressPersistence.set(false);
+                        }
+                    };
+
+            Runnable rebuildGantt =
+                    () -> {
+                        SpreadsheetView sv = ganttSvRef.get();
+                        if (sv == null) {
+                            return;
+                        }
+                        gridState.suppressPersistence.set(true);
+                        try {
+                            GridBase grid =
+                                    SpreadsheetTabularSupport.buildReadOnlyGanttGrid(
+                                            gridState.headersRef, gridState.rows, ganttKind);
+                            sv.setGrid(grid);
+                            Platform.runLater(
+                                    () -> {
+                                        if (ganttKind == GanttSheetKind.EQUIPMENT_TIMELINE
+                                                && !sv.getStyleClass()
+                                                        .contains("pm-gantt-equipment-xlsx")) {
+                                            sv.getStyleClass().add("pm-gantt-equipment-xlsx");
+                                        }
+                                        finishPlanResultSpreadsheet(
+                                                sv, gridState, ganttWatcherInstalled);
+                                    });
+                        } finally {
+                            gridState.suppressPersistence.set(false);
+                        }
+                    };
+
+            Runnable resetWidths =
+                    () -> {
+                        SpreadsheetView v = tableSvRef.get();
+                        if (v == null) {
+                            v = ganttSvRef.get();
+                        }
+                        if (v == null) {
+                            return;
+                        }
+                        double def = 112;
+                        for (var c : v.getColumns()) {
+                            c.setPrefWidth(def);
+                        }
+                        TableColumnOrderPersistence.saveLayoutForScope(
+                                gridState.scopeKey,
+                                TableColumnOrderPersistence.snapshotSpreadsheet(
+                                        v, gridState.headersRef));
+                    };
+
+            Runnable onReorder =
+                    () -> {
+                        if (gridState.headersRef.isEmpty()) {
+                            if (shell != null) {
+                                shell.appendLog("[plan-result-viewer] 列がありません（先にシートを開く）");
+                            }
+                            return;
+                        }
+                        SpreadsheetColumnReorderDialog.show(
+                                        ownerStage, new ArrayList<>(gridState.headersRef))
+                                .ifPresent(
+                                        perm -> {
+                                            List<String> oldHeaders =
+                                                    new ArrayList<>(gridState.headersRef);
+                                            List<String> titleOrder =
+                                                    perm.stream().map(oldHeaders::get).toList();
+                                            TableColumnOrderPersistence.applyLogicalColumnOrder(
+                                                    gridState.headersRef,
+                                                    gridState.rows,
+                                                    titleOrder);
+                                            List<Double> widths =
+                                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
+                                                            gridState.headersRef,
+                                                            gridState.persistedLayout.get(),
+                                                            112);
+                                            List<TableColumnOrderPersistence.ColumnSpec> newLay =
+                                                    new ArrayList<>();
+                                            for (int i = 0; i < gridState.headersRef.size(); i++) {
+                                                newLay.add(
+                                                        new TableColumnOrderPersistence.ColumnSpec(
+                                                                gridState.headersRef.get(i),
+                                                                widths.get(i)));
+                                            }
+                                            gridState.persistedLayout.set(newLay);
+                                            TableColumnOrderPersistence.saveLayoutForScope(
+                                                    gridState.scopeKey, newLay);
+                                            if (built[0]) {
+                                                rebuildTable.run();
+                                            }
+                                            if (built[1]) {
+                                                rebuildGantt.run();
+                                            }
+                                        });
+                    };
+
+            HBox strip =
+                    SpreadsheetColumnSettingsStrip.createForScope(
+                            resetWidths,
+                            gridState.scopeKey,
+                            gridState.headerColumnCount,
+                            hv -> {
+                                if (built[0]) {
+                                    rebuildTable.run();
+                                }
+                                if (built[1]) {
+                                    rebuildGantt.run();
+                                }
+                            },
+                            onReorder);
+
             Runnable loadTable =
                     () -> {
                         if (built[0]) {
@@ -356,22 +582,25 @@ public final class PlanResultViewerTabController {
                         built[0] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
+                        applyPlanResultFont(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-                        ObservableList<ObservableList<String>> rows = model.copyRows();
-                        GridBase grid =
-                                SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
-                                        model.columns(), rows);
-                        sv.setGrid(grid);
-                        SpreadsheetTabularSupport.applyColumnFilters(sv);
-                        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(sv, 1);
-                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
-                        Platform.runLater(
-                                () -> {
-                                    SpreadsheetTabularSupport.applyColumnWidths(
-                                            sv, List.of(), 104);
-                                    tableHost.getChildren().setAll(sv);
-                                    StackPane.setAlignment(sv, Pos.CENTER_LEFT);
-                                });
+                        tableSvRef.set(sv);
+                        gridState.suppressPersistence.set(true);
+                        try {
+                            GridBase grid =
+                                    SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
+                                            gridState.headersRef, gridState.rows);
+                            sv.setGrid(grid);
+                            Platform.runLater(
+                                    () -> {
+                                        finishPlanResultSpreadsheet(
+                                                sv, gridState, tableWatcherInstalled);
+                                        tableHost.getChildren().setAll(sv);
+                                        StackPane.setAlignment(sv, Pos.CENTER_LEFT);
+                                    });
+                        } finally {
+                            gridState.suppressPersistence.set(false);
+                        }
                         registeredSpreadsheets.add(sv);
                     };
             Runnable loadGantt =
@@ -382,28 +611,34 @@ public final class PlanResultViewerTabController {
                         built[1] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
+                        applyPlanResultFont(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-                        if (ganttKind == GanttSheetKind.EQUIPMENT_TIMELINE) {
-                            sv.getStyleClass().add("pm-gantt-equipment-xlsx");
+                        ganttSvRef.set(sv);
+                        gridState.suppressPersistence.set(true);
+                        try {
+                            GridBase grid =
+                                    SpreadsheetTabularSupport.buildReadOnlyGanttGrid(
+                                            gridState.headersRef, gridState.rows, ganttKind);
+                            sv.setGrid(grid);
+                            Platform.runLater(
+                                    () -> {
+                                        if (ganttKind == GanttSheetKind.EQUIPMENT_TIMELINE) {
+                                            sv.getStyleClass().add("pm-gantt-equipment-xlsx");
+                                        }
+                                        finishPlanResultSpreadsheet(
+                                                sv, gridState, ganttWatcherInstalled);
+                                        ganttHost.getChildren().setAll(sv);
+                                        StackPane.setAlignment(sv, Pos.CENTER_LEFT);
+                                    });
+                        } finally {
+                            gridState.suppressPersistence.set(false);
                         }
-                        ObservableList<ObservableList<String>> rows = model.copyRows();
-                        GridBase grid =
-                                SpreadsheetTabularSupport.buildReadOnlyGanttGrid(
-                                        model.columns(), rows, ganttKind);
-                        sv.setGrid(grid);
-                        SpreadsheetTabularSupport.applyColumnFilters(sv);
-                        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(sv, 1);
-                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
-                        Platform.runLater(
-                                () -> {
-                                    SpreadsheetTabularSupport.applyColumnWidths(
-                                            sv, List.of(), 96);
-                                    ganttHost.getChildren().setAll(sv);
-                                    StackPane.setAlignment(sv, Pos.CENTER_LEFT);
-                                });
                         registeredSpreadsheets.add(sv);
                     };
             st.setUserData(new Runnable[] {loadTable, loadGantt});
+
+            VBox sheetVBox = new VBox(4, strip, modeTabs);
+            VBox.setVgrow(modeTabs, Priority.ALWAYS);
 
             modeTabs
                     .getSelectionModel()
@@ -436,7 +671,7 @@ public final class PlanResultViewerTabController {
                                 }
                             });
 
-            st.setContent(modeTabs);
+            st.setContent(sheetVBox);
             inner.getTabs().add(st);
         }
         inner.getSelectionModel()
@@ -448,6 +683,66 @@ public final class PlanResultViewerTabController {
                             }
                         });
         return inner;
+    }
+
+    private void finishPlanResultSpreadsheet(
+            SpreadsheetView sv,
+            SheetGridState gridState,
+            AtomicBoolean layoutWatcherInstalled) {
+        List<Double> widths =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(
+                        gridState.headersRef, gridState.persistedLayout.get(), 112);
+        SpreadsheetTabularSupport.applyColumnWidths(sv, widths, 112);
+        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
+        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(sv);
+        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(
+                sv, gridState.headerColumnCount.get());
+        applyPlanResultFont(sv);
+        if (layoutWatcherInstalled.compareAndSet(false, true)) {
+            TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcherForScope(
+                    sv,
+                    gridState.scopeKey,
+                    gridState.suppressPersistence::get,
+                    () -> new ArrayList<>(gridState.headersRef));
+        }
+    }
+
+    private static final class SheetGridState {
+        final ArrayList<String> headersRef = new ArrayList<>();
+        final ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
+                new AtomicReference<>(List.of());
+        final AtomicInteger headerColumnCount = new AtomicInteger(0);
+        final AtomicBoolean suppressPersistence = new AtomicBoolean(false);
+        final String scopeKey;
+
+        private SheetGridState(String scopeKey) {
+            this.scopeKey = scopeKey;
+        }
+
+        static SheetGridState fromSheetModel(
+                SheetModel model, String datasetTag, String sheetName) {
+            String scope =
+                    TableColumnOrderPersistence.planResultViewerSheetScopeKey(datasetTag, sheetName);
+            SheetGridState st = new SheetGridState(scope);
+            st.headersRef.addAll(model.columns());
+            for (Map<String, String> map : model.rowMaps()) {
+                ObservableList<String> line = FXCollections.observableArrayList();
+                for (String h : st.headersRef) {
+                    line.add(map.getOrDefault(h, ""));
+                }
+                st.rows.add(line);
+            }
+            List<TableColumnOrderPersistence.ColumnSpec> lay =
+                    TableColumnOrderPersistence.loadLayoutForScope(scope);
+            st.persistedLayout.set(lay);
+            TableColumnOrderPersistence.applyLogicalColumnOrder(
+                    st.headersRef,
+                    st.rows,
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+            st.headerColumnCount.set(TableColumnOrderPersistence.loadHeaderColumnCountForScope(scope));
+            return st;
+        }
     }
 
     private static void wireDatasetTabActivation(TabPane outer) {
@@ -467,8 +762,27 @@ public final class PlanResultViewerTabController {
         }
     }
 
+    private static TabPane findModeTabPaneInSheetTab(Tab sheetTab) {
+        if (sheetTab == null) {
+            return null;
+        }
+        Node content = sheetTab.getContent();
+        if (content instanceof TabPane tp) {
+            return tp;
+        }
+        if (content instanceof VBox v) {
+            for (Node n : v.getChildren()) {
+                if (n instanceof TabPane inner) {
+                    return inner;
+                }
+            }
+        }
+        return null;
+    }
+
     private static void kickVisibleSheetTab(Tab sheetTab) {
-        if (sheetTab == null || !(sheetTab.getContent() instanceof TabPane modeTabs)) {
+        TabPane modeTabs = findModeTabPaneInSheetTab(sheetTab);
+        if (modeTabs == null) {
             return;
         }
         Object ud = sheetTab.getUserData();

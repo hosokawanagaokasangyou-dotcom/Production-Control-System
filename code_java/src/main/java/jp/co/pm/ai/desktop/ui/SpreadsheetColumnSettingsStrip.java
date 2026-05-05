@@ -73,4 +73,60 @@ public final class SpreadsheetColumnSettingsStrip {
         h.setStyle("-fx-alignment: CENTER_LEFT;");
         return h;
     }
+
+    /**
+     * 計画結果 JSON ビューアなど、{@link TableColumnOrderPersistence#planResultViewerSheetScopeKey} 単位で見出し列数を保存する。
+     */
+    public static HBox createForScope(
+            Runnable resetColumnWidths,
+            String sheetScopeKey,
+            AtomicInteger headerColumnCountHolder,
+            Consumer<Integer> onLeadingColumnCountChanged,
+            Runnable reorderColumns) {
+        int initial = TableColumnOrderPersistence.loadHeaderColumnCountForScope(sheetScopeKey);
+        headerColumnCountHolder.set(initial);
+        Spinner<Integer> headerSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 999, initial));
+        headerSpinner.setEditable(true);
+        headerSpinner
+                .valueProperty()
+                .addListener(
+                        (obs, o, v) -> {
+                            if (v == null) {
+                                return;
+                            }
+                            int hv = Math.max(0, v);
+                            headerColumnCountHolder.set(hv);
+                            TableColumnOrderPersistence.saveHeaderColumnCountForScope(sheetScopeKey, hv);
+                            onLeadingColumnCountChanged.accept(hv);
+                        });
+        Button reorder =
+                new Button(
+                        "列の並べ替え");
+        reorder.setOnAction(e -> {
+            if (reorderColumns != null) {
+                reorderColumns.run();
+            }
+        });
+        reorder.setManaged(reorderColumns != null);
+        reorder.setVisible(reorderColumns != null);
+
+        Button reset = new Button("列幅を既定に");
+        reset.setOnAction(
+                e -> {
+                    if (resetColumnWidths != null) {
+                        resetColumnWidths.run();
+                    }
+                });
+        HBox h =
+                new HBox(
+                        8,
+                        new Label("列設定"),
+                        new Label("見出し列数"),
+                        headerSpinner,
+                        reorder,
+                        reset);
+        h.setStyle("-fx-alignment: CENTER_LEFT;");
+        return h;
+    }
 }
