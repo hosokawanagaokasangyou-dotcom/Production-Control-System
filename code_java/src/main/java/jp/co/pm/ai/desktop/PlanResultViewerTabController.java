@@ -52,6 +52,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -218,29 +219,17 @@ public final class PlanResultViewerTabController {
                 .valueProperty()
                 .addListener((o, a, b) -> saveAndApply.run());
         if (planResultRowHeightSlider != null) {
-            planResultRowHeightSlider
-                    .valueProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                if (planResultRowHeightPctLabel != null) {
-                                    planResultRowHeightPctLabel.setText(
-                                            String.format(
-                                                    "%.0f%%",
-                                                    planResultRowHeightSlider.getValue()));
-                                }
-                                /* ドラッグ中は isValueChanging true のため保存しない */
-                                if (!planResultRowHeightSlider.isValueChanging()) {
-                                    saveAndApply.run();
-                                }
-                            });
-            planResultRowHeightSlider
-                    .valueChangingProperty()
-                    .addListener(
-                            (obs, wasChanging, changing) -> {
-                                if (Boolean.FALSE.equals(changing)) {
-                                    saveAndApply.run();
-                                }
-                            });
+            SliderCommittedChangeSupport.install(
+                    planResultRowHeightSlider,
+                    () -> {
+                        if (planResultRowHeightPctLabel != null) {
+                            planResultRowHeightPctLabel.setText(
+                                    String.format(
+                                            "%.0f%%",
+                                            planResultRowHeightSlider.getValue()));
+                        }
+                    },
+                    saveAndApply::run);
         }
         if (planResultCellWrapRadio != null) {
             planResultCellWrapRadio.selectedProperty().addListener((o, a, b) -> saveAndApply.run());
@@ -737,7 +726,15 @@ public final class PlanResultViewerTabController {
                     };
             st.setUserData(new Runnable[] {loadTable, loadGantt});
 
-            VBox sheetVBox = new VBox(4, strip, modeTabs);
+            Accordion columnSettingsAccordion = new Accordion();
+            TitledPane columnSettingsPane = new TitledPane("列設定", strip);
+            columnSettingsPane.setExpanded(false);
+            columnSettingsAccordion.getPanes().add(columnSettingsPane);
+            columnSettingsAccordion.setMaxWidth(Double.MAX_VALUE);
+            columnSettingsAccordion.getStyleClass().add("pm-plan-result-sheet-column-accordion");
+
+            VBox sheetVBox = new VBox(4, columnSettingsAccordion, modeTabs);
+            VBox.setVgrow(columnSettingsAccordion, Priority.NEVER);
             VBox.setVgrow(modeTabs, Priority.ALWAYS);
 
             modeTabs

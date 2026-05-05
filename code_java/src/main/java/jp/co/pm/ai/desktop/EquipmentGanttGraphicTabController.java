@@ -42,6 +42,7 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
@@ -212,46 +213,39 @@ public final class EquipmentGanttGraphicTabController {
         if (graphicZoomSlider == null) {
             return;
         }
-        graphicZoomSlider
-                .valueProperty()
-                .addListener(
-                        (obs, oldV, v) -> {
-                            graphicZoomPercentLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicZoomSlider);
+        Runnable graphicCommitted =
+                () -> {
+                    flushGraphicRebuildNow();
+                    scheduleEquipmentGraphicPersist();
+                };
 
-        graphicRowHeightSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicRowHeightPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicRowHeightSlider);
+        SliderCommittedChangeSupport.install(
+                graphicZoomSlider,
+                () ->
+                        graphicZoomPercentLabel.setText(
+                                String.format("%.0f%%", graphicZoomSlider.getValue())),
+                graphicCommitted);
 
-        graphicSlotWidthSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicSlotWidthPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicSlotWidthSlider);
+        SliderCommittedChangeSupport.install(
+                graphicRowHeightSlider,
+                () ->
+                        graphicRowHeightPctLabel.setText(
+                                String.format("%.0f%%", graphicRowHeightSlider.getValue())),
+                graphicCommitted);
 
-        graphicHeaderHeightSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicHeaderHeightPctLabel.setText(
-                                    String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicHeaderHeightSlider);
+        SliderCommittedChangeSupport.install(
+                graphicSlotWidthSlider,
+                () ->
+                        graphicSlotWidthPctLabel.setText(
+                                String.format("%.0f%%", graphicSlotWidthSlider.getValue())),
+                graphicCommitted);
+
+        SliderCommittedChangeSupport.install(
+                graphicHeaderHeightSlider,
+                () ->
+                        graphicHeaderHeightPctLabel.setText(
+                                String.format("%.0f%%", graphicHeaderHeightSlider.getValue())),
+                graphicCommitted);
 
         equipmentGraphicBarFontCombo
                 .valueProperty()
@@ -261,59 +255,40 @@ public final class EquipmentGanttGraphicTabController {
                             scheduleEquipmentGraphicPersist();
                         });
 
-        graphicBarFontPctSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicBarFontPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicBarFontPctSlider);
+        SliderCommittedChangeSupport.install(
+                graphicBarFontPctSlider,
+                () ->
+                        graphicBarFontPctLabel.setText(
+                                String.format("%.0f%%", graphicBarFontPctSlider.getValue())),
+                graphicCommitted);
 
-        graphicDateColSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicDateColWidthLabel.setText(
-                                    formatLeftColWidthLabel(v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicDateColSlider);
+        SliderCommittedChangeSupport.install(
+                graphicDateColSlider,
+                () ->
+                        graphicDateColWidthLabel.setText(
+                                formatLeftColWidthLabel(graphicDateColSlider.getValue())),
+                graphicCommitted);
 
-        graphicMachColSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicMachColWidthLabel.setText(
-                                    formatLeftColWidthLabel(v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicMachColSlider);
+        SliderCommittedChangeSupport.install(
+                graphicMachColSlider,
+                () ->
+                        graphicMachColWidthLabel.setText(
+                                formatLeftColWidthLabel(graphicMachColSlider.getValue())),
+                graphicCommitted);
 
-        graphicProcColSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicProcColWidthLabel.setText(
-                                    formatLeftColWidthLabel(v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicProcColSlider);
+        SliderCommittedChangeSupport.install(
+                graphicProcColSlider,
+                () ->
+                        graphicProcColWidthLabel.setText(
+                                formatLeftColWidthLabel(graphicProcColSlider.getValue())),
+                graphicCommitted);
 
-        graphicShiftWheelHSlider
-                .valueProperty()
-                .addListener(
-                        (o, a, v) -> {
-                            graphicShiftWheelHLabel.setText(
-                                    String.format("%.0f%%", v.doubleValue()));
-                            requestThrottledGraphicRebuild();
-                            scheduleEquipmentGraphicPersist();
-                        });
-        wireGraphicSliderFlushOnDragEnd(graphicShiftWheelHSlider);
+        SliderCommittedChangeSupport.install(
+                graphicShiftWheelHSlider,
+                () ->
+                        graphicShiftWheelHLabel.setText(
+                                String.format("%.0f%%", graphicShiftWheelHSlider.getValue())),
+                graphicCommitted);
     }
 
     private void populateEquipmentGraphicBarFontComboItems() {
@@ -419,19 +394,6 @@ public final class EquipmentGanttGraphicTabController {
         if (personBadgeShowCheckBox != null) {
             personBadgeShowCheckBox.setSelected(s.equipmentGanttPersonBadgeEnabled());
         }
-    }
-
-    private void wireGraphicSliderFlushOnDragEnd(Slider slider) {
-        if (slider == null) {
-            return;
-        }
-        slider.valueChangingProperty()
-                .addListener(
-                        (obs, wasChanging, changing) -> {
-                            if (!changing) {
-                                flushGraphicRebuildNow();
-                            }
-                        });
     }
 
     private void requestThrottledGraphicRebuild() {

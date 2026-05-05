@@ -40,6 +40,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.SkillsSheetMemberReader;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 
 /** 設備ガント・担当バッジのデザイン編集タブ（master skills メンバー表＋セッション保存）。 */
 public final class GanttPersonBadgeDesignTabController {
@@ -658,14 +659,14 @@ public final class GanttPersonBadgeDesignTabController {
         if (sl == null) {
             return;
         }
-        sl.valueProperty()
-                .addListener(
-                        (o, a, b) -> {
-                            if (lb != null) {
-                                lb.setText(String.format(fmt, sl.getValue()));
-                            }
-                            onChange.run();
-                        });
+        SliderCommittedChangeSupport.install(
+                sl,
+                () -> {
+                    if (lb != null) {
+                        lb.setText(String.format(fmt, sl.getValue()));
+                    }
+                },
+                onChange);
     }
 
     private void syncLabelsFromSliders() {

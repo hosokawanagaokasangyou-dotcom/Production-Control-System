@@ -28,6 +28,7 @@ import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.UiBadgePurpose;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 
 /**
  * 用途別 UI バッジのデザイン（実行タブのキャッシュ表示など）。
@@ -283,14 +284,14 @@ public final class UiBadgeDesignTabController {
         if (sl == null) {
             return;
         }
-        sl.valueProperty()
-                .addListener(
-                        (o, a, b) -> {
-                            if (lb != null) {
-                                lb.setText(String.format(fmt, sl.getValue()));
-                            }
-                            onChange.run();
-                        });
+        SliderCommittedChangeSupport.install(
+                sl,
+                () -> {
+                    if (lb != null) {
+                        lb.setText(String.format(fmt, sl.getValue()));
+                    }
+                },
+                onChange);
     }
 
     private void syncLabelsFromSliders() {
