@@ -540,6 +540,7 @@ public final class MainShellController {
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontFamily(),

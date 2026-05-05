@@ -116,6 +116,24 @@ public final class EquipmentGanttGraphicTabController {
 
     private Label graphicBarFontPctLabel;
 
+    private Slider graphicDateColSlider;
+
+    private Label graphicDateColWidthLabel;
+
+    private Slider graphicMachColSlider;
+
+    private Label graphicMachColWidthLabel;
+
+    private Slider graphicProcColSlider;
+
+    private Label graphicProcColWidthLabel;
+
+    /** 日付列幅スライダー上限（px）。0 は自動計測 */
+    private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
+
+    /** 機械名・工程名列幅スライダー上限（px）。0 は自動計測 */
+    private static final double SIDE_COL_WIDTH_SLIDER_MAX = 800;
+
     private PauseTransition equipmentGraphicPersistDelay;
 
     private boolean graphicWheelHookInstalled;
@@ -124,7 +142,7 @@ public final class EquipmentGanttGraphicTabController {
      * 設備グラフィックの {@link EquipmentGraphicGanttPane#build} は重いため、スライダー連続変更では
      * この間隔（ms）より頻繁には再構築しない。ドラッグ終了時は {@link #flushGraphicRebuildNow()} で必ず反映する。
      */
-    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 36L;
+    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 33L;
 
     private long graphicRebuildLastEmitMs;
 
@@ -233,9 +251,59 @@ public final class EquipmentGanttGraphicTabController {
                             scheduleEquipmentGraphicPersist();
                         });
         wireGraphicSliderFlushOnDragEnd(graphicBarFontPctSlider);
+
+        graphicDateColSlider = new Slider(0, DATE_COL_WIDTH_SLIDER_MAX, 0);
+        graphicDateColSlider.setPrefWidth(112);
+        graphicDateColWidthLabel = new Label(formatLeftColWidthLabel(0));
+        graphicDateColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicDateColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicDateColSlider);
+
+        graphicMachColSlider = new Slider(0, SIDE_COL_WIDTH_SLIDER_MAX, 0);
+        graphicMachColSlider.setPrefWidth(112);
+        graphicMachColWidthLabel = new Label(formatLeftColWidthLabel(0));
+        graphicMachColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicMachColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicMachColSlider);
+
+        graphicProcColSlider = new Slider(0, SIDE_COL_WIDTH_SLIDER_MAX, 0);
+        graphicProcColSlider.setPrefWidth(112);
+        graphicProcColWidthLabel = new Label(formatLeftColWidthLabel(0));
+        graphicProcColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicProcColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicProcColSlider);
+
         if (graphicToolbarHost != null) {
             graphicToolbarHost.getChildren().setAll(buildGraphicToolbar());
         }
+    }
+
+    private static String formatLeftColWidthLabel(double px) {
+        if (px <= 0.5) {
+            return "自動";
+        }
+        return String.format("%.0fpx", px);
     }
 
     void applyEquipmentGanttSession(DesktopSessionState s) {
@@ -287,6 +355,30 @@ public final class EquipmentGanttGraphicTabController {
                 }
                 equipmentGraphicBarFontCombo.setValue(fs);
             }
+        }
+        double dwc = s.equipmentGanttDateColWidth();
+        if (graphicDateColSlider != null
+                && Double.isFinite(dwc)
+                && dwc >= 0
+                && dwc <= DATE_COL_WIDTH_SLIDER_MAX) {
+            graphicDateColSlider.setValue(dwc);
+            graphicDateColWidthLabel.setText(formatLeftColWidthLabel(dwc));
+        }
+        double mwc = s.equipmentGanttMachineColWidth();
+        if (graphicMachColSlider != null
+                && Double.isFinite(mwc)
+                && mwc >= 0
+                && mwc <= SIDE_COL_WIDTH_SLIDER_MAX) {
+            graphicMachColSlider.setValue(mwc);
+            graphicMachColWidthLabel.setText(formatLeftColWidthLabel(mwc));
+        }
+        double pwc = s.equipmentGanttProcessColWidth();
+        if (graphicProcColSlider != null
+                && Double.isFinite(pwc)
+                && pwc >= 0
+                && pwc <= SIDE_COL_WIDTH_SLIDER_MAX) {
+            graphicProcColSlider.setValue(pwc);
+            graphicProcColWidthLabel.setText(formatLeftColWidthLabel(pwc));
         }
     }
 
@@ -345,12 +437,16 @@ public final class EquipmentGanttGraphicTabController {
         return graphicZoomSlider != null ? graphicZoomSlider.getValue() : 100d;
     }
 
+    double snapshotEquipmentGanttDateColWidth() {
+        return graphicDateColSlider != null ? graphicDateColSlider.getValue() : 0d;
+    }
+
     double snapshotEquipmentGanttMachineColWidth() {
-        return 0d;
+        return graphicMachColSlider != null ? graphicMachColSlider.getValue() : 0d;
     }
 
     double snapshotEquipmentGanttProcessColWidth() {
-        return 0d;
+        return graphicProcColSlider != null ? graphicProcColSlider.getValue() : 0d;
     }
 
     double snapshotEquipmentGanttRowHeightPercent() {
@@ -558,6 +654,9 @@ public final class EquipmentGanttGraphicTabController {
         Label rhLab = new Label("行の高さ");
         Label hhLab = new Label("見出し行の高さ");
         Label swLab = new Label("時刻列幅");
+        Label dateColLab = new Label("日付列幅");
+        Label machColLab = new Label("機械名列幅");
+        Label procColLab = new Label("工程名列幅");
         Label fontHint = new Label("バー文字フォント");
         Label bfLab = new Label("バー文字サイズ");
         bar.getChildren()
@@ -574,6 +673,15 @@ public final class EquipmentGanttGraphicTabController {
                         swLab,
                         graphicSlotWidthSlider,
                         graphicSlotWidthPctLabel,
+                        dateColLab,
+                        graphicDateColSlider,
+                        graphicDateColWidthLabel,
+                        machColLab,
+                        graphicMachColSlider,
+                        graphicMachColWidthLabel,
+                        procColLab,
+                        graphicProcColSlider,
+                        graphicProcColWidthLabel,
                         fontHint,
                         equipmentGraphicBarFontCombo,
                         bfLab,
@@ -606,7 +714,10 @@ public final class EquipmentGanttGraphicTabController {
                         slotPct,
                         snapshotEquipmentGanttBarFontFamily(),
                         barFp,
-                        headerPct);
+                        headerPct,
+                        snapshotEquipmentGanttDateColWidth(),
+                        snapshotEquipmentGanttMachineColWidth(),
+                        snapshotEquipmentGanttProcessColWidth());
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             contentPane.setCenter(graphicRootWrapper);

@@ -60,6 +60,7 @@ public final class DesktopSessionStateStore {
                     loadUiEnvRows(root),
                     loadStringList(root, "mainShellTabOrder"),
                     optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
+                    optionalDouble(root, "equipmentGanttDateColWidth", 0d),
                     optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
                     optionalDouble(root, "equipmentGanttProcessColWidth", 0d),
                     text(root, "equipmentGanttBarFontFamily"),
@@ -227,6 +228,10 @@ public final class DesktopSessionStateStore {
         double z = state.equipmentGanttGraphicZoomPercent();
         if (Double.isFinite(z) && z >= 50 && z <= 200) {
             root.put("equipmentGanttGraphicZoomPercent", z);
+        }
+        double dw = state.equipmentGanttDateColWidth();
+        if (Double.isFinite(dw) && dw > 0) {
+            root.put("equipmentGanttDateColWidth", dw);
         }
         double mw = state.equipmentGanttMachineColWidth();
         if (Double.isFinite(mw) && mw > 0) {

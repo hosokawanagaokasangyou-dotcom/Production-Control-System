@@ -32,8 +32,9 @@ import java.util.List;
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order
  * @param equipmentGanttGraphicZoomPercent 設備ガント・グラフィックタブの表示倍率（50〜200、0 は未保存として既定 100）
- * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は未保存として既定幅を使用）
- * @param equipmentGanttProcessColWidth 同タブ左・工程名列の幅（px、0 は未保存として既定幅を使用）
+ * @param equipmentGanttDateColWidth 同タブ左・日付列の幅（px、0 は自動計測）
+ * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は自動計測）
+ * @param equipmentGanttProcessColWidth 同タブ左・工程名列の幅（px、0 は自動計測）
  * @param equipmentGanttBarFontFamily 同タブタイムライン・バー内ラベル用フォントファミリ（空はシステム既定）
  * @param equipmentGanttBarFontPercent バー内ラベル文字サイズ（50〜200、100＝既定、0 は未保存として既定 100）
  * @param equipmentGanttRowHeightPercent データ行の高さ調整（50〜200、0 は未保存として既定 100）
@@ -66,6 +67,7 @@ public record DesktopSessionState(
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
         double equipmentGanttGraphicZoomPercent,
+        double equipmentGanttDateColWidth,
         double equipmentGanttMachineColWidth,
         double equipmentGanttProcessColWidth,
         String equipmentGanttBarFontFamily,
@@ -100,6 +102,7 @@ public record DesktopSessionState(
                 "",
                 List.of(),
                 List.of(),
+                0d,
                 0d,
                 0d,
                 0d,

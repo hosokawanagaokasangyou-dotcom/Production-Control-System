@@ -91,6 +91,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, w));
     }
 
+    /** UI からの列幅上書き（px）。正の有限値のみ採用し、それ以外は計測幅を使う */
+    private static double effectiveLeftColWidth(double measuredW, double overridePx) {
+        if (Double.isFinite(overridePx) && overridePx > 0.5) {
+            return Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, overridePx));
+        }
+        return measuredW;
+    }
+
     private record MeasuredLeftWidths(double dateW, double machW, double procW) {}
 
     private static MeasuredLeftWidths measureAutoLeftWidths(
@@ -283,6 +291,39 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String barFontFamily,
             double barFontPercent,
             double headerHeightPercent) {
+        return build(
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowHeightPercent,
+                slotWidthPercent,
+                barFontFamily,
+                barFontPercent,
+                headerHeightPercent,
+                0d,
+                0d,
+                0d);
+    }
+
+    /**
+     * @param dateColWidthOverridePx 日付列幅（px）。{@code <= 0} または非有限は自動計測を使用
+     * @param machineColWidthOverridePx 機械名列幅（px）。同上
+     * @param processColWidthOverridePx 工程名列幅（px）。同上
+     */
+    public static BorderPane build(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            DesktopTheme theme,
+            double zoom,
+            double rowHeightPercent,
+            double slotWidthPercent,
+            String barFontFamily,
+            double barFontPercent,
+            double headerHeightPercent,
+            double dateColWidthOverridePx,
+            double machineColWidthOverridePx,
+            double processColWidthOverridePx) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -319,9 +360,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         List<DateColumnPlan> datePlans = computeDateColumnPlans(effCols, parsed.displayRows());
         MeasuredLeftWidths auto =
                 measureAutoLeftWidths(effCols, parsed, machPlans, layout);
-        double dateW = auto.dateW();
-        double machW = auto.machW();
-        double procW = auto.procW();
+        double dateW = effectiveLeftColWidth(auto.dateW(), dateColWidthOverridePx);
+        double machW = effectiveLeftColWidth(auto.machW(), machineColWidthOverridePx);
+        double procW = effectiveLeftColWidth(auto.procW(), processColWidthOverridePx);
         double leftTotal = dateW + machW + procW;
 
         double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
@@ -612,7 +653,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         """
                         ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付列は見出しなし・データは反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
-                        行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
+                        行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。日付・機械名・工程名列幅もスライダーで指定できます（先頭は自動）。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
