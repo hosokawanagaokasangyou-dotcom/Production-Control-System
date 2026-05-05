@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.TreeSet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 
 /**
@@ -86,6 +88,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 events.add(te);
             }
         }
+
+        events = applyGapAwareMachiningLabels(events);
 
         List<LocalDate> sortedDates = new ArrayList<>();
         for (JsonNode dn : datesNode) {
@@ -181,6 +185,112 @@ public final class EquipmentGanttContractSheetTableBuilder {
 
         return new EquipmentGanttSheetBundle(
                 new JsonTableIo.SheetTable(columns, rows), badgeSlotRows);
+    }
+
+    /**
+     * 同一日・同一機械・同一依頼の加工イベントを時系列で並べ、直前イベント終了より後に開始がある場合は
+     * 「休憩で途切れた」別ブロックとして分割する。各ブロックの延長は {@code Σ units_done×unit_m}。
+     */
+    private static List<TimelineEvent> applyGapAwareMachiningLabels(List<TimelineEvent> raw) {
+        Map<Integer, GapSegMeta> metaByIndex = new HashMap<>();
+        Map<String, List<Integer>> group = new LinkedHashMap<>();
+        for (int i = 0; i < raw.size(); i++) {
+            TimelineEvent e = raw.get(i);
+            if (!TimelineEvent.isMachiningDispatch(e)) {
+                continue;
+            }
+            String k = TimelineEvent.gapGroupKey(e);
+            group.computeIfAbsent(k, kk -> new ArrayList<>()).add(i);
+        }
+        // #region agent log
+        int dbgLeft = 5;
+        // #endregion
+        for (Map.Entry<String, List<Integer>> en : group.entrySet()) {
+            List<Integer> ix = en.getValue();
+            ix.sort(Comparator.comparing(i -> raw.get(i).start));
+            List<List<Integer>> segments = new ArrayList<>();
+            List<Integer> cur = new ArrayList<>();
+            LocalDateTime prevEnd = null;
+            for (int ii : ix) {
+                TimelineEvent ev = raw.get(ii);
+                if (prevEnd != null && ev.start.isAfter(prevEnd)) {
+                    segments.add(cur);
+                    cur = new ArrayList<>();
+                }
+                cur.add(ii);
+                prevEnd = ev.end;
+            }
+            if (!cur.isEmpty()) {
+                segments.add(cur);
+            }
+            int segCount = segments.size();
+            for (int si = 0; si < segments.size(); si++) {
+                double sum = 0.0;
+                for (int ii : segments.get(si)) {
+                    TimelineEvent ev = raw.get(ii);
+                    double ud = ev.unitsDone != null ? ev.unitsDone : 0.0;
+                    double um = ev.unitM != null ? ev.unitM : 0.0;
+                    sum += ud * um;
+                }
+                for (int ii : segments.get(si)) {
+                    metaByIndex.put(ii, new GapSegMeta(si, segCount, sum));
+                }
+            }
+            // #region agent log
+            if (segCount > 1 && dbgLeft > 0) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("groupKey", en.getKey());
+                d.put("segments", segCount);
+                List<Double> sums = new ArrayList<>();
+                for (List<Integer> seg : segments) {
+                    double s = 0.0;
+                    for (int ii : seg) {
+                        TimelineEvent ev = raw.get(ii);
+                        double ud = ev.unitsDone != null ? ev.unitsDone : 0.0;
+                        double um = ev.unitM != null ? ev.unitM : 0.0;
+                        s += ud * um;
+                    }
+                    sums.add(s);
+                }
+                d.put("sums", sums);
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        "38d31c",
+                        "H1",
+                        "EquipmentGanttContractSheetTableBuilder.applyGapAwareMachiningLabels",
+                        "machining gap segments",
+                        d);
+                dbgLeft--;
+            }
+            // #endregion
+        }
+        List<TimelineEvent> out = new ArrayList<>(raw.size());
+        for (int i = 0; i < raw.size(); i++) {
+            TimelineEvent e = raw.get(i);
+            GapSegMeta g = metaByIndex.get(i);
+            if (g == null) {
+                out.add(e);
+            } else {
+                out.add(e.withGapSegment(g.segmentIndex, g.segmentCount, g.segmentSumM));
+            }
+        }
+        return out;
+    }
+
+    private record GapSegMeta(int segmentIndex, int segmentCount, double segmentSumM) {}
+
+    /** 休憩で途切れた複数ブロックの見出し（3 ブロック目以降は「区間N」）。 */
+    private static String segmentPhaseLabel(int idx, int total) {
+        if (total <= 1) {
+            return "";
+        }
+        if (idx == 0) {
+            return "休憩前";
+        }
+        if (idx == 1) {
+            return "休憩後";
+        }
+        return "区間" + (idx + 1);
     }
 
     private static List<String> emptyBadgeSlots(List<LocalTime> slotStarts) {
@@ -426,6 +536,14 @@ public final class EquipmentGanttContractSheetTableBuilder {
         /** サブ担当など（JSON {@code sub}）。 */
         final String sub;
         final List<List<LocalDateTime>> breaks;
+        /**
+         * 時間ギャップで分割した加工ブロックの 0 始まりインデックス。{@code -1} は未使用（単一ブロックまたは非加工）。
+         */
+        final int gapSegmentIndex;
+        /** {@link #gapSegmentIndex} を付けたときのブロック数（2 以上で休憩前／休憩後表記）。 */
+        final int gapSegmentCount;
+        /** 同一ギャップブロック内の {@code Σ units_done×unit_m}（m）。 */
+        final double gapSegmentSumM;
 
         TimelineEvent(
                 LocalDate date,
@@ -441,7 +559,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 boolean labelLenMIsCumulative,
                 String op,
                 String sub,
-                List<List<LocalDateTime>> breaks) {
+                List<List<LocalDateTime>> breaks,
+                int gapSegmentIndex,
+                int gapSegmentCount,
+                double gapSegmentSumM) {
             this.date = date;
             this.machine = machine;
             this.taskId = taskId;
@@ -456,6 +577,45 @@ public final class EquipmentGanttContractSheetTableBuilder {
             this.op = op != null ? op : "";
             this.sub = sub != null ? sub : "";
             this.breaks = breaks;
+            this.gapSegmentIndex = gapSegmentIndex;
+            this.gapSegmentCount = gapSegmentCount;
+            this.gapSegmentSumM = gapSegmentSumM;
+        }
+
+        TimelineEvent withGapSegment(int segmentIndex, int segmentCount, double segmentSumM) {
+            return new TimelineEvent(
+                    date,
+                    machine,
+                    taskId,
+                    eventKind,
+                    start,
+                    end,
+                    unitM,
+                    unitsDone,
+                    totalUnits,
+                    labelLenM,
+                    labelLenMIsCumulative,
+                    op,
+                    sub,
+                    breaks,
+                    segmentIndex,
+                    segmentCount,
+                    segmentSumM);
+        }
+
+        static boolean isMachiningDispatch(TimelineEvent e) {
+            return e != null
+                    && "machining".equals(e.eventKind)
+                    && e.taskId != null
+                    && !e.taskId.isBlank();
+        }
+
+        static String gapGroupKey(TimelineEvent e) {
+            return String.valueOf(e.date)
+                    + "|"
+                    + (e.machine != null ? e.machine : "")
+                    + "|"
+                    + (e.taskId != null ? e.taskId : "");
         }
 
         static TimelineEvent from(JsonNode n) {
@@ -515,7 +675,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     labelCumulative,
                     op,
                     sub,
-                    breaks);
+                    breaks,
+                    -1,
+                    0,
+                    Double.NaN);
         }
 
         static String text(JsonNode n, String field) {
@@ -586,6 +749,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
 
         /**
          * タイムライン1マスに表示する文字列（依頼NO＋契約に基づく総加工量m）。
+         * 加工が時間ギャップで複数ブロックに分かれるときは「休憩前／休憩後」とブロック合計m。
          */
         String timelineCellLabel() {
             if ("machine_daily_startup".equals(eventKind)) {
@@ -596,6 +760,27 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 return "日次点検";
             }
             String tid = taskId != null ? taskId.strip() : "";
+            if (labelLenM != null && !labelLenMIsCumulative) {
+                String len = formatLengthM(labelLenM);
+                if (!len.isEmpty()) {
+                    return tid.isEmpty() ? len + "m" : tid + " " + len + "m";
+                }
+            }
+            if ("machining".equals(eventKind)
+                    && gapSegmentIndex >= 0
+                    && gapSegmentCount > 1
+                    && !Double.isNaN(gapSegmentSumM)
+                    && gapSegmentSumM > 1e-12) {
+                String phase =
+                        EquipmentGanttContractSheetTableBuilder.segmentPhaseLabel(
+                                gapSegmentIndex, gapSegmentCount);
+                String len = formatLengthM(gapSegmentSumM);
+                if (!phase.isEmpty() && !len.isEmpty()) {
+                    return tid.isEmpty()
+                            ? phase + " " + len + "m"
+                            : tid + " " + phase + " " + len + "m";
+                }
+            }
             Double totalM = eventTotalLengthMeters();
             if (totalM == null
                     && labelLenMIsCumulative
