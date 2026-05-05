@@ -160,7 +160,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
-        return build(columns, rows, DesktopTheme.LIGHT, 1.0, 100, 100, "", 100);
+        return build(columns, rows, DesktopTheme.LIGHT, 1.0, 100, 100, "", 100, 100);
     }
 
     public static BorderPane build(
@@ -168,7 +168,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ObservableList<ObservableList<String>> rows,
             DesktopTheme theme,
             double zoom) {
-        return build(columns, rows, theme, zoom, 100, 100, "", 100);
+        return build(columns, rows, theme, zoom, 100, 100, "", 100, 100);
     }
 
     /**
@@ -178,6 +178,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param slotWidthPercent 時刻列の幅スケール（50〜500）
      * @param barFontFamily バー上ラベル用フォントファミリ（null／空で既定）
      * @param barFontPercent バー内ラベル文字サイズ（50〜200、100＝既定）
+     * @param headerHeightPercent 見出し行の高さ（50〜200、100＝既定）
      */
     public static BorderPane build(
             List<String> columns,
@@ -188,7 +189,37 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double slotWidthPercent,
             String barFontFamily) {
         return build(
-                columns, rows, theme, zoom, rowHeightPercent, slotWidthPercent, barFontFamily, 100);
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowHeightPercent,
+                slotWidthPercent,
+                barFontFamily,
+                100,
+                100);
+    }
+
+    /** 見出し行高さは既定 100%（ヘッダ調整スライダーなしの呼び出し向け） */
+    public static BorderPane build(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            DesktopTheme theme,
+            double zoom,
+            double rowHeightPercent,
+            double slotWidthPercent,
+            String barFontFamily,
+            double barFontPercent) {
+        return build(
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowHeightPercent,
+                slotWidthPercent,
+                barFontFamily,
+                barFontPercent,
+                100);
     }
 
     public static BorderPane build(
@@ -199,7 +230,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double rowHeightPercent,
             double slotWidthPercent,
             String barFontFamily,
-            double barFontPercent) {
+            double barFontPercent,
+            double headerHeightPercent) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -223,7 +255,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         LayoutMetrics layout =
                 LayoutMetrics.fromScales(
-                        zoom, rowHeightPercent, slotWidthPercent, barFontPercent);
+                        zoom,
+                        rowHeightPercent,
+                        slotWidthPercent,
+                        barFontPercent,
+                        headerHeightPercent);
         GanttPalette palette = GanttPalette.forTheme(theme);
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
@@ -483,7 +519,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付データは反時計回り90°（列幅は見出し「日付」のみ）。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
-                        行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
+                        行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
@@ -702,7 +738,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int progressGap) {
 
         static LayoutMetrics fromZoom(double zoomIn) {
-            return fromScales(zoomIn, 100, 100, 100);
+            return fromScales(zoomIn, 100, 100, 100, 100);
         }
 
         /**
@@ -710,12 +746,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
          * @param rowHeightPercent 行の高さ 50〜200（100＝基準、0／負は 100 扱い）
          * @param slotWidthPercent 時刻 1 スロット列幅 50〜500
          * @param barFontPercent バー内文字 50〜200（100＝基準）
+         * @param headerHeightPercent 見出し行の高さ 50〜200（100＝基準）
          */
         static LayoutMetrics fromScales(
                 double zoomIn,
                 double rowHeightPercent,
                 double slotWidthPercent,
-                double barFontPercent) {
+                double barFontPercent,
+                double headerHeightPercent) {
             double z = Math.clamp(zoomIn, 0.5, 2.0);
             double rPct =
                     rowHeightPercent <= 0 || rowHeightPercent > 500
@@ -729,16 +767,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     barFontPercent <= 0 || barFontPercent > 500
                             ? 100
                             : Math.clamp(barFontPercent, 50, 200);
+            double hdrPct =
+                    headerHeightPercent <= 0 || headerHeightPercent > 500
+                            ? 100
+                            : Math.clamp(headerHeightPercent, 50, 200);
             double rScale = rPct / 100.0;
             double sScale = sPct / 100.0;
             double bfScale = bfPct / 100.0;
+            double hdrScale = hdrPct / 100.0;
             double barPx = Math.max(8, 9 * z * bfScale);
             return new LayoutMetrics(
                     z,
                     BASE_SLOT_WIDTH * z * sScale,
                     BASE_ROW_HEIGHT * z * rScale,
                     BASE_SECTION_ROW_HEIGHT * z * rScale,
-                    BASE_HEADER_HEIGHT * z,
+                    BASE_HEADER_HEIGHT * z * hdrScale,
                     BASE_LABEL_MIN_WIDTH * z,
                     BASE_LABEL_MAX_WIDTH * z,
                     11 * z,

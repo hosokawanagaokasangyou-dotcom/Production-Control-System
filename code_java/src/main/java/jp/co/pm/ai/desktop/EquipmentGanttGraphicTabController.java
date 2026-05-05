@@ -106,6 +106,10 @@ public final class EquipmentGanttGraphicTabController {
 
     private Label graphicSlotWidthPctLabel;
 
+    private Slider graphicHeaderHeightSlider;
+
+    private Label graphicHeaderHeightPctLabel;
+
     private ComboBox<String> equipmentGraphicBarFontCombo;
 
     private Slider graphicBarFontPctSlider;
@@ -170,6 +174,20 @@ public final class EquipmentGanttGraphicTabController {
                             scheduleEquipmentGraphicPersist();
                         });
 
+        graphicHeaderHeightSlider = new Slider(50, 200, 100);
+        graphicHeaderHeightSlider.setPrefWidth(140);
+        graphicHeaderHeightSlider.setShowTickLabels(false);
+        graphicHeaderHeightPctLabel = new Label("100%");
+        graphicHeaderHeightSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicHeaderHeightPctLabel.setText(
+                                    String.format("%.0f%%", v.doubleValue()));
+                            rebuildGraphicView();
+                            scheduleEquipmentGraphicPersist();
+                        });
+
         equipmentGraphicBarFontCombo = new ComboBox<>();
         List<String> families = new ArrayList<>(Font.getFamilies());
         Collections.sort(families);
@@ -215,6 +233,11 @@ public final class EquipmentGanttGraphicTabController {
             graphicRowHeightSlider.setValue(rh);
             graphicRowHeightPctLabel.setText(String.format("%.0f%%", rh));
         }
+        double hh = s.equipmentGanttHeaderHeightPercent();
+        if (graphicHeaderHeightSlider != null && Double.isFinite(hh) && hh >= 50 && hh <= 200) {
+            graphicHeaderHeightSlider.setValue(hh);
+            graphicHeaderHeightPctLabel.setText(String.format("%.0f%%", hh));
+        }
         double sw = s.equipmentGanttSlotWidthPercent();
         if (graphicSlotWidthSlider != null && Double.isFinite(sw) && sw >= 50 && sw <= 500) {
             graphicSlotWidthSlider.setValue(sw);
@@ -253,6 +276,10 @@ public final class EquipmentGanttGraphicTabController {
 
     double snapshotEquipmentGanttRowHeightPercent() {
         return graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttHeaderHeightPercent() {
+        return graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
     }
 
     double snapshotEquipmentGanttSlotWidthPercent() {
@@ -450,6 +477,7 @@ public final class EquipmentGanttGraphicTabController {
         bar.setPadding(new Insets(0, 0, 8, 0));
         Label z = new Label("表示倍率");
         Label rhLab = new Label("行の高さ");
+        Label hhLab = new Label("見出し行の高さ");
         Label swLab = new Label("時刻列幅");
         Label fontHint = new Label("バー文字フォント");
         Label bfLab = new Label("バー文字サイズ");
@@ -461,6 +489,9 @@ public final class EquipmentGanttGraphicTabController {
                         rhLab,
                         graphicRowHeightSlider,
                         graphicRowHeightPctLabel,
+                        hhLab,
+                        graphicHeaderHeightSlider,
+                        graphicHeaderHeightPctLabel,
                         swLab,
                         graphicSlotWidthSlider,
                         graphicSlotWidthPctLabel,
@@ -479,6 +510,8 @@ public final class EquipmentGanttGraphicTabController {
         double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
         double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
         double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
+        double headerPct =
+                graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
         double barFp =
                 graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
         DesktopTheme theme =
@@ -493,7 +526,8 @@ public final class EquipmentGanttGraphicTabController {
                         rowPct,
                         slotPct,
                         snapshotEquipmentGanttBarFontFamily(),
-                        barFp);
+                        barFp,
+                        headerPct);
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             contentPane.setCenter(graphicRootWrapper);
