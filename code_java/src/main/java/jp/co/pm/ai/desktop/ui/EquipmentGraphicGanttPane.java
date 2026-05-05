@@ -41,6 +41,11 @@ import javafx.scene.layout.StackPane;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import java.util.function.Function;
 
+import javafx.application.Platform;
+import javafx.geometry.Bounds;
+import javafx.geometry.Point2D;
+import javafx.scene.Node;
+
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
@@ -80,6 +85,104 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final Scene MEASURE_SCENE = new Scene(MEASURE_ROOT, 4000, 4000);
 
     private EquipmentGraphicGanttPane() {}
+
+    /** {@link #build} のルート {@link BorderPane} から再構築前に保存するスクロール位置。 */
+    public record EquipmentGanttScrollState(double hValue, double vValue) {}
+
+    /** 時刻軸（右ペイン）の {@link ScrollPane}。縦スクロールは左ペインと双方向バインド済み。 */
+    public record EquipmentGanttViewHandles(ScrollPane timelineScroll) {}
+
+    /**
+     * Ctrl+ホイールで拡大率を変えるとき、マウス下の内容位置を維持するためのアンカー（コンテンツ座標の X とビューポート内 X）。
+     */
+    public record HorizontalZoomAnchor(double anchorContentX, double viewportMouseX) {}
+
+    /**
+     * 再構築前のガント {@link BorderPane} から横・縦スクロール位置を取得する。
+     *
+     * @param graphicRoot {@link #build} の戻り値。無効時は (0,0)
+     */
+    public static EquipmentGanttScrollState snapshotScroll(BorderPane graphicRoot) {
+        if (graphicRoot == null) {
+            return new EquipmentGanttScrollState(0.0, 0.0);
+        }
+        Object ud = graphicRoot.getUserData();
+        if (!(ud instanceof EquipmentGanttViewHandles handles)) {
+            return new EquipmentGanttScrollState(0.0, 0.0);
+        }
+        ScrollPane sp = handles.timelineScroll();
+        return new EquipmentGanttScrollState(sp.getHvalue(), sp.getVvalue());
+    }
+
+    /**
+     * 再構築直後のガントにスクロールを戻す。レイアウト確定後に合わせるため {@link Platform#runLater} を使う。
+     *
+     * @param zoomAnchorOrNull 非 null のときは横位置のみアンカー基準（マウス中心ズーム）。縦は常に {@code snap} を使う。
+     */
+    public static void restoreScrollAfterRebuild(
+            BorderPane graphicRoot,
+            EquipmentGanttScrollState snap,
+            HorizontalZoomAnchor zoomAnchorOrNull) {
+        if (graphicRoot == null || snap == null) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    Object ud = graphicRoot.getUserData();
+                    if (!(ud instanceof EquipmentGanttViewHandles handles)) {
+                        return;
+                    }
+                    ScrollPane sp = handles.timelineScroll();
+                    sp.setVvalue(Math.clamp(snap.vValue(), 0.0, 1.0));
+                    if (zoomAnchorOrNull != null) {
+                        Node content = sp.getContent();
+                        Bounds vp = sp.getViewportBounds();
+                        if (content == null || vp == null) {
+                            sp.setHvalue(Math.clamp(snap.hValue(), 0.0, 1.0));
+                            return;
+                        }
+                        double contentW = content.getLayoutBounds().getWidth();
+                        double viewportW = vp.getWidth();
+                        double excess = contentW - viewportW;
+                        if (!(excess > 1.0) || !Double.isFinite(excess)) {
+                            sp.setHvalue(0.0);
+                            return;
+                        }
+                        double scrollNew =
+                                zoomAnchorOrNull.anchorContentX() - zoomAnchorOrNull.viewportMouseX();
+                        sp.setHvalue(Math.clamp(scrollNew / excess, 0.0, 1.0));
+                    } else {
+                        sp.setHvalue(Math.clamp(snap.hValue(), 0.0, 1.0));
+                    }
+                });
+    }
+
+    /**
+     * マウス位置を基準にズームしたあと横スクロールを合わせるため、アンカーを求める。
+     *
+     * @return 取得できないときは null
+     */
+    public static HorizontalZoomAnchor computeHorizontalZoomAnchor(ScrollPane timelineScroll, ScrollEvent e) {
+        if (timelineScroll == null || e == null) {
+            return null;
+        }
+        Bounds vp = timelineScroll.getViewportBounds();
+        if (vp == null || !(vp.getWidth() > 0.0)) {
+            return null;
+        }
+        Point2D local = timelineScroll.sceneToLocal(e.getSceneX(), e.getSceneY());
+        double mouseInVpX = local.getX() - vp.getMinX();
+        Node content = timelineScroll.getContent();
+        if (content == null) {
+            return null;
+        }
+        double contentW = content.getLayoutBounds().getWidth();
+        double viewportW = vp.getWidth();
+        double excess = Math.max(0.0, contentW - viewportW);
+        double scrollPx = timelineScroll.getHvalue() * excess;
+        double anchorContentX = scrollPx + mouseInVpX;
+        return new HorizontalZoomAnchor(anchorContentX, mouseInVpX);
+    }
 
     public static double clampMachineColumnWidth(double w) {
         return clampSideCol(w, DEFAULT_MACHINE_COLUMN_WIDTH);
@@ -744,6 +847,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         mainColumn.setPadding(new Insets(4));
         mainColumn.setCache(false);
         root.setCenter(mainColumn);
+        root.setUserData(new EquipmentGanttViewHandles(rightBodyScroll));
 
         Label hint =
                 new Label(

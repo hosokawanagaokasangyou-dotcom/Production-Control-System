@@ -23,6 +23,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
@@ -190,6 +191,12 @@ public final class EquipmentGanttGraphicTabController {
 
     /** {@link #applyEquipmentGanttSession} 等で複数スライダーを一度に動かすときの再構築抑制 */
     private boolean suppressGraphicRebuild;
+
+    /**
+     * Ctrl+ホイールで拡大率変更した直後の再構築のみ、横スクロールをマウス位置基準で復元する。
+     * {@link #applyGraphicCenter} で消費して null に戻す。
+     */
+    private EquipmentGraphicGanttPane.HorizontalZoomAnchor pendingHorizontalZoomAnchor;
 
     @FXML
     private void initialize() {
@@ -661,6 +668,7 @@ public final class EquipmentGanttGraphicTabController {
         badgeRowsForCurrentGraphic = null;
         graphicRootWrapper = null;
         graphicWheelHookInstalled = false;
+        pendingHorizontalZoomAnchor = null;
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
@@ -670,6 +678,15 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane == null || st == null) {
             return;
         }
+        BorderPane oldGantt =
+                graphicRootWrapper != null && graphicRootWrapper.getCenter() instanceof BorderPane ob
+                        ? ob
+                        : null;
+        EquipmentGraphicGanttPane.EquipmentGanttScrollState scrollSnap =
+                EquipmentGraphicGanttPane.snapshotScroll(oldGantt);
+        EquipmentGraphicGanttPane.HorizontalZoomAnchor zoomAnchor = pendingHorizontalZoomAnchor;
+        pendingHorizontalZoomAnchor = null;
+
         double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
         double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
         double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
@@ -711,6 +728,7 @@ public final class EquipmentGanttGraphicTabController {
             contentPane.setCenter(graphicRootWrapper);
         }
         graphicRootWrapper.setCenter(gantt);
+        EquipmentGraphicGanttPane.restoreScrollAfterRebuild(gantt, scrollSnap, zoomAnchor);
         installGraphicWheelZoomIfNeeded();
     }
 
@@ -729,15 +747,32 @@ public final class EquipmentGanttGraphicTabController {
                     if (graphicZoomSlider == null) {
                         return;
                     }
+                    double cur = graphicZoomSlider.getValue();
                     double delta = e.getDeltaY() > 0 ? 5 : -5;
-                    double v = Math.clamp(graphicZoomSlider.getValue() + delta, 50, 200);
-                    graphicZoomSlider.setValue(v);
+                    double next = Math.clamp(cur + delta, 50, 200);
+                    if (next == cur) {
+                        return;
+                    }
+                    BorderPane oldGantt =
+                            graphicRootWrapper.getCenter() instanceof BorderPane ob ? ob : null;
+                    ScrollPane sp = null;
+                    if (oldGantt != null
+                            && oldGantt.getUserData()
+                                    instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h) {
+                        sp = h.timelineScroll();
+                    }
+                    pendingHorizontalZoomAnchor =
+                            sp != null
+                                    ? EquipmentGraphicGanttPane.computeHorizontalZoomAnchor(sp, e)
+                                    : null;
+                    graphicZoomSlider.setValue(next);
                     scheduleEquipmentGraphicPersist();
                 });
     }
 
     private void rebuildGraphicView() {
         if (lastGraphicSheet == null || contentPane == null) {
+            pendingHorizontalZoomAnchor = null;
             return;
         }
         applyGraphicCenter(lastGraphicSheet);
