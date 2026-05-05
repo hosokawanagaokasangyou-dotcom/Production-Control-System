@@ -12,6 +12,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -25,6 +26,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
@@ -267,7 +269,45 @@ public final class GanttPersonBadgeDesignTabController {
                     return new ReadOnlyStringWrapper(custom ? "個別" : "既定継承");
                 });
 
-        badgeMemberTable.getColumns().setAll(colMember, colBadge, colDetect, colStyle);
+        TableColumn<BadgeDesignTableItem, BadgeDesignTableItem> colPreview = new TableColumn<>("プレビュー");
+        colPreview.setPrefWidth(112);
+        colPreview.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue()));
+        colPreview.setCellFactory(
+                col ->
+                        new TableCell<BadgeDesignTableItem, BadgeDesignTableItem>() {
+                            @Override
+                            protected void updateItem(BadgeDesignTableItem item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setText(null);
+                                    setGraphic(null);
+                                    return;
+                                }
+                                setText(null);
+                                PersonBadgeStyle st = styleForTableRowPreview(item);
+                                String txt = previewBadgeText(item);
+                                setGraphic(PersonBadgeNodeFactory.createBadge(txt, st, 1.0, 12.0));
+                            }
+                        });
+
+        badgeMemberTable.getColumns().setAll(colMember, colBadge, colDetect, colStyle, colPreview);
+    }
+
+    /** 表のプレビュー列用：選択行は UI の現在値、それ以外は保存済みの解決スタイル。 */
+    private PersonBadgeStyle styleForTableRowPreview(BadgeDesignTableItem item) {
+        if (item == null) {
+            return PersonBadgeStyle.defaultStyle();
+        }
+        BadgeDesignTableItem sel =
+                badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
+        if (sel != null && item == sel) {
+            return buildStyleFromUiFields();
+        }
+        PersonBadgeStyle g = globalStyle != null ? globalStyle : PersonBadgeStyle.defaultStyle();
+        if (item.globalFallback) {
+            return g;
+        }
+        return perMemberStyles.getOrDefault(item.memberKeyNormalized, g);
     }
 
     void bindShell(MainShellController mainShell) {
