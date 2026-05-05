@@ -765,8 +765,21 @@ public final class EquipmentGanttGraphicTabController {
                             sp != null
                                     ? EquipmentGraphicGanttPane.computeHorizontalZoomAnchor(sp, e)
                                     : null;
-                    graphicZoomSlider.setValue(next);
-                    scheduleEquipmentGraphicPersist();
+                    /*
+                     * 拡大率の数値・スライダーを即時反映し、重い build は次フレームへ遅延する
+                     *（同一イベント内で Canvas 再構築するとツールバーの追従が遅く見える）。
+                     */
+                    suppressGraphicRebuild = true;
+                    try {
+                        graphicZoomSlider.setValue(next);
+                        scheduleEquipmentGraphicPersist();
+                    } finally {
+                        suppressGraphicRebuild = false;
+                    }
+                    Platform.runLater(
+                            () -> {
+                                flushGraphicRebuildNow();
+                            });
                 });
     }
 
