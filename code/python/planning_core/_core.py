@@ -29151,6 +29151,16 @@ def _stage2_publish_excel_enabled(stage2_output_root) -> bool:
     return v not in ("0", "false", "no", "off", "none")
 
 
+def _stage2_write_excel_gantt_sheets_enabled() -> bool:
+    """計画ブックに「結果_設備ガント」「結果_設備ガント_実績明細」を Excel シートとして含めるか。
+
+    既定は False（設備ガント(グラフィック)が描画契約 JSON を参照するため Excel への重複出力を省略）。
+    従来どおりブックへ書くときは ``PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS=1``。
+    """
+    v = (os.environ.get("PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS") or "0").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _generate_plan_impl(
     tasks_df_override=None,
     stage2_output_root=None,
@@ -31802,14 +31812,22 @@ def _generate_plan_impl(
 
             from planning_core.gantt_render_contract import (
                 make_gantt_render_contract,
-                render_gantt_sheet_from_contract,
                 write_gantt_contract_json,
             )
 
+            _write_excel_gantt_sheets = _stage2_write_excel_gantt_sheets_enabled()
+
             if not stage2_output_root and _publish_plan_xlsx:
-                logging.info(
-                    "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
-                )
+                if _write_excel_gantt_sheets:
+                    logging.info(
+                        "段階2: 設備ガントチャートを生成（データ量により数分かかることがあります）"
+                    )
+                else:
+                    logging.info(
+                        "段階2: 計画ブックへの設備ガント Excel シートは省略します（"
+                        "設備ガント(グラフィック)用の契約 JSON のみ出力。ブックへ含める場合は "
+                        "PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS=1）。"
+                    )
                 try:
                     from planning_core.excel_trace_task import (
                         log_gantt_label_specs as _excel_trace_gantt_specs,
@@ -31845,19 +31863,25 @@ def _generate_plan_impl(
                         )
                 except Exception as _e_egc:
                     logging.warning("段階2: 設備ガント契約 JSON 出力をスキップ: %s", _e_egc)
-                gantt_tl_label_specs, gantt_tl_day_blocks = render_gantt_sheet_from_contract(
-                    writer, _equipment_gantt_contract
-                )
-                try:
-                    from planning_core.excel_trace_task import (
-                        log_gantt_label_specs as _excel_trace_gantt_specs,
+                if _write_excel_gantt_sheets:
+                    from planning_core.gantt_render_contract import (
+                        render_gantt_sheet_from_contract,
                     )
 
-                    _excel_trace_gantt_specs(
-                        gantt_tl_label_specs, "after_write_results_equipment_gantt_sheet"
+                    gantt_tl_label_specs, gantt_tl_day_blocks = (
+                        render_gantt_sheet_from_contract(writer, _equipment_gantt_contract)
                     )
-                except Exception:
-                    pass
+                    try:
+                        from planning_core.excel_trace_task import (
+                            log_gantt_label_specs as _excel_trace_gantt_specs,
+                        )
+
+                        _excel_trace_gantt_specs(
+                            gantt_tl_label_specs,
+                            "after_write_results_equipment_gantt_sheet",
+                        )
+                    except Exception:
+                        pass
             else:
                 try:
                     from planning_core.excel_trace_task import append as _excel_trace_append
@@ -31875,9 +31899,14 @@ def _generate_plan_impl(
                     pass
 
             if detail_timeline_events:
-                logging.info(
-                    "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
-                )
+                if _write_excel_gantt_sheets:
+                    logging.info(
+                        "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
+                    )
+                else:
+                    logging.info(
+                        "段階2: 計画ブックへの実績明細ガント Excel シートは省略します（契約 JSON のみ）。"
+                    )
 
                 _actual_detail_gantt_contract = make_gantt_render_contract(
                     timeline_events=[],
@@ -31905,10 +31934,17 @@ def _generate_plan_impl(
                         )
                 except Exception as _e_adgc:
                     logging.warning("段階2: 実績明細ガント契約 JSON 出力をスキップ: %s", _e_adgc)
-                (
-                    gantt_detail_tl_label_specs,
-                    gantt_detail_tl_day_blocks,
-                ) = render_gantt_sheet_from_contract(writer, _actual_detail_gantt_contract)
+                if _write_excel_gantt_sheets:
+                    from planning_core.gantt_render_contract import (
+                        render_gantt_sheet_from_contract,
+                    )
+
+                    (
+                        gantt_detail_tl_label_specs,
+                        gantt_detail_tl_day_blocks,
+                    ) = render_gantt_sheet_from_contract(
+                        writer, _actual_detail_gantt_contract
+                    )
 
             for sheet_name, ws_out in writer.sheets.items():
                 if sheet_name in (
@@ -31919,6 +31955,8 @@ def _generate_plan_impl(
                 _apply_output_font_to_result_sheet(ws_out)
 
             # 段階2 結果ブックの Excel 表現は以下を維持すること（簡略化・削除しない）。
+            # - 「結果_設備ガント」系シートは既定では含めない（PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS で任意復活）。
+            #   表示は設備ガント(グラフィック)＋描画契約 JSON を正とする。
             # - 条件付き書式に相当する着色（設備時間割の定常外・準備・機械別の強調、タスク一覧の
             #   未配台行・履歴 need/surplus・セル不一致・納期判定ハイライトなど）
             # - ハイパーリンク（結果_タスク一覧の依頼NO → 結果_設備毎の時間割）
