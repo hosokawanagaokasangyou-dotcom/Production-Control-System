@@ -523,4 +523,37 @@ public final class SpreadsheetTabularSupport {
             }
         }
     }
+
+    /**
+     * {@link #applyPlanResultGridPresentation} 後、内側 {@link TableView} が古い行高を保持することがあるため、
+     * グリッド由来の行高を再適用し、表示を更新する（スクロールしなくても反映されるようにする）。
+     */
+    public static void refreshSpreadsheetAfterRowPresentationChange(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        Runnable flush =
+                () -> {
+                    view.resizeRowsToDefault();
+                    refreshEmbeddedTableViewsRecursive(view, 0);
+                    view.requestLayout();
+                };
+        Platform.runLater(flush);
+        Platform.runLater(() -> Platform.runLater(flush));
+    }
+
+    private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {
+        if (n == null || depth > 24) {
+            return;
+        }
+        if (n instanceof TableView<?> tv) {
+            tv.refresh();
+            tv.requestLayout();
+        }
+        if (n instanceof Parent p) {
+            for (Node c : p.getChildrenUnmodifiable()) {
+                refreshEmbeddedTableViewsRecursive(c, depth + 1);
+            }
+        }
+    }
 }
