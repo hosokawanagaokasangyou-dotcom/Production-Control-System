@@ -13,8 +13,10 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!-- ビルド・実行は JDK 26（Temurin 等）を推奨。mvn が古い JDK のときは JAVA_HOME を更新すること -->
+    <!-- ビルド・実行は JDK 26（Temurin 等）。mvn / ./mvnw が参照する JVM は JAVA_HOME（未設定時は PATH の java） -->
     <maven.compiler.release>26</maven.compiler.release>
+    <!-- maven-enforcer-plugin: 実行中の java -version がこの範囲外なら即失敗（コンパイラより先に検出） -->
+    <jdk.version.range>[26,)</jdk.version.range>
     <!-- OpenJFX 24.x（JDK とバイトコード release を合わせること） -->
     <javafx.version>24.0.2</javafx.version>
     <controlsfx.version>11.2.3</controlsfx.version>
@@ -185,6 +187,31 @@
         <configuration>
           <release>${maven.compiler.release}</release>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>enforce-jdk-matches-release</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <phase>validate</phase>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>${jdk.version.range}</version>
+                  <message>
+                    実行中の JDK が ${jdk.version.range} ではありません。mvn が使う JVM は JAVA_HOME（なければ PATH の java）。Temurin 等の JDK ${maven.compiler.release} に合わせてください。
+                  </message>
+                </requireJavaVersion>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.openjfx</groupId>
