@@ -15,12 +15,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 
 /**
@@ -122,10 +120,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
         List<Map<String, String>> rows = new ArrayList<>();
         List<List<String>> badgeSlotRows = new ArrayList<>();
 
-        // #region agent log
-        final AtomicInteger agentLogBudget = new AtomicInteger(8);
-        // #endregion
-
         List<LocalDate> graphicDays = graphicCalendarDates(events, sortedDates);
         for (LocalDate day : graphicDays) {
             Map<String, String> section = new LinkedHashMap<>();
@@ -176,29 +170,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         }
                         cell = ev.timelineCellLabel(winStart, winEnd);
                         badgeCell = ev.badgeSlotFragment();
-                        // #region agent log
-                        if (agentLogBudget.getAndDecrement() > 0) {
-                            java.util.Map<String, Object> dbg = new java.util.LinkedHashMap<>();
-                            dbg.put("taskId", ev.taskId != null ? ev.taskId : "");
-                            dbg.put("unit_m", ev.unitM);
-                            dbg.put("units_done", ev.unitsDone);
-                            dbg.put("label_len_m", ev.labelLenM);
-                            dbg.put("label_cumulative", ev.labelLenMIsCumulative);
-                            dbg.put("winStart", winStart.toString());
-                            dbg.put("winEnd", winEnd.toString());
-                            dbg.put("cell", cell);
-                            dbg.put(
-                                    "slotLenM",
-                                    ev.slotProcessingMetersForOverlap(winStart, winEnd));
-                            AgentDebugLog.appendStructured(
-                                    Map.of(),
-                                    "38d31c",
-                                    "H1",
-                                    "EquipmentGanttContractSheetTableBuilder.java:slot",
-                                    "equipment gantt timeline cell label",
-                                    dbg);
-                        }
-                        // #endregion
                         break;
                     }
                     row.put(col, cell);
