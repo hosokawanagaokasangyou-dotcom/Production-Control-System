@@ -370,9 +370,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double leftTotal = dateW + machW + procW;
 
         double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
+        /*
+         * 幅・高さが 0 に近い／Prism の Canvas バックバッファ生成失敗時に NGCanvas で NPE になるのを避ける。
+         * GPU ドライバ由来の不具合が残る場合は JVM に -Dprism.order=sw を試す。
+         */
+        final double canvasTimelineW = Math.max(1.0, timelineWidth);
+        final double canvasHeaderH = Math.max(1.0, layout.headerHeight);
 
-        Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
-        drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
+        Canvas headerCanvas = new Canvas(canvasTimelineW, canvasHeaderH);
+        headerCanvas.setCache(false);
+        drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, canvasTimelineW, layout, palette);
 
         Label hDate = new Label("");
         Label hMach = new Label("機械名");
@@ -557,7 +564,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             pl.setWrapText(true);
             fitFontIntoColumn(pl, procTxt, procW - 8, cellBodyH - 4, layout.rowLabelFontSize);
 
-            Canvas rowCanvas = new Canvas(timelineWidth, cellBodyH);
+            double rowCanvasH = Math.max(1.0, cellBodyH);
+            Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
+            rowCanvas.setCache(false);
             GraphicsContext gcx = rowCanvas.getGraphicsContext2D();
             gcx.translate(0, timelineOuterPad);
             drawTimelineRow(
