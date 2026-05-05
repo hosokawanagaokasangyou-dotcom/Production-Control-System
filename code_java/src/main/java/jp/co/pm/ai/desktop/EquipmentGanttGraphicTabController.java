@@ -660,7 +660,7 @@ public final class EquipmentGanttGraphicTabController {
                             + names.size());
             // #region agent log
             try {
-                Map<String, ?> dg = new LinkedHashMap<>();
+                Map<String, Object> dg = new LinkedHashMap<>();
                 dg.put("planPath", planPath.toString());
                 dg.put("sheetUsed", sheetUsed);
                 dg.put("eligibleSheetCount", names.size());

@@ -466,7 +466,7 @@ public final class DispatchInteractiveTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         // #region agent log
         try {
-            Map<String, ?> d0 = new LinkedHashMap<>();
+            Map<String, Object> d0 = new LinkedHashMap<>();
             d0.put(
                     "watchTaskIds",
                     "JR260501,Y5-4,Y5-5,Y5-14,Y5-6,Y5-3,Y5-8");
@@ -722,8 +722,10 @@ public final class DispatchInteractiveTabController {
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         // #region agent log
                         try {
-                            Map<String, ?> d1 = new LinkedHashMap<>();
-                            d1.put("shortagesPath", shortagesPath != null ? shortagesPath : "");
+                            Map<String, Object> d1 = new LinkedHashMap<>();
+                            d1.put(
+                                    "shortagesPath",
+                                    shortagesPath != null ? shortagesPath : "");
                             AgentDebugLog.appendStructured(
                                     shell.snapshotUiEnv(),
                                     "327eec",
