@@ -76,6 +76,12 @@
                         <fx:include fx:id="excludeRulesTab" source="ExcludeRulesTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabSpecialRules" closable="false"
+                     text="特別ルール">
+                    <content>
+                        <fx:include fx:id="specialRulesTab" source="SpecialRulesTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabActualsStatus" closable="false"
                      text="実績DATA・明細の取得状態">
                     <content>

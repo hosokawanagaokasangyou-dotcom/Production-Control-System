@@ -66,6 +66,12 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_EXCLUDE_RULES_JSON = "PM_AI_EXCLUDE_RULES_JSON";
 
+    /** リポジトリ直下の人間向け要約（デスクトップ「特別ルール」タブと運用で同期）。 */
+    public static final String SPECIAL_RULES_SUMMARY_MD = "特別ルール.md";
+
+    /** リポジトリ直下の L 番号列挙（{@code planning_core/_core.py} のコメントと対応）。 */
+    public static final String SPECIAL_RULES_ENUMERATED_MD = "特別ルール列挙.md";
+
     /** Absolute path to master workbook ({@code master.xlsm}); overrides basename-only {@code MASTER_WORKBOOK_FILE}. */
     public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
 
@@ -681,6 +687,16 @@ public final class AppPaths {
         }
         Path repo = code.getParent();
         return repo != null ? repo : code;
+    }
+
+    /** {@link #resolveRepoRoot(Map)}/{@link #SPECIAL_RULES_SUMMARY_MD} */
+    public static Path resolveSpecialRulesSummaryMd(Map<String, String> ui) {
+        return resolveRepoRoot(ui).resolve(SPECIAL_RULES_SUMMARY_MD).toAbsolutePath().normalize();
+    }
+
+    /** {@link #resolveRepoRoot(Map)}/{@link #SPECIAL_RULES_ENUMERATED_MD} */
+    public static Path resolveSpecialRulesEnumeratedMd(Map<String, String> ui) {
+        return resolveRepoRoot(ui).resolve(SPECIAL_RULES_ENUMERATED_MD).toAbsolutePath().normalize();
     }
 
     /**

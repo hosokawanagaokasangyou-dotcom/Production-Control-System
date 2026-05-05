@@ -151,6 +151,9 @@ public final class MainShellController {
     private ExcludeRulesTabController excludeRulesTabController;
 
     @FXML
+    private SpecialRulesTabController specialRulesTabController;
+
+    @FXML
     private ActualsStatusTabController actualsStatusTabController;
 
     @FXML
@@ -200,6 +203,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabExcludeRules;
+
+    @FXML
+    private Tab mainShellTabSpecialRules;
 
     @FXML
     private Tab mainShellTabActualsStatus;
@@ -322,6 +328,7 @@ public final class MainShellController {
         planInputTabController.bindShell(this);
         stage1PreviewTabController.bindShell(this);
         excludeRulesTabController.bindShell(this);
+        specialRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         machineCalendarTabController.bindShell(this);
@@ -770,6 +777,9 @@ public final class MainShellController {
         if (t == mainShellTabExcludeRules) {
             return MainShellTabId.EXCLUDE_RULES;
         }
+        if (t == mainShellTabSpecialRules) {
+            return MainShellTabId.SPECIAL_RULES;
+        }
         if (t == mainShellTabActualsStatus) {
             return MainShellTabId.ACTUALS_STATUS;
         }
@@ -809,6 +819,7 @@ public final class MainShellController {
             case PLAN_INPUT -> mainShellTabPlanInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
+            case SPECIAL_RULES -> mainShellTabSpecialRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case MACHINE_CALENDAR_JSON -> mainShellTabMachineCalendarJson;

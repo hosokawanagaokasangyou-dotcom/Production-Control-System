@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- 特別ルール.md / 特別ルール列挙.md の閲覧（UTF-8）。 -->
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.SpecialRulesTabController">
+    <center>
+        <VBox spacing="8.0">
+            <padding>
+                <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+            </padding>
+            <Label wrapText="true"
+                   text="リポジトリ直下の Markdown を表示します。列挙を更新したら「特別ルール.md」の要約も揃えてください。"/>
+            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                <fx:define>
+                    <ToggleGroup fx:id="sourceToggle"/>
+                </fx:define>
+                <RadioButton fx:id="summaryRadio" mnemonicParsing="false" selected="true"
+                             text="要約（特別ルール.md）" toggleGroup="$sourceToggle"/>
+                <RadioButton fx:id="enumeratedRadio" mnemonicParsing="false"
+                             text="列挙（特別ルール列挙.md）" toggleGroup="$sourceToggle"/>
+                <Button fx:id="reloadButton" mnemonicParsing="false" text="再読込"
+                        onAction="#onReloadAction"/>
+            </HBox>
+            <Label fx:id="pathLabel" wrapText="true" styleClass="pm-muted-label"/>
+            <TextArea fx:id="bodyArea" editable="false" prefRowCount="22" wrapText="true" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </center>
+</BorderPane>

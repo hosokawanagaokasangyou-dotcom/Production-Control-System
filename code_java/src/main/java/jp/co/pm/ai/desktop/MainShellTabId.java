@@ -11,6 +11,7 @@ public enum MainShellTabId {
     PLAN_INPUT("planInput"),
     STAGE1_PREVIEW("stage1Preview"),
     EXCLUDE_RULES("excludeRules"),
+    SPECIAL_RULES("specialRules"),
     ACTUALS_STATUS("actualsStatus"),
     RESULT_DISPATCH("resultDispatch"),
     PLAN_RESULT_VIEWER("planResultViewer"),
