@@ -56,6 +56,8 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeGlowSpread DropShadow の spread（0〜1）
  * @param equipmentGanttPersonBadgeStylesByLabel バッジ表示文字のみの旧キー（後方互換・読込のみ参照し得る）
  * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
+ * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
+ * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -105,7 +107,9 @@ public record DesktopSessionState(
         double equipmentGanttPersonBadgeGlowRadius,
         double equipmentGanttPersonBadgeGlowSpread,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel,
-        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey) {
+        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey,
+        String stage1NetworkCacheBadgeLabel,
+        PersonBadgeStyle stage1NetworkCacheBadgeStyle) {
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -216,6 +220,8 @@ public record DesktopSessionState(
                 d.glowRadius(),
                 d.glowSpread(),
                 Map.of(),
-                Map.of());
+                Map.of(),
+                "",
+                PersonBadgeStyle.networkSourceCacheBadgeDefault());
     }
 }

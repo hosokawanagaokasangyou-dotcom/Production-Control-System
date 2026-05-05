@@ -47,4 +47,20 @@ public record PersonBadgeStyle(
                 14.0,
                 0.28);
     }
+
+    /** 実行タブ「ソースキャッシュ」バッジの初期配色（ネットワーク不可フォールバックの視認性）。 */
+    public static PersonBadgeStyle networkSourceCacheBadgeDefault() {
+        return new PersonBadgeStyle(
+                "",
+                92,
+                "#ea580c",
+                "#fffbeb",
+                "#c2410c",
+                1.2,
+                8.0,
+                false,
+                "#fdba74",
+                12.0,
+                0.22);
+    }
 }

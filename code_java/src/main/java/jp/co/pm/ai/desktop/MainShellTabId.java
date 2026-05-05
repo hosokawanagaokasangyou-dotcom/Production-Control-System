@@ -5,6 +5,7 @@ package jp.co.pm.ai.desktop;
  */
 public enum MainShellTabId {
     RUN("run"),
+    UI_BADGE_DESIGN("uiBadgeDesign"),
     ENV("env"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),

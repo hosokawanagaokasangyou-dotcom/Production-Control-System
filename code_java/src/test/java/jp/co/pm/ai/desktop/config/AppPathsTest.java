@@ -47,6 +47,7 @@ class AppPathsTest {
     @Test
     void planInputAndSidecarPaths_useFilePickerNotFolder() {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
         assertTrue(AppPaths.isPlanInputPathEnvKey(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH));
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH));

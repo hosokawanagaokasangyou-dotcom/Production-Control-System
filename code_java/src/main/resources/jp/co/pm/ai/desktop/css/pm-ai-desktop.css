@@ -115,6 +115,10 @@
     -fx-padding: 2;
 }
 
+.pm-stage1-network-cache-badge-host {
+    -fx-padding: 0 10 0 0;
+}
+
 .button.pm-stage-run-button {
     -fx-cursor: hand;
     -fx-font-size: 15px;

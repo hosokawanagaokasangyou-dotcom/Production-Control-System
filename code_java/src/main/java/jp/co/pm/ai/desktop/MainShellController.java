@@ -48,6 +48,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
@@ -174,10 +175,16 @@ public final class MainShellController {
     private GanttPersonBadgeDesignTabController ganttPersonBadgeDesignTabController;
 
     @FXML
+    private UiBadgeDesignTabController uiBadgeDesignTabController;
+
+    @FXML
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
     private Tab mainShellTabRun;
+
+    @FXML
+    private Tab mainShellTabUiBadgeDesign;
 
     @FXML
     private Tab mainShellTabEnv;
@@ -227,6 +234,10 @@ public final class MainShellController {
 
     /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
     private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
+
+    /** {@link #childEnvForPython(Map)} の直近結果（実行タブのキャッシュ表示・ログ用）。 */
+    private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
+
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
@@ -269,6 +280,9 @@ public final class MainShellController {
             equipmentGanttGraphicTabController.bindShell(this);
             if (ganttPersonBadgeDesignTabController != null) {
                 ganttPersonBadgeDesignTabController.bindShell(this);
+            }
+            if (uiBadgeDesignTabController != null) {
+                uiBadgeDesignTabController.bindShell(this);
             }
 
             operatorCardTabController.bindShell(this);
@@ -490,6 +504,9 @@ public final class MainShellController {
         if (ganttPersonBadgeDesignTabController != null) {
             ganttPersonBadgeDesignTabController.applyPersonBadgeDesignSession(s);
         }
+        if (uiBadgeDesignTabController != null) {
+            uiBadgeDesignTabController.applyUiBadgeSession(s);
+        }
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -534,6 +551,9 @@ public final class MainShellController {
     private DesktopSessionState collectDesktopSession() {
         if (ganttPersonBadgeDesignTabController != null) {
             ganttPersonBadgeDesignTabController.flushBadgeEditsBeforeSnapshot();
+        }
+        if (uiBadgeDesignTabController != null) {
+            uiBadgeDesignTabController.flushEditsBeforeSnapshot();
         }
         return new DesktopSessionState(
                 planInputTabController.snapshotPlanInputPath(),
@@ -585,7 +605,13 @@ public final class MainShellController {
                 snapshotPersonBadgeGlowRadius(),
                 snapshotPersonBadgeGlowSpread(),
                 snapshotPersonBadgeStylesByLabel(),
-                snapshotPersonBadgeStylesByMemberKey());
+                snapshotPersonBadgeStylesByMemberKey(),
+                uiBadgeDesignTabController != null
+                        ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeLabel()
+                        : "",
+                uiBadgeDesignTabController != null
+                        ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
+                        : PersonBadgeStyle.networkSourceCacheBadgeDefault());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -716,6 +742,9 @@ public final class MainShellController {
         if (t == mainShellTabRun) {
             return MainShellTabId.RUN;
         }
+        if (t == mainShellTabUiBadgeDesign) {
+            return MainShellTabId.UI_BADGE_DESIGN;
+        }
         if (t == mainShellTabEnv) {
             return MainShellTabId.ENV;
         }
@@ -764,6 +793,7 @@ public final class MainShellController {
         }
         return switch (id) {
             case RUN -> mainShellTabRun;
+            case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
             case ENV -> mainShellTabEnv;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
@@ -1218,7 +1248,26 @@ public final class MainShellController {
                                     mainRunTabController.getScriptDirField().getText().trim()));
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
-            RunRequest req = new RunRequest(py, dir, script, wb, childEnvForPython(uiRun));
+            Map<String, String> childEnv = childEnvForPython(uiRun);
+            if (lastNetworkSourceResolution != null) {
+                for (String line : lastNetworkSourceResolution.logLines()) {
+                    appendLog(line);
+                }
+            }
+            if (STAGE1.equals(script)) {
+                NetworkSourceDirResolver.Result res = lastNetworkSourceResolution;
+                boolean show =
+                        res != null && (res.taskInputFromCache() || res.actualDetailFromCache());
+                mainRunTabController.setStage1NetworkCacheBadge(
+                        show,
+                        uiBadgeDesignTabController != null
+                                ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
+                                : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                        uiBadgeDesignTabController != null
+                                ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeLabel()
+                                : "キャッシュ");
+            }
+            RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
 
             PythonProcessRunner.runAsync(
@@ -1493,6 +1542,9 @@ public final class MainShellController {
             m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
         }
         overlayPlanInputTabPathsIfEnvBlank(m);
+        NetworkSourceDirResolver.Result netRes = NetworkSourceDirResolver.resolve(m);
+        lastNetworkSourceResolution = netRes;
+        NetworkSourceDirResolver.applyToEnv(m, netRes);
         String pauseOnErr = m.get(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR);
         if (pauseOnErr == null || pauseOnErr.isBlank()) {
             m.put(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR, "0");

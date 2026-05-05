@@ -26,6 +26,7 @@ import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
@@ -33,12 +34,15 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
+import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 /** Run/log tab; layout in {@code MainRunTab.fxml}. */
 public final class MainRunTabController {
@@ -81,6 +85,9 @@ public final class MainRunTabController {
 
     @FXML
     private TextField stage2MemberScheduleField;
+
+    @FXML
+    private StackPane stage1NetworkCacheBadgeHost;
 
     @FXML
     private Button stage1RunButton;
@@ -585,6 +592,34 @@ public final class MainRunTabController {
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(busy);
         }
+    }
+
+    /**
+     * ネットワークソースが使えずキャッシュを読んだとき、段階1ボタン左にバッジを表示する。
+     */
+    void setStage1NetworkCacheBadge(boolean visible, PersonBadgeStyle style, String labelText) {
+        Platform.runLater(
+                () -> {
+                    if (stage1NetworkCacheBadgeHost == null) {
+                        return;
+                    }
+                    stage1NetworkCacheBadgeHost.getChildren().clear();
+                    stage1NetworkCacheBadgeHost.setManaged(visible);
+                    stage1NetworkCacheBadgeHost.setVisible(visible);
+                    if (!visible || style == null) {
+                        return;
+                    }
+                    String t =
+                            labelText != null && !labelText.isBlank() ? labelText.strip() : "キャッシュ";
+                    StackPane graphic = PersonBadgeNodeFactory.createBadge(t, style, 1.0, 14.0);
+                    Tooltip.install(
+                            graphic,
+                            new Tooltip(
+                                    "PM_AI_TASK_INPUT_SOURCE_DIR または "
+                                            + "PM_AI_ACTUAL_DETAIL_SOURCE_DIR "
+                                            + "を参照できず、リポジトリ配下の最終キャッシュを使用して段階1／段階2に渡します。"));
+                    stage1NetworkCacheBadgeHost.getChildren().add(graphic);
+                });
     }
 
     /**

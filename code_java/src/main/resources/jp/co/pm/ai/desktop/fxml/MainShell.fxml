@@ -42,6 +42,11 @@
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabUiBadgeDesign" closable="false" text="UIバッジ">
+                    <content>
+                        <fx:include fx:id="uiBadgeDesignTab" source="UiBadgeDesignTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabEnv" closable="false" text="環境変数">
                     <content>
                         <fx:include fx:id="envTab" source="EnvTab.fxml"/>

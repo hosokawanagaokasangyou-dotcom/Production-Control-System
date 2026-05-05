@@ -85,7 +85,9 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
-                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"));
+                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
+                    text(root, "stage1NetworkCacheBadgeLabel"),
+                    loadStage1NetworkCacheBadgeStyle(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -116,6 +118,7 @@ public final class DesktopSessionStateStore {
             putUiEnvRows(root, state.uiEnvRows());
             putMainShellTabOrder(root, state.mainShellTabOrder());
             putEquipmentGanttGraphicPrefs(root, state);
+            putStage1NetworkCacheBadgePrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -332,6 +335,35 @@ public final class DesktopSessionStateStore {
             }
         }
         return Map.copyOf(out);
+    }
+
+    private static PersonBadgeStyle loadStage1NetworkCacheBadgeStyle(JsonNode root) {
+        JsonNode n = root.get("stage1NetworkCacheBadgeStyle");
+        if (n == null || !n.isObject()) {
+            return PersonBadgeStyle.networkSourceCacheBadgeDefault();
+        }
+        PersonBadgeStyle st = loadPersonBadgeStyleObject(n);
+        return st != null ? st : PersonBadgeStyle.networkSourceCacheBadgeDefault();
+    }
+
+    private static void putStage1NetworkCacheBadgePrefs(ObjectNode root, DesktopSessionState state) {
+        put(root, "stage1NetworkCacheBadgeLabel", state.stage1NetworkCacheBadgeLabel());
+        PersonBadgeStyle st = state.stage1NetworkCacheBadgeStyle();
+        if (st == null) {
+            return;
+        }
+        ObjectNode o = root.putObject("stage1NetworkCacheBadgeStyle");
+        o.put("fontFamily", st.fontFamily() != null ? st.fontFamily() : "");
+        o.put("fontPercent", st.fontPercent());
+        o.put("fillHex", st.fillHex());
+        o.put("textHex", st.textHex());
+        o.put("strokeHex", st.strokeHex());
+        o.put("strokeWidth", st.strokeWidth());
+        o.put("cornerRadius", st.cornerRadius());
+        o.put("pill", st.pill());
+        o.put("glowColorHex", st.glowColorHex());
+        o.put("glowRadius", st.glowRadius());
+        o.put("glowSpread", st.glowSpread());
     }
 
     private static PersonBadgeStyle loadPersonBadgeStyleObject(JsonNode o) {

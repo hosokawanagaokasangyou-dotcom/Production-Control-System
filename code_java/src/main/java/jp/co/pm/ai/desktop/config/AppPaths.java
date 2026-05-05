@@ -99,6 +99,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_PLAN_INPUT_PATH = "PM_AI_PLAN_INPUT_PATH";
 
     /**
+     * Stage1 加工計画DATA相当の単一ファイル（{@code PM_AI_PROCESSING_PLAN_PATH}）。未設定時は Python が
+     * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} 内の最新表を選択する。
+     */
+    public static final String KEY_PM_AI_PROCESSING_PLAN_PATH = "PM_AI_PROCESSING_PLAN_PATH";
+
+    /**
      * Single-file override for actual-detail workbook ({@code PM_AI_ACTUAL_DETAIL_WORKBOOK}); takes precedence over
      * {@link #KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} when set.
      */
@@ -206,6 +212,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV);
         s.add(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK);
         s.add(KEY_PM_AI_PLAN_INPUT_PATH);
+        s.add(KEY_PM_AI_PROCESSING_PLAN_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
