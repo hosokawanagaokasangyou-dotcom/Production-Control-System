@@ -3,6 +3,9 @@ package jp.co.pm.ai.desktop;
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Map;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -28,13 +31,35 @@ public class PmAiFxApp extends Application {
      * </ul>
      */
     private static void configurePrismAfterProbe() {
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                "d1d903",
+                "H3",
+                "PmAiFxApp.configurePrismAfterProbe:entry",
+                "Prism設定前フラグ",
+                Map.of(
+                        "skipGpuProbe",
+                        Boolean.getBoolean("pm.ai.javafx.prism.skipGpuProbe"),
+                        "prismGpuOptIn",
+                        prismGpuOptIn(),
+                        "osName",
+                        System.getProperty("os.name", ""),
+                        "hasDisplay",
+                        System.getenv("DISPLAY") != null && !System.getenv("DISPLAY").isBlank(),
+                        "hasWayland",
+                        System.getenv("WAYLAND_DISPLAY") != null
+                                && !System.getenv("WAYLAND_DISPLAY").isBlank()));
+        // #endregion
         if (Boolean.getBoolean("pm.ai.javafx.prism.skipGpuProbe")) {
             applyLegacyPrismConfiguration();
+            logPrismConfigured("skipGpuProbe→legacy");
             return;
         }
         if (prismGpuOptIn()) {
             applyPrismGpuPipelineOrder();
             PrismGpuBootstrapStatus.recordGpuOptIn();
+            logPrismConfigured("opt-in GPU");
             return;
         }
         boolean ok = GpuProbeLauncher.runGpuCanvasProbe();
@@ -44,6 +69,27 @@ public class PmAiFxApp extends Application {
         } else {
             System.setProperty("prism.order", "sw");
         }
+        logPrismConfigured(ok ? "probe OK" : "probe NG→sw");
+    }
+
+    private static void logPrismConfigured(String branch) {
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                "d1d903",
+                "OUTCOME",
+                "PmAiFxApp.configurePrismAfterProbe:end",
+                "Prism設定完了",
+                Map.of(
+                        "branch",
+                        branch,
+                        "prismOrder",
+                        System.getProperty("prism.order", ""),
+                        "mode",
+                        PrismGpuBootstrapStatus.getMode().name(),
+                        "runTabSummary",
+                        PrismGpuBootstrapStatus.runTabSummary()));
+        // #endregion
     }
 
     /** プローブ無効時の従来どおりの設定（opt-in GPU または JVM の prism.order / 既定 sw）。 */

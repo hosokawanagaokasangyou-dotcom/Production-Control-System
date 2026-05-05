@@ -1,5 +1,9 @@
 package jp.co.pm.ai.desktop;
 
+import java.util.Map;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+
 /**
  * {@link PmAiFxApp#main} で Prism（GPU / sw）を決めた結果を保持し、実行・ログタブ表示に使う。
  */
@@ -31,6 +35,15 @@ public final class PrismGpuBootstrapStatus {
     static void recordSoftwareAfterProbe(String reason) {
         mode = Mode.SOFTWARE_AFTER_PROBE;
         detail = reason != null ? reason : "";
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                "d1d903",
+                "H1-H5",
+                "PrismGpuBootstrapStatus.recordSoftwareAfterProbe",
+                "GPUプローブ失敗・ソフトウェア描画へ",
+                Map.of("reason", detail));
+        // #endregion
     }
 
     static void recordGpuOptIn() {

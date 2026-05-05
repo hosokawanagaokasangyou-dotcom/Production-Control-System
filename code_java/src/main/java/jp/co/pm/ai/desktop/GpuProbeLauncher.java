@@ -5,7 +5,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * 現在の JVM と同じクラスパスで {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
@@ -20,6 +23,19 @@ final class GpuProbeLauncher {
      * @return GPU パイプラインで Canvas プローブが成功したら true
      */
     static boolean runGpuCanvasProbe() {
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                "d1d903",
+                "H5",
+                "GpuProbeLauncher.runGpuCanvasProbe:start",
+                "子プロセスGPUプローブ",
+                Map.of(
+                        "probePrismOrder",
+                        prismGpuOrderForProbe(),
+                        "osName",
+                        System.getProperty("os.name", "")));
+        // #endregion
         List<String> cmd;
         try {
             cmd = buildCommand();
@@ -37,11 +53,29 @@ final class GpuProbeLauncher {
             drainStream(process.getErrorStream());
             boolean done = process.waitFor(PROBE_TIMEOUT_SEC, TimeUnit.SECONDS);
             if (!done) {
+                // #region agent log
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        "d1d903",
+                        "H2",
+                        "GpuProbeLauncher.runGpuCanvasProbe",
+                        "プローブwaitForがタイムアウト",
+                        Map.of("timeoutSec", PROBE_TIMEOUT_SEC));
+                // #endregion
                 process.destroyForcibly();
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テストタイムアウト");
                 return false;
             }
             int code = process.exitValue();
+            // #region agent log
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "d1d903",
+                    "H1",
+                    "GpuProbeLauncher.runGpuCanvasProbe",
+                    "子プロセス終了",
+                    Map.of("exitCode", code));
+            // #endregion
             if (code != 0) {
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テスト終了コード=" + code);
                 return false;

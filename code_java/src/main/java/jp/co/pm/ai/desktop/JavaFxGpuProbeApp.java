@@ -1,7 +1,10 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -109,6 +112,19 @@ public final class JavaFxGpuProbeApp extends Application {
         launch(args);
         Throwable fail = asyncFailure.get();
         if (fail != null) {
+            // #region agent log
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "d1d903",
+                    "H1",
+                    "JavaFxGpuProbeApp.main",
+                    "Canvas.snapshot等で失敗",
+                    Map.of(
+                            "type",
+                            fail.getClass().getName(),
+                            "message",
+                            fail.getMessage() != null ? fail.getMessage() : ""));
+            // #endregion
             fail.printStackTrace(System.err);
             System.exit(1);
         }
