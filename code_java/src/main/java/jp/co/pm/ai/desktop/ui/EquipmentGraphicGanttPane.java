@@ -174,7 +174,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         VBox wrapMach = new VBox(hMach);
         VBox wrapProc = new VBox(hProc);
+        /* SplitPane の子が min=pref=max で幅固定だと区切りを動かせない。幅の上下限は divider 側で与える。 */
+        wrapMach.setMinSize(0, 0);
+        wrapProc.setMinSize(0, 0);
         SplitPane headSplit = new SplitPane(wrapMach, wrapProc);
+        headSplit.setMinSize(0, 0);
         headSplit.setMinWidth(leftTotal);
         headSplit.setPrefWidth(leftTotal);
         headSplit.setMaxHeight(layout.headerHeight);
@@ -426,9 +430,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static void applySideHeaderStyle(
             Label lb, double colW, LayoutMetrics layout, GanttPalette palette) {
-        lb.setMinWidth(colW);
+        lb.setMinWidth(MIN_SIDE_COL_WIDTH);
         lb.setPrefWidth(colW);
-        lb.setMaxWidth(colW);
+        lb.setMaxWidth(Double.MAX_VALUE);
         lb.setAlignment(Pos.CENTER_LEFT);
         lb.setPadding(new Insets(4 * layout.zoom, 6 * layout.zoom, 4 * layout.zoom, 6 * layout.zoom));
         lb.setFont(Font.font(layout.rowLabelFontSize * 1.05));
