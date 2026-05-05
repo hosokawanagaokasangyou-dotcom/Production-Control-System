@@ -84,6 +84,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # - 段階2の配台ループ本体は変更しない。試行はフラグ・読込・結果表の上書きで差し替える。
 # - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日行を基準とし、入力が 1 行に潰れないようマージする。
 # - 機械カレンダーは * 系セルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
+# - 配台試行時はチーム終業上限を同日 23:59 まで緩め、機械空きが退勤より遅い場合でも同日フォーム探索する。
 # - 人不足は op_shortage / as_shortage に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
@@ -23827,6 +23828,19 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _interactive_trial_relax_team_end_limit_to_eod(
+    team_end_limit: datetime, current_date: date
+) -> datetime:
+    """
+    デスクトップ配台試行のみ: 出勤簿の終業より遅く機械が空く場合でも同日ロールを試せるよう、
+    チーム終業上限を当日 23:59 まで引き上げる（暦日跨ぎ加工は別チェックでエラー）。
+    """
+    if not _interactive_dispatch_trial_env_active():
+        return team_end_limit
+    cap = datetime.combine(current_date, time(23, 59))
+    return cap if team_end_limit < cap else team_end_limit
+
+
 def _interactive_trial_pair_dates_from_targets(
     targets: dict | None,
 ) -> dict[tuple[str, str], set[date]]:
@@ -25707,6 +25721,9 @@ def _append_legacy_dispatch_candidate_for_team(
         if current_date == macro_run_date and team_start < macro_now_dt:
             team_start = macro_now_dt
     team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+    team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+        team_end_limit, current_date
+    )
     if team_start >= team_end_limit:
         return False
     team_breaks = []
@@ -26178,6 +26195,9 @@ def _assign_one_roll_trial_order_flow(
         ):
             team_start = _l10_slit_nth_end_floor_dt
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+        team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+            team_end_limit, current_date
+        )
         if team_start >= team_end_limit:
             _trace_assign(
                 "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
@@ -30469,10 +30489,13 @@ def _generate_plan_impl(
                                     if current_date == macro_run_date and team_start < macro_now_dt:
                                         team_start = macro_now_dt
                                 team_end_limit = min(daily_status[m]['end_dt'] for m in team)
-    
+                                team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+                                    team_end_limit, current_date
+                                )
+
                                 if team_start >= team_end_limit:
                                     continue
-    
+
                                 team_breaks = []
                                 for m in team:
                                     team_breaks.extend(daily_status[m]['breaks_dt'])
