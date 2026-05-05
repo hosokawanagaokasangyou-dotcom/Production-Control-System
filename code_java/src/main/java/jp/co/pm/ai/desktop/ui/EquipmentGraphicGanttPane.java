@@ -1263,7 +1263,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 || badgeSlotTexts.size() != slotTexts.size()) {
             return;
         }
-        List<BarRun> runs = collectBarRuns(slotTexts);
+        // スロット文言がスロット按分の m で微妙に異なると collectBarRuns が細切れになり、
+        // バッジがスロット個数ぶん重複描画される。バッジ結合だけ末尾「◯◯m」を除いたキーでまとめる。
+        List<BarRun> runs = collectBarRunsForPersonBadges(slotTexts);
         for (BarRun run : runs) {
             if (run.kind() == BarKind.BREAK) {
                 continue;
@@ -1373,6 +1375,78 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             n - 1,
                             runText,
                             classifyBar(runText)));
+        }
+        return runs;
+    }
+
+    /**
+     * 担当バッジの横並び位置は連続スロットを1ランにまとめる必要がある。
+     * タイムライン文言が「依頼NO 123.4m」のようにスロットごとに変わる場合でも、依頼NO単位で結合するためのキー。
+     */
+    private static String personBadgeRunMergeKey(String slotText) {
+        String t = slotText != null ? slotText.strip() : "";
+        if (t.isEmpty()) {
+            return "";
+        }
+        BarKind k = classifyBar(t);
+        if (k == BarKind.BREAK || k == BarKind.STARTUP) {
+            return k + "\u0001" + t;
+        }
+        String base = t.replaceFirst("\\s+\\d+(?:\\.\\d+)?m\\s*$", "").strip();
+        String identity = base.isEmpty() ? t : base;
+        return k + "\u0001" + identity;
+    }
+
+    /**
+     * {@link #collectBarRuns} と同様だが、連続判定に {@link #personBadgeRunMergeKey} を使う（バッジ重複抑制用）。
+     */
+    private static List<BarRun> collectBarRunsForPersonBadges(List<String> slotTexts) {
+        int n = slotTexts.size();
+        List<BarRun> runs = new ArrayList<>();
+        int runStart = -1;
+        String runKey = "";
+        String headText = "";
+        for (int i = 0; i < n; i++) {
+            String t = slotTexts.get(i) != null ? slotTexts.get(i).strip() : "";
+            boolean empty = t.isEmpty();
+            if (empty) {
+                if (runStart >= 0) {
+                    runs.add(
+                            new BarRun(
+                                    runStart,
+                                    i - 1,
+                                    headText,
+                                    classifyBar(headText)));
+                    runStart = -1;
+                    runKey = "";
+                    headText = "";
+                }
+                continue;
+            }
+            String key = personBadgeRunMergeKey(t);
+            if (runStart < 0) {
+                runStart = i;
+                runKey = key;
+                headText = t;
+            } else if (!key.equals(runKey)) {
+                runs.add(
+                        new BarRun(
+                                runStart,
+                                i - 1,
+                                headText,
+                                classifyBar(headText)));
+                runStart = i;
+                runKey = key;
+                headText = t;
+            }
+        }
+        if (runStart >= 0) {
+            runs.add(
+                    new BarRun(
+                            runStart,
+                            n - 1,
+                            headText,
+                            classifyBar(headText)));
         }
         return runs;
     }
