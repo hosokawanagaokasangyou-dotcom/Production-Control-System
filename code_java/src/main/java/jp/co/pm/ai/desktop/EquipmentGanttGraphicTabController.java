@@ -128,11 +128,20 @@ public final class EquipmentGanttGraphicTabController {
 
     private Label graphicProcColWidthLabel;
 
+    private Slider graphicShiftWheelHSlider;
+
+    private Label graphicShiftWheelHLabel;
+
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
     private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
 
     /** 機械名・工程名列幅スライダー上限（px）。0 は自動計測 */
     private static final double SIDE_COL_WIDTH_SLIDER_MAX = 800;
+
+    /** Shift+ホイール横スクロール感度（％）。100＝従来のステップ相当 */
+    private static final double SHIFT_WHEEL_H_SCROLL_MIN = 50;
+
+    private static final double SHIFT_WHEEL_H_SCROLL_MAX = 400;
 
     private PauseTransition equipmentGraphicPersistDelay;
 
@@ -294,6 +303,22 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicProcColSlider);
 
+        graphicShiftWheelHSlider =
+                new Slider(SHIFT_WHEEL_H_SCROLL_MIN, SHIFT_WHEEL_H_SCROLL_MAX, 200);
+        graphicShiftWheelHSlider.setPrefWidth(130);
+        graphicShiftWheelHSlider.setShowTickLabels(false);
+        graphicShiftWheelHLabel = new Label("200%");
+        graphicShiftWheelHSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicShiftWheelHLabel.setText(
+                                    String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicShiftWheelHSlider);
+
         if (graphicToolbarHost != null) {
             graphicToolbarHost.getChildren().setAll(buildGraphicToolbar());
         }
@@ -379,6 +404,14 @@ public final class EquipmentGanttGraphicTabController {
                 && pwc <= SIDE_COL_WIDTH_SLIDER_MAX) {
             graphicProcColSlider.setValue(pwc);
             graphicProcColWidthLabel.setText(formatLeftColWidthLabel(pwc));
+        }
+        double swh = s.equipmentGanttShiftWheelHScrollPercent();
+        if (graphicShiftWheelHSlider != null
+                && Double.isFinite(swh)
+                && swh >= SHIFT_WHEEL_H_SCROLL_MIN
+                && swh <= SHIFT_WHEEL_H_SCROLL_MAX) {
+            graphicShiftWheelHSlider.setValue(swh);
+            graphicShiftWheelHLabel.setText(String.format("%.0f%%", swh));
         }
     }
 
@@ -471,6 +504,10 @@ public final class EquipmentGanttGraphicTabController {
 
     double snapshotEquipmentGanttBarFontPercent() {
         return graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttShiftWheelHScrollPercent() {
+        return graphicShiftWheelHSlider != null ? graphicShiftWheelHSlider.getValue() : 200d;
     }
 
     private void scheduleEquipmentGraphicPersist() {
@@ -654,6 +691,7 @@ public final class EquipmentGanttGraphicTabController {
         Label rhLab = new Label("行の高さ");
         Label hhLab = new Label("見出し行の高さ");
         Label swLab = new Label("時刻列幅");
+        Label shiftHWLab = new Label("Shift横スクロール");
         Label dateColLab = new Label("日付列幅");
         Label machColLab = new Label("機械名列幅");
         Label procColLab = new Label("工程名列幅");
@@ -673,6 +711,9 @@ public final class EquipmentGanttGraphicTabController {
                         swLab,
                         graphicSlotWidthSlider,
                         graphicSlotWidthPctLabel,
+                        shiftHWLab,
+                        graphicShiftWheelHSlider,
+                        graphicShiftWheelHLabel,
                         dateColLab,
                         graphicDateColSlider,
                         graphicDateColWidthLabel,
@@ -717,7 +758,8 @@ public final class EquipmentGanttGraphicTabController {
                         headerPct,
                         snapshotEquipmentGanttDateColWidth(),
                         snapshotEquipmentGanttMachineColWidth(),
-                        snapshotEquipmentGanttProcessColWidth());
+                        snapshotEquipmentGanttProcessColWidth(),
+                        snapshotEquipmentGanttShiftWheelHScrollPercent());
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             contentPane.setCenter(graphicRootWrapper);

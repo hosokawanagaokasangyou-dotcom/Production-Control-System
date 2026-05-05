@@ -40,6 +40,7 @@ import java.util.List;
  * @param equipmentGanttRowHeightPercent データ行の高さ調整（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttHeaderHeightPercent 見出し行（日付・機械名・工程名・時刻軸）の高さ（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
+ * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜400、100＝従来相当、0 は未保存として既定 200）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -74,7 +75,8 @@ public record DesktopSessionState(
         double equipmentGanttBarFontPercent,
         double equipmentGanttRowHeightPercent,
         double equipmentGanttHeaderHeightPercent,
-        double equipmentGanttSlotWidthPercent) {
+        double equipmentGanttSlotWidthPercent,
+        double equipmentGanttShiftWheelHScrollPercent) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
@@ -107,6 +109,7 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 "",
+                0d,
                 0d,
                 0d,
                 0d,

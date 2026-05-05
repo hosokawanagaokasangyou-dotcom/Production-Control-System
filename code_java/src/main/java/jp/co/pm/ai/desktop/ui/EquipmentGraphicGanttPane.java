@@ -303,6 +303,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 headerHeightPercent,
                 0d,
                 0d,
+                0d,
                 0d);
     }
 
@@ -310,6 +311,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param dateColWidthOverridePx 日付列幅（px）。{@code <= 0} または非有限は自動計測を使用
      * @param machineColWidthOverridePx 機械名列幅（px）。同上
      * @param processColWidthOverridePx 工程名列幅（px）。同上
+     * @param shiftWheelHorizontalSensitivityPercent Shift+ホイール横スクロール感度（50〜400、100＝従来の速さ、{@code <=0}
+     *     は既定 200）
      */
     public static BorderPane build(
             List<String> columns,
@@ -323,7 +326,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double headerHeightPercent,
             double dateColWidthOverridePx,
             double machineColWidthOverridePx,
-            double processColWidthOverridePx) {
+            double processColWidthOverridePx,
+            double shiftWheelHorizontalSensitivityPercent) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -636,7 +640,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerRightScroll.hvalueProperty().bindBidirectional(rightBodyScroll.hvalueProperty());
         leftBodyScroll.vvalueProperty().bindBidirectional(rightBodyScroll.vvalueProperty());
 
-        installShiftWheelHorizontalScroll(rightBodyScroll);
+        double shiftSens =
+                effectiveShiftWheelHorizontalSensitivity(shiftWheelHorizontalSensitivityPercent);
+        installShiftWheelHorizontalScroll(rightBodyScroll, shiftSens);
 
         HBox bodySplit = new HBox(0, leftBodyScroll, rightBodyScroll);
         bodySplit.setAlignment(Pos.TOP_LEFT);
@@ -651,7 +657,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Label hint =
                 new Label(
                         """
-                        ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
+                        ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。Shift+ホイールでも横（時刻軸方向）にスクロール（感度はツールバー「Shift横スクロール」）。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付列は見出しなし・データは反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。日付・機械名・工程名列幅もスライダーで指定できます（先頭は自動）。""");
         hint.setWrapText(true);
@@ -661,7 +667,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return root;
     }
 
-    private static void installShiftWheelHorizontalScroll(ScrollPane scrollPane) {
+    /**
+     * Shift+ホイール横スクロールの感度。{@code <= 0} または非有限は既定（速めにスクロール）。
+     *
+     * @param percentFromUi ツールバー「％」（50〜400）。実効値は {@link Math#clamp(double, double, double)} で範囲内に収める
+     */
+    private static double effectiveShiftWheelHorizontalSensitivity(double percentFromUi) {
+        if (!Double.isFinite(percentFromUi) || percentFromUi <= 0) {
+            return 200.0;
+        }
+        return Math.clamp(percentFromUi, 50.0, 400.0);
+    }
+
+    /** @param sensitivityPercent 100 で従来の {@code -delta/excess} と同等 */
+    private static void installShiftWheelHorizontalScroll(
+            ScrollPane scrollPane, double sensitivityPercent) {
+        double factor = sensitivityPercent / 100.0;
         scrollPane.addEventFilter(
                 ScrollEvent.SCROLL,
                 e -> {
@@ -689,7 +710,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (!(excess > 1.0) || !Double.isFinite(excess)) {
                         return;
                     }
-                    double deltaH = -delta / excess;
+                    double deltaH = -delta / excess * factor;
                     scrollPane.setHvalue(Math.clamp(scrollPane.getHvalue() + deltaH, 0.0, 1.0));
                 });
     }

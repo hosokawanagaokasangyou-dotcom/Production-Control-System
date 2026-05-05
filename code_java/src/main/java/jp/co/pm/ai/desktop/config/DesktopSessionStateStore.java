@@ -67,7 +67,8 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttBarFontPercent", 0d),
                     optionalDouble(root, "equipmentGanttRowHeightPercent", 0d),
                     optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
-                    optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d));
+                    optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
+                    optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -260,6 +261,10 @@ public final class DesktopSessionStateStore {
         double sw = state.equipmentGanttSlotWidthPercent();
         if (Double.isFinite(sw) && sw >= 50 && sw <= 500) {
             root.put("equipmentGanttSlotWidthPercent", sw);
+        }
+        double sh = state.equipmentGanttShiftWheelHScrollPercent();
+        if (Double.isFinite(sh) && sh >= 50 && sh <= 400) {
+            root.put("equipmentGanttShiftWheelHScrollPercent", sh);
         }
     }
 
