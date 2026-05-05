@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -14,10 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 
 /**
@@ -119,6 +122,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
         List<Map<String, String>> rows = new ArrayList<>();
         List<List<String>> badgeSlotRows = new ArrayList<>();
 
+        // #region agent log
+        final AtomicInteger agentLogBudget = new AtomicInteger(8);
+        // #endregion
+
         List<LocalDate> graphicDays = graphicCalendarDates(events, sortedDates);
         for (LocalDate day : graphicDays) {
             Map<String, String> section = new LinkedHashMap<>();
@@ -167,8 +174,31 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         if (ev.isInBreaks(winStart, winEnd)) {
                             continue;
                         }
-                        cell = ev.cellLabel();
+                        cell = ev.timelineCellLabel(winStart, winEnd);
                         badgeCell = ev.badgeSlotFragment();
+                        // #region agent log
+                        if (agentLogBudget.getAndDecrement() > 0) {
+                            java.util.Map<String, Object> dbg = new java.util.LinkedHashMap<>();
+                            dbg.put("taskId", ev.taskId != null ? ev.taskId : "");
+                            dbg.put("unit_m", ev.unitM);
+                            dbg.put("units_done", ev.unitsDone);
+                            dbg.put("label_len_m", ev.labelLenM);
+                            dbg.put("label_cumulative", ev.labelLenMIsCumulative);
+                            dbg.put("winStart", winStart.toString());
+                            dbg.put("winEnd", winEnd.toString());
+                            dbg.put("cell", cell);
+                            dbg.put(
+                                    "slotLenM",
+                                    ev.slotProcessingMetersForOverlap(winStart, winEnd));
+                            AgentDebugLog.appendStructured(
+                                    Map.of(),
+                                    "38d31c",
+                                    "H1",
+                                    "EquipmentGanttContractSheetTableBuilder.java:slot",
+                                    "equipment gantt timeline cell label",
+                                    dbg);
+                        }
+                        // #endregion
                         break;
                     }
                     row.put(col, cell);
@@ -408,7 +438,14 @@ public final class EquipmentGanttContractSheetTableBuilder {
         final String eventKind;
         final LocalDateTime start;
         final LocalDateTime end;
-        final Long unitM;
+        /** メートル／単位（ロール単位長さなど）。Python {@code unit_m}。 */
+        final Double unitM;
+        /** 当該イベントの単位数（ロール数など）。Python {@code units_done}。 */
+        final Double unitsDone;
+        /** 実績明細由来の加工長さ(m)。Python {@code label_len_m}。 */
+        final Double labelLenM;
+        /** Python {@code label_len_m_is_cumulative}。累積ラベルはスロット按分しない。 */
+        final boolean labelLenMIsCumulative;
         /** メイン担当（JSON {@code op}）。 */
         final String op;
         /** サブ担当など（JSON {@code sub}）。 */
@@ -422,7 +459,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 String eventKind,
                 LocalDateTime start,
                 LocalDateTime end,
-                Long unitM,
+                Double unitM,
+                Double unitsDone,
+                Double labelLenM,
+                boolean labelLenMIsCumulative,
                 String op,
                 String sub,
                 List<List<LocalDateTime>> breaks) {
@@ -433,6 +473,9 @@ public final class EquipmentGanttContractSheetTableBuilder {
             this.start = start;
             this.end = end;
             this.unitM = unitM;
+            this.unitsDone = unitsDone;
+            this.labelLenM = labelLenM;
+            this.labelLenMIsCumulative = labelLenMIsCumulative;
             this.op = op != null ? op : "";
             this.sub = sub != null ? sub : "";
             this.breaks = breaks;
@@ -456,10 +499,11 @@ public final class EquipmentGanttContractSheetTableBuilder {
             String eventKind = text(n, "event_kind");
             String op = text(n, "op");
             String sub = text(n, "sub");
-            Long unitM = null;
-            if (n.has("unit_m") && n.get("unit_m").isNumber()) {
-                unitM = n.get("unit_m").longValue();
-            }
+            Double unitM = numberOrNull(n, "unit_m");
+            Double unitsDone = numberOrNull(n, "units_done");
+            Double labelLenM = numberOrNull(n, "label_len_m");
+            boolean labelCumulative =
+                    n.has("label_len_m_is_cumulative") && n.get("label_len_m_is_cumulative").asBoolean();
             List<List<LocalDateTime>> breaks = new ArrayList<>();
             JsonNode bn = n.get("breaks");
             if (bn != null && bn.isArray()) {
@@ -479,12 +523,33 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     }
                 }
             }
-            return new TimelineEvent(date, machine, taskId, eventKind, start, end, unitM, op, sub, breaks);
+            return new TimelineEvent(
+                    date,
+                    machine,
+                    taskId,
+                    eventKind,
+                    start,
+                    end,
+                    unitM,
+                    unitsDone,
+                    labelLenM,
+                    labelCumulative,
+                    op,
+                    sub,
+                    breaks);
         }
 
         static String text(JsonNode n, String field) {
             JsonNode x = n.get(field);
             return x != null && x.isTextual() ? x.asText() : "";
+        }
+
+        static Double numberOrNull(JsonNode n, String field) {
+            JsonNode x = n.get(field);
+            if (x != null && x.isNumber()) {
+                return x.doubleValue();
+            }
+            return null;
         }
 
         boolean isInBreaks(LocalDateTime winStart, LocalDateTime winEnd) {
@@ -501,27 +566,98 @@ public final class EquipmentGanttContractSheetTableBuilder {
             return false;
         }
 
-        String cellLabel() {
+        /**
+         * Python {@code _gantt_format_length_m} 相当（整数に近いときは整数文字列、それ以外は小数1桁まで）。
+         */
+        static String formatLengthM(double v) {
+            if (Double.isNaN(v) || v <= 1e-12) {
+                return "";
+            }
+            double r = Math.round(v);
+            if (Math.abs(v - r) <= 1e-9) {
+                return Long.toString((long) r);
+            }
+            String s = String.format(java.util.Locale.ROOT, "%.1f", v);
+            s = s.replaceAll("0+$", "").replaceAll("\\.$", "");
+            return s;
+        }
+
+        /**
+         * イベント総加工長さ(m)。Python {@code _gantt_slot_state_tuple_from_active} の ev_total_len_m と同趣旨。
+         */
+        Double eventTotalLengthMeters() {
+            if (labelLenM != null && !labelLenMIsCumulative) {
+                return labelLenM;
+            }
+            if (labelLenMIsCumulative) {
+                return null;
+            }
+            double u = unitsDone != null ? unitsDone : 0.0;
+            double um = unitM != null ? unitM : 0.0;
+            if (u > 1e-12 && um > 1e-12) {
+                return u * um;
+            }
+            return null;
+        }
+
+        /**
+         * スロット窓 [winStart, winEnd) とイベントの重なりに対する加工量(m)。休憩は呼び出し側で除外済み。
+         * Python {@code _gantt_slot_state_tuple_from_active} の slot_len_m と同じ比例式。
+         */
+        Double slotProcessingMetersForOverlap(LocalDateTime winStart, LocalDateTime winEnd) {
+            if ("machine_daily_startup".equals(eventKind)
+                    || "machine_daily_inspection".equals(eventKind)
+                    || "daily_inspection".equals(eventKind)) {
+                return null;
+            }
+            Double evTotalLenM = eventTotalLengthMeters();
+            if (evTotalLenM == null || evTotalLenM <= 1e-12) {
+                return null;
+            }
+            if (!start.isBefore(end)) {
+                return null;
+            }
+            LocalDateTime lo = winStart.isAfter(start) ? winStart : start;
+            LocalDateTime hi = winEnd.isBefore(end) ? winEnd : end;
+            if (!lo.isBefore(hi)) {
+                return null;
+            }
+            double evSec = durationSeconds(start, end);
+            double ovSec = durationSeconds(lo, hi);
+            if (evSec <= 1e-9 || ovSec <= 1e-9) {
+                return null;
+            }
+            return evTotalLenM * (ovSec / evSec);
+        }
+
+        private static double durationSeconds(LocalDateTime a, LocalDateTime b) {
+            return Duration.between(a, b).toNanos() / 1_000_000_000.0;
+        }
+
+        /**
+         * タイムライン1マスに表示する文字列（依頼NO＋当該スロットの加工量m）。 {@code cellLabel}（unit_m 単体）は廃止。
+         */
+        String timelineCellLabel(LocalDateTime winStart, LocalDateTime winEnd) {
             if ("machine_daily_startup".equals(eventKind)) {
                 return "日次始業準備";
             }
-            if ("machine_daily_inspection".equals(eventKind) || "daily_inspection".equals(eventKind)) {
+            if ("machine_daily_inspection".equals(eventKind)
+                    || "daily_inspection".equals(eventKind)) {
                 return "日次点検";
             }
-            StringBuilder sb = new StringBuilder();
-            if (taskId != null && !taskId.isEmpty()) {
-                sb.append(taskId);
-            }
-            if (unitM != null && unitM > 0) {
-                if (sb.length() > 0) {
-                    sb.append(" ");
+            String tid = taskId != null ? taskId.strip() : "";
+            Double slotM = slotProcessingMetersForOverlap(winStart, winEnd);
+            if (slotM != null && slotM > 1e-12) {
+                String len = formatLengthM(slotM);
+                if (!len.isEmpty()) {
+                    return tid.isEmpty() ? len + "m" : tid + " " + len + "m";
                 }
-                sb.append(unitM).append("m");
             }
-            if (sb.length() == 0 && eventKind != null && !eventKind.isEmpty()) {
-                return eventKind;
+            // 累積ラベル等で総量が取れないときは依頼NOのみ（単位長さだけは出さない）
+            if (!tid.isEmpty()) {
+                return tid;
             }
-            return sb.toString();
+            return eventKind != null && !eventKind.isEmpty() ? eventKind : "";
         }
 
         /**
