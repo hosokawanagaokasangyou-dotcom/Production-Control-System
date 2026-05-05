@@ -102,8 +102,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Font cellFont = Font.font(layout.rowLabelFontSize);
         double pad = 14 * layout.zoom;
         double padDate = 6 * layout.zoom;
-        double floorMach = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_MACHINE_COLUMN_WIDTH * layout.zoom);
-        double floorProc = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_PROCESS_COLUMN_WIDTH * layout.zoom);
 
         /* 日付列の幅は見出し「日付」の横書き幅のみ（データ行は回転表示のため幅に含めない） */
         double dateCol =
@@ -132,14 +130,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
         }
 
-        return new MeasuredLeftWidths(
-                dateCol,
-                Math.min(
-                        MAX_SIDE_COL_WIDTH,
-                        Math.max(floorMach, Math.min(MAX_SIDE_COL_WIDTH, maxM + pad))),
-                Math.min(
-                        MAX_SIDE_COL_WIDTH,
-                        Math.max(floorProc, Math.min(MAX_SIDE_COL_WIDTH, maxP + pad))));
+        /* 機械名・工程名: 固定のデフォルト幅は使わず、文字列（＋列パディング）に合わせる */
+        double machCol =
+                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxM + pad));
+        double procCol =
+                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxP + pad));
+        return new MeasuredLeftWidths(dateCol, machCol, procCol);
     }
 
     private static double measureMultilineMaxLineWidth(String text, Font font) {
