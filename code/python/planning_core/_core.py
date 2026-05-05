@@ -20476,6 +20476,7 @@ def write_dispatch_trial_pattern_list_via_xlwings(
     """
     マクロブックを Excel で開き、「配台計画_タスク入力」を読み、
     試行順パターン一覧を DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME に書き込む。
+    （関数名は VBA / 既存スクリプト互換のため旧接頭辞を含む。）
     """
     path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
