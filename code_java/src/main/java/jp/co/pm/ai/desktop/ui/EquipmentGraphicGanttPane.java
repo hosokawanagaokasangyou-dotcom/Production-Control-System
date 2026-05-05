@@ -3,7 +3,9 @@ package jp.co.pm.ai.desktop.ui;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,11 +25,15 @@ import javafx.scene.control.Tooltip;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.geometry.VPos;
 
 import javafx.scene.layout.Region;
 
@@ -106,6 +112,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 zoom,
                 DEFAULT_MACHINE_COLUMN_WIDTH,
                 DEFAULT_PROCESS_COLUMN_WIDTH,
+                "",
                 null);
     }
 
@@ -114,6 +121,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param zoom 表示倍率（0.5〜2.0 程度を想定。スロット幅・行高・フォントに連動）
      * @param machineColWidth 機械名列の幅（px）
      * @param processColWidth 工程名列の幅（px）
+     * @param barFontFamily バー上ラベル用フォントファミリ（null／空で既定）
      * @param onLeftColumnWidthsChanged ヘッダの境界ドラッグ後に {@code (機械列幅, 工程列幅)} を通知（永続化用）
      */
     public static BorderPane build(
@@ -123,6 +131,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double zoom,
             double machineColWidth,
             double processColWidth,
+            String barFontFamily,
             BiConsumer<Double, Double> onLeftColumnWidthsChanged) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
@@ -133,11 +142,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effRows = repaired.rows();
         }
         ParseResult parsed = parse(effCols, effRows);
-        if (parsed.slotColumnIndices.isEmpty()) {
+        if (parsed.slotColumnIndices().isEmpty()) {
             Label msg =
                     new Label(
-                            "このシートから時刻列（列見出しが HH:MM 形式）を検出できませんでした。\n"
-                                    + "「結果_設備ガント」形式の JSON を開いているか確認してください。");
+                            """
+                            このシートから時刻列（列見出しが HH:MM 形式）を検出できませんでした。
+                            「結果_設備ガント」形式の JSON を開いているか確認してください。""");
             msg.setWrapText(true);
             msg.setPadding(new Insets(16));
             root.setCenter(msg);
@@ -146,12 +156,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         LayoutMetrics layout = LayoutMetrics.fromZoom(zoom);
         GanttPalette palette = GanttPalette.forTheme(theme);
+        Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
         double machW = clampMachineColumnWidth(machineColWidth);
         double procW = clampProcessColumnWidth(processColWidth);
         double leftTotal = machW + procW;
 
-        double timelineWidth = parsed.slotColumnIndices.size() * layout.slotWidth;
+        double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
 
         Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
         drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
@@ -171,10 +182,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrapProc.setMinHeight(layout.headerHeight);
         styleEquipmentHeadSplit(headSplit, theme);
         double divPos = leftTotal > 1 ? machW / leftTotal : 0.5;
-        final boolean[] suppressDiv = {false};
-        suppressDiv[0] = true;
+        AtomicBoolean suppressDividerCallback = new AtomicBoolean(true);
         headSplit.setDividerPositions(divPos);
-        suppressDiv[0] = false;
+        suppressDividerCallback.set(false);
 
         if (onLeftColumnWidthsChanged != null) {
             headSplit
@@ -183,7 +193,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     .positionProperty()
                     .addListener(
                             (obs, o, n) -> {
-                                if (suppressDiv[0]) {
+                                if (suppressDividerCallback.get()) {
                                     return;
                                 }
                                 double tw = headSplit.getWidth();
@@ -202,8 +212,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int progCell = layout.progressCellWidth;
         int gap = layout.progressGap;
         int progressTotal =
-                parsed.progressColumnIndices.size() * progCell
-                        + Math.max(0, parsed.progressColumnIndices.size() - 1) * gap;
+                parsed.progressColumnIndices().size() * progCell
+                        + Math.max(0, parsed.progressColumnIndices().size() - 1) * gap;
 
         double contentMinWidth = leftTotal + timelineWidth + progressTotal;
 
@@ -212,14 +222,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headSplit.setMinWidth(leftTotal);
         HBox.setHgrow(headSplit, Priority.NEVER);
 
-        VBox scrollBody = new VBox(0);
-        scrollBody.setMinWidth(contentMinWidth);
+        GridPane bodyGrid = new GridPane();
+        bodyGrid.setMinWidth(contentMinWidth);
+        ColumnConstraints ccMach = new ColumnConstraints(machW);
+        ColumnConstraints ccProc = new ColumnConstraints(procW);
+        ColumnConstraints ccTime = new ColumnConstraints(timelineWidth);
+        if (progressTotal > 0) {
+            ColumnConstraints ccProg = new ColumnConstraints(progressTotal);
+            bodyGrid.getColumnConstraints().setAll(ccMach, ccProc, ccTime, ccProg);
+        } else {
+            bodyGrid.getColumnConstraints().setAll(ccMach, ccProc, ccTime);
+        }
+
+        double timelineOuterPad =
+                Math.max(12 * layout.zoom, barFont.getSize() * 2.0);
+        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
+
+        List<MachineColumnPlan> machPlans =
+                computeMachineColumnPlans(effCols, parsed.displayRows());
 
         int dataStripe = 0;
-        for (int ri = 0; ri < parsed.displayRows.size(); ri++) {
-            DisplayRow dr = parsed.displayRows.get(ri);
-            if (dr.sectionBanner != null) {
-                Label ban = new Label(dr.sectionBanner);
+        int gridR = 0;
+        for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
+            DisplayRow dr = parsed.displayRows().get(ri);
+            if (dr.sectionBanner() != null) {
+                Label ban = new Label(dr.sectionBanner());
                 ban.setPrefHeight(layout.sectionRowHeight);
                 ban.setMinHeight(layout.sectionRowHeight);
                 ban.setMaxWidth(Double.MAX_VALUE);
@@ -227,40 +254,88 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 ban.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
                 ban.setStyle(palette.sectionBannerCss());
                 ban.setMinWidth(contentMinWidth);
-                scrollBody.getChildren().add(ban);
+                int spanCols = progressTotal > 0 ? 4 : 3;
+                GridPane.setColumnSpan(ban, spanCols);
+                bodyGrid.add(ban, 0, gridR);
+                gridR++;
                 continue;
             }
 
-            String machTxt = dr.machineLine != null ? dr.machineLine : "";
-            String procTxt = dr.processBlock != null ? dr.processBlock : "";
+            MachineColumnPlan mplan = machPlans.get(ri);
+            if (mplan == null) {
+                mplan =
+                        new MachineColumnPlan(
+                                false, dr.machineLine() != null ? dr.machineLine() : "", 1);
+            }
 
-            Label ml = new Label(machTxt);
+            String procTxt = dr.processBlock() != null ? dr.processBlock() : "";
+
+            if (!mplan.continuation()) {
+                String machTxt = mplan.machineCellText() != null ? mplan.machineCellText() : "";
+                Label ml = new Label(machTxt);
+                applySideDataStyle(ml, machW, layout, palette);
+                ml.setWrapText(true);
+                if (mplan.rowSpan() > 1) {
+                    double spanH = mplan.rowSpan() * cellBodyH;
+                    ml.setMinHeight(spanH);
+                    ml.setPrefHeight(spanH);
+                    ml.setMaxHeight(spanH);
+                    ml.setAlignment(Pos.TOP_LEFT);
+                    GridPane.setValignment(ml, VPos.TOP);
+                    GridPane.setRowSpan(ml, mplan.rowSpan());
+                    fitFontIntoColumn(
+                            ml,
+                            machTxt,
+                            machW - 8,
+                            spanH - 4,
+                            layout.rowLabelFontSize);
+                } else {
+                    ml.setMinHeight(cellBodyH);
+                    ml.setPrefHeight(cellBodyH);
+                    ml.setMaxHeight(cellBodyH);
+                    fitFontIntoColumn(
+                            ml,
+                            machTxt,
+                            machW - 8,
+                            cellBodyH - 4,
+                            layout.rowLabelFontSize);
+                }
+                bodyGrid.add(ml, 0, gridR);
+            }
+
             Label pl = new Label(procTxt);
-            applySideDataStyle(ml, machW, layout, palette);
             applySideDataStyle(pl, procW, layout, palette);
-            ml.setWrapText(true);
+            pl.setMinHeight(cellBodyH);
+            pl.setPrefHeight(cellBodyH);
+            pl.setMaxHeight(cellBodyH);
             pl.setWrapText(true);
+            fitFontIntoColumn(pl, procTxt, procW - 8, cellBodyH - 4, layout.rowLabelFontSize);
 
-            fitFontIntoColumn(ml, machTxt, machW - 8, layout.rowHeight - 4, layout.rowLabelFontSize);
-            fitFontIntoColumn(pl, procTxt, procW - 8, layout.rowHeight - 4, layout.rowLabelFontSize);
-
-            Canvas rowCanvas = new Canvas(timelineWidth, layout.rowHeight);
+            Canvas rowCanvas = new Canvas(timelineWidth, cellBodyH);
+            GraphicsContext gcx = rowCanvas.getGraphicsContext2D();
+            gcx.translate(0, timelineOuterPad);
             drawTimelineRow(
-                    rowCanvas.getGraphicsContext2D(), dr.cellsInSlots, dataStripe++, layout, palette);
+                    gcx,
+                    dr.cellsInSlots(),
+                    dataStripe++,
+                    layout,
+                    palette,
+                    barFont);
 
             String tip =
-                    (dr.rowSummary != null ? dr.rowSummary : "")
+                    (dr.rowSummary() != null ? dr.rowSummary() : "")
                             + "\n（スロット "
-                            + parsed.slotMinutes
+                            + parsed.slotMinutes()
                             + " 分・設備ガント JSON と同一データ）";
             Tooltip.install(rowCanvas, new Tooltip(tip));
 
             HBox progBox = new HBox(gap);
+            progBox.setMinHeight(cellBodyH);
             progBox.setAlignment(Pos.CENTER_LEFT);
-            for (int pc : parsed.progressColumnIndices) {
+            for (int pc : parsed.progressColumnIndices()) {
                 String pv =
-                        dr.rawRow.size() > pc && dr.rawRow.get(pc) != null
-                                ? dr.rawRow.get(pc).strip()
+                        dr.rawRow().size() > pc && dr.rawRow().get(pc) != null
+                                ? dr.rawRow().get(pc).strip()
                                 : "";
                 Label pLab = new Label(pv);
                 pLab.setMinWidth(progCell);
@@ -273,26 +348,27 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 progBox.getChildren().add(pLab);
             }
 
-            HBox line = new HBox(0);
-            line.setMinWidth(contentMinWidth);
-            line.getChildren().addAll(ml, pl, rowCanvas);
+            bodyGrid.add(pl, 1, gridR);
+            bodyGrid.add(rowCanvas, 2, gridR);
             if (!progBox.getChildren().isEmpty()) {
-                line.getChildren().add(progBox);
+                bodyGrid.add(progBox, 3, gridR);
             }
-            scrollBody.getChildren().add(line);
+            gridR++;
         }
 
         ScrollPane headerScroll = new ScrollPane(headRow);
         headerScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerScroll.setPannable(false);
-        headerScroll.setFitToHeight(true);
-        headerScroll.setMinViewportHeight(layout.headerHeight);
-        headerScroll.setMaxViewportHeight(layout.headerHeight);
+        headerScroll.setFitToHeight(false);
+        headerScroll.setPrefViewportHeight(layout.headerHeight);
+        headerScroll.setPrefHeight(layout.headerHeight);
+        headerScroll.setMinHeight(layout.headerHeight);
+        headerScroll.setMaxHeight(layout.headerHeight);
         headerScroll.setMinWidth(Region.USE_COMPUTED_SIZE);
 
-        ScrollPane bodyScroll = new ScrollPane(scrollBody);
-        bodyScroll.setFitToWidth(true);
+        ScrollPane bodyScroll = new ScrollPane(bodyGrid);
+        bodyScroll.setFitToWidth(false);
         bodyScroll.setPannable(true);
         VBox.setVgrow(bodyScroll, Priority.ALWAYS);
 
@@ -307,9 +383,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         Label hint =
                 new Label(
-                        "ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。"
-                                + " 機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。"
-                                + " ブロックは Excel と同じセル内容を連続結合した帯です。");
+                        """
+                        ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
+                        機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。同一機械名は左列を縦結合表示。 \
+                        短いバーのラベルはバー上下にずらして表示し、ツールバーでバー用フォントを指定できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
@@ -411,6 +488,83 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
         }
         lb.setFont(best);
+    }
+
+    private static Font resolveBarFont(String family, double sizePx) {
+        double s = Math.max(6, sizePx);
+        if (family == null || family.isBlank()) {
+            return Font.font(s);
+        }
+        return Font.font(family.strip(), s);
+    }
+
+    private record MachineColumnPlan(boolean continuation, String machineCellText, int rowSpan) {}
+
+    private static String[] computeCarriedDates(
+            List<String> columns, List<DisplayRow> displayRows) {
+        String[] out = new String[displayRows.size()];
+        String cd = "";
+        for (int i = 0; i < displayRows.size(); i++) {
+            DisplayRow dr = displayRows.get(i);
+            if (dr.sectionBanner() != null) {
+                out[i] = cd;
+                continue;
+            }
+            int dateCol = columns.indexOf("日付");
+            if (dateCol >= 0 && dr.rawRow().size() > dateCol) {
+                String dv =
+                        dr.rawRow().get(dateCol) != null
+                                ? dr.rawRow().get(dateCol).strip()
+                                : "";
+                if (!dv.isEmpty()) {
+                    cd = dv;
+                }
+            }
+            out[i] = cd;
+        }
+        return out;
+    }
+
+    private static List<MachineColumnPlan> computeMachineColumnPlans(
+            List<String> columns, List<DisplayRow> displayRows) {
+        List<MachineColumnPlan> plans = new ArrayList<>();
+        for (int i = 0; i < displayRows.size(); i++) {
+            plans.add(null);
+        }
+        String[] carriedAt = computeCarriedDates(columns, displayRows);
+        int r = 0;
+        while (r < displayRows.size()) {
+            DisplayRow dr = displayRows.get(r);
+            if (dr.sectionBanner() != null) {
+                r++;
+                continue;
+            }
+            String machKey = cellAt(columns, dr.rawRow(), "機械名");
+            if (machKey.isEmpty()) {
+                LeftParts lp = buildLeftParts(columns, dr.rawRow(), carriedAt[r]);
+                plans.set(r, new MachineColumnPlan(false, lp.machine(), 1));
+                r++;
+                continue;
+            }
+            int j = r + 1;
+            while (j < displayRows.size()) {
+                DisplayRow drj = displayRows.get(j);
+                if (drj.sectionBanner() != null) {
+                    break;
+                }
+                if (!machKey.equals(cellAt(columns, drj.rawRow(), "機械名"))) {
+                    break;
+                }
+                j++;
+            }
+            LeftParts lpFirst = buildLeftParts(columns, dr.rawRow(), carriedAt[r]);
+            plans.set(r, new MachineColumnPlan(false, lpFirst.machine(), j - r));
+            for (int k = r + 1; k < j; k++) {
+                plans.set(k, new MachineColumnPlan(true, "", 1));
+            }
+            r = j;
+        }
+        return plans;
     }
 
     private record LayoutMetrics(
@@ -525,28 +679,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setLineWidth(0.5);
         gc.strokeRect(0, 0, timelineWidth, layout.headerHeight);
 
-        List<Integer> slotCols = parsed.slotColumnIndices;
+        List<Integer> slotCols = parsed.slotColumnIndices();
         int n = slotCols.size();
-        int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes));
+        int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes()));
 
         gc.setFill(palette.axisLabel());
         gc.setFont(Font.font(layout.axisFontSize));
-        LocalTime t0 = parsed.slotBaseTime;
+        LocalTime t0 = parsed.slotBaseTime();
         for (int i = 0; i < n; i += step) {
             double x = i * layout.slotWidth;
-            LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes);
+            LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes());
             String txt = tt.format(DateTimeFormatter.ofPattern("H:mm"));
             gc.fillText(txt, x + 2, layout.headerHeight - 8 * layout.zoom);
             gc.strokeLine(x, 0, x, layout.headerHeight);
         }
     }
 
+    private record BarRun(int fromSlot, int toSlot, String text, BarKind kind) {}
+
     private static void drawTimelineRow(
             GraphicsContext gc,
             List<String> slotTexts,
             int stripeIndex,
             LayoutMetrics layout,
-            GanttPalette palette) {
+            GanttPalette palette,
+            Font barFont) {
         int n = slotTexts.size();
         boolean stripe = (stripeIndex & 1) == 0;
         for (int i = 0; i < n; i++) {
@@ -560,6 +717,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
         }
 
+        List<BarRun> runs = collectBarRuns(slotTexts);
+        for (BarRun run : runs) {
+            fillBar(gc, run, layout, palette);
+        }
+        drawBarLabelsOutside(gc, runs, layout, palette, barFont);
+    }
+
+    private static List<BarRun> collectBarRuns(List<String> slotTexts) {
+        int n = slotTexts.size();
+        List<BarRun> runs = new ArrayList<>();
         int runStart = -1;
         String runText = "";
         for (int i = 0; i < n; i++) {
@@ -567,7 +734,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean empty = t.isEmpty();
             if (empty) {
                 if (runStart >= 0) {
-                    paintBar(gc, runStart, i - 1, runText, layout, palette);
+                    runs.add(
+                            new BarRun(
+                                    runStart,
+                                    i - 1,
+                                    runText,
+                                    classifyBar(runText)));
                     runStart = -1;
                     runText = "";
                 }
@@ -577,26 +749,34 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 runStart = i;
                 runText = t;
             } else if (!t.equals(runText)) {
-                paintBar(gc, runStart, i - 1, runText, layout, palette);
+                runs.add(
+                        new BarRun(
+                                runStart,
+                                i - 1,
+                                runText,
+                                classifyBar(runText)));
                 runStart = i;
                 runText = t;
             }
         }
         if (runStart >= 0) {
-            paintBar(gc, runStart, n - 1, runText, layout, palette);
+            runs.add(
+                    new BarRun(
+                            runStart,
+                            n - 1,
+                            runText,
+                            classifyBar(runText)));
         }
+        return runs;
     }
 
-    private static void paintBar(
-            GraphicsContext gc,
-            int fromSlot,
-            int toSlot,
-            String text,
-            LayoutMetrics layout,
-            GanttPalette palette) {
+    private static void fillBar(
+            GraphicsContext gc, BarRun run, LayoutMetrics layout, GanttPalette palette) {
+        int fromSlot = run.fromSlot();
+        int toSlot = run.toSlot();
         double x = fromSlot * layout.slotWidth;
         double w = (toSlot - fromSlot + 1) * layout.slotWidth;
-        BarKind kind = classifyBar(text);
+        BarKind kind = run.kind();
         Color fill =
                 switch (kind) {
                     case BREAK -> palette.barBreak();
@@ -612,27 +792,93 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setStroke(palette.barStroke());
         gc.setLineWidth(0.5 * layout.zoom);
         gc.strokeRoundRect(x + inset, barTop, w - 2 * inset, barH, arc, arc);
+    }
 
-        Color label =
-                switch (kind) {
-                    case BREAK -> palette.barBreakText();
-                    case STARTUP -> palette.barStartupText();
-                    default -> palette.barDefaultText();
-                };
-        gc.setFill(label);
-        gc.setFont(Font.font(layout.barFontSize));
-        String shortTxt = text.replace('\n', ' ');
-        if (shortTxt.length() > 80) {
-            shortTxt = shortTxt.substring(0, 77) + "...";
+    private static void drawBarLabelsOutside(
+            GraphicsContext gc,
+            List<BarRun> runs,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont) {
+        if (runs.isEmpty()) {
+            return;
         }
-        double charPx = Math.max(4.0, 5.0 * layout.zoom);
-        double maxChars = Math.max(4, (w - 6 * layout.zoom) / charPx);
-        if (shortTxt.length() > maxChars) {
-            shortTxt = shortTxt.substring(0, (int) maxChars - 2) + "..";
+        List<BarRun> sorted = new ArrayList<>(runs);
+        sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
+        double inset = 0.5 * layout.zoom;
+        double barTop = 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * barTop;
+        double pad = 6 * layout.zoom;
+
+        List<double[]> aboveRanges = new ArrayList<>();
+        List<double[]> belowRanges = new ArrayList<>();
+
+        gc.setFont(barFont);
+
+        for (BarRun run : sorted) {
+            String full = run.text().replace('\n', ' ');
+            if (full.length() > 220) {
+                full = full.substring(0, 217) + "...";
+            }
+            if (full.isEmpty()) {
+                continue;
+            }
+            Color labelColor =
+                    switch (run.kind()) {
+                        case BREAK -> palette.barBreakText();
+                        case STARTUP -> palette.barStartupText();
+                        default -> palette.barDefaultText();
+                    };
+
+            double lx = run.fromSlot() * layout.slotWidth + inset + 3 * layout.zoom;
+            double tw = measureTextWidth(full, barFont);
+            double fh = measureTextHeight(full, barFont);
+            double rx = lx + tw;
+
+            boolean useAbove;
+            if (!horizontalHits(aboveRanges, lx, rx, pad)) {
+                useAbove = true;
+            } else if (!horizontalHits(belowRanges, lx, rx, pad)) {
+                useAbove = false;
+            } else {
+                useAbove = (run.fromSlot() & 1) == 0;
+            }
+            if (useAbove) {
+                aboveRanges.add(new double[] {lx, rx});
+            } else {
+                belowRanges.add(new double[] {lx, rx});
+            }
+
+            double baseline =
+                    useAbove
+                            ? barTop - fh * 0.35
+                            : barTop + barH + fh * 0.75;
+
+            gc.setFill(labelColor);
+            gc.fillText(full, lx, baseline);
         }
-        if (w > 28 * layout.zoom && !shortTxt.isEmpty()) {
-            gc.fillText(shortTxt, x + 4 * layout.zoom, layout.rowHeight / 2 + 3 * layout.zoom);
+    }
+
+    private static boolean horizontalHits(
+            List<double[]> ranges, double lo, double hi, double pad) {
+        for (double[] r : ranges) {
+            if (!(hi + pad < r[0] || lo - pad > r[1])) {
+                return true;
+            }
         }
+        return false;
+    }
+
+    private static double measureTextWidth(String s, Font f) {
+        Text t = new Text(s != null ? s : "");
+        t.setFont(f);
+        return t.getLayoutBounds().getWidth();
+    }
+
+    private static double measureTextHeight(String s, Font f) {
+        Text t = new Text(s != null ? s : "");
+        t.setFont(f);
+        return t.getLayoutBounds().getHeight();
     }
 
     private enum BarKind {
@@ -751,7 +997,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
     private static ParseResult parse(List<String> columns, ObservableList<ObservableList<String>> rows) {
-        ParseResult pr = new ParseResult();
         List<Integer> slots = new ArrayList<>();
         for (int c = 0; c < columns.size(); c++) {
             String h = columns.get(c);
@@ -759,13 +1004,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 slots.add(c);
             }
         }
-        pr.slotColumnIndices = slots;
+        LocalTime slotBaseTime = LocalTime.of(8, 0);
         if (!slots.isEmpty()) {
             LocalTime t0 = parseTimeHeader(columns.get(slots.get(0)));
             if (t0 != null) {
-                pr.slotBaseTime = t0;
+                slotBaseTime = t0;
             }
         }
+        int slotMinutes = 10;
         if (slots.size() >= 2) {
             LocalTime a = parseTimeHeader(columns.get(slots.get(0)));
             LocalTime b = parseTimeHeader(columns.get(slots.get(1)));
@@ -773,17 +1019,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 int delta =
                         (b.getHour() * 60 + b.getMinute()) - (a.getHour() * 60 + a.getMinute());
                 if (delta > 0) {
-                    pr.slotMinutes = delta;
+                    slotMinutes = delta;
                 }
             }
         }
+        List<Integer> progressCols = new ArrayList<>();
         for (int c = 0; c < columns.size(); c++) {
             String h = columns.get(c);
             if (h != null && h.endsWith("進度")) {
-                pr.progressColumnIndices.add(c);
+                progressCols.add(c);
             }
         }
 
+        List<DisplayRow> displayRows = new ArrayList<>();
         String carriedDate = "";
         for (int r = 0; r < rows.size(); r++) {
             ObservableList<String> row = rows.get(r);
@@ -793,10 +1041,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String c0 = row.size() > 0 && row.get(0) != null ? row.get(0).strip() : "";
             if (isSectionRow(row)) {
                 String banner = !c0.isEmpty() ? c0 : sectionTitleFromRow(row);
-                pr.displayRows.add(new DisplayRow(banner, null, null, null, null, row));
+                displayRows.add(new DisplayRow(banner, null, null, null, null, row));
                 continue;
             }
-            int dateCol = columnIndex(columns, "日付");
+            int dateCol = columns.indexOf("日付");
             if (dateCol >= 0 && row.size() > dateCol) {
                 String dv = row.get(dateCol) != null ? row.get(dateCol).strip() : "";
                 if (!dv.isEmpty()) {
@@ -810,7 +1058,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         row.size() > si && row.get(si) != null ? row.get(si) : "";
                 slotCells.add(v);
             }
-            pr.displayRows.add(
+            displayRows.add(
                     new DisplayRow(
                             null,
                             lp.machine(),
@@ -819,7 +1067,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             slotCells,
                             row));
         }
-        return pr;
+        return new ParseResult(slots, progressCols, slotMinutes, slotBaseTime, displayRows);
     }
 
     private static boolean isSectionRow(ObservableList<String> row) {
@@ -849,12 +1097,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static int columnIndex(List<String> columns, String name) {
-        for (int i = 0; i < columns.size(); i++) {
-            if (name.equals(columns.get(i))) {
-                return i;
-            }
-        }
-        return -1;
+        return columns.indexOf(name);
     }
 
     private record LeftParts(String machine, String process, String summary) {}
@@ -948,39 +1191,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return v != null ? v.strip() : "";
     }
 
-    private static final class ParseResult {
-        List<Integer> slotColumnIndices = new ArrayList<>();
-        List<Integer> progressColumnIndices = new ArrayList<>();
-        int slotMinutes = 10;
-        LocalTime slotBaseTime = LocalTime.of(8, 0);
-        List<DisplayRow> displayRows = new ArrayList<>();
-    }
+    private record ParseResult(
+            List<Integer> slotColumnIndices,
+            List<Integer> progressColumnIndices,
+            int slotMinutes,
+            LocalTime slotBaseTime,
+            List<DisplayRow> displayRows) {}
 
-    private static final class DisplayRow {
-        /** 非 null のときセクション行 */
-        final String sectionBanner;
-        /** データ行: 機械名列のテキスト */
-        final String machineLine;
-        /** データ行: 工程名列（工程名・タスク等。日付は機械名列側） */
-        final String processBlock;
-        /** データ行: ツールチップ用 */
-        final String rowSummary;
-        final List<String> cellsInSlots;
-        final ObservableList<String> rawRow;
-
-        DisplayRow(
-                String sectionBanner,
-                String machineLine,
-                String processBlock,
-                String rowSummary,
-                List<String> cellsInSlots,
-                ObservableList<String> rawRow) {
-            this.sectionBanner = sectionBanner;
-            this.machineLine = machineLine;
-            this.processBlock = processBlock;
-            this.rowSummary = rowSummary;
-            this.cellsInSlots = cellsInSlots;
-            this.rawRow = rawRow;
-        }
-    }
+    /**
+     * @param sectionBanner 非 null のときセクション行
+     * @param machineLine データ行: 機械名列のテキスト
+     * @param processBlock データ行: 工程名列（工程名・タスク等。日付は機械名列側）
+     * @param rowSummary データ行: ツールチップ用
+     */
+    private record DisplayRow(
+            String sectionBanner,
+            String machineLine,
+            String processBlock,
+            String rowSummary,
+            List<String> cellsInSlots,
+            ObservableList<String> rawRow) {}
 }

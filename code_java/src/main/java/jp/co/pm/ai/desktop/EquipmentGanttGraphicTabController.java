@@ -7,8 +7,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -101,6 +99,10 @@ public final class EquipmentGanttGraphicTabController {
     private double equipmentGraphicProcessColWidth =
             EquipmentGraphicGanttPane.DEFAULT_PROCESS_COLUMN_WIDTH;
 
+    private TextField equipmentGraphicBarFontField;
+
+    private String equipmentGraphicBarFontFamily = "";
+
     private PauseTransition equipmentGraphicPersistDelay;
     private PauseTransition equipmentGraphicDividerRebuildDelay;
 
@@ -166,6 +168,11 @@ public final class EquipmentGanttGraphicTabController {
         if (Double.isFinite(pw) && pw > 0) {
             equipmentGraphicProcessColWidth = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
         }
+        String f = s.equipmentGanttBarFontFamily();
+        equipmentGraphicBarFontFamily = f != null ? f.strip() : "";
+        if (equipmentGraphicBarFontField != null) {
+            equipmentGraphicBarFontField.setText(equipmentGraphicBarFontFamily);
+        }
     }
 
     double snapshotEquipmentGanttZoomPercent() {
@@ -178,6 +185,14 @@ public final class EquipmentGanttGraphicTabController {
 
     double snapshotEquipmentGanttProcessColWidth() {
         return equipmentGraphicProcessColWidth;
+    }
+
+    String snapshotEquipmentGanttBarFontFamily() {
+        if (equipmentGraphicBarFontField != null) {
+            String t = equipmentGraphicBarFontField.getText();
+            return t != null ? t.strip() : "";
+        }
+        return equipmentGraphicBarFontFamily;
     }
 
     private void scheduleEquipmentGraphicPersist() {
@@ -313,8 +328,7 @@ public final class EquipmentGanttGraphicTabController {
                 return;
             }
 
-            List<String> names =
-                    eligible.keySet().stream().sorted().collect(Collectors.toList());
+            List<String> names = eligible.keySet().stream().sorted().toList();
             String previous =
                     sheetCombo.getSelectionModel().getSelectedItem() != null
                             ? sheetCombo.getSelectionModel().getSelectedItem()
@@ -402,7 +416,31 @@ public final class EquipmentGanttGraphicTabController {
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(0, 0, 8, 0));
         Label z = new Label("表示倍率（タイムライン・行・フォント）");
-        bar.getChildren().addAll(z, graphicZoomSlider, graphicZoomPercentLabel);
+        if (equipmentGraphicBarFontField == null) {
+            equipmentGraphicBarFontField = new TextField();
+            equipmentGraphicBarFontField.setPrefWidth(200);
+            equipmentGraphicBarFontField.setPromptText("バー表示フォント（空＝既定）");
+            equipmentGraphicBarFontField.setText(equipmentGraphicBarFontFamily);
+            equipmentGraphicBarFontField
+                    .textProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                equipmentGraphicBarFontFamily =
+                                        equipmentGraphicBarFontField.getText() != null
+                                                ? equipmentGraphicBarFontField.getText().strip()
+                                                : "";
+                                rebuildGraphicView();
+                                scheduleEquipmentGraphicPersist();
+                            });
+        }
+        Label fontHint = new Label("バー文字フォント");
+        bar.getChildren()
+                .addAll(
+                        z,
+                        graphicZoomSlider,
+                        graphicZoomPercentLabel,
+                        fontHint,
+                        equipmentGraphicBarFontField);
         return bar;
     }
 
@@ -422,6 +460,7 @@ public final class EquipmentGanttGraphicTabController {
                         zoom,
                         equipmentGraphicMachineColWidth,
                         equipmentGraphicProcessColWidth,
+                        snapshotEquipmentGanttBarFontFamily(),
                         (mw, pw) -> {
                             double cm = EquipmentGraphicGanttPane.clampMachineColumnWidth(mw);
                             double cp = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
