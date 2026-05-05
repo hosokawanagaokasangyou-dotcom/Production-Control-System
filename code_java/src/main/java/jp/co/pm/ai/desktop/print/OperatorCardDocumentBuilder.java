@@ -13,12 +13,16 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 
 /**
  * Builds {@link OperatorCardPage} from member_schedule sheets and 結果_配台表 rows.
  */
 public final class OperatorCardDocumentBuilder {
+
+    /** Cursor debug session: オペレーターカードメンバー欄 / Y5-1 追跡 */
+    private static final String DEBUG_SESSION_OP_CARD = "72c80c";
 
     private static final String COL_TIME = "時間帯";
     private static final Set<String> NON_WORK_MARKERS =
@@ -41,6 +45,18 @@ public final class OperatorCardDocumentBuilder {
     private static final String QTY_CONV = "換算数量";
 
     private OperatorCardDocumentBuilder() {}
+
+    /** ログ用: teamKey 不一致疑い（H1）のため空白正規化したセル（本番キーとは別）。 */
+    static String normalizeCellProbe(String cell) {
+        if (cell == null) {
+            return "";
+        }
+        return cell.trim().replaceAll("\\s+", "");
+    }
+
+    static boolean traceY51Slice(String cell) {
+        return cell != null && cell.contains("Y5-1");
+    }
 
     public static OperatorCardPage buildPage(
             String operatorName,
@@ -68,6 +84,32 @@ public final class OperatorCardDocumentBuilder {
 
         Map<String, Set<String>> teamMap =
                 buildTeamMap(memberSheetsByOperator, threeCols);
+
+        // #region agent log
+        {
+            int y51Keys = 0;
+            for (String k : teamMap.keySet()) {
+                if (k != null && k.contains("Y5-1")) {
+                    y51Keys++;
+                }
+            }
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    DEBUG_SESSION_OP_CARD,
+                    "H3",
+                    "OperatorCardDocumentBuilder.buildPage",
+                    "teamMap built",
+                    Map.of(
+                            "operatorSheets",
+                            memberSheetsByOperator.size(),
+                            "dateCols",
+                            String.join("|", threeCols),
+                            "teamMapSize",
+                            teamMap.size(),
+                            "y51KeyCount",
+                            y51Keys));
+        }
+        // #endregion
 
         List<OperatorCardDaySection> days = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
@@ -148,6 +190,29 @@ public final class OperatorCardDocumentBuilder {
                     }
                     String k = teamKey(dc, slot, cell);
                     out.computeIfAbsent(k, x -> new LinkedHashSet<>()).add(op);
+                    // #region agent log
+                    if (traceY51Slice(cell)) {
+                        AgentDebugLog.appendStructured(
+                                Map.of(),
+                                DEBUG_SESSION_OP_CARD,
+                                "H2",
+                                "OperatorCardDocumentBuilder.buildTeamMap",
+                                "teamMap put",
+                                Map.of(
+                                        "operator",
+                                        op,
+                                        "dateCol",
+                                        dc,
+                                        "slot",
+                                        slot != null ? slot : "",
+                                        "cellLen",
+                                        cell.length(),
+                                        "cellNormLen",
+                                        normalizeCellProbe(cell).length(),
+                                        "cellNormHash",
+                                        Integer.toHexString(normalizeCellProbe(cell).hashCode())));
+                    }
+                    // #endregion
                 }
             }
         }
@@ -208,6 +273,46 @@ public final class OperatorCardDocumentBuilder {
             members.remove(selfOperator);
             String memberStr =
                     members.isEmpty() ? "—" : String.join("、", members);
+
+            // #region agent log
+            if (traceY51Slice(cell)) {
+                List<Integer> perKeySizes = new ArrayList<>();
+                List<String> slotSamples = new ArrayList<>();
+                for (int k = i; k <= j; k++) {
+                    String sl = lines.get(k).get(COL_TIME);
+                    if (sl != null) {
+                        String tk = teamKey(dateCol, sl, cell);
+                        perKeySizes.add(teamMap.getOrDefault(tk, Set.of()).size());
+                        slotSamples.add(sl);
+                    }
+                }
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        DEBUG_SESSION_OP_CARD,
+                        "H1",
+                        "OperatorCardDocumentBuilder.buildDayRows",
+                        "Y5-1 row members resolved",
+                        Map.of(
+                                "selfOperator",
+                                selfOperator,
+                                "date",
+                                date.toString(),
+                                "slotRange",
+                                String.join(
+                                        " .. ",
+                                        slotSamples.isEmpty()
+                                                ? List.of("")
+                                                : List.of(slotSamples.get(0), slotSamples.get(slotSamples.size() - 1))),
+                                "perKeySizes",
+                                perKeySizes.toString(),
+                                "memberStr",
+                                memberStr,
+                                "memberStrLen",
+                                memberStr.length(),
+                                "cellNormHash",
+                                Integer.toHexString(normalizeCellProbe(cell).hashCode())));
+            }
+            // #endregion
 
             String qtyD = "";
             String qtyC = "";
