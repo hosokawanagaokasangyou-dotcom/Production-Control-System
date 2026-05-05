@@ -54,10 +54,10 @@
                         </HBox>
                         <Label text="データ行の高さ（一括）"/>
                         <HBox alignment="CENTER_LEFT" spacing="10.0">
-                            <Slider fx:id="planResultRowHeightSlider" blockIncrement="5.0"
-                                    majorTickUnit="25.0" max="200.0" min="50.0"
-                                    prefWidth="240.0" showTickMarks="true"/>
-                            <Label fx:id="planResultRowHeightPctLabel" minWidth="44.0" text="100%"/>
+                            <Slider fx:id="planResultRowHeightSlider" blockIncrement="25.0"
+                                    majorTickUnit="250.0" max="2000.0" min="50.0"
+                                    prefWidth="280.0" showTickMarks="true"/>
+                            <Label fx:id="planResultRowHeightPctLabel" minWidth="52.0" text="100%"/>
                         </HBox>
                         <Label text="長い文字列の表示"/>
                         <HBox alignment="CENTER_LEFT" spacing="16.0">

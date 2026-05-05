@@ -491,11 +491,18 @@ public final class SpreadsheetTabularSupport {
         }
     }
 
+    /** 計画結果スプレッドシートの行高さ％の下限（既定行高に対する倍率）。 */
+    public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MIN = 50.0;
+
+    /** 計画結果スプレッドシートの行高さ％の上限（既定行高に対する倍率）。 */
+    public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
+
     /**
      * 計画結果 JSON ビューア：全グリッド行の高さを一括スケールし、フィルタ行以外のセルに折り返しを適用する。
      *
      * @param cellWrapText {@code true} で折り返し、{@code false} で単行（見切れ）
-     * @param rowHeightPercent 50〜100〜200（ControlsFX 既定行高に対する倍率％）
+     * @param rowHeightPercent {@link #PLAN_RESULT_ROW_HEIGHT_PCT_MIN}〜{@link #PLAN_RESULT_ROW_HEIGHT_PCT_MAX}
+     *         （ControlsFX 既定行高に対する倍率％、100＝既定）
      */
     public static void applyPlanResultGridPresentation(
             GridBase grid, boolean cellWrapText, double rowHeightPercent) {
@@ -506,7 +513,10 @@ public final class SpreadsheetTabularSupport {
         if (Double.isNaN(pct) || pct <= 0) {
             pct = 100.0;
         }
-        pct = Math.min(200.0, Math.max(50.0, pct));
+        pct =
+                Math.min(
+                        PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
+                        Math.max(PLAN_RESULT_ROW_HEIGHT_PCT_MIN, pct));
         final double basePx = 24.0;
         final double rowPx = basePx * (pct / 100.0);
         grid.setRowHeightCallback(row -> rowPx);

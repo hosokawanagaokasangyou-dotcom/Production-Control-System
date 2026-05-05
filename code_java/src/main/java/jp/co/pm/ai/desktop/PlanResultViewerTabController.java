@@ -168,11 +168,12 @@ public final class PlanResultViewerTabController {
             if (Double.isNaN(rh) || rh < 50) {
                 rh = 100.0;
             }
-            rh = Math.min(200.0, rh);
-            planResultRowHeightSlider.setMin(50);
-            planResultRowHeightSlider.setMax(200);
+            rh =
+                    Math.min(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX, rh);
+            planResultRowHeightSlider.setMin(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN);
+            planResultRowHeightSlider.setMax(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
             planResultRowHeightSlider.setValue(rh);
-            planResultRowHeightSlider.setMajorTickUnit(25);
+            planResultRowHeightSlider.setMajorTickUnit(250);
             planResultRowHeightSlider.setMinorTickCount(4);
             planResultRowHeightSlider.setShowTickMarks(true);
             if (planResultRowHeightPctLabel != null) {

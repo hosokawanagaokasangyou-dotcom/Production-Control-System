@@ -59,7 +59,7 @@ public final class TableColumnOrderPersistence {
     /**
      * 計画結果 JSON ビューアの表示設定（フォント・行高・セル折り返し）。
      *
-     * @param rowHeightPercent データ行の高さ 50〜200（100＝既定）
+     * @param rowHeightPercent データ行の高さ 50〜2000（100＝既定）
      * @param cellWrapText {@code true} で折り返し、{@code false} で1行・見切れ
      */
     public record PlanResultViewerUiPrefs(
@@ -377,8 +377,8 @@ public final class TableColumnOrderPersistence {
             if (Double.isNaN(rh) || rh < 50) {
                 rh = 100.0;
             }
-            if (rh > 200) {
-                rh = 200.0;
+            if (rh > SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX) {
+                rh = SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX;
             }
             boolean wrap = root.path(KEY_PLAN_RESULT_CELL_WRAP).asBoolean(false);
             return new PlanResultViewerUiPrefs(fam != null ? fam : "", sz, rh, wrap);
@@ -409,7 +409,10 @@ public final class TableColumnOrderPersistence {
             if (Double.isNaN(rh)) {
                 rh = 100.0;
             }
-            rh = Math.min(200.0, Math.max(50.0, rh));
+            rh =
+                    Math.min(
+                            SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
+                            Math.max(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN, rh));
             root.put(KEY_PLAN_RESULT_ROW_HEIGHT_PCT, rh);
             root.put(KEY_PLAN_RESULT_CELL_WRAP, prefs.cellWrapText());
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
