@@ -1384,7 +1384,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     private static LeftParts buildLeftParts(
             List<String> columns, ObservableList<String> row, String carriedDate) {
-        String mach = cellAt(columns, row, "機械名");
+        String machRaw = cellAt(columns, row, "機械名");
+        String mach = machRaw.isEmpty() ? "" : machineMergeKey(machRaw);
         String proc = cellAt(columns, row, "工程名");
         String task = cellAt(columns, row, "タスク概覝");
         String tb = cellAt(columns, row, "日時帯");
@@ -1437,14 +1438,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * 機械名列に付いた {@code (EC)} 等の識別子で行が分かれているとき、結合用に末尾 {@code (...)} を除いたキー。
+     * 機械名列末尾の {@code (...)} および全角 {@code （…）}（工程名の重複表示など）を除いた表示・縦結合用キー。
      */
     private static String machineMergeKey(String rawMachineCell) {
         if (rawMachineCell == null || rawMachineCell.isBlank()) {
             return "";
         }
-        String first = rawMachineCell.strip().split("\\R", 2)[0].strip();
-        return first.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
+        String s = rawMachineCell.strip().split("\\R", 2)[0].strip();
+        String prev;
+        do {
+            prev = s;
+            s = s.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
+            s = s.replaceFirst("\\s*（[^）]*）\\s*$", "").strip();
+        } while (!s.equals(prev));
+        return s;
     }
 
     /**
