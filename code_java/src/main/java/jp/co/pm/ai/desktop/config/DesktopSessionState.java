@@ -34,7 +34,6 @@ import java.util.List;
  * @param equipmentGanttGraphicZoomPercent 設備ガント・グラフィックタブの表示倍率（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は未保存として既定幅を使用）
  * @param equipmentGanttProcessColWidth 同タブ左・工程名列の幅（px、0 は未保存として既定幅を使用）
- * @param equipmentGanttBarFontFamily 同タブタイムライン・バー内ラベル用フォントファミリ（空はシステム既定）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -63,8 +62,7 @@ public record DesktopSessionState(
         List<String> mainShellTabOrder,
         double equipmentGanttGraphicZoomPercent,
         double equipmentGanttMachineColWidth,
-        double equipmentGanttProcessColWidth,
-        String equipmentGanttBarFontFamily) {
+        double equipmentGanttProcessColWidth) {
 
     public static DesktopSessionState empty() {
         return new DesktopSessionState(
@@ -94,7 +92,6 @@ public record DesktopSessionState(
                 List.of(),
                 0d,
                 0d,
-                0d,
-                "");
+                0d);
     }
 }

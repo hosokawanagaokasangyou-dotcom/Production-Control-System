@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [JAVA版, main, master]
+    branches: [JAVA��, main, master]
   pull_request:
-    branches: [JAVA版, main, master]
+    branches: [JAVA��, main, master]
 
 jobs:
   java:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "26"
+          java-version: "21"
           cache: maven
       - name: Maven test (wrapper)
         working-directory: code_java

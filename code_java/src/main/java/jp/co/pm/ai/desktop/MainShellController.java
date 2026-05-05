@@ -541,8 +541,7 @@ public final class MainShellController {
                 snapshotMainShellTabOrder(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
-                equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth(),
-                equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontFamily());
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth());
     }
 
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
