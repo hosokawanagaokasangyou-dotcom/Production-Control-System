@@ -46,12 +46,37 @@ public final class OperatorCardDocumentBuilder {
 
     private OperatorCardDocumentBuilder() {}
 
-    /** ログ用: teamKey 不一致疑い（H1）のため空白正規化したセル（本番キーとは別）。 */
+    /** ログ用: 修正前後の比較用（生セルを空白除去したハッシュ）。 */
     static String normalizeCellProbe(String cell) {
         if (cell == null) {
             return "";
         }
-        return cell.trim().replaceAll("\\s+", "");
+        return cell.trim().replaceAll("\\p{Zs}+", "");
+    }
+
+    /**
+     * チーム照合用キー。セル原文の完全一致ではなく、依頼NO・工程・機械（{@link MemberScheduleWorkCellParser} と同じ解釈）に
+     * 正規化してオペレーター間の表記ゆれを吸収する。
+     */
+    static String canonicalTeamCellKey(String rawCell) {
+        if (rawCell == null) {
+            return "";
+        }
+        String trimmed = rawCell.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        MemberScheduleWorkCellParser.ParsedWorkCell p =
+                MemberScheduleWorkCellParser.parse(trimmed);
+        String req = p.requestNo();
+        if (req != null && !req.isEmpty()) {
+            return normalizeKey(req)
+                    + "|"
+                    + normalizeKey(p.processName())
+                    + "|"
+                    + normalizeKey(p.machineName());
+        }
+        return normalizeKey(trimmed);
     }
 
     static boolean traceY51Slice(String cell) {
@@ -210,7 +235,10 @@ public final class OperatorCardDocumentBuilder {
                                         "cellNormLen",
                                         normalizeCellProbe(cell).length(),
                                         "cellNormHash",
-                                        Integer.toHexString(normalizeCellProbe(cell).hashCode())));
+                                        Integer.toHexString(normalizeCellProbe(cell).hashCode()),
+                                        "canonicalKeyHash",
+                                        Integer.toHexString(
+                                                canonicalTeamCellKey(cell).hashCode())));
                     }
                     // #endregion
                 }
@@ -220,7 +248,7 @@ public final class OperatorCardDocumentBuilder {
     }
 
     static String teamKey(String dateCol, String timeSlot, String rawCell) {
-        return dateCol + "\0" + timeSlot + "\0" + rawCell;
+        return dateCol + "\0" + timeSlot + "\0" + canonicalTeamCellKey(rawCell);
     }
 
     static boolean isNonWork(String cell) {
@@ -310,7 +338,11 @@ public final class OperatorCardDocumentBuilder {
                                 "memberStrLen",
                                 memberStr.length(),
                                 "cellNormHash",
-                                Integer.toHexString(normalizeCellProbe(cell).hashCode())));
+                                Integer.toHexString(normalizeCellProbe(cell).hashCode()),
+                                "canonicalKeyHash",
+                                Integer.toHexString(canonicalTeamCellKey(cell).hashCode()),
+                                "runId",
+                                "post-fix"));
             }
             // #endregion
 
@@ -374,7 +406,7 @@ public final class OperatorCardDocumentBuilder {
         if (s == null) {
             return "";
         }
-        return s.trim().replaceAll("\\s+", "");
+        return s.trim().replaceAll("\\p{Zs}+", "");
     }
 
     static String nz(String s) {

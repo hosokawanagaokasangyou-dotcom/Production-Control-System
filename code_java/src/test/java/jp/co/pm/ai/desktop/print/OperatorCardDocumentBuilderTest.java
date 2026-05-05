@@ -49,4 +49,15 @@ class OperatorCardDocumentBuilderTest {
                 "2026-05-07  05/07（木）",
                 OperatorCardPreviewFactory.formatDaySectionTitle(thu));
     }
+
+    @Test
+    void canonicalTeamCellKey_ignores_whitespace_between_tokens() {
+        String a =
+                "[Y5-1] \u30b9\u30e9\u30a4\u30b9+\u30b9\u30e9\u30a4\u30b9\u6a5f1\u3000\u6e56\u5357(\u88dc)";
+        String b =
+                "[Y5-1] \u30b9\u30e9\u30a4\u30b9+\u30b9\u30e9\u30a4\u30b9\u6a5f1 \u6e56\u5357(\u88dc)";
+        assertEquals(
+                OperatorCardDocumentBuilder.canonicalTeamCellKey(a),
+                OperatorCardDocumentBuilder.canonicalTeamCellKey(b));
+    }
 }
