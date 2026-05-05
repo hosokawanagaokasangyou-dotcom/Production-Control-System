@@ -104,6 +104,16 @@ public final class OperatorCardTabController {
                                 }
                             });
         }
+        if (operatorCombo != null) {
+            operatorCombo
+                    .valueProperty()
+                    .addListener(
+                            (obs, previousOp, newOp) -> {
+                                if (!Objects.equals(previousOp, newOp)) {
+                                    rebuildPreview();
+                                }
+                            });
+        }
         if (previewHost != null) {
             previewHost.setAlignment(Pos.TOP_CENTER);
             Label placeholder =
