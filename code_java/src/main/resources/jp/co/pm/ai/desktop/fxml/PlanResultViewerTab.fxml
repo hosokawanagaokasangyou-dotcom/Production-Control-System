@@ -7,6 +7,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -19,30 +20,33 @@
     <padding>
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
-    <!-- 常時表示（低高）：再読み・検索のみ -->
+    <!-- 常時表示：再読み・検索のみ -->
     <HBox alignment="CENTER_LEFT" spacing="8.0">
         <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
                 onAction="#onReloadButtonAction"/>
         <Button fx:id="syncLatestButton" mnemonicParsing="false"
                 text="最新JSONを検索"
                 onAction="#onSyncLatestButtonAction"/>
-        <Label text="表フォント"/>
-        <ComboBox fx:id="planResultFontFamilyCombo" prefWidth="200.0"/>
-        <Label text="サイズ"/>
-        <Spinner fx:id="planResultFontSizeSpinner" prefWidth="72.0"/>
         <Label styleClass="pm-plan-result-viewer-hint-inline"
-               text="パス指定・詳細は下のアコーディオンを展開"/>
+               text="フォント・JSONパスは下のアコーディオンで設定"/>
     </HBox>
     <Accordion fx:id="sourceAccordion" maxWidth="Infinity" VBox.vgrow="NEVER">
         <panes>
             <TitledPane fx:id="sourceTitledPane" animated="true"
-                        text="JSONファイル・ヒント"
+                        text="設定（フォント・JSONパス）"
                         expanded="false">
                 <content>
                     <VBox fillWidth="true" spacing="6.0" styleClass="pm-plan-result-viewer-source-body">
                         <padding>
                             <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
                         </padding>
+                        <Label text="表フォント"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <ComboBox fx:id="planResultFontFamilyCombo" prefWidth="280.0"/>
+                            <Label text="サイズ"/>
+                            <Spinner fx:id="planResultFontSizeSpinner" prefWidth="72.0"/>
+                        </HBox>
+                        <Separator/>
                         <Label text="production_plan_multi_day*.json"/>
                         <HBox alignment="CENTER_LEFT" spacing="8.0">
                             <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"
