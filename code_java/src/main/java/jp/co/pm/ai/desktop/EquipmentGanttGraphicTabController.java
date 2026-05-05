@@ -124,7 +124,7 @@ public final class EquipmentGanttGraphicTabController {
      * 設備グラフィックの {@link EquipmentGraphicGanttPane#build} は重いため、スライダー連続変更では
      * この間隔（ms）より頻繁には再構築しない。ドラッグ終了時は {@link #flushGraphicRebuildNow()} で必ず反映する。
      */
-    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 52L;
+    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 36L;
 
     private long graphicRebuildLastEmitMs;
 
