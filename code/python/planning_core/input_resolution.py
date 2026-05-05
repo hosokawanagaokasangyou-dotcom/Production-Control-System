@@ -84,8 +84,9 @@ EXCEL_IO_INVENTORY: list[dict[str, str]] = [
         "default": "pandas read_excel exclude-rules sheet (same name as _core EXCLUDE_RULES_SHEET_NAME)",
         "env": ENV_EXCLUDE_RULES_JSON,
         "note": "UTF-8 JSON list or {rules: [...]} skips Excel read when valid; "
-        "stage1 run_stage1_extract writes json/stage1_exclude_rules.json after exclude-rules maintenance "
-        "and sets PM_AI_EXCLUDE_RULES_JSON when that step runs",
+        "stage1 prefers repo code/exclude_rules.json as canonical source when present; "
+        "else writes json/stage1_exclude_rules.json from master after exclude-rules maintenance "
+        "and sets PM_AI_EXCLUDE_RULES_JSON",
     },
     {
         "area": "result_task_sheet_sidecar",

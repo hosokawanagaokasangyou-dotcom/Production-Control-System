@@ -14935,15 +14935,6 @@ def _json_safe_cell_for_exclude_rules_export(value) -> object:
     return str(value)
 
 
-def _read_exclude_rules_sheet_missing_error(ex: BaseException, sheet_name: str) -> bool:
-    """pandas / openpyxl が「シートなし」で投げた例外か（空ルール JSON へフォールバックする）。"""
-    msg = str(ex)
-    if sheet_name not in msg:
-        return False
-    low = msg.lower()
-    return "not found" in low or "does not exist" in low
-
-
 def _write_stage1_exclude_rules_json_sidecar(
     wb_path_arg: str, out_path: str, *, use_effective_read_path: bool = True
 ) -> str | None:
@@ -14972,24 +14963,6 @@ def _write_stage1_exclude_rules_json_sidecar(
             return None
         df = pd.read_excel(path, sheet_name=EXCLUDE_RULES_SHEET_NAME)
     except Exception as ex:
-        if _read_exclude_rules_sheet_missing_error(ex, EXCLUDE_RULES_SHEET_NAME):
-            rules_out: list[dict] = []
-            abs_out = os.path.abspath(out_path)
-            parent = os.path.dirname(abs_out)
-            try:
-                if parent:
-                    os.makedirs(parent, exist_ok=True)
-                with open(abs_out, "w", encoding="utf-8", newline="\n") as f:
-                    json.dump({"rules": rules_out}, f, ensure_ascii=False, indent=2)
-            except OSError as wex:
-                logging.warning("段階1: 配台不要 JSON の書き込みに失敗: %s", wex)
-                return None
-            logging.info(
-                "段階1: master に「%s」シートが無いため空ルールの JSON を書きました: %s",
-                EXCLUDE_RULES_SHEET_NAME,
-                abs_out,
-            )
-            return abs_out
         logging.warning(
             "段階1: 「%s」シートの読込に失敗し JSON を書けません: %s",
             EXCLUDE_RULES_SHEET_NAME,
@@ -15031,6 +15004,50 @@ def _write_stage1_exclude_rules_json_sidecar(
 def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
     """True のとき「設定_配台不要工程」の openpyxl と Excel 経由の保守を省略し、ルールは JSON のみとする。"""
     return _get_exclude_rules_from_json_env() is not None
+
+
+def _resolve_repo_root_exclude_rules_json_path() -> str | None:
+    """リポジトリの ``code/exclude_rules.json``（配台不要ルールの既定・JavaFX と同じ）があれば絶対パス。"""
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    candidates: list[str] = []
+    if repo:
+        candidates.append(
+            os.path.normpath(os.path.join(repo, "code", "exclude_rules.json"))
+        )
+    cwd = os.path.abspath(os.getcwd())
+    candidates.append(os.path.join(cwd, "code", "exclude_rules.json"))
+    try:
+        _pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        _code_dir = os.path.normpath(os.path.join(_pkg_dir, "..", ".."))
+        candidates.append(os.path.join(_code_dir, "exclude_rules.json"))
+    except Exception:
+        pass
+    seen: set[str] = set()
+    for p in candidates:
+        if not p or p in seen:
+            continue
+        seen.add(p)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def _ensure_stage1_exclude_rules_json_env_from_repo_default() -> None:
+    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定のとき、実在する ``code/exclude_rules.json`` を正本として載せる。"""
+    cur = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
+    if cur and os.path.isfile(cur):
+        _reset_exclude_rules_json_env_memo()
+        return
+    bundled = _resolve_repo_root_exclude_rules_json_path()
+    if not bundled:
+        return
+    os.environ[ENV_EXCLUDE_RULES_JSON] = bundled
+    _reset_exclude_rules_json_env_memo()
+    logging.info(
+        "段階1: 配台不要ルールの正本として JSON を使用します（%s）。Excel「%s」は参照しません。",
+        bundled,
+        EXCLUDE_RULES_SHEET_NAME,
+    )
 
 
 def _load_exclude_rules_from_workbook(wb_path: str) -> list[dict]:
@@ -15812,10 +15829,10 @@ def run_stage1_extract():
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
 
-    「設定_配台不要工程」の読み取り・JSON 化は **master.xlsm** のみ。
-
-    ``json`` 直下の ``stage1_exclude_rules.json`` へ書き出し、環境変数 ``PM_AI_EXCLUDE_RULES_JSON``
-    をその絶対パスに設定する（同一プロセス内）。
+    配台不要ルールの**正本**は UTF-8 JSON（list または ``{"rules":[...]}``）。既定でリポジトリの
+    ``code/exclude_rules.json`` が実在すれば ``PM_AI_EXCLUDE_RULES_JSON`` に載せ、Excel の
+    「設定_配台不要工程」は読まない。JSON が無い場合のみ master.xlsm の当該シートから
+    ``json/stage1_exclude_rules.json`` へ書き出して同変数を設定する。
 
     ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのときのみ、そのブックへ
     ``run_exclude_rules_sheet_maintenance``（行同期・D→E）を行う。
@@ -15928,35 +15945,48 @@ def run_stage1_extract():
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
-    # 設定_配台不要工程の行同期と D→E（AI）は、計画行集合確定後・配台試行順番付与より前に行う。
+    _ensure_stage1_exclude_rules_json_env_from_repo_default()
+    # 設定_配台不要工程の行同期と D→E（AI）は JSON 正本が無いときのみ（計画行確定後・試行順より前）。
     try:
-        _wb_maint_s1 = _excel_plan_input_wb()
-        if not _wb_maint_s1 or not os.path.isfile(_wb_maint_s1):
+        if _exclude_rules_json_env_supersedes_excel_sheet():
             logging.info(
-                "段階1: 設定シート「%s」の Excel 保守をスキップ（%s がブック実ファイルでない）。",
+                "段階1: %s が有効のため「%s」の Excel 保守をスキップします。",
+                ENV_EXCLUDE_RULES_JSON,
                 EXCLUDE_RULES_SHEET_NAME,
-                ENV_PLAN_INPUT_PATH,
             )
         else:
-            _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
-            run_exclude_rules_sheet_maintenance(_wb_maint_s1, _pm_pairs_s1, "段階1")
+            _wb_maint_s1 = _excel_plan_input_wb()
+            if not _wb_maint_s1 or not os.path.isfile(_wb_maint_s1):
+                logging.info(
+                    "段階1: 設定シート「%s」の Excel 保守をスキップ（%s がブック実ファイルでない）。",
+                    EXCLUDE_RULES_SHEET_NAME,
+                    ENV_PLAN_INPUT_PATH,
+                )
+            else:
+                _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
+                run_exclude_rules_sheet_maintenance(_wb_maint_s1, _pm_pairs_s1, "段階1")
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
-    # 配台不要の読取・JSON 化は master.xlsm のみ
     _master_er_wb = _require_master_workbook_path_exists()
     try:
-        _s1_er_json = os.path.join(json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
-        _written_er = _write_stage1_exclude_rules_json_sidecar(
-            _master_er_wb, _s1_er_json, use_effective_read_path=False
-        )
-        if _written_er:
-            os.environ[ENV_EXCLUDE_RULES_JSON] = _written_er
-            _reset_exclude_rules_json_env_memo()
+        if _exclude_rules_json_env_supersedes_excel_sheet():
             logging.info(
-                "段階1: 配台不要ルール（master）を JSON に書き出し、%s=%s",
-                ENV_EXCLUDE_RULES_JSON,
-                _written_er,
+                "段階1: 配台不要は JSON のみのため master からの %s 書き出しをスキップします。",
+                STAGE1_EXCLUDE_RULES_JSON_FILENAME,
             )
+        else:
+            _s1_er_json = os.path.join(json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+            _written_er = _write_stage1_exclude_rules_json_sidecar(
+                _master_er_wb, _s1_er_json, use_effective_read_path=False
+            )
+            if _written_er:
+                os.environ[ENV_EXCLUDE_RULES_JSON] = _written_er
+                _reset_exclude_rules_json_env_memo()
+                logging.info(
+                    "段階1: 配台不要ルール（master）を JSON に書き出し、%s=%s",
+                    ENV_EXCLUDE_RULES_JSON,
+                    _written_er,
+                )
     except Exception:
         logging.exception("段階1: 配台不要ルールの JSON 書き出しで例外（続行）")
     try:
