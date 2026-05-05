@@ -21,8 +21,8 @@
     <jfreechart.version>1.5.4</jfreechart.version>
     <jackson.version>2.21.3</jackson.version>
     <junit.version>5.12.2</junit.version>
-    <!-- javafx-maven-plugin: OS プロファイルで上書き（GPU パイプライン優先、失敗時 sw） -->
-    <javafx.prism.order>es2,sw</javafx.prism.order>
+    <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
+    <javafx.prism.order>sw</javafx.prism.order>
   </properties>
 
   <dependencies>
@@ -94,9 +94,6 @@
           <classifier>linux</classifier>
         </dependency>
       </dependencies>
-      <properties>
-        <javafx.prism.order>es2,sw</javafx.prism.order>
-      </properties>
     </profile>
     <profile>
       <id>javafx-win</id>
@@ -137,9 +134,6 @@
           <classifier>win</classifier>
         </dependency>
       </dependencies>
-      <properties>
-        <javafx.prism.order>d3d,es2,sw</javafx.prism.order>
-      </properties>
     </profile>
     <profile>
       <id>javafx-mac</id>
@@ -180,9 +174,6 @@
           <classifier>mac</classifier>
         </dependency>
       </dependencies>
-      <properties>
-        <javafx.prism.order>metal,es2,sw</javafx.prism.order>
-      </properties>
     </profile>
   </profiles>
 
@@ -204,7 +195,7 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <!-- Prism: GPU パイプライン優先（不具合時は VM に -Dprism.order=sw） -->
+          <!-- Prism 既定 sw（設備ガント等の Canvas で GPU 経路が NPE になり得る）。GPU は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
             <option>-Dprism.order=${javafx.prism.order}</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
