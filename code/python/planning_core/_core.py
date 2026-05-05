@@ -23560,11 +23560,7 @@ def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> 
         if hasattr(ws, "tables") and ws.tables:
             existing = ws.tables.get(str(table_display_name))
         if not existing:
-            # 新規作成しない（#REF 回避）
-            logging.warning(
-                "結果_配台表: テーブル '%s' が見つからないため新規作成は行いません（参照維持のため）。",
-                table_display_name,
-            )
+            # 新規作成しない（#REF 回避）。テーブル未使用時はログも出さない
             return
         # 既存テーブルの範囲だけ更新
         try:
