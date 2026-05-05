@@ -1136,6 +1136,7 @@ public final class MainShellController {
     void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
         alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("環境変数を初期値に戻す");
         alert.setHeaderText(null);
         alert.setContentText(
@@ -1463,10 +1464,28 @@ public final class MainShellController {
     private void showStageCompletionDialog(String title, String contentText) {
         Alert alert = new Alert(AlertType.INFORMATION);
         alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(contentText);
         alert.showAndWait();
+    }
+
+    /** メインウィンドウと同じテーマ CSS をダイアログに載せる（Alert は別 Scene のため未設定だと配色がずれる） */
+    private void applyAlertStylesheetsFromOwner(Alert alert) {
+        if (primaryStage == null) {
+            return;
+        }
+        Scene ownerScene = primaryStage.getScene();
+        if (ownerScene == null) {
+            return;
+        }
+        var paneSheets = alert.getDialogPane().getStylesheets();
+        for (String url : ownerScene.getStylesheets()) {
+            if (!paneSheets.contains(url)) {
+                paneSheets.add(url);
+            }
+        }
     }
 
     private static String exitCodeLegend(int code) {
