@@ -25,8 +25,6 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
-import javafx.scene.control.ProgressBar;
-import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -35,7 +33,6 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
@@ -96,21 +93,6 @@ public final class MainRunTabController {
 
     @FXML
     private ComboBox<String> stage2ResultBookFontCombo;
-
-    @FXML
-    private HBox stageRunProgressBox;
-
-    @FXML
-    private Label stageRunProgressLabel;
-
-    @FXML
-    private ProgressBar stageRunProgressBar;
-
-    @FXML
-    private ProgressIndicator stageRunBusyIndicator;
-
-    @FXML
-    private Button stageRunCancelButton;
 
     @FXML
     private Button copyAllLogButton;
@@ -489,13 +471,6 @@ public final class MainRunTabController {
     }
 
     @FXML
-    private void onStageRunCancelAction() {
-        if (shell != null) {
-            shell.cancelActiveStageRun();
-        }
-    }
-
-    @FXML
     private void onOpenStage2ProductionPlanAction() {
         openExcelBesideField(stage2ProductionPlanField, "stage2-production-plan");
     }
@@ -594,64 +569,17 @@ public final class MainRunTabController {
     }
 
     /**
-     * 段階1／段階2 実行中に進捗 UI を表示する。
-     * プログレスは {@link DispatchInteractiveTabController} の「機械 JSON 再読み」と同じ
-     * {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
+     * 段階1／段階2 実行中は段階ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
         Runnable work =
                 () -> {
-                    if (stageRunProgressBox == null) {
-                        return;
+                    boolean busy = stage1Running || stage2Running;
+                    if (stage1RunButton != null) {
+                        stage1RunButton.setDisable(busy);
                     }
-                    boolean show = stage1Running || stage2Running;
-                    if (stage1RunButton != null && stage2RunButton != null) {
-                        stage1RunButton.setDisable(show);
-                        stage2RunButton.setDisable(show);
-                    }
-                    if (show) {
-                        stageRunProgressBox.setManaged(true);
-                        stageRunProgressBox.setVisible(true);
-                        if (stageRunProgressBar != null) {
-                            stageRunProgressBar.setManaged(true);
-                            stageRunProgressBar.setVisible(true);
-                            stageRunProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-                        }
-                        if (stageRunBusyIndicator != null) {
-                            stageRunBusyIndicator.setManaged(true);
-                            stageRunBusyIndicator.setVisible(true);
-                        }
-                        if (stageRunProgressLabel != null) {
-                            stageRunProgressLabel.setText(
-                                    stage1Running ? "段階1 実行中…" : "段階2 実行中…");
-                        }
-                        if (stageRunCancelButton != null) {
-                            stageRunCancelButton.setManaged(true);
-                            stageRunCancelButton.setVisible(true);
-                        }
-                    } else {
-                        if (stageRunProgressBar != null) {
-                            stageRunProgressBar.setProgress(0);
-                            stageRunProgressBar.setVisible(false);
-                            stageRunProgressBar.setManaged(false);
-                        }
-                        if (stageRunBusyIndicator != null) {
-                            stageRunBusyIndicator.setVisible(false);
-                            stageRunBusyIndicator.setManaged(false);
-                        }
-                        if (stageRunProgressLabel != null) {
-                            stageRunProgressLabel.setText("");
-                        }
-                        if (stageRunCancelButton != null) {
-                            stageRunCancelButton.setVisible(false);
-                            stageRunCancelButton.setManaged(false);
-                        }
-                        stageRunProgressBox.setVisible(false);
-                        stageRunProgressBox.setManaged(false);
-                    }
-                    javafx.scene.Parent p = stageRunProgressBox.getParent();
-                    if (p != null) {
-                        p.requestLayout();
+                    if (stage2RunButton != null) {
+                        stage2RunButton.setDisable(busy);
                     }
                 };
         if (Platform.isFxApplicationThread()) {

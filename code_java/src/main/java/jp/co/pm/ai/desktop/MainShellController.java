@@ -1157,8 +1157,7 @@ public final class MainShellController {
     }
 
     /**
-     * 段階1実行中は環境変数タブと配台計画入力タブを無効化し、段階2に渡す前提が途中で崩れる操作を防ぐ。
-     * 段階2実行中は環境変数タブと段階1プレビュータブを無効化し、段階1の結果と食い違う操作を防ぐ。
+     * 段階1／段階2 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
      */
     private void applyRunTabGating() {
         String script = activeRunStageScript;
@@ -1175,19 +1174,15 @@ public final class MainShellController {
         if (tabs.isEmpty()) {
             return;
         }
+        boolean stageBusy = stage1Running || stage2Running;
         for (Tab t : tabs) {
-            boolean disable =
-                    stage1Running
-                            && (t == mainShellTabEnv || t == mainShellTabPlanInput)
-                            || stage2Running
-                                    && (t == mainShellTabEnv || t == mainShellTabStage1Preview);
-            t.setDisable(disable);
+            t.setDisable(stageBusy && t != mainShellTabRun);
         }
-        Tab sel = tabPane.getSelectionModel().getSelectedItem();
-        if (stage1Running && (sel == mainShellTabEnv || sel == mainShellTabPlanInput)) {
-            tabPane.getSelectionModel().select(mainShellTabRun);
-        } else if (stage2Running && (sel == mainShellTabEnv || sel == mainShellTabStage1Preview)) {
-            tabPane.getSelectionModel().select(mainShellTabRun);
+        if (stageBusy) {
+            Tab sel = tabPane.getSelectionModel().getSelectedItem();
+            if (sel != mainShellTabRun) {
+                tabPane.getSelectionModel().select(mainShellTabRun);
+            }
         }
     }
 
