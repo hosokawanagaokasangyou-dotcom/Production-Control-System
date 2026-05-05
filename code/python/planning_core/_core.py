@@ -35,6 +35,8 @@ from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.pagebreak import Break
+from openpyxl.chart import LineChart, Reference
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from .dispatch_workspace import (
     ENV_PLAN_INPUT_PATH,
@@ -114,7 +116,7 @@ GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE = "gemini_usage_summary_for_main.txt"
 GEMINI_USAGE_CUMULATIVE_JSON_FILE = "gemini_usage_cumulative.json"
 # 期間別ポケットをフラット化した CSV（Excel の折れ線・棒グラフ用）
 GEMINI_USAGE_BUCKETS_CSV_FILE = "gemini_usage_buckets_for_chart.csv"
-# メインシート・Gemini 日次推移（xlwings: Q〜R＝料金または呼出し、S〜T＝合計トークン）
+# メインシート・Gemini 日次推移（openpyxl: Q〜R＝料金または呼出し、S〜T＝合計トークン）
 GEMINI_USAGE_CHART_COL_DATE = 17  # Q
 GEMINI_USAGE_CHART_COL_VALUE = 18  # R
 GEMINI_USAGE_CHART_COL_TOK_DATE = 19  # S（グラフ用に日付を複製）
@@ -124,7 +126,7 @@ GEMINI_USAGE_CHART_ANCHOR_CELL = "T16"
 GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL = "AA16"
 GEMINI_USAGE_CHART_MAX_DAYS = 14
 GEMINI_USAGE_CHART_CLEAR_ROWS = 36
-# xlwings で貼る折れ線グラフ名（再実行時に削除してから作り直し）
+# openpyxl で貼る折れ線グラフ名（再実行時に削除してから作り直し）
 GEMINI_USAGE_XLW_CHART_NAME = "_GeminiApiDailyTrend"
 GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # テスト: EXCLUDE_RULES_TEST_E1234=1 で EXCLUDE_RULES_SHEET_NAME（「設定_配台不要工程」）の E 列に "1234" を書き（保存経路の確認用）。
@@ -6726,22 +6728,34 @@ def parse_result_task_column_config_dataframe(
     return out or None
 
 
-def _xlwings_write_column_config_sheet_ab(xw_sheet, rows: list[tuple[str, bool]]) -> None:
+def _openpyxl_write_column_config_sheet_ab(ws, rows: list[tuple[str, bool]]) -> None:
     """列設定シートの A:B を 列名・表示 のみで上書き（1行目見出し＋データ）。"""
     mat = [[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]]
     for lab, vis in rows:
         mat.append([lab, bool(vis)])
     n_r = len(mat)
+    lim_r = max(int(ws.max_row or 1), n_r, 50)
+    for r in range(1, lim_r + 1):
+        for c in (1, 2):
+            ws.cell(row=r, column=c).value = None
+    for r in range(1, n_r + 1):
+        ws.cell(row=r, column=1).value = mat[r - 1][0]
+        ws.cell(row=r, column=2).value = mat[r - 1][1]
+
+
+def _openpyxl_sheet_to_matrix(ws) -> list:
+    """openpyxl Worksheet を矩形 list[list] にする（1行のみでも2次元）。"""
     try:
-        ur = xw_sheet.used_range
-        lim_r = max(ur.row + ur.rows.count - 1, n_r, 2)
-        xw_sheet.range((1, 1), (lim_r, 2)).clear_contents()
+        mr = int(ws.max_row or 0)
+        mc = int(ws.max_column or 0)
     except Exception:
-        try:
-            xw_sheet.range((1, 1)).resize(max(n_r, 50), 2).clear_contents()
-        except Exception:
-            pass
-    xw_sheet.range((1, 1)).resize(n_r, 2).value = mat
+        mr, mc = 0, 0
+    if mr < 1 or mc < 1:
+        return []
+    out: list[list] = []
+    for r in range(1, mr + 1):
+        out.append([ws.cell(row=r, column=c).value for c in range(1, mc + 1)])
+    return out
 
 
 def load_result_task_column_rows_from_input_workbook(max_history_len: int) -> list | None:
@@ -6928,23 +6942,6 @@ def apply_result_task_sheet_column_order(
     return df[ordered], ordered, source, vis_map
 
 
-def _xlwings_sheet_to_matrix(sheet) -> list:
-    """xlwings Sheet の UsedRange を矩形の list[list] にれる（1行のみでも2次元）。"""
-    ur = sheet.used_range
-    if ur is None:
-        return []
-    raw = ur.options(ndim=2).value
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        return [[raw]]
-    if len(raw) == 0:
-        return []
-    if not isinstance(raw[0], list):
-        return [raw]
-    return raw
-
-
 def _matrix_to_dataframe_header_first(matrix: list) -> pd.DataFrame | None:
     """1行目を列名とみなし DataFrame を返す。空なら None。"""
     if not matrix or not matrix[0]:
@@ -6971,119 +6968,122 @@ def _max_history_len_from_result_task_df_columns(columns) -> int:
     return max(imax, 1)
 
 
-def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None) -> bool:
+def apply_result_task_column_layout_via_openpyxl(workbook_path: str | None = None) -> bool:
     """
-    Excel で開いているマクロブックについで」
-    「列設定_結果_タスク一覧」の内容に合わせで「結果_タスク一覧」の列順と列非表示を更新れる。
+    マクロブックのディスク上の内容を読み、
+    「列設定_結果_タスク一覧」の内容に合わせて「結果_タスク一覧」の列順と列非表示を更新する。
     「列設定_結果_タスク一覧」のセルは上書きしない（メモ・表外の A:B を消さない）。重複整理は
-    dedupe_result_task_column_config_sheet_via_xlwings / VBA「重複列名を整理」を使う。
-    ブックは事剝に保存し、本処理中も Excel 上で開いたままにれること（xlwings は接続れる）。
+    dedupe_result_task_column_config_sheet_via_openpyxl / VBA「重複列名を整理」を使う。
     """
     path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("結果_タスク一覧 列適用: ブックパスは空です（TASK_INPUT_WORKBOOK を設定してください）。")
         return False
-    try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("結果_タスク一覧 列適用: xlwings は import でしません。pip install xlwings を確認してください。")
-        return False
-
-    try:
-        wb = xw.Book(path)
-    except Exception as e:
-        logging.error("結果_タスク一覧 列適用: ブックに接続でしません: %s", e)
-        return False
-
-    try:
-        ws_res = wb.sheets[RESULT_TASK_SHEET_NAME]
-        ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
-    except Exception as e:
-        logging.error("結果_タスク一覧 列適用: 必須シートは見つかりません: %s", e)
-        return False
-
-    mat_res = _xlwings_sheet_to_matrix(ws_res)
-    mat_cfg = _xlwings_sheet_to_matrix(ws_cfg)
-    df_res = _matrix_to_dataframe_header_first(mat_res)
-    df_cfg = _matrix_to_dataframe_header_first(mat_cfg)
-    if df_res is None or df_res.empty:
-        logging.error("結果_タスク一覧 列適用: 「%s」にデータはありません。", RESULT_TASK_SHEET_NAME)
-        return False
-    if df_cfg is None:
-        logging.error("結果_タスク一覧 列適用: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
-        return False
-
-    max_h = _max_history_len_from_result_task_df_columns(df_res.columns)
-    rows_cfg = parse_result_task_column_config_dataframe(df_cfg, max_h)
-    if not rows_cfg:
+    if _workbook_should_skip_openpyxl_io(path):
         logging.error(
-            "結果_タスク一覧 列適用: 「%s」に有効な列名行はありません。",
-            COLUMN_CONFIG_SHEET_NAME,
+            "結果_タスク一覧 列適用: ブックに「%s」があるため openpyxl で編集できません。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return False
-    # 列設定シートの A:B は上書きしない（clear_contents が UsedRange まで広がり、
-    # 表外のメモ・余白の文字やチェック連動セルが消えるのを防ぐ）。並べ替え・非表示は結果シートのみ反映。
-    df_cfg_clean = pd.DataFrame(
-        rows_cfg, columns=[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]
-    )
-    df_out, ordered, source, vis_map = apply_result_task_sheet_column_order(
-        df_res, max_h, config_dataframe=df_cfg_clean
-    )
-
-    df_write = df_out.astype(object).where(pd.notna(df_out), None)
-    headers = [str(h) for h in df_write.columns.tolist()]
-    body = df_write.values.tolist()
-    out_matrix = [headers] + body
-    nrows = len(out_matrix)
-    ncols = len(headers)
-    if ncols == 0:
-        return False
-
+    keep_vba = str(path).lower().endswith(".xlsm")
+    wb = None
     try:
-        ur_old = ws_res.used_range
-        if ur_old is not None:
-            ws_res.range((ur_old.row, ur_old.column)).resize(
-                ur_old.rows.count, ur_old.columns.count
-            ).clear_contents()
-    except Exception:
-        try:
-            ws_res.used_range.clear_contents()
-        except Exception:
-            pass
-
-    ws_res.range((1, 1)).resize(nrows, ncols).value = out_matrix
-
-    for ci in range(1, ncols + 1):
-        try:
-            ws_res.range((1, ci)).api.EntireColumn.Hidden = False
-        except Exception:
-            pass
-
-    for ci, col_name in enumerate(ordered, 1):
-        if not vis_map.get(col_name, True):
-            try:
-                ws_res.range((1, ci)).api.EntireColumn.Hidden = True
-            except Exception as e:
-                logging.warning("列非表示に失敗（列%s %s）: %s", ci, col_name, e)
-
-    try:
-        wb.save()
+        wb = load_workbook(path, keep_vba=keep_vba, read_only=False, data_only=False)
     except Exception as e:
-        logging.warning("結果_タスク一覧 列適用: 保存で警告（データはシート上は更新済みの可能性）: %s", e)
+        logging.error("結果_タスク一覧 列適用: ブックを開けません: %s", e)
+        return False
+    try:
+        try:
+            ws_res = wb[RESULT_TASK_SHEET_NAME]
+            ws_cfg = wb[COLUMN_CONFIG_SHEET_NAME]
+        except KeyError as e:
+            logging.error("結果_タスク一覧 列適用: 必須シートは見つかりません: %s", e)
+            return False
 
-    logging.info(
-        "結果_タスク一覧 列適用完了: %s（%s 列」非表示=%s）",
-        source,
-        len(ordered),
-        sum(1 for c in ordered if not vis_map.get(c, True)),
-    )
-    return True
+        mat_res = _openpyxl_sheet_to_matrix(ws_res)
+        mat_cfg = _openpyxl_sheet_to_matrix(ws_cfg)
+        df_res = _matrix_to_dataframe_header_first(mat_res)
+        df_cfg = _matrix_to_dataframe_header_first(mat_cfg)
+        if df_res is None or df_res.empty:
+            logging.error("結果_タスク一覧 列適用: 「%s」にデータはありません。", RESULT_TASK_SHEET_NAME)
+            return False
+        if df_cfg is None:
+            logging.error("結果_タスク一覧 列適用: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+            return False
+
+        max_h = _max_history_len_from_result_task_df_columns(df_res.columns)
+        rows_cfg = parse_result_task_column_config_dataframe(df_cfg, max_h)
+        if not rows_cfg:
+            logging.error(
+                "結果_タスク一覧 列適用: 「%s」に有効な列名行はありません。",
+                COLUMN_CONFIG_SHEET_NAME,
+            )
+            return False
+        df_cfg_clean = pd.DataFrame(
+            rows_cfg, columns=[COLUMN_CONFIG_HEADER_COL, COLUMN_CONFIG_VISIBLE_COL]
+        )
+        df_out, ordered, source, vis_map = apply_result_task_sheet_column_order(
+            df_res, max_h, config_dataframe=df_cfg_clean
+        )
+
+        df_write = df_out.astype(object).where(pd.notna(df_out), None)
+        headers = [str(h) for h in df_write.columns.tolist()]
+        body = df_write.values.tolist()
+        out_matrix = [headers] + body
+        nrows = len(out_matrix)
+        ncols = len(headers)
+        if ncols == 0:
+            return False
+
+        max_old_r = int(ws_res.max_row or 1)
+        max_old_c = int(ws_res.max_column or 1)
+        for r in range(1, max(max_old_r, nrows) + 1):
+            for c in range(1, max(max_old_c, ncols) + 1):
+                ws_res.cell(row=r, column=c).value = None
+
+        for r in range(1, nrows + 1):
+            for c in range(1, ncols + 1):
+                ws_res.cell(row=r, column=c).value = out_matrix[r - 1][c - 1]
+
+        for ci in range(1, ncols + 1):
+            ws_res.column_dimensions[get_column_letter(ci)].hidden = False
+
+        for ci, col_name in enumerate(ordered, 1):
+            if not vis_map.get(col_name, True):
+                try:
+                    ws_res.column_dimensions[get_column_letter(ci)].hidden = True
+                except Exception as e:
+                    logging.warning("列非表示に失敗（列%s %s）: %s", ci, col_name, e)
+
+        try:
+            wb.save(path)
+        except Exception as e:
+            logging.warning("結果_タスク一覧 列適用: 保存で警告: %s", e)
+
+        logging.info(
+            "結果_タスク一覧 列適用完了: %s（%s 列・非表示=%s）",
+            source,
+            len(ordered),
+            sum(1 for c in ordered if not vis_map.get(c, True)),
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None) -> bool:
+    """互換名。xlwings は廃止し openpyxl のみ使用。"""
+    return apply_result_task_column_layout_via_openpyxl(workbook_path)
 
 
 def apply_result_task_column_layout_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックに対し列設定を適用する（VBA ボタン用）。"""
     p = _excel_plan_input_wb()
-    return apply_result_task_column_layout_via_xlwings(p)
+    return apply_result_task_column_layout_via_openpyxl(p)
 
 _PLAN_INPUT_XLWINGS_ORIG_ROW = "__orig_sheet_row__"
 
@@ -7094,16 +7094,15 @@ def _plan_input_dispatch_trial_order_local_only_from_env() -> bool:
     return v in ("1", "true", "yes", "on", "y")
 
 
-def refresh_plan_input_dispatch_trial_order_via_xlwings(
+def refresh_plan_input_dispatch_trial_order_via_openpyxl(
     workbook_path: str | None = None,
     *,
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    Excel で開いたマクロブック内の「配台計画_タスク入力」について、
+    マクロブックの「配台計画_タスク入力」について、
     段階2 と同じ ``fill_plan_dispatch_trial_order_column_stage1`` で「配台試行順番」を
-    再付与し、段階1 出力直前と同じ手順で行を並べ替える。
-    （未保存の編集分も xlwings で反映させるため read_excel は使わない）
+    再付与し、段階1 出力直前と同じ手順で行を並べ替える（ディスク上のブックを openpyxl で読み書き）。
 
     事前処理は ``_apply_planning_sheet_post_load_mutations``（設定シートの行同期・分割行の自動配台不要）。
     **「設定_配台不要工程」の C/E による計画シートへの配台不要の上書きは行わない**（段階1のみ。
@@ -7113,142 +7112,165 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     if not path:
         logging.error("配台試行順番更新: ブックパスは空です。")
         return False
-    try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("配台試行順番更新: xlwings はありません。")
-        return False
-    try:
-        wb = xw.Book(path)
-        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
-    except Exception as e:
-        logging.error("配台試行順番更新: シート接続に失敗: %s", e)
-        return False
-
-    mat = _xlwings_sheet_to_matrix(ws)
-    df = _matrix_to_dataframe_header_first(mat)
-    if df is None or df.empty:
-        logging.warning("配台試行順番更新: データ行はありません。")
-        return False
-
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-    for c in plan_input_sheet_column_order():
-        if c not in df.columns:
-            df[c] = ""
-
-    df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
-
-    _apply_planning_sheet_post_load_mutations(
-        df,
-        path,
-        "配台試行順番更新",
-        apply_exclude_rules_from_config=False,
-        compile_exclude_rules_d_to_e_with_ai=False,
-    )
-
-    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-    if dto_col not in df.columns:
-        logging.error("配台試行順番更新: 列「%s」はありません。", dto_col)
-        return False
-
-    _dto_loc = df.columns.get_loc(dto_col)
-    if isinstance(_dto_loc, slice):
-        logging.error("配台試行順番更新: 列「%s」は複数ありした。", dto_col)
-        return False
-    if pd.api.types.is_numeric_dtype(df[dto_col]):
-        df[dto_col] = float("nan")
-    else:
-        df[dto_col] = ""
-
-    data_extract_dt, _ = _extract_data_extraction_datetime()
-    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-    run_date = base_now_dt.date()
-
-    try:
-        (
-            _sd,
-            _mem,
-            equipment_list,
-            req_map,
-            need_rules,
-            _sm,
-            need_combo_col_index,
-        ) = load_skills_and_needs()
-    except Exception as e:
-        logging.exception("配台試行順番更新: master 読込に失敗: %s", e)
-        return False
-
-    try:
-        fill_plan_dispatch_trial_order_column_stage1(
-            df,
-            run_date,
-            req_map,
-            need_rules,
-            need_combo_col_index,
-            equipment_list,
-            members_for_gpo=_mem,
+    if _workbook_should_skip_openpyxl_io(path):
+        logging.error(
+            "配台試行順番更新: ブックに「%s」があるため openpyxl で編集できません。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
+        return False
+    keep_vba = str(path).lower().endswith(".xlsm")
+    wb = None
+    try:
+        wb = load_workbook(path, keep_vba=keep_vba, read_only=False, data_only=False)
     except Exception as e:
-        logging.exception("配台試行順番更新: 試行順計算に失敗: %s", e)
+        logging.error("配台試行順番更新: ブックを開けません: %s", e)
         return False
+    try:
+        try:
+            ws = wb[PLAN_INPUT_SHEET_NAME]
+        except KeyError as e:
+            logging.error("配台試行順番更新: シート接続に失敗: %s", e)
+            return False
 
-    df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
-    orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
-    df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
+        mat = _openpyxl_sheet_to_matrix(ws)
+        df = _matrix_to_dataframe_header_first(mat)
+        if df is None or df.empty:
+            logging.warning("配台試行順番更新: データ行はありません。")
+            return False
 
-    header_row = mat[0] if mat else []
-    n_hdr = len(header_row)
-    if n_hdr == 0:
-        return False
+        df = df.copy()
+        df.columns = df.columns.str.strip()
+        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+        for c in plan_input_sheet_column_order():
+            if c not in df.columns:
+                df[c] = ""
 
-    def _pad_row(r, n):
-        r = list(r) if r is not None else []
-        if len(r) < n:
-            r = r + [None] * (n - len(r))
-        return r
+        df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
 
-    new_mat = [_pad_row(header_row, n_hdr)]
-    for i in range(len(df_sorted)):
-        orig = orig_list[i]
-        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
-        src_row = _pad_row(src_row, n_hdr)
-        out_row = []
-        for j in range(n_hdr):
-            h_cell = header_row[j]
-            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
-                hname = ""
-            else:
-                hname = str(h_cell).strip()
-            if hname and hname in df_sorted.columns:
-                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
-                if pd.isna(v):
-                    out_row.append(None)
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "配台試行順番更新",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
+        )
+
+        dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+        if dto_col not in df.columns:
+            logging.error("配台試行順番更新: 列「%s」はありません。", dto_col)
+            return False
+
+        _dto_loc = df.columns.get_loc(dto_col)
+        if isinstance(_dto_loc, slice):
+            logging.error("配台試行順番更新: 列「%s」は複数ありした。", dto_col)
+            return False
+        if pd.api.types.is_numeric_dtype(df[dto_col]):
+            df[dto_col] = float("nan")
+        else:
+            df[dto_col] = ""
+
+        data_extract_dt, _ = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
+
+        try:
+            (
+                _sd,
+                _mem,
+                equipment_list,
+                req_map,
+                need_rules,
+                _sm,
+                need_combo_col_index,
+            ) = load_skills_and_needs()
+        except Exception as e:
+            logging.exception("配台試行順番更新: master 読込に失敗: %s", e)
+            return False
+
+        try:
+            fill_plan_dispatch_trial_order_column_stage1(
+                df,
+                run_date,
+                req_map,
+                need_rules,
+                need_combo_col_index,
+                equipment_list,
+                members_for_gpo=_mem,
+            )
+        except Exception as e:
+            logging.exception("配台試行順番更新: 試行順計算に失敗: %s", e)
+            return False
+
+        df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df)
+        orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
+        df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
+
+        header_row = mat[0] if mat else []
+        n_hdr = len(header_row)
+        if n_hdr == 0:
+            return False
+
+        def _pad_row(r, n):
+            r = list(r) if r is not None else []
+            if len(r) < n:
+                r = r + [None] * (n - len(r))
+            return r
+
+        new_mat = [_pad_row(header_row, n_hdr)]
+        for i in range(len(df_sorted)):
+            orig = orig_list[i]
+            src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+            src_row = _pad_row(src_row, n_hdr)
+            out_row = []
+            for j in range(n_hdr):
+                h_cell = header_row[j]
+                if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                    hname = ""
                 else:
-                    out_row.append(v)
-            else:
-                out_row.append(src_row[j])
-        new_mat.append(out_row)
+                    hname = str(h_cell).strip()
+                if hname and hname in df_sorted.columns:
+                    v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                    if pd.isna(v):
+                        out_row.append(None)
+                    else:
+                        out_row.append(v)
+                else:
+                    out_row.append(src_row[j])
+            new_mat.append(out_row)
 
-    try:
         n_r = len(new_mat)
-        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
-    except Exception as e:
-        logging.exception("配台試行順番更新: シート書込に失敗: %s", e)
-        return False
+        for r in range(1, n_r + 1):
+            for c in range(1, n_hdr + 1):
+                ws.cell(row=r, column=c).value = new_mat[r - 1][c - 1]
 
-    try:
-        wb.save()
-    except Exception as e:
-        logging.warning("配台試行順番更新: Save 警告: %s", e)
+        try:
+            wb.save(path)
+        except Exception as e:
+            logging.warning("配台試行順番更新: Save 警告: %s", e)
 
-    logging.info(
-        "配台試行順番更新: 「%s」を %s 行で更新しました。",
-        PLAN_INPUT_SHEET_NAME,
-        len(df_sorted),
+        logging.info(
+            "配台試行順番更新: 「%s」を %s 行で更新しました。",
+            PLAN_INPUT_SHEET_NAME,
+            len(df_sorted),
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+def refresh_plan_input_dispatch_trial_order_via_xlwings(
+    workbook_path: str | None = None,
+    *,
+    apply_post_load_mutations: bool = True,
+) -> bool:
+    """互換名。xlwings は廃止。"""
+    return refresh_plan_input_dispatch_trial_order_via_openpyxl(
+        workbook_path, apply_post_load_mutations=apply_post_load_mutations
     )
-    return True
 
 
 def refresh_plan_input_dispatch_trial_order_only() -> bool:
@@ -7380,7 +7402,7 @@ def _df_first_col_index_for_header(columns: pd.Index, hname: str) -> int | None:
     return None
 
 
-def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
+def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
     workbook_path: str | None = None,
 ) -> bool:
     """
@@ -7400,223 +7422,190 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     if not path:
         logging.error("配台試行順番（小数キー並べ）: ブックパスが空です。")
         return False
-    try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("配台試行順番（小数キー並べ）: xlwings がありません。")
-        return False
-    try:
-        wb = xw.Book(path)
-        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
-    except Exception as e:
-        logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
-        return False
-
-    # フィルター適用中は「見えている行だけが並べ替わらない」ように見えるため、
-    # 条件を退避して一旦解除→処理→復元する。
-    filter_restore = None
-    try:
-        if bool(getattr(ws.api, "FilterMode", False)) and getattr(ws.api, "AutoFilter", None) is not None:
-            af = ws.api.AutoFilter
-            filters = getattr(af, "Filters", None)
-            count = int(getattr(filters, "Count", 0) or 0)
-            filter_restore = []
-            for field in range(1, count + 1):
-                try:
-                    f = filters.Item(field)
-                    on = bool(getattr(f, "On", False))
-                    if not on:
-                        filter_restore.append({"field": field, "on": False})
-                        continue
-                    filter_restore.append(
-                        {
-                            "field": field,
-                            "on": True,
-                            "Criteria1": getattr(f, "Criteria1", None),
-                            "Operator": getattr(f, "Operator", None),
-                            "Criteria2": getattr(f, "Criteria2", None),
-                        }
-                    )
-                except Exception:
-                    filter_restore.append({"field": field, "on": None})
-
-            try:
-                ws.api.ShowAllData()
-            except Exception:
-                filter_restore = None
-    except Exception:
-        filter_restore = None
-
-    mat = _xlwings_sheet_to_matrix(ws)
-    df = _matrix_to_dataframe_header_first(mat)
-    if df is None or df.empty:
-        logging.warning("配台試行順番（小数キー並べ）: データ行がありません。")
-        return False
-
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-    for c in plan_input_sheet_column_order():
-        if c not in df.columns:
-            df[c] = ""
-
-    if df.columns.duplicated().any():
-        dup_labels = sorted(
-            {str(c) for c in df.columns[df.columns.duplicated(keep=False)]}
-        )
-        logging.warning(
-            "配台試行順番（小数キー並べ）: 見出しの重複列があります（先頭列を参照します）: %s",
-            dup_labels[:25],
-        )
-
-    _apply_plan_input_excel_accounting_speed_fix_to_df(df)
-
-    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-    if dto_col not in df.columns:
-        logging.error("配台試行順番（小数キー並べ）: 列「%s」がありません。", dto_col)
-        return False
-    dto_idx = df.columns.get_loc(dto_col)
-    if isinstance(dto_idx, slice):
-        logging.error("配台試行順番（小数キー並べ）: 列「%s」が複数あります。", dto_col)
-        return False
-
-    n = len(df)
-    active = [i for i in range(n) if not _plan_input_row_is_blank_task_row(df, i)]
-    if not active:
+    if _workbook_should_skip_openpyxl_io(path):
         logging.error(
-            "配台試行順番（小数キー並べ）: 依頼NO または 工程名 がある行がありません。"
+            "配台試行順番（小数キー並べ）: ブックに「%s」があるため openpyxl で編集できません。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return False
-    first = min(active)
-    last = max(active)
-    for k in range(first, last + 1):
-        if k not in active:
-            logging.error(
-                "配台試行順番（小数キー並べ）: %s 行目付近に、依頼NO・工程名が両方空の行が"
-                " データの途中にあります。",
-                k + 2,
-            )
-            return False
-
-    row_by_key: dict[float, int] = {}
-    sort_tuple_by_row: dict[int, tuple] = {}
-    n_invalid_key = 0
-    for i in active:
-        fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
-        if fk is None:
-            n_invalid_key += 1
-            # 有効 float より後ろ。同帯は元の行番号で安定化。
-            sort_tuple_by_row[i] = (1, i)
-            continue
-        if fk in row_by_key:
-            logging.error(
-                "配台試行順番（小数キー並べ）: 並べ替えキー %s が %s 行目と %s 行目で重複しています。",
-                fk,
-                row_by_key[fk] + 2,
-                i + 2,
-            )
-            return False
-        row_by_key[fk] = i
-        sort_tuple_by_row[i] = (0, fk, i)
-
-    if n_invalid_key:
-        logging.info(
-            "配台試行順番（小数キー並べ）: 「%s」が空・非数値のデータ行が %s 行あります。"
-            " 有効キー行の後ろに並べ、連番化します。",
-            dto_col,
-            n_invalid_key,
-        )
-
-    sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
-    df_mut = df.copy()
-    for rank, i in enumerate(sorted_active, start=1):
-        df_mut.iat[i, dto_idx] = rank
-
-    leading = [i for i in range(0, first)]
-    trailing = [i for i in range(last + 1, n)]
-    orig_list = leading + sorted_active + trailing
-
-    # 列名重複時は list[Series] からの DataFrame 構築で InvalidIndexError になるため iloc で行並べ替え
-    df_sorted = df_mut.iloc[orig_list].reset_index(drop=True)
-
-    header_row = mat[0] if mat else []
-    n_hdr = len(header_row)
-    if n_hdr == 0:
-        return False
-
-    def _pad_row(r, n):
-        r = list(r) if r is not None else []
-        if len(r) < n:
-            r = r + [None] * (n - len(r))
-        return r
-
-    new_mat = [_pad_row(header_row, n_hdr)]
-    for i in range(len(df_sorted)):
-        orig = orig_list[i]
-        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
-        src_row = _pad_row(src_row, n_hdr)
-        out_row = []
-        for j in range(n_hdr):
-            h_cell = header_row[j]
-            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
-                hname = ""
-            else:
-                hname = str(h_cell).strip()
-            ci_hdr = _df_first_col_index_for_header(df_sorted.columns, hname)
-            if ci_hdr is not None:
-                v = df_sorted.iat[i, ci_hdr]
-                if pd.isna(v):
-                    out_row.append(None)
-                else:
-                    if _plan_input_header_is_speed_excel_paren_fix_target(hname):
-                        v = _scalar_excel_accounting_speed_paren_negative_to_positive(v)
-                    out_row.append(v)
-            else:
-                _v = src_row[j]
-                if _plan_input_header_is_speed_excel_paren_fix_target(hname):
-                    _v = _scalar_excel_accounting_speed_paren_negative_to_positive(_v)
-                out_row.append(_v)
-        new_mat.append(out_row)
-
+    keep_vba = str(path).lower().endswith(".xlsm")
+    wb = None
     try:
-        n_r = len(new_mat)
-        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+        wb = load_workbook(path, keep_vba=keep_vba, read_only=False, data_only=False)
     except Exception as e:
-        logging.exception("配台試行順番（小数キー並べ）: シート書込に失敗: %s", e)
+        logging.error("配台試行順番（小数キー並べ）: ブックを開けません: %s", e)
         return False
-
     try:
-        if filter_restore:
-            rng = ws.api.Range(getattr(ws.used_range, "address", None))
-            for it in filter_restore:
-                if not isinstance(it, dict) or not it.get("on"):
-                    continue
-                rng.AutoFilter(
-                    Field=int(it["field"]),
-                    Criteria1=it.get("Criteria1"),
-                    Operator=it.get("Operator"),
-                    Criteria2=it.get("Criteria2"),
+        try:
+            ws = wb[PLAN_INPUT_SHEET_NAME]
+        except KeyError as e:
+            logging.error("配台試行順番（小数キー並べ）: シート接続に失敗: %s", e)
+            return False
+
+        mat = _openpyxl_sheet_to_matrix(ws)
+        df = _matrix_to_dataframe_header_first(mat)
+        if df is None or df.empty:
+            logging.warning("配台試行順番（小数キー並べ）: データ行がありません。")
+            return False
+
+        df = df.copy()
+        df.columns = df.columns.str.strip()
+        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+        for c in plan_input_sheet_column_order():
+            if c not in df.columns:
+                df[c] = ""
+
+        if df.columns.duplicated().any():
+            dup_labels = sorted(
+                {str(c) for c in df.columns[df.columns.duplicated(keep=False)]}
+            )
+            logging.warning(
+                "配台試行順番（小数キー並べ）: 見出しの重複列があります（先頭列を参照します）: %s",
+                dup_labels[:25],
+            )
+
+        _apply_plan_input_excel_accounting_speed_fix_to_df(df)
+
+        dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+        if dto_col not in df.columns:
+            logging.error("配台試行順番（小数キー並べ）: 列「%s」がありません。", dto_col)
+            return False
+        dto_idx = df.columns.get_loc(dto_col)
+        if isinstance(dto_idx, slice):
+            logging.error("配台試行順番（小数キー並べ）: 列「%s」が複数あります。", dto_col)
+            return False
+
+        n = len(df)
+        active = [i for i in range(n) if not _plan_input_row_is_blank_task_row(df, i)]
+        if not active:
+            logging.error(
+                "配台試行順番（小数キー並べ）: 依頼NO または 工程名 がある行がありません。"
+            )
+            return False
+        first = min(active)
+        last = max(active)
+        for k in range(first, last + 1):
+            if k not in active:
+                logging.error(
+                    "配台試行順番（小数キー並べ）: %s 行目付近に、依頼NO・工程名が両方空の行が"
+                    " データの途中にあります。",
+                    k + 2,
                 )
-    except Exception:
-        pass
+                return False
 
-    try:
-        wb.save()
-    except Exception as e:
-        logging.warning("配台試行順番（小数キー並べ）: Save 警告: %s", e)
+        row_by_key: dict[float, int] = {}
+        sort_tuple_by_row: dict[int, tuple] = {}
+        n_invalid_key = 0
+        for i in active:
+            fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
+            if fk is None:
+                n_invalid_key += 1
+                sort_tuple_by_row[i] = (1, i)
+                continue
+            if fk in row_by_key:
+                logging.error(
+                    "配台試行順番（小数キー並べ）: 並べ替えキー %s が %s 行目と %s 行目で重複しています。",
+                    fk,
+                    row_by_key[fk] + 2,
+                    i + 2,
+                )
+                return False
+            row_by_key[fk] = i
+            sort_tuple_by_row[i] = (0, fk, i)
 
-    logging.info(
-        "配台試行順番（小数キー並べ）: 「%s」を %s データ行で並べ替え・連番化しました。",
-        PLAN_INPUT_SHEET_NAME,
-        len(sorted_active),
-    )
-    return True
+        if n_invalid_key:
+            logging.info(
+                "配台試行順番（小数キー並べ）: 「%s」が空・非数値のデータ行が %s 行あります。"
+                " 有効キー行の後ろに並べ、連番化します。",
+                dto_col,
+                n_invalid_key,
+            )
+
+        sorted_active = sorted(active, key=lambda ri: sort_tuple_by_row[ri])
+        df_mut = df.copy()
+        for rank, i in enumerate(sorted_active, start=1):
+            df_mut.iat[i, dto_idx] = rank
+
+        leading = [i for i in range(0, first)]
+        trailing = [i for i in range(last + 1, n)]
+        orig_list = leading + sorted_active + trailing
+
+        df_sorted = df_mut.iloc[orig_list].reset_index(drop=True)
+
+        header_row = mat[0] if mat else []
+        n_hdr = len(header_row)
+        if n_hdr == 0:
+            return False
+
+        def _pad_row(r, n):
+            r = list(r) if r is not None else []
+            if len(r) < n:
+                r = r + [None] * (n - len(r))
+            return r
+
+        new_mat = [_pad_row(header_row, n_hdr)]
+        for i in range(len(df_sorted)):
+            orig = orig_list[i]
+            src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+            src_row = _pad_row(src_row, n_hdr)
+            out_row = []
+            for j in range(n_hdr):
+                h_cell = header_row[j]
+                if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                    hname = ""
+                else:
+                    hname = str(h_cell).strip()
+                ci_hdr = _df_first_col_index_for_header(df_sorted.columns, hname)
+                if ci_hdr is not None:
+                    v = df_sorted.iat[i, ci_hdr]
+                    if pd.isna(v):
+                        out_row.append(None)
+                    else:
+                        if _plan_input_header_is_speed_excel_paren_fix_target(hname):
+                            v = _scalar_excel_accounting_speed_paren_negative_to_positive(v)
+                        out_row.append(v)
+                else:
+                    _v = src_row[j]
+                    if _plan_input_header_is_speed_excel_paren_fix_target(hname):
+                        _v = _scalar_excel_accounting_speed_paren_negative_to_positive(_v)
+                    out_row.append(_v)
+            new_mat.append(out_row)
+
+        n_r = len(new_mat)
+        for r in range(1, n_r + 1):
+            for c in range(1, n_hdr + 1):
+                ws.cell(row=r, column=c).value = new_mat[r - 1][c - 1]
+
+        try:
+            wb.save(path)
+        except Exception as e:
+            logging.warning("配台試行順番（小数キー並べ）: Save 警告: %s", e)
+
+        logging.info(
+            "配台試行順番（小数キー並べ）: 「%s」を %s データ行で並べ替え・連番化しました。",
+            PLAN_INPUT_SHEET_NAME,
+            len(sorted_active),
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
+    workbook_path: str | None = None,
+) -> bool:
+    """互換名。xlwings は廃止。"""
+    return sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(workbook_path)
 
 
 def sort_plan_input_dispatch_trial_order_by_float_keys_only() -> bool:
     """TASK_INPUT_WORKBOOK に対する「小数キーで並べ替え→1..n」（VBA / cmd 経由）。"""
     p = _excel_plan_input_wb()
-    return sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(p)
+    return sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(p)
 
 
 def apply_plan_input_column_layout_only() -> bool:
@@ -7629,7 +7618,7 @@ def apply_plan_input_column_layout_only() -> bool:
 
 
 
-def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
+def dedupe_result_task_column_config_sheet_via_openpyxl(workbook_path: str | None = None) -> bool:
     """
     「列設定_結果_タスク一覧」の A:B の値を」重複列名を除いた一覧で書き直れ（先の行を優先）。
     「結果_タスク一覧」はあれみ履歴列数の解釈に使う。結果シートは変更しない。
@@ -7638,52 +7627,71 @@ def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None
     if not path:
         logging.error("列設定 重複整睆: ブックパスは空です。")
         return False
-    try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("列設定 重複整睆: xlwings は import でしません。")
+    if _workbook_should_skip_openpyxl_io(path):
+        logging.error(
+            "列設定 重複整睆: ブックに「%s」があるため openpyxl で編集できません。",
+            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
+        )
         return False
+    keep_vba = str(path).lower().endswith(".xlsm")
+    wb = None
     try:
-        wb = xw.Book(path)
-        ws_cfg = wb.sheets[COLUMN_CONFIG_SHEET_NAME]
+        wb = load_workbook(path, keep_vba=keep_vba, read_only=False, data_only=False)
     except Exception as e:
-        logging.error("列設定 重複整睆: 接続またはシート取得に失敗: %s", e)
+        logging.error("列設定 重複整睆: ブックを開けません: %s", e)
         return False
-
-    max_h = 1
     try:
-        ws_res = wb.sheets[RESULT_TASK_SHEET_NAME]
-        df_r = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_res))
-        if df_r is not None and not df_r.empty:
-            max_h = _max_history_len_from_result_task_df_columns(df_r.columns)
-    except Exception:
-        pass
+        try:
+            ws_cfg = wb[COLUMN_CONFIG_SHEET_NAME]
+        except KeyError as e:
+            logging.error("列設定 重複整睆: 接続またはシート取得に失敗: %s", e)
+            return False
 
-    df_cfg = _matrix_to_dataframe_header_first(_xlwings_sheet_to_matrix(ws_cfg))
-    if df_cfg is None:
-        logging.error("列設定 重複整睆: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
-        return False
-    rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
-    if not rows:
-        logging.warning("列設定 重複整睆: 有効なデータ行はありません。")
-        return False
-    _xlwings_write_column_config_sheet_ab(ws_cfg, rows)
-    try:
-        wb.save()
-    except Exception as e:
-        logging.warning("列設定 重複整睆: 保存警告: %s", e)
-    logging.info(
-        "列設定「%s」を重複除去済みで %s 行に整睆しました（履歴展開後の行数）。",
-        COLUMN_CONFIG_SHEET_NAME,
-        len(rows),
-    )
-    return True
+        max_h = 1
+        try:
+            ws_res = wb[RESULT_TASK_SHEET_NAME]
+            df_r = _matrix_to_dataframe_header_first(_openpyxl_sheet_to_matrix(ws_res))
+            if df_r is not None and not df_r.empty:
+                max_h = _max_history_len_from_result_task_df_columns(df_r.columns)
+        except Exception:
+            pass
+
+        df_cfg = _matrix_to_dataframe_header_first(_openpyxl_sheet_to_matrix(ws_cfg))
+        if df_cfg is None:
+            logging.error("列設定 重複整睆: 「%s」の見出しを読めません。", COLUMN_CONFIG_SHEET_NAME)
+            return False
+        rows = parse_result_task_column_config_dataframe(df_cfg, max_h)
+        if not rows:
+            logging.warning("列設定 重複整睆: 有効なデータ行はありません。")
+            return False
+        _openpyxl_write_column_config_sheet_ab(ws_cfg, rows)
+        try:
+            wb.save(path)
+        except Exception as e:
+            logging.warning("列設定 重複整睆: 保存警告: %s", e)
+        logging.info(
+            "列設定「%s」を重複除去済みで %s 行に整睆しました（履歴展開後の行数）。",
+            COLUMN_CONFIG_SHEET_NAME,
+            len(rows),
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
+    """互換名。xlwings は廃止。"""
+    return dedupe_result_task_column_config_sheet_via_openpyxl(workbook_path)
 
 
 def dedupe_result_task_column_config_sheet_only() -> bool:
     """環境変数 TASK_INPUT_WORKBOOK のブックの列設定シートの値重複整睆（VBA 用）。"""
     p = _excel_plan_input_wb()
-    return dedupe_result_task_column_config_sheet_via_xlwings(p)
+    return dedupe_result_task_column_config_sheet_via_openpyxl(p)
 
 
 def _apply_result_task_sheet_column_visibility(worksheet, column_names: list, vis_map: dict):
@@ -8188,189 +8196,15 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    pandas/openｎｎxl で新規作成した結果ブックには図形が含まれない。
-    既定で有効（環境変数で 0/false/no/off のとき無効）。入力ブックの
-    「列設定_結果_タスク一覧」上の **Shapes**（フォームのボタン・チェックボックス等）と
-    **OLEObjects**（ActiveX コントロール等）を結果ブックの同名シートへコピーし、
-    各図形の Left/Top/Width/Height（および取れるとき Placement）を入力側と同じに戻す。
-    openpyxl による当該ブックへの保存がすべて終わった後に呼ぶこと。
+    旧実装は Excel COM（xlwings）で列設定シートの図形を複製していた。
+    xlwings 廃止により **未対応**（常にスキップ）。openpyxl のみではシート上の
+    Shapes/OLE を安全に複製できないため。
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
-    _xlw_off = (os.environ.get("PM_AI_XLWINGS_STAGE2_DISABLED") or "").strip().lower()
-    if _xlw_off in ("1", "true", "yes", "on"):
-        logging.info(
-            "列設定シート図形コピー: PM_AI_XLWINGS_STAGE2_DISABLED によりスキップしました。"
-        )
-        return
-    rp = (result_path or "").strip()
-    ip = (input_path or "").strip()
-    if not rp or not os.path.isfile(rp):
-        logging.warning(
-            "列設定シート図形コピー: 結果パスは無効のため、スキップしました。"
-        )
-        return
-    if not ip or not os.path.isfile(ip):
-        logging.warning(
-            "列設定シート図形コピー: TASK_INPUT_WORKBOOK は無効のため、スキップしました。"
-        )
-        return
-    try:
-        import xlwings as xw  # noqa: F401
-    except ImportError:
-        logging.warning(
-            "列設定シート図形コピー: xlwings は import でしません。"
-        )
-        return
-    abs_rp = os.path.abspath(rp)
-    abs_ip = os.path.abspath(ip)
-    app = None
-    wb_out = None
-    wb_in = None
-    owns_app = False
-    opened_out_here = False
-    opened_in_here = False
-    attached = _xlwings_attach_two_workbooks_same_app(abs_rp, abs_ip)
-    if attached is None:
-        logging.warning(
-            "列設定シート図形コピー: 結果・入力ブックを同一 Excel 上に開けませんでした。"
-        )
-        return
-    app, wb_out, wb_in, owns_app, opened_out_here, opened_in_here = attached
-    if owns_app:
-        logging.info(
-            "列設定シート図形コピー: 起動中に同一プロセスで揃えられなかったため、"
-            "非表示の新規 Excel で両ブックを開きます。"
-        )
-    else:
-        logging.info(
-            "列設定シート図形コピー: 起動中の Excel を再利用し、同一プロセスで処理します。"
-        )
-    _perf_snap = None
-    try:
-        _perf_snap = _xlwings_app_save_perf_state_push(app)
-        try:
-            ws_out = wb_out.sheets[COLUMN_CONFIG_SHEET_NAME]
-        except Exception:
-            logging.warning(
-                "列設定シート図形コピー: 結果ブックにシート「%s」はありません。",
-                COLUMN_CONFIG_SHEET_NAME,
-            )
-            return
-        try:
-            ws_in = wb_in.sheets[COLUMN_CONFIG_SHEET_NAME]
-        except Exception:
-            logging.warning(
-                "列設定シート図形コピー: 入力ブックにシート「%s」はありません。",
-                COLUMN_CONFIG_SHEET_NAME,
-            )
-            return
-        api_in = ws_in.api
-        api_out = ws_out.api
-        n_shapes = int(api_in.Shapes.Count)
-        try:
-            n_ole = int(api_in.OLEObjects.Count)
-        except Exception:
-            n_ole = 0
-        if n_shapes <= 0 and n_ole <= 0:
-            logging.info(
-                "列設定シート図形コピー: 入力側に Shapes（フォーム等）も "
-                "OLEObjects（ActiveX 等）もありません（スキップ）。"
-            )
-            return
-        ws_out.activate()
-        for i in range(1, n_shapes + 1):
-            src = api_in.Shapes(i)
-            left = float(src.Left)
-            top = float(src.Top)
-            width = float(src.Width)
-            height = float(src.Height)
-            placement = None
-            try:
-                placement = int(src.Placement)
-            except Exception:
-                pass
-            src.Copy()
-            api_out.Paste()
-            dst = api_out.Shapes(int(api_out.Shapes.Count))
-            try:
-                dst.LockAspectRatio = False
-            except Exception:
-                pass
-            if placement is not None:
-                try:
-                    dst.Placement = placement
-                except Exception:
-                    pass
-            dst.Left = left
-            dst.Top = top
-            dst.Width = width
-            dst.Height = height
-        for j in range(1, n_ole + 1):
-            try:
-                src_ole = api_in.OLEObjects(j)
-                left_o = float(src_ole.Left)
-                top_o = float(src_ole.Top)
-                width_o = float(src_ole.Width)
-                height_o = float(src_ole.Height)
-                src_ole.Copy()
-                api_out.Paste()
-                dst_ole = api_out.OLEObjects(int(api_out.OLEObjects.Count))
-                dst_ole.Left = left_o
-                dst_ole.Top = top_o
-                dst_ole.Width = width_o
-                dst_ole.Height = height_o
-            except Exception as e_ole:
-                logging.warning(
-                    "列設定シート図形コピー: OLEObject（ActiveX 等）%s の複製に失敗しました: %s",
-                    j,
-                    e_ole,
-                )
-        wb_out.save()
-        logging.info(
-            "列設定シート図形コピー: 入力から Shapes %s 個・OLEObjects %s 個を結果ブックへ複製しました。",
-            n_shapes,
-            n_ole,
-        )
-    except Exception as e:
-        logging.warning(
-            "列設定シート図形コピー: 失敗しました（%s）。Excel 占有・COM エラー等の可能性はありした。",
-            e,
-        )
-    finally:
-        if _perf_snap is not None:
-            try:
-                _xlwings_app_save_perf_state_pop(app, _perf_snap)
-            except Exception:
-                pass
-        if owns_app:
-            for _wb in (wb_in, wb_out):
-                if _wb is not None:
-                    try:
-                        _wb.close()
-                    except Exception:
-                        pass
-            if app is not None:
-                try:
-                    app.quit()
-                except Exception:
-                    pass
-        else:
-            if opened_in_here and wb_in is not None:
-                try:
-                    wb_in.close()
-                except Exception:
-                    pass
-            if opened_out_here and wb_out is not None:
-                try:
-                    wb_out.close()
-                except Exception:
-                    pass
-
-
-def _com_excel_bgr_rgb(r: int, g: int, b: int) -> int:
-    """Office COM の Color.RGB（BGR リトルエンディアン）。"""
-    return int(r) & 255 | ((int(g) & 255) << 8) | ((int(b) & 255) << 16)
+    logging.info(
+        "列設定シート図形コピー: xlwings/COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。"
+    )
 
 
 def _hex_rrggbb_to_rgb_triple(hx: str) -> tuple[int, int, int]:
@@ -8385,25 +8219,6 @@ def _gantt_label_luminance_01(r: int, g: int, b: int) -> float:
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
 
 
-def _gantt_com_colors_from_fill_hex(fill_hex: str) -> tuple[int, int, int]:
-    """
-    ガント帯色（RRGGBB）から COM 用 (塗り BGR, 枠 BGR, 文字 BGR)。
-    淡色帯は黒寄り文字、やや濃い帯は白文字（モックのコントラストに近づける）。
-    """
-    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
-    fill_bgr = _com_excel_bgr_rgb(r, g, b)
-    lr = max(0, min(255, int(r * 0.52)))
-    lg = max(0, min(255, int(g * 0.52)))
-    lb = max(0, min(255, int(b * 0.52)))
-    line_bgr = _com_excel_bgr_rgb(lr, lg, lb)
-    lum = _gantt_label_luminance_01(r, g, b)
-    if lum > 0.74:
-        text_bgr = _com_excel_bgr_rgb(26, 26, 26)
-    else:
-        text_bgr = _com_excel_bgr_rgb(255, 255, 255)
-    return fill_bgr, line_bgr, text_bgr
-
-
 def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
     """openpyxl Font.color 用 6 桁（RGB 文字列）。"""
     r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
@@ -8411,28 +8226,6 @@ def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
     if lum > 0.74:
         return "1A1A1A"
     return "FFFFFF"
-
-
-def _gantt_member_pill_bgrs_for_task_fill_hex(fill_hex: str) -> tuple[int, int, int]:
-    """
-    GANTT_COLOR_MODE=full 時の担当者チップ用 (塗り BGR, 線 BGR, 文字 BGR)。
-    依頼NO帯色を薄く混ぜた地色とし、文字は輝度から黒／白を選択。
-    """
-    r, g, b = _hex_rrggbb_to_rgb_triple(fill_hex)
-    rf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(r))))
-    gf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(g))))
-    bf = max(0, min(255, int(0.62 * 255.0 + 0.38 * float(b))))
-    mem_fill_bgr = _com_excel_bgr_rgb(rf, gf, bf)
-    lr = max(0, min(255, int(rf * 0.52)))
-    lg = max(0, min(255, int(gf * 0.52)))
-    lb = max(0, min(255, int(bf * 0.52)))
-    mem_line_bgr = _com_excel_bgr_rgb(lr, lg, lb)
-    lum = _gantt_label_luminance_01(rf, gf, bf)
-    if lum > 0.74:
-        mem_txt_bgr = _com_excel_bgr_rgb(26, 26, 26)
-    else:
-        mem_txt_bgr = _com_excel_bgr_rgb(255, 255, 255)
-    return mem_fill_bgr, mem_line_bgr, mem_txt_bgr
 
 
 def _gantt_fallback_timeline_labels_openpyxl(
@@ -9266,9 +9059,8 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     sheet_name: str | None = None,
 ) -> None:
     """
-    openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があれば xlwings で角丸ラベルを描画。
-    day_blocks があれば既定で日単位に画像化してシェイプ数を抑える。
-    失敗時は openpyxl でセルにフォールバック。
+    openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があればタイムライン先頭列にラベルを書き込む。
+    （旧 xlwings の角丸シェイプ・画像化は廃止。day_blocks は無視される。）
     """
     if not GANTT_TIMELINE_SHAPE_LABELS or not specs:
         return
@@ -9276,25 +9068,16 @@ def _stage2_try_add_gantt_timeline_shape_labels(
     if not rp or not os.path.isfile(rp):
         return
     shn = sheet_name or RESULT_SHEET_GANTT_NAME
-    if _gantt_add_timeline_rounded_rect_labels_xlwings(
-        rp, specs, day_blocks, sheet_name=shn
-    ):
-        logging.info(
-            "%s: タイムラインラベルを角丸シェイプ %s 件で追加しました。",
-            shn,
-            len(specs),
-        )
-        return
     try:
         _gantt_fallback_timeline_labels_openpyxl(rp, specs, sheet_name=shn)
         logging.info(
-            "%s: タイムラインラベルをセル表記にフォールバックしました（%s 件）。",
+            "%s: タイムラインラベルをセル表記で追加しました（%s 件）。",
             shn,
             len(specs),
         )
     except Exception as e:
         logging.warning(
-            "%s: セルへのラベルフォールバックも失敗しました（%s）。",
+            "%s: タイムラインラベルのセル書込に失敗しました（%s）。",
             shn,
             e,
         )
@@ -10583,27 +10366,58 @@ def _gemini_usage_trend_caption_lines(cum: dict) -> list[str]:
     return lines
 
 
-def _gemini_resolve_main_sheet_xlwings(book) -> object | None:
-    """xlwings Book からメイン相当シートを返す。無ければ None。"""
+def _gemini_resolve_main_sheet_openpyxl(wb) -> object | None:
+    """openpyxl Workbook からメイン相当シートを返す。無ければ None。"""
     for name in ("メイン", "メイン_", "Main"):
-        try:
-            return book.sheets[name]
-        except Exception:
-            continue
-    try:
-        for sht in book.sheets:
-            try:
-                if "メイン" in str(sht.name):
-                    return sht
-            except Exception:
-                continue
-    except Exception:
-        pass
+        if name in wb.sheetnames:
+            return wb[name]
+    for sn in wb.sheetnames:
+        if "メイン" in str(sn):
+            return wb[sn]
     return None
 
 
-def _strip_gemini_usage_charts_xlwings(ws) -> None:
-    """当機能は管理れる折れ線（坝剝またはグラフタイトル）を削除する。"""
+def _workbook_file_has_gemini_target_main_sheet(path: str) -> bool:
+    """ディスク上のブックにメイン相当シートが無ければ書き込めない。Excel を起動しないための事前判定。"""
+    p = (path or "").strip()
+    if not p or not os.path.isfile(p):
+        return False
+    try:
+        wbr = load_workbook(p, read_only=True, data_only=True)
+    except Exception:
+        return True
+    try:
+        for nm in wbr.sheetnames:
+            sn = str(nm or "")
+            if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
+                return True
+        return False
+    finally:
+        try:
+            wbr.close()
+        except Exception:
+            pass
+
+
+def _openpyxl_chart_title_str(chart_obj) -> str:
+    if chart_obj is None:
+        return ""
+    try:
+        t = getattr(chart_obj, "title", None)
+        if t is None:
+            return ""
+        if isinstance(t, str):
+            return t
+        tx = getattr(t, "tx", None)
+        if tx is not None:
+            return str(tx)
+        return str(t)
+    except Exception:
+        return ""
+
+
+def _strip_gemini_usage_charts_openpyxl(ws) -> None:
+    """メインシート上の当機能が管理する折れ線グラフ（名前またはタイトル一致）を削除する。"""
     managed_names = (
         GEMINI_USAGE_XLW_CHART_NAME,
         GEMINI_USAGE_XLW_CHART_TOKENS_NAME,
@@ -10612,52 +10426,54 @@ def _strip_gemini_usage_charts_xlwings(ws) -> None:
         "Gemini API 日次推移",
         "Gemini API 日次トークン",
     )
+    charts = getattr(ws, "_charts", None)
+    if not charts:
+        return
+    keep: list = []
+    for anc in list(charts):
+        drop = False
+        try:
+            ch = getattr(anc, "chart", None)
+            if ch is None:
+                ch = anc
+            tit_s = _openpyxl_chart_title_str(ch)
+            for mk in title_markers:
+                if mk in tit_s:
+                    drop = True
+                    break
+            if not drop:
+                vchart = getattr(ch, "vchart", None) or ch
+                nm = str(getattr(vchart, "name", "") or "")
+                if nm in managed_names:
+                    drop = True
+        except Exception:
+            pass
+        if not drop:
+            keep.append(anc)
     try:
-        charts_iter = list(ws.charts)
+        ws._charts = keep  # type: ignore[attr-defined]
     except Exception:
         return
-    for ch in charts_iter:
-        try:
-            if str(getattr(ch, "name", "") or "") in managed_names:
-                ch.delete()
-                continue
-        except Exception:
-            pass
-        try:
-            ca = ch.api
-            if bool(ca.HasTitle):
-                cap = getattr(ca.ChartTitle, "Caption", None)
-                txt = getattr(ca.ChartTitle, "Text", None)
-                title_s = str(cap or txt or "")
-                for mk in title_markers:
-                    if mk in title_s:
-                        ch.delete()
-                        break
-        except Exception:
-            pass
 
 
-def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
-    """開いたブック上で Q〜R・S〜T を埋ゝ」折れ線グラフを 2 本まで置し（xlwings）。"""
+def _apply_main_sheet_gemini_usage_chart_openpyxl(ws, cum: dict) -> None:
+    """Q〜R・S〜T を埋め、折れ線グラフを最大 2 本まで置く（openpyxl・ディスク保存前提）。"""
     hr = GEMINI_USAGE_CHART_HEADER_ROW
     cdt = GEMINI_USAGE_CHART_COL_DATE
     cvl = GEMINI_USAGE_CHART_COL_VALUE
     cts = GEMINI_USAGE_CHART_COL_TOK_DATE
     ctv = GEMINI_USAGE_CHART_COL_TOK_VALUE
     nclear = GEMINI_USAGE_CHART_CLEAR_ROWS
-    try:
-        block = ws.range((hr, cdt), (hr + nclear - 1, ctv))
-        block.clear_contents()
-    except Exception:
-        for i in range(nclear):
-            r = hr + i
-            for c in (cdt, cvl, cts, ctv):
-                try:
-                    ws.range((r, c)).clear_contents()
-                except Exception:
-                    pass
 
-    _strip_gemini_usage_charts_xlwings(ws)
+    for i in range(nclear):
+        r = hr + i
+        for c in (cdt, cvl, cts, ctv):
+            try:
+                ws.cell(row=r, column=c).value = None
+            except Exception:
+                pass
+
+    _strip_gemini_usage_charts_openpyxl(ws)
     ser = _gemini_daily_trend_series(cum)
     if ser is None:
         return
@@ -10666,43 +10482,29 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
     if n <= 0:
         return
 
-    ws.range((hr, cdt)).value = "日付"
-    ws.range((hr, cvl)).value = val_label
+    ws.cell(row=hr, column=cdt, value="日付")
+    ws.cell(row=hr, column=cvl, value=val_label)
     for i, (dk, val) in enumerate(zip(day_keys, values)):
         r = hr + 1 + i
-        ws.range((r, cdt)).value = dk
-        ws.range((r, cvl)).value = val
-    try:
-        vrng = ws.range((hr + 1, cvl), (hr + n, cvl))
-        vrng.number_format = "0.000000" if val_label == "推定USD" else "0"
-    except Exception:
-        pass
-
-    try:
-        anchor = ws.range(GEMINI_USAGE_CHART_ANCHOR_CELL)
-        left = float(anchor.left)
-        top = float(anchor.top)
-    except Exception:
-        left, top = 0.0, 0.0
-    chart = ws.charts.add(left=left, top=top, width=410, height=220)
-    try:
-        chart.name = GEMINI_USAGE_XLW_CHART_NAME
-    except Exception:
-        pass
-    data_rng = ws.range((hr, cdt), (hr + n, cvl))
-    chart.set_source_data(data_rng)
-    try:
-        chart.chart_type = "line"
-    except Exception:
+        ws.cell(row=r, column=cdt, value=dk)
+        ws.cell(row=r, column=cvl, value=val)
+    nf = "0.000000" if val_label == "推定USD" else "0"
+    for r in range(hr + 1, hr + n + 1):
         try:
-            chart.api.ChartType = 4
+            ws.cell(row=r, column=cvl).number_format = nf
         except Exception:
             pass
+
     try:
-        ca = chart.api
-        ca.HasTitle = True
-        ca.ChartTitle.Text = "Gemini API 日次推移"
-        ca.HasLegend = False
+        chart1 = LineChart()
+        chart1.title = "Gemini API 日次推移"
+        chart1.legend = None
+        data = Reference(ws, min_col=cdt, min_row=hr, max_col=cvl, max_row=hr + n)
+        chart1.add_data(data, titles_from_data=True)
+        chart1.set_categories(
+            Reference(ws, min_col=cdt, min_row=hr + 1, max_row=hr + n)
+        )
+        ws.add_chart(chart1, GEMINI_USAGE_CHART_ANCHOR_CELL)
     except Exception:
         pass
 
@@ -10711,112 +10513,101 @@ def _apply_main_sheet_gemini_usage_chart_xlwings(ws, cum: dict) -> None:
         return
 
     tok_label = "合計トークン"
-    ws.range((hr, cts)).value = "日付"
-    ws.range((hr, ctv)).value = tok_label
+    ws.cell(row=hr, column=cts, value="日付")
+    ws.cell(row=hr, column=ctv, value=tok_label)
     for i, dk in enumerate(day_keys):
         r = hr + 1 + i
-        ws.range((r, cts)).value = dk
-        ws.range((r, ctv)).value = int(tok_vals[i])
-    try:
-        ws.range((hr + 1, ctv), (hr + n, ctv)).number_format = "#,##0"
-    except Exception:
-        pass
-
-    try:
-        anchor2 = ws.range(GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL)
-        left2 = float(anchor2.left)
-        top2 = float(anchor2.top)
-    except Exception:
-        left2, top2 = left + 420.0, top
-    chart2 = ws.charts.add(left=left2, top=top2, width=410, height=220)
-    try:
-        chart2.name = GEMINI_USAGE_XLW_CHART_TOKENS_NAME
-    except Exception:
-        pass
-    data_rng2 = ws.range((hr, cts), (hr + n, ctv))
-    chart2.set_source_data(data_rng2)
-    try:
-        chart2.chart_type = "line"
-    except Exception:
+        ws.cell(row=r, column=cts, value=dk)
+        ws.cell(row=r, column=ctv, value=int(tok_vals[i]))
+    for r in range(hr + 1, hr + n + 1):
         try:
-            chart2.api.ChartType = 4
+            ws.cell(row=r, column=ctv).number_format = "#,##0"
         except Exception:
             pass
+
     try:
-        ca2 = chart2.api
-        ca2.HasTitle = True
-        ca2.ChartTitle.Text = "Gemini API 日次トークン"
-        ca2.HasLegend = False
+        chart2 = LineChart()
+        chart2.title = "Gemini API 日次トークン"
+        chart2.legend = None
+        data2 = Reference(ws, min_col=cts, min_row=hr, max_col=ctv, max_row=hr + n)
+        chart2.add_data(data2, titles_from_data=True)
+        chart2.set_categories(
+            Reference(ws, min_col=cts, min_row=hr + 1, max_row=hr + n)
+        )
+        ws.add_chart(chart2, GEMINI_USAGE_CHART_TOKENS_ANCHOR_CELL)
     except Exception:
         pass
 
 
-def _write_main_sheet_gemini_usage_via_xlwings(
+def _write_main_sheet_gemini_usage_via_openpyxl(
     macro_wb_path: str, text: str, log_prefix: str
 ) -> bool:
-    """Excel でブックは開いているとし」メイン P 列・Q〜T・推移グラフ（最大2本）を xlwings で更新して Save。"""
-    attached = _xlwings_attach_open_macro_workbook(macro_wb_path, log_prefix)
-    if attached is None:
+    """openpyxl でメイン P 列・Q〜T・推移グラフ（最大2本）を更新し wb.save する。"""
+    abs_wb = os.path.abspath((macro_wb_path or "").strip())
+    if not abs_wb or not os.path.isfile(abs_wb):
         logging.info(
-            "%s: xlwings でマクロブックに接続でしう」メイン AI サマリをスキップしました。",
+            "%s: Gemini メイン反映: 対象ブックがありません。%s",
             log_prefix,
+            macro_wb_path,
         )
         return False
-    xw_book, info = attached
-    ok = False
+    if not _workbook_file_has_gemini_target_main_sheet(abs_wb):
+        logging.info(
+            "%s: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。%s",
+            log_prefix,
+            os.path.basename(abs_wb),
+        )
+        return False
+
+    keep_vba = abs_wb.lower().endswith(".xlsm")
+    wb = None
     try:
-        try:
-            xw_book.app.display_alerts = False
-        except Exception:
-            pass
-        ws_main = _gemini_resolve_main_sheet_xlwings(xw_book)
+        wb = load_workbook(abs_wb, keep_vba=keep_vba)
+        ws_main = _gemini_resolve_main_sheet_openpyxl(wb)
         if ws_main is None:
             logging.info(
-                "%s: メインシートはないため、xlwings での AI サマリをスキップしました。",
+                "%s: メインシートが見つからないため、AI サマリをスキップしました。",
                 log_prefix,
             )
             return False
+
         start_r, col_p, clear_n = 16, 16, 120
-        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
-        try:
-            p_rng = ws_main.range((start_r, col_p)).resize(clear_n, 1)
-            p_rng.clear_contents()
-            lines_list = text.split("\n") if (text or "").strip() else []
-            p_vals = [
-                [lines_list[i] if i < len(lines_list) else None]
-                for i in range(clear_n)
-            ]
-            p_rng.value = p_vals
+        for i in range(clear_n):
             try:
-                p_rng.api.WrapText = True
-                p_rng.api.VerticalAlignment = -4160
+                ws_main.cell(row=start_r + i, column=col_p).value = None
             except Exception:
                 pass
-            _apply_main_sheet_gemini_usage_chart_xlwings(
-                ws_main, _load_gemini_cumulative_payload()
-            )
-            if bool(info.get("opened_wb_here")):
-                xw_book.save()
-            else:
-                # 起動中の Excel（ユーザー操作）でブックを再利用した場合、save() は保存ダイアログを出し得るため自動保存しない。
-                # 変更はブック上に反映済みなので、必要ならユーザーが任意のタイミングで保存する。
+        lines_list = text.split("\n") if (text or "").strip() else []
+        wrap = Alignment(wrap_text=True, vertical="top")
+        for i in range(clear_n):
+            v = lines_list[i] if i < len(lines_list) else None
+            try:
+                c = ws_main.cell(row=start_r + i, column=col_p, value=v)
+                c.alignment = wrap
+            except Exception:
                 pass
-            ok = True
-            logging.info(
-                "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を xlwings で更新しました。",
-                log_prefix,
-                start_r,
-            )
-        finally:
-            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
+
+        _apply_main_sheet_gemini_usage_chart_openpyxl(
+            ws_main, _load_gemini_cumulative_payload()
+        )
+        wb.save(abs_wb)
+        logging.info(
+            "%s: メインシート P%d 以降・Gemini 推移グラフ（料金/呼出し・トークン）を openpyxl で保存しました。",
+            log_prefix,
+            start_r,
+        )
+        return True
     except Exception as ex:
         logging.warning(
-            "%s: メイン AI サマリの xlwings 保存に失敗: %s", log_prefix, ex
+            "%s: メイン AI サマリの openpyxl 保存に失敗: %s", log_prefix, ex
         )
-        ok = False
+        return False
     finally:
-        _xlwings_release_book_after_mutation(xw_book, info, ok)
-    return ok
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
 
 
 def _gemini_kv_table_lines(title: str, rows: list[tuple[str, str]]) -> list[str]:
@@ -11037,18 +10828,18 @@ def build_gemini_usage_summary_text() -> str:
 
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
-    """Gemini 利用サマリを log に書き」xlwings でメイン P 列・推移グラフへ保存（開いているブック坑け）。"""
+    """Gemini 利用サマリを log に書き、openpyxl でメイン P 列・推移グラフへ保存する。"""
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
-    xw_ok = False
+    sheet_ok = False
     if wb_path and os.path.isfile(wb_path):
         try:
-            xw_ok = _write_main_sheet_gemini_usage_via_xlwings(
+            sheet_ok = _write_main_sheet_gemini_usage_via_openpyxl(
                 wb_path, text, log_prefix
             )
         except Exception as ex:
             logging.warning(
-                "%s: AI サマリの xlwings 書き込みで例外: %s", log_prefix, ex
+                "%s: AI サマリの openpyxl 書き込みで例外: %s", log_prefix, ex
             )
     try:
         os.makedirs(log_dir, exist_ok=True)
@@ -11062,12 +10853,12 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
         logging.debug("Gemini ポケット CSV 出力で例外（続行）: %s", ex)
-    if xw_ok:
+    if sheet_ok:
         return
     if text.strip():
         logging.info(
-            "%s: メイン P 列・グラフを xlwings で保存でしませんでした。"
-            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映でしした。",
+            "%s: メイン P 列・グラフをブックへ保存できませんでした。"
+            " %s に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。",
             log_prefix,
             path,
         )
@@ -11179,7 +10970,7 @@ def write_plan_sheet_global_comment_parse_block(
     """
     「配台計画_タスク入力」シートの坳端付近（AX:AY）に」グローバルコメントの解析結果を書き込む。
     メイン原文はここに転記しない（メイン欄との重複・誤解を避ける）。本列は再読込されう参照専用。
-    マクロブックは **openpyxl で save せず** xlwings で AX〜AY を保存する（Excel 占有対策）。
+    マクロブックも ``keep_vba=True`` で openpyxl から保存する。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -11216,26 +11007,17 @@ def write_plan_sheet_global_comment_parse_block(
         _plan_sheet_write_global_parse_block_to_ws(ws, gpo, when_str)
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-        max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
-        ax_ay_data = [
-            [ws.cell(row=r, column=lc).value, ws.cell(row=r, column=vc).value]
-            for r in range(1, max_r + 1)
-        ]
         try:
-            wb.close()
-        except Exception:
-            pass
-        wb = None
-        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
-            wb_path, sheet_name, ax_ay_data, None, log_prefix
-        ):
+            wb.save(wb_path)
+        except OSError as ex:
             logging.warning(
-                "%s: グローバルコメント解析を xlwings で配台シートへ保存できませんでした。",
+                "%s: グローバルコメント解析の保存に失敗しました: %s",
                 log_prefix,
+                ex,
             )
             return False
         logging.info(
-            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました（xlwings）。",
+            "%s: 「%s」%s:%s 列にグローバルコメント解析を保存しました。",
             log_prefix,
             sheet_name,
             get_column_letter(lc),
@@ -11863,102 +11645,6 @@ def _snapshot_plan_sheet_conflict_style_cells(
     return out
 
 
-def _xlwings_rgb_to_long_bgr(rgb: tuple[int, int, int]) -> int:
-    r, g, b = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
-    return r + (g << 8) + (b << 16)
-
-
-def _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
-    wb_path: str,
-    sheet_name: str,
-    ax_ay_data: list | None,
-    style_snaps: (
-        list[
-            tuple[
-                int,
-                int,
-                tuple[int, int, int] | None,
-                tuple[int, int, int] | None,
-                bool,
-            ]
-        ]
-        | None
-    ),
-    log_prefix: str,
-) -> bool:
-    """
-    マクロブック（.xlsm）へ openpyxl の wb.save を使わず、xlwings で AX〜AY と矛盾着色セルを反映して Save する。
-    """
-    has_ax = ax_ay_data is not None and len(ax_ay_data) > 0
-    has_sn = style_snaps is not None and len(style_snaps) > 0
-    if not has_ax and not has_sn:
-        return False
-    attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
-    if attached is None:
-        return False
-    xw_book, info = attached
-    ok = False
-    try:
-        try:
-            xw_book.app.display_alerts = False
-        except Exception:
-            pass
-        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
-        try:
-            sht = xw_book.sheets[sheet_name]
-            lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
-            vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-            if ax_ay_data:
-                nrows = len(ax_ay_data)
-                sht.range((1, lc), (nrows, vc)).value = ax_ay_data
-            if style_snaps:
-                for r, c, brgb, frgb, bold in style_snaps:
-                    rng = sht.range((r, c))
-                    if brgb is None:
-                        try:
-                            rng.api.Interior.Pattern = -4142  # xlNone
-                        except Exception:
-                            try:
-                                rng.color = None
-                            except Exception:
-                                pass
-                    else:
-                        rng.color = brgb
-                    try:
-                        if frgb is not None:
-                            rng.api.Font.Color = _xlwings_rgb_to_long_bgr(frgb)
-                        rng.api.Font.Bold = bool(bold)
-                    except Exception:
-                        pass
-            xw_book.save()
-            ok = True
-            if ax_ay_data:
-                logging.info(
-                    "%s: グローバル解析（列 %s〜%s）を xlwings で保存しました。",
-                    log_prefix,
-                    get_column_letter(lc),
-                    get_column_letter(vc),
-                )
-            if style_snaps:
-                logging.info(
-                    "%s: 矛盾着色対象列 %s セルを xlwings で反映しました。",
-                    log_prefix,
-                    len(style_snaps),
-                )
-            return True
-        finally:
-            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
-    except Exception as ex:
-        logging.warning(
-            "%s: xlwings による配台シート（グローバル解析・着色）の保存に失敗: %s",
-            log_prefix,
-            ex,
-        )
-        return False
-    finally:
-        _xlwings_release_book_after_mutation(xw_book, info, ok)
-
-
 def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     wb_path: str,
     sheet_name: str,
@@ -11971,8 +11657,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
 ) -> bool:
     """
     段階2: グローバルコメント解析（AX:AY）と矛盾ハイライトを反映する。
-    マクロブックは Excel 占有で openpyxl の save が失敗しやすいため、**openpyxl はメモリ編集のみ**とし、
-    ディスク反映は **xlwings で 1 回の Save** に統一する。
+    マクロブック（.xlsm）も含め、編集内容を openpyxl で ``keep_vba=True`` のまま保存する。
     """
     if not wb_path or not os.path.isfile(wb_path):
         return False
@@ -12024,28 +11709,16 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row or {})
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
-        max_r = PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS
-        ax_ay_data = [
-            [ws.cell(row=r, column=lc).value, ws.cell(row=r, column=vc).value]
-            for r in range(1, max_r + 1)
-        ]
-        style_snaps = _snapshot_plan_sheet_conflict_style_cells(ws, num_data_rows)
         write_planning_conflict_highlight_sidecar(
             sheet_name, num_data_rows, conflicts_by_row or {}
         )
         try:
-            wb.close()
-        except Exception:
-            pass
-        wb = None
-        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
-            wb_path, sheet_name, ax_ay_data, style_snaps, log_prefix
-        ):
+            wb.save(wb_path)
+        except OSError as ex:
             logging.warning(
-                "%s: xlwings で配台シートへ保存できませんでした。"
-                " 矛盾ハイライトは '%s' に書き出済みです。マクロで反映してください。",
+                "%s: 配台シートの openpyxl 保存に失敗しました（ファイルロック等の可能性）: %s",
                 log_prefix,
-                _planning_conflict_sidecar_path(),
+                ex,
             )
             return False
         _remove_planning_conflict_sidecar_safe()
@@ -12053,7 +11726,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         if _n_conf:
             logging.info(
                 "%s: 「%s」%s:%s 列にグローバル解析を保存し、"
-                "特別指定_備考と列の矛盾 %s 行を xlwings でハイライトしました。",
+                "特別指定_備考と列の矛盾 %s 行をハイライトしました。",
                 log_prefix,
                 sheet_name,
                 get_column_letter(lc),
@@ -12096,7 +11769,7 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
     配台計画_タスク入力シートのデータ行を」矛盾列のみ赤地・白太字にれる。
     事剝パスでは上書き入力列を段階1とともに薄黄色に戻し、フォントは変更しない（体裝維挝）。
     AI解析列は着色しない（段階1の仕様に合わせる）。
-    マクロブックは **openpyxl で save せず** xlwings でセル書式を保存する。
+    矛盾列のハイライトを openpyxl で保存する（.xlsm は keep_vba=True）。
     """
     if not wb_path or not os.path.exists(wb_path):
         return
@@ -12115,28 +11788,20 @@ def apply_planning_sheet_conflict_styles(wb_path, sheet_name, num_data_rows, con
             return
         ws = wb[sheet_name]
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row)
-        style_snaps = _snapshot_plan_sheet_conflict_style_cells(ws, num_data_rows)
         write_planning_conflict_highlight_sidecar(
             sheet_name, num_data_rows, conflicts_by_row
         )
         try:
-            wb.close()
-        except Exception:
-            pass
-        wb = None
-        if not _xlwings_persist_plan_input_ax_ay_and_style_snapshots(
-            wb_path, sheet_name, None, style_snaps, "矛盾書式"
-        ):
+            wb.save(wb_path)
+        except OSError as e:
             logging.warning(
-                "配台シートへの矛盾ハイライトを xlwings で保存できませんでした。"
-                " '%s' に指示を書き出済みです。マクロで反映してください。",
-                _planning_conflict_sidecar_path(),
+                "配台シートへの矛盾ハイライトの保存に失敗しました: %s", e
             )
             return
         _remove_planning_conflict_sidecar_safe()
         if conflicts_by_row:
             logging.info(
-                "特別指定_備考と列の矛盾: %s 行を '%s' でハイライトしました（xlwings）。",
+                "特別指定_備考と列の矛盾: %s 行を '%s' でハイライトしました。",
                 len(conflicts_by_row),
                 sheet_name,
             )
@@ -14057,6 +13722,16 @@ def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool)
     mode = info.get("mode", "keep")
     opened_here = bool(info.get("opened_wb_here"))
     if mode == "quit_excel":
+        defer_despite = bool(info.get("defer_quit_despite_failure"))
+        should_defer = _env_xlwings_defer_quit_on_success() and (
+            mutation_ok or (defer_despite and _env_xlwings_defer_after_exclude_sheet_miss())
+        )
+        if should_defer:
+            try:
+                _xlwings_register_deferred_hidden_app(xw_book.app)
+            except Exception:
+                pass
+            return
         try:
             xw_book.close()
         except Exception:
@@ -14264,6 +13939,10 @@ def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
         try:
             sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
         except Exception:
+            try:
+                info["defer_quit_despite_failure"] = True
+            except Exception:
+                pass
             _log_exclude_rules_sheet_debug(
                 "XLWINGS_SYNC_SKIP",
                 log_prefix,
@@ -20796,7 +20475,7 @@ def write_dispatch_trial_pattern_list_via_xlwings(
         logging.error("配台試行順パターン一覧: シート接続に失敗: %s", e)
         return False
 
-    mat = _xlwings_sheet_to_matrix(ws)
+    mat = _openpyxl_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
         logging.warning("配台試行順パターン一覧: データ行はありません。")
@@ -20930,7 +20609,7 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
         return False
 
     _t0 = time_module.perf_counter()
-    mat = _xlwings_sheet_to_matrix(ws)
+    mat = _openpyxl_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
         logging.warning("パターン別段階2: データ行はありません。")
@@ -21227,7 +20906,7 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
         return False
 
     job = _pattern_job_tuple_from_meta_entry(ent)
-    mat = _xlwings_sheet_to_matrix(ws)
+    mat = _openpyxl_sheet_to_matrix(ws)
     df = _matrix_to_dataframe_header_first(mat)
     if df is None or df.empty:
         logging.warning("パターン採用反映: データ行はありません。")
