@@ -1,6 +1,11 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +21,8 @@ import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 final class GpuProbeLauncher {
 
     private static final int PROBE_TIMEOUT_SEC = 45;
+    /** 子プロセス stderr を親側ログに載せる上限（パイプ詰まり防止とログ肥大防止） */
+    private static final int STDERR_CAPTURE_MAX_BYTES = 24576;
 
     private GpuProbeLauncher() {}
 
@@ -47,12 +54,19 @@ final class GpuProbeLauncher {
         pb.redirectOutput(ProcessBuilder.Redirect.PIPE);
         pb.redirectError(ProcessBuilder.Redirect.PIPE);
         Process process = null;
+        ByteArrayOutputStream errCapture = new ByteArrayOutputStream();
+        Thread errDrain = null;
+        Thread outDrain = null;
         try {
             process = pb.start();
-            drainStream(process.getInputStream());
-            drainStream(process.getErrorStream());
+            outDrain = startDrainToDiscard(process.getInputStream());
+            errDrain = startDrainToBoundedBuffer(process.getErrorStream(), errCapture, STDERR_CAPTURE_MAX_BYTES);
             boolean done = process.waitFor(PROBE_TIMEOUT_SEC, TimeUnit.SECONDS);
             if (!done) {
+                process.destroyForcibly();
+                joinDrainQuiet(outDrain, 5_000);
+                joinDrainQuiet(errDrain, 5_000);
+                String errTimeout = clipStderrForLog(errCapture);
                 // #region agent log
                 AgentDebugLog.appendStructured(
                         Map.of(),
@@ -60,13 +74,15 @@ final class GpuProbeLauncher {
                         "H2",
                         "GpuProbeLauncher.runGpuCanvasProbe",
                         "プローブwaitForがタイムアウト",
-                        Map.of("timeoutSec", PROBE_TIMEOUT_SEC));
+                        Map.of("timeoutSec", PROBE_TIMEOUT_SEC, "stderrCapture", errTimeout));
                 // #endregion
-                process.destroyForcibly();
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テストタイムアウト");
                 return false;
             }
+            joinDrainQuiet(outDrain, 5_000);
+            joinDrainQuiet(errDrain, 5_000);
             int code = process.exitValue();
+            String errFull = clipStderrForLog(errCapture);
             // #region agent log
             AgentDebugLog.appendStructured(
                     Map.of(),
@@ -74,7 +90,7 @@ final class GpuProbeLauncher {
                     "H1",
                     "GpuProbeLauncher.runGpuCanvasProbe",
                     "子プロセス終了",
-                    Map.of("exitCode", code));
+                    Map.of("exitCode", code, "stderrCapture", errFull));
             // #endregion
             if (code != 0) {
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テスト終了コード=" + code);
@@ -92,19 +108,66 @@ final class GpuProbeLauncher {
         }
     }
 
-    private static void drainStream(java.io.InputStream in) {
-        Thread t =
+    /** NDJSON 用に stderr を上限文字数で切り詰め（改行は維持） */
+    private static String clipStderrForLog(ByteArrayOutputStream errCapture) {
+        if (errCapture == null) {
+            return "";
+        }
+        String s = errCapture.toString(StandardCharsets.UTF_8).trim();
+        int max = 8000;
+        if (s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max) + "…";
+    }
+
+    private static void joinDrainQuiet(Thread t, long millis) {
+        if (t == null) {
+            return;
+        }
+        try {
+            t.join(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static Thread startDrainToDiscard(InputStream in) {
+        Thread thr =
                 new Thread(
                         () -> {
                             try (in) {
-                                in.transferTo(java.io.OutputStream.nullOutputStream());
-                            } catch (java.io.IOException ignored) {
+                                in.transferTo(OutputStream.nullOutputStream());
+                            } catch (IOException ignored) {
                                 // ignore
                             }
                         },
-                        "gpu-probe-drain");
-        t.setDaemon(true);
-        t.start();
+                        "gpu-probe-drain-out");
+        thr.setDaemon(true);
+        thr.start();
+        return thr;
+    }
+
+    private static Thread startDrainToBoundedBuffer(
+            InputStream in, ByteArrayOutputStream buf, int maxBytes) {
+        Thread thr =
+                new Thread(
+                        () -> {
+                            try (in) {
+                                byte[] chunk = new byte[8192];
+                                int n;
+                                while ((n = in.read(chunk)) != -1 && buf.size() < maxBytes) {
+                                    int w = Math.min(n, maxBytes - buf.size());
+                                    buf.write(chunk, 0, w);
+                                }
+                            } catch (IOException ignored) {
+                                // ignore
+                            }
+                        },
+                        "gpu-probe-drain-err");
+        thr.setDaemon(true);
+        thr.start();
+        return thr;
     }
 
     private static List<String> buildCommand() {
