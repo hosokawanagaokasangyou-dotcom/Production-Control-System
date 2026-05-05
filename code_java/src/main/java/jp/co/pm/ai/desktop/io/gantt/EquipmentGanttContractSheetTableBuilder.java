@@ -412,6 +412,11 @@ public final class EquipmentGanttContractSheetTableBuilder {
         final Double unitM;
         /** 当該イベントの単位数（ロール数など）。Python {@code units_done}。 */
         final Double unitsDone;
+        /**
+         * 当該タスクの配台単位総数（例: 全ロール数）。Python {@code total_units}。
+         * ガントの「依頼単位の延長m」は {@code total_units×unit_m} を優先し、配台表と揃える。
+         */
+        final Double totalUnits;
         /** 実績明細由来の加工長さ(m)。Python {@code label_len_m}。 */
         final Double labelLenM;
         /** Python {@code label_len_m_is_cumulative}。累積ラベルはスロット按分しない。 */
@@ -431,6 +436,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 LocalDateTime end,
                 Double unitM,
                 Double unitsDone,
+                Double totalUnits,
                 Double labelLenM,
                 boolean labelLenMIsCumulative,
                 String op,
@@ -444,6 +450,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
             this.end = end;
             this.unitM = unitM;
             this.unitsDone = unitsDone;
+            this.totalUnits = totalUnits;
             this.labelLenM = labelLenM;
             this.labelLenMIsCumulative = labelLenMIsCumulative;
             this.op = op != null ? op : "";
@@ -471,6 +478,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
             String sub = text(n, "sub");
             Double unitM = numberOrNull(n, "unit_m");
             Double unitsDone = numberOrNull(n, "units_done");
+            Double totalUnits = numberOrNull(n, "total_units");
             Double labelLenM = numberOrNull(n, "label_len_m");
             boolean labelCumulative =
                     n.has("label_len_m_is_cumulative") && n.get("label_len_m_is_cumulative").asBoolean();
@@ -502,6 +510,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     end,
                     unitM,
                     unitsDone,
+                    totalUnits,
                     labelLenM,
                     labelCumulative,
                     op,
@@ -553,7 +562,9 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         /**
-         * イベント総加工長さ(m)。Python {@code _gantt_slot_state_tuple_from_active} の ev_total_len_m と同趣旨。
+         * イベントに表示する総加工長さ(m)。
+         * {@code label_len_m} があれば優先。無ければ契約の {@code total_units×unit_m}（配台表の依頼総量と整合）、
+         * それも無ければ {@code units_done×unit_m}（当該タイムライン分割の1片）。
          */
         Double eventTotalLengthMeters() {
             if (labelLenM != null && !labelLenMIsCumulative) {
@@ -562,8 +573,11 @@ public final class EquipmentGanttContractSheetTableBuilder {
             if (labelLenMIsCumulative) {
                 return null;
             }
-            double u = unitsDone != null ? unitsDone : 0.0;
             double um = unitM != null ? unitM : 0.0;
+            if (totalUnits != null && totalUnits > 1e-12 && um > 1e-12) {
+                return totalUnits * um;
+            }
+            double u = unitsDone != null ? unitsDone : 0.0;
             if (u > 1e-12 && um > 1e-12) {
                 return u * um;
             }
@@ -571,8 +585,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         /**
-         * タイムライン1マスに表示する文字列（依頼NO＋当該<strong>依頼イベント</strong>の総加工量m）。
-         * スロット按分ではなく、Excel 帯の「依頼単位の加工量」と揃える。
+         * タイムライン1マスに表示する文字列（依頼NO＋契約に基づく総加工量m）。
          */
         String timelineCellLabel() {
             if ("machine_daily_startup".equals(eventKind)) {
