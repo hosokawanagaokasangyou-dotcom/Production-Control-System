@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -94,6 +95,14 @@ public final class OperatorCardTabController {
     private void initialize() {
         if (startDatePicker != null) {
             startDatePicker.setValue(LocalDate.now());
+            startDatePicker
+                    .valueProperty()
+                    .addListener(
+                            (obs, previousDate, newDate) -> {
+                                if (!Objects.equals(previousDate, newDate)) {
+                                    rebuildPreview();
+                                }
+                            });
         }
         if (previewHost != null) {
             previewHost.setAlignment(Pos.TOP_CENTER);
