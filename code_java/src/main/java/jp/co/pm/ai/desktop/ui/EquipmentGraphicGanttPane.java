@@ -5,8 +5,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,10 +18,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tooltip;
-import javafx.application.Platform;
-import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
@@ -93,6 +88,85 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, w));
     }
 
+    private record MeasuredLeftWidths(double dateW, double machW, double procW) {}
+
+    private static MeasuredLeftWidths measureAutoLeftWidths(
+            List<String> columns,
+            ParseResult parsed,
+            List<MachineColumnPlan> machPlans,
+            LayoutMetrics layout) {
+        Font headerFont = Font.font(layout.rowLabelFontSize * 1.05);
+        Font cellFont = Font.font(layout.rowLabelFontSize);
+        double pad = 14 * layout.zoom;
+        double floorDate = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_WIDTH * layout.zoom);
+        double floorMach = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_MACHINE_COLUMN_WIDTH * layout.zoom);
+        double floorProc = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_PROCESS_COLUMN_WIDTH * layout.zoom);
+
+        double maxD = measureTextWidth("日付", headerFont);
+        double maxM = measureTextWidth("機械名", headerFont);
+        double maxP = measureTextWidth("工程名", headerFont);
+
+        List<DisplayRow> rows = parsed.displayRows();
+        for (int i = 0; i < rows.size(); i++) {
+            DisplayRow dr = rows.get(i);
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            MachineColumnPlan plan = machPlans.get(i);
+            String proc = dr.processBlock() != null ? dr.processBlock() : "";
+            maxP = Math.max(maxP, measureMultilineMaxLineWidth(proc, cellFont));
+
+            if (plan != null && !plan.continuation()) {
+                String mach = plan.machineCellText() != null ? plan.machineCellText() : "";
+                maxM = Math.max(maxM, measureMultilineMaxLineWidth(mach, cellFont));
+            }
+            String dc = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
+            if (!dc.isEmpty()) {
+                maxD =
+                        Math.max(
+                                maxD,
+                                measureVerticalStackMaxLineWidth(
+                                        verticalStackHorizontal(dc), cellFont));
+            }
+        }
+
+        return new MeasuredLeftWidths(
+                Math.min(
+                        MAX_SIDE_COL_WIDTH,
+                        Math.max(floorDate, Math.min(MAX_SIDE_COL_WIDTH, maxD + pad))),
+                Math.min(
+                        MAX_SIDE_COL_WIDTH,
+                        Math.max(floorMach, Math.min(MAX_SIDE_COL_WIDTH, maxM + pad))),
+                Math.min(
+                        MAX_SIDE_COL_WIDTH,
+                        Math.max(floorProc, Math.min(MAX_SIDE_COL_WIDTH, maxP + pad))));
+    }
+
+    private static double measureMultilineMaxLineWidth(String text, Font font) {
+        String t = text != null ? text : "";
+        double m = 0;
+        for (String line : t.split("\\R")) {
+            String s = line.strip();
+            if (!s.isEmpty()) {
+                m = Math.max(m, measureTextWidth(s, font));
+            }
+        }
+        return m;
+    }
+
+    private static double measureVerticalStackMaxLineWidth(String stacked, Font font) {
+        if (stacked == null || stacked.isEmpty()) {
+            return 0;
+        }
+        double m = 0;
+        for (String line : stacked.split("\n")) {
+            if (!line.isEmpty()) {
+                m = Math.max(m, measureTextWidth(line, font));
+            }
+        }
+        return m;
+    }
+
     /**
      * @param columns シート列見出し
      * @param rows データ行（フィルタ行を含まない素データ）
@@ -100,7 +174,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     public static BorderPane build(
             List<String> columns, ObservableList<ObservableList<String>> rows) {
-        return build(columns, rows, DesktopTheme.LIGHT, 1.0);
+        return build(columns, rows, DesktopTheme.LIGHT, 1.0, 100, 100, "");
     }
 
     public static BorderPane build(
@@ -108,34 +182,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ObservableList<ObservableList<String>> rows,
             DesktopTheme theme,
             double zoom) {
-        return build(
-                columns,
-                rows,
-                theme,
-                zoom,
-                DEFAULT_MACHINE_COLUMN_WIDTH,
-                DEFAULT_PROCESS_COLUMN_WIDTH,
-                "",
-                null);
+        return build(columns, rows, theme, zoom, 100, 100, "");
     }
 
     /**
      * @param theme アプリの {@link DesktopTheme}（Canvas 帯の配色に反映）
-     * @param zoom 表示倍率（0.5〜2.0 程度を想定。スロット幅・行高・フォントに連動）
-     * @param machineColWidth 機械名列の幅（px）
-     * @param processColWidth 工程名列の幅（px）
+     * @param zoom 表示倍率（0.5〜2.0、スライダー 100%÷100）
+     * @param rowHeightPercent 行の高さ（50〜200、100＝既定）
+     * @param slotWidthPercent 時刻列の幅スケール（50〜200）
      * @param barFontFamily バー上ラベル用フォントファミリ（null／空で既定）
-     * @param onLeftColumnWidthsChanged ヘッダの境界ドラッグ後に {@code (機械列幅, 工程列幅)} を通知（永続化用）
      */
     public static BorderPane build(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
             DesktopTheme theme,
             double zoom,
-            double machineColWidth,
-            double processColWidth,
-            String barFontFamily,
-            BiConsumer<Double, Double> onLeftColumnWidthsChanged) {
+            double rowHeightPercent,
+            double slotWidthPercent,
+            String barFontFamily) {
         BorderPane root = new BorderPane();
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
@@ -157,15 +221,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return root;
         }
 
-        LayoutMetrics layout = LayoutMetrics.fromZoom(zoom);
+        LayoutMetrics layout =
+                LayoutMetrics.fromScales(zoom, rowHeightPercent, slotWidthPercent);
         GanttPalette palette = GanttPalette.forTheme(theme);
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
-        double machW = clampMachineColumnWidth(machineColWidth);
-        double procW = clampProcessColumnWidth(processColWidth);
-        double dateW = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_WIDTH * layout.zoom);
-        double splitTotal = machW + procW;
-        double leftTotal = dateW + splitTotal;
+        List<MachineColumnPlan> machPlans =
+                computeMachineColumnPlans(effCols, parsed.displayRows());
+        MeasuredLeftWidths auto =
+                measureAutoLeftWidths(effCols, parsed, machPlans, layout);
+        double dateW = auto.dateW();
+        double machW = auto.machW();
+        double procW = auto.procW();
+        double leftTotal = dateW + machW + procW;
 
         double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
 
@@ -186,44 +254,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrapDate.setMinHeight(layout.headerHeight);
         VBox wrapMach = new VBox(hMach);
         VBox wrapProc = new VBox(hProc);
-        /* SplitPane の子が min=pref=max で幅固定だと区切りを動かせない。幅の上下限は divider 側で与える。 */
-        wrapMach.setMinSize(0, 0);
-        wrapProc.setMinSize(0, 0);
-        SplitPane headSplit = new SplitPane(wrapMach, wrapProc);
-        headSplit.setMinSize(0, 0);
-        headSplit.setMinWidth(splitTotal);
-        headSplit.setPrefWidth(splitTotal);
-        headSplit.setMaxHeight(layout.headerHeight);
         wrapMach.setMinHeight(layout.headerHeight);
         wrapProc.setMinHeight(layout.headerHeight);
-        styleEquipmentHeadSplit(headSplit, theme);
-        double divPos = splitTotal > 1 ? machW / splitTotal : 0.5;
-        AtomicBoolean suppressDividerCallback = new AtomicBoolean(true);
-        headSplit.setDividerPositions(divPos);
-        suppressDividerCallback.set(false);
-
-        if (onLeftColumnWidthsChanged != null) {
-            headSplit
-                    .getDividers()
-                    .get(0)
-                    .positionProperty()
-                    .addListener(
-                            (obs, o, n) -> {
-                                if (suppressDividerCallback.get()) {
-                                    return;
-                                }
-                                double tw = headSplit.getWidth();
-                                if (tw < 40) {
-                                    return;
-                                }
-                                double pos = n.doubleValue();
-                                double newM = tw * pos;
-                                double newP = tw * (1.0 - pos);
-                                if (newM >= MIN_SIDE_COL_WIDTH && newP >= MIN_SIDE_COL_WIDTH) {
-                                    onLeftColumnWidthsChanged.accept(newM, newP);
-                                }
-                            });
-        }
+        HBox leftHead = new HBox(0, wrapDate, wrapMach, wrapProc);
+        leftHead.setMinWidth(leftTotal);
+        leftHead.setPrefWidth(leftTotal);
+        leftHead.setMaxHeight(layout.headerHeight);
 
         int progCell = layout.progressCellWidth;
         int gap = layout.progressGap;
@@ -233,9 +269,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         double contentMinWidth = leftTotal + timelineWidth + progressTotal;
 
-        HBox headRow = new HBox(0, wrapDate, headSplit, headerCanvas);
+        HBox headRow = new HBox(0, leftHead, headerCanvas);
         headRow.setMinWidth(contentMinWidth);
-        HBox.setHgrow(headSplit, Priority.NEVER);
 
         GridPane bodyGrid = new GridPane();
         bodyGrid.setMinWidth(contentMinWidth);
@@ -251,11 +286,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
 
         double timelineOuterPad =
-                Math.max(12 * layout.zoom, barFont.getSize() * 2.0);
+                Math.min(
+                        layout.rowHeight * 0.32,
+                        Math.max(5 * layout.zoom, barFont.getSize() * 0.9));
         double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
-
-        List<MachineColumnPlan> machPlans =
-                computeMachineColumnPlans(effCols, parsed.displayRows());
 
         int machineColorSeq = -1;
         int gridR = 0;
@@ -293,11 +327,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             if (!mplan.continuation()) {
                 String dateCompact = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
-                Label dl = new Label(dateCompact.isEmpty() ? "" : verticalStackHorizontal(dateCompact));
+                String stackedDate = dateCompact.isEmpty() ? "" : verticalStackHorizontal(dateCompact);
+                Label dl = new Label(stackedDate);
                 applySideDataStyle(dl, dateW, layout, palette, machineGroupIndex);
                 dl.setWrapText(true);
                 dl.setAlignment(Pos.TOP_CENTER);
-                dl.setFont(Font.font(layout.rowLabelFontSize * 0.92));
 
                 String machTxt = mplan.machineCellText() != null ? mplan.machineCellText() : "";
                 Label ml = new Label(machTxt);
@@ -317,6 +351,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     GridPane.setValignment(ml, VPos.TOP);
                     GridPane.setRowSpan(ml, mplan.rowSpan());
                     fitFontIntoColumn(
+                            dl,
+                            stackedDate,
+                            dateW - 8,
+                            spanH - 4,
+                            layout.rowLabelFontSize * 0.92);
+                    fitFontIntoColumn(
                             ml,
                             machTxt,
                             machW - 8,
@@ -329,6 +369,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     ml.setMinHeight(cellBodyH);
                     ml.setPrefHeight(cellBodyH);
                     ml.setMaxHeight(cellBodyH);
+                    fitFontIntoColumn(
+                            dl,
+                            stackedDate,
+                            dateW - 8,
+                            cellBodyH - 4,
+                            layout.rowLabelFontSize * 0.92);
                     fitFontIntoColumn(
                             ml,
                             machTxt,
@@ -416,49 +462,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         mainColumn.setPadding(new Insets(4));
         root.setCenter(mainColumn);
 
-        attachSplitDividerGrip(headSplit, theme);
-
         Label hint =
                 new Label(
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
-                        機械名／工程名の間の縦線で列幅変更（自動保存）。日付は左列（縦積み）。同一機械は行を縦結合。 \
-                        短いバーのラベルはバー上下にずらして表示し、ツールバーでバー用フォントを指定できます。""");
+                        左列は内容に応じ自動幅。日付は縦積み。同一機械は行を縦結合。 \
+                        行の高さ・時刻列幅はツールバーで調整できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
         return root;
-    }
-
-    private static void styleEquipmentHeadSplit(SplitPane sp, DesktopTheme theme) {
-        boolean dark = theme.isDarkUi();
-        String line = dark ? "#94a3b8" : "#64748b";
-        sp.setStyle(
-                "-fx-background-color: transparent; -fx-box-border: "
-                        + line
-                        + "; -fx-background-insets: 0; -fx-padding: 0;");
-    }
-
-    /** テーマ適用後に境界線を太め・ハイコントラストにする（初期レイアウト後）。 */
-    private static void attachSplitDividerGrip(SplitPane sp, DesktopTheme theme) {
-        String bg = theme.isDarkUi() ? "rgba(148,163,184,0.98)" : "rgba(71,85,105,0.95)";
-        sp.sceneProperty()
-                .addListener(
-                        (obs, o, scene) -> {
-                            if (scene == null) {
-                                return;
-                            }
-                            Platform.runLater(
-                                    () -> {
-                                        for (Node n : sp.lookupAll(".split-pane-divider")) {
-                                            n.setStyle(
-                                                    "-fx-background-color: "
-                                                            + bg
-                                                            + "; -fx-padding: 0 5 0 5; -fx-cursor: h-resize;");
-                                        }
-                                    });
-                        });
     }
 
     private static void applySideHeaderStyle(
@@ -628,12 +642,32 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int progressGap) {
 
         static LayoutMetrics fromZoom(double zoomIn) {
+            return fromScales(zoomIn, 100, 100);
+        }
+
+        /**
+         * @param zoomIn 表示倍率（0.5〜2.0、スライダー 100%＝1.0）
+         * @param rowHeightPercent 行の高さ 50〜200（100＝基準、0／負は 100 扱い）
+         * @param slotWidthPercent 時刻 1 スロット列幅 50〜200
+         */
+        static LayoutMetrics fromScales(
+                double zoomIn, double rowHeightPercent, double slotWidthPercent) {
             double z = Math.clamp(zoomIn, 0.5, 2.0);
+            double rPct =
+                    rowHeightPercent <= 0 || rowHeightPercent > 500
+                            ? 100
+                            : Math.clamp(rowHeightPercent, 50, 200);
+            double sPct =
+                    slotWidthPercent <= 0 || slotWidthPercent > 500
+                            ? 100
+                            : Math.clamp(slotWidthPercent, 50, 200);
+            double rScale = rPct / 100.0;
+            double sScale = sPct / 100.0;
             return new LayoutMetrics(
                     z,
-                    BASE_SLOT_WIDTH * z,
-                    BASE_ROW_HEIGHT * z,
-                    BASE_SECTION_ROW_HEIGHT * z,
+                    BASE_SLOT_WIDTH * z * sScale,
+                    BASE_ROW_HEIGHT * z * rScale,
+                    BASE_SECTION_ROW_HEIGHT * z * rScale,
                     BASE_HEADER_HEIGHT * z,
                     BASE_LABEL_MIN_WIDTH * z,
                     BASE_LABEL_MAX_WIDTH * z,
@@ -790,7 +824,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LocalTime tt = t0.plusMinutes((long) i * slotMin);
             String txt = tt.format(tf);
             gc.save();
-            double cy = layout.headerHeight * 0.5;
+            double cy = layout.headerHeight * 0.38;
             gc.translate(cx, cy);
             gc.rotate(-90);
             double tw = approxLatinDigitTextWidth(txt, labelFont);

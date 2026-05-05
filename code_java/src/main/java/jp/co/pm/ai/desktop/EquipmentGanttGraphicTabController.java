@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.text.Font;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -94,17 +97,17 @@ public final class EquipmentGanttGraphicTabController {
 
     private Label graphicZoomPercentLabel;
 
-    private double equipmentGraphicMachineColWidth =
-            EquipmentGraphicGanttPane.DEFAULT_MACHINE_COLUMN_WIDTH;
-    private double equipmentGraphicProcessColWidth =
-            EquipmentGraphicGanttPane.DEFAULT_PROCESS_COLUMN_WIDTH;
+    private Slider graphicRowHeightSlider;
 
-    private TextField equipmentGraphicBarFontField;
+    private Label graphicRowHeightPctLabel;
 
-    private String equipmentGraphicBarFontFamily = "";
+    private Slider graphicSlotWidthSlider;
+
+    private Label graphicSlotWidthPctLabel;
+
+    private ComboBox<String> equipmentGraphicBarFontCombo;
 
     private PauseTransition equipmentGraphicPersistDelay;
-    private PauseTransition equipmentGraphicDividerRebuildDelay;
 
     private boolean graphicWheelHookInstalled;
 
@@ -150,6 +153,47 @@ public final class EquipmentGanttGraphicTabController {
                             rebuildGraphicView();
                             scheduleEquipmentGraphicPersist();
                         });
+
+        graphicRowHeightSlider = new Slider(50, 200, 100);
+        graphicRowHeightSlider.setPrefWidth(140);
+        graphicRowHeightSlider.setShowTickLabels(false);
+        graphicRowHeightPctLabel = new Label("100%");
+        graphicRowHeightSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicRowHeightPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            rebuildGraphicView();
+                            scheduleEquipmentGraphicPersist();
+                        });
+
+        graphicSlotWidthSlider = new Slider(50, 200, 100);
+        graphicSlotWidthSlider.setPrefWidth(140);
+        graphicSlotWidthSlider.setShowTickLabels(false);
+        graphicSlotWidthPctLabel = new Label("100%");
+        graphicSlotWidthSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicSlotWidthPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            rebuildGraphicView();
+                            scheduleEquipmentGraphicPersist();
+                        });
+
+        equipmentGraphicBarFontCombo = new ComboBox<>();
+        List<String> families = new ArrayList<>(Font.getFamilies());
+        Collections.sort(families);
+        equipmentGraphicBarFontCombo.getItems().add("");
+        equipmentGraphicBarFontCombo.getItems().addAll(families);
+        equipmentGraphicBarFontCombo.setEditable(false);
+        equipmentGraphicBarFontCombo.setPrefWidth(220);
+        equipmentGraphicBarFontCombo
+                .valueProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            rebuildGraphicView();
+                            scheduleEquipmentGraphicPersist();
+                        });
     }
 
     void applyEquipmentGanttSession(DesktopSessionState s) {
@@ -160,18 +204,27 @@ public final class EquipmentGanttGraphicTabController {
         if (graphicZoomSlider != null && Double.isFinite(z) && z >= 50 && z <= 200) {
             graphicZoomSlider.setValue(z);
         }
-        double mw = s.equipmentGanttMachineColWidth();
-        if (Double.isFinite(mw) && mw > 0) {
-            equipmentGraphicMachineColWidth = EquipmentGraphicGanttPane.clampMachineColumnWidth(mw);
+        double rh = s.equipmentGanttRowHeightPercent();
+        if (graphicRowHeightSlider != null && Double.isFinite(rh) && rh >= 50 && rh <= 200) {
+            graphicRowHeightSlider.setValue(rh);
+            graphicRowHeightPctLabel.setText(String.format("%.0f%%", rh));
         }
-        double pw = s.equipmentGanttProcessColWidth();
-        if (Double.isFinite(pw) && pw > 0) {
-            equipmentGraphicProcessColWidth = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
+        double sw = s.equipmentGanttSlotWidthPercent();
+        if (graphicSlotWidthSlider != null && Double.isFinite(sw) && sw >= 50 && sw <= 200) {
+            graphicSlotWidthSlider.setValue(sw);
+            graphicSlotWidthPctLabel.setText(String.format("%.0f%%", sw));
         }
         String f = s.equipmentGanttBarFontFamily();
-        equipmentGraphicBarFontFamily = f != null ? f.strip() : "";
-        if (equipmentGraphicBarFontField != null) {
-            equipmentGraphicBarFontField.setText(equipmentGraphicBarFontFamily);
+        if (equipmentGraphicBarFontCombo != null) {
+            if (f == null || f.isBlank()) {
+                equipmentGraphicBarFontCombo.setValue("");
+            } else {
+                String fs = f.strip();
+                if (!equipmentGraphicBarFontCombo.getItems().contains(fs)) {
+                    equipmentGraphicBarFontCombo.getItems().add(1, fs);
+                }
+                equipmentGraphicBarFontCombo.setValue(fs);
+            }
         }
     }
 
@@ -180,19 +233,27 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     double snapshotEquipmentGanttMachineColWidth() {
-        return equipmentGraphicMachineColWidth;
+        return 0d;
     }
 
     double snapshotEquipmentGanttProcessColWidth() {
-        return equipmentGraphicProcessColWidth;
+        return 0d;
+    }
+
+    double snapshotEquipmentGanttRowHeightPercent() {
+        return graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttSlotWidthPercent() {
+        return graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
     }
 
     String snapshotEquipmentGanttBarFontFamily() {
-        if (equipmentGraphicBarFontField != null) {
-            String t = equipmentGraphicBarFontField.getText();
-            return t != null ? t.strip() : "";
+        if (equipmentGraphicBarFontCombo != null) {
+            String v = equipmentGraphicBarFontCombo.getValue();
+            return v != null ? v.strip() : "";
         }
-        return equipmentGraphicBarFontFamily;
+        return "";
     }
 
     private void scheduleEquipmentGraphicPersist() {
@@ -207,20 +268,6 @@ public final class EquipmentGanttGraphicTabController {
         }
         equipmentGraphicPersistDelay.stop();
         equipmentGraphicPersistDelay.playFromStart();
-    }
-
-    private void scheduleDividerFollowUpRebuild() {
-        if (equipmentGraphicDividerRebuildDelay == null) {
-            equipmentGraphicDividerRebuildDelay = new PauseTransition(Duration.millis(160));
-            equipmentGraphicDividerRebuildDelay.setOnFinished(
-                    e -> {
-                        if (lastGraphicSheet != null) {
-                            applyGraphicCenter(lastGraphicSheet);
-                        }
-                    });
-        }
-        equipmentGraphicDividerRebuildDelay.stop();
-        equipmentGraphicDividerRebuildDelay.playFromStart();
     }
 
     void bindShell(MainShellController shell) {
@@ -415,32 +462,23 @@ public final class EquipmentGanttGraphicTabController {
         HBox bar = new HBox(8);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(0, 0, 8, 0));
-        Label z = new Label("表示倍率（タイムライン・行・フォント）");
-        if (equipmentGraphicBarFontField == null) {
-            equipmentGraphicBarFontField = new TextField();
-            equipmentGraphicBarFontField.setPrefWidth(200);
-            equipmentGraphicBarFontField.setPromptText("バー表示フォント（空＝既定）");
-            equipmentGraphicBarFontField.setText(equipmentGraphicBarFontFamily);
-            equipmentGraphicBarFontField
-                    .textProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                equipmentGraphicBarFontFamily =
-                                        equipmentGraphicBarFontField.getText() != null
-                                                ? equipmentGraphicBarFontField.getText().strip()
-                                                : "";
-                                rebuildGraphicView();
-                                scheduleEquipmentGraphicPersist();
-                            });
-        }
+        Label z = new Label("表示倍率");
+        Label rhLab = new Label("行の高さ");
+        Label swLab = new Label("時刻列幅");
         Label fontHint = new Label("バー文字フォント");
         bar.getChildren()
                 .addAll(
                         z,
                         graphicZoomSlider,
                         graphicZoomPercentLabel,
+                        rhLab,
+                        graphicRowHeightSlider,
+                        graphicRowHeightPctLabel,
+                        swLab,
+                        graphicSlotWidthSlider,
+                        graphicSlotWidthPctLabel,
                         fontHint,
-                        equipmentGraphicBarFontField);
+                        equipmentGraphicBarFontCombo);
         return bar;
     }
 
@@ -449,6 +487,8 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
+        double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+        double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
@@ -458,21 +498,9 @@ public final class EquipmentGanttGraphicTabController {
                         rows,
                         theme,
                         zoom,
-                        equipmentGraphicMachineColWidth,
-                        equipmentGraphicProcessColWidth,
-                        snapshotEquipmentGanttBarFontFamily(),
-                        (mw, pw) -> {
-                            double cm = EquipmentGraphicGanttPane.clampMachineColumnWidth(mw);
-                            double cp = EquipmentGraphicGanttPane.clampProcessColumnWidth(pw);
-                            if (Math.abs(cm - equipmentGraphicMachineColWidth) < 0.75
-                                    && Math.abs(cp - equipmentGraphicProcessColWidth) < 0.75) {
-                                return;
-                            }
-                            equipmentGraphicMachineColWidth = cm;
-                            equipmentGraphicProcessColWidth = cp;
-                            scheduleEquipmentGraphicPersist();
-                            scheduleDividerFollowUpRebuild();
-                        });
+                        rowPct,
+                        slotPct,
+                        snapshotEquipmentGanttBarFontFamily());
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             graphicRootWrapper.setTop(buildGraphicToolbar());
