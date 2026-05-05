@@ -26,7 +26,9 @@ import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tab;
@@ -101,6 +103,18 @@ public final class PlanResultViewerTabController {
     private Spinner<Integer> planResultFontSizeSpinner;
 
     @FXML
+    private Slider planResultRowHeightSlider;
+
+    @FXML
+    private Label planResultRowHeightPctLabel;
+
+    @FXML
+    private RadioButton planResultCellWrapRadio;
+
+    @FXML
+    private RadioButton planResultCellClipRadio;
+
+    @FXML
     private Accordion sourceAccordion;
 
     @FXML
@@ -116,8 +130,8 @@ public final class PlanResultViewerTabController {
     /** Active spreadsheet views for 列フィルタ解除 */
     private final List<SpreadsheetView> registeredSpreadsheets = new ArrayList<>();
 
-    private final AtomicReference<TableColumnOrderPersistence.PlanResultViewerFontPrefs> planResultFontPrefs =
-            new AtomicReference<>(TableColumnOrderPersistence.loadPlanResultViewerFontPrefs());
+    private final AtomicReference<TableColumnOrderPersistence.PlanResultViewerUiPrefs> planResultUiPrefs =
+            new AtomicReference<>(TableColumnOrderPersistence.loadPlanResultViewerUiPrefs());
 
     @FXML
     private void initialize() {
@@ -127,14 +141,14 @@ public final class PlanResultViewerTabController {
             sourceAccordion.setExpandedPane(sourceTitledPane);
             sourceTitledPane.setExpanded(false);
         }
-        initPlanResultFontControls();
+        initPlanResultUiControls();
     }
 
-    private void initPlanResultFontControls() {
+    private void initPlanResultUiControls() {
         if (planResultFontFamilyCombo == null || planResultFontSizeSpinner == null) {
             return;
         }
-        TableColumnOrderPersistence.PlanResultViewerFontPrefs fp = planResultFontPrefs.get();
+        TableColumnOrderPersistence.PlanResultViewerUiPrefs fp = planResultUiPrefs.get();
         ObservableList<String> families = FXCollections.observableArrayList(Font.getFamilies());
         FXCollections.sort(families);
         planResultFontFamilyCombo.setItems(families);
@@ -147,6 +161,31 @@ public final class PlanResultViewerTabController {
         int sz = (int) Math.round(fp.size());
         sz = Math.max(8, Math.min(48, sz <= 0 ? 12 : sz));
         planResultFontSizeSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(8, 48, sz));
+
+        if (planResultRowHeightSlider != null) {
+            double rh = fp.rowHeightPercent();
+            if (Double.isNaN(rh) || rh < 50) {
+                rh = 100.0;
+            }
+            rh = Math.min(200.0, rh);
+            planResultRowHeightSlider.setMin(50);
+            planResultRowHeightSlider.setMax(200);
+            planResultRowHeightSlider.setValue(rh);
+            planResultRowHeightSlider.setMajorTickUnit(25);
+            planResultRowHeightSlider.setMinorTickCount(4);
+            planResultRowHeightSlider.setShowTickMarks(true);
+            if (planResultRowHeightPctLabel != null) {
+                planResultRowHeightPctLabel.setText(String.format("%.0f%%", rh));
+            }
+        }
+        if (planResultCellWrapRadio != null && planResultCellClipRadio != null) {
+            if (fp.cellWrapText()) {
+                planResultCellWrapRadio.setSelected(true);
+            } else {
+                planResultCellClipRadio.setSelected(true);
+            }
+        }
+
         Runnable saveAndApply =
                 () -> {
                     String selFam =
@@ -154,11 +193,22 @@ public final class PlanResultViewerTabController {
                     String effFam = selFam != null ? selFam.strip() : "";
                     Integer spv = planResultFontSizeSpinner.getValue();
                     double fs = spv != null ? spv.doubleValue() : 12.0;
-                    TableColumnOrderPersistence.PlanResultViewerFontPrefs next =
-                            new TableColumnOrderPersistence.PlanResultViewerFontPrefs(effFam, fs);
-                    planResultFontPrefs.set(next);
-                    TableColumnOrderPersistence.savePlanResultViewerFontPrefs(next);
-                    applyPlanResultFontToAllRegisteredSpreadsheets();
+                    double rowPct =
+                            planResultRowHeightSlider != null
+                                    ? planResultRowHeightSlider.getValue()
+                                    : 100.0;
+                    boolean wrap =
+                            planResultCellWrapRadio != null && planResultCellWrapRadio.isSelected();
+                    TableColumnOrderPersistence.PlanResultViewerUiPrefs next =
+                            new TableColumnOrderPersistence.PlanResultViewerUiPrefs(
+                                    effFam, fs, rowPct, wrap);
+                    planResultUiPrefs.set(next);
+                    TableColumnOrderPersistence.savePlanResultViewerUiPrefs(next);
+                    if (planResultRowHeightPctLabel != null && planResultRowHeightSlider != null) {
+                        planResultRowHeightPctLabel.setText(
+                                String.format("%.0f%%", planResultRowHeightSlider.getValue()));
+                    }
+                    applyPlanResultPresentationToAllRegisteredSpreadsheets();
                 };
         planResultFontFamilyCombo
                 .getSelectionModel()
@@ -167,31 +217,58 @@ public final class PlanResultViewerTabController {
         planResultFontSizeSpinner
                 .valueProperty()
                 .addListener((o, a, b) -> saveAndApply.run());
+        if (planResultRowHeightSlider != null) {
+            planResultRowHeightSlider.valueProperty().addListener((o, a, b) -> saveAndApply.run());
+        }
+        if (planResultCellWrapRadio != null) {
+            planResultCellWrapRadio.selectedProperty().addListener((o, a, b) -> saveAndApply.run());
+        }
+        if (planResultCellClipRadio != null) {
+            planResultCellClipRadio.selectedProperty().addListener((o, a, b) -> saveAndApply.run());
+        }
     }
 
-    private void applyPlanResultFont(SpreadsheetView sv) {
+    private void applyPlanResultFontStyle(SpreadsheetView sv) {
         if (sv == null) {
             return;
         }
-        TableColumnOrderPersistence.PlanResultViewerFontPrefs p = planResultFontPrefs.get();
-        double sz = p.size() >= 6 ? p.size() : 12.0;
-        sz = Math.min(96, sz);
+        TableColumnOrderPersistence.PlanResultViewerUiPrefs p = planResultUiPrefs.get();
+        double fsize = p.size() >= 6 ? p.size() : 12.0;
+        fsize = Math.min(96, fsize);
         String fam = p.family() != null ? p.family().strip() : "";
         String esc = fam.replace("\\", "\\\\").replace("\"", "\\\"");
         String style =
                 fam.isEmpty()
-                        ? ("-fx-font-size: " + (int) Math.round(sz) + "px;")
+                        ? ("-fx-font-size: " + (int) Math.round(fsize) + "px;")
                         : ("-fx-font-family: \""
                                 + esc
                                 + "\"; -fx-font-size: "
-                                + (int) Math.round(sz)
+                                + (int) Math.round(fsize)
                                 + "px;");
         sv.setStyle(style);
     }
 
-    private void applyPlanResultFontToAllRegisteredSpreadsheets() {
+    private void applyPlanResultGridPresentation(SpreadsheetView sv) {
+        if (sv == null) {
+            return;
+        }
+        if (!(sv.getGrid() instanceof GridBase gb)) {
+            return;
+        }
+        TableColumnOrderPersistence.PlanResultViewerUiPrefs u = planResultUiPrefs.get();
+        SpreadsheetTabularSupport.applyPlanResultGridPresentation(
+                gb, u.cellWrapText(), u.rowHeightPercent());
+    }
+
+    /** フォントスタイルと行高・折り返しを現在の UI 設定で適用する。 */
+    private void applyPlanResultPresentation(SpreadsheetView sv) {
+        applyPlanResultFontStyle(sv);
+        applyPlanResultGridPresentation(sv);
+    }
+
+    private void applyPlanResultPresentationToAllRegisteredSpreadsheets() {
         for (SpreadsheetView v : registeredSpreadsheets) {
-            applyPlanResultFont(v);
+            applyPlanResultPresentation(v);
         }
     }
 
@@ -582,7 +659,7 @@ public final class PlanResultViewerTabController {
                         built[0] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
-                        applyPlanResultFont(sv);
+                        applyPlanResultPresentation(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
                         tableSvRef.set(sv);
                         gridState.suppressPersistence.set(true);
@@ -611,7 +688,7 @@ public final class PlanResultViewerTabController {
                         built[1] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
-                        applyPlanResultFont(sv);
+                        applyPlanResultPresentation(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
                         ganttSvRef.set(sv);
                         gridState.suppressPersistence.set(true);
@@ -697,7 +774,7 @@ public final class PlanResultViewerTabController {
         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(sv);
         SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(
                 sv, gridState.headerColumnCount.get());
-        applyPlanResultFont(sv);
+        applyPlanResultPresentation(sv);
         if (layoutWatcherInstalled.compareAndSet(false, true)) {
             TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcherForScope(
                     sv,

@@ -52,10 +52,20 @@ public final class TableColumnOrderPersistence {
 
     private static final String KEY_PLAN_RESULT_FONT_SIZE = "planResultViewer_ui_fontSize";
 
-    /** 計画結果 JSON ビューアの表フォント（空 family は既定フォント）。 */
-    public record PlanResultViewerFontPrefs(String family, double size) {
-        public static PlanResultViewerFontPrefs defaults() {
-            return new PlanResultViewerFontPrefs("", 12.0);
+    private static final String KEY_PLAN_RESULT_ROW_HEIGHT_PCT = "planResultViewer_ui_rowHeightPercent";
+
+    private static final String KEY_PLAN_RESULT_CELL_WRAP = "planResultViewer_ui_cellWrapText";
+
+    /**
+     * 計画結果 JSON ビューアの表示設定（フォント・行高・セル折り返し）。
+     *
+     * @param rowHeightPercent データ行の高さ 50〜200（100＝既定）
+     * @param cellWrapText {@code true} で折り返し、{@code false} で1行・見切れ
+     */
+    public record PlanResultViewerUiPrefs(
+            String family, double size, double rowHeightPercent, boolean cellWrapText) {
+        public static PlanResultViewerUiPrefs defaults() {
+            return new PlanResultViewerUiPrefs("", 12.0, 100.0, false);
         }
     }
 
@@ -346,14 +356,14 @@ public final class TableColumnOrderPersistence {
         }
     }
 
-    public static PlanResultViewerFontPrefs loadPlanResultViewerFontPrefs() {
+    public static PlanResultViewerUiPrefs loadPlanResultViewerUiPrefs() {
         try {
             if (!Files.isRegularFile(STORE)) {
-                return PlanResultViewerFontPrefs.defaults();
+                return PlanResultViewerUiPrefs.defaults();
             }
             JsonNode root = JSON.readTree(STORE.toFile());
             if (root == null || !root.isObject()) {
-                return PlanResultViewerFontPrefs.defaults();
+                return PlanResultViewerUiPrefs.defaults();
             }
             String fam = root.path(KEY_PLAN_RESULT_FONT_FAMILY).asText("");
             double sz = root.path(KEY_PLAN_RESULT_FONT_SIZE).asDouble(12.0);
@@ -363,13 +373,21 @@ public final class TableColumnOrderPersistence {
             if (sz > 96) {
                 sz = 96;
             }
-            return new PlanResultViewerFontPrefs(fam != null ? fam : "", sz);
+            double rh = root.path(KEY_PLAN_RESULT_ROW_HEIGHT_PCT).asDouble(100.0);
+            if (Double.isNaN(rh) || rh < 50) {
+                rh = 100.0;
+            }
+            if (rh > 200) {
+                rh = 200.0;
+            }
+            boolean wrap = root.path(KEY_PLAN_RESULT_CELL_WRAP).asBoolean(false);
+            return new PlanResultViewerUiPrefs(fam != null ? fam : "", sz, rh, wrap);
         } catch (IOException e) {
-            return PlanResultViewerFontPrefs.defaults();
+            return PlanResultViewerUiPrefs.defaults();
         }
     }
 
-    public static void savePlanResultViewerFontPrefs(PlanResultViewerFontPrefs prefs) {
+    public static void savePlanResultViewerUiPrefs(PlanResultViewerUiPrefs prefs) {
         if (prefs == null) {
             return;
         }
@@ -387,6 +405,13 @@ public final class TableColumnOrderPersistence {
             }
             root.put(KEY_PLAN_RESULT_FONT_FAMILY, prefs.family() != null ? prefs.family() : "");
             root.put(KEY_PLAN_RESULT_FONT_SIZE, prefs.size());
+            double rh = prefs.rowHeightPercent();
+            if (Double.isNaN(rh)) {
+                rh = 100.0;
+            }
+            rh = Math.min(200.0, Math.max(50.0, rh));
+            root.put(KEY_PLAN_RESULT_ROW_HEIGHT_PCT, rh);
+            root.put(KEY_PLAN_RESULT_CELL_WRAP, prefs.cellWrapText());
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
         }

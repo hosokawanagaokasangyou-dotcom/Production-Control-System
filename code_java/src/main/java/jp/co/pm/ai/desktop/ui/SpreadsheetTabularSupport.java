@@ -490,4 +490,37 @@ public final class SpreadsheetTabularSupport {
             cols.get(i).setPrefWidth(w);
         }
     }
+
+    /**
+     * 計画結果 JSON ビューア：全グリッド行の高さを一括スケールし、フィルタ行以外のセルに折り返しを適用する。
+     *
+     * @param cellWrapText {@code true} で折り返し、{@code false} で単行（見切れ）
+     * @param rowHeightPercent 50〜100〜200（ControlsFX 既定行高に対する倍率％）
+     */
+    public static void applyPlanResultGridPresentation(
+            GridBase grid, boolean cellWrapText, double rowHeightPercent) {
+        if (grid == null) {
+            return;
+        }
+        double pct = rowHeightPercent;
+        if (Double.isNaN(pct) || pct <= 0) {
+            pct = 100.0;
+        }
+        pct = Math.min(200.0, Math.max(50.0, pct));
+        final double basePx = 24.0;
+        final double rowPx = basePx * (pct / 100.0);
+        grid.setRowHeightCallback(row -> rowPx);
+        List<ObservableList<SpreadsheetCell>> rows = grid.getRows();
+        if (rows == null) {
+            return;
+        }
+        int firstData = spreadsheetFirstDataRowIndex();
+        for (int r = 0; r < rows.size(); r++) {
+            ObservableList<SpreadsheetCell> line = rows.get(r);
+            boolean wrap = cellWrapText && r >= firstData;
+            for (SpreadsheetCell cell : line) {
+                cell.setWrapText(wrap);
+            }
+        }
+    }
 }
