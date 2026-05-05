@@ -120,6 +120,19 @@ public final class EquipmentGanttGraphicTabController {
 
     private boolean graphicWheelHookInstalled;
 
+    /**
+     * 設備グラフィックの {@link EquipmentGraphicGanttPane#build} は重いため、スライダー連続変更では
+     * この間隔（ms）より頻繁には再構築しない。ドラッグ終了時は {@link #flushGraphicRebuildNow()} で必ず反映する。
+     */
+    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 52L;
+
+    private long graphicRebuildLastEmitMs;
+
+    private PauseTransition graphicRebuildTrailing;
+
+    /** {@link #applyEquipmentGanttSession} 等で複数スライダーを一度に動かすときの再構築抑制 */
+    private boolean suppressGraphicRebuild;
+
     @FXML
     private void initialize() {
         if (hintLabel != null) {
@@ -144,9 +157,10 @@ public final class EquipmentGanttGraphicTabController {
                 .addListener(
                         (obs, oldV, v) -> {
                             graphicZoomPercentLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            rebuildGraphicView();
+                            requestThrottledGraphicRebuild();
                             scheduleEquipmentGraphicPersist();
                         });
+        wireGraphicSliderFlushOnDragEnd(graphicZoomSlider);
 
         graphicRowHeightSlider = new Slider(50, 200, 100);
         graphicRowHeightSlider.setPrefWidth(140);
@@ -157,9 +171,10 @@ public final class EquipmentGanttGraphicTabController {
                 .addListener(
                         (o, a, v) -> {
                             graphicRowHeightPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            rebuildGraphicView();
+                            requestThrottledGraphicRebuild();
                             scheduleEquipmentGraphicPersist();
                         });
+        wireGraphicSliderFlushOnDragEnd(graphicRowHeightSlider);
 
         graphicSlotWidthSlider = new Slider(50, 500, 100);
         graphicSlotWidthSlider.setPrefWidth(140);
@@ -170,9 +185,10 @@ public final class EquipmentGanttGraphicTabController {
                 .addListener(
                         (o, a, v) -> {
                             graphicSlotWidthPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            rebuildGraphicView();
+                            requestThrottledGraphicRebuild();
                             scheduleEquipmentGraphicPersist();
                         });
+        wireGraphicSliderFlushOnDragEnd(graphicSlotWidthSlider);
 
         graphicHeaderHeightSlider = new Slider(50, 200, 100);
         graphicHeaderHeightSlider.setPrefWidth(140);
@@ -184,9 +200,10 @@ public final class EquipmentGanttGraphicTabController {
                         (o, a, v) -> {
                             graphicHeaderHeightPctLabel.setText(
                                     String.format("%.0f%%", v.doubleValue()));
-                            rebuildGraphicView();
+                            requestThrottledGraphicRebuild();
                             scheduleEquipmentGraphicPersist();
                         });
+        wireGraphicSliderFlushOnDragEnd(graphicHeaderHeightSlider);
 
         equipmentGraphicBarFontCombo = new ComboBox<>();
         List<String> families = new ArrayList<>(Font.getFamilies());
@@ -199,7 +216,7 @@ public final class EquipmentGanttGraphicTabController {
                 .valueProperty()
                 .addListener(
                         (o, a, b) -> {
-                            rebuildGraphicView();
+                            flushGraphicRebuildNow();
                             scheduleEquipmentGraphicPersist();
                         });
 
@@ -212,9 +229,10 @@ public final class EquipmentGanttGraphicTabController {
                 .addListener(
                         (o, a, v) -> {
                             graphicBarFontPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
-                            rebuildGraphicView();
+                            requestThrottledGraphicRebuild();
                             scheduleEquipmentGraphicPersist();
                         });
+        wireGraphicSliderFlushOnDragEnd(graphicBarFontPctSlider);
         if (graphicToolbarHost != null) {
             graphicToolbarHost.getChildren().setAll(buildGraphicToolbar());
         }
@@ -224,6 +242,16 @@ public final class EquipmentGanttGraphicTabController {
         if (s == null) {
             return;
         }
+        suppressGraphicRebuild = true;
+        try {
+            applyEquipmentGanttSessionBody(s);
+        } finally {
+            suppressGraphicRebuild = false;
+            flushGraphicRebuildNow();
+        }
+    }
+
+    private void applyEquipmentGanttSessionBody(DesktopSessionState s) {
         double z = s.equipmentGanttGraphicZoomPercent();
         if (graphicZoomSlider != null && Double.isFinite(z) && z >= 50 && z <= 200) {
             graphicZoomSlider.setValue(z);
@@ -260,6 +288,57 @@ public final class EquipmentGanttGraphicTabController {
                 equipmentGraphicBarFontCombo.setValue(fs);
             }
         }
+    }
+
+    private void wireGraphicSliderFlushOnDragEnd(Slider slider) {
+        if (slider == null) {
+            return;
+        }
+        slider.valueChangingProperty()
+                .addListener(
+                        (obs, wasChanging, changing) -> {
+                            if (!changing) {
+                                flushGraphicRebuildNow();
+                            }
+                        });
+    }
+
+    private void requestThrottledGraphicRebuild() {
+        if (suppressGraphicRebuild) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long gap = GRAPHIC_REBUILD_MIN_GAP_MS;
+        long elapsed = now - graphicRebuildLastEmitMs;
+        if (elapsed >= gap || graphicRebuildLastEmitMs == 0L) {
+            graphicRebuildLastEmitMs = now;
+            rebuildGraphicView();
+            return;
+        }
+        if (graphicRebuildTrailing == null) {
+            graphicRebuildTrailing = new PauseTransition();
+            graphicRebuildTrailing.setOnFinished(
+                    e -> {
+                        graphicRebuildLastEmitMs = System.currentTimeMillis();
+                        if (!suppressGraphicRebuild) {
+                            rebuildGraphicView();
+                        }
+                    });
+        }
+        graphicRebuildTrailing.stop();
+        graphicRebuildTrailing.setDuration(Duration.millis(Math.max(1, gap - elapsed)));
+        graphicRebuildTrailing.playFromStart();
+    }
+
+    private void flushGraphicRebuildNow() {
+        if (suppressGraphicRebuild) {
+            return;
+        }
+        if (graphicRebuildTrailing != null) {
+            graphicRebuildTrailing.stop();
+        }
+        graphicRebuildLastEmitMs = System.currentTimeMillis();
+        rebuildGraphicView();
     }
 
     double snapshotEquipmentGanttZoomPercent() {
@@ -567,7 +646,7 @@ public final class EquipmentGanttGraphicTabController {
 
     /** メインの {@link DesktopTheme} 変更時に Canvas 帯の配色を合わせて再描画する。 */
     void refreshGraphicForTheme() {
-        rebuildGraphicView();
+        flushGraphicRebuildNow();
     }
 
     /**
