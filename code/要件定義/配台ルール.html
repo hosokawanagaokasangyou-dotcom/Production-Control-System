@@ -484,18 +484,6 @@
     <h4>B-4.2 スリット行とSEC行の隣接（自動算出の配台試行順）</h4>
     <p>加工内容がスリット→SECの依頼について、自動算出の配台試行順では <strong>同一依頼NO内でスリット行の直後にSEC行が来る</strong>ようにキューを軽く並べ替えます（隣接）。シートで全行の試行順が指定されている場合は適用しません（<code>_apply_dispatch_trial_order_for_generate_plan</code>）。</p>
 
-    <h3>B-6 — 接続 → SEC（工程間WIP上限・ゲート・試行順隣接）</h3>
-    <p><strong>目的</strong>: B-4 と同趣旨で、<strong>接続完了前に SEC が先行しない</strong>ようにします。</p>
-    <ul>
-      <li><strong>対象</strong>: 工程名 <strong>接続</strong>×機械名 <strong>熱融着機　湖南</strong> と、工程名 <strong>SEC</strong>×機械名 <strong>SEC機　湖南</strong>。</li>
-      <li><strong>定義</strong>: <code>WIP = max(0, CONN_DONE_TOTAL - SEC_DONE_TOTAL)</code>（完了ロールは <code>initial_remaining_units - remaining_units</code> を合算）。</li>
-      <li><strong>ルール</strong>: WIP が上限以上のときは <strong>接続を新たに配台しません</strong>（候補から除外）。上限は <code>WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS</code>（既定 20、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code>。</li>
-    </ul>
-    <h4>B-6.1 接続が所定ロール以上終わるまで SEC を開始しない（加工内容が接続→SECの依頼のみ）</h4>
-    <p>加工内容トークンが <strong>接続→SEC</strong> の依頼について、同一依頼内で <strong>接続完了 − SEC完了</strong> が閾値未満の間は <strong>SECを候補から除外</strong>します。閾値は <code>CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS</code>（既定 5、<code>0</code> 以下で無効）。タイムライン下限は <code>_b6_sec_start_floor_from_connection_timeline</code>。</p>
-    <h4>B-6.2 接続行とSEC行の隣接（自動算出の配台試行順）</h4>
-    <p>自動算出時は <code>_reorder_task_queue_connection_sec_consecutive</code> で <strong>同一依頼NO内で接続行の直後にSEC行</strong>が来るよう並べ替えます（シート全行試行順指定時は適用しません）。</p>
-
     <h3>B-5 — 特別ルール列挙（速度・人数・日内優先）</h3>
     <p>リポジトリ直下の <span class="file">特別ルール列挙.md</span> のうち、実装済みの要点です。</p>
     <ul>
@@ -509,6 +497,18 @@
       <li><strong>L9</strong>（スライス×スライス機1　湖南）: 日内配台で、直前ロールの <strong>試行順±10</strong> かつ <strong>同厚み</strong>のスライスを優先。ただし開始日（<code>start_date_req</code>）や納期基準（<code>due_basis_date</code>）を満たさない場合は優先しない。</li>
       <li><strong>PN優先（SEC同日）</strong>: 日内配台で、同一試行順帯の中では <strong>PNを含む依頼NOのSEC</strong> を先に並べます（同日に配台する場合）。</li>
     </ul>
+
+    <h3>B-6 — 接続 → SEC（工程間WIP上限・ゲート・試行順隣接）</h3>
+    <p><strong>目的</strong>: B-4 と同趣旨で、<strong>接続完了前に SEC が先行しない</strong>ようにします。</p>
+    <ul>
+      <li><strong>対象</strong>: 工程名 <strong>接続</strong>×機械名 <strong>熱融着機　湖南</strong> と、工程名 <strong>SEC</strong>×機械名 <strong>SEC機　湖南</strong>。</li>
+      <li><strong>定義</strong>: <code>WIP = max(0, CONN_DONE_TOTAL - SEC_DONE_TOTAL)</code>（完了ロールは <code>initial_remaining_units - remaining_units</code> を合算）。</li>
+      <li><strong>ルール</strong>: WIP が上限以上のときは <strong>接続を新たに配台しません</strong>（候補から除外）。上限は <code>WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS</code>（既定 20、<code>0</code> 以下で無効）。実装は <code>_trial_order_flow_eligible_tasks</code>。</li>
+    </ul>
+    <h4>B-6.1 接続が所定ロール以上終わるまで SEC を開始しない（加工内容が接続→SECの依頼のみ）</h4>
+    <p>加工内容トークンが <strong>接続→SEC</strong> の依頼について、同一依頼内で <strong>接続完了 − SEC完了</strong> が閾値未満の間は <strong>SECを候補から除外</strong>します。閾値は <code>CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS</code>（既定 5、<code>0</code> 以下で無効）。タイムライン下限は <code>_b6_sec_start_floor_from_connection_timeline</code>。</p>
+    <h4>B-6.2 接続行とSEC行の隣接（自動算出の配台試行順）</h4>
+    <p>自動算出時は <code>_reorder_task_queue_connection_sec_consecutive</code> で <strong>同一依頼NO内で接続行の直後にSEC行</strong>が来るよう並べ替えます（シート全行試行順指定時は適用しません）。</p>
   </section>
 
   <section id="partial-retry" class="card" aria-labelledby="h-partial">
