@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -329,7 +330,7 @@ public final class ExcludeRulesTabController {
             shell.appendLog("[exclude-json] 削除する行を選択してください");
             return;
         }
-        ruleRows.removeAll(sel);
+        ruleRows.removeAll(new ArrayList<>(sel));
         tableEdited();
     }
 
