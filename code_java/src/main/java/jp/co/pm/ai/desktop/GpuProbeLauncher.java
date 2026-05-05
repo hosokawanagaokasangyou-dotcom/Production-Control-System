@@ -186,14 +186,7 @@ final class GpuProbeLauncher {
         List<String> cmd = new ArrayList<>();
         cmd.add(javaExe.toString());
 
-        for (String arg : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-            if (arg.startsWith("--add-opens")
-                    || arg.startsWith("--add-exports")
-                    || arg.startsWith("--enable-native-access=")
-                    || arg.startsWith("--patch-module")) {
-                cmd.add(arg);
-            }
-        }
+        appendInheritedJvmOptions(cmd, ManagementFactory.getRuntimeMXBean().getInputArguments());
 
         cmd.add("-Dfile.encoding=UTF-8");
         cmd.add("-Dprism.order=" + prismGpuOrderForProbe());
@@ -202,6 +195,44 @@ final class GpuProbeLauncher {
         cmd.add(JavaFxGpuProbeApp.class.getName());
 
         return cmd;
+    }
+
+    /**
+     * javafx-maven-plugin 等が親 JVM に付ける JavaFX モジュール解決用オプションを子へ継承する。
+     *
+     * <p>継承しないと子プロセスだけ {@code javafx.application.Application} が解決できず GPU プローブが誤って不合格になる。
+     */
+    private static void appendInheritedJvmOptions(List<String> cmd, List<String> inputArgs) {
+        for (int i = 0; i < inputArgs.size(); i++) {
+            String arg = inputArgs.get(i);
+            if (arg.startsWith("--module-path=")
+                    || arg.startsWith("--upgrade-module-path=")
+                    || arg.startsWith("--add-modules=")
+                    || arg.startsWith("--limit-modules=")) {
+                cmd.add(arg);
+                continue;
+            }
+            if ("--module-path".equals(arg)
+                    || "--upgrade-module-path".equals(arg)
+                    || "--add-modules".equals(arg)
+                    || "--limit-modules".equals(arg)) {
+                cmd.add(arg);
+                if (i + 1 < inputArgs.size()) {
+                    String next = inputArgs.get(i + 1);
+                    if (!next.startsWith("-")) {
+                        cmd.add(next);
+                        i++;
+                    }
+                }
+                continue;
+            }
+            if (arg.startsWith("--add-opens")
+                    || arg.startsWith("--add-exports")
+                    || arg.startsWith("--enable-native-access=")
+                    || arg.startsWith("--patch-module")) {
+                cmd.add(arg);
+            }
+        }
     }
 
     private static String prismGpuOrderForProbe() {
