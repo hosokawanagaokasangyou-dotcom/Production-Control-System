@@ -13532,14 +13532,13 @@ def _log_exclude_rules_sheet_debug(
         "MATRIX_TSV_WRITTEN",
         "OPENPYXL_SAVE_OK",
         "OPENPYXL_RETRY_WAIT",
-        "XLWINGS_SYNC_OK",
     ):
         logging.info(msg)
     else:
         logging.info(msg)
 
 
-def _xlwings_paths_equivalent(disk_path: str, book_fullname: str) -> bool:
+def __deleted_xlwings_block_placeholder_do_not_use():
     """ディスクパスと xlwings ``Book.fullname``（パス文字列）が同一ファイルを指すか（表記ゆれを多少吸収）。"""
     try:
         fn = str(book_fullname).strip()
@@ -14012,28 +14011,47 @@ EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 
 def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> bool:
     """
-    設定シートのディスク反映。マクロブックは **openpyxl の save を使わず** xlwings で A:E 同期→Save する。
-    失敗時は log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映れる。
+    設定シートのディスク反映。openpyxl でマクロ付きブックを保存する（keep_vba）。
 
-    _wb … 編集済み openpyxl ワークシート ws の親（save には使用しない）。
+    失敗時は log に行列 TSV を出し、VBA「設定_配台不要工程_AからE_TSVから反映」で反映できる。
     """
     global _exclude_rules_effective_read_path
 
-    _log_exclude_rules_sheet_debug(
-        "OPENPYXL_SAVE_SKIPPED_EXCLUDE_RULES_POLICY",
-        log_prefix,
-        "設定_配台不要工程の保存では openpyxl save を試行しません（マクロブックは Excel 占有で失敗しやすいため）。xlwings 同期→Save を試みます。",
-        details=f"path={wb_path}",
-    )
-    logging.info(
-        "%s: 設定_配台不要工程は openpyxl save を使わず xlwings 同期→Save を試みます。",
-        log_prefix,
-    )
-
-    if _xlwings_sync_exclude_rules_sheet_from_openpyxl(wb_path, ws, log_prefix):
+    abs_p = os.path.abspath(str(wb_path or "").strip())
+    if not abs_p:
+        _log_exclude_rules_sheet_debug(
+            "SKIP_NO_PATH", log_prefix, "設定シート保存: パスが空です。", details=""
+        )
+        return False
+    keep_vba = abs_p.lower().endswith(".xlsm")
+    try:
+        _wb.save(abs_p)
+        _exclude_rules_effective_read_path = abs_p
+        _clear_exclude_rules_e_apply_files()
+        _log_exclude_rules_sheet_debug(
+            "OPENPYXL_SAVE_OK",
+            log_prefix,
+            "openpyxl で設定シートを含むブックを保存しました。",
+            details=f"path={abs_p}",
+        )
+        logging.info(
+            "%s: 「%s」を openpyxl で保存しました（設定_配台不要工程）。",
+            log_prefix,
+            os.path.basename(abs_p),
+        )
         return True
-
-    if _write_exclude_rules_matrix_vba_tsv(wb_path, ws, log_prefix):
+    except Exception as ex:
+        _log_exclude_rules_sheet_debug(
+            "OPENPYXL_SAVE_FAIL",
+            log_prefix,
+            "openpyxl でのブック保存に失敗しました。",
+            details=f"path={abs_p}",
+            exc=ex,
+        )
+        logging.warning(
+            "%s: 設定シートの openpyxl 保存に失敗: %s", log_prefix, ex
+        )
+    if _write_exclude_rules_matrix_vba_tsv(abs_p, ws, log_prefix):
         logging.warning(
             "%s: 設定シートを log\\%s に出力しました。"
             " Excel でマクロ「設定_配台不要工程_AからE_TSVから反映」を実行してください。",
@@ -14044,8 +14062,8 @@ def _persist_exclude_rules_workbook(_wb, wb_path: str, ws, log_prefix: str) -> b
     _log_exclude_rules_sheet_debug(
         "OPENPYXL_VBA_FALLBACK",
         log_prefix,
-        "xlwings 保存に失敗したため、 VBA 用行列 TSV を出力しました（ブックは Excel 上で手動反映が必要な場合があります）。",
-        details=f"path={wb_path}",
+        "保存に失敗したため、VBA 用行列 TSV を出力しました（必要なら手動反映）。",
+        details=f"path={abs_p}",
     )
     return False
 
@@ -20097,7 +20115,7 @@ def _excel_hyperlink_formula_file(abs_path: str, display: str) -> str:
     return f'=HYPERLINK("{p}","{disp}")'
 
 
-def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
+def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
     wb,
     summary_rows: list[dict],
     *,
@@ -20110,16 +20128,27 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     C2=合計処理時間のラベル、D2=合計秒（バッチ全体の壁時計）。
     """
     sheet_name = DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME
+    if sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+    else:
+        try:
+            pin = wb.sheetnames.index(PLAN_INPUT_SHEET_NAME)
+            ws = wb.create_sheet(title=sheet_name, index=pin + 1)
+        except ValueError:
+            ws = wb.create_sheet(title=sheet_name)
+
     try:
-        ws = wb.sheets[sheet_name]
-    except Exception:
-        ws = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
-    try:
-        ur = ws.used_range
-        if ur:
-            ur.clear_contents()
+        for mr in list(ws.merged_cells.ranges):
+            ws.unmerge_cells(str(mr))
     except Exception:
         pass
+    max_r = int(ws.max_row or 0)
+    max_c = int(ws.max_column or 0)
+    if max_r > 0 and max_c > 0:
+        for r in range(1, max_r + 1):
+            for c in range(1, max_c + 1):
+                ws.cell(row=r, column=c, value=None)
+
     intro = (
         "各パターンの配台試行順を「配台計画_タスク入力」に反映したうえで段階2のみ実行し、"
         "output/dispatch_pattern_stage2/<実行時刻>/<パターンID>/ に "
@@ -20178,7 +20207,6 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
             "",
             "",
             "",
-            "",
         ],
         headers,
     ]
@@ -20207,7 +20235,11 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
             rr.extend([""] * (n_cols - len(rr)))
         pad.append(rr)
     n_rows = len(pad)
-    ws.range((1, 1)).resize(n_rows, n_cols).value = pad
+
+    for r_i in range(n_rows):
+        for c_i in range(n_cols):
+            ws.cell(row=r_i + 1, column=c_i + 1, value=pad[r_i][c_i])
+
     data_start = 6
     # C,D 列に数式を上書き（データ行のみ）… output/dispatch_pattern_stage2/<日付>/<パターンID>/ の xlsx 絶対パス
     for i, r in enumerate(summary_rows, start=data_start):
@@ -20215,48 +20247,43 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
             fp = r.get("_path_plan")
             fm = r.get("_path_member")
             if fp:
-                ws.range((i, 3)).formula = _excel_hyperlink_formula_file(
+                ws.cell(row=i, column=3).value = _excel_hyperlink_formula_file(
                     fp, os.path.basename(fp)
                 )
             if fm:
-                ws.range((i, 4)).formula = _excel_hyperlink_formula_file(
+                ws.cell(row=i, column=4).value = _excel_hyperlink_formula_file(
                     fm, os.path.basename(fm)
                 )
         except Exception:
             logging.debug("パターン段階2サマリ: HYPERLINK 設定失敗（無視）", exc_info=True)
     try:
-        ws.range((1, 1), (1, n_cols)).merge()
-        ws.range((1, 1)).api.WrapText = True
-        ws.range((5, 1), (5, n_cols)).api.Font.Bold = True
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
+        ws.cell(row=1, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+    except Exception:
+        pass
+    try:
+        for c in range(1, n_cols + 1):
+            ws.cell(row=5, column=c).font = Font(bold=True)
     except Exception:
         pass
     n_pat = len(summary_rows)
     if n_pat > 0:
         try:
-            addr = ws.range((data_start, 1)).resize(n_pat, 1).get_address(
-                row_absolute=True,
-                column_absolute=True,
-                include_sheetname=True,
-            )
-            v = ws.range((3, 2)).api.Validation
-            try:
-                v.Delete()
-            except Exception:
-                pass
-            v.Add(3, 1, 1, Formula1=f"={addr}")
+            f1 = f"$A${data_start}:$A${data_start + n_pat - 1}"
+            dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+            ws.add_data_validation(dv)
+            dv.add(ws.cell(row=3, column=2))
         except Exception:
             logging.debug("パターン段階2サマリ: B3 入力規則の設定に失敗（無視）", exc_info=True)
     try:
-        ws.range((2, 1), (2, n_cols)).api.WrapText = True
-        ws.range((4, 1), (4, n_cols)).merge()
-        ws.range((4, 1)).api.WrapText = True
+        for c in range(1, n_cols + 1):
+            ws.cell(row=2, column=c).alignment = Alignment(
+                wrap_text=True, vertical="top"
+            )
+        ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=n_cols)
+        ws.cell(row=4, column=1).alignment = Alignment(wrap_text=True, vertical="top")
     except Exception:
         pass
-    try:
-        ws.used_range.columns.api.AutoFit()
-    except Exception:
-        pass
-
 
 def _build_dispatch_trial_pattern_list_matrix(
     tasks_df: "pd.DataFrame",
@@ -20388,7 +20415,7 @@ def _build_dispatch_trial_pattern_list_matrix(
     return rows
 
 
-def _xlwings_format_dispatch_trial_pattern_list_sheet(
+def _openpyxl_format_dispatch_trial_pattern_list_sheet(
     ws_out,
     n_rows: int,
     n_cols: int,
@@ -20396,21 +20423,22 @@ def _xlwings_format_dispatch_trial_pattern_list_sheet(
     header_row: int = 3,
 ) -> None:
     """
-    パターン一覧シートの見やすさ: 1 行目説明の横結合、見出し行の太字、データ範囲を Excel 表（ListObject）にする。
+    パターン一覧シートの見やすさ: 1 行目説明の横結合、見出し行の太字、データ範囲を Excel 表（Table）にする。
     環境変数 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE=1 で表のみスキップ（結合・太字は実施）。
     """
     if n_rows < header_row or n_cols < 1:
         return
     try:
-        ws_out.range((1, 1), (1, n_cols)).merge()
-        c1 = ws_out.range((1, 1)).api
-        c1.VerticalAlignment = -4160  # xlTop
-        c1.WrapText = True
-        c1.HorizontalAlignment = -4131  # xlLeft
+        ws_out.merge_cells(
+            start_row=1, start_column=1, end_row=1, end_column=n_cols
+        )
+        top_left = ws_out.cell(row=1, column=1)
+        top_left.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
     except Exception:
         logging.debug("パターン一覧: 1 行目の結合に失敗（無視）", exc_info=True)
     try:
-        ws_out.range((header_row, 1), (header_row, n_cols)).api.Font.Bold = True
+        for c in range(1, n_cols + 1):
+            ws_out.cell(row=header_row, column=c).font = Font(bold=True)
     except Exception:
         pass
 
@@ -20419,35 +20447,33 @@ def _xlwings_format_dispatch_trial_pattern_list_sheet(
         return
     tbl_name = "TblDispatchTrialPatterns"
     try:
-        lots = ws_out.api.ListObjects
-        for i in range(int(lots.Count), 0, -1):
-            try:
-                if str(lots.Item(i).Name) == tbl_name:
-                    lots.Item(i).Delete()
-            except Exception:
-                continue
+        keys_to_del = []
+        for k, tbl in ws_out.tables.items():
+            dn = getattr(tbl, "displayName", None) or getattr(tbl, "name", None)
+            if str(dn or "") == tbl_name:
+                keys_to_del.append(k)
+        for k in keys_to_del:
+            del ws_out.tables[k]
     except Exception:
         pass
     try:
         tbl_nrows = n_rows - header_row + 1
         if tbl_nrows < 2:
             return
-        data_rng = ws_out.range((header_row, 1)).resize(tbl_nrows, n_cols)
-        # xlSrcRange=1, HasHeaders=xlYes=1
-        ws_out.api.ListObjects.Add(1, data_rng.api, None, 1)
-        lots = ws_out.api.ListObjects
-        lo = lots.Item(int(lots.Count))
-        lo.Name = tbl_name
-        try:
-            lo.TableStyle = "TableStyleMedium2"
-        except Exception:
-            pass
+        end_l = get_column_letter(n_cols)
+        ref = f"A{header_row}:{end_l}{n_rows}"
+        tab = Table(displayName=tbl_name, ref=ref)
+        style = TableStyleInfo(
+            name="TableStyleMedium2",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        tab.tableStyleInfo = style
+        ws_out.add_table(tab)
     except Exception as e:
-        logging.warning("パターン一覧: Excel 表（ListObject）の設定をスキップしました: %s", e)
-    try:
-        ws_out.used_range.columns.api.AutoFit()
-    except Exception:
-        pass
+        logging.warning("パターン一覧: Excel 表（Table）の設定をスキップしました: %s", e)
 
 
 def write_dispatch_trial_pattern_list_via_xlwings(
@@ -20456,121 +20482,133 @@ def write_dispatch_trial_pattern_list_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    マクロブックを xlwings で開き、「配台計画_タスク入力」を読み、
+    マクロブックを openpyxl で開き、「配台計画_タスク入力」を読み、
     試行順パターン一覧を DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME に書き込む。
+    （関数名は VBA / 既存スクリプト互換のため xlwings を含む。）
     """
     path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("配台試行順パターン一覧: ブックパスは空です。")
         return False
+    keep_vba = path.lower().endswith(".xlsm")
+    wb = None
     try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("配台試行順パターン一覧: xlwings はありません。")
-        return False
-    try:
-        wb = xw.Book(path)
-        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+        wb = load_workbook(path, keep_vba=keep_vba)
+        ws = wb[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
         logging.error("配台試行順パターン一覧: シート接続に失敗: %s", e)
         return False
 
-    mat = _openpyxl_sheet_to_matrix(ws)
-    df = _matrix_to_dataframe_header_first(mat)
-    if df is None or df.empty:
-        logging.warning("配台試行順パターン一覧: データ行はありません。")
-        return False
-
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-    for c in plan_input_sheet_column_order():
-        if c not in df.columns:
-            df[c] = ""
-
-    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
-        _apply_planning_sheet_post_load_mutations(
-            df,
-            path,
-            "配台試行順パターン一覧",
-            apply_exclude_rules_from_config=False,
-            compile_exclude_rules_d_to_e_with_ai=False,
-        )
-
-    data_extract_dt, _ = _extract_data_extraction_datetime()
-    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-    run_date = base_now_dt.date()
-
     try:
-        (
-            _sd,
-            _mem,
-            equipment_list,
-            req_map,
-            need_rules,
-            _sm,
-            need_combo_col_index,
-        ) = load_skills_and_needs()
-    except Exception as e:
-        logging.exception("配台試行順パターン一覧: master 読込に失敗: %s", e)
-        return False
-
-    try:
-        matrix = _build_dispatch_trial_pattern_list_matrix(
-            df, run_date, req_map, need_rules, need_combo_col_index, equipment_list
-        )
-    except Exception as e:
-        logging.exception("配台試行順パターン一覧: 行列生成に失敗: %s", e)
-        return False
-
-    sheet_name = DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME
-    try:
-        ws_out = wb.sheets[sheet_name]
-    except Exception:
-        try:
-            ws_out = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
-        except Exception as e2:
-            logging.error("配台試行順パターン一覧: シート作成に失敗: %s", e2)
+        mat = _openpyxl_sheet_to_matrix(ws)
+        df = _matrix_to_dataframe_header_first(mat)
+        if df is None or df.empty:
+            logging.warning("配台試行順パターン一覧: データ行はありません。")
             return False
 
-    try:
-        ur0 = ws_out.used_range
-        if ur0:
-            ur0.clear_contents()
-    except Exception:
-        pass
+        df = df.copy()
+        df.columns = df.columns.str.strip()
+        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+        for c in plan_input_sheet_column_order():
+            if c not in df.columns:
+                df[c] = ""
 
-    n_cols = max((len(r) for r in matrix), default=1)
-    padded: list[list] = []
-    for r in matrix:
-        row = list(r)
-        if len(row) < n_cols:
-            row.extend([None] * (n_cols - len(row)))
-        padded.append(row)
-    n_rows = len(padded)
-    try:
-        ws_out.range((1, 1)).resize(n_rows, n_cols).value = padded
-    except Exception as e:
-        logging.exception("配台試行順パターン一覧: シート書込に失敗: %s", e)
-        return False
+        if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+            _apply_planning_sheet_post_load_mutations(
+                df,
+                path,
+                "配台試行順パターン一覧",
+                apply_exclude_rules_from_config=False,
+                compile_exclude_rules_d_to_e_with_ai=False,
+            )
 
-    try:
-        _xlwings_format_dispatch_trial_pattern_list_sheet(ws_out, n_rows, n_cols, header_row=3)
-    except Exception:
-        logging.exception("配台試行順パターン一覧: 書式・表の適用で例外（続行）")
+        data_extract_dt, _ = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
 
-    try:
-        wb.save()
-    except Exception as e:
-        logging.warning("配台試行順パターン一覧: Save 警告: %s", e)
+        try:
+            (
+                _sd,
+                _mem,
+                equipment_list,
+                req_map,
+                need_rules,
+                _sm,
+                need_combo_col_index,
+            ) = load_skills_and_needs()
+        except Exception as e:
+            logging.exception("配台試行順パターン一覧: master 読込に失敗: %s", e)
+            return False
 
-    logging.info(
-        "配台試行順パターン一覧: 「%s」に %s 行を書き込みました。",
-        sheet_name,
-        n_rows,
-    )
-    return True
+        try:
+            matrix = _build_dispatch_trial_pattern_list_matrix(
+                df, run_date, req_map, need_rules, need_combo_col_index, equipment_list
+            )
+        except Exception as e:
+            logging.exception("配台試行順パターン一覧: 行列生成に失敗: %s", e)
+            return False
 
+        sheet_name = DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME
+        if sheet_name in wb.sheetnames:
+            ws_out = wb[sheet_name]
+        else:
+            try:
+                pin = wb.sheetnames.index(PLAN_INPUT_SHEET_NAME)
+                idx = min(pin + 1, len(wb.sheetnames))
+            except ValueError:
+                idx = len(wb.sheetnames)
+            ws_out = wb.create_sheet(title=sheet_name, index=idx)
+
+        try:
+            for mr in list(ws_out.merged_cells.ranges):
+                ws_out.unmerge_cells(str(mr))
+        except Exception:
+            pass
+        max_r = int(ws_out.max_row or 0)
+        max_c = int(ws_out.max_column or 0)
+        if max_r > 0 and max_c > 0:
+            for r in range(1, max_r + 1):
+                for c in range(1, max_c + 1):
+                    ws_out.cell(row=r, column=c, value=None)
+
+        n_cols = max((len(r) for r in matrix), default=1)
+        padded: list[list] = []
+        for r in matrix:
+            row = list(r)
+            if len(row) < n_cols:
+                row.extend([None] * (n_cols - len(row)))
+            padded.append(row)
+        n_rows = len(padded)
+
+        for r_i in range(n_rows):
+            row_vals = padded[r_i]
+            for c_i in range(n_cols):
+                val = row_vals[c_i] if c_i < len(row_vals) else None
+                if val is not None and isinstance(val, float) and pd.isna(val):
+                    val = None
+                ws_out.cell(row=r_i + 1, column=c_i + 1, value=val)
+
+        try:
+            _openpyxl_format_dispatch_trial_pattern_list_sheet(
+                ws_out, n_rows, n_cols, header_row=3
+            )
+        except Exception:
+            logging.exception("配台試行順パターン一覧: 書式・表の適用で例外（続行）")
+
+        wb.save(path)
+
+        logging.info(
+            "配台試行順パターン一覧: 「%s」に %s 行を書き込みました。",
+            sheet_name,
+            n_rows,
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     """TASK_INPUT_WORKBOOK に対する配台試行順パターン一覧シート作成（VBA / cmd 用）。"""
@@ -20590,237 +20628,240 @@ def run_dispatch_trial_pattern_stage2_batch_via_xlwings(
     各試行順パターン（P1～P7）ごとに段階2を実行し、
     ``output/dispatch_pattern_stage2/<時刻>/<パターンID>/`` に production_plan / member_schedule を保存する。
     バッチ時は計画側および加工実績明細の設備ガントシートを生成しない（スコア比較の負荷軽減）。
-    マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（xlwings）。
+    マクロブックに ``DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME`` へリンクとスコアを書く（openpyxl）。
     """
     path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("パターン別段階2: ブックパスは空です。")
         return False
+    keep_vba = path.lower().endswith(".xlsm")
+    wb = None
     try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("パターン別段階2: xlwings はありません。")
-        return False
-    try:
-        wb = xw.Book(path)
-        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+        wb = load_workbook(path, keep_vba=keep_vba)
+        ws = wb[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
         logging.error("パターン別段階2: シート接続に失敗: %s", e)
         return False
 
-    _t0 = time_module.perf_counter()
-    mat = _openpyxl_sheet_to_matrix(ws)
-    df = _matrix_to_dataframe_header_first(mat)
-    if df is None or df.empty:
-        logging.warning("パターン別段階2: データ行はありません。")
-        return False
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-    for c in plan_input_sheet_column_order():
-        if c not in df.columns:
-            df[c] = ""
-
-    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
-        _t_mut0 = time_module.perf_counter()
-        _apply_planning_sheet_post_load_mutations(
-            df,
-            path,
-            "配台試行順パターン別段階2",
-            apply_exclude_rules_from_config=False,
-            compile_exclude_rules_d_to_e_with_ai=False,
-        )
-    data_extract_dt, _ = _extract_data_extraction_datetime()
-    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-    run_date = base_now_dt.date()
-
     try:
-        _t_master0 = time_module.perf_counter()
-        (
-            _sd,
-            _mem,
-            equipment_list,
-            req_map,
-            need_rules,
-            _sm,
-            need_combo_col_index,
-        ) = load_skills_and_needs()
-    except Exception as e:
-        logging.exception("パターン別段階2: master 読込に失敗: %s", e)
-        return False
+        _t0 = time_module.perf_counter()
+        mat = _openpyxl_sheet_to_matrix(ws)
+        df = _matrix_to_dataframe_header_first(mat)
+        if df is None or df.empty:
+            logging.warning("パターン別段階2: データ行はありません。")
+            return False
+        df = df.copy()
+        df.columns = df.columns.str.strip()
+        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+        for c in plan_input_sheet_column_order():
+            if c not in df.columns:
+                df[c] = ""
 
-    df0 = df.copy()
-    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-    if dto_col in df0.columns:
-        if pd.api.types.is_numeric_dtype(df0[dto_col]):
-            df0[dto_col] = float("nan")
-        else:
-            df0[dto_col] = ""
-
-    global_priority_raw = load_main_sheet_global_priority_override_text()
-    members_for_gpo: list = []
-    try:
-        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
-            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
-        for r in range(2, _skills.shape[0]):
-            cell = _skills.iat[r, 0]
-            if pd.isna(cell):
-                continue
-            name = str(cell).strip()
-            if name and name.lower() not in ("nan", "none", "null"):
-                members_for_gpo.append(name)
-    except Exception:
-        members_for_gpo = []
-    _t_build0 = time_module.perf_counter()
-    gpo = analyze_global_priority_override_comment(
-        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
-    )
-    ai_by_tid = analyze_task_special_remarks(df0, reference_year=run_date.year)
-    tq_template = build_task_queue_from_planning_df(
-        df0, run_date, req_map, ai_by_tid, gpo, equipment_list
-    )
-    if not tq_template:
-        logging.error("パターン別段階2: 配台対象タスクがありません。")
-        return False
-
-    tq_frozen = copy.deepcopy(tq_template)
-    pattern_jobs = _dispatch_pattern_stage2_capped_jobs()
-    batch_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    batch_root = os.path.join(output_dir, "dispatch_pattern_stage2", batch_stamp)
-    try:
-        os.makedirs(batch_root, exist_ok=True)
-    except OSError as e:
-        logging.error("パターン別段階2: バッチフォルダを作成できません: %s", e)
-        return False
-    logging.info("パターン別段階2: 出力ルート %s", batch_root)
-    _write_dispatch_pattern_stage2_jobs_meta(batch_root, pattern_jobs)
-
-    p5_bundle_batch = {
-        "planning_df": df0,
-        "run_date": run_date,
-        "req_map": req_map,
-        "need_rules": need_rules,
-        "need_combo_col_index": need_combo_col_index,
-        "equipment_list": equipment_list,
-        "gpo": gpo,
-        "probe_stage2_root": os.path.join(batch_root, "_p5_p2_probe"),
-        "p6_nested_probe_parent": os.path.join(batch_root, "_p6_nested_probes"),
-    }
-    summary_rows: list[dict] = []
-    _pat_var_it = _iter_dispatch_trial_pattern_variant_queues(
-        tq_frozen, pattern_jobs, p5_bundle=p5_bundle_batch
-    )
-    while True:
-        t_pat_wall0 = time_module.perf_counter()
-        try:
-            pid, pname, tq, df_p5_ov = next(_pat_var_it)
-        except StopIteration:
-            break
-        df_run = df_p5_ov.copy() if df_p5_ov is not None else df0.copy()
-        _apply_pattern_dispatch_trial_orders_to_tasks_df(df_run, tq)
-        out_sub = os.path.join(batch_root, pid)
-        try:
-            os.makedirs(out_sub, exist_ok=True)
-        except OSError as e:
-            summary_rows.append(
-                {
-                    "パターンID": pid,
-                    "パターン名": pname,
-                    "備考": f"出力フォルダ作成失敗: {e}",
-                    "参考スコア(自動)": "",
-                    "処理時間(秒)": round(
-                        time_module.perf_counter() - t_pat_wall0, 2
-                    ),
-                }
+        if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+            _t_mut0 = time_module.perf_counter()
+            _apply_planning_sheet_post_load_mutations(
+                df,
+                path,
+                "配台試行順パターン別段階2",
+                apply_exclude_rules_from_config=False,
+                compile_exclude_rules_d_to_e_with_ai=False,
             )
-            continue
+        data_extract_dt, _ = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
 
-        row: dict = {
-            "パターンID": pid,
-            "パターン名": pname,
-            "備考": "",
-            "参考スコア(自動)": "",
-        }
-        paths = None
         try:
-            paths = _generate_plan_impl(
-                tasks_df_override=df_run,
-                stage2_output_root=out_sub,
-                skip_remove_prior_stage2_workbooks=True,
-                return_output_paths=True,
-                tasks_df_raw_input_baseline=(df0 if df_p5_ov is not None else None),
-                result_pattern_shift_label=(pid if df_p5_ov is not None else None),
-            )
-        except PlanningValidationError as e:
-            row["備考"] = f"検証エラー: {e}"[:500]
-            row["処理時間(秒)"] = round(
-                time_module.perf_counter() - t_pat_wall0, 2
-            )
-            summary_rows.append(row)
-            continue
+            _t_master0 = time_module.perf_counter()
+            (
+                _sd,
+                _mem,
+                equipment_list,
+                req_map,
+                need_rules,
+                _sm,
+                need_combo_col_index,
+            ) = load_skills_and_needs()
         except Exception as e:
-            logging.exception("パターン別段階2: %s で例外", pid)
-            row["備考"] = f"エラー: {e}"[:500]
+            logging.exception("パターン別段階2: master 読込に失敗: %s", e)
+            return False
+
+        df0 = df.copy()
+        dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+        if dto_col in df0.columns:
+            if pd.api.types.is_numeric_dtype(df0[dto_col]):
+                df0[dto_col] = float("nan")
+            else:
+                df0[dto_col] = ""
+
+        global_priority_raw = load_main_sheet_global_priority_override_text()
+        members_for_gpo: list = []
+        try:
+            with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
+                _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+            for r in range(2, _skills.shape[0]):
+                cell = _skills.iat[r, 0]
+                if pd.isna(cell):
+                    continue
+                name = str(cell).strip()
+                if name and name.lower() not in ("nan", "none", "null"):
+                    members_for_gpo.append(name)
+        except Exception:
+            members_for_gpo = []
+        _t_build0 = time_module.perf_counter()
+        gpo = analyze_global_priority_override_comment(
+            global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+        )
+        ai_by_tid = analyze_task_special_remarks(df0, reference_year=run_date.year)
+        tq_template = build_task_queue_from_planning_df(
+            df0, run_date, req_map, ai_by_tid, gpo, equipment_list
+        )
+        if not tq_template:
+            logging.error("パターン別段階2: 配台対象タスクがありません。")
+            return False
+
+        tq_frozen = copy.deepcopy(tq_template)
+        pattern_jobs = _dispatch_pattern_stage2_capped_jobs()
+        batch_stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        batch_root = os.path.join(output_dir, "dispatch_pattern_stage2", batch_stamp)
+        try:
+            os.makedirs(batch_root, exist_ok=True)
+        except OSError as e:
+            logging.error("パターン別段階2: バッチフォルダを作成できません: %s", e)
+            return False
+        logging.info("パターン別段階2: 出力ルート %s", batch_root)
+        _write_dispatch_pattern_stage2_jobs_meta(batch_root, pattern_jobs)
+
+        p5_bundle_batch = {
+            "planning_df": df0,
+            "run_date": run_date,
+            "req_map": req_map,
+            "need_rules": need_rules,
+            "need_combo_col_index": need_combo_col_index,
+            "equipment_list": equipment_list,
+            "gpo": gpo,
+            "probe_stage2_root": os.path.join(batch_root, "_p5_p2_probe"),
+            "p6_nested_probe_parent": os.path.join(batch_root, "_p6_nested_probes"),
+        }
+        summary_rows: list[dict] = []
+        _pat_var_it = _iter_dispatch_trial_pattern_variant_queues(
+            tq_frozen, pattern_jobs, p5_bundle=p5_bundle_batch
+        )
+        while True:
+            t_pat_wall0 = time_module.perf_counter()
+            try:
+                pid, pname, tq, df_p5_ov = next(_pat_var_it)
+            except StopIteration:
+                break
+            df_run = df_p5_ov.copy() if df_p5_ov is not None else df0.copy()
+            _apply_pattern_dispatch_trial_orders_to_tasks_df(df_run, tq)
+            out_sub = os.path.join(batch_root, pid)
+            try:
+                os.makedirs(out_sub, exist_ok=True)
+            except OSError as e:
+                summary_rows.append(
+                    {
+                        "パターンID": pid,
+                        "パターン名": pname,
+                        "備考": f"出力フォルダ作成失敗: {e}",
+                        "参考スコア(自動)": "",
+                        "処理時間(秒)": round(
+                            time_module.perf_counter() - t_pat_wall0, 2
+                        ),
+                    }
+                )
+                continue
+
+            row: dict = {
+                "パターンID": pid,
+                "パターン名": pname,
+                "備考": "",
+                "参考スコア(自動)": "",
+            }
+            paths = None
+            try:
+                paths = _generate_plan_impl(
+                    tasks_df_override=df_run,
+                    stage2_output_root=out_sub,
+                    skip_remove_prior_stage2_workbooks=True,
+                    return_output_paths=True,
+                    tasks_df_raw_input_baseline=(df0 if df_p5_ov is not None else None),
+                    result_pattern_shift_label=(pid if df_p5_ov is not None else None),
+                )
+            except PlanningValidationError as e:
+                row["備考"] = f"検証エラー: {e}"[:500]
+                row["処理時間(秒)"] = round(
+                    time_module.perf_counter() - t_pat_wall0, 2
+                )
+                summary_rows.append(row)
+                continue
+            except Exception as e:
+                logging.exception("パターン別段階2: %s で例外", pid)
+                row["備考"] = f"エラー: {e}"[:500]
+                row["処理時間(秒)"] = round(
+                    time_module.perf_counter() - t_pat_wall0, 2
+                )
+                summary_rows.append(row)
+                continue
+
+            if not paths:
+                row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
+                row["処理時間(秒)"] = round(
+                    time_module.perf_counter() - t_pat_wall0, 2
+                )
+                summary_rows.append(row)
+                continue
+
+            row["_path_plan"] = paths.get("production_plan") or ""
+            row["_path_member"] = paths.get("member_schedule") or ""
+            sco = _score_dispatch_pattern_stage2_workbook(paths["production_plan"])
+            row["納期_判定対象件数"] = sco.get("納期_判定対象件数", "")
+            row["納期_遅れ件数"] = sco.get("納期_遅れ件数", "")
+            row["納期_遵守率"] = sco.get("納期_遵守率", "")
+            row["メンバー_平均作業割合_pct"] = sco.get("メンバー_平均作業割合_pct", "")
+            row["設備_稼働セル数"] = sco.get("設備_稼働セル数", "")
+            ref_s = _dispatch_pattern_reference_score_from_metrics(
+                row.get("納期_遵守率"),
+                row.get("メンバー_平均作業割合_pct"),
+                row.get("設備_稼働セル数"),
+            )
+            row["参考スコア(自動)"] = ref_s if ref_s is not None else ""
+            if sco.get("スコア備考"):
+                row["備考"] = str(sco["スコア備考"])[:500]
             row["処理時間(秒)"] = round(
                 time_module.perf_counter() - t_pat_wall0, 2
             )
             summary_rows.append(row)
-            continue
 
-        if not paths:
-            row["備考"] = "段階2が結果パスを返しませんでした（中断の可能性）。"
-            row["処理時間(秒)"] = round(
-                time_module.perf_counter() - t_pat_wall0, 2
+        _sum_pat_sec = 0.0
+        for _sr in summary_rows:
+            v = _sr.get("処理時間(秒)")
+            if isinstance(v, (int, float)):
+                _sum_pat_sec += float(v)
+        try:
+            _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
+                wb,
+                summary_rows,
+                batch_root=os.path.abspath(batch_root),
+                total_batch_seconds=_sum_pat_sec,
             )
-            summary_rows.append(row)
-            continue
+            wb.save(path)
+        except Exception as e:
+            logging.exception("パターン別段階2: サマリシートまたは保存に失敗: %s", e)
+            return False
 
-        row["_path_plan"] = paths.get("production_plan") or ""
-        row["_path_member"] = paths.get("member_schedule") or ""
-        sco = _score_dispatch_pattern_stage2_workbook(paths["production_plan"])
-        row["納期_判定対象件数"] = sco.get("納期_判定対象件数", "")
-        row["納期_遅れ件数"] = sco.get("納期_遅れ件数", "")
-        row["納期_遵守率"] = sco.get("納期_遵守率", "")
-        row["メンバー_平均作業割合_pct"] = sco.get("メンバー_平均作業割合_pct", "")
-        row["設備_稼働セル数"] = sco.get("設備_稼働セル数", "")
-        ref_s = _dispatch_pattern_reference_score_from_metrics(
-            row.get("納期_遵守率"),
-            row.get("メンバー_平均作業割合_pct"),
-            row.get("設備_稼働セル数"),
+        logging.info(
+            "パターン別段階2: 完了（%s パターン・合計約 %.2f 秒）。サマリシート「%s」",
+            len(summary_rows),
+            _sum_pat_sec,
+            DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME,
         )
-        row["参考スコア(自動)"] = ref_s if ref_s is not None else ""
-        if sco.get("スコア備考"):
-            row["備考"] = str(sco["スコア備考"])[:500]
-        row["処理時間(秒)"] = round(
-            time_module.perf_counter() - t_pat_wall0, 2
-        )
-        summary_rows.append(row)
-
-    _sum_pat_sec = 0.0
-    for _sr in summary_rows:
-        v = _sr.get("処理時間(秒)")
-        if isinstance(v, (int, float)):
-            _sum_pat_sec += float(v)
-    try:
-        _xlwings_write_dispatch_pattern_stage2_summary_sheet(
-            wb,
-            summary_rows,
-            batch_root=os.path.abspath(batch_root),
-            total_batch_seconds=_sum_pat_sec,
-        )
-        wb.save()
-    except Exception as e:
-        logging.exception("パターン別段階2: サマリシートまたは保存に失敗: %s", e)
-        return False
-
-    logging.info(
-        "パターン別段階2: 完了（%s パターン・合計約 %.2f 秒）。サマリシート「%s」",
-        len(summary_rows),
-        _sum_pat_sec,
-        DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME,
-    )
-    return True
-
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 def refresh_dispatch_trial_pattern_stage2_batch_only() -> bool:
     """各パターンで段階2を実行しサマリをマクロブックに書く（VBA / cmd 用）。"""
@@ -20848,217 +20889,226 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
     if not path:
         logging.error("パターン採用反映: ブックパスは空です。")
         return False
+    keep_vba = path.lower().endswith(".xlsm")
+    wb = None
     try:
-        import xlwings as xw
-    except ImportError:
-        logging.error("パターン採用反映: xlwings はありません。")
-        return False
-    try:
-        wb = xw.Book(path)
-        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
-        ws_sum = wb.sheets[DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME]
+        wb = load_workbook(path, keep_vba=keep_vba)
+        ws = wb[PLAN_INPUT_SHEET_NAME]
+        ws_sum = wb[DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME]
     except Exception as e:
         logging.error("パターン採用反映: シート接続に失敗: %s", e)
         return False
 
-    batch_root = str(ws_sum.range((2, 2)).value or "").strip()
-    if not batch_root or not os.path.isdir(batch_root):
-        logging.error(
-            "パターン採用反映: サマリ B2 のバッチ出力ルートが無効です（先にパターン別段階2を実行してください）。"
-        )
-        return False
-    meta_path = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
-    if not os.path.isfile(meta_path):
-        logging.error("パターン採用反映: メタファイルがありません: %s", meta_path)
-        return False
     try:
-        with open(meta_path, encoding="utf-8") as f:
-            meta = json.load(f)
-    except OSError as e:
-        logging.error("パターン採用反映: メタ JSON の読込に失敗: %s", e)
-        return False
-
-    chosen = (chosen_pattern_id or "").strip()
-    if not chosen:
+        batch_root = str(ws_sum.cell(row=2, column=2).value or "").strip()
+        if not batch_root or not os.path.isdir(batch_root):
+            logging.error(
+                "パターン採用反映: サマリ B2 のバッチ出力ルートが無効です（先にパターン別段階2を実行してください）。"
+            )
+            return False
+        meta_path = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
+        if not os.path.isfile(meta_path):
+            logging.error("パターン採用反映: メタファイルがありません: %s", meta_path)
+            return False
         try:
-            chosen = str(ws_sum.range((3, 2)).value or "").strip()
+            with open(meta_path, encoding="utf-8") as f:
+                meta = json.load(f)
+        except OSError as e:
+            logging.error("パターン採用反映: メタ JSON の読込に失敗: %s", e)
+            return False
+
+        chosen = (chosen_pattern_id or "").strip()
+        if not chosen:
+            try:
+                chosen = str(ws_sum.cell(row=3, column=2).value or "").strip()
+            except Exception:
+                chosen = ""
+        if not chosen:
+            logging.error(
+                "パターン採用反映: 採用パターンIDが空です。サマリの B3 に一覧のいずれかを入力してください。"
+            )
+            return False
+
+        patterns = meta.get("patterns") or []
+        ent = None
+        chosen_key = chosen.strip().casefold()
+        for p in patterns:
+            pid = str(p.get("id") or "").strip()
+            if pid.casefold() == chosen_key:
+                ent = p
+                break
+        if ent is None:
+            logging.error(
+                "パターン採用反映: パターンID「%s」は当該バッチのメタにありません。",
+                chosen,
+            )
+            return False
+
+        job = _pattern_job_tuple_from_meta_entry(ent)
+        mat = _openpyxl_sheet_to_matrix(ws)
+        df = _matrix_to_dataframe_header_first(mat)
+        if df is None or df.empty:
+            logging.warning("パターン採用反映: データ行はありません。")
+            return False
+
+        df = df.copy()
+        df.columns = df.columns.str.strip()
+        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+        for c in plan_input_sheet_column_order():
+            if c not in df.columns:
+                df[c] = ""
+
+        df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
+
+        if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+            _apply_planning_sheet_post_load_mutations(
+                df,
+                path,
+                "パターン採用反映",
+                apply_exclude_rules_from_config=False,
+                compile_exclude_rules_d_to_e_with_ai=False,
+            )
+
+        dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+        if dto_col not in df.columns:
+            logging.error("パターン採用反映: 列「%s」はありません。", dto_col)
+            return False
+        _dto_loc = df.columns.get_loc(dto_col)
+        if isinstance(_dto_loc, slice):
+            logging.error("パターン採用反映: 列「%s」は複数あります。", dto_col)
+            return False
+        if pd.api.types.is_numeric_dtype(df[dto_col]):
+            df[dto_col] = float("nan")
+        else:
+            df[dto_col] = ""
+
+        data_extract_dt, _ = _extract_data_extraction_datetime()
+        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+        run_date = base_now_dt.date()
+
+        try:
+            (
+                _sd,
+                _mem,
+                equipment_list,
+                req_map,
+                need_rules,
+                _sm,
+                need_combo_col_index,
+            ) = load_skills_and_needs()
+        except Exception as e:
+            logging.exception("パターン採用反映: master 読込に失敗: %s", e)
+            return False
+
+        global_priority_raw = load_main_sheet_global_priority_override_text()
+        members_for_gpo: list = []
+        try:
+            with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
+                _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+            for r in range(2, _skills.shape[0]):
+                cell = _skills.iat[r, 0]
+                if pd.isna(cell):
+                    continue
+                name = str(cell).strip()
+                if name and name.lower() not in ("nan", "none", "null"):
+                    members_for_gpo.append(name)
         except Exception:
-            chosen = ""
-    if not chosen:
-        logging.error(
-            "パターン採用反映: 採用パターンIDが空です。サマリの B3 に一覧のいずれかを入力してください。"
+            members_for_gpo = []
+        gpo = analyze_global_priority_override_comment(
+            global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
         )
-        return False
-
-    patterns = meta.get("patterns") or []
-    ent = None
-    chosen_key = chosen.strip().casefold()
-    for p in patterns:
-        pid = str(p.get("id") or "").strip()
-        if pid.casefold() == chosen_key:
-            ent = p
-            break
-    if ent is None:
-        logging.error(
-            "パターン採用反映: パターンID「%s」は当該バッチのメタにありません。",
-            chosen,
+        ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
+        tq_template = build_task_queue_from_planning_df(
+            df, run_date, req_map, ai_by_tid, gpo, equipment_list
         )
-        return False
+        if not tq_template:
+            logging.error("パターン採用反映: 配台対象タスクがありません。")
+            return False
 
-    job = _pattern_job_tuple_from_meta_entry(ent)
-    mat = _openpyxl_sheet_to_matrix(ws)
-    df = _matrix_to_dataframe_header_first(mat)
-    if df is None or df.empty:
-        logging.warning("パターン採用反映: データ行はありません。")
-        return False
-
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-    for c in plan_input_sheet_column_order():
-        if c not in df.columns:
-            df[c] = ""
-
-    df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
-
-    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
-        _apply_planning_sheet_post_load_mutations(
-            df,
-            path,
-            "パターン採用反映",
-            apply_exclude_rules_from_config=False,
-            compile_exclude_rules_d_to_e_with_ai=False,
+        tq_frozen = copy.deepcopy(tq_template)
+        p5_bundle_sel = {
+            "planning_df": df,
+            "run_date": run_date,
+            "req_map": req_map,
+            "need_rules": need_rules,
+            "need_combo_col_index": need_combo_col_index,
+            "equipment_list": equipment_list,
+            "gpo": gpo,
+            "probe_stage2_root": os.path.join(batch_root, "_p5_selection_probe"),
+            "p6_nested_probe_parent": os.path.join(batch_root, "_p6_selection_nested"),
+        }
+        _pid_applied, _pname_applied, tq_sel, df_p5_ov = next(
+            _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job], p5_bundle=p5_bundle_sel)
         )
+        df_apply = df_p5_ov.copy() if df_p5_ov is not None else df
+        _apply_pattern_dispatch_trial_orders_to_tasks_df(df_apply, tq_sel)
+        df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df_apply)
+        orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
+        df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
 
-    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-    if dto_col not in df.columns:
-        logging.error("パターン採用反映: 列「%s」はありません。", dto_col)
-        return False
-    _dto_loc = df.columns.get_loc(dto_col)
-    if isinstance(_dto_loc, slice):
-        logging.error("パターン採用反映: 列「%s」は複数あります。", dto_col)
-        return False
-    if pd.api.types.is_numeric_dtype(df[dto_col]):
-        df[dto_col] = float("nan")
-    else:
-        df[dto_col] = ""
+        header_row = mat[0] if mat else []
+        n_hdr = len(header_row)
+        if n_hdr == 0:
+            return False
 
-    data_extract_dt, _ = _extract_data_extraction_datetime()
-    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-    run_date = base_now_dt.date()
+        def _pad_row(r, n):
+            r = list(r) if r is not None else []
+            if len(r) < n:
+                r = r + [None] * (n - len(r))
+            return r
 
-    try:
-        (
-            _sd,
-            _mem,
-            equipment_list,
-            req_map,
-            need_rules,
-            _sm,
-            need_combo_col_index,
-        ) = load_skills_and_needs()
-    except Exception as e:
-        logging.exception("パターン採用反映: master 読込に失敗: %s", e)
-        return False
-
-    global_priority_raw = load_main_sheet_global_priority_override_text()
-    members_for_gpo: list = []
-    try:
-        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
-            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
-        for r in range(2, _skills.shape[0]):
-            cell = _skills.iat[r, 0]
-            if pd.isna(cell):
-                continue
-            name = str(cell).strip()
-            if name and name.lower() not in ("nan", "none", "null"):
-                members_for_gpo.append(name)
-    except Exception:
-        members_for_gpo = []
-    gpo = analyze_global_priority_override_comment(
-        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
-    )
-    ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
-    tq_template = build_task_queue_from_planning_df(
-        df, run_date, req_map, ai_by_tid, gpo, equipment_list
-    )
-    if not tq_template:
-        logging.error("パターン採用反映: 配台対象タスクがありません。")
-        return False
-
-    tq_frozen = copy.deepcopy(tq_template)
-    p5_bundle_sel = {
-        "planning_df": df,
-        "run_date": run_date,
-        "req_map": req_map,
-        "need_rules": need_rules,
-        "need_combo_col_index": need_combo_col_index,
-        "equipment_list": equipment_list,
-        "gpo": gpo,
-        "probe_stage2_root": os.path.join(batch_root, "_p5_selection_probe"),
-        "p6_nested_probe_parent": os.path.join(batch_root, "_p6_selection_nested"),
-    }
-    _pid_applied, _pname_applied, tq_sel, df_p5_ov = next(
-        _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job], p5_bundle=p5_bundle_sel)
-    )
-    df_apply = df_p5_ov.copy() if df_p5_ov is not None else df
-    _apply_pattern_dispatch_trial_orders_to_tasks_df(df_apply, tq_sel)
-    df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df_apply)
-    orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
-    df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
-
-    header_row = mat[0] if mat else []
-    n_hdr = len(header_row)
-    if n_hdr == 0:
-        return False
-
-    def _pad_row(r, n):
-        r = list(r) if r is not None else []
-        if len(r) < n:
-            r = r + [None] * (n - len(r))
-        return r
-
-    new_mat = [_pad_row(header_row, n_hdr)]
-    for i in range(len(df_sorted)):
-        orig = orig_list[i]
-        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
-        src_row = _pad_row(src_row, n_hdr)
-        out_row = []
-        for j in range(n_hdr):
-            h_cell = header_row[j]
-            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
-                hname = ""
-            else:
-                hname = str(h_cell).strip()
-            if hname and hname in df_sorted.columns:
-                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
-                if pd.isna(v):
-                    out_row.append(None)
+        new_mat = [_pad_row(header_row, n_hdr)]
+        for i in range(len(df_sorted)):
+            orig = orig_list[i]
+            src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+            src_row = _pad_row(src_row, n_hdr)
+            out_row = []
+            for j in range(n_hdr):
+                h_cell = header_row[j]
+                if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                    hname = ""
                 else:
-                    out_row.append(v)
-            else:
-                out_row.append(src_row[j])
-        new_mat.append(out_row)
+                    hname = str(h_cell).strip()
+                if hname and hname in df_sorted.columns:
+                    v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                    if pd.isna(v):
+                        out_row.append(None)
+                    else:
+                        out_row.append(v)
+                else:
+                    out_row.append(src_row[j])
+            new_mat.append(out_row)
 
-    try:
-        n_r = len(new_mat)
-        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
-    except Exception as e:
-        logging.exception("パターン採用反映: シート書込に失敗: %s", e)
-        return False
+        try:
+            n_r = len(new_mat)
+            for r_i in range(n_r):
+                row_vals = _pad_row(new_mat[r_i], n_hdr)
+                for c_i in range(n_hdr):
+                    val = row_vals[c_i]
+                    if val is not None and isinstance(val, float) and pd.isna(val):
+                        val = None
+                    ws.cell(row=r_i + 1, column=c_i + 1, value=val)
+        except Exception as e:
+            logging.exception("パターン採用反映: シート書込に失敗: %s", e)
+            return False
 
-    try:
-        wb.save()
-    except Exception as e:
-        logging.warning("パターン採用反映: Save 警告: %s", e)
+        try:
+            wb.save(path)
+        except Exception as e:
+            logging.warning("パターン採用反映: Save 警告: %s", e)
 
-    logging.info(
-        "パターン採用反映: パターン「%s」を「%s」に書き込みました。",
-        chosen,
-        PLAN_INPUT_SHEET_NAME,
-    )
-    return True
-
+        logging.info(
+            "パターン採用反映: パターン「%s」を「%s」に書き込みました。",
+            chosen,
+            PLAN_INPUT_SHEET_NAME,
+        )
+        return True
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 def refresh_dispatch_pattern_stage2_selection_to_plan_only() -> bool:
     """サマリで選んだパターンの試行順を配台計画シートへ反映（VBA / cmd 用）。"""
