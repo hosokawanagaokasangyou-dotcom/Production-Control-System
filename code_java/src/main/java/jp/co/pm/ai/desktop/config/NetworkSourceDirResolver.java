@@ -41,12 +41,19 @@ public final class NetworkSourceDirResolver {
     private NetworkSourceDirResolver() {}
 
     /**
-     * 解決結果を {@code m} に反映する前に呼ぶ。{@code m} は env タブ＋タブ補完済みのマップ。
+     * 環境マップ {@code m} から加工計画ファイル・実績明細ブックを解決する。
+     *
+     * @param skipTaskInputSourceDirListing {@code true} のとき {@link AppPaths#resolveTaskInputSourceDir(Map)}
+     *     配下の一覧・最新ファイル検出をせず、単一ファイル指定が無効な場合はキャッシュのみ試行する（起動時未到達など）。
+     * @param skipActualDetailSourceDirListing 同上 {@link AppPaths#resolveActualDetailSourceDir(Map)}
      */
-    public static Result resolve(Map<String, String> m) {
+    public static Result resolve(
+            Map<String, String> m,
+            boolean skipTaskInputSourceDirListing,
+            boolean skipActualDetailSourceDirListing) {
         List<String> logs = new ArrayList<>();
-        Optional<Path> task = resolveTaskInput(m, logs);
-        Optional<Path> actual = resolveActualDetail(m, logs);
+        Optional<Path> task = resolveTaskInput(m, logs, skipTaskInputSourceDirListing);
+        Optional<Path> actual = resolveActualDetail(m, logs, skipActualDetailSourceDirListing);
         boolean tCache =
                 task.isPresent()
                         && task.get().startsWith(cacheRoot(m))
@@ -56,6 +63,41 @@ public final class NetworkSourceDirResolver {
                         && actual.get().startsWith(cacheRoot(m))
                         && Files.isRegularFile(actual.get());
         return new Result(task, tCache, actual, aCache, List.copyOf(logs));
+    }
+
+    /** フォルダ一覧まで試す通常解決（後方互換）。 */
+    public static Result resolve(Map<String, String> m) {
+        return resolve(m, false, false);
+    }
+
+    /**
+     * 環境変数で解決されるソースフォルダにディレクトリとしてアクセスできるか（一覧が開けるか）。
+     * 起動時に未到達なら {@link #resolve(Map, boolean, boolean)} でフォルダ参照を省略する。
+     */
+    public static boolean isTaskInputSourceDirReachable(Map<String, String> ui) {
+        return isDirectoryListingReachable(AppPaths.resolveTaskInputSourceDir(ui != null ? ui : Map.of()));
+    }
+
+    /** {@link #isTaskInputSourceDirReachable(Map)} と同様、実績明細ソースフォルダ用。 */
+    public static boolean isActualDetailSourceDirReachable(Map<String, String> ui) {
+        return isDirectoryListingReachable(AppPaths.resolveActualDetailSourceDir(ui != null ? ui : Map.of()));
+    }
+
+    private static boolean isDirectoryListingReachable(Path dir) {
+        if (dir == null) {
+            return false;
+        }
+        try {
+            if (!Files.isDirectory(dir) || !Files.isReadable(dir)) {
+                return false;
+            }
+            try (Stream<Path> s = Files.list(dir)) {
+                s.findAny();
+            }
+            return true;
+        } catch (IOException | SecurityException e) {
+            return false;
+        }
     }
 
     /** {@link Result} を merged env に適用。解決できないときは単一ファイル指定キーを外し Python 側のフォールバックに任せる。 */
@@ -83,7 +125,8 @@ public final class NetworkSourceDirResolver {
                 .normalize();
     }
 
-    private static Optional<Path> resolveTaskInput(Map<String, String> ui, List<String> logs) {
+    private static Optional<Path> resolveTaskInput(
+            Map<String, String> ui, List<String> logs, boolean skipSourceDirListing) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String explicit = trim(u.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
         if (!explicit.isEmpty()) {
@@ -103,6 +146,12 @@ public final class NetworkSourceDirResolver {
                             + p
                             + " → フォルダ解決／キャッシュへフォールバックします");
         }
+        if (skipSourceDirListing) {
+            logs.add(
+                    "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR は起動時チェックで未到達のため一覧せずキャッシュを試行: "
+                            + AppPaths.resolveTaskInputSourceDir(u));
+            return loadTaskInputFromCache(u, logs);
+        }
         Path dir = AppPaths.resolveTaskInputSourceDir(u);
         Optional<Path> live = pickNewestTaskInputInDir(dir);
         if (live.isPresent() && isReadableFile(live.get())) {
@@ -116,7 +165,8 @@ public final class NetworkSourceDirResolver {
         return loadTaskInputFromCache(u, logs);
     }
 
-    private static Optional<Path> resolveActualDetail(Map<String, String> ui, List<String> logs) {
+    private static Optional<Path> resolveActualDetail(
+            Map<String, String> ui, List<String> logs, boolean skipSourceDirListing) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String wb = trim(u.get(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
         if (!wb.isEmpty()) {
@@ -130,6 +180,12 @@ public final class NetworkSourceDirResolver {
                     "[network-source] PM_AI_ACTUAL_DETAIL_WORKBOOK が参照できません: "
                             + p
                             + " → フォルダ／キャッシュへフォールバックします");
+        }
+        if (skipSourceDirListing) {
+            logs.add(
+                    "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR は起動時チェックで未到達のため一覧せずキャッシュを試行: "
+                            + AppPaths.resolveActualDetailSourceDir(u));
+            return loadActualDetailFromCache(u, logs);
         }
         Path dir = AppPaths.resolveActualDetailSourceDir(u);
         Optional<Path> live = pickNewestExcelInDir(dir);

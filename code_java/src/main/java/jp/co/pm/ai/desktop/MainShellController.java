@@ -238,6 +238,14 @@ public final class MainShellController {
     /** {@link #childEnvForPython(Map)} の直近結果（実行タブのキャッシュ表示・ログ用）。 */
     private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
 
+    /**
+     * 起動時プローブでソースフォルダが一覧不可なら {@code true}。{@link NetworkSourceDirResolver#resolve(Map, boolean, boolean)}
+     * でネットワーク側の一覧を省略する。
+     */
+    private volatile boolean startupSkipTaskInputSourceDirListing;
+
+    private volatile boolean startupSkipActualDetailSourceDirListing;
+
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
@@ -334,6 +342,8 @@ public final class MainShellController {
         installUiEnvAutoSave();
 
         applyRepoFolderPathNormalization();
+
+        probeNetworkSourceDirsAtStartup();
 
         primaryStage.setOnCloseRequest(e -> DesktopSessionStateStore.save(collectDesktopSession()));
 
@@ -1542,7 +1552,11 @@ public final class MainShellController {
             m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
         }
         overlayPlanInputTabPathsIfEnvBlank(m);
-        NetworkSourceDirResolver.Result netRes = NetworkSourceDirResolver.resolve(m);
+        NetworkSourceDirResolver.Result netRes =
+                NetworkSourceDirResolver.resolve(
+                        m,
+                        startupSkipTaskInputSourceDirListing,
+                        startupSkipActualDetailSourceDirListing);
         lastNetworkSourceResolution = netRes;
         NetworkSourceDirResolver.applyToEnv(m, netRes);
         String pauseOnErr = m.get(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR);
@@ -1592,6 +1606,32 @@ public final class MainShellController {
             m.put(k, row.getValue() != null ? row.getValue() : "");
         }
         return m;
+    }
+
+    /**
+     * 起動時: {@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} のフォルダが一覧可能か調べ、
+     * 不可なら以降の Python 向け env マージでネットワーク側の一覧を省略しキャッシュのみ試行する。
+     */
+    private void probeNetworkSourceDirsAtStartup() {
+        Map<String, String> ui = collectUiEnv();
+        boolean taskReach = NetworkSourceDirResolver.isTaskInputSourceDirReachable(ui);
+        boolean actReach = NetworkSourceDirResolver.isActualDetailSourceDirReachable(ui);
+        startupSkipTaskInputSourceDirListing = !taskReach;
+        startupSkipActualDetailSourceDirListing = !actReach;
+        Path taskDir = AppPaths.resolveTaskInputSourceDir(ui);
+        Path actDir = AppPaths.resolveActualDetailSourceDir(ui);
+        if (!taskReach) {
+            appendLog(
+                    "[startup] PM_AI_TASK_INPUT_SOURCE_DIR にアクセスできません（一覧不可）: "
+                            + taskDir
+                            + " — フォルダ参照を省略しキャッシュを優先します");
+        }
+        if (!actReach) {
+            appendLog(
+                    "[startup] PM_AI_ACTUAL_DETAIL_SOURCE_DIR にアクセスできません（一覧不可）: "
+                            + actDir
+                            + " — フォルダ参照を省略しキャッシュを優先します");
+        }
     }
 
     /**
