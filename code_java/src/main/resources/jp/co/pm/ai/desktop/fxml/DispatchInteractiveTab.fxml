@@ -29,7 +29,7 @@
         <Button fx:id="reloadCalendarButton" mnemonicParsing="false"
                 text="機械 JSON 再読み"
                 onAction="#onReloadCalendarAction"/>
-        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="配台試行"
+        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3へ"
                 onAction="#onDispatchTrialAction"/>
         <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
                 onAction="#onWideRowUpAction">

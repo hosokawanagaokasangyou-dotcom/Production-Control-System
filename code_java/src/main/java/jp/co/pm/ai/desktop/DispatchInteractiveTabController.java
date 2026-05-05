@@ -1034,7 +1034,7 @@ public final class DispatchInteractiveTabController {
         dispatchTrialButton.setDisable(block);
         if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             dispatchTrialButton.setTooltip(
-                    new Tooltip("表の変更を配台試行に反映するには、先に「保存 (JSON+xlsx)」を押してください。"));
+                    new Tooltip("表の変更を段階3に反映するには、先に「保存 (JSON+xlsx)」を押してください。"));
         } else {
             dispatchTrialButton.setTooltip(null);
         }
