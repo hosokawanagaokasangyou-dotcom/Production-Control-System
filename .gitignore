@@ -1,4 +1,5 @@
 .venv/
+# Java Desktop ネットワークソース代替キャッシュ（リポジトリ直下 .pm-ai-cache/）。無視しない — Git のステージング対象。
 # Log files（ステージングしない）
 *.log
 # Excel creates lock files while a workbook is open
