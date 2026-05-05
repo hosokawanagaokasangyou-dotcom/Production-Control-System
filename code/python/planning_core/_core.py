@@ -993,12 +993,12 @@ STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx"
 STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形"
 # 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「配台計画_」は誤字（UTF-8 保存時の破損）で一致しない。
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
-# 配台試行順の比較用パターン一覧（xlwings でマクロブックに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
+# 配台試行順の比較用パターン一覧（マクロブック向けに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
 DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
     os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
     or "配台試行順_パターン一覧"
 )
-# 各試行順パターンで段階2を回した結果・リンク・スコア（xlwings）。DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET で上書き可。
+# 各試行順パターンで段階2を回した結果・リンク・スコア（出力シート）。DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET で上書き可。
 DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME = (
     os.environ.get("DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET", "").strip()
     or "配台試行順_パターン別段階2"
@@ -1405,7 +1405,7 @@ PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS = (
     not in ("0", "false", "no", "off", "いいえ", "無効")
 )
 
-# マクロブック「設定_配台不要工程」: openpyxl の save は使わず xlwings 同期→Save のみ（Excel 占有で openpyxl save が失敗するため）。失敗時は TSV→VBA 反映。
+# マクロブック「設定_配台不要工程」: openpyxl の save は使わず Excel 経由の同期→Save のみ（Excel 占有で openpyxl save が失敗するため）。失敗時は TSV→VBA 反映。
 EXCLUDE_RULES_SHEET_NAME = "設定_配台不要工程"
 EXCLUDE_RULE_COL_PROCESS = "工程名"
 EXCLUDE_RULE_COL_MACHINE = "機械名"
@@ -1548,12 +1548,12 @@ RESULT_MEMBER_WORK_UTIL_SHEET_NAME = "結果_メンバー別作業割合"
 COLUMN_CONFIG_SHEET_NAME = "列設定_結果_タスク一覧"
 COLUMN_CONFIG_HEADER_COL = "列名"
 COLUMN_CONFIG_VISIBLE_COL = "表示"
-# 段階2の結果 xlsx 生成後」入力ブックの列設定シート上の図形（フォームボタン等）を xlwings で複製れる（既定 ON。無効化は STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0）
+# 段階2の結果 xlsx 生成後」入力ブックの列設定シート上の図形（フォームボタン等）を Excel で複製する（既定 ON。無効化は STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT=0）
 STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT = os.environ.get(
     "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
 # 結果_設備ガントのタイムライン上ラベル（依頼NO 等）をセル文字ではなく角丸四角シェイプで重ねる。
-# xlwings + Excel が必要。失敗時は openpyxl でセルにフォールバック。無効化: GANTT_TIMELINE_SHAPE_LABELS=0
+# Excel が開いていることが必要。失敗時は openpyxl でセルにフォールバック。無効化: GANTT_TIMELINE_SHAPE_LABELS=0
 GANTT_TIMELINE_SHAPE_LABELS = os.environ.get(
     "GANTT_TIMELINE_SHAPE_LABELS", "1"
 ).strip().lower() in ("1", "true", "yes", "on")
@@ -2522,11 +2522,11 @@ def _paint_gantt_timeline_row_merged(
     """
     時間軸を塗り分けたうえで、同一状態が連続するセルを横結合し帯状のバーにする。
     （細マス単体の塗りではなく slot_mins 刻み＋同一状態のセル結合で、帯状のバーとして表現する）
-    shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（xlwings）で
+    shape_label_specs に list を渡すと、タイムライン上の文字はセルに入れず後段（Excel）で
     角丸シェイプとして追加するための座標・文言を蓄積する。
     そのモードでは複数スロットの横結合を避け、スロット列ごとに罫線を引いてタイムラインの格子を揃える。
     shape_day_key に ISO 日付文字列等を渡すと、後段で日単位の画像化（フラット化）に利用する。
-    shape_line_dash / shape_line_weight_override は角丸ラベルシェイプの枠線（xlwings 段階）向け。
+    shape_line_dash / shape_line_weight_override は角丸ラベルシェイプの枠線（Excel 描画段階）向け。
     """
     bar_label_font = label_font or gantt_label_font
     _shape_line_opt: dict = {}
@@ -3068,7 +3068,7 @@ def _write_results_equipment_gantt_sheet(
     actual_timeline_events があれば設備ごとに「実績」行を計画行の下へ追加する。
     plan_rows=False のときは計画行を出さず actual_timeline_events のみを各行に描画する（実績明細ガント用）。
     GANTT_TIMELINE_SHAPE_LABELS が有効なとき、タイムライン上の依頼NO 等はセルに書かず
-    角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に xlwings で描画・画像化）。
+    角丸シェイプ用の仕様 dict の list と、日ブロック境界の list を返す（保存後に Excel で描画・画像化）。
     無効時は ([], []) を返す。
     gantt_compare_shape_styling が True のとき、計画行の角丸枠は点線、実績行は太線（比較ガント用）。
     compare_aladdin_qty_by_machine_date が dict のとき（通常 None）、比較ガントで機械×日ごとに
@@ -5449,11 +5449,11 @@ def _apply_planning_sheet_post_load_mutations(
     ``load_planning_tasks_df`` では常に ``apply_exclude_rules_from_config=False`` を渡し、
     シート上の「配台不要」列をそのまま解釈する。
 
-    段階2および試行順のみの xlwings 更新では ``compile_exclude_rules_d_to_e_with_ai=False`` とし、
+    段階2および試行順のみの限定更新では ``compile_exclude_rules_d_to_e_with_ai=False`` とし、
     設定シートの D→E（ロジック式）の **Gemini 補完は行わない**（行同期・保存のみ）。
 
     ``apply_exclude_rules_from_config=False`` は本関数呼び出し側で明示する（上記のほか、
-    試行順のみ再計算する xlwings 経路でも同様）。
+    試行順のみ再計算する当該経路でも同様）。
     """
     try:
         if _exclude_rules_json_env_supersedes_excel_sheet():
@@ -6875,7 +6875,7 @@ def apply_result_task_sheet_column_order(
 ):
     """
     列設定シートはあれみしの順・表示を優先し、無い列は既定順で後ゝに追記（表示は True）。
-    config_dataframe を渡した場合はファイルを読まうしの内容を列設定とみなす（xlwings 実行時用）。
+    config_dataframe を渡した場合はファイルを読まうしの内容を列設定とみなす（実行時用）。
     戻り値: (並き替ご後 DataFrame, 実際の列名リスト, 設定ソース説明文字列, 列名→表示bool)
     """
     default_order = default_result_task_sheet_column_order(max_history_len)
@@ -7076,7 +7076,7 @@ def apply_result_task_column_layout_via_openpyxl(workbook_path: str | None = Non
 
 
 def apply_result_task_column_layout_via_xlwings(workbook_path: str | None = None) -> bool:
-    """互換名。xlwings は廃止し openpyxl のみ使用。"""
+    """互換名。実装は openpyxl のみ。"""
     return apply_result_task_column_layout_via_openpyxl(workbook_path)
 
 
@@ -7267,7 +7267,7 @@ def refresh_plan_input_dispatch_trial_order_via_xlwings(
     *,
     apply_post_load_mutations: bool = True,
 ) -> bool:
-    """互換名。xlwings は廃止。"""
+    """互換名（関数名は後方互換）。"""
     return refresh_plan_input_dispatch_trial_order_via_openpyxl(
         workbook_path, apply_post_load_mutations=apply_post_load_mutations
     )
@@ -7598,7 +7598,7 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
 def sort_plan_input_dispatch_trial_order_by_float_keys_via_xlwings(
     workbook_path: str | None = None,
 ) -> bool:
-    """互換名。xlwings は廃止。"""
+    """互換名（関数名は後方互換）。"""
     return sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(workbook_path)
 
 
@@ -7684,7 +7684,7 @@ def dedupe_result_task_column_config_sheet_via_openpyxl(workbook_path: str | Non
 
 
 def dedupe_result_task_column_config_sheet_via_xlwings(workbook_path: str | None = None) -> bool:
-    """互換名。xlwings は廃止。"""
+    """互換名（関数名は後方互換）。"""
     return dedupe_result_task_column_config_sheet_via_openpyxl(workbook_path)
 
 
@@ -8196,14 +8196,14 @@ def _stage2_try_copy_column_config_shapes_from_input(
     input_path: str | None,
 ) -> None:
     """
-    旧実装は Excel COM（xlwings）で列設定シートの図形を複製していた。
-    xlwings 廃止により **未対応**（常にスキップ）。openpyxl のみではシート上の
+    旧実装は Excel COM で列設定シートの図形を複製していた。
+    COM 経路廃止により **未対応**（常にスキップ）。openpyxl のみではシート上の
     Shapes/OLE を安全に複製できないため。
     """
     if not STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT:
         return
     logging.info(
-        "列設定シート図形コピー: xlwings/COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。"
+        "列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。"
     )
 
 
@@ -8231,7 +8231,7 @@ def _gantt_openpyxl_font_color_for_fill_hex(fill_hex: str) -> str:
 def _gantt_fallback_timeline_labels_openpyxl(
     result_path: str, specs: list, sheet_name: str | None = None
 ) -> None:
-    """xlwings 失敗時: タイムライン先頭列にセル文字でラベルを書き戻す。"""
+    """Excel シェイプ描画に失敗した場合: タイムライン先頭列にセル文字でラベルを書き戻す。"""
     from openpyxl import load_workbook
 
     if _workbook_should_skip_openpyxl_io(result_path):
@@ -8504,6 +8504,553 @@ def _gantt_flatten_day_label_shapes_to_pictures_xlw(
     return n_out
 
 
+def _gantt_add_timeline_rounded_rect_labels_xlwings(
+    result_path: str,
+    specs: list,
+    day_blocks: list | None = None,
+    *,
+    sheet_name: str | None = None,
+) -> bool:
+    """
+    結果_設備ガントのタイムライン上に、角丸四角（msoShapeRoundedRectangle）でラベルを重ねる。
+    依頼NOは中央のメインシェイプ（高さは行の約 1/5。結合幅が狭くてもタイムライン列幅の
+    GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS 本相当を下限とし文字潰れを抑える。隣スロット上にはみ出し得る）。
+    担当者姓はその直上に小さな角丸チップ 1 つ（結合文字が潰れない下限幅までシェイプ幅を確保、
+    テキストはシェイプ内右寄せ。Z オーダーはメンバーを背面・依頼NO を前面に寄せる）。
+    day_blocks が与えられ、GANTT_TIMELINE_LABELS_DAY_FLATTEN が有効なとき、日ごとに画像へ集約する。
+    成功時 True。Excel 経由でない場合や COM 不可時は False。
+    """
+    rp = (result_path or "").strip()
+    if not rp or not os.path.isfile(rp) or not specs:
+        return False
+    try:
+        import xlwings as xw
+    except ImportError:
+        return False
+    app = None
+    wb = None
+    _perf_snap = None
+    try:
+        n_specs = len(specs)
+        shn = sheet_name or RESULT_SHEET_GANTT_NAME
+        logging.info(
+            "%s: Excel で角丸シェイプを追加します（候補 %s 件）。"
+            " 件数が多いと数分かかり、完了までログが増えない時間が続くことがあります。",
+            shn,
+            n_specs,
+        )
+        app = xw.App(visible=False)
+        app.display_alerts = False
+        wb = app.books.open(os.path.abspath(rp), update_links=False)
+        _perf_snap = _xlwings_app_save_perf_state_push(app)
+        try:
+            sht = wb.sheets[shn]
+        except Exception:
+            return False
+        api_ws = sht.api
+        # msoShapeRoundedRectangle = 5
+        _mso_round_rect = 5
+        _mso_bring_to_front = 0
+        _mso_send_to_back = 1
+        _xl_move_and_size = 1
+        _xl_h_align_center = -4131
+        _xl_h_align_right = -4152
+        # 件数が多いときの進捗ログ間隔（小さすぎると I/O 負荷、大きすぎると停止に見える）
+        _progress_every = 10
+        n_added = 0
+        names_by_day: dict[str, list[str]] = defaultdict(list)
+
+        def _record_day_shape(shp_obj, day_k: str):
+            if not day_k or shp_obj is None:
+                return
+            try:
+                names_by_day[day_k].append(str(shp_obj.Name))
+            except Exception:
+                pass
+
+        # 同一データ行ごとにシェイプを 3 段（行高の各 1/3 の帯）でローテーション配置（4 件目は上段に戻る）。
+        # 依頼NO メインは行高の 1/5 を目標にし、帯の上下にインセットを取って罫線付近への食み出しを抑える。
+        # メンバー名は上下分割せず、依頼NO の直上に 1 シェイプで置く（全角空白区切り。人数分の AddShape はしない）。
+        # メンバーは ZOrder SendToBack、依頼NO は BringToFront（幅はみ出し時も依頼NOが手前に来る）。
+        # メンバー帯の縦幅は依頼NO メインと同じ。印刷で上行にはみ出さないよう、行矩形内に収める。
+        _row_shape_seq: dict[int, int] = {}
+
+        def _gantt_xlw_timeline_main_font_pt(xw: float, cap: str) -> float:
+            """狭い結合セルではフォントを下げ、glyph のシェイプ外はみ出しを抑える。"""
+            nch = max(1, len(str(cap or "").strip()))
+            raw = float(xw) / max(nch * 0.62, 4.0)
+            return max(5.25, min(9.0, raw))
+
+        def _gantt_xlw_member_pill_font_pt(pwidth: float, nm: str) -> float:
+            nch = max(1, len(str(nm or "").strip()))
+            raw = float(pwidth) / max(nch * 1.05, 3.2)
+            return max(5.5, min(6.5, raw))
+
+        def _gantt_xlw_member_combined_min_width_pt(combined: str) -> float:
+            """メンバー結合文字列が最低フォントでも潰れないよう必要幅（pt）の粗い下限。"""
+            nch = max(1, len(str(combined or "").strip()))
+            f_min = 5.75
+            return f_min * max(float(nch) * 1.1, 4.0) + 7.0
+
+        def _gantt_xlw_add_round_rect(
+            x_left,
+            x_top,
+            x_w,
+            x_h,
+            caption,
+            *,
+            fill_rgb,
+            line_rgb,
+            text_rgb,
+            font_pt=9.0,
+            bold=True,
+            italic=False,
+            line_wt=0.75,
+            line_dash=False,
+            adj_round=0.2,
+            shadow=False,
+            shape_name=None,
+            tf_margin_tb=None,
+            tf_margin_lr=None,
+            z_bring_to_front=True,
+            text_h_align=None,
+        ):
+            cap = str(caption or "").strip()
+            if x_w <= 0 or x_h <= 0 or not cap:
+                return None
+            shp_local = api_ws.Shapes.AddShape(
+                _mso_round_rect, float(x_left), float(x_top), float(x_w), float(x_h)
+            )
+            if shape_name:
+                try:
+                    shp_local.Name = shape_name
+                except Exception:
+                    pass
+            try:
+                shp_local.Placement = _xl_move_and_size
+            except Exception:
+                pass
+            try:
+                if z_bring_to_front:
+                    shp_local.ZOrder(_mso_bring_to_front)
+                else:
+                    shp_local.ZOrder(_mso_send_to_back)
+            except Exception:
+                pass
+            try:
+                shp_local.Fill.Visible = True
+                shp_local.Fill.Solid()
+                shp_local.Fill.ForeColor.RGB = fill_rgb
+                shp_local.Line.Visible = True
+                shp_local.Line.ForeColor.RGB = line_rgb
+                shp_local.Line.Weight = line_wt
+                # msoLineSolid=1, msoLineDash=4（Office VBA MsoLineDashStyle）
+                try:
+                    shp_local.Line.DashStyle = 4 if line_dash else 1
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            if adj_round is not None:
+                try:
+                    shp_local.Adjustments[1] = adj_round
+                except Exception:
+                    pass
+            if shadow:
+                try:
+                    sd0 = shp_local.Shadow
+                    sd0.Visible = -1  # msoTrue
+                    sd0.OffsetX = 3
+                    sd0.OffsetY = 3
+                    sd0.Transparency = 0.55
+                    try:
+                        sd0.Blur = 4
+                    except Exception:
+                        pass
+                    try:
+                        sd0.ForeColor.RGB = _com_excel_bgr_rgb(40, 40, 50)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            try:
+                tf0 = shp_local.TextFrame
+                try:
+                    if tf_margin_lr is not None:
+                        mrg_lr = float(tf_margin_lr)
+                    else:
+                        mrg_lr = 1.0 if font_pt <= 7.0 else 2.0
+                    tf0.MarginLeft = mrg_lr
+                    tf0.MarginRight = mrg_lr
+                    m_tb = 0.5 if tf_margin_tb is None else float(tf_margin_tb)
+                    tf0.MarginTop = m_tb
+                    tf0.MarginBottom = m_tb
+                except Exception:
+                    pass
+                try:
+                    tf0.VerticalAlignment = -4108  # xlVAlignCenter
+                    _hal = (
+                        int(text_h_align)
+                        if text_h_align is not None
+                        else int(_xl_h_align_center)
+                    )
+                    tf0.HorizontalAlignment = _hal
+                except Exception:
+                    pass
+                tf0.Characters().Text = cap
+                nch = len(cap)
+                fnt = tf0.Characters(1, nch).Font if nch > 0 else tf0.Characters().Font
+                fnt.Size = font_pt
+                fnt.Bold = bold
+                if italic:
+                    fnt.Italic = True
+                try:
+                    fnt.Color = text_rgb
+                except Exception:
+                    pass
+            except Exception:
+                try:
+                    shp_local.TextFrame.Characters().Text = cap
+                except Exception:
+                    pass
+            return shp_local
+
+        for idx, sp in enumerate(specs, start=1):
+            if idx == 1 or idx % _progress_every == 0 or idx == n_specs:
+                logging.info(
+                    "結果_設備ガント: シェイプ走査 %s/%s（確定追加 %s 件）…",
+                    idx,
+                    n_specs,
+                    n_added,
+                )
+            text = str(sp.get("text") or "").strip()
+            if not text:
+                continue
+            dk = str(sp.get("day_key") or "").strip()
+            row = int(sp["row"])
+            col_s = int(sp["col_s"])
+            col_e = int(sp["col_e"])
+            rng = sht.range((row, col_s), (row, col_e))
+            left = float(rng.left)
+            top = float(rng.top)
+            w = float(rng.width)
+            h = float(rng.height)
+            if w <= 0 or h <= 0:
+                continue
+            _lw_sp = sp.get("line_wt")
+            try:
+                _lw_use = 0.75 if _lw_sp is None else float(_lw_sp)
+            except (TypeError, ValueError):
+                _lw_use = 0.75
+            _dash_use = bool(sp.get("line_dash"))
+            _fh = str(sp.get("fill_hex") or "E8E8E8")
+            fill_bgr, line_bgr, text_bgr = _gantt_com_colors_from_fill_hex(_fh)
+            # 依頼NO メインシェイプ: 狭い結合幅でも文字が潰れないよう、スロット列幅×下限本数を確保する
+            # （隣スロット上にはみ出し得る。結合がそれ以上なら結合幅のまま）。
+            try:
+                slot_w = float(sht.range((row, col_s), (row, col_s)).width)
+            except Exception:
+                slot_w = 0.0
+            if slot_w <= 0.0:
+                _ns0 = max(1, int(col_e) - int(col_s) + 1)
+                slot_w = float(w) / float(_ns0)
+            _min_slot_cols = max(1, int(GANTT_LABEL_SHAPE_MIN_TIMELINE_COLUMNS))
+            label_w = max(float(w), float(_min_slot_cols) * float(slot_w))
+            # 縦位置は行を 3 等分した帯のいずれか（同一行で追加順に 0→1→2→0…）。依頼NO の高さは行高の 1/5。
+            _band = float(h) / 3.0
+            _h_req_no = max(9.0, float(h) / 5.0)
+            _n_on_row = int(_row_shape_seq.get(row, 0))
+            _slot = _n_on_row % 3
+            _row_shape_seq[row] = _n_on_row + 1
+            band_top = top + _slot * _band
+            band_bot = band_top + _band
+            _band_inset = 0.75
+            mems_all = [
+                str(x).strip() for x in (sp.get("member_labels") or []) if str(x).strip()
+            ]
+            mems_all = mems_all[:8]
+            if _gantt_color_mode_full():
+                mem_fill, mem_line, mem_txt = _gantt_member_pill_bgrs_for_task_fill_hex(
+                    _fh
+                )
+            else:
+                mem_fill = _com_excel_bgr_rgb(252, 252, 254)
+                mem_line = _com_excel_bgr_rgb(175, 180, 188)
+                mem_txt = _com_excel_bgr_rgb(38, 40, 46)
+            if mems_all:
+                _chip_below = bool(sp.get("member_chip_below"))
+                gx = 1.0
+
+                def _emit_member_pills(
+                    names: list[str],
+                    y0: float,
+                    pill_h: float,
+                    day_k: str,
+                    *,
+                    cell_w_scale: float = 1.0,
+                    min_chip_w: float | None = None,
+                    font_floor: float | None = None,
+                ) -> None:
+                    nonlocal n_added
+                    if not names or pill_h <= 1.0:
+                        return
+                    parts: list[str] = []
+                    est_w = 0.0
+                    for nm in names:
+                        nm2 = nm if len(nm) <= 6 else (nm[:5] + "…")
+                        parts.append(nm2)
+                        est_w += max(9.0, 5.2 * float(len(nm2)))
+                    if len(parts) > 1:
+                        est_w += float(len(parts) - 1) * gx
+                    combined = "\u3000".join(parts)
+                    if not combined.strip():
+                        return
+                    # 結合幅 w に縛ると文字が潰れるため、ピル分割時と同様の推定に加え、
+                    # 最低フォント相当の下限幅を満たすまでシェイプ幅を広げる（隣セル上にはみ出し得る）。
+                    _min_member_chip_w = (
+                        float(min_chip_w) if min_chip_w is not None else 34.0
+                    )
+                    text_min_w = _gantt_xlw_member_combined_min_width_pt(combined)
+                    want_w = max(
+                        _min_member_chip_w, float(est_w), float(text_min_w)
+                    )
+                    _w_base = max(float(w) * float(cell_w_scale), _min_member_chip_w)
+                    use_w = max(_w_base, want_w)
+                    _fp_mem = float(_gantt_xlw_member_pill_font_pt(use_w, combined))
+                    if font_floor is not None:
+                        _fp_mem = max(_fp_mem, float(font_floor))
+                    s_mem = _gantt_xlw_add_round_rect(
+                        left,
+                        y0,
+                        use_w,
+                        pill_h,
+                        combined,
+                        fill_rgb=mem_fill,
+                        line_rgb=mem_line,
+                        text_rgb=mem_txt,
+                        font_pt=float(_fp_mem),
+                        bold=True,
+                        italic=False,
+                        line_wt=0.55,
+                        adj_round=0.42,
+                        shadow=False,
+                        shape_name=f"GanttMem_R{row}_C{col_s}_{_n_on_row}_{int(y0)}",
+                        tf_margin_tb=0.0,
+                        tf_margin_lr=0.75,
+                        z_bring_to_front=False,
+                        text_h_align=_xl_h_align_right,
+                    )
+                    if s_mem is not None:
+                        n_added += 1
+                        _record_day_shape(s_mem, day_k)
+
+                if _chip_below:
+                    # 日次始業準備: メイン文言は「日次始業準備」のみ。メイン・直下メンバーとも高さは行の 1/4（収まらないときは等分縮小）。
+                    _gap_eff = 1.35
+                    _h_quarter = max(8.0, float(h) * 0.25)
+                    row_top_lim = float(top) + _band_inset
+                    row_bot_lim = float(top) + float(h) - _band_inset
+                    room = max(0.0, row_bot_lim - row_top_lim)
+                    _twin_need = 2.0 * _h_quarter + _gap_eff
+                    if room + 1e-9 >= _twin_need:
+                        h_main = _h_quarter
+                        h_mem_use = _h_quarter
+                    else:
+                        _avail = max(0.0, room - _gap_eff)
+                        h_main = _avail / 2.0
+                        h_mem_use = _avail / 2.0
+                    _stack = h_main + _gap_eff + h_mem_use
+                    y_main = row_top_lim + max(0.0, (room - _stack) / 2.0)
+                    y_mem = y_main + h_main + _gap_eff
+                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                    _main_fp = float(_gantt_xlw_timeline_main_font_pt(label_w, text))
+                    shp_main = _gantt_xlw_add_round_rect(
+                        left,
+                        y_main,
+                        label_w,
+                        h_main,
+                        text,
+                        fill_rgb=fill_bgr,
+                        line_rgb=line_bgr,
+                        text_rgb=text_bgr,
+                        font_pt=float(_main_fp),
+                        bold=True,
+                        italic=bool(sp.get("italic")),
+                        line_wt=_lw_use,
+                        line_dash=_dash_use,
+                        adj_round=0.2,
+                        shadow=False,
+                        shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                    )
+                    if shp_main is not None:
+                        n_added += 1
+                        _record_day_shape(shp_main, dk)
+                        try:
+                            shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
+                        except Exception:
+                            pass
+                else:
+                    # メンバー縦幅＝依頼NO と同じ（行高の 1/5 目標）。行全体 [top, top+h] に収まるよう
+                    # 積み上げ位置を平行移動し、収まらないときは隙間・ピル高を漸減する。（既定: メンバーは依頼NO の直上）
+                    _gap_mm = 1.35
+                    h_main = max(9.0, float(_h_req_no))
+                    h_mem_use = h_main
+                    _rin_row = 1.0
+                    _rout_row = 1.0
+                    row_top_b = float(top)
+                    row_bot_b = float(top) + float(h)
+                    _gap_eff = float(_gap_mm)
+                    _hmem_eff = float(h_mem_use)
+                    _hmain_eff = float(h_main)
+                    y_main = band_bot - _band_inset - _hmain_eff
+                    y_mem = y_main - _gap_eff - _hmem_eff
+                    for _squeeze in range(28):
+                        st = float(y_mem)
+                        sb = float(y_main) + float(_hmain_eff)
+                        lo = (row_top_b + _rin_row) - st
+                        hi = (row_bot_b - _rout_row) - sb
+                        if lo <= hi:
+                            if lo > 0.0:
+                                delta = lo
+                            elif hi < 0.0:
+                                delta = hi
+                            else:
+                                delta = 0.0
+                            y_mem += delta
+                            y_main += delta
+                            break
+                        if _gap_eff > 0.35:
+                            _gap_eff = max(0.35, _gap_eff - 0.35)
+                        elif _hmem_eff > 6.0:
+                            _hmem_eff = max(6.0, _hmem_eff - 0.5)
+                        elif _hmain_eff > 8.0:
+                            _hmain_eff = max(8.0, _hmain_eff - 0.5)
+                        else:
+                            y_main = band_bot - _band_inset - _hmain_eff
+                            y_mem = y_main - _gap_eff - _hmem_eff
+                            lo2 = (row_top_b + _rin_row) - float(y_mem)
+                            if lo2 > 0.0:
+                                y_mem += lo2
+                                y_main += lo2
+                            break
+                        y_main = band_bot - _band_inset - _hmain_eff
+                        y_mem = y_main - _gap_eff - _hmem_eff
+                    h_main = float(_hmain_eff)
+                    h_mem_use = float(_hmem_eff)
+                    _emit_member_pills(mems_all, y_mem, h_mem_use, dk)
+                    _main_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
+                    shp_main = _gantt_xlw_add_round_rect(
+                        left,
+                        y_main,
+                        label_w,
+                        h_main,
+                        text,
+                        fill_rgb=fill_bgr,
+                        line_rgb=line_bgr,
+                        text_rgb=text_bgr,
+                        font_pt=float(_main_fp),
+                        bold=True,
+                        italic=bool(sp.get("italic")),
+                        line_wt=_lw_use,
+                        line_dash=_dash_use,
+                        adj_round=0.2,
+                        shadow=False,
+                        shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                    )
+                    if shp_main is not None:
+                        n_added += 1
+                        _record_day_shape(shp_main, dk)
+                        try:
+                            shp_main.TextFrame.HorizontalAlignment = -4131  # xlHAlignLeft
+                        except Exception:
+                            pass
+            else:
+                _nlines = max(1, str(text).count("\n") + 1)
+                label_h = _h_req_no
+                if _nlines > 1:
+                    label_h = min(
+                        _band - 2.0 * _band_inset,
+                        max(_h_req_no, _h_req_no * (0.55 + 0.48 * float(_nlines))),
+                    )
+                y_lbl = band_top + _band_inset + max(
+                    0.0, (_band - 2.0 * _band_inset - label_h) / 2.0
+                )
+                _solo_fp = _gantt_xlw_timeline_main_font_pt(label_w, text)
+                shp = _gantt_xlw_add_round_rect(
+                    left,
+                    y_lbl,
+                    label_w,
+                    label_h,
+                    text,
+                    fill_rgb=fill_bgr,
+                    line_rgb=line_bgr,
+                    text_rgb=text_bgr,
+                    font_pt=float(_solo_fp),
+                    bold=True,
+                    italic=bool(sp.get("italic")),
+                    line_wt=_lw_use,
+                    line_dash=_dash_use,
+                    adj_round=0.2,
+                    shadow=False,
+                    shape_name=f"GanttLbl_R{row}_C{col_s}_{_n_on_row}",
+                )
+                if shp is not None:
+                    n_added += 1
+                    _record_day_shape(shp, dk)
+                    try:
+                        shp.TextFrame.HorizontalAlignment = -4131
+                    except Exception:
+                        pass
+        n_flat = 0
+        if (
+            GANTT_TIMELINE_LABELS_DAY_FLATTEN
+            and day_blocks
+            and GANTT_TIMELINE_SHAPE_LABELS
+        ):
+            try:
+                n_flat = _gantt_flatten_day_label_shapes_to_pictures_xlw(
+                    api_ws, day_blocks, names_by_day
+                )
+            except Exception as e_flat:
+                logging.warning(
+                    "%s: 日別画像化に失敗しました（個別シェイプのまま保存します）: %s",
+                    shn,
+                    e_flat,
+                )
+        logging.info(
+            "%s: 角丸シェイプ %s 件を反映%sして保存します（Excel）…",
+            shn,
+            n_added,
+            f"し、日別に画像 {n_flat} 枚へ集約" if n_flat else "",
+        )
+        wb.save()
+        return True
+    except Exception as e:
+        _shn_fb = sheet_name or RESULT_SHEET_GANTT_NAME
+        logging.warning(
+            "%s: 角丸シェイプラベルの追加に失敗しました（%s）。セル表記へフォールバックします。",
+            _shn_fb,
+            e,
+        )
+        return False
+    finally:
+        if _perf_snap is not None:
+            try:
+                _xlwings_app_save_perf_state_pop(app, _perf_snap)
+            except Exception:
+                pass
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        if app is not None:
+            try:
+                app.quit()
+            except Exception:
+                pass
+
+
 def _stage2_try_add_gantt_timeline_shape_labels(
     result_path: str,
     specs: list | None,
@@ -8513,7 +9060,7 @@ def _stage2_try_add_gantt_timeline_shape_labels(
 ) -> None:
     """
     openpyxl 保存後、GANTT_TIMELINE_SHAPE_LABELS が有効で specs があればタイムライン先頭列にラベルを書き込む。
-    （旧 xlwings の角丸シェイプ・画像化は廃止。day_blocks は無視される。）
+    （旧角丸シェイプ・画像化は廃止。day_blocks は無視される。）
     """
     if not GANTT_TIMELINE_SHAPE_LABELS or not specs:
         return
@@ -12094,7 +12641,7 @@ def _merge_plan_sheet_user_overrides(out_df):
 #   (A) DataFrame 上のルール … 同一依頼NO×同一機械で「分割」行に yes（手入力は上書きしない）。
 #       段階2読込後も ``_apply_auto_exclude_bunkatsu_duplicate_machine`` で適用。
 #   (B) マクロブック「設定_配台不要工程」… 工程+機械ごとの C/D/E 列、Gemini で D→E、
-#       保存ロック時は xlwings で A:E 同期→Save のフォールバックあり。
+#       保存ロック時は Excel で A:E 同期→Save のフォールバックあり。
 #       ``apply_exclude_rules_config_to_plan_df`` による計画 DataFrame への反映は **段階1のみ**。
 #       工程名が「分割」の行については、(A) と同じく **同一依頼NO内に同一機械名が複数行あるときだけ**
 #       C 列／E 列 JSON による配台不要=yes を適用する（EC と分割で機械が異なる依頼では設定行が残っていても配台可）。
@@ -12991,6 +13538,473 @@ def _log_exclude_rules_sheet_debug(
         logging.info(msg)
 
 
+def __deleted_xlwings_block_placeholder_do_not_use():
+    """ディスクパスと Excel ``Book.fullname``（パス文字列）が同一ファイルを指すか（表記ゆれを多少吸収）。"""
+    try:
+        fn = str(book_fullname).strip()
+    except Exception:
+        return False
+
+    def _norm(p: str) -> str:
+        p = os.path.normpath(str(p).strip().replace("/", "\\"))
+        return os.path.normcase(os.path.abspath(p))
+
+    try:
+        if _norm(disk_path) == _norm(fn):
+            return True
+    except Exception:
+        pass
+    try:
+        return os.path.samefile(disk_path, fn)
+    except Exception:
+        pass
+    try:
+        import win32api  # type: ignore
+
+        a = _norm(win32api.GetLongPathName(disk_path))
+        b = _norm(win32api.GetLongPathName(fn))
+        if a == b:
+            return True
+    except Exception:
+        pass
+    try:
+        if os.path.basename(_norm(disk_path)).lower() == os.path.basename(_norm(fn)).lower():
+            if _norm(os.path.dirname(disk_path)) == _norm(os.path.dirname(fn)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _xlwings_book_path_str(book) -> str | None:
+    """Excel 連携 ``Book`` のディスクパス。公式 API は ``fullname``（``full_name`` は存在しない）。"""
+    for attr in ("fullname", "full_name"):
+        try:
+            fn = getattr(book, attr, None)
+            if fn is not None:
+                s = str(fn).strip()
+                if s:
+                    return s
+        except Exception:
+            continue
+    return None
+
+
+def _xlwings_book_matches_path(book, disk_path: str) -> bool:
+    fn = _xlwings_book_path_str(book)
+    if not fn:
+        return False
+    return _xlwings_paths_equivalent(disk_path, fn)
+
+
+def _xlwings_find_book_on_running_instances(abs_path: str):
+    """起動中の Excel からパス一致する Book を返す。無ければ None。
+
+    ``for app in xw.apps`` の列挙は環境によって COM 無応答になり得るが、
+    ユーザー操作の Excel 上で既にマクロブックを開いているときは再利用した方が安全なため列挙する。
+    見つからないときは ``_xlwings_attach_open_macro_workbook`` が非表示の新規 ``xw.App`` で開く。
+    """
+    if not (abs_path or "").strip():
+        return None
+    try:
+        import xlwings as xw
+    except ImportError:
+        return None
+    try:
+        for app in xw.apps:
+            try:
+                for book in app.books:
+                    if _xlwings_book_matches_path(book, abs_path):
+                        return book
+            except Exception:
+                continue
+    except Exception:
+        return None
+    return None
+
+
+def _xlwings_find_book_in_app(app, abs_path: str):
+    """同一 ``Application`` 内の ``Books`` からパス一致する ``Book`` を返す。無ければ None。"""
+    if app is None or not (abs_path or "").strip():
+        return None
+    try:
+        for book in app.books:
+            if _xlwings_book_matches_path(book, abs_path):
+                return book
+    except Exception:
+        pass
+    return None
+
+
+def _xlwings_same_excel_app(app_a, app_b) -> bool:
+    """2 つの連携用 App が同一 Excel プロセスか。"""
+    if app_a is None or app_b is None:
+        return False
+    if app_a is app_b:
+        return True
+    try:
+        return int(app_a.pid) == int(app_b.pid)
+    except Exception:
+        return False
+
+
+def _xlwings_attach_two_workbooks_same_app(abs_result: str, abs_input: str):
+    """
+    図形の Copy/Paste 用に、結果ブックと入力ブックを **同一 Application** 上に揃える。
+
+    戻り値: ``(app, wb_out, wb_in, owns_app, opened_out_here, opened_in_here)`` または失敗時 ``None``。
+
+    - ``owns_app`` … この関数が新規 ``xw.App`` を起動したとき True（終了時に ``quit`` する）。
+    - ``opened_*_here`` … 当該ブックを本関数が ``books.open`` したとき True（終了時にそのブックだけ ``close``）。
+    """
+    try:
+        import xlwings as xw
+    except ImportError:
+        return None
+    abs_r = os.path.abspath(abs_result)
+    abs_i = os.path.abspath(abs_input)
+
+    bo = _xlwings_find_book_on_running_instances(abs_r)
+    bi = _xlwings_find_book_on_running_instances(abs_i)
+
+    if bo is not None and bi is not None and _xlwings_same_excel_app(bo.app, bi.app):
+        try:
+            bo.app.display_alerts = False
+        except Exception:
+            pass
+        return (bo.app, bo, bi, False, False, False)
+
+    if bo is not None:
+        try:
+            ap = bo.app
+            try:
+                ap.display_alerts = False
+            except Exception:
+                pass
+            bi2 = _xlwings_find_book_in_app(ap, abs_i)
+            if bi2 is None:
+                bi2 = ap.books.open(abs_i, read_only=True, update_links=False)
+                return (ap, bo, bi2, False, False, True)
+            return (ap, bo, bi2, False, False, False)
+        except Exception:
+            pass
+
+    if bi is not None:
+        try:
+            ap = bi.app
+            try:
+                ap.display_alerts = False
+            except Exception:
+                pass
+            bo2 = _xlwings_find_book_in_app(ap, abs_r)
+            if bo2 is None:
+                bo2 = ap.books.open(abs_r, update_links=False)
+                return (ap, bo2, bi, False, True, False)
+            return (ap, bo2, bi, False, False, False)
+        except Exception:
+            pass
+
+    try:
+        ap = xw.App(visible=False, add_book=False)
+        ap.display_alerts = False
+        wb_o = ap.books.open(abs_r, update_links=False)
+        wb_i = ap.books.open(abs_i, read_only=True, update_links=False)
+        return (ap, wb_o, wb_i, True, True, True)
+    except Exception:
+        return None
+
+
+def _xlwings_release_book_after_mutation(xw_book, info: dict, mutation_ok: bool) -> None:
+    """専用起動した Excel は終了れる。実行中 Excel での値 Open したブックは失敗時のみ閉もる。"""
+    if xw_book is None:
+        return
+    mode = info.get("mode", "keep")
+    opened_here = bool(info.get("opened_wb_here"))
+    if mode == "quit_excel":
+        defer_despite = bool(info.get("defer_quit_despite_failure"))
+        should_defer = _env_xlwings_defer_quit_on_success() and (
+            mutation_ok or (defer_despite and _env_xlwings_defer_after_exclude_sheet_miss())
+        )
+        if should_defer:
+            try:
+                _xlwings_register_deferred_hidden_app(xw_book.app)
+            except Exception:
+                pass
+            return
+        try:
+            xw_book.close()
+        except Exception:
+            pass
+        try:
+            xw_book.app.quit()
+        except Exception:
+            pass
+        return
+    if opened_here and not mutation_ok:
+        try:
+            xw_book.close()
+        except Exception:
+            pass
+
+
+def _xlwings_attach_open_macro_workbook(macro_wb_path: str, log_prefix: str):
+    """
+    マクロブックを Excel 連携で取得する（本番・テスト共通）。
+    戻り値: (Book, release_info) / 失敗時 None。
+    release_info: mode は keep または quit_excel」opened_wb_here は bool。
+    """
+    try:
+        import xlwings as xw  # noqa: F401
+    except ImportError:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_UNAVAILABLE",
+            log_prefix,
+            "Excel 連携モジュールを import できません（requirements.txt の依存を確認）。",
+        )
+        return None
+
+    abs_path = os.path.abspath(macro_wb_path)
+
+    book_existing = _xlwings_find_book_on_running_instances(abs_path)
+    if book_existing is not None:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_BOOK_REUSED",
+            log_prefix,
+            "起動中の Excel から同一路径のブックを再利用します（xw.apps 列挙）。",
+            details=f"path={abs_path}",
+        )
+        return book_existing, {"mode": "keep", "opened_wb_here": False}
+
+    _log_exclude_rules_sheet_debug(
+        "XLWINGS_NEW_APP_FALLBACK",
+        log_prefix,
+        "起動中に該当ブックは見つかりません。非表示の新規 Excel で開きます。",
+        details=f"path={abs_path}",
+    )
+
+    try:
+        import xlwings as xw
+
+        app = xw.App(visible=False, add_book=False)
+        try:
+            app.display_alerts = False
+        except Exception:
+            pass
+        book = app.books.open(abs_path, update_links=False)
+        return book, {"mode": "quit_excel", "opened_wb_here": True}
+    except Exception as ex:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_ATTACH_FAIL",
+            log_prefix,
+            "Excel でブックを開けませんでした。",
+            details=f"path={abs_path}",
+            exc=ex,
+        )
+        return None
+
+
+def _xlwings_attach_workbook_for_tests(
+    book_path: str,
+    label: str,
+    *,
+    allow_dispatch_open: bool = False,
+):
+    """
+    検証スクリプト用: 起動中ブックを優先し、必須なら表示付し Excel で開し。
+    戻り値: (Book, info, 説明文字列) または None。
+    """
+    abs_path = os.path.abspath(book_path)
+    if not allow_dispatch_open:
+        return None
+    try:
+        import xlwings as xw
+
+        app = xw.App(visible=True, add_book=False)
+        try:
+            app.display_alerts = False
+        except Exception:
+            pass
+        book = app.books.open(abs_path, update_links=False)
+        return book, {"mode": "keep", "opened_wb_here": True}, f"{label}:dispatch-open"
+    except Exception:
+        return None
+
+
+def _env_xlw_suspend_auto_calculation() -> bool:
+    """環境変数 XLWINGS_SUSPEND_AUTO_CALCULATION（既定 1）が off のとき、Calculation は変更しない。"""
+    raw = (os.environ.get("XLWINGS_SUSPEND_AUTO_CALCULATION", "1") or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off", "n", "いいえ", "無効", "×")
+
+
+def _xlwings_app_save_perf_state_push(app):
+    """VBA スプラッシュポーリングと競合しやすいため、同期・保存の短時間 Excel を静かにする。
+    自動計算は手動（xlCalculationManual）へ切り替え、終了時に _xlwings_app_save_perf_state_pop で復帰する。
+    XLWINGS_SUSPEND_AUTO_CALCULATION=0 等のときは Calculation の取得・変更を行わない。
+    """
+    suspend_calc = _env_xlw_suspend_auto_calculation()
+    snap: dict = {"suspend_auto_calculation": suspend_calc}
+    for attr in ("screen_updating", "enable_events"):
+        try:
+            snap[attr] = getattr(app, attr)
+        except Exception:
+            snap[attr] = None
+    if suspend_calc:
+        try:
+            snap["calculation"] = getattr(app, "calculation")
+        except Exception:
+            snap["calculation"] = None
+            try:
+                snap["calculation"] = app.api.Calculation
+            except Exception:
+                pass
+    else:
+        snap["calculation"] = None
+    try:
+        app.screen_updating = False
+    except Exception:
+        pass
+    if suspend_calc:
+        try:
+            app.calculation = "manual"
+        except Exception:
+            try:
+                app.api.Calculation = -4135  # xlCalculationManual
+            except Exception:
+                pass
+    try:
+        app.enable_events = False
+    except Exception:
+        pass
+    return snap
+
+
+def _xlwings_app_save_perf_state_pop(app, snap):
+    if not snap:
+        return
+    try:
+        prev_ev = snap.get("enable_events")
+        if prev_ev is not None:
+            setattr(app, "enable_events", prev_ev)
+    except Exception:
+        pass
+    if snap.get("suspend_auto_calculation"):
+        prev_calc = snap.get("calculation")
+        if prev_calc is not None:
+            try:
+                setattr(app, "calculation", prev_calc)
+            except Exception:
+                try:
+                    app.api.Calculation = prev_calc
+                except Exception:
+                    pass
+    try:
+        prev_su = snap.get("screen_updating")
+        if prev_su is not None:
+            setattr(app, "screen_updating", prev_su)
+    except Exception:
+        pass
+
+
+def _xlwings_sync_exclude_rules_sheet_from_openpyxl(
+    wb_path: str, ws_oxl, log_prefix: str
+) -> bool:
+    """
+    openpyxl で保存できないとき、Excel 上の「設定_配台不要工程」A:E をメモリ上の値で上書きし Save。
+
+    表示中シートに対れる一括 .value の値てと」スプラッシュ＋ポーリング（D3=true）下で
+    Range 代入は数分かかる計測はあり得る。同期中のみシートを一時非表示にし api.Value2 で書き。
+    """
+    global _exclude_rules_effective_read_path
+
+    attached = _xlwings_attach_open_macro_workbook(wb_path, log_prefix)
+    if attached is None:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_SYNC_SKIP",
+            log_prefix,
+            "Excel にブックを接続できず A:E 同期をスキップ。",
+            details=f"path={wb_path}",
+        )
+        return False
+
+    xw_book, info = attached
+    ok = False
+    try:
+        try:
+            xw_book.app.display_alerts = False
+        except Exception:
+            pass
+        # 全シート名を列挙れるとシート数分の COM 往復になり」D3=true 時は VBA ポーリングと競坈して
+        # 1 シート数秒〜坝数秒かかることはある（計測で 40 シート≈213s）。坝剝で直接解決れる。
+        try:
+            sht = xw_book.sheets[EXCLUDE_RULES_SHEET_NAME]
+        except Exception:
+            try:
+                info["defer_quit_despite_failure"] = True
+            except Exception:
+                pass
+            _log_exclude_rules_sheet_debug(
+                "XLWINGS_SYNC_SKIP",
+                log_prefix,
+                f"Excel 側にシート「{EXCLUDE_RULES_SHEET_NAME}」はありません。",
+                details=f"path={wb_path}",
+            )
+            return False
+        max_r = max(1, int(ws_oxl.max_row or 1))
+        ncols = EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL
+        data = [
+            [ws_oxl.cell(row=r, column=c).value for c in range(1, ncols + 1)]
+            for r in range(1, max_r + 1)
+        ]
+        _perf_snap = _xlwings_app_save_perf_state_push(xw_book.app)
+        rng = sht.range((1, 1)).resize(len(data), ncols)
+        hid_sheet_for_write = False
+        try:
+            try:
+                if int(sht.api.Visible) == -1:  # xlSheetVisible
+                    sht.api.Visible = 0  # xlSheetHidden（同期中の値。再杝画・ウィンドウ更新負蝷を抑ごる）
+                    hid_sheet_for_write = True
+            except Exception:
+                pass
+            try:
+                rng.api.Value2 = data
+            except Exception:
+                rng.value = data
+            xw_book.save()
+        finally:
+            if hid_sheet_for_write:
+                try:
+                    sht.api.Visible = -1
+                except Exception:
+                    pass
+            _xlwings_app_save_perf_state_pop(xw_book.app, _perf_snap)
+        ok = True
+        _exclude_rules_effective_read_path = wb_path
+        _clear_exclude_rules_e_apply_files()
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_SYNC_OK",
+            log_prefix,
+            "Excel 経由で設定シート A〜E を同期しブックを保存しました。",
+            details=f"path={wb_path} rows={max_r}",
+        )
+        logging.info(
+            "%s: 設定シートを Excel でマクロブックに保存しました（A〜E）。",
+            log_prefix,
+        )
+        return True
+    except Exception as ex:
+        _log_exclude_rules_sheet_debug(
+            "XLWINGS_SYNC_FAIL",
+            log_prefix,
+            "Excel での A:E 同期または Save に失敗しました。",
+            details=f"path={wb_path}",
+            exc=ex,
+        )
+        return False
+    finally:
+        _xlwings_release_book_after_mutation(xw_book, info, ok)
+
+
+# 設定シートの列範囲（A〜E）。Excel 経由の同期・VBA 行列 TSV 出力でも使用。
 EXCLUDE_RULES_SHEET_COM_SYNC_MAX_COL = 5
 EXCLUDE_RULES_MATRIX_CLIP_MAX_COL = 5
 
@@ -13107,7 +14121,7 @@ def _write_exclude_rules_matrix_vba_tsv(
         _log_exclude_rules_sheet_debug(
             "MATRIX_TSV_WRITTEN",
             log_prefix,
-            "設定シート A〜E を VBA 反映用 TSV に書き出しました（xlwings 保存失敗時のフォールバック）。",
+            "設定シート A〜E を VBA 反映用 TSV に書き出しました（Excel 保存失敗時のフォールバック）。",
             details=f"path={path} rows={max_r}",
         )
         return True
@@ -13359,13 +14373,13 @@ def run_exclude_rules_sheet_maintenance(
     compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（マクロブックは **openpyxl save なし**、xlwings で A〜E 同期→Save）。
+    「設定_配台不要工程」の行同期・（任意で）D→E の AI 補完・ディスク反映（マクロブックは **openpyxl save なし**、Excel で A〜E 同期→Save）。
 
     ``compile_exclude_rules_d_to_e_with_ai=False`` のときは D 列→E 列（ロジック式 JSON）の
     Gemini 補完のみスキップする（行同期・空行詰め・退避 E の復元・保存は従来どおり）。
     段階2の ``load_planning_tasks_df`` 経路では False を渡す。
 
-    xlwings でも保存でしないとしは ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
+    Excel 経由でも保存に失敗した場合は ``log/exclude_rules_matrix_vba.tsv`` を残し、マクロ
     ``設定_配台不要工程_AからE_TSVから反映`` で A〜E を反映れる。
     併せで従来どおり E 列のみの ``exclude_rules_e_column_vba.tsv`` も出力され得る（行列 TSV 優先で反映後は削除）。
     保存成功時は TSV/JSON は削除される。
@@ -13449,7 +14463,7 @@ def run_exclude_rules_sheet_maintenance(
             details=f"path={wb_path}",
         )
         logging.warning(
-            "%s: 「%s」併有のため、「%s」の openpyxl 保守をスキップしました（Excel＝xlwings で編集してください）。",
+            "%s: 「%s」併有のため、「%s」の openpyxl 保守をスキップしました（Excel で直接編集してください）。",
             log_prefix,
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
             EXCLUDE_RULES_SHEET_NAME,
@@ -13751,12 +14765,12 @@ def run_exclude_rules_sheet_maintenance(
             _log_exclude_rules_sheet_debug(
                 "SKIP_XLWINGS_SYNC_NO_CHANGES",
                 log_prefix,
-                "設定シート（openpyxl側）に変更が無いため、xlwings 同期→Save をスキップしました。",
+                "設定シート（openpyxl側）に変更が無いため、Excel 経由の同期→Save をスキップしました。",
                 details=f"path={wb_path}",
             )
         if needs_disk_sync and (not persisted):
             logging.warning(
-                "%s: 設定シートの xlwings 保存に失敗しました。"
+                "%s: 設定シートの Excel 保存に失敗しました。"
                 " log の行列 TSV をマクロ「設定_配台不要工程_AからE_TSVから反映」"
                 "または E 列のみ「設定_配台不要工程_E列_TSVから反映」で反映してください。",
                 log_prefix,
@@ -13988,7 +15002,7 @@ def _write_stage1_exclude_rules_json_sidecar(
 
 
 def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
-    """True のとき「設定_配台不要工程」の openpyxl/xlwings 保守を省略し、ルールは JSON のみとする。"""
+    """True のとき「設定_配台不要工程」の openpyxl と Excel 経由の保守を省略し、ルールは JSON のみとする。"""
     return _get_exclude_rules_from_json_env() is not None
 
 
@@ -19101,7 +20115,7 @@ def _excel_hyperlink_formula_file(abs_path: str, display: str) -> str:
     return f'=HYPERLINK("{p}","{disp}")'
 
 
-def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
+def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     wb,
     summary_rows: list[dict],
     *,
@@ -19114,27 +20128,16 @@ def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
     C2=合計処理時間のラベル、D2=合計秒（バッチ全体の壁時計）。
     """
     sheet_name = DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME
-    if sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-    else:
-        try:
-            pin = wb.sheetnames.index(PLAN_INPUT_SHEET_NAME)
-            ws = wb.create_sheet(title=sheet_name, index=pin + 1)
-        except ValueError:
-            ws = wb.create_sheet(title=sheet_name)
-
     try:
-        for mr in list(ws.merged_cells.ranges):
-            ws.unmerge_cells(str(mr))
+        ws = wb.sheets[sheet_name]
+    except Exception:
+        ws = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
+    try:
+        ur = ws.used_range
+        if ur:
+            ur.clear_contents()
     except Exception:
         pass
-    max_r = int(ws.max_row or 0)
-    max_c = int(ws.max_column or 0)
-    if max_r > 0 and max_c > 0:
-        for r in range(1, max_r + 1):
-            for c in range(1, max_c + 1):
-                ws.cell(row=r, column=c, value=None)
-
     intro = (
         "各パターンの配台試行順を「配台計画_タスク入力」に反映したうえで段階2のみ実行し、"
         "output/dispatch_pattern_stage2/<実行時刻>/<パターンID>/ に "
@@ -19193,6 +20196,7 @@ def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
             "",
             "",
             "",
+            "",
         ],
         headers,
     ]
@@ -19221,11 +20225,7 @@ def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
             rr.extend([""] * (n_cols - len(rr)))
         pad.append(rr)
     n_rows = len(pad)
-
-    for r_i in range(n_rows):
-        for c_i in range(n_cols):
-            ws.cell(row=r_i + 1, column=c_i + 1, value=pad[r_i][c_i])
-
+    ws.range((1, 1)).resize(n_rows, n_cols).value = pad
     data_start = 6
     # C,D 列に数式を上書き（データ行のみ）… output/dispatch_pattern_stage2/<日付>/<パターンID>/ の xlsx 絶対パス
     for i, r in enumerate(summary_rows, start=data_start):
@@ -19233,43 +20233,48 @@ def _openpyxl_write_dispatch_pattern_stage2_summary_sheet(
             fp = r.get("_path_plan")
             fm = r.get("_path_member")
             if fp:
-                ws.cell(row=i, column=3).value = _excel_hyperlink_formula_file(
+                ws.range((i, 3)).formula = _excel_hyperlink_formula_file(
                     fp, os.path.basename(fp)
                 )
             if fm:
-                ws.cell(row=i, column=4).value = _excel_hyperlink_formula_file(
+                ws.range((i, 4)).formula = _excel_hyperlink_formula_file(
                     fm, os.path.basename(fm)
                 )
         except Exception:
             logging.debug("パターン段階2サマリ: HYPERLINK 設定失敗（無視）", exc_info=True)
     try:
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
-        ws.cell(row=1, column=1).alignment = Alignment(wrap_text=True, vertical="top")
-    except Exception:
-        pass
-    try:
-        for c in range(1, n_cols + 1):
-            ws.cell(row=5, column=c).font = Font(bold=True)
+        ws.range((1, 1), (1, n_cols)).merge()
+        ws.range((1, 1)).api.WrapText = True
+        ws.range((5, 1), (5, n_cols)).api.Font.Bold = True
     except Exception:
         pass
     n_pat = len(summary_rows)
     if n_pat > 0:
         try:
-            f1 = f"$A${data_start}:$A${data_start + n_pat - 1}"
-            dv = DataValidation(type="list", formula1=f1, allow_blank=True)
-            ws.add_data_validation(dv)
-            dv.add(ws.cell(row=3, column=2))
+            addr = ws.range((data_start, 1)).resize(n_pat, 1).get_address(
+                row_absolute=True,
+                column_absolute=True,
+                include_sheetname=True,
+            )
+            v = ws.range((3, 2)).api.Validation
+            try:
+                v.Delete()
+            except Exception:
+                pass
+            v.Add(3, 1, 1, Formula1=f"={addr}")
         except Exception:
             logging.debug("パターン段階2サマリ: B3 入力規則の設定に失敗（無視）", exc_info=True)
     try:
-        for c in range(1, n_cols + 1):
-            ws.cell(row=2, column=c).alignment = Alignment(
-                wrap_text=True, vertical="top"
-            )
-        ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=n_cols)
-        ws.cell(row=4, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.range((2, 1), (2, n_cols)).api.WrapText = True
+        ws.range((4, 1), (4, n_cols)).merge()
+        ws.range((4, 1)).api.WrapText = True
     except Exception:
         pass
+    try:
+        ws.used_range.columns.api.AutoFit()
+    except Exception:
+        pass
+
 
 def _build_dispatch_trial_pattern_list_matrix(
     tasks_df: "pd.DataFrame",
@@ -19401,7 +20406,7 @@ def _build_dispatch_trial_pattern_list_matrix(
     return rows
 
 
-def _openpyxl_format_dispatch_trial_pattern_list_sheet(
+def _xlwings_format_dispatch_trial_pattern_list_sheet(
     ws_out,
     n_rows: int,
     n_cols: int,
@@ -19409,22 +20414,21 @@ def _openpyxl_format_dispatch_trial_pattern_list_sheet(
     header_row: int = 3,
 ) -> None:
     """
-    パターン一覧シートの見やすさ: 1 行目説明の横結合、見出し行の太字、データ範囲を Excel 表（Table）にする。
+    パターン一覧シートの見やすさ: 1 行目説明の横結合、見出し行の太字、データ範囲を Excel 表（ListObject）にする。
     環境変数 DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE=1 で表のみスキップ（結合・太字は実施）。
     """
     if n_rows < header_row or n_cols < 1:
         return
     try:
-        ws_out.merge_cells(
-            start_row=1, start_column=1, end_row=1, end_column=n_cols
-        )
-        top_left = ws_out.cell(row=1, column=1)
-        top_left.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
+        ws_out.range((1, 1), (1, n_cols)).merge()
+        c1 = ws_out.range((1, 1)).api
+        c1.VerticalAlignment = -4160  # xlTop
+        c1.WrapText = True
+        c1.HorizontalAlignment = -4131  # xlLeft
     except Exception:
         logging.debug("パターン一覧: 1 行目の結合に失敗（無視）", exc_info=True)
     try:
-        for c in range(1, n_cols + 1):
-            ws_out.cell(row=header_row, column=c).font = Font(bold=True)
+        ws_out.range((header_row, 1), (header_row, n_cols)).api.Font.Bold = True
     except Exception:
         pass
 
@@ -19433,33 +20437,35 @@ def _openpyxl_format_dispatch_trial_pattern_list_sheet(
         return
     tbl_name = "TblDispatchTrialPatterns"
     try:
-        keys_to_del = []
-        for k, tbl in ws_out.tables.items():
-            dn = getattr(tbl, "displayName", None) or getattr(tbl, "name", None)
-            if str(dn or "") == tbl_name:
-                keys_to_del.append(k)
-        for k in keys_to_del:
-            del ws_out.tables[k]
+        lots = ws_out.api.ListObjects
+        for i in range(int(lots.Count), 0, -1):
+            try:
+                if str(lots.Item(i).Name) == tbl_name:
+                    lots.Item(i).Delete()
+            except Exception:
+                continue
     except Exception:
         pass
     try:
         tbl_nrows = n_rows - header_row + 1
         if tbl_nrows < 2:
             return
-        end_l = get_column_letter(n_cols)
-        ref = f"A{header_row}:{end_l}{n_rows}"
-        tab = Table(displayName=tbl_name, ref=ref)
-        style = TableStyleInfo(
-            name="TableStyleMedium2",
-            showFirstColumn=False,
-            showLastColumn=False,
-            showRowStripes=True,
-            showColumnStripes=False,
-        )
-        tab.tableStyleInfo = style
-        ws_out.add_table(tab)
+        data_rng = ws_out.range((header_row, 1)).resize(tbl_nrows, n_cols)
+        # xlSrcRange=1, HasHeaders=xlYes=1
+        ws_out.api.ListObjects.Add(1, data_rng.api, None, 1)
+        lots = ws_out.api.ListObjects
+        lo = lots.Item(int(lots.Count))
+        lo.Name = tbl_name
+        try:
+            lo.TableStyle = "TableStyleMedium2"
+        except Exception:
+            pass
     except Exception as e:
-        logging.warning("パターン一覧: Excel 表（Table）の設定をスキップしました: %s", e)
+        logging.warning("パターン一覧: Excel 表（ListObject）の設定をスキップしました: %s", e)
+    try:
+        ws_out.used_range.columns.api.AutoFit()
+    except Exception:
+        pass
 
 
 def write_dispatch_trial_pattern_list_via_xlwings(
@@ -19468,133 +20474,121 @@ def write_dispatch_trial_pattern_list_via_xlwings(
     apply_post_load_mutations: bool = True,
 ) -> bool:
     """
-    マクロブックを openpyxl で開き、「配台計画_タスク入力」を読み、
+    マクロブックを Excel で開き、「配台計画_タスク入力」を読み、
     試行順パターン一覧を DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME に書き込む。
-    （関数名は VBA / 既存スクリプト互換のため xlwings を含む。）
     """
     path = (workbook_path or "").strip() or _excel_plan_input_wb().strip()
     if not path:
         logging.error("配台試行順パターン一覧: ブックパスは空です。")
         return False
-    keep_vba = path.lower().endswith(".xlsm")
-    wb = None
     try:
-        wb = load_workbook(path, keep_vba=keep_vba)
-        ws = wb[PLAN_INPUT_SHEET_NAME]
+        import xlwings as xw
+    except ImportError:
+        logging.error("配台試行順パターン一覧: Excel 連携に必要なパッケージがありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
     except Exception as e:
         logging.error("配台試行順パターン一覧: シート接続に失敗: %s", e)
         return False
 
-    try:
-        mat = _openpyxl_sheet_to_matrix(ws)
-        df = _matrix_to_dataframe_header_first(mat)
-        if df is None or df.empty:
-            logging.warning("配台試行順パターン一覧: データ行はありません。")
-            return False
+    mat = _openpyxl_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("配台試行順パターン一覧: データ行はありません。")
+        return False
 
-        df = df.copy()
-        df.columns = df.columns.str.strip()
-        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-        for c in plan_input_sheet_column_order():
-            if c not in df.columns:
-                df[c] = ""
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
 
-        if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
-            _apply_planning_sheet_post_load_mutations(
-                df,
-                path,
-                "配台試行順パターン一覧",
-                apply_exclude_rules_from_config=False,
-                compile_exclude_rules_d_to_e_with_ai=False,
-            )
-
-        data_extract_dt, _ = _extract_data_extraction_datetime()
-        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-        run_date = base_now_dt.date()
-
-        try:
-            (
-                _sd,
-                _mem,
-                equipment_list,
-                req_map,
-                need_rules,
-                _sm,
-                need_combo_col_index,
-            ) = load_skills_and_needs()
-        except Exception as e:
-            logging.exception("配台試行順パターン一覧: master 読込に失敗: %s", e)
-            return False
-
-        try:
-            matrix = _build_dispatch_trial_pattern_list_matrix(
-                df, run_date, req_map, need_rules, need_combo_col_index, equipment_list
-            )
-        except Exception as e:
-            logging.exception("配台試行順パターン一覧: 行列生成に失敗: %s", e)
-            return False
-
-        sheet_name = DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME
-        if sheet_name in wb.sheetnames:
-            ws_out = wb[sheet_name]
-        else:
-            try:
-                pin = wb.sheetnames.index(PLAN_INPUT_SHEET_NAME)
-                idx = min(pin + 1, len(wb.sheetnames))
-            except ValueError:
-                idx = len(wb.sheetnames)
-            ws_out = wb.create_sheet(title=sheet_name, index=idx)
-
-        try:
-            for mr in list(ws_out.merged_cells.ranges):
-                ws_out.unmerge_cells(str(mr))
-        except Exception:
-            pass
-        max_r = int(ws_out.max_row or 0)
-        max_c = int(ws_out.max_column or 0)
-        if max_r > 0 and max_c > 0:
-            for r in range(1, max_r + 1):
-                for c in range(1, max_c + 1):
-                    ws_out.cell(row=r, column=c, value=None)
-
-        n_cols = max((len(r) for r in matrix), default=1)
-        padded: list[list] = []
-        for r in matrix:
-            row = list(r)
-            if len(row) < n_cols:
-                row.extend([None] * (n_cols - len(row)))
-            padded.append(row)
-        n_rows = len(padded)
-
-        for r_i in range(n_rows):
-            row_vals = padded[r_i]
-            for c_i in range(n_cols):
-                val = row_vals[c_i] if c_i < len(row_vals) else None
-                if val is not None and isinstance(val, float) and pd.isna(val):
-                    val = None
-                ws_out.cell(row=r_i + 1, column=c_i + 1, value=val)
-
-        try:
-            _openpyxl_format_dispatch_trial_pattern_list_sheet(
-                ws_out, n_rows, n_cols, header_row=3
-            )
-        except Exception:
-            logging.exception("配台試行順パターン一覧: 書式・表の適用で例外（続行）")
-
-        wb.save(path)
-
-        logging.info(
-            "配台試行順パターン一覧: 「%s」に %s 行を書き込みました。",
-            sheet_name,
-            n_rows,
+    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "配台試行順パターン一覧",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
         )
-        return True
-    finally:
-        if wb is not None:
-            try:
-                wb.close()
-            except Exception:
-                pass
+
+    data_extract_dt, _ = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: master 読込に失敗: %s", e)
+        return False
+
+    try:
+        matrix = _build_dispatch_trial_pattern_list_matrix(
+            df, run_date, req_map, need_rules, need_combo_col_index, equipment_list
+        )
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: 行列生成に失敗: %s", e)
+        return False
+
+    sheet_name = DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME
+    try:
+        ws_out = wb.sheets[sheet_name]
+    except Exception:
+        try:
+            ws_out = wb.sheets.add(name=sheet_name, after=wb.sheets[PLAN_INPUT_SHEET_NAME])
+        except Exception as e2:
+            logging.error("配台試行順パターン一覧: シート作成に失敗: %s", e2)
+            return False
+
+    try:
+        ur0 = ws_out.used_range
+        if ur0:
+            ur0.clear_contents()
+    except Exception:
+        pass
+
+    n_cols = max((len(r) for r in matrix), default=1)
+    padded: list[list] = []
+    for r in matrix:
+        row = list(r)
+        if len(row) < n_cols:
+            row.extend([None] * (n_cols - len(row)))
+        padded.append(row)
+    n_rows = len(padded)
+    try:
+        ws_out.range((1, 1)).resize(n_rows, n_cols).value = padded
+    except Exception as e:
+        logging.exception("配台試行順パターン一覧: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        _xlwings_format_dispatch_trial_pattern_list_sheet(ws_out, n_rows, n_cols, header_row=3)
+    except Exception:
+        logging.exception("配台試行順パターン一覧: 書式・表の適用で例外（続行）")
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("配台試行順パターン一覧: Save 警告: %s", e)
+
+    logging.info(
+        "配台試行順パターン一覧: 「%s」に %s 行を書き込みました。",
+        sheet_name,
+        n_rows,
+    )
+    return True
+
 
 def refresh_dispatch_trial_pattern_list_sheet_only() -> bool:
     """TASK_INPUT_WORKBOOK に対する配台試行順パターン一覧シート作成（VBA / cmd 用）。"""
@@ -19875,226 +20869,217 @@ def apply_dispatch_pattern_stage2_selection_to_plan_via_xlwings(
     if not path:
         logging.error("パターン採用反映: ブックパスは空です。")
         return False
-    keep_vba = path.lower().endswith(".xlsm")
-    wb = None
     try:
-        wb = load_workbook(path, keep_vba=keep_vba)
-        ws = wb[PLAN_INPUT_SHEET_NAME]
-        ws_sum = wb[DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME]
+        import xlwings as xw
+    except ImportError:
+        logging.error("パターン採用反映: Excel 連携に必要なパッケージがありません。")
+        return False
+    try:
+        wb = xw.Book(path)
+        ws = wb.sheets[PLAN_INPUT_SHEET_NAME]
+        ws_sum = wb.sheets[DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME]
     except Exception as e:
         logging.error("パターン採用反映: シート接続に失敗: %s", e)
         return False
 
+    batch_root = str(ws_sum.range((2, 2)).value or "").strip()
+    if not batch_root or not os.path.isdir(batch_root):
+        logging.error(
+            "パターン採用反映: サマリ B2 のバッチ出力ルートが無効です（先にパターン別段階2を実行してください）。"
+        )
+        return False
+    meta_path = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
+    if not os.path.isfile(meta_path):
+        logging.error("パターン採用反映: メタファイルがありません: %s", meta_path)
+        return False
     try:
-        batch_root = str(ws_sum.cell(row=2, column=2).value or "").strip()
-        if not batch_root or not os.path.isdir(batch_root):
-            logging.error(
-                "パターン採用反映: サマリ B2 のバッチ出力ルートが無効です（先にパターン別段階2を実行してください）。"
-            )
-            return False
-        meta_path = os.path.join(batch_root, DISPATCH_PATTERN_STAGE2_META_FILENAME)
-        if not os.path.isfile(meta_path):
-            logging.error("パターン採用反映: メタファイルがありません: %s", meta_path)
-            return False
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+    except OSError as e:
+        logging.error("パターン採用反映: メタ JSON の読込に失敗: %s", e)
+        return False
+
+    chosen = (chosen_pattern_id or "").strip()
+    if not chosen:
         try:
-            with open(meta_path, encoding="utf-8") as f:
-                meta = json.load(f)
-        except OSError as e:
-            logging.error("パターン採用反映: メタ JSON の読込に失敗: %s", e)
-            return False
-
-        chosen = (chosen_pattern_id or "").strip()
-        if not chosen:
-            try:
-                chosen = str(ws_sum.cell(row=3, column=2).value or "").strip()
-            except Exception:
-                chosen = ""
-        if not chosen:
-            logging.error(
-                "パターン採用反映: 採用パターンIDが空です。サマリの B3 に一覧のいずれかを入力してください。"
-            )
-            return False
-
-        patterns = meta.get("patterns") or []
-        ent = None
-        chosen_key = chosen.strip().casefold()
-        for p in patterns:
-            pid = str(p.get("id") or "").strip()
-            if pid.casefold() == chosen_key:
-                ent = p
-                break
-        if ent is None:
-            logging.error(
-                "パターン採用反映: パターンID「%s」は当該バッチのメタにありません。",
-                chosen,
-            )
-            return False
-
-        job = _pattern_job_tuple_from_meta_entry(ent)
-        mat = _openpyxl_sheet_to_matrix(ws)
-        df = _matrix_to_dataframe_header_first(mat)
-        if df is None or df.empty:
-            logging.warning("パターン採用反映: データ行はありません。")
-            return False
-
-        df = df.copy()
-        df.columns = df.columns.str.strip()
-        df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
-        for c in plan_input_sheet_column_order():
-            if c not in df.columns:
-                df[c] = ""
-
-        df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
-
-        if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
-            _apply_planning_sheet_post_load_mutations(
-                df,
-                path,
-                "パターン採用反映",
-                apply_exclude_rules_from_config=False,
-                compile_exclude_rules_d_to_e_with_ai=False,
-            )
-
-        dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
-        if dto_col not in df.columns:
-            logging.error("パターン採用反映: 列「%s」はありません。", dto_col)
-            return False
-        _dto_loc = df.columns.get_loc(dto_col)
-        if isinstance(_dto_loc, slice):
-            logging.error("パターン採用反映: 列「%s」は複数あります。", dto_col)
-            return False
-        if pd.api.types.is_numeric_dtype(df[dto_col]):
-            df[dto_col] = float("nan")
-        else:
-            df[dto_col] = ""
-
-        data_extract_dt, _ = _extract_data_extraction_datetime()
-        base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
-        run_date = base_now_dt.date()
-
-        try:
-            (
-                _sd,
-                _mem,
-                equipment_list,
-                req_map,
-                need_rules,
-                _sm,
-                need_combo_col_index,
-            ) = load_skills_and_needs()
-        except Exception as e:
-            logging.exception("パターン採用反映: master 読込に失敗: %s", e)
-            return False
-
-        global_priority_raw = load_main_sheet_global_priority_override_text()
-        members_for_gpo: list = []
-        try:
-            with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
-                _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
-            for r in range(2, _skills.shape[0]):
-                cell = _skills.iat[r, 0]
-                if pd.isna(cell):
-                    continue
-                name = str(cell).strip()
-                if name and name.lower() not in ("nan", "none", "null"):
-                    members_for_gpo.append(name)
+            chosen = str(ws_sum.range((3, 2)).value or "").strip()
         except Exception:
-            members_for_gpo = []
-        gpo = analyze_global_priority_override_comment(
-            global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+            chosen = ""
+    if not chosen:
+        logging.error(
+            "パターン採用反映: 採用パターンIDが空です。サマリの B3 に一覧のいずれかを入力してください。"
         )
-        ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
-        tq_template = build_task_queue_from_planning_df(
-            df, run_date, req_map, ai_by_tid, gpo, equipment_list
-        )
-        if not tq_template:
-            logging.error("パターン採用反映: 配台対象タスクがありません。")
-            return False
+        return False
 
-        tq_frozen = copy.deepcopy(tq_template)
-        p5_bundle_sel = {
-            "planning_df": df,
-            "run_date": run_date,
-            "req_map": req_map,
-            "need_rules": need_rules,
-            "need_combo_col_index": need_combo_col_index,
-            "equipment_list": equipment_list,
-            "gpo": gpo,
-            "probe_stage2_root": os.path.join(batch_root, "_p5_selection_probe"),
-            "p6_nested_probe_parent": os.path.join(batch_root, "_p6_selection_nested"),
-        }
-        _pid_applied, _pname_applied, tq_sel, df_p5_ov = next(
-            _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job], p5_bundle=p5_bundle_sel)
-        )
-        df_apply = df_p5_ov.copy() if df_p5_ov is not None else df
-        _apply_pattern_dispatch_trial_orders_to_tasks_df(df_apply, tq_sel)
-        df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df_apply)
-        orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
-        df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
-
-        header_row = mat[0] if mat else []
-        n_hdr = len(header_row)
-        if n_hdr == 0:
-            return False
-
-        def _pad_row(r, n):
-            r = list(r) if r is not None else []
-            if len(r) < n:
-                r = r + [None] * (n - len(r))
-            return r
-
-        new_mat = [_pad_row(header_row, n_hdr)]
-        for i in range(len(df_sorted)):
-            orig = orig_list[i]
-            src_row = mat[orig + 1] if orig + 1 < len(mat) else []
-            src_row = _pad_row(src_row, n_hdr)
-            out_row = []
-            for j in range(n_hdr):
-                h_cell = header_row[j]
-                if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
-                    hname = ""
-                else:
-                    hname = str(h_cell).strip()
-                if hname and hname in df_sorted.columns:
-                    v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
-                    if pd.isna(v):
-                        out_row.append(None)
-                    else:
-                        out_row.append(v)
-                else:
-                    out_row.append(src_row[j])
-            new_mat.append(out_row)
-
-        try:
-            n_r = len(new_mat)
-            for r_i in range(n_r):
-                row_vals = _pad_row(new_mat[r_i], n_hdr)
-                for c_i in range(n_hdr):
-                    val = row_vals[c_i]
-                    if val is not None and isinstance(val, float) and pd.isna(val):
-                        val = None
-                    ws.cell(row=r_i + 1, column=c_i + 1, value=val)
-        except Exception as e:
-            logging.exception("パターン採用反映: シート書込に失敗: %s", e)
-            return False
-
-        try:
-            wb.save(path)
-        except Exception as e:
-            logging.warning("パターン採用反映: Save 警告: %s", e)
-
-        logging.info(
-            "パターン採用反映: パターン「%s」を「%s」に書き込みました。",
+    patterns = meta.get("patterns") or []
+    ent = None
+    chosen_key = chosen.strip().casefold()
+    for p in patterns:
+        pid = str(p.get("id") or "").strip()
+        if pid.casefold() == chosen_key:
+            ent = p
+            break
+    if ent is None:
+        logging.error(
+            "パターン採用反映: パターンID「%s」は当該バッチのメタにありません。",
             chosen,
-            PLAN_INPUT_SHEET_NAME,
         )
-        return True
-    finally:
-        if wb is not None:
-            try:
-                wb.close()
-            except Exception:
-                pass
+        return False
+
+    job = _pattern_job_tuple_from_meta_entry(ent)
+    mat = _openpyxl_sheet_to_matrix(ws)
+    df = _matrix_to_dataframe_header_first(mat)
+    if df is None or df.empty:
+        logging.warning("パターン採用反映: データ行はありません。")
+        return False
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    df = _align_dataframe_headers_to_canonical(df, plan_input_sheet_column_order())
+    for c in plan_input_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+
+    df.insert(0, _PLAN_INPUT_XLWINGS_ORIG_ROW, range(len(df)))
+
+    if apply_post_load_mutations and not _plan_input_dispatch_trial_order_local_only_from_env():
+        _apply_planning_sheet_post_load_mutations(
+            df,
+            path,
+            "パターン採用反映",
+            apply_exclude_rules_from_config=False,
+            compile_exclude_rules_d_to_e_with_ai=False,
+        )
+
+    dto_col = RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    if dto_col not in df.columns:
+        logging.error("パターン採用反映: 列「%s」はありません。", dto_col)
+        return False
+    _dto_loc = df.columns.get_loc(dto_col)
+    if isinstance(_dto_loc, slice):
+        logging.error("パターン採用反映: 列「%s」は複数あります。", dto_col)
+        return False
+    if pd.api.types.is_numeric_dtype(df[dto_col]):
+        df[dto_col] = float("nan")
+    else:
+        df[dto_col] = ""
+
+    data_extract_dt, _ = _extract_data_extraction_datetime()
+    base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
+    run_date = base_now_dt.date()
+
+    try:
+        (
+            _sd,
+            _mem,
+            equipment_list,
+            req_map,
+            need_rules,
+            _sm,
+            need_combo_col_index,
+        ) = load_skills_and_needs()
+    except Exception as e:
+        logging.exception("パターン採用反映: master 読込に失敗: %s", e)
+        return False
+
+    global_priority_raw = load_main_sheet_global_priority_override_text()
+    members_for_gpo: list = []
+    try:
+        with pd.ExcelFile(_master_workbook_path_resolved()) as _xf:
+            _skills = pd.read_excel(_xf, sheet_name="skills", header=None)
+        for r in range(2, _skills.shape[0]):
+            cell = _skills.iat[r, 0]
+            if pd.isna(cell):
+                continue
+            name = str(cell).strip()
+            if name and name.lower() not in ("nan", "none", "null"):
+                members_for_gpo.append(name)
+    except Exception:
+        members_for_gpo = []
+    gpo = analyze_global_priority_override_comment(
+        global_priority_raw, members_for_gpo, run_date.year, ai_sheet_sink={}
+    )
+    ai_by_tid = analyze_task_special_remarks(df, reference_year=run_date.year)
+    tq_template = build_task_queue_from_planning_df(
+        df, run_date, req_map, ai_by_tid, gpo, equipment_list
+    )
+    if not tq_template:
+        logging.error("パターン採用反映: 配台対象タスクがありません。")
+        return False
+
+    tq_frozen = copy.deepcopy(tq_template)
+    p5_bundle_sel = {
+        "planning_df": df,
+        "run_date": run_date,
+        "req_map": req_map,
+        "need_rules": need_rules,
+        "need_combo_col_index": need_combo_col_index,
+        "equipment_list": equipment_list,
+        "gpo": gpo,
+        "probe_stage2_root": os.path.join(batch_root, "_p5_selection_probe"),
+        "p6_nested_probe_parent": os.path.join(batch_root, "_p6_selection_nested"),
+    }
+    _pid_applied, _pname_applied, tq_sel, df_p5_ov = next(
+        _iter_dispatch_trial_pattern_variant_queues(tq_frozen, [job], p5_bundle=p5_bundle_sel)
+    )
+    df_apply = df_p5_ov.copy() if df_p5_ov is not None else df
+    _apply_pattern_dispatch_trial_orders_to_tasks_df(df_apply, tq_sel)
+    df_sorted = _sort_stage1_plan_df_by_dispatch_trial_order_asc(df_apply)
+    orig_list = [int(x) for x in df_sorted[_PLAN_INPUT_XLWINGS_ORIG_ROW].tolist()]
+    df_sorted = df_sorted.drop(columns=[_PLAN_INPUT_XLWINGS_ORIG_ROW])
+
+    header_row = mat[0] if mat else []
+    n_hdr = len(header_row)
+    if n_hdr == 0:
+        return False
+
+    def _pad_row(r, n):
+        r = list(r) if r is not None else []
+        if len(r) < n:
+            r = r + [None] * (n - len(r))
+        return r
+
+    new_mat = [_pad_row(header_row, n_hdr)]
+    for i in range(len(df_sorted)):
+        orig = orig_list[i]
+        src_row = mat[orig + 1] if orig + 1 < len(mat) else []
+        src_row = _pad_row(src_row, n_hdr)
+        out_row = []
+        for j in range(n_hdr):
+            h_cell = header_row[j]
+            if h_cell is None or (isinstance(h_cell, float) and pd.isna(h_cell)):
+                hname = ""
+            else:
+                hname = str(h_cell).strip()
+            if hname and hname in df_sorted.columns:
+                v = df_sorted.iat[i, df_sorted.columns.get_loc(hname)]
+                if pd.isna(v):
+                    out_row.append(None)
+                else:
+                    out_row.append(v)
+            else:
+                out_row.append(src_row[j])
+        new_mat.append(out_row)
+
+    try:
+        n_r = len(new_mat)
+        ws.range((1, 1)).resize(n_r, n_hdr).value = new_mat
+    except Exception as e:
+        logging.exception("パターン採用反映: シート書込に失敗: %s", e)
+        return False
+
+    try:
+        wb.save()
+    except Exception as e:
+        logging.warning("パターン採用反映: Save 警告: %s", e)
+
+    logging.info(
+        "パターン採用反映: パターン「%s」を「%s」に書き込みました。",
+        chosen,
+        PLAN_INPUT_SHEET_NAME,
+    )
+    return True
+
 
 def refresh_dispatch_pattern_stage2_selection_to_plan_only() -> bool:
     """サマリで選んだパターンの試行順を配台計画シートへ反映（VBA / cmd 用）。"""

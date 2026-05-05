@@ -321,11 +321,11 @@
   }, {
     "key" : "PM_AI_CMD_PAUSE_ON_ERROR",
     "value" : "1",
-    "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効"
+    "description" : "pip install 等の一括セットアップ実行時: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。初回 pip 失敗時は OS 環境変数のみ有効な場合あり"
   }, {
     "key" : "PM_AI_SETUP_COMPLETION_MSGBOX",
     "value" : "1",
-    "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
+    "description" : "pip install 等の一括セットアップ成功時: Windows で完了メッセージ（MessageBox）を表示。0 false no off で無効"
   }, {
     "key" : "PM_AI_SPLASH_XLWINGS",
     "value" : "",
