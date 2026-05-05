@@ -34,6 +34,7 @@ import javafx.scene.text.Text;
 import javafx.geometry.VPos;
 
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 
@@ -125,7 +126,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             String dc = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
             if (!dc.isEmpty()) {
-                maxD = Math.max(maxD, measureTextWidth(dc, cellFont));
+                maxD = Math.max(maxD, measureTextCapHeight(dc, cellFont));
             }
         }
 
@@ -334,27 +335,37 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             if (!dplan.continuation()) {
                 String dateTxt = dplan.dateText() != null ? dplan.dateText() : "";
-                Label dl = new Label(dateTxt);
-                applySideDataStyle(dl, dateW, layout, palette, machineGroupIndex);
-                dl.setWrapText(true);
-                dl.setAlignment(Pos.TOP_CENTER);
-
                 int dRows = Math.max(1, dplan.rowSpan());
                 double spanDateH = dRows * cellBodyH;
-                dl.setMinHeight(spanDateH);
-                dl.setPrefHeight(spanDateH);
-                dl.setMaxHeight(spanDateH);
+
+                StackPane dateWrap = new StackPane();
+                dateWrap.setMinWidth(dateW);
+                dateWrap.setPrefWidth(dateW);
+                dateWrap.setMaxWidth(dateW);
+                dateWrap.setMinHeight(spanDateH);
+                dateWrap.setPrefHeight(spanDateH);
+                dateWrap.setMaxHeight(spanDateH);
+                dateWrap.setPadding(
+                        new Insets(
+                                2 * layout.zoom,
+                                6 * layout.zoom,
+                                2 * layout.zoom,
+                                6 * layout.zoom));
+                dateWrap.setStyle(palette.machineSideCellCss(machineGroupIndex));
                 if (dRows > 1) {
-                    GridPane.setRowSpan(dl, dRows);
+                    GridPane.setRowSpan(dateWrap, dRows);
                 }
-                GridPane.setValignment(dl, VPos.TOP);
-                fitFontIntoColumn(
-                        dl,
-                        dateTxt,
-                        dateW - 8,
-                        spanDateH - 4,
-                        layout.rowLabelFontSize * 0.92);
-                bodyGrid.add(dl, 0, gridR);
+                GridPane.setValignment(dateWrap, VPos.TOP);
+
+                Label dl = new Label(dateTxt);
+                dl.setFont(Font.font(layout.rowLabelFontSize * 0.92));
+                dl.setWrapText(false);
+                dl.setTextFill(Color.web(palette.machineSideTextFill()));
+                dl.setRotate(-90);
+                StackPane.setAlignment(dl, Pos.CENTER);
+                dateWrap.getChildren().add(dl);
+
+                bodyGrid.add(dateWrap, 0, gridR);
             }
 
             if (!mplan.continuation()) {
@@ -470,7 +481,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 new Label(
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
-                        左列は内容に応じ自動幅。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
+                        左列は内容に応じ自動幅。日付は反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
@@ -796,8 +807,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         Color.web("#93c5fd"),
                         Color.web("#fdba74"),
                         Color.web("#f8fafc"),
-                        Color.web("#0c1222"),
-                        Color.web("#0c1222"),
+                        /* バー外ラベルは機械行の暗い帯の上に描くため明るい色にする */
+                        Color.web("#f1f5f9"),
+                        Color.web("#fffbeb"),
                         Color.web("#93c5fd"),
                         bandsDark,
                         "#e2e8f0",
@@ -1097,6 +1109,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Text t = new Text(s != null ? s : "");
         t.setFont(f);
         return t.getLayoutBounds().getHeight();
+    }
+
+    /** 日付列を反時計回り 90° 表示するときの列幅の目安（横書き一行の高さ）。 */
+    private static double measureTextCapHeight(String s, Font f) {
+        return measureTextHeight(s, f);
     }
 
     private enum BarKind {
