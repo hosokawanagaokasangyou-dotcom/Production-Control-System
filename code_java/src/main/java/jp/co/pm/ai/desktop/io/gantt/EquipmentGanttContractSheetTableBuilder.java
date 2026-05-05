@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Normalizer;
 import java.time.LocalDate;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -168,7 +167,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         if (ev.isInBreaks(winStart, winEnd)) {
                             continue;
                         }
-                        cell = ev.timelineCellLabel(winStart, winEnd);
+                        cell = ev.timelineCellLabel();
                         badgeCell = ev.badgeSlotFragment();
                         break;
                     }
@@ -572,43 +571,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         /**
-         * スロット窓 [winStart, winEnd) とイベントの重なりに対する加工量(m)。休憩は呼び出し側で除外済み。
-         * Python {@code _gantt_slot_state_tuple_from_active} の slot_len_m と同じ比例式。
+         * タイムライン1マスに表示する文字列（依頼NO＋当該<strong>依頼イベント</strong>の総加工量m）。
+         * スロット按分ではなく、Excel 帯の「依頼単位の加工量」と揃える。
          */
-        Double slotProcessingMetersForOverlap(LocalDateTime winStart, LocalDateTime winEnd) {
-            if ("machine_daily_startup".equals(eventKind)
-                    || "machine_daily_inspection".equals(eventKind)
-                    || "daily_inspection".equals(eventKind)) {
-                return null;
-            }
-            Double evTotalLenM = eventTotalLengthMeters();
-            if (evTotalLenM == null || evTotalLenM <= 1e-12) {
-                return null;
-            }
-            if (!start.isBefore(end)) {
-                return null;
-            }
-            LocalDateTime lo = winStart.isAfter(start) ? winStart : start;
-            LocalDateTime hi = winEnd.isBefore(end) ? winEnd : end;
-            if (!lo.isBefore(hi)) {
-                return null;
-            }
-            double evSec = durationSeconds(start, end);
-            double ovSec = durationSeconds(lo, hi);
-            if (evSec <= 1e-9 || ovSec <= 1e-9) {
-                return null;
-            }
-            return evTotalLenM * (ovSec / evSec);
-        }
-
-        private static double durationSeconds(LocalDateTime a, LocalDateTime b) {
-            return Duration.between(a, b).toNanos() / 1_000_000_000.0;
-        }
-
-        /**
-         * タイムライン1マスに表示する文字列（依頼NO＋当該スロットの加工量m）。 {@code cellLabel}（unit_m 単体）は廃止。
-         */
-        String timelineCellLabel(LocalDateTime winStart, LocalDateTime winEnd) {
+        String timelineCellLabel() {
             if ("machine_daily_startup".equals(eventKind)) {
                 return "日次始業準備";
             }
@@ -617,14 +583,19 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 return "日次点検";
             }
             String tid = taskId != null ? taskId.strip() : "";
-            Double slotM = slotProcessingMetersForOverlap(winStart, winEnd);
-            if (slotM != null && slotM > 1e-12) {
-                String len = formatLengthM(slotM);
+            Double totalM = eventTotalLengthMeters();
+            if (totalM == null
+                    && labelLenMIsCumulative
+                    && labelLenM != null
+                    && labelLenM > 1e-12) {
+                totalM = labelLenM;
+            }
+            if (totalM != null && totalM > 1e-12) {
+                String len = formatLengthM(totalM);
                 if (!len.isEmpty()) {
                     return tid.isEmpty() ? len + "m" : tid + " " + len + "m";
                 }
             }
-            // 累積ラベル等で総量が取れないときは依頼NOのみ（単位長さだけは出さない）
             if (!tid.isEmpty()) {
                 return tid;
             }
