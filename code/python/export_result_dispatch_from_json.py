@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Write 結果_配台表.xlsx next to the given 結果_配台表.json using planning_core (same layout as stage2)."""
+"""Write dispatch-table xlsx next to the input JSON via planning_core (same layout as stage2)."""
 from __future__ import annotations
 
 import json
@@ -13,7 +13,10 @@ os.chdir(SCRIPT_DIR)
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: export_result_dispatch_from_json.py <結果_配台表.jsonのパス>", file=sys.stderr)
+        print(
+            "usage: export_result_dispatch_from_json.py <path-to-dispatch-result.json>",
+            file=sys.stderr,
+        )
         return 2
     path = Path(sys.argv[1]).resolve()
     if not path.is_file():
