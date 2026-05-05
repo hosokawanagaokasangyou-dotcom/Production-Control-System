@@ -10559,6 +10559,23 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
         )
         return False
 
+    low_wb = str(abs_wb).lower()
+    if low_wb.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        try:
+            import zipfile
+
+            with zipfile.ZipFile(abs_wb, "r") as zf:
+                if "xl/sharedStrings.xml" not in zf.namelist():
+                    logging.info(
+                        "%s: OOXML に xl/sharedStrings.xml が無いブックのため、"
+                        "メイン AI サマリ（openpyxl）をスキップしました。"
+                        "Excel で対象ブックを開いて通常保存すると解消することがあります。",
+                        log_prefix,
+                    )
+                    return False
+        except Exception:
+            pass
+
     keep_vba = abs_wb.lower().endswith(".xlsm")
     wb = None
     try:
