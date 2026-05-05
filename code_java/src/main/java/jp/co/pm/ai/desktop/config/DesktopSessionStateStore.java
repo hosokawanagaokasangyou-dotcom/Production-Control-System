@@ -68,7 +68,19 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttRowHeightPercent", 0d),
                     optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
                     optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
-                    optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d));
+                    optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
+                    optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
+                    text(root, "equipmentGanttPersonBadgeFontFamily"),
+                    optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
+                    text(root, "equipmentGanttPersonBadgeFillHex"),
+                    text(root, "equipmentGanttPersonBadgeTextHex"),
+                    text(root, "equipmentGanttPersonBadgeStrokeHex"),
+                    optionalDouble(root, "equipmentGanttPersonBadgeStrokeWidth", -1d),
+                    optionalDouble(root, "equipmentGanttPersonBadgeCornerRadius", -1d),
+                    optionalBoolean(root, "equipmentGanttPersonBadgePill", false),
+                    text(root, "equipmentGanttPersonBadgeGlowColorHex"),
+                    optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
+                    optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -265,6 +277,33 @@ public final class DesktopSessionStateStore {
         double sh = state.equipmentGanttShiftWheelHScrollPercent();
         if (Double.isFinite(sh) && sh >= 50 && sh <= 1000) {
             root.put("equipmentGanttShiftWheelHScrollPercent", sh);
+        }
+        root.put("equipmentGanttPersonBadgeEnabled", state.equipmentGanttPersonBadgeEnabled());
+        put(root, "equipmentGanttPersonBadgeFontFamily", state.equipmentGanttPersonBadgeFontFamily());
+        double bpf = state.equipmentGanttPersonBadgeFontPercent();
+        if (Double.isFinite(bpf) && bpf > 0 && bpf <= 300) {
+            root.put("equipmentGanttPersonBadgeFontPercent", bpf);
+        }
+        put(root, "equipmentGanttPersonBadgeFillHex", state.equipmentGanttPersonBadgeFillHex());
+        put(root, "equipmentGanttPersonBadgeTextHex", state.equipmentGanttPersonBadgeTextHex());
+        put(root, "equipmentGanttPersonBadgeStrokeHex", state.equipmentGanttPersonBadgeStrokeHex());
+        double stw = state.equipmentGanttPersonBadgeStrokeWidth();
+        if (Double.isFinite(stw) && stw >= 0) {
+            root.put("equipmentGanttPersonBadgeStrokeWidth", stw);
+        }
+        double cr = state.equipmentGanttPersonBadgeCornerRadius();
+        if (Double.isFinite(cr) && cr >= 0) {
+            root.put("equipmentGanttPersonBadgeCornerRadius", cr);
+        }
+        root.put("equipmentGanttPersonBadgePill", state.equipmentGanttPersonBadgePill());
+        put(root, "equipmentGanttPersonBadgeGlowColorHex", state.equipmentGanttPersonBadgeGlowColorHex());
+        double gr = state.equipmentGanttPersonBadgeGlowRadius();
+        if (Double.isFinite(gr) && gr >= 0) {
+            root.put("equipmentGanttPersonBadgeGlowRadius", gr);
+        }
+        double gs = state.equipmentGanttPersonBadgeGlowSpread();
+        if (Double.isFinite(gs) && gs >= 0 && gs <= 1) {
+            root.put("equipmentGanttPersonBadgeGlowSpread", gs);
         }
     }
 

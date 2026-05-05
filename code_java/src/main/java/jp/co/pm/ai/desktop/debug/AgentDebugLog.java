@@ -14,8 +14,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 /**
  * NDJSON append for Cursor debug sessions. Resolves log path across Windows / WSL / fat JAR layouts.
  *
- * <p>Project convention (instrumentation and path rules): {@code .cursor/rules/agent-debug-ndjson-logging.mdc}
- * under the repository root.
+ * <p>Project convention: {@code .cursor/rules/agent-debug-ndjson-logging.mdc}（モノレポでは親
+ * {@code 工程管理AIプロジェクト_JAVA/.cursor/rules/agent-debug-ndjson-logging.mdc} が正本）。
  *
  * <p>Resolution order (first hit wins):
  *

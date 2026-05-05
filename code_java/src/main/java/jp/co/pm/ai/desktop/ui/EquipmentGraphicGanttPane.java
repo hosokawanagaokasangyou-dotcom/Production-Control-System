@@ -34,10 +34,13 @@ import javafx.scene.text.Text;
 import javafx.geometry.VPos;
 import javafx.scene.input.ScrollEvent;
 
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
 /**
  * 「結果_設備ガント」Excel と同一データ（JSON の columns / rows）から、横軸が時刻スロットの
@@ -304,15 +307,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 0d,
                 0d,
                 0d,
-                0d);
+                0d,
+                null,
+                false,
+                null);
     }
 
     /**
-     * @param dateColWidthOverridePx 日付列幅（px）。{@code <= 0} または非有限は自動計測を使用
-     * @param machineColWidthOverridePx 機械名列幅（px）。同上
-     * @param processColWidthOverridePx 工程名列幅（px）。同上
-     * @param shiftWheelHorizontalSensitivityPercent Shift+ホイール横スクロール感度（50〜1000、100＝従来の速さ、{@code <=0}
-     *     は既定 200）
+     * 担当バッジなし（後方互換）。
+     *
+     * @see #build(List, ObservableList, DesktopTheme, double, double, double, String, double, double, double, double,
+     *     double, double, List, boolean, PersonBadgeStyle)
      */
     public static BorderPane build(
             List<String> columns,
@@ -328,16 +333,67 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double machineColWidthOverridePx,
             double processColWidthOverridePx,
             double shiftWheelHorizontalSensitivityPercent) {
+        return build(
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowHeightPercent,
+                slotWidthPercent,
+                barFontFamily,
+                barFontPercent,
+                headerHeightPercent,
+                dateColWidthOverridePx,
+                machineColWidthOverridePx,
+                processColWidthOverridePx,
+                shiftWheelHorizontalSensitivityPercent,
+                null,
+                false,
+                null);
+    }
+
+    /**
+     * @param dateColWidthOverridePx 日付列幅（px）。{@code <= 0} または非有限は自動計測を使用
+     * @param machineColWidthOverridePx 機械名列幅（px）。同上
+     * @param processColWidthOverridePx 工程名列幅（px）。同上
+     * @param shiftWheelHorizontalSensitivityPercent Shift+ホイール横スクロール感度（50〜1000、100＝従来の速さ、{@code <=0}
+     *     は既定 200）
+     * @param badgeSlotRowsRaw 行インデックスが {@code rows} と一致する担当バッジグリッド（各内側リストはスロット列数分）。Excel 連携のみのときは
+     *     {@code null}
+     * @param showPersonBadges 担当バッジオーバーレイを描画するか
+     * @param personBadgeStyle バッジ見た目（{@code null} は {@link PersonBadgeStyle#defaultStyle()}）
+     */
+    public static BorderPane build(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            DesktopTheme theme,
+            double zoom,
+            double rowHeightPercent,
+            double slotWidthPercent,
+            String barFontFamily,
+            double barFontPercent,
+            double headerHeightPercent,
+            double dateColWidthOverridePx,
+            double machineColWidthOverridePx,
+            double processColWidthOverridePx,
+            double shiftWheelHorizontalSensitivityPercent,
+            List<List<String>> badgeSlotRowsRaw,
+            boolean showPersonBadges,
+            PersonBadgeStyle personBadgeStyle) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
         RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
+        List<List<String>> badgeEff = badgeSlotRowsRaw;
         if (repaired != null) {
             effCols = repaired.columns();
             effRows = repaired.rows();
+            badgeEff = null;
         }
-        ParseResult parsed = parse(effCols, effRows);
+        PersonBadgeStyle badgeStyle =
+                personBadgeStyle != null ? personBadgeStyle : PersonBadgeStyle.defaultStyle();
+        ParseResult parsed = parse(effCols, effRows, badgeEff);
         if (parsed.slotColumnIndices().isEmpty()) {
             Label msg =
                     new Label(
@@ -580,12 +636,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     palette,
                     barFont);
 
+            Pane badgePane = new Pane();
+            badgePane.setMouseTransparent(true);
+            if (showPersonBadges) {
+                layoutPersonBadgeOverlay(
+                        badgePane,
+                        dr.badgeCellsInSlots(),
+                        dr.cellsInSlots(),
+                        layout,
+                        badgeStyle);
+            }
+            StackPane rowStack = new StackPane(rowCanvas, badgePane);
+
             String tip =
                     (dr.rowSummary() != null ? dr.rowSummary() : "")
                             + "\n（スロット "
                             + parsed.slotMinutes()
                             + " 分・設備ガント JSON と同一データ）";
-            Tooltip.install(rowCanvas, new Tooltip(tip));
+            Tooltip.install(rowStack, new Tooltip(tip));
 
             HBox progBox = new HBox(gap);
             progBox.setMinHeight(cellBodyH);
@@ -607,7 +675,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
 
             leftBodyGrid.add(pl, 2, gridR);
-            rightBodyGrid.add(rowCanvas, 0, gridR);
+            rightBodyGrid.add(rowStack, 0, gridR);
             if (!progBox.getChildren().isEmpty()) {
                 rightBodyGrid.add(progBox, 1, gridR);
             }
@@ -1178,6 +1246,57 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private record BarRun(int fromSlot, int toSlot, String text, BarKind kind) {}
 
+    private static void layoutPersonBadgeOverlay(
+            Pane overlay,
+            List<String> badgeSlotTexts,
+            List<String> slotTexts,
+            LayoutMetrics layout,
+            PersonBadgeStyle style) {
+        if (overlay == null
+                || style == null
+                || badgeSlotTexts == null
+                || slotTexts == null
+                || badgeSlotTexts.size() != slotTexts.size()) {
+            return;
+        }
+        List<BarRun> runs = collectBarRuns(slotTexts);
+        for (BarRun run : runs) {
+            if (run.kind() == BarKind.BREAK) {
+                continue;
+            }
+            String frag =
+                    PersonNameBadgeText.firstNonEmptyInSlotRange(
+                            badgeSlotTexts, run.fromSlot(), run.toSlot());
+            if (frag.isEmpty()) {
+                continue;
+            }
+            List<String> parts = PersonNameBadgeText.splitBadgeCell(frag);
+            if (parts.isEmpty()) {
+                continue;
+            }
+            HBox box = new HBox(2 * layout.zoom);
+            box.setAlignment(Pos.CENTER);
+            for (String p : parts) {
+                box.getChildren()
+                        .add(
+                                PersonBadgeNodeFactory.createBadge(
+                                        p, style, layout.zoom, layout.rowLabelFontSize));
+            }
+            double barTop = 3 * layout.zoom;
+            double barH = layout.rowHeight - 2 * barTop;
+            box.applyCss();
+            box.layout();
+            double w = Math.max(1, box.prefWidth(-1));
+            double h = Math.max(1, box.prefHeight(-1));
+            double cx = (run.fromSlot() + run.toSlot() + 1) * 0.5 * layout.slotWidth;
+            double x0 = cx - w / 2;
+            double y0 = barTop + (barH - h) / 2;
+            box.setLayoutX(x0);
+            box.setLayoutY(y0);
+            overlay.getChildren().add(box);
+        }
+    }
+
     private static void drawTimelineRow(
             GraphicsContext gc,
             List<String> slotTexts,
@@ -1477,7 +1596,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
-    private static ParseResult parse(List<String> columns, ObservableList<ObservableList<String>> rows) {
+    private static ParseResult parse(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            List<List<String>> badgeSlotRowsRaw) {
         List<Integer> slots = new ArrayList<>();
         for (int c = 0; c < columns.size(); c++) {
             String h = columns.get(c);
@@ -1522,7 +1644,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String c0 = row.size() > 0 && row.get(0) != null ? row.get(0).strip() : "";
             if (isSectionRow(row)) {
                 String banner = !c0.isEmpty() ? c0 : sectionTitleFromRow(row);
-                displayRows.add(new DisplayRow(banner, null, null, null, null, null, row));
+                displayRows.add(new DisplayRow(banner, null, null, null, null, null, null, row));
                 continue;
             }
             int dateCol = columns.indexOf("日付");
@@ -1540,6 +1662,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         row.size() > si && row.get(si) != null ? row.get(si) : "";
                 slotCells.add(v);
             }
+            List<String> badgeSlotCells = new ArrayList<>();
+            if (badgeSlotRowsRaw != null && r < badgeSlotRowsRaw.size()) {
+                List<String> br = badgeSlotRowsRaw.get(r);
+                for (int j = 0; j < slots.size(); j++) {
+                    String b = (br != null && j < br.size() && br.get(j) != null) ? br.get(j) : "";
+                    badgeSlotCells.add(b);
+                }
+            } else {
+                for (int j = 0; j < slots.size(); j++) {
+                    badgeSlotCells.add("");
+                }
+            }
             displayRows.add(
                     new DisplayRow(
                             null,
@@ -1548,6 +1682,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             lp.summary(),
                             dateForCol,
                             slotCells,
+                            badgeSlotCells,
                             row));
         }
         return new ParseResult(slots, progressCols, slotMinutes, slotBaseTime, displayRows);
@@ -1724,5 +1859,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String rowSummary,
             String dateCompact,
             List<String> cellsInSlots,
+            List<String> badgeCellsInSlots,
             ObservableList<String> rawRow) {}
 }

@@ -52,6 +52,18 @@ public final class ResultDispatchNormalizer {
         return sb.toString();
     }
 
+    /**
+     * Stable task identity key (same algorithm as {@link #groupKey} for non-date/non-qty columns).
+     * Used for DnD payloads so row indices stay valid under TableView sorting.
+     */
+    public static String staticGroupKey(List<String> columns, Map<String, String> staticFields) {
+        return groupKey(
+                columns,
+                staticFields,
+                ResultDispatchSchema.COL_DISPATCH_DATE,
+                ResultDispatchSchema.COL_DISPATCH_QTY);
+    }
+
     static String nz(String s) {
         return s != null ? s : "";
     }

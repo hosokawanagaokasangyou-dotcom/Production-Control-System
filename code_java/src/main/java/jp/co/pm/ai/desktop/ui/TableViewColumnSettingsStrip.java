@@ -1,8 +1,14 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javafx.collections.ListChangeListener;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.HBox;
 
@@ -21,7 +27,23 @@ public final class TableViewColumnSettingsStrip {
      */
     public static HBox create(
             TableView<?> table, Runnable resetToDefaults, boolean flexLastColumnInitially) {
-        CheckBox flex = new CheckBox("\u6700\u7d42\u5217\u3092\u4f38\u7e2e");
+        return create(table, resetToDefaults, flexLastColumnInitially, null, null);
+    }
+
+    /**
+     * Same as {@link #create(TableView, Runnable, boolean)} plus optional leading visual columns as header columns
+     * (persisted under {@link TableColumnOrderPersistence#saveHeaderColumnCount}).
+     *
+     * @param headerColumnCountHolder receives and publishes {@code n}; used by cell factories via {@link
+     *     AtomicInteger#get()}
+     */
+    public static HBox create(
+            TableView<?> table,
+            Runnable resetToDefaults,
+            boolean flexLastColumnInitially,
+            TableColumnOrderPersistence.TableId tableId,
+            AtomicInteger headerColumnCountHolder) {
+        CheckBox flex = new CheckBox("最終列を伸縮");
         flex.setSelected(flexLastColumnInitially);
         applyResizePolicy(table, flex.isSelected());
         flex.selectedProperty()
@@ -31,14 +53,66 @@ public final class TableViewColumnSettingsStrip {
                                 applyResizePolicy(table, b);
                             }
                         });
-        Button reset = new Button("\u5217\u5e45\u3092\u65e2\u5b9a\u306b");
+        Button reset = new Button("列幅を既定に");
         reset.setOnAction(
                 e -> {
                     if (resetToDefaults != null) {
                         resetToDefaults.run();
                     }
                 });
-        HBox h = new HBox(8, new Label("\u5217\u8a2d\u5b9a"), flex, reset);
+
+        Runnable refreshHeaderColumns =
+                () -> {
+                    if (tableId != null && headerColumnCountHolder != null) {
+                        int n = Math.max(0, headerColumnCountHolder.get());
+                        TableHeaderColumnStyle.applyToTableColumns(table, n);
+                        table.refresh();
+                    }
+                };
+
+        if (tableId != null && headerColumnCountHolder != null) {
+            int initial = TableColumnOrderPersistence.loadHeaderColumnCount(tableId);
+            headerColumnCountHolder.set(initial);
+            Spinner<Integer> headerSpinner =
+                    new Spinner<>(
+                            new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 999, initial));
+            headerSpinner.setEditable(true);
+            headerSpinner
+                    .valueProperty()
+                    .addListener(
+                            (obs, o, v) -> {
+                                if (v == null) {
+                                    return;
+                                }
+                                headerColumnCountHolder.set(Math.max(0, v));
+                                TableHeaderColumnStyle.applyToTableColumns(table, headerColumnCountHolder.get());
+                                TableColumnOrderPersistence.saveHeaderColumnCount(
+                                        tableId, headerColumnCountHolder.get());
+                                table.refresh();
+                            });
+            table.getColumns()
+                    .addListener(
+                            (ListChangeListener<TableColumn<?, ?>>)
+                                    c -> {
+                                        while (c.next()) {
+                                            // structural or reorder
+                                        }
+                                        refreshHeaderColumns.run();
+                                    });
+            javafx.application.Platform.runLater(refreshHeaderColumns);
+            HBox h =
+                    new HBox(
+                            8,
+                            new Label("列設定"),
+                            flex,
+                            new Label("見出し列数"),
+                            headerSpinner,
+                            reset);
+            h.setStyle("-fx-alignment: CENTER_LEFT;");
+            return h;
+        }
+
+        HBox h = new HBox(8, new Label("列設定"), flex, reset);
         h.setStyle("-fx-alignment: CENTER_LEFT;");
         return h;
     }

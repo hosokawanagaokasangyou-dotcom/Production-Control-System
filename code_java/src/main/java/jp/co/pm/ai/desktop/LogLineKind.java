@@ -26,8 +26,8 @@ enum LogLineKind {
         if (s.contains("[error]")
                 || s.contains("traceback")
                 || s.contains("planningvalidationerror")
-                || s.contains("\u5931\u6557")
-                || s.contains("\u30a8\u30e9\u30fc")) {
+                || s.contains("失敗")
+                || s.contains("エラー")) {
             return true;
         }
         if (s.contains("exception")) {
@@ -43,7 +43,7 @@ enum LogLineKind {
         return s.contains("[warn")
                 || s.contains("warning")
                 || s.contains("warn:")
-                || s.contains("\u8b66\u544a")
+                || s.contains("警告")
                 || s.contains("deprecated")
                 || s.contains("userwarning");
     }

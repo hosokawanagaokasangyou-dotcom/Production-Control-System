@@ -41,6 +41,18 @@ import java.util.List;
  * @param equipmentGanttHeaderHeightPercent 見出し行（日付・機械名・工程名・時刻軸）の高さ（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
+ * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
+ * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
+ * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
+ * @param equipmentGanttPersonBadgeFillHex バッジ背景色（#RRGGBB）
+ * @param equipmentGanttPersonBadgeTextHex バッジ文字色
+ * @param equipmentGanttPersonBadgeStrokeHex バッジ枠色
+ * @param equipmentGanttPersonBadgeStrokeWidth バッジ枠の太さ（px 相当）
+ * @param equipmentGanttPersonBadgeCornerRadius 角丸（ピルでないとき）
+ * @param equipmentGanttPersonBadgePill カプセル形状
+ * @param equipmentGanttPersonBadgeGlowColorHex グロー（DropShadow）の色
+ * @param equipmentGanttPersonBadgeGlowRadius グロー半径
+ * @param equipmentGanttPersonBadgeGlowSpread DropShadow の spread（0〜1）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -76,9 +88,55 @@ public record DesktopSessionState(
         double equipmentGanttRowHeightPercent,
         double equipmentGanttHeaderHeightPercent,
         double equipmentGanttSlotWidthPercent,
-        double equipmentGanttShiftWheelHScrollPercent) {
+        double equipmentGanttShiftWheelHScrollPercent,
+        boolean equipmentGanttPersonBadgeEnabled,
+        String equipmentGanttPersonBadgeFontFamily,
+        double equipmentGanttPersonBadgeFontPercent,
+        String equipmentGanttPersonBadgeFillHex,
+        String equipmentGanttPersonBadgeTextHex,
+        String equipmentGanttPersonBadgeStrokeHex,
+        double equipmentGanttPersonBadgeStrokeWidth,
+        double equipmentGanttPersonBadgeCornerRadius,
+        boolean equipmentGanttPersonBadgePill,
+        String equipmentGanttPersonBadgeGlowColorHex,
+        double equipmentGanttPersonBadgeGlowRadius,
+        double equipmentGanttPersonBadgeGlowSpread) {
+
+    /**
+     * セッション値と {@link PersonBadgeStyle#defaultStyle()} をマージした実効スタイル。
+     */
+    public PersonBadgeStyle resolvedPersonBadgeStyle() {
+        PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
+        return new PersonBadgeStyle(
+                nz(equipmentGanttPersonBadgeFontFamily(), d.fontFamily()),
+                equipmentGanttPersonBadgeFontPercent() > 0 && equipmentGanttPersonBadgeFontPercent() <= 300
+                        ? equipmentGanttPersonBadgeFontPercent()
+                        : d.fontPercent(),
+                nz(equipmentGanttPersonBadgeFillHex(), d.fillHex()),
+                nz(equipmentGanttPersonBadgeTextHex(), d.textHex()),
+                nz(equipmentGanttPersonBadgeStrokeHex(), d.strokeHex()),
+                equipmentGanttPersonBadgeStrokeWidth() >= 0
+                        ? equipmentGanttPersonBadgeStrokeWidth()
+                        : d.strokeWidth(),
+                equipmentGanttPersonBadgeCornerRadius() >= 0
+                        ? equipmentGanttPersonBadgeCornerRadius()
+                        : d.cornerRadius(),
+                equipmentGanttPersonBadgePill(),
+                nz(equipmentGanttPersonBadgeGlowColorHex(), d.glowColorHex()),
+                equipmentGanttPersonBadgeGlowRadius() >= 0
+                        ? equipmentGanttPersonBadgeGlowRadius()
+                        : d.glowRadius(),
+                equipmentGanttPersonBadgeGlowSpread() >= 0 && equipmentGanttPersonBadgeGlowSpread() <= 1
+                        ? equipmentGanttPersonBadgeGlowSpread()
+                        : d.glowSpread());
+    }
+
+    private static String nz(String s, String def) {
+        return s != null && !s.isBlank() ? s.strip() : def;
+    }
 
     public static DesktopSessionState empty() {
+        PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
         return new DesktopSessionState(
                 "",
                 "",
@@ -113,6 +171,18 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 0d,
-                0d);
+                0d,
+                true,
+                "",
+                d.fontPercent(),
+                d.fillHex(),
+                d.textHex(),
+                d.strokeHex(),
+                d.strokeWidth(),
+                d.cornerRadius(),
+                d.pill(),
+                d.glowColorHex(),
+                d.glowRadius(),
+                d.glowSpread());
     }
 }

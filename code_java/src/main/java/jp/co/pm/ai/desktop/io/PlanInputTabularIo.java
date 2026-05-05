@@ -68,7 +68,7 @@ public final class PlanInputTabularIo {
             parseCsvLine(headerLine, headers);
             if (!headers.isEmpty()) {
                 String h0 = headers.get(0);
-                if (!h0.isEmpty() && h0.charAt(0) == '\ufeff') {
+                if (!h0.isEmpty() && h0.charAt(0) == '﻿') {
                     headers.set(0, h0.substring(1));
                 }
             }
@@ -125,7 +125,7 @@ public final class PlanInputTabularIo {
 
     private static void writeCsv(Path path, TabularSheet data) throws IOException {
         try (BufferedWriter w = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-            w.write('\ufeff');
+            w.write('﻿');
             w.write(joinCsvLine(data.headers()));
             w.newLine();
             for (List<String> row : data.rows()) {

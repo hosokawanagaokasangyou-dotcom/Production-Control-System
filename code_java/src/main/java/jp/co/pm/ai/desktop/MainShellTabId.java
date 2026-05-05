@@ -12,10 +12,11 @@ public enum MainShellTabId {
     EXCLUDE_RULES("excludeRules"),
     ACTUALS_STATUS("actualsStatus"),
     RESULT_DISPATCH("resultDispatch"),
-    MACHINE_CALENDAR_JSON("machineCalendarJson"),
     PLAN_RESULT_VIEWER("planResultViewer"),
     EQUIPMENT_GANTT_GRAPHIC("equipmentGanttGraphic"),
+    GANTT_PERSON_BADGE_DESIGN("ganttPersonBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
+    MACHINE_CALENDAR_JSON("machineCalendarJson"),
     DISPATCH_INTERACTIVE("dispatchInteractive");
 
     private final String key;

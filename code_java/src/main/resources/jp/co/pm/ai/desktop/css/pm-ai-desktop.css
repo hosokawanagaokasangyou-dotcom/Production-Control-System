@@ -163,19 +163,6 @@
     -fx-opacity: 0.5;
 }
 
-/* 段階1/2 進捗: 配台計画手動修正タブと同じ ProgressIndicator(22) + ProgressBar(prefWidth 220)・既定 Modena／テーマ色 */
-
-.pm-run-tab .pm-stage-run-progress-box {
-    -fx-spacing: 8;
-    -fx-alignment: CENTER_LEFT;
-    -fx-padding: 0 0 8 0;
-}
-
-.pm-app-toolbar .pm-shell-stage-progress {
-    -fx-spacing: 8;
-    -fx-alignment: CENTER_LEFT;
-}
-
 /* Plan result viewer (JSON): accordion source strip + side tab panes for vertical space */
 
 .pm-plan-result-viewer .label.pm-plan-result-viewer-hint-inline {

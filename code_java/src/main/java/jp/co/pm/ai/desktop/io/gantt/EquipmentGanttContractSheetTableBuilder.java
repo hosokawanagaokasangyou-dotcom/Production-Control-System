@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,9 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
  *
  * <p>{@code sorted_dates} は計画ホライズン全体を含むことがあり、イベントがまだ無い暦日が先頭に並ぶ。
  * その日はタイムラインがすべて空になるため、グラフィック用の暦日は {@code timeline_events} に現れる日付に限定する。
+ *
+ * <p>設備列キーと {@code machine} の対応づけは、Excel 出力側の
+ * {@code _eq_grid_events_for_equipment_column} と同様に正規化照合する（厳密一致のみだと表記ゆれで行が空になる）。
  */
 public final class EquipmentGanttContractSheetTableBuilder {
 
@@ -44,7 +49,18 @@ public final class EquipmentGanttContractSheetTableBuilder {
 
     private EquipmentGanttContractSheetTableBuilder() {}
 
+    /**
+     * 契約 JSON から表と担当バッジ列（スロットごと）を返す。
+     *
+     * @deprecated 呼び出し側は {@link #buildBundleFromContractPath(Path)} を使用すること。
+     */
+    @Deprecated
     public static JsonTableIo.SheetTable buildFromContractPath(Path contractPath) throws IOException {
+        return buildBundleFromContractPath(contractPath).table();
+    }
+
+    public static EquipmentGanttSheetBundle buildBundleFromContractPath(Path contractPath)
+            throws IOException {
         JsonNode root = JSON.readTree(Files.readString(contractPath, StandardCharsets.UTF_8));
         JsonNode packed = root.get("kwargs_packed");
         if (packed == null || !packed.isObject()) {
@@ -87,6 +103,9 @@ public final class EquipmentGanttContractSheetTableBuilder {
             }
         }
 
+        Map<String, List<TimelineEvent>> machineToEvents = buildMachineToEventsMap(events);
+        List<String> machineHeaderLabels = equipmentScheduleHeaderLabels(equipmentLines);
+
         List<LocalTime> slotStarts = computeSlotTimes(events);
         List<String> columns = new ArrayList<>();
         columns.add(COL_DATE);
@@ -98,6 +117,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
         }
 
         List<Map<String, String>> rows = new ArrayList<>();
+        List<List<String>> badgeSlotRows = new ArrayList<>();
 
         List<LocalDate> graphicDays = graphicCalendarDates(events, sortedDates);
         for (LocalDate day : graphicDays) {
@@ -106,27 +126,39 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 section.put(col, col.equals(COL_DATE) ? formatSectionBanner(day) : "");
             }
             rows.add(section);
+            badgeSlotRows.add(emptyBadgeSlots(slotStarts));
 
-            for (String equipLine : equipmentLines) {
+            for (int eqIdx = 0; eqIdx < equipmentLines.size(); eqIdx++) {
+                String equipLine = equipmentLines.get(eqIdx);
                 String[] split = splitEquipmentLine(equipLine);
                 String proc = split[0];
-                String mach = split[1];
+                String machDisplay = machineHeaderLabels.get(eqIdx);
                 Map<String, String> row = new LinkedHashMap<>();
                 row.put(COL_DATE, "");
-                row.put(COL_MACH, mach);
+                row.put(COL_MACH, machDisplay);
                 row.put(COL_PROC, proc);
                 row.put(COL_TASK, "—");
 
+                List<TimelineEvent> columnEvents =
+                        new ArrayList<>(eventsForEquipmentColumn(machineToEvents, equipLine));
+                columnEvents.sort(
+                        Comparator.comparing(
+                                        (TimelineEvent e) ->
+                                                e.start != null
+                                                        ? e.start
+                                                        : LocalDateTime.MIN)
+                                .thenComparing(
+                                        e -> e.taskId != null ? e.taskId : ""));
+
+                List<String> badgeSlots = new ArrayList<>();
                 for (LocalTime slotStart : slotStarts) {
                     String col = formatSlotColumn(slotStart);
                     LocalDateTime winStart = LocalDateTime.of(day, slotStart);
                     LocalDateTime winEnd = winStart.plusMinutes(SLOT_MINUTES);
                     String cell = "";
-                    for (TimelineEvent ev : events) {
+                    String badgeCell = "";
+                    for (TimelineEvent ev : columnEvents) {
                         if (!eventTouchesCalendarDay(ev, day)) {
-                            continue;
-                        }
-                        if (!equipLine.equals(ev.machine)) {
                             continue;
                         }
                         if (!rangesOverlap(ev.start, ev.end, winStart, winEnd)) {
@@ -136,15 +168,127 @@ public final class EquipmentGanttContractSheetTableBuilder {
                             continue;
                         }
                         cell = ev.cellLabel();
+                        badgeCell = ev.badgeSlotFragment();
                         break;
                     }
                     row.put(col, cell);
+                    badgeSlots.add(badgeCell);
                 }
                 rows.add(row);
+                badgeSlotRows.add(badgeSlots);
             }
         }
 
-        return new JsonTableIo.SheetTable(columns, rows);
+        return new EquipmentGanttSheetBundle(
+                new JsonTableIo.SheetTable(columns, rows), badgeSlotRows);
+    }
+
+    private static List<String> emptyBadgeSlots(List<LocalTime> slotStarts) {
+        List<String> z = new ArrayList<>();
+        for (int i = 0; i < slotStarts.size(); i++) {
+            z.add("");
+        }
+        return z;
+    }
+
+    /**
+     * Python {@code _normalize_equipment_match_key} と同等（NFKC・NBSP/全角空白・ゼロ幅・連続空白）。
+     */
+    static String normalizeEquipmentMatchKey(String val) {
+        if (val == null) {
+            return "";
+        }
+        String t = Normalizer.normalize(val, Normalizer.Form.NFKC);
+        t = t.replace('\u00a0', ' ').replace('\u3000', ' ');
+        t = t.replaceAll("[\u200b\u200c\u200d\ufeff]", "");
+        t = t.replaceAll("\\s+", " ").strip();
+        return t;
+    }
+
+    /** timeline_events を ev.machine 文字列（JSON 上の生キー）で束ねる。挿入順を保つ。 */
+    private static Map<String, List<TimelineEvent>> buildMachineToEventsMap(
+            List<TimelineEvent> events) {
+        Map<String, List<TimelineEvent>> map = new LinkedHashMap<>();
+        for (TimelineEvent ev : events) {
+            String mk = ev.machine != null ? ev.machine : "";
+            map.computeIfAbsent(mk, k -> new ArrayList<>()).add(ev);
+        }
+        return map;
+    }
+
+    /**
+     * Python {@code _eq_grid_events_for_equipment_column} と同じ解決順で、設備列に紐づくイベント一覧を返す。
+     */
+    static List<TimelineEvent> eventsForEquipmentColumn(
+            Map<String, List<TimelineEvent>> machineToEvents, String eqCol) {
+        if (eqCol == null || eqCol.isEmpty() || machineToEvents.isEmpty()) {
+            return List.of();
+        }
+        List<TimelineEvent> evs = machineToEvents.get(eqCol);
+        if (evs != null && !evs.isEmpty()) {
+            return evs;
+        }
+        String nk = normalizeEquipmentMatchKey(eqCol);
+        if (nk.isEmpty()) {
+            return List.of();
+        }
+        for (Map.Entry<String, List<TimelineEvent>> e : machineToEvents.entrySet()) {
+            if (normalizeEquipmentMatchKey(e.getKey()).equals(nk)) {
+                return e.getValue();
+            }
+        }
+        String[] pmEq = splitEquipmentLine(eqCol);
+        String peN = normalizeEquipmentMatchKey(pmEq[0]);
+        String meN = normalizeEquipmentMatchKey(pmEq[1]);
+        if (!peN.isEmpty() && !meN.isEmpty()) {
+            for (Map.Entry<String, List<TimelineEvent>> e : machineToEvents.entrySet()) {
+                String[] pmMk = splitEquipmentLine(e.getKey());
+                String pk = normalizeEquipmentMatchKey(pmMk[0]);
+                String mkM = normalizeEquipmentMatchKey(pmMk[1]);
+                if (peN.equals(pk) && meN.equals(mkM)) {
+                    return e.getValue();
+                }
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Python {@code _equipment_schedule_header_labels} と同様。
+     * 機械名が複数行で重なるときだけ「機械名（工程名）」で区別して Excel と視認性を揃える。
+     */
+    static List<String> equipmentScheduleHeaderLabels(List<String> equipmentList) {
+        List<String> raw = new ArrayList<>(equipmentList.size());
+        for (String eq : equipmentList) {
+            String s = eq != null ? eq.strip() : "";
+            if (s.contains("+")) {
+                String mpart = s.split("\\+", 2)[1].strip();
+                raw.add(!mpart.isEmpty() ? mpart : s);
+            } else {
+                raw.add(s);
+            }
+        }
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String r : raw) {
+            counts.put(r, counts.getOrDefault(r, 0) + 1);
+        }
+        List<String> out = new ArrayList<>(equipmentList.size());
+        for (int i = 0; i < equipmentList.size(); i++) {
+            String eq = equipmentList.get(i);
+            String r = raw.get(i);
+            if (counts.getOrDefault(r, 0) > 1) {
+                String s = eq != null ? eq.strip() : "";
+                if (s.contains("+")) {
+                    String p = s.split("\\+", 2)[0].strip();
+                    out.add((!p.isEmpty()) ? (r + "（" + p + "）") : r);
+                } else {
+                    out.add(r);
+                }
+            } else {
+                out.add(r);
+            }
+        }
+        return out;
     }
 
     /**
@@ -265,6 +409,10 @@ public final class EquipmentGanttContractSheetTableBuilder {
         final LocalDateTime start;
         final LocalDateTime end;
         final Long unitM;
+        /** メイン担当（JSON {@code op}）。 */
+        final String op;
+        /** サブ担当など（JSON {@code sub}）。 */
+        final String sub;
         final List<List<LocalDateTime>> breaks;
 
         TimelineEvent(
@@ -275,6 +423,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 LocalDateTime start,
                 LocalDateTime end,
                 Long unitM,
+                String op,
+                String sub,
                 List<List<LocalDateTime>> breaks) {
             this.date = date;
             this.machine = machine;
@@ -283,6 +433,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
             this.start = start;
             this.end = end;
             this.unitM = unitM;
+            this.op = op != null ? op : "";
+            this.sub = sub != null ? sub : "";
             this.breaks = breaks;
         }
 
@@ -302,6 +454,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
             String machine = text(n, "machine");
             String taskId = text(n, "task_id");
             String eventKind = text(n, "event_kind");
+            String op = text(n, "op");
+            String sub = text(n, "sub");
             Long unitM = null;
             if (n.has("unit_m") && n.get("unit_m").isNumber()) {
                 unitM = n.get("unit_m").longValue();
@@ -325,7 +479,7 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     }
                 }
             }
-            return new TimelineEvent(date, machine, taskId, eventKind, start, end, unitM, breaks);
+            return new TimelineEvent(date, machine, taskId, eventKind, start, end, unitM, op, sub, breaks);
         }
 
         static String text(JsonNode n, String field) {
@@ -368,6 +522,18 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 return eventKind;
             }
             return sb.toString();
+        }
+
+        /**
+         * タイムスロット1マスに書き込むバッジセル（複数人は {@link PersonNameBadgeText#UNIT_SEPARATOR} 連結）。
+         */
+        String badgeSlotFragment() {
+            boolean startupSplit =
+                    "machine_daily_startup".equals(eventKind)
+                            || "machine_daily_inspection".equals(eventKind)
+                            || "daily_inspection".equals(eventKind);
+            return PersonNameBadgeText.joinBadgeCells(
+                    PersonNameBadgeText.badgeListFromOpSub(op, sub, startupSplit));
         }
     }
 }

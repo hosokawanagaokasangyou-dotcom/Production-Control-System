@@ -48,11 +48,11 @@ public final class ResultDispatchTableTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String HINT_TEXT =
-            "PM_AI_RESULT_DISPATCH_TABLE_DIR \u307e\u305f\u306f\u30c7\u30d5\u30a9\u30eb\u30c8\u306e code/output/"
-                    + " \u914d\u4e0b\u306e JSON \u3092\u8868\u793a\u3057\u307e\u3059\u3002\u518d\u8aad\u307f\u3067"
-                    + "\u6700\u65b0\u5316\u3057\u307e\u3059\u3002"
-                    + " ControlsFX SpreadsheetView \uff08\u6bb5\u968e1\u6210\u5f62\u7d50\u679c\u3068\u540c\u3058"
-                    + "\u5217\u30d5\u30a3\u30eb\u30bf\uff09\u3002";
+            "PM_AI_RESULT_DISPATCH_TABLE_DIR またはデフォルトの code/output/"
+                    + " 配下の JSON を表示します。再読みで"
+                    + "最新化します。"
+                    + " ControlsFX SpreadsheetView （段階1成形結果と同じ"
+                    + "列フィルタ）。";
 
     @FXML
     private Button refreshButton;
@@ -136,7 +136,7 @@ public final class ResultDispatchTableTabController {
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
             shell.appendLog(
-                    "[result-dispatch-json] \u5217\u304c\u3042\u308a\u307e\u305b\u3093\uff08\u5148\u306b\u518d\u8aad\u307f\uff09");
+                    "[result-dispatch-json] 列がありません（先に再読み）");
             return;
         }
         SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
@@ -213,7 +213,7 @@ public final class ResultDispatchTableTabController {
         Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
         pathLabel.setText(path.toString());
         if (!Files.isRegularFile(path)) {
-            statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057");
+            statusLabel.setText("ファイルなし");
             metaText.setText("");
             applyEmpty();
             refreshButton.setDisable(false);
@@ -229,7 +229,7 @@ public final class ResultDispatchTableTabController {
             JsonNode columnsNode = root.get("columns");
             JsonNode rowsNode = root.get("rows");
             if (columnsNode == null || !columnsNode.isArray() || rowsNode == null || !rowsNode.isArray()) {
-                statusLabel.setText("JSON \u69cb\u9020\u304c\u4e0d\u6b63");
+                statusLabel.setText("JSON 構造が不正");
                 metaText.setText("");
                 applyEmpty();
                 refreshButton.setDisable(false);
@@ -264,7 +264,7 @@ public final class ResultDispatchTableTabController {
                             + ", loaded_rows="
                             + rowMaps.size();
             metaText.setText(meta);
-            statusLabel.setText(rowMaps.size() + " \u884c");
+            statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();
             headersRef.addAll(headerOrder);

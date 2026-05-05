@@ -74,6 +74,126 @@ public final class MasterReadSummaryTabController {
         }
     }
 
+    /** speed.lookup_sample row for {@link #speedSampleTable}. */
+    public static final class SpeedSampleRow {
+        private final String process;
+        private final String machine;
+        private final String speedMPerMin;
+
+        public SpeedSampleRow(String process, String machine, String speedMPerMin) {
+            this.process = process;
+            this.machine = machine;
+            this.speedMPerMin = speedMPerMin;
+        }
+
+        public String getProcess() {
+            return process;
+        }
+
+        public String getMachine() {
+            return machine;
+        }
+
+        public String getSpeedMPerMin() {
+            return speedMPerMin;
+        }
+    }
+
+    /** need_base_required_sample row. */
+    public static final class NeedBaseRow {
+        private final String combo;
+        private final String required;
+
+        public NeedBaseRow(String combo, String required) {
+            this.combo = combo;
+            this.required = required;
+        }
+
+        public String getCombo() {
+            return combo;
+        }
+
+        public String getRequired() {
+            return required;
+        }
+    }
+
+    /** need_rules_detail row. */
+    public static final class NeedRuleRow {
+        private final String order;
+        private final String condition;
+        private final String overrideCount;
+
+        public NeedRuleRow(String order, String condition, String overrideCount) {
+            this.order = order;
+            this.condition = condition;
+            this.overrideCount = overrideCount;
+        }
+
+        public String getOrder() {
+            return order;
+        }
+
+        public String getCondition() {
+            return condition;
+        }
+
+        public String getOverrideCount() {
+            return overrideCount;
+        }
+    }
+
+    /** calendar_top_dates row. */
+    public static final class CalendarTopRow {
+        private final String date;
+        private final String intervals;
+
+        public CalendarTopRow(String date, String intervals) {
+            this.date = date;
+            this.intervals = intervals;
+        }
+
+        public String getDate() {
+            return date;
+        }
+
+        public String getIntervals() {
+            return intervals;
+        }
+    }
+
+    /** exclude_rules_sheet.rules_sample row. */
+    public static final class ExcludeRuleSampleRow {
+        private final String process;
+        private final String machine;
+        private final String excludeFlag;
+        private final String logicParsedShort;
+
+        public ExcludeRuleSampleRow(
+                String process, String machine, String excludeFlag, String logicParsedShort) {
+            this.process = process;
+            this.machine = machine;
+            this.excludeFlag = excludeFlag;
+            this.logicParsedShort = logicParsedShort;
+        }
+
+        public String getProcess() {
+            return process;
+        }
+
+        public String getMachine() {
+            return machine;
+        }
+
+        public String getExcludeFlag() {
+            return excludeFlag;
+        }
+
+        public String getLogicParsedShort() {
+            return logicParsedShort;
+        }
+    }
+
     @FXML
     private Button refreshButton;
 
@@ -103,6 +223,87 @@ public final class MasterReadSummaryTabController {
 
     @FXML
     private GridPane attendanceGrid;
+
+    @FXML
+    private GridPane skillsNeedGrid;
+
+    @FXML
+    private GridPane teamComboGrid;
+
+    @FXML
+    private GridPane machineCalendarGrid;
+
+    @FXML
+    private GridPane appConfigGrid;
+
+    @FXML
+    private GridPane excludeRulesGrid;
+
+    @FXML
+    private TableView<ExcludeRuleSampleRow> excludeRulesSampleTable;
+
+    @FXML
+    private TableColumn<ExcludeRuleSampleRow, String> colExProcess;
+
+    @FXML
+    private TableColumn<ExcludeRuleSampleRow, String> colExMachine;
+
+    @FXML
+    private TableColumn<ExcludeRuleSampleRow, String> colExFlag;
+
+    @FXML
+    private TableColumn<ExcludeRuleSampleRow, String> colExParsed;
+
+    @FXML
+    private GridPane planningConstantsGrid;
+
+    @FXML
+    private TableView<SpeedSampleRow> speedSampleTable;
+
+    @FXML
+    private TableColumn<SpeedSampleRow, String> colSpeedProcess;
+
+    @FXML
+    private TableColumn<SpeedSampleRow, String> colSpeedMachine;
+
+    @FXML
+    private TableColumn<SpeedSampleRow, String> colSpeedMpm;
+
+    @FXML
+    private TableView<NeedBaseRow> needBaseTable;
+
+    @FXML
+    private TableColumn<NeedBaseRow, String> colNeedCombo;
+
+    @FXML
+    private TableColumn<NeedBaseRow, String> colNeedReq;
+
+    @FXML
+    private TableView<NeedRuleRow> needRulesTable;
+
+    @FXML
+    private TableColumn<NeedRuleRow, String> colRuleOrder;
+
+    @FXML
+    private TableColumn<NeedRuleRow, String> colRuleCond;
+
+    @FXML
+    private TableColumn<NeedRuleRow, String> colRuleOv;
+
+    @FXML
+    private TableView<CalendarTopRow> calendarTopDatesTable;
+
+    @FXML
+    private TableColumn<CalendarTopRow, String> colCalDate;
+
+    @FXML
+    private TableColumn<CalendarTopRow, String> colCalIv;
+
+    @FXML
+    private ListView<String> allSheetsList;
+
+    @FXML
+    private ListView<String> attendanceSheetsList;
 
     @FXML
     private TableView<SheetCheckRow> sheetTable;
@@ -138,6 +339,27 @@ public final class MasterReadSummaryTabController {
         colNote.setCellValueFactory(new PropertyValueFactory<>("note"));
         sheetTable.setItems(FXCollections.observableArrayList());
         warningsList.setItems(FXCollections.observableArrayList());
+        allSheetsList.setItems(FXCollections.observableArrayList());
+        attendanceSheetsList.setItems(FXCollections.observableArrayList());
+        speedSampleTable.setItems(FXCollections.observableArrayList());
+        needBaseTable.setItems(FXCollections.observableArrayList());
+        needRulesTable.setItems(FXCollections.observableArrayList());
+        calendarTopDatesTable.setItems(FXCollections.observableArrayList());
+        colSpeedProcess.setCellValueFactory(new PropertyValueFactory<>("process"));
+        colSpeedMachine.setCellValueFactory(new PropertyValueFactory<>("machine"));
+        colSpeedMpm.setCellValueFactory(new PropertyValueFactory<>("speedMPerMin"));
+        colNeedCombo.setCellValueFactory(new PropertyValueFactory<>("combo"));
+        colNeedReq.setCellValueFactory(new PropertyValueFactory<>("required"));
+        colRuleOrder.setCellValueFactory(new PropertyValueFactory<>("order"));
+        colRuleCond.setCellValueFactory(new PropertyValueFactory<>("condition"));
+        colRuleOv.setCellValueFactory(new PropertyValueFactory<>("overrideCount"));
+        colCalDate.setCellValueFactory(new PropertyValueFactory<>("date"));
+        colCalIv.setCellValueFactory(new PropertyValueFactory<>("intervals"));
+        excludeRulesSampleTable.setItems(FXCollections.observableArrayList());
+        colExProcess.setCellValueFactory(new PropertyValueFactory<>("process"));
+        colExMachine.setCellValueFactory(new PropertyValueFactory<>("machine"));
+        colExFlag.setCellValueFactory(new PropertyValueFactory<>("excludeFlag"));
+        colExParsed.setCellValueFactory(new PropertyValueFactory<>("logicParsedShort"));
     }
 
     void bindShell(MainShellController shell) {
@@ -149,7 +371,7 @@ public final class MasterReadSummaryTabController {
     private void onRefreshAction() {
         refreshButton.setDisable(true);
         openExcelButton.setDisable(true);
-        statusLabel.setText("\u53d6\u5f97\u4e2d...");
+        statusLabel.setText("取得中...");
         RunRequest req = requestFactory.get();
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(
@@ -180,6 +402,21 @@ public final class MasterReadSummaryTabController {
         envGrid.getChildren().clear();
         mainGrid.getChildren().clear();
         attendanceGrid.getChildren().clear();
+        skillsNeedGrid.getChildren().clear();
+        teamComboGrid.getChildren().clear();
+        machineCalendarGrid.getChildren().clear();
+        appConfigGrid.getChildren().clear();
+        excludeRulesGrid.getChildren().clear();
+        if (excludeRulesSampleTable != null) {
+            excludeRulesSampleTable.getItems().clear();
+        }
+        planningConstantsGrid.getChildren().clear();
+        speedSampleTable.getItems().clear();
+        needBaseTable.getItems().clear();
+        needRulesTable.getItems().clear();
+        calendarTopDatesTable.getItems().clear();
+        allSheetsList.getItems().clear();
+        attendanceSheetsList.getItems().clear();
         sheetTable.getItems().clear();
         warningsList.getItems().clear();
         lastRawJson = "";
@@ -201,7 +438,7 @@ public final class MasterReadSummaryTabController {
             statusLabel.setText(
                     "exit="
                             + exitCode
-                            + (root.path("ok").asBoolean(true) ? " OK" : " (\u8981\u78ba\u8a8d)"));
+                            + (root.path("ok").asBoolean(true) ? " OK" : " (要確認)"));
         } catch (Exception e) {
             statusLabel.setText("JSON parse error: " + e.getMessage());
             shell.appendLog("[master-summary] parse: " + e.getMessage());
@@ -230,7 +467,7 @@ public final class MasterReadSummaryTabController {
     private void applyJson(JsonNode root) {
         resolvedPathField.setText(root.path("resolved_path").asText(""));
         boolean exists = root.path("file_exists").asBoolean(false);
-        fileExistsLabel.setText(exists ? "\u30d5\u30a1\u30a4\u30eb: \u3042\u308a" : "\u30d5\u30a1\u30a4\u30eb: \u306a\u3057");
+        fileExistsLabel.setText(exists ? "ファイル: あり" : "ファイル: なし");
         cwdLabel.setText("cwd: " + root.path("cwd").asText(""));
 
         String rp = root.path("resolved_path").asText("");
@@ -245,34 +482,68 @@ public final class MasterReadSummaryTabController {
         }
 
         envGrid.getChildren().clear();
-        int row = 0;
+        int         row = 0;
+        addGridRow(
+                envGrid,
+                row++,
+                "MASTER_WORKBOOK_FILE",
+                root.path("master_workbook_file_env").asText(""));
+        addGridRow(
+                envGrid,
+                row++,
+                "PM_AI_MASTER_WORKBOOK",
+                root.path("pm_ai_master_workbook_env").asText(""));
         addGridRow(
                 envGrid,
                 row++,
                 "MASTER_USE_SPEED_SHEET",
                 root.path("master_use_speed_sheet_env").asText(""));
+        addGridRow(
+                envGrid,
+                row++,
+                "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET",
+                root.path("team_assign_use_master_combo_sheet_env").asText(""));
+        addGridRow(
+                envGrid,
+                row++,
+                "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW",
+                root.path("team_assign_ignore_need_surplus_row_env").asText(""));
+        addGridRow(
+                envGrid,
+                row++,
+                "MASTER_SPEED_SHEET_NAME",
+                root.path("speed").path("master_speed_sheet_name_env").asText(""));
+        addGridRow(
+                envGrid,
+                row++,
+                "PM_AI_EXCLUDE_RULES_JSON",
+                root.path("pm_ai_exclude_rules_json_env").asText(""));
         JsonNode speed = root.path("speed");
         boolean sen = speed.path("enabled").asBoolean(false);
         addGridRow(
                 envGrid,
                 row++,
-                "\u52a0\u5de5\u901f\u5ea6\u4e0a\u66f8\u304d\uff08speed\uff09",
-                sen ? "\u6709\u52b9" : "\u7121\u52b9");
+                "加工速度上書き（speed）",
+                sen ? "有効" : "無効");
         addGridRow(
                 envGrid,
                 row++,
-                "speed \u30b7\u30fc\u30c8",
+                "speed シート",
                 speed.path("sheet_name").asText(""));
         addGridRow(
                 envGrid,
                 row++,
-                "\u30c7\u30fc\u30bf\u958b\u59cb\u5217\uff081\u8d77\u7b97\uff09",
+                "データ開始列（1起算）",
                 String.valueOf(speed.path("first_data_col_1based").asInt(0)));
         addGridRow(
                 envGrid,
                 row++,
-                "\u8aad\u307f\u8fbc\u307f\u4ef6\u6570\uff08\u5de5\u7a0b+\u6a5f\u68b0\u30ad\u30fc\uff09",
+                "読み込み件数（工程+機械キー）",
                 String.valueOf(speed.path("lookup_entry_count").asInt(0)));
+
+        applySkillsNeedSection(root.path("skills_need"));
+
+        applyTeamComboSection(root.path("team_combinations"));
 
         mainGrid.getChildren().clear();
         row = 0;
@@ -280,29 +551,29 @@ public final class MasterReadSummaryTabController {
         addGridRow(
                 mainGrid,
                 row++,
-                "\u89e3\u6c7a\u30b7\u30fc\u30c8\u540d",
-                ms.path("resolved_name").asText("\u2014"));
+                "解決シート名",
+                ms.path("resolved_name").asText("—"));
         JsonNode fo = ms.path("factory_operating");
         addGridRow(
                 mainGrid,
                 row++,
-                "\u5de5\u5834\u67a2 A12",
+                "工場枢 A12",
                 formatTimeCell(fo, "a12", fo.path("effective").asBoolean(false)));
         addGridRow(
                 mainGrid,
                 row++,
-                "\u5de5\u5834\u67a2 B12",
+                "工場枢 B12",
                 formatTimeCell(fo, "b12", fo.path("effective").asBoolean(false)));
         JsonNode rs = ms.path("regular_shift");
         addGridRow(
                 mainGrid,
                 row++,
-                "\u5b9a\u5e38 A15",
+                "定常 A15",
                 formatTimeCell(rs, "a15", rs.path("effective").asBoolean(false)));
         addGridRow(
                 mainGrid,
                 row++,
-                "\u5b9a\u5e38 B15",
+                "定常 B15",
                 formatTimeCell(rs, "b15", rs.path("effective").asBoolean(false)));
 
         ObservableList<SheetCheckRow> sheetRows = FXCollections.observableArrayList();
@@ -312,25 +583,34 @@ public final class MasterReadSummaryTabController {
             r.setCategory(sheetKeyLabelJa(k));
             r.setSheetName(ch.path("sheet_name").asText(""));
             boolean pr = ch.path("present").asBoolean(false);
-            r.setStatus(pr ? "\u3042\u308a" : "\u306a\u3057");
+            r.setStatus(pr ? "あり" : "なし");
             String note = ch.path("note").asText("");
-            r.setNote("\u2014".equals(note) || note.isEmpty() ? (pr ? "" : "\u306a\u3057") : note);
+            r.setNote("—".equals(note) || note.isEmpty() ? (pr ? "" : "なし") : note);
             sheetRows.add(r);
         }
         sheetTable.setItems(sheetRows);
+
+        applyAppConfigSection(root.path("app_config_sheet"));
+        applyExcludeRulesSection(root.path("exclude_rules_sheet"));
+        applyPlanningConstantsSection(root.path("planning_constants"));
+        applyDetailTables(root);
+        applyAllSheetsList(root.withArray("all_sheet_names"));
+
+        applyMachineCalendarSection(root);
 
         attendanceGrid.getChildren().clear();
         JsonNode att = root.path("attendance");
         addGridRow(
                 attendanceGrid,
                 0,
-                "skills \u30e1\u30f3\u30d0\u30fc\u6570",
+                "skills メンバー数",
                 String.valueOf(att.path("skills_member_count").asInt(0)));
         addGridRow(
                 attendanceGrid,
                 1,
-                "\u52e4\u6020\u30b7\u30fc\u30c8\u6570\uff08\u4e00\u81f4\uff09",
+                "勤怠シート数（一致）",
                 String.valueOf(att.path("attendance_sheets_matched").asInt(0)));
+        applyAttendanceSheetsList(att.withArray("matched_sheet_names"));
 
         ObservableList<String> warns = FXCollections.observableArrayList();
         for (JsonNode w : root.withArray("warnings")) {
@@ -339,18 +619,532 @@ public final class MasterReadSummaryTabController {
         if (root.path("openpyxl_skip").asBoolean(false)) {
             warns.add(
                     0,
-                    "openpyxl: incompatible workbook marker (\u8a73\u7d30\u306f Python \u5074\u8b66\u544a)");
+                    "openpyxl: incompatible workbook marker (詳細は Python 側警告)");
         }
         if (warns.isEmpty()) {
-            warns.add("\u8b66\u544a\u306a\u3057");
+            warns.add("警告なし");
         }
         warningsList.setItems(warns);
+    }
+
+    private void applySkillsNeedSection(JsonNode sn) {
+        skillsNeedGrid.getChildren().clear();
+        if (sn == null || sn.isMissingNode()) {
+            addGridRow(skillsNeedGrid, 0, "状態", "—");
+            return;
+        }
+        int row = 0;
+        String fmt = sn.path("skills_sheet_format").asText("");
+        addGridRow(
+                skillsNeedGrid,
+                row++,
+                "skills 形式",
+                formatSkillsSheetFormatJa(fmt));
+        if (sn.hasNonNull("skip_reason")) {
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "スキップ",
+                    formatSkillsNeedSkipJa(sn.path("skip_reason").asText("")));
+        }
+        if (sn.hasNonNull("validation_error")) {
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "検証エラー",
+                    sn.path("validation_error").asText(""));
+        }
+        if (sn.hasNonNull("parse_error")) {
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "解析エラー",
+                    sn.path("parse_error").asText(""));
+        }
+        boolean loaded = sn.path("loaded").asBoolean(false);
+        addGridRow(
+                skillsNeedGrid,
+                row++,
+                "load_skills_and_needs",
+                loaded ? "成功（データあり）" : "未収集または空");
+        if (sn.path("empty_result").asBoolean(false)) {
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "補足",
+                    sn.path("note").asText(
+                            "メンバー・設備列が空"));
+        }
+        if (loaded) {
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "メンバー数",
+                    String.valueOf(sn.path("members_count").asInt(0)));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "設備列（工程×機械等）",
+                    String.valueOf(sn.path("equipment_columns").asInt(0)));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "need 工程×機械列数",
+                    String.valueOf(sn.path("need_combo_columns").asInt(0)));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "特別指定ルール数",
+                    String.valueOf(sn.path("need_rules_count").asInt(0)));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "配台時追加人数（組合せキー）",
+                    String.valueOf(sn.path("surplus_combo_entries").asInt(0)));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "メンバー（最多40人）",
+                    jsonArrayJoin(sn.withArray("member_names_sample")));
+            addGridRow(
+                    skillsNeedGrid,
+                    row++,
+                    "need キー（最多40）",
+                    jsonArrayJoin(sn.withArray("need_combo_keys_sample")));
+            if (sn.has("equipment_columns_sample")) {
+                addGridRow(
+                        skillsNeedGrid,
+                        row++,
+                        "設備列サンプル（先頭48）",
+                        jsonArrayJoin(sn.withArray("equipment_columns_sample")));
+            }
+            if (sn.has("surplus_sample") && sn.withArray("surplus_sample").size() > 0) {
+                addGridRow(
+                        skillsNeedGrid,
+                        row++,
+                        "配台時追加上限サンプル",
+                        String.valueOf(sn.withArray("surplus_sample").size())
+                                + " 件");
+            }
+        }
+    }
+
+    private void applyAppConfigSection(JsonNode ac) {
+        appConfigGrid.getChildren().clear();
+        if (ac == null || ac.isMissingNode()) {
+            addGridRow(appConfigGrid, 0, "状態", "—");
+            return;
+        }
+        int row = 0;
+        if (!ac.path("present").asBoolean(false)) {
+            addGridRow(
+                    appConfigGrid,
+                    row++,
+                    "シート",
+                    ac.path("note").asText("なし"));
+            return;
+        }
+        if (ac.path("openpyxl_cells_unreadable").asBoolean(false)) {
+            addGridRow(
+                    appConfigGrid,
+                    row++,
+                    "注意",
+                    ac.path("note").asText("openpyxl"));
+        }
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "A列 依頼NO（トレース）件数",
+                String.valueOf(ac.path("trace_task_ids_count").asInt(0)));
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "A列 サンプル",
+                jsonArrayJoin(ac.withArray("trace_task_ids_sample")));
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "B列 依頼NO（デバッグ）件数",
+                String.valueOf(ac.path("debug_task_ids_count").asInt(0)));
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "B列 サンプル",
+                jsonArrayJoin(ac.withArray("debug_task_ids_sample")));
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "Gemini 有効モデル数",
+                String.valueOf(ac.path("gemini_models_enabled_count").asInt(0)));
+        addGridRow(
+                appConfigGrid,
+                row++,
+                "Gemini モデルリスト",
+                jsonArrayJoin(ac.withArray("gemini_models_enabled_sample")));
+    }
+
+    private void applyExcludeRulesSection(JsonNode ex) {
+        excludeRulesGrid.getChildren().clear();
+        if (excludeRulesSampleTable != null) {
+            excludeRulesSampleTable.getItems().clear();
+        }
+        if (ex == null || ex.isMissingNode()) {
+            addGridRow(excludeRulesGrid, 0, "状態", "—");
+            return;
+        }
+        int row = 0;
+        if (!ex.path("present").asBoolean(false)) {
+            addGridRow(
+                    excludeRulesGrid,
+                    row++,
+                    "シート",
+                    ex.path("read_error")
+                            .asText(ex.path("error")
+                                    .asText(ex.path("note").asText("なし"))));
+            return;
+        }
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "期待シート名",
+                ex.path("expected_sheet_name").asText("—"));
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "解決後シート名",
+                ex.path("resolved_sheet_name").asText("—"));
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "行数/列数",
+                ex.path("rows").asInt(0) + " / " + ex.path("cols").asInt(0));
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "ルール行（工程名あり）",
+                String.valueOf(ex.path("rules_count").asInt(0)));
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "最初5列が空でない行数",
+                String.valueOf(ex.path("non_empty_rows_scan").asInt(0)));
+        if (ex.path("openpyxl_io_skipped_by_marker").asBoolean(false)) {
+            addGridRow(
+                    excludeRulesGrid,
+                    row++,
+                    "openpyxl",
+                    ex.path("note").asText("—"));
+        }
+        if (ex.hasNonNull("header_error")) {
+            addGridRow(
+                    excludeRulesGrid,
+                    row++,
+                    "見出し",
+                    ex.path("header_error").asText(""));
+        }
+        String envNote =
+                ex.path("pm_ai_exclude_rules_json_set").asBoolean(false)
+                        ? "（JSON 優先のため段階1はExcel行を見ない場合あり）"
+                        : "";
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "PM_AI_EXCLUDE_RULES_JSON",
+                (ex.path("pm_ai_exclude_rules_json_path").asText("").isEmpty()
+                                ? "（未設定）"
+                                : ex.path("pm_ai_exclude_rules_json_path").asText(""))
+                        + envNote);
+        addGridRow(
+                excludeRulesGrid,
+                row++,
+                "段階1との関係",
+                ex.path("stage1_effective_source_note").asText(""));
+
+        ObservableList<ExcludeRuleSampleRow> exRows = FXCollections.observableArrayList();
+        for (JsonNode r : ex.withArray("rules_sample")) {
+            exRows.add(
+                    new ExcludeRuleSampleRow(
+                            r.path("process").asText(""),
+                            r.path("machine").asText(""),
+                            r.path("exclude_flag").asText(""),
+                            summarizeExcludeParsedJson(r.path("logic_json_parsed"))));
+        }
+        if (excludeRulesSampleTable != null) {
+            excludeRulesSampleTable.setItems(exRows);
+        }
+    }
+
+    private static String summarizeExcludeParsedJson(JsonNode parsed) {
+        if (parsed == null || parsed.isNull() || parsed.isMissingNode()) {
+            return "";
+        }
+        if (parsed.isObject()) {
+            int ver = parsed.path("version").asInt(0);
+            String mode = parsed.path("mode").asText("");
+            boolean reqAll = parsed.path("require_all").asBoolean(false);
+            String tail = "";
+            if (parsed.has("conditions")) {
+                tail = ", conds~" + parsed.withArray("conditions").size();
+            }
+            return "v" + ver + " " + mode + (mode.equals("conditions") ? " all=" + reqAll : "")
+                    + tail;
+        }
+        return parsed.toString();
+    }
+
+    private void applyPlanningConstantsSection(JsonNode pc) {
+        planningConstantsGrid.getChildren().clear();
+        if (pc == null || pc.isMissingNode()) {
+            addGridRow(planningConstantsGrid, 0, "状態", "—");
+            return;
+        }
+        JsonNode rr = pc.withArray("config_task_ids_row_range");
+        String rng =
+                rr.size() >= 2
+                        ? rr.get(0).asInt() + "–" + rr.get(1).asInt()
+                        : "—";
+        addGridRow(
+                planningConstantsGrid,
+                0,
+                "機械カレンダースロット（分）",
+                String.valueOf(pc.path("machine_calendar_slot_minutes").asInt(0)));
+        addGridRow(
+                planningConstantsGrid,
+                1,
+                "解決後 speed シート名",
+                pc.path("resolved_speed_sheet_name").asText(""));
+        addGridRow(
+                planningConstantsGrid,
+                2,
+                "設定 依頼NO行範囲（1起算 Excel行）",
+                rng);
+    }
+
+    private void applyDetailTables(JsonNode root) {
+        JsonNode sp = root.path("speed").withArray("lookup_sample");
+        ObservableList<SpeedSampleRow> speedRows = FXCollections.observableArrayList();
+        for (JsonNode r : sp) {
+            speedRows.add(
+                    new SpeedSampleRow(
+                            r.path("process").asText(""),
+                            r.path("machine").asText(""),
+                            r.path("speed_m_per_min").asText("")));
+        }
+        speedSampleTable.setItems(speedRows);
+
+        JsonNode sn = root.path("skills_need");
+        ObservableList<NeedBaseRow> nb = FXCollections.observableArrayList();
+        for (JsonNode r : sn.withArray("need_base_required_sample")) {
+            nb.add(
+                    new NeedBaseRow(
+                            r.path("combo").asText(""),
+                            String.valueOf(r.path("required").asInt(0))));
+        }
+        needBaseTable.setItems(nb);
+
+        ObservableList<NeedRuleRow> nr = FXCollections.observableArrayList();
+        for (JsonNode r : sn.withArray("need_rules_detail")) {
+            nr.add(
+                    new NeedRuleRow(
+                            String.valueOf(r.path("order").asInt(0)),
+                            r.path("condition").asText(""),
+                            String.valueOf(r.path("override_entry_count").asInt(0))));
+        }
+        needRulesTable.setItems(nr);
+
+        ObservableList<CalendarTopRow> ct = FXCollections.observableArrayList();
+        for (JsonNode r : sn.withArray("calendar_top_dates")) {
+            ct.add(
+                    new CalendarTopRow(
+                            r.path("date").asText(""),
+                            String.valueOf(r.path("intervals").asInt(0))));
+        }
+        calendarTopDatesTable.setItems(ct);
+    }
+
+    private void applyAllSheetsList(JsonNode arr) {
+        ObservableList<String> items = FXCollections.observableArrayList();
+        if (arr != null && arr.isArray()) {
+            for (JsonNode x : arr) {
+                items.add(x.asText(""));
+            }
+        }
+        allSheetsList.setItems(items);
+    }
+
+    private void applyAttendanceSheetsList(JsonNode arr) {
+        ObservableList<String> items = FXCollections.observableArrayList();
+        if (arr != null && arr.isArray()) {
+            for (JsonNode x : arr) {
+                items.add(x.asText(""));
+            }
+        }
+        attendanceSheetsList.setItems(items);
+    }
+
+    private void applyTeamComboSection(JsonNode tc) {
+        teamComboGrid.getChildren().clear();
+        if (tc == null || tc.isMissingNode()) {
+            addGridRow(teamComboGrid, 0, "状態", "—");
+            return;
+        }
+        int row = 0;
+        if (tc.hasNonNull("load_error")) {
+            addGridRow(
+                    teamComboGrid,
+                    row++,
+                    "読込エラー",
+                    tc.path("load_error").asText(""));
+            return;
+        }
+        addGridRow(
+                teamComboGrid,
+                row++,
+                "環境で組み合わせ表を使用",
+                tc.path("env_use_sheet_enabled").asBoolean(false)
+                        ? "はい"
+                        : "いいえ");
+        addGridRow(
+                teamComboGrid,
+                row++,
+                "工程+機械キー数（別）",
+                String.valueOf(tc.path("distinct_equipment_keys").asInt(0)));
+        addGridRow(
+                teamComboGrid,
+                row++,
+                "プリセット行合計",
+                String.valueOf(tc.path("preset_rows_total").asInt(0)));
+        addGridRow(
+                teamComboGrid,
+                row++,
+                "サンプルキー（最多20）",
+                jsonArrayJoin(tc.withArray("sample_equipment_keys")));
+    }
+
+    private void applyMachineCalendarSection(JsonNode root) {
+        machineCalendarGrid.getChildren().clear();
+        int row = 0;
+        JsonNode mcs = root.path("machine_calendar_sheet");
+        if (mcs.path("present").asBoolean(false)) {
+            addGridRow(
+                    machineCalendarGrid,
+                    row++,
+                    "シート行数/列数",
+                    mcs.path("rows").asInt(0) + " / " + mcs.path("cols").asInt(0));
+            if (mcs.has("equipment_like_columns")) {
+                addGridRow(
+                        machineCalendarGrid,
+                        row++,
+                        "設備列見込み",
+                        String.valueOf(mcs.path("equipment_like_columns").asInt(0)));
+            }
+            if (mcs.has("two_row_equipment_header")) {
+                addGridRow(
+                        machineCalendarGrid,
+                        row++,
+                        "ヘッダ",
+                        mcs.path("two_row_equipment_header").asBoolean(false)
+                                ? "2行（工程+機械）"
+                                : "1行");
+            }
+        } else {
+            String note = mcs.path("note").asText("");
+            String err = mcs.path("read_error").asText("");
+            addGridRow(
+                    machineCalendarGrid,
+                    row++,
+                    "機械カレンダー",
+                    (!note.isEmpty() ? note : err.isEmpty() ? "なし" : err));
+        }
+        JsonNode sn = root.path("skills_need");
+        if (sn.path("loaded").asBoolean(false)) {
+            if (sn.has("machine_calendar_days_with_blocks")) {
+                addGridRow(
+                        machineCalendarGrid,
+                        row++,
+                        "占有がある日（論理同一）",
+                        String.valueOf(sn.path("machine_calendar_days_with_blocks").asInt(0)));
+            }
+            if (sn.has("machine_calendar_intervals")) {
+                addGridRow(
+                        machineCalendarGrid,
+                        row++,
+                        "占有区間合計（論理同一）",
+                        String.valueOf(sn.path("machine_calendar_intervals").asInt(0)));
+            }
+            if (sn.hasNonNull("machine_calendar_occ_error")) {
+                addGridRow(
+                        machineCalendarGrid,
+                        row++,
+                        "占有集計エラー",
+                        sn.path("machine_calendar_occ_error").asText(""));
+            }
+        }
+        JsonNode md = root.path("machine_daily_startup");
+        if (md.path("present").asBoolean(false)) {
+            addGridRow(
+                    machineCalendarGrid,
+                    row++,
+                    "設定_機械_日次始業準備（データ行）",
+                    String.valueOf(md.path("data_rows").asInt(0)));
+        } else if (md.hasNonNull("read_error")) {
+            addGridRow(
+                    machineCalendarGrid,
+                    row++,
+                    "設定_機械_日次始業準備",
+                    md.path("read_error").asText(""));
+        } else {
+            addGridRow(
+                    machineCalendarGrid,
+                    row++,
+                    "設定_機械_日次始業準備",
+                    "シートなし");
+        }
+    }
+
+    private static String jsonArrayJoin(JsonNode arr) {
+        if (arr == null || !arr.isArray() || arr.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode x : arr) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(x.asText(""));
+        }
+        return sb.toString();
+    }
+
+    private static String formatSkillsSheetFormatJa(String fmt) {
+        if (fmt == null || fmt.isEmpty()) {
+            return "—";
+        }
+        return switch (fmt) {
+            case "two_row_header" -> "2行ヘッダ（工程+機械）";
+            case "single_row_header" -> "1行ヘッダ（旧互換）";
+            case "unknown" -> "不明";
+            default -> fmt;
+        };
+    }
+
+    private static String formatSkillsNeedSkipJa(String key) {
+        if (key == null || key.isEmpty()) {
+            return "";
+        }
+        return switch (key) {
+            case "openpyxl_incompatible_marker" ->
+                    "openpyxl 非対話マーカーのため未実行";
+            case "missing_skills_or_need_sheet" ->
+                    "skills / need シートがありません";
+            default -> key;
+        };
     }
 
     private static String formatTimeCell(JsonNode parent, String field, boolean effective) {
         String t = parent.path(field).asText("");
         if (t == null || t.isEmpty() || "null".equals(t)) {
-            return effective ? "\u2014" : "\uff08\u672a\u8a2d\u5b9a\u30fb\u65e2\u5b9a\u5024\u4f7f\u7528\u53ef\uff09";
+            return effective ? "—" : "（未設定・既定値使用可）";
         }
         return t;
     }
@@ -369,10 +1163,12 @@ public final class MasterReadSummaryTabController {
         return switch (key) {
             case "skills" -> "skills";
             case "need" -> "need";
-            case "machine_calendar" -> "\u6a5f\u68b0\u30ab\u30ec\u30f3\u30c0\u30fc";
-            case "team_combinations" -> "\u7d44\u307f\u5408\u308f\u305b\u8868";
+            case "machine_calendar" -> "機械カレンダー";
+            case "team_combinations" -> "組み合わせ表";
             case "speed" -> "speed";
-            case "machine_daily_startup" -> "\u8a2d\u5b9a_\u6a5f\u68b0_\u65e5\u6b21\u59cb\u696d\u6e96\u5099";
+            case "machine_daily_startup" -> "設定_機械_日次始業準備";
+            case "app_config" -> "設定";
+            case "exclude_dispatch_rules" -> "設定_配台不要工程";
             default -> key;
         };
     }
@@ -388,7 +1184,7 @@ public final class MasterReadSummaryTabController {
         }
         if (!Files.isRegularFile(target)) {
             shell.appendLog("[master-summary] Excel: file not found: " + target);
-            statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093");
+            statusLabel.setText("ファイルが見つかりません");
             return;
         }
         try {

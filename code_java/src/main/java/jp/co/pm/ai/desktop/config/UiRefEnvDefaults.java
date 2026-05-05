@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,13 +18,6 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 public final class UiRefEnvDefaults {
 
     static final String RESOURCE = "/jp/co/pm/ai/desktop/ui_ref_env_defaults.json";
-
-    /**
-     * VBA-era keys; JavaFX sets the macro workbook path only via the main field + {@code ProcessBuilder},
-     * not the env tab.
-     */
-    private static final Set<String> SKIP_KEYS_FOR_JAVAFX_UI =
-            Set.of("TASK_INPUT_WORKBOOK", "PM_AI_TASK_INPUT_WORKBOOK");
 
     private UiRefEnvDefaults() {}
 
@@ -42,9 +34,6 @@ public final class UiRefEnvDefaults {
             List<WorkbookEnvSheetReader.RowEntry> list = new ArrayList<>(p.entries.size());
             for (PayloadEntry e : p.entries) {
                 if (e == null || e.key == null || e.key.isBlank()) {
-                    continue;
-                }
-                if (SKIP_KEYS_FOR_JAVAFX_UI.contains(e.key.trim())) {
                     continue;
                 }
                 String v = e.value != null ? e.value : "";

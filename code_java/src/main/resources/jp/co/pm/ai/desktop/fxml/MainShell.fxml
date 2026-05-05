@@ -107,6 +107,12 @@
                         <fx:include fx:id="equipmentGanttGraphicTab" source="EquipmentGanttGraphicTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabGanttPersonBadgeDesign" closable="false"
+                     text="設備ガント・担当バッジ">
+                    <content>
+                        <fx:include fx:id="ganttPersonBadgeDesignTab" source="GanttPersonBadgeDesignTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabOperatorCard" closable="false"
                      text="オペレーターカード">
                     <content>

@@ -18,6 +18,7 @@ import javafx.geometry.Pos;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
@@ -34,7 +35,9 @@ import javafx.util.Duration;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
@@ -88,7 +91,16 @@ public final class EquipmentGanttGraphicTabController {
     /** 再描画用に保持する最新の選択シート（ズーム・テーマ変更時）。 */
     private JsonTableIo.SheetTable lastGraphicSheet;
 
+    /** 契約 JSON から得たバッジグリッド（{@link #DEFAULT_SHEET} 表示時のみ使用）。 */
+    private List<List<String>> loadedContractBadgeRows;
+
+    /** {@link #applyGraphicCenter} に渡す現在のバッジ行（シートに応じて null）。 */
+    private List<List<String>> badgeRowsForCurrentGraphic;
+
     private BorderPane graphicRootWrapper;
+
+    @FXML
+    private CheckBox personBadgeShowCheckBox;
 
     @FXML
     private Slider graphicZoomSlider;
@@ -401,6 +413,9 @@ public final class EquipmentGanttGraphicTabController {
             graphicShiftWheelHSlider.setValue(swh);
             graphicShiftWheelHLabel.setText(String.format("%.0f%%", swh));
         }
+        if (personBadgeShowCheckBox != null) {
+            personBadgeShowCheckBox.setSelected(s.equipmentGanttPersonBadgeEnabled());
+        }
     }
 
     private void wireGraphicSliderFlushOnDragEnd(Slider slider) {
@@ -498,6 +513,10 @@ public final class EquipmentGanttGraphicTabController {
         return graphicShiftWheelHSlider != null ? graphicShiftWheelHSlider.getValue() : 200d;
     }
 
+    boolean snapshotEquipmentGanttPersonBadgeEnabled() {
+        return personBadgeShowCheckBox == null || personBadgeShowCheckBox.isSelected();
+    }
+
     private void scheduleEquipmentGraphicPersist() {
         if (equipmentGraphicPersistDelay == null) {
             equipmentGraphicPersistDelay = new PauseTransition(Duration.millis(450));
@@ -539,6 +558,12 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private void onReloadButtonAction() {
         reloadFromFields();
+    }
+
+    @FXML
+    private void onPersonBadgeShowAction() {
+        scheduleEquipmentGraphicPersist();
+        requestThrottledGraphicRebuild();
     }
 
     @FXML
@@ -605,6 +630,7 @@ public final class EquipmentGanttGraphicTabController {
 
             SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
+            loadedContractBadgeRows = loaded.contractBadgeSlotRows();
             lastLoadedPlanPath = planPath.toString();
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
@@ -656,11 +682,18 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         lastGraphicSheet = st;
+        if (loadedContractBadgeRows != null && DEFAULT_SHEET.equals(name)) {
+            badgeRowsForCurrentGraphic = loadedContractBadgeRows;
+        } else {
+            badgeRowsForCurrentGraphic = null;
+        }
         applyGraphicCenter(st);
     }
 
     private void resetGraphicState(String placeholderMsg) {
         lastGraphicSheet = null;
+        loadedContractBadgeRows = null;
+        badgeRowsForCurrentGraphic = null;
         graphicRootWrapper = null;
         graphicWheelHookInstalled = false;
         if (contentPane != null) {
@@ -682,6 +715,9 @@ public final class EquipmentGanttGraphicTabController {
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
+        PersonBadgeStyle badgeStyle =
+                shell != null ? shell.currentPersonBadgeStyleForGantt() : PersonBadgeStyle.defaultStyle();
+        boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
         BorderPane gantt =
                 EquipmentGraphicGanttPane.build(
                         st.columns(),
@@ -696,7 +732,10 @@ public final class EquipmentGanttGraphicTabController {
                         snapshotEquipmentGanttDateColWidth(),
                         snapshotEquipmentGanttMachineColWidth(),
                         snapshotEquipmentGanttProcessColWidth(),
-                        snapshotEquipmentGanttShiftWheelHScrollPercent());
+                        snapshotEquipmentGanttShiftWheelHScrollPercent(),
+                        badgeRowsForCurrentGraphic,
+                        showBadges,
+                        badgeStyle);
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             contentPane.setCenter(graphicRootWrapper);
@@ -736,6 +775,11 @@ public final class EquipmentGanttGraphicTabController {
 
     /** メインの {@link DesktopTheme} 変更時に Canvas 帯の配色を合わせて再描画する。 */
     void refreshGraphicForTheme() {
+        flushGraphicRebuildNow();
+    }
+
+    /** 担当バッジデザイン変更時に設備ガントを即時再描画する。 */
+    void refreshGraphicForPersonBadge() {
         flushGraphicRebuildNow();
     }
 
@@ -788,7 +832,10 @@ public final class EquipmentGanttGraphicTabController {
         return p;
     }
 
-    private record SheetLoad(Map<String, JsonTableIo.SheetTable> sheets, String description) {}
+    private record SheetLoad(
+            Map<String, JsonTableIo.SheetTable> sheets,
+            String description,
+            List<List<String>> contractBadgeSlotRows) {}
 
     /**
      * ブック JSON は論理ビューがあればそれを読む（他シートの結合セル展開用）。
@@ -801,13 +848,13 @@ public final class EquipmentGanttGraphicTabController {
         if (fn0 != null && fn0.toString().endsWith(".json")) {
             String stem0 = fn0.toString().substring(0, fn0.toString().length() - 5);
             if (stem0.endsWith("_equipment_gantt_contract")) {
-                JsonTableIo.SheetTable ganttOnly =
-                        EquipmentGanttContractSheetTableBuilder.buildFromContractPath(
+                EquipmentGanttSheetBundle bundle =
+                        EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(
                                 planJsonFromField);
                 Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
-                m.put(DEFAULT_SHEET, ganttOnly);
+                m.put(DEFAULT_SHEET, bundle.table());
                 return new SheetLoad(
-                        m, fn0.toString() + " (設備ガント契約・直接)");
+                        m, fn0.toString() + " (設備ガント契約・直接)", bundle.badgeSlotRows());
             }
         }
         Path logical = resolveLogicalViewPath(planJsonFromField);
@@ -823,13 +870,15 @@ public final class EquipmentGanttGraphicTabController {
         } else {
             desc = planJsonFromField.getFileName().toString();
         }
+        List<List<String>> badgeRows = null;
         if (contract != null && Files.isRegularFile(contract)) {
-            JsonTableIo.SheetTable gantt =
-                    EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
-            sheets.put(DEFAULT_SHEET, gantt);
+            EquipmentGanttSheetBundle bundle =
+                    EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(contract);
+            sheets.put(DEFAULT_SHEET, bundle.table());
+            badgeRows = bundle.badgeSlotRows();
             desc = desc + " / " + contract.getFileName() + " (設備ガント帯)";
         }
-        return new SheetLoad(sheets, desc);
+        return new SheetLoad(sheets, desc, badgeRows);
     }
 
     /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */

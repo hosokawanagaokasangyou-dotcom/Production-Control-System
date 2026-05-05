@@ -17,11 +17,11 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 /**
- * Reads Excel sheet {@code \u8a2d\u5b9a_\u74b0\u5883\u5909\u6570} (same row rules as {@code workbook_env_bootstrap.py}).
+ * Reads Excel sheet {@code 設定_環境変数} (same row rules as {@code workbook_env_bootstrap.py}).
  */
 public final class WorkbookEnvSheetReader {
 
-    public static final String SHEET_NAME = "\u8a2d\u5b9a_\u74b0\u5883\u5909\u6570";
+    public static final String SHEET_NAME = "設定_環境変数";
 
     public record RowEntry(String key, String value, String description) {}
 
@@ -54,10 +54,10 @@ public final class WorkbookEnvSheetReader {
             int start = 0;
             Row head = rows.get(0);
             String hk = cellStr(fmt, head.getCell(0)).toLowerCase(Locale.ROOT);
-            if (hk.equals("\u5909\u6570\u540d")
+            if (hk.equals("変数名")
                     || hk.equals("name")
                     || hk.equals("key")
-                    || hk.equals("\u74b0\u5883\u5909\u6570")
+                    || hk.equals("環境変数")
                     || hk.equals("env")) {
                 start = 1;
             }

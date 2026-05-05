@@ -48,6 +48,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
@@ -170,6 +171,9 @@ public final class MainShellController {
     private EquipmentGanttGraphicTabController equipmentGanttGraphicTabController;
 
     @FXML
+    private GanttPersonBadgeDesignTabController ganttPersonBadgeDesignTabController;
+
+    @FXML
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
@@ -207,6 +211,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabEquipmentGanttGraphic;
+
+    @FXML
+    private Tab mainShellTabGanttPersonBadgeDesign;
 
     @FXML
     private Tab mainShellTabOperatorCard;
@@ -260,6 +267,9 @@ public final class MainShellController {
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
             equipmentGanttGraphicTabController.bindShell(this);
+            if (ganttPersonBadgeDesignTabController != null) {
+                ganttPersonBadgeDesignTabController.bindShell(this);
+            }
 
             operatorCardTabController.bindShell(this);
 
@@ -477,6 +487,9 @@ public final class MainShellController {
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
+        if (ganttPersonBadgeDesignTabController != null) {
+            ganttPersonBadgeDesignTabController.applyPersonBadgeDesignSession(s);
+        }
         applyWindowGeometry(s);
         applyMainShellTabOrder(s.mainShellTabOrder());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
@@ -555,7 +568,98 @@ public final class MainShellController {
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttRowHeightPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttHeaderHeightPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttSlotWidthPercent(),
-                equipmentGanttGraphicTabController.snapshotEquipmentGanttShiftWheelHScrollPercent());
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttShiftWheelHScrollPercent(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeEnabled(),
+                snapshotPersonBadgeFontFamily(),
+                snapshotPersonBadgeFontPercent(),
+                snapshotPersonBadgeFillHex(),
+                snapshotPersonBadgeTextHex(),
+                snapshotPersonBadgeStrokeHex(),
+                snapshotPersonBadgeStrokeWidth(),
+                snapshotPersonBadgeCornerRadius(),
+                snapshotPersonBadgePill(),
+                snapshotPersonBadgeGlowColorHex(),
+                snapshotPersonBadgeGlowRadius(),
+                snapshotPersonBadgeGlowSpread());
+    }
+
+    /** 設備ガントのプレビュー用に、バッジデザインタブの現在スタイルを返す。 */
+    public PersonBadgeStyle currentPersonBadgeStyleForGantt() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.previewStyleForGantt()
+                : PersonBadgeStyle.defaultStyle();
+    }
+
+    /** バッジデザイン変更後に設備ガント（グラフィック）のみ再描画する。 */
+    public void refreshEquipmentGanttGraphicForBadgeChange() {
+        if (equipmentGanttGraphicTabController != null) {
+            equipmentGanttGraphicTabController.refreshGraphicForPersonBadge();
+        }
+    }
+
+    private String snapshotPersonBadgeFontFamily() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeFontFamily()
+                : "";
+    }
+
+    private double snapshotPersonBadgeFontPercent() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeFontPercent()
+                : 0d;
+    }
+
+    private String snapshotPersonBadgeFillHex() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeFillHex()
+                : "";
+    }
+
+    private String snapshotPersonBadgeTextHex() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeTextHex()
+                : "";
+    }
+
+    private String snapshotPersonBadgeStrokeHex() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeStrokeHex()
+                : "";
+    }
+
+    private double snapshotPersonBadgeStrokeWidth() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeStrokeWidth()
+                : -1d;
+    }
+
+    private double snapshotPersonBadgeCornerRadius() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeCornerRadius()
+                : -1d;
+    }
+
+    private boolean snapshotPersonBadgePill() {
+        return ganttPersonBadgeDesignTabController != null
+                && ganttPersonBadgeDesignTabController.snapshotPersonBadgePill();
+    }
+
+    private String snapshotPersonBadgeGlowColorHex() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeGlowColorHex()
+                : "";
+    }
+
+    private double snapshotPersonBadgeGlowRadius() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeGlowRadius()
+                : -1d;
+    }
+
+    private double snapshotPersonBadgeGlowSpread() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeGlowSpread()
+                : -1d;
     }
 
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
@@ -603,6 +707,9 @@ public final class MainShellController {
         if (t == mainShellTabEquipmentGanttGraphic) {
             return MainShellTabId.EQUIPMENT_GANTT_GRAPHIC;
         }
+        if (t == mainShellTabGanttPersonBadgeDesign) {
+            return MainShellTabId.GANTT_PERSON_BADGE_DESIGN;
+        }
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
@@ -626,6 +733,7 @@ public final class MainShellController {
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
+            case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
         };
     }
