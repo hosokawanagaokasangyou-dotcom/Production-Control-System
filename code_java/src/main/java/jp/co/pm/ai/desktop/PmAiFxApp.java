@@ -17,12 +17,32 @@ import javafx.stage.Stage;
 public class PmAiFxApp extends Application {
 
     /**
-     * Toolkit 初期化前に指定すること。既に {@code prism.order} が JVM で与えられている場合は尊重する。
+     * Prism のパイプライン順（Toolkit 初期化前）。既定はソフトウェア描画（{@code sw}）。Canvas（{@code NGCanvas}）と GPU
+     * の組み合わせで {@code RTTexture} が null になり得るため。
+     *
+     * <p>GPU を試す: JVM {@code -Dpm.ai.javafx.prism.gpu=true} または環境変数 {@code PM_AI_JAVAFX_PRISM_GPU=1}。そのときのみ
+     * OS 別の GPU 優先 {@code prism.order} を適用する。opt-in しない場合は既存の {@code prism.order} が無ければ {@code sw}。
      */
-    private static void ensurePrismGpuPreferred() {
+    private static void configurePrismOrderEarly() {
+        if (prismGpuOptIn()) {
+            applyPrismGpuPipelineOrder();
+            return;
+        }
         if (System.getProperty("prism.order") != null) {
             return;
         }
+        System.setProperty("prism.order", "sw");
+    }
+
+    private static boolean prismGpuOptIn() {
+        if (Boolean.getBoolean("pm.ai.javafx.prism.gpu")) {
+            return true;
+        }
+        String env = System.getenv("PM_AI_JAVAFX_PRISM_GPU");
+        return env != null && ("1".equals(env) || "true".equalsIgnoreCase(env));
+    }
+
+    private static void applyPrismGpuPipelineOrder() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("windows")) {
             System.setProperty("prism.order", "d3d,es2,sw");
@@ -71,7 +91,7 @@ public class PmAiFxApp extends Application {
     }
 
     public static void main(String[] args) {
-        ensurePrismGpuPreferred();
+        configurePrismOrderEarly();
         System.setProperty("file.encoding", "UTF-8");
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println(
