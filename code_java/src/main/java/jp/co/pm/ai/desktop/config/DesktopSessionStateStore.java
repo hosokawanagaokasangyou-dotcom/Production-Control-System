@@ -84,7 +84,8 @@ public final class DesktopSessionStateStore {
                     text(root, "equipmentGanttPersonBadgeGlowColorHex"),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
-                    loadPersonBadgeStylesByLabel(root));
+                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
+                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -309,11 +310,12 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(gs) && gs >= 0 && gs <= 1) {
             root.put("equipmentGanttPersonBadgeGlowSpread", gs);
         }
-        putPersonBadgeStylesByLabel(root, state);
+        putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByLabel(), "equipmentGanttPersonBadgeStylesByLabel");
+        putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByMemberKey(), "equipmentGanttPersonBadgeStylesByMemberKey");
     }
 
-    private static Map<String, PersonBadgeStyle> loadPersonBadgeStylesByLabel(JsonNode root) {
-        JsonNode obj = root.get("equipmentGanttPersonBadgeStylesByLabel");
+    private static Map<String, PersonBadgeStyle> loadPersonBadgeStyleMap(JsonNode root, String jsonKey) {
+        JsonNode obj = root.get(jsonKey);
         if (obj == null || !obj.isObject()) {
             return Map.of();
         }
@@ -363,8 +365,9 @@ public final class DesktopSessionStateStore {
         return s != null && !s.isBlank() ? s.strip() : def;
     }
 
-    private static void putPersonBadgeStylesByLabel(ObjectNode root, DesktopSessionState state) {
-        Map<String, PersonBadgeStyle> m = state.equipmentGanttPersonBadgeStylesByLabel();
+    private static void putPersonBadgeStyleMap(
+            ObjectNode root, Map<String, PersonBadgeStyle> styleMap, String jsonKey) {
+        Map<String, PersonBadgeStyle> m = styleMap;
         if (m == null || m.isEmpty()) {
             return;
         }
@@ -392,7 +395,7 @@ public final class DesktopSessionStateStore {
             o.put("glowSpread", st.glowSpread());
         }
         if (!bag.isEmpty()) {
-            root.set("equipmentGanttPersonBadgeStylesByLabel", bag);
+            root.set(jsonKey, bag);
         }
     }
 

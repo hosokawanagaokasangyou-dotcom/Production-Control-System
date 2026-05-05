@@ -584,7 +584,8 @@ public final class MainShellController {
                 snapshotPersonBadgeGlowColorHex(),
                 snapshotPersonBadgeGlowRadius(),
                 snapshotPersonBadgeGlowSpread(),
-                snapshotPersonBadgeStylesByLabel());
+                snapshotPersonBadgeStylesByLabel(),
+                snapshotPersonBadgeStylesByMemberKey());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -607,6 +608,16 @@ public final class MainShellController {
         if (ganttPersonBadgeDesignTabController != null) {
             ganttPersonBadgeDesignTabController.mergeObservedBadgeLabels(labels);
         }
+    }
+
+    /**
+     * planning_core と同様に {@code master.xls(x/m)} を解決する。ファイルが無いときは {@code null}。
+     */
+    public Path resolveMasterWorkbookIfPresent() {
+        Path p =
+                AppPaths.resolveMasterWorkbookPathResolved(
+                        collectUiEnv(), nz(mainRunTabController.getWorkbookField().getText()));
+        return Files.isRegularFile(p) ? p.toAbsolutePath().normalize() : null;
     }
 
     /** バッジデザイン変更後に設備ガント（グラフィック）のみ再描画する。 */
@@ -684,6 +695,12 @@ public final class MainShellController {
     private java.util.Map<String, PersonBadgeStyle> snapshotPersonBadgeStylesByLabel() {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeStylesByLabel()
+                : java.util.Map.of();
+    }
+
+    private java.util.Map<String, PersonBadgeStyle> snapshotPersonBadgeStylesByMemberKey() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeStylesByMemberKey()
                 : java.util.Map.of();
     }
 

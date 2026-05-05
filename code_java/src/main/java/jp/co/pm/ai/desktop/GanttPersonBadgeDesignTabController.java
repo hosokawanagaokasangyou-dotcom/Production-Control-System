@@ -1,22 +1,29 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
 
 import javafx.animation.PauseTransition;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Accordion;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
@@ -24,19 +31,27 @@ import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.io.SkillsSheetMemberReader;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
-/** 設備ガント・担当バッジのデザイン編集タブ（担当者キーごとにスタイルを保持）。 */
+/** 設備ガント・担当バッジのデザイン編集タブ（master skills メンバー表＋セッション保存）。 */
 public final class GanttPersonBadgeDesignTabController {
 
-    /** セッションの「既定」―マップ未登録のバッジ表示に適用。 */
-    public static final String GLOBAL_EDIT_LABEL = "（既定・未登録の担当者）";
+    /** 表の先頭行：マスタに無いバッジ向けの全体既定。 */
+    public static final String GLOBAL_EDIT_LABEL = "（既定・マスタ外のバッジ）";
 
     @FXML
     private Accordion designAccordion;
 
     @FXML
-    private ComboBox<String> personBadgeEditTargetCombo;
+    private Label masterWorkbookPathLabel;
+
+    @FXML
+    private Button reloadSkillsMembersButton;
+
+    @FXML
+    private TableView<BadgeDesignTableItem> badgeMemberTable;
 
     @FXML
     private HBox badgePreviewBox;
@@ -98,11 +113,35 @@ public final class GanttPersonBadgeDesignTabController {
 
     private boolean suppress;
 
-    /** フラット項目に保存される「既定」スタイル。 */
     private PersonBadgeStyle globalStyle = PersonBadgeStyle.defaultStyle();
 
-    private final LinkedHashMap<String, PersonBadgeStyle> perLabelStyles = new LinkedHashMap<>();
+    private final LinkedHashMap<String, PersonBadgeStyle> perMemberStyles = new LinkedHashMap<>();
+
+    /** セッション由来のバッジ文字だけの旧マップ（同一バッジが複数人にぶつかるときのフォールバック）。 */
+    private Map<String, PersonBadgeStyle> legacyLabelStylesFromSession = Map.of();
+
+    /** session-state.json にそのまま書き戻す旧キー（読込時スナップショット・変更不要）。 */
+    private Map<String, PersonBadgeStyle> frozenLegacyLabelStylesForPersistence = Map.of();
+
     private final LinkedHashSet<String> observedBadgeLabels = new LinkedHashSet<>();
+
+    private List<String> masterMemberNames = List.of();
+
+    private boolean autoLoadedSkillsOnce;
+
+    static final class BadgeDesignTableItem {
+        final boolean globalFallback;
+        final String memberKeyNormalized;
+        final String memberDisplay;
+        final String badgeShort;
+
+        BadgeDesignTableItem(boolean globalFallback, String memberKeyNorm, String memberDisplay, String badgeShort) {
+            this.globalFallback = globalFallback;
+            this.memberKeyNormalized = memberKeyNorm != null ? memberKeyNorm : "";
+            this.memberDisplay = memberDisplay != null ? memberDisplay : "";
+            this.badgeShort = badgeShort != null ? badgeShort : "";
+        }
+    }
 
     @FXML
     private void initialize() {
@@ -113,24 +152,14 @@ public final class GanttPersonBadgeDesignTabController {
         persistDelay = new PauseTransition(Duration.millis(400));
         persistDelay.setOnFinished(e -> saveAndRefresh());
 
-        if (personBadgeEditTargetCombo != null) {
-            personBadgeEditTargetCombo.setEditable(true);
-            personBadgeEditTargetCombo
-                    .valueProperty()
-                    .addListener(
-                            (o, oldVal, newVal) -> {
-                                if (!suppress) {
-                                    onEditTargetChanged(oldVal, newVal);
-                                }
-                            });
-        }
+        setupMemberTable();
 
         attachListeners();
-        rebuildComboItems();
         suppress = true;
         try {
-            if (personBadgeEditTargetCombo != null) {
-                personBadgeEditTargetCombo.getSelectionModel().select(GLOBAL_EDIT_LABEL);
+            rebuildTableItems();
+            if (badgeMemberTable != null && !badgeMemberTable.getItems().isEmpty()) {
+                badgeMemberTable.getSelectionModel().select(0);
             }
             pushStyleToUi(globalStyle);
             syncLabelsFromSliders();
@@ -140,13 +169,103 @@ public final class GanttPersonBadgeDesignTabController {
         refreshPreview();
     }
 
-    void bindShell(MainShellController mainShell) {
-        this.shell = mainShell;
+    private void setupMemberTable() {
+        if (badgeMemberTable == null) {
+            return;
+        }
+        badgeMemberTable.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        badgeMemberTable
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener(
+                        (o, prev, cur) -> {
+                            if (suppress) {
+                                return;
+                            }
+                            suppress = true;
+                            try {
+                                if (prev != null) {
+                                    PersonBadgeStyle built = buildStyleFromUiFields();
+                                    if (prev.globalFallback) {
+                                        globalStyle = built;
+                                    } else {
+                                        perMemberStyles.put(prev.memberKeyNormalized, built);
+                                    }
+                                }
+                                if (cur == null) {
+                                    return;
+                                }
+                                if (cur.globalFallback) {
+                                    pushStyleToUi(globalStyle);
+                                } else {
+                                    PersonBadgeStyle st =
+                                            perMemberStyles.getOrDefault(cur.memberKeyNormalized, globalStyle);
+                                    pushStyleToUi(st);
+                                }
+                                syncLabelsFromSliders();
+                            } finally {
+                                suppress = false;
+                            }
+                            refreshPreview();
+                            if (badgeMemberTable != null) {
+                                badgeMemberTable.refresh();
+                            }
+                        });
+
+        TableColumn<BadgeDesignTableItem, String> colMember = new TableColumn<>("メンバー（skills）");
+        colMember.setPrefWidth(220);
+        colMember.setCellValueFactory(
+                cd ->
+                        new ReadOnlyStringWrapper(
+                                cd.getValue() == null ? "" : cd.getValue().memberDisplay));
+
+        TableColumn<BadgeDesignTableItem, String> colBadge = new TableColumn<>("バッジ表示");
+        colBadge.setPrefWidth(90);
+        colBadge.setCellValueFactory(
+                cd ->
+                        new ReadOnlyStringWrapper(
+                                cd.getValue() == null ? "" : cd.getValue().badgeShort));
+
+        TableColumn<BadgeDesignTableItem, String> colDetect = new TableColumn<>("ガント検出");
+        colDetect.setPrefWidth(88);
+        colDetect.setCellValueFactory(
+                cd -> {
+                    BadgeDesignTableItem it = cd.getValue();
+                    if (it == null || it.globalFallback) {
+                        return new ReadOnlyStringWrapper("—");
+                    }
+                    boolean ok =
+                            !it.badgeShort.isEmpty()
+                                    && !"—".equals(it.badgeShort)
+                                    && observedBadgeLabels.contains(it.badgeShort);
+                    return new ReadOnlyStringWrapper(ok ? "あり" : "");
+                });
+
+        TableColumn<BadgeDesignTableItem, String> colStyle = new TableColumn<>("スタイル");
+        colStyle.setPrefWidth(100);
+        colStyle.setCellValueFactory(
+                cd -> {
+                    BadgeDesignTableItem it = cd.getValue();
+                    if (it == null) {
+                        return new ReadOnlyStringWrapper("");
+                    }
+                    if (it.globalFallback) {
+                        return new ReadOnlyStringWrapper("全体既定");
+                    }
+                    boolean custom = perMemberStyles.containsKey(it.memberKeyNormalized);
+                    return new ReadOnlyStringWrapper(custom ? "個別" : "既定継承");
+                });
+
+        badgeMemberTable.getColumns().setAll(colMember, colBadge, colDetect, colStyle);
     }
 
-    /**
-     * 設備ガントで検出したバッジ表示キーをコンボに追加する（選択は維持）。
-     */
+    void bindShell(MainShellController mainShell) {
+        this.shell = mainShell;
+        autoLoadedSkillsOnce = false;
+        Platform.runLater(this::trySilentInitialMasterLoad);
+    }
+
+    /** 設備ガントで検出したバッジ表示文字を「ガント検出」列に反映する。 */
     void mergeObservedBadgeLabels(Collection<String> labels) {
         if (labels == null || labels.isEmpty()) {
             return;
@@ -158,14 +277,8 @@ public final class GanttPersonBadgeDesignTabController {
                 changed = true;
             }
         }
-        if (!changed) {
-            return;
-        }
-        suppress = true;
-        try {
-            rebuildComboItems();
-        } finally {
-            suppress = false;
+        if (changed && badgeMemberTable != null) {
+            badgeMemberTable.refresh();
         }
     }
 
@@ -176,11 +289,13 @@ public final class GanttPersonBadgeDesignTabController {
         suppress = true;
         try {
             globalStyle = s.resolvedPersonBadgeStyle();
-            perLabelStyles.clear();
-            perLabelStyles.putAll(s.equipmentGanttPersonBadgeStylesByLabel());
-            rebuildComboItems();
-            if (personBadgeEditTargetCombo != null) {
-                personBadgeEditTargetCombo.getSelectionModel().select(GLOBAL_EDIT_LABEL);
+            perMemberStyles.clear();
+            perMemberStyles.putAll(s.equipmentGanttPersonBadgeStylesByMemberKey());
+            legacyLabelStylesFromSession = Map.copyOf(s.equipmentGanttPersonBadgeStylesByLabel());
+            frozenLegacyLabelStylesForPersistence = Map.copyOf(s.equipmentGanttPersonBadgeStylesByLabel());
+            rebuildTableItems();
+            if (badgeMemberTable != null && !badgeMemberTable.getItems().isEmpty()) {
+                badgeMemberTable.getSelectionModel().select(0);
             }
             pushStyleToUi(globalStyle);
             syncLabelsFromSliders();
@@ -188,31 +303,53 @@ public final class GanttPersonBadgeDesignTabController {
             suppress = false;
         }
         refreshPreview();
+        autoLoadedSkillsOnce = false;
+        Platform.runLater(this::trySilentInitialMasterLoad);
     }
 
-    /** セッション保存直前に、現在の UI を global / per-label に反映する。 */
     void flushBadgeEditsBeforeSnapshot() {
         commitUiToTarget();
     }
 
-    /** ガント描画用：バッジ文字列ごとの実効スタイル。 */
-    public PersonBadgeStyle resolveStyleForBadgeLabel(String badgeLabel) {
+    public PersonBadgeStyle resolveStyleForBadgeLabel(String badgeFragment) {
         commitUiToTarget();
-        return resolveStyleForBadgeLabelRaw(badgeLabel);
+        return resolveStyleForBadgeLabelRaw(badgeFragment);
     }
 
-    private PersonBadgeStyle resolveStyleForBadgeLabelRaw(String badgeLabel) {
-        String k = PersonBadgeStyle.normalizeLabelKey(badgeLabel);
-        if (k.isEmpty()) {
+    private PersonBadgeStyle resolveStyleForBadgeLabelRaw(String badgeFragment) {
+        String frag = PersonBadgeStyle.normalizeLabelKey(badgeFragment);
+        if (frag.isEmpty()) {
             return globalStyle;
         }
-        PersonBadgeStyle o = perLabelStyles.get(k);
-        return o != null ? o : globalStyle;
+        LinkedHashSet<String> matchKeys = new LinkedHashSet<>();
+        for (String raw : masterMemberNames) {
+            String badge = PersonNameBadgeText.badgeTwoFromRawName(raw);
+            if (badge.isEmpty()) {
+                continue;
+            }
+            if (frag.equals(PersonBadgeStyle.normalizeLabelKey(badge))) {
+                matchKeys.add(PersonBadgeStyle.normalizeLabelKey(raw));
+            }
+        }
+        if (matchKeys.size() == 1) {
+            PersonBadgeStyle st = perMemberStyles.get(matchKeys.iterator().next());
+            return st != null ? st : globalStyle;
+        }
+        if (matchKeys.size() > 1) {
+            PersonBadgeStyle amb = legacyLabelStylesFromSession.get(frag);
+            return amb != null ? amb : globalStyle;
+        }
+        PersonBadgeStyle leg = legacyLabelStylesFromSession.get(frag);
+        return leg != null ? leg : globalStyle;
     }
 
     Map<String, PersonBadgeStyle> snapshotPersonBadgeStylesByLabel() {
+        return Map.copyOf(frozenLegacyLabelStylesForPersistence);
+    }
+
+    Map<String, PersonBadgeStyle> snapshotPersonBadgeStylesByMemberKey() {
         commitUiToTarget();
-        return Map.copyOf(perLabelStyles);
+        return Map.copyOf(perMemberStyles);
     }
 
     PersonBadgeStyle previewStyleForGantt() {
@@ -263,72 +400,139 @@ public final class GanttPersonBadgeDesignTabController {
         return globalStyle.glowSpread();
     }
 
-    private void onEditTargetChanged(String oldVal, String newVal) {
-        suppress = true;
-        try {
-            if (oldVal != null) {
-                PersonBadgeStyle built = buildStyleFromUiFields();
-                if (GLOBAL_EDIT_LABEL.equals(oldVal)) {
-                    globalStyle = built;
-                } else {
-                    String k = PersonBadgeStyle.normalizeLabelKey(oldVal);
-                    if (!k.isEmpty()) {
-                        perLabelStyles.put(k, built);
-                    }
-                }
-            }
-            String nv = newVal != null ? newVal : GLOBAL_EDIT_LABEL;
-            if (GLOBAL_EDIT_LABEL.equals(nv)) {
-                pushStyleToUi(globalStyle);
-            } else {
-                String k = PersonBadgeStyle.normalizeLabelKey(nv);
-                PersonBadgeStyle st = perLabelStyles.getOrDefault(k, globalStyle);
-                pushStyleToUi(st);
-            }
-            syncLabelsFromSliders();
-        } finally {
-            suppress = false;
-        }
-        refreshPreview();
+    @FXML
+    private void onReloadSkillsMembersAction() {
+        loadMembersFromMasterBook(true);
     }
 
-    private void rebuildComboItems() {
-        if (personBadgeEditTargetCombo == null) {
+    private void trySilentInitialMasterLoad() {
+        if (shell == null || autoLoadedSkillsOnce) {
+            updateMasterPathHint();
             return;
         }
-        String prev = personBadgeEditTargetCombo.getValue();
-        var items = FXCollections.<String>observableArrayList();
-        items.add(GLOBAL_EDIT_LABEL);
-        TreeSet<String> sorted = new TreeSet<>(Comparator.naturalOrder());
-        sorted.addAll(perLabelStyles.keySet());
-        sorted.addAll(observedBadgeLabels);
-        for (String s : sorted) {
-            if (s != null && !s.isBlank()) {
-                items.add(s);
+        loadMembersFromMasterBook(false);
+    }
+
+    private void loadMembersFromMasterBook(boolean showAlertOnFailure) {
+        if (shell == null) {
+            return;
+        }
+        Path master = shell.resolveMasterWorkbookIfPresent();
+        updateMasterPathHint(master);
+        if (master == null) {
+            if (showAlertOnFailure) {
+                alert(
+                        Alert.AlertType.WARNING,
+                        "マスタブックが見つかりません",
+                        "環境変数 PM_AI_MASTER_WORKBOOK / MASTER_WORKBOOK_FILE と、実行タブのブックパスを確認してください。");
+            }
+            return;
+        }
+        try {
+            masterMemberNames = SkillsSheetMemberReader.readMemberDisplayNames(master);
+            autoLoadedSkillsOnce = true;
+            suppress = true;
+            try {
+                rebuildTableItems();
+                if (badgeMemberTable != null && !badgeMemberTable.getItems().isEmpty()) {
+                    badgeMemberTable.getSelectionModel().select(0);
+                    BadgeDesignTableItem it = badgeMemberTable.getSelectionModel().getSelectedItem();
+                    if (it != null) {
+                        if (it.globalFallback) {
+                            pushStyleToUi(globalStyle);
+                        } else {
+                            pushStyleToUi(perMemberStyles.getOrDefault(it.memberKeyNormalized, globalStyle));
+                        }
+                        syncLabelsFromSliders();
+                    }
+                }
+            } finally {
+                suppress = false;
+            }
+            refreshPreview();
+            if (badgeMemberTable != null) {
+                badgeMemberTable.refresh();
+            }
+        } catch (IOException ex) {
+            if (showAlertOnFailure) {
+                alert(
+                        Alert.AlertType.ERROR,
+                        "skills の読込に失敗",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
         }
-        personBadgeEditTargetCombo.setItems(items);
-        if (prev != null && items.contains(prev)) {
-            personBadgeEditTargetCombo.getSelectionModel().select(prev);
-        } else if (GLOBAL_EDIT_LABEL.equals(prev) || prev == null) {
-            personBadgeEditTargetCombo.getSelectionModel().select(GLOBAL_EDIT_LABEL);
+    }
+
+    private void updateMasterPathHint() {
+        updateMasterPathHint(shell != null ? shell.resolveMasterWorkbookIfPresent() : null);
+    }
+
+    private void updateMasterPathHint(Path master) {
+        if (masterWorkbookPathLabel == null) {
+            return;
         }
+        if (master == null) {
+            masterWorkbookPathLabel.setText("マスタ未検出（環境変数・実行タブを確認）");
+        } else {
+            masterWorkbookPathLabel.setText(master.toString());
+        }
+    }
+
+    private static void alert(Alert.AlertType type, String title, String msg) {
+        Alert a = new Alert(type, msg);
+        a.setHeaderText(title);
+        a.showAndWait();
+    }
+
+    private void rebuildTableItems() {
+        if (badgeMemberTable == null) {
+            return;
+        }
+        BadgeDesignTableItem prevSel =
+                badgeMemberTable.getSelectionModel().getSelectedItem();
+        String prevKey =
+                prevSel != null && !prevSel.globalFallback ? prevSel.memberKeyNormalized : null;
+
+        ObservableList<BadgeDesignTableItem> items = FXCollections.observableArrayList();
+        items.add(new BadgeDesignTableItem(true, "", GLOBAL_EDIT_LABEL, "—"));
+        for (String raw : masterMemberNames) {
+            String mk = PersonBadgeStyle.normalizeLabelKey(raw);
+            String badge = PersonNameBadgeText.badgeTwoFromRawName(raw);
+            items.add(
+                    new BadgeDesignTableItem(
+                            false,
+                            mk,
+                            raw,
+                            badge.isEmpty() ? "—" : badge));
+        }
+        badgeMemberTable.setItems(items);
+
+        if (prevKey != null) {
+            for (BadgeDesignTableItem it : items) {
+                if (!it.globalFallback && prevKey.equals(it.memberKeyNormalized)) {
+                    badgeMemberTable.getSelectionModel().select(it);
+                    return;
+                }
+            }
+        }
+        badgeMemberTable.getSelectionModel().select(0);
     }
 
     private void commitUiToTarget() {
-        if (suppress || personBadgeEditTargetCombo == null) {
+        if (suppress || badgeMemberTable == null) {
+            return;
+        }
+        BadgeDesignTableItem sel = badgeMemberTable.getSelectionModel().getSelectedItem();
+        if (sel == null) {
             return;
         }
         PersonBadgeStyle built = buildStyleFromUiFields();
-        String raw = personBadgeEditTargetCombo.getValue();
-        if (raw == null || GLOBAL_EDIT_LABEL.equals(raw)) {
+        if (sel.globalFallback) {
             globalStyle = built;
         } else {
-            String k = PersonBadgeStyle.normalizeLabelKey(raw);
-            if (!k.isEmpty()) {
-                perLabelStyles.put(k, built);
-            }
+            perMemberStyles.put(sel.memberKeyNormalized, built);
         }
+        badgeMemberTable.refresh();
     }
 
     private void pushStyleToUi(PersonBadgeStyle st) {
@@ -473,17 +677,19 @@ public final class GanttPersonBadgeDesignTabController {
 
     @FXML
     private void onBadgeResetDefaultsAction() {
+        BadgeDesignTableItem sel =
+                badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
         suppress = true;
         try {
-            String cur =
-                    personBadgeEditTargetCombo != null ? personBadgeEditTargetCombo.getValue() : GLOBAL_EDIT_LABEL;
             PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
-            if (cur == null || GLOBAL_EDIT_LABEL.equals(cur)) {
+            if (sel == null) {
+                globalStyle = d;
+                pushStyleToUi(globalStyle);
+            } else if (sel.globalFallback) {
                 globalStyle = d;
                 pushStyleToUi(globalStyle);
             } else {
-                String k = PersonBadgeStyle.normalizeLabelKey(cur);
-                perLabelStyles.remove(k);
+                perMemberStyles.remove(sel.memberKeyNormalized);
                 pushStyleToUi(globalStyle);
             }
             syncLabelsFromSliders();
@@ -491,6 +697,9 @@ public final class GanttPersonBadgeDesignTabController {
             suppress = false;
         }
         refreshPreview();
+        if (badgeMemberTable != null) {
+            badgeMemberTable.refresh();
+        }
         saveAndRefresh();
     }
 
@@ -504,11 +713,29 @@ public final class GanttPersonBadgeDesignTabController {
         badgePreviewBox.getChildren().clear();
         double zoom = 1.0;
         double rowPx = 13;
-        for (String sample : List.of("山田", "佐藤")) {
-            PersonBadgeStyle st = resolveStyleForBadgeLabelRaw(sample);
-            badgePreviewBox
-                    .getChildren()
-                    .add(PersonBadgeNodeFactory.createBadge(sample, st, zoom, rowPx));
+        List<String> samples = new ArrayList<>();
+        for (String raw : masterMemberNames) {
+            String b = PersonNameBadgeText.badgeTwoFromRawName(raw);
+            if (!b.isEmpty()) {
+                samples.add(b);
+            }
+            if (samples.size() >= 2) {
+                break;
+            }
+        }
+        while (samples.size() < 2) {
+            if (samples.isEmpty()) {
+                samples.add("山田");
+            } else if (samples.size() == 1 && !samples.contains("佐藤")) {
+                samples.add("佐藤");
+            } else {
+                samples.add("?");
+            }
+        }
+        for (int i = 0; i < 2; i++) {
+            String s = samples.get(i);
+            PersonBadgeStyle st = resolveStyleForBadgeLabelRaw(s);
+            badgePreviewBox.getChildren().add(PersonBadgeNodeFactory.createBadge(s, st, zoom, rowPx));
         }
     }
 }

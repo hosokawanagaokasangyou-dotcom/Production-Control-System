@@ -54,7 +54,8 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeGlowColorHex グロー（DropShadow）の色
  * @param equipmentGanttPersonBadgeGlowRadius グロー半径
  * @param equipmentGanttPersonBadgeGlowSpread DropShadow の spread（0〜1）
- * @param equipmentGanttPersonBadgeStylesByLabel 担当者（バッジ表示キー）ごとの見た目。キーは {@link PersonBadgeStyle#normalizeLabelKey}
+ * @param equipmentGanttPersonBadgeStylesByLabel バッジ表示文字のみの旧キー（後方互換・読込のみ参照し得る）
+ * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -103,13 +104,19 @@ public record DesktopSessionState(
         String equipmentGanttPersonBadgeGlowColorHex,
         double equipmentGanttPersonBadgeGlowRadius,
         double equipmentGanttPersonBadgeGlowSpread,
-        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel) {
+        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel,
+        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey) {
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
                 equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
                         ? Map.of()
                         : Map.copyOf(equipmentGanttPersonBadgeStylesByLabel);
+        equipmentGanttPersonBadgeStylesByMemberKey =
+                equipmentGanttPersonBadgeStylesByMemberKey == null
+                                || equipmentGanttPersonBadgeStylesByMemberKey.isEmpty()
+                        ? Map.of()
+                        : Map.copyOf(equipmentGanttPersonBadgeStylesByMemberKey);
     }
 
     /**
@@ -208,6 +215,7 @@ public record DesktopSessionState(
                 d.glowColorHex(),
                 d.glowRadius(),
                 d.glowSpread(),
+                Map.of(),
                 Map.of());
     }
 }
