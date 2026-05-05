@@ -1389,6 +1389,9 @@ public final class MainShellController {
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+        }
         updateShellStageProgressOverlay(stage1Running, stage2Running);
         if (tabPane == null) {
             return;

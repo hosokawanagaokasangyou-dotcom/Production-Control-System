@@ -29,6 +29,9 @@
         <Button fx:id="reloadCalendarButton" mnemonicParsing="false"
                 text="機械 JSON 再読み"
                 onAction="#onReloadCalendarAction"/>
+        <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
+                styleClass="pm-stage-run-button,pm-stage-run-2"
+                onAction="#onStage2RunButtonAction"/>
         <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3へ"
                 styleClass="pm-stage-run-button,pm-stage-run-3"
                 onAction="#onDispatchTrialAction"/>

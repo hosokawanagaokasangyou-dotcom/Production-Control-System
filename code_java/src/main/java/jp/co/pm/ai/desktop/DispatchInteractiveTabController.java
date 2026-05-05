@@ -162,6 +162,9 @@ public final class DispatchInteractiveTabController {
     /** True while load/rebuild progress UI disables the toolbar ({@link #setReloadInteractionDisabled}). */
     private boolean reloadInteractionDisabled;
 
+    /** True while 段階1／段階2 pipeline is running ({@link #setStageRunProgressVisible}). */
+    private boolean stagePipelineBusy;
+
     /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
     private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
 
@@ -176,6 +179,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private Button reloadCalendarButton;
+
+    @FXML
+    private Button stage2RunButton;
 
     @FXML
     private Button dispatchTrialButton;
@@ -292,6 +298,29 @@ public final class DispatchInteractiveTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         Platform.runLater(this::reloadFromDiskQuiet);
+    }
+
+    /**
+     * 実行タブと同様、段階1／段階2 実行中は「段階2 実行」を無効化する（{@link MainShellController#applyRunTabGating} から）。
+     */
+    void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
+        stagePipelineBusy = stage1Running || stage2Running;
+        applyStage2RunButtonEnabledState();
+    }
+
+    private void applyStage2RunButtonEnabledState() {
+        if (stage2RunButton == null) {
+            return;
+        }
+        stage2RunButton.setDisable(reloadInteractionDisabled || stagePipelineBusy);
+    }
+
+    @FXML
+    private void onStage2RunButtonAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.triggerStage2();
     }
 
     @FXML
@@ -1003,6 +1032,7 @@ public final class DispatchInteractiveTabController {
         if (reloadCalendarButton != null) {
             reloadCalendarButton.setDisable(disabled);
         }
+        applyStage2RunButtonEnabledState();
         applyDispatchTrialButtonEnabledState();
         if (wideRowUpButton != null) {
             wideRowUpButton.setDisable(disabled);
