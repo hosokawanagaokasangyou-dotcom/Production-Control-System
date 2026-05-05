@@ -7,8 +7,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -313,8 +311,7 @@ public final class EquipmentGanttGraphicTabController {
                 return;
             }
 
-            List<String> names =
-                    eligible.keySet().stream().sorted().collect(Collectors.toList());
+            List<String> names = eligible.keySet().stream().sorted().toList();
             String previous =
                     sheetCombo.getSelectionModel().getSelectedItem() != null
                             ? sheetCombo.getSelectionModel().getSelectedItem()

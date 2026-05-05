@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -133,11 +134,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effRows = repaired.rows();
         }
         ParseResult parsed = parse(effCols, effRows);
-        if (parsed.slotColumnIndices.isEmpty()) {
+        if (parsed.slotColumnIndices().isEmpty()) {
             Label msg =
                     new Label(
-                            "このシートから時刻列（列見出しが HH:MM 形式）を検出できませんでした。\n"
-                                    + "「結果_設備ガント」形式の JSON を開いているか確認してください。");
+                            """
+                            このシートから時刻列（列見出しが HH:MM 形式）を検出できませんでした。
+                            「結果_設備ガント」形式の JSON を開いているか確認してください。""");
             msg.setWrapText(true);
             msg.setPadding(new Insets(16));
             root.setCenter(msg);
@@ -151,7 +153,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double procW = clampProcessColumnWidth(processColWidth);
         double leftTotal = machW + procW;
 
-        double timelineWidth = parsed.slotColumnIndices.size() * layout.slotWidth;
+        double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
 
         Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
         drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
@@ -171,10 +173,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrapProc.setMinHeight(layout.headerHeight);
         styleEquipmentHeadSplit(headSplit, theme);
         double divPos = leftTotal > 1 ? machW / leftTotal : 0.5;
-        final boolean[] suppressDiv = {false};
-        suppressDiv[0] = true;
+        AtomicBoolean suppressDividerCallback = new AtomicBoolean(true);
         headSplit.setDividerPositions(divPos);
-        suppressDiv[0] = false;
+        suppressDividerCallback.set(false);
 
         if (onLeftColumnWidthsChanged != null) {
             headSplit
@@ -183,7 +184,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     .positionProperty()
                     .addListener(
                             (obs, o, n) -> {
-                                if (suppressDiv[0]) {
+                                if (suppressDividerCallback.get()) {
                                     return;
                                 }
                                 double tw = headSplit.getWidth();
@@ -202,8 +203,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int progCell = layout.progressCellWidth;
         int gap = layout.progressGap;
         int progressTotal =
-                parsed.progressColumnIndices.size() * progCell
-                        + Math.max(0, parsed.progressColumnIndices.size() - 1) * gap;
+                parsed.progressColumnIndices().size() * progCell
+                        + Math.max(0, parsed.progressColumnIndices().size() - 1) * gap;
 
         double contentMinWidth = leftTotal + timelineWidth + progressTotal;
 
@@ -216,10 +217,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         scrollBody.setMinWidth(contentMinWidth);
 
         int dataStripe = 0;
-        for (int ri = 0; ri < parsed.displayRows.size(); ri++) {
-            DisplayRow dr = parsed.displayRows.get(ri);
-            if (dr.sectionBanner != null) {
-                Label ban = new Label(dr.sectionBanner);
+        for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
+            DisplayRow dr = parsed.displayRows().get(ri);
+            if (dr.sectionBanner() != null) {
+                Label ban = new Label(dr.sectionBanner());
                 ban.setPrefHeight(layout.sectionRowHeight);
                 ban.setMinHeight(layout.sectionRowHeight);
                 ban.setMaxWidth(Double.MAX_VALUE);
@@ -231,8 +232,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 continue;
             }
 
-            String machTxt = dr.machineLine != null ? dr.machineLine : "";
-            String procTxt = dr.processBlock != null ? dr.processBlock : "";
+            String machTxt = dr.machineLine() != null ? dr.machineLine() : "";
+            String procTxt = dr.processBlock() != null ? dr.processBlock() : "";
 
             Label ml = new Label(machTxt);
             Label pl = new Label(procTxt);
@@ -246,21 +247,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             Canvas rowCanvas = new Canvas(timelineWidth, layout.rowHeight);
             drawTimelineRow(
-                    rowCanvas.getGraphicsContext2D(), dr.cellsInSlots, dataStripe++, layout, palette);
+                    rowCanvas.getGraphicsContext2D(), dr.cellsInSlots(), dataStripe++, layout, palette);
 
             String tip =
-                    (dr.rowSummary != null ? dr.rowSummary : "")
+                    (dr.rowSummary() != null ? dr.rowSummary() : "")
                             + "\n（スロット "
-                            + parsed.slotMinutes
+                            + parsed.slotMinutes()
                             + " 分・設備ガント JSON と同一データ）";
             Tooltip.install(rowCanvas, new Tooltip(tip));
 
             HBox progBox = new HBox(gap);
             progBox.setAlignment(Pos.CENTER_LEFT);
-            for (int pc : parsed.progressColumnIndices) {
+            for (int pc : parsed.progressColumnIndices()) {
                 String pv =
-                        dr.rawRow.size() > pc && dr.rawRow.get(pc) != null
-                                ? dr.rawRow.get(pc).strip()
+                        dr.rawRow().size() > pc && dr.rawRow().get(pc) != null
+                                ? dr.rawRow().get(pc).strip()
                                 : "";
                 Label pLab = new Label(pv);
                 pLab.setMinWidth(progCell);
@@ -309,9 +310,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         Label hint =
                 new Label(
-                        "ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。"
-                                + " 機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。"
-                                + " ブロックは Excel と同じセル内容を連続結合した帯です。");
+                        """
+                        ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
+                        機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。 \
+                        ブロックは Excel と同じセル内容を連続結合した帯です。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
@@ -527,16 +529,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setLineWidth(0.5);
         gc.strokeRect(0, 0, timelineWidth, layout.headerHeight);
 
-        List<Integer> slotCols = parsed.slotColumnIndices;
+        List<Integer> slotCols = parsed.slotColumnIndices();
         int n = slotCols.size();
-        int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes));
+        int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes()));
 
         gc.setFill(palette.axisLabel());
         gc.setFont(Font.font(layout.axisFontSize));
-        LocalTime t0 = parsed.slotBaseTime;
+        LocalTime t0 = parsed.slotBaseTime();
         for (int i = 0; i < n; i += step) {
             double x = i * layout.slotWidth;
-            LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes);
+            LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes());
             String txt = tt.format(DateTimeFormatter.ofPattern("H:mm"));
             gc.fillText(txt, x + 2, layout.headerHeight - 8 * layout.zoom);
             gc.strokeLine(x, 0, x, layout.headerHeight);
@@ -753,7 +755,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
     private static ParseResult parse(List<String> columns, ObservableList<ObservableList<String>> rows) {
-        ParseResult pr = new ParseResult();
         List<Integer> slots = new ArrayList<>();
         for (int c = 0; c < columns.size(); c++) {
             String h = columns.get(c);
@@ -761,13 +762,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 slots.add(c);
             }
         }
-        pr.slotColumnIndices = slots;
+        LocalTime slotBaseTime = LocalTime.of(8, 0);
         if (!slots.isEmpty()) {
             LocalTime t0 = parseTimeHeader(columns.get(slots.get(0)));
             if (t0 != null) {
-                pr.slotBaseTime = t0;
+                slotBaseTime = t0;
             }
         }
+        int slotMinutes = 10;
         if (slots.size() >= 2) {
             LocalTime a = parseTimeHeader(columns.get(slots.get(0)));
             LocalTime b = parseTimeHeader(columns.get(slots.get(1)));
@@ -775,17 +777,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 int delta =
                         (b.getHour() * 60 + b.getMinute()) - (a.getHour() * 60 + a.getMinute());
                 if (delta > 0) {
-                    pr.slotMinutes = delta;
+                    slotMinutes = delta;
                 }
             }
         }
+        List<Integer> progressCols = new ArrayList<>();
         for (int c = 0; c < columns.size(); c++) {
             String h = columns.get(c);
             if (h != null && h.endsWith("進度")) {
-                pr.progressColumnIndices.add(c);
+                progressCols.add(c);
             }
         }
 
+        List<DisplayRow> displayRows = new ArrayList<>();
         String carriedDate = "";
         for (int r = 0; r < rows.size(); r++) {
             ObservableList<String> row = rows.get(r);
@@ -795,10 +799,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String c0 = row.size() > 0 && row.get(0) != null ? row.get(0).strip() : "";
             if (isSectionRow(row)) {
                 String banner = !c0.isEmpty() ? c0 : sectionTitleFromRow(row);
-                pr.displayRows.add(new DisplayRow(banner, null, null, null, null, row));
+                displayRows.add(new DisplayRow(banner, null, null, null, null, row));
                 continue;
             }
-            int dateCol = columnIndex(columns, "日付");
+            int dateCol = columns.indexOf("日付");
             if (dateCol >= 0 && row.size() > dateCol) {
                 String dv = row.get(dateCol) != null ? row.get(dateCol).strip() : "";
                 if (!dv.isEmpty()) {
@@ -812,7 +816,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         row.size() > si && row.get(si) != null ? row.get(si) : "";
                 slotCells.add(v);
             }
-            pr.displayRows.add(
+            displayRows.add(
                     new DisplayRow(
                             null,
                             lp.machine(),
@@ -821,7 +825,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             slotCells,
                             row));
         }
-        return pr;
+        return new ParseResult(slots, progressCols, slotMinutes, slotBaseTime, displayRows);
     }
 
     private static boolean isSectionRow(ObservableList<String> row) {
@@ -851,12 +855,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static int columnIndex(List<String> columns, String name) {
-        for (int i = 0; i < columns.size(); i++) {
-            if (name.equals(columns.get(i))) {
-                return i;
-            }
-        }
-        return -1;
+        return columns.indexOf(name);
     }
 
     private record LeftParts(String machine, String process, String summary) {}
@@ -950,39 +949,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return v != null ? v.strip() : "";
     }
 
-    private static final class ParseResult {
-        List<Integer> slotColumnIndices = new ArrayList<>();
-        List<Integer> progressColumnIndices = new ArrayList<>();
-        int slotMinutes = 10;
-        LocalTime slotBaseTime = LocalTime.of(8, 0);
-        List<DisplayRow> displayRows = new ArrayList<>();
-    }
+    private record ParseResult(
+            List<Integer> slotColumnIndices,
+            List<Integer> progressColumnIndices,
+            int slotMinutes,
+            LocalTime slotBaseTime,
+            List<DisplayRow> displayRows) {}
 
-    private static final class DisplayRow {
-        /** 非 null のときセクション行 */
-        final String sectionBanner;
-        /** データ行: 機械名列のテキスト */
-        final String machineLine;
-        /** データ行: 工程名列（工程名・タスク等。日付は機械名列側） */
-        final String processBlock;
-        /** データ行: ツールチップ用 */
-        final String rowSummary;
-        final List<String> cellsInSlots;
-        final ObservableList<String> rawRow;
-
-        DisplayRow(
-                String sectionBanner,
-                String machineLine,
-                String processBlock,
-                String rowSummary,
-                List<String> cellsInSlots,
-                ObservableList<String> rawRow) {
-            this.sectionBanner = sectionBanner;
-            this.machineLine = machineLine;
-            this.processBlock = processBlock;
-            this.rowSummary = rowSummary;
-            this.cellsInSlots = cellsInSlots;
-            this.rawRow = rawRow;
-        }
-    }
+    /**
+     * @param sectionBanner 非 null のときセクション行
+     * @param machineLine データ行: 機械名列のテキスト
+     * @param processBlock データ行: 工程名列（工程名・タスク等。日付は機械名列側）
+     * @param rowSummary データ行: ツールチップ用
+     */
+    private record DisplayRow(
+            String sectionBanner,
+            String machineLine,
+            String processBlock,
+            String rowSummary,
+            List<String> cellsInSlots,
+            ObservableList<String> rawRow) {}
 }
