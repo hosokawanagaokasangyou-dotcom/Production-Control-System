@@ -626,6 +626,7 @@ public final class EquipmentGanttGraphicTabController {
                             + sheetUsed
                             + " / 対象シート数="
                             + names.size());
+            collapseSourceAccordionAfterSuccessfulLoad();
         } catch (Exception ex) {
             resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -662,6 +663,24 @@ public final class EquipmentGanttGraphicTabController {
         applyGraphicCenter(st);
     }
 
+    /** 再読み／最新JSON検索が成功したあとアコーディオンを閉じて表示領域を広げる */
+    private void collapseSourceAccordionAfterSuccessfulLoad() {
+        if (sourceAccordion != null) {
+            sourceAccordion.setExpandedPane(null);
+        }
+        if (sourceTitledPane != null) {
+            sourceTitledPane.setExpanded(false);
+        }
+    }
+
+    /** パス未指定・読み込み失敗時は設定パネルを開く */
+    private void expandSourceAccordionForAttention() {
+        if (sourceAccordion != null && sourceTitledPane != null) {
+            sourceAccordion.setExpandedPane(sourceTitledPane);
+            sourceTitledPane.setExpanded(true);
+        }
+    }
+
     private void resetGraphicState(String placeholderMsg) {
         lastGraphicSheet = null;
         loadedContractBadgeRows = null;
@@ -672,6 +691,7 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
+        expandSourceAccordionForAttention();
     }
 
     private void applyGraphicCenter(JsonTableIo.SheetTable st) {

@@ -287,6 +287,9 @@ public final class PlanResultViewerTabController {
 
     /** 読み込み成功後はデータ領域を広げるため折りたたむ */
     private void collapseSourcePaneAfterLoad() {
+        if (sourceAccordion != null) {
+            sourceAccordion.setExpandedPane(null);
+        }
         if (sourceTitledPane != null) {
             sourceTitledPane.setExpanded(false);
         }
