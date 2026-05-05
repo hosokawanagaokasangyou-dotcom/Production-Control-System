@@ -35,8 +35,9 @@ import java.util.List;
  * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は未保存として既定幅を使用）
  * @param equipmentGanttProcessColWidth 同タブ左・工程名列の幅（px、0 は未保存として既定幅を使用）
  * @param equipmentGanttBarFontFamily 同タブタイムライン・バー内ラベル用フォントファミリ（空はシステム既定）
+ * @param equipmentGanttBarFontPercent バー内ラベル文字サイズ（50〜200、100＝既定、0 は未保存として既定 100）
  * @param equipmentGanttRowHeightPercent データ行の高さ調整（50〜200、0 は未保存として既定 100）
- * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜200、0 は未保存として既定 100）
+ * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -67,6 +68,7 @@ public record DesktopSessionState(
         double equipmentGanttMachineColWidth,
         double equipmentGanttProcessColWidth,
         String equipmentGanttBarFontFamily,
+        double equipmentGanttBarFontPercent,
         double equipmentGanttRowHeightPercent,
         double equipmentGanttSlotWidthPercent) {
 
@@ -100,6 +102,7 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 "",
+                0d,
                 0d,
                 0d);
     }

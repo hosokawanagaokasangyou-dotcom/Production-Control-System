@@ -543,6 +543,7 @@ public final class MainShellController {
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttProcessColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontFamily(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttBarFontPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttRowHeightPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttSlotWidthPercent());
     }
