@@ -5,8 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,7 +83,8 @@ public final class DesktopSessionStateStore {
                     optionalBoolean(root, "equipmentGanttPersonBadgePill", false),
                     text(root, "equipmentGanttPersonBadgeGlowColorHex"),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
-                    optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d));
+                    optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
+                    loadPersonBadgeStylesByLabel(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -304,6 +308,91 @@ public final class DesktopSessionStateStore {
         double gs = state.equipmentGanttPersonBadgeGlowSpread();
         if (Double.isFinite(gs) && gs >= 0 && gs <= 1) {
             root.put("equipmentGanttPersonBadgeGlowSpread", gs);
+        }
+        putPersonBadgeStylesByLabel(root, state);
+    }
+
+    private static Map<String, PersonBadgeStyle> loadPersonBadgeStylesByLabel(JsonNode root) {
+        JsonNode obj = root.get("equipmentGanttPersonBadgeStylesByLabel");
+        if (obj == null || !obj.isObject()) {
+            return Map.of();
+        }
+        Map<String, PersonBadgeStyle> out = new LinkedHashMap<>();
+        for (Iterator<String> it = obj.fieldNames(); it.hasNext(); ) {
+            String field = it.next();
+            JsonNode el = obj.get(field);
+            if (el != null && el.isObject()) {
+                PersonBadgeStyle st = loadPersonBadgeStyleObject(el);
+                String k = PersonBadgeStyle.normalizeLabelKey(field);
+                if (st != null && !k.isEmpty()) {
+                    out.put(k, st);
+                }
+            }
+        }
+        return Map.copyOf(out);
+    }
+
+    private static PersonBadgeStyle loadPersonBadgeStyleObject(JsonNode o) {
+        PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
+        String ff = text(o, "fontFamily");
+        double fp = optionalDouble(o, "fontPercent", 0d);
+        String fill = text(o, "fillHex");
+        String tx = text(o, "textHex");
+        String stk = text(o, "strokeHex");
+        double stw = optionalDouble(o, "strokeWidth", -1d);
+        double cr = optionalDouble(o, "cornerRadius", -1d);
+        boolean pill = optionalBoolean(o, "pill", false);
+        String glow = text(o, "glowColorHex");
+        double gr = optionalDouble(o, "glowRadius", -1d);
+        double gs = optionalDouble(o, "glowSpread", -1d);
+        return new PersonBadgeStyle(
+                ff,
+                fp > 0 && fp <= 300 ? fp : d.fontPercent(),
+                nzStored(fill, d.fillHex()),
+                nzStored(tx, d.textHex()),
+                nzStored(stk, d.strokeHex()),
+                stw >= 0 ? stw : d.strokeWidth(),
+                cr >= 0 ? cr : d.cornerRadius(),
+                pill,
+                nzStored(glow, d.glowColorHex()),
+                gr >= 0 ? gr : d.glowRadius(),
+                gs >= 0 && gs <= 1 ? gs : d.glowSpread());
+    }
+
+    private static String nzStored(String s, String def) {
+        return s != null && !s.isBlank() ? s.strip() : def;
+    }
+
+    private static void putPersonBadgeStylesByLabel(ObjectNode root, DesktopSessionState state) {
+        Map<String, PersonBadgeStyle> m = state.equipmentGanttPersonBadgeStylesByLabel();
+        if (m == null || m.isEmpty()) {
+            return;
+        }
+        ObjectNode bag = JSON.createObjectNode();
+        for (Map.Entry<String, PersonBadgeStyle> e : m.entrySet()) {
+            if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null) {
+                continue;
+            }
+            String canon = PersonBadgeStyle.normalizeLabelKey(e.getKey());
+            if (canon.isEmpty()) {
+                continue;
+            }
+            PersonBadgeStyle st = e.getValue();
+            ObjectNode o = bag.putObject(canon);
+            o.put("fontFamily", st.fontFamily() != null ? st.fontFamily() : "");
+            o.put("fontPercent", st.fontPercent());
+            o.put("fillHex", st.fillHex());
+            o.put("textHex", st.textHex());
+            o.put("strokeHex", st.strokeHex());
+            o.put("strokeWidth", st.strokeWidth());
+            o.put("cornerRadius", st.cornerRadius());
+            o.put("pill", st.pill());
+            o.put("glowColorHex", st.glowColorHex());
+            o.put("glowRadius", st.glowRadius());
+            o.put("glowSpread", st.glowSpread());
+        }
+        if (!bag.isEmpty()) {
+            root.set("equipmentGanttPersonBadgeStylesByLabel", bag);
         }
     }
 

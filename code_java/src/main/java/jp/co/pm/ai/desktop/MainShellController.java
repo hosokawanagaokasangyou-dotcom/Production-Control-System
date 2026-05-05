@@ -532,6 +532,9 @@ public final class MainShellController {
     }
 
     private DesktopSessionState collectDesktopSession() {
+        if (ganttPersonBadgeDesignTabController != null) {
+            ganttPersonBadgeDesignTabController.flushBadgeEditsBeforeSnapshot();
+        }
         return new DesktopSessionState(
                 planInputTabController.snapshotPlanInputPath(),
                 planInputTabController.snapshotPlanInputSheet(),
@@ -580,14 +583,30 @@ public final class MainShellController {
                 snapshotPersonBadgePill(),
                 snapshotPersonBadgeGlowColorHex(),
                 snapshotPersonBadgeGlowRadius(),
-                snapshotPersonBadgeGlowSpread());
+                snapshotPersonBadgeGlowSpread(),
+                snapshotPersonBadgeStylesByLabel());
     }
 
-    /** 設備ガントのプレビュー用に、バッジデザインタブの現在スタイルを返す。 */
+    /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
     public PersonBadgeStyle currentPersonBadgeStyleForGantt() {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.previewStyleForGantt()
                 : PersonBadgeStyle.defaultStyle();
+    }
+
+    /** バッジ表示文字列ごとの見た目（担当者別設定を反映）。 */
+    public java.util.function.Function<String, PersonBadgeStyle> personBadgeStyleResolverForGantt() {
+        if (ganttPersonBadgeDesignTabController != null) {
+            return ganttPersonBadgeDesignTabController::resolveStyleForBadgeLabel;
+        }
+        return (String __) -> PersonBadgeStyle.defaultStyle();
+    }
+
+    /** 設備ガントで検出したバッジキーをデザインタブの候補に追加する。 */
+    public void refreshEquipmentGanttObservedBadgeLabels(java.util.Collection<String> labels) {
+        if (ganttPersonBadgeDesignTabController != null) {
+            ganttPersonBadgeDesignTabController.mergeObservedBadgeLabels(labels);
+        }
     }
 
     /** バッジデザイン変更後に設備ガント（グラフィック）のみ再描画する。 */
@@ -660,6 +679,12 @@ public final class MainShellController {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeGlowSpread()
                 : -1d;
+    }
+
+    private java.util.Map<String, PersonBadgeStyle> snapshotPersonBadgeStylesByLabel() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeStylesByLabel()
+                : java.util.Map.of();
     }
 
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */

@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Paths and fields restored on startup from {@link DesktopSessionStateStore}.
@@ -53,6 +54,7 @@ import java.util.List;
  * @param equipmentGanttPersonBadgeGlowColorHex グロー（DropShadow）の色
  * @param equipmentGanttPersonBadgeGlowRadius グロー半径
  * @param equipmentGanttPersonBadgeGlowSpread DropShadow の spread（0〜1）
+ * @param equipmentGanttPersonBadgeStylesByLabel 担当者（バッジ表示キー）ごとの見た目。キーは {@link PersonBadgeStyle#normalizeLabelKey}
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -100,7 +102,15 @@ public record DesktopSessionState(
         boolean equipmentGanttPersonBadgePill,
         String equipmentGanttPersonBadgeGlowColorHex,
         double equipmentGanttPersonBadgeGlowRadius,
-        double equipmentGanttPersonBadgeGlowSpread) {
+        double equipmentGanttPersonBadgeGlowSpread,
+        Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel) {
+
+    public DesktopSessionState {
+        equipmentGanttPersonBadgeStylesByLabel =
+                equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
+                        ? Map.of()
+                        : Map.copyOf(equipmentGanttPersonBadgeStylesByLabel);
+    }
 
     /**
      * セッション値と {@link PersonBadgeStyle#defaultStyle()} をマージした実効スタイル。
@@ -129,6 +139,20 @@ public record DesktopSessionState(
                 equipmentGanttPersonBadgeGlowSpread() >= 0 && equipmentGanttPersonBadgeGlowSpread() <= 1
                         ? equipmentGanttPersonBadgeGlowSpread()
                         : d.glowSpread());
+    }
+
+    /**
+     * 担当者キー（バッジに表示する文字列）に紐づくスタイル。未登録キーは {@link #resolvedPersonBadgeStyle()}。
+     */
+    public PersonBadgeStyle resolvedPersonBadgeStyleForLabel(String badgeLabel) {
+        String k = PersonBadgeStyle.normalizeLabelKey(badgeLabel);
+        if (!k.isEmpty()) {
+            PersonBadgeStyle per = equipmentGanttPersonBadgeStylesByLabel().get(k);
+            if (per != null) {
+                return per;
+            }
+        }
+        return resolvedPersonBadgeStyle();
     }
 
     private static String nz(String s, String def) {
@@ -183,6 +207,7 @@ public record DesktopSessionState(
                 d.pill(),
                 d.glowColorHex(),
                 d.glowRadius(),
-                d.glowSpread());
+                d.glowSpread(),
+                Map.of());
     }
 }

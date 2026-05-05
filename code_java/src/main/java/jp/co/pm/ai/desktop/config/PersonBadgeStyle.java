@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
+import java.text.Normalizer;
+
 /**
  * 設備ガント・担当バッジの見た目（セッション保存・デザインタブと共有）。
  */
@@ -18,6 +20,18 @@ public record PersonBadgeStyle(
         double glowRadius,
         /** DropShadow の spread（0〜1 付近） */
         double glowSpread) {
+
+    /**
+     * 担当者ごとのスタイルマップのキーに使う（NFKC・前後空白除去）。
+     *
+     * <p>ガント上のバッジ表示文字列と一致させる。
+     */
+    public static String normalizeLabelKey(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return Normalizer.normalize(raw.strip(), Normalizer.Form.NFKC);
+    }
 
     public static PersonBadgeStyle defaultStyle() {
         return new PersonBadgeStyle(

@@ -39,6 +39,8 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import java.util.function.Function;
+
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
@@ -317,7 +319,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * 担当バッジなし（後方互換）。
      *
      * @see #build(List, ObservableList, DesktopTheme, double, double, double, String, double, double, double, double,
-     *     double, double, List, boolean, PersonBadgeStyle)
+     *     double, double, List, boolean, Function)
      */
     public static BorderPane build(
             List<String> columns,
@@ -361,7 +363,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param badgeSlotRowsRaw 行インデックスが {@code rows} と一致する担当バッジグリッド（各内側リストはスロット列数分）。Excel 連携のみのときは
      *     {@code null}
      * @param showPersonBadges 担当バッジオーバーレイを描画するか
-     * @param personBadgeStyle バッジ見た目（{@code null} は {@link PersonBadgeStyle#defaultStyle()}）
+     * @param personBadgeStyleResolver バッジ表示文字列ごとの見た目（{@code null} は常に {@link PersonBadgeStyle#defaultStyle()}）
      */
     public static BorderPane build(
             List<String> columns,
@@ -379,7 +381,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double shiftWheelHorizontalSensitivityPercent,
             List<List<String>> badgeSlotRowsRaw,
             boolean showPersonBadges,
-            PersonBadgeStyle personBadgeStyle) {
+            Function<String, PersonBadgeStyle> personBadgeStyleResolver) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         List<String> effCols = columns;
@@ -391,8 +393,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             effRows = repaired.rows();
             badgeEff = null;
         }
-        PersonBadgeStyle badgeStyle =
-                personBadgeStyle != null ? personBadgeStyle : PersonBadgeStyle.defaultStyle();
+        Function<String, PersonBadgeStyle> badgeResolver =
+                personBadgeStyleResolver != null
+                        ? personBadgeStyleResolver
+                        : (String __) -> PersonBadgeStyle.defaultStyle();
         ParseResult parsed = parse(effCols, effRows, badgeEff);
         if (parsed.slotColumnIndices().isEmpty()) {
             Label msg =
@@ -644,7 +648,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dr.badgeCellsInSlots(),
                         dr.cellsInSlots(),
                         layout,
-                        badgeStyle);
+                        badgeResolver);
             }
             StackPane rowStack = new StackPane(rowCanvas, badgePane);
 
@@ -1251,9 +1255,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> badgeSlotTexts,
             List<String> slotTexts,
             LayoutMetrics layout,
-            PersonBadgeStyle style) {
+            Function<String, PersonBadgeStyle> styleForLabel) {
         if (overlay == null
-                || style == null
+                || styleForLabel == null
                 || badgeSlotTexts == null
                 || slotTexts == null
                 || badgeSlotTexts.size() != slotTexts.size()) {
@@ -1280,7 +1284,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 box.getChildren()
                         .add(
                                 PersonBadgeNodeFactory.createBadge(
-                                        p, style, layout.zoom, layout.rowLabelFontSize));
+                                        p,
+                                        styleForLabel.apply(p),
+                                        layout.zoom,
+                                        layout.rowLabelFontSize));
             }
             double barTop = 3 * layout.zoom;
             double barH = layout.rowHeight - 2 * barTop;

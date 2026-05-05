@@ -7,8 +7,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -38,6 +40,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
@@ -715,8 +718,10 @@ public final class EquipmentGanttGraphicTabController {
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        PersonBadgeStyle badgeStyle =
-                shell != null ? shell.currentPersonBadgeStyleForGantt() : PersonBadgeStyle.defaultStyle();
+        Function<String, PersonBadgeStyle> badgeResolver =
+                shell != null
+                        ? shell.personBadgeStyleResolverForGantt()
+                        : (String __) -> PersonBadgeStyle.defaultStyle();
         boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
         BorderPane gantt =
                 EquipmentGraphicGanttPane.build(
@@ -735,7 +740,10 @@ public final class EquipmentGanttGraphicTabController {
                         snapshotEquipmentGanttShiftWheelHScrollPercent(),
                         badgeRowsForCurrentGraphic,
                         showBadges,
-                        badgeStyle);
+                        badgeResolver);
+        if (shell != null) {
+            shell.refreshEquipmentGanttObservedBadgeLabels(distinctBadgeLabelsFromGrid(badgeRowsForCurrentGraphic));
+        }
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
             contentPane.setCenter(graphicRootWrapper);
@@ -926,6 +934,31 @@ public final class EquipmentGanttGraphicTabController {
             stem = stem.substring(0, stem.length() - "_logical_view".length());
         }
         return planJsonFromField.resolveSibling(stem + "_equipment_gantt_contract.json");
+    }
+
+    /** バッジグリッドから表示キー（姓2文字等）を重複除去して列挙する。 */
+    private static List<String> distinctBadgeLabelsFromGrid(List<List<String>> grid) {
+        if (grid == null || grid.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        for (List<String> row : grid) {
+            if (row == null) {
+                continue;
+            }
+            for (String cell : row) {
+                if (cell == null || cell.isBlank()) {
+                    continue;
+                }
+                for (String part : PersonNameBadgeText.splitBadgeCell(cell)) {
+                    String k = PersonBadgeStyle.normalizeLabelKey(part);
+                    if (!k.isEmpty()) {
+                        out.add(k);
+                    }
+                }
+            }
+        }
+        return List.copyOf(out);
     }
 
     private static Path siblingJson(Path workbookPath) {

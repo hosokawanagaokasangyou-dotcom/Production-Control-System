@@ -3,6 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TextField?>
@@ -29,6 +30,10 @@
                         </padding>
                         <Label styleClass="pm-plan-result-viewer-hint-inline"
                                text="設備ガント（グラフィック）のバッジに適用。変更は自動保存されます。"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Label prefWidth="140.0" text="編集する担当（バッジ表示）"/>
+                            <ComboBox fx:id="personBadgeEditTargetCombo" editable="true" prefWidth="240.0"/>
+                        </HBox>
                         <HBox alignment="CENTER_LEFT" spacing="12.0">
                             <Label text="プレビュー"/>
                             <HBox fx:id="badgePreviewBox" alignment="CENTER_LEFT" spacing="8.0"/>
