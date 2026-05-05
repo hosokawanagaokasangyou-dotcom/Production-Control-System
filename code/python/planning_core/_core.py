@@ -14935,6 +14935,15 @@ def _json_safe_cell_for_exclude_rules_export(value) -> object:
     return str(value)
 
 
+def _read_exclude_rules_sheet_missing_error(ex: BaseException, sheet_name: str) -> bool:
+    """pandas / openpyxl が「シートなし」で投げた例外か（空ルール JSON へフォールバックする）。"""
+    msg = str(ex)
+    if sheet_name not in msg:
+        return False
+    low = msg.lower()
+    return "not found" in low or "does not exist" in low
+
+
 def _write_stage1_exclude_rules_json_sidecar(
     wb_path_arg: str, out_path: str, *, use_effective_read_path: bool = True
 ) -> str | None:
@@ -14963,6 +14972,24 @@ def _write_stage1_exclude_rules_json_sidecar(
             return None
         df = pd.read_excel(path, sheet_name=EXCLUDE_RULES_SHEET_NAME)
     except Exception as ex:
+        if _read_exclude_rules_sheet_missing_error(ex, EXCLUDE_RULES_SHEET_NAME):
+            rules_out: list[dict] = []
+            abs_out = os.path.abspath(out_path)
+            parent = os.path.dirname(abs_out)
+            try:
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+                with open(abs_out, "w", encoding="utf-8", newline="\n") as f:
+                    json.dump({"rules": rules_out}, f, ensure_ascii=False, indent=2)
+            except OSError as wex:
+                logging.warning("段階1: 配台不要 JSON の書き込みに失敗: %s", wex)
+                return None
+            logging.info(
+                "段階1: master に「%s」シートが無いため空ルールの JSON を書きました: %s",
+                EXCLUDE_RULES_SHEET_NAME,
+                abs_out,
+            )
+            return abs_out
         logging.warning(
             "段階1: 「%s」シートの読込に失敗し JSON を書けません: %s",
             EXCLUDE_RULES_SHEET_NAME,
