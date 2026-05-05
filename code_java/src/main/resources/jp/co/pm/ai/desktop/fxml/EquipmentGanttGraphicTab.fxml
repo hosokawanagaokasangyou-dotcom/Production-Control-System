@@ -17,25 +17,26 @@
     <padding>
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
-                onAction="#onReloadButtonAction"/>
-        <Button fx:id="syncLatestButton" mnemonicParsing="false"
-                text="最新JSONを検索"
-                onAction="#onSyncLatestButtonAction"/>
-        <Label styleClass="pm-plan-result-viewer-hint-inline"
-               text="production_plan_multi_day*.json の設備ガント系シートを表示"/>
-    </HBox>
+    <!-- 折りたたみ1つに JSON パス・説明・グラフィック調整スライダーを集約（見た目の段数を抑える） -->
     <Accordion fx:id="sourceAccordion" maxWidth="Infinity" VBox.vgrow="NEVER">
         <panes>
             <TitledPane fx:id="sourceTitledPane" animated="true"
-                        text="JSONファイル"
+                        text="ファイル・表示の調整"
                         expanded="false">
                 <content>
-                    <VBox fillWidth="true" spacing="6.0" styleClass="pm-plan-result-viewer-source-body">
+                    <VBox fillWidth="true" spacing="8.0" styleClass="pm-plan-result-viewer-source-body">
                         <padding>
                             <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
                         </padding>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
+                                    onAction="#onReloadButtonAction"/>
+                            <Button fx:id="syncLatestButton" mnemonicParsing="false"
+                                    text="最新JSONを検索"
+                                    onAction="#onSyncLatestButtonAction"/>
+                            <Label styleClass="pm-plan-result-viewer-hint-inline"
+                                   text="production_plan_multi_day*.json の設備ガント系シートを表示"/>
+                        </HBox>
                         <HBox alignment="CENTER_LEFT" spacing="8.0">
                             <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"
                                        promptText="*.json" HBox.hgrow="ALWAYS"/>
@@ -43,17 +44,7 @@
                                     onAction="#onBrowsePlanJsonAction"/>
                         </HBox>
                         <Label fx:id="hintLabel" wrapText="true"/>
-                    </VBox>
-                </content>
-            </TitledPane>
-            <TitledPane fx:id="graphicTitledPane" animated="true"
-                        text="グラフィック表示の調整"
-                        expanded="false">
-                <content>
-                    <VBox fx:id="graphicToolbarHost" fillWidth="true" spacing="8.0">
-                        <padding>
-                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
-                        </padding>
+                        <VBox fx:id="graphicToolbarHost" fillWidth="true" spacing="8.0"/>
                     </VBox>
                 </content>
             </TitledPane>

@@ -83,9 +83,6 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private VBox graphicToolbarHost;
 
-    @FXML
-    private TitledPane graphicTitledPane;
-
     private MainShellController shell;
 
     private Stage ownerStage;
@@ -127,9 +124,6 @@ public final class EquipmentGanttGraphicTabController {
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
             sourceTitledPane.setExpanded(false);
-        }
-        if (graphicTitledPane != null) {
-            graphicTitledPane.setExpanded(false);
         }
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
