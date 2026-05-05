@@ -13,13 +13,14 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
-    <javafx.version>21.0.5</javafx.version>
-    <controlsfx.version>11.2.1</controlsfx.version>
-    <poi.version>5.2.5</poi.version>
+    <!-- OpenJFX 26.x と揃える（JDK は 26 以上を推奨） -->
+    <maven.compiler.release>26</maven.compiler.release>
+    <javafx.version>26.0.1</javafx.version>
+    <controlsfx.version>11.2.3</controlsfx.version>
+    <poi.version>5.5.1</poi.version>
     <jfreechart.version>1.5.4</jfreechart.version>
-    <jackson.version>2.17.2</jackson.version>
-    <junit.version>5.11.3</junit.version>
+    <jackson.version>2.21.3</jackson.version>
+    <junit.version>5.12.2</junit.version>
   </properties>
 
   <dependencies>
@@ -182,6 +183,8 @@
         <version>3.13.0</version>
         <configuration>
           <release>${maven.compiler.release}</release>
+          <!-- リフレクションでパラメータ名を利用する場合に有利 -->
+          <parameters>true</parameters>
         </configuration>
       </plugin>
       <plugin>
@@ -190,16 +193,18 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <!-- ControlsFX SpreadsheetView が javafx.base の内部 API を参照するため（JDK モジュール境界） -->
+          <!-- ControlsFX / classpath 実行時の javafx モジュール境界 -->
           <options>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
+            <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
+            <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
           </options>
         </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.2</version>
+        <version>3.5.4</version>
         <configuration>
           <useModulePath>false</useModulePath>
         </configuration>
@@ -207,7 +212,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
-        <version>3.5.0</version>
+        <version>3.6.3</version>
       </plugin>
     </plugins>
   </build>

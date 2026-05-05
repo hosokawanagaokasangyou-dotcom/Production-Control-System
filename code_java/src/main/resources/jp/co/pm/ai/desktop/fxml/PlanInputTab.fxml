@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <!-- Dynamic table columns remain in {@link PlanInputTabController}. -->
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.PlanInputTabController" fillWidth="true" spacing="8.0">
     <padding>
         <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>

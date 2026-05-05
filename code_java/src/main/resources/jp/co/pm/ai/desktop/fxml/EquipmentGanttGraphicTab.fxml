@@ -14,7 +14,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <!-- 設備ガント（時刻軸）を Canvas 帯で表示する独立タブ {@link EquipmentGanttGraphicTabController} -->
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.EquipmentGanttGraphicTabController"
       fillWidth="true" spacing="4.0" styleClass="pm-equipment-gantt-graphic-tab">
     <padding>
