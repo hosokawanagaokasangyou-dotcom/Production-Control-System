@@ -218,7 +218,29 @@ public final class PlanResultViewerTabController {
                 .valueProperty()
                 .addListener((o, a, b) -> saveAndApply.run());
         if (planResultRowHeightSlider != null) {
-            planResultRowHeightSlider.valueProperty().addListener((o, a, b) -> saveAndApply.run());
+            planResultRowHeightSlider
+                    .valueProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (planResultRowHeightPctLabel != null) {
+                                    planResultRowHeightPctLabel.setText(
+                                            String.format(
+                                                    "%.0f%%",
+                                                    planResultRowHeightSlider.getValue()));
+                                }
+                                /* ドラッグ中は isValueChanging true のため保存しない */
+                                if (!planResultRowHeightSlider.isValueChanging()) {
+                                    saveAndApply.run();
+                                }
+                            });
+            planResultRowHeightSlider
+                    .valueChangingProperty()
+                    .addListener(
+                            (obs, wasChanging, changing) -> {
+                                if (Boolean.FALSE.equals(changing)) {
+                                    saveAndApply.run();
+                                }
+                            });
         }
         if (planResultCellWrapRadio != null) {
             planResultCellWrapRadio.selectedProperty().addListener((o, a, b) -> saveAndApply.run());
