@@ -329,6 +329,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double processColWidthOverridePx,
             double shiftWheelHorizontalSensitivityPercent) {
         BorderPane root = new BorderPane();
+        root.setCache(false);
         List<String> effCols = columns;
         ObservableList<ObservableList<String>> effRows = rows;
         RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
@@ -432,6 +433,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         } else {
             rightBodyGrid.getColumnConstraints().setAll(fixedPixelColumn(timelineWidth));
         }
+        leftBodyGrid.setCache(false);
+        rightBodyGrid.setCache(false);
 
         double timelineOuterPad =
                 Math.min(
@@ -640,6 +643,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerRightScroll.setPannable(false);
         headerRightScroll.setFitToHeight(true);
         HBox.setHgrow(headerRightScroll, Priority.ALWAYS);
+        leftBodyScroll.setCache(false);
+        rightBodyScroll.setCache(false);
+        headerRightScroll.setCache(false);
+        headerRightContent.setCache(false);
 
         HBox headRow = new HBox(0, leftHead, headerRightScroll);
         headRow.setMinHeight(layout.headerHeight);
@@ -657,10 +664,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         bodySplit.setAlignment(Pos.TOP_LEFT);
         HBox.setHgrow(rightBodyScroll, Priority.ALWAYS);
         VBox.setVgrow(bodySplit, Priority.ALWAYS);
+        headRow.setCache(false);
+        bodySplit.setCache(false);
 
         VBox mainColumn = new VBox(0, headRow, bodySplit);
         VBox.setVgrow(bodySplit, Priority.ALWAYS);
         mainColumn.setPadding(new Insets(4));
+        mainColumn.setCache(false);
         root.setCenter(mainColumn);
 
         Label hint =
