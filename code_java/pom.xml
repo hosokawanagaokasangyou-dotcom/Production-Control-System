@@ -190,6 +190,10 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
+          <!-- ControlsFX SpreadsheetView が javafx.base の内部 API を参照するため（JDK モジュール境界） -->
+          <options>
+            <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
+          </options>
         </configuration>
       </plugin>
       <plugin>
