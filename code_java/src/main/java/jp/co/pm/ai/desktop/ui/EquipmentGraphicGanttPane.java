@@ -68,6 +68,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     public static final double DEFAULT_MACHINE_COLUMN_WIDTH = 140;
     public static final double DEFAULT_PROCESS_COLUMN_WIDTH = 220;
+    /** 日付列（1文字ずつ改行の縦積み）。リサイズはガント全体倍率に連動 */
+    private static final double DEFAULT_DATE_COLUMN_WIDTH = 36;
     private static final double MIN_SIDE_COL_WIDTH = 48;
     private static final double MAX_SIDE_COL_WIDTH = 800;
 
@@ -161,18 +163,27 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         double machW = clampMachineColumnWidth(machineColWidth);
         double procW = clampProcessColumnWidth(processColWidth);
-        double leftTotal = machW + procW;
+        double dateW = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_WIDTH * layout.zoom);
+        double splitTotal = machW + procW;
+        double leftTotal = dateW + splitTotal;
 
         double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
 
         Canvas headerCanvas = new Canvas(timelineWidth, layout.headerHeight);
         drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, timelineWidth, layout, palette);
 
+        Label hDate = new Label("日付");
         Label hMach = new Label("機械名");
         Label hProc = new Label("工程名");
+        applySideHeaderStyle(hDate, dateW, layout, palette);
         applySideHeaderStyle(hMach, machW, layout, palette);
         applySideHeaderStyle(hProc, procW, layout, palette);
 
+        VBox wrapDate = new VBox(hDate);
+        wrapDate.setMinWidth(dateW);
+        wrapDate.setPrefWidth(dateW);
+        wrapDate.setMaxWidth(dateW);
+        wrapDate.setMinHeight(layout.headerHeight);
         VBox wrapMach = new VBox(hMach);
         VBox wrapProc = new VBox(hProc);
         /* SplitPane の子が min=pref=max で幅固定だと区切りを動かせない。幅の上下限は divider 側で与える。 */
@@ -180,13 +191,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrapProc.setMinSize(0, 0);
         SplitPane headSplit = new SplitPane(wrapMach, wrapProc);
         headSplit.setMinSize(0, 0);
-        headSplit.setMinWidth(leftTotal);
-        headSplit.setPrefWidth(leftTotal);
+        headSplit.setMinWidth(splitTotal);
+        headSplit.setPrefWidth(splitTotal);
         headSplit.setMaxHeight(layout.headerHeight);
         wrapMach.setMinHeight(layout.headerHeight);
         wrapProc.setMinHeight(layout.headerHeight);
         styleEquipmentHeadSplit(headSplit, theme);
-        double divPos = leftTotal > 1 ? machW / leftTotal : 0.5;
+        double divPos = splitTotal > 1 ? machW / splitTotal : 0.5;
         AtomicBoolean suppressDividerCallback = new AtomicBoolean(true);
         headSplit.setDividerPositions(divPos);
         suppressDividerCallback.set(false);
@@ -222,21 +233,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         double contentMinWidth = leftTotal + timelineWidth + progressTotal;
 
-        HBox headRow = new HBox(0, headSplit, headerCanvas);
+        HBox headRow = new HBox(0, wrapDate, headSplit, headerCanvas);
         headRow.setMinWidth(contentMinWidth);
-        headSplit.setMinWidth(leftTotal);
         HBox.setHgrow(headSplit, Priority.NEVER);
 
         GridPane bodyGrid = new GridPane();
         bodyGrid.setMinWidth(contentMinWidth);
+        ColumnConstraints ccDate = new ColumnConstraints(dateW);
         ColumnConstraints ccMach = new ColumnConstraints(machW);
         ColumnConstraints ccProc = new ColumnConstraints(procW);
         ColumnConstraints ccTime = new ColumnConstraints(timelineWidth);
         if (progressTotal > 0) {
             ColumnConstraints ccProg = new ColumnConstraints(progressTotal);
-            bodyGrid.getColumnConstraints().setAll(ccMach, ccProc, ccTime, ccProg);
+            bodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc, ccTime, ccProg);
         } else {
-            bodyGrid.getColumnConstraints().setAll(ccMach, ccProc, ccTime);
+            bodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc, ccTime);
         }
 
         double timelineOuterPad =
@@ -259,7 +270,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 ban.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
                 ban.setStyle(palette.sectionBannerCss());
                 ban.setMinWidth(contentMinWidth);
-                int spanCols = progressTotal > 0 ? 4 : 3;
+                int spanCols = progressTotal > 0 ? 5 : 4;
                 GridPane.setColumnSpan(ban, spanCols);
                 bodyGrid.add(ban, 0, gridR);
                 gridR++;
@@ -281,12 +292,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String procTxt = dr.processBlock() != null ? dr.processBlock() : "";
 
             if (!mplan.continuation()) {
+                String dateCompact = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
+                Label dl = new Label(dateCompact.isEmpty() ? "" : verticalStackHorizontal(dateCompact));
+                applySideDataStyle(dl, dateW, layout, palette, machineGroupIndex);
+                dl.setWrapText(true);
+                dl.setAlignment(Pos.TOP_CENTER);
+                dl.setFont(Font.font(layout.rowLabelFontSize * 0.92));
+
                 String machTxt = mplan.machineCellText() != null ? mplan.machineCellText() : "";
                 Label ml = new Label(machTxt);
                 applySideDataStyle(ml, machW, layout, palette, machineGroupIndex);
                 ml.setWrapText(true);
                 if (mplan.rowSpan() > 1) {
                     double spanH = mplan.rowSpan() * cellBodyH;
+                    dl.setMinHeight(spanH);
+                    dl.setPrefHeight(spanH);
+                    dl.setMaxHeight(spanH);
+                    GridPane.setRowSpan(dl, mplan.rowSpan());
+                    GridPane.setValignment(dl, VPos.TOP);
                     ml.setMinHeight(spanH);
                     ml.setPrefHeight(spanH);
                     ml.setMaxHeight(spanH);
@@ -300,6 +323,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             spanH - 4,
                             layout.rowLabelFontSize);
                 } else {
+                    dl.setMinHeight(cellBodyH);
+                    dl.setPrefHeight(cellBodyH);
+                    dl.setMaxHeight(cellBodyH);
                     ml.setMinHeight(cellBodyH);
                     ml.setPrefHeight(cellBodyH);
                     ml.setMaxHeight(cellBodyH);
@@ -310,7 +336,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             cellBodyH - 4,
                             layout.rowLabelFontSize);
                 }
-                bodyGrid.add(ml, 0, gridR);
+                bodyGrid.add(dl, 0, gridR);
+                bodyGrid.add(ml, 1, gridR);
             }
 
             Label pl = new Label(procTxt);
@@ -358,10 +385,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 progBox.getChildren().add(pLab);
             }
 
-            bodyGrid.add(pl, 1, gridR);
-            bodyGrid.add(rowCanvas, 2, gridR);
+            bodyGrid.add(pl, 2, gridR);
+            bodyGrid.add(rowCanvas, 3, gridR);
             if (!progBox.getChildren().isEmpty()) {
-                bodyGrid.add(progBox, 3, gridR);
+                bodyGrid.add(progBox, 4, gridR);
             }
             gridR++;
         }
@@ -395,7 +422,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 new Label(
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
-                        機械名／工程名の間の縦線をドラッグして列幅変更（自動保存）。同一機械名は左列を縦結合表示。 \
+                        機械名／工程名の間の縦線で列幅変更（自動保存）。日付は左列（縦積み）。同一機械は行を縦結合。 \
                         短いバーのラベルはバー上下にずらして表示し、ツールバーでバー用フォントを指定できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
@@ -553,26 +580,30 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 r++;
                 continue;
             }
-            String machKey = cellAt(columns, dr.rawRow(), "機械名");
-            if (machKey.isEmpty()) {
+            String rawMach = cellAt(columns, dr.rawRow(), "機械名");
+            if (rawMach.isEmpty()) {
                 LeftParts lp = buildLeftParts(columns, dr.rawRow(), carriedAt[r]);
                 plans.set(r, new MachineColumnPlan(false, lp.machine(), 1));
                 r++;
                 continue;
             }
+            String mergeKey = machineMergeKey(rawMach);
             int j = r + 1;
             while (j < displayRows.size()) {
                 DisplayRow drj = displayRows.get(j);
                 if (drj.sectionBanner() != null) {
                     break;
                 }
-                if (!machKey.equals(cellAt(columns, drj.rawRow(), "機械名"))) {
+                String rawJ = cellAt(columns, drj.rawRow(), "機械名");
+                if (rawJ.isEmpty()) {
+                    break;
+                }
+                if (!mergeKey.equals(machineMergeKey(rawJ))) {
                     break;
                 }
                 j++;
             }
-            LeftParts lpFirst = buildLeftParts(columns, dr.rawRow(), carriedAt[r]);
-            plans.set(r, new MachineColumnPlan(false, lpFirst.machine(), j - r));
+            plans.set(r, new MachineColumnPlan(false, mergeKey, j - r));
             for (int k = r + 1; k < j; k++) {
                 plans.set(k, new MachineColumnPlan(true, "", 1));
             }
@@ -759,13 +790,32 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LocalTime tt = t0.plusMinutes((long) i * slotMin);
             String txt = tt.format(tf);
             gc.save();
-            gc.translate(cx, layout.headerHeight - 6 * layout.zoom);
+            double cy = layout.headerHeight * 0.5;
+            gc.translate(cx, cy);
             gc.rotate(-90);
             double tw = approxLatinDigitTextWidth(txt, labelFont);
             gc.setTextBaseline(VPos.CENTER);
             gc.fillText(txt, -tw / 2, 0);
             gc.restore();
         }
+    }
+
+    /**
+     * 「横書き縦配置」: 各文字は通常向きのまま、列方向に積む（Excel の縦中横セルに近い）。
+     */
+    private static String verticalStackHorizontal(String compactDate) {
+        if (compactDate == null || compactDate.isEmpty()) {
+            return "";
+        }
+        String s = compactDate.strip();
+        StringBuilder sb = new StringBuilder(s.length() * 2);
+        for (int i = 0; i < s.length(); i++) {
+            if (i > 0) {
+                sb.append('\n');
+            }
+            sb.append(s.charAt(i));
+        }
+        return sb.toString();
     }
 
     /** スロットが細いときは時間単位で間引き、それ以外は Excel に近い密度でラベル */
@@ -1135,7 +1185,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String c0 = row.size() > 0 && row.get(0) != null ? row.get(0).strip() : "";
             if (isSectionRow(row)) {
                 String banner = !c0.isEmpty() ? c0 : sectionTitleFromRow(row);
-                displayRows.add(new DisplayRow(banner, null, null, null, null, row));
+                displayRows.add(new DisplayRow(banner, null, null, null, null, null, row));
                 continue;
             }
             int dateCol = columns.indexOf("日付");
@@ -1146,6 +1196,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 }
             }
             LeftParts lp = buildLeftParts(columns, row, carriedDate);
+            String dateForCol = compactDateLine(carriedDate);
             List<String> slotCells = new ArrayList<>();
             for (int si : slots) {
                 String v =
@@ -1158,6 +1209,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             lp.machine(),
                             lp.process(),
                             lp.summary(),
+                            dateForCol,
                             slotCells,
                             row));
         }
@@ -1197,7 +1249,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record LeftParts(String machine, String process, String summary) {}
 
     /**
-     * 機械名列・工程名列に分割する。日付は工程名ではなく機械名側に表示する。
+     * 機械名列・工程名列に分割する。日付は左端「日付」列で表示するため機械名からは付けない。
      * ツールチップ用の要約文字列も返す。
      */
     private static LeftParts buildLeftParts(
@@ -1211,12 +1263,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         StringBuilder machCol = new StringBuilder();
         if (!mach.isEmpty()) {
             machCol.append(mach);
-        }
-        if (!dateLine.isEmpty()) {
-            if (machCol.length() > 0) {
-                machCol.append('\n');
-            }
-            machCol.append(dateLine);
         }
 
         StringBuilder procCol = new StringBuilder();
@@ -1248,10 +1294,27 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             sum.append(procStr);
         }
         String summary = sum.toString();
+        if (!dateLine.isEmpty()) {
+            summary =
+                    summary.isEmpty()
+                            ? dateLine
+                            : dateLine + "\n" + summary;
+        }
         if (summary.isEmpty()) {
             return new LeftParts("", "", "（行）");
         }
         return new LeftParts(machStr, procStr, summary);
+    }
+
+    /**
+     * 機械名列に付いた {@code (EC)} 等の識別子で行が分かれているとき、結合用に末尾 {@code (...)} を除いたキー。
+     */
+    private static String machineMergeKey(String rawMachineCell) {
+        if (rawMachineCell == null || rawMachineCell.isBlank()) {
+            return "";
+        }
+        String first = rawMachineCell.strip().split("\\R", 2)[0].strip();
+        return first.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
     }
 
     /** 「【2026/05/07】」等を {@code 2026/05/07} 形式に正規化する。 */
@@ -1294,15 +1357,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     /**
      * @param sectionBanner 非 null のときセクション行
-     * @param machineLine データ行: 機械名列のテキスト
-     * @param processBlock データ行: 工程名列（工程名・タスク等。日付は機械名列側）
+     * @param machineLine データ行: 機械名列のテキスト（日付は含めない）
+     * @param processBlock データ行: 工程名列（工程名・タスク等）
      * @param rowSummary データ行: ツールチップ用
+     * @param dateCompact 左「日付」列用（例 2026/05/07、空可）
      */
     private record DisplayRow(
             String sectionBanner,
             String machineLine,
             String processBlock,
             String rowSummary,
+            String dateCompact,
             List<String> cellsInSlots,
             ObservableList<String> rawRow) {}
 }
