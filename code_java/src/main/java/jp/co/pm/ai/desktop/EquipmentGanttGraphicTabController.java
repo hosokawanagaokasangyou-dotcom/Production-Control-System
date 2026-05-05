@@ -27,6 +27,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.text.Font;
@@ -49,7 +50,7 @@ public final class EquipmentGanttGraphicTabController {
 
     private static final String HINT =
             "計画結果ビューアと同じ production_plan_multi_day*.json を指定します。"
-                    + " 設備タイムライン（時刻列 HH:MM）と判定されるシートだけコンボに出ます。"
+                    + " 設備タイムライン（時刻列 HH:MM）と判定されるシートのうち、既定では「結果_設備ガント」を表示します。"
                     + " グラフィック表示はメインのこのタブから利用してください。";
 
     @FXML
@@ -77,10 +78,13 @@ public final class EquipmentGanttGraphicTabController {
     private TitledPane sourceTitledPane;
 
     @FXML
-    private ComboBox<String> sheetCombo;
+    private BorderPane contentPane;
 
     @FXML
-    private BorderPane contentPane;
+    private VBox graphicToolbarHost;
+
+    @FXML
+    private TitledPane graphicTitledPane;
 
     private MainShellController shell;
 
@@ -115,29 +119,17 @@ public final class EquipmentGanttGraphicTabController {
 
     private boolean graphicWheelHookInstalled;
 
-    /**
-     * {@link ComboBox#getItems()} の {@code setAll} や {@code select} の途中で onAction が発火し、
-     * 選択が一瞬 null になり {@link #applySelectedSheetFromMap} が何も描画しない状態になるのを防ぐ。
-     */
-    private boolean suppressSheetComboEvents;
-
     @FXML
     private void initialize() {
         if (hintLabel != null) {
             hintLabel.setText(HINT);
         }
-        if (sheetCombo != null) {
-            sheetCombo.setOnAction(
-                    e -> {
-                        if (suppressSheetComboEvents) {
-                            return;
-                        }
-                        applySelectedSheet();
-                    });
-        }
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
             sourceTitledPane.setExpanded(false);
+        }
+        if (graphicTitledPane != null) {
+            graphicTitledPane.setExpanded(false);
         }
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
@@ -211,6 +203,9 @@ public final class EquipmentGanttGraphicTabController {
                             rebuildGraphicView();
                             scheduleEquipmentGraphicPersist();
                         });
+        if (graphicToolbarHost != null) {
+            graphicToolbarHost.getChildren().setAll(buildGraphicToolbar());
+        }
     }
 
     void applyEquipmentGanttSession(DesktopSessionState s) {
@@ -373,7 +368,7 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private void reloadFromFields() {
-        if (contentPane == null || sheetCombo == null) {
+        if (contentPane == null) {
             return;
         }
         reloadButton.setDisable(true);
@@ -384,7 +379,6 @@ public final class EquipmentGanttGraphicTabController {
             if (planPath == null || !Files.isRegularFile(planPath)) {
                 resetGraphicState("ファイルが指定されていないか、見つかりません。");
                 statusLabel.setText("読み込み対象なし");
-                sheetCombo.getItems().clear();
                 return;
             }
 
@@ -394,7 +388,6 @@ public final class EquipmentGanttGraphicTabController {
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             if (eligible.isEmpty()) {
-                sheetCombo.getItems().clear();
                 resetGraphicState(
                         "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。");
                 statusLabel.setText("対象シートなし: " + planPath.getFileName());
@@ -402,30 +395,17 @@ public final class EquipmentGanttGraphicTabController {
             }
 
             List<String> names = eligible.keySet().stream().sorted().toList();
-            String previous =
-                    sheetCombo.getSelectionModel().getSelectedItem() != null
-                            ? sheetCombo.getSelectionModel().getSelectedItem()
-                            : "";
-            suppressSheetComboEvents = true;
-            try {
-                sheetCombo.getItems().setAll(names);
-
-                String pick = previous;
-                if (pick.isEmpty() || !eligible.containsKey(pick)) {
-                    pick = eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
-                }
-                sheetCombo.getSelectionModel().select(pick);
-
-                applySelectedSheetFromMap(eligible);
-            } finally {
-                suppressSheetComboEvents = false;
-            }
+            applySelectedSheetFromMap(eligible);
+            String sheetUsed =
+                    eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
             statusLabel.setText(
                     "読み込み: "
                             + planPath.getFileName()
                             + " → "
                             + loaded.description()
-                            + " / シート数(対象)="
+                            + " / 表示シート="
+                            + sheetUsed
+                            + " / 対象シート数="
                             + names.size());
             if (sourceTitledPane != null) {
                 sourceTitledPane.setExpanded(false);
@@ -442,29 +422,15 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
-    private void applySelectedSheet() {
-        String ps = planJsonField != null ? planJsonField.getText().strip() : "";
-        Path planPath = ps.isEmpty() ? null : Path.of(ps);
-        if (planPath == null || !Files.isRegularFile(planPath)) {
-            return;
-        }
-        if (!planPath.toString().equals(lastLoadedPlanPath)) {
-            reloadFromFields();
-            return;
-        }
-        try {
-            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
-            Map<String, JsonTableIo.SheetTable> eligible =
-                    filterEquipmentTimelineSheets(loaded.sheets());
-            applySelectedSheetFromMap(eligible);
-        } catch (IOException ex) {
-            statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
-        }
-    }
-
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {
-        String name = sheetCombo.getSelectionModel().getSelectedItem();
-        if (name == null || name.isBlank()) {
+        if (eligible == null || eligible.isEmpty()) {
+            return;
+        }
+        String name =
+                eligible.containsKey(DEFAULT_SHEET)
+                        ? DEFAULT_SHEET
+                        : eligible.keySet().stream().sorted().findFirst().orElse("");
+        if (name.isBlank()) {
             return;
         }
         JsonTableIo.SheetTable st = eligible.get(name);
@@ -482,16 +448,6 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
-    }
-
-    /** スライダー類を畳んで縦スペースを確保する */
-    private Accordion buildGraphicSettingsAccordion() {
-        Accordion acc = new Accordion();
-        TitledPane pane =
-                new TitledPane("グラフィック表示の調整", buildGraphicToolbar());
-        pane.setExpanded(false);
-        acc.getPanes().add(pane);
-        return acc;
     }
 
     private HBox buildGraphicToolbar() {
@@ -546,7 +502,6 @@ public final class EquipmentGanttGraphicTabController {
                         barFp);
         if (graphicRootWrapper == null) {
             graphicRootWrapper = new BorderPane();
-            graphicRootWrapper.setTop(buildGraphicSettingsAccordion());
             contentPane.setCenter(graphicRootWrapper);
         }
         graphicRootWrapper.setCenter(gantt);

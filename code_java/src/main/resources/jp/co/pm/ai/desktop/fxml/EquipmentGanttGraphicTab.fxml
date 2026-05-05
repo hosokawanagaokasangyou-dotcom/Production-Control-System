@@ -3,7 +3,6 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Accordion?>
 <?import javafx.scene.control.Button?>
-<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TitledPane?>
@@ -47,12 +46,19 @@
                     </VBox>
                 </content>
             </TitledPane>
+            <TitledPane fx:id="graphicTitledPane" animated="true"
+                        text="グラフィック表示の調整"
+                        expanded="false">
+                <content>
+                    <VBox fx:id="graphicToolbarHost" fillWidth="true" spacing="8.0">
+                        <padding>
+                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                        </padding>
+                    </VBox>
+                </content>
+            </TitledPane>
         </panes>
     </Accordion>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Label text="シート"/>
-        <ComboBox fx:id="sheetCombo" prefWidth="320.0"/>
-    </HBox>
     <Label fx:id="statusLabel" wrapText="true"/>
     <BorderPane fx:id="contentPane" minHeight="400.0" VBox.vgrow="ALWAYS"/>
 </VBox>

@@ -67,8 +67,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     public static final double DEFAULT_MACHINE_COLUMN_WIDTH = 140;
     public static final double DEFAULT_PROCESS_COLUMN_WIDTH = 220;
-    /** 日付列は回転表示のため最小幅のみ床として使用（実幅はキャップ高＋パディング）。 */
-    private static final double DEFAULT_DATE_COLUMN_FLOOR = 20;
     private static final double MIN_SIDE_COL_WIDTH = 48;
     private static final double MAX_SIDE_COL_WIDTH = 800;
 
@@ -101,16 +99,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout) {
         Font headerFont = Font.font(layout.rowLabelFontSize * 1.05);
         Font cellFont = Font.font(layout.rowLabelFontSize);
-        Font dateBodyFont = Font.font(layout.rowLabelFontSize * 0.92);
-        Font dateHdrFont = Font.font(layout.rowLabelFontSize * 1.05);
         double pad = 14 * layout.zoom;
         double padDate = 6 * layout.zoom;
-        double floorDate =
-                Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_DATE_COLUMN_FLOOR * layout.zoom);
         double floorMach = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_MACHINE_COLUMN_WIDTH * layout.zoom);
         double floorProc = Math.max(MIN_SIDE_COL_WIDTH, DEFAULT_PROCESS_COLUMN_WIDTH * layout.zoom);
 
-        double maxD = measureTextCapHeight("日付", dateHdrFont);
+        /* 日付列の幅は見出し「日付」の横書き幅のみ（データ行は回転表示のため幅に含めない） */
+        double dateCol =
+                Math.min(
+                        MAX_SIDE_COL_WIDTH,
+                        Math.max(
+                                MIN_SIDE_COL_WIDTH,
+                                measureTextWidth("日付", headerFont) + padDate));
+
         double maxM = measureTextWidth("機械名", headerFont);
         double maxP = measureTextWidth("工程名", headerFont);
 
@@ -128,16 +129,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 String mach = plan.machineCellText() != null ? plan.machineCellText() : "";
                 maxM = Math.max(maxM, measureMultilineMaxLineWidth(mach, cellFont));
             }
-            String dc = dr.dateCompact() != null ? dr.dateCompact().strip() : "";
-            if (!dc.isEmpty()) {
-                maxD = Math.max(maxD, measureTextCapHeight(dc, dateBodyFont));
-            }
         }
 
         return new MeasuredLeftWidths(
-                Math.min(
-                        MAX_SIDE_COL_WIDTH,
-                        Math.max(floorDate, Math.min(MAX_SIDE_COL_WIDTH, maxD + padDate))),
+                dateCol,
                 Math.min(
                         MAX_SIDE_COL_WIDTH,
                         Math.max(floorMach, Math.min(MAX_SIDE_COL_WIDTH, maxM + pad))),
@@ -253,16 +248,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         applySideHeaderStyle(hDate, dateW, layout, palette);
         applySideHeaderStyle(hMach, machW, layout, palette);
         applySideHeaderStyle(hProc, procW, layout, palette);
-        hDate.setRotate(-90);
 
-        StackPane wrapDateHead = new StackPane(hDate);
-        wrapDateHead.setMinWidth(dateW);
-        wrapDateHead.setPrefWidth(dateW);
-        wrapDateHead.setMaxWidth(dateW);
-        wrapDateHead.setMinHeight(layout.headerHeight);
-        StackPane.setAlignment(hDate, Pos.CENTER);
-
-        VBox wrapDate = new VBox(wrapDateHead);
+        VBox wrapDate = new VBox(hDate);
         wrapDate.setAlignment(Pos.CENTER);
         wrapDate.setMinWidth(dateW);
         wrapDate.setPrefWidth(dateW);
@@ -372,13 +359,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 }
                 GridPane.setValignment(dateWrap, VPos.TOP);
 
-                Label dl = new Label(dateTxt);
-                dl.setFont(Font.font(layout.rowLabelFontSize * 0.92));
-                dl.setWrapText(false);
-                dl.setTextFill(Color.web(palette.machineSideTextFill()));
-                dl.setRotate(-90);
-                StackPane.setAlignment(dl, Pos.CENTER);
-                dateWrap.getChildren().add(dl);
+                Text dt = new Text(dateTxt != null ? dateTxt : "");
+                dt.setFont(Font.font(layout.rowLabelFontSize * 0.92));
+                dt.setFill(Color.web(palette.machineSideTextFill()));
+                dt.setRotate(-90);
+                StackPane.setAlignment(dt, Pos.CENTER);
+                dateWrap.getChildren().add(dt);
 
                 bodyGrid.add(dateWrap, 0, gridR);
             }
@@ -496,7 +482,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 new Label(
                         """
                         ヒント: 横スクロールで時刻軸を追えます。Ctrl+ホイールで表示倍率。 \
-                        左列は内容に応じ自動幅。日付は反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
+                        左列は内容に応じ自動幅。日付データは反時計回り90°（列幅は見出し「日付」のみ）。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
         hint.setStyle(palette.hintCss());
@@ -1124,11 +1110,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Text t = new Text(s != null ? s : "");
         t.setFont(f);
         return t.getLayoutBounds().getHeight();
-    }
-
-    /** 日付列を反時計回り 90° 表示するときの列幅の目安（横書き一行の高さ）。 */
-    private static double measureTextCapHeight(String s, Font f) {
-        return measureTextHeight(s, f);
     }
 
     private enum BarKind {
