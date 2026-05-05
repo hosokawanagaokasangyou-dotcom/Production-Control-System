@@ -100,7 +100,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout) {
         Font headerFont = Font.font(layout.rowLabelFontSize * 1.05);
         Font cellFont = Font.font(layout.rowLabelFontSize);
-        double pad = 14 * layout.zoom;
 
         /* 日付列は見出しテキストなし。幅は縦書き日付（データ）のフォント＋左右パディング程度 */
         double dateBodyFontPx = layout.rowLabelFontSize * 0.92;
@@ -111,8 +110,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 MIN_SIDE_COL_WIDTH,
                                 Math.ceil(dateBodyFontPx + 12 * layout.zoom)));
 
-        double maxM = measureTextWidth("機械名", headerFont);
-        double maxP = measureTextWidth("工程名", headerFont);
+        /* 見出し・セルは Label＋実際の Insets で測る（Text より実表示に近い）。列パディングは二重に足さない */
+        double maxM = measureSideHeaderLabelPrefWidth("機械名", layout, headerFont);
+        double maxP = measureSideHeaderLabelPrefWidth("工程名", layout, headerFont);
 
         List<DisplayRow> rows = parsed.displayRows();
         for (int i = 0; i < rows.size(); i++) {
@@ -122,20 +122,75 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             MachineColumnPlan plan = machPlans.get(i);
             String proc = dr.processBlock() != null ? dr.processBlock() : "";
-            maxP = Math.max(maxP, measureMultilineMaxLineWidth(proc, cellFont));
+            maxP = Math.max(maxP, measureMultilineMaxSideDataLabelWidth(proc, layout, cellFont));
 
             if (plan != null && !plan.continuation()) {
                 String mach = plan.machineCellText() != null ? plan.machineCellText() : "";
-                maxM = Math.max(maxM, measureMultilineMaxLineWidth(mach, cellFont));
+                maxM = Math.max(maxM, measureMultilineMaxSideDataLabelWidth(mach, layout, cellFont));
             }
         }
 
-        /* 機械名・工程名: 固定のデフォルト幅は使わず、文字列（＋列パディング）に合わせる */
         double machCol =
-                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxM + pad));
+                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxM));
         double procCol =
-                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxP + pad));
+                Math.min(MAX_SIDE_COL_WIDTH, Math.max(MIN_SIDE_COL_WIDTH, maxP));
         return new MeasuredLeftWidths(dateCol, machCol, procCol);
+    }
+
+    private static ColumnConstraints fixedPixelColumn(double w) {
+        ColumnConstraints c = new ColumnConstraints(w, w, w);
+        c.setHgrow(Priority.NEVER);
+        return c;
+    }
+
+    private static double measureSideHeaderLabelPrefWidth(
+            String text, LayoutMetrics layout, Font font) {
+        String t = text != null ? text : "";
+        Label lb = new Label(t);
+        lb.setFont(font);
+        lb.setPadding(
+                new Insets(
+                        4 * layout.zoom,
+                        6 * layout.zoom,
+                        4 * layout.zoom,
+                        6 * layout.zoom));
+        lb.setWrapText(false);
+        MEASURE_ROOT.getChildren().setAll(lb);
+        lb.applyCss();
+        lb.layout();
+        return Math.ceil(lb.prefWidth(-1));
+    }
+
+    private static double measureSideDataLabelPrefWidth(
+            String text, LayoutMetrics layout, Font font) {
+        String collapsed = collapseWhitespaceForColumnMeasure(text != null ? text : "");
+        Label lb = new Label(collapsed.isEmpty() ? " " : collapsed);
+        lb.setFont(font);
+        lb.setPadding(
+                new Insets(
+                        2 * layout.zoom,
+                        6 * layout.zoom,
+                        2 * layout.zoom,
+                        6 * layout.zoom));
+        lb.setWrapText(false);
+        MEASURE_ROOT.getChildren().setAll(lb);
+        lb.applyCss();
+        lb.layout();
+        return Math.ceil(lb.prefWidth(-1));
+    }
+
+    private static double measureMultilineMaxSideDataLabelWidth(
+            String text, LayoutMetrics layout, Font cellFont) {
+        String t = text != null ? text : "";
+        double m = 0;
+        for (String line : t.split("\\R")) {
+            String s = collapseWhitespaceForColumnMeasure(line);
+            if (s.isEmpty()) {
+                continue;
+            }
+            m = Math.max(m, measureSideDataLabelPrefWidth(s, layout, cellFont));
+        }
+        return m;
     }
 
     /**
@@ -147,18 +202,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return "";
         }
         return text.strip().replaceAll("[\\p{Zs}]+", " ");
-    }
-
-    private static double measureMultilineMaxLineWidth(String text, Font font) {
-        String t = text != null ? text : "";
-        double m = 0;
-        for (String line : t.split("\\R")) {
-            String s = collapseWhitespaceForColumnMeasure(line);
-            if (!s.isEmpty()) {
-                m = Math.max(m, measureTextWidth(s, font));
-            }
-        }
-        return m;
     }
 
     /**
@@ -303,6 +346,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         VBox wrapProc = new VBox(hProc);
         wrapMach.setAlignment(Pos.CENTER);
         wrapProc.setAlignment(Pos.CENTER);
+        wrapMach.setMinWidth(machW);
+        wrapMach.setPrefWidth(machW);
+        wrapMach.setMaxWidth(machW);
+        wrapProc.setMinWidth(procW);
+        wrapProc.setPrefWidth(procW);
+        wrapProc.setMaxWidth(procW);
         wrapMach.setMinHeight(layout.headerHeight);
         wrapProc.setMinHeight(layout.headerHeight);
         HBox leftHead = new HBox(0, wrapDate, wrapMach, wrapProc);
@@ -318,19 +367,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         GridPane leftBodyGrid = new GridPane();
         leftBodyGrid.setMinWidth(leftTotal);
-        ColumnConstraints ccDate = new ColumnConstraints(dateW);
-        ColumnConstraints ccMach = new ColumnConstraints(machW);
-        ColumnConstraints ccProc = new ColumnConstraints(procW);
-        leftBodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc);
+        leftBodyGrid.setMaxWidth(leftTotal);
+        leftBodyGrid.setPrefWidth(leftTotal);
+        leftBodyGrid.getColumnConstraints()
+                .setAll(fixedPixelColumn(dateW), fixedPixelColumn(machW), fixedPixelColumn(procW));
 
         GridPane rightBodyGrid = new GridPane();
         rightBodyGrid.setMinWidth(timelineWidth + progressTotal);
-        ColumnConstraints ccTime = new ColumnConstraints(timelineWidth);
         if (progressTotal > 0) {
-            ColumnConstraints ccProg = new ColumnConstraints(progressTotal);
-            rightBodyGrid.getColumnConstraints().setAll(ccTime, ccProg);
+            rightBodyGrid.getColumnConstraints()
+                    .setAll(fixedPixelColumn(timelineWidth), fixedPixelColumn(progressTotal));
         } else {
-            rightBodyGrid.getColumnConstraints().setAll(ccTime);
+            rightBodyGrid.getColumnConstraints().setAll(fixedPixelColumn(timelineWidth));
         }
 
         double timelineOuterPad =
@@ -512,7 +560,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         ScrollPane leftBodyScroll = new ScrollPane(leftBodyGrid);
         leftBodyScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         leftBodyScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        leftBodyScroll.setFitToWidth(true);
+        /* true のときビューポートより狭いグリッドが横に引き伸ばされ、機械名・工程名列が余白だらけになる */
+        leftBodyScroll.setFitToWidth(false);
         leftBodyScroll.setMinViewportWidth(leftTotal);
         leftBodyScroll.setPrefViewportWidth(leftTotal);
 
