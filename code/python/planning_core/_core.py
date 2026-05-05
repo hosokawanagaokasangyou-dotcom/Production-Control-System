@@ -18517,6 +18517,26 @@ SPECIAL_WIP_SLIT_MACHINE = "スリット機1　湖南"
 SPECIAL_WIP_SEC_PROCESS = "SEC"
 SPECIAL_WIP_SEC_MACHINE = "SEC機　湖南"
 
+# B-6（接続→SEC）: WIP 上限・ゲート・試行順隣接。既定値・無効化は B-4（スリット→SEC）と同趣旨。
+WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS = os.environ.get(
+    "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS", "20"
+).strip()
+try:
+    WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS = int(WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS)
+except (TypeError, ValueError):
+    WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS = 20
+
+CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS = os.environ.get(
+    "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS", "5"
+).strip()
+try:
+    CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS = int(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
+except (TypeError, ValueError):
+    CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS = 5
+
+SPECIAL_WIP_CONNECTION_PROCESS = "接続"
+SPECIAL_WIP_CONNECTION_MACHINE = "熱融着機　湖南"
+
 # L10 B-4.1「スリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない」用:
 # **同一依頼NO** のスリット完了 − SEC 完了。
 # 工場全体の wip_slit_before_sec を使うと、他依頼の SEC が進むと差が sleみ、当依頼のスリットを完走しても
@@ -18567,6 +18587,61 @@ def _l10_task_queue_has_special_slit_row_for_tid(task_queue: list, task_id: str)
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
         if proc == _slit_proc and mach == _slit_mach:
+            return True
+    return False
+
+
+# B-6.1: 同一依頼内の 接続完了ロール − SEC 完了ロール（接続が先・SEC が後の依頼のみ集計に使用）
+def _b6_connection_done_minus_sec_done_for_task_id(
+    task_queue: list, task_id: str
+) -> float:
+    tid = (task_id or "").strip()
+    if not tid:
+        return 0.0
+    _conn_proc = _normalize_process_name_for_rule_match(
+        SPECIAL_WIP_CONNECTION_PROCESS
+    )
+    _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+    _sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+    conn_done = 0.0
+    sec_done = 0.0
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if not proc or not mach:
+            continue
+        init = float(_t.get("initial_remaining_units") or 0)
+        rem = float(_t.get("remaining_units") or 0)
+        done = max(0.0, init - rem)
+        if done <= 1e-12:
+            continue
+        if proc == _conn_proc and mach == _conn_mach:
+            conn_done += done
+        elif proc == _sec_proc and mach == _sec_mach:
+            sec_done += done
+    return max(0.0, conn_done - sec_done)
+
+
+def _b6_task_queue_has_special_connection_row_for_tid(
+    task_queue: list, task_id: str
+) -> bool:
+    """同一依頼に B-6 対象（接続×熱融着機　湖南）の行が task_queue に存在するか。"""
+    tid = (task_id or "").strip()
+    if not tid:
+        return False
+    _conn_proc = _normalize_process_name_for_rule_match(
+        SPECIAL_WIP_CONNECTION_PROCESS
+    )
+    _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _conn_proc and mach == _conn_mach:
             return True
     return False
 
@@ -18630,6 +18705,83 @@ def _l10_sec_start_floor_from_slit_timeline(
     k_eq = _normalize_equipment_match_key(slit_eq)
     k_m = _normalize_equipment_match_key(str(slit_row.get("machine") or ""))
     k_occ = _normalize_equipment_match_key(occ_slit)
+    hits: list[dict] = []
+    for e in timeline_events:
+        if not _is_machining_timeline_event(e):
+            continue
+        if str(e.get("task_id") or "").strip() != tid:
+            continue
+        em = _normalize_equipment_match_key(str(e.get("machine") or ""))
+        eocc = _normalize_equipment_match_key(str(e.get("machine_occupancy_key") or ""))
+        if em not in (k_eq, k_m) and eocc != k_occ:
+            continue
+        sd = e.get("start_dt")
+        ed = e.get("end_dt")
+        if not isinstance(sd, datetime) or not isinstance(ed, datetime):
+            continue
+        hits.append(e)
+    hits.sort(key=lambda x: x["start_dt"])
+    if len(hits) >= n_need:
+        nth = hits[n_need - 1].get("end_dt")
+        return nth if isinstance(nth, datetime) else None
+    return None
+
+
+def _b6_sec_start_floor_from_connection_timeline(
+    task: dict,
+    timeline_events: list | None,
+    task_queue: list,
+) -> datetime | None:
+    """
+    B-6.1 のカレンダー側下限: 接続→SEC の SEC 行は、タイムライン上で
+    CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS 本目の接続加工終了後まで加工開始しない。
+    """
+    if CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS <= 0:
+        return None
+    if not timeline_events:
+        return None
+    machine_proc = str(task.get("machine") or "").strip()
+    machine_name = str(task.get("machine_name", "") or "").strip()
+    proc = _normalize_process_name_for_rule_match(machine_proc)
+    mach = _normalize_equipment_match_key(machine_name)
+    if proc != _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS):
+        return None
+    if mach != _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE):
+        return None
+    toks = task.get("process_content_tokens") or []
+    _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+    _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+    _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    if not (_cp in _norm and _sc in _norm and _norm.index(_cp) < _norm.index(_sc)):
+        return None
+    tid = str(task.get("task_id") or "").strip()
+    if not tid:
+        return None
+    conn_row: dict | None = None
+    conn_eq: str = ""
+    for t in task_queue:
+        if str(t.get("task_id") or "").strip() != tid:
+            continue
+        p = _normalize_process_name_for_rule_match(t.get("machine"))
+        m = _normalize_equipment_match_key(t.get("machine_name"))
+        if (
+            p == _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+            and m == _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+        ):
+            conn_row = t
+            conn_eq = (
+                str(t.get("equipment_line_key") or t.get("machine") or "")
+                .strip()
+                or str(t.get("machine") or "").strip()
+            )
+            break
+    if not conn_row or not conn_eq:
+        return None
+    occ_conn = str(_machine_occupancy_key_resolve(conn_row, conn_eq) or "").strip()
+    n_need = int(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
+    k_eq = _normalize_equipment_match_key(conn_eq)
+    k_m = _normalize_equipment_match_key(str(conn_row.get("machine") or ""))
+    k_occ = _normalize_equipment_match_key(occ_conn)
     hits: list[dict] = []
     for e in timeline_events:
         if not _is_machining_timeline_event(e):
@@ -19458,10 +19610,11 @@ def _finalize_dispatch_trial_pattern_queue_after_pattern_sort(
 ) -> None:
     """
     配台試行順パターン一覧用: ⑤特別ルール相当の共通後処理（パターン用ソートのあと）。
-    §B-2/3 EC 隣接 → スリット→SEC 連続 → 加工途中タスク単位を前へ → 試行順 1..n。
+    §B-2/3 EC 隣接 → スリット→SEC 連続 → 接続→SEC 連続 → 加工途中タスク単位を前へ → 試行順 1..n。
     """
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _reorder_task_queue_slit_sec_consecutive(task_queue)
+    _reorder_task_queue_connection_sec_consecutive(task_queue)
     _reorder_task_queue_in_progress_front_stable(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
 
@@ -21239,6 +21392,76 @@ def _reorder_task_queue_slit_sec_consecutive(task_queue: list) -> None:
         )
 
 
+def _reorder_task_queue_connection_sec_consecutive(task_queue: list) -> None:
+    """
+    特別ルール B-6.2（接続→SEC）: 同一依頼NO内で接続行の直後に SEC 行が来るよう
+    task_queue（自動算出時の並び）を軽く並べ替える。
+
+    - 対象: 加工内容トークンに「接続」「SEC」があり、かつその順序が接続→SEC の依頼
+    - 判定: 工程名×機械名で、接続=熱融着機　湖南、SEC=SEC機　湖南
+    - シートで配台試行順が全行指定されている場合は本関数は呼ばれない（_apply_dispatch_trial_order...側）
+    """
+    if not task_queue:
+        return
+    conn_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+    conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+    sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+
+    idx_by_tid: dict[str, dict[str, int]] = {}
+    ok_tid: set[str] = set()
+    for i, t in enumerate(task_queue):
+        tid = str(t.get("task_id") or "").strip()
+        if not tid:
+            continue
+        toks = t.get("process_content_tokens") or []
+        norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+        if conn_proc in norm and sec_proc in norm:
+            try:
+                if norm.index(conn_proc) < norm.index(sec_proc):
+                    ok_tid.add(tid)
+            except Exception:
+                pass
+        proc = _normalize_process_name_for_rule_match(t.get("machine"))
+        mach = _normalize_equipment_match_key(t.get("machine_name"))
+        if proc == conn_proc and mach == conn_mach:
+            idx_by_tid.setdefault(tid, {})["conn"] = i
+        elif proc == sec_proc and mach == sec_mach:
+            idx_by_tid.setdefault(tid, {})["sec"] = i
+
+    moved: list[str] = []
+    for tid in sorted(ok_tid):
+        pos = idx_by_tid.get(tid) or {}
+        if "conn" not in pos or "sec" not in pos:
+            continue
+        conn_i = None
+        sec_i = None
+        for i, t in enumerate(task_queue):
+            if str(t.get("task_id") or "").strip() != tid:
+                continue
+            proc = _normalize_process_name_for_rule_match(t.get("machine"))
+            mach = _normalize_equipment_match_key(t.get("machine_name"))
+            if conn_i is None and proc == conn_proc and mach == conn_mach:
+                conn_i = i
+            if sec_i is None and proc == sec_proc and mach == sec_mach:
+                sec_i = i
+        if conn_i is None or sec_i is None:
+            continue
+        if sec_i == conn_i + 1:
+            continue
+        sec_task = task_queue.pop(sec_i)
+        insert_at = conn_i + 1
+        if sec_i < insert_at:
+            insert_at -= 1
+        task_queue.insert(insert_at, sec_task)
+        moved.append(tid)
+    if moved:
+        logging.info(
+            "特別ルールB-6 配台試行順: 接続行の直後にSEC行を隣接した依頼NO: %s",
+            ",".join(moved),
+        )
+
+
 def _task_queue_all_have_sheet_dispatch_trial_order(task_queue: list) -> bool:
     """配台計画シートの「配台試行順番」はキュー全行に正の整数で入っているか。"""
     if not task_queue:
@@ -21288,6 +21511,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
     )
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _reorder_task_queue_slit_sec_consecutive(task_queue)
+    _reorder_task_queue_connection_sec_consecutive(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
     logging.info(
         "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
@@ -25418,6 +25642,7 @@ def _trial_order_flow_eligible_tasks(
     # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
     # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE（既定 task_id＝当該依頼NO行、head＝接頭辞、global）。
     # - L10: スリット→SEC の前段WIPが上限以上なら スリット を配台しない（SECは優先して進める）
+    # - B-6 / L13: 接続→SEC の前段WIPが上限以上なら 接続 を配台しない（SECは優先して進める）
     # remaining_units はロール本数（1ロール完了で 1 減）である前提。
     _wip_l11_global_val: float | None = None
     _wip_l11_by_bucket: dict[str, float] = {}
@@ -25451,6 +25676,35 @@ def _trial_order_flow_eligible_tasks(
             elif proc == _sec_proc and mach == _sec_mach:
                 sec_done_total += done
         wip_slit_before_sec = max(0.0, slit_done_total - sec_done_total)
+
+    wip_connection_before_sec = None
+    if (
+        isinstance(WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS, int)
+        and WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS > 0
+    ):
+        connection_done_total = 0.0
+        sec_done_c = 0.0
+        _conn_proc = _normalize_process_name_for_rule_match(
+            SPECIAL_WIP_CONNECTION_PROCESS
+        )
+        _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+        _sec_proc_c = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+        _sec_mach_c = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        for _t in task_queue:
+            proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+            mach = _normalize_equipment_match_key(_t.get("machine_name"))
+            if not proc or not mach:
+                continue
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if proc == _conn_proc and mach == _conn_mach:
+                connection_done_total += done
+            elif proc == _sec_proc_c and mach == _sec_mach_c:
+                sec_done_c += done
+        wip_connection_before_sec = max(0.0, connection_done_total - sec_done_c)
 
     out = []
     for task in tasks_today:
@@ -25505,6 +25759,20 @@ def _trial_order_flow_eligible_tasks(
             ):
                 continue
 
+        # B-6: SEC 前の接続ロールが上限以上なら接続を止めて SEC を進める（総ロール・スリット経路と同趣旨）
+        if wip_connection_before_sec is not None and wip_connection_before_sec >= float(
+            WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS
+        ):
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc
+                == _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+                and mach
+                == _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+            ):
+                continue
+
         # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
         _l10_tid = str(task.get("task_id") or "").strip()
         _l10_pair_gap = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid)
@@ -25527,6 +25795,34 @@ def _trial_order_flow_eligible_tasks(
                 ):
                     if _l10_task_queue_has_special_slit_row_for_tid(
                         task_queue, _l10_tid
+                    ):
+                        continue
+        # B-6.1: 加工内容が「接続→SEC」の依頼では、当該依頼で接続が
+        # CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS ロール以上終わるまで SEC を開始しない
+        _b6_tid = str(task.get("task_id") or "").strip()
+        _b6_pair_gap = _b6_connection_done_minus_sec_done_for_task_id(
+            task_queue, _b6_tid
+        )
+        if CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0 and _b6_pair_gap < float(
+            CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS
+        ) - 1e-9:
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+            ):
+                toks = task.get("process_content_tokens") or []
+                _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+                _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+                _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+                if (
+                    _cp in _norm
+                    and _sc in _norm
+                    and _norm.index(_cp) < _norm.index(_sc)
+                ):
+                    if _b6_task_queue_has_special_connection_row_for_tid(
+                        task_queue, _b6_tid
                     ):
                         continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
@@ -26151,6 +26447,17 @@ def _assign_one_roll_trial_order_flow(
     _l10_slit_nth_end_floor_dt = _l10_sec_start_floor_from_slit_timeline(
         task, timeline_events, task_queue
     )
+    _b6_conn_nth_end_floor_dt = _b6_sec_start_floor_from_connection_timeline(
+        task, timeline_events, task_queue
+    )
+    _sec_pair_gate_floor_dt: datetime | None = None
+    _pair_gate_candidates = [
+        x
+        for x in (_l10_slit_nth_end_floor_dt, _b6_conn_nth_end_floor_dt)
+        if x is not None
+    ]
+    if _pair_gate_candidates:
+        _sec_pair_gate_floor_dt = max(_pair_gate_candidates)
 
     def _one_roll_from_team(
         team: tuple,
@@ -26191,10 +26498,10 @@ def _assign_one_roll_trial_order_flow(
         if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
             team_start = b2_insp_ec_floor
         if (
-            _l10_slit_nth_end_floor_dt is not None
-            and team_start < _l10_slit_nth_end_floor_dt
+            _sec_pair_gate_floor_dt is not None
+            and team_start < _sec_pair_gate_floor_dt
         ):
-            team_start = _l10_slit_nth_end_floor_dt
+            team_start = _sec_pair_gate_floor_dt
         team_end_limit = min(daily_status[m]["end_dt"] for m in team)
         team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
             team_end_limit, current_date
@@ -26237,10 +26544,10 @@ def _assign_one_roll_trial_order_flow(
             if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
                 ts = b2_insp_ec_floor
             if (
-                _l10_slit_nth_end_floor_dt is not None
-                and ts < _l10_slit_nth_end_floor_dt
+                _sec_pair_gate_floor_dt is not None
+                and ts < _sec_pair_gate_floor_dt
             ):
-                ts = _l10_slit_nth_end_floor_dt
+                ts = _sec_pair_gate_floor_dt
             return ts
 
         _ts_before_defer = team_start
@@ -26720,6 +27027,35 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
                 sec_done_total += done
         wip_slit_before_sec = max(0.0, slit_done_total - sec_done_total)
 
+    wip_connection_before_sec = None
+    if (
+        isinstance(WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS, int)
+        and WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS > 0
+    ):
+        connection_done_total = 0.0
+        sec_done_c = 0.0
+        _conn_proc = _normalize_process_name_for_rule_match(
+            SPECIAL_WIP_CONNECTION_PROCESS
+        )
+        _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+        _sec_proc_c = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+        _sec_mach_c = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        for _t in task_queue:
+            proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+            mach = _normalize_equipment_match_key(_t.get("machine_name"))
+            if not proc or not mach:
+                continue
+            init = float(_t.get("initial_remaining_units") or 0)
+            rem = float(_t.get("remaining_units") or 0)
+            done = max(0.0, init - rem)
+            if done <= 1e-12:
+                continue
+            if proc == _conn_proc and mach == _conn_mach:
+                connection_done_total += done
+            elif proc == _sec_proc_c and mach == _sec_mach_c:
+                sec_done_c += done
+        wip_connection_before_sec = max(0.0, connection_done_total - sec_done_c)
+
     if (
         wip_ec_before_insp is not None
         and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
@@ -26734,6 +27070,18 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
         if (
             proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
             and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+        ):
+            return True
+    if wip_connection_before_sec is not None and wip_connection_before_sec >= float(
+        WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS
+    ):
+        proc = _normalize_process_name_for_rule_match(task.get("machine"))
+        mach = _normalize_equipment_match_key(task.get("machine_name"))
+        if (
+            proc
+            == _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+            and mach
+            == _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
         ):
             return True
     _l10_tid_p = str(task.get("task_id") or "").strip()
@@ -26756,6 +27104,30 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
                 < _norm.index(_normalize_process_name_for_rule_match("SEC"))
             ):
                 return True
+    _b6_tid_p = str(task.get("task_id") or "").strip()
+    _b6_gap_p = _b6_connection_done_minus_sec_done_for_task_id(task_queue, _b6_tid_p)
+    if CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0 and _b6_gap_p < float(
+        CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS
+    ) - 1e-9:
+        proc = _normalize_process_name_for_rule_match(task.get("machine"))
+        mach = _normalize_equipment_match_key(task.get("machine_name"))
+        if (
+            proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+            and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+        ):
+            toks = task.get("process_content_tokens") or []
+            _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+            _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+            _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+            if (
+                _cp in _norm
+                and _sc in _norm
+                and _norm.index(_cp) < _norm.index(_sc)
+            ):
+                if _b6_task_queue_has_special_connection_row_for_tid(
+                    task_queue, _b6_tid_p
+                ):
+                    return True
     if _task_blocked_by_same_request_dependency(task, task_queue):
         return True
     if (

@@ -158,6 +158,14 @@
     "value" : "5",
     "description" : "L10 B-4.1: 加工内容スリット→SEC の依頼で、同一依頼内（スリット完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
   }, {
+    "key" : "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS",
+    "value" : "20",
+    "description" : "B-6: 接続〜SEC 間の総ロール WIP 上限（0 以下で無効）"
+  }, {
+    "key" : "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS",
+    "value" : "5",
+    "description" : "B-6.1: 加工内容接続→SEC の依頼で、同一依頼内（接続完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
+  }, {
     "key" : "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
     "value" : "0",
     "description" : "1=人数最優先（従来）"
@@ -321,11 +329,11 @@
   }, {
     "key" : "PM_AI_CMD_PAUSE_ON_ERROR",
     "value" : "1",
-    "description" : "pip install 等の一括セットアップ実行時: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。初回 pip 失敗時は OS 環境変数のみ有効な場合あり"
+    "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効"
   }, {
     "key" : "PM_AI_SETUP_COMPLETION_MSGBOX",
     "value" : "1",
-    "description" : "pip install 等の一括セットアップ成功時: Windows で完了メッセージ（MessageBox）を表示。0 false no off で無効"
+    "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
   }, {
     "key" : "PM_AI_SPLASH_XLWINGS",
     "value" : "",
