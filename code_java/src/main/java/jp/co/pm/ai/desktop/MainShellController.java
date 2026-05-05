@@ -985,6 +985,8 @@ public final class MainShellController {
 
     void appendBootMessage() {
         mainRunTabController.appendLog(
+                "[boot] " + PrismGpuBootstrapStatus.runTabSummary(), false);
+        mainRunTabController.appendLog(
                 "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", false);
         Platform.runLater(
                 () -> {

@@ -100,6 +100,9 @@ public final class MainRunTabController {
     @FXML
     private Button clearLogButton;
 
+    @FXML
+    private Label prismPipelineLabel;
+
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
             new FilteredList<>(logLinesAll, s -> true);
@@ -205,6 +208,9 @@ public final class MainRunTabController {
         applyLogAreaFont();
         installStageRunButtonDepth(stage1RunButton, Color.rgb(14, 116, 144, 0.35));
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+        if (prismPipelineLabel != null) {
+            prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
+        }
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox
                     .selectedProperty()
@@ -572,20 +578,12 @@ public final class MainRunTabController {
      * 段階1／段階2 実行中は段階ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        Runnable work =
-                () -> {
-                    boolean busy = stage1Running || stage2Running;
-                    if (stage1RunButton != null) {
-                        stage1RunButton.setDisable(busy);
-                    }
-                    if (stage2RunButton != null) {
-                        stage2RunButton.setDisable(busy);
-                    }
-                };
-        if (Platform.isFxApplicationThread()) {
-            work.run();
-        } else {
-            Platform.runLater(work);
+        boolean busy = stage1Running || stage2Running;
+        if (stage1RunButton != null) {
+            stage1RunButton.setDisable(busy);
+        }
+        if (stage2RunButton != null) {
+            stage2RunButton.setDisable(busy);
         }
     }
 

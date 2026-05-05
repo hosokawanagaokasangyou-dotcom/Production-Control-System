@@ -80,6 +80,7 @@
                 <ComboBox fx:id="logFontSizeCombo" prefWidth="88.0" />
                 <Button fx:id="copyAllLogButton" mnemonicParsing="false" onAction="#onCopyAllLogButtonAction" text="全ログをコピー" />
                 <Button fx:id="clearLogButton" mnemonicParsing="false" onAction="#onClearLogButtonAction" text="ログをクリア" />
+                <Label fx:id="prismPipelineLabel" styleClass="pm-prism-pipeline-label" text="JavaFX Prism: …" />
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0" />
         </VBox>

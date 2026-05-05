@@ -195,7 +195,7 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <!-- Prism 既定 sw（設備ガント等の Canvas で GPU 経路が NPE になり得る）。GPU は -Dpm.ai.javafx.prism.gpu=true -->
+          <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
             <option>-Dprism.order=${javafx.prism.order}</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
