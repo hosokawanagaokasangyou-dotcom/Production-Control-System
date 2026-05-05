@@ -1,7 +1,10 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -1351,7 +1354,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return first.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
     }
 
-    /** 「【2026/05/07】」等を {@code 2026/05/07} 形式に正規化する。 */
+    /**
+     * 「【2026/05/07】」等から年月日を取り、{@code 2026年4月18日(土)} 形式に正規化する。
+     */
     private static String compactDateLine(String raw) {
         if (raw == null || raw.isBlank()) {
             return "";
@@ -1365,10 +1370,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         Matcher m = LOOSE_YMD.matcher(s);
         if (m.find()) {
-            int y = Integer.parseInt(m.group(1));
-            int mo = Integer.parseInt(m.group(2));
-            int d = Integer.parseInt(m.group(3));
-            return String.format("%d/%02d/%02d", y, mo, d);
+            try {
+                int y = Integer.parseInt(m.group(1));
+                int mo = Integer.parseInt(m.group(2));
+                int d = Integer.parseInt(m.group(3));
+                LocalDate date = LocalDate.of(y, mo, d);
+                String narrow =
+                        date.getDayOfWeek().getDisplayName(TextStyle.NARROW, Locale.JAPAN);
+                return String.format(
+                        "%d年%d月%d日(%s)",
+                        date.getYear(), date.getMonthValue(), date.getDayOfMonth(), narrow);
+            } catch (Exception ignored) {
+                return s;
+            }
         }
         return s;
     }
