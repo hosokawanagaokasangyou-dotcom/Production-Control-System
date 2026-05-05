@@ -19,7 +19,6 @@ import java.util.TreeSet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 
 /**
@@ -202,9 +201,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
             String k = TimelineEvent.gapGroupKey(e);
             group.computeIfAbsent(k, kk -> new ArrayList<>()).add(i);
         }
-        // #region agent log
-        int dbgLeft = 5;
-        // #endregion
         for (Map.Entry<String, List<Integer>> en : group.entrySet()) {
             List<Integer> ix = en.getValue();
             ix.sort(Comparator.comparing(i -> raw.get(i).start));
@@ -236,33 +232,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     metaByIndex.put(ii, new GapSegMeta(si, segCount, sum));
                 }
             }
-            // #region agent log
-            if (segCount > 1 && dbgLeft > 0) {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("groupKey", en.getKey());
-                d.put("segments", segCount);
-                List<Double> sums = new ArrayList<>();
-                for (List<Integer> seg : segments) {
-                    double s = 0.0;
-                    for (int ii : seg) {
-                        TimelineEvent ev = raw.get(ii);
-                        double ud = ev.unitsDone != null ? ev.unitsDone : 0.0;
-                        double um = ev.unitM != null ? ev.unitM : 0.0;
-                        s += ud * um;
-                    }
-                    sums.add(s);
-                }
-                d.put("sums", sums);
-                AgentDebugLog.appendStructured(
-                        Map.of(),
-                        "38d31c",
-                        "H1",
-                        "EquipmentGanttContractSheetTableBuilder.applyGapAwareMachiningLabels",
-                        "machining gap segments",
-                        d);
-                dbgLeft--;
-            }
-            // #endregion
         }
         List<TimelineEvent> out = new ArrayList<>(raw.size());
         for (int i = 0; i < raw.size(); i++) {
@@ -766,19 +735,24 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     return tid.isEmpty() ? len + "m" : tid + " " + len + "m";
                 }
             }
+            // 加工はギャップ集計の Σ(units_done×unit_m) を優先（複数日の続きは当日ブロック分のみとなり total_units× を上回らない）。
             if ("machining".equals(eventKind)
                     && gapSegmentIndex >= 0
-                    && gapSegmentCount > 1
                     && !Double.isNaN(gapSegmentSumM)
                     && gapSegmentSumM > 1e-12) {
-                String phase =
-                        EquipmentGanttContractSheetTableBuilder.segmentPhaseLabel(
-                                gapSegmentIndex, gapSegmentCount);
                 String len = formatLengthM(gapSegmentSumM);
-                if (!phase.isEmpty() && !len.isEmpty()) {
-                    return tid.isEmpty()
-                            ? phase + " " + len + "m"
-                            : tid + " " + phase + " " + len + "m";
+                if (!len.isEmpty()) {
+                    if (gapSegmentCount > 1) {
+                        String phase =
+                                EquipmentGanttContractSheetTableBuilder.segmentPhaseLabel(
+                                        gapSegmentIndex, gapSegmentCount);
+                        if (!phase.isEmpty()) {
+                            return tid.isEmpty()
+                                    ? phase + " " + len + "m"
+                                    : tid + " " + phase + " " + len + "m";
+                        }
+                    }
+                    return tid.isEmpty() ? len + "m" : tid + " " + len + "m";
                 }
             }
             Double totalM = eventTotalLengthMeters();
