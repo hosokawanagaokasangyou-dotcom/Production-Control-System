@@ -1673,6 +1673,57 @@ public final class MainShellController {
         }
     }
 
+    /**
+     * メインシェルのタブを ID で選択する（配台試行ウィザードなどから）。
+     */
+    public void selectMainShellTab(MainShellTabId id) {
+        if (tabPane == null || id == null) {
+            return;
+        }
+        Tab t = mainShellTabFor(id);
+        if (t != null) {
+            tabPane.getSelectionModel().select(t);
+        }
+    }
+
+    /** 計画結果ビューアを選択し、段階2成果のパスで JSON フィールドを埋める。 */
+    public void navigatePlanResultViewerWithArtifacts(String productionPlanPath, String memberSchedulePath) {
+        selectMainShellTab(MainShellTabId.PLAN_RESULT_VIEWER);
+        String p = productionPlanPath != null ? productionPlanPath : "";
+        String m = memberSchedulePath != null ? memberSchedulePath : "";
+        planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(p, m);
+    }
+
+    /** 設備ガントを選択し、同じ成果パスで読み込む。 */
+    public void navigateEquipmentGanttWithArtifacts(String productionPlanPath, String memberSchedulePath) {
+        selectMainShellTab(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC);
+        String p = productionPlanPath != null ? productionPlanPath : "";
+        String m = memberSchedulePath != null ? memberSchedulePath : "";
+        equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(p, m);
+    }
+
+    /** 配台計画手動修正タブへ切り替える。 */
+    public void navigateDispatchInteractiveTab() {
+        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+    }
+
+    /** {@link AppPaths#defaultPlanningOutputDir} を OS のファイルマネージャで開く。 */
+    public void openDefaultPlanningOutputFolderInOs() {
+        try {
+            Path dir = AppPaths.defaultPlanningOutputDir(collectUiEnv());
+            if (!Files.isDirectory(dir)) {
+                appendLog("[dispatch-wizard] 出力フォルダがありません: " + dir);
+                return;
+            }
+            java.awt.Desktop.getDesktop().open(dir.toFile());
+            appendLog("[dispatch-wizard] 出力フォルダを開きました: " + dir);
+        } catch (Exception e) {
+            appendLog(
+                    "[dispatch-wizard] フォルダを開けませんでした: "
+                            + (e.getMessage() != null ? e.getMessage() : e));
+        }
+    }
+
     /** Same-package tab controllers append run-tab log lines here. */
     void appendLog(String line) {
         mainRunTabController.appendLog(line);

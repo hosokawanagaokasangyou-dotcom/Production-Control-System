@@ -736,6 +736,8 @@ public final class DispatchInteractiveTabController {
                                     if (last >= 0) {
                                         logList.scrollTo(last);
                                     }
+                                    DispatchTrialUnassignedWizard.showIfNeeded(
+                                            owner, shell, Path.of(shortagesPath));
                                 });
                     } finally {
                         releaseTrialModal.run();
