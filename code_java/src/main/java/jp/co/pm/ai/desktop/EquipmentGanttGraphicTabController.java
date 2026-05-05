@@ -14,23 +14,16 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
-import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.FlowPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -48,6 +41,7 @@ import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
 /**
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
+ * グラフィック調整ツールバーのレイアウトは {@code EquipmentGanttGraphicTab.fxml} の FlowPane で定義する。
  */
 public final class EquipmentGanttGraphicTabController {
 
@@ -85,9 +79,6 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private BorderPane contentPane;
 
-    @FXML
-    private VBox graphicToolbarHost;
-
     private MainShellController shell;
 
     private Stage ownerStage;
@@ -99,42 +90,61 @@ public final class EquipmentGanttGraphicTabController {
 
     private BorderPane graphicRootWrapper;
 
+    @FXML
     private Slider graphicZoomSlider;
 
+    @FXML
     private Label graphicZoomPercentLabel;
 
+    @FXML
     private Slider graphicRowHeightSlider;
 
+    @FXML
     private Label graphicRowHeightPctLabel;
 
+    @FXML
     private Slider graphicSlotWidthSlider;
 
+    @FXML
     private Label graphicSlotWidthPctLabel;
 
+    @FXML
     private Slider graphicHeaderHeightSlider;
 
+    @FXML
     private Label graphicHeaderHeightPctLabel;
 
+    @FXML
     private ComboBox<String> equipmentGraphicBarFontCombo;
 
+    @FXML
     private Slider graphicBarFontPctSlider;
 
+    @FXML
     private Label graphicBarFontPctLabel;
 
+    @FXML
     private Slider graphicDateColSlider;
 
+    @FXML
     private Label graphicDateColWidthLabel;
 
+    @FXML
     private Slider graphicMachColSlider;
 
+    @FXML
     private Label graphicMachColWidthLabel;
 
+    @FXML
     private Slider graphicProcColSlider;
 
+    @FXML
     private Label graphicProcColWidthLabel;
 
+    @FXML
     private Slider graphicShiftWheelHSlider;
 
+    @FXML
     private Label graphicShiftWheelHLabel;
 
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
@@ -178,12 +188,15 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
         }
-        graphicZoomSlider = new Slider(50, 200, 100);
-        /* ティック付き長尺スライダーは狭いパネルで右側コントロールを押し出すため非表示 */
-        graphicZoomSlider.setPrefWidth(118);
-        graphicZoomSlider.setShowTickLabels(false);
-        graphicZoomSlider.setShowTickMarks(false);
-        graphicZoomPercentLabel = new Label("100%");
+        populateEquipmentGraphicBarFontComboItems();
+        attachGraphicToolbarListeners();
+    }
+
+    /** FXML で定義済みのコントロールへ値変更リスナーを付ける（ノード生成は FXML 側）。 */
+    private void attachGraphicToolbarListeners() {
+        if (graphicZoomSlider == null) {
+            return;
+        }
         graphicZoomSlider
                 .valueProperty()
                 .addListener(
@@ -194,10 +207,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicZoomSlider);
 
-        graphicRowHeightSlider = new Slider(50, 200, 100);
-        graphicRowHeightSlider.setPrefWidth(96);
-        graphicRowHeightSlider.setShowTickLabels(false);
-        graphicRowHeightPctLabel = new Label("100%");
         graphicRowHeightSlider
                 .valueProperty()
                 .addListener(
@@ -208,10 +217,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicRowHeightSlider);
 
-        graphicSlotWidthSlider = new Slider(50, 500, 100);
-        graphicSlotWidthSlider.setPrefWidth(96);
-        graphicSlotWidthSlider.setShowTickLabels(false);
-        graphicSlotWidthPctLabel = new Label("100%");
         graphicSlotWidthSlider
                 .valueProperty()
                 .addListener(
@@ -222,10 +227,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicSlotWidthSlider);
 
-        graphicHeaderHeightSlider = new Slider(50, 200, 100);
-        graphicHeaderHeightSlider.setPrefWidth(96);
-        graphicHeaderHeightSlider.setShowTickLabels(false);
-        graphicHeaderHeightPctLabel = new Label("100%");
         graphicHeaderHeightSlider
                 .valueProperty()
                 .addListener(
@@ -237,13 +238,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicHeaderHeightSlider);
 
-        equipmentGraphicBarFontCombo = new ComboBox<>();
-        List<String> families = new ArrayList<>(Font.getFamilies());
-        Collections.sort(families);
-        equipmentGraphicBarFontCombo.getItems().add("");
-        equipmentGraphicBarFontCombo.getItems().addAll(families);
-        equipmentGraphicBarFontCombo.setEditable(false);
-        equipmentGraphicBarFontCombo.setPrefWidth(140);
         equipmentGraphicBarFontCombo
                 .valueProperty()
                 .addListener(
@@ -252,10 +246,6 @@ public final class EquipmentGanttGraphicTabController {
                             scheduleEquipmentGraphicPersist();
                         });
 
-        graphicBarFontPctSlider = new Slider(50, 200, 100);
-        graphicBarFontPctSlider.setPrefWidth(96);
-        graphicBarFontPctSlider.setShowTickLabels(false);
-        graphicBarFontPctLabel = new Label("100%");
         graphicBarFontPctSlider
                 .valueProperty()
                 .addListener(
@@ -266,9 +256,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicBarFontPctSlider);
 
-        graphicDateColSlider = new Slider(0, DATE_COL_WIDTH_SLIDER_MAX, 0);
-        graphicDateColSlider.setPrefWidth(88);
-        graphicDateColWidthLabel = new Label(formatLeftColWidthLabel(0));
         graphicDateColSlider
                 .valueProperty()
                 .addListener(
@@ -280,9 +267,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicDateColSlider);
 
-        graphicMachColSlider = new Slider(0, SIDE_COL_WIDTH_SLIDER_MAX, 0);
-        graphicMachColSlider.setPrefWidth(88);
-        graphicMachColWidthLabel = new Label(formatLeftColWidthLabel(0));
         graphicMachColSlider
                 .valueProperty()
                 .addListener(
@@ -294,9 +278,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicMachColSlider);
 
-        graphicProcColSlider = new Slider(0, SIDE_COL_WIDTH_SLIDER_MAX, 0);
-        graphicProcColSlider.setPrefWidth(88);
-        graphicProcColWidthLabel = new Label(formatLeftColWidthLabel(0));
         graphicProcColSlider
                 .valueProperty()
                 .addListener(
@@ -308,11 +289,6 @@ public final class EquipmentGanttGraphicTabController {
                         });
         wireGraphicSliderFlushOnDragEnd(graphicProcColSlider);
 
-        graphicShiftWheelHSlider =
-                new Slider(SHIFT_WHEEL_H_SCROLL_MIN, SHIFT_WHEEL_H_SCROLL_MAX, 200);
-        graphicShiftWheelHSlider.setPrefWidth(96);
-        graphicShiftWheelHSlider.setShowTickLabels(false);
-        graphicShiftWheelHLabel = new Label("200%");
         graphicShiftWheelHSlider
                 .valueProperty()
                 .addListener(
@@ -323,10 +299,17 @@ public final class EquipmentGanttGraphicTabController {
                             scheduleEquipmentGraphicPersist();
                         });
         wireGraphicSliderFlushOnDragEnd(graphicShiftWheelHSlider);
+    }
 
-        if (graphicToolbarHost != null) {
-            graphicToolbarHost.getChildren().setAll(buildGraphicToolbar());
+    private void populateEquipmentGraphicBarFontComboItems() {
+        if (equipmentGraphicBarFontCombo == null) {
+            return;
         }
+        List<String> families = new ArrayList<>(Font.getFamilies());
+        Collections.sort(families);
+        equipmentGraphicBarFontCombo.getItems().clear();
+        equipmentGraphicBarFontCombo.getItems().add("");
+        equipmentGraphicBarFontCombo.getItems().addAll(families);
     }
 
     private static String formatLeftColWidthLabel(double px) {
@@ -683,54 +666,6 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
-    }
-
-    /**
-     * 横幅が狭いと 1 行に詰めた {@link HBox} がオーバーして欠ける。
-     * {@link FlowPane} でコントロール単位を並べ、幅に応じて折り返す。狭い高さでは縦スクロールする。
-     */
-    private ScrollPane buildGraphicToolbar() {
-        FlowPane flow = new FlowPane(Orientation.HORIZONTAL, 8, 6);
-        flow.setPadding(new Insets(0, 0, 4, 0));
-        flow.getChildren()
-                .addAll(
-                        graphicToolbarRow("表示倍率", graphicZoomSlider, graphicZoomPercentLabel),
-                        graphicToolbarRow("行の高さ", graphicRowHeightSlider, graphicRowHeightPctLabel),
-                        graphicToolbarRow(
-                                "見出し行の高さ",
-                                graphicHeaderHeightSlider,
-                                graphicHeaderHeightPctLabel),
-                        graphicToolbarRow("時刻列幅", graphicSlotWidthSlider, graphicSlotWidthPctLabel),
-                        graphicToolbarRow(
-                                "Shift横スクロール",
-                                graphicShiftWheelHSlider,
-                                graphicShiftWheelHLabel),
-                        graphicToolbarRow("日付列幅", graphicDateColSlider, graphicDateColWidthLabel),
-                        graphicToolbarRow("機械名列幅", graphicMachColSlider, graphicMachColWidthLabel),
-                        graphicToolbarRow("工程名列幅", graphicProcColSlider, graphicProcColWidthLabel),
-                        graphicToolbarRow("バー文字フォント", equipmentGraphicBarFontCombo),
-                        graphicToolbarRow(
-                                "バー文字サイズ", graphicBarFontPctSlider, graphicBarFontPctLabel));
-
-        ScrollPane sp = new ScrollPane(flow);
-        sp.setFitToWidth(true);
-        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        sp.setMaxHeight(420);
-        sp.setMinViewportHeight(Region.USE_COMPUTED_SIZE);
-        return sp;
-    }
-
-    /** 左ラベル幅をそろえ、長い日本語ラベルが途中で切れないようにする（{@link FlowPane} の 1 セル）。 */
-    private static HBox graphicToolbarRow(String leftText, Node... rest) {
-        Label left = new Label(leftText);
-        left.setPrefWidth(156);
-        left.setMinWidth(Region.USE_PREF_SIZE);
-        left.setWrapText(false);
-        HBox row = new HBox(8, left);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.getChildren().addAll(rest);
-        return row;
     }
 
     private void applyGraphicCenter(JsonTableIo.SheetTable st) {

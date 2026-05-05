@@ -6,7 +6,10 @@
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Slider?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -44,7 +47,78 @@
                                     onAction="#onBrowsePlanJsonAction"/>
                         </HBox>
                         <Label fx:id="hintLabel" wrapText="true"/>
-                        <VBox fx:id="graphicToolbarHost" fillWidth="true" spacing="8.0"/>
+                        <!-- グラフィック調整：FlowPane で折り返し、高さは行数に応じ自動 -->
+                        <FlowPane hgap="8.0" maxWidth="Infinity"
+                                  orientation="HORIZONTAL" vgap="6.0" VBox.vgrow="NEVER">
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="表示倍率"/>
+                                <Slider fx:id="graphicZoomSlider" blockIncrement="5.0" max="200.0"
+                                        min="50.0" prefWidth="118.0" showTickLabels="false"
+                                        showTickMarks="false" value="100.0"/>
+                                <Label fx:id="graphicZoomPercentLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="行の高さ"/>
+                                <Slider fx:id="graphicRowHeightSlider" blockIncrement="5.0" max="200.0"
+                                        min="50.0" prefWidth="96.0" showTickLabels="false"
+                                        showTickMarks="false" value="100.0"/>
+                                <Label fx:id="graphicRowHeightPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="見出し行の高さ"/>
+                                <Slider fx:id="graphicHeaderHeightSlider" blockIncrement="5.0"
+                                        max="200.0" min="50.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="100.0"/>
+                                <Label fx:id="graphicHeaderHeightPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="時刻列幅"/>
+                                <Slider fx:id="graphicSlotWidthSlider" blockIncrement="5.0"
+                                        max="500.0" min="50.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="100.0"/>
+                                <Label fx:id="graphicSlotWidthPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="Shift横スクロール"/>
+                                <Slider fx:id="graphicShiftWheelHSlider" blockIncrement="5.0"
+                                        max="400.0" min="50.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="200.0"/>
+                                <Label fx:id="graphicShiftWheelHLabel" text="200%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="日付列幅"/>
+                                <Slider fx:id="graphicDateColSlider" blockIncrement="1.0"
+                                        max="220.0" min="0.0" prefWidth="88.0"
+                                        showTickLabels="false" showTickMarks="false" value="0.0"/>
+                                <Label fx:id="graphicDateColWidthLabel" text="自動"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="機械名列幅"/>
+                                <Slider fx:id="graphicMachColSlider" blockIncrement="1.0"
+                                        max="800.0" min="0.0" prefWidth="88.0"
+                                        showTickLabels="false" showTickMarks="false" value="0.0"/>
+                                <Label fx:id="graphicMachColWidthLabel" text="自動"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="工程名列幅"/>
+                                <Slider fx:id="graphicProcColSlider" blockIncrement="1.0"
+                                        max="800.0" min="0.0" prefWidth="88.0"
+                                        showTickLabels="false" showTickMarks="false" value="0.0"/>
+                                <Label fx:id="graphicProcColWidthLabel" text="自動"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="バー文字フォント"/>
+                                <ComboBox fx:id="equipmentGraphicBarFontCombo" editable="false"
+                                          prefWidth="140.0"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="バー文字サイズ"/>
+                                <Slider fx:id="graphicBarFontPctSlider" blockIncrement="5.0"
+                                        max="200.0" min="50.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="100.0"/>
+                                <Label fx:id="graphicBarFontPctLabel" text="100%"/>
+                            </HBox>
+                        </FlowPane>
                     </VBox>
                 </content>
             </TitledPane>
