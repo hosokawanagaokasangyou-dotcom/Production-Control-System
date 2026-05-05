@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -127,6 +128,9 @@ public final class MainShellController {
     private ProgressIndicator shellStageBusyIndicator;
 
     @FXML
+    private Button shellStageCancelButton;
+
+    @FXML
     private Region toolbarGrowSpacer;
 
     @FXML
@@ -213,6 +217,9 @@ public final class MainShellController {
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
+
+    /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
+    private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
@@ -1072,11 +1079,13 @@ public final class MainShellController {
                                     appendLog(line);
                                 }
                             },
-                            ex -> appendLog("[error] " + ex.getMessage()))
+                            ex -> appendLog("[error] " + ex.getMessage()),
+                            activeStageChildProcess::set)
                     .whenComplete(
                             (code, err) -> {
                                 runLock.set(false);
                                 activeRunStageScript = null;
+                                activeStageChildProcess.set(null);
                                 javafx.application.Platform.runLater(
                                         () -> {
                                             applyRunTabGating();
@@ -1119,9 +1128,32 @@ public final class MainShellController {
         } catch (Throwable t) {
             runLock.set(false);
             activeRunStageScript = null;
+            activeStageChildProcess.set(null);
             appendLog("[error] runStage: " + t.getMessage());
             javafx.application.Platform.runLater(this::applyRunTabGating);
         }
+    }
+
+    /**
+     * 段階1/2 実行中の Python 子プロセスを終了する（ツールバー・実行・ログの「中断」）。
+     */
+    void cancelActiveStageRun() {
+        Process child = activeStageChildProcess.get();
+        if (child != null && child.isAlive()) {
+            appendLog("[interrupt] 段階1/2 の子プロセスを終了します…");
+            try {
+                child.destroyForcibly();
+            } catch (Exception ex) {
+                appendLog("[interrupt] 子プロセス終了に失敗: " + ex.getMessage());
+            }
+        } else {
+            appendLog("[interrupt] 終了対象の子プロセスがありません。");
+        }
+    }
+
+    @FXML
+    private void onCancelStageRunAction() {
+        cancelActiveStageRun();
     }
 
     /**
@@ -1185,6 +1217,10 @@ public final class MainShellController {
                 shellStageProgressLabel.setText(
                         stage1Running ? "段階1 実行中…" : "段階2 実行中…");
             }
+            if (shellStageCancelButton != null) {
+                shellStageCancelButton.setManaged(true);
+                shellStageCancelButton.setVisible(true);
+            }
         } else {
             if (shellStageProgressBar != null) {
                 shellStageProgressBar.setProgress(0);
@@ -1197,6 +1233,10 @@ public final class MainShellController {
             }
             if (shellStageProgressLabel != null) {
                 shellStageProgressLabel.setText("");
+            }
+            if (shellStageCancelButton != null) {
+                shellStageCancelButton.setVisible(false);
+                shellStageCancelButton.setManaged(false);
             }
             shellStageProgressBox.setVisible(false);
             shellStageProgressBox.setManaged(false);

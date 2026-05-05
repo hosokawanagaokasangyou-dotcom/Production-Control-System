@@ -41,6 +41,7 @@
                         <Label fx:id="stageRunProgressLabel" minWidth="140.0" text="" />
                         <ProgressIndicator fx:id="stageRunBusyIndicator" managed="false" prefHeight="22.0" prefWidth="22.0" visible="false" />
                         <ProgressBar fx:id="stageRunProgressBar" managed="false" maxWidth="Infinity" prefWidth="220.0" visible="false" />
+                        <Button fx:id="stageRunCancelButton" managed="false" mnemonicParsing="false" onAction="#onStageRunCancelAction" text="中断" visible="false" />
                     </HBox>
                     <Label text="段階2 production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="2" />
                     <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="2">

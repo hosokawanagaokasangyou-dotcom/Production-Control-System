@@ -110,6 +110,9 @@ public final class MainRunTabController {
     private ProgressIndicator stageRunBusyIndicator;
 
     @FXML
+    private Button stageRunCancelButton;
+
+    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -486,6 +489,13 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onStageRunCancelAction() {
+        if (shell != null) {
+            shell.cancelActiveStageRun();
+        }
+    }
+
+    @FXML
     private void onOpenStage2ProductionPlanAction() {
         openExcelBesideField(stage2ProductionPlanField, "stage2-production-plan");
     }
@@ -615,6 +625,10 @@ public final class MainRunTabController {
                             stageRunProgressLabel.setText(
                                     stage1Running ? "段階1 実行中…" : "段階2 実行中…");
                         }
+                        if (stageRunCancelButton != null) {
+                            stageRunCancelButton.setManaged(true);
+                            stageRunCancelButton.setVisible(true);
+                        }
                     } else {
                         if (stageRunProgressBar != null) {
                             stageRunProgressBar.setProgress(0);
@@ -628,12 +642,16 @@ public final class MainRunTabController {
                         if (stageRunProgressLabel != null) {
                             stageRunProgressLabel.setText("");
                         }
+                        if (stageRunCancelButton != null) {
+                            stageRunCancelButton.setVisible(false);
+                            stageRunCancelButton.setManaged(false);
+                        }
                         stageRunProgressBox.setVisible(false);
                         stageRunProgressBox.setManaged(false);
                     }
-                    javafx.scene.Node n = stageRunProgressBox.getParent();
-                    if (n != null) {
-                        n.requestLayout();
+                    javafx.scene.Parent p = stageRunProgressBox.getParent();
+                    if (p != null) {
+                        p.requestLayout();
                     }
                 };
         if (Platform.isFxApplicationThread()) {

@@ -26,6 +26,7 @@
                 <Label fx:id="shellStageProgressLabel" minWidth="130.0" text="" />
                 <ProgressIndicator fx:id="shellStageBusyIndicator" managed="false" prefHeight="22.0" prefWidth="22.0" visible="false" />
                 <ProgressBar fx:id="shellStageProgressBar" managed="false" maxWidth="Infinity" prefWidth="220.0" visible="false" />
+                <Button fx:id="shellStageCancelButton" managed="false" mnemonicParsing="false" onAction="#onCancelStageRunAction" text="中断" visible="false" />
             </HBox>
             <Region fx:id="toolbarGrowSpacer" maxWidth="Infinity" minWidth="0.0" />
             <Button fx:id="clearTabFiltersButton"
