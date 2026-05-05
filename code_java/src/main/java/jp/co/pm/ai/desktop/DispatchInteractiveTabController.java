@@ -80,6 +80,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -463,6 +464,27 @@ public final class DispatchInteractiveTabController {
         statusLabel.setText("配台試行中...");
         showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        // #region agent log
+        try {
+            Map<String, ?> d0 = new LinkedHashMap<>();
+            d0.put(
+                    "watchTaskIds",
+                    "JR260501,Y5-4,Y5-5,Y5-14,Y5-6,Y5-3,Y5-8");
+            d0.put("jsonPath", jsonPath.toString());
+            d0.put(
+                    "ndjsonPath",
+                    String.valueOf(
+                            AgentDebugLog.resolveNdjsonPath(shell.snapshotUiEnv(), "327eec")));
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "327eec",
+                    "H0",
+                    "DispatchInteractiveTabController:onDispatchTrialAction",
+                    "dispatch_trial_started",
+                    d0);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
 
         Stage owner = shell.getPrimaryStage();
         Stage logStage = new Stage();
@@ -698,6 +720,20 @@ public final class DispatchInteractiveTabController {
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
+                        // #region agent log
+                        try {
+                            Map<String, ?> d1 = new LinkedHashMap<>();
+                            d1.put("shortagesPath", shortagesPath != null ? shortagesPath : "");
+                            AgentDebugLog.appendStructured(
+                                    shell.snapshotUiEnv(),
+                                    "327eec",
+                                    "H3",
+                                    "DispatchInteractiveTabController:onDispatchTrialAction:succeeded",
+                                    "dispatch_trial_finished_ok",
+                                    d1);
+                        } catch (Throwable ignored) {
+                        }
+                        // #endregion
                         logLines.add("");
                         logLines.add("[配台試行] 正常終了しました。");
                         logLines.add("不足情報JSON: " + shortagesPath);
