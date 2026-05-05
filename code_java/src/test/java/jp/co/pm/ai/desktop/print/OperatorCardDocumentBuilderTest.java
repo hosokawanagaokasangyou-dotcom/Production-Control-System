@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -59,5 +60,40 @@ class OperatorCardDocumentBuilderTest {
         assertEquals(
                 OperatorCardDocumentBuilder.canonicalTeamCellKey(a),
                 OperatorCardDocumentBuilder.canonicalTeamCellKey(b));
+    }
+
+    @Test
+    void parseDispatchTableDay_accepts_iso_and_slash() {
+        assertEquals(
+                LocalDate.of(2026, 5, 7),
+                OperatorCardDocumentBuilder.parseDispatchTableDay("2026-05-07"));
+        assertEquals(
+                LocalDate.of(2026, 5, 7),
+                OperatorCardDocumentBuilder.parseDispatchTableDay("2026/05/07"));
+    }
+
+    @Test
+    void findDispatchRow_matches_json_dispatch_day_with_slashes() {
+        List<Map<String, String>> rows =
+                List.of(
+                        Map.ofEntries(
+                                Map.entry("\u914d\u53f0\u65e5", "2026/05/07"),
+                                Map.entry("\u4f9d\u983cNO", "Y5-1"),
+                                Map.entry("\u5de5\u7a0b\u540d", "\u30b9\u30e9\u30a4\u30b9"),
+                                Map.entry(
+                                        "\u6a5f\u68b0\u540d",
+                                        "\u30b9\u30e9\u30a4\u30b9\u6a5f1\u3000\u6e56\u5357"),
+                                Map.entry("\u5f53\u65e5\u914d\u53f0\u6570\u91cf", "3600"),
+                                Map.entry("\u63db\u7b97\u6570\u91cf", "9000")));
+        Map<String, String> hit =
+                OperatorCardDocumentBuilder.findDispatchRow(
+                        rows,
+                        LocalDate.of(2026, 5, 7),
+                        "Y5-1",
+                        "\u30b9\u30e9\u30a4\u30b9",
+                        "\u30b9\u30e9\u30a4\u30b9\u6a5f1\u3000\u6e56\u5357");
+        assertNotNull(hit);
+        assertEquals("3600", hit.get("\u5f53\u65e5\u914d\u53f0\u6570\u91cf"));
+        assertEquals("9000", hit.get("\u63db\u7b97\u6570\u91cf"));
     }
 }

@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.print;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,6 +37,10 @@ public final class OperatorCardDocumentBuilder {
             Pattern.compile("(\\d{1,2})/(\\d{1,2})");
     private static final Pattern SLOT_RANGE =
             Pattern.compile("(\\d{2}:\\d{2})-(\\d{2}:\\d{2})");
+
+    /** 結果_配台表.json の配台日（例 {@code 2026/05/07}）および ISO（{@code 2026-05-07}）を解釈する。 */
+    private static final DateTimeFormatter DISPATCH_DAY_SLASH =
+            DateTimeFormatter.ofPattern("uuuu/MM/dd");
 
     private static final String REQ = "依頼NO";
     private static final String PROC = "工程名";
@@ -302,6 +307,23 @@ public final class OperatorCardDocumentBuilder {
             String memberStr =
                     members.isEmpty() ? "—" : String.join("、", members);
 
+            Map<String, String> dispatchHit = null;
+            String qtyD = "";
+            String qtyC = "";
+            if (!p.requestNo().isEmpty()) {
+                dispatchHit =
+                        findDispatchRow(
+                                dispatchRows,
+                                date,
+                                p.requestNo(),
+                                p.processName(),
+                                p.machineName());
+                if (dispatchHit != null) {
+                    qtyD = nz(dispatchHit.get(QTY_DAY));
+                    qtyC = nz(dispatchHit.get(QTY_CONV));
+                }
+            }
+
             // #region agent log
             if (traceY51Slice(cell)) {
                 List<Integer> perKeySizes = new ArrayList<>();
@@ -346,16 +368,25 @@ public final class OperatorCardDocumentBuilder {
             }
             // #endregion
 
-            String qtyD = "";
-            String qtyC = "";
-            if (!p.requestNo().isEmpty()) {
-                Map<String, String> hit =
-                        findDispatchRow(dispatchRows, date, p.requestNo(), p.processName(), p.machineName());
-                if (hit != null) {
-                    qtyD = nz(hit.get(QTY_DAY));
-                    qtyC = nz(hit.get(QTY_CONV));
-                }
+            // #region agent log
+            if (traceY51Slice(cell) && !p.requestNo().isEmpty()) {
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        DEBUG_SESSION_OP_CARD,
+                        "QTY",
+                        "OperatorCardDocumentBuilder.buildDayRows",
+                        "dispatch lookup for quantities",
+                        Map.of(
+                                "dateIso",
+                                date.toString(),
+                                "dispatchHit",
+                                dispatchHit != null,
+                                "qtyDLen",
+                                qtyD.length(),
+                                "qtyCLen",
+                                qtyC.length()));
             }
+            // #endregion
 
             out.add(
                     new OperatorCardTaskRow(
@@ -372,6 +403,32 @@ public final class OperatorCardDocumentBuilder {
         return out;
     }
 
+    /**
+     * 結果_配台表の「配台日」セル文字列を {@link LocalDate} にする。ISO とスラッシュ区切りの両方を許容する。
+     */
+    static LocalDate parseDispatchTableDay(String cell) {
+        if (cell == null) {
+            return null;
+        }
+        String t = cell.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(t);
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(t, DISPATCH_DAY_SLASH);
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(t, DateTimeFormatter.ofPattern("uuuu/M/d"));
+        } catch (DateTimeParseException ignored) {
+        }
+        return null;
+    }
+
     static Map<String, String> findDispatchRow(
             List<Map<String, String>> dispatchRows,
             LocalDate date,
@@ -379,9 +436,9 @@ public final class OperatorCardDocumentBuilder {
             String process,
             String machine) {
 
-        String dayStr = date.toString();
         for (Map<String, String> r : dispatchRows) {
-            if (!dayStr.equals(nz(r.get(DAY)))) {
+            LocalDate rowDay = parseDispatchTableDay(r.get(DAY));
+            if (rowDay == null || !date.equals(rowDay)) {
                 continue;
             }
             if (!eqNorm(reqNo, r.get(REQ))) {
