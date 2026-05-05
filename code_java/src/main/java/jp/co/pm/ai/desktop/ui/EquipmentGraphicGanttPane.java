@@ -305,22 +305,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 parsed.progressColumnIndices().size() * progCell
                         + Math.max(0, parsed.progressColumnIndices().size() - 1) * gap;
 
-        double contentMinWidth = leftTotal + timelineWidth + progressTotal;
-
-        HBox headRow = new HBox(0, leftHead, headerCanvas);
-        headRow.setMinWidth(contentMinWidth);
-
-        GridPane bodyGrid = new GridPane();
-        bodyGrid.setMinWidth(contentMinWidth);
+        GridPane leftBodyGrid = new GridPane();
+        leftBodyGrid.setMinWidth(leftTotal);
         ColumnConstraints ccDate = new ColumnConstraints(dateW);
         ColumnConstraints ccMach = new ColumnConstraints(machW);
         ColumnConstraints ccProc = new ColumnConstraints(procW);
+        leftBodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc);
+
+        GridPane rightBodyGrid = new GridPane();
+        rightBodyGrid.setMinWidth(timelineWidth + progressTotal);
         ColumnConstraints ccTime = new ColumnConstraints(timelineWidth);
         if (progressTotal > 0) {
             ColumnConstraints ccProg = new ColumnConstraints(progressTotal);
-            bodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc, ccTime, ccProg);
+            rightBodyGrid.getColumnConstraints().setAll(ccTime, ccProg);
         } else {
-            bodyGrid.getColumnConstraints().setAll(ccDate, ccMach, ccProc, ccTime);
+            rightBodyGrid.getColumnConstraints().setAll(ccTime);
         }
 
         double timelineOuterPad =
@@ -334,17 +333,28 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
             if (dr.sectionBanner() != null) {
-                Label ban = new Label(dr.sectionBanner());
-                ban.setPrefHeight(layout.sectionRowHeight);
-                ban.setMinHeight(layout.sectionRowHeight);
-                ban.setMaxWidth(Double.MAX_VALUE);
-                ban.setAlignment(Pos.CENTER_LEFT);
-                ban.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
-                ban.setStyle(palette.sectionBannerCss());
-                ban.setMinWidth(contentMinWidth);
-                int spanCols = progressTotal > 0 ? 5 : 4;
-                GridPane.setColumnSpan(ban, spanCols);
-                bodyGrid.add(ban, 0, gridR);
+                Label banL = new Label(dr.sectionBanner());
+                banL.setPrefHeight(layout.sectionRowHeight);
+                banL.setMinHeight(layout.sectionRowHeight);
+                banL.setMaxHeight(layout.sectionRowHeight);
+                banL.setMaxWidth(leftTotal);
+                banL.setAlignment(Pos.CENTER_LEFT);
+                banL.setPadding(new Insets(2 * layout.zoom, 8 * layout.zoom, 2 * layout.zoom, 8 * layout.zoom));
+                banL.setStyle(palette.sectionBannerCss());
+                banL.setWrapText(true);
+                GridPane.setColumnSpan(banL, 3);
+                leftBodyGrid.add(banL, 0, gridR);
+
+                Region banR = new Region();
+                banR.setPrefHeight(layout.sectionRowHeight);
+                banR.setMinHeight(layout.sectionRowHeight);
+                banR.setMaxHeight(layout.sectionRowHeight);
+                banR.setMinWidth(timelineWidth + progressTotal);
+                banR.setStyle(palette.sectionBannerCss());
+                rightBodyGrid.add(banR, 0, gridR);
+                if (progressTotal > 0) {
+                    GridPane.setColumnSpan(banR, 2);
+                }
                 gridR++;
                 continue;
             }
@@ -399,7 +409,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 StackPane.setAlignment(dt, Pos.CENTER);
                 dateWrap.getChildren().add(dt);
 
-                bodyGrid.add(dateWrap, 0, gridR);
+                leftBodyGrid.add(dateWrap, 0, gridR);
             }
 
             if (!mplan.continuation()) {
@@ -432,7 +442,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             cellBodyH - 4,
                             layout.rowLabelFontSize);
                 }
-                bodyGrid.add(ml, 1, gridR);
+                leftBodyGrid.add(ml, 1, gridR);
             }
 
             Label pl = new Label(procTxt);
@@ -480,42 +490,67 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 progBox.getChildren().add(pLab);
             }
 
-            bodyGrid.add(pl, 2, gridR);
-            bodyGrid.add(rowCanvas, 3, gridR);
+            leftBodyGrid.add(pl, 2, gridR);
+            rightBodyGrid.add(rowCanvas, 0, gridR);
             if (!progBox.getChildren().isEmpty()) {
-                bodyGrid.add(progBox, 4, gridR);
+                rightBodyGrid.add(progBox, 1, gridR);
             }
             gridR++;
         }
 
-        ScrollPane headerScroll = new ScrollPane(headRow);
-        headerScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        headerScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        headerScroll.setPannable(false);
-        headerScroll.setFitToHeight(false);
-        headerScroll.setPrefViewportHeight(layout.headerHeight);
-        headerScroll.setPrefHeight(layout.headerHeight);
-        headerScroll.setMinHeight(layout.headerHeight);
-        headerScroll.setMaxHeight(layout.headerHeight);
-        headerScroll.setMinWidth(Region.USE_COMPUTED_SIZE);
+        ScrollPane leftBodyScroll = new ScrollPane(leftBodyGrid);
+        leftBodyScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        leftBodyScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        leftBodyScroll.setFitToWidth(true);
+        leftBodyScroll.setMinViewportWidth(leftTotal);
+        leftBodyScroll.setPrefViewportWidth(leftTotal);
 
-        ScrollPane bodyScroll = new ScrollPane(bodyGrid);
-        bodyScroll.setFitToWidth(false);
-        bodyScroll.setPannable(true);
-        VBox.setVgrow(bodyScroll, Priority.ALWAYS);
+        ScrollPane rightBodyScroll = new ScrollPane(rightBodyGrid);
+        rightBodyScroll.setFitToWidth(false);
+        rightBodyScroll.setPannable(true);
+        HBox.setHgrow(rightBodyScroll, Priority.ALWAYS);
 
-        headerScroll.hvalueProperty().bindBidirectional(bodyScroll.hvalueProperty());
-        installShiftWheelHorizontalScroll(bodyScroll);
+        leftHead.minWidthProperty().bind(leftBodyScroll.widthProperty());
 
-        VBox mainColumn = new VBox(0, headerScroll, bodyScroll);
-        VBox.setVgrow(bodyScroll, Priority.ALWAYS);
+        Region progressHeaderSpacer = new Region();
+        progressHeaderSpacer.setMinWidth(progressTotal);
+        progressHeaderSpacer.setPrefWidth(progressTotal);
+        HBox headerRightContent = new HBox(0, headerCanvas, progressHeaderSpacer);
+        headerRightContent.setMinHeight(layout.headerHeight);
+        headerRightContent.setPrefHeight(layout.headerHeight);
+        headerRightContent.setMaxHeight(layout.headerHeight);
+
+        ScrollPane headerRightScroll = new ScrollPane(headerRightContent);
+        headerRightScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerRightScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        headerRightScroll.setPannable(false);
+        headerRightScroll.setFitToHeight(true);
+        HBox.setHgrow(headerRightScroll, Priority.ALWAYS);
+
+        HBox headRow = new HBox(0, leftHead, headerRightScroll);
+        headRow.setMinHeight(layout.headerHeight);
+        headRow.setPrefHeight(layout.headerHeight);
+        headRow.setMaxHeight(layout.headerHeight);
+
+        headerRightScroll.hvalueProperty().bindBidirectional(rightBodyScroll.hvalueProperty());
+        leftBodyScroll.vvalueProperty().bindBidirectional(rightBodyScroll.vvalueProperty());
+
+        installShiftWheelHorizontalScroll(rightBodyScroll);
+
+        HBox bodySplit = new HBox(0, leftBodyScroll, rightBodyScroll);
+        bodySplit.setAlignment(Pos.TOP_LEFT);
+        HBox.setHgrow(rightBodyScroll, Priority.ALWAYS);
+        VBox.setVgrow(bodySplit, Priority.ALWAYS);
+
+        VBox mainColumn = new VBox(0, headRow, bodySplit);
+        VBox.setVgrow(bodySplit, Priority.ALWAYS);
         mainColumn.setPadding(new Insets(4));
         root.setCenter(mainColumn);
 
         Label hint =
                 new Label(
                         """
-                        ヒント: 横スクロールで時刻軸を追えます。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
+                        ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。Shift+ホイールでも横（時刻軸方向）にスクロール。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付列は見出しなし・データは反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。""");
         hint.setWrapText(true);
