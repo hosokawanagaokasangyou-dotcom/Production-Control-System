@@ -14,16 +14,12 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 
 /**
  * Builds {@link OperatorCardPage} from member_schedule sheets and 結果_配台表 rows.
  */
 public final class OperatorCardDocumentBuilder {
-
-    /** Cursor debug session: オペレーターカードメンバー欄 / Y5-1 追跡 */
-    private static final String DEBUG_SESSION_OP_CARD = "72c80c";
 
     private static final String COL_TIME = "時間帯";
     private static final Set<String> NON_WORK_MARKERS =
@@ -51,14 +47,6 @@ public final class OperatorCardDocumentBuilder {
 
     private OperatorCardDocumentBuilder() {}
 
-    /** ログ用: 修正前後の比較用（生セルを空白除去したハッシュ）。 */
-    static String normalizeCellProbe(String cell) {
-        if (cell == null) {
-            return "";
-        }
-        return cell.trim().replaceAll("\\p{Zs}+", "");
-    }
-
     /**
      * チーム照合用キー。セル原文の完全一致ではなく、依頼NO・工程・機械（{@link MemberScheduleWorkCellParser} と同じ解釈）に
      * 正規化してオペレーター間の表記ゆれを吸収する。
@@ -82,10 +70,6 @@ public final class OperatorCardDocumentBuilder {
                     + normalizeKey(p.machineName());
         }
         return normalizeKey(trimmed);
-    }
-
-    static boolean traceY51Slice(String cell) {
-        return cell != null && cell.contains("Y5-1");
     }
 
     public static OperatorCardPage buildPage(
@@ -114,32 +98,6 @@ public final class OperatorCardDocumentBuilder {
 
         Map<String, Set<String>> teamMap =
                 buildTeamMap(memberSheetsByOperator, threeCols);
-
-        // #region agent log
-        {
-            int y51Keys = 0;
-            for (String k : teamMap.keySet()) {
-                if (k != null && k.contains("Y5-1")) {
-                    y51Keys++;
-                }
-            }
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    DEBUG_SESSION_OP_CARD,
-                    "H3",
-                    "OperatorCardDocumentBuilder.buildPage",
-                    "teamMap built",
-                    Map.of(
-                            "operatorSheets",
-                            memberSheetsByOperator.size(),
-                            "dateCols",
-                            String.join("|", threeCols),
-                            "teamMapSize",
-                            teamMap.size(),
-                            "y51KeyCount",
-                            y51Keys));
-        }
-        // #endregion
 
         List<OperatorCardDaySection> days = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
@@ -220,32 +178,6 @@ public final class OperatorCardDocumentBuilder {
                     }
                     String k = teamKey(dc, slot, cell);
                     out.computeIfAbsent(k, x -> new LinkedHashSet<>()).add(op);
-                    // #region agent log
-                    if (traceY51Slice(cell)) {
-                        AgentDebugLog.appendStructured(
-                                Map.of(),
-                                DEBUG_SESSION_OP_CARD,
-                                "H2",
-                                "OperatorCardDocumentBuilder.buildTeamMap",
-                                "teamMap put",
-                                Map.of(
-                                        "operator",
-                                        op,
-                                        "dateCol",
-                                        dc,
-                                        "slot",
-                                        slot != null ? slot : "",
-                                        "cellLen",
-                                        cell.length(),
-                                        "cellNormLen",
-                                        normalizeCellProbe(cell).length(),
-                                        "cellNormHash",
-                                        Integer.toHexString(normalizeCellProbe(cell).hashCode()),
-                                        "canonicalKeyHash",
-                                        Integer.toHexString(
-                                                canonicalTeamCellKey(cell).hashCode())));
-                    }
-                    // #endregion
                 }
             }
         }
@@ -307,86 +239,21 @@ public final class OperatorCardDocumentBuilder {
             String memberStr =
                     members.isEmpty() ? "—" : String.join("、", members);
 
-            Map<String, String> dispatchHit = null;
             String qtyD = "";
             String qtyC = "";
             if (!p.requestNo().isEmpty()) {
-                dispatchHit =
+                Map<String, String> hit =
                         findDispatchRow(
                                 dispatchRows,
                                 date,
                                 p.requestNo(),
                                 p.processName(),
                                 p.machineName());
-                if (dispatchHit != null) {
-                    qtyD = nz(dispatchHit.get(QTY_DAY));
-                    qtyC = nz(dispatchHit.get(QTY_CONV));
+                if (hit != null) {
+                    qtyD = nz(hit.get(QTY_DAY));
+                    qtyC = nz(hit.get(QTY_CONV));
                 }
             }
-
-            // #region agent log
-            if (traceY51Slice(cell)) {
-                List<Integer> perKeySizes = new ArrayList<>();
-                List<String> slotSamples = new ArrayList<>();
-                for (int k = i; k <= j; k++) {
-                    String sl = lines.get(k).get(COL_TIME);
-                    if (sl != null) {
-                        String tk = teamKey(dateCol, sl, cell);
-                        perKeySizes.add(teamMap.getOrDefault(tk, Set.of()).size());
-                        slotSamples.add(sl);
-                    }
-                }
-                AgentDebugLog.appendStructured(
-                        Map.of(),
-                        DEBUG_SESSION_OP_CARD,
-                        "H1",
-                        "OperatorCardDocumentBuilder.buildDayRows",
-                        "Y5-1 row members resolved",
-                        Map.of(
-                                "selfOperator",
-                                selfOperator,
-                                "date",
-                                date.toString(),
-                                "slotRange",
-                                String.join(
-                                        " .. ",
-                                        slotSamples.isEmpty()
-                                                ? List.of("")
-                                                : List.of(slotSamples.get(0), slotSamples.get(slotSamples.size() - 1))),
-                                "perKeySizes",
-                                perKeySizes.toString(),
-                                "memberStr",
-                                memberStr,
-                                "memberStrLen",
-                                memberStr.length(),
-                                "cellNormHash",
-                                Integer.toHexString(normalizeCellProbe(cell).hashCode()),
-                                "canonicalKeyHash",
-                                Integer.toHexString(canonicalTeamCellKey(cell).hashCode()),
-                                "runId",
-                                "post-fix"));
-            }
-            // #endregion
-
-            // #region agent log
-            if (traceY51Slice(cell) && !p.requestNo().isEmpty()) {
-                AgentDebugLog.appendStructured(
-                        Map.of(),
-                        DEBUG_SESSION_OP_CARD,
-                        "QTY",
-                        "OperatorCardDocumentBuilder.buildDayRows",
-                        "dispatch lookup for quantities",
-                        Map.of(
-                                "dateIso",
-                                date.toString(),
-                                "dispatchHit",
-                                dispatchHit != null,
-                                "qtyDLen",
-                                qtyD.length(),
-                                "qtyCLen",
-                                qtyC.length()));
-            }
-            // #endregion
 
             out.add(
                     new OperatorCardTaskRow(
