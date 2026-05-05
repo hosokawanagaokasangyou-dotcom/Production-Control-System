@@ -138,11 +138,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return new MeasuredLeftWidths(dateCol, machCol, procCol);
     }
 
+    /**
+     * 列幅計測用。データに含まれる全角スペース・連続空白がそのままだと {@link Text} の見た目より列だけ広がるため、
+     * {@link Character#isWhitespace(int)} / {@code \\p{Zs}} に該当する連続を半角1つに畳む（表示文字列は変えない）。
+     */
+    private static String collapseWhitespaceForColumnMeasure(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        return text.strip().replaceAll("[\\p{Zs}]+", " ");
+    }
+
     private static double measureMultilineMaxLineWidth(String text, Font font) {
         String t = text != null ? text : "";
         double m = 0;
         for (String line : t.split("\\R")) {
-            String s = line.strip();
+            String s = collapseWhitespaceForColumnMeasure(line);
             if (!s.isEmpty()) {
                 m = Math.max(m, measureTextWidth(s, font));
             }
