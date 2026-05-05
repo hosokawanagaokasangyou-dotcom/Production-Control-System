@@ -61,7 +61,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double BASE_LABEL_MAX_WIDTH = 360;
     private static final double BASE_ROW_HEIGHT = 26;
     private static final double BASE_SECTION_ROW_HEIGHT = 30;
-    private static final double BASE_HEADER_HEIGHT = 40;
+    /** 時刻ヘッダを縦書き表示するため Excel 風にやや高め */
+    private static final double BASE_HEADER_HEIGHT = 54;
     /** 1 スロットあたりの幅（px、倍率1のとき）。Excel の 10 分スロットを想定 */
     private static final double BASE_SLOT_WIDTH = 9;
 
@@ -245,7 +246,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         List<MachineColumnPlan> machPlans =
                 computeMachineColumnPlans(effCols, parsed.displayRows());
 
-        int dataStripe = 0;
+        int machineColorSeq = -1;
         int gridR = 0;
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
@@ -272,12 +273,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 false, dr.machineLine() != null ? dr.machineLine() : "", 1);
             }
 
+            if (!mplan.continuation()) {
+                machineColorSeq++;
+            }
+            int machineGroupIndex = Math.max(0, machineColorSeq);
+
             String procTxt = dr.processBlock() != null ? dr.processBlock() : "";
 
             if (!mplan.continuation()) {
                 String machTxt = mplan.machineCellText() != null ? mplan.machineCellText() : "";
                 Label ml = new Label(machTxt);
-                applySideDataStyle(ml, machW, layout, palette);
+                applySideDataStyle(ml, machW, layout, palette, machineGroupIndex);
                 ml.setWrapText(true);
                 if (mplan.rowSpan() > 1) {
                     double spanH = mplan.rowSpan() * cellBodyH;
@@ -308,7 +314,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
 
             Label pl = new Label(procTxt);
-            applySideDataStyle(pl, procW, layout, palette);
+            applySideDataStyle(pl, procW, layout, palette, machineGroupIndex);
             pl.setMinHeight(cellBodyH);
             pl.setPrefHeight(cellBodyH);
             pl.setMaxHeight(cellBodyH);
@@ -321,7 +327,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             drawTimelineRow(
                     gcx,
                     dr.cellsInSlots(),
-                    dataStripe++,
+                    machineGroupIndex,
                     layout,
                     palette,
                     barFont);
@@ -348,7 +354,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 pLab.setWrapText(true);
                 pLab.setAlignment(Pos.CENTER);
                 pLab.setFont(Font.font(layout.progressFontSize));
-                pLab.setStyle(pv.isEmpty() ? palette.progressEmptyCss() : palette.progressFilledCss());
+                pLab.setStyle(palette.machineSideCellCss(machineGroupIndex));
                 progBox.getChildren().add(pLab);
             }
 
@@ -443,13 +449,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static void applySideDataStyle(
-            Label lb, double colW, LayoutMetrics layout, GanttPalette palette) {
+            Label lb,
+            double colW,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            int machineGroupIndex) {
         lb.setMinWidth(colW);
         lb.setPrefWidth(colW);
         lb.setMaxWidth(colW);
         lb.setAlignment(Pos.CENTER_LEFT);
         lb.setPadding(new Insets(2 * layout.zoom, 6 * layout.zoom, 2 * layout.zoom, 6 * layout.zoom));
-        lb.setStyle(palette.rowLabelCss());
+        lb.setStyle(palette.machineSideCellCss(machineGroupIndex));
         lb.setMinHeight(layout.rowHeight);
         lb.setPrefHeight(layout.rowHeight);
         lb.setMaxHeight(layout.rowHeight);
@@ -618,57 +628,103 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Color barBreakText,
             Color barStartupText,
             Color barStroke,
+            Color[] machineBands,
+            String machineSideTextFill,
+            String machineSideBorder,
             String rowLabelCss,
             String sectionBannerCss,
             String hintCss,
             String progressEmptyCss,
             String progressFilledCss) {
 
+        Color machineBandFill(int machineGroupIndex) {
+            Color[] b = machineBands();
+            return b[Math.floorMod(machineGroupIndex, b.length)];
+        }
+
+        /** 機械名・工程名・進捗列の Excel 風パステル背景（機械ブロック単位で同色） */
+        String machineSideCellCss(int machineGroupIndex) {
+            return "-fx-background-color: "
+                    + rgbHex(machineBandFill(machineGroupIndex))
+                    + "; -fx-text-fill: "
+                    + machineSideTextFill()
+                    + "; -fx-border-color: "
+                    + machineSideBorder()
+                    + "; -fx-border-width: 0 1 1 0;";
+        }
+
         static GanttPalette forTheme(DesktopTheme theme) {
             boolean dark = theme.isDarkUi();
             if (dark) {
+                Color[] bandsDark =
+                        new Color[] {
+                            Color.web("#223449"),
+                            Color.web("#3d2836"),
+                            Color.web("#243d30"),
+                            Color.web("#454018")
+                        };
                 return new GanttPalette(
                         Color.web("#1e293b"),
                         Color.web("#0f172a"),
-                        Color.web("#475569"),
+                        Color.web("#64748b"),
                         Color.web("#334155"),
                         Color.web("#e2e8f0"),
-                        Color.web("#2563eb"),
-                        Color.web("#38bdf8"),
-                        Color.web("#fb923c"),
+                        Color.web("#60a5fa"),
+                        Color.web("#93c5fd"),
+                        Color.web("#fdba74"),
                         Color.web("#f8fafc"),
                         Color.web("#0c1222"),
                         Color.web("#0c1222"),
                         Color.web("#93c5fd"),
+                        bandsDark,
+                        "#e2e8f0",
+                        "#64748b",
                         "-fx-background-color: #334155; -fx-text-fill: #f8fafc; "
                                 + "-fx-border-color: #64748b; -fx-border-width: 0 1 0 0;",
-                        "-fx-background-color: #0f172a; -fx-font-weight: bold; -fx-font-size: 12px; "
+                        "-fx-background-color: #1e293b; -fx-font-weight: bold; -fx-font-size: 12px; "
                                 + "-fx-text-fill: #f1f5f9;",
                         "-fx-text-fill: #94a3b8; -fx-font-size: 11px;",
                         "-fx-background-color: #1e293b; -fx-border-color: #475569; -fx-text-fill: #cbd5e1;",
                         "-fx-background-color: #422006; -fx-border-color: #d97706; -fx-text-fill: #ffedd5;");
             }
+            Color[] bandsLight =
+                    new Color[] {
+                        Color.web("#ddebf7"),
+                        Color.web("#fce4d6"),
+                        Color.web("#e2efda"),
+                        Color.web("#fff2cc")
+                    };
             return new GanttPalette(
                     Color.web("#ffffff"),
-                    Color.web("#f1f5f9"),
-                    Color.web("#cbd5e1"),
-                    Color.web("#e2e8f0"),
-                    Color.web("#0f172a"),
-                    Color.web("#2563eb"),
-                    Color.web("#7dd3fc"),
-                    Color.web("#fdba74"),
-                    Color.web("#ffffff"),
-                    Color.web("#0f172a"),
-                    Color.web("#9a3412"),
-                    Color.web("#1e40af"),
-                    "-fx-background-color: #e8eef7; -fx-text-fill: #0f172a; "
-                            + "-fx-border-color: #cbd5e1; -fx-border-width: 0 1 0 0;",
-                    "-fx-background-color: #1e3a5f; -fx-font-weight: bold; -fx-font-size: 12px; "
-                            + "-fx-text-fill: #f8fafc;",
-                    "-fx-text-fill: #64748b; -fx-font-size: 11px;",
-                    "-fx-background-color: #fffbf0; -fx-border-color: #f0e1b7; -fx-text-fill: #334155;",
-                    "-fx-background-color: #fff2cc; -fx-border-color: #d6b656; -fx-text-fill: #334155;");
+                    Color.web("#f3f3f3"),
+                    Color.web("#d9d9d9"),
+                    Color.web("#f8f9fa"),
+                    Color.web("#333333"),
+                    Color.web("#8faadc"),
+                    Color.web("#c9daf8"),
+                    Color.web("#ffd966"),
+                    Color.web("#111827"),
+                    Color.web("#1e3a5f"),
+                    Color.web("#854d0e"),
+                    Color.web("#2f5597"),
+                    bandsLight,
+                    "#111827",
+                    "#bfbfbf",
+                    "-fx-background-color: #4472c4; -fx-text-fill: #ffffff; -fx-font-weight: bold; "
+                            + "-fx-border-color: #bfbfbf; -fx-border-width: 0 1 1 0;",
+                    "-fx-background-color: #4472c4; -fx-font-weight: bold; -fx-font-size: 12px; "
+                            + "-fx-text-fill: #ffffff;",
+                    "-fx-text-fill: #595959; -fx-font-size: 11px;",
+                    "-fx-background-color: #fffbf0; -fx-border-color: #d9d9d9; -fx-text-fill: #334155;",
+                    "-fx-background-color: #fff2cc; -fx-border-color: #bfbfbf; -fx-text-fill: #334155;");
         }
+    }
+
+    private static String rgbHex(Color c) {
+        int r = (int) Math.round(c.getRed() * 255);
+        int g = (int) Math.round(c.getGreen() * 255);
+        int b = (int) Math.round(c.getBlue() * 255);
+        return String.format("#%02x%02x%02x", r, g, b);
     }
 
     private static void drawTimeAxis(
@@ -680,23 +736,57 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setFill(palette.headerAxis());
         gc.fillRect(0, 0, timelineWidth, layout.headerHeight);
         gc.setStroke(palette.grid());
-        gc.setLineWidth(0.5);
-        gc.strokeRect(0, 0, timelineWidth, layout.headerHeight);
+        gc.setLineWidth(0.35);
 
         List<Integer> slotCols = parsed.slotColumnIndices();
         int n = slotCols.size();
-        int step = Math.max(1, 60 / Math.max(1, parsed.slotMinutes()));
-
-        gc.setFill(palette.axisLabel());
-        gc.setFont(Font.font(layout.axisFontSize));
         LocalTime t0 = parsed.slotBaseTime();
-        for (int i = 0; i < n; i += step) {
+        int slotMin = Math.max(1, parsed.slotMinutes());
+
+        for (int i = 0; i <= n; i++) {
             double x = i * layout.slotWidth;
-            LocalTime tt = t0.plusMinutes((long) i * parsed.slotMinutes());
-            String txt = tt.format(DateTimeFormatter.ofPattern("H:mm"));
-            gc.fillText(txt, x + 2, layout.headerHeight - 8 * layout.zoom);
             gc.strokeLine(x, 0, x, layout.headerHeight);
         }
+        gc.strokeRect(0, 0, timelineWidth, layout.headerHeight);
+
+        int labelStep = timeLabelStep(n, slotMin, layout.slotWidth);
+        double labelFont = Math.min(layout.axisFontSize, Math.max(7, layout.slotWidth * 0.95));
+        gc.setFill(palette.axisLabel());
+        gc.setFont(Font.font(labelFont));
+        DateTimeFormatter tf = DateTimeFormatter.ofPattern("H:mm");
+        for (int i = 0; i < n; i += labelStep) {
+            double cx = i * layout.slotWidth + layout.slotWidth * 0.5;
+            LocalTime tt = t0.plusMinutes((long) i * slotMin);
+            String txt = tt.format(tf);
+            gc.save();
+            gc.translate(cx, layout.headerHeight - 6 * layout.zoom);
+            gc.rotate(-90);
+            double tw = approxLatinDigitTextWidth(txt, labelFont);
+            gc.setTextBaseline(VPos.CENTER);
+            gc.fillText(txt, -tw / 2, 0);
+            gc.restore();
+        }
+    }
+
+    /** スロットが細いときは時間単位で間引き、それ以外は Excel に近い密度でラベル */
+    private static int timeLabelStep(int slotCount, int slotMinutes, double slotWidthPx) {
+        if (slotCount <= 0) {
+            return 1;
+        }
+        int perHour = Math.max(1, 60 / slotMinutes);
+        double totalPx = slotCount * slotWidthPx;
+        if (totalPx <= 960 || slotWidthPx >= 14) {
+            return 1;
+        }
+        if (totalPx <= 1600) {
+            return Math.min(perHour, 3);
+        }
+        return perHour;
+    }
+
+    private static double approxLatinDigitTextWidth(String txt, double fontPx) {
+        String s = txt != null ? txt : "";
+        return Math.max(8, s.length() * fontPx * 0.52);
     }
 
     private record BarRun(int fromSlot, int toSlot, String text, BarKind kind) {}
@@ -704,19 +794,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static void drawTimelineRow(
             GraphicsContext gc,
             List<String> slotTexts,
-            int stripeIndex,
+            int machineGroupIndex,
             LayoutMetrics layout,
             GanttPalette palette,
             Font barFont) {
         int n = slotTexts.size();
-        boolean stripe = (stripeIndex & 1) == 0;
+        Color band = palette.machineBandFill(machineGroupIndex);
         for (int i = 0; i < n; i++) {
             double x = i * layout.slotWidth;
-            gc.setFill(stripe ? palette.emptyLight() : palette.emptyBand());
+            gc.setFill(band);
             gc.fillRect(x, 0, layout.slotWidth, layout.rowHeight);
         }
         gc.setStroke(palette.grid());
-        gc.setLineWidth(0.3);
+        gc.setLineWidth(0.35);
         for (int i = 0; i <= n; i++) {
             gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
         }
