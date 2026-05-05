@@ -658,9 +658,14 @@ public final class DispatchInteractiveTabController {
         root.setBottom(bottom);
 
         Scene scene = new Scene(root, sceneW, sceneH);
+        shell.registerThemeTrackedScene(scene);
         logStage.setScene(scene);
         logStage.setOnShown(ev -> trialLogWindowReady.set(true));
-        logStage.setOnHidden(ev -> saveTrialLogUiSnapshot.run());
+        logStage.setOnHidden(
+                ev -> {
+                    shell.unregisterThemeTrackedScene(scene);
+                    saveTrialLogUiSnapshot.run();
+                });
         logStage.show();
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
@@ -706,7 +711,7 @@ public final class DispatchInteractiveTabController {
                                         logLines.add("");
                                         logLines.add(
                                                 "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
-                                                        + "依頼NO×機械×配台日の当日配台数量および配台試行順番（工程別最小値）の観点で一致しました。");
+                                                        + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
                                         shell.appendLog(
                                                 "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
                                     } else {

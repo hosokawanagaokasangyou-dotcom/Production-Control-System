@@ -1,0 +1,72 @@
+/* Oxford blue — academic navy with warm accent */
+
+.root {
+    -fx-base: #002855;
+    -fx-background: #001f3f;
+    -fx-control-inner-background: #003875;
+    -fx-text-box-border: #1a4f8c;
+    -fx-accent: #ffd166;
+    -fx-focus-color: -fx-accent;
+    -fx-faint-focus-color: transparent;
+    -fx-default-button-base-color: derive(-fx-accent, -18%);
+    -fx-hover-base: derive(-fx-base, 10%);
+    -fx-pressed-base: derive(-fx-base, -8%);
+    -fx-dark-text-color: #f0f4f8;
+    -fx-mid-text-color: #d9e2ec;
+    -fx-light-text-color: white;
+    -fx-mark-color: #f0f4f8;
+    -fx-selection-bar: derive(-fx-accent, -22%);
+    -fx-selection-bar-non-focused: derive(-fx-accent, -38%);
+    -fx-selection-bar-text: #001f3f;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-background-color: derive(-fx-background, 12%);
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: derive(-fx-background, -6%);
+}
+
+.table-view {
+    -fx-table-cell-border-color: #4a7ab8;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: derive(-fx-base, 8%);
+}
+
+.list-view .list-cell:selected,
+.tree-view .tree-cell:selected {
+    -fx-background-color: -fx-selection-bar;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.text-area,
+.list-view,
+.tree-view,
+.table-view {
+    -fx-background-color: -fx-control-inner-background;
+}
+
+.scroll-bar {
+    -fx-background-color: derive(-fx-background, 6%);
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: derive(-fx-base, 22%);
+}
+
+.menu-bar {
+    -fx-background-color: derive(-fx-background, 4%);
+}
+
+.tool-bar {
+    -fx-background-color: derive(-fx-background, 4%);
+    -fx-border-color: #1a4f8c;
+    -fx-border-width: 0 0 1 0;
+}
+
+.titled-pane > .title {
+    -fx-background-color: derive(-fx-base, 6%);
+}

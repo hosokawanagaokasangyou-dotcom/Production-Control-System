@@ -57,6 +57,7 @@ from .plan_workbook_sidecar import (
     normalized_workbook_json_path,
     read_result_task_dataframe,
     write_member_schedule_workbook_json,
+    write_production_plan_logical_view_json,
     write_production_plan_workbook_json,
     write_result_task_json_sidecar,
 )
@@ -79,7 +80,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 
 # JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
 # - 段階2の配台ループ本体は変更しない。試行はフラグ・読込・結果表の上書きで差し替える。
-# - 配台試行順・結果表の日別数量は入力 JSON を正とする。
+# - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日行を基準とし、入力が 1 行に潰れないようマージする。
 # - 機械カレンダーは * 系セルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 人不足は op_shortage / as_shortage に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
@@ -1928,7 +1929,9 @@ def _apply_stage2_production_plan_workbook_polish(
 ):
     """
     production_plan_multi_day*.xlsx 各シートの共通仕上げ（ガント以外）。
-    見出し背景・罫線・窓枠固定（先頭列＋行1）。
+
+    見出し背景・罫線・窓枠固定（先頭列＋行1）に限る。条件付き書式・ハイパーリンク・
+    配台表の Excel テーブル化・設備時間割の列幅調整は、呼び出し側の前段・後段で維持する。
     """
     skip = frozenset(
         {RESULT_SHEET_GANTT_NAME, RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME}
@@ -23659,6 +23662,38 @@ def _interactive_validate_dispatch_quantities(
         "yes",
         "on",
     )
+
+    def _sum_by_task_machine(
+        src: dict[tuple[str, str, date], float],
+    ) -> dict[tuple[str, str], float]:
+        acc: dict[tuple[str, str], float] = defaultdict(float)
+        for (tid, mach, _dd), v in src.items():
+            acc[(tid, mach)] += float(v)
+        return dict(acc)
+
+    if interactive_ui_trial:
+        # JSON が暦日別に分割されていない場合、期待値は 1 暦日キーに寄せられがち。
+        # 結果_配台表は timeline の暦日分割を正とするため、(依頼NO, 機械名) 単位の合計で照合する。
+        exp_tm = _sum_by_task_machine(expected)
+        act_tm = _sum_by_task_machine(actual)
+        all_tm = set(exp_tm) | set(act_tm)
+        for k in sorted(all_tm):
+            exp_v = float(exp_tm.get(k, 0.0))
+            act_v = float(act_tm.get(k, 0.0))
+            lim = max(eps, 1e-9 * max(abs(exp_v), abs(act_v), 1.0))
+            if abs(act_v - exp_v) <= lim:
+                continue
+            msg = (
+                "インタラクティブ配台試行: 数量不一致（依頼NO×機械名の合計） "
+                f"{k}: 期待={exp_v} 実際={act_v}"
+            )
+            logging.warning(msg)
+            try:
+                print(msg, file=sys.stderr, flush=True)
+            except Exception:
+                pass
+        return
+
     for k, exp_v in expected.items():
         act_v = actual.get(k, 0.0)
         if abs(act_v - exp_v) <= eps:
@@ -23667,14 +23702,7 @@ def _interactive_validate_dispatch_quantities(
             "インタラクティブ配台試行: 数量不一致 "
             f"{k}: 期待={exp_v} 実際={act_v}"
         )
-        if interactive_ui_trial:
-            logging.warning(msg)
-            try:
-                print(msg, file=sys.stderr, flush=True)
-            except Exception:
-                pass
-        else:
-            raise PlanningValidationError(msg)
+        raise PlanningValidationError(msg)
 
 
 def _interactive_validate_timeline_midnight_if_interactive(
@@ -24028,25 +24056,40 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def _interactive_dispatch_trial_use_editor_rows_for_result_table(
-    df_sim: pd.DataFrame,
-    json_rows: list | None,
+def _interactive_trial_pair_dates_from_targets(
+    targets: dict | None,
+) -> dict[tuple[str, str], set[date]]:
+    """
+    結果_配台表 JSON 由来の targets に現れる (依頼NO, 機械名) ごとの配台日集合。
+    キーに含まれない行は暦日制限をかけない（従来どおり段階2に委ねる）。
+    """
+    out: dict[tuple[str, str], set[date]] = {}
+    if not targets:
+        return out
+    for (tid, mach, dd) in targets.keys():
+        k = (_interactive_norm_cell(tid), _interactive_norm_cell(mach))
+        if k not in out:
+            out[k] = set()
+        if isinstance(dd, date):
+            out[k].add(dd)
+    return out
+
+
+def _dataframe_from_interactive_dispatch_json_rows(
+    json_rows: list,
     json_columns: list | None,
+    *,
+    fallback_columns_from: pd.DataFrame | None,
 ) -> pd.DataFrame:
-    """
-    インタラクティブ配台試行: 保存済み「結果_配台表.json」の rows をシミュレーション結果より優先する（日別・数量を死守）。
-    通常の段階2（本関数を呼ばない経路）では従来どおり timeline から集約した表を使う。
-    """
-    if not json_rows or not isinstance(json_rows, list):
-        return df_sim
-    if not _interactive_dispatch_trial_env_active():
-        return df_sim
-    if df_sim is None:
-        df_sim = pd.DataFrame()
+    """結果_配台表 JSON の rows のみから DataFrame を組み立てる（timeline が空のときのフォールバック）。"""
     if json_columns and isinstance(json_columns, list) and len(json_columns) > 0:
         cols_order = [str(x) for x in json_columns]
-    elif df_sim is not None and not getattr(df_sim, "empty", True) and len(df_sim.columns) > 0:
-        cols_order = list(df_sim.columns)
+    elif (
+        fallback_columns_from is not None
+        and not getattr(fallback_columns_from, "empty", True)
+        and len(fallback_columns_from.columns) > 0
+    ):
+        cols_order = list(fallback_columns_from.columns)
     else:
         cols_order = list(RESULT_DISPATCH_TABLE_STATIC_HEADERS) + ["配台日", "当日配台数量"]
     recs: list[dict] = []
@@ -24068,17 +24111,35 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
                 else:
                     d[c] = v
         recs.append(d)
-    if not recs:
-        return df_sim
     df_out = pd.DataFrame(recs)
     for c in cols_order:
         if c not in df_out.columns:
             df_out[c] = ""
     ordered = [c for c in cols_order if c in df_out.columns]
     extra = [c for c in df_out.columns if c not in ordered]
-    df_out = df_out.reindex(columns=ordered + extra)
+    return df_out.reindex(columns=ordered + extra)
+
+
+def _interactive_dispatch_trial_use_editor_rows_for_result_table(
+    df_sim: pd.DataFrame,
+    json_rows: list | None,
+    json_columns: list | None,
+) -> pd.DataFrame:
+    """
+    インタラクティブ配台試行: 編集タブの入力 JSON rows を結果_配台表の正とする。
+    ユーザーが暦日行を手動統合した場合でも、配台試行後に分割へ戻さない。
+    """
+    if not json_rows or not isinstance(json_rows, list):
+        return df_sim
+    if not _interactive_dispatch_trial_env_active():
+        return df_sim
+    df_out = _dataframe_from_interactive_dispatch_json_rows(
+        json_rows,
+        json_columns,
+        fallback_columns_from=df_sim,
+    )
     logging.info(
-        "インタラクティブ配台試行: 結果_配台表は入力 JSON の rows を採用しました（%s 行・シミュレーション集約は上書き）。",
+        "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
     )
     return df_out
@@ -25566,6 +25627,7 @@ def _trial_order_flow_eligible_tasks(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     min_dispatch_effective: int | None = None,
     assign_probe_ctx: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
 ) -> list:
     # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
     # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE（既定 task_id＝当該依頼NO行、head＝接頭辞、global）。
@@ -25608,6 +25670,15 @@ def _trial_order_flow_eligible_tasks(
     for task in tasks_today:
         if float(task.get("remaining_units") or 0) <= 1e-12:
             continue
+        if (
+            _interactive_dispatch_trial_env_active()
+            and interactive_trial_pair_dates is not None
+        ):
+            tid_n = _interactive_norm_cell(str(task.get("task_id") or ""))
+            mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
+            _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
+            if _pd is not None and current_date not in _pd:
+                continue
         # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
         if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
             if task.get("roll_pipeline_ec"):
@@ -26974,12 +27045,22 @@ def _tasks_in_min_pending_dispatch_pool(
     skills_dict: dict | None = None,
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_trial_pair_dates: dict | None = None,
 ) -> list:
     """`_min_pending_dispatch_trial_order_for_date` と同一の安価フィルタを通靎したタスクのリスト。"""
     out: list = []
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
             continue
+        if (
+            _interactive_dispatch_trial_env_active()
+            and interactive_trial_pair_dates is not None
+        ):
+            tid_n = _interactive_norm_cell(str(t.get("task_id") or ""))
+            mach_n = _interactive_norm_cell(str(t.get("machine_name") or ""))
+            _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
+            if _pd is not None and current_date not in _pd:
+                continue
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
             continue
@@ -27063,6 +27144,9 @@ def _trial_order_first_schedule_pass(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_dispatch_targets: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
+    interactive_trial_meters_done: dict | None = None,
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並きる（1 パス分）。
@@ -27118,6 +27202,7 @@ def _trial_order_first_schedule_pass(
                 _gpo.get("abolish_all_scheduling_limits")
             ),
             dispatch_interval_mirror=dispatch_interval_mirror,
+            interactive_trial_pair_dates=interactive_trial_pair_dates,
         )
         _min_dispatch_eff = _effective_min_dispatch_trial_order_from_pool(
             _pool_min, current_date, daily_status, _assign_probe_ctx
@@ -27136,6 +27221,7 @@ def _trial_order_first_schedule_pass(
         dispatch_interval_mirror=dispatch_interval_mirror,
         min_dispatch_effective=_min_dispatch_eff,
         assign_probe_ctx=_assign_probe_ctx,
+        interactive_trial_pair_dates=interactive_trial_pair_dates,
     )
     if not eligible:
         return False
@@ -27249,6 +27335,31 @@ def _trial_order_first_schedule_pass(
         while float(task.get("remaining_units") or 0) > 1e-12:
             if max_rolls is not None and rolls_done >= max_rolls:
                 break
+            _iv_cap = (
+                _interactive_dispatch_trial_env_active()
+                and interactive_dispatch_targets is not None
+                and interactive_trial_meters_done is not None
+            )
+            _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
+            _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
+            _cap_key = (_tid_iv, _mach_iv, current_date)
+            if _iv_cap and _cap_key in interactive_dispatch_targets:
+                try:
+                    _cap_m = float(interactive_dispatch_targets[_cap_key])
+                    _done_m = float(interactive_trial_meters_done.get(_cap_key, 0.0))
+                except (TypeError, ValueError):
+                    _cap_m = 0.0
+                    _done_m = 0.0
+                if _done_m >= _cap_m - 1e-5:
+                    break
+                try:
+                    _um_lim = float(task.get("unit_m") or 0)
+                except (TypeError, ValueError):
+                    _um_lim = 0.0
+                if _um_lim > 1e-12:
+                    _rem_m = max(0.0, _cap_m - _done_m)
+                    if _rem_m + 1e-9 < _um_lim:
+                        break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -27366,6 +27477,19 @@ def _trial_order_first_schedule_pass(
             )
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
+            if (
+                _iv_cap
+                and interactive_dispatch_targets is not None
+                and interactive_trial_meters_done is not None
+                and _cap_key in interactive_dispatch_targets
+            ):
+                try:
+                    _um_iv_acc = float(task.get("unit_m") or 0)
+                except (TypeError, ValueError):
+                    _um_iv_acc = 0.0
+                interactive_trial_meters_done[_cap_key] = float(
+                    interactive_trial_meters_done.get(_cap_key, 0.0)
+                ) + float(done_units) * _um_iv_acc
             task["remaining_units"] = max(
                 0.0,
                 float(task.get("remaining_units") or 0) - float(done_units),
@@ -27557,6 +27681,9 @@ def _run_b2_inspection_rewind_pass(
     _need_headcount_logged_orders: set,
     team_combo_presets: dict | None = None,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    interactive_dispatch_targets: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
+    interactive_trial_meters_done: dict | None = None,
 ) -> bool:
     """
     §B-2 / §B-3: EC 坴を先に全日で進ゝた後」検査＝巻返し坴のみを日付先頭から再走査して配台れる。
@@ -27661,6 +27788,9 @@ def _run_b2_inspection_rewind_pass(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                interactive_dispatch_targets=interactive_dispatch_targets,
+                interactive_trial_pair_dates=interactive_trial_pair_dates,
+                interactive_trial_meters_done=interactive_trial_meters_done,
             )
             if not _made:
                 break
@@ -27697,6 +27827,42 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
         if str(t.get("task_id") or "").strip() == tid:
             return t
     return None
+
+
+def _interactive_trial_recompute_meters_done_from_timeline(
+    timeline_events: list,
+    task_queue: list,
+    targets: dict | None,
+) -> dict[tuple[str, str, date], float]:
+    """
+    インタラクティブ試行: timeline の加工イベントから (依頼NO, 機械名, 暦日) 別の換算mを再集計する。
+    納期シフト等で timeline からイベントが削除されたときに meters 追跡を整合させる。
+    """
+    acc: dict[tuple[str, str, date], float] = {}
+    if not targets:
+        return acc
+    want = set(targets.keys())
+    for ev in timeline_events:
+        if not _is_machining_timeline_event(ev):
+            continue
+        tid = _interactive_norm_cell(ev.get("task_id"))
+        tsk = _task_dict_for_timeline_event(ev, task_queue)
+        if tsk is None:
+            continue
+        mach_n = _interactive_norm_cell(tsk.get("machine_name"))
+        d = ev.get("date")
+        if not isinstance(d, date):
+            continue
+        k = (tid, mach_n, d)
+        if k not in want:
+            continue
+        try:
+            ud = float(ev.get("units_done") or 0)
+            um = float(tsk.get("unit_m") or 0)
+        except (TypeError, ValueError):
+            continue
+        acc[k] = acc.get(k, 0.0) + ud * um
+    return acc
 
 
 def _repair_timeline_daily_startup_snapped_to_first_machining(
@@ -29770,6 +29936,12 @@ def _generate_plan_impl(
     _due_shift_retry_count_by_request: dict[str, int] = {}
     _due_shift_exhausted_requests: set[str] = set()
     _due_shift_cap_warned_tids: set[str] = set()
+    _interactive_trial_pair_dates = None
+    _interactive_trial_meters_done: dict[tuple[str, str, date], float] = {}
+    if _interactive_dispatch_trial_env_active() and interactive_dispatch_targets:
+        _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
+            interactive_dispatch_targets
+        )
     _outer_retry_round = 0
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
@@ -29915,6 +30087,9 @@ def _generate_plan_impl(
                         _need_headcount_logged_orders,
                         team_combo_presets,
                         dispatch_interval_mirror=_dispatch_interval_mirror,
+                        interactive_dispatch_targets=interactive_dispatch_targets,
+                        interactive_trial_pair_dates=_interactive_trial_pair_dates,
+                        interactive_trial_meters_done=_interactive_trial_meters_done,
                     )
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     _mh_legacy_day = _machine_handoff_state_from_timeline(
@@ -29972,6 +30147,7 @@ def _generate_plan_impl(
                                 )
                             ),
                             dispatch_interval_mirror=_dispatch_interval_mirror,
+                            interactive_trial_pair_dates=_interactive_trial_pair_dates,
                         )
                         _min_dispatch_eff_legacy = (
                             _effective_min_dispatch_trial_order_from_pool(
@@ -31120,6 +31296,18 @@ def _generate_plan_impl(
                                 _dispatch_interval_mirror.rebuild_from_timeline(
                                     timeline_events
                                 )
+                            if (
+                                _interactive_dispatch_trial_env_active()
+                                and interactive_dispatch_targets
+                            ):
+                                _interactive_trial_meters_done.clear()
+                                _interactive_trial_meters_done.update(
+                                    _interactive_trial_recompute_meters_done_from_timeline(
+                                        timeline_events,
+                                        task_queue,
+                                        interactive_dispatch_targets,
+                                    )
+                                )
                             for t in task_queue:
                                 if str(t.get("task_id", "") or "").strip() in shift_set:
                                     t["remaining_units"] = float(
@@ -31182,6 +31370,9 @@ def _generate_plan_impl(
                 _need_headcount_logged_orders,
                 team_combo_presets,
                 dispatch_interval_mirror=_dispatch_interval_mirror,
+                interactive_dispatch_targets=interactive_dispatch_targets,
+                interactive_trial_pair_dates=_interactive_trial_pair_dates,
+                interactive_trial_meters_done=_interactive_trial_meters_done,
             )
             if _rewind_made:
                 logging.info(
@@ -31396,6 +31587,35 @@ def _generate_plan_impl(
     # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
     # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
+    _interactive_hist_override: dict[tuple[str, str], list[dict]] = {}
+    if _interactive_dispatch_trial_env_active() and isinstance(interactive_result_dispatch_json_rows, list):
+        _tmp_hist: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        for _r in interactive_result_dispatch_json_rows:
+            if not isinstance(_r, dict):
+                continue
+            _tid = _interactive_norm_cell(_r.get(TASK_COL_TASK_ID))
+            _mach = _interactive_norm_cell(_r.get(TASK_COL_MACHINE_NAME))
+            _dd = _interactive_parse_dispatch_date_cell(_r.get("配台日"))
+            _qc = _r.get("当日配台数量")
+            try:
+                _qv = (
+                    float(str(_qc).replace(",", "").strip())
+                    if _qc not in (None, "")
+                    else 0.0
+                )
+            except (TypeError, ValueError):
+                _qv = 0.0
+            if not _tid or not _mach or _dd is None or _qv <= 1e-9:
+                continue
+            _tmp_hist[(_tid, _mach)].append(
+                {
+                    "date": _dd.strftime("%m/%d"),
+                    "done_m": float(_qv),
+                }
+            )
+        for _k, _vv in _tmp_hist.items():
+            _vv.sort(key=lambda _h: str(_h.get("date") or ""))
+            _interactive_hist_override[_k] = _vv
     max_history_len = max(
         [
             len(merge_assigned_history_contiguous_for_result_sheet(t.get("assigned_history")))
@@ -31403,6 +31623,12 @@ def _generate_plan_impl(
         ]
         + [0]
     )
+    if _interactive_hist_override:
+        try:
+            _ov_max = max((len(v) for v in _interactive_hist_override.values()), default=0)
+            max_history_len = max(int(max_history_len), int(_ov_max))
+        except Exception:
+            pass
     _baseline_raw_by_line = _build_result_sheet_effective_raw_input_date_by_line(
         tasks_df_raw_input_baseline
     )
@@ -31494,9 +31720,15 @@ def _generate_plan_impl(
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER: _dto if _dto is not None else "",
         }
         row_history = {}
-        _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
-            t.get("assigned_history")
-        )
+        _tid_norm = _interactive_norm_cell(t.get("task_id"))
+        _mach_norm = _interactive_norm_cell(t.get("machine_name"))
+        _hk = (_tid_norm, _mach_norm)
+        if _hk in _interactive_hist_override:
+            _hist_for_sheet = _interactive_hist_override.get(_hk, [])
+        else:
+            _hist_for_sheet = merge_assigned_history_contiguous_for_result_sheet(
+                t.get("assigned_history")
+            )
         for i in range(max_history_len):
             if i < len(_hist_for_sheet):
                 h = _hist_for_sheet[i]
@@ -31651,26 +31883,6 @@ def _generate_plan_impl(
         
     df_utilization = pd.DataFrame(utilization_data)
 
-    df_mprio_legend, df_mprio_tbl = build_member_assignment_priority_reference(
-        skills_dict, members
-    )
-    if df_mprio_tbl.empty:
-        df_mprio_tbl = pd.DataFrame(
-            [
-                {
-                    "工程名": "",
-                    "機械名": "",
-                    "スキル列キー": "",
-                    "優先順佝": "",
-                    "メンバー": "",
-                    "ロール": "",
-                    "優先度値_尝さいろど先": "",
-                    "skillsセル値": "",
-                    "備考": "マスタ skills に「工程名+機械名」形式の列は見つからないか」データはありません。",
-                }
-            ]
-        )
-
     _usage_txt = build_gemini_usage_summary_text()
     if _usage_txt:
         ai_log_data["Gemini_トークン・料金サマリ"] = _usage_txt[:50000]
@@ -31796,88 +32008,123 @@ def _generate_plan_impl(
                 log_sheet_name=_actual_detail_sheet_log_label(),
                 roll_detail=True,
             )
+    # 表シート: DataFrame を先に確定 → JSON 正本 → 同一ペイロードから ExcelWriter へ（ガント・2 段シート除く）
+    df_tasks = pd.DataFrame(task_results)
+    df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
+        df_tasks, max_history_len
+    )
+    try:
+        from planning_core.excel_trace_task import log_df_tasks as _excel_trace_df_tasks
+
+        _excel_trace_df_tasks(
+            df_tasks,
+            "after_apply_result_task_column_order",
+            output_basename=os.path.basename(plan_xlsx_final),
+        )
+    except Exception:
+        pass
+    if not task_column_order:
+        task_column_order, vis_map = _result_task_column_config_fallback_from_existing(
+            df_tasks, max_history_len
+        )
+    seen_tc: set[str] = set()
+    task_column_order_dedup: list = []
+    vis_list_dedup: list = []
+    for c in task_column_order:
+        if c in seen_tc:
+            continue
+        seen_tc.add(c)
+        task_column_order_dedup.append(c)
+        vis_list_dedup.append(bool(vis_map.get(c, True)))
+    df_column_config = pd.DataFrame(
+        {
+            "列名": task_column_order_dedup,
+            "表示": vis_list_dedup,
+        }
+    )
+    try:
+        df_src_for_dispatch = load_tasks_df()
+    except Exception as e:
+        logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
+        df_src_for_dispatch = None
+    df_dispatch = build_result_dispatch_table_dataframe(
+        timeline_events,
+        sorted_tasks_for_result,
+        tasks_df,
+        df_src_for_dispatch,
+    )
+    df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
+        df_dispatch,
+        interactive_result_dispatch_json_rows,
+        interactive_result_dispatch_json_columns,
+    )
+    if interactive_dispatch_targets:
+        _interactive_validate_dispatch_quantities(
+            df_dispatch, interactive_dispatch_targets
+        )
+    if interactive_relax_intraday or interactive_dispatch_targets is not None:
+        _interactive_validate_timeline_midnight_if_interactive(timeline_events)
+    df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
+
+    from planning_core.workbook_payload import (
+        build_workbook_payload_from_dataframes,
+        write_tabular_source_json_file,
+        write_tabular_sheets_from_payload_to_excel_writer,
+    )
+
+    _stage2_tabular_sheet_order = [
+        RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME,
+        RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME,
+        "結果_カレンダー(出勤簿)",
+        RESULT_MEMBER_WORK_UTIL_SHEET_NAME,
+        COLUMN_CONFIG_SHEET_NAME,
+        RESULT_TASK_SHEET_NAME,
+        RESULT_DISPATCH_TABLE_SHEET_NAME,
+        "結果_AIログ",
+    ]
+    _stage2_tabular_dfs = {
+        RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME: df_eq_schedule,
+        RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME: df_equipment_by_machine_name,
+        "結果_カレンダー(出勤簿)": pd.DataFrame(cal_rows),
+        RESULT_MEMBER_WORK_UTIL_SHEET_NAME: df_utilization,
+        COLUMN_CONFIG_SHEET_NAME: df_column_config,
+        RESULT_TASK_SHEET_NAME: df_tasks,
+        RESULT_DISPATCH_TABLE_SHEET_NAME: df_dispatch,
+        "結果_AIログ": df_ai_log,
+    }
+    _stage2_tabular_payload = build_workbook_payload_from_dataframes(
+        _stage2_tabular_dfs,
+        source_xlsx_basename=os.path.basename(plan_xlsx_final),
+        metadata_extra={
+            "schema": "stage2_tabular_source_v1",
+            "excel_tabular_sheets_rendered_from_this_payload": True,
+        },
+    )
+    try:
+        _tabular_json_path, _tabular_json_strat = write_tabular_source_json_file(
+            plan_xlsx_final, _stage2_tabular_payload
+        )
+        if _tabular_json_path:
+            logging.info(
+                "段階2: 表シート正本 JSON（Excel より先）を '%s' に出力しました（%s）。",
+                _tabular_json_path,
+                _tabular_json_strat,
+            )
+    except Exception as e:
+        logging.warning("段階2: 表シート正本 JSON の出力に失敗しました: %s", e)
+
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
-            df_eq_schedule.to_excel(
-                writer, sheet_name=RESULT_EQUIPMENT_SCHEDULE_SHEET_NAME, index=False
+            write_tabular_sheets_from_payload_to_excel_writer(
+                writer,
+                _stage2_tabular_payload,
+                sheet_order=_stage2_tabular_sheet_order,
             )
-            df_equipment_by_machine_name.to_excel(
-                writer, sheet_name=RESULT_EQUIPMENT_BY_MACHINE_SHEET_NAME, index=False
-            )
-            pd.DataFrame(cal_rows).to_excel(writer, sheet_name='結果_カレンダー(出勤簿)', index=False)
-            df_utilization.to_excel(
-                writer, sheet_name=RESULT_MEMBER_WORK_UTIL_SHEET_NAME, index=False
-            )
-            df_tasks = pd.DataFrame(task_results)
-            df_tasks, task_column_order, _, vis_map = apply_result_task_sheet_column_order(
-                df_tasks, max_history_len
-            )
-            try:
-                from planning_core.excel_trace_task import log_df_tasks as _excel_trace_df_tasks
 
-                _excel_trace_df_tasks(
-                    df_tasks,
-                    "after_apply_result_task_column_order",
-                    output_basename=os.path.basename(plan_xlsx_final),
-                )
-            except Exception:
-                pass
-            # 列設定シートは「列名」「表示」のデータ行が必須。task_results が空だと
-            # apply_result_task_sheet_column_order は ordered が空になり、見出しのみのシートになる。
-            if not task_column_order:
-                task_column_order, vis_map = _result_task_column_config_fallback_from_existing(
-                    df_tasks, max_history_len
-                )
-            seen_tc: set[str] = set()
-            task_column_order_dedup: list = []
-            vis_list_dedup: list = []
-            for c in task_column_order:
-                if c in seen_tc:
-                    continue
-                seen_tc.add(c)
-                task_column_order_dedup.append(c)
-                vis_list_dedup.append(bool(vis_map.get(c, True)))
-            pd.DataFrame(
-                {
-                    "列名": task_column_order_dedup,
-                    "表示": vis_list_dedup,
-                }
-            ).to_excel(writer, sheet_name=COLUMN_CONFIG_SHEET_NAME, index=False)
-            df_tasks.to_excel(writer, sheet_name=RESULT_TASK_SHEET_NAME, index=False)
-            # 結果_配台表: 空欄補完のため加工計画DATA（元データ）も参照する
-            try:
-                df_src_for_dispatch = load_tasks_df()
-            except Exception as e:
-                logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
-                df_src_for_dispatch = None
-            df_dispatch = build_result_dispatch_table_dataframe(
-                timeline_events,
-                sorted_tasks_for_result,
-                tasks_df,
-                df_src_for_dispatch,
-            )
-            df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
-                df_dispatch,
-                interactive_result_dispatch_json_rows,
-                interactive_result_dispatch_json_columns,
-            )
-            if interactive_dispatch_targets:
-                _interactive_validate_dispatch_quantities(
-                    df_dispatch, interactive_dispatch_targets
-                )
-            if interactive_relax_intraday or interactive_dispatch_targets is not None:
-                _interactive_validate_timeline_midnight_if_interactive(timeline_events)
-            df_dispatch.to_excel(
-                writer, sheet_name=RESULT_DISPATCH_TABLE_SHEET_NAME, index=False
-            )
-            pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"]).to_excel(writer, sheet_name='結果_AIログ', index=False)
-
-            _mprio_sheet = RESULT_MEMBER_PRIORITY_SHEET_NAME
-            df_mprio_legend.to_excel(writer, sheet_name=_mprio_sheet, index=False)
-            _mprio_gap = len(df_mprio_legend) + 2
-            _mprio_second_header_row = _mprio_gap + 1
-            df_mprio_tbl.to_excel(
-                writer, sheet_name=_mprio_sheet, index=False, startrow=_mprio_gap
+            from planning_core.gantt_render_contract import (
+                make_gantt_render_contract,
+                render_gantt_sheet_from_contract,
+                write_gantt_contract_json,
             )
 
             if not stage2_output_root and _publish_plan_xlsx:
@@ -31895,15 +32142,32 @@ def _generate_plan_impl(
                     )
                 except Exception:
                     pass
-                gantt_tl_label_specs, gantt_tl_day_blocks = _write_results_equipment_gantt_sheet(
-                    writer,
-                    timeline_events,
-                    equipment_list,
-                    sorted_dates,
-                    attendance_data,
-                    data_extract_dt_str,
-                    base_now_dt,
+
+                _equipment_gantt_contract = make_gantt_render_contract(
+                    timeline_events=timeline_events,
+                    equipment_list=equipment_list,
+                    sorted_dates=sorted_dates,
+                    attendance_data=attendance_data,
+                    data_extract_dt_str=data_extract_dt_str,
+                    base_now_dt=base_now_dt,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
+                    plan_rows=True,
+                    kind="equipment_gantt",
+                )
+                try:
+                    _eg_path, _eg_strat = write_gantt_contract_json(
+                        plan_xlsx_final, "equipment", _equipment_gantt_contract
+                    )
+                    if _eg_path:
+                        logging.info(
+                            "段階2: 設備ガント描画契約 JSON（再描画用）を '%s' に出力しました（%s）。",
+                            _eg_path,
+                            _eg_strat,
+                        )
+                except Exception as _e_egc:
+                    logging.warning("段階2: 設備ガント契約 JSON 出力をスキップ: %s", _e_egc)
+                gantt_tl_label_specs, gantt_tl_day_blocks = render_gantt_sheet_from_contract(
+                    writer, _equipment_gantt_contract
                 )
                 try:
                     from planning_core.excel_trace_task import (
@@ -31935,23 +32199,37 @@ def _generate_plan_impl(
                 logging.info(
                     "段階2: 設備ガントチャート（加工実績明細）を生成します（データ量により時間がかかることがあります）"
                 )
-                (
-                    gantt_detail_tl_label_specs,
-                    gantt_detail_tl_day_blocks,
-                ) = _write_results_equipment_gantt_sheet(
-                    writer,
-                    [],
-                    equipment_list,
-                    sorted_dates_detail,
-                    attendance_data,
-                    data_extract_dt_str_act_gantt,
-                    base_now_dt_act_gantt,
+
+                _actual_detail_gantt_contract = make_gantt_render_contract(
+                    timeline_events=[],
+                    equipment_list=equipment_list,
+                    sorted_dates=sorted_dates_detail,
+                    attendance_data=attendance_data,
+                    data_extract_dt_str=data_extract_dt_str_act_gantt,
+                    base_now_dt=base_now_dt_act_gantt,
                     actual_timeline_events=detail_timeline_events,
                     regular_shift_times=(_reg_shift_start, _reg_shift_end),
                     plan_rows=False,
                     chart_title=chart_title_actual_detail,
                     sheet_name_override=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
+                    kind="actual_detail_gantt",
                 )
+                try:
+                    _ad_path, _ad_strat = write_gantt_contract_json(
+                        plan_xlsx_final, "actual_detail", _actual_detail_gantt_contract
+                    )
+                    if _ad_path:
+                        logging.info(
+                            "段階2: 実績明細ガント描画契約 JSON（再描画用）を '%s' に出力しました（%s）。",
+                            _ad_path,
+                            _ad_strat,
+                        )
+                except Exception as _e_adgc:
+                    logging.warning("段階2: 実績明細ガント契約 JSON 出力をスキップ: %s", _e_adgc)
+                (
+                    gantt_detail_tl_label_specs,
+                    gantt_detail_tl_day_blocks,
+                ) = render_gantt_sheet_from_contract(writer, _actual_detail_gantt_contract)
 
             for sheet_name, ws_out in writer.sheets.items():
                 if sheet_name in (
@@ -31960,6 +32238,14 @@ def _generate_plan_impl(
                 ):
                     continue
                 _apply_output_font_to_result_sheet(ws_out)
+
+            # 段階2 結果ブックの Excel 表現は以下を維持すること（簡略化・削除しない）。
+            # - 条件付き書式に相当する着色（設備時間割の定常外・準備・機械別の強調、タスク一覧の
+            #   未配台行・履歴 need/surplus・セル不一致・納期判定ハイライトなど）
+            # - ハイパーリンク（結果_タスク一覧の依頼NO → 結果_設備毎の時間割）
+            # - 列幅調整（結果_設備毎の時間割はヘッダー長基準のオートフィット相当）
+            # - Excel テーブル化（配台表シート）
+            # 共通の見出し背景・罫線・固定窓枠は末尾の _apply_stage2_production_plan_workbook_polish。
 
             if _reg_shift_start is not None and _reg_shift_end is not None:
                 for _eq_sched_sheet in (
@@ -32055,11 +32341,7 @@ def _generate_plan_impl(
 
             _apply_stage2_production_plan_workbook_polish(
                 writer.sheets,
-                member_priority_second_header_row=(
-                    _mprio_second_header_row
-                    if RESULT_MEMBER_PRIORITY_SHEET_NAME in writer.sheets
-                    else None
-                ),
+                member_priority_second_header_row=None,
             )
 
             if RESULT_TASK_SHEET_NAME in writer.sheets:
@@ -32125,6 +32407,7 @@ def _generate_plan_impl(
             sheet_name=RESULT_SHEET_GANTT_ACTUAL_DETAIL_NAME,
         )
 
+    # 計画ブック全シート JSON: セル値のみ。抽出ロジックは workbook_payload（設備ガント列見出しの reheader 込み）。
     _plan_wb_json = None
     try:
         _meta_wb = (
@@ -32148,6 +32431,23 @@ def _generate_plan_impl(
             )
     except Exception as e:
         logging.warning("段階2: 計画ブック JSON（全シート）出力をスキップ: %s", e)
+
+    try:
+        from .logical_workbook_view import logical_view_json_path
+
+        _logical_view_out = (
+            logical_view_json_path(plan_xlsx_final) if not _publish_plan_xlsx else None
+        )
+        _plan_lv_json = write_production_plan_logical_view_json(
+            output_filename, json_out_path=_logical_view_out
+        )
+        if _plan_lv_json:
+            logging.info(
+                "段階2: 計画ブック 論理ビュー JSON（結合展開）を '%s' に出力しました。",
+                _plan_lv_json,
+            )
+    except Exception as e:
+        logging.warning("段階2: 論理ビュー JSON 出力をスキップ: %s", e)
 
     if not _publish_plan_xlsx:
         try:

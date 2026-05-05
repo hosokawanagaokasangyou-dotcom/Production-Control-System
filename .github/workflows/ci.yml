@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [JAVA��, main, master]
+    branches: [JAVA版, main, master]
   pull_request:
-    branches: [JAVA��, main, master]
+    branches: [JAVA版, main, master]
 
 jobs:
   java:

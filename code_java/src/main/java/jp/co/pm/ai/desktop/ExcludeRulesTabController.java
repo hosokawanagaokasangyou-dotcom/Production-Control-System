@@ -27,9 +27,9 @@ public final class ExcludeRulesTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String HINT_TEXT =
-            "PM_AI_EXCLUDE_RULES_JSON \u304c\u5b9f\u5728\u304b\u3064\u6709\u52b9\u306a\u3089"
-                    + " \u8a2d\u5b9a_\u914d\u53f0\u4e0d\u8981\u5de5\u7a0b \u306e Excel \u4fdd\u5b88\u3092\u7701\u7565\u53ef\u3002"
-                    + " \u74b0\u5883\u5909\u6570\u30bf\u30d6\u306b\u540c\u540d\u3092\u8ffd\u52a0\u3057\u3066\u30d1\u30b9\u3092\u5171\u6709\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+            "PM_AI_EXCLUDE_RULES_JSON が実在かつ有効なら"
+                    + " 設定_配台不要工程 の Excel 保守を省略可。"
+                    + " 環境変数タブに同名を追加してパスを共有してください。";
 
     private Stage ownerStage;
 
@@ -61,10 +61,10 @@ public final class ExcludeRulesTabController {
 
     @FXML
     private void initialize() {
-        pathField.setPromptText("PM_AI_EXCLUDE_RULES_JSON \u2014 .json \u30d5\u30eb\u30d1\u30b9");
+        pathField.setPromptText("PM_AI_EXCLUDE_RULES_JSON — .json フルパス");
         bodyArea.setPromptText(
-                "[\n  { \"\u5de5\u7a0b\u540d\": \"...\", \"\u6a5f\u68b0\u540d\": \"...\", ... }\n]\n"
-                        + "\u307e\u305f\u306f {\"rules\":[...]}");
+                "[\n  { \"工程名\": \"...\", \"機械名\": \"...\", ... }\n]\n"
+                        + "または {\"rules\":[...]}");
         hintLabel.setText(HINT_TEXT);
     }
 
@@ -128,6 +128,36 @@ public final class ExcludeRulesTabController {
             shell.appendLog("[exclude-json] save ok: " + p);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] save error: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Loads JSON into the editor when a session path points at an existing file (next-launch restore).
+     */
+    void tryStartupLoadFromPathField() {
+        String p = pathField.getText() != null ? pathField.getText().trim() : "";
+        if (p.isEmpty()) {
+            return;
+        }
+        try {
+            Path fp = Path.of(p);
+            if (!Files.isRegularFile(fp)) {
+                return;
+            }
+            bodyArea.setText(Files.readString(fp, StandardCharsets.UTF_8));
+            shell.appendLog("[exclude-json] restored session: " + p);
+        } catch (IOException ex) {
+            shell.appendLog("[exclude-json] session restore load error: " + ex.getMessage());
+        }
+    }
+
+    String snapshotExcludeRulesPath() {
+        return pathField.getText() != null ? pathField.getText().trim() : "";
+    }
+
+    void restoreDesktopSessionPath(String path) {
+        if (path != null && !path.isBlank()) {
+            pathField.setText(path.trim());
         }
     }
 

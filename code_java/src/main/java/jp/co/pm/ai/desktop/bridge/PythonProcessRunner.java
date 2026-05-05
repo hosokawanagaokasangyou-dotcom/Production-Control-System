@@ -75,6 +75,28 @@ public final class PythonProcessRunner {
     }
 
     /**
+     * Same rules as stage1/2: strip OS-inherited {@code PM_AI_*} unless set in {@code extraEnv}, merge UI keys,
+     * then force UTF-8 stdio and unbuffered Python output (Windows-safe Japanese logging).
+     */
+    public static void mergeUiEnvIntoProcess(ProcessBuilder pb, Map<String, String> extraEnv) {
+        Map<String, String> env = new HashMap<>(pb.environment());
+        stripInheritedPmAiEnvUnlessInUi(env, extraEnv);
+        if (extraEnv != null) {
+            for (var e : extraEnv.entrySet()) {
+                String k = e.getKey();
+                if (k == null || k.isBlank()) {
+                    continue;
+                }
+                env.put(k.trim(), e.getValue() != null ? e.getValue() : "");
+            }
+        }
+        env.put("PYTHONUTF8", "1");
+        env.put("PYTHONIOENCODING", "utf-8");
+        env.put("PYTHONUNBUFFERED", "1");
+        pb.environment().putAll(env);
+    }
+
+    /**
      * @param taskInputWorkbook Reserved; not copied into the child environment.
      */
     public record RunRequest(
@@ -109,20 +131,7 @@ public final class PythonProcessRunner {
                         ProcessBuilder pb = new ProcessBuilder(cmd);
                         pb.directory(req.scriptDirectory.toFile());
                         pb.redirectErrorStream(true);
-                        Map<String, String> env = new HashMap<>(pb.environment());
-                        stripInheritedPmAiEnvUnlessInUi(env, req.extraEnv);
-                        if (req.extraEnv != null) {
-                            for (var e : req.extraEnv.entrySet()) {
-                                String k = e.getKey();
-                                if (k == null || k.isBlank()) {
-                                    continue;
-                                }
-                                env.put(k.trim(), e.getValue() != null ? e.getValue() : "");
-                            }
-                        }
-                        env.put("PYTHONUTF8", "1");
-                        env.put("PYTHONIOENCODING", "utf-8");
-                        pb.environment().putAll(env);
+                        mergeUiEnvIntoProcess(pb, req.extraEnv);
                         Process p = pb.start();
                         String out = readStreamFully(p.getInputStream());
                         int code = p.waitFor();
@@ -150,6 +159,18 @@ public final class PythonProcessRunner {
 
     public static CompletableFuture<Integer> runAsync(
             RunRequest req, Consumer<String> lineConsumer, Consumer<Throwable> onError) {
+        return runAsync(req, lineConsumer, onError, null);
+    }
+
+    /**
+     * @param onProcessStarted invoked on the worker thread immediately after {@link ProcessBuilder#start()}
+     *     (e.g. to retain the handle for {@link Process#destroyForcibly()} user cancellation).
+     */
+    public static CompletableFuture<Integer> runAsync(
+            RunRequest req,
+            Consumer<String> lineConsumer,
+            Consumer<Throwable> onError,
+            Consumer<Process> onProcessStarted) {
         Objects.requireNonNull(req, "req");
         if (!Files.isDirectory(req.scriptDirectory)) {
             return CompletableFuture.failedFuture(
@@ -167,26 +188,16 @@ public final class PythonProcessRunner {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(req.scriptDirectory.toFile());
         pb.redirectErrorStream(true);
-        Map<String, String> env = new HashMap<>(pb.environment());
-        stripInheritedPmAiEnvUnlessInUi(env, req.extraEnv);
-        if (req.extraEnv != null) {
-            for (var e : req.extraEnv.entrySet()) {
-                String k = e.getKey();
-                if (k == null || k.isBlank()) {
-                    continue;
-                }
-                env.put(k.trim(), e.getValue() != null ? e.getValue() : "");
-            }
-        }
-        env.put("PYTHONUTF8", "1");
-        env.put("PYTHONIOENCODING", "utf-8");
-        pb.environment().putAll(env);
+        mergeUiEnvIntoProcess(pb, req.extraEnv);
 
         Consumer<String> safeOut = lineConsumer != null ? lineConsumer : s -> {};
         return CompletableFuture.supplyAsync(
                 () -> {
                     try {
                         Process p = pb.start();
+                        if (onProcessStarted != null) {
+                            onProcessStarted.accept(p);
+                        }
                         readStreamBlocking(p.getInputStream(), line -> safeOut.accept("[child] " + line));
                         return p.waitFor();
                     } catch (Exception e) {

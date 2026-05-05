@@ -13,7 +13,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <!-- Operator dispatch A4 card tab {@link OperatorCardTabController} -->
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.OperatorCardTabController"
       fillWidth="true" spacing="8.0" styleClass="pm-operator-card-tab">
     <padding>

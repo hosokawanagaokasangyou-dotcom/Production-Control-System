@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 
 /**
- * One-shot: read {@code plan/UI\u53c2\u7167\u7528_*.xlsx} and write {@code src/main/resources/.../ui_ref_env_defaults.json}.
+ * One-shot: read {@code plan/UI参照用_*.xlsx} and write {@code src/main/resources/.../ui_ref_env_defaults.json}.
  *
  * <p>Run from {@code code_java}:
  *
@@ -21,7 +21,7 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 public final class GenerateUiRefEnvDefaultsJson {
 
     private static final String UI_REF_FILE =
-            "UI\u53c2\u7167\u7528_\u751f\u7523\u7ba1\u7406_AI\u914d\u53f0(RC1).xlsx";
+            "UI参照用_生産管理_AI配台(RC1).xlsx";
 
     private GenerateUiRefEnvDefaultsJson() {}
 

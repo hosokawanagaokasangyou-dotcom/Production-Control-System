@@ -3,54 +3,56 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <!-- Dynamic table columns remain in {@link PlanInputTabController}. -->
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="jp.co.pm.ai.desktop.PlanInputTabController" fillWidth="true" spacing="8.0">
+
+<VBox fillWidth="true" spacing="8.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.PlanInputTabController">
     <padding>
-        <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>
+        <Insets bottom="8.0" left="8.0" right="8.0" top="8.0" />
     </padding>
-    <GridPane hgap="8.0" vgap="8.0">
+    <GridPane hgap="8.0" prefHeight="61.0" prefWidth="561.0" vgap="8.0">
         <columnConstraints>
-            <ColumnConstraints hgrow="NEVER" minWidth="-Infinity"/>
-            <ColumnConstraints hgrow="ALWAYS" minWidth="100.0"/>
-            <ColumnConstraints hgrow="NEVER" minWidth="-Infinity"/>
+            <ColumnConstraints hgrow="NEVER" minWidth="-Infinity" />
+            <ColumnConstraints hgrow="ALWAYS" maxWidth="415.0" minWidth="100.0" prefWidth="242.33333333333337" />
+            <ColumnConstraints hgrow="NEVER" maxWidth="319.33334859212243" minWidth="-Infinity" prefWidth="54.0" />
+         <ColumnConstraints hgrow="NEVER" maxWidth="311.33330281575525" minWidth="10.0" prefWidth="55.333333333333314" />
+         <ColumnConstraints hgrow="NEVER" maxWidth="427.66667683919275" minWidth="10.0" prefWidth="69.66669718424481" />
+         <ColumnConstraints hgrow="NEVER" maxWidth="427.66667683919275" minWidth="10.0" prefWidth="60.999969482421875" />
         </columnConstraints>
-        <Label text="&#x30d5;&#x30a1;&#x30a4;&#x30eb;" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-        <TextField fx:id="pathField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-        <Button fx:id="browseButton" mnemonicParsing="false" text="&#x53c2;&#x7167;&#x2026;"
-                onAction="#onBrowseButtonAction"
-                GridPane.columnIndex="2" GridPane.rowIndex="0"/>
-        <Label text="&#x30b7;&#x30fc;&#x30c8;&#x540d;" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-        <TextField fx:id="sheetField" GridPane.columnIndex="1" GridPane.columnSpan="2"
-                   GridPane.rowIndex="1"/>
+        <Label text="ファイル" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+        <TextField fx:id="pathField" prefHeight="25.0" prefWidth="273.0" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+        <Button fx:id="browseButton" mnemonicParsing="false" onAction="#onBrowseButtonAction" text="参照…" GridPane.columnIndex="2" />
+        <Label text="シート名" GridPane.rowIndex="1" />
+        <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadButtonAction" text="読込" GridPane.columnIndex="3" />
+        <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" prefHeight="25.0" prefWidth="52.0" text="保存" GridPane.columnIndex="4" />
+        <TextField fx:id="sheetField" prefHeight="25.0" prefWidth="127.0" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+        <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" GridPane.columnIndex="2" GridPane.rowIndex="1" />
+        <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" GridPane.columnIndex="3" GridPane.rowIndex="1" />
+        <Label text="既定列幅(px)" GridPane.columnIndex="4" GridPane.rowIndex="1" />
+        <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112" GridPane.columnIndex="5" GridPane.rowIndex="1" />
+      <rowConstraints>
+         <RowConstraints maxHeight="25.333333333333332" minHeight="25.333333333333332" prefHeight="25.333333333333332" />
+         <RowConstraints maxHeight="25.33333333333333" minHeight="25.33333333333333" prefHeight="25.33333333333333" />
+      </rowConstraints>
     </GridPane>
     <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="loadButton" mnemonicParsing="false" text="&#x8aad;&#x8fbc;"
-                onAction="#onLoadButtonAction"/>
-        <Button fx:id="saveButton" mnemonicParsing="false" text="&#x4fdd;&#x5b58;"
-                onAction="#onSaveButtonAction"/>
-        <Button fx:id="addRowButton" mnemonicParsing="false" text="&#x884c;&#x8ffd;&#x52a0;"
-                onAction="#onAddRowButtonAction"/>
-        <Button fx:id="removeRowsButton" mnemonicParsing="false" text="&#x884c;&#x524a;&#x9664;"
-                onAction="#onRemoveRowsButtonAction"/>
+        <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
+        <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
     </HBox>
-    <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0"
-          style="-fx-alignment: CENTER_LEFT;">
-        <HBox fx:id="columnStripHost" spacing="0.0"/>
-        <Label text="&#x65e2;&#x5b9a;&#x5217;&#x5e45;(px)"/>
-        <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112"/>
+    <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0" style="-fx-alignment: CENTER_LEFT;">
+        <HBox fx:id="columnStripHost" spacing="0.0" />
     </HBox>
-    <Label fx:id="hintLabel" wrapText="true"/>
-    <TableView fx:id="table" minHeight="240.0" VBox.vgrow="ALWAYS">
+    <Label fx:id="hintLabel" wrapText="true" />
+    <StackPane fx:id="spreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS">
         <VBox.margin>
-            <Insets bottom="8.0" left="8.0" right="8.0"/>
+            <Insets bottom="8.0" left="8.0" right="8.0" />
         </VBox.margin>
-    </TableView>
+    </StackPane>
 </VBox>

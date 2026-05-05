@@ -217,39 +217,49 @@
 
 /* Operator dispatch A4 card preview */
 
+/* Tab chrome (not the A4 paper): use fixed gray so it stays legible in dark themes */
 .pm-operator-card-tab .pm-operator-card-hint {
-    -fx-text-fill: -fx-muted-text-color;
+    -fx-text-fill: #8b95a3;
     -fx-font-size: 11px;
 }
 
+/* A4 preview: always paper-like (dark app themes must not wash out text on white). */
 .pm-operator-card-root {
     -fx-background-color: white;
-    -fx-border-color: -fx-box-border;
+    -fx-border-color: #c5ccd6;
     -fx-border-width: 1;
+}
+
+.pm-operator-card-root .label {
+    -fx-text-fill: #1a1a1a;
 }
 
 .pm-operator-card-doc-title {
     -fx-font-size: 16px;
     -fx-font-weight: bold;
+    -fx-text-fill: #111111;
 }
 
 .pm-operator-card-issued-at {
     -fx-font-size: 11px;
-    -fx-text-fill: -fx-muted-text-color;
+    -fx-text-fill: #4a5568;
 }
 
 .pm-operator-card-title {
     -fx-font-size: 18px;
     -fx-font-weight: bold;
+    -fx-text-fill: #111111;
 }
 
 .pm-operator-card-day-title {
     -fx-font-size: 13px;
     -fx-font-weight: bold;
+    -fx-text-fill: #111111;
 }
 
 .pm-operator-card-th {
     -fx-font-weight: bold;
+    -fx-text-fill: #111111;
     -fx-border-color: #c5ccd6;
     -fx-border-width: 1;
     -fx-padding: 5 7 5 7;
@@ -260,6 +270,7 @@
 .pm-operator-card-td-time,
 .pm-operator-card-td-num {
     -fx-font-size: 11px;
+    -fx-text-fill: #1a1a1a;
     -fx-border-color: #c5ccd6;
     -fx-border-width: 1;
     -fx-padding: 4 7 4 7;
@@ -271,44 +282,10 @@
 }
 
 .pm-operator-card-empty {
-    -fx-text-fill: -fx-muted-text-color;
+    -fx-text-fill: #5c6370;
     -fx-font-style: italic;
     -fx-border-color: #c5ccd6;
     -fx-border-width: 1;
     -fx-padding: 8 7 8 7;
     -fx-background-color: white;
-}
-
-.root.pm-dark-theme .pm-operator-card-root {
-    -fx-background-color: #2d2d30;
-}
-
-.root.pm-dark-theme .pm-operator-card-doc-title {
-    -fx-text-fill: #e8e8e8;
-}
-
-.root.pm-dark-theme .pm-operator-card-issued-at {
-    -fx-text-fill: #b0b0b0;
-}
-
-.root.pm-dark-theme .pm-operator-card-title,
-.root.pm-dark-theme .pm-operator-card-day-title {
-    -fx-text-fill: #e8e8e8;
-}
-
-.root.pm-dark-theme .pm-operator-card-th {
-    -fx-border-color: #555558;
-    -fx-background-color: #3e3e42;
-}
-
-.root.pm-dark-theme .pm-operator-card-td,
-.root.pm-dark-theme .pm-operator-card-td-time,
-.root.pm-dark-theme .pm-operator-card-td-num {
-    -fx-border-color: #555558;
-    -fx-background-color: #2d2d30;
-}
-
-.root.pm-dark-theme .pm-operator-card-empty {
-    -fx-border-color: #555558;
-    -fx-background-color: #2d2d30;
 }

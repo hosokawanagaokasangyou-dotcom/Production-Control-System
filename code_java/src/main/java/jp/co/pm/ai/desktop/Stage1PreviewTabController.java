@@ -82,9 +82,9 @@ public final class Stage1PreviewTabController {
     @FXML
     private void initialize() {
         pathField.setPromptText(
-                "PM_AI_OUTPUT_DIR \u307e\u305f\u306f\u30ea\u30dd\u6839\u76f4\u4e0b/output/"
+                "PM_AI_OUTPUT_DIR またはリポ根直下/output/"
                         + AppPaths.STAGE1_TASK_INPUT_PREVIEW_FILENAME
-                        + " (\u554f\u5408\u305b\u53d6\u8fbc\u5f8c\u30fb\u30bf\u30b9\u30af\u4e00\u89a7\u5316\u524d)");
+                        + " (問合せ取込後・タスク一覧化前)");
         sheetField.setText(DEFAULT_STAGE1_PREVIEW_SHEET);
         sheetField.setPromptText("Excel sheet name");
         colWidthField.setText("112");
@@ -101,14 +101,14 @@ public final class Stage1PreviewTabController {
     }
 
     private static String buildHintText() {
-        return "\u554f\u5408\u305b xlsx \u3092\u8aad\u307f\u8fbc\u307f\u3001\u30d8\u30c3\u30c0\u30fc\u884c\u3068"
-                + "\u5217\u540d\u3092\u6574\u3048\u305f\u76f4\u5f8c\uff08\u4f9d\u983cNO"
-                + "\u304c\u3042\u308b\u884c\u306e\u307f\uff09\u3002"
-                + " \u30de\u30b9\u30bf\u30fb\u914d\u53f0\u8a66\u884c\u9806\u4ed8\u4e0e\u524d\u306e"
+        return "問合せ xlsx を読み込み、ヘッダー行と"
+                + "列名を整えた直後（依頼NO"
+                + "がある行のみ）。"
+                + " マスタ・配台試行順付与前の"
                 + " stage1_task_input_table.xlsx"
-                + " \u30b7\u30fc\u30c8\u300c"
+                + " シート「"
                 + DEFAULT_STAGE1_PREVIEW_SHEET
-                + "\u300d\u3092\u8868\u793a\u3057\u307e\u3059\u3002";
+                + "」を表示します。";
     }
 
     void bindShell(MainShellController shell) {
@@ -156,7 +156,7 @@ public final class Stage1PreviewTabController {
 
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
-            shell.appendLog("[stage1-preview] \u5217\u304c\u3042\u308a\u307e\u305b\u3093\uff08\u5148\u306b\u8aad\u307f\u8fbc\u307f\uff09");
+            shell.appendLog("[stage1-preview] 列がありません（先に読み込み）");
             return;
         }
         SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))

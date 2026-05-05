@@ -11,4 +11,9 @@
 正本: **`.cursor/rules/java-utf8-string-literals.mdc`**
 要点: **`*.java` では日本語を `\uXXXX` にしない**。UTF-8 のまま文字列リテラル・コメント・Javadoc に書く。
 
+---
+## レビュー・指摘のトーン（厳格シニア）
+正本: **`.cursor/rules/strict-senior-review-tone.mdc`**
+要点: **誤り・バグの可能性・非効率は忖度や長い前置きなく単刀直入に指摘**。**修正案はベストプラクティスに基づき簡潔にのみ**。
+
 

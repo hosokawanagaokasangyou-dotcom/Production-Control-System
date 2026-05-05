@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.VBox?>
 
 <!-- 計画結果 JSON ビューア（入れ子タブ） {@link PlanResultViewerTabController} -->
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.PlanResultViewerTabController"
       fillWidth="true" spacing="4.0" styleClass="pm-plan-result-viewer">
     <padding>

@@ -72,9 +72,7 @@ def build_logical_view_workbook_payload(
         if format_version is not None
         else WORKBOOK_JSON_FORMAT_VERSION
     )
-    # data_only=True … Excel が保存した計算結果（表示値）を読み、結合展開の複製先にも値が入る。
-    # data_only=False だと式セルが式のまま残り、read_excel 経由の JSON で時刻マスが欠損しやすい。
-    wb = load_workbook(xlsx_path, data_only=True)
+    wb = load_workbook(xlsx_path, data_only=False)
     expand_merged_cells_fill_workbook(wb)
 
     fd, tmp_xlsx = tempfile.mkstemp(suffix=".xlsx", prefix="_pm_logical_view_src_")

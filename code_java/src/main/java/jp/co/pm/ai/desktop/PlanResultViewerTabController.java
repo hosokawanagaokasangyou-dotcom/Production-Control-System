@@ -18,12 +18,15 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
+import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
@@ -34,22 +37,24 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
+import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
 /**
- * {@code production_plan_multi_day*.json} \u3068 {@code member_schedule*.json} \u3092\u5165\u308c\u5b50
- * \u30bf\u30d6\uff08\u30c7\u30fc\u30bf\u30bb\u30c3\u30c8 \u2192 \u5404\u30b7\u30fc\u30c8 \u2192 \u8868/\u30ac\u30f3\u30c8\uff09\u3067\u8868\u793a\u3059\u308b\u3002
+ * {@code production_plan_multi_day*.json} と {@code member_schedule*.json} を入れ子
+ * タブ（データセット → 各シート → 表/ガント）で表示する。
  */
 public final class PlanResultViewerTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String HINT =
-            "\u30c7\u30fc\u30bf\u30bb\u30c3\u30c8\u3092\u9078\u629e\u3057\u3001\u518d\u8aad\u307f\u3067\u5404\u30b7\u30fc\u30c8\u306e\u4e00\u89a7\u8868\u3068"
-                    + "\u30ac\u30f3\u30c8\u98a8\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3\uff08\u7a2e\u5225\u8272\uff09\u3092\u8868\u793a\u3057\u307e\u3059\u3002"
-                    + " \u6700\u65b0JSON\u691c\u7d22\u306f PM_AI_OUTPUT_DIR \u4e0b\u306e\u6210\u679c\u7269\u30d5\u30a9\u30eb\u30c0\u304b\u3089\u6700\u65b0"
-                    + " \u30da\u30a2\u3092\u63a2\u3057\u307e\u3059\u3002";
+            "データセットを選択し、再読みで各シートの一覧表と"
+                    + "ガント風タイムライン（種別色）を表示します。"
+                    + " 最新JSON検索は PM_AI_OUTPUT_DIR 下の成果物フォルダから最新"
+                    + " ペアを探します。";
 
     @FXML
     private Button reloadButton;
@@ -76,19 +81,44 @@ public final class PlanResultViewerTabController {
     private Label hintLabel;
 
     @FXML
+    private Accordion sourceAccordion;
+
+    @FXML
+    private TitledPane sourceTitledPane;
+
+    @FXML
     private BorderPane contentPane;
 
     private MainShellController shell;
 
     private Stage ownerStage;
 
-    /** Active spreadsheet views for \u5217\u30d5\u30a3\u30eb\u30bf\u89e3\u9664 */
+    /** Active spreadsheet views for 列フィルタ解除 */
     private final List<SpreadsheetView> registeredSpreadsheets = new ArrayList<>();
 
     @FXML
     private void initialize() {
         hintLabel.setText(HINT);
-        contentPane.setCenter(emptyPlaceholder("\u518d\u8aad\u307f\u3067JSON\u3092\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"));
+        contentPane.setCenter(emptyPlaceholder("再読みでJSONを読み込みます。"));
+        if (sourceAccordion != null && sourceTitledPane != null) {
+            sourceAccordion.setExpandedPane(sourceTitledPane);
+            sourceTitledPane.setExpanded(false);
+        }
+    }
+
+    /** 読み込み成功後はデータ領域を広げるため折りたたむ */
+    private void collapseSourcePaneAfterLoad() {
+        if (sourceTitledPane != null) {
+            sourceTitledPane.setExpanded(false);
+        }
+    }
+
+    /** エラー時など、ファイル指定を見せる */
+    private void expandSourcePaneForAttention() {
+        if (sourceAccordion != null && sourceTitledPane != null) {
+            sourceAccordion.setExpandedPane(sourceTitledPane);
+            sourceTitledPane.setExpanded(true);
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -98,7 +128,7 @@ public final class PlanResultViewerTabController {
     }
 
     /**
-     * \u5b9f\u884c\u30bf\u30d6\u306e\u6700\u65b0 xlsx \u30d1\u30b9\u3068\u540c\u3058\u30b9\u30c6\u30e0\u306e .json \u304c\u3042\u308c\u3070\u30d5\u30a3\u30fc\u30eb\u30c9\u306b\u53cd\u6620\uff08\u6bb5\u968e2\u5b8c\u4e86\u5f8c\u306a\u3069\uff09\u3002
+     * 実行タブの最新 xlsx パスと同じステムの .json があればフィールドに反映（段階2完了後など）。
      */
     void tryAutofillJsonFromStage2Xlsx(String productionPlanPath, String memberSchedulePath) {
         if (planJsonField == null || memberJsonField == null) {
@@ -149,12 +179,14 @@ public final class PlanResultViewerTabController {
             }
             if (plan == null && mem == null) {
                 statusLabel.setText(
-                        "\u3053\u306e\u30d5\u30a9\u30eb\u30c0\u306b JSON \u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093: "
+                        "このフォルダに JSON が見つかりません: "
                                 + dir);
+                expandSourcePaneForAttention();
                 return;
             }
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            expandSourcePaneForAttention();
             return;
         }
         reloadFromFields();
@@ -224,22 +256,25 @@ public final class PlanResultViewerTabController {
             if (planSheets.isEmpty() && memberSheets.isEmpty()) {
                 contentPane.setCenter(
                         emptyPlaceholder(
-                                "\u30d5\u30a1\u30a4\u30eb\u304c\u6307\u5b9a\u3055\u308c\u3066\u3044\u306a\u3044\u304b\u3001\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3002"));
-                statusLabel.setText("\u8aad\u307f\u8fbc\u307f\u5bfe\u8c61\u306a\u3057");
+                                "ファイルが指定されていないか、見つかりません。"));
+                statusLabel.setText("読み込み対象なし");
+                expandSourcePaneForAttention();
                 return;
             }
 
             TabPane outer = new TabPane();
+            outer.setSide(Side.LEFT);
+            outer.getStyleClass().add("pm-plan-result-tabpane-side");
             outer.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-            Tab tPlan = new Tab("\u751f\u7523\u8a08\u753b (multi_day)");
+            Tab tPlan = new Tab("生産計画 (multi_day)");
             TabPane planInner =
                     buildDatasetTabs(
                             planSheets,
                             planPath != null ? planPath.getFileName().toString() : "");
             tPlan.setContent(planInner);
 
-            Tab tMem = new Tab("\u30e1\u30f3\u30d0\u30fc\u52e4\u52d9");
+            Tab tMem = new Tab("メンバー勤務");
             TabPane memInner =
                     buildDatasetTabs(
                             memberSheets,
@@ -257,10 +292,12 @@ public final class PlanResultViewerTabController {
                             + planSheets.size()
                             + ", member_sheets="
                             + memberSheets.size()
-                            + " \u8aad\u307f\u8fbc\u307f");
+                            + " 読み込み");
+            collapseSourcePaneAfterLoad();
         } catch (Exception ex) {
             contentPane.setCenter(emptyPlaceholder("Error"));
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            expandSourcePaneForAttention();
             if (shell != null) {
                 shell.appendLog("[plan-result-viewer] " + ex.getMessage());
             }
@@ -278,14 +315,16 @@ public final class PlanResultViewerTabController {
 
     private TabPane buildDatasetTabs(Map<String, SheetModel> sheets, String fileLabel) {
         TabPane inner = new TabPane();
+        inner.setSide(Side.LEFT);
+        inner.getStyleClass().add("pm-plan-result-tabpane-side");
         inner.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         if (sheets.isEmpty()) {
             inner.getTabs()
                     .add(
                             new Tab(
-                                    "(\u7a7a)",
+                                    "(空)",
                                     emptyPlaceholder(
-                                            "\u30c7\u30fc\u30bf\u306a\u3057 "
+                                            "データなし "
                                                     + fileLabel)));
             return inner;
         }
@@ -293,16 +332,19 @@ public final class PlanResultViewerTabController {
             String sheetName = e.getKey();
             SheetModel model = e.getValue();
             Tab st = new Tab(truncateTabTitle(sheetName));
-            st.setTooltip(new Tooltip(sheetName + " \u2014 " + fileLabel));
+            st.setTooltip(new Tooltip(sheetName + " — " + fileLabel));
 
             TabPane modeTabs = new TabPane();
             modeTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-            StackPane tableHost = new StackPane(new Label("\u8aad\u307f\u8fbc\u307f\u4e2d..."));
-            StackPane ganttHost = new StackPane(new Label("\u8aad\u307f\u8fbc\u307f\u4e2d..."));
+            StackPane tableHost = new StackPane(new Label("読み込み中..."));
+            StackPane ganttHost = new StackPane(new Label("読み込み中..."));
 
-            Tab tTable = new Tab("\u4e00\u89a7\uff08\u8868\uff09", tableHost);
-            Tab tGantt = new Tab("\u30ac\u30f3\u30c8", ganttHost);
+            GanttSheetKind ganttKind =
+                    GanttScheduleStyle.resolveKind(sheetName, model.columns());
+
+            Tab tTable = new Tab("一覧（表）", tableHost);
+            Tab tGantt = new Tab("ガント", ganttHost);
             modeTabs.getTabs().addAll(tTable, tGantt);
 
             final boolean[] built = new boolean[2];
@@ -341,10 +383,13 @@ public final class PlanResultViewerTabController {
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+                        if (ganttKind == GanttSheetKind.EQUIPMENT_TIMELINE) {
+                            sv.getStyleClass().add("pm-gantt-equipment-xlsx");
+                        }
                         ObservableList<ObservableList<String>> rows = model.copyRows();
                         GridBase grid =
                                 SpreadsheetTabularSupport.buildReadOnlyGanttGrid(
-                                        model.columns(), rows);
+                                        model.columns(), rows, ganttKind);
                         sv.setGrid(grid);
                         SpreadsheetTabularSupport.applyColumnFilters(sv);
                         SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(sv, 1);
@@ -368,11 +413,14 @@ public final class PlanResultViewerTabController {
                                 if (n == null) {
                                     return;
                                 }
-                                if (n.intValue() == 0) {
-                                    loadTable.run();
-                                } else if (n.intValue() == 1) {
-                                    loadGantt.run();
+                                int idx = n.intValue();
+                                if (!(st.getUserData() instanceof Runnable[] loaders)) {
+                                    return;
                                 }
+                                if (idx < 0 || idx >= loaders.length) {
+                                    return;
+                                }
+                                loaders[idx].run();
                             });
 
             st.selectedProperty()
@@ -380,10 +428,10 @@ public final class PlanResultViewerTabController {
                             (obs, o, now) -> {
                                 if (Boolean.TRUE.equals(now)) {
                                     int m = modeTabs.getSelectionModel().getSelectedIndex();
-                                    if (m == 0) {
-                                        loadTable.run();
-                                    } else if (m == 1) {
-                                        loadGantt.run();
+                                    if (st.getUserData() instanceof Runnable[] loaders
+                                            && m >= 0
+                                            && m < loaders.length) {
+                                        loaders[m].run();
                                     }
                                 }
                             });
@@ -424,17 +472,14 @@ public final class PlanResultViewerTabController {
             return;
         }
         Object ud = sheetTab.getUserData();
-        if (!(ud instanceof Runnable[] pair) || pair.length < 2) {
+        if (!(ud instanceof Runnable[] loaders) || loaders.length < 1) {
             return;
         }
         int mi = modeTabs.getSelectionModel().getSelectedIndex();
-        if (mi == 0) {
-            pair[0].run();
-        } else if (mi == 1) {
-            pair[1].run();
-        } else {
-            pair[0].run();
+        if (mi < 0 || mi >= loaders.length) {
+            return;
         }
+        loaders[mi].run();
     }
 
     private static String truncateTabTitle(String s) {
@@ -442,7 +487,7 @@ public final class PlanResultViewerTabController {
             return "";
         }
         int max = 18;
-        return s.length() <= max ? s : s.substring(0, max - 1) + "\u2026";
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
     private static Map<String, SheetModel> parseWorkbookSheets(Path path) throws IOException {

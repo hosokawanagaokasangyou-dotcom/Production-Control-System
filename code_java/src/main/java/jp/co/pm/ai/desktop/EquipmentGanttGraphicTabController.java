@@ -4,36 +4,50 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
+import java.util.function.Function;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.text.Font;
+import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+import jp.co.pm.ai.desktop.config.DesktopSessionState;
+import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
+import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
 /**
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
+ * グラフィック調整ツールバーのレイアウトは {@code EquipmentGanttGraphicTab.fxml} の FlowPane で定義する。
  */
 public final class EquipmentGanttGraphicTabController {
 
@@ -41,7 +55,7 @@ public final class EquipmentGanttGraphicTabController {
 
     private static final String HINT =
             "計画結果ビューアと同じ production_plan_multi_day*.json を指定します。"
-                    + " 設備タイムライン（時刻列 HH:MM）と判定されるシートだけコンボに出ます。"
+                    + " 設備タイムライン（時刻列 HH:MM）と判定されるシートのうち、既定では「結果_設備ガント」を表示します。"
                     + " グラフィック表示はメインのこのタブから利用してください。";
 
     @FXML
@@ -69,9 +83,6 @@ public final class EquipmentGanttGraphicTabController {
     private TitledPane sourceTitledPane;
 
     @FXML
-    private ComboBox<String> sheetCombo;
-
-    @FXML
     private BorderPane contentPane;
 
     private MainShellController shell;
@@ -80,21 +91,447 @@ public final class EquipmentGanttGraphicTabController {
 
     private String lastLoadedPlanPath = "";
 
+    /** 再描画用に保持する最新の選択シート（ズーム・テーマ変更時）。 */
+    private JsonTableIo.SheetTable lastGraphicSheet;
+
+    /** 契約 JSON から得たバッジグリッド（{@link #DEFAULT_SHEET} 表示時のみ使用）。 */
+    private List<List<String>> loadedContractBadgeRows;
+
+    /** {@link #applyGraphicCenter} に渡す現在のバッジ行（シートに応じて null）。 */
+    private List<List<String>> badgeRowsForCurrentGraphic;
+
+    private BorderPane graphicRootWrapper;
+
+    @FXML
+    private CheckBox personBadgeShowCheckBox;
+
+    @FXML
+    private Slider graphicZoomSlider;
+
+    @FXML
+    private Label graphicZoomPercentLabel;
+
+    @FXML
+    private Slider graphicRowHeightSlider;
+
+    @FXML
+    private Label graphicRowHeightPctLabel;
+
+    @FXML
+    private Slider graphicSlotWidthSlider;
+
+    @FXML
+    private Label graphicSlotWidthPctLabel;
+
+    @FXML
+    private Slider graphicHeaderHeightSlider;
+
+    @FXML
+    private Label graphicHeaderHeightPctLabel;
+
+    @FXML
+    private ComboBox<String> equipmentGraphicBarFontCombo;
+
+    @FXML
+    private Slider graphicBarFontPctSlider;
+
+    @FXML
+    private Label graphicBarFontPctLabel;
+
+    @FXML
+    private Slider graphicDateColSlider;
+
+    @FXML
+    private Label graphicDateColWidthLabel;
+
+    @FXML
+    private Slider graphicMachColSlider;
+
+    @FXML
+    private Label graphicMachColWidthLabel;
+
+    @FXML
+    private Slider graphicProcColSlider;
+
+    @FXML
+    private Label graphicProcColWidthLabel;
+
+    @FXML
+    private Slider graphicShiftWheelHSlider;
+
+    @FXML
+    private Label graphicShiftWheelHLabel;
+
+    /** 日付列幅スライダー上限（px）。0 は自動計測 */
+    private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
+
+    /** 機械名・工程名列幅スライダー上限（px）。0 は自動計測 */
+    private static final double SIDE_COL_WIDTH_SLIDER_MAX = 800;
+
+    /** Shift+ホイール横スクロール感度（％）。100＝従来のステップ相当 */
+    private static final double SHIFT_WHEEL_H_SCROLL_MIN = 50;
+
+    private static final double SHIFT_WHEEL_H_SCROLL_MAX = 1000;
+
+    private PauseTransition equipmentGraphicPersistDelay;
+
+    private boolean graphicWheelHookInstalled;
+
+    /**
+     * 設備グラフィックの {@link EquipmentGraphicGanttPane#build} は重いため、スライダー連続変更では
+     * この間隔（ms）より頻繁には再構築しない。ドラッグ終了時は {@link #flushGraphicRebuildNow()} で必ず反映する。
+     */
+    private static final long GRAPHIC_REBUILD_MIN_GAP_MS = 33L;
+
+    private long graphicRebuildLastEmitMs;
+
+    private PauseTransition graphicRebuildTrailing;
+
+    /** {@link #applyEquipmentGanttSession} 等で複数スライダーを一度に動かすときの再構築抑制 */
+    private boolean suppressGraphicRebuild;
+
     @FXML
     private void initialize() {
         if (hintLabel != null) {
             hintLabel.setText(HINT);
         }
-        if (sheetCombo != null) {
-            sheetCombo.setOnAction(e -> applySelectedSheet());
-        }
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
-            sourceTitledPane.setExpanded(false);
+            /* ツールバー（列幅・Shift横スクロール等）を見つけやすくする */
+            sourceTitledPane.setExpanded(true);
         }
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
         }
+        populateEquipmentGraphicBarFontComboItems();
+        attachGraphicToolbarListeners();
+    }
+
+    /** FXML で定義済みのコントロールへ値変更リスナーを付ける（ノード生成は FXML 側）。 */
+    private void attachGraphicToolbarListeners() {
+        if (graphicZoomSlider == null) {
+            return;
+        }
+        graphicZoomSlider
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, v) -> {
+                            graphicZoomPercentLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicZoomSlider);
+
+        graphicRowHeightSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicRowHeightPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicRowHeightSlider);
+
+        graphicSlotWidthSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicSlotWidthPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicSlotWidthSlider);
+
+        graphicHeaderHeightSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicHeaderHeightPctLabel.setText(
+                                    String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicHeaderHeightSlider);
+
+        equipmentGraphicBarFontCombo
+                .valueProperty()
+                .addListener(
+                        (o, a, b) -> {
+                            flushGraphicRebuildNow();
+                            scheduleEquipmentGraphicPersist();
+                        });
+
+        graphicBarFontPctSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicBarFontPctLabel.setText(String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicBarFontPctSlider);
+
+        graphicDateColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicDateColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicDateColSlider);
+
+        graphicMachColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicMachColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicMachColSlider);
+
+        graphicProcColSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicProcColWidthLabel.setText(
+                                    formatLeftColWidthLabel(v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicProcColSlider);
+
+        graphicShiftWheelHSlider
+                .valueProperty()
+                .addListener(
+                        (o, a, v) -> {
+                            graphicShiftWheelHLabel.setText(
+                                    String.format("%.0f%%", v.doubleValue()));
+                            requestThrottledGraphicRebuild();
+                            scheduleEquipmentGraphicPersist();
+                        });
+        wireGraphicSliderFlushOnDragEnd(graphicShiftWheelHSlider);
+    }
+
+    private void populateEquipmentGraphicBarFontComboItems() {
+        if (equipmentGraphicBarFontCombo == null) {
+            return;
+        }
+        List<String> families = new ArrayList<>(Font.getFamilies());
+        Collections.sort(families);
+        equipmentGraphicBarFontCombo.getItems().clear();
+        equipmentGraphicBarFontCombo.getItems().add("");
+        equipmentGraphicBarFontCombo.getItems().addAll(families);
+    }
+
+    private static String formatLeftColWidthLabel(double px) {
+        if (px <= 0.5) {
+            return "自動";
+        }
+        return String.format("%.0fpx", px);
+    }
+
+    void applyEquipmentGanttSession(DesktopSessionState s) {
+        if (s == null) {
+            return;
+        }
+        suppressGraphicRebuild = true;
+        try {
+            applyEquipmentGanttSessionBody(s);
+        } finally {
+            suppressGraphicRebuild = false;
+            flushGraphicRebuildNow();
+        }
+    }
+
+    private void applyEquipmentGanttSessionBody(DesktopSessionState s) {
+        double z = s.equipmentGanttGraphicZoomPercent();
+        if (graphicZoomSlider != null && Double.isFinite(z) && z >= 50 && z <= 200) {
+            graphicZoomSlider.setValue(z);
+        }
+        double rh = s.equipmentGanttRowHeightPercent();
+        if (graphicRowHeightSlider != null && Double.isFinite(rh) && rh >= 50 && rh <= 200) {
+            graphicRowHeightSlider.setValue(rh);
+            graphicRowHeightPctLabel.setText(String.format("%.0f%%", rh));
+        }
+        double hh = s.equipmentGanttHeaderHeightPercent();
+        if (graphicHeaderHeightSlider != null && Double.isFinite(hh) && hh >= 50 && hh <= 200) {
+            graphicHeaderHeightSlider.setValue(hh);
+            graphicHeaderHeightPctLabel.setText(String.format("%.0f%%", hh));
+        }
+        double sw = s.equipmentGanttSlotWidthPercent();
+        if (graphicSlotWidthSlider != null && Double.isFinite(sw) && sw >= 50 && sw <= 500) {
+            graphicSlotWidthSlider.setValue(sw);
+            graphicSlotWidthPctLabel.setText(String.format("%.0f%%", sw));
+        }
+        double bfp = s.equipmentGanttBarFontPercent();
+        if (graphicBarFontPctSlider != null && Double.isFinite(bfp) && bfp >= 50 && bfp <= 200) {
+            graphicBarFontPctSlider.setValue(bfp);
+            graphicBarFontPctLabel.setText(String.format("%.0f%%", bfp));
+        }
+        String f = s.equipmentGanttBarFontFamily();
+        if (equipmentGraphicBarFontCombo != null) {
+            if (f == null || f.isBlank()) {
+                equipmentGraphicBarFontCombo.setValue("");
+            } else {
+                String fs = f.strip();
+                if (!equipmentGraphicBarFontCombo.getItems().contains(fs)) {
+                    equipmentGraphicBarFontCombo.getItems().add(1, fs);
+                }
+                equipmentGraphicBarFontCombo.setValue(fs);
+            }
+        }
+        double dwc = s.equipmentGanttDateColWidth();
+        if (graphicDateColSlider != null
+                && Double.isFinite(dwc)
+                && dwc >= 0
+                && dwc <= DATE_COL_WIDTH_SLIDER_MAX) {
+            graphicDateColSlider.setValue(dwc);
+            graphicDateColWidthLabel.setText(formatLeftColWidthLabel(dwc));
+        }
+        double mwc = s.equipmentGanttMachineColWidth();
+        if (graphicMachColSlider != null
+                && Double.isFinite(mwc)
+                && mwc >= 0
+                && mwc <= SIDE_COL_WIDTH_SLIDER_MAX) {
+            graphicMachColSlider.setValue(mwc);
+            graphicMachColWidthLabel.setText(formatLeftColWidthLabel(mwc));
+        }
+        double pwc = s.equipmentGanttProcessColWidth();
+        if (graphicProcColSlider != null
+                && Double.isFinite(pwc)
+                && pwc >= 0
+                && pwc <= SIDE_COL_WIDTH_SLIDER_MAX) {
+            graphicProcColSlider.setValue(pwc);
+            graphicProcColWidthLabel.setText(formatLeftColWidthLabel(pwc));
+        }
+        double swh = s.equipmentGanttShiftWheelHScrollPercent();
+        if (graphicShiftWheelHSlider != null
+                && Double.isFinite(swh)
+                && swh >= SHIFT_WHEEL_H_SCROLL_MIN
+                && swh <= SHIFT_WHEEL_H_SCROLL_MAX) {
+            graphicShiftWheelHSlider.setValue(swh);
+            graphicShiftWheelHLabel.setText(String.format("%.0f%%", swh));
+        }
+        if (personBadgeShowCheckBox != null) {
+            personBadgeShowCheckBox.setSelected(s.equipmentGanttPersonBadgeEnabled());
+        }
+    }
+
+    private void wireGraphicSliderFlushOnDragEnd(Slider slider) {
+        if (slider == null) {
+            return;
+        }
+        slider.valueChangingProperty()
+                .addListener(
+                        (obs, wasChanging, changing) -> {
+                            if (!changing) {
+                                flushGraphicRebuildNow();
+                            }
+                        });
+    }
+
+    private void requestThrottledGraphicRebuild() {
+        if (suppressGraphicRebuild) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long gap = GRAPHIC_REBUILD_MIN_GAP_MS;
+        long elapsed = now - graphicRebuildLastEmitMs;
+        if (elapsed >= gap || graphicRebuildLastEmitMs == 0L) {
+            graphicRebuildLastEmitMs = now;
+            rebuildGraphicView();
+            return;
+        }
+        if (graphicRebuildTrailing == null) {
+            graphicRebuildTrailing = new PauseTransition();
+            graphicRebuildTrailing.setOnFinished(
+                    e -> {
+                        graphicRebuildLastEmitMs = System.currentTimeMillis();
+                        if (!suppressGraphicRebuild) {
+                            rebuildGraphicView();
+                        }
+                    });
+        }
+        graphicRebuildTrailing.stop();
+        graphicRebuildTrailing.setDuration(Duration.millis(Math.max(1, gap - elapsed)));
+        graphicRebuildTrailing.playFromStart();
+    }
+
+    private void flushGraphicRebuildNow() {
+        if (suppressGraphicRebuild) {
+            return;
+        }
+        if (graphicRebuildTrailing != null) {
+            graphicRebuildTrailing.stop();
+        }
+        graphicRebuildLastEmitMs = System.currentTimeMillis();
+        rebuildGraphicView();
+    }
+
+    double snapshotEquipmentGanttZoomPercent() {
+        return graphicZoomSlider != null ? graphicZoomSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttDateColWidth() {
+        return graphicDateColSlider != null ? graphicDateColSlider.getValue() : 0d;
+    }
+
+    double snapshotEquipmentGanttMachineColWidth() {
+        return graphicMachColSlider != null ? graphicMachColSlider.getValue() : 0d;
+    }
+
+    double snapshotEquipmentGanttProcessColWidth() {
+        return graphicProcColSlider != null ? graphicProcColSlider.getValue() : 0d;
+    }
+
+    double snapshotEquipmentGanttRowHeightPercent() {
+        return graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttHeaderHeightPercent() {
+        return graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttSlotWidthPercent() {
+        return graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
+    }
+
+    String snapshotEquipmentGanttBarFontFamily() {
+        if (equipmentGraphicBarFontCombo != null) {
+            String v = equipmentGraphicBarFontCombo.getValue();
+            return v != null ? v.strip() : "";
+        }
+        return "";
+    }
+
+    double snapshotEquipmentGanttBarFontPercent() {
+        return graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
+    }
+
+    double snapshotEquipmentGanttShiftWheelHScrollPercent() {
+        return graphicShiftWheelHSlider != null ? graphicShiftWheelHSlider.getValue() : 200d;
+    }
+
+    boolean snapshotEquipmentGanttPersonBadgeEnabled() {
+        return personBadgeShowCheckBox == null || personBadgeShowCheckBox.isSelected();
+    }
+
+    private void scheduleEquipmentGraphicPersist() {
+        if (equipmentGraphicPersistDelay == null) {
+            equipmentGraphicPersistDelay = new PauseTransition(Duration.millis(450));
+            equipmentGraphicPersistDelay.setOnFinished(
+                    e -> {
+                        if (shell != null) {
+                            shell.persistDesktopSessionNow();
+                        }
+                    });
+        }
+        equipmentGraphicPersistDelay.stop();
+        equipmentGraphicPersistDelay.playFromStart();
     }
 
     void bindShell(MainShellController shell) {
@@ -124,6 +561,12 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private void onReloadButtonAction() {
         reloadFromFields();
+    }
+
+    @FXML
+    private void onPersonBadgeShowAction() {
+        scheduleEquipmentGraphicPersist();
+        requestThrottledGraphicRebuild();
     }
 
     @FXML
@@ -174,7 +617,7 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private void reloadFromFields() {
-        if (contentPane == null || sheetCombo == null) {
+        if (contentPane == null) {
             return;
         }
         reloadButton.setDisable(true);
@@ -183,56 +626,39 @@ public final class EquipmentGanttGraphicTabController {
             String ps = planJsonField != null ? planJsonField.getText().strip() : "";
             Path planPath = ps.isEmpty() ? null : Path.of(ps);
             if (planPath == null || !Files.isRegularFile(planPath)) {
-                contentPane.setCenter(emptyPlaceholder("ファイルが指定されていないか、見つかりません。"));
+                resetGraphicState("ファイルが指定されていないか、見つかりません。");
                 statusLabel.setText("読み込み対象なし");
-                sheetCombo.getItems().clear();
                 return;
             }
 
-            SheetLoad loaded =
-                    loadWorkbookSheetsForGraphic(
-                            planPath,
-                            shell != null ? shell.snapshotUiEnv() : Map.of());
+            SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
+            loadedContractBadgeRows = loaded.contractBadgeSlotRows();
             lastLoadedPlanPath = planPath.toString();
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
             if (eligible.isEmpty()) {
-                sheetCombo.getItems().clear();
-                contentPane.setCenter(
-                        emptyPlaceholder(
-                                "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。"));
+                resetGraphicState(
+                        "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。");
                 statusLabel.setText("対象シートなし: " + planPath.getFileName());
                 return;
             }
 
-            List<String> names =
-                    eligible.keySet().stream().sorted().collect(Collectors.toList());
-            String previous =
-                    sheetCombo.getSelectionModel().getSelectedItem() != null
-                            ? sheetCombo.getSelectionModel().getSelectedItem()
-                            : "";
-            sheetCombo.getItems().setAll(names);
-
-            String pick = previous;
-            if (pick.isEmpty() || !eligible.containsKey(pick)) {
-                pick = eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
-            }
-            sheetCombo.getSelectionModel().select(pick);
-
+            List<String> names = eligible.keySet().stream().sorted().toList();
             applySelectedSheetFromMap(eligible);
+            String sheetUsed =
+                    eligible.containsKey(DEFAULT_SHEET) ? DEFAULT_SHEET : names.get(0);
             statusLabel.setText(
                     "読み込み: "
                             + planPath.getFileName()
                             + " → "
                             + loaded.description()
-                            + " / シート数(対象)="
+                            + " / 表示シート="
+                            + sheetUsed
+                            + " / 対象シート数="
                             + names.size());
-            if (sourceTitledPane != null) {
-                sourceTitledPane.setExpanded(false);
-            }
         } catch (Exception ex) {
-            contentPane.setCenter(emptyPlaceholder("エラー"));
+            resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             if (shell != null) {
                 shell.appendLog("[equipment-gantt-graphic] " + ex.getMessage());
@@ -243,40 +669,126 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
-    private void applySelectedSheet() {
-        String ps = planJsonField != null ? planJsonField.getText().strip() : "";
-        Path planPath = ps.isEmpty() ? null : Path.of(ps);
-        if (planPath == null || !Files.isRegularFile(planPath)) {
-            return;
-        }
-        if (!planPath.toString().equals(lastLoadedPlanPath)) {
-            reloadFromFields();
-            return;
-        }
-        try {
-            SheetLoad loaded =
-                    loadWorkbookSheetsForGraphic(
-                            planPath,
-                            shell != null ? shell.snapshotUiEnv() : Map.of());
-            Map<String, JsonTableIo.SheetTable> eligible =
-                    filterEquipmentTimelineSheets(loaded.sheets());
-            applySelectedSheetFromMap(eligible);
-        } catch (IOException ex) {
-            statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
-        }
-    }
-
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {
-        String name = sheetCombo.getSelectionModel().getSelectedItem();
-        if (name == null || name.isBlank()) {
+        if (eligible == null || eligible.isEmpty()) {
+            return;
+        }
+        String name =
+                eligible.containsKey(DEFAULT_SHEET)
+                        ? DEFAULT_SHEET
+                        : eligible.keySet().stream().sorted().findFirst().orElse("");
+        if (name.isBlank()) {
             return;
         }
         JsonTableIo.SheetTable st = eligible.get(name);
         if (st == null) {
             return;
         }
+        lastGraphicSheet = st;
+        if (loadedContractBadgeRows != null && DEFAULT_SHEET.equals(name)) {
+            badgeRowsForCurrentGraphic = loadedContractBadgeRows;
+        } else {
+            badgeRowsForCurrentGraphic = null;
+        }
+        applyGraphicCenter(st);
+    }
+
+    private void resetGraphicState(String placeholderMsg) {
+        lastGraphicSheet = null;
+        loadedContractBadgeRows = null;
+        badgeRowsForCurrentGraphic = null;
+        graphicRootWrapper = null;
+        graphicWheelHookInstalled = false;
+        if (contentPane != null) {
+            contentPane.setCenter(emptyPlaceholder(placeholderMsg));
+        }
+    }
+
+    private void applyGraphicCenter(JsonTableIo.SheetTable st) {
+        if (contentPane == null || st == null) {
+            return;
+        }
+        double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
+        double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+        double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
+        double headerPct =
+                graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
+        double barFp =
+                graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
+        DesktopTheme theme =
+                shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        contentPane.setCenter(EquipmentGraphicGanttPane.build(st.columns(), rows));
+        Function<String, PersonBadgeStyle> badgeResolver =
+                shell != null
+                        ? shell.personBadgeStyleResolverForGantt()
+                        : (String __) -> PersonBadgeStyle.defaultStyle();
+        boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
+        BorderPane gantt =
+                EquipmentGraphicGanttPane.build(
+                        st.columns(),
+                        rows,
+                        theme,
+                        zoom,
+                        rowPct,
+                        slotPct,
+                        snapshotEquipmentGanttBarFontFamily(),
+                        barFp,
+                        headerPct,
+                        snapshotEquipmentGanttDateColWidth(),
+                        snapshotEquipmentGanttMachineColWidth(),
+                        snapshotEquipmentGanttProcessColWidth(),
+                        snapshotEquipmentGanttShiftWheelHScrollPercent(),
+                        badgeRowsForCurrentGraphic,
+                        showBadges,
+                        badgeResolver);
+        if (shell != null) {
+            shell.refreshEquipmentGanttObservedBadgeLabels(distinctBadgeLabelsFromGrid(badgeRowsForCurrentGraphic));
+        }
+        if (graphicRootWrapper == null) {
+            graphicRootWrapper = new BorderPane();
+            contentPane.setCenter(graphicRootWrapper);
+        }
+        graphicRootWrapper.setCenter(gantt);
+        installGraphicWheelZoomIfNeeded();
+    }
+
+    private void installGraphicWheelZoomIfNeeded() {
+        if (graphicRootWrapper == null || graphicWheelHookInstalled) {
+            return;
+        }
+        graphicWheelHookInstalled = true;
+        graphicRootWrapper.addEventFilter(
+                ScrollEvent.SCROLL,
+                e -> {
+                    if (!e.isControlDown()) {
+                        return;
+                    }
+                    e.consume();
+                    if (graphicZoomSlider == null) {
+                        return;
+                    }
+                    double delta = e.getDeltaY() > 0 ? 5 : -5;
+                    double v = Math.clamp(graphicZoomSlider.getValue() + delta, 50, 200);
+                    graphicZoomSlider.setValue(v);
+                    scheduleEquipmentGraphicPersist();
+                });
+    }
+
+    private void rebuildGraphicView() {
+        if (lastGraphicSheet == null || contentPane == null) {
+            return;
+        }
+        applyGraphicCenter(lastGraphicSheet);
+    }
+
+    /** メインの {@link DesktopTheme} 変更時に Canvas 帯の配色を合わせて再描画する。 */
+    void refreshGraphicForTheme() {
+        flushGraphicRebuildNow();
+    }
+
+    /** 担当バッジデザイン変更時に設備ガントを即時再描画する。 */
+    void refreshGraphicForPersonBadge() {
+        flushGraphicRebuildNow();
     }
 
     /**
@@ -328,90 +840,53 @@ public final class EquipmentGanttGraphicTabController {
         return p;
     }
 
-    private record SheetLoad(Map<String, JsonTableIo.SheetTable> sheets, String description) {}
+    private record SheetLoad(
+            Map<String, JsonTableIo.SheetTable> sheets,
+            String description,
+            List<List<String>> contractBadgeSlotRows) {}
 
     /**
-     * 読み込み優先: {@code *_logical_view.json}（時刻マスに実体があるとき）→ それ以外は sibling の
-     * {@code *_equipment_gantt_contract.json}（タイムライン契約から表生成）→ plan JSON 本体。
-     *
-     * <p>論理ビューは式キャッシュ欠落などで時刻列がすべて空になりうる。その場合は契約 JSON があれば
-     * グラフィック用にフォールバックする。
+     * ブック JSON は論理ビューがあればそれを読む（他シートの結合セル展開用）。
+     * 「結果_設備ガント」のタイムセルは xlsx 由来 JSON では欠損しがち（シェイプ描画のため）なので、
+     * 兄弟の {@code *_equipment_gantt_contract.json} があればそのシートだけ契約から組み立てた表で上書きする。
      */
-    private static SheetLoad loadWorkbookSheetsForGraphic(
-            Path planJsonFromField, Map<String, String> ui) throws IOException {
+    private static SheetLoad loadWorkbookSheetsForGraphic(Path planJsonFromField)
+            throws IOException {
         Path fn0 = planJsonFromField.getFileName();
         if (fn0 != null && fn0.toString().endsWith(".json")) {
             String stem0 = fn0.toString().substring(0, fn0.toString().length() - 5);
             if (stem0.endsWith("_equipment_gantt_contract")) {
-                JsonTableIo.SheetTable ganttOnly =
-                        EquipmentGanttContractSheetTableBuilder.buildFromContractPath(
+                EquipmentGanttSheetBundle bundle =
+                        EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(
                                 planJsonFromField);
                 Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
-                m.put(DEFAULT_SHEET, ganttOnly);
+                m.put(DEFAULT_SHEET, bundle.table());
                 return new SheetLoad(
-                        m, fn0.toString() + " (設備ガント契約・直接)");
+                        m, fn0.toString() + " (設備ガント契約・直接)", bundle.badgeSlotRows());
             }
         }
         Path logical = resolveLogicalViewPath(planJsonFromField);
-        if (logical != null) {
-            Map<String, JsonTableIo.SheetTable> logicalSheets =
-                    JsonTableIo.loadSheetsWorkbook(logical);
-            boolean slotsFilled =
-                    equipmentTimelineSheetsHaveNonEmptySlots(logicalSheets);
-            Path contract = resolveEquipmentContractSibling(planJsonFromField);
-            if (!slotsFilled && contract != null && Files.isRegularFile(contract)) {
-                // #region agent log
-                AgentDebugLog.appendStructured(
-                        ui != null ? ui : Map.of(),
-                        "gantt-nodisp",
-                        "H_fallback_contract",
-                        "EquipmentGanttGraphicTabController.loadWorkbookSheetsForGraphic",
-                        "logical_view had empty timeline slot cells; using equipment_gantt_contract",
-                        Map.of(
-                                "logicalPath",
-                                logical.toAbsolutePath().normalize().toString(),
-                                "contractPath",
-                                contract.toAbsolutePath().normalize().toString()));
-                // #endregion
-                JsonTableIo.SheetTable gantt =
-                        EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
-                Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
-                m.put(DEFAULT_SHEET, gantt);
-                return new SheetLoad(
-                        m,
-                        contract.getFileName().toString()
-                                + " (設備ガント契約・論理ビュー時刻セル空のため)");
-            }
-            return new SheetLoad(
-                    logicalSheets,
-                    logical.getFileName().toString() + " (論理ビュー)");
-        }
-        Path contract = resolveEquipmentContractSibling(planJsonFromField);
-        if (contract != null && Files.isRegularFile(contract)) {
-            JsonTableIo.SheetTable gantt =
-                    EquipmentGanttContractSheetTableBuilder.buildFromContractPath(contract);
-            Map<String, JsonTableIo.SheetTable> m = new LinkedHashMap<>();
-            m.put(DEFAULT_SHEET, gantt);
-            return new SheetLoad(
-                    m, contract.getFileName().toString() + " (設備ガント契約→表)");
-        }
-        return new SheetLoad(
-                JsonTableIo.loadSheetsWorkbook(planJsonFromField),
-                planJsonFromField.getFileName().toString());
-    }
+        Path workbookJson =
+                logical != null && Files.isRegularFile(logical) ? logical : planJsonFromField;
+        Map<String, JsonTableIo.SheetTable> sheets =
+                new LinkedHashMap<>(JsonTableIo.loadSheetsWorkbook(workbookJson));
 
-    /**
-     * {@link #filterEquipmentTimelineSheets} 対象シートのうち、いずれかの時刻スロット列に非空セルがあるか。
-     */
-    private static boolean equipmentTimelineSheetsHaveNonEmptySlots(
-            Map<String, JsonTableIo.SheetTable> sheets) {
-        Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
-        for (JsonTableIo.SheetTable t : eligible.values()) {
-            if (EquipmentGraphicGanttPane.sheetHasAnyNonEmptySlotCell(t.columns(), t.rows())) {
-                return true;
-            }
+        Path contract = resolveEquipmentContractSibling(planJsonFromField);
+        String desc;
+        if (logical != null && workbookJson.equals(logical)) {
+            desc = logical.getFileName().toString() + " (論理ビュー)";
+        } else {
+            desc = planJsonFromField.getFileName().toString();
         }
-        return false;
+        List<List<String>> badgeRows = null;
+        if (contract != null && Files.isRegularFile(contract)) {
+            EquipmentGanttSheetBundle bundle =
+                    EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(contract);
+            sheets.put(DEFAULT_SHEET, bundle.table());
+            badgeRows = bundle.badgeSlotRows();
+            desc = desc + " / " + contract.getFileName() + " (設備ガント帯)";
+        }
+        return new SheetLoad(sheets, desc, badgeRows);
     }
 
     /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */
@@ -437,6 +912,7 @@ public final class EquipmentGanttGraphicTabController {
 
     /**
      * {@code production_plan_multi_day_xxx.json} と並ぶ {@code …_equipment_gantt_contract.json}。
+     * {@code *_logical_view.json} を開いているときは stem から {@code _logical_view} を除いて兄弟を解決する。
      */
     private static Path resolveEquipmentContractSibling(Path planJsonFromField) {
         if (planJsonFromField == null) {
@@ -454,7 +930,35 @@ public final class EquipmentGanttGraphicTabController {
         if (stem.endsWith("_equipment_gantt_contract")) {
             return null;
         }
+        if (stem.endsWith("_logical_view")) {
+            stem = stem.substring(0, stem.length() - "_logical_view".length());
+        }
         return planJsonFromField.resolveSibling(stem + "_equipment_gantt_contract.json");
+    }
+
+    /** バッジグリッドから表示キー（姓2文字等）を重複除去して列挙する。 */
+    private static List<String> distinctBadgeLabelsFromGrid(List<List<String>> grid) {
+        if (grid == null || grid.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        for (List<String> row : grid) {
+            if (row == null) {
+                continue;
+            }
+            for (String cell : row) {
+                if (cell == null || cell.isBlank()) {
+                    continue;
+                }
+                for (String part : PersonNameBadgeText.splitBadgeCell(cell)) {
+                    String k = PersonBadgeStyle.normalizeLabelKey(part);
+                    if (!k.isEmpty()) {
+                        out.add(k);
+                    }
+                }
+            }
+        }
+        return List.copyOf(out);
     }
 
     private static Path siblingJson(Path workbookPath) {

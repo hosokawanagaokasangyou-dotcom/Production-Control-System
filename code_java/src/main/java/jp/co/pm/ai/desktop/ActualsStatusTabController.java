@@ -39,12 +39,12 @@ public final class ActualsStatusTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String HINT_TEXT =
-            "* \u30c7\u30fc\u30bf\u884c: \u6700\u5217\u76ee\u3092\u898b\u51fa\u3057\u9664\u304f\u7d2f\u8a08"
-                    + "\uff08max "
+            "* データ行: 最列目を見出し除く累計"
+                    + "（max "
                     + "500000"
-                    + "\u884c\u3067\u626b\u63cf\u7d42\u4e86\u3002\u5b9f\u30c7\u30fc\u30bf\u672c\u4f53\u306f"
-                    + " Excel \u30b7\u30fc\u30c8\u3001\u672c\u753b\u9762\u306f JSON \u5f62\u5f0f\u306e"
-                    + " \u53d6\u5f97\u30e1\u30bf\u306e\u307f\u8868\u793a\u3002";
+                    + "行で扫描終了。実データ本体は"
+                    + " Excel シート、本画面は JSON 形式の"
+                    + " 取得メタのみ表示。";
 
     public static final class Row {
         private String label;
@@ -174,15 +174,15 @@ public final class ActualsStatusTabController {
         this.actualsStatusRequestFactory = shell::buildActualsStatusRequest;
         List<ColDef> defs =
                 Arrays.asList(
-                        new ColDef("\u7a2e\u5225", "label", 100),
-                        new ColDef("\u89e3\u6c7a\u6839\u62e0", "resolution", 160),
-                        new ColDef("\u30d1\u30b9", "path", 220),
-                        new ColDef("\u30d5\u30a1\u30a4\u30eb", "fileOk", 56),
-                        new ColDef("\u30b7\u30fc\u30c8", "sheetOk", 56),
-                        new ColDef("\u30c7\u30fc\u30bf\u884c*", "dataRows", 88),
-                        new ColDef("\u30b5\u30a4\u30ba", "sizeBytes", 90),
-                        new ColDef("\u66f4\u65b0(UTC)", "mtime", 140),
-                        new ColDef("\u5099\u8003", "extra", 120));
+                        new ColDef("種別", "label", 100),
+                        new ColDef("解決根拠", "resolution", 160),
+                        new ColDef("パス", "path", 220),
+                        new ColDef("ファイル", "fileOk", 56),
+                        new ColDef("シート", "sheetOk", 56),
+                        new ColDef("データ行*", "dataRows", 88),
+                        new ColDef("サイズ", "sizeBytes", 90),
+                        new ColDef("更新(UTC)", "mtime", 140),
+                        new ColDef("備考", "extra", 120));
         List<TableColumn<Row, String>> columns = new ArrayList<>();
         for (ColDef d : defs) {
             TableColumn<Row, String> col = new TableColumn<>(d.title());
@@ -243,7 +243,7 @@ public final class ActualsStatusTabController {
     @FXML
     private void onRefreshButtonAction() {
         refreshButton.setDisable(true);
-        statusLabel.setText("\u53d6\u5f97\u4e2d...");
+        statusLabel.setText("取得中...");
         RunRequest req = actualsStatusRequestFactory.get();
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(

@@ -11,6 +11,10 @@
 日付列の表示整形・ガント後処理など **保存済み xlsx の最終セル値** を
 ``workbook_payload_from_final_xlsx_file``（pandas + ガント系 reheader）で出力する。
 
+**論理・ビュー JSON**（``*_logical_view.json``）
+結合セルを値で展開してから同じ抽出へ渡したもの（UI グラフィック向け。
+``planning_core.logical_workbook_view``／``write_production_plan_logical_view_json``）。
+
 **値のみのブックを JSON から再生成** … ``write_xlsx_from_workbook_payload_tabular``
 """
 
@@ -109,9 +113,6 @@ def workbook_payload_from_final_xlsx_file(
     }
     if metadata_extra:
         payload.update(metadata_extra)
-    from .equipment_gantt_json_enrich import enrich_workbook_payload_equipment_gantt_members
-
-    payload = enrich_workbook_payload_equipment_gantt_members(payload)
     return payload
 
 
@@ -165,9 +166,6 @@ def build_workbook_payload_from_dataframes(
     }
     if metadata_extra:
         payload.update(metadata_extra)
-    from .equipment_gantt_json_enrich import enrich_workbook_payload_equipment_gantt_members
-
-    payload = enrich_workbook_payload_equipment_gantt_members(payload)
     return payload
 
 

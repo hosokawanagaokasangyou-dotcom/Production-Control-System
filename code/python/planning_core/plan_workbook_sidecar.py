@@ -318,11 +318,6 @@ def write_production_plan_logical_view_json(
 
     通常の ``production_plan_multi_day*.json``（xlsx 直読みミラー）と併用し、
     設備ガントの 10 分枠を UI で使う場合は本ファイルを正とする。
-
-    同ブックに「結果_タスク一覧」がある場合、
-    :mod:`planning_core.equipment_gantt_json_enrich` により設備ガント系シートの
-    ``[依頼NO]`` セルへ担当ヒントを追記する（無効化は環境変数
-    ``PM_AI_ENRICH_EQUIPMENT_GANTT_MEMBERS=0``）。
     """
     if _plan_logical_view_json_disabled():
         logging.info(

@@ -1,16 +1,56 @@
 ---
-description: AgentDebugLog（NDJSON）— 正本は親ワークスペース .cursor/rules と同一方針
+description: Javaデスクトップの Cursor デバッグ NDJSON（AgentDebugLog）の出力手順・ログパス規約
 alwaysApply: true
 ---
 
-# Agent debug NDJSON（本サブモジュール）
+# Agent debug NDJSON（Cursor・Java デスクトップ）
 
-モノレポで **`工程管理AIプロジェクト_JAVA`** をルートに開いている場合の**正本**は次です（内容は同一方針）。
+## 実装の正
 
-- **`工程管理AIプロジェクト_JAVA/.cursor/rules/agent-debug-ndjson-logging.mdc`**
+- **コード**: `Production-Control-System/code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`
 
-実装クラスは常に本リポジトリ内:
+## 出力に使う API（必須）
 
-- `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`
+1. **構造化ログ**: `AgentDebugLog.appendStructured(ui, sessionId, hypothesisId, location, message, data)`
+2. **生 NDJSON 行のみ必要なとき**: `AgentDebugLog.appendNdjsonLine(ui, sessionId, jsonLine)`
+3. **解決後パスを記録する**: `AgentDebugLog.resolveNdjsonPath(ui, sessionId)` を `data` に含めてよい
 
-追加・変更するときは **上記正本** と矛盾しないようにし、`AgentDebugLog` の Javadoc（パス解決順）と整合させる。
+## 禁止
+
+- アプリソースに `/mnt/c/...` や OS 固定の絶対パスでログファイルを**直書き**しない
+
+## `ui` の渡し方（`debug-471ee7.log` と同じリポジトリ解決に揃える）
+
+- `MainShellController` 内では **`collectUiEnv()`** と同一キーの `Map<String,String>` を渡す（パッケージ内ならそのまま `collectUiEnv()` 可）
+- 子コントローラでは **`shell.snapshotUiEnv()`**（`collectUiEnv()` と同内容）を渡してよい
+- 無いときは **`Map.of()`**
+
+## `sessionId`
+
+- Cursor デバッグセッションで ID が指定されているときは**その値**（例: `471ee7`, `f0dedd`）
+- それ以外は **`AgentDebugLog.DEFAULT_SESSION_ID`** または機能ごとに定数化
+
+## ログファイルの解決順（実装と同一・first hit）
+
+1. **`CURSOR_DEBUG_LOG`** または **`PM_AI_DEBUG_LOG`**（ログ**ファイル**への絶対パス）
+2. 環境タブ **`PM_AI_CURSOR_DEBUG_LOG`**（`AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG`）
+3. **`parent(resolveRepoRoot(ui))/.cursor/debug-<sessionId>.log`** — リポジトリが `Production-Control-System` のとき、多くの場合**ワークスペース直下**の `.cursor/`（例: `工程管理AIプロジェクト_JAVA/.cursor/debug-471ee7.log`）
+4. **`resolveRepoRoot(ui)/.cursor/debug-<sessionId>.log`**
+5. 失敗時: **`user.home/.cursor/debug-<sessionId>.log`**
+
+## コード上のレイアウト
+
+- `// #region agent log` … `// #endregion` で囲む
+- **`appendStructured` 利用時は `data` に秘密・個人情報を入れない**
+
+## 環境変数キーを増やす場合
+
+- 環境タブ／TSV 連携するキーなら **`env-vars-managed-by-sheet-and-tsv.mdc`** に従う
+
+## ライフサイクル
+
+- 不具合修正がログで確証できたら **計測ブロックは削除**。`AgentDebugLog` と本ルールは残す。
+
+## 参照実装（計測ブロックは修正確証後に削除する前提）
+
+- `AgentDebugLog.appendStructured(collectUiEnv(), sessionId, …)` を `MainShellController` の該当フローに一時挿入するパターン
