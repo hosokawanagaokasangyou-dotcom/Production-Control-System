@@ -1,4 +1,6 @@
 @echo off
+rem Do not paste this script line-by-line into PowerShell (batch is for cmd.exe).
+rem Start: double-click, or in PowerShell run: .\launch-pm-ai-desktop.bat
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem =============================================================================
