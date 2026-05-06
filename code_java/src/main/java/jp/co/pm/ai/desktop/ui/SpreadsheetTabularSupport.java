@@ -572,59 +572,66 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
-        int physicalRows = -1;
-        if (view.getGrid() instanceof GridBase gb) {
-            var rows = gb.getRows();
-            physicalRows = rows != null ? rows.size() : -1;
-        }
-        final boolean skipResize =
-                physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
-        final boolean singleFlush =
-                skipResize || physicalRows >= PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS;
-
-        Runnable flush =
+        /*
+         * 呼び出し時点では Grid の行がまだ増えていないことがある（後から数千行になる）。
+         * 閾値と resize 可否は各 flush の実行時に再評価する。
+         */
+        Platform.runLater(
                 () -> {
-                    // #region agent log
-                    try {
-                        Map<String, Object> data =
-                                new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-                        data.put("viewRef", System.identityHashCode(view));
-                        data.put("refreshMode", skipResize ? "layout_only" : "resize_then_layout");
-                        data.put("schedule", singleFlush ? "single_runLater" : "double_nested_runLater");
-                        if (view.getGrid() instanceof GridBase gb) {
-                            var rows = gb.getRows();
-                            data.put(
-                                    "gridPhysicalRows",
-                                    rows != null ? rows.size() : -1);
-                            int cols =
-                                    rows != null && !rows.isEmpty()
-                                            ? rows.get(0).size()
-                                            : -1;
-                            data.put("gridColsFirstRow", cols);
-                        }
-                        data.put("runId", "post-fix");
-                        AgentDebugLog.appendStructured(
-                                Map.of(),
-                                "81ed4a",
-                                "H1",
-                                "SpreadsheetTabularSupport:refreshSpreadsheetAfterRowPresentationChange",
-                                "presentation refresh flush",
-                                data);
-                    } catch (Throwable ignored) {
+                    presentationFlushAfterRowPresentationChangeOnce(view);
+                    int pr = spreadsheetPhysicalRowCount(view);
+                    if (pr >= 0 && pr < PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS) {
+                        Platform.runLater(() -> presentationFlushAfterRowPresentationChangeOnce(view));
                     }
-                    // #endregion
-                    if (!skipResize) {
-                        view.resizeRowsToDefault();
-                    }
-                    refreshEmbeddedTableViewsRecursive(view, 0);
-                    view.requestLayout();
-                };
-        if (singleFlush) {
-            Platform.runLater(flush);
-        } else {
-            Platform.runLater(flush);
-            Platform.runLater(() -> Platform.runLater(flush));
+                });
+    }
+
+    private static int spreadsheetPhysicalRowCount(SpreadsheetView view) {
+        if (view == null || !(view.getGrid() instanceof GridBase gb)) {
+            return -1;
         }
+        var rows = gb.getRows();
+        return rows != null ? rows.size() : -1;
+    }
+
+    /**
+     * 行高・折り返し変更後の 1 パルス分（実行時点の行数で {@link SpreadsheetView#resizeRowsToDefault()} を抑止する）。
+     */
+    private static void presentationFlushAfterRowPresentationChangeOnce(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        int physicalRows = spreadsheetPhysicalRowCount(view);
+        boolean skipResize = physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
+        // #region agent log
+        try {
+            Map<String, Object> data = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+            data.put("viewRef", System.identityHashCode(view));
+            data.put("refreshMode", skipResize ? "layout_only" : "resize_then_layout");
+            data.put("evalAt", "flush_execute");
+            if (view.getGrid() instanceof GridBase gb) {
+                var rows = gb.getRows();
+                data.put("gridPhysicalRows", rows != null ? rows.size() : -1);
+                int cols =
+                        rows != null && !rows.isEmpty() ? rows.get(0).size() : -1;
+                data.put("gridColsFirstRow", cols);
+            }
+            data.put("runId", "post-fix-v2");
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "81ed4a",
+                    "H1",
+                    "SpreadsheetTabularSupport:presentationFlushOnce",
+                    "presentation refresh flush",
+                    data);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
+        if (!skipResize) {
+            view.resizeRowsToDefault();
+        }
+        refreshEmbeddedTableViewsRecursive(view, 0);
+        view.requestLayout();
     }
 
     private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {
