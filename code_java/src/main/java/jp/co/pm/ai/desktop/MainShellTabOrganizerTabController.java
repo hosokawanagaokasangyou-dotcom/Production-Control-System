@@ -3,11 +3,9 @@ package jp.co.pm.ai.desktop;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -15,7 +13,6 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
-import javafx.scene.Cursor;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.CheckBox;
@@ -42,7 +39,6 @@ import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.scene.paint.Color;
-import javafx.scene.text.TextAlignment;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -56,25 +52,11 @@ public final class MainShellTabOrganizerTabController {
     private static final DataFormat ROW_MOVE_MARKER =
             new DataFormat("application/x-pm-main-shell-tab-org-move");
 
-    /** ブラウザ型タブ列：やや細め・高めで横に多く並べる */
-    private static final double PREVIEW_STRIP_CHIP_W = 132.0;
-    private static final double PREVIEW_STRIP_CHIP_H = 36.0;
-    private static final double PREVIEW_STRIP_OVERLAP = 50.0;
-
     private static final double TREE_INDENT_STEP = 22.0;
     private static final double TREE_CONNECTOR_ROW_H = 30.0;
 
     @FXML
     private TreeView<OrgRow> treeView;
-
-    @FXML
-    private ScrollPane previewStripScroll;
-
-    @FXML
-    private HBox previewStripBox;
-
-    private final IdentityHashMap<TreeItem<OrgRow>, StackPane> previewStripChipByTreeItem =
-            new IdentityHashMap<>();
 
     @FXML
     private ColorPicker colorPicker;
@@ -126,7 +108,6 @@ public final class MainShellTabOrganizerTabController {
             treeSelectionListener =
                     (obs, prev, cur) -> {
                         syncOrganizerSideFields();
-                        syncPreviewStripChipHighlight();
                     };
             treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
         }
@@ -174,7 +155,6 @@ public final class MainShellTabOrganizerTabController {
                                 if (treeView != null) {
                                     treeView.refresh();
                                 }
-                                rebuildPreviewStrip();
                                 DesktopSessionState snap = shell.collectDesktopSessionSnapshot();
                                 DesktopSessionStateStore.save(snap);
                             });
@@ -206,7 +186,6 @@ public final class MainShellTabOrganizerTabController {
         treeView.setRoot(invisibleRoot);
         expandAll(invisibleRoot);
         syncOrganizerSideFields();
-        rebuildPreviewStrip();
     }
 
     private void syncOrganizerSideFields() {
@@ -286,7 +265,6 @@ public final class MainShellTabOrganizerTabController {
         DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
         treeView.refresh();
         syncTabAliasField();
-        rebuildPreviewStrip();
     }
 
     private static void expandAll(TreeItem<OrgRow> n) {
@@ -382,7 +360,6 @@ public final class MainShellTabOrganizerTabController {
         }
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(group);
-        rebuildPreviewStrip();
     }
 
     @FXML
@@ -441,7 +418,6 @@ public final class MainShellTabOrganizerTabController {
             }
         }
         treeView.requestFocus();
-        rebuildPreviewStrip();
     }
 
     /**
@@ -666,7 +642,7 @@ public final class MainShellTabOrganizerTabController {
             return base + c;
         }
 
-        /** ツリー右側テキスト（プレビューチップとは別）—色コードはチップ側で示すため省略。 */
+        /** ツールチップ等用の行説明（グループは [グループ] 付き）。 */
         String treeDetailWithoutHex(MainShellController shellCtl) {
             if (kind == Kind.GROUP) {
                 String t = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
@@ -675,121 +651,12 @@ public final class MainShellTabOrganizerTabController {
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
 
-        /** ツリー色ピル／ブラウザ型プレビュー用の短い見出し（[グループ] プレフィックスなし）。 */
+        /** ツリー色ピル用の短い見出し（[グループ] プレフィックスなし）。 */
         String treePillPrimaryLabel(MainShellController shellCtl) {
             if (kind == Kind.GROUP) {
                 return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
             }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
-        }
-    }
-
-    private void rebuildPreviewStrip() {
-        if (previewStripBox == null || treeView == null || treeView.getRoot() == null || shell == null) {
-            return;
-        }
-        previewStripBox.getChildren().clear();
-        previewStripChipByTreeItem.clear();
-        previewStripBox.setSpacing(-PREVIEW_STRIP_OVERLAP);
-        List<TreeItem<OrgRow>> tabs = new ArrayList<>();
-        collectTabTreeItemsInOrder(treeView.getRoot(), tabs);
-        for (TreeItem<OrgRow> tabItem : tabs) {
-            StackPane chip = createPreviewStripChip(tabItem);
-            previewStripChipByTreeItem.put(tabItem, chip);
-            previewStripBox.getChildren().add(chip);
-        }
-        syncPreviewStripChipHighlight();
-        if (previewStripScroll != null) {
-            Platform.runLater(
-                    () -> {
-                        previewStripScroll.applyCss();
-                        previewStripScroll.layout();
-                    });
-        }
-    }
-
-    private static void collectTabTreeItemsInOrder(TreeItem<OrgRow> node, List<TreeItem<OrgRow>> out) {
-        if (node == null || node.getValue() == null) {
-            return;
-        }
-        OrgRow r = node.getValue();
-        if (r.kind == OrgRow.Kind.TAB) {
-            out.add(node);
-        }
-        for (TreeItem<OrgRow> ch : node.getChildren()) {
-            collectTabTreeItemsInOrder(ch, out);
-        }
-    }
-
-    private StackPane createPreviewStripChip(TreeItem<OrgRow> tabItem) {
-        OrgRow row = tabItem.getValue();
-        StackPane chip = new StackPane();
-        chip.setCursor(Cursor.HAND);
-        chip.setPrefSize(PREVIEW_STRIP_CHIP_W, PREVIEW_STRIP_CHIP_H);
-        chip.setMinSize(PREVIEW_STRIP_CHIP_W, PREVIEW_STRIP_CHIP_H);
-        chip.setMaxHeight(PREVIEW_STRIP_CHIP_H);
-        chip.getStyleClass().setAll("pm-org-strip-chip", "pm-org-strip-browser-tab");
-
-        String fullTitle = row.treeDetailWithoutHex(shell);
-        String pillTitle = row.treePillPrimaryLabel(shell);
-        Label lab = new Label(pillTitle);
-        lab.setWrapText(false);
-        lab.setTextAlignment(TextAlignment.CENTER);
-        lab.setAlignment(Pos.CENTER);
-        lab.setMaxWidth(PREVIEW_STRIP_CHIP_W - 10);
-        lab.getStyleClass().add("pm-org-strip-chip-label");
-        Tooltip.install(chip, new Tooltip(fullTitle));
-
-        String hex = row.colorHex;
-        if (hex != null && !hex.isBlank()) {
-            chip.setStyle(
-                    shell.tabOrganizerPreviewChipSurfaceStyle(hex)
-                            + " -fx-background-radius: 10 10 0 0; -fx-border-radius: 10 10 0 0;");
-            // 添付イメージどおりブラウザタブは白文字基調（メインシェル選択タブの見えに寄せる）
-            lab.setStyle("-fx-text-fill: #f8fafc; -fx-font-size: 10.5px; -fx-font-weight: bold;");
-        } else {
-            chip.getStyleClass().add("pm-org-tab-preview-chip-empty");
-            chip.setStyle("");
-            lab.setStyle(
-                    "-fx-font-size: 10.5px; -fx-font-weight: bold; -fx-text-fill: "
-                            + shell.tabOrganizerPreviewChipLabelTextFill("")
-                            + ";");
-        }
-        chip.getChildren().setAll(lab);
-
-        chip.setOnMouseClicked(
-                e -> {
-                    if (treeView == null) {
-                        return;
-                    }
-                    treeView.getSelectionModel().clearSelection();
-                    treeView.getSelectionModel().select(tabItem);
-                    int rowIdx = treeView.getRow(tabItem);
-                    if (rowIdx >= 0) {
-                        treeView.scrollTo(rowIdx);
-                    }
-                    e.consume();
-                });
-        return chip;
-    }
-
-    private void syncPreviewStripChipHighlight() {
-        if (previewStripChipByTreeItem.isEmpty() || treeView == null) {
-            return;
-        }
-        ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
-        Set<TreeItem<OrgRow>> selected =
-                sel == null || sel.isEmpty() ? Set.of() : new HashSet<>(sel);
-        for (Map.Entry<TreeItem<OrgRow>, StackPane> e : previewStripChipByTreeItem.entrySet()) {
-            boolean on = selected.contains(e.getKey());
-            StackPane chip = e.getValue();
-            if (on) {
-                if (!chip.getStyleClass().contains("pm-org-strip-chip-selected")) {
-                    chip.getStyleClass().add("pm-org-strip-chip-selected");
-                }
-            } else {
-                chip.getStyleClass().remove("pm-org-strip-chip-selected");
-            }
         }
     }
 
@@ -1030,7 +897,6 @@ public final class MainShellTabOrganizerTabController {
         treeView.getSelectionModel().select(source);
         treeView.refresh();
         syncOrganizerSideFields();
-        rebuildPreviewStrip();
         return true;
     }
 

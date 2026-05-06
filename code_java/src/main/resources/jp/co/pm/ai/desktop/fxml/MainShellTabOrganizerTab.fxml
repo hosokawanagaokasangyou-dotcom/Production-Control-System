@@ -28,19 +28,6 @@
             </padding>
             <Label wrapText="true"
                    text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
-            <Label styleClass="pm-main-shell-tab-organizer-strip-hint" wrapText="true"
-                   text="メインシェル上部に近いブラウザ型タブ列プレビュー（横に重ねて表示。クリックでツリー内の該当タブ行へ）"/>
-            <ScrollPane fx:id="previewStripScroll" fitToHeight="true" fitToWidth="false" hbarPolicy="AS_NEEDED"
-                        maxHeight="104.0" minHeight="60.0" prefHeight="88.0" styleClass="pm-org-preview-strip"
-                        vbarPolicy="NEVER">
-                <content>
-                    <HBox fx:id="previewStripBox" alignment="CENTER_LEFT" spacing="0.0">
-                        <padding>
-                            <Insets bottom="6.0" left="10.0" right="10.0" top="6.0"/>
-                        </padding>
-                    </HBox>
-                </content>
-            </ScrollPane>
             <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
             <TreeView fx:id="treeView" minHeight="220.0" prefHeight="420.0" styleClass="tree-view pm-org-tree-lined"/>
             <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
