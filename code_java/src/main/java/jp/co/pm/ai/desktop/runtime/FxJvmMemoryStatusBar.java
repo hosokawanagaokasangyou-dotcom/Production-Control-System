@@ -16,13 +16,14 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 
 /**
- * ツールバー右側ラベルにヒープ・Metaspace の使用状況を表示し、同一内容を標準エラーに記録する（{@code System.err}）。
+ * Toolbar label: heap and Metaspace usage; same line to {@code System.err}.
  *
- * <p>間隔は 10 秒固定。バックグラウンドスレッドでサンプルし、ラベル更新は JavaFX スレッドで行う。
+ * <p>Interval 10 seconds. UI strings are ASCII-only (English) so labels render correctly on Japanese Windows
+ * when editor or runtime encoding does not match UTF-8 (same rationale as {@link JvmMemoryMonitor}).
  */
 public final class FxJvmMemoryStatusBar {
 
-    /** ログプレフィックス（{@link JvmMemoryMonitor} の {@code [PM-AI heap]} と揃える） */
+    /** Prefix for stderr lines; matches {@link JvmMemoryMonitor} tag style. */
     private static final String LOG_PREFIX = "[PM-AI memory]";
 
     private static final int INTERVAL_SEC = 10;
@@ -32,12 +33,7 @@ public final class FxJvmMemoryStatusBar {
 
     private FxJvmMemoryStatusBar() {}
 
-    /**
-     * 監視を開始する（アプリ生存期間で一度だけ有効）。
-     *
-     * @param label 表示先（右上ツールバー）
-     * @param stage 終了時にスケジューラを停止するために渡す
-     */
+    /** Starts sampling (once per JVM). @param label toolbar target @param stage used to stop on close */
     public static void start(Label label, Stage stage) {
         if (label == null || stage == null) {
             return;
@@ -123,16 +119,16 @@ public final class FxJvmMemoryStatusBar {
         String heapPctStr =
                 !Double.isNaN(s.heapPct)
                         ? String.format(Locale.ROOT, "%.1f%%", s.heapPct)
-                        : "?";
-        return "ヒープ "
+                        : "n/a";
+        return "Heap "
                 + formatMiPair(s.heapUsed, s.heapMax)
                 + " ("
                 + heapPctStr
-                + ") ・ メタスペース "
+                + ") | Metaspace "
                 + formatMiPair(s.metaUsed, s.metaMax);
     }
 
-    /** ログ用（ASCII、キー=値を並べる） */
+    /** Log line: ASCII key=value */
     private static String formatLogLine(MemorySample s) {
         return "heap_used_MiB="
                 + toMiB(s.heapUsed)
@@ -147,10 +143,10 @@ public final class FxJvmMemoryStatusBar {
     }
 
     private static String formatMiPair(long usedBytes, long maxBytes) {
-        String usedStr = usedBytes >= 0 ? toMiB(usedBytes) + " MiB" : "?";
+        String usedStr = usedBytes >= 0 ? toMiB(usedBytes) + " MiB" : "n/a";
         String maxStr;
         if (maxBytes < 0) {
-            maxStr = "?";
+            maxStr = "n/a";
         } else {
             maxStr = toMiB(maxBytes) + " MiB";
         }
