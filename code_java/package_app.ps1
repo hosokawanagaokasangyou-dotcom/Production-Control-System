@@ -287,24 +287,31 @@ function Ensure-PythonEmbedCache {
 
     Push-Location $dest
     try {
-        # scripts not on PATH 等の WARNING が stderr に出ると、2>&1 でも PS 5.1 が NativeCommandError にする。
-        # *> $null で全ストリームを捨て、戻り値配列化も防ぐ。
-        $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
-        & .\python.exe $getPip *> $null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'get-pip が失敗しました。'
+        # PS 5.1 + $ErrorActionPreference=Stop では、python の stderr WARNING でも NativeCommandError で中断する。
+        # *> $null だけでは防げないため、実行中だけ SilentlyContinue にする。
+        $prevEa = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'SilentlyContinue'
+            $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
+            & .\python.exe $getPip *> $null
+            if ($LASTEXITCODE -ne 0) {
+                throw 'get-pip が失敗しました。'
+            }
+            & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location *> $null
+            if ($LASTEXITCODE -ne 0) {
+                throw 'pip のアップグレードに失敗しました。'
+            }
+            & .\python.exe -m pip install -q -r $req --no-warn-script-location *> $null
+            if ($LASTEXITCODE -ne 0) {
+                throw 'pip install -r requirements.txt が失敗しました。'
+            }
         }
-        & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location *> $null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'pip のアップグレードに失敗しました。'
-        }
-        & .\python.exe -m pip install -q -r $req --no-warn-script-location *> $null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'pip install -r requirements.txt が失敗しました。'
+        finally {
+            $ErrorActionPreference = $prevEa
+            Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
         }
     }
     finally {
-        Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
         Pop-Location
     }
 
