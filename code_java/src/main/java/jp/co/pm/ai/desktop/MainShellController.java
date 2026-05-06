@@ -1086,9 +1086,12 @@ public final class MainShellController {
         }
     }
 
-    private void rebuildMainShellTabsFromLayout(List<MainShellTabLayoutNode> layout) {
+    /**
+     * @return レイアウトが検証されメイン {@link TabPane} が組み替えられたとき {@code true}。検証不一致などでスキップしたとき {@code false}
+     */
+    private boolean rebuildMainShellTabsFromLayout(List<MainShellTabLayoutNode> layout) {
         if (tabPane == null || layout == null || layout.isEmpty() || mainShellTabOrganizer == null) {
-            return;
+            return false;
         }
         HashSet<String> required = new HashSet<>();
         for (MainShellTabId id : MainShellTabId.values()) {
@@ -1101,7 +1104,7 @@ public final class MainShellController {
             collectLayoutLeafKeys(n, found);
         }
         if (!found.equals(required)) {
-            return;
+            return false;
         }
         suppressEnvSessionPersistence.set(true);
         try {
@@ -1130,6 +1133,7 @@ public final class MainShellController {
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        return true;
     }
 
     private static void collectLayoutLeafKeys(MainShellTabLayoutNode n, Set<String> out) {
@@ -1198,10 +1202,17 @@ public final class MainShellController {
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
     }
 
-    /** ツリー編集結果を適用しセッション保存まで行う。 */
-    void applyMainShellTabLayoutFromOrganizer(List<MainShellTabLayoutNode> layout) {
-        rebuildMainShellTabsFromLayout(layout);
+    /**
+     * ツリー編集結果を適用し、成功時のみセッション保存まで行う。
+     *
+     * @return メインタブの組み替えに成功したとき {@code true}
+     */
+    boolean applyMainShellTabLayoutFromOrganizer(List<MainShellTabLayoutNode> layout) {
+        if (!rebuildMainShellTabsFromLayout(layout)) {
+            return false;
+        }
         DesktopSessionStateStore.save(collectDesktopSession());
+        return true;
     }
 
     /** 現在のメインシェル構成をツリー編集用にエクスポート。 */

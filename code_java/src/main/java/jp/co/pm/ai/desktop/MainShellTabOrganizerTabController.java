@@ -338,6 +338,7 @@ public final class MainShellTabOrganizerTabController {
         if (shell == null || treeView == null || treeView.getRoot() == null) {
             return;
         }
+        mergePendingOrganizerFieldsIntoModel();
         List<MainShellTabLayoutNode> layout = new ArrayList<>();
         for (TreeItem<OrgRow> ch : treeView.getRoot().getChildren()) {
             MainShellTabLayoutNode n = layoutNodeFromTreeItem(ch);
@@ -348,11 +349,72 @@ public final class MainShellTabOrganizerTabController {
         if (!validateAllTabsOnce(layout)) {
             alert(
                     AlertType.WARNING,
-                    "すべての作業タブをちょうど1回ずつ使う必要があります（不足・重複があります）。");
+                    "すべての作業タブをちょうど1回ずつ使う必要があります（不足・重複があります）。\n"
+                            + leafKeyMismatchDetail(layout));
             return;
         }
-        shell.applyMainShellTabLayoutFromOrganizer(layout);
+        if (!shell.applyMainShellTabLayoutFromOrganizer(layout)) {
+            alert(
+                    AlertType.WARNING,
+                    "メイン画面上部への反映に失敗しました。タブキーの一覧が一致していません。\n"
+                            + leafKeyMismatchDetail(layout));
+            return;
+        }
         reloadTreeFromShell();
+    }
+
+    /**
+     * 「名前を反映」「別名を反映」を押し忘れたときでも、構成適用で入力欄の内容を取り込む。
+     */
+    private void mergePendingOrganizerFieldsIntoModel() {
+        if (treeView == null || shell == null) {
+            return;
+        }
+        if (groupNameField != null && !groupNameField.isDisable()) {
+            TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+            if (sel != null
+                    && sel.getValue() != null
+                    && sel.getValue().kind == OrgRow.Kind.GROUP) {
+                String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
+                sel.getValue().groupTitle = t;
+            }
+        }
+        if (tabAliasField != null && !tabAliasField.isDisable()) {
+            TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+            if (sel != null
+                    && sel.getValue() != null
+                    && sel.getValue().kind == OrgRow.Kind.TAB) {
+                shell.setMainShellTabDisplayAlias(sel.getValue().tabId, tabAliasField.getText());
+            }
+        }
+    }
+
+    private static String leafKeyMismatchDetail(List<MainShellTabLayoutNode> top) {
+        Set<String> seen = new HashSet<>();
+        Set<String> required = new HashSet<>();
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id != MainShellTabId.TAB_ORGANIZER) {
+                required.add(id.key());
+            }
+        }
+        for (MainShellTabLayoutNode n : top) {
+            collectLeafKeys(n, seen);
+        }
+        Set<String> missing = new HashSet<>(required);
+        missing.removeAll(seen);
+        Set<String> extra = new HashSet<>(seen);
+        extra.removeAll(required);
+        StringBuilder sb = new StringBuilder();
+        if (!missing.isEmpty()) {
+            sb.append("不足キー: ").append(missing).append("\n");
+        }
+        if (!extra.isEmpty()) {
+            sb.append("余分キー: ").append(extra).append("\n");
+        }
+        if (seen.size() != required.size() && missing.isEmpty() && extra.isEmpty()) {
+            sb.append("(リーフ数 ").append(seen.size()).append(" / 期待 ").append(required.size()).append(")");
+        }
+        return sb.length() > 0 ? sb.toString().strip() : "";
     }
 
     private static boolean validateAllTabsOnce(List<MainShellTabLayoutNode> top) {
