@@ -23,20 +23,18 @@
     <!-- 縮小ウィンドウでもツリー編集をスクロール可能にし、適用ボタンは常に下端に固定 -->
     <ScrollPane fitToWidth="true" hbarPolicy="NEVER" minHeight="0.0" pannable="false"
                 VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED">
-        <VBox spacing="10.0">
+        <VBox spacing="8.0">
             <padding>
                 <Insets bottom="4.0" left="0.0" right="4.0" top="0.0"/>
             </padding>
-            <Label wrapText="true"
-                   text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
-            <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
-            <StackPane minHeight="220.0" prefHeight="420.0" styleClass="pm-org-organizer-stack">
-                <ScrollPane fitToHeight="true" fitToWidth="true" hbarPolicy="AS_NEEDED" styleClass="pm-org-organizer-visual-scroll"
+            <!-- ツリー編集を先頭に置き、スクロールなしで見える領域を確保 -->
+            <StackPane minHeight="80.0" prefHeight="200.0" maxHeight="320.0" styleClass="pm-org-organizer-stack">
+                <ScrollPane fitToHeight="false" fitToWidth="true" hbarPolicy="AS_NEEDED" styleClass="pm-org-organizer-visual-scroll"
                             vbarPolicy="AS_NEEDED">
                     <content>
-                        <VBox fx:id="organizerVisualRoot" spacing="12.0" styleClass="pm-org-organizer-visual-root">
+                        <VBox fx:id="organizerVisualRoot" spacing="6.0" styleClass="pm-org-organizer-visual-root">
                             <padding>
-                                <Insets bottom="8.0" left="6.0" right="6.0" top="6.0"/>
+                                <Insets bottom="4.0" left="4.0" right="4.0" top="2.0"/>
                             </padding>
                         </VBox>
                     </content>
@@ -44,6 +42,8 @@
                 <TreeView fx:id="treeView" managed="true" maxHeight="0.0" minHeight="0.0" mouseTransparent="true"
                           prefHeight="0.0" showRoot="false" styleClass="pm-org-organizer-model-tree" visible="false"/>
             </StackPane>
+            <Label wrapText="true"
+                   text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
             <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
                    text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">

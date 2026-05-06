@@ -28,7 +28,6 @@ import javafx.scene.control.TreeView;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.Node;
-import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -49,8 +48,11 @@ public final class MainShellTabOrganizerTabController {
     private static final DataFormat ROW_MOVE_MARKER =
             new DataFormat("application/x-pm-main-shell-tab-org-move");
 
-    /** 親の右に並べる子の縦ずらしの下限ピクセル（高さの半分がこれより小さいとき）。 */
-    private static final double CHILD_STAGGER_MIN_PX = 4.0;
+    /** 親の右の子行同士の縦隙間（重ならないようにフル高さで積む）。 */
+    private static final double CHILD_STRIP_VERTICAL_GAP = 4.0;
+
+    /** 子行ごとに左へ積み上げるインデント（階段状の「半歩ずらし」用、横方向のみ）。 */
+    private static final double CHILD_STRIP_HORIZONTAL_STAGGER = 8.0;
 
     @FXML
     private TreeView<OrgRow> treeView;
@@ -685,7 +687,7 @@ public final class MainShellTabOrganizerTabController {
             return createPillForTreeItem(item);
         }
         HBox row = new HBox(8);
-        row.setAlignment(Pos.CENTER_LEFT);
+        row.setAlignment(Pos.TOP_LEFT);
         row.setFillHeight(false);
 
         Button disclosure = new Button(item.isExpanded() ? "▼" : "▶");
@@ -709,30 +711,36 @@ public final class MainShellTabOrganizerTabController {
         return row;
     }
 
-    private Pane buildStaggeredChildStrip(TreeItem<OrgRow> groupItem) {
-        Pane pane = new Pane();
-        double maxRight = 0;
-        double maxBottom = 0;
-        double y = 0;
+    /**
+     * グループの右側に子を縦に並べる（縦は重ならない）。行ごとに左インデントを増やし、軽い階段状にする。
+     */
+    private VBox buildStaggeredChildStrip(TreeItem<OrgRow> groupItem) {
+        VBox col = new VBox(CHILD_STRIP_VERTICAL_GAP);
+        col.setFillWidth(false);
+        col.setAlignment(Pos.TOP_LEFT);
+        int i = 0;
         for (TreeItem<OrgRow> ch : groupItem.getChildren()) {
             Node n =
                     ch.getValue() != null && ch.getValue().kind == OrgRow.Kind.GROUP
                             ? buildOrganizerRow(ch)
                             : createPillForTreeItem(ch);
-            n.applyCss();
-            double pw = n.prefWidth(-1);
-            double ph = n.prefHeight(-1);
-            n.setLayoutX(0);
-            n.setLayoutY(y);
-            pane.getChildren().add(n);
-            maxRight = Math.max(maxRight, pw);
-            maxBottom = Math.max(maxBottom, y + ph);
-            y += Math.max(CHILD_STAGGER_MIN_PX, ph * 0.5);
+            HBox line = new HBox(0);
+            line.setAlignment(Pos.CENTER_LEFT);
+            line.setFillHeight(false);
+            double indent = i * CHILD_STRIP_HORIZONTAL_STAGGER;
+            if (indent > 0) {
+                Region lead = new Region();
+                lead.setMinWidth(indent);
+                lead.setPrefWidth(indent);
+                lead.setMaxWidth(indent);
+                line.getChildren().add(lead);
+            }
+            line.getChildren().add(n);
+            col.getChildren().add(line);
+            i++;
         }
-        pane.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-        pane.setPrefSize(Math.max(maxRight, 1), Math.max(maxBottom, 1));
-        attachDropTarget(pane, groupItem);
-        return pane;
+        attachDropTarget(col, groupItem);
+        return col;
     }
 
     private StackPane createPillForTreeItem(TreeItem<OrgRow> item) {
