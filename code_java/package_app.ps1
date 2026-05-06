@@ -167,7 +167,7 @@ function Ensure-PythonEmbedCache {
 
     if ($Skip -and (Test-Path -LiteralPath $pyExe)) {
         Write-Host "SkipPythonPrepare: キャッシュをそのまま使います: $dest" -ForegroundColor DarkGray
-        return $dest
+        return [string]$dest
     }
 
     if (-not (Test-Path -LiteralPath $req)) {
@@ -200,15 +200,16 @@ function Ensure-PythonEmbedCache {
 
     Push-Location $dest
     try {
-        & .\python.exe $getPip
+        # 子プロセスの stdout/stderr を関数の戻り値に混ぜない（$pythonSrc が配列化し robocopy 引数欠落の原因になる）
+        & .\python.exe $getPip 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw 'get-pip が失敗しました。'
         }
-        & .\python.exe -m pip install --upgrade pip
+        & .\python.exe -m pip install -q --upgrade pip 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw 'pip のアップグレードに失敗しました。'
         }
-        & .\python.exe -m pip install -r $req
+        & .\python.exe -m pip install -q -r $req 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw 'pip install -r requirements.txt が失敗しました。'
         }
@@ -217,7 +218,7 @@ function Ensure-PythonEmbedCache {
         Pop-Location
     }
 
-    return $dest
+    return [string]$dest
 }
 
 function Copy-BundleToDist {
@@ -226,6 +227,10 @@ function Copy-BundleToDist {
         [string]$DistAppRoot,
         [string]$PythonEmbedSourceDir
     )
+
+    if ([string]::IsNullOrWhiteSpace($PythonEmbedSourceDir) -or -not (Test-Path -LiteralPath $PythonEmbedSourceDir)) {
+        throw "Python 同梱元パスが無効です: '$PythonEmbedSourceDir'"
+    }
 
     $data = Join-Path $DistAppRoot 'pm-ai-data'
     if (Test-Path -LiteralPath $data) {
@@ -315,8 +320,8 @@ Copy-JpackageInputDirectory -RootPath $Root -MainJarName $proj.MainJar -DestPath
 
 Write-Host "--- Step 3: Python 同梱キャッシュ（pip）---" -ForegroundColor Cyan
 $cacheRoot = Join-Path $Root 'build_cache'
-$pythonSrc = Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot -PythonVersion $pyEmbedVer `
-    -CacheRoot $cacheRoot -Skip:$SkipPythonPrepare
+$pythonSrc = [string](Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot -PythonVersion $pyEmbedVer `
+        -CacheRoot $cacheRoot -Skip:$SkipPythonPrepare)
 
 Write-Host "--- Step 4: jpackage（type=$PackageType）---" -ForegroundColor Cyan
 $dist = Join-Path $Root 'dist'
