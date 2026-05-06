@@ -40,6 +40,7 @@ import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.paint.Color;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -1083,20 +1084,63 @@ public final class MainShellController {
         if (colorHex != null && !colorHex.isBlank()) {
             String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
-            tab.setStyle("-fx-background-color: " + h + ";");
-            pokeShellTabHeaderBackground(pane, tab, h);
+            String textFill = contrastingTabLabelTextFillHex(h);
+            tab.setStyle(
+                    "-fx-background-color: "
+                            + h
+                            + "; -fx-text-fill: "
+                            + textFill
+                            + ";");
+            pokeShellTabHeaderBackground(pane, tab, h, textFill);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
-            pokeShellTabHeaderBackground(pane, tab, null);
+            pokeShellTabHeaderBackground(pane, tab, null, null);
         }
     }
 
     /**
-     * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
-     * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景を指定する。
+     * ユーザー指定のタブ背景に対し、WCAG 系の相対輝度で明暗を判定してラベル色を選ぶ（固定の白／グレー文字との衝突を避ける）。
      */
-    private static void pokeShellTabHeaderBackground(TabPane pane, Tab tab, String rgbHexOrNull) {
+    private static String contrastingTabLabelTextFillHex(String bgHex) {
+        try {
+            Color c = Color.web(bgHex.strip());
+            double lum =
+                    relativeSrgbLuminance(
+                            (int) Math.round(c.getRed() * 255.0),
+                            (int) Math.round(c.getGreen() * 255.0),
+                            (int) Math.round(c.getBlue() * 255.0));
+            return lum > 0.45 ? "#0f172a" : "#f8fafc";
+        } catch (IllegalArgumentException ex) {
+            return "#f8fafc";
+        }
+    }
+
+    /** sRGB の相対輝度（0〜1）。{@link Color} と同じ係数。 */
+    private static double relativeSrgbLuminance(int r, int g, int b) {
+        double rs = linearizeSrgbChannel(clamp255(r) / 255.0);
+        double gs = linearizeSrgbChannel(clamp255(g) / 255.0);
+        double bs = linearizeSrgbChannel(clamp255(b) / 255.0);
+        return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    }
+
+    private static int clamp255(int x) {
+        return Math.max(0, Math.min(255, x));
+    }
+
+    private static double linearizeSrgbChannel(double channel01) {
+        if (channel01 <= 0.03928) {
+            return channel01 / 12.92;
+        }
+        return Math.pow((channel01 + 0.055) / 1.055, 2.4);
+    }
+
+    /**
+     * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
+     * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
+     */
+    private static void pokeShellTabHeaderBackground(
+            TabPane pane, Tab tab, String rgbHexOrNull, String labelFillHexOrNull) {
         if (pane == null) {
             return;
         }
@@ -1116,10 +1160,28 @@ public final class MainShellController {
                             continue;
                         }
                         if (tabOrdinal == idx) {
-                            if (rgbHexOrNull != null && !rgbHexOrNull.isBlank()) {
-                                child.setStyle("-fx-background-color: " + rgbHexOrNull.strip() + ";");
+                            if (rgbHexOrNull != null
+                                    && !rgbHexOrNull.isBlank()
+                                    && labelFillHexOrNull != null
+                                    && !labelFillHexOrNull.isBlank()) {
+                                String h = rgbHexOrNull.strip();
+                                String tf = labelFillHexOrNull.strip();
+                                child.setStyle(
+                                        "-fx-background-color: "
+                                                + h
+                                                + "; -fx-text-fill: "
+                                                + tf
+                                                + ";");
+                                Node lab = child.lookup(".tab-label");
+                                if (lab != null) {
+                                    lab.setStyle("-fx-text-fill: " + tf + ";");
+                                }
                             } else {
                                 child.setStyle("");
+                                Node lab = child.lookup(".tab-label");
+                                if (lab != null) {
+                                    lab.setStyle("");
+                                }
                             }
                             return;
                         }
