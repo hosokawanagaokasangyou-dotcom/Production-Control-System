@@ -166,6 +166,33 @@ function Read-MavenPomProperties {
     return $props
 }
 
+function Expand-PomPropertyPlaceholder {
+    param(
+        [string]$Raw,
+        [hashtable]$Props
+    )
+    if ($null -eq $Raw -or [string]::IsNullOrWhiteSpace($Raw)) {
+        return ''
+    }
+    $current = $Raw.Trim()
+    for ($iter = 0; $iter -lt 4; $iter++) {
+        $m = [regex]::Match($current, '^\$\{([^}]+)\}$')
+        if (-not $m.Success) {
+            break
+        }
+        $innerKey = $m.Groups[1].Value
+        if (-not $Props.ContainsKey($innerKey)) {
+            break
+        }
+        $next = [string]$Props[$innerKey]
+        if ([string]::IsNullOrWhiteSpace($next)) {
+            break
+        }
+        $current = $next.Trim()
+    }
+    return $current
+}
+
 function Get-MavenProjectInfo {
     param([string]$PomPath)
     [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8
@@ -478,9 +505,9 @@ Copy-JpackageInputDirectory -RootPath $Root -MainJarName $proj.MainJar -DestPath
 $cacheRoot = Join-Path $Root 'build_cache'
 
 Write-Host "--- Step 3: Windows JDK bundle (Temurin zip -> jpackage --runtime-image) ---" -ForegroundColor Cyan
-$jdkRelease = $pomProps['pm.ai.bundle.jdk.windows.release']
+$jdkRelease = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['pm.ai.bundle.jdk.windows.release']) -Props $pomProps
 if ([string]::IsNullOrWhiteSpace($jdkRelease)) {
-    $jdkRelease = $pomProps['maven.compiler.release']
+    $jdkRelease = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['maven.compiler.release']) -Props $pomProps
 }
 if ([string]::IsNullOrWhiteSpace($jdkRelease)) {
     throw 'pom.xml: set maven.compiler.release or pm.ai.bundle.jdk.windows.release.'
