@@ -23,6 +23,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
@@ -281,7 +282,8 @@ public final class MainRunTabController {
                                     return;
                                 }
                                 setText(item);
-                                setWrapText(true);
+                                setWrapText(false);
+                                setTextOverrun(OverrunStyle.CLIP);
                                 setFont(appliedLogFont);
                                 double w = logListView.getWidth() - 28;
                                 if (w > 0) {
@@ -315,14 +317,14 @@ public final class MainRunTabController {
     /**
      * 可変行高（{@code setFixedCellSize(-1)}）と折り返しの組み合わせは VirtualFlow が極端なセル数を見積もり、
      * {@code index exceeds maxCellCount} やヒープ枯渇を招くことがある。フォントに応じた正の固定高で抑える。
-     * セル高は「1List項目＝概ね1ログ行」が主という前提で、折り返し数行分に留める（従来の×10は短い1行ログだけでも行が過剰に高くなり、空白だらけに見えていた）。
+     * ログは折り返さず右端でクリップするため、セル高は1行分に近い値とする。
      */
     private void applyLogListFixedCellHeight() {
         if (logListView == null) {
             return;
         }
         double lineHeight = appliedLogFont.getSize() * 1.35;
-        double cell = Math.clamp(lineHeight * 3.5, 28.0, 140.0);
+        double cell = Math.clamp(lineHeight * 1.45, 22.0, 52.0);
         logListView.setFixedCellSize(cell);
     }
 
