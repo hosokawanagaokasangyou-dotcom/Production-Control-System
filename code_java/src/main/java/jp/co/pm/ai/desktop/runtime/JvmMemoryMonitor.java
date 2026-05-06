@@ -11,16 +11,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 実行中 JVM のヒープ／スレッド使用量を定期的に記録する（既定オフ）。
+ * Periodically logs heap and thread usage (disabled unless interval &gt; 0).
  *
- * <p>有効化:
+ * <p>Enable via system property {@code pm.ai.jvm.memory.monitor.intervalSec} or env {@code
+ * PM_AI_JVM_MEMORY_MONITOR_SEC} (seconds). Optional {@code pm.ai.jvm.memory.monitor.warnRatio} (0..1, default
+ * 0.85).
  *
- * <ul>
- *   <li>システムプロパティ {@code pm.ai.jvm.memory.monitor.intervalSec} に正の整数（秒）</li>
- *   <li>または環境変数 {@code PM_AI_JVM_MEMORY_MONITOR_SEC}</li>
- * </ul>
- *
- * <p>任意: {@code pm.ai.jvm.memory.monitor.warnRatio}（0 以上 1 以下、既定 0.85）で警告閾値。
+ * <p>This source is ASCII-only so compilation succeeds even when the repo path is edited on Windows with a
+ * non-UTF-8 editor encoding (javac uses UTF-8 per pom).
  */
 public final class JvmMemoryMonitor {
 
@@ -32,7 +30,7 @@ public final class JvmMemoryMonitor {
 
     private JvmMemoryMonitor() {}
 
-    /** {@link jp.co.pm.ai.desktop.PmAiFxApp#main} から起動。複数回呼んでも一度だけ有効。 */
+    /** Called from {@link jp.co.pm.ai.desktop.PmAiFxApp#main}; effective once. */
     public static void startFromMain() {
         if (!STARTED.compareAndSet(false, true)) {
             return;
@@ -83,13 +81,13 @@ public final class JvmMemoryMonitor {
 
                         if (max > 0 && used >= max * warnRatio) {
                             System.err.println(
-                                    "[PM-AI heap] 警告: ヒープ使用率が閾値 "
+                                    "[PM-AI heap] WARN: heap usage exceeded threshold "
                                             + String.format(
                                                     Locale.ROOT, "%.0f%%", warnRatio * 100)
-                                            + " を超えました。-Xmx の引き上げや処理の分割を検討してください。");
+                                            + ". Consider increasing -Xmx or splitting work.");
                         }
                     } catch (Throwable ignored) {
-                        // 監視のみ
+                        // monitoring only
                     }
                 };
 

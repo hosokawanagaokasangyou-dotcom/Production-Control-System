@@ -1,0 +1,2 @@
+# Java sources: UTF-8 in repo; normalize line endings (avoids mixed CRLF/LF noise on Windows).
+*.java text eol=lf

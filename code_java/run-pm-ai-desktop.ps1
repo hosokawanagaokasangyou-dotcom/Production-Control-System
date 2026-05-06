@@ -12,7 +12,7 @@
     .\code_java\run-pm-ai-desktop.ps1
   （run-pm-ai-desktop.ps1 だけでは実行できません。）
 
-  ヒープ監視（stderr に定期サンプル）を有効にする例:
+  ヒープ監視（stderr に英語の定期サンプル / 閾値警告）を有効にする例:
     .\run-pm-ai-desktop.ps1 -MonitorIntervalSec 60
 
   既定では環境変数 PM_AI_JVM_MEMORY_MONITOR_SEC は上書きしません（-1）。
