@@ -19,7 +19,7 @@
   0 以上を指定したときだけ、そのセッション用に設定して子 JVM に継承します。
 
 .PARAMETER MaxHeap
-  Maven プロパティ jvm.max.heap（例: 2g, 4g）。大きいブック時は 4g 等。
+  Maven プロパティ jvm.max.heap（既定 4g。例: 2g, 4g, 8g）。
 
 .PARAMETER MonitorIntervalSec
   ヒープ監視の間隔（秒）。-1 なら環境変数を触らない。0 以上で PM_AI_JVM_MEMORY_MONITOR_SEC をその値に設定。
@@ -30,7 +30,7 @@
   .\run-pm-ai-desktop.ps1 -MaxHeap 4g -MonitorIntervalSec 30
 #>
 param(
-    [string] $MaxHeap = "2g",
+    [string] $MaxHeap = "4g",
     [int] $MonitorIntervalSec = -1
 )
 
