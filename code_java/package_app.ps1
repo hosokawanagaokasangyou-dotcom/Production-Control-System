@@ -287,21 +287,24 @@ function Ensure-PythonEmbedCache {
 
     Push-Location $dest
     try {
-        # 子プロセスの stdout/stderr を関数の戻り値に混ぜない（$pythonSrc が配列化し robocopy 引数欠落の原因になる）
-        & .\python.exe $getPip 2>&1 | Out-Null
+        # scripts not on PATH 等の WARNING が stderr に出ると、2>&1 でも PS 5.1 が NativeCommandError にする。
+        # *> $null で全ストリームを捨て、戻り値配列化も防ぐ。
+        $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
+        & .\python.exe $getPip *> $null
         if ($LASTEXITCODE -ne 0) {
             throw 'get-pip が失敗しました。'
         }
-        & .\python.exe -m pip install -q --upgrade pip 2>&1 | Out-Null
+        & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location *> $null
         if ($LASTEXITCODE -ne 0) {
             throw 'pip のアップグレードに失敗しました。'
         }
-        & .\python.exe -m pip install -q -r $req 2>&1 | Out-Null
+        & .\python.exe -m pip install -q -r $req --no-warn-script-location *> $null
         if ($LASTEXITCODE -ne 0) {
             throw 'pip install -r requirements.txt が失敗しました。'
         }
     }
     finally {
+        Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
         Pop-Location
     }
 
