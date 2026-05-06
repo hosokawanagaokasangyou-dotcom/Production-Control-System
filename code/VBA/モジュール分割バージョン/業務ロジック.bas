@@ -3503,8 +3503,8 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     planImported = False
     memberImported = False
     Set targetWb = ThisWorkbook
-    ' master.xlsm のみで VBA を保守する場合: 以下セクション 7（計画*.xlsx／人員*.xlsx と旧名フォールバック）を
-    ' master.xlsm 内の対応モジュールへ貼り替え・同期すること。リポジトリ上の本 .bas はテキスト正本。
+    ' master.xlsm（等）で VBA を保守する場合: 以下セクション 7（計画*.xlsx／人員*.xlsx と旧名フォールバック）を
+    ' ブック内の対応モジュールへ反映すること。モジュール分割バージョン/*.bas は参照用で実行の正本ではない。
     
     ' 7a. 計画*.xlsx（旧: production_plan_multi_day_*.xlsx）（結果_* シート）
     outputFilePath = GetLatestOutputFile(targetDir & "\output", "計画*.xlsx")
