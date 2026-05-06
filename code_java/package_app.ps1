@@ -11,6 +11,8 @@
 #   .\package_app.ps1 -PackageType exe
 #   .\package_app.ps1 -SkipPythonPrepare   # reuse existing build_cache python (faster)
 #   .\package_app.ps1 -WinConsole
+#   .\package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
+# Env: PM_AI_JPACKAGE_DEST = same as -JpackageDest (optional)
 
 # UTF-8 BOM helps Windows PowerShell 5.1 display Japanese in README / paths consistently.
 [CmdletBinding()]
@@ -20,7 +22,10 @@ param(
 
     [switch]$WinConsole,
 
-    [switch]$SkipPythonPrepare
+    [switch]$SkipPythonPrepare,
+
+    # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
+    [string]$JpackageDest = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -460,25 +465,53 @@ $pythonSrc = [string](Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot 
         -CacheRoot $cacheRoot -Skip:$SkipPythonPrepare)
 
 Write-Host "--- Step 4: jpackage (type=$PackageType) ---" -ForegroundColor Cyan
-$dist = Join-Path $Root 'dist'
-if (Test-Path $dist) {
+
+# Final output always under code_java\dist. jpackage --dest may use a staging folder: non-ASCII paths
+# can produce runtime\bin with DLLs but no java.exe on some JDK builds.
+$distFinal = Join-Path $Root 'dist'
+$jpkgDestParent = $distFinal
+if (-not [string]::IsNullOrWhiteSpace($JpackageDest)) {
+    $jpkgDestParent = $JpackageDest.TrimEnd('\', '/')
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_JPACKAGE_DEST)) {
+    $jpkgDestParent = $env:PM_AI_JPACKAGE_DEST.Trim().TrimEnd('\', '/')
+}
+elseif ($Root -match '[^\x00-\x7F]') {
+    $jpkgDestParent = Join-Path $env:TEMP ("pm-ai-jpackage-" + [Guid]::NewGuid().ToString('N'))
+    Write-Host "Repo path contains non-ASCII: staging jpackage --dest to ASCII-only: $jpkgDestParent" -ForegroundColor Cyan
+}
+$usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
+
+$pathsToClean = @($jpkgDestParent)
+if ($usedStagingForJpackage) {
+    $pathsToClean = @($jpkgDestParent, $distFinal)
+}
+$pathsToClean = $pathsToClean | Select-Object -Unique
+foreach ($p in $pathsToClean) {
+    if ([string]::IsNullOrWhiteSpace($p)) {
+        continue
+    }
+    if (-not (Test-Path -LiteralPath $p)) {
+        continue
+    }
     $removed = $false
     for ($i = 0; $i -lt 5; $i++) {
         try {
-            Remove-Item -Recurse -Force -LiteralPath $dist -ErrorAction Stop
+            Remove-Item -Recurse -Force -LiteralPath $p -ErrorAction Stop
             $removed = $true
             break
         }
         catch {
-            Write-Warning "Cannot remove dist (file may be locked). Close PmAiDesktop / Explorer using dist, retry ($i/5)..."
+            Write-Warning "Cannot remove $p (locked?). Retry ($i/5)..."
             Start-Sleep -Seconds 2
         }
     }
-    if (-not $removed -and (Test-Path $dist)) {
-        throw @'
-Cannot remove dist. Close any handle on code_java\dist (explorer, running app), then re-run package_app.ps1.
-'@
+    if (-not $removed -and (Test-Path -LiteralPath $p)) {
+        throw "Cannot remove folder (close Explorer/app using it): $p"
     }
+}
+if ($usedStagingForJpackage) {
+    New-Item -ItemType Directory -Path $jpkgDestParent -Force | Out-Null
 }
 
 $javaOpts = @(
@@ -499,7 +532,7 @@ $jpkgArgs.Add($PackageType)
 $jpkgArgs.Add('--input')
 $jpkgArgs.Add($packageInput)
 $jpkgArgs.Add('--dest')
-$jpkgArgs.Add($dist)
+$jpkgArgs.Add($jpkgDestParent)
 $jpkgArgs.Add('--name')
 $jpkgArgs.Add($APP_NAME)
 $jpkgArgs.Add('--main-jar')
@@ -537,6 +570,22 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+if ($usedStagingForJpackage) {
+    $stagedApp = Join-Path $jpkgDestParent $APP_NAME
+    if (-not (Test-Path -LiteralPath $stagedApp)) {
+        throw "jpackage staging output missing: $stagedApp"
+    }
+    if (Test-Path -LiteralPath $distFinal) {
+        Remove-Item -Recurse -Force -LiteralPath $distFinal -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Path $distFinal -Force | Out-Null
+    Copy-Item -Recurse -Force -LiteralPath $stagedApp -Destination (Join-Path $distFinal $APP_NAME)
+    Remove-Item -Recurse -Force -LiteralPath $jpkgDestParent -ErrorAction SilentlyContinue
+    Write-Host "Copied jpackage output from staging to: $(Join-Path $distFinal $APP_NAME)" -ForegroundColor DarkGray
+}
+
+$dist = $distFinal
+
 $postJpkgRoot = Join-Path $dist $APP_NAME
 if (Test-Path -LiteralPath $postJpkgRoot) {
     $diagBin = Join-Path $postJpkgRoot 'runtime\bin'
@@ -556,7 +605,7 @@ if (Test-Path -LiteralPath $postJpkgRoot) {
 Bundled launcher not found: $bundledJavaExe
 Common causes:
   1) Windows Defender / AV removed java.exe (DLLs often remain). Check Protection history.
-  2) Very long or non-ASCII path — try a short ASCII path e.g. C:\work\pm-ai.
+  2) Very long or non-ASCII path — this script stages jpackage --dest under %TEMP% when the repo path has non-ASCII; override with -JpackageDest or PM_AI_JPACKAGE_DEST, or clone to e.g. C:\work\pm-ai.
   3) Stale dist — ensure code_java\dist was removed before jpackage.
 Java runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
 Step 5 continues; output may be incomplete.
