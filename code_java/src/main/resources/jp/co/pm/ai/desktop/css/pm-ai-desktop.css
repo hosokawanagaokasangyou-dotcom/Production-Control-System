@@ -307,9 +307,114 @@
     -fx-background-color: white;
 }
 
-/* Alert: 既定ボタン地は -fx-default-button-base-color（ダークで明るめ）。テキストを選択バーと同じ配色にしてコントラストを確保 */
+/*
+ * Alert / ダイアログの既定ボタン：Modena のデフォルトは薄い -fx-default-button-base-color に白系ラベルが載り、
+ * ダークテーマでコントラストが不足することがある。アクセント色＋白字で統一する。
+ */
 .dialog-pane .button:default {
-    -fx-text-fill: -fx-selection-bar-text;
+    -fx-background-color: -fx-accent;
+    -fx-text-fill: white;
+    -fx-border-color: derive(-fx-accent, -18%);
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.dialog-pane .button:default:hover {
+    -fx-background-color: derive(-fx-accent, 10%);
+    -fx-text-fill: white;
+}
+
+.dialog-pane .button:default:pressed {
+    -fx-background-color: derive(-fx-accent, -12%);
+    -fx-text-fill: white;
+}
+
+/* タブ整理：ボタン・補助ラベルをテーマ横断で読みやすく（ダークで既定ボタンが薄地＋白字にならないよう固定） */
+.pm-main-shell-tab-organizer {
+    -fx-background-color: transparent;
+}
+
+.pm-main-shell-tab-organizer > .scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.pm-main-shell-tab-organizer > .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.pm-main-shell-tab-organizer .label {
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-main-shell-tab-organizer .label.pm-main-shell-tab-organizer-hint {
+    -fx-font-size: 0.95em;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-main-shell-tab-organizer .label.pm-main-shell-tab-organizer-subhint {
+    -fx-opacity: 0.92;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-main-shell-tab-organizer .text-field {
+    -fx-padding: 8 10;
+}
+
+.pm-main-shell-tab-organizer .tree-view {
+    -fx-background-radius: 6;
+    -fx-border-color: derive(-fx-text-box-border, 8%);
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
+
+.pm-main-shell-tab-organizer .separator .line {
+    -fx-border-color: derive(-fx-text-box-border, 12%);
+}
+
+/* 二次ボタン（Run タブの通常ボタンと同系） */
+.pm-main-shell-tab-organizer .button:not(:default) {
+    -fx-cursor: hand;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: derive(-fx-text-box-border, -8%);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 14;
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-main-shell-tab-organizer .button:not(:default):hover {
+    -fx-background-color: derive(-fx-control-inner-background, -6%);
+    -fx-border-color: derive(-fx-text-box-border, -18%);
+}
+
+.pm-main-shell-tab-organizer .button:not(:default):pressed {
+    -fx-background-color: derive(-fx-control-inner-background, -10%);
+}
+
+/* 主操作：アクセント上に白（テーマの default-button-base の明暗に依存しない） */
+.pm-main-shell-tab-organizer .button:default {
+    -fx-background-color: -fx-accent;
+    -fx-text-fill: white;
+    -fx-border-color: derive(-fx-accent, -22%);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 10 18;
+    -fx-font-weight: bold;
+    -fx-min-width: 140px;
+}
+
+.pm-main-shell-tab-organizer .button:default:hover {
+    -fx-background-color: derive(-fx-accent, 10%);
+    -fx-text-fill: white;
+}
+
+.pm-main-shell-tab-organizer .button:default:pressed {
+    -fx-background-color: derive(-fx-accent, -12%);
+    -fx-text-fill: white;
 }
 
 /* メインシェル：グループ内の第2段 TabPane */
