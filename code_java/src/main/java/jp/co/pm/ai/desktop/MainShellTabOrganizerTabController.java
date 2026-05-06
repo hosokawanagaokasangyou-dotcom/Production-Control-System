@@ -1,20 +1,26 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import javafx.beans.value.ChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DataFormat;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.paint.Color;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -25,13 +31,24 @@ import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
  */
 public final class MainShellTabOrganizerTabController {
 
+    private static final DataFormat ROW_MOVE_MARKER =
+            new DataFormat("application/x-pm-main-shell-tab-org-move");
+
     @FXML
     private TreeView<OrgRow> treeView;
 
     @FXML
     private ColorPicker colorPicker;
 
+    @FXML
+    private TextField groupNameField;
+
     private MainShellController shell;
+
+    /** ドラッグ開始セルと {@link Dragboard} を対応付けるための作業領域（ツリー行の移動用）。 */
+    private TreeItem<OrgRow> dragSourceItem;
+
+    private ChangeListener<TreeItem<OrgRow>> treeSelectionListener;
 
     @FXML
     private void initialize() {
@@ -42,10 +59,21 @@ public final class MainShellTabOrganizerTabController {
             treeView.setShowRoot(false);
             treeView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         }
+        if (groupNameField != null) {
+            groupNameField.setDisable(true);
+            groupNameField.setOnAction(e -> onApplyGroupName());
+        }
     }
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        if (treeView != null && treeSelectionListener == null) {
+            treeSelectionListener =
+                    (obs, prev, cur) -> {
+                        syncGroupNameField();
+                    };
+            treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
+        }
         reloadTreeFromShell();
     }
 
@@ -72,6 +100,40 @@ public final class MainShellTabOrganizerTabController {
         }
         treeView.setRoot(invisibleRoot);
         expandAll(invisibleRoot);
+        syncGroupNameField();
+    }
+
+    private void syncGroupNameField() {
+        if (groupNameField == null || treeView == null) {
+            return;
+        }
+        TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+        if (sel != null
+                && sel.getValue() != null
+                && sel.getValue().kind == OrgRow.Kind.GROUP) {
+            groupNameField.setDisable(false);
+            groupNameField.setText(sel.getValue().groupTitle);
+        } else {
+            groupNameField.setDisable(true);
+            groupNameField.clear();
+        }
+    }
+
+    @FXML
+    private void onApplyGroupName() {
+        if (treeView == null || groupNameField == null) {
+            return;
+        }
+        TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+        if (sel == null
+                || sel.getValue() == null
+                || sel.getValue().kind != OrgRow.Kind.GROUP) {
+            alert(AlertType.INFORMATION, "グループ行を1つ選んでください。");
+            return;
+        }
+        String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
+        sel.getValue().groupTitle = t;
+        treeView.refresh();
     }
 
     private static void expandAll(TreeItem<OrgRow> n) {
@@ -351,18 +413,141 @@ public final class MainShellTabOrganizerTabController {
         if (treeView == null) {
             return;
         }
-        treeView.setCellFactory(
-                tv ->
-                        new javafx.scene.control.TreeCell<>() {
-                            @Override
-                            protected void updateItem(OrgRow row, boolean empty) {
-                                super.updateItem(row, empty);
-                                if (empty || row == null) {
-                                    setText(null);
-                                    return;
-                                }
-                                setText(row.formatDisplay(shell));
-                            }
-                        });
+        treeView.setCellFactory(tv -> createDnDTreeCell());
+    }
+
+    private TreeCell<OrgRow> createDnDTreeCell() {
+        TreeCell<OrgRow> cell =
+                new TreeCell<>() {
+                    @Override
+                    protected void updateItem(OrgRow row, boolean empty) {
+                        super.updateItem(row, empty);
+                        if (empty || row == null) {
+                            setText(null);
+                            return;
+                        }
+                        setText(row.formatDisplay(shell));
+                    }
+                };
+        cell.setOnDragDetected(
+                event -> {
+                    TreeItem<OrgRow> dragged = cell.getTreeItem();
+                    if (dragged == null || dragged.getValue() == null) {
+                        return;
+                    }
+                    Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
+                    dragSourceItem = dragged;
+                    ClipboardContent cc = new ClipboardContent();
+                    cc.put(ROW_MOVE_MARKER, "move");
+                    db.setContent(cc);
+                    event.consume();
+                });
+        cell.setOnDragOver(
+                event -> {
+                    if (event.getGestureSource() != cell
+                            && event.getDragboard().hasContent(ROW_MOVE_MARKER)
+                            && dragSourceItem != null) {
+                        TreeItem<OrgRow> target = cell.getTreeItem();
+                        if (canAcceptDrop(dragSourceItem, target)) {
+                            event.acceptTransferModes(TransferMode.MOVE);
+                        }
+                    }
+                    event.consume();
+                });
+        cell.setOnDragDropped(
+                event -> {
+                    Dragboard db = event.getDragboard();
+                    boolean success = false;
+                    if (db.hasContent(ROW_MOVE_MARKER) && dragSourceItem != null) {
+                        TreeItem<OrgRow> target = cell.getTreeItem();
+                        success = performDrop(dragSourceItem, target);
+                    }
+                    event.setDropCompleted(success);
+                    event.consume();
+                });
+        cell.setOnDragDone(
+                event -> {
+                    dragSourceItem = null;
+                    event.consume();
+                });
+        return cell;
+    }
+
+    /**
+     * {@code target} がグループならその子の末尾へ、タブなら同一親リストのその手前へ移動する。
+     */
+    private boolean performDrop(TreeItem<OrgRow> source, TreeItem<OrgRow> target) {
+        if (!canAcceptDrop(source, target)) {
+            return false;
+        }
+        OrgRow tv = target.getValue();
+        TreeItem<OrgRow> oldParent = source.getParent();
+        if (oldParent == null) {
+            return false;
+        }
+
+        boolean intoGroup = tv.kind == OrgRow.Kind.GROUP;
+
+        TreeItem<OrgRow> newParent;
+        int insertIndex;
+
+        if (intoGroup) {
+            newParent = target;
+            insertIndex = -1;
+        } else {
+            newParent = target.getParent();
+            if (newParent == null) {
+                return false;
+            }
+            insertIndex = newParent.getChildren().indexOf(target);
+            if (insertIndex < 0) {
+                return false;
+            }
+        }
+
+        int oldIndex = oldParent.getChildren().indexOf(source);
+        if (oldIndex < 0) {
+            return false;
+        }
+
+        oldParent.getChildren().remove(source);
+
+        if (intoGroup) {
+            insertIndex = newParent.getChildren().size();
+        } else {
+            if (oldParent == newParent && oldIndex < insertIndex) {
+                insertIndex--;
+            }
+        }
+
+        newParent.getChildren().add(insertIndex, source);
+
+        treeView.getSelectionModel().clearSelection();
+        treeView.getSelectionModel().select(source);
+        treeView.refresh();
+        syncGroupNameField();
+        return true;
+    }
+
+    private static boolean canAcceptDrop(TreeItem<OrgRow> source, TreeItem<OrgRow> target) {
+        if (source == null || target == null || source == target) {
+            return false;
+        }
+        if (target.getValue() == null) {
+            return false;
+        }
+        return !isStrictDescendant(source, target);
+    }
+
+    /** {@code target} が {@code ancestor} の（自身を含む）配下にあれば真。 */
+    private static boolean isStrictDescendant(TreeItem<OrgRow> ancestor, TreeItem<OrgRow> node) {
+        TreeItem<OrgRow> p = node;
+        while (p != null) {
+            if (p == ancestor) {
+                return true;
+            }
+            p = p.getParent();
+        }
+        return false;
     }
 }
