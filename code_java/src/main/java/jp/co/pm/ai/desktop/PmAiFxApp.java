@@ -3,12 +3,15 @@ package jp.co.pm.ai.desktop;
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Map;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+
+import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 
 /**
  * JavaFX エントリ — UI レイアウトは FXML（{@code jp/co/pm/ai/desktop/fxml/MainShell.fxml}）、ロジックは
@@ -126,6 +129,7 @@ public class PmAiFxApp extends Application {
             System.exit(2);
         }
         configurePrismAfterProbe();
+        JvmMemoryMonitor.startFromMain(Map.of());
         launch(args);
     }
 }

@@ -23,6 +23,8 @@
     <junit.version>5.12.2</junit.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
+    <!-- javafx:run / 開発時のヒープ上限（大規模ブック時は mvn -Djvm.max.heap=4g javafx:run 等で上書き） -->
+    <jvm.max.heap>2g</jvm.max.heap>
   </properties>
 
   <dependencies>
@@ -197,7 +199,10 @@
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
           <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
-            <option>-Xmx2g</option>
+            <option>-Xms512m</option>
+            <option>-Xmx${jvm.max.heap}</option>
+            <option>-XX:+HeapDumpOnOutOfMemoryError</option>
+            <option>-XX:+UseStringDeduplication</option>
             <option>-Dprism.order=${javafx.prism.order}</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
             <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
