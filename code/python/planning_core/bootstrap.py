@@ -14,7 +14,7 @@ if sys.version_info < (3, 14):
         "[planning_core] Python 3.14 以上が必要です（現在 "
         + _v
         + "）。\n"
-        "Windows の例: py -3.14 -X utf8 -u python\\\\setup_environment.py\n"
+        "Windows の例: py -3.14 -X utf8 -u 参照用\\\\python\\\\setup_environment.py\n"
     )
     raise SystemExit(2)
 

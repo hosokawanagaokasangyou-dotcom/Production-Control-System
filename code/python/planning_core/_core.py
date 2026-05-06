@@ -835,7 +835,7 @@ if not API_KEY:
         "Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、"
         "マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「%s」を配置してください。"
         " 備考の AI 解析等はスキップされした。"
-        " 参考型: gemini_credentials.example.json / encrypt_gemini_credentials.py（暗号化）。",
+        " 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。",
         GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
 
