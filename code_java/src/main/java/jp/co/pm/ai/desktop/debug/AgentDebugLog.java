@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.debug;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,6 +38,16 @@ public final class AgentDebugLog {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private AgentDebugLog() {}
+
+    /** Heap used/max in MiB for debug NDJSON payloads (session tooling). */
+    public static Map<String, Object> debugHeapMap() {
+        MemoryUsage h = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("heapUsedMiB", h.getUsed() / (1024L * 1024L));
+        long max = h.getMax();
+        m.put("heapMaxMiB", max > 0 ? max / (1024L * 1024L) : -1L);
+        return m;
+    }
 
     public static Path resolveNdjsonPath(Map<String, String> ui, String sessionId) {
         String id =

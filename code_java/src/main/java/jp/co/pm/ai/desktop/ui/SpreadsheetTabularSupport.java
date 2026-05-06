@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
@@ -24,6 +26,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
@@ -555,6 +559,32 @@ public final class SpreadsheetTabularSupport {
         }
         Runnable flush =
                 () -> {
+                    // #region agent log
+                    try {
+                        Map<String, Object> data =
+                                new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+                        data.put("viewRef", System.identityHashCode(view));
+                        if (view.getGrid() instanceof GridBase gb) {
+                            var rows = gb.getRows();
+                            data.put(
+                                    "gridPhysicalRows",
+                                    rows != null ? rows.size() : -1);
+                            int cols =
+                                    rows != null && !rows.isEmpty()
+                                            ? rows.get(0).size()
+                                            : -1;
+                            data.put("gridColsFirstRow", cols);
+                        }
+                        AgentDebugLog.appendStructured(
+                                Map.of(),
+                                "81ed4a",
+                                "H1",
+                                "SpreadsheetTabularSupport:refreshSpreadsheetAfterRowPresentationChange",
+                                "before resizeRowsToDefault flush",
+                                data);
+                    } catch (Throwable ignored) {
+                    }
+                    // #endregion
                     view.resizeRowsToDefault();
                     refreshEmbeddedTableViewsRecursive(view, 0);
                     view.requestLayout();
