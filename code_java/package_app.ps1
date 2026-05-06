@@ -2,7 +2,8 @@
 #
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
-#   - Full JDK matching pom maven.compiler.release (jpackage). Currently JDK 26 expected.
+#   - Maven uses JAVA_HOME on PATH (compile must match maven.compiler.release).
+#   - Bundled JVM: Temurin JDK zip -> build_cache -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
 #   - For --type exe/msi: WiX Toolset on PATH (candle/light).
 #   - Bundled Python: pip runs at build time - internet on first run or empty cache.
 #
@@ -10,9 +11,11 @@
 #   .\package_app.ps1
 #   .\package_app.ps1 -PackageType exe
 #   .\package_app.ps1 -SkipPythonPrepare   # reuse existing build_cache python (faster)
+#   .\package_app.ps1 -SkipJdkPrepare      # reuse existing build_cache JDK extract (faster)
 #   .\package_app.ps1 -WinConsole
 #   .\package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
-# Env: PM_AI_JPACKAGE_DEST = same as -JpackageDest (optional)
+#   .\package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
+# Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 
 # UTF-8 BOM: Windows PowerShell 5.1 parses this file as UTF-8. Body is ASCII-only; Japanese paths live in package_app_mandatory_code_paths.txt.
 [CmdletBinding()]
@@ -23,6 +26,11 @@ param(
     [switch]$WinConsole,
 
     [switch]$SkipPythonPrepare,
+
+    [switch]$SkipJdkPrepare,
+
+    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into build_cache.
+    [string]$JdkRuntimeImage = '',
 
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
     [string]$JpackageDest = ''
@@ -158,65 +166,6 @@ function Read-MavenPomProperties {
     return $props
 }
 
-function Add-JpackageCandidatesFromDir {
-    param(
-        [string]$BasePath,
-        [string]$NamePattern
-    )
-    $list = [System.Collections.Generic.List[string]]::new()
-    if (-not (Test-Path -LiteralPath $BasePath)) {
-        return $list
-    }
-    Get-ChildItem -LiteralPath $BasePath -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match $NamePattern } |
-        Sort-Object Name -Descending |
-        ForEach-Object {
-            $exe = Join-Path $_.FullName 'bin\jpackage.exe'
-            $list.Add($exe)
-        }
-    return $list
-}
-
-function Resolve-JpackageExe {
-    $candidates = [System.Collections.Generic.List[string]]::new()
-
-    if ($env:JAVA_HOME) {
-        $candidates.Add((Join-Path $env:JAVA_HOME 'bin\jpackage.exe'))
-    }
-
-    foreach ($pair in @(
-            @{ Base = 'C:\Program Files\Eclipse Adoptium'; Pattern = '^jdk-(2[1-9]|[34][0-9])' },
-            @{ Base = 'C:\Program Files\Microsoft';        Pattern = '^jdk-(2[1-9]|[34][0-9])' },
-            @{ Base = 'C:\Program Files\Java';             Pattern = '^jdk-(2[1-9]|[34][0-9])' }
-        )) {
-        foreach ($p in (Add-JpackageCandidatesFromDir -BasePath $pair.Base -NamePattern $pair.Pattern)) {
-            $candidates.Add($p)
-        }
-    }
-
-    @(
-        'C:\Program Files\Java\jdk-26\bin\jpackage.exe',
-        'C:\Program Files\Java\jdk-25\bin\jpackage.exe',
-        'C:\Program Files\Java\jdk-21\bin\jpackage.exe'
-    ) | ForEach-Object { $candidates.Add($_) }
-
-    foreach ($p in $candidates) {
-        if ($p -and (Test-Path -LiteralPath $p)) {
-            return (Resolve-Path -LiteralPath $p).Path
-        }
-    }
-
-    $cmd = Get-Command jpackage -ErrorAction SilentlyContinue
-    if ($cmd) {
-        return $cmd.Source
-    }
-
-    throw @'
-jpackage not found.
-Install a JDK matching pom maven.compiler.release and set JAVA_HOME or PATH.
-'@
-}
-
 function Get-MavenProjectInfo {
     param([string]$PomPath)
     [xml]$xml = Get-Content -LiteralPath $PomPath -Encoding UTF8
@@ -269,6 +218,72 @@ function Copy-JpackageInputDirectory {
         throw "dependency folder not found: $depDir"
     }
     Copy-Item -Path (Join-Path $depDir '*') -Destination $DestPath -Force
+}
+
+function Ensure-JdkWindowsEmbedCache {
+    param(
+        [string]$CacheRoot,
+        [string]$JdkRelease,
+        [string]$ZipUrlOverride,
+        [bool]$Skip
+    )
+
+    $dest = Join-Path $CacheRoot ('jdk-embed-' + $JdkRelease + '-windows-amd64')
+    $javaExe = Join-Path $dest 'bin\java.exe'
+    $jpkgExe = Join-Path $dest 'bin\jpackage.exe'
+
+    if ($Skip -and (Test-Path -LiteralPath $javaExe) -and (Test-Path -LiteralPath $jpkgExe)) {
+        Write-Host "SkipJdkPrepare: using cache: $dest" -ForegroundColor DarkGray
+        return [string]$dest
+    }
+
+    if (Test-Path -LiteralPath $dest) {
+        Remove-Item -Recurse -Force -LiteralPath $dest
+    }
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+
+    $zipPath = Join-Path $dest 'jdk-bundle.zip'
+    if (-not [string]::IsNullOrWhiteSpace($ZipUrlOverride)) {
+        $url = $ZipUrlOverride.Trim()
+        Write-Host "--- Download JDK zip (pom pm.ai.bundle.jdk.windows.zip.url): $url ---" -ForegroundColor Cyan
+    }
+    else {
+        $url = "https://api.adoptium.net/v3/binary/latest/$JdkRelease/ga/windows/x64/jdk/hotspot/normal/eclipse"
+        Write-Host "--- Download JDK zip (Adoptium API, Windows x64 release $JdkRelease): $url ---" -ForegroundColor Cyan
+    }
+
+    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+
+    $extractTmp = Join-Path $dest '_ext'
+    New-Item -ItemType Directory -Path $extractTmp -Force | Out-Null
+    try {
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractTmp -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+    }
+
+    $javaFound = Get-ChildItem -Path $extractTmp -Recurse -Filter 'java.exe' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Directory.Name -ieq 'bin' } |
+        Select-Object -First 1
+    if (-not $javaFound) {
+        throw "JDK zip did not contain bin\java.exe under: $extractTmp"
+    }
+
+    $jdkHome = $javaFound.Directory.Parent.FullName
+    Get-ChildItem -LiteralPath $jdkHome -ErrorAction SilentlyContinue | ForEach-Object {
+        Move-Item -LiteralPath $_.FullName -Destination $dest -Force
+    }
+    Remove-Item -LiteralPath $extractTmp -Recurse -Force -ErrorAction SilentlyContinue
+
+    if (-not (Test-Path -LiteralPath $javaExe)) {
+        throw "JDK layout error: missing $javaExe"
+    }
+    if (-not (Test-Path -LiteralPath $jpkgExe)) {
+        throw "JDK layout error: missing $jpkgExe"
+    }
+
+    return [string]$dest
 }
 
 function Ensure-PythonEmbedCache {
@@ -384,6 +399,7 @@ function Copy-BundleToDist {
 
     $readme = Join-Path $data 'README_PORTABLE.txt'
     @(
+        'JVM: bundled via jpackage --runtime-image from Temurin JDK (see pom.xml / package_app.ps1).',
         'Portable bundle generated by package_app.ps1.',
         'Workspace mirror source: git ls-files -co --exclude-standard (respects .gitignore).',
         'Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).',
@@ -410,7 +426,6 @@ if ([string]::IsNullOrWhiteSpace($pyEmbedVer)) {
     throw 'pom.properties missing pm.ai.bundle.python.embed.version.'
 }
 
-$JPACKAGE = Resolve-JpackageExe
 $proj = Get-MavenProjectInfo -PomPath $POM
 
 $APP_NAME = 'PmAiDesktop'
@@ -460,12 +475,47 @@ Write-Host "--- Step 2: jpackage input directory ---" -ForegroundColor Cyan
 $packageInput = Join-Path $Root 'package_input'
 Copy-JpackageInputDirectory -RootPath $Root -MainJarName $proj.MainJar -DestPath $packageInput
 
-Write-Host "--- Step 3: Python embed cache (pip) ---" -ForegroundColor Cyan
 $cacheRoot = Join-Path $Root 'build_cache'
+
+Write-Host "--- Step 3: Windows JDK bundle (Temurin zip -> jpackage --runtime-image) ---" -ForegroundColor Cyan
+$jdkRelease = $pomProps['pm.ai.bundle.jdk.windows.release']
+if ([string]::IsNullOrWhiteSpace($jdkRelease)) {
+    $jdkRelease = $pomProps['maven.compiler.release']
+}
+if ([string]::IsNullOrWhiteSpace($jdkRelease)) {
+    throw 'pom.xml: set maven.compiler.release or pm.ai.bundle.jdk.windows.release.'
+}
+$jdkZipUrlOverride = ''
+if ($pomProps.ContainsKey('pm.ai.bundle.jdk.windows.zip.url')) {
+    $jdkZipUrlOverride = [string]$pomProps['pm.ai.bundle.jdk.windows.zip.url']
+}
+
+if (-not [string]::IsNullOrWhiteSpace($JdkRuntimeImage)) {
+    $jdkRoot = $JdkRuntimeImage.TrimEnd('\', '/')
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_JDK_RUNTIME_IMAGE)) {
+    $jdkRoot = $env:PM_AI_JDK_RUNTIME_IMAGE.Trim().TrimEnd('\', '/')
+}
+else {
+    $jdkRoot = [string](Ensure-JdkWindowsEmbedCache -CacheRoot $cacheRoot -JdkRelease $jdkRelease `
+            -ZipUrlOverride $jdkZipUrlOverride -Skip:$SkipJdkPrepare)
+}
+
+$jdkJavaExe = Join-Path $jdkRoot 'bin\java.exe'
+$JPACKAGE = Join-Path $jdkRoot 'bin\jpackage.exe'
+if (-not (Test-Path -LiteralPath $jdkJavaExe)) {
+    throw "JDK folder missing bin\java.exe (runtime-image): $jdkRoot"
+}
+if (-not (Test-Path -LiteralPath $JPACKAGE)) {
+    throw "JDK folder missing bin\jpackage.exe: $jdkRoot"
+}
+Write-Host "Using JDK for jpackage + bundled runtime: $jdkRoot" -ForegroundColor DarkGray
+
+Write-Host "--- Step 4: Python embed cache (pip) ---" -ForegroundColor Cyan
 $pythonSrc = [string](Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot -PythonVersion $pyEmbedVer `
         -CacheRoot $cacheRoot -Skip:$SkipPythonPrepare)
 
-Write-Host "--- Step 4: jpackage (type=$PackageType) ---" -ForegroundColor Cyan
+Write-Host "--- Step 5: jpackage (type=$PackageType) ---" -ForegroundColor Cyan
 
 # Final output always under code_java\dist. jpackage --dest may use a staging folder: non-ASCII paths
 # can produce runtime\bin with DLLs but no java.exe on some JDK builds.
@@ -532,6 +582,8 @@ $jpkgArgs.Add('--type')
 $jpkgArgs.Add($PackageType)
 $jpkgArgs.Add('--input')
 $jpkgArgs.Add($packageInput)
+$jpkgArgs.Add('--runtime-image')
+$jpkgArgs.Add($jdkRoot)
 $jpkgArgs.Add('--dest')
 $jpkgArgs.Add($jpkgDestParent)
 $jpkgArgs.Add('--name')
@@ -608,8 +660,8 @@ Common causes:
   1) Windows Defender / AV removed java.exe (DLLs often remain). Check Protection history.
   2) Very long or non-ASCII path - this script stages jpackage --dest under %TEMP% when the repo path has non-ASCII; override with -JpackageDest or PM_AI_JPACKAGE_DEST, or clone to e.g. C:\work\pm-ai.
   3) Stale dist - ensure code_java\dist was removed before jpackage.
-Java runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
-Step 5 continues; output may be incomplete.
+Java runtime is next to PmAiDesktop.exe (from --runtime-image JDK); pm-ai-data\runtime is Python only.
+Step 6 continues; output may be incomplete.
 "@
         $diagRt = Join-Path $postJpkgRoot 'runtime'
         if (Test-Path -LiteralPath $diagBin) {
@@ -637,7 +689,7 @@ Step 5 continues; output may be incomplete.
     }
 }
 
-Write-Host "--- Step 5: bundle pm-ai-data (Python + code/python + default dirs) ---" -ForegroundColor Cyan
+Write-Host "--- Step 6: bundle pm-ai-data (Python + code/python + default dirs) ---" -ForegroundColor Cyan
 $distRoot = Join-Path $dist $APP_NAME
 if (-not (Test-Path -LiteralPath $distRoot)) {
     throw "Distribution folder missing: $distRoot"
