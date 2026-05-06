@@ -9,20 +9,20 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * メモリ設定タブの希望ヒープ（MiB）に合わせて {@code code_java/pom.xml} の {@code jvm.max.heap} と
- * {@code jvm.initial.heap} を同一値に更新する。
+ * Syncs {@code code_java/pom.xml} properties {@code jvm.max.heap} and {@code jvm.initial.heap} to the desired heap
+ * size from the Memory Settings tab (MiB).
  */
 public final class PomJvmHeapPropertiesSync {
 
-    /** pom のヒープ指定の下限（2 GiB）。 */
+    /** Minimum heap token for pom (2 GiB). */
     public static final int MIN_HEAP_MIB = 2048;
 
     private PomJvmHeapPropertiesSync() {}
 
     /**
-     * {@code code_java/pom.xml} の JVM ヒーププロパティを更新する。
+     * Updates JVM heap properties in {@code code_java/pom.xml}.
      *
-     * @param heapMaxMiB 希望上限（MiB）。{@code MIN_HEAP_MIB} 未満は {@code MIN_HEAP_MIB} に切り上げる。
+     * @param heapMaxMiB desired max heap MiB; values below {@link #MIN_HEAP_MIB} are clamped upward
      */
     public static void writeJvmHeapFromDesiredMiB(Map<String, String> ui, int heapMaxMiB) {
         int mib = Math.max(MIN_HEAP_MIB, heapMaxMiB);
@@ -36,8 +36,7 @@ public final class PomJvmHeapPropertiesSync {
         try {
             content = Files.readString(pom, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            System.err.println(
-                    "[PM-AI] code_java/pom.xml を読み込めませんでした: " + pom + " ? " + e.getMessage());
+            System.err.println("[PM-AI] Failed to read code_java/pom.xml: " + pom + " : " + e.getMessage());
             return;
         }
         String updated = replaceProperty(content, "jvm.max.heap", token);
@@ -48,12 +47,11 @@ public final class PomJvmHeapPropertiesSync {
         try {
             Files.writeString(pom, updated, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            System.err.println(
-                    "[PM-AI] code_java/pom.xml にヒープ設定を書き込めませんでした: " + pom + " ? " + e.getMessage());
+            System.err.println("[PM-AI] Failed to write heap props to code_java/pom.xml: " + pom + " : " + e.getMessage());
         }
     }
 
-    /** JVM オプションと同様の表記（整数 GiB は {@code Ng}、それ以外は {@code Nm}）。 */
+    /** Same convention as JVM flags: whole GiB as {@code Ng}, otherwise {@code Nm}. */
     static String formatJvmHeapToken(int mib) {
         if (mib >= 1024 && mib % 1024 == 0) {
             return (mib / 1024) + "g";

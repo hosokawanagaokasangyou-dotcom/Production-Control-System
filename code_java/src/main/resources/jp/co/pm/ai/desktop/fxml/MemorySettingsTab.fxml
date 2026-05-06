@@ -8,6 +8,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
@@ -36,6 +37,15 @@
                 <Spinner fx:id="intervalSpinner" prefWidth="96.0"/>
             </HBox>
             <Label fx:id="monitorHintLabel" wrapText="true"/>
+            <Separator/>
+            <Label fx:id="jvmLogSectionTitleLabel" style="-fx-font-weight: bold" text=""/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label fx:id="jvmLogMaxLinesLabel" text=""/>
+                <Spinner fx:id="memoryJvmLogMaxLinesSpinner" editable="true" prefWidth="128.0"/>
+            </HBox>
+            <Label fx:id="jvmLogHintLabel" style="-fx-text-fill: -fx-mid-text-color" wrapText="true"/>
+            <TextArea fx:id="jvmLogTextArea" editable="false" prefRowCount="12" wrapText="false"
+                      VBox.vgrow="ALWAYS" style="-fx-font-family: monospace"/>
             <VBox fx:id="chartContainer" fillWidth="true" spacing="4.0" VBox.vgrow="ALWAYS">
                 <Label fx:id="chartCaptionLabel" text=""/>
                 <LineChart fx:id="heapChart" animated="false" legendVisible="true" minHeight="240.0"

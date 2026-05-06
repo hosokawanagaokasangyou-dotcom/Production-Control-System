@@ -3,11 +3,13 @@ package jp.co.pm.ai.desktop;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
@@ -17,14 +19,16 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.PomJvmHeapPropertiesSync;
+import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 
 /**
- * JVM ヒ�?�プ�?�参�?�・次回起動時の希望値、およ�?�ヒ�?�プ使用量�?�定期監視と推移グラフ�?
+ * JVM ??????????????JVM ??????????? UI?
  */
 public final class MemorySettingsTabController {
 
@@ -98,6 +102,21 @@ public final class MemorySettingsTabController {
     @FXML
     private Button refreshRuntimeHeapButton;
 
+    @FXML
+    private Label jvmLogSectionTitleLabel;
+
+    @FXML
+    private Label jvmLogMaxLinesLabel;
+
+    @FXML
+    private Spinner<Integer> memoryJvmLogMaxLinesSpinner;
+
+    @FXML
+    private Label jvmLogHintLabel;
+
+    @FXML
+    private TextArea jvmLogTextArea;
+
     private final XYChart.Series<Number, Number> heapUsedSeries = new XYChart.Series<>();
 
     private Timeline monitorTimeline;
@@ -110,32 +129,32 @@ public final class MemorySettingsTabController {
 
     @FXML
     private void initialize() {
-        heapSectionTitleLabel.setText("ヒ�?�プサイズ?��次�? JVM 起動時?�?");
+        heapSectionTitleLabel.setText("????????? JVM ????");
         heapExplainLabel.setText(
-                "実行中の JVM はヒ�?�プ上限?�?-Xmx?��を変更できません�?"
-                        + " ここで�?定した値はセ�?ションに保存され、次回起動時の JVM 引数の参�?として使えます�?");
-        desiredHeapLabel.setText("希望ヒ�?�プ上限?�?MiB?�?");
-        monitorSectionTitleLabel.setText("メモリ監�?");
-        monitorEnabledCheck.setText("ヒ�?�プ使用量を監視す�?");
-        intervalCaptionLabel.setText("間隔?��秒�?");
-        chartCaptionLabel.setText("ヒ�?�プ使用量�?�推移");
-        runtimeCaptionLabel.setText("現在のヒ�?�プ（実行中 JVM?�?");
+                "???? JVM ???????-Xmx??????????"
+                        + " ?????????????????????????? JVM ?????????????");
+        desiredHeapLabel.setText("????????MiB?");
+        monitorSectionTitleLabel.setText("?????");
+        monitorEnabledCheck.setText("???????????");
+        intervalCaptionLabel.setText("?????");
+        chartCaptionLabel.setText("?????????");
+        runtimeCaptionLabel.setText("?????????? JVM?");
         runtimeSlashLabel.setText("/");
-        runtimeOpenParenLabel.setText("?��コミッ�? ");
-        runtimeCloseParenLabel.setText("?�?");
+        runtimeOpenParenLabel.setText("????? ");
+        runtimeCloseParenLabel.setText("?");
         monitorHintLabel.setText(
-                "監視をオンにすると、指定間隔でヒ�?�プ使用量を記録し、下�?�グラフに表示します�?"
-                        + " オフにするとタイマ�?�を停止し、グラフを�?します�?");
-        syncHeapToCurrentButton.setText("現在の上限に合わせる");
-        refreshRuntimeHeapButton.setText("今すぐ更新");
+                "??????????????????????????????????????"
+                        + " ????????????????????????");
+        syncHeapToCurrentButton.setText("??????????");
+        refreshRuntimeHeapButton.setText("?????");
 
-        heapUsedSeries.setName("ヒ�?�プ使用�?");
+        heapUsedSeries.setName("??????");
         heapChart.getData().add(heapUsedSeries);
         heapChart.setCreateSymbols(false);
         NumberAxis xAxis = (NumberAxis) heapChart.getXAxis();
-        xAxis.setLabel("経過?��秒�?");
+        xAxis.setLabel("?????");
         NumberAxis yAxis = (NumberAxis) heapChart.getYAxis();
-        yAxis.setLabel("使用量�?MiB?�?");
+        yAxis.setLabel("????MiB?");
 
         int curMaxMiB = readHeapMaxMiBOrFallback();
         nextLaunchHeapMiBSpinner.setValueFactory(
@@ -144,15 +163,37 @@ public final class MemorySettingsTabController {
 
         intervalSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 3600, 5));
 
+        jvmLogSectionTitleLabel.setText("JVM ?????");
+        jvmLogMaxLinesLabel.setText("????");
+        jvmLogHintLabel.setText(
+                "??????????????????????????????? JVM ???????????????"
+                        + " ????????????????????????");
+        memoryJvmLogMaxLinesSpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                        MemoryJvmRingLog.ABS_MIN,
+                        MemoryJvmRingLog.ABS_MAX,
+                        MemoryJvmRingLog.DEFAULT_MAX_LINES,
+                        500));
+        memoryJvmLogMaxLinesSpinner
+                .valueProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            if (n != null) {
+                                MemoryJvmRingLog.setMaxLines(n);
+                                persistIfReady();
+                            }
+                        });
+
         refreshRuntimeHeapLabels();
         updateHeapArgHint();
 
         nextLaunchHeapMiBSpinner
                 .valueProperty()
-                .addListener((obs, o, n) -> {
-                    updateHeapArgHint();
-                    persistIfReady();
-                });
+                .addListener(
+                        (obs, o, n) -> {
+                            updateHeapArgHint();
+                            persistIfReady();
+                        });
 
         chartContainer.setManaged(false);
         chartContainer.setVisible(false);
@@ -162,6 +203,8 @@ public final class MemorySettingsTabController {
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        MemoryJvmRingLog.setUiRefreshListener(
+                () -> Platform.runLater(this::flushJvmLogTextArea));
         if (!listenersInstalled) {
             listenersInstalled = true;
             monitorEnabledCheck
@@ -181,7 +224,7 @@ public final class MemorySettingsTabController {
         }
     }
 
-    /** セ�?ション適用?�?{@link MainShellController#applyDesktopSession} から?���? */
+    /** ????????{@link MainShellController#applyDesktopSession} ???? */
     void applyMemorySettingsSession(DesktopSessionState s) {
         if (s == null) {
             return;
@@ -200,11 +243,22 @@ public final class MemorySettingsTabController {
                             : cur;
             nextLaunchHeapMiBSpinner.getValueFactory().setValue(target);
 
+            long savedMl = s.memoryJvmLogMaxLines();
+            int targetMl =
+                    (int)
+                            clamp(
+                                    savedMl > 0 ? savedMl : MemoryJvmRingLog.DEFAULT_MAX_LINES,
+                                    MemoryJvmRingLog.ABS_MIN,
+                                    MemoryJvmRingLog.ABS_MAX);
+            memoryJvmLogMaxLinesSpinner.getValueFactory().setValue(targetMl);
+            MemoryJvmRingLog.setMaxLines(targetMl);
+
             updateHeapArgHint();
         } finally {
             suppressPersist.set(false);
         }
         restartMonitorFromUiState();
+        flushJvmLogTextArea();
     }
 
     boolean snapshotMemoryMonitorEnabled() {
@@ -220,9 +274,15 @@ public final class MemorySettingsTabController {
         return v <= 0 ? 0L : v;
     }
 
-    /** メインウィンドウ終�?時にタイマ�?�を停止する�? */
+    long snapshotMemoryJvmLogMaxLines() {
+        int v = memoryJvmLogMaxLinesSpinner.getValue();
+        return clamp(v, MemoryJvmRingLog.ABS_MIN, MemoryJvmRingLog.ABS_MAX);
+    }
+
+    /** ?????????????????????? */
     void shutdown() {
         stopMonitorTimeline();
+        MemoryJvmRingLog.setUiRefreshListener(null);
     }
 
     @FXML
@@ -306,7 +366,10 @@ public final class MemorySettingsTabController {
     private void updateHeapArgHint() {
         int mib = nextLaunchHeapMiBSpinner.getValue();
         heapArgHintLabel.setText(
-                String.format(Locale.ROOT, "�?: java -Xmx%dm ... ?��起動スクリプト�? IDE の VM オプションに設定�?", mib));
+                String.format(
+                        Locale.ROOT,
+                        "?: java -Xmx%dm ? ????????? IDE ? VM ?????????",
+                        mib));
     }
 
     private static String formatMiB(long bytes) {
@@ -336,5 +399,16 @@ public final class MemorySettingsTabController {
 
     private static long clamp(long v, long lo, long hi) {
         return Math.max(lo, Math.min(hi, v));
+    }
+
+    private void flushJvmLogTextArea() {
+        if (jvmLogTextArea == null) {
+            return;
+        }
+        List<String> lines = MemoryJvmRingLog.snapshotLines();
+        jvmLogTextArea.setText(String.join("\n", lines));
+        int len = jvmLogTextArea.getLength();
+        jvmLogTextArea.positionCaret(len);
+        jvmLogTextArea.setScrollTop(Double.MAX_VALUE);
     }
 }

@@ -16,8 +16,7 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 
 /**
- * Toolbar label: heap and Metaspace usage; same line to {@code System.err} (subject to {@link
- * MemoryStderrLogGate#MAX_LINES} combined with {@link JvmMemoryMonitor}).
+ * Toolbar label: heap and Metaspace usage; same sample appended to {@link MemoryJvmRingLog} (bounded).
  *
  * <p>Interval 10 seconds. UI strings are ASCII-only (English) so labels render correctly on Japanese Windows
  * when editor or runtime encoding does not match UTF-8 (same rationale as {@link JvmMemoryMonitor}).
@@ -78,9 +77,7 @@ public final class FxJvmMemoryStatusBar {
                         String uiText = formatUiText(sample);
                         String logLine = formatLogLine(sample);
                         Platform.runLater(() -> label.setText(uiText));
-                        if (!MemoryStderrLogGate.recordLine(LOG_PREFIX + " " + logLine)) {
-                            shutdown.run();
-                        }
+                        MemoryJvmRingLog.append(LOG_PREFIX + " " + logLine);
                     } catch (Throwable ignored) {
                         // status bar only
                     }

@@ -65,6 +65,7 @@ import java.util.Map;
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
  * @param memoryMonitorEnabled メモリ設定タブのヒープ監視（トレンドグラフ）を有効にするか
  * @param memoryMonitorIntervalSec 監視間隔（秒、1〜3600）
+ * @param memoryJvmLogMaxLines JVM メモリログ（リング）の最大行数（100〜500000、超過分は古い行から破棄）
  * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で現在値を参照）
  */
 public record DesktopSessionState(
@@ -125,6 +126,7 @@ public record DesktopSessionState(
         PushButtonDesignPrefs pushButtonDesignPrefs,
         boolean memoryMonitorEnabled,
         long memoryMonitorIntervalSec,
+        long memoryJvmLogMaxLines,
         long nextLaunchHeapMaxMiB) {
 
     public DesktopSessionState {
@@ -254,6 +256,7 @@ public record DesktopSessionState(
                 PushButtonDesignPrefs.inactiveDefaults(),
                 false,
                 5L,
+                10_000L,
                 0L);
     }
 }

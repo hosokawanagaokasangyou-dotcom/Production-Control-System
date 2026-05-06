@@ -720,6 +720,7 @@ public final class MainShellController {
                         : PushButtonDesignPrefs.inactiveDefaults(),
                 memorySettingsTabController.snapshotMemoryMonitorEnabled(),
                 memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
+                memorySettingsTabController.snapshotMemoryJvmLogMaxLines(),
                 memorySettingsTabController.snapshotNextLaunchHeapMaxMiB());
     }
 
