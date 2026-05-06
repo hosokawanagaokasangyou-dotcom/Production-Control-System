@@ -235,6 +235,24 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.6.3</version>
       </plugin>
+      <!-- jpackage（Windows package_app.ps1）が classpath 入力を組むため package 時に依存 JAR を target/dependency に複製 -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>copy-runtime-deps-for-jpackage</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/dependency</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>
