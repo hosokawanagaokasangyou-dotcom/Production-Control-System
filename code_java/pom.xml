@@ -215,6 +215,7 @@
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
           <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
+            <option>-Dfile.encoding=UTF-8</option>
             <option>-Xms${jvm.initial.heap}</option>
             <option>-Xmx${jvm.max.heap}</option>
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>

@@ -411,6 +411,7 @@ if (Test-Path $dist) {
 }
 
 $javaOpts = @(
+    '-Dfile.encoding=UTF-8',
     "-Xms$jvmInitial",
     "-Xmx$jvmMax",
     '-XX:+HeapDumpOnOutOfMemoryError',

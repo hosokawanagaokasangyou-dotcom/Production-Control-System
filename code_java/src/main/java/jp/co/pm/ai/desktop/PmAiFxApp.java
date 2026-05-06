@@ -21,6 +21,10 @@ import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
  */
 public class PmAiFxApp extends Application {
 
+    static {
+        System.setProperty("file.encoding", "UTF-8");
+    }
+
     /**
      * Toolkit 初期化前に呼ぶ。既定は別プロセスの GPU プローブに従い {@code prism.order} を決める。
      *
@@ -119,7 +123,6 @@ public class PmAiFxApp extends Application {
     }
 
     public static void main(String[] args) {
-        System.setProperty("file.encoding", "UTF-8");
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println(
                     "[PmAiFxApp] No graphical display (headless). "
