@@ -146,17 +146,17 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
-# 既定の試行順（精度の高い順）。マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
+# 既定の試行順（精度の高い順）。gemini-3-flash-preview は応答遅延のため列から除外。
+# マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
 # 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
-    "gemini-3-flash-preview",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash-lite",
 )
-# 既定の先頭モデル（従来名 GEMINI_MODEL_FLASH のまま参照している箇所向け）
-GEMINI_MODEL_FLASH = GEMINI_MODEL_IDS_BY_QUALITY[0]
+# 既定の Flash 系モデル ID（試行列先頭が Pro になり得るため [0] とは一致させない）
+GEMINI_MODEL_FLASH = "gemini-2.5-flash"
 # 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
 # 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
