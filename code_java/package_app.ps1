@@ -539,23 +539,42 @@ if ($LASTEXITCODE -ne 0) {
 
 $postJpkgRoot = Join-Path $dist $APP_NAME
 if (Test-Path -LiteralPath $postJpkgRoot) {
-    $bundledJavaExe = Join-Path $postJpkgRoot 'runtime\bin\java.exe'
-    if (-not (Test-Path -LiteralPath $bundledJavaExe)) {
+    $diagBin = Join-Path $postJpkgRoot 'runtime\bin'
+    $bundledJavaExe = Join-Path $diagBin 'java.exe'
+    # LiteralPath can mis-detect on some Unicode/long paths; confirm with *.exe listing.
+    $exeInBin = @()
+    if (Test-Path -LiteralPath $diagBin) {
+        $exeInBin = @(Get-ChildItem -LiteralPath $diagBin -Filter '*.exe' -File -ErrorAction SilentlyContinue)
+    }
+    $hasJavaExe = Test-Path -LiteralPath $bundledJavaExe
+    if (-not $hasJavaExe -and $exeInBin.Count -gt 0) {
+        $hasJavaExe = [bool]($exeInBin | Where-Object { $_.Name -ieq 'java.exe' })
+    }
+
+    if (-not $hasJavaExe) {
         Write-Warning @"
-Bundled JRE not found: $bundledJavaExe
+Bundled launcher not found: $bundledJavaExe
 Common causes:
-  1) Windows Defender / AV removed java.exe (often DLLs remain). Check Protection history.
-  2) Very long or non-ASCII path (e.g. Japanese folder names) — try cloning to a short path like C:\work\pm-ai and run package_app.ps1 there.
-  3) Stale dist — ensure Step 4 deleted code_java\dist before jpackage.
-App runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
+  1) Windows Defender / AV removed java.exe (DLLs often remain). Check Protection history.
+  2) Very long or non-ASCII path — try a short ASCII path e.g. C:\work\pm-ai.
+  3) Stale dist — ensure code_java\dist was removed before jpackage.
+Java runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
 Step 5 continues; output may be incomplete.
 "@
-        $diagBin = Join-Path $postJpkgRoot 'runtime\bin'
         $diagRt = Join-Path $postJpkgRoot 'runtime'
         if (Test-Path -LiteralPath $diagBin) {
-            Write-Host '--- Diagnostic: runtime\bin (first 40 entries) ---' -ForegroundColor Yellow
-            Get-ChildItem -LiteralPath $diagBin -ErrorAction SilentlyContinue |
-                Select-Object -First 40 Name, Length |
+            Write-Host '--- Diagnostic: runtime\bin *.exe (all) ---' -ForegroundColor Yellow
+            if ($exeInBin.Count -eq 0) {
+                Write-Host '  (no .exe files — launchers missing or blocked)' -ForegroundColor Yellow
+            }
+            else {
+                $exeInBin | Sort-Object Name | Format-Table Name, Length -AutoSize
+            }
+            Write-Host '--- Diagnostic: runtime\bin non-directory count by extension (sample) ---' -ForegroundColor DarkGray
+            Get-ChildItem -LiteralPath $diagBin -File -ErrorAction SilentlyContinue |
+                Group-Object Extension |
+                Sort-Object Count -Descending |
+                Select-Object -First 15 Name, Count |
                 Format-Table -AutoSize
         }
         elseif (Test-Path -LiteralPath $diagRt) {
