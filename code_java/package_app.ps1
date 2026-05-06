@@ -113,6 +113,29 @@ git が PATH にありません。
 
         Copy-Item -LiteralPath $src -Destination $dst -Force
     }
+
+    # code 直下のマスタ系 .txt は、将来 .gitignore や ls-files の取りこぼしで欠けないよう明示複製する（ポータブル／インストーラ同梱）。
+    $mandatoryCodeRootTxt = @(
+        'code/使用原反, 加工幅.txt',
+        'code/使用原反,ロール単位の長さ.txt',
+        'code/製品名,ロール単位の長さ.txt',
+        'code/製品名,製品厚み.txt',
+        'code/製品名,製品長.txt',
+        'code/製品名, 製品幅.txt'
+    )
+    foreach ($relSlash in $mandatoryCodeRootTxt) {
+        $relOs = $relSlash -replace '/', [System.IO.Path]::DirectorySeparatorChar
+        $src = Join-Path $RepoRoot $relOs
+        if (-not (Test-Path -LiteralPath $src)) {
+            continue
+        }
+        $dst = Join-Path $DestRoot $relOs
+        $parent = Split-Path -Parent $dst
+        if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $src -Destination $dst -Force
+    }
 }
 
 function Read-MavenPomProperties {
@@ -336,7 +359,7 @@ function Copy-BundleToDist {
 
     New-Item -ItemType Directory -Path $data -Force | Out-Null
 
-    Write-Host "--- pm-ai-data にワークスペースを複製（git ls-files / .gitignore 準拠）---" -ForegroundColor Cyan
+    Write-Host "--- pm-ai-data にワークスペースを複製（git ls-files / .gitignore 準拠 + code 直下マスタ .txt 必須同梱）---" -ForegroundColor Cyan
     Copy-WorkspaceTreeRespectingGitIgnore -RepoRoot $WorkspaceRootPath -DestRoot $data
 
     New-Item -ItemType Directory -Path (Join-Path $data 'input\task-input') -Force | Out-Null
@@ -356,6 +379,7 @@ function Copy-BundleToDist {
     @(
         'このフォルダは package_app.ps1 が生成したポータブル用データです。',
         'ワークスペースの複製元: git ls-files -co --exclude-standard（.gitignore で無視されるものは含みません）。',
+        'code 直下のマスタ .txt（使用原反／製品名・ロール単位などの一覧）は package_app.ps1 で必ず同梱します。',
         '除外追加: code_java/build_cache, package_input, dist（パッケージ作業用）。',
         'PmAiDesktop.exe と同じ階層にあります。',
         '版はリポジトリ直下 version.txt（この複製に含まれる）。正本フォルダは環境変数 PM_AI_PORTABLE_BUNDLE_SOURCE_DIR で指定して起動時同期できます。',
