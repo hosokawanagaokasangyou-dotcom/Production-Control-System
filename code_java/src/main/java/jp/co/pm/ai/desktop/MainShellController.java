@@ -48,6 +48,8 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
+import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
+
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -141,6 +143,9 @@ public final class MainShellController {
 
     @FXML
     private Region toolbarGrowSpacer;
+
+    @FXML
+    private Label jvmMemoryStatusLabel;
 
     @FXML
     private MainRunTabController mainRunTabController;
@@ -418,6 +423,8 @@ public final class MainShellController {
         if (toolbarGrowSpacer != null) {
             HBox.setHgrow(toolbarGrowSpacer, Priority.ALWAYS);
         }
+
+        FxJvmMemoryStatusBar.start(jvmMemoryStatusLabel, primaryStage);
 
         installUiEnvAutoSave();
 

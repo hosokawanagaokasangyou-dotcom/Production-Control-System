@@ -510,3 +510,10 @@
 .tab-pane.pm-main-shell-inner-tab-pane {
     -fx-padding: 2 0 0 0;
 }
+
+/* ツールバー右上：JVM ヒープ・メタスペース表示（FxJvmMemoryStatusBar） */
+.label.pm-jvm-memory-status {
+    -fx-font-size: 11px;
+    -fx-text-fill: derive(-fx-text-inner-color, -8%);
+    -fx-padding: 0 0 0 8;
+}

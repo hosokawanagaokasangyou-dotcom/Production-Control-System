@@ -29,6 +29,7 @@
                 <Button fx:id="shellStageCancelButton" managed="false" mnemonicParsing="false" onAction="#onCancelStageRunAction" text="中断" visible="false" />
             </HBox>
             <Region fx:id="toolbarGrowSpacer" maxWidth="Infinity" minWidth="0.0" />
+            <Label fx:id="jvmMemoryStatusLabel" styleClass="pm-jvm-memory-status" text="メモリ: 取得中…" />
         </ToolBar>
     </top>
     <center>

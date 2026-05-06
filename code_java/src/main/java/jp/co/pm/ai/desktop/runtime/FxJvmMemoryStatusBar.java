@@ -1,0 +1,170 @@
+package jp.co.pm.ai.desktop.runtime;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryUsage;
+import java.util.Locale;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import javafx.application.Platform;
+import javafx.scene.control.Label;
+import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
+
+/**
+ * ツールバー右側ラベルにヒープ・Metaspace の使用状況を表示し、同一内容を標準エラーに記録する（{@code System.err}）。
+ *
+ * <p>間隔は 10 秒固定。バックグラウンドスレッドでサンプルし、ラベル更新は JavaFX スレッドで行う。
+ */
+public final class FxJvmMemoryStatusBar {
+
+    /** ログプレフィックス（{@link JvmMemoryMonitor} の {@code [PM-AI heap]} と揃える） */
+    private static final String LOG_PREFIX = "[PM-AI memory]";
+
+    private static final int INTERVAL_SEC = 10;
+    private static final String POOL_METASPACE = "Metaspace";
+
+    private static final AtomicBoolean GLOBAL_STARTED = new AtomicBoolean(false);
+
+    private FxJvmMemoryStatusBar() {}
+
+    /**
+     * 監視を開始する（アプリ生存期間で一度だけ有効）。
+     *
+     * @param label 表示先（右上ツールバー）
+     * @param stage 終了時にスケジューラを停止するために渡す
+     */
+    public static void start(Label label, Stage stage) {
+        if (label == null || stage == null) {
+            return;
+        }
+        if (!GLOBAL_STARTED.compareAndSet(false, true)) {
+            return;
+        }
+
+        MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+        MemoryPoolMXBean metaspacePool = resolveMetaspacePool();
+
+        ScheduledExecutorService scheduler =
+                Executors.newSingleThreadScheduledExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "pm-ai-fx-jvm-memory-status");
+                            t.setDaemon(true);
+                            return t;
+                        });
+
+        AtomicBoolean stopped = new AtomicBoolean(false);
+        Runnable shutdown =
+                () -> {
+                    if (!stopped.compareAndSet(false, true)) {
+                        return;
+                    }
+                    scheduler.shutdown();
+                    try {
+                        if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                            scheduler.shutdownNow();
+                        }
+                    } catch (InterruptedException e) {
+                        scheduler.shutdownNow();
+                        Thread.currentThread().interrupt();
+                    }
+                };
+
+        Runnable task =
+                () -> {
+                    try {
+                        MemorySample sample = readSample(memoryBean, metaspacePool);
+                        String uiText = formatUiText(sample);
+                        String logLine = formatLogLine(sample);
+                        Platform.runLater(() -> label.setText(uiText));
+                        System.err.println(LOG_PREFIX + " " + logLine);
+                    } catch (Throwable ignored) {
+                        // status bar only
+                    }
+                };
+
+        scheduler.scheduleAtFixedRate(task, 0, INTERVAL_SEC, TimeUnit.SECONDS);
+
+        stage.addEventHandler(WindowEvent.WINDOW_CLOSE_REQUEST, e -> shutdown.run());
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(shutdown, "pm-ai-fx-jvm-memory-status-shutdown"));
+    }
+
+    private static MemoryPoolMXBean resolveMetaspacePool() {
+        for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            if (POOL_METASPACE.equals(pool.getName())) {
+                return pool;
+            }
+        }
+        return null;
+    }
+
+    private static MemorySample readSample(MemoryMXBean memoryBean, MemoryPoolMXBean metaspacePool) {
+        MemoryUsage heap = memoryBean.getHeapMemoryUsage();
+        long heapUsed = heap.getUsed();
+        long heapMax = heap.getMax();
+        double heapPct = heapMax > 0 ? 100.0 * heapUsed / (double) heapMax : Double.NaN;
+
+        long metaUsed = -1;
+        long metaMax = -1;
+        if (metaspacePool != null) {
+            MemoryUsage u = metaspacePool.getUsage();
+            metaUsed = u.getUsed();
+            metaMax = u.getMax();
+        }
+        return new MemorySample(heapUsed, heapMax, heapPct, metaUsed, metaMax);
+    }
+
+    private static String formatUiText(MemorySample s) {
+        String heapPctStr =
+                !Double.isNaN(s.heapPct)
+                        ? String.format(Locale.ROOT, "%.1f%%", s.heapPct)
+                        : "?";
+        return "ヒープ "
+                + formatMiPair(s.heapUsed, s.heapMax)
+                + " ("
+                + heapPctStr
+                + ") ・ メタスペース "
+                + formatMiPair(s.metaUsed, s.metaMax);
+    }
+
+    /** ログ用（ASCII、キー=値を並べる） */
+    private static String formatLogLine(MemorySample s) {
+        return "heap_used_MiB="
+                + toMiB(s.heapUsed)
+                + " heap_max_MiB="
+                + formatMaxMiB(s.heapMax)
+                + " heap_pct="
+                + (Double.isNaN(s.heapPct) ? "n/a" : String.format(Locale.ROOT, "%.1f", s.heapPct))
+                + " metaspace_used_MiB="
+                + (s.metaUsed >= 0 ? toMiB(s.metaUsed) : "n/a")
+                + " metaspace_max_MiB="
+                + formatMaxMiB(s.metaMax);
+    }
+
+    private static String formatMiPair(long usedBytes, long maxBytes) {
+        String usedStr = usedBytes >= 0 ? toMiB(usedBytes) + " MiB" : "?";
+        String maxStr;
+        if (maxBytes < 0) {
+            maxStr = "?";
+        } else {
+            maxStr = toMiB(maxBytes) + " MiB";
+        }
+        return usedStr + " / " + maxStr;
+    }
+
+    private static String formatMaxMiB(long maxBytes) {
+        return maxBytes >= 0 ? Long.toString(toMiB(maxBytes)) : "n/a";
+    }
+
+    private static long toMiB(long bytes) {
+        return bytes >= 0 ? bytes / (1024 * 1024) : -1;
+    }
+
+    private record MemorySample(
+            long heapUsed, long heapMax, double heapPct, long metaUsed, long metaMax) {}
+}
