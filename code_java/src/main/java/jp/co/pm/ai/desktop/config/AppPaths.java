@@ -871,6 +871,11 @@ public final class AppPaths {
             if (Files.isDirectory(candidate) && Files.isRegularFile(candidate.resolve("task_extract_stage1.py"))) {
                 return Optional.of(candidate.toAbsolutePath().normalize());
             }
+            Path bundled =
+                    cur.resolve("pm-ai-data").resolve("code").resolve("python");
+            if (Files.isDirectory(bundled) && Files.isRegularFile(bundled.resolve("task_extract_stage1.py"))) {
+                return Optional.of(bundled.toAbsolutePath().normalize());
+            }
             Path parent = cur.getParent();
             if (parent == null || Objects.equals(parent, cur)) {
                 break;

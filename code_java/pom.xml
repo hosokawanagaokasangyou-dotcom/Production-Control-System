@@ -25,8 +25,12 @@
     <log4j.version>2.24.3</log4j.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
-    <!-- javafx:run / 開発時のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g、減らす例: -Djvm.max.heap=2g） -->
+    <!-- javafx:run / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
     <jvm.max.heap>3g</jvm.max.heap>
+    <!-- javafx:run / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
+    <jvm.initial.heap>512m</jvm.initial.heap>
+    <!-- package_app.ps1: Windows embeddable Python（amd64）の取得元バージョン -->
+    <pm.ai.bundle.python.embed.version>3.12.7</pm.ai.bundle.python.embed.version>
   </properties>
 
   <dependencies>
@@ -211,7 +215,7 @@
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
           <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
-            <option>-Xms512m</option>
+            <option>-Xms${jvm.initial.heap}</option>
             <option>-Xmx${jvm.max.heap}</option>
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
