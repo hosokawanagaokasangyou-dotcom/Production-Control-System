@@ -560,9 +560,11 @@ elseif ($Root -match '[^\x00-\x7F]') {
 }
 $usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
 
+# When staging to TEMP, do not pre-delete code_java\dist: Explorer / running exe often locks it.
+# jpackage only writes to $jpkgDestParent; we replace dist\<APP_NAME> after success.
 $pathsToClean = @($jpkgDestParent)
-if ($usedStagingForJpackage) {
-    $pathsToClean = @($jpkgDestParent, $distFinal)
+if (-not $usedStagingForJpackage) {
+    $pathsToClean = @($distFinal)
 }
 $pathsToClean = $pathsToClean | Select-Object -Unique
 foreach ($p in $pathsToClean) {
@@ -655,13 +657,28 @@ if ($usedStagingForJpackage) {
     if (-not (Test-Path -LiteralPath $stagedApp)) {
         throw "jpackage staging output missing: $stagedApp"
     }
-    if (Test-Path -LiteralPath $distFinal) {
-        Remove-Item -Recurse -Force -LiteralPath $distFinal -ErrorAction SilentlyContinue
-    }
     New-Item -ItemType Directory -Path $distFinal -Force | Out-Null
-    Copy-Item -Recurse -Force -LiteralPath $stagedApp -Destination (Join-Path $distFinal $APP_NAME)
+    $destAppPath = Join-Path $distFinal $APP_NAME
+    if (Test-Path -LiteralPath $destAppPath) {
+        $removedOld = $false
+        for ($ri = 0; $ri -lt 8; $ri++) {
+            try {
+                Remove-Item -Recurse -Force -LiteralPath $destAppPath -ErrorAction Stop
+                $removedOld = $true
+                break
+            }
+            catch {
+                Write-Warning "Cannot remove old bundle folder (close PmAiDesktop.exe / Explorer on dist\$APP_NAME). Retry ($ri/8)..."
+                Start-Sleep -Seconds 3
+            }
+        }
+        if (-not $removedOld) {
+            throw "Cannot replace $destAppPath. Close the app and Explorer windows using that folder, then re-run package_app.ps1."
+        }
+    }
+    Copy-Item -Recurse -Force -LiteralPath $stagedApp -Destination $destAppPath
     Remove-Item -Recurse -Force -LiteralPath $jpkgDestParent -ErrorAction SilentlyContinue
-    Write-Host "Copied jpackage output from staging to: $(Join-Path $distFinal $APP_NAME)" -ForegroundColor DarkGray
+    Write-Host "Copied jpackage output from staging to: $destAppPath" -ForegroundColor DarkGray
 }
 
 $dist = $distFinal
