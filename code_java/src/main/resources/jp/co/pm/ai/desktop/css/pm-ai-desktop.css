@@ -333,14 +333,15 @@
 /* タブ整理：ボタン・補助ラベルをテーマ横断で読みやすく（ダークで既定ボタンが薄地＋白字にならないよう固定） */
 .pm-main-shell-tab-organizer {
     -fx-background-color: transparent;
+    -fx-padding: 10 10 8 10;
 }
 
-.pm-main-shell-tab-organizer > .scroll-pane {
+.pm-main-shell-tab-organizer ScrollPane {
     -fx-background-color: transparent;
     -fx-background: transparent;
 }
 
-.pm-main-shell-tab-organizer > .scroll-pane .viewport {
+.pm-main-shell-tab-organizer ScrollPane .viewport {
     -fx-background-color: transparent;
 }
 
