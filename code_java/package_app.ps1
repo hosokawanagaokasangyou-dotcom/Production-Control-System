@@ -1,4 +1,4 @@
-﻿# Production desktop (JavaFX) — Windows app bundle builder (jpackage + bundled runtime).
+# Production desktop (JavaFX) — Windows app bundle builder (jpackage + bundled runtime).
 #
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
@@ -543,11 +543,28 @@ if (Test-Path -LiteralPath $postJpkgRoot) {
     if (-not (Test-Path -LiteralPath $bundledJavaExe)) {
         Write-Warning @"
 Bundled JRE not found: $bundledJavaExe
-- dist may be stale if removal failed earlier.
-- Windows Defender may have quarantined java.exe.
-- Java runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
+Common causes:
+  1) Windows Defender / AV removed java.exe (often DLLs remain). Check Protection history.
+  2) Very long or non-ASCII path (e.g. Japanese folder names) — try cloning to a short path like C:\work\pm-ai and run package_app.ps1 there.
+  3) Stale dist — ensure Step 4 deleted code_java\dist before jpackage.
+App runtime is next to PmAiDesktop.exe; pm-ai-data\runtime is Python only.
 Step 5 continues; output may be incomplete.
 "@
+        $diagBin = Join-Path $postJpkgRoot 'runtime\bin'
+        $diagRt = Join-Path $postJpkgRoot 'runtime'
+        if (Test-Path -LiteralPath $diagBin) {
+            Write-Host '--- Diagnostic: runtime\bin (first 40 entries) ---' -ForegroundColor Yellow
+            Get-ChildItem -LiteralPath $diagBin -ErrorAction SilentlyContinue |
+                Select-Object -First 40 Name, Length |
+                Format-Table -AutoSize
+        }
+        elseif (Test-Path -LiteralPath $diagRt) {
+            Write-Host '--- Diagnostic: runtime exists but bin\ is missing ---' -ForegroundColor Yellow
+            Get-ChildItem -LiteralPath $diagRt -ErrorAction SilentlyContinue | Select-Object Name
+        }
+        else {
+            Write-Host '--- Diagnostic: runtime folder missing under app-image root ---' -ForegroundColor Yellow
+        }
     }
 }
 
