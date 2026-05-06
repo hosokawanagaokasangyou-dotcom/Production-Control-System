@@ -20,7 +20,8 @@ if not exist "%JAVA_EXE%" (
     pause
     exit /b 1
 )
-if not exist "%ROOT%\app\" (
+rem 末尾 \ で閉じ引用符が壊れるため、ディレクトリは \ なしで検査する
+if not exist "%ROOT%\app" (
     echo [ERROR] app フォルダがありません: "%ROOT%\app"
     pause
     exit /b 1
