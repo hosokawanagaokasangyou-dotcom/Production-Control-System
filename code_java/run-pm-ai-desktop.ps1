@@ -6,6 +6,12 @@
 .DESCRIPTION
   同階層の mvnw.cmd で javafx:run します。pom.xml の JVM オプション（-Xms/-Xmx、OOM 時ヒープダンプ等）がそのまま適用されます。
 
+  重要: このフォルダで実行するときはパスの先頭に .\ を付けます。
+    .\run-pm-ai-desktop.ps1
+  リポジトリ直下からなら:
+    .\code_java\run-pm-ai-desktop.ps1
+  （run-pm-ai-desktop.ps1 だけでは実行できません。）
+
   ヒープ監視（stderr に定期サンプル）を有効にする例:
     .\run-pm-ai-desktop.ps1 -MonitorIntervalSec 60
 
