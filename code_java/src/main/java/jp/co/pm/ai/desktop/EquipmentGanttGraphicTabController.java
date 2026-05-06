@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -35,6 +36,9 @@ import javafx.stage.Stage;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -61,6 +65,19 @@ public final class EquipmentGanttGraphicTabController {
     /** {@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane} の時刻列検出と整合する見出し判定（ログ・検証用） */
     private static final Pattern HH_MM_COLUMN_HEADER =
             Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$");
+
+    /**
+     * 非空タイムラインが皆無の「大表」で {@link EquipmentGraphicGanttPane#build}（行ごと Canvas）を
+     * 起動しない行数の下限。配台が空のときのメモリ急増を抑える。
+     */
+    private static final int HEAVY_EMPTY_GRID_MIN_ROWS = 300;
+
+    /**
+     * 上記判定で先頭から走査する最大行数（全行が空の想定のとき概ね足りるが、上限で打ち切る）。
+     */
+    private static final int HEAVY_EMPTY_GRID_SCAN_MAX_ROWS = 2000;
+
+    private static final ObjectMapper GANTT_CONTRACT_PEEK_OM = new ObjectMapper();
 
     private static final String HINT =
             "計画結果ビューアと同じ 計画*.json（または旧 production_plan_multi_day*.json）を指定します。"
@@ -738,6 +755,28 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane == null || st == null) {
             return;
         }
+        Path planPath =
+                lastLoadedPlanPath != null && !lastLoadedPlanPath.isBlank()
+                        ? Path.of(lastLoadedPlanPath)
+                        : null;
+        String skipReason = skipHeavyGraphicReason(planPath, st);
+        if (skipReason != null) {
+            if (shell != null) {
+                shell.refreshEquipmentGanttObservedBadgeLabels(List.of());
+            }
+            if (graphicRootWrapper == null) {
+                graphicRootWrapper = new BorderPane();
+                contentPane.setCenter(graphicRootWrapper);
+            }
+            graphicRootWrapper.setCenter(
+                    emptyPlaceholder(
+                            "設備ガント（グラフィック）の Canvas 生成をスキップしました（メモリ負荷の抑制）。\n"
+                                    + skipReason
+                                    + "\n正しい master.xlsm と段階2出力を確認してください。"));
+            installGraphicWheelZoomIfNeeded();
+            return;
+        }
+
         BorderPane oldGantt =
                 graphicRootWrapper != null && graphicRootWrapper.getCenter() instanceof BorderPane ob
                         ? ob
@@ -877,6 +916,72 @@ public final class EquipmentGanttGraphicTabController {
             }
         }
         return GanttSheetKind.DEFAULT;
+    }
+
+    /**
+     * 計画 JSON パスから、設備ガント契約 JSON（…設.json 等）のパスを返す。計画パス自体が契約のときはそのまま。
+     */
+    private static Path resolveContractJsonForPlanPath(Path planJsonPath) {
+        Path fn = planJsonPath.getFileName();
+        if (fn == null) {
+            return resolveEquipmentContractSibling(planJsonPath);
+        }
+        String n = fn.toString();
+        if (!n.endsWith(".json")) {
+            return resolveEquipmentContractSibling(planJsonPath);
+        }
+        String stem = n.substring(0, n.length() - 5);
+        if (stem.endsWith("設") || stem.endsWith("_equipment_gantt_contract")) {
+            return planJsonPath;
+        }
+        return resolveEquipmentContractSibling(planJsonPath);
+    }
+
+    /**
+     * 契約 JSON の {@code kwargs_packed.timeline_events} が無い・空配列のとき true（配台イベントなし）。
+     */
+    private static boolean isContractTimelineEventsEmpty(Path contractJsonPath) {
+        try {
+            JsonNode root =
+                    GANTT_CONTRACT_PEEK_OM.readTree(
+                            Files.readString(contractJsonPath, StandardCharsets.UTF_8));
+            JsonNode packed = root.get("kwargs_packed");
+            if (packed == null || !packed.isObject()) {
+                return false;
+            }
+            JsonNode te = packed.get("timeline_events");
+            if (te == null || !te.isArray()) {
+                return true;
+            }
+            return te.isEmpty();
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 重いグラフィックビルドを省略すべき理由を返す（無ければ null）。
+     * 契約の空 timeline_events、または大規模表でタイムライン非空セルが皆無のとき。
+     */
+    private static String skipHeavyGraphicReason(Path planJsonPath, JsonTableIo.SheetTable st) {
+        if (planJsonPath != null && Files.isRegularFile(planJsonPath)) {
+            Path contract = resolveContractJsonForPlanPath(planJsonPath);
+            if (contract != null && Files.isRegularFile(contract)) {
+                if (isContractTimelineEventsEmpty(contract)) {
+                    return "設備ガント契約の kwargs_packed.timeline_events にイベントがありません（配台結果なしと同等）。";
+                }
+            }
+        }
+        if (st != null) {
+            int n = st.rows().size();
+            if (n >= HEAVY_EMPTY_GRID_MIN_ROWS) {
+                int scan = Math.min(n, HEAVY_EMPTY_GRID_SCAN_MAX_ROWS);
+                if (countNonEmptyTimelineSlotCells(st, scan) == 0) {
+                    return "タイムライン（HH:MM）列に非空セルがありません（空の大表のため描画を省略しました）。";
+                }
+            }
+        }
+        return null;
     }
 
     /**
