@@ -166,8 +166,8 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
-        sel.getValue().groupTitle = t;
-        treeView.refresh();
+        OrgRow prev = sel.getValue();
+        sel.setValue(OrgRow.group(t, prev != null ? prev.colorHex : ""));
     }
 
     @FXML
@@ -299,11 +299,8 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         for (TreeItem<OrgRow> ti : sel) {
-            if (ti != null && ti.getValue() != null) {
-                ti.getValue().colorHex = hex;
-            }
+            replaceRowColorHex(ti, hex);
         }
-        treeView.refresh();
     }
 
     @FXML
@@ -316,11 +313,28 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         for (TreeItem<OrgRow> ti : sel) {
-            if (ti != null && ti.getValue() != null) {
-                ti.getValue().colorHex = "";
-            }
+            replaceRowColorHex(ti, "");
         }
-        treeView.refresh();
+    }
+
+    /**
+     * {@link OrgRow} のフィールドを直接書き換えると {@link TreeItem} が変更を検知せず行が描画更新されないことがあるため、
+     * 置き換え後の行で {@link TreeItem#setValue} する。
+     */
+    private static void replaceRowColorHex(TreeItem<OrgRow> ti, String hex) {
+        if (ti == null) {
+            return;
+        }
+        OrgRow r = ti.getValue();
+        if (r == null) {
+            return;
+        }
+        String h = hex != null ? hex : "";
+        if (r.kind == OrgRow.Kind.TAB) {
+            ti.setValue(OrgRow.tab(r.tabId, h));
+        } else {
+            ti.setValue(OrgRow.group(r.groupTitle, h));
+        }
     }
 
     @FXML
@@ -376,7 +390,10 @@ public final class MainShellTabOrganizerTabController {
                     && sel.getValue() != null
                     && sel.getValue().kind == OrgRow.Kind.GROUP) {
                 String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
-                sel.getValue().groupTitle = t;
+                OrgRow r = sel.getValue();
+                if (r != null && r.kind == OrgRow.Kind.GROUP) {
+                    sel.setValue(OrgRow.group(t, r.colorHex));
+                }
             }
         }
         if (tabAliasField != null && !tabAliasField.isDisable()) {
