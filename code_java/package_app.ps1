@@ -1,4 +1,4 @@
-# Production desktop (JavaFX) — Windows app bundle builder (jpackage + bundled runtime).
+﻿# Production desktop (JavaFX) — Windows app bundle builder (jpackage + bundled runtime).
 #
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
