@@ -505,6 +505,18 @@ public final class SpreadsheetTabularSupport {
     public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
 
     /**
+     * グリッド物理行数がこの値以上のとき、{@link #refreshSpreadsheetAfterRowPresentationChange} で {@link
+     * SpreadsheetView#resizeRowsToDefault()} を呼ばない（大量行で Prism/SW のオフスクリーン確保がヒープを押し上げるため）。
+     */
+    public static final int PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS = 1200;
+
+    /**
+     * グリッド物理行数がこの値以上のとき、二重にネストした {@link Platform#runLater} を使わず 1 回だけレイアウト flush
+     * する（同一処理の重複を避ける）。
+     */
+    public static final int PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS = 400;
+
+    /**
      * 列フィルタ行（グリッド行 {@link #SPREADSHEET_FILTER_ROW}）の高さ上限（px）。データ行の行高スライダー倍率に
      * 引きずられて巨大化しないようにする。
      */
@@ -552,11 +564,24 @@ public final class SpreadsheetTabularSupport {
     /**
      * {@link #applyPlanResultGridPresentation} 後、内側 {@link TableView} が古い行高を保持することがあるため、
      * グリッド由来の行高を再適用し、表示を更新する（スクロールしなくても反映されるようにする）。
+     *
+     * <p>行数が極端に多いグリッドでは {@link SpreadsheetView#resizeRowsToDefault()} と二重 flush がヒープを急増させるため、
+     * {@link #PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS} / {@link #PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS} で軽い経路に切り替える。
      */
     public static void refreshSpreadsheetAfterRowPresentationChange(SpreadsheetView view) {
         if (view == null) {
             return;
         }
+        int physicalRows = -1;
+        if (view.getGrid() instanceof GridBase gb) {
+            var rows = gb.getRows();
+            physicalRows = rows != null ? rows.size() : -1;
+        }
+        final boolean skipResize =
+                physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
+        final boolean singleFlush =
+                skipResize || physicalRows >= PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS;
+
         Runnable flush =
                 () -> {
                     // #region agent log
@@ -564,6 +589,8 @@ public final class SpreadsheetTabularSupport {
                         Map<String, Object> data =
                                 new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
                         data.put("viewRef", System.identityHashCode(view));
+                        data.put("refreshMode", skipResize ? "layout_only" : "resize_then_layout");
+                        data.put("schedule", singleFlush ? "single_runLater" : "double_nested_runLater");
                         if (view.getGrid() instanceof GridBase gb) {
                             var rows = gb.getRows();
                             data.put(
@@ -575,22 +602,29 @@ public final class SpreadsheetTabularSupport {
                                             : -1;
                             data.put("gridColsFirstRow", cols);
                         }
+                        data.put("runId", "post-fix");
                         AgentDebugLog.appendStructured(
                                 Map.of(),
                                 "81ed4a",
                                 "H1",
                                 "SpreadsheetTabularSupport:refreshSpreadsheetAfterRowPresentationChange",
-                                "before resizeRowsToDefault flush",
+                                "presentation refresh flush",
                                 data);
                     } catch (Throwable ignored) {
                     }
                     // #endregion
-                    view.resizeRowsToDefault();
+                    if (!skipResize) {
+                        view.resizeRowsToDefault();
+                    }
                     refreshEmbeddedTableViewsRecursive(view, 0);
                     view.requestLayout();
                 };
-        Platform.runLater(flush);
-        Platform.runLater(() -> Platform.runLater(flush));
+        if (singleFlush) {
+            Platform.runLater(flush);
+        } else {
+            Platform.runLater(flush);
+            Platform.runLater(() -> Platform.runLater(flush));
+        }
     }
 
     private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {
