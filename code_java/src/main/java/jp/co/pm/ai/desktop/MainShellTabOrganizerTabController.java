@@ -755,7 +755,11 @@ public final class MainShellTabOrganizerTabController {
         String hx = row.colorHex;
         if (hx != null && !hx.isBlank() && shell != null) {
             pill.setStyle(shell.tabOrganizerTreePillSurfaceStyle(hx));
-            lab.setStyle("-fx-text-fill: #f8fafc; -fx-font-size: 11px; -fx-font-weight: bold;");
+            String fill = shell.tabOrganizerPreviewChipLabelTextFill(hx);
+            lab.setStyle(
+                    "-fx-text-fill: "
+                            + fill
+                            + "; -fx-font-size: 11px; -fx-font-weight: bold;");
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
         } else {
             pill.setStyle("");
