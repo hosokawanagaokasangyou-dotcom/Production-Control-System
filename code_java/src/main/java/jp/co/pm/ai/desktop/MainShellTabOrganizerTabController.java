@@ -301,6 +301,9 @@ public final class MainShellTabOrganizerTabController {
         for (TreeItem<OrgRow> ti : sel) {
             replaceRowColorHex(ti, hex);
         }
+        if (shell != null && treeView.getRoot() != null) {
+            shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
+        }
     }
 
     @FXML
@@ -314,6 +317,9 @@ public final class MainShellTabOrganizerTabController {
         }
         for (TreeItem<OrgRow> ti : sel) {
             replaceRowColorHex(ti, "");
+        }
+        if (shell != null && treeView.getRoot() != null) {
+            shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
         }
     }
 

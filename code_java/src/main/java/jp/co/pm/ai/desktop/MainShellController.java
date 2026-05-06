@@ -34,6 +34,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -1083,6 +1084,77 @@ public final class MainShellController {
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
+        }
+    }
+
+    /**
+     * タブ整理ツリーで編集した見出し色を、メインシェル上部のタブへ即時反映する（並び替えはしない）。
+     *
+     * <p>作業タブ（リーフ）は {@link MainShellTabId} で一意に付け替え、グループ行の色は現在のタブ入れ子とツリーを対応付ける。
+     */
+    void syncMainShellTabHeaderColorsFromOrganizerTree(
+            TreeItem<MainShellTabOrganizerTabController.OrgRow> invisibleRoot) {
+        if (tabPane == null || invisibleRoot == null) {
+            return;
+        }
+        syncLeafTabColorsFromOrganizerTree(invisibleRoot);
+        syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+    }
+
+    private void syncLeafTabColorsFromOrganizerTree(TreeItem<MainShellTabOrganizerTabController.OrgRow> node) {
+        if (node == null) {
+            return;
+        }
+        MainShellTabOrganizerTabController.OrgRow r = node.getValue();
+        if (r != null && r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.TAB) {
+            Tab t = mainShellTabFor(r.tabId);
+            if (t != null) {
+                applyShellTabColor(t, r.colorHex);
+            }
+        }
+        for (TreeItem<MainShellTabOrganizerTabController.OrgRow> c : node.getChildren()) {
+            syncLeafTabColorsFromOrganizerTree(c);
+        }
+    }
+
+    private void syncGroupTabHeadersFromOrganizerTree(
+            TreeItem<MainShellTabOrganizerTabController.OrgRow> invisibleRoot) {
+        ObservableList<Tab> tabs = tabPane.getTabs();
+        List<TreeItem<MainShellTabOrganizerTabController.OrgRow>> treeTop = invisibleRoot.getChildren();
+        int ti = 0;
+        int ui = 0;
+        while (ti < treeTop.size() && ui < tabs.size()) {
+            Tab shellTab = tabs.get(ui);
+            if (shellTab == mainShellTabOrganizer) {
+                break;
+            }
+            syncGroupColorsPair(treeTop.get(ti), shellTab);
+            ti++;
+            ui++;
+        }
+    }
+
+    private void syncGroupColorsPair(
+            TreeItem<MainShellTabOrganizerTabController.OrgRow> treeItem, Tab shellTab) {
+        if (treeItem == null || shellTab == null) {
+            return;
+        }
+        MainShellTabOrganizerTabController.OrgRow r = treeItem.getValue();
+        if (r == null) {
+            return;
+        }
+        if (r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.TAB) {
+            return;
+        }
+        if (r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.GROUP
+                && shellTab.getContent() instanceof TabPane inner) {
+            applyShellTabColor(shellTab, r.colorHex);
+            ObservableList<Tab> innerTabs = inner.getTabs();
+            List<TreeItem<MainShellTabOrganizerTabController.OrgRow>> ch = treeItem.getChildren();
+            int n = Math.min(innerTabs.size(), ch.size());
+            for (int i = 0; i < n; i++) {
+                syncGroupColorsPair(ch.get(i), innerTabs.get(i));
+            }
         }
     }
 
