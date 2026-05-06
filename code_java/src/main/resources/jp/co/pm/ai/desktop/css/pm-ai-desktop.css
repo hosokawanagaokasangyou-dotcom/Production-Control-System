@@ -377,27 +377,47 @@
 }
 
 .pm-org-strip-chip {
-    -fx-padding: 4 7;
+    -fx-padding: 5 8 4 8;
     -fx-background-insets: 0;
+}
+
+/* 上段：ブラウザ風タブ（上辺のみ丸、下辺はフラットで重なりやすく） */
+.pm-org-strip-chip.pm-org-strip-browser-tab {
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.38), 4, 0.22, 0, 1);
 }
 
 .pm-org-strip-chip-selected {
     -fx-border-color: -fx-accent;
     -fx-border-width: 2;
-    -fx-border-radius: 6;
+    -fx-background-insets: 0;
 }
 
 .pm-org-strip-chip .label.pm-org-strip-chip-label {
-    -fx-line-spacing: -1px;
+    -fx-line-spacing: 0;
 }
 
-/* ツリー行左：保存色の細いスウォッチ（全文ラベルは右側） */
-.pm-org-tree-swatch-empty {
-    -fx-border-color: derive(-fx-text-box-border, -8%);
+/* ツリー：色付きピル（添付モックのノード） */
+.pm-org-tree-pill {
+    -fx-padding: 6 12 6 12;
+    -fx-background-insets: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 5, 0.2, 0, 1);
+}
+
+.pm-org-tree-pill-empty {
+    -fx-background-color: derive(-fx-control-inner-background, -10%);
+    -fx-border-color: derive(-fx-text-box-border, -6%);
     -fx-border-width: 1;
-    -fx-border-radius: 3;
-    -fx-background-color: derive(-fx-control-inner-background, -8%);
-    -fx-background-radius: 3;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.pm-org-tree-pill-selected {
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 2;
+}
+
+.pm-org-tree-pill .label.pm-org-tree-pill-label {
+    -fx-padding: 0 2 0 2;
 }
 
 .pm-main-shell-tab-organizer .text-field {
@@ -411,27 +431,24 @@
     -fx-border-width: 1;
 }
 
-/* タブ整理ツリー：薄い区切り＋左ガイドで階層がつながった見え方 */
+/* タブ整理ツリー：行背景は薄く、ノードはピル側で表現（接続線はコード描画） */
 .pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined {
     -fx-background-color: derive(-fx-base, -5%);
 }
 
 .pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled {
-    -fx-border-width: 0 0 1 1;
-    -fx-border-color:
-        transparent
-        transparent
-        derive(-fx-control-inner-background, -22%)
-        derive(-fx-control-inner-background, -32%);
-    -fx-padding: 3 6 4 6;
+    -fx-background-color: transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent derive(-fx-control-inner-background, -24%) transparent;
+    -fx-padding: 3 4 5 2;
 }
 
 .pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled:selected {
-    -fx-background-color: derive(-fx-accent, 88%);
+    -fx-background-color: transparent;
 }
 
 .pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled:hover {
-    -fx-background-color: derive(-fx-control-inner-background, -6%);
+    -fx-background-color: derive(-fx-control-inner-background, -5%);
 }
 
 /* ツリー行左：メインタブ見出しのミニプレビュー */

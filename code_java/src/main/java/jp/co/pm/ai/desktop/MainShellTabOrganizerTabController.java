@@ -1,18 +1,19 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.control.Alert;
@@ -29,13 +30,14 @@ import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.ClipboardContent;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
-import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.HBox;
+import javafx.scene.Node;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.shape.Line;
+import javafx.scene.shape.Polyline;
 import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
@@ -54,9 +56,13 @@ public final class MainShellTabOrganizerTabController {
     private static final DataFormat ROW_MOVE_MARKER =
             new DataFormat("application/x-pm-main-shell-tab-org-move");
 
-    private static final double PREVIEW_STRIP_CHIP_W = 184.0;
-    private static final double PREVIEW_STRIP_CHIP_H = 46.0;
-    private static final double PREVIEW_STRIP_OVERLAP = 54.0;
+    /** ブラウザ型タブ列：やや細め・高めで横に多く並べる */
+    private static final double PREVIEW_STRIP_CHIP_W = 132.0;
+    private static final double PREVIEW_STRIP_CHIP_H = 36.0;
+    private static final double PREVIEW_STRIP_OVERLAP = 50.0;
+
+    private static final double TREE_INDENT_STEP = 22.0;
+    private static final double TREE_CONNECTOR_ROW_H = 30.0;
 
     @FXML
     private TreeView<OrgRow> treeView;
@@ -93,6 +99,8 @@ public final class MainShellTabOrganizerTabController {
 
     private ChangeListener<TreeItem<OrgRow>> treeSelectionListener;
 
+    private boolean treeSelectionRefreshHooked;
+
     @FXML
     private void initialize() {
         if (colorPicker != null) {
@@ -121,6 +129,18 @@ public final class MainShellTabOrganizerTabController {
                         syncPreviewStripChipHighlight();
                     };
             treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
+        }
+        if (treeView != null && !treeSelectionRefreshHooked) {
+            treeSelectionRefreshHooked = true;
+            treeView.getSelectionModel()
+                    .getSelectedItems()
+                    .addListener(
+                            (ListChangeListener<TreeItem<OrgRow>>)
+                                    c -> {
+                                        if (treeView != null) {
+                                            treeView.refresh();
+                                        }
+                                    });
         }
         installHeaderGlowControls();
         reloadTreeFromShell();
@@ -654,6 +674,14 @@ public final class MainShellTabOrganizerTabController {
             }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
+
+        /** ツリー色ピル／ブラウザ型プレビュー用の短い見出し（[グループ] プレフィックスなし）。 */
+        String treePillPrimaryLabel(MainShellController shellCtl) {
+            if (kind == Kind.GROUP) {
+                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
+            }
+            return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
+        }
     }
 
     private void rebuildPreviewStrip() {
@@ -700,29 +728,30 @@ public final class MainShellTabOrganizerTabController {
         chip.setPrefSize(PREVIEW_STRIP_CHIP_W, PREVIEW_STRIP_CHIP_H);
         chip.setMinSize(PREVIEW_STRIP_CHIP_W, PREVIEW_STRIP_CHIP_H);
         chip.setMaxHeight(PREVIEW_STRIP_CHIP_H);
-        chip.getStyleClass().setAll("pm-org-strip-chip");
+        chip.getStyleClass().setAll("pm-org-strip-chip", "pm-org-strip-browser-tab");
 
         String fullTitle = row.treeDetailWithoutHex(shell);
-        Label lab = new Label(fullTitle);
-        lab.setWrapText(true);
+        String pillTitle = row.treePillPrimaryLabel(shell);
+        Label lab = new Label(pillTitle);
+        lab.setWrapText(false);
         lab.setTextAlignment(TextAlignment.CENTER);
         lab.setAlignment(Pos.CENTER);
-        lab.setMaxWidth(PREVIEW_STRIP_CHIP_W - 12);
+        lab.setMaxWidth(PREVIEW_STRIP_CHIP_W - 10);
         lab.getStyleClass().add("pm-org-strip-chip-label");
         Tooltip.install(chip, new Tooltip(fullTitle));
 
         String hex = row.colorHex;
         if (hex != null && !hex.isBlank()) {
-            chip.setStyle(shell.tabOrganizerPreviewChipSurfaceStyle(hex));
-            lab.setStyle(
-                    "-fx-text-fill: "
-                            + shell.tabOrganizerPreviewChipLabelTextFill(hex)
-                            + "; -fx-font-size: 10px; -fx-font-weight: bold;");
+            chip.setStyle(
+                    shell.tabOrganizerPreviewChipSurfaceStyle(hex)
+                            + " -fx-background-radius: 10 10 0 0; -fx-border-radius: 10 10 0 0;");
+            // 添付イメージどおりブラウザタブは白文字基調（メインシェル選択タブの見えに寄せる）
+            lab.setStyle("-fx-text-fill: #f8fafc; -fx-font-size: 10.5px; -fx-font-weight: bold;");
         } else {
             chip.getStyleClass().add("pm-org-tab-preview-chip-empty");
             chip.setStyle("");
             lab.setStyle(
-                    "-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: "
+                    "-fx-font-size: 10.5px; -fx-font-weight: bold; -fx-text-fill: "
                             + shell.tabOrganizerPreviewChipLabelTextFill("")
                             + ";");
         }
@@ -764,6 +793,54 @@ public final class MainShellTabOrganizerTabController {
         }
     }
 
+    /** ルート直下から見て各階層で「末っ子か」を末端から順に並べたリスト（接続線描画用）。 */
+    private static List<Boolean> lastAncestorChain(
+            TreeItem<OrgRow> item, TreeItem<OrgRow> invisibleRoot) {
+        LinkedList<Boolean> chain = new LinkedList<>();
+        TreeItem<OrgRow> n = item;
+        while (n != null && n.getParent() != null && n.getParent() != invisibleRoot) {
+            TreeItem<OrgRow> p = n.getParent();
+            ObservableList<TreeItem<OrgRow>> sibs = p.getChildren();
+            boolean last = !sibs.isEmpty() && sibs.indexOf(n) == sibs.size() - 1;
+            chain.addFirst(last);
+            n = p;
+        }
+        return new ArrayList<>(chain);
+    }
+
+    /** ツリー接続線（縦＋最深段の L 字）。幅は深さ×{@link #TREE_INDENT_STEP}。 */
+    private static Pane buildTreeConnectorPane(List<Boolean> chain, double rowH) {
+        Pane pane = new Pane();
+        int depth = chain.size();
+        double w = depth * TREE_INDENT_STEP;
+        pane.setPrefWidth(w);
+        pane.setMinWidth(w);
+        if (depth <= 0) {
+            return pane;
+        }
+        double h = Math.max(26, rowH);
+        double midY = h * 0.42;
+        Color lc = Color.web("#5ba9ff");
+        for (int lev = 0; lev < depth; lev++) {
+            double x = lev * TREE_INDENT_STEP + TREE_INDENT_STEP / 2.0;
+            boolean lastAtLevel = chain.get(lev);
+            if (lev < depth - 1) {
+                double yEnd = lastAtLevel ? midY : h;
+                Line vl = new Line(x, 0, x, yEnd);
+                vl.setStroke(lc);
+                vl.setStrokeWidth(1.35);
+                pane.getChildren().add(vl);
+            } else {
+                Polyline elbow = new Polyline(x, 0, x, midY, x + 13, midY);
+                elbow.setStroke(lc);
+                elbow.setFill(Color.TRANSPARENT);
+                elbow.setStrokeWidth(1.35);
+                pane.getChildren().add(elbow);
+            }
+        }
+        return pane;
+    }
+
     /** {@link TreeView} 用セルファクトリはコントローラ初期化後にシェルへバインドしてから設定する。 */
     void installTreeCellFactory() {
         if (treeView == null) {
@@ -786,41 +863,72 @@ public final class MainShellTabOrganizerTabController {
                         }
                         TreeView<OrgRow> tv = getTreeView();
                         TreeItem<OrgRow> ti = getTreeItem();
-                        TreeItem<?> root = tv != null ? tv.getRoot() : null;
-                        int depth = 0;
-                        TreeItem<?> walk = ti;
-                        while (walk != null && walk != root && walk.getParent() != null) {
-                            depth++;
-                            walk = walk.getParent();
-                        }
+                        TreeItem<OrgRow> invisibleRoot = tv != null ? tv.getRoot() : null;
+                        List<Boolean> chain =
+                                invisibleRoot != null && ti != null
+                                        ? lastAncestorChain(ti, invisibleRoot)
+                                        : List.of();
+                        int depth = chain.size();
                         getStyleClass().add("pm-org-depth-" + Math.min(depth, 12));
 
-                        Region swatch = new Region();
-                        swatch.setPrefSize(12, 22);
-                        swatch.setMinSize(12, 22);
-                        swatch.setMaxSize(12, 22);
-                        swatch.getStyleClass().add("pm-org-tree-swatch");
-                        String hx = row.colorHex;
-                        if (hx != null && !hx.isBlank()) {
-                            try {
-                                Color fill = Color.web(hx.strip());
-                                swatch.setBackground(
-                                        new Background(
-                                                new BackgroundFill(fill, new CornerRadii(3), Insets.EMPTY)));
-                            } catch (IllegalArgumentException ex) {
-                                swatch.getStyleClass().add("pm-org-tree-swatch-empty");
-                            }
+                        Node indentGraphic;
+                        if (depth > 0) {
+                            indentGraphic = buildTreeConnectorPane(chain, TREE_CONNECTOR_ROW_H);
                         } else {
-                            swatch.getStyleClass().add("pm-org-tree-swatch-empty");
+                            Region z = new Region();
+                            z.setMinWidth(0);
+                            z.setPrefWidth(0);
+                            z.setMaxWidth(0);
+                            indentGraphic = z;
                         }
 
-                        Label detail = new Label(row.treeDetailWithoutHex(shell));
-                        detail.setWrapText(false);
-                        HBox.setHgrow(detail, Priority.ALWAYS);
+                        StackPane pill = new StackPane();
+                        pill.setMinHeight(30);
+                        pill.setPrefHeight(32);
+                        pill.getStyleClass().setAll("pm-org-tree-pill");
+                        String pillTitle = row.treePillPrimaryLabel(shell);
+                        Label lab = new Label(pillTitle);
+                        lab.setWrapText(false);
+                        lab.setMaxWidth(Double.MAX_VALUE);
+                        lab.setAlignment(Pos.CENTER_LEFT);
+                        lab.getStyleClass().add("pm-org-tree-pill-label");
+                        String hx = row.colorHex;
+                        if (hx != null && !hx.isBlank() && shell != null) {
+                            pill.setStyle(
+                                    shell.tabOrganizerPreviewChipSurfaceStyle(hx)
+                                            + " -fx-background-radius: 8 8 8 8; -fx-border-radius: 8 8 8 8;");
+                            lab.setStyle(
+                                    "-fx-text-fill: #f8fafc; -fx-font-size: 11px; -fx-font-weight: bold;");
+                            pill.getStyleClass().remove("pm-org-tree-pill-empty");
+                        } else {
+                            pill.setStyle("");
+                            pill.getStyleClass().add("pm-org-tree-pill-empty");
+                            lab.setStyle(
+                                    "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
+                                            + (shell != null
+                                                    ? shell.tabOrganizerPreviewChipLabelTextFill("")
+                                                    : "#94a3b8")
+                                            + ";");
+                        }
+                        Tooltip.install(
+                                pill,
+                                new Tooltip(row.treeDetailWithoutHex(shell)));
+                        pill.getChildren().setAll(lab);
+                        HBox.setHgrow(pill, Priority.ALWAYS);
 
-                        HBox rowBox = new HBox(8);
+                        boolean sel =
+                                tv != null
+                                        && tv.getSelectionModel()
+                                                .getSelectedItems()
+                                                .contains(ti);
+                        pill.getStyleClass().remove("pm-org-tree-pill-selected");
+                        if (sel) {
+                            pill.getStyleClass().add("pm-org-tree-pill-selected");
+                        }
+
+                        HBox rowBox = new HBox(6);
                         rowBox.setAlignment(Pos.CENTER_LEFT);
-                        rowBox.getChildren().addAll(swatch, detail);
+                        rowBox.getChildren().addAll(indentGraphic, pill);
                         setText(null);
                         setGraphic(rowBox);
                     }
