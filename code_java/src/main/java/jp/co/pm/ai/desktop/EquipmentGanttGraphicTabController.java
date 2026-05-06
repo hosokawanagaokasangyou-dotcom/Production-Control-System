@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -47,6 +48,8 @@ import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+
 /**
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
  * グラフィック調整ツールバーのレイアウトは {@code EquipmentGanttGraphicTab.fxml} の FlowPane で定義する。
@@ -54,6 +57,10 @@ import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 public final class EquipmentGanttGraphicTabController {
 
     private static final String DEFAULT_SHEET = "結果_設備ガント";
+
+    /** {@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane} の時刻列検出と整合する見出し判定（ログ・検証用） */
+    private static final Pattern HH_MM_COLUMN_HEADER =
+            Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$");
 
     private static final String HINT =
             "計画結果ビューアと同じ 計画*.json（または旧 production_plan_multi_day*.json）を指定します。"
@@ -601,6 +608,39 @@ public final class EquipmentGanttGraphicTabController {
             }
 
             SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
+            // #region agent log
+            try {
+                Path contractCand = resolveEquipmentContractSibling(planPath);
+                Map<String, Object> eg = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+                eg.put("planInput", planPath.getFileName().toString());
+                eg.put("loadDescription", loaded.description());
+                eg.put("contractMerged", loaded.description().contains("設備ガント帯"));
+                eg.put(
+                        "contractSiblingFileName",
+                        contractCand != null ? contractCand.getFileName().toString() : "");
+                eg.put(
+                        "contractFileExists",
+                        Boolean.valueOf(contractCand != null && Files.isRegularFile(contractCand)));
+                JsonTableIo.SheetTable def = loaded.sheets().get(DEFAULT_SHEET);
+                if (def != null) {
+                    eg.put("defaultSheetRowCount", Integer.valueOf(def.rows().size()));
+                    eg.put(
+                            "defaultSheetTimelineNonEmptyCells",
+                            Integer.valueOf(countNonEmptyTimelineSlotCells(def, 600)));
+                } else {
+                    eg.put("defaultSheetRowCount", Integer.valueOf(-1));
+                    eg.put("defaultSheetTimelineNonEmptyCells", Integer.valueOf(-1));
+                }
+                AgentDebugLog.appendStructured(
+                        shell != null ? shell.snapshotUiEnv() : Map.of(),
+                        "81ed4a",
+                        "EG1",
+                        "EquipmentGanttGraphicTabController.reloadFromFields",
+                        "equipment gantt sheet load",
+                        eg);
+            } catch (Throwable ignored) {
+            }
+            // #endregion
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             loadedContractBadgeRows = loaded.contractBadgeSlotRows();
             lastLoadedPlanPath = planPath.toString();
@@ -837,6 +877,40 @@ public final class EquipmentGanttGraphicTabController {
             }
         }
         return GanttSheetKind.DEFAULT;
+    }
+
+    /**
+     * HH:MM 列の非空白セル数（先頭 {@code maxRows} 行まで）。契約マージ後の表にタイムライン文言があるかの簡易検証用。
+     */
+    private static int countNonEmptyTimelineSlotCells(JsonTableIo.SheetTable st, int maxRows) {
+        List<String> cols = st.columns();
+        List<String> slotHeaders = new ArrayList<>();
+        for (String h : cols) {
+            if (h != null && HH_MM_COLUMN_HEADER.matcher(h).matches()) {
+                slotHeaders.add(h);
+            }
+        }
+        if (slotHeaders.isEmpty()) {
+            return 0;
+        }
+        int nonEmpty = 0;
+        int rowsSeen = 0;
+        for (Map<String, String> row : st.rows()) {
+            if (rowsSeen >= maxRows) {
+                break;
+            }
+            rowsSeen++;
+            if (row == null) {
+                continue;
+            }
+            for (String h : slotHeaders) {
+                String v = row.get(h);
+                if (v != null && !v.isBlank()) {
+                    nonEmpty++;
+                }
+            }
+        }
+        return nonEmpty;
     }
 
     private static Map<String, JsonTableIo.SheetTable> filterEquipmentTimelineSheets(
