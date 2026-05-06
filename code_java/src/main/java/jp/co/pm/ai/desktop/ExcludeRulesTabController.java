@@ -6,7 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -218,12 +222,26 @@ public final class ExcludeRulesTabController {
             shell.appendLog("[exclude-json] path empty");
             return;
         }
+        Optional<Path> resolvedOpt = resolveExistingExcludeRulesJsonPath(p);
+        if (resolvedOpt.isEmpty()) {
+            shell.appendLog(
+                    "[exclude-json] 読込失敗: ファイルなし（入力パスおよび code/json 等の既定候補）。パス="
+                            + p);
+            return;
+        }
+        Path fp = resolvedOpt.get();
+        Path requestedAbs = Path.of(p).toAbsolutePath().normalize();
+        if (!fp.equals(requestedAbs)) {
+            pathField.setText(fp.toString());
+            shell.appendLog("[exclude-json] 実在パスへ切替えて読込: " + fp);
+        }
         try {
-            String s = Files.readString(Path.of(p), StandardCharsets.UTF_8);
+            String s = Files.readString(fp, StandardCharsets.UTF_8);
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
-                d.put("path", p);
+                d.put("pathRequested", p);
+                d.put("pathResolved", fp.toString());
                 d.put("charsRead", s.length());
                 d.put("source", "onLoadButtonAction");
                 AgentDebugLog.appendStructured(
@@ -235,12 +253,12 @@ public final class ExcludeRulesTabController {
                         d);
             }
             // #endregion
-            setBodyAndSyncTable(s, "[exclude-json] load ok: " + p);
+            setBodyAndSyncTable(s, "[exclude-json] load ok: " + fp);
         } catch (IOException ex) {
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
-                d.put("path", p);
+                d.put("path", fp.toString());
                 d.put("error", ex.getClass().getSimpleName());
                 d.put("message", ex.getMessage());
                 AgentDebugLog.appendStructured(
@@ -301,25 +319,38 @@ public final class ExcludeRulesTabController {
         if (p.isEmpty()) {
             return;
         }
+        Optional<Path> resolvedOpt = resolveExistingExcludeRulesJsonPath(p);
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                dbgUiEnv(),
+                AGENT_DEBUG_SESSION_ID,
+                "H1",
+                "ExcludeRulesTabController.tryStartupLoadFromPathField",
+                "resolveExistingExcludeRulesJsonPath result",
+                Map.of(
+                        "requested",
+                        p,
+                        "resolved",
+                        resolvedOpt.map(Path::toString).orElse("")));
+        // #endregion
+        if (resolvedOpt.isEmpty()) {
+            shell.appendLog(
+                    "[exclude-json] セッション復元スキップ: ファイルなし（入力パスおよび code/json 等の既定候補）。パス="
+                            + p);
+            return;
+        }
+        Path fp = resolvedOpt.get();
+        Path requestedAbs = Path.of(p).toAbsolutePath().normalize();
+        if (!fp.equals(requestedAbs)) {
+            pathField.setText(fp.toString());
+            shell.appendLog("[exclude-json] 実在パスへ切替え（復元）: " + fp);
+        }
         try {
-            Path fp = Path.of(p);
-            if (!Files.isRegularFile(fp)) {
-                // #region agent log
-                AgentDebugLog.appendStructured(
-                        dbgUiEnv(),
-                        AGENT_DEBUG_SESSION_ID,
-                        "H1",
-                        "ExcludeRulesTabController.tryStartupLoadFromPathField",
-                        "skip load: not a regular file",
-                        Map.of("path", p));
-                // #endregion
-                return;
-            }
             String jsonText = Files.readString(fp, StandardCharsets.UTF_8);
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
-                d.put("path", p);
+                d.put("path", fp.toString());
                 d.put("charsRead", jsonText.length());
                 AgentDebugLog.appendStructured(
                         dbgUiEnv(),
@@ -330,12 +361,12 @@ public final class ExcludeRulesTabController {
                         d);
             }
             // #endregion
-            setBodyAndSyncTable(jsonText, "[exclude-json] restored session: " + p);
+            setBodyAndSyncTable(jsonText, "[exclude-json] restored session: " + fp);
         } catch (IOException ex) {
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
-                d.put("path", p);
+                d.put("path", fp.toString());
                 d.put("error", ex.getClass().getSimpleName());
                 d.put("message", ex.getMessage());
                 AgentDebugLog.appendStructured(
@@ -489,6 +520,44 @@ public final class ExcludeRulesTabController {
 
     private Map<String, String> dbgUiEnv() {
         return shell != null ? shell.snapshotUiEnv() : Map.of();
+    }
+
+    /**
+     * 入力パスが誤ったサブフォルダ（例: Production-Control-System）を挟んでいても、リポジトリの {@code
+     * code/json/stage1_exclude_rules.json} 等へ読込をフォールバックする。
+     */
+    private Optional<Path> resolveExistingExcludeRulesJsonPath(String requested) {
+        Map<String, String> ui = dbgUiEnv();
+        List<Path> candidates = new ArrayList<>();
+        if (requested != null && !requested.isBlank()) {
+            candidates.add(Path.of(requested.trim()));
+        }
+        String fileName = AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME;
+        if (requested != null && !requested.isBlank()) {
+            Path fn = Path.of(requested.trim()).getFileName();
+            if (fn != null && !fn.toString().isBlank()) {
+                fileName = fn.toString();
+            }
+        }
+        Path repo = AppPaths.resolveRepoRoot(ui);
+        candidates.add(repo.resolve("code").resolve("json").resolve(fileName));
+        candidates.add(AppPaths.stage1ExcludeRulesJsonPath(ui));
+        candidates.add(AppPaths.stage1ExcludeRulesJsonPathLegacyUnderPython(ui));
+        Path parent = repo.getParent();
+        if (parent != null) {
+            candidates.add(parent.resolve("code").resolve("json").resolve(fileName));
+        }
+        Set<Path> seen = new LinkedHashSet<>();
+        for (Path c : candidates) {
+            Path n = c.toAbsolutePath().normalize();
+            if (!seen.add(n)) {
+                continue;
+            }
+            if (Files.isRegularFile(n)) {
+                return Optional.of(n);
+            }
+        }
+        return Optional.empty();
     }
 
     private void setBodyTextProgrammatically(String text) {
