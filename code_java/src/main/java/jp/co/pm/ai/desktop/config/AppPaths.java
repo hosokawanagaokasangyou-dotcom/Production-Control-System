@@ -181,6 +181,14 @@ public final class AppPaths {
     public static final String KEY_PM_AI_CMD_PAUSE_ON_ERROR = "PM_AI_CMD_PAUSE_ON_ERROR";
 
     /**
+     * ポータブル配布（{@code pm-ai-data}）の正本リポジトリルート（ネットワーク共有等）。{@link #VERSION_TXT_FILE_NAME} で版比較し、新しいときのみ起動時同期する。フォルダ系だが {@link #FOLDER_PATH_ENV_KEYS} には含めない（ルート付け替えで破綻するため）。
+     */
+    public static final String KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR = "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR";
+
+    /** リポジトリ直下および {@code pm-ai-data} 直下で共用する版ファイル名。 */
+    public static final String VERSION_TXT_FILE_NAME = "version.txt";
+
+    /**
      * Env keys whose value is a directory (folder picker in the UI).
      */
     private static final Set<String> FOLDER_PATH_ENV_KEYS = Set.of(
@@ -191,7 +199,8 @@ public final class AppPaths {
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
-            KEY_COMPARE_GANTT_SNAPSHOT_DIR);
+            KEY_COMPARE_GANTT_SNAPSHOT_DIR,
+            KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
 
     /** {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。 */
     private static final List<String> FOLDER_PATH_NORMALIZE_ORDER =

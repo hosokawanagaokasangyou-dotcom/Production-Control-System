@@ -79,3 +79,4 @@ PM_AI_CMD_PAUSE_ON_ERROR	1	setup_environment 等: 成功・失敗とも終了時
 PM_AI_SETUP_COMPLETION_MSGBOX	1	setup_environment: Windows で成功時に MessageBox。0/false/no/off で無効。
 PM_AI_SPLASH_XLWINGS		1/true 等で xlwings 経由のスプラッシュログ追記を有効（段階実行で利用する場合）
 PM_AI_XLWINGS_SPLASH_MACRO	スプラッシュ表示.SplashLog_AppendChunk	PM_AI_SPLASH_XLWINGS 有効時に呼ぶ VBA マクロの修飾名
+PM_AI_PORTABLE_BUNDLE_SOURCE_DIR		ポータブル配布（pm-ai-data）の正本リポジトリルート（UNC 可）。version.txt がローカルより新しいときのみ起動時に pm-ai-data を同期。空なら自動更新なし（情報表示のみ）。

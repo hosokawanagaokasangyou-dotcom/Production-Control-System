@@ -358,6 +358,7 @@ function Copy-BundleToDist {
         'ワークスペースの複製元: git ls-files -co --exclude-standard（.gitignore で無視されるものは含みません）。',
         '除外追加: code_java/build_cache, package_input, dist（パッケージ作業用）。',
         'PmAiDesktop.exe と同じ階層にあります。',
+        '版はリポジトリ直下 version.txt（この複製に含まれる）。正本フォルダは環境変数 PM_AI_PORTABLE_BUNDLE_SOURCE_DIR で指定して起動時同期できます。',
         'Python: runtime\python-embed\python.exe（requirements 済みキャッシュを複製）',
         '入力フォルダの既定: input\task-input , input\actual-detail（アプリ起動時に参照されます）',
         'セッション ~/.pm-ai-desktop はユーザーごとに別 PC で初期化されます。',
@@ -382,7 +383,37 @@ $JPACKAGE = Resolve-JpackageExe
 $proj = Get-MavenProjectInfo -PomPath $POM
 
 $APP_NAME = 'PmAiDesktop'
+$VersionTxtPath = Join-Path $WorkspaceRoot 'version.txt'
 $APP_VERSION = $proj.Version -replace '-SNAPSHOT$', '.0'
+if (Test-Path -LiteralPath $VersionTxtPath) {
+    $rawTxt = (Get-Content -LiteralPath $VersionTxtPath -Raw -Encoding UTF8).Trim()
+    $firstLine = ($rawTxt -split "`r?`n")[0].Trim()
+    if (-not [string]::IsNullOrWhiteSpace($firstLine)) {
+        $sbDigits = [System.Text.StringBuilder]::new()
+        foreach ($ch in $firstLine.ToCharArray()) {
+            if ([char]::IsDigit($ch) -or ($ch -eq '.')) {
+                [void]$sbDigits.Append($ch)
+            }
+        }
+        $digitsdots = $sbDigits.ToString()
+        if (-not [string]::IsNullOrWhiteSpace($digitsdots)) {
+            while ($digitsdots.Contains('..')) {
+                $digitsdots = $digitsdots.Replace('..', '.')
+            }
+            if ($digitsdots.StartsWith('.')) {
+                $digitsdots = '0' + $digitsdots
+            }
+            if ($digitsdots.EndsWith('.')) {
+                $digitsdots = $digitsdots + '0'
+            }
+            $APP_VERSION = $digitsdots
+            # jpackage の --app-version は major.minor.micro 形式が無難
+            if ($APP_VERSION -match '^\d+\.\d+$') {
+                $APP_VERSION = "$APP_VERSION.0"
+            }
+        }
+    }
+}
 
 Write-Host "--- Step 1: Maven package ---" -ForegroundColor Cyan
 $mvnw = Join-Path $Root 'mvnw.cmd'

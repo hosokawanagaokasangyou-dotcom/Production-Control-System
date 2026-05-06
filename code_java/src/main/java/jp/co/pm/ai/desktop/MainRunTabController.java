@@ -41,6 +41,7 @@ import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.AppVersionInfo;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
@@ -110,6 +111,9 @@ public final class MainRunTabController {
 
     @FXML
     private Label prismPipelineLabel;
+
+    @FXML
+    private Label appVersionLabel;
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -419,6 +423,17 @@ public final class MainRunTabController {
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        refreshAppVersionLabel();
+    }
+
+    /** 実行・ログタブの {@code version.txt} 表示を更新する（ポータブル同期後など）。 */
+    void refreshAppVersionLabel() {
+        if (appVersionLabel == null || shell == null) {
+            return;
+        }
+        Path cwd = Paths.get(System.getProperty("user.dir", "."));
+        String v = AppVersionInfo.resolveDisplayedVersion(cwd, shell.snapshotUiEnv());
+        appVersionLabel.setText("バージョン " + v);
     }
 
     /**

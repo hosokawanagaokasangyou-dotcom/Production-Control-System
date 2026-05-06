@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
@@ -43,7 +45,9 @@ import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -62,6 +66,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
@@ -117,7 +122,8 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
-                    AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
+                    AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH,
+                    AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
 
     /** Keys in {@link #BOOTSTRAP_ORDER} for quick membership checks. */
     private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
@@ -444,6 +450,8 @@ public final class MainShellController {
         applyRepoFolderPathNormalization();
 
         probeNetworkSourceDirsAtStartup();
+
+        Platform.runLater(this::maybePortableBundleSelfUpdate);
 
         primaryStage.setOnCloseRequest(
                 e -> {
@@ -2792,6 +2800,107 @@ public final class MainShellController {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
                 ? "python"
                 : "python3";
+    }
+
+    /**
+     * ポータブル配布: 正本が {@link AppPaths#KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} に設定され、{@code version.txt} がローカルより新しいときに
+     * {@code pm-ai-data} を同期する。
+     */
+    private void maybePortableBundleSelfUpdate() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        if (!PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
+            return;
+        }
+        Map<String, String> ui = collectUiEnv();
+        String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
+        if (raw == null || raw.isBlank()) {
+            Alert a = new Alert(AlertType.INFORMATION);
+            a.initOwner(primaryStage);
+            applyAlertStylesheetsFromOwner(a);
+            a.setTitle("自動バージョンアップ");
+            a.setHeaderText(null);
+            a.setContentText(
+                    "ポータブル配布では "
+                            + AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR
+                            + "（正本フォルダ）が空です。\n"
+                            + "自動バージョンアップは行いません。そのまま続行します。");
+            a.show();
+            appendLog(
+                    "[startup] "
+                            + AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR
+                            + " が未設定のためポータル同期をスキップしました。");
+            return;
+        }
+        Path canonical = Path.of(raw.trim()).toAbsolutePath().normalize();
+        Path localData = cwd.resolve("pm-ai-data").normalize();
+        if (!PortableBundleSelfUpdater.isReadableDirectory(canonical)) {
+            appendLog(
+                    "[startup] 正本フォルダにアクセスできません: "
+                            + PortableBundleSelfUpdater.safePathForLog(canonical));
+            Alert w = new Alert(AlertType.WARNING);
+            w.initOwner(primaryStage);
+            applyAlertStylesheetsFromOwner(w);
+            w.setTitle("自動バージョンアップ");
+            w.setHeaderText(null);
+            w.setContentText(
+                    "正本フォルダを開けませんでした。自動バージョンアップはスキップします。\n"
+                            + PortableBundleSelfUpdater.safePathForLog(canonical));
+            w.show();
+            return;
+        }
+        Optional<BigDecimal> cv = PortableBundleSelfUpdater.readBundleVersion(canonical);
+        Optional<BigDecimal> lv = PortableBundleSelfUpdater.readLocalBundleVersion(localData);
+        if (!PortableBundleSelfUpdater.shouldUpdate(cv, lv)) {
+            return;
+        }
+        Stage wait = new Stage();
+        wait.initModality(Modality.APPLICATION_MODAL);
+        wait.initOwner(primaryStage);
+        wait.setTitle("自動バージョンアップ");
+        VBox root = new VBox(16);
+        root.setStyle("-fx-padding: 16;");
+        Label msg = new Label("正本から pm-ai-data を更新しています…");
+        ProgressIndicator pi = new ProgressIndicator();
+        pi.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+        root.getChildren().addAll(msg, pi);
+        wait.setScene(new Scene(root));
+        wait.show();
+
+        Task<Void> task =
+                new Task<>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        PortableBundleSelfUpdater.syncFromCanonical(
+                                canonical,
+                                localData,
+                                line -> Platform.runLater(() -> appendLog(line)));
+                        return null;
+                    }
+                };
+        task.setOnSucceeded(
+                e -> {
+                    wait.close();
+                    applyBundledPortableDefaultsIfPresent();
+                    mainRunTabController.refreshAppVersionLabel();
+                    appendLog("[startup] ポータブル同期が完了しました（version.txt に従いファイルを更新）。");
+                });
+        task.setOnFailed(
+                e -> {
+                    wait.close();
+                    Throwable ex = task.getException();
+                    String detail = ex != null ? ex.getMessage() : "不明なエラー";
+                    appendLog("[startup] ポータル同期に失敗: " + detail);
+                    Alert er = new Alert(AlertType.WARNING);
+                    er.initOwner(primaryStage);
+                    applyAlertStylesheetsFromOwner(er);
+                    er.setTitle("自動バージョンアップ");
+                    er.setHeaderText(null);
+                    er.setContentText("正本からの同期に失敗しました。\n" + detail);
+                    er.show();
+                });
+        Thread t = new Thread(task, "pm-ai-portable-sync");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

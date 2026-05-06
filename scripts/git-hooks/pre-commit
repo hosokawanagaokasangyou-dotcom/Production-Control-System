@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Git pre-commit: bump repo-root version.txt by 0.01 and stage it (requires python3).
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+VT="$ROOT/version.txt"
+if [[ ! -f "$VT" ]]; then
+  exit 0
+fi
+python3 "$ROOT/scripts/bump_version_txt.py" "$VT"
+git add -- "$VT"

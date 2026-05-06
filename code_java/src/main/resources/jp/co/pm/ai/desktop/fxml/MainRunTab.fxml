@@ -23,6 +23,9 @@
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
+            <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
+            </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>
                     <Insets bottom="0.0" left="12.0" right="0.0" top="12.0" />

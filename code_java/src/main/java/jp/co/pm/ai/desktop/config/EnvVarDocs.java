@@ -29,6 +29,11 @@ public final class EnvVarDocs {
                 "Production-Control-System の親（リポジトリ根）。"
                         + "PM_AI_CODE_PYTHON_DIR 未指定時の推定に使用。");
         put(
+                "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
+                "ポータブル配布（PmAiDesktop.exe と pm-ai-data）向け。正本リポジトリルートのパス（ネットワーク共有・ローカル Clone）。"
+                        + "リポジトリ直下の version.txt がローカル pm-ai-data より新しいときのみ、起動時に pm-ai-data を同期する。"
+                        + "空のときは自動更新しない（情報表示のみ）。フォルダパス（UNC 可）。");
+        put(
                 "PM_AI_OUTPUT_DIR",
                 "段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output"
                         + " に相当）。未設定時は PM_AI_REPO_ROOT"
