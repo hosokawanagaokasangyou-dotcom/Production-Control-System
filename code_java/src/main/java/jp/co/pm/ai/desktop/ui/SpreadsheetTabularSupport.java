@@ -501,7 +501,13 @@ public final class SpreadsheetTabularSupport {
     public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
 
     /**
-     * 計画結果 JSON ビューア：全グリッド行の高さを一括スケールし、フィルタ行以外のセルに折り返しを適用する。
+     * 列フィルタ行（グリッド行 {@link #SPREADSHEET_FILTER_ROW}）の高さ上限（px）。データ行の行高スライダー倍率に
+     * 引きずられて巨大化しないようにする。
+     */
+    private static final double PLAN_RESULT_FILTER_ROW_MAX_HEIGHT_PX = 34.0;
+
+    /**
+     * 計画結果 JSON ビューア：データ行の高さをスケールする（列フィルタ行は上限 px で抑える）。フィルタ行以外のセルに折り返しを適用する。
      *
      * @param cellWrapText {@code true} で折り返し、{@code false} で単行（見切れ）
      * @param rowHeightPercent {@link #PLAN_RESULT_ROW_HEIGHT_PCT_MIN}〜{@link #PLAN_RESULT_ROW_HEIGHT_PCT_MAX}
@@ -522,7 +528,9 @@ public final class SpreadsheetTabularSupport {
                         Math.max(PLAN_RESULT_ROW_HEIGHT_PCT_MIN, pct));
         final double basePx = 24.0;
         final double rowPx = basePx * (pct / 100.0);
-        grid.setRowHeightCallback(row -> rowPx);
+        final double filterRowPx = Math.min(rowPx, PLAN_RESULT_FILTER_ROW_MAX_HEIGHT_PX);
+        grid.setRowHeightCallback(
+                row -> row == SPREADSHEET_FILTER_ROW ? filterRowPx : rowPx);
         List<ObservableList<SpreadsheetCell>> rows = grid.getRows();
         if (rows == null) {
             return;
