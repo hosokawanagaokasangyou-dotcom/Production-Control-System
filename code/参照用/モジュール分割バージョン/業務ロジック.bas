@@ -3902,7 +3902,7 @@ Public Sub 実績設備ガント_のみ更新_実行()
                  "if not exist log mkdir log" & vbCrLf & _
                  "chcp 65001>nul" & vbCrLf & _
                  "echo [actual_gantt] Running plan_refresh_actual_detail_gantt.py ..." & vbCrLf & _
-                 "py -" & PM_AI_SETUP_PY_MINOR & " -u python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
+                 "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\plan_refresh_actual_detail_gantt.py" & vbCrLf & _
                  "set PM_ACT_EXIT=!ERRORLEVEL!" & vbCrLf & _
                  "echo." & vbCrLf & _
                  "echo [actual_gantt] Finished. ERRORLEVEL=!PM_ACT_EXIT!" & vbCrLf & _

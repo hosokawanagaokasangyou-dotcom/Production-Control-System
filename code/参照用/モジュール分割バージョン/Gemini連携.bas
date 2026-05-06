@@ -95,7 +95,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
         Exit Sub
     End If
     
-    pyScript = wbPath & "\python\encrypt_gemini_credentials.py"
+    pyScript = wbPath & "\参照用\参照用\python\encrypt_gemini_credentials.py"
     If Len(Dir(pyScript)) = 0 Then
         MsgBox "次のファイルが見つかりません。" & vbCrLf & pyScript & vbCrLf & vbCrLf & _
                "テストコード直下に python\ フォルダがあり、上記スクリプトがあるか確認してください。", vbCritical
@@ -148,7 +148,7 @@ Public Sub 設定_Gemini認証を暗号化してB1に保存()
     MacroSplash_SetStep "Gemini: Python で認証 JSON を暗号化しています…"
     Set wsh = CreateObject("WScript.Shell")
     gemBat = "@echo off" & vbCrLf & "pushd """ & wbPath & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\encrypt_gemini_credentials.py """ & plainPath & """ """ & outPath & """ --passphrase-file """ & passPath & """ 2> """ & errPath & """" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
     exitCode = RunTempCmdWithConsoleLayout(wsh, gemBat)
     

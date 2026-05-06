@@ -213,7 +213,7 @@ End Function
 ' xlwings RunPython: runpy.run_path Ç≈ python\xlwings_console_runner.py Çé¿çs
 Public Sub XwRunConsoleRunner(ByVal entryPoint As String)
     On Error GoTo EH
-    xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
+    xlwings.RunPython "import os, runpy, xlwings as xw; wb=xw.Book.caller(); p=os.path.join(os.path.dirname(str(wb.fullname)), 'éQè∆óp', 'python', 'xlwings_console_runner.py'); ns=runpy.run_path(p); ns['" & entryPoint & "']()"
     Exit Sub
 EH:
     Err.Raise Err.Number, "XwRunConsoleRunner", "RunPython: " & Err.Description

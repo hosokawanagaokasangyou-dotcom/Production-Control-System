@@ -447,7 +447,7 @@ Public Sub 列設定_結果_タスク一覧_列順表示をPython適用()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "列設定: Python で結果タスク一覧の列順・表示を適用しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_result_task_column_layout.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_result_task_column_layout.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [column-layout] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -507,7 +507,7 @@ Public Sub 列設定_結果_タスク一覧_重複列名を整理()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "列設定: Python で重複列名を整理しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\dedupe_result_task_column_config_sheet.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\dedupe_result_task_column_config_sheet.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dedupe-column-config] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -564,7 +564,7 @@ Public Sub 配台計画_タスク入力_配台試行順番をPythonで再計算()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "配台計画: Python で配台試行順番を再計算しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_plan_input_dispatch_trial_order.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_plan_input_dispatch_trial_order.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [plan-dispatch-trial-order] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -618,7 +618,7 @@ Public Sub 配台計画_タスク入力_試行順を小数キーでPython並べ替え()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "配台計画: 配台試行順番を小数キーで並べ替えています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_plan_input_dispatch_trial_order_sort_by_float_keys.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_plan_input_dispatch_trial_order_sort_by_float_keys.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [plan-dispatch-trial-float-keys] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -674,7 +674,7 @@ Public Sub 配台計画_タスク入力_試行順パターン一覧シートをPythonで作成()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "配台試行順: パターン一覧シートを作成しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_trial_pattern_list_sheet.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_dispatch_trial_pattern_list_sheet.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dispatch-trial-pattern-list] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -695,7 +695,7 @@ End Sub
 ' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン別段階2を実行」
 ' 図形の自動作成: 「配台計画_タスク入力_試行順パターン別段階2ボタンを配置」
 ' ・サマリシート名は planning_core の DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET_NAME（既定「配台試行順_パターン別段階2」）
-' ・python\apply_dispatch_trial_pattern_stage2_batch.py（所要時間大）
+' ・参照用\python\apply_dispatch_trial_pattern_stage2_batch.py（所要時間大）
 '==============================================================================
 Public Sub 配台計画_タスク入力_試行順パターン別段階2をPythonで作成()
     Dim wsh As Object
@@ -730,7 +730,7 @@ Public Sub 配台計画_タスク入力_試行順パターン別段階2をPythonで作成()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "配台試行順: 各パターンで段階2を実行しています（完了までお待ちください）…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_trial_pattern_stage2_batch.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_dispatch_trial_pattern_stage2_batch.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dispatch-trial-pattern-stage2-batch] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"
@@ -749,7 +749,7 @@ End Sub
 '==============================================================================
 ' 配台試行順: サマリで選んだパターンの試行順を「配台計画_タスク入力」へ反映（Python）
 ' 図形のマクロ: 「アニメ付き_配台計画_タスク入力_試行順パターン採用を実行」
-' ・python\apply_dispatch_pattern_stage2_selection.py
+' ・参照用\python\apply_dispatch_pattern_stage2_selection.py
 '==============================================================================
 Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
     Dim wsh As Object
@@ -784,7 +784,7 @@ Public Sub 配台計画_タスク入力_試行順パターン採用をPythonで実行()
     Application.ScreenUpdating = False
     MacroSplash_SetStep "配台試行順: サマリで選んだパターンを計画シートへ反映しています…"
     runBat = "@echo off" & vbCrLf & "pushd """ & targetDir & """" & vbCrLf & "chcp 65001>nul" & vbCrLf & _
-             "py -" & PM_AI_SETUP_PY_MINOR & " -u python\apply_dispatch_pattern_stage2_selection.py" & vbCrLf & _
+             "py -" & PM_AI_SETUP_PY_MINOR & " -u 参照用\python\apply_dispatch_pattern_stage2_selection.py" & vbCrLf & _
              "echo." & vbCrLf & _
              "echo [dispatch-pattern-stage2-selection] ERRORLEVEL=%ERRORLEVEL%" & vbCrLf & _
              "exit /b %ERRORLEVEL%"

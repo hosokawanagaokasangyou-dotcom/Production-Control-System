@@ -640,7 +640,7 @@ Private Sub RunCompareGanttPythonAndImport(ByVal targetDir As String, ByVal snap
              "if not exist log mkdir log" & vbCrLf & _
              "chcp 65001>nul" & vbCrLf & _
              "echo [compare_gantt] Running plan_compare_gantt_from_snapshot.py ..." & vbCrLf & _
-             "py -3 -u python\plan_compare_gantt_from_snapshot.py" & vbCrLf & _
+             "py -3 -u ŽQÆ—p\python\plan_compare_gantt_from_snapshot.py" & vbCrLf & _
              "set PM_CMP_EXIT=!ERRORLEVEL!" & vbCrLf & _
              "(echo !PM_CMP_EXIT!)>log\compare_gantt_exitcode.txt" & vbCrLf & _
              "echo [compare_gantt] Finished. ERRORLEVEL=!PM_CMP_EXIT!" & vbCrLf

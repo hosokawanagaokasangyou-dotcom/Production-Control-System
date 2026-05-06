@@ -167,8 +167,8 @@ End Function
 
 ' ブック直下または python\ 配下の setup_environment.py。戻り値: 相対パス（例 python\setup_environment.py）または空。
 Public Function SetupEnvironmentScriptRelativePath(ByVal workDir As String) As String
-    If Len(Dir(workDir & "\python\setup_environment.py")) > 0 Then
-        SetupEnvironmentScriptRelativePath = "python\setup_environment.py"
+    If Len(Dir(workDir & "\参照用\python\setup_environment.py")) > 0 Then
+        SetupEnvironmentScriptRelativePath = "参照用\python\setup_environment.py"
     ElseIf Len(Dir(workDir & "\setup_environment.py")) > 0 Then
         SetupEnvironmentScriptRelativePath = "setup_environment.py"
     Else
@@ -225,7 +225,7 @@ Public Sub InstallComponentsViaExcelSafeBatch()
     setupRel = SetupEnvironmentScriptRelativePath(workDir)
     If Len(setupRel) = 0 Then
         MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
-               workDir & "\python\setup_environment.py" & vbCrLf & _
+               workDir & "\参照用\python\setup_environment.py" & vbCrLf & _
                "または " & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
                "テストコード一式（python フォルダ含む）をブックと同じフォルダにコピーしてから再実行してください。", vbCritical
         Exit Sub
@@ -278,7 +278,7 @@ Sub InstallComponents()
     setupRel = SetupEnvironmentScriptRelativePath(workDir)
     If Len(setupRel) = 0 Then
         MsgBox "次のいずれのファイルも見つかりません:" & vbCrLf & _
-               workDir & "\python\setup_environment.py" & vbCrLf & _
+               workDir & "\参照用\python\setup_environment.py" & vbCrLf & _
                "または " & workDir & "\setup_environment.py" & vbCrLf & vbCrLf & _
                "テストコード一式（python フォルダ含む）をブックと同じフォルダにコピーしてから再実行してください。", vbCritical
         Exit Sub
