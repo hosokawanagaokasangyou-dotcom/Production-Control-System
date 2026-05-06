@@ -880,7 +880,23 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headRow.setCache(false);
         bodySplit.setCache(false);
 
-        VBox mainColumn = new VBox(0, headRow, bodySplit);
+        int nonSectionRowCount = countNonSectionDisplayRows(parsed.displayRows());
+        int dataRowsWithTimelineText = countDataRowsWithAnyNonEmptySlot(parsed.displayRows());
+        boolean warnEmptyTimelineCells =
+                nonSectionRowCount > 0 && dataRowsWithTimelineText == 0;
+        VBox mainColumn;
+        if (warnEmptyTimelineCells) {
+            Label slotWarn =
+                    new Label(
+                            """
+                            タイムライン（HH:MM 列）のセルに表示文言がありません（帯色のみになります）。ブック JSON 単体ではシェイプ由来の値が欠損することがあります。計画出力フォルダに …設.json（設備ガント契約）が同梱されているか、または段階2の設備ガント関連出力を確認してください。""");
+            slotWarn.setWrapText(true);
+            slotWarn.setPadding(new Insets(8));
+            slotWarn.setStyle("-fx-background-color: rgba(255,165,0,0.22);");
+            mainColumn = new VBox(0, slotWarn, headRow, bodySplit);
+        } else {
+            mainColumn = new VBox(0, headRow, bodySplit);
+        }
         VBox.setVgrow(bodySplit, Priority.ALWAYS);
         mainColumn.setPadding(new Insets(4));
         mainColumn.setCache(false);
@@ -912,6 +928,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             data.put("rowBodyHeightPx", cellBodyH);
             data.put("timelineCanvasRowCount", timelineCanvasRowCount);
             data.put("approxNonSectionRows", approxTimelineRows);
+            data.put("nonSectionDataRows", nonSectionRowCount);
+            data.put("dataRowsWithAnyTimelineCellText", dataRowsWithTimelineText);
             data.put("firstDataRowNonEmptySlotCount", countNonEmptySlotsFirstDataRow(parsed.displayRows()));
             data.put("firstDataRowSlotSample", firstDataRowSlotSample(parsed.displayRows(), 8));
             data.put("naiveRowCanvasRgbMiB", Math.round(rowRgbMiB * 10.0) / 10.0);
@@ -2121,6 +2139,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int n = 0;
         for (DisplayRow dr : displayRows) {
             if (dr.sectionBanner() == null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** いずれかのタイムスロット列に非空白があるデータ行数（バー描画可否の集計） */
+    private static int countDataRowsWithAnyNonEmptySlot(List<DisplayRow> displayRows) {
+        int n = 0;
+        for (DisplayRow dr : displayRows) {
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            List<String> cells = dr.cellsInSlots();
+            if (cells == null) {
+                continue;
+            }
+            boolean any = false;
+            for (String s : cells) {
+                if (s != null && !s.isBlank()) {
+                    any = true;
+                    break;
+                }
+            }
+            if (any) {
                 n++;
             }
         }
