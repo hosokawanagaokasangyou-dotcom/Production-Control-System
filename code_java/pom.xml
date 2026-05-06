@@ -25,7 +25,7 @@
     <log4j.version>2.24.3</log4j.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
-    <!-- javafx:run / 開発時のヒープ上限（既定 3g。減らす場合は mvn -Djvm.max.heap=2g javafx:run 等） -->
+    <!-- javafx:run / 開発時のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g、減らす例: -Djvm.max.heap=2g） -->
     <jvm.max.heap>3g</jvm.max.heap>
   </properties>
 
