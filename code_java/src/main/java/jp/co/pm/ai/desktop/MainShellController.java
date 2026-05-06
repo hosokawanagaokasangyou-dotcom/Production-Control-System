@@ -305,6 +305,10 @@ public final class MainShellController {
     /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
     private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
 
+    /** 見出しグローの強さ（0〜1、1 が従来の既定ビジュアル）。 */
+    private final AtomicReference<Double> mainShellTabOrganizerHeaderGlowStrength =
+            new AtomicReference<>(1.0);
+
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
     private Runnable uiEnvPersistSchedule;
@@ -532,6 +536,8 @@ public final class MainShellController {
             return;
         }
         setMainShellTabOrganizerHeaderGlowEnabled(s.mainShellTabOrganizerHeaderGlow());
+        setMainShellTabOrganizerHeaderGlowStrength(
+                clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0));
         applyUiEnvRowsFromSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
         stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
@@ -575,7 +581,7 @@ public final class MainShellController {
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         if (mainShellTabOrganizerPaneController != null) {
-            mainShellTabOrganizerPaneController.syncHeaderGlowCheckFromShell();
+            mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
         }
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
@@ -685,6 +691,7 @@ public final class MainShellController {
                         ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
                         : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
                 mainShellTabOrganizerHeaderGlowEnabled.get(),
+                getMainShellTabOrganizerHeaderGlowStrength(),
                 pushButtonDesignTabController != null
                         ? pushButtonDesignTabController.snapshotPrefs()
                         : PushButtonDesignPrefs.inactiveDefaults());
@@ -1117,6 +1124,16 @@ public final class MainShellController {
         mainShellTabOrganizerHeaderGlowEnabled.set(enabled);
     }
 
+    public double getMainShellTabOrganizerHeaderGlowStrength() {
+        Double v = mainShellTabOrganizerHeaderGlowStrength.get();
+        double x = v != null ? v : 1.0;
+        return clamp(x, 0.0, 1.0);
+    }
+
+    public void setMainShellTabOrganizerHeaderGlowStrength(double strength01) {
+        mainShellTabOrganizerHeaderGlowStrength.set(clamp(strength01, 0.0, 1.0));
+    }
+
     /** 保存済みの {@code pmShellTabColor} を踏まえて全タブ見出しのインラインスタイルを再適用（グロー切替時）。 */
     public void refreshMainShellTabHeaderChromeFromStoredColors() {
         if (tabPane == null) {
@@ -1202,22 +1219,36 @@ public final class MainShellController {
     }
 
     /**
-     * 見出し背景に連動した半透明のガウシアン {@code dropshadow} でグロー風の縁取り（強すぎないよう半径・スプレッドは控えめ）。
+     * 見出し背景に連動した半透明のガウシアン {@code dropshadow} でグロー風の縁取り。
+     * 強さは {@link #getMainShellTabOrganizerHeaderGlowStrength()} でスケールする（0 で効果なし）。
      *
      * @return CSS の {@code -fx-effect} に渡す値（{@code dropshadow(...)}）。失敗時は空。
      */
-    private static String shellTabHeaderGlowEffectCss(String hexBg) {
+    private String shellTabHeaderGlowEffectCss(String hexBg) {
+        double strength = clamp(getMainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0);
+        if (strength <= 1e-6) {
+            return "";
+        }
         try {
             Color c = Color.web(hexBg.strip());
+            double alpha = 0.62 * strength;
+            double radius = 14.0 * strength;
+            double spread = 0.38 * strength;
             String rgba =
                     String.format(
                             Locale.US,
-                            "rgba(%d,%d,%d,%.2f)",
+                            "rgba(%d,%d,%d,%.4f)",
                             clamp255((int) Math.round(c.getRed() * 255.0)),
                             clamp255((int) Math.round(c.getGreen() * 255.0)),
                             clamp255((int) Math.round(c.getBlue() * 255.0)),
-                            0.62);
-            return "dropshadow(gaussian, " + rgba + ", 14, 0.38, 0, 0)";
+                            alpha);
+            return "dropshadow(gaussian, "
+                    + rgba
+                    + ", "
+                    + String.format(Locale.US, "%.2f", radius)
+                    + ", "
+                    + String.format(Locale.US, "%.2f", spread)
+                    + ", 0, 0)";
         } catch (IllegalArgumentException ex) {
             return "";
         }

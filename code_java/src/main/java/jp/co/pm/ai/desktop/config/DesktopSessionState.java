@@ -61,6 +61,7 @@ import java.util.Map;
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
  * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
  * @param mainShellTabOrganizerHeaderGlow メインシェル「タブの並び」で指定した見出し色にグロー（dropshadow）を付けるか
+ * @param mainShellTabOrganizerHeaderGlowStrength 見出しグローの強さ（0.0〜1.0、1.0 が従来既定の見え方）
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
  */
 public record DesktopSessionState(
@@ -117,6 +118,7 @@ public record DesktopSessionState(
         String stage1NetworkCacheBadgeLabel,
         PersonBadgeStyle stage1NetworkCacheBadgeStyle,
         boolean mainShellTabOrganizerHeaderGlow,
+        double mainShellTabOrganizerHeaderGlowStrength,
         PushButtonDesignPrefs pushButtonDesignPrefs) {
 
     public DesktopSessionState {
@@ -242,6 +244,7 @@ public record DesktopSessionState(
                 "",
                 PersonBadgeStyle.networkSourceCacheBadgeDefault(),
                 true,
+                1d,
                 PushButtonDesignPrefs.inactiveDefaults());
     }
 }

@@ -1,10 +1,11 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import java.util.HashSet;
 
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -21,6 +22,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeItem;
@@ -72,11 +74,19 @@ public final class MainShellTabOrganizerTabController {
     @FXML
     private CheckBox headerGlowCheck;
 
+    @FXML
+    private Slider headerGlowStrengthSlider;
+
+    @FXML
+    private Label headerGlowStrengthLabel;
+
     private MainShellController shell;
 
     private boolean suppressOrganizerChromeListeners;
 
     private boolean headerGlowListenerHooked;
+
+    private boolean headerGlowStrengthListenerHooked;
 
     /** ドラッグ開始セルと {@link Dragboard} を対応付けるための作業領域（ツリー行の移動用）。 */
     private TreeItem<OrgRow> dragSourceItem;
@@ -142,6 +152,32 @@ public final class MainShellTabOrganizerTabController {
         }
     }
 
+    /** グローのオンオフ・強度スライダーをシェル値と同期する（セッション復元・ツリー選択時）。 */
+    void syncHeaderGlowControlsFromShell() {
+        syncHeaderGlowCheckFromShell();
+        syncHeaderGlowStrengthFromShell();
+    }
+
+    private void syncHeaderGlowStrengthFromShell() {
+        if (headerGlowStrengthSlider == null || shell == null) {
+            return;
+        }
+        suppressOrganizerChromeListeners = true;
+        try {
+            headerGlowStrengthSlider.setValue(shell.getMainShellTabOrganizerHeaderGlowStrength() * 100.0);
+            updateHeaderGlowStrengthLabelText();
+        } finally {
+            suppressOrganizerChromeListeners = false;
+        }
+    }
+
+    private void updateHeaderGlowStrengthLabelText() {
+        if (headerGlowStrengthLabel != null && headerGlowStrengthSlider != null) {
+            headerGlowStrengthLabel.setText(
+                    String.format(Locale.JAPAN, "%.0f%%", headerGlowStrengthSlider.getValue()));
+        }
+    }
+
     private void installHeaderGlowControls() {
         if (headerGlowCheck != null && shell != null && !headerGlowListenerHooked) {
             headerGlowListenerHooked = true;
@@ -159,7 +195,28 @@ public final class MainShellTabOrganizerTabController {
                                 DesktopSessionStateStore.save(snap);
                             });
         }
-        syncHeaderGlowCheckFromShell();
+        installHeaderGlowStrengthSlider();
+        syncHeaderGlowControlsFromShell();
+    }
+
+    private void installHeaderGlowStrengthSlider() {
+        if (headerGlowStrengthSlider == null || shell == null || headerGlowStrengthListenerHooked) {
+            return;
+        }
+        headerGlowStrengthListenerHooked = true;
+        headerGlowStrengthSlider
+                .valueProperty()
+                .addListener(
+                        (obs, prev, n) -> {
+                            if (suppressOrganizerChromeListeners) {
+                                return;
+                            }
+                            shell.setMainShellTabOrganizerHeaderGlowStrength(n.doubleValue() / 100.0);
+                            shell.refreshMainShellTabHeaderChromeFromStoredColors();
+                            rebuildOrganizerVisualTree();
+                            updateHeaderGlowStrengthLabelText();
+                            DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
+                        });
     }
 
     private void reloadTreeFromShell() {
@@ -193,7 +250,7 @@ public final class MainShellTabOrganizerTabController {
         syncGroupNameField();
         syncTabAliasField();
         syncColorPickerFromSelection();
-        syncHeaderGlowCheckFromShell();
+        syncHeaderGlowControlsFromShell();
     }
 
     /** 単一選択時、見出し色ピッカーを選択行の {@link OrgRow#colorHex} に合わせる。 */

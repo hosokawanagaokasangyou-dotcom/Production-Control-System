@@ -7,6 +7,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TreeView?>
 <?import javafx.scene.layout.BorderPane?>
@@ -52,6 +53,14 @@
                 </HBox>
                 <CheckBox fx:id="headerGlowCheck" mnemonicParsing="false"
                           text="見出しにグロー（発光風）を付ける — メインタブの見出しの縁に色にじみが付きます（オフでフラット）"/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="90.0" text="グロー強度"/>
+                    <Slider fx:id="headerGlowStrengthSlider" blockIncrement="5.0" majorTickUnit="25.0"
+                            max="100.0" min="0.0" minorTickCount="4" prefWidth="220.0"
+                            showTickLabels="true" showTickMarks="true" snapToTicks="true" value="100.0"
+                            HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="headerGlowStrengthLabel" minWidth="42.0" text="100%"/>
+                </HBox>
                 <HBox spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
                     <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>

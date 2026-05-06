@@ -92,6 +92,7 @@ public final class DesktopSessionStateStore {
                     text(root, "stage1NetworkCacheBadgeLabel"),
                     loadStage1NetworkCacheBadgeStyle(root),
                     optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
+                    clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
                     loadPushButtonDesignPrefs(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -127,6 +128,9 @@ public final class DesktopSessionStateStore {
             putEquipmentGanttGraphicPrefs(root, state);
             putStage1NetworkCacheBadgePrefs(root, state);
             root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
+            root.put(
+                    "mainShellTabOrganizerHeaderGlowStrength",
+                    state.mainShellTabOrganizerHeaderGlowStrength());
             putPushButtonDesignPrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
@@ -148,6 +152,13 @@ public final class DesktopSessionStateStore {
             return defaultValue;
         }
         return n.asDouble();
+    }
+
+    private static double clamp01(double v) {
+        if (!Double.isFinite(v)) {
+            return 1d;
+        }
+        return Math.max(0d, Math.min(1d, v));
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {
