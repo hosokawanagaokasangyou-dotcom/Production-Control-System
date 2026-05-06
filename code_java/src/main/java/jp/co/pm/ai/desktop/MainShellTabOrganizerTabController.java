@@ -399,6 +399,10 @@ public final class MainShellTabOrganizerTabController {
         TreeItem<OrgRow> g = new TreeItem<>(OrgRow.group("新規グループ", ""));
         g.setExpanded(true);
         treeView.getRoot().getChildren().add(g);
+        // TreeView は非表示で可視一覧は organizerVisualRoot を手組みするため、モデルだけ追加では画面が更新されない。
+        // 選択を変えてリスナー経由で rebuild する（ドラッグ移動完了時と同様）。
+        treeView.getSelectionModel().clearSelection();
+        treeView.getSelectionModel().select(g);
     }
 
     @FXML
