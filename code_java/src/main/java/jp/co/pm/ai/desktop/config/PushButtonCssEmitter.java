@@ -74,34 +74,48 @@ public final class PushButtonCssEmitter {
         return sb.toString();
     }
 
-    /** {@link javafx.scene.control.DialogPane} 内のボタン（Alert の OK／キャンセル、確認ダイアログなど）。 */
+    /**
+     * {@link javafx.scene.control.DialogPane} 内のボタンに加え、メインシェル「タブの並びとグループ」画面（{@code
+     * pm-main-shell-tab-organizer}）フッターの「構成を適用」（既定）なども同一の主／副スタイルで上書きする。
+     */
     private static void appendDialogButtons(StringBuilder sb, PushButtonDesignPrefs p) {
-        appendDialogVariant(
-                sb,
-                ".dialog-pane .button:default",
-                p.dialogPrimaryBorderRadius(),
-                p.dialogPrimaryPaddingV(),
-                p.dialogPrimaryPaddingH(),
-                p.dialogPrimaryFontPx(),
-                p.dialogPrimaryBgHex(),
-                p.dialogPrimaryBorderHex(),
-                p.dialogPrimaryTextHex(),
-                p.dialogPrimaryHoverBgHex(),
-                p.dialogPrimaryPressedBgHex());
-        appendDialogVariant(
-                sb,
-                ".dialog-pane .button:not(:default)",
-                p.dialogSecondaryBorderRadius(),
-                p.dialogSecondaryPaddingV(),
-                p.dialogSecondaryPaddingH(),
-                p.dialogSecondaryFontPx(),
-                p.dialogSecondaryBgHex(),
-                p.dialogSecondaryBorderHex(),
-                p.dialogSecondaryTextHex(),
-                p.dialogSecondaryHoverBgHex(),
-                p.dialogSecondaryPressedBgHex());
-        sb.append(".dialog-pane .button:default:focused,\n");
-        sb.append(".dialog-pane .button:not(:default):focused {\n");
+        String[] scopes = {".dialog-pane", ".pm-main-shell-tab-organizer"};
+        for (String scope : scopes) {
+            appendDialogVariant(
+                    sb,
+                    scope + " .button:default",
+                    p.dialogPrimaryBorderRadius(),
+                    p.dialogPrimaryPaddingV(),
+                    p.dialogPrimaryPaddingH(),
+                    p.dialogPrimaryFontPx(),
+                    p.dialogPrimaryBgHex(),
+                    p.dialogPrimaryBorderHex(),
+                    p.dialogPrimaryTextHex(),
+                    p.dialogPrimaryHoverBgHex(),
+                    p.dialogPrimaryPressedBgHex());
+            appendDialogVariant(
+                    sb,
+                    scope + " .button:not(:default)",
+                    p.dialogSecondaryBorderRadius(),
+                    p.dialogSecondaryPaddingV(),
+                    p.dialogSecondaryPaddingH(),
+                    p.dialogSecondaryFontPx(),
+                    p.dialogSecondaryBgHex(),
+                    p.dialogSecondaryBorderHex(),
+                    p.dialogSecondaryTextHex(),
+                    p.dialogSecondaryHoverBgHex(),
+                    p.dialogSecondaryPressedBgHex());
+        }
+        for (int i = 0; i < scopes.length; i++) {
+            String scope = scopes[i];
+            sb.append(scope).append(" .button:default:focused,\n");
+            sb.append(scope).append(" .button:not(:default):focused");
+            if (i < scopes.length - 1) {
+                sb.append(",\n");
+            } else {
+                sb.append(" {\n");
+            }
+        }
         sb.append("    -fx-focus-color: transparent;\n");
         sb.append("    -fx-faint-focus-color: transparent;\n");
         sb.append("}\n");
