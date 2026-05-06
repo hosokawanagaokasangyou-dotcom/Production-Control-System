@@ -4,48 +4,64 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ColorPicker?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TreeView?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.MainShellTabOrganizerTabController"
-      spacing="10.0">
+      spacing="8.0">
     <padding>
-        <Insets bottom="10.0" left="10.0" right="10.0" top="10.0"/>
+        <Insets bottom="8.0" left="10.0" right="10.0" top="10.0"/>
     </padding>
-    <Label wrapText="true"
-           text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
-    <TreeView fx:id="treeView" VBox.vgrow="ALWAYS" prefHeight="280.0"/>
-    <Label wrapText="true" style="-fx-font-size: 0.95em;"
-           text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Label text="グループ名"/>
-        <TextField fx:id="groupNameField" prefWidth="220.0" promptText="グループ行を1つ選ぶと編集できます"
-                   HBox.hgrow="ALWAYS"/>
-        <Button mnemonicParsing="false" onAction="#onApplyGroupName" text="名前を反映"/>
-    </HBox>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Label text="タブ見出し（別名）"/>
-        <TextField fx:id="tabAliasField" prefWidth="220.0" promptText="タブ行を1つ選ぶと編集できます"
-                   HBox.hgrow="ALWAYS"/>
-        <Button mnemonicParsing="false" onAction="#onApplyTabAlias" text="別名を反映"/>
-    </HBox>
-    <Label wrapText="true" style="-fx-opacity: 0.85;"
-           text="別名はエイリアスのみです。空にして反映すると FXML 既定の見出しに戻ります。"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Label text="見出し色"/>
-        <ColorPicker fx:id="colorPicker"/>
-        <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
-        <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="選択の色を解除"/>
-    </HBox>
-    <HBox spacing="8.0">
-        <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
-        <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>
-    </HBox>
-    <HBox spacing="8.0">
+    <!-- 縮小ウィンドウでもツリー編集をスクロール可能にし、適用ボタンは常に下端に固定 -->
+    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" minHeight="0.0" pannable="false"
+                VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED">
+        <VBox spacing="10.0">
+            <padding>
+                <Insets bottom="4.0" left="0.0" right="4.0" top="0.0"/>
+            </padding>
+            <Label wrapText="true"
+                   text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
+            <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
+            <TreeView fx:id="treeView" prefHeight="260.0"/>
+            <Label wrapText="true" style="-fx-font-size: 0.95em;"
+                   text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="グループ名"/>
+                <TextField fx:id="groupNameField" prefWidth="220.0" promptText="グループ行を1つ選ぶと編集できます"
+                           HBox.hgrow="ALWAYS"/>
+                <Button mnemonicParsing="false" onAction="#onApplyGroupName" text="名前を反映"/>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="タブ見出し（別名）"/>
+                <TextField fx:id="tabAliasField" prefWidth="220.0" promptText="タブ行を1つ選ぶと編集できます"
+                           HBox.hgrow="ALWAYS"/>
+                <Button mnemonicParsing="false" onAction="#onApplyTabAlias" text="別名を反映"/>
+            </HBox>
+            <Label wrapText="true" style="-fx-opacity: 0.85;"
+                   text="別名はエイリアスのみです。空にして反映すると FXML 既定の見出しに戻ります。"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="見出し色"/>
+                <ColorPicker fx:id="colorPicker"/>
+                <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
+                <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="選択の色を解除"/>
+            </HBox>
+            <HBox spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
+                <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>
+            </HBox>
+        </VBox>
+    </ScrollPane>
+    <Separator/>
+    <HBox alignment="CENTER_RIGHT" spacing="10.0">
+        <Region HBox.hgrow="ALWAYS"/>
         <Button mnemonicParsing="false" onAction="#onResetFlat" text="フラット初期構成に戻す"/>
-        <Button defaultButton="true" mnemonicParsing="false" onAction="#onApplyLayout" text="構成を適用"/>
+        <Button defaultButton="true" minWidth="140.0" mnemonicParsing="false" onAction="#onApplyLayout"
+                style="-fx-font-weight: bold;" text="構成を適用"/>
     </HBox>
 </VBox>
