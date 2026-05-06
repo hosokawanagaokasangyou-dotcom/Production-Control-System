@@ -28,8 +28,21 @@
             </padding>
             <Label wrapText="true"
                    text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
+            <Label styleClass="pm-main-shell-tab-organizer-strip-hint" wrapText="true"
+                   text="タブ色プレビュー（カードを横に重ねて表示。クリックでツリー内の該当タブ行へ移動）"/>
+            <ScrollPane fx:id="previewStripScroll" fitToHeight="true" fitToWidth="false" hbarPolicy="AS_NEEDED"
+                        maxHeight="96.0" minHeight="56.0" prefHeight="84.0" styleClass="pm-org-preview-strip"
+                        vbarPolicy="NEVER">
+                <content>
+                    <HBox fx:id="previewStripBox" alignment="CENTER_LEFT" spacing="0.0">
+                        <padding>
+                            <Insets bottom="6.0" left="10.0" right="10.0" top="6.0"/>
+                        </padding>
+                    </HBox>
+                </content>
+            </ScrollPane>
             <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
-            <TreeView fx:id="treeView" prefHeight="260.0" styleClass="tree-view pm-org-tree-lined"/>
+            <TreeView fx:id="treeView" minHeight="220.0" prefHeight="420.0" styleClass="tree-view pm-org-tree-lined"/>
             <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
                    text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
