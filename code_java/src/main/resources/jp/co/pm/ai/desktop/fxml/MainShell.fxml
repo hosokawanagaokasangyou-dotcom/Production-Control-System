@@ -135,6 +135,11 @@
                         <fx:include fx:id="operatorCardTab" source="OperatorCardTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabOrganizer" closable="false" text="タブ整理">
+                    <content>
+                        <fx:include fx:id="mainShellTabOrganizerPane" source="MainShellTabOrganizerTab.fxml"/>
+                    </content>
+                </Tab>
             </tabs>
         </TabPane>
     </center>

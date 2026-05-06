@@ -14,6 +14,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
@@ -62,6 +63,7 @@ public final class DesktopSessionStateStore {
                     text(root, "mainRunStage2ResultBookFont"),
                     loadUiEnvRows(root),
                     loadStringList(root, "mainShellTabOrder"),
+                    loadMainShellTabLayout(root),
                     optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
                     optionalDouble(root, "equipmentGanttDateColWidth", 0d),
                     optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
@@ -118,6 +120,7 @@ public final class DesktopSessionStateStore {
             put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
             putUiEnvRows(root, state.uiEnvRows());
             putMainShellTabOrder(root, state.mainShellTabOrder());
+            putMainShellTabLayout(root, state.mainShellTabLayout());
             putEquipmentGanttGraphicPrefs(root, state);
             putStage1NetworkCacheBadgePrefs(root, state);
             putPushButtonDesignPrefs(root, state);
@@ -245,6 +248,51 @@ public final class DesktopSessionStateStore {
         if (!arr.isEmpty()) {
             root.set("mainShellTabOrder", arr);
         }
+    }
+
+    private static List<MainShellTabLayoutNode> loadMainShellTabLayout(JsonNode root) {
+        JsonNode arr = root.get("mainShellTabLayout");
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<MainShellTabLayoutNode> out = new ArrayList<>();
+        for (JsonNode el : arr) {
+            MainShellTabLayoutNode n = MainShellTabLayoutNode.fromJson(el);
+            if (n != null) {
+                out.add(n);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static void putMainShellTabLayout(ObjectNode root, List<MainShellTabLayoutNode> layout) {
+        if (layout == null || layout.isEmpty()) {
+            return;
+        }
+        ArrayNode arr = JsonNodeFactory.instance.arrayNode();
+        for (MainShellTabLayoutNode n : layout) {
+            arr.add(layoutNodeToJson(n));
+        }
+        root.set("mainShellTabLayout", arr);
+    }
+
+    private static JsonNode layoutNodeToJson(MainShellTabLayoutNode n) {
+        ObjectNode o = JsonNodeFactory.instance.objectNode();
+        o.put("kind", n.kind());
+        if (!n.colorHex().isBlank()) {
+            o.put("color", n.colorHex());
+        }
+        if (n.isTab()) {
+            o.put("id", n.id());
+            return o;
+        }
+        o.put("title", n.title().isBlank() ? "グループ" : n.title());
+        ArrayNode ch = JsonNodeFactory.instance.arrayNode();
+        for (MainShellTabLayoutNode c : n.children()) {
+            ch.add(layoutNodeToJson(c));
+        }
+        o.set("children", ch);
+        return o;
     }
 
     private static void putEquipmentGanttGraphicPrefs(ObjectNode root, DesktopSessionState state) {

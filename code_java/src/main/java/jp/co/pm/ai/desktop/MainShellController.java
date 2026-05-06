@@ -46,6 +46,7 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
@@ -239,6 +240,41 @@ public final class MainShellController {
     @FXML
     private Tab mainShellTabOperatorCard;
 
+    @FXML
+    private Tab mainShellTabOrganizer;
+
+    @FXML
+    private MainShellTabOrganizerTabController mainShellTabOrganizerPaneController;
+
+    /** 入れ子 {@link TabPane} の選択変化を監視する（メイン以外）。 */
+    private final List<TabPane> wiredInnerMainShellTabPanes = new ArrayList<>();
+
+    /** {@link #emitShellTabNavigation()} 用の直前リーフ（列フィルタ解除・実行タブ離脱保存）。 */
+    private Tab lastEffectiveShellLeaf;
+
+    /**
+     * MainShell.fxml の既定タブ並び（{@link MainShellTabId#TAB_ORGANIZER} を除く）。
+     */
+    private static final List<String> DEFAULT_MAIN_SHELL_TAB_KEYS =
+            List.of(
+                    MainShellTabId.RUN.key(),
+                    MainShellTabId.UI_BADGE_DESIGN.key(),
+                    MainShellTabId.PUSH_BUTTON_DESIGN.key(),
+                    MainShellTabId.ENV.key(),
+                    MainShellTabId.MASTER_SUMMARY.key(),
+                    MainShellTabId.PLAN_INPUT.key(),
+                    MainShellTabId.STAGE1_PREVIEW.key(),
+                    MainShellTabId.EXCLUDE_RULES.key(),
+                    MainShellTabId.SPECIAL_RULES.key(),
+                    MainShellTabId.ACTUALS_STATUS.key(),
+                    MainShellTabId.RESULT_DISPATCH.key(),
+                    MainShellTabId.MACHINE_CALENDAR_JSON.key(),
+                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
+                    MainShellTabId.PLAN_RESULT_VIEWER.key(),
+                    MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
+                    MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(),
+                    MainShellTabId.OPERATOR_CARD.key());
+
     private ObservableList<EnvVarRow> envRows;
 
     private final AtomicBoolean runLock = new AtomicBoolean(false);
@@ -352,6 +388,10 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
+            if (mainShellTabOrganizerPaneController != null) {
+                mainShellTabOrganizerPaneController.bindShell(this);
+                mainShellTabOrganizerPaneController.installTreeCellFactory();
+            }
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -374,16 +414,12 @@ public final class MainShellController {
                     tabPane.getSelectionModel().selectFirst();
                 });
 
+        lastEffectiveShellLeaf =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         tabPane
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener(
-                        (obs, prevTab, newTab) -> {
-                            if (prevTab == mainShellTabRun && newTab != mainShellTabRun) {
-                                DesktopSessionStateStore.save(collectDesktopSession());
-                            }
-                            updateClearTabFiltersButton(newTab);
-                        });
+                .addListener((obs, prevTab, newTab) -> emitShellTabNavigation());
         tabPane
                 .getTabs()
                 .addListener(
@@ -393,7 +429,8 @@ public final class MainShellController {
                                         DesktopSessionStateStore.save(collectDesktopSession());
                                     }
                                 });
-        updateClearTabFiltersButton(tabPane.getSelectionModel().getSelectedItem());
+        updateClearTabFiltersButton(
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem()));
     }
 
     /**
@@ -477,7 +514,8 @@ public final class MainShellController {
         }
     }
 
-    private boolean tabSupportsClearFilters(Tab t) {
+    private boolean tabSupportsClearFilters(Tab leafTab) {
+        Tab t = leafTab;
         return t == mainShellTabEnv
                 || t == mainShellTabPlanInput
                 || t == mainShellTabStage1Preview
@@ -486,16 +524,17 @@ public final class MainShellController {
                 || t == mainShellTabPlanResultViewer;
     }
 
-    private void updateClearTabFiltersButton(Tab selected) {
+    private void updateClearTabFiltersButton(Tab selectedLeaf) {
         if (clearTabFiltersButton == null) {
             return;
         }
-        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(selected));
+        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(selectedLeaf));
     }
 
     @FXML
     private void onClearTabFiltersAction() {
-        Tab sel = tabPane.getSelectionModel().getSelectedItem();
+        Tab sel =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         if (sel == mainShellTabEnv) {
             envTabController.clearColumnFiltersAndSort();
         } else if (sel == mainShellTabPlanInput) {
@@ -550,7 +589,11 @@ public final class MainShellController {
             pushButtonDesignTabController.applyPushButtonSession(s);
         }
         applyWindowGeometry(s);
-        applyMainShellTabOrder(s.mainShellTabOrder());
+        if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
+            rebuildMainShellTabsFromLayout(s.mainShellTabLayout());
+        } else {
+            applyMainShellTabOrder(s.mainShellTabOrder());
+        }
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
@@ -627,6 +670,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
+                snapshotMainShellTabLayout(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
@@ -846,6 +890,9 @@ public final class MainShellController {
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
+        if (t == mainShellTabOrganizer) {
+            return MainShellTabId.TAB_ORGANIZER;
+        }
         return null;
     }
 
@@ -871,6 +918,7 @@ public final class MainShellController {
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
+            case TAB_ORGANIZER -> mainShellTabOrganizer;
         };
     }
 
@@ -880,12 +928,28 @@ public final class MainShellController {
         }
         List<String> out = new ArrayList<>();
         for (Tab t : tabPane.getTabs()) {
-            MainShellTabId id = mainShellTabId(t);
-            if (id != null) {
-                out.add(id.key());
+            if (t == mainShellTabOrganizer) {
+                continue;
             }
+            flattenMainShellTabOrderKeys(t, out);
         }
         return List.copyOf(out);
+    }
+
+    private void flattenMainShellTabOrderKeys(Tab t, List<String> out) {
+        if (t == null) {
+            return;
+        }
+        if (t.getContent() instanceof TabPane inner) {
+            for (Tab c : inner.getTabs()) {
+                flattenMainShellTabOrderKeys(c, out);
+            }
+            return;
+        }
+        MainShellTabId id = mainShellTabId(t);
+        if (id != null && id != MainShellTabId.TAB_ORGANIZER) {
+            out.add(id.key());
+        }
     }
 
     private void applyMainShellTabOrder(List<String> orderKeys) {
@@ -918,6 +982,242 @@ public final class MainShellController {
             return;
         }
         tabs.setAll(newOrder);
+    }
+
+    private void emitShellTabNavigation() {
+        Tab now = resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        Tab prev = lastEffectiveShellLeaf;
+        lastEffectiveShellLeaf = now;
+        if (prev == mainShellTabRun && now != mainShellTabRun) {
+            DesktopSessionStateStore.save(collectDesktopSession());
+        }
+        updateClearTabFiltersButton(now);
+    }
+
+    /**
+     * ルートで選ばれているタブがグループのときは、その内側の選択タブまで辿ったリーフ（実タブ）を返す。
+     */
+    private Tab resolveEffectiveLeafTab(Tab rootSelected) {
+        if (rootSelected == null) {
+            return null;
+        }
+        if (rootSelected.getContent() instanceof TabPane inner) {
+            Tab innerSel = inner.getSelectionModel().getSelectedItem();
+            if (innerSel != null) {
+                return resolveEffectiveLeafTab(innerSel);
+            }
+            if (!inner.getTabs().isEmpty()) {
+                return resolveEffectiveLeafTab(inner.getTabs().getFirst());
+            }
+            return null;
+        }
+        return rootSelected;
+    }
+
+    private List<MainShellTabLayoutNode> snapshotMainShellTabLayout() {
+        if (tabPane == null) {
+            return List.of();
+        }
+        List<MainShellTabLayoutNode> top = new ArrayList<>();
+        for (Tab t : tabPane.getTabs()) {
+            if (t == mainShellTabOrganizer) {
+                continue;
+            }
+            MainShellTabLayoutNode n = snapshotMainShellLayoutNode(t);
+            if (n != null) {
+                top.add(n);
+            }
+        }
+        return List.copyOf(top);
+    }
+
+    private MainShellTabLayoutNode snapshotMainShellLayoutNode(Tab t) {
+        if (t == null) {
+            return null;
+        }
+        if (t.getContent() instanceof TabPane inner) {
+            List<MainShellTabLayoutNode> ch = new ArrayList<>();
+            for (Tab c : inner.getTabs()) {
+                MainShellTabLayoutNode cn = snapshotMainShellLayoutNode(c);
+                if (cn != null) {
+                    ch.add(cn);
+                }
+            }
+            String title = t.getText() != null && !t.getText().isBlank() ? t.getText() : "グループ";
+            return MainShellTabLayoutNode.groupNode(title, readShellTabColorHex(t), ch);
+        }
+        MainShellTabId id = mainShellTabId(t);
+        if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
+            return null;
+        }
+        return MainShellTabLayoutNode.tabNode(id.key(), readShellTabColorHex(t));
+    }
+
+    private static String readShellTabColorHex(Tab t) {
+        Object v = t.getProperties().get("pmShellTabColor");
+        return v instanceof String s && !s.isBlank() ? s.strip() : "";
+    }
+
+    private static void applyShellTabColor(Tab tab, String colorHex) {
+        if (tab == null) {
+            return;
+        }
+        if (colorHex != null && !colorHex.isBlank()) {
+            String h = colorHex.strip();
+            tab.getProperties().put("pmShellTabColor", h);
+            tab.setStyle("-fx-background-color: " + h + ";");
+        } else {
+            tab.getProperties().remove("pmShellTabColor");
+            tab.setStyle("");
+        }
+    }
+
+    private void rebuildMainShellTabsFromLayout(List<MainShellTabLayoutNode> layout) {
+        if (tabPane == null || layout == null || layout.isEmpty() || mainShellTabOrganizer == null) {
+            return;
+        }
+        HashSet<String> required = new HashSet<>();
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id != MainShellTabId.TAB_ORGANIZER) {
+                required.add(id.key());
+            }
+        }
+        HashSet<String> found = new HashSet<>();
+        for (MainShellTabLayoutNode n : layout) {
+            collectLayoutLeafKeys(n, found);
+        }
+        if (!found.equals(required)) {
+            return;
+        }
+        suppressEnvSessionPersistence.set(true);
+        try {
+            wiredInnerMainShellTabPanes.clear();
+            tabPane.getTabs().clear();
+            for (MainShellTabLayoutNode n : layout) {
+                Tab built = materializeLayoutNode(n);
+                if (built != null) {
+                    tabPane.getTabs().add(built);
+                }
+            }
+            tabPane.getTabs().add(mainShellTabOrganizer);
+            boolean nested = layout.stream().anyMatch(MainShellTabLayoutNode::isGroup);
+            tabPane.setTabDragPolicy(
+                    nested
+                            ? TabPane.TabDragPolicy.FIXED
+                            : TabPane.TabDragPolicy.REORDER);
+            for (TabPane inner : wiredInnerMainShellTabPanes) {
+                inner.getSelectionModel()
+                        .selectedItemProperty()
+                        .addListener((o, p, n) -> emitShellTabNavigation());
+            }
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+        lastEffectiveShellLeaf =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        updateClearTabFiltersButton(lastEffectiveShellLeaf);
+    }
+
+    private static void collectLayoutLeafKeys(MainShellTabLayoutNode n, Set<String> out) {
+        if (n.isTab()) {
+            out.add(n.id());
+            return;
+        }
+        for (MainShellTabLayoutNode c : n.children()) {
+            collectLayoutLeafKeys(c, out);
+        }
+    }
+
+    private Tab materializeLayoutNode(MainShellTabLayoutNode n) {
+        if (n.isTab()) {
+            MainShellTabId id = MainShellTabId.fromKey(n.id());
+            Tab t = id != null ? mainShellTabFor(id) : null;
+            if (t != null) {
+                applyShellTabColor(t, n.colorHex());
+            }
+            return t;
+        }
+        if (n.isGroup()) {
+            Tab groupTab = new Tab(n.title().isBlank() ? "グループ" : n.title());
+            TabPane inner = new TabPane();
+            inner.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+            inner.setTabDragPolicy(TabPane.TabDragPolicy.REORDER);
+            inner.getStyleClass().add("pm-main-shell-inner-tab-pane");
+            for (MainShellTabLayoutNode c : n.children()) {
+                Tab ct = materializeLayoutNode(c);
+                if (ct != null) {
+                    inner.getTabs().add(ct);
+                }
+            }
+            groupTab.setContent(inner);
+            applyShellTabColor(groupTab, n.colorHex());
+            wiredInnerMainShellTabPanes.add(inner);
+            return groupTab;
+        }
+        return null;
+    }
+
+    /** 「タブ整理」タブから呼ばれ、既定のフラット構成に戻す（作業タブを1段に並べ替え）。 */
+    void restoreDefaultFlatMainShellTabLayout() {
+        if (tabPane == null || mainShellTabOrganizer == null) {
+            return;
+        }
+        suppressEnvSessionPersistence.set(true);
+        try {
+            wiredInnerMainShellTabPanes.clear();
+            tabPane.getTabs().clear();
+            for (String key : DEFAULT_MAIN_SHELL_TAB_KEYS) {
+                MainShellTabId id = MainShellTabId.fromKey(key);
+                Tab t = id != null ? mainShellTabFor(id) : null;
+                if (t != null) {
+                    applyShellTabColor(t, "");
+                    tabPane.getTabs().add(t);
+                }
+            }
+            tabPane.getTabs().add(mainShellTabOrganizer);
+            tabPane.setTabDragPolicy(TabPane.TabDragPolicy.REORDER);
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+        lastEffectiveShellLeaf =
+                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        updateClearTabFiltersButton(lastEffectiveShellLeaf);
+    }
+
+    /** ツリー編集結果を適用しセッション保存まで行う。 */
+    void applyMainShellTabLayoutFromOrganizer(List<MainShellTabLayoutNode> layout) {
+        rebuildMainShellTabsFromLayout(layout);
+        DesktopSessionStateStore.save(collectDesktopSession());
+    }
+
+    /** 現在のメインシェル構成をツリー編集用にエクスポート。 */
+    List<MainShellTabLayoutNode> snapshotMainShellTabLayoutNodes() {
+        return snapshotMainShellTabLayout();
+    }
+
+    /** {@link #DEFAULT_MAIN_SHELL_TAB_KEYS} と同順の {@link MainShellTabId}（オーガナイザ以外）。 */
+    List<MainShellTabId> defaultMainShellTabIds() {
+        List<MainShellTabId> out = new ArrayList<>();
+        for (String k : DEFAULT_MAIN_SHELL_TAB_KEYS) {
+            MainShellTabId id = MainShellTabId.fromKey(k);
+            if (id != null) {
+                out.add(id);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    String mainShellTabTitle(MainShellTabId id) {
+        Tab t = mainShellTabFor(id);
+        if (t != null && t.getText() != null && !t.getText().isBlank()) {
+            return t.getText();
+        }
+        return id != null ? id.name() : "";
+    }
+
+    /** セッション保存用スナップショット（同一プロセス内の子コントローラから）。 */
+    DesktopSessionState collectDesktopSessionSnapshot() {
+        return collectDesktopSession();
     }
 
     private static boolean omitEnvRowKey(String name) {
@@ -1756,10 +2056,25 @@ public final class MainShellController {
         if (tabPane == null || id == null) {
             return;
         }
-        Tab t = mainShellTabFor(id);
-        if (t != null) {
-            tabPane.getSelectionModel().select(t);
+        selectMainShellTabRecursive(tabPane, id);
+    }
+
+    private boolean selectMainShellTabRecursive(TabPane pane, MainShellTabId id) {
+        for (Tab t : pane.getTabs()) {
+            if (mainShellTabId(t) == id) {
+                pane.getSelectionModel().select(t);
+                return true;
+            }
         }
+        for (Tab t : pane.getTabs()) {
+            if (t.getContent() instanceof TabPane inner) {
+                if (selectMainShellTabRecursive(inner, id)) {
+                    pane.getSelectionModel().select(t);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** 計画結果ビューアを選択し、段階2成果のパスで JSON フィールドを埋める。 */

@@ -311,3 +311,8 @@
 .dialog-pane .button:default {
     -fx-text-fill: -fx-selection-bar-text;
 }
+
+/* メインシェル：グループ内の第2段 TabPane */
+.tab-pane.pm-main-shell-inner-tab-pane {
+    -fx-padding: 2 0 0 0;
+}
