@@ -261,7 +261,7 @@ public final class MainRunTabController {
 
     private void setupLogListView() {
         logListView.setItems(logLinesVisible);
-        logListView.setFixedCellSize(-1);
+        applyLogListFixedCellHeight();
         logListView.setFocusTraversable(true);
         logListView.setCellFactory(
                 lv ->
@@ -310,6 +310,19 @@ public final class MainRunTabController {
                         });
         logListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         installLogClipboardSupport();
+    }
+
+    /**
+     * 可変行高（{@code setFixedCellSize(-1)}）と折り返しの組み合わせは VirtualFlow が極端なセル数を見積もり、
+     * {@code index exceeds maxCellCount} やヒープ枯渇を招くことがある。フォントに応じた正の固定高で抑える。
+     */
+    private void applyLogListFixedCellHeight() {
+        if (logListView == null) {
+            return;
+        }
+        double lineHeight = appliedLogFont.getSize() * 1.35;
+        double cell = Math.clamp(lineHeight * 10.0, 56.0, 360.0);
+        logListView.setFixedCellSize(cell);
     }
 
     private void installLogClipboardSupport() {
@@ -469,6 +482,7 @@ public final class MainRunTabController {
             appliedLogFont = Font.font(choice, size);
         }
         if (logListView != null) {
+            applyLogListFixedCellHeight();
             logListView.refresh();
         }
     }

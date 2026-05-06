@@ -197,6 +197,7 @@
           <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
           <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
           <options>
+            <option>-Xmx2g</option>
             <option>-Dprism.order=${javafx.prism.order}</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
             <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
