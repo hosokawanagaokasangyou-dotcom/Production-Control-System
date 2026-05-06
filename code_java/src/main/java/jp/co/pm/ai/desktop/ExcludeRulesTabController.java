@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -28,6 +30,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 
 /**
@@ -36,6 +39,8 @@ import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
  * <p>ルールは JSON（配列または {@code {"rules":[]}}）と表の両方から編集でき、保存時は直近で編集した側をファイルへ書き出します。
  */
 public final class ExcludeRulesTabController {
+
+    private static final String AGENT_DEBUG_SESSION_ID = "504628";
 
     /** Python {@code planning_core._core} と同じ列名（Excel 見出し）。 */
     private static final String COL_PROCESS = "工程名";
@@ -215,8 +220,38 @@ public final class ExcludeRulesTabController {
         }
         try {
             String s = Files.readString(Path.of(p), StandardCharsets.UTF_8);
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("path", p);
+                d.put("charsRead", s.length());
+                d.put("source", "onLoadButtonAction");
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H2",
+                        "ExcludeRulesTabController.onLoadButtonAction",
+                        "load read ok",
+                        d);
+            }
+            // #endregion
             setBodyAndSyncTable(s, "[exclude-json] load ok: " + p);
         } catch (IOException ex) {
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("path", p);
+                d.put("error", ex.getClass().getSimpleName());
+                d.put("message", ex.getMessage());
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H4",
+                        "ExcludeRulesTabController.onLoadButtonAction",
+                        "load read failed",
+                        d);
+            }
+            // #endregion
             shell.appendLog("[exclude-json] load error: " + ex.getMessage());
         }
     }
@@ -244,18 +279,74 @@ public final class ExcludeRulesTabController {
      */
     void tryStartupLoadFromPathField() {
         String p = pathField.getText() != null ? pathField.getText().trim() : "";
+        // #region agent log
+        {
+            Path fpProbe = p.isEmpty() ? null : Path.of(p);
+            boolean exists = fpProbe != null && Files.exists(fpProbe);
+            boolean regular = fpProbe != null && Files.isRegularFile(fpProbe);
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("path", p);
+            d.put("pathEmpty", p.isEmpty());
+            d.put("exists", exists);
+            d.put("isRegularFile", regular);
+            AgentDebugLog.appendStructured(
+                    dbgUiEnv(),
+                    AGENT_DEBUG_SESSION_ID,
+                    "H1",
+                    "ExcludeRulesTabController.tryStartupLoadFromPathField",
+                    "startup load entry",
+                    d);
+        }
+        // #endregion
         if (p.isEmpty()) {
             return;
         }
         try {
             Path fp = Path.of(p);
             if (!Files.isRegularFile(fp)) {
+                // #region agent log
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H1",
+                        "ExcludeRulesTabController.tryStartupLoadFromPathField",
+                        "skip load: not a regular file",
+                        Map.of("path", p));
+                // #endregion
                 return;
             }
-            setBodyAndSyncTable(
-                    Files.readString(fp, StandardCharsets.UTF_8),
-                    "[exclude-json] restored session: " + p);
+            String jsonText = Files.readString(fp, StandardCharsets.UTF_8);
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("path", p);
+                d.put("charsRead", jsonText.length());
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H1",
+                        "ExcludeRulesTabController.tryStartupLoadFromPathField",
+                        "startup read ok before sync",
+                        d);
+            }
+            // #endregion
+            setBodyAndSyncTable(jsonText, "[exclude-json] restored session: " + p);
         } catch (IOException ex) {
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("path", p);
+                d.put("error", ex.getClass().getSimpleName());
+                d.put("message", ex.getMessage());
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H4",
+                        "ExcludeRulesTabController.tryStartupLoadFromPathField",
+                        "session restore io error",
+                        d);
+            }
+            // #endregion
             shell.appendLog("[exclude-json] session restore load error: " + ex.getMessage());
         }
     }
@@ -361,10 +452,43 @@ public final class ExcludeRulesTabController {
         preferTableOnSave = false;
         try {
             syncJsonToTableInternal();
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("tableRows", ruleRows.size());
+                d.put("bodyChars", bodyArea.getText() != null ? bodyArea.getText().length() : 0);
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H3",
+                        "ExcludeRulesTabController.setBodyAndSyncTable",
+                        "sync json to table ok",
+                        d);
+            }
+            // #endregion
         } catch (Exception ex) {
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("error", ex.getClass().getSimpleName());
+                d.put("message", ex.getMessage());
+                d.put("bodyCharsAfterFail", bodyArea.getText() != null ? bodyArea.getText().length() : 0);
+                AgentDebugLog.appendStructured(
+                        dbgUiEnv(),
+                        AGENT_DEBUG_SESSION_ID,
+                        "H3",
+                        "ExcludeRulesTabController.setBodyAndSyncTable",
+                        "sync json to table failed",
+                        d);
+            }
+            // #endregion
             shell.appendLog("[exclude-json] load後の表反映スキップ: " + ex.getMessage());
         }
         shell.appendLog(logOk);
+    }
+
+    private Map<String, String> dbgUiEnv() {
+        return shell != null ? shell.snapshotUiEnv() : Map.of();
     }
 
     private void setBodyTextProgrammatically(String text) {
