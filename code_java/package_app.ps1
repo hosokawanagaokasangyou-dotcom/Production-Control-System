@@ -521,6 +521,19 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+$postJpkgRoot = Join-Path $dist $APP_NAME
+if (Test-Path -LiteralPath $postJpkgRoot) {
+    $bundledJavaExe = Join-Path $postJpkgRoot 'runtime\bin\java.exe'
+    if (-not (Test-Path -LiteralPath $bundledJavaExe)) {
+        throw @"
+jpackage 直後の成果物に同梱 JRE (runtime\bin\java.exe) がありません: $bundledJavaExe
+・Windows Defender 等が java.exe を隔離していないか確認してください。
+・--type が app-image で dist\$APP_NAME が生成されているか確認してください。
+・PmAiDesktop.exe と同階層の runtime は「Java 用」。pm-ai-data\runtime（Python 用）とは別です。
+"@
+    }
+}
+
 Write-Host "--- Step 5: pm-ai-data 同梱（Python + code/python + 既定フォルダ）---" -ForegroundColor Cyan
 $distRoot = Join-Path $dist $APP_NAME
 if (-not (Test-Path -LiteralPath $distRoot)) {

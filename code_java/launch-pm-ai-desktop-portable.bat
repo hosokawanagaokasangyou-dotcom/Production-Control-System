@@ -37,14 +37,19 @@ if defined JAVA_HOME (
 
 echo [ERROR] 同梱 JRE が見つかりません: "%ROOT%\runtime\bin\java.exe"
 echo.
-echo jpackage の app-image では「runtime」フォルダ全体が必要です（Git や ZIP で省略していないか確認）。
+echo 【よくある取り違え】この bat と「同じ階層」にある runtime が対象です（PmAiDesktop.exe の隣）。
+echo   × pm-ai-data\runtime … Python 同梱用（ここには java.exe はありません）
+echo   ○ runtime\bin\java.exe … jpackage が作った Java ランタイム（exe と同じ直下の runtime）
+echo.
+echo bin に dll だけある場合: ウイルス対策が java.exe / javaw.exe だけ隔離していることがあります。隔離を確認してください。
+echo jpackage の app-image では runtime フォルダ一式が必要です（Git や ZIP で exe を除外していないか確認）。
 echo そのまま使う場合は Windows 上で code_java\package_app.ps1 を完走し、dist\PmAiDesktop を丸ごとコピーしてください。
 echo.
 echo このフォルダの一覧:
 dir /b "%ROOT%"
 echo.
 if exist "%ROOT%\runtime" (
-    echo runtime はありますが bin\java.exe がありません。ビルドやコピーが不完全な可能性があります。
+    echo runtime はありますが bin\java.exe がありません。ビルド・コピー不全か、java.exe がセキュリティ対策で削除された可能性があります。
 ) else (
     echo runtime フォルダ自体がありません。
 )
