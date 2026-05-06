@@ -659,6 +659,7 @@ if ($usedStagingForJpackage) {
     }
     New-Item -ItemType Directory -Path $distFinal -Force | Out-Null
     $destAppPath = Join-Path $distFinal $APP_NAME
+    $copyTarget = $destAppPath
     if (Test-Path -LiteralPath $destAppPath) {
         $removedOld = $false
         for ($ri = 0; $ri -lt 8; $ri++) {
@@ -673,17 +674,22 @@ if ($usedStagingForJpackage) {
             }
         }
         if (-not $removedOld) {
-            throw "Cannot replace $destAppPath. Close the app and Explorer windows using that folder, then re-run package_app.ps1."
+            $copyTarget = Join-Path $distFinal ($APP_NAME + '-build-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+            Write-Warning "Old folder is locked; publishing fresh bundle to $copyTarget instead. Close handles on $destAppPath and rename/swap when possible."
         }
     }
-    Copy-Item -Recurse -Force -LiteralPath $stagedApp -Destination $destAppPath
+    Copy-Item -Recurse -Force -LiteralPath $stagedApp -Destination $copyTarget
     Remove-Item -Recurse -Force -LiteralPath $jpkgDestParent -ErrorAction SilentlyContinue
-    Write-Host "Copied jpackage output from staging to: $destAppPath" -ForegroundColor DarkGray
+    $publishedBundleRoot = (Resolve-Path -LiteralPath $copyTarget).Path
+    Write-Host "Copied jpackage output from staging to: $publishedBundleRoot" -ForegroundColor DarkGray
+}
+else {
+    $publishedBundleRoot = Join-Path $distFinal $APP_NAME
 }
 
 $dist = $distFinal
 
-$postJpkgRoot = Join-Path $dist $APP_NAME
+$postJpkgRoot = $publishedBundleRoot
 if (Test-Path -LiteralPath $postJpkgRoot) {
     $diagBin = Join-Path $postJpkgRoot 'runtime\bin'
     $bundledJavaExe = Join-Path $diagBin 'java.exe'
@@ -734,7 +740,7 @@ Step 6 continues; output may be incomplete.
 }
 
 Write-Host "--- Step 6: bundle pm-ai-data (Python + code/python + default dirs) ---" -ForegroundColor Cyan
-$distRoot = Join-Path $dist $APP_NAME
+$distRoot = $publishedBundleRoot
 if (-not (Test-Path -LiteralPath $distRoot)) {
     throw "Distribution folder missing: $distRoot"
 }
