@@ -4,15 +4,11 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.lang.management.ThreadMXBean;
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * 実行中 JVM のヒープ／スレッド使用量を定期的に記録する（既定オフ）。
@@ -24,24 +20,20 @@ import jp.co.pm.ai.desktop.debug.AgentDebugLog;
  *   <li>または環境変数 {@code PM_AI_JVM_MEMORY_MONITOR_SEC}</li>
  * </ul>
  *
- * <p>任意: {@code pm.ai.jvm.memory.monitor.warnRatio}（0 以上 1 以下、既定 0.85）で警告閾値、
- * {@code pm.ai.jvm.memory.monitor.ndjson=true} で NDJSON 出力（{@link AgentDebugLog}）、
- * {@code pm.ai.jvm.memory.monitor.sessionId} でセッション ID。
+ * <p>任意: {@code pm.ai.jvm.memory.monitor.warnRatio}（0 以上 1 以下、既定 0.85）で警告閾値。
  */
 public final class JvmMemoryMonitor {
 
     private static final String PROP_INTERVAL = "pm.ai.jvm.memory.monitor.intervalSec";
     private static final String ENV_INTERVAL = "PM_AI_JVM_MEMORY_MONITOR_SEC";
     private static final String PROP_WARN_RATIO = "pm.ai.jvm.memory.monitor.warnRatio";
-    private static final String PROP_NDJSON = "pm.ai.jvm.memory.monitor.ndjson";
-    private static final String PROP_SESSION = "pm.ai.jvm.memory.monitor.sessionId";
 
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
     private JvmMemoryMonitor() {}
 
     /** {@link jp.co.pm.ai.desktop.PmAiFxApp#main} から起動。複数回呼んでも一度だけ有効。 */
-    public static void startFromMain(Map<String, String> ui) {
+    public static void startFromMain() {
         if (!STARTED.compareAndSet(false, true)) {
             return;
         }
@@ -51,8 +43,6 @@ public final class JvmMemoryMonitor {
             return;
         }
         double warnRatio = resolveWarnRatio();
-        boolean ndjson = Boolean.getBoolean(PROP_NDJSON);
-        String sessionId = resolveSessionId();
 
         ScheduledExecutorService scheduler =
                 Executors.newSingleThreadScheduledExecutor(
@@ -97,25 +87,6 @@ public final class JvmMemoryMonitor {
                                             + String.format(
                                                     Locale.ROOT, "%.0f%%", warnRatio * 100)
                                             + " を超えました。-Xmx の引き上げや処理の分割を検討してください。");
-                        }
-
-                        if (ndjson) {
-                            Map<String, Object> data = new LinkedHashMap<>();
-                            data.put("heapUsedBytes", used);
-                            data.put("heapCommittedBytes", heap.getCommitted());
-                            data.put("heapMaxBytes", max);
-                            data.put("nonHeapUsedBytes", nonHeap.getUsed());
-                            data.put("threadCount", threads);
-                            if (max > 0) {
-                                data.put("heapUsageRatio", used / (double) max);
-                            }
-                            AgentDebugLog.appendStructured(
-                                    ui != null ? ui : Map.of(),
-                                    sessionId,
-                                    "heap",
-                                    "JvmMemoryMonitor",
-                                    "jvm_memory_sample",
-                                    data);
                         }
                     } catch (Throwable ignored) {
                         // 監視のみ
@@ -176,14 +147,6 @@ public final class JvmMemoryMonitor {
         } catch (NumberFormatException e) {
             return 0.85;
         }
-    }
-
-    private static String resolveSessionId() {
-        String p = System.getProperty(PROP_SESSION, "").trim();
-        if (!p.isEmpty()) {
-            return p;
-        }
-        return AgentDebugLog.DEFAULT_SESSION_ID;
     }
 
     private static long toMiB(long bytes) {

@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop;
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.Map;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -129,7 +128,7 @@ public class PmAiFxApp extends Application {
             System.exit(2);
         }
         configurePrismAfterProbe();
-        JvmMemoryMonitor.startFromMain(Map.of());
+        JvmMemoryMonitor.startFromMain();
         launch(args);
     }
 }
