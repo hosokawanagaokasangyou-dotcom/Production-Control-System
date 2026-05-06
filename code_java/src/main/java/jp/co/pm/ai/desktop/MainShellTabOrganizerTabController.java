@@ -43,6 +43,9 @@ public final class MainShellTabOrganizerTabController {
     @FXML
     private TextField groupNameField;
 
+    @FXML
+    private TextField tabAliasField;
+
     private MainShellController shell;
 
     /** ドラッグ開始セルと {@link Dragboard} を対応付けるための作業領域（ツリー行の移動用）。 */
@@ -63,6 +66,10 @@ public final class MainShellTabOrganizerTabController {
             groupNameField.setDisable(true);
             groupNameField.setOnAction(e -> onApplyGroupName());
         }
+        if (tabAliasField != null) {
+            tabAliasField.setDisable(true);
+            tabAliasField.setOnAction(e -> onApplyTabAlias());
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -70,7 +77,7 @@ public final class MainShellTabOrganizerTabController {
         if (treeView != null && treeSelectionListener == null) {
             treeSelectionListener =
                     (obs, prev, cur) -> {
-                        syncGroupNameField();
+                        syncOrganizerSideFields();
                     };
             treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
         }
@@ -100,7 +107,12 @@ public final class MainShellTabOrganizerTabController {
         }
         treeView.setRoot(invisibleRoot);
         expandAll(invisibleRoot);
+        syncOrganizerSideFields();
+    }
+
+    private void syncOrganizerSideFields() {
         syncGroupNameField();
+        syncTabAliasField();
     }
 
     private void syncGroupNameField() {
@@ -119,6 +131,28 @@ public final class MainShellTabOrganizerTabController {
         }
     }
 
+    private void syncTabAliasField() {
+        if (tabAliasField == null || treeView == null || shell == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> multi =
+                treeView.getSelectionModel().getSelectedItems();
+        if (multi != null
+                && multi.size() == 1
+                && multi.getFirst() != null
+                && multi.getFirst().getValue() != null
+                && multi.getFirst().getValue().kind == OrgRow.Kind.TAB) {
+            MainShellTabId tid = multi.getFirst().getValue().tabId;
+            tabAliasField.setDisable(false);
+            tabAliasField.setText(shell.mainShellTabTitleAliasStored(tid));
+            tabAliasField.setPromptText("既定: " + shell.mainShellTabBaselineTitle(tid));
+            return;
+        }
+        tabAliasField.setDisable(true);
+        tabAliasField.clear();
+        tabAliasField.setPromptText("");
+    }
+
     @FXML
     private void onApplyGroupName() {
         if (treeView == null || groupNameField == null) {
@@ -134,6 +168,25 @@ public final class MainShellTabOrganizerTabController {
         String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
         sel.getValue().groupTitle = t;
         treeView.refresh();
+    }
+
+    @FXML
+    private void onApplyTabAlias() {
+        if (shell == null || treeView == null || tabAliasField == null) {
+            return;
+        }
+        TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+        if (sel == null
+                || sel.getValue() == null
+                || sel.getValue().kind != OrgRow.Kind.TAB) {
+            alert(AlertType.INFORMATION, "タブ行を1つ選んでください。");
+            return;
+        }
+        String raw = tabAliasField.getText();
+        shell.setMainShellTabDisplayAlias(sel.getValue().tabId, raw);
+        DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
+        treeView.refresh();
+        syncTabAliasField();
     }
 
     private static void expandAll(TreeItem<OrgRow> n) {
@@ -525,7 +578,7 @@ public final class MainShellTabOrganizerTabController {
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(source);
         treeView.refresh();
-        syncGroupNameField();
+        syncOrganizerSideFields();
         return true;
     }
 

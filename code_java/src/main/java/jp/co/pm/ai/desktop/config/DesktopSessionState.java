@@ -33,6 +33,7 @@ import java.util.Map;
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order（{@link #mainShellTabLayout()} が空のときのみ有効）
  * @param mainShellTabLayout メインシェルタブの入れ子構成・色（空は未使用として従来のフラット＋{@link #mainShellTabOrder()}）
+ * @param mainShellTabTitleAliases メイン作業タブ見出しの表示エイリアス（キーは {@link jp.co.pm.ai.desktop.MainShellTabId#key()}、空値は保存しない）
  * @param equipmentGanttGraphicZoomPercent 設備ガント・グラフィックタブの表示倍率（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttDateColWidth 同タブ左・日付列の幅（px、0 は自動計測）
  * @param equipmentGanttMachineColWidth 同タブ左・機械名列の幅（px、0 は自動計測）
@@ -87,6 +88,7 @@ public record DesktopSessionState(
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
         List<MainShellTabLayoutNode> mainShellTabLayout,
+        Map<String, String> mainShellTabTitleAliases,
         double equipmentGanttGraphicZoomPercent,
         double equipmentGanttDateColWidth,
         double equipmentGanttMachineColWidth,
@@ -129,6 +131,10 @@ public record DesktopSessionState(
                 mainShellTabLayout == null || mainShellTabLayout.isEmpty()
                         ? List.of()
                         : List.copyOf(mainShellTabLayout);
+        mainShellTabTitleAliases =
+                mainShellTabTitleAliases == null || mainShellTabTitleAliases.isEmpty()
+                        ? Map.of()
+                        : Map.copyOf(mainShellTabTitleAliases);
     }
 
     /**
@@ -206,6 +212,7 @@ public record DesktopSessionState(
                 List.of(),
                 List.of(),
                 List.of(),
+                Map.of(),
                 0d,
                 0d,
                 0d,

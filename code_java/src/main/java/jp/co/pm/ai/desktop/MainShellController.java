@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -301,6 +302,12 @@ public final class MainShellController {
 
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
 
+    /** FXML 読込直後に固定した既定見出し（内部 ID は {@link MainShellTabId#key()} のまま）。 */
+    private final Map<MainShellTabId, String> mainShellTabBaselineTitles = new EnumMap<>(MainShellTabId.class);
+
+    /** セッション保存する見出しエイリアス（キーは {@link MainShellTabId#key()}）。 */
+    private final Map<String, String> mainShellTabTitleAliases = new LinkedHashMap<>();
+
     private static final String PM_AI_DESKTOP_CSS =
             Objects.requireNonNull(
                             PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css"),
@@ -327,6 +334,7 @@ public final class MainShellController {
     private void initialize() {
         suppressEnvSessionPersistence.set(true);
         try {
+            captureMainShellTabBaselineTitles();
             envRows = FXCollections.observableArrayList();
             populateEnvRows(envRows);
             Map<String, String> ui0 = collectUiEnv();
@@ -553,6 +561,7 @@ public final class MainShellController {
         } else {
             applyMainShellTabOrder(s.mainShellTabOrder());
         }
+        applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
@@ -630,6 +639,7 @@ public final class MainShellController {
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
+                snapshotMainShellTabTitleAliases(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
@@ -972,6 +982,52 @@ public final class MainShellController {
         return rootSelected;
     }
 
+    private void captureMainShellTabBaselineTitles() {
+        mainShellTabBaselineTitles.clear();
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id == MainShellTabId.TAB_ORGANIZER) {
+                continue;
+            }
+            Tab t = mainShellTabFor(id);
+            if (t != null) {
+                String tx = t.getText();
+                mainShellTabBaselineTitles.put(
+                        id, tx != null && !tx.isBlank() ? tx.strip() : id.name());
+            }
+        }
+    }
+
+    private Map<String, String> snapshotMainShellTabTitleAliases() {
+        return Map.copyOf(mainShellTabTitleAliases);
+    }
+
+    private void refreshMainShellTabDisplayedTitles() {
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id == MainShellTabId.TAB_ORGANIZER) {
+                continue;
+            }
+            Tab t = mainShellTabFor(id);
+            if (t != null) {
+                t.setText(mainShellTabTitle(id));
+            }
+        }
+    }
+
+    private void applyMainShellTabTitleAliasesFromSession(Map<String, String> fromSession) {
+        mainShellTabTitleAliases.clear();
+        if (fromSession != null) {
+            for (Map.Entry<String, String> e : fromSession.entrySet()) {
+                if (e.getKey() != null
+                        && !e.getKey().isBlank()
+                        && e.getValue() != null
+                        && !e.getValue().isBlank()) {
+                    mainShellTabTitleAliases.put(e.getKey().trim(), e.getValue().strip());
+                }
+            }
+        }
+        refreshMainShellTabDisplayedTitles();
+    }
+
     private List<MainShellTabLayoutNode> snapshotMainShellTabLayout() {
         if (tabPane == null) {
             return List.of();
@@ -1071,6 +1127,7 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
+        refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
     }
@@ -1136,6 +1193,7 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
+        refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
     }
@@ -1164,11 +1222,55 @@ public final class MainShellController {
     }
 
     String mainShellTabTitle(MainShellTabId id) {
-        Tab t = mainShellTabFor(id);
-        if (t != null && t.getText() != null && !t.getText().isBlank()) {
-            return t.getText();
+        if (id == null) {
+            return "";
         }
-        return id != null ? id.name() : "";
+        String a = mainShellTabTitleAliases.get(id.key());
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        String baseline = mainShellTabBaselineTitles.get(id);
+        if (baseline != null && !baseline.isBlank()) {
+            return baseline;
+        }
+        return id.name();
+    }
+
+    /** FXML 既定の見出し（エイリアス未設定時の説明・プレースホルダ用）。 */
+    String mainShellTabBaselineTitle(MainShellTabId id) {
+        if (id == null) {
+            return "";
+        }
+        String baseline = mainShellTabBaselineTitles.get(id);
+        return baseline != null && !baseline.isBlank() ? baseline : id.name();
+    }
+
+    /** セッションに保存されているエイリアス（未設定は空文字）。 */
+    String mainShellTabTitleAliasStored(MainShellTabId id) {
+        if (id == null) {
+            return "";
+        }
+        return mainShellTabTitleAliases.getOrDefault(id.key(), "");
+    }
+
+    /**
+     * メインタブ見出しの表示エイリアスを設定する。空ならエイリアスを解除し既定見出しに戻す。
+     * 内部 ID（{@link MainShellTabId#key()}）やレイアウト JSON は変更しない。
+     */
+    void setMainShellTabDisplayAlias(MainShellTabId id, String alias) {
+        if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
+            return;
+        }
+        String k = id.key();
+        if (alias == null || alias.isBlank()) {
+            mainShellTabTitleAliases.remove(k);
+        } else {
+            mainShellTabTitleAliases.put(k, alias.strip());
+        }
+        Tab tab = mainShellTabFor(id);
+        if (tab != null) {
+            tab.setText(mainShellTabTitle(id));
+        }
     }
 
     /** セッション保存用スナップショット（同一プロセス内の子コントローラから）。 */
