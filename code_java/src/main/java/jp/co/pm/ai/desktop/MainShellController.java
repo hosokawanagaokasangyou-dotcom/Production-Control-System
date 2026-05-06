@@ -2853,6 +2853,26 @@ public final class MainShellController {
         if (!PortableBundleSelfUpdater.shouldUpdate(cv, lv)) {
             return;
         }
+        String canonVerStr = cv.map(BigDecimal::toPlainString).orElse("?");
+        String localVerStr = lv.map(BigDecimal::toPlainString).orElse("（なし・初回）");
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(confirm);
+        confirm.setTitle("自動バージョンアップ");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "正本のバージョン（"
+                        + canonVerStr
+                        + "）がローカル pm-ai-data（"
+                        + localVerStr
+                        + "）より新しいです。\n"
+                        + "正本フォルダから pm-ai-data へファイルを同期します。実行してよいですか？");
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            appendLog("[startup] ポータル同期はユーザー操作によりスキップしました（版 " + canonVerStr + " → 保留）。");
+            return;
+        }
+
         Stage wait = new Stage();
         wait.initModality(Modality.APPLICATION_MODAL);
         wait.initOwner(primaryStage);
