@@ -4,3 +4,8 @@
 *.log
 # Excel creates lock files while a workbook is open
 **/~$*
+
+# Build / cache（ステージングしない）
+code_java/target/
+**/__pycache__/
+**/.pytest_cache/
