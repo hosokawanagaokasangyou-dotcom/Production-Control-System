@@ -23,6 +23,8 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -1077,14 +1079,55 @@ public final class MainShellController {
         if (tab == null) {
             return;
         }
+        TabPane pane = tab.getTabPane();
         if (colorHex != null && !colorHex.isBlank()) {
             String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
             tab.setStyle("-fx-background-color: " + h + ";");
+            pokeShellTabHeaderBackground(pane, tab, h);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
+            pokeShellTabHeaderBackground(pane, tab, null);
         }
+    }
+
+    /**
+     * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
+     * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景を指定する。
+     */
+    private static void pokeShellTabHeaderBackground(TabPane pane, Tab tab, String rgbHexOrNull) {
+        if (pane == null) {
+            return;
+        }
+        Runnable op =
+                () -> {
+                    int idx = pane.getTabs().indexOf(tab);
+                    if (idx < 0) {
+                        return;
+                    }
+                    Node headersRegion = pane.lookup(".headers-region");
+                    if (!(headersRegion instanceof Parent hp)) {
+                        return;
+                    }
+                    int tabOrdinal = 0;
+                    for (Node child : hp.getChildrenUnmodifiable()) {
+                        if (!child.getStyleClass().contains("tab")) {
+                            continue;
+                        }
+                        if (tabOrdinal == idx) {
+                            if (rgbHexOrNull != null && !rgbHexOrNull.isBlank()) {
+                                child.setStyle("-fx-background-color: " + rgbHexOrNull.strip() + ";");
+                            } else {
+                                child.setStyle("");
+                            }
+                            return;
+                        }
+                        tabOrdinal++;
+                    }
+                };
+        op.run();
+        Platform.runLater(op);
     }
 
     /**

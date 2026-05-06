@@ -6,12 +6,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeCell;
@@ -298,12 +300,14 @@ public final class MainShellTabOrganizerTabController {
         if (sel == null || sel.isEmpty()) {
             return;
         }
-        for (TreeItem<OrgRow> ti : sel) {
+        List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
+        for (TreeItem<OrgRow> ti : keep) {
             replaceRowColorHex(ti, hex);
         }
         if (shell != null && treeView.getRoot() != null) {
             shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
         }
+        Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
     }
 
     @FXML
@@ -315,12 +319,29 @@ public final class MainShellTabOrganizerTabController {
         if (sel == null || sel.isEmpty()) {
             return;
         }
-        for (TreeItem<OrgRow> ti : sel) {
+        List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
+        for (TreeItem<OrgRow> ti : keep) {
             replaceRowColorHex(ti, "");
         }
         if (shell != null && treeView.getRoot() != null) {
             shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
         }
+        Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
+    }
+
+    /** {@link TreeItem#setValue} やシェル同期のあとでも選択が維持されるようにする。 */
+    private void restoreOrganizerTreeSelection(List<TreeItem<OrgRow>> items) {
+        if (treeView == null || items == null || items.isEmpty()) {
+            return;
+        }
+        MultipleSelectionModel<TreeItem<OrgRow>> sm = treeView.getSelectionModel();
+        sm.clearSelection();
+        for (TreeItem<OrgRow> ti : items) {
+            if (ti != null) {
+                sm.select(ti);
+            }
+        }
+        treeView.requestFocus();
     }
 
     /**
