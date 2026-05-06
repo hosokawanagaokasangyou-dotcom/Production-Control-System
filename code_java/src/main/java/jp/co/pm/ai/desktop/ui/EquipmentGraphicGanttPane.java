@@ -7,7 +7,9 @@ import java.time.format.TextStyle;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,6 +49,7 @@ import javafx.geometry.Point2D;
 import javafx.scene.Node;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
 /**
@@ -607,6 +610,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         int machineColorSeq = -1;
         int gridR = 0;
+        int timelineCanvasRowCount = 0;
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
             if (dr.sectionBanner() != null) {
@@ -732,6 +736,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             double rowCanvasH = Math.max(1.0, cellBodyH);
             Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
+            timelineCanvasRowCount++;
             rowCanvas.setCache(false);
             GraphicsContext gcx = rowCanvas.getGraphicsContext2D();
             gcx.translate(0, timelineOuterPad);
@@ -859,6 +864,34 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         hint.setStyle(palette.hintCss());
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
+        // #region agent log
+        try {
+            int slotCols = parsed.slotColumnIndices().size();
+            double rowRgbMiB =
+                    (canvasTimelineW * cellBodyH * 4.0 * (double) timelineCanvasRowCount)
+                            / (1024.0 * 1024.0);
+            double headerRgbMiB =
+                    (canvasTimelineW * canvasHeaderH * 4.0) / (1024.0 * 1024.0);
+            Map<String, Object> data = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+            data.put("slotColumns", slotCols);
+            data.put("timelineWidthPx", canvasTimelineW);
+            data.put("rowBodyHeightPx", cellBodyH);
+            data.put("timelineCanvasRowCount", timelineCanvasRowCount);
+            data.put("naiveRowCanvasRgbMiB", Math.round(rowRgbMiB * 10.0) / 10.0);
+            data.put("naiveHeaderCanvasRgbMiB", Math.round(headerRgbMiB * 10.0) / 10.0);
+            data.put(
+                    "note",
+                    "RGBA naive estimate; Prism/SW actual may differ");
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "81ed4a",
+                    "HG1",
+                    "EquipmentGraphicGanttPane.build",
+                    "equipment gantt canvas footprint estimate",
+                    data);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
         return root;
     }
 
