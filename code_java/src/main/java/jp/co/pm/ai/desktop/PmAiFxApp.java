@@ -25,6 +25,11 @@ public class PmAiFxApp extends Application {
 
     static {
         System.setProperty("file.encoding", "UTF-8");
+        try {
+            StartupCrashLog.append("PmAiFxApp: static initializer (before main)");
+        } catch (Throwable ignored) {
+            /* ログクラス初期化失敗でも本体クラスは読み込む */
+        }
     }
 
     /**
