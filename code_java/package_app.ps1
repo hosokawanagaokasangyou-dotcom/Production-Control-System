@@ -528,6 +528,13 @@ if (-not (Test-Path -LiteralPath $distRoot)) {
 }
 Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $distRoot -PythonEmbedSourceDir $pythonSrc
 
+$launcherBatSrc = Join-Path $Root 'launch-pm-ai-desktop-portable.bat'
+$launcherBatDst = Join-Path $distRoot 'launch-pm-ai-desktop.bat'
+if (Test-Path -LiteralPath $launcherBatSrc) {
+    Copy-Item -LiteralPath $launcherBatSrc -Destination $launcherBatDst -Force
+    Write-Host "代替起動 bat: $launcherBatDst（exe が動かないとき runtime\bin\java.exe で直接起動）" -ForegroundColor DarkGray
+}
+
 Write-Host "--- 完了 ---" -ForegroundColor Green
 Write-Host "アプリ本体: $(Join-Path $distRoot "$APP_NAME.exe")"
 Write-Host "ポータブルデータ: $(Join-Path $distRoot 'pm-ai-data')"
