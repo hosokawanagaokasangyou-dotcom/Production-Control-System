@@ -11,7 +11,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Periodically logs heap and thread usage (disabled unless interval &gt; 0).
+ * Periodically logs heap and thread usage (disabled unless interval &gt; 0). At most {@link
+ * MemoryStderrLogGate#MAX_LINES} lines are written to stderr across all PM-AI memory loggers; then this monitor
+ * stops.
  *
  * <p>Enable via system property {@code pm.ai.jvm.memory.monitor.intervalSec} or env {@code
  * PM_AI_JVM_MEMORY_MONITOR_SEC} (seconds). Optional {@code pm.ai.jvm.memory.monitor.warnRatio} (0..1, default
@@ -77,14 +79,20 @@ public final class JvmMemoryMonitor {
                                         max > 0
                                                 ? String.format(Locale.ROOT, "%.1f%%", pct)
                                                 : "n/a");
-                        System.err.println(line);
+                        if (!MemoryStderrLogGate.recordLine(line)) {
+                            scheduler.shutdown();
+                            return;
+                        }
 
                         if (max > 0 && used >= max * warnRatio) {
-                            System.err.println(
+                            String warn =
                                     "[PM-AI heap] WARN: heap usage exceeded threshold "
                                             + String.format(
                                                     Locale.ROOT, "%.0f%%", warnRatio * 100)
-                                            + ". Consider increasing -Xmx or splitting work.");
+                                            + ". Consider increasing -Xmx or splitting work.";
+                            if (!MemoryStderrLogGate.recordLine(warn)) {
+                                scheduler.shutdown();
+                            }
                         }
                     } catch (Throwable ignored) {
                         // monitoring only
