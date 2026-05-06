@@ -8,6 +8,9 @@ import java.util.Map;
 /** Resolves {@link AppPaths#VERSION_TXT_FILE_NAME} for the run tab label. */
 public final class AppVersionInfo {
 
+    /** Fallback when version.txt cannot be read (ASCII only: avoids javac errors if source file encoding breaks on Windows). */
+    static final String VERSION_UNKNOWN = "--";
+
     private AppVersionInfo() {}
 
     /**
@@ -26,15 +29,15 @@ public final class AppVersionInfo {
                 Path vf = c.resolve("pm-ai-data").resolve(AppPaths.VERSION_TXT_FILE_NAME);
                 return PortableBundleSelfUpdater.parseVersionFile(vf)
                         .map(BigDecimal::toPlainString)
-                        .orElse("•s–¾");
+                        .orElse(VERSION_UNKNOWN);
             }
             Path repo = AppPaths.resolveRepoRoot(ui != null ? ui : Map.of());
             Path vf = repo.resolve(AppPaths.VERSION_TXT_FILE_NAME);
             return PortableBundleSelfUpdater.parseVersionFile(vf)
                     .map(BigDecimal::toPlainString)
-                    .orElse("•s–¾");
+                    .orElse(VERSION_UNKNOWN);
         } catch (Exception e) {
-            return "•s–¾";
+            return VERSION_UNKNOWN;
         }
     }
 }
