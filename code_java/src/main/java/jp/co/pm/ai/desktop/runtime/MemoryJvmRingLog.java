@@ -24,7 +24,7 @@ public final class MemoryJvmRingLog {
 
     private MemoryJvmRingLog() {}
 
-    /** Called from JavaFX controller; runs on arbitrary threads ? listener should hop to FX thread if needed. */
+    /** Called from JavaFX controller; listener should hop to the FX thread if it touches UI. */
     public static void setUiRefreshListener(Runnable listener) {
         UI_REFRESH.set(listener);
     }
@@ -61,6 +61,24 @@ public final class MemoryJvmRingLog {
         synchronized (LOCK) {
             return List.copyOf(LINES);
         }
+    }
+
+    /** Replaces buffer contents (e.g. after loading from disk); trims to current {@link #maxLines}. */
+    public static void replaceLines(List<String> incoming) {
+        synchronized (LOCK) {
+            LINES.clear();
+            if (incoming != null) {
+                for (String line : incoming) {
+                    if (line != null) {
+                        LINES.addLast(line);
+                        while (LINES.size() > maxLines) {
+                            LINES.removeFirst();
+                        }
+                    }
+                }
+            }
+        }
+        notifyUi();
     }
 
     private static void notifyUi() {

@@ -24,11 +24,12 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
+import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.PomJvmHeapPropertiesSync;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 
 /**
- * JVM ??????????????JVM ??????????? UI?
+ * JVM ??????????????JVM ??????????? UI?????? session-state ?????? JSON ?????
  */
 public final class MemorySettingsTabController {
 
@@ -167,7 +168,8 @@ public final class MemorySettingsTabController {
         jvmLogMaxLinesLabel.setText("????");
         jvmLogHintLabel.setText(
                 "??????????????????????????????? JVM ???????????????"
-                        + " ????????????????????????");
+                        + " ???????????????????????session-state????????"
+                        + "?????????? .pm-ai-desktop/jvm-memory-log.json?????????");
         memoryJvmLogMaxLinesSpinner.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(
                         MemoryJvmRingLog.ABS_MIN,
@@ -243,15 +245,7 @@ public final class MemorySettingsTabController {
                             : cur;
             nextLaunchHeapMiBSpinner.getValueFactory().setValue(target);
 
-            long savedMl = s.memoryJvmLogMaxLines();
-            int targetMl =
-                    (int)
-                            clamp(
-                                    savedMl > 0 ? savedMl : MemoryJvmRingLog.DEFAULT_MAX_LINES,
-                                    MemoryJvmRingLog.ABS_MIN,
-                                    MemoryJvmRingLog.ABS_MAX);
-            memoryJvmLogMaxLinesSpinner.getValueFactory().setValue(targetMl);
-            MemoryJvmRingLog.setMaxLines(targetMl);
+            memoryJvmLogMaxLinesSpinner.getValueFactory().setValue(MemoryJvmRingLog.getMaxLines());
 
             updateHeapArgHint();
         } finally {
@@ -272,11 +266,6 @@ public final class MemorySettingsTabController {
     long snapshotNextLaunchHeapMaxMiB() {
         int v = nextLaunchHeapMiBSpinner.getValue();
         return v <= 0 ? 0L : v;
-    }
-
-    long snapshotMemoryJvmLogMaxLines() {
-        int v = memoryJvmLogMaxLinesSpinner.getValue();
-        return clamp(v, MemoryJvmRingLog.ABS_MIN, MemoryJvmRingLog.ABS_MAX);
     }
 
     /** ?????????????????????? */
@@ -305,6 +294,8 @@ public final class MemorySettingsTabController {
         shell.persistDesktopSessionNow();
         PomJvmHeapPropertiesSync.writeJvmHeapFromDesiredMiB(
                 shell.snapshotUiEnv(), nextLaunchHeapMiBSpinner.getValue());
+        JvmMemoryLogStore.persistSnapshot(
+                memoryJvmLogMaxLinesSpinner.getValue(), MemoryJvmRingLog.snapshotLines());
     }
 
     private void restartMonitorFromUiState() {

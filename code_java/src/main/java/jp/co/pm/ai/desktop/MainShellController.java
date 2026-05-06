@@ -56,6 +56,7 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
@@ -65,6 +66,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
@@ -446,6 +448,8 @@ public final class MainShellController {
         primaryStage.setOnCloseRequest(
                 e -> {
                     memorySettingsTabController.shutdown();
+                    JvmMemoryLogStore.persistSnapshot(
+                            MemoryJvmRingLog.getMaxLines(), MemoryJvmRingLog.snapshotLines());
                     DesktopSessionStateStore.save(collectDesktopSession());
                 });
 
@@ -557,6 +561,7 @@ public final class MainShellController {
         if (s == null) {
             return;
         }
+        JvmMemoryLogStore.bootstrapRingFromDisk();
         setMainShellTabOrganizerHeaderGlowEnabled(s.mainShellTabOrganizerHeaderGlow());
         setMainShellTabOrganizerHeaderGlowStrength(
                 clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0));
@@ -720,7 +725,6 @@ public final class MainShellController {
                         : PushButtonDesignPrefs.inactiveDefaults(),
                 memorySettingsTabController.snapshotMemoryMonitorEnabled(),
                 memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
-                memorySettingsTabController.snapshotMemoryJvmLogMaxLines(),
                 memorySettingsTabController.snapshotNextLaunchHeapMaxMiB());
     }
 

@@ -96,8 +96,6 @@ public final class DesktopSessionStateStore {
                     loadPushButtonDesignPrefs(root),
                     optionalBoolean(root, "memoryMonitorEnabled", false),
                     optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
-                    optionalLongClamped(
-                            root, "memoryJvmLogMaxLines", 10_000L, 100L, 500_000L),
                     optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -193,10 +191,6 @@ public final class DesktopSessionStateStore {
         root.put("memoryMonitorEnabled", state.memoryMonitorEnabled());
         long iv = state.memoryMonitorIntervalSec();
         root.put("memoryMonitorIntervalSec", Math.max(1L, Math.min(3600L, iv <= 0 ? 5L : iv)));
-        long ml = state.memoryJvmLogMaxLines();
-        root.put(
-                "memoryJvmLogMaxLines",
-                Math.max(100L, Math.min(500_000L, ml <= 0 ? 10_000L : ml)));
         long nx = state.nextLaunchHeapMaxMiB();
         if (nx > 0) {
             root.put("nextLaunchHeapMaxMiB", nx);
