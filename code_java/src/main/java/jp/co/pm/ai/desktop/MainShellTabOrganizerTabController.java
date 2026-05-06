@@ -1,7 +1,6 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -15,6 +14,7 @@ import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
@@ -23,18 +23,15 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
-import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.Node;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
-import javafx.scene.shape.Line;
-import javafx.scene.shape.Polyline;
+import javafx.scene.layout.VBox;
 import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
@@ -52,11 +49,14 @@ public final class MainShellTabOrganizerTabController {
     private static final DataFormat ROW_MOVE_MARKER =
             new DataFormat("application/x-pm-main-shell-tab-org-move");
 
-    private static final double TREE_INDENT_STEP = 22.0;
-    private static final double TREE_CONNECTOR_ROW_H = 30.0;
+    /** 親の右に並べる子の縦ずらしの下限ピクセル（高さの半分がこれより小さいとき）。 */
+    private static final double CHILD_STAGGER_MIN_PX = 4.0;
 
     @FXML
     private TreeView<OrgRow> treeView;
+
+    @FXML
+    private VBox organizerVisualRoot;
 
     @FXML
     private ColorPicker colorPicker;
@@ -108,6 +108,7 @@ public final class MainShellTabOrganizerTabController {
             treeSelectionListener =
                     (obs, prev, cur) -> {
                         syncOrganizerSideFields();
+                        rebuildOrganizerVisualTree();
                     };
             treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
         }
@@ -117,11 +118,7 @@ public final class MainShellTabOrganizerTabController {
                     .getSelectedItems()
                     .addListener(
                             (ListChangeListener<TreeItem<OrgRow>>)
-                                    c -> {
-                                        if (treeView != null) {
-                                            treeView.refresh();
-                                        }
-                                    });
+                                    c -> rebuildOrganizerVisualTree());
         }
         installHeaderGlowControls();
         reloadTreeFromShell();
@@ -152,9 +149,7 @@ public final class MainShellTabOrganizerTabController {
                                 }
                                 shell.setMainShellTabOrganizerHeaderGlowEnabled(selected);
                                 shell.refreshMainShellTabHeaderChromeFromStoredColors();
-                                if (treeView != null) {
-                                    treeView.refresh();
-                                }
+                                rebuildOrganizerVisualTree();
                                 DesktopSessionState snap = shell.collectDesktopSessionSnapshot();
                                 DesktopSessionStateStore.save(snap);
                             });
@@ -186,6 +181,7 @@ public final class MainShellTabOrganizerTabController {
         treeView.setRoot(invisibleRoot);
         expandAll(invisibleRoot);
         syncOrganizerSideFields();
+        rebuildOrganizerVisualTree();
     }
 
     private void syncOrganizerSideFields() {
@@ -263,7 +259,7 @@ public final class MainShellTabOrganizerTabController {
         String raw = tabAliasField.getText();
         shell.setMainShellTabDisplayAlias(sel.getValue().tabId, raw);
         DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
-        treeView.refresh();
+        rebuildOrganizerVisualTree();
         syncTabAliasField();
     }
 
@@ -418,6 +414,7 @@ public final class MainShellTabOrganizerTabController {
             }
         }
         treeView.requestFocus();
+        rebuildOrganizerVisualTree();
     }
 
     /**
@@ -660,188 +657,207 @@ public final class MainShellTabOrganizerTabController {
         }
     }
 
-    /** ルート直下から見て各階層で「末っ子か」を末端から順に並べたリスト（接続線描画用）。 */
-    private static List<Boolean> lastAncestorChain(
-            TreeItem<OrgRow> item, TreeItem<OrgRow> invisibleRoot) {
-        LinkedList<Boolean> chain = new LinkedList<>();
-        TreeItem<OrgRow> n = item;
-        while (n != null && n.getParent() != null && n.getParent() != invisibleRoot) {
-            TreeItem<OrgRow> p = n.getParent();
-            ObservableList<TreeItem<OrgRow>> sibs = p.getChildren();
-            boolean last = !sibs.isEmpty() && sibs.indexOf(n) == sibs.size() - 1;
-            chain.addFirst(last);
-            n = p;
-        }
-        return new ArrayList<>(chain);
+    /** {@link TreeView} はモデル専用。可視レイアウトは {@link #organizerVisualRoot} を再構築する。 */
+    void installTreeCellFactory() {
+        rebuildOrganizerVisualTree();
     }
 
-    /** ツリー接続線（縦＋最深段の L 字）。幅は深さ×{@link #TREE_INDENT_STEP}。 */
-    private static Pane buildTreeConnectorPane(List<Boolean> chain, double rowH) {
+    private void rebuildOrganizerVisualTree() {
+        if (organizerVisualRoot == null || treeView == null) {
+            return;
+        }
+        organizerVisualRoot.getChildren().clear();
+        TreeItem<OrgRow> root = treeView.getRoot();
+        if (root == null) {
+            return;
+        }
+        for (TreeItem<OrgRow> ch : root.getChildren()) {
+            organizerVisualRoot.getChildren().add(buildOrganizerRow(ch));
+        }
+    }
+
+    private Node buildOrganizerRow(TreeItem<OrgRow> item) {
+        if (item == null || item.getValue() == null) {
+            return new Region();
+        }
+        OrgRow r = item.getValue();
+        if (r.kind == OrgRow.Kind.TAB) {
+            return createPillForTreeItem(item);
+        }
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setFillHeight(false);
+
+        Button disclosure = new Button(item.isExpanded() ? "▼" : "▶");
+        disclosure.setFocusTraversable(false);
+        disclosure.getStyleClass().add("pm-org-tree-disclosure");
+        disclosure.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        disclosure.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        disclosure.setOnAction(
+                e -> {
+                    item.setExpanded(!item.isExpanded());
+                    rebuildOrganizerVisualTree();
+                });
+
+        StackPane pill = createPillForTreeItem(item);
+        row.getChildren().addAll(disclosure, pill);
+        attachDropTarget(row, item);
+
+        if (item.isExpanded() && !item.getChildren().isEmpty()) {
+            row.getChildren().add(buildStaggeredChildStrip(item));
+        }
+        return row;
+    }
+
+    private Pane buildStaggeredChildStrip(TreeItem<OrgRow> groupItem) {
         Pane pane = new Pane();
-        int depth = chain.size();
-        double w = depth * TREE_INDENT_STEP;
-        pane.setPrefWidth(w);
-        pane.setMinWidth(w);
-        if (depth <= 0) {
-            return pane;
+        double maxRight = 0;
+        double maxBottom = 0;
+        double y = 0;
+        for (TreeItem<OrgRow> ch : groupItem.getChildren()) {
+            Node n =
+                    ch.getValue() != null && ch.getValue().kind == OrgRow.Kind.GROUP
+                            ? buildOrganizerRow(ch)
+                            : createPillForTreeItem(ch);
+            n.applyCss();
+            double pw = n.prefWidth(-1);
+            double ph = n.prefHeight(-1);
+            n.setLayoutX(0);
+            n.setLayoutY(y);
+            pane.getChildren().add(n);
+            maxRight = Math.max(maxRight, pw);
+            maxBottom = Math.max(maxBottom, y + ph);
+            y += Math.max(CHILD_STAGGER_MIN_PX, ph * 0.5);
         }
-        double h = Math.max(26, rowH);
-        double midY = h * 0.42;
-        Color lc = Color.web("#5ba9ff");
-        for (int lev = 0; lev < depth; lev++) {
-            double x = lev * TREE_INDENT_STEP + TREE_INDENT_STEP / 2.0;
-            boolean lastAtLevel = chain.get(lev);
-            if (lev < depth - 1) {
-                double yEnd = lastAtLevel ? midY : h;
-                Line vl = new Line(x, 0, x, yEnd);
-                vl.setStroke(lc);
-                vl.setStrokeWidth(1.35);
-                pane.getChildren().add(vl);
-            } else {
-                Polyline elbow = new Polyline(x, 0, x, midY, x + 13, midY);
-                elbow.setStroke(lc);
-                elbow.setFill(Color.TRANSPARENT);
-                elbow.setStrokeWidth(1.35);
-                pane.getChildren().add(elbow);
-            }
-        }
+        pane.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        pane.setPrefSize(Math.max(maxRight, 1), Math.max(maxBottom, 1));
+        attachDropTarget(pane, groupItem);
         return pane;
     }
 
-    /** {@link TreeView} 用セルファクトリはコントローラ初期化後にシェルへバインドしてから設定する。 */
-    void installTreeCellFactory() {
-        if (treeView == null) {
-            return;
+    private StackPane createPillForTreeItem(TreeItem<OrgRow> item) {
+        OrgRow row = item.getValue();
+        StackPane pill = new StackPane();
+        pill.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        pill.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        pill.getStyleClass().setAll("pm-org-tree-pill");
+        Label lab = new Label(row.treePillPrimaryLabel(shell));
+        lab.setWrapText(false);
+        lab.getStyleClass().add("pm-org-tree-pill-label");
+        String hx = row.colorHex;
+        if (hx != null && !hx.isBlank() && shell != null) {
+            pill.setStyle(shell.tabOrganizerTreePillSurfaceStyle(hx));
+            lab.setStyle("-fx-text-fill: #f8fafc; -fx-font-size: 11px; -fx-font-weight: bold;");
+            pill.getStyleClass().remove("pm-org-tree-pill-empty");
+        } else {
+            pill.setStyle("");
+            pill.getStyleClass().add("pm-org-tree-pill-empty");
+            lab.setStyle(
+                    "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
+                            + (shell != null
+                                    ? shell.tabOrganizerPreviewChipLabelTextFill("")
+                                    : "#94a3b8")
+                            + ";");
         }
-        treeView.setCellFactory(tv -> createDnDTreeCell());
+        Tooltip.install(pill, new Tooltip(row.treeDetailWithoutHex(shell)));
+        pill.getChildren().setAll(lab);
+        wirePillInteractions(pill, item);
+        updatePillSelectionStyle(pill, item);
+        return pill;
     }
 
-    private TreeCell<OrgRow> createDnDTreeCell() {
-        TreeCell<OrgRow> cell =
-                new TreeCell<>() {
-                    @Override
-                    protected void updateItem(OrgRow row, boolean empty) {
-                        super.updateItem(row, empty);
-                        getStyleClass().removeIf(st -> st.startsWith("pm-org-depth-"));
-                        if (empty || row == null) {
-                            setText(null);
-                            setGraphic(null);
-                            return;
-                        }
-                        TreeView<OrgRow> tv = getTreeView();
-                        TreeItem<OrgRow> ti = getTreeItem();
-                        TreeItem<OrgRow> invisibleRoot = tv != null ? tv.getRoot() : null;
-                        List<Boolean> chain =
-                                invisibleRoot != null && ti != null
-                                        ? lastAncestorChain(ti, invisibleRoot)
-                                        : List.of();
-                        int depth = chain.size();
-                        getStyleClass().add("pm-org-depth-" + Math.min(depth, 12));
-
-                        Node indentGraphic;
-                        if (depth > 0) {
-                            indentGraphic = buildTreeConnectorPane(chain, TREE_CONNECTOR_ROW_H);
-                        } else {
-                            Region z = new Region();
-                            z.setMinWidth(0);
-                            z.setPrefWidth(0);
-                            z.setMaxWidth(0);
-                            indentGraphic = z;
-                        }
-
-                        StackPane pill = new StackPane();
-                        pill.setMinHeight(30);
-                        pill.setPrefHeight(32);
-                        pill.getStyleClass().setAll("pm-org-tree-pill");
-                        String pillTitle = row.treePillPrimaryLabel(shell);
-                        Label lab = new Label(pillTitle);
-                        lab.setWrapText(false);
-                        lab.setMaxWidth(Double.MAX_VALUE);
-                        lab.setAlignment(Pos.CENTER_LEFT);
-                        lab.getStyleClass().add("pm-org-tree-pill-label");
-                        String hx = row.colorHex;
-                        if (hx != null && !hx.isBlank() && shell != null) {
-                            pill.setStyle(
-                                    shell.tabOrganizerPreviewChipSurfaceStyle(hx)
-                                            + " -fx-background-radius: 8 8 8 8; -fx-border-radius: 8 8 8 8;");
-                            lab.setStyle(
-                                    "-fx-text-fill: #f8fafc; -fx-font-size: 11px; -fx-font-weight: bold;");
-                            pill.getStyleClass().remove("pm-org-tree-pill-empty");
-                        } else {
-                            pill.setStyle("");
-                            pill.getStyleClass().add("pm-org-tree-pill-empty");
-                            lab.setStyle(
-                                    "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
-                                            + (shell != null
-                                                    ? shell.tabOrganizerPreviewChipLabelTextFill("")
-                                                    : "#94a3b8")
-                                            + ";");
-                        }
-                        Tooltip.install(
-                                pill,
-                                new Tooltip(row.treeDetailWithoutHex(shell)));
-                        pill.getChildren().setAll(lab);
-                        HBox.setHgrow(pill, Priority.ALWAYS);
-
-                        boolean sel =
-                                tv != null
-                                        && tv.getSelectionModel()
-                                                .getSelectedItems()
-                                                .contains(ti);
-                        pill.getStyleClass().remove("pm-org-tree-pill-selected");
-                        if (sel) {
-                            pill.getStyleClass().add("pm-org-tree-pill-selected");
-                        }
-
-                        HBox rowBox = new HBox(6);
-                        rowBox.setAlignment(Pos.CENTER_LEFT);
-                        rowBox.getChildren().addAll(indentGraphic, pill);
-                        setText(null);
-                        setGraphic(rowBox);
-                    }
-                };
-        cell.setOnDragDetected(
-                event -> {
-                    TreeItem<OrgRow> dragged = cell.getTreeItem();
-                    if (dragged == null || dragged.getValue() == null) {
+    private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
+        pill.setOnMouseClicked(
+                ev -> {
+                    if (treeView == null) {
                         return;
                     }
-                    Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
-                    dragSourceItem = dragged;
+                    MultipleSelectionModel<TreeItem<OrgRow>> sm = treeView.getSelectionModel();
+                    if (ev.isControlDown()) {
+                        if (sm.getSelectedItems().contains(item)) {
+                            int row = treeView.getRow(item);
+                            if (row >= 0) {
+                                sm.clearSelection(row);
+                            }
+                        } else {
+                            sm.select(item);
+                        }
+                    } else {
+                        sm.clearSelection();
+                        sm.select(item);
+                    }
+                    rebuildOrganizerVisualTree();
+                    syncOrganizerSideFields();
+                    ev.consume();
+                });
+        pill.setOnDragDetected(
+                ev -> {
+                    if (item.getValue() == null) {
+                        return;
+                    }
+                    Dragboard db = pill.startDragAndDrop(TransferMode.MOVE);
+                    dragSourceItem = item;
                     ClipboardContent cc = new ClipboardContent();
                     cc.put(ROW_MOVE_MARKER, "move");
                     db.setContent(cc);
-                    event.consume();
+                    ev.consume();
                 });
-        cell.setOnDragOver(
-                event -> {
-                    if (event.getGestureSource() != cell
-                            && event.getDragboard().hasContent(ROW_MOVE_MARKER)
-                            && dragSourceItem != null) {
-                        TreeItem<OrgRow> target = cell.getTreeItem();
-                        if (canAcceptDrop(dragSourceItem, target)) {
-                            event.acceptTransferModes(TransferMode.MOVE);
-                        }
+        pill.setOnDragOver(
+                ev -> {
+                    if (ev.getGestureSource() != pill
+                            && ev.getDragboard().hasContent(ROW_MOVE_MARKER)
+                            && dragSourceItem != null
+                            && canAcceptDrop(dragSourceItem, item)) {
+                        ev.acceptTransferModes(TransferMode.MOVE);
                     }
-                    event.consume();
+                    ev.consume();
                 });
-        cell.setOnDragDropped(
-                event -> {
-                    Dragboard db = event.getDragboard();
-                    boolean success = false;
+        pill.setOnDragDropped(
+                ev -> {
+                    Dragboard db = ev.getDragboard();
+                    boolean ok = false;
                     if (db.hasContent(ROW_MOVE_MARKER) && dragSourceItem != null) {
-                        TreeItem<OrgRow> target = cell.getTreeItem();
-                        success = performDrop(dragSourceItem, target);
+                        ok = performDrop(dragSourceItem, item);
                     }
-                    event.setDropCompleted(success);
-                    event.consume();
+                    ev.setDropCompleted(ok);
+                    ev.consume();
                 });
-        cell.setOnDragDone(
-                event -> {
-                    dragSourceItem = null;
-                    event.consume();
+        pill.setOnDragDone(ev -> dragSourceItem = null);
+    }
+
+    private void attachDropTarget(Node node, TreeItem<OrgRow> target) {
+        node.setOnDragOver(
+                ev -> {
+                    if (ev.getGestureSource() != node
+                            && ev.getDragboard().hasContent(ROW_MOVE_MARKER)
+                            && dragSourceItem != null
+                            && canAcceptDrop(dragSourceItem, target)) {
+                        ev.acceptTransferModes(TransferMode.MOVE);
+                    }
+                    ev.consume();
                 });
-        return cell;
+        node.setOnDragDropped(
+                ev -> {
+                    Dragboard db = ev.getDragboard();
+                    boolean ok = false;
+                    if (db.hasContent(ROW_MOVE_MARKER) && dragSourceItem != null) {
+                        ok = performDrop(dragSourceItem, target);
+                    }
+                    ev.setDropCompleted(ok);
+                    ev.consume();
+                });
+        node.setOnDragDone(ev -> dragSourceItem = null);
+    }
+
+    private void updatePillSelectionStyle(StackPane pill, TreeItem<OrgRow> item) {
+        if (treeView == null) {
+            return;
+        }
+        boolean sel = treeView.getSelectionModel().getSelectedItems().contains(item);
+        pill.getStyleClass().remove("pm-org-tree-pill-selected");
+        if (sel) {
+            pill.getStyleClass().add("pm-org-tree-pill-selected");
+        }
     }
 
     /**
@@ -895,7 +911,7 @@ public final class MainShellTabOrganizerTabController {
 
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(source);
-        treeView.refresh();
+        rebuildOrganizerVisualTree();
         syncOrganizerSideFields();
         return true;
     }

@@ -1163,6 +1163,23 @@ public final class MainShellController {
         return sb.toString().trim();
     }
 
+    /**
+     * タブ整理ツリー上の色ピル用（メイン見出しのグロー設定に依存しないフラットな面スタイル）。
+     */
+    public String tabOrganizerTreePillSurfaceStyle(String colorHexOrEmpty) {
+        if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
+            return "";
+        }
+        String h = colorHexOrEmpty.strip();
+        return ("-fx-background-color: "
+                        + h
+                        + "; -fx-background-radius: 6; -fx-border-radius: 6; -fx-border-width: 1; "
+                        + "-fx-border-color: "
+                        + previewChipBorderRgba(h)
+                        + ";")
+                .trim();
+    }
+
     public String tabOrganizerPreviewChipLabelTextFill(String colorHexOrEmpty) {
         if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
             return "#94a3b8";

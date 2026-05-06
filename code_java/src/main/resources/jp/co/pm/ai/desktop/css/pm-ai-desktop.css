@@ -344,6 +344,33 @@
     -fx-background-color: transparent;
 }
 
+/* タブ整理：可視ツリー（ピル＋親の右に子）／モデル用 TreeView は非表示 */
+.pm-org-organizer-stack {
+    -fx-background-color: transparent;
+}
+
+.pm-org-organizer-visual-scroll,
+.pm-org-organizer-visual-scroll .viewport {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.pm-org-organizer-visual-root {
+    -fx-background-color: transparent;
+}
+
+.pm-main-shell-tab-organizer .tree-view.pm-org-organizer-model-tree {
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.pm-org-tree-disclosure {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 0;
+    -fx-font-size: 0.85em;
+}
+
 .pm-main-shell-tab-organizer .label {
     -fx-text-fill: -fx-text-background-color;
 }
@@ -358,11 +385,11 @@
     -fx-text-fill: -fx-mid-text-color;
 }
 
-/* ツリー：色付きピル（添付モックのノード） */
+/* ツリー：色付きピル（文字に合わせたコンパクトサイズ・グローなし） */
 .pm-org-tree-pill {
-    -fx-padding: 6 12 6 12;
+    -fx-padding: 1 8 1 8;
     -fx-background-insets: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 5, 0.2, 0, 1);
+    -fx-effect: null;
 }
 
 .pm-org-tree-pill-empty {

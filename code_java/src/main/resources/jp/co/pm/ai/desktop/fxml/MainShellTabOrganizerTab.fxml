@@ -11,6 +11,7 @@
 <?import javafx.scene.control.TreeView?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -29,7 +30,20 @@
             <Label wrapText="true"
                    text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
             <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
-            <TreeView fx:id="treeView" minHeight="220.0" prefHeight="420.0" styleClass="tree-view pm-org-tree-lined"/>
+            <StackPane minHeight="220.0" prefHeight="420.0" styleClass="pm-org-organizer-stack">
+                <ScrollPane fitToHeight="true" fitToWidth="true" hbarPolicy="AS_NEEDED" styleClass="pm-org-organizer-visual-scroll"
+                            vbarPolicy="AS_NEEDED">
+                    <content>
+                        <VBox fx:id="organizerVisualRoot" spacing="12.0" styleClass="pm-org-organizer-visual-root">
+                            <padding>
+                                <Insets bottom="8.0" left="6.0" right="6.0" top="6.0"/>
+                            </padding>
+                        </VBox>
+                    </content>
+                </ScrollPane>
+                <TreeView fx:id="treeView" managed="true" maxHeight="0.0" minHeight="0.0" mouseTransparent="true"
+                          prefHeight="0.0" showRoot="false" styleClass="pm-org-organizer-model-tree" visible="false"/>
+            </StackPane>
             <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
                    text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
