@@ -55,6 +55,11 @@
                         <fx:include fx:id="envTab" source="EnvTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabMemorySettings" closable="false" text="メモリ設定">
+                    <content>
+                        <fx:include fx:id="memorySettingsTab" source="MemorySettingsTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

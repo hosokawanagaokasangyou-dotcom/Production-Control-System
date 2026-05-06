@@ -8,6 +8,8 @@ public enum MainShellTabId {
     UI_BADGE_DESIGN("uiBadgeDesign"),
     PUSH_BUTTON_DESIGN("pushButtonDesign"),
     ENV("env"),
+    /** JVM ヒープ・メモリ監視・次回起動時ヒープ希望値。 */
+    MEMORY_SETTINGS("memorySettings"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     STAGE1_PREVIEW("stage1Preview"),

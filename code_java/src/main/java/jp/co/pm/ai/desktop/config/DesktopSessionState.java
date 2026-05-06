@@ -63,6 +63,9 @@ import java.util.Map;
  * @param mainShellTabOrganizerHeaderGlow メインシェル「タブの並び」で指定した見出し色にグロー（dropshadow）を付けるか
  * @param mainShellTabOrganizerHeaderGlowStrength 見出しグローの強さ（0.0〜1.0、1.0 が従来既定の見え方）
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
+ * @param memoryMonitorEnabled メモリ設定タブのヒープ監視（トレンドグラフ）を有効にするか
+ * @param memoryMonitorIntervalSec 監視間隔（秒、1〜3600）
+ * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で現在値を参照）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -119,7 +122,10 @@ public record DesktopSessionState(
         PersonBadgeStyle stage1NetworkCacheBadgeStyle,
         boolean mainShellTabOrganizerHeaderGlow,
         double mainShellTabOrganizerHeaderGlowStrength,
-        PushButtonDesignPrefs pushButtonDesignPrefs) {
+        PushButtonDesignPrefs pushButtonDesignPrefs,
+        boolean memoryMonitorEnabled,
+        long memoryMonitorIntervalSec,
+        long nextLaunchHeapMaxMiB) {
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -245,6 +251,9 @@ public record DesktopSessionState(
                 PersonBadgeStyle.networkSourceCacheBadgeDefault(),
                 true,
                 1d,
-                PushButtonDesignPrefs.inactiveDefaults());
+                PushButtonDesignPrefs.inactiveDefaults(),
+                false,
+                5L,
+                0L);
     }
 }

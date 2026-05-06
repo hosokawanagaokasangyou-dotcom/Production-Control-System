@@ -155,6 +155,9 @@ public final class MainShellController {
     private EnvTabController envTabController;
 
     @FXML
+    private MemorySettingsTabController memorySettingsTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -210,6 +213,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabEnv;
+
+    @FXML
+    private Tab mainShellTabMemorySettings;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -271,6 +277,7 @@ public final class MainShellController {
                     MainShellTabId.UI_BADGE_DESIGN.key(),
                     MainShellTabId.PUSH_BUTTON_DESIGN.key(),
                     MainShellTabId.ENV.key(),
+                    MainShellTabId.MEMORY_SETTINGS.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
@@ -361,6 +368,7 @@ public final class MainShellController {
 
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);
+            memorySettingsTabController.bindShell(this);
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
             equipmentGanttGraphicTabController.bindShell(this);
@@ -433,7 +441,11 @@ public final class MainShellController {
 
         probeNetworkSourceDirsAtStartup();
 
-        primaryStage.setOnCloseRequest(e -> DesktopSessionStateStore.save(collectDesktopSession()));
+        primaryStage.setOnCloseRequest(
+                e -> {
+                    memorySettingsTabController.shutdown();
+                    DesktopSessionStateStore.save(collectDesktopSession());
+                });
 
         primaryStage.setOnShown(
                 e -> {
@@ -547,6 +559,7 @@ public final class MainShellController {
         setMainShellTabOrganizerHeaderGlowStrength(
                 clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0));
         applyUiEnvRowsFromSession(s);
+        memorySettingsTabController.applyMemorySettingsSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
         stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
         excludeRulesTabController.restoreDesktopSessionPath(s.excludeRulesPath());
@@ -702,7 +715,10 @@ public final class MainShellController {
                 getMainShellTabOrganizerHeaderGlowStrength(),
                 pushButtonDesignTabController != null
                         ? pushButtonDesignTabController.snapshotPrefs()
-                        : PushButtonDesignPrefs.inactiveDefaults());
+                        : PushButtonDesignPrefs.inactiveDefaults(),
+                memorySettingsTabController.snapshotMemoryMonitorEnabled(),
+                memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
+                memorySettingsTabController.snapshotNextLaunchHeapMaxMiB());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -850,6 +866,9 @@ public final class MainShellController {
         if (t == mainShellTabEnv) {
             return MainShellTabId.ENV;
         }
+        if (t == mainShellTabMemorySettings) {
+            return MainShellTabId.MEMORY_SETTINGS;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -904,6 +923,7 @@ public final class MainShellController {
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
             case PUSH_BUTTON_DESIGN -> mainShellTabPushButtonDesign;
             case ENV -> mainShellTabEnv;
+            case MEMORY_SETTINGS -> mainShellTabMemorySettings;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;

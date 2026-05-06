@@ -93,7 +93,10 @@ public final class DesktopSessionStateStore {
                     loadStage1NetworkCacheBadgeStyle(root),
                     optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
                     clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
-                    loadPushButtonDesignPrefs(root));
+                    loadPushButtonDesignPrefs(root),
+                    optionalBoolean(root, "memoryMonitorEnabled", false),
+                    optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
+                    optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L));
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
@@ -132,6 +135,7 @@ public final class DesktopSessionStateStore {
                     "mainShellTabOrganizerHeaderGlowStrength",
                     state.mainShellTabOrganizerHeaderGlowStrength());
             putPushButtonDesignPrefs(root, state);
+            putMemorySettingsPrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
@@ -159,6 +163,38 @@ public final class DesktopSessionStateStore {
             return 1d;
         }
         return Math.max(0d, Math.min(1d, v));
+    }
+
+    private static long optionalLongClamped(
+            JsonNode root, String key, long defaultValue, long min, long max) {
+        JsonNode n = root.get(key);
+        if (n == null || n.isNull() || !n.isNumber()) {
+            return defaultValue;
+        }
+        long v = n.asLong();
+        return Math.max(min, Math.min(max, v));
+    }
+
+    private static long optionalNonNegativeLong(JsonNode root, String key, long defaultValue) {
+        JsonNode n = root.get(key);
+        if (n == null || n.isNull() || !n.isNumber()) {
+            return defaultValue;
+        }
+        long v = n.asLong();
+        if (v < 0) {
+            return defaultValue;
+        }
+        return Math.min(v, 65536L);
+    }
+
+    private static void putMemorySettingsPrefs(ObjectNode root, DesktopSessionState state) {
+        root.put("memoryMonitorEnabled", state.memoryMonitorEnabled());
+        long iv = state.memoryMonitorIntervalSec();
+        root.put("memoryMonitorIntervalSec", Math.max(1L, Math.min(3600L, iv <= 0 ? 5L : iv)));
+        long nx = state.nextLaunchHeapMaxMiB();
+        if (nx > 0) {
+            root.put("nextLaunchHeapMaxMiB", nx);
+        }
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {
