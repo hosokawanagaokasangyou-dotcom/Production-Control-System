@@ -4,7 +4,7 @@ package jp.co.pm.ai.desktop.config;
  * 実行タブなどのプッシュボタン見た目のユーザー上書き（セッション保存用）。
  *
  * <p>{@link #customizeGeneralRunTab()} または {@link #customizeStageRunButtons()} が {@code true} のときだけ
- * 生成 CSS がシーンに適用される。
+ * 生成 CSS がシーンに適用される。プッシュボタン編集タブではスライダー／色を変えると自動で {@code true} になる。
  */
 public record PushButtonDesignPrefs(
         boolean customizeGeneralRunTab,

@@ -20,7 +20,7 @@
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
     <Label styleClass="pm-plan-result-viewer-hint-inline"
-           text="チェックを入れたグループだけ、アプリ組み込みのボタン見た目より優先して適用されます（テーマ変更後も維持）。通常ボタンは実行タブ内の「段階実行」以外に、段階ボタンはアプリ全体の同種クラスに適用されます。"/>
+           text="スライダーや色を変更すると、そのグループのカスタムが自動でオンになり、アプリに反映されます。チェックを外すと組み込み見た目に戻します（設定値は残ります）。通常ボタン＝実行タブの段階実行以外、段階ボタン＝アプリ全体の同種ボタンです。"/>
     <BorderPane fx:id="previewRunPane" styleClass="pm-run-tab">
         <padding>
             <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>

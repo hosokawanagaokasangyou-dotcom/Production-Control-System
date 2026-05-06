@@ -170,7 +170,6 @@ public final class PushButtonDesignTabController {
                 customStageCheck.setSelected(false);
             }
             syncLabelsFromSliders();
-            refreshPreviewDisabledMask();
         } finally {
             suppress = false;
         }
@@ -191,7 +190,6 @@ public final class PushButtonDesignTabController {
         try {
             pushPrefsToUi(p != null ? p : PushButtonDesignPrefs.inactiveDefaults());
             syncLabelsFromSliders();
-            refreshPreviewDisabledMask();
         } finally {
             suppress = false;
         }
@@ -254,7 +252,6 @@ public final class PushButtonDesignTabController {
                 customStageCheck.setSelected(true);
             }
             syncLabelsFromSliders();
-            refreshPreviewDisabledMask();
         } finally {
             suppress = false;
         }
@@ -333,48 +330,78 @@ public final class PushButtonDesignTabController {
     }
 
     private void attachListeners() {
-        Runnable refreshAndPersist =
+        Runnable onCheckboxToggle =
                 () -> {
-                    refreshPreviewDisabledMask();
+                    refreshStylesheetOnShell();
+                    schedulePersist();
+                };
+        Runnable onGeneralEdit =
+                () -> {
+                    touchCustomizeGeneral();
+                    refreshStylesheetOnShell();
+                    schedulePersist();
+                };
+        Runnable onStageEdit =
+                () -> {
+                    touchCustomizeStage();
                     refreshStylesheetOnShell();
                     schedulePersist();
                 };
         if (customGeneralCheck != null) {
-            customGeneralCheck.selectedProperty().addListener((o, a, b) -> refreshAndPersist.run());
+            customGeneralCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
         }
         if (customStageCheck != null) {
-            customStageCheck.selectedProperty().addListener((o, a, b) -> refreshAndPersist.run());
+            customStageCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
         }
 
-        wireSlider(generalRadiusSlider, generalRadiusLabel, "%.0f", refreshAndPersist);
-        wireSlider(generalPadVSlider, generalPadVLabel, "%.0f", refreshAndPersist);
-        wireSlider(generalPadHSlider, generalPadHLabel, "%.0f", refreshAndPersist);
-        wireSlider(generalFontSlider, generalFontLabel, "%.0f", refreshAndPersist);
+        wireSlider(generalRadiusSlider, generalRadiusLabel, "%.0f", onGeneralEdit);
+        wireSlider(generalPadVSlider, generalPadVLabel, "%.0f", onGeneralEdit);
+        wireSlider(generalPadHSlider, generalPadHLabel, "%.0f", onGeneralEdit);
+        wireSlider(generalFontSlider, generalFontLabel, "%.0f", onGeneralEdit);
 
-        wireSlider(stageFontSlider, stageFontLabel, "%.0f", refreshAndPersist);
-        wireSlider(stageMinWidthSlider, stageMinWidthLabel, "%.0f", refreshAndPersist);
-        wireSlider(stageMinHeightSlider, stageMinHeightLabel, "%.0f", refreshAndPersist);
-        wireSlider(stagePadVSlider, stagePadVLabel, "%.0f", refreshAndPersist);
-        wireSlider(stagePadHSlider, stagePadHLabel, "%.0f", refreshAndPersist);
-        wireSlider(stageRadiusSlider, stageRadiusLabel, "%.0f", refreshAndPersist);
+        wireSlider(stageFontSlider, stageFontLabel, "%.0f", onStageEdit);
+        wireSlider(stageMinWidthSlider, stageMinWidthLabel, "%.0f", onStageEdit);
+        wireSlider(stageMinHeightSlider, stageMinHeightLabel, "%.0f", onStageEdit);
+        wireSlider(stagePadVSlider, stagePadVLabel, "%.0f", onStageEdit);
+        wireSlider(stagePadHSlider, stagePadHLabel, "%.0f", onStageEdit);
+        wireSlider(stageRadiusSlider, stageRadiusLabel, "%.0f", onStageEdit);
 
-        addPicker(generalBgPicker, refreshAndPersist);
-        addPicker(generalBorderPicker, refreshAndPersist);
-        addPicker(generalTextPicker, refreshAndPersist);
-        addPicker(generalHoverPicker, refreshAndPersist);
-        addPicker(generalPressedPicker, refreshAndPersist);
-        addPicker(stage1BgPicker, refreshAndPersist);
-        addPicker(stage1BorderPicker, refreshAndPersist);
-        addPicker(stage1HoverPicker, refreshAndPersist);
-        addPicker(stage1PressedPicker, refreshAndPersist);
-        addPicker(stage2BgPicker, refreshAndPersist);
-        addPicker(stage2BorderPicker, refreshAndPersist);
-        addPicker(stage2HoverPicker, refreshAndPersist);
-        addPicker(stage2PressedPicker, refreshAndPersist);
-        addPicker(stage3BgPicker, refreshAndPersist);
-        addPicker(stage3BorderPicker, refreshAndPersist);
-        addPicker(stage3HoverPicker, refreshAndPersist);
-        addPicker(stage3PressedPicker, refreshAndPersist);
+        addPicker(generalBgPicker, onGeneralEdit);
+        addPicker(generalBorderPicker, onGeneralEdit);
+        addPicker(generalTextPicker, onGeneralEdit);
+        addPicker(generalHoverPicker, onGeneralEdit);
+        addPicker(generalPressedPicker, onGeneralEdit);
+        addPicker(stage1BgPicker, onStageEdit);
+        addPicker(stage1BorderPicker, onStageEdit);
+        addPicker(stage1HoverPicker, onStageEdit);
+        addPicker(stage1PressedPicker, onStageEdit);
+        addPicker(stage2BgPicker, onStageEdit);
+        addPicker(stage2BorderPicker, onStageEdit);
+        addPicker(stage2HoverPicker, onStageEdit);
+        addPicker(stage2PressedPicker, onStageEdit);
+        addPicker(stage3BgPicker, onStageEdit);
+        addPicker(stage3BorderPicker, onStageEdit);
+        addPicker(stage3HoverPicker, onStageEdit);
+        addPicker(stage3PressedPicker, onStageEdit);
+    }
+
+    /** スライダー／色の操作でカスタムが自動オンになる（チェックを先に付ける必要をなくす）。 */
+    private void touchCustomizeGeneral() {
+        if (suppress || customGeneralCheck == null) {
+            return;
+        }
+        if (!customGeneralCheck.isSelected()) {
+            customGeneralCheck.setSelected(true);
+        }
+    }
+
+    private void touchCustomizeStage() {
+        if (suppress || customStageCheck == null) {
+            return;
+        }
+        if (!customStageCheck.isSelected()) {
+            customStageCheck.setSelected(true);
+        }
     }
 
     private static void addPicker(ColorPicker cp, Runnable r) {
@@ -427,103 +454,6 @@ public final class PushButtonDesignTabController {
         }
         if (stageRadiusSlider != null && stageRadiusLabel != null) {
             stageRadiusLabel.setText(String.format("%.0f", stageRadiusSlider.getValue()));
-        }
-    }
-
-    private void refreshPreviewDisabledMask() {
-        boolean ge = customGeneralCheck == null || !customGeneralCheck.isSelected();
-        boolean se = customStageCheck == null || !customStageCheck.isSelected();
-        setDisableGeneral(ge);
-        setDisableStage(se);
-        if (previewRunPane != null) {
-            previewRunPane.setOpacity(1.0);
-        }
-    }
-
-    private void setDisableGeneral(boolean dis) {
-        if (generalRadiusSlider != null) {
-            generalRadiusSlider.setDisable(dis);
-        }
-        if (generalPadVSlider != null) {
-            generalPadVSlider.setDisable(dis);
-        }
-        if (generalPadHSlider != null) {
-            generalPadHSlider.setDisable(dis);
-        }
-        if (generalFontSlider != null) {
-            generalFontSlider.setDisable(dis);
-        }
-        if (generalBgPicker != null) {
-            generalBgPicker.setDisable(dis);
-        }
-        if (generalBorderPicker != null) {
-            generalBorderPicker.setDisable(dis);
-        }
-        if (generalTextPicker != null) {
-            generalTextPicker.setDisable(dis);
-        }
-        if (generalHoverPicker != null) {
-            generalHoverPicker.setDisable(dis);
-        }
-        if (generalPressedPicker != null) {
-            generalPressedPicker.setDisable(dis);
-        }
-    }
-
-    private void setDisableStage(boolean dis) {
-        if (stageFontSlider != null) {
-            stageFontSlider.setDisable(dis);
-        }
-        if (stageMinWidthSlider != null) {
-            stageMinWidthSlider.setDisable(dis);
-        }
-        if (stageMinHeightSlider != null) {
-            stageMinHeightSlider.setDisable(dis);
-        }
-        if (stagePadVSlider != null) {
-            stagePadVSlider.setDisable(dis);
-        }
-        if (stagePadHSlider != null) {
-            stagePadHSlider.setDisable(dis);
-        }
-        if (stageRadiusSlider != null) {
-            stageRadiusSlider.setDisable(dis);
-        }
-        if (stage1BgPicker != null) {
-            stage1BgPicker.setDisable(dis);
-        }
-        if (stage1BorderPicker != null) {
-            stage1BorderPicker.setDisable(dis);
-        }
-        if (stage1HoverPicker != null) {
-            stage1HoverPicker.setDisable(dis);
-        }
-        if (stage1PressedPicker != null) {
-            stage1PressedPicker.setDisable(dis);
-        }
-        if (stage2BgPicker != null) {
-            stage2BgPicker.setDisable(dis);
-        }
-        if (stage2BorderPicker != null) {
-            stage2BorderPicker.setDisable(dis);
-        }
-        if (stage2HoverPicker != null) {
-            stage2HoverPicker.setDisable(dis);
-        }
-        if (stage2PressedPicker != null) {
-            stage2PressedPicker.setDisable(dis);
-        }
-        if (stage3BgPicker != null) {
-            stage3BgPicker.setDisable(dis);
-        }
-        if (stage3BorderPicker != null) {
-            stage3BorderPicker.setDisable(dis);
-        }
-        if (stage3HoverPicker != null) {
-            stage3HoverPicker.setDisable(dis);
-        }
-        if (stage3PressedPicker != null) {
-            stage3PressedPicker.setDisable(dis);
         }
     }
 
