@@ -1,10 +1,17 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
+import java.nio.charset.StandardCharsets;
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.animation.KeyFrame;
@@ -29,9 +36,36 @@ import jp.co.pm.ai.desktop.config.PomJvmHeapPropertiesSync;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 
 /**
- * JVM ?????????????????pom ???????????????????????????
+ * Memory settings tab. UI strings load from classpath {@code memory_settings_strings.properties}
+ * (ASCII + \\u escapes) so Japanese is not stored in this source file.
  */
 public final class MemorySettingsTabController {
+
+    private static final String STRINGS_RESOURCE = "/jp/co/pm/ai/desktop/memory_settings_strings.properties";
+
+    private static final Properties UI_STRINGS = loadStrings();
+
+    private static Properties loadStrings() {
+        Properties p = new Properties();
+        try (InputStream in = MemorySettingsTabController.class.getResourceAsStream(STRINGS_RESOURCE)) {
+            Objects.requireNonNull(in, STRINGS_RESOURCE);
+            try (InputStreamReader r = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                p.load(r);
+            }
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+        return p;
+    }
+
+    private static String txt(String key) {
+        String v = UI_STRINGS.getProperty(key);
+        return v != null ? v : key;
+    }
+
+    private static String txtFmt(String key, Object... args) {
+        return MessageFormat.format(txt(key), args);
+    }
 
     private static final int MAX_CHART_POINTS = 400;
 
@@ -130,32 +164,28 @@ public final class MemorySettingsTabController {
 
     @FXML
     private void initialize() {
-        heapSectionTitleLabel.setText("????????? JVM ????");
-        heapExplainLabel.setText(
-                "???? JVM ???????-Xmx??????????"
-                        + " ????????????????????pom ????????????? VM ??????????????");
-        desiredHeapLabel.setText("????????MiB?");
-        monitorSectionTitleLabel.setText("?????");
-        monitorEnabledCheck.setText("???????????");
-        intervalCaptionLabel.setText("?????");
-        chartCaptionLabel.setText("?????????");
-        runtimeCaptionLabel.setText("?????????? JVM?");
+        heapSectionTitleLabel.setText(txt("heap.section.title"));
+        heapExplainLabel.setText(txt("heap.explain"));
+        desiredHeapLabel.setText(txt("heap.desired.label"));
+        monitorSectionTitleLabel.setText(txt("monitor.section.title"));
+        monitorEnabledCheck.setText(txt("monitor.enabled"));
+        intervalCaptionLabel.setText(txt("interval.caption"));
+        chartCaptionLabel.setText(txt("chart.caption"));
+        runtimeCaptionLabel.setText(txt("runtime.caption"));
         runtimeSlashLabel.setText("/");
-        runtimeOpenParenLabel.setText("????? ");
-        runtimeCloseParenLabel.setText("?");
-        monitorHintLabel.setText(
-                "??????????????????????????????????????"
-                        + " ????????????????????????");
-        syncHeapToCurrentButton.setText("??????????");
-        refreshRuntimeHeapButton.setText("?????");
+        runtimeOpenParenLabel.setText(txt("runtime.open_paren"));
+        runtimeCloseParenLabel.setText(txt("runtime.close_paren"));
+        monitorHintLabel.setText(txt("monitor.hint"));
+        syncHeapToCurrentButton.setText(txt("sync.button"));
+        refreshRuntimeHeapButton.setText(txt("refresh.button"));
 
-        heapUsedSeries.setName("??????");
+        heapUsedSeries.setName(txt("series.heap_used"));
         heapChart.getData().add(heapUsedSeries);
         heapChart.setCreateSymbols(false);
         NumberAxis xAxis = (NumberAxis) heapChart.getXAxis();
-        xAxis.setLabel("?????");
+        xAxis.setLabel(txt("axis.elapsed_sec"));
         NumberAxis yAxis = (NumberAxis) heapChart.getYAxis();
-        yAxis.setLabel("????MiB?");
+        yAxis.setLabel(txt("axis.usage_mib"));
 
         int curMaxMiB = readHeapMaxMiBOrFallback();
         nextLaunchHeapMiBSpinner.setValueFactory(
@@ -164,12 +194,9 @@ public final class MemorySettingsTabController {
 
         intervalSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 3600, 5));
 
-        jvmLogSectionTitleLabel.setText("JVM ?????");
-        jvmLogMaxLinesLabel.setText("????????");
-        jvmLogHintLabel.setText(
-                "??????????????????????????????"
-                        + " ???????????session-state?????????"
-                        + " ???????????????? .pm-ai-desktop/jvm-memory-log.json ?????????");
+        jvmLogSectionTitleLabel.setText(txt("jvm.log.section"));
+        jvmLogMaxLinesLabel.setText(txt("jvm.log.max_lines"));
+        jvmLogHintLabel.setText(txt("jvm.log.hint"));
         memoryJvmLogMaxLinesSpinner.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(
                         MemoryJvmRingLog.ABS_MIN,
@@ -226,7 +253,7 @@ public final class MemorySettingsTabController {
         }
     }
 
-    /** ????????{@link MainShellController#applyDesktopSession} ???? */
+    /** Applies persisted session (invoked from {@link MainShellController#applyDesktopSession}). */
     void applyMemorySettingsSession(DesktopSessionState s) {
         if (s == null) {
             return;
@@ -268,7 +295,7 @@ public final class MemorySettingsTabController {
         return v <= 0 ? 0L : v;
     }
 
-    /** ????????????????????????????? */
+    /** Stops timers and clears log listener on main window close. */
     void shutdown() {
         stopMonitorTimeline();
         MemoryJvmRingLog.setUiRefreshListener(null);
@@ -356,11 +383,7 @@ public final class MemorySettingsTabController {
 
     private void updateHeapArgHint() {
         int mib = nextLaunchHeapMiBSpinner.getValue();
-        heapArgHintLabel.setText(
-                String.format(
-                        Locale.ROOT,
-                        "?: java -Xmx%dm ? ????????? IDE ? VM ?????????",
-                        mib));
+        heapArgHintLabel.setText(txtFmt("heap.arg.hint", mib));
     }
 
     private static String formatMiB(long bytes) {
