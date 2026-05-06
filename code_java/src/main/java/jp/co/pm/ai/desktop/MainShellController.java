@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -1085,18 +1086,51 @@ public final class MainShellController {
             String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
             String textFill = contrastingTabLabelTextFillHex(h);
-            tab.setStyle(
-                    "-fx-background-color: "
-                            + h
-                            + "; -fx-text-fill: "
-                            + textFill
-                            + ";");
-            pokeShellTabHeaderBackground(pane, tab, h, textFill);
+            String glowEffect = shellTabHeaderGlowEffectCss(h);
+            tab.setStyle(shellTabHeaderChromeInlineStyle(h, textFill, glowEffect));
+            pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
-            pokeShellTabHeaderBackground(pane, tab, null, null);
+            pokeShellTabHeaderBackground(pane, tab, null, null, null);
         }
+    }
+
+    /**
+     * 見出し背景に連動した半透明のガウシアン {@code dropshadow} でグロー風の縁取り（強すぎないよう半径・スプレッドは控えめ）。
+     *
+     * @return CSS の {@code -fx-effect} に渡す値（{@code dropshadow(...)}）。失敗時は空。
+     */
+    private static String shellTabHeaderGlowEffectCss(String hexBg) {
+        try {
+            Color c = Color.web(hexBg.strip());
+            String rgba =
+                    String.format(
+                            Locale.US,
+                            "rgba(%d,%d,%d,%.2f)",
+                            clamp255((int) Math.round(c.getRed() * 255.0)),
+                            clamp255((int) Math.round(c.getGreen() * 255.0)),
+                            clamp255((int) Math.round(c.getBlue() * 255.0)),
+                            0.62);
+            return "dropshadow(gaussian, " + rgba + ", 14, 0.38, 0, 0)";
+        } catch (IllegalArgumentException ex) {
+            return "";
+        }
+    }
+
+    private static String shellTabHeaderChromeInlineStyle(
+            String bgHex, String labelFillHex, String glowEffectCssValue) {
+        StringBuilder sb =
+                new StringBuilder()
+                        .append("-fx-background-color: ")
+                        .append(bgHex.strip())
+                        .append("; -fx-text-fill: ")
+                        .append(labelFillHex.strip())
+                        .append(";");
+        if (glowEffectCssValue != null && !glowEffectCssValue.isBlank()) {
+            sb.append(" -fx-effect: ").append(glowEffectCssValue.strip()).append(";");
+        }
+        return sb.toString();
     }
 
     /**
@@ -1140,7 +1174,11 @@ public final class MainShellController {
      * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
      */
     private static void pokeShellTabHeaderBackground(
-            TabPane pane, Tab tab, String rgbHexOrNull, String labelFillHexOrNull) {
+            TabPane pane,
+            Tab tab,
+            String rgbHexOrNull,
+            String labelFillHexOrNull,
+            String glowEffectCssOrNull) {
         if (pane == null) {
             return;
         }
@@ -1167,11 +1205,8 @@ public final class MainShellController {
                                 String h = rgbHexOrNull.strip();
                                 String tf = labelFillHexOrNull.strip();
                                 child.setStyle(
-                                        "-fx-background-color: "
-                                                + h
-                                                + "; -fx-text-fill: "
-                                                + tf
-                                                + ";");
+                                        shellTabHeaderChromeInlineStyle(
+                                                h, tf, glowEffectCssOrNull));
                                 Node lab = child.lookup(".tab-label");
                                 if (lab != null) {
                                     lab.setStyle("-fx-text-fill: " + tf + ";");
