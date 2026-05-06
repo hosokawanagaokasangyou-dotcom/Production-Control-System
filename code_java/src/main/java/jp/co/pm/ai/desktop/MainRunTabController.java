@@ -315,13 +315,14 @@ public final class MainRunTabController {
     /**
      * 可変行高（{@code setFixedCellSize(-1)}）と折り返しの組み合わせは VirtualFlow が極端なセル数を見積もり、
      * {@code index exceeds maxCellCount} やヒープ枯渇を招くことがある。フォントに応じた正の固定高で抑える。
+     * セル高は「1List項目＝概ね1ログ行」が主という前提で、折り返し数行分に留める（従来の×10は短い1行ログだけでも行が過剰に高くなり、空白だらけに見えていた）。
      */
     private void applyLogListFixedCellHeight() {
         if (logListView == null) {
             return;
         }
         double lineHeight = appliedLogFont.getSize() * 1.35;
-        double cell = Math.clamp(lineHeight * 10.0, 56.0, 360.0);
+        double cell = Math.clamp(lineHeight * 3.5, 28.0, 140.0);
         logListView.setFixedCellSize(cell);
     }
 
