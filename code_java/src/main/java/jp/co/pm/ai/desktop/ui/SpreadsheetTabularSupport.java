@@ -511,8 +511,8 @@ public final class SpreadsheetTabularSupport {
     public static final int PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS = 1200;
 
     /**
-     * グリッド物理行数がこの値以上のとき、二重にネストした {@link Platform#runLater} を使わず 1 回だけレイアウト flush
-     * する（同一処理の重複を避ける）。
+     * 旧実装では「この行数未満なら第 2 パルスを積む」に使った。post-fix-v3 で単発 flush に統一したためコードからは参照しないが、
+     * 調整履歴として公開のまま残す。
      */
     public static final int PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS = 400;
 
@@ -565,8 +565,9 @@ public final class SpreadsheetTabularSupport {
      * {@link #applyPlanResultGridPresentation} 後、内側 {@link TableView} が古い行高を保持することがあるため、
      * グリッド由来の行高を再適用し、表示を更新する（スクロールしなくても反映されるようにする）。
      *
-     * <p>行数が極端に多いグリッドでは {@link SpreadsheetView#resizeRowsToDefault()} と二重 flush がヒープを急増させるため、
-     * {@link #PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS} / {@link #PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS} で軽い経路に切り替える。
+     * <p>行数が極端に多いグリッドでは {@link SpreadsheetView#resizeRowsToDefault()} や内側 {@link TableView#refresh()} の再帰が
+     * ヒープを急増させるため、{@link #PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS} 以上のときは軽い経路に切り替える。
+     * 小表向けの二重 {@link Platform#runLater} は NDJSON 上で追加の {@code resize_then_layout} 連打と相関したため廃止。
      */
     public static void refreshSpreadsheetAfterRowPresentationChange(SpreadsheetView view) {
         if (view == null) {
@@ -574,16 +575,9 @@ public final class SpreadsheetTabularSupport {
         }
         /*
          * 呼び出し時点では Grid の行がまだ増えていないことがある（後から数千行になる）。
-         * 閾値と resize 可否は各 flush の実行時に再評価する。
+         * 閾値は flush 実行時に再評価する。1 パルスのみ（二重 runLater 無し）。
          */
-        Platform.runLater(
-                () -> {
-                    presentationFlushAfterRowPresentationChangeOnce(view);
-                    int pr = spreadsheetPhysicalRowCount(view);
-                    if (pr >= 0 && pr < PLAN_RESULT_REFRESH_SINGLE_FLUSH_ROWS) {
-                        Platform.runLater(() -> presentationFlushAfterRowPresentationChangeOnce(view));
-                    }
-                });
+        Platform.runLater(() -> presentationFlushAfterRowPresentationChangeOnce(view));
     }
 
     private static int spreadsheetPhysicalRowCount(SpreadsheetView view) {
@@ -616,7 +610,7 @@ public final class SpreadsheetTabularSupport {
                         rows != null && !rows.isEmpty() ? rows.get(0).size() : -1;
                 data.put("gridColsFirstRow", cols);
             }
-            data.put("runId", "post-fix-v2");
+            data.put("runId", "post-fix-v3");
             AgentDebugLog.appendStructured(
                     Map.of(),
                     "81ed4a",
@@ -629,8 +623,8 @@ public final class SpreadsheetTabularSupport {
         // #endregion
         if (!skipResize) {
             view.resizeRowsToDefault();
+            refreshEmbeddedTableViewsRecursive(view, 0);
         }
-        refreshEmbeddedTableViewsRecursive(view, 0);
         view.requestLayout();
     }
 
