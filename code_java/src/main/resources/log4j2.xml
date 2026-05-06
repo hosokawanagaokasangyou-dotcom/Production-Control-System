@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <!--
+    - log4j-api のみだと「could not find a logging provider」となるため log4j-core を pom に追加し、本設定で初期化する。
+    - 一部 xlsx の OPC/ZIP 都合で POI が sharedStrings をスキップすると ERROR が連発する。実データ欠落の疑いがある場合は
+      当該ブックを Excel で開き直して保存するか、下の RegexFilter を一時的に外して調査する。
+  -->
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">
+      <RegexFilter regex=".*Skipped invalid entry /xl/sharedStrings\.xml.*"
+                   onMatch="DENY"
+                   onMismatch="NEUTRAL"/>
+      <PatternLayout charset="UTF-8"
+                     pattern="%d{ISO8601}{UTC} %t %-5level %logger{36} - %msg%n"/>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Root level="info">
+      <AppenderRef ref="Console"/>
+    </Root>
+  </Loggers>
+</Configuration>

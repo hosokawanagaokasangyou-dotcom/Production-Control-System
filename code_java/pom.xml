@@ -21,10 +21,12 @@
     <jfreechart.version>1.5.4</jfreechart.version>
     <jackson.version>2.21.3</jackson.version>
     <junit.version>5.12.2</junit.version>
+    <!-- poi-ooxml が運ぶ log4j-api と同一に揃える（log4j-core 無しだと API がプロバイダ不足になり ERROR になる） -->
+    <log4j.version>2.24.3</log4j.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
-    <!-- javafx:run / 開発時のヒープ上限（既定 4g。減らす場合は mvn -Djvm.max.heap=2g javafx:run 等） -->
-    <jvm.max.heap>4g</jvm.max.heap>
+    <!-- javafx:run / 開発時のヒープ上限（既定 3g。減らす場合は mvn -Djvm.max.heap=2g javafx:run 等） -->
+    <jvm.max.heap>3g</jvm.max.heap>
   </properties>
 
   <dependencies>
@@ -37,6 +39,11 @@
       <groupId>org.apache.poi</groupId>
       <artifactId>poi-ooxml</artifactId>
       <version>${poi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>${log4j.version}</version>
     </dependency>
     <dependency>
       <groupId>org.jfree</groupId>
