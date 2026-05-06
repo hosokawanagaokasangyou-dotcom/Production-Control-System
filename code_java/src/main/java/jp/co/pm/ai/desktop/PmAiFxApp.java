@@ -10,7 +10,9 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
+import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
+import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
 
 /**
  * JavaFX エントリ — UI レイアウトは FXML（{@code jp/co/pm/ai/desktop/fxml/MainShell.fxml}）、ロジックは
@@ -123,15 +125,28 @@ public class PmAiFxApp extends Application {
     }
 
     public static void main(String[] args) {
+        WindowsLauncherUserDir.alignWithPackagedLauncherIfWindows();
+        StartupCrashLog.installUncaughtExceptionLogging();
+        StartupCrashLog.append("main: begin user.dir=" + System.getProperty("user.dir"));
         if (GraphicsEnvironment.isHeadless()) {
-            System.err.println(
+            String msg =
                     "[PmAiFxApp] No graphical display (headless). "
                             + "Run on Windows desktop, or on WSL set DISPLAY for JavaFX (e.g. WSLg / VcXsrv). "
-                            + "Do not run javafx:run from SSH without X forwarding.");
+                            + "Do not run javafx:run from SSH without X forwarding.";
+            StartupCrashLog.append(msg);
+            System.err.println(msg);
             System.exit(2);
         }
-        configurePrismAfterProbe();
-        JvmMemoryMonitor.startFromMain();
-        launch(args);
+        try {
+            configurePrismAfterProbe();
+            StartupCrashLog.append(
+                    "main: after configurePrism prism.order="
+                            + System.getProperty("prism.order", ""));
+            JvmMemoryMonitor.startFromMain();
+            launch(args);
+        } catch (Throwable t) {
+            StartupCrashLog.appendThrowable("main: launch failed", t);
+            throw t;
+        }
     }
 }
