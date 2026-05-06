@@ -91,6 +91,7 @@ public final class DesktopSessionStateStore {
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
                     text(root, "stage1NetworkCacheBadgeLabel"),
                     loadStage1NetworkCacheBadgeStyle(root),
+                    optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
                     loadPushButtonDesignPrefs(root));
         } catch (IOException e) {
             return DesktopSessionState.empty();
@@ -125,6 +126,7 @@ public final class DesktopSessionStateStore {
             putStringStringMap(root, "mainShellTabTitleAliases", state.mainShellTabTitleAliases());
             putEquipmentGanttGraphicPrefs(root, state);
             putStage1NetworkCacheBadgePrefs(root, state);
+            root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
             putPushButtonDesignPrefs(root, state);
             putWindowGeometry(root, state);
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);

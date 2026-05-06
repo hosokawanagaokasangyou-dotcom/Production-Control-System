@@ -60,6 +60,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
  * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
+ * @param mainShellTabOrganizerHeaderGlow メインシェル「タブの並び」で指定した見出し色にグロー（dropshadow）を付けるか
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
  */
 public record DesktopSessionState(
@@ -115,6 +116,7 @@ public record DesktopSessionState(
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey,
         String stage1NetworkCacheBadgeLabel,
         PersonBadgeStyle stage1NetworkCacheBadgeStyle,
+        boolean mainShellTabOrganizerHeaderGlow,
         PushButtonDesignPrefs pushButtonDesignPrefs) {
 
     public DesktopSessionState {
@@ -239,6 +241,7 @@ public record DesktopSessionState(
                 Map.of(),
                 "",
                 PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                true,
                 PushButtonDesignPrefs.inactiveDefaults());
     }
 }

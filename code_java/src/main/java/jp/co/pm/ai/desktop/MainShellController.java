@@ -300,6 +300,10 @@ public final class MainShellController {
     private volatile boolean startupSkipActualDetailSourceDirListing;
 
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
+
+    /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
+    private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
+
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
     private Runnable uiEnvPersistSchedule;
@@ -526,6 +530,7 @@ public final class MainShellController {
         if (s == null) {
             return;
         }
+        setMainShellTabOrganizerHeaderGlowEnabled(s.mainShellTabOrganizerHeaderGlow());
         applyUiEnvRowsFromSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
         stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
@@ -568,6 +573,9 @@ public final class MainShellController {
         }
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
+        if (mainShellTabOrganizerPaneController != null) {
+            mainShellTabOrganizerPaneController.syncHeaderGlowCheckFromShell();
+        }
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
 
@@ -675,6 +683,7 @@ public final class MainShellController {
                 uiBadgeDesignTabController != null
                         ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
                         : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                mainShellTabOrganizerHeaderGlowEnabled.get(),
                 pushButtonDesignTabController != null
                         ? pushButtonDesignTabController.snapshotPrefs()
                         : PushButtonDesignPrefs.inactiveDefaults());
@@ -1077,7 +1086,7 @@ public final class MainShellController {
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
-    private static void applyShellTabColor(Tab tab, String colorHex) {
+    private void applyShellTabColor(Tab tab, String colorHex) {
         if (tab == null) {
             return;
         }
@@ -1086,13 +1095,91 @@ public final class MainShellController {
             String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
             String textFill = contrastingTabLabelTextFillHex(h);
-            String glowEffect = shellTabHeaderGlowEffectCss(h);
+            String glowEffect =
+                    mainShellTabOrganizerHeaderGlowEnabled.get()
+                            ? shellTabHeaderGlowEffectCss(h)
+                            : "";
             tab.setStyle(shellTabHeaderChromeInlineStyle(h, textFill, glowEffect));
             pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
             pokeShellTabHeaderBackground(pane, tab, null, null, null);
+        }
+    }
+
+    public boolean isMainShellTabOrganizerHeaderGlowEnabled() {
+        return mainShellTabOrganizerHeaderGlowEnabled.get();
+    }
+
+    public void setMainShellTabOrganizerHeaderGlowEnabled(boolean enabled) {
+        mainShellTabOrganizerHeaderGlowEnabled.set(enabled);
+    }
+
+    /** 保存済みの {@code pmShellTabColor} を踏まえて全タブ見出しのインラインスタイルを再適用（グロー切替時）。 */
+    public void refreshMainShellTabHeaderChromeFromStoredColors() {
+        if (tabPane == null) {
+            return;
+        }
+        applyStoredShellTabColorsRecursive(tabPane.getTabs());
+    }
+
+    private void applyStoredShellTabColorsRecursive(ObservableList<Tab> tabs) {
+        if (tabs == null) {
+            return;
+        }
+        for (Tab t : tabs) {
+            if (t == mainShellTabOrganizer) {
+                continue;
+            }
+            applyShellTabColor(t, readShellTabColorHex(t));
+            if (t.getContent() instanceof TabPane inner) {
+                applyStoredShellTabColorsRecursive(inner.getTabs());
+            }
+        }
+    }
+
+    /** タブ整理ツリーのミニプレビュー（チップ）のインラインスタイル。 */
+    public String tabOrganizerPreviewChipSurfaceStyle(String colorHexOrEmpty) {
+        if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
+            return "";
+        }
+        String h = colorHexOrEmpty.strip();
+        StringBuilder sb =
+                new StringBuilder()
+                        .append("-fx-background-color: ")
+                        .append(h)
+                        .append("; -fx-background-radius: 5; -fx-border-radius: 5; -fx-border-width: 1; ")
+                        .append("-fx-border-color: ")
+                        .append(previewChipBorderRgba(h))
+                        .append("; ");
+        if (mainShellTabOrganizerHeaderGlowEnabled.get()) {
+            String g = shellTabHeaderGlowEffectCss(h);
+            if (!g.isBlank()) {
+                sb.append("-fx-effect: ").append(g).append("; ");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    public String tabOrganizerPreviewChipLabelTextFill(String colorHexOrEmpty) {
+        if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
+            return "#94a3b8";
+        }
+        return contrastingTabLabelTextFillHex(colorHexOrEmpty.strip());
+    }
+
+    private static String previewChipBorderRgba(String bgHex) {
+        try {
+            Color c = Color.web(bgHex.strip());
+            return String.format(
+                    Locale.US,
+                    "rgba(%d,%d,%d,0.40)",
+                    clamp255((int) Math.round(c.getRed() * 255.0)),
+                    clamp255((int) Math.round(c.getGreen() * 255.0)),
+                    clamp255((int) Math.round(c.getBlue() * 255.0)));
+        } catch (IllegalArgumentException ex) {
+            return "rgba(148,163,184,0.65)";
         }
     }
 

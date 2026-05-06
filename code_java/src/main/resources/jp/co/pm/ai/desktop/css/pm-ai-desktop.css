@@ -369,6 +369,46 @@
     -fx-border-width: 1;
 }
 
+/* タブ整理ツリー：薄い区切り＋左ガイドで階層がつながった見え方 */
+.pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined {
+    -fx-background-color: derive(-fx-base, -5%);
+}
+
+.pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled {
+    -fx-border-width: 0 0 1 1;
+    -fx-border-color:
+        transparent
+        transparent
+        derive(-fx-control-inner-background, -22%)
+        derive(-fx-control-inner-background, -32%);
+    -fx-padding: 3 6 4 6;
+}
+
+.pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled:selected {
+    -fx-background-color: derive(-fx-accent, 88%);
+}
+
+.pm-main-shell-tab-organizer .tree-view.pm-org-tree-lined .tree-cell:filled:hover {
+    -fx-background-color: derive(-fx-control-inner-background, -6%);
+}
+
+/* ツリー行左：メインタブ見出しのミニプレビュー */
+.pm-org-tab-preview-chip {
+    -fx-padding: 0 6 0 6;
+}
+
+.pm-org-tab-preview-chip-empty {
+    -fx-background-color: derive(-fx-control-inner-background, -10%);
+    -fx-border-color: derive(-fx-text-box-border, -6%);
+    -fx-border-width: 1;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+}
+
+.pm-org-tab-preview-chip-empty .label {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
 .pm-main-shell-tab-organizer .separator .line {
     -fx-border-color: derive(-fx-text-box-border, 12%);
 }

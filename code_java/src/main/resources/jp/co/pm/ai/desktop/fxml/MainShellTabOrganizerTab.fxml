@@ -2,6 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ColorPicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
@@ -28,7 +29,7 @@
             <Label wrapText="true"
                    text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
             <!-- vgrow しない＝スクロール領域内に収め、下端の適用ボタンが常に見える -->
-            <TreeView fx:id="treeView" prefHeight="260.0"/>
+            <TreeView fx:id="treeView" prefHeight="260.0" styleClass="tree-view pm-org-tree-lined"/>
             <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
                    text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
@@ -51,6 +52,8 @@
                 <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
                 <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="選択の色を解除"/>
             </HBox>
+            <CheckBox fx:id="headerGlowCheck" mnemonicParsing="false"
+                      text="見出しにグロー（発光風）を付ける — メインタブの見出しの縁に色にじみが付きます（オフでフラット）"/>
             <HBox spacing="8.0">
                 <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
                 <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>

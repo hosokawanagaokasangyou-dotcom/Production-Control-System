@@ -10,9 +10,12 @@ import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.Label;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
@@ -20,11 +23,16 @@ import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.scene.paint.Color;
 
+import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 
@@ -48,7 +56,14 @@ public final class MainShellTabOrganizerTabController {
     @FXML
     private TextField tabAliasField;
 
+    @FXML
+    private CheckBox headerGlowCheck;
+
     private MainShellController shell;
+
+    private boolean suppressOrganizerChromeListeners;
+
+    private boolean headerGlowListenerHooked;
 
     /** ドラッグ開始セルと {@link Dragboard} を対応付けるための作業領域（ツリー行の移動用）。 */
     private TreeItem<OrgRow> dragSourceItem;
@@ -83,7 +98,43 @@ public final class MainShellTabOrganizerTabController {
                     };
             treeView.getSelectionModel().selectedItemProperty().addListener(treeSelectionListener);
         }
+        installHeaderGlowControls();
         reloadTreeFromShell();
+    }
+
+    /** セッション復元後にチェック状態だけシェルと揃える。 */
+    void syncHeaderGlowCheckFromShell() {
+        if (headerGlowCheck == null || shell == null) {
+            return;
+        }
+        suppressOrganizerChromeListeners = true;
+        try {
+            headerGlowCheck.setSelected(shell.isMainShellTabOrganizerHeaderGlowEnabled());
+        } finally {
+            suppressOrganizerChromeListeners = false;
+        }
+    }
+
+    private void installHeaderGlowControls() {
+        if (headerGlowCheck != null && shell != null && !headerGlowListenerHooked) {
+            headerGlowListenerHooked = true;
+            headerGlowCheck
+                    .selectedProperty()
+                    .addListener(
+                            (obs, prev, selected) -> {
+                                if (suppressOrganizerChromeListeners) {
+                                    return;
+                                }
+                                shell.setMainShellTabOrganizerHeaderGlowEnabled(selected);
+                                shell.refreshMainShellTabHeaderChromeFromStoredColors();
+                                if (treeView != null) {
+                                    treeView.refresh();
+                                }
+                                DesktopSessionState snap = shell.collectDesktopSessionSnapshot();
+                                DesktopSessionStateStore.save(snap);
+                            });
+        }
+        syncHeaderGlowCheckFromShell();
     }
 
     private void reloadTreeFromShell() {
@@ -565,6 +616,27 @@ public final class MainShellTabOrganizerTabController {
             String c = colorHex != null && !colorHex.isBlank() ? "  [" + colorHex + "]" : "";
             return base + c;
         }
+
+        /** ツリー右側テキスト（プレビューチップとは別）—色コードはチップ側で示すため省略。 */
+        String treeDetailWithoutHex(MainShellController shellCtl) {
+            if (kind == Kind.GROUP) {
+                String t = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
+                return "[グループ] " + t;
+            }
+            return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
+        }
+
+        String previewChipCenterTitle(MainShellController shellCtl, int maxChars) {
+            String s =
+                    kind == Kind.GROUP
+                            ? (groupTitle != null && !groupTitle.isBlank() ? groupTitle : "Grp")
+                            : (shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name());
+            int max = Math.max(4, maxChars);
+            if (s.length() <= max) {
+                return s;
+            }
+            return s.substring(0, max - 1) + "…";
+        }
     }
 
     /** {@link TreeView} 用セルファクトリはコントローラ初期化後にシェルへバインドしてから設定する。 */
@@ -581,11 +653,55 @@ public final class MainShellTabOrganizerTabController {
                     @Override
                     protected void updateItem(OrgRow row, boolean empty) {
                         super.updateItem(row, empty);
+                        getStyleClass().removeIf(st -> st.startsWith("pm-org-depth-"));
                         if (empty || row == null) {
                             setText(null);
+                            setGraphic(null);
                             return;
                         }
-                        setText(row.formatDisplay(shell));
+                        TreeView<OrgRow> tv = getTreeView();
+                        TreeItem<OrgRow> ti = getTreeItem();
+                        TreeItem<?> root = tv != null ? tv.getRoot() : null;
+                        int depth = 0;
+                        TreeItem<?> walk = ti;
+                        while (walk != null && walk != root && walk.getParent() != null) {
+                            depth++;
+                            walk = walk.getParent();
+                        }
+                        getStyleClass().add("pm-org-depth-" + Math.min(depth, 12));
+
+                        Label detail = new Label(row.treeDetailWithoutHex(shell));
+                        detail.setWrapText(false);
+                        HBox.setHgrow(detail, Priority.ALWAYS);
+
+                        StackPane chip = new StackPane();
+                        chip.setPrefSize(108, 26);
+                        chip.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+                        chip.setMaxHeight(26);
+                        chip.getStyleClass().setAll("pm-org-tab-preview-chip");
+
+                        Label mini = new Label(row.previewChipCenterTitle(shell, 11));
+                        StackPane.setAlignment(mini, Pos.CENTER);
+
+                        String hex = row.colorHex;
+                        if (hex != null && !hex.isBlank() && shell != null) {
+                            chip.setStyle(shell.tabOrganizerPreviewChipSurfaceStyle(hex));
+                            mini.setStyle(
+                                    "-fx-text-fill: "
+                                            + shell.tabOrganizerPreviewChipLabelTextFill(hex)
+                                            + "; -fx-font-size: 10.5px; -fx-font-weight: bold;");
+                        } else {
+                            chip.getStyleClass().add("pm-org-tab-preview-chip-empty");
+                            chip.setStyle("");
+                            mini.setStyle("-fx-font-size: 10.5px; -fx-font-weight: bold;");
+                        }
+                        chip.getChildren().setAll(mini);
+
+                        HBox rowBox = new HBox(10);
+                        rowBox.setAlignment(Pos.CENTER_LEFT);
+                        rowBox.getChildren().addAll(chip, detail);
+                        setText(null);
+                        setGraphic(rowBox);
                     }
                 };
         cell.setOnDragDetected(
