@@ -32349,6 +32349,13 @@ def _generate_plan_impl(
                 except Exception:
                     pass
 
+                if not timeline_events:
+                    logging.warning(
+                        "段階2: 設備ガント契約 JSON に書き込む timeline_events が空です。"
+                        " Java の設備ガント（グラフィック）や契約からの再描画ではタイムラインに文言が出ません。"
+                        " 配台ループでイベントが追記されているか、タスクキュー・稼働メンバー・計画日を確認してください。"
+                    )
+
                 _equipment_gantt_contract = make_gantt_render_contract(
                     timeline_events=timeline_events,
                     equipment_list=equipment_list,

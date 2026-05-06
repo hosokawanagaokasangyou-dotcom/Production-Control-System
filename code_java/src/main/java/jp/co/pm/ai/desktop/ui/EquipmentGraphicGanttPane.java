@@ -889,7 +889,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Label slotWarn =
                     new Label(
                             """
-                            タイムライン（HH:MM 列）のセルに表示文言がありません（帯色のみになります）。ブック JSON 単体ではシェイプ由来の値が欠損することがあります。計画出力フォルダに …設.json（設備ガント契約）が同梱されているか、または段階2の設備ガント関連出力を確認してください。""");
+                            タイムライン（HH:MM 列）のセルに表示文言がありません（帯色のみになります）。ブック JSON 単体ではシェイプ由来の値が欠損することがあります。…設.json（設備ガント契約）を読んでいても、kwargs_packed.timeline_events が空配列 [] のときはバーを描画できません（段階2の配台でイベントが生成されていない／契約が古い可能性）。計画出力・段階2ログを確認してください。""");
             slotWarn.setWrapText(true);
             slotWarn.setPadding(new Insets(8));
             slotWarn.setStyle("-fx-background-color: rgba(255,165,0,0.22);");

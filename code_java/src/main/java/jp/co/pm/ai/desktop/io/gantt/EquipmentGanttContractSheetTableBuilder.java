@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * {@code *_equipment_gantt_contract.json}（設備ガント描画契約）から、
@@ -87,6 +88,23 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 events.add(te);
             }
         }
+        // #region agent log
+        try {
+            int rawLen = eventsNode.size();
+            Map<String, Object> eb = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+            eb.put("contractFileName", contractPath.getFileName().toString());
+            eb.put("timelineEventsJsonArrayLength", Integer.valueOf(rawLen));
+            eb.put("parsedTimelineEventCount", Integer.valueOf(events.size()));
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "81ed4a",
+                    "EB1",
+                    "EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath",
+                    "contract timeline_events raw vs parsed",
+                    eb);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
 
         events = applyGapAwareMachiningLabels(events);
 
