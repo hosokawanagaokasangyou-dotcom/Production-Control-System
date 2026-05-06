@@ -35,6 +35,14 @@ public final class MasterReadSummaryTabController {
 
     private static final String SCRIPT = "master_read_summary.py";
 
+    /**
+     * {@link JsonNode#path(String)} が MissingNode を返してもよいが、{@link
+     * com.fasterxml.jackson.databind.node.ObjectNode#withArray(String)} は ObjectNode 専用で欠損時に例外になる。
+     */
+    private static boolean notObjectSection(JsonNode n) {
+        return n == null || n.isMissingNode() || n.isNull() || !n.isObject();
+    }
+
     public static final class SheetCheckRow {
         private String category;
         private String sheetName;
@@ -577,7 +585,7 @@ public final class MasterReadSummaryTabController {
                 formatTimeCell(rs, "b15", rs.path("effective").asBoolean(false)));
 
         ObservableList<SheetCheckRow> sheetRows = FXCollections.observableArrayList();
-        for (JsonNode ch : root.withArray("sheet_checks")) {
+        for (JsonNode ch : root.path("sheet_checks")) {
             SheetCheckRow r = new SheetCheckRow();
             String k = ch.path("key").asText("");
             r.setCategory(sheetKeyLabelJa(k));
@@ -594,7 +602,7 @@ public final class MasterReadSummaryTabController {
         applyExcludeRulesSection(root.path("exclude_rules_sheet"));
         applyPlanningConstantsSection(root.path("planning_constants"));
         applyDetailTables(root);
-        applyAllSheetsList(root.withArray("all_sheet_names"));
+        applyAllSheetsList(root.path("all_sheet_names"));
 
         applyMachineCalendarSection(root);
 
@@ -610,10 +618,10 @@ public final class MasterReadSummaryTabController {
                 1,
                 "勤怠シート数（一致）",
                 String.valueOf(att.path("attendance_sheets_matched").asInt(0)));
-        applyAttendanceSheetsList(att.withArray("matched_sheet_names"));
+        applyAttendanceSheetsList(att.path("matched_sheet_names"));
 
         ObservableList<String> warns = FXCollections.observableArrayList();
-        for (JsonNode w : root.withArray("warnings")) {
+        for (JsonNode w : root.path("warnings")) {
             warns.add(w.asText(""));
         }
         if (root.path("openpyxl_skip").asBoolean(false)) {
@@ -629,7 +637,7 @@ public final class MasterReadSummaryTabController {
 
     private void applySkillsNeedSection(JsonNode sn) {
         skillsNeedGrid.getChildren().clear();
-        if (sn == null || sn.isMissingNode()) {
+        if (notObjectSection(sn)) {
             addGridRow(skillsNeedGrid, 0, "状態", "—");
             return;
         }
@@ -705,25 +713,26 @@ public final class MasterReadSummaryTabController {
                     skillsNeedGrid,
                     row++,
                     "メンバー（最多40人）",
-                    jsonArrayJoin(sn.withArray("member_names_sample")));
+                    jsonArrayJoin(sn.path("member_names_sample")));
             addGridRow(
                     skillsNeedGrid,
                     row++,
                     "need キー（最多40）",
-                    jsonArrayJoin(sn.withArray("need_combo_keys_sample")));
+                    jsonArrayJoin(sn.path("need_combo_keys_sample")));
             if (sn.has("equipment_columns_sample")) {
                 addGridRow(
                         skillsNeedGrid,
                         row++,
                         "設備列サンプル（先頭48）",
-                        jsonArrayJoin(sn.withArray("equipment_columns_sample")));
+                        jsonArrayJoin(sn.path("equipment_columns_sample")));
             }
-            if (sn.has("surplus_sample") && sn.withArray("surplus_sample").size() > 0) {
+            JsonNode surplusSample = sn.path("surplus_sample");
+            if (surplusSample.isArray() && surplusSample.size() > 0) {
                 addGridRow(
                         skillsNeedGrid,
                         row++,
                         "配台時追加上限サンプル",
-                        String.valueOf(sn.withArray("surplus_sample").size())
+                        String.valueOf(surplusSample.size())
                                 + " 件");
             }
         }
@@ -731,7 +740,7 @@ public final class MasterReadSummaryTabController {
 
     private void applyAppConfigSection(JsonNode ac) {
         appConfigGrid.getChildren().clear();
-        if (ac == null || ac.isMissingNode()) {
+        if (notObjectSection(ac)) {
             addGridRow(appConfigGrid, 0, "状態", "—");
             return;
         }
@@ -760,7 +769,7 @@ public final class MasterReadSummaryTabController {
                 appConfigGrid,
                 row++,
                 "A列 サンプル",
-                jsonArrayJoin(ac.withArray("trace_task_ids_sample")));
+                jsonArrayJoin(ac.path("trace_task_ids_sample")));
         addGridRow(
                 appConfigGrid,
                 row++,
@@ -770,7 +779,7 @@ public final class MasterReadSummaryTabController {
                 appConfigGrid,
                 row++,
                 "B列 サンプル",
-                jsonArrayJoin(ac.withArray("debug_task_ids_sample")));
+                jsonArrayJoin(ac.path("debug_task_ids_sample")));
         addGridRow(
                 appConfigGrid,
                 row++,
@@ -780,7 +789,7 @@ public final class MasterReadSummaryTabController {
                 appConfigGrid,
                 row++,
                 "Gemini モデルリスト",
-                jsonArrayJoin(ac.withArray("gemini_models_enabled_sample")));
+                jsonArrayJoin(ac.path("gemini_models_enabled_sample")));
     }
 
     private void applyExcludeRulesSection(JsonNode ex) {
@@ -788,7 +797,7 @@ public final class MasterReadSummaryTabController {
         if (excludeRulesSampleTable != null) {
             excludeRulesSampleTable.getItems().clear();
         }
-        if (ex == null || ex.isMissingNode()) {
+        if (notObjectSection(ex)) {
             addGridRow(excludeRulesGrid, 0, "状態", "—");
             return;
         }
@@ -861,7 +870,7 @@ public final class MasterReadSummaryTabController {
                 ex.path("stage1_effective_source_note").asText(""));
 
         ObservableList<ExcludeRuleSampleRow> exRows = FXCollections.observableArrayList();
-        for (JsonNode r : ex.withArray("rules_sample")) {
+        for (JsonNode r : ex.path("rules_sample")) {
             exRows.add(
                     new ExcludeRuleSampleRow(
                             r.path("process").asText(""),
@@ -883,8 +892,9 @@ public final class MasterReadSummaryTabController {
             String mode = parsed.path("mode").asText("");
             boolean reqAll = parsed.path("require_all").asBoolean(false);
             String tail = "";
-            if (parsed.has("conditions")) {
-                tail = ", conds~" + parsed.withArray("conditions").size();
+            JsonNode conditions = parsed.path("conditions");
+            if (conditions.isArray()) {
+                tail = ", conds~" + conditions.size();
             }
             return "v" + ver + " " + mode + (mode.equals("conditions") ? " all=" + reqAll : "")
                     + tail;
@@ -894,11 +904,11 @@ public final class MasterReadSummaryTabController {
 
     private void applyPlanningConstantsSection(JsonNode pc) {
         planningConstantsGrid.getChildren().clear();
-        if (pc == null || pc.isMissingNode()) {
+        if (notObjectSection(pc)) {
             addGridRow(planningConstantsGrid, 0, "状態", "—");
             return;
         }
-        JsonNode rr = pc.withArray("config_task_ids_row_range");
+        JsonNode rr = pc.path("config_task_ids_row_range");
         String rng =
                 rr.size() >= 2
                         ? rr.get(0).asInt() + "–" + rr.get(1).asInt()
@@ -921,7 +931,7 @@ public final class MasterReadSummaryTabController {
     }
 
     private void applyDetailTables(JsonNode root) {
-        JsonNode sp = root.path("speed").withArray("lookup_sample");
+        JsonNode sp = root.path("speed").path("lookup_sample");
         ObservableList<SpeedSampleRow> speedRows = FXCollections.observableArrayList();
         for (JsonNode r : sp) {
             speedRows.add(
@@ -934,7 +944,7 @@ public final class MasterReadSummaryTabController {
 
         JsonNode sn = root.path("skills_need");
         ObservableList<NeedBaseRow> nb = FXCollections.observableArrayList();
-        for (JsonNode r : sn.withArray("need_base_required_sample")) {
+        for (JsonNode r : sn.path("need_base_required_sample")) {
             nb.add(
                     new NeedBaseRow(
                             r.path("combo").asText(""),
@@ -943,7 +953,7 @@ public final class MasterReadSummaryTabController {
         needBaseTable.setItems(nb);
 
         ObservableList<NeedRuleRow> nr = FXCollections.observableArrayList();
-        for (JsonNode r : sn.withArray("need_rules_detail")) {
+        for (JsonNode r : sn.path("need_rules_detail")) {
             nr.add(
                     new NeedRuleRow(
                             String.valueOf(r.path("order").asInt(0)),
@@ -953,7 +963,7 @@ public final class MasterReadSummaryTabController {
         needRulesTable.setItems(nr);
 
         ObservableList<CalendarTopRow> ct = FXCollections.observableArrayList();
-        for (JsonNode r : sn.withArray("calendar_top_dates")) {
+        for (JsonNode r : sn.path("calendar_top_dates")) {
             ct.add(
                     new CalendarTopRow(
                             r.path("date").asText(""),
@@ -984,7 +994,7 @@ public final class MasterReadSummaryTabController {
 
     private void applyTeamComboSection(JsonNode tc) {
         teamComboGrid.getChildren().clear();
-        if (tc == null || tc.isMissingNode()) {
+        if (notObjectSection(tc)) {
             addGridRow(teamComboGrid, 0, "状態", "—");
             return;
         }
@@ -1018,7 +1028,7 @@ public final class MasterReadSummaryTabController {
                 teamComboGrid,
                 row++,
                 "サンプルキー（最多20）",
-                jsonArrayJoin(tc.withArray("sample_equipment_keys")));
+                jsonArrayJoin(tc.path("sample_equipment_keys")));
     }
 
     private void applyMachineCalendarSection(JsonNode root) {
